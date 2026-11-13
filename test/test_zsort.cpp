@@ -103,8 +103,8 @@ TEST(ZSort, AModelDrawnAtOnceComesAtItsPlaceInTheListBeforeEverythingSorted)
 	EXPECT_GT(zsort::AtOnce(zsort::k_Unlisted), zsort::Depth(camera + glm::vec3(farthest, 0.0f, 0.0f), camera));
 	// After the farthest fizzing creature, with the draws that follow it
 	EXPECT_LT(zsort::AtOnce(0), zsort::BeforeSorted(camera + glm::vec3(farthest, 0.0f, 0.0f), camera) - 15u);
-	// After the segments of many fizzing creatures in the list
-	EXPECT_LT(zsort::AtOnce(0), fizz_draw_order::SegmentDepth(1000000));
+	// After the segments of all the fizzing creatures in the list
+	EXPECT_LT(zsort::AtOnce(0), fizz_draw_order::SegmentDepth(fizz_draw_order::k_MaxRanked));
 }
 
 TEST(ZSort, AYardCopySortsByTheKeyOfItsWorkshop)
@@ -183,4 +183,14 @@ TEST(ZSort, TheTranslucentViewDrawsInTheOrderOfTheGameList)
 		depths.push_back(zsort::Depth(point, camera));
 	}
 	EXPECT_EQ(DescendingViewOrder(depths), GameListOrder(keys));
+}
+
+// The game draws all of the copies at the yard places of a workshop in one go, in the order of the workshop's scaffold
+// list. Two workshops of the same key draw in the order of the land's draw list.
+TEST(ZSort, TheYardCopiesOfAWorkshopComeInTheOrderOfItsScaffoldList)
+{
+	EXPECT_LT(zsort::YardCopyOrder(7, 0), zsort::YardCopyOrder(7, 1));
+	EXPECT_LT(zsort::YardCopyOrder(7, 1), zsort::YardCopyOrder(7, 2));
+	EXPECT_LT(zsort::YardCopyOrder(7, 2), zsort::YardCopyOrder(8, 0));
+	EXPECT_LT(zsort::YardCopyOrder(zsort::k_ListPlaces - 1, 2), zsort::YardCopyOrder(zsort::k_Unlisted, 0));
 }

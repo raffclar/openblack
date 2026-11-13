@@ -291,6 +291,28 @@ void AddGlobes(std::vector<Scenario>& all)
 	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 43.0f}, .bubbleHeight = 3.0f}},
 	});
 
+	all.push_back({
+	    .id = "miracles.fading_building_before_fizzing_creature",
+	    .name = "A building that fades out in front of a creature that fizzes",
+	    .facet = Facet::Miracles,
+	    .description = "The creche of miracles.globe_over_fading_building, far from the camera, and the player's tiger 15 m "
+	                   "behind it. After one second the tiger fizzes a third of the way out of sight over two seconds, and "
+	                   "stays there. Start the game at the lowest detail level, so that the creche fades out.",
+	    .expected = "The land's draw list has the creche before the tiger, so the game draws the fading creche before the "
+	                "passes of the tiger. The creche writes its depth, thus the tiger does not show through the creche. "
+	                "The land behind the creche shows through it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 60.0f, -190.0f}, .look = {0.0f, 24.0f, 40.0f}},
+	    .creatures = {CreatureSetup {.label = "yours",
+	                                 .species = CreatureType::Tiger,
+	                                 .offset = {0.0f, 55.0f},
+	                                 .facingDegrees = 90.0f,
+	                                 .owner = PlayerNames::PLAYER_ONE,
+	                                 .needs = {.energy = 0.8f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticCreche, .offset = {0.0f, 40.0f}}},
+	    .commands = {{.kind = Command::Kind::SetFizz, .creature = 0, .delaySeconds = 1.0f, .value = 2000, .amount = 0.3f}},
+	});
+
 	auto extreme = GlobeRow({MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo}, 34.0f);
 	for (auto& row :
 	     {GlobeRow({MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo}, 27.0f),

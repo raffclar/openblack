@@ -227,6 +227,7 @@ private:
 	/// Puts an arena of a loaded file of the game midway between two creatures of the scenario
 	[[nodiscard]] std::string PutLoadedArena(const Command& command);
 	[[nodiscard]] std::string HandTakeNear(const Command& command);
+	[[nodiscard]] std::string TapScaffoldNear(const Command& command);
 	[[nodiscard]] std::string ClickCreatureNear(const Command& command);
 	[[nodiscard]] std::string TapRewardNear(const Command& command);
 	[[nodiscard]] std::string RunScript(const Command& command);

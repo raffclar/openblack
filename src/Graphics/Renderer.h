@@ -538,7 +538,8 @@ private:
 	void DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) const;
 	/// Draws the things that blend over the solid models
 	void DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
-	/// Draws the temple's pool and map, the seeds, the weather, the particles, the mists and the other effects
+	/// Draws the temple's pool and map, the seeds, the weather, the mists and the other effects. The particles come after
+	/// the hand.
 	void DrawPassEffects(const DrawSceneDesc& desc) const;
 	/// Draws the hand mirrored in the sea, then the hand
 	void DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;

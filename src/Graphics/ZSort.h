@@ -57,6 +57,14 @@ namespace openblack::graphics::zsort
 	return Depth(workshop, camera);
 }
 
+/// The order of the see-through copies of one depth. The game draws the copies of a workshop's yard in one go, in the
+/// order of the workshop's scaffold list, the newest scaffold first. Two workshops of the same key draw in the order of
+/// the land's draw list.
+[[nodiscard]] constexpr uint64_t YardCopyOrder(uint32_t workshopListPlace, uint32_t scaffoldIndex) noexcept
+{
+	return (static_cast<uint64_t>(workshopListPlace) << 32u) | scaffoldIndex;
+}
+
 /// The key of a number that floats up from a thing. The game adds the first axis last.
 [[nodiscard]] inline float FloatingNumberKey(const glm::vec3& point, const glm::vec3& camera) noexcept
 {
@@ -92,6 +100,8 @@ constexpr uint32_t k_Unlisted = k_ListPlaces;
 /// out in the distance, or a see-through copy. Thus it comes after the solid models and before every sorted thing, such
 /// as the dome of a globe. As a bgfx depth: above k_AfterSolidBeforeSorted and under every key of BeforeSorted, the
 /// first place the greatest. A thing that is not in the list comes after the things of the list.
+/// A thing that comes before a fizzing creature in the list takes a depth in its segment (see
+/// fizz_draw_order::Order::AtOnceDepth).
 [[nodiscard]] constexpr uint32_t AtOnce(uint32_t listPlace) noexcept
 {
 	return k_AfterSolidBeforeSorted + 1u + (k_ListPlaces - std::min(listPlace, k_ListPlaces));
