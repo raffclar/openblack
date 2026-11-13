@@ -52,6 +52,7 @@
 #include "Graphics/SeaRows.h"
 #include "Graphics/VolumeGlowShell.h"
 #include "Particles/ParticleDrawFrame.h"
+#include "Particles/ParticleSymbolLayout.h"
 #include "Visual/CoarseEdges.h"
 #include "Visual/LandDetail.h"
 #include "Visual/RenderPass.h"
@@ -83,6 +84,7 @@ struct RenderContext;
 }
 namespace components
 {
+struct Abode;
 struct CreatureEyes;
 struct CreatureHair;
 struct CreatureHandGlows;
@@ -219,6 +221,11 @@ private:
 	/// are not drawn when all of them are out of it: then they put no pixel on the screen.
 	void DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre,
 	                             const view_frustum::Frustum* seenBy = nullptr) const;
+	/// For each village centre in turn, calls the draw of its column, then draws its symbols of belief. When a view is
+	/// given, the symbols of a centre are not drawn when all of them are out of it. The sprites of all the symbols in
+	/// the layout of the symbols go to the GPU in one buffer.
+	void DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const entt::entity> centres,
+	                           const view_frustum::Frustum* seenBy, const std::function<void(size_t)>& drawColumn) const;
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
@@ -1083,6 +1090,9 @@ private:
 	{
 		entt::entity centre {entt::null};
 		particles::draw::Frame frame;
+		/// The run of the symbols in the layout of the symbols, when the effect draws only symbols. Then the frame is
+		/// clear.
+		std::optional<uint32_t> symbolRun;
 		/// The lowest and the highest corners of a box that holds every corner of the frame's sprites. It is none when
 		/// the frame has more than sprites.
 		std::optional<std::pair<glm::vec3, glm::vec3>> spriteBox;
@@ -1092,6 +1102,28 @@ private:
 	mutable size_t _townBeliefFrameCount {0};
 	mutable std::vector<particles::draw::Command> _townBeliefCommands;
 	mutable std::vector<uint32_t> _townBeliefSpriteOrder;
+	/// The symbols of belief of the centres whose effects draw only symbols, all in one layout
+	mutable particles::draw::SymbolLayout _townBeliefSymbols;
+	/// What one pass draws of the layout of the symbols for a centre: its commands, and its sprites in the sprite order
+	struct TownBeliefSymbolDraw
+	{
+		/// The symbols of the centre are in the layout
+		bool laid {false};
+		uint32_t firstCommand {0};
+		uint32_t commandCount {0};
+		uint32_t firstSprite {0};
+		uint32_t spriteCount {0};
+		uint32_t run {0};
+	};
+	mutable std::vector<TownBeliefSymbolDraw> _townBeliefSymbolDraws;
+	/// The village centres of the pass, in the order of their columns, and their abodes, kept for their memory
+	mutable std::vector<entt::entity> _townColumnCentres;
+	mutable std::vector<const ecs::components::Abode*> _townColumnAbodes;
+	/// The commands of the symbols of the pass. Each counts from the start of the sprite order of the pass.
+	mutable std::vector<particles::draw::Command> _townBeliefSymbolCommands;
+	/// The places of the sprites of the symbols of the pass in the layout, in the order drawn
+	mutable std::vector<uint32_t> _townBeliefSymbolSprites;
+	mutable particles::draw::SymbolOrderLists _townBeliefSymbolLists;
 	/// The lists that the orders of the particles use, kept from frame to frame for their memory
 	mutable particles::draw::OrderLists _townBeliefOrderLists;
 	mutable particles::draw::OrderLists _particleOrderLists;

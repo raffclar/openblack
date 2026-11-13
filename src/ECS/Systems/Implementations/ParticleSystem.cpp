@@ -128,6 +128,12 @@ particles::draw::Sources ParticleSystem::DrawSources(const ParticleRuleSystemInt
 void ParticleSystem::AddDrawn(const DrawnEffect& drawn, float turnFraction, particles::draw::Frame& frame,
                               const particles::draw::Sources& sources) const
 {
+	WalkDrawn(drawn, turnFraction);
+	particles::draw::AddEffect(frame, _walk, drawn.path, drawn.effect->GetOrigin(), drawn.effect->GetPlayer(), sources);
+}
+
+void ParticleSystem::WalkDrawn(const DrawnEffect& drawn, float turnFraction) const
+{
 	_walk.Clear();
 	drawn.effect->Walk(particles::drawn_steps::DrawFraction(drawn.atLastStep, turnFraction), _walk);
 	if (drawn.drawOffset != glm::vec3(0.0f))
@@ -153,7 +159,6 @@ void ParticleSystem::AddDrawn(const DrawnEffect& drawn, float turnFraction, part
 		std::ranges::for_each(_walk.atoms, followHand);
 		std::ranges::for_each(_walk.joints, followHand);
 	}
-	particles::draw::AddEffect(frame, _walk, drawn.path, drawn.effect->GetOrigin(), drawn.effect->GetPlayer(), sources);
 }
 
 void ParticleSystem::CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const
@@ -170,6 +175,33 @@ void ParticleSystem::CollectEffectDrawFrame(EffectId id, float turnFraction, par
 	{
 		AddDrawn(*drawn, turnFraction, frame, DrawSources(*rules));
 	}
+}
+
+std::optional<uint32_t> ParticleSystem::CollectEffectSymbols(EffectId id, float turnFraction,
+                                                             particles::draw::SymbolLayout& symbols,
+                                                             particles::draw::Frame& frame) const
+{
+	frame.Clear();
+	const auto* rules = _findRules ? _findRules() : nullptr;
+	if (rules == nullptr)
+	{
+		return std::nullopt;
+	}
+	ResolveTextures(*rules);
+	// A hidden effect continues to step but does not draw
+	const auto drawn = rules->FindDrawn(id);
+	if (!drawn.has_value() || drawn->effect == nullptr || !drawn->shown)
+	{
+		return std::nullopt;
+	}
+	const auto sources = DrawSources(*rules);
+	WalkDrawn(*drawn, turnFraction);
+	if (particles::draw::OnlySymbols(_walk))
+	{
+		return symbols.Add(_walk, drawn->path, drawn->effect->GetOrigin(), drawn->effect->GetPlayer(), sources);
+	}
+	particles::draw::AddEffect(frame, _walk, drawn->path, drawn->effect->GetOrigin(), drawn->effect->GetPlayer(), sources);
+	return std::nullopt;
 }
 
 void ParticleSystem::AddLightSheets(const ParticleRuleSystemInterface& rules, particles::draw::Frame& frame)

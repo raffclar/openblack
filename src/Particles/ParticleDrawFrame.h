@@ -324,6 +324,35 @@ struct SymbolSprites
 };
 [[nodiscard]] SymbolSprites SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, int player,
                                      int symbolsInARow = k_LandSymbolsInARow);
+/// The values of an atom that its symbol's three sprites use
+struct SymbolAtom
+{
+	glm::vec3 position;
+	float scale;
+	float alpha;
+	/// Seconds it has lived, at the drawn time
+	float age;
+	std::array<uint8_t, 3> rgb;
+};
+[[nodiscard]] SymbolAtom SymbolAtomOf(const Effect::DrawAtom& atom);
+/// The same sprites as SymbolOf gives for the drawn atom
+[[nodiscard]] SymbolSprites SymbolOf(const SymbolAtom& atom, uint32_t playerRgb, int player,
+                                     int symbolsInARow = k_LandSymbolsInARow);
+/// Half the width of each glow and half the width of the symbol, for an atom of this size
+[[nodiscard]] std::pair<float, float> SymbolHalfWidths(float atomScale);
+/// The material of a symbol's glows and the material of the symbol, in the sheets that the sources give. Each is none
+/// when the sources do not know its sheet.
+[[nodiscard]] std::pair<std::optional<Material>, std::optional<Material>> SymbolMaterials(const Sources& sources);
+/// True when each step of the walk is a symbol or an atom that draws nothing: no ribbon, no shell over a model, no shower
+/// of sparks and no other kind of drawn atom
+[[nodiscard]] bool OnlySymbols(const Effect::DrawWalk& walk);
+/// True when the atom draws a symbol and nothing more
+[[nodiscard]] bool IsLaidSymbol(const Effect::DrawAtom& atom);
+/// True when the atom puts nothing in a frame: an atom that only carries collections or marks a point, a joint of a
+/// ribbon, or a kind that the game does not draw
+[[nodiscard]] bool DrawsNothing(const Effect::DrawAtom& atom);
+/// The player whose symbol an atom shows: its own player, else the player of its effect
+[[nodiscard]] int SymbolPlayer(const Effect::DrawAtom& atom, int effectPlayer);
 
 /// A player's symbol drawn by itself, between its two glows, as over a worthy artefact
 struct PlayerSymbol

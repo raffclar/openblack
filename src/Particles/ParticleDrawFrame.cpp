@@ -380,7 +380,7 @@ void AddAtom(Frame& frame, GroupBuilder& builder, const Effect::DrawAtom& atom, 
 	case Creator::Kind::Symbol:
 	{
 		// An atom may show a player of its own, as each of a village's symbols of belief does
-		const int shown = atom.player >= 0 ? atom.player : player;
+		const int shown = SymbolPlayer(atom, player);
 		const uint32_t rgb = sources.playerColour ? sources.playerColour(shown) : 0xFFFFFFu;
 		const auto symbol = SymbolOf(atom, rgb, shown, sources.symbolsInARow);
 		// Added to what is behind, writing no depth
@@ -548,7 +548,67 @@ uint32_t Frame::MaterialIndex(const Material& material)
 	return static_cast<uint32_t>(materials.size() - 1);
 }
 
+SymbolAtom draw::SymbolAtomOf(const Effect::DrawAtom& atom)
+{
+	return {.position = atom.position, .scale = atom.scale, .alpha = atom.alpha, .age = atom.age, .rgb = atom.rgb};
+}
+
 SymbolSprites draw::SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, int player, int symbolsInARow)
+{
+	return SymbolOf(SymbolAtomOf(atom), playerRgb, player, symbolsInARow);
+}
+
+std::pair<float, float> draw::SymbolHalfWidths(float atomScale)
+{
+	const float scale = std::max(atomScale, sprites::k_MinimumHalfWidth);
+	return {scale * k_GlowScale, scale};
+}
+
+std::pair<std::optional<Material>, std::optional<Material>> draw::SymbolMaterials(const Sources& sources)
+{
+	const auto materialOf = [&sources](std::string_view texture) -> std::optional<Material> {
+		const auto ids = sources.textures ? sources.textures(texture) : std::nullopt;
+		if (!ids.has_value())
+		{
+			return std::nullopt;
+		}
+		return Material {.texture = ids->first, .alphaTexture = ids->second, .mode = Mode::AlphaTexturedAlphaAdditiveNz};
+	};
+	return {materialOf(k_GlowTexture), materialOf(k_SymbolTexture)};
+}
+
+bool draw::OnlySymbols(const Effect::DrawWalk& walk)
+{
+	return std::ranges::all_of(walk.steps, [&walk](const Effect::DrawWalk::Step& step) {
+		if (step.chain)
+		{
+			return false;
+		}
+		return IsLaidSymbol(walk.atoms.at(step.index)) || DrawsNothing(walk.atoms.at(step.index));
+	});
+}
+
+bool draw::IsLaidSymbol(const Effect::DrawAtom& atom)
+{
+	return !atom.objectGlow.has_value() && atom.shower == nullptr && atom.creator->kind == Creator::Kind::Symbol;
+}
+
+bool draw::DrawsNothing(const Effect::DrawAtom& atom)
+{
+	if (atom.objectGlow.has_value() || atom.shower != nullptr)
+	{
+		return false;
+	}
+	const auto kind = atom.creator->kind;
+	return kind == Creator::Kind::Point || kind == Creator::Kind::Chain || kind == Creator::Kind::Other;
+}
+
+int draw::SymbolPlayer(const Effect::DrawAtom& atom, int effectPlayer)
+{
+	return atom.player >= 0 ? atom.player : effectPlayer;
+}
+
+SymbolSprites draw::SymbolOf(const SymbolAtom& atom, uint32_t playerRgb, int player, int symbolsInARow)
 {
 	// The symbol takes the player's colour times the atom's; the glows are a faint copy, the second white
 	const auto channel = [&](int shift, uint8_t value) {
@@ -561,11 +621,11 @@ SymbolSprites draw::SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, i
 	const float milliseconds = atom.age * k_MillisecondsPerSecond;
 	const float spin = exact_remainder::Fmod(milliseconds * k_GlowSpinRate, k_TwoPi);
 	const float glow = static_cast<float>(glowAlpha) / k_ByteMax;
-	const float scale = std::max(atom.scale, sprites::k_MinimumHalfWidth);
+	const auto [glowHalfWidth, scale] = SymbolHalfWidths(atom.scale);
 	return {{
-	    FacingSprite(atom.position, scale * k_GlowScale, 0.0f, GlowCell(milliseconds, k_GlowFrameRates[0]), k_GlowCellsPerRow,
+	    FacingSprite(atom.position, glowHalfWidth, 0.0f, GlowCell(milliseconds, k_GlowFrameRates[0]), k_GlowCellsPerRow,
 	                 glm::vec4(rgb, glow)),
-	    FacingSprite(atom.position, scale * k_GlowScale, spin, GlowCell(milliseconds, k_GlowFrameRates[1]), k_GlowCellsPerRow,
+	    FacingSprite(atom.position, glowHalfWidth, spin, GlowCell(milliseconds, k_GlowFrameRates[1]), k_GlowCellsPerRow,
 	                 glm::vec4(1.0f, 1.0f, 1.0f, glow)),
 	    FacingSprite(atom.position, scale, 0.0f, std::max(player, 0), symbolsInARow,
 	                 glm::vec4(rgb, static_cast<float>(symbolAlpha) / k_ByteMax)),
