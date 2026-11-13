@@ -26,8 +26,10 @@ namespace openblack::radix_sort
 /// Lists with fewer keys than this are sorted by comparisons, which are faster for few keys
 inline constexpr size_t k_SmallList = 64;
 
-/// Sorts the keys from the least to the greatest. The scratch list keeps its memory for the next call.
-inline void Sort(std::vector<uint64_t>& keys, std::vector<uint64_t>& scratch)
+/// Sorts the keys from the least to the greatest. The scratch list keeps its memory for the next call. When the keys
+/// already come in the order of their lowest `sortedBytes` bytes, the sort does not read these bytes. Then the sort keeps
+/// that order for keys with the same higher bytes, which gives the same result.
+inline void Sort(std::vector<uint64_t>& keys, std::vector<uint64_t>& scratch, size_t sortedBytes = 0)
 {
 	const size_t count = keys.size();
 	if (count < k_SmallList)
@@ -42,7 +44,7 @@ inline void Sort(std::vector<uint64_t>& keys, std::vector<uint64_t>& scratch)
 	std::array<std::array<size_t, k_Digits>, k_Bytes> counts {};
 	for (const auto key : keys)
 	{
-		for (size_t byte = 0; byte < k_Bytes; ++byte)
+		for (size_t byte = sortedBytes; byte < k_Bytes; ++byte)
 		{
 			++counts.at(byte).at((key >> (byte * k_BitsPerByte)) & 0xFFu);
 		}
@@ -50,7 +52,7 @@ inline void Sort(std::vector<uint64_t>& keys, std::vector<uint64_t>& scratch)
 	scratch.resize(count);
 	auto* from = &keys;
 	auto* to = &scratch;
-	for (size_t byte = 0; byte < k_Bytes; ++byte)
+	for (size_t byte = sortedBytes; byte < k_Bytes; ++byte)
 	{
 		auto& digits = counts.at(byte);
 		const auto shift = byte * k_BitsPerByte;

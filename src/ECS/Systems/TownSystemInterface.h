@@ -23,6 +23,7 @@
 
 #include "3D/MapCoords.h"
 #include "ECS/Systems/SavedStateInterface.h"
+#include "ECS/TownCentreLinks.h"
 #include "ECS/TownHomes.h"
 #include "Enums.h"
 
@@ -174,5 +175,8 @@ public:
 	/// The village centres in the order that the game draws them: the newest first. A centre that goes keeps the order of
 	/// the others. The order follows the centres at each frame.
 	[[nodiscard]] virtual std::span<const entt::entity> CentresInDrawOrder() const { return {}; }
+	/// The totem and the town of each village centre, while the symbols of belief take their step in a frame. At other
+	/// times it is none, and a search for a centre walks the stores.
+	[[nodiscard]] virtual const town_centre_links::Links* FrameLinks() const { return nullptr; }
 };
 } // namespace openblack::ecs::systems

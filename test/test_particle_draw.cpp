@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
 #include <algorithm>
@@ -25,6 +26,7 @@
 #include <ParticleFile.h>
 #include <StackedBitmap.h>
 #include <glm/geometric.hpp>
+#include <glm/vector_relational.hpp>
 #include <gtest/gtest.h>
 
 #include "Graphics/ZSort.h"
@@ -253,6 +255,75 @@ TEST(ParticleDraw, SortedThingsGoInTheOrderOfAStableSortOfTheirDistances)
 	std::vector<uint32_t> sprites;
 	std::ranges::transform(expected, std::back_inserter(sprites), &std::pair<float, uint32_t>::second);
 	EXPECT_EQ(order, sprites);
+}
+
+TEST(ParticleDraw, KeptListsGiveTheSameOrderAsNewLists)
+{
+	// Frames of different sizes, one after the other, through the same lists
+	OrderLists lists;
+	for (const int count : {300, 5, 0, 120, 300})
+	{
+		auto frame = MakeFrame();
+		for (int i = 0; i < count; ++i)
+		{
+			const glm::vec3 point(static_cast<float>((i * 7) % 5 - 2), static_cast<float>((i * 3) % 4 - 2),
+			                      static_cast<float>(i % 9));
+			AddSprite(frame, point, static_cast<uint32_t>(i % 2));
+		}
+		AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+		AddSprite(frame, glm::vec3(1.0f), 1);
+		AddSprite(frame, glm::vec3(2.0f), 0);
+		AddGroup(frame, DrawPath::Queued, glm::vec3(1.0f), static_cast<uint32_t>(count));
+		std::vector<Command> expectedCommands;
+		std::vector<uint32_t> expectedOrder;
+		Order(frame, glm::vec3(0.5f), std::nullopt, expectedCommands, expectedOrder);
+		std::vector<Command> commands;
+		std::vector<uint32_t> order;
+		Order(frame, glm::vec3(0.5f), std::nullopt, commands, order, lists);
+		EXPECT_EQ(order, expectedOrder) << count;
+		ASSERT_EQ(commands.size(), expectedCommands.size()) << count;
+		for (size_t i = 0; i < commands.size(); ++i)
+		{
+			EXPECT_EQ(commands[i].kind, expectedCommands[i].kind);
+			EXPECT_EQ(commands[i].first, expectedCommands[i].first);
+			EXPECT_EQ(commands[i].count, expectedCommands[i].count);
+			EXPECT_EQ(commands[i].material, expectedCommands[i].material);
+			EXPECT_EQ(commands[i].depth, expectedCommands[i].depth);
+		}
+	}
+}
+
+TEST(ParticleDraw, TheSpriteBoxHoldsEachCornerOfEachSprite)
+{
+	auto frame = MakeFrame();
+	EXPECT_FALSE(SpriteBox(frame).has_value());
+	AddSprite(frame, {10.0f, 0.0f, 0.0f}, 0);
+	AddSprite(frame, {-5.0f, 2.0f, 7.0f}, 1);
+	// Half a width of 1, half a height of 2, and corners moved back by 0.5 across and by -1 up
+	frame.sprites[1].shape = {2.0f, 0.3f, 0.5f, -1.0f};
+	AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+	const auto box = SpriteBox(frame);
+	ASSERT_TRUE(box.has_value());
+	ExpectNear(box->first, {-9.5f, -2.5f, -1.0f});
+	ExpectNear(box->second, {11.0f, 6.5f, 11.5f});
+	// Each corner of the second sprite as the shader puts it, in any turn and facing the screen at any angle
+	for (const float roll : {0.0f, 0.3f, 1.0f, 2.5f})
+	{
+		for (const glm::vec2 corner : {glm::vec2(-1.0f), glm::vec2(1.0f), glm::vec2(-1.0f, 1.0f), glm::vec2(1.0f, -1.0f)})
+		{
+			const float x = corner.x * 1.0f - 0.5f;
+			const float y = corner.y * 2.0f + 1.0f;
+			const glm::vec3 right = glm::normalize(glm::vec3(1.0f, 0.5f, -0.2f));
+			const glm::vec3 up = glm::normalize(glm::cross(glm::vec3(0.1f, 0.2f, 1.0f), right));
+			const glm::vec3 world = glm::vec3(-5.0f, 2.0f, 7.0f) + right * (x * std::cos(roll) + y * std::sin(roll)) +
+			                        up * (y * std::cos(roll) - x * std::sin(roll));
+			EXPECT_TRUE(glm::all(glm::greaterThanEqual(world, box->first)));
+			EXPECT_TRUE(glm::all(glm::lessThanEqual(world, box->second)));
+		}
+	}
+	// A frame that draws more than sprites has no box
+	frame.items.push_back({.kind = ItemKind::Mist, .index = 0, .sortPoint = glm::vec3(0.0f)});
+	EXPECT_FALSE(SpriteBox(frame).has_value());
 }
 
 TEST(ParticleDraw, AddedSpritesOnDifferentSheetsAreDrawnASheetAtATime)

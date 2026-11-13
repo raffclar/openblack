@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -87,6 +88,7 @@ public:
 	void UpdateFrame(std::chrono::milliseconds frameRealTime, bool landDrawn) override;
 	[[nodiscard]] std::optional<uint32_t> BeliefSymbolsOf(entt::entity centre) const override;
 	[[nodiscard]] std::span<const entt::entity> CentresInDrawOrder() const override;
+	[[nodiscard]] const town_centre_links::Links* FrameLinks() const override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
@@ -120,5 +122,7 @@ private:
 	std::vector<entt::entity> _presentCentres;
 	/// When the symbols of belief take their next step
 	frame_pace::Pace _beliefPace;
+	/// The totem and the town of each centre, kept only while the symbols take their step in a frame
+	std::optional<town_centre_links::Links> _frameLinks;
 };
 } // namespace openblack::ecs::systems

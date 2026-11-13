@@ -1190,6 +1190,18 @@ private:
 	/// The creator of the points of a group: the creator that the rules of the group name, when they name only one
 	[[nodiscard]] const Creator* PointCreatorOfGroup(int group) const;
 	[[nodiscard]] const Modifier* ModifierAt(int number) const;
+	/// The answer of a rule's condition over its collection, as ConditionForCollection gives it for the name of the
+	/// rule's condition
+	[[nodiscard]] bool ConditionForSlot(const Modifier& modifier, const Collection& collection) const;
+
+	/// A rule's condition over a collection, found one time in the file and in the classes. A condition with no object
+	/// in the file, or with a class that the game does not run, holds.
+	struct CollectionTest
+	{
+		const psys::ParticleObject* object {nullptr};
+		const std::function<bool(const Effect&, const psys::ParticleObject&, const Collection&)>* test {nullptr};
+		bool invert {false};
+	};
 
 	std::shared_ptr<const psys::ParticleFile> _file;
 	EffectServices _services;
@@ -1198,6 +1210,8 @@ private:
 	std::vector<int> _objectModifiers;
 	std::array<std::vector<const Modifier*>, k_GroupCount> _groups;
 	std::array<bool, k_GroupCount> _hierarchies {};
+	/// The condition of each rule that tested its collection, by the rule
+	mutable std::unordered_map<const Modifier*, CollectionTest> _collectionTests;
 	std::unordered_map<std::string, std::unique_ptr<Creator>> _creators;
 	std::unordered_map<std::string, float> _floatValues;
 	std::vector<std::unique_ptr<Collection>> _roots;

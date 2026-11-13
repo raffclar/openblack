@@ -1458,6 +1458,9 @@ void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landD
 		particles.Delete(entry.second);
 		return true;
 	});
+	// The step of the symbols makes and removes no totem and no town. Thus one walk of their stores gives the links of
+	// all the centres
+	_frameLinks = town_centre_links::Links::Of(*_registry);
 	_registry->Each<const Abode>([&](entt::entity entity, const Abode& abode) {
 		if (abode.type != AbodeNumber::TownCentre)
 		{
@@ -1488,6 +1491,12 @@ void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landD
 			particles.ProcessByFrame(found->second, *step);
 		}
 	});
+	_frameLinks.reset();
+}
+
+const town_centre_links::Links* TownSystem::FrameLinks() const
+{
+	return _frameLinks.has_value() ? &*_frameLinks : nullptr;
 }
 
 std::span<const entt::entity> TownSystem::CentresInDrawOrder() const

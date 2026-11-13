@@ -125,7 +125,7 @@ void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 		{
 			drawColumn(entity, abode);
 		}
-		DrawTownBeliefParticles(desc, entity);
+		DrawTownBeliefParticles(desc, entity, _warmingUp ? nullptr : &seenBy);
 	};
 	// The centres draw in the game's order, the newest first
 	if (!Locator::townSystem::has_value())
