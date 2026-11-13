@@ -7,12 +7,18 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <bit>
+#include <functional>
 #include <limits>
+#include <numeric>
+#include <random>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "Graphics/FizzDrawOrder.h"
+#include "Graphics/ViewOrder.h"
 #include "Graphics/ZSort.h"
 
 using namespace openblack::graphics;
@@ -114,4 +120,67 @@ TEST(ZSort, AYardCopySortsByTheKeyOfItsWorkshop)
 	const glm::vec3 farWorkshop {0.0f, 0.0f, 24.0f};
 	EXPECT_LT(zsort::ModelDepth(copyPlace, camera), zsort::ModelDepth(model, camera));
 	EXPECT_GT(zsort::YardCopyDepth(farWorkshop, camera), zsort::ModelDepth(model, camera));
+}
+
+namespace
+{
+
+/// The list of the game: a new thing goes before the first thing of a smaller key, thus after the things of the same
+/// key. The game draws the list from its start.
+std::vector<size_t> GameListOrder(const std::vector<float>& keys)
+{
+	std::vector<size_t> list;
+	for (size_t index = 0; index < keys.size(); ++index)
+	{
+		const auto place = std::ranges::find_if(list, [&](size_t other) { return keys.at(other) < keys.at(index); });
+		list.insert(place, index);
+	}
+	return list;
+}
+
+/// The order of a view sorted by depth, the greatest first, with the ties in the order that the draws came in
+std::vector<size_t> DescendingViewOrder(const std::vector<uint32_t>& depths)
+{
+	std::vector<size_t> order(depths.size());
+	std::iota(order.begin(), order.end(), size_t {0});
+	std::ranges::stable_sort(order, std::ranges::greater {}, [&](size_t index) { return depths.at(index); });
+	return order;
+}
+
+} // namespace
+
+TEST(ZSort, TheViewsSortedByDepthKeepTiesInTheOrderTheyCame)
+{
+	EXPECT_TRUE(TiesInSubmitOrder(ViewOrder::DepthDescending));
+	EXPECT_TRUE(TiesInSubmitOrder(ViewOrder::DepthAscending));
+	EXPECT_FALSE(TiesInSubmitOrder(ViewOrder::ByProgram));
+	EXPECT_FALSE(TiesInSubmitOrder(ViewOrder::Sequential));
+}
+
+TEST(ZSort, TheGameDrawsThingsOfTheSameKeyInTheOrderItGetsThem)
+{
+	// Three things at one place and two at another: the first that the game gets of each key comes first
+	const std::vector<float> keys {25.0f, 9.0f, 25.0f, 9.0f, 25.0f};
+	EXPECT_EQ(GameListOrder(keys), (std::vector<size_t> {0, 2, 4, 1, 3}));
+}
+
+TEST(ZSort, TheTranslucentViewDrawsInTheOrderOfTheGameList)
+{
+	const glm::vec3 camera {100.0f, 50.0f, -20.0f};
+	std::mt19937 random(7);
+	std::uniform_int_distribution<int> step(0, 6);
+	std::vector<glm::vec3> points;
+	for (size_t index = 0; index < 400; ++index)
+	{
+		// Few places, so that many draws share a place and thus a key
+		points.push_back(camera + glm::vec3(static_cast<float>(step(random)) * 3.5f, static_cast<float>(step(random)), 0.25f));
+	}
+	std::vector<float> keys;
+	std::vector<uint32_t> depths;
+	for (const auto& point : points)
+	{
+		keys.push_back(zsort::Key(point, camera));
+		depths.push_back(zsort::Depth(point, camera));
+	}
+	EXPECT_EQ(DescendingViewOrder(depths), GameListOrder(keys));
 }

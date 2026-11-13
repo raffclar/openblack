@@ -531,6 +531,7 @@ void ShaderManager::SetViewOrder(uint16_t viewId, ViewOrder order) const
 	    bgfx::ViewMode::DepthDescending,
 	};
 	bgfx::setViewMode(static_cast<bgfx::ViewId>(viewId), k_Modes.at(static_cast<size_t>(order)));
+	bgfx::setViewDepthTies(static_cast<bgfx::ViewId>(viewId), TiesInSubmitOrder(order));
 }
 
 void ShaderManager::SetCamera(graphics::RenderPass viewId, const Camera& camera, glm::vec2 target)

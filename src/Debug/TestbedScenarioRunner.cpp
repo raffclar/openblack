@@ -235,6 +235,11 @@ void Runner::Start(const Scenario& scenario)
 	// without them
 	const ecs::systems::InspectorLoading loading("scenario " + std::string(scenario.id));
 	Stop();
+	// The boxes of the scenario before close, so that none stays open over the new testbed
+	if (_stage != nullptr)
+	{
+		_stage->CloseBoxes();
+	}
 	// The camera is the player's again before the scenario frames it, and the cave closes
 	if (Locator::creatureModeSystem::has_value())
 	{
@@ -274,6 +279,7 @@ void Runner::Start(const Scenario& scenario)
 	_started.clear();
 	_log.clear();
 	_checks.Start(scenario.checks);
+	_checksClock.Start(Locator::time::has_value() ? Locator::time::value().GetTurn() : 0);
 	_checksReported = false;
 	_checksProgressTurn.reset();
 	_shot.reset();
@@ -1111,7 +1117,7 @@ void Runner::Update(float seconds)
 	{
 		return;
 	}
-	UpdateChecks();
+	UpdateChecks(seconds);
 	// Another land was loaded over the testbed
 	const auto gone = [](entt::entity entity) { return !Locator::entitiesRegistry::value().Valid(entity); };
 	if ((!_creatures.empty() && std::ranges::none_of(std::views::iota(size_t {0}, _creatures.size()),
@@ -1364,7 +1370,7 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 	return std::nullopt;
 }
 
-void Runner::UpdateChecks()
+void Runner::UpdateChecks(float seconds)
 {
 	if (_scenario == nullptr || _checksReported || !Locator::time::has_value())
 	{
@@ -1377,8 +1383,11 @@ void Runner::UpdateChecks()
 	}
 	if (!_checks.Done())
 	{
-		const auto turns = Locator::time::value().GetTurn() - _startTurn;
-		_checks.Update(turns, [this](const checks::Check& check) { return ReadCheck(check); });
+		const auto& time = Locator::time::value();
+		_checksClock.Advance(time.GetTurn(),
+		                     !time.IsNetworkGame() && Locator::temple::has_value() && Locator::temple::value().Active(),
+		                     seconds);
+		_checks.Update(_checksClock.Elapsed(time.GetTurn()), [this](const checks::Check& check) { return ReadCheck(check); });
 	}
 	if (_checks.GetVerdict() == checks::Verdict::Waiting)
 	{
@@ -1420,7 +1429,7 @@ void Runner::EndChecks()
 	}
 	if (!_checks.Done())
 	{
-		const auto turns = Locator::time::value().GetTurn() - _startTurn;
+		const auto turns = _checksClock.Elapsed(Locator::time::value().GetTurn());
 		_checks.Update(turns, [this](const checks::Check& check) { return ReadCheck(check); });
 	}
 	PublishChecks(_benchmark.reportChecks);

@@ -158,6 +158,24 @@ private:
 	std::vector<bool> _decided;
 };
 
+/// Counts the turns that a scenario's checks wait for. A frame in which the world plays no turn while the temple holds
+/// the world adds its time as turns, so that a check on the temple's rooms and their boxes can run.
+class Clock
+{
+public:
+	/// Begins a scenario at the world's turn
+	void Start(uint32_t worldTurn);
+	/// Takes one frame. templeHoldsWorld is true while the player is in the temple of a game alone.
+	void Advance(uint32_t worldTurn, bool templeHoldsWorld, float seconds);
+	/// The turns since the start: the world's turns and the turns of the time that the temple held the world
+	[[nodiscard]] uint32_t Elapsed(uint32_t worldTurn) const;
+
+private:
+	uint32_t _startTurn {0};
+	uint32_t _lastTurn {0};
+	double _heldSeconds {0.0};
+};
+
 /// What the game keeps of the scenario that ran last, for the inspector
 struct Report
 {

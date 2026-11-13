@@ -1481,8 +1481,8 @@ void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, au
 			glowPlacers.additiveShare.reset();
 			glowPlacers.instanceAlpha = false;
 			submitDesc.state = glowState(cullBack);
-			// Just after the hand in the sort
-			submitDesc.sortDepth = submitDesc.sortDepth > 0 ? submitDesc.sortDepth - 1 : 0;
+			// The glow has the depth of the hand. The view keeps the draws of one depth in the order that they come, thus the
+			// glow comes just after the hand, and before the particles that the game draws after the hand.
 			submitDesc.skinTexture = &glow->flow->GetNativeHandle();
 			submitDesc.uvScale = glow->uvScale;
 			submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glow->colour, .alpha = glow->alpha};
