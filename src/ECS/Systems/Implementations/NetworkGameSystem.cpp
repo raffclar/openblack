@@ -222,7 +222,9 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	_session = std::make_unique<online::NetworkSession>(*sockets, Microseconds, _log);
 	// Each network game has its own id in the desync events. The id is random, so it tells nothing about the player.
 	std::random_device random;
-	_desyncs.emplace(error_reports::ClientGameId((static_cast<uint64_t>(random()) << 32U) | random()), turn_codec::k_Version);
+	const uint64_t high = random();
+	const uint64_t low = random();
+	_desyncs.emplace(error_reports::ClientGameId((high << 32U) | low), turn_codec::k_Version);
 	// A land that loads after the join gets its humans from the session at the start of the game
 	if (Locator::landSystem::has_value())
 	{
