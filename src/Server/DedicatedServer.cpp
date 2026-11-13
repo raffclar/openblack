@@ -19,6 +19,8 @@
 #include <filesystem>
 #include <memory>
 #include <random>
+#include <span>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -35,6 +37,8 @@
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
+#include "Commands/TurnCodec.h"
+#include "Common/DesyncReports.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
@@ -104,6 +108,36 @@ namespace openblack::server
 {
 namespace
 {
+
+/// The desyncs of the game of the server. The server plays one game in each run, so the budget of the run is here too.
+struct ServerDesyncs
+{
+	error_reports::DesyncReportRule rule;
+	error_reports::DesyncRunBudget budget;
+
+	/// Milliseconds of a steady clock
+	[[nodiscard]] static int64_t Now()
+	{
+		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+		    .count();
+	}
+	/// Once a frame: the events that the flood limits let go now
+	void Update()
+	{
+		for (const auto& report : rule.Update(Now(), budget))
+		{
+			SendDesyncReport(report);
+		}
+	}
+	/// The end of the game: the summary, once
+	void Finish()
+	{
+		if (const auto summary = rule.Finish(budget); summary.has_value())
+		{
+			SendDesyncReport(*summary);
+		}
+	}
+};
 
 constexpr std::string_view k_TurnWord = "turn ";
 constexpr std::string_view k_ChecksumWord = " checksum ";
@@ -1005,7 +1039,8 @@ std::string GameIdFor(const NetworkSettings& settings, bool restored)
 /// continues a game from a snapshot restores the room of the game.
 bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::unique_ptr<GameRole>& network,
                   const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn, SnapshotKeeper* keeper,
-                  const std::optional<snapshots::Restored>& restored, LifetimeWatch& lifetime)
+                  const std::optional<snapshots::Restored>& restored, LifetimeWatch& lifetime,
+                  std::shared_ptr<ServerDesyncs>& desyncs)
 {
 	network = std::make_unique<GameRole>();
 	// The land goes as its path under the Scripts folder, so that each client finds it in its own game folder, and the
@@ -1149,6 +1184,18 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		Locator::syncChecksumSystem::value().DumpPart(turn, fmt::format("slot {} parts", seat), seat);
 	});
 #endif
+	// The lobby gets the end of the game one time, with the figures of the turn that decided it
+	const lobby_results::Game game {.id = GameIdFor(*settings.network, restored.has_value()), .land = start.land, .turn = 0};
+	// Each desync of a client goes to the error reports, inside the flood limits. The events have the id of the game.
+	desyncs = std::make_shared<ServerDesyncs>(
+	    ServerDesyncs {.rule = error_reports::DesyncReportRule(game.id, turn_codec::k_Version), .budget = {}});
+	host.SetDesyncListener([desyncs](uint8_t seat, uint32_t turn, uint64_t server, uint64_t client) {
+		desyncs->rule.Detected(seat, {.turn = turn, .ownChecksum = server, .otherChecksum = client, .slot = seat},
+		                       ServerDesyncs::Now());
+	});
+	host.SetPartedListener([desyncs](uint8_t seat, std::span<const std::string> parts) {
+		desyncs->rule.Parted(seat, parts, ServerDesyncs::Now());
+	});
 	// The log names the parts that differ when a client sends its parts of the turn at which its world parted
 	host.SetPartsOfTurn([](uint32_t turn) { return Locator::syncChecksumSystem::value().PartsOfTurn(turn); });
 	// A client whose world parted gets the world of the server, at the start of the next turn
@@ -1168,13 +1215,14 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		                   settings.network->gameId, lobby->id, online::build_id::Own(), start.land, landSha256Logged, members);
 	}
 	lifetime.Listened();
-	world.SetNetwork([&host, role = network.get(), keeper, &lifetime] {
+	world.SetNetwork([&host, role = network.get(), keeper, &lifetime, desyncs] {
 		// After a restart, the world first does again the turns that the server sent. The server reads no socket until then.
 		if (host.Replaying())
 		{
 			return ServerWorld::NetworkStep::Replay;
 		}
 		role->Update();
+		desyncs->Update();
 		if (role->HostReportDue())
 		{
 			role->SendHostReport(Locator::time::value().GetTurn(), false, HostConditionsOfWorld());
@@ -1182,6 +1230,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		if (host.GameOver())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every god left the game: the game ends");
+			desyncs->Finish();
 		}
 		if (lifetime.Ends(host))
 		{
@@ -1197,8 +1246,6 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		}
 		return host.HasTurn(Locator::time::value().GetTurn()) ? ServerWorld::NetworkStep::Play : ServerWorld::NetworkStep::Wait;
 	});
-	// The lobby gets the end of the game one time, with the figures of the turn that decided it
-	const lobby_results::Game game {.id = GameIdFor(*settings.network, restored.has_value()), .land = start.land, .turn = 0};
 	Locator::syncChecksumSystem::value().SetTurnListener(
 	    [&host, onTurn, role = network.get(), game,
 	     logChecksums = settings.logChecksums](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
@@ -1242,7 +1289,8 @@ public:
 
 bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, std::unique_ptr<int>& /*network*/,
                   const std::function<void(uint32_t turn, uint64_t checksum)>& /*onTurn*/, SnapshotKeeper* /*keeper*/,
-                  const std::optional<snapshots::Restored>& /*restored*/, LifetimeWatch& /*lifetime*/)
+                  const std::optional<snapshots::Restored>& /*restored*/, LifetimeWatch& /*lifetime*/,
+                  std::shared_ptr<ServerDesyncs>& /*desyncs*/)
 {
 	SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "This build has no game role");
 	return false;
@@ -1420,6 +1468,7 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 	std::optional<snapshots::Restored> restored;
 	// The limits of the life of the server of a lobby game
 	LifetimeWatch lifetime(settings);
+	std::shared_ptr<ServerDesyncs> desyncs;
 	if (settings.network.has_value() && settings.network->snapshots.everyTurns > 0)
 	{
 		keeper = std::make_unique<SnapshotKeeper>(settings.network->snapshots);
@@ -1433,7 +1482,8 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 	{
 		exitCode = EXIT_FAILURE;
 	}
-	else if (settings.network.has_value() && !StartNetwork(settings, *world, network, onTurn, keeper.get(), restored, lifetime))
+	else if (settings.network.has_value() &&
+	         !StartNetwork(settings, *world, network, onTurn, keeper.get(), restored, lifetime, desyncs))
 	{
 		exitCode = EXIT_FAILURE;
 	}
@@ -1454,6 +1504,11 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 		LogGraphicsLibrary();
 	}
 	checksums.SetTurnListener({});
+	// The summary of the desyncs goes when the game did not end before the server stops
+	if (desyncs)
+	{
+		desyncs->Finish();
+	}
 	// The writer of the snapshots finishes before the services of the world stop
 	keeper.reset();
 #if defined(OPENBLACK_GAME_ROLE)

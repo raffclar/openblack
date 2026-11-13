@@ -177,7 +177,11 @@ struct Computer
 		    .readCreature = [this] { return this->creature; },
 		    .readAlignment = [alignment] { return alignment; },
 		    .localParts = [this](uint32_t turn) { return parts ? parts(turn) : online::PartHashes {}; },
+		    .origin = online::GameOrigin::Lan,
 		    .testLoadDelayMicroseconds = loadDelayMicroseconds,
+		    .desynced = [this](uint32_t turn, uint64_t local,
+		                       uint64_t server) { desyncs.push_back({.turn = turn, .local = local, .server = server}); },
+		    .partedParts = [this](std::span<const std::string> names) { partedNames.assign(names.begin(), names.end()); },
 		});
 		this->landFile = std::move(landFile);
 		this->creature = std::move(creature);
@@ -214,6 +218,15 @@ struct Computer
 	std::unique_ptr<LoopbackSockets::Client> sockets;
 	/// The parts of the world of this computer at a turn, for the log of a part. None by default.
 	std::function<online::PartHashes(uint32_t turn)> parts;
+	/// The desyncs that the session told, and the names of the parts that differ from the last parts of the server
+	struct Desync
+	{
+		uint32_t turn {0};
+		uint64_t local {0};
+		uint64_t server {0};
+	};
+	std::vector<Desync> desyncs;
+	std::vector<std::string> partedNames;
 	NetworkSession session;
 	FakeWorld world;
 	std::vector<size_t> played;
@@ -222,14 +235,22 @@ struct Computer
 
 server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 {
-	// "god:name" or "observer:name", with "@lobby" after the name for a ticket of a lobby's game; anything else is not a
-	// ticket
+	// "god:name" or "observer:name", with "+staff" after the role for a staff player and "@lobby" after the name for a
+	// ticket of a lobby's game; anything else is not a ticket
 	const auto colon = token.find(':');
 	if (colon == std::string_view::npos)
 	{
 		return {.problem = server::TicketProblem::Signature, .claims = std::nullopt};
 	}
-	const auto role = game_socket::RoleFrom(token.substr(0, colon));
+	// "+staff" after the role gives the staff claim
+	auto roleText = token.substr(0, colon);
+	constexpr std::string_view k_Staff = "+staff";
+	const auto staff = roleText.ends_with(k_Staff);
+	if (staff)
+	{
+		roleText.remove_suffix(k_Staff.size());
+	}
+	const auto role = game_socket::RoleFrom(roleText);
 	if (!role.has_value())
 	{
 		return {.problem = server::TicketProblem::Format, .claims = std::nullopt};
@@ -244,6 +265,7 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 	claims.subject = std::string(subject);
 	claims.name = claims.subject;
 	claims.role = *role;
+	claims.staff = staff;
 	return {.problem = server::TicketProblem::None, .claims = claims};
 }
 
@@ -635,6 +657,83 @@ TEST(LockstepRules, TheServerLeavesOutOnlyTheCommandsThatAClientNeverSends)
 	EXPECT_FALSE(server::LeavesOut(TotemShare {}, false));
 }
 
+TEST(LockstepRules, OnlyAStaffPlayerSendsTheEditsAndTheCheats)
+{
+	EXPECT_TRUE(OnlyStaffSends(EditorEdit {}));
+	EXPECT_TRUE(OnlyStaffSends(DebugCheat {}));
+	EXPECT_FALSE(OnlyStaffSends(HandTap {}));
+	EXPECT_FALSE(OnlyStaffSends(CreatureFightCheat {}));
+	// An observer sends the edits of the editor only with the staff claim, and never a debug cheat, as it has no god
+	EXPECT_TRUE(ServerTakesFromObserver(EditorEdit {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorEdit {}, false));
+	EXPECT_FALSE(ServerTakesFromObserver(DebugCheat {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(HandTap {}, true));
+	EXPECT_FALSE(server::LeavesOut(EditorEdit {}, false));
+	EXPECT_FALSE(server::LeavesOut(DebugCheat {}, false));
+}
+
+TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAStaffGod)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+staff:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.GetJoined().has_value());
+	EXPECT_TRUE(alice.session.GetJoined()->staff);
+	EXPECT_FALSE(bob.session.GetJoined()->staff);
+	const EditorEdit move {.kind = EditorEdit::Kind::Move, .object = Entity(5), .position = {1.0f, 0.0f, 2.0f}};
+	alice.session.Send(move);
+	alice.session.Send(DebugCheat {.cheat = 0, .on = true});
+	bob.session.Send(move);
+	bob.session.Send(DebugCheat {.cheat = 1, .on = true});
+	bob.session.Send(HandTap {.object = Entity(2)});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedStaffCommands(), 2u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorEdit), 1u);
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugCheat), 1u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorEdit), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::DebugCheat), 0u);
+	// The other commands of the block of the player with no staff claim stay
+	EXPECT_EQ(count(1, turn_codec::CommandTag::HandTap), 1u);
+	// The worlds stay in step
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, AStaffObserverSendsTheEditsButNoCheat)
+{
+	MakeHost(1);
+	// The observers join before the start, as this server has no world state for a later join
+	Computer watcher(network, now, "observer+staff:carol");
+	Computer other(network, now, "observer:dave");
+	Frames({&watcher, &other}, 3);
+	Computer alice(network, now, "god:alice");
+	Frames({&alice, &watcher, &other}, 8);
+	ASSERT_TRUE(host->Started());
+	EXPECT_TRUE(watcher.session.GetJoined()->staff);
+	const EditorEdit remove {.kind = EditorEdit::Kind::Remove, .object = Entity(7)};
+	watcher.session.Send(remove);
+	watcher.session.Send(DebugCheat {.cheat = 0, .on = true});
+	other.session.Send(remove);
+	Frames({&alice, &watcher, &other}, 4);
+	// The client of an observer with no staff claim does not send the edit, and no observer client sends a cheat
+	EXPECT_EQ(host->RefusedStaffCommands(), 0u);
+	const auto edits = std::ranges::count_if(alice.world.observerCommands, [](const Command& command) {
+		return std::holds_alternative<EditorEdit>(command.action);
+	});
+	const auto cheats = std::ranges::count_if(alice.world.observerCommands, [](const Command& command) {
+		return std::holds_alternative<DebugCheat>(command.action);
+	});
+	EXPECT_EQ(edits, 1);
+	EXPECT_EQ(cheats, 0);
+}
+
 // A changed client can send bytes that are not a creature file. The server sends empty data in their place, so no
 // computer reads them, and each computer brings no creature for that god, as it does for a file that does not read.
 TEST_F(LockstepTest, TheServerSendsNoCreatureFileForAFileThatDoesNotRead)
@@ -841,6 +940,52 @@ TEST_F(LockstepTest, AClientThatPartsSendsItsPartsAndBothLogsNameThePartThatDiff
 	EXPECT_TRUE(std::ranges::any_of(
 	    lines, [](const std::string& line) { return line.find("The client asks to resume from turn") != std::string::npos; }));
 	EXPECT_EQ(alice.loads, 1u);
+}
+
+TEST_F(LockstepTest, BothSidesTellTheDesyncWithItsChecksumsAndThePartsThatDiffer)
+{
+	MakeHost(1);
+	GiveWorldState();
+	host->SetPartsOfTurn(
+	    [](uint32_t turn) { return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}}; });
+	struct HostDesync
+	{
+		uint8_t seat {0};
+		uint32_t turn {0};
+		uint64_t server {0};
+		uint64_t client {0};
+	};
+	std::vector<HostDesync> hostDesyncs;
+	host->SetDesyncListener([&hostDesyncs](uint8_t seat, uint32_t turn, uint64_t server, uint64_t client) {
+		hostDesyncs.push_back({.seat = seat, .turn = turn, .server = server, .client = client});
+	});
+	std::vector<std::pair<uint8_t, std::vector<std::string>>> hostParts;
+	host->SetPartedListener([&hostParts](uint8_t seat, std::span<const std::string> names) {
+		hostParts.emplace_back(seat, std::vector<std::string>(names.begin(), names.end()));
+	});
+	Computer alice(network, now, "god:alice");
+	constexpr uint32_t k_PartsAfter = 20;
+	alice.parts = [](uint32_t turn) {
+		const bool parted = turn > k_PartsAfter;
+		return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn + (parted ? 1 : 0)}, {"synced seed", 7}};
+	};
+	alice.world.partsAfter = k_PartsAfter;
+	Frames({&alice}, 60);
+
+	// One desync on each side: the turns that differ until the resync do not count again
+	ASSERT_EQ(alice.desyncs.size(), 1u);
+	EXPECT_EQ(alice.desyncs[0].turn, k_PartsAfter + 1);
+	EXPECT_NE(alice.desyncs[0].local, alice.desyncs[0].server);
+	ASSERT_EQ(hostDesyncs.size(), 1u);
+	EXPECT_EQ(hostDesyncs[0].seat, 0u);
+	EXPECT_EQ(hostDesyncs[0].turn, k_PartsAfter + 1);
+	// The two sides see the same two checksums
+	EXPECT_EQ(hostDesyncs[0].server, alice.desyncs[0].server);
+	EXPECT_EQ(hostDesyncs[0].client, alice.desyncs[0].local);
+	EXPECT_EQ(alice.partedNames, (std::vector<std::string> {"Transform"}));
+	ASSERT_EQ(hostParts.size(), 1u);
+	EXPECT_EQ(hostParts[0].first, 0u);
+	EXPECT_EQ(hostParts[0].second, (std::vector<std::string> {"Transform"}));
 }
 
 TEST_F(LockstepTest, TheServerLogTellsWhyItRefusesAResume)

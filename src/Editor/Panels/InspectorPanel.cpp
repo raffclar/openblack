@@ -47,6 +47,7 @@
 #include "Editor/EditorContext.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorMath.h"
+#include "Editor/EditorNetworkEdits.h"
 #include "Editor/EditorStyle.h"
 #include "Locator.h"
 
@@ -275,14 +276,14 @@ void InspectorPanel::DrawTransform(EditorContext& context, entt::entity entity) 
 	auto position = transform->position;
 	if (ImGui::DragFloat3("Position", &position.x, 0.25f, 0.0f, 0.0f, "%.1f"))
 	{
-		MoveTo(entity, position);
+		context.writes.MoveTo(entity, position);
 	}
 	track("Move");
 	ImGui::SameLine();
 	if (ImGui::SmallButton("Ground"))
 	{
 		_edit.Begin(context.registry, one);
-		MoveTo(entity, {position.x, LandHeight({position.x, position.z}), position.z});
+		context.writes.MoveTo(entity, {position.x, LandHeight({position.x, position.z}), position.z});
 		_edit.Finish(context, "Ground");
 		before.Begin(context.registry, one);
 	}
@@ -295,16 +296,19 @@ void InspectorPanel::DrawTransform(EditorContext& context, entt::entity entity) 
 	auto yaw = glm::degrees(YawOf(transform->rotation));
 	if (ImGui::SliderFloat("Turn", &yaw, -180.0f, 180.0f, "%.0f degrees"))
 	{
-		Turn(entity, glm::radians(yaw) - YawOf(transform->rotation));
+		context.writes.Turn(entity, glm::radians(yaw) - YawOf(transform->rotation));
 	}
 	track("Turn");
+	// In a network game the editor sends only moves and turns, so the size stays as it is
 	auto scale = transform->scale.x;
+	ImGui::BeginDisabled(!context.writes.ChangesAtOnce());
 	if (ImGui::DragFloat("Scale", &scale, 0.01f, 0.05f, 50.0f, "%.2f"))
 	{
 		const auto ratio = scale / std::max(transform->scale.x, 0.0001f);
 		transform->scale *= ratio;
 		context.registry.SetDirty();
 	}
+	ImGui::EndDisabled();
 	track("Scale");
 	if (const auto bounds = WorldBoundsOf(context.registry, entity))
 	{
@@ -322,6 +326,17 @@ void InspectorPanel::DrawVillager(EditorContext& context, entt::entity entity) n
 	}
 	auto& villager = context.registry.Get<Villager>(entity);
 	auto& action = context.registry.Get<LivingAction>(entity);
+	// In a network game the fields of a villager only show: a change would change the world of this computer only
+	ImGui::BeginDisabled(!context.writes.ChangesAtOnce());
+	struct EndDisabled
+	{
+		EndDisabled() = default;
+		EndDisabled(const EndDisabled&) = delete;
+		EndDisabled& operator=(const EndDisabled&) = delete;
+		EndDisabled(EndDisabled&&) = delete;
+		EndDisabled& operator=(EndDisabled&&) = delete;
+		~EndDisabled() { ImGui::EndDisabled(); }
+	} const endDisabled;
 	if (villager.abode == entt::null)
 	{
 		ImGui::TextColored(style::k_Warning, "Homeless");

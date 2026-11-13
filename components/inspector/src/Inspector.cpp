@@ -477,10 +477,11 @@ bool openblack::inspector::RefusedInNetworkGame(std::string_view query, bool wri
 	// These queries write, but act only on this computer. The fight autopilot gives only the input of this computer.
 	constexpr std::array<std::string_view, 4> k_LocalProviders {"input.", "camera.", "screenshot.", "autopilot."};
 	// The fight cheat goes to the game server as a command of this computer's player. The server lets it through only
-	// with its test commands on.
-	constexpr std::array<std::string_view, 6> k_LocalQueries {
-	    "sim.record",        "sim.feedback",         "fights.transcript_folder", "fights.clear_transcripts",
-	    "audio.lose_device", "creatures.fight_cheat"};
+	// with its test commands on. The edits of the editor and the debug cheats also go as commands of this computer's
+	// player, and the server lets them through only from a staff player.
+	constexpr std::array<std::string_view, 8> k_LocalQueries {
+	    "sim.record",        "sim.feedback",          "fights.transcript_folder", "fights.clear_transcripts",
+	    "audio.lose_device", "creatures.fight_cheat", "editor.network_edit",      "editor.cheat"};
 	if (std::ranges::find(k_RunControls, query) != k_RunControls.end())
 	{
 		return true;

@@ -315,7 +315,8 @@ bool ReadStart(const Json& object, Start& start)
 	{
 		God god;
 		uint64_t slot = 0;
-		if (!entry.is_object() || !ReadUnsigned(entry, "slot", k_MostSlot, slot) || !ReadString(entry, "name", god.name))
+		if (!entry.is_object() || !ReadUnsigned(entry, "slot", k_MostSlot, slot) || !ReadString(entry, "name", god.name) ||
+		    !ReadBool(entry, "staff", god.staff, false))
 		{
 			return false;
 		}
@@ -387,6 +388,10 @@ void WriteStart(const Start& start, Json& object)
 			if (god.account.has_value())
 			{
 				entry["account"] = *god.account;
+			}
+			if (god.staff)
+			{
+				entry["staff"] = true;
 			}
 			gods.push_back(std::move(entry));
 		}
@@ -470,6 +475,10 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 			return std::nullopt;
 		}
 		joined.observer = static_cast<uint8_t>(observer);
+		if (!ReadBool(object, "staff", joined.staff, false))
+		{
+			return std::nullopt;
+		}
 		if (const auto* startMember = Member(object, "start"); startMember != nullptr && !startMember->is_null())
 		{
 			Start start;
@@ -738,6 +747,10 @@ std::string ToJson(const Frame& frame)
 			    if (value.observer != 0)
 			    {
 				    object["observer"] = value.observer;
+			    }
+			    if (value.staff)
+			    {
+				    object["staff"] = true;
 			    }
 			    if (!value.name.empty())
 			    {

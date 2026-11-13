@@ -320,13 +320,18 @@ std::optional<Claims> ParseClaims(std::string_view message)
 	claims.issuedAt = *issuedAt;
 	claims.notBefore = *notBefore;
 	claims.expires = *expires;
-	if (const auto admin = value.find("admin"); admin != value.end() && !admin->is_null())
+	// The admin and the staff claims are optional. A ticket of an older lobby has no staff claim: the account is not
+	// staff.
+	for (const auto& [name, flag] : {std::pair {"admin", &claims.admin}, std::pair {"staff", &claims.staff}})
 	{
-		if (!admin->is_boolean())
+		if (const auto found = value.find(name); found != value.end() && !found->is_null())
 		{
-			return std::nullopt;
+			if (!found->is_boolean())
+			{
+				return std::nullopt;
+			}
+			*flag = found->get<bool>();
 		}
-		claims.admin = admin->get<bool>();
 	}
 	// The lobby's tickets name the role. A ticket with no role is a god's ticket, as the lobby's default.
 	if (!role.empty())

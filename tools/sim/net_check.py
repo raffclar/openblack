@@ -228,12 +228,13 @@ SWITCH_IN_PATH = re.compile(r"[-/\\]multiplayer", re.IGNORECASE)
 
 
 def copy_programs(folder, out):
-    """The server, the game and their libraries, in a folder whose path has no switch of the game"""
+    """The server, the game, their libraries and the crash handler of the error reports, in a folder whose path has no
+    switch of the game"""
     target = os.path.join(out, "bin")
     os.makedirs(target, exist_ok=True)
     for name in os.listdir(folder):
         if name.lower().endswith(".dll") or name in ("openblack.exe", "openblack-server.exe", "openblack",
-                                                       "openblack-server"):
+                                                       "openblack-server", "crashpad_handler.exe", "crashpad_handler"):
             shutil.copy2(os.path.join(folder, name), os.path.join(target, name))
     return target
 
@@ -260,17 +261,20 @@ def ticket_file(folder, ticket):
     return path
 
 
-def make_ticket(key, kid, account, name, role, lifetime):
-    """A PASETO v4.public join ticket as the lobby makes one, for this test server"""
+def make_ticket(key, kid, account, name, role, lifetime, staff=False):
+    """A PASETO v4.public join ticket as the lobby makes one, for this test server. staff gives the staff claim of a
+    staff account whose sign-in gave a second-factor code."""
     now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
     claims = {
         "iss": "bwgame-service", "sub": str(account), "aud": SERVER_ID,
         "iat": now.isoformat(), "nbf": now.isoformat(),
         "exp": (now + datetime.timedelta(seconds=lifetime)).isoformat(),
-        "jti": b64(os.urandom(16)), "name": name, "clans": [], "admin": False, "role": role,
+        "jti": b64(os.urandom(16)), "name": name, "clans": [], "admin": staff, "role": role,
     }
     if TICKET_LOBBY["lobby"] is not None:
         claims["lobby"] = TICKET_LOBBY["lobby"]
+    if staff:
+        claims["staff"] = True
     message = json.dumps(claims, separators=(",", ":")).encode("utf-8")
     footer = json.dumps({"kid": kid}, separators=(",", ":")).encode("utf-8")
     header = b"v4.public."
@@ -1172,6 +1176,87 @@ def inspector_answer(pid, query, request):
     return answer.get("result") if answer.get("ok") else {"error": answer.get("error")}
 
 
+def editor_shots(pids, folder, name):
+    """A screenshot of each client for the look of the editor check, when the check has a folder for them"""
+    if not folder:
+        return
+    os.makedirs(folder, exist_ok=True)
+    for index, pid in enumerate(pids):
+        inspector_answer(pid, "screenshot.take", {"params": {
+            "path": os.path.abspath(os.path.join(folder, f"client{index + 1}_{name}.png"))}})
+
+
+def editor_check(pids, client_logs, server_log, shots=None):
+    """The editor in a network game. The first client is staff and the second is not. Each client presses the editor
+    key; only the staff client opens the editor. The staff client moves a tree and turns on the influence cheat, and
+    each computer must do both. The second client then sends an edit and a cheat with force, and the server must refuse
+    them. Returns what each step did."""
+    staff, other = pids
+    done = {"states": [inspector_answer(pid, "editor.state", {}) for pid in pids]}
+    camera = inspector_answer(staff, "camera.state", {}) or {}
+    focus = camera.get("focus") or [0.0, 0.0, 0.0]
+    trees = items_of(inspector_answer(staff, "objects.find", {"params": {
+        "near": [focus[0], focus[2]], "radius": 400.0, "kind": "Tree", "limit": 1}}))
+    if not trees:
+        done["error"] = f"no tree near the camera at {focus}"
+        return done
+    tree = trees[0]
+    start = tree.get("position") or [0.0, 0.0, 0.0]
+    target = [start[0] + 6.0, start[2] + 6.0]
+    done["tree"] = tree.get("id")
+    if shots:
+        # Both cameras look at the tree, so that the pictures of the two clients show the same place
+        view = {"focus": [start[0] + 3.0, start[1], start[2] + 3.0], "yaw": 0.0, "pitch": 35.0, "distance": 45.0}
+        for pid in pids:
+            close_land_info_box(pid)
+            set_camera(pid, json.dumps(view))
+        time.sleep(2)
+    editor_shots(pids, shots, "00_before")
+    for pid in pids:
+        press_key(pid, "F10", True)
+    done["opened"] = [(inspector_answer(pid, "editor.state", {}) or {}).get("open") for pid in pids]
+    editor_shots(pids, shots, "01_after_key")
+    if shots:
+        # The tree goes in small steps, so that the pictures show the move on both clients
+        for step in range(1, 13):
+            point = [start[0] + 0.5 * step, start[2] + 0.5 * step]
+            inspector_answer(staff, "editor.network_edit", {"params": {"kind": "move", "id": tree["id"], "position": point}})
+            time.sleep(0.4)
+            editor_shots(pids, shots, f"02_move_{step:02d}")
+    done["move"] = inspector_answer(staff, "editor.network_edit", {"params": {
+        "kind": "move", "id": tree["id"], "position": target}})
+    if shots:
+        inspector_answer(staff, "editor.show_tab", {"params": {"tab": "Cheats"}})
+    done["cheat"] = inspector_answer(staff, "editor.cheat", {"params": {"cheat": "infinite influence", "on": True}})
+    time.sleep(5)
+    editor_shots(pids, shots, "03_cheat_on")
+
+    def position(pid):
+        entity = inspector_answer(pid, "ecs.entity", {"params": {"id": tree["id"]}}) or {}
+        return entity.get("position")
+
+    done["positions"] = [position(pid) for pid in pids]
+    done["refused_before"] = len(lines_with(server_log, ["the join ticket has no staff claim"]))
+    done["forced_edit"] = inspector_answer(other, "editor.network_edit", {"params": {
+        "kind": "move", "id": tree["id"], "position": [start[0] - 6.0, start[2] - 6.0], "force": True}})
+    done["forced_cheat"] = inspector_answer(other, "editor.cheat", {"params": {
+        "cheat": "infinite miracle charge", "on": True, "force": True}})
+    time.sleep(5)
+    done["positions_after"] = [position(pid) for pid in pids]
+    done["refused"] = len(lines_with(server_log, ["the join ticket has no staff claim"]))
+    done["server_cheats"] = len(lines_with(server_log, ["The server takes the debug cheat"]))
+    done["client_cheats"] = [len(lines_with(log, ["the debug cheat infinite influence of player"])) for log in client_logs]
+    done["client_refused_cheats"] = [len(lines_with(log, ["the debug cheat infinite miracle charge"]))
+                                     for log in client_logs]
+    moved = [p is not None and abs(p[0] - target[0]) < 0.01 and abs(p[2] - target[1]) < 0.01
+             for p in done["positions_after"]]
+    done["passed"] = bool(
+        done["opened"] == [True, False] and all(moved) and done["refused"] >= done["refused_before"] + 1
+        and done["server_cheats"] >= 1 and all(count >= 1 for count in done["client_cheats"])
+        and not any(done["client_refused_cheats"]))
+    return done
+
+
 def slot_fight(pids, seconds):
     """The first client sends the fight cheat, so that the creature of its god fights the nearest creature: the creature
     of the other god. The server must take test commands. The fight autopilot of each client then fights for the god
@@ -2004,6 +2089,12 @@ def main():
                         help="once the client (from 1) compared --hold-after turns, its hand takes a villager near its "
                              "god's creature and gives it to the creature through the inspector; the server and every "
                              "client must then tell the same gift (the deed 'gives')")
+    parser.add_argument("--editor-check", action="store_true",
+                        help="the first client is staff and the second is not: after --hold-after turns the staff "
+                             "client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
+                             "the edit and the cheat of the second client")
+    parser.add_argument("--editor-shots", metavar="FOLDER",
+                        help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
     parser.add_argument("--slot-fight", type=int, metavar="SECONDS",
                         help="once the first client compared --hold-after turns, it sends the fight cheat (its god's "
                              "creature fights the nearest creature); then both clients fight with the fight autopilot "
@@ -2286,6 +2377,7 @@ def main():
     processes = []
     miracle_done = None
     fight_done = None
+    editor_done = None
     give_done = None
     hand_steps = HandSteps()
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
@@ -2346,7 +2438,7 @@ def main():
                 return 1
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
-                                 "observer" if is_observer else "god", 600)
+                                 "observer" if is_observer else "god", 600, staff=options.editor_check and index == 0)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
@@ -2394,7 +2486,8 @@ def main():
             chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
             chatting = chatting or any(value.split(":", 1)[1] == str(index + 1) for value in options.tattoo_menu)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
-                    or options.give == index + 1 or any(leash["client"] == index for leash in leashes)):
+                    or options.give == index + 1 or any(leash["client"] == index for leash in leashes)
+                    or options.editor_check):
                 command += ["--inspect-port", "0"]
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
@@ -2492,6 +2585,13 @@ def main():
                     and not hand_steps.busy(slot) and reached_turn(
                     os.path.join(client_dirs[slot], "client.log"), clients[slot].pid, options.hold_after)):
                 miracle_done = slot_miracle(clients[slot].pid, slot)
+            if (options.editor_check and editor_done is None and len(clients) == 2
+                    and all(client.poll() is None for client in clients) and all(reached_turn(
+                        os.path.join(client_dirs[index], "client.log"), clients[index].pid, options.hold_after)
+                        for index in range(2))):
+                editor_done = editor_check([client.pid for client in clients],
+                                           [os.path.join(client_dirs[index], "client.log") for index in range(2)],
+                                           server_log, options.editor_shots)
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
                     and not any(hand_steps.busy(index) for index in range(len(clients))) and reached_turn(
@@ -2715,6 +2815,11 @@ def main():
         summary["slot_miracle"] = miracle_done
     if options.slot_fight:
         summary["slot_fight"] = fight_done
+    if options.editor_check:
+        summary["editor_check"] = editor_done
+        if not (editor_done or {}).get("passed"):
+            print(f"the editor check did not pass: {editor_done}")
+            all_same = False
     if options.give:
         # The server did the gift of the hand of the giver's god at a turn
         gifts = sim_report.hand_deeds_in_file(server_log).get(options.give - 1, {}).get("gives", 0)

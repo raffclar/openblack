@@ -23,6 +23,7 @@
 #include "Editor/EditorActions.h"
 #include "Editor/EditorContext.h"
 #include "Editor/EditorEntities.h"
+#include "Editor/EditorNetworkEdits.h"
 #include "Editor/EditorOutline.h"
 #include "Editor/EditorStyle.h"
 #include "InfoConstants.h"
@@ -325,6 +326,12 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 	{
 		return;
 	}
+	// The creature tools of this computer make a creature, so a network game has no layout of creatures
+	if (kind == PlaceKind::Creature && !context.writes.ChangesAtOnce())
+	{
+		_lastLayout = "The editor does not place a creature in a network game";
+		return;
+	}
 	const auto& camera = Locator::camera::value();
 	const auto hit = camera.RaycastScreenCoordToLand({0.5f, 0.5f}, false);
 	const auto centre = hit.has_value() ? hit->position : camera.GetFocus();
@@ -338,8 +345,9 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 		const PlaceItem item {.kind = kind,
 		                      .type = types.at(i),
 		                      .challenge = kind == PlaceKind::Highlight ? static_cast<uint32_t>(_challenge) : 0u};
-		const auto entity = kind == PlaceKind::Creature ? context.spawner.SpawnAt({point.x, LandHeight(point), point.y}, 0.0f)
-		                                                : Place(item, {point.x, LandHeight(point), point.y}, 0.0f);
+		const auto entity = kind == PlaceKind::Creature
+		                        ? context.spawner.SpawnAt({point.x, LandHeight(point), point.y}, 0.0f)
+		                        : context.writes.Place(item, {point.x, LandHeight(point), point.y}, 0.0f).value_or(entt::null);
 		if (entity != entt::null)
 		{
 			placed.push_back(entity);

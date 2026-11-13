@@ -266,6 +266,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"scriptMusicSystem", "audio.state"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"playgroundTripSystem", "players.playground_trip"},
+    LocatorCoverage {"debugCheatSystem", "editor.state"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"advisorVoiceSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
@@ -654,6 +655,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(ViewProvider(controls.seam));
 	inspector.Add(AdvisorsProvider());
 	inspector.Add(CreaturesProvider());
+	inspector.Add(EditorProvider());
 	inspector.Add(ScriptProvider(controls.scripts));
 	inspector.Add(HelpProvider());
 	inspector.Add(SavesProvider());

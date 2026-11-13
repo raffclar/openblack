@@ -43,6 +43,8 @@ public:
 	/// How a new creature of the species starts: neutral, as big, fat and strong as the species starts
 	[[nodiscard]] static float StartScale(CreatureType species);
 	[[nodiscard]] static Body StartBody(CreatureType species);
+	/// The body of the species before the random spread of a new creature. It uses no random number of the game.
+	[[nodiscard]] static Body BaseBody(CreatureType species);
 	/// The scale a creature of the species is drawn at for its size, by its base mesh's rest pose
 	[[nodiscard]] static float DrawnScale(CreatureType species, float size);
 	/// The species' own strength, 0 to 1, which counts a little towards how strong its creatures look

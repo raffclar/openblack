@@ -41,11 +41,14 @@
 /// - A line of the chat: the count of the players that get it (u8), the god slot of each (u8), then the count of its
 ///   characters (u16) and each character as UTF-16 (u16). A taunt has its number (u32) in place of the characters.
 /// - An observer that comes in: the count of the characters of its name (u8), then each character as UTF-16 (u16).
+/// - An edit of the editor: the kind (u8), the thing, the kind of the item (u8), the type of the item (u32), the
+///   challenge (u32), the position and the angle (f32).
+/// - A debug cheat: the cheat (u8), then 1 for on or 0 for off (u8).
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 34;
+inline constexpr uint8_t k_Version = 35;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -118,6 +121,8 @@ enum class CommandTag : uint8_t
 	ObserverIn = 52,
 	ObserverOut = 53,
 	HandLockRelease = 54,
+	EditorEdit = 55,
+	DebugCheat = 56,
 };
 
 /// The sizes of the parts of the frames, in bytes

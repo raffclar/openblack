@@ -31,6 +31,7 @@
 #include "3D/LandData.h"
 #include "CHLApi.h"
 #include "Common/BuildVersion.h"
+#include "Common/DesyncReports.h"
 #include "Common/DeveloperTools.h"
 #include "Common/ErrorReportsInterface.h"
 #include "Common/ErrorReportsRules.h"
@@ -132,6 +133,7 @@
 #include "ECS/Systems/Implementations/ChatSystem.h"
 #include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
+#include "ECS/Systems/Implementations/DebugCheatSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
 #include "ECS/Systems/Implementations/FootballSystem.h"
@@ -274,6 +276,7 @@ using openblack::ecs::systems::CreaturePhysiologySystem;
 using openblack::ecs::systems::CreatureSkinSystem;
 using openblack::ecs::systems::CreatureWebPageSystem;
 using openblack::ecs::systems::DanceSystem;
+using openblack::ecs::systems::DebugCheatSystem;
 using openblack::ecs::systems::DialogueControlSystem;
 using openblack::ecs::systems::DynamicsSystem;
 using openblack::ecs::systems::EditorSystem;
@@ -839,6 +842,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	    []() -> uint32_t& { return Locator::entitiesRegistry::value().Context().thingsMade; });
 	Locator::abodeKnockSystem::emplace<AbodeKnockSystem>();
 	Locator::influenceSystem::emplace<InfluenceSystem>();
+	Locator::debugCheatSystem::emplace<DebugCheatSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
 	// The rules of the particle effects step in the turns on every computer, also on the dedicated server
 	Locator::particleRuleSystem::emplace<ParticleRuleSystem>();
@@ -895,9 +899,10 @@ void openblack::InitializePlayerInput(bool systemSaysWheel)
 void openblack::InitializeOnlineAndTools(const player_profiles::Store& profiles)
 {
 	InitializeOnline(profiles);
-#if defined(OPENBLACK_DEVELOPER_TOOLS)
-	// The editor is a developer tool: a build without the developer tools has no editor
+	// Every build has the editor: a staff player opens it in a network game. Outside a network game it is a developer
+	// tool.
 	Locator::editorSystem::emplace<EditorSystem>();
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The record of the creature minds that the developer view watches
 	Locator::creatureMindLog::emplace<ecs::systems::CreatureMindLogSystem>();
 #endif
@@ -1024,6 +1029,28 @@ void openblack::ShutDownErrorReports()
 	Locator::errorReports::reset();
 }
 
+void openblack::SendDesyncReport(const error_reports::DesyncReport& report)
+{
+	// The tools find the line by its words
+	if (auto logger = spdlog::get("game"))
+	{
+		if (report.kind == error_reports::DesyncReport::Kind::Summary)
+		{
+			logger->info("Desync report: summary of game {}, {} desyncs, {} not sent", report.game, report.desyncsInGame,
+			             report.notSent);
+		}
+		else
+		{
+			logger->info("Desync report: key {} of game {} at turn {}, desync {} of the game", report.key, report.game,
+			             report.facts.turn, report.desyncsInGame);
+		}
+	}
+	if (Locator::errorReports::has_value())
+	{
+		Locator::errorReports::value().SendDesync(report);
+	}
+}
+
 void openblack::ShutDownServices()
 {
 	// The files of the creature that wait go to the disk while the services that write them are still there
@@ -1136,6 +1163,7 @@ void openblack::ShutDownServices()
 	Locator::playerCommandSystem::reset();
 	Locator::syncChecksumSystem::reset();
 	Locator::influenceSystem::reset();
+	Locator::debugCheatSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::thingsMadeSystem::reset();
 	Locator::abodeKnockSystem::reset();

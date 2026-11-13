@@ -33,6 +33,8 @@ namespace openblack::debug::gui
 {
 /// The name of the window of the testbed's scenarios, which opens with the testbed
 constexpr std::string_view k_TestbedScenariosWindow = "Testbed Scenarios";
+/// The name of the window of the in-game editor
+constexpr std::string_view k_EditorWindow = "Editor";
 
 class DebugGuiInterface
 {

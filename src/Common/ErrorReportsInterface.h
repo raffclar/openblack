@@ -25,6 +25,8 @@ enum class Role : uint8_t
 	Server,
 };
 
+struct DesyncReport;
+
 /// What the service tells about itself, for the tools. It never holds the DSN.
 struct ErrorReportsState
 {
@@ -37,6 +39,8 @@ struct ErrorReportsState
 	Role role {Role::Client};
 	std::string release;
 	std::string environment;
+	/// The desync events that the service sent
+	uint32_t desyncEvents {0};
 };
 
 /// The error and crash reports of this program to Sentry. The service has no effect until it starts, and it starts only
@@ -56,6 +60,8 @@ public:
 	virtual void SetEnabled(bool enabled) = 0;
 	/// The state of the service, with no DSN
 	[[nodiscard]] virtual ErrorReportsState GetState() const = 0;
+	/// Sends the event of a desync, which DesyncReportRule allowed. Nothing when the service does not send reports.
+	virtual void SendDesync(const DesyncReport& report) = 0;
 };
 
 } // namespace openblack::error_reports

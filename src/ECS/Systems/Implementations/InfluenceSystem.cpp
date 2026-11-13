@@ -53,6 +53,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/DebugCheatSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -896,6 +897,13 @@ bool InfluenceSystem::InfluenceEverywhere()
 	return Locator::playgroundTripSystem::has_value() && Locator::playgroundTripSystem::value().InfluenceEverywhere();
 }
 
+bool InfluenceSystem::CheatEverywhere(PlayerNames player)
+{
+	// The debug cheat of a player gives the player full influence at each point, as on the trip to the Gods' Playground
+	return Locator::debugCheatSystem::has_value() &&
+	       Locator::debugCheatSystem::value().Has(player, debug_cheats::Cheat::InfiniteInfluence);
+}
+
 namespace
 {
 
@@ -982,7 +990,7 @@ std::array<float, player_slots::k_PlayerNumbers> InfluenceSystem::PlayerInfluenc
 			continue;
 		}
 		float own = 1.0f;
-		if (!everywhere)
+		if (!everywhere && !CheatEverywhere(player))
 		{
 			const auto* virtualInfluence =
 			    entities.at(index).has_value() ? registry.TryGet<const VirtualInfluence>(*entities.at(index)) : nullptr;
@@ -1035,7 +1043,7 @@ std::optional<float> InfluenceSystem::HandGrant(PlayerNames player, const map_co
 
 float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
-	if (InfluenceEverywhere())
+	if (InfluenceEverywhere() || CheatEverywhere(player))
 	{
 		return 1.0f;
 	}
@@ -1114,6 +1122,11 @@ InfluenceSystem::NearInfluence InfluenceSystem::RawInfluences(const map_coords::
 		}
 		const bool shielded = std::ranges::any_of(shieldOwners, [player](PlayerNames owner) { return owner != player; });
 		near.keptOut.at(index) = shielded || anti.at(index);
+		if (CheatEverywhere(player))
+		{
+			near.raw.at(index) = 1.0f;
+			continue;
+		}
 		const auto citadel = citadels.at(index);
 		const bool hasTemple = citadel != entt::null;
 		if (!openblack::influence_rules::CanHaveInfluence(network, hasTemple))
@@ -1154,7 +1167,7 @@ InfluenceSystem::NearInfluence InfluenceSystem::RawInfluences(const map_coords::
 
 float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const
 {
-	if (InfluenceEverywhere())
+	if (InfluenceEverywhere() || CheatEverywhere(player))
 	{
 		return 1.0f;
 	}
@@ -1171,6 +1184,10 @@ float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::
 
 float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
+	if (CheatEverywhere(player))
+	{
+		return 1.0f;
+	}
 	auto& registry = Locator::entitiesRegistry::value();
 	// Each is measured from its map position, in the game's map units
 	const auto distanceTo = [&position](const glm::vec3& point) {
