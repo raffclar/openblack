@@ -74,6 +74,9 @@ public:
 		online::OnlineMapStoreInterface* maps {nullptr};
 		/// The clan creature: the game asks the lobby for it when the player uses a clan in the room
 		ecs::systems::ClanCreatureSystemInterface* clanCreature {nullptr};
+		/// Reads a file of the game folder, for example the land that a map package needs (deviation 249). Nothing when
+		/// the game folder does not have the file.
+		std::function<std::optional<std::vector<uint8_t>>(std::string_view path)> readGameFile;
 	};
 
 	struct Settings

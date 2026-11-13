@@ -353,6 +353,25 @@ std::vector<Line> gods_ring_map::VillageInSlot(const VillageTemplate& village, c
 
 std::string gods_ring_map::MapScript(const VillageTemplate& village, std::span<const Slot> slots)
 {
+	// The frame of the same slots has a slot for each mark line, so the fill always gives a script
+	return FillFrame(ScriptFrame(slots), village, slots).value_or(std::string {});
+}
+
+std::string gods_ring_map::ScriptFrame(std::span<const Slot> slots)
+{
+	std::string frame = std::string(k_SettingsMark) + "\n";
+	for (const auto& slot : slots)
+	{
+		frame += fmt::format("\nrem ---------------- Slot: {} ----------------\n", slot.index);
+		frame += fmt::format("{}{}\n", k_VillageMark, slot.index);
+	}
+	frame += "\n" + std::string(k_WeatherMark) + "\n";
+	return frame;
+}
+
+std::optional<std::string> gods_ring_map::FillFrame(std::string_view frame, const VillageTemplate& village,
+                                                    std::span<const Slot> slots)
+{
 	std::vector<PlayerNames> gods;
 	for (const auto& slot : slots)
 	{
@@ -363,22 +382,46 @@ std::string gods_ring_map::MapScript(const VillageTemplate& village, std::span<c
 	}
 
 	std::string script;
-	for (const auto& line : village.settings)
-	{
-		script += line.original + "\n";
-	}
-	for (const auto& slot : slots)
-	{
-		script += fmt::format("\nrem ---------------- Slot: {} ----------------\n", slot.index);
-		for (const auto& line : VillageInSlot(village, slot, gods))
+	const auto addOriginals = [&script](std::span<const Line> lines) {
+		for (const auto& line : lines)
 		{
-			script += line.Text() + "\n";
+			script += line.original + "\n";
 		}
-	}
-	script += "\n";
-	for (const auto& line : village.weather)
+	};
+	// The frame ends with a new line, so the text after the last new line is not a line
+	size_t start = 0;
+	while (start < frame.size())
 	{
-		script += line.original + "\n";
+		const auto end = std::min(frame.find('\n', start), frame.size());
+		const auto line = frame.substr(start, end - start);
+		start = end + 1;
+		if (line == k_SettingsMark)
+		{
+			addOriginals(village.settings);
+		}
+		else if (line == k_WeatherMark)
+		{
+			addOriginals(village.weather);
+		}
+		else if (line.starts_with(k_VillageMark))
+		{
+			const auto number = line.substr(k_VillageMark.size());
+			size_t index = 0;
+			const auto [last, error] = std::from_chars(number.data(), number.data() + number.size(), index);
+			const auto slot = std::ranges::find(slots, index, &Slot::index);
+			if (error != std::errc() || last != number.data() + number.size() || slot == slots.end())
+			{
+				return std::nullopt;
+			}
+			for (const auto& villageLine : VillageInSlot(village, *slot, gods))
+			{
+				script += villageLine.Text() + "\n";
+			}
+		}
+		else
+		{
+			script += std::string(line) + "\n";
+		}
 	}
 	return script;
 }

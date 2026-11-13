@@ -237,6 +237,22 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	    .poll = {},
 	    .maps = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr,
 	    .clanCreature = Locator::clanCreatureSystem::has_value() ? &Locator::clanCreatureSystem::value() : nullptr,
+	    .readGameFile = [](std::string_view path) -> std::optional<std::vector<uint8_t>> {
+		    try
+		    {
+			    auto& files = Locator::filesystem::value();
+			    const std::filesystem::path file(path);
+			    if (files.Exists(file))
+			    {
+				    return files.ReadAll(file);
+			    }
+		    }
+		    catch (const std::exception& e)
+		    {
+			    SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file {} of the game folder does not read: {}", path, e.what());
+		    }
+		    return std::nullopt;
+	    },
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
