@@ -12,6 +12,7 @@
 
 #include <utility>
 
+#include "3D/TempleRoom.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -300,6 +301,27 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	                 Draw(GestureType::VerticalScribble),
 	                 Draw(GestureType::Scribble)},
 	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "interface.hint_row_in_temple",
+	    .name = "The gesture hints while the camera is in the temple",
+	    .facet = Facet::Interface,
+	    .description = "Your tiger is taught all three leashes, its leash is taken off, and the leash gesture opens the "
+	                   "leash picker. Then the player goes into the main room of the temple, and after 30 seconds "
+	                   "the camera walks out again.",
+	    .expected = "On the land, the hints along the bottom right of the screen show the leashes, their collars turn "
+	                "and their dots run. In the temple, the hints do not show, also while the advisors speak. Out of the "
+	                "temple, the hints show again.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Tiger()},
+	    .commands = {{.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Evil},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Good},
+	                 {.kind = Kind::TakeOffLeash, .creature = 0, .delaySeconds = 1.0f},
+	                 Draw(GestureType::SquareSpirial, 1.0f),
+	                 AfterDrawing(
+	                     {.kind = Kind::EnterTemple, .delaySeconds = 3.0f, .value = static_cast<size_t>(TempleRoom::Main)}),
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 30.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
 	});
 
 	all.push_back({
