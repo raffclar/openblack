@@ -2804,13 +2804,17 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 	const float elapsedSeconds = static_cast<float>(elapsed) * 0.001f;
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
+	// One world plays the clips' sounds of all the animals in this frame
+	const auto clipSounds = ecs::clip_sound_player::MakeGameWorld();
+	// The walk makes no component, so the stores of the components stay the same for all of it
+	const ecs::ComponentLookups<CarriedByTornado, InHand, HeldByCreature, InPhysics, SpellAnimal> stores(registry);
 	// The frame writes only the drawn place, the tilt, the clip and the pose. The turns go by the Transform.
 	registry.Each<Animal, const Transform, const Mesh>([&](entt::entity entity, Animal& animal, const Transform& transform,
 	                                                       const Mesh& mesh) {
 		// A tornado carrying it places it, as does a hand or a creature holding it or the physics moving it; it still plays
 		// its clip
 		animal.drawn.reset();
-		if (!registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
+		if (!stores.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
 		{
 			// Drawn between its last two turns, tilted as far as its bank has glided
 			const auto between = animals::DrawnAt(animal.previousPosition, animal.position, animal.previousHeading,
@@ -2860,13 +2864,13 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 		const auto played = carried.played;
 		animal.groundCarry = carried.carry;
 		// The sounds on the clip's frames it passes play from the animal
-		ecs::clip_sound_player::Play(entity, animal.animation, *clip, animal.clipPlace,
+		ecs::clip_sound_player::Play(*clipSounds, entity, animal.animation, *clip, animal.clipPlace,
 		                             static_cast<uint32_t>(std::max(played, 0)), drawnAt, refresh);
 		animal.clipPlace = animals::AdvanceClip(timing, animal.clipPlace, played);
 
 		// A wolf fades out of sight as it goes; the doves and bats stay whole until they go
 		pose->alpha = 255;
-		if (const auto* spellAnimal = registry.TryGet<const SpellAnimal>(entity);
+		if (const auto* spellAnimal = stores.TryGet<SpellAnimal>(entity);
 		    pose->light == AnimalLight::White && spellAnimal != nullptr)
 		{
 			pose->alpha = static_cast<uint8_t>(std::clamp(std::nearbyint(spellAnimal->Alpha()), 0.0f, 255.0f));
