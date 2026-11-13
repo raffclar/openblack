@@ -117,13 +117,16 @@ private:
 		std::vector<Matrix> mirroredTurns;
 	};
 	std::unordered_map<const Animation*, std::vector<FrameTurns>> _animations;
-	/// The animation of the last call and its frames in the store
-	struct Last
+	/// An animation of a recent call and its frames in the store
+	struct Recent
 	{
 		const Animation* animation {nullptr};
 		std::vector<FrameTurns>* frames {nullptr};
 	};
-	Last _last;
+	/// The animations of the last calls, the most recent first. A pose asks for its animation and the stand animation in
+	/// turn, thus one place is not sufficient.
+	static constexpr size_t k_RecentCount = 4;
+	std::array<Recent, k_RecentCount> _recent {};
 };
 
 /// The two keyframes around a time and how far between them it is. Cycles wrap from their last frame to the first,
