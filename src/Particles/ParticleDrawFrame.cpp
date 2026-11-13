@@ -27,6 +27,7 @@
 #include <glm/geometric.hpp>
 #include <glm/matrix.hpp>
 
+#include "Common/ExactRemainder.h"
 #include "Common/ModelInverseSquareRoot.h"
 #include "Common/RadixSort.h"
 #include "Common/X87Matrix.h"
@@ -80,7 +81,7 @@ uint32_t Abgr(const std::array<uint8_t, 3>& rgb, float alpha)
 /// A glow's frame at an age: it starts at the first and runs backwards
 int GlowCell(float milliseconds, float rate)
 {
-	const float run = std::fmod(milliseconds * rate, k_GlowFrames);
+	const float run = exact_remainder::Fmod(milliseconds * rate, k_GlowFrames);
 	const float phase = run > 0.0f ? k_GlowFrames - run : 0.0f;
 	return static_cast<int>(phase);
 }
@@ -558,7 +559,7 @@ SymbolSprites draw::SymbolOf(const Effect::DrawAtom& atom, uint32_t playerRgb, i
 	const uint32_t glowAlpha = (symbolAlpha * k_GlowAlpha) >> 8u;
 	const glm::vec3 rgb = glm::vec3(channel(16, atom.rgb[0]), channel(8, atom.rgb[1]), channel(0, atom.rgb[2])) / k_ByteMax;
 	const float milliseconds = atom.age * k_MillisecondsPerSecond;
-	const float spin = std::fmod(milliseconds * k_GlowSpinRate, k_TwoPi);
+	const float spin = exact_remainder::Fmod(milliseconds * k_GlowSpinRate, k_TwoPi);
 	const float glow = static_cast<float>(glowAlpha) / k_ByteMax;
 	const float scale = std::max(atom.scale, sprites::k_MinimumHalfWidth);
 	return {{

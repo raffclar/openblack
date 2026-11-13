@@ -2388,6 +2388,7 @@ openblack_setup_and_add_test(
   test_oracle_ftol_portable oracle/test_oracle_ftol_portable.cpp
 )
 openblack_setup_and_add_test(test_radix_sort test_radix_sort.cpp)
+openblack_setup_and_add_test(test_exact_remainder test_exact_remainder.cpp)
 openblack_setup_and_add_test(test_creature_approach_walk test_creature_approach_walk.cpp)
 openblack_setup_and_add_test(test_lhvm_start_at lhvm/test_lhvm_start_at.cpp)
 target_link_libraries(test_lhvm_start_at PRIVATE ScriptLibrary)

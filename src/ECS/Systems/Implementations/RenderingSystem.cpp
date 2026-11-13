@@ -932,6 +932,21 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    return;
 		    }
+		    // Whether the land's draw list draws the thing. The walk finds it one time for each thing.
+		    std::optional<bool> listedMemo;
+		    const auto listed = [&listedMemo, drawList, &registry, entity, &drawnStores] {
+			    if (!listedMemo.has_value())
+			    {
+				    listedMemo = drawList == nullptr || drawList->DrawnWith(registry, entity, drawnStores);
+			    }
+			    return *listedMemo;
+		    };
+		    // A thing of several meshes or a creature that the land's draw list leaves out is not drawn and leaves
+		    // nothing. A creed object is noted first. Thus the walk does not find the place of the others.
+		    if (!creeds.Has(entity) && (detailMeshes.Has(entity) || creatureMorphs.Has(entity)) && !listed())
+		    {
+			    return;
+		    }
 		    // A villager is drawn gliding between its turns and turning after the way it faces; one held by the opening's
 		    // hand is drawn in its grip
 		    const auto* villagerPose = villagerPoses.TryGet(entity);
@@ -960,7 +975,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    {
 				    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, false);
 			    }
-			    if ((drawList == nullptr || drawList->DrawnWith(registry, entity, drawnStores)) && placed.has_value())
+			    if (listed() && placed.has_value())
 			    {
 				    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
 				    _renderContext.creedGlowDraws.push_back({
@@ -998,7 +1013,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto keptBox =
 		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : mesh.id;
 		    bool noted = false;
-		    if (drawList != nullptr && !drawList->DrawnWith(registry, entity, drawnStores))
+		    if (!listed())
 		    {
 			    // Of the things on the land's blocks only those in the land's draw list are drawn. One left out leaves
 			    // what it stands on painted, as one too far off does; the living and the creatures leave nothing.

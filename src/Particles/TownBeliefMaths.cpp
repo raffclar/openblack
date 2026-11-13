@@ -15,6 +15,7 @@
 #include <numbers>
 #include <numeric>
 
+#include "Common/ExactRemainder.h"
 #include "Common/PortableMath.h"
 
 namespace openblack::particles::town_belief
@@ -41,7 +42,7 @@ float Swell(float t)
 
 float Wrapped(float angle)
 {
-	return std::fmod(angle, k_TwoPi);
+	return exact_remainder::Fmod(angle, k_TwoPi);
 }
 } // namespace
 

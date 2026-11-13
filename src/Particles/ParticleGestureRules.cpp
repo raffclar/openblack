@@ -154,7 +154,7 @@ public:
 		}
 
 		// A trail ends when its atom has lived its time, and the hand's glow goes with it
-		std::erase_if(collection.atoms, [&](const std::unique_ptr<Atom>& atom) {
+		std::erase_if(collection.atoms, [&](const AtomPtr& atom) {
 			if (effect.AtomAge(*atom) <= dieAge)
 			{
 				return false;
