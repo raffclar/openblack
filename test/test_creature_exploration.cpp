@@ -123,6 +123,41 @@ TEST(CreatureExploration, ASaveKeepsTheMap)
 		EXPECT_FLOAT_EQ(back.regions[i].highest, kept.regions[i].highest) << i;
 	}
 	EXPECT_TRUE(back.At({5, 5}).Is(Kind::Town));
+	// The save does not keep the packed kinds; the game makes them again from the regions
+	EXPECT_FALSE(back.KindsPacked());
+	auto packed = back;
+	packed.PackKinds();
+	EXPECT_EQ(packed.regionKinds, kept.regionKinds);
+}
+
+// The search finds the same region with the packed kinds and with the kinds of the regions
+TEST(CreatureExploration, TheSearchGivesTheSameRegionWithOrWithoutThePackedKinds)
+{
+	const auto packed = RegionMap::Make(FakeCell, FakeTowns {.cells = {{42, 43}, {300, 12}}}.At());
+	ASSERT_TRUE(packed.KindsPacked());
+	auto unpacked = packed;
+	unpacked.regionKinds.clear();
+	ASSERT_FALSE(unpacked.KindsPacked());
+	Visited visited;
+	for (int32_t i = 0; i < k_RegionsPerSide; i += 3)
+	{
+		Visit(visited, {i, i / 2});
+	}
+	for (const auto kind : {Kind::Town, Kind::Coast, Kind::Sea, Kind::Hill, Kind::Land})
+	{
+		for (int32_t x = -2; x < k_RegionsPerSide + 2; x += 5)
+		{
+			for (int32_t z = -2; z < k_RegionsPerSide + 2; z += 7)
+			{
+				for (const bool prefer : {false, true})
+				{
+					const Search search {.kind = kind, .from = {x, z}, .preferUnvisited = prefer, .includeStart = x % 2 == 0};
+					EXPECT_EQ(FindNearest(packed, visited, search), FindNearest(unpacked, visited, search))
+					    << static_cast<int>(kind) << " " << x << " " << z << " " << prefer;
+				}
+			}
+		}
+	}
 }
 
 TEST(CreatureExploration, TheLastOfTheHighestCellsCounts)

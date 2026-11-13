@@ -36,7 +36,8 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturee(entt::meta_ctx&
 	    .Field<&openblack::creature_exploration::Region::kinds>("kinds");
 	Reflect<openblack::creature_exploration::RegionMap>(context, ValueOnly {})
 	    .Field<&openblack::creature_exploration::RegionMap::regions>("regions")
-	    .Field<&openblack::creature_exploration::RegionMap::highest>("highest");
+	    .Field<&openblack::creature_exploration::RegionMap::highest>("highest")
+	    .RunField<&openblack::creature_exploration::RegionMap::regionKinds>("regionKinds");
 	Reflect<openblack::creature_eyes::Blink>(context, ValueOnly {})
 	    .Field<&openblack::creature_eyes::Blink::state>("state")
 	    .Field<&openblack::creature_eyes::Blink::timerMs>("timerMs")
