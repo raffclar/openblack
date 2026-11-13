@@ -77,6 +77,10 @@ class WorkerPool;
 namespace ecs
 {
 class Registry;
+namespace systems
+{
+struct RenderContext;
+}
 namespace components
 {
 struct CreatureEyes;
@@ -132,6 +136,7 @@ public:
 	void RequestDeviceRestore(device_restore::Request request) noexcept final;
 	[[nodiscard]] uint32_t GetDeviceRestores() const noexcept final;
 	[[nodiscard]] device_restore::Kept GetDeviceRestoreKept() const noexcept final;
+	[[nodiscard]] bool DeviceRecoveryFailed() const noexcept final { return _deviceRecoveryFailed; }
 	[[nodiscard]] uint32_t GetDrawsOfLastFrame() const noexcept final;
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
 	void SetProfile(bool value) noexcept final { _bgfxProfile = value; }
@@ -207,9 +212,16 @@ private:
 	void DrawChimneySmoke(const DrawSceneDesc& desc) const;
 	/// Gathers what the particle effects draw this frame, once for every pass
 	void CollectParticles() const;
+	/// Gathers the symbols of belief of each village centre into a frame of its own, as the game draws them after the
+	/// centre's column and not with the other effects
+	void CollectTownBeliefParticles() const;
+	/// The symbols of belief of one village centre, among the other things that blend
+	void DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre) const;
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// Draws the light bulbs of the learning marks at once, after the solid models and before everything that is sorted
+	void DrawLearningBulbs(const DrawSceneDesc& desc) const;
 	/// Draws what a frame of particles holds, in the order of its commands, seen from a point
 	void SubmitParticleFrame(const DrawSceneDesc& desc, const particles::draw::Frame& frame,
 	                         std::span<const particles::draw::Command> commands, std::span<const uint32_t> spriteOrder,
@@ -310,8 +322,9 @@ private:
 	/// The glow while the hand holds a miracle, none otherwise
 	[[nodiscard]] std::optional<HandGlowLook> HandGlowOf(const DrawSceneDesc& desc) const;
 	[[nodiscard]] const Texture2D* HandFlowTexture() const;
-	/// The bands flying onto and off the hand that holds a miracle and the bracelets it wears, in the main view
-	void DrawHandMiracleBands(const DrawSceneDesc& desc) const;
+	/// The bands flying onto and off the hand that holds a miracle and the bracelets it wears, in the main view. They
+	/// take the place of the hand among what blends.
+	void DrawHandMiracleBands(const DrawSceneDesc& desc, uint32_t handDepth) const;
 	/// A tribe's power behind a miracle: its name's letters spinning round the hand or rising where it was cast
 	void DrawTribalPower(const DrawSceneDesc& desc) const;
 	/// The words of the game's pause and speed, after the rest of the scene
@@ -330,6 +343,9 @@ private:
 	/// The glows on a creature's body where its pose put them, in a view (a bgfx view id)
 	void DrawCreatureHandGlows(uint16_t viewId, const ecs::components::CreatureHandGlows& glows, const glm::mat4& projection,
 	                           bool reflection, uint32_t depth) const;
+	/// The glows of the creed objects, each sorted by the distance of its object from the camera, in a view (a bgfx view id)
+	void DrawCreedGlows(uint16_t viewId, const ecs::systems::RenderContext& context, const glm::mat4& projection,
+	                    bool reflection, const glm::vec3& cameraOrigin) const;
 	/// The band of a glowing shell over a part of a model, made when first drawn; nullptr for a part without one
 	[[nodiscard]] const VolumeGlowShell* GlowShellOf(entt::id_type mesh, uint32_t subMesh) const;
 	/// A frame of a particle light map as a texture of its colours, made when first stamped
@@ -375,6 +391,8 @@ private:
 		const L3DMeshSubmitDesc::MorphTargets* morph;
 		/// It covers only the second row of each texel's pair of sample rows, as the hand itself does
 		bool secondRowsOnly;
+		/// It fills the shadow through its textures' alpha and the fill is softened, as a tree, a pot or a crop does
+		bool throughAlpha {false};
 	};
 	/// The memory in which one lane of the workers makes a shadow (see GroundShadowScratch below)
 	struct GroundShadowScratch;
@@ -383,10 +401,10 @@ private:
 	/// The levels of the texture of the shadow being made, from the coverage of its counted parts
 	[[nodiscard]] static std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
 	GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t alpha, GroundShadowScratch& scratch);
-	/// The levels of the texture of a moving body's shadow, filled through its textures' alpha (see shadow_texture)
+	/// The levels of the part of a shadow that its bodies fill through their textures' alpha (see shadow_texture)
 	[[nodiscard]] std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
-	ShadowTextureLevels(const GroundShadowBody& body, const GroundShadow::Footprint& footprint, const GroundShadow::Cast& cast,
-	                    uint8_t alpha) const;
+	ShadowTextureLevels(std::span<const GroundShadowBody> bodies, const GroundShadow::Footprint& footprint,
+	                    const GroundShadow::Cast& cast, uint8_t alpha) const;
 	/// Hands the moving shadows to the land's program, or none where it isn't to receive them. Each block sets its own
 	/// u_groundShadowBlock, because bgfx accepts a uniform only once for each draw.
 	void SetGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
@@ -435,6 +453,7 @@ private:
 		EnvironmentStage,
 		LightRule,
 		Shine,
+		SkinAlpha,
 
 		_count
 	};
@@ -477,6 +496,7 @@ private:
 	    "u_environmentStage",  //
 	    "u_lightRule",         //
 	    "u_shine",             //
+	    "s_skinAlpha",         //
 	};
 	using MeshUniforms = std::array<std::optional<UniformHandle>, static_cast<size_t>(MeshUniform::_count)>;
 	/// A program's handles of the mesh uniforms it has, looked up by name the first time it draws a mesh
@@ -533,8 +553,15 @@ private:
 	void DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) const;
 	/// Draws the things that blend over the solid models
 	void DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
-	/// Draws the temple's pool and map, the seeds, the weather, the particles, the mists and the other effects
+	/// Draws the temple's pool and map, the seeds, the learning words, the mists, the leashes and the other effects that
+	/// the game adds before the hand
 	void DrawPassEffects(const DrawSceneDesc& desc) const;
+	/// Submits a group of the labels in the world at this point of the main pass. The other passes do not show the labels.
+	void SubmitWorldLabels(const DrawSceneDesc& desc, WorldLabelGroup group) const;
+	/// Draws the effects that the game adds after the hand and its particles: the shields' domes, the columns over the
+	/// village centres with their symbols of belief, the floating numbers, the rain and the snowfall, the villagers'
+	/// names and the tip bubble
+	void DrawPassEffectsAfterParticles(const DrawSceneDesc& desc) const;
 	/// Draws the hand mirrored in the sea, then the hand
 	void DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
 	/// Draws the debug lines of the main view: the bounding boxes, the footpaths and the streams
@@ -620,8 +647,11 @@ private:
 	void DrawInterfaceCreatures(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
 	/// The creature that the main menu's tattoo editor asked to show last, in its view of its own
 	void DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatureBody& drawBody) const;
-	/// The columns of light over the village centres and temples of the players whose borders show
-	void DrawLightColumns(const DrawSceneDesc& desc) const;
+	/// The columns of light over the village centres of the players whose borders show. Each centre's symbols of belief
+	/// come just after its column, also in the reflection.
+	void DrawTownColumns(const DrawSceneDesc& desc) const;
+	/// The columns of light over the temples of the players whose borders show
+	void DrawTempleColumns(const DrawSceneDesc& desc) const;
 	/// The beams of light the started scrolls stand in
 	void DrawScrollBeams(const DrawSceneDesc& desc) const;
 	/// The pulse models that shrink into the charging icons at the worship sites, added over the scene in their players'
@@ -719,6 +749,8 @@ private:
 		std::vector<bool> inView;
 		/// The texels of the corner texture (see GetLandCorners), two bytes each
 		std::vector<uint8_t> corners;
+		/// For each block, the values from which its texels in corners came. A block with the same values keeps them.
+		std::vector<std::optional<land_detail::BlockCornerInputs>> cornersFrom;
 	};
 	mutable LandDetailFrame _landDetail;
 	mutable std::unique_ptr<Texture2D> _landCorners;
@@ -761,8 +793,6 @@ private:
 		GroundShadow::Cast cast;
 		uint8_t alpha;
 		bool onObjects;
-		/// It is filled through its textures' alpha and softened, as the shadow of a moving tree is
-		bool throughAlpha {false};
 		/// The thing that the physics moves, whose shadow stays as it is while the thing is under the sea
 		entt::entity kept {entt::null};
 	};
@@ -816,6 +846,11 @@ private:
 	mutable sky_dome::Picture _skyDomePicture;
 	/// Finds each new restore of the graphics device
 	device_restore::Watch _deviceRestores;
+	/// Finds a recovery from lost devices that does not succeed (web build only)
+	device_restore::RecoveryWatch _deviceRecovery;
+	/// The renderer that the graphics library started with
+	bgfx::RendererType::Enum _rendererType {bgfx::getRendererType()};
+	bool _deviceRecoveryFailed {false};
 	/// The glow lightning stamps on the land, made the first time it is drawn
 	mutable std::optional<TextureHandle> _lightningGlowTexture;
 	/// How strongly the sun glares, 0 to 255, easing towards how much of the sun shows
@@ -1041,8 +1076,20 @@ private:
 	mutable std::unique_ptr<Camera> _hintCamera;
 	mutable std::vector<particles::draw::Command> _hintParticleCommands;
 	mutable std::vector<uint32_t> _hintParticleSpriteOrder;
+	/// What the symbols of belief of one village centre draw this frame
+	struct TownBeliefFrame
+	{
+		entt::entity centre {entt::null};
+		particles::draw::Frame frame;
+	};
+	/// The frames of the village centres' symbols of belief. Only the first _townBeliefFrameCount are of this frame.
+	mutable std::vector<TownBeliefFrame> _townBeliefFrames;
+	mutable size_t _townBeliefFrameCount {0};
+	mutable std::vector<particles::draw::Command> _townBeliefCommands;
+	mutable std::vector<uint32_t> _townBeliefSpriteOrder;
 	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
 	mutable std::vector<uint32_t> _particleBeforeLandSprites;
+	mutable std::vector<uint32_t> _learningBulbMeshes;
 	/// What the falling spell's film draws of the particles this frame, and their order
 	mutable particles::draw::Frame _filmParticleFrame;
 	mutable std::vector<particles::draw::Command> _filmParticleCommands;

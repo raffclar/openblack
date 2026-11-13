@@ -704,6 +704,122 @@ void AddPauseInFlight(std::vector<Scenario>& all)
 	});
 }
 
+void AddScriptMadeThingsOverRocks(std::vector<Scenario>& all)
+{
+	// A script makes things of six kinds, each on a rock. The physics lifts each thing that starts in it clear of the
+	// rock. The pile and the champignon do not start in the physics.
+	using Kind = Command::Kind;
+	using Argument = ScriptArgument;
+	constexpr float k_Gap = 8.0f;
+	const auto place = [](size_t index) { return k_Field + glm::vec2 {(static_cast<float>(index) - 2.5f) * k_Gap, 0.0f}; };
+	const auto create = [&place](float delay, int32_t type, int32_t subtype, size_t index) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "CREATE",
+		                .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(type)},
+		                                    {.kind = Argument::Kind::Integer, .number = static_cast<float>(subtype)},
+		                                    {.kind = Argument::Kind::Position, .point = place(index)}}};
+	};
+	// The script types and rows: a mobile object (an Egyptian barrel), a lump of poo, a ball, a pile of wood, a
+	// scaffold and a mobile object of the champignon row
+	constexpr int32_t k_MobileObject = 20;
+	constexpr int32_t k_Poo = 25;
+	constexpr int32_t k_Ball = 28;
+	constexpr int32_t k_Store = 16;
+	constexpr int32_t k_Scaffold = 39;
+	constexpr int32_t k_Wood = 1;
+	constexpr auto k_Champi = static_cast<int32_t>(MobileObjectInfo::Champi);
+	std::vector<ObjectSetup> rocks;
+	for (size_t index = 0; index < 6; ++index)
+	{
+		rocks.push_back({.type = MobileStaticInfo::RockChalk, .offset = place(index)});
+	}
+	all.push_back({
+	    .id = "physics.script_made_things_over_rocks",
+	    .name = "Things that a script makes on rocks",
+	    .facet = Facet::Physics,
+	    .description = "Six rocks stand in a row 8 metres apart. One second in, a script makes one thing at the middle "
+	                   "of each rock, from west to east: an Egyptian barrel, a lump of poo, a ball, a pile of wood, a "
+	                   "scaffold and a champignon.",
+	    .expected = "The barrel, the poo, the ball and the scaffold each appear on top of their rock, not in it. The "
+	                "barrel stays on its rock. The poo, the ball and the scaffold can then slide or roll off the rock. The "
+	                "pile and the champignon appear at the height of the land, inside their rocks: the row of the pile "
+	                "keeps it out of the physics, and a champignon only stands on the land. The inspector query "
+	                "physics_bodies gives a body to the first four only.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Field.x, 10.0f, k_Field.y + 30.0f}, .look = {k_Field.x, 0.0f, k_Field.y}},
+	    .objects = std::move(rocks),
+	    .commands = {create(1.0f, k_MobileObject, 0, 0), create(0.0f, k_Poo, 0, 1), create(0.0f, k_Ball, 0, 2),
+	                 create(0.0f, k_Store, k_Wood, 3), create(0.0f, k_Scaffold, 0, 4),
+	                 create(0.0f, k_MobileObject, k_Champi, 5)},
+	});
+}
+
+void AddScriptMadeDeadTreeAndEyes(std::vector<Scenario>& all)
+{
+	// A script makes a dead tree on a rock and a pair of eyes next to it. The physics lifts the dead tree clear of the
+	// rock. The eyes are a creed, which never flies, so the throw of the eyes does nothing.
+	using Kind = Command::Kind;
+	using Argument = ScriptArgument;
+	constexpr int32_t k_DeadTree = 13;
+	constexpr int32_t k_MobileObject = 20;
+	constexpr auto k_Oak = static_cast<int32_t>(TreeInfo::Oak);
+	constexpr auto k_Eyes = static_cast<int32_t>(MobileObjectInfo::Eyes);
+	const glm::vec2 tree = k_Field + glm::vec2 {-6.0f, 0.0f};
+	const glm::vec2 eyes = k_Field + glm::vec2 {6.0f, 0.0f};
+	const glm::vec2 madeEyes = k_Field + glm::vec2 {10.0f, 0.0f};
+	const auto create = [](float delay, int32_t type, int32_t subtype, glm::vec2 point) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "CREATE",
+		                .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(type)},
+		                                    {.kind = Argument::Kind::Integer, .number = static_cast<float>(subtype)},
+		                                    {.kind = Argument::Kind::Position, .point = point}}};
+	};
+	all.push_back({
+	    .id = "physics.script_made_dead_tree_and_eyes",
+	    .name = "A dead tree and eyes that a script makes",
+	    .facet = Facet::Physics,
+	    .description = "A rock stands 6 metres west of the middle of the field, and a pair of eyes stands 6 metres east "
+	                   "of it. One second in, a script makes a dead oak at the middle of the rock and a second pair of "
+	                   "eyes 4 metres east of the first pair. At two seconds, the first pair of eyes is thrown up from "
+	                   "where it stands.",
+	    .expected = "The dead oak appears upright on top of the rock, not in it, and it can then fall or roll off. Both "
+	                "pairs of eyes stay where they are on the land: the throw does not move the first pair, and the "
+	                "second pair does not start in the physics. The inspector query physics_bodies gives a body to the "
+	                "dead tree and to the rock only, and to no pair of eyes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Field.x, 10.0f, k_Field.y + 30.0f}, .look = {k_Field.x, 0.0f, k_Field.y}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = tree}, {.type = MobileObjectInfo::Eyes, .offset = eyes}},
+	    .commands = {create(1.0f, k_DeadTree, k_Oak, tree), create(0.0f, k_MobileObject, k_Eyes, madeEyes)},
+	    .throws = {{.object = 1, .height = 0.0f, .velocity = {0.0f, 20.0f, 0.0f}, .delaySeconds = 2.0f}},
+	});
+}
+
+void AddCropFliesAsATree(std::vector<Scenario>& all)
+{
+	// A crop flies with the body of a standing tree, and shows roots while it moves. A barrel beside it flies as a plain
+	// thing, with no roots.
+	const glm::vec2 crop = k_Field + glm::vec2 {-4.0f, 0.0f};
+	const glm::vec2 barrel = k_Field + glm::vec2 {4.0f, 0.0f};
+	all.push_back({
+	    .id = "physics.crop_flies_as_a_tree",
+	    .name = "A crop flies as a rooted tree",
+	    .facet = Facet::Physics,
+	    .description = "A crop lies 4 metres west of the middle of the field, and a barrel lies 4 metres east of it. At "
+	                   "two seconds, and again every eight seconds, each is thrown up and to the east from 2 metres above "
+	                   "where it lies.",
+	    .expected = "While the crop moves, a small clump of roots shows at its base, and turns with it. The crop has the "
+	                "body of a standing tree: a spindle of the tree material, with its centre of mass low in it. It "
+	                "comes to rest on the land, and then it shows no roots. The barrel shows no roots at any time.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Field.x, 6.0f, k_Field.y + 18.0f}, .look = {k_Field.x, 2.0f, k_Field.y}},
+	    .objects = {{.type = MobileObjectInfo::Crop, .offset = crop},
+	                {.type = MobileObjectInfo::EgyptBarrel, .offset = barrel}},
+	    .throws = {{.object = 0, .height = 2.0f, .velocity = {3.0f, 9.0f, 0.0f}, .delaySeconds = 2.0f, .repeatSeconds = 8.0f},
+	               {.object = 1, .height = 2.0f, .velocity = {3.0f, 9.0f, 0.0f}, .delaySeconds = 2.0f, .repeatSeconds = 8.0f}},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
@@ -725,4 +841,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddSinking(all);
 	AddTempleStruck(all);
 	AddPauseInFlight(all);
+	AddScriptMadeThingsOverRocks(all);
+	AddScriptMadeDeadTreeAndEyes(all);
+	AddCropFliesAsATree(all);
 }

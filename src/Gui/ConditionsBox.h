@@ -59,9 +59,6 @@ public:
 
 	[[nodiscard]] Dialog& GetDialog() noexcept { return *_dialog; }
 	[[nodiscard]] const Dialog& GetDialog() const noexcept { return *_dialog; }
-	[[nodiscard]] const conditions_box::Figures& GetFigures() const noexcept { return _figures; }
-	/// Whether each god is ticked, by its place in the figures
-	[[nodiscard]] const std::vector<bool>& GetTicked() const noexcept { return _ticked; }
 	[[nodiscard]] GodWindow& GetGodWindow() noexcept { return *_window; }
 
 	/// The box, 780 by 500 in the middle of the dialog space

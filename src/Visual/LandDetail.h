@@ -230,6 +230,25 @@ struct MorphTargets
 [[nodiscard]] std::array<uint8_t, k_CornerCount> CrossFadeCorners(const GroundLine& line, float width, float band,
                                                                   glm::vec2 blockCorner);
 
+/// The values from which the drawn corners of a block come: its morph and the mesh line, its cross-fade and the texture
+/// line, the widths of the bands, the block's corner on the map and the corners' own altitudes. The same values give the same
+/// drawn corners, thus a frame can keep the corners of a block whose values did not change.
+struct BlockCornerInputs
+{
+	Morph morph {Morph::None};
+	bool fades {false};
+	GroundLine meshLine;
+	float meshWidth {0.0f};
+	GroundLine textureLine;
+	float textureWidth {0.0f};
+	float textureBand {0.0f};
+	glm::vec2 blockCorner {0.0f};
+	std::array<uint8_t, k_CornerCount> altitudes {};
+};
+
+/// Whether two sets of values are the same, each float by its bits
+[[nodiscard]] bool SameCornerInputs(const BlockCornerInputs& a, const BlockCornerInputs& b);
+
 /// The land's vertex shader reads the blocks' corners as they are drawn in a frame from one texture: 32 by 32 squares,
 /// one for each block in the order of the blocks, of 17 by 17 texels, the corner's x along the width and z along the
 /// height. Each texel holds the drawn altitude and the coarse texture's opacity, a byte each. There is a square for

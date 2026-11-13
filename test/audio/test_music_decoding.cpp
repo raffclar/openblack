@@ -298,3 +298,142 @@ TEST(MusicDecoding, ADecodeDoesNotKeepTheDecodesBeforeIt)
 	EXPECT_EQ(player.sources.begin()->second, DecodeWhole(bank, {0, 1, 2, 3}));
 	backend.Destroy(stream);
 }
+
+namespace
+{
+/// Plays the buffers of a source as an OpenAL source does. A source that played all of its buffers stops. A stopped
+/// source gives all of its buffers as played, also the buffers that it got after it stopped. A start plays the buffers
+/// from the first one that is still on the source.
+class QueuePlayer final: public AudioPlayerInterface
+{
+public:
+	void Initialize() override {}
+	void UpdateListener(glm::vec3, glm::vec3, glm::vec3) const override {}
+	BufferId CreateBuffer(ChannelLayout, const std::vector<int16_t>&, int) override
+	{
+		alive.push_back(nextBuffer);
+		return nextBuffer++;
+	}
+	void QueueBuffer(SourceId, BufferId buffer) override { queue.push_back(buffer); }
+	void DeleteBuffer(BufferId id) override { std::erase(alive, id); }
+	SourceId CreateSource(float, bool) override { return 1; }
+	void DeleteSource(SourceId) override {}
+	void UpdateSource(SourceId, glm::vec3, float, bool) override {}
+	void UpdateSource(SourceId, float, bool) override {}
+	float GetDuration(BufferId) override { return 0.0f; }
+	void PlaySource(SourceId, glm::vec3, float, bool) override {}
+	void PlaySource(SourceId, float, bool) override {}
+	void PauseSource(SourceId) const override {}
+	void StopSource(SourceId) const override {}
+	void SetVolume(SourceId, float) override {}
+	void SetPitch(SourceId, float) override {}
+	void SetPosition(SourceId, glm::vec3) override {}
+	void SetDistanceAttenuation(SourceId, float, float, float) override {}
+	void SetLooping(SourceId, bool) override {}
+	void StartSource(SourceId) override
+	{
+		if (status != AudioStatus::Playing)
+		{
+			status = AudioStatus::Playing;
+			played = 0;
+			++starts;
+		}
+	}
+	[[nodiscard]] float GetVolume() const override { return 1.0f; }
+	[[nodiscard]] AudioStatus GetStatus(SourceId) const override { return status; }
+	[[nodiscard]] float GetProgress(size_t, SourceId) const override { return 0.0f; }
+	std::vector<BufferId> UnqueueProcessedBuffers(SourceId) override
+	{
+		const auto count = status == AudioStatus::Stopped ? queue.size() : status == AudioStatus::Playing ? played : 0;
+		std::vector<BufferId> out(queue.begin(), queue.begin() + static_cast<std::ptrdiff_t>(count));
+		queue.erase(queue.begin(), queue.begin() + static_cast<std::ptrdiff_t>(count));
+		played -= std::min(played, count);
+		return out;
+	}
+	[[nodiscard]] uint32_t GetSampleOffset(SourceId) const override { return 0; }
+
+	/// The source plays one buffer to its end, and stops after the last one
+	void PlayOne()
+	{
+		if (status == AudioStatus::Playing && ++played >= queue.size())
+		{
+			status = AudioStatus::Stopped;
+		}
+	}
+	/// The buffers that the source has not played yet
+	[[nodiscard]] size_t Unplayed() const { return status == AudioStatus::Playing ? queue.size() - played : 0; }
+
+	std::vector<BufferId> queue;
+	std::vector<BufferId> alive;
+	size_t played {0};
+	AudioStatus status {AudioStatus::Initial};
+	BufferId nextBuffer {1};
+	int starts {0};
+};
+
+/// Gets the chunks that other threads decode onto the source, and adds up the chunks that the source played
+uint32_t Collect(MusicStreamBackend& backend, MusicBackend::Stream stream, const QueuePlayer& player, size_t buffers)
+{
+	uint32_t played = 0;
+	for (int attempt = 0; attempt < 500; ++attempt)
+	{
+		played += backend.ReleasePlayedChunks(stream);
+		if (player.queue.size() >= buffers)
+		{
+			break;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	}
+	return played;
+}
+} // namespace
+
+TEST(MusicDecoding, AStreamThatRanOutOfChunksPlaysTheNextChunksWhenTheyCome)
+{
+	const auto bank = MakeBank(4);
+	QueuePlayer player;
+	MusicStreamBackend backend(player, ColdDecoder, StillClock);
+	const auto stream = backend.CreateStream(100);
+	EXPECT_TRUE(backend.QueueChunk(stream, bank, 0, 0));
+	EXPECT_EQ(Collect(backend, stream, player, 1), 0u);
+	backend.Play(stream);
+	ASSERT_TRUE(backend.IsPlaying(stream));
+
+	// The frames of the game stop for a time, such as in a tab that the browser hides. The source plays its only
+	// chunk and stops.
+	player.PlayOne();
+	ASSERT_FALSE(backend.IsPlaying(stream));
+
+	// The next chunk comes after the stop. The old chunk counts as played, the new chunk plays.
+	EXPECT_TRUE(backend.QueueChunk(stream, bank, 1, 0));
+	EXPECT_EQ(Collect(backend, stream, player, 1), 1u);
+	EXPECT_TRUE(backend.IsPlaying(stream));
+	EXPECT_EQ(player.Unplayed(), 1u);
+	EXPECT_EQ(player.alive.size(), 1u);
+	EXPECT_EQ(player.starts, 2);
+
+	// The new chunk plays to its end like any other chunk
+	player.PlayOne();
+	EXPECT_EQ(backend.ReleasePlayedChunks(stream), 1u);
+	EXPECT_TRUE(player.alive.empty());
+	backend.Destroy(stream);
+}
+
+TEST(MusicDecoding, AStreamThatPlaysOnTakesTheNextChunksWithNoStart)
+{
+	const auto bank = MakeBank(4);
+	QueuePlayer player;
+	MusicStreamBackend backend(player, ColdDecoder, StillClock);
+	const auto stream = backend.CreateStream(100);
+	EXPECT_TRUE(backend.QueueChunk(stream, bank, 0, 0));
+	EXPECT_TRUE(backend.QueueChunk(stream, bank, 1, 0));
+	EXPECT_EQ(Collect(backend, stream, player, 2), 0u);
+	backend.Play(stream);
+	player.PlayOne();
+	EXPECT_TRUE(backend.QueueChunk(stream, bank, 2, 0));
+	EXPECT_EQ(Collect(backend, stream, player, 2), 1u);
+	EXPECT_TRUE(backend.IsPlaying(stream));
+	EXPECT_EQ(player.Unplayed(), 2u);
+	EXPECT_EQ(player.starts, 1);
+	backend.Destroy(stream);
+}

@@ -56,7 +56,8 @@ struct Match
 };
 
 /// The path's width against its height on the screen, the height scaled by the screen's width over its height, as the
-/// game measures it
+/// game measures it. A screen wider than 4:3 scales the height as a 4:3 screen does, so the same shape that the hand
+/// draws gives the same value as on a 4:3 screen.
 [[nodiscard]] float AspectOf(const ScreenBox& box, float screenAspect);
 /// Whether a path of an aspect may be the template's
 [[nodiscard]] bool AspectFits(float pathAspect, float templateAspect);

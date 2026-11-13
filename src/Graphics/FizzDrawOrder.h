@@ -20,6 +20,8 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "ZSort.h"
+
 /// The game draws the things of the land's draw list one by one, in the order of the list. A creature that fizzes in
 /// or out of sight first writes its depth where its static is strong. Then it blends its body over that depth. A solid
 /// thing that comes later in the list and stands behind the creature does not show where the creature wrote its depth.
@@ -27,25 +29,36 @@
 ///
 /// The renderer draws the solid things together. Each fizzing creature divides the list into segments: segment 0 is
 /// the things before the first fizzing creature, and segment n is the things after the creature n. The renderer draws
-/// segment 0 with the solid things, and each later segment after the passes of the creature before it.
+/// segment 0 with the solid things, and each later segment after the passes of the creature before it. A thing that
+/// fades out in the distance comes after the solid things of its segment, at its place in the list, and before the
+/// passes of the next creature.
 namespace openblack::graphics::fizz_draw_order
 {
 
-/// The sort depths of a view sorted by depth, the greatest first, where the fizzing creatures and the later segments
-/// go. The top sixteen depths stay free for the draws that come straight after the land. A distance's bits never
-/// reach the top bit, so all these depths come before the blended things.
-inline constexpr uint32_t k_FirstCreatureDepth = 0xFFFFFFEFu;
-/// Each fizzing creature has sixteen depths: its depth pass, its body pass, then the passes of its eyes, and its
-/// segment at the lowest depth
+/// The sort depths of a view sorted by depth, the greatest first, where the fizzing creatures and the segments go. The
+/// top sixteen depths stay free for the draws that come straight after the land. A distance's bits never reach the top
+/// bit, so all these depths come before the blended things.
+inline constexpr uint32_t k_FirstSegmentDepth = 0xFFFFFFEFu;
+/// Each fizzing creature has sixteen depths: its depth pass, its body pass, then the passes of its eyes, and the solid
+/// things of the segment after it at the lowest depth
 inline constexpr uint32_t k_DepthsPerCreature = 16;
-/// The most fizzing creatures that get a place of their own in the list order. This keeps the depths above the
-/// blended things.
-inline constexpr uint32_t k_MaxRanked = 0x07FFFFFFu;
+/// Each segment that comes before a fizzing creature has a depth for each place of the list, for the things that fade
+/// out in it. Then the passes of the creature after the segment follow.
+inline constexpr uint32_t k_DepthsPerSegment = zsort::k_ListPlaces + k_DepthsPerCreature;
+/// The most fizzing creatures that get a place of their own in the list order. This keeps the depths above the things
+/// that fade out after the last fizzing creature.
+inline constexpr uint32_t k_MaxRanked = (k_FirstSegmentDepth - zsort::AtOnce(0)) / k_DepthsPerSegment - 1;
+
+/// The sort depth of a thing that fades out at this place of the list, in a segment before a fizzing creature
+[[nodiscard]] constexpr uint32_t FadingDepth(uint32_t segment, uint32_t listPlace) noexcept
+{
+	return k_FirstSegmentDepth - (segment * k_DepthsPerSegment) - std::min(listPlace, zsort::k_ListPlaces - 1);
+}
 
 /// The sort depth of the depth pass of the fizzing creature at this rank, 0 for the first in the list
 [[nodiscard]] constexpr uint32_t CreatureDepth(uint32_t rank) noexcept
 {
-	return k_FirstCreatureDepth - (rank * k_DepthsPerCreature);
+	return k_FirstSegmentDepth - (rank * k_DepthsPerSegment) - zsort::k_ListPlaces;
 }
 
 /// The sort depth of the solid things of a segment after the first, below every pass of the creature before it
@@ -53,6 +66,9 @@ inline constexpr uint32_t k_MaxRanked = 0x07FFFFFFu;
 {
 	return CreatureDepth(segment - 1) - (k_DepthsPerCreature - 1);
 }
+
+static_assert(SegmentDepth(1) == FadingDepth(1, 0) + 1);
+static_assert(FadingDepth(k_MaxRanked, zsort::k_ListPlaces) > zsort::AtOnce(0));
 
 /// The fizzing creatures of the land's draw list in their order, and the segment of each listed thing after the first
 /// of them
@@ -70,9 +86,15 @@ public:
 	[[nodiscard]] std::optional<uint32_t> RankOf(entt::entity entity) const;
 	/// No listed creature fizzes, so all things are in segment 0
 	[[nodiscard]] bool Empty() const noexcept { return _fizzing.empty(); }
+	/// The sort depth of a thing that fades out at this place of the list (see zsort::AtOnce). A thing before a
+	/// fizzing creature comes before the passes of the creature. A thing after the last fizzing creature, or not in the
+	/// list, comes after all of them.
+	[[nodiscard]] uint32_t AtOnceDepth(uint32_t listPlace) const;
 
 private:
 	std::vector<entt::entity> _fizzing;
+	/// The places of the fizzing creatures in the list, the first place first
+	std::vector<uint32_t> _places;
 	std::unordered_map<entt::entity, uint32_t> _segments;
 };
 

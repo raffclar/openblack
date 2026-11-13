@@ -2108,6 +2108,19 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	}
 }
 
+void LeashSystem::DropRope(PlayerNames player)
+{
+	if (player != OwnPlayer() || _ropeHand != leash_snap::Hand::Holding)
+	{
+		return;
+	}
+	_ropeHand = leash_snap::Hand::Away;
+	if (auto* drawn = DrawnRope(player))
+	{
+		drawn->held.reset();
+	}
+}
+
 void LeashSystem::DoLeashLength(PlayerNames player, float length)
 {
 	// The leash of the player's creature that the player holds, tied to a thing that still exists

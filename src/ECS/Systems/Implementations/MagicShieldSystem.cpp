@@ -74,8 +74,6 @@ namespace
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
-/// What a thrown thing of no known weight weighs
-constexpr float k_DefaultMass = 1.0f;
 
 ecs::Registry& EntityRegistry()
 {

@@ -93,22 +93,105 @@ TEST(ScriptCreate, ARockOfTheRockKindStartsInThePhysics)
 {
 	const auto rock = static_cast<uint32_t>(MobileStaticInfo::Rock);
 	// A mobile static of the rock kind starts in the physics, but is not put on the land first
-	const auto asMobileStatic = RockStartOf(ScriptType::MobileStatic, rock, true);
+	const auto asMobileStatic = PhysicsStartOf(ScriptType::MobileStatic, rock, {.rock = true});
 	ASSERT_TRUE(asMobileStatic.has_value());
 	EXPECT_FALSE(asMobileStatic->settlesOnLand);
 	// Made by the rock type, the physics puts it on the land and turns it to the slope
-	const auto asRock = RockStartOf(ScriptType::Rock, rock, true);
+	const auto asRock = PhysicsStartOf(ScriptType::Rock, rock, {.rock = true});
 	ASSERT_TRUE(asRock.has_value());
 	EXPECT_TRUE(asRock->settlesOnLand);
 	// A row out of the rock kind, such as a singing stone, does not start in the physics
-	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::SingingStone_1), false));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::SingingStone_1)));
 	// The rows that the physics can not move never start in it, whatever their kind
-	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::Bonfire), true));
-	EXPECT_FALSE(RockStartOf(ScriptType::Rock, static_cast<uint32_t>(MobileStaticInfo::SingingStoneBase), true));
-	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::StreetLantern), true));
-	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::CountryLantern), true));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::Bonfire), {.rock = true}));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::Rock, static_cast<uint32_t>(MobileStaticInfo::SingingStoneBase), {.rock = true}));
+	EXPECT_FALSE(
+	    PhysicsStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::StreetLantern), {.rock = true}));
+	EXPECT_FALSE(
+	    PhysicsStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::CountryLantern), {.rock = true}));
 	// Other types never do
-	EXPECT_FALSE(RockStartOf(ScriptType::Feature, rock, true));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::Feature, rock, {.rock = true}));
+}
+
+TEST(ScriptCreate, AOneShotMiracleGlobeStartsInThePhysicsOnTheLand)
+{
+	// Every globe starts in the physics, and the physics puts it on the land and turns it to the slope
+	for (const auto seed : {0u, 3u, 7u, 8u, 9u})
+	{
+		const auto start = PhysicsStartOf(ScriptType::OneShotSpell, seed);
+		ASSERT_TRUE(start.has_value());
+		EXPECT_TRUE(start->settlesOnLand);
+	}
+	// A globe that goes straight into the hand does not
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::OneShotSpellInHand, 3));
+}
+
+TEST(ScriptCreate, AMobileObjectStartsInThePhysicsOnTheLandAsTheKindOfItsRowTells)
+{
+	const auto row = [](MobileObjectInfo info) { return static_cast<uint32_t>(info); };
+	const auto plain = [](MobileObjectInfo info) { return ScriptRowKind {.mobileObject = info}; };
+	// A plain mobile object starts in the physics, and the physics puts it on the land
+	for (const auto info : {MobileObjectInfo::EgyptBarrel, MobileObjectInfo::Cart, MobileObjectInfo::Arrow,
+	                        MobileObjectInfo::OldScaffold, MobileObjectInfo::OneOffSpellSeed})
+	{
+		const auto start = PhysicsStartOf(ScriptType::MobileObject, row(info), plain(info));
+		ASSERT_TRUE(start.has_value());
+		EXPECT_TRUE(start->settlesOnLand);
+	}
+	// The kind of the row tells the thing, not the number of the row
+	EXPECT_TRUE(PhysicsStartOf(ScriptType::MobileObject, row(MobileObjectInfo::OldScaffold), plain(MobileObjectInfo::Champi))
+	                .has_value());
+	// A crop and a creed do not start in the physics, also when another row has their kind
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileObject, row(MobileObjectInfo::Crop), plain(MobileObjectInfo::Crop)));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileObject, row(MobileObjectInfo::Creed), plain(MobileObjectInfo::Creed)));
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileObject, row(MobileObjectInfo::Eyes), plain(MobileObjectInfo::Creed)));
+	// The three mushroom rows only stand on the land
+	for (const auto info : {MobileObjectInfo::Champi, MobileObjectInfo::MagicMushroom, MobileObjectInfo::Toadstool})
+	{
+		EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileObject, row(info), plain(info)));
+	}
+	// A row out of the table makes nothing
+	EXPECT_FALSE(PhysicsStartOf(ScriptType::MobileObject, row(MobileObjectInfo::_COUNT), {}));
+}
+
+TEST(ScriptCreate, PooAndAnArkStartInThePhysicsOnTheLand)
+{
+	// The lump of poo is poo whatever kind its row has
+	for (const auto kind : {MobileObjectInfo::LumpOfPoo, MobileObjectInfo::Crop, MobileObjectInfo::Creed})
+	{
+		const auto poo = PhysicsStartOf(ScriptType::Poo, 0, {.mobileObject = kind});
+		ASSERT_TRUE(poo.has_value());
+		EXPECT_TRUE(poo->settlesOnLand);
+	}
+	EXPECT_TRUE(PhysicsStartOf(ScriptType::MobileObject, static_cast<uint32_t>(MobileObjectInfo::LumpOfPoo),
+	                           {.mobileObject = MobileObjectInfo::Crop})
+	                .has_value());
+	// The ark is a plain mobile object of its own row
+	const auto ark = PhysicsStartOf(ScriptType::Ark, 7, {.mobileObject = MobileObjectInfo::Ark});
+	ASSERT_TRUE(ark.has_value());
+	EXPECT_TRUE(ark->settlesOnLand);
+}
+
+TEST(ScriptCreate, ABallAPileAScaffoldAndADeadTreeStartInThePhysicsOnTheLand)
+{
+	for (const auto type : {ScriptType::Ball, ScriptType::Store, ScriptType::Scaffold, ScriptType::DeadTree})
+	{
+		const auto start = PhysicsStartOf(type, 0);
+		ASSERT_TRUE(start.has_value());
+		EXPECT_TRUE(start->settlesOnLand);
+	}
+}
+
+TEST(ScriptCreate, ThingsThatCanNotBecomeAPhysicsObjectOrOnlyStandOnTheLandDoNotStartInThePhysics)
+{
+	for (const auto type :
+	     {ScriptType::Marker, ScriptType::Feature, ScriptType::Villager, ScriptType::VillagerChild, ScriptType::Animal,
+	      ScriptType::Bird, ScriptType::Reward, ScriptType::Creature, ScriptType::WeatherThing, ScriptType::Timer,
+	      ScriptType::Tree, ScriptType::Vortex, ScriptType::Whale, ScriptType::OneShotSpellInHand, ScriptType::PuzzleGame,
+	      ScriptType::Totem, ScriptType::SpellDispenser, ScriptType::AnimatedStatic})
+	{
+		EXPECT_FALSE(PhysicsStartOf(type, 0).has_value()) << static_cast<int>(type);
+	}
 }
 
 TEST(ScriptCreate, AnglesAreGivenInDegrees)

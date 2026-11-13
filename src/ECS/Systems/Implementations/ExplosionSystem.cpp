@@ -192,18 +192,13 @@ void ExplosionSystem::Update(float milliseconds)
 			registry.SetDirty();
 		}
 	}
-	// A destroyed building's ghost runs down by the frames' time once drawn, and goes as it reaches nothing
+	// A ghost runs down by the game time of the frames after the first frame that draws it, and goes at nothing
 	std::erase_if(_ghosts, [milliseconds](DestructionGhost& ghost) {
-		if (ghost.shown)
-		{
-			ghost.millisecondsLeft = std::max(ghost.millisecondsLeft - static_cast<int>(milliseconds), 0);
-			if (ghost.millisecondsLeft == 0)
-			{
-				return true;
-			}
-		}
+		const bool wasShown = ghost.shown;
+		ghost.millisecondsLeft =
+		    ecs::destruction_ghost::TimeLeftAfter(ghost.millisecondsLeft, static_cast<int32_t>(milliseconds), wasShown);
 		ghost.shown = true;
-		return false;
+		return wasShown && ghost.millisecondsLeft == 0;
 	});
 	// The puffs step by the whole milliseconds of the game's frame time
 	const float puffSeconds = dust_puff::StepSeconds(static_cast<int32_t>(milliseconds));

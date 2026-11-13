@@ -75,6 +75,9 @@ public:
 	/// The frame's time in milliseconds and the place of the pointer. While the window takes the messages of a still
 	/// mouse, it adds a message after each period without one.
 	void Wait(uint32_t milliseconds, glm::ivec2 position, bool stillMessages);
+	/// The interface gets a place of the pointer at once, without the time of the messages. A hand demonstration sends
+	/// each recorded move so.
+	void Place(glm::ivec2 position);
 	/// The interface's frame: the number of places that it got that are not the same as the place before
 	[[nodiscard]] uint32_t TakeMoves();
 	/// The interface's frame: the places that it got since the last frame, in the sequence that they came

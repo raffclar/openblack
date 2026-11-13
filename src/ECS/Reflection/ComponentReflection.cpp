@@ -229,7 +229,7 @@ void reflection::SaveRegistered(BinaryWriter& out, const entt::meta_any& value)
 			info->save(data.get(value), out);
 			planned = false;
 		}
-		else if (info != nullptr)
+		else if (info != nullptr && !info->runOnly)
 		{
 			// A value that only a function reads cannot come back: the list of unsaved values names it
 			out.Unsupported(info->name);

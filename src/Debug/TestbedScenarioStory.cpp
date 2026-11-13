@@ -1394,9 +1394,9 @@ void testbed_scenarios::AddStory(std::vector<Scenario>& all)
 	    .facet = Facet::Story,
 	    .description = "The player's temple stands west of the middle; after a second the player goes into it for the "
 	                   "first time, and the advisors' introduction of its main room plays. Turn and tilt the room with the "
-	                   "camera's keys, move the hand about, and click and drag while they talk.",
+	                   "camera's keys, move the mouse, and click and drag while they talk.",
 	    .expected = "The camera flies in from the entrance to the main room by itself while the good and evil advisors "
-	                "come out and talk through their nine lines. Throughout, the hand follows the cursor over the room "
+	                "come out and talk through their nine lines. The hand is away under the cinema bars, "
 	                "and the camera's keys turn and tilt the room as they do after the scene. Clicks and drags do nothing "
 	                "until the scene is over: the flight isn't cut short and the room isn't dragged round.",
 	    .environment = {.dispenserGrid = false},

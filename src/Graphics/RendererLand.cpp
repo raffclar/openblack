@@ -950,6 +950,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	const auto& corners = GetLandCorners();
 	bool changed = false;
 	const size_t squares = std::min(blocks.size(), land_detail::k_CornerSquaresPerSide * land_detail::k_CornerSquaresPerSide);
+	frame.cornersFrom.resize(squares);
 	for (size_t i = 0; i < squares && i < detail.blocks.size(); ++i)
 	{
 		const auto& block = detail.blocks[i];
@@ -962,6 +963,22 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 		const auto blockCorner = blocks[i].GetMapPosition();
 		const auto& own = blocks[i].GetCornerAltitudes();
 		const auto& meshLine = block.morph == land_detail::Morph::ToQuarter ? detail.meshFarGround : detail.meshNearGround;
+		// The same values give the same texels, and the texels of the block still hold them from an earlier frame
+		const land_detail::BlockCornerInputs inputs {.morph = block.morph,
+		                                             .fades = fades,
+		                                             .meshLine = meshLine,
+		                                             .meshWidth = meshWidth,
+		                                             .textureLine = detail.textureGround,
+		                                             .textureWidth = textureWidth,
+		                                             .textureBand = detail.lines.textureBand,
+		                                             .blockCorner = blockCorner,
+		                                             .altitudes = own};
+		auto& from = frame.cornersFrom[i];
+		if (from.has_value() && land_detail::SameCornerInputs(*from, inputs))
+		{
+			continue;
+		}
+		from = inputs;
 		const auto altitudes = land_detail::MorphedCorners(own, block.morph, meshLine, meshWidth, blockCorner);
 		const auto alphas =
 		    fades ? land_detail::CrossFadeCorners(detail.textureGround, textureWidth, detail.lines.textureBand, blockCorner)
@@ -994,6 +1011,7 @@ const Texture2D& Renderer::GetLandCorners() const
 	{
 		constexpr auto k_Side = static_cast<uint16_t>(land_detail::k_CornerTextureSide);
 		_landDetail.corners.assign(2 * land_detail::k_CornerTextureSide * land_detail::k_CornerTextureSide, 0);
+		_landDetail.cornersFrom.clear();
 		_landCorners = std::make_unique<Texture2D>("LandCorners");
 		_landCorners->CreateWithinFrame(k_Side, k_Side, 1, TextureFormat::RG8, Wrapping::ClampEdge, Filter::Nearest, nullptr);
 		_landCorners->Update(_landDetail.corners.data(), static_cast<uint32_t>(_landDetail.corners.size()));

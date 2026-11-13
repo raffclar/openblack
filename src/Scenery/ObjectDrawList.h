@@ -276,6 +276,12 @@ struct OwnDraw
 {
 	return thing.temple || thing.highDetail || thing.walkingTrack;
 }
+/// Whether the land's draw calls the own draw of a thing on a frame. The land's draw calls it for each object that the
+/// list draws, then for each thing that a script walks along a track.
+[[nodiscard]] constexpr bool LandCallsOwnDraw(const Frame& frame, bool walkingTrack, bool listed, bool lastOnScreen)
+{
+	return walkingTrack ? frame.landDrawn : Drawn(frame, listed, lastOnScreen);
+}
 /// Whether a listed thing stays drawn on the next frames that do not draw all of the list. A full frame decides it:
 /// - A villager or a creature stays drawn, on the screen or not.
 /// - Another thing stays drawn when its sphere was on the screen and it did not fade out completely.

@@ -232,6 +232,10 @@ public:
 	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
 	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
 	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
+	/// The hash of each part of the server's world at one of the last turns, empty for a turn that the server does not
+	/// keep. When a client sends its parts of the turn at which its world parted, the log names the parts that differ.
+	using PartsOfTurn = std::function<std::vector<std::pair<std::string, uint64_t>>(uint32_t turn)>;
+	void SetPartsOfTurn(PartsOfTurn parts) { _partsOfTurn = std::move(parts); }
 	/// The account ids that the lobby banned from the server. Before the start, a banned god leaves the room at once with
 	/// "kicked", and the room refuses the join of a banned god. After the start, a ban changes nothing (deviation 146).
 	void SetBans(std::set<int64_t> accounts);
@@ -310,7 +314,12 @@ private:
 		uint8_t observer {0};
 		/// The account of the ticket. Empty for a player that joined by name or came back with a session.
 		std::string account;
+		/// The "sync.parts" frames that the connection sent. The server answers only the first few.
+		uint32_t partReports {0};
 	};
+
+	/// The most "sync.parts" frames of one connection that the server answers
+	static constexpr uint32_t k_MostPartReports = 4;
 
 	/// The blocks of commands of an observer that the server took, as the seat of a god keeps them
 	struct ObserverBlocks
@@ -324,7 +333,12 @@ private:
 	void Opened(ConnectionId connection);
 	void Text(ConnectionId connection, std::string_view text);
 	void Binary(ConnectionId connection, std::span<const uint8_t> bytes);
-	void Closed(ConnectionId connection);
+	void Closed(ConnectionId connection, uint16_t code);
+	/// A client sent the hash of each part of its world at the turn at which its world parted: the log names the parts
+	/// that differ from the server's, and the client gets the server's parts
+	void PartsFrom(ConnectionId connection, Peer& peer, const game_socket::SyncParts& parts);
+	/// The name of a connection for the log: the name of the player, or "not joined"
+	[[nodiscard]] std::string WhoIs(ConnectionId connection) const;
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
 	void Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume);
 	/// An observer comes back with the secret of its session. False when no observer has the secret.
@@ -368,7 +382,8 @@ private:
 	[[nodiscard]] bool ObserversFull() const;
 	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
 	bool SendWorld(ConnectionId connection);
-	void Refuse(ConnectionId connection, std::string_view reason);
+	/// Refuses a connection with the short reason that the client gets. The log also gets the detail.
+	void Refuse(ConnectionId connection, std::string_view reason, std::string_view detail = {});
 	/// Takes the players of the accounts that the lobby banned out of the started game
 	void RemoveBannedFromGame();
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
@@ -487,6 +502,7 @@ private:
 	uint32_t _refusedBlocks {0};
 	WorldState _worldState;
 	PartListener _partListener;
+	PartsOfTurn _partsOfTurn;
 	TurnJournal _turnJournal;
 	/// The game continues from a snapshot of the server
 	bool _restored {false};

@@ -191,7 +191,6 @@ public:
 	void PlacePoints(glm::vec3 centre, std::span<const glm::vec3> worldPoints);
 	/// The creature's posed skeleton, whose parts are what other bodies hit
 	void SetSkeleton(std::vector<Ellipsoid> bones);
-	[[nodiscard]] bool HasSkeleton() const { return !_bones.empty(); }
 
 	/// Optionally lays the body along the slope under its centre, then moves it up or down until its lowest point is on
 	/// the land; with noPullDown it is only ever raised. The points aren't moved with it until the next step.
@@ -245,7 +244,6 @@ public:
 	/// The centre of mass in the world
 	[[nodiscard]] glm::vec3 Centre() const { return _centre; }
 	[[nodiscard]] const glm::mat3& TurnStartAxes() const { return _turnStartAxes; }
-	[[nodiscard]] glm::vec3 TurnStartCentre() const { return _turnStartCentre; }
 	[[nodiscard]] glm::vec3 CentreOfMass() const { return _centreOfMass; }
 	[[nodiscard]] float Scale() const { return _scale; }
 	[[nodiscard]] float Radius() const { return _radius; }
@@ -262,7 +260,6 @@ public:
 	[[nodiscard]] int RestCounter() const { return _restCounter; }
 	/// The force and turning force summed this step
 	[[nodiscard]] glm::vec3 Force() const { return _force; }
-	[[nodiscard]] glm::vec3 Torque() const { return _torque; }
 	/// Inertia about the body's own axes, as rows
 	[[nodiscard]] const std::array<std::array<float, 3>, 3>& Inertia() const { return _inertia; }
 

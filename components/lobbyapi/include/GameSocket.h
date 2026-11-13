@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -299,9 +300,26 @@ struct LoadWait
 	[[nodiscard]] bool operator==(const LoadWait&) const = default;
 };
 
-using Frame =
-    std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply, StartCancel,
-                 StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft, Loaded, LoadWait>;
+/// The most parts in a "sync.parts" frame
+inline constexpr size_t k_MostSyncParts = 4096;
+/// The most bytes of the name of a part in a "sync.parts" frame
+inline constexpr size_t k_MostSyncPartNameBytes = 256;
+
+/// Both ways: "sync.parts". The hash of each part of the synced world of one computer at a turn at which the worlds
+/// parted. A client sends its parts after it comes back from the part. The server writes the parts that differ to its log
+/// and sends its own parts back, and the client writes the parts that differ to its log. Only the logs use the frame.
+struct SyncParts
+{
+	uint32_t turn {0};
+	/// The name and the hash of each part
+	std::vector<std::pair<std::string, uint64_t>> parts;
+
+	[[nodiscard]] bool operator==(const SyncParts&) const = default;
+};
+
+using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
+                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
+                           SyncParts, Loaded, LoadWait>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);
