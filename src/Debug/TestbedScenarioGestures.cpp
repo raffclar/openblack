@@ -390,6 +390,64 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	    .townBeliefInPlayer = k_WorshipTownBelief,
 	    .townMiracles = {MagicType::Food},
 	});
+	// Where the shield demonstration of the second land looks: its camera stays still at its recorded place, which
+	// looks at the hut of Khazar's shield challenge
+	using Argument = ScriptArgument;
+	constexpr glm::vec2 k_ShieldDemoView {1052.0f, 899.0f};
+	constexpr float k_ShieldInfluenceRadius = 40.0f;
+	constexpr float k_OneShotSpellInHand = 31.0f;
+	constexpr float k_ShieldStrength = 7.0f;
+	constexpr float k_SeedPowerProperty = 17.0f;
+	all.push_back({
+	    .id = "story.l2_shield_demo",
+	    .name = "Story: Khazar's hand demonstration of the shield",
+	    .facet = Facet::Story,
+	    .description = "The start of the hand demonstration of Khazar's shield challenge on the second land. A circle of "
+	                   "influence of radius 40 goes about the place of the hut, as the challenge makes it. The shield "
+	                   "demonstration starts. Then a script puts a shield miracle in the hand with the strength of seven "
+	                   "shields. The camera goes where the recording had it. The Magic debug window is open under the "
+	                   "place where the recorded hand presses the Action button.",
+	    .expected = "The hand holds the Action button and draws a circle about the place of the hut. When it lets go of "
+	                "the button, the shield goes up there and the hand is empty. At the end of the demonstration the "
+	                "hand holds no miracle.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "INFLUENCE_POSITION",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = k_ShieldDemoView},
+	                                      {.number = k_ShieldInfluenceRadius},
+	                                      {.number = 0.0f},
+	                                      {.number = 0.0f}}},
+	                 {.kind = Kind::PlayHandDemo, .delaySeconds = 0.5f, .handDemo = "shield"},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = k_OneShotSpellInHand},
+	                                      {.kind = Argument::Kind::Integer,
+	                                       .number = static_cast<float>(SpellSeedType::PhysicalShield)},
+	                                      {.kind = Argument::Kind::Position, .point = {0.0f, 0.0f}}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = k_SeedPowerProperty},
+	                                      {.kind = Argument::Kind::LastResult},
+	                                      {.number = k_ShieldStrength}}}},
+	    .debugWindow = "Magic",
+	    .checks = {{.label = "the hand holds the shield miracle at the start of the demonstration",
+	                .quantity = checks::Quantity::HandMiracle,
+	                .afterTurns = 25,
+	                .atLeast = 1.0},
+	               {.label = "the demonstration casts the shield",
+	                .quantity = checks::Quantity::PhysicalShields,
+	                .afterTurns = 25,
+	                .byTurn = 200,
+	                .atLeast = 1.0},
+	               {.label = "the hand holds no miracle after the demonstration",
+	                .quantity = checks::Quantity::HandMiracle,
+	                .afterTurns = 200,
+	                .atMost = 0.0}},
+	});
 	all.push_back({
 	    .id = "story.hidden_phone_box",
 	    .name = "The square wave starts the hidden phone box",
