@@ -210,8 +210,6 @@ public:
 	[[nodiscard]] bool ShowsBoxOverGame() const noexcept { return _boxOverGameFade.has_value(); }
 	/// The save game room's question and name box, over the temple
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
-	/// The box that asks a question of the staff of the game
-	[[nodiscard]] StaffQuestionBox& GetStaffQuestionBox() noexcept { return *_staffQuestionBox; }
 	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
 	void ShowSaveProblem();
 	/// The script of the land gives a command for the land information box: a title that shows the box with an empty

@@ -157,7 +157,6 @@ public:
 	void SelectGame(std::optional<size_t> game);
 	/// The filter of the game names, which the password's box holds while no game is picked
 	void SetFilter(std::u16string filter) { _filter = std::move(filter); }
-	[[nodiscard]] const std::u16string& GetFilter() const noexcept { return _filter; }
 	void RefreshGames();
 	/// Join game: a ticket from the lobby, then the game socket. The password is for a game that needs one.
 	void Join(std::u16string password);

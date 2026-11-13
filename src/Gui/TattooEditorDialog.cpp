@@ -181,7 +181,6 @@ void TattooEditorDialog::ApplyTint()
 
 void TattooEditorDialog::SetTint(glm::u8vec4 tint)
 {
-	_tint = tint;
 	for (auto* symbol : _symbols)
 	{
 		symbol->tint = tint;

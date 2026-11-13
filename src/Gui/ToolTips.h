@@ -107,7 +107,6 @@ public:
 	explicit ToolTips(std::span<const ToolTipInfo, k_Count> info);
 
 	void SetLevel(ToolTipLevel level) noexcept { _level = level; }
-	[[nodiscard]] ToolTipLevel GetLevel() const noexcept { return _level; }
 
 	/// The tooltip of an index for this turn. A forced one shows at once, even over one still being shown.
 	void Submit(uint32_t index, ToolTipAction action, uint32_t arrows, bool force = false);
