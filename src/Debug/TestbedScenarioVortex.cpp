@@ -448,9 +448,11 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	                   "the camera comes near the vortex, and after 6 more seconds it goes back to 900 m. The land draws "
 	                   "the things on its blocks within 700 m of the camera only, and only the draw of a vortex shows the "
 	                   "stars over it and the glow on the ground.",
-	    .expected = "From 900 m only the swirl in the hole shows, and it turns. Near the vortex the stars rise and turn "
-	                "over the hole and the glow lights the ground. Back at 900 m the stars and the glow go: they do not "
-	                "stay in the picture without movement.",
+	    .expected = "From 900 m the stars and the glow do not show. The land draws the vortex's block with its coarse "
+	                "texture alone, so the hole moves as the game's does (vanilla-bugs row 2230): the land covers the "
+	                "swirl and the flat ring shows. Near the vortex the swirl turns in the hole, the stars rise and turn "
+	                "over it and the glow lights the ground. Back at 900 m the stars and the glow go: they do not stay in "
+	                "the picture without movement.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_OnThePlane.x, 300.0f, k_OnThePlane.y - 850.0f},
