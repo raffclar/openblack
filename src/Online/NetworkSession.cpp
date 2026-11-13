@@ -767,8 +767,8 @@ void NetworkSession::SendLoaded()
 		_loadedDueAt = _clock() + _settings.testLoadDelayMicroseconds;
 		if (_settings.testLoadDelayMicroseconds > 0)
 		{
-			Log(spdlog::level::info, fmt::format("Tests: the session tells the server about the load {} ms late",
-			                                     _settings.testLoadDelayMicroseconds / 1000));
+			_log->Write(spdlog::level::info, fmt::format("Tests: the session tells the server about the load {} ms late",
+			                                             _settings.testLoadDelayMicroseconds / 1000));
 		}
 	}
 	if (_clock() >= *_loadedDueAt && _stream && _stream->IsOpen())
