@@ -185,7 +185,7 @@ private:
 	void UpdateTurnsAsked();
 	/// Asks the renderer to make the graphics device again once the dome of the sky is part way through a follow
 	void UpdateDeviceRestore();
-	void UpdateChecks();
+	void UpdateChecks(float seconds);
 	/// Gives the report of the checks to the stage. With quit, the game also ends with the exit code of the verdict.
 	void PublishChecks(bool quit);
 	[[nodiscard]] std::optional<double> ReadCheck(const checks::Check& check) const;
@@ -422,6 +422,7 @@ private:
 
 	std::deque<std::string> _log;
 	checks::Evaluator _checks;
+	checks::Clock _checksClock;
 	bool _checksReported {false};
 	/// The turn of the last progress report, so that the report is made once for each turn
 	std::optional<uint32_t> _checksProgressTurn;

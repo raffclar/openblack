@@ -346,6 +346,14 @@ std::optional<bool> TestbedGameStage::IsHandShown() const
 	return game != nullptr ? std::optional(game->IsHandDrawn()) : std::nullopt;
 }
 
+void TestbedGameStage::CloseBoxes()
+{
+	if (Locator::gameInterface::has_value())
+	{
+		Locator::gameInterface::value().CloseBoxesForScenario();
+	}
+}
+
 void TestbedGameStage::ReportChecks(checks::Report report, bool quit)
 {
 	auto* game = Game::Instance();
