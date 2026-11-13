@@ -755,6 +755,47 @@ void AddScriptMadeThingsOverRocks(std::vector<Scenario>& all)
 	});
 }
 
+void AddScriptMadeDeadTreeAndEyes(std::vector<Scenario>& all)
+{
+	// A script makes a dead tree on a rock and a pair of eyes next to it. The physics lifts the dead tree clear of the
+	// rock. The eyes are a creed, which never flies, so the throw of the eyes does nothing.
+	using Kind = Command::Kind;
+	using Argument = ScriptArgument;
+	constexpr int32_t k_DeadTree = 13;
+	constexpr int32_t k_MobileObject = 20;
+	constexpr auto k_Oak = static_cast<int32_t>(TreeInfo::Oak);
+	constexpr auto k_Eyes = static_cast<int32_t>(MobileObjectInfo::Eyes);
+	const glm::vec2 tree = k_Field + glm::vec2 {-6.0f, 0.0f};
+	const glm::vec2 eyes = k_Field + glm::vec2 {6.0f, 0.0f};
+	const glm::vec2 madeEyes = k_Field + glm::vec2 {10.0f, 0.0f};
+	const auto create = [](float delay, int32_t type, int32_t subtype, glm::vec2 point) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "CREATE",
+		                .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(type)},
+		                                    {.kind = Argument::Kind::Integer, .number = static_cast<float>(subtype)},
+		                                    {.kind = Argument::Kind::Position, .point = point}}};
+	};
+	all.push_back({
+	    .id = "physics.script_made_dead_tree_and_eyes",
+	    .name = "A dead tree and eyes that a script makes",
+	    .facet = Facet::Physics,
+	    .description = "A rock stands 6 metres west of the middle of the field, and a pair of eyes stands 6 metres east "
+	                   "of it. One second in, a script makes a dead oak at the middle of the rock and a second pair of "
+	                   "eyes 4 metres east of the first pair. At two seconds, the first pair of eyes is thrown up from "
+	                   "where it stands.",
+	    .expected = "The dead oak appears upright on top of the rock, not in it, and it can then fall or roll off. Both "
+	                "pairs of eyes stay where they are on the land: the throw does not move the first pair, and the "
+	                "second pair does not start in the physics. The inspector query physics_bodies gives a body to the "
+	                "dead tree and to the rock only, and to no pair of eyes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Field.x, 10.0f, k_Field.y + 30.0f}, .look = {k_Field.x, 0.0f, k_Field.y}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = tree}, {.type = MobileObjectInfo::Eyes, .offset = eyes}},
+	    .commands = {create(1.0f, k_DeadTree, k_Oak, tree), create(0.0f, k_MobileObject, k_Eyes, madeEyes)},
+	    .throws = {{.object = 1, .height = 0.0f, .velocity = {0.0f, 20.0f, 0.0f}, .delaySeconds = 2.0f}},
+	});
+}
+
 } // namespace
 
 void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
@@ -777,4 +818,5 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddTempleStruck(all);
 	AddPauseInFlight(all);
 	AddScriptMadeThingsOverRocks(all);
+	AddScriptMadeDeadTreeAndEyes(all);
 }

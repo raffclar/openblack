@@ -68,6 +68,7 @@
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
@@ -546,6 +547,23 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		}
 		return TreeArchetype::Create(0, OnGround(position), static_cast<TreeInfo>(subtype), false,
 		                             script::create_rules::TreeAngle(yAngleRadians), scale, scale);
+	}
+	case ObjectType::DeadTree:
+	{
+		// A dead tree of the tree row, upright and at the size of its model. The angle and the scale of the script have no
+		// effect. It belongs to nobody and has its full life. Then it starts in the physics on the land.
+		const auto& info = Locator::infoConstants::value();
+		if (!script::create_rules::IsRow(subtype, info.tree.size()))
+		{
+			break;
+		}
+		const auto made = DeadTreeArchetype::Create(OnGround(position), static_cast<TreeInfo>(subtype), 0.0f, 0.0f, 0.0f,
+		                                            script::create_rules::k_DeadTreeScale);
+		if (const auto start = script::create_rules::PhysicsStartOf(type, subtype))
+		{
+			StartScriptPhysics(made, *start);
+		}
+		return made;
 	}
 	case ObjectType::AnimatedStatic:
 	{
