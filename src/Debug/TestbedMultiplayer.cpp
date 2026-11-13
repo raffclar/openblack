@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <deque>
 #include <functional>
 #include <map>
@@ -603,11 +604,14 @@ struct DemoServices
 	Stage stage {Stage::ChooseConnection};
 	/// The steps after the join wait for the game socket to open
 	bool staged {false};
+	/// The stage of the notices: the time when the front end first shows the room, and the number of the steps done after it
+	std::optional<std::chrono::steady_clock::time_point> noticesFrom;
+	size_t noticeSteps {0};
 };
 
 [[nodiscard]] bool IsLobbyStage(Stage stage) noexcept
 {
-	return stage >= Stage::LobbyList && stage <= Stage::LobbySettings;
+	return stage >= Stage::LobbyList && stage <= Stage::LobbyNotices;
 }
 
 /// The steps of a stage of the lobby sessions, after the login
@@ -663,11 +667,53 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		frontEnd.JoinSelectedLobby();
 		lobbies.KickPlayer();
 		break;
+	case Stage::LobbyNotices:
+		frontEnd.SelectLobby("d1");
+		frontEnd.JoinSelectedLobby();
+		break;
 	case Stage::LobbyPassword:
 		frontEnd.SelectLobby("d2");
 		frontEnd.JoinSelectedLobby();
 		break;
 	default:
+		break;
+	}
+}
+
+/// The stage of the notices does one event of the room every two seconds, so that each notice is separate. The first
+/// step comes two seconds after the front end shows the room, because the login and the join take some frames.
+void FollowNoticeSteps(const MultiplayerFrontEnd& frontEnd, DemoServices& demo)
+{
+	constexpr auto k_StepTime = std::chrono::seconds(2);
+	constexpr int64_t k_DaveId = 34;
+	constexpr size_t k_Steps = 4;
+	if (demo.stage != Stage::LobbyNotices || demo.noticeSteps >= k_Steps || frontEnd.GetLobbyRoom() == nullptr)
+	{
+		return;
+	}
+	const auto now = std::chrono::steady_clock::now();
+	if (!demo.noticesFrom.has_value())
+	{
+		demo.noticesFrom = now;
+	}
+	if (now - *demo.noticesFrom < k_StepTime * static_cast<int>(demo.noticeSteps + 1))
+	{
+		return;
+	}
+	auto& lobbies = demo.lobbyRoom;
+	switch (demo.noticeSteps++)
+	{
+	case 0:
+		lobbies.MemberJoins({.id = k_DaveId, .name = "Dave"}, 4);
+		break;
+	case 1:
+		lobbies.MemberReady(k_DaveId);
+		break;
+	case 2:
+		lobbies.StartCountdown();
+		break;
+	default:
+		lobbies.KickPlayer();
 		break;
 	}
 }
@@ -852,6 +898,7 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 		        state->network.Update();
 		        state->sockets.Poll();
 		        state->lobby.Poll();
+		        FollowNoticeSteps(frontEnd, *state);
 		        if (!begun)
 		        {
 			        begun = true;
@@ -867,6 +914,7 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 	    .readGameFile = {},
 	    .lobbyRoom = lobbySessions ? &demo->lobbyRoom : nullptr,
 	    .nowMs = [] { return k_DemoNowMs; },
+	    .notice = openblack::gui::GiveLobbyNotice,
 	};
 	MultiplayerFrontEnd::Settings settings {
 	    .registerPage = {},

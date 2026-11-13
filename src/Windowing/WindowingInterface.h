@@ -39,6 +39,11 @@ public:
 	[[nodiscard]] virtual bool IsMinimised() const = 0;
 	/// Whether the game runs in a window rather than taking the whole screen
 	[[nodiscard]] virtual bool IsWindowed() const = 0;
+	/// Whether the window, or the browser tab, has the focus of the keyboard
+	[[nodiscard]] virtual bool HasFocus() const { return true; }
+	/// Asks for the attention of the player until the window gets the focus. The desktop window flashes on the taskbar.
+	/// The browser tab shows a different title.
+	virtual void AskForAttention() {}
 
 	virtual WindowingInterface& SetDisplayMode(DisplayMode mode) = 0;
 };

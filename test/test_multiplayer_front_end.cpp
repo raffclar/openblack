@@ -352,6 +352,8 @@ struct FrontEndTest: public ::testing::Test
 	/// The fake lobby sessions of the testbed, for the tests of the lobby list and the room; none for the game list
 	std::unique_ptr<testbed_multiplayer::DemoLobbyRoom> lobbySessions;
 	FakeClanCreature clanCreature;
+	/// The notices of the lobby room that the front end gave
+	std::vector<online::lobby::LobbyNotice> notices;
 
 	void Make(bool withLan = false)
 	{
@@ -367,6 +369,7 @@ struct FrontEndTest: public ::testing::Test
 		    .readGameFile = {},
 		    .lobbyRoom = lobbySessions.get(),
 		    .nowMs = [] { return int64_t {0}; },
+		    .notice = [this](const online::lobby::LobbyNotice& notice) { notices.push_back(notice); },
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
@@ -1214,6 +1217,39 @@ TEST_F(FrontEndTest, AnAccountWithNoEmailIsSentToTheAccountPage)
 	EXPECT_FALSE(lobby.servers);
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Yes);
 	EXPECT_EQ(opened, (std::vector<std::string> {"https://lobby.test/account/"}));
+}
+
+TEST_F(FrontEndTest, TheEventsOfTheLobbyRoomGiveTheirNotices)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	frontEnd->SelectLobby("d1");
+	frontEnd->JoinSelectedLobby();
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	// The room as it opens gives no notice
+	frontEnd->Update();
+	EXPECT_TRUE(notices.empty());
+
+	constexpr online::lobby::LobbyNotice k_Sound {.sound = true, .flash = false};
+	constexpr online::lobby::LobbyNotice k_SoundAndFlash {.sound = true, .flash = true};
+	lobbySessions->MemberJoins({.id = 34, .name = "Dave"}, 4);
+	frontEnd->Update();
+	lobbySessions->MemberReady(34);
+	frontEnd->Update();
+	lobbySessions->StartCountdown();
+	frontEnd->Update();
+	lobbySessions->KickPlayer();
+	frontEnd->Update();
+	frontEnd->Update();
+	EXPECT_EQ(notices, (std::vector<online::lobby::LobbyNotice> {k_Sound, k_Sound, k_SoundAndFlash, k_SoundAndFlash}));
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
 }
 
 TEST_F(FrontEndTest, ALostLobbySessionGoesBackToTheLogin)

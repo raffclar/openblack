@@ -19,6 +19,7 @@
 
 #include "Common/Platform.h"
 #include "DisplayScaling.h"
+#include "Online/LobbyNotices.h"
 #include "SystemPointer.h"
 #include "Web/WebPointer.h"
 #include "WindowFit.h"
@@ -33,6 +34,10 @@ void* cbSetupMetalLayer(void* wnd);
 #endif
 
 #include <SDL.h>
+
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
+#endif
 
 using namespace openblack::windowing;
 
@@ -409,6 +414,45 @@ bool Sdl2WindowingSystem::IsWindowed() const
 {
 	// Full screen on the desktop's own resolution has the full screen flag too
 	return (SDL_GetWindowFlags(_window.get()) & SDL_WINDOW_FULLSCREEN) == 0;
+}
+
+bool Sdl2WindowingSystem::HasFocus() const
+{
+#if defined(__EMSCRIPTEN__)
+	// The game runs in a worker, which has no page: the thread of the page reads the focus
+	return MAIN_THREAD_EM_ASM_INT({ return document.hasFocus() ? 1 : 0; }) != 0;
+#else
+	return (SDL_GetWindowFlags(_window.get()) & SDL_WINDOW_INPUT_FOCUS) != 0;
+#endif
+}
+
+void Sdl2WindowingSystem::AskForAttention()
+{
+#if defined(__EMSCRIPTEN__)
+	// The tab keeps the new title until the page gets the focus again. Then the page title comes back.
+	const std::string title(online::lobby::k_AttentionTitle);
+	MAIN_THREAD_EM_ASM(
+	    {
+		    if (document.hasFocus() || "openblackTitle" in window)
+		    {
+			    return;
+		    }
+		    window.openblackTitle = document.title;
+		    document.title = UTF8ToString($0);
+		    window.addEventListener("focus",
+		                            function() {
+			                            document.title = window.openblackTitle;
+			                            delete window.openblackTitle;
+		                            },
+		                            {once : true});
+	    },
+	    title.c_str());
+#else
+	if (SDL_FlashWindow(_window.get(), SDL_FLASH_UNTIL_FOCUSED) != 0)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The window did not flash: {}", SDL_GetError());
+	}
+#endif
 }
 
 glm::ivec2 Sdl2WindowingSystem::GetSize() const

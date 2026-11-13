@@ -63,6 +63,12 @@ public:
 	void Queue(int32_t position);
 	/// A member of the room gets the map, or loses it
 	void SetMemberMap(int64_t account, bool haveMap);
+	/// A different player comes into a god slot of the room
+	void MemberJoins(const lobby_api::AccountRef& account, int32_t slot);
+	/// A member of the room becomes ready
+	void MemberReady(int64_t account);
+	/// The host starts the countdown
+	void StartCountdown();
 
 private:
 	/// Sends an event to the room, as the push channel of the room does

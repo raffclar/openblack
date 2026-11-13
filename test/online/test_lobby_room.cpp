@@ -23,6 +23,7 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "Online/LobbyNotices.h"
 #include "Online/LobbyRoom.h"
 
 // Enable this define because the test makes the system itself
@@ -971,4 +972,116 @@ TEST_F(LobbyRoomSystemTest, QuickJoinGetsTheLobbyAgain)
 	lobby.replace(lobby.find("Friday Ring"), 11, "Monday Ring");
 	_client.Answer(200, lobby);
 	EXPECT_EQ(_system.Room()->Data().name, "Monday Ring");
+}
+
+namespace
+{
+
+/// The notice of one event of the room, from the snapshots before and after the event
+LobbyNotice NoticeOf(LobbyRoom& room, const lobby_api::PushEvent& event)
+{
+	const auto before = SnapshotOf(room);
+	room.Apply(event);
+	return NoticeBetween(before, SnapshotOf(room));
+}
+
+constexpr LobbyNotice k_Sound {.sound = true, .flash = false};
+constexpr LobbyNotice k_SoundAndFlash {.sound = true, .flash = true};
+
+} // namespace
+
+TEST(LobbyNotices, TheSnapshotHasTheOtherReadyPlayersAndTheCounts)
+{
+	LobbyRoom room(TestLobby(), k_Me);
+	room.Apply(Event("member.changed", fmt::format(R"({{"account":{},"ready":true}})", Account(k_Me))));
+	room.Apply(Event("member.joined", R"({"account":{"id":5,"name":"Sunfish"},"role":"god","slot":3})"));
+	room.Apply(Event("member.left", fmt::format(R"({{"account":{}}})", Account(k_Owl))));
+	const auto snapshot = SnapshotOf(room);
+	EXPECT_EQ(snapshot.lobbyId, "l1");
+	EXPECT_EQ(snapshot.phase, RoomPhase::Open);
+	EXPECT_FALSE(snapshot.end.has_value());
+	EXPECT_EQ(snapshot.joins, 1u);
+	EXPECT_EQ(snapshot.leaves, 1u);
+	EXPECT_EQ(snapshot.removals, 0u);
+	// The player is ready too, but the snapshot keeps only the other players. Owl left.
+	EXPECT_TRUE(snapshot.readyPlayers.empty());
+}
+
+TEST(LobbyNotices, TheEventsOfOtherPlayersPlayTheSound)
+{
+	LobbyRoom room(TestLobby(), k_Me);
+	EXPECT_EQ(NoticeOf(room, Event("member.joined", R"({"account":{"id":5,"name":"Sunfish"},"role":"god","slot":3})")),
+	          k_Sound);
+	EXPECT_EQ(NoticeOf(room, Event("member.changed", R"({"account":{"id":5,"name":"Sunfish"},"ready":true})")), k_Sound);
+	EXPECT_EQ(NoticeOf(room, Event("member.kicked",
+	                               fmt::format(R"({{"account":{{"id":5,"name":"Sunfish"}},"by":{}}})", Account(k_Host)))),
+	          k_Sound);
+	EXPECT_EQ(NoticeOf(room, Event("member.left", fmt::format(R"({{"account":{}}})", Account(k_Owl)))), k_Sound);
+}
+
+TEST(LobbyNotices, TheEventsWithNoNoticeAreSilent)
+{
+	LobbyRoom room(TestLobby(), k_Me);
+	// The ready of the player comes from the click of the player, which has its own sound
+	EXPECT_FALSE(NoticeOf(room, Event("member.changed", fmt::format(R"({{"account":{},"ready":true}})", Account(k_Me)))).Any());
+	// A player that is not ready now, a chat line and a change of the map give no notice
+	EXPECT_FALSE(
+	    NoticeOf(room, Event("member.changed", fmt::format(R"({{"account":{},"ready":false}})", Account(k_Owl)))).Any());
+	EXPECT_FALSE(
+	    NoticeOf(room, Event("chat.line", fmt::format(R"({{"channel":"lobby-l1","from":{},"text":"hi"}})", Account(k_Owl))))
+	        .Any());
+	EXPECT_FALSE(NoticeOf(room, Event("lobby.changed", R"({"fields":["map"],"ready_cleared":true})")).Any());
+}
+
+TEST(LobbyNotices, TheCountdownFlashesAtItsStartAndPlaysEachSecond)
+{
+	LobbyRoom room(TestLobby(), k_Me);
+	EXPECT_EQ(NoticeOf(room, Event("start.countdown", R"({"at":"2026-11-12T10:00:05Z"})")), k_SoundAndFlash);
+	auto before = SnapshotOf(room);
+	room.Tick(k_TenOClock);
+	EXPECT_EQ(NoticeBetween(before, SnapshotOf(room)), k_Sound);
+	// The same second gives no second notice
+	before = SnapshotOf(room);
+	room.Tick(k_TenOClock + 200);
+	EXPECT_FALSE(NoticeBetween(before, SnapshotOf(room)).Any());
+	// The cancel of the start gives no notice
+	EXPECT_FALSE(NoticeOf(room, Event("start.cancelled", R"({"why":"host_cancelled"})")).Any());
+}
+
+TEST(LobbyNotices, TheStartOfTheGameFlashesOnce)
+{
+	LobbyRoom room(TestLobby(), k_Me);
+	room.Apply(Event("start.countdown", R"({"at":"2026-11-12T10:00:05Z"})"));
+	EXPECT_EQ(NoticeOf(room, Event("game.assigned", R"({"game_id":"g1"})")), k_SoundAndFlash);
+	EXPECT_FALSE(NoticeOf(room, Event("game.started", "{}")).Any());
+	// The end of the game gives no notice
+	EXPECT_FALSE(NoticeOf(room, Event("game.ended", "{}")).Any());
+}
+
+TEST(LobbyNotices, AKickOrABanOfThePlayerFlashes)
+{
+	LobbyRoom kicked(TestLobby(), k_Me);
+	EXPECT_EQ(NoticeOf(kicked, Event("lobby.kicked", R"({"lobby":"l1","by":{"id":1,"name":"marek"},"banned":false})")),
+	          k_SoundAndFlash);
+	LobbyRoom banned(TestLobby(), k_Me);
+	EXPECT_EQ(NoticeOf(banned, Event("member.banned", fmt::format(R"({{"account":{}}})", Account(k_Me)))), k_SoundAndFlash);
+	// The leave of the player gives no notice
+	LobbyRoom left(TestLobby(), k_Me);
+	EXPECT_FALSE(NoticeOf(left, Event("member.left", fmt::format(R"({{"account":{}}})", Account(k_Me)))).Any());
+}
+
+TEST(LobbyNotices, TwoLobbiesGiveNoNotice)
+{
+	NoticeSnapshot before {.lobbyId = "l1"};
+	NoticeSnapshot after {.lobbyId = "l2", .phase = RoomPhase::Countdown, .joins = 3};
+	EXPECT_FALSE(NoticeBetween(before, after).Any());
+	after.lobbyId = "l1";
+	EXPECT_EQ(NoticeBetween(before, after), k_SoundAndFlash);
+}
+
+TEST(LobbyNotices, TheWindowFlashesOnlyWithNoFocus)
+{
+	EXPECT_TRUE(FlashesWindow(k_SoundAndFlash, false));
+	EXPECT_FALSE(FlashesWindow(k_SoundAndFlash, true));
+	EXPECT_FALSE(FlashesWindow(k_Sound, false));
 }

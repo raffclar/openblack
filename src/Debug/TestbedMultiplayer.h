@@ -77,6 +77,8 @@ enum class Stage : uint8_t
 	LobbyMapTooSmall,
 	/// The host opens the box of the settings of the session before the start
 	LobbySettings,
+	/// The events of a joined room give their notices one after the other: a join, a ready, the countdown and a kick
+	LobbyNotices,
 	_Count
 };
 

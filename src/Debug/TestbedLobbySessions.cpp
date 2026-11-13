@@ -445,6 +445,34 @@ void DemoLobbyRoom::KickPlayer()
 	}
 }
 
+void DemoLobbyRoom::MemberJoins(const lobby_api::AccountRef& account, int32_t slot)
+{
+	Send(lobby_api::lobby_events::k_MemberJoined,
+	     fmt::format(R"({{"account":{},"role":"god","slot":{},"have_map":true}})", Account(account), slot));
+}
+
+void DemoLobbyRoom::MemberReady(int64_t account)
+{
+	if (_room == nullptr)
+	{
+		return;
+	}
+	const auto* member = _room->FindMember(account);
+	if (member != nullptr)
+	{
+		Send(lobby_api::lobby_events::k_MemberChanged,
+		     fmt::format(R"({{"account":{},"ready":true}})", Account(member->account)));
+	}
+}
+
+void DemoLobbyRoom::StartCountdown()
+{
+	if (_room != nullptr)
+	{
+		_room->ApplyStart({.state = LobbyState::Countdown, .at = _nowMs + k_CountdownMs, .position = std::nullopt});
+	}
+}
+
 void DemoLobbyRoom::Queue(int32_t position)
 {
 	if (_room != nullptr)
