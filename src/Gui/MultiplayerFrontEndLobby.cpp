@@ -725,8 +725,14 @@ void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
 		have = false;
 		break;
 	case screens::MapNeed::Download:
-		if (map.sha256 != _roomMapHash)
+	{
+		const auto failed =
+		    _mapFailed || (_mapDownload != nullptr && _mapDownload->GetState() == online::MapDownload::State::Failed);
+		// A failed download starts again when the host sets the map again. A second failure shows the box again.
+		if (map.sha256 != _roomMapHash || (failed && room.MapSets() != _roomMapSets))
 		{
+			_roomMapSets = room.MapSets();
+			_reportedMap.reset();
 			FetchRoomMap(map.sha256);
 		}
 		if (_mapDownload != nullptr && _mapDownload->GetState() == online::MapDownload::State::Ready)
@@ -738,6 +744,7 @@ void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
 			have = false;
 		}
 		break;
+	}
 	}
 	if (!have.has_value())
 	{
@@ -760,6 +767,16 @@ void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
 void MultiplayerFrontEnd::FollowLobbyGame(const online::lobby::LobbyRoom& room)
 {
 	const bool hasServer = room.Phase() == RoomPhase::Assigned || room.Phase() == RoomPhase::InGame;
+	if (!hasServer && _lobbyGame && !IsStarted())
+	{
+		// The lobby took the game back before the start, for example when too few players joined in time. The session
+		// with the game server stops, and the room of the session stays open with its system line.
+		_lobbyGame = false;
+		_busy = false;
+		_ticketGame.clear();
+		LeaveRoom();
+		return;
+	}
 	if (!hasServer || _services.network == nullptr || room.GameId().empty() || _ticketGame == room.GameId())
 	{
 		return;

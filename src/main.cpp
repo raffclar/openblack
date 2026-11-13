@@ -241,6 +241,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("join-creature", "Tests: with --join, send this creature file before the start in place of the creature of the player's profile.", cxxopts::value<std::string>())
 		("join-build-id", "Tests: with --join, give this build id in the join in place of the build id of this build, so that the game server refuses the join with \"version\".", cxxopts::value<std::string>())
 		("join-part-again", "Tests: with --join-part-at, the world parts again after each load of the server's world, so that the resyncs do not work and the game shows the out-of-sync box.")
+		("join-load-delay", "Tests: with --join, tell the game server this many seconds late that the world loaded, as a slow computer does. The other players of a lobby game then see the pause for the loads.", cxxopts::value<uint32_t>())
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
 		("throw-lead-latency-ms", "Tools: a fixed latency in milliseconds for the reports of the hand. A throw moves its start along the flight by one turn for each 100 ms, at most 5 turns. Without it the game measures the latency on its clock.", cxxopts::value<uint32_t>())
 		("sim-gods-need-no-temple", "Tests: a god with no temple stays in a network game, for a land that makes no temple at its start (a story land). Each computer of a network game needs the same switch.")
@@ -497,6 +498,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .serverKey = JoinKeyOf(result),
 			    .testBuildId = result.count("join-build-id") != 0 ? std::optional(result["join-build-id"].as<std::string>())
 			                                                      : std::nullopt,
+			    .testLoadDelaySeconds = result.count("join-load-delay") != 0
+			                                ? std::optional(result["join-load-delay"].as<uint32_t>())
+			                                : std::nullopt,
 			};
 			// A ticket of the lobby makes the game a game of the internet lobby
 			args.networkJoin->origin = openblack::online::OriginOfJoin(args.networkJoin->ticket);

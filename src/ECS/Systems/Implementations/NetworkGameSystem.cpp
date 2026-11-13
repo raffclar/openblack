@@ -288,6 +288,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		                                                        : online::PartHashes {};
 	        },
 	    .origin = join.origin,
+	    .testLoadDelayMicroseconds = static_cast<int64_t>(join.testLoadDelaySeconds.value_or(0)) * 1'000'000,
 	});
 	return true;
 }

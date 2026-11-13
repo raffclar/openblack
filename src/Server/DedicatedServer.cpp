@@ -91,6 +91,7 @@
 #define OPENBLACK_GAME_ROLE 1
 #include "Online/StartRules.h"
 #include "Server/Desktop/GameRole.h"
+#include "Server/LobbyGame.h"
 #include "Server/LobbyHostReport.h"
 #include "Server/LobbyResults.h"
 #include "Server/ServerAdmin.h"
@@ -1458,6 +1459,11 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 #if defined(OPENBLACK_GAME_ROLE)
 	if (network)
 	{
+		// A room that the server ends before the start tells each client, so that no client tries to come back
+		if (lifetime.Why() != game_lifetime::End::None && !network->Host().Started())
+		{
+			network->Host().EndRoom(lobby_game::k_EndedRefusal);
+		}
 		for (const auto& line : network->Host().SummaryLines())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Network game: {}", line);

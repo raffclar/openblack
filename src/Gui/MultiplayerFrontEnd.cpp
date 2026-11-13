@@ -203,6 +203,11 @@ void MultiplayerFrontEnd::FollowSession()
 		_joined = false;
 		const auto refusal =
 		    session->GetEnd() == online::NetworkSession::End::Refused ? session->RefusedReason() : std::string();
+		// The game server ended the room before the start: the lobby tells the players why, in the room of the session
+		if (refusal == lobby_screens::k_EndedRefusal)
+		{
+			return;
+		}
 		ShowLobbyNotice(ToUtf16(lobby_screens::GameRefusalText(refusal, _settings.browser ? lobby_api::ClientKind::Browser
 		                                                                                  : lobby_api::ClientKind::Desktop)));
 		return;

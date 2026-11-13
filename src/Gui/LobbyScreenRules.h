@@ -129,6 +129,9 @@ struct Problem
 /// The box for a problem of a call. Each code of the service has its own clear text, and only a problem of the network
 /// shows the vanilla "Connection Failed.".
 [[nodiscard]] Problem ProblemOf(const ecs::systems::LobbyError& error, lobby_api::ClientKind client);
+/// The refusal that each client gets when the game server ends its room before the start. The front end shows no box
+/// for it: the lobby tells the players why in the room of the session.
+inline constexpr std::string_view k_EndedRefusal = "ended";
 /// The box for a refusal of the game server at the join of the game of a session ("version", "map", "ticket" and
 /// others)
 [[nodiscard]] std::string GameRefusalText(std::string_view refusal, lobby_api::ClientKind client);

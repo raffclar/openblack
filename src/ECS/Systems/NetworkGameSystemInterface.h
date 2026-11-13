@@ -61,6 +61,8 @@ struct NetworkJoin
 	std::optional<online::server_key::Pin> serverKey;
 	/// Tests: the build id that the join gives in place of the build id of this build
 	std::optional<std::string> testBuildId;
+	/// Tests: the seconds by which the client delays the report that its world loaded, as a slow computer does
+	std::optional<uint32_t> testLoadDelaySeconds;
 	/// The name of the room in the game list, for the box that tells that the host kicked the player
 	std::string roomName;
 };
