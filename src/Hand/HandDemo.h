@@ -176,6 +176,13 @@ private:
 	uint32_t _frameMarks {0};
 };
 
+/// Whether a demonstration that starts shakes off what the player's hand holds, a thing or a miracle. It does so when
+/// the hand holds something, unless the demonstration keeps the hand as it is.
+[[nodiscard]] constexpr bool ShakesOffHeld(bool withoutHandModify, bool holdsSomething)
+{
+	return !withoutHandModify && holdsSomething;
+}
+
 /// Whether a demonstration that starts stops the miracles that charge for the player's hand at the worship sites of the
 /// player's temple. It does so unless the demonstration keeps the hand as it is.
 [[nodiscard]] constexpr bool StopsCharges(bool withoutHandModify)

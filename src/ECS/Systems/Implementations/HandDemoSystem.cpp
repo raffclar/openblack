@@ -28,7 +28,9 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -208,18 +210,36 @@ void RetargetClick(const hnd::HNDRecord& record)
 
 void HandDemoSystem::Play(std::string_view name, uint32_t task, bool pauseOnTrigger, bool withoutHandModify)
 {
-	// The hand lets go of what it holds first, unless the demonstration needs it (a miracle to cast)
-	// A script starts the demonstration at the turn. It asks about the first player's hand, which ForceDrop empties.
-	if (!withoutHandModify && Locator::handGrabSystem::has_value() &&
-	    Locator::handGrabSystem::value().GetHeldOf(PlayerNames::PLAYER_ONE).has_value())
+	// The hand of this computer shakes off what it holds first, a thing or a miracle, unless the demonstration needs it
+	// (a miracle to cast). The shake off is a command, which the turn does: the thing falls from the hand with no speed,
+	// and the seed goes back to the player's worship. The hand does not shake.
+	const auto local =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const bool holdsThing =
+	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldOf(local).has_value();
+	const bool holdsSeed = Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(local).has_value();
+	if (hand_demo::ShakesOffHeld(withoutHandModify, holdsThing || holdsSeed))
 	{
-		Locator::handGrabSystem::value().ForceDrop();
+		if (Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::HandShakeOff {});
+		}
+		else
+		{
+			if (holdsSeed)
+			{
+				Locator::magicSystem::value().ShakeOffHeldSeedOf(local);
+			}
+			if (holdsThing)
+			{
+				Locator::handGrabSystem::value().DoShakeOff(local);
+			}
+		}
 	}
 	// The miracles that charge for the hand of this computer's player at the sites of the player's temple stop too
 	if (hand_demo::StopsCharges(withoutHandModify) && Locator::playerSystem::has_value() &&
 	    Locator::worshipSiteSystem::has_value() && Locator::spellIconSystem::has_value())
 	{
-		const auto local = Locator::playerSystem::value().GetLocalPlayer();
 		if (const auto temple = Locator::worshipSiteSystem::value().TempleOf(local); temple != entt::null)
 		{
 			Locator::spellIconSystem::value().CancelChargesFor(temple, local);
@@ -229,9 +249,7 @@ void HandDemoSystem::Play(std::string_view name, uint32_t task, bool pauseOnTrig
 	if (Locator::leashSystem::has_value())
 	{
 		auto& leash = Locator::leashSystem::value();
-		const auto player =
-		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
-		if (const auto creature = leash.PlayersCreature(player);
+		if (const auto creature = leash.PlayersCreature(local);
 		    creature.has_value() &&
 		    hand_demo::TakesOffLeash(withoutHandModify, leash.IsLeashed(*creature), leash.TiedTo(*creature).has_value()))
 		{
