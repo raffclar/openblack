@@ -533,7 +533,17 @@ void TempleExteriorSystem::Dress(entt::id_type id, const l3d::L3DFile& blended, 
 	// Its shape is kept too, for what is done at points on its surface
 	if (files.Contains(id))
 	{
-		*files.Handle(id) = blended;
+		// Each shape of a temple is a copy of the first temple with other vertices. Thus a kept shape with the same count
+		// of vertices only takes the new vertices, and the textures and the other data stay.
+		auto& kept = *files.Handle(id);
+		if (kept.GetVertices().size() == blended.GetVertices().size())
+		{
+			std::ranges::copy(blended.GetVertices(), kept.EditVertices().begin());
+		}
+		else
+		{
+			kept = blended;
+		}
 	}
 	else if (copy != nullptr)
 	{
