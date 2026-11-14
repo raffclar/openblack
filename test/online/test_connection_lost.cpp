@@ -7,12 +7,16 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "Online/ConnectionLostNotice.h"
 
 using openblack::online::ConnectionLostFacts;
 using openblack::online::ConnectionLostNotice;
+using openblack::online::DataRefusalText;
+using openblack::online::k_MostDataRefusalPathLetters;
 using openblack::online::LostTheConnection;
 using openblack::online::NetworkSession;
 
@@ -88,4 +92,56 @@ TEST(ConnectionLost, AKickOfTheLobbysHostShowsTheBoxOfTheKick)
 	EXPECT_TRUE(openblack::online::KickedFromGame(NetworkSession::End::Refused, "kicked"));
 	EXPECT_FALSE(openblack::online::KickedFromGame(NetworkSession::End::Refused, "resume"));
 	EXPECT_FALSE(openblack::online::KickedFromGame(NetworkSession::End::Lost, "kicked"));
+}
+
+TEST(ConnectionLost, ARefusalForTheGameDataNamesTheFile)
+{
+	EXPECT_EQ(DataRefusalText(NetworkSession::End::Refused, "data", "Scripts/info.dat"),
+	          "Your game data is not the server's: Scripts/info.dat");
+}
+
+TEST(ConnectionLost, OtherRefusalsAndEndsHaveNoTextOfTheGameData)
+{
+	EXPECT_FALSE(DataRefusalText(NetworkSession::End::Refused, "kicked", "Scripts/info.dat").has_value());
+	EXPECT_FALSE(DataRefusalText(NetworkSession::End::Refused, "full", {}).has_value());
+	EXPECT_FALSE(DataRefusalText(NetworkSession::End::Lost, "data", "Scripts/info.dat").has_value());
+	// An older server sends no path: the usual box shows
+	EXPECT_FALSE(DataRefusalText(NetworkSession::End::Refused, "data", {}).has_value());
+}
+
+TEST(ConnectionLost, TheTextOfTheGameDataKeepsOnlyPrintableLettersOfThePath)
+{
+	EXPECT_EQ(DataRefusalText(NetworkSession::End::Refused, "data", "Data/\x01Land\n1.lnd\x7f"),
+	          "Your game data is not the server's: Data/Land1.lnd");
+	EXPECT_FALSE(DataRefusalText(NetworkSession::End::Refused, "data", "\x01\x02").has_value());
+	const auto text = DataRefusalText(NetworkSession::End::Refused, "data", std::string(1000, 'a'));
+	ASSERT_TRUE(text.has_value());
+	EXPECT_EQ(*text, "Your game data is not the server's: " + std::string(k_MostDataRefusalPathLetters, 'a'));
+}
+
+TEST(ConnectionLost, AJoinFromTheCommandLineShowsTheBoxOfTheGameDataBeforeTheStart)
+{
+	ConnectionLostFacts facts {.hasSession = true,
+	                           .started = false,
+	                           .state = NetworkSession::State::Ended,
+	                           .end = NetworkSession::End::Refused,
+	                           .toolRun = false,
+	                           .joinedFromCommandLine = true,
+	                           .dataRefused = true};
+	ConnectionLostNotice notice;
+	EXPECT_TRUE(notice.Update(facts));
+	EXPECT_FALSE(notice.Update(facts));
+	// The front end tells a player who joined from it, and a run of the tools stops with no box
+	ConnectionLostNotice frontEnd;
+	facts.joinedFromCommandLine = false;
+	EXPECT_FALSE(frontEnd.Update(facts));
+	ConnectionLostNotice tools;
+	facts.joinedFromCommandLine = true;
+	facts.toolRun = true;
+	EXPECT_FALSE(tools.Update(facts));
+	// Another refusal before the start shows no box
+	ConnectionLostNotice other;
+	facts.toolRun = false;
+	facts.dataRefused = false;
+	EXPECT_FALSE(other.Update(facts));
 }

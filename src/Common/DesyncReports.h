@@ -35,6 +35,11 @@ constexpr uint32_t k_MostDesyncEventsInRun = 20;
 /// The longest time, in milliseconds, that a desync waits for the names of the parts that differ. After that, its key
 /// is k_UnknownDesyncPart.
 constexpr int64_t k_DesyncPartsWaitMilliseconds = 15'000;
+/// The longest time, in milliseconds, that the event of a desync waits for the detail of its capture, when the rule
+/// waits for details. After that, the event goes with no detail.
+constexpr int64_t k_DesyncDetailWaitMilliseconds = 75'000;
+/// The most bytes of the file that an event of a desync attaches
+constexpr size_t k_MostDesyncAttachmentBytes = 256 * 1024;
 /// The key of a desync with no known part that differs
 constexpr std::string_view k_UnknownDesyncPart = "unknown";
 /// The most parts that an event names
@@ -53,6 +58,18 @@ struct DesyncFacts
 	uint64_t otherChecksum {0};
 	/// On the server: the god slot of the client. None on a client.
 	std::optional<uint8_t> slot;
+};
+
+/// What the capture of a desync found, for its event
+struct DesyncDetail
+{
+	/// The values of the event, such as the first fact that differs and the first entities that differ
+	std::vector<std::pair<std::string, std::string>> extras;
+	/// The name of the first fact that differs, or empty when no fact differs
+	std::string fact;
+	/// A file for the event, such as the facts of the capture, and its name. Empty: no file.
+	std::string attachment;
+	std::string attachmentName;
 };
 
 /// One event that goes to Sentry
@@ -80,6 +97,8 @@ struct DesyncReport
 	/// own event
 	std::vector<std::pair<std::string, uint32_t>> counts;
 	uint32_t notSent {0};
+	/// A desync event: what its capture found, when it came in time
+	std::optional<DesyncDetail> detail;
 };
 
 /// The events of desyncs that one run of the program can still send. It lives as long as the program runs.
@@ -123,6 +142,11 @@ public:
 	void Detected(uint8_t source, const DesyncFacts& facts, int64_t nowMilliseconds);
 	/// The names of the parts that differ for the desync of the source that waits. Nothing when no desync waits.
 	void Parted(uint8_t source, std::span<const std::string> parts, int64_t nowMilliseconds);
+	/// The event of a new key waits up to k_DesyncDetailWaitMilliseconds for the detail of its capture. Off by default.
+	void SetDetailWait(bool wait) noexcept { _detailWait = wait; }
+	/// The detail of the capture of the last desync of the source. It goes with the event of that desync when the event
+	/// did not go yet, else nothing happens.
+	void Detailed(uint8_t source, DesyncDetail detail);
 	/// Once a frame: the events that go now
 	[[nodiscard]] std::vector<DesyncReport> Update(int64_t nowMilliseconds, DesyncRunBudget& budget);
 	/// The game ended, or the program stops: the summary, once, when some desyncs did not go and the run can send it.
@@ -140,15 +164,19 @@ private:
 	{
 		DesyncFacts facts;
 		int64_t detectedAt {0};
+		std::optional<DesyncDetail> detail;
 	};
 	struct Ready
 	{
+		uint8_t source {0};
 		std::string key;
 		DesyncFacts facts;
 		std::vector<std::string> parts;
 		uint32_t desyncsInGame {0};
+		int64_t readyAt {0};
+		std::optional<DesyncDetail> detail;
 	};
-	void Resolve(uint8_t source, std::span<const std::string> parts);
+	void Resolve(uint8_t source, std::span<const std::string> parts, int64_t nowMilliseconds);
 
 	std::string _game;
 	uint8_t _turnCodec {0};
@@ -161,6 +189,7 @@ private:
 	uint32_t _desyncs {0};
 	uint32_t _eventsSent {0};
 	bool _finished {false};
+	bool _detailWait {false};
 };
 
 /// What a desync event tells Sentry, with no player name, account, address or chat

@@ -22,6 +22,7 @@
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Online/ConnectionLostNotice.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapPackage.h"
 #include "Online/LanDiscoveryInterface.h"
@@ -237,6 +238,12 @@ void MultiplayerFrontEnd::FollowSession()
 		{
 			return;
 		}
+		// A file of the game data is not the server's: the box names the file (deviation 266)
+		if (const auto text = online::DataRefusalText(session->GetEnd(), refusal, session->RefusedPath()))
+		{
+			ShowLobbyNotice(ToUtf16(*text));
+			return;
+		}
 		ShowLobbyNotice(ToUtf16(lobby_screens::GameRefusalText(refusal, _settings.browser ? lobby_api::ClientKind::Browser
 		                                                                                  : lobby_api::ClientKind::Desktop)));
 		return;
@@ -255,6 +262,12 @@ void MultiplayerFrontEnd::FollowSession()
 		return;
 	}
 	const auto refusal = session->GetEnd() == online::NetworkSession::End::Refused ? session->RefusedReason() : std::string();
+	// A file of the game data is not the server's: the box names the file (deviation 266)
+	if (const auto text = online::DataRefusalText(session->GetEnd(), refusal, session->RefusedPath()))
+	{
+		ShowLobbyNotice(ToUtf16(*text));
+		return;
+	}
 	Show(JoinFailureMessage(refusal, _flow.kind));
 }
 
