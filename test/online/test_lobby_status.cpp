@@ -68,6 +68,25 @@ TEST(LobbyStatus, ReportHasTheGodsThatHaveASeat)
 	EXPECT_EQ(status.players[1].account, 9);
 	EXPECT_EQ(status.players[0].role, "god");
 	EXPECT_FALSE(status.players[0].clan.has_value());
+	// The god of an away seat keeps its seat, and the report shows that its player is not connected
+	EXPECT_FALSE(status.players[0].away);
+	EXPECT_TRUE(status.players[1].away);
+}
+
+TEST(LobbyStatus, TheGodsChangeWhenAPlayerGoesOrComesBack)
+{
+	std::vector seats {SeatOf(LockstepHost::SeatState::Taken, "7"), SeatOf(LockstepHost::SeatState::Taken, "9")};
+	const auto connected = StatusPlayers(seats);
+	seats[1].state = LockstepHost::SeatState::Away;
+	const auto away = StatusPlayers(seats);
+	EXPECT_NE(away, connected);
+	seats[1].state = LockstepHost::SeatState::Taken;
+	EXPECT_EQ(StatusPlayers(seats), connected);
+	seats[1].state = LockstepHost::SeatState::Closed;
+	const auto left = StatusPlayers(seats);
+	EXPECT_NE(left, connected);
+	ASSERT_EQ(left.size(), 1U);
+	EXPECT_EQ(left[0].account, 7);
 }
 
 TEST(LobbyStatus, ReportKeepsTheLimitsOfTheLobby)
@@ -87,7 +106,7 @@ TEST(LobbyStatus, ReportGoesToTheJsonOfTheLobby)
 	EXPECT_NE(text.find(R"("hostname":"Room")"), std::string::npos);
 	EXPECT_NE(text.find(R"("gamemode":"openstaging")"), std::string::npos);
 	EXPECT_NE(text.find(R"("maxplayers":2)"), std::string::npos);
-	EXPECT_NE(text.find(R"("players":[{"account":7,"clan":null,"role":"god"}])"), std::string::npos);
+	EXPECT_NE(text.find(R"("players":[{"account":7,"away":false,"clan":null,"role":"god"}])"), std::string::npos);
 }
 
 TEST(LobbyStatus, TheAnswerGivesTheListingAndTheTimeOfTheNextReport)
