@@ -103,6 +103,8 @@ struct Claims
 	game_socket::Role role {game_socket::Role::God};
 	/// The id of the lobby whose game the ticket is for ("lobby", optional). Empty for a ticket of a server with no lobby.
 	std::string lobby;
+	/// The number of gods of the lobby's game at its start ("gods", optional). 0 when the ticket does not give it.
+	uint32_t gods {0};
 };
 
 /// The claims of a ticket's message. None when a claim is missing, has the wrong type or names a role that is not known.

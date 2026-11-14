@@ -1854,6 +1854,71 @@ TEST_F(FrontEndTest, PlayerDetailsShowTheOwnLinesWithNoPickAndNothingAfterAFailu
 	EXPECT_EQ(lobby.detailsAsked.size(), 3u);
 }
 
+TEST_F(FrontEndTest, ThePlayerOfALobbyGameIsReadyInTheRoomOfTheGameServerAfterTheJoin)
+{
+	// The fake service of the testbed gives the room of the lobby session
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	frontEnd->OpenCreateLobby();
+	frontEnd->SubmitCreateLobby();
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+
+	// The countdown ends and the lobby gives the room a game server: the front end joins it with the room's ticket
+	lobbySessions->StartCountdown();
+	lobbySessions->AssignGame(
+	    "game-1",
+	    lobby_api::JoinTicket {.url = "wss://lobby.test/game/s1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	frontEnd->Update();
+	ASSERT_FALSE(sockets.order.empty());
+	ASSERT_EQ(network.joins.size(), 1u);
+	EXPECT_EQ(network.joins.back().ticket, "v4.public.t");
+	sockets.Accept(sockets.order.back());
+	Step();
+	const auto& socket = sockets.sockets.at(sockets.order.back());
+	const auto readyFrame = std::string(R"({"ready":true,"type":"room.ready"})");
+	EXPECT_TRUE(std::ranges::none_of(socket.sent, [&](const auto& frame) { return frame.Text() == readyFrame; }));
+
+	// The server lets the player in: the player was ready in the lobby, so the player is ready in the room of the game
+	// server, which starts only when each god in it is ready. The room of the session stays on its box.
+	ServerJoins();
+	EXPECT_EQ(socket.sent.back().Text(), readyFrame);
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+}
+
+TEST_F(FrontEndTest, AnObserverOfALobbyGameSendsNoReady)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	frontEnd->OpenCreateLobby();
+	frontEnd->SubmitCreateLobby();
+	frontEnd->Update();
+	lobbySessions->AssignGame(
+	    "game-1",
+	    lobby_api::JoinTicket {.url = "wss://lobby.test/game/s1", .ticket = "v4.public.t", .expires = 0, .role = "observer"});
+	frontEnd->Update();
+	ASSERT_FALSE(sockets.order.empty());
+	sockets.Accept(sockets.order.back());
+	Step();
+	ServerJoins(game_socket::Role::Observer);
+	const auto& socket = sockets.sockets.at(sockets.order.back());
+	EXPECT_TRUE(std::ranges::none_of(socket.sent,
+	                                 [](const auto& frame) { return frame.Text().find("room.ready") != std::string::npos; }));
+}
+
 TEST_F(FrontEndTest, ReadyShowsNoBoxAndTheTickTakesItAway)
 {
 	ToRoom();

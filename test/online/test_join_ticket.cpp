@@ -214,6 +214,27 @@ TEST(JoinTicket, OnlyATrueStaffClaimMakesAStaffPlayer)
 	EXPECT_FALSE(ParseClaims(with(R"("staff":1)")).has_value());
 }
 
+TEST(JoinTicket, TheGodsClaimGivesTheGodsOfTheLobbyGame)
+{
+	const auto text = ClaimsText();
+	const auto with = [&](std::string_view field) {
+		auto changed = text;
+		changed.insert(changed.size() - 1, std::string(",") + std::string(field));
+		return changed;
+	};
+	// A ticket without the claim, as from an older lobby, gives no gods
+	const auto none = ParseClaims(text);
+	ASSERT_TRUE(none.has_value());
+	EXPECT_EQ(none->gods, 0u);
+	const auto two = ParseClaims(with(R"("gods":2)"));
+	ASSERT_TRUE(two.has_value());
+	EXPECT_EQ(two->gods, 2u);
+	// A claim that is not a number of zero or more makes the ticket bad
+	EXPECT_FALSE(ParseClaims(with(R"("gods":"2")")).has_value());
+	EXPECT_FALSE(ParseClaims(with(R"("gods":-1)")).has_value());
+	EXPECT_FALSE(ParseClaims(with(R"("gods":1.5)")).has_value());
+}
+
 TEST(TicketCheck, TheStaffClaimComesOnlyFromASignedTicket)
 {
 	auto check = MakeCheck();

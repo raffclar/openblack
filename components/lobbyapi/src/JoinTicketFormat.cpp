@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <limits>
 
 #include <nlohmann/json.hpp>
 
@@ -332,6 +333,15 @@ std::optional<Claims> ParseClaims(std::string_view message)
 			}
 			*flag = found->get<bool>();
 		}
+	}
+	// The gods of the lobby's game are optional. A ticket of an older lobby does not give them.
+	if (const auto found = value.find("gods"); found != value.end() && !found->is_null())
+	{
+		if (!found->is_number_unsigned() || found->get<uint64_t>() > std::numeric_limits<uint32_t>::max())
+		{
+			return std::nullopt;
+		}
+		claims.gods = static_cast<uint32_t>(found->get<uint64_t>());
 	}
 	// The lobby's tickets name the role. A ticket with no role is a god's ticket, as the lobby's default.
 	if (!role.empty())

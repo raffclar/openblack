@@ -685,6 +685,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		joined.slot = seat;
 		joined.session = free->session;
 		Log(spdlog::level::info, fmt::format("{} joins as the god of slot {}", claims.name, seat));
+		WaitForGodsOfTicket(claims);
 	}
 	else
 	{
@@ -1439,6 +1440,12 @@ void LockstepHost::Update()
 	if (!_started)
 	{
 		const auto inRoom = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
+		if (inRoom == 0 && !_settings.lobby.has_value() && _godsToWaitFor != _settings.minGods)
+		{
+			// The gods of a lobby's game left the room before the start: the room waits for its own fewest gods again
+			_godsToWaitFor = _settings.minGods;
+			Log(spdlog::level::info, fmt::format("The room is empty: it starts with {} gods at least", _godsToWaitFor));
+		}
 		const auto ready =
 		    std::ranges::count_if(_seats, [](const Seat& seat) { return seat.state == SeatState::Taken && seat.ready; });
 		if (!Starting() && RoomStarts(static_cast<size_t>(inRoom), static_cast<size_t>(ready), _godsToWaitFor))
@@ -1809,6 +1816,24 @@ void LockstepHost::StopTurns()
 	// log uses the number of the world, so that it names the same turn as the line of the decision.
 	Log(spdlog::level::info, fmt::format("The game is decided: the turns of the game stop after turn {}", *_stoppedAfter + 1));
 	Broadcast(game_socket::GameStop {.turn = *_stoppedAfter});
+}
+
+void LockstepHost::WaitForGodsOfTicket(const join_ticket::Claims& claims)
+{
+	// A server with no member list of the lobby gets the gods of the lobby's game from the tickets. The room then waits
+	// for each of these gods, so that a god alone does not start a game of two.
+	if (_settings.lobby.has_value() || claims.lobby.empty() || claims.gods == 0)
+	{
+		return;
+	}
+	const auto gods = game_lifetime::GodsToWaitFor(claims.gods, _settings.minGods, false);
+	if (gods == _godsToWaitFor)
+	{
+		return;
+	}
+	_godsToWaitFor = gods;
+	Log(spdlog::level::info,
+	    fmt::format("The game of the lobby {} has {} gods: the room starts when each of them is ready", claims.lobby, gods));
 }
 
 void LockstepHost::EndJoinWindow()
