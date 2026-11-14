@@ -57,6 +57,7 @@ public:
 	[[nodiscard]] bool IsRunning() const noexcept override { return _running; }
 	void SetEnabled(bool enabled) override;
 	void SendDesync(const DesyncReport& report) override;
+	void SendEvent(const FailureEvent& event) override;
 	[[nodiscard]] ErrorReportsState GetState() const override
 	{
 		return {.hasDestination = HasDestination(),

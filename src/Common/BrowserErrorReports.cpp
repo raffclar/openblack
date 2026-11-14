@@ -160,6 +160,44 @@ void BrowserErrorReports::SendDesync(const DesyncReport& report)
 	++_desyncEvents;
 }
 
+void BrowserErrorReports::SendEvent(const FailureEvent& event)
+{
+	if (!_running)
+	{
+		return;
+	}
+	const auto fingerprint = CStrings(event.fingerprint);
+	const auto tags = CStrings(event.tags);
+	const auto extras = CStrings(event.extras);
+	// The page reads the lists of strings before the call returns
+	// clang-format off
+	MAIN_THREAD_EM_ASM({
+		if (!globalThis.openblackErrorReports) {
+			return;
+		}
+		const strings = (at, count) => {
+			const list = [];
+			for (let i = 0; i < count; ++i) {
+				list.push(UTF8ToString(HEAPU32[(at >> 2) + i]));
+			}
+			return list;
+		};
+		const pairs = (list) => {
+			const result = [];
+			for (let i = 0; i + 1 < list.length; i += 2) {
+				result.push([list[i], list[i + 1]]);
+			}
+			return result;
+		};
+		globalThis.openblackErrorReports.event({
+			message: UTF8ToString($0), level: UTF8ToString($1), fingerprint: strings($2, $3),
+			tags: pairs(strings($4, $5)), extras: pairs(strings($6, $7)),
+		});
+	}, event.message.c_str(), event.level.c_str(), fingerprint.data(), fingerprint.size(), tags.data(), tags.size(),
+	   extras.data(), extras.size());
+	// clang-format on
+}
+
 void BrowserErrorReports::Start()
 {
 	if (_running || !HasDestination())

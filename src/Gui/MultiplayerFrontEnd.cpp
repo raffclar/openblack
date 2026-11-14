@@ -843,18 +843,24 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 		if (_mapDownload == nullptr)
 		{
 			auto* lobby = _services.lobby;
+			auto lastError = _lastPieceError;
 			// The pieces come from the lobby, or from the site for a map with a package (deviation 257)
-			auto fetch = [this, lobby](const lobby_api::OnlineMap& wanted, uint64_t offset, uint64_t count, auto done) {
+			auto fetch = [this, lobby, lastError](const lobby_api::OnlineMap& wanted, uint64_t offset, uint64_t count,
+			                                      auto done) {
 				// The tests have no game log
 				if (const auto log = spdlog::get("game"); log != nullptr)
 				{
 					SPDLOG_LOGGER_INFO(log, "The map download asks for {} bytes from byte {} of {}", count, offset,
 					                   wanted.file);
 				}
-				auto send = [lobby, wanted, offset, count, done = std::move(done)]() mutable {
+				auto send = [lobby, lastError, wanted, offset, count, done = std::move(done)]() mutable {
 					lobby->DownloadMapPiece(
 					    wanted, offset, count,
-					    [done = std::move(done)](ecs::systems::LobbyResult<lobby_api::FilePiece>&& piece) mutable {
+					    [lastError, done = std::move(done)](ecs::systems::LobbyResult<lobby_api::FilePiece>&& piece) mutable {
+						    if (!piece.Ok())
+						    {
+							    *lastError = {piece.error.status, static_cast<int32_t>(piece.error.kind)};
+						    }
 						    done(std::move(piece.value));
 					    });
 				};
@@ -936,12 +942,51 @@ void MultiplayerFrontEnd::FollowMapDownload()
 	    _mapFailed || (_mapDownload != nullptr && _mapDownload->GetState() == online::MapDownload::State::Failed);
 	if (failed && _flow.box == Box::Room && _message == Message::None)
 	{
+		ReportMapFailure();
 		_mapFailed = false;
 		if (_mapDownload != nullptr)
 		{
 			_mapDownload->Stop();
 		}
 		Show(Message::CouldNotDownloadMap);
+	}
+}
+
+void MultiplayerFrontEnd::ReportMapFailure()
+{
+	const auto map = online::MapDownload::MapOfRoom(_lobbyMaps, _roomMapHash);
+	std::string_view step = "list";
+	uint64_t offset = 0;
+	if (!_mapFailed && _mapDownload != nullptr)
+	{
+		switch (_mapDownload->GetFailure())
+		{
+		case online::MapDownload::Failure::Piece:
+			step = "piece";
+			offset = _mapDownload->GetFailedOffset();
+			break;
+		case online::MapDownload::Failure::Check:
+			step = "check";
+			break;
+		case online::MapDownload::Failure::Store:
+			step = "store";
+			break;
+		case online::MapDownload::Failure::None:
+			break;
+		}
+	}
+	const auto [status, error] = *_lastPieceError;
+	auto event = online::MapDownload::ReportOf(_roomMapHash, map.has_value() ? &*map : nullptr, step, offset, status, error);
+	// The tests have no game log
+	if (const auto log = spdlog::get("game"); log != nullptr)
+	{
+		SPDLOG_LOGGER_WARN(log, "The map download of {} failed at the step {}: byte {}, HTTP status {}, error kind {}",
+		                   _roomMapHash, step, offset, status, error);
+	}
+	*_lastPieceError = {0, 0};
+	if (_services.report)
+	{
+		_services.report(event);
 	}
 }
 

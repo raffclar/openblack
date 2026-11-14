@@ -789,6 +789,7 @@ void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
 	_services.lobbyRoom->ReportMap({.haveMap = *have, .sha256 = map.sha256}, {});
 	if (!*have && need == screens::MapNeed::Download && _message == Message::None)
 	{
+		ReportMapFailure();
 		Show(Message::CouldNotDownloadMap);
 	}
 }

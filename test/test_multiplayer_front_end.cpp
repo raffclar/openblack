@@ -360,6 +360,7 @@ struct FrontEndTest: public ::testing::Test
 	FakeClanCreature clanCreature;
 	/// The notices of the lobby room that the front end gave
 	std::vector<online::lobby::LobbyNotice> notices;
+	std::vector<error_reports::FailureEvent> reports;
 
 	/// The front end goes first, because it still uses the fake lobby sessions when it closes
 	void TearDown() override { frontEnd.reset(); }
@@ -379,6 +380,7 @@ struct FrontEndTest: public ::testing::Test
 		    .lobbyRoom = lobbySessions.get(),
 		    .nowMs = clock,
 		    .notice = [this](const online::lobby::LobbyNotice& notice) { notices.push_back(notice); },
+		    .report = [this](const error_reports::FailureEvent& event) { reports.push_back(event); },
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
@@ -2680,6 +2682,20 @@ TEST_F(FrontEndTest, ALandThatTheLobbyDoesNotGiveShowsTheBoxOfTheRoom)
 	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
 	EXPECT_EQ(ButtonsOf(Message::CouldNotDownloadMap), MessageButtons::Ok);
+	// The failure goes to the error reports with its step, its map and the error of the lobby
+	ASSERT_EQ(reports.size(), 1u);
+	EXPECT_EQ(reports[0].fingerprint, (std::vector<std::string> {"map-download", "piece"}));
+	const auto tag = [this](std::string_view name, bool extra = false) {
+		const auto& list = extra ? reports[0].extras : reports[0].tags;
+		const auto found = std::ranges::find(list, name, &std::pair<std::string, std::string>::first);
+		return found != list.end() ? found->second : std::string("missing");
+	};
+	EXPECT_EQ(tag("map_step"), "piece");
+	EXPECT_EQ(tag("map_file"), RoomMap().file);
+	EXPECT_EQ(tag("map_sha256", true), k_RoomMapHash);
+	EXPECT_EQ(tag("map_address", true), "/api/v1/maps/" + std::string(k_RoomMapHash));
+	EXPECT_EQ(tag("map_offset", true), "0");
+	EXPECT_EQ(tag("map_error_kind", true), std::to_string(static_cast<int>(LobbyErrorKind::Network)));
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
 	Step();
 	// OK closes the box, and the player stays in the room
@@ -2698,6 +2714,8 @@ TEST_F(FrontEndTest, ALandThatIsNotInTheLobbysListShowsTheBoxOfTheRoom)
 	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
 	EXPECT_TRUE(lobby.downloads.empty());
+	ASSERT_EQ(reports.size(), 1u);
+	EXPECT_EQ(reports[0].fingerprint, (std::vector<std::string> {"map-download", "list"}));
 }
 
 TEST_F(FrontEndTest, ALandInTheStoreDoesNotComeAgain)

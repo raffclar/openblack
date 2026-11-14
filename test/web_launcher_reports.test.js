@@ -224,6 +224,22 @@ check('the address loses its parameters and the masks find the secrets', () => {
   assert.equal(addressWithoutParameters('https://h/p'), 'https://h/p');
   assert.equal(maskSecrets('session_id=abc'), 'session_id=<hidden>');
 });
+check('the event of a failure of the game goes to Sentry with its fingerprint, tags and extras', async () => {
+  const { reports, sentry } = makeReports();
+  reports.start(settings);
+  await settle();
+  reports.event({
+    message: 'The map download failed: piece', level: 'warning', fingerprint: ['map-download', 'piece'],
+    tags: [['map_step', 'piece']], extras: [['map_offset', '0']],
+  });
+  await settle();
+  const event = sentry.calls.find((call) => call[0] === 'event')[1];
+  assert.equal(event.message, 'The map download failed: piece');
+  assert.equal(event.level, 'warning');
+  assert.deepEqual(event.fingerprint, ['map-download', 'piece']);
+  assert.deepEqual(event.tags, { map_step: 'piece' });
+  assert.deepEqual(event.extra, { map_offset: '0' });
+});
 
 (async () => {
   for (const { name, body } of tests) {

@@ -33,6 +33,7 @@
 #include "Commands/PlayerCommands.h"
 #include "Common/BuildVersion.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Common/ErrorReportsInterface.h"
 #include "Game.h"
 #include "Sound/ClipSounds.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -290,6 +291,13 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	    .lobbyRoom = Locator::lobbyRoom::has_value() ? &Locator::lobbyRoom::value() : nullptr,
 	    .nowMs = {},
 	    .notice = gui::GiveLobbyNotice,
+	    .report =
+	        [](const error_reports::FailureEvent& event) {
+		        if (Locator::errorReports::has_value())
+		        {
+			        Locator::errorReports::value().SendEvent(event);
+		        }
+	        },
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
