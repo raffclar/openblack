@@ -799,12 +799,13 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 						    done(std::move(piece.value));
 					    });
 				};
-				if (_settings.mapPieceDelayMs == 0 || !_services.nowMs)
+				if (_settings.mapPieceDelayMs == 0)
 				{
 					send();
 					return;
 				}
-				_delayedPieces.emplace_back(_services.nowMs() + _settings.mapPieceDelayMs, std::move(send));
+				// The game gives no clock of its own, so the delay uses the clock of the computer
+				_delayedPieces.emplace_back(NowMs() + _settings.mapPieceDelayMs, std::move(send));
 			};
 			// A map with a package: the game adds the village of its own game data to the package (deviation 249)
 			auto assemble = [read = _services.readGameFile](const lobby_api::OnlineMap& wanted,
@@ -838,11 +839,11 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 
 void MultiplayerFrontEnd::SendDelayedPieces()
 {
-	if (_delayedPieces.empty() || !_services.nowMs)
+	if (_delayedPieces.empty())
 	{
 		return;
 	}
-	const auto now = _services.nowMs();
+	const auto now = NowMs();
 	std::vector<std::function<void()>> due;
 	std::erase_if(_delayedPieces, [now, &due](auto& delayed) {
 		if (delayed.first > now)
