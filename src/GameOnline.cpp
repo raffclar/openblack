@@ -282,6 +282,8 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
 #if defined(__EMSCRIPTEN__)
 	settings.browser = true;
+	// The browser build goes straight to the lobby of its site, with no list of the connections (deviation 264)
+	settings.start = gui::multiplayer::FrontEndStart::SiteLobby;
 	settings.registerPage = "/register/";
 	settings.accountPage = "/account/";
 #else
@@ -653,6 +655,8 @@ void Game::UpdateMultiplayerFrontEnd()
 	const bool templeGone = !Locator::temple::has_value() || !Locator::temple::value().IsMultiplayerFrontEnd();
 	if (boxes.TakeLeft() || templeGone)
 	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The multiplayer front end closes: the player goes back to the screen before it");
 		boxes.Close();
 		if (Locator::temple::has_value())
 		{
