@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const {
-  isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hexText, fetchAssetIndex, keepAssets,
+  isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hexText, refusalReason, fetchAssetIndex, keepAssets,
   k_AssetIndexAddress, k_AssetCacheFolder,
 } = require('../web/page/launcher-assets.js');
 
@@ -185,6 +185,13 @@ check('the address of a file encodes each part of its path', () => {
 
 check('the text of bytes has two hexadecimal digits for each byte', () => {
   assert.equal(hexText(new Uint8Array([0, 15, 255]).buffer), '000fff');
+});
+
+check('the reason of a refusal is the detail of the problem, or else the text', () => {
+  const problem = JSON.stringify({ status: 403, detail: 'Your account cannot download the game files yet.' });
+  assert.equal(refusalReason(problem), 'Your account cannot download the game files yet.');
+  assert.equal(refusalReason('  Not found\n'), 'Not found');
+  assert.equal(refusalReason('x'.repeat(300)).length, 200);
 });
 
 check('an account without the mark gets the refusal of the site', async () => {

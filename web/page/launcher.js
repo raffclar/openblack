@@ -645,7 +645,9 @@ async function useSiteGameFiles() {
   element('site-files').hidden = false;
   const progress = element('site-files-progress');
   let shown = '';
+  let last = { bytes: 0, files: 0 };
   const show = (state) => {
+    last = state;
     const percent = state.totalBytes === 0 ? 100 : Math.floor(100 * state.bytes / state.totalBytes);
     const text = state.totalFiles === 0
       ? 'This browser has all the game files already.'
@@ -662,6 +664,7 @@ async function useSiteGameFiles() {
       fetchFile, digest: (algorithm, bytes) => crypto.subtle.digest(algorithm, bytes), root,
       wanted: isGameFile, progress: show,
     });
+    log(`The page downloaded ${last.files} game files (${megabytes(last.bytes)}). The browser kept the other files.`);
     progress.textContent = 'This browser has all the game files. The next visit downloads only the files that change.';
     await choose(entries, 'the site', { copyAllowed: false });
     return true;

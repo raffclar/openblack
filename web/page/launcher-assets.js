@@ -134,6 +134,19 @@ function hexText(buffer) {
   return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+/** The reason in the text of a refusal: the detail of a problem of the site, or else the text */
+function refusalReason(text) {
+  try {
+    const problem = JSON.parse(text);
+    if (problem && typeof problem.detail === 'string') {
+      return problem.detail.slice(0, k_AssetReasonLength);
+    }
+  } catch {
+    // The text is not JSON. The reason is the text.
+  }
+  return text.trim().slice(0, k_AssetReasonLength);
+}
+
 /**
  * Asks the site for the list of the game files. Gives { granted: true, index } when the account gets the files, or
  * { granted: false, status, reason } when the site refuses them or the list is not correct.
@@ -147,7 +160,7 @@ async function fetchAssetIndex(fetchFile) {
   }
   const text = await response.text();
   if (!response.ok) {
-    return { granted: false, status: response.status, reason: text.trim().slice(0, k_AssetReasonLength) };
+    return { granted: false, status: response.status, reason: refusalReason(text) };
   }
   try {
     return { granted: true, index: parseAssetIndex(text) };
@@ -270,7 +283,8 @@ async function keepAssets(index, { fetchFile, digest, root, wanted = () => true,
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hexText, fetchAssetIndex, fetchAsset, keepAssets,
+    isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hexText, refusalReason, fetchAssetIndex, fetchAsset,
+    keepAssets,
     k_AssetIndexAddress, k_AssetCacheFolder,
   };
 }
