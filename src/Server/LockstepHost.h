@@ -404,6 +404,9 @@ private:
 	void JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims, bool byName);
 	/// True when the room has as many observers as it takes
 	[[nodiscard]] bool ObserversFull() const;
+	/// A god joins with the ticket of a lobby's game on a server with no member list of the lobby: the room waits for
+	/// the gods that the ticket gives
+	void WaitForGodsOfTicket(const join_ticket::Claims& claims);
 	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
 	bool SendWorld(ConnectionId connection);
 	/// Refuses a connection with the short reason that the client gets. The log also gets the detail.
