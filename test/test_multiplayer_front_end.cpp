@@ -89,7 +89,7 @@ class FakeLobby final: public LobbyClientSystemInterface
 {
 public:
 	void Update() override {}
-	[[nodiscard]] bool IsConfigured() const override { return true; }
+	[[nodiscard]] bool IsConfigured() const override { return configured; }
 	[[nodiscard]] LobbySessionState GetState() const override
 	{
 		return account ? LobbySessionState::LoggedIn : LobbySessionState::LoggedOut;
@@ -196,6 +196,8 @@ public:
 		done(LobbyResult<Value> {.value = std::move(value), .error = {}});
 	}
 
+	/// The game has the address of a lobby
+	bool configured {true};
 	/// The lobby can get a session from the sign-in of the site, as in the browser
 	bool siteSignIn {false};
 	bool fromSite {false};
@@ -362,7 +364,7 @@ struct FrontEndTest: public ::testing::Test
 	/// The front end goes first, because it still uses the fake lobby sessions when it closes
 	void TearDown() override { frontEnd.reset(); }
 
-	void Make(bool withLan = false)
+	void Make(bool withLan = false, FrontEndStart start = FrontEndStart::ConnectionList)
 	{
 		MultiplayerFrontEnd::Services services {
 		    .lobby = &lobby,
@@ -389,6 +391,7 @@ struct FrontEndTest: public ::testing::Test
 		    .conditionTemplate = std::string(k_Conditions),
 		    .showPing = showPing,
 		    .mapPieceDelayMs = mapPieceDelayMs,
+		    .start = start,
 		};
 		frontEnd = std::make_unique<MultiplayerFrontEnd>(std::move(services), std::move(settings));
 	}
@@ -813,6 +816,51 @@ TEST(MultiplayerRules, FlowGoesThroughTheBoxesInOrder)
 	flow.box = Box::ChooseConnection;
 	Back(flow);
 	EXPECT_TRUE(flow.left);
+}
+
+TEST(MultiplayerRules, TheSiteLobbyHasNoBoxBeforeTheLogin)
+{
+	// The game opens at the list of the connections
+	auto flow = FirstFlow(FrontEndStart::ConnectionList);
+	EXPECT_EQ(flow.box, Box::ChooseConnection);
+	flow.box = Box::Login;
+	Back(flow);
+	EXPECT_EQ(flow.box, Box::FindGames);
+	flow.box = Box::LobbyList;
+	Back(flow);
+	EXPECT_EQ(flow.box, Box::FindGames);
+	EXPECT_FALSE(flow.left);
+
+	// The site's lobby opens at the login box of the internet
+	flow = FirstFlow(FrontEndStart::SiteLobby);
+	EXPECT_EQ(flow.box, Box::Login);
+	EXPECT_EQ(flow.kind, LobbyKind::Internet);
+	EXPECT_FALSE(flow.left);
+	// The game list goes back to the login box, and Back on the login box leaves the front end
+	flow.box = Box::GameList;
+	Back(flow);
+	EXPECT_EQ(flow.box, Box::Login);
+	EXPECT_FALSE(flow.left);
+	Back(flow);
+	EXPECT_TRUE(flow.left);
+	EXPECT_EQ(flow.box, Box::Login);
+	// Back on the lobby list leaves the front end, and the rooms go back to the lists as before
+	for (const auto box : {Box::LobbyList, Box::FindGames, Box::ChooseConnection})
+	{
+		flow = FirstFlow(FrontEndStart::SiteLobby);
+		flow.box = box;
+		Back(flow);
+		EXPECT_TRUE(flow.left);
+		EXPECT_EQ(flow.box, box);
+	}
+	flow = FirstFlow(FrontEndStart::SiteLobby);
+	flow.box = Box::LobbyRoom;
+	Back(flow);
+	EXPECT_EQ(flow.box, Box::LobbyList);
+	flow.box = Box::Room;
+	Back(flow);
+	EXPECT_EQ(flow.box, Box::GameList);
+	EXPECT_FALSE(flow.left);
 }
 
 TEST(MultiplayerJson, RoomFramesAndLobbyShapes)
@@ -1269,6 +1317,105 @@ TEST_F(FrontEndTest, ALostLobbySessionGoesBackToTheLogin)
 	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
 	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 	EXPECT_EQ(network.leaves, 1);
+}
+
+TEST_F(FrontEndTest, TheSiteLobbyAsksTheSiteWithNoConnectionBox)
+{
+	lobby.siteSignIn = true;
+	Make(false, FrontEndStart::SiteLobby);
+	// The front end opens at the login box and asks the site at once
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(lobby.siteAsks, 1);
+	EXPECT_TRUE(frontEnd->IsBusy());
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	lobby.fromSite = true;
+	FakeLobby::Give(lobby.site, *lobby.account);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_TRUE(lobby.servers);
+	// Back skips the login box of the site's session and leaves the front end
+	frontEnd->Back();
+	EXPECT_TRUE(frontEnd->TakeLeft());
+	EXPECT_FALSE(lobby.watchingServers);
+}
+
+TEST_F(FrontEndTest, TheSiteLobbyAsksTheSiteAgainWhenTheLobbyClientWasBusy)
+{
+	lobby.siteSignIn = true;
+	Make(false, FrontEndStart::SiteLobby);
+	// The lobby client continues a stored session at the start of the game
+	FakeLobby::Fail(lobby.site, LobbyErrorKind::Busy);
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(lobby.siteAsks, 1);
+	frontEnd->Update();
+	EXPECT_EQ(lobby.siteAsks, 2);
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	lobby.fromSite = true;
+	FakeLobby::Give(lobby.site, *lobby.account);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	// A refusal of the site does not ask again
+	frontEnd->Update();
+	EXPECT_EQ(lobby.siteAsks, 2);
+}
+
+TEST_F(FrontEndTest, TheSiteLobbyGoesToTheLobbyListWithASession)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	Make(false, FrontEndStart::SiteLobby);
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	EXPECT_EQ(lobby.siteAsks, 0);
+	EXPECT_FALSE(frontEnd->TakeLeft());
+	frontEnd->Back();
+	EXPECT_TRUE(frontEnd->TakeLeft());
+}
+
+TEST_F(FrontEndTest, TheSiteLobbyWithNoSiteSessionKeepsTheLoginBox)
+{
+	lobby.siteSignIn = true;
+	Make(false, FrontEndStart::SiteLobby);
+	FakeLobby::Fail(lobby.site, LobbyErrorKind::NotLoggedIn);
+	EXPECT_FALSE(frontEnd->IsBusy());
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	// A login with a password goes to the list, and the list goes back to the login box
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::GameList);
+	frontEnd->Back();
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_FALSE(frontEnd->TakeLeft());
+	frontEnd->Back();
+	EXPECT_TRUE(frontEnd->TakeLeft());
+}
+
+TEST_F(FrontEndTest, TheSiteLobbyGoesToTheLoginBoxWhenTheLobbyEndsTheSession)
+{
+	lobby.siteSignIn = true;
+	Make(false, FrontEndStart::SiteLobby);
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	lobby.fromSite = true;
+	FakeLobby::Give(lobby.site, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::GameList);
+	lobby.account.reset();
+	frontEnd->Update();
+	// The box tells the player, over the login box and not over a box of the connections
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_FALSE(frontEnd->TakeLeft());
+	frontEnd->Back();
+	EXPECT_TRUE(frontEnd->TakeLeft());
+}
+
+TEST_F(FrontEndTest, TheSiteLobbyWithNoLobbyTellsThePlayerAndCloses)
+{
+	lobby.configured = false;
+	Make(false, FrontEndStart::SiteLobby);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::NoConnections);
+	EXPECT_FALSE(frontEnd->TakeLeft());
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_TRUE(frontEnd->TakeLeft());
 }
 
 TEST_F(FrontEndTest, ASignInOnTheSiteGoesToTheGameListWithNoLogin)
