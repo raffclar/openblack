@@ -1168,16 +1168,23 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	{
 		return false;
 	}
+	// The help counts the use only for the hand of this computer. Every computer does the use of every hand.
+	const auto countHelp = [this](uint32_t event) {
+		if (_world->IsLocalHand())
+		{
+			_world->HelpEvent(event);
+		}
+	};
 	// A villager, an animal, a tree or a dead tree given to a worship site's altar is sacrificed there. The altar can
 	// refuse it: then the hand keeps it, and the press does nothing more.
 	switch (_world->OfferAtAltar(target, held))
 	{
 	case altar_offering::Answer::Sacrificed:
-		_world->HelpEvent(altar_sacrifice::k_AltarHelpEvent);
+		countHelp(altar_sacrifice::k_AltarHelpEvent);
 		Empty(grab);
 		return true;
 	case altar_offering::Answer::Refused:
-		_world->HelpEvent(altar_sacrifice::k_AltarHelpEvent);
+		countHelp(altar_sacrifice::k_AltarHelpEvent);
 		// The hand keeps the thing, but its reactions spread again
 		_world->SpreadReactionsAgain(held);
 		return true;
@@ -1191,7 +1198,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 		registry.Remove<InHand>(held);
 		registry.Remove<HeldLight>(held);
 		Empty(grab);
-		_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
+		countHelp(altar_sacrifice::k_UsedOnThingHelpEvent);
 		_world->DropOnTeleport(target, held);
 		_world->SpreadReactionsAgain(held);
 		return true;
@@ -1201,7 +1208,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	{
 		_world->Entities().Remove<InHand>(held);
 		_world->JoinScaffold(target, held);
-		_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
+		countHelp(altar_sacrifice::k_UsedOnThingHelpEvent);
 		Empty(grab);
 		return true;
 	}
@@ -1214,7 +1221,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 		{
 			_world->Entities().Remove<InHand>(held);
 			_world->UseUp(held);
-			_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
+			countHelp(altar_sacrifice::k_UsedOnThingHelpEvent);
 			Empty(grab);
 			return true;
 		}
@@ -1224,7 +1231,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 		{
 			return false;
 		}
-		_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
+		countHelp(altar_sacrifice::k_UsedOnThingHelpEvent);
 		Empty(grab);
 		return true;
 	}
@@ -1242,7 +1249,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	}
 	_world->Entities().Remove<InHand>(held);
 	_world->UseUp(held);
-	_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
+	countHelp(altar_sacrifice::k_UsedOnThingHelpEvent);
 	Empty(grab);
 	return true;
 }
