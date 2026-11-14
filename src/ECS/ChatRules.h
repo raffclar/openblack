@@ -44,12 +44,12 @@ constexpr size_t k_MostTypedCharacters = 254;
 /// The heading of the players in the list of players: "Players"
 constexpr uint32_t k_PlayersText = 3543;
 
-/// The text of a line as it goes to the other players. The game drops a staff code from the start of each line, but its
-/// test is loose, so it also drops letters of a plain line:
+/// The text of a line as it goes to the other players. Only a line that starts with the full staff code "!SGRB" loses a
+/// code. Every other line goes out whole. For a line with the staff code:
 /// 1. Each of '!', 'S', 'G', 'R', 'B' and 'O' goes when it is the next character, in that order.
 /// 2. After an 'N' that is then the next character, the 'N' and up to 19 more characters go, until a '#' or the end.
 /// 3. A '#' that is then the next character goes.
-/// Thus "Sorry" goes as "orry", and "Nice to see you" goes as nothing (vanilla bug).
+/// Vanilla drops these letters from each line, so "Sorry" goes as "orry". Deviation 268 keeps plain lines whole.
 [[nodiscard]] std::u16string_view WithoutStaffCode(std::u16string_view text) noexcept;
 
 /// The text of a taunt that comes in, none for a number past the last taunt
