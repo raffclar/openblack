@@ -413,6 +413,9 @@ private:
 	bool _observer {false};
 	/// The player was logged in to the lobby, so a loss of the session goes back to the login box
 	bool _loggedIn {false};
+	/// The lobby client was busy with another login when the login box asked the site. The login box asks again when
+	/// the lobby client is free.
+	bool _askSiteAgain {false};
 
 	std::vector<multiplayer::LocalMap> _maps;
 	/// The lands of network games that the lobby gives, with the hash of each file

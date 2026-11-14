@@ -123,6 +123,15 @@ void MultiplayerFrontEnd::Update()
 			FollowLanRoom();
 		}
 	}
+	if (_askSiteAgain && _services.lobby != nullptr &&
+	    _services.lobby->GetState() != ecs::systems::LobbySessionState::LoggingIn)
+	{
+		_askSiteAgain = false;
+		if (_flow.box == Box::Login && !_busy && _message == Message::None)
+		{
+			EnterLogin();
+		}
+	}
 	FollowSession();
 	FollowLanChat();
 	FollowStart();
@@ -519,6 +528,11 @@ void MultiplayerFrontEnd::SignInFromSite()
 		_busy = false;
 		if (!result.Ok())
 		{
+			// The lobby client continues a stored session, as at the start of the game: the login box asks again later
+			if (result.error.kind == ecs::systems::LobbyErrorKind::Busy)
+			{
+				_askSiteAgain = true;
+			}
 			// Nobody is signed in on the site, or the page cannot ask: the login box stays for a name and a password
 			return;
 		}

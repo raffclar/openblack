@@ -1334,6 +1334,25 @@ TEST_F(FrontEndTest, TheSiteLobbyAsksTheSiteWithNoConnectionBox)
 	EXPECT_FALSE(lobby.watchingServers);
 }
 
+TEST_F(FrontEndTest, TheSiteLobbyAsksTheSiteAgainWhenTheLobbyClientWasBusy)
+{
+	lobby.siteSignIn = true;
+	Make(false, FrontEndStart::SiteLobby);
+	// The lobby client continues a stored session at the start of the game
+	FakeLobby::Fail(lobby.site, LobbyErrorKind::Busy);
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(lobby.siteAsks, 1);
+	frontEnd->Update();
+	EXPECT_EQ(lobby.siteAsks, 2);
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	lobby.fromSite = true;
+	FakeLobby::Give(lobby.site, *lobby.account);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	// A refusal of the site does not ask again
+	frontEnd->Update();
+	EXPECT_EQ(lobby.siteAsks, 2);
+}
+
 TEST_F(FrontEndTest, TheSiteLobbyGoesToTheLobbyListWithASession)
 {
 	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
