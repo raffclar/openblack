@@ -982,6 +982,7 @@ TEST_F(LockstepTest, TheRoomRefusesAGodWhoseGameDataIsNotTheServers)
 	bob.printData = print(9, 2);
 	Frames({&alice, &bob}, 10);
 	EXPECT_EQ(bob.session.RefusedReason(), "data");
+	EXPECT_EQ(bob.session.RefusedPath(), "Data/info.dat");
 	EXPECT_TRUE(alice.session.RefusedReason().empty());
 	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
 	EXPECT_TRUE(std::ranges::any_of(bob.session.Log().Lines(),

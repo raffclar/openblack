@@ -765,6 +765,12 @@ void GameInterface::ShowKicked(std::u16string_view roomName)
 	_connectionLostShown = true;
 }
 
+void GameInterface::ShowDataRefused(std::u16string_view text)
+{
+	_saveGameBoxes->Tell(std::u16string(text));
+	_connectionLostShown = true;
+}
+
 void GameInterface::ShowConnectionLost()
 {
 	_saveGameBoxes->Tell(std::u16string(_texts.Get(k_ConnectionLostText)));

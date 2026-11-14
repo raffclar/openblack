@@ -295,7 +295,7 @@ std::string LockstepHost::WhoIs(ConnectionId connection) const
 	return fmt::format("{}, observer {}", name, found->second.observer);
 }
 
-void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std::string_view detail)
+void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std::string_view detail, std::string_view path)
 {
 	// A refusal for the protocol or the version names the two builds, in the log and in the frame to the client
 	std::string text(detail);
@@ -313,7 +313,8 @@ void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std:
 	// A refusal for the game data names the file in the frame, so that the player sees which file differs
 	SendTo(connection, game_socket::Refused {.reason = std::string(reason),
 	                                         .build = std::move(serverBuild),
-	                                         .file = reason == "data" ? std::string(detail) : std::string()});
+	                                         .file = reason == "data" ? std::string(detail) : std::string(),
+	                                         .path = std::string(path)});
 	_sockets.Close(connection, server_close::k_Refused);
 	std::optional<std::string> observer;
 	if (const auto found = _peers.find(connection);
@@ -574,7 +575,7 @@ void LockstepHost::DataPrintFrom(ConnectionId connection, Peer& peer, const game
 			StopStart(game_socket::StartCancel {});
 		}
 	}
-	Refuse(connection, "data", words);
+	Refuse(connection, "data", words, difference->server.path);
 }
 
 void LockstepHost::CaptureFrame(const Peer& peer, const game_socket::Frame& frame)

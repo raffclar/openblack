@@ -433,7 +433,7 @@ private:
 	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
 	bool SendWorld(ConnectionId connection);
 	/// Refuses a connection with the short reason that the client gets. The log also gets the detail.
-	void Refuse(ConnectionId connection, std::string_view reason, std::string_view detail = {});
+	void Refuse(ConnectionId connection, std::string_view reason, std::string_view detail = {}, std::string_view path = {});
 	/// Takes the players of the accounts that the lobby banned out of the started game
 	void RemoveBannedFromGame();
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);

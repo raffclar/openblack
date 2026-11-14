@@ -58,6 +58,8 @@ constexpr std::string_view k_SyncWorld = "sync.world";
 constexpr size_t k_MostHintBytes = 16;
 /// The most bytes of the words of the file in a refusal "data"
 constexpr size_t k_MostRefusedFileBytes = 1024;
+/// The most bytes of the path of the file in a refusal "data"
+constexpr size_t k_MostRefusedPathBytes = 260;
 /// The most blocks of one part that a "sync.ask" frame names
 constexpr size_t k_MostAskBlocks = 64;
 /// The longest wait for the loads that a frame can give: the 6 hours of a lobby game
@@ -611,7 +613,8 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	{
 		Refused refused;
 		if (!ReadString(object, "reason", refused.reason) || !ReadString(object, "build", refused.build, false) ||
-		    !ReadShort(object, "file", refused.file, k_MostRefusedFileBytes))
+		    !ReadShort(object, "file", refused.file, k_MostRefusedFileBytes) ||
+		    !ReadShort(object, "path", refused.path, k_MostRefusedPathBytes))
 		{
 			return std::nullopt;
 		}
@@ -1079,6 +1082,10 @@ std::string ToJson(const Frame& frame)
 			    if (!value.file.empty())
 			    {
 				    object["file"] = value.file;
+			    }
+			    if (!value.path.empty())
+			    {
+				    object["path"] = value.path;
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Start>)

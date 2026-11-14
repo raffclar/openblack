@@ -228,6 +228,8 @@ public:
 	[[nodiscard]] const std::map<uint8_t, std::vector<uint8_t>>& StartCreatures() const { return _startCreatures; }
 	/// The reason that the server gave for a refusal
 	[[nodiscard]] const std::string& RefusedReason() const { return _refusedReason; }
+	/// The path of the file of the game data that is not the server's, with the refusal "data". Empty otherwise.
+	[[nodiscard]] const std::string& RefusedPath() const { return _refusedPath; }
 	/// The computer loaded the world of the network game. The session tells the server after the start (game.loaded), as
 	/// the turns of a lobby game wait for each god's player to load (deviation 254).
 	void ReportLoaded();
@@ -358,6 +360,7 @@ private:
 	std::map<uint8_t, float> _startAlignments;
 	bool _ownGodPlaysForClan {false};
 	std::string _refusedReason;
+	std::string _refusedPath;
 
 	std::map<uint32_t, turn_codec::TurnBundle> _turns;
 	TurnPlayout _playout;

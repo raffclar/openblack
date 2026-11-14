@@ -177,6 +177,8 @@ struct Refused
 	/// The refusal "data": the first file of the game data of the client that is not the server's, in words ("file",
 	/// optional)
 	std::string file;
+	/// The refusal "data": the path of that file in the game folder ("path", optional). The box of the client names it.
+	std::string path;
 };
 
 /// Server to client: "room.resumed". The server accepted the resume. The turns after the client's turn follow.

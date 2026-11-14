@@ -401,7 +401,11 @@ TEST(GameSocket, TheFramesOfTheDesyncCaptureGoToJsonAndBack)
 
 	Refused refused {.reason = "data"};
 	refused.file = "Data/info.dat is not the server's";
+	refused.path = "Data/info.dat";
 	EXPECT_EQ(RoundTrip(refused).file, refused.file);
+	EXPECT_EQ(RoundTrip(refused).path, refused.path);
+	// An older server sends no path
+	EXPECT_TRUE(RoundTrip(Refused {.reason = "data"}).path.empty());
 
 	const DataPrint print {.files = {{.path = "Data/info.dat", .present = true, .size = 10, .hash = 0xfedcba9876543210ull},
 	                                 {.path = "Data/x.lnd", .present = false, .size = 0, .hash = 0}},

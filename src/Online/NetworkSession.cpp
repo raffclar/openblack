@@ -436,6 +436,7 @@ void NetworkSession::Text(std::string_view text)
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
 	{
 		_refusedReason = refused->reason;
+		_refusedPath = refused->path;
 		// A refusal for the protocol or the version gives the build of the server: the log names the two builds
 		const auto builds =
 		    refused->build.empty()
