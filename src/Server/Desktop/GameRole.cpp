@@ -100,6 +100,8 @@ struct GameRole::Parts
 	lobby_status::Room room;
 	std::chrono::steady_clock::time_point nextReport {};
 	bool reporting {false};
+	/// The gods of the last report. A change goes to the lobby at once, so that its lists show the connected players.
+	std::vector<lobby_api::ServerStatusPlayer> reportedPlayers;
 	bool listed {false};
 	/// The bans of the server, which the server reads from the lobby with each status report
 	std::unique_ptr<lobby_bans::Reader> bans;
@@ -220,7 +222,9 @@ struct GameRole::Parts
 		reporting = true;
 		const auto sentAt = std::chrono::steady_clock::now();
 		nextReport = sentAt + lobby_status::k_ReportInterval;
-		const auto text = lobby_api::ToJson(lobby_status::MakeStatus(room, phase, host->Seats()));
+		auto status = lobby_status::MakeStatus(room, phase, host->Seats());
+		reportedPlayers = status.players;
+		const auto text = lobby_api::ToJson(status);
 		online::HttpRequest request {.method = online::HttpMethod::Put,
 		                             .url = statusAddress,
 		                             .headers = {{"Content-Type", "application/json"}},
@@ -484,7 +488,9 @@ void GameRole::Update()
 	parts.AnswerSearches();
 	if (parts.lobby)
 	{
-		if (std::chrono::steady_clock::now() >= parts.nextReport)
+		// A god that joins, leaves, loses the connection or comes back goes in a report at once
+		const bool godsChanged = parts.host && lobby_status::StatusPlayers(parts.host->Seats()) != parts.reportedPlayers;
+		if (std::chrono::steady_clock::now() >= parts.nextReport || godsChanged)
 		{
 			parts.Report(lobby_status::PhaseOf(parts.host && parts.host->Started(), false));
 		}

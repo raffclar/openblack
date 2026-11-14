@@ -62,8 +62,11 @@ enum class Phase : uint8_t
 /// The account id of a ticket's subject. None when the subject is not a decimal number.
 [[nodiscard]] std::optional<int64_t> AccountId(std::string_view subject) noexcept;
 
-/// The report for the room: each seat that a god's player has (connected or away) is a god of the room. A seat with a
-/// subject that is not an account id is not in the report.
+/// The gods of the room: each seat that a god's player has (connected or away) is a god of the room. A god whose player
+/// lost the connection is away. A seat with a subject that is not an account id is not in the list.
+[[nodiscard]] std::vector<lobby_api::ServerStatusPlayer> StatusPlayers(std::span<const LockstepHost::Seat> seats);
+
+/// The report for the room, with the gods of StatusPlayers
 [[nodiscard]] lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<const LockstepHost::Seat> seats);
 
 /// A land of a network game that the players do not have, which the server sends to the lobby (deviation 169). The

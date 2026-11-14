@@ -449,6 +449,7 @@ std::string ToJson(const ServerStatus& status)
 		    {"account", player.account},
 		    {"role", player.role},
 		    {"clan", player.clan.has_value() ? Json(*player.clan) : Json(nullptr)},
+		    {"away", player.away},
 		});
 	}
 	return Dump(Json {
