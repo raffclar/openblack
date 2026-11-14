@@ -27,6 +27,8 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Online/GameDataPrint.h"
+#include "Server/DesyncCapture.h"
 #include "Server/GameLifetime.h"
 #include "Server/LobbyGame.h"
 #include "Server/ServerSnapshots.h"
@@ -248,6 +250,18 @@ public:
 	/// of the turn at which its world parted
 	using PartedListener = std::function<void(uint8_t seat, std::span<const std::string> parts)>;
 	void SetPartedListener(PartedListener listener) { _partedListener = std::move(listener); }
+	/// The print of the game data that the server's world read, before a client joins. The room sends the names of its
+	/// files in its join, and refuses a player whose file of a land, of a script or of the table of objects differs, with
+	/// "data". With no print, the room makes no check.
+	void SetDataPrint(std::vector<online::game_data::FilePrint> print) { _dataPrint = std::move(print); }
+	/// Starts the capture of the first desync of each god (DesyncCapture), before a client joins: the server's facts,
+	/// the hash of each entity of the server's world, and the end of each capture. The server's world comes from the
+	/// world state.
+	void SetCapture(game_socket::SyncFacts facts,
+	                std::function<std::vector<synced_state::PartEntities>(std::span<const std::string> parts)> entities,
+	                std::function<void(CaptureRecord record)> finished);
+	/// The game ends: each capture ends with what it has
+	void FinishCaptures();
 	/// The account ids that the lobby banned from the server. Before the start, a banned god leaves the room at once with
 	/// "kicked", and the room refuses the join of a banned god. After the start, a ban changes nothing (deviation 146).
 	void SetBans(std::set<int64_t> accounts);
@@ -336,6 +350,8 @@ private:
 		/// The join ticket of the player has the staff claim: the server takes the edits of the editor and the debug cheats
 		/// of the player
 		bool staff {false};
+		/// The client sent the print of its game data. The server takes only the first.
+		bool printed {false};
 	};
 
 	/// The most "sync.parts" frames of one connection that the server answers
@@ -357,6 +373,13 @@ private:
 	/// A client sent the hash of each part of its world at the turn at which its world parted: the log names the parts
 	/// that differ from the server's, and the client gets the server's parts
 	void PartsFrom(ConnectionId connection, Peer& peer, const game_socket::SyncParts& parts);
+	/// A client sent the print of its game data: the server compares it with its own, and refuses a client whose file of
+	/// a land, of a script or of the table of objects differs
+	void DataPrintFrom(ConnectionId connection, Peer& peer, const game_socket::DataPrint& print);
+	/// The frames of a capture of a desync from the client of a god
+	void CaptureFrame(const Peer& peer, const game_socket::Frame& frame);
+	/// The names of the files of the server's print, for the join
+	[[nodiscard]] std::vector<std::string> DataFiles() const;
 	/// The name of a connection for the log: the name of the player, or "not joined"
 	[[nodiscard]] std::string WhoIs(ConnectionId connection) const;
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
@@ -533,6 +556,8 @@ private:
 	PartsOfTurn _partsOfTurn;
 	DesyncListener _desyncListener;
 	PartedListener _partedListener;
+	std::unique_ptr<DesyncCapture> _capture;
+	std::vector<online::game_data::FilePrint> _dataPrint;
 	TurnJournal _turnJournal;
 	/// The game continues from a snapshot of the server
 	bool _restored {false};

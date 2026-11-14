@@ -310,7 +310,10 @@ void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std:
 	}
 	Log(spdlog::level::info, fmt::format("The server refuses connection {} ({}): {}{}{}", connection, WhoIs(connection), reason,
 	                                     text.empty() ? "" : ": ", text));
-	SendTo(connection, game_socket::Refused {.reason = std::string(reason), .build = std::move(serverBuild)});
+	// A refusal for the game data names the file in the frame, so that the player sees which file differs
+	SendTo(connection, game_socket::Refused {.reason = std::string(reason),
+	                                         .build = std::move(serverBuild),
+	                                         .file = reason == "data" ? std::string(detail) : std::string()});
 	_sockets.Close(connection, server_close::k_Refused);
 	std::optional<std::string> observer;
 	if (const auto found = _peers.find(connection);
@@ -445,6 +448,17 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	{
 		PartsFrom(connection, peer, *parts);
 	}
+	else if (const auto* print = std::get_if<game_socket::DataPrint>(&*frame))
+	{
+		DataPrintFrom(connection, peer, *print);
+	}
+	else if (std::holds_alternative<game_socket::SyncFacts>(*frame) ||
+	         std::holds_alternative<game_socket::SyncBlocks>(*frame) ||
+	         std::holds_alternative<game_socket::SyncEntities>(*frame) ||
+	         std::holds_alternative<game_socket::SyncWorld>(*frame))
+	{
+		CaptureFrame(peer, *frame);
+	}
 	else
 	{
 		Refuse(connection, "protocol", fmt::format("a frame that only the server sends (type \"{}\")", FrameType(text)));
@@ -467,18 +481,125 @@ void LockstepHost::PartsFrom(ConnectionId connection, Peer& peer, const game_soc
 	const auto differences = online::DifferentParts(own, parts.parts);
 	Log(spdlog::level::warn, fmt::format("The world of connection {} ({}) parted at turn {}: {}", connection, WhoIs(connection),
 	                                     parts.turn, online::DescribeParts(differences, "server", "client")));
-	if (_partedListener && peer.seat.has_value())
+	if ((_partedListener || _capture) && peer.seat.has_value())
 	{
 		std::vector<std::string> names;
 		names.reserve(differences.size());
 		std::ranges::transform(differences, std::back_inserter(names), &online::PartDifference::name);
-		_partedListener(*peer.seat, names);
+		if (_partedListener)
+		{
+			_partedListener(*peer.seat, names);
+		}
+		if (_capture)
+		{
+			_capture->Parted(*peer.seat, connection, parts.turn, _turnsDone, names, _clock());
+		}
 	}
 	if (own.size() > game_socket::k_MostSyncParts)
 	{
 		own.resize(game_socket::k_MostSyncParts);
 	}
 	SendTo(connection, game_socket::SyncParts {.turn = parts.turn, .parts = std::move(own)});
+}
+
+void LockstepHost::SetCapture(
+    game_socket::SyncFacts facts,
+    std::function<std::vector<synced_state::PartEntities>(std::span<const std::string> parts)> entities,
+    std::function<void(CaptureRecord record)> finished)
+{
+	_capture = std::make_unique<DesyncCapture>(
+	    std::move(facts),
+	    DesyncCapture::Hooks {
+	        .send = [this](ConnectionId connection, const game_socket::Frame& frame) { SendTo(connection, frame); },
+	        .entities = std::move(entities),
+	        .world = [this] { return _worldState ? _worldState() : std::vector<uint8_t> {}; },
+	        .finished = std::move(finished),
+	    });
+}
+
+void LockstepHost::FinishCaptures()
+{
+	if (_capture)
+	{
+		_capture->FinishAll();
+	}
+}
+
+std::vector<std::string> LockstepHost::DataFiles() const
+{
+	std::vector<std::string> files;
+	files.reserve(_dataPrint.size());
+	std::ranges::transform(_dataPrint, std::back_inserter(files), &online::game_data::FilePrint::path);
+	return files;
+}
+
+void LockstepHost::DataPrintFrom(ConnectionId connection, Peer& peer, const game_socket::DataPrint& print)
+{
+	if (!peer.joined || _dataPrint.empty() || std::exchange(peer.printed, true))
+	{
+		return;
+	}
+	std::vector<online::game_data::FilePrint> theirs;
+	theirs.reserve(print.files.size());
+	for (const auto& file : print.files)
+	{
+		theirs.push_back({.path = file.path, .present = file.present, .size = file.size, .hash = file.hash});
+	}
+	const auto copy = fmt::format("patch {}, language {}", print.patch.empty() ? "not known" : print.patch,
+	                              print.language.empty() ? "not known" : print.language);
+	const auto difference = online::game_data::FirstDifference(_dataPrint, theirs);
+	if (!difference.has_value())
+	{
+		Log(spdlog::level::info, fmt::format("The game data of connection {} ({}) is the server's: {} files ({})", connection,
+		                                     WhoIs(connection), _dataPrint.size(), copy));
+		return;
+	}
+	const auto words = online::game_data::Describe(*difference);
+	// A god of a game that started keeps its god: its world parts, and the capture of the desync names the file too
+	const bool refuses =
+	    online::game_data::RefusesJoin(difference->server.path) && (!_started || peer.role == game_socket::Role::Observer);
+	Log(spdlog::level::warn, fmt::format("The game data of connection {} ({}) is not the server's: {} ({}){}", connection,
+	                                     WhoIs(connection), words, copy, refuses ? "" : "; the player stays"));
+	if (!refuses)
+	{
+		return;
+	}
+	if (peer.seat.has_value() && !_started)
+	{
+		const auto seat = *peer.seat;
+		peer.seat.reset();
+		_seats[seat] = Seat {};
+		if (Starting())
+		{
+			StopStart(game_socket::StartCancel {});
+		}
+	}
+	Refuse(connection, "data", words);
+}
+
+void LockstepHost::CaptureFrame(const Peer& peer, const game_socket::Frame& frame)
+{
+	if (!_capture || !peer.joined || !peer.seat.has_value())
+	{
+		return;
+	}
+	const auto seat = *peer.seat;
+	if (const auto* facts = std::get_if<game_socket::SyncFacts>(&frame))
+	{
+		_capture->Facts(seat, *facts);
+	}
+	else if (const auto* blocks = std::get_if<game_socket::SyncBlocks>(&frame))
+	{
+		_capture->Blocks(seat, *blocks);
+	}
+	else if (const auto* entities = std::get_if<game_socket::SyncEntities>(&frame))
+	{
+		_capture->Entities(seat, *entities);
+	}
+	else if (const auto* world = std::get_if<game_socket::SyncWorld>(&frame))
+	{
+		_capture->World(seat, *world);
+	}
 }
 
 void LockstepHost::ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat)
@@ -620,6 +741,8 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	game_socket::Joined joined {
 	    .role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name, .start = _settings.start};
 	joined.staff = claims.staff;
+	joined.dataFiles = DataFiles();
+	joined.capture = _capture != nullptr;
 	if (claims.role == game_socket::Role::God)
 	{
 		// The room refuses a god that the lobby banned, as the host's channel refuses a banned player
@@ -1142,6 +1265,8 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	game_socket::Joined joined {
 	    .role = game_socket::Role::Observer, .slot = std::nullopt, .session = {}, .name = claims.name, .start = start};
 	joined.staff = claims.staff;
+	joined.dataFiles = DataFiles();
+	joined.capture = _capture != nullptr;
 	if (own != _seats.end())
 	{
 		const auto seat = static_cast<uint8_t>(own - _seats.begin());
@@ -1318,6 +1443,10 @@ void LockstepHost::Closed(ConnectionId connection, uint16_t code)
 	const auto name = found->second.name;
 	const auto number = found->second.observer;
 	_peers.erase(found);
+	if (_capture && seat.has_value())
+	{
+		_capture->Gone(*seat);
+	}
 	if (const auto watcher = std::ranges::find(_watchers, std::optional(connection), &Watcher::connection);
 	    watcher != _watchers.end())
 	{
@@ -1388,6 +1517,10 @@ void LockstepHost::CloseSeat(uint8_t seat)
 void LockstepHost::Update()
 {
 	const auto now = _clock();
+	if (_capture)
+	{
+		_capture->Update(now);
+	}
 	// A connection that does not join or come back in its time closes, so that a socket with no ticket does not stay
 	std::vector<ConnectionId> late;
 	for (const auto& [connection, peer] : _peers)
@@ -2214,6 +2347,10 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 void LockstepHost::TurnChecksum(uint32_t turn, uint64_t checksum)
 {
 	_checksums[turn] = checksum;
+	if (_capture)
+	{
+		_capture->TurnDone(turn);
+	}
 	if (turn > _settings.keptTurns)
 	{
 		_checksums.erase(_checksums.begin(), _checksums.lower_bound(turn - _settings.keptTurns));

@@ -64,24 +64,45 @@ void DesyncReportRule::Detected(uint8_t source, const DesyncFacts& facts, int64_
 	}
 	if (_waiting.contains(source))
 	{
-		Resolve(source, {});
+		Resolve(source, {}, nowMilliseconds);
 	}
-	_waiting[source] = Waiting {.facts = facts, .detectedAt = nowMilliseconds};
+	_waiting[source] = Waiting {.facts = facts, .detectedAt = nowMilliseconds, .detail = std::nullopt};
 }
 
-void DesyncReportRule::Parted(uint8_t source, std::span<const std::string> parts, int64_t /*nowMilliseconds*/)
+void DesyncReportRule::Parted(uint8_t source, std::span<const std::string> parts, int64_t nowMilliseconds)
 {
 	if (_finished || !_waiting.contains(source))
 	{
 		return;
 	}
-	Resolve(source, parts);
+	Resolve(source, parts, nowMilliseconds);
 }
 
-void DesyncReportRule::Resolve(uint8_t source, std::span<const std::string> parts)
+void DesyncReportRule::Detailed(uint8_t source, DesyncDetail detail)
+{
+	if (_finished)
+	{
+		return;
+	}
+	if (const auto waiting = _waiting.find(source); waiting != _waiting.end())
+	{
+		waiting->second.detail = std::move(detail);
+		return;
+	}
+	// The last desync of the source that did not go yet
+	const auto ready =
+	    std::find_if(_ready.rbegin(), _ready.rend(), [source](const Ready& entry) { return entry.source == source; });
+	if (ready != _ready.rend() && !ready->detail.has_value())
+	{
+		ready->detail = std::move(detail);
+	}
+}
+
+void DesyncReportRule::Resolve(uint8_t source, std::span<const std::string> parts, int64_t nowMilliseconds)
 {
 	const auto waiting = _waiting.find(source);
 	const auto facts = waiting->second.facts;
+	auto detail = std::move(waiting->second.detail);
 	_waiting.erase(waiting);
 	++_desyncs;
 	auto key = DesyncKey(parts);
@@ -97,7 +118,13 @@ void DesyncReportRule::Resolve(uint8_t source, std::span<const std::string> part
 	{
 		names.push_back(CleanPartName(part));
 	}
-	_ready.push_back(Ready {.key = std::move(key), .facts = facts, .parts = std::move(names), .desyncsInGame = _desyncs});
+	_ready.push_back(Ready {.source = source,
+	                        .key = std::move(key),
+	                        .facts = facts,
+	                        .parts = std::move(names),
+	                        .desyncsInGame = _desyncs,
+	                        .readyAt = nowMilliseconds,
+	                        .detail = std::move(detail)});
 }
 
 std::vector<DesyncReport> DesyncReportRule::Update(int64_t nowMilliseconds, DesyncRunBudget& budget)
@@ -115,7 +142,7 @@ std::vector<DesyncReport> DesyncReportRule::Update(int64_t nowMilliseconds, Desy
 		++it;
 		if (late)
 		{
-			Resolve(source, {});
+			Resolve(source, {}, nowMilliseconds);
 		}
 	}
 	if (_ready.empty() || _eventsSent >= k_MostDesyncEventsInGame)
@@ -123,6 +150,12 @@ std::vector<DesyncReport> DesyncReportRule::Update(int64_t nowMilliseconds, Desy
 		return reports;
 	}
 	if (_lastEventAt.has_value() && nowMilliseconds - *_lastEventAt < k_DesyncEventGapMilliseconds)
+	{
+		return reports;
+	}
+	// The event waits for the detail of its capture, for a time
+	if (_detailWait && !_ready.front().detail.has_value() &&
+	    nowMilliseconds - _ready.front().readyAt < k_DesyncDetailWaitMilliseconds)
 	{
 		return reports;
 	}
@@ -144,6 +177,7 @@ std::vector<DesyncReport> DesyncReportRule::Update(int64_t nowMilliseconds, Desy
 	    .desyncsInGame = ready.desyncsInGame,
 	    .counts = {},
 	    .notSent = 0,
+	    .detail = std::move(ready.detail),
 	});
 	return reports;
 }
@@ -157,7 +191,7 @@ std::optional<DesyncReport> DesyncReportRule::Finish(DesyncRunBudget& budget)
 	// The desyncs that still wait for their parts count with no known part
 	while (!_waiting.empty())
 	{
-		Resolve(_waiting.begin()->first, {});
+		Resolve(_waiting.begin()->first, {}, 0);
 	}
 	const auto notSent = _desyncs - _eventsSent;
 	if (notSent == 0 || !budget.Take())
@@ -174,6 +208,7 @@ std::optional<DesyncReport> DesyncReportRule::Finish(DesyncRunBudget& budget)
 	    .desyncsInGame = _desyncs,
 	    .counts = _counts,
 	    .notSent = notSent,
+	    .detail = std::nullopt,
 	};
 }
 
@@ -219,6 +254,12 @@ DesyncEventFields DesyncEventFieldsOf(const DesyncReport& report)
 		parts += parts.empty() ? part : ", " + part;
 	}
 	fields.extras.emplace_back("parts", parts.empty() ? std::string(k_UnknownDesyncPart) : parts);
+	if (report.detail.has_value())
+	{
+		// The first fact that differs tells the cause better than the part, so it is a tag that a search can find
+		fields.tags.emplace_back("desync_fact", report.detail->fact.empty() ? std::string("none") : report.detail->fact);
+		fields.extras.insert(fields.extras.end(), report.detail->extras.begin(), report.detail->extras.end());
+	}
 	return fields;
 }
 

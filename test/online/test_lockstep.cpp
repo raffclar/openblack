@@ -182,6 +182,13 @@ struct Computer
 		    .desynced = [this](uint32_t turn, uint64_t local,
 		                       uint64_t server) { desyncs.push_back({.turn = turn, .local = local, .server = server}); },
 		    .partedParts = [this](std::span<const std::string> names) { partedNames.assign(names.begin(), names.end()); },
+		    .printData =
+		        [this](std::span<const std::string> files) { return printData ? printData(files) : game_socket::DataPrint {}; },
+		    .entities =
+		        [this](std::span<const std::string> names) {
+			        return entities ? entities(names) : std::vector<synced_state::PartEntities> {};
+		        },
+		    .saveWorld = [this] { return saveWorld ? saveWorld() : std::vector<uint8_t> {}; },
 		});
 		this->landFile = std::move(landFile);
 		this->creature = std::move(creature);
@@ -227,6 +234,10 @@ struct Computer
 	};
 	std::vector<Desync> desyncs;
 	std::vector<std::string> partedNames;
+	/// The print of the game data, the hash of each entity and the world of this computer, for the capture of a desync
+	std::function<game_socket::DataPrint(std::span<const std::string> files)> printData;
+	std::function<std::vector<synced_state::PartEntities>(std::span<const std::string> names)> entities;
+	std::function<std::vector<uint8_t>()> saveWorld;
 	NetworkSession session;
 	FakeWorld world;
 	std::vector<size_t> played;
@@ -947,6 +958,105 @@ TEST_F(LockstepTest, AClientThatPartsSendsItsPartsAndBothLogsNameThePartThatDiff
 	EXPECT_TRUE(std::ranges::any_of(
 	    lines, [](const std::string& line) { return line.find("The client asks to resume from turn") != std::string::npos; }));
 	EXPECT_EQ(alice.loads, 1u);
+}
+
+TEST_F(LockstepTest, TheRoomRefusesAGodWhoseGameDataIsNotTheServers)
+{
+	MakeHost(2);
+	host->SetDataPrint({{.path = "Data/info.dat", .present = true, .size = 4, .hash = 1},
+	                    {.path = "Data/Text/english.txt", .present = true, .size = 4, .hash = 2}});
+	const auto print = [](uint64_t infoHash, uint64_t textHash) {
+		return [infoHash, textHash](std::span<const std::string> files) {
+			EXPECT_EQ(files.size(), 2U);
+			return game_socket::DataPrint {
+			    .files = {{.path = "Data/info.dat", .present = true, .size = 4, .hash = infoHash},
+			              {.path = "Data/Text/english.txt", .present = true, .size = 4, .hash = textHash}},
+			    .patch = "1.20",
+			    .language = {}};
+		};
+	};
+	// A file of the table of objects refuses the join, another file only goes in the log
+	Computer alice(network, now, "god:alice");
+	alice.printData = print(1, 3);
+	Computer bob(network, now, "god:bob");
+	bob.printData = print(9, 2);
+	Frames({&alice, &bob}, 10);
+	EXPECT_EQ(bob.session.RefusedReason(), "data");
+	EXPECT_TRUE(alice.session.RefusedReason().empty());
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
+	EXPECT_TRUE(std::ranges::any_of(bob.session.Log().Lines(),
+	                                [](const std::string& line) { return line.find("Data/info.dat") != std::string::npos; }));
+	// A god with the same data takes the free seat, and the game starts
+	Computer carol(network, now, "god:carol");
+	carol.printData = print(1, 2);
+	Frames({&alice, &carol}, 10);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(carol.session.GetState(), NetworkSession::State::Playing);
+}
+
+TEST_F(LockstepTest, TheServerCapturesTheFirstDesyncOfAGodEntityByEntity)
+{
+	MakeHost(1);
+	GiveWorldState();
+	host->SetPartsOfTurn(
+	    [](uint32_t turn) { return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}}; });
+	const auto entities = [](uint64_t change) {
+		return [change](std::span<const std::string> names) {
+			std::vector<synced_state::PartEntities> parts;
+			for (const auto& name : names)
+			{
+				synced_state::PartEntities part {.part = name, .entities = {}};
+				for (uint32_t i = 0; i < 300; ++i)
+				{
+					part.entities.push_back(
+					    {.entity = i, .hash = i == 270 ? change : i + 1, .kind = "Villager", .position = {}});
+				}
+				parts.push_back(std::move(part));
+			}
+			return parts;
+		};
+	};
+	std::vector<server::CaptureRecord> records;
+	host->SetCapture({.turn = 0,
+	                  .build = "b",
+	                  .land = "Land1.txt",
+	                  .landSha256 = {},
+	                  .map = {},
+	                  .seed = 1,
+	                  .data = 5,
+	                  .patch = {},
+	                  .language = {}},
+	                 entities(5), [&records](server::CaptureRecord record) { records.push_back(std::move(record)); });
+	Computer alice(network, now, "god:alice");
+	constexpr uint32_t k_PartsAfter = 20;
+	alice.parts = [](uint32_t turn) {
+		return online::PartHashes {
+		    {"entities", 1}, {"Transform", 10 + turn + (turn > k_PartsAfter ? 1 : 0)}, {"synced seed", 7}};
+	};
+	alice.entities = entities(6);
+	alice.saveWorld = [] { return std::vector<uint8_t> {4, 3, 2, 1}; };
+	alice.world.partsAfter = k_PartsAfter;
+	Frames({&alice}, 120);
+	std::string clientLines;
+	for (const auto& line : alice.session.Log().Lines())
+	{
+		clientLines += line + '\n';
+	}
+	ASSERT_EQ(records.size(), 1U) << clientLines;
+	const auto& record = records[0];
+	EXPECT_TRUE(record.missing.empty());
+	EXPECT_EQ(record.playerWorld, (std::vector<uint8_t> {4, 3, 2, 1}));
+	EXPECT_FALSE(record.serverWorld.empty());
+	ASSERT_TRUE(record.player.has_value());
+	ASSERT_FALSE(record.parts.empty());
+	EXPECT_EQ(record.parts[0].part, "Transform");
+	ASSERT_EQ(record.parts[0].differences.size(), 1U);
+	EXPECT_EQ(record.parts[0].differences[0].entity, 270U);
+	// After the capture the client loads the server's world
+	EXPECT_EQ(alice.loads, 1u);
+	EXPECT_TRUE(std::ranges::any_of(alice.session.Log().Lines(), [](const std::string& line) {
+		return line.find("The resync starts") != std::string::npos;
+	}));
 }
 
 TEST_F(LockstepTest, BothSidesTellTheDesyncWithItsChecksumsAndThePartsThatDiffer)

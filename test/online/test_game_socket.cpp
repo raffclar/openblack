@@ -385,3 +385,61 @@ TEST(GameSocket, TheJoinAndTheRefusalCanGiveABuildId)
 	EXPECT_TRUE(RoundTrip(Refused {.reason = "full"}).build.empty());
 	EXPECT_FALSE(Parse(R"({"type":"room.refused","reason":"protocol","build":[]})").has_value());
 }
+
+TEST(GameSocket, TheFramesOfTheDesyncCaptureGoToJsonAndBack)
+{
+	Joined joined {.role = Role::God, .slot = 1, .session = "s", .name = {}, .start = std::nullopt};
+	joined.dataFiles = {"Data/info.dat", "Scripts/Online Maps/mpm_2p_1.txt"};
+	joined.capture = true;
+	const auto backJoined = RoundTrip(joined);
+	EXPECT_EQ(backJoined.dataFiles, joined.dataFiles);
+	EXPECT_TRUE(backJoined.capture);
+	// An older server sends neither
+	const auto old = RoundTrip(Joined {.role = Role::God, .slot = 1, .session = "s", .name = {}, .start = std::nullopt});
+	EXPECT_TRUE(old.dataFiles.empty());
+	EXPECT_FALSE(old.capture);
+
+	Refused refused {.reason = "data"};
+	refused.file = "Data/info.dat is not the server's";
+	EXPECT_EQ(RoundTrip(refused).file, refused.file);
+
+	const DataPrint print {.files = {{.path = "Data/info.dat", .present = true, .size = 10, .hash = 0xfedcba9876543210ull},
+	                                 {.path = "Data/x.lnd", .present = false, .size = 0, .hash = 0}},
+	                       .patch = "1.20",
+	                       .language = "0809"};
+	EXPECT_EQ(RoundTrip(print), print);
+
+	const SyncFacts facts {.turn = 3,
+	                       .build = "b",
+	                       .land = "Land1.txt",
+	                       .landSha256 = "ab",
+	                       .map = "",
+	                       .seed = 9,
+	                       .data = 0xffffffffffffffffull,
+	                       .patch = "1.10",
+	                       .language = ""};
+	EXPECT_EQ(RoundTrip(facts), facts);
+
+	const SyncCapture capture {.turn = 40, .parts = {"Transform", "VillagerPose"}};
+	EXPECT_EQ(RoundTrip(capture), capture);
+
+	const SyncBlocks blocks {.turn = 40,
+	                         .parts = {{.part = "Transform", .entities = 300, .blocks = {1, 0xffffffffffffffffull}}}};
+	EXPECT_EQ(RoundTrip(blocks), blocks);
+
+	const SyncAsk ask {.turn = 40, .parts = {{.part = "Transform", .blocks = {1}}}};
+	EXPECT_EQ(RoundTrip(ask), ask);
+	EXPECT_EQ(RoundTrip(SyncAsk {.turn = 40, .parts = {}}), (SyncAsk {.turn = 40, .parts = {}}));
+
+	const SyncEntities entities {
+	    .turn = 40,
+	    .parts = {
+	        {.part = "Transform",
+	         .entities = {{.entity = 270, .hash = 6, .kind = "Villager", .position = std::array<float, 3> {1.5F, -2.0F, 3.25F}},
+	                      {.entity = 271, .hash = 7, .kind = "", .position = std::nullopt}}}}};
+	EXPECT_EQ(RoundTrip(entities), entities);
+
+	const SyncWorld world {.turn = 40, .index = 0, .count = 1, .size = 3, .bytes = {0, 1, 255}};
+	EXPECT_EQ(RoundTrip(world), world);
+	EXPECT_FALSE(Parse(R"({"type":"sync.world","turn":1,"index":2,"count":1,"size":3,"data":"AAH_"})").has_value());
+}

@@ -15,6 +15,8 @@
 #include <array>
 #include <fstream>
 #include <ios>
+#include <iterator>
+#include <mutex>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -219,4 +221,39 @@ bool FileSystemInterface::EmptyFolder(const std::filesystem::path& path)
 		std::filesystem::remove_all(entry, error);
 	}
 	return std::filesystem::is_empty(path, error);
+}
+
+std::vector<std::filesystem::path> FileSystemInterface::ReadGameFiles() const
+{
+	const std::scoped_lock lock(_readMutex);
+	return {_readFiles.begin(), _readFiles.end()};
+}
+
+void FileSystemInterface::NoteRead(const std::filesystem::path& found)
+{
+	const auto& gamePath = GetGamePath();
+	if (gamePath.empty())
+	{
+		return;
+	}
+	// A text compare of the parts is enough: the file system found the file from the game's folder
+	const auto game = gamePath.lexically_normal();
+	const auto file = found.lexically_normal();
+	auto [gamePart, filePart] = std::ranges::mismatch(game, file);
+	// A game folder that ends with a separator has an empty last part
+	if (gamePart != game.end() && gamePart->empty() && std::next(gamePart) == game.end())
+	{
+		gamePart = game.end();
+	}
+	if (gamePart != game.end() || filePart == file.end())
+	{
+		return;
+	}
+	auto relative = file.lexically_relative(game);
+	if (relative.empty())
+	{
+		return;
+	}
+	const std::scoped_lock lock(_readMutex);
+	_readFiles.insert(std::move(relative));
 }

@@ -189,7 +189,19 @@ void SentryErrorReports::SendDesync(const DesyncReport& report)
 		sentry_value_set_by_key(extra, key.c_str(), sentry_value_new_string(value.c_str()));
 	}
 	sentry_value_set_by_key(event, "extra", extra);
-	sentry_capture_event(event);
+	// The capture of the desync gives its facts as a file of the event, when the file is small
+	if (report.detail.has_value() && !report.detail->attachment.empty() &&
+	    report.detail->attachment.size() <= k_MostDesyncAttachmentBytes)
+	{
+		auto* scope = sentry_local_scope_new();
+		const auto& name = report.detail->attachmentName.empty() ? std::string("desync.json") : report.detail->attachmentName;
+		sentry_scope_attach_bytes(scope, report.detail->attachment.data(), report.detail->attachment.size(), name.c_str());
+		sentry_scope_capture_event(scope, event, nullptr);
+	}
+	else
+	{
+		sentry_capture_event(event);
+	}
 	++_desyncEvents;
 }
 

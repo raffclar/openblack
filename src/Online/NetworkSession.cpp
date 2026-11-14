@@ -9,6 +9,8 @@
 
 #include "NetworkSession.h"
 
+#include <cstddef>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -21,7 +23,9 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Online/GameDataPrint.h"
 #include "Online/JoinRetryRule.h"
+#include "Online/Sha256.h"
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
 
@@ -335,6 +339,23 @@ void NetworkSession::Text(std::string_view text)
 		_log->Info(fmt::format("Joined the game server as {}{}{}", game_socket::RoleName(joined->role),
 		                       joined->observer != 0 ? fmt::format(" (observer {})", joined->observer) : "",
 		                       joined->slot.has_value() ? fmt::format(" in slot {}", *joined->slot) : ""));
+		// The server names the files of the game data that its world read: the client sends the print of its own files
+		if (!joined->dataFiles.empty() && _settings.printData && _stream)
+		{
+			const auto print = _settings.printData(joined->dataFiles);
+			std::vector<game_data::FilePrint> files;
+			files.reserve(print.files.size());
+			for (const auto& file : print.files)
+			{
+				files.push_back({.path = file.path, .present = file.present, .size = file.size, .hash = file.hash});
+			}
+			_dataHash = game_data::HashOfPrint(files);
+			_dataPatch = print.patch;
+			_dataLanguage = print.language;
+			_log->Info(
+			    fmt::format("The client sends the print of {} files of its game data (hash {:016x})", files.size(), _dataHash));
+			_stream->SendText(game_socket::ToJson(print));
+		}
 		if (_ready)
 		{
 			_stream->SendText(game_socket::ToJson(game_socket::Ready {.ready = true}));
@@ -424,8 +445,9 @@ void NetworkSession::Text(std::string_view text)
 		                                              : fmt::format("the client has the build \"{}\"", _settings.build),
 		                      Printable(refused->build));
 		_log->Write(spdlog::level::warn,
-		            fmt::format("The game server refused the client: {} (state {}, {} ms after the socket opened){}",
-		                        refused->reason, StateName(_state), MillisecondsSince(_openedAt), builds));
+		            fmt::format("The game server refused the client: {} (state {}, {} ms after the socket opened){}{}",
+		                        refused->reason, StateName(_state), MillisecondsSince(_openedAt), builds,
+		                        refused->file.empty() ? std::string() : fmt::format("; {}", Printable(refused->file))));
 		FinishWith(End::Refused);
 	}
 	else if (const auto* parts = std::get_if<game_socket::SyncParts>(&*frame))
@@ -450,6 +472,10 @@ void NetworkSession::Text(std::string_view text)
 				_settings.partedParts(names);
 			}
 		}
+	}
+	else if (std::holds_alternative<game_socket::SyncCapture>(*frame) || std::holds_alternative<game_socket::SyncAsk>(*frame))
+	{
+		CaptureFrame(*frame);
 	}
 	else if (const auto* chat = std::get_if<game_socket::RoomChat>(&*frame))
 	{
@@ -622,6 +648,163 @@ void NetworkSession::Closed(const WebSocketClosed& closed)
 	FinishWith(End::NoConnection);
 }
 
+game_socket::SyncFacts NetworkSession::OwnFacts(uint32_t turn) const
+{
+	game_socket::SyncFacts facts {
+	    .turn = turn,
+	    .build = _settings.build,
+	    .land = {},
+	    .landSha256 = {},
+	    .map = _settings.map,
+	    .seed = 0,
+	    .data = _dataHash,
+	    .patch = _dataPatch,
+	    .language = _dataLanguage,
+	};
+	const auto& start = _start.has_value() ? _start : (_joined.has_value() ? _joined->start : std::nullopt);
+	if (start.has_value())
+	{
+		facts.land = start->land;
+		facts.seed = start->seed;
+		if (!start->land.empty() && _settings.readLand && start_rules::IsLandPath(start->land))
+		{
+			if (const auto file = _settings.readLand(start->land); file.has_value())
+			{
+				facts.landSha256 = sha256::HexOf(*file);
+			}
+		}
+	}
+	return facts;
+}
+
+void NetworkSession::CaptureFrame(const game_socket::Frame& frame)
+{
+	if (!_capture.has_value() || !_stream)
+	{
+		return;
+	}
+	if (const auto* capture = std::get_if<game_socket::SyncCapture>(&frame))
+	{
+		// A second frame with no parts tells that the server has all of the capture
+		if (_capture->turn.has_value())
+		{
+			if (capture->parts.empty() && capture->turn == *_capture->turn)
+			{
+				ResyncAfterCapture("the server has the capture");
+			}
+			return;
+		}
+		// The world must do the turn of the capture after the frame came
+		if (capture->turn < _turnsDone)
+		{
+			ResyncAfterCapture(fmt::format("the turn {} of the capture is past", capture->turn));
+			return;
+		}
+		_capture->turn = capture->turn;
+		_capture->parts = capture->parts;
+		_log->Info(fmt::format("The server captures the desync at turn {} ({} parts)", capture->turn, capture->parts.size()));
+	}
+	else if (const auto* ask = std::get_if<game_socket::SyncAsk>(&frame))
+	{
+		if (!_capture->sent || !_capture->turn.has_value() || ask->turn != *_capture->turn)
+		{
+			return;
+		}
+		game_socket::SyncEntities entities {.turn = ask->turn, .parts = {}};
+		for (const auto& part : ask->parts)
+		{
+			const auto own = std::ranges::find(_capture->entities, part.part, &synced_state::PartEntities::part);
+			if (own == _capture->entities.end())
+			{
+				continue;
+			}
+			auto& out = entities.parts.emplace_back(game_socket::PartEntityHashes {.part = part.part, .entities = {}});
+			for (auto& entity : synced_state::EntitiesOfBlocks(own->entities, part.blocks))
+			{
+				if (out.entities.size() >= game_socket::k_MostSyncEntities)
+				{
+					break;
+				}
+				out.entities.push_back({.entity = entity.entity,
+				                        .hash = entity.hash,
+				                        .kind = std::move(entity.kind),
+				                        .position = entity.position});
+			}
+		}
+		if (!entities.parts.empty())
+		{
+			_stream->SendText(game_socket::ToJson(entities));
+		}
+		// The client resyncs when the server has all of the capture: a resync now closes the socket before the world goes
+		_log->Info(fmt::format("The client sent the entities of {} parts and waits for the end of the capture",
+		                       entities.parts.size()));
+	}
+}
+
+void NetworkSession::Capture(uint32_t turn)
+{
+	if (!_capture.has_value() || !_capture->turn.has_value() || _capture->sent || !_stream || !_stream->IsOpen())
+	{
+		return;
+	}
+	if (turn > *_capture->turn)
+	{
+		ResyncAfterCapture(fmt::format("the world did the turn {} of the capture before the frame came", *_capture->turn));
+		return;
+	}
+	if (turn != *_capture->turn)
+	{
+		return;
+	}
+	_capture->sent = true;
+	_capture->entities = _settings.entities ? _settings.entities(_capture->parts) : std::vector<synced_state::PartEntities> {};
+	game_socket::SyncBlocks blocks {.turn = turn, .parts = {}};
+	for (const auto& part : _capture->entities)
+	{
+		blocks.parts.push_back({.part = part.part,
+		                        .entities = static_cast<uint32_t>(part.entities.size()),
+		                        .blocks = synced_state::BlocksOf(part.entities)});
+	}
+	_stream->SendText(game_socket::ToJson(blocks));
+	// The world goes in parts, so that no frame is large
+	const auto world = _settings.saveWorld ? _settings.saveWorld() : std::vector<uint8_t> {};
+	if (!world.empty() && world.size() <= game_socket::k_MostSyncWorldBytes)
+	{
+		const auto count = static_cast<uint32_t>((world.size() + game_socket::k_MostSyncWorldChunkBytes - 1) /
+		                                         game_socket::k_MostSyncWorldChunkBytes);
+		for (uint32_t index = 0; index < count; ++index)
+		{
+			const auto first = static_cast<size_t>(index) * game_socket::k_MostSyncWorldChunkBytes;
+			const auto size = std::min(game_socket::k_MostSyncWorldChunkBytes, world.size() - first);
+			_stream->SendText(game_socket::ToJson(game_socket::SyncWorld {
+			    .turn = turn,
+			    .index = index,
+			    .count = count,
+			    .size = static_cast<uint32_t>(world.size()),
+			    .bytes = {world.begin() + static_cast<std::ptrdiff_t>(first),
+			              world.begin() + static_cast<std::ptrdiff_t>(first + size)},
+			}));
+		}
+	}
+	_log->Info(fmt::format("The client sends the capture of turn {}: {} parts, a world of {} bytes", turn, blocks.parts.size(),
+	                       world.size() <= game_socket::k_MostSyncWorldBytes ? world.size() : 0));
+}
+
+void NetworkSession::ResyncAfterCapture(std::string_view why)
+{
+	if (!_resyncAt.has_value())
+	{
+		return;
+	}
+	_resyncAt.reset();
+	_capture.reset();
+	_log->Info(fmt::format("The resync starts: {}", why));
+	if (_state == State::Playing)
+	{
+		ComeBack(true);
+	}
+}
+
 void NetworkSession::ComeBack(bool resync)
 {
 	if (resync)
@@ -675,6 +858,10 @@ void NetworkSession::Update()
 	}
 	// A report of the load that the tests delay goes when its time comes
 	SendLoaded();
+	if (_resyncAt.has_value() && now >= *_resyncAt)
+	{
+		ResyncAfterCapture("the capture did not end in time");
+	}
 	if (_stream && _stream->IsOpen() && now >= _nextPing)
 	{
 		_stream->SendPing();
@@ -1004,6 +1191,7 @@ void NetworkSession::LocalChecksum(uint32_t turn, uint64_t checksum)
 		_stream->SendChecksum(turn, checksum);
 	}
 	_localChecksums[turn] = checksum;
+	Capture(turn);
 	Compare(turn);
 }
 
@@ -1056,7 +1244,22 @@ void NetworkSession::Compare(uint32_t turn)
 		switch (action)
 		{
 		case ResyncRule::Action::Rejoin:
-			ComeBack(true);
+			// The first desync of a game waits for the capture of the server, which compares the worlds at a later turn.
+			// The client sends its facts and its parts at once, and resyncs after the capture.
+			if (_joined.has_value() && _joined->capture && !_captured && _stream && _stream->IsOpen())
+			{
+				_captured = true;
+				_capture = CaptureState {};
+				_resyncAt = _clock() + k_CaptureWaitMicroseconds;
+				_log->Info(fmt::format("The client sends its facts and waits up to {} s for the capture of the desync",
+				                       k_CaptureWaitMicroseconds / 1'000'000));
+				_stream->SendText(game_socket::ToJson(OwnFacts(turn)));
+				SendPartedParts();
+			}
+			else
+			{
+				ComeBack(true);
+			}
 			break;
 		case ResyncRule::Action::GiveUp:
 			_log->Write(spdlog::level::err, "The resyncs did not work: the client leaves the game (out of sync)");

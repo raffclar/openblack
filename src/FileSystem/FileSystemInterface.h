@@ -16,7 +16,9 @@
 #include <functional>
 #include <iosfwd>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <set>
 #include <span>
 #include <vector>
 
@@ -164,6 +166,17 @@ public:
 	virtual bool EmptyFolder(const std::filesystem::path& path);
 	/// True when the path is in the game's folder
 	[[nodiscard]] bool InGameFolder(const std::filesystem::path& path) const;
+	/// The files of the game's folder that the program opened to read, as paths relative to the game's folder, in the
+	/// order of their names. A network game compares these files on the server and on each player's computer.
+	[[nodiscard]] std::vector<std::filesystem::path> ReadGameFiles() const;
+
+protected:
+	/// Keeps the name of a file that the program opens to read, when the file is in the game's folder
+	void NoteRead(const std::filesystem::path& found);
+
+private:
+	mutable std::mutex _readMutex;
+	std::set<std::filesystem::path> _readFiles;
 };
 
 } // namespace openblack::filesystem

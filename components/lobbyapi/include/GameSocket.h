@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -153,6 +154,13 @@ struct Joined
 	/// The join ticket of the player has the staff claim ("staff", optional). Then the player can open the editor and
 	/// turn on the debug cheats. The server refuses the edits and the cheats of every other player.
 	bool staff {false};
+	/// The files of the game's folder that the server's world read, relative to the game's folder ("data_files",
+	/// optional). The client sends the print of these files from its own folder (data.print). An older server sends
+	/// none, and then the client sends no print.
+	std::vector<std::string> dataFiles;
+	/// The server keeps the facts of a desync and compares the worlds entity by entity ("capture", optional). Only then
+	/// the client sends its facts, its blocks, its entities and its world after a desync.
+	bool capture {false};
 };
 
 /// Server to client: "room.refused". The server closes the socket after this frame.
@@ -160,11 +168,15 @@ struct Refused
 {
 	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked", "version" (the
 	/// client has another build than the server, or sent a binary frame of another version of the format of the turns),
-	/// "map" (the client has another file of the land), "load" (the client did not load the world of a lobby game in time)
+	/// "map" (the client has another file of the land), "load" (the client did not load the world of a lobby game in time),
+	/// "data" (a file of the game data of the client is not the server's)
 	std::string reason;
 	/// The build id of the server ("build", optional), with the refusals "protocol" and "version". The client log names
 	/// it beside the build id of the client. An older client does not read it.
 	std::string build;
+	/// The refusal "data": the first file of the game data of the client that is not the server's, in words ("file",
+	/// optional)
+	std::string file;
 };
 
 /// Server to client: "room.resumed". The server accepted the resume. The turns after the client's turn follow.
@@ -326,9 +338,173 @@ struct SyncParts
 	[[nodiscard]] bool operator==(const SyncParts&) const = default;
 };
 
-using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
-                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
-                           SyncParts, Loaded, LoadWait>;
+/// The most files in a "data.print" frame and in the files of "room.joined"
+inline constexpr size_t k_MostDataFiles = 512;
+/// The most bytes of the path of a file in these frames
+inline constexpr size_t k_MostDataPathBytes = 260;
+/// The most bytes of a short text of the facts, such as a build id or a land
+inline constexpr size_t k_MostFactBytes = 256;
+
+/// The print of one file of the game data
+struct DataFile
+{
+	/// The path relative to the game's folder, with "/" between the parts
+	std::string path;
+	/// False when the client does not have the file
+	bool present {false};
+	uint64_t size {0};
+	uint64_t hash {0};
+
+	[[nodiscard]] bool operator==(const DataFile&) const = default;
+};
+
+/// Client to server: "data.print". The print of each file of the server's list (room.joined), from the client's own game
+/// folder. The server refuses a client whose print differs with "data", and names the first file that differs.
+struct DataPrint
+{
+	std::vector<DataFile> files;
+	/// What the client's game folder tells of its copy: the last patch, such as "1.20", and the language, as the 4
+	/// hexadecimal digits of the Windows locale. Empty when the folder does not tell.
+	std::string patch;
+	std::string language;
+
+	[[nodiscard]] bool operator==(const DataPrint&) const = default;
+};
+
+/// Client to server: "sync.facts". After its world parts from the server's world, the client sends the facts that decide
+/// whether the two worlds can be the same. The server compares them with its own facts and names the first that
+/// differs.
+struct SyncFacts
+{
+	/// The turn at which the worlds parted
+	uint32_t turn {0};
+	/// The build id of the client
+	std::string build;
+	/// The land that the client loaded, and the SHA-256 of its file (64 hexadecimal digits, or empty)
+	std::string land;
+	std::string landSha256;
+	/// The SHA-256 of the land file that the client got from the lobby ("map" of the join), or empty
+	std::string map;
+	/// The seed of the client's world
+	uint32_t seed {0};
+	/// One hash of the client's print of the game data (data.print)
+	uint64_t data {0};
+	std::string patch;
+	std::string language;
+
+	[[nodiscard]] bool operator==(const SyncFacts&) const = default;
+};
+
+/// The most parts in one capture
+inline constexpr size_t k_MostCaptureParts = 8;
+
+/// Server to client: "sync.capture". At the end of this turn, the client hashes each entity of these parts, and sends
+/// the blocks (sync.blocks) and its world (sync.world). The client rejoins after the capture.
+struct SyncCapture
+{
+	uint32_t turn {0};
+	std::vector<std::string> parts;
+
+	[[nodiscard]] bool operator==(const SyncCapture&) const = default;
+};
+
+/// The most blocks of one part in a "sync.blocks" frame
+inline constexpr size_t k_MostSyncBlocks = 1024;
+
+/// The hash of each block of the entities of one part
+struct PartBlocks
+{
+	std::string part;
+	/// The count of the entities of the part on the computer
+	uint32_t entities {0};
+	std::vector<uint64_t> blocks;
+
+	[[nodiscard]] bool operator==(const PartBlocks&) const = default;
+};
+
+/// Client to server: "sync.blocks". The blocks of each part of the capture at its turn.
+struct SyncBlocks
+{
+	uint32_t turn {0};
+	std::vector<PartBlocks> parts;
+
+	[[nodiscard]] bool operator==(const SyncBlocks&) const = default;
+};
+
+/// The blocks of one part that the server asks for
+struct PartAsk
+{
+	std::string part;
+	std::vector<uint32_t> blocks;
+
+	[[nodiscard]] bool operator==(const PartAsk&) const = default;
+};
+
+/// Server to client: "sync.ask". The first blocks that differ from the server's. The client sends the entities of these
+/// blocks (sync.entities).
+struct SyncAsk
+{
+	uint32_t turn {0};
+	std::vector<PartAsk> parts;
+
+	[[nodiscard]] bool operator==(const SyncAsk&) const = default;
+};
+
+/// The most entities of one part in a "sync.entities" frame
+inline constexpr size_t k_MostSyncEntities = 1024;
+
+/// The hash of one entity of a part, with what it is and where it is
+struct SyncEntity
+{
+	uint32_t entity {0};
+	uint64_t hash {0};
+	std::string kind;
+	std::optional<std::array<float, 3>> position;
+
+	[[nodiscard]] bool operator==(const SyncEntity&) const = default;
+};
+
+struct PartEntityHashes
+{
+	std::string part;
+	std::vector<SyncEntity> entities;
+
+	[[nodiscard]] bool operator==(const PartEntityHashes&) const = default;
+};
+
+/// Client to server: "sync.entities". The entities of the blocks that the server asked for.
+struct SyncEntities
+{
+	uint32_t turn {0};
+	std::vector<PartEntityHashes> parts;
+
+	[[nodiscard]] bool operator==(const SyncEntities&) const = default;
+};
+
+/// The most bytes of the world in one "sync.world" frame, before Base64
+inline constexpr size_t k_MostSyncWorldChunkBytes = 48 * 1024;
+/// The most bytes of the world that a client sends in all
+inline constexpr size_t k_MostSyncWorldBytes = 16 * 1024 * 1024;
+
+/// Client to server: "sync.world". One part of the client's saved world at the turn of the capture, for the server's
+/// record of the desync. The parts go in order.
+struct SyncWorld
+{
+	uint32_t turn {0};
+	/// The number of this part from 0, and the count of the parts
+	uint32_t index {0};
+	uint32_t count {0};
+	/// The bytes of the whole world
+	uint32_t size {0};
+	std::vector<uint8_t> bytes;
+
+	[[nodiscard]] bool operator==(const SyncWorld&) const = default;
+};
+
+using Frame =
+    std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply, StartCancel,
+                 StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft, SyncParts, Loaded,
+                 LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities, SyncWorld>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

@@ -25,6 +25,7 @@
 #include "Common/DeveloperTools.h"
 #include "Debug/SimRun.h"
 #include "EngineConfig.h"
+#include "Server/DesyncBundle.h"
 #include "Server/GameLifetime.h"
 #include "Server/LobbyGame.h"
 #include "Server/ServerSnapshots.h"
@@ -100,6 +101,8 @@ struct NetworkSettings
 	std::optional<std::filesystem::path> lobbyTestAuthorities;
 	/// The snapshots of the shared world on the server's own disk (deviation 100)
 	snapshots::Settings snapshots;
+	/// The records of the desyncs that the server captures, on the server's own disk
+	desync_bundle::Settings desyncRecords;
 	/// The game of one lobby on a server of the pool (deviation 236): the lobby's id and members. The room takes only
 	/// these members, and the server ends after its game. None for a server with no lobby.
 	std::optional<lobby_game::Lobby> lobby;

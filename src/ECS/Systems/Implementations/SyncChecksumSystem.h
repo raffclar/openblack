@@ -18,6 +18,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -26,6 +27,7 @@
 
 #include "Common/SideThread.h"
 #include "Common/WorkerPool.h"
+#include "ECS/EntityHashes.h"
 #include "ECS/PartHashHistory.h"
 #include "ECS/SyncedState.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
@@ -61,6 +63,7 @@ public:
 	{
 		return _lastHash.has_value() && _lastHash->turn == turn && _lastHash->byField == byField ? &_lastHash->hash : nullptr;
 	}
+	[[nodiscard]] std::vector<synced_state::PartEntities> EntitiesOfParts(std::span<const std::string> parts) const override;
 	[[nodiscard]] std::vector<std::pair<std::string, uint64_t>> PartsOfTurn(uint32_t turn) const override
 	{
 		return _partHistory.Of(turn);

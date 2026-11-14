@@ -19,6 +19,7 @@
 #include "Common/DesyncReports.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/ConnectionLog.h"
+#include "Online/GameDataFiles.h"
 #include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
 
@@ -122,6 +123,8 @@ private:
 	error_reports::DesyncRunBudget _desyncBudget;
 	/// The desyncs of the network game, from the join to the end of the game
 	std::optional<error_reports::DesyncReportRule> _desyncs;
+	/// The prints of the game data from the joins before, so that a rejoin reads only the files that changed
+	online::game_data::PrintCache _printCache;
 };
 
 } // namespace openblack::ecs::systems

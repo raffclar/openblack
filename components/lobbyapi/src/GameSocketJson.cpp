@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
+#include <array>
 #include <limits>
 #include <type_traits>
 #include <utility>
@@ -45,6 +47,19 @@ constexpr std::string_view k_ObserverLeft = "observer.left";
 constexpr std::string_view k_SyncParts = "sync.parts";
 constexpr std::string_view k_Loaded = "game.loaded";
 constexpr std::string_view k_LoadWait = "game.wait";
+constexpr std::string_view k_DataPrint = "data.print";
+constexpr std::string_view k_SyncFacts = "sync.facts";
+constexpr std::string_view k_SyncCapture = "sync.capture";
+constexpr std::string_view k_SyncBlocks = "sync.blocks";
+constexpr std::string_view k_SyncAsk = "sync.ask";
+constexpr std::string_view k_SyncEntities = "sync.entities";
+constexpr std::string_view k_SyncWorld = "sync.world";
+/// The most bytes of the hints of a copy of the game (the patch and the language)
+constexpr size_t k_MostHintBytes = 16;
+/// The most bytes of the words of the file in a refusal "data"
+constexpr size_t k_MostRefusedFileBytes = 1024;
+/// The most blocks of one part that a "sync.ask" frame names
+constexpr size_t k_MostAskBlocks = 64;
 /// The longest wait for the loads that a frame can give: the 6 hours of a lobby game
 constexpr uint64_t k_MostLoadWaitSeconds = 6ULL * 60 * 60;
 
@@ -171,6 +186,107 @@ bool ReadBool(const Json& object, std::string_view key, bool& out, bool required
 		return false;
 	}
 	out = member->get<bool>();
+	return true;
+}
+
+/// A hash from 1 to 16 hexadecimal digits in lower case
+bool ParseHex(std::string_view hex, uint64_t& out)
+{
+	if (hex.empty() || hex.size() > 16)
+	{
+		return false;
+	}
+	uint64_t value = 0;
+	for (const char c : hex)
+	{
+		uint64_t digit = 0;
+		if (c >= '0' && c <= '9')
+		{
+			digit = static_cast<uint64_t>(c - '0');
+		}
+		else if (c >= 'a' && c <= 'f')
+		{
+			digit = static_cast<uint64_t>(c - 'a' + 10);
+		}
+		else
+		{
+			return false;
+		}
+		value = (value << 4U) | digit;
+	}
+	out = value;
+	return true;
+}
+
+bool ReadHex(const Json& object, std::string_view key, uint64_t& out, bool required = true)
+{
+	const auto* member = Member(object, key);
+	if (member == nullptr || member->is_null())
+	{
+		return !required;
+	}
+	return member->is_string() && ParseHex(member->get_ref<const std::string&>(), out);
+}
+
+/// A text of at most a count of bytes
+bool ReadShort(const Json& object, std::string_view key, std::string& out, size_t most, bool required = false)
+{
+	return ReadString(object, key, out, required) && out.size() <= most;
+}
+
+/// An array of texts, each of at most a count of bytes
+bool ReadNames(const Json& object, std::string_view key, std::vector<std::string>& out, size_t mostNames, size_t mostBytes,
+               bool required = true)
+{
+	const auto* member = Member(object, key);
+	if (member == nullptr || member->is_null())
+	{
+		return !required;
+	}
+	if (!member->is_array() || member->size() > mostNames)
+	{
+		return false;
+	}
+	for (const auto& entry : *member)
+	{
+		if (!entry.is_string() || entry.get_ref<const std::string&>().size() > mostBytes)
+		{
+			return false;
+		}
+		out.push_back(entry.get<std::string>());
+	}
+	return true;
+}
+
+bool ReadTurn(const Json& object, uint32_t& out)
+{
+	uint64_t turn = 0;
+	if (!ReadUnsigned(object, "turn", std::numeric_limits<uint32_t>::max(), turn))
+	{
+		return false;
+	}
+	out = static_cast<uint32_t>(turn);
+	return true;
+}
+
+/// The array of parts of a frame of a capture: each part an object that the reader reads
+template <typename Part, typename ReadPart>
+bool ReadCaptureParts(const Json& object, std::vector<Part>& out, const ReadPart& read)
+{
+	const auto* member = Member(object, "parts");
+	if (member == nullptr || !member->is_array() || member->size() > k_MostCaptureParts)
+	{
+		return false;
+	}
+	for (const auto& entry : *member)
+	{
+		Part part;
+		if (!entry.is_object() || !ReadShort(entry, "part", part.part, k_MostSyncPartNameBytes, true) || !read(entry, part))
+		{
+			return false;
+		}
+		out.push_back(std::move(part));
+	}
 	return true;
 }
 
@@ -475,7 +591,8 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 			return std::nullopt;
 		}
 		joined.observer = static_cast<uint8_t>(observer);
-		if (!ReadBool(object, "staff", joined.staff, false))
+		if (!ReadBool(object, "staff", joined.staff, false) || !ReadBool(object, "capture", joined.capture, false) ||
+		    !ReadNames(object, "data_files", joined.dataFiles, k_MostDataFiles, k_MostDataPathBytes, false))
 		{
 			return std::nullopt;
 		}
@@ -493,7 +610,8 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	if (type == k_Refused)
 	{
 		Refused refused;
-		if (!ReadString(object, "reason", refused.reason) || !ReadString(object, "build", refused.build, false))
+		if (!ReadString(object, "reason", refused.reason) || !ReadString(object, "build", refused.build, false) ||
+		    !ReadShort(object, "file", refused.file, k_MostRefusedFileBytes))
 		{
 			return std::nullopt;
 		}
@@ -517,6 +635,186 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 			return std::nullopt;
 		}
 		return Resumed {.turn = static_cast<uint32_t>(turn), .world = world};
+	}
+	if (type == k_DataPrint)
+	{
+		DataPrint print;
+		const auto* files = Member(object, "files");
+		if (files == nullptr || !files->is_array() || files->size() > k_MostDataFiles ||
+		    !ReadShort(object, "patch", print.patch, k_MostHintBytes) ||
+		    !ReadShort(object, "language", print.language, k_MostHintBytes))
+		{
+			return std::nullopt;
+		}
+		for (const auto& entry : *files)
+		{
+			DataFile file;
+			if (!entry.is_array() || entry.size() != 4 || !entry[0].is_string() || !entry[1].is_boolean() ||
+			    !entry[2].is_number_unsigned() || !entry[3].is_string())
+			{
+				return std::nullopt;
+			}
+			file.path = entry[0].get<std::string>();
+			file.present = entry[1].get<bool>();
+			file.size = entry[2].get<uint64_t>();
+			if (file.path.empty() || file.path.size() > k_MostDataPathBytes ||
+			    !ParseHex(entry[3].get_ref<const std::string&>(), file.hash))
+			{
+				return std::nullopt;
+			}
+			print.files.push_back(std::move(file));
+		}
+		return print;
+	}
+	if (type == k_SyncFacts)
+	{
+		SyncFacts facts;
+		uint64_t seed = 0;
+		if (!ReadTurn(object, facts.turn) || !ReadShort(object, "build", facts.build, k_MostFactBytes) ||
+		    !ReadShort(object, "land", facts.land, k_MostFactBytes) ||
+		    !ReadShort(object, "land_sha256", facts.landSha256, k_MostFactBytes) ||
+		    !ReadShort(object, "map", facts.map, k_MostFactBytes) ||
+		    !ReadUnsigned(object, "seed", std::numeric_limits<uint32_t>::max(), seed, false) ||
+		    !ReadHex(object, "data", facts.data, false) || !ReadShort(object, "patch", facts.patch, k_MostHintBytes) ||
+		    !ReadShort(object, "language", facts.language, k_MostHintBytes))
+		{
+			return std::nullopt;
+		}
+		facts.seed = static_cast<uint32_t>(seed);
+		return facts;
+	}
+	if (type == k_SyncCapture)
+	{
+		SyncCapture capture;
+		if (!ReadTurn(object, capture.turn) ||
+		    !ReadNames(object, "parts", capture.parts, k_MostCaptureParts, k_MostSyncPartNameBytes))
+		{
+			return std::nullopt;
+		}
+		return capture;
+	}
+	if (type == k_SyncBlocks)
+	{
+		SyncBlocks blocks;
+		const auto read = [](const Json& entry, PartBlocks& part) {
+			uint64_t entities = 0;
+			const auto* list = Member(entry, "blocks");
+			if (!ReadUnsigned(entry, "entities", std::numeric_limits<uint32_t>::max(), entities) || list == nullptr ||
+			    !list->is_array() || list->size() > k_MostSyncBlocks)
+			{
+				return false;
+			}
+			part.entities = static_cast<uint32_t>(entities);
+			for (const auto& block : *list)
+			{
+				uint64_t value = 0;
+				if (!block.is_string() || !ParseHex(block.get_ref<const std::string&>(), value))
+				{
+					return false;
+				}
+				part.blocks.push_back(value);
+			}
+			return true;
+		};
+		if (!ReadTurn(object, blocks.turn) || !ReadCaptureParts(object, blocks.parts, read))
+		{
+			return std::nullopt;
+		}
+		return blocks;
+	}
+	if (type == k_SyncAsk)
+	{
+		SyncAsk ask;
+		const auto read = [](const Json& entry, PartAsk& part) {
+			const auto* list = Member(entry, "blocks");
+			if (list == nullptr || !list->is_array() || list->size() > k_MostAskBlocks)
+			{
+				return false;
+			}
+			for (const auto& block : *list)
+			{
+				if (!block.is_number_unsigned() || block.get<uint64_t>() >= k_MostSyncBlocks)
+				{
+					return false;
+				}
+				part.blocks.push_back(block.get<uint32_t>());
+			}
+			return true;
+		};
+		if (!ReadTurn(object, ask.turn) || !ReadCaptureParts(object, ask.parts, read))
+		{
+			return std::nullopt;
+		}
+		return ask;
+	}
+	if (type == k_SyncEntities)
+	{
+		SyncEntities entities;
+		const auto read = [](const Json& entry, PartEntityHashes& part) {
+			const auto* list = Member(entry, "entities");
+			if (list == nullptr || !list->is_array() || list->size() > k_MostSyncEntities)
+			{
+				return false;
+			}
+			for (const auto& item : *list)
+			{
+				SyncEntity entity;
+				if (!item.is_array() || item.size() != 4 || !item[0].is_number_unsigned() ||
+				    item[0].get<uint64_t>() > std::numeric_limits<uint32_t>::max() || !item[1].is_string() ||
+				    !ParseHex(item[1].get_ref<const std::string&>(), entity.hash) || !item[2].is_string() ||
+				    item[2].get_ref<const std::string&>().size() > k_MostSyncPartNameBytes)
+				{
+					return false;
+				}
+				entity.entity = item[0].get<uint32_t>();
+				entity.kind = item[2].get<std::string>();
+				const auto& place = item[3];
+				if (place.is_array() && place.size() == 3 &&
+				    std::ranges::all_of(place, [](const Json& v) { return v.is_number(); }))
+				{
+					entity.position =
+					    std::array<float, 3> {place[0].get<float>(), place[1].get<float>(), place[2].get<float>()};
+				}
+				else if (!place.is_null())
+				{
+					return false;
+				}
+				part.entities.push_back(std::move(entity));
+			}
+			return true;
+		};
+		if (!ReadTurn(object, entities.turn) || !ReadCaptureParts(object, entities.parts, read))
+		{
+			return std::nullopt;
+		}
+		return entities;
+	}
+	if (type == k_SyncWorld)
+	{
+		SyncWorld world;
+		uint64_t index = 0;
+		uint64_t count = 0;
+		uint64_t size = 0;
+		std::string data;
+		constexpr auto k_MostChunks = (k_MostSyncWorldBytes + k_MostSyncWorldChunkBytes - 1) / k_MostSyncWorldChunkBytes;
+		// Base64 holds 3 bytes in 4 characters
+		constexpr auto k_MostDataCharacters = (k_MostSyncWorldChunkBytes + 2) / 3 * 4;
+		if (!ReadTurn(object, world.turn) || !ReadUnsigned(object, "index", k_MostChunks - 1, index) ||
+		    !ReadUnsigned(object, "count", k_MostChunks, count) || !ReadUnsigned(object, "size", k_MostSyncWorldBytes, size) ||
+		    !ReadShort(object, "data", data, k_MostDataCharacters, true) || index >= count)
+		{
+			return std::nullopt;
+		}
+		auto bytes = join_ticket::DecodeBase64Url(data);
+		if (!bytes.has_value() || bytes->size() > k_MostSyncWorldChunkBytes)
+		{
+			return std::nullopt;
+		}
+		world.index = static_cast<uint32_t>(index);
+		world.count = static_cast<uint32_t>(count);
+		world.size = static_cast<uint32_t>(size);
+		world.bytes = std::move(*bytes);
+		return world;
 	}
 	if (type == k_SyncParts)
 	{
@@ -762,6 +1060,14 @@ std::string ToJson(const Frame& frame)
 				    WriteStart(*value.start, start);
 				    object["start"] = std::move(start);
 			    }
+			    if (!value.dataFiles.empty())
+			    {
+				    object["data_files"] = value.dataFiles;
+			    }
+			    if (value.capture)
+			    {
+				    object["capture"] = true;
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Refused>)
 		    {
@@ -769,6 +1075,10 @@ std::string ToJson(const Frame& frame)
 			    if (!value.build.empty())
 			    {
 				    object["build"] = value.build;
+			    }
+			    if (!value.file.empty())
+			    {
+				    object["file"] = value.file;
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Start>)
@@ -849,6 +1159,89 @@ std::string ToJson(const Frame& frame)
 				    parts.push_back(Json::array({name, HexOf(hash)}));
 			    }
 			    object = Json {{"type", k_SyncParts}, {"turn", value.turn}, {"parts", std::move(parts)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, DataPrint>)
+		    {
+			    auto files = Json::array();
+			    for (const auto& file : value.files)
+			    {
+				    files.push_back(Json::array({file.path, file.present, file.size, HexOf(file.hash)}));
+			    }
+			    object = Json {{"type", k_DataPrint}, {"files", std::move(files)}};
+			    if (!value.patch.empty())
+			    {
+				    object["patch"] = value.patch;
+			    }
+			    if (!value.language.empty())
+			    {
+				    object["language"] = value.language;
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, SyncFacts>)
+		    {
+			    object = Json {{"type", k_SyncFacts},
+			                   {"turn", value.turn},
+			                   {"build", value.build},
+			                   {"land", value.land},
+			                   {"land_sha256", value.landSha256},
+			                   {"map", value.map},
+			                   {"seed", value.seed},
+			                   {"data", HexOf(value.data)},
+			                   {"patch", value.patch},
+			                   {"language", value.language}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, SyncCapture>)
+		    {
+			    object = Json {{"type", k_SyncCapture}, {"turn", value.turn}, {"parts", value.parts}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, SyncBlocks>)
+		    {
+			    auto parts = Json::array();
+			    for (const auto& part : value.parts)
+			    {
+				    auto blocks = Json::array();
+				    for (const auto block : part.blocks)
+				    {
+					    blocks.push_back(HexOf(block));
+				    }
+				    parts.push_back(Json {{"part", part.part}, {"entities", part.entities}, {"blocks", std::move(blocks)}});
+			    }
+			    object = Json {{"type", k_SyncBlocks}, {"turn", value.turn}, {"parts", std::move(parts)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, SyncAsk>)
+		    {
+			    auto parts = Json::array();
+			    for (const auto& part : value.parts)
+			    {
+				    parts.push_back(Json {{"part", part.part}, {"blocks", part.blocks}});
+			    }
+			    object = Json {{"type", k_SyncAsk}, {"turn", value.turn}, {"parts", std::move(parts)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, SyncEntities>)
+		    {
+			    auto parts = Json::array();
+			    for (const auto& part : value.parts)
+			    {
+				    auto entities = Json::array();
+				    for (const auto& entity : part.entities)
+				    {
+					    // The position goes as the doubles of the floats, which read back to the same floats
+					    const auto place = entity.position.has_value()
+					                           ? Json::array({static_cast<double>((*entity.position)[0]),
+					                                          static_cast<double>((*entity.position)[1]),
+					                                          static_cast<double>((*entity.position)[2])})
+					                           : Json(nullptr);
+					    entities.push_back(Json::array({entity.entity, HexOf(entity.hash), entity.kind, place}));
+				    }
+				    parts.push_back(Json {{"part", part.part}, {"entities", std::move(entities)}});
+			    }
+			    object = Json {{"type", k_SyncEntities}, {"turn", value.turn}, {"parts", std::move(parts)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, SyncWorld>)
+		    {
+			    object =
+			        Json {{"type", k_SyncWorld},  {"turn", value.turn}, {"index", value.index},
+			              {"count", value.count}, {"size", value.size}, {"data", join_ticket::EncodeBase64Url(value.bytes)}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, Loaded>)
 		    {

@@ -269,3 +269,44 @@ TEST(DesyncReports, TheGameIdOfAClientHasSixteenDigits)
 {
 	EXPECT_EQ(ClientGameId(0x1234), "0000000000001234");
 }
+
+TEST(DesyncReports, TheEventWaitsForTheDetailOfItsCaptureForATime)
+{
+	DesyncRunBudget budget;
+	DesyncReportRule rule("game1", k_Codec);
+	rule.SetDetailWait(true);
+	Desync(rule, 100, {"Transform"}, 0);
+	EXPECT_TRUE(rule.Update(1000, budget).empty());
+	rule.Detailed(0, DesyncDetail {.extras = {{"first_fact", "data: the player has other game data"}},
+	                               .fact = "data",
+	                               .attachment = "{}",
+	                               .attachmentName = "facts.json"});
+	auto reports = rule.Update(2000, budget);
+	ASSERT_EQ(reports.size(), 1u);
+	ASSERT_TRUE(reports[0].detail.has_value());
+	EXPECT_EQ(reports[0].detail->attachmentName, "facts.json");
+	const auto fields = DesyncEventFieldsOf(reports[0]);
+	EXPECT_EQ(FieldOf(fields.tags, "desync_fact"), "data");
+	EXPECT_EQ(FieldOf(fields.extras, "first_fact"), "data: the player has other game data");
+}
+
+TEST(DesyncReports, AnEventWithNoDetailGoesAfterTheWait)
+{
+	DesyncRunBudget budget;
+	DesyncReportRule rule("game1", k_Codec);
+	rule.SetDetailWait(true);
+	Desync(rule, 100, {"Transform"}, 0);
+	EXPECT_TRUE(rule.Update(k_DesyncDetailWaitMilliseconds - 1, budget).empty());
+	auto reports = rule.Update(k_DesyncDetailWaitMilliseconds, budget);
+	ASSERT_EQ(reports.size(), 1u);
+	EXPECT_FALSE(reports[0].detail.has_value());
+	EXPECT_FALSE(FieldOf(DesyncEventFieldsOf(reports[0]).tags, "desync_fact").has_value());
+}
+
+TEST(DesyncReports, WithNoWaitTheEventGoesAtOnce)
+{
+	DesyncRunBudget budget;
+	DesyncReportRule rule("game1", k_Codec);
+	Desync(rule, 100, {"Transform"}, 0);
+	EXPECT_EQ(rule.Update(0, budget).size(), 1u);
+}
