@@ -64,6 +64,9 @@ struct HostSettings
 	uint8_t godSlots {k_DefaultGodSlots};
 	/// How long a god's player can be away before the god is defeated (user decision MP-Q6: 5 minutes, set by the server)
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
+	/// How long the gods wait when the players of all the gods lost the connection (user, 2026-11-14: 10 seconds). Then
+	/// each away god is defeated and the game ends. The longer time to come back holds while a god's player is connected.
+	int64_t allGoneMicroseconds {10LL * 1'000'000};
 	/// The turns that the server keeps to send again to a player who comes back: 5 minutes of turns, and some more
 	uint32_t keptTurns {3200};
 	/// Tests: the commands of the test tools (player_commands::CreatureFightCheat) go into the turns. Without this, the
@@ -483,6 +486,11 @@ private:
 	/// The alignments that the gods sent with their creature files, by god slot
 	std::map<uint8_t, float> _startAlignments;
 	bool _pausedBefore {false};
+	/// When the last god's player of this process went and a god started to wait for its player. None while a god's
+	/// player is connected.
+	std::optional<int64_t> _allGoneSince;
+	/// A god's player connected to this process after its start or its restore
+	bool _godConnectedHere {false};
 	/// Tools, a room with no human god: the world turns from the time that as many observers as the room waits for joined
 	bool _observersJoined {false};
 	/// Tools, a room with no human god: at least one observer joined, so a room with no observer left is over
