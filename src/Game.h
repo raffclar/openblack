@@ -199,6 +199,8 @@ struct Arguments
 	bool skipLogos {false};
 	/// Developers: throw a test error after the start, to test the error reports
 	bool sentryTestError {false};
+	/// Developers: stop with a trap after the start, to test the crash reports
+	bool sentryTestTrap {false};
 	/// Play the logo effect of the first game, a run of a developer or a tool too
 	bool logoEffect {false};
 	/// Start a new game rather than continue from the save on exit

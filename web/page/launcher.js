@@ -138,19 +138,23 @@ const k_DiagnosticTail = 40;
 // What the page found out for the report: the renderer and its adapter, and the size of the canvas
 const diagnostics = { renderer: 'not chosen', adapter: 'not known', canvas: 'not known' };
 
-/** Write a line of the page to the game log, with the tag of the page */
+// The error and crash reports to Sentry (launcher-reports.js). The game starts and stops them with the option of the
+// player. Until the game starts them, the page sends nothing.
+const errorReports = new ErrorReports({
+  loadSdk: () => loadSentryScript(document),
+  logText: () => logLines.join('\n'),
+  log: (text) => log(k_PageTag + text),
+});
+globalThis.openblackErrorReports = errorReports;
+
+/** Write a line of the page to the game log, with the tag of the page. The line is also a breadcrumb of the reports. */
 function pageLog(text) {
   log(k_PageTag + text);
+  errorReports.breadcrumb('page', text);
 }
 globalThis.openblackPageLog = pageLog;
 
-/** The text with each secret in it replaced by a mark, as the game does (MaskSecrets) */
-function maskSecrets(text) {
-  return text
-    .replace(/v4\.(public|local)\.[A-Za-z0-9_\-.=+/]+/g, '<hidden>')
-    .replace(/Bearer [A-Za-z0-9_\-.=+/]+/g, '<hidden>')
-    .replace(/(\w*(?:ticket|password|token|session|secret)\w*"?\s*[=:]\s*"?)([^"\s,;&]+)/gi, '$1<hidden>');
-}
+// The masks of the secrets in the texts of the diagnostics come from maskSecrets in launcher-reports.js
 
 /** The text of the report of "Copy diagnostics": the build, the browser, the renderer and the last lines of the logs */
 async function diagnosticsReport() {
@@ -563,12 +567,13 @@ function watchGameFrames(gameFrames, displayFrames) {
 
 // The game stopped on an error of the browser: the page keeps one report, then shows the reports
 let pageCrashKept = false;
-async function gameFailed(reason) {
+async function gameFailed(reason, error) {
   if (pageCrashKept) {
     return;
   }
   pageCrashKept = true;
   log(`The game stopped on an error: ${reason}`);
+  errorReports.pageFailed(reason, error);
   const kept = await keepPageCrashReport(reason);
   if (!kept || (await showCrashReports('The game stopped on an error',
     'The browser keeps the crash reports below. The "Save log" button gives the whole game log.', true)) === 0) {
@@ -811,6 +816,11 @@ async function start(online = false) {
   const developer = await developerTools;
   if (developer) {
     await addToolFiles(parameters);
+    // A developer run can give its reports another environment, such as "lane-test", so that the tests do not mix
+    // with the reports of the players
+    if (parameters.get('sentry-environment')) {
+      errorReports.environment = parameters.get('sentry-environment');
+    }
   } else if (parameters.has('args') || parameters.has('tool-file')) {
     log('This build has no developer tools: the page ignores the parameters "args" and "tool-file".');
   }
@@ -883,7 +893,7 @@ async function start(online = false) {
       log(`The game stopped with the code ${code}.`);
       leaveForHome(code);
     },
-    onAbort: (reason) => gameFailed(String(reason)),
+    onAbort: (reason) => gameFailed(String(reason), reason),
   };
   // An error on a game thread that the game does not catch, such as a WebAssembly trap, comes to the page as an error.
   // The page ignores the error of the size watch of the browser, which is harmless.
@@ -897,8 +907,13 @@ async function start(online = false) {
         'Make sure that the network works, then load the page again.'
       : (event.error && event.error.message) || event.message || String(event.error);
     if (!reason.includes('ResizeObserver')) {
-      gameFailed(reason);
+      gameFailed(reason, event.error);
     }
+  });
+  // A promise of the page that failed with no code to take the error does not stop the game. It goes to the reports
+  // as an error.
+  window.addEventListener('unhandledrejection', (event) => {
+    errorReports.pageError(event.reason);
   });
   const script = document.createElement('script');
   script.src = 'openblack.js';
