@@ -292,7 +292,8 @@ struct ListFilter
 	std::string mapFile;
 	bool showFull {true};
 	bool showLocked {true};
-	bool showInGame {false};
+	/// The list shows the games that play by default (user, 2026-11-14)
+	bool showInGame {true};
 	bool showOtherVersions {false};
 };
 
@@ -303,7 +304,8 @@ struct ListFilter
 [[nodiscard]] bool IsInGame(const lobby_api::LobbySummary& lobby);
 /// The player can ask to join the lobby as a god
 [[nodiscard]] bool CanJoin(const lobby_api::LobbySummary& lobby, std::string_view ownBuild);
-/// The order of the list with no sort column: the open lobbies first, then the most gods, then the newest
+/// The order of the list with no sort column: the open lobbies first, then the other lobbies before their start, then
+/// the games that play. In each group the lobby with the most gods comes first, then the newest.
 [[nodiscard]] bool DefaultOrderBefore(const lobby_api::LobbySummary& left, const lobby_api::LobbySummary& right);
 /// The lobbies that the filter shows, in the default order
 [[nodiscard]] std::vector<lobby_api::LobbySummary> VisibleLobbies(std::span<const lobby_api::LobbySummary> lobbies,

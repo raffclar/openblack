@@ -233,6 +233,24 @@ std::u16string ServersText(const std::optional<lobby_api::PoolState>& pool)
 
 std::u16string DetailText(const lobby_api::LobbySummary& lobby, std::u16string_view mapName)
 {
+	if (online::lobby::IsInGame(lobby))
+	{
+		auto text = std::u16string(mapName) + Utf16(fmt::format(" - Host: {} - Players: ", lobby.host.name));
+		const auto shown = std::min(lobby.players.size(), k_MostShownPlayers);
+		for (size_t i = 0; i < shown; ++i)
+		{
+			text += (i == 0 ? std::u16string() : std::u16string(u", ")) + Utf16(lobby.players[i].name);
+		}
+		if (shown == 0)
+		{
+			text += Utf16(fmt::format("{}", lobby.gods));
+		}
+		else if (lobby.players.size() > shown)
+		{
+			text += Utf16(fmt::format(" and {} more", lobby.players.size() - shown));
+		}
+		return text;
+	}
 	auto text = std::u16string(mapName) +
 	            Utf16(fmt::format(" - Host: {} - Password: {}", lobby.host.name, lobby.locked ? "yes" : "no"));
 	if (!lobby.map.sha256.empty() && lobby.map.size > 0)
@@ -240,6 +258,11 @@ std::u16string DetailText(const lobby_api::LobbySummary& lobby, std::u16string_v
 		text += Utf16(fmt::format(" - Map download: {}", MegabytesText(lobby.map.size)));
 	}
 	return text;
+}
+
+bool ShowsJoinButton(const lobby_api::LobbySummary* picked)
+{
+	return picked != nullptr && !online::lobby::IsInGame(*picked);
 }
 
 std::string_view RefusalOf(const lobby_api::LobbySummary& lobby, std::string_view ownBuild)

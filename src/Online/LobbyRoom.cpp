@@ -734,10 +734,16 @@ bool CanJoin(const lobby_api::LobbySummary& lobby, std::string_view ownBuild)
 
 bool DefaultOrderBefore(const lobby_api::LobbySummary& left, const lobby_api::LobbySummary& right)
 {
-	const auto open = [](const auto& lobby) { return lobby.state == lobby_api::LobbyState::Open && !IsFull(lobby); };
-	if (open(left) != open(right))
+	const auto group = [](const auto& lobby) {
+		if (IsInGame(lobby))
+		{
+			return 2;
+		}
+		return lobby.state == lobby_api::LobbyState::Open && !IsFull(lobby) ? 0 : 1;
+	};
+	if (group(left) != group(right))
 	{
-		return open(left);
+		return group(left) < group(right);
 	}
 	if (left.gods != right.gods)
 	{

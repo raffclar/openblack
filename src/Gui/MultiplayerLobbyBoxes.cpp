@@ -262,7 +262,7 @@ void MultiplayerBoxes::SyncLobbyList()
 		_headings.at(i)->label = screens::HeadingText(k_Headings.at(i), static_cast<screens::Column>(i), sort);
 	}
 	const auto* picked = _frontEnd->GetSelectedSummary();
-	_next->visible = picked != nullptr;
+	_next->visible = screens::ShowsJoinButton(picked);
 	_detail->text = picked != nullptr
 	                    ? screens::DetailText(*picked, ToUtf16(picked->map.name.empty() ? picked->map.file : picked->map.name))
 	                    : (_shownLobbies.empty() ? std::u16string(u"No open game. Click Create session.")

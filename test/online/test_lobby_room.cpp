@@ -146,7 +146,21 @@ TEST(LobbiesJson, TheListAndItsEventsRead)
 	EXPECT_EQ(list->lobbies[0].created, k_TenOClock);
 	ASSERT_TRUE(list->pool.has_value());
 	EXPECT_EQ(list->pool->total, 1);
+	EXPECT_TRUE(list->lobbies[0].players.empty());
 	EXPECT_FALSE(lobby_api::ParseLobbyList(R"({"lobbies":[{"id":"a"}]})").has_value());
+	// A game that plays gives the names of its players
+	const auto playing = lobby_api::ParseLobbyList(
+	    R"({"lobbies":[{"id":"a","name":"A","host":{"id":1,"name":"h"},"map":{"file":"m"},"gods":2,"god_slots":2,)"
+	    R"("players":[{"id":1,"name":"h"},{"id":7,"name":"owl"}],"observers_allowed":false,"state":"in_game",)"
+	    R"("started_at":"2026-11-12T10:00:00+00:00","build_id":"b"}]})");
+	ASSERT_TRUE(playing.has_value());
+	ASSERT_EQ(playing->lobbies.at(0).players.size(), 2u);
+	EXPECT_EQ(playing->lobbies[0].players[1].name, "owl");
+	EXPECT_EQ(playing->lobbies[0].players[1].id, 7);
+	EXPECT_EQ(playing->lobbies[0].startedAt, k_TenOClock);
+	EXPECT_FALSE(lobby_api::ParseLobbyList(R"({"lobbies":[{"id":"a","name":"A","host":{"id":1,"name":"h"},)"
+	                                       R"("map":{"file":"m"},"gods":1,"god_slots":2,"players":[1],"state":"open"}]})")
+	                 .has_value());
 
 	const auto removed =
 	    lobby_api::ParseLobbyListChange(lobby_api::lobby_events::k_LobbiesRemoved, R"({"id":"a","reason":"host_closed"})");
@@ -578,6 +592,7 @@ TEST(LobbyList, TheFilterAndTheOrder)
 	    Summary("a", 1, 2, LobbyState::Open, 1),   Summary("b", 4, 4, LobbyState::Open, 2),
 	    Summary("c", 3, 8, LobbyState::Open, 3),   Summary("d", 3, 8, LobbyState::Open, 4),
 	    Summary("e", 2, 2, LobbyState::InGame, 5), Summary("f", 1, 2, LobbyState::Open, 6, "0.1.0+old/codec33"),
+	    Summary("g", 6, 8, LobbyState::InGame, 7),
 	};
 	const auto ids = [](const std::vector<lobby_api::LobbySummary>& list) {
 		std::string text;
@@ -587,10 +602,13 @@ TEST(LobbyList, TheFilterAndTheOrder)
 		}
 		return text;
 	};
-	// Open first, then the most gods, then the newest
-	EXPECT_EQ(ids(VisibleLobbies(lobbies, {}, k_Build)), "dcab");
-	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.showFull = false}, k_Build)), "dca");
-	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.showInGame = true, .showOtherVersions = true}, k_Build)), "dcfabe");
+	// Open first, then the other lobbies before their start, then the games that play. In each group the most gods
+	// come first, then the newest.
+	EXPECT_EQ(ids(VisibleLobbies(lobbies, {}, k_Build)), "dcabge");
+	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.showInGame = false}, k_Build)), "dcab");
+	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.showFull = false, .showInGame = false}, k_Build)), "dca");
+	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.showFull = false}, k_Build)), "dcag");
+	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.showInGame = true, .showOtherVersions = true}, k_Build)), "dcfabge");
 	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.search = "HOSTC"}, k_Build)), "c");
 	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.search = "map d"}, k_Build)), "d");
 	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.mapFile = "ma"}, k_Build)), "a");

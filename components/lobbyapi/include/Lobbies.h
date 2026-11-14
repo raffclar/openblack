@@ -147,6 +147,8 @@ struct LobbySummary
 	std::optional<int32_t> freeSlots;
 	/// "observers"
 	int32_t observers {0};
+	/// "players": the players in god slots, in the order of the slots
+	std::vector<AccountRef> players;
 	/// "locked": the lobby needs a password
 	bool locked {false};
 	/// "state"
