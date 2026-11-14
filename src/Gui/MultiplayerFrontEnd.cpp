@@ -170,11 +170,17 @@ void MultiplayerFrontEnd::FollowSession()
 	const auto state = session->GetState();
 	if (!_joined && session->GetJoined().has_value() && state != State::Ended && _lobbyGame)
 	{
-		// The game of a lobby session starts when its players joined: the room of the session stays on its box
+		// The game of a lobby session starts when its players joined: the room of the session stays on its box. The
+		// player was ready in the lobby before the start, so the player is ready in the room of the game server too. The
+		// game server starts the room only when each god in it is ready.
 		_busy = false;
 		_joined = true;
 		_observer = session->GetJoined()->role == game_socket::Role::Observer;
 		TakeHostPicks(session->GetJoined()->start);
+		if (!_observer)
+		{
+			_services.network->SetReady(true);
+		}
 		return;
 	}
 	if (!_joined && session->GetJoined().has_value() && state != State::Ended)

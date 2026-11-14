@@ -432,8 +432,24 @@ void DemoLobbyRoom::CancelStart(LobbyCallback<LobbyDone> callback)
 
 void DemoLobbyRoom::RequestTicket(LobbyCallback<lobby_api::JoinTicket> callback)
 {
+	if (_ticket.has_value())
+	{
+		callback({.value = *_ticket, .error = {}});
+		return;
+	}
 	// The demonstration has no game server
 	callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::Network}});
+}
+
+void DemoLobbyRoom::AssignGame(std::string gameId, lobby_api::JoinTicket ticket)
+{
+	if (_room == nullptr)
+	{
+		return;
+	}
+	Send(lobby_api::lobby_events::k_GameAssigned,
+	     fmt::format(R"({{"lobby":"{}","game_id":"{}","url":"{}"}})", _room->Data().id, gameId, ticket.url));
+	_ticket = std::move(ticket);
 }
 
 void DemoLobbyRoom::KickPlayer()

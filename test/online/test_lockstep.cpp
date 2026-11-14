@@ -236,7 +236,8 @@ struct Computer
 server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 {
 	// "god:name" or "observer:name", with "+staff" after the role for a staff player and "@lobby" after the name for a
-	// ticket of a lobby's game; anything else is not a ticket
+	// ticket of a lobby's game, and "#gods" after the lobby for the gods of the lobby's game; anything else is not a
+	// ticket
 	const auto colon = token.find(':');
 	if (colon == std::string_view::npos)
 	{
@@ -259,7 +260,13 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 	auto subject = token.substr(colon + 1);
 	if (const auto at = subject.find('@'); at != std::string_view::npos)
 	{
-		claims.lobby = std::string(subject.substr(at + 1));
+		auto lobby = subject.substr(at + 1);
+		if (const auto hash = lobby.find('#'); hash != std::string_view::npos)
+		{
+			claims.gods = static_cast<uint32_t>(std::stoul(std::string(lobby.substr(hash + 1))));
+			lobby = lobby.substr(0, hash);
+		}
+		claims.lobby = std::string(lobby);
 		subject = subject.substr(0, at);
 	}
 	claims.subject = std::string(subject);
@@ -1465,6 +1472,54 @@ TEST_F(LockstepTest, AThirdGodIsRefusedFromARoomOfTwoSlotsAndAnObserverIsLetIn)
 	alice.session.SetReady(true);
 	Frames({&alice, &bob, &watcher}, 6);
 	EXPECT_TRUE(host->Started());
+}
+
+TEST_F(LockstepTest, AFixedServerWaitsForEachGodOfTheLobbyGameThatTheTicketsGive)
+{
+	// The fixed room has 2 slots and starts with 1 god, but the tickets of the lobby's game give 2 gods
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	Computer alice(network, now, "god:alice@lobby1#2");
+	Frames({&alice}, 6);
+	// Alice is ready, but the second god of the lobby's game is not in the room: the room does not start
+	EXPECT_FALSE(host->Started());
+	EXPECT_FALSE(host->Starting());
+	EXPECT_EQ(host->GodsToWaitFor(), 2u);
+	Computer bob(network, now, "god:bob@lobby1#2");
+	bob.session.SetReady(false);
+	Frames({&alice, &bob}, 6);
+	// Bob is in the room, but he is not ready: the room does not start
+	EXPECT_FALSE(host->Started());
+	bob.session.SetReady(true);
+	Frames({&alice, &bob}, 6);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+}
+
+TEST_F(LockstepTest, AFixedServerWaitsForItsOwnFewestGodsAgainAfterTheLobbyGodsLeave)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	Computer alice(network, now, "god:alice@lobby1#2");
+	Frames({&alice}, 6);
+	EXPECT_EQ(host->GodsToWaitFor(), 2u);
+	alice.session.Leave();
+	alice.Frame();
+	Frames({}, 3);
+	EXPECT_FALSE(host->Started());
+	EXPECT_EQ(host->GodsToWaitFor(), 1u);
+	// A player of the server's own room with no lobby starts it alone, as before
+	Computer carol(network, now, "god:carol");
+	Frames({&carol}, 6);
+	EXPECT_TRUE(host->Started());
+}
+
+TEST_F(LockstepTest, AFixedServerStartsAOneGodLobbyGameWithOneGod)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	Computer alice(network, now, "god:alice@lobby1#1");
+	Frames({&alice}, 6);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
 }
 
 TEST(LockstepRules, ALanNameHasNoControlCharacterAndAMostLength)

@@ -69,6 +69,8 @@ public:
 	void MemberReady(int64_t account);
 	/// The host starts the countdown
 	void StartCountdown();
+	/// The lobby gives the room a game server after the countdown. Then the room gets this ticket.
+	void AssignGame(std::string gameId, lobby_api::JoinTicket ticket);
 
 private:
 	/// Sends an event to the room, as the push channel of the room does
@@ -81,6 +83,8 @@ private:
 	online::lobby::LobbyListModel _list;
 	std::unique_ptr<online::lobby::LobbyRoom> _room;
 	int64_t _seq {0};
+	/// The ticket of the game server that the lobby gave the room, none before AssignGame
+	std::optional<lobby_api::JoinTicket> _ticket;
 };
 
 } // namespace openblack::testbed_multiplayer
