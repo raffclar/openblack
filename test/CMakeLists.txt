@@ -2092,6 +2092,10 @@ if (NODE_EXECUTABLE)
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_exit.test.js
   )
+  add_test(NAME test_web_launcher_reports
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_reports.test.js
+  )
 endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
 openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)

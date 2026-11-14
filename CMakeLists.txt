@@ -144,14 +144,12 @@ elseif (OPENBLACK_INSPECTOR)
         FORCE
   )
 endif ()
-# The error and crash reports to Sentry (sentry-native with the crashpad backend). The game sends reports only when the
-# player turns on the option. The game server sends reports when it has a DSN. sentry-native has no port for the web
-# (Emscripten), so the web build has no reports. OPENBLACK_SENTRY_DSN gives a DSN to the build. Keep it in the cache of
-# the build only, and never in a file of the repository. The SENTRY_DSN environment variable comes first.
-if (EMSCRIPTEN
-    OR ANDROID
-    OR IOS
-)
+# The error and crash reports to Sentry. The desktop game and the game server use sentry-native with the crashpad
+# backend. The web game uses the Sentry browser SDK in its page (CMakeModules/SentryBrowser.cmake). The game sends
+# reports only when the player turns on the option. The game server sends reports when it has a DSN.
+# OPENBLACK_SENTRY_DSN gives a DSN to the build. Keep it in the cache of the build only, and never in a file of the
+# repository. On the desktop, the SENTRY_DSN environment variable comes first.
+if (ANDROID OR IOS)
   set(OPENBLACK_SENTRY_DEFAULT OFF)
 else ()
   set(OPENBLACK_SENTRY_DEFAULT ON)
@@ -164,9 +162,6 @@ set(OPENBLACK_SENTRY_DSN
     CACHE STRING
           "The Sentry DSN of the build. Keep it out of the repository."
 )
-if (OPENBLACK_SENTRY AND EMSCRIPTEN)
-  message(FATAL_ERROR "OPENBLACK_SENTRY: sentry-native has no web build")
-endif ()
 # The web build uses the 128-bit vector instructions of WebAssembly, which all current desktop browsers have. The
 # compiler uses them only where the results stay the same.
 if (EMSCRIPTEN)
@@ -243,7 +238,9 @@ find_package(imgui REQUIRED)
 find_package(spdlog 1.3.0 REQUIRED)
 find_package(EnTT 3.7.0 CONFIG REQUIRED) # only available as a config
 find_path(CXXOPTS_INCLUDE_DIRS "cxxopts.hpp")
-if (OPENBLACK_SENTRY)
+if (OPENBLACK_SENTRY AND EMSCRIPTEN)
+  include(SentryBrowser)
+elseif (OPENBLACK_SENTRY)
   find_package(sentry CONFIG REQUIRED)
   # The crashpad backend starts crashpad_handler, which must be next to the program. vcpkg keeps it with the tools of
   # the port.
@@ -267,7 +264,7 @@ if (OPENBLACK_SENTRY)
 endif ()
 # Copies crashpad_handler next to the program of the target, after each build, when the build has the reports
 function (openblack_copy_crashpad_handler target)
-  if (OPENBLACK_SENTRY)
+  if (OPENBLACK_SENTRY AND NOT EMSCRIPTEN)
     add_custom_command(
       TARGET ${target}
       POST_BUILD

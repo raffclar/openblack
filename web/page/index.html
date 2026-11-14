@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- The page loads nothing from other sites and sends nothing to a server -->
+<!-- The page loads nothing from other sites. It sends nothing to a server, with one exception: the error reports, when
+     the player turns them on. For them, the build adds the address of the reports to connect-src. -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>openblack</title>
@@ -17,7 +18,8 @@
   <p>openblack plays Black &amp; White in this browser tab. It needs the folder of your own install of Black &amp; White.</p>
   <p class="privacy">The game data stays on this computer. The page reads the files in this tab and sends nothing to a
     server. The browser can show a message such as "Upload files to this site". That message is the standard text of the
-    browser: the page does not send the files.</p>
+    browser: the page does not send the files. When you turn on "Send Crash Reports" on the Options page of the game,
+    the game sends its error and crash reports with the game log to Sentry.</p>
 
   <section id="sources">
     <button id="pick-folder" type="button">Choose the Black &amp; White folder</button>
@@ -65,6 +67,7 @@
 </aside>
 <script src="launcher-arguments.js"></script>
 <script src="launcher-exit.js"></script>
+<script src="launcher-reports.js"></script>
 <script src="launcher.js"></script>
 </body>
 </html>

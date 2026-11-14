@@ -65,11 +65,10 @@ void ForwardCrash(const crash_report::CrashInfo& info, std::string_view report, 
 	{
 		return;
 	}
-	const std::string type(info.detail.empty() ? crash_report::KindName(info.kind) : info.detail);
-	const std::string message(info.message.empty() ? crash_report::KindName(info.kind) : info.message);
+	const auto texts = CrashEventTextsOf(info);
 	auto event = sentry_value_new_event();
 	sentry_value_set_by_key(event, "level", sentry_value_new_string("fatal"));
-	auto exception = sentry_value_new_exception(type.c_str(), message.c_str());
+	auto exception = sentry_value_new_exception(texts.type.c_str(), texts.message.c_str());
 	sentry_value_set_stacktrace(exception, nullptr, 0);
 	sentry_event_add_exception(event, exception);
 	auto extra = sentry_value_new_object();
