@@ -89,7 +89,7 @@ EditorWindow::~EditorWindow() noexcept = default;
 
 void EditorWindow::Open() noexcept
 {
-	// In a network game only a staff player opens the editor. Outside a network game it is a developer tool.
+	// In a network game only a player with the editor claim opens the editor. Outside a network game it is a developer tool.
 	if (IsOpen() || !developer_tools::EditorAllowed())
 	{
 		return;
@@ -813,22 +813,26 @@ bool EditorWindow::TakesEvent(const SDL_Event& event) const noexcept
 	}
 }
 
-void EditorWindow::ProcessEventAlways(const SDL_Event& event) noexcept
+bool IsEditorToggleKey(const SDL_Event& event) noexcept
 {
 	namespace keys = input::developer_keys;
 	if (event.type != SDL_KEYDOWN || event.key.keysym.scancode != input::platform_keys::EditorToggleKey(k_Platform) ||
 	    event.key.repeat != 0 || ImGui::GetIO().WantTextInput)
 	{
-		return;
+		return false;
 	}
 	// A key that the player bound to an action of the game stays the game's
-	if (Locator::gameActionSystem::has_value() &&
-	    keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform, event.key.keysym.scancode,
-	                      event.key.keysym.mod))
+	return !Locator::gameActionSystem::has_value() ||
+	       !keys::GameUsesKey(Locator::gameActionSystem::value().GetKeyBindings(), k_Platform, event.key.keysym.scancode,
+	                          event.key.keysym.mod);
+}
+
+void EditorWindow::ProcessEventAlways(const SDL_Event& event) noexcept
+{
+	if (IsEditorToggleKey(event))
 	{
-		return;
+		Toggle();
 	}
-	Toggle();
 }
 
 void EditorWindow::ProcessEventOpen(const SDL_Event& event) noexcept

@@ -433,6 +433,13 @@ void NetworkSession::Text(std::string_view text)
 		_observersLeft.push_back(left->name);
 		_log->Write(spdlog::level::info, fmt::format("The observer {} left the game", left->name));
 	}
+	else if (const auto* commands = std::get_if<game_socket::CommandRefused>(&*frame))
+	{
+		// The game shows a line to the player. A refusal for another reason shows the same line, as no other reason exists.
+		++_editorRefusals;
+		_log->Write(spdlog::level::warn, fmt::format("The game server refused {} commands of this player: {}",
+		                                             commands->commands, Printable(commands->reason)));
+	}
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
 	{
 		_refusedReason = refused->reason;
@@ -1023,10 +1030,10 @@ void NetworkSession::Send(const player_commands::Action& action)
 		}
 		return;
 	}
-	// An observer sends only the report of its hand and camera and the lines of the chat. A staff observer also sends the
-	// edits of the editor. An observer with no number of an observer sends no commands.
+	// An observer sends only the report of its hand and camera and the lines of the chat. An observer with the editor claim
+	// also sends the edits of the editor. An observer with no number of an observer sends no commands.
 	if (_joined.has_value() && (!SendsCommands() || (_joined->role == game_socket::Role::Observer &&
-	                                                 !player_commands::ServerTakesFromObserver(action, _joined->staff))))
+	                                                 !player_commands::ServerTakesFromObserver(action, _joined->editor))))
 	{
 		return;
 	}

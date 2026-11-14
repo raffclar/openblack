@@ -246,21 +246,21 @@ struct Computer
 
 server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 {
-	// "god:name" or "observer:name", with "+staff" after the role for a staff player and "@lobby" after the name for a
-	// ticket of a lobby's game, and "#gods" after the lobby for the gods of the lobby's game; anything else is not a
+	// "god:name" or "observer:name", with "+editor" after the role for a player with the editor claim and "@lobby" after the
+	// name for a ticket of a lobby's game, and "#gods" after the lobby for the gods of the lobby's game; anything else is not a
 	// ticket
 	const auto colon = token.find(':');
 	if (colon == std::string_view::npos)
 	{
 		return {.problem = server::TicketProblem::Signature, .claims = std::nullopt};
 	}
-	// "+staff" after the role gives the staff claim
+	// "+editor" after the role gives the editor claim
 	auto roleText = token.substr(0, colon);
-	constexpr std::string_view k_Staff = "+staff";
-	const auto staff = roleText.ends_with(k_Staff);
-	if (staff)
+	constexpr std::string_view k_Editor = "+editor";
+	const auto editor = roleText.ends_with(k_Editor);
+	if (editor)
 	{
-		roleText.remove_suffix(k_Staff.size());
+		roleText.remove_suffix(k_Editor.size());
 	}
 	const auto role = game_socket::RoleFrom(roleText);
 	if (!role.has_value())
@@ -283,7 +283,7 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 	claims.subject = std::string(subject);
 	claims.name = claims.subject;
 	claims.role = *role;
-	claims.staff = staff;
+	claims.editor = editor;
 	return {.problem = server::TicketProblem::None, .claims = claims};
 }
 
@@ -675,13 +675,13 @@ TEST(LockstepRules, TheServerLeavesOutOnlyTheCommandsThatAClientNeverSends)
 	EXPECT_FALSE(server::LeavesOut(TotemShare {}, false));
 }
 
-TEST(LockstepRules, OnlyAStaffPlayerSendsTheEditsAndTheCheats)
+TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 {
-	EXPECT_TRUE(OnlyStaffSends(EditorEdit {}));
-	EXPECT_TRUE(OnlyStaffSends(DebugCheat {}));
-	EXPECT_FALSE(OnlyStaffSends(HandTap {}));
-	EXPECT_FALSE(OnlyStaffSends(CreatureFightCheat {}));
-	// An observer sends the edits of the editor only with the staff claim, and never a debug cheat, as it has no god
+	EXPECT_TRUE(OnlyEditorSends(EditorEdit {}));
+	EXPECT_TRUE(OnlyEditorSends(DebugCheat {}));
+	EXPECT_FALSE(OnlyEditorSends(HandTap {}));
+	EXPECT_FALSE(OnlyEditorSends(CreatureFightCheat {}));
+	// An observer sends the edits of the editor only with the editor claim, and never a debug cheat, as it has no god
 	EXPECT_TRUE(ServerTakesFromObserver(EditorEdit {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(EditorEdit {}, false));
 	EXPECT_FALSE(ServerTakesFromObserver(DebugCheat {}, true));
@@ -690,16 +690,16 @@ TEST(LockstepRules, OnlyAStaffPlayerSendsTheEditsAndTheCheats)
 	EXPECT_FALSE(server::LeavesOut(DebugCheat {}, false));
 }
 
-TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAStaffGod)
+TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAGodWithTheEditorClaim)
 {
 	MakeHost(2);
-	Computer alice(network, now, "god+staff:alice");
+	Computer alice(network, now, "god+editor:alice");
 	Computer bob(network, now, "god:bob");
 	Frames({&alice, &bob}, 8);
 	ASSERT_TRUE(host->Started());
 	ASSERT_TRUE(alice.session.GetJoined().has_value());
-	EXPECT_TRUE(alice.session.GetJoined()->staff);
-	EXPECT_FALSE(bob.session.GetJoined()->staff);
+	EXPECT_TRUE(alice.session.GetJoined()->editor);
+	EXPECT_FALSE(bob.session.GetJoined()->editor);
 	const EditorEdit move {.kind = EditorEdit::Kind::Move, .object = Entity(5), .position = {1.0f, 0.0f, 2.0f}};
 	alice.session.Send(move);
 	alice.session.Send(DebugCheat {.cheat = 0, .on = true});
@@ -707,7 +707,7 @@ TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAStaffGod)
 	bob.session.Send(DebugCheat {.cheat = 1, .on = true});
 	bob.session.Send(HandTap {.object = Entity(2)});
 	Frames({&alice, &bob}, 4);
-	EXPECT_EQ(host->RefusedStaffCommands(), 2u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
 	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
 		const auto& commands = host->Seats()[seat].commands;
 		const auto found = commands.find(static_cast<uint8_t>(tag));
@@ -717,31 +717,36 @@ TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAStaffGod)
 	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugCheat), 1u);
 	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorEdit), 0u);
 	EXPECT_EQ(count(1, turn_codec::CommandTag::DebugCheat), 0u);
-	// The other commands of the block of the player with no staff claim stay
+	// The other commands of the block of the player with no editor claim stay
 	EXPECT_EQ(count(1, turn_codec::CommandTag::HandTap), 1u);
+	// Only the player with no editor claim gets the refusal, and the world of the other player does not get the edit
+	// The server sends one refusal for each block of commands that it refused commands from
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+	EXPECT_EQ(bob.session.TakeEditorRefusals(), 0u);
 	// The worlds stay in step
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
-TEST_F(LockstepTest, AStaffObserverSendsTheEditsButNoCheat)
+TEST_F(LockstepTest, AnObserverWithTheEditorClaimSendsTheEditsButNoCheat)
 {
 	MakeHost(1);
 	// The observers join before the start, as this server has no world state for a later join
-	Computer watcher(network, now, "observer+staff:carol");
+	Computer watcher(network, now, "observer+editor:carol");
 	Computer other(network, now, "observer:dave");
 	Frames({&watcher, &other}, 3);
 	Computer alice(network, now, "god:alice");
 	Frames({&alice, &watcher, &other}, 8);
 	ASSERT_TRUE(host->Started());
-	EXPECT_TRUE(watcher.session.GetJoined()->staff);
+	EXPECT_TRUE(watcher.session.GetJoined()->editor);
 	const EditorEdit remove {.kind = EditorEdit::Kind::Remove, .object = Entity(7)};
 	watcher.session.Send(remove);
 	watcher.session.Send(DebugCheat {.cheat = 0, .on = true});
 	other.session.Send(remove);
 	Frames({&alice, &watcher, &other}, 4);
-	// The client of an observer with no staff claim does not send the edit, and no observer client sends a cheat
-	EXPECT_EQ(host->RefusedStaffCommands(), 0u);
+	// The client of an observer with no editor claim does not send the edit, and no observer client sends a cheat
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
 	const auto edits = std::ranges::count_if(alice.world.observerCommands, [](const Command& command) {
 		return std::holds_alternative<EditorEdit>(command.action);
 	});
