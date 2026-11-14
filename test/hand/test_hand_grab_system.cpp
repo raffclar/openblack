@@ -25,6 +25,7 @@
 #include <gtest/gtest.h>
 
 #include "Animals/FishFarmRules.h"
+#include "ECS/AltarSacrifice.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
@@ -493,6 +494,8 @@ public:
 		stored[store] += amount;
 		return amount;
 	}
+	void HelpEvent(uint32_t event) override { usedHelpEvents.push_back(event); }
+	std::vector<uint32_t> usedHelpEvents;
 	bool TakeIntoStore(entt::entity store, entt::entity object) override
 	{
 		if (!stores.contains(store))
@@ -2699,6 +2702,48 @@ TEST_F(HandGrabSystemWithWorld, ATreePressedOntoAStoreGoesIntoItWhole)
 	EXPECT_EQ(world->takenWhole.front().first, store);
 	EXPECT_EQ(world->takenWhole.front().second, tree);
 	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+// The help counts the use of a held thing on a store for the hand of this computer
+TEST_F(HandGrabSystemWithWorld, TheHelpCountsTheUseOfAHeldThingByTheLocalHand)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	const auto store = world->registry.Create();
+	world->stores.insert(store);
+	world->underCursor = store;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(world->takenWhole.size(), 1u);
+	EXPECT_EQ(world->usedHelpEvents, std::vector<uint32_t> {altar_sacrifice::k_UsedOnThingHelpEvent});
+}
+
+// The hand of another player uses its held thing on a store on every computer, but the help of this computer does not
+// count it
+TEST_F(HandGrabSystemWithWorld, TheHelpCountsNoUseOfAHeldThingByAHandThatIsNotTheLocalOne)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	world->localHand = false;
+	const auto store = world->registry.Create();
+	world->stores.insert(store);
+	world->underCursor = store;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(world->takenWhole.size(), 1u);
+	EXPECT_TRUE(world->usedHelpEvents.empty());
 }
 
 TEST_F(HandGrabSystemWithWorld, AGateStonePressedOntoThePlinthIsLaidInIt)

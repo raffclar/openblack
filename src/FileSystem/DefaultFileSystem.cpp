@@ -111,7 +111,12 @@ bool DefaultFileSystem::IsPathValid(const std::filesystem::path& path)
 
 std::unique_ptr<Stream> DefaultFileSystem::Open(const std::filesystem::path& path, Stream::Mode mode)
 {
-	return std::unique_ptr<Stream>(new FileStream(FindPath(path), mode));
+	auto found = FindPath(path);
+	if (mode == Stream::Mode::Read)
+	{
+		NoteRead(found);
+	}
+	return std::unique_ptr<Stream>(new FileStream(found, mode));
 }
 
 bool DefaultFileSystem::Exists(const std::filesystem::path& path) const
@@ -197,5 +202,7 @@ void DefaultFileSystem::SetGamePath(const std::filesystem::path& path)
 }
 std::unique_ptr<std::istream> DefaultFileSystem::GetData(const std::filesystem::path& path)
 {
-	return std::make_unique<std::ifstream>(FindPath(path), std::ios::binary);
+	auto found = FindPath(path);
+	NoteRead(found);
+	return std::make_unique<std::ifstream>(found, std::ios::binary);
 }

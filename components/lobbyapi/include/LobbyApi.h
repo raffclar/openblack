@@ -284,6 +284,10 @@ struct ServerStatusPlayer
 	std::string role;
 	/// "clan": the clan that the god plays for, or null
 	std::optional<int64_t> clan;
+	/// "away": the player of the god lost the connection and can come back. The god keeps its seat.
+	bool away {false};
+
+	bool operator==(const ServerStatusPlayer&) const = default;
 };
 
 /// PUT /api/v1/servers/{id}/status: the report of a game server every 5 seconds, over mutual TLS
