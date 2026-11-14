@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <tuple>
 
 #include "Graphics/EmbeddedShaders.h"
 #ifdef __GNUC__
@@ -195,8 +196,8 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 	debugWindows.emplace_back(std::move(scenarios));
 	debugWindows.emplace_back(std::move(spawner));
 #else
-	// A build without the developer tools has only the editor, which only a staff player opens in a network game. The
-	// editor hosts the creature tools, which it does not use in a network game.
+	// A build without the developer tools has only the editor, which only a player with the editor claim opens in a network
+	// game. The editor hosts the creature tools, which it does not use in a network game.
 	auto spawner = std::make_unique<CreatureSpawner>();
 	auto scenarios = std::make_unique<NoScenariosWindow>();
 	debugWindows.emplace_back(std::make_unique<editor::EditorWindow>(*spawner, *scenarios));
@@ -323,7 +324,7 @@ void Gui::FollowNetworkSession() noexcept
 			SPDLOG_LOGGER_INFO(logger, "The debug windows start again");
 			break;
 		case GuiMode::EditorOnly:
-			SPDLOG_LOGGER_INFO(logger, "A network game is live and the player is staff: only the editor shows");
+			SPDLOG_LOGGER_INFO(logger, "A network game is live and the player has the editor claim: only the editor shows");
 			break;
 		case GuiMode::Dormant:
 			SPDLOG_LOGGER_INFO(logger, "The debug windows and the editor stop");
@@ -342,10 +343,15 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 {
 	ImGui::SetCurrentContext(_imgui);
 	// While a network game is live, no debug window takes an event, so that none changes the shared world. Only the editor
-	// of a staff player takes events, and it sends its edits as commands of the turns.
+	// of a player with the editor claim takes events, and it sends its edits as commands of the turns.
 	FollowNetworkSession();
 	if (_mode == developer_tools::GuiMode::Dormant)
 	{
+		// In a network game the editor key of a player with no editor claim shows the refusal line to the player
+		if (_imgui != nullptr && developer_tools::NetworkSessionLive() && editor::IsEditorToggleKey(event))
+		{
+			std::ignore = developer_tools::EditorAllowed();
+		}
 		return false;
 	}
 
@@ -445,7 +451,7 @@ void Gui::CloseWindow(std::string_view name) noexcept
 
 std::string Gui::WindowTakingEvent(const SDL_Event& event) const noexcept
 {
-	// While a network game is live, only the editor of a staff player takes an event
+	// While a network game is live, only the editor of a player with the editor claim takes an event
 	if (_mode == developer_tools::GuiMode::Dormant || _imgui == nullptr)
 	{
 		return {};
@@ -593,8 +599,8 @@ bool Gui::Loop() noexcept
 	FollowNetworkSession();
 	if (_mode != developer_tools::GuiMode::Full)
 	{
-		// No menu and no overlay. The tools that the game server asks for continue. Only the editor of a staff player
-		// shows.
+		// No menu and no overlay. The tools that the game server asks for continue. Only the editor of a player with the editor
+		// claim shows.
 		for (auto& window : _debugWindows)
 		{
 			if (Shows(*window))

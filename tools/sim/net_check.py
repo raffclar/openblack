@@ -261,18 +261,21 @@ def ticket_file(folder, ticket):
     return path
 
 
-def make_ticket(key, kid, account, name, role, lifetime, staff=False):
-    """A PASETO v4.public join ticket as the lobby makes one, for this test server. staff gives the staff claim of a
-    staff account whose sign-in gave a second-factor code."""
+def make_ticket(key, kid, account, name, role, lifetime, editor=False, staff=False):
+    """A PASETO v4.public join ticket as the lobby makes one, for this test server. editor gives the editor claim of an
+    account with the editor right (game_session_editor); only that claim opens the editor in a network game. staff gives
+    the staff claim of a confirmed staff account, which does not open the editor."""
     now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
     claims = {
         "iss": "bwgame-service", "sub": str(account), "aud": SERVER_ID,
         "iat": now.isoformat(), "nbf": now.isoformat(),
         "exp": (now + datetime.timedelta(seconds=lifetime)).isoformat(),
-        "jti": b64(os.urandom(16)), "name": name, "clans": [], "admin": staff, "role": role,
+        "jti": b64(os.urandom(16)), "name": name, "clans": [], "admin": False, "role": role,
     }
     if TICKET_LOBBY["lobby"] is not None:
         claims["lobby"] = TICKET_LOBBY["lobby"]
+    if editor:
+        claims["editor"] = True
     if staff:
         claims["staff"] = True
     message = json.dumps(claims, separators=(",", ":")).encode("utf-8")
@@ -1187,15 +1190,16 @@ def editor_shots(pids, folder, name):
 
 
 def editor_check(pids, client_logs, server_log, shots=None):
-    """The editor in a network game. The first client is staff and the second is not. Each client presses the editor
-    key; only the staff client opens the editor. The staff client moves a tree and turns on the influence cheat, and
-    each computer must do both. The second client then sends an edit and a cheat with force, and the server must refuse
-    them. Returns what each step did."""
-    staff, other = pids
+    """The editor in a network game. The first client has the editor claim and the second has not. Each client presses
+    the editor key; only the first client opens the editor, and the second client shows the refusal line. The first
+    client moves a tree and turns on the influence cheat, and each computer must do both. The second client then sends
+    an edit and a cheat with force: the server must refuse them, and the second client shows the refusal line again.
+    Returns what each step did."""
+    editor, other = pids
     done = {"states": [inspector_answer(pid, "editor.state", {}) for pid in pids]}
-    camera = inspector_answer(staff, "camera.state", {}) or {}
+    camera = inspector_answer(editor, "camera.state", {}) or {}
     focus = camera.get("focus") or [0.0, 0.0, 0.0]
-    trees = items_of(inspector_answer(staff, "objects.find", {"params": {
+    trees = items_of(inspector_answer(editor, "objects.find", {"params": {
         "near": [focus[0], focus[2]], "radius": 400.0, "kind": "Tree", "limit": 1}}))
     if not trees:
         done["error"] = f"no tree near the camera at {focus}"
@@ -1215,19 +1219,21 @@ def editor_check(pids, client_logs, server_log, shots=None):
     for pid in pids:
         press_key(pid, "F10", True)
     done["opened"] = [(inspector_answer(pid, "editor.state", {}) or {}).get("open") for pid in pids]
+    time.sleep(1)
+    done["key_refusal_lines"] = [len(lines_with(log, ["The player sees the refusal line"])) for log in client_logs]
     editor_shots(pids, shots, "01_after_key")
     if shots:
         # The tree goes in small steps, so that the pictures show the move on both clients
         for step in range(1, 13):
             point = [start[0] + 0.5 * step, start[2] + 0.5 * step]
-            inspector_answer(staff, "editor.network_edit", {"params": {"kind": "move", "id": tree["id"], "position": point}})
+            inspector_answer(editor, "editor.network_edit", {"params": {"kind": "move", "id": tree["id"], "position": point}})
             time.sleep(0.4)
             editor_shots(pids, shots, f"02_move_{step:02d}")
-    done["move"] = inspector_answer(staff, "editor.network_edit", {"params": {
+    done["move"] = inspector_answer(editor, "editor.network_edit", {"params": {
         "kind": "move", "id": tree["id"], "position": target}})
     if shots:
-        inspector_answer(staff, "editor.show_tab", {"params": {"tab": "Cheats"}})
-    done["cheat"] = inspector_answer(staff, "editor.cheat", {"params": {"cheat": "infinite influence", "on": True}})
+        inspector_answer(editor, "editor.show_tab", {"params": {"tab": "Cheats"}})
+    done["cheat"] = inspector_answer(editor, "editor.cheat", {"params": {"cheat": "infinite influence", "on": True}})
     time.sleep(5)
     editor_shots(pids, shots, "03_cheat_on")
 
@@ -1236,24 +1242,29 @@ def editor_check(pids, client_logs, server_log, shots=None):
         return entity.get("position")
 
     done["positions"] = [position(pid) for pid in pids]
-    done["refused_before"] = len(lines_with(server_log, ["the join ticket has no staff claim"]))
+    done["refused_before"] = len(lines_with(server_log, ["the join ticket has no editor claim"]))
     done["forced_edit"] = inspector_answer(other, "editor.network_edit", {"params": {
         "kind": "move", "id": tree["id"], "position": [start[0] - 6.0, start[2] - 6.0], "force": True}})
     done["forced_cheat"] = inspector_answer(other, "editor.cheat", {"params": {
         "cheat": "infinite miracle charge", "on": True, "force": True}})
     time.sleep(5)
     done["positions_after"] = [position(pid) for pid in pids]
-    done["refused"] = len(lines_with(server_log, ["the join ticket has no staff claim"]))
+    done["refused"] = len(lines_with(server_log, ["the join ticket has no editor claim"]))
     done["server_cheats"] = len(lines_with(server_log, ["The server takes the debug cheat"]))
     done["client_cheats"] = [len(lines_with(log, ["the debug cheat infinite influence of player"])) for log in client_logs]
     done["client_refused_cheats"] = [len(lines_with(log, ["the debug cheat infinite miracle charge"]))
                                      for log in client_logs]
+    done["server_refusals_told"] = [len(lines_with(log, ["The game server refused"])) for log in client_logs]
+    done["refusal_lines"] = [len(lines_with(log, ["The player sees the refusal line"])) for log in client_logs]
     moved = [p is not None and abs(p[0] - target[0]) < 0.01 and abs(p[2] - target[1]) < 0.01
              for p in done["positions_after"]]
     done["passed"] = bool(
         done["opened"] == [True, False] and all(moved) and done["refused"] >= done["refused_before"] + 1
         and done["server_cheats"] >= 1 and all(count >= 1 for count in done["client_cheats"])
-        and not any(done["client_refused_cheats"]))
+        and not any(done["client_refused_cheats"]) and done["key_refusal_lines"][0] == 0
+        and done["key_refusal_lines"][1] >= 1 and done["server_refusals_told"][0] == 0
+        and done["server_refusals_told"][1] >= 1 and done["refusal_lines"][0] == 0
+        and done["refusal_lines"][1] > done["key_refusal_lines"][1])
     return done
 
 
@@ -2090,8 +2101,9 @@ def main():
                              "god's creature and gives it to the creature through the inspector; the server and every "
                              "client must then tell the same gift (the deed 'gives')")
     parser.add_argument("--editor-check", action="store_true",
-                        help="the first client is staff and the second is not: after --hold-after turns the staff "
-                             "client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
+                        help="the first client has the editor claim, and the second has only the staff claim: after "
+                             "--hold-after turns "
+                             "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
@@ -2438,7 +2450,8 @@ def main():
                 return 1
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
-                                 "observer" if is_observer else "god", 600, staff=options.editor_check and index == 0)
+                                 "observer" if is_observer else "god", 600, editor=options.editor_check and index == 0,
+                                 staff=options.editor_check and index == 1)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []

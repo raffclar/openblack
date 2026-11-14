@@ -596,8 +596,9 @@ struct MusicMood
 	float mood {0.0f};
 };
 
-/// An edit of the editor in a network game. Only a staff player opens the editor there, and the game server refuses the
-/// edits of every other player. Each computer does the edit at the turn, so the world stays the same on each computer.
+/// An edit of the editor in a network game. Only a player with the editor claim opens the editor there, and the game server
+/// refuses the edits of every other player. Each computer does the edit at the turn, so the world stays the same on each
+/// computer.
 struct EditorEdit
 {
 	enum class Kind : uint8_t
@@ -628,8 +629,8 @@ struct EditorEdit
 	[[nodiscard]] bool operator==(const EditorEdit&) const = default;
 };
 
-/// A debug cheat of the player of the command goes on or off (debug_cheats::Cheat). Only a staff player sends it in a
-/// network game, and the game server refuses it from every other player.
+/// A debug cheat of the player of the command goes on or off (debug_cheats::Cheat). Only a player with the editor claim sends
+/// it in a network game, and the game server refuses it from every other player.
 struct DebugCheat
 {
 	uint8_t cheat {0};
@@ -667,18 +668,18 @@ struct Command
 	       std::holds_alternative<ChatTaunt>(action);
 }
 
-/// Whether only a staff player sends the command: the edits of the editor and the debug cheats. The game server refuses
-/// these commands from a player whose join ticket has no staff claim.
-[[nodiscard]] constexpr bool OnlyStaffSends(const Action& action) noexcept
+/// Whether only a player with the editor claim sends the command: the edits of the editor and the debug cheats. The game server
+/// refuses these commands from a player whose join ticket has no editor claim.
+[[nodiscard]] constexpr bool OnlyEditorSends(const Action& action) noexcept
 {
 	return std::holds_alternative<EditorEdit>(action) || std::holds_alternative<DebugCheat>(action);
 }
 
-/// Whether the game server takes the command from an observer. A staff observer also sends the edits of the editor. The
-/// god of the observers has no citadel, so an observer sends no debug cheat.
-[[nodiscard]] constexpr bool ServerTakesFromObserver(const Action& action, bool staff) noexcept
+/// Whether the game server takes the command from an observer. An observer with the editor claim also sends the edits of the
+/// editor. The god of the observers has no citadel, so an observer sends no debug cheat.
+[[nodiscard]] constexpr bool ServerTakesFromObserver(const Action& action, bool editor) noexcept
 {
-	return ObserverSends(action) || (staff && std::holds_alternative<EditorEdit>(action));
+	return ObserverSends(action) || (editor && std::holds_alternative<EditorEdit>(action));
 }
 
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that

@@ -78,6 +78,7 @@ public:
 	{
 		return _session ? _session->TakeObserversLeft() : std::vector<std::string>();
 	}
+	[[nodiscard]] uint32_t TakeEditorRefusals() override { return _session ? _session->TakeEditorRefusals() : 0; }
 	void LogConnection(std::string_view text) override { _log->Info(text); }
 	[[nodiscard]] std::string DiagnosticsReport() const override;
 	[[nodiscard]] std::string_view RoomName() const override { return _roomName; }
