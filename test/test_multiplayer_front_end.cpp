@@ -2549,7 +2549,7 @@ TEST_F(FrontEndTest, AFullSessionRefusesAGodAndAnObserverWithTheSameBox)
 	EXPECT_EQ(frontEnd->GetLobbyRoom(), nullptr);
 }
 
-TEST_F(FrontEndTest, TheMapOfASessionDownloadsInTheRoomAndContinuesAfterTheBoxOfAFailure)
+TEST_F(FrontEndTest, TheMapOfASessionShowsOneBoxForAFailureAndContinuesAfterANewMapSet)
 {
 	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
 	mapStore = &store;
@@ -2580,8 +2580,25 @@ TEST_F(FrontEndTest, TheMapOfASessionDownloadsInTheRoomAndContinuesAfterTheBoxOf
 	frontEnd->Update();
 	ASSERT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
 	EXPECT_FALSE(frontEnd->GetLobbyRoom()->CanReady());
-	// OK closes the box, and the download continues with no new map set of the host (deviation 257)
+	// OK closes the box and does not start the download again: the room shows no second box (deviation 257)
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	for (int i = 0; i < 5; ++i)
+	{
+		frontEnd->Update();
+	}
+	EXPECT_FALSE(lobby.maps);
+	EXPECT_EQ(lobby.downloads.size(), 2u);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_FALSE(frontEnd->GetLobbyRoom()->CanReady());
+	// The host picks a land of the game, then the map of the service again: the download continues
+	lobby_api::LobbyChangeRequest other;
+	other.map = lobby_api::LobbyMap {.file = "Online Maps/mpm_2p_1.map", .name = "Two", .sha256 = {}, .size = 0};
+	lobbySessions->Change(std::move(other), [](auto&&) {});
+	frontEnd->Update();
+	EXPECT_FALSE(lobby.maps);
+	lobby_api::LobbyChangeRequest again;
+	again.map = lobby_api::LobbyMap {.file = "Online Maps/obm_32p_1.map", .name = map.name, .sha256 = map.sha256, .size = 3};
+	lobbySessions->Change(std::move(again), [](auto&&) {});
 	frontEnd->Update();
 	ASSERT_TRUE(lobby.maps);
 	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {map}});

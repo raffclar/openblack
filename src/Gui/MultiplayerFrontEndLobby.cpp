@@ -746,9 +746,12 @@ void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
 	{
 	case screens::MapNeed::Have:
 		have = true;
+		// A later map of the service starts its download again, also after a failure
+		_roomMapHash.clear();
 		break;
 	case screens::MapNeed::Missing:
 		have = false;
+		_roomMapHash.clear();
 		break;
 	case screens::MapNeed::Download:
 	{

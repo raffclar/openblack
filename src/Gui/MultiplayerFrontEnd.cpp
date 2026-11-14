@@ -498,12 +498,8 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 		EnterGameList();
 		break;
 	case Message::CouldNotDownloadMap:
-		// In the room of a lobby session, the download of the room's map continues from its kept bytes after the box
-		// (deviation 257). The host does not have to set the map again.
-		if (_flow.box == Box::LobbyRoom || _flow.box == Box::CreateLobby)
-		{
-			_roomMapHash.clear();
-		}
+		// OK does not start the download again, so that one failure shows one box (deviation 257). A new map of the
+		// room, a new map set of the host, or a new entry into the room starts it again from the kept bytes.
 		break;
 	case Message::LobbyNotice:
 	case Message::LobbyQuestion:
