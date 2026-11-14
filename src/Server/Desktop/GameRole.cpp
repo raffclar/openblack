@@ -457,6 +457,7 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                  .minGods = settings.minGods,
 	                  .godSlots = godSlots,
 	                  .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,
+	                  .allGoneMicroseconds = static_cast<int64_t>(settings.allGoneSeconds) * 1'000'000,
 	                  .keptTurns = settings.comeBackSeconds * 10 + 200,
 	                  .testCommands = settings.testCommands,
 	                  .sessionHasher = std::make_shared<Sha256SessionHasher>(),

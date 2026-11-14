@@ -1454,10 +1454,30 @@ void LockstepHost::Update()
 		}
 		return;
 	}
+	// The shorter time starts when no god's player is connected and a god waits for its player. It starts only after a
+	// god's player connected to this process, so that the players have the full time to come back after a restore.
+	if (AnyGodConnected())
+	{
+		_allGoneSince.reset();
+		_godConnectedHere = true;
+	}
+	else if (_godConnectedHere && !_allGoneSince.has_value() &&
+	         std::ranges::any_of(_seats, [](const Seat& seat) { return seat.state == SeatState::Away; }))
+	{
+		_allGoneSince = now;
+	}
+	// When the players of all the gods lost the connection, the gods wait only for the shorter time
+	const bool allGone = _allGoneSince.has_value() && now - *_allGoneSince > _settings.allGoneMicroseconds;
+	if (allGone)
+	{
+		Log(spdlog::level::info, fmt::format("No god's player came back in {} s: each away god is defeated",
+		                                     _settings.allGoneMicroseconds / 1'000'000));
+		_allGoneSince.reset();
+	}
 	for (size_t i = 0; i < _seats.size(); ++i)
 	{
 		auto& seat = _seats[i];
-		if (seat.state == SeatState::Away && now - seat.awaySince > _settings.comeBackMicroseconds)
+		if (seat.state == SeatState::Away && (allGone || now - seat.awaySince > _settings.comeBackMicroseconds))
 		{
 			Log(spdlog::level::info, fmt::format("The player of slot {} did not come back: the god is defeated", i));
 			CloseSeat(static_cast<uint8_t>(i));

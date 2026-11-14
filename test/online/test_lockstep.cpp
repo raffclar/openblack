@@ -851,6 +851,92 @@ TEST_F(LockstepTest, AnAwayGodIsDefeatedAfterTheTimeToComeBack)
 	EXPECT_EQ(commands, 3u);
 }
 
+TEST_F(LockstepTest, WhenThePlayersOfAllTheGodsLoseTheConnectionTheGameEndsAfterTheShortTime)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	network.Cut(alice.sockets->Ids().back());
+	network.Cut(bob.sockets->Ids().back());
+	// Both computers stop. The gods wait 10 seconds, not the time to come back of 5 minutes.
+	for (int i = 0; i < 90; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Away);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	EXPECT_FALSE(host->GameOver());
+	for (int i = 0; i < 30; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Closed);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+	EXPECT_TRUE(host->GameOver());
+}
+
+TEST_F(LockstepTest, TheShortTimeStartsWhenThePlayerOfTheLastGodLosesTheConnection)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 10);
+	network.Cut(alice.sockets->Ids().back());
+	for (int i = 0; i < 50; ++i)
+	{
+		Frame({&bob});
+	}
+	network.Cut(bob.sockets->Ids().back());
+	// Alice is away for 13 seconds, but Bob for 8 seconds only: both gods still wait
+	for (int i = 0; i < 80; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Away);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	for (int i = 0; i < 30; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Closed);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+}
+
+TEST_F(LockstepTest, WhenTheLastConnectedGodLeavesAnAwayGodWaitsOnlyTheShortTime)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 10);
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 5);
+	alice.session.Leave();
+	alice.Frame();
+	for (int i = 0; i < 120; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+	EXPECT_TRUE(host->GameOver());
+}
+
+TEST_F(LockstepTest, AnAwayGodKeepsTheTimeToComeBackWhileAnotherGodsPlayerIsConnected)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 10);
+	network.Cut(bob.sockets->Ids().back());
+	for (int i = 0; i < 200; ++i)
+	{
+		Frame({&alice});
+	}
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+}
+
 TEST_F(LockstepTest, AClientThatPartsTriesThreeRejoinsAndThenLeaves)
 {
 	MakeHost(1);
