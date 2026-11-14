@@ -95,9 +95,9 @@ struct God
 	/// The id of the lobby account of the player ("account", optional). It is the lasting number of the player, for
 	/// example in the friend list. None on the local network, where no ticket names an account.
 	std::optional<int64_t> account;
-	/// The join ticket of the player has the staff claim ("staff", optional). Only a staff player opens the editor and
+	/// The join ticket of the player has the editor claim ("editor", optional). Only such a player opens the editor and
 	/// turns on the debug cheats in a network game.
-	bool staff {false};
+	bool editor {false};
 	bool operator==(const God&) const = default;
 };
 
@@ -151,9 +151,9 @@ struct Joined
 	/// The number of an observer in the game, from 1 ("observer", optional). The turns stamp the commands of the
 	/// observer with it. 0 for a god, and for an observer of an older server.
 	uint8_t observer {0};
-	/// The join ticket of the player has the staff claim ("staff", optional). Then the player can open the editor and
+	/// The join ticket of the player has the editor claim ("editor", optional). Then the player can open the editor and
 	/// turn on the debug cheats. The server refuses the edits and the cheats of every other player.
-	bool staff {false};
+	bool editor {false};
 	/// The files of the game's folder that the server's world read, relative to the game's folder ("data_files",
 	/// optional). The client sends the print of these files from its own folder (data.print). An older server sends
 	/// none, and then the client sends no print.
@@ -301,6 +301,22 @@ struct ObserverLeft
 	/// The name of the observer's account
 	std::string name;
 };
+
+/// Server to client: "command.refused". The server refused commands of this player, and no turn holds them. The game
+/// of the player shows a line that tells why.
+struct CommandRefused
+{
+	/// Why the server refused the commands. k_NoEditorClaim: edits of the editor or debug cheats from a player whose join
+	/// ticket has no editor claim.
+	std::string reason;
+	/// The number of commands that the server refused
+	uint32_t commands {0};
+
+	[[nodiscard]] bool operator==(const CommandRefused&) const = default;
+};
+
+/// The reason of a refusal of edits of the editor or of debug cheats (see CommandRefused)
+inline constexpr std::string_view k_NoEditorClaim = "no_editor_claim";
 
 /// Client to server: "game.loaded". The player's computer has the land and loaded the world of the started game. The
 /// client sends it once after game.start, and again after it comes back if the server did not get it.
@@ -506,7 +522,7 @@ struct SyncWorld
 using Frame =
     std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply, StartCancel,
                  StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft, SyncParts, Loaded,
-                 LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities, SyncWorld>;
+                 LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities, SyncWorld, CommandRefused>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

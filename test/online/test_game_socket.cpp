@@ -109,21 +109,39 @@ TEST(GameSocket, AGodCanGiveItsLobbyAccount)
 	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1,"name":"a","account":-1}]})").has_value());
 }
 
-TEST(GameSocket, TheStaffMarkGoesWithTheGodAndTheJoinAndIsLeftOutWhenNotSet)
+TEST(GameSocket, TheEditorMarkGoesWithTheGodAndTheJoinAndIsLeftOutWhenNotSet)
 {
 	Start start {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
-	start.gods = {{.slot = 0, .name = "Ann", .staff = true}, {.slot = 1, .name = "Bob"}};
+	start.gods = {{.slot = 0, .name = "Ann", .editor = true}, {.slot = 1, .name = "Bob"}};
 	EXPECT_EQ(RoundTrip(start).gods, start.gods);
-	EXPECT_EQ(ToJson(start), R"({"gods":[{"name":"Ann","slot":0,"staff":true},{"name":"Bob","slot":1}],"land":"",)"
+	EXPECT_EQ(ToJson(start), R"({"gods":[{"editor":true,"name":"Ann","slot":0},{"name":"Bob","slot":1}],"land":"",)"
 	                         R"("seed":1,"testbed":true,"turn":0,"type":"game.start"})");
-	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1,"name":"a","staff":1}]})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1,"name":"a","editor":1}]})").has_value());
 
-	EXPECT_TRUE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s", .staff = true}).staff);
-	EXPECT_FALSE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s"}).staff);
+	EXPECT_TRUE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s", .editor = true}).editor);
+	EXPECT_FALSE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s"}).editor);
 	const auto old = Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x"})");
 	ASSERT_TRUE(old.has_value());
-	EXPECT_FALSE(std::get<Joined>(*old).staff);
-	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","staff":"yes"})").has_value());
+	EXPECT_FALSE(std::get<Joined>(*old).editor);
+	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","editor":"yes"})").has_value());
+	// The old staff mark of an older server gives no editor
+	const auto staff = Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","staff":true})");
+	ASSERT_TRUE(staff.has_value());
+	EXPECT_FALSE(std::get<Joined>(*staff).editor);
+}
+
+TEST(GameSocket, TheRefusalOfCommandsGivesTheReasonAndTheCount)
+{
+	const CommandRefused refused {.reason = std::string(k_NoEditorClaim), .commands = 2};
+	EXPECT_EQ(ToJson(refused), R"({"commands":2,"reason":"no_editor_claim","type":"command.refused"})");
+	EXPECT_EQ(std::get<CommandRefused>(*Parse(ToJson(refused))), refused);
+	// The count is optional, and the reason is not
+	const auto noCount = Parse(R"({"type":"command.refused","reason":"no_editor_claim"})");
+	ASSERT_TRUE(noCount.has_value());
+	EXPECT_EQ(std::get<CommandRefused>(*noCount).commands, 0u);
+	EXPECT_FALSE(Parse(R"({"type":"command.refused","commands":1})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"command.refused","reason":7})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"command.refused","reason":")" + std::string(65, 'x') + R"("})").has_value());
 }
 
 TEST(GameSocket, TheReplyToAJoinGivesTheServersWorld)

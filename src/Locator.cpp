@@ -901,8 +901,8 @@ void openblack::InitializePlayerInput(bool systemSaysWheel)
 void openblack::InitializeOnlineAndTools(const player_profiles::Store& profiles)
 {
 	InitializeOnline(profiles);
-	// Every build has the editor: a staff player opens it in a network game. Outside a network game it is a developer
-	// tool.
+	// Every build has the editor: a player with the editor claim opens it in a network game. Outside a network game it is a
+	// developer tool.
 	Locator::editorSystem::emplace<EditorSystem>();
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The record of the creature minds that the developer view watches

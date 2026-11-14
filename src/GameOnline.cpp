@@ -596,6 +596,15 @@ void Game::TellLeaves()
 	}
 }
 
+void Game::TellEditorRefusals()
+{
+	if (!Locator::networkGame::has_value() || Locator::networkGame::value().TakeEditorRefusals() == 0)
+	{
+		return;
+	}
+	developer_tools::ShowEditorRefusal();
+}
+
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)
 {
 	if (!Locator::gameInterface::has_value() || !Locator::temple::has_value() || frontEnd == nullptr)

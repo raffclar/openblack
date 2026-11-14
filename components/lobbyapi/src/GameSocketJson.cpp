@@ -54,10 +54,13 @@ constexpr std::string_view k_SyncBlocks = "sync.blocks";
 constexpr std::string_view k_SyncAsk = "sync.ask";
 constexpr std::string_view k_SyncEntities = "sync.entities";
 constexpr std::string_view k_SyncWorld = "sync.world";
+constexpr std::string_view k_CommandRefused = "command.refused";
 /// The most bytes of the hints of a copy of the game (the patch and the language)
 constexpr size_t k_MostHintBytes = 16;
 /// The most bytes of the words of the file in a refusal "data"
 constexpr size_t k_MostRefusedFileBytes = 1024;
+/// The most bytes of the reason of a "command.refused" frame
+constexpr size_t k_MostRefusalReasonBytes = 64;
 /// The most bytes of the path of the file in a refusal "data"
 constexpr size_t k_MostRefusedPathBytes = 260;
 /// The most blocks of one part that a "sync.ask" frame names
@@ -434,7 +437,7 @@ bool ReadStart(const Json& object, Start& start)
 		God god;
 		uint64_t slot = 0;
 		if (!entry.is_object() || !ReadUnsigned(entry, "slot", k_MostSlot, slot) || !ReadString(entry, "name", god.name) ||
-		    !ReadBool(entry, "staff", god.staff, false))
+		    !ReadBool(entry, "editor", god.editor, false))
 		{
 			return false;
 		}
@@ -507,9 +510,9 @@ void WriteStart(const Start& start, Json& object)
 			{
 				entry["account"] = *god.account;
 			}
-			if (god.staff)
+			if (god.editor)
 			{
-				entry["staff"] = true;
+				entry["editor"] = true;
 			}
 			gods.push_back(std::move(entry));
 		}
@@ -593,7 +596,7 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 			return std::nullopt;
 		}
 		joined.observer = static_cast<uint8_t>(observer);
-		if (!ReadBool(object, "staff", joined.staff, false) || !ReadBool(object, "capture", joined.capture, false) ||
+		if (!ReadBool(object, "editor", joined.editor, false) || !ReadBool(object, "capture", joined.capture, false) ||
 		    !ReadNames(object, "data_files", joined.dataFiles, k_MostDataFiles, k_MostDataPathBytes, false))
 		{
 			return std::nullopt;
@@ -830,6 +833,18 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		parts.turn = static_cast<uint32_t>(turn);
 		return parts;
 	}
+	if (type == k_CommandRefused)
+	{
+		CommandRefused refused;
+		uint64_t commands = 0;
+		if (!ReadShort(object, "reason", refused.reason, k_MostRefusalReasonBytes, true) ||
+		    !ReadUnsigned(object, "commands", std::numeric_limits<uint32_t>::max(), commands, false))
+		{
+			return std::nullopt;
+		}
+		refused.commands = static_cast<uint32_t>(commands);
+		return refused;
+	}
 	if (type == k_ObserverLeft)
 	{
 		ObserverLeft left;
@@ -1049,9 +1064,9 @@ std::string ToJson(const Frame& frame)
 			    {
 				    object["observer"] = value.observer;
 			    }
-			    if (value.staff)
+			    if (value.editor)
 			    {
-				    object["staff"] = true;
+				    object["editor"] = true;
 			    }
 			    if (!value.name.empty())
 			    {
@@ -1153,6 +1168,10 @@ std::string ToJson(const Frame& frame)
 			    {
 				    object["team"] = true;
 			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, CommandRefused>)
+		    {
+			    object = Json {{"type", k_CommandRefused}, {"reason", value.reason}, {"commands", value.commands}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, ObserverLeft>)
 		    {

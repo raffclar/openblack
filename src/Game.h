@@ -370,6 +370,8 @@ public:
 	void FollowGameEnd();
 	/// A human of another computer left the network game: the advisors can remark on it, and a box tells the name
 	void TellLeaves();
+	/// The game server refused edits of the editor or debug cheats of this player: the player sees the refusal line
+	void TellEditorRefusals();
 	/// The player asks to leave the network game: the end box asks the question to leave
 	void AskToLeaveNetworkGame();
 	/// Exit Online Game of the menu: the question to leave, or a leave at once when the god of the player is out

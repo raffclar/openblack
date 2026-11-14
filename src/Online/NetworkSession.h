@@ -223,6 +223,8 @@ public:
 	[[nodiscard]] std::optional<StartEvent> TakeStartEvent();
 	/// The names of the observers that left the game since the last call, in the order that the server told them
 	[[nodiscard]] std::vector<std::string> TakeObserversLeft() { return std::exchange(_observersLeft, {}); }
+	/// The refusals of edits of the editor or of debug cheats that the server sent since the last call
+	[[nodiscard]] uint32_t TakeEditorRefusals() { return std::exchange(_editorRefusals, 0); }
 	/// The creature files of the gods that the server sent before the start, by god slot. An empty file is a god with no
 	/// creature.
 	[[nodiscard]] const std::map<uint8_t, std::vector<uint8_t>>& StartCreatures() const { return _startCreatures; }
@@ -343,6 +345,7 @@ private:
 	std::vector<StartEvent> _startEvents;
 	std::vector<game_socket::RoomChat> _roomChat;
 	std::vector<std::string> _observersLeft;
+	uint32_t _editorRefusals {0};
 	/// The computer loaded the world (ReportLoaded)
 	bool _loaded {false};
 	/// The session sent game.loaded on its socket

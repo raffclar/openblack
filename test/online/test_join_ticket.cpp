@@ -214,6 +214,35 @@ TEST(JoinTicket, OnlyATrueStaffClaimMakesAStaffPlayer)
 	EXPECT_FALSE(ParseClaims(with(R"("staff":1)")).has_value());
 }
 
+TEST(JoinTicket, TheEditorClaimIsApartFromTheStaffClaim)
+{
+	const auto text = ClaimsText();
+	const auto with = [&](std::string_view field) {
+		auto changed = text;
+		changed.insert(changed.size() - 1, std::string(",") + std::string(field));
+		return changed;
+	};
+	// A ticket without the claim, as from an older lobby, does not open the editor
+	const auto none = ParseClaims(text);
+	ASSERT_TRUE(none.has_value());
+	EXPECT_FALSE(none->editor);
+	// The staff claim alone does not open the editor, and the editor claim alone does not make a staff account
+	const auto staff = ParseClaims(with(R"("staff":true)"));
+	ASSERT_TRUE(staff.has_value());
+	EXPECT_TRUE(staff->staff);
+	EXPECT_FALSE(staff->editor);
+	const auto editor = ParseClaims(with(R"("editor":true)"));
+	ASSERT_TRUE(editor.has_value());
+	EXPECT_TRUE(editor->editor);
+	EXPECT_FALSE(editor->staff);
+	const auto notEditor = ParseClaims(with(R"("staff":true,"editor":false)"));
+	ASSERT_TRUE(notEditor.has_value());
+	EXPECT_FALSE(notEditor->editor);
+	// A claim that is not a boolean makes the ticket bad
+	EXPECT_FALSE(ParseClaims(with(R"("editor":"true")")).has_value());
+	EXPECT_FALSE(ParseClaims(with(R"("editor":1)")).has_value());
+}
+
 TEST(JoinTicket, TheGodsClaimGivesTheGodsOfTheLobbyGame)
 {
 	const auto text = ClaimsText();

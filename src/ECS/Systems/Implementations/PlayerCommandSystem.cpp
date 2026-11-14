@@ -234,7 +234,7 @@ openblack::ecs::components::ObserverInterfaces* ObserversOf(openblack::PlayerNam
 	return &registry.Assign<openblack::ecs::components::ObserverInterfaces>(*player);
 }
 
-/// Do an edit of the editor at the turn. The game server takes the edits only from a staff player.
+/// Do an edit of the editor at the turn. The game server takes the edits only from a player with the editor claim.
 void RunEditorEdit(openblack::PlayerNames player, const EditorEdit& edit, uint32_t turn)
 {
 	const bool done = openblack::editor::ApplyEdit(edit);
@@ -246,7 +246,8 @@ void RunEditorEdit(openblack::PlayerNames player, const EditorEdit& edit, uint32
 	}
 }
 
-/// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a staff player.
+/// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a player with the editor
+/// claim.
 void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uint32_t turn)
 {
 	const auto cheat = openblack::debug_cheats::CheatFrom(command.cheat);
