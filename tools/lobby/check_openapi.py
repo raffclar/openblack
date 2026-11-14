@@ -37,6 +37,7 @@ SERVER = {
 SESSION = {
     "access_token": (S, True), "access_token_expires": (S, True), "refresh_token": (None, True),
     "refresh_token_expires": (S, False), "email_required": (B, False), "account": (ACCOUNT, True),
+    "editor": (B, False),
 }  # fmt: skip
 
 # (method, path, request members or None, answer members or None)

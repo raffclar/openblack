@@ -174,6 +174,8 @@ struct Arguments
 	std::optional<std::string> lobbyTestAuthorities;
 	/// The game asks the lobby for the real-world weather. The setting of the lobby account decides if it comes.
 	bool useInternetWeather {true};
+	/// Tools: the editor rule of a build that players get, with this editor right of a signed-in account
+	std::optional<bool> simAccountEditor;
 	/// A network game shows the player's own ping (off by default)
 	bool showPing {false};
 	/// Tests: the wait before each request of a piece of a map that the lobby room downloads

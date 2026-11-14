@@ -338,7 +338,41 @@ void LobbyClientSystem::Login(std::string name, std::string password, LobbyCallb
 	});
 }
 
+std::optional<bool> LobbyClientSystem::GetAccountEditor() const
+{
+	if (_state != LobbySessionState::LoggedIn || !_account.has_value())
+	{
+		return std::nullopt;
+	}
+	return _accountEditor;
+}
+
 void LobbyClientSystem::ResumeSession(LobbyCallback<lobby_api::AccountRef> callback)
+{
+	Resume(std::move(callback), true);
+}
+
+void LobbyClientSystem::SignInAtStart()
+{
+	if (!_config.has_value() || _state != LobbySessionState::LoggedOut || _loggingOut)
+	{
+		return;
+	}
+	auto quiet = [](LobbyResult<lobby_api::AccountRef>&& result) {
+		if (!result.Ok())
+		{
+			LogSession("The game starts with no lobby session: no account gives the editor right");
+		}
+	};
+	if (CanSignInFromSite())
+	{
+		SiteSignIn(std::move(quiet), false);
+		return;
+	}
+	Resume(std::move(quiet), false);
+}
+
+void LobbyClientSystem::Resume(LobbyCallback<lobby_api::AccountRef> callback, bool openPush)
 {
 	if (!_config.has_value())
 	{
@@ -347,6 +381,11 @@ void LobbyClientSystem::ResumeSession(LobbyCallback<lobby_api::AccountRef> callb
 	}
 	if (_state == LobbySessionState::LoggedIn && _account.has_value())
 	{
+		// The quiet login at the start of the game did not open the push channel
+		if (openPush && !_pushWanted)
+		{
+			OpenPush();
+		}
 		Succeed(callback, *_account);
 		return;
 	}
@@ -356,7 +395,7 @@ void LobbyClientSystem::ResumeSession(LobbyCallback<lobby_api::AccountRef> callb
 		return;
 	}
 	_state = LobbySessionState::LoggingIn;
-	Refresh([this, callback = std::move(callback)](const LobbyError& error) {
+	Refresh([this, openPush, callback = std::move(callback)](const LobbyError& error) {
 		if (error.kind != LobbyErrorKind::None || !_account.has_value())
 		{
 			if (_state == LobbySessionState::LoggingIn)
@@ -366,12 +405,20 @@ void LobbyClientSystem::ResumeSession(LobbyCallback<lobby_api::AccountRef> callb
 			Fail(callback, error.kind != LobbyErrorKind::None ? error : ErrorOfKind(LobbyErrorKind::NotLoggedIn));
 			return;
 		}
-		OpenPush();
+		if (openPush)
+		{
+			OpenPush();
+		}
 		Succeed(callback, *_account);
 	});
 }
 
 void LobbyClientSystem::SignInFromSite(LobbyCallback<lobby_api::AccountRef> callback)
+{
+	SiteSignIn(std::move(callback), true);
+}
+
+void LobbyClientSystem::SiteSignIn(LobbyCallback<lobby_api::AccountRef> callback, bool openPush)
 {
 	if (!CanSignInFromSite())
 	{
@@ -380,6 +427,11 @@ void LobbyClientSystem::SignInFromSite(LobbyCallback<lobby_api::AccountRef> call
 	}
 	if (_state == LobbySessionState::LoggedIn && _account.has_value())
 	{
+		// The quiet login at the start of the game did not open the push channel
+		if (openPush && !_pushWanted)
+		{
+			OpenPush();
+		}
 		Succeed(callback, *_account);
 		return;
 	}
@@ -390,7 +442,7 @@ void LobbyClientSystem::SignInFromSite(LobbyCallback<lobby_api::AccountRef> call
 	}
 	_state = LobbySessionState::LoggingIn;
 	const auto generation = ++_generation;
-	_site->Request([this, generation, callback = std::move(callback)](HttpResponse&& response) {
+	_site->Request([this, generation, openPush, callback = std::move(callback)](HttpResponse&& response) {
 		if (generation != _generation)
 		{
 			Fail(callback, ErrorOfKind(LobbyErrorKind::Cancelled));
@@ -417,7 +469,10 @@ void LobbyClientSystem::SignInFromSite(LobbyCallback<lobby_api::AccountRef> call
 		ApplySession(*session);
 		_fromSite = true;
 		LogSession("The lobby session comes from the sign-in of the site, as {}", session->account.name);
-		OpenPush();
+		if (openPush)
+		{
+			OpenPush();
+		}
 		Succeed(callback, session->account);
 	});
 }
@@ -541,8 +596,16 @@ void LobbyClientSystem::ApplySession(const lobby_api::Session& session)
 {
 	_accessToken = session.accessToken;
 	_accessExpiry = std::chrono::system_clock::time_point(std::chrono::milliseconds(session.accessTokenExpires));
+	const bool known = _state == LobbySessionState::LoggedIn && _account.has_value() && _account->id == session.account.id;
+	if (!known || _accountEditor != session.editor)
+	{
+		// The test tools find the words "the editor right"
+		LogSession("The lobby session of {} {} the editor right", session.account.name,
+		           session.editor ? "has" : "does not have");
+	}
 	_account = session.account;
 	_emailRequired = session.emailRequired;
+	_accountEditor = session.editor;
 	_state = LobbySessionState::LoggedIn;
 	if (session.refreshToken.has_value())
 	{
@@ -558,6 +621,7 @@ void LobbyClientSystem::EndSession()
 	_state = LobbySessionState::LoggedOut;
 	_account.reset();
 	_emailRequired = false;
+	_accountEditor = false;
 	_accessToken.clear();
 	_accessExpiry = {};
 	_refreshToken.reset();

@@ -203,6 +203,9 @@ struct EngineConfig
 	/// "Online weather" setting of the lobby account decides if the weather comes. False stops the question (a developer
 	/// switch).
 	bool useInternetWeather {true};
+	/// Tools: the editor rule of a build that players get, with a signed-in account. True gives the account the editor
+	/// right, and false does not give it. None uses the rule of this build and the account of the lobby.
+	std::optional<bool> simAccountEditor;
 	/// A network game shows the round trip of this computer's game socket (deviation 143). It is off unless the player
 	/// turns it on.
 	bool showPing {false};

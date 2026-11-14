@@ -87,32 +87,89 @@ enum class Action : uint8_t
 	return !RefusalOf(built, networkSessionLive).has_value();
 }
 
-/// Why the in-game editor cannot open or change the world, or none when it can. In a network game only a player with the
-/// editor claim opens the editor, in every build: the join ticket of the player has the claim, and the game server
-/// refuses the edits of every other player. Outside a network game the editor is a developer tool.
-[[nodiscard]] constexpr std::optional<std::string_view> EditorRefusalOf(bool built, bool networkSessionLive,
-                                                                        bool editor) noexcept
+/// The editor right of the player of this computer. The editor right also gives the debug cheats of the editor.
+enum class EditorRight : uint8_t
+{
+	/// No network game is live and no account is signed in, so the right is not known
+	Unknown,
+	/// The join ticket or the signed-in account has the editor right
+	Granted,
+	/// The join ticket or the signed-in account does not have the editor right
+	Refused,
+};
+
+/// The editor right of the player of this computer. In a network game it is the editor claim of the join ticket.
+/// Outside a network game it is the editor right of the signed-in account, or Unknown when no account is signed in.
+[[nodiscard]] constexpr EditorRight EditorRightOf(bool networkSessionLive, bool ticketEditor,
+                                                  std::optional<bool> accountEditor) noexcept
 {
 	if (networkSessionLive)
 	{
-		if (!editor)
+		return ticketEditor ? EditorRight::Granted : EditorRight::Refused;
+	}
+	if (!accountEditor.has_value())
+	{
+		return EditorRight::Unknown;
+	}
+	return *accountEditor ? EditorRight::Granted : EditorRight::Refused;
+}
+
+/// The name of the editor right, for the log and the inspector
+[[nodiscard]] constexpr std::string_view NameOf(EditorRight right) noexcept
+{
+	switch (right)
+	{
+	case EditorRight::Unknown:
+		return "unknown";
+	case EditorRight::Granted:
+		return "granted";
+	case EditorRight::Refused:
+		return "refused";
+	}
+	return "unknown";
+}
+
+/// Why the in-game editor cannot open or change the world, or none when it can. The rules are:
+/// - In a network game, only a player with the editor claim opens the editor, in every build. The game server refuses
+///   the edits of every other player.
+/// - In a developer build outside a network game, the editor always opens.
+/// - In a build that players get outside a network game, the editor opens when the signed-in account has the editor
+///   right. When no account is signed in, the editor does not open.
+[[nodiscard]] constexpr std::optional<std::string_view> EditorRefusalOf(bool built, bool networkSessionLive,
+                                                                        EditorRight right) noexcept
+{
+	if (networkSessionLive)
+	{
+		if (right != EditorRight::Granted)
 		{
 			return "only a player with the editor claim opens the editor in a network game";
 		}
 		return std::nullopt;
 	}
+	if (built || right == EditorRight::Granted)
+	{
+		return std::nullopt;
+	}
+	if (right == EditorRight::Refused)
+	{
+		return "the signed-in account does not have the editor right";
+	}
 	return RefusalOf(built, false);
 }
 
-/// The line that the player sees when the game or the game server refuses the editor or a debug cheat in a network game
-/// (deviation 269)
+/// The line that the player sees when the game or the game server refuses the editor or a debug cheat (deviation 269)
 inline constexpr std::u16string_view k_EditorRefusedLine = u"Your account cannot use the editor or the cheats in this game.";
 
-/// Whether a refusal of the editor or of a debug cheat shows the refusal line to the player: only in a network game, for
-/// a player with no editor claim. Outside a network game a refusal shows nothing, as before.
-[[nodiscard]] constexpr bool ShowsRefusalLine(bool networkSessionLive, bool editor) noexcept
+/// Whether a refusal of the editor or of a debug cheat shows the refusal line to the player. The line shows when the
+/// join ticket or the signed-in account does not have the editor right. A developer build outside a network game never
+/// refuses. With no account signed in outside a network game, a refusal shows nothing, as before.
+[[nodiscard]] constexpr bool ShowsRefusalLine(bool built, bool networkSessionLive, EditorRight right) noexcept
 {
-	return networkSessionLive && !editor;
+	if (networkSessionLive)
+	{
+		return right != EditorRight::Granted;
+	}
+	return !built && right == EditorRight::Refused;
 }
 
 /// What the debug windows show and take
@@ -120,21 +177,43 @@ enum class GuiMode : uint8_t
 {
 	/// All the debug windows, the menu and the editor
 	Full,
-	/// Only the editor. The editor sends its edits and the debug cheats as commands of the turns.
+	/// Only the editor. In a network game the editor sends its edits and the debug cheats as commands of the turns.
 	EditorOnly,
 	/// No window and no menu, and the windows take no input
 	Dormant,
 };
 
-/// What the debug windows show: all of them in a developer build outside a network game, only the editor for a player
-/// with the editor claim in a network game, else nothing
-[[nodiscard]] constexpr GuiMode GuiModeOf(bool built, bool networkSessionLive, bool editor) noexcept
+/// The name of what the debug windows show, for the log and the inspector
+[[nodiscard]] constexpr std::string_view NameOf(GuiMode mode) noexcept
+{
+	switch (mode)
+	{
+	case GuiMode::Full:
+		return "full";
+	case GuiMode::EditorOnly:
+		return "editor only";
+	case GuiMode::Dormant:
+		return "dormant";
+	}
+	return "dormant";
+}
+
+/// What the debug windows show:
+/// - In a network game, only the editor for a player with the editor claim, else nothing.
+/// - In a developer build outside a network game, all the windows.
+/// - In a build that players get outside a network game, only the editor when the signed-in account has the editor
+///   right, else nothing.
+[[nodiscard]] constexpr GuiMode GuiModeOf(bool built, bool networkSessionLive, EditorRight right) noexcept
 {
 	if (networkSessionLive)
 	{
-		return editor ? GuiMode::EditorOnly : GuiMode::Dormant;
+		return right == EditorRight::Granted ? GuiMode::EditorOnly : GuiMode::Dormant;
 	}
-	return built ? GuiMode::Full : GuiMode::Dormant;
+	if (built)
+	{
+		return GuiMode::Full;
+	}
+	return right == EditorRight::Granted ? GuiMode::EditorOnly : GuiMode::Dormant;
 }
 
 /// An option of the command line that only developers and tools use
@@ -198,6 +277,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "map-piece-delay-ms", .takesValue = true},
     DeveloperOption {.name = "sim-network-game"},
     DeveloperOption {.name = "throw-lead-latency-ms", .takesValue = true},
+    DeveloperOption {.name = "sim-account-editor", .takesValue = true},
     DeveloperOption {.name = "sim-still-hand"},
     DeveloperOption {.name = "sim-no-hand-reports"},
     DeveloperOption {.name = "sim-temple-loss", .takesValue = true},

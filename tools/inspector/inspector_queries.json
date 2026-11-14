@@ -2211,7 +2211,7 @@
   "query": "creatures.route"
  },
  {
-  "description": "The editor of this computer: whether it is open, whether a network game is live, whether the player of this computer has the editor claim, and the debug cheats of that player",
+  "description": "The editor of this computer: whether it is open, whether a network game is live, whether the player of this computer has the editor right (from the join ticket in a network game, else from the signed-in account: granted, refused or unknown), what the debug windows show, and the debug cheats of that player",
   "kind": "object",
   "parameters": [],
   "query": "editor.state"
