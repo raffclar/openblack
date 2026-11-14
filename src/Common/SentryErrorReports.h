@@ -15,6 +15,7 @@
 #include <string_view>
 
 #include "ErrorReportsInterface.h"
+#include "SentryBuildDsn.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -22,9 +23,6 @@
 
 namespace openblack::error_reports
 {
-
-/// The DSN of the build, from the cache value OPENBLACK_SENTRY_DSN, or empty
-[[nodiscard]] std::string_view BuildDsn() noexcept;
 
 /// What the reports tell Sentry. ChooseDsn, ReleaseName and the other rules of ErrorReportsRules.h give the values.
 struct SentrySettings

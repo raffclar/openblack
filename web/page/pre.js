@@ -7,6 +7,18 @@
 // The page also sends the answer to a question of the game thread for a lobby session from the sign-in of the site. The
 // worker keeps the answer under its number until the game takes it (see src/Web/PageSiteSession.cpp).
 if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
+  // An error that no code of the thread catches, such as a trap of the WebAssembly code, comes to the page with its
+  // message only. The thread thus also gives the page the name and the stack of the error, for the error reports.
+  self.addEventListener('error', (event) => {
+    const error = event.error;
+    postMessage({
+      openblackThreadError: {
+        name: String((error && error.name) || 'Error'),
+        message: String((error && error.message) || event.message || ''),
+        stack: String((error && error.stack) || ''),
+      },
+    });
+  });
   self.addEventListener('message', (event) => {
     if (event.data && event.data.openblackWeb) {
       globalThis.openblackWeb = event.data.openblackWeb;

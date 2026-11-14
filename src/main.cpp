@@ -33,6 +33,9 @@
 #include <processenv.h>
 // clang-format on
 #endif
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
@@ -286,6 +289,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-world-states", "Tools: write the world state of this computer to this folder at the end of each turn of --sim-world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
 		("sim-world-state-turns", "Tools: with --sim-world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
 		("sentry-test-error", "Developers: after the start, throw an exception with the message \"Sentry test error\" and the time, to test the error reports. The player's option for the reports must be on.")
+		("sentry-test-trap", "Developers: after the start, stop the game with a trap of the processor (in the web game, a trap of the WebAssembly code), to test the crash reports. The player's option for the reports must be on.")
 		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
 		("turn-beside-draw", "Developers: the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later.");
 #endif
@@ -742,6 +746,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.skipLogos = result.count("skip-logos") != 0;
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 		args.sentryTestError = result.count("sentry-test-error") != 0;
+		args.sentryTestTrap = result.count("sentry-test-trap") != 0;
 #endif
 		args.logoEffect = result.count("logo-effect") != 0;
 		args.newGame = result.count("new-game") != 0;
@@ -953,6 +958,7 @@ int main(int argc, char* argv[]) noexcept
 		openblack::crash_handler::SetLogFile(args.logFile);
 		errorReports.emplace(openblack::error_reports::Role::Client, args.logFile);
 		const bool sentryTestError = args.sentryTestError;
+		const bool sentryTestTrap = args.sentryTestTrap;
 #if defined(__EMSCRIPTEN__)
 		// The page gives links to the crash reports that the private storage of the site keeps, also with a log file
 		openblack::crash_handler::SetReportFolder(openblack::web::CrashReportFolder());
@@ -968,6 +974,16 @@ int main(int argc, char* argv[]) noexcept
 			const auto now = std::chrono::system_clock::now().time_since_epoch();
 			throw std::runtime_error(
 			    openblack::error_reports::TestErrorMessage(std::chrono::duration_cast<std::chrono::seconds>(now).count()));
+		}
+		// A developer test of the crash reports. The trap goes to the crash handler as a crash of the system, and in a web
+		// browser to the page as an error of the game thread.
+		if (sentryTestTrap)
+		{
+#if defined(_MSC_VER)
+			__ud2();
+#else
+			__builtin_trap();
+#endif
 		}
 #if defined(__EMSCRIPTEN__)
 		// In a web browser the game thread waits for the browser after each frame, so that the browser shows the frame
