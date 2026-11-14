@@ -205,6 +205,12 @@ private:
 	std::vector<lobby_api::LobbySummary> _shownLobbies;
 	std::array<Button*, lobby_screens::k_ColumnCount> _headings {};
 	EditBox* _search {nullptr};
+	/// The panel of the main lobby room at the right of the list. The list and the edit box of its lines are _chat and
+	/// _chatEdit.
+	StaticText* _mainPeopleHeading {nullptr};
+	List* _mainPeople {nullptr};
+	/// The version of the room that the panel shows, none after a build
+	std::optional<uint64_t> _mainRoomVersion;
 	CheckBox* _showFull {nullptr};
 	CheckBox* _showLocked {nullptr};
 	CheckBox* _showInGame {nullptr};

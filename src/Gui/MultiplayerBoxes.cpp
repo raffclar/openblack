@@ -264,6 +264,8 @@ void MultiplayerBoxes::Build()
 	_conditionControls.clear();
 	_chat = nullptr;
 	_chatEdit = nullptr;
+	_mainPeople = nullptr;
+	_mainPeopleHeading = nullptr;
 	_lands = nullptr;
 	_landInfo = nullptr;
 	_clans = nullptr;
@@ -942,6 +944,10 @@ void MultiplayerBoxes::SendChat()
 		if (_frontEnd->GetBox() == Box::LobbyRoom)
 		{
 			_frontEnd->SendLobbyChat(_chatEdit->GetText());
+		}
+		else if (_frontEnd->GetBox() == Box::LobbyList)
+		{
+			_frontEnd->SendMainRoomChat(_chatEdit->GetText());
 		}
 		else
 		{

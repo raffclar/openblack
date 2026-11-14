@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 32> boxes = {{
+	const std::array<BoxScenario, 33> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -210,6 +210,12 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The box \"Session settings\" shows the name, the map, the gods, the time limit, Private and a new password. "
 	     "\"Change settings\" sends the changes and goes back to the room, where the ready ticks are clear. Back keeps "
 	     "the old settings. Two gods or a land of two places gives \"Remove players first: this land has 2 places.\"."},
+	    {"multiplayer.lobby_chat_room", "The lobby sessions: the main lobby room", Stage::LobbyChatRoom,
+	     "The player logs in as Alice and comes to the lobby list. The main lobby room gives its people and its last "
+	     "lines. The player sends a line.",
+	     "The panel at the right of the list shows \"Incoming chat messages:\", \"In the room (4)\" with Alice, Ann, Bob "
+	     "and Carol, and the lines of Bob and Carol in white. The long line of Carol wraps. The line of the staff "
+	     "account Ann is yellow. The line of the player is last, as \"Alice> text\" in light grey."},
 	    {"multiplayer.lobby_notices", "The lobby sessions: the notices of the room", Stage::LobbyNotices,
 	     "The player joins \"Friday Ring\". Each two seconds an event occurs: Dave joins, Dave is ready, Bob starts the "
 	     "countdown, and Bob kicks the player. Run the game in the background, so that the window does not have the "

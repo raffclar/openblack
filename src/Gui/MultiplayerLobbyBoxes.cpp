@@ -21,6 +21,7 @@
 #include <fmt/format.h>
 
 #include "Controls.h"
+#include "MainLobbyChatRules.h"
 #include "MultiplayerBoxes.h"
 #include "TextDatabase.h"
 
@@ -85,9 +86,18 @@ constexpr glm::ivec2 k_YesPosition {200, 338};
 constexpr glm::ivec2 k_NoPosition {568, 338};
 constexpr int k_AnswerArrowSize = 32;
 
-// The lobby list: the columns of the list, from their left
-constexpr DialogRect k_ListRect {.min = {40, 162}, .max = {760, 405}};
-constexpr std::array<int, screens::k_ColumnCount + 1> k_ColumnLeft {44, 300, 420, 560, 625, 736};
+// The lobby list: the columns of the list, from their left. The list and its buttons take the left of the box, and
+// the main lobby room takes its right (deviation 267).
+constexpr DialogRect k_ListRect {.min = {30, 162}, .max = {520, 405}};
+constexpr std::array<int, screens::k_ColumnCount + 1> k_ColumnLeft {34, 186, 268, 368, 418, 516};
+
+// The panel of the main lobby room, at the right of the list and its buttons
+constexpr DialogRect k_RoomHeading {.min = {535, 104}, .max = {770, 132}};
+constexpr DialogRect k_PeopleHeading {.min = {535, 137}, .max = {770, 158}};
+constexpr DialogRect k_PeopleRect {.min = {535, 162}, .max = {770, 232}};
+constexpr DialogRect k_RoomLinesRect {.min = {535, 238}, .max = {770, 482}};
+constexpr DialogRect k_RoomEditRect {.min = {535, 488}, .max = {700, 520}};
+constexpr DialogRect k_RoomSendRect {.min = {706, 488}, .max = {770, 520}};
 constexpr std::array<std::u16string_view, screens::k_ColumnCount> k_Headings {u"Name", u"Host", u"Map", u"Gods", u"Status"};
 
 // The room of a session
@@ -151,15 +161,15 @@ void MultiplayerBoxes::BuildLobbyList(Dialog& dialog)
 	dialog.Add<StaticText>(k_Title, Text(k_InternetListTitle), Layout::Centre, k_Big);
 
 	// The search box finds a part of the name of the game, of the host or of the map
-	dialog.Add<StaticText>(DialogRect {.min = {40, 104}, .max = {230, 132}}, Text(k_FilterText), Layout::Right, Mid());
-	_search = &dialog.Add<EditBox>(_font, DialogRect {.min = {240, 104}, .max = {520, 132}},
+	dialog.Add<StaticText>(DialogRect {.min = {30, 104}, .max = {150, 132}}, Text(k_FilterText), Layout::Right, Mid());
+	_search = &dialog.Add<EditBox>(_font, DialogRect {.min = {156, 104}, .max = {370, 132}},
 	                               ToUtf16(_frontEnd->GetListFilter().search), lobby_api::k_MostLobbyNameCharacters, Mid());
 	_search->onChange = [this](const std::u16string& text) {
 		auto filter = _frontEnd->GetListFilter();
 		filter.search = ToUtf8(text);
 		_frontEnd->SetListFilter(std::move(filter));
 	};
-	auto& refresh = dialog.Add<Button>(DialogRect {.min = {560, 102}, .max = {760, 134}}, Text(k_RefreshText), Mid());
+	auto& refresh = dialog.Add<Button>(DialogRect {.min = {380, 102}, .max = {520, 134}}, Text(k_RefreshText), Mid());
 	refresh.onClick = [this] { _frontEnd->RefreshLobbies(); };
 
 	// A click on a heading sorts the list by its column
@@ -217,24 +227,37 @@ void MultiplayerBoxes::BuildLobbyList(Dialog& dialog)
 		};
 		return &box;
 	};
-	_showFull = addFilter(44, u"Full", filter.showFull, &online::lobby::ListFilter::showFull);
-	_showLocked = addFilter(170, u"Password", filter.showLocked, &online::lobby::ListFilter::showLocked);
-	_showInGame = addFilter(330, u"In game", filter.showInGame, &online::lobby::ListFilter::showInGame);
+	_showFull = addFilter(34, u"Full", filter.showFull, &online::lobby::ListFilter::showFull);
+	_showLocked = addFilter(104, u"Password", filter.showLocked, &online::lobby::ListFilter::showLocked);
+	_showInGame = addFilter(214, u"In game", filter.showInGame, &online::lobby::ListFilter::showInGame);
 	_showOtherVersions =
-	    addFilter(480, u"Other versions", filter.showOtherVersions, &online::lobby::ListFilter::showOtherVersions);
+	    addFilter(314, u"Other versions", filter.showOtherVersions, &online::lobby::ListFilter::showOtherVersions);
 
 	_detail =
-	    &dialog.Add<StaticText>(DialogRect {.min = {40, 440}, .max = {760, 464}}, std::u16string(), Layout::Left, Small());
+	    &dialog.Add<StaticText>(DialogRect {.min = {30, 440}, .max = {520, 464}}, std::u16string(), Layout::Left, Small());
 	_servers =
-	    &dialog.Add<StaticText>(DialogRect {.min = {40, 464}, .max = {760, 488}}, std::u16string(), Layout::Left, Small());
+	    &dialog.Add<StaticText>(DialogRect {.min = {30, 464}, .max = {520, 488}}, std::u16string(), Layout::Left, Small());
 
 	// The buttons of the list. "Create session" is the user's name for the button (2026-11-12).
-	auto& create = dialog.Add<Button>(DialogRect {.min = {110, 492}, .max = {290, 524}}, u"Create session", Mid());
+	auto& create = dialog.Add<Button>(DialogRect {.min = {30, 492}, .max = {190, 524}}, u"Create session", Mid());
 	create.onClick = [this] { _frontEnd->OpenCreateLobby(); };
-	auto& quick = dialog.Add<Button>(DialogRect {.min = {300, 492}, .max = {460, 524}}, u"Quick join", Mid());
+	auto& quick = dialog.Add<Button>(DialogRect {.min = {198, 492}, .max = {344, 524}}, u"Quick join", Mid());
 	quick.onClick = [this] { _frontEnd->QuickJoinLobby(); };
-	auto& code = dialog.Add<Button>(DialogRect {.min = {470, 492}, .max = {650, 524}}, u"Join by code", Mid());
+	auto& code = dialog.Add<Button>(DialogRect {.min = {352, 492}, .max = {520, 524}}, u"Join by code", Mid());
 	code.onClick = [this] { _frontEnd->AskLobbyCode(); };
+
+	// The main lobby room (deviation 267): the people in it, its lines with the newest at the bottom, and an edit box
+	// with Send. The list, the edit box and the colours are those of the chat of the game room.
+	dialog.Add<StaticText>(k_RoomHeading, Text(k_IncomingText), Layout::Left, Mid());
+	_mainPeopleHeading = &dialog.Add<StaticText>(k_PeopleHeading, std::u16string(), Layout::Left, Small());
+	_mainPeople = &dialog.Add<List>(_font, k_PeopleRect, Small(), false, true, false);
+	_mainPeople->ShowScrollBarWhenNeeded();
+	_chat = &dialog.Add<List>(_font, k_RoomLinesRect, Small(), false, true, false);
+	_chatEdit = &dialog.Add<EditBox>(_font, k_RoomEditRect, std::u16string(), k_MostChatCharacters, Mid());
+	_chatEdit->onClick = [this] { SendChat(); };
+	auto& send = dialog.Add<Button>(k_RoomSendRect, u"Send", Mid());
+	send.onClick = [this] { SendChat(); };
+	_mainRoomVersion.reset();
 }
 
 void MultiplayerBoxes::SyncLobbyList()
@@ -268,6 +291,31 @@ void MultiplayerBoxes::SyncLobbyList()
 	                    : (_shownLobbies.empty() ? std::u16string(u"No open game. Click Create session.")
 	                                             : std::u16string(u"Click a game, then Join Game."));
 	_servers->text = screens::ServersText(_frontEnd->GetServerPool());
+
+	// The main lobby room: the panel changes only when the room changed, which keeps the scroll of the people
+	const auto& room = _frontEnd->GetMainRoom();
+	if (_mainRoomVersion != room.Version())
+	{
+		_mainRoomVersion = room.Version();
+		const auto own = _frontEnd->GetOwnAccount();
+		std::vector<List::Item> lines;
+		for (const auto& line : room.Lines())
+		{
+			auto item = main_chat::LineItem(line, own);
+			lines.push_back(
+			    {.text = std::move(item.text), .mouseCell = std::nullopt, .mouseMirrored = false, .colour = item.colour});
+		}
+		_chat->SetItems(std::move(lines));
+		_chat->SetSelection(std::nullopt);
+		_chat->ScrollToSelection();
+		std::vector<List::Item> people;
+		for (const auto& person : room.People())
+		{
+			people.push_back({.text = ToUtf16(person.name)});
+		}
+		SetItemsIfChanged(*_mainPeople, std::move(people));
+		_mainPeopleHeading->text = main_chat::PeopleHeading(room.People().size());
+	}
 }
 
 void MultiplayerBoxes::BuildCreateLobby(Dialog& dialog)

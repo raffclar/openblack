@@ -26,6 +26,7 @@
 #include "LobbyScreenRules.h"
 #include "MultiplayerFrontEndRules.h"
 #include "Online/LobbyNotices.h"
+#include "Online/MainLobbyRoom.h"
 
 namespace openblack::ecs::systems
 {
@@ -291,6 +292,12 @@ public:
 	[[nodiscard]] const online::lobby::LobbyRoom* GetLobbyRoom() const;
 	void ToggleLobbyReady();
 	void SendLobbyChat(std::u16string_view text);
+	/// The main lobby room at the right of the list of the sessions (deviation 267)
+	[[nodiscard]] const online::main_room::MainLobbyRoom& GetMainRoom() const noexcept { return _mainRoom; }
+	/// The account of the player, 0 before the login
+	[[nodiscard]] int64_t GetOwnAccount() const;
+	/// Sends a line to the main lobby room. The line shows when the lobby sends it back to the room.
+	void SendMainRoomChat(std::u16string_view text);
 	void PickLobbySlot(int32_t slot);
 	void DoHostAction(int32_t slot, lobby_screens::HostAction action);
 	/// Start, or Cancel during the countdown and the wait in the line
@@ -333,6 +340,8 @@ private:
 	void EnterLogin();
 	void LeaveRoom();
 	void HandleEvent(const lobby_api::PushEvent& event);
+	/// Asks the lobby for the lines and the people of the main lobby room, or stops them and forgets them
+	void WatchMainRoom(bool watch);
 	void RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password);
 	/// Writes a line to the connection log of the network game
 	void LogConnection(std::string_view text) const;
@@ -451,6 +460,7 @@ private:
 	online::lobby::ListFilter _listFilter;
 	lobby_screens::Sort _listSort;
 	std::string _selectedLobby;
+	online::main_room::MainLobbyRoom _mainRoom;
 	lobby_screens::CreateForm _createForm;
 	bool _editsLobby {false};
 	std::u16string _lobbyMessageText;

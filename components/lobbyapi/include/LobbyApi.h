@@ -657,8 +657,11 @@ namespace events
 constexpr std::string_view k_Hello = "hello";
 constexpr std::string_view k_Resumed = "resumed";
 constexpr std::string_view k_Resync = "resync";
+constexpr std::string_view k_Subscribed = "subscribed";
 // The events
 constexpr std::string_view k_ChatLine = "chat.line";
+constexpr std::string_view k_ChatJoined = "chat.joined";
+constexpr std::string_view k_ChatLeft = "chat.left";
 constexpr std::string_view k_ServersChanged = "servers.changed";
 constexpr std::string_view k_ServersRemoved = "servers.removed";
 constexpr std::string_view k_RoomChanged = "room.changed";
@@ -731,6 +734,44 @@ struct ChatLine
 	AccountRef from;
 	/// "text"
 	std::string text;
+	/// "staff": true for a line of a confirmed staff account, false when it is missing
+	bool staff {false};
+};
+
+/// A line of "history" in "subscribed": {"seq": n, "time": "...", "from": {...}, "text": "...", "staff": true}
+struct ChatHistoryLine
+{
+	/// "seq": the number of the "chat.line" event of the line, 0 when it is missing
+	int64_t seq {0};
+	/// "time": milliseconds since 1970 (UTC)
+	int64_t time {0};
+	/// "from"
+	AccountRef from;
+	/// "text"
+	std::string text;
+	/// "staff"
+	bool staff {false};
+};
+
+/// The data of the control frame "subscribed": the channel, the people in a chat channel and, for the main lobby
+/// room, its last lines
+struct ChannelSubscribed
+{
+	/// "channel"
+	std::string channel;
+	/// "members": the account of each person, from {"account": {...}, "status": "..."}
+	std::vector<AccountRef> members;
+	/// "history": the last lines, the oldest first. Empty for a channel that has no history.
+	std::vector<ChatHistoryLine> history;
+};
+
+/// The data of "chat.joined" and of "chat.left": {"channel": "...", "account": {...}}
+struct ChatPresence
+{
+	/// "channel"
+	std::string channel;
+	/// "account"
+	AccountRef account;
 };
 
 /// The ping server of the game goes through the lobby (user answer GBX-1 b): the ping, the lines to one account, and the
@@ -837,6 +878,8 @@ struct Ban
 
 /// The channels of the push channel
 constexpr std::string_view k_ServersChannel = "servers";
+/// The main lobby room: the chat beside the list of the sessions
+constexpr std::string_view k_LobbyChannel = "lobby";
 /// The channel of the room of a game server is this text and the id of the server
 constexpr std::string_view k_ServerChannelPrefix = "server-";
 
