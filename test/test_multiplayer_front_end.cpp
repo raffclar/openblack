@@ -346,6 +346,10 @@ struct FrontEndTest: public ::testing::Test
 	std::unique_ptr<MultiplayerFrontEnd> frontEnd;
 	/// The ping display of the room, as --show-ping turns it on
 	bool showPing {false};
+	/// The wait before each piece of a map, as --map-piece-delay-ms sets it
+	uint32_t mapPieceDelayMs {0};
+	/// The clock of the front end. The game gives none, so the front end uses the clock of the computer.
+	std::function<int64_t()> clock = [] { return int64_t {0}; };
 	FakeMapStore store;
 	/// The store of the lands of network games, none when the test does not give one
 	online::OnlineMapStoreInterface* mapStore {nullptr};
@@ -371,7 +375,7 @@ struct FrontEndTest: public ::testing::Test
 		    .clanCreature = &clanCreature,
 		    .readGameFile = {},
 		    .lobbyRoom = lobbySessions.get(),
-		    .nowMs = [] { return int64_t {0}; },
+		    .nowMs = clock,
 		    .notice = [this](const online::lobby::LobbyNotice& notice) { notices.push_back(notice); },
 		};
 		MultiplayerFrontEnd::Settings settings {
@@ -384,6 +388,7 @@ struct FrontEndTest: public ::testing::Test
 		    .localMaps = std::string(k_LocalMaps),
 		    .conditionTemplate = std::string(k_Conditions),
 		    .showPing = showPing,
+		    .mapPieceDelayMs = mapPieceDelayMs,
 		};
 		frontEnd = std::make_unique<MultiplayerFrontEnd>(std::move(services), std::move(settings));
 	}
@@ -2374,6 +2379,61 @@ TEST_F(FrontEndTest, TheMapOfASessionDownloadsInTheRoomAndContinuesAfterTheBoxOf
 	frontEnd->Update();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 	EXPECT_TRUE(frontEnd->GetLobbyRoom()->CanReady());
+}
+
+/// The player joins session d1, and the host sets a map of the service
+void SetRoomMapOfTheService(FrontEndTest& test, const lobby_api::OnlineMap& map)
+{
+	test.frontEnd->Next();
+	test.frontEnd->SetLobbyKind(LobbyKind::Internet);
+	test.frontEnd->Next();
+	test.frontEnd->Login(u"Alice", u"secret");
+	test.lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(test.lobby.login, *test.lobby.account);
+	ASSERT_EQ(test.frontEnd->GetBox(), Box::LobbyList);
+	test.frontEnd->SelectLobby("d1");
+	test.frontEnd->JoinSelectedLobby();
+	test.frontEnd->Update();
+	ASSERT_EQ(test.frontEnd->GetBox(), Box::LobbyRoom);
+	lobby_api::LobbyChangeRequest change;
+	change.map = lobby_api::LobbyMap {.file = "Online Maps/obm_32p_1.map", .name = map.name, .sha256 = map.sha256, .size = 3};
+	test.lobbySessions->Change(std::move(change), [](auto&&) {});
+	test.frontEnd->Update();
+	ASSERT_TRUE(test.lobby.maps);
+	FakeLobby::Give(test.lobby.maps, lobby_api::MapList {.maps = {map}});
+}
+
+TEST_F(FrontEndTest, EachPieceOfAMapWaitsForTheDelayOfTheTestsOnTheClockOfTheFrontEnd)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	mapStore = &store;
+	mapPieceDelayMs = 1500;
+	int64_t now = 1000;
+	clock = [&now] { return now; };
+	Make();
+	SetRoomMapOfTheService(*this, RoomMap());
+	// The piece waits until 1500 ms go by
+	EXPECT_TRUE(lobby.downloads.empty());
+	now = 2499;
+	frontEnd->Update();
+	EXPECT_TRUE(lobby.downloads.empty());
+	now = 2500;
+	frontEnd->Update();
+	EXPECT_EQ(lobby.downloads.size(), 1u);
+}
+
+TEST_F(FrontEndTest, ThePieceDelayOfTheTestsAlsoWorksWithNoClockOfTheGame)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	mapStore = &store;
+	mapPieceDelayMs = 60000;
+	// The game gives the front end no clock
+	clock = {};
+	Make();
+	SetRoomMapOfTheService(*this, RoomMap());
+	// The piece waits on the clock of the computer, so it does not go at once
+	frontEnd->Update();
+	EXPECT_TRUE(lobby.downloads.empty());
 }
 
 TEST_F(FrontEndTest, ALandThatTheLobbyDoesNotGiveShowsTheBoxOfTheRoom)
