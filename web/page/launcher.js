@@ -1,6 +1,7 @@
 // openblack web page: it gets the user's Black & White folder, checks the install and starts the game.
 //
-// The page sends nothing to a server. It reads the game data only with the local file interfaces of the browser:
+// The page sends nothing to a server. It gets the game data in one of these ways:
+// - the game files of the site (launcher-assets.js), for an account with the mark for them, with no folder picker,
 // - the folder picker (Chrome, Edge), which reads the install in place and keeps the choice of the folder,
 // - a file input or a dropped folder (all browsers), which give local File objects,
 // - an optional copy in the private storage of the site (OPFS), for browsers that cannot keep the choice of a folder.
@@ -617,6 +618,65 @@ function copyToStorage(entries) {
   });
 }
 
+// ------------------------------------------------------------------------------------------------ the game files of the site
+
+/** The number of bytes as megabytes, for the player */
+function megabytes(bytes) {
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
+}
+
+/**
+ * When the site gives the game files to the account, the page keeps them in this browser and chooses them, with no
+ * folder picker. Gives false when the site refuses them or the page cannot get them: the player then chooses a folder.
+ */
+async function useSiteGameFiles() {
+  const fetchFile = (address, options) => fetch(address, options);
+  const answer = await fetchAssetIndex(fetchFile);
+  if (!answer.granted) {
+    log(`The site gives no game files to this account (status ${answer.status}): ${answer.reason || 'no reason'}.`);
+    return false;
+  }
+  const root = await storageRoot();
+  if (!root) {
+    log('The site gives the game files, but this browser has no private storage for them.');
+    return false;
+  }
+  element('site-files-intro').hidden = false;
+  element('site-files').hidden = false;
+  const progress = element('site-files-progress');
+  let shown = '';
+  let last = { bytes: 0, files: 0 };
+  const show = (state) => {
+    last = state;
+    const percent = state.totalBytes === 0 ? 100 : Math.floor(100 * state.bytes / state.totalBytes);
+    const text = state.totalFiles === 0
+      ? 'This browser has all the game files already.'
+      : `The page gets the game files from the site: ${percent}% (${megabytes(state.bytes)} of ` +
+        `${megabytes(state.totalBytes)}, ${state.files} of ${state.totalFiles} files).`;
+    if (text !== shown) {
+      shown = text;
+      progress.textContent = text;
+    }
+  };
+  log(`The site gives ${answer.index.files.length} game files (${megabytes(answer.index.totalBytes)}).`);
+  try {
+    const entries = await keepAssets(answer.index, {
+      fetchFile, digest: (algorithm, bytes) => crypto.subtle.digest(algorithm, bytes), root,
+      wanted: isGameFile, progress: show,
+    });
+    log(`The page downloaded ${last.files} game files (${megabytes(last.bytes)}). The browser kept the other files.`);
+    progress.textContent = 'This browser has all the game files. The next visit downloads only the files that change.';
+    await choose(entries, 'the site', { copyAllowed: false });
+    return true;
+  } catch (error) {
+    element('site-files-intro').hidden = true;
+    element('site-files').hidden = true;
+    showMessage('The page cannot get the game files from the site',
+      `${error.message || error}. Load the page again to continue the download, or choose your own folder.`);
+    return false;
+  }
+}
+
 // ------------------------------------------------------------------------------------------------ start
 
 let chosen = null;
@@ -640,7 +700,7 @@ function showFrame(frame) {
   screenContext.transferFromImageBitmap(frame);
 }
 
-async function choose(entries, source) {
+async function choose(entries, source, { copyAllowed = source !== 'the copy in this browser' } = {}) {
   chosen = entries;
   const check = checkInstall(entries);
   const list = element('check-list');
@@ -662,7 +722,7 @@ async function choose(entries, source) {
   element('check').hidden = false;
   setPlayEnabled(false);
   log(`The page has ${entries.length} files from ${source}. Missing: ${check.missing.join(', ') || 'none'}.`);
-  if (check.missing.length === 0 && element('keep-copy').checked && source !== 'the copy in this browser') {
+  if (check.missing.length === 0 && element('keep-copy').checked && copyAllowed) {
     await copyToStorage(entries);
   }
   setPlayEnabled(check.missing.length === 0);
@@ -1020,6 +1080,13 @@ async function main() {
   element('play-online').addEventListener('click', () => start(true));
   if (parameterIsOn(new URLSearchParams(location.search), 'multiplayer')) {
     element('play').hidden = true;
+  }
+
+  // An account with the mark for the game files gets them from the site. The other players choose their own folder.
+  if (!(await useSiteGameFiles())) {
+    for (const id of ['own-install-intro', 'own-install-privacy', 'sources']) {
+      element(id).hidden = false;
+    }
   }
 }
 
