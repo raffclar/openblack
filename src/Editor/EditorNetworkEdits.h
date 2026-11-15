@@ -24,6 +24,7 @@
 #include "Commands/PlayerCommands.h"
 #include "Common/DebugCheats.h"
 #include "EditorPalette.h"
+#include "Story/StoryLandSkip.h"
 
 namespace openblack::ecs
 {
@@ -139,5 +140,12 @@ void SendDebugCheat(debug_cheats::Cheat cheat, bool on);
 
 /// The cheats of the player of this computer that are on now, from the synced world
 [[nodiscard]] uint32_t OwnDebugCheats();
+
+/// The game that the player of this computer plays now, as the skip to a land of the story sees it
+[[nodiscard]] story_land_skip::GameFacts OwnStoryGame();
+
+/// Sends a skip to a land of the story after the first as a command of the turns (story_land_skip). The land changes at
+/// the next turn. Gives false when the game does not show the skip, or the land does not go as a command.
+bool SendStoryLandSkip(int32_t land);
 
 } // namespace openblack::editor

@@ -45,11 +45,12 @@
 ///   challenge (u32), the position and the angle (f32).
 /// - A debug cheat: the cheat (u8), then 1 for on or 0 for off (u8).
 /// - An edit of a creature by the editor: the creature, the value (u8) and the amount (f32).
+/// - A skip to a land of the story: the land (u8), 2 to 5.
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 36;
+inline constexpr uint8_t k_Version = 37;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -126,6 +127,7 @@ enum class CommandTag : uint8_t
 	DebugCheat = 56,
 	EditorCreatureEdit = 57,
 	EditorCreatureAct = 58,
+	DebugLandSkip = 59,
 };
 
 /// The sizes of the parts of the frames, in bytes

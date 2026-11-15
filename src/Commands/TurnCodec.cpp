@@ -24,6 +24,7 @@
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFight.h"
 #include "PlayerSlots.h"
+#include "Story/StoryLandSkip.h"
 
 namespace openblack::turn_codec
 {
@@ -401,6 +402,7 @@ void WriteAction(Writer& out, const Action& action)
 			               out.Byte(arg);
 		               }
 	               },
+	               [&out](const DebugLandSkip& command) { out.Byte(command.land); },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -941,6 +943,16 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = act;
 		return DecodeError::None;
 	}
+	case CommandTag::DebugLandSkip:
+	{
+		const auto land = in.Byte();
+		if (!story_land_skip::GoesAsCommand(land))
+		{
+			return in.Bad() ? DecodeError::Truncated : DecodeError::Value;
+		}
+		action = DebugLandSkip {.land = land};
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -1116,6 +1128,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const DebugCheat& /*command*/) { return CommandTag::DebugCheat; },
 	                      [](const EditorCreatureEdit& /*command*/) { return CommandTag::EditorCreatureEdit; },
 	                      [](const EditorCreatureAct& /*command*/) { return CommandTag::EditorCreatureAct; },
+	                      [](const DebugLandSkip& /*command*/) { return CommandTag::DebugLandSkip; },
 	                  },
 	                  action);
 }
@@ -1189,6 +1202,7 @@ size_t SizeOf(const Action& action) noexcept
 	        [](const DebugCheat& /*command*/) { return size_t {2}; },
 	        [](const EditorCreatureEdit& /*command*/) { return k_Entity + 1 + 4; },
 	        [](const EditorCreatureAct& command) { return k_Entity + 1 + k_Entity + k_Vector + 4 + 2 + command.args.size(); },
+	        [](const DebugLandSkip& /*command*/) { return size_t {1}; },
 	    },
 	    action);
 	return 1 + fields;

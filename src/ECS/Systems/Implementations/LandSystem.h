@@ -79,6 +79,7 @@ public:
 	void SetAllComputerGods(bool allComputer) override { _allComputerGods = allComputer; }
 	bool StartChallengeScripts(bool startStory) override;
 	void StartStoryScripts() override;
+	bool StartStoryAtLand(int32_t land) override;
 
 	void PlayTurns(simulation::TurnViewInterface& view) override;
 	void PlayTurnSteps(simulation::TurnViewInterface& view) override;

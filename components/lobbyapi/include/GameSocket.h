@@ -307,7 +307,7 @@ struct ObserverLeft
 struct CommandRefused
 {
 	/// Why the server refused the commands. k_NoEditorClaim: edits of the editor or debug cheats from a player whose join
-	/// ticket has no editor claim.
+	/// ticket has no editor claim. k_NoStoryLands: a skip to a land of the story, which a network game does not have.
 	std::string reason;
 	/// The number of commands that the server refused
 	uint32_t commands {0};
@@ -317,6 +317,8 @@ struct CommandRefused
 
 /// The reason of a refusal of edits of the editor or of debug cheats (see CommandRefused)
 inline constexpr std::string_view k_NoEditorClaim = "no_editor_claim";
+/// The reason of a refusal of a skip to a land of the story: a network game has no lands of the story
+inline constexpr std::string_view k_NoStoryLands = "no_story_lands";
 
 /// Client to server: "game.loaded". The player's computer has the land and loaded the world of the started game. The
 /// client sends it once after game.start, and again after it comes back if the server did not get it.
