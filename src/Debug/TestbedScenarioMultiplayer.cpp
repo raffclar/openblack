@@ -50,7 +50,6 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
 	const std::array<BoxScenario, 35> boxes = {{
-	const std::array<BoxScenario, 35> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",

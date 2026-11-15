@@ -8,8 +8,9 @@
  *******************************************************************************/
 
 // A read-only file system for the web build that holds the user's install of Black & White. The page gives the files
-// of the folder that the user picks, and each thread of the game reads slices of them in place, with no copy. The
-// names match without letter case, as on Windows.
+// of the folder that the user picks, or the files that the site sends, and each thread of the game reads slices of them
+// in place, with no copy. The names match without letter case, as on Windows. The list of the page gives the size of
+// each file, thus the game sees every file of a site's list before the page has it.
 
 #include <cerrno>
 #include <cstdint>
@@ -43,15 +44,59 @@ EM_JS(char*, openblack_user_folder_list, (), {
 	return folder ? stringToNewUTF8(folder.list) : 0;
 });
 
+// A file that the site streams is not in the folder until the game first reads it. A large file can come in blocks of
+// the same size, of which the folder has only some. The read gives -2 when the folder does not have all its bytes yet.
 EM_JS(double, openblack_user_folder_read, (uint32_t file, uint8_t* buffer, double length, double offset), {
 	try {
-		const blob = globalThis.openblackWeb.folder.files[file];
-		const bytes = new FileReaderSync().readAsArrayBuffer(blob.slice(offset, offset + length));
-		HEAPU8.set(new Uint8Array(bytes), buffer);
-		return bytes.byteLength;
+		const folder = globalThis.openblackWeb.folder;
+		const blob = folder.files[file];
+		if (blob) {
+			const bytes = new FileReaderSync().readAsArrayBuffer(blob.slice(offset, offset + length));
+			HEAPU8.set(new Uint8Array(bytes), buffer);
+			return bytes.byteLength;
+		}
+		const blocks = folder.blocks && folder.blocks[file];
+		const size = folder.blockSize;
+		if (!blocks || !(size > 0) || !(length > 0)) {
+			return -2;
+		}
+		const first = Math.floor(offset / size);
+		const last = Math.min(blocks.length - 1, Math.floor((offset + length - 1) / size));
+		for (let block = first; block <= last; block += 1) {
+			if (!blocks[block]) {
+				return -2;
+			}
+		}
+		let done = 0;
+		for (let block = first; block <= last; block += 1) {
+			const start = Math.max(0, offset + done - block * size);
+			const end = Math.min(size, offset + length - block * size);
+			const bytes = new FileReaderSync().readAsArrayBuffer(blocks[block].slice(start, end));
+			HEAPU8.set(new Uint8Array(bytes), buffer + done);
+			done += bytes.byteLength;
+			if (bytes.byteLength < end - start) {
+				break;
+			}
+		}
+		return done;
 	} catch (error) {
 		console.error('openblack: the game cannot read a file of the game folder:', error);
 		return -1;
+	}
+});
+// The thread asks the page for the bytes of a file that the site streams, and waits until the folder has them (see
+// web/page/pre.js). The program links with JSPI, which keeps the stack of the thread while it waits. Gives 1 when the
+// folder has the bytes.
+EM_ASYNC_JS(int, openblack_user_folder_obtain, (uint32_t file, double length, double offset), {
+	const obtain = globalThis.openblackObtainGameFile;
+	if (!obtain) {
+		return 0;
+	}
+	try {
+		return (await obtain(file, offset, length)) ? 1 : 0;
+	} catch (error) {
+		console.error('openblack: the game cannot get a file of the game folder from the site:', error);
+		return 0;
 	}
 });
 EM_JS_DEPS(openblack_user_folder, "$stringToNewUTF8");
@@ -68,10 +113,19 @@ constexpr off_t k_BlockSize = 1024 * 1024;
 /// The number of blocks that the block cache keeps for all the files together
 constexpr size_t k_CachedBlocks = 32;
 
-/// Read a part of a file of the user's folder from the page. Returns the number of bytes read, or -EIO.
+/// The value of a read of the page when the folder does not have the file yet
+constexpr double k_NotInFolder = -2;
+
+/// Read a part of a file of the user's folder from the page. The bytes of a file that the site streams come from the
+/// site on their first read. Returns the number of bytes read, or -EIO.
 ssize_t ReadFromPage(uint32_t file, uint8_t* buffer, off_t count, off_t offset)
 {
-	const auto done = openblack_user_folder_read(file, buffer, static_cast<double>(count), static_cast<double>(offset));
+	auto done = openblack_user_folder_read(file, buffer, static_cast<double>(count), static_cast<double>(offset));
+	if (done == k_NotInFolder &&
+	    openblack_user_folder_obtain(file, static_cast<double>(count), static_cast<double>(offset)) == 1)
+	{
+		done = openblack_user_folder_read(file, buffer, static_cast<double>(count), static_cast<double>(offset));
+	}
 	return done < 0 ? -EIO : static_cast<ssize_t>(done);
 }
 

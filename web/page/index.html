@@ -29,6 +29,10 @@
   <section id="site-files" hidden>
     <h2>Game files</h2>
     <p id="site-files-progress">The page asks the site for the game files.</p>
+    <!-- Without this choice, the page gets only the files for the start, and the game gets each other file when it
+         first reads it. With it, the page gets all the files, and the browser keeps the choice for the next visit. -->
+    <label><input id="site-files-all" type="checkbox"> Download all the game files now, so that the game never waits
+      for the network (about 700 MB)</label>
   </section>
 
   <section id="sources" hidden>
