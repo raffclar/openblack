@@ -164,9 +164,11 @@ public:
 	[[nodiscard]] virtual std::optional<glm::vec3> OrderTarget(entt::entity creature) const = 0;
 	/// The Action button is pressed with the hand empty, along a ray, where on the screen and when: a second press soon
 	/// after the first, near it, is a double tap, which with the leash held ties the leash to the thing under the cursor
-	/// or unties it. Returns whether the leash took the press; any press it doesn't take is left to the hand.
+	/// or unties it. Returns whether the leash took the press; any press it doesn't take is left to the hand. While the
+	/// fight takes the presses of the hand (mayTie is false), the leash counts the press for the next double tap but does
+	/// not take it.
 	virtual bool PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-	                         uint32_t milliseconds) = 0;
+	                         uint32_t milliseconds, bool mayTie) = 0;
 	/// A tap on a thing that the hand let go before taking it, with the leash held loose in the hand: an order to act on
 	/// it, in place of the thing's own tap. Returns whether the leash took the tap, which it does also when the creature
 	/// refuses the order.
