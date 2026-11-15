@@ -79,6 +79,10 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<UsedClan> ParseUsedClan(std::string_view text);
 /// The data of "chat.line"
 [[nodiscard]] std::optional<ChatLine> ParseChatLine(std::string_view data);
+/// The data of the control frame "subscribed"
+[[nodiscard]] std::optional<ChannelSubscribed> ParseChannelSubscribed(std::string_view data);
+/// The data of "chat.joined" or of "chat.left"
+[[nodiscard]] std::optional<ChatPresence> ParseChatPresence(std::string_view data);
 [[nodiscard]] std::optional<PingReply> ParsePingReply(std::string_view text);
 /// The data of "ping.line"
 [[nodiscard]] std::optional<PingLine> ParsePingLine(std::string_view data);

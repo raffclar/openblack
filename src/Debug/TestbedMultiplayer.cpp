@@ -209,6 +209,11 @@ public:
 			_pending.push_back(Line(3, "Bob", "Hello, and welcome to the game."));
 			_pending.push_back(Line(9, "Eve", "I am only watching."));
 		}
+		// The main lobby room gives its people and its last lines when the player comes to the lobby list
+		if (watch && channel == lobby_api::k_LobbyChannel)
+		{
+			_pending.push_back(MainRoomSubscribed());
+		}
 		// In the big room each of the other gods says a line, so that the chat shows the colour of each god
 		if (watch && channel == "server-w5")
 		{
@@ -240,10 +245,11 @@ public:
 		                                          .role = std::string(game_socket::RoleName(role))},
 		          .error = {}});
 	}
-	void SendChatLine(std::string, std::string text, LobbyCallback<LobbyDone> callback) override
+	void SendChatLine(std::string channel, std::string text, LobbyCallback<LobbyDone> callback) override
 	{
-		// The line comes back on the room's channel, as the lobby sends it to everyone in the room
-		_pending.push_back(Line(k_PlayerId, "Alice", text));
+		// The line comes back on the channel, as the lobby sends it to everyone in the room
+		_pending.push_back(channel == lobby_api::k_LobbyChannel ? Line(k_PlayerId, "Alice", text, channel)
+		                                                        : Line(k_PlayerId, "Alice", text));
 		callback({.value = LobbyDone {}, .error = {}});
 	}
 	void UseClan(std::string, std::optional<int64_t> clanId, LobbyCallback<lobby_api::UsedClan> callback) override
@@ -370,6 +376,25 @@ private:
 		const std::string data = R"({"channel":")" + channel + R"(","from":{"id":)" + std::to_string(id) + R"(,"name":")" +
 		                         name + R"("},)" + textMember;
 		return {.seq = ++_seq, .type = std::string(lobby_api::events::k_ChatLine), .time = {}, .data = data};
+	}
+
+	/// The main lobby room: Bob, Carol and the staff account Ann are in it, and it has three lines
+	lobby_api::PushEvent MainRoomSubscribed()
+	{
+		// The lines of the history are the events 1 to 3: the next events have higher numbers
+		_seq = std::max<int64_t>(_seq, 3);
+		std::string data = R"({"channel":"lobby","members":[)";
+		data += R"({"account":{"id":1,"name":"Alice"},"status":"online","server":null},)";
+		data += R"({"account":{"id":3,"name":"Bob"},"status":"online","server":null},)";
+		data += R"({"account":{"id":31,"name":"Carol"},"status":"online","server":null},)";
+		data += R"({"account":{"id":40,"name":"Ann"},"status":"online","server":null}],"history":[)";
+		data += R"({"seq":1,"time":"2026-11-14T10:00:00.000Z","from":{"id":3,"name":"Bob"},"text":"Anyone for a game )";
+		data += R"(on the Ring of gods?"},)";
+		data += R"({"seq":2,"time":"2026-11-14T10:00:05.000Z","from":{"id":31,"name":"Carol"},"text":"Yes, make a )";
+		data += R"(session and I will join it. Four gods is a good number for a first game, I think."},)";
+		data += R"({"seq":3,"time":"2026-11-14T10:00:09.000Z","from":{"id":40,"name":"Ann"},"text":"Welcome to the )";
+		data += R"(lobby. Be kind to the other gods.","staff":true}]})";
+		return {.seq = std::nullopt, .type = std::string(lobby_api::events::k_Subscribed), .time = {}, .data = data};
 	}
 
 	std::optional<lobby_api::AccountRef> _account;
@@ -625,6 +650,9 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 	{
 	case Stage::LobbyList:
 		frontEnd.SelectLobby("d1");
+		break;
+	case Stage::LobbyChatRoom:
+		frontEnd.SendMainRoomChat(u"Hello, everyone! I will make a session for four gods.");
 		break;
 	case Stage::LobbyCreate:
 		frontEnd.OpenCreateLobby();

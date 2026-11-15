@@ -97,6 +97,7 @@ MultiplayerFrontEnd::~MultiplayerFrontEnd()
 	if (_services.lobby != nullptr)
 	{
 		_services.lobby->WatchServers(false);
+		WatchMainRoom(false);
 		if (_listener.has_value())
 		{
 			_services.lobby->RemoveEventListener(*_listener);
@@ -438,6 +439,7 @@ void MultiplayerFrontEnd::Back()
 		{
 			_services.lobbyRoom->WatchList(false);
 		}
+		WatchMainRoom(false);
 		multiplayer::Back(_flow);
 		break;
 	case Box::CreateLobby:
@@ -1247,6 +1249,10 @@ void MultiplayerFrontEnd::SendChat(std::u16string_view text)
 
 void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 {
+	if (_mainRoom.Apply(event))
+	{
+		return;
+	}
 	if (!_room.has_value())
 	{
 		return;

@@ -20,6 +20,7 @@
 #include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Locator.h"
+#include "MainLobbyChatRules.h"
 #include "MultiplayerFrontEnd.h"
 #include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
@@ -108,6 +109,7 @@ void MultiplayerFrontEnd::EnterLobbyList()
 		_services.lobby->WatchServers(false);
 	}
 	_services.lobbyRoom->WatchList(true);
+	WatchMainRoom(true);
 	RefreshLobbies();
 	// The names of the maps of the service, for the box that makes a session
 	GetLobbyMaps({});
@@ -136,6 +138,7 @@ void MultiplayerFrontEnd::RefreshLobbies()
 		{
 			_noLobbySessions = true;
 			_services.lobbyRoom->WatchList(false);
+			WatchMainRoom(false);
 			EnterGameList();
 			return;
 		}
@@ -388,6 +391,43 @@ void MultiplayerFrontEnd::SendLobbyChat(std::u16string_view text)
 			ShowLobbyProblem(result.error);
 		}
 	});
+}
+
+void MultiplayerFrontEnd::WatchMainRoom(bool watch)
+{
+	if (_services.lobby == nullptr)
+	{
+		return;
+	}
+	if (!watch)
+	{
+		_mainRoom.Clear();
+	}
+	_services.lobby->WatchChannel(std::string(lobby_api::k_LobbyChannel), watch);
+}
+
+int64_t MultiplayerFrontEnd::GetOwnAccount() const
+{
+	const auto account = _services.lobby != nullptr ? _services.lobby->GetAccount() : std::nullopt;
+	return account.has_value() ? account->id : 0;
+}
+
+void MultiplayerFrontEnd::SendMainRoomChat(std::u16string_view text)
+{
+	const auto line = ClampChat(text);
+	if (!HasChatText(line) || _services.lobby == nullptr)
+	{
+		return;
+	}
+	// The line comes back from the lobby to all the people in the room, also to the player. A refused line gives a line
+	// of the game in the room.
+	_services.lobby->SendChatLine(std::string(lobby_api::k_LobbyChannel), ToUtf8(line),
+	                              [this, generation = _generation](LobbyResult<LobbyDone>&& result) {
+		                              if (generation == _generation && !result.Ok())
+		                              {
+			                              _mainRoom.AddSystemLine(main_chat::RefusalLine(result.error));
+		                              }
+	                              });
 }
 
 void MultiplayerFrontEnd::PickLobbySlot(int32_t slot)
