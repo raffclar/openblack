@@ -295,7 +295,7 @@ TOOLS = [
     {
         "name": "edit_create",
         "description": "Makes a thing through the archetype the game makes it with (kinds: creature, villager, "
-                       "building, tree, feature, mobile_object, mobile_static, dispenser, miracle_bubble). Answers "
+                       "building, tree, feature, mobile_object, mobile_static, dispenser, miracle_bubble, animal). Answers "
                        "its id, label, components and whether it is in its map cell and the physics.",
         "inputSchema": schema({"kind": {"type": "string"},
                                "type": {"description": "The type's number or name (edit_kinds)"},

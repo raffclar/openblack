@@ -108,4 +108,20 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))}},
 	});
+
+	all.push_back({
+	    .id = "editor.animals",
+	    .name = "Every animal of the palette",
+	    .facet = Facet::Editor,
+	    .description = "Open flat land, and the editor opens after a second. The Animals tab of the "
+	                   "palette lists each animal that a land's script makes: the grazers, the hunters of the wild and "
+	                   "the birds of the land. Lay out all puts one of each in rows in the middle of the view.",
+	    .expected = "Each animal comes down on the land as a land's script makes it, then lives as the land's animals "
+	                "do: the grazers eat grass, the hunters look for food and the birds fly over the land. The outliner "
+	                "lists each under Animals, and Ctrl+D copies one.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 30.0f}, {30.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::PressPlainKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))}},
+	});
 }

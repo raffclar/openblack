@@ -14,6 +14,10 @@
 
 #include <algorithm>
 
+#include "Animals/BirdRules.h"
+#include "Animals/GrazerRules.h"
+#include "Animals/HunterRules.h"
+
 namespace openblack::editor
 {
 
@@ -77,6 +81,47 @@ std::vector<std::string> ReadableNames(std::span<const std::string_view> names)
 		result.push_back(TitleCase(name.substr(std::min(prefix, name.size()))));
 	}
 	return result;
+}
+
+std::string NameOfModel(std::string_view meshName)
+{
+	constexpr std::string_view k_Animal = "Animal";
+	if (meshName.starts_with(k_Animal) && meshName.size() > k_Animal.size())
+	{
+		meshName.remove_prefix(k_Animal.size());
+	}
+	while (!meshName.empty() && std::isdigit(static_cast<unsigned char>(meshName.back())) != 0)
+	{
+		meshName.remove_suffix(1);
+	}
+	std::string result;
+	for (const auto c : meshName)
+	{
+		if (std::isupper(static_cast<unsigned char>(c)) != 0 && !result.empty())
+		{
+			result.push_back(' ');
+		}
+		result.push_back(c);
+	}
+	return result;
+}
+
+bool IsPlaceableAnimal(AnimalInfo kind)
+{
+	return animals::grazers::IsGrazer(kind) || animals::hunters::IsWildHunter(kind) || animals::birds::IsLandBird(kind);
+}
+
+std::vector<int32_t> PlaceableAnimalRows(std::span<const AnimalInfo> rowKinds)
+{
+	std::vector<int32_t> rows;
+	for (size_t row = 0; row < rowKinds.size(); ++row)
+	{
+		if (IsPlaceableAnimal(rowKinds[row]))
+		{
+			rows.push_back(static_cast<int32_t>(row));
+		}
+	}
+	return rows;
 }
 
 std::vector<glm::vec2> GridLayout(size_t count, float spacing)

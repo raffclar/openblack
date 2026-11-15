@@ -146,7 +146,7 @@ std::optional<std::string_view> EditRefusal(const EditorEdit& edit) noexcept
 	switch (edit.kind)
 	{
 	case EditorEdit::Kind::Place:
-		if (edit.placeKind > static_cast<uint8_t>(PlaceKind::Highlight))
+		if (edit.placeKind > static_cast<uint8_t>(k_LastPlaceKind))
 		{
 			return "the palette has no such kind of item";
 		}
