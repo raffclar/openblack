@@ -503,6 +503,17 @@ float CreaturePhysiologySystem::Eat(entt::entity creature, float foodValue)
 	return energy;
 }
 
+float CreaturePhysiologySystem::MealEnergy(entt::entity creature, float foodValue) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* self = registry.TryGet<const Creature>(creature);
+	if (self == nullptr)
+	{
+		return 0.0f;
+	}
+	return physiology::MealEnergy(ShapeOf(*self), SpeciesOf(self->species), foodValue);
+}
+
 void CreaturePhysiologySystem::Drink(entt::entity creature)
 {
 	if (auto* needs = Locator::entitiesRegistry::value().TryGet<CreatureNeeds>(creature))

@@ -53,6 +53,7 @@ public:
 	bool Discard(entt::entity creature) override;
 	bool DiscardWith(entt::entity creature, size_t animation) override;
 	bool EatHeld(entt::entity creature) override;
+	bool EatHeldAndSwallow(entt::entity creature, entt::entity thing) override;
 	bool EatHeldOnly(entt::entity creature) override;
 	bool Keep(entt::entity creature, size_t animation) override;
 	bool Throw(entt::entity creature, const glm::vec3& target) override;

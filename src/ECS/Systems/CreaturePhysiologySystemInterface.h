@@ -39,6 +39,8 @@ public:
 
 	/// The creature ate something of a food value. Returns the energy the meal gave it, by its size and species.
 	[[nodiscard]] virtual float Eat(entt::entity creature, float foodValue) = 0;
+	/// The energy that a meal of a food value would give the creature, with no change to its body
+	[[nodiscard]] virtual float MealEnergy(entt::entity /*creature*/, float /*foodValue*/) const { return 0.0f; }
 	/// Drank its fill
 	virtual void Drink(entt::entity creature) = 0;
 	/// Finished the squat of a poo or of a fart: the bowels are empty. The lumps of a poo drop during the squat

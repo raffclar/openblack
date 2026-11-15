@@ -388,7 +388,7 @@ std::vector<Step> creature_mind::Eat(uint32_t food, bool holdingEatable)
 	examine.face = creature_face::Cue::Curiosity;
 	examine.gaze = Gaze {.object = food};
 	agenda.push_back(examine);
-	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat));
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat, .object = food}, Effect::Eat));
 	return agenda;
 }
 
@@ -403,7 +403,8 @@ std::vector<Step> creature_mind::EatAlive(uint32_t food, bool holdingEatable, co
 		}
 		agenda.push_back(PickUpLooking(food));
 	}
-	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat}, Effect::Eat));
+	// The creature swallows the food that the plan names, also when it holds a different thing that it eats first
+	agenda.push_back(Object({.kind = ObjectOrder::Kind::Eat, .object = food}, Effect::Eat));
 	return agenda;
 }
 

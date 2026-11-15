@@ -82,6 +82,7 @@
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -1751,6 +1752,22 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 				Consume(registry, creature, *held);
 				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} takes in what it held, with no thing given",
 				                    entt::to_integral(creature));
+				break;
+			}
+			// Told to swallow a thing that it does not hold, it swallows that thing where it is. The thing that it held never
+			// comes back into sight, so it goes.
+			if (action.swallowed.has_value() && *action.swallowed != *held)
+			{
+				registry.Remove<HeldByCreature>(*held);
+				registry.Destroy(*held);
+				if (registry.Valid(*action.swallowed))
+				{
+					action.eaten = *action.swallowed;
+					action.mealEnergy = Locator::creaturePhysiologySystem::has_value()
+					                        ? Locator::creaturePhysiologySystem::value().MealEnergy(
+					                              creature, FoodValueOf(*action.swallowed).value_or(0.0f))
+					                        : 0.0f;
+				}
 				break;
 			}
 			registry.AssignOrReplace<HiddenByState>(*held);

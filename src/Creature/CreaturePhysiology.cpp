@@ -234,10 +234,15 @@ void creature_physiology::ApplyActionCost(Needs& needs, Shape& shape, const Acti
 	needs.exhaustion = std::min(needs.exhaustion + (cost.exhaustionCost / divisor), 1.0f);
 }
 
-float creature_physiology::Eat(Needs& needs, Shape& shape, const Species& species, float foodValue)
+float creature_physiology::MealEnergy(const Shape& shape, const Species& species, float foodValue)
 {
 	const auto mealSize = std::min(shape.size, k_MaxMealSize) * species.foodToEnergy;
-	const auto energy = mealSize > 0.0f ? std::max(foodValue, 0.0f) / mealSize : 0.0f;
+	return mealSize > 0.0f ? std::max(foodValue, 0.0f) / mealSize : 0.0f;
+}
+
+float creature_physiology::Eat(Needs& needs, Shape& shape, const Species& species, float foodValue)
+{
+	const auto energy = MealEnergy(shape, species, foodValue);
 	// What it eats beyond full makes it fat
 	const auto over = (energy * species.overeatFatFactor) + needs.energy - 1.0f;
 	if (over > 0.0f)

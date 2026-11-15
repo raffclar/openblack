@@ -334,6 +334,17 @@ TEST(CreaturePhysiology, ActionsCostEnergyAndBuildStrength)
 	EXPECT_NEAR(needs.exhaustion, 0.08f, k_Tolerance);
 }
 
+TEST(CreaturePhysiology, TheEnergyOfAMealDoesNotChangeTheBody)
+{
+	const auto species = Fake();
+	const Shape shape {.fatness = 0.5f, .strength = 0.5f, .size = 1.0f};
+	// The same energy as the meal gives, by the size and the species, with no meal eaten
+	EXPECT_FLOAT_EQ(MealEnergy(shape, species, 250.0f), 0.3125f);
+	EXPECT_FLOAT_EQ(MealEnergy({.size = 0.2f}, species, 100.0f), 0.5f);
+	EXPECT_FLOAT_EQ(MealEnergy(shape, species, -10.0f), 0.0f);
+	EXPECT_FLOAT_EQ(MealEnergy({.size = 0.0f}, species, 100.0f), 0.0f);
+}
+
 TEST(CreaturePhysiology, EatingFillsItUpFattensAndBuildsPoo)
 {
 	const auto species = Fake();

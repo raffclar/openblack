@@ -849,7 +849,11 @@ void Order(ecs::Registry& registry, entt::entity creature, const creature_mind::
 		}
 		break;
 	case Kind::Eat:
-		if (order.swallows)
+		if (order.swallows && object.has_value())
+		{
+			hands.EatHeldAndSwallow(creature, *object);
+		}
+		else if (order.swallows)
 		{
 			hands.EatHeld(creature);
 		}
