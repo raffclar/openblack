@@ -501,6 +501,21 @@ TEST(LobbyRoom, TheCountdownWritesEachSecond)
 	EXPECT_EQ(LineTexts(room).back(), "The start was cancelled.");
 }
 
+TEST(LobbyRoom, AGameServerOfAnotherVersionTellsEachPlayerWhyTheStartStopped)
+{
+	LobbyRoom room(TestLobby(), k_Me);
+	room.Apply(Event("start.cancelled",
+	                 R"({"why":"wrong_version","server_build":"0.2.0+bbb/codec36","expected":"0.2.0+bbb/codec36"})"));
+	EXPECT_EQ(room.Phase(), RoomPhase::Open);
+	EXPECT_EQ(LineTexts(room).back(), "The game could not start: the game server has version 0.2.0+bbb/codec36.");
+	EXPECT_EQ(room.NeededBuild(), "0.2.0+bbb/codec36");
+	EXPECT_EQ(room.SystemLineCount(SystemLineKind::ServerVersion), 1U);
+	// A service that does not give the build of the server still gives the reason
+	room.Apply(Event("start.cancelled", R"({"why":"wrong_version"})"));
+	EXPECT_EQ(LineTexts(room).back(), "The game could not start: the game server has another version of openblack.");
+	EXPECT_TRUE(room.NeededBuild().empty());
+}
+
 TEST(LobbyRoom, TheQueueShowsThePlace)
 {
 	LobbyRoom room(TestLobby(), k_Me);

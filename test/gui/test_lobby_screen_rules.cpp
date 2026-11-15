@@ -205,6 +205,37 @@ TEST(LobbyScreenRules, EachProblemHasItsOwnBox)
 	          GameRefusalText("version", lobby_api::ClientKind::Desktop));
 }
 
+TEST(LobbyScreenRules, ARefusalForTheVersionTellsThePlayerToUpdateTheGame)
+{
+	using lobby_api::ClientKind;
+	// The service names the version that it needs and the page of the download
+	const auto problem = ProblemOf(
+	    ecs::systems::LobbyError {
+	        .status = 409, .code = "wrong_version", .expected = "0.2.0+bbb/codec36", .download = "https://bw.zanidrak.com/"},
+	    ClientKind::Desktop, "0.1.0+aaa/codec34");
+	EXPECT_EQ(problem.box, ProblemBox::Notice);
+	EXPECT_EQ(problem.text, "Wrong Version. This game needs version 0.2.0+bbb/codec36. You have version 0.1.0+aaa/codec34. "
+	                        "Get the new version at bw.zanidrak.com.");
+	// The web page loads again to get the new version
+	EXPECT_EQ(VersionRefusalText(ClientKind::Browser, {.own = "0.1.0+aaa/codec34", .needed = "0.2.0+bbb/codec36"}),
+	          "Wrong Version. This game needs version 0.2.0+bbb/codec36. You have version 0.1.0+aaa/codec34. "
+	          "Reload the page to get the new version.");
+	// A refusal with no version that the server needs keeps the general text, and the page of the site
+	EXPECT_EQ(VersionRefusalText(ClientKind::Desktop, {}),
+	          "Wrong Version. This game uses another version of openblack. Get the new version at bw.zanidrak.com.");
+	// The game server gives its own build with the refusal at the join
+	EXPECT_EQ(GameRefusalText("version", ClientKind::Desktop, {.own = "a", .needed = "b", .download = "https://get.test/x/"}),
+	          "Wrong Version. This game needs version b. You have version a. Get the new version at get.test/x.");
+	// The other refusals keep their own texts
+	EXPECT_EQ(GameRefusalText("map", ClientKind::Desktop), "Your map of this game is not the map of the game server.");
+	// The problem of the service reads the version and the page
+	const auto parsed = lobby_api::ParseProblem(
+	    R"({"status":409,"code":"wrong_version","expected":"0.2.0+bbb/codec36","download":"https://bw.zanidrak.com/"})");
+	ASSERT_TRUE(parsed.has_value());
+	EXPECT_EQ(parsed->expected, "0.2.0+bbb/codec36");
+	EXPECT_EQ(parsed->download, "https://bw.zanidrak.com/");
+}
+
 TEST(LobbyScreenRules, AMapWithTooFewPlacesNeedsKicksFirst)
 {
 	const LobbyRoom room(TestLobby(), k_Host);

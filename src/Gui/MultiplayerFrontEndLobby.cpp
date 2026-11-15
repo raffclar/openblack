@@ -59,8 +59,7 @@ void MultiplayerFrontEnd::ShowLobbyNotice(std::u16string text)
 
 void MultiplayerFrontEnd::ShowLobbyProblem(const LobbyError& error)
 {
-	const auto client = _settings.browser ? lobby_api::ClientKind::Browser : lobby_api::ClientKind::Desktop;
-	const auto problem = screens::ProblemOf(error, client);
+	const auto problem = screens::ProblemOf(error, ClientKind(), OwnBuild());
 	switch (problem.box)
 	{
 	case screens::ProblemBox::Notice:
@@ -206,7 +205,9 @@ void MultiplayerFrontEnd::JoinSelectedLobby()
 		Show(Message::LobbyPassword);
 		break;
 	case screens::JoinStep::Refuse:
-		ShowLobbyProblem(LobbyError {.status = 409, .code = std::string(screens::RefusalOf(*lobby, build))});
+		// A session of another version names the version that it needs
+		ShowLobbyProblem(
+		    LobbyError {.status = 409, .code = std::string(screens::RefusalOf(*lobby, build)), .expected = lobby->buildId});
 		break;
 	}
 }
@@ -686,6 +687,7 @@ void MultiplayerFrontEnd::ForgetLobbyRoom()
 	}
 	_reportedMap.reset();
 	_editsLobby = false;
+	_serverVersionLines = 0;
 	_ticketGame.clear();
 	_roomMapHash.clear();
 	if (_mapDownload != nullptr)
@@ -757,6 +759,25 @@ void MultiplayerFrontEnd::FollowLobbySession()
 	}
 	FollowLobbyMap(*room);
 	FollowLobbyGame(*room);
+	FollowServerVersion(*room);
+}
+
+void MultiplayerFrontEnd::FollowServerVersion(const online::lobby::LobbyRoom& room)
+{
+	const auto lines = room.SystemLineCount(online::lobby::SystemLineKind::ServerVersion);
+	if (lines == _serverVersionLines)
+	{
+		return;
+	}
+	_serverVersionLines = lines;
+	// A game server of another version stopped the start. When the service needs another version than this game, the
+	// box tells the player to update the game. Else the line in the chat of the room is sufficient.
+	const auto& needed = room.NeededBuild();
+	if (needed.empty() || needed == OwnBuild() || _message != Message::None)
+	{
+		return;
+	}
+	ShowLobbyNotice(ToUtf16(screens::VersionRefusalText(ClientKind(), {.own = OwnBuild(), .needed = needed, .download = {}})));
 }
 
 void MultiplayerFrontEnd::FollowLobbyNotices(const online::lobby::LobbyRoom* room)

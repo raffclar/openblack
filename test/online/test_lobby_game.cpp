@@ -160,6 +160,9 @@ TEST(GameLifetime, EachEndHasItsOwnExitCodeAndLine)
 	EXPECT_EQ(codes.size(), ends.size());
 	// A failure of the server is 1, which no end uses
 	EXPECT_FALSE(codes.contains(1));
+	// A server of another build than the lobby has its own code, so that the slot agent does not start it again
+	EXPECT_FALSE(codes.contains(game_lifetime::k_ExitWrongVersion));
+	EXPECT_NE(game_lifetime::k_ExitWrongVersion, 1);
 	EXPECT_EQ(game_lifetime::ExitCodeOf(End::AllGodsLeft), 0);
 }
 

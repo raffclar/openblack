@@ -246,6 +246,17 @@ void DemoLobbyRoom::Join(std::string lobbyId, std::optional<std::string> passwor
 		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::Refused, .status = 403, .code = std::string(code)}});
 		return;
 	}
+	// A session of another version refuses the join, as the service does, and names the build that it needs
+	if (summary->buildId != _build)
+	{
+		callback({.value = std::nullopt,
+		          .error = {.kind = LobbyErrorKind::Refused,
+		                    .status = 409,
+		                    .detail = "This game uses another version of openblack.",
+		                    .code = std::string(lobby_api::lobby_problems::k_WrongVersion),
+		                    .expected = summary->buildId}});
+		return;
+	}
 	// A full session refuses a god and an observer, as the service does (user, 2026-11-13)
 	if (online::lobby::IsFull(*summary))
 	{
@@ -487,6 +498,13 @@ void DemoLobbyRoom::StartCountdown()
 	{
 		_room->ApplyStart({.state = LobbyState::Countdown, .at = _nowMs + k_CountdownMs, .position = std::nullopt});
 	}
+}
+
+void DemoLobbyRoom::StopForServerVersion(std::string serverBuild, std::string expected)
+{
+	Send(lobby_api::lobby_events::k_StartCancelled,
+	     fmt::format(R"({{"why":"wrong_version","server_build":"{}","expected":"{}"}})", Escaped(serverBuild),
+	                 Escaped(expected)));
 }
 
 void DemoLobbyRoom::Queue(int32_t position)

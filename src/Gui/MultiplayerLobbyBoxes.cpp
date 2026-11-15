@@ -78,7 +78,9 @@ constexpr std::string_view k_NoText = "HELP_TEXT_REQUESTER_BOXES_02";
 constexpr std::string_view k_OkText = "HELP_TEXT_REQUESTER_BOXES_04";
 
 // The message box, as the vanilla boxes have it
-constexpr DialogRect k_MessageText {.min = {200, 220}, .max = {600, 350}};
+/// The text of a notice stops above the buttons with the same gap as the edit box of a prompt. A long text then
+/// does not touch the OK button.
+constexpr DialogRect k_NoticeText {.min = {200, 220}, .max = {600, 327}};
 constexpr DialogRect k_PromptText {.min = {200, 215}, .max = {600, 290}};
 constexpr DialogRect k_PromptEdit {.min = {220, 295}, .max = {580, 327}};
 constexpr DialogRect k_MessageOk {.min = {325, 338}, .max = {475, 370}};
@@ -707,7 +709,7 @@ void MultiplayerBoxes::BuildLobbyMessage(MessageShown& shown)
 	shown.text = _frontEnd->GetLobbyMessageText();
 	const bool asksText =
 	    message == Message::LobbyPassword || message == Message::LobbyCode || message == Message::LobbyNewPassword;
-	shown.textControl = &shown.answers.Add<StaticText>(asksText ? k_PromptText : k_MessageText, shown.text, Layout::Wrapped);
+	shown.textControl = &shown.answers.Add<StaticText>(asksText ? k_PromptText : k_NoticeText, shown.text, Layout::Wrapped);
 	shown.textControl->takesClicks = true;
 	if (asksText)
 	{
