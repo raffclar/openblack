@@ -30,6 +30,7 @@ public:
 	void CreatureTurn(entt::entity creature) override;
 
 	[[nodiscard]] float Eat(entt::entity creature, float foodValue) override;
+	[[nodiscard]] float MealEnergy(entt::entity creature, float foodValue) const override;
 	void Drink(entt::entity creature) override;
 	void EmptyBowels(entt::entity creature) override;
 	void SitTurn(entt::entity creature) override;

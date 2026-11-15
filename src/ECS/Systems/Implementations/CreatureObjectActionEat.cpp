@@ -307,6 +307,19 @@ bool CreatureObjectActionSystem::EatHeld(entt::entity creature)
 	return Start(creature, {.kind = Kind::Eat, .target = held});
 }
 
+bool CreatureObjectActionSystem::EatHeldAndSwallow(entt::entity creature, entt::entity thing)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto held = GetHeld(creature);
+	// When it holds the named thing, or holds nothing, or the named thing is gone, this is the usual eat. A held person
+	// or animal is eaten as it is.
+	if (!held.has_value() || *held == thing || !registry.Valid(thing) || registry.AnyOf<Villager, Animal, Creature>(*held))
+	{
+		return EatHeld(creature);
+	}
+	return Start(creature, {.kind = Kind::Eat, .target = held, .swallowed = thing});
+}
+
 bool CreatureObjectActionSystem::EatHeldOnly(entt::entity creature)
 {
 	const auto held = GetHeld(creature);

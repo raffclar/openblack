@@ -130,6 +130,9 @@ struct CreatureObjectAction
 	bool swallows {true};
 	/// Eating: what left its hand at the moment of eating, out of sight, until it swallows it as the animation ends
 	std::optional<entt::entity> eaten;
+	/// Eating: the thing that the plan names to swallow, when the plan names one. When it is not the held thing, the
+	/// creature swallows it where it is, and the held thing goes.
+	std::optional<entt::entity> swallowed;
 	/// Eating: the energy that the food gave the body as the animation started, which its hunger falls by once it keeps
 	/// the meal down
 	float mealEnergy {0.0f};

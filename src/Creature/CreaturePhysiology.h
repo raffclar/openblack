@@ -244,6 +244,8 @@ void ApplyActionCost(Needs& needs, Shape& shape, const ActionCost& cost, uint32_
 /// Eats something of a food value: fills up (up to its shown size), fattens by what it overeats and builds up poo. Returns the
 /// energy it gained.
 float Eat(Needs& needs, Shape& shape, const Species& species, float foodValue);
+/// The energy that a meal of a food value gives a body of this shape and species, with no change to the body
+[[nodiscard]] float MealEnergy(const Shape& shape, const Species& species, float foodValue);
 /// Drinks its fill
 void Drink(Needs& needs);
 /// Each lump of poo stops the desire to poo for this many seconds

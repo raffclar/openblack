@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/SkeletalAnimation.h"
+#include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureIdleMind.h"
@@ -880,6 +881,17 @@ TEST(CreatureIdleMind, ACreatureEatsWhatItHoldsWithNoPickUp)
 	ASSERT_EQ(held.size(), 1u);
 	EXPECT_EQ(held[0].order.kind, creature_mind::ObjectOrder::Kind::Eat);
 	EXPECT_EQ(held[0].effect, creature_mind::Effect::Eat);
+}
+
+TEST(CreatureIdleMind, TheEatStepNamesTheFoodOfThePlan)
+{
+	// The eat step names the food of the plan. A creature that holds a different thing swallows the named food.
+	EXPECT_EQ(creature_mind::Eat(3u, false).back().order.object, std::optional<uint32_t>(3u));
+	EXPECT_EQ(creature_mind::Eat(3u, true).back().order.object, std::optional<uint32_t>(3u));
+	EXPECT_EQ(creature_mind::EatAlive(3u, false, First).back().order.object, std::optional<uint32_t>(3u));
+	EXPECT_EQ(creature_mind::EatAlive(3u, true, First).back().order.object, std::optional<uint32_t>(3u));
+	EXPECT_EQ(creature_mind::StompAndEat(3u, true).back().order.object, std::optional<uint32_t>(3u));
+	EXPECT_TRUE(creature_mind::EatAlive(3u, true, First).back().order.swallows);
 }
 
 TEST(CreatureIdleMind, EatingAliveShowsHungerThenPicksUpAndEats)

@@ -68,6 +68,10 @@ public:
 	/// Tosses away what it holds with another animation, letting go at the same moment
 	virtual bool DiscardWith(entt::entity creature, size_t animation) = 0;
 	virtual bool EatHeld(entt::entity creature) = 0;
+	/// Eats what it holds, but swallows the thing that the plan names. When the creature holds a different thing, the
+	/// food of the held thing goes into its body. Then the held thing leaves its hand and goes, and the
+	/// creature swallows the named thing where it is.
+	virtual bool EatHeldAndSwallow(entt::entity creature, entt::entity /*thing*/) { return EatHeld(creature); }
 	/// Eats what it holds when it is told only to eat, with no thing given: the food goes into its body, but it does not
 	/// swallow the meal, and the eat fails when the animation ends
 	virtual bool EatHeldOnly(entt::entity creature) = 0;

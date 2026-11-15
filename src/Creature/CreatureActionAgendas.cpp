@@ -97,7 +97,8 @@ std::vector<Step> creature_mind::StompAndEat(uint32_t thing, bool holdingEatable
 		                  .order = {.kind = ObjectOrder::Kind::PickUp, .object = thing},
 		                  .gaze = Gaze {.object = thing, .whileGoing = true}});
 	}
-	agenda.push_back({.kind = Step::Kind::Object, .effect = Effect::Eat, .order = {.kind = ObjectOrder::Kind::Eat}});
+	agenda.push_back(
+	    {.kind = Step::Kind::Object, .effect = Effect::Eat, .order = {.kind = ObjectOrder::Kind::Eat, .object = thing}});
 	return agenda;
 }
 
