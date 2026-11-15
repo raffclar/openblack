@@ -46,6 +46,8 @@ constexpr glm::vec2 k_UndeadVillage = glm::vec2(3001.083f, 3457.676f) - k_LandMi
 constexpr float k_UndeadVillageSearch = 100.0f;
 /// The mountain top where the Creed comes, from the middle of the land
 constexpr glm::vec2 k_CreedTop = glm::vec2(2694.475f, 2594.948f) - k_LandMiddle;
+/// The radius of the ring of anti-influence that the land's script puts on the Creed
+constexpr float k_CreedRing = 30.0f;
 /// The kinds of thing and of town that the land's script gives to find a village
 constexpr float k_TownThing = 9.0f;
 constexpr float k_AnyTown = 5000.0f;
@@ -311,6 +313,51 @@ void AddUndeadVillageCreed(std::vector<Scenario>& all)
 	});
 }
 
+void AddCreedScene(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_creed_scene",
+	    .name = "Story: the Creed of the fourth land on its hill top, with the scene that waits for the creature",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The Creed is on the mountain top, with the "
+	                   "ring of anti-influence that the land's script puts on it. The cheat of infinite influence is "
+	                   "on. The scene that waits for the Creed in the creature's hand runs. The player's tiger stands 20 "
+	                   "metres east of the Creed on the learning leash, and the leash tells it to act on the Creed.",
+	    .expected = "The hand can not take the Creed, also with the cheat. The tiger takes the Creed, and the scene "
+	                "fades to white and plays.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_CreedTop.x + 40.0f, 35.0f, k_CreedTop.y + 40.0f},
+	                .look = {k_CreedTop.x, 2.0f, k_CreedTop.y}},
+	    .creatures = {PlayersTiger(k_CreedTop + glm::vec2(20.0f, 0.0f))},
+	    .objects = {{.type = MobileObjectInfo::Creed, .offset = k_CreedTop}},
+	    .commands = {{.kind = Kind::InfiniteInfluenceCheat, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "INFLUENCE_OBJECT",
+	                  .scriptArguments = {{.kind = Argument::Kind::Object, .index = 0},
+	                                      {.number = k_CreedRing},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 1.0f}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.0f,
+	                  .script = "CreatureGetsCreed",
+	                  .scriptGlobals = {{"CreedL4", {.kind = Argument::Kind::Object, .index = 0}},
+	                                    {"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
+	                 {.kind = Kind::LeashOrderOn, .creature = 0, .delaySeconds = 2.0f, .waitUntilFree = false, .object = 0}},
+	    .checks = {{.label = "the hand can not take the Creed with the cheat on",
+	                .quantity = checks::Quantity::HandMayTake,
+	                .afterTurns = 20,
+	                .atMost = 0.0},
+	               {.label = "the creature takes the Creed and the scene deletes it",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 40,
+	                .byTurn = 900,
+	                .atMost = 0.0}},
+	});
+}
+
 void AddSlegFightTwice(std::vector<Scenario>& all)
 {
 	all.push_back({
@@ -360,4 +407,5 @@ void testbed_scenarios::AddLand4SlegScenarios(std::vector<Scenario>& all)
 	AddCreatureSentBack(all);
 	AddSlegEatsVillagers(all);
 	AddUndeadVillageCreed(all);
+	AddCreedScene(all);
 }
