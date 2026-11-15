@@ -69,6 +69,9 @@ public:
 	void MemberReady(int64_t account);
 	/// The host starts the countdown
 	void StartCountdown();
+	/// The game server of the start has another build than the session: the service stops the start. expected: the
+	/// build that the service needs now, empty when it gives none.
+	void StopForServerVersion(std::string serverBuild, std::string expected);
 	/// The lobby gives the room a game server after the countdown. Then the room gets this ticket.
 	void AssignGame(std::string gameId, lobby_api::JoinTicket ticket);
 

@@ -701,6 +701,15 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		frontEnd.SelectLobby("d1");
 		frontEnd.JoinSelectedLobby();
 		break;
+	case Stage::LobbyWrongVersion:
+		frontEnd.SelectLobby("d6");
+		frontEnd.JoinSelectedLobby();
+		break;
+	case Stage::LobbyServerVersion:
+		frontEnd.SelectLobby("d1");
+		frontEnd.JoinSelectedLobby();
+		lobbies.StopForServerVersion("0.9.0+new/codec36", "0.9.0+new/codec36");
+		break;
 	case Stage::LobbyPassword:
 		frontEnd.SelectLobby("d2");
 		frontEnd.JoinSelectedLobby();

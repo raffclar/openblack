@@ -59,6 +59,9 @@ inline constexpr int k_ExitTimeLimit = 10;
 inline constexpr int k_ExitDeadline = 11;
 inline constexpr int k_ExitNoStart = 12;
 inline constexpr int k_ExitDecided = 13;
+/// The server did not start, because the lobby gave another build id (--build-id) than the build id of the server. The
+/// slot agent does not start the server again, and the lobby tells the players the version of the server.
+inline constexpr int k_ExitWrongVersion = 14;
 
 [[nodiscard]] int ExitCodeOf(End end) noexcept;
 

@@ -123,6 +123,9 @@ std::string SystemLineText(const SystemLine& line)
 		return "The game could not start.";
 	case SystemLineKind::NotEnoughJoined:
 		return "Not enough players joined the server.";
+	case SystemLineKind::ServerVersion:
+		return line.subject.empty() ? std::string("The game could not start: the game server has another version of openblack.")
+		                            : fmt::format("The game could not start: the game server has version {}.", line.subject);
 	case SystemLineKind::Queued:
 		return fmt::format("Waiting for a free server: you are number {} in the line.", line.number);
 	}
@@ -561,6 +564,12 @@ void LobbyRoom::ApplyStateEvent(std::string_view type, const lobby_api::LobbySta
 		else if (event.why == "not_enough_joined")
 		{
 			AddSystemLine({.kind = SystemLineKind::NotEnoughJoined});
+		}
+		else if (event.why == lobby_api::lobby_problems::k_WrongVersion)
+		{
+			// Each player sees why: the build of the game server is not the build of the session
+			_neededBuild = event.expected;
+			AddSystemLine({.kind = SystemLineKind::ServerVersion, .subject = event.serverBuild});
 		}
 		else
 		{

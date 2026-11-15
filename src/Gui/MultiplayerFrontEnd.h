@@ -390,9 +390,17 @@ private:
 	void FollowLobbyMap(const online::lobby::LobbyRoom& room);
 	/// After the session gets a game server: a ticket, then the network game joins the server
 	void FollowLobbyGame(const online::lobby::LobbyRoom& room);
+	/// A start that a game server of another version stopped: the box tells the player to update the game
+	void FollowServerVersion(const online::lobby::LobbyRoom& room);
 	/// The box for a problem of a call of the lobby sessions
 	void ShowLobbyProblem(const ecs::systems::LobbyError& error);
 	void ShowLobbyNotice(std::u16string text);
+	/// The desktop game or the web page
+	[[nodiscard]] lobby_api::ClientKind ClientKind() const noexcept;
+	/// The build id that this game gives in its joins
+	[[nodiscard]] const std::string& OwnBuild() const;
+	/// The versions of a refusal of the game server for the version
+	[[nodiscard]] lobby_screens::VersionNeed VersionNeedOf(const online::NetworkSession& session) const;
 	/// The answer of a call of the lobby sessions: the busy state ends, and a problem shows its box
 	[[nodiscard]] ecs::systems::LobbyCallback<ecs::systems::LobbyDone> LobbyDoneCallback();
 	void JoinLobby(std::string id, std::optional<std::string> password);
@@ -473,6 +481,10 @@ private:
 	lobby_screens::CreateForm _createForm;
 	bool _editsLobby {false};
 	std::u16string _lobbyMessageText;
+	/// The build id of this build, for a front end with no lobby sessions
+	std::string _ownBuild;
+	/// The lines of the room that tell of a game server of another version, which the front end showed
+	uint32_t _serverVersionLines {0};
 	/// What Yes does on a LobbyQuestion
 	enum class LobbyQuestionKind : uint8_t
 	{
