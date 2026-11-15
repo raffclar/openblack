@@ -343,3 +343,14 @@ TEST(SpellIcons, TheHandShowsTheStoreOrWhatTheHeldSeedStillNeeds)
 	EXPECT_EQ(HandPulseShare({.charging = true, .store = 5.0f}, 0.0f), 1.0f);
 	EXPECT_EQ(HandPulseShare({.charging = true}, 0.0f), 0.0f);
 }
+
+// A village centre shows its stone hands only while it stands in a town, the land's draw list draws it and it has
+// life. A centre that a script keeps with no life shows no hands.
+TEST(SpellIcons, ACentreShowsItsHandsOnlyInATownDrawnAndWithLife)
+{
+	EXPECT_TRUE(CentreShowsHands(true, true, 1.0f));
+	EXPECT_TRUE(CentreShowsHands(true, true, 0.01f));
+	EXPECT_FALSE(CentreShowsHands(true, true, 0.0f));
+	EXPECT_FALSE(CentreShowsHands(true, false, 1.0f));
+	EXPECT_FALSE(CentreShowsHands(false, true, 1.0f));
+}

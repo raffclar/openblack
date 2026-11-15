@@ -54,6 +54,14 @@ struct SeedLevel
 	int powerUp {k_BasePowerUpLevel};
 };
 
+/// Whether a village centre shows its stone hands, with their seeds and their charge looks. The centre must stand in a
+/// town, the land's draw list must draw it, and it must have life. A centre that a script keeps with no life shows no
+/// hands, but it keeps them.
+[[nodiscard]] constexpr bool CentreShowsHands(bool inTown, bool centreDrawn, float centreLife)
+{
+	return inTown && centreDrawn && centreLife > 0.0f;
+}
+
 /// The town comes to hold a magic type: whether it is new to it. Types beyond the game's, and none, are never held.
 bool Hold(HeldMagic& held, MagicType type);
 /// The town no longer holds a magic type: whether it held it

@@ -1204,6 +1204,11 @@ void world_objects::Remove(entt::entity object)
 	{
 		Locator::wonderSystem::value().Lost(object);
 	}
+	// A village centre that goes takes its stone hands with it, before its town plans it again
+	if (registry.AllOf<CentreHands>(object) && Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().CentreRemoved(object);
+	}
 	// A town's building going is planned again by its town, where it stood, and the things it put round itself go. A
 	// miracle dispenser is one of the buildings of its town.
 	if (registry.AnyOf<Abode, SpellDispenser>(object))

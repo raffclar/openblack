@@ -656,6 +656,50 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "town.centre_destroyed",
+	    .name = "A village centre with stone hands destroyed by an effect",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given, its centre with the heal and water stone hands. "
+	                   "When the site has its heal and water icons and is built, an effect destroys the village centre, "
+	                   "as when a fire takes the last of its life.",
+	    .expected = "The village centre goes, and its two stone hands, their seeds and its totem go with it. The heal and "
+	                "water icons at the worship site go too, as no other town of the site offers them. The town keeps "
+	                "the two miracles: when its builders make the village centre again, its stone hands and the "
+	                "site's icons come back.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = TownAndTemple(),
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::DestroyObjectByEffect, .delaySeconds = 3.0f, .object = 0}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "town.centre_destroyed_in_script",
+	    .name = "A village centre that a script holds, destroyed by an effect",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.centre_destroyed, but a script holds the village centre, as a script "
+	                   "holds a thing that one of its variables names. When the site is built, an effect takes the last "
+	                   "of the centre's life.",
+	    .expected = "The village centre stays, with no life. Its stone hands, their seeds and its totem do not show. The "
+	                "heal and water icons at the worship site stay, and the player can charge the two miracles there. "
+	                "When the builders mend the centre, its stone hands show again.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = TownAndTemple(),
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.front().inScript = true;
+		        return objects;
+	        }(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::DestroyObjectByEffect, .delaySeconds = 3.0f, .object = 0}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "miracles.icon_charge_far_off",
 	    .name = "The pulse of a charging icon seen from far off",
 	    .facet = Facet::Miracles,

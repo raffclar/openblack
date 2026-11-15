@@ -57,6 +57,7 @@ public:
 	bool TownReleases(entt::entity town, MagicType type) override;
 	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity town) const override;
 	void CentreWorking(entt::entity centre) override;
+	void CentreRemoved(entt::entity centre) override;
 	void TownChangedHands(entt::entity town, PlayerNames previous) override;
 	void TownRemoved(entt::entity town) override;
 	void PlayerMade(PlayerNames player) override;
@@ -120,6 +121,8 @@ private:
 	/// Every hand of a centre that shows a seed goes. The site's icon of the seed goes too, unless another of the site's
 	/// towns offers the seed.
 	void RemoveHands(entt::entity centre, entt::entity town, SpellSeedType seed);
+	/// The town's worship site loses its icon of a seed, unless one of the site's towns still has a hand of the seed
+	void RemoveSiteIconUnlessOffered(entt::entity town, SpellSeedType seed);
 	/// A site gets an icon of a seed, if it has none
 	void AddSiteIcon(entt::entity site, SpellSeedType seed);
 	/// The seed above a site's icon shows the highest power-up level of it that the site's player may cast

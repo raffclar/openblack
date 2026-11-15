@@ -248,6 +248,18 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		ecs::world_objects::DestroyedByEffect(scaffold->site, {.killer = std::nullopt, .weight = 0.0f});
 		return "the building of the site is destroyed";
 	}
+	case Kind::DestroyObjectByEffect:
+	{
+		const auto object = ObjectAt(command.object);
+		if (!object.has_value())
+		{
+			return "nothing to destroy";
+		}
+		// The effect harms the object first, and its death follows when no life is left
+		ecs::world_objects::ReduceLife(*object, ecs::world_objects::LifeOf(*object), std::nullopt, false);
+		ecs::world_objects::DestroyedByEffect(*object, {.killer = std::nullopt, .weight = 0.0f});
+		return Locator::entitiesRegistry::value().Valid(*object) ? "the object stays" : "the object is destroyed";
+	}
 	case Kind::CreateReaction:
 	{
 		const auto object = ObjectAt(command.object);
