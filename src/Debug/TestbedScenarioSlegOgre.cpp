@@ -258,6 +258,41 @@ void AddUndeadVillageCreed(std::vector<Scenario>& all)
 	                                    {"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
 	});
 }
+
+void AddCreedScene(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_creed_scene",
+	    .name = "Story: the Creed of the fourth land on its hill top, with the scene that waits for the creature",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The curse of the undead village is broken at "
+	                   "once and the Creed comes on the mountain top, with its ring of anti-influence. The scene that "
+	                   "waits for the Creed in the creature's hand runs. The player's tiger stands 20 metres east of the "
+	                   "Creed on the learning leash.",
+	    .expected = "The hand can not take the Creed. Told with the leash to act on the Creed, the tiger takes it, and "
+	                "the scene fades to white and plays.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_CreedTop.x + 40.0f, 35.0f, k_CreedTop.y + 40.0f},
+	                .look = {k_CreedTop.x, 2.0f, k_CreedTop.y}},
+	    .creatures = {PlayersTiger(k_CreedTop + glm::vec2(20.0f, 0.0f))},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CALL_NEAR",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = k_TownThing},
+	                                      {.kind = Argument::Kind::Integer, .number = k_AnyTown},
+	                                      {.kind = Argument::Kind::Position, .point = k_UndeadVillage},
+	                                      {.number = k_UndeadVillageSearch},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.0f,
+	                  .script = "LookAfterTotems",
+	                  .scriptGlobals = {{"UndeadTown", {.kind = Argument::Kind::LastResult}},
+	                                    {"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::RunScript, .delaySeconds = 0.0f, .script = "CreatureGetsCreed"},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope}},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddLand4SlegScenarios(std::vector<Scenario>& all)
@@ -269,4 +304,5 @@ void testbed_scenarios::AddLand4SlegScenarios(std::vector<Scenario>& all)
 	AddCreatureSentBack(all);
 	AddSlegEatsVillagers(all);
 	AddUndeadVillageCreed(all);
+	AddCreedScene(all);
 }
