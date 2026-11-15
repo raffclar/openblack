@@ -85,3 +85,20 @@ TEST(HttpPolicy, AChannelWithNoTransportClosesAtTheNextPoll)
 	EXPECT_EQ(reason, PushClose::Unavailable);
 	EXPECT_FALSE(channel.IsOpen());
 }
+
+TEST(HttpPolicy, TheHeaderLinesOfTheBrowserGiveNamesAndValuesWithNoSpaceAndNoLineEnd)
+{
+	// The text of a range answer as the browser gives it: CR LF after each line, a space after each colon
+	const auto headers = http_policy::ParseHeaderLines("Accept-Ranges: bytes\r\n"
+	                                                   "Content-Range: bytes 0-262143/2176738\r\n"
+	                                                   "content-length:262144\n"
+	                                                   "no colon\r\n"
+	                                                   ": no name\r\n"
+	                                                   "ETag: \"a:b\"\r\n");
+	ASSERT_EQ(headers.size(), 4u);
+	EXPECT_EQ(headers[0], (std::pair<std::string, std::string> {"accept-ranges", "bytes"}));
+	EXPECT_EQ(headers[1], (std::pair<std::string, std::string> {"content-range", "bytes 0-262143/2176738"}));
+	EXPECT_EQ(headers[2], (std::pair<std::string, std::string> {"content-length", "262144"}));
+	EXPECT_EQ(headers[3], (std::pair<std::string, std::string> {"etag", "\"a:b\""}));
+	EXPECT_TRUE(http_policy::ParseHeaderLines("").empty());
+}

@@ -917,6 +917,7 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 	    .lobbyRoom = lobbySessions ? &demo->lobbyRoom : nullptr,
 	    .nowMs = [] { return k_DemoNowMs; },
 	    .notice = openblack::gui::GiveLobbyNotice,
+	    .report = {},
 	};
 	MultiplayerFrontEnd::Settings settings {
 	    .registerPage = {},

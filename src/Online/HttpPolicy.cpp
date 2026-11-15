@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cctype>
 #include <cstdint>
 
 #include <algorithm>
@@ -115,6 +116,40 @@ bool IsLoopbackAddress(std::string_view url) noexcept
 		return false;
 	}
 	return IsLoopbackHost(rest.substr(0, rest.find_first_of(":/?#")));
+}
+
+std::vector<std::pair<std::string, std::string>> ParseHeaderLines(std::string_view text)
+{
+	const auto trim = [](std::string_view part) {
+		constexpr std::string_view k_Space = " \t\r\n";
+		const auto first = part.find_first_not_of(k_Space);
+		if (first == std::string_view::npos)
+		{
+			return std::string_view {};
+		}
+		return part.substr(first, part.find_last_not_of(k_Space) - first + 1);
+	};
+	std::vector<std::pair<std::string, std::string>> headers;
+	while (!text.empty())
+	{
+		const auto end = text.find('\n');
+		const auto line = text.substr(0, end);
+		text = end == std::string_view::npos ? std::string_view {} : text.substr(end + 1);
+		const auto colon = line.find(':');
+		if (colon == std::string_view::npos)
+		{
+			continue;
+		}
+		const auto name = trim(line.substr(0, colon));
+		if (name.empty())
+		{
+			continue;
+		}
+		std::string lower(name);
+		std::ranges::transform(lower, lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		headers.emplace_back(std::move(lower), std::string(trim(line.substr(colon + 1))));
+	}
+	return headers;
 }
 
 bool IsSameOriginPath(std::string_view url) noexcept
