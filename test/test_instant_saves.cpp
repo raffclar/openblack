@@ -312,6 +312,44 @@ TEST(InstantSaves, NamesTheSlotWithTheLand)
 	EXPECT_EQ(k_SlotNameTexts.at(0), 0u);
 }
 
+TEST(InstantSaves, TheWebGameAutosavesAfterFiveMinutesOfTurns)
+{
+	EXPECT_EQ(AutosaveInterval(false), 6000u);
+	EXPECT_EQ(AutosaveInterval(true), 3000u);
+	AutosaveState state {.land = 1, .turn = 3000, .lastAutosaveTurn = 0, .interval = AutosaveInterval(true)};
+	EXPECT_FALSE(AutosaveDue(state));
+	state.turn = 3001;
+	EXPECT_TRUE(AutosaveDue(state));
+	// The web game keeps all the other rules of the autosave
+	state.paused = true;
+	EXPECT_FALSE(AutosaveDue(state));
+	state.paused = false;
+	state.scriptCutScene = true;
+	EXPECT_FALSE(AutosaveDue(state));
+	state.scriptCutScene = false;
+	state.networkGame = true;
+	EXPECT_FALSE(AutosaveDue(state));
+	state.networkGame = false;
+	state.gameOver = true;
+	EXPECT_FALSE(AutosaveDue(state));
+	state.gameOver = false;
+	state.autosaveOn = false;
+	EXPECT_FALSE(AutosaveDue(state));
+	state.autosaveOn = true;
+	state.land = 6;
+	EXPECT_FALSE(AutosaveDue(state));
+	// The next autosave waits five more minutes from the turn of the last one
+	state.land = 1;
+	state.lastAutosaveTurn = 3001;
+	state.turn = 6001;
+	EXPECT_FALSE(AutosaveDue(state));
+	state.turn = 6002;
+	EXPECT_TRUE(AutosaveDue(state));
+	// The desktop game waits ten minutes
+	state.interval = AutosaveInterval(false);
+	EXPECT_FALSE(AutosaveDue(state));
+}
+
 TEST(InstantSaves, AutosavesAfterTenMinutesOfTurns)
 {
 	AutosaveState state {.autosaveOn = true,

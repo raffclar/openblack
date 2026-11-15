@@ -258,11 +258,49 @@ void AddUndeadVillageCreed(std::vector<Scenario>& all)
 	                                    {"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
 	});
 }
+
+void AddSlegFightTwice(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_sleg_fight_twice",
+	    .name = "Story: Sleg the ogre fights the creature two times in a row on the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The set-up script of the land runs, then the "
+	                   "script of the ogre. The player's Tiger stands 55 metres from the place where the ogre speaks, and "
+	                   "nobody fights for it.",
+	    .expected = "The first scene plays: Sleg walks to his side and says his four lines, then the fight starts. When "
+	                "it ends, Sleg walks back to his lair and the Tiger goes to the temple. When the Tiger comes near "
+	                "again, the second scene plays: Sleg says his one line, and the second fight starts. Neither scene "
+	                "stays on the screen.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_FightIntro.x - 30.0f, 35.0f, k_FightIntro.y - 40.0f},
+	                .look = {k_FightIntro.x, 5.0f, k_FightIntro.y}},
+	    .creatures = {PlayersTiger(k_NearTheFight)},
+	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand4"},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "Land4Ogre",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
+	    .checks = {{.label = "the first fight starts after the first scene",
+	                .quantity = checks::Quantity::CreatureDuels,
+	                .afterTurns = 10,
+	                .byTurn = 1500,
+	                .atLeast = 1.0},
+	               {.label = "the second fight starts after the second scene",
+	                .quantity = checks::Quantity::CreatureDuels,
+	                .afterTurns = 10,
+	                .byTurn = 3500,
+	                .atLeast = 2.0}},
+	});
+}
+
 } // namespace
 
 void testbed_scenarios::AddLand4SlegScenarios(std::vector<Scenario>& all)
 {
 	AddSlegFight(all);
+	AddSlegFightTwice(all);
 	AddSlegBeatenScroll(all);
 	AddGremlins(all);
 	AddOgreFence(all);
