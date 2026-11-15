@@ -720,6 +720,8 @@ async function useSiteGameFiles() {
 // ------------------------------------------------------------------------------------------------ start
 
 let chosen = null;
+// The saved games and creatures on the site (launcher-cloud.js)
+let cloudSaves = null;
 
 // The game thread draws into an OffscreenCanvas. In the frames of its game loop, the thread gives control back to the
 // browser after each frame, and the browser shows the game canvas. While it draws other frames, such as a loading
@@ -943,6 +945,9 @@ async function start(online = false) {
     return;
   }
   setPlayEnabled(false);
+  // The saved games and creatures from the site come back before the game starts, because the game reads its
+  // profiles at the start. Then the game owns the Profiles folder, and the page only reads it.
+  await waitForCloudRestore(cloudSaves);
   const storage = (await storageRoot()) !== undefined;
   if (storage && navigator.storage.persist) {
     // Ask the browser to keep the saves when it needs space
@@ -1146,6 +1151,10 @@ async function main() {
   });
 
   showCrashReports('Crash reports', 'The browser keeps these crash reports of earlier games.');
+
+  if (await storageRoot()) {
+    cloudSaves = startCloudSaves({ log });
+  }
 
   const copy = await keptCopy();
   if (copy) {
