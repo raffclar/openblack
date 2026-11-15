@@ -1128,6 +1128,9 @@ struct Command
 		/// An effect destroys the building on whose site the scenario's object, a scaffold, stands, as when a fire takes
 		/// the last of the life of the building. Needs no creature.
 		DestroyScaffoldSite,
+		/// An effect takes all of the life of the scenario's object and then destroys it, as a fire does. Needs no
+		/// creature.
+		DestroyObjectByEffect,
 		/// The scenario's object, a scaffold that a script marked to clear its ground, clears it at once, as when the
 		/// hand lets it go. Needs no creature.
 		ScaffoldClearsGround,

@@ -1021,6 +1021,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::FillBuiltAmount:
 	case Kind::ScaffoldStartsSite:
 	case Kind::DestroyScaffoldSite:
+	case Kind::DestroyObjectByEffect:
 	case Kind::ScaffoldClearsGround:
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
