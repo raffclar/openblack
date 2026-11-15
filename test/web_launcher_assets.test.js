@@ -455,6 +455,28 @@ check('a file that the game reads comes from the site once and goes to every gam
   assert.equal(site.requests.get(assetAddress('Data/Landscape/Land2.lnd')), 1);
 });
 
+check('a file that came for later before the game could take it goes to the game thread when the game reads it', async () => {
+  const { store, shared, index } = await streamedSite();
+  const number = numberOf(index.files, 'Data/Spells/Anims/heal.anm');
+  // The page gets the file for later while the game cannot take files yet: the share then gives it to no thread
+  store.prefetch([number]);
+  await Promise.all([...store.jobs.values()].map((job) => job.promise));
+  shared.length = 0;
+  // The game reads it: the page has it, and must give it again, or the game thread waits for ever
+  await store.obtain(number);
+  assert.deepEqual(shared.map((given) => [given.number, given.block]), [[number, null]]);
+});
+
+check('a block that the page has goes to the game thread again when the game reads it', async () => {
+  const { store, shared, index } = await streamedSite();
+  const number = numberOf(index.files, 'Audio/Music/align/Good.sad');
+  await store.obtain(number, 4, 4);
+  await Promise.all([...store.jobs.values()].map((job) => job.promise));
+  shared.length = 0;
+  await store.obtain(number, 4, 4);
+  assert.deepEqual(shared.map((given) => [given.number, given.block]), [[number, 1]]);
+});
+
 check('a read of a music bank gets its blocks and the next blocks, and the whole bank is kept when complete', async () => {
   const { store, site, shared, index } = await streamedSite();
   const number = numberOf(index.files, 'Audio/Music/align/Good.sad');
