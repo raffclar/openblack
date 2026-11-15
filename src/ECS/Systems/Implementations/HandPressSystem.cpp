@@ -205,9 +205,9 @@ public:
 	}
 	void LeashTapThing(PlayerNames player, entt::entity thing) final { Locator::leashSystem::value().TapThing(player, thing); }
 	bool LeashPressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-	                      uint32_t nowMs) final
+	                      uint32_t nowMs, bool mayTie) final
 	{
-		return Locator::leashSystem::value().PressAction(player, rayOrigin, rayDirection, cursor, nowMs);
+		return Locator::leashSystem::value().PressAction(player, rayOrigin, rayDirection, cursor, nowMs, mayTie);
 	}
 	bool PressRope(PlayerNames player) final { return Locator::leashSystem::value().PressRope(player); }
 	[[nodiscard]] std::optional<entt::entity> PlayersCreature(PlayerNames player) const final
@@ -435,13 +435,15 @@ void HandPressSystem::ActionPress(const SDL_Event& event, bool inTemple, bool ha
 		_actionPressTaken = _world->GrabPress(_world->Ticks(), _world->Turn());
 	}
 	// With an empty hand and the leash held, a quick second press near the first is a double tap, which ties the leash
-	// to the thing under the cursor or unties it, before anything else takes it
+	// to the thing under the cursor or unties it, before anything else takes it. While the camera shows the duel, the
+	// fight takes the double tap as two presses, and the leash does not tie.
 	if (!_actionPressTaken && !handHoldsThing && !_world->MagicHandBusy())
 	{
 		glm::vec3 rayOrigin;
 		glm::vec3 rayDirection;
 		_world->Ray(cursor, rayOrigin, rayDirection);
-		_actionPressTaken = _world->LeashPressAction(_world->Player(), rayOrigin, rayDirection, cursor, _world->Ticks());
+		_actionPressTaken =
+		    _world->LeashPressAction(_world->Player(), rayOrigin, rayDirection, cursor, _world->Ticks(), !fightTakesPress);
 	}
 	// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
 	if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !_world->MagicHandBusy() && _world->TipBubbleUnderHand())

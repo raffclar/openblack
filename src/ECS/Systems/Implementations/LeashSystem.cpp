@@ -2361,9 +2361,10 @@ void LeashSystem::DoOrder(PlayerNames player, const player_commands::LeashOrder&
 }
 
 bool LeashSystem::PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-                              uint32_t milliseconds)
+                              uint32_t milliseconds, bool mayTie)
 {
-	_lastPressDouble = _doubleTaps.OnPress(milliseconds, cursor);
+	// Each press counts for the next double tap, also a press that the fight takes
+	_lastPressDouble = _doubleTaps.OnPress(milliseconds, cursor) && mayTie;
 	if (!_lastPressDouble)
 	{
 		return false;

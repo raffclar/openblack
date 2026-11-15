@@ -816,6 +816,87 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 			    .commands = std::move(commands),
 			});
 		}
+		{
+			// The player's red tiger, with the aggression leash held, duels a blue tiger of another player. No one chooses
+			// the moves of either tiger. The hand double taps the Action button on the blue tiger after the duel starts.
+			// In the fight view the fight takes both presses, and the duel continues. Out of the fight view the second
+			// press ties the leash to the blue tiger, and the fight ends with no winner.
+			const auto doubleTap = [&](bool view) {
+				// The pointer stays on the blue tiger, so that the hand that holds the leash stays near the red tiger. A
+				// hand further away than the full length of the leash makes the red tiger walk back to it.
+				std::vector<Command> commands {{.kind = Kind::PointerOnCreature, .creature = 1, .delaySeconds = 0.3f},
+				                               Leash(0, LeashType::Evil, 0.2f),
+				                               Fight(Kind::StartFight, 0, 1, 1.0f),
+				                               Fight(Kind::FightAuto, 0, 0, 0.2f),
+				                               Fight(Kind::FightAuto, 1, 0, 0.2f),
+				                               Fight(Kind::PointerOnOpponent, 0, 0, 0.1f)};
+				if (view)
+				{
+					commands.push_back(Fight(Kind::FightView, 0, 0, k_ViewAfterArena - 0.1f));
+				}
+				for (int step = 0; step < 8; ++step)
+				{
+					commands.push_back(Fight(Kind::PointerOnOpponent, 0, 0, 1.0f));
+				}
+				commands.push_back(Fight(Kind::PointerOnOpponent, 0, 0,
+				                         view ? k_PressAfterDuel - 8.0f : k_ViewAfterArena + k_PressAfterDuel - 8.1f));
+				for (int press = 0; press < 2; ++press)
+				{
+					commands.push_back({.kind = Kind::PointerPress, .delaySeconds = 0.05f, .value = k_RightButton});
+					commands.push_back({.kind = Kind::PointerRelease, .delaySeconds = 0.05f, .value = k_RightButton});
+				}
+				return commands;
+			};
+			// The double tap comes at about 16.5 seconds, and the checks read the fight at 20 seconds
+			constexpr uint32_t k_AfterTapTurns = 200;
+			all.push_back({
+			    .id = "combat.fight_view_leash_double_tap",
+			    .name = "A double tap with the leash in the fight view",
+			    .facet = Facet::Combat,
+			    .description = "The player's red tiger has the aggression leash and duels a blue tiger of another player. "
+			                   "No one chooses the moves. A double click into the arena makes the camera show the fight. "
+			                   "Then the hand double taps the Action button on the blue tiger.",
+			    .expected = "The fight takes both presses: two sparkles show on the blue tiger, and the red tiger "
+			                "strikes. The leash does not tie to the blue tiger, and the duel continues.",
+			    .framing = ringside,
+			    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+			    .commands = doubleTap(true),
+			    .checks = {{.label = "the red tiger still duels",
+			                .quantity = checks::Quantity::CreatureInDuel,
+			                .afterTurns = k_AfterTapTurns,
+			                .atLeast = 1.0},
+			               {.label = "the blue tiger still duels",
+			                .quantity = checks::Quantity::CreatureInDuel,
+			                .index = 1,
+			                .afterTurns = k_AfterTapTurns,
+			                .atLeast = 1.0}},
+			});
+			all.push_back({
+			    .id = "combat.leash_double_tap_out_of_view",
+			    .name = "A double tap with the leash out of the fight view",
+			    .facet = Facet::Combat,
+			    .description = "As A double tap with the leash in the fight view, but the camera does not show the fight. "
+			                   "The camera stays out of the arena.",
+			    .expected = "The second press ties the leash to the blue tiger. The fight ends with no winner: neither "
+			                "tiger faints, and neither celebrates.",
+			    .framing = ringside,
+			    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+			    .commands = doubleTap(false),
+			    .checks = {{.label = "the duel ended",
+			                .quantity = checks::Quantity::CreatureInDuel,
+			                .afterTurns = k_AfterTapTurns,
+			                .atMost = 0.0},
+			               {.label = "the red tiger did not lose",
+			                .quantity = checks::Quantity::CreatureFightHealth,
+			                .afterTurns = k_AfterTapTurns,
+			                .atLeast = 0.1},
+			               {.label = "the blue tiger did not lose",
+			                .quantity = checks::Quantity::CreatureFightHealth,
+			                .index = 1,
+			                .afterTurns = k_AfterTapTurns,
+			                .atLeast = 0.1}},
+			});
+		}
 		// The fight autopilot plays the stages of the lesson with the real mouse, then checks them in the transcript
 		constexpr size_t k_LessonPolicy = 0;
 		constexpr float k_LessonCheckAfterSeconds = 45.0f;
