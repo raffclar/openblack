@@ -24,7 +24,9 @@
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
 #include "EngineConfig.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -40,8 +42,6 @@ namespace
 /// The kinds of wound fights leave, and the burns fire leaves, strong and weak
 constexpr std::array<uint8_t, 3> k_FightWounds {3, 4, 5};
 constexpr uint8_t k_StrongBurn = 1;
-/// A trail of blood runs this many texels down the skin
-constexpr int k_BloodTrailLength = 12;
 
 std::string SlotLabel(size_t index, const creature_tattoo::Slot& slot)
 {
@@ -123,6 +123,21 @@ void CreatureSpawner::DrawAppearance(entt::entity entity) noexcept
 		slots.at(index) = tattoo;
 		const auto pictures = Locator::tattooEditorSystem::has_value() ? Locator::tattooEditorSystem::value().GetPictures()
 		                                                               : creature_tattoo::Pictures {};
+		// In a network game the tattoos and the block of pictures go as the command of the tattoo editor, so that each
+		// computer puts the same tattoos on the creature
+		if (InNetworkGame())
+		{
+			if (Locator::playerCommandSystem::has_value())
+			{
+				Locator::playerCommandSystem::value().Submit(player_commands::CreatureTattoo {
+				    .creature = entity,
+				    .slots = slots,
+				    .hasPictures = true,
+				    .pictures = creature_tattoo::PicturesBlock(slots, pictures),
+				});
+			}
+			return;
+		}
 		skins.PutOnTattoos(entity, slots, pictures);
 	};
 	if (ImGui::Button("Set slot"))
@@ -160,6 +175,13 @@ void CreatureSpawner::DrawAppearance(entt::entity entity) noexcept
 	}
 	ImGui::SliderInt("Kind", &_woundType, 0, 7);
 	ImGui::SliderInt("Column", &_woundColumn, 0, 7);
+	// In a network game each mark goes as a command of the turns. This computer picks the random place, so that each
+	// computer puts the mark at the same place.
+	using creature_edit_acts::Act;
+	const auto mark = [entity](Act kind, const creature_marks::Mark& at) {
+		static_cast<void>(editor::DoCreatureAct(
+		    {.creature = entity, .act = static_cast<uint8_t>(kind), .args = {at.u, at.v, at.skin, at.type, at.column}}));
+	};
 	const auto place = [this](uint8_t type, uint8_t column) {
 		creature_marks::Mark mark {.u = static_cast<uint8_t>(_markU),
 		                           .v = static_cast<uint8_t>(_markV),
@@ -178,7 +200,7 @@ void CreatureSpawner::DrawAppearance(entt::entity entity) noexcept
 	if (ImGui::Button("Add wound"))
 	{
 		const auto type = k_FightWounds.at(std::uniform_int_distribution<size_t>(0, k_FightWounds.size() - 1)(_random));
-		skins.AddWound(entity, place(type, static_cast<uint8_t>(_woundColumn)));
+		mark(Act::AddWound, place(type, static_cast<uint8_t>(_woundColumn)));
 	}
 	if (ImGui::IsItemHovered())
 	{
@@ -187,31 +209,27 @@ void CreatureSpawner::DrawAppearance(entt::entity entity) noexcept
 	ImGui::SameLine();
 	if (ImGui::Button("Add burn"))
 	{
-		skins.AddWound(entity, place(k_StrongBurn, static_cast<uint8_t>(_woundColumn)));
+		mark(Act::AddWound, place(k_StrongBurn, static_cast<uint8_t>(_woundColumn)));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Add of kind"))
 	{
-		skins.AddWound(entity, place(static_cast<uint8_t>(_woundType), static_cast<uint8_t>(_woundColumn)));
+		mark(Act::AddWound, place(static_cast<uint8_t>(_woundType), static_cast<uint8_t>(_woundColumn)));
 	}
 	if (ImGui::Button("Add blood"))
 	{
 		// A trail down the skin from the place; the game runs drops of blood down the posed body instead
-		auto drop = place(0, 0);
-		for (int i = 0; i < k_BloodTrailLength && drop.v < 255; ++i, ++drop.v)
-		{
-			skins.AddBlood(entity, drop);
-		}
+		mark(Act::AddBlood, place(0, 0));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Heal a step"))
 	{
-		skins.Heal(entity, creature_marks::k_CountsPerStep);
+		static_cast<void>(editor::DoCreatureAct(editor::SwitchOf(entity, Act::Heal, false)));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Heal effect"))
 	{
-		skins.Heal(entity, creature_marks::k_HealEffectCounts);
+		static_cast<void>(editor::DoCreatureAct(editor::SwitchOf(entity, Act::Heal, true)));
 	}
 
 	ImGui::SeparatorText("Drawing");

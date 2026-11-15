@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <optional>
+
+#include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 
 #include "Editor/EditorActions.h"
@@ -33,6 +36,15 @@ private:
 
 	/// The pose of the main pick as a field of the transform starts to change it
 	PoseEdit _edit;
+	/// While the turn slider of a network game moves: the angle of the thing when the slider started, and the angle of the
+	/// slider. The turn goes as one command when the slider lets go, because the thing turns only at a later turn.
+	struct HeldTurn
+	{
+		entt::entity entity {entt::null};
+		float from {0.0f};
+		float degrees {0.0f};
+	};
+	std::optional<HeldTurn> _heldTurn;
 };
 
 } // namespace openblack::editor

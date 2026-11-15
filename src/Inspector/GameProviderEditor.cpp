@@ -14,6 +14,7 @@
 #include <string_view>
 #include <utility>
 
+#include <fmt/format.h>
 #include <glm/vec2.hpp>
 
 #include "Common/CreatureEditValues.h"
@@ -22,6 +23,7 @@
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorNetworkEdits.h"
@@ -237,6 +239,69 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			return QueryResult::Error("editor.creature_edit needs the id of a creature, the name of a value and an amount");
 		}
 		editor::SendCreatureEdit(*entity, *value, *amount);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto creatureAct =
+	    Query("creature_act",
+	          "Sends an act of the creature tools as a command of the turns, as the tabs of the creature section send it in a "
+	          "network game: each computer does it at the same turn, and the game server takes it only from a player with the "
+	          "editor claim. force sends it also when the editor of this computer is refused.",
+	          {{.name = "id",
+	            .type = "integer",
+	            .description = "The creature (none for an act on every creature)",
+	            .required = false},
+	           {.name = "act", .type = "string", .description = "The name of the act, such as \"sit down\"", .required = true},
+	           {.name = "other", .type = "integer", .description = "The other thing of the act", .required = false},
+	           {.name = "position", .type = "array", .description = "The place of the act [x, y, z]", .required = false},
+	           {.name = "amount", .type = "number", .description = "The amount of the act", .required = false},
+	           {.name = "index", .type = "integer", .description = "The index of the act in its list", .required = false},
+	           {.name = "args", .type = "array", .description = "Up to six small numbers of the act", .required = false},
+	           {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	creatureAct.writes = true;
+	provider->Add(std::move(creatureAct), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto nameParam = context.params.find("act");
+		const auto name =
+		    nameParam != context.params.end() && nameParam->is_string() ? nameParam->get<std::string>() : std::string();
+		const auto kind = creature_edit_acts::ActNamed(name);
+		if (!kind.has_value())
+		{
+			return QueryResult::Error("editor.creature_act needs the name of an act");
+		}
+		player_commands::EditorCreatureAct act {.creature = EntityParam(context.params).value_or(entt::null),
+		                                        .act = static_cast<uint8_t>(*kind)};
+		if (const auto other = context.params.find("other"); other != context.params.end() && other->is_number_integer())
+		{
+			act.other = static_cast<entt::entity>(other->get<uint32_t>());
+		}
+		if (const auto position = context.params.find("position");
+		    position != context.params.end() && position->is_array() && position->size() == 3)
+		{
+			act.position = {(*position)[0].get<float>(), (*position)[1].get<float>(), (*position)[2].get<float>()};
+		}
+		act.amount = NumberParam(context.params, "amount").value_or(0.0f);
+		if (const auto index = context.params.find("index"); index != context.params.end() && index->is_number_integer())
+		{
+			act.index = index->get<uint16_t>();
+		}
+		if (const auto args = context.params.find("args"); args != context.params.end() && args->is_array())
+		{
+			for (size_t i = 0; i < std::min(args->size(), act.args.size()); ++i)
+			{
+				act.args.at(i) = (*args)[i].get<uint8_t>();
+			}
+		}
+		if (const auto refusal = editor::ActRefusal(act))
+		{
+			return QueryResult::Error(fmt::format("editor.creature_act refuses the act: {}", *refusal));
+		}
+		if (Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(act);
+		}
 		return QueryResult::Value({{"sent", true}});
 	});
 	auto cheat =

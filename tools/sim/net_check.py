@@ -1278,6 +1278,35 @@ CREATURE_EDITS = [("alignment", [-0.8, 0.6]), ("fatness", [0.9, 0.2]), ("strengt
                   ("life", [0.4, 1.0]), ("warmth", [-0.6, 0.3]), ("itchiness", [0.5, 0.0]), ("grown up", [2, 13])]
 
 
+# The acts of the creature tools that the creature case sends after the values: the name of the act and its numbers.
+# "here" puts the place of the act at the creature, "near" a little way from it, and "other" names the nearest tree.
+CREATURE_ACTS = [
+    ("pause mind", {"args": [1]}), ("pause mind", {"args": [0]}), ("takes notice", {"args": [0]}),
+    ("takes notice", {"args": [1]}), ("play action", {"index": 0}), ("play gesture", {"index": 0}),
+    ("pull face", {"index": 3}), ("show feeling", {"index": 2}), ("sit down", {}), ("stand up", {}),
+    ("feedback", {"amount": 0.5}), ("feedback", {"amount": -0.5}), ("trainer", {"index": 1}), ("trainer", {"index": 0}),
+    ("see skill", {"index": 0, "here": True}), ("see miracle", {"index": 0, "here": True}),
+    ("player deed", {"index": 0, "near": True}), ("clear learning", {}),
+    ("body time", {"index": 1, "every": True}), ("body time", {"index": 0, "every": True}),
+    ("fainting", {"args": [0], "every": True}), ("fainting", {"args": [1], "every": True}),
+    ("fill up", {}), ("starve", {}), ("tire out", {}), ("parch", {}), ("bloat", {}), ("show fatness", {}),
+    ("sleep", {}), ("wake", {}), ("eat", {}), ("drink", {}), ("poo", {}), ("puke", {}), ("fill up", {}),
+    ("drop food", {"near": True}), ("go to", {"near": True, "args": [1]}), ("face", {"near": True}),
+    ("stop moving", {}), ("flee from", {"near": True}), ("stop moving", {}),
+    ("put thing", {"index": 0, "near": True}), ("put down", {}), ("toss away", {}), ("eat held", {}), ("drop", {}),
+    ("look over", {"index": 1}), ("stop hands", {}), ("throw at", {"near": True}), ("point at", {"near": True}),
+    ("pick up", {"other": True}), ("knock down", {"other": True}), ("stop hands", {}),
+    ("knows leash", {"index": 2, "args": [1]}), ("grant leashes", {}), ("leashable", {"args": [1]}),
+    ("put on leash", {"index": 2}), ("leash works", {"args": [0]}), ("leash works", {"args": [1]}),
+    ("leash drawn", {"args": [0], "every": True}), ("leash drawn", {"args": [1], "every": True}),
+    ("tie to", {"other": True}), ("untie to hand", {}), ("take off leash", {}), ("keep at home", {}), ("let roam", {}),
+    ("place posts", {"near": True}), ("knock out", {}), ("bring round", {}), ("abort fight", {}),
+    ("blow", {"index": 1, "amount": 300.0}), ("block", {}), ("special", {}), ("fight step", {"index": 2}),
+    ("add wound", {"args": [100, 120, 0, 3, 2]}), ("add blood", {"args": [80, 60, 1]}), ("heal", {"args": [0]}),
+    ("heal", {"args": [1]}),
+]
+
+
 def place_row(pid, place_type, copies, start, step):
     """Sends a row of placements of a villager type. A build whose inspector does not take a row sends each placement
     on its own. Returns the count sent, and the error of the inspector or None."""
@@ -1336,10 +1365,55 @@ def editor_desync(pids, case):
                 done["sent"].append({name: amount, "answer": answer})
                 time.sleep(0.5)
         where = found[0].get("position") or focus
+        trees = items_of(inspector_answer(editor, "objects.find", {"params": {
+            "near": [where[0], where[2]], "radius": 400.0, "kind": "Tree", "limit": 1}}))
+        tree = trees[0]["id"] if trees else None
+        for name, numbers in CREATURE_ACTS:
+            params = {"act": name}
+            if not numbers.get("every"):
+                params["id"] = creature
+            for key in ("index", "amount", "args"):
+                if key in numbers:
+                    params[key] = numbers[key]
+            if numbers.get("here"):
+                params["position"] = [where[0], where[1], where[2]]
+            if numbers.get("near"):
+                params["position"] = [where[0] + 12.0, where[1], where[2] + 6.0]
+            if numbers.get("other"):
+                if tree is None:
+                    continue
+                params["other"] = tree
+            answer = inspector_answer(editor, "editor.creature_act", {"params": params})
+            done["sent"].append({"act": name, "answer": answer})
+            if isinstance(answer, dict) and answer.get("error"):
+                done.setdefault("errors", []).append(f"{name}: {answer['error']}")
+            time.sleep(0.3)
         done["sent"].append({"move": inspector_answer(editor, "editor.network_edit", {"params": {
             "kind": "move", "id": creature, "position": [where[0] + 8.0, where[2] + 8.0]}})})
         done["sent"].append({"turn": inspector_answer(editor, "editor.network_edit", {"params": {
             "kind": "turn", "id": creature, "radians": 1.2}})})
+    if case in ("objects", "all"):
+        # A building, a tree, a feature and a villager near the camera each go up, along and back down, then turn.
+        # The moves give x, y and z, as the position of the entity panel does.
+        for kind in ("Abode", "Tree", "Feature", "Villager"):
+            found = items_of(inspector_answer(editor, "objects.find", {"params": {
+                "near": [focus[0], focus[2]], "radius": 3000.0, "kind": kind, "limit": 1}}))
+            if not found:
+                done.setdefault("errors", []).append(f"no {kind} near the camera at {focus}")
+                continue
+            thing = found[0]
+            where = thing.get("position") or focus
+            steps = [[where[0] + 4.0, where[1] + 3.0, where[2]], [where[0] + 4.0, where[1] + 3.0, where[2] + 4.0],
+                     [where[0] + 8.0, where[1] - 1.0, where[2] + 4.0], [where[0] + 8.0, where[2] + 8.0]]
+            moves = []
+            for point in steps:
+                moves.append(inspector_answer(editor, "editor.network_edit", {"params": {
+                    "kind": "move", "id": thing["id"], "position": point}}))
+                time.sleep(1.0)
+            turn = inspector_answer(editor, "editor.network_edit", {"params": {
+                "kind": "turn", "id": thing["id"], "radians": 0.9}})
+            done["sent"].append({kind: thing["id"], "moves": moves, "turn": turn})
+            time.sleep(1.0)
     return done
 
 
@@ -2180,7 +2254,7 @@ def main():
                              "--hold-after turns "
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
-    parser.add_argument("--editor-desync", choices=("villagers", "creature", "all"),
+    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value of the creature near the camera "
                              "(creature), or both; every computer must keep the same checksums")

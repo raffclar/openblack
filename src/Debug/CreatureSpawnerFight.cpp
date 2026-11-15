@@ -24,6 +24,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -129,6 +130,9 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 	}
 	auto& fights = Locator::creatureFightSystem::value();
 	ImGui::SeparatorText("Fight");
+	// In a network game each change goes as a command of the turns. The camera of this computer is not part of the world.
+	using creature_edit_acts::Act;
+	const auto act = [](const player_commands::EditorCreatureAct& edit) { return editor::DoCreatureAct(edit); };
 
 	if (const auto* record = registry.TryGet<const CreatureFightRecord>(entity))
 	{
@@ -146,7 +150,7 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 		            knockedOut->permanent ? " for good" : "", static_cast<double>(knockedOut->seconds));
 		if (ImGui::Button("Bring round"))
 		{
-			fights.Resurrect(entity);
+			act(editor::ActOf(entity, Act::BringRound));
 		}
 		return;
 	}
@@ -188,27 +192,22 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 			}
 			if (ImGui::Button("Start fight"))
 			{
-				using Result = ecs::systems::CreatureFightSystemInterface::StartResult;
-				constexpr std::array<std::string_view, 7> k_Results {"started",  "no opponent", "busy",     "too weak",
-				                                                     "no arena", "refused",     "finishing"};
-				const auto result = fights.StartFight(entity, others.at(static_cast<size_t>(_fightOpponent)).second);
-				_lastFight = k_Results.at(static_cast<size_t>(result));
-				if (result == Result::Started && _fightAuto)
-				{
-					fights.SetAutoFighting(entity, true);
-				}
+				auto start = editor::SwitchOf(entity, Act::StartFight, _fightAuto);
+				start.other = others.at(static_cast<size_t>(_fightOpponent)).second;
+				const auto result = act(start);
+				_lastFight = !result.has_value() ? "sent" : result->done ? "started" : "refused";
 			}
 			ImGui::SameLine();
 			ImGui::Checkbox("Start fighting by itself", &_fightAuto);
 		}
 		if (ImGui::Button("Knock out"))
 		{
-			fights.KnockOut(entity);
+			act(editor::ActOf(entity, Act::KnockOut));
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Kill for good"))
 		{
-			fights.KillPermanently(entity);
+			act(editor::ActOf(entity, Act::KillForGood));
 		}
 		if (ImGui::IsItemHovered())
 		{
@@ -231,12 +230,12 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 	auto autoFight = fighting->fighter.control != fight::Control::None;
 	if (ImGui::Checkbox("Fights by itself", &autoFight))
 	{
-		fights.SetAutoFighting(entity, autoFight);
+		act(editor::SwitchOf(entity, Act::FightsByItself, autoFight));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Abort fight"))
 	{
-		fights.AbortFight(entity);
+		act(editor::ActOf(entity, Act::AbortFight));
 	}
 
 	// Orders as the player's clicks give them, each blow charged as if held this long
@@ -244,8 +243,9 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 	const auto blow = [&](const char* label, fight::Band band) {
 		if (ImGui::Button(label))
 		{
-			fights.QueueMove(entity, fight::AttackMove(band), false);
-			fights.ReleaseCharge(entity, _fightChargeMs);
+			auto hit = editor::IndexOf(entity, Act::Blow, static_cast<size_t>(band));
+			hit.amount = _fightChargeMs;
+			act(hit);
 		}
 	};
 	blow("High", fight::Band::High);
@@ -256,12 +256,12 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 	ImGui::SameLine();
 	if (ImGui::Button("Block"))
 	{
-		fights.QueueMove(entity, fight::BlockMove(), false);
+		act(editor::ActOf(entity, Act::Block));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Special"))
 	{
-		fights.QueueMove(entity, {.kind = fight::Move::Kind::Special}, false);
+		act(editor::ActOf(entity, Act::Special));
 	}
 	constexpr std::array<std::pair<const char*, fight::Step>, 4> k_Steps {
 	    std::pair("Step forward", fight::Step::Forward), std::pair("Step back", fight::Step::Back),
@@ -274,7 +274,7 @@ void CreatureSpawner::DrawFight(entt::entity entity) noexcept
 		}
 		if (ImGui::Button(k_Steps.at(i).first))
 		{
-			fights.QueueMove(entity, fight::StepMove(k_Steps.at(i).second), false);
+			act(editor::IndexOf(entity, Act::FightStep, static_cast<size_t>(k_Steps.at(i).second)));
 		}
 	}
 }

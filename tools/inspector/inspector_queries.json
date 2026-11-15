@@ -2315,6 +2315,55 @@
   "writes": true
  },
  {
+  "description": "Sends an act of the creature tools as a command of the turns, as the tabs of the creature section send it in a network game: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature (none for an act on every creature)",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The name of the act, such as \"sit down\"",
+    "name": "act",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The other thing of the act",
+    "name": "other",
+    "type": "integer"
+   },
+   {
+    "description": "The place of the act [x, y, z]",
+    "name": "position",
+    "type": "array"
+   },
+   {
+    "description": "The amount of the act",
+    "name": "amount",
+    "type": "number"
+   },
+   {
+    "description": "The index of the act in its list",
+    "name": "index",
+    "type": "integer"
+   },
+   {
+    "description": "Up to six small numbers of the act",
+    "name": "args",
+    "type": "array"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.creature_act",
+  "writes": true
+ },
+ {
   "description": "Sends a debug cheat of the player of this computer as a command of the turns, as the cheats tab of the editor does. The game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
   "kind": "object",
   "parameters": [

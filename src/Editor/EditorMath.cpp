@@ -18,7 +18,9 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
-#include <glm/gtx/euler_angles.hpp>
+
+#include "Common/PortableMath.h"
+#include "Common/PortableRotations.h"
 
 namespace openblack::editor
 {
@@ -129,12 +131,14 @@ glm::vec2 FacingOf(const glm::mat3& rotation)
 
 glm::mat3 YawRotation(float yawRadians)
 {
-	return glm::mat3(glm::eulerAngleY(yawRadians));
+	// The edits of a network game turn things with this rotation on every computer. The portable sine and cosine give the
+	// same bits on each build, and the C library does not.
+	return glm::mat3(portable_math::EulerAngleY(yawRadians));
 }
 
 float YawOf(const glm::mat3& rotation)
 {
-	return std::atan2(rotation[2][0], rotation[2][2]);
+	return portable_math::Atan2(rotation[2][0], rotation[2][2]);
 }
 
 std::optional<float> RayBox(glm::vec3 origin, glm::vec3 direction, const AxisAlignedBoundingBox& box)

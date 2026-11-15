@@ -125,6 +125,7 @@ enum class CommandTag : uint8_t
 	EditorEdit = 55,
 	DebugCheat = 56,
 	EditorCreatureEdit = 57,
+	EditorCreatureAct = 58,
 };
 
 /// The sizes of the parts of the frames, in bytes

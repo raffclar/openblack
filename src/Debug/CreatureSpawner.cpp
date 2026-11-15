@@ -50,6 +50,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -362,12 +363,10 @@ void CreatureSpawner::DrawSelected() noexcept
 		            static_cast<uint32_t>(creature_skin::k_MaxWeight), morph->drawn.evilGood < 0.0f ? "evil" : "good");
 		ImGui::Text("Fatness shown %.2f", static_cast<double>(morph->shownFatness));
 		ImGui::SameLine();
-		ImGui::BeginDisabled(network);
 		if (ImGui::SmallButton("Show now"))
 		{
-			morph->shownFatness = creature->fatness;
+			static_cast<void>(editor::DoCreatureAct(editor::ActOf(entity, creature_edit_acts::Act::ShowFatnessNow)));
 		}
-		ImGui::EndDisabled();
 	}
 	if (ImGui::Button("Deselect"))
 	{
@@ -392,12 +391,8 @@ void CreatureSpawner::DrawSelected() noexcept
 	{
 		if (ImGui::BeginTabItem(label))
 		{
-			// In a network game a change of a tab would change the world of this computer only, so the tabs only show the
-			// creature. The body and the mind tabs send the changes of their values as commands of the turns.
-			const bool onlyShows = network && draw != &CreatureSpawner::DrawBody && draw != &CreatureSpawner::DrawMind;
-			ImGui::BeginDisabled(onlyShows);
+			// In a network game each change of a tab goes as a command of the turns
 			(this->*draw)(entity);
-			ImGui::EndDisabled();
 			ImGui::EndTabItem();
 		}
 	}
@@ -412,7 +407,6 @@ void CreatureSpawner::DrawMovement(entt::entity entity) noexcept
 	{
 		return;
 	}
-	auto& locomotion = Locator::creatureLocomotionSystem::value();
 
 	ImGui::SeparatorText("Movement");
 	ImGui::Text("%s%s", MotionName(self->motion).data(), self->failed ? ", the last move failed" : "");
@@ -479,14 +473,18 @@ void CreatureSpawner::DrawMovement(entt::entity entity) noexcept
 			ImGui::TextUnformatted(_lastOrder.c_str());
 		}
 	}
+	using creature_edit_acts::Act;
 	if (ImGui::Button("Stop"))
 	{
-		locomotion.Stop(entity);
+		static_cast<void>(editor::DoCreatureAct(editor::ActOf(entity, Act::StopMoving)));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Face the camera"))
 	{
-		locomotion.TurnToFace(entity, glm::xz(Locator::camera::value().GetOrigin()));
+		// The editor gives the place of its camera, so that each computer turns the creature to the same place
+		auto act = editor::ActOf(entity, Act::Face);
+		act.position = Locator::camera::value().GetOrigin();
+		static_cast<void>(editor::DoCreatureAct(act));
 	}
 	ImGui::SameLine();
 	ImGui::Checkbox("Show route", &_showRoute);
@@ -562,23 +560,17 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	{
 		return;
 	}
-	auto& minds = Locator::creatureMindSystem::value();
 
 	ImGui::SeparatorText("Mind");
-	// In a network game the stage of growing up goes as a command of the turns. The other parts of the tab would change the
-	// world of this computer only, so they only show.
+	// In a network game each change of the tab goes as a command of the turns
 	const bool network = InNetworkGame();
-	ImGui::BeginDisabled(network);
-	struct EndDisabled
+	using creature_edit_acts::Act;
+	const auto act = [](const player_commands::EditorCreatureAct& edit) { static_cast<void>(editor::DoCreatureAct(edit)); };
+	bool paused = mind->paused;
+	if (ImGui::Checkbox("Pause mind", &paused))
 	{
-		EndDisabled() = default;
-		EndDisabled(const EndDisabled&) = delete;
-		EndDisabled& operator=(const EndDisabled&) = delete;
-		EndDisabled(EndDisabled&&) = delete;
-		EndDisabled& operator=(EndDisabled&&) = delete;
-		~EndDisabled() { ImGui::EndDisabled(); }
-	} const endDisabled;
-	ImGui::Checkbox("Pause mind", &mind->paused);
+		act(editor::SwitchOf(entity, Act::PauseMind, paused));
+	}
 	if (ImGui::IsItemHovered())
 	{
 		ImGui::SetTooltip("The mind leaves the body alone; the buttons below still work");
@@ -586,7 +578,7 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	bool notice = ecs::creature_reaction_notice::TakesNotice(registry, entity);
 	if (ImGui::Checkbox("Takes notice of reactions", &notice))
 	{
-		ecs::creature_reaction_notice::SetTakesNotice(registry, entity, notice);
+		act(editor::SwitchOf(entity, Act::TakesNotice, notice));
 	}
 	if (ImGui::IsItemHovered())
 	{
@@ -599,7 +591,6 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		using creature_edit_values::Value;
 		const auto now = static_cast<float>(std::min<size_t>(mind->developmentPhase, phases.size() - 1));
 		auto phase = static_cast<int>(network ? ShownValue(entity, Value::GrownUp, now) : now);
-		ImGui::EndDisabled();
 		const bool changed = ImGui::SliderInt("Grown up", &phase, 0, static_cast<int>(phases.size()) - 1,
 		                                      phases.at(static_cast<size_t>(phase)).name.data());
 		if (network)
@@ -610,7 +601,6 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		{
 			mind->developmentPhase = static_cast<uint32_t>(phase);
 		}
-		ImGui::BeginDisabled(network);
 		if (ImGui::IsItemHovered())
 		{
 			ImGui::SetTooltip("Each stage of growing up brings desires and takes some away");
@@ -749,7 +739,7 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	ImGui::BeginDisabled(busy);
 	if (ImGui::Button("Play"))
 	{
-		minds.PlayAction(entity, animations::k_FirstAction + _action);
+		act(editor::IndexOf(entity, Act::PlayAction, _action));
 	}
 	ImGui::EndDisabled();
 	if (ImGui::BeginCombo("Gesture", AnimationLabel(animations::k_FirstGesture + _gesture).c_str()))
@@ -767,7 +757,7 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	ImGui::BeginDisabled(animation->gesture.animation.has_value());
 	if (ImGui::Button("Gesture"))
 	{
-		minds.PlayGesture(entity, animations::k_FirstGesture + _gesture);
+		act(editor::IndexOf(entity, Act::PlayGesture, _gesture));
 	}
 	ImGui::EndDisabled();
 	ImGui::TextUnformatted("Face");
@@ -779,7 +769,7 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		}
 		if (ImGui::SmallButton(AnimationLabel(animations::k_FirstFace + i).c_str()))
 		{
-			minds.PullFace(entity, animations::k_FirstFace + i);
+			act(editor::IndexOf(entity, Act::PullFace, i));
 		}
 	}
 	ImGui::TextUnformatted("Feel");
@@ -801,31 +791,31 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		}
 		if (ImGui::SmallButton(std::string(creature_face::Name(k_Feelings.at(i))).c_str()))
 		{
-			minds.ShowFeeling(entity, k_Feelings.at(i));
+			act(editor::IndexOf(entity, Act::ShowFeeling, static_cast<size_t>(k_Feelings.at(i))));
 		}
 	}
 	ImGui::BeginDisabled(busy);
 	if (ImGui::Button("Sit down"))
 	{
-		minds.SitDown(entity);
+		act(editor::ActOf(entity, Act::SitDown));
 	}
 	ImGui::EndDisabled();
 	ImGui::SameLine();
 	ImGui::BeginDisabled(!creature_layers::IsLooping(body));
 	if (ImGui::Button("Stand up"))
 	{
-		minds.StandUp(entity);
+		act(editor::ActOf(entity, Act::StandUp));
 	}
 	ImGui::EndDisabled();
 	ImGui::SameLine();
 	if (ImGui::Button("Stroke"))
 	{
-		minds.ReceiveFeedback(entity, 0.5f);
+		act({.creature = entity, .act = static_cast<uint8_t>(Act::Feedback), .amount = 0.5f});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Slap"))
 	{
-		minds.ReceiveFeedback(entity, -0.5f);
+		act({.creature = entity, .act = static_cast<uint8_t>(Act::Feedback), .amount = -0.5f});
 	}
 
 	ImGui::SeparatorText("Desires");
@@ -997,6 +987,67 @@ void CreatureSpawner::Update() noexcept
 	}
 }
 
+std::optional<entt::entity> CreatureSpawner::NearestToOrder(glm::vec2 point) const noexcept
+{
+	auto& hands = Locator::creatureObjectActionSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool pickUp = _order == Order::PickUp;
+	std::optional<entt::entity> nearest;
+	float best = k_PickRadius;
+	registry.Each<const Transform>([&](entt::entity entity, const Transform& at) {
+		const auto distance = glm::distance(glm::xz(at.position), point);
+		if (distance < best && entity != *_selected &&
+		    (pickUp ? hands.CanPickUp(*_selected, entity) : hands.CanDestroy(entity)))
+		{
+			best = distance;
+			nearest = entity;
+		}
+	});
+	return nearest;
+}
+
+void CreatureSpawner::SendCommand(glm::vec3 point) noexcept
+{
+	using creature_edit_acts::Act;
+	player_commands::EditorCreatureAct act {.creature = *_selected, .position = point};
+	switch (_order)
+	{
+	case Order::Walk:
+	case Order::Run:
+		act.act = static_cast<uint8_t>(Act::GoTo);
+		act.args[0] = _order == Order::Run ? 1 : 0;
+		break;
+	case Order::Flee:
+		act.act = static_cast<uint8_t>(Act::FleeFrom);
+		break;
+	case Order::Face:
+		act.act = static_cast<uint8_t>(Act::Face);
+		break;
+	case Order::PickUp:
+	case Order::Destroy:
+	{
+		// The editor finds the thing, so that each computer acts on the same thing
+		const auto nearest = NearestToOrder(glm::xz(point));
+		if (!nearest.has_value())
+		{
+			_lastOrder = fmt::format("Nothing to {} there", _order == Order::PickUp ? "pick up" : "knock down");
+			return;
+		}
+		act.act = static_cast<uint8_t>(_order == Order::PickUp ? Act::PickUp : Act::KnockDown);
+		act.other = *nearest;
+		break;
+	}
+	case Order::Throw:
+		act.act = static_cast<uint8_t>(Act::ThrowAt);
+		break;
+	case Order::Point:
+		act.act = static_cast<uint8_t>(Act::PointAt);
+		break;
+	}
+	static_cast<void>(editor::DoCreatureAct(act));
+	_lastOrder = fmt::format("Sent the order to {:.0f}, {:.0f}: it comes at the next turn", point.x, point.z);
+}
+
 void CreatureSpawner::Command(glm::vec2 screenCoord) noexcept
 {
 	if (!_selected.has_value() || !Locator::creatureLocomotionSystem::has_value())
@@ -1011,6 +1062,11 @@ void CreatureSpawner::Command(glm::vec2 screenCoord) noexcept
 	using Pace = ecs::systems::CreatureLocomotionSystemInterface::Pace;
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
 	const auto point = glm::xz(hit->position);
+	if (InNetworkGame())
+	{
+		SendCommand(hit->position);
+		return;
+	}
 	switch (_order)
 	{
 	case Order::Walk:
@@ -1033,19 +1089,8 @@ void CreatureSpawner::Command(glm::vec2 screenCoord) noexcept
 	{
 		// What is nearest where the land was clicked
 		auto& hands = Locator::creatureObjectActionSystem::value();
-		auto& registry = Locator::entitiesRegistry::value();
 		const bool pickUp = _order == Order::PickUp;
-		std::optional<entt::entity> nearest;
-		float best = k_PickRadius;
-		registry.Each<const Transform>([&](entt::entity entity, const Transform& at) {
-			const auto distance = glm::distance(glm::xz(at.position), point);
-			if (distance < best && entity != *_selected &&
-			    (pickUp ? hands.CanPickUp(*_selected, entity) : hands.CanDestroy(entity)))
-			{
-				best = distance;
-				nearest = entity;
-			}
-		});
+		const auto nearest = NearestToOrder(point);
 		if (!nearest.has_value())
 		{
 			_lastOrder = fmt::format("Nothing to {} there", pickUp ? "pick up" : "knock down");

@@ -69,6 +69,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "Hand/HandSendWait.h"
@@ -266,6 +267,25 @@ void RunEditorCreatureEdit(openblack::PlayerNames player, const EditorCreatureEd
 	}
 }
 
+/// Do an act of the creature tools of the editor at the turn. The game server takes the acts only from a player with the
+/// editor claim.
+void RunEditorCreatureAct(openblack::PlayerNames player, const EditorCreatureAct& act, uint32_t turn)
+{
+	if (!openblack::Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	const auto result = openblack::editor::ApplyCreatureAct(openblack::Locator::entitiesRegistry::value(), act);
+	if (auto logger = spdlog::get("game"))
+	{
+		const auto kind = openblack::creature_edit_acts::ActFrom(act.act);
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} the act {} on creature {}", turn,
+		                   static_cast<int>(player), result.done ? "does" : "cannot do",
+		                   kind.has_value() ? openblack::creature_edit_acts::NameOf(*kind) : "unknown act",
+		                   static_cast<uint32_t>(entt::to_integral(act.creature)));
+	}
+}
+
 /// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a player with the editor
 /// claim.
 void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uint32_t turn)
@@ -320,6 +340,10 @@ void RunObserver(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, EditorCreatureEdit>)
 		    {
 			    RunEditorCreatureEdit(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorCreatureAct>)
+		    {
+			    RunEditorCreatureAct(command.player, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
 		    {
@@ -1021,6 +1045,10 @@ void Run(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, EditorCreatureEdit>)
 		    {
 			    RunEditorCreatureEdit(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorCreatureAct>)
+		    {
+			    RunEditorCreatureAct(command.player, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, DebugCheat>)
 		    {

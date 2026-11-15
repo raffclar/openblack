@@ -70,23 +70,27 @@ public:
 	/// Places a creature as the settings say, with the mind and tattoos of the mind file it is to be spawned from, if
 	/// any, facing an angle about the up axis
 	entt::entity SpawnAt(glm::vec3 position, float yawRadians) noexcept;
-	/// While hosted, the clicks on the land that command the picked creature, and their orders
-	/// In a network game the clicks on the land do not command a creature, because the order would change the world of
-	/// this computer only
-	[[nodiscard]] bool HostedTakesEvent(const SDL_Event& event) const noexcept { return !InNetworkGame() && TakesEvent(event); }
+	/// While hosted, the clicks on the land that command the picked creature, and their orders. In a network game each
+	/// order goes as a command of the turns. A network game places no creature, because the creature tools of this
+	/// computer make it.
+	[[nodiscard]] bool HostedTakesEvent(const SDL_Event& event) const noexcept
+	{
+		return TakesEvent(event) && (!InNetworkGame() || !_placing);
+	}
 	void HostedProcessEvent(const SDL_Event& event) noexcept
 	{
-		if (!InNetworkGame())
+		if (HostedTakesEvent(event))
 		{
 			ProcessEventOpen(event);
 		}
 	}
 	void HostedUpdate() noexcept
 	{
-		if (!InNetworkGame())
+		if (InNetworkGame())
 		{
-			Update();
+			_placeAt.reset();
 		}
+		Update();
 	}
 
 protected:
@@ -143,6 +147,10 @@ private:
 	/// what it holds, and how the player's hand last treated it
 	void DrawHands(entt::entity entity) noexcept;
 	void Command(glm::vec2 screenCoord) noexcept;
+	/// The thing nearest to the point that the order picks up or knocks down, if one is near
+	[[nodiscard]] std::optional<entt::entity> NearestToOrder(glm::vec2 point) const noexcept;
+	/// Sends the order to the point as a command of the turns, in a network game
+	void SendCommand(glm::vec3 point) noexcept;
 	void DrawCreatures() noexcept;
 	void Spawn(glm::vec2 screenCoord) noexcept;
 	/// Places a creature with the settings, and the mind and tattoos of the mind file it is to be spawned from, if any

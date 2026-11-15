@@ -34,12 +34,14 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::debug::gui;
 using creature_desires::Desire;
+using creature_edit_acts::Act;
 using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::Transform;
 
@@ -123,8 +125,8 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 		ImGui::SameLine();
 		if (ImGui::Button("Clear learning"))
 		{
-			minds.ClearLearning(entity);
-			_lastMindFile = "Learning cleared";
+			const auto result = editor::DoCreatureAct(editor::ActOf(entity, Act::ClearLearning));
+			_lastMindFile = result.has_value() ? "Learning cleared" : "Sent: the learning clears at the next turn";
 		}
 		if (!_lastMindFile.empty())
 		{
@@ -155,24 +157,19 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 	}
 
 	{
-		// The trainer strokes it for each thing it does to the kind of thing picked, and slaps it for anything else
-		constexpr std::array<std::pair<const char*, std::optional<uint32_t>>, 6> k_Trainers {{
-		    {"No trainer", std::nullopt},
-		    {"Reward villagers", creature_tree::belief_types::k_Villager},
-		    {"Reward objects", creature_tree::belief_types::k_MobileObject},
-		    {"Reward trees", creature_tree::belief_types::k_Tree},
-		    {"Reward creatures", creature_tree::belief_types::k_Creature},
-		    {"Reward abodes", creature_tree::belief_types::k_Abode},
-		}};
-		const auto current =
-		    std::ranges::find(k_Trainers, mind->trainer, &std::pair<const char*, std::optional<uint32_t>>::second);
-		if (ImGui::BeginCombo("Trainer", current != k_Trainers.end() ? current->first : "Custom"))
+		// The trainer strokes it for each thing it does to the kind of thing picked, and slaps it for anything else. The
+		// labels go in the order of editor::TrainerKind.
+		constexpr std::array<const char*, creature_edit_acts::k_TrainerCount> k_Trainers {
+		    "No trainer", "Reward villagers", "Reward objects", "Reward trees", "Reward creatures", "Reward abodes",
+		};
+		const auto current = editor::TrainerOf(mind->trainer);
+		if (ImGui::BeginCombo("Trainer", current.has_value() ? k_Trainers.at(*current) : "Custom"))
 		{
-			for (const auto& [label, kind] : k_Trainers)
+			for (size_t i = 0; i < k_Trainers.size(); ++i)
 			{
-				if (ImGui::Selectable(label, mind->trainer == kind))
+				if (ImGui::Selectable(k_Trainers.at(i), current == i))
 				{
-					mind->trainer = kind;
+					static_cast<void>(editor::DoCreatureAct(editor::IndexOf(entity, Act::Trainer, i)));
 				}
 			}
 			ImGui::EndCombo();
@@ -187,12 +184,14 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 	ImGui::SameLine();
 	if (ImGui::SmallButton("Stroke"))
 	{
-		minds.ReceiveFeedback(entity, 1.0f);
+		static_cast<void>(
+		    editor::DoCreatureAct({.creature = entity, .act = static_cast<uint8_t>(Act::Feedback), .amount = 1.0f}));
 	}
 	ImGui::SameLine();
 	if (ImGui::SmallButton("Slap"))
 	{
-		minds.ReceiveFeedback(entity, -1.0f);
+		static_cast<void>(
+		    editor::DoCreatureAct({.creature = entity, .act = static_cast<uint8_t>(Act::Feedback), .amount = -1.0f}));
 	}
 
 	if (ImGui::TreeNodeEx("Planner", ImGuiTreeNodeFlags_DefaultOpen))
@@ -375,22 +374,27 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 		{
 			pick("Skill", _skill, tables->skills);
 			ImGui::SameLine();
+			// The act goes to the place of the creature, as this computer sees it at the click
+			const auto at = [entity, transform](Act kind, int index, glm::vec3 offset) {
+				auto edit = editor::IndexOf(entity, kind, static_cast<size_t>(index));
+				edit.position = transform->position + offset;
+				static_cast<void>(editor::DoCreatureAct(edit));
+			};
 			if (ImGui::SmallButton("Show it##skill"))
 			{
-				minds.SeeSkill(transform->position, static_cast<size_t>(_skill));
+				at(Act::SeeSkill, _skill, glm::vec3(0.0f));
 			}
 			pick("Miracle", _miracle, tables->miracles);
 			ImGui::SameLine();
 			if (ImGui::SmallButton("Cast it near##miracle"))
 			{
-				minds.SeeMiracle(transform->position, static_cast<size_t>(_miracle));
+				at(Act::SeeMiracle, _miracle, glm::vec3(0.0f));
 			}
 			pick("Player's deed", _deed, tables->mimics);
 			ImGui::SameLine();
 			if (ImGui::SmallButton("Do it near##deed"))
 			{
-				minds.PlayerDid(static_cast<size_t>(_deed), transform->position + glm::vec3(20.0f, 0.0f, 0.0f), std::nullopt,
-				                std::nullopt);
+				at(Act::PlayerDeed, _deed, glm::vec3(20.0f, 0.0f, 0.0f));
 			}
 		}
 		if (learnt.mimicry.has_value())

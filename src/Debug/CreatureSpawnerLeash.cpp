@@ -31,6 +31,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -47,8 +48,6 @@ namespace leash = openblack::creature_leash;
 namespace
 {
 constexpr float k_BarWidth = 160.0f;
-/// The posts placed by hand stand this far apart round the hand
-constexpr float k_PostSpacing = 6.0f;
 /// How far round the creature to look for something to tie the leash to
 constexpr float k_TieSearch = 400.0f;
 
@@ -115,6 +114,9 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 		return;
 	}
 	ImGui::SeparatorText("Leash");
+	// In a network game each change goes as a command of the turns
+	using creature_edit_acts::Act;
+	const auto act = [](const player_commands::EditorCreatureAct& edit) { static_cast<void>(editor::DoCreatureAct(edit)); };
 
 	// Who the creature belongs to, and whether it is the one creature its owner can lead
 	const auto& body = registry.Get<const Creature>(entity);
@@ -129,7 +131,7 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 			const auto owner = static_cast<PlayerNames>(i);
 			if (ImGui::Selectable(ownerName(owner).c_str(), owner == body.owner))
 			{
-				leashes.SetOwner(entity, owner);
+				act(editor::IndexOf(entity, Act::Owner, i));
 			}
 		}
 		ImGui::EndCombo();
@@ -139,7 +141,7 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	ImGui::BeginDisabled(!leash::CanLead(body.owner));
 	if (ImGui::Checkbox("Leashable", &leashable))
 	{
-		leashes.SetLeashable(entity, leashable);
+		act(editor::SwitchOf(entity, Act::Leashable, leashable));
 	}
 	ImGui::EndDisabled();
 	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
@@ -160,15 +162,14 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 		bool known = leashes.Knows(entity, type);
 		if (ImGui::Checkbox(leash::Name(type), &known))
 		{
-			leashes.SetKnown(entity, type, known);
+			auto edit = editor::IndexOf(entity, Act::KnowsLeash, static_cast<size_t>(type));
+			edit.args[0] = known ? 1 : 0;
+			act(edit);
 		}
 	}
 	if (ImGui::Button("Grant all"))
 	{
-		for (const auto type : leash::k_Types)
-		{
-			leashes.SetKnown(entity, type, true);
-		}
+		act(editor::ActOf(entity, Act::GrantAllLeashes));
 	}
 
 	// Putting each leash on, held in the hand
@@ -178,14 +179,7 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 		ImGui::BeginDisabled(!leashes.Knows(entity, type) || !leashes.Knows(entity, LeashType::Rope));
 		if (ImGui::Button(fmt::format("Put on {}", leash::Name(type)).c_str()))
 		{
-			if (leashes.IsLeashed(entity))
-			{
-				leashes.ChangeType(entity, type);
-			}
-			else
-			{
-				leashes.PutOn(entity, type);
-			}
+			act(editor::IndexOf(entity, Act::PutOnLeash, static_cast<size_t>(type)));
 		}
 		ImGui::EndDisabled();
 	}
@@ -195,14 +189,15 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	ImGui::BeginDisabled(!leashed);
 	if (ImGui::Button("Take off"))
 	{
-		leashes.TakeOff(entity);
+		act(editor::ActOf(entity, Act::TakeOffLeash));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Tie to nearest thing"))
 	{
+		// The editor finds the thing, so that each computer ties the leash to the same thing
 		if (const auto object = NearestObject(registry, transform->position))
 		{
-			leashes.HandTie(entity, *object);
+			act({.creature = entity, .act = static_cast<uint8_t>(Act::TieTo), .other = *object});
 		}
 	}
 	ImGui::SameLine();
@@ -210,14 +205,14 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	{
 		if (const auto other = OtherCreature(registry, entity, transform->position))
 		{
-			leashes.HandTie(entity, *other);
+			act({.creature = entity, .act = static_cast<uint8_t>(Act::TieTo), .other = *other});
 		}
 	}
 	ImGui::SameLine();
 	ImGui::BeginDisabled(!leashes.TiedTo(entity).has_value());
 	if (ImGui::Button("Untie to hand"))
 	{
-		leashes.UntieToHand(entity);
+		act(editor::ActOf(entity, Act::UntieToHand));
 	}
 	ImGui::EndDisabled();
 	ImGui::EndDisabled();
@@ -228,13 +223,13 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 		bool works = worn.works;
 		if (ImGui::Checkbox("Leash works", &works))
 		{
-			leashes.SetWorks(entity, works);
+			act(editor::SwitchOf(entity, Act::LeashWorks, works));
 		}
 		ImGui::SameLine();
 		bool drawn = state->drawn;
 		if (ImGui::Checkbox("Draw rope", &drawn))
 		{
-			leashes.SetDrawn(drawn);
+			act(editor::SwitchOf(entt::null, Act::LeashDrawn, drawn));
 		}
 		ImGui::Text("%s leash, %s", leash::Name(worn.type),
 		            worn.tiedTo.has_value() ? fmt::format("tied to entity {}", static_cast<uint32_t>(*worn.tiedTo)).c_str()
@@ -263,12 +258,12 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	ImGui::Text("Free of home: %s", leashes.FreeOfHome(entity) ? "yes" : "no");
 	if (ImGui::Button("Keep at home"))
 	{
-		leashes.ConfineToHome(entity, leash::k_HomeConfinement);
+		act(editor::ActOf(entity, Act::KeepAtHome));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Let roam"))
 	{
-		leashes.ClearConfinement(entity);
+		act(editor::ActOf(entity, Act::LetRoam));
 	}
 
 	// What the leash tells the mind, for the learning to come
@@ -286,11 +281,12 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 
 	if (ImGui::Button("Place leash posts at the hand"))
 	{
+		// The hand of this computer gives the place, so that each computer puts the posts at the same place
 		if (const auto hand = HandPoint())
 		{
-			const auto owner = registry.Get<const Creature>(entity).owner;
-			leashes.PlacePosts(
-			    owner, {*hand + glm::vec3(-k_PostSpacing, 0.0f, 0.0f), *hand, *hand + glm::vec3(k_PostSpacing, 0.0f, 0.0f)});
+			auto edit = editor::ActOf(entity, Act::PlacePosts);
+			edit.position = *hand;
+			act(edit);
 		}
 	}
 	ImGui::SameLine();
