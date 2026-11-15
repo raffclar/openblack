@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/CreatureEditValues.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/CreatureTattoo.h"
 #include "Enums.h"
@@ -69,10 +70,28 @@ public:
 	/// Places a creature as the settings say, with the mind and tattoos of the mind file it is to be spawned from, if
 	/// any, facing an angle about the up axis
 	entt::entity SpawnAt(glm::vec3 position, float yawRadians) noexcept;
-	/// While hosted, the clicks on the land that command the picked creature, and their orders
-	[[nodiscard]] bool HostedTakesEvent(const SDL_Event& event) const noexcept { return TakesEvent(event); }
-	void HostedProcessEvent(const SDL_Event& event) noexcept { ProcessEventOpen(event); }
-	void HostedUpdate() noexcept { Update(); }
+	/// While hosted, the clicks on the land that command the picked creature, and their orders. In a network game each
+	/// order goes as a command of the turns. A network game places no creature, because the creature tools of this
+	/// computer make it.
+	[[nodiscard]] bool HostedTakesEvent(const SDL_Event& event) const noexcept
+	{
+		return TakesEvent(event) && (!InNetworkGame() || !_placing);
+	}
+	void HostedProcessEvent(const SDL_Event& event) noexcept
+	{
+		if (HostedTakesEvent(event))
+		{
+			ProcessEventOpen(event);
+		}
+	}
+	void HostedUpdate() noexcept
+	{
+		if (InNetworkGame())
+		{
+			_placeAt.reset();
+		}
+		Update();
+	}
 
 protected:
 	void Draw() noexcept override;
@@ -83,6 +102,15 @@ protected:
 
 private:
 	[[nodiscard]] static std::string_view SpeciesName(CreatureType species) noexcept;
+	/// Whether a network game is live. Then the creature section changes only the values of creature_edit_values, and it
+	/// sends each change as a command of the turns. Its other parts only show the creature.
+	[[nodiscard]] static bool InNetworkGame() noexcept;
+	/// The amount of a value that a slider shows: the amount that the player holds on the slider, or the amount now
+	[[nodiscard]] float ShownValue(entt::entity entity, creature_edit_values::Value value, float now) const noexcept;
+	/// In a network game, follows the slider of a value. The slider keeps the changed amount while the player holds it,
+	/// and sends the amount as a command of the turns when the player lets go.
+	void FollowValueSlider(entt::entity entity, creature_edit_values::Value value, float amount, bool changed,
+	                       bool released) noexcept;
 	void DrawSettings() noexcept;
 	/// The creature picked in the list: its alignment, physique and size, changed as it stands
 	void DrawSelected() noexcept;
@@ -119,6 +147,10 @@ private:
 	/// what it holds, and how the player's hand last treated it
 	void DrawHands(entt::entity entity) noexcept;
 	void Command(glm::vec2 screenCoord) noexcept;
+	/// The thing nearest to the point that the order picks up or knocks down, if one is near
+	[[nodiscard]] std::optional<entt::entity> NearestToOrder(glm::vec2 point) const noexcept;
+	/// Sends the order to the point as a command of the turns, in a network game
+	void SendCommand(glm::vec3 point) noexcept;
 	void DrawCreatures() noexcept;
 	void Spawn(glm::vec2 screenCoord) noexcept;
 	/// Places a creature with the settings, and the mind and tattoos of the mind file it is to be spawned from, if any
@@ -182,6 +214,14 @@ private:
 	std::string _lastNeed;
 	RandomStreamSource _random {RandomStream::CreatureSpawner};
 	std::optional<entt::entity> _selected;
+	/// The amount of a value that the player holds on a slider in a network game, until the slider lets go
+	struct HeldValue
+	{
+		entt::entity entity;
+		creature_edit_values::Value value;
+		float amount;
+	};
+	std::optional<HeldValue> _held;
 	/// The creature the selected tab was last brought to the front for
 	std::optional<entt::entity> _tabFor;
 	/// The thing to put by the creature, what it does to what it holds, and what became of the last thing it was told to

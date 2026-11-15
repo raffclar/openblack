@@ -50,6 +50,9 @@ public:
 	/// Each game turn: the totems move by the real clock. A totem that arrives at its share stops the sound of its
 	/// movement and rings the village bell. A totem whose town centre went goes, with its icon and its second totem.
 	virtual void ProcessTurn(uint32_t realMs) = 0;
+	/// A town centre goes from the world: each totem on it goes at once, with its icon and its second totem. This
+	/// occurs also while the game is paused, as when the editor removes the centre.
+	virtual void CentreRemoved(entt::entity /*centre*/) {}
 
 	/// The totem a picked plinth or icon belongs to
 	[[nodiscard]] virtual std::optional<entt::entity> TotemOf(entt::entity picked) const = 0;

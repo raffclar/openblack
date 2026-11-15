@@ -129,6 +129,8 @@ public:
 	[[nodiscard]] bool IsMultiplayerFrontEnd() const override { return {}; }
 	void ShowHelpAfterLoad() override {}
 	void WarmUpVisit(const std::function<void()>& /*draw*/) override {}
+	void SetFreeCamera(bool /*on*/) override {}
+	[[nodiscard]] bool IsFreeCameraOn() const override { return {}; }
 
 	bool active {false};
 	Camera* worldCamera {nullptr};

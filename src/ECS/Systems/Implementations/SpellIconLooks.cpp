@@ -30,6 +30,7 @@
 #include "ECS/GamePlayers.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
+#include "ECS/StoneHands.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
@@ -134,15 +135,8 @@ void SpellIconSystem::UpdateChargeLooks(int32_t gameMilliseconds, bool landDrawn
 bool SpellIconSystem::StoneHandDrawn(const ecs::Registry& registry, const ObjectDrawListSystemInterface* drawList,
                                      entt::entity centre, entt::entity hand, bool landDrawn)
 {
-	// A centre draws its hands only while the list draws it and while it has life
-	if (!landDrawn || !registry.Valid(centre))
-	{
-		return false;
-	}
-	const auto* life = registry.TryGet<const ObjectLife>(centre);
-	const bool centreDrawn =
-	    (drawList == nullptr || drawList->Drawn(registry, centre)) && (life == nullptr || life->life > 0.0f);
-	return centreDrawn && ecs::DrawnOnScreen(registry, hand);
+	// A centre draws its hands only while it stands in a town, the list draws it and it has life
+	return landDrawn && ecs::stone_hands::CentreShowsHands(registry, drawList, centre) && ecs::DrawnOnScreen(registry, hand);
 }
 
 void SpellIconSystem::HideRing(entt::entity icon)

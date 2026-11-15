@@ -780,8 +780,9 @@ void MagicSystem::Update(float /*seconds*/)
 	{
 		for (const auto entity : _spells)
 		{
-			if (const auto* spell = FindSpell(entity); spell != nullptr && spell->castFromHand && spell->fromLocalHand &&
-			                                           spell->caster.player == OwnPlayer() && spell->effect != k_NoEffectHandle)
+			if (const auto* spell = FindSpell(entity); spell != nullptr && spell->castFromHand &&
+			                                           magic::spells::IsCastOfThisComputer(*spell, OwnPlayer()) &&
+			                                           spell->effect != k_NoEffectHandle)
 			{
 				Locator::effectRequestSystem::value().SetLiveHand(spell->effect, _hand.handPosition);
 			}

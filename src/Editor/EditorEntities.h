@@ -54,6 +54,8 @@ struct NameTables
 	std::vector<std::string> scriptMarkers;
 	/// By the kind of the scroll or sign
 	std::vector<std::string> highlights;
+	/// By the row of the animals' table
+	std::vector<std::string> animals;
 
 	/// The tables' names, or none before the game's tables are loaded
 	[[nodiscard]] static std::optional<NameTables> Load();

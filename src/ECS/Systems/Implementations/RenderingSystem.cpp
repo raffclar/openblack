@@ -102,6 +102,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ScaffoldGhostRules.h"
 #include "ECS/SnowLevels.h"
+#include "ECS/StoneHands.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
@@ -915,6 +916,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A pot that holds nothing is not drawn in a hand, and a plain pot that holds nothing is not drawn at all
 		    if (const auto* pot = stores.TryGet<Pot>(entity);
 		        pot != nullptr && !PotShown(*pot, stores.AnyOf<InHand, HeldByCreature>(entity)))
+		    {
+			    return;
+		    }
+		    // A stone hand shows only while its village centre stands in a town, is drawn and has life
+		    if (const auto* stoneHand = stores.TryGet<TownCentreIcon>(entity);
+		        stoneHand != nullptr && !openblack::ecs::stone_hands::CentreShowsHands(registry, drawList, stoneHand->centre))
 		    {
 			    return;
 		    }

@@ -25,7 +25,6 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureRig.h"
 #include "CreatureSpawner.h"
-#include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -36,6 +35,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -69,15 +69,10 @@ std::string_view AttitudeName(ecs::creature_attitude::Attitude attitude)
 	return "nothing";
 }
 
-/// The things that can be put by a creature to pick up
-constexpr std::array<std::pair<MobileObjectInfo, std::string_view>, 6> k_Objects {{
-    {MobileObjectInfo::Ball, "Ball"},
-    {MobileObjectInfo::EgyptBarrel, "Barrel"},
-    {MobileObjectInfo::EgyptPotA, "Pot"},
-    {MobileObjectInfo::MagicFood, "Food"},
-    {MobileObjectInfo::WaterJug, "Water jug"},
-    {MobileObjectInfo::MagicWood, "Wood"},
-}};
+/// The names of the things that can be put by a creature to pick up, in the order of editor::k_PutThings
+constexpr std::array<std::string_view, editor::k_PutThings.size()> k_Objects {
+    "Ball", "Barrel", "Pot", "Food", "Water jug", "Wood",
+};
 /// What it can do to what it holds: stroke, shake, smell, examine
 constexpr std::array<std::string_view, creature_object_actions::k_KeepAnimationCount> k_KeepNames {"Stroke", "Shake", "Smell",
                                                                                                    "Examine"};
@@ -94,11 +89,11 @@ std::string ObjectName(const ecs::Registry& registry, entt::entity entity)
 {
 	if (const auto* object = registry.TryGet<const MobileObject>(entity))
 	{
-		for (const auto& [type, name] : k_Objects)
+		for (size_t i = 0; i < k_Objects.size(); ++i)
 		{
-			if (type == object->type)
+			if (editor::k_PutThings.at(i) == object->type)
 			{
-				return fmt::format("{} {}", name, entt::to_integral(entity));
+				return fmt::format("{} {}", k_Objects.at(i), entt::to_integral(entity));
 			}
 		}
 		return fmt::format("object {} (type {})", entt::to_integral(entity), static_cast<int>(object->type));
@@ -190,17 +185,21 @@ void CreatureSpawner::DrawHands(entt::entity entity) noexcept
 	}
 
 	// Things to put by it
-	if (ImGui::BeginCombo("Thing", k_Objects.at(static_cast<size_t>(_objectType)).second.data()))
+	if (ImGui::BeginCombo("Thing", k_Objects.at(static_cast<size_t>(_objectType)).data()))
 	{
 		for (size_t i = 0; i < k_Objects.size(); ++i)
 		{
-			if (ImGui::Selectable(k_Objects.at(i).second.data(), static_cast<int>(i) == _objectType))
+			if (ImGui::Selectable(k_Objects.at(i).data(), static_cast<int>(i) == _objectType))
 			{
 				_objectType = static_cast<int>(i);
 			}
 		}
 		ImGui::EndCombo();
 	}
+	// In a network game each act goes as a command of the turns. This computer finds the place, so that each computer
+	// puts the thing at the same place.
+	using creature_edit_acts::Act;
+	const auto act = [](const player_commands::EditorCreatureAct& edit) { return editor::DoCreatureAct(edit); };
 	const auto putAt = [&](float angle) {
 		if (!Locator::terrainSystem::has_value() || !Locator::infoConstants::has_value())
 		{
@@ -209,7 +208,9 @@ void CreatureSpawner::DrawHands(entt::entity entity) noexcept
 		const auto ahead = transform->rotation * glm::vec3(std::sin(angle), 0.0f, -std::cos(angle));
 		auto at = transform->position + (ahead * k_PutAtDistance * ShownSize(*creature));
 		at.y = Locator::terrainSystem::value().GetHeightAt(glm::xz(at));
-		ecs::archetypes::MobileObjectArchetype::Create(at, k_Objects.at(static_cast<size_t>(_objectType)).first, 0.0f, 1.0f);
+		auto put = editor::IndexOf(entity, Act::PutThing, static_cast<size_t>(_objectType));
+		put.position = at;
+		act(put);
 	};
 	constexpr float k_Quarter = std::numbers::pi_v<float> / 2.0f;
 	ImGui::TextUnformatted("Put it");
@@ -245,28 +246,29 @@ void CreatureSpawner::DrawHands(entt::entity entity) noexcept
 	}
 
 	// What to do with what it holds
-	const auto told = [this](std::string_view what, bool started) {
-		_lastHands = fmt::format("{}: {}", what, started ? "started" : "can't");
+	const auto told = [this, &act](std::string_view what, const player_commands::EditorCreatureAct& edit) {
+		const auto result = act(edit);
+		_lastHands = fmt::format("{}: {}", what, !result.has_value() ? "sent" : result->done ? "started" : "can't");
 	};
 	ImGui::BeginDisabled(!held.has_value());
 	if (ImGui::Button("Put down"))
 	{
-		told("Put down", hands.PutDown(entity));
+		told("Put down", editor::ActOf(entity, Act::PutDown));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Toss away"))
 	{
-		told("Toss away", hands.Discard(entity));
+		told("Toss away", editor::ActOf(entity, Act::TossAway));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Eat it"))
 	{
-		told("Eat", hands.EatHeld(entity));
+		told("Eat", editor::ActOf(entity, Act::EatHeld));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Drop"))
 	{
-		hands.Drop(entity);
+		act(editor::ActOf(entity, Act::Drop));
 	}
 	ImGui::SetNextItemWidth(100.0f);
 	if (ImGui::BeginCombo("##keep", k_KeepNames.at(static_cast<size_t>(_keepAction)).data()))
@@ -284,13 +286,13 @@ void CreatureSpawner::DrawHands(entt::entity entity) noexcept
 	if (ImGui::Button("Look it over"))
 	{
 		told(k_KeepNames.at(static_cast<size_t>(_keepAction)),
-		     hands.Keep(entity, creature_object_actions::k_FirstKeepAnimation + static_cast<size_t>(_keepAction)));
+		     editor::IndexOf(entity, Act::LookOver, static_cast<size_t>(_keepAction)));
 	}
 	ImGui::EndDisabled();
 	ImGui::SameLine();
 	if (ImGui::Button("Stop it"))
 	{
-		hands.Cancel(entity);
+		act(editor::ActOf(entity, Act::StopHands));
 	}
 	if (!_lastHands.empty())
 	{

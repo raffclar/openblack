@@ -10,6 +10,7 @@
 #include "PalettePanel.h"
 
 #include <algorithm>
+#include <iterator>
 #include <vector>
 
 #include <fmt/format.h>
@@ -44,6 +45,8 @@ float SpacingOf(PlaceKind kind)
 		return 30.0f;
 	case PlaceKind::Villager:
 		return 5.0f;
+	case PlaceKind::Animal:
+		return 10.0f;
 	case PlaceKind::Building:
 		return 45.0f;
 	case PlaceKind::Tree:
@@ -155,6 +158,14 @@ void PalettePanel::Draw(EditorContext& context) noexcept
 		TribeCombo(_tribe);
 		ImGui::SameLine();
 		DrawList(context, PlaceKind::Villager, OfTribe(info.villager, _tribe));
+		ImGui::EndTabItem();
+	}
+	if (ImGui::BeginTabItem("Animals"))
+	{
+		std::vector<AnimalInfo> kinds;
+		kinds.reserve(info.animal.size());
+		std::ranges::transform(info.animal, std::back_inserter(kinds), &GAnimalInfo::animalInfo);
+		DrawList(context, PlaceKind::Animal, PlaceableAnimalRows(kinds));
 		ImGui::EndTabItem();
 	}
 	if (ImGui::BeginTabItem("Buildings"))

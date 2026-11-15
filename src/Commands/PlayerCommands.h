@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <bitset>
 #include <optional>
 #include <string>
@@ -629,6 +630,44 @@ struct EditorEdit
 	[[nodiscard]] bool operator==(const EditorEdit&) const = default;
 };
 
+/// An edit of the editor to a value of a creature (creature_edit_values::Value), such as its alignment, its size or a need
+/// of its body. Only a player with the editor claim sends it in a network game, and the game server refuses it from every
+/// other player.
+struct EditorCreatureEdit
+{
+	entt::entity creature {entt::null};
+	/// The value (creature_edit_values::Value)
+	uint8_t value {0};
+	/// The new amount of the value. Each computer keeps it in the limits of the value.
+	float amount {0.0f};
+
+	[[nodiscard]] bool operator==(const EditorCreatureEdit&) const = default;
+};
+
+/// An act of the creature tools of the editor (creature_edit_acts::Act), such as an order to the creature, a change to its
+/// mind or to its leash, or a move of its fight. The editor finds the things and the places of the act, so that each
+/// computer does the same act. Only a player with the editor claim sends it in a network game, and the game server refuses
+/// it from every other player.
+struct EditorCreatureAct
+{
+	/// The creature, or none for an act on every creature (creature_edit_acts::ActsOnEveryCreature)
+	entt::entity creature {entt::null};
+	/// The act (creature_edit_acts::Act)
+	uint8_t act {0};
+	/// The other thing of the act, such as the thing to pick up or the creature to fight
+	entt::entity other {entt::null};
+	/// The place of the act, such as the place to go to
+	glm::vec3 position {0.0f};
+	/// The amount of the act, such as the charge of a blow
+	float amount {0.0f};
+	/// The index of the act in its list, such as the skill to see
+	uint16_t index {0};
+	/// The small numbers of the act, such as the switch of a box
+	std::array<uint8_t, 6> args {};
+
+	[[nodiscard]] bool operator==(const EditorCreatureAct&) const = default;
+};
+
 /// A debug cheat of the player of the command goes on or off (debug_cheats::Cheat). Only a player with the editor claim sends
 /// it in a network game, and the game server refuses it from every other player.
 struct DebugCheat
@@ -640,14 +679,14 @@ struct DebugCheat
 };
 
 /// What a command does
-using Action =
-    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
-                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
-                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
-                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
-                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap, FishScare,
-                 ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit, DebugCheat>;
+using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
+                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
+                            GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
+                            CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
+                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut,
+                            HandLockRelease, EditorEdit, DebugCheat, EditorCreatureEdit, EditorCreatureAct>;
 
 /// A command and the player that sent it
 struct Command
@@ -672,14 +711,18 @@ struct Command
 /// refuses these commands from a player whose join ticket has no editor claim.
 [[nodiscard]] constexpr bool OnlyEditorSends(const Action& action) noexcept
 {
-	return std::holds_alternative<EditorEdit>(action) || std::holds_alternative<DebugCheat>(action);
+	return std::holds_alternative<EditorEdit>(action) || std::holds_alternative<DebugCheat>(action) ||
+	       std::holds_alternative<EditorCreatureEdit>(action) || std::holds_alternative<EditorCreatureAct>(action);
 }
 
 /// Whether the game server takes the command from an observer. An observer with the editor claim also sends the edits of the
-/// editor. The god of the observers has no citadel, so an observer sends no debug cheat.
+/// editor, also the edits, the acts and the tattoos of a creature. The god of the observers has no citadel, so an observer
+/// sends no debug cheat.
 [[nodiscard]] constexpr bool ServerTakesFromObserver(const Action& action, bool editor) noexcept
 {
-	return ObserverSends(action) || (editor && std::holds_alternative<EditorEdit>(action));
+	return ObserverSends(action) ||
+	       (editor && (std::holds_alternative<EditorEdit>(action) || std::holds_alternative<EditorCreatureEdit>(action) ||
+	                   std::holds_alternative<EditorCreatureAct>(action) || std::holds_alternative<CreatureTattoo>(action)));
 }
 
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that

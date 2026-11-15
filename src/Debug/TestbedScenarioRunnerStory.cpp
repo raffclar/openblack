@@ -403,6 +403,15 @@ bool Runner::GiveStoryCommand(const Command& command)
 		Log(fmt::format("{:.1f}s: the temple's camera looks at scroll {}", _seconds, command.value));
 		return true;
 	}
+	if (command.kind == Kind::TempleFreeCamera)
+	{
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().SetFreeCamera(command.value != 0);
+		}
+		Log(fmt::format("{:.1f}s: the free camera in the temple is {}", _seconds, command.value != 0 ? "on" : "off"));
+		return true;
+	}
 	if (command.kind == Kind::ZoomToTempleCaveTarget)
 	{
 		if (Locator::temple::has_value())

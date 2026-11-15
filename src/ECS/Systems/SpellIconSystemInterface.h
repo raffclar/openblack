@@ -46,6 +46,10 @@ public:
 	[[nodiscard]] virtual std::optional<size_t> CentreMiraclesShown(entt::entity town) const = 0;
 	/// A town's village centre stands working: its hands show what the town offers
 	virtual void CentreWorking(entt::entity centre) = 0;
+	/// A town's village centre goes from the world, as when an effect destroys it. Each of its stone hands goes, and the
+	/// site's icon of each hand's miracle goes unless another of the site's towns offers it. The town keeps the miracles
+	/// that it offers, and a new centre of the town shows them again when it works.
+	virtual void CentreRemoved(entt::entity /*centre*/) {}
 	/// A town has changed hands: what it offers goes from its old player to its new one
 	virtual void TownChangedHands(entt::entity town, PlayerNames previous) = 0;
 	/// A town goes from the game: its player counts one town less that offers each miracle that the town offers, and

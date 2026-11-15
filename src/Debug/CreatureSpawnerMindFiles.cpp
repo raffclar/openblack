@@ -98,6 +98,12 @@ void CreatureSpawner::UseMindFile(MindFileUse use, const std::filesystem::path& 
 {
 	file_dialog::RememberPath(k_FolderKey, path.parent_path());
 	const auto name = path.filename().string();
+	// A mind from a file of this computer would change the world of this computer only
+	if (use != MindFileUse::SaveSelected && InNetworkGame())
+	{
+		_lastMindFile = "A network game does not take a mind file";
+		return;
+	}
 
 	if (use == MindFileUse::SaveSelected)
 	{

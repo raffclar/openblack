@@ -293,10 +293,42 @@ void InspectorPanel::DrawTransform(EditorContext& context, entt::entity entity) 
 	{
 		return;
 	}
-	auto yaw = glm::degrees(YawOf(transform->rotation));
-	if (ImGui::SliderFloat("Turn", &yaw, -180.0f, 180.0f, "%.0f degrees"))
+	const auto yawNow = YawOf(transform->rotation);
+	if (context.writes.ChangesAtOnce())
 	{
-		context.writes.Turn(entity, glm::radians(yaw) - YawOf(transform->rotation));
+		auto yaw = glm::degrees(yawNow);
+		if (ImGui::SliderFloat("Turn", &yaw, -180.0f, 180.0f, "%.0f degrees"))
+		{
+			context.writes.Turn(entity, glm::radians(yaw) - yawNow);
+		}
+	}
+	else
+	{
+		// In a network game the thing turns at a later turn. Thus the slider keeps its own angle, and sends the full turn
+		// from the angle at the start one time, when it lets go.
+		if (_heldTurn.has_value() && _heldTurn->entity != entity)
+		{
+			_heldTurn.reset();
+		}
+		auto yaw = _heldTurn.has_value() ? _heldTurn->degrees : glm::degrees(yawNow);
+		const bool changed = ImGui::SliderFloat("Turn", &yaw, -180.0f, 180.0f, "%.0f degrees");
+		if (ImGui::IsItemActivated())
+		{
+			_heldTurn = HeldTurn {.entity = entity, .from = yawNow, .degrees = glm::degrees(yawNow)};
+		}
+		if (changed && _heldTurn.has_value())
+		{
+			_heldTurn->degrees = yaw;
+		}
+		if (ImGui::IsItemDeactivated() && _heldTurn.has_value())
+		{
+			const auto turn = glm::radians(_heldTurn->degrees) - _heldTurn->from;
+			if (turn != 0.0f)
+			{
+				context.writes.Turn(entity, turn);
+			}
+			_heldTurn.reset();
+		}
 	}
 	track("Turn");
 	// In a network game the editor sends only moves and turns, so the size stays as it is

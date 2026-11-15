@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
@@ -810,4 +811,83 @@ TEST_F(SpellIconSystemTest, ASeedMadeAtAnIconCountsOnceAsOut)
 	// Something that is not an icon keeps no seed
 	_system.SeedMadeAt(site, seed);
 	EXPECT_FALSE(registry.AllOf<WorshipIcon>(site));
+}
+
+namespace
+{
+/// A town of a number that worships at a site, with a village centre whose hands show seeds, in order
+struct CentreTown
+{
+	entt::entity town;
+	entt::entity centre;
+	std::vector<entt::entity> hands;
+};
+
+CentreTown MakeCentreTown(Registry& registry, uint32_t id, entt::entity site, const std::vector<SpellSeedType>& seeds)
+{
+	CentreTown made {.town = registry.Create(), .centre = registry.Create(), .hands = {}};
+	registry.Assign<Town>(made.town).id = id;
+	registry.Get<Town>(made.town).worshipSite = site;
+	registry.Context().towns[id] = made.town;
+	registry.Get<WorshipSite>(site).towns.push_back(made.town);
+	registry.Assign<Abode>(made.centre, Abode {.type = AbodeNumber::TownCentre, .townId = id});
+	auto& slots = registry.Assign<CentreHands>(made.centre);
+	for (size_t i = 0; i < seeds.size(); ++i)
+	{
+		const auto hand = registry.Create();
+		registry.Assign<TownCentreIcon>(
+		    hand,
+		    TownCentreIcon {.centre = made.centre, .town = made.town, .hand = static_cast<uint8_t>(i), .seed = seeds.at(i)});
+		slots.hands.at(i) = hand;
+		made.hands.push_back(hand);
+	}
+	return made;
+}
+} // namespace
+
+// A village centre that goes takes each of its stone hands with it. The site loses the icon of each hand's miracle,
+// unless another of its towns still has a hand of that miracle. The town keeps the miracles it holds.
+TEST_F(SpellIconSystemTest, AGoneCentreTakesItsHandsAndTheSiteIconsThatNoOtherTownOffers)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<WorshipSite>(site);
+	registry.Assign<SiteIcons>(site);
+	const auto heal = Icon(site, SpellSeedType::Heal, entt::null);
+	const auto water = Icon(site, SpellSeedType::Water, entt::null);
+	const auto gone = MakeCentreTown(registry, 1, site, {SpellSeedType::Heal, SpellSeedType::Water});
+	registry.Assign<TownMagic>(gone.town).held.at(static_cast<size_t>(MagicType::Heal)) = true;
+	const auto other = MakeCentreTown(registry, 2, site, {SpellSeedType::Water});
+
+	_system.CentreRemoved(gone.centre);
+
+	for (const auto hand : gone.hands)
+	{
+		EXPECT_FALSE(registry.Valid(hand));
+	}
+	EXPECT_FALSE(registry.AllOf<CentreHands>(gone.centre));
+	EXPECT_FALSE(registry.Valid(heal));
+	EXPECT_TRUE(registry.Valid(water));
+	EXPECT_EQ(registry.Get<const SiteIcons>(site).icons, std::vector<entt::entity> {water});
+	EXPECT_TRUE(registry.Valid(other.hands.front()));
+	EXPECT_TRUE(registry.Get<const TownMagic>(gone.town).held.at(static_cast<size_t>(MagicType::Heal)));
+	EXPECT_EQ(_system.CentreMiraclesShown(gone.town), std::nullopt);
+	EXPECT_EQ(_system.CentreMiraclesShown(other.town), std::optional<size_t> {1});
+}
+
+// Anything that is not a village centre with hands loses nothing
+TEST_F(SpellIconSystemTest, AGoneThingWithoutHandsLosesNothing)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<WorshipSite>(site);
+	registry.Assign<SiteIcons>(site);
+	const auto heal = Icon(site, SpellSeedType::Heal, entt::null);
+	const auto hut = registry.Create();
+	registry.Assign<Abode>(hut, Abode {.type = AbodeNumber::A, .townId = 1});
+
+	_system.CentreRemoved(hut);
+	_system.CentreRemoved(entt::null);
+
+	EXPECT_TRUE(registry.Valid(heal));
 }

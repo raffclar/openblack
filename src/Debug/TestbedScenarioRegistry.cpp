@@ -316,18 +316,19 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
 	       kind == Kind::TakeIconSeed || kind == Kind::TapSiteIcon || kind == Kind::TapStoneHand ||
 	       kind == Kind::TapTempleEntrance || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
-	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::ScaffoldClearsGround ||
-	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
-	       kind == Kind::BuildWorshipSites || kind == Kind::ScriptBuildsWorshipSites || kind == Kind::PressPlainKey ||
-	       kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp ||
-	       kind == Kind::OtherGodHand || kind == Kind::ObserverCamera || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
-	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
-	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
-	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
-	       kind == Kind::LookAtSaveGamePicture || kind == Kind::ZoomToTempleCaveTarget || kind == Kind::HandCastOnDispenser ||
-	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball ||
-	       kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint || IsPointerCommand(kind);
+	       kind == Kind::ScaffoldStartsSite || kind == Kind::DestroyScaffoldSite || kind == Kind::DestroyObjectByEffect ||
+	       kind == Kind::ScaffoldClearsGround || kind == Kind::CallNative || kind == Kind::PauseGame ||
+	       kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance ||
+	       kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites || kind == Kind::ScriptBuildsWorshipSites ||
+	       kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat ||
+	       kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::ObserverCamera || kind == Kind::OwnGod ||
+	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
+	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
+	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
+	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || kind == Kind::ZoomToTempleCaveTarget ||
+	       kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle ||
+	       kind == Kind::JoinFootball || kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint ||
+	       kind == Kind::TempleFreeCamera || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -355,7 +356,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 244> k_Names {
+	constexpr std::array<std::string_view, 246> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -543,6 +544,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "fill the built amount",
 	    "start a site with the scaffold",
 	    "destroy the site of the scaffold",
+	    "destroy the object by an effect",
 	    "clear the ground of the scaffold",
 	    "call a script native",
 	    "animal flees",
@@ -600,6 +602,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "create a reaction at an object",
 	    "pointer on tip bubble",
 	    "pointer on totem",
+	    "free camera in the temple",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

@@ -67,6 +67,9 @@ struct DesyncDetail
 	std::vector<std::pair<std::string, std::string>> extras;
 	/// The name of the first fact that differs, or empty when no fact differs
 	std::string fact;
+	/// The first field that differs as "Component.field", from the saved worlds of both sides, or empty when no field
+	/// is known
+	std::string field;
 	/// A file for the event, such as the facts of the capture, and its name. Empty: no file.
 	std::string attachment;
 	std::string attachmentName;

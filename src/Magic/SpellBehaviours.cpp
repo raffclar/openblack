@@ -521,6 +521,13 @@ bool spells::FollowsHand(SpellServicesInterface& services, const Spell& spell)
 	return flocks != nullptr && flocks->FollowsHand(services, spell);
 }
 
+bool spells::IsCastOfThisComputer(const Spell& spell, PlayerNames thisComputer)
+{
+	// Each computer casts the miracles of the hands of all players, so the player of the hand decides
+	return spell.fromLocalHand && spell.caster.kind == ecs::components::SpellCaster::Kind::Player &&
+	       spell.caster.player == thisComputer;
+}
+
 bool spells::MakesAnimals(SpellServicesInterface& services, const Spell& spell)
 {
 	const auto* flocks = IsFlock(spell.spellClass) ? services.Flocks() : nullptr;

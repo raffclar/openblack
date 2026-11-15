@@ -9,6 +9,11 @@
 
 // Testbed scenarios for the land editor.
 
+#include <vector>
+
+#include <SDL_scancode.h>
+
+#include "3D/TempleRoom.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFight.h"
 #include "Input/PlatformKeys.h"
@@ -18,8 +23,69 @@
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
 
+namespace
+{
+
+/// The player flies the camera in the temple's main room and then in its save game room, with the editor's cheat of
+/// the free camera on or off. The same presses go to the game in both scenarios.
+std::vector<Command> TempleFreeCameraFlight(bool cheatOn)
+{
+	using Kind = Command::Kind;
+	const auto key = [](Kind kind, SDL_Scancode code, float delay) {
+		return Command {.kind = kind, .delaySeconds = delay, .value = static_cast<size_t>(code)};
+	};
+	constexpr size_t k_Middle = 2;
+	std::vector<Command> commands {
+	    {.kind = Kind::TempleFreeCamera, .delaySeconds = 0.5f, .value = cheatOn ? 1u : 0u},
+	    {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = static_cast<size_t>(TempleRoom::Main)},
+	};
+	const auto flight = [&](float delay) {
+		commands.push_back({.kind = Kind::PointerTo, .delaySeconds = delay, .waitUntilFree = true, .point = {0.5f, 0.5f}});
+		commands.push_back({.kind = Kind::PointerPress, .delaySeconds = 0.2f, .value = k_Middle});
+		commands.push_back({.kind = Kind::PointerSweep, .delaySeconds = 0.1f, .point = {0.2f, -0.1f}, .amount = 1.0f});
+		commands.push_back({.kind = Kind::PointerRelease, .delaySeconds = 1.2f, .value = k_Middle});
+		commands.push_back(key(Kind::PlainKeyDown, SDL_SCANCODE_UP, 0.3f));
+		commands.push_back(key(Kind::PlainKeyUp, SDL_SCANCODE_UP, 1.5f));
+		commands.push_back(key(Kind::PlainKeyDown, SDL_SCANCODE_LEFT, 0.3f));
+		commands.push_back(key(Kind::PlainKeyUp, SDL_SCANCODE_LEFT, 1.0f));
+	};
+	flight(8.0f);
+	commands.push_back({.kind = Kind::EnterTemple, .delaySeconds = 3.0f, .value = static_cast<size_t>(TempleRoom::SaveGame)});
+	flight(3.0f);
+	return commands;
+}
+
+} // namespace
+
 void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 {
+	all.push_back({
+	    .id = "editor.temple_free_camera",
+	    .name = "The editor's free camera flies through the temple's rooms",
+	    .facet = Facet::Editor,
+	    .description = "The editor's cheat of the free camera goes on, and the player goes into the temple's main room. "
+	                   "When the camera has the player, the middle button turns the view right and up for a second. "
+	                   "Then the up arrow key moves the camera forwards and the left arrow key moves it left. Then the "
+	                   "player goes into the save game room, and the same presses come again.",
+	    .expected = "In each room, the camera comes in along the room's path as usual. Then the view turns right and up "
+	                "about the place of the camera, and the camera flies forwards along the view and to the left. The "
+	                "room does not turn, and no door opens.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = TempleFreeCameraFlight(true),
+	});
+
+	all.push_back({
+	    .id = "editor.temple_free_camera_off",
+	    .name = "With the editor's free camera off, the temple's camera is as usual",
+	    .facet = Facet::Editor,
+	    .description = "The same presses as editor.temple_free_camera, with the editor's cheat of the free camera off.",
+	    .expected = "The middle button does nothing in the temple. The up arrow key leans the main room's view and the "
+	                "left arrow key turns the room, as with no cheat. In the save game room, the keys turn the room and "
+	                "move the camera up and down.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = TempleFreeCameraFlight(false),
+	});
+
 	all.push_back({
 	    .id = "editor.one_of_each",
 	    .name = "One of each kind to pick",
@@ -104,6 +170,22 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                {.type = TreeInfo::Oak, .offset = {0.0f, 25.0f}},
 	                {.type = TreeInfo::Oak, .offset = {20.0f, 25.0f}},
 	                {.type = FeatureInfo::FatPilarChalk, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::PressPlainKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))}},
+	});
+
+	all.push_back({
+	    .id = "editor.animals",
+	    .name = "Every animal of the palette",
+	    .facet = Facet::Editor,
+	    .description = "Open flat land, and the editor opens after a second. The Animals tab of the "
+	                   "palette lists each animal that a land's script makes: the grazers, the hunters of the wild and "
+	                   "the birds of the land. Lay out all puts one of each in rows in the middle of the view.",
+	    .expected = "Each animal comes down on the land as a land's script makes it, then lives as the land's animals "
+	                "do: the grazers eat grass, the hunters look for food and the birds fly over the land. The outliner "
+	                "lists each under Animals, and Ctrl+D copies one.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 30.0f}, {30.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::PressPlainKey,
 	                  .delaySeconds = 1.0f,
 	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))}},

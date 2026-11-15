@@ -258,6 +258,10 @@ DesyncEventFields DesyncEventFieldsOf(const DesyncReport& report)
 	{
 		// The first fact that differs tells the cause better than the part, so it is a tag that a search can find
 		fields.tags.emplace_back("desync_fact", report.detail->fact.empty() ? std::string("none") : report.detail->fact);
+		if (!report.detail->field.empty())
+		{
+			fields.tags.emplace_back("desync_field", report.detail->field);
+		}
 		fields.extras.insert(fields.extras.end(), report.detail->extras.begin(), report.detail->extras.end());
 	}
 	return fields;

@@ -727,7 +727,9 @@ def inspector_call(pid, query, request):
 
 def say_in_chat(pid, text):
     """A client says a line in the chat as the player does: a click on the speech button at the top right corner, the
-    line typed and Return. The inspector takes only the input of the player while a network game is live."""
+    line typed and Return. The inspector takes only the input of the player while a network game is live. The
+    information box of the land takes every press of the buttons while it shows, so the Escape key closes it first."""
+    close_land_info_box(pid)
     frame = inspector_call(pid, "engine.frame", {}) or {}
     width = (frame.get("window") or [1280, 1024])[0]
     inspector_call(pid, "input.pointer", {"params": {"screen": [width - 8, 8]}})
@@ -1268,6 +1270,158 @@ def editor_check(pids, client_logs, server_log, shots=None):
     return done
 
 
+# The villager types of the info table: the plain villagers of each tribe and every special villager (the breeder, the
+# healer, the crusader and the rest)
+VILLAGER_TYPES = 84
+# The values of a creature that the editor changes in a network game, with amounts to set (editor::LimitsOf keeps each
+# amount in its limits)
+CREATURE_EDITS = [("alignment", [-0.8, 0.6]), ("fatness", [0.9, 0.2]), ("strength", [0.1, 0.95]), ("size", [1.6, 0.7]),
+                  ("energy", [0.3, 1.0]), ("exhaustion", [0.7, 0.1]), ("thirst", [0.8, 0.0]), ("poo", [0.85, 0.2]),
+                  ("life", [0.4, 1.0]), ("warmth", [-0.6, 0.3]), ("itchiness", [0.5, 0.0]), ("grown up", [2, 13])]
+
+
+# The acts of the creature tools that the creature case sends after the values: the name of the act and its numbers.
+# "here" puts the place of the act at the creature, "near" a little way from it, and "other" names the nearest tree.
+CREATURE_ACTS = [
+    ("pause mind", {"args": [1]}), ("pause mind", {"args": [0]}), ("takes notice", {"args": [0]}),
+    ("takes notice", {"args": [1]}), ("play action", {"index": 0}), ("play gesture", {"index": 0}),
+    ("pull face", {"index": 3}), ("show feeling", {"index": 2}), ("sit down", {}), ("stand up", {}),
+    ("feedback", {"amount": 0.5}), ("feedback", {"amount": -0.5}), ("trainer", {"index": 1}), ("trainer", {"index": 0}),
+    ("see skill", {"index": 0, "here": True}), ("see miracle", {"index": 0, "here": True}),
+    ("player deed", {"index": 0, "near": True}), ("clear learning", {}),
+    ("body time", {"index": 1, "every": True}), ("body time", {"index": 0, "every": True}),
+    ("fainting", {"args": [0], "every": True}), ("fainting", {"args": [1], "every": True}),
+    ("fill up", {}), ("starve", {}), ("tire out", {}), ("parch", {}), ("bloat", {}), ("show fatness", {}),
+    ("sleep", {}), ("wake", {}), ("eat", {}), ("drink", {}), ("poo", {}), ("puke", {}), ("fill up", {}),
+    ("drop food", {"near": True}), ("go to", {"near": True, "args": [1]}), ("face", {"near": True}),
+    ("stop moving", {}), ("flee from", {"near": True}), ("stop moving", {}),
+    ("put thing", {"index": 0, "near": True}), ("put down", {}), ("toss away", {}), ("eat held", {}), ("drop", {}),
+    ("look over", {"index": 1}), ("stop hands", {}), ("throw at", {"near": True}), ("point at", {"near": True}),
+    ("pick up", {"other": True}), ("knock down", {"other": True}), ("stop hands", {}),
+    ("knows leash", {"index": 2, "args": [1]}), ("grant leashes", {}), ("leashable", {"args": [1]}),
+    ("put on leash", {"index": 2}), ("leash works", {"args": [0]}), ("leash works", {"args": [1]}),
+    ("leash drawn", {"args": [0], "every": True}), ("leash drawn", {"args": [1], "every": True}),
+    ("tie to", {"other": True}), ("untie to hand", {}), ("take off leash", {}), ("keep at home", {}), ("let roam", {}),
+    ("place posts", {"near": True}), ("knock out", {}), ("bring round", {}), ("abort fight", {}),
+    ("blow", {"index": 1, "amount": 300.0}), ("block", {}), ("special", {}), ("fight step", {"index": 2}),
+    ("add wound", {"args": [100, 120, 0, 3, 2]}), ("add blood", {"args": [80, 60, 1]}), ("heal", {"args": [0]}),
+    ("heal", {"args": [1]}),
+]
+
+
+def place_row(pid, place_type, copies, start, step):
+    """Sends a row of placements of a villager type. A build whose inspector does not take a row sends each placement
+    on its own. Returns the count sent, and the error of the inspector or None."""
+    params = {"kind": "place", "place_kind": 1, "place_type": place_type, "position": start}
+    answer = inspector_answer(pid, "editor.network_edit", {"params": dict(params, copies=copies, step=step)})
+    if isinstance(answer, dict) and "doesn't take copies" in str(answer.get("error", "")):
+        sent = 0
+        for index in range(copies):
+            point = [start[0] + step[0] * index, start[1] + step[1] * index]
+            one = inspector_answer(pid, "editor.network_edit", {"params": dict(params, position=point)})
+            sent += 1 if isinstance(one, dict) and one.get("sent") else 0
+        return sent, None
+    if isinstance(answer, dict) and answer.get("error"):
+        return 0, answer["error"]
+    return int(answer.get("sent", 0)) if isinstance(answer, dict) else 0, None
+
+
+def editor_desync(pids, case):
+    """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
+    "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
+    second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. Every
+    computer must then have the same checksums: net_check compares them for each turn. Returns what each step sent."""
+    editor = pids[0]
+    done = {"case": case, "sent": []}
+    camera = inspector_answer(editor, "camera.state", {}) or {}
+    focus = camera.get("focus") or [0.0, 0.0, 0.0]
+    # Find the creature before the villagers come, so that the rows of new villagers do not hide it
+    found = []
+    if case in ("creature", "all"):
+        found = items_of(inspector_answer(editor, "objects.find", {"params": {
+                "near": [focus[0], focus[2]], "radius": 3000.0, "kind": "Creature", "limit": 1}}))
+    if case in ("villagers", "all"):
+        # All the types in one frame: three of each, in rows of the same type
+        burst = 0
+        for kind in range(VILLAGER_TYPES):
+            sent, error = place_row(editor, kind, 3, [focus[0] - 60.0 + (kind % 12) * 6.0,
+                                                      focus[2] - 30.0 + (kind // 12) * 4.0], [1.5, 0.0])
+            burst += sent
+            if error:
+                done.setdefault("errors", []).append(error)
+        done["sent"].append({"villagers_at_once": burst})
+        # Then the special villagers again, one row of each type in turn
+        spread = 0
+        for step, kind in enumerate(range(63, VILLAGER_TYPES)):
+            sent, _ = place_row(editor, kind, 4, [focus[0] + 30.0 + step * 2.0, focus[2] + 20.0], [0.0, 1.5])
+            spread += sent
+            time.sleep(1.0)
+        done["sent"].append({"villagers_in_turns": spread})
+    if case in ("creature", "all"):
+        if not found:
+            done["error"] = f"no creature near the camera at {focus}"
+            return done
+        creature = found[0]["id"]
+        done["creature"] = creature
+        for name, amounts in CREATURE_EDITS:
+            for amount in amounts:
+                answer = inspector_answer(editor, "editor.creature_edit", {"params": {
+                    "id": creature, "value": name, "amount": amount}})
+                done["sent"].append({name: amount, "answer": answer})
+                time.sleep(0.5)
+        where = found[0].get("position") or focus
+        trees = items_of(inspector_answer(editor, "objects.find", {"params": {
+            "near": [where[0], where[2]], "radius": 400.0, "kind": "Tree", "limit": 1}}))
+        tree = trees[0]["id"] if trees else None
+        for name, numbers in CREATURE_ACTS:
+            params = {"act": name}
+            if not numbers.get("every"):
+                params["id"] = creature
+            for key in ("index", "amount", "args"):
+                if key in numbers:
+                    params[key] = numbers[key]
+            if numbers.get("here"):
+                params["position"] = [where[0], where[1], where[2]]
+            if numbers.get("near"):
+                params["position"] = [where[0] + 12.0, where[1], where[2] + 6.0]
+            if numbers.get("other"):
+                if tree is None:
+                    continue
+                params["other"] = tree
+            answer = inspector_answer(editor, "editor.creature_act", {"params": params})
+            done["sent"].append({"act": name, "answer": answer})
+            if isinstance(answer, dict) and answer.get("error"):
+                done.setdefault("errors", []).append(f"{name}: {answer['error']}")
+            time.sleep(0.3)
+        done["sent"].append({"move": inspector_answer(editor, "editor.network_edit", {"params": {
+            "kind": "move", "id": creature, "position": [where[0] + 8.0, where[2] + 8.0]}})})
+        done["sent"].append({"turn": inspector_answer(editor, "editor.network_edit", {"params": {
+            "kind": "turn", "id": creature, "radians": 1.2}})})
+    if case in ("objects", "all"):
+        # A building, a tree, a feature and a villager near the camera each go up, along and back down, then turn.
+        # The moves give x, y and z, as the position of the entity panel does.
+        for kind in ("Abode", "Tree", "Feature", "Villager"):
+            found = items_of(inspector_answer(editor, "objects.find", {"params": {
+                "near": [focus[0], focus[2]], "radius": 3000.0, "kind": kind, "limit": 1}}))
+            if not found:
+                done.setdefault("errors", []).append(f"no {kind} near the camera at {focus}")
+                continue
+            thing = found[0]
+            where = thing.get("position") or focus
+            steps = [[where[0] + 4.0, where[1] + 3.0, where[2]], [where[0] + 4.0, where[1] + 3.0, where[2] + 4.0],
+                     [where[0] + 8.0, where[1] - 1.0, where[2] + 4.0], [where[0] + 8.0, where[2] + 8.0]]
+            moves = []
+            for point in steps:
+                moves.append(inspector_answer(editor, "editor.network_edit", {"params": {
+                    "kind": "move", "id": thing["id"], "position": point}}))
+                time.sleep(1.0)
+            turn = inspector_answer(editor, "editor.network_edit", {"params": {
+                "kind": "turn", "id": thing["id"], "radians": 0.9}})
+            done["sent"].append({kind: thing["id"], "moves": moves, "turn": turn})
+            time.sleep(1.0)
+    return done
+
+
 def slot_fight(pids, seconds):
     """The first client sends the fight cheat, so that the creature of its god fights the nearest creature: the creature
     of the other god. The server must take test commands. The fight autopilot of each client then fights for the god
@@ -1391,10 +1545,13 @@ def slot_icons(pid, player):
     return icons
 
 
-def slot_cast(pid, player):
-    """The tap on the icon with the most prayer power stored, and the cast of the miracle that comes into the hand"""
+def slot_cast(pid, player, seed=None):
+    """The tap on the icon with the most prayer power stored, and the cast of the miracle that comes into the hand. With
+    a seed type, only an icon of that seed type."""
     done = {}
     icons = slot_icons(pid, player)
+    if seed is not None:
+        icons = [found for found in icons if found.get("seed") == seed]
     # The icon with the most prayer power stored; with none stored, a miracle of low cost first (water, heal, food,
     # wood), so that the site's prayer power charges it soon
     cheap = [9, 7, 3, 8]
@@ -1431,6 +1588,52 @@ def slot_cast(pid, player):
     state = inspector_call(pid, "magic.state", {}) or {}
     done["cast"] = {"spells_before": spells_before, "spells_while_held": spells_held, "spells_after": state.get("spells"),
                     "held_after": state.get("held_seed"), "last_hand_result": state.get("last_hand_result")}
+    return done
+
+
+FOREST_SEED = 1
+
+
+def camera_view(pid):
+    """Where the camera of a client is, what it looks at and whether a camera path holds it"""
+    state = inspector_answer(pid, "camera.state", {}) or {}
+    view = inspector_answer(pid, "view.state", {}) or {}
+    found = {key: state.get(key) for key in ("origin", "focus")} if isinstance(state, dict) else {"camera": state}
+    found["path"] = view.get("path") if isinstance(view, dict) else view
+    return found
+
+
+def forest_camera_check(pids, caster, shots=None, cast=True):
+    """The forest miracle in a network game. With cast, the client of the caster turns on the cheat of the miracle charge
+    (it has the editor claim), taps an icon of the forest of its god and casts the forest. Without cast, a scenario (such
+    as miracles.forest_camera_path) casts it with the hand of the first god. Only the camera of the caster may follow the
+    camera path of the forest; the camera of each other client must stay where it was. Screenshots of each client go to
+    the folder before the cast and at each time after it. Returns what each step did."""
+    done = {"before": [camera_view(pid) for pid in pids], "miracle": {}}
+    editor_shots(pids, shots, "00_before")
+    if cast:
+        done["cheat"] = inspector_answer(pids[caster], "editor.cheat",
+                                         {"params": {"cheat": "infinite miracle charge", "on": True}})
+        time.sleep(3.0)
+        done["miracle"] = slot_cast(pids[caster], caster, seed=FOREST_SEED)
+    after = []
+    for seconds in (2, 6, 10):
+        time.sleep(seconds - (after[-1]["at"] if after else 0))
+        views = [camera_view(pid) for pid in pids]
+        after.append({"at": seconds, "views": views})
+        editor_shots(pids, shots, f"{len(after):02d}_after_{seconds}s")
+    done["after"] = after
+
+    def holds(view):
+        return bool(((view or {}).get("path") or {}).get("holds_camera"))
+
+    caster_followed = any(holds(step["views"][caster]) for step in after)
+    others_followed = [index for index in range(len(pids)) if index != caster
+                       and any(holds(step["views"][index]) for step in after)]
+    done["caster_followed"] = caster_followed
+    done["others_followed"] = others_followed
+    done["passed"] = caster_followed and not others_followed
+    print("forest camera:", json.dumps({key: done[key] for key in ("caster_followed", "others_followed", "passed")}))
     return done
 
 
@@ -2105,8 +2308,19 @@ def main():
                              "--hold-after turns "
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
+    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "all"),
+                        help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
+                             "villager type (villagers), or changes each value and does each act of the creature near the "
+                             "camera (creature), or moves and turns a building, a tree, a feature and a villager "
+                             "(objects), or all of them; every computer must keep the same checksums")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
+    parser.add_argument("--forest-camera", action="store_true",
+                        help="the first client casts the forest once both clients compared --hold-after turns (with "
+                             "--scenario, the scenario casts it): only the camera of the first client may follow the "
+                             "camera path of the forest (the first client has the editor claim)")
+    parser.add_argument("--forest-camera-shots", metavar="FOLDER",
+                        help="the folder for the screenshots of each client in the forest camera check")
     parser.add_argument("--slot-fight", type=int, metavar="SECONDS",
                         help="once the first client compared --hold-after turns, it sends the fight cheat (its god's "
                              "creature fights the nearest creature); then both clients fight with the fight autopilot "
@@ -2390,6 +2604,8 @@ def main():
     miracle_done = None
     fight_done = None
     editor_done = None
+    forest_done = None
+    editor_desync_done = None
     give_done = None
     hand_steps = HandSteps()
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
@@ -2450,7 +2666,9 @@ def main():
                 return 1
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
-                                 "observer" if is_observer else "god", 600, editor=options.editor_check and index == 0,
+                                 "observer" if is_observer else "god", 600,
+                                 editor=(options.editor_check or options.forest_camera
+                                         or bool(options.editor_desync)) and index == 0,
                                  staff=options.editor_check and index == 1)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
@@ -2500,7 +2718,7 @@ def main():
             chatting = chatting or any(value.split(":", 1)[1] == str(index + 1) for value in options.tattoo_menu)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
                     or options.give == index + 1 or any(leash["client"] == index for leash in leashes)
-                    or options.editor_check):
+                    or options.editor_check or options.forest_camera or options.editor_desync):
                 command += ["--inspect-port", "0"]
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
@@ -2605,6 +2823,16 @@ def main():
                 editor_done = editor_check([client.pid for client in clients],
                                            [os.path.join(client_dirs[index], "client.log") for index in range(2)],
                                            server_log, options.editor_shots)
+            if (options.forest_camera and forest_done is None and len(clients) == 2
+                    and all(client.poll() is None for client in clients) and all(reached_turn(
+                        os.path.join(client_dirs[index], "client.log"), clients[index].pid, options.hold_after)
+                        for index in range(2))):
+                forest_done = forest_camera_check([client.pid for client in clients], 0, options.forest_camera_shots,
+                                                  cast=not options.scenario)
+            if (options.editor_desync and editor_desync_done is None and clients and clients[0].poll() is None
+                    and reached_turn(os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
+                editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync)
+                print(f"editor desync: {json.dumps(editor_desync_done)[:400]}")
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
                     and not any(hand_steps.busy(index) for index in range(len(clients))) and reached_turn(
@@ -2828,6 +3056,15 @@ def main():
         summary["slot_miracle"] = miracle_done
     if options.slot_fight:
         summary["slot_fight"] = fight_done
+    if options.forest_camera:
+        summary["forest_camera"] = forest_done
+        if not (forest_done or {}).get("passed"):
+            print(f"the forest camera check did not pass: {json.dumps(forest_done)[:2000]}")
+    if options.editor_desync:
+        summary["editor_desync"] = editor_desync_done
+        if editor_desync_done is None or editor_desync_done.get("error"):
+            print(f"the editor desync check did not run: {editor_desync_done}")
+            all_same = False
     if options.editor_check:
         summary["editor_check"] = editor_done
         if not (editor_done or {}).get("passed"):

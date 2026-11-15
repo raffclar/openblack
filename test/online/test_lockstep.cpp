@@ -688,6 +688,19 @@ TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 	EXPECT_FALSE(ServerTakesFromObserver(HandTap {}, true));
 	EXPECT_FALSE(server::LeavesOut(EditorEdit {}, false));
 	EXPECT_FALSE(server::LeavesOut(DebugCheat {}, false));
+	// An edit of a creature is an edit of the editor
+	EXPECT_TRUE(OnlyEditorSends(EditorCreatureEdit {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorCreatureEdit {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorCreatureEdit {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorCreatureEdit {}, false));
+	// An act of the creature tools is an edit of the editor too. An observer with the editor claim also sends the tattoos.
+	EXPECT_TRUE(OnlyEditorSends(EditorCreatureAct {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorCreatureAct {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorCreatureAct {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorCreatureAct {}, false));
+	EXPECT_FALSE(OnlyEditorSends(CreatureTattoo {}));
+	EXPECT_TRUE(ServerTakesFromObserver(CreatureTattoo {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(CreatureTattoo {}, false));
 }
 
 TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAGodWithTheEditorClaim)

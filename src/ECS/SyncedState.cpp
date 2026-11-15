@@ -209,6 +209,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The static that a creature fizzes through slides only while this computer draws it, as a knocked out fighter
     // fades. The turns read how far it fizzed, not the static.
     {.component = "CreatureSpells", .field = "staticScroll", .marker = ""},
+    // The time that the symbol of an artefact shows. Only a computer that shows the effects adds the time of its
+    // frames, so a server adds none. Only the symbol reads the time.
+    {.component = "TownArtefact", .field = "symbolMilliseconds", .marker = ""},
+    // The details of a villager that the player of this computer asked for with the details key. Only the labels
+    // over the heads of this computer read them.
+    {.component = "DetailsShown", .field = "", .marker = ""},
     // The glow of the hand while a gesture is drawn, which only the computer that draws the gesture shows
     {.component = "HandGlow", .field = "", .marker = ""},
     // The sum of the strokes and slaps that the hand let go of a creature with, which only the creature's status panel
