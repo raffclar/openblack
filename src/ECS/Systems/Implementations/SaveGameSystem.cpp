@@ -122,6 +122,12 @@ namespace save_state = openblack::creature_save_state;
 namespace
 {
 constexpr float k_TurnsPerSecond = 10.0f;
+/// The web game autosaves at its own interval (deviation 273)
+#if defined(__EMSCRIPTEN__)
+constexpr bool k_WebGame = true;
+#else
+constexpr bool k_WebGame = false;
+#endif
 constexpr std::string_view k_CurseScript = "CreatureCurse";
 
 /// A table from the keys of one stream to the keys of another
@@ -2041,6 +2047,7 @@ void SaveGameSystem::EndTurn()
 	    .land = LandNumber(),
 	    .turn = TurnNow(),
 	    .lastAutosaveTurn = _lastAutosaveTurn,
+	    .interval = gamesave::AutosaveInterval(k_WebGame),
 	};
 	if (!gamesave::AutosaveDue(state))
 	{
