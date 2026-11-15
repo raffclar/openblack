@@ -127,6 +127,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -1436,6 +1437,19 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		}
 		const auto* record = registry.TryGet<const ecs::components::CreatureFightRecord>(*creature);
 		return record != nullptr ? static_cast<double>(record->fights) : 0.0;
+	}
+	case checks::Quantity::HandMayTake:
+	{
+		const auto object = ObjectAt(check.index);
+		const auto* transform = object.has_value() ? registry.TryGet<const ecs::components::Transform>(*object) : nullptr;
+		if (transform == nullptr || !Locator::handGrabSystem::has_value() || !Locator::influenceSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		// The hand takes a thing where the thing is, so the influence is read at the place of the thing
+		const bool inInfluence =
+		    Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, transform->position);
+		return inInfluence && Locator::handGrabSystem::value().WhyNotTake(*object).empty() ? 1.0 : 0.0;
 	}
 	}
 	return std::nullopt;

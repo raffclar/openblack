@@ -27,6 +27,7 @@
 
 using openblack::PlayerNames;
 using openblack::influence_rules::CanHaveInfluence;
+using openblack::influence_rules::CheatInfluence;
 namespace influence_rules = openblack::ecs::systems::influence_rules;
 
 namespace
@@ -254,4 +255,16 @@ TEST(InfluenceRules, TheReachOfAHeartIsItsSizeTimesTheInfluenceForTheLand)
 	// A plan of size 500 gives a heart of half the size, thus half the reach
 	EXPECT_EQ(HeartReach(static_cast<float>(500) * 0.001f, 80.0f), 40.0f);
 	EXPECT_EQ(HeartReach(0.0f, 80.0f), 0.0f);
+}
+
+TEST(InfluenceRules, TheCheatOfInfiniteInfluenceGivesFullInfluenceOutsideTheAntiInfluenceOfAScript)
+{
+	EXPECT_FLOAT_EQ(CheatInfluence(false), 1.0f);
+}
+
+TEST(InfluenceRules, TheCheatOfInfiniteInfluenceGivesNoInfluenceInTheAntiInfluenceOfAScript)
+{
+	// The hand of a player with the cheat can not take a thing that a script keeps from the hand, such as the Creed of the
+	// fourth land
+	EXPECT_FLOAT_EQ(CheatInfluence(true), 0.0f);
 }

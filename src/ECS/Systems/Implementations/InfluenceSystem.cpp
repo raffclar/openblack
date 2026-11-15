@@ -574,11 +574,12 @@ bool InfluenceSystem::InAntiInfluence(PlayerNames player, const glm::vec3& point
 
 bool InfluenceSystem::InAntiInfluence(PlayerNames player, const map_coords::MapCoords& position)
 {
-	if (Shielded(player, position))
-	{
-		return true;
-	}
-	// An anti-influence that a script made for the player keeps the player out too, up to and at its edge
+	return Shielded(player, position) || InScriptAntiInfluence(player, position);
+}
+
+bool InfluenceSystem::InScriptAntiInfluence(PlayerNames player, const map_coords::MapCoords& position)
+{
+	// An anti-influence that a script made for the player keeps the player out, up to and at its edge
 	const auto& registry = Locator::entitiesRegistry::value();
 	bool anti = false;
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
@@ -899,7 +900,8 @@ bool InfluenceSystem::InfluenceEverywhere()
 
 bool InfluenceSystem::CheatEverywhere(PlayerNames player)
 {
-	// The debug cheat of a player gives the player full influence at each point, as on the trip to the Gods' Playground
+	// The debug cheat of a player gives the player full influence at each point. A script's anti-influence still keeps
+	// the player out, see CheatInfluence
 	return Locator::debugCheatSystem::has_value() &&
 	       Locator::debugCheatSystem::value().Has(player, debug_cheats::Cheat::InfiniteInfluence);
 }
@@ -990,7 +992,11 @@ std::array<float, player_slots::k_PlayerNumbers> InfluenceSystem::PlayerInfluenc
 			continue;
 		}
 		float own = 1.0f;
-		if (!everywhere && !CheatEverywhere(player))
+		if (!everywhere && CheatEverywhere(player))
+		{
+			own = openblack::influence_rules::CheatInfluence(near.scriptAnti.at(index));
+		}
+		else if (!everywhere)
 		{
 			const auto* virtualInfluence =
 			    entities.at(index).has_value() ? registry.TryGet<const VirtualInfluence>(*entities.at(index)) : nullptr;
@@ -1043,9 +1049,13 @@ std::optional<float> InfluenceSystem::HandGrant(PlayerNames player, const map_co
 
 float InfluenceSystem::PlayerOwnInfluence(PlayerNames player, const map_coords::MapCoords& position) const
 {
-	if (InfluenceEverywhere() || CheatEverywhere(player))
+	if (InfluenceEverywhere())
 	{
 		return 1.0f;
+	}
+	if (CheatEverywhere(player))
+	{
+		return openblack::influence_rules::CheatInfluence(InScriptAntiInfluence(player, position));
 	}
 	if (const auto granted = HandGrant(player, position, VirtualStateOf(player), std::nullopt); granted.has_value())
 	{
@@ -1122,9 +1132,10 @@ InfluenceSystem::NearInfluence InfluenceSystem::RawInfluences(const map_coords::
 		}
 		const bool shielded = std::ranges::any_of(shieldOwners, [player](PlayerNames owner) { return owner != player; });
 		near.keptOut.at(index) = shielded || anti.at(index);
+		near.scriptAnti.at(index) = anti.at(index);
 		if (CheatEverywhere(player))
 		{
-			near.raw.at(index) = 1.0f;
+			near.raw.at(index) = openblack::influence_rules::CheatInfluence(anti.at(index));
 			continue;
 		}
 		const auto citadel = citadels.at(index);
@@ -1167,9 +1178,13 @@ InfluenceSystem::NearInfluence InfluenceSystem::RawInfluences(const map_coords::
 
 float InfluenceSystem::HandPointInfluence(PlayerNames player, const map_coords::MapCoords& hand) const
 {
-	if (InfluenceEverywhere() || CheatEverywhere(player))
+	if (InfluenceEverywhere())
 	{
 		return 1.0f;
+	}
+	if (CheatEverywhere(player))
+	{
+		return WithAllies(player, hand, openblack::influence_rules::CheatInfluence(InScriptAntiInfluence(player, hand)));
 	}
 	// The place asked is the hand's own, so the hand is inside while it keeps anything
 	if (const auto* state = VirtualStateOf(player); state != nullptr && !InAntiInfluence(player, hand))
@@ -1186,7 +1201,7 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 {
 	if (CheatEverywhere(player))
 	{
-		return 1.0f;
+		return openblack::influence_rules::CheatInfluence(InScriptAntiInfluence(player, position));
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	// Each is measured from its map position, in the game's map units
