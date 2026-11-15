@@ -1209,3 +1209,32 @@ TEST(SpellSeedRules, TheForestSeedIsHiddenUntilPlantedThenRidesOverItsTallestTre
 	EXPECT_FLOAT_EQ(ForestSeedHeight(3.0f, 12.0f), 12.0f);
 	EXPECT_FLOAT_EQ(ForestSeedHeight(3.0f, 0.0f), 3.0f);
 }
+
+TEST(SpellBehaviours, OnlyTheComputerOfTheCasterShowsAHandCastAsItsOwn)
+{
+	// Each computer casts the miracle of the hand of the first player in a network game
+	Spell spell;
+	spell.fromLocalHand = true;
+	spell.caster = {.kind = SpellCaster::Kind::Player, .player = PlayerNames::PLAYER_ONE};
+	EXPECT_TRUE(spells::IsCastOfThisComputer(spell, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(spells::IsCastOfThisComputer(spell, PlayerNames::PLAYER_TWO));
+
+	// The cast of the second player shows as its own only on the computer of the second player
+	spell.caster.player = PlayerNames::PLAYER_TWO;
+	EXPECT_FALSE(spells::IsCastOfThisComputer(spell, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(spells::IsCastOfThisComputer(spell, PlayerNames::PLAYER_TWO));
+}
+
+TEST(SpellBehaviours, AMiracleThatNoHandCastIsTheCastOfNoComputer)
+{
+	// A script cast of the player of this computer
+	Spell script;
+	script.caster = {.kind = SpellCaster::Kind::Player, .player = PlayerNames::PLAYER_ONE};
+	EXPECT_FALSE(spells::IsCastOfThisComputer(script, PlayerNames::PLAYER_ONE));
+
+	// The cast of a creature of the player of this computer
+	Spell creature;
+	creature.fromLocalHand = true;
+	creature.caster = {.kind = SpellCaster::Kind::Creature, .player = PlayerNames::PLAYER_ONE};
+	EXPECT_FALSE(spells::IsCastOfThisComputer(creature, PlayerNames::PLAYER_ONE));
+}

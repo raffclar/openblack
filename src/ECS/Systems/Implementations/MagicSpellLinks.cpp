@@ -20,6 +20,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Magic/SpellBehaviours.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -53,8 +54,9 @@ int MagicSystem::SpellLink::PowerUpLevel() const
 
 bool MagicSystem::SpellLink::IsMyInterfaceCasting() const
 {
+	// In a network game the effect of a cast by another player's hand shows as that player's cast, not as this player's
 	const auto* spell = EntityRegistry().TryGet<const components::Spell>(_spell);
-	return spell != nullptr && spell->fromLocalHand;
+	return spell != nullptr && magic::spells::IsCastOfThisComputer(*spell, OwnPlayer());
 }
 
 bool MagicSystem::SpellLink::IsHumanPlayerCasting() const

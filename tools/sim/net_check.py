@@ -1393,10 +1393,13 @@ def slot_icons(pid, player):
     return icons
 
 
-def slot_cast(pid, player):
-    """The tap on the icon with the most prayer power stored, and the cast of the miracle that comes into the hand"""
+def slot_cast(pid, player, seed=None):
+    """The tap on the icon with the most prayer power stored, and the cast of the miracle that comes into the hand. With
+    a seed type, only an icon of that seed type."""
     done = {}
     icons = slot_icons(pid, player)
+    if seed is not None:
+        icons = [found for found in icons if found.get("seed") == seed]
     # The icon with the most prayer power stored; with none stored, a miracle of low cost first (water, heal, food,
     # wood), so that the site's prayer power charges it soon
     cheap = [9, 7, 3, 8]
@@ -1433,6 +1436,52 @@ def slot_cast(pid, player):
     state = inspector_call(pid, "magic.state", {}) or {}
     done["cast"] = {"spells_before": spells_before, "spells_while_held": spells_held, "spells_after": state.get("spells"),
                     "held_after": state.get("held_seed"), "last_hand_result": state.get("last_hand_result")}
+    return done
+
+
+FOREST_SEED = 1
+
+
+def camera_view(pid):
+    """Where the camera of a client is, what it looks at and whether a camera path holds it"""
+    state = inspector_answer(pid, "camera.state", {}) or {}
+    view = inspector_answer(pid, "view.state", {}) or {}
+    found = {key: state.get(key) for key in ("origin", "focus")} if isinstance(state, dict) else {"camera": state}
+    found["path"] = view.get("path") if isinstance(view, dict) else view
+    return found
+
+
+def forest_camera_check(pids, caster, shots=None, cast=True):
+    """The forest miracle in a network game. With cast, the client of the caster turns on the cheat of the miracle charge
+    (it has the editor claim), taps an icon of the forest of its god and casts the forest. Without cast, a scenario (such
+    as miracles.forest_camera_path) casts it with the hand of the first god. Only the camera of the caster may follow the
+    camera path of the forest; the camera of each other client must stay where it was. Screenshots of each client go to
+    the folder before the cast and at each time after it. Returns what each step did."""
+    done = {"before": [camera_view(pid) for pid in pids], "miracle": {}}
+    editor_shots(pids, shots, "00_before")
+    if cast:
+        done["cheat"] = inspector_answer(pids[caster], "editor.cheat",
+                                         {"params": {"cheat": "infinite miracle charge", "on": True}})
+        time.sleep(3.0)
+        done["miracle"] = slot_cast(pids[caster], caster, seed=FOREST_SEED)
+    after = []
+    for seconds in (2, 6, 10):
+        time.sleep(seconds - (after[-1]["at"] if after else 0))
+        views = [camera_view(pid) for pid in pids]
+        after.append({"at": seconds, "views": views})
+        editor_shots(pids, shots, f"{len(after):02d}_after_{seconds}s")
+    done["after"] = after
+
+    def holds(view):
+        return bool(((view or {}).get("path") or {}).get("holds_camera"))
+
+    caster_followed = any(holds(step["views"][caster]) for step in after)
+    others_followed = [index for index in range(len(pids)) if index != caster
+                       and any(holds(step["views"][index]) for step in after)]
+    done["caster_followed"] = caster_followed
+    done["others_followed"] = others_followed
+    done["passed"] = caster_followed and not others_followed
+    print("forest camera:", json.dumps({key: done[key] for key in ("caster_followed", "others_followed", "passed")}))
     return done
 
 
@@ -2109,6 +2158,12 @@ def main():
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
+    parser.add_argument("--forest-camera", action="store_true",
+                        help="the first client casts the forest once both clients compared --hold-after turns (with "
+                             "--scenario, the scenario casts it): only the camera of the first client may follow the "
+                             "camera path of the forest (the first client has the editor claim)")
+    parser.add_argument("--forest-camera-shots", metavar="FOLDER",
+                        help="the folder for the screenshots of each client in the forest camera check")
     parser.add_argument("--slot-fight", type=int, metavar="SECONDS",
                         help="once the first client compared --hold-after turns, it sends the fight cheat (its god's "
                              "creature fights the nearest creature); then both clients fight with the fight autopilot "
@@ -2392,6 +2447,7 @@ def main():
     miracle_done = None
     fight_done = None
     editor_done = None
+    forest_done = None
     give_done = None
     hand_steps = HandSteps()
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
@@ -2452,7 +2508,8 @@ def main():
                 return 1
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
-                                 "observer" if is_observer else "god", 600, editor=options.editor_check and index == 0,
+                                 "observer" if is_observer else "god", 600,
+                                 editor=(options.editor_check or options.forest_camera) and index == 0,
                                  staff=options.editor_check and index == 1)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
@@ -2502,7 +2559,7 @@ def main():
             chatting = chatting or any(value.split(":", 1)[1] == str(index + 1) for value in options.tattoo_menu)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
                     or options.give == index + 1 or any(leash["client"] == index for leash in leashes)
-                    or options.editor_check):
+                    or options.editor_check or options.forest_camera):
                 command += ["--inspect-port", "0"]
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
@@ -2607,6 +2664,12 @@ def main():
                 editor_done = editor_check([client.pid for client in clients],
                                            [os.path.join(client_dirs[index], "client.log") for index in range(2)],
                                            server_log, options.editor_shots)
+            if (options.forest_camera and forest_done is None and len(clients) == 2
+                    and all(client.poll() is None for client in clients) and all(reached_turn(
+                        os.path.join(client_dirs[index], "client.log"), clients[index].pid, options.hold_after)
+                        for index in range(2))):
+                forest_done = forest_camera_check([client.pid for client in clients], 0, options.forest_camera_shots,
+                                                  cast=not options.scenario)
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
                     and not any(hand_steps.busy(index) for index in range(len(clients))) and reached_turn(
@@ -2830,6 +2893,11 @@ def main():
         summary["slot_miracle"] = miracle_done
     if options.slot_fight:
         summary["slot_fight"] = fight_done
+    if options.forest_camera:
+        summary["forest_camera"] = forest_done
+        if not (forest_done or {}).get("passed"):
+            print(f"the forest camera check did not pass: {json.dumps(forest_done)[:2000]}")
+            all_same = False
     if options.editor_check:
         summary["editor_check"] = editor_done
         if not (editor_done or {}).get("passed"):
