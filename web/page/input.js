@@ -85,6 +85,49 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
   // The wheel turns no page zoom and no page scroll while it is over the game
   canvas.addEventListener('wheel', (event) => event.preventDefault(), { passive: false });
 
+  // The releases of the mouse buttons. The game holds a button from its press on the game canvas until its release on
+  // the page. When the browser gives the release to another window, the page gives the game a release itself:
+  // - The page loses the focus (Alt+Tab, a window of the system) or the page goes hidden. The game lets go of all the
+  //   buttons.
+  // - A movement of the mouse shows a held button as up. The game lets go of that button before it gets the movement.
+  // - The browser cancels the pointer, or the capture of the pointer stops while the buttons show as up.
+  // Without the pointer lock, the canvas captures the pointer at a press. Thus a release outside the canvas also comes to
+  // the canvas. The rules of a drag in the game stay the same: only a lost release changes.
+  const buttonRules = globalThis.openblackButtons;
+  const heldButtons = buttonRules ? new buttonRules.HeldButtons() : null;
+  const giveRelease = (button, reason) => {
+    const held = heldButtons.list();
+    heldButtons.release(button);
+    say(`the page gives the release of button ${button} (${reason})`);
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button, buttons: buttonRules.buttonsAfterRelease(held, button) }));
+  };
+  const giveReleases = (buttons, reason) => buttons.forEach((button) => giveRelease(button, reason));
+  if (heldButtons) {
+    canvas.addEventListener('mousedown', (event) => heldButtons.press(event.button), true);
+    document.addEventListener('mouseup', (event) => heldButtons.release(event.button), true);
+    window.addEventListener('mousemove', (event) => giveReleases(heldButtons.lostReleases(event.buttons), 'the button is up'), true);
+    canvas.addEventListener('pointerdown', (event) => {
+      if (document.pointerLockElement === canvas) {
+        return;
+      }
+      try {
+        canvas.setPointerCapture(event.pointerId);
+      } catch {
+        // The browser does not capture a pointer that is not active
+      }
+    });
+    canvas.addEventListener('pointercancel', () => giveReleases(heldButtons.allReleases(), 'the browser cancelled the pointer'));
+    // The capture also stops at the last release, and when the pointer lock starts. Only a button that shows as up gets
+    // a release.
+    canvas.addEventListener('lostpointercapture', (event) => giveReleases(heldButtons.lostReleases(event.buttons), 'the capture stopped'));
+    window.addEventListener('blur', () => giveReleases(heldButtons.allReleases(), 'the page lost the focus'));
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        giveReleases(heldButtons.allReleases(), 'the page is hidden');
+      }
+    });
+  }
+
   // Full screen. The game asks for it after a key press. The browser lets the page start the full screen only soon
   // after a press or a click, thus a request that fails waits for the next press or click.
   let fullscreenWanted = false;
