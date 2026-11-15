@@ -629,6 +629,29 @@ function megabytes(bytes) {
  * When the site gives the game files to the account, the page keeps them in this browser and chooses them, with no
  * folder picker. Gives false when the site refuses them or the page cannot get them: the player then chooses a folder.
  */
+// The choice of the player to get all the game files before the start, which the browser keeps for the next visit
+const k_DownloadAllKey = 'openblack.downloadAllGameFiles';
+
+/** True when the player chose to get all the game files before the start. A browser with no storage gives false. */
+function wantsAllGameFiles() {
+  try {
+    return localStorage.getItem(k_DownloadAllKey) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function keepAllGameFilesChoice(all) {
+  try {
+    localStorage.setItem(k_DownloadAllKey, all ? '1' : '0');
+  } catch {
+    // The browser keeps no storage for the page. The choice is only for this visit.
+  }
+}
+
+// The store of the game files that the site streams, while the game plays them (see launcher-assets.js)
+let siteFiles = null;
+
 async function useSiteGameFiles() {
   const fetchFile = (address, options) => fetch(address, options);
   const answer = await fetchAssetIndex(fetchFile);
@@ -659,13 +682,30 @@ async function useSiteGameFiles() {
     }
   };
   log(`The site gives ${answer.index.files.length} game files (${megabytes(answer.index.totalBytes)}).`);
+  const allBox = element('site-files-all');
+  allBox.checked = wantsAllGameFiles();
+  // A player who chooses it after the start of the download gets the other files after the start files
+  const getAll = () => siteFiles && allBox.checked && siteFiles.store.prefetch(siteFiles.store.files.map((_, number) => number));
+  allBox.addEventListener('change', () => {
+    keepAllGameFilesChoice(allBox.checked);
+    getAll();
+  });
+  const all = allBox.checked;
   try {
-    const entries = await keepAssets(answer.index, {
+    const { entries, store, blockSize } = await streamAssets(answer.index, {
       fetchFile, digest: (algorithm, bytes) => crypto.subtle.digest(algorithm, bytes), root,
-      wanted: isGameFile, progress: show,
+      wanted: isGameFile, progress: show, all,
+      share: (number, block, file) => globalThis.Module?.openblackWeb?.shareGameFile?.(number, block, file),
+      log,
     });
-    log(`The page downloaded ${last.files} game files (${megabytes(last.bytes)}). The browser kept the other files.`);
-    progress.textContent = 'This browser has all the game files. The next visit downloads only the files that change.';
+    siteFiles = { store, blockSize };
+    getAll();
+    log(`The page downloaded ${last.files} game files and blocks (${megabytes(last.bytes)}). The browser kept the ` +
+      'other files.');
+    progress.textContent = all
+      ? 'This browser has all the game files. The next visit downloads only the files that change.'
+      : 'This browser has the game files for the start. The game gets the other files from the site when it reads ' +
+        'them.';
     await choose(entries, 'the site', { copyAllowed: false });
     return true;
   } catch (error) {
@@ -855,6 +895,42 @@ async function addToolFiles(parameters) {
   }
 }
 
+/**
+ * The folder for the game threads: the files of the chosen folder, or the files and the blocks that the page has of the
+ * files that the site streams, with an empty place for each file that it does not have yet.
+ */
+function gameFolder(list) {
+  if (!siteFiles) {
+    return { list, files: chosen.map((entry) => entry.file) };
+  }
+  const { store, blockSize } = siteFiles;
+  const inStore = (number) => number < store.files.length && chosen[number].path === store.files[number].path;
+  return {
+    list,
+    blockSize,
+    files: chosen.map((entry, number) => (inStore(number) ? store.fileOf(number) : entry.file)),
+    blocks: chosen.map((entry, number) => (inStore(number) && store.files[number].blocks ? store.blocksOf(number) : null)),
+  };
+}
+
+// The game files that a game thread read and the page got from the site, for the log
+const obtainedGameFiles = new Set();
+
+/**
+ * A game thread reads bytes of a game file that the page does not have. The page gets them first, then the files that
+ * the game will probably read next.
+ */
+async function obtainGameFile(number, offset, length) {
+  const { store } = siteFiles;
+  const file = store.files[number];
+  if (!obtainedGameFiles.has(number)) {
+    obtainedGameFiles.add(number);
+    log(`The game reads ${file.path}, which the page gets from the site now.`);
+  }
+  await store.obtain(number, offset, length);
+  store.prefetch(planAssetPrefetch(store.files, { path: file.path, have: (sha256) => store.kept.has(sha256) }));
+}
+
 async function start(online = false) {
   if (!chosen) {
     return;
@@ -884,7 +960,7 @@ async function start(online = false) {
   } else if (parameters.has('args') || parameters.has('tool-file')) {
     log('This build has no developer tools: the page ignores the parameters "args" and "tool-file".');
   }
-  const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
+  const list = chosen.map((entry, index) => `${index}\t${entry.size ?? entry.file.size}\t${entry.path}`).join('\n');
   // The page takes the arguments of a player from a list (launcher-arguments.js), and "args" in a developer build.
   // With no profile, the multiplayer front end asks for the new player's name first.
   const gameArguments = playerArguments(parameters, developer, online);
@@ -946,8 +1022,8 @@ async function start(online = false) {
     print: log,
     printErr: log,
     openblackWeb: {
-      folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
-      requests, displayFrames, gameFrames,
+      folder: gameFolder(list), storage, version: version.file, showFrame, setPresent, requests, displayFrames, gameFrames,
+      obtainGameFile: siteFiles ? obtainGameFile : undefined,
     },
     onExit: (code) => {
       log(`The game stopped with the code ${code}.`);
@@ -978,6 +1054,11 @@ async function start(online = false) {
   const script = document.createElement('script');
   script.src = 'openblack.js';
   document.body.append(script);
+  // After the start, the page gets the files that the first land can read in its play, one at a time
+  if (siteFiles) {
+    const { store } = siteFiles;
+    store.prefetch(planAssetPrefetch(store.files, { have: (sha256) => store.kept.has(sha256) }));
+  }
 }
 
 async function main() {

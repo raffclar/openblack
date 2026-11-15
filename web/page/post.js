@@ -6,7 +6,8 @@
 // end, and the count of the page's display frames, which starts each frame of the game thread. It also shows each frame
 // that the game thread sends as an image, and it changes between the image and the game canvas when the game thread
 // asks (see the frame present code of the web platform). It also writes the diagnostic lines of the game threads to the
-// game log (see pre.js), and it gives the stack of an error of a game thread to the error reports.
+// game log (see pre.js), and it gives the stack of an error of a game thread to the error reports. When a game thread
+// reads a game file that the site streams and that the page does not have yet, this code asks the page for the file.
 //
 // When the game thread asks for a lobby session from the sign-in of the site, this code asks the page of the site around
 // the game page (the site's /play/ page), and gives the answer to that thread only. Only the parent page of the same
@@ -43,10 +44,58 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
     clearTimeout(entry.timer);
     answerWorker(entry, reply.status | 0, typeof reply.body === 'string' ? reply.body : '');
   });
+  // The page gives each game file and each block of a file that it gets from the site to every worker, also to a
+  // worker that did not ask for it, so that no other thread asks for it again. A new worker gets the folder with the
+  // files and the blocks that the page has.
+  const workers = new Set();
+  const folder = openblackWeb.folder;
+  const message = (file, block, blob) => ({ openblackGameFile: block === null ? { file, blob } : { file, block, blob } });
+  openblackWeb.shareGameFile = (file, block, blob) => {
+    if (!Number.isInteger(file) || file < 0 || file >= folder.files.length || !blob) {
+      return;
+    }
+    if (block === null) {
+      folder.files[file] = blob;
+    } else if (folder.blocks && folder.blocks[file] && block >= 0 && block < folder.blocks[file].length) {
+      folder.blocks[file][block] = blob;
+    } else {
+      return;
+    }
+    workers.forEach((worker) => worker.postMessage(message(file, block, blob)));
+  };
+  // A game thread read bytes of a game file that the page does not have yet. The page gets them from the site (see
+  // launcher-assets.js), and gives them to every worker. The worker that asked then also gets what the page has of the
+  // file, in case the page had it already. When the page cannot get the bytes, only the worker that asked gets the
+  // answer, and the read of the game fails.
+  const wantGameFile = (worker, { file, offset, length }) => {
+    const refuse = (reason) => {
+      if (globalThis.openblackPageLog) {
+        globalThis.openblackPageLog(`The page cannot get the game file ${file} from the site: ${reason}`);
+      }
+      worker.postMessage(message(file, null, null));
+    };
+    if (!Number.isInteger(file) || file < 0 || file >= folder.files.length || !openblackWeb.obtainGameFile) {
+      refuse('the page does not stream the game files');
+      return;
+    }
+    openblackWeb.obtainGameFile(file, offset, length).then(() => {
+      if (folder.files[file]) {
+        worker.postMessage(message(file, null, folder.files[file]));
+        return;
+      }
+      (folder.blocks && folder.blocks[file] || []).forEach((blob, block) => {
+        if (blob) {
+          worker.postMessage(message(file, block, blob));
+        }
+      });
+    }, (error) => refuse(error.message || error));
+  };
   const listened = new WeakSet();
   const show = (event, worker) => {
     if (event.data && Number.isInteger(event.data.openblackSiteSessionRequest)) {
       askSite(worker, event.data.openblackSiteSessionRequest);
+    } else if (event.data && event.data.openblackGameFileWanted) {
+      wantGameFile(worker, event.data.openblackGameFileWanted);
     } else if (event.data && typeof event.data.openblackLog === 'string' && globalThis.openblackPageLog) {
       // A line of a game thread for the diagnostics, such as a lost device of the renderer
       globalThis.openblackPageLog(event.data.openblackLog);
@@ -60,6 +109,7 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
     }
   };
   const give = (worker) => {
+    workers.add(worker);
     worker.postMessage({
       openblackWeb: {
         folder: openblackWeb.folder, storage: openblackWeb.storage, version: openblackWeb.version,
