@@ -555,6 +555,9 @@ void MultiplayerFrontEnd::EnterLogin()
 	if (UsesLobbySessions() && _services.lobby->GetState() == ecs::systems::LobbySessionState::LoggedIn &&
 	    !_services.lobby->IsEmailRequired())
 	{
+		// The sign-in at the start of the game opens no push channel. The front end needs the events of the lobby, so
+		// the session continues with the push channel open.
+		_services.lobby->ResumeSession([](ecs::systems::LobbyResult<lobby_api::AccountRef>&&) {});
 		_loggedIn = true;
 		EnterGameList();
 		return;
