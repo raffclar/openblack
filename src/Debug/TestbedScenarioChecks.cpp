@@ -88,6 +88,8 @@ std::string_view Name(Quantity quantity)
 		return "the hand holds a miracle";
 	case Quantity::PhysicalShields:
 		return "the number of physical shields";
+	case Quantity::FootballMatchState:
+		return "the state of the football match";
 	}
 	return "";
 }
