@@ -98,6 +98,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
@@ -1208,6 +1209,11 @@ void world_objects::Remove(entt::entity object)
 	if (registry.AllOf<CentreHands>(object) && Locator::spellIconSystem::has_value())
 	{
 		Locator::spellIconSystem::value().CentreRemoved(object);
+	}
+	// Its totem goes with it at once, also while the game is paused
+	if (registry.AllOf<Abode>(object) && Locator::villageTotemSystem::has_value())
+	{
+		Locator::villageTotemSystem::value().CentreRemoved(object);
 	}
 	// A town's building going is planned again by its town, where it stood, and the things it put round itself go. A
 	// miracle dispenser is one of the buildings of its town.

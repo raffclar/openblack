@@ -40,6 +40,7 @@ public:
 	void Restore(entt::entity totem, float heading, float share) override;
 	void Update(uint32_t realMs) override;
 	void ProcessTurn(uint32_t realMs) override;
+	void CentreRemoved(entt::entity centre) override;
 
 	[[nodiscard]] std::optional<entt::entity> TotemOf(entt::entity picked) const override;
 	bool Grip(entt::entity totem, PlayerNames player) override;

@@ -430,6 +430,26 @@ void VillageTotemSystem::ProcessTurn(uint32_t realMs)
 	}
 }
 
+void VillageTotemSystem::CentreRemoved(entt::entity centre)
+{
+	auto& registry = _world->Entities();
+	std::vector<entt::entity> gone;
+	registry.Each<const VillageTotem>([centre, &gone](entt::entity totem, const VillageTotem& totemComponent) {
+		if (totemComponent.townCentre == centre)
+		{
+			gone.push_back(totem);
+		}
+	});
+	for (const auto totem : gone)
+	{
+		Remove(totem);
+	}
+	if (_gripped != entt::null && !registry.Valid(_gripped))
+	{
+		_gripped = entt::null;
+	}
+}
+
 std::optional<entt::entity> VillageTotemSystem::TotemOf(entt::entity picked) const
 {
 	auto& registry = _world->Entities();

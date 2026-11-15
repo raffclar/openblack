@@ -540,6 +540,24 @@ TEST(VillageTotemSystem, AtTheTurnATotemGoesWithItsTownCentreWithItsIconAndSecon
 	EXPECT_FALSE(registry.Valid(totem.ghostIcon));
 }
 
+// A town centre that goes takes its totem with it at once, with no turn, as when the editor removes the centre while
+// the game is paused. A totem on another centre stays.
+TEST(VillageTotemSystem, ARemovedTownCentreTakesItsTotemAtOnce)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	auto& system = *village.system;
+	const auto totem = registry.Get<VillageTotem>(village.totem);
+	system.CentreRemoved(registry.Create());
+	EXPECT_TRUE(registry.Valid(village.totem));
+	system.CentreRemoved(totem.townCentre);
+	EXPECT_FALSE(registry.Valid(village.totem));
+	EXPECT_FALSE(registry.Valid(totem.icon));
+	EXPECT_FALSE(registry.Valid(totem.ghost));
+	EXPECT_FALSE(registry.Valid(totem.ghostIcon));
+	EXPECT_TRUE(registry.Valid(totem.townCentre));
+}
+
 TEST(VillageTotemSystem, AsItMovesItsPlayerSeesTheShareItIsHeldAtButNotJustAfterItsIconIsPutOn)
 {
 	auto village = MakeVillage(true);

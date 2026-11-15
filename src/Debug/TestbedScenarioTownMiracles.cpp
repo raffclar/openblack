@@ -676,6 +676,27 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "town.centre_removed_paused",
+	    .name = "A village centre removed while the game is paused",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The town and temple of town.centre_destroyed. When the site is built, the game pauses, as the "
+	        "pause key does. In the same frame, the village centre goes from the world, as when the editor removes it. Press "
+	        "P to continue the game.",
+	    .expected = "While the game is still paused, the village centre goes with its totem, the creature icon on the "
+	                "totem, its two stone hands and their seeds. The heal and water icons at the worship site go too. "
+	                "Nothing of them comes back when the game continues.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = TownAndTemple(),
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::PauseGame, .delaySeconds = 3.0f, .value = 1},
+	                 {.kind = Kind::RemoveObject, .delaySeconds = 0.0f, .object = 0}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "town.centre_destroyed_in_script",
 	    .name = "A village centre that a script holds, destroyed by an effect",
 	    .facet = Facet::Miracles,
