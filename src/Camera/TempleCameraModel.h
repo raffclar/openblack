@@ -25,6 +25,7 @@
 #include "CameraModel.h"
 #include "Common/Zoomer.h"
 #include "Temple/TempleKeys.h"
+#include "TempleFreeCamera.h"
 #include "TemplePress.h"
 
 namespace openblack
@@ -320,6 +321,8 @@ private:
 	};
 
 	void Step(float dt, const Input& input);
+	/// A frame of the editor's free camera: the arrow keys move it and the middle button turns it
+	[[nodiscard]] CameraInterpolationUpdateInfo StepFreeCamera(float seconds);
 	void UpdateIntro(float dt, const Input& input);
 	void UpdateOrbit(float dt, const Input& input);
 	void UpdateLook(float dt, const Input& input);
@@ -470,6 +473,9 @@ private:
 	Pose _doorStart {};
 	Pose _doorEnd {};
 	std::optional<Room> _doorRoom;
+
+	/// The view of the editor's free camera while it has the view, none while the room's camera has it
+	std::optional<temple_free_camera::View> _freeView;
 };
 
 } // namespace openblack

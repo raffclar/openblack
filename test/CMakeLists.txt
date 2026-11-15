@@ -2629,3 +2629,4 @@ openblack_setup_and_add_test(test_game_data_print online/test_game_data_print.cp
 openblack_setup_and_add_test(test_entity_hashes test_entity_hashes.cpp)
 openblack_setup_and_add_test(test_desync_capture online/test_desync_capture.cpp)
 openblack_setup_and_add_test(test_main_lobby_chat gui/test_main_lobby_chat.cpp)
+openblack_setup_and_add_test(test_temple_free_camera camera/test_temple_free_camera.cpp)

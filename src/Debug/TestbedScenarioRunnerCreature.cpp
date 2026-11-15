@@ -1105,6 +1105,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::PointerOnObject:
 	case Kind::PointerOnTipBubble:
 	case Kind::PointerOnTotem:
+	case Kind::TempleFreeCamera:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:

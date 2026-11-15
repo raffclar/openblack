@@ -328,7 +328,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::SkirmishBox || kind == Kind::LookAtSaveGamePicture || kind == Kind::ZoomToTempleCaveTarget ||
 	       kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle ||
 	       kind == Kind::JoinFootball || kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint ||
-	       IsPointerCommand(kind);
+	       kind == Kind::TempleFreeCamera || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -602,6 +602,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "create a reaction at an object",
 	    "pointer on tip bubble",
 	    "pointer on totem",
+	    "free camera in the temple",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
