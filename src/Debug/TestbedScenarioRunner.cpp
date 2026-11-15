@@ -1400,6 +1400,16 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 			return std::nullopt;
 		}
 		return static_cast<double>(Locator::magicShieldSystem::value().GetDomes(0.0f).size());
+	case checks::Quantity::CreatureDuels:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto* record = registry.TryGet<const ecs::components::CreatureFightRecord>(*creature);
+		return record != nullptr ? static_cast<double>(record->fights) : 0.0;
+	}
 	}
 	return std::nullopt;
 }
