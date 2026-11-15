@@ -221,12 +221,14 @@ await sleep(1500);
 // With --frame-url, the scripts of the steps run in the frame of the game page
 const frameUrl = option('--frame-url');
 let frameContext = null;
-const findFrame = (tree) => {
-  if (tree.frame.url.includes(frameUrl) && tree.frame.parentId) {
+// Only a child frame can be the game frame. Some versions of Chrome do not give the parentId of a frame in the tree, so
+// the search uses the place of the frame in the tree.
+const findFrame = (tree, child = false) => {
+  if (child && tree.frame.url.includes(frameUrl)) {
     return tree.frame.id;
   }
-  for (const child of tree.childFrames ?? []) {
-    const found = findFrame(child);
+  for (const next of tree.childFrames ?? []) {
+    const found = findFrame(next, true);
     if (found) {
       return found;
     }
