@@ -69,6 +69,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/Football.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
@@ -1400,6 +1401,26 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 			return std::nullopt;
 		}
 		return static_cast<double>(Locator::magicShieldSystem::value().GetDomes(0.0f).size());
+	case checks::Quantity::FootballMatchState:
+	{
+		const auto object = ObjectAt(check.index);
+		const auto* pitch = object.has_value() ? registry.TryGet<const ecs::components::FootballPitch>(*object) : nullptr;
+		if (pitch == nullptr)
+		{
+			return std::nullopt;
+		}
+		return static_cast<double>(pitch->match.state);
+	}
+	case checks::Quantity::CreatureDuels:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto* record = registry.TryGet<const ecs::components::CreatureFightRecord>(*creature);
+		return record != nullptr ? static_cast<double>(record->fights) : 0.0;
+	}
 	}
 	return std::nullopt;
 }

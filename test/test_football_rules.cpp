@@ -97,6 +97,30 @@ TEST(FootballRules, TheKickOffComesWhenTheBallIsOnTheSpotAndFewPlayersWalk)
 	EXPECT_EQ(match.roleTurns, rules::k_ReRoleTurns);
 }
 
+TEST(FootballRules, TheWalkersAreCountedOnlyOnceTheBallIsOnTheSpot)
+{
+	rules::Match match;
+	uint32_t counts = 0;
+	const auto walking = [&counts]() {
+		++counts;
+		return 0u;
+	};
+	for (uint32_t turn = 1; turn <= rules::k_KickOffWaitTurns; ++turn)
+	{
+		EXPECT_FALSE(rules::StepWaiting(match, 5, 3, walking).kickOff);
+	}
+	EXPECT_EQ(counts, 0u);
+	// With too few players on a team, the count of walkers is not asked either
+	rules::Match few;
+	for (uint32_t turn = 1; turn <= rules::k_SendHomeTurns + 1; ++turn)
+	{
+		static_cast<void>(rules::StepWaiting(few, 5, 2, walking));
+	}
+	EXPECT_EQ(counts, 0u);
+	EXPECT_TRUE(rules::StepWaiting(match, 5, 3, walking).kickOff);
+	EXPECT_EQ(counts, 1u);
+}
+
 TEST(FootballRules, AMatchNeedsMoreThanOnePlayerEach)
 {
 	EXPECT_TRUE(rules::PlaysOn(2, 1));
