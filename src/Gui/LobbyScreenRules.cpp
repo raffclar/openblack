@@ -298,6 +298,12 @@ Problem ProblemOf(const ecs::systems::LobbyError& error, lobby_api::ClientKind c
 	{
 		return notice("This game is full.");
 	}
+	// A cancel that comes after the start stopped, for example a second click before the room shows the stop. The room
+	// stays open and shows no box.
+	if (code == problems::k_NotStarting)
+	{
+		return {.box = ProblemBox::None, .text = {}};
+	}
 	if (code == problems::k_Started || code == problems::k_NotOpen)
 	{
 		return notice("The game has started.");

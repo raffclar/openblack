@@ -194,6 +194,10 @@ TEST(LobbyScreenRules, EachProblemHasItsOwnBox)
 	          "This game is full.");
 	EXPECT_EQ(of("none", 404).box, ProblemBox::AskCreate);
 	EXPECT_EQ(of("", 404).text, "There is no such game.");
+	// A cancel after the start stopped keeps the room with no box, not the box "Connection Failed."
+	EXPECT_EQ(of("not_starting").box, ProblemBox::None);
+	EXPECT_TRUE(of("not_starting").text.empty());
+	EXPECT_EQ(of("started").text, "The game has started.");
 	// Only a problem of the network shows the vanilla box
 	EXPECT_EQ(ProblemOf(LobbyError {.kind = ecs::systems::LobbyErrorKind::Timeout}, lobby_api::ClientKind::Desktop).box,
 	          ProblemBox::ConnectionFailed);
