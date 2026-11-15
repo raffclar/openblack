@@ -95,6 +95,10 @@ struct Session
 	/// "email_required": the account has no email address. The lobby refuses every other call with 403
 	/// "email_required" until the player adds an address on the account page of the site.
 	bool emailRequired {false};
+	/// "editor": the account has the editor right (optional). In a single player game, this right opens the editor and
+	/// its debug cheats in a build that players get. In a network game, only the editor claim of the join ticket
+	/// counts.
+	bool editor {false};
 };
 
 /// A clan of the account in GET /api/v1/me

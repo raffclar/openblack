@@ -89,7 +89,8 @@ EditorWindow::~EditorWindow() noexcept = default;
 
 void EditorWindow::Open() noexcept
 {
-	// In a network game only a player with the editor claim opens the editor. Outside a network game it is a developer tool.
+	// In a network game only a player with the editor claim opens the editor. Outside a network game, a developer build
+	// always opens it, and a build that players get opens it for an account with the editor right.
 	if (IsOpen() || !developer_tools::EditorAllowed())
 	{
 		return;

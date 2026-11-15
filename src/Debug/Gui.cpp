@@ -324,7 +324,7 @@ void Gui::FollowNetworkSession() noexcept
 			SPDLOG_LOGGER_INFO(logger, "The debug windows start again");
 			break;
 		case GuiMode::EditorOnly:
-			SPDLOG_LOGGER_INFO(logger, "A network game is live and the player has the editor claim: only the editor shows");
+			SPDLOG_LOGGER_INFO(logger, "The player has the editor right: only the editor shows");
 			break;
 		case GuiMode::Dormant:
 			SPDLOG_LOGGER_INFO(logger, "The debug windows and the editor stop");
@@ -343,12 +343,15 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 {
 	ImGui::SetCurrentContext(_imgui);
 	// While a network game is live, no debug window takes an event, so that none changes the shared world. Only the editor
-	// of a player with the editor claim takes events, and it sends its edits as commands of the turns.
+	// of a player with the editor claim takes events, and it sends its edits as commands of the turns. In a build that
+	// players get, only the editor of a player with the editor right takes events.
 	FollowNetworkSession();
 	if (_mode == developer_tools::GuiMode::Dormant)
 	{
-		// In a network game the editor key of a player with no editor claim shows the refusal line to the player
-		if (_imgui != nullptr && developer_tools::NetworkSessionLive() && editor::IsEditorToggleKey(event))
+		// The editor key of a player with no editor right shows the refusal line to the player. With no account signed in
+		// outside a network game, the key does nothing.
+		if (_imgui != nullptr && developer_tools::LocalEditorRight() != developer_tools::EditorRight::Unknown &&
+		    editor::IsEditorToggleKey(event))
 		{
 			std::ignore = developer_tools::EditorAllowed();
 		}

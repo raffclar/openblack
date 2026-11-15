@@ -11,7 +11,8 @@
 
 #include "DeveloperTools.h"
 
-/// The gate of the developer tools in the running game. It reads the network game of this computer from the Locator.
+/// The gate of the developer tools in the running game. It reads the network game of this computer and the account of
+/// the lobby from the Locator.
 namespace openblack::developer_tools
 {
 
@@ -21,6 +22,10 @@ namespace openblack::developer_tools
 /// True while a network session is live and the join ticket of the player of this computer has the editor claim
 [[nodiscard]] bool LocalPlayerHasEditorClaim();
 
+/// The editor right of the player of this computer (see EditorRightOf): the editor claim of the join ticket in a network
+/// game, else the editor right of the account that is signed in to the lobby
+[[nodiscard]] EditorRight LocalEditorRight();
+
 /// Shows the refusal line of the editor and the debug cheats to the player, in the incoming messages (see
 /// ShowsRefusalLine). The game calls it for a refusal of this computer and for a refusal of the game server.
 void ShowEditorRefusal();
@@ -28,8 +33,8 @@ void ShowEditorRefusal();
 /// What the debug windows show now (see GuiModeOf)
 [[nodiscard]] GuiMode CurrentGuiMode();
 
-/// Whether the editor can open now (see EditorRefusalOf). The log tells each refusal, and in a network game the player
-/// sees the refusal line. Thus call it only for an event.
+/// Whether the editor can open now (see EditorRefusalOf). The log tells each refusal. When the join ticket or the
+/// signed-in account does not have the editor right, the player sees the refusal line. Thus call it only for an event.
 [[nodiscard]] bool EditorAllowed();
 
 /// Whether the developer action can run now (see RefusalOf). The log tells each refusal, thus call it only for an

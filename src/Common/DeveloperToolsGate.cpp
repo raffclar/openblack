@@ -12,12 +12,52 @@
 #include <spdlog/spdlog.h>
 
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
+#include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "EngineConfig.h"
 #include "Locator.h"
 #include "Online/NetworkSession.h"
 
 namespace openblack::developer_tools
 {
+
+namespace
+{
+
+/// The editor right that a tool run gives to a signed-in account, or none. Only a developer build reads it.
+[[nodiscard]] std::optional<bool> SimAccountEditor()
+{
+	if constexpr (k_Built)
+	{
+		if (Locator::config::has_value())
+		{
+			return Locator::config::value().simAccountEditor;
+		}
+	}
+	return std::nullopt;
+}
+
+/// Whether the editor rule is the rule of a developer build. A tool run can ask for the rule of a build that players get.
+[[nodiscard]] bool BuiltRule()
+{
+	return k_Built && !SimAccountEditor().has_value();
+}
+
+/// The editor right of the account that is signed in to the lobby, or none when no account is signed in
+[[nodiscard]] std::optional<bool> AccountEditor()
+{
+	if (const auto sim = SimAccountEditor(); sim.has_value())
+	{
+		return sim;
+	}
+	if (!Locator::lobbyClient::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::lobbyClient::value().GetAccountEditor();
+}
+
+} // namespace
 
 bool NetworkSessionLive()
 {
@@ -34,9 +74,15 @@ bool LocalPlayerHasEditorClaim()
 	return session != nullptr && session->GetJoined().has_value() && session->GetJoined()->editor;
 }
 
+EditorRight LocalEditorRight()
+{
+	return EditorRightOf(NetworkSessionLive(), LocalPlayerHasEditorClaim(), AccountEditor());
+}
+
 void ShowEditorRefusal()
 {
-	if (!ShowsRefusalLine(NetworkSessionLive(), LocalPlayerHasEditorClaim()) || !Locator::incomingMessageSystem::has_value())
+	if (!ShowsRefusalLine(BuiltRule(), NetworkSessionLive(), LocalEditorRight()) ||
+	    !Locator::incomingMessageSystem::has_value())
 	{
 		return;
 	}
@@ -50,12 +96,12 @@ void ShowEditorRefusal()
 
 GuiMode CurrentGuiMode()
 {
-	return GuiModeOf(k_Built, NetworkSessionLive(), LocalPlayerHasEditorClaim());
+	return GuiModeOf(BuiltRule(), NetworkSessionLive(), LocalEditorRight());
 }
 
 bool EditorAllowed()
 {
-	const auto refusal = EditorRefusalOf(k_Built, NetworkSessionLive(), LocalPlayerHasEditorClaim());
+	const auto refusal = EditorRefusalOf(BuiltRule(), NetworkSessionLive(), LocalEditorRight());
 	if (refusal.has_value())
 	{
 		if (auto logger = spdlog::get("game"))
