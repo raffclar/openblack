@@ -17,7 +17,11 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Animal.h"
+#include "ECS/Registry.h"
+#include "Editor/EditorEntities.h"
 #include "Editor/EditorNetworkEdits.h"
+#include "Editor/EditorOutline.h"
 
 using namespace openblack;
 using namespace openblack::editor;
@@ -147,8 +151,33 @@ TEST(EditorNetworkEdits, TheRuleRefusesABadEdit)
 	    EditRefusal(EditorEdit {.kind = EditorEdit::Kind::Place, .placeKind = static_cast<uint8_t>(PlaceKind::Creature)})
 	        .has_value());
 	EXPECT_TRUE(EditRefusal(EditorEdit {.kind = EditorEdit::Kind::Place, .placeKind = 200}).has_value());
+	// The animals are the last kind of the palette, and every computer makes them
+	EXPECT_FALSE(EditRefusal(EditorEdit {.kind = EditorEdit::Kind::Place, .placeKind = static_cast<uint8_t>(PlaceKind::Animal)})
+	                 .has_value());
+	EXPECT_TRUE(
+	    EditRefusal(EditorEdit {.kind = EditorEdit::Kind::Place, .placeKind = static_cast<uint8_t>(k_LastPlaceKind) + 1})
+	        .has_value());
 	EXPECT_TRUE(
 	    EditRefusal(
 	        EditorEdit {.kind = EditorEdit::Kind::Place, .placeKind = static_cast<uint8_t>(PlaceKind::Tree), .placeType = -1})
 	        .has_value());
+}
+
+TEST(EditorNetworkEdits, AnAnimalOfThePaletteIsCopiedByItsKind)
+{
+	ecs::Registry registry;
+	const auto horse = registry.Create();
+	registry.Assign<ecs::components::Animal>(horse).type = AnimalInfo::Horse;
+	const auto spellWolf = registry.Create();
+	registry.Assign<ecs::components::Animal>(spellWolf).type = AnimalInfo::SpellWolf;
+
+	// The outliner lists each animal under Animals
+	EXPECT_EQ(KindOf(registry, horse), EntityKind::Animal);
+	EXPECT_EQ(KindOf(registry, spellWolf), EntityKind::Animal);
+	// A copy makes the same kind again through the palette; the palette does not make a miracle's wolf
+	const auto copy = ItemOf(registry, horse);
+	ASSERT_TRUE(copy.has_value());
+	EXPECT_EQ(copy->kind, PlaceKind::Animal);
+	EXPECT_EQ(copy->type, static_cast<int32_t>(AnimalInfo::Horse));
+	EXPECT_FALSE(ItemOf(registry, spellWolf).has_value());
 }

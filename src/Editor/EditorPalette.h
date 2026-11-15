@@ -19,6 +19,8 @@
 
 #include <glm/vec2.hpp>
 
+#include "Enums.h"
+
 /// The palette's lists of things to place, and how they are named and laid out, as plain data
 namespace openblack::editor
 {
@@ -42,7 +44,12 @@ enum class PlaceKind : uint8_t
 	/// A scroll or sign that the scripts put up, its type its kind: a plain scroll, a tip sign, a silver scroll or a
 	/// gold scroll, which marks the place of a challenge
 	Highlight,
+	/// An animal of the land, its type its row of the animals' table
+	Animal,
 };
+
+/// The last kind of the palette. A placement from another computer with a higher kind makes nothing.
+constexpr PlaceKind k_LastPlaceKind = PlaceKind::Animal;
 
 /// Something picked in the palette to place: its kind and its type within the kind
 struct PlaceItem
@@ -63,6 +70,17 @@ struct PlaceItem
 [[nodiscard]] size_t CommonWordPrefix(std::span<const std::string_view> names);
 /// Every name made readable, with the words they all start with left out
 [[nodiscard]] std::vector<std::string> ReadableNames(std::span<const std::string_view> names);
+
+/// True for an animal kind that a land's script makes on its own: a grazer, a hunter of the wild or a bird of the land.
+/// The game makes the other kinds in other ways, or does not make them.
+[[nodiscard]] bool IsPlaceableAnimal(AnimalInfo kind);
+/// The rows of the animals' table that the palette lists, in the order of the table. Each row gives the kind of its
+/// animal.
+[[nodiscard]] std::vector<int32_t> PlaceableAnimalRows(std::span<const AnimalInfo> rowKinds);
+
+/// The name of a model made readable, for a row that the game's table names "N/A". The name does not have the word
+/// "Animal" at the start or the number at the end, and a space divides the words: "AnimalLeopard1" becomes "Leopard".
+[[nodiscard]] std::string NameOfModel(std::string_view meshName);
 
 /// Points for a number of things laid out in rows on the land, as near square as can be, spaced apart and centred on
 /// the origin, row by row from the north west

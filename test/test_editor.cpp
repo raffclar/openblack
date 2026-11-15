@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <array>
 #include <set>
 #include <string>
@@ -265,6 +266,48 @@ TEST(EditorPalette, MakesNamesReadable)
 	EXPECT_EQ(CommonWordPrefix(short_), 0u);
 	const std::array<std::string_view, 1> single {"TREE_OAK"};
 	EXPECT_EQ(CommonWordPrefix(single), 0u);
+}
+
+TEST(EditorPalette, ListsTheAnimalsThatALandScriptMakes)
+{
+	// The grazers, the hunters of the wild and the birds of the land
+	for (const auto kind : {AnimalInfo::Horse, AnimalInfo::Wolf, AnimalInfo::Pig, AnimalInfo::Sheep, AnimalInfo::Cow,
+	                        AnimalInfo::Tortoise, AnimalInfo::Lion, AnimalInfo::Tiger, AnimalInfo::Leopard, AnimalInfo::Crow,
+	                        AnimalInfo::Dove, AnimalInfo::Swallow, AnimalInfo::Pigeon, AnimalInfo::Seagull, AnimalInfo::Bat})
+	{
+		EXPECT_TRUE(IsPlaceableAnimal(kind)) << static_cast<int>(kind);
+	}
+	// The kinds of miracles, puzzles and the citadel, and the kinds that no land's script makes
+	for (const auto kind : {AnimalInfo::Goat, AnimalInfo::Zebra, AnimalInfo::Vulture, AnimalInfo::CitadelDove,
+	                        AnimalInfo::CitadelBat, AnimalInfo::SpellDove, AnimalInfo::SpellBat, AnimalInfo::SpellWolf,
+	                        AnimalInfo::PuzzleLion, AnimalInfo::PuzzleSheep, AnimalInfo::PuzzlePig, AnimalInfo::None})
+	{
+		EXPECT_FALSE(IsPlaceableAnimal(kind)) << static_cast<int>(kind);
+	}
+
+	// The list keeps the order of the table and gives each row, not the kind of the row
+	const std::array rows {AnimalInfo::SpellWolf, AnimalInfo::Pig, AnimalInfo::Zebra, AnimalInfo::Crow, AnimalInfo::Lion};
+	EXPECT_EQ(PlaceableAnimalRows(rows), (std::vector<int32_t> {1, 3, 4}));
+	EXPECT_TRUE(PlaceableAnimalRows({}).empty());
+
+	// A table in the order of the kinds lists fifteen animals
+	std::vector<AnimalInfo> table;
+	for (int kind = 0; kind < static_cast<int>(AnimalInfo::_COUNT); ++kind)
+	{
+		table.push_back(static_cast<AnimalInfo>(kind));
+	}
+	const auto listed = PlaceableAnimalRows(table);
+	EXPECT_EQ(listed.size(), 15u);
+	EXPECT_NE(std::ranges::find(listed, static_cast<int32_t>(AnimalInfo::Horse)), listed.end());
+	EXPECT_EQ(std::ranges::find(listed, static_cast<int32_t>(AnimalInfo::PuzzleHorse)), listed.end());
+}
+
+TEST(EditorPalette, NamesARowFromTheModelOfItsKind)
+{
+	EXPECT_EQ(NameOfModel("AnimalLeopard1"), "Leopard");
+	EXPECT_EQ(NameOfModel("AnimalCitadelDove"), "Citadel Dove");
+	EXPECT_EQ(NameOfModel("Animal"), "Animal");
+	EXPECT_EQ(NameOfModel(""), "");
 }
 
 TEST(EditorPalette, LaysOutInSquareRows)

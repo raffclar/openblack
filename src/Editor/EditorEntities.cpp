@@ -16,10 +16,12 @@
 #include <fmt/format.h>
 #include <glm/gtx/euler_angles.hpp>
 
+#include "3D/AllMeshes.h"
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Animals/BirdRules.h"
 #include "Creature/CreatureTurnPose.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
@@ -59,6 +61,7 @@
 #include "ECS/MobileObjectRecord.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -201,6 +204,17 @@ std::optional<NameTables> NameTables::Load()
 	tables.scriptMarkers = {"Script Marker"};
 	// In the order of the highlights' info table
 	tables.highlights = {"Scroll", "Did You Know Sign", "Silver Scroll", "Gold Scroll"};
+	tables.animals = NamesFrom(info.animal);
+	// The table names some rows "N/A", the leopard too. Such a row takes the name of the model of its kind.
+	for (size_t row = 0; row < info.animal.size(); ++row)
+	{
+		const auto& raw = info.animal.at(row).debugString;
+		const auto high = static_cast<size_t>(info.animal.at(row).high);
+		if (std::string_view(raw.data(), strnlen(raw.data(), raw.size())) == "N/A" && high < k_MeshNames.size())
+		{
+			tables.animals.at(row) = NameOfModel(k_MeshNames.at(high));
+		}
+	}
 	return tables;
 }
 
@@ -227,6 +241,8 @@ const std::vector<std::string>& NameTables::Of(PlaceKind kind) const
 		return scriptMarkers;
 	case PlaceKind::Highlight:
 		return highlights;
+	case PlaceKind::Animal:
+		return animals;
 	case PlaceKind::MobileStatic:
 	default:
 		return mobileStatics;
@@ -298,7 +314,7 @@ EntityKind KindOf(const ecs::Registry& registry, entt::entity entity)
 	{
 		return EntityKind::Store;
 	}
-	if (registry.AllOf<Mobile>(entity))
+	if (registry.AnyOf<Mobile, Animal>(entity))
 	{
 		return EntityKind::Animal;
 	}
@@ -318,6 +334,15 @@ std::optional<PlaceItem> ItemOf(const ecs::Registry& registry, entt::entity enti
 			return PlaceItem {.kind = PlaceKind::Villager, .type = static_cast<int32_t>(*type)};
 		}
 		return std::nullopt;
+	}
+	if (const auto* animal = registry.TryGet<Animal>(entity))
+	{
+		// Only a kind that the palette lists can be copied
+		if (!IsPlaceableAnimal(animal->type))
+		{
+			return std::nullopt;
+		}
+		return PlaceItem {.kind = PlaceKind::Animal, .type = static_cast<int32_t>(animal->type)};
 	}
 	if (const auto* dispenser = registry.TryGet<SpellDispenser>(entity))
 	{
@@ -462,6 +487,16 @@ std::optional<uint32_t> MeshOf(const PlaceItem& item)
 	case PlaceKind::Highlight:
 		// A marker has no model; a scroll's model comes from the highlights' system
 		return std::nullopt;
+	case PlaceKind::Animal:
+	{
+		if (index >= info.animal.size())
+		{
+			return std::nullopt;
+		}
+		// The game shows a bird by its middle model and another animal by its high model
+		const auto& row = info.animal.at(index);
+		return resources::HashIdentifier(animals::birds::IsBird(row.animalInfo) ? row.std : row.high);
+	}
 	}
 	return std::nullopt;
 }
@@ -576,6 +611,24 @@ entt::entity Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 		return Locator::scriptHighlightSystem::has_value()
 		           ? Locator::scriptHighlightSystem::value().Create(static_cast<uint32_t>(item.type), position, item.challenge)
 		           : entt::null;
+	case PlaceKind::Animal:
+	{
+		const auto& rows = Locator::infoConstants::value().animal;
+		const auto row = static_cast<size_t>(item.type);
+		if (row >= rows.size() || !IsPlaceableAnimal(rows.at(row).animalInfo) || !Locator::animalSystem::has_value())
+		{
+			return entt::null;
+		}
+		// The animal is made as a land's script makes one. Then it goes free as a script lets it go, and lives as the
+		// land's animals do. It faces as the script makes it face, so the turn of the palette does not change it.
+		auto& animals = Locator::animalSystem::value();
+		const auto entity = animals.CreateScriptAnimal(rows.at(row).animalInfo, {position.x, position.z});
+		if (entity != entt::null)
+		{
+			animals.ReleaseFromScript(entity);
+		}
+		return entity;
+	}
 	}
 	return entt::null;
 }
