@@ -79,6 +79,8 @@ enum class Quantity : uint8_t
 	HandMiracle,
 	/// The number of physical shields on the land
 	PhysicalShields,
+	/// How many duels the scenario's creature at the index has started, as its fight record counts them
+	CreatureDuels,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
