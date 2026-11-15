@@ -83,11 +83,17 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
         worker.postMessage(message(file, null, folder.files[file]));
         return;
       }
+      let given = 0;
       (folder.blocks && folder.blocks[file] || []).forEach((blob, block) => {
         if (blob) {
           worker.postMessage(message(file, block, blob));
+          given += 1;
         }
       });
+      // The thread must not wait for ever: with no bytes to give, the read of the game fails
+      if (given === 0) {
+        refuse('the page got the file, but has no bytes of it to give');
+      }
     }, (error) => refuse(error.message || error));
   };
   const listened = new WeakSet();

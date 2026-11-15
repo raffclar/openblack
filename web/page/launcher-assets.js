@@ -450,10 +450,14 @@ class AssetStore {
    * Makes sure that the page has the bytes of the file from offset, for length bytes, before all the files that the
    * game will probably read next. Gives a promise that is done when the page has them and gave them to share. For a
    * file in blocks, the page then gets the next blocks for later.
+   * A file or a block that the page has already goes to share again: the page can get a file before the game can
+   * take it (a file for later that arrives before the game starts), and the game thread waits until share gives it.
    */
   async obtain(number, offset = 0, length = Infinity) {
     const file = this.files[number];
-    if (this.fileOf(number)) {
+    const whole = this.fileOf(number);
+    if (whole) {
+      this.share(number, null, whole);
       return;
     }
     const range = file.blocks ? assetBlockRange(file, this.blockSize, offset, length) : null;
@@ -463,7 +467,12 @@ class AssetStore {
     }
     const wanted = [];
     for (let block = range.first; block <= range.last; block += 1) {
-      wanted.push(this.getBlockJob(number, block, 'now'));
+      const kept = this.kept.get(file.blocks[block]);
+      if (kept) {
+        this.share(number, block, kept);
+      } else {
+        wanted.push(this.getBlockJob(number, block, 'now'));
+      }
     }
     const ahead = Math.min(file.blocks.length - 1, range.last + k_AssetReadAheadBlocks);
     for (let block = range.last + 1; block <= ahead; block += 1) {
