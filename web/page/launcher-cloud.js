@@ -8,8 +8,8 @@
 //   the browser has.
 // - When the game writes a file, the page sends the new file to the site in the background. A send that fails tries
 //   again at the next check, and no send stops a frame of the game.
-// - The page shows the list of the files on the site, each with a Download button. The Upload button shows but does
-//   not work yet.
+// - The page shows no list of these files. The account page of the site shows the list, with a Download button for each
+//   file.
 // The page asks the site's /play/ page around it, which asks the site with the site session. The page gives no address
 // to that page, only the kind of question.
 'use strict';
@@ -170,7 +170,6 @@ class CloudSaves {
     this.checkAgain = false;
     this.restoreStopped = false;
     this.restoring = true;
-    this.onChange = () => {};
   }
 
   readWaiting() {
@@ -208,7 +207,6 @@ class CloudSaves {
     this.state = 'ready';
     this.listing = listing;
     this.remote = new Map(listing.files.map((file) => [cloudKey(file.folder, file.name), file]));
-    this.onChange();
     return true;
   }
 
@@ -406,63 +404,11 @@ async function cloudProfilesFolder() {
   }
 }
 
-function megabytesText(bytes) {
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/** Shows the files of the site in the section of the page, each with a Download button */
-function showCloudFiles(cloud, element) {
-  const state = element('cloud-saves-state');
-  const list = element('cloud-saves-list');
-  list.replaceChildren();
-  if (cloud.state === 'signed-out') {
-    state.textContent = 'Sign in on the site to keep your saved games and creatures on the site.';
-    return;
-  }
-  if (cloud.state === 'no-site') {
-    state.textContent = 'The saved games and creatures stay in this browser only: no page of the site is around ' +
-      'this page.';
-    return;
-  }
-  if (cloud.state !== 'ready' || !cloud.listing) {
-    state.textContent = 'The site did not give the list of your saved games and creatures.';
-    return;
-  }
-  const { usage, limits } = cloud.listing;
-  state.textContent = `The site keeps ${usage.files} file${usage.files === 1 ? '' : 's'} for you ` +
-    `(${megabytesText(usage.bytes)} of ${megabytesText(limits.bytes)}).`;
-  for (const file of cloud.listing.files) {
-    const item = document.createElement('li');
-    const label = document.createElement('span');
-    label.textContent = `${file.name} in ${file.folder || 'Profiles'} (${megabytesText(file.size)})`;
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = 'Download';
-    button.addEventListener('click', async () => {
-      button.disabled = true;
-      const reply = await cloud.ask({ op: 'get', file: file.id });
-      button.disabled = false;
-      if (reply.status !== 200 || !(reply.bytes instanceof ArrayBuffer)) {
-        cloud.log(`The site did not give the file ${file.name} (${reply.status}).`);
-        return;
-      }
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(new Blob([reply.bytes], { type: 'application/octet-stream' }));
-      link.download = file.name;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 60000);
-    });
-    item.append(label, button);
-    list.append(item);
-  }
-}
-
 /**
  * Starts the saved games and creatures on the site for this page: the list, the files that come back, and the sends
  * when the game writes. Returns the CloudSaves and the promise of the files that come back.
  */
-function startCloudSaves({ element, log }) {
-  const section = element('cloud-saves');
+function startCloudSaves({ log }) {
   const cloud = new CloudSaves({
     ask: askSitePage,
     profiles: undefined,
@@ -477,7 +423,6 @@ function startCloudSaves({ element, log }) {
       }
     })(),
   });
-  cloud.onChange = () => showCloudFiles(cloud, element);
   const restored = (async () => {
     cloud.profiles = await cloudProfilesFolder();
     try {
@@ -485,8 +430,6 @@ function startCloudSaves({ element, log }) {
     } catch (error) {
       log(`The page could not bring back the files from the site: ${error}`);
     }
-    section.hidden = false;
-    showCloudFiles(cloud, element);
   })();
   // The game tells the page after it wrote files of the profiles. The page also checks at times, for files that a
   // check did not send.

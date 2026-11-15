@@ -1072,7 +1072,7 @@ async function main() {
   showCrashReports('Crash reports', 'The browser keeps these crash reports of earlier games.');
 
   if (await storageRoot()) {
-    cloudSaves = startCloudSaves({ element, log });
+    cloudSaves = startCloudSaves({ log });
   }
 
   const copy = await keptCopy();

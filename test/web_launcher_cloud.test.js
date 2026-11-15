@@ -3,6 +3,8 @@
 
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
 const {
   isCloudPlace, cloudKey, parseCloudList, planRestore, planSends, fileStamp, cloudHex, sendAgainLater, CloudSaves,
   k_CloudWaitingKey,
@@ -291,6 +293,16 @@ check('no check runs while the files come back', async () => {
   await cloud.check();
   await restoring;
   assert.ok(!site.asked.some((question) => question.op === 'put'));
+});
+
+check('the game page shows no list, Download or Upload of the files on the site', () => {
+  // The account page of the site shows the list. The game page only sends the files and brings them back.
+  const page = readFileSync(join(__dirname, '../web/page/index.html'), 'utf8');
+  assert.ok(!page.includes('cloud-saves'));
+  assert.ok(!/>\s*(Download|Upload)\s*</.test(page));
+  const script = readFileSync(join(__dirname, '../web/page/launcher-cloud.js'), 'utf8');
+  assert.ok(!script.includes("'Download'"));
+  assert.ok(!script.includes('createElement'));
 });
 
 (async () => {
