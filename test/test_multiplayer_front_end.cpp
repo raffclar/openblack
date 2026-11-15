@@ -104,7 +104,7 @@ public:
 		loginPassword = std::move(password);
 		login = std::move(callback);
 	}
-	void ResumeSession(LobbyCallback<lobby_api::AccountRef>) override {}
+	void ResumeSession(LobbyCallback<lobby_api::AccountRef>) override { ++resumes; }
 	[[nodiscard]] bool CanSignInFromSite() const override { return siteSignIn; }
 	[[nodiscard]] bool IsSignedInFromSite() const override { return fromSite && account.has_value(); }
 	void SignInFromSite(LobbyCallback<lobby_api::AccountRef> callback) override
@@ -212,6 +212,7 @@ public:
 	LobbyCallback<lobby_api::ServerList> servers;
 	bool watchingServers {false};
 	std::map<std::string, bool> watched;
+	int resumes {0};
 	std::string ticketFor;
 	LobbyCallback<lobby_api::JoinTicket> ticket;
 	std::vector<game_socket::Role> ticketRoles;
@@ -1367,6 +1368,8 @@ TEST_F(FrontEndTest, TheSiteLobbyGoesToTheLobbyListWithASession)
 	Make(false, FrontEndStart::SiteLobby);
 	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
 	EXPECT_EQ(lobby.siteAsks, 0);
+	// The session of the start of the game has no push channel: the front end continues it with the channel open
+	EXPECT_EQ(lobby.resumes, 1);
 	EXPECT_FALSE(frontEnd->TakeLeft());
 	frontEnd->Back();
 	EXPECT_TRUE(frontEnd->TakeLeft());
