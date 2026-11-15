@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- The page loads nothing from other sites. It sends nothing to a server, with one exception: the error reports, when
-     the player turns them on. For them, the build adds the address of the reports to connect-src. -->
+<!-- The page loads nothing from other sites. It sends nothing to a server, with two exceptions: the error reports, when
+     the player turns them on (for them, the build adds the address of the reports to connect-src), and the saved games
+     and creatures of a player who is signed in on the site, which the site's page around this page sends. -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>openblack</title>
@@ -44,6 +45,18 @@
       keep the choice of a folder.</label>
   </section>
 
+  <!-- The saved games and creatures that the site keeps for the account (launcher-cloud.js). The page shows the
+       section when it knows if a player is signed in on the site. -->
+  <section id="cloud-saves" hidden>
+    <h2>Saved games and creatures on the site</h2>
+    <p id="cloud-saves-state">The page asks the site for your saved games and creatures.</p>
+    <ul id="cloud-saves-list"></ul>
+    <p class="cloud-saves-upload">
+      <button id="cloud-saves-upload" type="button" disabled aria-describedby="cloud-saves-upload-note">Upload</button>
+      <span id="cloud-saves-upload-note">Upload comes in a later version.</span>
+    </p>
+  </section>
+
   <section id="check" hidden>
     <h2>Install check</h2>
     <ul id="check-list"></ul>
@@ -79,6 +92,7 @@
 <script src="launcher-exit.js"></script>
 <script src="launcher-reports.js"></script>
 <script src="launcher-assets.js"></script>
+<script src="launcher-cloud.js"></script>
 <script src="launcher.js"></script>
 </body>
 </html>

@@ -12,6 +12,10 @@
 #include <exception>
 #include <utility>
 
+#if defined(__EMSCRIPTEN__)
+#include "Web/ProfileWriteNotice.h"
+#endif
+
 using namespace openblack::ecs::save_files;
 
 BackgroundWriter::BackgroundWriter(Failed failed)
@@ -88,6 +92,10 @@ void BackgroundWriter::Run(const std::stop_token& stop)
 		if (_jobs.empty() && _running == 0)
 		{
 			_done.notify_all();
+#if defined(__EMSCRIPTEN__)
+			// The web page sends the new saved games and creatures to the site after the last job of a group
+			openblack::web::NoticeProfileWrite();
+#endif
 		}
 	}
 }

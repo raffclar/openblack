@@ -25,6 +25,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 #drop-zone { border: 2px dashed var(--muted); border-radius: 6px; padding: 24px; width: 100%; box-sizing: border-box; }
 #drop-zone.active { border-color: var(--accent); }
 #check-list { margin: 0; padding-left: 20px; }
+#cloud-saves-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+#cloud-saves-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.cloud-saves-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; }
 .good { color: var(--good); }
 .bad { color: var(--bad); }
 .build { color: var(--muted); margin-top: -8px; font-size: 13px; }

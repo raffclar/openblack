@@ -12,6 +12,9 @@
 // the game page (the site's /play/ page), and gives the answer to that thread only. Only the parent page of the same
 // origin can answer. With no such page, or with no answer in 15 seconds, the answer is status 0 and the game shows its
 // login box. The answer goes only into messages.
+//
+// When a game thread wrote files of the profiles, it tells the page, which sends the saved games and creatures to the
+// site (launcher-cloud.js).
 if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalScope)) {
   const openblackWeb = Module['openblackWeb'];
   globalThis.openblackWeb = openblackWeb;
@@ -47,6 +50,11 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
   const show = (event, worker) => {
     if (event.data && Number.isInteger(event.data.openblackSiteSessionRequest)) {
       askSite(worker, event.data.openblackSiteSessionRequest);
+    } else if (event.data && event.data.openblackProfileWrite) {
+      // The game wrote files of its profiles: the page sends the saved games and creatures to the site
+      if (globalThis.openblackProfileWrite) {
+        globalThis.openblackProfileWrite();
+      }
     } else if (event.data && typeof event.data.openblackLog === 'string' && globalThis.openblackPageLog) {
       // A line of a game thread for the diagnostics, such as a lost device of the renderer
       globalThis.openblackPageLog(event.data.openblackLog);
