@@ -407,6 +407,31 @@ void testbed_scenarios::AddMovement(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "movement.freeze_while_walking_to_a_thing",
+	    .name = "Freeze while walking to a thing",
+	    .facet = Facet::Movement,
+	    .description = "A tiger of the second player walks towards a far rock to pick it up. On its way the first "
+	                   "player casts the freeze spell on it.",
+	    .expected = "As the ice grows, it gives up the walk to the rock. It walks on a short distance and slows to a "
+	                "stand, far from the rock. It does not go to the rock while it is frozen.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{40.0f, 100.0f}, {-40.0f, -100.0f}}},
+	    .creatures = {[] {
+		    auto tiger = Posed(CreatureType::Tiger, {0.0f, -90.0f}, 180.0f);
+		    tiger.owner = PlayerNames::PLAYER_TWO;
+		    return tiger;
+	    }()},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, 90.0f}}},
+	    .miracles = {{.type = MagicType::CreatureSpellFreeze, .target = MiracleCast::Target::Creature, .delaySeconds = 3.0f}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 0.5f, false)},
+	    .checks = {{.label = "it stands far from the rock while it is frozen",
+	                .quantity = checks::Quantity::CreatureDistance,
+	                .point = {0.0f, 90.0f},
+	                .afterTurns = 200,
+	                .atLeast = 40.0}},
+	});
+
+	all.push_back({
 	    .id = "appearance.body_spread",
 	    .name = "Three new tigers of one species",
 	    .facet = Facet::Appearance,

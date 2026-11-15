@@ -340,11 +340,11 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 		{
 			slot.before = *value;
 		}
-		// Freezing it stops what it was doing. A mood taking it, or making it itch, stops it too, but not when a
-		// script controls the creature.
+		// Freezing it stops all that it was doing as a failure: its plan, its agenda, a walk to a thing, its hands and a
+		// fight. A mood taking it, or making it itch, stops it the same way, but not when a script controls the creature.
 		if (creature_spells::StopsAction(event.spell, registry.AllOf<ScriptControlled>(entity)) && minds != nullptr)
 		{
-			minds->AbandonAction(entity);
+			minds->StopAndGiveUpAction(entity);
 		}
 		if (event.spell == Spell::Freeze)
 		{
