@@ -666,6 +666,37 @@ void AddWater(std::vector<Scenario>& all)
 	                  .holdSeconds = 8.0f}},
 	});
 }
+void AddFieldFires(std::vector<Scenario>& all)
+{
+	// The groups stand far enough apart that the fire of one group does not reach the next
+	constexpr glm::vec2 k_LoneRipe {-90.0f, 40.0f};
+	constexpr glm::vec2 k_LoneUnripe {-45.0f, 40.0f};
+	constexpr glm::vec2 k_Unsown {0.0f, 40.0f};
+	constexpr glm::vec2 k_Hut {60.0f, 40.0f};
+	constexpr glm::vec2 k_HutGap {7.0f, 0.0f};
+	all.push_back({
+	    .id = "nature.field_fire_ends",
+	    .name = "The fire of a field goes out when the fire has burnt all its food",
+	    .facet = Facet::Nature,
+	    .description = "Four groups are set alight as they are made. From the west: a ripe wheat field, a half grown wheat "
+	                   "field, an unsown wheat field, and a Norse hut with a ripe wheat field 7 metres to the west and to "
+	                   "the east of it. The two fields by the hut catch fire from the hut.",
+	    .expected =
+	        "The ripe field and the half grown field burn their food, and each fire goes out when the food is gone. The "
+	        "half grown field then grows again. The unsown field does not catch fire. At the start a field fire burns no "
+	        "food, and it burns more food as it gets hotter, so these fires take about two minutes. The two fields by the "
+	        "hut burn their food more quickly. The hut heats each of them again before its fire goes out, so both burn on "
+	        "with no food and never go out, as in the game, also after the hut has burnt down. Their flames are not "
+	        "drawn, because a field with no food is not drawn. The inspector's fires show them.",
+	    .framing = {.shot = Shot::Overview, .include = {k_LoneRipe, k_Hut + k_HutGap}, .distance = 0.45f},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = k_LoneRipe, .ripeCrop = true, .alight = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = k_LoneUnripe, .unripeCrop = true, .alight = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = k_Unsown, .alight = true},
+	                {.type = AbodeInfo::NorseHut, .offset = k_Hut, .yawDegrees = 180.0f, .alight = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = k_Hut - k_HutGap, .ripeCrop = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = k_Hut + k_HutGap, .ripeCrop = true}},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddBlastFireScenarios(std::vector<Scenario>& all)
@@ -673,4 +704,5 @@ void testbed_scenarios::AddBlastFireScenarios(std::vector<Scenario>& all)
 	AddBlasts(all);
 	AddFire(all);
 	AddWater(all);
+	AddFieldFires(all);
 }

@@ -4,7 +4,8 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const {
-  isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hexText, refusalReason, fetchAssetIndex, keepAssets,
+  isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hexText, refusalReason, fetchAssetIndex, fetchAsset,
+  keepAssets,
   k_AssetIndexAddress, k_AssetCacheFolder,
 } = require('../web/page/launcher-assets.js');
 
@@ -263,6 +264,20 @@ check('the page gets only the files that the game reads', async () => {
   });
   assert.deepEqual(entries.map((entry) => entry.path), ['Data/AllMeshes.g3d']);
   assert.equal(site.requests.size, 2);
+});
+
+check('a compressed reply passes: the size check uses the body and not the Content-Length header', async () => {
+  const text = 'meshes meshes meshes meshes';
+  const file = { path: 'Data/AllMeshes.g3d', size: Buffer.byteLength(text), sha256: sha(text) };
+  // The header says 9 bytes (the compressed size); the body that the browser gives has all the bytes
+  const fetchFile = async () => ({ ...fakeResponse(200, text), headers: { get: () => '9' } });
+  let received = 0;
+  const bytes = await fetchAsset(fetchFile, digest, file, (count) => { received += count; });
+  assert.equal(Buffer.from(bytes).toString(), text);
+  assert.equal(received, file.size);
+  // A body with a wrong size still fails, also when the header has the right size
+  const shortFetch = async () => ({ ...fakeResponse(200, 'meshes'), headers: { get: () => String(file.size) } });
+  await assert.rejects(fetchAsset(shortFetch, digest, file, () => {}), /bytes for Data\/AllMeshes.g3d/);
 });
 
 (async () => {

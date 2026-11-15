@@ -2100,6 +2100,10 @@ if (NODE_EXECUTABLE)
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_assets.test.js
   )
+  add_test(NAME test_web_launcher_buttons
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_buttons.test.js
+  )
 endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
 openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
@@ -2633,3 +2637,5 @@ openblack_setup_and_add_test(test_temple_free_camera camera/test_temple_free_cam
 openblack_setup_and_add_test(test_editor_creature_edits test_editor_creature_edits.cpp)
 openblack_setup_and_add_test(test_editor_creature_acts test_editor_creature_acts.cpp)
 openblack_setup_and_add_test(test_desync_fields online/test_desync_fields.cpp)
+openblack_setup_and_add_test(test_creature_freeze_stop test_creature_freeze_stop.cpp)
+target_link_libraries(test_creature_freeze_stop PRIVATE edt psys)

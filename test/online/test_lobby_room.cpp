@@ -868,6 +868,42 @@ TEST_F(LobbyRoomSystemTest, TheStartAndTheCountdown)
 	EXPECT_EQ(ticket->url, "wss://bw.example/game/s1/g1");
 }
 
+TEST_F(LobbyRoomSystemTest, ACancelReturnsTheRoomToTheOpenRoom)
+{
+	JoinTestLobby();
+	const auto members = _system.Room()->Data().members.size();
+	const auto owlReady = _system.Room()->Data().members[1].ready;
+	_system.Start({});
+	_client.Answer(202, R"({"state":"countdown","at":"2026-11-12T10:00:05Z"})");
+	ASSERT_EQ(_system.Room()->Phase(), RoomPhase::Countdown);
+
+	std::optional<LobbyError> first;
+	_system.CancelStart([&](auto&& result) { first = result.error; });
+	EXPECT_EQ(_client.calls.back().path, "/lobbies/l1/start/cancel");
+	_client.Answer(200, R"({"state":"open","at":null})");
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->kind, LobbyErrorKind::None);
+	_client.Deliver(Event("start.cancelled", R"({"why":"host_cancelled"})"));
+	EXPECT_EQ(_system.Room()->Phase(), RoomPhase::Open);
+	EXPECT_EQ(RoomLineText(_system.Room()->Lines().back()), "The start was cancelled.");
+	// The players stay in the room, with their ready
+	EXPECT_EQ(_system.Room()->Data().members.size(), members);
+	EXPECT_EQ(_system.Room()->Data().members[1].ready, owlReady);
+
+	// A second cancel that comes after the stop: the service refuses it, and the room stays open
+	std::optional<LobbyError> second;
+	_system.CancelStart([&](auto&& result) { second = result.error; });
+	_client.Refuse(409, "not_starting");
+	ASSERT_TRUE(second.has_value());
+	EXPECT_EQ(second->code, "not_starting");
+	EXPECT_EQ(_system.Room()->Phase(), RoomPhase::Open);
+
+	// The host can start again
+	_system.Start({});
+	_client.Answer(202, R"({"state":"countdown","at":"2026-11-12T10:01:05Z"})");
+	EXPECT_EQ(_system.Room()->Phase(), RoomPhase::Countdown);
+}
+
 TEST_F(LobbyRoomSystemTest, TheEndStopsTheChannelOfTheRoom)
 {
 	JoinTestLobby();

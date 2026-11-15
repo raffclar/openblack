@@ -178,6 +178,8 @@ async function fetchAsset(fetchFile, digest, file, received) {
   if (response.status !== 200) {
     throw new Error(`the site gave the status ${response.status} for ${file.path}`);
   }
+  // The site can send the file compressed. The Content-Length header then gives the size of the compressed copy,
+  // but the body that the browser gives is the whole file. The size check uses the bytes of the body only.
   const bytes = new Uint8Array(file.size);
   let at = 0;
   const reader = response.body.getReader();
