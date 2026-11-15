@@ -53,7 +53,7 @@ namespace
 	{
 		return std::nullopt;
 	}
-	return QueryResult::Error("the editor is refused: only a player with the editor claim opens the editor in a network game");
+	return QueryResult::Error("the editor is refused: only a player with the editor right opens the editor");
 }
 
 } // namespace
@@ -65,7 +65,9 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("editor");
 	provider->Add(Query("state", "The editor of this computer: whether it is open, whether a network game is live, whether "
-	                             "the player of this computer has the editor claim, and the debug cheats of that player"),
+	                             "the player of this computer has the editor right (from the join ticket in a network game, "
+	                             "else from the signed-in account: granted, refused or unknown), what the debug windows "
+	                             "show, and the debug cheats of that player"),
 	              [](const QueryContext& /*context*/) {
 		              Json cheats = Json::array();
 		              const auto own = editor::OwnDebugCheats();
@@ -80,7 +82,9 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		              return QueryResult::Value({
 		                  {"open", Locator::editorSystem::has_value() && Locator::editorSystem::value().IsOpen()},
 		                  {"network", developer_tools::NetworkSessionLive()},
-		                  {"editor", developer_tools::LocalPlayerHasEditorClaim()},
+		                  {"editor", developer_tools::LocalEditorRight() == developer_tools::EditorRight::Granted},
+		                  {"right", std::string(developer_tools::NameOf(developer_tools::LocalEditorRight()))},
+		                  {"mode", std::string(developer_tools::NameOf(developer_tools::CurrentGuiMode()))},
 		                  {"cheats", std::move(cheats)},
 		              });
 	              });

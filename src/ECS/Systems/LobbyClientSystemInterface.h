@@ -129,6 +129,9 @@ public:
 	/// The account of the session has no email address. The lobby refuses most calls until the player adds one on the
 	/// account page of the site.
 	[[nodiscard]] virtual bool IsEmailRequired() const = 0;
+	/// The editor right of the account of the session, or none while no account is logged in. Each answer of the
+	/// lobby with a session gives the right again: a login, a refresh of the access token, and a sign-in from the site.
+	[[nodiscard]] virtual std::optional<bool> GetAccountEditor() const { return std::nullopt; }
 
 	/// Logs in with a name and a password. The client checks the name before it calls the lobby.
 	virtual void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) = 0;
@@ -146,6 +149,10 @@ public:
 	{
 		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
 	}
+	/// Starts a quiet login at the start of the game, so that a single player game knows the editor right of the
+	/// account. The browser game uses the sign-in of the site. The desktop uses the refresh token that the store keeps.
+	/// The push channel does not open, and the player sees no result.
+	virtual void SignInAtStart() {}
 	/// Ends the session here, or every session of the account. The client forgets the tokens also when the lobby does
 	/// not answer.
 	virtual void Logout(bool everywhere, LobbyCallback<LobbyDone> callback) = 0;

@@ -76,12 +76,14 @@ public:
 	[[nodiscard]] std::optional<lobby_api::AccountRef> GetAccount() const override { return _account; }
 	[[nodiscard]] bool IsPushOpen() const override { return _push->IsOpen(); }
 	[[nodiscard]] bool IsEmailRequired() const override { return _emailRequired; }
+	[[nodiscard]] std::optional<bool> GetAccountEditor() const override;
 
 	void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) override;
 	void ResumeSession(LobbyCallback<lobby_api::AccountRef> callback) override;
 	[[nodiscard]] bool CanSignInFromSite() const override { return _config.has_value() && _site != nullptr && !_siteDeclined; }
 	[[nodiscard]] bool IsSignedInFromSite() const override { return _state == LobbySessionState::LoggedIn && _fromSite; }
 	void SignInFromSite(LobbyCallback<lobby_api::AccountRef> callback) override;
+	void SignInAtStart() override;
 	void Logout(bool everywhere, LobbyCallback<LobbyDone> callback) override;
 
 	void GetMe(LobbyCallback<lobby_api::Me> callback) override;
@@ -156,6 +158,10 @@ private:
 	void Refresh(std::function<void(const LobbyError&)> after);
 	/// Asks the site for a new access token of a session of the site
 	void RefreshFromSite(const std::function<void(const LobbyError&)>& finish);
+	/// The login with the refresh token. The push channel opens after it only when openPush is true.
+	void Resume(LobbyCallback<lobby_api::AccountRef> callback, bool openPush);
+	/// The login from the sign-in of the site. The push channel opens after it only when openPush is true.
+	void SiteSignIn(LobbyCallback<lobby_api::AccountRef> callback, bool openPush);
 	void ApplySession(const lobby_api::Session& session);
 	/// Forgets the session and the tokens here and in the store
 	void EndSession();
@@ -183,6 +189,8 @@ private:
 	bool _siteDeclined {false};
 	std::optional<lobby_api::AccountRef> _account;
 	bool _emailRequired {false};
+	/// The editor right of the account, from the last answer of the lobby with a session
+	bool _accountEditor {false};
 	std::string _accessToken;
 	std::chrono::system_clock::time_point _accessExpiry {};
 	/// The refresh token of this run, also when the store cannot keep it

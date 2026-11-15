@@ -901,9 +901,14 @@ void openblack::InitializePlayerInput(bool systemSaysWheel)
 void openblack::InitializeOnlineAndTools(const player_profiles::Store& profiles)
 {
 	InitializeOnline(profiles);
-	// Every build has the editor: a player with the editor claim opens it in a network game. Outside a network game it is a
-	// developer tool.
+	// Every build has the editor: a player with the editor claim opens it in a network game. Outside a network game, a
+	// developer build always opens it, and a build that players get opens it for an account with the editor right.
 	Locator::editorSystem::emplace<EditorSystem>();
+	if constexpr (!developer_tools::k_Built)
+	{
+		// A single player game must know the editor right of the account, thus the game asks the lobby for a session now
+		Locator::lobbyClient::value().SignInAtStart();
+	}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The record of the creature minds that the developer view watches
 	Locator::creatureMindLog::emplace<ecs::systems::CreatureMindLogSystem>();
