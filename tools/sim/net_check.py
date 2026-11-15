@@ -727,7 +727,9 @@ def inspector_call(pid, query, request):
 
 def say_in_chat(pid, text):
     """A client says a line in the chat as the player does: a click on the speech button at the top right corner, the
-    line typed and Return. The inspector takes only the input of the player while a network game is live."""
+    line typed and Return. The inspector takes only the input of the player while a network game is live. The
+    information box of the land takes every press of the buttons while it shows, so the Escape key closes it first."""
+    close_land_info_box(pid)
     frame = inspector_call(pid, "engine.frame", {}) or {}
     width = (frame.get("window") or [1280, 1024])[0]
     inspector_call(pid, "input.pointer", {"params": {"screen": [width - 8, 8]}})
