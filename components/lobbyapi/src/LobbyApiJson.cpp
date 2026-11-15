@@ -760,7 +760,8 @@ std::optional<Problem> ParseProblem(std::string_view text)
 		return ReadString(object, "type", out.type, false) && ReadString(object, "title", out.title, false) &&
 		       ReadInteger(object, "status", out.status, false) && ReadString(object, "detail", out.detail, false) &&
 		       ReadString(object, "code", out.code, false) && ReadInteger(object, "members", out.members, false) &&
-		       ReadInteger(object, "slots", out.slots, false);
+		       ReadInteger(object, "slots", out.slots, false) && ReadString(object, "expected", out.expected, false) &&
+		       ReadString(object, "download", out.download, false);
 	});
 }
 

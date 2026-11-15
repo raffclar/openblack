@@ -23,6 +23,7 @@
 #include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/ConnectionLostNotice.h"
+#include "Online/GameBuildId.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapPackage.h"
 #include "Online/LanDiscoveryInterface.h"
@@ -61,6 +62,7 @@ MultiplayerFrontEnd::MultiplayerFrontEnd(Services services, Settings settings)
     : _services(std::move(services))
     , _settings(std::move(settings))
     , _maps(ParseLocalMaps(_settings.localMaps))
+    , _ownBuild(online::build_id::Own())
 {
 	if (_services.lobby != nullptr)
 	{
@@ -244,18 +246,28 @@ void MultiplayerFrontEnd::FollowSession()
 			ShowLobbyNotice(ToUtf16(*text));
 			return;
 		}
-		ShowLobbyNotice(ToUtf16(lobby_screens::GameRefusalText(refusal, _settings.browser ? lobby_api::ClientKind::Browser
-		                                                                                  : lobby_api::ClientKind::Desktop)));
+		ShowLobbyNotice(ToUtf16(lobby_screens::GameRefusalText(refusal, ClientKind(), VersionNeedOf(*session))));
 		return;
 	}
 	if (_joined)
 	{
 		// The server removed the player, the room's server went, or the player could not come back to it
-		const bool kicked = session->GetEnd() == online::NetworkSession::End::Refused && session->RefusedReason() == "kicked";
+		const auto reason =
+		    session->GetEnd() == online::NetworkSession::End::Refused ? session->RefusedReason() : std::string();
 		_joined = false;
-		if (kicked)
+		if (reason == "kicked")
 		{
 			ShowKicked();
+			return;
+		}
+		// The server closed the player for another version of the format of the turns: the box tells the player to
+		// update the game, not that the host left
+		if (reason == lobby_screens::k_VersionRefusal)
+		{
+			LeaveRoom();
+			_flow.box = Box::GameList;
+			EnterGameList();
+			ShowLobbyNotice(ToUtf16(lobby_screens::VersionRefusalText(ClientKind(), VersionNeedOf(*session))));
 			return;
 		}
 		Show(Message::HostLeft);
@@ -268,7 +280,29 @@ void MultiplayerFrontEnd::FollowSession()
 		ShowLobbyNotice(ToUtf16(*text));
 		return;
 	}
+	// A server of another version refused the join: the box tells the player to update the game, not "Connection
+	// Failed."
+	if (refusal == lobby_screens::k_VersionRefusal)
+	{
+		ShowLobbyNotice(ToUtf16(lobby_screens::VersionRefusalText(ClientKind(), VersionNeedOf(*session))));
+		return;
+	}
 	Show(JoinFailureMessage(refusal, _flow.kind));
+}
+
+openblack::lobby_api::ClientKind MultiplayerFrontEnd::ClientKind() const noexcept
+{
+	return _settings.browser ? lobby_api::ClientKind::Browser : lobby_api::ClientKind::Desktop;
+}
+
+const std::string& MultiplayerFrontEnd::OwnBuild() const
+{
+	return _services.lobbyRoom != nullptr ? _services.lobbyRoom->BuildId() : _ownBuild;
+}
+
+openblack::gui::lobby_screens::VersionNeed MultiplayerFrontEnd::VersionNeedOf(const online::NetworkSession& session) const
+{
+	return {.own = OwnBuild(), .needed = session.RefusedBuild(), .download = {}};
 }
 
 void MultiplayerFrontEnd::FollowStart()

@@ -444,6 +444,7 @@ void NetworkSession::Text(std::string_view text)
 	{
 		_refusedReason = refused->reason;
 		_refusedPath = refused->path;
+		_refusedBuild = refused->build;
 		// A refusal for the protocol or the version gives the build of the server: the log names the two builds
 		const auto builds =
 		    refused->build.empty()

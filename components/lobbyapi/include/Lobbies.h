@@ -445,6 +445,12 @@ struct LobbyStateEvent
 	std::string url;
 	/// "reason": the reason of a close, for example "host_closed"
 	std::string reason;
+	/// "server_build": the build id of the game server, with the "why" "wrong_version". The server did not start, because
+	/// its build is not the build of the lobby.
+	std::string serverBuild;
+	/// "expected": the build id that the service needs now, with the "why" "wrong_version". A player of another build
+	/// must get the new version. Empty when the service did not give it.
+	std::string expected;
 };
 
 /// The codes of the problems that the calls of the lobbies give ("code" of the problem)

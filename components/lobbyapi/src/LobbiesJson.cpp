@@ -612,7 +612,9 @@ std::optional<LobbyStateEvent> ParseLobbyStateEvent(std::string_view data)
 		return ReadString(object, "lobby", out.lobby, false) && ReadOptionalTime(object, "at", out.at) &&
 		       ReadString(object, "why", out.why, false) && ReadOptionalAccount(object, "account", out.account) &&
 		       ReadOptionalInteger(object, "position", out.position) && ReadString(object, "game_id", out.gameId, false) &&
-		       ReadString(object, "url", out.url, false) && ReadString(object, "reason", out.reason, false);
+		       ReadString(object, "url", out.url, false) && ReadString(object, "reason", out.reason, false) &&
+		       ReadString(object, "server_build", out.serverBuild, false) &&
+		       ReadString(object, "expected", out.expected, false);
 	});
 }
 

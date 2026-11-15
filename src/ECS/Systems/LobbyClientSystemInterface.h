@@ -70,6 +70,10 @@ struct LobbyError
 	/// give them.
 	int32_t members {0};
 	int32_t slots {0};
+	/// The build id that the lobby needs, for the code "wrong_version". Empty when the lobby did not give it.
+	std::string expected;
+	/// The page where the player gets the new version, for the code "wrong_version". Can be empty.
+	std::string download;
 };
 
 /// The result of a call: a value, or an error

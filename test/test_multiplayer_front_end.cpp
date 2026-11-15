@@ -25,6 +25,7 @@
 #include <vector>
 
 #include <LobbyApiJson.h>
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 
 #include "ColourDifference.h"
@@ -2728,4 +2729,83 @@ TEST_F(FrontEndTest, ALandInTheStoreDoesNotComeAgain)
 	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {RoomMap()}});
 	EXPECT_EQ(frontEnd->GetMapDownload()->GetState(), online::MapDownload::State::Ready);
 	EXPECT_TRUE(lobby.downloads.empty());
+}
+
+TEST_F(FrontEndTest, AJoinThatTheServerRefusesForTheVersionTellsThePlayerToUpdate)
+{
+	// The game server of another build refuses the join and gives its build: the box is not "Connection Failed."
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	sockets.ServerText(sockets.order.back(),
+	                   game_socket::ToJson(game_socket::Refused {.reason = "version", .build = "0.9.0+new/codec36"}));
+	Step();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyNotice);
+	EXPECT_EQ(frontEnd->GetLobbyMessageText(),
+	          ToUtf16(fmt::format("Wrong Version. This game needs version 0.9.0+new/codec36. You have version {}. Get the "
+	                              "new version at bw.zanidrak.com.",
+	                              online::build_id::Own())));
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_FALSE(frontEnd->IsBusy());
+}
+
+TEST_F(FrontEndTest, AServerThatClosesThePlayerForTheVersionDoesNotSayThatTheHostLeft)
+{
+	// The server closes a player in the room that sends turns of another format
+	ToRoom();
+	ServerSends(sockets, game_socket::Refused {.reason = "version", .build = "0.9.0+new/codec36"});
+	Step();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyNotice);
+	EXPECT_NE(frontEnd->GetLobbyMessageText().find(u"0.9.0+new/codec36"), std::u16string::npos);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+}
+
+TEST_F(FrontEndTest, TheLobbySessionsTellThePlayerOfAVersionThatTheGameNeeds)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	const auto own = online::build_id::Own();
+
+	// A session of another version names the version that it needs
+	frontEnd->SelectLobby("d6");
+	frontEnd->JoinSelectedLobby();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyNotice);
+	EXPECT_EQ(frontEnd->GetLobbyMessageText(),
+	          ToUtf16(fmt::format("Wrong Version. This game needs version 0.0.1+old/codec1. You have version {}. Get the "
+	                              "new version at bw.zanidrak.com.",
+	                              own)));
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+
+	// A game server of another version stops the start. The service needs this version: only the line of the room shows.
+	frontEnd->SelectLobby("d1");
+	frontEnd->JoinSelectedLobby();
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
+	lobbySessions->StopForServerVersion("0.0.2+server/codec35", own);
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	ASSERT_NE(frontEnd->GetLobbyRoom(), nullptr);
+	EXPECT_EQ(online::lobby::RoomLineText(frontEnd->GetLobbyRoom()->Lines().back()),
+	          "The game could not start: the game server has version 0.0.2+server/codec35.");
+
+	// The service needs a new version: the box tells the player to update the game
+	lobbySessions->StopForServerVersion("0.9.0+new/codec36", "0.9.0+new/codec36");
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyNotice);
+	EXPECT_EQ(frontEnd->GetLobbyMessageText(),
+	          ToUtf16(fmt::format("Wrong Version. This game needs version 0.9.0+new/codec36. You have version {}. Get the "
+	                              "new version at bw.zanidrak.com.",
+	                              own)));
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
 }

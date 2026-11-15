@@ -77,6 +77,11 @@ enum class Stage : uint8_t
 	LobbyMapTooSmall,
 	/// The host opens the box of the settings of the session before the start
 	LobbySettings,
+	/// The join of a session of another version: the box names the version that the session needs
+	LobbyWrongVersion,
+	/// A game server of another version stops the start: the line of the room and the box that tells the player to
+	/// update the game
+	LobbyServerVersion,
 	/// The events of a joined room give their notices one after the other: a join, a ready, the countdown and a kick
 	LobbyNotices,
 	_Count

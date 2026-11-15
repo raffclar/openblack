@@ -29,8 +29,10 @@ using lobby_api::LobbyState;
 using online::lobby::SlotHolder;
 
 constexpr std::u16string_view k_Ellipsis = u"...";
-/// The texts of the session list that vanilla does not have
-constexpr std::string_view k_DownloadText = "This game uses another version of openblack.";
+/// The vanilla text of a game of another version (HELP_TEXT_DIALOG_ADDITION_149)
+constexpr std::string_view k_WrongVersionHeading = "Wrong Version.";
+/// The page of the site, where the desktop game gets the new version
+constexpr std::string_view k_SitePage = "bw.zanidrak.com";
 
 std::u16string Utf16(std::string_view text)
 {
@@ -270,7 +272,7 @@ JoinStep JoinStepOf(const lobby_api::LobbySummary& lobby, std::string_view ownBu
 	return lobby.locked ? JoinStep::AskPassword : JoinStep::Join;
 }
 
-Problem ProblemOf(const ecs::systems::LobbyError& error, lobby_api::ClientKind client)
+Problem ProblemOf(const ecs::systems::LobbyError& error, lobby_api::ClientKind client, std::string_view ownBuild)
 {
 	const std::string_view code = error.code;
 	const auto notice = [](std::string text) { return Problem {.box = ProblemBox::Notice, .text = std::move(text)}; };
@@ -292,7 +294,7 @@ Problem ProblemOf(const ecs::systems::LobbyError& error, lobby_api::ClientKind c
 	}
 	if (code == problems::k_WrongVersion)
 	{
-		return notice(GameRefusalText("version", client));
+		return notice(VersionRefusalText(client, {.own = ownBuild, .needed = error.expected, .download = error.download}));
 	}
 	if (code == problems::k_Full)
 	{
@@ -365,13 +367,51 @@ Problem ProblemOf(const ecs::systems::LobbyError& error, lobby_api::ClientKind c
 	return {.box = ProblemBox::ConnectionFailed, .text = {}};
 }
 
-std::string GameRefusalText(std::string_view refusal, lobby_api::ClientKind client)
+namespace
+{
+/// A page as the box shows it: with no "https://" in front and no "/" at the end
+std::string_view PageText(std::string_view page)
+{
+	constexpr std::string_view k_Secure = "https://";
+	if (page.starts_with(k_Secure))
+	{
+		page.remove_prefix(k_Secure.size());
+	}
+	while (page.ends_with('/'))
+	{
+		page.remove_suffix(1);
+	}
+	return page.empty() ? k_SitePage : page;
+}
+} // namespace
+
+std::string VersionRefusalText(lobby_api::ClientKind client, const VersionNeed& need)
+{
+	std::string text(k_WrongVersionHeading);
+	if (need.needed.empty())
+	{
+		text += " This game uses another version of openblack.";
+	}
+	else if (need.own.empty() || need.own == need.needed)
+	{
+		text += fmt::format(" This game needs version {}.", need.needed);
+	}
+	else
+	{
+		text += fmt::format(" This game needs version {}. You have version {}.", need.needed, need.own);
+	}
+	if (client == lobby_api::ClientKind::Browser)
+	{
+		return text + " Reload the page to get the new version.";
+	}
+	return text + fmt::format(" Get the new version at {}.", PageText(need.download));
+}
+
+std::string GameRefusalText(std::string_view refusal, lobby_api::ClientKind client, const VersionNeed& need)
 {
 	if (refusal == "version")
 	{
-		return client == lobby_api::ClientKind::Browser
-		           ? std::string(k_DownloadText) + " Reload the page to get the new version."
-		           : std::string(k_DownloadText) + " Get the new version at bw.zanidrak.com";
+		return VersionRefusalText(client, need);
 	}
 	if (refusal == "map")
 	{

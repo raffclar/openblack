@@ -218,7 +218,7 @@ int main(int argc, char* argv[])
 		("game-id", "With --lobby-id, the id of the game at the lobby, which the log and the results of the game name.", cxxopts::value<std::string>())
 		("join-window", "With --lobby-id, the seconds in which the members join after the server listens. The room waits for each god of the lobby until then. With fewer gods than --min-gods at its end, or no start at two times its length, the server ends with exit code 12.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::game_lifetime::k_DefaultJoinWindowSeconds)))
 		("deadline", "With --lobby-id, the time (UTC, ISO 8601 such as 2026-11-12T18:00:00+00:00) at which the server ends with exit code 11. The server also ends 6 hours after it starts to listen at the latest.", cxxopts::value<std::string>())
-		("build-id", "The build id that the lobby gave the game, such as 0.1.0+0123456789ab/codec34. The server does not start when its own build id is another.", cxxopts::value<std::string>())
+		("build-id", "The build id that the lobby gave the game, such as 0.1.0+0123456789ab/codec34. The server does not start when its own build id is another: it ends with exit code 14.", cxxopts::value<std::string>())
 		("map-sha256", "The SHA-256 of the file of the land that the lobby gave its members, as 64 hex digits. The server does not start with another file.", cxxopts::value<std::string>())
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
@@ -292,9 +292,10 @@ int main(int argc, char* argv[])
 		}
 		if (result.count("build-id") != 0 && result["build-id"].as<std::string>() != openblack::online::build_id::Own())
 		{
+			// The server cannot start the game of another version. The exit code tells the slot agent the reason.
 			std::cerr << "openblack-server: the lobby gave the build " << result["build-id"].as<std::string>()
 			          << ", but this server is the build " << openblack::online::build_id::Own() << std::endl;
-			return EXIT_FAILURE;
+			return openblack::server::game_lifetime::k_ExitWrongVersion;
 		}
 		if (result.count("write-map-package") != 0)
 		{

@@ -641,6 +641,11 @@ struct Problem
 	/// when the problem does not give them.
 	int32_t members {0};
 	int32_t slots {0};
+	/// "expected" of the problem "wrong_version": the build id that the service needs. Empty when the problem does not
+	/// give it.
+	std::string expected;
+	/// "download" of the problem "wrong_version": the page where the player gets the new version. Can be empty.
+	std::string download;
 };
 
 /// A frame of the push channel. An event: {"seq": n, "type": "...", "time": "...", "data": {...}}. A control frame
