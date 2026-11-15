@@ -44,11 +44,12 @@
 /// - An edit of the editor: the kind (u8), the thing, the kind of the item (u8), the type of the item (u32), the
 ///   challenge (u32), the position and the angle (f32).
 /// - A debug cheat: the cheat (u8), then 1 for on or 0 for off (u8).
+/// - An edit of a creature by the editor: the creature, the value (u8) and the amount (f32).
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 35;
+inline constexpr uint8_t k_Version = 36;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -123,6 +124,7 @@ enum class CommandTag : uint8_t
 	HandLockRelease = 54,
 	EditorEdit = 55,
 	DebugCheat = 56,
+	EditorCreatureEdit = 57,
 };
 
 /// The sizes of the parts of the frames, in bytes

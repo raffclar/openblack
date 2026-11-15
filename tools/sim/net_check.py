@@ -1268,6 +1268,81 @@ def editor_check(pids, client_logs, server_log, shots=None):
     return done
 
 
+# The villager types of the info table: the plain villagers of each tribe and every special villager (the breeder, the
+# healer, the crusader and the rest)
+VILLAGER_TYPES = 84
+# The values of a creature that the editor changes in a network game, with amounts to set (editor::LimitsOf keeps each
+# amount in its limits)
+CREATURE_EDITS = [("alignment", [-0.8, 0.6]), ("fatness", [0.9, 0.2]), ("strength", [0.1, 0.95]), ("size", [1.6, 0.7]),
+                  ("energy", [0.3, 1.0]), ("exhaustion", [0.7, 0.1]), ("thirst", [0.8, 0.0]), ("poo", [0.85, 0.2]),
+                  ("life", [0.4, 1.0]), ("warmth", [-0.6, 0.3]), ("itchiness", [0.5, 0.0]), ("grown up", [2, 13])]
+
+
+def place_row(pid, place_type, copies, start, step):
+    """Sends a row of placements of a villager type. A build whose inspector does not take a row sends each placement
+    on its own. Returns the count sent, and the error of the inspector or None."""
+    params = {"kind": "place", "place_kind": 1, "place_type": place_type, "position": start}
+    answer = inspector_answer(pid, "editor.network_edit", {"params": dict(params, copies=copies, step=step)})
+    if isinstance(answer, dict) and "doesn't take copies" in str(answer.get("error", "")):
+        sent = 0
+        for index in range(copies):
+            point = [start[0] + step[0] * index, start[1] + step[1] * index]
+            one = inspector_answer(pid, "editor.network_edit", {"params": dict(params, position=point)})
+            sent += 1 if isinstance(one, dict) and one.get("sent") else 0
+        return sent, None
+    if isinstance(answer, dict) and answer.get("error"):
+        return 0, answer["error"]
+    return int(answer.get("sent", 0)) if isinstance(answer, dict) else 0, None
+
+
+def editor_desync(pids, case):
+    """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
+    "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
+    second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. Every
+    computer must then have the same checksums: net_check compares them for each turn. Returns what each step sent."""
+    editor = pids[0]
+    done = {"case": case, "sent": []}
+    camera = inspector_answer(editor, "camera.state", {}) or {}
+    focus = camera.get("focus") or [0.0, 0.0, 0.0]
+    if case in ("villagers", "all"):
+        # All the types in one frame: three of each, in rows of the same type
+        burst = 0
+        for kind in range(VILLAGER_TYPES):
+            sent, error = place_row(editor, kind, 3, [focus[0] - 60.0 + (kind % 12) * 6.0,
+                                                      focus[2] - 30.0 + (kind // 12) * 4.0], [1.5, 0.0])
+            burst += sent
+            if error:
+                done.setdefault("errors", []).append(error)
+        done["sent"].append({"villagers_at_once": burst})
+        # Then the special villagers again, one row of each type in turn
+        spread = 0
+        for step, kind in enumerate(range(63, VILLAGER_TYPES)):
+            sent, _ = place_row(editor, kind, 4, [focus[0] + 30.0 + step * 2.0, focus[2] + 20.0], [0.0, 1.5])
+            spread += sent
+            time.sleep(1.0)
+        done["sent"].append({"villagers_in_turns": spread})
+    if case in ("creature", "all"):
+        found = items_of(inspector_answer(editor, "objects.find", {"params": {
+            "near": [focus[0], focus[2]], "radius": 3000.0, "kind": "Creature", "limit": 1}}))
+        if not found:
+            done["error"] = f"no creature near the camera at {focus}"
+            return done
+        creature = found[0]["id"]
+        done["creature"] = creature
+        for name, amounts in CREATURE_EDITS:
+            for amount in amounts:
+                answer = inspector_answer(editor, "editor.creature_edit", {"params": {
+                    "id": creature, "value": name, "amount": amount}})
+                done["sent"].append({name: amount, "answer": answer})
+                time.sleep(0.5)
+        where = found[0].get("position") or focus
+        done["sent"].append({"move": inspector_answer(editor, "editor.network_edit", {"params": {
+            "kind": "move", "id": creature, "position": [where[0] + 8.0, where[2] + 8.0]}})})
+        done["sent"].append({"turn": inspector_answer(editor, "editor.network_edit", {"params": {
+            "kind": "turn", "id": creature, "radians": 1.2}})})
+    return done
+
+
 def slot_fight(pids, seconds):
     """The first client sends the fight cheat, so that the creature of its god fights the nearest creature: the creature
     of the other god. The server must take test commands. The fight autopilot of each client then fights for the god
@@ -2105,6 +2180,10 @@ def main():
                              "--hold-after turns "
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
+    parser.add_argument("--editor-desync", choices=("villagers", "creature", "all"),
+                        help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
+                             "villager type (villagers), or changes each value of the creature near the camera "
+                             "(creature), or both; every computer must keep the same checksums")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
     parser.add_argument("--slot-fight", type=int, metavar="SECONDS",
@@ -2390,6 +2469,7 @@ def main():
     miracle_done = None
     fight_done = None
     editor_done = None
+    editor_desync_done = None
     give_done = None
     hand_steps = HandSteps()
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
@@ -2450,7 +2530,7 @@ def main():
                 return 1
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
-                                 "observer" if is_observer else "god", 600, editor=options.editor_check and index == 0,
+                                 "observer" if is_observer else "god", 600, editor=(options.editor_check or bool(options.editor_desync)) and index == 0,
                                  staff=options.editor_check and index == 1)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
@@ -2500,7 +2580,7 @@ def main():
             chatting = chatting or any(value.split(":", 1)[1] == str(index + 1) for value in options.tattoo_menu)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
                     or options.give == index + 1 or any(leash["client"] == index for leash in leashes)
-                    or options.editor_check):
+                    or options.editor_check or options.editor_desync):
                 command += ["--inspect-port", "0"]
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
@@ -2605,6 +2685,10 @@ def main():
                 editor_done = editor_check([client.pid for client in clients],
                                            [os.path.join(client_dirs[index], "client.log") for index in range(2)],
                                            server_log, options.editor_shots)
+            if (options.editor_desync and editor_desync_done is None and clients and clients[0].poll() is None
+                    and reached_turn(os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
+                editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync)
+                print(f"editor desync: {json.dumps(editor_desync_done)[:400]}")
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
                     and not any(hand_steps.busy(index) for index in range(len(clients))) and reached_turn(
@@ -2828,6 +2912,11 @@ def main():
         summary["slot_miracle"] = miracle_done
     if options.slot_fight:
         summary["slot_fight"] = fight_done
+    if options.editor_desync:
+        summary["editor_desync"] = editor_desync_done
+        if editor_desync_done is None or editor_desync_done.get("error"):
+            print(f"the editor desync check did not run: {editor_desync_done}")
+            all_same = False
     if options.editor_check:
         summary["editor_check"] = editor_done
         if not (editor_done or {}).get("passed"):

@@ -629,6 +629,20 @@ struct EditorEdit
 	[[nodiscard]] bool operator==(const EditorEdit&) const = default;
 };
 
+/// An edit of the editor to a value of a creature (creature_edit_values::Value), such as its alignment, its size or a need
+/// of its body. Only a player with the editor claim sends it in a network game, and the game server refuses it from every
+/// other player.
+struct EditorCreatureEdit
+{
+	entt::entity creature {entt::null};
+	/// The value (creature_edit_values::Value)
+	uint8_t value {0};
+	/// The new amount of the value. Each computer keeps it in the limits of the value.
+	float amount {0.0f};
+
+	[[nodiscard]] bool operator==(const EditorCreatureEdit&) const = default;
+};
+
 /// A debug cheat of the player of the command goes on or off (debug_cheats::Cheat). Only a player with the editor claim sends
 /// it in a network game, and the game server refuses it from every other player.
 struct DebugCheat
@@ -640,14 +654,14 @@ struct DebugCheat
 };
 
 /// What a command does
-using Action =
-    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
-                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
-                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
-                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
-                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap, FishScare,
-                 ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit, DebugCheat>;
+using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
+                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
+                            GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
+                            CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
+                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut,
+                            HandLockRelease, EditorEdit, DebugCheat, EditorCreatureEdit>;
 
 /// A command and the player that sent it
 struct Command
@@ -672,14 +686,16 @@ struct Command
 /// refuses these commands from a player whose join ticket has no editor claim.
 [[nodiscard]] constexpr bool OnlyEditorSends(const Action& action) noexcept
 {
-	return std::holds_alternative<EditorEdit>(action) || std::holds_alternative<DebugCheat>(action);
+	return std::holds_alternative<EditorEdit>(action) || std::holds_alternative<DebugCheat>(action) ||
+	       std::holds_alternative<EditorCreatureEdit>(action);
 }
 
 /// Whether the game server takes the command from an observer. An observer with the editor claim also sends the edits of the
-/// editor. The god of the observers has no citadel, so an observer sends no debug cheat.
+/// editor, also the edits of a creature. The god of the observers has no citadel, so an observer sends no debug cheat.
 [[nodiscard]] constexpr bool ServerTakesFromObserver(const Action& action, bool editor) noexcept
 {
-	return ObserverSends(action) || (editor && std::holds_alternative<EditorEdit>(action));
+	return ObserverSends(action) ||
+	       (editor && (std::holds_alternative<EditorEdit>(action) || std::holds_alternative<EditorCreatureEdit>(action)));
 }
 
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that

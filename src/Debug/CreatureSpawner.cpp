@@ -50,6 +50,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "Editor/EditorCreatureEdits.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -276,6 +277,30 @@ void CreatureSpawner::DrawSettings() noexcept
 	}
 }
 
+bool CreatureSpawner::InNetworkGame() noexcept
+{
+	return developer_tools::NetworkSessionLive();
+}
+
+float CreatureSpawner::ShownValue(entt::entity entity, creature_edit_values::Value value, float now) const noexcept
+{
+	return _held.has_value() && _held->entity == entity && _held->value == value ? _held->amount : now;
+}
+
+void CreatureSpawner::FollowValueSlider(entt::entity entity, creature_edit_values::Value value, float amount, bool changed,
+                                        bool released) noexcept
+{
+	if (changed)
+	{
+		_held = HeldValue {.entity = entity, .value = value, .amount = amount};
+	}
+	if (released && _held.has_value() && _held->entity == entity && _held->value == value)
+	{
+		editor::SendCreatureEdit(entity, value, _held->amount);
+		_held.reset();
+	}
+}
+
 void CreatureSpawner::DrawSelected() noexcept
 {
 	if (!_selected.has_value() || !Locator::entitiesRegistry::has_value())
@@ -294,20 +319,35 @@ void CreatureSpawner::DrawSelected() noexcept
 	ImGui::SeparatorText("Selected creature");
 	ImGui::Text("%s at %.0f, %.0f", SpeciesName(creature->species).data(), static_cast<double>(transform->position.x),
 	            static_cast<double>(transform->position.z));
-	ImGui::SliderFloat("Its alignment", &creature->alignment, -1.0f, 1.0f, "%.2f");
-	ImGui::SliderFloat("Its fatness", &creature->fatness, 0.0f, 1.0f, "%.2f");
+	const bool network = InNetworkGame();
+	const auto entity = *_selected;
+	using creature_edit_values::Value;
+	// In a network game each slider sends its amount as a command of the turns when the player lets go of it
+	const auto slider = [this, network, entity](const char* label, Value value, float& field, float low, float high,
+	                                            ImGuiSliderFlags flags) {
+		if (!network)
+		{
+			return ImGui::SliderFloat(label, &field, low, high, "%.2f", flags);
+		}
+		auto amount = ShownValue(entity, value, field);
+		const bool changed = ImGui::SliderFloat(label, &amount, low, high, "%.2f", flags);
+		FollowValueSlider(entity, value, amount, changed, ImGui::IsItemDeactivatedAfterEdit());
+		return false;
+	};
+	slider("Its alignment", Value::Alignment, creature->alignment, -1.0f, 1.0f, ImGuiSliderFlags_None);
+	slider("Its fatness", Value::Fatness, creature->fatness, 0.0f, 1.0f, ImGuiSliderFlags_None);
 	if (ImGui::IsItemHovered())
 	{
 		ImGui::SetTooltip("Its body follows its fatness by at most %.2f a game turn",
 		                  static_cast<double>(creature_morph::k_MaxFatnessStep));
 	}
-	if (ImGui::SliderFloat("Its strength", &creature->strength, 0.0f, 1.0f, "%.2f"))
+	if (slider("Its strength", Value::Strength, creature->strength, 0.0f, 1.0f, ImGuiSliderFlags_None))
 	{
 		// Set here, as a script sets it, the body shows it
-		CreatureArchetype::ShowStrength(*_selected);
+		CreatureArchetype::ShowStrength(entity);
 	}
-	if (ImGui::SliderFloat("Its size", &creature->size, creature_morph::k_MinScale, creature_morph::k_MaxScale, "%.2f",
-	                       ImGuiSliderFlags_Logarithmic))
+	if (slider("Its size", Value::Size, creature->size, creature_morph::k_MinScale, creature_morph::k_MaxScale,
+	           ImGuiSliderFlags_Logarithmic))
 	{
 		creature->size = creature_morph::ClampScale(creature->size);
 		transform->scale = glm::vec3(CreatureArchetype::DrawnScale(creature->species, creature->size));
@@ -322,10 +362,12 @@ void CreatureSpawner::DrawSelected() noexcept
 		            static_cast<uint32_t>(creature_skin::k_MaxWeight), morph->drawn.evilGood < 0.0f ? "evil" : "good");
 		ImGui::Text("Fatness shown %.2f", static_cast<double>(morph->shownFatness));
 		ImGui::SameLine();
+		ImGui::BeginDisabled(network);
 		if (ImGui::SmallButton("Show now"))
 		{
 			morph->shownFatness = creature->fatness;
 		}
+		ImGui::EndDisabled();
 	}
 	if (ImGui::Button("Deselect"))
 	{
@@ -335,7 +377,6 @@ void CreatureSpawner::DrawSelected() noexcept
 	{
 		return;
 	}
-	const auto entity = *_selected;
 	const std::array<std::pair<const char*, void (CreatureSpawner::*)(entt::entity) noexcept>, 9> k_Tabs {{
 	    {"Looks", &CreatureSpawner::DrawAppearance},
 	    {"Audio", &CreatureSpawner::DrawAudio},
@@ -351,7 +392,12 @@ void CreatureSpawner::DrawSelected() noexcept
 	{
 		if (ImGui::BeginTabItem(label))
 		{
+			// In a network game a change of a tab would change the world of this computer only, so the tabs only show the
+			// creature. The body and the mind tabs send the changes of their values as commands of the turns.
+			const bool onlyShows = network && draw != &CreatureSpawner::DrawBody && draw != &CreatureSpawner::DrawMind;
+			ImGui::BeginDisabled(onlyShows);
 			(this->*draw)(entity);
+			ImGui::EndDisabled();
 			ImGui::EndTabItem();
 		}
 	}
@@ -519,6 +565,19 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	auto& minds = Locator::creatureMindSystem::value();
 
 	ImGui::SeparatorText("Mind");
+	// In a network game the stage of growing up goes as a command of the turns. The other parts of the tab would change the
+	// world of this computer only, so they only show.
+	const bool network = InNetworkGame();
+	ImGui::BeginDisabled(network);
+	struct EndDisabled
+	{
+		EndDisabled() = default;
+		EndDisabled(const EndDisabled&) = delete;
+		EndDisabled& operator=(const EndDisabled&) = delete;
+		EndDisabled(EndDisabled&&) = delete;
+		EndDisabled& operator=(EndDisabled&&) = delete;
+		~EndDisabled() { ImGui::EndDisabled(); }
+	} const endDisabled;
 	ImGui::Checkbox("Pause mind", &mind->paused);
 	if (ImGui::IsItemHovered())
 	{
@@ -537,12 +596,21 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	if (Locator::infoConstants::has_value())
 	{
 		const auto& phases = Locator::infoConstants::value().creatureDevelopmentPhaseEntry;
-		auto phase = static_cast<int>(std::min<size_t>(mind->developmentPhase, phases.size() - 1));
-		if (ImGui::SliderInt("Grown up", &phase, 0, static_cast<int>(phases.size()) - 1,
-		                     phases.at(static_cast<size_t>(phase)).name.data()))
+		using creature_edit_values::Value;
+		const auto now = static_cast<float>(std::min<size_t>(mind->developmentPhase, phases.size() - 1));
+		auto phase = static_cast<int>(network ? ShownValue(entity, Value::GrownUp, now) : now);
+		ImGui::EndDisabled();
+		const bool changed = ImGui::SliderInt("Grown up", &phase, 0, static_cast<int>(phases.size()) - 1,
+		                                      phases.at(static_cast<size_t>(phase)).name.data());
+		if (network)
+		{
+			FollowValueSlider(entity, Value::GrownUp, static_cast<float>(phase), changed, ImGui::IsItemDeactivatedAfterEdit());
+		}
+		else if (changed)
 		{
 			mind->developmentPhase = static_cast<uint32_t>(phase);
 		}
+		ImGui::BeginDisabled(network);
 		if (ImGui::IsItemHovered())
 		{
 			ImGui::SetTooltip("Each stage of growing up brings desires and takes some away");

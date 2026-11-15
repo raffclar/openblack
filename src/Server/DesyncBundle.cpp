@@ -19,6 +19,8 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "DesyncFields.h"
+
 namespace openblack::server::desync_bundle
 {
 namespace
@@ -196,6 +198,27 @@ std::string FactsJson(const CaptureRecord& record, std::string_view game, std::s
 	return out;
 }
 
+namespace
+{
+/// The fields that differ for the entities that differ in a part, from the worlds of the record. None when the record does
+/// not have both worlds, or a world does not read.
+std::optional<std::vector<desync_fields::EntityFields>> FieldsOf(const CaptureRecord& record, const CaptureRecord::Part& part)
+{
+	if (record.serverWorld.empty() || record.playerWorld.empty() || part.differences.empty())
+	{
+		return std::nullopt;
+	}
+	std::vector<uint32_t> entities;
+	entities.reserve(part.differences.size());
+	for (const auto& difference : part.differences)
+	{
+		entities.push_back(difference.entity);
+	}
+	return desync_fields::DifferentFields(record.serverWorld, record.playerWorld, part.part, entities,
+	                                      synced_state::PresentationParts());
+}
+} // namespace
+
 std::vector<std::string> Lines(const CaptureRecord& record)
 {
 	std::vector<std::string> lines;
@@ -216,6 +239,11 @@ std::vector<std::string> Lines(const CaptureRecord& record)
 		lines.push_back(fmt::format("The capture of slot {}: {} ({} entities on the server, {} on the player's computer)",
 		                            record.seat, synced_state::Describe(part.part, part.differences), part.serverEntities,
 		                            part.playerEntities.value_or(0)));
+		if (const auto fields = FieldsOf(record, part))
+		{
+			lines.push_back(fmt::format("The capture of slot {}: the fields of {} that differ: {}", record.seat, part.part,
+			                            desync_fields::Describe(*fields)));
+		}
 	}
 	if (!record.missing.empty())
 	{
@@ -258,6 +286,15 @@ error_reports::DesyncDetail DetailOf(const CaptureRecord& record, std::string_vi
 	{
 		detail.extras.emplace_back("entities." + part.part, part.compared ? synced_state::Describe(part.part, part.differences)
 		                                                                  : std::string("not compared"));
+		// The fields name the cause better than the entities: the first one is a tag that a search can find
+		if (const auto fields = FieldsOf(record, part))
+		{
+			detail.extras.emplace_back("fields." + part.part, desync_fields::Describe(*fields));
+			if (const auto first = desync_fields::FirstField(part.part, *fields); first.has_value() && detail.field.empty())
+			{
+				detail.field = *first;
+			}
+		}
 	}
 	detail.extras.emplace_back("capture_turn", std::to_string(record.captureTurn));
 	detail.extras.emplace_back("record", std::string(name));

@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include "Commands/TurnCodec.h"
+#include "Common/CreatureEditValues.h"
 #include "Common/DebugCheats.h"
 #include "PlayerSlots.h"
 
@@ -147,6 +148,7 @@ std::vector<Action> EachCommand()
 	                .position = {1.0f, 2.0f, 3.0f},
 	                .radians = 0.5f},
 	    DebugCheat {.cheat = 1, .on = true},
+	    EditorCreatureEdit {.creature = Entity(32), .value = 3, .amount = 1.25f},
 	};
 }
 
@@ -187,7 +189,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 56)
+	switch (bits(random) % 57)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -399,6 +401,10 @@ Action RandomAction(std::mt19937& random)
 	case 54:
 		return DebugCheat {.cheat = static_cast<uint8_t>(bits(random) % debug_cheats::k_CheatCount),
 		                   .on = (bits(random) % 2) == 1};
+	case 55:
+		return EditorCreatureEdit {.creature = entity(),
+		                           .value = static_cast<uint8_t>(bits(random) % creature_edit_values::k_ValueCount),
+		                           .amount = number()};
 	default:
 		return PlayerLeft {};
 	}
@@ -463,7 +469,7 @@ TEST(TurnCodec, EachCommandHasItsSize)
 {
 	const std::vector<size_t> sizes {2,  5,  9,  5, 53, 5, 10, 18, 5,  49, 17, 5, 5,  5,  9,  12, 1,  18, 11,
 	                                 5,  19, 15, 7, 5,  1, 2,  1,  61, 5,  2,  1, 13, 10, 18, 1,  58, 1,  5,
-	                                 51, 5,  16, 7, 1,  1, 13, 1,  2,  9,  13, 1, 1,  8,  1,  5,  31, 3};
+	                                 51, 5,  16, 7, 1,  1, 13, 1,  2,  9,  13, 1, 1,  8,  1,  5,  31, 3,  10};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -498,6 +504,11 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 56;
 		}
+		// The edit of a creature by the editor has the tag 57
+		if (std::holds_alternative<EditorCreatureEdit>(commands[i]))
+		{
+			tag = 57;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
@@ -526,6 +537,23 @@ TEST(TurnCodec, TheDecoderRefusesABadEditOrCheat)
 	auto notBool = cheat;
 	notBool[k_FirstField + 1] = 2;
 	EXPECT_EQ(Decode(notBool).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, TheDecoderRefusesAnEditOfACreatureWithNoSuchValue)
+{
+	const auto encode = [](Action action) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {std::move(action)}}});
+	};
+	// The tag, the creature, the value and the amount
+	constexpr size_t k_Tag = 9;
+	const EditorCreatureEdit edit {.creature = Entity(4), .value = 0, .amount = -0.5f};
+	auto bytes = encode(edit);
+	ASSERT_EQ(bytes.size(), k_Tag + 1 + sizes::k_Entity + 1 + 4);
+	const auto back = Decode(bytes);
+	ASSERT_EQ(back.error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorCreatureEdit>(std::get<CommandBlock>(*back.frame).actions[0]), edit);
+	bytes[k_Tag + 1 + sizes::k_Entity] = static_cast<uint8_t>(creature_edit_values::k_ValueCount);
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
 }
 
 TEST(TurnCodec, TheBytesOfABlockAreLittleEndianWithTheRawBitsOfTheFloats)

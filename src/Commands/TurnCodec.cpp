@@ -18,6 +18,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "Common/CreatureEditValues.h"
 #include "Common/DebugCheats.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFight.h"
@@ -381,6 +382,11 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const DebugCheat& command) {
 		               out.Byte(command.cheat);
 		               out.Byte(command.on ? 1 : 0);
+	               },
+	               [&out](const EditorCreatureEdit& command) {
+		               out.Entity(command.creature);
+		               out.Byte(command.value);
+		               out.Float(command.amount);
 	               },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
@@ -893,6 +899,17 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = DebugCheat {.cheat = cheat, .on = on == 1};
 		return DecodeError::None;
 	}
+	case CommandTag::EditorCreatureEdit:
+	{
+		const auto creature = in.Entity();
+		const auto value = in.Byte();
+		if (!creature_edit_values::ValueFrom(value).has_value())
+		{
+			return DecodeError::Value;
+		}
+		action = EditorCreatureEdit {.creature = creature, .value = value, .amount = in.Float()};
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -1066,6 +1083,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandLockRelease& /*command*/) { return CommandTag::HandLockRelease; },
 	                      [](const EditorEdit& /*command*/) { return CommandTag::EditorEdit; },
 	                      [](const DebugCheat& /*command*/) { return CommandTag::DebugCheat; },
+	                      [](const EditorCreatureEdit& /*command*/) { return CommandTag::EditorCreatureEdit; },
 	                  },
 	                  action);
 }
@@ -1137,6 +1155,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const HandLockRelease& /*command*/) { return k_Entity; },
 	                   [](const EditorEdit& /*command*/) { return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4; },
 	                   [](const DebugCheat& /*command*/) { return size_t {2}; },
+	                   [](const EditorCreatureEdit& /*command*/) { return k_Entity + 1 + 4; },
 	               },
 	               action);
 	return 1 + fields;

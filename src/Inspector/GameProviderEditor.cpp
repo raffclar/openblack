@@ -7,17 +7,22 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include <glm/vec2.hpp>
+
+#include "Common/CreatureEditValues.h"
 #include "Common/DebugCheats.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "GameProviderShared.h"
@@ -120,6 +125,11 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	     {.name = "radians", .type = "number", .description = "The angle of a turn or a placement", .required = false},
 	     {.name = "place_kind", .type = "integer", .description = "The kind of the palette item (place)", .required = false},
 	     {.name = "place_type", .type = "integer", .description = "The type of the palette item (place)", .required = false},
+	     {.name = "copies",
+	      .type = "integer",
+	      .description = "Placements in a row from the position, all in one frame (place; 1 when not given)",
+	      .required = false},
+	     {.name = "step", .type = "point", .description = "[x, z] from each placement to the next (place)", .required = false},
 	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
 	edit.writes = true;
 	provider->Add(std::move(edit), [](const QueryContext& context) {
@@ -172,10 +182,63 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		{
 			return QueryResult::Error(std::string(*refusal));
 		}
-		Locator::playerCommandSystem::value().Submit(command);
-		return QueryResult::Value({{"sent", true}});
+		// A tool sends a row of placements in one frame, so that they go in the same turn
+		const auto count = command.kind == EditorEdit::Kind::Place
+		                       ? std::clamp(static_cast<int>(NumberParam(context.params, "copies").value_or(1.0f)), 1, 256)
+		                       : 1;
+		glm::vec2 step {0.0f};
+		if (const auto found = context.params.find("step"); found != context.params.end() && found->is_array() &&
+		                                                    found->size() == 2 && (*found)[0].is_number() &&
+		                                                    (*found)[1].is_number())
+		{
+			step = {(*found)[0].get<float>(), (*found)[1].get<float>()};
+		}
+		const auto start = command.position;
+		for (int index = 0; index < count; ++index)
+		{
+			if (index > 0)
+			{
+				const glm::vec2 point {start.x + step.x * static_cast<float>(index),
+				                       start.z + step.y * static_cast<float>(index)};
+				command.position = {point.x, editor::LandHeight(point), point.y};
+			}
+			Locator::playerCommandSystem::value().Submit(command);
+		}
+		return QueryResult::Value({{"sent", count}});
 	});
 
+	auto creatureEdit = Query(
+	    "creature_edit",
+	    "Sends a change of a value of a creature as a command of the turns, as the creature section of the editor sends it "
+	    "in a network game: each computer does it at the same turn, and the game server takes it only from a player with the "
+	    "editor claim. force sends it also when the editor of this computer is refused.",
+	    {{.name = "id", .type = "integer", .description = "The creature", .required = true},
+	     {.name = "value",
+	      .type = "string",
+	      .description = "alignment, fatness, strength, size, energy, exhaustion, thirst, poo, life, warmth, itchiness or "
+	                     "grown up",
+	      .required = true},
+	     {.name = "amount", .type = "number", .description = "The new amount of the value", .required = true},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	creatureEdit.writes = true;
+	provider->Add(std::move(creatureEdit), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto entity = EntityParam(context.params);
+		const auto nameParam = context.params.find("value");
+		const auto name =
+		    nameParam != context.params.end() && nameParam->is_string() ? nameParam->get<std::string>() : std::string();
+		const auto value = creature_edit_values::ValueNamed(name);
+		const auto amount = NumberParam(context.params, "amount");
+		if (!entity.has_value() || !value.has_value() || !amount.has_value())
+		{
+			return QueryResult::Error("editor.creature_edit needs the id of a creature, the name of a value and an amount");
+		}
+		editor::SendCreatureEdit(*entity, *value, *amount);
+		return QueryResult::Value({{"sent", true}});
+	});
 	auto cheat =
 	    Query("cheat",
 	          "Sends a debug cheat of the player of this computer as a command of the turns, as the cheats tab "

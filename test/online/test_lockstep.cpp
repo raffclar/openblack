@@ -688,6 +688,11 @@ TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 	EXPECT_FALSE(ServerTakesFromObserver(HandTap {}, true));
 	EXPECT_FALSE(server::LeavesOut(EditorEdit {}, false));
 	EXPECT_FALSE(server::LeavesOut(DebugCheat {}, false));
+	// An edit of a creature is an edit of the editor
+	EXPECT_TRUE(OnlyEditorSends(EditorCreatureEdit {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorCreatureEdit {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorCreatureEdit {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorCreatureEdit {}, false));
 }
 
 TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAGodWithTheEditorClaim)

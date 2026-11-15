@@ -59,15 +59,25 @@ std::string_view RestName(CreatureNeeds::Rest rest)
 	return k_Names.at(static_cast<size_t>(rest));
 }
 
+/// What the player did with the slider of a bar in this frame
+struct BarEdit
+{
+	bool changed {false};
+	/// The player let go of the slider after a change
+	bool released {false};
+};
+
 /// A bar of a value from low to high, with a slider beside it to set it
-void Bar(const char* label, float& value, float low, float high, const char* tooltip)
+BarEdit Bar(const char* label, float& value, float low, float high, const char* tooltip)
 {
 	const auto fraction = high > low ? (value - low) / (high - low) : 0.0f;
 	ImGui::ProgressBar(std::clamp(fraction, 0.0f, 1.0f), ImVec2(k_BarWidth, 0.0f), fmt::format("{:.3f}", value).c_str());
 	ImGui::SameLine();
 	ImGui::PushID(label);
 	ImGui::SetNextItemWidth(90.0f);
-	ImGui::SliderFloat("##set", &value, low, high, "set");
+	BarEdit edit;
+	edit.changed = ImGui::SliderFloat("##set", &value, low, high, "set");
+	edit.released = ImGui::IsItemDeactivatedAfterEdit();
 	ImGui::PopID();
 	ImGui::SameLine();
 	ImGui::TextUnformatted(label);
@@ -75,6 +85,7 @@ void Bar(const char* label, float& value, float low, float high, const char* too
 	{
 		ImGui::SetTooltip("%s", tooltip);
 	}
+	return edit;
 }
 } // namespace
 
@@ -90,6 +101,22 @@ void CreatureSpawner::DrawBody(entt::entity entity) noexcept
 	}
 
 	ImGui::SeparatorText("Body and needs");
+	// In a network game the bars send their amounts as commands of the turns. The other parts of the tab would change the
+	// world of this computer only, so they only show.
+	const bool network = InNetworkGame();
+	using creature_edit_values::Value;
+	const auto bar = [this, network, entity](const char* label, Value value, float& field, float low, float high,
+	                                         const char* tooltip) {
+		if (!network)
+		{
+			return Bar(label, field, low, high, tooltip).changed;
+		}
+		auto amount = ShownValue(entity, value, field);
+		const auto edit = Bar(label, amount, low, high, tooltip);
+		FollowValueSlider(entity, value, amount, edit.changed, edit.released);
+		return false;
+	};
+	ImGui::BeginDisabled(network);
 	if (Locator::creaturePhysiologySystem::has_value())
 	{
 		auto& physiology = Locator::creaturePhysiologySystem::value();
@@ -118,35 +145,46 @@ void CreatureSpawner::DrawBody(entt::entity entity) noexcept
 		}
 	}
 
+	ImGui::EndDisabled();
+
 	auto& body = needs->needs;
 	ImGui::Text("Age %u (game hours), %u turns, %u meals, %s for %u turns%s", body.age, body.turns, body.meals,
 	            RestName(needs->rest).data(), needs->restTurns, needs->rested ? ", rested" : "");
 	ImGui::Text("%s%s", needs->moving ? "On the move" : "Standing still",
 	            needs->moving ? ": tiring, not growing" : ": growing, not tiring");
-	Bar("Energy", body.energy, 0.0f, std::max(1.0f, ShownSize(*creature)),
+	bar("Energy", Value::Energy, body.energy, 0.0f, std::max(1.0f, ShownSize(*creature)),
 	    "Hunger is 1 less energy; a big meal fills it up to its size");
-	Bar("Exhaustion", body.exhaustion, 0.0f, 1.0f, "Slowed to its slow speed from 0.8, faints at 1");
-	Bar("Thirst", body.dehydration, 0.0f, 1.0f, "Fills in about 83 minutes; drinking clears it");
-	Bar("Poo", body.poo, 0.0f, 1.0f, "Builds up from meals");
-	Bar("Life", body.life, 0.0f, 1.0f, "Heals while asleep");
-	Bar("Warmth", body.warmth, -1.0f, 1.0f, "Cold below 0, hot above, from the temperature against its species' comfort");
-	Bar("Itchiness", body.itchiness, 0.0f, 1.0f, "Only the itchy spell makes a creature itch");
-	Bar("Fatness", creature->fatness, 0.0f, 1.0f, "Burnt while hungry, put on by overeating");
+	bar("Exhaustion", Value::Exhaustion, body.exhaustion, 0.0f, 1.0f, "Slowed to its slow speed from 0.8, faints at 1");
+	bar("Thirst", Value::Thirst, body.dehydration, 0.0f, 1.0f, "Fills in about 83 minutes; drinking clears it");
+	bar("Poo", Value::Poo, body.poo, 0.0f, 1.0f, "Builds up from meals");
+	bar("Life", Value::Life, body.life, 0.0f, 1.0f, "Heals while asleep");
+	bar("Warmth", Value::Warmth, body.warmth, -1.0f, 1.0f,
+	    "Cold below 0, hot above, from the temperature against its species' comfort");
+	bar("Itchiness", Value::Itchiness, body.itchiness, 0.0f, 1.0f, "Only the itchy spell makes a creature itch");
+	bar("Fatness", Value::Fatness, creature->fatness, 0.0f, 1.0f, "Burnt while hungry, put on by overeating");
 	if (const auto* morph = registry.TryGet<const CreatureMorph>(entity))
 	{
 		ImGui::SameLine();
 		ImGui::Text("(shown %.2f)", static_cast<double>(morph->shownFatness));
 	}
-	Bar("Strength", creature->strength, 0.0f, 1.0f, "Gained from hard work");
-	const auto oldSize = creature->size;
-	Bar("Size", creature->size, creature_morph::k_MinScale, creature_physiology::k_MaxGrownSize,
-	    "Grows while standing still, fast while young");
-	if (creature->size != oldSize)
+	bar("Strength", Value::Strength, creature->strength, 0.0f, 1.0f, "Gained from hard work");
+	if (bar("Size", Value::Size, creature->size, creature_morph::k_MinScale, creature_physiology::k_MaxGrownSize,
+	        "Grows while standing still, fast while young"))
 	{
 		creature->size = creature_morph::ClampScale(creature->size);
 		transform->scale = glm::vec3(ecs::archetypes::CreatureArchetype::DrawnScale(creature->species, creature->size));
 		registry.SetDirty();
 	}
+	ImGui::BeginDisabled(network);
+	struct EndDisabled
+	{
+		EndDisabled() = default;
+		EndDisabled(const EndDisabled&) = delete;
+		EndDisabled& operator=(const EndDisabled&) = delete;
+		EndDisabled(EndDisabled&&) = delete;
+		EndDisabled& operator=(EndDisabled&&) = delete;
+		~EndDisabled() { ImGui::EndDisabled(); }
+	} const endDisabled;
 	if (ImGui::SmallButton("Fill up"))
 	{
 		body.energy = 1.0f;

@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/CreatureEditValues.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/CreatureTattoo.h"
 #include "Enums.h"
@@ -70,9 +71,23 @@ public:
 	/// any, facing an angle about the up axis
 	entt::entity SpawnAt(glm::vec3 position, float yawRadians) noexcept;
 	/// While hosted, the clicks on the land that command the picked creature, and their orders
-	[[nodiscard]] bool HostedTakesEvent(const SDL_Event& event) const noexcept { return TakesEvent(event); }
-	void HostedProcessEvent(const SDL_Event& event) noexcept { ProcessEventOpen(event); }
-	void HostedUpdate() noexcept { Update(); }
+	/// In a network game the clicks on the land do not command a creature, because the order would change the world of
+	/// this computer only
+	[[nodiscard]] bool HostedTakesEvent(const SDL_Event& event) const noexcept { return !InNetworkGame() && TakesEvent(event); }
+	void HostedProcessEvent(const SDL_Event& event) noexcept
+	{
+		if (!InNetworkGame())
+		{
+			ProcessEventOpen(event);
+		}
+	}
+	void HostedUpdate() noexcept
+	{
+		if (!InNetworkGame())
+		{
+			Update();
+		}
+	}
 
 protected:
 	void Draw() noexcept override;
@@ -83,6 +98,15 @@ protected:
 
 private:
 	[[nodiscard]] static std::string_view SpeciesName(CreatureType species) noexcept;
+	/// Whether a network game is live. Then the creature section changes only the values of creature_edit_values, and it
+	/// sends each change as a command of the turns. Its other parts only show the creature.
+	[[nodiscard]] static bool InNetworkGame() noexcept;
+	/// The amount of a value that a slider shows: the amount that the player holds on the slider, or the amount now
+	[[nodiscard]] float ShownValue(entt::entity entity, creature_edit_values::Value value, float now) const noexcept;
+	/// In a network game, follows the slider of a value. The slider keeps the changed amount while the player holds it,
+	/// and sends the amount as a command of the turns when the player lets go.
+	void FollowValueSlider(entt::entity entity, creature_edit_values::Value value, float amount, bool changed,
+	                       bool released) noexcept;
 	void DrawSettings() noexcept;
 	/// The creature picked in the list: its alignment, physique and size, changed as it stands
 	void DrawSelected() noexcept;
@@ -182,6 +206,14 @@ private:
 	std::string _lastNeed;
 	RandomStreamSource _random {RandomStream::CreatureSpawner};
 	std::optional<entt::entity> _selected;
+	/// The amount of a value that the player holds on a slider in a network game, until the slider lets go
+	struct HeldValue
+	{
+		entt::entity entity;
+		creature_edit_values::Value value;
+		float amount;
+	};
+	std::optional<HeldValue> _held;
 	/// The creature the selected tab was last brought to the front for
 	std::optional<entt::entity> _tabFor;
 	/// The thing to put by the creature, what it does to what it holds, and what became of the last thing it was told to
