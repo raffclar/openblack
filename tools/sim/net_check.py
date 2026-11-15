@@ -1333,6 +1333,11 @@ def editor_desync(pids, case):
     done = {"case": case, "sent": []}
     camera = inspector_answer(editor, "camera.state", {}) or {}
     focus = camera.get("focus") or [0.0, 0.0, 0.0]
+    # Find the creature before the villagers come, so that the rows of new villagers do not hide it
+    found = []
+    if case in ("creature", "all"):
+        found = items_of(inspector_answer(editor, "objects.find", {"params": {
+                "near": [focus[0], focus[2]], "radius": 3000.0, "kind": "Creature", "limit": 1}}))
     if case in ("villagers", "all"):
         # All the types in one frame: three of each, in rows of the same type
         burst = 0
@@ -1351,8 +1356,6 @@ def editor_desync(pids, case):
             time.sleep(1.0)
         done["sent"].append({"villagers_in_turns": spread})
     if case in ("creature", "all"):
-        found = items_of(inspector_answer(editor, "objects.find", {"params": {
-            "near": [focus[0], focus[2]], "radius": 3000.0, "kind": "Creature", "limit": 1}}))
         if not found:
             done["error"] = f"no creature near the camera at {focus}"
             return done
@@ -2256,8 +2259,9 @@ def main():
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
-                             "villager type (villagers), or changes each value of the creature near the camera "
-                             "(creature), or both; every computer must keep the same checksums")
+                             "villager type (villagers), or changes each value and does each act of the creature near the "
+                             "camera (creature), or moves and turns a building, a tree, a feature and a villager "
+                             "(objects), or all of them; every computer must keep the same checksums")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
     parser.add_argument("--slot-fight", type=int, metavar="SECONDS",
