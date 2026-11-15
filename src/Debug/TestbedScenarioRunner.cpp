@@ -105,6 +105,7 @@
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -1401,6 +1402,21 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 			return std::nullopt;
 		}
 		return static_cast<double>(Locator::magicShieldSystem::value().GetDomes(0.0f).size());
+	case checks::Quantity::CreatureInDuel:
+	case checks::Quantity::CreatureFightHealth:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value() || !Locator::creatureFightSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& fights = Locator::creatureFightSystem::value();
+		if (check.quantity == checks::Quantity::CreatureInDuel)
+		{
+			return fights.IsDuelling(*creature) ? 1.0 : 0.0;
+		}
+		return static_cast<double>(fights.GetFightHealth(*creature));
+	}
 	case checks::Quantity::FootballMatchState:
 	{
 		const auto object = ObjectAt(check.index);

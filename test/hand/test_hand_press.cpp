@@ -52,6 +52,7 @@ struct FakeWorld final: public HandPressWorld
 	bool leashPressTakes {false};
 	bool waitsForLockEnd {false};
 	bool fightDirects {false};
+	std::optional<bool> leashMayTie;
 	bool fightPressTakes {false};
 	bool fightPressed {false};
 	bool doubleClick {false};
@@ -126,10 +127,11 @@ struct FakeWorld final: public HandPressWorld
 	void LetGoOfRope(PlayerNames /*player*/, std::optional<glm::vec3> /*place*/) final { calls.emplace_back("LetGoOfRope"); }
 	void LeashTapThing(PlayerNames /*player*/, entt::entity /*thing*/) final { calls.emplace_back("LeashTapThing"); }
 	bool LeashPressAction(PlayerNames /*player*/, const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/,
-	                      glm::vec2 /*cursor*/, uint32_t /*nowMs*/) final
+	                      glm::vec2 /*cursor*/, uint32_t /*nowMs*/, bool mayTie) final
 	{
 		calls.emplace_back("LeashPressAction");
-		return leashPressTakes;
+		leashMayTie = mayTie;
+		return leashPressTakes && mayTie;
 	}
 	bool PressRope(PlayerNames /*player*/) final
 	{
@@ -276,6 +278,28 @@ TEST(HandPress, APressThatTheFightRefusesWhileItDirectsTheFightDoesNothingMore)
 	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
 	EXPECT_EQ(fixture.world->calls, (std::vector<std::string> {"LeashPressAction", "FightPressAction"}));
 	EXPECT_TRUE(fixture.system->TakeActionPress());
+}
+
+TEST(HandPress, WhileTheCameraShowsTheDuelADoubleTapOfTheLeashGoesToTheFight)
+{
+	Fixture fixture;
+	fixture.world->fightDirects = true;
+	fixture.world->fightPressTakes = true;
+	fixture.world->leashPressTakes = true;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	ASSERT_TRUE(fixture.world->leashMayTie.has_value());
+	EXPECT_FALSE(*fixture.world->leashMayTie);
+	EXPECT_TRUE(fixture.Called("FightPressAction"));
+}
+
+TEST(HandPress, OutOfTheDuelADoubleTapOfTheLeashTiesTheLeash)
+{
+	Fixture fixture;
+	fixture.world->leashPressTakes = true;
+	fixture.Press(ButtonEvent(SDL_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT));
+	ASSERT_TRUE(fixture.world->leashMayTie.has_value());
+	EXPECT_TRUE(*fixture.world->leashMayTie);
+	EXPECT_FALSE(fixture.Called("FightPressAction"));
 }
 
 TEST(HandPress, TheLetGoOfTheButtonThatPressedForTheFightChargesTheBlow)

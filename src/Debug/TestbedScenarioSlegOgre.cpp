@@ -11,6 +11,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -77,6 +78,57 @@ void AddSlegFight(std::vector<Scenario>& all)
 	                  .delaySeconds = 0.5f,
 	                  .script = "Land4Ogre",
 	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
+	});
+}
+
+void AddSlegFightDoubleTap(std::vector<Scenario>& all)
+{
+	// The duel starts at about 60 seconds. Then the player puts the aggression leash on the Tiger, makes the camera show
+	// the fight and double taps the Action button on Sleg. The fight takes both presses.
+	constexpr float k_DuelSeconds = 60.0f;
+	constexpr size_t k_RightButton = 3;
+	std::vector<Command> commands {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand4"},
+	                               {.kind = Kind::RunScript,
+	                                .delaySeconds = 0.5f,
+	                                .script = "Land4Ogre",
+	                                .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                               Fight(Kind::PointerOnOpponent, 0, 0, k_DuelSeconds),
+	                               Leash(0, LeashType::Evil, 0.2f),
+	                               Fight(Kind::FightView, 0, 0, 0.3f)};
+	// The pointer stays on Sleg, so that the hand that holds the leash stays near the Tiger
+	for (int step = 0; step < 5; ++step)
+	{
+		commands.push_back(Fight(Kind::PointerOnOpponent, 0, 0, 1.0f));
+	}
+	for (int press = 0; press < 2; ++press)
+	{
+		commands.push_back({.kind = Kind::PointerPress, .delaySeconds = 0.05f, .value = k_RightButton});
+		commands.push_back({.kind = Kind::PointerRelease, .delaySeconds = 0.05f, .value = k_RightButton});
+	}
+	all.push_back({
+	    .id = "story.l4_sleg_fight_leash_double_tap",
+	    .name = "Story: a double tap with the leash on Sleg in the fight view on the fourth land",
+	    .facet = Facet::Story,
+	    .description = "As Sleg the ogre fights the creature at his lair. When the duel starts, the player puts the "
+	                   "aggression leash on the Tiger. A double click into the arena makes the camera show the fight. Then "
+	                   "the hand double taps the Action button on Sleg.",
+	    .expected = "The fight takes both presses, and the Tiger strikes at Sleg. The leash does not tie to Sleg. The duel "
+	                "continues until one creature wins, and Sleg does not laugh after the double tap.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_FightIntro.x - 30.0f, 35.0f, k_FightIntro.y - 40.0f},
+	                .look = {k_FightIntro.x, 5.0f, k_FightIntro.y}},
+	    .creatures = {PlayersTiger(k_NearTheFight)},
+	    .commands = std::move(commands),
+	    .checks = {{.label = "the duel starts",
+	                .quantity = checks::Quantity::CreatureInDuel,
+	                .afterTurns = 300,
+	                .byTurn = 1500,
+	                .atLeast = 1.0},
+	               {.label = "the Tiger still duels after the double tap",
+	                .quantity = checks::Quantity::CreatureInDuel,
+	                .afterTurns = 700,
+	                .atLeast = 1.0}},
 	});
 }
 
@@ -300,6 +352,7 @@ void AddSlegFightTwice(std::vector<Scenario>& all)
 void testbed_scenarios::AddLand4SlegScenarios(std::vector<Scenario>& all)
 {
 	AddSlegFight(all);
+	AddSlegFightDoubleTap(all);
 	AddSlegFightTwice(all);
 	AddSlegBeatenScroll(all);
 	AddGremlins(all);
