@@ -360,6 +360,7 @@ struct FrontEndTest: public ::testing::Test
 	FakeClanCreature clanCreature;
 	/// The notices of the lobby room that the front end gave
 	std::vector<online::lobby::LobbyNotice> notices;
+	std::vector<error_reports::FailureEvent> reports;
 
 	/// The front end goes first, because it still uses the fake lobby sessions when it closes
 	void TearDown() override { frontEnd.reset(); }
@@ -379,6 +380,7 @@ struct FrontEndTest: public ::testing::Test
 		    .lobbyRoom = lobbySessions.get(),
 		    .nowMs = clock,
 		    .notice = [this](const online::lobby::LobbyNotice& notice) { notices.push_back(notice); },
+		    .report = [this](const error_reports::FailureEvent& event) { reports.push_back(event); },
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
@@ -2549,7 +2551,7 @@ TEST_F(FrontEndTest, AFullSessionRefusesAGodAndAnObserverWithTheSameBox)
 	EXPECT_EQ(frontEnd->GetLobbyRoom(), nullptr);
 }
 
-TEST_F(FrontEndTest, TheMapOfASessionDownloadsInTheRoomAndContinuesAfterTheBoxOfAFailure)
+TEST_F(FrontEndTest, TheMapOfASessionShowsOneBoxForAFailureAndContinuesAfterANewMapSet)
 {
 	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
 	mapStore = &store;
@@ -2580,8 +2582,25 @@ TEST_F(FrontEndTest, TheMapOfASessionDownloadsInTheRoomAndContinuesAfterTheBoxOf
 	frontEnd->Update();
 	ASSERT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
 	EXPECT_FALSE(frontEnd->GetLobbyRoom()->CanReady());
-	// OK closes the box, and the download continues with no new map set of the host (deviation 257)
+	// OK closes the box and does not start the download again: the room shows no second box (deviation 257)
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	for (int i = 0; i < 5; ++i)
+	{
+		frontEnd->Update();
+	}
+	EXPECT_FALSE(lobby.maps);
+	EXPECT_EQ(lobby.downloads.size(), 2u);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_FALSE(frontEnd->GetLobbyRoom()->CanReady());
+	// The host picks a land of the game, then the map of the service again: the download continues
+	lobby_api::LobbyChangeRequest other;
+	other.map = lobby_api::LobbyMap {.file = "Online Maps/mpm_2p_1.map", .name = "Two", .sha256 = {}, .size = 0};
+	lobbySessions->Change(std::move(other), [](auto&&) {});
+	frontEnd->Update();
+	EXPECT_FALSE(lobby.maps);
+	lobby_api::LobbyChangeRequest again;
+	again.map = lobby_api::LobbyMap {.file = "Online Maps/obm_32p_1.map", .name = map.name, .sha256 = map.sha256, .size = 3};
+	lobbySessions->Change(std::move(again), [](auto&&) {});
 	frontEnd->Update();
 	ASSERT_TRUE(lobby.maps);
 	FakeLobby::Give(lobby.maps, lobby_api::MapList {.maps = {map}});
@@ -2663,6 +2682,20 @@ TEST_F(FrontEndTest, ALandThatTheLobbyDoesNotGiveShowsTheBoxOfTheRoom)
 	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
 	EXPECT_EQ(ButtonsOf(Message::CouldNotDownloadMap), MessageButtons::Ok);
+	// The failure goes to the error reports with its step, its map and the error of the lobby
+	ASSERT_EQ(reports.size(), 1u);
+	EXPECT_EQ(reports[0].fingerprint, (std::vector<std::string> {"map-download", "piece"}));
+	const auto tag = [this](std::string_view name, bool extra = false) {
+		const auto& list = extra ? reports[0].extras : reports[0].tags;
+		const auto found = std::ranges::find(list, name, &std::pair<std::string, std::string>::first);
+		return found != list.end() ? found->second : std::string("missing");
+	};
+	EXPECT_EQ(tag("map_step"), "piece");
+	EXPECT_EQ(tag("map_file"), RoomMap().file);
+	EXPECT_EQ(tag("map_sha256", true), k_RoomMapHash);
+	EXPECT_EQ(tag("map_address", true), "/api/v1/maps/" + std::string(k_RoomMapHash));
+	EXPECT_EQ(tag("map_offset", true), "0");
+	EXPECT_EQ(tag("map_error_kind", true), std::to_string(static_cast<int>(LobbyErrorKind::Network)));
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
 	Step();
 	// OK closes the box, and the player stays in the room
@@ -2681,6 +2714,8 @@ TEST_F(FrontEndTest, ALandThatIsNotInTheLobbysListShowsTheBoxOfTheRoom)
 	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
 	EXPECT_TRUE(lobby.downloads.empty());
+	ASSERT_EQ(reports.size(), 1u);
+	EXPECT_EQ(reports[0].fingerprint, (std::vector<std::string> {"map-download", "list"}));
 }
 
 TEST_F(FrontEndTest, ALandInTheStoreDoesNotComeAgain)

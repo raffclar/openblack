@@ -234,6 +234,12 @@ class ErrorReports {
     return this.send((Sentry) => Sentry.captureEvent(event));
   }
 
+  /** The event of a failure that the game found, such as a map download that failed */
+  event(fields) {
+    const event = desyncEvent(fields.message, fields.level, fields.fingerprint, fields.tags, fields.extras);
+    return this.send((Sentry) => Sentry.captureEvent(event));
+  }
+
   /**
    * An error of the browser that stopped the game: a trap of the WebAssembly code, an abort, or an error that no code
    * caught. Only the first one goes, because the game stops after it.

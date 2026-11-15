@@ -9,7 +9,6 @@
 
 #include "FetchHttpClient.h"
 
-#include <cctype>
 #include <cstring>
 
 #include <algorithm>
@@ -109,17 +108,10 @@ void Done(emscripten_fetch_t* fetch)
 		{
 			std::string text(length + 1, '\0');
 			emscripten_fetch_get_response_headers(fetch, text.data(), text.size());
-			char** pairs = emscripten_fetch_unpack_response_headers(text.c_str());
-			for (size_t i = 0; pairs != nullptr && pairs[i] != nullptr && pairs[i + 1] != nullptr; i += 2)
-			{
-				std::string name(pairs[i]);
-				std::ranges::transform(name, name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-				response.headers.emplace_back(std::move(name), std::string(pairs[i + 1]));
-			}
-			if (pairs != nullptr)
-			{
-				emscripten_fetch_free_unpacked_response_headers(pairs);
-			}
+			// The browser gives each line as "name: value" with CR LF. The unpack of Emscripten keeps the space and the
+			// CR in each value, so the client reads the lines itself.
+			text.resize(std::strlen(text.c_str()));
+			response.headers = online::http_policy::ParseHeaderLines(text);
 		}
 	}
 	transfer.finished = std::move(response);

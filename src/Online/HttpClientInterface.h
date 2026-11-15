@@ -159,6 +159,10 @@ namespace http_policy
 /// True when the host of an https:// or wss:// address is this computer (IsLoopbackHost). The test authorities of the
 /// tools are only for such addresses.
 [[nodiscard]] bool IsLoopbackAddress(std::string_view url) noexcept;
+/// The headers of an answer from the header text of the browser: one "name: value" line for each header, with a line
+/// end of CR LF or LF. Each name is in lower case. The spaces, tabs and line ends before and after the name and the value
+/// go. A line with no colon or with no name gives no header.
+[[nodiscard]] std::vector<std::pair<std::string, std::string>> ParseHeaderLines(std::string_view text);
 
 } // namespace http_policy
 
