@@ -80,6 +80,8 @@ void MultiplayerFrontEnd::ShowLobbyProblem(const LobbyError& error)
 	case screens::ProblemBox::ConnectionFailed:
 		Show(Message::ConnectionFailed);
 		break;
+	case screens::ProblemBox::None:
+		break;
 	}
 }
 

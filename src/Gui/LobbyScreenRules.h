@@ -119,6 +119,8 @@ enum class ProblemBox : uint8_t
 	IncorrectPassword,
 	/// The vanilla box "Connection Failed."
 	ConnectionFailed,
+	/// No box: the call had the result that the player wanted already
+	None,
 };
 struct Problem
 {
