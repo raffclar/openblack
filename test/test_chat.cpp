@@ -28,20 +28,30 @@ using namespace openblack::chat;
 using openblack::ecs::systems::ChatSystem;
 using P = PlayerNames;
 
-TEST(ChatRules, TheStaffCodeTestDropsLettersOfAPlainLine)
+TEST(ChatRules, OnlyALineWithTheStaffCodeLosesACode)
 {
 	EXPECT_EQ(WithoutStaffCode(u"Hello"), u"Hello");
-	EXPECT_EQ(WithoutStaffCode(u"Sorry"), u"orry");
-	EXPECT_EQ(WithoutStaffCode(u"SGRBOhi"), u"hi");
-	// The letters go only in their order
-	EXPECT_EQ(WithoutStaffCode(u"GS"), u"S");
-	// An 'N' takes the characters to the '#', and the '#'
-	EXPECT_EQ(WithoutStaffCode(u"!N123#rest"), u"rest");
-	// An 'N' takes at most 19 characters after it
-	EXPECT_EQ(WithoutStaffCode(u"N12345678901234567890X"), u"0X");
-	EXPECT_EQ(WithoutStaffCode(u"Nice to see you"), u"");
-	EXPECT_EQ(WithoutStaffCode(u"#x"), u"x");
+	EXPECT_EQ(WithoutStaffCode(u"Oh no"), u"Oh no");
+	EXPECT_EQ(WithoutStaffCode(u"Sorry"), u"Sorry");
+	EXPECT_EQ(WithoutStaffCode(u"Go"), u"Go");
+	EXPECT_EQ(WithoutStaffCode(u"Bye"), u"Bye");
+	EXPECT_EQ(WithoutStaffCode(u"!"), u"!");
+	EXPECT_EQ(WithoutStaffCode(u"N#x"), u"N#x");
+	EXPECT_EQ(WithoutStaffCode(u"Nice to see you"), u"Nice to see you");
+	EXPECT_EQ(WithoutStaffCode(u"#x"), u"#x");
+	EXPECT_EQ(WithoutStaffCode(u"SGRBOhi"), u"SGRBOhi");
 	EXPECT_EQ(WithoutStaffCode(u""), u"");
+}
+
+TEST(ChatRules, ALineWithTheStaffCodeLosesTheCode)
+{
+	EXPECT_EQ(WithoutStaffCode(u"!SGRBOhi"), u"hi");
+	EXPECT_EQ(WithoutStaffCode(u"!SGRBhi"), u"hi");
+	EXPECT_EQ(WithoutStaffCode(u"!SGRB"), u"");
+	// An 'N' takes the characters to the '#', and the '#'
+	EXPECT_EQ(WithoutStaffCode(u"!SGRBN123#rest"), u"rest");
+	// An 'N' takes at most 19 characters after it
+	EXPECT_EQ(WithoutStaffCode(u"!SGRBN12345678901234567890X"), u"0X");
 }
 
 TEST(ChatRules, ATauntPastTheLastIsLost)
@@ -414,10 +424,11 @@ TEST(ChatSystem, ALineGoesAsACommandAndTheAdvisorsSpeakAtTheTurn)
 	const std::vector recipients {P::PLAYER_ONE};
 	chat.SendLine(u"", recipients);
 	EXPECT_TRUE(game.submitted.empty());
+	// A plain line goes out whole
 	chat.SendLine(u"Shello", recipients);
 	ASSERT_EQ(game.submitted.size(), 1);
 	const auto& speech = std::get<player_commands::ChatSpeech>(game.submitted[0]);
-	EXPECT_EQ(speech.text, u"hello");
+	EXPECT_EQ(speech.text, u"Shello");
 	EXPECT_EQ(speech.recipients, recipients);
 	// The one-off remark waits for the turn
 	EXPECT_EQ(game.yacking, 0);

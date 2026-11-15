@@ -17,9 +17,9 @@
 #include <string_view>
 
 /// The debug cheats of a player. The editor turns them on and off for the player of this computer. In a network game
-/// only a staff player can open the editor, and the game server refuses a cheat from every other player. A cheat goes
-/// to every computer as a command of a turn, so that all the computers do the same turn. These rules keep no state, so
-/// that the game and the tests use them both.
+/// only a player with the editor claim can open the editor, and the game server refuses a cheat from every other player. A
+/// cheat goes to every computer as a command of a turn, so that all the computers do the same turn. These rules keep no state,
+/// so that the game and the tests use them both.
 ///
 /// To add a cheat:
 /// 1. Add its value before Count, and its name in k_CheatNames.

@@ -25,6 +25,7 @@
 #include "Common/DeveloperTools.h"
 #include "Debug/SimRun.h"
 #include "EngineConfig.h"
+#include "Server/DesyncBundle.h"
 #include "Server/GameLifetime.h"
 #include "Server/LobbyGame.h"
 #include "Server/ServerSnapshots.h"
@@ -76,6 +77,8 @@ struct NetworkSettings
 	uint32_t minGods {1};
 	/// How long a god's player can be away before the god is defeated
 	uint32_t comeBackSeconds {300};
+	/// How long the gods wait when the players of all the gods lost the connection. Then the game ends.
+	uint32_t allGoneSeconds {10};
 	/// Tests: the server lets through the commands of the test tools (player_commands::CreatureFightCheat)
 	bool testCommands {false};
 	/// The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room
@@ -100,6 +103,8 @@ struct NetworkSettings
 	std::optional<std::filesystem::path> lobbyTestAuthorities;
 	/// The snapshots of the shared world on the server's own disk (deviation 100)
 	snapshots::Settings snapshots;
+	/// The records of the desyncs that the server captures, on the server's own disk
+	desync_bundle::Settings desyncRecords;
 	/// The game of one lobby on a server of the pool (deviation 236): the lobby's id and members. The room takes only
 	/// these members, and the server ends after its game. None for a server with no lobby.
 	std::optional<lobby_game::Lobby> lobby;

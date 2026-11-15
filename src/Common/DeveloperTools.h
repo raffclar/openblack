@@ -87,21 +87,32 @@ enum class Action : uint8_t
 	return !RefusalOf(built, networkSessionLive).has_value();
 }
 
-/// Why the in-game editor cannot open or change the world, or none when it can. In a network game only a staff player
-/// opens the editor, in every build: the join ticket of the player has the staff claim, and the game server refuses the
-/// edits of every other player. Outside a network game the editor is a developer tool.
+/// Why the in-game editor cannot open or change the world, or none when it can. In a network game only a player with the
+/// editor claim opens the editor, in every build: the join ticket of the player has the claim, and the game server
+/// refuses the edits of every other player. Outside a network game the editor is a developer tool.
 [[nodiscard]] constexpr std::optional<std::string_view> EditorRefusalOf(bool built, bool networkSessionLive,
-                                                                        bool staff) noexcept
+                                                                        bool editor) noexcept
 {
 	if (networkSessionLive)
 	{
-		if (!staff)
+		if (!editor)
 		{
-			return "only a staff player opens the editor in a network game";
+			return "only a player with the editor claim opens the editor in a network game";
 		}
 		return std::nullopt;
 	}
 	return RefusalOf(built, false);
+}
+
+/// The line that the player sees when the game or the game server refuses the editor or a debug cheat in a network game
+/// (deviation 269)
+inline constexpr std::u16string_view k_EditorRefusedLine = u"Your account cannot use the editor or the cheats in this game.";
+
+/// Whether a refusal of the editor or of a debug cheat shows the refusal line to the player: only in a network game, for
+/// a player with no editor claim. Outside a network game a refusal shows nothing, as before.
+[[nodiscard]] constexpr bool ShowsRefusalLine(bool networkSessionLive, bool editor) noexcept
+{
+	return networkSessionLive && !editor;
 }
 
 /// What the debug windows show and take
@@ -115,13 +126,13 @@ enum class GuiMode : uint8_t
 	Dormant,
 };
 
-/// What the debug windows show: all of them in a developer build outside a network game, only the editor for a staff
-/// player in a network game, else nothing
-[[nodiscard]] constexpr GuiMode GuiModeOf(bool built, bool networkSessionLive, bool staff) noexcept
+/// What the debug windows show: all of them in a developer build outside a network game, only the editor for a player
+/// with the editor claim in a network game, else nothing
+[[nodiscard]] constexpr GuiMode GuiModeOf(bool built, bool networkSessionLive, bool editor) noexcept
 {
 	if (networkSessionLive)
 	{
-		return staff ? GuiMode::EditorOnly : GuiMode::Dormant;
+		return editor ? GuiMode::EditorOnly : GuiMode::Dormant;
 	}
 	return built ? GuiMode::Full : GuiMode::Dormant;
 }
@@ -207,6 +218,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-world-states", .takesValue = true},
     DeveloperOption {.name = "sim-world-state-turns", .takesValue = true},
     DeveloperOption {.name = "sentry-test-error"},
+    DeveloperOption {.name = "sentry-test-trap"},
     DeveloperOption {.name = "turn-api-check", .takesValue = true},
     DeveloperOption {.name = "turn-beside-draw"},
     DeveloperOption {.name = "sim-record", .takesValue = true},

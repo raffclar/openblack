@@ -109,21 +109,39 @@ TEST(GameSocket, AGodCanGiveItsLobbyAccount)
 	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1,"name":"a","account":-1}]})").has_value());
 }
 
-TEST(GameSocket, TheStaffMarkGoesWithTheGodAndTheJoinAndIsLeftOutWhenNotSet)
+TEST(GameSocket, TheEditorMarkGoesWithTheGodAndTheJoinAndIsLeftOutWhenNotSet)
 {
 	Start start {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
-	start.gods = {{.slot = 0, .name = "Ann", .staff = true}, {.slot = 1, .name = "Bob"}};
+	start.gods = {{.slot = 0, .name = "Ann", .editor = true}, {.slot = 1, .name = "Bob"}};
 	EXPECT_EQ(RoundTrip(start).gods, start.gods);
-	EXPECT_EQ(ToJson(start), R"({"gods":[{"name":"Ann","slot":0,"staff":true},{"name":"Bob","slot":1}],"land":"",)"
+	EXPECT_EQ(ToJson(start), R"({"gods":[{"editor":true,"name":"Ann","slot":0},{"name":"Bob","slot":1}],"land":"",)"
 	                         R"("seed":1,"testbed":true,"turn":0,"type":"game.start"})");
-	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1,"name":"a","staff":1}]})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1,"name":"a","editor":1}]})").has_value());
 
-	EXPECT_TRUE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s", .staff = true}).staff);
-	EXPECT_FALSE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s"}).staff);
+	EXPECT_TRUE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s", .editor = true}).editor);
+	EXPECT_FALSE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s"}).editor);
 	const auto old = Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x"})");
 	ASSERT_TRUE(old.has_value());
-	EXPECT_FALSE(std::get<Joined>(*old).staff);
-	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","staff":"yes"})").has_value());
+	EXPECT_FALSE(std::get<Joined>(*old).editor);
+	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","editor":"yes"})").has_value());
+	// The old staff mark of an older server gives no editor
+	const auto staff = Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","staff":true})");
+	ASSERT_TRUE(staff.has_value());
+	EXPECT_FALSE(std::get<Joined>(*staff).editor);
+}
+
+TEST(GameSocket, TheRefusalOfCommandsGivesTheReasonAndTheCount)
+{
+	const CommandRefused refused {.reason = std::string(k_NoEditorClaim), .commands = 2};
+	EXPECT_EQ(ToJson(refused), R"({"commands":2,"reason":"no_editor_claim","type":"command.refused"})");
+	EXPECT_EQ(std::get<CommandRefused>(*Parse(ToJson(refused))), refused);
+	// The count is optional, and the reason is not
+	const auto noCount = Parse(R"({"type":"command.refused","reason":"no_editor_claim"})");
+	ASSERT_TRUE(noCount.has_value());
+	EXPECT_EQ(std::get<CommandRefused>(*noCount).commands, 0u);
+	EXPECT_FALSE(Parse(R"({"type":"command.refused","commands":1})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"command.refused","reason":7})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"command.refused","reason":")" + std::string(65, 'x') + R"("})").has_value());
 }
 
 TEST(GameSocket, TheReplyToAJoinGivesTheServersWorld)
@@ -384,4 +402,66 @@ TEST(GameSocket, TheJoinAndTheRefusalCanGiveABuildId)
 	EXPECT_EQ(ToJson(Refused {.reason = "full"}), R"({"reason":"full","type":"room.refused"})");
 	EXPECT_TRUE(RoundTrip(Refused {.reason = "full"}).build.empty());
 	EXPECT_FALSE(Parse(R"({"type":"room.refused","reason":"protocol","build":[]})").has_value());
+}
+
+TEST(GameSocket, TheFramesOfTheDesyncCaptureGoToJsonAndBack)
+{
+	Joined joined {.role = Role::God, .slot = 1, .session = "s", .name = {}, .start = std::nullopt};
+	joined.dataFiles = {"Data/info.dat", "Scripts/Online Maps/mpm_2p_1.txt"};
+	joined.capture = true;
+	const auto backJoined = RoundTrip(joined);
+	EXPECT_EQ(backJoined.dataFiles, joined.dataFiles);
+	EXPECT_TRUE(backJoined.capture);
+	// An older server sends neither
+	const auto old = RoundTrip(Joined {.role = Role::God, .slot = 1, .session = "s", .name = {}, .start = std::nullopt});
+	EXPECT_TRUE(old.dataFiles.empty());
+	EXPECT_FALSE(old.capture);
+
+	Refused refused {.reason = "data"};
+	refused.file = "Data/info.dat is not the server's";
+	refused.path = "Data/info.dat";
+	EXPECT_EQ(RoundTrip(refused).file, refused.file);
+	EXPECT_EQ(RoundTrip(refused).path, refused.path);
+	// An older server sends no path
+	EXPECT_TRUE(RoundTrip(Refused {.reason = "data"}).path.empty());
+
+	const DataPrint print {.files = {{.path = "Data/info.dat", .present = true, .size = 10, .hash = 0xfedcba9876543210ull},
+	                                 {.path = "Data/x.lnd", .present = false, .size = 0, .hash = 0}},
+	                       .patch = "1.20",
+	                       .language = "0809"};
+	EXPECT_EQ(RoundTrip(print), print);
+
+	const SyncFacts facts {.turn = 3,
+	                       .build = "b",
+	                       .land = "Land1.txt",
+	                       .landSha256 = "ab",
+	                       .map = "",
+	                       .seed = 9,
+	                       .data = 0xffffffffffffffffull,
+	                       .patch = "1.10",
+	                       .language = ""};
+	EXPECT_EQ(RoundTrip(facts), facts);
+
+	const SyncCapture capture {.turn = 40, .parts = {"Transform", "VillagerPose"}};
+	EXPECT_EQ(RoundTrip(capture), capture);
+
+	const SyncBlocks blocks {.turn = 40,
+	                         .parts = {{.part = "Transform", .entities = 300, .blocks = {1, 0xffffffffffffffffull}}}};
+	EXPECT_EQ(RoundTrip(blocks), blocks);
+
+	const SyncAsk ask {.turn = 40, .parts = {{.part = "Transform", .blocks = {1}}}};
+	EXPECT_EQ(RoundTrip(ask), ask);
+	EXPECT_EQ(RoundTrip(SyncAsk {.turn = 40, .parts = {}}), (SyncAsk {.turn = 40, .parts = {}}));
+
+	const SyncEntities entities {
+	    .turn = 40,
+	    .parts = {
+	        {.part = "Transform",
+	         .entities = {{.entity = 270, .hash = 6, .kind = "Villager", .position = std::array<float, 3> {1.5F, -2.0F, 3.25F}},
+	                      {.entity = 271, .hash = 7, .kind = "", .position = std::nullopt}}}}};
+	EXPECT_EQ(RoundTrip(entities), entities);
+
+	const SyncWorld world {.turn = 40, .index = 0, .count = 1, .size = 3, .bytes = {0, 1, 255}};
+	EXPECT_EQ(RoundTrip(world), world);
+	EXPECT_FALSE(Parse(R"({"type":"sync.world","turn":1,"index":2,"count":1,"size":3,"data":"AAH_"})").has_value());
 }

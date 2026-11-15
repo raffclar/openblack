@@ -65,11 +65,10 @@ void ForwardCrash(const crash_report::CrashInfo& info, std::string_view report, 
 	{
 		return;
 	}
-	const std::string type(info.detail.empty() ? crash_report::KindName(info.kind) : info.detail);
-	const std::string message(info.message.empty() ? crash_report::KindName(info.kind) : info.message);
+	const auto texts = CrashEventTextsOf(info);
 	auto event = sentry_value_new_event();
 	sentry_value_set_by_key(event, "level", sentry_value_new_string("fatal"));
-	auto exception = sentry_value_new_exception(type.c_str(), message.c_str());
+	auto exception = sentry_value_new_exception(texts.type.c_str(), texts.message.c_str());
 	sentry_value_set_stacktrace(exception, nullptr, 0);
 	sentry_event_add_exception(event, exception);
 	auto extra = sentry_value_new_object();
@@ -189,8 +188,49 @@ void SentryErrorReports::SendDesync(const DesyncReport& report)
 		sentry_value_set_by_key(extra, key.c_str(), sentry_value_new_string(value.c_str()));
 	}
 	sentry_value_set_by_key(event, "extra", extra);
-	sentry_capture_event(event);
+	// The capture of the desync gives its facts as a file of the event, when the file is small
+	if (report.detail.has_value() && !report.detail->attachment.empty() &&
+	    report.detail->attachment.size() <= k_MostDesyncAttachmentBytes)
+	{
+		auto* scope = sentry_local_scope_new();
+		const auto& name = report.detail->attachmentName.empty() ? std::string("desync.json") : report.detail->attachmentName;
+		sentry_scope_attach_bytes(scope, report.detail->attachment.data(), report.detail->attachment.size(), name.c_str());
+		sentry_scope_capture_event(scope, event, nullptr);
+	}
+	else
+	{
+		sentry_capture_event(event);
+	}
 	++_desyncEvents;
+}
+
+void SentryErrorReports::SendEvent(const FailureEvent& fields)
+{
+	if (!_running)
+	{
+		return;
+	}
+	const auto level = fields.level == "info" ? SENTRY_LEVEL_INFO : SENTRY_LEVEL_WARNING;
+	auto event = sentry_value_new_message_event(level, "game", fields.message.c_str());
+	auto fingerprint = sentry_value_new_list();
+	for (const auto& part : fields.fingerprint)
+	{
+		sentry_value_append(fingerprint, sentry_value_new_string(part.c_str()));
+	}
+	sentry_value_set_by_key(event, "fingerprint", fingerprint);
+	auto tags = sentry_value_new_object();
+	for (const auto& [key, value] : fields.tags)
+	{
+		sentry_value_set_by_key(tags, key.c_str(), sentry_value_new_string(value.c_str()));
+	}
+	sentry_value_set_by_key(event, "tags", tags);
+	auto extra = sentry_value_new_object();
+	for (const auto& [key, value] : fields.extras)
+	{
+		sentry_value_set_by_key(extra, key.c_str(), sentry_value_new_string(value.c_str()));
+	}
+	sentry_value_set_by_key(event, "extra", extra);
+	sentry_capture_event(event);
 }
 
 void SentryErrorReports::Start()

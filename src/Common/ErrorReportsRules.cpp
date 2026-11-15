@@ -152,4 +152,11 @@ std::string TestErrorMessage(int64_t unixSeconds)
 	return std::format("{} {}", k_TestErrorText, unixSeconds);
 }
 
+CrashEventTexts CrashEventTextsOf(const crash_report::CrashInfo& info)
+{
+	const auto kind = crash_report::KindName(info.kind);
+	return {.type = std::string(info.detail.empty() ? kind : info.detail),
+	        .message = std::string(info.message.empty() ? kind : info.message)};
+}
+
 } // namespace openblack::error_reports

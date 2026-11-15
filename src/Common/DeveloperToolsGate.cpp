@@ -11,6 +11,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Locator.h"
 #include "Online/NetworkSession.h"
@@ -23,30 +24,45 @@ bool NetworkSessionLive()
 	return Locator::networkGame::has_value() && Locator::networkGame::value().InGame();
 }
 
-bool LocalPlayerIsStaff()
+bool LocalPlayerHasEditorClaim()
 {
 	if (!NetworkSessionLive())
 	{
 		return false;
 	}
 	const auto* session = Locator::networkGame::value().Session();
-	return session != nullptr && session->GetJoined().has_value() && session->GetJoined()->staff;
+	return session != nullptr && session->GetJoined().has_value() && session->GetJoined()->editor;
+}
+
+void ShowEditorRefusal()
+{
+	if (!ShowsRefusalLine(NetworkSessionLive(), LocalPlayerHasEditorClaim()) || !Locator::incomingMessageSystem::has_value())
+	{
+		return;
+	}
+	Locator::incomingMessageSystem::value().Add(incoming_messages::Kind::Chat, k_EditorRefusedLine, 0);
+	// The test tools find the words "The player sees the refusal line"
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The player sees the refusal line of the editor and the debug cheats");
+	}
 }
 
 GuiMode CurrentGuiMode()
 {
-	return GuiModeOf(k_Built, NetworkSessionLive(), LocalPlayerIsStaff());
+	return GuiModeOf(k_Built, NetworkSessionLive(), LocalPlayerHasEditorClaim());
 }
 
 bool EditorAllowed()
 {
-	const auto refusal = EditorRefusalOf(k_Built, NetworkSessionLive(), LocalPlayerIsStaff());
+	const auto refusal = EditorRefusalOf(k_Built, NetworkSessionLive(), LocalPlayerHasEditorClaim());
 	if (refusal.has_value())
 	{
 		if (auto logger = spdlog::get("game"))
 		{
 			SPDLOG_LOGGER_WARN(logger, "The game refuses the editor: {}", *refusal);
 		}
+		ShowEditorRefusal();
 		return false;
 	}
 	return true;

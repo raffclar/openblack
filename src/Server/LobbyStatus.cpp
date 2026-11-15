@@ -42,18 +42,9 @@ std::optional<int64_t> AccountId(std::string_view subject) noexcept
 	return value;
 }
 
-lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<const LockstepHost::Seat> seats)
+std::vector<lobby_api::ServerStatusPlayer> StatusPlayers(std::span<const LockstepHost::Seat> seats)
 {
-	lobby_api::ServerStatus status {
-	    .hostname = room.hostname,
-	    .land = room.land,
-	    .gamemode = phase == Phase::Exiting ? "exiting" : (phase == Phase::Playing ? "closedplaying" : "openstaging"),
-	    .locked = false,
-	    .password = false,
-	    .maxplayers = std::clamp(room.maxGods, 1, 32),
-	    .gamever = room.version.substr(0, std::min(room.version.size(), k_MostVersionCharacters)),
-	    .players = {},
-	};
+	std::vector<lobby_api::ServerStatusPlayer> players;
 	for (const auto& seat : seats)
 	{
 		if (seat.state != LockstepHost::SeatState::Taken && seat.state != LockstepHost::SeatState::Away)
@@ -65,9 +56,24 @@ lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<cons
 		{
 			continue;
 		}
-		status.players.push_back({.account = *account, .role = "god", .clan = std::nullopt});
+		players.push_back(
+		    {.account = *account, .role = "god", .clan = std::nullopt, .away = seat.state == LockstepHost::SeatState::Away});
 	}
-	return status;
+	return players;
+}
+
+lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<const LockstepHost::Seat> seats)
+{
+	return {
+	    .hostname = room.hostname,
+	    .land = room.land,
+	    .gamemode = phase == Phase::Exiting ? "exiting" : (phase == Phase::Playing ? "closedplaying" : "openstaging"),
+	    .locked = false,
+	    .password = false,
+	    .maxplayers = std::clamp(room.maxGods, 1, 32),
+	    .gamever = room.version.substr(0, std::min(room.version.size(), k_MostVersionCharacters)),
+	    .players = StatusPlayers(seats),
+	};
 }
 
 namespace

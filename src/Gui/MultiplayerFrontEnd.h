@@ -23,6 +23,7 @@
 
 #include <LobbyApi.h>
 
+#include "Common/ErrorReportsInterface.h"
 #include "LobbyScreenRules.h"
 #include "MultiplayerFrontEndRules.h"
 #include "Online/LobbyNotices.h"
@@ -91,6 +92,9 @@ public:
 		/// Gives the notice of the events of the lobby room: a sound, or a flash of the window (deviation 251). When this
 		/// function is empty, the room gives no notices.
 		std::function<void(const online::lobby::LobbyNotice& notice)> notice;
+		/// Sends an event of a failure to the error reports, for example a map download that failed. When this function
+		/// is empty, the front end sends no events.
+		std::function<void(const error_reports::FailureEvent& event)> report;
 	};
 
 	struct Settings
@@ -352,6 +356,8 @@ private:
 	void FetchRoomMap(std::string sha256);
 	/// Starts the download when the room gets a land of the lobby, and shows the box of a download that failed
 	void FollowMapDownload();
+	/// Writes the failure of the download of the room's map to the game log, and sends it to the error reports
+	void ReportMapFailure();
 	/// Tests: sends each request of a map piece whose wait ended
 	void SendDelayedPieces();
 	/// Follows the session of the network game: the join, a refusal, a loss
@@ -438,6 +444,9 @@ private:
 	std::optional<online::lobby::NoticeSnapshot> _noticeSnapshot;
 	/// The lobby's list did not have the room's land, or the list did not come
 	bool _mapFailed {false};
+	/// The HTTP status and the kind of error of the last piece of a map that the lobby did not give. The answers of the
+	/// lobby hold a copy, so that an answer after the end of the front end writes nothing of the front end.
+	std::shared_ptr<std::pair<int32_t, int32_t>> _lastPieceError {std::make_shared<std::pair<int32_t, int32_t>>(0, 0)};
 	/// Tests: the requests of map pieces that wait for the time of --map-piece-delay-ms, with the time to send each
 	std::vector<std::pair<int64_t, std::function<void()>>> _delayedPieces;
 	std::optional<size_t> _shownLand;

@@ -12,6 +12,8 @@
 #include <cstdint>
 
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace openblack::error_reports
 {
@@ -26,6 +28,18 @@ enum class Role : uint8_t
 };
 
 struct DesyncReport;
+
+/// An event of a failure that the game finds itself, with no player name, account, address or chat
+struct FailureEvent
+{
+	std::string message;
+	/// "warning" or "info"
+	std::string level;
+	/// Sentry puts the events with the same fingerprint into one issue
+	std::vector<std::string> fingerprint;
+	std::vector<std::pair<std::string, std::string>> tags;
+	std::vector<std::pair<std::string, std::string>> extras;
+};
 
 /// What the service tells about itself, for the tools. It never holds the DSN.
 struct ErrorReportsState
@@ -62,6 +76,8 @@ public:
 	[[nodiscard]] virtual ErrorReportsState GetState() const = 0;
 	/// Sends the event of a desync, which DesyncReportRule allowed. Nothing when the service does not send reports.
 	virtual void SendDesync(const DesyncReport& report) = 0;
+	/// Sends an event of a failure that the game found. Nothing when the service does not send reports.
+	virtual void SendEvent(const FailureEvent& event) = 0;
 };
 
 } // namespace openblack::error_reports

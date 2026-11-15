@@ -26,6 +26,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "ECS/EntityHashes.h"
 #include "Online/Backoff.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameOrigin.h"
@@ -86,6 +87,14 @@ struct NetworkSessionSettings
 	std::function<void(uint32_t turn, uint64_t local, uint64_t server)> desynced;
 	/// Gets the names of the parts that differ, in the order of the checksum, when the server's parts came
 	std::function<void(std::span<const std::string> parts)> partedParts;
+	/// Makes the print of these files of the game's folder, when the server names them in its join. The client sends it
+	/// (data.print), and the server refuses a client whose land, scripts or table of objects differ. With none, the
+	/// client sends no print.
+	std::function<game_socket::DataPrint(std::span<const std::string> files)> printData;
+	/// The hash of each entity of these parts of this computer's world now, for the capture of a desync
+	std::function<std::vector<synced_state::PartEntities>(std::span<const std::string> parts)> entities;
+	/// This computer's saved world now, for the capture of a desync. Empty: the client sends no world.
+	std::function<std::vector<uint8_t>()> saveWorld;
 };
 
 /// A step of the start of the game that the front end shows to the player
@@ -214,11 +223,15 @@ public:
 	[[nodiscard]] std::optional<StartEvent> TakeStartEvent();
 	/// The names of the observers that left the game since the last call, in the order that the server told them
 	[[nodiscard]] std::vector<std::string> TakeObserversLeft() { return std::exchange(_observersLeft, {}); }
+	/// The refusals of edits of the editor or of debug cheats that the server sent since the last call
+	[[nodiscard]] uint32_t TakeEditorRefusals() { return std::exchange(_editorRefusals, 0); }
 	/// The creature files of the gods that the server sent before the start, by god slot. An empty file is a god with no
 	/// creature.
 	[[nodiscard]] const std::map<uint8_t, std::vector<uint8_t>>& StartCreatures() const { return _startCreatures; }
 	/// The reason that the server gave for a refusal
 	[[nodiscard]] const std::string& RefusedReason() const { return _refusedReason; }
+	/// The path of the file of the game data that is not the server's, with the refusal "data". Empty otherwise.
+	[[nodiscard]] const std::string& RefusedPath() const { return _refusedPath; }
 	/// The computer loaded the world of the network game. The session tells the server after the start (game.loaded), as
 	/// the turns of a lobby game wait for each god's player to load (deviation 254).
 	void ReportLoaded();
@@ -270,6 +283,8 @@ public:
 	static constexpr int64_t k_HealthLogMicroseconds = 30'000'000;
 	/// The log warns once when this many pings in a row have no answer
 	static constexpr uint32_t k_MissedPingsWarning = 3;
+	/// The longest time that the first resync of a game waits for the capture of the desync. Then the client resyncs.
+	static constexpr int64_t k_CaptureWaitMicroseconds = 50'000'000;
 
 	/// The connection log of the session: each step of the connection, for the "Copy diagnostics" report
 	[[nodiscard]] ConnectionLog& Log() const { return *_log; }
@@ -300,6 +315,14 @@ private:
 	void SendKeptAgain();
 	/// Closes the socket and starts the attempts to come back
 	void ComeBack(bool resync);
+	/// The facts of this computer's world, for the capture of a desync
+	[[nodiscard]] game_socket::SyncFacts OwnFacts(uint32_t turn) const;
+	/// The frames of the capture of a desync from the server
+	void CaptureFrame(const game_socket::Frame& frame);
+	/// The world of this computer did the turn of the capture: it sends the blocks of its entities and its world
+	void Capture(uint32_t turn);
+	/// The capture ended or cannot be: the resync that waited starts now
+	void ResyncAfterCapture(std::string_view why);
 	/// After the client came back from a part of the worlds: sends the hash of each part of its world at the turn of the
 	/// part, once
 	void SendPartedParts();
@@ -322,6 +345,7 @@ private:
 	std::vector<StartEvent> _startEvents;
 	std::vector<game_socket::RoomChat> _roomChat;
 	std::vector<std::string> _observersLeft;
+	uint32_t _editorRefusals {0};
 	/// The computer loaded the world (ReportLoaded)
 	bool _loaded {false};
 	/// The session sent game.loaded on its socket
@@ -339,6 +363,7 @@ private:
 	std::map<uint8_t, float> _startAlignments;
 	bool _ownGodPlaysForClan {false};
 	std::string _refusedReason;
+	std::string _refusedPath;
 
 	std::map<uint32_t, turn_codec::TurnBundle> _turns;
 	TurnPlayout _playout;
@@ -352,6 +377,24 @@ private:
 	std::map<uint32_t, uint64_t> _serverChecksums;
 	Compares _compares;
 	ResyncRule _resync;
+	/// The capture of the first desync of the game: the turn and the parts that the server asked for, and the hashes of
+	/// the entities of the turn when this computer did it
+	struct CaptureState
+	{
+		std::optional<uint32_t> turn;
+		std::vector<std::string> parts;
+		std::vector<synced_state::PartEntities> entities;
+		bool sent {false};
+	};
+	std::optional<CaptureState> _capture;
+	/// The game had its capture
+	bool _captured {false};
+	/// The time at which the resync that waits for the capture starts, at the latest
+	std::optional<int64_t> _resyncAt;
+	/// The hash and the hints of the print of the game data that the client sent
+	uint64_t _dataHash {0};
+	std::string _dataPatch;
+	std::string _dataLanguage;
 
 	ReconnectBackoff _backoff {std::chrono::milliseconds(250), std::chrono::milliseconds(5000)};
 	int64_t _lostAt {0};

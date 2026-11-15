@@ -199,6 +199,8 @@ struct Arguments
 	bool skipLogos {false};
 	/// Developers: throw a test error after the start, to test the error reports
 	bool sentryTestError {false};
+	/// Developers: stop with a trap after the start, to test the crash reports
+	bool sentryTestTrap {false};
 	/// Play the logo effect of the first game, a run of a developer or a tool too
 	bool logoEffect {false};
 	/// Start a new game rather than continue from the save on exit
@@ -368,6 +370,8 @@ public:
 	void FollowGameEnd();
 	/// A human of another computer left the network game: the advisors can remark on it, and a box tells the name
 	void TellLeaves();
+	/// The game server refused edits of the editor or debug cheats of this player: the player sees the refusal line
+	void TellEditorRefusals();
 	/// The player asks to leave the network game: the end box asks the question to leave
 	void AskToLeaveNetworkGame();
 	/// Exit Online Game of the menu: the question to leave, or a leave at once when the god of the player is out

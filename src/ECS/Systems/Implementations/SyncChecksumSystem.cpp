@@ -12,8 +12,10 @@
 #include "SyncChecksumSystem.h"
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -25,6 +27,8 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/GameRandom.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/EntityHashes.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/SyncedState.h"
@@ -267,3 +271,83 @@ void SyncChecksumSystem::DumpPart(uint32_t turn, std::string_view reason, uint32
 	}
 }
 #endif
+
+std::vector<openblack::synced_state::PartEntities> SyncChecksumSystem::EntitiesOfParts(std::span<const std::string> parts) const
+{
+	using synced_state::EntityHash;
+	std::vector<synced_state::PartEntities> result;
+	if (!Locator::entitiesRegistry::has_value() || parts.empty())
+	{
+		return result;
+	}
+	const auto wanted = parts.first(std::min(parts.size(), synced_state::k_MostCapturedParts));
+	const auto& registry = Locator::entitiesRegistry::value().Underlying();
+	// The hash of each entity in each part that the caller asks for, and the names of the components of each entity in the
+	// order that the hash found them
+	std::map<std::string, std::map<uint32_t, uint64_t>, std::less<>> hashes;
+	for (const auto& part : wanted)
+	{
+		hashes.try_emplace(part);
+	}
+	std::set<std::string, std::less<>> names;
+	std::map<uint32_t, std::vector<std::string_view>> components;
+	const ecs::reflection::RowVisitor visit = [&](std::string_view component, entt::entity entity,
+	                                              [[maybe_unused]] std::string_view field, std::span<const uint8_t> bytes) {
+		const auto number = entt::to_integral(entity);
+		auto& kept = components[number];
+		if (kept.empty() || kept.back() != component)
+		{
+			auto name = names.find(component);
+			if (name == names.end())
+			{
+				name = names.emplace(component).first;
+			}
+			kept.emplace_back(*name);
+		}
+		if (const auto found = hashes.find(component); found != hashes.end())
+		{
+			auto& hash = found->second.try_emplace(number, synced_state::k_EntityHashStart).first->second;
+			hash = synced_state::MixHash(hash, bytes);
+		}
+	};
+	// The visitor gets the rows in order on this thread
+	[[maybe_unused]] const auto hash =
+	    synced_state::HashOf(registry, *_reflection, synced_state::PresentationParts(), false, visit, nullptr);
+	// The list of the entities: each place of the registry's list, with the entity in it and whether it is in use
+	if (const auto found = hashes.find(std::string_view("entities")); found != hashes.end())
+	{
+		if (const auto* entities = registry.storage<entt::entity>(); entities != nullptr)
+		{
+			for (size_t i = 0; i < entities->size(); ++i)
+			{
+				const std::array<uint64_t, 2> values {i, i < entities->free_list() ? 1u : 0u};
+				const auto number = entt::to_integral(entities->data()[i]);
+				found->second[number] =
+				    synced_state::MixHash(synced_state::k_EntityHashStart,
+				                          {reinterpret_cast<const uint8_t*>(values.data()), values.size() * sizeof(uint64_t)});
+			}
+		}
+	}
+	for (const auto& part : wanted)
+	{
+		auto& out = result.emplace_back(synced_state::PartEntities {.part = part, .entities = {}});
+		for (const auto& [number, value] : hashes.find(part)->second)
+		{
+			EntityHash entry {.entity = number, .hash = value, .kind = {}, .position = std::nullopt};
+			if (const auto kept = components.find(number); kept != components.end())
+			{
+				entry.kind = synced_state::KindOf(kept->second);
+			}
+			const auto entity = static_cast<entt::entity>(number);
+			if (registry.valid(entity))
+			{
+				if (const auto* transform = registry.try_get<ecs::components::Transform>(entity); transform != nullptr)
+				{
+					entry.position = std::array<float, 3> {transform->position.x, transform->position.y, transform->position.z};
+				}
+			}
+			out.entities.push_back(std::move(entry));
+		}
+	}
+	return result;
+}

@@ -208,8 +208,11 @@ int main(int argc, char* argv[])
 		("snapshot-folder", "The folder of the snapshots of the game server: the shared world, on the server's own disk, for a restart after a crash.", cxxopts::value<std::string>()->default_value(std::string(openblack::server::snapshots::k_DefaultFolder)))
 		("snapshot-every", "The turns between two snapshots of the game server (10 turns a second). 0 stops the snapshots.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::snapshots::k_DefaultEveryTurns)))
 		("snapshot-keep", "The snapshots that the folder keeps, at least 1.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::snapshots::k_DefaultKeep)))
+		("desync-folder", "The folder of the records of the desyncs that the game server captures: the two worlds of the turn and the facts, on the server's own disk.", cxxopts::value<std::string>()->default_value(std::string(openblack::server::desync_bundle::k_DefaultFolder)))
+		("desync-keep-days", "The days that the game server keeps the record of a desync.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::desync_bundle::k_DefaultKeepDays)))
 		("resume-snapshot", "At its start, the game server continues the game of the newest snapshot that reads. With no snapshot, it starts a new game.")
 		("come-back-seconds", "How long a god's player can be away before the god is defeated.", cxxopts::value<uint32_t>()->default_value("300"))
+		("all-gone-seconds", "How long the gods wait when the players of all the gods lost the connection. Then each away god is defeated and the game ends.", cxxopts::value<uint32_t>()->default_value("10"))
 		("lobby-id", "The game of one lobby on a server of the pool: the id of the lobby, which each join ticket must name. It needs --expect-members and --game-id. The time limit is then 360 minutes (6 hours) at most, and the server ends after its game.", cxxopts::value<std::string>())
 		("expect-members", "With --lobby-id, the JSON file of the members of the lobby: {\"members\": [{\"account\": \"101\", \"role\": \"god\", \"slot\": 0}, ...]}. The server takes only these accounts, each in its role and god slot.", cxxopts::value<std::string>())
 		("game-id", "With --lobby-id, the id of the game at the lobby, which the log and the results of the game name.", cxxopts::value<std::string>())
@@ -503,6 +506,7 @@ int main(int argc, char* argv[])
 			network.minGods = result.count("min-gods") == 0 && result.count("gods") != 0 ? result["gods"].as<uint32_t>()
 			                                                                             : result["min-gods"].as<uint32_t>();
 			network.comeBackSeconds = result["come-back-seconds"].as<uint32_t>();
+			network.allGoneSeconds = result["all-gone-seconds"].as<uint32_t>();
 			network.testCommands = result.count("test-commands") != 0;
 			if (result.count("lobby-api") != 0)
 			{
@@ -531,6 +535,11 @@ int main(int argc, char* argv[])
 			    .everyTurns = result["snapshot-every"].as<uint32_t>(),
 			    .keep = result["snapshot-keep"].as<uint32_t>(),
 			    .resume = result.count("resume-snapshot") != 0,
+			};
+			network.desyncRecords = openblack::server::desync_bundle::Settings {
+			    .folder = std::filesystem::path(result["desync-folder"].as<std::string>()),
+			    .keepDays = result["desync-keep-days"].as<uint32_t>(),
+			    .mostRecords = openblack::server::desync_bundle::k_MostRecords,
 			};
 			if (result.count("lobby-test-ca") != 0)
 			{

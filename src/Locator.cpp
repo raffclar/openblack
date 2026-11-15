@@ -40,7 +40,9 @@
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
-#if defined(OPENBLACK_SENTRY)
+#if defined(OPENBLACK_SENTRY) && defined(__EMSCRIPTEN__)
+#include "Common/BrowserErrorReports.h"
+#elif defined(OPENBLACK_SENTRY)
 #include "Common/SentryErrorReports.h"
 #endif
 #include "ECS/Archetypes/PlayerArchetype.h"
@@ -899,8 +901,8 @@ void openblack::InitializePlayerInput(bool systemSaysWheel)
 void openblack::InitializeOnlineAndTools(const player_profiles::Store& profiles)
 {
 	InitializeOnline(profiles);
-	// Every build has the editor: a staff player opens it in a network game. Outside a network game it is a developer
-	// tool.
+	// Every build has the editor: a player with the editor claim opens it in a network game. Outside a network game it is a
+	// developer tool.
 	Locator::editorSystem::emplace<EditorSystem>();
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The record of the creature minds that the developer view watches
@@ -1012,6 +1014,15 @@ void openblack::InitializeErrorReports([[maybe_unused]] error_reports::Role role
 	using namespace error_reports;
 	const char* environment = std::getenv("SENTRY_DSN");
 	auto dsn = ChooseDsn(environment != nullptr ? std::optional<std::string_view>(environment) : std::nullopt, BuildDsn());
+#if defined(__EMSCRIPTEN__)
+	// The page sends the reports with the game log that it keeps, thus the web game gives no log file
+	Locator::errorReports::emplace<BrowserErrorReports>(BrowserReportSettings {
+	    .dsn = dsn.value_or(std::string {}),
+	    .release = ReleaseName(build_version::Semantic(), build_version::Commit()),
+	    .environment = std::string(EnvironmentName(developer_tools::k_Built)),
+	    .role = role,
+	});
+#else
 	Locator::errorReports::emplace<SentryErrorReports>(SentrySettings {
 	    .dsn = dsn.value_or(std::string {}),
 	    .release = ReleaseName(build_version::Semantic(), build_version::Commit()),
@@ -1021,6 +1032,7 @@ void openblack::InitializeErrorReports([[maybe_unused]] error_reports::Role role
 	    .databaseFolder = DatabaseFolder(logFile),
 	    .homeFolder = HomeFolder(),
 	});
+#endif
 #endif
 }
 

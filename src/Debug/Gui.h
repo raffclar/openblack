@@ -105,8 +105,8 @@ private:
 	bool _followsDrivenPointer = false;
 	/// The mouse events that the debug windows take now
 	WindowMouse _windowMouse = WindowMouse::Player;
-	/// What the debug windows showed last frame. In a network game only a staff player has the editor, and the other
-	/// windows and the menu do not show and take no input. A build without the developer tools has only the editor.
+	/// What the debug windows showed last frame. In a network game only a player with the editor claim has the editor, and the
+	/// other windows and the menu do not show and take no input. A build without the developer tools has only the editor.
 	developer_tools::GuiMode _mode =
 	    developer_tools::k_Built ? developer_tools::GuiMode::Full : developer_tools::GuiMode::Dormant;
 	/// Closes the editor when what the windows show changes, and tells the log

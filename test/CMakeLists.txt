@@ -2092,6 +2092,14 @@ if (NODE_EXECUTABLE)
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_exit.test.js
   )
+  add_test(NAME test_web_launcher_reports
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_reports.test.js
+  )
+  add_test(NAME test_web_launcher_assets
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_assets.test.js
+  )
 endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
 openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
@@ -2617,4 +2625,7 @@ openblack_setup_and_add_test(test_lobby_room online/test_lobby_room.cpp)
 openblack_setup_and_add_test(test_lobby_screen_rules gui/test_lobby_screen_rules.cpp)
 openblack_setup_and_add_test(test_camera_jump test_camera_jump.cpp)
 openblack_setup_and_add_test(test_desync_reports test_desync_reports.cpp)
+openblack_setup_and_add_test(test_game_data_print online/test_game_data_print.cpp)
+openblack_setup_and_add_test(test_entity_hashes test_entity_hashes.cpp)
+openblack_setup_and_add_test(test_desync_capture online/test_desync_capture.cpp)
 openblack_setup_and_add_test(test_main_lobby_chat gui/test_main_lobby_chat.cpp)

@@ -27,6 +27,8 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Online/GameDataPrint.h"
+#include "Server/DesyncCapture.h"
 #include "Server/GameLifetime.h"
 #include "Server/LobbyGame.h"
 #include "Server/ServerSnapshots.h"
@@ -64,6 +66,9 @@ struct HostSettings
 	uint8_t godSlots {k_DefaultGodSlots};
 	/// How long a god's player can be away before the god is defeated (user decision MP-Q6: 5 minutes, set by the server)
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
+	/// How long the gods wait when the players of all the gods lost the connection (user, 2026-11-14: 10 seconds). Then
+	/// each away god is defeated and the game ends. The longer time to come back holds while a god's player is connected.
+	int64_t allGoneMicroseconds {10LL * 1'000'000};
 	/// The turns that the server keeps to send again to a player who comes back: 5 minutes of turns, and some more
 	uint32_t keptTurns {3200};
 	/// Tests: the commands of the test tools (player_commands::CreatureFightCheat) go into the turns. Without this, the
@@ -178,8 +183,8 @@ public:
 		uint32_t blocksAgain {0};
 		/// The blocks whose commands the server refused because the commands of the god did not fit in the turn
 		uint32_t refusedBlocks {0};
-		/// The join ticket of the player has the staff claim. A seat that a snapshot gave back has no staff claim.
-		bool staff {false};
+		/// The join ticket of the player has the editor claim. A seat that a snapshot gave back has no editor claim.
+		bool editor {false};
 	};
 
 	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
@@ -196,8 +201,8 @@ public:
 		std::string name;
 		/// The number of the observer in the game, from 1. The turns stamp the blocks of the observer with it.
 		uint8_t number {0};
-		/// The join ticket of the observer has the staff claim
-		bool staff {false};
+		/// The join ticket of the observer has the editor claim
+		bool editor {false};
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
@@ -248,6 +253,18 @@ public:
 	/// of the turn at which its world parted
 	using PartedListener = std::function<void(uint8_t seat, std::span<const std::string> parts)>;
 	void SetPartedListener(PartedListener listener) { _partedListener = std::move(listener); }
+	/// The print of the game data that the server's world read, before a client joins. The room sends the names of its
+	/// files in its join, and refuses a player whose file of a land, of a script or of the table of objects differs, with
+	/// "data". With no print, the room makes no check.
+	void SetDataPrint(std::vector<online::game_data::FilePrint> print) { _dataPrint = std::move(print); }
+	/// Starts the capture of the first desync of each god (DesyncCapture), before a client joins: the server's facts,
+	/// the hash of each entity of the server's world, and the end of each capture. The server's world comes from the
+	/// world state.
+	void SetCapture(game_socket::SyncFacts facts,
+	                std::function<std::vector<synced_state::PartEntities>(std::span<const std::string> parts)> entities,
+	                std::function<void(CaptureRecord record)> finished);
+	/// The game ends: each capture ends with what it has
+	void FinishCaptures();
 	/// The account ids that the lobby banned from the server. Before the start, a banned god leaves the room at once with
 	/// "kicked", and the room refuses the join of a banned god. After the start, a ban changes nothing (deviation 146).
 	void SetBans(std::set<int64_t> accounts);
@@ -307,8 +324,8 @@ public:
 	/// The blocks of commands that the server did not accept: before the start, a command that only the server sends, or
 	/// a command that an observer does not send
 	[[nodiscard]] uint32_t RefusedBlocks() const { return _refusedBlocks; }
-	/// The edits of the editor and the debug cheats that the server refused because their player has no staff claim
-	[[nodiscard]] uint32_t RefusedStaffCommands() const { return _refusedStaffCommands; }
+	/// The edits of the editor and the debug cheats that the server refused because their player has no editor claim
+	[[nodiscard]] uint32_t RefusedEditorCommands() const { return _refusedEditorCommands; }
 	/// The numbers of the observers that the server gave and whose leave is not in a turn yet, in order
 	[[nodiscard]] std::vector<uint8_t> ObserverNumbers() const;
 	/// One line for each god slot that had a player: the checksums compared and the same ones
@@ -333,9 +350,11 @@ private:
 		/// The build id that the client gave in its join, or in a text frame that the server could not read. Empty when
 		/// the client gave none.
 		std::string build;
-		/// The join ticket of the player has the staff claim: the server takes the edits of the editor and the debug cheats
+		/// The join ticket of the player has the editor claim: the server takes the edits of the editor and the debug cheats
 		/// of the player
-		bool staff {false};
+		bool editor {false};
+		/// The client sent the print of its game data. The server takes only the first.
+		bool printed {false};
 	};
 
 	/// The most "sync.parts" frames of one connection that the server answers
@@ -357,6 +376,13 @@ private:
 	/// A client sent the hash of each part of its world at the turn at which its world parted: the log names the parts
 	/// that differ from the server's, and the client gets the server's parts
 	void PartsFrom(ConnectionId connection, Peer& peer, const game_socket::SyncParts& parts);
+	/// A client sent the print of its game data: the server compares it with its own, and refuses a client whose file of
+	/// a land, of a script or of the table of objects differs
+	void DataPrintFrom(ConnectionId connection, Peer& peer, const game_socket::DataPrint& print);
+	/// The frames of a capture of a desync from the client of a god
+	void CaptureFrame(const Peer& peer, const game_socket::Frame& frame);
+	/// The names of the files of the server's print, for the join
+	[[nodiscard]] std::vector<std::string> DataFiles() const;
 	/// The name of a connection for the log: the name of the player, or "not joined"
 	[[nodiscard]] std::string WhoIs(ConnectionId connection) const;
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
@@ -367,7 +393,7 @@ private:
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
 	/// Gives a new session to an observer on a connection, with the number of the observer, and returns its secret. With
 	/// no secrets, the observer cannot come back.
-	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool staff);
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool editor);
 	/// A line of the room's chat from a player: it goes to every other player in a room on the local network, until the
 	/// start
 	void ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat);
@@ -383,12 +409,13 @@ private:
 	void ObserverGone(uint8_t number);
 	/// The lowest number that no observer has, none when every number is taken
 	[[nodiscard]] std::optional<uint8_t> FreeObserverNumber() const;
-	/// Removes the edits of the editor and the debug cheats of a player with no staff claim, and logs the refusal
-	void RefuseStaffCommands(const Peer& peer, std::vector<player_commands::Action>& actions);
+	/// Removes the edits of the editor and the debug cheats of a player with no editor claim, logs the refusal, and sends
+	/// the reason to the connection of the player
+	void RefuseEditorCommands(ConnectionId connection, const Peer& peer, std::vector<player_commands::Action>& actions);
 	/// Logs each debug cheat that the server takes into its turns, so that the log of the server tells each change
 	void LogDebugCheats(const Peer& peer, const std::vector<player_commands::Action>& actions);
 	/// Takes a block of commands from an observer into the next turn
-	void ObserverBlock(const Peer& peer, turn_codec::CommandBlock& block);
+	void ObserverBlock(ConnectionId connection, const Peer& peer, turn_codec::CommandBlock& block);
 	/// The blocks of the server that tell the worlds of the god of the observers and of the observers that came and left
 	void AddObserverBlocks(turn_codec::TurnBundle& bundle, uint32_t turn);
 	/// The observers that are in the game: each observer that is connected, and each observer that can come back
@@ -410,7 +437,7 @@ private:
 	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
 	bool SendWorld(ConnectionId connection);
 	/// Refuses a connection with the short reason that the client gets. The log also gets the detail.
-	void Refuse(ConnectionId connection, std::string_view reason, std::string_view detail = {});
+	void Refuse(ConnectionId connection, std::string_view reason, std::string_view detail = {}, std::string_view path = {});
 	/// Takes the players of the accounts that the lobby banned out of the started game
 	void RemoveBannedFromGame();
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
@@ -483,6 +510,11 @@ private:
 	/// The alignments that the gods sent with their creature files, by god slot
 	std::map<uint8_t, float> _startAlignments;
 	bool _pausedBefore {false};
+	/// When the last god's player of this process went and a god started to wait for its player. None while a god's
+	/// player is connected.
+	std::optional<int64_t> _allGoneSince;
+	/// A god's player connected to this process after its start or its restore
+	bool _godConnectedHere {false};
 	/// Tools, a room with no human god: the world turns from the time that as many observers as the room waits for joined
 	bool _observersJoined {false};
 	/// Tools, a room with no human god: at least one observer joined, so a room with no observer left is over
@@ -527,12 +559,14 @@ private:
 	/// The clients' checksums of the turns that the server did not do yet, by seat
 	std::map<std::pair<uint8_t, uint32_t>, uint64_t> _early;
 	uint32_t _refusedBlocks {0};
-	uint32_t _refusedStaffCommands {0};
+	uint32_t _refusedEditorCommands {0};
 	WorldState _worldState;
 	PartListener _partListener;
 	PartsOfTurn _partsOfTurn;
 	DesyncListener _desyncListener;
 	PartedListener _partedListener;
+	std::unique_ptr<DesyncCapture> _capture;
+	std::vector<online::game_data::FilePrint> _dataPrint;
 	TurnJournal _turnJournal;
 	/// The game continues from a snapshot of the server
 	bool _restored {false};

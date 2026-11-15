@@ -16,6 +16,7 @@
 #include <string>
 #include <string_view>
 
+#include "CrashReport.h"
 #include "ErrorReportsInterface.h"
 
 /// The rules of the error and crash reports, with no state, so that the tests can check them with no Sentry
@@ -57,5 +58,16 @@ constexpr std::string_view k_DatabaseFolderName = ".sentry-native";
 [[nodiscard]] std::string HideHomeFolderInText(std::string_view text, std::string_view homeFolder, bool windows);
 /// The message of the test error: the start text and the time in seconds since 1970
 [[nodiscard]] std::string TestErrorMessage(int64_t unixSeconds);
+
+/// The type and the message of the exception of a crash event
+struct CrashEventTexts
+{
+	std::string type;
+	std::string message;
+};
+
+/// The texts of the event of a crash. The type is the detail of the crash, such as the type of the exception, or else
+/// the name of the kind. The message is the message of the crash, or else the name of the kind.
+[[nodiscard]] CrashEventTexts CrashEventTextsOf(const crash_report::CrashInfo& info);
 
 } // namespace openblack::error_reports

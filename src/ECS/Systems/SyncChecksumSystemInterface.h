@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -28,6 +29,7 @@
 namespace openblack::synced_state
 {
 struct Hash;
+struct PartEntities;
 } // namespace openblack::synced_state
 
 namespace openblack::ecs::systems
@@ -74,6 +76,10 @@ public:
 	/// draws and the music as parts too. Empty when the system does not keep the turn. The log of a network game compares
 	/// the parts of two computers at the turn at which their worlds parted.
 	[[nodiscard]] virtual std::vector<std::pair<std::string, uint64_t>> PartsOfTurn(uint32_t turn) const = 0;
+	/// The hash of each entity in these parts of the synced world now, for at most synced_state::k_MostCapturedParts
+	/// parts. A part that has no entities, such as the synced seed, gives an empty list. A network game hashes the
+	/// parts that differ entity by entity at a turn that the server picks.
+	[[nodiscard]] virtual std::vector<synced_state::PartEntities> EntitiesOfParts(std::span<const std::string> parts) const = 0;
 	/// A function that gets the checksum of each turn as the system makes it, as the dedicated server logs it. An empty
 	/// function removes it.
 	virtual void SetTurnListener(std::function<void(const TurnChecksum&)> listener) = 0;

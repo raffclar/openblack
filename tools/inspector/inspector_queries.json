@@ -2211,7 +2211,7 @@
   "query": "creatures.route"
  },
  {
-  "description": "The editor of this computer: whether it is open, whether a network game is live, whether the player of this computer is staff, and the debug cheats of that player",
+  "description": "The editor of this computer: whether it is open, whether a network game is live, whether the player of this computer has the editor claim, and the debug cheats of that player",
   "kind": "object",
   "parameters": [],
   "query": "editor.state"
@@ -2230,7 +2230,7 @@
   "query": "editor.show_tab"
  },
  {
-  "description": "Sends an edit of the editor as a command of the turns, as the editor of a network game sends it: each computer does it at the same turn, and the game server takes it only from a staff player. force sends it also when the editor of this computer is refused, so that a test sees the refusal of the server.",
+  "description": "Sends an edit of the editor as a command of the turns, as the editor of a network game sends it: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused, so that a test sees the refusal of the server.",
   "kind": "object",
   "parameters": [
    {
@@ -2274,7 +2274,7 @@
   "writes": true
  },
  {
-  "description": "Sends a debug cheat of the player of this computer as a command of the turns, as the cheats tab of the editor does. The game server takes it only from a staff player. force sends it also when the editor of this computer is refused.",
+  "description": "Sends a debug cheat of the player of this computer as a command of the turns, as the cheats tab of the editor does. The game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
   "kind": "object",
   "parameters": [
    {

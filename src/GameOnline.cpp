@@ -33,6 +33,7 @@
 #include "Commands/PlayerCommands.h"
 #include "Common/BuildVersion.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Common/ErrorReportsInterface.h"
 #include "Game.h"
 #include "Sound/ClipSounds.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -184,12 +185,17 @@ void Game::UpdateOnline()
 				}
 			}
 			// After the last try to come back, the box tells the player that the connection to the game is lost
+			const auto dataRefusal = session != nullptr ? online::DataRefusalText(session->GetEnd(), session->RefusedReason(),
+			                                                                      session->RefusedPath())
+			                                            : std::nullopt;
 			if (_connectionLost.Update({
 			        .hasSession = session != nullptr,
 			        .started = session != nullptr && session->GetStart().has_value(),
 			        .state = session != nullptr ? session->GetState() : online::NetworkSession::State::Idle,
 			        .end = session != nullptr ? session->GetEnd() : online::NetworkSession::End::None,
 			        .toolRun = toolRun,
+			        .joinedFromCommandLine = _joinedFromCommandLine,
+			        .dataRefused = dataRefusal.has_value(),
 			    }))
 			{
 				// The server took the player out of the game for the lobby's host (row 241)
@@ -198,6 +204,14 @@ void Game::UpdateOnline()
 					Locator::gameInterface::value().ShowKicked(gui::ToUtf16(network.RoomName()));
 					SPDLOG_LOGGER_INFO(spdlog::get("game"),
 					                   "The host kicked the player from the network game: the box tells the player");
+				}
+				// A file of the game data is not the server's: the box names the file (deviation 266)
+				else if (dataRefusal.has_value())
+				{
+					Locator::gameInterface::value().ShowDataRefused(gui::ToUtf16(*dataRefusal));
+					SPDLOG_LOGGER_INFO(spdlog::get("game"),
+					                   "The game server refused the game data of the player: the box names {}",
+					                   session->RefusedPath());
 				}
 				else
 				{
@@ -277,6 +291,13 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	    .lobbyRoom = Locator::lobbyRoom::has_value() ? &Locator::lobbyRoom::value() : nullptr,
 	    .nowMs = {},
 	    .notice = gui::GiveLobbyNotice,
+	    .report =
+	        [](const error_reports::FailureEvent& event) {
+		        if (Locator::errorReports::has_value())
+		        {
+			        Locator::errorReports::value().SendEvent(event);
+		        }
+	        },
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
@@ -581,6 +602,15 @@ void Game::TellLeaves()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{} left the network game{}", name,
 		                   notice.box ? ": the box tells the players" : "");
 	}
+}
+
+void Game::TellEditorRefusals()
+{
+	if (!Locator::networkGame::has_value() || Locator::networkGame::value().TakeEditorRefusals() == 0)
+	{
+		return;
+	}
+	developer_tools::ShowEditorRefusal();
 }
 
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)

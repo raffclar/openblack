@@ -53,7 +53,7 @@ namespace
 	{
 		return std::nullopt;
 	}
-	return QueryResult::Error("the editor is refused: only a staff player opens the editor in a network game");
+	return QueryResult::Error("the editor is refused: only a player with the editor claim opens the editor in a network game");
 }
 
 } // namespace
@@ -65,7 +65,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("editor");
 	provider->Add(Query("state", "The editor of this computer: whether it is open, whether a network game is live, whether "
-	                             "the player of this computer is staff, and the debug cheats of that player"),
+	                             "the player of this computer has the editor claim, and the debug cheats of that player"),
 	              [](const QueryContext& /*context*/) {
 		              Json cheats = Json::array();
 		              const auto own = editor::OwnDebugCheats();
@@ -80,7 +80,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		              return QueryResult::Value({
 		                  {"open", Locator::editorSystem::has_value() && Locator::editorSystem::value().IsOpen()},
 		                  {"network", developer_tools::NetworkSessionLive()},
-		                  {"staff", developer_tools::LocalPlayerIsStaff()},
+		                  {"editor", developer_tools::LocalPlayerHasEditorClaim()},
 		                  {"cheats", std::move(cheats)},
 		              });
 	              });
@@ -108,7 +108,8 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	auto edit = Query(
 	    "network_edit",
 	    "Sends an edit of the editor as a command of the turns, as the editor of a network game sends it: each computer "
-	    "does it at the same turn, and the game server takes it only from a staff player. force sends it also when the "
+	    "does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also "
+	    "when the "
 	    "editor of this computer is refused, so that a test sees the refusal of the server.",
 	    {{.name = "kind", .type = "string", .description = "move, turn, place or remove", .required = true},
 	     {.name = "id", .type = "integer", .description = "The thing of a move, a turn or a removal", .required = false},
@@ -178,7 +179,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	auto cheat =
 	    Query("cheat",
 	          "Sends a debug cheat of the player of this computer as a command of the turns, as the cheats tab "
-	          "of the editor does. The game server takes it only from a staff player. force sends it also when "
+	          "of the editor does. The game server takes it only from a player with the editor claim. force sends it also when "
 	          "the editor of this computer is refused.",
 	          {{.name = "cheat", .type = "string", .description = "The name of the cheat", .required = true},
 	           {.name = "on", .type = "boolean", .description = "On (the default) or off", .required = false},

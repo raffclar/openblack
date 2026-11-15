@@ -52,6 +52,12 @@ char CodePageByte(char16_t character)
 std::u16string_view WithoutStaffCode(std::u16string_view text) noexcept
 {
 	constexpr size_t k_MostCodeCharacters = 19;
+	constexpr std::u16string_view k_StaffCode = u"!SGRB";
+	// Only a line that starts with the full staff code loses a code. Every other line goes out whole.
+	if (!text.starts_with(k_StaffCode))
+	{
+		return text;
+	}
 	size_t at = 0;
 	const auto next = [&text, &at]() { return at < text.size() ? text[at] : u'\0'; };
 	for (const auto letter : {u'!', u'S', u'G', u'R', u'B', u'O'})
