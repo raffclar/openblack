@@ -14,6 +14,7 @@
 #include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
@@ -36,6 +37,10 @@ namespace
 
 constexpr glm::vec3 k_Here {105.0f, 0.0f, 105.0f};
 constexpr float k_Combustion = 100.0f;
+/// The heat capacity of a field's crop row, which the fire must not use
+constexpr float k_CropCapacity = 100.0f;
+/// The heat capacity of a field's row of the buildings' table
+constexpr float k_FieldCapacity = 20.0f;
 
 /// The fire's test of what takes it: a burn that reaches an object, and the heat of the fires near a held thing.
 class FireReceivers: public ::testing::Test
@@ -46,7 +51,9 @@ protected:
 		Locator::entitiesRegistry::emplace<ecs::Registry>();
 		Locator::entitiesMap::emplace<ecs::MapProduction>();
 		_info = std::make_unique<InfoConstants>();
-		for (GObjectInfo* row : {static_cast<GObjectInfo*>(&_info->fieldType.at(0)),
+		auto& fieldRow = _info->abode.at(static_cast<size_t>(AbodeInfo::CelticField));
+		fieldRow.abodeNumber = AbodeNumber::Field;
+		for (GObjectInfo* row : {static_cast<GObjectInfo*>(&fieldRow),
 		                         static_cast<GObjectInfo*>(&_info->pot.at(static_cast<size_t>(PotInfo::FoodPot))),
 		                         static_cast<GObjectInfo*>(&_info->fishFarm)})
 		{
@@ -54,6 +61,12 @@ protected:
 			row->heatCapacity = 1.0f;
 			row->defenceMultiplierBurn = 1.0f;
 		}
+		fieldRow.heatCapacity = k_FieldCapacity;
+		// The crop row has other numbers: a field burns by its row of the buildings' table
+		auto& crop = _info->fieldType.at(0);
+		crop.combustionTemperature = 2.0f * k_Combustion;
+		crop.heatCapacity = k_CropCapacity;
+		crop.defenceMultiplierBurn = 0.0f;
 		Locator::infoConstants::emplace(*_info);
 		Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	}
@@ -84,6 +97,16 @@ protected:
 		registry.Assign<FireGroup>(object, FireGroup {.members = {object}, .firemen = {}});
 	}
 
+	/// A field of no tribe: its row of the buildings' table is the Celtic field
+	static entt::entity MadeField()
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto entity = Made();
+		registry.Assign<Abode>(entity, Abode {.type = AbodeNumber::Field, .townId = 0, .foodAmount = 0, .woodAmount = 0});
+		registry.Assign<Field>(entity);
+		return entity;
+	}
+
 	static float TemperatureOf(entt::entity object) { return Locator::fireSystem::value().GetTemperature(object); }
 
 	std::unique_ptr<InfoConstants> _info;
@@ -93,8 +116,7 @@ TEST_F(FireReceivers, ABurnHeatsABurningFieldThatHasNoFood)
 {
 	// A field with no food does not take the burn of a fire, but a burn reaches its fire all the same
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto field = Made();
-	registry.Assign<Field>(field);
+	const auto field = MadeField();
 	Burn(field, 150.0f);
 	ASSERT_FALSE(ecs::world_objects::TakesEffect(field, 1000.0f, 0.0f));
 	Locator::fireSystem::value().ApplyBurn(field, 1000.0f, std::nullopt);
@@ -115,8 +137,8 @@ TEST_F(FireReceivers, WaterCoolsABurningPotThatHoldsNothing)
 TEST_F(FireReceivers, ABurnSetsAlightOnlyWhatTakesTheBurnOfAFire)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto field = Made();
-	auto& crop = registry.Assign<Field>(field).crop;
+	const auto field = MadeField();
+	auto& crop = registry.Get<Field>(field).crop;
 	auto& fires = Locator::fireSystem::value();
 	// No food: no fire, however hot the burn
 	fires.ApplyBurn(field, 1000.0f, std::nullopt);
@@ -138,8 +160,8 @@ TEST_F(FireReceivers, AFireHeatsAHeldThingOnlyWhenItTakesTheBurnOfAFire)
 	Burn(farm, 2.0f * k_Combustion);
 	Locator::entitiesMap::value().Sync();
 	// The hand holds a field that burns a little: a field with no food does not take the burn of a fire
-	const auto held = Made();
-	auto& crop = registry.Assign<Field>(held).crop;
+	const auto held = MadeField();
+	auto& crop = registry.Get<Field>(held).crop;
 	registry.Assign<InHand>(held);
 	Burn(held, fire::k_AmbientTemperature);
 	auto& fires = Locator::fireSystem::value();
@@ -151,6 +173,20 @@ TEST_F(FireReceivers, AFireHeatsAHeldThingOnlyWhenItTakesTheBurnOfAFire)
 	crop.food = 5.0f;
 	fires.HeatHeldObject(held);
 	EXPECT_GT(TemperatureOf(held), fire::k_AmbientTemperature);
+}
+
+TEST_F(FireReceivers, AFieldBurnsByItsRowOfTheBuildingsTableNotByItsCropRow)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto field = MadeField();
+	auto& crop = registry.Get<Field>(field).crop;
+	crop.age = 1.0f;
+	crop.food = 5.0f;
+	Burn(field, 150.0f);
+	// A cool burn of 100 brings it towards 124.7: ten for each degree, over the capacity of the buildings' row
+	Locator::fireSystem::value().ApplyBurn(field, 100.0f, std::nullopt);
+	const float difference = fire::k_AmbientTemperature + 100.0f - 150.0f;
+	EXPECT_FLOAT_EQ(TemperatureOf(field), 150.0f + 10.0f * difference / k_FieldCapacity);
 }
 
 } // namespace
