@@ -50,6 +50,8 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
+#include "Editor/EditorCreatureEdits.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -276,6 +278,30 @@ void CreatureSpawner::DrawSettings() noexcept
 	}
 }
 
+bool CreatureSpawner::InNetworkGame() noexcept
+{
+	return developer_tools::NetworkSessionLive();
+}
+
+float CreatureSpawner::ShownValue(entt::entity entity, creature_edit_values::Value value, float now) const noexcept
+{
+	return _held.has_value() && _held->entity == entity && _held->value == value ? _held->amount : now;
+}
+
+void CreatureSpawner::FollowValueSlider(entt::entity entity, creature_edit_values::Value value, float amount, bool changed,
+                                        bool released) noexcept
+{
+	if (changed)
+	{
+		_held = HeldValue {.entity = entity, .value = value, .amount = amount};
+	}
+	if (released && _held.has_value() && _held->entity == entity && _held->value == value)
+	{
+		editor::SendCreatureEdit(entity, value, _held->amount);
+		_held.reset();
+	}
+}
+
 void CreatureSpawner::DrawSelected() noexcept
 {
 	if (!_selected.has_value() || !Locator::entitiesRegistry::has_value())
@@ -294,20 +320,35 @@ void CreatureSpawner::DrawSelected() noexcept
 	ImGui::SeparatorText("Selected creature");
 	ImGui::Text("%s at %.0f, %.0f", SpeciesName(creature->species).data(), static_cast<double>(transform->position.x),
 	            static_cast<double>(transform->position.z));
-	ImGui::SliderFloat("Its alignment", &creature->alignment, -1.0f, 1.0f, "%.2f");
-	ImGui::SliderFloat("Its fatness", &creature->fatness, 0.0f, 1.0f, "%.2f");
+	const bool network = InNetworkGame();
+	const auto entity = *_selected;
+	using creature_edit_values::Value;
+	// In a network game each slider sends its amount as a command of the turns when the player lets go of it
+	const auto slider = [this, network, entity](const char* label, Value value, float& field, float low, float high,
+	                                            ImGuiSliderFlags flags) {
+		if (!network)
+		{
+			return ImGui::SliderFloat(label, &field, low, high, "%.2f", flags);
+		}
+		auto amount = ShownValue(entity, value, field);
+		const bool changed = ImGui::SliderFloat(label, &amount, low, high, "%.2f", flags);
+		FollowValueSlider(entity, value, amount, changed, ImGui::IsItemDeactivatedAfterEdit());
+		return false;
+	};
+	slider("Its alignment", Value::Alignment, creature->alignment, -1.0f, 1.0f, ImGuiSliderFlags_None);
+	slider("Its fatness", Value::Fatness, creature->fatness, 0.0f, 1.0f, ImGuiSliderFlags_None);
 	if (ImGui::IsItemHovered())
 	{
 		ImGui::SetTooltip("Its body follows its fatness by at most %.2f a game turn",
 		                  static_cast<double>(creature_morph::k_MaxFatnessStep));
 	}
-	if (ImGui::SliderFloat("Its strength", &creature->strength, 0.0f, 1.0f, "%.2f"))
+	if (slider("Its strength", Value::Strength, creature->strength, 0.0f, 1.0f, ImGuiSliderFlags_None))
 	{
 		// Set here, as a script sets it, the body shows it
-		CreatureArchetype::ShowStrength(*_selected);
+		CreatureArchetype::ShowStrength(entity);
 	}
-	if (ImGui::SliderFloat("Its size", &creature->size, creature_morph::k_MinScale, creature_morph::k_MaxScale, "%.2f",
-	                       ImGuiSliderFlags_Logarithmic))
+	if (slider("Its size", Value::Size, creature->size, creature_morph::k_MinScale, creature_morph::k_MaxScale,
+	           ImGuiSliderFlags_Logarithmic))
 	{
 		creature->size = creature_morph::ClampScale(creature->size);
 		transform->scale = glm::vec3(CreatureArchetype::DrawnScale(creature->species, creature->size));
@@ -324,7 +365,7 @@ void CreatureSpawner::DrawSelected() noexcept
 		ImGui::SameLine();
 		if (ImGui::SmallButton("Show now"))
 		{
-			morph->shownFatness = creature->fatness;
+			static_cast<void>(editor::DoCreatureAct(editor::ActOf(entity, creature_edit_acts::Act::ShowFatnessNow)));
 		}
 	}
 	if (ImGui::Button("Deselect"))
@@ -335,7 +376,6 @@ void CreatureSpawner::DrawSelected() noexcept
 	{
 		return;
 	}
-	const auto entity = *_selected;
 	const std::array<std::pair<const char*, void (CreatureSpawner::*)(entt::entity) noexcept>, 9> k_Tabs {{
 	    {"Looks", &CreatureSpawner::DrawAppearance},
 	    {"Audio", &CreatureSpawner::DrawAudio},
@@ -351,6 +391,7 @@ void CreatureSpawner::DrawSelected() noexcept
 	{
 		if (ImGui::BeginTabItem(label))
 		{
+			// In a network game each change of a tab goes as a command of the turns
 			(this->*draw)(entity);
 			ImGui::EndTabItem();
 		}
@@ -366,7 +407,6 @@ void CreatureSpawner::DrawMovement(entt::entity entity) noexcept
 	{
 		return;
 	}
-	auto& locomotion = Locator::creatureLocomotionSystem::value();
 
 	ImGui::SeparatorText("Movement");
 	ImGui::Text("%s%s", MotionName(self->motion).data(), self->failed ? ", the last move failed" : "");
@@ -433,14 +473,18 @@ void CreatureSpawner::DrawMovement(entt::entity entity) noexcept
 			ImGui::TextUnformatted(_lastOrder.c_str());
 		}
 	}
+	using creature_edit_acts::Act;
 	if (ImGui::Button("Stop"))
 	{
-		locomotion.Stop(entity);
+		static_cast<void>(editor::DoCreatureAct(editor::ActOf(entity, Act::StopMoving)));
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Face the camera"))
 	{
-		locomotion.TurnToFace(entity, glm::xz(Locator::camera::value().GetOrigin()));
+		// The editor gives the place of its camera, so that each computer turns the creature to the same place
+		auto act = editor::ActOf(entity, Act::Face);
+		act.position = Locator::camera::value().GetOrigin();
+		static_cast<void>(editor::DoCreatureAct(act));
 	}
 	ImGui::SameLine();
 	ImGui::Checkbox("Show route", &_showRoute);
@@ -516,10 +560,17 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	{
 		return;
 	}
-	auto& minds = Locator::creatureMindSystem::value();
 
 	ImGui::SeparatorText("Mind");
-	ImGui::Checkbox("Pause mind", &mind->paused);
+	// In a network game each change of the tab goes as a command of the turns
+	const bool network = InNetworkGame();
+	using creature_edit_acts::Act;
+	const auto act = [](const player_commands::EditorCreatureAct& edit) { static_cast<void>(editor::DoCreatureAct(edit)); };
+	bool paused = mind->paused;
+	if (ImGui::Checkbox("Pause mind", &paused))
+	{
+		act(editor::SwitchOf(entity, Act::PauseMind, paused));
+	}
 	if (ImGui::IsItemHovered())
 	{
 		ImGui::SetTooltip("The mind leaves the body alone; the buttons below still work");
@@ -527,7 +578,7 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	bool notice = ecs::creature_reaction_notice::TakesNotice(registry, entity);
 	if (ImGui::Checkbox("Takes notice of reactions", &notice))
 	{
-		ecs::creature_reaction_notice::SetTakesNotice(registry, entity, notice);
+		act(editor::SwitchOf(entity, Act::TakesNotice, notice));
 	}
 	if (ImGui::IsItemHovered())
 	{
@@ -537,9 +588,16 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	if (Locator::infoConstants::has_value())
 	{
 		const auto& phases = Locator::infoConstants::value().creatureDevelopmentPhaseEntry;
-		auto phase = static_cast<int>(std::min<size_t>(mind->developmentPhase, phases.size() - 1));
-		if (ImGui::SliderInt("Grown up", &phase, 0, static_cast<int>(phases.size()) - 1,
-		                     phases.at(static_cast<size_t>(phase)).name.data()))
+		using creature_edit_values::Value;
+		const auto now = static_cast<float>(std::min<size_t>(mind->developmentPhase, phases.size() - 1));
+		auto phase = static_cast<int>(network ? ShownValue(entity, Value::GrownUp, now) : now);
+		const bool changed = ImGui::SliderInt("Grown up", &phase, 0, static_cast<int>(phases.size()) - 1,
+		                                      phases.at(static_cast<size_t>(phase)).name.data());
+		if (network)
+		{
+			FollowValueSlider(entity, Value::GrownUp, static_cast<float>(phase), changed, ImGui::IsItemDeactivatedAfterEdit());
+		}
+		else if (changed)
 		{
 			mind->developmentPhase = static_cast<uint32_t>(phase);
 		}
@@ -681,7 +739,7 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	ImGui::BeginDisabled(busy);
 	if (ImGui::Button("Play"))
 	{
-		minds.PlayAction(entity, animations::k_FirstAction + _action);
+		act(editor::IndexOf(entity, Act::PlayAction, _action));
 	}
 	ImGui::EndDisabled();
 	if (ImGui::BeginCombo("Gesture", AnimationLabel(animations::k_FirstGesture + _gesture).c_str()))
@@ -699,7 +757,7 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 	ImGui::BeginDisabled(animation->gesture.animation.has_value());
 	if (ImGui::Button("Gesture"))
 	{
-		minds.PlayGesture(entity, animations::k_FirstGesture + _gesture);
+		act(editor::IndexOf(entity, Act::PlayGesture, _gesture));
 	}
 	ImGui::EndDisabled();
 	ImGui::TextUnformatted("Face");
@@ -711,7 +769,7 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		}
 		if (ImGui::SmallButton(AnimationLabel(animations::k_FirstFace + i).c_str()))
 		{
-			minds.PullFace(entity, animations::k_FirstFace + i);
+			act(editor::IndexOf(entity, Act::PullFace, i));
 		}
 	}
 	ImGui::TextUnformatted("Feel");
@@ -733,31 +791,31 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		}
 		if (ImGui::SmallButton(std::string(creature_face::Name(k_Feelings.at(i))).c_str()))
 		{
-			minds.ShowFeeling(entity, k_Feelings.at(i));
+			act(editor::IndexOf(entity, Act::ShowFeeling, static_cast<size_t>(k_Feelings.at(i))));
 		}
 	}
 	ImGui::BeginDisabled(busy);
 	if (ImGui::Button("Sit down"))
 	{
-		minds.SitDown(entity);
+		act(editor::ActOf(entity, Act::SitDown));
 	}
 	ImGui::EndDisabled();
 	ImGui::SameLine();
 	ImGui::BeginDisabled(!creature_layers::IsLooping(body));
 	if (ImGui::Button("Stand up"))
 	{
-		minds.StandUp(entity);
+		act(editor::ActOf(entity, Act::StandUp));
 	}
 	ImGui::EndDisabled();
 	ImGui::SameLine();
 	if (ImGui::Button("Stroke"))
 	{
-		minds.ReceiveFeedback(entity, 0.5f);
+		act({.creature = entity, .act = static_cast<uint8_t>(Act::Feedback), .amount = 0.5f});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Slap"))
 	{
-		minds.ReceiveFeedback(entity, -0.5f);
+		act({.creature = entity, .act = static_cast<uint8_t>(Act::Feedback), .amount = -0.5f});
 	}
 
 	ImGui::SeparatorText("Desires");
@@ -929,6 +987,67 @@ void CreatureSpawner::Update() noexcept
 	}
 }
 
+std::optional<entt::entity> CreatureSpawner::NearestToOrder(glm::vec2 point) const noexcept
+{
+	auto& hands = Locator::creatureObjectActionSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool pickUp = _order == Order::PickUp;
+	std::optional<entt::entity> nearest;
+	float best = k_PickRadius;
+	registry.Each<const Transform>([&](entt::entity entity, const Transform& at) {
+		const auto distance = glm::distance(glm::xz(at.position), point);
+		if (distance < best && entity != *_selected &&
+		    (pickUp ? hands.CanPickUp(*_selected, entity) : hands.CanDestroy(entity)))
+		{
+			best = distance;
+			nearest = entity;
+		}
+	});
+	return nearest;
+}
+
+void CreatureSpawner::SendCommand(glm::vec3 point) noexcept
+{
+	using creature_edit_acts::Act;
+	player_commands::EditorCreatureAct act {.creature = *_selected, .position = point};
+	switch (_order)
+	{
+	case Order::Walk:
+	case Order::Run:
+		act.act = static_cast<uint8_t>(Act::GoTo);
+		act.args[0] = _order == Order::Run ? 1 : 0;
+		break;
+	case Order::Flee:
+		act.act = static_cast<uint8_t>(Act::FleeFrom);
+		break;
+	case Order::Face:
+		act.act = static_cast<uint8_t>(Act::Face);
+		break;
+	case Order::PickUp:
+	case Order::Destroy:
+	{
+		// The editor finds the thing, so that each computer acts on the same thing
+		const auto nearest = NearestToOrder(glm::xz(point));
+		if (!nearest.has_value())
+		{
+			_lastOrder = fmt::format("Nothing to {} there", _order == Order::PickUp ? "pick up" : "knock down");
+			return;
+		}
+		act.act = static_cast<uint8_t>(_order == Order::PickUp ? Act::PickUp : Act::KnockDown);
+		act.other = *nearest;
+		break;
+	}
+	case Order::Throw:
+		act.act = static_cast<uint8_t>(Act::ThrowAt);
+		break;
+	case Order::Point:
+		act.act = static_cast<uint8_t>(Act::PointAt);
+		break;
+	}
+	static_cast<void>(editor::DoCreatureAct(act));
+	_lastOrder = fmt::format("Sent the order to {:.0f}, {:.0f}: it comes at the next turn", point.x, point.z);
+}
+
 void CreatureSpawner::Command(glm::vec2 screenCoord) noexcept
 {
 	if (!_selected.has_value() || !Locator::creatureLocomotionSystem::has_value())
@@ -943,6 +1062,11 @@ void CreatureSpawner::Command(glm::vec2 screenCoord) noexcept
 	using Pace = ecs::systems::CreatureLocomotionSystemInterface::Pace;
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
 	const auto point = glm::xz(hit->position);
+	if (InNetworkGame())
+	{
+		SendCommand(hit->position);
+		return;
+	}
 	switch (_order)
 	{
 	case Order::Walk:
@@ -965,19 +1089,8 @@ void CreatureSpawner::Command(glm::vec2 screenCoord) noexcept
 	{
 		// What is nearest where the land was clicked
 		auto& hands = Locator::creatureObjectActionSystem::value();
-		auto& registry = Locator::entitiesRegistry::value();
 		const bool pickUp = _order == Order::PickUp;
-		std::optional<entt::entity> nearest;
-		float best = k_PickRadius;
-		registry.Each<const Transform>([&](entt::entity entity, const Transform& at) {
-			const auto distance = glm::distance(glm::xz(at.position), point);
-			if (distance < best && entity != *_selected &&
-			    (pickUp ? hands.CanPickUp(*_selected, entity) : hands.CanDestroy(entity)))
-			{
-				best = distance;
-				nearest = entity;
-			}
-		});
+		const auto nearest = NearestToOrder(point);
 		if (!nearest.has_value())
 		{
 			_lastOrder = fmt::format("Nothing to {} there", pickUp ? "pick up" : "knock down");

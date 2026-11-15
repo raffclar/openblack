@@ -2265,12 +2265,102 @@
     "type": "integer"
    },
    {
+    "description": "Placements in a row from the position, all in one frame (place; 1 when not given)",
+    "name": "copies",
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] from each placement to the next (place)",
+    "name": "step",
+    "type": "point"
+   },
+   {
     "description": "Send also when the editor is refused",
     "name": "force",
     "type": "boolean"
    }
   ],
   "query": "editor.network_edit",
+  "writes": true
+ },
+ {
+  "description": "Sends a change of a value of a creature as a command of the turns, as the creature section of the editor sends it in a network game: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "alignment, fatness, strength, size, energy, exhaustion, thirst, poo, life, warmth, itchiness or grown up",
+    "name": "value",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The new amount of the value",
+    "name": "amount",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.creature_edit",
+  "writes": true
+ },
+ {
+  "description": "Sends an act of the creature tools as a command of the turns, as the tabs of the creature section send it in a network game: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature (none for an act on every creature)",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The name of the act, such as \"sit down\"",
+    "name": "act",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The other thing of the act",
+    "name": "other",
+    "type": "integer"
+   },
+   {
+    "description": "The place of the act [x, y, z]",
+    "name": "position",
+    "type": "array"
+   },
+   {
+    "description": "The amount of the act",
+    "name": "amount",
+    "type": "number"
+   },
+   {
+    "description": "The index of the act in its list",
+    "name": "index",
+    "type": "integer"
+   },
+   {
+    "description": "Up to six small numbers of the act",
+    "name": "args",
+    "type": "array"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.creature_act",
   "writes": true
  },
  {

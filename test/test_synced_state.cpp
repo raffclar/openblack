@@ -189,6 +189,22 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+TEST(SyncedState, TheTimeOfTheSymbolOfAnArtefactIsNotSynced)
+{
+	// Only a computer that shows the effects adds the time of its frames to the symbol. A server adds none.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "TownArtefact", "symbolMilliseconds"));
+	// The turns read the rest of an artefact
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "TownArtefact", "symbol"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "TownArtefact", "value"));
+}
+
+TEST(SyncedState, TheDetailsThatThePlayerAsksForAreNotSynced)
+{
+	// The details key of a player changes the labels of the computer of that player only
+	EXPECT_TRUE(synced_state::IsPresentationOnly(synced_state::PresentationParts(), "DetailsShown", ""));
+}
+
 TEST(SyncedState, TheStaticOfAFizzOnlyThisComputerSlidesIsNotSynced)
 {
 	// Each computer slides the static only while it draws the creature. The turns read how far the creature fizzed.
