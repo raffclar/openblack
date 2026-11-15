@@ -427,7 +427,7 @@ TEST(TestbedScenarios, MakingFriendsNeedsAnotherCreature)
 
 TEST(TestbedScenarios, EveryCommandHasAName)
 {
-	for (size_t i = 0; i <= static_cast<size_t>(Command::Kind::TempleFreeCamera); ++i)
+	for (size_t i = 0; i <= static_cast<size_t>(Command::Kind::InfiniteInfluenceCheat); ++i)
 	{
 		EXPECT_FALSE(Name(static_cast<Command::Kind>(i)).empty()) << i;
 	}

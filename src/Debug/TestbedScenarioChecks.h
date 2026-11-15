@@ -88,6 +88,9 @@ enum class Quantity : uint8_t
 	FootballMatchState,
 	/// How many duels the scenario's creature at the index has started, as its fight record counts them
 	CreatureDuels,
+	/// 1 when the empty hand of the player, at the place of the scenario's object at the index, may take that object,
+	/// else 0
+	HandMayTake,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its

@@ -96,6 +96,8 @@ std::string_view Name(Quantity quantity)
 		return "the state of the football match";
 	case Quantity::CreatureDuels:
 		return "duels started";
+	case Quantity::HandMayTake:
+		return "the hand may take the object";
 	}
 	return "";
 }

@@ -1330,6 +1330,9 @@ struct Command
 		/// The editor's cheat of the free camera in the temple goes on (value 1) or off (value 0), as its box in the
 		/// Cheats tab does. Needs no creature
 		TempleFreeCamera,
+		/// The editor's cheat of infinite influence for the player goes on (value 1) or off (value 0), as its box in
+		/// the Cheats tab does. Needs no creature
+		InfiniteInfluenceCheat,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
