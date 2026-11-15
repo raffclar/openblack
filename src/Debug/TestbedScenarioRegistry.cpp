@@ -327,7 +327,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
 	       kind == Kind::LookAtSaveGamePicture || kind == Kind::ZoomToTempleCaveTarget || kind == Kind::HandCastOnDispenser ||
 	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball ||
-	       kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint || IsPointerCommand(kind);
+	       kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint || kind == Kind::TempleFreeCamera ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -355,7 +356,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 244> k_Names {
+	constexpr std::array<std::string_view, 245> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -600,6 +601,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "create a reaction at an object",
 	    "pointer on tip bubble",
 	    "pointer on totem",
+	    "free camera in the temple",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

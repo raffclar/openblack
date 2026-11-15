@@ -143,6 +143,8 @@ public:
 	void EnterMultiplayerFrontEnd() override;
 	void LeaveMultiplayerFrontEnd() override;
 	[[nodiscard]] bool IsMultiplayerFrontEnd() const override { return _multiplayerFrontEnd; }
+	void SetFreeCamera(bool on) override { _freeCamera = on; }
+	[[nodiscard]] bool IsFreeCameraOn() const override { return _freeCamera; }
 	void ShowHelpAfterLoad() override { BringBackDialogue(); }
 	void WarmUpVisit(const std::function<void()>& draw) override;
 	/// A save keeps the dialogue that the temple keeps for the world while the player is inside: its owner, its last six
@@ -345,6 +347,8 @@ private:
 	bool _optionsShown {false};
 	/// The multiplayer front end is up over the future room
 	bool _multiplayerFrontEnd {false};
+	/// The editor's cheat of the free camera in the temple is on
+	bool _freeCamera {false};
 	/// The submeshes of each room that are its controls, found as the rooms are set up
 	std::unordered_map<TempleRoom, std::vector<uint32_t>> _controlSubMeshes;
 	/// The future room's words in this visit, which fade in

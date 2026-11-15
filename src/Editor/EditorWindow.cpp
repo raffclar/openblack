@@ -23,6 +23,7 @@
 #include <glm/trigonometric.hpp>
 #include <imgui.h>
 
+#include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/KeyboardMoveSpeed.h"
 #include "Common/DebugCheats.h"
@@ -1283,6 +1284,20 @@ void EditorWindow::DrawCheats() noexcept
 		{
 			SendDebugCheat(cheat, on);
 		}
+	}
+	// The free camera in the temple moves only the view of this computer, so it sends no command of a turn
+	if (Locator::temple::has_value())
+	{
+		auto& temple = Locator::temple::value();
+		bool freeCamera = temple.IsFreeCameraOn();
+		if (ImGui::Checkbox("free camera in the temple", &freeCamera))
+		{
+			temple.SetFreeCamera(freeCamera);
+		}
+		ImGui::SetItemTooltip(
+		    "In the temple, the arrow keys move the camera forwards, backwards, left and right.\n"
+		    "Hold the middle button and move the mouse to turn the camera up, down, left and right.\n"
+		    "Only this computer sees the free camera. Its keys do nothing else in the temple while it is on.");
 	}
 }
 

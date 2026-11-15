@@ -42,6 +42,7 @@
 #include "Sound/SoundId.h"
 #include "Sound/SoundRequestInterface.h"
 #include "Temple/TempleHelpScripts.h"
+#include "TempleFreeCamera.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -634,6 +635,8 @@ void TempleCameraModel::StartIntro(Room room, bool blendFromCurrent)
 {
 	// The room's camera starts its path in
 	Locator::temple::value().SetCurrentRoom(room);
+	// In each room, the editor's free camera starts again from the view of the room's camera
+	_freeView.reset();
 	// Each room has a camera of its own, so a scroll looked at in the room left is left with it, along with its text in
 	// front of it, which only that room draws
 	_lookingAtSubMesh = false;
@@ -824,9 +827,25 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 	// This frame's, none where the cursor meets nothing of the room's cylinder
 	_cursorHit = input.hit;
 
-	Step(seconds, input);
+	// The editor's cheat of the free camera takes the view while the room's camera has the player. Then the room's
+	// camera keeps still and gets no press and no key, and the temple's camera is as usual when the cheat stops.
+	auto& temple = Locator::temple::value();
+	const bool freeCamera = temple_free_camera::HasControl({
+	    .cheatOn = temple.IsFreeCameraOn(),
+	    .inTemple = temple.Active() && !temple.IsMultiplayerFrontEnd(),
+	    .roomCameraInControl = IsInControl(),
+	});
+	if (!freeCamera)
+	{
+		_freeView.reset();
+		Step(seconds, input);
+	}
 	FollowTemple();
-	Locator::temple::value().GetDoors().Update(seconds);
+	temple.GetDoors().Update(seconds);
+	if (freeCamera)
+	{
+		return StepFreeCamera(seconds);
+	}
 
 	auto origin = _origin.GetValue();
 	auto focus = _focus.GetValue();
@@ -839,6 +858,28 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> TempleCameraModel::Upd
 	}
 	_wasOverCaveCreature = input.overCaveCreature;
 	return CameraInterpolationUpdateInfo {origin, focus, std::chrono::microseconds::zero()};
+}
+
+CameraModel::CameraInterpolationUpdateInfo TempleCameraModel::StepFreeCamera(float seconds)
+{
+	// The free camera starts where the room's camera is
+	if (!_freeView.has_value())
+	{
+		_freeView = temple_free_camera::ViewOf(_origin.GetValue(), _focus.GetValue());
+	}
+	const auto& actions = Locator::gameActionSystem::value();
+	_freeView = temple_free_camera::Step(*_freeView, {
+	                                                     .forwards = actions.Get(BindableActionMap::MOVE_FORWARDS),
+	                                                     .backwards = actions.Get(BindableActionMap::MOVE_BACKWARDS),
+	                                                     .left = actions.Get(BindableActionMap::MOVE_LEFT),
+	                                                     .right = actions.Get(BindableActionMap::MOVE_RIGHT),
+	                                                     .steer = actions.Get(BindableActionMap::ROTATE_AROUND_MOUSE_ON),
+	                                                     .mouse = glm::vec2(actions.GetMouseDelta()),
+	                                                     .seconds = seconds,
+	                                                 });
+	return {.origin = _freeView->origin,
+	        .focus = temple_free_camera::Focus(*_freeView),
+	        .duration = std::chrono::microseconds::zero()};
 }
 
 void TempleCameraModel::Step(float dt, const Input& input)
