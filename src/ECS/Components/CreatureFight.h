@@ -154,6 +154,12 @@ struct CreatureFighting
 {
 	return stage < CreatureFighting::Stage::Duel;
 }
+/// Whether the creature started its fight and did not stop what it did after the start. Such a creature refuses leash
+/// orders and reactions.
+[[nodiscard]] constexpr bool LeadsFight(const CreatureFighting& fighting)
+{
+	return fighting.madeArena && !fighting.leadEnded;
+}
 /// Whether the other creature of a fight did its last order and waits for the next order. It does an order with no look
 /// of its own, and it looks about. While it waits, it looks at the first creature.
 [[nodiscard]] constexpr bool WaitsForNextOrder(const CreatureFighting& fighting)

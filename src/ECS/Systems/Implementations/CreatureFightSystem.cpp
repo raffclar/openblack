@@ -849,7 +849,7 @@ bool CreatureFightSystem::LeadsFight(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
-	return fighting != nullptr && fighting->madeArena && !fighting->leadEnded;
+	return fighting != nullptr && ecs::components::LeadsFight(*fighting);
 }
 
 bool CreatureFightSystem::IsSettingUpFight(entt::entity creature) const
