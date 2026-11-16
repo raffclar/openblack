@@ -33,6 +33,8 @@ namespace openblack::debug::gui
 class VideoViewer final: public Window
 {
 public:
+	/// The window shows in a network game. It plays the films on this computer.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	VideoViewer() noexcept;
 	~VideoViewer() noexcept override;
 

@@ -67,11 +67,16 @@
 ///   the value (u32), the count of the parameters (u8), then each parameter (f32).
 /// - An act of the Land script tab of the editor: the act (u8), the command (u32), then the hash of the file (u64).
 /// - A change of the program of the editor: the use (u8), the hash of the file (u64), then the script (u32).
+/// - An act of the Advisors debug window: the act (u8), the advisor (u8), the place on the screen (two f32), the
+///   position, 1 when the advisor points in the world or 0 (u8), the animation (u8), the speed (f32), then the emotion
+///   (u8).
+/// - A change of the debug menus of the world: the act (u8), the player (u8), the index (u8), then the value (f32).
+/// - A line of the debug Console: the count of its bytes (u16), then each byte.
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 42;
+inline constexpr uint8_t k_Version = 43;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -158,6 +163,9 @@ enum class CommandTag : uint8_t
 	EditorScript = 70,
 	EditorLandScript = 71,
 	EditorScriptProgram = 72,
+	DebugAdvisor = 76,
+	DebugWorld = 77,
+	DebugConsoleLine = 78,
 };
 
 /// The sizes of the parts of the frames, in bytes

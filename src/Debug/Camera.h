@@ -23,6 +23,8 @@ namespace openblack::debug::gui
 class Camera final: public Window
 {
 public:
+	/// The window shows in a network game. It moves only the camera of this computer.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	Camera();
 
 protected:

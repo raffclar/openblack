@@ -241,13 +241,15 @@ enum class GuiMode : uint8_t
 }
 
 /// Whether a debug window shows and takes events in the mode. The editor shows only when the editor can open. In a
-/// network game no other debug window shows, so that no debug window changes the shared world.
-[[nodiscard]] constexpr bool ShowsWindow(GuiMode mode, bool networkSessionLive, bool editorWindow, bool editorAllowed) noexcept
+/// network game another debug window shows only when it shows in a network game: it changes nothing of the shared
+/// world, or it sends its changes as commands of the turns.
+[[nodiscard]] constexpr bool ShowsWindow(GuiMode mode, bool networkSessionLive, bool editorWindow, bool editorAllowed,
+                                         bool showsInNetworkGame = false) noexcept
 {
 	switch (mode)
 	{
 	case GuiMode::Full:
-		return editorWindow ? editorAllowed : !networkSessionLive;
+		return editorWindow ? editorAllowed : (!networkSessionLive || showsInNetworkGame);
 	case GuiMode::EditorOnly:
 		return editorWindow && editorAllowed;
 	case GuiMode::Dormant:

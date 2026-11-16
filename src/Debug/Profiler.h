@@ -21,6 +21,9 @@ namespace openblack::debug::gui
 class Profiler final: public Window
 {
 public:
+	/// The window shows in a network game. It only shows the frame times, and its switches change only the draw of this
+	/// computer.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	Profiler() noexcept;
 	void Open() noexcept override;
 	void Close() noexcept override;

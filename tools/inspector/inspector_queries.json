@@ -2806,6 +2806,85 @@
   "writes": true
  },
  {
+  "description": "Does an act of the debug windows or of the debug menus, as their buttons do: an act on the advisors (kind advisor), a change of the time of the day, of the alignment of a player or of a bonus creature (kind world), a line of land script commands of the Console (kind console), or a gesture of the Gestures window (kind gesture). In a network game the first three go as commands of the turns, and the game server takes them only from a player with the debugger claim. A gesture goes to the hand of this computer. force sends the act also when the debug windows of this computer do not show.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "advisor, world, console or gesture",
+    "name": "kind",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "advisor: out, appear, home, vanish, fly, cling, screen_point, point_at, look_at, stop_pointing, stop_looking, play_anim or feel. world: time_of_day, player_alignment or bonus_creature. gesture: circle, power_up_0, power_up_1 or scribble.",
+    "name": "act",
+    "type": "string"
+   },
+   {
+    "description": "0 both, 1 the good one, 2 the evil one",
+    "name": "advisor",
+    "type": "integer"
+   },
+   {
+    "description": "The place on the screen, x and y from 0 to 1",
+    "name": "place",
+    "type": "array"
+   },
+   {
+    "description": "The position x, y and z in the world",
+    "name": "position",
+    "type": "array"
+   },
+   {
+    "description": "advisor point_at: point in the world",
+    "name": "in_world",
+    "type": "boolean"
+   },
+   {
+    "description": "advisor play_anim: the animation",
+    "name": "anim",
+    "type": "integer"
+   },
+   {
+    "description": "advisor play_anim: the speed",
+    "name": "speed",
+    "type": "number"
+   },
+   {
+    "description": "advisor feel: the emotion, 0 to 7",
+    "name": "emotion",
+    "type": "integer"
+   },
+   {
+    "description": "world player_alignment: the player",
+    "name": "player",
+    "type": "integer"
+   },
+   {
+    "description": "world bonus_creature: the bonus creature",
+    "name": "index",
+    "type": "integer"
+   },
+   {
+    "description": "world: the hours, the alignment, or 1 or 0",
+    "name": "value",
+    "type": "number"
+   },
+   {
+    "description": "console: the line",
+    "name": "text",
+    "type": "string"
+   },
+   {
+    "description": "Send also when the debug windows do not show",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.debug_act",
+  "writes": true
+ },
+ {
   "description": "The script machine: its scripts, tasks, globals and the task running",
   "kind": "object",
   "parameters": [],

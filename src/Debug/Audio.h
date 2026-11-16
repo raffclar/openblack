@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "Audio/AudioManagerInterface.h"
 #include "Window.h"
 
@@ -17,6 +19,9 @@ namespace openblack::debug::gui
 class Audio final: public Window
 {
 public:
+	/// The window shows in a network game. It plays sounds on this computer, and its alignment slider sends a command of the
+	/// turns.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	Audio() noexcept;
 
 protected:
@@ -35,5 +40,7 @@ private:
 	std::string _selectedSoundPack;
 	std::string _selectedMusicPack;
 	entt::entity _selectedEmitter;
+	/// In a network game, the value of the alignment slider while it moves
+	std::optional<float> _alignmentDrag;
 };
 } // namespace openblack::debug::gui

@@ -18,6 +18,7 @@
 
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
+#include "Common/DebugActRuns.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -26,7 +27,6 @@
 #include "Input/DeveloperKeys.h"
 #include "Input/GameActionMapInterface.h"
 #include "LHScriptX/FeatureScriptCommands.h"
-#include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -462,17 +462,14 @@ void Console::ExecCommand(const std::string& commandLine) noexcept
 			AddLog("%3zu: %s\n", i, _history[i].c_str());
 		}
 	}
-	else
+	else if (const auto error = debug_acts::Do(player_commands::DebugConsoleLine {.text = commandLine}); error.has_value())
 	{
-		try
-		{
-			lhscriptx::Script script;
-			script.Load(commandLine);
-		}
-		catch (std::runtime_error& error)
-		{
-			AddLog("[error]: %s", error.what());
-		}
+		AddLog("[error]: %s", error->c_str());
+	}
+	else if (debug_acts::SendsCommands())
+	{
+		// In a network game the line goes as a command of the turns. Each computer runs it, and the game log has the result.
+		AddLog("The line goes to every computer, and runs at the next turn.");
 	}
 }
 

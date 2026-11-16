@@ -15,6 +15,9 @@ namespace openblack::debug::gui
 class LandIsland final: public Window
 {
 public:
+	/// The window shows in a network game. It changes only the draw of the land on this computer, and it writes files on this
+	/// computer.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	LandIsland() noexcept;
 
 protected:

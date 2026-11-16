@@ -24,12 +24,16 @@
 #include <fmt/format.h>
 #include <glm/vec2.hpp>
 
+#include "Camera/Camera.h"
 #include "Common/CreatureEditValues.h"
+#include "Common/DebugActRuns.h"
+#include "Common/DebugActs.h"
 #include "Common/DebugCheats.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -78,6 +82,130 @@ namespace
 		return std::nullopt;
 	}
 	return QueryResult::Error("the editor is refused: only a player with the editor right opens the editor");
+}
+
+/// The text of a parameter, or an empty text
+[[nodiscard]] std::string TextParam(const Json& params, std::string_view name)
+{
+	const auto found = params.find(std::string(name));
+	return found != params.end() && found->is_string() ? found->get<std::string>() : std::string();
+}
+
+/// The whole number of a parameter, or the fallback
+[[nodiscard]] int32_t IntegerParam(const Json& params, std::string_view name, int32_t fallback)
+{
+	const auto found = params.find(std::string(name));
+	return found != params.end() && found->is_number_integer() ? found->get<int32_t>() : fallback;
+}
+
+/// The numbers of an array parameter, or zeros when the parameter does not have the count
+[[nodiscard]] std::vector<float> NumbersParam(const Json& params, std::string_view name, size_t count)
+{
+	std::vector<float> values(count, 0.0f);
+	const auto found = params.find(std::string(name));
+	if (found != params.end() && found->is_array() && found->size() == count)
+	{
+		for (size_t i = 0; i < count; ++i)
+		{
+			values[i] = (*found)[i].is_number() ? (*found)[i].get<float>() : 0.0f;
+		}
+	}
+	return values;
+}
+
+/// The gesture of the Gestures window: it goes to the hand of this computer, which sends it as the commands of the hand
+QueryResult DebugGesture(std::string_view act)
+{
+	if (!Locator::gestureEvents::has_value())
+	{
+		return QueryResult::Error("editor.debug_act gesture: this game has no gestures");
+	}
+	using ecs::systems::GestureEvent;
+	const auto focus = Locator::camera::has_value() ? Locator::camera::value().GetFocus() : glm::vec3(0.0f);
+	auto& gestures = Locator::gestureEvents::value();
+	if (act == "circle")
+	{
+		gestures.Inject({.kind = GestureEvent::Kind::Circle, .gesture = GestureType::Circle, .centre = focus, .radius = 30.0f});
+	}
+	else if (act == "power_up_0" || act == "power_up_1")
+	{
+		gestures.Inject({.kind = GestureEvent::Kind::PowerUp, .centre = focus, .powerUpLevel = act == "power_up_0" ? 0 : 1});
+	}
+	else if (act == "scribble")
+	{
+		gestures.Inject({.kind = GestureEvent::Kind::Scribble, .gesture = GestureType::Scribble, .centre = focus});
+	}
+	else
+	{
+		return QueryResult::Error("editor.debug_act gesture needs circle, power_up_0, power_up_1 or scribble");
+	}
+	return QueryResult::Value({{"sent", false}, {"kind", "gesture"}, {"act", std::string(act)}});
+}
+
+/// An act of the debug windows or of the debug menus, as their buttons do it
+QueryResult DebugAct(const Json& params)
+{
+	if (!BoolParam(params, "force", false) && developer_tools::CurrentGuiMode() != developer_tools::GuiMode::Full)
+	{
+		return QueryResult::Error("editor.debug_act: the debug windows do not show: the player has no debugger right");
+	}
+	const auto kind = TextParam(params, "kind");
+	const auto act = TextParam(params, "act");
+	if (kind == "advisor")
+	{
+		using player_commands::DebugAdvisor;
+		for (uint8_t i = 0; i <= static_cast<uint8_t>(DebugAdvisor::Act::Feel); ++i)
+		{
+			const auto candidate = static_cast<DebugAdvisor::Act>(i);
+			if (debug_acts::NameOf(candidate) != act)
+			{
+				continue;
+			}
+			const auto place = NumbersParam(params, "place", 2);
+			const auto position = NumbersParam(params, "position", 3);
+			debug_acts::Do(DebugAdvisor {.act = candidate,
+			                             .advisor = static_cast<uint8_t>(IntegerParam(params, "advisor", 0)),
+			                             .place = {place[0], place[1]},
+			                             .position = {position[0], position[1], position[2]},
+			                             .inWorld = BoolParam(params, "in_world", false),
+			                             .anim = static_cast<uint8_t>(IntegerParam(params, "anim", 0)),
+			                             .speed = NumberParam(params, "speed").value_or(1.0f),
+			                             .emotion = static_cast<uint8_t>(IntegerParam(params, "emotion", 0))});
+			return QueryResult::Value({{"sent", debug_acts::SendsCommands()}, {"kind", kind}, {"act", act}});
+		}
+		return QueryResult::Error("editor.debug_act advisor needs the name of an act of the advisors");
+	}
+	if (kind == "world")
+	{
+		using player_commands::DebugWorld;
+		for (uint8_t i = 0; i <= static_cast<uint8_t>(DebugWorld::Act::BonusCreature); ++i)
+		{
+			const auto candidate = static_cast<DebugWorld::Act>(i);
+			if (debug_acts::NameOf(candidate) != act)
+			{
+				continue;
+			}
+			debug_acts::Do(DebugWorld {.act = candidate,
+			                           .player = static_cast<uint8_t>(IntegerParam(params, "player", 0)),
+			                           .index = static_cast<uint8_t>(IntegerParam(params, "index", 0)),
+			                           .value = NumberParam(params, "value").value_or(0.0f)});
+			return QueryResult::Value({{"sent", debug_acts::SendsCommands()}, {"kind", kind}, {"act", act}});
+		}
+		return QueryResult::Error("editor.debug_act world needs time_of_day, player_alignment or bonus_creature");
+	}
+	if (kind == "console")
+	{
+		if (const auto error = debug_acts::Do(player_commands::DebugConsoleLine {.text = TextParam(params, "text")}))
+		{
+			return QueryResult::Error(fmt::format("editor.debug_act console: {}", *error));
+		}
+		return QueryResult::Value({{"sent", debug_acts::SendsCommands()}, {"kind", kind}});
+	}
+	if (kind == "gesture")
+	{
+		return DebugGesture(act);
+	}
+	return QueryResult::Error("editor.debug_act needs the kind advisor, world, console or gesture");
 }
 
 } // namespace
@@ -1190,6 +1318,38 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		}
 		return QueryResult::Value({{"sent", true}, {"land", land}});
 	});
+	auto debugAct = Query(
+	    "debug_act",
+	    "Does an act of the debug windows or of the debug menus, as their buttons do: an act on the advisors (kind advisor), "
+	    "a change of the time of the day, of the alignment of a player or of a bonus creature (kind world), a line of land "
+	    "script commands of the Console (kind console), or a gesture of the Gestures window (kind gesture). In a network "
+	    "game the first three go as commands of the turns, and the game server takes them only from a player with the "
+	    "debugger claim. A gesture goes to the hand of this computer. force sends the act also when the debug windows of "
+	    "this computer do not show.",
+	    {{.name = "kind", .type = "string", .description = "advisor, world, console or gesture", .required = true},
+	     {.name = "act",
+	      .type = "string",
+	      .description = "advisor: out, appear, home, vanish, fly, cling, screen_point, point_at, look_at, stop_pointing, "
+	                     "stop_looking, play_anim or feel. world: time_of_day, player_alignment or bonus_creature. gesture: "
+	                     "circle, power_up_0, power_up_1 or scribble.",
+	      .required = false},
+	     {.name = "advisor", .type = "integer", .description = "0 both, 1 the good one, 2 the evil one", .required = false},
+	     {.name = "place", .type = "array", .description = "The place on the screen, x and y from 0 to 1", .required = false},
+	     {.name = "position", .type = "array", .description = "The position x, y and z in the world", .required = false},
+	     {.name = "in_world", .type = "boolean", .description = "advisor point_at: point in the world", .required = false},
+	     {.name = "anim", .type = "integer", .description = "advisor play_anim: the animation", .required = false},
+	     {.name = "speed", .type = "number", .description = "advisor play_anim: the speed", .required = false},
+	     {.name = "emotion", .type = "integer", .description = "advisor feel: the emotion, 0 to 7", .required = false},
+	     {.name = "player", .type = "integer", .description = "world player_alignment: the player", .required = false},
+	     {.name = "index", .type = "integer", .description = "world bonus_creature: the bonus creature", .required = false},
+	     {.name = "value", .type = "number", .description = "world: the hours, the alignment, or 1 or 0", .required = false},
+	     {.name = "text", .type = "string", .description = "console: the line", .required = false},
+	     {.name = "force",
+	      .type = "boolean",
+	      .description = "Send also when the debug windows do not show",
+	      .required = false}});
+	debugAct.writes = true;
+	provider->Add(std::move(debugAct), [](const QueryContext& context) { return DebugAct(context.params); });
 	return provider;
 }
 

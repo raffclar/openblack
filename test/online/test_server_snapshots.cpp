@@ -189,6 +189,28 @@ TEST(ServerSnapshots, TheRoomKeepsTheEditorClaimsOfTheGodsAndTheObservers)
 	EXPECT_EQ(read->watcherEditors, (std::vector<bool> {true}));
 }
 
+// The room keeps the debugger claims in the same bytes as the editor claims
+TEST(ServerSnapshots, TheRoomKeepsTheDebuggerClaimsOfTheGodsAndTheObservers)
+{
+	auto room = MakeRoom();
+	room.seats[1].debugger = true;
+	room.watcherDebuggers = {true};
+	const auto bytes = EncodeRoom(room);
+	EXPECT_EQ(bytes.size(), EncodeRoom(MakeRoom()).size());
+	const auto read = DecodeRoom(bytes);
+	ASSERT_TRUE(read.has_value());
+	EXPECT_TRUE(read->seats[0].editor);
+	EXPECT_FALSE(read->seats[0].debugger);
+	EXPECT_FALSE(read->seats[1].editor);
+	EXPECT_TRUE(read->seats[1].debugger);
+	EXPECT_EQ(read->watcherDebuggers, (std::vector<bool> {true}));
+	EXPECT_EQ(*read, room);
+	// A room with no debugger claim keeps no list of them
+	const auto plain = DecodeRoom(EncodeRoom(MakeRoom()));
+	ASSERT_TRUE(plain.has_value());
+	EXPECT_TRUE(plain->watcherDebuggers.empty());
+}
+
 // A room of format 5 has no claims. It still reads, and no god or observer has the editor claim.
 TEST(ServerSnapshots, TheRoomOfTheFifthFormatReadsWithNoClaims)
 {

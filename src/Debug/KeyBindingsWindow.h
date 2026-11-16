@@ -23,6 +23,8 @@ namespace openblack::debug::gui
 class KeyBindingsWindow final: public Window
 {
 public:
+	/// The window shows in a network game. It changes only the keys of this computer.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	KeyBindingsWindow() noexcept;
 
 protected:

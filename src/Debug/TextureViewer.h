@@ -18,6 +18,8 @@ namespace openblack::debug::gui
 class TextureViewer final: public Window
 {
 public:
+	/// The window shows in a network game. It only shows the textures.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	TextureViewer() noexcept;
 
 protected:
