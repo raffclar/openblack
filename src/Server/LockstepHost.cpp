@@ -1069,6 +1069,29 @@ bool LockstepHost::KeepsScenarioTurns() const
 	return _scenarioStart.has_value() && (_turnsDone == _scenarioStart->turn || _history.contains(_scenarioStart->turn));
 }
 
+std::optional<uint32_t> LockstepHost::HeldScenarioTurn() const
+{
+	if (!_scenarioStart.has_value() || !_settings.start.scenario.has_value())
+	{
+		return std::nullopt;
+	}
+	// An away seat or observer that missed the start loses its place after the time to come back, and the hold then ends
+	const bool seatMissed = std::ranges::any_of(_seats, [](const Seat& seat) {
+		return (seat.state == SeatState::Taken || seat.state == SeatState::Away) && seat.missedWorldChange;
+	});
+	const bool observerMissed = std::ranges::any_of(_watchers, &Watcher::missedWorldChange);
+	if (!seatMissed && !observerMissed)
+	{
+		return std::nullopt;
+	}
+	return _scenarioStart->turn;
+}
+
+void LockstepHost::ForgetOldTurns(uint32_t turn)
+{
+	_history.erase(_history.begin(), _history.lower_bound(FirstKeptTurn(turn, _settings.keptTurns, HeldScenarioTurn())));
+}
+
 void LockstepHost::SendScenarioAgain(ConnectionId connection)
 {
 	// The client starts the game again on the testbed with the scenario, as the other players did at the start of the
@@ -2840,10 +2863,7 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 	}
 	BroadcastBinary(bytes);
 	_history[turn] = std::move(bytes);
-	if (turn >= _settings.keptTurns)
-	{
-		_history.erase(_history.begin(), _history.lower_bound(turn - _settings.keptTurns));
-	}
+	ForgetOldTurns(turn);
 	_turnsDone = turn + 1;
 
 	std::vector<player_commands::Command> commands;
@@ -2909,10 +2929,7 @@ std::vector<player_commands::Command> LockstepHost::TakeReplayedTurn(uint32_t tu
 		}
 	}
 	_history[turn] = std::move(bytes);
-	if (turn >= _settings.keptTurns)
-	{
-		_history.erase(_history.begin(), _history.lower_bound(turn - _settings.keptTurns));
-	}
+	ForgetOldTurns(turn);
 	_turnsDone = turn + 1;
 	if (_replayed.empty())
 	{
@@ -3121,10 +3138,7 @@ void LockstepHost::TurnChecksum(uint32_t turn, uint64_t checksum)
 	{
 		_capture->TurnDone(turn);
 	}
-	if (turn > _settings.keptTurns)
-	{
-		_checksums.erase(_checksums.begin(), _checksums.lower_bound(turn - _settings.keptTurns));
-	}
+	_checksums.erase(_checksums.begin(), _checksums.lower_bound(FirstKeptTurn(turn, _settings.keptTurns, HeldScenarioTurn())));
 	BroadcastBinary(turn_codec::Encode(turn_codec::TurnChecksum {.turn = turn, .checksum = checksum}));
 	for (auto early = _early.begin(); early != _early.end();)
 	{

@@ -254,6 +254,19 @@ TEST(SavedSystemState, TheStateOfANewLandComesBack)
 	check(TeleportSystem {}, TeleportSystem {});
 }
 
+// The world state that the game server sends keeps the body time and the fainting switch of the creature tools. A client
+// that loads the world of the server thus has the values of the room.
+TEST(SavedSystemState, TheBodyTimeAndTheFaintingSwitchComeBack)
+{
+	CreaturePhysiologySystem saved;
+	saved.SetTimeScale(60.0f);
+	saved.SetFaintingEnabled(false);
+	CreaturePhysiologySystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_EQ(loaded.GetTimeScale(), 60.0f);
+	EXPECT_FALSE(loaded.IsFaintingEnabled());
+}
+
 TEST(SavedSystemState, TheGuidanceAfterALoadGivesTheSameBytesAndDrawsTheStampsAgain)
 {
 	// The stamps of this land are drawn: a load starts the guidance again, but a save before the next turn is the same

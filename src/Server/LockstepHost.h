@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
@@ -129,6 +130,14 @@ constexpr size_t k_MostLanNameBytes = 64;
 ///   tattoos, which stay on the computer of the player in a network game).
 /// - The commands of the test tools, when the test commands of the server are off.
 [[nodiscard]] bool LeavesOut(const player_commands::Action& action, bool testCommands) noexcept;
+
+/// The first turn that the server keeps after the turn that it did last. The server keeps the last keptTurns turns. With a
+/// held turn, the server also keeps each turn from that turn.
+[[nodiscard]] constexpr uint32_t FirstKeptTurn(uint32_t turn, uint32_t keptTurns, std::optional<uint32_t> held) noexcept
+{
+	const uint32_t last = turn > keptTurns ? turn - keptTurns : 0;
+	return held.has_value() ? std::min(last, *held) : last;
+}
 
 /// True when a line of the room's chat can go to the players: it has a character above the space, as the game sends no
 /// line of only spaces, and it has at most the characters that the chat box of the game takes. The game counts the
@@ -328,6 +337,8 @@ public:
 	[[nodiscard]] bool Replaying() const { return !_replayed.empty(); }
 	/// The next turn that the server closes
 	[[nodiscard]] uint32_t TurnsDone() const { return _turnsDone; }
+	/// Whether the server keeps a turn that it did, to send it again to a player who comes back
+	[[nodiscard]] bool KeepsTurn(uint32_t turn) const { return _history.contains(turn); }
 	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
 	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
 	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
@@ -510,6 +521,11 @@ private:
 	/// True when the server keeps each turn of the testbed scenario that the editor started, from its first turn. A player
 	/// who was away at that start can then come back: the start goes again to the player, and then each turn of it.
 	[[nodiscard]] bool KeepsScenarioTurns() const;
+	/// The first turn of the scenario while a player or an observer who was away at its start can still come back. The
+	/// server then keeps each turn of the scenario, also when a fast room clock does more turns than it usually keeps.
+	[[nodiscard]] std::optional<uint32_t> HeldScenarioTurn() const;
+	/// Removes the turns and the checksums that the server no longer keeps after it did a turn
+	void ForgetOldTurns(uint32_t turn);
 	/// Sends the start of the scenario that the editor started, and then each turn of it, to a player who was away at
 	/// that start
 	void SendScenarioAgain(ConnectionId connection);
