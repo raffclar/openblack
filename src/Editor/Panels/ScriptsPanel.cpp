@@ -23,7 +23,10 @@
 #include <imgui_user.h>
 
 #include "CHLApi.h"
+#include "Commands/PlayerCommands.h"
+#include "Common/DeveloperToolsGate.h"
 #include "Common/FileDialog.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "Editor/EditorOutline.h"
 #include "Editor/EditorStyle.h"
@@ -158,6 +161,10 @@ void ScriptsPanel::Draw() noexcept
 	    .data = vm.GetData(),
 	};
 	DrawLoading(vm);
+	if (!_actMessage.empty())
+	{
+		ImGui::TextColored(style::k_Muted, "%s", _actMessage.c_str());
+	}
 	if (program.scripts.empty())
 	{
 		ImGui::TextDisabled("No script program is loaded");
@@ -224,7 +231,12 @@ void ScriptsPanel::DrawLoading(lhvm::LHVM& vm) noexcept
 	}
 	ImGui::SetItemTooltip("Loads a .chl into the script machine in place of the game's, stopping every task");
 	ImGui::SameLine();
-	if (ImGui::SmallButton("Game's program") && Locator::filesystem::has_value())
+	const bool gamesProgram = ImGui::SmallButton("Game's program");
+	if (gamesProgram && developer_tools::NetworkSessionLive())
+	{
+		_loadMessage = SendProgram({.use = player_commands::EditorScriptProgram::Use::GamesProgram}, {});
+	}
+	else if (gamesProgram && Locator::filesystem::has_value())
 	{
 		auto& fileSystem = Locator::filesystem::value();
 		const auto path = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
@@ -255,6 +267,22 @@ void ScriptsPanel::DrawLoading(lhvm::LHVM& vm) noexcept
 void ScriptsPanel::LoadProgram(lhvm::LHVM& vm, const std::filesystem::path& path) noexcept
 {
 	file_dialog::RememberPath(k_ProgramFolderKey, path.parent_path());
+	// In a network game the program goes to every computer, and each computer loads it at the turn
+	if (developer_tools::NetworkSessionLive())
+	{
+		try
+		{
+			const auto bytes = Locator::filesystem::value().ReadAll(path);
+			_loadMessage = script_acts::ReadsProgram(bytes)
+			                   ? SendProgram({.use = player_commands::EditorScriptProgram::Use::Open}, bytes)
+			                   : fmt::format("Couldn't read {}", path.filename().string());
+		}
+		catch (const std::exception& error)
+		{
+			_loadMessage = fmt::format("Couldn't read {}: {}", path.filename().string(), error.what());
+		}
+		return;
+	}
 	// The machine reads it as the game reads its own program, stopping every task first. As when the game restarts its
 	// scripts, the old program's objects are let go first: what it made goes, the rest goes back to the game
 	try
@@ -267,6 +295,46 @@ void ScriptsPanel::LoadProgram(lhvm::LHVM& vm, const std::filesystem::path& path
 	{
 		_loadMessage = fmt::format("Couldn't read {}: {}", path.filename().string(), error.what());
 	}
+}
+
+std::optional<script_acts::ActResult> ScriptsPanel::Act(const player_commands::EditorScript& act) noexcept
+{
+	if (developer_tools::NetworkSessionLive())
+	{
+		if (!Locator::playerCommandSystem::has_value())
+		{
+			_actMessage = "The game has no commands: the act did not go";
+			return std::nullopt;
+		}
+		Locator::playerCommandSystem::value().Submit(act);
+		_actMessage = fmt::format("Sent: {} at the next turn", script_acts::NameOf(act.act));
+		return std::nullopt;
+	}
+	return script_acts::RunScriptAct(act);
+}
+
+std::string ScriptsPanel::SendProgram(player_commands::EditorScriptProgram change, std::span<const uint8_t> file) noexcept
+{
+	if (!Locator::playerCommandSystem::has_value())
+	{
+		return "The game has no commands: the change did not go";
+	}
+	if (const auto kind = script_acts::FileKindOf(change))
+	{
+		if (file.size() > game_socket::k_MostEditorScriptFileBytes)
+		{
+			return fmt::format("A network game takes a file of at most {} MB", game_socket::k_MostEditorScriptFileBytes >> 20);
+		}
+		// The bytes go first on the game socket. The server sends them to every computer before the turn of the command.
+		const auto hash = script_acts::SendFile(*kind, file);
+		if (!hash.has_value())
+		{
+			return "The game socket is not open: the file did not go";
+		}
+		change.file = *hash;
+	}
+	Locator::playerCommandSystem::value().Submit(change);
+	return fmt::format("Sent: {} at the next turn, for every computer", script_acts::NameOf(change.use));
 }
 
 void ScriptsPanel::Refresh(const lhvm::LHVM& vm, const Program& program) noexcept
@@ -633,7 +701,9 @@ void ScriptsPanel::DrawDisassembly(lhvm::LHVM& vm, const Program& program, const
 			const bool hasBreakpoint = breakpoints.contains(address);
 			if (ImGui::InvisibleButton("Breakpoint", ImVec2(ImGui::GetFontSize(), rowHeight)))
 			{
-				vm.SetBreakpoint(address, !hasBreakpoint);
+				Act({.act = player_commands::EditorScript::Act::Breakpoint,
+				     .address = address,
+				     .index = static_cast<uint16_t>(hasBreakpoint ? 0 : 1)});
 			}
 			ImGui::SetItemTooltip(hasBreakpoint ? "Remove the breakpoint" : "Hold tasks before this instruction");
 			auto* drawList = ImGui::GetWindowDrawList();
@@ -711,7 +781,17 @@ void ScriptsPanel::DrawDecompiled(const Program& program, const VMScript& script
 		{
 			auto result = Compile(program, script, _sourceText);
 			_compileMessages = std::move(result.diagnostics);
-			if (result.program != nullptr && Locator::vm::value().UpdateProgram(*result.program) == EXIT_SUCCESS)
+			// In a network game each computer compiles the source at the turn. This computer only checks it first.
+			if (developer_tools::NetworkSessionLive())
+			{
+				if (result.program != nullptr)
+				{
+					const std::span edited(reinterpret_cast<const uint8_t*>(_sourceText.data()), _sourceText.size());
+					_compileMessages.push_back(SendProgram(
+					    {.use = player_commands::EditorScriptProgram::Use::Compile, .script = script.scriptId}, edited));
+				}
+			}
+			else if (result.program != nullptr && Locator::vm::value().UpdateProgram(*result.program) == EXIT_SUCCESS)
 			{
 				// The program's tables have moved: stop drawing from the old ones this frame
 				_compileMessages.emplace_back("Compiled: the script runs its new code from its next start");
@@ -899,7 +979,7 @@ void ScriptsPanel::DrawSide(lhvm::LHVM& vm, const Program& program) noexcept
 	ImGui::EndTabBar();
 }
 
-void ScriptsPanel::DrawDetails(lhvm::LHVM& vm, const Program& program) noexcept
+void ScriptsPanel::DrawDetails(lhvm::LHVM& /*vm*/, const Program& program) noexcept
 {
 	const auto* script = ScriptById(program, _scriptId);
 	if (script == nullptr)
@@ -935,23 +1015,26 @@ void ScriptsPanel::DrawDetails(lhvm::LHVM& vm, const Program& program) noexcept
 	}
 	if (ImGui::Button("Start a task"))
 	{
-		// Parameters go on the stack as a calling script's do, then the script starts as the game starts scripts
-		for (const auto value : _parameters)
+		const auto result =
+		    Act({.act = player_commands::EditorScript::Act::Start, .id = script->scriptId, .parameters = _parameters});
+		if (!result.has_value())
 		{
-			vm.Pushf(value);
+			_lastStart = "Sent: the task starts at the next turn";
 		}
-		const auto task = vm.StartScript(script->name, lhvm::ScriptType::All);
-		_lastStart = task != 0 ? fmt::format("Started task {}", task) : "Couldn't start it: see the log";
-		if (task != 0)
+		else if (result->task != 0)
 		{
-			_taskId = task;
+			_lastStart = fmt::format("Started task {}", result->task);
+			_taskId = result->task;
+		}
+		else
+		{
+			_lastStart = "Couldn't start it: see the log";
 		}
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Stop its tasks"))
 	{
-		const auto& name = script->name;
-		vm.StopScripts([&name](const std::string& taskName, const std::string&) { return taskName == name; });
+		Act({.act = player_commands::EditorScript::Act::StopScript, .id = script->scriptId});
 	}
 	if (!_lastStart.empty())
 	{
@@ -1008,18 +1091,12 @@ void ScriptsPanel::DrawTasks(lhvm::LHVM& vm, const Program& program) noexcept
 	const auto& tasks = vm.GetTasks();
 	if (ImGui::Button("Hold all"))
 	{
-		for (const auto& [id, task] : tasks)
-		{
-			vm.HoldTask(id);
-		}
+		Act({.act = player_commands::EditorScript::Act::HoldAll});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Continue all"))
 	{
-		for (const auto& [id, task] : tasks)
-		{
-			vm.ContinueTask(id);
-		}
+		Act({.act = player_commands::EditorScript::Act::ContinueAll});
 	}
 	ImGui::SameLine();
 	ImGui::TextColored(style::k_Muted, "Held tasks sit out the turns; the game's pause and step drive the rest");
@@ -1075,24 +1152,26 @@ void ScriptsPanel::DrawTasks(lhvm::LHVM& vm, const Program& program) noexcept
 		{
 			if (ImGui::Button("Step"))
 			{
-				vm.StepTask(task.id);
+				Act({.act = player_commands::EditorScript::Act::StepTask, .id = task.id});
 			}
 			ImGui::SetItemTooltip("Runs its next instruction at the next turn");
 			ImGui::SameLine();
 			if (ImGui::Button("Continue"))
 			{
-				vm.ContinueTask(task.id);
+				Act({.act = player_commands::EditorScript::Act::ContinueTask, .id = task.id});
 			}
 		}
 		else if (ImGui::Button("Hold"))
 		{
-			vm.HoldTask(task.id);
+			Act({.act = player_commands::EditorScript::Act::HoldTask, .id = task.id});
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Stop"))
 		{
-			vm.StopTask(task.id);
+			const auto stopped = task.id;
 			_taskId = 0;
+			Act({.act = player_commands::EditorScript::Act::StopTask, .id = stopped});
+			return;
 		}
 		if (_taskId != 0)
 		{
@@ -1160,7 +1239,10 @@ void ScriptsPanel::DrawTasks(lhvm::LHVM& vm, const Program& program) noexcept
 							{
 								if (const auto value = ParseValue(text, variable.type))
 								{
-									vm.SetTaskVariable(task.id, i, *value);
+									Act({.act = player_commands::EditorScript::Act::SetTaskVariable,
+									     .id = task.id,
+									     .index = static_cast<uint16_t>(i),
+									     .value = value->uintVal});
 								}
 							}
 							ImGui::PopID();
@@ -1210,20 +1292,16 @@ void ScriptsPanel::DrawTasks(lhvm::LHVM& vm, const Program& program) noexcept
 		}
 		if (remove.has_value())
 		{
-			vm.SetBreakpoint(*remove, false);
+			Act({.act = player_commands::EditorScript::Act::Breakpoint, .address = *remove, .index = 0});
 		}
 		if (!breakpoints.empty() && ImGui::Button("Remove all"))
 		{
-			const std::vector<uint32_t> all(breakpoints.begin(), breakpoints.end());
-			for (const auto address : all)
-			{
-				vm.SetBreakpoint(address, false);
-			}
+			Act({.act = player_commands::EditorScript::Act::RemoveBreakpoints});
 		}
 	}
 }
 
-void ScriptsPanel::DrawGlobals(lhvm::LHVM& vm, const Program& program) noexcept
+void ScriptsPanel::DrawGlobals(lhvm::LHVM& /*vm*/, const Program& program) noexcept
 {
 	ImGui::SetNextItemWidth(-1.0f);
 	ImGui::InputTextWithHint("##Filter", "Search globals", &_globalsFilter);
@@ -1271,7 +1349,7 @@ void ScriptsPanel::DrawGlobals(lhvm::LHVM& vm, const Program& program) noexcept
 				{
 					if (const auto value = ParseValue(_editText, global.type))
 					{
-						vm.SetVariable(id, *value);
+						Act({.act = player_commands::EditorScript::Act::SetGlobal, .id = id, .value = value->uintVal});
 					}
 					_editingGlobal.reset();
 				}

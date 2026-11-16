@@ -1243,27 +1243,24 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 		_palette.Draw(context);
 		ImGui::EndTabItem();
 	}
-	// The scenarios and the scripts change the world of this computer only, so a network game does not have them. The land
-	// tools send their strokes and paths as commands of the turns.
-	if (!InNetworkGame())
+	// The scenarios change the world of this computer only, so a network game does not have them. The land tools and the
+	// script tabs send their acts as commands of the turns.
+	if (!InNetworkGame() && ImGui::BeginTabItem("Scenarios", nullptr, flags(BottomTab::Scenarios)))
 	{
-		if (ImGui::BeginTabItem("Scenarios", nullptr, flags(BottomTab::Scenarios)))
-		{
-			ImGui::BeginChild("Scenarios");
-			_scenarios.DrawContents();
-			ImGui::EndChild();
-			ImGui::EndTabItem();
-		}
-		if (ImGui::BeginTabItem("Scripts", nullptr, flags(BottomTab::Scripts)))
-		{
-			_scripts.Draw();
-			ImGui::EndTabItem();
-		}
-		if (ImGui::BeginTabItem("Land script", nullptr, flags(BottomTab::LandScript)))
-		{
-			_landScript.Draw();
-			ImGui::EndTabItem();
-		}
+		ImGui::BeginChild("Scenarios");
+		_scenarios.DrawContents();
+		ImGui::EndChild();
+		ImGui::EndTabItem();
+	}
+	if (ImGui::BeginTabItem("Scripts", nullptr, flags(BottomTab::Scripts)))
+	{
+		_scripts.Draw();
+		ImGui::EndTabItem();
+	}
+	if (ImGui::BeginTabItem("Land script", nullptr, flags(BottomTab::LandScript)))
+	{
+		_landScript.Draw();
+		ImGui::EndTabItem();
 	}
 	if (ImGui::BeginTabItem("Land tools", nullptr, flags(BottomTab::LandTools)))
 	{

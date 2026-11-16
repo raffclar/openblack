@@ -33,6 +33,7 @@
 #include "Common/BuildVersion.h"
 #include "Creature/CreatureFileLoad.h"
 #include "Editor/EditorMindLoads.h"
+#include "Editor/EditorScriptActs.h"
 #include "Locator.h"
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Online/Desktop/UdpLanDiscovery.h"
@@ -474,6 +475,7 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	        .lanNames = settings.lan,
 	        .relaysCreature = creature_file_load::ServerRelays,
 	        .readsMindFile = [](std::span<const uint8_t> data) { return editor::mind_loads::ReadMind(data) != nullptr; },
+	        .readsScriptProgram = editor::script_acts::ReadsProgram,
 	        .landCountries =
 	            [] {
 		            return Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded()

@@ -853,6 +853,108 @@ struct EditorMindLoad
 	[[nodiscard]] bool operator==(const EditorMindLoad&) const = default;
 };
 
+/// The most parameters of a script that the Scripts tab of the editor starts
+inline constexpr size_t k_MostEditorScriptParameters = 16;
+
+/// An act of the Scripts tab of the editor on the script machine: a task starts, holds, steps, continues or stops, a
+/// breakpoint changes, or a variable takes a new value. Each computer does the act at the same turn. Only a player with
+/// the editor claim sends it in a network game, and the game server refuses it from every other player.
+struct EditorScript
+{
+	enum class Act : uint8_t
+	{
+		/// A new task of the script id starts with the parameters
+		Start = 0,
+		/// Each task of the script id stops
+		StopScript = 1,
+		HoldAll = 2,
+		ContinueAll = 3,
+		/// The held task id does one instruction
+		StepTask = 4,
+		/// The held task id runs again
+		ContinueTask = 5,
+		HoldTask = 6,
+		StopTask = 7,
+		/// The breakpoint at the address goes on (index 1) or off (index 0)
+		Breakpoint = 8,
+		/// All the breakpoints go off
+		RemoveBreakpoints = 9,
+		/// The global variable id takes the value
+		SetGlobal = 10,
+		/// The local variable index of the task id takes the value
+		SetTaskVariable = 11,
+	};
+
+	Act act {Act::Start};
+	/// The script, the task or the global variable of the act
+	uint32_t id {0};
+	/// The address of a breakpoint
+	uint32_t address {0};
+	/// The local variable of a task, or 1 for a breakpoint that goes on and 0 for one that goes off
+	uint16_t index {0};
+	/// The bits of the new value of a variable. The variable keeps its type.
+	uint32_t value {0};
+	/// The parameters of a start
+	std::vector<float> parameters;
+
+	[[nodiscard]] bool operator==(const EditorScript&) const = default;
+};
+
+/// An act of the Land script tab of the editor: the stepper reads a land script, or does, skips or stops at its commands.
+/// The editor system of each computer keeps the stepper, and does the act at the same turn. Only a player with the editor
+/// claim sends it in a network game, and the game server refuses it from every other player.
+struct EditorLandScript
+{
+	enum class Act : uint8_t
+	{
+		/// The stepper reads the script of the land that the game loaded last
+		LoadedLand = 0,
+		/// The stepper reads the text of a land script of the editor, by the hash of its bytes
+		Open = 1,
+		Step = 2,
+		Continue = 3,
+		/// The stepper does the commands up to the command index, and not that command
+		RunTo = 4,
+		Skip = 5,
+		Restart = 6,
+		/// The breakpoint of the command index goes on or off
+		Breakpoint = 7,
+	};
+
+	Act act {Act::LoadedLand};
+	/// The command of RunTo and Breakpoint
+	uint32_t command {0};
+	/// The hash of the text of an Open (editor::mind_loads::HashOf)
+	uint64_t file {0};
+
+	[[nodiscard]] bool operator==(const EditorLandScript&) const = default;
+};
+
+/// The Scripts tab of the editor changes the program of the script machine: it compiles the edited source of a script,
+/// opens another program, or opens the program of the game again. The file goes to the game server on the game socket
+/// before the command, and the server sends it to each computer before the turn that holds the command. Only a player with
+/// the editor claim sends it in a network game, and the game server refuses it from every other player.
+struct EditorScriptProgram
+{
+	enum class Use : uint8_t
+	{
+		/// Each computer compiles the source of the file into the script id
+		Compile = 0,
+		/// The compiled program of the file takes the place of the program
+		Open = 1,
+		/// The program of the game takes the place of the program again. It uses no file.
+		GamesProgram = 2,
+	};
+
+	Use use {Use::Compile};
+	/// The hash of the bytes of the file (editor::mind_loads::HashOf), 0 for GamesProgram
+	uint64_t file {0};
+	/// The script of a compile
+	uint32_t script {0};
+
+	[[nodiscard]] bool operator==(const EditorScriptProgram&) const = default;
+};
+
 /// A debug cheat of the player of the command goes on or off (debug_cheats::Cheat). Only a player with the editor claim sends
 /// it in a network game, and the game server refuses it from every other player.
 struct DebugCheat
@@ -873,16 +975,15 @@ struct DebugLandSkip
 };
 
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
-                            GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
-                            CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
-                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut,
-                            HandLockRelease, EditorEdit, DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip,
-                            EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke, EditorPath, EditorRemake,
-                            EditorMindLoad>;
+using Action = std::variant<
+    LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap, HandReport,
+    HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove, FightCharge,
+    CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest, MiracleRepeat, HandCast,
+    HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff,
+    GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
+    DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit,
+    DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip, EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke,
+    EditorPath, EditorRemake, EditorMindLoad, EditorScript, EditorLandScript, EditorScriptProgram>;
 
 /// A command and the player that sent it
 struct Command
@@ -912,7 +1013,8 @@ struct Command
 	       std::holds_alternative<EditorVillagerEdit>(action) || std::holds_alternative<EditorCreatureSpawn>(action) ||
 	       std::holds_alternative<DebugLandSkip>(action) || std::holds_alternative<EditorLandStroke>(action) ||
 	       std::holds_alternative<EditorPath>(action) || std::holds_alternative<EditorRemake>(action) ||
-	       std::holds_alternative<EditorMindLoad>(action);
+	       std::holds_alternative<EditorMindLoad>(action) || std::holds_alternative<EditorScript>(action) ||
+	       std::holds_alternative<EditorLandScript>(action) || std::holds_alternative<EditorScriptProgram>(action);
 }
 
 /// Whether the game server refuses the command from every player, also from a player with the editor claim. A network game
@@ -924,8 +1026,8 @@ struct Command
 
 /// Whether the game server takes the command from an observer. An observer with the editor claim also sends the edits of the
 /// editor, also the edits, the acts, the new creatures and the tattoos of a creature, the edits of a villager, and the
-/// strokes and the paths of the land tools, and the mind files of a creature. The god of the observers has no citadel, so
-/// an observer sends no debug cheat.
+/// strokes and the paths of the land tools, the mind files of a creature, and the acts of the script tabs. The god of the
+/// observers has no citadel, so an observer sends no debug cheat.
 [[nodiscard]] constexpr bool ServerTakesFromObserver(const Action& action, bool editor) noexcept
 {
 	return ObserverSends(action) ||
@@ -934,7 +1036,9 @@ struct Command
 	         std::holds_alternative<EditorCreatureAct>(action) || std::holds_alternative<EditorCreatureSpawn>(action) ||
 	         std::holds_alternative<EditorVillagerEdit>(action) || std::holds_alternative<CreatureTattoo>(action) ||
 	         std::holds_alternative<EditorLandStroke>(action) || std::holds_alternative<EditorPath>(action) ||
-	         std::holds_alternative<EditorRemake>(action) || std::holds_alternative<EditorMindLoad>(action)));
+	         std::holds_alternative<EditorRemake>(action) || std::holds_alternative<EditorMindLoad>(action) ||
+	         std::holds_alternative<EditorScript>(action) || std::holds_alternative<EditorLandScript>(action) ||
+	         std::holds_alternative<EditorScriptProgram>(action)));
 }
 
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that

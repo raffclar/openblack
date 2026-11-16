@@ -70,6 +70,10 @@ public:
 			_session->SendRoomChat(text, to, team);
 		}
 	}
+	[[nodiscard]] bool SendEditorScriptFile(game_socket::EditorScriptFile::Kind kind, std::vector<uint8_t> file) override
+	{
+		return _session && _session->SendEditorScriptFile(kind, std::move(file));
+	}
 	[[nodiscard]] bool SendEditorMindFile(std::vector<uint8_t> file) override
 	{
 		return _session && _session->SendEditorMindFile(std::move(file));

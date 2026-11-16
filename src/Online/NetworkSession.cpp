@@ -128,6 +128,8 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_startCreatures.clear();
 	_startAlignments.clear();
 	_mindFiles.Clear();
+	_scriptFiles.Clear();
+	_scriptParts = {};
 	_ownGodPlaysForClan = false;
 	_turns.clear();
 	_waitingCommands = 0;
@@ -250,6 +252,19 @@ void NetworkSession::SendRoomChat(std::string_view text, std::string_view to, bo
 std::vector<game_socket::RoomChat> NetworkSession::TakeRoomChat()
 {
 	return std::exchange(_roomChat, {});
+}
+
+bool NetworkSession::SendEditorScriptFile(game_socket::EditorScriptFile::Kind kind, std::vector<uint8_t> file)
+{
+	if (!_start.has_value() || !_stream || !_stream->IsOpen() || file.empty() ||
+	    file.size() > game_socket::k_MostEditorScriptFileBytes)
+	{
+		return false;
+	}
+	const auto parts = editor::script_files::SplitFile(kind, file);
+	_log->Write(spdlog::level::info, fmt::format("This computer sends a script file of the editor of {} bytes in {} parts",
+	                                             file.size(), parts.size()));
+	return std::ranges::all_of(parts, [this](const auto& part) { return _stream->SendText(game_socket::ToJson(part)); });
 }
 
 bool NetworkSession::SendEditorMindFile(std::vector<uint8_t> file)
@@ -459,6 +474,32 @@ void NetworkSession::Text(std::string_view text)
 		{
 			_log->Write(spdlog::level::warn,
 			            fmt::format("The session keeps the most mind files and does not keep the file {:016x}", hash));
+		}
+	}
+	else if (const auto* part = std::get_if<game_socket::EditorScriptFile>(&*frame))
+	{
+		// The parts come in order before the turn of the command that uses the file, on the same socket
+		const auto step = _scriptParts.Add(*part);
+		if (step == editor::script_files::PartAssembly::Step::Bad)
+		{
+			_log->Write(spdlog::level::warn,
+			            fmt::format("A part of the script file {:016x} of the editor does not continue the file", part->hash));
+		}
+		else if (step == editor::script_files::PartAssembly::Step::Done)
+		{
+			auto file = _scriptParts.Take();
+			const auto size = file->bytes.size();
+			const auto [added, hash] = _scriptFiles.Add(file->kind, std::move(file->bytes));
+			if (added == editor::script_files::FileStore::Added::New)
+			{
+				_log->Write(spdlog::level::info,
+				            fmt::format("The server sent a script file of the editor of {} bytes (hash {:016x})", size, hash));
+			}
+			else if (added == editor::script_files::FileStore::Added::Refused)
+			{
+				_log->Write(spdlog::level::warn,
+				            fmt::format("The session keeps the most script files and does not keep the file {:016x}", hash));
+			}
 		}
 	}
 	else if (const auto* commands = std::get_if<game_socket::CommandRefused>(&*frame))

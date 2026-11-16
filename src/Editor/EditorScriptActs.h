@@ -1,0 +1,196 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+
+#include <filesystem>
+#include <functional>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include <GameSocket.h>
+
+#include "Commands/PlayerCommands.h"
+#include "Editor/Scripts/LandScriptStepper.h"
+#include "LHScriptX/Script.h"
+
+/// The acts of the Scripts tab and the Land script tab of the editor. A game alone does each act at once. In a network game
+/// the act is a command of the turns, and each computer does it at the same turn, so that the script machine and the land
+/// script stepper stay the same on every computer. The rules take the machine and the world as interfaces, so that the
+/// tests give fakes.
+namespace openblack::editor::script_acts
+{
+
+using player_commands::EditorLandScript;
+using player_commands::EditorScript;
+using player_commands::EditorScriptProgram;
+
+/// The script machine as the acts see it. The game gives its own machine, and the tests give a fake.
+class MachineInterface
+{
+public:
+	struct ScriptInfo
+	{
+		std::string name;
+		uint32_t parameters {0};
+	};
+
+	virtual ~MachineInterface() = default;
+
+	/// The script with the id, or none
+	[[nodiscard]] virtual std::optional<ScriptInfo> Script(uint32_t id) const = 0;
+	[[nodiscard]] virtual bool HasTask(uint32_t task) const = 0;
+	/// The ids of the tasks, in the order of the machine
+	[[nodiscard]] virtual std::vector<uint32_t> Tasks() const = 0;
+	[[nodiscard]] virtual bool IsHeld(uint32_t task) const = 0;
+	/// The count of the instructions of the program
+	[[nodiscard]] virtual size_t CodeSize() const = 0;
+	/// The count of the global variables, with the null variable 0
+	[[nodiscard]] virtual size_t GlobalCount() const = 0;
+	[[nodiscard]] virtual size_t TaskVariableCount(uint32_t task) const = 0;
+
+	/// Starts a task of the script with the parameters. Gives the new task, or 0 when the machine did not start it.
+	virtual uint32_t Start(const ScriptInfo& script, std::span<const float> parameters) = 0;
+	/// Stops each task of the script with the name
+	virtual void StopScript(const std::string& name) = 0;
+	virtual void Hold(uint32_t task) = 0;
+	virtual void Continue(uint32_t task) = 0;
+	virtual void Step(uint32_t task) = 0;
+	virtual void Stop(uint32_t task) = 0;
+	virtual void SetBreakpoint(uint32_t address, bool on) = 0;
+	[[nodiscard]] virtual std::vector<uint32_t> Breakpoints() const = 0;
+	/// Sets the bits of the value of a global variable or of a local variable of a task. The type stays.
+	virtual void SetGlobal(uint32_t id, uint32_t bits) = 0;
+	virtual void SetTaskVariable(uint32_t task, size_t index, uint32_t bits) = 0;
+};
+
+/// The name of an act, for the log of the game
+[[nodiscard]] std::string_view NameOf(EditorScript::Act act) noexcept;
+[[nodiscard]] std::string_view NameOf(EditorLandScript::Act act) noexcept;
+[[nodiscard]] std::string_view NameOf(EditorScriptProgram::Use use) noexcept;
+
+/// Why no computer takes the act, or none when the act can go. The rule keeps no state, so the game server uses it before
+/// the turn. The machine of each computer checks the ids at the turn.
+[[nodiscard]] std::optional<std::string_view> ScriptActRefusal(const EditorScript& act) noexcept;
+
+/// What an act did at the turn
+struct ActResult
+{
+	bool done {false};
+	/// Why the machine did not take the act. Empty when it took it.
+	std::string_view refusal;
+	/// The new task of a start, or 0
+	uint32_t task {0};
+};
+
+/// Does an act of the editor on a script machine
+[[nodiscard]] ActResult ApplyScriptAct(const EditorScript& act, MachineInterface& machine);
+/// Does an act of the editor on the script machine of the Locator
+[[nodiscard]] ActResult RunScriptAct(const EditorScript& act);
+
+/// What the world of a computer gives to a change of the program at the turn. The game gives the world of the Locator,
+/// and the tests give fakes.
+struct ProgramWorld
+{
+	/// Compiles the source of the script with the id into the program. Gives the first message of the compiler when the
+	/// source does not compile, or none when the machine runs the new code.
+	std::function<std::optional<std::string>(uint32_t script, std::string_view source)> compile;
+	/// Loads the bytes of a compiled program in place of the program of the machine. False when the bytes do not read.
+	std::function<bool(std::span<const uint8_t> bytes)> load;
+	/// Loads the program of the game again. False when the program of the game does not read.
+	std::function<bool()> loadGames;
+};
+
+/// What a change of the program did at the turn
+struct ProgramResult
+{
+	bool done {false};
+	std::string refusal;
+};
+
+/// Whether the bytes read as a compiled program, as the script machine reads a program that it loads
+[[nodiscard]] bool ReadsProgram(std::span<const uint8_t> bytes);
+
+/// Why no computer takes the change of the program, or none when it can go. kept tells whether the store of the computer
+/// keeps the file of the command.
+[[nodiscard]] std::optional<std::string_view> ProgramRefusal(const EditorScriptProgram& change, bool kept) noexcept;
+/// The kind of the file that a change of the program uses, or none when it uses no file
+[[nodiscard]] std::optional<game_socket::EditorScriptFile::Kind> FileKindOf(const EditorScriptProgram& change) noexcept;
+/// Does a change of the program. file is the bytes of the file with the hash of the command, from the store of this
+/// computer, or none.
+[[nodiscard]] ProgramResult ApplyProgram(const EditorScriptProgram& change, std::span<const uint8_t> file,
+                                         const ProgramWorld& world);
+/// Does a change of the program on the script machine of the Locator
+[[nodiscard]] ProgramResult RunProgram(const EditorScriptProgram& change, std::span<const uint8_t> file);
+
+/// The land script that the Land script tab steps through: the commands, which of them are done, and the breakpoints. The
+/// editor system keeps it, so that each computer of a network game steps the same commands.
+struct LandScriptRun
+{
+	/// The name of the file of the script
+	std::string name;
+	lhscriptx::ReadCommands read;
+	scripts::LandScriptStepper stepper;
+	/// What the last act did
+	std::string message;
+	/// Goes up at each act, so that a panel knows that the run changed
+	uint32_t changes {0};
+};
+
+/// Reads the text of a land script into the run: the commands, none done and no breakpoints
+void ReadLandScript(LandScriptRun& run, std::string name, const std::string& text);
+
+/// The text of the land script in a file: the text of a land script file, or the script in a land of a network game. None
+/// when the file does not read.
+[[nodiscard]] std::optional<std::string> LandScriptText(const std::filesystem::path& path);
+
+/// What the world of a computer gives to an act of the land script at the turn. The game gives the world of the Locator,
+/// and the tests give fakes.
+struct LandScriptWorld
+{
+	/// The path of the land that the game loaded last, or none
+	std::function<std::optional<std::filesystem::path>()> loadedLand;
+	/// The text of the land script of a file, or none
+	std::function<std::optional<std::string>(const std::filesystem::path&)> readText;
+	/// Does a command in the world. Gives the text of the error when the command failed, or none.
+	std::function<std::optional<std::string>(const lhscriptx::Command&)> run;
+};
+
+/// Why no computer takes the act, or none when it can go. kept tells whether the store of the computer keeps the file
+/// of an Open.
+[[nodiscard]] std::optional<std::string_view> LandScriptRefusal(const EditorLandScript& act, bool kept) noexcept;
+
+/// What an act of the land script did
+struct LandScriptResult
+{
+	bool done {false};
+	std::string_view refusal;
+	/// The count of the commands that the act did in the world
+	size_t commands {0};
+};
+
+/// Does an act of the land script on the run. file is the text of an Open, from the store of this computer, or none.
+[[nodiscard]] LandScriptResult ApplyLandScript(const EditorLandScript& act, std::span<const uint8_t> file, LandScriptRun& run,
+                                               const LandScriptWorld& world);
+/// The world of the Locator for the acts of the land script
+[[nodiscard]] LandScriptWorld LocatorLandScriptWorld();
+/// Does an act of the land script on the run of the editor system of the Locator
+[[nodiscard]] LandScriptResult RunLandScript(const EditorLandScript& act, std::span<const uint8_t> file);
+
+/// Sends the bytes of a file on the game socket and gives the hash of the bytes. None when the game socket did not take
+/// the bytes: then the command that uses the file must not go.
+[[nodiscard]] std::optional<uint64_t> SendFile(game_socket::EditorScriptFile::Kind kind, std::span<const uint8_t> bytes);
+
+} // namespace openblack::editor::script_acts

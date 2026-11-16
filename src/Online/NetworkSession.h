@@ -28,6 +28,7 @@
 #include "Commands/TurnCommandSource.h"
 #include "ECS/EntityHashes.h"
 #include "Editor/EditorMindLoads.h"
+#include "Editor/EditorScriptFiles.h"
 #include "Online/Backoff.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameOrigin.h"
@@ -192,6 +193,9 @@ public:
 	/// Sends a mind file of the creature tools of the editor to the server, during the game. False when the socket is not
 	/// open or the game did not start: then the file does not go.
 	[[nodiscard]] bool SendEditorMindFile(std::vector<uint8_t> file);
+	/// Sends a file of the script tabs of the editor to the server in parts, during the game. False when the socket is not
+	/// open, the game did not start or the file is too large: then the file does not go.
+	[[nodiscard]] bool SendEditorScriptFile(game_socket::EditorScriptFile::Kind kind, std::vector<uint8_t> file);
 	/// The player leaves the game. The server defeats the god.
 	void Leave();
 	/// The end box of a decided game opened: the client asks the server to stop the turns of the game, one time
@@ -210,6 +214,10 @@ public:
 	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
 	[[nodiscard]] std::span<const uint8_t> EditorMindFile(uint64_t hash) const override { return _mindFiles.Find(hash); }
+	[[nodiscard]] std::span<const uint8_t> EditorScriptFile(uint8_t kind, uint64_t hash) const override
+	{
+		return _scriptFiles.Find(static_cast<game_socket::EditorScriptFile::Kind>(kind), hash);
+	}
 	/// The god of the slot that the server gave to this computer. None for an observer.
 	[[nodiscard]] std::optional<PlayerNames> OwnGod() const override;
 	/// The number of the observer that the server gave to this computer. None for a god, and for an observer of a
@@ -370,6 +378,10 @@ private:
 	std::map<uint8_t, float> _startAlignments;
 	/// The mind files of the editor that the server sent during this game. A resume keeps them; a new join clears them.
 	editor::mind_loads::MindFileStore _mindFiles;
+	/// The files of the script tabs of the editor that the server sent during this game, and the parts of the file that
+	/// comes now. A resume keeps the files; a new join clears them.
+	editor::script_files::FileStore _scriptFiles;
+	editor::script_files::PartAssembly _scriptParts;
 	bool _ownGodPlaysForClan {false};
 	std::string _refusedReason;
 	std::string _refusedPath;

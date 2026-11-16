@@ -2503,6 +2503,119 @@
   "writes": true
  },
  {
+  "description": "Does an act of the Scripts tab on the script machine, as the tab does it: at once in a game alone, or as a command of the turns in a network game, which each computer does at the same turn and the game server takes only from a player with the editor claim. Acts: start, stop_script, hold_all, continue_all, step, continue, hold, stop, breakpoint, remove_breakpoints, set_global, set_local. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The act",
+    "name": "act",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The script, the task or the global of the act",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The name of the script of a start or a stop_script, in place of the id",
+    "name": "script",
+    "type": "string"
+   },
+   {
+    "description": "The address of a breakpoint",
+    "name": "address",
+    "type": "integer"
+   },
+   {
+    "description": "The local of set_local, or 1 (on) or 0 (off) for a breakpoint",
+    "name": "index",
+    "type": "integer"
+   },
+   {
+    "description": "The new value of a variable, as a number",
+    "name": "value",
+    "type": "number"
+   },
+   {
+    "description": "The numbers that a start gives",
+    "name": "parameters",
+    "type": "array"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.script",
+  "writes": true
+ },
+ {
+  "description": "Does an act of the Land script tab on its stepper, as the tab does it: at once in a game alone, or as a command of the turns in a network game. Acts: loaded_land, open (with a path: the text goes to every computer first), step, continue, run_to, skip, restart, breakpoint. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The act",
+    "name": "act",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The command of run_to and breakpoint",
+    "name": "command",
+    "type": "integer"
+   },
+   {
+    "description": "The land script file of an open",
+    "name": "path",
+    "type": "string"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.land_script",
+  "writes": true
+ },
+ {
+  "description": "Changes the program of the script machine, as the Scripts tab does it: compile (the text of a source file into the script), open (a compiled .chl) or games (the program of the game again). In a network game the file goes to every computer first, and each computer does the change at the same turn. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "compile, open or games",
+    "name": "use",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The source file or the program file",
+    "name": "path",
+    "type": "string"
+   },
+   {
+    "description": "The name of the script of a compile",
+    "name": "script",
+    "type": "string"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.script_program",
+  "writes": true
+ },
+ {
+  "description": "What the script tabs of the editor show and every computer of a network game must have the same: the tasks with their scripts and whether they are held, the breakpoints, the count of the instructions, and the land script of the stepper with its next command",
+  "kind": "object",
+  "parameters": [],
+  "query": "editor.script_state"
+ },
+ {
   "description": "Sends a stroke of the land brush as a command of the turns, as the land tools send it in a network game: each computer raises, lowers or paints the land at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
   "kind": "object",
   "parameters": [

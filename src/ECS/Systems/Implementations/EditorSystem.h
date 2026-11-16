@@ -14,6 +14,7 @@
 
 #include "Camera/KeyboardMoveSpeed.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "Editor/EditorScriptActs.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -44,6 +45,7 @@ public:
 	void AnswerRequest(editor::Request request, entt::entity entity) override;
 	[[nodiscard]] editor::paths::DrawnPaths& GetDrawnPaths() override { return _drawnPaths; }
 	[[nodiscard]] const editor::paths::DrawnPaths& GetDrawnPaths() const override { return _drawnPaths; }
+	[[nodiscard]] editor::script_acts::LandScriptRun& GetLandScriptRun() override { return _landScript; }
 	[[nodiscard]] editor::land_brush::Brush& GetLandBrush() override { return _landBrush; }
 	void SetTool(Tool tool) override { _tool = tool; }
 	[[nodiscard]] Tool GetTool() const override { return _tool; }
@@ -72,6 +74,7 @@ private:
 	editor::EditorSelection _selection;
 	editor::EditorHistory _history;
 	editor::paths::DrawnPaths _drawnPaths;
+	editor::script_acts::LandScriptRun _landScript;
 	editor::land_brush::Brush _landBrush;
 	/// The count of the registry's resets that the picks and the history belong to
 	std::optional<uint32_t> _registryResets;
