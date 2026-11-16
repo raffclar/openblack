@@ -1362,6 +1362,12 @@
   "query": "engine.config"
  },
  {
+  "description": "What the scripts read of the bonus creatures and the advisors now. every_computer is what a script that each computer runs reads (in a network game, the same on each computer). this_computer is what a help script of this computer reads. The spirits are those of the script spirits 3 (by the alignment) and 4 (the opposite of the alignment); the query draws no random number",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.script_reads"
+ },
+ {
   "description": "The settings of this computer (settings.json) as the game read them at the start, with the changes kept since; a value the file does not keep is null",
   "kind": "object",
   "parameters": [],

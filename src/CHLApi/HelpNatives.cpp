@@ -45,6 +45,7 @@
 #include "CHLApi.h"
 #include "CHLApi/NativeHelpers.h"
 #include "CHLApi/Natives.h"
+#include "Common/GameRandom.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Player.h"
@@ -122,17 +123,45 @@ help::spirits::AdvisorSpiritController* ScriptAdvisors()
 	return &Locator::advisorSystem::value().GetController();
 }
 
-/// The advisor a script's spirit means, 1 the good one or 2 the evil one, by the first player's alignment for those
-/// that go by it. A random spirit comes from the random numbers of the help, which no frame draws.
+bool AdvisorsReadThisComputer()
+{
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	constexpr auto k_HelpScripts = lhvm::ScriptType::Help | lhvm::ScriptType::TempleHelp | lhvm::ScriptType::MultiplayerHelp;
+	const bool helpScript = Locator::vm::has_value() && (TaskType(CurrentTask()) & k_HelpScripts);
+	return help::script_spirits::ReadsThisComputer(networkGame, helpScript);
+}
+
+/// The advisor a script's spirit means, 1 the good one or 2 the evil one, for the task that runs
 int32_t ScriptHelpSpirit(int32_t scriptSpirit)
 {
-	const auto player =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return ScriptHelpSpirit(scriptSpirit, AdvisorsReadThisComputer());
+}
+
+/// The advisor a script's spirit means. A spirit that goes by the alignment reads the player of this computer, or the
+/// first player for a script that each computer runs. A random spirit draws from the random numbers of the help of this
+/// computer, which no frame draws, or from the synced random numbers.
+int32_t ScriptHelpSpirit(int32_t scriptSpirit, bool readsThisComputer)
+{
+	const auto player = readsThisComputer && Locator::playerSystem::has_value()
+	                        ? Locator::playerSystem::value().GetLocalPlayer()
+	                        : PlayerNames::PLAYER_ONE;
 	const auto alignment =
 	    Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(player) : 0.0f;
-	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment), []() {
-		return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpRand(100) : 0u;
-	});
+	const auto rand100 = [readsThisComputer]() -> uint32_t {
+		if (readsThisComputer)
+		{
+			return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpRand(100) : 0u;
+		}
+		return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(100) : 0u;
+	};
+	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment), rand100);
+}
+
+/// Whether the advisor has played its animation, as SPIRIT_PLAYED asks
+bool ScriptSpiritPlayed(int32_t spirit, bool readsThisComputer)
+{
+	const auto* advisors = readsThisComputer ? ScriptAdvisors() : nullptr;
+	return help::script_spirits::SpiritPlayed(readsThisComputer, advisors != nullptr && advisors->SpiritPlayingAnim(spirit));
 }
 
 /// The last of the advisors' animations a script can play
@@ -316,9 +345,9 @@ void PlaySpiritAnim() // 140 PLAY_SPIRIT_ANIM
 
 void SpiritPlayed() // 165 SPIRIT_PLAYED
 {
-	const auto spirit = ScriptHelpSpirit(Pop().intVal);
-	const auto* advisors = ScriptAdvisors();
-	Pushb(advisors == nullptr || !advisors->SpiritPlayingAnim(spirit));
+	const bool readsThisComputer = AdvisorsReadThisComputer();
+	const auto spirit = ScriptHelpSpirit(Pop().intVal, readsThisComputer);
+	Pushb(ScriptSpiritPlayed(spirit, readsThisComputer));
 }
 
 void ClingSpirit() // 166 CLING_SPIRIT

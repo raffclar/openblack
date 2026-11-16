@@ -46,6 +46,7 @@
 #include "Advisors.h"
 #include "AlignmentHistory.h"
 #include "Audio.h"
+#include "CHLApi/NativeHelpers.h"
 #include "Camera.h"
 #include "Camera/Camera.h"
 #include "Challenges.h"
@@ -1115,11 +1116,13 @@ bool Gui::ShowMenu() noexcept
 
 			if (ImGui::BeginMenu("Bonus Creatures"))
 			{
-				// The breeder's bonus creatures, which vanilla only had once unlocked from outside the game
+				// The breeder's bonus creatures, which vanilla only had once unlocked from outside the game. The boxes show
+				// the set that the scripts read: in a network game, the set of the world.
+				const auto scriptUnlocked = chlapi::ScriptBonusCreatures();
 				for (size_t i = 0; i < creature_swap::k_BonusCount; ++i)
 				{
 					const auto name = creature_swap::NameOf(static_cast<creature_swap::Bonus>(i));
-					bool unlocked = config.unlockedBonusCreatures.test(i);
+					bool unlocked = scriptUnlocked.test(i);
 					if (ImGui::Checkbox(std::string(name).c_str(), &unlocked))
 					{
 						debug_acts::Do(player_commands::DebugWorld {.act = player_commands::DebugWorld::Act::BonusCreature,

@@ -1911,6 +1911,10 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["debug"] = editor_debug(pids, focus, shots)
         if done["debug"].get("error"):
             done["error"] = done["debug"]["error"]
+    if case == "debug-reads":
+        done["debug_reads"] = editor_debug_reads(pids, focus)
+        if done["debug_reads"].get("error"):
+            done["error"] = done["debug_reads"]["error"]
     if case in ("land", "all"):
         # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
         # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
@@ -2014,6 +2018,74 @@ def editor_debug(pids, focus, shots=None):
         problems.append("the server took a pause from the debugger claim")
     if problems:
         done["error"] = "; ".join(problems)
+    return done
+
+
+def editor_debug_reads(pids, focus):
+    """What the scripts of a network game read of the bonus creatures and the advisors. Only the first client starts
+    with all the bonus creatures of the command line (--client-arg 1:--unlock-bonus-creatures=all), and it has the
+    debugger claim. A script that each computer runs must read the same answers on each client: no bonus creature at
+    the start, the leopard after the debug menu unlocks it at a turn, and each advisor has played while the advisor of
+    each client plays an animation. What a help script of this computer reads may differ: it shows that the old read
+    of this computer can part the worlds. Returns what each client read at each step."""
+    debugger = pids[0]
+    done = {"steps": [], "answers": []}
+
+    def read(step):
+        reads = [inspector_answer(pid, "engine.script_reads", {}) or {} for pid in pids]
+        done["steps"].append({"step": step, "reads": reads})
+        return reads
+
+    def send(params):
+        answer = inspector_answer(debugger, "editor.debug_act", {"params": params})
+        done["answers"].append({"params": params, "answer": answer})
+        return answer
+
+    def every(reads, field):
+        return [(entry.get("every_computer") or {}).get(field) for entry in reads]
+
+    def local(reads, field):
+        return [(entry.get("this_computer") or {}).get(field) for entry in reads]
+
+    problems = []
+    start = read("start")
+    if any(not entry.get("network_game") for entry in start):
+        problems.append("a client is not in a network game")
+    if any(names != [] for names in every(start, "unlocked_bonus_creatures")):
+        problems.append(f"a script of the network game reads bonus creatures at the start: {start}")
+    done["command_line_differs"] = len(set(map(str, local(start, "unlocked_bonus_creatures")))) > 1
+    send({"kind": "world", "act": "bonus_creature", "index": 0, "value": 1})
+    time.sleep(2.0)
+    unlocked = read("leopard unlocked")
+    if any(names != ["leopard"] for names in every(unlocked, "unlocked_bonus_creatures")):
+        problems.append(f"the scripts do not read the leopard of the debug menu on each client: {unlocked}")
+    # Both advisors play a long animation on each computer at the same turn; the reads come while they play
+    for advisor in (1, 2):
+        send({"kind": "advisor", "act": "play_anim", "advisor": advisor, "place": [0.5, 0.5], "anim": 3, "speed": 0.2})
+    time.sleep(1.2)
+    playing = read("advisors play")
+    for field in ("good_spirit_played", "evil_spirit_played", "alignment_spirit", "opposite_spirit"):
+        values = every(playing, field)
+        if len(set(map(str, values))) != 1 or None in values:
+            problems.append(f"the clients read different values of {field}: {values}")
+    if any(value is not True for value in every(playing, "good_spirit_played")):
+        problems.append("a script that each computer runs does not see that the advisor has played")
+    done["local_played_while_playing"] = local(playing, "good_spirit_played")
+    send({"kind": "world", "act": "bonus_creature", "index": 0, "value": 0})
+    time.sleep(2.0)
+    if len(pids) > 1:
+        # The second client has no debugger claim: the server refuses its unlock of the horse
+        done["refused"] = inspector_answer(pids[1], "editor.debug_act", {"params": {
+            "kind": "world", "act": "bonus_creature", "index": 1, "value": 1, "force": True}})
+    time.sleep(2.0)
+    locked = read("leopard locked again")
+    if any(names != [] for names in every(locked, "unlocked_bonus_creatures")):
+        problems.append(f"the scripts read a bonus creature after the debug menu locked the leopard: {locked}")
+    errors = [entry["answer"]["error"] for entry in done["answers"]
+              if isinstance(entry["answer"], dict) and entry["answer"].get("error")]
+    problems += errors
+    if problems:
+        done["error"] = "; ".join(map(str, problems))
     return done
 
 
@@ -3201,7 +3273,7 @@ def main():
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
                                                     "creature-remove", "land", "history", "mind", "time", "scripts", "debugger",
-                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "all"),
+                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "debug-reads", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -3214,7 +3286,8 @@ def main():
                              "(mind), or pauses, steps and changes the speed of the clock of the room (time), "
                              "or does the acts of the script tabs and changes the program (scripts, which "
                              "opens the program of the game again), or holds a task and steps the land script "
-                             "over a restart of the server or a part (debugger), or all of them but time and scripts; "
+                             "over a restart of the server or a part (debugger), or reads what the scripts read of the bonus creatures "
+                             "and the advisors (debug-reads), or all of them but time and scripts; "
                              "every computer must keep the same checksums. Not in all, as each ends the game of the "
                              "room: the editor writes the world into a file and loads it 10 seconds later for the room "
                              "(world), or starts the room again on a testbed scenario (scenario), also while the second "
@@ -3602,10 +3675,11 @@ def main():
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
                                  "observer" if is_observer else "god", 600,
                                  editor=(options.editor_check or options.forest_camera
-                                         or (bool(options.editor_desync) and options.editor_desync != "debug"))
+                                         or (bool(options.editor_desync)
+                                             and options.editor_desync not in ("debug", "debug-reads")))
                                  and index == 0,
                                  staff=options.editor_check and index == 1,
-                                 debugger=options.editor_desync == "debug" and index == 0)
+                                 debugger=options.editor_desync in ("debug", "debug-reads") and index == 0)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
@@ -4053,7 +4127,7 @@ def main():
                 print(f"the script acts differ or did not come: {json.dumps(summary['script_acts'])[:2000]} "
                       f"states {json.dumps(states)[:1000]}")
                 all_same = False
-        if options.editor_desync == "debug":
+        if options.editor_desync in ("debug", "debug-reads"):
             summary["debug_acts"] = debug_act_check(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
             if not summary["debug_acts"]["same"]:
