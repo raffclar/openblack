@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 38> boxes = {{
+	const std::array<BoxScenario, 40> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -157,6 +157,12 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "demonstration does not give its file (deviation 169).",
 	     "A white box says \"ERROR: Could not download map from Internet.\" and \"Please check your Internet "
 	     "connection.\" with OK, over the dimmed room. OK closes the box, and the player stays in the room."},
+	    {"multiplayer.map_package_failed", "The multiplayer front end: a map package that gives no map",
+	     Stage::MapPackageFailed,
+	     "The player joins Bob's game. The lobby gives the land of the room as a map package, but the bytes of the "
+	     "download are not that package (deviation 275).",
+	     "The box \"Could not download map\" shows the vanilla text, and then the line \"The map file is not the map "
+	     "of this game.\" with OK, over the dimmed room."},
 	    {"multiplayer.lan_room_chat", "The multiplayer front end: the chat of a room on the local network", Stage::LanRoomChat,
 	     "The player joins \"Office game\" on the demonstration's local network by the profile's name. The room's game "
 	     "server sends a line of Ian, god 1.",
@@ -243,6 +249,12 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The chat of the room shows \"The game could not start: the game server has version 0.9.0+new/codec36.\". A "
 	     "box over the room tells \"Wrong Version. This game needs version 0.9.0+new/codec36. You have version <this "
 	     "build>. Get the new version at bw.zanidrak.com.\" and OK."},
+	    {"multiplayer.lobby_server_problem", "The lobby sessions: a map that the game server cannot play",
+	     Stage::LobbyServerProblem,
+	     "The player makes a session and clicks Start. The game server of the site plays only another map, so the "
+	     "service refuses the start (deviation 275).",
+	     "A box over the room tells \"The game server cannot play this game.\" and, on a second line, \"This server "
+	     "plays only Two Gods for up to 2 gods.\" with OK. The room stays open."},
 	    {"multiplayer.lobby_notices", "The lobby sessions: the notices of the room", Stage::LobbyNotices,
 	     "The player joins \"Friday Ring\". Each two seconds an event occurs: Dave joins, Dave is ready, Bob starts the "
 	     "countdown, and Bob kicks the player. Run the game in the background, so that the window does not have the "

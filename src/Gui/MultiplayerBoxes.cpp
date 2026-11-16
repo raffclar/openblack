@@ -903,6 +903,14 @@ void MultiplayerBoxes::ShowMessage(Message message)
 		const std::array<TextArgument, 1> nameArgument = {std::u16string_view(name)};
 		shown.text = FormatText(shown.text, nameArgument);
 	}
+	// A map package that did not give the map adds its reason under the vanilla text (deviation 275)
+	const auto& reason = _frontEnd->GetMapFailureLine();
+	const bool reasonLine = message == Message::CouldNotDownloadMap && !reason.empty();
+	if (reasonLine)
+	{
+		shown.text += u'\n';
+		shown.text += ToUtf16(reason);
+	}
 	if (message == Message::LobbyNotice || message == Message::LobbyQuestion || message == Message::LobbyPassword ||
 	    message == Message::LobbyCode || message == Message::LobbyNewPassword)
 	{
@@ -911,7 +919,7 @@ void MultiplayerBoxes::ShowMessage(Message message)
 		_messageFade.SetDestination(1.0f, k_FadeInSeconds);
 		return;
 	}
-	shown.textControl = &shown.answers.Add<StaticText>(k_MessageText, shown.text, Layout::Wrapped);
+	shown.textControl = &shown.answers.Add<StaticText>(reasonLine ? k_ReasonText : k_MessageText, shown.text, Layout::Wrapped);
 	shown.textControl->takesClicks = true;
 	switch (ButtonsOf(message))
 	{

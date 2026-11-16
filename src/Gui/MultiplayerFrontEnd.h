@@ -328,6 +328,9 @@ public:
 	// For the testbed
 	/// The name in the message box of a message with a name: the room's server for KickedFromGame
 	[[nodiscard]] const std::u16string& GetMessageName() const noexcept { return _messageName; }
+	/// The line under the vanilla text of the box "Could not download map": why the map package did not give the map.
+	/// Empty for other failures.
+	[[nodiscard]] const std::string& GetMapFailureLine() const noexcept { return *_mapFailureLine; }
 
 	/// The download of the room's land from the lobby, none when the room has no such land
 	[[nodiscard]] const online::MapDownload* GetMapDownload() const noexcept { return _mapDownload.get(); }
@@ -456,6 +459,9 @@ private:
 	/// The HTTP status and the kind of error of the last piece of a map that the lobby did not give. The answers of the
 	/// lobby hold a copy, so that an answer after the end of the front end writes nothing of the front end.
 	std::shared_ptr<std::pair<int32_t, int32_t>> _lastPieceError {std::make_shared<std::pair<int32_t, int32_t>>(0, 0)};
+	/// Why the map package of the last download did not give the map, in the words of the box. The download holds a
+	/// copy, as the answers of the lobby hold a copy of the error above.
+	std::shared_ptr<std::string> _mapFailureLine {std::make_shared<std::string>()};
 	/// Tests: the requests of map pieces that wait for the time of --map-piece-delay-ms, with the time to send each
 	std::vector<std::pair<int64_t, std::function<void()>>> _delayedPieces;
 	std::optional<size_t> _shownLand;
