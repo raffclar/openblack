@@ -364,6 +364,46 @@ TEST_F(EffectReceivers, AFieldWithoutFoodTakesNoEffectThatBurns)
 	EXPECT_TRUE(ecs::world_objects::TakesEffect(field, 10.0f, 0.0f));
 }
 
+TEST_F(EffectReceivers, AFieldHasItsRowOfTheBuildingsTableForEveryUseNotItsCropRow)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The two rows have different numbers, as the rows of the game do
+	auto& abodeRow = _info->abode.at(static_cast<size_t>(AbodeInfo::CelticField));
+	abodeRow.abodeNumber = AbodeNumber::Field;
+	abodeRow.type = ObjectType::Abode;
+	abodeRow.heatCapacity = 20.0f;
+	abodeRow.defenceEffectCrush = 0.08f;
+	abodeRow.collideSound = SoundCollisionType::BrickBuilding;
+	abodeRow.woodValue = 2000;
+	abodeRow.helpStartEnum = static_cast<HelpText>(2847);
+	auto& crop = _info->fieldType.at(static_cast<size_t>(FieldTypeInfo::WheatWithFence));
+	crop.type = ObjectType::Field;
+	crop.heatCapacity = 100.0f;
+	crop.defenceEffectCrush = 0.8f;
+	crop.collideSound = SoundCollisionType::Default;
+	crop.woodValue = 0;
+	crop.helpStartEnum = static_cast<HelpText>(2848);
+	Locator::infoConstants::emplace(*_info);
+	const auto field = Made();
+	registry.Assign<Abode>(field, Abode {.type = AbodeNumber::Field, .townId = 0, .foodAmount = 0, .woodAmount = 0});
+	registry.Assign<Field>(field).type = FieldTypeInfo::WheatWithFence;
+	const auto& row = Locator::infoConstants::value().abode.at(static_cast<size_t>(AbodeInfo::CelticField));
+	// The kind, the effects and the heat, and the help all read the row of the buildings' table
+	EXPECT_EQ(ecs::world_objects::InfoOf(field), &row);
+	EXPECT_EQ(ecs::world_objects::EffectInfoOf(field), &row);
+	EXPECT_EQ(ecs::world_objects::HelpInfoOf(field), &row);
+	const auto* info = ecs::world_objects::InfoOf(field);
+	ASSERT_NE(info, nullptr);
+	// A creature that eats the field remembers the object type of a building
+	EXPECT_EQ(info->type, ObjectType::Abode);
+	EXPECT_FLOAT_EQ(info->heatCapacity, 20.0f);
+	EXPECT_FLOAT_EQ(info->defenceEffectCrush, 0.08f);
+	EXPECT_EQ(info->collideSound, SoundCollisionType::BrickBuilding);
+	EXPECT_EQ(info->woodValue, 2000u);
+	// A field with a fence shows the help text of a field, not the text of its crop row
+	EXPECT_EQ(info->helpStartEnum, static_cast<HelpText>(2847));
+}
+
 TEST_F(EffectReceivers, EveryOtherThingTakesEveryEffect)
 {
 	const auto thing = Made();
