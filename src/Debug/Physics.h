@@ -10,6 +10,7 @@
 #pragma once
 
 #include <array>
+#include <string>
 
 #include "Window.h"
 
@@ -21,6 +22,8 @@ class Physics final: public Window
 {
 public:
 	Physics() noexcept;
+	/// In a network game the throws go as commands of the turns
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 
 protected:
 	void Draw() noexcept override;
@@ -36,6 +39,8 @@ private:
 	std::array<float, 3> _velocity {0.0f, 0.0f, 0.0f};
 	/// An object already in the world to throw instead
 	int _entity {-1};
+	/// What the last throw did
+	std::string _result;
 };
 
 } // namespace openblack::debug::gui

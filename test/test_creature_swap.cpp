@@ -15,6 +15,7 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/BonusCreatures.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureSwap.h"
 
@@ -95,6 +96,35 @@ TEST(CreatureSwap, TheDebugOptionNamesTheBonusCreatures)
 }
 
 // While the bodies change, a beam runs between them every third game turn
+TEST(CreatureSwap, TheSetOfTheBonusCreaturesKeepsItsBitsInAByte)
+{
+	Unlocked unlocked;
+	EXPECT_EQ(MaskOf(unlocked), 0u);
+	unlocked.set(static_cast<size_t>(Bonus::Horse));
+	unlocked.set(static_cast<size_t>(Bonus::Rhino));
+	EXPECT_EQ(MaskOf(unlocked), 0b10010u);
+	EXPECT_EQ(FromMask(MaskOf(unlocked)), unlocked);
+	EXPECT_EQ(MaskOf(*ParseUnlocked("all")), 0b11111u);
+	// The bits past the five bonus creatures change nothing
+	EXPECT_EQ(FromMask(0xFFu), *ParseUnlocked("all"));
+}
+
+TEST(CreatureSwap, TheScriptsOfANetworkGameReadTheSetOfTheWorldAndNotTheDebugOption)
+{
+	const auto all = *ParseUnlocked("all");
+	const auto leopard = *ParseUnlocked("leopard");
+	// A game alone reads the debug option of this computer
+	EXPECT_EQ(ScriptUnlocked(false, all, 0), all);
+	EXPECT_EQ(ScriptUnlocked(false, Unlocked {}, MaskOf(all)), Unlocked {});
+	// Two computers of a network game with different options read the same set: the set of the world
+	EXPECT_EQ(ScriptUnlocked(true, all, 0), Unlocked {});
+	EXPECT_EQ(ScriptUnlocked(true, Unlocked {}, 0), Unlocked {});
+	EXPECT_EQ(ScriptUnlocked(true, all, MaskOf(leopard)), leopard);
+	EXPECT_EQ(ScriptUnlocked(true, Unlocked {}, MaskOf(leopard)), leopard);
+	EXPECT_TRUE(IsAvailable(3, ScriptUnlocked(true, Unlocked {}, MaskOf(leopard))));
+	EXPECT_FALSE(IsAvailable(6, ScriptUnlocked(true, all, MaskOf(leopard))));
+}
+
 TEST(CreatureSwap, ABeamRunsEveryThirdTurn)
 {
 	EXPECT_TRUE(IsBeamTurn(0));

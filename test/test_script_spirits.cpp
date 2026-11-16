@@ -91,6 +91,26 @@ TEST(ScriptSpirits, RandomSpiritIsEvilAboveHalf)
 	EXPECT_EQ(HelpSpiritOf(5, 3, {}), k_GoodSpirit);
 }
 
+TEST(ScriptSpirits, OnlyAHelpScriptOfANetworkGameReadsThisComputer)
+{
+	// A game alone reads this computer, for each script
+	EXPECT_TRUE(ReadsThisComputer(false, false));
+	EXPECT_TRUE(ReadsThisComputer(false, true));
+	// In a network game, each computer runs its own help scripts, but the other scripts run on each computer
+	EXPECT_TRUE(ReadsThisComputer(true, true));
+	EXPECT_FALSE(ReadsThisComputer(true, false));
+}
+
+TEST(ScriptSpirits, AScriptThatEachComputerRunsSeesThatTheAdvisorHasPlayed)
+{
+	// This computer asks its advisor
+	EXPECT_TRUE(SpiritPlayed(true, false));
+	EXPECT_FALSE(SpiritPlayed(true, true));
+	// The world of the turns has no advisors, so the answer is the same on each computer and on the game server
+	EXPECT_TRUE(SpiritPlayed(false, false));
+	EXPECT_TRUE(SpiritPlayed(false, true));
+}
+
 TEST(ScriptSpirits, AdvisorNarratorsTalk)
 {
 	EXPECT_EQ(SpiritWhoTalks(2), k_GoodSpirit);

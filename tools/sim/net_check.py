@@ -58,6 +58,9 @@ With --ban-account the script also starts a fake lobby on 127.0.0.1 (HTTPS with 
 the server from the test authority). The fake lobby takes the status reports of the server and answers its bans with
 that account. Before the other clients, a client with a god's ticket of that account tries to join; the server must
 refuse it with "kicked" while the other clients play in step.
+With --kick-away-observer TURN (and --observers 1 or more) the last observer drops its socket once it compared TURN
+turns, and tries to come back 30 seconds later. While it is away, the fake lobby bans its account. The server must end
+the away session, and refuse the observer with "resume" when it comes back, while the gods play on in step.
 With --lobby-results the fake lobby also takes the result of the game: the server gets a test Ed25519 key
 (--result-key), and the fake lobby checks the signature of the result as the lobby does. The game must be decided, for
 example with --temple-loss. One signed result must come, with the position, the gods defeated and the time played of
@@ -366,9 +369,10 @@ class FakeLobby:
         # The reports of the host as bytes, each with the size check of the lobby
         self.host_reports = []
         lobby = self
-        bans = {"bans": [] if banned is None else [
-            {"account": {"id": banned, "name": f"Player{banned}"}, "reason": "net_check", "by": "test",
-             "created": "2026-10-26T00:00:00Z", "expires": None}]}
+        bans = {"bans": []}
+        self.bans = bans
+        if banned is not None:
+            self.ban(banned)
         clans = [{"account": 100, "clan": 7}] if result_key is not None else []
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -445,9 +449,44 @@ class FakeLobby:
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
+    def ban(self, account):
+        """Adds a ban of the account: the next read of the bans of the server gets it"""
+        self.bans["bans"] = self.bans["bans"] + [
+            {"account": {"id": account, "name": f"Player{account}"}, "reason": "net_check", "by": "test",
+             "created": "2026-10-26T00:00:00Z", "expires": None}]
+
     def close(self):
         self.server.shutdown()
         self.server.server_close()
+
+
+def kick_away_observer(pid, account, lobby, server_log, client_log):
+    """The observer drops its socket and tries to come back after 30 seconds. While it is away, the fake lobby bans its
+    account. The server must end the away session, and refuse the observer with "resume" when it comes back."""
+    done = {"account": account}
+    done["away"] = inspector_answer(pid, "engine.online_away", {"params": {"seconds": 30}})
+    if not (done["away"] or {}).get("away"):
+        done["error"] = f"the observer did not go away: {done['away']}"
+        return done
+
+    def wait_for(log, text, limit):
+        end = time.monotonic() + limit
+        while time.monotonic() < end:
+            if lines_with(log, [text]):
+                return True
+            time.sleep(0.5)
+        return False
+
+    done["server_saw_away"] = wait_for(server_log, "An observer lost the connection; it can come back", 20)
+    lobby.ban(account)
+    # The server reads the bans with each status report, each 5 seconds
+    done["session_ended"] = wait_for(server_log, "The lobby removed the away observer", 20)
+    done["refused"] = wait_for(client_log, "The game server refused the client: resume", 60)
+    done["server"] = lines_with(server_log, ["An observer lost the connection", "The lobby removed the away observer",
+                                             "(resume): no god or observer has the secret"])[-3:]
+    done["client"] = lines_with(client_log, ["The game server refused the client"])[-1:]
+    done["ok"] = done["server_saw_away"] and done["session_ended"] and done["refused"]
+    return done
 
 
 def lobby_results_summary(lobby, clients, server_log, out):
@@ -1644,12 +1683,38 @@ def editor_world(pids, world_file, shots=None, given=False):
     if not given:
         done["saved"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file, "save": True}})
     time.sleep(10.0)
+    done["creatures_before"] = [creatures_of(pid) for pid in pids]
     done["sent"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file}})
     if not (done["sent"] or {}).get("sent"):
         done["error"] = f"the world file did not go: {done['sent']}"
     time.sleep(15.0)
     editor_shots(pids, shots, "world_01_after_load")
+    # The computer gods on each client after the load: a god of the file with no player of the room gets one, and every
+    # client must tell the same gods
+    done["computer_gods"] = [computer_gods_of(pid) for pid in pids]
+    done["creatures"] = [creatures_of(pid) for pid in pids]
+    # A second look shows whether each mind still works out what to do as the turns go by
+    time.sleep(10.0)
+    done["computer_gods_later"] = [computer_gods_of(pid) for pid in pids]
     return done
+
+
+def creatures_of(pid):
+    """The creatures on one client, by their ids and names"""
+    return sorted((item.get("id"), item.get("name")) for item in
+                  items_of(inspector_answer(pid, "ecs.entities", {"params": {"component": "Creature"}}))
+                  if isinstance(item, dict))
+
+
+def computer_gods_of(pid):
+    """The players whose computer mind is on, with whether it started and its creature, on one client"""
+    players = items_of(inspector_answer(pid, "players.list", {}))
+    return [{"player": item.get("player"), "started": item["computer_mind"].get("started"),
+             "creature": item.get("primary_creature"), "hand": item["computer_mind"].get("hand"),
+             "doing": item["computer_mind"].get("doing"), "paused": item["computer_mind"].get("paused"),
+             "last_empty_turn": item["computer_mind"].get("last_empty_turn")}
+            for item in players
+            if isinstance(item, dict) and (item.get("computer_mind") or {}).get("switched_on")]
 
 
 def body_switches(pid):
@@ -1887,6 +1952,9 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["world"] = editor_world(pids, world_file, shots, given_world)
         if done["world"].get("error"):
             done.setdefault("errors", []).append(done["world"]["error"])
+        gods = [[(god["player"], god["creature"]) for god in client] for client in done["world"]["computer_gods"]]
+        if any(client != gods[0] for client in gods):
+            done.setdefault("errors", []).append(f"the clients tell different computer gods: {gods}")
     if case in ("scenario", "scenario-away", "scenario-away-fast"):
         done["scenario"] = editor_scenario(pids, shots, away=case != "scenario", fast=case == "scenario-away-fast")
         if done["scenario"].get("error"):
@@ -1911,6 +1979,18 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["debug"] = editor_debug(pids, focus, shots)
         if done["debug"].get("error"):
             done["error"] = done["debug"]["error"]
+    if case == "debug-reads":
+        done["debug_reads"] = editor_debug_reads(pids, focus)
+        if done["debug_reads"].get("error"):
+            done["error"] = done["debug_reads"]["error"]
+    if case == "debug-magic":
+        done["debug_magic"] = editor_debug_magic(pids, shots)
+        if done["debug_magic"].get("error"):
+            done["error"] = done["debug_magic"]["error"]
+    if case == "debug-things":
+        done["debug_things"] = editor_debug_things(pids, focus, shots)
+        if done["debug_things"].get("error"):
+            done["error"] = done["debug_things"]["error"]
     if case in ("land", "all"):
         # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
         # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
@@ -1957,6 +2037,77 @@ DEBUG_ADVISOR_ACTS = [
     {"act": "play_anim", "advisor": 1, "place": [0.5, 0.5], "anim": 3, "speed": 1.5},
     {"act": "feel", "advisor": 2, "emotion": 4}, {"act": "home", "advisor": 1}, {"act": "vanish", "advisor": 0},
 ]
+
+
+# The cases where the first client has only the debugger claim
+DEBUGGER_CASES = ("debug", "debug-reads", "debug-magic", "debug-things")
+
+# Each button of the Magic, Weather and Moon debug windows that the debug-magic case presses, in order. The miracles
+# are magic types: 1 the fireball, 10 the heal, 14 the food, 22 the water, 28 the big creature spell.
+DEBUG_MAGIC_ACTS = [
+    {"kind": "magic", "act": "ignore_influence", "on": True},
+    {"kind": "magic", "act": "place_dispenser", "magic": 1},
+    {"kind": "magic", "act": "place_bubble", "magic": 22},
+    {"kind": "magic", "act": "give_to_hand", "magic": 10},
+    {"kind": "magic", "act": "drop_seed"},
+    {"kind": "magic", "act": "summon_from_worship", "magic": 10},
+    {"kind": "magic", "act": "drop_seed"},
+    {"kind": "magic", "act": "cast_at_point", "magic": 14},
+    {"kind": "magic", "act": "cast_on_creature", "magic": 28},
+    {"kind": "magic", "act": "prayer_power", "value": 50000.0},
+    {"kind": "magic", "act": "infinite_prayer", "on": True},
+    {"kind": "magic", "act": "infinite_prayer", "on": False},
+    {"kind": "magic", "act": "ignore_influence", "on": False},
+    {"kind": "town", "act": "give", "magic": 10},
+    {"kind": "town", "act": "take", "magic": 10},
+    {"kind": "weather", "act": "preset", "rain": 100, "overcast": 100, "temperature": 20, "wind_x": 20, "wind_z": 20,
+     "lightning": True},
+    {"kind": "weather", "act": "bolt"},
+    {"kind": "weather", "act": "thunder"},
+    {"kind": "weather", "act": "force_storm", "snow": 70, "overcast": 80, "temperature": -5, "seconds": 120.0},
+    {"kind": "weather", "act": "end_storm"},
+    {"kind": "weather", "act": "clear_storms"},
+    {"kind": "weather", "act": "melt_snow"},
+    {"kind": "weather", "act": "climates", "on": False},
+    {"kind": "weather", "act": "climates", "on": True},
+    {"kind": "weather", "act": "climate_storms", "on": True},
+    {"kind": "sky", "act": "script_hour", "value": 19.5},
+    {"kind": "sky", "act": "clock_runs", "on": False},
+    {"kind": "sky", "act": "clock_runs", "on": True},
+    {"kind": "sky", "act": "moon_date", "date": 1000000000},
+    {"kind": "sky", "act": "computer_date"},
+    {"kind": "sky", "act": "moon_date", "date": 1000086400},
+    {"kind": "sky", "act": "reset"},
+]
+
+
+def editor_debug_magic(pids, shots=None):
+    """The first client has the debugger claim and no editor claim. It presses each button of the Magic, Weather and
+    Moon debug windows near its camera. The second client (no claim) sends three acts with force: the server must
+    refuse them. Every computer must do the same acts at the same turns and keep the same checksums. Returns what each
+    step sent."""
+    debugger = pids[0]
+    done = {"answers": []}
+
+    def send(pid, params):
+        answer = inspector_answer(pid, "editor.debug_act", {"params": params})
+        done["answers"].append({"params": params, "answer": answer})
+        time.sleep(0.4)
+        return answer
+
+    for act in DEBUG_MAGIC_ACTS:
+        send(debugger, dict(act))
+    if len(pids) > 1:
+        send(pids[1], {"kind": "magic", "act": "place_dispenser", "magic": 1, "force": True})
+        send(pids[1], {"kind": "weather", "act": "bolt", "force": True})
+        send(pids[1], {"kind": "sky", "act": "script_hour", "value": 6.0, "force": True})
+    time.sleep(2.0)
+    editor_shots(pids, shots, "debug-magic")
+    problems = [f"{entry['params']}: {entry['answer']['error']}" for entry in done["answers"]
+                if isinstance(entry["answer"], dict) and entry["answer"].get("error")]
+    if problems:
+        done["error"] = "; ".join(problems)
+    return done
 
 
 def debug_act_lines(log):
@@ -2012,6 +2163,149 @@ def editor_debug(pids, focus, shots=None):
         problems.append(f"a client did not follow the speed 2 of the debugger: {done['speed_clocks']}")
     if any(done["paused_after_refused_pause"]):
         problems.append("the server took a pause from the debugger claim")
+    if problems:
+        done["error"] = "; ".join(problems)
+    return done
+
+
+def editor_debug_reads(pids, focus):
+    """What the scripts of a network game read of the bonus creatures and the advisors. Only the first client starts
+    with all the bonus creatures of the command line (--client-arg 1:--unlock-bonus-creatures=all), and it has the
+    debugger claim. A script that each computer runs must read the same answers on each client: no bonus creature at
+    the start, the leopard after the debug menu unlocks it at a turn, and each advisor has played while the advisor of
+    each client plays an animation. What a help script of this computer reads may differ: it shows that the old read
+    of this computer can part the worlds. Returns what each client read at each step."""
+    debugger = pids[0]
+    done = {"steps": [], "answers": []}
+
+    def read(step):
+        reads = [inspector_answer(pid, "engine.script_reads", {}) or {} for pid in pids]
+        done["steps"].append({"step": step, "reads": reads})
+        return reads
+
+    def send(params):
+        answer = inspector_answer(debugger, "editor.debug_act", {"params": params})
+        done["answers"].append({"params": params, "answer": answer})
+        return answer
+
+    def every(reads, field):
+        return [(entry.get("every_computer") or {}).get(field) for entry in reads]
+
+    def local(reads, field):
+        return [(entry.get("this_computer") or {}).get(field) for entry in reads]
+
+    problems = []
+    start = read("start")
+    if any(not entry.get("network_game") for entry in start):
+        problems.append("a client is not in a network game")
+    if any(names != [] for names in every(start, "unlocked_bonus_creatures")):
+        problems.append(f"a script of the network game reads bonus creatures at the start: {start}")
+    done["command_line_differs"] = len(set(map(str, local(start, "unlocked_bonus_creatures")))) > 1
+    send({"kind": "world", "act": "bonus_creature", "index": 0, "value": 1})
+    time.sleep(2.0)
+    unlocked = read("leopard unlocked")
+    if any(names != ["leopard"] for names in every(unlocked, "unlocked_bonus_creatures")):
+        problems.append(f"the scripts do not read the leopard of the debug menu on each client: {unlocked}")
+    # Both advisors play a long animation on each computer at the same turn; the reads come while they play
+    for advisor in (1, 2):
+        send({"kind": "advisor", "act": "play_anim", "advisor": advisor, "place": [0.5, 0.5], "anim": 3, "speed": 0.2})
+    time.sleep(1.2)
+    playing = read("advisors play")
+    for field in ("good_spirit_played", "evil_spirit_played", "alignment_spirit", "opposite_spirit"):
+        values = every(playing, field)
+        if len(set(map(str, values))) != 1 or None in values:
+            problems.append(f"the clients read different values of {field}: {values}")
+    if any(value is not True for value in every(playing, "good_spirit_played")):
+        problems.append("a script that each computer runs does not see that the advisor has played")
+    done["local_played_while_playing"] = local(playing, "good_spirit_played")
+    send({"kind": "world", "act": "bonus_creature", "index": 0, "value": 0})
+    time.sleep(2.0)
+    if len(pids) > 1:
+        # The second client has no debugger claim: the server refuses its unlock of the horse
+        done["refused"] = inspector_answer(pids[1], "editor.debug_act", {"params": {
+            "kind": "world", "act": "bonus_creature", "index": 1, "value": 1, "force": True}})
+    time.sleep(2.0)
+    locked = read("leopard locked again")
+    if any(names != [] for names in every(locked, "unlocked_bonus_creatures")):
+        problems.append(f"the scripts read a bonus creature after the debug menu locked the leopard: {locked}")
+    errors = [entry["answer"]["error"] for entry in done["answers"]
+              if isinstance(entry["answer"], dict) and entry["answer"].get("error")]
+    problems += errors
+    if problems:
+        done["error"] = "; ".join(map(str, problems))
+    return done
+
+
+def shared_effects(pid):
+    """The numbers of the running particle effects that each computer has (the shared random numbers), the oldest first"""
+    effects = items_of(inspector_answer(pid, "particles.effects", {}))
+    return sorted(effect["id"] for effect in effects
+                  if isinstance(effect, dict) and 0 < effect.get("id", 0) < 0x40000001)
+
+
+def editor_debug_things(pids, focus, shots=None):
+    """The first client has the debugger claim and no editor claim. It presses each button of the Physics window, of the
+    Particles tab of the Magic window, of the Temple villagers window and of the Path finding window, as the inspector
+    query editor.debug_thing does them. The second client (no claim) sends acts with force: the server must refuse them.
+    Every computer must do the same acts at the same turns and keep the same checksums. Returns what each step sent."""
+    debugger = pids[0]
+    done = {"answers": []}
+    x, y, z = focus[0], focus[1], focus[2]
+
+    def send(pid, params):
+        answer = inspector_answer(pid, "editor.debug_thing", {"params": params})
+        done["answers"].append({"params": params, "answer": answer})
+        time.sleep(0.4)
+        return answer
+
+    # The Physics window: a new rock, then a throw of the same type higher up
+    send(debugger, {"kind": "physics", "type": 36, "height": 20.0, "place": [x + 10.0, z], "velocity": [0.0, 5.0, 0.0]})
+    send(debugger, {"kind": "physics", "type": 36, "height": 40.0, "scale": 2.0, "place": [x - 10.0, z + 5.0],
+                    "velocity": [3.0, 0.0, -2.0]})
+    # The Particles tab: an effect with the shared random numbers, the pause, the close and the delete of one effect, and
+    # the close and the delete of all
+    send(debugger, {"kind": "particle", "act": "start", "type": 115, "position": [x, y + 5.0, z], "targets": 2})
+    send(debugger, {"kind": "particle", "act": "pause", "paused": True})
+    send(debugger, {"kind": "particle", "act": "pause", "paused": False})
+    time.sleep(1.0)
+    shared = shared_effects(debugger)
+    done["shared_effects"] = [len(shared)]
+    if shared:
+        send(debugger, {"kind": "particle", "act": "close", "effect": shared[-1]})
+    send(debugger, {"kind": "particle", "act": "start", "type": 115, "position": [x + 5.0, y + 5.0, z]})
+    time.sleep(1.0)
+    shared = shared_effects(debugger)
+    done["shared_effects"].append(len(shared))
+    if shared:
+        send(debugger, {"kind": "particle", "act": "delete", "effect": shared[-1]})
+    send(debugger, {"kind": "particle", "act": "close_all"})
+    send(debugger, {"kind": "particle", "act": "delete_all"})
+    # The Temple villagers window: new villagers that go to worship, the share, one more and one less at worship, and a
+    # villager sent to worship
+    send(debugger, {"kind": "temple", "act": "make", "count": 3, "age": 25, "send": True})
+    time.sleep(1.0)
+    send(debugger, {"kind": "temple", "act": "share", "value": 0.4})
+    send(debugger, {"kind": "temple", "act": "send_one"})
+    send(debugger, {"kind": "temple", "act": "call_one_back"})
+    send(debugger, {"kind": "temple", "act": "send_to_worship"})
+    # The Path finding window on the first villager that the window made
+    send(debugger, {"kind": "path", "act": "teleport", "position": [x + 3.0, y, z + 3.0]})
+    send(debugger, {"kind": "path", "act": "move_to", "position": [x + 20.0, y, z + 20.0]})
+    send(debugger, {"kind": "path", "act": "goal", "goal": [int(x) + 25, int(z) + 25]})
+    send(debugger, {"kind": "path", "act": "speed", "speed": 1.5})
+    time.sleep(1.0)
+    editor_shots(pids, shots, "debug-things")
+    send(debugger, {"kind": "temple", "act": "take_away"})
+    if len(pids) > 1:
+        # The second client has no debugger claim: the server refuses its acts
+        send(pids[1], {"kind": "physics", "type": 36, "place": [x, z], "force": True})
+        send(pids[1], {"kind": "temple", "act": "share", "value": 0.9, "force": True})
+        send(pids[1], {"kind": "particle", "act": "delete_all", "force": True})
+    time.sleep(2.0)
+    problems = [f"{entry['params']}: {entry['answer']['error']}" for entry in done["answers"]
+                if isinstance(entry["answer"], dict) and entry["answer"].get("error")]
+    if not all(done["shared_effects"]):
+        problems.append(f"no effect of each computer to close or delete: {done['shared_effects']}")
     if problems:
         done["error"] = "; ".join(problems)
     return done
@@ -3201,7 +3495,7 @@ def main():
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
                                                     "creature-remove", "land", "history", "mind", "time", "scripts", "debugger",
-                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "all"),
+                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "debug-reads", "debug-magic", "debug-things", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -3214,13 +3508,18 @@ def main():
                              "(mind), or pauses, steps and changes the speed of the clock of the room (time), "
                              "or does the acts of the script tabs and changes the program (scripts, which "
                              "opens the program of the game again), or holds a task and steps the land script "
-                             "over a restart of the server or a part (debugger), or all of them but time and scripts; "
+                             "over a restart of the server or a part (debugger), or reads what the scripts read of the bonus creatures "
+                             "and the advisors (debug-reads), or all of them but time and scripts; "
                              "every computer must keep the same checksums. Not in all, as each ends the game of the "
                              "room: the editor writes the world into a file and loads it 10 seconds later for the room "
                              "(world), or starts the room again on a testbed scenario (scenario), also while the second "
                              "client is away for 15 seconds (scenario-away), or at 100 turns a second while the second client is "
                              "away for 75 seconds (scenario-away-fast), or the second client is away while the editor "
-                             "changes the body time and the fainting switch and loads a world file (body-away)")
+                             "changes the body time and the fainting switch and loads a world file (body-away). With debug and "
+                             "debug-magic the first client has only the debugger claim: it does the acts of the Advisors, "
+                             "World, Console and Gestures debug windows (debug), or each button of the Magic, Weather and "
+                             "Moon windows (debug-magic), or each button of the Physics window, of the Particles tab, of the "
+                             "Temple villagers window and of the Path finding window (debug-things)")
     parser.add_argument("--world-file", metavar="FILE",
                         help="with --editor-desync world: the first client sends this world file, for example the world "
                              "of a room with other players, and does not write its own")
@@ -3277,6 +3576,9 @@ def main():
     parser.add_argument("--ban-account", type=int,
                         help="a fake lobby bans this account id; a client of that account must be refused before the "
                              "start (the other clients use the ids 100 and up)")
+    parser.add_argument("--kick-away-observer", type=int, metavar="TURN",
+                        help="the last observer drops its socket after this many compared turns, the fake lobby bans its "
+                             "account while it is away, and the server must refuse it with \"resume\" when it comes back")
     parser.add_argument("--lobby-results", action="store_true",
                         help="a fake lobby takes the result of the game, signed with a test key of the server; the "
                              "game must be decided (for example with --temple-loss), and the result must come one time "
@@ -3503,7 +3805,9 @@ def main():
         server_command += ["--lobby-id", LOBBY_ID, "--expect-members", members_file, "--game-id", SERVER_ID,
                            "--join-window", str(options.join_window)]
     lobby = None
-    if options.ban_account is not None or options.lobby_results:
+    if options.kick_away_observer is not None and options.observers < 1:
+        parser.error("--kick-away-observer needs --observers 1 or more")
+    if options.ban_account is not None or options.lobby_results or options.kick_away_observer is not None:
         if options.ban_account is not None and 100 <= options.ban_account < 100 + options.clients:
             parser.error("--ban-account must not be the account of a client that plays")
         result_key = None
@@ -3541,6 +3845,7 @@ def main():
     forest_done = None
     editor_desync_done = None
     give_done = None
+    kick_done = None
     hand_steps = HandSteps()
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
     leash_done = {number: [] for number, leash in enumerate(leashes) if leash["client"] != "web"}
@@ -3602,10 +3907,10 @@ def main():
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
                                  "observer" if is_observer else "god", 600,
                                  editor=(options.editor_check or options.forest_camera
-                                         or (bool(options.editor_desync) and options.editor_desync != "debug"))
+                                         or (bool(options.editor_desync) and options.editor_desync not in DEBUGGER_CASES))
                                  and index == 0,
                                  staff=options.editor_check and index == 1,
-                                 debugger=options.editor_desync == "debug" and index == 0)
+                                 debugger=options.editor_desync in DEBUGGER_CASES and index == 0)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
@@ -3823,6 +4128,16 @@ def main():
                 give_done = {}
                 hand_steps.start(giver, lambda pid=clients[giver].pid, log=os.path.join(
                     client_dirs[giver], "client.log"): give_done.update(give_to_creature(pid, log)))
+            kicked = desktop_clients - 1
+            if (options.kick_away_observer is not None and kick_done is None and clients[kicked].poll() is None
+                    and not hand_steps.busy(kicked) and reached_turn(os.path.join(client_dirs[kicked], "client.log"),
+                                                                      clients[kicked].pid, options.kick_away_observer)):
+                kick_done = {}
+                hand_steps.start(kicked, lambda pid=clients[kicked].pid: kick_done.update(kick_away_observer(
+                    pid, 100 + kicked, lobby, server_log, os.path.join(client_dirs[kicked], "client.log"))))
+            if kick_done and "ok" in kick_done and clients[kicked].poll() is None:
+                # The refused observer has no game: the script stops it
+                stop(clients[kicked])
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])
@@ -3901,6 +4216,10 @@ def main():
         if parted_on_purpose and recovered:
             different = purposeful_part_left_out(different, recovery_turns(recovered), options.part_second_at)
         expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
+        kicked_observer = options.kick_away_observer is not None and index == desktop_clients - 1
+        if kicked_observer:
+            # The kicked observer compares the turns up to its kick only
+            expected = options.kick_away_observer
         is_observer = index >= options.clients
         if is_observer and client_turns:
             # An observer that joined a running game compares the turns from the turn of its world
@@ -3939,7 +4258,7 @@ def main():
             if (match := re.search(r"back from turn (\d+) with the world of turn (\d+)", line)))
         same = (not different and enough and counts is not None
                 and (counts[0] - counts[1] <= allowed_differing)
-                and (left or counts[0] >= expected - 100 - away_gap) and bool(recovered or not parted_on_purpose))
+                and (left or kicked_observer or counts[0] >= expected - 100 - away_gap) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         draws = None
         if options.trace_draws and os.path.exists(server_trace) and os.path.exists(os.path.join(client_dir, "draws.tsv")):
@@ -4053,7 +4372,7 @@ def main():
                 print(f"the script acts differ or did not come: {json.dumps(summary['script_acts'])[:2000]} "
                       f"states {json.dumps(states)[:1000]}")
                 all_same = False
-        if options.editor_desync == "debug":
+        if options.editor_desync in DEBUGGER_CASES:
             summary["debug_acts"] = debug_act_check(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
             if not summary["debug_acts"]["same"]:
@@ -4174,6 +4493,11 @@ def main():
         banned_result["bans_with_each_report"] = lobby.counts["status"] > 0 and lobby.counts["bans"] >= lobby.counts["status"] - 1
         summary["banned"] = banned_result
         all_same = all_same and banned_result["refused"] and banned_result["bans_with_each_report"]
+    if options.kick_away_observer is not None:
+        summary["kick_away_observer"] = kick_done
+        if not (kick_done or {}).get("ok"):
+            print(f"the server did not refuse the kicked observer that came back: {json.dumps(kick_done)}")
+            all_same = False
     if wrong_build is not None:
         summary["wrong_build"] = wrong_build
         if not wrong_build["refused"]:

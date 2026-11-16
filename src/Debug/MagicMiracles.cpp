@@ -21,6 +21,8 @@
 #include <imgui.h>
 
 #include "Camera/Camera.h"
+#include "Common/DebugActRuns.h"
+#include "Common/DebugMagicWeatherActRuns.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -30,6 +32,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "EngineConfig.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -48,6 +51,15 @@ constexpr std::array k_HandResults {"",           "took a miracle",  "readied", 
                                     "dropped",    "no circle drawn", "powered up",       "stored"};
 constexpr std::array k_CreatureSpellNames {"Freeze", "Small", "Big",    "Weak",       "Strong", "Fat", "Thin",    "Invisible",
                                            "Nice",   "Nasty", "Hungry", "Frightened", "Tired",  "Ill", "Thirsty", "Itchy"};
+
+using player_commands::DebugMagic;
+
+/// The player of the window: in a network game the player of this computer, else the first player
+PlayerNames OwnPlayer()
+{
+	return debug_acts::SendsCommands() && Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer()
+	                                                                         : PlayerNames::PLAYER_ONE;
+}
 
 std::string MiracleName(MagicType type)
 {
@@ -138,16 +150,27 @@ void Magic::DrawCasting(ecs::systems::MagicSystemInterface& magic, glm::vec3 poi
 void Magic::DrawPrayer() noexcept
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const ecs::components::Player, ecs::components::PrayerPower>(
-	    [](entt::entity, const ecs::components::Player& player, ecs::components::PrayerPower& prayer) {
-		    if (player.name != PlayerNames::PLAYER_ONE)
+	const auto own = OwnPlayer();
+	registry.Each<const ecs::components::Player, const ecs::components::PrayerPower>(
+	    [own](entt::entity, const ecs::components::Player& player, const ecs::components::PrayerPower& prayer) {
+		    if (player.name != own)
 		    {
 			    return;
 		    }
+		    // In a network game the value goes when the player presses Enter or a step button
+		    const auto flags = debug_acts::SendsCommands() ? ImGuiInputTextFlags_EnterReturnsTrue : ImGuiInputTextFlags_None;
+		    float chants = prayer.chants;
 		    ImGui::SetNextItemWidth(160.0f);
-		    ImGui::InputFloat("Prayer power", &prayer.chants, 1000.0f, 10000.0f, "%.0f");
+		    if (ImGui::InputFloat("Prayer power", &chants, 1000.0f, 10000.0f, "%.0f", flags))
+		    {
+			    debug_acts::Do(DebugMagic {.act = DebugMagic::Act::PrayerPower, .value = chants});
+		    }
 		    ImGui::SameLine();
-		    ImGui::Checkbox("Infinite", &prayer.infinite);
+		    bool infinite = prayer.infinite;
+		    if (ImGui::Checkbox("Infinite", &infinite))
+		    {
+			    debug_acts::Do(DebugMagic {.act = DebugMagic::Act::InfinitePrayer, .on = infinite});
+		    }
 	    });
 }
 
@@ -164,7 +187,7 @@ void Magic::DrawMiracles() noexcept
 	bool ignore = magic.IsIgnoringInfluence();
 	if (ImGui::Checkbox("Cast outside influence", &ignore))
 	{
-		magic.SetIgnoreInfluence(ignore);
+		debug_acts::Do(DebugMagic {.act = DebugMagic::Act::IgnoreInfluence, .on = ignore});
 	}
 	ImGui::SameLine();
 	ImGui::Checkbox("Label dispensers", &config.showDispenserNames);
@@ -187,57 +210,44 @@ void Magic::DrawMiracles() noexcept
 	}
 	const auto point = SpawnPoint();
 	const auto isCreatureSpell = magic::ClassOf(_miracle) == magic::SpellClass::Creature;
+	// Each button acts at the point. In a network game it goes as a command, and each computer does it at the turn.
+	const auto act = [this, point](DebugMagic::Act kind, entt::entity creature = entt::null) {
+		debug_acts::Do(DebugMagic {.act = kind,
+		                           .magic = static_cast<uint8_t>(_miracle),
+		                           .position = point,
+		                           .forward = Locator::camera::value().GetForward(),
+		                           .creature = creature});
+	};
 	if (ImGui::Button("Place dispenser"))
 	{
-		magic.CreateDispenser(point, _miracle, 0.0f);
+		act(DebugMagic::Act::PlaceDispenser);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Place bubble"))
 	{
-		magic.CreateOneOffSeedFor(point + glm::vec3(0.0f, 3.0f, 0.0f), _miracle);
+		act(DebugMagic::Act::PlaceBubble);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Give to hand"))
 	{
-		if (const auto seed = magic::FindFirstSpellSeedForMagicType(info, _miracle))
-		{
-			const auto step = magic::GetPowerUpGesture(magic::GetSpellSeedInfo(info, *seed), _miracle);
-			magic.GiveSeedToHand(PlayerNames::PLAYER_ONE, *seed, step.level, 1.0f);
-		}
+		act(DebugMagic::Act::GiveToHand);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Summon from worship"))
 	{
-		if (const auto seed = magic::FindFirstSpellSeedForMagicType(info, _miracle))
-		{
-			const auto step = magic::GetPowerUpGesture(magic::GetSpellSeedInfo(info, *seed), _miracle);
-			magic.SummonSeed(PlayerNames::PLAYER_ONE, *seed, step.level);
-		}
+		act(DebugMagic::Act::SummonFromWorship);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button(isCreatureSpell ? "Cast on nearest creature" : "Cast here"))
 	{
-		const auto seed = magic::FindFirstSpellSeedForMagicType(info, _miracle).value_or(SpellSeedType::None);
-		float size = 1.0f;
-		if (const auto* radius = magic::GetMagicInfoAs<GMagicRadiusSpellInfo>(info, _miracle))
-		{
-			size = radius->radiusForNormalCost;
-		}
-		const auto cast = magic::SeedCastData(info, _miracle, seed, 1.0f, size);
 		// From a little above the point, thrown down onto it
-		const particles::ProcessInfo process {.handPosition = point + glm::vec3(0.0f, 15.0f, 0.0f),
-		                                      .cameraForward = Locator::camera::value().GetForward(),
-		                                      .direction = glm::vec3(0.0f, -10.0f, 0.0f)};
-		if (isCreatureSpell)
+		if (!isCreatureSpell)
 		{
-			if (const auto creature = NearestCreature(point))
-			{
-				magic.CastOnObject(_miracle, PlayerNames::PLAYER_ONE, *creature, cast, process);
-			}
+			act(DebugMagic::Act::CastAtPoint);
 		}
-		else
+		else if (const auto creature = NearestCreature(point))
 		{
-			magic.CastAtPoint(_miracle, PlayerNames::PLAYER_ONE, point, cast, process);
+			act(DebugMagic::Act::CastOnCreature, *creature);
 		}
 	}
 	ImGui::TextDisabled("At the %s: (%.0f, %.0f)", _spawnAt == SpawnAt::Hand ? "hand" : "camera focus", point.x, point.z);
@@ -249,7 +259,7 @@ void Magic::DrawMiracles() noexcept
 		ImGui::SameLine();
 		if (ImGui::SmallButton("Drop"))
 		{
-			magic.DiscardHeldSeed();
+			debug_acts::Do(DebugMagic {.act = DebugMagic::Act::DropSeed});
 		}
 	}
 	else

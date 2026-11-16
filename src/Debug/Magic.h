@@ -36,6 +36,8 @@ class Magic final: public Window
 {
 public:
 	Magic() noexcept;
+	/// The acts on the world go as commands in a network game. Each tab shows there.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 
 protected:
 	void Draw() noexcept override;
@@ -66,8 +68,6 @@ private:
 	[[nodiscard]] glm::vec3 SpawnPoint() const noexcept;
 	/// What the particles drew in the last frame, by kind
 	void DrawParticleStats() const noexcept;
-	/// Gives an effect the creatures and villagers nearest its origin to act on
-	void GiveNearestTargets(uint32_t effect, const glm::vec3& origin) const noexcept;
 
 	void ResetSandbox() noexcept;
 	void CastInSandbox() noexcept;

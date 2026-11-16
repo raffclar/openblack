@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include "Common/DebugMagicWeatherActs.h"
+#include "Common/DebugThingActs.h"
 #include "Creature/BonusCreatures.h"
 #include "Help/Spirits.h"
 #include "PlayerSlots.h"
@@ -177,7 +179,24 @@ std::optional<std::string_view> RefusalOf(const player_commands::Action& action)
 	{
 		return ConsoleLineRefusal(*line);
 	}
-	return std::nullopt;
+	if (const auto* magic = std::get_if<player_commands::DebugMagic>(&action))
+	{
+		return MagicActRefusal(*magic);
+	}
+	if (const auto* town = std::get_if<player_commands::DebugTownMiracle>(&action))
+	{
+		return TownMiracleRefusal(*town);
+	}
+	if (const auto* weather = std::get_if<player_commands::DebugWeather>(&action))
+	{
+		return WeatherActRefusal(*weather);
+	}
+	if (const auto* sky = std::get_if<player_commands::DebugSky>(&action))
+	{
+		return SkyActRefusal(*sky);
+	}
+	// The acts of the Physics, Particles, Temple villagers and Path finding windows
+	return debug_thing_acts::RefusalOf(action);
 }
 
 bool ApplyWorldAct(WorldTarget& target, const DebugWorld& act)

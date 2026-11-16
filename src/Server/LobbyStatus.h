@@ -29,8 +29,6 @@ namespace openblack::server::lobby_status
 
 /// The time between two reports. The lobby removes a server from its list after 15 seconds with no report.
 constexpr auto k_ReportInterval = std::chrono::seconds(5);
-/// The longest version text that the lobby keeps
-constexpr size_t k_MostVersionCharacters = 16;
 
 /// What the room shows in the list of the lobby
 struct Room
@@ -41,7 +39,7 @@ struct Room
 	std::string land;
 	/// The gods that the room takes, 1 to 32
 	int32_t maxGods {1};
-	/// The version of the game server
+	/// The build id of the game server (online::build_id), which the game list compares with the build id of each client
 	std::string version;
 };
 
@@ -66,8 +64,14 @@ enum class Phase : uint8_t
 /// lost the connection is away. A seat with a subject that is not an account id is not in the list.
 [[nodiscard]] std::vector<lobby_api::ServerStatusPlayer> StatusPlayers(std::span<const LockstepHost::Seat> seats);
 
-/// The report for the room, with the gods of StatusPlayers
-[[nodiscard]] lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<const LockstepHost::Seat> seats);
+/// The report for the room, with the gods of StatusPlayers. The report has the first characters of the build id, at
+/// most `mostVersionCharacters`.
+[[nodiscard]] lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<const LockstepHost::Seat> seats,
+                                                 size_t mostVersionCharacters = lobby_api::k_MostGameVersionCharacters);
+
+/// True when the answer to a status report tells that the lobby did not take the length of "gamever". An older lobby
+/// keeps only 16 characters: the server then cuts its build id to 16 characters in the next reports.
+[[nodiscard]] bool RefusedTheVersionLength(int32_t status, std::string_view body);
 
 /// A land of a network game that the players do not have, which the server sends to the lobby (deviation 169). The
 /// lobby gives it only to the players with a ticket for the room of the server.

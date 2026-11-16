@@ -297,6 +297,23 @@ struct ServerStatusPlayer
 	bool operator==(const ServerStatusPlayer&) const = default;
 };
 
+/// The most characters of the "gamever" of a status report: the build id of the game server, which the lobby keeps whole
+constexpr size_t k_MostGameVersionCharacters = 64;
+/// The most characters of the "gamever" that an older lobby keeps. A game server cuts its build id to this length when
+/// such a lobby refuses the whole build id.
+constexpr size_t k_OldMostGameVersionCharacters = 16;
+
+/// True when the "gamever" of a game in the list is the build id of this client. An older lobby keeps only the first 16
+/// characters of a build id, so a "gamever" of exactly 16 characters is the same when the build id starts with it.
+[[nodiscard]] constexpr bool SameGameVersion(std::string_view listed, std::string_view own) noexcept
+{
+	if (listed == own)
+	{
+		return true;
+	}
+	return listed.size() == k_OldMostGameVersionCharacters && own.size() > listed.size() && own.starts_with(listed);
+}
+
 /// PUT /api/v1/servers/{id}/status: the report of a game server every 5 seconds, over mutual TLS
 struct ServerStatus
 {
@@ -312,7 +329,7 @@ struct ServerStatus
 	bool password {false};
 	/// "maxplayers": 1 to 32 gods
 	int32_t maxplayers {1};
-	/// "gamever": the version of the game server, 16 characters at most
+	/// "gamever": the build id of the game server, 64 characters at most (16 for an older lobby)
 	std::string gamever;
 	/// "players"
 	std::vector<ServerStatusPlayer> players;
@@ -649,6 +666,9 @@ struct Problem
 	std::string expected;
 	/// "download" of the problem "wrong_version": the page where the player gets the new version. Can be empty.
 	std::string download;
+	/// The names of the members of "errors": the fields of the request that the lobby did not take. Empty when the problem
+	/// gives no errors.
+	std::vector<std::string> errorFields;
 };
 
 /// A frame of the push channel. An event: {"seq": n, "type": "...", "time": "...", "data": {...}}. A control frame

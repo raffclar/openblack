@@ -96,3 +96,18 @@ std::optional<Unlocked> creature_swap::ParseUnlocked(std::string_view text)
 	}
 	return unlocked;
 }
+
+uint8_t creature_swap::MaskOf(const Unlocked& unlocked)
+{
+	return static_cast<uint8_t>(unlocked.to_ulong());
+}
+
+Unlocked creature_swap::FromMask(uint8_t mask)
+{
+	return Unlocked(mask);
+}
+
+Unlocked creature_swap::ScriptUnlocked(bool networkGame, const Unlocked& option, uint8_t world)
+{
+	return networkGame ? FromMask(world) : option;
+}

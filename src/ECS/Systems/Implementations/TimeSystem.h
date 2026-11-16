@@ -85,6 +85,7 @@ public:
 	void SetNetworkGame(bool networkGame) override;
 	[[nodiscard]] bool IsNetworkGame() const override { return _networkGame; }
 	void SetCatchesUp(bool catchesUp) override { _catchesUp = catchesUp; }
+	void SetMostTurnsInFrame(uint32_t turns) override;
 	void SetSpeed(float speed) override;
 	[[nodiscard]] float GetSpeed() const override { return _speed; }
 
@@ -131,6 +132,8 @@ private:
 	bool _held {false};
 	bool _networkGame {false};
 	bool _catchesUp {false};
+	/// The most turns that a frame plays while the clock does not catch up
+	uint32_t _mostTurnsInFrame {1};
 	float _speed {1.0f};
 	uint32_t _turnsThisFrame {0};
 	// The frame clock: the timer at the last frame, the turn then, and the time past that turn

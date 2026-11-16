@@ -22,6 +22,7 @@
 #include <glm/vec3.hpp>
 
 #include "CHLApi.h"
+#include "Creature/BonusCreatures.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Enums.h"
 #include "ScriptHeaders/ScriptEnums.h"
@@ -92,12 +93,19 @@ void CountCameraOrder();
 void StopHelpScripts();
 void ReleaseDialogue(uint32_t task);
 help::spirits::AdvisorSpiritController* ScriptAdvisors();
+/// Whether the advisor natives of the task that runs read the state of this computer (see
+/// help::script_spirits::ReadsThisComputer)
+bool AdvisorsReadThisComputer();
 int32_t ScriptHelpSpirit(int32_t scriptSpirit);
+int32_t ScriptHelpSpirit(int32_t scriptSpirit, bool readsThisComputer);
+bool ScriptSpiritPlayed(int32_t spirit, bool readsThisComputer);
 
 // In CHLApi/SoundNatives.cpp
 ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic();
 
 // In CHLApi/CreatureNatives.cpp
+/// The bonus creatures that the scripts read (see creature_swap::ScriptUnlocked)
+creature_swap::Unlocked ScriptBonusCreatures();
 std::optional<entt::entity> CreatureForNative(entt::entity thing);
 void MoveCreatureToStage(entt::entity creature, uint32_t stage);
 

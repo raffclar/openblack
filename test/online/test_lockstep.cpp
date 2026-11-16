@@ -7,11 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -2643,6 +2645,62 @@ TEST_F(LockstepTest, AnAwayGodThatTheLobbyKicksCannotComeBack)
 	EXPECT_EQ(host->Seats()[1].resumes, 0u);
 }
 
+TEST_F(LockstepTest, AnAwayObserverThatTheLobbyKicksCannotComeBack)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	Computer carol(network, now, "observer:102");
+	Frames({&alice, &bob, &carol}, 10);
+	ASSERT_TRUE(host->Started());
+	ASSERT_EQ(host->Observers(), 1u);
+	// Carol's network stops, then the lobby's host kicks her while her session waits
+	network.Cut(carol.sockets->Ids().back());
+	Frames({&alice, &bob}, 1);
+	carol.Frame();
+	Frames({&alice, &bob}, 3);
+	ASSERT_EQ(host->Watchers().size(), 1u);
+	ASSERT_FALSE(host->Watchers()[0].connection.has_value());
+	EXPECT_EQ(host->Watchers()[0].account, "102");
+	host->SetBans({102});
+	EXPECT_TRUE(host->Watchers().empty());
+	// Carol's session tries to come back, and the server refuses it
+	Frames({&alice, &bob, &carol}, 10);
+	EXPECT_NE(carol.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(carol.session.RefusedReason(), "resume");
+	EXPECT_EQ(host->Observers(), 0u);
+	// The gods play on
+	Frames({&alice, &bob}, 10);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+}
+
+TEST_F(LockstepTest, AnObserverThatCameBackKeepsItsAccountForAKick)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	Computer carol(network, now, "observer:102");
+	Frames({&alice, &bob, &carol}, 10);
+	ASSERT_TRUE(host->Started());
+	// Carol's network stops, and her session comes back
+	network.Cut(carol.sockets->Ids().back());
+	Frames({&alice, &bob}, 1);
+	carol.Frame();
+	Frames({&alice, &bob, &carol}, 20);
+	ASSERT_EQ(carol.session.GetState(), NetworkSession::State::Playing);
+	ASSERT_EQ(host->Watchers().size(), 1u);
+	ASSERT_EQ(host->Watchers()[0].resumes, 1u);
+	// The kick of her account takes the observer that came back out of the game
+	host->SetBans({102});
+	Frames({&alice, &bob, &carol}, 3);
+	EXPECT_EQ(carol.session.RefusedReason(), "kicked");
+	EXPECT_TRUE(host->Watchers().empty());
+	EXPECT_EQ(host->Observers(), 0u);
+}
+
 TEST_F(LockstepTest, ABanAfterTheStartTakesThePlayerOutOfTheGame)
 {
 	MakeHost(2);
@@ -4629,6 +4687,30 @@ TEST(RoomClock, TheClockOfAComputerFollowsTheSpeedOfTheRoomAndStartsFromTheTurnA
 	EXPECT_TRUE(room_clock::FollowOf(GameTime {.paused = true, .speed = 1.0f, .act = TimeAct::Step}, 1.0f).fromTurn);
 }
 
+TEST(RoomClock, TheGameServerPlaysInAFrameTheTurnsThatTheClockOfTheRoomGives)
+{
+	namespace room_clock = online::room_clock;
+	using std::chrono::milliseconds;
+	// The default frame of the server is 100 ms: one turn at the normal speed, ten at the fastest speed
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(1.0f, milliseconds(100)), 1u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.1f, milliseconds(100)), 10u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.5f, milliseconds(100)), 2u);
+	// A part of a turn goes up to a full turn
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.3f, milliseconds(100)), 4u);
+	// A slow clock and a short frame give one turn
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(10.0f, milliseconds(100)), 1u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.1f, milliseconds(10)), 1u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(1.0f, milliseconds(10)), 1u);
+	// The number stays at the limit, also for a long frame
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.1f, milliseconds(1000)), room_clock::k_MostServerTurnsInFrame);
+	// No fixed frame time: the frame takes the time of a normal turn
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.1f, std::nullopt), 10u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(1.0f, std::nullopt), 1u);
+	// A speed out of the limits gives one turn
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.0f, milliseconds(100)), 1u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(std::nanf(""), milliseconds(100)), 1u);
+}
+
 TEST(RoomClock, EveryPlayerSeesALineForAPauseAPlayAndASpeedOfAPlayer)
 {
 	using game_socket::GameTime;
@@ -4690,6 +4772,92 @@ TEST_F(LockstepTest, TheServerTakesTheActsOfTheDebugWindowsOnlyFromAGodWithTheDe
 	EXPECT_FLOAT_EQ(host->RoomClock().speed, 2.0f);
 	EXPECT_FALSE(host->RoomClock().paused);
 	EXPECT_EQ(host->RefusedTimeRequests(), 1u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheActsOfTheMagicWeatherAndMoonWindowsOnlyFromAGodWithTheDebuggerClaim)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+debugger:alice");
+	Computer bob(network, now, "god+editor:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	const DebugMagic dispenser {.act = DebugMagic::Act::PlaceDispenser, .magic = 1, .position = {10.0f, 0.0f, 10.0f}};
+	const DebugTownMiracle town {.town = 1, .magic = 2};
+	const DebugWeather storm {.act = DebugWeather::Act::ForceStorm, .temperature = 12, .rain = 80, .overcast = 90};
+	const DebugSky noon {.act = DebugSky::Act::ScriptHour, .hour = 12.0f};
+	for (auto* computer : {&alice, &bob})
+	{
+		computer->session.Send(dispenser);
+		computer->session.Send(town);
+		computer->session.Send(storm);
+		computer->session.Send(noon);
+	}
+	// No computer takes a miracle out of the table, a storm hotter than the window gives, or an hour after 24
+	alice.session.Send(DebugMagic {.act = DebugMagic::Act::PlaceBubble, .magic = 200});
+	alice.session.Send(DebugWeather {.act = DebugWeather::Act::Preset, .temperature = 90, .rain = 10});
+	alice.session.Send(DebugSky {.act = DebugSky::Act::ScriptHour, .hour = 25.0f});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedDebuggerCommands(), 7u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	for (const auto tag : {turn_codec::CommandTag::DebugMagic, turn_codec::CommandTag::DebugTownMiracle,
+	                       turn_codec::CommandTag::DebugWeather, turn_codec::CommandTag::DebugSky})
+	{
+		EXPECT_EQ(count(0, tag), 1u) << static_cast<int>(tag);
+		EXPECT_EQ(count(1, tag), 0u) << static_cast<int>(tag);
+	}
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheActsOnTheThingsOfTheWorldOnlyFromAGodWithTheDebuggerClaim)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+debugger:alice");
+	Computer bob(network, now, "god+editor:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	const DebugPhysics throwAct {.type = 36, .height = 20.0f, .scale = 1.0f, .place = {100.0f, 100.0f}};
+	const DebugParticle pause {.act = DebugParticle::Act::Pause, .paused = true};
+	const DebugTempleVillager share {.act = DebugTempleVillager::Act::Share, .value = 0.5f};
+	const DebugVillagerPath speed {.act = DebugVillagerPath::Act::Speed, .speed = 1.0f};
+	alice.session.Send(throwAct);
+	alice.session.Send(pause);
+	alice.session.Send(share);
+	alice.session.Send(speed);
+	// No computer takes these acts, thus the server refuses them also from a player with the claim: a type that is not a
+	// type of a static thing, a share above 1, an effect of one computer only and too many new villagers
+	alice.session.Send(DebugPhysics {.type = 999, .scale = 1.0f});
+	alice.session.Send(DebugTempleVillager {.act = DebugTempleVillager::Act::Share, .value = 1.5f});
+	alice.session.Send(DebugParticle {.act = DebugParticle::Act::Close, .effect = 0x4000'0001u});
+	alice.session.Send(DebugTempleVillager {.act = DebugTempleVillager::Act::Make, .age = 30, .count = 33});
+	// The editor claim does not give the acts of the debug windows
+	bob.session.Send(throwAct);
+	bob.session.Send(pause);
+	bob.session.Send(share);
+	bob.session.Send(speed);
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedDebuggerCommands(), 8u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	for (const auto tag : {turn_codec::CommandTag::DebugPhysics, turn_codec::CommandTag::DebugParticle,
+	                       turn_codec::CommandTag::DebugTempleVillager, turn_codec::CommandTag::DebugVillagerPath})
+	{
+		EXPECT_EQ(count(0, tag), 1u) << static_cast<int>(tag);
+		EXPECT_EQ(count(1, tag), 0u) << static_cast<int>(tag);
+	}
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }

@@ -17,6 +17,8 @@
 #include <fmt/format.h>
 #include <imgui.h>
 
+#include "Common/DebugActRuns.h"
+#include "Common/DebugMagicWeatherActRuns.h"
 #include "Debug/TownMiracles.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
@@ -140,13 +142,19 @@ void Magic::DrawTownMiracles() noexcept
 	ImGui::EndDisabled();
 
 	const auto apply = [&](bool give) {
-		const auto outcome = tool::Apply({.town = town,
-		                                  .type = _townMiracle,
-		                                  .give = give,
-		                                  .withPlain = _withPlain,
-		                                  .allLevels = _allLevels,
-		                                  .openSite = _openSite,
-		                                  .anyLand = _anyLand});
+		const auto result = debug_acts::Do(player_commands::DebugTownMiracle {.town = _townId,
+		                                                                      .magic = static_cast<uint8_t>(_townMiracle),
+		                                                                      .give = give,
+		                                                                      .withPlain = _withPlain,
+		                                                                      .allLevels = _allLevels,
+		                                                                      .openSite = _openSite,
+		                                                                      .anyLand = _anyLand});
+		if (!result.has_value())
+		{
+			_townResult = "Sent as a command. The game log gives the result at the turn.";
+			return;
+		}
+		const auto& outcome = *result;
 		if (!outcome.error.empty())
 		{
 			_townResult = outcome.error;

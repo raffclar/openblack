@@ -29,6 +29,22 @@ constexpr int32_t k_EvilSpirit = 2;
 /// by a number below 100 that `rand100` draws only then
 [[nodiscard]] int32_t HelpSpiritOf(int32_t scriptSpirit, int32_t discreteAlignment, const std::function<uint32_t()>& rand100);
 
+/// Whether the advisor natives of a script read the state of this computer: its advisors, the alignment of its player
+/// and the random numbers of its help. They do in a game alone. In a network game, only the help scripts do. Each
+/// computer runs these for its own player, and they change only what this computer shows.
+[[nodiscard]] constexpr bool ReadsThisComputer(bool networkGame, bool helpScript)
+{
+	return !networkGame || helpScript;
+}
+
+/// Whether an advisor has played its animation, as a script asks. A script that reads this computer asks the advisor.
+/// In a network game, a script that each computer runs reads the world of the turns. That world has no advisors, as on
+/// the game server, thus each advisor has played.
+[[nodiscard]] constexpr bool SpiritPlayed(bool readsThisComputer, bool advisorPlays)
+{
+	return !readsThisComputer || !advisorPlays;
+}
+
 /// The advisor who says a help text, by its narrator: 1 good, 2 evil, 0 neither
 [[nodiscard]] int32_t SpiritWhoTalks(int32_t narrator);
 

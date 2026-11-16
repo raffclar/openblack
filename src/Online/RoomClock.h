@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -203,6 +204,34 @@ struct Claims
 [[nodiscard]] constexpr float ClockSpeedOf(float speed) noexcept
 {
 	return 1.0f / speed;
+}
+
+/// The time of a turn at the normal speed of the room
+inline constexpr std::chrono::microseconds k_NormalTurnTime {100'000};
+/// The most turns that the game server plays in one frame. A player's computer that catches up plays as many.
+inline constexpr uint32_t k_MostServerTurnsInFrame = 10;
+
+/// The most turns that the game server plays in one frame of this time, at this time of a turn of the room. It is the
+/// number of turns that the clock of the room gives in the frame, rounded up, from 1 to k_MostServerTurnsInFrame. At
+/// the normal speed and a frame of 100 ms, it is 1. A server with no fixed frame time takes the time of a normal turn.
+[[nodiscard]] constexpr uint32_t ServerTurnsInFrame(float speed, std::optional<std::chrono::microseconds> frameTime) noexcept
+{
+	if (!(speed >= k_FastestSpeed && speed <= k_SlowestSpeed))
+	{
+		return 1;
+	}
+	const auto frame = static_cast<double>(frameTime.value_or(k_NormalTurnTime).count());
+	const auto turns = frame * static_cast<double>(ClockSpeedOf(speed)) / static_cast<double>(k_NormalTurnTime.count());
+	if (!(turns > 1.0))
+	{
+		return 1;
+	}
+	if (turns >= static_cast<double>(k_MostServerTurnsInFrame))
+	{
+		return k_MostServerTurnsInFrame;
+	}
+	const auto whole = static_cast<uint32_t>(turns);
+	return static_cast<double>(whole) < turns ? whole + 1 : whole;
 }
 
 /// What the clock of a computer does when a frame of the clock of the room comes

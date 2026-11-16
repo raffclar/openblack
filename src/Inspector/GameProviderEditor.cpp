@@ -11,6 +11,7 @@
 #include <array>
 #include <bit>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -22,19 +23,27 @@
 #include <LHVM.h>
 #include <MindFile.h>
 #include <fmt/format.h>
+#include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Common/CreatureEditValues.h"
 #include "Common/DebugActRuns.h"
 #include "Common/DebugActs.h"
 #include "Common/DebugCheats.h"
+#include "Common/DebugMagicWeatherActRuns.h"
+#include "Common/DebugMagicWeatherActs.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/Components/Creature.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Components/Weather.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
-#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -144,6 +153,171 @@ QueryResult DebugGesture(std::string_view act)
 	return QueryResult::Value({{"sent", false}, {"kind", "gesture"}, {"act", std::string(act)}});
 }
 
+/// The position of a parameter, or the point that the camera looks at on the land, as the Magic window gives it
+[[nodiscard]] glm::vec3 PositionParam(const Json& params)
+{
+	const auto found = params.find("position");
+	if (found != params.end() && found->is_array() && found->size() == 3)
+	{
+		const auto values = NumbersParam(params, "position", 3);
+		return {values[0], values[1], values[2]};
+	}
+	glm::vec3 point = Locator::camera::has_value() ? Locator::camera::value().GetFocus() : glm::vec3(0.0f);
+	if (Locator::terrainSystem::has_value())
+	{
+		point.y = Locator::terrainSystem::value().GetHeightAt({point.x, point.z});
+	}
+	return point;
+}
+
+/// The entity of a parameter, or none
+[[nodiscard]] std::optional<entt::entity> EntityParam(const Json& params, std::string_view name)
+{
+	const auto found = params.find(std::string(name));
+	if (found == params.end() || !found->is_number_integer())
+	{
+		return std::nullopt;
+	}
+	return static_cast<entt::entity>(found->get<uint32_t>());
+}
+
+/// The creature nearest to the point, as the Magic window finds it, or none
+[[nodiscard]] entt::entity NearestCreatureTo(glm::vec3 point)
+{
+	entt::entity nearest = entt::null;
+	float best = std::numeric_limits<float>::max();
+	Locator::entitiesRegistry::value().Each<const ecs::components::Creature, const ecs::components::Transform>(
+	    [&](entt::entity entity, const ecs::components::Creature&, const ecs::components::Transform& transform) {
+		    const float distance = glm::distance(point, transform.position);
+		    if (distance < best)
+		    {
+			    best = distance;
+			    nearest = entity;
+		    }
+	    });
+	return nearest;
+}
+
+/// The first storm that lives, as the Storms list of the Weather window shows it, or none
+[[nodiscard]] entt::entity FirstStorm()
+{
+	entt::entity first = entt::null;
+	Locator::entitiesRegistry::value().Each<const ecs::components::Storm>(
+	    [&first](entt::entity entity, const ecs::components::Storm& storm) {
+		    if (!storm.dead && first == entt::null)
+		    {
+			    first = entity;
+		    }
+	    });
+	return first;
+}
+
+/// Finds the act of a kind by its name
+template <class Act>
+[[nodiscard]] std::optional<Act> ActNamed(std::string_view name, Act last)
+{
+	for (uint8_t i = 0; i <= static_cast<uint8_t>(last); ++i)
+	{
+		if (debug_acts::NameOf(static_cast<Act>(i)) == name)
+		{
+			return static_cast<Act>(i);
+		}
+	}
+	return std::nullopt;
+}
+
+/// An act of the Magic, the Weather or the Moon window, as their buttons do it
+std::optional<QueryResult> MagicWeatherAct(std::string_view kind, std::string_view act, const Json& params)
+{
+	const auto sent = [&]() {
+		return QueryResult::Value({{"sent", debug_acts::SendsCommands()}, {"kind", kind}, {"act", act}});
+	};
+	if (kind == "magic")
+	{
+		using player_commands::DebugMagic;
+		const auto found = ActNamed(act, DebugMagic::Act::InfinitePrayer);
+		if (!found.has_value())
+		{
+			return QueryResult::Error("editor.debug_act magic needs the name of an act of the Magic window");
+		}
+		const auto position = PositionParam(params);
+		auto creature = EntityParam(params, "creature");
+		if (*found == DebugMagic::Act::CastOnCreature && !creature.has_value())
+		{
+			creature = NearestCreatureTo(position);
+		}
+		debug_acts::Do(DebugMagic {.act = *found,
+		                           .magic = static_cast<uint8_t>(IntegerParam(params, "magic", 1)),
+		                           .position = position,
+		                           .forward = Locator::camera::has_value() ? Locator::camera::value().GetForward()
+		                                                                   : glm::vec3(0.0f, 0.0f, 1.0f),
+		                           .creature = creature.value_or(entt::null),
+		                           .value = NumberParam(params, "value").value_or(0.0f),
+		                           .on = BoolParam(params, "on", false)});
+		return sent();
+	}
+	if (kind == "town")
+	{
+		// With no number, the first town of the land, as the Town miracles tab shows it first
+		const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+		const auto first = towns.empty() ? 0 : static_cast<int32_t>(towns.begin()->first);
+		const auto outcome = debug_acts::Do(
+		    player_commands::DebugTownMiracle {.town = static_cast<uint32_t>(IntegerParam(params, "town", first)),
+		                                       .magic = static_cast<uint8_t>(IntegerParam(params, "magic", 1)),
+		                                       .give = act != "take",
+		                                       .withPlain = BoolParam(params, "with_plain", true),
+		                                       .allLevels = BoolParam(params, "all_levels", false),
+		                                       .openSite = BoolParam(params, "open_site", true),
+		                                       .anyLand = BoolParam(params, "any_land", true)});
+		if (outcome.has_value() && !outcome->error.empty())
+		{
+			return QueryResult::Error(fmt::format("editor.debug_act town: {}", outcome->error));
+		}
+		return sent();
+	}
+	if (kind == "weather")
+	{
+		using player_commands::DebugWeather;
+		const auto found = ActNamed(act, DebugWeather::Act::EndStorm);
+		if (!found.has_value())
+		{
+			return QueryResult::Error("editor.debug_act weather needs the name of an act of the Weather window");
+		}
+		// A storm with lightning flashes as the window's lightning storm does
+		const bool lightning = BoolParam(params, "lightning", false);
+		debug_acts::Do(DebugWeather {
+		    .act = *found,
+		    .temperature = static_cast<int8_t>(IntegerParam(params, "temperature", 12)),
+		    .rain = static_cast<int8_t>(IntegerParam(params, "rain", 0)),
+		    .snow = static_cast<int8_t>(IntegerParam(params, "snow", 0)),
+		    .overcast = static_cast<int8_t>(IntegerParam(params, "overcast", 0)),
+		    .windX = static_cast<int8_t>(IntegerParam(params, "wind_x", 0)),
+		    .windZ = static_cast<int8_t>(IntegerParam(params, "wind_z", 0)),
+		    .seconds = NumberParam(params, "seconds").value_or(600.0f),
+		    .thunderWait = lightning ? glm::vec2(3.0f, 15.0f) : glm::vec2(0.0f),
+		    .boltWait = lightning ? glm::vec2(2.0f, 8.0f) : glm::vec2(0.0f),
+		    .storm = EntityParam(params, "storm").value_or(*found == DebugWeather::Act::EndStorm ? FirstStorm() : entt::null),
+		    .on = BoolParam(params, "on", false)});
+		return sent();
+	}
+	if (kind == "sky")
+	{
+		using player_commands::DebugSky;
+		const auto found = ActNamed(act, DebugSky::Act::Reset);
+		if (!found.has_value())
+		{
+			return QueryResult::Error("editor.debug_act sky needs the name of an act of the Moon window");
+		}
+		const auto date = params.find("date");
+		debug_acts::Do(DebugSky {.act = *found,
+		                         .hour = NumberParam(params, "value").value_or(0.0f),
+		                         .on = BoolParam(params, "on", false),
+		                         .date = date != params.end() && date->is_number_integer() ? date->get<int64_t>() : 0});
+		return sent();
+	}
+	return std::nullopt;
+}
+
 /// An act of the debug windows or of the debug menus, as their buttons do it
 QueryResult DebugAct(const Json& params)
 {
@@ -207,7 +381,11 @@ QueryResult DebugAct(const Json& params)
 	{
 		return DebugGesture(act);
 	}
-	return QueryResult::Error("editor.debug_act needs the kind advisor, world, console or gesture");
+	if (auto answer = MagicWeatherAct(kind, act, params))
+	{
+		return std::move(*answer);
+	}
+	return QueryResult::Error("editor.debug_act needs the kind advisor, world, console, gesture, magic, town, weather or sky");
 }
 
 } // namespace
@@ -1424,16 +1602,24 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	    "debug_act",
 	    "Does an act of the debug windows or of the debug menus, as their buttons do: an act on the advisors (kind advisor), "
 	    "a change of the time of the day, of the alignment of a player or of a bonus creature (kind world), a line of land "
-	    "script commands of the Console (kind console), or a gesture of the Gestures window (kind gesture). In a network "
-	    "game the first three go as commands of the turns, and the game server takes them only from a player with the "
-	    "debugger claim. A gesture goes to the hand of this computer. force sends the act also when the debug windows of "
-	    "this computer do not show.",
-	    {{.name = "kind", .type = "string", .description = "advisor, world, console or gesture", .required = true},
+	    "script commands of the Console (kind console), a gesture of the Gestures window (kind gesture), an act of the "
+	    "Magic window (kind magic, or town for the town miracles), of the Weather window (kind weather) or of the Moon "
+	    "window (kind sky). In a network game each act but a gesture goes as a command of the turns, and the game server "
+	    "takes it only from a player with the debugger claim. A gesture goes to the hand of this computer. force sends the "
+	    "act also when the debug windows of this computer do not show.",
+	    {{.name = "kind",
+	      .type = "string",
+	      .description = "advisor, world, console, gesture, magic, town, weather or sky",
+	      .required = true},
 	     {.name = "act",
 	      .type = "string",
 	      .description = "advisor: out, appear, home, vanish, fly, cling, screen_point, point_at, look_at, stop_pointing, "
 	                     "stop_looking, play_anim or feel. world: time_of_day, player_alignment or bonus_creature. gesture: "
-	                     "circle, power_up_0, power_up_1 or scribble.",
+	                     "circle, power_up_0, power_up_1 or scribble. magic: ignore_influence, place_dispenser, "
+	                     "place_bubble, give_to_hand, summon_from_worship, cast_at_point, cast_on_creature, drop_seed, "
+	                     "prayer_power or infinite_prayer. town: give or take. weather: preset, force_storm, clear_storms, "
+	                     "bolt, thunder, melt_snow, climates, climate_storms or end_storm. sky: script_hour, clock_runs, "
+	                     "moon_date, computer_date or reset.",
 	      .required = false},
 	     {.name = "advisor", .type = "integer", .description = "0 both, 1 the good one, 2 the evil one", .required = false},
 	     {.name = "place", .type = "array", .description = "The place on the screen, x and y from 0 to 1", .required = false},
@@ -1444,7 +1630,47 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	     {.name = "emotion", .type = "integer", .description = "advisor feel: the emotion, 0 to 7", .required = false},
 	     {.name = "player", .type = "integer", .description = "world player_alignment: the player", .required = false},
 	     {.name = "index", .type = "integer", .description = "world bonus_creature: the bonus creature", .required = false},
-	     {.name = "value", .type = "number", .description = "world: the hours, the alignment, or 1 or 0", .required = false},
+	     {.name = "value",
+	      .type = "number",
+	      .description = "world: the hours, the alignment, or 1 or 0. magic prayer_power: the prayer power. sky script_hour: "
+	                     "the hour",
+	      .required = false},
+	     {.name = "magic", .type = "integer", .description = "magic, town: the miracle (magic type)", .required = false},
+	     {.name = "on", .type = "boolean", .description = "magic, weather, sky: the value of a switch", .required = false},
+	     {.name = "creature",
+	      .type = "integer",
+	      .description = "magic cast_on_creature: the creature, else the creature nearest to the position",
+	      .required = false},
+	     {.name = "town",
+	      .type = "integer",
+	      .description = "town: the number of the town, else the first town",
+	      .required = false},
+	     {.name = "with_plain", .type = "boolean", .description = "town give: also the plain miracle", .required = false},
+	     {.name = "all_levels", .type = "boolean", .description = "town take: each level", .required = false},
+	     {.name = "open_site",
+	      .type = "boolean",
+	      .description = "town give: the town can have a worship site",
+	      .required = false},
+	     {.name = "any_land", .type = "boolean", .description = "town give: also on the first land", .required = false},
+	     {.name = "rain", .type = "integer", .description = "weather preset, force_storm: rain, 0 to 100", .required = false},
+	     {.name = "snow", .type = "integer", .description = "weather preset, force_storm: snow, 0 to 100", .required = false},
+	     {.name = "overcast",
+	      .type = "integer",
+	      .description = "weather preset, force_storm: cloud, 0 to 100",
+	      .required = false},
+	     {.name = "temperature",
+	      .type = "integer",
+	      .description = "weather preset, force_storm: temperature, -30 to 45",
+	      .required = false},
+	     {.name = "wind_x", .type = "integer", .description = "weather: wind along x, -100 to 100", .required = false},
+	     {.name = "wind_z", .type = "integer", .description = "weather: wind along z, -100 to 100", .required = false},
+	     {.name = "seconds", .type = "number", .description = "weather: how long the storm lasts", .required = false},
+	     {.name = "lightning", .type = "boolean", .description = "weather: the storm has lightning", .required = false},
+	     {.name = "storm",
+	      .type = "integer",
+	      .description = "weather end_storm: the storm, else the first storm",
+	      .required = false},
+	     {.name = "date", .type = "integer", .description = "sky moon_date: seconds after 1970", .required = false},
 	     {.name = "text", .type = "string", .description = "console: the line", .required = false},
 	     {.name = "force",
 	      .type = "boolean",
@@ -1452,6 +1678,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	      .required = false}});
 	debugAct.writes = true;
 	provider->Add(std::move(debugAct), [](const QueryContext& context) { return DebugAct(context.params); });
+	AddDebugThingQueries(*provider);
 	return provider;
 }
 

@@ -15,10 +15,13 @@
 
 #include "Common/DebugActs.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Creature/BonusCreatures.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "Help/Spirits.h"
 #include "LHScriptX/Script.h"
@@ -52,7 +55,19 @@ public:
 
 	void SetBonusUnlocked(size_t bonus, bool unlocked) override
 	{
-		// The scripts read the bonus creatures that are unlocked, thus each computer keeps the same set
+		// The scripts of a network game read the set of the world, which each computer changes at the same turn. A game
+		// alone changes the set of the debug option.
+		if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+		{
+			if (Locator::entitiesRegistry::has_value())
+			{
+				auto& world = Locator::entitiesRegistry::value().Context().networkBonusCreatures;
+				auto set = creature_swap::FromMask(world);
+				set.set(bonus, unlocked);
+				world = creature_swap::MaskOf(set);
+			}
+			return;
+		}
 		if (Locator::config::has_value())
 		{
 			Locator::config::value().unlockedBonusCreatures.set(bonus, unlocked);

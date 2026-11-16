@@ -13,8 +13,6 @@
 
 #include <algorithm>
 #include <array>
-#include <numbers>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -25,31 +23,24 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
-#include "ECS/Archetypes/VillagerArchetype.h"
-#include "ECS/Components/LivingAction.h"
+#include "Common/DebugThingActRuns.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/DynamicsSystemInterface.h"
-#include "ECS/Systems/Implementations/VillagerWorship.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
-#include "Editor/EditorEntities.h"
-#include "InfoConstants.h"
 #include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::debug::gui;
 using namespace openblack::temple_villagers;
+using openblack::player_commands::DebugTempleVillager;
 
 namespace
 {
 /// The player whose temple the window looks at
 constexpr auto k_Player = PlayerNames::PLAYER_ONE;
-/// New villagers stand round their town's first building, this far from it, in metres
-constexpr float k_SpawnRing = 6.0f;
 /// The camera looks at a villager from no further than this, and at the temple from no further than that, in metres,
 /// keeping its way of looking
 constexpr float k_LookDistance = 45.0f;
@@ -156,15 +147,6 @@ void TempleVillagers::UpdateAlways() noexcept
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	// Those made last frame set off for their town's worship site as the game sends a villager
-	for (const auto villager : std::exchange(_toSend, {}))
-	{
-		if (registry.Valid(villager) && registry.AllOf<ecs::components::LivingAction>(villager))
-		{
-			ecs::villager_worship::CheckWorshipActivity(registry.Get<ecs::components::LivingAction>(villager), false);
-		}
-	}
-	std::erase_if(_spawned, [&registry](entt::entity villager) { return !registry.Valid(villager); });
 	if (_selected.has_value() && !registry.Valid(*_selected))
 	{
 		_selected.reset();
@@ -245,7 +227,9 @@ void TempleVillagers::DrawTemple(const Survey& survey) noexcept
 		_follow = false;
 		LookAt(survey.templePosition, k_TempleLookDistance);
 	}
-	if (Locator::temple::has_value())
+	// In a network game the player goes into the temple with a tap on its entrance. The button would stop the time of this
+	// computer only.
+	if (Locator::temple::has_value() && !debug_thing_acts::SendsCommands())
 	{
 		auto& temple = Locator::temple::value();
 		ImGui::SameLine();
@@ -278,6 +262,11 @@ void TempleVillagers::DrawRun() noexcept
 	}
 	auto& time = Locator::time::value();
 	ImGui::Text("Turn %u%s", time.GetTurn(), time.IsPaused() ? ", paused" : "");
+	// In a network game the clock of the room steps the turns of each computer
+	if (debug_thing_acts::SendsCommands())
+	{
+		return;
+	}
 	ImGui::SameLine();
 	if (ImGui::SmallButton(time.IsPaused() ? "Resume" : "Pause"))
 	{
@@ -360,19 +349,20 @@ void TempleVillagers::DrawTowns(const Survey& survey) noexcept
 		float share = town.share;
 		ImGui::SetNextItemWidth(200.0f);
 		ImGui::SliderFloat("Worship share", &share, 0.0f, 1.0f, "%.2f");
-		if (ImGui::IsItemDeactivatedAfterEdit() && Locator::villageTotemSystem::has_value())
+		if (ImGui::IsItemDeactivatedAfterEdit())
 		{
-			Locator::villageTotemSystem::value().SetTownShare(town.town, share);
+			debug_thing_acts::Do(DebugTempleVillager {
+			    .act = DebugTempleVillager::Act::Share, .town = town.town, .value = std::clamp(share, 0.0f, 1.0f)});
 		}
 		ImGui::SameLine();
 		if (ImGui::SmallButton("Send one"))
 		{
-			ecs::villager_worship::AdjustWorshippers(town.town, 1, true, false);
+			debug_thing_acts::Do(DebugTempleVillager {.act = DebugTempleVillager::Act::SendOne, .town = town.town});
 		}
 		ImGui::SameLine();
 		if (ImGui::SmallButton("Call one back"))
 		{
-			ecs::villager_worship::AdjustWorshippers(town.town, -1, true, false);
+			debug_thing_acts::Do(DebugTempleVillager {.act = DebugTempleVillager::Act::CallOneBack, .town = town.town});
 		}
 		ImGui::PopID();
 	}
@@ -426,76 +416,40 @@ void TempleVillagers::DrawSpawn(const Survey& survey) noexcept
 		}
 		ImGui::EndCombo();
 	}
-	ImGui::SliderInt("Age", &_age, 1, 80);
-	ImGui::SliderInt("How many", &_count, 1, 32);
+	ImGui::SliderInt("Age", &_age, debug_thing_acts::k_YoungestAge, debug_thing_acts::k_OldestAge);
+	ImGui::SliderInt("How many", &_count, 1, debug_thing_acts::k_MostMade);
 	ImGui::Checkbox("Send them to worship", &_sendOnSpawn);
 	if (ImGui::Button("Make"))
 	{
 		Spawn(survey.towns.at(_town));
 	}
 	ImGui::SameLine();
-	Button(!_spawned.empty(), fmt::format("Take away the {} made here", _spawned.size()).c_str(), [this] { ClearSpawned(); });
+	auto made = debug_thing_acts::MadeVillagers();
+	Button(!made.empty(), fmt::format("Take away the {} made here", made.size()).c_str(), [&made] {
+		for (const auto& act : debug_thing_acts::TakeAwayActs(std::move(made)))
+		{
+			debug_thing_acts::Do(act);
+		}
+	});
 }
 
-void TempleVillagers::Spawn(const temple_villagers::Town& town) noexcept
+void TempleVillagers::Spawn(const temple_villagers::Town& town) const noexcept
 {
-	if (!town.home.has_value() || !Locator::infoConstants::has_value())
+	if (!town.home.has_value())
 	{
 		return;
 	}
-	VillagerInfo type;
-	try
-	{
-		type = GVillagerInfo::Find(_tribe, _number);
-	}
-	catch (const std::runtime_error&)
-	{
-		return;
-	}
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto home = glm::xz(*town.home);
-	for (int i = 0; i < _count; ++i)
-	{
-		const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / static_cast<float>(_count);
-		const auto at = OnLand(home + k_SpawnRing * glm::vec2(std::cos(angle), std::sin(angle)));
-		const auto villager =
-		    ecs::archetypes::VillagerArchetype::Create(*town.home, at, type, static_cast<uint32_t>(std::max(_age, 1)));
-		// It joins the town nearest its home, which is the town asked for
-		if (auto* person = registry.TryGet<ecs::components::Villager>(villager); person != nullptr && person->town != town.town)
-		{
-			person->town = town.town;
-		}
-		_spawned.push_back(villager);
-		if (_sendOnSpawn)
-		{
-			_toSend.push_back(villager);
-		}
-	}
-}
-
-void TempleVillagers::ClearSpawned() noexcept
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	for (const auto villager : std::exchange(_spawned, {}))
-	{
-		if (registry.Valid(villager))
-		{
-			// It leaves its site and the dance as a worshipper leaving its town does, then the towns forget it
-			ecs::villager_worship::LeaveTown(villager);
-			ecs::villager_worship::Forget(villager);
-			// Out of the physics and silent first, then out of the world as the game takes things out
-			if (Locator::dynamicsSystem::has_value())
-			{
-				Locator::dynamicsSystem::value().RemoveObject(villager, false, false);
-			}
-			if (Locator::audio::has_value())
-			{
-				Locator::audio::value().StopOwnedSounds(villager);
-			}
-			editor::Remove(villager);
-		}
-	}
-	_toSend.clear();
+	// The new villagers stand round the first building of the town, and they go to worship after they are in the town
+	debug_thing_acts::Do(DebugTempleVillager {
+	    .act = DebugTempleVillager::Act::Make,
+	    .town = town.town,
+	    .home = *town.home,
+	    .tribe = static_cast<uint8_t>(_tribe),
+	    .number = static_cast<uint8_t>(_number),
+	    .age = static_cast<uint8_t>(std::clamp<int>(_age, debug_thing_acts::k_YoungestAge, debug_thing_acts::k_OldestAge)),
+	    .count = static_cast<uint8_t>(std::clamp<int>(_count, 1, debug_thing_acts::k_MostMade)),
+	    .send = _sendOnSpawn,
+	});
 }
 
 void TempleVillagers::DrawVillagers(const Survey& survey) noexcept
@@ -620,13 +574,10 @@ void TempleVillagers::DrawSelected(const Survey& survey) noexcept
 	ImGui::SameLine();
 	ImGui::Checkbox("Follow it", &_follow);
 	ImGui::SameLine();
-	if (ImGui::SmallButton("Send to worship") && Locator::entitiesRegistry::has_value())
+	if (ImGui::SmallButton("Send to worship"))
 	{
-		auto& registry = Locator::entitiesRegistry::value();
-		if (auto* action = registry.TryGet<ecs::components::LivingAction>(villager.villager))
-		{
-			ecs::villager_worship::CheckWorshipActivity(*action, false);
-		}
+		debug_thing_acts::Do(
+		    DebugTempleVillager {.act = DebugTempleVillager::Act::SendToWorship, .villager = villager.villager});
 	}
 	ImGui::SameLine();
 	if (ImGui::SmallButton("Deselect"))

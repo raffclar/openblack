@@ -1362,6 +1362,12 @@
   "query": "engine.config"
  },
  {
+  "description": "What the scripts read of the bonus creatures and the advisors now. every_computer is what a script that each computer runs reads (in a network game, the same on each computer). this_computer is what a help script of this computer reads. The spirits are those of the script spirits 3 (by the alignment) and 4 (the opposite of the alignment); the query draws no random number",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.script_reads"
+ },
+ {
   "description": "The settings of this computer (settings.json) as the game read them at the start, with the changes kept since; a value the file does not keep is null",
   "kind": "object",
   "parameters": [],
@@ -2869,17 +2875,17 @@
   "writes": true
  },
  {
-  "description": "Does an act of the debug windows or of the debug menus, as their buttons do: an act on the advisors (kind advisor), a change of the time of the day, of the alignment of a player or of a bonus creature (kind world), a line of land script commands of the Console (kind console), or a gesture of the Gestures window (kind gesture). In a network game the first three go as commands of the turns, and the game server takes them only from a player with the debugger claim. A gesture goes to the hand of this computer. force sends the act also when the debug windows of this computer do not show.",
+  "description": "Does an act of the debug windows or of the debug menus, as their buttons do: an act on the advisors (kind advisor), a change of the time of the day, of the alignment of a player or of a bonus creature (kind world), a line of land script commands of the Console (kind console), a gesture of the Gestures window (kind gesture), an act of the Magic window (kind magic, or town for the town miracles), of the Weather window (kind weather) or of the Moon window (kind sky). In a network game each act but a gesture goes as a command of the turns, and the game server takes it only from a player with the debugger claim. A gesture goes to the hand of this computer. force sends the act also when the debug windows of this computer do not show.",
   "kind": "object",
   "parameters": [
    {
-    "description": "advisor, world, console or gesture",
+    "description": "advisor, world, console, gesture, magic, town, weather or sky",
     "name": "kind",
     "required": true,
     "type": "string"
    },
    {
-    "description": "advisor: out, appear, home, vanish, fly, cling, screen_point, point_at, look_at, stop_pointing, stop_looking, play_anim or feel. world: time_of_day, player_alignment or bonus_creature. gesture: circle, power_up_0, power_up_1 or scribble.",
+    "description": "advisor: out, appear, home, vanish, fly, cling, screen_point, point_at, look_at, stop_pointing, stop_looking, play_anim or feel. world: time_of_day, player_alignment or bonus_creature. gesture: circle, power_up_0, power_up_1 or scribble. magic: ignore_influence, place_dispenser, place_bubble, give_to_hand, summon_from_worship, cast_at_point, cast_on_creature, drop_seed, prayer_power or infinite_prayer. town: give or take. weather: preset, force_storm, clear_storms, bolt, thunder, melt_snow, climates, climate_storms or end_storm. sky: script_hour, clock_runs, moon_date, computer_date or reset.",
     "name": "act",
     "type": "string"
    },
@@ -2929,9 +2935,99 @@
     "type": "integer"
    },
    {
-    "description": "world: the hours, the alignment, or 1 or 0",
+    "description": "world: the hours, the alignment, or 1 or 0. magic prayer_power: the prayer power. sky script_hour: the hour",
     "name": "value",
     "type": "number"
+   },
+   {
+    "description": "magic, town: the miracle (magic type)",
+    "name": "magic",
+    "type": "integer"
+   },
+   {
+    "description": "magic, weather, sky: the value of a switch",
+    "name": "on",
+    "type": "boolean"
+   },
+   {
+    "description": "magic cast_on_creature: the creature, else the creature nearest to the position",
+    "name": "creature",
+    "type": "integer"
+   },
+   {
+    "description": "town: the number of the town, else the first town",
+    "name": "town",
+    "type": "integer"
+   },
+   {
+    "description": "town give: also the plain miracle",
+    "name": "with_plain",
+    "type": "boolean"
+   },
+   {
+    "description": "town take: each level",
+    "name": "all_levels",
+    "type": "boolean"
+   },
+   {
+    "description": "town give: the town can have a worship site",
+    "name": "open_site",
+    "type": "boolean"
+   },
+   {
+    "description": "town give: also on the first land",
+    "name": "any_land",
+    "type": "boolean"
+   },
+   {
+    "description": "weather preset, force_storm: rain, 0 to 100",
+    "name": "rain",
+    "type": "integer"
+   },
+   {
+    "description": "weather preset, force_storm: snow, 0 to 100",
+    "name": "snow",
+    "type": "integer"
+   },
+   {
+    "description": "weather preset, force_storm: cloud, 0 to 100",
+    "name": "overcast",
+    "type": "integer"
+   },
+   {
+    "description": "weather preset, force_storm: temperature, -30 to 45",
+    "name": "temperature",
+    "type": "integer"
+   },
+   {
+    "description": "weather: wind along x, -100 to 100",
+    "name": "wind_x",
+    "type": "integer"
+   },
+   {
+    "description": "weather: wind along z, -100 to 100",
+    "name": "wind_z",
+    "type": "integer"
+   },
+   {
+    "description": "weather: how long the storm lasts",
+    "name": "seconds",
+    "type": "number"
+   },
+   {
+    "description": "weather: the storm has lightning",
+    "name": "lightning",
+    "type": "boolean"
+   },
+   {
+    "description": "weather end_storm: the storm, else the first storm",
+    "name": "storm",
+    "type": "integer"
+   },
+   {
+    "description": "sky moon_date: seconds after 1970",
+    "name": "date",
+    "type": "integer"
    },
    {
     "description": "console: the line",
@@ -2945,6 +3041,150 @@
    }
   ],
   "query": "editor.debug_act",
+  "writes": true
+ },
+ {
+  "description": "Does an act of the Physics, Particles, Temple villagers or Path finding debug windows, as their buttons do: a throw (kind physics), an act on the effects with the shared random numbers (kind particle), an act on the towns and the villagers of the temple of the first player (kind temple), or a move of a villager (kind path). In a network game the acts go as commands of the turns, and the game server takes them only from a player with the debugger claim. force sends the act also when the debug windows of this computer do not show.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "physics, particle, temple or path",
+    "name": "kind",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "particle: start, pause, close_all, delete_all, close or delete. temple: share, send_one, call_one_back, make, send_to_worship or take_away. path: teleport, move_to, goal or speed.",
+    "name": "act",
+    "type": "string"
+   },
+   {
+    "description": "physics: the thing to throw, -1 for a new one",
+    "name": "object",
+    "type": "integer"
+   },
+   {
+    "description": "physics: the type of the new static thing. particle start: the particle type",
+    "name": "type",
+    "type": "integer"
+   },
+   {
+    "description": "physics: the height above the land",
+    "name": "height",
+    "type": "number"
+   },
+   {
+    "description": "physics: the scale",
+    "name": "scale",
+    "type": "number"
+   },
+   {
+    "description": "physics: x and z, else the focus of the camera",
+    "name": "place",
+    "type": "array"
+   },
+   {
+    "description": "physics: the velocity x, y and z",
+    "name": "velocity",
+    "type": "array"
+   },
+   {
+    "description": "particle start: the particle file",
+    "name": "file",
+    "type": "string"
+   },
+   {
+    "description": "particle start and path: x, y and z, else the focus of the camera",
+    "name": "position",
+    "type": "array"
+   },
+   {
+    "description": "particle start: the magnitude",
+    "name": "magnitude",
+    "type": "number"
+   },
+   {
+    "description": "particle start: the player, 0 to 7",
+    "name": "player",
+    "type": "integer"
+   },
+   {
+    "description": "particle start: the draw, 0 to 5",
+    "name": "draw",
+    "type": "integer"
+   },
+   {
+    "description": "particle start: the count of the targets",
+    "name": "targets",
+    "type": "integer"
+   },
+   {
+    "description": "particle close and delete: the effect",
+    "name": "effect",
+    "type": "integer"
+   },
+   {
+    "description": "particle pause: true stops the steps",
+    "name": "paused",
+    "type": "boolean"
+   },
+   {
+    "description": "temple: the town, else the first town",
+    "name": "town",
+    "type": "integer"
+   },
+   {
+    "description": "temple and path: the villager, else the first villager that the window made",
+    "name": "villager",
+    "type": "integer"
+   },
+   {
+    "description": "temple share: the share, 0 to 1",
+    "name": "value",
+    "type": "number"
+   },
+   {
+    "description": "temple make: the tribe",
+    "name": "tribe",
+    "type": "integer"
+   },
+   {
+    "description": "temple make: the job",
+    "name": "number",
+    "type": "integer"
+   },
+   {
+    "description": "temple make: the age, 1 to 80",
+    "name": "age",
+    "type": "integer"
+   },
+   {
+    "description": "temple make: the count, 1 to 32",
+    "name": "count",
+    "type": "integer"
+   },
+   {
+    "description": "temple make: the villagers go to worship",
+    "name": "send",
+    "type": "boolean"
+   },
+   {
+    "description": "path goal: the goal x and z",
+    "name": "goal",
+    "type": "array"
+   },
+   {
+    "description": "path speed: the speed in metres a second",
+    "name": "speed",
+    "type": "number"
+   },
+   {
+    "description": "Send also when the debug windows do not show",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.debug_thing",
   "writes": true
  },
  {

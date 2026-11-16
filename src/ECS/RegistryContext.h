@@ -118,5 +118,12 @@ struct RegistryContext
 	std::optional<creature_exploration::RegionMap> explorationMap;
 	/// The statistics the game keeps once for everyone, which a new land starts again
 	statistics::GlobalFigures globalStatistics;
+	/// The bonus creatures that the scripts of a network game read, one bit for each (creature_swap::MaskOf). A network
+	/// game starts with none, as a normal install. Only the turn command of the debug menu changes the set, thus each
+	/// computer keeps the same set.
+	uint8_t networkBonusCreatures {0};
+	/// The villagers that the Temple villagers debug window of each player made, so that the window can take them away.
+	/// In a network game each computer adds them at the turn of the act, thus the list is the same on each computer.
+	std::array<std::vector<entt::entity>, player_slots::k_PlayerNumbers> debugMadeVillagers {};
 };
 } // namespace openblack::ecs

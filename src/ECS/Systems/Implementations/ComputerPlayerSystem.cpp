@@ -722,6 +722,13 @@ void ComputerPlayerSystem::FillEmptySlots(std::span<const PlayerNames> gods, std
 	computer_player::FillEmptySlots(world, gods, humans);
 }
 
+void ComputerPlayerSystem::FillSlotOf(PlayerNames player, bool makeCreature)
+{
+	GameSlotWorld world(*this);
+	world.MakePlayer(player);
+	computer_player::FillSlot(world, player, makeCreature);
+}
+
 void ComputerPlayerSystem::WaitForHumans(std::span<const uint8_t> closedSlots)
 {
 	Locator::entitiesRegistry::value().Context().slotsWaitForHumans = true;
