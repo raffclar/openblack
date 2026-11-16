@@ -189,6 +189,9 @@ public:
 	                                 bool /*landDrawn*/)
 	{
 	}
+	/// Once a frame, after the frame shades the land and before it collects the particles: the effect over each stone hand
+	/// that the frame draws gets its alpha from the light of the land of this frame at the hand
+	virtual void LightHandHolderEffects() {}
 	/// The seed's model that the effect of the holder over an icon acts on: the model and where it was last drawn
 	struct HolderTarget
 	{

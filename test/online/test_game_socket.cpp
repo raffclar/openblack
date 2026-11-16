@@ -144,6 +144,44 @@ TEST(GameSocket, TheRefusalOfCommandsGivesTheReasonAndTheCount)
 	EXPECT_FALSE(Parse(R"({"type":"command.refused","reason":")" + std::string(65, 'x') + R"("})").has_value());
 }
 
+TEST(GameSocket, TheRequestOfTheClockGivesItsActAndTheSpeedOnlyForTheActSpeed)
+{
+	const EditorTime pause {.act = TimeAct::Pause};
+	EXPECT_EQ(ToJson(pause), R"({"act":"pause","type":"editor.time"})");
+	EXPECT_EQ(std::get<EditorTime>(*Parse(ToJson(pause))), pause);
+	for (const auto act : {TimeAct::Play, TimeAct::Step})
+	{
+		EXPECT_EQ(std::get<EditorTime>(*Parse(ToJson(EditorTime {.act = act}))).act, act);
+	}
+	// The speed keeps each bit of the float
+	const EditorTime speed {.act = TimeAct::Speed, .speed = 0.1f};
+	EXPECT_EQ(std::bit_cast<uint32_t>(std::get<EditorTime>(*Parse(ToJson(speed))).speed), std::bit_cast<uint32_t>(0.1f));
+	EXPECT_EQ(std::get<EditorTime>(*Parse(ToJson(EditorTime {.act = TimeAct::Speed, .speed = 7.25f}))).speed, 7.25f);
+	// A request with no act, another act, or a speed that is not a number does not read
+	EXPECT_FALSE(Parse(R"({"type":"editor.time"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.time","act":"rewind"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.time","act":"speed","speed":"fast"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.time","act":"speed","speed":0})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.time","act":"speed","speed":1e9})").has_value());
+	// A speed out of the range of the editor reads: the server refuses it with its reason
+	EXPECT_EQ(std::get<EditorTime>(*Parse(R"({"type":"editor.time","act":"speed","speed":20})")).speed, 20.0f);
+}
+
+TEST(GameSocket, TheClockOfTheRoomGivesThePauseTheSpeedTheActThePlayerAndTheTurn)
+{
+	const GameTime time {.paused = true, .speed = 2.5f, .act = TimeAct::Pause, .by = "alice", .turn = 120};
+	EXPECT_EQ(ToJson(time), R"({"act":"pause","by":"alice","paused":true,"speed":2.5,"turn":120,"type":"game.time"})");
+	EXPECT_EQ(std::get<GameTime>(*Parse(ToJson(time))), time);
+	const GameTime back {.paused = false, .speed = 0.1f, .act = TimeAct::Play, .by = {}, .turn = 0};
+	EXPECT_EQ(std::get<GameTime>(*Parse(ToJson(back))), back);
+	// The paused member is needed; the name of the player has a most length
+	EXPECT_FALSE(Parse(R"({"type":"game.time","act":"play","speed":1})").has_value());
+	EXPECT_FALSE(
+	    Parse(R"({"type":"game.time","act":"play","paused":false,"by":")" + std::string(65, 'x') + R"("})").has_value());
+	EXPECT_EQ(TimeActFrom(TimeActName(TimeAct::Speed)), TimeAct::Speed);
+	EXPECT_FALSE(TimeActFrom("Pause").has_value());
+}
+
 TEST(GameSocket, TheReplyToAJoinGivesTheServersWorld)
 {
 	const auto joined = RoundTrip(Joined {.role = Role::God,

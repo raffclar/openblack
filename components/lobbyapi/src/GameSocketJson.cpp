@@ -58,6 +58,14 @@ constexpr std::string_view k_CommandRefused = "command.refused";
 constexpr std::string_view k_EditorMindFile = "editor.mind_file";
 constexpr std::string_view k_EditorWorld = "editor.world";
 constexpr std::string_view k_EditorScenario = "editor.scenario";
+constexpr std::string_view k_EditorTime = "editor.time";
+constexpr std::string_view k_GameTime = "game.time";
+/// The fastest and the slowest time of a turn that a frame of the clock can give, as a multiple of a tenth of a second.
+/// The server takes a smaller range (see room_clock).
+constexpr double k_LeastTimeSpeed = 0.001;
+constexpr double k_MostTimeSpeed = 1000.0;
+/// The most bytes of the name of the player in a "game.time" frame
+constexpr size_t k_MostTimeNameBytes = 64;
 /// The most bytes of the hints of a copy of the game (the patch and the language)
 constexpr size_t k_MostHintBytes = 16;
 /// The most bytes of the words of the file in a refusal "data"
@@ -299,6 +307,45 @@ bool ReadCaptureParts(const Json& object, std::vector<Part>& out, const ReadPart
 }
 
 /// Reads an alignment, a number from -1 to 1 that the frame holds as a float. A frame with no alignment gives 0.
+/// The time of a turn of a frame of the clock: a finite number in the range of the frames, 1 when the frame gives none
+bool ReadTimeSpeed(const Json& object, float& out)
+{
+	const auto* member = Member(object, "speed");
+	if (member == nullptr || member->is_null())
+	{
+		out = 1.0f;
+		return true;
+	}
+	if (!member->is_number())
+	{
+		return false;
+	}
+	const auto value = member->get<double>();
+	if (!(value >= k_LeastTimeSpeed && value <= k_MostTimeSpeed))
+	{
+		return false;
+	}
+	out = static_cast<float>(value);
+	return true;
+}
+
+/// The act of a frame of the clock
+bool ReadTimeAct(const Json& object, TimeAct& out)
+{
+	std::string name;
+	if (!ReadString(object, "act", name))
+	{
+		return false;
+	}
+	const auto act = TimeActFrom(name);
+	if (!act.has_value())
+	{
+		return false;
+	}
+	out = *act;
+	return true;
+}
+
 bool ReadAlignment(const Json& object, std::string_view key, float& out)
 {
 	const auto* member = Member(object, key);
@@ -899,6 +946,27 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		}
 		return scenario;
 	}
+	if (type == k_EditorTime)
+	{
+		EditorTime time;
+		if (!ReadTimeAct(object, time.act) || !ReadTimeSpeed(object, time.speed))
+		{
+			return std::nullopt;
+		}
+		return time;
+	}
+	if (type == k_GameTime)
+	{
+		GameTime time;
+		uint64_t turn = 0;
+		if (!ReadTimeAct(object, time.act) || !ReadTimeSpeed(object, time.speed) || !ReadBool(object, "paused", time.paused) ||
+		    !ReadShort(object, "by", time.by, k_MostTimeNameBytes) || !ReadUnsigned(object, "turn", k_MostTurn, turn, false))
+		{
+			return std::nullopt;
+		}
+		time.turn = static_cast<uint32_t>(turn);
+		return time;
+	}
 	if (type == k_CommandRefused)
 	{
 		CommandRefused refused;
@@ -1072,6 +1140,34 @@ std::optional<Role> RoleFrom(std::string_view name) noexcept
 	if (name == "observer")
 	{
 		return Role::Observer;
+	}
+	return std::nullopt;
+}
+
+std::string_view TimeActName(TimeAct act) noexcept
+{
+	switch (act)
+	{
+	case TimeAct::Pause:
+		return "pause";
+	case TimeAct::Play:
+		return "play";
+	case TimeAct::Step:
+		return "step";
+	case TimeAct::Speed:
+		return "speed";
+	}
+	return "play";
+}
+
+std::optional<TimeAct> TimeActFrom(std::string_view name) noexcept
+{
+	for (const auto act : {TimeAct::Pause, TimeAct::Play, TimeAct::Step, TimeAct::Speed})
+	{
+		if (TimeActName(act) == name)
+		{
+			return act;
+		}
 	}
 	return std::nullopt;
 }
@@ -1254,6 +1350,20 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, CommandRefused>)
 		    {
 			    object = Json {{"type", k_CommandRefused}, {"reason", value.reason}, {"commands", value.commands}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorTime>)
+		    {
+			    object = Json {{"type", k_EditorTime}, {"act", TimeActName(value.act)}};
+			    if (value.act == TimeAct::Speed)
+			    {
+				    object["speed"] = value.speed;
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, GameTime>)
+		    {
+			    object = Json {{"type", k_GameTime},   {"paused", value.paused},
+			                   {"speed", value.speed}, {"act", TimeActName(value.act)},
+			                   {"by", value.by},       {"turn", value.turn}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, ObserverLeft>)
 		    {

@@ -131,6 +131,23 @@ void openblack::testbed_scenarios::AddCreatureLearningScenarios(std::vector<Scen
 	    .objects = std::move(building),
 	    .townBeliefInPlayer = k_TownBelief,
 	});
+	// The near mark is made first, so the game draws it last. The far mark is three times as far and three times as big,
+	// so it moves on the screen as the near mark does, with its bulb behind the near mark's words.
+	all.push_back({
+	    .id = "interface.learning_marks_overlap",
+	    .name = "The words of a learning mark in front of the bulb of another mark",
+	    .facet = Facet::Interface,
+	    .description = "Two learning marks with no creature, made at the same turn and made again when they go. The camera "
+	                   "looks north across the flat land. The first mark is 20 units in front of the camera. The second "
+	                   "mark is three times as far and three times as big, with its bulb behind the words of the first.",
+	    .expected = "The game draws the newest mark first: the words and the bulb of the far mark, then the words and the "
+	                "bulb of the near mark. The yellow words of the near mark show over the bulb of the far mark. The "
+	                "bulb does not hide the words.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 10.0f, -40.0f}, .look = {0.0f, 10.0f, 0.0f}},
+	    .learningMarks = {{.offset = {0.0f, -20.0f}, .height = 8.125f, .creatureHeight = 10.0f, .share = 0.5f},
+	                      {.offset = {0.0f, 20.0f}, .height = 10.5f, .creatureHeight = 30.0f, .share = 0.25f}},
+	});
 
 	std::vector<ObjectSetup> dancing {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_DanceCentre},

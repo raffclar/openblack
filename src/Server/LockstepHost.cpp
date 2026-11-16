@@ -466,6 +466,10 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	{
 		EditorScenarioFrom(connection, peer, *scenario);
 	}
+	else if (const auto* time = std::get_if<game_socket::EditorTime>(&*frame))
+	{
+		TimeFrom(connection, peer, *time);
+	}
 	else if (const auto* parts = std::get_if<game_socket::SyncParts>(&*frame))
 	{
 		PartsFrom(connection, peer, *parts);
@@ -1021,6 +1025,7 @@ void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
 		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
 	}
 	SendLoadWait(connection);
+	SendRoomClock(connection);
 }
 
 void LockstepHost::SendLoadWait(ConnectionId connection)
@@ -1030,6 +1035,69 @@ void LockstepHost::SendLoadWait(ConnectionId connection)
 	{
 		SendTo(connection, game_socket::LoadWait {.loading = _loadingSent, .secondsLeft = LoadSecondsLeft()});
 	}
+}
+
+game_socket::GameTime LockstepHost::RoomClockFrame(game_socket::TimeAct act, std::string by) const
+{
+	return game_socket::GameTime {
+	    .paused = _roomClock.paused, .speed = _roomClock.speed, .act = act, .by = std::move(by), .turn = _turnsDone};
+}
+
+void LockstepHost::SendRoomClock(ConnectionId connection)
+{
+	// The clock of a player who comes back can be from before a change, or from before a restart of the server
+	if (_started)
+	{
+		SendTo(connection, RoomClockFrame(game_socket::TimeAct::Play, {}));
+	}
+}
+
+bool LockstepHost::AnyEditorInGame() const
+{
+	const bool god = std::ranges::any_of(_seats, [](const Seat& seat) {
+		return seat.editor && (seat.state == SeatState::Taken || seat.state == SeatState::Away);
+	});
+	return god || std::ranges::any_of(_watchers, &Watcher::editor);
+}
+
+void LockstepHost::TimeFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorTime& request)
+{
+	namespace room_clock = online::room_clock;
+	if (!peer.joined || !_started)
+	{
+		return;
+	}
+	if (const auto refusal = room_clock::RefusalOf(room_clock::k_Rule, peer.editor, _roomClock, request))
+	{
+		++_refusedTimeRequests;
+		Log(spdlog::level::warn,
+		    fmt::format("The server refuses the request \"{}\" of the clock from {}: {}", game_socket::TimeActName(request.act),
+		                peer.name, room_clock::RefusalText(*refusal)));
+		const auto reason =
+		    *refusal == room_clock::Refusal::NoRight ? game_socket::k_NoEditorClaim : game_socket::k_TimeRefused;
+		SendTo(connection, game_socket::CommandRefused {.reason = std::string(reason), .commands = 1});
+		return;
+	}
+	_roomClock = room_clock::Apply(_roomClock, request);
+	switch (request.act)
+	{
+	case game_socket::TimeAct::Pause:
+		Log(spdlog::level::info,
+		    fmt::format("{} paused the game after turn {}: the server sends no turns", peer.name, _turnsDone));
+		break;
+	case game_socket::TimeAct::Play:
+		Log(spdlog::level::info, fmt::format("{} started the game again after turn {}", peer.name, _turnsDone));
+		break;
+	case game_socket::TimeAct::Step:
+		Log(spdlog::level::info, fmt::format("{} asked for one turn after turn {}", peer.name, _turnsDone));
+		break;
+	case game_socket::TimeAct::Speed:
+		Log(spdlog::level::info, fmt::format("{} set the time of a turn to {:.2f} times a tenth of a second after turn {}",
+		                                     peer.name, _roomClock.speed, _turnsDone));
+		break;
+	}
+	// With the rule, every player sees a line. Without it, each computer sets its clock but shows no line.
+	Broadcast(RoomClockFrame(request.act, room_clock::k_Rule.tellsEveryPlayer ? peer.name : std::string()));
 }
 
 std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool editor)
@@ -1329,6 +1397,7 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
 	}
 	SendLoadWait(connection);
+	SendRoomClock(connection);
 	return true;
 }
 
@@ -1723,6 +1792,13 @@ void LockstepHost::Update()
 		EndLoadWait();
 	}
 	UpdateLoadWait();
+	// A pause of the editor does not stay when no player with the editor claim is in the game to end it
+	if (_roomClock.paused && !AnyEditorInGame())
+	{
+		_roomClock = online::room_clock::State {.paused = false, .speed = _roomClock.speed, .steps = 0};
+		Log(spdlog::level::info, "No player with the editor claim is in the game: the game plays again");
+		Broadcast(RoomClockFrame(game_socket::TimeAct::Play, {}));
+	}
 	const bool paused = Paused();
 	if (paused != _pausedBefore)
 	{
@@ -2101,6 +2177,8 @@ void LockstepHost::StartGame()
 		}
 	}
 	Broadcast(start);
+	// Each player gets the clock of the room, so that the editor of a player with the editor claim can change it
+	Broadcast(RoomClockFrame(game_socket::TimeAct::Play, {}));
 	// The turns of a lobby game wait until each god's player loaded the world (deviation 254)
 	if (_settings.lobby.has_value() && !AllComputerGods())
 	{
@@ -2373,6 +2451,11 @@ bool LockstepHost::HasTurn(uint32_t turn) const
 	{
 		return true;
 	}
+	// While the editor paused the clock of the room, only the turns of its steps come
+	if (!online::room_clock::SendsTurn(_roomClock))
+	{
+		return false;
+	}
 	// The defeat of a god that left still comes at a turn, so a world with a god leaving turns once more. No turn comes
 	// after the turns of the game stop.
 	if (AllComputerGods())
@@ -2394,6 +2477,7 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 	{
 		return TakeReplayedTurn(turn);
 	}
+	_roomClock = online::room_clock::TurnSent(_roomClock);
 	turn_codec::TurnBundle bundle {.turn = turn, .blocks = {}};
 	for (const auto seat : _joining)
 	{

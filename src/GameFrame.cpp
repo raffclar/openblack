@@ -374,6 +374,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		FollowGameEnd();
 		TellLeaves();
 		TellEditorRefusals();
+		TellTimeNotices();
 		break;
 	case Step::CameraKeys:
 		UpdateCameraKeys(frame.deltaTime);
@@ -503,19 +504,19 @@ void Game::UpdateLearningMarks(float milliseconds)
 	{
 		return;
 	}
-	// The bulbs and glows are drawn with the world's effects
+	// The bulbs and glows are drawn with the world's effects, in the order that the game draws the marks
 	std::vector<particles::draw::LearningMark> marks;
-	registry.Each<const ecs::components::LearningMarker>(
-	    [&marks](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
-		    const auto look = ecs::learning_marker::LookOf(marker);
-		    marks.push_back({.glow = look.glow,
-		                     .glowHalfSize = look.glowHalfSize,
-		                     .glowColour = look.glowColour,
-		                     .bulb = look.bulb,
-		                     .bulbScale = look.bulbScale,
-		                     .bulbColour = look.bulbColour,
-		                     .bulbMesh = resources::HashIdentifier(MeshId::ObjectLightBulb)});
-	    });
+	for (const auto entity : ecs::learning_marker::InDrawOrder(registry))
+	{
+		const auto look = ecs::learning_marker::LookOf(registry.Get<const ecs::components::LearningMarker>(entity));
+		marks.push_back({.glow = look.glow,
+		                 .glowHalfSize = look.glowHalfSize,
+		                 .glowColour = look.glowColour,
+		                 .bulb = look.bulb,
+		                 .bulbScale = look.bulbScale,
+		                 .bulbColour = look.bulbColour,
+		                 .bulbMesh = resources::HashIdentifier(MeshId::ObjectLightBulb)});
+	}
 	Locator::particleSystem::value().SetLearningMarks(std::move(marks));
 }
 
@@ -535,22 +536,27 @@ void Game::PlaceLearningTexts()
 	const auto viewProjection = camera.GetViewProjectionMatrix();
 	const float nearClip = camera.GetNearClip();
 	const auto halfScreen = glm::vec2(Locator::windowing::value().GetSize()) * 0.5f;
-	Locator::entitiesRegistry::value().Each<const ecs::components::LearningMarker>(
-	    [&](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
-		    const auto look = ecs::learning_marker::LookOf(marker);
-		    if (marker.text.empty())
-		    {
-			    return;
-		    }
-		    const auto clip = viewProjection * glm::vec4(look.textPoint, 1.0f);
-		    if (const auto place = ecs::learning_marker::PlaceText(clip, nearClip, halfScreen); place.has_value())
-		    {
-			    texts.push_back({.screen = place->screen,
-			                     .text = gui::ToUtf16(marker.text),
-			                     .alpha = look.textAlpha,
-			                     .depth = place->depth});
-		    }
-	    });
+	// Each text keeps the place of its mark in the order that the game draws the marks, which the bulbs have too
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto order = ecs::learning_marker::InDrawOrder(registry);
+	for (uint32_t mark = 0; mark < order.size(); ++mark)
+	{
+		const auto& marker = registry.Get<const ecs::components::LearningMarker>(order[mark]);
+		if (marker.text.empty())
+		{
+			continue;
+		}
+		const auto look = ecs::learning_marker::LookOf(marker);
+		const auto clip = viewProjection * glm::vec4(look.textPoint, 1.0f);
+		if (const auto place = ecs::learning_marker::PlaceText(clip, nearClip, halfScreen); place.has_value())
+		{
+			texts.push_back({.screen = place->screen,
+			                 .text = gui::ToUtf16(marker.text),
+			                 .alpha = look.textAlpha,
+			                 .depth = place->depth,
+			                 .mark = mark});
+		}
+	}
 	Locator::gameInterface::value().SetLearningTexts(std::move(texts));
 }
 

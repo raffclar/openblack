@@ -15,6 +15,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <memory>
 #include <optional>
@@ -37,6 +38,7 @@
 #include "Online/ConnectionLostNotice.h"
 #include "Online/GameBuildId.h"
 #include "Online/NetworkSession.h"
+#include "Online/RoomClock.h"
 #include "Online/StartRules.h"
 #include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/LockstepHost.h"
@@ -4022,4 +4024,255 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringAWorldFileComesBackWithTheNewWorld)
 	EXPECT_EQ(bob.world.hash, serverWorld.hash);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 	EXPECT_TRUE(bob.desyncs.empty());
+}
+
+TEST(RoomClock, OnlyAPlayerWithTheEditorClaimChangesTheClockAndTheValuesStayInTheirLimits)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	namespace room_clock = online::room_clock;
+	const room_clock::State playing {};
+	const room_clock::State paused {.paused = true, .speed = 1.0f, .steps = 0};
+	const auto& rule = room_clock::k_Rule;
+	EXPECT_EQ(room_clock::RefusalOf(rule, false, playing, EditorTime {.act = TimeAct::Pause}), room_clock::Refusal::NoRight);
+	EXPECT_FALSE(room_clock::RefusalOf(rule, true, playing, EditorTime {.act = TimeAct::Pause}).has_value());
+	EXPECT_FALSE(room_clock::RefusalOf(rule, true, paused, EditorTime {.act = TimeAct::Play}).has_value());
+	// A step comes only while the clock is paused, and only a few steps wait
+	EXPECT_EQ(room_clock::RefusalOf(rule, true, playing, EditorTime {.act = TimeAct::Step}),
+	          room_clock::Refusal::StepWhilePlaying);
+	EXPECT_FALSE(room_clock::RefusalOf(rule, true, paused, EditorTime {.act = TimeAct::Step}).has_value());
+	auto full = paused;
+	full.steps = room_clock::k_MostWaitingSteps;
+	EXPECT_EQ(room_clock::RefusalOf(rule, true, full, EditorTime {.act = TimeAct::Step}), room_clock::Refusal::TooManySteps);
+	// The speed is from 0.1 to 10, as the slider of the editor
+	for (const float speed : {0.1f, 1.0f, 10.0f})
+	{
+		EXPECT_FALSE(room_clock::RefusalOf(rule, true, playing, EditorTime {.act = TimeAct::Speed, .speed = speed})) << speed;
+	}
+	for (const float speed :
+	     {0.09f, 10.5f, 0.0f, -1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()})
+	{
+		EXPECT_EQ(room_clock::RefusalOf(rule, true, playing, EditorTime {.act = TimeAct::Speed, .speed = speed}),
+		          room_clock::Refusal::SpeedOutOfRange)
+		    << speed;
+	}
+	// The rule of nobody refuses each player
+	EXPECT_EQ(room_clock::RefusalOf(room_clock::Rule {.right = room_clock::Right::Nobody, .tellsEveryPlayer = false}, true,
+	                                playing, EditorTime {.act = TimeAct::Pause}),
+	          room_clock::Refusal::NoRight);
+}
+
+TEST(RoomClock, APauseStopsTheTurnsAndEachStepLetsOneTurnGo)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	namespace room_clock = online::room_clock;
+	auto state = room_clock::State {};
+	EXPECT_TRUE(room_clock::SendsTurn(state));
+	state = room_clock::Apply(state, EditorTime {.act = TimeAct::Pause});
+	EXPECT_FALSE(room_clock::SendsTurn(state));
+	state = room_clock::Apply(state, EditorTime {.act = TimeAct::Step});
+	state = room_clock::Apply(state, EditorTime {.act = TimeAct::Step});
+	EXPECT_EQ(state.steps, 2u);
+	EXPECT_TRUE(room_clock::SendsTurn(state));
+	state = room_clock::TurnSent(state);
+	EXPECT_TRUE(room_clock::SendsTurn(state));
+	state = room_clock::TurnSent(state);
+	EXPECT_FALSE(room_clock::SendsTurn(state));
+	EXPECT_EQ(room_clock::TurnSent(state), state);
+	state = room_clock::Apply(state, EditorTime {.act = TimeAct::Speed, .speed = 2.0f});
+	EXPECT_EQ(state.speed, 2.0f);
+	EXPECT_TRUE(state.paused);
+	state = room_clock::Apply(state, EditorTime {.act = TimeAct::Play});
+	EXPECT_TRUE(room_clock::SendsTurn(state));
+	// A turn while the clock plays uses no step
+	EXPECT_EQ(room_clock::TurnSent(state), state);
+}
+
+TEST(RoomClock, TheClockOfAComputerFollowsTheSpeedOfTheRoomAndStartsFromTheTurnAfterAPause)
+{
+	using game_socket::GameTime;
+	using game_socket::TimeAct;
+	namespace room_clock = online::room_clock;
+	// A turn of twice the time is a clock of half the speed
+	EXPECT_EQ(room_clock::FollowOf(GameTime {.paused = false, .speed = 2.0f, .act = TimeAct::Speed}, 1.0f),
+	          (room_clock::Follow {.clockSpeed = 0.5f, .fromTurn = false}));
+	EXPECT_EQ(room_clock::FollowOf(GameTime {.paused = false, .speed = 0.1f, .act = TimeAct::Speed}, 1.0f).clockSpeed,
+	          1.0f / 0.1f);
+	// The same speed does not set the clock again
+	EXPECT_EQ(room_clock::FollowOf(GameTime {.paused = true, .speed = 2.0f, .act = TimeAct::Pause}, 2.0f),
+	          (room_clock::Follow {.clockSpeed = std::nullopt, .fromTurn = false}));
+	// After a pause, the next turn of a play or of a step starts from its turn
+	EXPECT_TRUE(room_clock::FollowOf(GameTime {.paused = false, .speed = 1.0f, .act = TimeAct::Play}, 1.0f).fromTurn);
+	EXPECT_TRUE(room_clock::FollowOf(GameTime {.paused = true, .speed = 1.0f, .act = TimeAct::Step}, 1.0f).fromTurn);
+}
+
+TEST(RoomClock, EveryPlayerSeesALineForAPauseAPlayAndASpeedOfAPlayer)
+{
+	using game_socket::GameTime;
+	using game_socket::TimeAct;
+	namespace room_clock = online::room_clock;
+	EXPECT_EQ(room_clock::NoticeOf(GameTime {.paused = true, .act = TimeAct::Pause, .by = "alice"}), "alice paused the game");
+	EXPECT_EQ(room_clock::NoticeOf(GameTime {.paused = false, .act = TimeAct::Play, .by = "alice"}),
+	          "alice started the game again");
+	EXPECT_EQ(room_clock::NoticeOf(GameTime {.paused = false, .speed = 2.5f, .act = TimeAct::Speed, .by = "alice"}),
+	          "alice set the speed of the game to 2.50");
+	EXPECT_FALSE(room_clock::NoticeOf(GameTime {.paused = true, .act = TimeAct::Step, .by = "alice"}).has_value());
+	// A frame to a player who comes back, or a change of the server, names no player and shows no line
+	EXPECT_FALSE(room_clock::NoticeOf(GameTime {.paused = true, .act = TimeAct::Play, .by = {}}).has_value());
+}
+
+TEST_F(LockstepTest, TheEditorPausesStepsAndChangesTheSpeedOfTheTurnsOfEveryComputer)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.RoomClock().has_value());
+	EXPECT_FALSE(alice.session.RoomClock()->paused);
+
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Pause});
+	Frames({&alice, &bob}, 3);
+	EXPECT_TRUE(host->RoomClock().paused);
+	const auto pausedAt = serverWorld.turns;
+	Frames({&alice, &bob}, 20);
+	// The server sends no turn, and each computer waits at the same turn
+	EXPECT_EQ(serverWorld.turns, pausedAt);
+	EXPECT_EQ(alice.world.turns, pausedAt);
+	EXPECT_EQ(bob.world.turns, pausedAt);
+	ASSERT_TRUE(bob.session.RoomClock().has_value());
+	EXPECT_TRUE(bob.session.RoomClock()->paused);
+	EXPECT_EQ(bob.session.RoomClock()->by, "alice");
+	EXPECT_EQ(bob.session.TakeTimeNotices(), std::vector<std::string> {"alice paused the game"});
+	EXPECT_EQ(alice.session.TakeTimeNotices(), std::vector<std::string> {"alice paused the game"});
+
+	// Each step lets one turn go on every computer
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Step});
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(serverWorld.turns, pausedAt + 1);
+	EXPECT_EQ(alice.world.turns, pausedAt + 1);
+	EXPECT_EQ(bob.world.turns, pausedAt + 1);
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Step});
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Step});
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(bob.world.turns, pausedAt + 3);
+	EXPECT_TRUE(bob.session.TakeTimeNotices().empty());
+
+	// The speed goes to every computer; a speed out of the range and the requests of a player with no claim do not
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Speed, .speed = 2.0f});
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Speed, .speed = 20.0f});
+	bob.session.RequestTime(EditorTime {.act = TimeAct::Play});
+	bob.session.RequestTime(EditorTime {.act = TimeAct::Step});
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(host->RefusedTimeRequests(), 3u);
+	EXPECT_EQ(host->RoomClock().speed, 2.0f);
+	EXPECT_TRUE(host->RoomClock().paused);
+	EXPECT_EQ(bob.session.RoomClock()->speed, 2.0f);
+	EXPECT_EQ(bob.world.turns, pausedAt + 3);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(bob.session.TakeTimeNotices(), std::vector<std::string> {"alice set the speed of the game to 2.00"});
+
+	// A step while the game plays is refused
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Play});
+	Frames({&alice, &bob}, 10);
+	EXPECT_FALSE(bob.session.RoomClock()->paused);
+	EXPECT_GT(bob.world.turns, pausedAt + 3);
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Step});
+	Frames({&alice, &bob}, 2);
+	EXPECT_EQ(host->RefusedTimeRequests(), 4u);
+	EXPECT_EQ(host->RoomClock().steps, 0u);
+	// The worlds stay in step
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(alice.world.hash, bob.world.hash);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+	EXPECT_GT(bob.session.GetCompares().compared, 0u);
+}
+
+TEST_F(LockstepTest, APlayerWhoComesBackGetsThePauseOfTheEditor)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Speed, .speed = 3.0f});
+	Frames({&alice, &bob}, 2);
+	// Bob's network stops before the pause, so he does not get it
+	network.Cut(bob.sockets->Ids().back());
+	bob.Frame();
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Pause});
+	Frames({&alice}, 5);
+	const auto pausedAt = serverWorld.turns;
+	Frames({&alice, &bob}, 15);
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.session.Resumes(), 1u);
+	// Bob comes back to the paused game: he gets the turns before the pause, and the clock of the room
+	ASSERT_TRUE(bob.session.RoomClock().has_value());
+	EXPECT_TRUE(bob.session.RoomClock()->paused);
+	EXPECT_EQ(bob.session.RoomClock()->speed, 3.0f);
+	EXPECT_EQ(bob.world.turns, pausedAt);
+	EXPECT_EQ(serverWorld.turns, pausedAt);
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Play});
+	Frames({&alice, &bob}, 10);
+	EXPECT_GT(bob.world.turns, pausedAt);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, ThePauseOfTheEditorEndsWhenNoPlayerWithTheEditorClaimIsInTheGame)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Pause});
+	Frames({&alice, &bob}, 5);
+	const auto pausedAt = serverWorld.turns;
+	// The editor's player loses the connection: the pause stays while the player can come back
+	network.Cut(alice.sockets->Ids().back());
+	alice.Frame();
+	Frames({&bob}, 5);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Away);
+	EXPECT_TRUE(host->RoomClock().paused);
+	EXPECT_EQ(bob.world.turns, pausedAt);
+	// The editor's player leaves: the game of the other players plays again
+	alice.Frame();
+	Frames({&alice, &bob}, 10);
+	alice.session.Leave();
+	Frames({&alice, &bob}, 10);
+	EXPECT_FALSE(host->RoomClock().paused);
+	EXPECT_FALSE(bob.session.RoomClock()->paused);
+	EXPECT_GT(bob.world.turns, pausedAt);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheWorldStillWaitsWithNoPlayersAfterAPauseOfTheEditor)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	MakeHost(1, 2 * 1'000'000);
+	Computer alice(network, now, "god+editor:alice");
+	Frames({&alice}, 10);
+	ASSERT_TRUE(host->Started());
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Pause});
+	Frames({&alice}, 3);
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Play});
+	Frames({&alice}, 3);
+	EXPECT_FALSE(host->RoomClock().paused);
+	alice.session.Leave();
+	alice.Frame();
+	Frames({}, 3);
+	// The server's own pause with no god connected is as before
+	EXPECT_TRUE(host->Paused());
+	const auto turns = serverWorld.turns;
+	Frames({}, 20);
+	EXPECT_EQ(serverWorld.turns, turns);
 }

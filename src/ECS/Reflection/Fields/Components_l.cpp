@@ -60,7 +60,8 @@ void openblack::ecs::reflection::RegisterFields_Components_l(entt::meta_ctx& con
 	    .Field<&components::LearningMarker::position>("position")
 	    .Field<&components::LearningMarker::size>("size")
 	    .Field<&components::LearningMarker::milliseconds>("milliseconds")
-	    .Field<&components::LearningMarker::madeTurn>("madeTurn");
+	    .Field<&components::LearningMarker::madeTurn>("madeTurn")
+	    .Field<&components::LearningMarker::madeIndex>("madeIndex");
 	Reflect<components::LeashOrderSparkles>(context).Field<&components::LeashOrderSparkles::effect>("effect");
 	Reflect<components::LeftGame>(context).Field<&components::LeftGame::turn>("turn");
 	Reflect<components::LightBeam>(context).Field<&components::LightBeam::cone>("cone");

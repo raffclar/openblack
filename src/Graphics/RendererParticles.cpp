@@ -195,8 +195,6 @@ glm::mat3 FacingCamera(glm::mat3 axes, const glm::vec3& position, const glm::vec
 void Renderer::CollectParticles() const
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ParticlesGather);
-	// The light maps and shadows of the frame that ended stamp the land in this frame
-	_landStamps.swap(_particleFrame.lightStamps);
 	_townBeliefFrameCount = 0;
 	if (!Locator::particleSystem::has_value() || !Locator::time::has_value())
 	{
@@ -952,9 +950,16 @@ void Renderer::DrawLearningBulbs(const DrawSceneDesc& desc) const
 		return;
 	}
 	particles::draw::MeshesWithLearningWords(_particleFrame, _learningBulbMeshes);
-	for (const auto index : _learningBulbMeshes)
+	// The bulbs come in the order of their marks. The words of a mark go just before its bulb, so the words of a later
+	// mark show over the bulb of an earlier mark.
+	const bool withWords = desc.viewId == RenderPass::Main && desc.submitLearningWords;
+	for (size_t mark = 0; mark < _learningBulbMeshes.size(); ++mark)
 	{
-		DrawParticleMesh(desc, _particleFrame.meshes[index], graphics::zsort::k_AfterSolidBeforeSorted);
+		if (withWords)
+		{
+			desc.submitLearningWords(static_cast<uint32_t>(mark));
+		}
+		DrawParticleMesh(desc, _particleFrame.meshes[_learningBulbMeshes[mark]], graphics::zsort::k_AfterSolidBeforeSorted);
 	}
 }
 

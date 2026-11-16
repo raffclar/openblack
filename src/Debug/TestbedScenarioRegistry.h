@@ -471,6 +471,19 @@ struct ParticleSetup
 	float restartSeconds {0.0f};
 };
 
+/// A learning mark made as a creature makes one when it learns, with no creature. A mark goes after six seconds, and
+/// the runner then makes it again.
+struct LearningMarkSetup
+{
+	glm::vec2 offset {0.0f};
+	/// The height of the middle of its glow above the land, as it starts
+	float height {0.0f};
+	/// The height of the creature that the mark is sized by
+	float creatureHeight {10.0f};
+	/// The share that its words show, 0 to 1
+	float share {0.5f};
+};
+
 /// A vortex between the lands opened as a script opens one, and later told to fade out
 struct VortexSetup
 {
@@ -1595,6 +1608,8 @@ struct Scenario
 	/// The alliances made after the scenario's things and the land's script
 	std::vector<AllySetup> allies;
 	std::vector<ParticleSetup> particles;
+	/// The marks are made in this order, at the same game turn
+	std::vector<LearningMarkSetup> learningMarks;
 	std::vector<VortexSetup> vortices;
 	std::vector<RewardSetup> rewards;
 	std::vector<DispenserSetup> dispensers;

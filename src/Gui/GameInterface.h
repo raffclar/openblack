@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -122,6 +123,9 @@ public:
 	/// Submits a group of the labels in the world that the last Draw drew, at its point in the scene. A group submits
 	/// one time in a frame.
 	void SubmitWorldLabels(graphics::WorldLabelGroup group);
+	/// Submits the words of the learning marks that the last Draw drew, up to and with a mark by its place in the order
+	/// that the game draws the marks in. The words of each mark submit one time. SubmitWorldLabels submits the rest.
+	void SubmitLearningWords(uint32_t throughMark);
 	/// Submits each group of the labels in the world that the scene did not submit, in the order of the groups
 	void SubmitWaitingWorldLabels();
 	/// The box that shows while the game saves or loads, drawn alone as a frame of its own over the last picture
@@ -394,6 +398,8 @@ public:
 		float alpha;
 		/// The depth of its point in front of the camera. The world in front of the words hides them.
 		float depth {0.0f};
+		/// The place of its mark in the order that the game draws the marks in
+		uint32_t mark {0};
 	};
 	/// The camera's helper icons by the hand this frame, from the world camera or a tutorial demonstration; none while
 	/// they aren't drawn, when their fades hold where they are
@@ -668,6 +674,8 @@ private:
 	std::optional<std::u16string> _pingLine;
 	std::vector<FloatingNumber> _floatingNumbers;
 	std::vector<LearningText> _learningTexts;
+	/// For each of the learning texts in the last Draw, its mark and its part of the canvas of the learning words
+	std::vector<std::pair<uint32_t, size_t>> _learningWordParts;
 	std::optional<HandTricons> _handTricons;
 	std::optional<uint32_t> _drawnCameraIcons;
 	/// The helper icons' strengths, and whether the demonstration's mouse is left of them
