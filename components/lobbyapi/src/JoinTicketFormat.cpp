@@ -363,6 +363,15 @@ std::optional<Claims> ParseClaims(std::string_view message)
 			claims.slotKinds.push_back(*kind);
 		}
 	}
+	// The slot of the player is optional. A ticket of an observer or of an older lobby does not give it.
+	if (const auto found = value.find("slot"); found != value.end() && !found->is_null())
+	{
+		if (!found->is_number_unsigned() || found->get<uint64_t>() >= k_MostSlotKinds)
+		{
+			return std::nullopt;
+		}
+		claims.slot = static_cast<uint8_t>(found->get<uint64_t>());
+	}
 	// The lobby's tickets name the role. A ticket with no role is a god's ticket, as the lobby's default.
 	if (!role.empty())
 	{
