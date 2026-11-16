@@ -41,6 +41,7 @@ public:
 	[[nodiscard]] const editor::EditorSelection& GetSelection() const override { return _selection; }
 	[[nodiscard]] editor::EditorHistory& GetHistory() override { return _history; }
 	[[nodiscard]] const editor::EditorHistory& GetHistory() const override { return _history; }
+	void AnswerRequest(editor::Request request, entt::entity entity) override;
 	[[nodiscard]] editor::paths::DrawnPaths& GetDrawnPaths() override { return _drawnPaths; }
 	[[nodiscard]] const editor::paths::DrawnPaths& GetDrawnPaths() const override { return _drawnPaths; }
 	[[nodiscard]] editor::land_brush::Brush& GetLandBrush() override { return _landBrush; }

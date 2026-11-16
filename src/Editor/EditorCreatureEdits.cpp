@@ -26,6 +26,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "EditorNetworkEdits.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -266,12 +267,15 @@ entt::entity ApplyCreatureSpawn(const player_commands::EditorCreatureSpawn& spaw
 	return entity;
 }
 
-void SendCreatureSpawn(const player_commands::EditorCreatureSpawn& spawn)
+Request SendCreatureSpawn(player_commands::EditorCreatureSpawn spawn)
 {
-	if (Locator::playerCommandSystem::has_value())
+	if (!Locator::playerCommandSystem::has_value())
 	{
-		Locator::playerCommandSystem::value().Submit(spawn);
+		return 0;
 	}
+	spawn.request = NewEditorRequest();
+	Locator::playerCommandSystem::value().Submit(spawn);
+	return spawn.request;
 }
 
 } // namespace openblack::editor

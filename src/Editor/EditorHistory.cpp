@@ -11,7 +11,9 @@
 
 #include <algorithm>
 #include <ranges>
+#include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace openblack::editor
 {
@@ -47,6 +49,17 @@ void EditorHistory::Rebind(HistoryRef ref, entt::entity entity)
 	}
 }
 
+void EditorHistory::Adopt(HistoryRef ref, entt::entity entity)
+{
+	if (const auto other = _refs.find(entity); other != _refs.end() && other->second != ref)
+	{
+		_entities.erase(other->second);
+		std::erase(_made, other->second);
+		_refs.erase(other);
+	}
+	Rebind(ref, entity);
+}
+
 void EditorHistory::Push(HistoryStep step)
 {
 	if (step.changes.empty())
@@ -56,8 +69,9 @@ void EditorHistory::Push(HistoryStep step)
 	_redo.clear();
 	for (const auto& change : step.changes)
 	{
+		// A thing that comes at a later turn gets its number from the answer
 		if (const auto* made = std::get_if<MakeChange>(&change);
-		    made != nullptr && std::ranges::find(_made, made->ref) == _made.end())
+		    made != nullptr && made->ref != 0 && std::ranges::find(_made, made->ref) == _made.end())
 		{
 			_made.push_back(made->ref);
 		}
@@ -71,7 +85,7 @@ void EditorHistory::Push(HistoryStep step)
 
 std::optional<HistoryResult> EditorHistory::Undo(EditorWorld& world)
 {
-	if (_undo.empty())
+	if (!CanUndo())
 	{
 		return std::nullopt;
 	}
@@ -84,7 +98,7 @@ std::optional<HistoryResult> EditorHistory::Undo(EditorWorld& world)
 
 std::optional<HistoryResult> EditorHistory::Redo(EditorWorld& world)
 {
-	if (_redo.empty())
+	if (!CanRedo())
 	{
 		return std::nullopt;
 	}
@@ -102,6 +116,7 @@ void EditorHistory::Clear()
 	_entities.clear();
 	_refs.clear();
 	_made.clear();
+	_open.clear();
 	for (const auto entity : std::exchange(_keepAtNextClear, {}))
 	{
 		_made.push_back(Track(entity));
@@ -136,7 +151,126 @@ std::optional<std::string> EditorHistory::RedoLabel() const
 	return _redo.empty() ? std::nullopt : std::optional(_redo.back().label);
 }
 
-HistoryResult EditorHistory::Apply(const HistoryStep& step, Direction direction, EditorWorld& world)
+Request EditorHistory::NewRequest(uint32_t turn)
+{
+	// The numbers go round. A number that is still open waits for its answer, so the next number goes to the request.
+	do
+	{
+		++_lastRequest;
+	} while (_lastRequest == 0 || _open.contains(_lastRequest));
+	_open.insert_or_assign(_lastRequest, turn);
+	return _lastRequest;
+}
+
+std::optional<Awaited> EditorHistory::AwaitedFrom(Request request) const
+{
+	if (request == 0 || !IsOpen(request))
+	{
+		return std::nullopt;
+	}
+	std::optional<Awaited> awaited;
+	const auto look = [request, &awaited](const HistoryStep& step) {
+		for (const auto& change : step.changes)
+		{
+			std::visit(
+			    [request, &awaited](const auto& one) {
+				    using Kind = std::decay_t<decltype(one)>;
+				    if (one.awaits == request)
+				    {
+					    awaited = std::is_same_v<Kind, PoseChange> ? Awaited::Pose : Awaited::Thing;
+				    }
+			    },
+			    change);
+		}
+	};
+	std::ranges::for_each(_undo, look);
+	std::ranges::for_each(_redo, look);
+	return awaited;
+}
+
+bool EditorHistory::AnswerChange(HistoryChange& change, Request request, const RequestAnswer& answer)
+{
+	if (auto* pose = std::get_if<PoseChange>(&change); pose != nullptr && pose->awaits == request)
+	{
+		pose->awaits = 0;
+		// A refused command changed nothing, and a change that gives the same pose is no change
+		if (answer.entity == entt::null || !answer.pose.has_value() || *answer.pose == pose->before)
+		{
+			return false;
+		}
+		pose->after = *answer.pose;
+		return true;
+	}
+	if (auto* made = std::get_if<MakeChange>(&change); made != nullptr && made->awaits == request)
+	{
+		made->awaits = 0;
+		if (made->ref == 0)
+		{
+			// The first answer of a placement gives the thing and how to make it again. A thing that the palette cannot
+			// make again goes with no change, as in a single player game.
+			if (answer.entity == entt::null || !answer.recipe.has_value())
+			{
+				return false;
+			}
+			made->ref = Track(answer.entity);
+			made->recipe = *answer.recipe;
+			if (std::ranges::find(_made, made->ref) == _made.end())
+			{
+				_made.push_back(made->ref);
+			}
+			return true;
+		}
+		if (answer.entity != entt::null)
+		{
+			Adopt(made->ref, answer.entity);
+		}
+		return true;
+	}
+	if (auto* removed = std::get_if<RemoveChange>(&change); removed != nullptr && removed->awaits == request)
+	{
+		removed->awaits = 0;
+		// A refused command made nothing: the thing stays gone, as when its thing is gone in a single player game
+		if (answer.entity != entt::null)
+		{
+			Adopt(removed->ref, answer.entity);
+		}
+	}
+	return true;
+}
+
+void EditorHistory::Answer(Request request, const RequestAnswer& answer)
+{
+	if (_open.erase(request) == 0)
+	{
+		return;
+	}
+	const auto answerStep = [this, request, &answer](HistoryStep& step) {
+		std::erase_if(step.changes,
+		              [this, request, &answer](HistoryChange& change) { return !AnswerChange(change, request, answer); });
+	};
+	std::ranges::for_each(_undo, answerStep);
+	std::ranges::for_each(_redo, answerStep);
+	std::erase_if(_undo, [](const HistoryStep& step) { return step.changes.empty(); });
+	std::erase_if(_redo, [](const HistoryStep& step) { return step.changes.empty(); });
+}
+
+void EditorHistory::ForgetOldRequests(uint32_t turn)
+{
+	std::vector<Request> old;
+	for (const auto& [request, sentAt] : _open)
+	{
+		if (turn >= sentAt && turn - sentAt > k_MostAnswerTurns)
+		{
+			old.push_back(request);
+		}
+	}
+	for (const auto request : old)
+	{
+		Answer(request, {});
+	}
+}
+
+HistoryResult EditorHistory::Apply(HistoryStep& step, Direction direction, EditorWorld& world)
 {
 	HistoryResult result {.label = step.label};
 	const auto touch = [&result](entt::entity entity) {
@@ -145,15 +279,22 @@ HistoryResult EditorHistory::Apply(const HistoryStep& step, Direction direction,
 			result.touched.push_back(entity);
 		}
 	};
-	const auto make = [&](HistoryRef ref, const Recipe& recipe) {
+	const auto make = [&](HistoryRef ref, const Recipe& recipe, Request& awaits) {
 		const auto made = world.Make(recipe);
-		if (made == entt::null)
+		if (made.entity == entt::null && made.request != 0)
+		{
+			// The thing comes at a later turn, and the answer to the request gives it
+			awaits = made.request;
+			Rebind(ref, entt::null);
+			return;
+		}
+		if (made.entity == entt::null)
 		{
 			++result.skipped;
 			return;
 		}
-		Rebind(ref, made);
-		touch(made);
+		Rebind(ref, made.entity);
+		touch(made.entity);
 	};
 	const auto remove = [&](HistoryRef ref) {
 		// A thing that is already gone needs nothing more
@@ -165,7 +306,7 @@ HistoryResult EditorHistory::Apply(const HistoryStep& step, Direction direction,
 		std::erase(result.touched, entity);
 		Rebind(ref, entt::null);
 	};
-	const auto apply = [&](const HistoryChange& change) {
+	const auto apply = [&](HistoryChange& change) {
 		if (const auto* pose = std::get_if<PoseChange>(&change))
 		{
 			const auto entity = Resolve(pose->ref);
@@ -177,7 +318,7 @@ HistoryResult EditorHistory::Apply(const HistoryStep& step, Direction direction,
 			world.SetPose(entity, direction == Direction::Back ? pose->before : pose->after);
 			touch(entity);
 		}
-		else if (const auto* made = std::get_if<MakeChange>(&change))
+		else if (auto* made = std::get_if<MakeChange>(&change))
 		{
 			if (direction == Direction::Back)
 			{
@@ -185,14 +326,14 @@ HistoryResult EditorHistory::Apply(const HistoryStep& step, Direction direction,
 			}
 			else
 			{
-				make(made->ref, made->recipe);
+				make(made->ref, made->recipe, made->awaits);
 			}
 		}
-		else if (const auto* removed = std::get_if<RemoveChange>(&change))
+		else if (auto* removed = std::get_if<RemoveChange>(&change))
 		{
 			if (direction == Direction::Back)
 			{
-				make(removed->ref, removed->recipe);
+				make(removed->ref, removed->recipe, removed->awaits);
 			}
 			else
 			{

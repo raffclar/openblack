@@ -2103,7 +2103,7 @@
   "query": "view.script_control"
  },
  {
-  "description": "The editor: open, its tool, its camera, what is selected (the main pick and all picks), the steps to undo and redo with their labels, and the counts of the streams and footpaths that it drew",
+  "description": "The editor: open, its tool, its camera, what is selected (the main pick and all picks), the steps to undo and redo with their labels, whether the history waits for the answer of a turn, and the counts of the streams and footpaths that it drew",
   "kind": "object",
   "parameters": [],
   "query": "view.editor"
@@ -2286,6 +2286,55 @@
    }
   ],
   "query": "editor.network_edit",
+  "writes": true
+ },
+ {
+  "description": "Does an action of the editor on things, as the tool bar and the keys of the editor do it, with the history of the editor: delete, duplicate, place, move, turn, undo or redo. In a network game each change goes as a command of the turns, and the history learns it from the answer at the turn. force acts also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "delete, duplicate, place, move, turn, undo or redo",
+    "name": "act",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The things to pick before the act (delete, duplicate, move, turn)",
+    "name": "ids",
+    "type": "array"
+   },
+   {
+    "description": "[x, z] that a move adds to each thing",
+    "name": "offset",
+    "type": "point"
+   },
+   {
+    "description": "The angle of a turn",
+    "name": "radians",
+    "type": "number"
+   },
+   {
+    "description": "[x, z] of a placement",
+    "name": "position",
+    "type": "point"
+   },
+   {
+    "description": "The kind of the palette item (place)",
+    "name": "place_kind",
+    "type": "integer"
+   },
+   {
+    "description": "The type of the palette item (place)",
+    "name": "place_type",
+    "type": "integer"
+   },
+   {
+    "description": "Act also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.act",
   "writes": true
  },
  {

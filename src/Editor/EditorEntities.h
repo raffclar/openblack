@@ -108,7 +108,7 @@ class RegistryWorld final: public EditorWorld
 public:
 	[[nodiscard]] bool Exists(entt::entity entity) const override;
 	void SetPose(entt::entity entity, const Pose& pose) override;
-	entt::entity Make(const Recipe& recipe) override;
+	MakeResult Make(const Recipe& recipe) override;
 	void Remove(entt::entity entity) override;
 };
 

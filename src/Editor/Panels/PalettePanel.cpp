@@ -344,6 +344,7 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 	const auto points = GridLayout(count, SpacingOf(kind));
 	std::vector<entt::entity> placed;
 	placed.reserve(count);
+	std::vector<Request> sent;
 	for (size_t i = 0; i < count; ++i)
 	{
 		const glm::vec2 point {centre.x + points.at(i).x, centre.z + points.at(i).y};
@@ -357,10 +358,15 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 		{
 			placed.push_back(entity);
 		}
+		else if (!context.writes.ChangesAtOnce())
+		{
+			sent.push_back(kind == PlaceKind::Creature ? context.spawner.LastSpawnRequest() : context.writes.LastMakeRequest());
+		}
 	}
-	// In a network game the things come at a later turn, and the editor keeps no history
+	// In a network game the things come at a later turn, and the answers to the requests give them to the history
 	if (!context.writes.ChangesAtOnce())
 	{
+		RecordAllSent(context, sent, "Lay out");
 		_lastLayout = fmt::format("Sent {}: they come at the next turn", count);
 		return;
 	}

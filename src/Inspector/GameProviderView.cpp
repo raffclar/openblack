@@ -523,7 +523,8 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 	    });
 	provider->Add(
 	    Query("editor", "The editor: open, its tool, its camera, what is selected (the main pick and all picks), the steps "
-	                    "to undo and redo with their labels, and the counts of the streams and footpaths that it drew"),
+	                    "to undo and redo with their labels, whether the history waits for the answer of a turn, and the "
+	                    "counts of the streams and footpaths that it drew"),
 	    Serve<Locator::editorSystem>("the editor",
 	                                 [](const ecs::systems::EditorSystemInterface& editor, const QueryContext& /*c*/) {
 		                                 auto picks = Json::array();
@@ -542,6 +543,7 @@ std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 		                                              {"redo_steps", history.RedoCount()},
 		                                              {"undo_label", history.UndoLabel().value_or("")},
 		                                              {"redo_label", history.RedoLabel().value_or("")},
+		                                              {"waiting", history.Waiting()},
 		                                              {"drawn_streams", editor.GetDrawnPaths().streams.size()},
 		                                              {"drawn_footpaths", editor.GetDrawnPaths().footpaths.size()}};
 	                                 }));
