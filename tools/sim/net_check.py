@@ -1326,7 +1326,7 @@ def place_row(pid, place_type, copies, start, step):
     return int(answer.get("sent", 0)) if isinstance(answer, dict) else 0, None
 
 
-def editor_desync(pids, case):
+def editor_desync(pids, case, shots=None):
     """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
     "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
     second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. Every
@@ -1445,6 +1445,33 @@ def editor_desync(pids, case):
                 "strength": 0.7}}))
             time.sleep(1.0)
         done["sent"].append({"spawns": made})
+    if case in ("land", "all"):
+        # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
+        # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
+        # the same: the checksum of each turn has the digest of the altitudes and the countries.
+        x, z = focus[0], focus[2]
+        strokes = []
+        for mode, offset, extra in (("raise", 0.0, {}), ("raise", 20.0, {"step": 8}), ("lower", -40.0, {}),
+                                    ("paint", 0.0, {"country": 1, "outer": 50.0})):
+            strokes.append(inspector_answer(editor, "editor.land_stroke", {"params": dict(
+                extra, mode=mode, position=[x + offset, z])}))
+            time.sleep(0.5)
+        for step in range(8):
+            strokes.append(inspector_answer(editor, "editor.land_stroke", {"params": {
+                "mode": "raise", "position": [x + step * 10.0, z + 40.0], "inner": 5.0, "outer": 15.0}}))
+            time.sleep(0.12)
+        time.sleep(1.0)
+        paths = [inspector_answer(editor, "editor.path", {"params": {
+                     "kind": "footpath", "points": [[x - 30.0, z - 30.0], [x, z - 50.0], [x + 30.0, z - 30.0]]}}),
+                 inspector_answer(editor, "editor.path", {"params": {
+                     "kind": "stream", "points": [[x - 60.0, z + 60.0], [x - 20.0, z + 80.0], [x + 20.0, z + 60.0]]}})]
+        for answer in strokes + paths:
+            if isinstance(answer, dict) and answer.get("error"):
+                done.setdefault("errors", []).append(answer["error"])
+        done["sent"].append({"strokes": len(strokes), "paths": paths})
+        time.sleep(1.0)
+        # Both clients show the same hills, the same painted ground and the same paths
+        editor_shots(pids, shots, "land")
     return done
 
 
@@ -2334,14 +2361,16 @@ def main():
                              "--hold-after turns "
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
-    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "all"),
+    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "land", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
                              "and changes the fields of the villager (objects), or puts down creatures with the creature "
-                             "tools (spawn), or all of them; every computer must keep the same checksums")
+                             "tools (spawn), or raises, lowers and paints the land and draws a footpath and a stream "
+                             "(land), or all of them; every computer must keep the same checksums")
     parser.add_argument("--editor-shots", metavar="FOLDER",
-                        help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
+                        help="with --editor-check: screenshots of both clients at each step, and of the move in steps; "
+                             "with --editor-desync land: screenshots of both clients after the strokes and the paths")
     parser.add_argument("--forest-camera", action="store_true",
                         help="the first client casts the forest once both clients compared --hold-after turns (with "
                              "--scenario, the scenario casts it): only the camera of the first client may follow the "
@@ -2858,7 +2887,8 @@ def main():
                                                   cast=not options.scenario)
             if (options.editor_desync and editor_desync_done is None and clients and clients[0].poll() is None
                     and reached_turn(os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
-                editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync)
+                editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync,
+                                                   options.editor_shots)
                 print(f"editor desync: {json.dumps(editor_desync_done)[:400]}")
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)

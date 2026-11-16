@@ -123,11 +123,6 @@ void EditorWindow::Open() noexcept
 	if (developer_tools::NetworkSessionLive())
 	{
 		_writes = MakeNetworkWrites();
-		// The land and the paths tools change the world of this computer only
-		if (auto* system = System(); system != nullptr && (system->GetTool() == Tool::Land || system->GetTool() == Tool::Paths))
-		{
-			system->SetTool(Tool::Select);
-		}
 	}
 	else
 	{
@@ -396,7 +391,7 @@ void EditorWindow::Update() noexcept
 	}
 	if (_drag == Drag::Land)
 	{
-		_landTools.DragTo(LandAt(MouseOnScreen()));
+		_landTools.DragTo(*context, LandAt(MouseOnScreen()));
 	}
 	if (_drag == Drag::Box && _boxTo.has_value())
 	{
@@ -1137,11 +1132,6 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 	}};
 	for (const auto& [label, tool] : k_Tools)
 	{
-		// The land and the paths tools change the world of this computer only
-		if (network && (tool == Tool::Land || tool == Tool::Paths))
-		{
-			continue;
-		}
 		if (ImGui::RadioButton(label, system.GetTool() == tool))
 		{
 			system.SetTool(tool);
@@ -1249,8 +1239,8 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 		_palette.Draw(context);
 		ImGui::EndTabItem();
 	}
-	// The scenarios, the scripts and the land tools change the world of this computer only, so a network game does not
-	// have them
+	// The scenarios and the scripts change the world of this computer only, so a network game does not have them. The land
+	// tools send their strokes and paths as commands of the turns.
 	if (!InNetworkGame())
 	{
 		if (ImGui::BeginTabItem("Scenarios", nullptr, flags(BottomTab::Scenarios)))
@@ -1270,11 +1260,11 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 			_landScript.Draw();
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("Land tools", nullptr, flags(BottomTab::LandTools)))
-		{
-			_landTools.Draw(context);
-			ImGui::EndTabItem();
-		}
+	}
+	if (ImGui::BeginTabItem("Land tools", nullptr, flags(BottomTab::LandTools)))
+	{
+		_landTools.Draw(context);
+		ImGui::EndTabItem();
 	}
 	if (ImGui::BeginTabItem("Cheats", nullptr, flags(BottomTab::Cheats)))
 	{

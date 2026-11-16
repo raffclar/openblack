@@ -171,6 +171,12 @@ std::vector<Action> EachCommand()
 	                         .strength = 0.75f,
 	                         .hasTattoos = true,
 	                         .tattoos = {creature_tattoo::Slot {.design = 3, .site = 2, .colour = {10, 20, 30}}}},
+	    EditorLandStroke {
+	        .mode = 2, .innerRadius = 12.5f, .outerRadius = 40.0f, .step = 6, .country = 3, .centre = {1.5f, 2.5f}},
+	    EditorPath {.kind = 1,
+	                .points = {{10.0f, 20.0f}, {30.0f, 40.0f}, {50.0f, 60.0f}},
+	                .firstHolder = Entity(36),
+	                .lastHolder = Entity(37)},
 	};
 }
 
@@ -211,7 +217,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 61)
+	switch (bits(random) % 62)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -456,6 +462,23 @@ Action RandomAction(std::mt19937& random)
 		                            .fatness = number(),
 		                            .strength = number(),
 		                            .hasTattoos = (bits(random) % 2) == 1};
+	case 60:
+		return EditorLandStroke {.mode = static_cast<uint8_t>(bits(random) % 3),
+		                         .innerRadius = number(),
+		                         .outerRadius = number(),
+		                         .step = static_cast<uint8_t>(bits(random)),
+		                         .country = static_cast<uint8_t>(bits(random)),
+		                         .centre = {number(), number()}};
+	case 61:
+	{
+		EditorPath path {.kind = static_cast<uint8_t>(bits(random) % 2), .firstHolder = entity(), .lastHolder = entity()};
+		path.points.resize(bits(random) % (k_MostEditorPathPoints + 1));
+		for (auto& point : path.points)
+		{
+			point = {number(), number()};
+		}
+		return path;
+	}
 	default:
 		return PlayerLeft {};
 	}
@@ -520,7 +543,7 @@ TEST(TurnCodec, EachCommandHasItsSize)
 {
 	const std::vector<size_t> sizes {2,  5, 9,  5, 53, 5, 10, 18, 5, 49, 17, 5,  5,  5, 9,  12, 1, 18, 11, 5,  19,
 	                                 15, 7, 5,  1, 2,  1, 61, 5,  2, 1,  13, 10, 18, 1, 58, 1,  5, 51, 5,  16, 7,
-	                                 1,  1, 13, 1, 2,  9, 13, 1,  1, 8,  1,  5,  35, 3, 10, 34, 2, 15, 76};
+	                                 1,  1, 13, 1, 2,  9, 13, 1,  1, 8,  1,  5,  35, 3, 10, 34, 2, 15, 76, 20, 36};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -578,8 +601,52 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 61;
 		}
+		// The stroke of the land brush and the path of the editor have the tags 62 and 63
+		if (std::holds_alternative<EditorLandStroke>(commands[i]))
+		{
+			tag = 62;
+		}
+		if (std::holds_alternative<EditorPath>(commands[i]))
+		{
+			tag = 63;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
+}
+
+TEST(TurnCodec, TheDecoderRefusesABadStrokeOrPath)
+{
+	const auto encode = [](Action action) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {std::move(action)}}});
+	};
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_FirstField = 10;
+	auto stroke = encode(EditorLandStroke {.mode = 2, .innerRadius = 5.0f, .outerRadius = 9.0f, .step = 1});
+	ASSERT_EQ(stroke.size(), k_FirstField + 19);
+	ASSERT_EQ(Decode(stroke).error, DecodeError::None);
+	// Paint is the last mode of the brush
+	stroke[k_FirstField] = 3;
+	EXPECT_EQ(Decode(stroke).error, DecodeError::Value);
+	stroke.pop_back();
+	EXPECT_EQ(Decode(stroke).error, DecodeError::Truncated);
+
+	EditorPath path {.kind = 0, .points = {{1.0f, 2.0f}, {3.0f, 4.0f}}};
+	auto bytes = encode(path);
+	ASSERT_EQ(bytes.size(), k_FirstField + 1 + 2 + 16 + 8);
+	ASSERT_EQ(Decode(bytes).error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorPath>(std::get<CommandBlock>(*Decode(bytes).frame).actions.front()), path);
+	// A stream is the last kind of path
+	bytes[k_FirstField] = 2;
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+	bytes[k_FirstField] = 0;
+	// The count of the points is more than the bytes give
+	bytes[k_FirstField + 1] = 3;
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Truncated);
+	// A path has at most the most points of a path of the editor
+	path.points.assign(k_MostEditorPathPoints + 1, glm::vec2 {1.0f, 1.0f});
+	EXPECT_EQ(Decode(encode(path)).error, DecodeError::Value);
+	path.points.pop_back();
+	EXPECT_EQ(Decode(encode(path)).error, DecodeError::None);
 }
 
 TEST(TurnCodec, TheDecoderRefusesABadEditOrCheat)

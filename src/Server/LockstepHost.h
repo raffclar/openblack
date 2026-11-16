@@ -85,6 +85,9 @@ struct HostSettings
 	/// Whether the server sends the start data of a god (its creature file) to the players as it is. The server sends
 	/// empty data in place of data that this refuses. With none, the server sends all data as it is.
 	std::function<bool(std::span<const uint8_t> data)> relaysCreature;
+	/// The count of the countries of the land of the server's world, which a paint of the editor must stay under. With
+	/// none, or when it gives none, the server checks only the most countries that a cell keeps.
+	std::function<std::optional<int>()> landCountries;
 	/// The game of one lobby (deviation 236): the room takes only the members of the lobby, each in its role and slot,
 	/// and waits for every god of the lobby until the time to join ends. None for a room with no lobby.
 	std::optional<lobby_game::Lobby> lobby;

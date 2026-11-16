@@ -21,12 +21,14 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DebugCheatSystemInterface.h"
+#include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "EditorEntities.h"
+#include "EditorHistory.h"
 #include "EditorMath.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
@@ -224,7 +226,13 @@ bool ApplyEdit(const EditorEdit& edit)
 		{
 			return false;
 		}
-		return editor::Place(item, edit.position, edit.radians) != entt::null;
+		const auto made = editor::Place(item, edit.position, edit.radians);
+		// The thing goes in the list of the things that the editor made, which a save of the land files writes
+		if (made != entt::null && Locator::editorSystem::has_value())
+		{
+			Locator::editorSystem::value().GetHistory().AddMade(made);
+		}
+		return made != entt::null;
 	}
 	if (!EditableInNetworkGame(registry, edit.object))
 	{

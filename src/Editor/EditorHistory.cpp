@@ -108,6 +108,19 @@ void EditorHistory::Clear()
 	}
 }
 
+void EditorHistory::AddMade(entt::entity entity)
+{
+	if (entity == entt::null)
+	{
+		return;
+	}
+	const auto ref = Track(entity);
+	if (std::ranges::find(_made, ref) == _made.end())
+	{
+		_made.push_back(ref);
+	}
+}
+
 void EditorHistory::KeepMadeAtNextClear(std::vector<entt::entity> entities)
 {
 	_keepAtNextClear = std::move(entities);

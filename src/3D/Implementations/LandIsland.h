@@ -61,6 +61,9 @@ public:
 	void CommitAltitudeChanges() override;
 	size_t RestoreBuiltAltitudes() override;
 	[[nodiscard]] std::vector<land_reuse::CellAltitude> ChangedAltitudes() const override;
+	size_t RestoreBuiltCountries() override;
+	[[nodiscard]] std::vector<land_reuse::CellCountry> ChangedCountries() const override;
+	[[nodiscard]] uint64_t LandDigest() const override { return _digest; }
 
 	// Debug
 	void DumpTextures() const override;
@@ -102,6 +105,15 @@ private:
 	ChangedArea _changedCorners;
 	/// Of each block, the altitude of each of its 17 by 17 cells when the land was built
 	std::vector<std::vector<uint8_t>> _builtAltitudes;
+	/// Of each block, the country of each of its 17 by 17 cells when the land was built
+	std::vector<std::vector<uint8_t>> _builtCountries;
+	/// The digest of the altitudes and the countries of the land now (see LandDigest)
+	uint64_t _digest {0};
+	/// Makes the digest of the land again from each cell corner of each block
+	void MakeDigest();
+	/// Sets the country of a cell of a block, [x * 17 + z], and notes the cells that its drawing must paint again.
+	/// Returns true when the country changed.
+	bool SetBlockCellCountry(size_t block, int x, int z, uint8_t country);
 	/// Sets the altitude of a cell of a block, [x * 17 + z], and notes the cells that its drawing must make again.
 	/// Returns true when the altitude changed.
 	bool SetBlockCellAltitude(size_t block, int x, int z, uint8_t altitude);

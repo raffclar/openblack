@@ -31,6 +31,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Commands/TurnCodec.h"
+#include "Editor/LandBrush.h"
 #include "LoopbackSockets.h"
 #include "Online/ConnectionLostNotice.h"
 #include "Online/GameBuildId.h"
@@ -707,6 +708,15 @@ TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 	EXPECT_TRUE(ServerTakesFromObserver(EditorVillagerEdit {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(EditorVillagerEdit {}, false));
 	EXPECT_FALSE(server::LeavesOut(EditorVillagerEdit {}, false));
+	// The strokes and the paths of the land tools are edits of the editor too
+	EXPECT_TRUE(OnlyEditorSends(EditorLandStroke {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorLandStroke {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorLandStroke {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorLandStroke {}, false));
+	EXPECT_TRUE(OnlyEditorSends(EditorPath {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorPath {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorPath {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorPath {}, false));
 	EXPECT_FALSE(OnlyEditorSends(CreatureTattoo {}));
 	EXPECT_TRUE(ServerTakesFromObserver(CreatureTattoo {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(CreatureTattoo {}, false));
@@ -812,6 +822,55 @@ TEST_F(LockstepTest, TheServerTakesTheEditsOfTheEditorOnlyWithValuesInTheirRange
 	EXPECT_EQ(count(0), 1u);
 	EXPECT_EQ(count(1), 0u);
 	// A refused value gives no line to the player with the editor claim
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheLandToolsOnlyFromTheEditorAndInTheirLimits)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	const EditorLandStroke raise {.mode = 0, .innerRadius = 10.0f, .outerRadius = 30.0f, .step = 4, .centre = {800.0f, 900.0f}};
+	const EditorPath footpath {.kind = 0, .points = {{100.0f, 100.0f}, {140.0f, 120.0f}}};
+	alice.session.Send(raise);
+	alice.session.Send(footpath);
+	// A player with no editor claim sends a stroke and a path
+	bob.session.Send(raise);
+	bob.session.Send(footpath);
+	// A changed client can send values that the land tools do not give
+	auto wide = raise;
+	wide.outerRadius = openblack::editor::land_brush::k_MostRadius * 2.0f;
+	alice.session.Send(wide);
+	auto steep = raise;
+	steep.step = openblack::editor::land_brush::k_MostStep + 1;
+	alice.session.Send(steep);
+	auto country = raise;
+	country.mode = 2;
+	country.country = openblack::editor::land_brush::k_MostCountries;
+	alice.session.Send(country);
+	auto away = raise;
+	away.centre = {-50.0f, 900.0f};
+	alice.session.Send(away);
+	auto longPath = footpath;
+	longPath.points.push_back({9000.0f, 100.0f});
+	alice.session.Send(longPath);
+	Frames({&alice, &bob}, 6);
+	EXPECT_EQ(host->RefusedEditorValues(), 5u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorLandStroke), 1u);
+	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorPath), 1u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorLandStroke), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorPath), 0u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
 	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
