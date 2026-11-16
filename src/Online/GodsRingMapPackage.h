@@ -56,7 +56,8 @@ enum class Failure : uint8_t
 
 /// The bytes of the ".map" file of a map of the lobby's list, from the package that the client downloaded and the land
 /// of the player's game data (nothing when the game data does not have it). The package must have the SHA-256 that the
-/// list gives. The download then checks the map's own SHA-256 and start checksum.
+/// list gives. The package of a custom land needs no game data (custom_map_package). The download then checks the map's
+/// own SHA-256 and start checksum.
 [[nodiscard]] std::variant<std::vector<uint8_t>, Failure>
 AssembleDownloaded(const lobby_api::OnlineMap& map, std::span<const uint8_t> package,
                    std::optional<std::span<const uint8_t>> templateMap);

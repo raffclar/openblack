@@ -185,7 +185,11 @@ int main(int argc, char* argv[])
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
 		("write-gods-ring-map", "Write the file of the network map for 32 gods, which the players get from the lobby, to this file, then stop.", cxxopts::value<std::string>())
 		("custom-map", "Play the land of a network game in this .map file outside the game folder. The server names it Online Maps/<file>.map and sends it to the lobby, so that the players get it.", cxxopts::value<std::string>())
-		("write-map-package", "Write the map package of the network map for 32 gods to this folder as <SHA-256>.obmap, then stop. The package has no game data, so the server needs no game folder for it.", cxxopts::value<std::string>())
+		("write-map-package", "Write the map package of the network map for 32 gods to this folder as <SHA-256>.obmap, then stop. The package has no game data, so the server needs no game folder for it. With --custom-map, write the package of that land, with --map-name and --map-players.", cxxopts::value<std::string>())
+		("map-package", "Play the land of the map package of a custom land (<SHA-256>.obmap) outside the game folder. The package needs no game data. The server names the land Online Maps/<file>.map, and the lobby gives the players the package.", cxxopts::value<std::string>())
+		("write-package-map", "With --map-package, write the .map file that the package gives to this file, then stop. The server needs no game folder for it.", cxxopts::value<std::string>())
+		("map-name", "With --custom-map and --write-map-package, the name of the land in the list of the lands. With none, the name of the file.", cxxopts::value<std::string>())
+		("map-players", "With --custom-map and --write-map-package, the gods that the land takes, from 1 to 32.", cxxopts::value<int32_t>())
 		("write-download-test-map", "Write the land of the map download test, which the tool makes from Online Maps/mpm_3p_1.map, to this file, then stop. The game folder does not change.", cxxopts::value<std::string>())
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
 		("time-limit", "The time limit of the network game in minutes, from 10 to 1440 (24 hours) as the host picks it, in place of the default 30. A build with the developer tools also accepts 1 to 9 minutes for tests. The start sends it to every client.", cxxopts::value<uint32_t>())
@@ -297,6 +301,42 @@ int main(int argc, char* argv[])
 			          << ", but this server is the build " << openblack::online::build_id::Own() << std::endl;
 			return openblack::server::game_lifetime::k_ExitWrongVersion;
 		}
+		if (result.count("write-map-package") != 0 && result.count("custom-map") != 0)
+		{
+			if (result.count("map-players") == 0)
+			{
+				std::cerr << "openblack-server: the package of --custom-map needs --map-players" << '\n';
+				return EXIT_FAILURE;
+			}
+			const auto written = openblack::server::WriteCustomMapPackage(
+			    result["custom-map"].as<std::string>(),
+			    result.count("map-name") != 0 ? result["map-name"].as<std::string>() : std::string(),
+			    result["map-players"].as<int32_t>(), result["write-map-package"].as<std::string>());
+			if (const auto* error = std::get_if<std::string>(&written); error != nullptr)
+			{
+				std::cerr << "openblack-server: " << *error << '\n';
+				return EXIT_FAILURE;
+			}
+			std::cout << std::get<std::filesystem::path>(written).generic_string() << '\n';
+			return EXIT_SUCCESS;
+		}
+		if (result.count("write-package-map") != 0)
+		{
+			if (result.count("map-package") == 0)
+			{
+				std::cerr << "openblack-server: --write-package-map needs --map-package" << '\n';
+				return EXIT_FAILURE;
+			}
+			const std::filesystem::path out(result["write-package-map"].as<std::string>());
+			if (const auto error = openblack::server::WritePackageMap(result["map-package"].as<std::string>(), out);
+			    error.has_value())
+			{
+				std::cerr << "openblack-server: " << *error << '\n';
+				return EXIT_FAILURE;
+			}
+			std::cout << "openblack-server: wrote the land of the map package to " << out.generic_string() << '\n';
+			return EXIT_SUCCESS;
+		}
 		if (result.count("write-map-package") != 0)
 		{
 			const std::filesystem::path folder(result["write-map-package"].as<std::string>());
@@ -354,15 +394,19 @@ int main(int argc, char* argv[])
 			std::cout << "openblack-server: wrote the land of the map download test to " << out.generic_string() << '\n';
 			return EXIT_SUCCESS;
 		}
-		if (result.count("custom-map") != 0)
+		const bool customMap = result.count("custom-map") != 0;
+		const bool mapPackage = result.count("map-package") != 0;
+		if (customMap || mapPackage)
 		{
-			if (settings.godsRingMap || settings.testbed)
+			if (settings.godsRingMap || settings.testbed || (customMap && mapPackage))
 			{
-				std::cerr << "openblack-server: --custom-map takes the place of the land: no --gods-ring-map or --testbed"
+				std::cerr << "openblack-server: --custom-map or --map-package takes the place of the land: no other land, "
+				             "--gods-ring-map or --testbed"
 				          << '\n';
 				return EXIT_FAILURE;
 			}
-			auto read = openblack::server::ReadCustomMap(result["custom-map"].as<std::string>());
+			auto read = mapPackage ? openblack::server::ReadMapPackage(result["map-package"].as<std::string>())
+			                       : openblack::server::ReadCustomMap(result["custom-map"].as<std::string>());
 			if (const auto* error = std::get_if<std::string>(&read); error != nullptr)
 			{
 				std::cerr << "openblack-server: " << *error << '\n';
@@ -370,8 +414,11 @@ int main(int argc, char* argv[])
 			}
 			auto& map = std::get<openblack::server::CustomMapRead>(read);
 			settings.land = "Online Maps/" + map.file + ".map";
-			settings.customMap =
-			    openblack::server::ServerSettings::CustomMapFile {.file = map.file, .bytes = std::move(map.bytes)};
+			settings.customMap = openblack::server::ServerSettings::CustomMapFile {.file = map.file,
+			                                                                       .bytes = std::move(map.bytes),
+			                                                                       .name = map.name,
+			                                                                       .packageSha256 = map.packageSha256,
+			                                                                       .packageSize = map.packageSize};
 		}
 		settings.soak.allComputerGods = result.count("all-computer-gods") != 0;
 		if (result.count("ai-seed") != 0)
