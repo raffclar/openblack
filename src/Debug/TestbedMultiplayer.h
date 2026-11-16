@@ -53,7 +53,7 @@ enum class Stage : uint8_t
 	RoomPing,
 	/// The game room's box "Could not download map from Internet.": the lobby did not give the room's land
 	MapDownloadFailed,
-	/// The box "Could not download map" with the reason of a map package under the vanilla text (deviation 274)
+	/// The box "Could not download map" with the reason of a map package under the vanilla text (deviation 275)
 	MapPackageFailed,
 	/// The conditions page of a game whose server picked winning conditions and a time limit
 	ConditionsPicked,

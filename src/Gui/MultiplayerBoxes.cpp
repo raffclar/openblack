@@ -901,7 +901,7 @@ void MultiplayerBoxes::ShowMessage(Message message)
 		const std::array<TextArgument, 1> nameArgument = {std::u16string_view(name)};
 		shown.text = FormatText(shown.text, nameArgument);
 	}
-	// A map package that did not give the map adds its reason under the vanilla text (deviation 274)
+	// A map package that did not give the map adds its reason under the vanilla text (deviation 275)
 	const auto& reason = _frontEnd->GetMapFailureLine();
 	const bool reasonLine = message == Message::CouldNotDownloadMap && !reason.empty();
 	if (reasonLine)

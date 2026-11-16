@@ -195,7 +195,7 @@ TEST(GodsRingMapPackage, ADamagedPackageOrOtherGameDataGivesNoFile)
 
 TEST(GodsRingMapPackage, EachFailureHasALineForTheBox)
 {
-	// The box "Could not download map" shows the vanilla text, then this line (deviation 274)
+	// The box "Could not download map" shows the vanilla text, then this line (deviation 275)
 	for (const auto failure :
 	     {Failure::NotAPackage, Failure::WrongPackage, Failure::OtherMap, Failure::NoGameData, Failure::GameDataDoesNotMatch})
 	{

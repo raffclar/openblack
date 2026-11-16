@@ -154,7 +154,7 @@ struct VersionNeed
 /// others)
 [[nodiscard]] std::string GameRefusalText(std::string_view refusal, lobby_api::ClientKind client, const VersionNeed& need = {});
 /// The box when the game server of the lobby cannot play the lobby's map or gods (the problem "server_land" of the
-/// start). The lobby's reason, its server_problem, is the second line, in fixed English (deviation 274).
+/// start). The lobby's reason, its server_problem, is the second line, in fixed English (deviation 275).
 [[nodiscard]] std::string ServerProblemText(std::string_view problem);
 
 /// The values of the box that makes a session

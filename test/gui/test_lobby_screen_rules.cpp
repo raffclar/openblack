@@ -179,7 +179,7 @@ TEST(LobbyScreenRules, AJoinAsksOrRefuses)
 
 TEST(LobbyScreenRules, AStartThatTheGameServerCannotPlayGivesTheReasonOnASecondLine)
 {
-	// The lobby's server_problem comes as the detail of the problem "server_land" (deviation 274)
+	// The lobby's server_problem comes as the detail of the problem "server_land" (deviation 275)
 	const auto problem = ProblemOf(
 	    ecs::systems::LobbyError {.status = 409, .detail = "The map Land Two takes at most 2 gods.", .code = "server_land"},
 	    lobby_api::ClientKind::Desktop);

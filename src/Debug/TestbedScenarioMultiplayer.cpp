@@ -160,7 +160,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.map_package_failed", "The multiplayer front end: a map package that gives no map",
 	     Stage::MapPackageFailed,
 	     "The player joins Bob's game. The lobby gives the land of the room as a map package, but the bytes of the "
-	     "download are not that package (deviation 274).",
+	     "download are not that package (deviation 275).",
 	     "The box \"Could not download map\" shows the vanilla text, and then the line \"The map file is not the map "
 	     "of this game.\" with OK, over the dimmed room."},
 	    {"multiplayer.lan_room_chat", "The multiplayer front end: the chat of a room on the local network", Stage::LanRoomChat,
@@ -236,7 +236,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.lobby_server_problem", "The lobby sessions: a map that the game server cannot play",
 	     Stage::LobbyServerProblem,
 	     "The player makes a session and clicks Start. The game server of the site plays only another map, so the "
-	     "service refuses the start (deviation 274).",
+	     "service refuses the start (deviation 275).",
 	     "A box over the room tells \"The game server cannot play this game.\" and, on a second line, \"This server "
 	     "plays only Two Gods for up to 2 gods.\" with OK. The room stays open."},
 	    {"multiplayer.lobby_notices", "The lobby sessions: the notices of the room", Stage::LobbyNotices,
