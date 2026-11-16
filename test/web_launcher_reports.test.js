@@ -3,7 +3,7 @@
 
 const assert = require('node:assert/strict');
 const {
-  ErrorReports, scrubEvent, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
+  ErrorReports, scrubEvent, applyIpChoice, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
   wasmModuleInfo, addWasmDebugImage, k_LogAttachmentName,
 } = require('../web/page/launcher-reports.js');
 
@@ -172,6 +172,13 @@ check('without consent the event asks Sentry to keep no IP address', () => {
   assert.equal(event.sdk.settings.infer_ip, 'never');
   assert.equal(event.sdk.name, 'sentry.javascript.browser');
   assert.doesNotMatch(JSON.stringify(event), /matt/);
+});
+check('the envelope takes the IP choice after the SDK wrote its own', () => {
+  const make = () => [{}, [[{ type: 'event' }, { sdk: { settings: { infer_ip: 'auto' } } }],
+    [{ type: 'attachment' }, 'text']]];
+  assert.equal(applyIpChoice(make(), undefined)[1][0][1].sdk.settings.infer_ip, 'never');
+  assert.equal(applyIpChoice(make(), { id: 7, username: 'matt' })[1][0][1].sdk.settings.infer_ip, 'auto');
+  assert.equal(applyIpChoice(make(), undefined)[1][1][1], 'text');
 });
 check('with the choice full the event names only the id and the name of the account', () => {
   const event = scrubEvent({ user: { email: 'a@b.c', segment: 'x' } }, { id: 7, username: 'matt' });

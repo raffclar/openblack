@@ -106,6 +106,21 @@ function scrubEvent(event, user) {
   return event;
 }
 
+/**
+ * Sets the choice about the IP address in each event of an envelope, just before the envelope goes. The SDK writes its
+ * own choice into the events after the function scrubEvent ran, and with sendDefaultPii the SDK choice is "auto".
+ * An account with the choice "full" keeps "auto". All other reports get "never", so that Sentry keeps no IP address.
+ */
+function applyIpChoice(envelope, user) {
+  for (const [header, payload] of (envelope && envelope[1]) || []) {
+    if (header && header.type === 'event' && payload && typeof payload === 'object') {
+      payload.sdk = payload.sdk || {};
+      payload.sdk.settings = { ...(payload.sdk.settings || {}), infer_ip: user ? 'auto' : 'never' };
+    }
+  }
+  return envelope;
+}
+
 /** The hexadecimal text of the bytes */
 function hexText(bytes) {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -266,6 +281,10 @@ class ErrorReports {
         this.sentry = Sentry;
         const environment = this.environment || settings.environment;
         Sentry.init(sentryOptions(Sentry, { ...settings, environment }, this.logText, () => this.user, this.buildId));
+        const client = Sentry.getClient && Sentry.getClient();
+        if (client && client.on) {
+          client.on('beforeEnvelope', (envelope) => applyIpChoice(envelope, this.user));
+        }
         this.ready = true;
         this.log('The error reports to Sentry started');
         const waiting = this.waiting;
@@ -385,7 +404,7 @@ function loadSentryScript(document) {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    ErrorReports, scrubEvent, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
+    ErrorReports, scrubEvent, applyIpChoice, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
     wasmModuleInfo, wasmDebugImage, addWasmDebugImage, k_LogAttachmentName, k_RoleTagName,
   };
 }
