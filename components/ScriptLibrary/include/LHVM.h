@@ -130,6 +130,7 @@ protected:
 	uint32_t GetTicksCount();
 	VMVar& GetVar(VMTask& task, uint32_t id);
 	void PopToVariable(VMTask& task, uint32_t id);
+	void Assign(VMVar& var, VMValue value, DataType type);
 	/// The task's exception handlers, innermost first by index
 	[[nodiscard]] static uint32_t GetExceptionHandlersCount(const VMTask& task);
 	[[nodiscard]] static uint32_t GetCurrentExceptionHandlerIp(const VMTask& task, uint32_t index);
@@ -268,6 +269,9 @@ public:
 
 	/// Changes a global variable's value, keeping its type
 	void SetVariable(uint32_t id, VMValue value);
+	/// Gives a global variable a value and the type of the value, as the assignment of a script does. The variable takes
+	/// a reference to a new object and gives back its reference to the object that it held before.
+	void AssignVariable(uint32_t id, VMValue value, DataType type);
 	/// Calls a native between the tasks' turns, as a script's call to it is made: its arguments pushed in order, the
 	/// native run with its entering and leaving told, and what it pushed taken back, the first pushed first. A text is
 	/// put after the scripts' own data for the length of the call and its place pushed, as a script pushes the place of

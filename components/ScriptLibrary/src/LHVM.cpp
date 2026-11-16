@@ -997,6 +997,14 @@ void LHVM::SetVariable(uint32_t id, VMValue value)
 	}
 }
 
+void LHVM::AssignVariable(uint32_t id, VMValue value, DataType type)
+{
+	if (id < _variables.size())
+	{
+		Assign(_variables.at(id), value, type);
+	}
+}
+
 void LHVM::SetTaskVariable(uint32_t taskNumber, size_t index, VMValue value)
 {
 	if (auto task = _tasks.find(taskNumber); task != _tasks.end() && index < task->second.localVars.size())
@@ -1111,16 +1119,21 @@ void LHVM::PopToVariable(VMTask& task, uint32_t id)
 	auto& var = GetVar(task, id);
 	DataType type;
 	const auto newVal = Pop(type);
+	Assign(var, newVal, type);
+}
+
+void LHVM::Assign(VMVar& var, VMValue value, DataType type)
+{
 	if (type == DataType::Object)
 	{
-		AddReference(newVal.uintVal);
+		AddReference(value.uintVal);
 	}
 	if (var.type == DataType::Object)
 	{
 		// the object the variable held until now
 		RemoveReference(var.value.uintVal);
 	}
-	var.value = newVal;
+	var.value = value;
 	var.type = type;
 }
 
