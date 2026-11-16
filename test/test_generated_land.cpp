@@ -8,11 +8,14 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "3D/GeneratedLand.h"
 #include "Audio/SoundMap.h"
+#include "LHScriptX/Script.h"
 
 using namespace openblack;
 using landgen::countries::Surface;
@@ -179,4 +182,51 @@ TEST(GeneratedLand, TheSoundsHaveTheNumbersOfTheGame)
 	EXPECT_EQ(static_cast<int>(landgen::Sound::Jungle), static_cast<int>(audio::AtmosType::Jungle));
 	EXPECT_EQ(static_cast<int>(landgen::Sound::Countryside), static_cast<int>(audio::AtmosType::Countryside));
 	EXPECT_EQ(static_cast<int>(landgen::Sound::RunningWater), static_cast<int>(audio::AtmosType::RunningWater));
+}
+
+TEST(GeneratedLand, TheTownIsTheLinesOfALandScript)
+{
+	using landgen::settlement::Building;
+	landgen::settlement::Plan plan;
+	plan.tribe = landgen::settlement::Tribe::Norse;
+	plan.citadelX = 100.0f;
+	plan.citadelZ = 200.0f;
+	plan.citadelRotation = 1234;
+	plan.townX = 195.0f;
+	plan.townZ = 200.0f;
+	plan.buildings = {{.building = Building::TownCentre, .x = 195.0f, .z = 200.0f, .rotation = 10},
+	                  {.building = Building::StoragePit, .x = 195.0f, .z = 222.5f, .rotation = 20},
+	                  {.building = Building::AbodeC, .x = 217.0f, .z = 200.0f, .rotation = 30}};
+	plan.villagers = {{.kind = landgen::settlement::Villager::Forester, .x = 218.0f, .z = 201.0f, .age = 30}};
+	plan.fields = {{.x = 245.0f, .z = 205.0f}};
+	const auto script = generated_land::SettlementScript(plan);
+	const auto read = lhscriptx::Script::Read(script);
+	ASSERT_FALSE(read.error.has_value()) << *read.error;
+	std::vector<std::string> names;
+	for (const auto& command : read.commands)
+	{
+		names.push_back(command.name);
+	}
+	// The town first, the town centre after the other buildings, then the people, the temple and its site
+	const std::vector<std::string> expected {"CREATE_TOWN",          "SET_TOWN_BELIEF", "CREATE_NEW_TOWN_FIELD",
+	                                         "CREATE_ABODE",         "CREATE_ABODE",    "CREATE_TOWN_CENTRE",
+	                                         "CREATE_TOWN_VILLAGER", "CREATE_CITADEL",  "CREATE_WORSHIP_SITE"};
+	EXPECT_EQ(names, expected);
+	EXPECT_NE(script.find(R"(CREATE_TOWN(0, "195.00,200.00", "PLAYER_ONE", 7, "NORSE"))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_ABODE(0, "195.00,222.50", "NORSE_ABODE_STORAGE_PIT", 20, 1000, 20000, 30000))"),
+	          std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_ABODE(0, "217.00,200.00", "NORSE_ABODE_C", 30, 1000, 0, 0))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_TOWN_CENTRE(0, "195.00,200.00", "NORSE_ABODE_TOWN_CENTRE", 10, 1000, 0))"),
+	          std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_TOWN_VILLAGER(0, "218.00,201.00", "NORSE_FORESTER", 30))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_CITADEL("100.00,200.00", 0, "PLAYER_ONE", 1234, 1000))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_WORSHIP_SITE("100.00,200.00", 0, "PLAYER_ONE", "NORSE", 0, 1000))"), std::string::npos);
+}
+
+TEST(GeneratedLand, EachTribeHasItsNameOfTheGame)
+{
+	EXPECT_EQ(generated_land::TribeName(landgen::settlement::Tribe::Celtic), "CELTIC");
+	EXPECT_EQ(generated_land::TribeName(landgen::settlement::Tribe::Aztec), "AZTEC");
+	EXPECT_EQ(generated_land::TribeName(landgen::settlement::Tribe::Egyptian), "EGYPTIAN");
+	EXPECT_EQ(generated_land::TribeName(landgen::settlement::Tribe::Tibetan), "TIBETAN");
 }

@@ -196,6 +196,21 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_start_town",
+	    .name = "The temple, town, fields and forests of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. The camera "
+	                   "looks down at the start area from the south.",
+	    .expected = "On the flat start area, the temple of player one stands on one side and a town on the other side. "
+	                "The town has a town centre, a storage pit, a creche, five to seven houses with their people and a "
+	                "block of fields. The worship site of the tribe of the town stands next to the temple. Trees in "
+	                "groups near the town are forests: the foresters go to them for wood.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	});
+
+	all.push_back({
 	    .id = "editor.animals",
 	    .name = "Every animal of the palette",
 	    .facet = Facet::Editor,
