@@ -402,6 +402,34 @@ TEST(GameSocket, AMindFileOfTheEditorGoesToJsonAndBackUpToItsLimit)
 	EXPECT_FALSE(Parse(R"({"type":"editor.mind_file","file":"!!"})").has_value());
 }
 
+TEST(GameSocket, APartOfAScriptFileOfTheEditorGoesToJsonAndBackUpToItsLimit)
+{
+	const EditorScriptFile part {.kind = EditorScriptFile::Kind::LandScript,
+	                             .hash = 0xFEDCBA9876543210ULL,
+	                             .index = 1,
+	                             .count = 3,
+	                             .size = 100000,
+	                             .bytes = {0, 1, 2, 250, 251}};
+	EXPECT_EQ(RoundTrip(part), part);
+	EditorScriptFile largest = part;
+	largest.bytes.assign(k_MostEditorScriptPartBytes, 7);
+	EXPECT_TRUE(Parse(ToJson(largest)).has_value());
+	EditorScriptFile tooLarge = part;
+	tooLarge.bytes.assign(k_MostEditorScriptPartBytes + 1, 7);
+	EXPECT_FALSE(Parse(ToJson(tooLarge)).has_value());
+	// A part after the last part, a file that is too large, or a kind that is not a kind of the file is not a part
+	EditorScriptFile after = part;
+	after.index = 3;
+	EXPECT_FALSE(Parse(ToJson(after)).has_value());
+	EditorScriptFile huge = part;
+	huge.size = static_cast<uint32_t>(k_MostEditorScriptFileBytes + 1);
+	EXPECT_FALSE(Parse(ToJson(huge)).has_value());
+	EXPECT_FALSE(
+	    Parse(R"({"type":"editor.script_file","kind":3,"hash":1,"index":0,"count":1,"size":1,"data":"AQ"})").has_value());
+	EXPECT_TRUE(
+	    Parse(R"({"type":"editor.script_file","kind":2,"hash":1,"index":0,"count":1,"size":1,"data":"AQ"})").has_value());
+}
+
 // The start names the players of the gods by slot, and the server tells the clients that the turns of the game stopped
 TEST(GameSocket, TheNamesOfTheGodsAndTheStopOfTheGameGoToJsonAndBack)
 {

@@ -100,6 +100,12 @@ public:
 	/// A mind file of the creature tools of the editor goes to the game server on the game socket. The server sends it to
 	/// every player. False when the socket of the game is not open: then the file does not go.
 	[[nodiscard]] virtual bool SendEditorMindFile(std::vector<uint8_t> /*file*/) { return false; }
+	/// A file of the script tabs of the editor goes to the game server in parts on the game socket. The server sends it to
+	/// every player. False when the socket of the game is not open: then the file does not go.
+	[[nodiscard]] virtual bool SendEditorScriptFile(game_socket::EditorScriptFile::Kind /*kind*/, std::vector<uint8_t> /*file*/)
+	{
+		return false;
+	}
 	/// The player leaves the network game
 	virtual void Leave() = 0;
 	/// The end box of a decided game opened: the game server stops the turns of the game. When the last turn came, the

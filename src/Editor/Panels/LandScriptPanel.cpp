@@ -10,22 +10,20 @@
 #include "LandScriptPanel.h"
 
 #include <algorithm>
-#include <exception>
-#include <span>
 #include <string_view>
 #include <system_error>
 
-#include <OnlineMapFile.h>
 #include <fmt/format.h>
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include "Common/DeveloperToolsGate.h"
 #include "Common/FileDialog.h"
-#include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "Editor/EditorStyle.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
-#include "Online/OnlineMapLand.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::editor
@@ -34,6 +32,8 @@ namespace openblack::editor
 namespace
 {
 constexpr std::string_view k_LandScriptFolderKey = "land_script_folder";
+
+using LandAct = player_commands::EditorLandScript::Act;
 
 [[nodiscard]] const char* StateText(scripts::LandScriptStepper::State state)
 {
@@ -52,68 +52,87 @@ constexpr std::string_view k_LandScriptFolderKey = "land_script_folder";
 }
 } // namespace
 
-void LandScriptPanel::ReadCurrentLand() noexcept
+void LandScriptPanel::Act(player_commands::EditorLandScript act, std::span<const uint8_t> text) noexcept
 {
-	if (!Locator::landSystem::has_value())
+	_scrollToNext = true;
+	if (developer_tools::NetworkSessionLive())
 	{
-		_message = "No land is loaded";
+		if (!Locator::playerCommandSystem::has_value())
+		{
+			_sendMessage = "The game has no commands: the act did not go";
+			return;
+		}
+		if (act.act == LandAct::Open)
+		{
+			// The text goes first on the game socket. The server sends it to every computer before the turn of the command.
+			const auto hash = script_acts::SendFile(game_socket::EditorScriptFile::Kind::LandScript, text);
+			if (!hash.has_value())
+			{
+				_sendMessage = "The game socket is not open, or the file is too large: the land script did not go";
+				return;
+			}
+			act.file = *hash;
+		}
+		Locator::playerCommandSystem::value().Submit(act);
+		_sendMessage = fmt::format("Sent: {} at the next turn, for every computer", script_acts::NameOf(act.act));
 		return;
 	}
-	ReadFile(Locator::landSystem::value().GetLandPath());
+	if (!Locator::editorSystem::has_value())
+	{
+		return;
+	}
+	auto& run = Locator::editorSystem::value().GetLandScriptRun();
+	// A game alone keeps the name of the file that the editor opened
+	if (act.act == LandAct::Open)
+	{
+		script_acts::ReadLandScript(run, _openedPath.filename().generic_string(),
+		                            std::string(reinterpret_cast<const char*>(text.data()), text.size()));
+		return;
+	}
+	std::ignore = script_acts::ApplyLandScript(act, {}, run, script_acts::LocatorLandScriptWorld());
 }
 
 void LandScriptPanel::ReadFile(const std::filesystem::path& path) noexcept
 {
-	_path = path;
-	_read = {};
-	_selected.reset();
-	_refilter = true;
-	try
+	_openedPath = path;
+	const auto text = script_acts::LandScriptText(path);
+	if (!text.has_value())
 	{
-		auto& fileSystem = Locator::filesystem::value();
-		if (path.empty() || !fileSystem.Exists(path))
-		{
-			_stepper.Reset(0);
-			_message = fmt::format("The land script {} is not a file", path.generic_string());
-			return;
-		}
-		const auto data = fileSystem.ReadAll(path);
-		auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
-		// A land of a network game holds its script in the same file as its landscape
-		if (online_map_land::IsOnlineMap(path.generic_string()))
-		{
-			const auto file = onlinemap::Parse(std::as_bytes(std::span(data)));
-			source = file.has_value() ? std::string(file->script) : std::string {};
-		}
-		_read = lhscriptx::Script::Read(source);
-		_stepper.Reset(_read.commands.size());
-		_message = fmt::format("Read {} commands of {}", _read.commands.size(), path.filename().generic_string());
+		_sendMessage = fmt::format("The land script {} is not a file that reads", path.generic_string());
+		return;
 	}
-	catch (const std::exception& error)
-	{
-		_stepper.Reset(0);
-		_message = fmt::format("Could not read {}: {}", path.generic_string(), error.what());
-	}
+	const std::span bytes(reinterpret_cast<const uint8_t*>(text->data()), text->size());
+	Act({.act = LandAct::Open}, bytes);
 }
 
 void LandScriptPanel::Draw() noexcept
 {
-	// The panel reads the script of the loaded land when it shows for the first time
+	if (!Locator::editorSystem::has_value())
+	{
+		ImGui::TextDisabled("The game has no editor");
+		return;
+	}
+	const auto& run = Locator::editorSystem::value().GetLandScriptRun();
+	// The panel reads the script of the loaded land when it shows for the first time. In a network game a read is a
+	// command, so the panel waits for the click.
 	if (!_triedCurrentLand)
 	{
 		_triedCurrentLand = true;
-		ReadCurrentLand();
+		if (!developer_tools::NetworkSessionLive() && run.changes == 0)
+		{
+			Act({.act = LandAct::LoadedLand});
+		}
 	}
-	DrawLoading();
-	DrawControls();
-	DrawCommands();
+	DrawLoading(run);
+	DrawControls(run);
+	DrawCommands(run);
 }
 
-void LandScriptPanel::DrawLoading() noexcept
+void LandScriptPanel::DrawLoading(const script_acts::LandScriptRun& run) noexcept
 {
 	if (ImGui::SmallButton("Loaded land"))
 	{
-		ReadCurrentLand();
+		Act({.act = LandAct::LoadedLand});
 	}
 	ImGui::SetItemTooltip("Reads the script of the land that the game loaded last");
 	ImGui::SameLine();
@@ -158,85 +177,63 @@ void LandScriptPanel::DrawLoading() noexcept
 		ReadFile(*chosen);
 	}
 	ImGui::SameLine();
-	ImGui::TextUnformatted(_path.generic_string().c_str());
-	if (!_message.empty())
+	ImGui::TextUnformatted(run.name.c_str());
+	if (!_sendMessage.empty())
 	{
-		ImGui::TextColored(style::k_Muted, "%s", _message.c_str());
+		ImGui::TextColored(style::k_Muted, "%s", _sendMessage.c_str());
 	}
-	if (_read.error.has_value())
+	if (!run.message.empty())
 	{
-		ImGui::TextColored(style::k_Warning, "The script stops after command %zu: %s", _read.commands.size(),
-		                   _read.error->c_str());
+		ImGui::TextColored(style::k_Muted, "%s", run.message.c_str());
 	}
-}
-
-bool LandScriptPanel::RunCommand(size_t index) noexcept
-{
-	if (index >= _read.commands.size())
+	if (run.read.error.has_value())
 	{
-		return false;
-	}
-	const auto& command = _read.commands[index];
-	try
-	{
-		lhscriptx::Script script;
-		script.Run(command);
-		_message = fmt::format("Line {}: {} done", command.line, command.name);
-		return true;
-	}
-	catch (const std::exception& error)
-	{
-		_message = fmt::format("Line {}: {} failed: {}", command.line, command.name, error.what());
-		return false;
+		ImGui::TextColored(style::k_Warning, "The script stops after command %zu: %s", run.read.commands.size(),
+		                   run.read.error->c_str());
 	}
 }
 
-void LandScriptPanel::DrawControls() noexcept
+void LandScriptPanel::DrawControls(const script_acts::LandScriptRun& run) noexcept
 {
-	const auto run = [this](size_t index) { return RunCommand(index); };
-	const bool hasNext = _stepper.Next().has_value();
+	const auto& stepper = run.stepper;
+	const bool hasNext = stepper.Next().has_value();
 	ImGui::BeginDisabled(!hasNext);
 	if (ImGui::Button("Step"))
 	{
-		_stepper.Step(run);
-		_scrollToNext = true;
+		Act({.act = LandAct::Step});
 	}
 	ImGui::SetItemTooltip("Does the next command in the world");
 	ImGui::SameLine();
 	if (ImGui::Button("Continue"))
 	{
-		_stepper.Continue(run);
-		_scrollToNext = true;
+		Act({.act = LandAct::Continue});
 	}
 	ImGui::SetItemTooltip("Does the commands up to the next breakpoint, a command that fails or the end");
 	ImGui::SameLine();
 	ImGui::BeginDisabled(!_selected.has_value());
 	if (ImGui::Button("Run to selected") && _selected.has_value())
 	{
-		_stepper.RunTo(*_selected, run);
-		_scrollToNext = true;
+		Act({.act = LandAct::RunTo, .command = static_cast<uint32_t>(*_selected)});
 	}
 	ImGui::EndDisabled();
 	ImGui::SetItemTooltip("Does the commands up to the selected command. The selected command is not done.");
 	ImGui::SameLine();
 	if (ImGui::Button("Skip"))
 	{
-		_stepper.Skip();
-		_scrollToNext = true;
+		Act({.act = LandAct::Skip});
 	}
 	ImGui::SetItemTooltip("Moves past the next command and does not do it");
 	ImGui::EndDisabled();
 	ImGui::SameLine();
 	if (ImGui::Button("Restart"))
 	{
-		_stepper.Restart();
-		_scrollToNext = true;
+		Act({.act = LandAct::Restart});
 	}
 	ImGui::SetItemTooltip("Starts again at the first command. The world keeps all that the commands made.");
 	ImGui::SameLine();
-	if (const auto next = _stepper.Next(); next.has_value())
+	if (const auto next = stepper.Next(); next.has_value())
 	{
-		ImGui::Text("Next: line %d, %s", _read.commands[*next].line, _read.commands[*next].name.c_str());
+		ImGui::Text("Next: line %d, %s", run.read.commands[*next].line, run.read.commands[*next].name.c_str());
 	}
 	else
 	{
@@ -248,27 +245,33 @@ void LandScriptPanel::DrawControls() noexcept
 		_refilter = true;
 	}
 	ImGui::SameLine();
-	ImGui::Text("%zu of %zu commands", _visible.size(), _read.commands.size());
+	ImGui::Text("%zu of %zu commands", _visible.size(), run.read.commands.size());
 }
 
-void LandScriptPanel::Refilter()
+void LandScriptPanel::Refilter(const script_acts::LandScriptRun& run)
 {
 	_refilter = false;
 	_visible.clear();
-	for (size_t i = 0; i < _read.commands.size(); ++i)
+	for (size_t i = 0; i < run.read.commands.size(); ++i)
 	{
-		if (scripts::CommandMatches(_read.commands[i], _filter))
+		if (scripts::CommandMatches(run.read.commands[i], _filter))
 		{
 			_visible.push_back(i);
 		}
 	}
 }
 
-void LandScriptPanel::DrawCommands() noexcept
+void LandScriptPanel::DrawCommands(const script_acts::LandScriptRun& run) noexcept
 {
-	if (_refilter)
+	// An act of this frame can change the commands, so the list follows the run before the table reads it
+	if (_refilter || run.changes != _shownChanges)
 	{
-		Refilter();
+		_shownChanges = run.changes;
+		Refilter(run);
+		if (_selected.has_value() && *_selected >= run.read.commands.size())
+		{
+			_selected.reset();
+		}
 	}
 	constexpr auto k_TableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_BordersInnerV |
 	                              ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit;
@@ -284,7 +287,8 @@ void LandScriptPanel::DrawCommands() noexcept
 	ImGui::TableSetupColumn("Arguments", ImGuiTableColumnFlags_WidthStretch);
 	ImGui::TableHeadersRow();
 
-	const auto next = _stepper.Next();
+	const auto& stepper = run.stepper;
+	const auto next = stepper.Next();
 	ImGuiListClipper clipper;
 	clipper.Begin(static_cast<int>(_visible.size()));
 	// The clipper must draw the row of the next command, so that the table can scroll to it
@@ -298,13 +302,14 @@ void LandScriptPanel::DrawCommands() noexcept
 			clipper.IncludeItemByIndex(*nextRow);
 		}
 	}
+	std::optional<size_t> toggle;
 	while (clipper.Step())
 	{
 		for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row)
 		{
 			const auto index = _visible[static_cast<size_t>(row)];
-			const auto& command = _read.commands[index];
-			const auto state = _stepper.StateOf(index);
+			const auto& command = run.read.commands[index];
+			const auto state = stepper.StateOf(index);
 			ImGui::PushID(static_cast<int>(index));
 			ImGui::TableNextRow();
 			if (next == index)
@@ -316,12 +321,12 @@ void LandScriptPanel::DrawCommands() noexcept
 				}
 			}
 			ImGui::TableNextColumn();
-			const bool breakpoint = _stepper.HasBreakpoint(index);
+			const bool breakpoint = stepper.HasBreakpoint(index);
 			ImGui::PushStyleColor(ImGuiCol_Text,
 			                      breakpoint ? ImGui::ColorConvertU32ToFloat4(style::k_Breakpoint) : style::k_Muted);
 			if (ImGui::SmallButton(breakpoint ? "stop" : " .  "))
 			{
-				_stepper.ToggleBreakpoint(index);
+				toggle = index;
 			}
 			ImGui::PopStyleColor();
 			ImGui::TableNextColumn();
@@ -344,6 +349,11 @@ void LandScriptPanel::DrawCommands() noexcept
 	}
 	_scrollToNext = false;
 	ImGui::EndTable();
+	// The act changes the run, so it goes after the table that reads the run
+	if (toggle.has_value())
+	{
+		Act({.act = LandAct::Breakpoint, .command = static_cast<uint32_t>(*toggle)});
+	}
 }
 
 } // namespace openblack::editor

@@ -33,6 +33,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "Editor/EditorMindLoads.h"
+#include "Editor/EditorScriptFiles.h"
 #include "Editor/LandBrush.h"
 #include "LoopbackSockets.h"
 #include "Online/ConnectionLostNotice.h"
@@ -80,6 +81,10 @@ struct FakeWorld
 	std::function<bool(uint64_t hash)> mindFileHere;
 	/// For each mind load of the editor that the world did, whether the computer had its file at the turn
 	std::vector<bool> mindFilesAtTurn;
+	/// Whether the computer has the file of the script tabs of the editor of the kind with the hash
+	std::function<bool(uint8_t kind, uint64_t hash)> scriptFileHere;
+	/// For each act of the script tabs that uses a file, whether the computer had its file at the turn
+	std::vector<bool> scriptFilesAtTurn;
 
 	uint64_t Play(uint32_t turn, const std::vector<Command>& commands)
 	{
@@ -104,6 +109,20 @@ struct FakeWorld
 			if (const auto* load = std::get_if<EditorMindLoad>(&command.action))
 			{
 				mindFilesAtTurn.push_back(mindFileHere && mindFileHere(load->file));
+			}
+			if (const auto* program = std::get_if<EditorScriptProgram>(&command.action);
+			    program != nullptr && program->use != EditorScriptProgram::Use::GamesProgram)
+			{
+				const auto kind = program->use == EditorScriptProgram::Use::Open ? game_socket::EditorScriptFile::Kind::Program
+				                                                                 : game_socket::EditorScriptFile::Kind::Source;
+				scriptFilesAtTurn.push_back(scriptFileHere && scriptFileHere(static_cast<uint8_t>(kind), program->file));
+			}
+			if (const auto* land = std::get_if<EditorLandScript>(&command.action);
+			    land != nullptr && land->act == EditorLandScript::Act::Open)
+			{
+				scriptFilesAtTurn.push_back(
+				    scriptFileHere &&
+				    scriptFileHere(static_cast<uint8_t>(game_socket::EditorScriptFile::Kind::LandScript), land->file));
 			}
 			hash = (hash ^ (static_cast<uint64_t>(command.player) + 1) * 31 + command.action.index()) * 1099511628211ull;
 			hash = (hash ^ command.observer) * 1099511628211ull;
@@ -205,6 +224,7 @@ struct Computer
 		this->landFile = std::move(landFile);
 		this->creature = std::move(creature);
 		world.mindFileHere = [this](uint64_t hash) { return !session.EditorMindFile(hash).empty(); };
+		world.scriptFileHere = [this](uint8_t kind, uint64_t hash) { return !session.EditorScriptFile(kind, hash).empty(); };
 		session.SetReady(true);
 	}
 
@@ -312,7 +332,8 @@ class LockstepTest: public ::testing::Test
 {
 protected:
 	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7, bool testCommands = false,
-	              bool lan = false, std::function<bool(std::span<const uint8_t>)> readsMindFile = {})
+	              bool lan = false, std::function<bool(std::span<const uint8_t>)> readsMindFile = {},
+	              std::function<bool(std::span<const uint8_t>)> readsScriptProgram = {})
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
@@ -326,7 +347,8 @@ protected:
 		        .testCommands = testCommands,
 		        .sessionHasher = hasher,
 		        .lanNames = lan,
-		        .readsMindFile = std::move(readsMindFile)});
+		        .readsMindFile = std::move(readsMindFile),
+		        .readsScriptProgram = std::move(readsScriptProgram)});
 	}
 
 	/// The room of the game of one lobby: the members of the lobby, the build of the server and the SHA-256 of its land
@@ -397,6 +419,9 @@ protected:
 			const auto turn = serverWorld.turns;
 			const auto commands = host->TakeTurn(turn);
 			serverWorld.mindFileHere = [this](uint64_t hash) { return !host->EditorMindFile(hash).empty(); };
+			serverWorld.scriptFileHere = [this](uint8_t kind, uint64_t hash) {
+				return !host->EditorScriptFile(kind, hash).empty();
+			};
 			host->TurnChecksum(turn + 1, serverWorld.Play(turn, commands));
 		}
 		for (auto* computer : computers)
@@ -743,6 +768,17 @@ TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 	EXPECT_TRUE(ServerTakesFromObserver(EditorPath {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(EditorPath {}, false));
 	EXPECT_FALSE(server::LeavesOut(EditorPath {}, false));
+	// The acts of the script tabs are edits of the editor too
+	EXPECT_TRUE(OnlyEditorSends(EditorScript {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorScript {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorScript {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorScript {}, false));
+	EXPECT_TRUE(OnlyEditorSends(EditorLandScript {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorLandScript {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorLandScript {}, false));
+	EXPECT_TRUE(OnlyEditorSends(EditorScriptProgram {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorScriptProgram {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorScriptProgram {}, false));
 	// The make again of an undo or a redo is an edit of the editor too
 	EXPECT_TRUE(OnlyEditorSends(EditorRemake {}));
 	EXPECT_TRUE(ServerTakesFromObserver(EditorRemake {}, true));
@@ -1055,6 +1091,127 @@ TEST_F(LockstepTest, APlayerWhoComesBackGetsTheMindFilesBeforeTheTurnsThatItMiss
 	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
 	// The kept turn with the load came after the file
 	EXPECT_EQ(bob.world.mindFilesAtTurn, (std::vector<bool> {true}));
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+/// A file of the script tabs that is larger than one part, with bytes that differ from part to part
+std::vector<uint8_t> ScriptFileOfParts(size_t parts, uint8_t first)
+{
+	std::vector<uint8_t> file(((parts - 1) * game_socket::k_MostEditorScriptPartBytes) + 100);
+	for (size_t i = 0; i < file.size(); ++i)
+	{
+		file[i] = static_cast<uint8_t>(first + (i * 7));
+	}
+	file.front() = first;
+	return file;
+}
+
+TEST_F(LockstepTest, EveryComputerHasTheScriptFilesOfTheEditorAtTheTurnOfTheirUse)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	using Kind = game_socket::EditorScriptFile::Kind;
+	// A program of three parts, the source of a script and a land script
+	const auto program = ScriptFileOfParts(3, 'P');
+	const std::string source = "begin script X\nend script X\n";
+	const std::string land = "VERSION(2.0)\n";
+	const auto bytesOf = [](const std::string& text) { return std::vector<uint8_t>(text.begin(), text.end()); };
+	ASSERT_TRUE(alice.session.SendEditorScriptFile(Kind::Program, program));
+	ASSERT_TRUE(alice.session.SendEditorScriptFile(Kind::Source, bytesOf(source)));
+	ASSERT_TRUE(alice.session.SendEditorScriptFile(Kind::LandScript, bytesOf(land)));
+	alice.session.Send(
+	    EditorScriptProgram {.use = EditorScriptProgram::Use::Open, .file = openblack::editor::mind_loads::HashOf(program)});
+	alice.session.Send(EditorScriptProgram {
+	    .use = EditorScriptProgram::Use::Compile, .file = openblack::editor::mind_loads::HashOf(bytesOf(source)), .script = 4});
+	alice.session.Send(
+	    EditorLandScript {.act = EditorLandScript::Act::Open, .file = openblack::editor::mind_loads::HashOf(bytesOf(land))});
+	alice.session.Send(EditorScript {.act = EditorScript::Act::HoldAll});
+	Frames({&alice, &bob}, 6);
+	const auto& commands = host->Seats()[0].commands;
+	EXPECT_EQ(commands.count(static_cast<uint8_t>(turn_codec::CommandTag::EditorScriptProgram)), 1u);
+	EXPECT_EQ(commands.at(static_cast<uint8_t>(turn_codec::CommandTag::EditorScriptProgram)), 2u);
+	EXPECT_EQ(commands.at(static_cast<uint8_t>(turn_codec::CommandTag::EditorLandScript)), 1u);
+	EXPECT_EQ(commands.at(static_cast<uint8_t>(turn_codec::CommandTag::EditorScript)), 1u);
+	// The server, the sender and the other player had each file at the turn of its use
+	const std::vector<bool> all {true, true, true};
+	EXPECT_EQ(serverWorld.scriptFilesAtTurn, all);
+	EXPECT_EQ(alice.world.scriptFilesAtTurn, all);
+	EXPECT_EQ(bob.world.scriptFilesAtTurn, all);
+	const auto kept =
+	    bob.session.EditorScriptFile(static_cast<uint8_t>(Kind::Program), openblack::editor::mind_loads::HashOf(program));
+	EXPECT_EQ(std::vector<uint8_t>(kept.begin(), kept.end()), program);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	EXPECT_EQ(host->RefusedEditorValues(), 0u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheScriptFilesAndActsOnlyFromTheEditorAndOnlyForAKeptFile)
+{
+	MakeHost(2, 5LL * 60 * 1'000'000, 7, false, false, {},
+	         [](std::span<const uint8_t> data) { return !data.empty() && data.front() == 'P'; });
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	using Kind = game_socket::EditorScriptFile::Kind;
+	const auto program = ScriptFileOfParts(2, 'P');
+	const auto bad = ScriptFileOfParts(2, 'X');
+	const auto hash = openblack::editor::mind_loads::HashOf(program);
+	const auto badHash = openblack::editor::mind_loads::HashOf(bad);
+	// A player with no editor claim sends a file of two parts, a change of the program and an act
+	ASSERT_TRUE(bob.session.SendEditorScriptFile(Kind::Program, program));
+	bob.session.Send(EditorScriptProgram {.use = EditorScriptProgram::Use::Open, .file = hash});
+	bob.session.Send(EditorScript {.act = EditorScript::Act::HoldAll});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 3u);
+	EXPECT_TRUE(host->EditorScriptFile(static_cast<uint8_t>(Kind::Program), hash).empty());
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	// The editor sends a program that does not read, a change that uses it, and an act with a bad value
+	ASSERT_TRUE(alice.session.SendEditorScriptFile(Kind::Program, bad));
+	alice.session.Send(EditorScriptProgram {.use = EditorScriptProgram::Use::Open, .file = badHash});
+	alice.session.Send(EditorScript {.act = EditorScript::Act::Breakpoint, .index = 2});
+	alice.session.Send(EditorLandScript {.act = EditorLandScript::Act::Open, .file = badHash});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorValues(), 4u);
+	EXPECT_TRUE(alice.session.EditorScriptFile(static_cast<uint8_t>(Kind::Program), badHash).empty());
+	const auto& commands = host->Seats()[0].commands;
+	EXPECT_EQ(commands.count(static_cast<uint8_t>(turn_codec::CommandTag::EditorScriptProgram)), 0u);
+	EXPECT_EQ(commands.count(static_cast<uint8_t>(turn_codec::CommandTag::EditorScript)), 0u);
+	EXPECT_EQ(commands.count(static_cast<uint8_t>(turn_codec::CommandTag::EditorLandScript)), 0u);
+	EXPECT_TRUE(serverWorld.scriptFilesAtTurn.empty());
+	// The program of the game uses no file, so the server takes it
+	alice.session.Send(EditorScriptProgram {.use = EditorScriptProgram::Use::GamesProgram});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(commands.count(static_cast<uint8_t>(turn_codec::CommandTag::EditorScriptProgram)), 1u);
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+}
+
+TEST_F(LockstepTest, APlayerWhoComesBackGetsTheScriptFilesBeforeTheTurnsThatItMissed)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	bob.Frame();
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Reconnecting);
+	// The editor opens a program of two parts while the other player is away
+	const auto program = ScriptFileOfParts(2, 'P');
+	const auto hash = openblack::editor::mind_loads::HashOf(program);
+	ASSERT_TRUE(alice.session.SendEditorScriptFile(game_socket::EditorScriptFile::Kind::Program, program));
+	alice.session.Send(EditorScriptProgram {.use = EditorScriptProgram::Use::Open, .file = hash});
+	Frames({&alice}, 10);
+	ASSERT_EQ(alice.world.scriptFilesAtTurn, (std::vector<bool> {true}));
+	Frames({&alice, &bob}, 10);
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	// The kept turn with the change came after the file
+	EXPECT_EQ(bob.world.scriptFilesAtTurn, (std::vector<bool> {true}));
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 

@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "Debug/FileBrowser.h"
+#include "Editor/EditorScriptActs.h"
 #include "Editor/Scripts/ScriptModel.h"
 
 struct MemoryEditor;
@@ -39,7 +40,8 @@ namespace openblack::editor
 /// - the side tabs show the script's details and starting it, the running tasks with their stacks and variables and
 ///   holding, stepping and continuing them, the global variables to change in place, the natives with which openblack
 ///   has written, and the program's data
-/// Scripts start through the virtual machine's own way of starting them, as the game starts them.
+/// Scripts start through the virtual machine's own way of starting them, as the game starts them. In a network game each
+/// act and each change of the program is a command of the turns, so every computer does it at the same turn.
 class ScriptsPanel
 {
 public:
@@ -70,6 +72,12 @@ private:
 	void DrawLoading(lhvm::LHVM& vm) noexcept;
 	/// Loads a compiled script program into the machine in place of the program that it has
 	void LoadProgram(lhvm::LHVM& vm, const std::filesystem::path& path) noexcept;
+	/// Does an act on the script machine: at once in a game alone, or at the next turn in a network game. Gives what the
+	/// act did in a game alone, and none in a network game.
+	std::optional<script_acts::ActResult> Act(const player_commands::EditorScript& act) noexcept;
+	/// Sends a change of the program in a network game, after its file. Gives the text for the panel.
+	[[nodiscard]] static std::string SendProgram(player_commands::EditorScriptProgram change,
+	                                             std::span<const uint8_t> file) noexcept;
 	void Refresh(const lhvm::LHVM& vm, const scripts::Program& program) noexcept;
 	void DrawBrowser(const lhvm::LHVM& vm, const scripts::Program& program) noexcept;
 	void DrawCode(lhvm::LHVM& vm, const scripts::Program& program) noexcept;
@@ -128,6 +136,8 @@ private:
 	bool _editingSource {false};
 	std::string _sourceText;
 	std::vector<std::string> _compileMessages;
+	/// What the last act of a network game did: it waits for the next turn
+	std::string _actMessage;
 };
 
 } // namespace openblack::editor

@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <string>
@@ -17,6 +19,7 @@
 #include <vector>
 
 #include <GameSocket.h>
+#include <LHVM.h>
 #include <MindFile.h>
 #include <fmt/format.h>
 #include <glm/vec2.hpp>
@@ -37,6 +40,8 @@
 #include "Editor/EditorLandEdits.h"
 #include "Editor/EditorMindLoads.h"
 #include "Editor/EditorNetworkEdits.h"
+#include "Editor/EditorScriptActs.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
 #include "Online/NetworkSession.h"
@@ -599,6 +604,319 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		                           {"use", load.use == player_commands::EditorMindLoad::Use::Spawn ? "spawn" : "load"},
 		                           {"species", static_cast<int>(load.spawn.species)}});
 	});
+	auto scriptAct = Query(
+	    "script",
+	    "Does an act of the Scripts tab on the script machine, as the tab does it: at once in a game alone, or as a command "
+	    "of the turns in a network game, which each computer does at the same turn and the game server takes only from a "
+	    "player with the editor claim. Acts: start, stop_script, hold_all, continue_all, step, continue, hold, stop, "
+	    "breakpoint, remove_breakpoints, set_global, set_local. force sends it also when the editor of this computer is "
+	    "refused.",
+	    {{.name = "act", .type = "string", .description = "The act", .required = true},
+	     {.name = "id", .type = "integer", .description = "The script, the task or the global of the act", .required = false},
+	     {.name = "script",
+	      .type = "string",
+	      .description = "The name of the script of a start or a stop_script, in place of the id",
+	      .required = false},
+	     {.name = "address", .type = "integer", .description = "The address of a breakpoint", .required = false},
+	     {.name = "index",
+	      .type = "integer",
+	      .description = "The local of set_local, or 1 (on) or 0 (off) for a breakpoint",
+	      .required = false},
+	     {.name = "value", .type = "number", .description = "The new value of a variable, as a number", .required = false},
+	     {.name = "parameters", .type = "array", .description = "The numbers that a start gives", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	scriptAct.writes = true;
+	provider->Add(std::move(scriptAct), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		using Act = player_commands::EditorScript::Act;
+		constexpr std::array<std::pair<std::string_view, Act>, 12> k_Acts {{
+		    {"start", Act::Start},
+		    {"stop_script", Act::StopScript},
+		    {"hold_all", Act::HoldAll},
+		    {"continue_all", Act::ContinueAll},
+		    {"step", Act::StepTask},
+		    {"continue", Act::ContinueTask},
+		    {"hold", Act::HoldTask},
+		    {"stop", Act::StopTask},
+		    {"breakpoint", Act::Breakpoint},
+		    {"remove_breakpoints", Act::RemoveBreakpoints},
+		    {"set_global", Act::SetGlobal},
+		    {"set_local", Act::SetTaskVariable},
+		}};
+		const auto actParam = context.params.find("act");
+		const auto found =
+		    actParam != context.params.end() && actParam->is_string()
+		        ? std::ranges::find(k_Acts, actParam->get<std::string>(), &std::pair<std::string_view, Act>::first)
+		        : k_Acts.end();
+		if (found == k_Acts.end())
+		{
+			return QueryResult::Error("editor.script needs an act that the Scripts tab knows");
+		}
+		player_commands::EditorScript act {.act = found->second};
+		act.id = static_cast<uint32_t>(NumberParam(context.params, "id").value_or(0.0f));
+		if (const auto name = context.params.find("script"); name != context.params.end() && name->is_string())
+		{
+			if (!Locator::vm::has_value())
+			{
+				return QueryResult::Error("the game has no script machine");
+			}
+			const auto& scripts = Locator::vm::value().GetScripts();
+			const auto script = std::ranges::find(scripts, name->get<std::string>(), &lhvm::VMScript::name);
+			if (script == scripts.end())
+			{
+				return QueryResult::Error("the program has no script with the name");
+			}
+			act.id = script->scriptId;
+		}
+		if (const auto address = context.params.find("address"); address != context.params.end() && address->is_number())
+		{
+			act.address = address->get<uint32_t>();
+		}
+		if (const auto index = context.params.find("index"); index != context.params.end() && index->is_number())
+		{
+			act.index = index->get<uint16_t>();
+		}
+		if (const auto value = NumberParam(context.params, "value"))
+		{
+			act.value = std::bit_cast<uint32_t>(*value);
+		}
+		if (const auto parameters = context.params.find("parameters");
+		    parameters != context.params.end() && parameters->is_array())
+		{
+			for (const auto& parameter : *parameters)
+			{
+				if (!parameter.is_number())
+				{
+					return QueryResult::Error("each parameter is a number");
+				}
+				act.parameters.push_back(parameter.get<float>());
+			}
+		}
+		if (const auto refusal = editor::script_acts::ScriptActRefusal(act))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		if (developer_tools::NetworkSessionLive())
+		{
+			if (!Locator::playerCommandSystem::has_value())
+			{
+				return QueryResult::Error("the game has no commands");
+			}
+			Locator::playerCommandSystem::value().Submit(act);
+			return QueryResult::Value({{"sent", true}});
+		}
+		const auto result = editor::script_acts::RunScriptAct(act);
+		return QueryResult::Value({{"sent", false}, {"done", result.done}, {"refusal", result.refusal}, {"task", result.task}});
+	});
+	auto landScriptAct =
+	    Query("land_script",
+	          "Does an act of the Land script tab on its stepper, as the tab does it: at once in a game alone, or as a command "
+	          "of the "
+	          "turns in a network game. Acts: loaded_land, open (with a path: the text goes to every computer first), step, "
+	          "continue, run_to, skip, restart, breakpoint. force sends it also when the editor of this computer is refused.",
+	          {{.name = "act", .type = "string", .description = "The act", .required = true},
+	           {.name = "command", .type = "integer", .description = "The command of run_to and breakpoint", .required = false},
+	           {.name = "path", .type = "string", .description = "The land script file of an open", .required = false},
+	           {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	landScriptAct.writes = true;
+	provider->Add(std::move(landScriptAct), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		using Act = player_commands::EditorLandScript::Act;
+		constexpr std::array<std::pair<std::string_view, Act>, 8> k_Acts {{
+		    {"loaded_land", Act::LoadedLand},
+		    {"open", Act::Open},
+		    {"step", Act::Step},
+		    {"continue", Act::Continue},
+		    {"run_to", Act::RunTo},
+		    {"skip", Act::Skip},
+		    {"restart", Act::Restart},
+		    {"breakpoint", Act::Breakpoint},
+		}};
+		const auto actParam = context.params.find("act");
+		const auto found =
+		    actParam != context.params.end() && actParam->is_string()
+		        ? std::ranges::find(k_Acts, actParam->get<std::string>(), &std::pair<std::string_view, Act>::first)
+		        : k_Acts.end();
+		if (found == k_Acts.end() || !Locator::editorSystem::has_value())
+		{
+			return QueryResult::Error("editor.land_script needs an act that the Land script tab knows");
+		}
+		player_commands::EditorLandScript act {.act = found->second};
+		act.command = static_cast<uint32_t>(NumberParam(context.params, "command").value_or(0.0f));
+		std::string text;
+		if (act.act == Act::Open)
+		{
+			const auto path = context.params.find("path");
+			const auto read = path != context.params.end() && path->is_string()
+			                      ? editor::script_acts::LandScriptText(path->get<std::string>())
+			                      : std::nullopt;
+			if (!read.has_value())
+			{
+				return QueryResult::Error("editor.land_script open needs the path of a land script that reads");
+			}
+			text = *read;
+		}
+		const std::span bytes(reinterpret_cast<const uint8_t*>(text.data()), text.size());
+		if (developer_tools::NetworkSessionLive())
+		{
+			if (!Locator::playerCommandSystem::has_value())
+			{
+				return QueryResult::Error("the game has no commands");
+			}
+			if (act.act == Act::Open)
+			{
+				const auto hash = editor::script_acts::SendFile(game_socket::EditorScriptFile::Kind::LandScript, bytes);
+				if (!hash.has_value())
+				{
+					return QueryResult::Error("the game socket is not open: the land script did not go");
+				}
+				act.file = *hash;
+			}
+			Locator::playerCommandSystem::value().Submit(act);
+			return QueryResult::Value({{"sent", true}, {"hash", fmt::format("{:016x}", act.file)}});
+		}
+		auto& run = Locator::editorSystem::value().GetLandScriptRun();
+		const auto result =
+		    act.act == Act::Open
+		        ? (editor::script_acts::ReadLandScript(run, "the file of the inspector", text),
+		           editor::script_acts::LandScriptResult {.done = true})
+		        : editor::script_acts::ApplyLandScript(act, {}, run, editor::script_acts::LocatorLandScriptWorld());
+		return QueryResult::Value(
+		    {{"sent", false}, {"done", result.done}, {"refusal", result.refusal}, {"commands", result.commands}});
+	});
+	auto scriptProgram = Query(
+	    "script_program",
+	    "Changes the program of the script machine, as the Scripts tab does it: compile (the text of a source file into the "
+	    "script), open (a compiled .chl) or games (the program of the game again). In a network game the file goes to every "
+	    "computer first, and each computer does the change at the same turn. force sends it also when the editor of this "
+	    "computer is refused.",
+	    {{.name = "use", .type = "string", .description = "compile, open or games", .required = true},
+	     {.name = "path", .type = "string", .description = "The source file or the program file", .required = false},
+	     {.name = "script", .type = "string", .description = "The name of the script of a compile", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	scriptProgram.writes = true;
+	provider->Add(std::move(scriptProgram), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		using Use = player_commands::EditorScriptProgram::Use;
+		const auto useParam = context.params.find("use");
+		const auto useName = useParam != context.params.end() && useParam->is_string() ? useParam->get<std::string>() : "";
+		std::optional<Use> use;
+		if (useName == "compile")
+		{
+			use = Use::Compile;
+		}
+		else if (useName == "open")
+		{
+			use = Use::Open;
+		}
+		else if (useName == "games")
+		{
+			use = Use::GamesProgram;
+		}
+		if (!use.has_value() || !Locator::vm::has_value() || !Locator::filesystem::has_value())
+		{
+			return QueryResult::Error("editor.script_program needs a use: compile, open or games");
+		}
+		player_commands::EditorScriptProgram change {.use = *use};
+		std::vector<uint8_t> file;
+		if (*use != Use::GamesProgram)
+		{
+			const auto path = context.params.find("path");
+			if (path == context.params.end() || !path->is_string())
+			{
+				return QueryResult::Error("editor.script_program needs the path of a file");
+			}
+			try
+			{
+				file = Locator::filesystem::value().ReadAll(path->get<std::string>());
+			}
+			catch (const std::exception& error)
+			{
+				return QueryResult::Error(fmt::format("the file does not read: {}", error.what()));
+			}
+			if (*use == Use::Open && !editor::script_acts::ReadsProgram(file))
+			{
+				return QueryResult::Error("the program does not read");
+			}
+		}
+		if (*use == Use::Compile)
+		{
+			const auto name = context.params.find("script");
+			const auto& scripts = Locator::vm::value().GetScripts();
+			const auto script = name != context.params.end() && name->is_string()
+			                        ? std::ranges::find(scripts, name->get<std::string>(), &lhvm::VMScript::name)
+			                        : scripts.end();
+			if (script == scripts.end())
+			{
+				return QueryResult::Error("editor.script_program compile needs the name of a script of the program");
+			}
+			change.script = script->scriptId;
+		}
+		if (developer_tools::NetworkSessionLive())
+		{
+			if (!Locator::playerCommandSystem::has_value())
+			{
+				return QueryResult::Error("the game has no commands");
+			}
+			if (const auto kind = editor::script_acts::FileKindOf(change))
+			{
+				const auto hash = editor::script_acts::SendFile(*kind, file);
+				if (!hash.has_value())
+				{
+					return QueryResult::Error("the game socket is not open, or the file is too large: the file did not go");
+				}
+				change.file = *hash;
+			}
+			Locator::playerCommandSystem::value().Submit(change);
+			return QueryResult::Value({{"sent", true}, {"hash", fmt::format("{:016x}", change.file)}, {"bytes", file.size()}});
+		}
+		const auto result = editor::script_acts::RunProgram(change, file);
+		return QueryResult::Value({{"sent", false}, {"done", result.done}, {"refusal", result.refusal}});
+	});
+	provider->Add(Query("script_state",
+	                    "What the script tabs of the editor show and every computer of a network game must have the same: the "
+	                    "tasks with their scripts and whether they are held, the breakpoints, the count of the instructions, "
+	                    "and the land script of the stepper with its next command"),
+	              [](const QueryContext& /*context*/) {
+		              auto tasks = Json::array();
+		              auto breakpoints = Json::array();
+		              size_t instructions = 0;
+		              if (Locator::vm::has_value())
+		              {
+			              const auto& vm = Locator::vm::value();
+			              for (const auto& [id, task] : vm.GetTasks())
+			              {
+				              tasks.push_back({{"id", id}, {"script", task.name}, {"held", vm.IsTaskHeld(id)}});
+			              }
+			              for (const auto address : vm.GetBreakpoints())
+			              {
+				              breakpoints.push_back(address);
+			              }
+			              instructions = vm.GetInstructions().size();
+		              }
+		              Json land = nullptr;
+		              if (Locator::editorSystem::has_value())
+		              {
+			              const auto& run = Locator::editorSystem::value().GetLandScriptRun();
+			              const auto next = run.stepper.Next();
+			              land = {{"name", run.name},
+			                      {"commands", run.read.commands.size()},
+			                      {"next", next.has_value() ? Json(*next) : Json(nullptr)}};
+		              }
+		              return QueryResult::Value({{"tasks", std::move(tasks)},
+		                                         {"breakpoints", std::move(breakpoints)},
+		                                         {"instructions", instructions},
+		                                         {"land_script", std::move(land)}});
+	              });
 	auto landStroke = Query(
 	    "land_stroke",
 	    "Sends a stroke of the land brush as a command of the turns, as the land tools send it in a network game: each "

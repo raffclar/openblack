@@ -204,6 +204,10 @@ std::vector<Action> EachCommand()
 	                              .alignment = 0.5f,
 	                              .fatness = 0.75f,
 	                              .strength = 0.25f}},
+	    EditorScript {.act = EditorScript::Act::Start, .id = 12, .parameters = {1.5f, -2.0f}},
+	    EditorScript {.act = EditorScript::Act::SetGlobal, .id = 40, .value = 0x3F800000U},
+	    EditorLandScript {.act = EditorLandScript::Act::Open, .file = 0x1122334455667788ULL},
+	    EditorScriptProgram {.use = EditorScriptProgram::Use::Compile, .file = 0x8877665544332211ULL, .script = 9},
 	};
 }
 
@@ -244,7 +248,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 65)
+	switch (bits(random) % 68)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -543,6 +547,28 @@ Action RandomAction(std::mt19937& random)
 		                                 .alignment = number(),
 		                                 .fatness = number(),
 		                                 .strength = number()}};
+	case 65:
+	{
+		EditorScript script {.act = static_cast<EditorScript::Act>(bits(random) % 12),
+		                     .id = bits(random),
+		                     .address = bits(random),
+		                     .index = static_cast<uint16_t>(bits(random)),
+		                     .value = bits(random)};
+		script.parameters.resize(bits(random) % (k_MostEditorScriptParameters + 1));
+		for (auto& parameter : script.parameters)
+		{
+			parameter = number();
+		}
+		return script;
+	}
+	case 66:
+		return EditorLandScript {.act = static_cast<EditorLandScript::Act>(bits(random) % 8),
+		                         .command = bits(random),
+		                         .file = (static_cast<uint64_t>(bits(random)) << 32U) | bits(random)};
+	case 67:
+		return EditorScriptProgram {.use = static_cast<EditorScriptProgram::Use>(bits(random) % 3),
+		                            .file = (static_cast<uint64_t>(bits(random)) << 32U) | bits(random),
+		                            .script = bits(random)};
 	default:
 		return PlayerLeft {};
 	}
@@ -605,9 +631,9 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5, 9, 5, 53, 5,  10, 18, 5, 49, 17, 5,  5,  5,  9, 12, 1,  18, 11, 5,  19, 15,
-	                                 7,  5, 1, 2, 1,  61, 5,  2,  1, 13, 10, 18, 1,  58, 1, 5,  51, 5,  16, 7,  1,  1,
-	                                 13, 1, 2, 9, 13, 1,  1,  8,  1, 5,  37, 3,  10, 34, 2, 15, 78, 20, 36, 107, 14, 85};
+	const std::vector<size_t> sizes {2,  5, 9, 5,  53, 5, 10, 18, 5,  49, 17, 5,  5,  5,  9,  12,  1,  18, 11, 5,  19, 15, 7, 5,
+	                                 1,  2, 1, 61, 5,  2, 1,  13, 10, 18, 1,  58, 1,  5,  51, 5,   16, 7,  1,  1,  13, 1,  2, 9,
+	                                 13, 1, 1, 8,  1,  5, 37, 3,  10, 34, 2,  15, 78, 20, 36, 107, 14, 85, 25, 17, 14, 14};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -683,6 +709,19 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		if (std::holds_alternative<EditorMindLoad>(commands[i]))
 		{
 			tag = 67;
+		}
+		// The acts of the script tabs of the editor have the tags 70, 71 and 72. The tags 68 and 69 stay free.
+		if (std::holds_alternative<EditorScript>(commands[i]))
+		{
+			tag = 70;
+		}
+		if (std::holds_alternative<EditorLandScript>(commands[i]))
+		{
+			tag = 71;
+		}
+		if (std::holds_alternative<EditorScriptProgram>(commands[i]))
+		{
+			tag = 72;
 		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
@@ -1633,6 +1672,47 @@ TEST(TurnCodec, TheDecoderRefusesAMindFileOfNoUseOrABadNewCreature)
 	made[k_Species] = 2;
 	made.pop_back();
 	EXPECT_EQ(Decode(made).error, DecodeError::Truncated);
+}
+
+TEST(TurnCodec, TheDecoderRefusesAScriptActOfNoKindOrWithTooManyParameters)
+{
+	const auto encode = [](Action action) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {std::move(action)}}});
+	};
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_Act = 10;
+	constexpr size_t k_Count = k_Act + 1 + 4 + 4 + 2 + 4;
+	const EditorScript start {.act = EditorScript::Act::Start, .id = 3, .parameters = {1.0f}};
+	auto bytes = encode(start);
+	ASSERT_EQ(bytes.size(), k_Count + 1 + 4);
+	ASSERT_EQ(Decode(bytes).error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorScript>(std::get<CommandBlock>(*Decode(bytes).frame).actions.front()), start);
+	// The change of a local of a task is the last act
+	bytes[k_Act] = 12;
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+	bytes[k_Act] = 0;
+	bytes[k_Count] = static_cast<uint8_t>(k_MostEditorScriptParameters + 1);
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+	// The count of the parameters is more than the bytes give
+	bytes[k_Count] = 2;
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Truncated);
+
+	auto land = encode(EditorLandScript {.act = EditorLandScript::Act::Breakpoint, .command = 4});
+	ASSERT_EQ(land.size(), k_Act + 13);
+	ASSERT_EQ(Decode(land).error, DecodeError::None);
+	// The breakpoint is the last act of the land script
+	land[k_Act] = 8;
+	EXPECT_EQ(Decode(land).error, DecodeError::Value);
+	land[k_Act] = 0;
+	land.pop_back();
+	EXPECT_EQ(Decode(land).error, DecodeError::Truncated);
+
+	auto program = encode(EditorScriptProgram {.use = EditorScriptProgram::Use::GamesProgram});
+	ASSERT_EQ(program.size(), k_Act + 13);
+	ASSERT_EQ(Decode(program).error, DecodeError::None);
+	// The program of the game is the last use
+	program[k_Act] = 3;
+	EXPECT_EQ(Decode(program).error, DecodeError::Value);
 }
 
 TEST(TurnCodec, TheDecoderRefusesAnEditOfAVillagerWithNoSuchField)

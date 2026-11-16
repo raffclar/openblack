@@ -63,11 +63,15 @@
 ///   size, the alignment, the fatness and the strength (f32).
 /// - A mind file of the editor: the use (u8), the hash of the file (u64), then for a load the creature, or for a new
 ///   creature each field as a new creature of the editor has it.
+/// - An act of the Scripts tab of the editor: the act (u8), the id (u32), the address (u32), the index (u16), the bits of
+///   the value (u32), the count of the parameters (u8), then each parameter (f32).
+/// - An act of the Land script tab of the editor: the act (u8), the command (u32), then the hash of the file (u64).
+/// - A change of the program of the editor: the use (u8), the hash of the file (u64), then the script (u32).
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 41;
+inline constexpr uint8_t k_Version = 42;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -151,6 +155,9 @@ enum class CommandTag : uint8_t
 	EditorPath = 63,
 	EditorRemake = 65,
 	EditorMindLoad = 67,
+	EditorScript = 70,
+	EditorLandScript = 71,
+	EditorScriptProgram = 72,
 };
 
 /// The sizes of the parts of the frames, in bytes

@@ -28,6 +28,7 @@
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
 #include "Editor/EditorMindLoads.h"
+#include "Editor/EditorScriptFiles.h"
 #include "Online/GameDataPrint.h"
 #include "Online/RoomClock.h"
 #include "Server/DesyncCapture.h"
@@ -90,6 +91,9 @@ struct HostSettings
 	/// Whether the server takes a mind file of the editor (editor.mind_file): each computer must read it as the creature
 	/// tools read a file. With none, the server takes every file that is not empty.
 	std::function<bool(std::span<const uint8_t> data)> readsMindFile;
+	/// Whether the server takes a compiled script program of the editor (editor.script_file): each computer must read it
+	/// as the script machine reads a program. With none, the server takes every program that is not empty.
+	std::function<bool(std::span<const uint8_t> data)> readsScriptProgram;
 	/// The count of the countries of the land of the server's world, which a paint of the editor must stay under. With
 	/// none, or when it gives none, the server checks only the most countries that a cell keeps.
 	std::function<std::optional<int>()> landCountries;
@@ -294,6 +298,11 @@ public:
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
 	/// The mind files of the editor that the server keeps for its own world and sends to every player
 	[[nodiscard]] std::span<const uint8_t> EditorMindFile(uint64_t hash) const override { return _mindFiles.Find(hash); }
+	/// The files of the script tabs of the editor that the server keeps for its own world and sends to every player
+	[[nodiscard]] std::span<const uint8_t> EditorScriptFile(uint8_t kind, uint64_t hash) const override
+	{
+		return _scriptFiles.Find(static_cast<game_socket::EditorScriptFile::Kind>(kind), hash);
+	}
 	/// The checksum of the server's world after a turn. It goes to every client.
 	void TurnChecksum(uint32_t turn, uint64_t checksum);
 
@@ -374,6 +383,8 @@ private:
 		bool editor {false};
 		/// The client sent the print of its game data. The server takes only the first.
 		bool printed {false};
+		/// The parts of the file of the script tabs of the editor that the connection sends now
+		editor::script_files::PartAssembly scriptParts;
 	};
 
 	/// The most "sync.parts" frames of one connection that the server answers
@@ -467,6 +478,12 @@ private:
 	void EditorMindFileFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorMindFile& mind);
 	/// Sends each mind file of the editor that the server keeps to a player who comes back or joins, before the turns
 	void SendEditorMindFiles(ConnectionId connection);
+	/// A part of a file of the script tabs of the editor from a player. The server checks the claim and the whole file,
+	/// keeps it and sends it to every player before any turn that holds a command that uses it.
+	void EditorScriptFileFrom(ConnectionId connection, Peer& peer, const game_socket::EditorScriptFile& part);
+	/// Sends each file of the script tabs of the editor that the server keeps to a player who comes back or joins, before
+	/// the turns
+	void SendEditorScriptFiles(ConnectionId connection);
 	/// The gods are ready: the server asks the gods if they have the land
 	void QueryLands();
 	/// Every god has the land: the gods send their creature files
@@ -544,6 +561,8 @@ private:
 	std::map<uint8_t, float> _startAlignments;
 	/// The mind files of the editor that the players with the editor claim sent during the game
 	editor::mind_loads::MindFileStore _mindFiles;
+	/// The files of the script tabs of the editor that the players with the editor claim sent during the game
+	editor::script_files::FileStore _scriptFiles;
 	bool _pausedBefore {false};
 	online::room_clock::State _roomClock;
 	uint32_t _refusedTimeRequests {0};
