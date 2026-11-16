@@ -28,6 +28,7 @@
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
 #include "Online/GameDataPrint.h"
+#include "Online/RoomClock.h"
 #include "Server/DesyncCapture.h"
 #include "Server/GameLifetime.h"
 #include "Server/LobbyGame.h"
@@ -298,6 +299,10 @@ public:
 	[[nodiscard]] bool Starting() const { return _startStep != StartStep::None; }
 	/// True when the game started and no god's player is connected
 	[[nodiscard]] bool Paused() const;
+	/// The clock of the room: the pause, the steps and the speed that the editor of a player asked for
+	[[nodiscard]] const online::room_clock::State& RoomClock() const { return _roomClock; }
+	/// The requests of the clock of the room that the server refused
+	[[nodiscard]] uint32_t RefusedTimeRequests() const { return _refusedTimeRequests; }
 	/// True when the game started and every god left or was defeated: no player can come back. A room with no human god
 	/// is over when no observer is connected and no observer can come back.
 	[[nodiscard]] bool GameOver() const;
@@ -502,6 +507,14 @@ private:
 	void UpdateLoadWait();
 	/// Sends the wait for the loads to one connection, while the turns wait
 	void SendLoadWait(ConnectionId connection);
+	/// A request of the editor to pause, play, step or change the speed of the clock of the room
+	void TimeFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorTime& request);
+	/// A player who joins or comes back gets the clock of the room
+	void SendRoomClock(ConnectionId connection);
+	/// The frame of the clock of the room after a change
+	[[nodiscard]] game_socket::GameTime RoomClockFrame(game_socket::TimeAct act, std::string by) const;
+	/// True while a player with the editor claim is in the game, or can come back
+	[[nodiscard]] bool AnyEditorInGame() const;
 	enum class StartStep : uint8_t
 	{
 		None,
@@ -519,6 +532,8 @@ private:
 	/// The alignments that the gods sent with their creature files, by god slot
 	std::map<uint8_t, float> _startAlignments;
 	bool _pausedBefore {false};
+	online::room_clock::State _roomClock;
+	uint32_t _refusedTimeRequests {0};
 	/// When the last god's player of this process went and a god started to wait for its player. None while a god's
 	/// player is connected.
 	std::optional<int64_t> _allGoneSince;

@@ -25,6 +25,7 @@
 
 #include "Online/GameDataPrint.h"
 #include "Online/JoinRetryRule.h"
+#include "Online/RoomClock.h"
 #include "Online/Sha256.h"
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
@@ -137,6 +138,8 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_loadedDueAt.reset();
 	_loadWait.reset();
 	_commandsInLoadWait = 0;
+	_roomClock.reset();
+	_timeNotices.clear();
 	// A new session counts its blocks of commands from 0
 	_sent.Reset();
 	_joinStartedAt = _clock();
@@ -272,6 +275,15 @@ void NetworkSession::StopGame()
 	{
 		_stopAsked = true;
 		_stream->SendText(game_socket::ToJson(game_socket::StopRequest {}));
+	}
+}
+
+void NetworkSession::RequestTime(const game_socket::EditorTime& request)
+{
+	// A request that cannot go now does not wait: the editor sends it again
+	if (_stream && _stream->IsOpen())
+	{
+		_stream->SendText(game_socket::ToJson(request));
 	}
 }
 
@@ -432,6 +444,21 @@ void NetworkSession::Text(std::string_view text)
 	{
 		_observersLeft.push_back(left->name);
 		_log->Write(spdlog::level::info, fmt::format("The observer {} left the game", left->name));
+	}
+	else if (const auto* time = std::get_if<game_socket::GameTime>(&*frame))
+	{
+		_roomClock = *time;
+		++_roomClockChanges;
+		if (auto notice = online::room_clock::NoticeOf(*time); notice.has_value())
+		{
+			_timeNotices.push_back(std::move(*notice));
+		}
+		_log->Write(spdlog::level::info,
+		            fmt::format("The clock of the room after turn {}: {}, the time of a turn {:.2f}{}", time->turn,
+		                        time->paused ? "paused" : "turns", time->speed,
+		                        time->by.empty()
+		                            ? std::string()
+		                            : fmt::format(" ({} by {})", game_socket::TimeActName(time->act), Printable(time->by))));
 	}
 	else if (const auto* commands = std::get_if<game_socket::CommandRefused>(&*frame))
 	{

@@ -2568,6 +2568,29 @@
   "writes": true
  },
  {
+  "description": "The clock of the room of a network game: with no act, the clock that the game server sent last and the turn of this computer. With an act, asks the game server to pause, play, step or change the speed of the clock for every player, as the play, step and speed of the editor do in a network game. The server takes the request only from a player with the editor claim, a speed from 0.1 to 10, and a step only while the room is paused. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "pause, play, step or speed",
+    "name": "act",
+    "type": "string"
+   },
+   {
+    "description": "With the act speed: the time of a turn as a multiple of a tenth of a second",
+    "name": "speed",
+    "type": "number"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.time",
+  "writes": true
+ },
+ {
   "description": "Sends the skip to a land of the story, 2 to 5, as a command of the turns, as the cheats tab of the editor does. The story changes the land as at the end of the land before. Only a game of the story on this computer alone does it. The skip to land 1 starts a new game, so only the editor does it.",
   "kind": "object",
   "parameters": [

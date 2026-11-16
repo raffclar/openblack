@@ -103,6 +103,8 @@ private:
 
 	[[nodiscard]] std::optional<EditorContext> Context() noexcept;
 	void DrawToolbar(EditorContext& context) noexcept;
+	/// The play, step and speed of the clock of the room in a network game
+	void DrawRoomClock() noexcept;
 	void DrawBottom(EditorContext& context) noexcept;
 	/// The debug cheats of the player of this computer, each one with a box to turn it on or off
 	void DrawCheats() noexcept;
@@ -187,6 +189,8 @@ private:
 	std::string_view _dragAction;
 	/// What the last undo or redo did
 	std::string _historyNote;
+	/// In a network game, the speed of the room while the slider moves. The request goes one time, when the slider lets go.
+	std::optional<float> _heldRoomSpeed;
 	std::optional<glm::vec2> _placeAt;
 	Drag _drag {Drag::None};
 	glm::ivec2 _dragLast {0};

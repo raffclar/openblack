@@ -22,7 +22,9 @@
 #include "Common/DeveloperToolsGate.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorEntities.h"
@@ -30,6 +32,7 @@
 #include "Editor/EditorNetworkEdits.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
+#include "Online/NetworkSession.h"
 #include "Story/StoryLandSkip.h"
 
 using namespace openblack;
@@ -546,6 +549,59 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		}
 		const auto cheatOf = static_cast<debug_cheats::Cheat>(found - debug_cheats::k_CheatNames.begin());
 		editor::SendDebugCheat(cheatOf, BoolParam(context.params, "on", true));
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto time = Query(
+	    "time",
+	    "The clock of the room of a network game: with no act, the clock that the game server sent last and the turn of "
+	    "this computer. With an act, asks the game server to pause, play, step or change the speed of the clock for every "
+	    "player, as the play, step and speed of the editor do in a network game. The server takes the request only from a "
+	    "player with the editor claim, a speed from 0.1 to 10, and a step only while the room is paused. force sends it also "
+	    "when the editor of this computer is refused.",
+	    {{.name = "act", .type = "string", .description = "pause, play, step or speed", .required = false},
+	     {.name = "speed",
+	      .type = "number",
+	      .description = "With the act speed: the time of a turn as a multiple of a tenth of a second",
+	      .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	time.writes = true;
+	provider->Add(std::move(time), [](const QueryContext& context) {
+		if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
+		{
+			return QueryResult::Error("editor.time needs a network game");
+		}
+		const auto actParam = context.params.find("act");
+		if (actParam == context.params.end() || !actParam->is_string())
+		{
+			const auto& room = Locator::networkGame::value().Session()->RoomClock();
+			Json value {{"room", room.has_value()},
+			            {"turn", Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u},
+			            {"clock_speed", Locator::time::has_value() ? Locator::time::value().GetSpeed() : 1.0f}};
+			if (room.has_value())
+			{
+				value["paused"] = room->paused;
+				value["speed"] = room->speed;
+				value["act"] = std::string(game_socket::TimeActName(room->act));
+				value["by"] = room->by;
+				value["server_turn"] = room->turn;
+			}
+			return QueryResult::Value(std::move(value));
+		}
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto act = game_socket::TimeActFrom(actParam->get<std::string>());
+		if (!act.has_value())
+		{
+			return QueryResult::Error("editor.time needs the act pause, play, step or speed");
+		}
+		const auto speed = NumberParam(context.params, "speed");
+		if (*act == game_socket::TimeAct::Speed && !speed.has_value())
+		{
+			return QueryResult::Error("editor.time with the act speed needs a speed");
+		}
+		Locator::networkGame::value().RequestTime(game_socket::EditorTime {.act = *act, .speed = speed.value_or(1.0f)});
 		return QueryResult::Value({{"sent", true}});
 	});
 	auto landSkip =
