@@ -1383,16 +1383,16 @@ def editor_right_check(pids, client_logs, server_log, lobby, shots=None):
 
 def debug_menu_shots(pids, shots, name):
     """A screenshot of each client with the game's menu open, so that the picture shows the debug menu bar or its
-    absence. The menu closes again after the picture."""
+    absence. The Escape key opens the menu, as the player opens it (a network game refuses gui.open). The menu closes
+    again after the picture."""
     if not shots:
         return
     for pid in pids:
-        inspector_answer(pid, "gui.open", {"params": {"window": "menu"}})
-    time.sleep(1.5)
+        press_key(pid, "Escape", True)
+    time.sleep(1.0)
     editor_shots(pids, shots, name)
     for pid in pids:
-        inspector_answer(pid, "gui.close", {"params": {"window": "menu"}})
-    time.sleep(1.0)
+        press_key(pid, "Escape", True)
 
 
 def debugger_right_check(pids, client_logs, server_log, lobby, shots=None):
