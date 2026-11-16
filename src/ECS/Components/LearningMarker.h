@@ -32,6 +32,8 @@ struct LearningMarker
 	float milliseconds {0.0f};
 	/// The game turn that made it. It goes at the turn when its life is over, the same turn on every computer.
 	uint32_t madeTurn {0};
+	/// How many marks the same game turn made before it. With the turn, it gives the order in which the marks were made.
+	uint32_t madeIndex {0};
 };
 
 } // namespace openblack::ecs::components

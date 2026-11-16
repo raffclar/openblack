@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <span>
 #include <vector>
 
 #include <bgfx/bgfx.h>
@@ -95,7 +96,9 @@ Canvas::~Canvas() = default;
 void Canvas::StartBatch(const graphics::Texture2D* texture)
 {
 	const auto clip = ClipInPixels();
-	if (_batches.empty() || _batches.back().texture != texture || _batches.back().blend != _blend ||
+	// A part starts with a batch of its own
+	const size_t partStart = _partEnds.empty() ? 0 : _partEnds.back();
+	if (_batches.size() == partStart || _batches.back().texture != texture || _batches.back().blend != _blend ||
 	    _batches.back().alphaReference != _alphaReference || _batches.back().sortDepth != _sortDepth ||
 	    _batches.back().clip != clip || _batches.back().vertexCount + 6 > k_MaxBatchVertices)
 	{
@@ -114,6 +117,8 @@ void Canvas::Begin(glm::u16vec2 resolution)
 	_resolution = resolution;
 	_vertices.clear();
 	_batches.clear();
+	_partEnds.clear();
+	_submittedBatches = 0;
 	_blend = Blend::Alpha;
 	_alphaReference = 0;
 	_depth = 0.0f;
@@ -209,21 +214,50 @@ void Canvas::DrawLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour)
 	DrawQuad(span->first, span->last + 1, {0.0f, 0.0f}, {1.0f, 1.0f}, colour, nullptr);
 }
 
+std::array<float, 16> Canvas::Projection() const
+{
+	std::array<float, 16> projection {};
+	bx::mtxOrtho(projection.data(), 0.0f, static_cast<float>(_resolution.x), static_cast<float>(_resolution.y), 0.0f, 0.0f,
+	             1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
+	return projection;
+}
+
 void Canvas::End()
 {
 	const auto view = static_cast<bgfx::ViewId>(_view);
 	bgfx::setViewMode(view, bgfx::ViewMode::Sequential);
 	bgfx::setViewClear(view, BGFX_CLEAR_NONE);
 	bgfx::setViewRect(view, 0, 0, _resolution.x, _resolution.y);
-	std::array<float, 16> projection {};
-	bx::mtxOrtho(projection.data(), 0.0f, static_cast<float>(_resolution.x), static_cast<float>(_resolution.y), 0.0f, 0.0f,
-	             1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
+	const auto projection = Projection();
 	bgfx::setViewTransform(view, nullptr, projection.data());
 	bgfx::touch(view);
-	if (_vertices.empty())
+	SubmitBatchesBefore(_batches.size());
+}
+
+size_t Canvas::EndPart()
+{
+	_partEnds.push_back(_batches.size());
+	return _partEnds.size() - 1;
+}
+
+void Canvas::SubmitThrough(size_t part)
+{
+	if (part < _partEnds.size())
+	{
+		SubmitBatchesBefore(_partEnds[part]);
+	}
+}
+
+void Canvas::SubmitBatchesBefore(size_t last)
+{
+	if (last <= _submittedBatches)
 	{
 		return;
 	}
+	const auto first = _submittedBatches;
+	_submittedBatches = last;
+	const auto projection = Projection();
+	const auto view = static_cast<bgfx::ViewId>(_view);
 
 	// In a sorted view the view's own transform is the world camera's, so the draws take the canvas's projection with
 	// them
@@ -232,7 +266,7 @@ void Canvas::End()
 	    shaders != nullptr ? shaders->GetShader(_sortedView.has_value() ? "InterfaceSorted" : "Interface") : nullptr;
 	const auto target = _sortedView.has_value() ? static_cast<bgfx::ViewId>(*_sortedView) : view;
 	auto& layout = GetLayout();
-	for (const auto& batch : _batches)
+	for (const auto& batch : std::span(_batches).subspan(first, last - first))
 	{
 		// A clip with no pixels hides the batch. The renderer reads a scissor with no area as no scissor.
 		if (batch.clip.has_value() && (batch.clip->width == 0 || batch.clip->height == 0))

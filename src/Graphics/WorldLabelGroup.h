@@ -45,6 +45,8 @@ class WorldLabelSubmits
 public:
 	/// The frame drew each group, and no group is submitted yet
 	void Drawn() noexcept { _waiting.fill(true); }
+	/// True if the group waits to be submitted
+	[[nodiscard]] bool Waits(WorldLabelGroup group) const noexcept { return _waiting.at(static_cast<std::size_t>(group)); }
 	/// True if the group waits to be submitted. The group then waits no more.
 	[[nodiscard]] bool Take(WorldLabelGroup group) noexcept
 	{

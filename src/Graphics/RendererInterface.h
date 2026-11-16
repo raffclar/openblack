@@ -90,6 +90,9 @@ public:
 		/// Submits a group of the labels in the world. The main pass calls it at the point where the game adds or draws the
 		/// group. With no function, the caller submits the labels.
 		std::function<void(WorldLabelGroup)> submitWorldLabels;
+		/// Submits the words of the learning marks up to and with a mark, by the place of the mark in the order that the
+		/// game draws the marks in. The main pass calls it before the bulb of each mark.
+		std::function<void(uint32_t)> submitLearningWords;
 	};
 
 	struct L3DMeshSubmitDesc

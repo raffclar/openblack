@@ -12,7 +12,9 @@
 #include <cmath>
 
 #include <algorithm>
+#include <iterator>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "Common/FixedFormat.h"
@@ -47,6 +49,38 @@ components::LearningMarker Start(const glm::vec3& head, float creatureHeight, fl
 	        .size = creatureHeight * k_SizeOfHeight,
 	        .milliseconds = 0.0f,
 	        .madeTurn = turn};
+}
+
+entt::entity Make(Registry& registry, const glm::vec3& head, float creatureHeight, float share, uint32_t turn)
+{
+	auto marker = Start(head, creatureHeight, share, turn);
+	registry.Each<const components::LearningMarker>([&marker](const components::LearningMarker& other) {
+		if (other.madeTurn == marker.madeTurn)
+		{
+			++marker.madeIndex;
+		}
+	});
+	const auto entity = registry.Create();
+	registry.Assign<components::LearningMarker>(entity, std::move(marker));
+	return entity;
+}
+
+bool DrawnBefore(const components::LearningMarker& first, const components::LearningMarker& second)
+{
+	// The game puts each new mark at the head of its list, and draws the list from the head
+	return std::tie(first.madeTurn, first.madeIndex) > std::tie(second.madeTurn, second.madeIndex);
+}
+
+std::vector<entt::entity> InDrawOrder(const Registry& registry)
+{
+	std::vector<std::pair<entt::entity, const components::LearningMarker*>> marks;
+	registry.Each<const components::LearningMarker>(
+	    [&marks](entt::entity entity, const components::LearningMarker& marker) { marks.emplace_back(entity, &marker); });
+	std::ranges::sort(marks, [](const auto& first, const auto& second) { return DrawnBefore(*first.second, *second.second); });
+	std::vector<entt::entity> order;
+	order.reserve(marks.size());
+	std::ranges::transform(marks, std::back_inserter(order), [](const auto& mark) { return mark.first; });
+	return order;
 }
 
 bool Step(components::LearningMarker& marker, float milliseconds)
