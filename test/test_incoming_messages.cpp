@@ -153,6 +153,39 @@ TEST(IncomingMessageSystem, TheListGoesOnlyWhileTheButtonShows)
 	EXPECT_TRUE(system.GetQueue().Empty());
 }
 
+// The end of a network game and the load of a land do not clear the list. The chat lines of the other players that
+// did not go show in the next game, also in a game alone.
+TEST(IncomingMessageSystem, ChatLinesStayForTheNextGame)
+{
+	uint32_t now = 1000;
+	ecs::systems::IncomingMessageSystem system([&now]() { return now; });
+	system.Add(Kind::Chat, u"first: hello", 0);
+	system.Add(Kind::Chat, u"second: bye", 0);
+	system.Add(Kind::Chat, u"third: again", 0);
+	system.Update(true);
+	ASSERT_EQ(system.GetQueue().Count(), 3U);
+
+	// The network game ends: the interface goes and the front end shows, so the button does not show
+	system.SetTexts(nullptr);
+	now = 60000;
+	system.Update(false);
+	EXPECT_EQ(system.GetQueue().Count(), 3U);
+
+	// The next land loads and the button shows again. The top line waited too long, so it goes at once.
+	system.Update(true);
+	ASSERT_EQ(system.GetQueue().Count(), 2U);
+	EXPECT_EQ(system.GetQueue().ShownText(), u"second: bye");
+
+	// The next line has its full ten seconds from that frame
+	now += 10000;
+	system.Update(true);
+	EXPECT_EQ(system.GetQueue().Count(), 2U);
+	now += 1;
+	system.Update(true);
+	ASSERT_EQ(system.GetQueue().Count(), 1U);
+	EXPECT_EQ(system.GetQueue().ShownText(), u"third: again");
+}
+
 TEST(IncomingMessageStrip, TheLayoutIsTheGamesOnTheDefaultScreen)
 {
 	EXPECT_EQ(strip::Origin({800, 600}), glm::vec2(0.0f));
