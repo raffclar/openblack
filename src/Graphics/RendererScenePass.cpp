@@ -115,6 +115,7 @@
 #include "Graphics/ShaderManager.h"
 #include "Graphics/SpriteTextures.h"
 #include "Graphics/Sun.h"
+#include "Graphics/TempleRoomOrder.h"
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/ViewFrustum.h"
 #include "Graphics/WarmUpViews.h"
@@ -721,7 +722,7 @@ void Renderer::DrawPassModels(const DrawSceneDesc& desc, const ScenePass& pass) 
 	DrawPassSprites(desc, pass);
 }
 
-void Renderer::DrawPassPlacedModels(const DrawSceneDesc& desc, auto& draws) const
+void Renderer::DrawPassPlacedModels(const DrawSceneDesc& desc, auto& draws, temple_room_order::Step step) const
 {
 	const auto& meshManager = Locator::resources::value().GetMeshes();
 	auto& submitDesc = draws.submitDesc;
@@ -741,6 +742,7 @@ void Renderer::DrawPassPlacedModels(const DrawSceneDesc& desc, auto& draws) cons
 	for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 	{
 		if (meshId != ecs::components::Hand::k_MeshId && !placers.translucent && !placers.perEntity &&
+		    temple_room_order::StepOf(placers.behindCurrentRoom, placers.translucent) == step &&
 		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
 		{
 			placed.push_back({.meshId = meshId, .mesh = &*meshManager.Handle(meshId), .placers = &placers});
@@ -1307,24 +1309,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	}
 	// Each thing that is posed by itself (an animal, a villager or posed scenery) is drawn above, in its own pose.
 	// It is not drawn here, because it would show again in the model's own pose.
-	for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
-	{
-		if (graphics::posed_draws::BlendedPassDrawsAllPlaced({.translucent = placers.translucent,
-		                                                      .perEntity = placers.perEntity,
-		                                                      .hand = meshId == ecs::components::Hand::k_MeshId}) &&
-		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
-		{
-			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
-			{
-				if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
-				{
-					continue;
-				}
-				submitDesc.sortDepth = blendDepth(instance);
-				drawInstances(meshId, placers, true, instance, 1);
-			}
-		}
-	}
+	DrawPassBlendedPlaced(desc, draws, temple_room_order::Step::CurrentRoomBlended, blendDepth);
 	for (const auto& [entity, instance] : renderCtx.entityDraws)
 	{
 		if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
@@ -1387,6 +1372,50 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	}
 	submitDesc.viewId = desc.viewId;
 	submitDesc.sortDepth = 0;
+}
+
+void Renderer::DrawPassBlendedPlaced(const DrawSceneDesc& desc, auto& draws, temple_room_order::Step step,
+                                     const auto& sortDepthOf) const
+{
+	const auto& meshManager = Locator::resources::value().GetMeshes();
+	auto& submitDesc = draws.submitDesc;
+	auto& drawInstances = draws.drawInstances;
+	auto& mirroredWithHand = draws.mirroredWithHand;
+	auto& instanceSeen = draws.instanceSeen;
+	for (const auto& [meshId, placers] : draws.renderCtx.instancedDrawDescs)
+	{
+		if (graphics::posed_draws::BlendedPassDrawsAllPlaced({.translucent = placers.translucent,
+		                                                      .perEntity = placers.perEntity,
+		                                                      .hand = meshId == ecs::components::Hand::k_MeshId}) &&
+		    temple_room_order::StepOf(placers.behindCurrentRoom, placers.translucent) == step &&
+		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+		{
+			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
+			{
+				if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
+				{
+					continue;
+				}
+				submitDesc.sortDepth = sortDepthOf(instance);
+				drawInstances(meshId, placers, true, instance, 1);
+			}
+		}
+	}
+}
+
+void Renderer::DrawPassOtherTempleRooms(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const
+{
+	// The game draws the other rooms after the whole room that the player is in, and before the hand
+	if (!pass.inTemple)
+	{
+		return;
+	}
+	DrawPassPlacedModels(desc, draws, temple_room_order::Step::OtherRoomsSolid);
+	// The temple draws in the order of the submits, so the depth of the sort has no effect
+	draws.submitDesc.viewId = pass.translucentViewId;
+	DrawPassBlendedPlaced(desc, draws, temple_room_order::Step::OtherRoomsBlended, [](uint32_t) { return uint32_t {0}; });
+	draws.submitDesc.viewId = desc.viewId;
+	draws.submitDesc.sortDepth = 0;
 }
 
 void Renderer::DrawPassEffects(const DrawSceneDesc& desc) const
@@ -2413,7 +2442,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	    .drawRootsPiles = drawRootsPiles,
 	    .handReflected = handReflected,
 	};
-	DrawPassPlacedModels(desc, draws);
+	DrawPassPlacedModels(desc, draws, temple_room_order::Step::CurrentRoomSolid);
 	for (const auto& build : renderCtx.partialBuilds)
 	{
 		if (!build.fading)
@@ -2431,6 +2460,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	drawRootsPiles(false);
 	DrawTempleUnderside(desc);
 	DrawPassTranslucent(desc, pass, draws);
+	DrawPassOtherTempleRooms(desc, pass, draws);
 	DrawPassEffects(desc);
 
 	DrawPassHand(desc, pass, draws);

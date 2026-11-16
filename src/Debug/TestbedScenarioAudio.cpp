@@ -1259,6 +1259,22 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.library_windows",
+	    .name = "The clear windows of the temple's library show no doors of the other rooms",
+	    .facet = Facet::Story,
+	    .description = "The player goes through the temple's main room into the library. The checker turns the camera to "
+	                   "the windows on each side of the library's door. The inspector can do this: camera_set with the "
+	                   "position (-113.9, 14.5, 11.1), the focus (0, 14.5, 0) and override.",
+	    .expected = "The windows show the sky and the clouds only. No door of the main room floats behind a window. The "
+	                "library's own door shows at the end of its passage. The game draws the room that the player is in "
+	                "first, and the other rooms after it, so the windows hide what is behind them.",
+	    .framing = {.shot = Shot::Overview},
+	    // The other rooms open after the temple draws the main room. Thus the player enters through it.
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2}},
+	});
+
+	all.push_back({
 	    .id = "temple.main_scroll_leave",
 	    .name = "The temple's main room leans up when the player sends the camera back from its scroll early",
 	    .facet = Facet::Story,
