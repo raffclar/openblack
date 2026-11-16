@@ -3086,9 +3086,12 @@ def main():
                 print(f"client {index + 1} did not join; see {client_dir}")
                 return 1
             joins = lines_with(os.path.join(client_dir, "client.log"), ["Joined the game server"])
+            # With --slot-kinds the gods take the open slots in order
+            kinds = options.slot_kinds.split(",") if options.slot_kinds else []
+            wanted = [slot for slot in range(32) if slot >= len(kinds) or kinds[slot] == "open"][index]
             if (not is_observer and any("in slot" in line for line in joins)
-                    and not any(line.endswith(f"in slot {index}") for line in joins)):
-                print(f"client {index + 1} did not get god slot {index}; see {client_dir}")
+                    and not any(line.endswith(f"in slot {wanted}") for line in joins)):
+                print(f"client {index + 1} did not get god slot {wanted}; see {client_dir}")
                 return 1
         web_process = None
         web_folder = None
