@@ -986,7 +986,7 @@ public:
 	~SnapshotKeeper() = default;
 
 	/// Once a frame, after the game role read the sockets and before the turn: a snapshot when one is due, else the room
-	/// in the journal when it changed
+	/// in the journal when it changed, and each new file of the editor before the turn that can use it
 	void BeforeTurn(const LockstepHost& host)
 	{
 		if (_ended || _settings.everyTurns == 0 || !host.Started() || host.Replaying() || !Locator::saveGameSystem::has_value())
@@ -996,6 +996,7 @@ public:
 		auto room = host.RoomRecord();
 		auto blocks = host.BlocksInTurns();
 		const auto turn = host.TurnsDone();
+		const auto files = host.KeptEditorFiles();
 		// The first turn brings the creatures from the files of the players, so the first snapshot comes after it
 		const bool due = turn >= 1 && (!_lastTurn.has_value() || turn >= *_lastTurn + _settings.everyTurns);
 		if (due && _writer->Pending() == 0)
@@ -1010,11 +1011,15 @@ public:
 			}
 			_lastRoom = room;
 			_lastTurn = turn;
+			// The snapshot keeps every file of the editor, so the new journal starts with none
+			_lastFiles = files;
 			_writer->Queue(fmt::format("the snapshot of turn {}", turn), [store = &_store, make = std::move(make),
 			                                                              room = std::move(room), blocks = std::move(blocks),
-			                                                              turn, takenMs]() {
+			                                                              editorFiles = host.EditorFilesAfter({}), turn,
+			                                                              takenMs]() mutable {
 				const auto writeStart = std::chrono::steady_clock::now();
-				const auto bytes = snapshots::EncodeSnapshot({.turn = turn, .room = room, .world = make(), .blocks = blocks});
+				const auto bytes = snapshots::EncodeSnapshot(
+				    {.turn = turn, .room = room, .world = make(), .blocks = blocks, .editorFiles = std::move(editorFiles)});
 				const bool written = store->Write(turn, bytes);
 				SPDLOG_LOGGER_INFO(
 				    spdlog::get("game"),
@@ -1029,6 +1034,15 @@ public:
 		{
 			_store.AddRoom(room);
 			_lastRoom = std::move(room);
+		}
+		// A new file goes into the journal before the turn of the command that uses it
+		if (files != _lastFiles && _store.JournalOpen())
+		{
+			for (const auto& file : host.EditorFilesAfter(_lastFiles))
+			{
+				_store.AddEditorFile(file);
+			}
+			_lastFiles = files;
 		}
 	}
 
@@ -1076,6 +1090,8 @@ private:
 	snapshots::Store _store;
 	std::optional<uint32_t> _lastTurn;
 	snapshots::Room _lastRoom;
+	/// The counts of the files of the editor that the snapshot and the journal keep
+	LockstepHost::EditorFileCounts _lastFiles;
 	bool _ended {false};
 	/// Last, so that it writes the snapshots that wait before the store goes
 	std::unique_ptr<ecs::save_files::BackgroundWriter> _writer {std::make_unique<ecs::save_files::BackgroundWriter>(
@@ -1282,7 +1298,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	auto& host = network->Host();
 	if (restored.has_value())
 	{
-		host.Restore(restored->room, restored->snapshot.turn, restored->turns, restored->blocks);
+		host.Restore(restored->room, restored->snapshot.turn, restored->turns, restored->blocks, restored->editorFiles);
 	}
 	if (keeper != nullptr)
 	{

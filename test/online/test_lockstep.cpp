@@ -504,10 +504,12 @@ protected:
 	}
 
 	/// The server stops with no warning. A new server continues the game from the room and the world of a snapshot, and
-	/// does again the turns of the journal after the snapshot, less the last turns that the journal lost.
+	/// does again the turns of the journal after the snapshot, less the last turns that the journal lost. The new server
+	/// keeps the files of the editor that the snapshot and the journal kept.
 	void RestartFrom(const server::snapshots::Room& room, uint32_t turn, const FakeWorld& world,
 	                 const std::vector<Computer*>& computers, uint32_t lostTurns = 0,
-	                 const server::snapshots::BlockSequences& snapshotBlocks = {})
+	                 const server::snapshots::BlockSequences& snapshotBlocks = {},
+	                 std::vector<server::snapshots::EditorFile> editorFiles = {})
 	{
 		for (auto* computer : computers)
 		{
@@ -531,7 +533,7 @@ protected:
 		{
 			blocks = last->second;
 		}
-		host->Restore(*savedRoom, turn, std::move(replayed), blocks);
+		host->Restore(*savedRoom, turn, std::move(replayed), blocks, std::move(editorFiles));
 		KeepJournal();
 		while (host->Replaying())
 		{
@@ -4582,4 +4584,133 @@ TEST_F(LockstepTest, TheWorldStillWaitsWithNoPlayersAfterAPauseOfTheEditor)
 	const auto turns = serverWorld.turns;
 	Frames({}, 20);
 	EXPECT_EQ(serverWorld.turns, turns);
+}
+
+// The snapshot keeps the files of the editor and the journal keeps the files that came after it. The restored server
+// does the replayed turns with the files, and a player who was away gets the files before the turns that use them.
+TEST_F(LockstepTest, ARestoredServerKeepsTheFilesOfTheEditorAndAPlayerWhoComesBackGetsThem)
+{
+	using Kind = game_socket::EditorScriptFile::Kind;
+	using openblack::editor::mind_loads::HashOf;
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	// The editor sends a mind file and a program before the snapshot
+	const std::vector<uint8_t> mind {'M', 1, 2};
+	const auto program = ScriptFileOfParts(2, 'P');
+	const std::string landText = "VERSION(2.0)\n";
+	const std::vector<uint8_t> land(landText.begin(), landText.end());
+	ASSERT_TRUE(alice.session.SendEditorMindFile(mind));
+	ASSERT_TRUE(alice.session.SendEditorScriptFile(Kind::Program, program));
+	Frames({&alice, &bob}, 4);
+	const auto room = host->RoomRecord();
+	const auto snapshotTurn = host->TurnsDone();
+	const auto snapshotWorld = serverWorld;
+	auto files = host->EditorFilesAfter({});
+	const auto counts = host->KeptEditorFiles();
+	ASSERT_EQ(files.size(), 2u);
+	EXPECT_EQ(files[0].kind, server::snapshots::EditorFileKind::Mind);
+	EXPECT_EQ(files[1].kind, server::snapshots::EditorFileKind::ScriptProgram);
+	EXPECT_EQ(files[1].bytes, program);
+
+	// Bob goes away. The editor sends a land script after the snapshot, then uses the three files.
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	bob.Frame();
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Reconnecting);
+	ASSERT_TRUE(alice.session.SendEditorScriptFile(Kind::LandScript, land));
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = HashOf(mind), .creature = Entity(5)});
+	alice.session.Send(EditorScriptProgram {.use = EditorScriptProgram::Use::Open, .file = HashOf(program)});
+	alice.session.Send(EditorLandScript {.act = EditorLandScript::Act::Open, .file = HashOf(land)});
+	Frames({&alice}, 10);
+	ASSERT_EQ(alice.world.mindFilesAtTurn, (std::vector<bool> {true}));
+	ASSERT_EQ(alice.world.scriptFilesAtTurn, (std::vector<bool> {true, true}));
+	const auto lastTurn = host->TurnsDone();
+	const auto lastHash = serverWorld.hash;
+	// The journal keeps the file that came after the snapshot
+	const auto journalFiles = host->EditorFilesAfter(counts);
+	ASSERT_EQ(journalFiles.size(), 1u);
+	EXPECT_EQ(journalFiles[0].kind, server::snapshots::EditorFileKind::LandScript);
+	files.insert(files.end(), journalFiles.begin(), journalFiles.end());
+
+	RestartFrom(room, snapshotTurn, snapshotWorld, {&alice}, 0, {}, std::move(files));
+	// The new server did the replayed turns with the files of the editor
+	EXPECT_EQ(host->TurnsDone(), lastTurn);
+	EXPECT_EQ(serverWorld.hash, lastHash);
+	EXPECT_EQ(serverWorld.mindFilesAtTurn, (std::vector<bool> {true}));
+	EXPECT_EQ(serverWorld.scriptFilesAtTurn, (std::vector<bool> {true, true}));
+	EXPECT_EQ(host->KeptEditorFiles(), (LockstepHost::EditorFileCounts {.minds = 1, .scripts = 2}));
+
+	// Both players come back. Bob gets the files before the kept turns with the loads.
+	Frames({&alice, &bob}, 40);
+	for (const auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->session.GetState(), NetworkSession::State::Playing);
+		EXPECT_EQ(computer->session.Resumes(), 1u);
+		// The client can be one turn after the server, and each checksum that it compared is the same
+		EXPECT_GE(computer->world.turns + 1, serverWorld.turns);
+		EXPECT_GT(computer->session.GetCompares().compared, 0u);
+		EXPECT_EQ(computer->session.GetCompares().compared, computer->session.GetCompares().same);
+	}
+	EXPECT_EQ(bob.world.mindFilesAtTurn, (std::vector<bool> {true}));
+	EXPECT_EQ(bob.world.scriptFilesAtTurn, (std::vector<bool> {true, true}));
+	EXPECT_FALSE(bob.session.EditorScriptFile(static_cast<uint8_t>(Kind::LandScript), HashOf(land)).empty());
+
+	// The editor uses a kept file again after the restart, with no new send of the file
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = HashOf(mind), .creature = Entity(5)});
+	Frames({&alice, &bob}, 6);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	EXPECT_EQ(host->RefusedEditorValues(), 0u);
+	EXPECT_EQ(serverWorld.mindFilesAtTurn, (std::vector<bool> {true, true}));
+	EXPECT_EQ(bob.world.mindFilesAtTurn, (std::vector<bool> {true, true}));
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+// The room of the snapshot keeps the clock of the room. A restart does not end an editor pause or change the speed.
+TEST_F(LockstepTest, ARestoredServerKeepsThePauseAndTheSpeedOfTheEditor)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Speed, .speed = 2.0f});
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Pause});
+	Frames({&alice, &bob}, 5);
+	const auto pausedAt = serverWorld.turns;
+	const auto room = host->RoomRecord();
+	EXPECT_TRUE(room.clock.paused);
+	EXPECT_EQ(room.clock.speed, 2.0f);
+
+	RestartFrom(room, host->TurnsDone(), serverWorld, {&alice, &bob});
+	EXPECT_TRUE(host->RoomClock().paused);
+	EXPECT_EQ(host->RoomClock().speed, 2.0f);
+	Frames({&alice, &bob}, 30);
+	for (const auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->session.GetState(), NetworkSession::State::Playing);
+		EXPECT_EQ(computer->session.Resumes(), 1u);
+		ASSERT_TRUE(computer->session.RoomClock().has_value());
+		EXPECT_TRUE(computer->session.RoomClock()->paused);
+		EXPECT_EQ(computer->session.RoomClock()->speed, 2.0f);
+		EXPECT_EQ(computer->world.turns, pausedAt);
+	}
+	// The pause continues after the restart: no turn comes until a step or a play
+	EXPECT_EQ(serverWorld.turns, pausedAt);
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Step});
+	Frames({&alice, &bob}, 5);
+	EXPECT_EQ(serverWorld.turns, pausedAt + 1);
+	EXPECT_EQ(bob.world.turns, pausedAt + 1);
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Play});
+	Frames({&alice, &bob}, 10);
+	EXPECT_GT(bob.world.turns, pausedAt + 1);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }

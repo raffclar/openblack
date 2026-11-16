@@ -2351,6 +2351,36 @@ void LockstepHost::ApplyWorldChange()
 	Broadcast(frame);
 }
 
+void LockstepHost::RestoreEditorFiles(std::vector<snapshots::EditorFile> files)
+{
+	size_t minds = 0;
+	size_t scripts = 0;
+	size_t refused = 0;
+	for (auto& file : files)
+	{
+		bool kept = false;
+		if (file.kind == snapshots::EditorFileKind::Mind)
+		{
+			kept = _mindFiles.Add(std::move(file.bytes)).first != editor::mind_loads::MindFileStore::Added::Refused;
+			minds += kept ? 1 : 0;
+		}
+		else
+		{
+			const auto kind = static_cast<editor::script_files::Kind>(static_cast<uint8_t>(file.kind) - 1);
+			kept = _scriptFiles.Add(kind, std::move(file.bytes)).first != editor::script_files::FileStore::Added::Refused;
+			scripts += kept ? 1 : 0;
+		}
+		refused += kept ? 0 : 1;
+	}
+	if (minds + scripts + refused > 0)
+	{
+		Log(refused == 0 ? spdlog::level::info : spdlog::level::warn,
+		    fmt::format("The server keeps the files of the editor of the snapshot again: {} mind files, {} script files, {} "
+		                "refused",
+		                minds, scripts, refused));
+	}
+}
+
 void LockstepHost::StartGame()
 {
 	_startStep = StartStep::None;
@@ -2868,7 +2898,26 @@ snapshots::Room LockstepHost::RoomRecord() const
 		room.arrivingNames.push_back(name);
 	}
 	room.departingNumbers = _observerDepartures;
+	room.clock = _roomClock;
 	return room;
+}
+
+std::vector<snapshots::EditorFile> LockstepHost::EditorFilesAfter(EditorFileCounts counts) const
+{
+	std::vector<snapshots::EditorFile> files;
+	const auto& minds = _mindFiles.Files();
+	for (size_t i = std::min(counts.minds, minds.size()); i < minds.size(); ++i)
+	{
+		files.push_back({.kind = snapshots::EditorFileKind::Mind, .bytes = minds[i].second});
+	}
+	const auto& scripts = _scriptFiles.Files();
+	for (size_t i = std::min(counts.scripts, scripts.size()); i < scripts.size(); ++i)
+	{
+		// The kinds of the script files come after the mind file in the same order
+		files.push_back({.kind = static_cast<snapshots::EditorFileKind>(static_cast<uint8_t>(scripts[i].kind) + 1),
+		                 .bytes = scripts[i].bytes});
+	}
+	return files;
 }
 
 snapshots::BlockSequences LockstepHost::BlocksInTurns() const
@@ -2892,7 +2941,7 @@ snapshots::BlockSequences LockstepHost::BlocksInTurns() const
 }
 
 void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed,
-                           const snapshots::BlockSequences& blocks)
+                           const snapshots::BlockSequences& blocks, std::vector<snapshots::EditorFile> editorFiles)
 {
 	const auto now = _clock();
 	_started = true;
@@ -2904,6 +2953,9 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 	_leaving = room.leaving;
 	_joining = room.joining;
 	_observersIn = room.observersIn;
+	// An editor pause and the speed of the room continue. The players get the clock when they come back.
+	_roomClock = room.clock;
+	RestoreEditorFiles(std::move(editorFiles));
 	// No player is connected yet: each god with a player waits for the player to come back
 	for (size_t i = 0; i < _seats.size() && i < room.seats.size(); ++i)
 	{
