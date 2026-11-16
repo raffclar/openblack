@@ -106,6 +106,17 @@ TEST(LandgenSettlement, TheTownHasEachBuildingOfAStart)
 	}
 }
 
+TEST(LandgenSettlement, TheSeedPicksEachTribe)
+{
+	const settlement::Settings settings;
+	std::set<settlement::Tribe> tribes;
+	for (uint64_t seed = 1; seed <= 200; ++seed)
+	{
+		tribes.insert(settlement::Make(k_StartX, k_StartZ, Clear(), seed, settings).tribe);
+	}
+	EXPECT_EQ(tribes.size(), settlement::k_Tribes.size());
+}
+
 TEST(LandgenSettlement, EachHouseHasItsAdults)
 {
 	const settlement::Settings settings;
