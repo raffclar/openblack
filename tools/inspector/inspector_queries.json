@@ -2616,6 +2616,12 @@
   "query": "editor.script_state"
  },
  {
+  "description": "What the Scripts tab of this computer shows of its acts at the turns of a network game: the last act on the script machine and the last change of the program, each with its turn, whether the machine did it, the new task of a start and the line of the tab. Only the computer that sent the act has the report.",
+  "kind": "object",
+  "parameters": [],
+  "query": "editor.script_reports"
+ },
+ {
   "description": "Sends a stroke of the land brush as a command of the turns, as the land tools send it in a network game: each computer raises, lowers or paints the land at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
   "kind": "object",
   "parameters": [

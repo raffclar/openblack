@@ -147,6 +147,8 @@ struct LandScriptRun
 	std::string message;
 	/// Goes up at each act, so that a panel knows that the run changed
 	uint32_t changes {0};
+	/// The count of the resets of the world when the run read its script. None until the run reads a script.
+	std::optional<uint32_t> world;
 };
 
 /// Reads the text of a land script into the run: the commands, none done and no breakpoints
@@ -166,6 +168,8 @@ struct LandScriptWorld
 	std::function<std::optional<std::string>(const std::filesystem::path&)> readText;
 	/// Does a command in the world. Gives the text of the error when the command failed, or none.
 	std::function<std::optional<std::string>(const lhscriptx::Command&)> run;
+	/// The count of the resets of the world. A load of a land or of a saved world adds one. With none, the count is 0.
+	std::function<uint32_t()> worldResets;
 };
 
 /// Why no computer takes the act, or none when it can go. kept tells whether the store of the computer keeps the file
@@ -181,13 +185,65 @@ struct LandScriptResult
 	size_t commands {0};
 };
 
-/// Does an act of the land script on the run. file is the text of an Open, from the store of this computer, or none.
+/// Starts the run again with the script of the loaded land when the game loaded another world after the last read. A run
+/// that read no script stays empty. Gives true when the run started again. The run changes only the state of the stepper,
+/// so a frame and a turn can both do it with the same result.
+bool RestartAtNewWorld(LandScriptRun& run, const LandScriptWorld& world);
+
+/// Does an act of the land script on the run. file is the text of an Open, from the store of this computer, or none. The
+/// run first starts again when the game loaded another world (RestartAtNewWorld).
 [[nodiscard]] LandScriptResult ApplyLandScript(const EditorLandScript& act, std::span<const uint8_t> file, LandScriptRun& run,
                                                const LandScriptWorld& world);
 /// The world of the Locator for the acts of the land script
 [[nodiscard]] LandScriptWorld LocatorLandScriptWorld();
 /// Does an act of the land script on the run of the editor system of the Locator
 [[nodiscard]] LandScriptResult RunLandScript(const EditorLandScript& act, std::span<const uint8_t> file);
+/// Starts the run of the editor system of the Locator again when the game loaded another world
+void RestartLandScriptAtNewWorld();
+
+/// What an act of the editor of this computer did at the turn of a network game, for the Scripts tab
+struct ActReport
+{
+	enum class Kind : uint8_t
+	{
+		/// An act on the script machine (EditorScript)
+		Script,
+		/// A change of the program (EditorScriptProgram)
+		Program,
+	};
+
+	Kind kind {Kind::Script};
+	/// The act of a Script report
+	EditorScript::Act act {EditorScript::Act::Start};
+	/// The use of a Program report
+	EditorScriptProgram::Use use {EditorScriptProgram::Use::Compile};
+	uint32_t turn {0};
+	bool done {false};
+	/// The new task of a start, or 0
+	uint32_t task {0};
+	/// The line that the tab shows
+	std::string text;
+	/// The value of ActReports::changes that came with the report
+	uint32_t number {0};
+};
+
+/// The last reports of the acts of the editor of this computer. The tab compares changes with the value that it showed.
+struct ActReports
+{
+	/// The last report of an act on the script machine
+	std::optional<ActReport> script;
+	/// The last report of a change of the program
+	std::optional<ActReport> program;
+	/// Goes up at each report
+	uint32_t changes {0};
+};
+
+/// The report of an act on the script machine at the turn
+[[nodiscard]] ActReport ReportOf(const EditorScript& act, const ActResult& result, uint32_t turn);
+/// The report of a change of the program at the turn
+[[nodiscard]] ActReport ReportOf(const EditorScriptProgram& change, const ProgramResult& result, uint32_t turn);
+/// Keeps the report as the last report of its kind, with the next number
+void Keep(ActReports& reports, ActReport report);
 
 /// Sends the bytes of a file on the game socket and gives the hash of the bytes. None when the game socket did not take
 /// the bytes: then the command that uses the file must not go.

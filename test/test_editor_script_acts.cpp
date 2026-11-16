@@ -112,6 +112,7 @@ struct FakeLandWorld
 	std::string fails;
 	std::optional<std::filesystem::path> land {"Land2.txt"};
 	std::map<std::filesystem::path, std::string> files {{"Land2.txt", std::string(k_Land)}};
+	uint32_t resets {0};
 
 	[[nodiscard]] LandScriptWorld World()
 	{
@@ -129,6 +130,7 @@ struct FakeLandWorld
 			    done.push_back(command.name);
 			    return std::nullopt;
 		    },
+		    .worldResets = [this]() { return resets; },
 		};
 	}
 };
@@ -291,6 +293,86 @@ TEST(EditorScriptActs, AnOpenReadsTheTextOfTheFileAndNeedsTheFile)
 	world.land.reset();
 	EXPECT_FALSE(ApplyLandScript({.act = LandAct::LoadedLand}, {}, run, world.World()).done);
 	EXPECT_EQ(run.read.commands.size(), 2u);
+}
+
+TEST(EditorScriptActs, TheLandScriptRunStartsAgainWhenTheGameLoadsAnotherLand)
+{
+	FakeLandWorld world;
+	world.files["Land3.txt"] = "VERSION(2.3)\nSET_LAND_NUMBER(3)\n";
+	LandScriptRun run;
+	// A run that read no script stays empty
+	world.resets = 1;
+	EXPECT_FALSE(RestartAtNewWorld(run, world.World()));
+	EXPECT_TRUE(run.read.commands.empty());
+	ASSERT_TRUE(ApplyLandScript({.act = LandAct::LoadedLand}, {}, run, world.World()).done);
+	ASSERT_TRUE(ApplyLandScript({.act = LandAct::Step}, {}, run, world.World()).done);
+	EXPECT_FALSE(RestartAtNewWorld(run, world.World()));
+	EXPECT_TRUE(run.stepper.Next() == 1u);
+	// The game loads another land: the run reads the new script, with no command done
+	world.land = "Land3.txt";
+	world.resets = 2;
+	const auto before = run.changes;
+	EXPECT_TRUE(RestartAtNewWorld(run, world.World()));
+	EXPECT_EQ(run.name, "Land3.txt");
+	EXPECT_EQ(run.read.commands.size(), 2u);
+	EXPECT_TRUE(run.stepper.Next() == 0u);
+	EXPECT_GT(run.changes, before);
+	EXPECT_NE(run.message.find("started again"), std::string::npos);
+	// A second check of the same world does nothing
+	EXPECT_FALSE(RestartAtNewWorld(run, world.World()));
+}
+
+TEST(EditorScriptActs, AnActAfterALandLoadStepsTheScriptOfTheNewLand)
+{
+	FakeLandWorld world;
+	world.files["Land3.txt"] = "SET_LAND_NUMBER(3)\nVERSION(2.3)\n";
+	LandScriptRun run;
+	// The run of an opened file starts again with the loaded land too
+	const auto text = BytesOf("VERSION(2.3)\n");
+	ASSERT_TRUE(ApplyLandScript({.act = LandAct::Open, .file = 5}, text, run, world.World()).done);
+	world.land = "Land3.txt";
+	world.resets = 1;
+	// The turn does the check before its act, so a frame that did not check gives the same run
+	EXPECT_EQ(ApplyLandScript({.act = LandAct::Step}, {}, run, world.World()).commands, 1u);
+	EXPECT_EQ(world.done, (std::vector<std::string> {"SET_LAND_NUMBER"}));
+	EXPECT_EQ(run.name, "Land3.txt");
+	// With no land loaded the old commands do not stay
+	world.land.reset();
+	world.resets = 2;
+	EXPECT_TRUE(RestartAtNewWorld(run, world.World()));
+	EXPECT_TRUE(run.read.commands.empty());
+	EXPECT_FALSE(run.stepper.Next().has_value());
+}
+
+TEST(EditorScriptActs, TheReportOfAnActTellsTheTurnTheNewTaskAndTheRefusal)
+{
+	const auto started = ReportOf(EditorScript {.act = Act::Start, .id = 2}, ActResult {.done = true, .task = 20}, 40);
+	EXPECT_EQ(started.text, "Turn 40: started task 20");
+	EXPECT_EQ(started.task, 20u);
+	EXPECT_EQ(started.kind, ActReport::Kind::Script);
+	const auto refused =
+	    ReportOf(EditorScript {.act = Act::StepTask, .id = 10}, ActResult {.refusal = "the task is not held"}, 41);
+	EXPECT_FALSE(refused.done);
+	EXPECT_EQ(refused.text, "Turn 41: the machine did not step: the task is not held");
+	const auto held = ReportOf(EditorScript {.act = Act::HoldAll}, ActResult {.done = true}, 42);
+	EXPECT_EQ(held.text, "Turn 42: hold all tasks: done");
+	const auto program =
+	    ReportOf(EditorScriptProgram {.use = Use::Compile}, ProgramResult {.refusal = "line 3: no such word"}, 43);
+	EXPECT_EQ(program.kind, ActReport::Kind::Program);
+	EXPECT_EQ(program.use, Use::Compile);
+	EXPECT_EQ(program.text, "Turn 43: the machine did not compile a script: line 3: no such word");
+
+	// Each kind keeps its last report, and each report has the next number
+	ActReports reports;
+	Keep(reports, started);
+	Keep(reports, program);
+	Keep(reports, refused);
+	EXPECT_EQ(reports.changes, 3u);
+	ASSERT_TRUE(reports.script.has_value());
+	EXPECT_EQ(reports.script->turn, 41u);
+	EXPECT_EQ(reports.script->number, 3u);
+	ASSERT_TRUE(reports.program.has_value());
+	EXPECT_EQ(reports.program->number, 2u);
 }
 
 TEST(EditorScriptFiles, TheSplitPartsComeTogetherAgainWithTheHash)

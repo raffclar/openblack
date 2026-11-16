@@ -26,6 +26,7 @@
 #include "Commands/PlayerCommands.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Common/FileDialog.h"
+#include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "Editor/EditorOutline.h"
@@ -160,6 +161,7 @@ void ScriptsPanel::Draw() noexcept
 	        natives != nullptr ? std::span<const lhvm::NativeFunction>(*natives) : std::span<const lhvm::NativeFunction>(),
 	    .data = vm.GetData(),
 	};
+	ShowReports();
 	DrawLoading(vm);
 	if (!_actMessage.empty())
 	{
@@ -311,6 +313,45 @@ std::optional<script_acts::ActResult> ScriptsPanel::Act(const player_commands::E
 		return std::nullopt;
 	}
 	return script_acts::RunScriptAct(act);
+}
+
+void ScriptsPanel::ShowReports() noexcept
+{
+	if (!Locator::editorSystem::has_value())
+	{
+		return;
+	}
+	const auto& reports = Locator::editorSystem::value().GetScriptActReports();
+	if (reports.changes == _shownReports)
+	{
+		return;
+	}
+	if (const auto& report = reports.script; report.has_value() && report->number > _shownReports)
+	{
+		// The line above the tabs shows the result of each act. A start also shows it next to its button and picks the
+		// new task.
+		_actMessage = report->text;
+		if (report->act == player_commands::EditorScript::Act::Start)
+		{
+			_lastStart = report->text;
+			if (report->task != 0)
+			{
+				_taskId = report->task;
+			}
+		}
+	}
+	if (const auto& report = reports.program; report.has_value() && report->number > _shownReports)
+	{
+		if (report->use == player_commands::EditorScriptProgram::Use::Compile)
+		{
+			_compileMessages.push_back(report->text);
+		}
+		else
+		{
+			_loadMessage = report->text;
+		}
+	}
+	_shownReports = reports.changes;
 }
 
 std::string ScriptsPanel::SendProgram(player_commands::EditorScriptProgram change, std::span<const uint8_t> file) noexcept
