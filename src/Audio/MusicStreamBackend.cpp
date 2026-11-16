@@ -206,7 +206,7 @@ bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32
 		decoded.requested = requested;
 		if (const auto logger = spdlog::get("audio"); logger != nullptr)
 		{
-			const auto took = std::chrono::duration<float, std::milli>(clock() - requested).count();
+			[[maybe_unused]] const auto took = std::chrono::duration<float, std::milli>(clock() - requested).count();
 			SPDLOG_LOGGER_DEBUG(logger, "Music chunk {} of {} decoded {:.1f} ms after its request on decode thread {}", chunk,
 			                    decoded.bank, took, std::hash<std::thread::id> {}(std::this_thread::get_id()));
 		}
