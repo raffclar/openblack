@@ -1118,6 +1118,10 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		{
 			refusal = editor::land_edits::PathRefusal(*path);
 		}
+		else if (const auto* remake = std::get_if<player_commands::EditorRemake>(&action))
+		{
+			refusal = editor::RemakeRefusal(*remake);
+		}
 		if (refusal.has_value())
 		{
 			Log(spdlog::level::warn, fmt::format("The server refuses an edit of the editor of {}: {}", peer.name, *refusal));

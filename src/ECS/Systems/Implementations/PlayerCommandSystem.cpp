@@ -52,6 +52,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DebugCheatSystemInterface.h"
+#include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
@@ -241,16 +242,47 @@ openblack::ecs::components::ObserverInterfaces* ObserversOf(openblack::PlayerNam
 	return &registry.Assign<openblack::ecs::components::ObserverInterfaces>(*player);
 }
 
-/// Do an edit of the editor at the turn. The game server takes the edits only from a player with the editor claim.
-void RunEditorEdit(openblack::PlayerNames player, const EditorEdit& edit, uint32_t turn)
+/// Give the editor of this computer the answer to a request of its own command: the thing that the command made or
+/// changed, or none. The answer changes nothing of the synced world.
+void AnswerEditor(openblack::PlayerNames player, uint8_t observer, uint16_t request, entt::entity entity)
 {
-	const bool done = openblack::editor::ApplyEdit(edit);
+	using namespace openblack;
+	if (request == 0 || !Locator::editorSystem::has_value() ||
+	    !editor::HistoryTakesAnswer(editor::SentByThisComputer(player, observer)))
+	{
+		return;
+	}
+	Locator::editorSystem::value().AnswerRequest(request, entity);
+}
+
+/// Do an edit of the editor at the turn. The game server takes the edits only from a player with the editor claim.
+void RunEditorEdit(openblack::PlayerNames player, uint8_t observer, const EditorEdit& edit, uint32_t turn)
+{
+	const auto thing = openblack::editor::ApplyEdit(edit);
 	if (auto logger = spdlog::get("game"))
 	{
 		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} an edit of kind {} on thing {}", turn,
-		                   static_cast<int>(player), done ? "does" : "cannot do", static_cast<int>(edit.kind),
-		                   static_cast<uint32_t>(entt::to_integral(edit.object)));
+		                   static_cast<int>(player), thing.has_value() ? "does" : "cannot do", static_cast<int>(edit.kind),
+		                   static_cast<uint32_t>(entt::to_integral(thing.value_or(edit.object))));
 	}
+	AnswerEditor(player, observer, edit.request, thing.value_or(entt::null));
+}
+
+/// Make a thing again from all that the editor kept of it, at the turn. The game server takes it only from a player with
+/// the editor claim.
+void RunEditorRemake(openblack::PlayerNames player, uint8_t observer, const EditorRemake& remake, uint32_t turn)
+{
+	const auto refusal = openblack::editor::RemakeRefusal(remake);
+	const auto thing = refusal.has_value() ? entt::entity {entt::null} : openblack::editor::ApplyRemake(remake);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} a thing of kind {} and type {} again: {}", turn,
+		                   static_cast<int>(player), thing != entt::null ? "makes" : "cannot make",
+		                   static_cast<int>(remake.placeKind), remake.placeType,
+		                   thing != entt::null ? fmt::format("thing {}", entt::to_integral(thing))
+		                                       : std::string(refusal.value_or("the world refused it")));
+	}
+	AnswerEditor(player, observer, remake.request, thing);
 }
 
 /// Do an edit of a creature by the editor at the turn. The game server takes the edits only from a player with the editor
@@ -312,7 +344,7 @@ void RunEditorVillagerEdit(openblack::PlayerNames player, const EditorVillagerEd
 
 /// Make a new creature of the creature tools of the editor at the turn. The game server takes the new creatures only from a
 /// player with the editor claim.
-void RunEditorCreatureSpawn(openblack::PlayerNames player, const EditorCreatureSpawn& spawn, uint32_t turn)
+void RunEditorCreatureSpawn(openblack::PlayerNames player, uint8_t observer, const EditorCreatureSpawn& spawn, uint32_t turn)
 {
 	const auto refusal = openblack::editor::CreatureSpawnRefusal(spawn);
 	const auto creature = refusal.has_value() ? entt::entity {entt::null} : openblack::editor::ApplyCreatureSpawn(spawn);
@@ -324,6 +356,7 @@ void RunEditorCreatureSpawn(openblack::PlayerNames player, const EditorCreatureS
 		                   creature != entt::null ? fmt::format("thing {}", entt::to_integral(creature))
 		                                          : std::string(refusal.value_or("the world refused it")));
 	}
+	AnswerEditor(player, observer, spawn.request, creature);
 }
 
 /// Do a stroke of the land brush of the editor at the turn. The game server takes the strokes only from a player with the
@@ -427,7 +460,7 @@ void RunObserver(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorEdit>)
 		    {
-			    RunEditorEdit(command.player, action, turn);
+			    RunEditorEdit(command.player, command.observer, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorCreatureEdit>)
 		    {
@@ -439,7 +472,11 @@ void RunObserver(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorCreatureSpawn>)
 		    {
-			    RunEditorCreatureSpawn(command.player, action, turn);
+			    RunEditorCreatureSpawn(command.player, command.observer, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorRemake>)
+		    {
+			    RunEditorRemake(command.player, command.observer, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorVillagerEdit>)
 		    {
@@ -1148,7 +1185,7 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorEdit>)
 		    {
-			    RunEditorEdit(command.player, action, turn);
+			    RunEditorEdit(command.player, command.observer, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorCreatureEdit>)
 		    {
@@ -1160,7 +1197,11 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorCreatureSpawn>)
 		    {
-			    RunEditorCreatureSpawn(command.player, action, turn);
+			    RunEditorCreatureSpawn(command.player, command.observer, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorRemake>)
+		    {
+			    RunEditorRemake(command.player, command.observer, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorVillagerEdit>)
 		    {

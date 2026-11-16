@@ -153,6 +153,8 @@ public:
 	bool CastByCreature(entt::entity creature, MagicType type, entt::entity target) override;
 	bool CastByCreatureAt(entt::entity creature, MagicType type, glm::vec3 place) override;
 	void ReleaseCreatureCast(entt::entity creature) override;
+	entt::entity ImportCreatureCast(entt::entity creature, const magic::ImportedCast& cast) override;
+	[[nodiscard]] entt::entity CreatureCastOf(entt::entity creature) const override;
 	void EndCreatureCastBeams(entt::entity creature) override;
 	entt::entity CastOnObject(MagicType type, PlayerNames player, entt::entity target, const magic::SpellCastData& cast,
 	                          const particles::ProcessInfo& info) override;
@@ -316,6 +318,10 @@ private:
 	/// A miracle cast by a caster at a point, or on an object
 	entt::entity Cast(MagicType type, const components::SpellCaster& caster, glm::vec3 point, const magic::SpellCastData& cast,
 	                  const particles::ProcessInfo& info);
+	/// The miracle and its effect, which a cast starts. Nothing for a miracle that is its effect when the effect cannot
+	/// start.
+	entt::entity MakeSpell(MagicType type, const components::SpellCaster& caster, glm::vec3 point,
+	                       const magic::SpellCastData& cast, const particles::ProcessInfo& info);
 	entt::entity CastOn(MagicType type, const components::SpellCaster& caster, entt::entity target,
 	                    const magic::SpellCastData& cast, const particles::ProcessInfo& info);
 	/// Whether a miracle may be cast at an object by a creature, which no influence holds back

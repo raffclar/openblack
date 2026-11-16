@@ -177,6 +177,22 @@ std::vector<Action> EachCommand()
 	                .points = {{10.0f, 20.0f}, {30.0f, 40.0f}, {50.0f, 60.0f}},
 	                .firstHolder = Entity(36),
 	                .lastHolder = Entity(37)},
+	    EditorRemake {.request = 513,
+	                  .placeKind = 0,
+	                  .placeType = 2,
+	                  .challenge = 0,
+	                  .position = {1.0f, 2.0f, 3.0f},
+	                  .rotation = glm::mat3 {0.5f, 0.0f, -0.5f, 0.0f, 1.0f, 0.0f, 0.5f, 0.0f, 0.5f},
+	                  .keepsAngles = true,
+	                  .keptAngles = {0.25f, -0.5f, 0.125f},
+	                  .scale = {1.5f, 1.25f, 1.0f},
+	                  .creature = true,
+	                  .owner = 1,
+	                  .mind = 0x01020304,
+	                  .size = 1.75f,
+	                  .alignment = -0.5f,
+	                  .fatness = 0.25f,
+	                  .strength = 0.75f},
 	};
 }
 
@@ -217,7 +233,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 62)
+	switch (bits(random) % 63)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -419,14 +435,19 @@ Action RandomAction(std::mt19937& random)
 	case 52:
 		return HandLockRelease {.creature = entity()};
 	case 53:
-		return EditorEdit {.kind = static_cast<EditorEdit::Kind>(bits(random) % 5),
+		return EditorEdit {.kind = static_cast<EditorEdit::Kind>(bits(random) % 6),
 		                   .object = entity(),
 		                   .placeKind = static_cast<uint8_t>(bits(random)),
 		                   .placeType = static_cast<int32_t>(bits(random)),
 		                   .challenge = bits(random),
 		                   .position = vector(),
 		                   .radians = number(),
-		                   .scale = number()};
+		                   .scale = number(),
+		                   .request = static_cast<uint16_t>(bits(random)),
+		                   .rotation = glm::mat3 {vector(), vector(), vector()},
+		                   .keepsAngles = (bits(random) % 2) == 1,
+		                   .keptAngles = vector(),
+		                   .poseScale = vector()};
 	case 54:
 		return DebugCheat {.cheat = static_cast<uint8_t>(bits(random) % debug_cheats::k_CheatCount),
 		                   .on = (bits(random) % 2) == 1};
@@ -479,6 +500,23 @@ Action RandomAction(std::mt19937& random)
 		}
 		return path;
 	}
+	case 62:
+		return EditorRemake {.request = static_cast<uint16_t>(bits(random)),
+		                     .placeKind = static_cast<uint8_t>(bits(random)),
+		                     .placeType = static_cast<int32_t>(bits(random)),
+		                     .challenge = bits(random),
+		                     .position = vector(),
+		                     .rotation = glm::mat3 {vector(), vector(), vector()},
+		                     .keepsAngles = (bits(random) % 2) == 1,
+		                     .keptAngles = vector(),
+		                     .scale = vector(),
+		                     .creature = (bits(random) % 2) == 1,
+		                     .owner = static_cast<uint8_t>(bits(random) % 8),
+		                     .mind = bits(random),
+		                     .size = number(),
+		                     .alignment = number(),
+		                     .fatness = number(),
+		                     .strength = number()};
 	default:
 		return PlayerLeft {};
 	}
@@ -541,9 +579,9 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5, 9,  5, 53, 5, 10, 18, 5, 49, 17, 5,  5,  5, 9,  12, 1, 18, 11, 5,  19,
-	                                 15, 7, 5,  1, 2,  1, 61, 5,  2, 1,  13, 10, 18, 1, 58, 1,  5, 51, 5,  16, 7,
-	                                 1,  1, 13, 1, 2,  9, 13, 1,  1, 8,  1,  5,  35, 3, 10, 34, 2, 15, 76, 20, 36};
+	const std::vector<size_t> sizes {2,  5, 9, 5, 53, 5,  10, 18, 5, 49, 17, 5,  5,  5,  9, 12, 1,  18, 11, 5,  19, 15,
+	                                 7,  5, 1, 2, 1,  61, 5,  2,  1, 13, 10, 18, 1,  58, 1, 5,  51, 5,  16, 7,  1,  1,
+	                                 13, 1, 2, 9, 13, 1,  1,  8,  1, 5,  37, 3,  10, 34, 2, 15, 78, 20, 36, 107};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -610,6 +648,11 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 63;
 		}
+		// The make again of the editor has the tag 65. The tag 64 stays free.
+		if (std::holds_alternative<EditorRemake>(commands[i]))
+		{
+			tag = 65;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
@@ -657,13 +700,32 @@ TEST(TurnCodec, TheDecoderRefusesABadEditOrCheat)
 	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
 	constexpr size_t k_FirstField = 10;
 	auto edit = encode(EditorEdit {.kind = EditorEdit::Kind::Move, .object = Entity(4), .position = {1.0f, 0.0f, 2.0f}});
-	ASSERT_EQ(edit.size(), k_FirstField + 34);
+	ASSERT_EQ(edit.size(), k_FirstField + 36);
 	ASSERT_EQ(Decode(edit).error, DecodeError::None);
-	// The change of size is the last kind of edit
 	edit[k_FirstField] = static_cast<uint8_t>(EditorEdit::Kind::Scale);
 	EXPECT_EQ(Decode(edit).error, DecodeError::None);
-	edit[k_FirstField] = static_cast<uint8_t>(EditorEdit::Kind::Scale) + 1;
-	EXPECT_EQ(Decode(edit).error, DecodeError::Value);
+	// A pose has more bytes, so a pose with the bytes of a move is not whole
+	edit[k_FirstField] = static_cast<uint8_t>(EditorEdit::Kind::Pose);
+	EXPECT_EQ(Decode(edit).error, DecodeError::Truncated);
+	// The full pose is the last kind of edit
+	const EditorEdit pose {.kind = EditorEdit::Kind::Pose,
+	                       .object = Entity(4),
+	                       .position = {1.0f, 0.0f, 2.0f},
+	                       .request = 9,
+	                       .rotation = glm::mat3 {2.0f},
+	                       .keepsAngles = true,
+	                       .keptAngles = {0.5f, 0.25f, 0.125f},
+	                       .poseScale = {1.0f, 2.0f, 3.0f}};
+	auto posed = encode(pose);
+	ASSERT_EQ(posed.size(), k_FirstField + 36 + 61);
+	ASSERT_EQ(Decode(posed).error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorEdit>(std::get<CommandBlock>(*Decode(posed).frame).actions.front()), pose);
+	posed[k_FirstField] = static_cast<uint8_t>(EditorEdit::Kind::Pose) + 1;
+	EXPECT_EQ(Decode(posed).error, DecodeError::Value);
+	// The switch of the kept angles is 0 or 1
+	posed[k_FirstField] = static_cast<uint8_t>(EditorEdit::Kind::Pose);
+	posed[k_FirstField + 36 + 36] = 2;
+	EXPECT_EQ(Decode(posed).error, DecodeError::Value);
 
 	auto cheat = encode(DebugCheat {.cheat = 0, .on = true});
 	ASSERT_EQ(cheat.size(), k_FirstField + 2);
@@ -1520,4 +1582,29 @@ TEST(TurnCodec, TheDecoderRefusesAnEditOfAVillagerWithNoSuchField)
 	EXPECT_EQ(std::get<EditorVillagerEdit>(std::get<CommandBlock>(*decoded.frame).actions.front()), edit);
 	bytes[k_Field] = static_cast<uint8_t>(EditorVillagerEdit::Field::State) + 1;
 	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, TheDecoderRefusesABadMakeAgain)
+{
+	const EditorRemake remake {.request = 4, .placeKind = 1, .placeType = 3, .creature = true, .owner = 2};
+	auto bytes = Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {remake}}});
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_FirstField = 10;
+	ASSERT_EQ(bytes.size(), k_FirstField + 106);
+	ASSERT_EQ(Decode(bytes).error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorRemake>(std::get<CommandBlock>(*Decode(bytes).frame).actions.front()), remake);
+	// The switches of the kept angles and of the body are 0 or 1, and the owner is one of the players
+	constexpr size_t k_Keeps = k_FirstField + 2 + 1 + 4 + 4 + 12 + 36;
+	constexpr size_t k_Creature = k_Keeps + 1 + 12 + 12;
+	for (const auto at : {k_Keeps, k_Creature})
+	{
+		auto bad = bytes;
+		bad[at] = 2;
+		EXPECT_EQ(Decode(bad).error, DecodeError::Value) << at;
+	}
+	auto noPlayer = bytes;
+	noPlayer[k_Creature + 1] = static_cast<uint8_t>(PlayerNames::_COUNT);
+	EXPECT_EQ(Decode(noPlayer).error, DecodeError::Value);
+	bytes.pop_back();
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Truncated);
 }

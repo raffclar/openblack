@@ -174,6 +174,9 @@ openblack_setup_and_add_test(test_hand_grab hand/test_hand_grab.cpp)
 openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
+if(MSVC)
+  target_compile_options(test_hand_grab_system PRIVATE /bigobj)
+endif()
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
 openblack_setup_and_add_test(test_hand_reach hand/test_hand_reach.cpp)
 openblack_setup_and_add_test(test_villager_pickup hand/test_villager_pickup.cpp)
@@ -2645,6 +2648,8 @@ openblack_setup_and_add_test(test_editor_creature_acts test_editor_creature_acts
 openblack_setup_and_add_test(test_desync_fields online/test_desync_fields.cpp)
 openblack_setup_and_add_test(test_creature_freeze_stop test_creature_freeze_stop.cpp)
 target_link_libraries(test_creature_freeze_stop PRIVATE edt psys)
+openblack_setup_and_add_test(test_creature_held_cast_import test_creature_held_cast_import.cpp)
+target_link_libraries(test_creature_held_cast_import PRIVATE edt psys)
 openblack_setup_and_add_test(test_story_land_skip test_story_land_skip.cpp)
 openblack_setup_and_add_test(test_script_global_assign test_script_global_assign.cpp)
 target_link_libraries(test_script_global_assign PRIVATE ScriptLibrary)

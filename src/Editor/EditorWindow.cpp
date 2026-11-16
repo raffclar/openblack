@@ -334,15 +334,21 @@ void EditorWindow::PlaceAt(EditorContext& context, glm::vec2 screen) noexcept
 	const auto& item = *_placement.item;
 	if (InNetworkGame())
 	{
-		// The creature tools send a creature with their settings, and the other items go as edits
+		// The creature tools send a creature with their settings, and the other items go as edits. The answer to the
+		// request of the command gives the thing to the history at the turn.
+		Request request {0};
 		if (item.kind == PlaceKind::Creature)
 		{
 			static_cast<void>(_spawner.SpawnAt(position, _placement.yawRadians));
+			request = _spawner.LastSpawnRequest();
 		}
 		else
 		{
 			static_cast<void>(context.writes.Place(item, position, _placement.yawRadians));
+			request = context.writes.LastMakeRequest();
 		}
+		const std::array requests {request};
+		RecordAllSent(context, requests, fmt::format("Place {}", context.names.NameOf(item.kind, item.type)));
 		_placement.last = fmt::format("Sent {} to {:.0f}, {:.0f}: it comes at the next turn",
 		                              context.names.NameOf(item.kind, item.type), position.x, position.z);
 		return;
@@ -709,11 +715,6 @@ void EditorWindow::HandleKey(const SDL_Event& event) noexcept
 		break;
 	case Action::Undo:
 	case Action::Redo:
-		// In a network game the editor keeps no history
-		if (InNetworkGame())
-		{
-			break;
-		}
 		// A drag that is not done becomes its step first
 		if (_drag == Drag::Move || _drag == Drag::Rotate)
 		{
@@ -1060,7 +1061,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		ImGui::SameLine();
 	};
 
-	// The game server sets the time of a network game, and the editor keeps no history there
+	// The game server sets the time of a network game
 	const bool network = InNetworkGame();
 	ImGui::BeginDisabled(network);
 	if (Locator::time::has_value())
@@ -1098,23 +1099,26 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 	separator();
 
 	auto& history = system.GetHistory();
-	ImGui::BeginDisabled(network || !history.CanUndo());
+	// In a network game undo and redo wait for the turn of the last change of the editor
+	const auto waitNote = history.Waiting() ? " (waits for the turn of the last change)" : "";
+	ImGui::BeginDisabled(!history.CanUndo());
 	if (ImGui::Button("Undo"))
 	{
 		_historyNote = UndoStep(context);
 		_outliner.Invalidate();
 	}
 	ImGui::EndDisabled();
-	ImGui::SetItemTooltip("%s (Ctrl+[)", fmt::format("Undo {}", history.UndoLabel().value_or("")).c_str());
+	ImGui::SetItemTooltip("%s (Ctrl+[)%s", fmt::format("Undo {}", history.UndoLabel().value_or("")).c_str(), waitNote);
 	ImGui::SameLine();
-	ImGui::BeginDisabled(network || !history.CanRedo());
+	ImGui::BeginDisabled(!history.CanRedo());
 	if (ImGui::Button("Redo"))
 	{
 		_historyNote = RedoStep(context);
 		_outliner.Invalidate();
 	}
 	ImGui::EndDisabled();
-	ImGui::SetItemTooltip("%s (Ctrl+] or Ctrl+Y)", fmt::format("Redo {}", history.RedoLabel().value_or("")).c_str());
+	ImGui::SetItemTooltip("%s (Ctrl+] or Ctrl+Y)%s", fmt::format("Redo {}", history.RedoLabel().value_or("")).c_str(),
+	                      waitNote);
 	if (!_historyNote.empty())
 	{
 		ImGui::SameLine();

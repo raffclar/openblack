@@ -4849,3 +4849,151 @@ TEST(VanillaWorldImport, SavedGamesHaveACameraWhosePointsGlideTogether)
 	}
 	EXPECT_GT(*files, 0u);
 }
+
+namespace
+{
+/// The record of a new water spell, as the game writes it, after the reference to it. The values are not the values of
+/// a real file.
+std::vector<uint8_t> WaterSpellRecord(StreamStart start, uint32_t number)
+{
+	constexpr uint32_t k_SpellWaterType = 0x0C;
+	StreamWriter writer(start);
+	EXPECT_TRUE(writer.PutReference(NumberKey(number)));
+	writer.Put(k_SpellWaterType);
+	writer.Put(uint32_t {0});
+	writer.PutChecksum();
+	writer.Put(uint32_t {0});
+	writer.Put(uint8_t {0});
+	writer.Put(MapCoords {.x = 0x10000, .z = 0x20000, .altitude = 1.5f});
+	writer.Put(uint16_t {0});
+	// Two marks, each before a reference to no object
+	for (const auto mark : {0x12C859u, 0x2A1C9Au})
+	{
+		writer.Put(mark);
+		writer.Put(uint32_t {0});
+	}
+	for (int i = 0; i < 3; ++i)
+	{
+		writer.Put(std::array<uint8_t, 12> {});
+	}
+	// The prayer power, the prayer power when last filled, the flag of a closed spell and three more words
+	writer.Put(30.0f);
+	writer.Put(50.0f);
+	writer.Put(uint32_t {0});
+	for (int i = 0; i < 3; ++i)
+	{
+		writer.Put(uint32_t {7});
+	}
+	// What the spell gives its particles: two points, the view, the movement of the hand, the power, a word and a flag
+	std::array<float, 15> info {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.0f, 0.0f, 0.75f, 0.0f, 0.0f};
+	std::array<uint8_t, 60> infoBytes {};
+	std::memcpy(infoBytes.data(), info.data(), infoBytes.size());
+	infoBytes[0x38] = 1;
+	writer.Put(infoBytes);
+	// The time limit, two bytes, the creator (object 7) and three references to no object
+	writer.Put(12.5f);
+	writer.Put(uint8_t {0});
+	writer.Put(uint8_t {0});
+	writer.Put(uint32_t {7});
+	for (int i = 0; i < 3; ++i)
+	{
+		writer.Put(uint32_t {0});
+	}
+	// The magic type, the age, the size and one more float
+	writer.Put(static_cast<uint32_t>(MagicType::Water));
+	writer.Put(3.25f);
+	writer.Put(40.0f);
+	writer.Put(0.0f);
+	writer.Put(std::array<uint8_t, 12> {});
+	writer.Put(0.5f);
+	writer.Put(0.25f);
+	// The age when the last drop made a ring on the land
+	writer.Put(2.0f);
+	return writer.Take();
+}
+} // namespace
+
+// The spell that a creature holds keeps its magic type, its time, its size, its prayer power and the values that it
+// gives its particles
+TEST(VanillaWorldImport, AHeldSpellReadsItsMagicTypeItsTimeAndItsPrayerPower)
+{
+	constexpr StreamStart k_Start {.objects = 100, .checksum = 0};
+	std::string error;
+	const auto world = ReadVanillaRecords(WaterSpellRecord(k_Start, 101), k_Start, &error);
+	ASSERT_TRUE(world.has_value()) << error;
+	const auto spell = world_import::ReadHeldSpell(*world, world->Records().front());
+	ASSERT_TRUE(spell.has_value());
+	EXPECT_EQ(spell->number, 101u);
+	EXPECT_EQ(spell->magicType, MagicType::Water);
+	EXPECT_EQ(spell->position, (MapCoords {.x = 0x10000, .z = 0x20000, .altitude = 1.5f}));
+	EXPECT_EQ(spell->creator, 7u);
+	EXPECT_EQ(spell->chants, 30.0f);
+	EXPECT_EQ(spell->initialChants, 50.0f);
+	EXPECT_FALSE(spell->closedDown);
+	EXPECT_EQ(spell->duration, 12.5f);
+	EXPECT_EQ(spell->age, 3.25f);
+	EXPECT_EQ(spell->magnitude, 40.0f);
+	EXPECT_EQ(spell->casterPoint, (std::array {1.0f, 2.0f, 3.0f}));
+	EXPECT_EQ(spell->abovePoint, (std::array {4.0f, 5.0f, 6.0f}));
+	EXPECT_EQ(spell->cameraForward, (std::array {0.0f, 0.0f, 1.0f}));
+	EXPECT_EQ(spell->handMovement, (std::array {0.5f, 0.0f, 0.0f}));
+	EXPECT_EQ(spell->power, 0.75f);
+	EXPECT_TRUE(spell->casting);
+	EXPECT_FALSE(spell->firstDone.has_value());
+	ASSERT_TRUE(spell->lastRipple.has_value());
+	EXPECT_EQ(*spell->lastRipple, 2.0f);
+}
+
+// A record that is not a spell, or a spell with no magic type, gives no held spell. Food and wood keep the flag of the
+// first grain.
+TEST(VanillaWorldImport, OnlyASpellWithAMagicTypeIsAHeldSpell)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::Tree).Position(1, 2);
+	fake.Record(static_cast<VanillaType>(0x0A)).Value<uint32_t>("spellMagicType", 0);
+	fake.Record(static_cast<VanillaType>(0x0A))
+	    .Position(3, 4)
+	    .Value<uint32_t>("spellMagicType", static_cast<uint32_t>(MagicType::Food))
+	    .Value<float>("spellDuration", -1.0f)
+	    .Value<uint8_t>("spellFirstDone", 1);
+	const auto world = fake.Make();
+	const auto records = world.Records();
+	EXPECT_FALSE(world_import::ReadHeldSpell(world, records[0]).has_value());
+	EXPECT_FALSE(world_import::ReadHeldSpell(world, records[1]).has_value());
+	const auto food = world_import::ReadHeldSpell(world, records[2]);
+	ASSERT_TRUE(food.has_value());
+	EXPECT_EQ(food->magicType, MagicType::Food);
+	EXPECT_EQ(food->position, (MapCoords {.x = 3, .z = 4, .altitude = 0.0f}));
+	EXPECT_EQ(food->duration, -1.0f);
+	EXPECT_EQ(food->firstDone, std::optional(true));
+	EXPECT_FALSE(food->lastRipple.has_value());
+}
+
+// Each spell that a creature of a saved game holds reads as a spell that the creature cast
+TEST(VanillaWorldImport, SavedGamesGiveEachHeldSpellOfACreatureItsValues)
+{
+	size_t held = 0;
+	const auto files = ForEachSave([&held](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto& creature : FindCreatures(world.Bytes()))
+		{
+			const auto number = NumberOf(creature.object.creature.spellVisuals[0].key);
+			if (!number.has_value())
+			{
+				continue;
+			}
+			++held;
+			const auto* record = world.Record(*number);
+			ASSERT_NE(record, nullptr) << path;
+			const auto spell = world_import::ReadHeldSpell(world, *record);
+			ASSERT_TRUE(spell.has_value()) << path << " object " << *number;
+			EXPECT_EQ(spell->creator, creature.number) << path;
+			std::cout << path << ": creature " << creature.number << " holds spell " << *number << " of magic type "
+			          << static_cast<int>(spell->magicType) << ", age " << spell->age << " of " << spell->duration << "\n";
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << held << " creatures hold a spell\n";
+}

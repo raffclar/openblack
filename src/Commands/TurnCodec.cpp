@@ -76,6 +76,14 @@ public:
 		Float(value.y);
 		Float(value.z);
 	}
+	/// The nine numbers of a turn, by columns
+	void Matrix(const glm::mat3& value)
+	{
+		for (int column = 0; column < 3; ++column)
+		{
+			Vector(value[column]);
+		}
+	}
 
 private:
 	std::vector<uint8_t>& _out;
@@ -128,6 +136,16 @@ public:
 		const float y = Float();
 		const float z = Float();
 		return {x, y, z};
+	}
+	/// The nine numbers of a turn, by columns
+	glm::mat3 Matrix()
+	{
+		glm::mat3 value {1.0f};
+		for (int column = 0; column < 3; ++column)
+		{
+			value[column] = Vector();
+		}
+		return value;
 	}
 
 	[[nodiscard]] bool Bad() const { return _bad; }
@@ -381,6 +399,32 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Vector(command.position);
 		               out.Float(command.radians);
 		               out.Float(command.scale);
+		               out.Number(command.request);
+		               if (command.kind == EditorEdit::Kind::Pose)
+		               {
+			               out.Matrix(command.rotation);
+			               out.Byte(command.keepsAngles ? 1 : 0);
+			               out.Vector(command.keptAngles);
+			               out.Vector(command.poseScale);
+		               }
+	               },
+	               [&out](const EditorRemake& command) {
+		               out.Number(command.request);
+		               out.Byte(command.placeKind);
+		               out.Number(static_cast<uint32_t>(command.placeType));
+		               out.Number(command.challenge);
+		               out.Vector(command.position);
+		               out.Matrix(command.rotation);
+		               out.Byte(command.keepsAngles ? 1 : 0);
+		               out.Vector(command.keptAngles);
+		               out.Vector(command.scale);
+		               out.Byte(command.creature ? 1 : 0);
+		               out.Byte(command.owner);
+		               out.Number(command.mind);
+		               out.Float(command.size);
+		               out.Float(command.alignment);
+		               out.Float(command.fatness);
+		               out.Float(command.strength);
 	               },
 	               [&out](const DebugCheat& command) {
 		               out.Byte(command.cheat);
@@ -416,6 +460,7 @@ void WriteAction(Writer& out, const Action& action)
 			               out.Byte(slot.colour.g);
 			               out.Byte(slot.colour.b);
 		               }
+		               out.Number(command.request);
 	               },
 	               [&out](const EditorCreatureAct& command) {
 		               out.Entity(command.creature);
@@ -936,7 +981,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::EditorEdit:
 	{
 		const auto kind = in.Byte();
-		if (kind > static_cast<uint8_t>(EditorEdit::Kind::Scale))
+		if (kind > static_cast<uint8_t>(EditorEdit::Kind::Pose))
 		{
 			return DecodeError::Value;
 		}
@@ -948,7 +993,54 @@ DecodeError ReadAction(Reader& in, Action& action)
 		edit.position = in.Vector();
 		edit.radians = in.Float();
 		edit.scale = in.Float();
+		edit.request = in.Number<uint16_t>();
+		if (edit.kind == EditorEdit::Kind::Pose)
+		{
+			edit.rotation = in.Matrix();
+			const auto keeps = in.Byte();
+			edit.keptAngles = in.Vector();
+			edit.poseScale = in.Vector();
+			if (in.Bad())
+			{
+				return DecodeError::Truncated;
+			}
+			if (keeps > 1)
+			{
+				return DecodeError::Value;
+			}
+			edit.keepsAngles = keeps == 1;
+		}
 		action = edit;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorRemake:
+	{
+		EditorRemake remake {.request = in.Number<uint16_t>(), .placeKind = in.Byte()};
+		remake.placeType = static_cast<int32_t>(in.Number<uint32_t>());
+		remake.challenge = in.Number<uint32_t>();
+		remake.position = in.Vector();
+		remake.rotation = in.Matrix();
+		const auto keeps = in.Byte();
+		remake.keptAngles = in.Vector();
+		remake.scale = in.Vector();
+		const auto creature = in.Byte();
+		remake.owner = in.Byte();
+		remake.mind = in.Number<uint32_t>();
+		remake.size = in.Float();
+		remake.alignment = in.Float();
+		remake.fatness = in.Float();
+		remake.strength = in.Float();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (keeps > 1 || creature > 1 || remake.owner >= static_cast<uint8_t>(PlayerNames::_COUNT))
+		{
+			return DecodeError::Value;
+		}
+		remake.keepsAngles = keeps == 1;
+		remake.creature = creature == 1;
+		action = remake;
 		return DecodeError::None;
 	}
 	case CommandTag::DebugCheat:
@@ -1034,6 +1126,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 			slot.colour.g = in.Byte();
 			slot.colour.b = in.Byte();
 		}
+		spawn.request = in.Number<uint16_t>();
 		if (in.Bad())
 		{
 			return DecodeError::Truncated;
@@ -1286,6 +1379,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const EditorCreatureSpawn& /*command*/) { return CommandTag::EditorCreatureSpawn; },
 	                      [](const EditorLandStroke& /*command*/) { return CommandTag::EditorLandStroke; },
 	                      [](const EditorPath& /*command*/) { return CommandTag::EditorPath; },
+	                      [](const EditorRemake& /*command*/) { return CommandTag::EditorRemake; },
 	                  },
 	                  action);
 }
@@ -1355,14 +1449,21 @@ size_t SizeOf(const Action& action) noexcept
 	        [](const ObserverIn& command) { return 1 + (2 * command.name.size()); },
 	        [](const ObserverOut& /*command*/) { return size_t {0}; },
 	        [](const HandLockRelease& /*command*/) { return k_Entity; },
-	        [](const EditorEdit& /*command*/) { return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4 + 4; },
+	        [](const EditorEdit& command) {
+		        // A pose adds the turn, the switch of the kept angles, the kept angles and the scale of each axis
+		        const size_t pose = command.kind == EditorEdit::Kind::Pose ? (3 * k_Vector) + 1 + k_Vector + k_Vector : 0;
+		        return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4 + 4 + 2 + pose;
+	        },
+	        [](const EditorRemake& /*command*/) {
+		        return 2 + 1 + 4 + 4 + k_Vector + (3 * k_Vector) + 1 + k_Vector + k_Vector + 1 + 1 + 4 + (4 * 4);
+	        },
 	        [](const DebugCheat& /*command*/) { return size_t {2}; },
 	        [](const EditorCreatureEdit& /*command*/) { return k_Entity + 1 + 4; },
 	        [](const EditorCreatureAct& command) { return k_Entity + 1 + k_Entity + k_Vector + 4 + 2 + command.args.size(); },
 	        [](const DebugLandSkip& /*command*/) { return size_t {1}; },
 	        [](const EditorVillagerEdit& /*command*/) { return k_Entity + 1 + 1 + 4 + 4; },
 	        [](const EditorCreatureSpawn& /*command*/) {
-		        return 1 + 1 + k_Vector + (5 * 4) + 1 + (5 * creature_tattoo::k_SlotCount);
+		        return 1 + 1 + k_Vector + (5 * 4) + 1 + (5 * creature_tattoo::k_SlotCount) + 2;
 	        },
 	        [](const EditorLandStroke& /*command*/) { return size_t {1 + 4 + 4 + 1 + 1 + 4 + 4}; },
 	        [](const EditorPath& command) { return 1 + 2 + (8 * command.points.size()) + (2 * k_Entity); },

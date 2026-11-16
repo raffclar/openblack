@@ -1140,16 +1140,16 @@ entt::entity CreatureSpawner::SpawnAt(glm::vec3 position, float yawRadians) noex
 	// network game does not take one.
 	if (InNetworkGame())
 	{
-		editor::SendCreatureSpawn({.species = static_cast<uint8_t>(_species),
-		                           .owner = static_cast<uint8_t>(_owner),
-		                           .position = position,
-		                           .radians = yawRadians,
-		                           .scale = _scale,
-		                           .alignment = _alignment,
-		                           .fatness = _fatness,
-		                           .strength = _strength,
-		                           .hasTattoos = _spawnTattoos.has_value(),
-		                           .tattoos = _spawnTattoos.value_or(creature_tattoo::Slots {})});
+		_lastSpawnRequest = editor::SendCreatureSpawn({.species = static_cast<uint8_t>(_species),
+		                                               .owner = static_cast<uint8_t>(_owner),
+		                                               .position = position,
+		                                               .radians = yawRadians,
+		                                               .scale = _scale,
+		                                               .alignment = _alignment,
+		                                               .fatness = _fatness,
+		                                               .strength = _strength,
+		                                               .hasTattoos = _spawnTattoos.has_value(),
+		                                               .tattoos = _spawnTattoos.value_or(creature_tattoo::Slots {})});
 		return entt::null;
 	}
 	const auto entity = CreatureArchetype::Create(position, _owner, _species, 0, yawRadians, _scale,

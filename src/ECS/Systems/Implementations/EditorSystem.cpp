@@ -24,6 +24,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Editor/EditorEntities.h"
+#include "Editor/EditorNetworkEdits.h"
 #include "Locator.h"
 
 namespace openblack::ecs::systems
@@ -195,6 +196,18 @@ void EditorSystem::StepTurn()
 	time.SetPaused(false);
 }
 
+void EditorSystem::AnswerRequest(editor::Request request, entt::entity entity)
+{
+	const auto awaited = _history.AwaitedFrom(request);
+	if (!awaited.has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		// No change waits for the answer, so the request only closes
+		_history.Answer(request, {.entity = entity});
+		return;
+	}
+	_history.Answer(request, editor::AnswerOf(Locator::entitiesRegistry::value(), entity, *awaited));
+}
+
 void EditorSystem::Update([[maybe_unused]] std::chrono::microseconds dt)
 {
 	// A land or a saved world that loads can give a new thing the entity of an old one, so the picks and the history
@@ -217,6 +230,11 @@ void EditorSystem::Update([[maybe_unused]] std::chrono::microseconds dt)
 			}
 		}
 		_registryResets = resets;
+	}
+	// A request that gets no answer, such as a command that the game server refused, does not hold undo and redo
+	if (_history.Waiting() && Locator::time::has_value())
+	{
+		_history.ForgetOldRequests(Locator::time::value().GetTurn());
 	}
 	if (_stepFrom.has_value() && Locator::time::has_value())
 	{
