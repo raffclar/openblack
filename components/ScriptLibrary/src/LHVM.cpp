@@ -1049,6 +1049,21 @@ void LHVM::ContinueTask(uint32_t taskNumber)
 	}
 }
 
+LHVM::DebuggerState LHVM::GetDebuggerState() const
+{
+	return {.breakpoints = _breakpoints, .heldTasks = _heldTasks, .resumeFrom = _resumeFrom};
+}
+
+void LHVM::SetDebuggerState(DebuggerState state)
+{
+	const auto missing = [this](const auto& entry) { return !_tasks.contains(entry.first); };
+	std::erase_if(state.heldTasks, missing);
+	std::erase_if(state.resumeFrom, missing);
+	_breakpoints = std::move(state.breakpoints);
+	_heldTasks = std::move(state.heldTasks);
+	_resumeFrom = std::move(state.resumeFrom);
+}
+
 float LHVM::Fmod(float a, float b)
 {
 	// The game truncates both values to integers first and takes the whole multiple of the divisor from the value

@@ -290,6 +290,21 @@ public:
 	/// Lets a held task run on, past the breakpoint it waits at
 	void ContinueTask(uint32_t taskNumber);
 	[[nodiscard]] bool IsTaskHeld(uint32_t taskNumber) const { return _heldTasks.contains(taskNumber); }
+
+	/// The state of the debugger: the breakpoints, the held tasks with the instructions that each can still run, and the
+	/// address where each continued task starts again. A world state keeps it, so that each computer holds the same tasks.
+	struct DebuggerState
+	{
+		std::set<uint32_t> breakpoints;
+		std::map<uint32_t, uint32_t> heldTasks;
+		std::map<uint32_t, uint32_t> resumeFrom;
+
+		bool operator==(const DebuggerState&) const = default;
+	};
+	[[nodiscard]] DebuggerState GetDebuggerState() const;
+	/// Puts back the state of the debugger after a load of the running state. The entries of a task that is not in the
+	/// machine go.
+	void SetDebuggerState(DebuggerState state);
 };
 
 } // namespace openblack::lhvm

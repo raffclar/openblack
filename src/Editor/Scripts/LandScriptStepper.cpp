@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <utility>
 
 #include <fmt/format.h>
 
@@ -80,6 +81,19 @@ void LandScriptStepper::Reset(size_t count)
 	_states.assign(count, State::NotDone);
 	_breakpoints.clear();
 	_next = 0;
+}
+
+bool LandScriptStepper::Restore(Kept kept)
+{
+	const auto count = kept.states.size();
+	if (kept.next > count || (!kept.breakpoints.empty() && *kept.breakpoints.rbegin() >= count))
+	{
+		return false;
+	}
+	_states = std::move(kept.states);
+	_breakpoints = std::move(kept.breakpoints);
+	_next = kept.next;
+	return true;
 }
 
 void LandScriptStepper::Restart() noexcept

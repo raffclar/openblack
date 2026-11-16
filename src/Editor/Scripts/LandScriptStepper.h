@@ -78,6 +78,21 @@ public:
 	/// Moves past the next command and does not do it
 	void Skip() noexcept;
 
+	/// The position of the stepper as a world state keeps it: the state of each command, the breakpoints and the next
+	/// command
+	struct Kept
+	{
+		std::vector<State> states;
+		std::set<size_t> breakpoints;
+		size_t next {0};
+
+		bool operator==(const Kept&) const = default;
+	};
+	[[nodiscard]] Kept GetKept() const { return {.states = _states, .breakpoints = _breakpoints, .next = _next}; }
+	/// Puts back a kept position. It gives false and changes nothing when the next command or a breakpoint is not in the
+	/// commands of the position.
+	bool Restore(Kept kept);
+
 private:
 	/// Does the next command and moves past it. It gives false when the command failed.
 	bool DoNext(const Run& run);

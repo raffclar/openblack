@@ -179,3 +179,24 @@ TEST(LandScriptStepper, RestartKeepsTheBreakpointsAndResetForgetsThem)
 	EXPECT_FALSE(stepper.HasBreakpoint(1));
 	EXPECT_EQ(stepper.Count(), 2u);
 }
+
+TEST(LandScriptStepper, AKeptPositionComesBackOnlyWhenItAgreesWithItsCommands)
+{
+	LandScriptStepper stepper(3);
+	stepper.ToggleBreakpoint(2);
+	stepper.Skip();
+	const auto kept = stepper.GetKept();
+	LandScriptStepper other;
+	ASSERT_TRUE(other.Restore(kept));
+	EXPECT_EQ(other.GetKept(), kept);
+	EXPECT_EQ(other.Next(), std::optional<size_t> {1});
+	EXPECT_TRUE(other.HasBreakpoint(2));
+	// A breakpoint or a next command past the last command does not come back
+	auto bad = kept;
+	bad.breakpoints.insert(3);
+	EXPECT_FALSE(other.Restore(bad));
+	bad = kept;
+	bad.next = 4;
+	EXPECT_FALSE(other.Restore(bad));
+	EXPECT_EQ(other.GetKept(), kept);
+}

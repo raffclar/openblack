@@ -484,6 +484,7 @@ ProgramResult RunProgram(const EditorScriptProgram& change, std::span<const uint
 void ReadLandScript(LandScriptRun& run, std::string name, const std::string& text)
 {
 	run.name = std::move(name);
+	run.text = text;
 	try
 	{
 		run.read = lhscriptx::Script::Read(text);
@@ -496,6 +497,33 @@ void ReadLandScript(LandScriptRun& run, std::string name, const std::string& tex
 	}
 	run.stepper.Reset(run.read.commands.size());
 	++run.changes;
+}
+
+KeptLandScriptRun KeepLandScriptRun(const LandScriptRun& run)
+{
+	return {
+	    .name = run.name, .text = run.text, .stepper = run.stepper.GetKept(), .message = run.message, .changes = run.changes};
+}
+
+bool RestoreLandScriptRun(LandScriptRun& run, const KeptLandScriptRun& kept, std::optional<uint32_t> worldResets)
+{
+	// A run that read no script stays with no script
+	if (kept.changes == 0)
+	{
+		run = {};
+		return true;
+	}
+	// The count of the changes goes up past both counts, so that a panel of this computer shows the new run
+	const auto changes = std::max(run.changes, kept.changes) + 1;
+	ReadLandScript(run, kept.name, kept.text);
+	run.changes = changes;
+	run.world = worldResets;
+	if (kept.stepper.states.size() != run.read.commands.size() || !run.stepper.Restore(kept.stepper))
+	{
+		return false;
+	}
+	run.message = kept.message;
+	return true;
 }
 
 std::optional<std::string> LandScriptText(const std::filesystem::path& path)

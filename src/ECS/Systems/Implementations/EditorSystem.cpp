@@ -14,6 +14,9 @@
 #include <cmath>
 
 #include <algorithm>
+#include <utility>
+
+#include <LHVM.h>
 
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
@@ -21,6 +24,7 @@
 #include "Camera/EditorCameraModel.h"
 #include "Common/PortableMath.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Editor/EditorEntities.h"
@@ -206,6 +210,53 @@ void EditorSystem::AnswerRequest(editor::Request request, entt::entity entity)
 		return;
 	}
 	_history.Answer(request, editor::AnswerOf(Locator::entitiesRegistry::value(), entity, *awaited));
+}
+
+void EditorSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	// The debugger of the script machine. A load of the scripts clears it, so this section puts it back after them.
+	const auto debugger = Locator::vm::has_value() ? Locator::vm::value().GetDebuggerState() : lhvm::LHVM::DebuggerState {};
+	reflection::Save(out, debugger.breakpoints);
+	reflection::Save(out, debugger.heldTasks);
+	reflection::Save(out, debugger.resumeFrom);
+	// The run of the land script stepper. Only the panels of this computer use the message and the count of the changes.
+	const auto run = editor::script_acts::KeepLandScriptRun(_landScript);
+	reflection::Save(out, run.name);
+	reflection::Save(out, run.text);
+	reflection::Save(out, run.stepper.states);
+	reflection::Save(out, run.stepper.breakpoints);
+	reflection::Save(out, run.stepper.next);
+	reflection::SavePresentation(out, run.message);
+	reflection::SavePresentation(out, run.changes);
+}
+
+bool EditorSystem::LoadState(reflection::BinaryReader& in)
+{
+	lhvm::LHVM::DebuggerState debugger;
+	reflection::Load(in, debugger.breakpoints);
+	reflection::Load(in, debugger.heldTasks);
+	reflection::Load(in, debugger.resumeFrom);
+	editor::script_acts::KeptLandScriptRun run;
+	reflection::Load(in, run.name);
+	reflection::Load(in, run.text);
+	reflection::Load(in, run.stepper.states);
+	reflection::Load(in, run.stepper.breakpoints);
+	reflection::Load(in, run.stepper.next);
+	reflection::Load(in, run.message);
+	reflection::Load(in, run.changes);
+	if (in.Failed())
+	{
+		return false;
+	}
+	if (Locator::vm::has_value())
+	{
+		Locator::vm::value().SetDebuggerState(std::move(debugger));
+	}
+	// The load reset the registry before this section, so the run starts at the count of the world that it now holds
+	const auto resets = Locator::entitiesRegistry::has_value()
+	                        ? std::optional<uint32_t> {Locator::entitiesRegistry::value().GetResets()}
+	                        : std::nullopt;
+	return editor::script_acts::RestoreLandScriptRun(_landScript, run, resets);
 }
 
 void EditorSystem::Update([[maybe_unused]] std::chrono::microseconds dt)
