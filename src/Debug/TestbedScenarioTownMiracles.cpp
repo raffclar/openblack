@@ -429,6 +429,24 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	                     MagicType::StormWindRain},
 	});
 	all.push_back({
+	    .id = "town.stone_hand_light_moves",
+	    .name = "The effects over the stone hands in a thunderstorm",
+	    .facet = Facet::Miracles,
+	    .description = "The same town, temple and six miracles as the scenario of the effects over the stone hands, in a "
+	                   "thunderstorm. The shadows of the storm's clouds move over the village centre.",
+	    .expected = "Each effect over a stone hand becomes lighter and darker with the land under its hand. It changes "
+	                "in the same frame as the land, not one frame after it.",
+	    .environment = {.weather = Weather::Thunderstorm, .dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x + 6.0f, 14.0f, k_Centre.y - 30.0f},
+	                .look = {k_Centre.x, 5.0f, k_Centre.y}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Fireball, MagicType::LightningBolt, MagicType::Water, MagicType::Teleport,
+	                     MagicType::StormWindRain},
+	});
+	all.push_back({
 	    .id = "town.miracle_spares_stone_hands",
 	    .name = "A fireball on a village centre with stone hands",
 	    .facet = Facet::Miracles,

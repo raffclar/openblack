@@ -102,6 +102,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1237,6 +1238,11 @@ bool Game::RunFrame() noexcept
 				drawDesc.submitWorldLabels = [](graphics::WorldLabelGroup group) {
 					Locator::gameInterface::value().SubmitWorldLabels(group);
 				};
+			}
+			// The effects over the stone hands read the light of the land of this frame
+			if (Locator::spellIconSystem::has_value())
+			{
+				drawDesc.landShaded = [] { Locator::spellIconSystem::value().LightHandHolderEffects(); };
 			}
 			// The sun, the moon and the dome's blend of this frame, for drawing it
 			if (Locator::skySystem::has_value())

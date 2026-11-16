@@ -195,8 +195,6 @@ glm::mat3 FacingCamera(glm::mat3 axes, const glm::vec3& position, const glm::vec
 void Renderer::CollectParticles() const
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ParticlesGather);
-	// The light maps and shadows of the frame that ended stamp the land in this frame
-	_landStamps.swap(_particleFrame.lightStamps);
 	_townBeliefFrameCount = 0;
 	if (!Locator::particleSystem::has_value() || !Locator::time::has_value())
 	{

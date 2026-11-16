@@ -90,6 +90,8 @@ public:
 		/// Submits a group of the labels in the world. The main pass calls it at the point where the game adds or draws the
 		/// group. With no function, the caller submits the labels.
 		std::function<void(WorldLabelGroup)> submitWorldLabels;
+		/// Runs once in the frame, after the frame shades the land and before it collects what the particle effects draw
+		std::function<void()> landShaded;
 	};
 
 	struct L3DMeshSubmitDesc
