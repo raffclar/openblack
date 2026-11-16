@@ -292,7 +292,9 @@ TEST(EditorScriptActs, AKeptRunOfTheLandScriptComesBackAtTheSamePosition)
 
 	// A computer with no run, such as a restarted server, gets the same run
 	LandScriptRun restored;
-	ASSERT_TRUE(RestoreLandScriptRun(restored, kept, 7));
+	FakeLandWorld other;
+	other.resets = 7;
+	ASSERT_TRUE(RestoreLandScriptRun(restored, kept, other.resets));
 	// The restored run holds the count of the world of the load, so the next act does not start it again
 	EXPECT_EQ(restored.world, std::optional<uint32_t> {7});
 	EXPECT_EQ(KeepLandScriptRun(restored).stepper, kept.stepper);
@@ -304,7 +306,6 @@ TEST(EditorScriptActs, AKeptRunOfTheLandScriptComesBackAtTheSamePosition)
 	EXPECT_GT(restored.changes, kept.changes);
 
 	// The next step does the same command on both runs
-	FakeLandWorld other;
 	ASSERT_TRUE(ApplyLandScript({.act = LandAct::Step}, {}, run, world.World()).done);
 	ASSERT_TRUE(ApplyLandScript({.act = LandAct::Step}, {}, restored, other.World()).done);
 	EXPECT_EQ(world.done.back(), "CREATE_TOWN");
