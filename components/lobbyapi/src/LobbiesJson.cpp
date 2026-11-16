@@ -230,7 +230,8 @@ bool ReadSummary(const Json& object, LobbySummary& out)
 	       ReadInteger(object, "gods", out.gods) && ReadInteger(object, "god_slots", out.godSlots) &&
 	       ReadOptionalInteger(object, "open_slots", out.openSlots) &&
 	       ReadOptionalInteger(object, "free_slots", out.freeSlots) && ReadInteger(object, "observers", out.observers, false) &&
-	       ReadBool(object, "locked", out.locked, false) && ReadName(object, "state", out.state, LobbyStateOf) &&
+	       ReadArray(object, "players", out.players, ReadAccountRef, false) && ReadBool(object, "locked", out.locked, false) &&
+	       ReadName(object, "state", out.state, LobbyStateOf) &&
 	       ReadOptionalInteger(object, "queue_position", out.queuePosition) &&
 	       ReadOptionalTime(object, "started_at", out.startedAt) && ReadOptionalTime(object, "created", out.created) &&
 	       ReadString(object, "build_id", out.buildId, false);
@@ -286,7 +287,8 @@ bool ReadLobby(const Json& object, Lobby& out)
 	    !ReadString(object, "build_id", out.buildId, false) || !ReadName(object, "state", out.state, LobbyStateOf) ||
 	    !ReadOptionalInteger(object, "queue_position", out.queuePosition) ||
 	    !ReadOptionalTime(object, "countdown_at", out.countdownAt) || !ReadOptionalTime(object, "started_at", out.startedAt) ||
-	    !ReadArray(object, "members", out.members, ReadMember) || !ReadSlots(object, out.slotKinds))
+	    !ReadArray(object, "members", out.members, ReadMember) || !ReadSlots(object, out.slotKinds) ||
+	    !ReadString(object, "game_id", out.gameId, false))
 	{
 		return false;
 	}
@@ -482,6 +484,15 @@ std::optional<LobbyList> ParseLobbyList(std::string_view text)
 				return false;
 			}
 			out.pool = state;
+		}
+		if (const auto* rejoin = Member(object, "rejoin"); rejoin != nullptr && !rejoin->is_null())
+		{
+			LobbySummary held;
+			if (!rejoin->is_object() || !ReadSummary(*rejoin, held))
+			{
+				return false;
+			}
+			out.rejoin = std::move(held);
 		}
 		return true;
 	});

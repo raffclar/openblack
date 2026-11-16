@@ -99,6 +99,9 @@ struct Session
 	/// its debug cheats in a build that players get. In a network game, only the editor claim of the join ticket
 	/// counts.
 	bool editor {false};
+	/// "debugger": the account has the debugger mark (optional). Outside a network game, only this mark shows the debug
+	/// menu bar. In a network game, only the debugger claim of the join ticket counts.
+	bool debugger {false};
 };
 
 /// A clan of the account in GET /api/v1/me

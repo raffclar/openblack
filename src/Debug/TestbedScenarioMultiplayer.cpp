@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 35> boxes = {{
+	const std::array<BoxScenario, 37> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -176,6 +176,16 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The status column shows Open, Full, \"In game 0:42\", \"Waiting for a server (2)\" and \"(Wrong Version)\". "
 	     "The line under the list shows that all servers are in use. The buttons \"Create session\", \"Quick join\" "
 	     "and \"Join by code\" are under the filters."},
+	    {"multiplayer.lobby_list_playing", "The lobby sessions: a game that plays", Stage::LobbyListPlaying,
+	     "The player logs in as Alice. The demonstration lobby gives six sessions. The player picks \"Evening game\", "
+	     "a game that plays.",
+	     "The status of \"Evening game\" is \"In game 0:42\", and its line is under the other sessions. The line under "
+	     "the list shows \"Three gods - Host: Bob - Players: Bob, Carol, Dan\". There is no Join Game button."},
+	    {"multiplayer.lobby_list_rejoin", "The lobby sessions: the game to rejoin", Stage::LobbyListRejoin,
+	     "The player logs in as Alice. Alice lost the connection to the private game \"Last night\" and still holds a god "
+	     "in it. The demonstration lobby gives six sessions and that game.",
+	     "\"Last night\" is the first line, and it is picked. Its status is \"In game 1:15\". The line under the list "
+	     "shows \"Two gods - Host: Carol - Players: Carol, Alice\". The button at the bottom right is \"Rejoin\"."},
 	    {"multiplayer.lobby_create", "The lobby sessions: Create session", Stage::LobbyCreate,
 	     "The player opens the box \"Create session\" from the lobby list.",
 	     "The box has the name \"<profile>'s game\", the list of the maps with \"Ring of gods (8) - download\" picked, 8 "

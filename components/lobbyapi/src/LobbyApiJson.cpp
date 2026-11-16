@@ -327,7 +327,8 @@ std::optional<Session> ParseSession(std::string_view text)
 		return ReadString(object, "access_token", out.accessToken) && !out.accessToken.empty() &&
 		       ReadTime(object, "access_token_expires", out.accessTokenExpires) &&
 		       ReadTime(object, "refresh_token_expires", out.refreshTokenExpires, false) &&
-		       ReadBool(object, "email_required", out.emailRequired, false) && ReadBool(object, "editor", out.editor, false);
+		       ReadBool(object, "email_required", out.emailRequired, false) && ReadBool(object, "editor", out.editor, false) &&
+		       ReadBool(object, "debugger", out.debugger, false);
 	});
 }
 

@@ -267,8 +267,14 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 	{
 		return {.problem = server::TicketProblem::Signature, .claims = std::nullopt};
 	}
-	// "+editor" after the role gives the editor claim
+	// "+debugger" after the role gives the debugger claim, and "+editor" after the role gives the editor claim
 	auto roleText = token.substr(0, colon);
+	constexpr std::string_view k_Debugger = "+debugger";
+	const auto debugger = roleText.ends_with(k_Debugger);
+	if (debugger)
+	{
+		roleText.remove_suffix(k_Debugger.size());
+	}
 	constexpr std::string_view k_Editor = "+editor";
 	const auto editor = roleText.ends_with(k_Editor);
 	if (editor)
@@ -297,6 +303,7 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 	claims.name = claims.subject;
 	claims.role = *role;
 	claims.editor = editor;
+	claims.debugger = debugger;
 	return {.problem = server::TicketProblem::None, .claims = claims};
 }
 
@@ -817,6 +824,26 @@ TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAGodWithTheEditor
 	// The worlds stay in step
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheJoinAnswerGivesTheDebuggerClaimOfTheTicketApartFromTheEditorClaim)
+{
+	MakeHost(2);
+	Computer watcher(network, now, "observer+debugger:carol");
+	Frames({&watcher}, 3);
+	Computer alice(network, now, "god+editor+debugger:alice");
+	Computer bob(network, now, "god+editor:bob");
+	Frames({&alice, &bob, &watcher}, 8);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.GetJoined().has_value());
+	ASSERT_TRUE(bob.session.GetJoined().has_value());
+	ASSERT_TRUE(watcher.session.GetJoined().has_value());
+	EXPECT_TRUE(alice.session.GetJoined()->debugger);
+	EXPECT_TRUE(alice.session.GetJoined()->editor);
+	EXPECT_FALSE(bob.session.GetJoined()->debugger);
+	EXPECT_TRUE(bob.session.GetJoined()->editor);
+	EXPECT_TRUE(watcher.session.GetJoined()->debugger);
+	EXPECT_FALSE(watcher.session.GetJoined()->editor);
 }
 
 TEST_F(LockstepTest, TheServerTakesTheEditsOfTheEditorOnlyWithValuesInTheirRange)

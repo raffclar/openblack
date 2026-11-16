@@ -75,6 +75,9 @@ public:
 	void StopForServerVersion(std::string serverBuild, std::string expected);
 	/// The lobby gives the room a game server after the countdown. Then the room gets this ticket.
 	void AssignGame(std::string gameId, lobby_api::JoinTicket ticket);
+	/// The player lost the connection to a game that plays and still holds a god in it. The next list gives that game,
+	/// and a join of it gives the room with its game server and this ticket.
+	void HoldGod(std::optional<lobby_api::JoinTicket> ticket = std::nullopt);
 
 private:
 	/// Sends an event to the room, as the push channel of the room does
@@ -89,6 +92,8 @@ private:
 	int64_t _seq {0};
 	/// The ticket of the game server that the lobby gave the room, none before AssignGame
 	std::optional<lobby_api::JoinTicket> _ticket;
+	/// The next list gives a game to rejoin
+	bool _holdsGod {false};
 };
 
 } // namespace openblack::testbed_multiplayer

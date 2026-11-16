@@ -301,11 +301,14 @@ void Gui::FollowNetworkSession() noexcept
 {
 	using developer_tools::GuiMode;
 	const auto mode = developer_tools::CurrentGuiMode();
-	if (mode == _mode)
+	_networkSessionLive = developer_tools::NetworkSessionLive();
+	const bool editorCanOpen = developer_tools::EditorCanOpen();
+	if (mode == _mode && editorCanOpen == _editorCanOpen)
 	{
 		return;
 	}
 	_mode = mode;
+	_editorCanOpen = editorCanOpen;
 	// The editor keeps the camera while it is open, thus it closes. It changes the world at once in a single player game
 	// and sends commands in a network game, so it opens again in the new mode. The other windows stay as they are.
 	for (auto& window : _debugWindows)
@@ -321,7 +324,9 @@ void Gui::FollowNetworkSession() noexcept
 		switch (mode)
 		{
 		case GuiMode::Full:
-			SPDLOG_LOGGER_INFO(logger, "The debug windows start again");
+			// The test tools find the words "the debugger right"
+			SPDLOG_LOGGER_INFO(logger, "The debug windows start again: the player has the debugger right or the build has "
+			                           "the developer tools");
 			break;
 		case GuiMode::EditorOnly:
 			SPDLOG_LOGGER_INFO(logger, "The player has the editor right: only the editor shows");
@@ -335,26 +340,25 @@ void Gui::FollowNetworkSession() noexcept
 
 bool Gui::Shows(const Window& window) const noexcept
 {
-	using developer_tools::GuiMode;
-	return _mode == GuiMode::Full || (_mode == GuiMode::EditorOnly && window.GetName() == k_EditorWindow);
+	return developer_tools::ShowsWindow(_mode, _networkSessionLive, window.GetName() == k_EditorWindow, _editorCanOpen);
 }
 
 bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 {
 	ImGui::SetCurrentContext(_imgui);
 	// While a network game is live, no debug window takes an event, so that none changes the shared world. Only the editor
-	// of a player with the editor claim takes events, and it sends its edits as commands of the turns. In a build that
-	// players get, only the editor of a player with the editor right takes events.
+	// of a player with the editor claim takes events, and it sends its edits as commands of the turns. The menu bar of a
+	// player with the debugger right also takes events. Its menus that change the world do not open in a network game.
 	FollowNetworkSession();
+	// The editor key of a player with no editor right shows the refusal line to the player. With no account signed in
+	// outside a network game, the key does nothing.
+	if (!_editorCanOpen && _imgui != nullptr && developer_tools::LocalEditorRight() != developer_tools::EditorRight::Unknown &&
+	    editor::IsEditorToggleKey(event))
+	{
+		std::ignore = developer_tools::EditorAllowed();
+	}
 	if (_mode == developer_tools::GuiMode::Dormant)
 	{
-		// The editor key of a player with no editor right shows the refusal line to the player. With no account signed in
-		// outside a network game, the key does nothing.
-		if (_imgui != nullptr && developer_tools::LocalEditorRight() != developer_tools::EditorRight::Unknown &&
-		    editor::IsEditorToggleKey(event))
-		{
-			std::ignore = developer_tools::EditorAllowed();
-		}
 		return false;
 	}
 
@@ -627,9 +631,18 @@ bool Gui::Loop() noexcept
 		ImGui::Render();
 		return false;
 	}
+	// The debugger right gives the menu bar. The editor shows only with the editor right, and in a network game no
+	// other window shows.
 	for (auto& window : _debugWindows)
 	{
-		window->WindowUpdate();
+		if (Shows(*window))
+		{
+			window->WindowUpdate();
+		}
+		else
+		{
+			window->UpdateInNetworkGame();
+		}
 	}
 	NewFrame();
 	if (_menuBarVisible && ShowMenu())
@@ -639,7 +652,10 @@ bool Gui::Loop() noexcept
 	}
 	for (auto& window : _debugWindows)
 	{
-		window->WindowDraw();
+		if (Shows(*window))
+		{
+			window->WindowDraw();
+		}
 	}
 	ShowVillagerNames();
 	ShowDispenserNames();
@@ -860,7 +876,9 @@ bool Gui::ShowMenu() noexcept
 	if (ImGui::BeginMainMenuBar())
 	{
 		auto& game = *Game::Instance();
-		if (ImGui::BeginMenu("Load Island"))
+		// In a network game the menus that change the shared world do not open, so that the worlds stay the same
+		const bool changesWorld = !_networkSessionLive;
+		if (ImGui::BeginMenu("Load Island", changesWorld))
 		{
 			auto& resources = Locator::resources::value();
 			auto& levelsManager = resources.GetLevels();
@@ -934,7 +952,7 @@ bool Gui::ShowMenu() noexcept
 
 		auto& config = Locator::config::value();
 
-		if (ImGui::BeginMenu("World"))
+		if (ImGui::BeginMenu("World", changesWorld))
 		{
 			if (ImGui::SliderFloat("Time of Day", &config.timeOfDay, 0.0f, 24.0f, "%.3f"))
 			{
@@ -958,13 +976,17 @@ bool Gui::ShowMenu() noexcept
 		{
 			if (ImGui::MenuItem("Editor", input::platform_keys::EditorToggleKeyName(k_Platform).data()))
 			{
-				OpenWindow("Editor");
+				// The editor opens only with the editor right, else the player sees the refusal line
+				if (developer_tools::EditorAllowed())
+				{
+					OpenWindow("Editor");
+				}
 			}
 			if (ImGui::BeginMenu("Windows"))
 			{
 				for (auto& window : _debugWindows)
 				{
-					if (ImGui::MenuItem(window->GetName().c_str()))
+					if (ImGui::MenuItem(window->GetName().c_str(), nullptr, false, Shows(*window)))
 					{
 						window->Open();
 					}
@@ -1007,7 +1029,7 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
-			if (ImGui::BeginMenu("Bonus Creatures"))
+			if (ImGui::BeginMenu("Bonus Creatures", changesWorld))
 			{
 				// The breeder's bonus creatures, which vanilla only had once unlocked from outside the game
 				for (size_t i = 0; i < creature_swap::k_BonusCount; ++i)
@@ -1052,7 +1074,7 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
-			if (ImGui::BeginMenu("Game Speed"))
+			if (ImGui::BeginMenu("Game Speed", changesWorld))
 			{
 				float multiplier = game.GetGameSpeed();
 				ImGui::Text("Scaled game duration: %.3fms (%.3f Hz)", multiplier * Game::k_TurnDuration.count(),

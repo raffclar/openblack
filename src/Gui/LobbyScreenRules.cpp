@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 
 #include <LobbiesJson.h>
 #include <SDL_keycode.h>
@@ -164,13 +165,17 @@ std::u16string NameText(const lobby_api::LobbySummary& lobby)
 }
 
 std::vector<lobby_api::LobbySummary> ShownLobbies(std::span<const lobby_api::LobbySummary> lobbies,
-                                                  const online::lobby::ListFilter& filter, std::string_view ownBuild, Sort sort)
+                                                  const online::lobby::ListFilter& filter, std::string_view ownBuild, Sort sort,
+                                                  std::string_view rejoinId)
 {
-	auto shown = online::lobby::VisibleLobbies(lobbies, filter, ownBuild);
+	auto shown = online::lobby::VisibleLobbies(lobbies, filter, ownBuild, rejoinId);
 	if (!sort.column.has_value())
 	{
 		return shown;
 	}
+	// The sort does not move the game to rejoin from the first line
+	const bool hasRejoin = !rejoinId.empty() && !shown.empty() && shown.front().id == rejoinId;
+	const auto first = hasRejoin ? std::next(shown.begin()) : shown.begin();
 	const auto column = *sort.column;
 	const auto build = std::string(ownBuild);
 	const auto compare = [column, &build](const lobby_api::LobbySummary& left, const lobby_api::LobbySummary& right) {
@@ -194,7 +199,7 @@ std::vector<lobby_api::LobbySummary> ShownLobbies(std::span<const lobby_api::Lob
 		}
 		return 0;
 	};
-	std::ranges::stable_sort(shown, [&compare, &sort](const auto& left, const auto& right) {
+	std::ranges::stable_sort(first, shown.end(), [&compare, &sort](const auto& left, const auto& right) {
 		const auto order = compare(left, right);
 		return sort.descending ? order > 0 : order < 0;
 	});
@@ -235,6 +240,24 @@ std::u16string ServersText(const std::optional<lobby_api::PoolState>& pool)
 
 std::u16string DetailText(const lobby_api::LobbySummary& lobby, std::u16string_view mapName)
 {
+	if (online::lobby::IsInGame(lobby))
+	{
+		auto text = std::u16string(mapName) + Utf16(fmt::format(" - Host: {} - Players: ", lobby.host.name));
+		const auto shown = std::min(lobby.players.size(), k_MostShownPlayers);
+		for (size_t i = 0; i < shown; ++i)
+		{
+			text += (i == 0 ? std::u16string() : std::u16string(u", ")) + Utf16(lobby.players[i].name);
+		}
+		if (shown == 0)
+		{
+			text += Utf16(fmt::format("{}", lobby.gods));
+		}
+		else if (lobby.players.size() > shown)
+		{
+			text += Utf16(fmt::format(" and {} more", lobby.players.size() - shown));
+		}
+		return text;
+	}
 	auto text = std::u16string(mapName) +
 	            Utf16(fmt::format(" - Host: {} - Password: {}", lobby.host.name, lobby.locked ? "yes" : "no"));
 	if (!lobby.map.sha256.empty() && lobby.map.size > 0)
@@ -242,6 +265,29 @@ std::u16string DetailText(const lobby_api::LobbySummary& lobby, std::u16string_v
 		text += Utf16(fmt::format(" - Map download: {}", MegabytesText(lobby.map.size)));
 	}
 	return text;
+}
+
+ListButton ListButtonOf(const lobby_api::LobbySummary* picked, std::string_view rejoinId)
+{
+	if (picked == nullptr)
+	{
+		return ListButton::None;
+	}
+	if (!rejoinId.empty() && picked->id == rejoinId)
+	{
+		return ListButton::Rejoin;
+	}
+	return online::lobby::IsInGame(*picked) ? ListButton::None : ListButton::Join;
+}
+
+bool ShowsJoinButton(const lobby_api::LobbySummary* picked, std::string_view rejoinId)
+{
+	return ListButtonOf(picked, rejoinId) != ListButton::None;
+}
+
+std::string_view PickedLobby(std::string_view clicked, std::string_view rejoinId)
+{
+	return clicked.empty() ? rejoinId : clicked;
 }
 
 std::string_view RefusalOf(const lobby_api::LobbySummary& lobby, std::string_view ownBuild)

@@ -176,6 +176,8 @@ struct Arguments
 	bool useInternetWeather {true};
 	/// Tools: the editor rule of a build that players get, with this editor right of a signed-in account
 	std::optional<bool> simAccountEditor;
+	/// Tools: the rule of the debug menu bar of a build that players get, with this debugger right of a signed-in account
+	std::optional<bool> simAccountDebugger;
 	/// A network game shows the player's own ping (off by default)
 	bool showPing {false};
 	/// Tests: the wait before each request of a piece of a map that the lobby room downloads

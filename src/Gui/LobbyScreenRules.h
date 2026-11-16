@@ -78,10 +78,12 @@ enum class Status : uint8_t
 [[nodiscard]] std::u16string GodsText(const lobby_api::LobbySummary& lobby);
 /// The name column: "# " in front of the name of a session with a password
 [[nodiscard]] std::u16string NameText(const lobby_api::LobbySummary& lobby);
-/// The sessions that the filter shows, in the order of the sort
+/// The sessions that the filter shows, in the order of the sort. The game in which the player still holds a god
+/// (rejoinId) is always the first line.
 [[nodiscard]] std::vector<lobby_api::LobbySummary> ShownLobbies(std::span<const lobby_api::LobbySummary> lobbies,
                                                                 const online::lobby::ListFilter& filter,
-                                                                std::string_view ownBuild, Sort sort);
+                                                                std::string_view ownBuild, Sort sort,
+                                                                std::string_view rejoinId = {});
 
 /// The width of a text at a size, from the font
 using MeasureText = std::function<float(std::u16string_view text)>;
@@ -90,8 +92,28 @@ using MeasureText = std::function<float(std::u16string_view text)>;
 
 /// The line under the list: the free game servers
 [[nodiscard]] std::u16string ServersText(const std::optional<lobby_api::PoolState>& pool);
-/// The line about the map of a session: its name, its host, and the bytes to download for a map of the service
+/// The line about the map of a session: its name, its host, and the bytes to download for a map of the service. For a
+/// game that plays, the line gives the names of its players in place of the password and the download.
 [[nodiscard]] std::u16string DetailText(const lobby_api::LobbySummary& lobby, std::u16string_view mapName);
+/// The most names of players that the line of a game that plays shows. A note gives the number of the other players.
+inline constexpr size_t k_MostShownPlayers = 6;
+/// The button of the list for the picked session
+enum class ListButton : uint8_t
+{
+	/// No session is picked, or the picked game plays and the player has no god in it
+	None,
+	/// "Join Game"
+	Join,
+	/// "Rejoin": the player goes back into the god that it holds in the game that plays (design 2.9)
+	Rejoin,
+};
+/// A game that plays takes no new player, so it has no button. The game in which the player still holds a god
+/// (rejoinId) has the button "Rejoin".
+[[nodiscard]] ListButton ListButtonOf(const lobby_api::LobbySummary* picked, std::string_view rejoinId = {});
+/// The list shows a button for the picked session
+[[nodiscard]] bool ShowsJoinButton(const lobby_api::LobbySummary* picked, std::string_view rejoinId = {});
+/// The session that the list picks: the session that the player clicked, else the game to rejoin
+[[nodiscard]] std::string_view PickedLobby(std::string_view clicked, std::string_view rejoinId);
 
 /// What a join of the picked session does
 enum class JoinStep : uint8_t

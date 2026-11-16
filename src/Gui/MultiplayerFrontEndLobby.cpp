@@ -153,7 +153,18 @@ std::vector<openblack::lobby_api::LobbySummary> MultiplayerFrontEnd::GetShownLob
 	{
 		return {};
 	}
-	return screens::ShownLobbies(_services.lobbyRoom->List().Entries(), _listFilter, _services.lobbyRoom->BuildId(), _listSort);
+	const auto& list = _services.lobbyRoom->List();
+	return screens::ShownLobbies(list.Entries(), _listFilter, _services.lobbyRoom->BuildId(), _listSort, list.RejoinId());
+}
+
+std::string_view MultiplayerFrontEnd::GetRejoinLobby() const
+{
+	return _services.lobbyRoom != nullptr ? std::string_view(_services.lobbyRoom->List().RejoinId()) : std::string_view();
+}
+
+std::string_view MultiplayerFrontEnd::GetSelectedLobby() const
+{
+	return screens::PickedLobby(_selectedLobby, GetRejoinLobby());
 }
 
 std::string MultiplayerFrontEnd::GetLobbyBuild() const
@@ -168,11 +179,12 @@ std::optional<openblack::lobby_api::PoolState> MultiplayerFrontEnd::GetServerPoo
 
 const openblack::lobby_api::LobbySummary* MultiplayerFrontEnd::GetSelectedSummary() const
 {
-	if (_services.lobbyRoom == nullptr || _selectedLobby.empty())
+	const auto picked = GetSelectedLobby();
+	if (_services.lobbyRoom == nullptr || picked.empty())
 	{
 		return nullptr;
 	}
-	return _services.lobbyRoom->List().Find(_selectedLobby);
+	return _services.lobbyRoom->List().Find(picked);
 }
 
 void MultiplayerFrontEnd::JoinLobby(std::string id, std::optional<std::string> password)
@@ -188,9 +200,17 @@ void MultiplayerFrontEnd::JoinSelectedLobby()
 	{
 		return;
 	}
+	// A game that plays has no join: Return does nothing, as the list shows no button
 	const auto* lobby = GetSelectedSummary();
-	if (lobby == nullptr)
+	const auto button = screens::ListButtonOf(lobby, GetRejoinLobby());
+	if (button == screens::ListButton::None)
 	{
+		return;
+	}
+	// The player is a member of the game already. The service gives the lobby, and the room asks a ticket for the god.
+	if (button == screens::ListButton::Rejoin)
+	{
+		JoinLobby(lobby->id, std::nullopt);
 		return;
 	}
 	const auto& build = _services.lobbyRoom->BuildId();

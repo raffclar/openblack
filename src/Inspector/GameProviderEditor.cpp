@@ -85,8 +85,9 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	auto provider = std::make_unique<FunctionProvider>("editor");
 	provider->Add(Query("state", "The editor of this computer: whether it is open, whether a network game is live, whether "
 	                             "the player of this computer has the editor right (from the join ticket in a network game, "
-	                             "else from the signed-in account: granted, refused or unknown), what the debug windows "
-	                             "show, and the debug cheats of that player"),
+	                             "else from the signed-in account: granted, refused or unknown), the debugger right of that "
+	                             "player (the same sources and values), what the debug windows show, and the debug cheats "
+	                             "of that player"),
 	              [](const QueryContext& /*context*/) {
 		              Json cheats = Json::array();
 		              const auto own = editor::OwnDebugCheats();
@@ -103,6 +104,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		                  {"network", developer_tools::NetworkSessionLive()},
 		                  {"editor", developer_tools::LocalEditorRight() == developer_tools::EditorRight::Granted},
 		                  {"right", std::string(developer_tools::NameOf(developer_tools::LocalEditorRight()))},
+		                  {"debugger", std::string(developer_tools::NameOf(developer_tools::LocalDebuggerRight()))},
 		                  {"mode", std::string(developer_tools::NameOf(developer_tools::CurrentGuiMode()))},
 		                  {"cheats", std::move(cheats)},
 		              });

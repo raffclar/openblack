@@ -61,6 +61,10 @@ enum class Stage : uint8_t
 	LanRoomPrivateChat,
 	/// The lobby list of the lobby sessions, with a session picked
 	LobbyList,
+	/// The lobby list with a game that plays picked: its players and no Join Game button
+	LobbyListPlaying,
+	/// The lobby list of a player who still holds a god in a game that plays: the first line, picked, with Rejoin
+	LobbyListRejoin,
 	/// The box "Create session"
 	LobbyCreate,
 	/// The room of a session that the player made: the host's controls, the ready ticks, a player without the map

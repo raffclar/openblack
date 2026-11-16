@@ -274,9 +274,10 @@ bool Game::UpdateDebugGui()
 		// The recorded mouse of a hand demonstration goes to the hand only, also when a debug window is under it
 		Locator::debugGui::value().SetHandDemoPlaying(Locator::handDemoSystem::has_value() &&
 		                                              Locator::handDemoSystem::value().IsReplaying());
-		// The debug menu bar comes up with the game's menu, or always without it
-		Locator::debugGui::value().SetMenuBarVisible(!Locator::gameInterface::has_value() ||
-		                                             Locator::gameInterface::value().GetMenu().IsOpen());
+		// The debug menu bar comes up with the game's menu, only for a player with the debugger right (see ShowsMenuBar)
+		const bool hasGameMenu = Locator::gameInterface::has_value();
+		Locator::debugGui::value().SetMenuBarVisible(developer_tools::ShowsMenuBar(
+		    developer_tools::CurrentGuiMode(), hasGameMenu, hasGameMenu && Locator::gameInterface::value().GetMenu().IsOpen()));
 		if (Locator::debugGui::value().Loop())
 		{
 			return false; // Quit event
