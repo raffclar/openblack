@@ -198,7 +198,8 @@ TEST(ResourceCache, AHeldResourceLoadsOnlyWhenItIsAskedFor)
 	// Prefetch asks for it, and then it does not count as held
 	cache.Prefetch(k_Second);
 	EXPECT_EQ(cache.HeldCount(), 0);
-	EXPECT_EQ(cache.LoadingCount(), 1);
+	// The first resource still runs, and the second one waits
+	EXPECT_EQ(cache.LoadingCount(), 2);
 	EXPECT_EQ(cache.StartLoads(queue, 1000), 10);
 }
 
