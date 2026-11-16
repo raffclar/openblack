@@ -58,6 +58,9 @@ With --ban-account the script also starts a fake lobby on 127.0.0.1 (HTTPS with 
 the server from the test authority). The fake lobby takes the status reports of the server and answers its bans with
 that account. Before the other clients, a client with a god's ticket of that account tries to join; the server must
 refuse it with "kicked" while the other clients play in step.
+With --kick-away-observer TURN (and --observers 1 or more) the last observer drops its socket once it compared TURN
+turns, and tries to come back 30 seconds later. While it is away, the fake lobby bans its account. The server must end
+the away session, and refuse the observer with "resume" when it comes back, while the gods play on in step.
 With --lobby-results the fake lobby also takes the result of the game: the server gets a test Ed25519 key
 (--result-key), and the fake lobby checks the signature of the result as the lobby does. The game must be decided, for
 example with --temple-loss. One signed result must come, with the position, the gods defeated and the time played of
@@ -366,9 +369,10 @@ class FakeLobby:
         # The reports of the host as bytes, each with the size check of the lobby
         self.host_reports = []
         lobby = self
-        bans = {"bans": [] if banned is None else [
-            {"account": {"id": banned, "name": f"Player{banned}"}, "reason": "net_check", "by": "test",
-             "created": "2026-10-26T00:00:00Z", "expires": None}]}
+        bans = {"bans": []}
+        self.bans = bans
+        if banned is not None:
+            self.ban(banned)
         clans = [{"account": 100, "clan": 7}] if result_key is not None else []
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -445,9 +449,44 @@ class FakeLobby:
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
+    def ban(self, account):
+        """Adds a ban of the account: the next read of the bans of the server gets it"""
+        self.bans["bans"] = self.bans["bans"] + [
+            {"account": {"id": account, "name": f"Player{account}"}, "reason": "net_check", "by": "test",
+             "created": "2026-10-26T00:00:00Z", "expires": None}]
+
     def close(self):
         self.server.shutdown()
         self.server.server_close()
+
+
+def kick_away_observer(pid, account, lobby, server_log, client_log):
+    """The observer drops its socket and tries to come back after 30 seconds. While it is away, the fake lobby bans its
+    account. The server must end the away session, and refuse the observer with "resume" when it comes back."""
+    done = {"account": account}
+    done["away"] = inspector_answer(pid, "engine.online_away", {"params": {"seconds": 30}})
+    if not (done["away"] or {}).get("away"):
+        done["error"] = f"the observer did not go away: {done['away']}"
+        return done
+
+    def wait_for(log, text, limit):
+        end = time.monotonic() + limit
+        while time.monotonic() < end:
+            if lines_with(log, [text]):
+                return True
+            time.sleep(0.5)
+        return False
+
+    done["server_saw_away"] = wait_for(server_log, "An observer lost the connection; it can come back", 20)
+    lobby.ban(account)
+    # The server reads the bans with each status report, each 5 seconds
+    done["session_ended"] = wait_for(server_log, "The lobby removed the away observer", 20)
+    done["refused"] = wait_for(client_log, "The game server refused the client: resume", 60)
+    done["server"] = lines_with(server_log, ["An observer lost the connection", "The lobby removed the away observer",
+                                             "(resume): no god or observer has the secret"])[-3:]
+    done["client"] = lines_with(client_log, ["The game server refused the client"])[-1:]
+    done["ok"] = done["server_saw_away"] and done["session_ended"] and done["refused"]
+    return done
 
 
 def lobby_results_summary(lobby, clients, server_log, out):
@@ -3136,6 +3175,9 @@ def main():
     parser.add_argument("--ban-account", type=int,
                         help="a fake lobby bans this account id; a client of that account must be refused before the "
                              "start (the other clients use the ids 100 and up)")
+    parser.add_argument("--kick-away-observer", type=int, metavar="TURN",
+                        help="the last observer drops its socket after this many compared turns, the fake lobby bans its "
+                             "account while it is away, and the server must refuse it with \"resume\" when it comes back")
     parser.add_argument("--lobby-results", action="store_true",
                         help="a fake lobby takes the result of the game, signed with a test key of the server; the "
                              "game must be decided (for example with --temple-loss), and the result must come one time "
@@ -3352,7 +3394,9 @@ def main():
         server_command += ["--lobby-id", LOBBY_ID, "--expect-members", members_file, "--game-id", SERVER_ID,
                            "--join-window", str(options.join_window)]
     lobby = None
-    if options.ban_account is not None or options.lobby_results:
+    if options.kick_away_observer is not None and options.observers < 1:
+        parser.error("--kick-away-observer needs --observers 1 or more")
+    if options.ban_account is not None or options.lobby_results or options.kick_away_observer is not None:
         if options.ban_account is not None and 100 <= options.ban_account < 100 + options.clients:
             parser.error("--ban-account must not be the account of a client that plays")
         result_key = None
@@ -3390,6 +3434,7 @@ def main():
     forest_done = None
     editor_desync_done = None
     give_done = None
+    kick_done = None
     hand_steps = HandSteps()
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
     leash_done = {number: [] for number, leash in enumerate(leashes) if leash["client"] != "web"}
@@ -3669,6 +3714,16 @@ def main():
                 give_done = {}
                 hand_steps.start(giver, lambda pid=clients[giver].pid, log=os.path.join(
                     client_dirs[giver], "client.log"): give_done.update(give_to_creature(pid, log)))
+            kicked = desktop_clients - 1
+            if (options.kick_away_observer is not None and kick_done is None and clients[kicked].poll() is None
+                    and not hand_steps.busy(kicked) and reached_turn(os.path.join(client_dirs[kicked], "client.log"),
+                                                                      clients[kicked].pid, options.kick_away_observer)):
+                kick_done = {}
+                hand_steps.start(kicked, lambda pid=clients[kicked].pid: kick_done.update(kick_away_observer(
+                    pid, 100 + kicked, lobby, server_log, os.path.join(client_dirs[kicked], "client.log"))))
+            if kick_done and "ok" in kick_done and clients[kicked].poll() is None:
+                # The refused observer has no game: the script stops it
+                stop(clients[kicked])
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])
@@ -3747,6 +3802,10 @@ def main():
         if parted_on_purpose and recovered:
             different = purposeful_part_left_out(different, recovery_turns(recovered), options.part_second_at)
         expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
+        kicked_observer = options.kick_away_observer is not None and index == desktop_clients - 1
+        if kicked_observer:
+            # The kicked observer compares the turns up to its kick only
+            expected = options.kick_away_observer
         is_observer = index >= options.clients
         if is_observer and client_turns:
             # An observer that joined a running game compares the turns from the turn of its world
@@ -3781,7 +3840,7 @@ def main():
                   f"{counts[0]}")
         same = (not different and enough and counts is not None
                 and (counts[0] - counts[1] <= allowed_differing)
-                and (left or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
+                and (left or kicked_observer or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         draws = None
         if options.trace_draws and os.path.exists(server_trace) and os.path.exists(os.path.join(client_dir, "draws.tsv")):
@@ -4005,6 +4064,11 @@ def main():
         banned_result["bans_with_each_report"] = lobby.counts["status"] > 0 and lobby.counts["bans"] >= lobby.counts["status"] - 1
         summary["banned"] = banned_result
         all_same = all_same and banned_result["refused"] and banned_result["bans_with_each_report"]
+    if options.kick_away_observer is not None:
+        summary["kick_away_observer"] = kick_done
+        if not (kick_done or {}).get("ok"):
+            print(f"the server did not refuse the kicked observer that came back: {json.dumps(kick_done)}")
+            all_same = False
     if wrong_build is not None:
         summary["wrong_build"] = wrong_build
         if not wrong_build["refused"]:
