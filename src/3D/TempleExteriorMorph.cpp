@@ -123,6 +123,22 @@ std::string MeshName(uint32_t size, uint32_t stage)
 	return fmt::format("b_temple{}{}_l3d", size, stage);
 }
 
+uint32_t CornerMeshId(uint32_t size, uint32_t stage)
+{
+	constexpr std::array<std::array<uint32_t, k_Stages>, k_Sizes> k_Ids {{
+	    {entt::hashed_string("temple/b_temple00_l3d").value(), entt::hashed_string("temple/b_temple01_l3d").value(),
+	     entt::hashed_string("temple/b_temple02_l3d").value(), entt::hashed_string("temple/b_temple03_l3d").value(),
+	     entt::hashed_string("temple/b_temple04_l3d").value()},
+	    {entt::hashed_string("temple/b_temple10_l3d").value(), entt::hashed_string("temple/b_temple11_l3d").value(),
+	     entt::hashed_string("temple/b_temple12_l3d").value(), entt::hashed_string("temple/b_temple13_l3d").value(),
+	     entt::hashed_string("temple/b_temple14_l3d").value()},
+	    {entt::hashed_string("temple/b_temple20_l3d").value(), entt::hashed_string("temple/b_temple21_l3d").value(),
+	     entt::hashed_string("temple/b_temple22_l3d").value(), entt::hashed_string("temple/b_temple23_l3d").value(),
+	     entt::hashed_string("temple/b_temple24_l3d").value()},
+	}};
+	return k_Ids.at(size).at(stage);
+}
+
 std::string OwnMeshName(uint32_t temple)
 {
 	return fmt::format("temple/exterior/{}", temple);

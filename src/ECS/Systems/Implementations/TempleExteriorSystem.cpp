@@ -207,6 +207,7 @@ void TempleExteriorSystem::ForgetLand()
 		}
 	}
 	_blends.clear();
+	_shownSkins.clear();
 	_spareShapes.clear();
 	_spareShapesSource.reset();
 }
@@ -241,11 +242,12 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 		{
 			_spareShapes.pop_back();
 		}
-		auto vertices = blended.EditVertices();
-		std::vector<l3d::L3DVertex> sum(vertices.size());
+		// The sum of the meshes by their weights goes into the vertices, which start at zero
+		auto sum = blended.EditVertices();
+		std::ranges::fill(sum, l3d::L3DVertex {});
 		for (const auto& corner : Corners(exterior.size, exterior.alignment))
 		{
-			const auto id = entt::hashed_string(fmt::format("temple/{}", MeshName(corner.size, corner.stage)).c_str()).value();
+			const auto id = CornerMeshId(corner.size, corner.stage);
 			if (corner.weight == 0.0f || !files.Contains(id))
 			{
 				continue;
@@ -270,7 +272,6 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 				sum[i].texCoord.y += source[i].texCoord.y * corner.weight;
 			}
 		}
-		std::ranges::copy(sum, vertices.begin());
 		made.shapes.emplace_back(look, std::move(blended));
 		shape = std::prev(made.shapes.end());
 	}
@@ -512,6 +513,7 @@ void TempleExteriorSystem::Unbind(entt::id_type id)
 {
 	auto& resources = Locator::resources::value();
 	auto& meshes = resources.GetMeshes();
+	_shownSkins.erase(id);
 	// The worship site mesh first, as it wears the skins of the temple's mesh
 	const auto madeFor = TempleExteriorMorph::MeshesMadeFor(id);
 	for (const auto made : madeFor | std::views::reverse)
@@ -572,7 +574,15 @@ void TempleExteriorSystem::Dress(entt::id_type id, const l3d::L3DFile& blended, 
 	{
 		files.Load(id, resources::L3DFileLoader::FromFileTag {}, blended);
 	}
-	DressSkin(temple, blended, alignment, owner, made);
+	// The texture of the mesh changes only with the alignment's texture or the set
+	const ShownSkin shown {.mesh = &temple, .texture = TempleExteriorMorph::TextureOf(alignment), .set = TextureSetOf(owner)};
+	if (const auto before = _shownSkins.find(id); before == _shownSkins.end() || before->second != shown)
+	{
+		DressSkin(temple, blended, alignment, owner, made);
+		// Other temples can share the mesh, and their notes of its texture are old now
+		std::erase_if(_shownSkins, [&temple](const auto& note) { return note.second.mesh == &temple; });
+		_shownSkins.insert_or_assign(id, shown);
+	}
 
 	// After a restore of the graphics device the mesh gets its shape and its texture again, from the kept shape
 	temple.SetModelSource(

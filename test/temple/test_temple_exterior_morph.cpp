@@ -89,6 +89,18 @@ TEST(TempleExteriorMorph, MeshNames)
 	EXPECT_EQ(MeshName(1, 4), "b_temple14_l3d");
 }
 
+TEST(TempleExteriorMorph, EachCornerMeshIdIsTheHashOfTheMeshName)
+{
+	for (uint32_t size = 0; size < k_Sizes; ++size)
+	{
+		for (uint32_t stage = 0; stage < k_Stages; ++stage)
+		{
+			const auto name = fmt::format("temple/{}", MeshName(size, stage));
+			EXPECT_EQ(CornerMeshId(size, stage), entt::hashed_string(name.c_str()).value()) << name;
+		}
+	}
+}
+
 TEST(TempleExteriorMorph, TexturesGoEvilToNeutralToGood)
 {
 	const auto evil = TextureOf(0.0f);
