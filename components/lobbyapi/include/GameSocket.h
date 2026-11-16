@@ -368,6 +368,7 @@ struct CommandRefused
 	/// Why the server refused the commands. k_NoEditorClaim: edits of the editor or debug cheats from a player whose join
 	/// ticket has no editor claim. k_NoStoryLands: a skip to a land of the story, which a network game does not have.
 	/// k_NoDebuggerClaim: acts of the debug windows from a player whose join ticket has no debugger claim.
+	/// k_WorldRefused: a world file or a scenario of the editor that the server cannot load.
 	std::string reason;
 	/// The number of commands that the server refused
 	uint32_t commands {0};
@@ -633,10 +634,48 @@ struct SyncWorld
 	[[nodiscard]] bool operator==(const SyncWorld&) const = default;
 };
 
+/// The most bytes of a world file that a player with the editor claim loads for the whole room, in all. It is the limit
+/// of the world of a capture.
+inline constexpr size_t k_MostEditorWorldBytes = k_MostSyncWorldBytes;
+/// The most bytes of a world file in one "editor.world" frame, before Base64
+inline constexpr size_t k_MostEditorWorldChunkBytes = k_MostSyncWorldChunkBytes;
+
+/// "editor.world". Client to server: one part of a world file that Load world file of the editor opened on the computer
+/// of a player with the editor claim. The parts go in order. When the last part came, the world of the server loads the
+/// file between two turns, and the server sends its new world to every player, as to a player who comes back.
+struct EditorWorld
+{
+	/// The number of this part from 0, and the count of the parts
+	uint32_t index {0};
+	uint32_t count {0};
+	/// The bytes of the whole file
+	uint32_t size {0};
+	std::vector<uint8_t> bytes;
+
+	[[nodiscard]] bool operator==(const EditorWorld&) const = default;
+};
+
+/// The most bytes of the id of a testbed scenario in an "editor.scenario" frame
+inline constexpr size_t k_MostScenarioIdBytes = 128;
+
+/// "editor.scenario". Client to server: a player with the editor claim runs a testbed scenario for the whole room. The
+/// server ends the current game, and starts the room again on the testbed with the scenario: every player gets a new
+/// "game.start" that names the scenario.
+struct EditorScenario
+{
+	std::string id;
+
+	[[nodiscard]] bool operator==(const EditorScenario&) const = default;
+};
+
+/// The reason of a refusal of a world file or a scenario of the editor that no computer can load (see CommandRefused)
+inline constexpr std::string_view k_WorldRefused = "world_refused";
+
 using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
                            StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
                            SyncParts, Loaded, LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities,
-                           SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime, EditorScriptFile>;
+                           SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime, EditorScriptFile, EditorWorld,
+                           EditorScenario>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

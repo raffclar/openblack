@@ -28,6 +28,7 @@
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
 #include "Editor/EditorMindLoads.h"
+#include "Online/EditorWorldUpload.h"
 #include "Editor/EditorScriptFiles.h"
 #include "Online/GameDataPrint.h"
 #include "Online/RoomClock.h"
@@ -198,6 +199,12 @@ public:
 		/// The join ticket of the player has the editor claim. A seat that a snapshot gave back keeps the claim of the
 		/// snapshot.
 		bool editor {false};
+		/// The player was away when the editor changed the world of the room. The turns that the client did are of the old
+		/// world: the player comes back only with the server's new world.
+		bool missedWorldChange {false};
+		/// The editor changed the world while the player was connected. The checksums that the client sends are of the old
+		/// world until its report that it loaded the new world (game.loaded): the server leaves them out.
+		bool oldWorldChecksums {false};
 		/// The join ticket of the player has the debugger claim. A seat that a snapshot gave back keeps the claim of the
 		/// snapshot.
 		bool debugger {false};
@@ -220,6 +227,35 @@ public:
 		/// The join ticket of the observer has the editor claim. An observer that a snapshot gave back keeps the claim of the
 		/// snapshot.
 		bool editor {false};
+		/// The observer was away when the editor changed the world of the room
+		bool missedWorldChange {false};
+	};
+
+	/// A change of the whole world of the room that a player with the editor claim asked for
+	struct WorldChange
+	{
+		enum class Kind : uint8_t
+		{
+			/// The world of the server loads a world file, and the server sends its new world to every player
+			WorldFile,
+			/// The room starts again on the testbed with a testbed scenario
+			Scenario,
+		};
+		Kind kind {Kind::WorldFile};
+		/// The bytes of the world file
+		std::vector<uint8_t> file;
+		/// The id of the scenario
+		std::string scenario;
+		/// The name of the player who asked for the change
+		std::string by;
+		/// The seed of the room, with which a scenario starts the land again
+		uint32_t seed {0};
+	};
+	/// The world of the server after a change: the turn that it is at, or why it did not change
+	struct WorldChanged
+	{
+		std::optional<uint32_t> turn;
+		std::string refusal;
 		/// The join ticket of the observer has the debugger claim
 		bool debugger {false};
 	};
@@ -238,6 +274,16 @@ public:
 	/// The server's world state at the start of the next turn, which a client whose world parted loads as it comes back
 	using WorldState = std::function<std::vector<uint8_t>()>;
 	void SetWorldState(WorldState worldState) { _worldState = std::move(worldState); }
+	/// Changes the world of the server between two turns, as a player with the editor claim asked. The server calls it
+	/// in Update, before the next turn. With none, the server refuses every change of the world.
+	using ChangeWorld = std::function<WorldChanged(const WorldChange& change)>;
+	void SetChangeWorld(ChangeWorld changeWorld) { _changeWorld = std::move(changeWorld); }
+	/// Tests: a check of a scenario id before the server takes the change. Gives why no computer can play the
+	/// scenario, or none when it can. With none, the server takes every id and the change of the world checks it.
+	using ScenarioRefusal = std::function<std::optional<std::string>(std::string_view id)>;
+	void SetScenarioRefusal(ScenarioRefusal refusal) { _scenarioRefusal = std::move(refusal); }
+	/// The changes of the world that the editor asked for and that the server did
+	[[nodiscard]] uint32_t WorldChanges() const { return _worldChanges; }
 	/// Gets the bytes of each turn that the server closes, before the server sends them, and the last block of each god
 	/// that a closed turn holds. The snapshots of the server keep them in a journal (deviation 100).
 	using TurnJournal =
@@ -394,6 +440,8 @@ private:
 		bool debugger {false};
 		/// The client sent the print of its game data. The server takes only the first.
 		bool printed {false};
+		/// The parts of a world file of the editor that came so far
+		online::editor_world::Upload worldUpload;
 		/// The parts of the file of the script tabs of the editor that the connection sends now
 		editor::script_files::PartAssembly scriptParts;
 	};
@@ -489,6 +537,17 @@ private:
 	void EditorMindFileFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorMindFile& mind);
 	/// Sends each mind file of the editor that the server keeps to a player who comes back or joins, before the turns
 	void SendEditorMindFiles(ConnectionId connection);
+	/// A part of a world file of the editor from a player. When the last part came, the world of the server loads the file
+	/// before the next turn.
+	void EditorWorldFrom(ConnectionId connection, Peer& peer, const game_socket::EditorWorld& part);
+	/// A testbed scenario of the editor for the whole room. The room starts again on the scenario before the next turn.
+	void EditorScenarioFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorScenario& scenario);
+	/// True when the player can change the world of the room. Else logs why, counts the refusal and tells the player.
+	[[nodiscard]] bool TakesWorldChange(ConnectionId connection, const Peer& peer, std::string_view what);
+	/// Refuses a change of the world that no computer can do, and tells the player who asked for it
+	void RefuseWorldChange(ConnectionId connection, std::string_view by, std::string_view why);
+	/// Between two turns: the world of the server changes as the editor asked, and every player gets the new world
+	void ApplyWorldChange();
 	/// A part of a file of the script tabs of the editor from a player. The server checks the claim and the whole file,
 	/// keeps it and sends it to every player before any turn that holds a command that uses it.
 	void EditorScriptFileFrom(ConnectionId connection, Peer& peer, const game_socket::EditorScriptFile& part);
@@ -643,6 +702,12 @@ private:
 	std::map<uint32_t, std::vector<uint8_t>> _replayed;
 	/// The account ids that the lobby banned from the server
 	std::set<int64_t> _bans;
+	ChangeWorld _changeWorld;
+	ScenarioRefusal _scenarioRefusal;
+	/// The change of the world that the server does before the next turn, and the connection that asked for it
+	std::optional<WorldChange> _worldChange;
+	ConnectionId _worldChangeFrom {0};
+	uint32_t _worldChanges {0};
 };
 
 } // namespace openblack::server

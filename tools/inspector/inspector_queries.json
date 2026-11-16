@@ -2503,6 +2503,49 @@
   "writes": true
  },
  {
+  "description": "Sends a world file of this computer to the game server, as Load world file of the editor does in a network game: the world of the server loads it between two turns, and every computer gets the server's new world. This ends the current game of every player. save writes the world of this computer into the file and sends nothing, as Save land files writes the world file. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The world file on this computer",
+    "name": "path",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "Write the world file and send nothing",
+    "name": "save",
+    "type": "boolean"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.world_load",
+  "writes": true
+ },
+ {
+  "description": "Asks the game server to start the room again on a testbed scenario, as the Scenarios tab of the editor does in a network game: every computer loads the testbed and lays the scenario out before the first turn of the new game. This ends the current game of every player. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The id of the testbed scenario",
+    "name": "id",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.scenario",
+  "writes": true
+ },
+ {
   "description": "Does an act of the Scripts tab on the script machine, as the tab does it: at once in a game alone, or as a command of the turns in a network game, which each computer does at the same turn and the game server takes only from a player with the editor claim. Acts: start, stop_script, hold_all, continue_all, step, continue, hold, stop, breakpoint, remove_breakpoints, set_global, set_local. force sends it also when the editor of this computer is refused.",
   "kind": "object",
   "parameters": [

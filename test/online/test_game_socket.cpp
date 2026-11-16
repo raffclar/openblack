@@ -569,3 +569,23 @@ TEST(GameSocket, TheFramesOfTheDesyncCaptureGoToJsonAndBack)
 	EXPECT_EQ(RoundTrip(world), world);
 	EXPECT_FALSE(Parse(R"({"type":"sync.world","turn":1,"index":2,"count":1,"size":3,"data":"AAH_"})").has_value());
 }
+
+TEST(GameSocket, TheEditorWorldAndScenarioFramesGoBothWays)
+{
+	const EditorWorld world {.index = 1, .count = 3, .size = 100'000, .bytes = {1, 2, 3, 250}};
+	const auto parsedWorld = Parse(ToJson(world));
+	ASSERT_TRUE(parsedWorld.has_value());
+	ASSERT_TRUE(std::holds_alternative<EditorWorld>(*parsedWorld));
+	EXPECT_EQ(std::get<EditorWorld>(*parsedWorld), world);
+	const EditorScenario scenario {.id = "creature.walk"};
+	const auto parsedScenario = Parse(ToJson(scenario));
+	ASSERT_TRUE(parsedScenario.has_value());
+	ASSERT_TRUE(std::holds_alternative<EditorScenario>(*parsedScenario));
+	EXPECT_EQ(std::get<EditorScenario>(*parsedScenario), scenario);
+	// A part after the last, a file over the limit, an empty part and an empty or long id do not read
+	EXPECT_FALSE(Parse(R"({"type":"editor.world","index":3,"count":3,"size":10,"data":"AQ"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.world","index":0,"count":1,"size":99999999,"data":"AQ"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.world","index":0,"count":1,"size":10,"data":""})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.scenario","id":""})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.scenario","id":")" + std::string(200, 'a') + R"("})").has_value());
+}

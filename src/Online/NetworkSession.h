@@ -193,6 +193,16 @@ public:
 	/// Sends a mind file of the creature tools of the editor to the server, during the game. False when the socket is not
 	/// open or the game did not start: then the file does not go.
 	[[nodiscard]] bool SendEditorMindFile(std::vector<uint8_t> file);
+	/// Sends a world file of the editor to the server in parts, during the game. The world of the server loads it, and
+	/// every player gets the new world. False when the socket is not open, the game did not start or the file is empty or
+	/// too large: then the file does not go.
+	[[nodiscard]] bool SendEditorWorld(std::span<const uint8_t> file);
+	/// Asks the server to start the room again on a testbed scenario, during the game. False when the socket is not open
+	/// or the game did not start.
+	[[nodiscard]] bool SendEditorScenario(std::string_view id);
+	/// True one time after the server started the game again (a new game.start in the game, for a scenario of the
+	/// editor). The game then loads the land of the new start.
+	[[nodiscard]] bool TakeRestart() { return std::exchange(_restarted, false); }
 	/// Sends a file of the script tabs of the editor to the server in parts, during the game. False when the socket is not
 	/// open, the game did not start or the file is too large: then the file does not go.
 	[[nodiscard]] bool SendEditorScriptFile(game_socket::EditorScriptFile::Kind kind, std::vector<uint8_t> file);
@@ -474,6 +484,10 @@ private:
 	int64_t _nextHealthLog {0};
 	bool _pingsWarned {false};
 	std::optional<uint32_t> _stoppedAfter;
+	/// The server started the game again, and the game did not load the land of the new start yet
+	bool _restarted {false};
+	/// The server started the game again, and the land of the new start did not load yet: the world does no turn
+	bool _landOfRestartDue {false};
 };
 
 [[nodiscard]] std::string_view StateName(NetworkSession::State state) noexcept;

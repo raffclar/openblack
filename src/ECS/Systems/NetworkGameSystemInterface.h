@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -100,6 +101,11 @@ public:
 	/// A mind file of the creature tools of the editor goes to the game server on the game socket. The server sends it to
 	/// every player. False when the socket of the game is not open: then the file does not go.
 	[[nodiscard]] virtual bool SendEditorMindFile(std::vector<uint8_t> /*file*/) { return false; }
+	/// A world file of Load world file of the editor goes to the game server on the game socket. The world of the server
+	/// loads it, and every player gets the new world. False when the file does not go.
+	[[nodiscard]] virtual bool SendEditorWorld(std::span<const uint8_t> /*file*/) { return false; }
+	/// The editor asks the game server to start the room again on a testbed scenario. False when the request does not go.
+	[[nodiscard]] virtual bool SendEditorScenario(std::string_view /*id*/) { return false; }
 	/// A file of the script tabs of the editor goes to the game server in parts on the game socket. The server sends it to
 	/// every player. False when the socket of the game is not open: then the file does not go.
 	[[nodiscard]] virtual bool SendEditorScriptFile(game_socket::EditorScriptFile::Kind /*kind*/, std::vector<uint8_t> /*file*/)

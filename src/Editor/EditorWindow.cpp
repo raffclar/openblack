@@ -1322,9 +1322,9 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 		_palette.Draw(context);
 		ImGui::EndTabItem();
 	}
-	// The scenarios change the world of this computer only, so a network game does not have them. The land tools and the
+	// In a network game, a scenario starts the room again on the game server for every player. The land tools and the
 	// script tabs send their acts as commands of the turns.
-	if (!InNetworkGame() && ImGui::BeginTabItem("Scenarios", nullptr, flags(BottomTab::Scenarios)))
+	if (ImGui::BeginTabItem("Scenarios", nullptr, flags(BottomTab::Scenarios)))
 	{
 		ImGui::BeginChild("Scenarios");
 		_scenarios.DrawContents();
