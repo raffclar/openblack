@@ -13,7 +13,9 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
+#include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -60,6 +62,13 @@ constexpr float k_BlinkPerMillisecond = 0.0062831854f;
 [[nodiscard]] std::string Text(float share);
 /// A mark that starts over a creature's head at a game turn, sized by the creature's height
 [[nodiscard]] components::LearningMarker Start(const glm::vec3& head, float creatureHeight, float share, uint32_t turn = 0);
+
+/// Makes a mark in the registry as Start does, after the other marks of its turn. Returns the mark's entity.
+entt::entity Make(Registry& registry, const glm::vec3& head, float creatureHeight, float share, uint32_t turn);
+/// True if the game draws the first mark before the second. The game draws the newest mark first, then the older marks.
+[[nodiscard]] bool DrawnBefore(const components::LearningMarker& first, const components::LearningMarker& second);
+/// The marks of the registry in the order that the game draws them
+[[nodiscard]] std::vector<entt::entity> InDrawOrder(const Registry& registry);
 
 /// The mark moves on by some milliseconds: it gets older and rises. Whether it lasts.
 [[nodiscard]] bool Step(components::LearningMarker& marker, float milliseconds);

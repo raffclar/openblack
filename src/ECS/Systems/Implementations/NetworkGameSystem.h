@@ -87,6 +87,17 @@ public:
 		return _session ? _session->TakeObserversLeft() : std::vector<std::string>();
 	}
 	[[nodiscard]] uint32_t TakeEditorRefusals() override { return _session ? _session->TakeEditorRefusals() : 0; }
+	void RequestTime(const game_socket::EditorTime& request) override
+	{
+		if (_session)
+		{
+			_session->RequestTime(request);
+		}
+	}
+	[[nodiscard]] std::vector<std::string> TakeTimeNotices() override
+	{
+		return _session ? _session->TakeTimeNotices() : std::vector<std::string>();
+	}
 	void LogConnection(std::string_view text) override { _log->Info(text); }
 	[[nodiscard]] std::string DiagnosticsReport() const override;
 	[[nodiscard]] std::string_view RoomName() const override { return _roomName; }
@@ -128,6 +139,10 @@ private:
 	bool _partAgain {false};
 	/// The turn of a loaded world state, until it is here and the world goes on
 	std::optional<uint32_t> _resumeTurn;
+	/// The count of the frames of the clock of the room that this computer followed
+	uint32_t _roomClockChanges {0};
+	/// The time of a turn of the clock of the room that this computer set last
+	float _roomSpeed {1.0f};
 	/// The desync events that this run of the game can still send, for all its network games
 	error_reports::DesyncRunBudget _desyncBudget;
 	/// The desyncs of the network game, from the join to the end of the game

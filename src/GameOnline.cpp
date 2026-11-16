@@ -59,6 +59,7 @@
 #include "ECS/Systems/GatheringBoxSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
@@ -630,6 +631,23 @@ void Game::TellEditorRefusals()
 		return;
 	}
 	developer_tools::ShowEditorRefusal();
+}
+
+void Game::TellTimeNotices()
+{
+	if (!Locator::networkGame::has_value())
+	{
+		return;
+	}
+	for (const auto& notice : Locator::networkGame::value().TakeTimeNotices())
+	{
+		if (Locator::incomingMessageSystem::has_value())
+		{
+			Locator::incomingMessageSystem::value().Add(incoming_messages::Kind::Chat, gui::ToUtf16(notice), 0);
+		}
+		// The test tools find the line by its words
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The players see the line of the clock: {}", notice);
+	}
 }
 
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)
