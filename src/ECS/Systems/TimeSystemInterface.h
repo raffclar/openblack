@@ -100,6 +100,9 @@ public:
 	/// A player's computer in a network game does up to 10 turns a frame and keeps the time it lost, so that it catches up
 	/// with the server's turns, as the game does. The game server's own world turns as a game alone does.
 	virtual void SetCatchesUp([[maybe_unused]] bool catchesUp) {}
+	/// The most turns that one frame plays while the clock does not catch up: 1 in a game alone. The game server plays more
+	/// turns in a frame when the clock of the room is fast, so that its turns follow the clock.
+	virtual void SetMostTurnsInFrame([[maybe_unused]] uint32_t turns) {}
 	/// The game's speed: 1 is normal and 2 twice as fast. The time already gone keeps the speed it went at
 	virtual void SetSpeed(float speed) = 0;
 	[[nodiscard]] virtual float GetSpeed() const = 0;

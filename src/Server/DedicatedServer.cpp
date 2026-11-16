@@ -1434,9 +1434,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		// The world of the server turns at the speed of the clock of the room, as the world of each player does. After a
 		// restart the room starts again at the normal speed. A world file or a scenario of the editor sets the speed of
 		// the clock of its world, so the server gives the clock the speed of the room again after each change of the world.
+		// A fast room gives more turns than one in a frame, so the server then plays more turns in a frame.
 		if (const auto speed = host.RoomClock().speed; speed != appliedSpeed || host.WorldChanges() != appliedChanges)
 		{
-			Locator::time::value().SetSpeed(online::room_clock::ClockSpeedOf(speed));
+			auto& clock = Locator::time::value();
+			clock.SetSpeed(online::room_clock::ClockSpeedOf(speed));
+			clock.SetMostTurnsInFrame(online::room_clock::ServerTurnsInFrame(speed, clock.GetFixedFrameTime()));
 			appliedSpeed = speed;
 			appliedChanges = host.WorldChanges();
 		}
