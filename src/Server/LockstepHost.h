@@ -229,6 +229,8 @@ public:
 		bool editor {false};
 		/// The observer was away when the editor changed the world of the room
 		bool missedWorldChange {false};
+		/// The join ticket of the observer has the debugger claim
+		bool debugger {false};
 	};
 
 	/// A change of the whole world of the room that a player with the editor claim asked for
@@ -259,8 +261,6 @@ public:
 	{
 		std::optional<uint32_t> turn;
 		std::string refusal;
-		/// The join ticket of the observer has the debugger claim
-		bool debugger {false};
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
