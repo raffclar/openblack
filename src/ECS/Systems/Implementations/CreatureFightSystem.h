@@ -61,7 +61,7 @@ public:
 	void HandLetGo(entt::entity creature) override;
 	void EndBodyFightAgain(entt::entity creature) override;
 	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override;
-	[[nodiscard]] bool StartedFight(entt::entity creature) const override;
+	[[nodiscard]] bool LeadsFight(entt::entity creature) const override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
 	[[nodiscard]] bool IsDuelling(entt::entity creature) const override;
 	void TakeForScript(entt::entity creature) override;

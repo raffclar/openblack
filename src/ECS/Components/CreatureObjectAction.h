@@ -235,4 +235,11 @@ struct HeldByCreature
 	std::optional<Drawn> drawn;
 };
 
+/// On a person or an animal that a creature held as it swallowed other food. The thing left the hand at the moment of
+/// eating. It stays in the state that it had in the hand, out of the map and out of sight, and nothing brings it back.
+/// It stays in the world for all things that know of it.
+struct LostFromCreatureHand
+{
+};
+
 } // namespace openblack::ecs::components

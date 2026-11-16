@@ -1566,6 +1566,7 @@ TEST(CreatureFight, TheCallsOfAStopChainEndTheBodyOfEachCreatureAgainAtEachStop)
 	EXPECT_EQ(calledOff.bodyEnds, (std::array<uint32_t, 2> {2, 3}));
 	EXPECT_EQ(calledOff.after.duels, (std::array<bool, 2> {false, false}));
 	EXPECT_EQ(calledOff.after.partners, (std::array<bool, 2> {false, false}));
+	EXPECT_EQ(calledOff.stopped, (std::array<bool, 2> {true, true}));
 	// A walk back: the body ends its fight first, so each creature gets one gain
 	const auto walkedBack =
 	    creature_fight::RunStopChain(both, creature_fight::StepsOf(creature_fight::CallOffStart::BodyFirst));
@@ -1588,6 +1589,8 @@ TEST(CreatureFight, TheCallsOfAStopChainEndTheBodyOfEachCreatureAgainAtEachStop)
 	const std::array again {StopStep {.creature = 0, .call = StopCall::Fail}};
 	const auto alone = creature_fight::RunStopChain({}, again);
 	EXPECT_EQ(alone.bodyEnds, (std::array<uint32_t, 2> {1, 0}));
+	// Only the creature that stops stops: its partner does not
+	EXPECT_EQ(alone.stopped, (std::array<bool, 2> {true, false}));
 	// A failure that keeps the body of a creature alone ends nothing
 	const std::array kept {StopStep {.creature = 0, .call = StopCall::FailKeepingBody}};
 	EXPECT_EQ(creature_fight::RunStopChain({}, kept).bodyEnds, (std::array<uint32_t, 2> {0, 0}));

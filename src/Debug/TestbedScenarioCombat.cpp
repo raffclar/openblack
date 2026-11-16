@@ -878,7 +878,8 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 			    .description = "As A double tap with the leash in the fight view, but the camera does not show the fight. "
 			                   "The camera stays out of the arena.",
 			    .expected = "The second press ties the leash to the blue tiger. The fight ends with no winner: neither "
-			                "tiger faints, and neither celebrates.",
+			                "tiger faints, and neither celebrates. Then the red tiger takes the order of the tie and acts on "
+			                "the blue tiger: the log shows that it is told to act on the blue tiger.",
 			    .framing = ringside,
 			    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
 			    .commands = doubleTap(false),

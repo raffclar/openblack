@@ -1755,11 +1755,21 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 				break;
 			}
 			// Told to swallow a thing that it does not hold, it swallows that thing where it is. The thing that it held never
-			// comes back into sight, so it goes.
+			// comes back into sight. A thing that is not alive goes. A person or an animal stays in its state for the
+			// hand, out of the map and out of sight, so that all things that know of it still find it.
 			if (action.swallowed.has_value() && *action.swallowed != *held)
 			{
 				registry.Remove<HeldByCreature>(*held);
-				registry.Destroy(*held);
+				switch (creature_object_actions::HeldAtOtherMealFor(registry.AnyOf<Villager, Animal>(*held)))
+				{
+				case creature_object_actions::HeldAtOtherMeal::LostFromHand:
+					registry.AssignOrReplace<HiddenByState>(*held);
+					registry.AssignOrReplace<LostFromCreatureHand>(*held);
+					break;
+				case creature_object_actions::HeldAtOtherMeal::Goes:
+					registry.Destroy(*held);
+					break;
+				}
 				if (registry.Valid(*action.swallowed))
 				{
 					action.eaten = *action.swallowed;
