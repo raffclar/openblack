@@ -402,8 +402,10 @@ private:
 	void CaptureFrame(const Peer& peer, const game_socket::Frame& frame);
 	/// The names of the files of the server's print, for the join
 	[[nodiscard]] std::vector<std::string> DataFiles() const;
-	/// The name of a connection for the log: the name of the player, or "not joined"
+	/// The words for a connection in the log: the god or observer of the player, or "not joined"
 	[[nodiscard]] std::string WhoIs(ConnectionId connection) const;
+	/// The words for a player in the log: the god or the observer. It gives no name.
+	[[nodiscard]] static std::string Who(const Peer& peer);
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
 	void Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume);
 	/// An observer comes back with the secret of its session. False when no observer has the secret.
