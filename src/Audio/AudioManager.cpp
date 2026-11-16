@@ -77,6 +77,23 @@ std::optional<glm::vec3> PlacedPosition(const Sound& sound, std::optional<glm::v
 	}
 	return LockedStartPosition(sound.overrideFlags, sound.headerPosition, callerPosition.value_or(glm::zero<glm::vec3>()));
 }
+
+/// The buffer that holds a part of a sample
+[[nodiscard]] BufferId PartBuffer(const Sound& sound, SamplePart part)
+{
+	switch (part)
+	{
+	case SamplePart::BeforeRegion:
+		return sound.beforeRegionBufferId;
+	case SamplePart::Region:
+		return sound.regionBufferId;
+	case SamplePart::AfterRegion:
+		return sound.afterRegionBufferId;
+	case SamplePart::Whole:
+		break;
+	}
+	return sound.bufferId;
+}
 } // namespace
 
 AudioManager::AudioManager()
@@ -609,12 +626,28 @@ void AudioManager::CreateBuffer(Sound& sound)
 	}
 	sound.decoded.reset();
 	sound.bufferId = CreateBuffer(sound.channelLayout, decodeBuffer, sampleRate);
+	const size_t channels = sound.channelLayout == ChannelLayout::Stereo ? 2 : 1;
+	const auto frames = static_cast<int32_t>(decodeBuffer.size() / channels);
+	sound.frames = frames;
 	// The mixer plays a sample with a loop region from its start. It loops over the region while the voice loops, and
 	// continues to the end after the game releases the loop.
-	const auto frames = static_cast<int32_t>(decodeBuffer.size() / (sound.channelLayout == ChannelLayout::Stereo ? 2 : 1));
 	if (const auto region = LoopRegionOf(sound.loopStart, sound.loopEnd, frames))
 	{
 		_audioPlayer->SetLoopPoints(sound.bufferId, region->first, region->end);
+		// A voice with a finite loop count queues the parts before, in and after the region
+		const auto partBuffer = [&](SamplePart part) -> BufferId {
+			const auto range = FramesOf(part, *region, frames);
+			if (range.end <= range.first)
+			{
+				return 0;
+			}
+			const auto first = decodeBuffer.begin() + static_cast<std::ptrdiff_t>(range.first * channels);
+			const auto end = decodeBuffer.begin() + static_cast<std::ptrdiff_t>(range.end * channels);
+			return CreateBuffer(sound.channelLayout, std::vector<int16_t>(first, end), sampleRate);
+		};
+		sound.beforeRegionBufferId = partBuffer(SamplePart::BeforeRegion);
+		sound.regionBufferId = partBuffer(SamplePart::Region);
+		sound.afterRegionBufferId = partBuffer(SamplePart::AfterRegion);
 	}
 	sound.duration = _audioPlayer->GetDuration(sound.bufferId);
 	sound.sizeInBytes = decodeBuffer.size() * sizeof(decodeBuffer[0]);
@@ -1282,21 +1315,38 @@ SourceId AudioManager::CreateSource(Sound& sound, const VoiceStart& start)
 	if (sound.bufferId == 0)
 	{
 		CreateBuffer(sound);
-		_decodedBuffers.push_back(sound.bufferId);
+		for (const auto buffer : {sound.bufferId, sound.beforeRegionBufferId, sound.regionBufferId, sound.afterRegionBufferId})
+		{
+			if (buffer != 0)
+			{
+				_decodedBuffers.push_back(buffer);
+			}
+		}
 	}
 
 	// Sources are positioned relative to the listener, in the game's listener frame
 	const auto source = _audioPlayer->CreateSource(start.pitch, true);
 	// A voice that loops until it stops holds the sample as one buffer, so that it loops over the loop region of the
-	// sample. Other voices queue the sample once for each play.
-	const auto feed = SampleFeedOf(start.loopCount);
+	// sample. Other voices queue the parts of the sample in the sequence that the sound library plays them.
+	const auto region = LoopRegionOf(sound.loopStart, sound.loopEnd, sound.frames);
+	const auto feed = SampleFeedOf(start.loopCount, region, sound.frames);
 	if (feed.attached)
 	{
 		_audioPlayer->AttachBuffer(source, sound.bufferId);
 	}
-	for (int32_t i = 0; i < feed.queued; ++i)
+	for (const auto& queued : feed.queue)
 	{
-		_audioPlayer->QueueBuffer(source, sound.bufferId);
+		const auto buffer = PartBuffer(sound, queued.part);
+		for (int32_t i = 0; i < queued.copies; ++i)
+		{
+			_audioPlayer->QueueBuffer(source, buffer);
+		}
+		if (region && queued.part != SamplePart::Whole)
+		{
+			const auto frames = FramesOf(queued.part, *region, sound.frames);
+			SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Sound {} queues frames {} to {} of {} frames {} times", sound.name,
+			                    frames.first, frames.end, sound.frames, queued.copies);
+		}
 	}
 	_audioPlayer->SetLooping(source, feed.attached);
 	if (start.positional)

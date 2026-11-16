@@ -174,8 +174,7 @@ std::optional<fire::Material> MaterialOf(entt::entity object)
 		};
 	}
 	// A field burns by its row of the buildings' table, as every other building does, not by the row of its crop
-	const GObjectInfo* info =
-	    registry.AllOf<Field>(object) ? world_objects::AbodeInfoOf(object) : world_objects::EffectInfoOf(object);
+	const GObjectInfo* info = world_objects::EffectInfoOf(object);
 	if (info == nullptr)
 	{
 		return std::nullopt;
