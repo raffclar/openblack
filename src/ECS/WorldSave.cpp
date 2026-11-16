@@ -73,6 +73,7 @@
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -341,7 +342,7 @@ struct SavedSystem
 
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
-constexpr std::array<SavedSystem, 46> k_SavedSystems {{
+constexpr std::array<SavedSystem, 47> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindOldParticles, false},
     {"syncedParticles", &FindSystem<Locator::particleRuleSystem>},
@@ -364,6 +365,7 @@ constexpr std::array<SavedSystem, 46> k_SavedSystems {{
     {"dialogueControl", &FindSystem<Locator::dialogueControlSystem>},
     {"scriptControl", &FindSystem<Locator::scriptControlSystem>},
     {"scriptSwitches", &FindSystem<Locator::chlapi>},
+    {"editorScripts", &FindSystem<Locator::editorSystem>},
     {"creatureAudio", &FindSystem<Locator::creatureAudioSystem>},
     {"scriptMusic", &FindSystem<Locator::scriptMusicSystem>},
     {"music", &FindGameMusic},

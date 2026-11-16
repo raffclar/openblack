@@ -1439,6 +1439,76 @@ def editor_scripts(pids, inputs):
     return done
 
 
+def editor_debugger(pids, inputs, restart=None):
+    """The debugger state that every computer must keep over a restart of the server and a load of the world state of
+    the server. The first client compiles a script that takes a number from the synced random numbers in each turn,
+    starts it, holds it and steps it one time. It also steps the land script of the land to the middle. With restart, the
+    server then stops and continues from its snapshots. After that, the task gets one more step, and the land script
+    does more commands up to its breakpoint. The task stays held until the end. A computer that ran the held task, or
+    did not do a land script step, takes other random numbers or makes other things, so its checksums differ."""
+    editor = pids[0]
+    done = {"acts": []}
+
+    def act(query, params, wait=1.0):
+        answer = inspector_answer(editor, query, {"params": params})
+        done["acts"].append({"query": query, "params": params, "answer": answer})
+        if isinstance(answer, dict) and answer.get("error"):
+            done.setdefault("errors", []).append(f"{query} {params}: {answer['error']}")
+        time.sleep(wait)
+        return answer
+
+    def states():
+        return [inspector_answer(pid, "editor.script_state", {}) for pid in pids]
+
+    act("editor.script_program", {"use": "open", "path": inputs["program"]}, 8.0)
+    scripts = items_of(inspector_answer(editor, "script.scripts", {"params": {"name": ""}}))
+    if not scripts:
+        done["error"] = "the program has no scripts"
+        return done
+    act("editor.script_program", {"use": "compile", "path": inputs["debugger_source"], "script": scripts[0]["name"]}, 2.0)
+    act("editor.script", {"act": "start", "script": "NetCheckDebuggerScript"}, 2.0)
+    tasks = (inspector_answer(editor, "editor.script_state", {}) or {}).get("tasks") or []
+    ours = [task["id"] for task in tasks if task.get("script") == "NetCheckDebuggerScript"]
+    if not ours:
+        done["error"] = "the new script has no task"
+        return done
+    task = ours[0]
+    done["task"] = task
+    act("editor.script", {"act": "hold", "id": task})
+    act("editor.script", {"act": "step", "id": task}, 0.5)
+    # The stepper moves past the first commands, which load the land, and does two commands of the camera and the
+    # influence. A breakpoint waits before the second abode.
+    act("editor.land_script", {"act": "loaded_land"})
+    act("editor.land_script", {"act": "breakpoint", "command": 9})
+    for _ in range(3):
+        act("editor.land_script", {"act": "skip"}, 0.3)
+    for _ in range(2):
+        act("editor.land_script", {"act": "step"}, 0.5)
+    time.sleep(2.0)
+    done["before"] = states()
+    if restart is not None:
+        done["restart"] = restart()
+        if done["restart"] is None:
+            done["error"] = "the restarted server did not listen"
+            return done
+    done["after_restart"] = states()
+    act("editor.script", {"act": "step", "id": task}, 0.5)
+    # Three steps make a town and its belief. The continue makes the first abode and stops at the breakpoint.
+    for _ in range(3):
+        act("editor.land_script", {"act": "step"}, 0.5)
+    act("editor.land_script", {"act": "continue"})
+    time.sleep(2.0)
+    done["states"] = states()
+    held = [any(t.get("id") == task and t.get("held") for t in (state or {}).get("tasks") or [])
+            for state in done["states"]]
+    nexts = [((state or {}).get("land_script") or {}).get("next") for state in done["states"]]
+    done["held"] = held
+    done["land_next"] = nexts
+    if not all(held) or nexts != [9] * len(pids):
+        done["error"] = f"the task is not held or the land script is not at command 9: held {held}, next {nexts}"
+    return done
+
+
 def script_inputs(options, folder):
     """The files of the case scripts: a source with one new script, a small land script and the program of the game"""
     os.makedirs(folder, exist_ok=True)
@@ -1446,11 +1516,16 @@ def script_inputs(options, folder):
     with open(source, "w", encoding="latin-1", newline="\n") as file:
         file.write("begin script NetCheckEditorScript\nstart\n\tbegin loop\n\t\twait 1 seconds\n\tend loop\n"
                    "end script NetCheckEditorScript\n")
+    debugger_source = os.path.join(folder, "net_check_debugger_script.txt")
+    with open(debugger_source, "w", encoding="latin-1", newline="\n") as file:
+        file.write("begin script NetCheckDebuggerScript\n\tDraw = 0\nstart\n\tbegin loop\n"
+                   "\t\tDraw = number from 1 to 1000\n\tend loop\nend script NetCheckDebuggerScript\n")
     land = os.path.join(folder, "net_check_land_script.txt")
     with open(land, "w", encoding="latin-1", newline="\n") as file:
         file.write("VERSION(2.300000)\nSET_LAND_NUMBER(1)\n")
     program = os.path.join(options.game_path, "Scripts", "Quests", "challenge.chl")
-    return {"source": os.path.abspath(source), "land": os.path.abspath(land), "program": os.path.abspath(program)}
+    return {"source": os.path.abspath(source), "debugger_source": os.path.abspath(debugger_source),
+            "land": os.path.abspath(land), "program": os.path.abspath(program)}
 
 
 def turn_of_line(line):
@@ -1641,6 +1716,12 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, re
         done["sent"].append({"spawns": made})
     if case in ("animals", "all"):
         done["animals"] = editor_animals(pids, focus)
+    if case == "debugger":
+        done["debugger"] = editor_debugger(pids, script_files or {}, restart)
+        if done["debugger"].get("error"):
+            done["error"] = done["debugger"]["error"]
+        if done["debugger"].get("errors"):
+            done.setdefault("errors", []).extend(done["debugger"]["errors"])
     if case == "scripts":
         done["scripts"] = editor_scripts(pids, script_files or {})
         if done["scripts"].get("errors"):
@@ -2868,7 +2949,8 @@ def main():
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
-                                                    "creature-remove", "land", "history", "mind", "scripts", "time", "all"),
+                                                    "creature-remove", "land", "history", "mind", "scripts", "debugger", "time",
+                                                    "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -2878,7 +2960,8 @@ def main():
                              "lowers and paints the land and draws a footpath and a stream (land), or undoes and redoes "
                              "a placement, a move, a turn, a removal and a copy of a creature (history), or makes "
                              "creatures from mind files and loads mind files into the creatures near the camera "
-                             "(mind), or does the acts of the script tabs and changes the program (scripts), or pauses, "
+                             "(mind), or does the acts of the script tabs and changes the program (scripts), or holds a "
+                             "task and steps the land script over a restart of the server or a part (debugger), or pauses, "
                              "steps and changes the speed of the clock of the room (time), or all of them but scripts "
                              "and time (scripts opens the program of the game again, time pauses the room); "
                              "every computer must keep the same checksums")
@@ -3382,7 +3465,7 @@ def main():
                     "editor_files": lines_with(restarted_log, ["keeps the files of the editor of the snapshot"])}
 
         # The time case stops the server in its pause
-        restart_in_pause = options.restart_server_at is not None and options.editor_desync == "time"
+        restart_in_pause = options.restart_server_at is not None and options.editor_desync in ("time", "debugger")
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (options.restart_server_at is not None and restarted_log is None and not restart_in_pause
                     and max(server_checksums(server_log), default=0) >= options.restart_server_at):
@@ -3679,6 +3762,16 @@ def main():
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs], restarted_log)
             states = (editor_desync_done or {}).get("scripts", {}).get("states") or []
             summary["script_states_same"] = len(states) == 2 and states[0] == states[1]
+            if not summary["script_acts"]["same"] or not summary["script_states_same"]:
+                print(f"the script acts differ or did not come: {json.dumps(summary['script_acts'])[:2000]} "
+                      f"states {json.dumps(states)[:1000]}")
+                all_same = False
+        if options.editor_desync == "debugger":
+            summary["script_acts"] = script_act_lines(
+                server_log, [os.path.join(folder, "client.log") for folder in client_dirs], restarted_log)
+            states = (editor_desync_done or {}).get("debugger", {}).get("states") or []
+            summary["script_states_same"] = len(states) == len(client_dirs) and all(
+                state == states[0] for state in states)
             if not summary["script_acts"]["same"] or not summary["script_states_same"]:
                 print(f"the script acts differ or did not come: {json.dumps(summary['script_acts'])[:2000]} "
                       f"states {json.dumps(states)[:1000]}")

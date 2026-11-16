@@ -59,6 +59,8 @@ public:
 	void FrameSelection() override;
 	void StepTurn() override;
 	[[nodiscard]] bool IsStepping() const override { return _stepFrom.has_value(); }
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	/// Whether the camera is driven by the editor's model now

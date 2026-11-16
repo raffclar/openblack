@@ -141,6 +141,8 @@ struct LandScriptRun
 {
 	/// The name of the file of the script
 	std::string name;
+	/// The text that the run read. A world state keeps it, so that a load reads the same commands again.
+	std::string text;
 	lhscriptx::ReadCommands read;
 	scripts::LandScriptStepper stepper;
 	/// What the last act did
@@ -151,6 +153,23 @@ struct LandScriptRun
 
 /// Reads the text of a land script into the run: the commands, none done and no breakpoints
 void ReadLandScript(LandScriptRun& run, std::string name, const std::string& text);
+
+/// The run of the land script as a world state keeps it. The commands are not in it: a load reads the text again.
+struct KeptLandScriptRun
+{
+	std::string name;
+	std::string text;
+	scripts::LandScriptStepper::Kept stepper;
+	std::string message;
+	uint32_t changes {0};
+
+	bool operator==(const KeptLandScriptRun&) const = default;
+};
+[[nodiscard]] KeptLandScriptRun KeepLandScriptRun(const LandScriptRun& run);
+/// Puts back a kept run. A kept run that read no script gives a run with no script. For other runs, it reads the text
+/// again and puts back the position of the stepper. It gives false when the position does not agree with the commands of
+/// the text. Then the run has the commands with none done.
+bool RestoreLandScriptRun(LandScriptRun& run, const KeptLandScriptRun& kept);
 
 /// The text of the land script in a file: the text of a land script file, or the script in a land of a network game. None
 /// when the file does not read.

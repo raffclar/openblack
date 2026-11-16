@@ -15,6 +15,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Editor/EditorHistory.h"
 #include "Editor/EditorMath.h"
 #include "Editor/EditorPaths.h"
@@ -32,7 +33,10 @@ namespace openblack::ecs::systems
 /// The in-game editor's state, which its panels share: whether it is open, the things picked, the history, the tool the mouse
 /// works in the world, snapping, the camera on the picked thing, how fast the keys move the camera, and stepping the game one
 /// turn at a time. While the editor is closed it does nothing and leaves the camera to the player.
-class EditorSystemInterface
+///
+/// The world state keeps the state of the editor that all computers of a network game share: the debugger of the script
+/// machine and the run of the land script stepper.
+class EditorSystemInterface: public SavedStateInterface
 {
 public:
 	/// What a left click in the world does
