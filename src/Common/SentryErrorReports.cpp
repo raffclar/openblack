@@ -13,8 +13,10 @@
 
 #include <array>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -136,6 +138,31 @@ sentry_value_t HideUserFolders(sentry_value_t event, sentry_hint_t* /*hint*/, vo
 	return event;
 }
 
+/// Names the players of the event: the first player is the user of the event, with the address of the player's computer.
+/// All the players are in the extra data "players". Does nothing when the list is empty.
+void NamePlayers(sentry_value_t event, const std::vector<ReportedPlayer>& players)
+{
+	if (players.empty())
+	{
+		return;
+	}
+	auto user = sentry_value_new_object();
+	sentry_value_set_by_key(user, "username", sentry_value_new_string(players.front().name.c_str()));
+	if (!players.front().address.empty())
+	{
+		sentry_value_set_by_key(user, "ip_address", sentry_value_new_string(players.front().address.c_str()));
+	}
+	sentry_value_set_by_key(event, "user", user);
+	std::string text;
+	for (const auto& player : players)
+	{
+		text += text.empty() ? "" : "; ";
+		text += player.address.empty() ? player.name : player.name + " " + player.address;
+	}
+	auto extra = sentry_value_get_by_key(event, "extra");
+	sentry_value_set_by_key(extra, "players", sentry_value_new_string(text.c_str()));
+}
+
 } // namespace
 
 SentryErrorReports::SentryErrorReports(SentrySettings settings)
@@ -208,6 +235,7 @@ void SentryErrorReports::SendDesync(const DesyncReport& report)
 		sentry_value_set_by_key(extra, key.c_str(), sentry_value_new_string(value.c_str()));
 	}
 	sentry_value_set_by_key(event, "extra", extra);
+	NamePlayers(event, report.players);
 	// The capture of the desync gives its facts as a file of the event, when the file is small
 	if (report.detail.has_value() && !report.detail->attachment.empty() &&
 	    report.detail->attachment.size() <= k_MostDesyncAttachmentBytes)

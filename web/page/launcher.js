@@ -141,10 +141,20 @@ const diagnostics = { renderer: 'not chosen', adapter: 'not known', canvas: 'not
 
 // The error and crash reports to Sentry (launcher-reports.js). The game starts and stops them with the option of the
 // player. Until the game starts them, the page sends nothing.
+//
+// The reports read the build id of the module of the game once, after the page compiled the game.
+let wasmBuildId;
 const errorReports = new ErrorReports({
   loadSdk: () => loadSentryScript(document),
   logText: () => logLines.join('\n'),
   log: (text) => log(k_PageTag + text),
+  buildId: () => {
+    const module = wasmBuildId === undefined && globalThis.openblackWasmModule && globalThis.openblackWasmModule();
+    if (module) {
+      wasmBuildId = wasmModuleInfo(module).buildId || '';
+    }
+    return wasmBuildId || undefined;
+  },
 });
 globalThis.openblackErrorReports = errorReports;
 

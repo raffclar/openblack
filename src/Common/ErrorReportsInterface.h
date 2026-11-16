@@ -53,6 +53,16 @@ struct AccountConsent
 	bool operator==(const AccountConsent&) const = default;
 };
 
+/// A player that a report of the game server names: the name of the account and the address of the player's computer.
+/// The server names a player only when the join ticket of the player gave the choice Full (ReportedPlayerOf).
+struct ReportedPlayer
+{
+	std::string name;
+	std::string address;
+
+	bool operator==(const ReportedPlayer&) const = default;
+};
+
 /// An event of a failure that the game finds itself, with no player name, account, address or chat
 struct FailureEvent
 {

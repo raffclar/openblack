@@ -57,6 +57,15 @@ if (EMSCRIPTEN OR ANDROID)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Server/Desktop/")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Server/Desktop/")
 endif ()
+# The web build can write the debug information of the game code to a file next to the build folder (not into it, so
+# that the files of the page stay the only files that go to the players). The file has the build id of the WebAssembly,
+# which the reports give to Sentry.
+if (EMSCRIPTEN AND OPENBLACK_WEB_DEBUG_INFO)
+  set(OPENBLACK_WEB_DEBUG_FILE
+      "${CMAKE_BINARY_DIR}/web-debug/openblack.debug.wasm"
+  )
+  add_compile_options(-g)
+endif ()
 # The reports to Sentry are built only with the option: through sentry-native on the desktop, and through the browser
 # SDK of the page on the web
 if (NOT OPENBLACK_SENTRY OR EMSCRIPTEN)
@@ -784,6 +793,31 @@ else ()
       "--post-js=${CMAKE_SOURCE_DIR}/web/page/post.js"
       "--post-js=${CMAKE_SOURCE_DIR}/web/page/input.js"
     )
+    if (OPENBLACK_WEB_DEBUG_INFO)
+      # The link writes the whole debug information to the debug file and keeps only the build id and the name of the
+      # file in the shipped WebAssembly. Emscripten then runs only the optimisations of the final WebAssembly that keep
+      # the debug information valid.
+      file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/web-debug")
+      target_link_options(
+        openblack PRIVATE -Wl,--build-id=sha1
+        "-gseparate-dwarf=${OPENBLACK_WEB_DEBUG_FILE}"
+      )
+      # The -g option also makes the link keep the function names in the shipped WebAssembly. The debug file has them, so
+      # a step after the link removes them from the shipped file. The code of the file does not move.
+      find_program(
+        OPENBLACK_LLVM_OBJCOPY llvm-objcopy
+        HINTS "${EMSCRIPTEN_ROOT_PATH}/../bin" "$ENV{EMSDK}/upstream/bin"
+        REQUIRED
+      )
+      add_custom_command(
+        TARGET openblack
+        POST_BUILD
+        COMMAND "${OPENBLACK_LLVM_OBJCOPY}" --remove-section=name
+                "$<TARGET_FILE_DIR:openblack>/openblack.wasm"
+        COMMENT "Remove the function names from the shipped WebAssembly"
+        VERBATIM
+      )
+    endif ()
     set_target_properties(openblack PROPERTIES SUFFIX ".js")
     set_property(
       TARGET openblack

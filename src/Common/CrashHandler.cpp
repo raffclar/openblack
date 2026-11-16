@@ -474,7 +474,7 @@ void DescribeCurrentException(CrashInfo& info)
 	}
 	catch (const std::exception& e)
 	{
-		info.detail = CopyInto(state.detail, typeid(e).name());
+		info.detail = CopyInto(state.detail, crash_report::ReadableTypeName(typeid(e)));
 		info.message = CopyInto(state.message, e.what());
 	}
 	catch (...)

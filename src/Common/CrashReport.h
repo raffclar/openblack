@@ -16,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <typeinfo>
 
 /// The pure part of crash handling: what a crash report says, what its files are called and which exit code the game
 /// leaves with. The platform hooks that catch crashes live in CrashHandler.
@@ -79,6 +80,12 @@ struct CrashInfo
 
 /// The well-known name of a Windows exception code, such as "EXCEPTION_ACCESS_VIOLATION", or empty when unknown
 [[nodiscard]] std::string_view StructuredExceptionName(uint32_t code);
+
+/// The type name of an exception in the form that people read, for example "std::runtime_error". Compilers other
+/// than MSVC give a mangled name such as "St13runtime_error", and this function decodes it. A name that it cannot
+/// decode comes back as it is.
+[[nodiscard]] std::string ReadableTypeName(const char* name);
+[[nodiscard]] std::string ReadableTypeName(const std::type_info& type);
 
 /// The name of a POSIX signal number such as "SIGSEGV", or empty when unknown
 [[nodiscard]] std::string_view SignalName(int signal);

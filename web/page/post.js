@@ -16,9 +16,14 @@
 //
 // When a game thread wrote files of the profiles, it tells the page, which sends the saved games and creatures to the
 // site (launcher-cloud.js).
+//
+// It also gives the error reports the WebAssembly module of the game, which holds the build id of the build.
 if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalScope)) {
   const openblackWeb = Module['openblackWeb'];
   globalThis.openblackWeb = openblackWeb;
+  // The error reports read the build id of the WebAssembly module of the game, so that Sentry can find the debug file
+  // of this build. The module is there after the page compiled the game.
+  globalThis.openblackWasmModule = () => (typeof wasmModule !== 'undefined' ? wasmModule : undefined);
   const siteAsks = new Map();
   let nextSiteAsk = 0;
   const answerWorker = (entry, status, body) => {

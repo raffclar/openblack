@@ -27,6 +27,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Common/ErrorReportsInterface.h"
 #include "Editor/EditorMindLoads.h"
 #include "Online/GameDataPrint.h"
 #include "Server/DesyncCapture.h"
@@ -262,6 +263,8 @@ public:
 	/// of the turn at which its world parted
 	using PartedListener = std::function<void(uint8_t seat, std::span<const std::string> parts)>;
 	void SetPartedListener(PartedListener listener) { _partedListener = std::move(listener); }
+	/// The players that a report may name: the players that joined with the ticket choice Full for the error reports
+	[[nodiscard]] std::vector<error_reports::ReportedPlayer> ReportedPlayers() const;
 	/// The print of the game data that the server's world read, before a client joins. The room sends the names of its
 	/// files in its join, and refuses a player whose file of a land, of a script or of the table of objects differs, with
 	/// "data". With no print, the room makes no check.
@@ -369,6 +372,9 @@ private:
 		bool editor {false};
 		/// The client sent the print of its game data. The server takes only the first.
 		bool printed {false};
+		/// The choice of the error reports on the join ticket of the player. None when the player joined with no ticket or
+		/// came back with a session: the server then never names the player in a report.
+		std::optional<error_reports::ReportsConsent> reports;
 	};
 
 	/// The most "sync.parts" frames of one connection that the server answers

@@ -231,7 +231,8 @@
       "description": "As emscripten-vcpkg, without the developer tools: the web build that players get",
       "inherits": "emscripten-vcpkg",
       "cacheVariables": {
-        "OPENBLACK_DEVELOPER_TOOLS": false
+        "OPENBLACK_DEVELOPER_TOOLS": false,
+        "OPENBLACK_WEB_DEBUG_INFO": true
       }
     }
   ],

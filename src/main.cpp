@@ -1027,7 +1027,7 @@ int main(int argc, char* argv[]) noexcept
 		if (!crashDialogs)
 		{
 			openblack::crash_handler::ReportFatal(openblack::crash_report::CrashKind::UncaughtException, e.what(), {}, 0,
-			                                      typeid(e).name());
+			                                      openblack::crash_report::ReadableTypeName(typeid(e)));
 		}
 		std::cerr << e.what() << std::endl;
 		openblack::ShowFatalMessage("Fatal error", e.what());

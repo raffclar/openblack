@@ -161,3 +161,15 @@ TEST(ErrorReports, TheGameServerNamesOnlyAPlayerWhoseTicketSaysFull)
 	EXPECT_FALSE(MayNamePlayer(std::nullopt));
 	EXPECT_FALSE(MayNamePlayer(ParseReportsConsent("")));
 }
+
+TEST(ErrorReports, AReportOfTheGameServerHasTheNameAndAddressOfAConsentingPlayerOnly)
+{
+	const auto full = ReportedPlayerOf("matt", "203.0.113.7", ReportsConsent::Full);
+	ASSERT_TRUE(full.has_value());
+	EXPECT_EQ(full->name, "matt");
+	EXPECT_EQ(full->address, "203.0.113.7");
+	EXPECT_FALSE(ReportedPlayerOf("matt", "203.0.113.7", ReportsConsent::Anonymous).has_value());
+	EXPECT_FALSE(ReportedPlayerOf("matt", "203.0.113.7", ReportsConsent::Off).has_value());
+	EXPECT_FALSE(ReportedPlayerOf("matt", "203.0.113.7", std::nullopt).has_value());
+	EXPECT_FALSE(ReportedPlayerOf("", "203.0.113.7", ReportsConsent::Full).has_value());
+}
