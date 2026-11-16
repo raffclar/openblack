@@ -1353,9 +1353,7 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 	if (developer_tools::k_Built && !InNetworkGame() &&
 	    ImGui::BeginTabItem("Land generator", nullptr, flags(BottomTab::LandGenerator)))
 	{
-		ImGui::BeginChild("LandGenerator");
 		_landGenerator.Draw(context);
-		ImGui::EndChild();
 		ImGui::EndTabItem();
 	}
 	if (ImGui::BeginTabItem("Cheats", nullptr, flags(BottomTab::Cheats)))
