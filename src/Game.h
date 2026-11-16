@@ -382,6 +382,9 @@ public:
 	/// line and a run of the tools stop the game. A join from the front end goes to the box that the control gives: the
 	/// multiplayer front end after Leave Game, the skirmish box after Back in the land information box.
 	void LeaveNetworkGame(game_session::NetworkLeave leave = game_session::NetworkLeave::LeaveGame);
+	/// The player leaves the lobby room of the network game that the player left. A new front end then shows the lobby
+	/// list and asks for no ticket of that game.
+	void LeaveLobbyGame();
 	/// Tests: the player leaves the network game through the menu and the question to leave, as a player does
 	void LeaveAsAPlayerDoes();
 	/// A run of the tools that stops: an observer leaves the network game at once, so that the server does not wait

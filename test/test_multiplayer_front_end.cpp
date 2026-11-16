@@ -1899,6 +1899,49 @@ TEST_F(FrontEndTest, ThePlayerOfALobbyGameIsReadyInTheRoomOfTheGameServerAfterTh
 	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyRoom);
 }
 
+TEST_F(FrontEndTest, AfterTheLeaveOfALobbyGameANewFrontEndShowsTheLobbyListAndAsksNoTicket)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	frontEnd->OpenCreateLobby();
+	frontEnd->SubmitCreateLobby();
+	frontEnd->Update();
+	lobbySessions->StartCountdown();
+	lobbySessions->AssignGame(
+	    "game-1",
+	    lobby_api::JoinTicket {.url = "wss://lobby.test/game/s1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	frontEnd->Update();
+	ASSERT_EQ(network.joins.size(), 1u);
+	sockets.Accept(sockets.order.back());
+	Step();
+	ServerJoins();
+
+	// The player plays the game and leaves it with Leave Game: the game leaves the game server, then the lobby room
+	network.Leave();
+	lobbySessions->LeaveGame();
+	ASSERT_NE(lobbySessions->Room(), nullptr);
+	EXPECT_EQ(lobbySessions->Room()->Phase(), online::lobby::RoomPhase::Ended);
+
+	// The front end opens again: the lobby list shows, and the game of the lobby gets no new join
+	frontEnd.reset();
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Update();
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	EXPECT_EQ(network.joins.size(), 1u);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(lobbySessions->Room(), nullptr);
+}
+
 TEST_F(FrontEndTest, AnObserverOfALobbyGameSendsNoReady)
 {
 	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
