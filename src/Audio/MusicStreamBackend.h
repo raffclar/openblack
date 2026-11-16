@@ -21,13 +21,14 @@
 
 #include "AudioPlayerInterface.h"
 #include "MusicPlayer.h"
+#include "SerialExecutor.h"
 #include "Sound/SoundDecoder.h"
 
 namespace openblack::audio
 {
 
 /// Streams music channels with OpenAL: each stream is a source centred on the listener with the decoded chunks of
-/// its bank queued on it. Other threads decode the chunks in their sequence, and the stream gets them as they are
+/// its bank queued on it. One decode thread decodes the chunks in their sequence, and the stream gets them as they are
 /// ready. Thus a stream starts to play a short time after its first chunk is queued.
 class MusicStreamBackend final: public MusicBackend
 {
@@ -116,6 +117,8 @@ private:
 	std::vector<std::shared_future<DecodedChunk>> _abandoned;
 	Stream _nextStream {1};
 	float _outputVolume {1.0f};
+	/// The one thread that decodes all the chunks, one after the other. It ends last, after the jobs that it holds.
+	SerialExecutor _executor;
 };
 
 } // namespace openblack::audio

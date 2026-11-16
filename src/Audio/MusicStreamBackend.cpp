@@ -11,8 +11,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <iterator>
 #include <span>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -178,7 +180,7 @@ bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32
 		return readChunk && index < count ? readChunk(index) : std::vector<uint8_t> {};
 	};
 
-	// Another thread decodes the chunk after the chunk before it, so that a frame of the game does not wait for the
+	// The decode thread decodes the chunk after the chunk before it, so that a frame of the game does not wait for the
 	// decode. The chunk plays after the chunks queued before it.
 	const auto requested = _clock();
 	std::shared_future<DecodedChunk> previous;
@@ -186,7 +188,7 @@ bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32
 	{
 		previous = state.decoding.back();
 	}
-	auto job = [decoder = _decoder, read = std::move(read), sampleRate, previous, before = state.lastChunk,
+	auto job = [decoder = _decoder, clock = _clock, read = std::move(read), sampleRate, previous, before = state.lastChunk,
 	            beforeFrames = state.lastChunkFrames, chunk, skipFrames, path = bank.path, requested]() mutable {
 		if (previous.valid())
 		{
@@ -202,9 +204,15 @@ bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32
 		decoded.bank = std::move(path);
 		decoded.skipFrames = skipFrames;
 		decoded.requested = requested;
+		if (const auto logger = spdlog::get("audio"); logger != nullptr)
+		{
+			const auto took = std::chrono::duration<float, std::milli>(clock() - requested).count();
+			SPDLOG_LOGGER_DEBUG(logger, "Music chunk {} of {} decoded {:.1f} ms after its request on decode thread {}", chunk,
+			                    decoded.bank, took, std::hash<std::thread::id> {}(std::this_thread::get_id()));
+		}
 		return decoded;
 	};
-	state.decoding.push_back(std::async(std::launch::async, std::move(job)).share());
+	state.decoding.push_back(_executor.Submit(std::move(job)));
 	return true;
 }
 
@@ -331,7 +339,7 @@ void MusicStreamBackend::Destroy(Stream stream)
 		return;
 	}
 	auto& state = found->second;
-	// The decodes still running end on their own threads; the frame does not wait for them
+	// The decodes that are not finished end on the decode thread; the frame does not wait for them
 	std::ranges::move(state.decoding, std::back_inserter(_abandoned));
 	// A stopped source has played all of its buffers, so they can all be taken off it
 	_player.StopSource(state.source);
