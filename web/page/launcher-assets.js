@@ -1,7 +1,9 @@
 // openblack web page: the game files that the site sends to an account with the mark for them.
 //
 // The site gives the list of the game files at /assets/index.json, with the size and the SHA-256 of each file, and
-// each file at /assets/files/<path>. An account without the mark gets 401 or 403, and the page shows the folder picker.
+// each file at /assets/files/<path>. A list with "hashed_addresses" also gives each file at /assets/sha256/<SHA-256>,
+// which the browser can keep for a long time with no check, because other bytes never have that address. An account
+// without the mark gets 401 or 403, and the page shows the folder picker.
 // The page keeps each file in the private storage of the site (OPFS), with its SHA-256 as its name. Thus a second
 // visit downloads only the files that changed. The page checks the size and the SHA-256 of each file that it gets.
 //
@@ -14,6 +16,8 @@
 // The address of the list of the game files, and the start of the address of each file
 const k_AssetIndexAddress = '/assets/index.json';
 const k_AssetFilesAddress = '/assets/files/';
+// The start of the address of each file by its SHA-256, when the list gives these addresses
+const k_AssetHashedAddress = '/assets/sha256/';
 // The versions of the list that the page reads. The second version also gives the SHA-256 of each block of the large
 // files that the site sends with no compression, so that the page can get only the blocks that the game reads.
 const k_AssetIndexFormats = [1, 2];
@@ -34,20 +38,30 @@ const k_AssetReasonLength = 200;
 // read next. A file that the game reads goes first.
 const k_AssetPrefetchDownloads = 1;
 
+// The voice banks of the creature species. The web game reads the samples of a bank only when a creature of its species
+// is in the world (src/Simulation/WorldStart.cpp, k_SpeciesVoiceBanks in src/Creature/CreatureAudio.h).
+const k_AssetVoiceBankRules = [
+  /^audio\/sfx\/creature\/b(ape|bear|cow|greek|horse|rhino|sheep|tiger|tort|wolf)\.sad$/,
+];
 // The files that the start of the game does not read: the landscapes of the other lands and of the network maps, the
-// network maps, the files of the old citadel, and the animations and light maps of the miracles. The game reads the
-// other files on the way to the first land: the films, the sound banks, the meshes, the textures and the scripts.
+// network maps, the files of the old citadel, the animations and light maps of the miracles, and the voice banks of the
+// species. The game reads the other files on the way to the first land: the films, the other sound banks, the meshes,
+// the textures and the scripts.
 const k_AssetLaterRules = [
   /^data\/landscape\/(land[2-5t]|construct|mpm_|twogods|threegods|fourgods)[^/]*$/,
   /^data\/landscape\/multi_player\//,
   /^online maps\//,
   /^data\/citadel\/engine_old\//,
   /^data\/spells\/(anims|lightmaps)\//,
+  ...k_AssetVoiceBankRules,
 ];
-// The files that the page gets first after the start, because the first land can read them in its play: the
-// animations and the light maps of the miracles. The landscapes of the other lands come when the game starts a land.
+// The files that the page gets first after the start, because the first land can read them in its play, in this order:
+// the animations and the light maps of the miracles, then the voice banks of the species. A creature can come into the
+// world at any time, and its first sound must not wait for the site. The landscapes of the other lands come when the
+// game starts a land.
 const k_AssetSoonRules = [
   /^data\/spells\//,
+  ...k_AssetVoiceBankRules,
 ];
 // The music banks. The start of the game reads only the list of the parts at the start of each bank, and the music
 // reads the parts of one bank while it plays. Thus the page gets only the first block of each bank before the start.
@@ -80,9 +94,10 @@ function isFileSize(value) {
 
 /**
  * The game files in the text of the list. Gives { archive, totalBytes, blockSize, files }, where each file has a path, a
- * size and a sha256. A file of the second version can also have blocks: the SHA-256 of each part of blockSize bytes, in
- * order. Throws an error when the list is not correct. The game finds its files with no letter case, so two paths that
- * have only a different letter case are an error.
+ * size, a sha256 and an address. A file of the second version can also have blocks: the SHA-256 of each part of
+ * blockSize bytes, in order. When the list has "hashed_addresses", the address of each file is its address by its
+ * SHA-256, and the file has hashed set. Throws an error when the list is not correct. The game finds its files with no
+ * letter case, so two paths that have only a different letter case are an error.
  */
 function parseAssetIndex(text) {
   let index;
@@ -109,6 +124,11 @@ function parseAssetIndex(text) {
   if (paths.length === 0 || paths.length > k_AssetMostFiles) {
     throw new Error(`the list of the game files has ${paths.length} files`);
   }
+  if (index.hashed_addresses !== undefined && typeof index.hashed_addresses !== 'boolean') {
+    throw new Error(`the list of the game files has the value ${JSON.stringify(index.hashed_addresses)} for ` +
+      'hashed_addresses');
+  }
+  const hashed = index.hashed_addresses === true;
   const seen = new Set();
   const files = paths.map((path) => {
     const entry = listed[path];
@@ -124,14 +144,15 @@ function parseAssetIndex(text) {
       typeof entry.sha256 !== 'string' || !k_Sha256Pattern.test(entry.sha256)) {
       throw new Error(`the list of the game files has no correct size and SHA-256 for ${path}`);
     }
+    const address = hashed ? hashedAssetAddress(entry.sha256) : assetAddress(path);
     if (entry.blocks === undefined || index.format < 2) {
-      return { path, size: entry.size, sha256: entry.sha256 };
+      return { path, size: entry.size, sha256: entry.sha256, address, hashed };
     }
     if (blockSize === 0 || !Array.isArray(entry.blocks) || entry.blocks.length !== Math.ceil(entry.size / blockSize) ||
       entry.size === 0 || !entry.blocks.every((block) => typeof block === 'string' && k_Sha256Pattern.test(block))) {
       throw new Error(`the list of the game files has no correct blocks for ${path}`);
     }
-    return { path, size: entry.size, sha256: entry.sha256, blocks: [...entry.blocks] };
+    return { path, size: entry.size, sha256: entry.sha256, address, hashed, blocks: [...entry.blocks] };
   });
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
   if (index.total_bytes !== undefined && index.total_bytes !== totalBytes) {
@@ -162,7 +183,8 @@ function assetBlockRange(file, blockSize, offset, length) {
  * What the page does with the files and the blocks that it keeps, for the files of the list. The argument kept is a
  * map from the name of each kept file to its size. The page keeps a whole file by its SHA-256, and a block by the
  * SHA-256 of the block. Gives:
- * - download: one entry { sha256, size, path } for each content that the page does not keep whole, with the first path,
+ * - download: one entry { sha256, size, path, address, hashed } for each content that the page does not keep whole,
+ *   with the first path,
  * - ready: the SHA-256 of each content that the page keeps with the correct size,
  * - blocks: the SHA-256 of each block that the page keeps, of the files that it does not keep whole,
  * - remove: the names of the kept files that the list does not use, that have an incorrect size, or that are the blocks
@@ -205,13 +227,33 @@ function planAssetCache(files, kept, blockSize = 0) {
   }
   const download = [...needed.values()]
     .filter((file) => !ready.has(file.sha256))
-    .map((file) => ({ sha256: file.sha256, size: file.size, path: file.path }));
+    .map((file) => ({
+      sha256: file.sha256, size: file.size, path: file.path, address: file.address, hashed: file.hashed,
+    }));
   return { download, ready, blocks, remove };
 }
 
 /** The address of a game file on the site, with each part of its path encoded */
 function assetAddress(path) {
   return k_AssetFilesAddress + path.split('/').map(encodeURIComponent).join('/');
+}
+
+/** The address of a game file on the site by its SHA-256 */
+function hashedAssetAddress(sha256) {
+  return k_AssetHashedAddress + sha256;
+}
+
+/**
+ * The address of a file of the list and the cache mode of the browser for it. The browser keeps a file at an address by
+ * SHA-256 and gives it again with no request, because the site sends it with a long immutable cache. A file at an
+ * address by path does not go in the cache of the browser, because a new version can put other bytes at that path. The
+ * page keeps each file in OPFS in both cases.
+ */
+function assetRequest(file) {
+  return {
+    address: file.address ?? assetAddress(file.path),
+    cache: file.hashed ? 'default' : 'no-store',
+  };
 }
 
 /** The text of the bytes, two hexadecimal digits for each byte */
@@ -259,7 +301,8 @@ async function fetchAssetIndex(fetchFile) {
  * received with the number of bytes of each part that arrives. Gives the bytes.
  */
 async function fetchAsset(fetchFile, digest, file, received) {
-  const response = await fetchFile(assetAddress(file.path), { cache: 'no-store', credentials: 'same-origin' });
+  const request = assetRequest(file);
+  const response = await fetchFile(request.address, { cache: request.cache, credentials: 'same-origin' });
   if (response.status !== 200) {
     throw new Error(`the site gave the status ${response.status} for ${file.path}`);
   }
@@ -299,7 +342,7 @@ function isStartAsset(path) {
  * the path just now. With no path, the files to get just after the start. The argument has: the files of the list in
  * the order of their numbers, with a path and a sha256 each, and a function that is true for the SHA-256 of each file
  * that the page has or gets now.
- * - After the start: the small files that the first land can read in its play.
+ * - After the start: the files that the first land can read in its play, in the order of k_AssetSoonRules.
  * - After the game read the landscape of a land: the landscape and the footpaths of the next land.
  * - After the game read a file of a network map: the other files of the same map.
  */
@@ -315,7 +358,9 @@ function planAssetPrefetch(files, { path = null, have = () => false }) {
     });
   };
   if (path === null) {
-    add((lower) => !isStartAsset(lower) && k_AssetSoonRules.some((rule) => rule.test(lower)));
+    for (const soon of k_AssetSoonRules) {
+      add((lower) => !isStartAsset(lower) && soon.test(lower));
+    }
     return numbers;
   }
   const lower = path.toLowerCase();
@@ -385,8 +430,9 @@ function parseContentRange(text) {
  */
 async function fetchAssetBlock(fetchFile, digest, file, blockSize, block) {
   const { start, end } = assetBlockBounds(file, blockSize, block);
-  const response = await fetchFile(assetAddress(file.path), {
-    cache: 'no-store', credentials: 'same-origin', headers: { Range: `bytes=${start}-${end - 1}` },
+  const request = assetRequest(file);
+  const response = await fetchFile(request.address, {
+    cache: request.cache, credentials: 'same-origin', headers: { Range: `bytes=${start}-${end - 1}` },
   });
   if (response.status !== 206) {
     throw new Error(`the site gave the status ${response.status} for block ${block} of ${file.path}`);
@@ -621,6 +667,26 @@ class AssetStore {
 }
 
 /** The size of each file in the folder of kept files, by its name */
+/**
+ * Asks the browser to keep the private storage of the site (the game files in OPFS and the saves) when it needs space.
+ * Without this, the storage is "best effort", and the browser can remove 700 MB of game files. Chrome and Safari give
+ * or refuse it with no question to the player. The argument is navigator.storage. Gives true when the browser keeps the
+ * storage, false when it does not, and null when the browser cannot keep it.
+ */
+async function askToKeepStorage(storage) {
+  if (!storage || typeof storage.persist !== 'function') {
+    return null;
+  }
+  try {
+    if (typeof storage.persisted === 'function' && await storage.persisted()) {
+      return true;
+    }
+    return await storage.persist();
+  } catch {
+    return null;
+  }
+}
+
 async function keptAssets(folder) {
   const kept = new Map();
   for await (const [name, handle] of folder.entries()) {
@@ -767,8 +833,9 @@ async function streamAssets(index, {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hexText, refusalReason, fetchAssetIndex, fetchAsset,
-    keepAssets, streamAssets, isStartAsset, planAssetStart, planAssetPrefetch, assetProblem, assetBlockBounds,
+    isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hashedAssetAddress, assetRequest, hexText,
+    refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets, isStartAsset,
+    planAssetStart, planAssetPrefetch, assetProblem, assetBlockBounds,
     assetBlockRange, parseContentRange, fetchAssetBlock, AssetStore,
     k_AssetIndexAddress, k_AssetCacheFolder,
   };

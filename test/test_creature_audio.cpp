@@ -234,6 +234,20 @@ TEST(CreatureAudio, VoiceBank)
 	EXPECT_EQ(VoiceBank("", CreatureType::Unknown), "");
 }
 
+TEST(CreatureAudio, EverySpeciesHasAVoiceBankOfTheList)
+{
+	// The web game holds these banks back from the start, so each species must have its bank in the list
+	for (int32_t type = 1; type < static_cast<int32_t>(CreatureType::_COUNT); ++type)
+	{
+		const auto bank = VoiceBank("", static_cast<CreatureType>(type));
+		EXPECT_TRUE(IsSpeciesVoiceBank(bank)) << type << " " << bank;
+	}
+	EXPECT_TRUE(IsSpeciesVoiceBank("BTiger.SAD"));
+	EXPECT_FALSE(IsSpeciesVoiceBank(k_GenericBank));
+	EXPECT_FALSE(IsSpeciesVoiceBank("InGame.sad"));
+	EXPECT_FALSE(IsSpeciesVoiceBank("btiger"));
+}
+
 TEST(CreatureAudio, Gate)
 {
 	const Gate open {.muted = false, .localPlayersCreature = false, .otherVoicesEnabled = false};

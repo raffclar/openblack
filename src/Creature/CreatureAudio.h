@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <functional>
 #include <optional>
 #include <span>
@@ -165,6 +166,13 @@ constexpr std::string_view k_GenericBank = "creature.sad";
 /// The species' voice bank as the sounds are loaded: the bank its .cbn file names, in lower case with its extension,
 /// or the one each species' file names when it names none (a lion uses the tiger's, a zebra the horse's)
 [[nodiscard]] std::string VoiceBank(std::string_view rigBankName, CreatureType species);
+/// The voice banks of the species, which only a creature of that species plays. The bank all creatures share is not one.
+constexpr std::array<std::string_view, 10> k_SpeciesVoiceBanks = {
+    "bape.sad",   "bbear.sad",  "bcow.sad",   "bgreek.sad", "bhorse.sad",
+    "brhino.sad", "bsheep.sad", "btiger.sad", "btort.sad",  "bwolf.sad",
+};
+/// Whether a sound bank file is the voice bank of a species, in any case
+[[nodiscard]] bool IsSpeciesVoiceBank(std::string_view file);
 
 /// Whether an event's sound is asked for: none while muted; a voice only from the local player's creature unless a
 /// script lets every creature be heard. The sample then has its own say, as every sound effect does (see

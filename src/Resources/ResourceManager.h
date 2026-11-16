@@ -192,12 +192,25 @@ public:
 		}
 	}
 
-	/// Asks for every registered resource to be loaded on the loading threads
+	/// Keeps a registered resource out of PrefetchAll. It loads only when it is asked for, or when Prefetch names it.
+	/// False when the id is not registered or is loaded already.
+	bool Hold(entt::id_type identifier)
+	{
+		const auto it = _deferred.find(identifier);
+		if (it == _deferred.end())
+		{
+			return false;
+		}
+		it->second.held = true;
+		return true;
+	}
+
+	/// Asks for every registered resource to be loaded on the loading threads, except the held resources
 	void PrefetchAll()
 	{
 		for (auto& [identifier, deferred] : _deferred)
 		{
-			if (!deferred.wanted)
+			if (!deferred.wanted && !deferred.held)
 			{
 				deferred.wanted = true;
 				_wanted.push_back(identifier);
@@ -258,6 +271,13 @@ public:
 
 	/// How many registered resources have not been loaded yet
 	[[nodiscard]] size_t PendingCount() const { return _deferred.size(); }
+
+	/// How many registered resources are held (see Hold) and are not asked for yet
+	[[nodiscard]] size_t HeldCount() const
+	{
+		return static_cast<size_t>(
+		    std::ranges::count_if(_deferred, [](const auto& entry) { return entry.second.held && !entry.second.wanted; }));
+	}
 
 	/// How many prefetched resources are waiting for a loading thread or on one
 	[[nodiscard]] size_t LoadingCount() const { return _wanted.size() + _running.size(); }
@@ -351,6 +371,8 @@ private:
 		/// Set once it is handed to a loading thread
 		std::shared_ptr<detail::LoadJob<ResourceType>> job;
 		bool wanted {false};
+		/// Set when PrefetchAll must not ask for it
+		bool held {false};
 	};
 
 	/// Loads a registered resource that isn't loaded yet: waits for its loading thread, or loads it here when no thread

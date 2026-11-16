@@ -124,6 +124,7 @@ public:
 	void SetOtherVoicesEnabled(bool enabled) override { otherVoices = enabled; }
 	void Play(entt::entity, const creature_audio::SoundEvent&) override {}
 	void PlayAction(entt::entity, const creature_audio::SoundEvent&) override {}
+	void AskForVoiceBanks() override {}
 
 	bool otherVoices {false};
 };

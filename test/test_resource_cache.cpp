@@ -179,6 +179,43 @@ TEST(ResourceCache, OneResourceGoesEvenWhenItIsOverTheBudget)
 	EXPECT_EQ(cache.StartLoads(queue, 10), 100);
 }
 
+TEST(ResourceCache, AHeldResourceLoadsOnlyWhenItIsAskedFor)
+{
+	FakeCache cache;
+	LoadQueue queue(0);
+	std::atomic<int> runs = 0;
+	cache.Register(k_First, Counted(1, runs), 10);
+	cache.Register(k_Second, Counted(2, runs), 10);
+	EXPECT_TRUE(cache.Hold(k_Second));
+	EXPECT_FALSE(cache.Hold(k_Third));
+	EXPECT_EQ(cache.HeldCount(), 1);
+
+	// PrefetchAll does not ask for the held resource
+	cache.PrefetchAll();
+	EXPECT_EQ(cache.LoadingCount(), 1);
+	EXPECT_EQ(cache.StartLoads(queue, 1000), 10);
+
+	// Prefetch asks for it, and then it does not count as held
+	cache.Prefetch(k_Second);
+	EXPECT_EQ(cache.HeldCount(), 0);
+	EXPECT_EQ(cache.LoadingCount(), 1);
+	EXPECT_EQ(cache.StartLoads(queue, 1000), 10);
+}
+
+TEST(ResourceCache, AHeldResourceLoadsWhereItIsAskedFor)
+{
+	FakeCache cache;
+	std::atomic<int> runs = 0;
+	cache.Register(k_First, Counted(1, runs), 10);
+	cache.Hold(k_First);
+	cache.PrefetchAll();
+	EXPECT_EQ(cache.LoadingCount(), 0);
+	EXPECT_EQ(cache.Handle(k_First)->value, 1);
+	EXPECT_EQ(runs, 1);
+	EXPECT_EQ(cache.HeldCount(), 0);
+	EXPECT_FALSE(cache.Hold(k_First));
+}
+
 TEST(ResourceCache, AResourceNoThreadHasStartedIsLoadedWhereItIsAskedFor)
 {
 	FakeCache cache;

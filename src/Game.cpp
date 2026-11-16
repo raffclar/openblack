@@ -1211,7 +1211,8 @@ bool Game::RunFrame() noexcept
 		// What the loading threads finished goes into the caches, and they're given a little more
 		auto& resources = Locator::resources::value();
 		resources.UpdateLoading(k_FrameLoadBudget, k_FrameUploads);
-		if (auto& screens = Locator::loadingScreenSystem::value(); screens.TimesPrefetch() && resources.PendingCount() == 0)
+		if (auto& screens = Locator::loadingScreenSystem::value();
+		    screens.TimesPrefetch() && resources.PendingCount() == resources.HeldCount())
 		{
 			screens.FinishPrefetchTimer();
 		}

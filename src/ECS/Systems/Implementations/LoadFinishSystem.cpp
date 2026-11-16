@@ -25,6 +25,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
@@ -78,6 +79,11 @@ void LoadFinishSystem::FinishBehindScreen()
 	const auto start = std::chrono::steady_clock::now();
 	// The pipelines of the land start in the background while the other resources load
 	StartLandPipelines();
+	// The voice banks of the species in the world load with the other resources
+	if (Locator::creatureAudioSystem::has_value())
+	{
+		Locator::creatureAudioSystem::value().AskForVoiceBanks();
+	}
 	const auto count = resources.LoadingCount();
 	while (resources.LoadingCount() > 0 && !_hooks.quitRequested())
 	{

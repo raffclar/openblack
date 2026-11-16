@@ -652,6 +652,18 @@ function keepAllGameFilesChoice(all) {
 // The store of the game files that the site streams, while the game plays them (see launcher-assets.js)
 let siteFiles = null;
 
+// The answer of the browser to the request to keep the private storage of the site. The page asks only one time.
+let keptStorage = null;
+function keepStorage() {
+  if (keptStorage === null) {
+    keptStorage = askToKeepStorage(globalThis.navigator?.storage).then((kept) => {
+      log(`The browser keeps the game files and the saves when it needs space: ${kept === null ? 'cannot' : kept}`);
+      return kept;
+    });
+  }
+  return keptStorage;
+}
+
 async function useSiteGameFiles() {
   const fetchFile = (address, options) => fetch(address, options);
   const answer = await fetchAssetIndex(fetchFile);
@@ -664,6 +676,8 @@ async function useSiteGameFiles() {
     log('The site gives the game files, but this browser has no private storage for them.');
     return false;
   }
+  // The page asks before it keeps the game files, so that the browser does not remove them when it needs space
+  keepStorage();
   element('site-files-intro').hidden = false;
   element('site-files').hidden = false;
   const progress = element('site-files-progress');
@@ -948,10 +962,9 @@ async function start(online = false) {
   // The saved games and creatures from the site come back before the game starts, because the game reads its
   // profiles at the start. Then the game owns the Profiles folder, and the page only reads it.
   await waitForCloudRestore(cloudSaves);
-  const storage = (await storageRoot()) !== undefined;
-  if (storage && navigator.storage.persist) {
+  if ((await storageRoot()) !== undefined) {
     // Ask the browser to keep the saves when it needs space
-    navigator.storage.persist().then((kept) => log(`The browser keeps the saves when it needs space: ${kept}`));
+    keepStorage();
   }
   const parameters = new URLSearchParams(location.search);
   const developer = await developerTools;

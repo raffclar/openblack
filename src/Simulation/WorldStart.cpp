@@ -53,8 +53,10 @@
 #include "Common/BufferedLogSink.h"
 #include "Common/ErrorReportsInterface.h"
 #include "Common/GameRandom.h"
+#include "Common/Platform.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
+#include "Creature/CreatureAudio.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "Creature/TattooPictures.h"
@@ -170,6 +172,11 @@ void RegisterFile(Manager& manager, Id id, const std::filesystem::path& path, Ar
 /// The sound banks whose samples are decoded as soon as they are read, as they are wanted at once and often: the hand's,
 /// the miracles' and the interface's
 constexpr std::array<std::string_view, 1> k_DecodedAheadBanks = {"InGame.sad"};
+
+/// The web game gets each file from the site when the game first reads it. Thus it does not read the voice banks of
+/// the species at the start: a bank loads when a creature of its species is in the world (see
+/// CreatureAudioSystemInterface::AskForVoiceBanks). The desktop game reads all the banks at the start.
+constexpr bool k_HoldsSpeciesVoiceBanks = k_Platform == Platform::Web;
 } // namespace
 
 void StartLogs(const std::string& logFile, const LogLevels& levels)
@@ -745,6 +752,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		    {
 			    audioManager.CreateSoundGroup(groupName);
 			    const bool decodeAhead = std::ranges::find(k_DecodedAheadBanks, groupName) != k_DecodedAheadBanks.end();
+			    const bool held = k_HoldsSpeciesVoiceBanks && creature_audio::IsSpeciesVoiceBank(groupName);
 			    for (size_t i = 0; i < audioHeaders.size(); i++)
 			    {
 				    soundName = std::filesystem::path(audioHeaders[i].name.data());
@@ -762,6 +770,10 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 				                        audioHeaders[i].name.data());
 				    soundManager.RegisterLoad(id, audioHeaders[i].size, resources::SoundLoader::FromBankFileTag {}, f,
 				                              waveData->offset, audioHeaders[i], decodeAhead);
+				    if (held)
+				    {
+					    soundManager.Hold(id);
+				    }
 				    audioManager.AddToSoundGroup(groupName, id);
 			    }
 

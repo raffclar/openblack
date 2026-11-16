@@ -204,6 +204,40 @@ bool CreatureAudioSystem::LoadState(reflection::BinaryReader& in)
 	return !in.Failed();
 }
 
+void CreatureAudioSystem::AskForVoiceBanks()
+{
+	// A computer with no sound, such as a game server, loads no voice bank and needs no creature rig for it
+	if (!Locator::sounds::has_value())
+	{
+		return;
+	}
+	Locator::entitiesRegistry::value().Each<const Creature>([this](entt::entity, const Creature& creature) {
+		if (const auto* rig = RigOf(creature))
+		{
+			AskForVoiceBank(creature, *rig);
+		}
+	});
+}
+
+void CreatureAudioSystem::AskForVoiceBank(const Creature& creature, const CreatureRig& rig)
+{
+	auto bank = creature_audio::VoiceBank(rig.soundBankName, creature.species);
+	if (bank.empty() || _askedBanks.contains(bank) || !Locator::sounds::has_value() || !Locator::resources::has_value())
+	{
+		return;
+	}
+	const auto& groups = Locator::sounds::value().GetSoundGroups();
+	if (const auto group = groups.find(bank); group != groups.end())
+	{
+		auto& sounds = Locator::resources::value().GetSounds();
+		for (const auto id : group->second.sounds)
+		{
+			sounds.Prefetch(id);
+		}
+	}
+	_askedBanks.insert(std::move(bank));
+}
+
 creature_audio::Gate CreatureAudioSystem::GateOf(entt::entity creature) const
 {
 	return {
@@ -243,6 +277,7 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		    {
 			    return;
 		    }
+		    AskForVoiceBank(creature, *rig);
 		    const creature_audio::InfoOf infoOf = [rig](size_t index) -> std::optional<creature_audio::AnimationInfo> {
 			    const auto* played = rig->GetAnimation(CreatureRig::Mesh::Base, index);
 			    if (played == nullptr)
