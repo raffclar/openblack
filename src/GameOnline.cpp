@@ -34,6 +34,7 @@
 #include "Common/BuildVersion.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Common/ErrorReportsInterface.h"
+#include "Common/ErrorReportsRules.h"
 #include "Game.h"
 #include "Sound/ClipSounds.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -76,6 +77,7 @@
 #include "Gui/GameInterface.h"
 #include "Gui/JoinOnlineEntry.h"
 #include "Gui/LobbyScreenRules.h"
+#include "Gui/MenuSettings.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/StartupRules.h"
@@ -121,6 +123,47 @@
 
 using namespace openblack;
 
+namespace
+{
+
+/// The error reports follow the choice of the lobby account (deviation 261). The box "Send Crash Reports" shows the
+/// choice and the profile keeps it. With no account or no choice, the box of the profile decides alone.
+void FollowAccountErrorReports()
+{
+	if (!Locator::lobbyClient::has_value() || !Locator::errorReports::has_value())
+	{
+		return;
+	}
+	auto& reports = Locator::errorReports::value();
+	auto account = Locator::lobbyClient::value().GetAccountErrorReports();
+	if (reports.GetState().account == account)
+	{
+		return;
+	}
+	reports.SetAccountConsent(account);
+	if (!account.has_value() || !Locator::gameInterface::has_value())
+	{
+		return;
+	}
+	const bool option = error_reports::OptionOfConsent(account->choice);
+	auto& menu = Locator::gameInterface::value().GetMenu();
+	const auto& shown = menu.GetSettings();
+	if (shown.crashReports == option)
+	{
+		return;
+	}
+	auto kept = gui::ToProfileSettings(shown);
+	kept.crashReports = option;
+	menu.ShowPlayer(shown.creatureName, shown.symbol, kept);
+	reports.SetEnabled(option);
+	if (Locator::playerProfileSystem::has_value())
+	{
+		Locator::playerProfileSystem::value().SetCurrentSettings(kept);
+	}
+}
+
+} // namespace
+
 void Game::UpdateOnline()
 {
 	// The web client and the WSS client move their transfers on and run the handlers. Then the lobby client moves on.
@@ -140,6 +183,7 @@ void Game::UpdateOnline()
 	{
 		Locator::lobbyClient::value().Update();
 	}
+	FollowAccountErrorReports();
 	if (Locator::lobbyRoom::has_value())
 	{
 		Locator::lobbyRoom::value().Update();

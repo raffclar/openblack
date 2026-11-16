@@ -5,8 +5,9 @@
 // the page loads the Sentry browser SDK from the folder of the page. The build puts the SDK there, with a fixed version.
 //
 // Each report has the role tag, the release and the environment that the game gives, and the game log as an
-// attachment. The reports have no user, no IP address, no page parameters and no secrets: the page removes them before
-// a report goes.
+// attachment. The reports have no page parameters and no secrets: the page removes them before a report goes. They
+// have no user and no IP address, unless the lobby account of the player gave the choice "full" on the site. Then the
+// game gives the page the id and the name of the account (setUser), and Sentry takes the IP address of the report.
 'use strict';
 
 // The file of the Sentry browser SDK next to the page (the build copies it there)
@@ -52,11 +53,19 @@ function maskValues(value) {
 }
 
 /**
- * Removes the personal data from an event before it goes. The event has no user and no IP address. The address of the
- * page has no parameters, the request has no referrer and no cookies, and the texts have no secrets.
+ * Removes the personal data from an event before it goes. The event has no user and no IP address, unless the game gave
+ * the user of an account with the choice "full": then the user is only that id and name, and Sentry takes the IP
+ * address. The address of the page has no parameters, the request has no referrer and no cookies, and the texts have
+ * no secrets.
  */
-function scrubEvent(event) {
-  delete event.user;
+function scrubEvent(event, user) {
+  event.sdk = event.sdk || {};
+  event.sdk.settings = { ...(event.sdk.settings || {}), infer_ip: user ? 'auto' : 'never' };
+  if (user) {
+    event.user = { id: String(user.id), username: String(user.username), ip_address: '{{auto}}' };
+  } else {
+    delete event.user;
+  }
   if (event.request) {
     if (event.request.url) {
       event.request.url = addressWithoutParameters(event.request.url);
@@ -94,7 +103,7 @@ function scrubEvent(event) {
  * The options of the Sentry SDK. The SDK uses only the integrations in the list: the page reports the errors itself,
  * and makes its own breadcrumbs. The SDK makes no traces and no replays.
  */
-function sentryOptions(Sentry, settings, logText) {
+function sentryOptions(Sentry, settings, logText, user = () => undefined) {
   return {
     dsn: settings.dsn,
     release: settings.release,
@@ -110,7 +119,7 @@ function sentryOptions(Sentry, settings, logText) {
         hint.attachments = [...(hint.attachments || []),
           { filename: k_LogAttachmentName, data: maskSecrets(logText()), contentType: 'text/plain' }];
       }
-      return scrubEvent(event);
+      return scrubEvent(event, user());
     },
   };
 }
@@ -155,6 +164,13 @@ class ErrorReports {
     this.lastThreadError = undefined;
     // An environment that replaces the environment of the game, or undefined
     this.environment = undefined;
+    // The id and the name of the account with the choice "full", or undefined: the reports then have no user
+    this.user = undefined;
+  }
+
+  /** The user of the next reports ({ id, username }), or undefined for reports with no personal data */
+  setUser(user) {
+    this.user = user && user.id ? { id: String(user.id), username: String(user.username || '') } : undefined;
   }
 
   /** Start the reports with the settings of the game. Gives true when the page can send reports. */
@@ -175,7 +191,7 @@ class ErrorReports {
         }
         this.sentry = Sentry;
         const environment = this.environment || settings.environment;
-        Sentry.init(sentryOptions(Sentry, { ...settings, environment }, this.logText));
+        Sentry.init(sentryOptions(Sentry, { ...settings, environment }, this.logText, () => this.user));
         this.ready = true;
         this.log('The error reports to Sentry started');
         const waiting = this.waiting;
@@ -200,6 +216,7 @@ class ErrorReports {
     }
     this.running = false;
     this.waiting = [];
+    this.user = undefined;
     if (this.ready) {
       this.ready = false;
       this.sentry.close(k_CloseMilliseconds);

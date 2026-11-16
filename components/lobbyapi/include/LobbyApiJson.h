@@ -50,6 +50,10 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string RoomReadyFrame(bool ready);
 
 [[nodiscard]] std::optional<Session> ParseSession(std::string_view text);
+/// The answer of GET and PUT /api/v1/me/consent
+[[nodiscard]] std::optional<Consent> ParseConsent(std::string_view text);
+/// The body of PUT /api/v1/me/consent: {"error_reports": "anonymous"} or {"error_reports": "off"}
+[[nodiscard]] std::string ConsentBody(std::string_view errorReports);
 [[nodiscard]] std::optional<Me> ParseMe(std::string_view text);
 [[nodiscard]] std::optional<ServerList> ParseServerList(std::string_view text);
 [[nodiscard]] std::optional<MapList> ParseMapList(std::string_view text);

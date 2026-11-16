@@ -1372,7 +1372,7 @@
   "query": "engine.tool_run"
  },
  {
-  "description": "The error and crash reports to Sentry: whether the program has a DSN, whether the reports go now, the option of the player, the role, the release and the environment. The answer never holds the DSN.",
+  "description": "The error and crash reports to Sentry: whether the program has a DSN, whether the reports go now, the option of the player, the role, the release, the environment, the choice of the lobby account and whether the reports name the account. The answer never holds the DSN or the name.",
   "kind": "object",
   "parameters": [],
   "query": "engine.error_reports"

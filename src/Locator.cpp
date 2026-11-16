@@ -1035,7 +1035,7 @@ void openblack::InitializeErrorReports([[maybe_unused]] error_reports::Role role
 	    .release = ReleaseName(build_version::Semantic(), build_version::Commit()),
 	    .environment = std::string(EnvironmentName(developer_tools::k_Built)),
 	    .role = role,
-	    .attachment = LogAttachment(logFile),
+	    .attachment = LogAttachmentOf(role, logFile),
 	    .databaseFolder = DatabaseFolder(logFile),
 	    .homeFolder = HomeFolder(),
 	});

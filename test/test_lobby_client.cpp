@@ -1242,6 +1242,64 @@ TEST_F(LobbyClientTest, EachSessionAnswerGivesTheEditorRightOfTheAccount)
 	EXPECT_FALSE(_client->GetAccountEditor().has_value());
 }
 
+TEST_F(LobbyClientTest, EachSessionAnswerGivesTheChoiceOfTheAccountForTheErrorReports)
+{
+	Make();
+	EXPECT_FALSE(_client->GetAccountErrorReports().has_value());
+	_client->Login("abc", "secret", [](auto&& /*result*/) {});
+	_http.Answer(201, R"({"access_token":"access1","access_token_expires":"2026-10-22T10:15:00Z",)"
+	                  R"("refresh_token":"refresh1","refresh_token_expires":"2026-11-21T10:00:00Z",)"
+	                  R"("account":{"id":7,"name":"abc"},"error_reports":"full"})");
+	const auto full = _client->GetAccountErrorReports();
+	ASSERT_TRUE(full.has_value());
+	EXPECT_EQ(*full,
+	          (error_reports::AccountConsent {.choice = error_reports::ReportsConsent::Full, .accountId = "7", .name = "abc"}));
+
+	// The next answer has no choice (the notice changed, or the lobby is older): the game has no choice of the account
+	_now += 15min;
+	_client->GetMe([](auto&& /*result*/) {});
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/sessions/refresh");
+	_http.Answer(200, k_Rotated);
+	EXPECT_FALSE(_client->GetAccountErrorReports().has_value());
+	_http.Answer(200, R"({"id":7,"name":"abc"})");
+
+	// A text that the game does not know counts as no choice
+	EXPECT_FALSE(lobby_api::ParseSession(
+	                 R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z","account":{"id":7,"name":"abc"},)"
+	                 R"("error_reports":3})")
+	                 .has_value());
+	_client->Logout(false, [](auto&& /*result*/) {});
+	_http.Answer(204, "");
+	EXPECT_FALSE(_client->GetAccountErrorReports().has_value());
+}
+
+TEST_F(LobbyClientTest, TheBoxOfTheReportsKeepsItsValueWithTheAccount)
+{
+	Make();
+	// With no session, nothing goes
+	_client->SendErrorReportsChoice(false);
+	EXPECT_TRUE(_http.sent.empty());
+
+	_client->Login("abc", "secret", [](auto&& /*result*/) {});
+	_http.Answer(201, R"({"access_token":"access1","access_token_expires":"2026-10-22T10:15:00Z",)"
+	                  R"("refresh_token":"refresh1","refresh_token_expires":"2026-11-21T10:00:00Z",)"
+	                  R"("account":{"id":7,"name":"abc"},"error_reports":"full"})");
+	_client->SendErrorReportsChoice(false);
+	ASSERT_EQ(_http.sent.size(), 1u);
+	EXPECT_EQ(_http.Next().method, HttpMethod::Put);
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/me/consent");
+	EXPECT_EQ(_http.NextBody(), R"({"error_reports":"off"})");
+	// The choice applies at once, before the answer
+	EXPECT_EQ(_client->GetAccountErrorReports()->choice, error_reports::ReportsConsent::Off);
+	_http.Answer(200, R"({"error_reports":"off","version":1,"chosen":"2026-11-16T10:00:00Z","notice_version":1})");
+	EXPECT_EQ(_client->GetAccountErrorReports()->choice, error_reports::ReportsConsent::Off);
+
+	// A set box never gives the choice Full: the player gives it on the site
+	_client->SendErrorReportsChoice(true);
+	EXPECT_EQ(_http.NextBody(), R"({"error_reports":"anonymous"})");
+	EXPECT_EQ(_client->GetAccountErrorReports()->choice, error_reports::ReportsConsent::Anonymous);
+}
+
 TEST_F(LobbyClientTest, AnAnswerWithNoEditorFieldGivesNoRight)
 {
 	// An older lobby sends no "editor" field

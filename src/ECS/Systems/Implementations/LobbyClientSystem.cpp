@@ -23,6 +23,8 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/ErrorReportsRules.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -349,6 +351,55 @@ std::optional<bool> LobbyClientSystem::GetAccountEditor() const
 	return _accountEditor;
 }
 
+std::optional<error_reports::AccountConsent> LobbyClientSystem::GetAccountErrorReports() const
+{
+	if (_state != LobbySessionState::LoggedIn || !_account.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto choice = error_reports::ParseReportsConsent(_accountErrorReports);
+	if (!choice.has_value())
+	{
+		return std::nullopt;
+	}
+	return error_reports::AccountConsent {.choice = *choice, .accountId = std::to_string(_account->id), .name = _account->name};
+}
+
+void LobbyClientSystem::SendErrorReportsChoice(bool option)
+{
+	if (!_config.has_value() || _state != LobbySessionState::LoggedIn)
+	{
+		return;
+	}
+	const auto generation = _generation;
+	const auto choice = error_reports::ReportsConsentText(error_reports::ConsentOfOption(option));
+	// The choice applies at once. When the call fails, the next answer of the lobby with a session gives the kept choice.
+	_accountErrorReports = choice;
+	Authorized(Call {
+	    .method = HttpMethod::Put,
+	    .path = "/me/consent",
+	    .headers = {{"Accept", std::string(k_JsonType)}, {"Content-Type", std::string(k_JsonType)}},
+	    .body = BytesOf(lobby_api::ConsentBody(choice)),
+	    .done =
+	        [this, generation](HttpResponse&& response) {
+		        if (generation != _generation)
+		        {
+			        return;
+		        }
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        LogSession("The lobby did not keep the choice for the error reports (status {})", response.status);
+			        return;
+		        }
+		        if (const auto consent = lobby_api::ParseConsent(TextOf(response)); consent.has_value())
+		        {
+			        _accountErrorReports = consent->errorReports;
+			        LogSession("The lobby keeps the choice \"{}\" for the error reports", _accountErrorReports);
+		        }
+	        },
+	});
+}
+
 void LobbyClientSystem::ResumeSession(LobbyCallback<lobby_api::AccountRef> callback)
 {
 	Resume(std::move(callback), true);
@@ -470,7 +521,8 @@ void LobbyClientSystem::SiteSignIn(LobbyCallback<lobby_api::AccountRef> callback
 		}
 		ApplySession(*session);
 		_fromSite = true;
-		LogSession("The lobby session comes from the sign-in of the site, as {}", session->account.name);
+		// The log goes with the error reports, so it has no account name
+		LogSession("The lobby session comes from the sign-in of the site");
 		if (openPush)
 		{
 			OpenPush();
@@ -601,13 +653,19 @@ void LobbyClientSystem::ApplySession(const lobby_api::Session& session)
 	const bool known = _state == LobbySessionState::LoggedIn && _account.has_value() && _account->id == session.account.id;
 	if (!known || _accountEditor != session.editor)
 	{
-		// The test tools find the words "the editor right"
-		LogSession("The lobby session of {} {} the editor right", session.account.name,
-		           session.editor ? "has" : "does not have");
+		// The test tools find the words "the editor right". The log goes with the error reports, so it has no account
+		// name.
+		LogSession("The lobby session {} the editor right", session.editor ? "has" : "does not have");
+	}
+	if (!known || _accountErrorReports != session.errorReports)
+	{
+		LogSession("The lobby session gives the choice \"{}\" for the error reports",
+		           session.errorReports.empty() ? "none" : session.errorReports);
 	}
 	_account = session.account;
 	_emailRequired = session.emailRequired;
 	_accountEditor = session.editor;
+	_accountErrorReports = session.errorReports;
 	_state = LobbySessionState::LoggedIn;
 	if (session.refreshToken.has_value())
 	{
@@ -624,6 +682,7 @@ void LobbyClientSystem::EndSession()
 	_account.reset();
 	_emailRequired = false;
 	_accountEditor = false;
+	_accountErrorReports.clear();
 	_accessToken.clear();
 	_accessExpiry = {};
 	_refreshToken.reset();

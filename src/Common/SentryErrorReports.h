@@ -41,8 +41,8 @@ struct SentrySettings
 };
 
 /// The reports to Sentry through sentry-native, with the crashpad backend. The crashpad handler process gets the
-/// crashes. The crash handler of the game also gives each crash that crashpad does not see. The reports have no user,
-/// no IP address and no save file.
+/// crashes. The crash handler of the game also gives each crash that crashpad does not see. The reports have no save
+/// file. They have no user and no IP address, unless the lobby account gave the choice Full.
 class SentryErrorReports final: public ErrorReportsInterface
 {
 public:
@@ -56,6 +56,7 @@ public:
 	[[nodiscard]] bool HasDestination() const noexcept override { return !_settings.dsn.empty(); }
 	[[nodiscard]] bool IsRunning() const noexcept override { return _running; }
 	void SetEnabled(bool enabled) override;
+	void SetAccountConsent(std::optional<AccountConsent> consent) override;
 	void SendDesync(const DesyncReport& report) override;
 	void SendEvent(const FailureEvent& event) override;
 	[[nodiscard]] ErrorReportsState GetState() const override
@@ -66,16 +67,26 @@ public:
 		        .role = _settings.role,
 		        .release = _settings.release,
 		        .environment = _settings.environment,
-		        .desyncEvents = _desyncEvents};
+		        .desyncEvents = _desyncEvents,
+		        .account = _account,
+		        .personalData = _personalData};
 	}
 
 private:
+	/// Starts or stops the service and names the account or not, as ReportsPlanOf tells
+	void Apply();
 	void Start();
 	void Stop();
+	/// Gives the reports the user of the account and the IP address, or removes the user. Only for a running service.
+	void SetUser(const std::optional<AccountConsent>& account);
 
 	SentrySettings _settings;
 	bool _running {false};
 	bool _enabled {false};
+	std::optional<AccountConsent> _account;
+	bool _personalData {false};
+	/// The id of the account that the reports name now, or empty
+	std::string _namedAccount;
 	uint32_t _desyncEvents {0};
 };
 

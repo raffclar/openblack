@@ -103,6 +103,10 @@ struct Claims
 	/// The account has the editor right of the lobby ("editor", optional). Only such an account opens the editor and
 	/// turns on the debug cheats in a network game.
 	bool editor {false};
+	/// The choice of the account for the error reports ("error_reports", optional): "full", "anonymous" or "off". Empty
+	/// when the account made no choice or the lobby is older. The game server can put the name or the address of the
+	/// player into a report only for "full".
+	std::string errorReports;
 	game_socket::Role role {game_socket::Role::God};
 	/// The id of the lobby whose game the ticket is for ("lobby", optional). Empty for a ticket of a server with no lobby.
 	std::string lobby;
