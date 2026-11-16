@@ -197,6 +197,9 @@ public:
 		/// The player was away when the editor changed the world of the room. The turns that the client did are of the old
 		/// world: the player comes back only with the server's new world.
 		bool missedWorldChange {false};
+		/// The editor changed the world while the player was connected. The checksums that the client sends are of the old
+		/// world until its report that it loaded the new world (game.loaded): the server leaves them out.
+		bool oldWorldChecksums {false};
 	};
 
 	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the

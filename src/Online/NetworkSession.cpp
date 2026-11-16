@@ -411,6 +411,9 @@ void NetworkSession::Text(std::string_view text)
 		{
 			_restarted = true;
 			_landOfRestartDue = true;
+			// The server takes the checksums of the new game after the report that the land of the new start loaded
+			_loaded = false;
+			_loadedSent = false;
 			_turns.clear();
 			_waitingCommands = 0;
 			_playout.Reset();
@@ -1279,6 +1282,11 @@ void NetworkSession::WorldLoaded(uint32_t turn)
 
 void NetworkSession::LocalChecksum(uint32_t turn, uint64_t checksum)
 {
+	// The last checksum of a world that the server's world or a new start replaces is of no use to the server
+	if (_worldTurn.has_value() || _landOfRestartDue)
+	{
+		return;
+	}
 	if (_stream && _stream->IsOpen())
 	{
 		_stream->SendChecksum(turn, checksum);

@@ -3881,6 +3881,9 @@ TEST_F(LockstepTest, AWorldFileOfTheEditorLoadsOnTheServerAndEveryComputerGoesOn
 	Frames({&alice, &bob}, 40);
 	ASSERT_TRUE(host->Started());
 	ASSERT_GT(alice.world.turns, 20u);
+	alice.session.ReportLoaded();
+	bob.session.ReportLoaded();
+	Frames({&alice, &bob}, 2);
 	// A world file of an earlier turn, larger than one part, so that it goes in several parts
 	auto file = FakeWorldFile(0x1234'5678'9abc'def0ull, 7);
 	file.resize(game_socket::k_MostEditorWorldChunkBytes * 2 + 5, 0);
@@ -3903,6 +3906,13 @@ TEST_F(LockstepTest, AWorldFileOfTheEditorLoadsOnTheServerAndEveryComputerGoesOn
 	EXPECT_TRUE(alice.desyncs.empty());
 	EXPECT_TRUE(bob.desyncs.empty());
 	EXPECT_EQ(host->RefusedEditorValues(), 0u);
+	// The server compares the checksums of the new world again, and each is the same
+	for (const auto& seat : {host->Seats()[0], host->Seats()[1]})
+	{
+		EXPECT_FALSE(seat.oldWorldChecksums);
+		EXPECT_GT(seat.compares.compared, 40u);
+		EXPECT_EQ(seat.compares.compared, seat.compares.same);
+	}
 }
 
 TEST_F(LockstepTest, TheServerTakesAWorldFileOrAScenarioOnlyFromTheEditor)

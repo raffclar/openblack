@@ -383,6 +383,12 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	}
 	else if (std::holds_alternative<game_socket::Loaded>(*frame))
 	{
+		// The client sends the report after the checksums of the world that the editor replaced
+		if (peer.seat.has_value() && std::exchange(_seats[*peer.seat].oldWorldChecksums, false))
+		{
+			Log(spdlog::level::info,
+			    fmt::format("The player of slot {} loaded the new world: the server compares its checksums again", *peer.seat));
+		}
 		if (_started && peer.seat.has_value() && !_seats[*peer.seat].loaded)
 		{
 			_seats[*peer.seat].loaded = true;
@@ -931,6 +937,7 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	peer.editor = found->editor;
 	// A client whose world parted gets the server's world at the start of the next turn, and then the turns from there
 	found->missedWorldChange = false;
+	found->oldWorldChecksums = false;
 	if (world && SendWorld(connection))
 	{
 		// The checksums that the client sent for the turns of its parted world are no longer of use
@@ -1506,7 +1513,7 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 	}
 	else if (const auto* checksum = std::get_if<turn_codec::TurnChecksum>(&*decoded.frame))
 	{
-		if (peer.seat.has_value())
+		if (peer.seat.has_value() && !_seats[*peer.seat].oldWorldChecksums)
 		{
 			CompareClient(*peer.seat, checksum->turn, checksum->checksum);
 		}
@@ -2002,6 +2009,7 @@ void LockstepHost::ApplyWorldChange()
 		{
 			seat.missedWorldChange = true;
 		}
+		seat.oldWorldChecksums = seat.state == SeatState::Taken && seat.connection.has_value();
 	}
 	for (auto& watcher : _watchers)
 	{
