@@ -23,6 +23,7 @@
 
 #include <GameSocket.h>
 
+#include "Online/RoomClock.h"
 #include "Server/SessionHash.h"
 
 /// The snapshots of a game server (deviation 100). The server keeps the shared world of its game on its own disk, so that
@@ -98,9 +99,40 @@ struct Room
 	/// For each observer of `watchers`, in the same order: true when the join ticket of the observer had the editor
 	/// claim. A file of format 5 or older has no claims.
 	std::vector<bool> watcherEditors;
+	/// The clock of the room: a pause of the editor, the steps that wait and the time of a turn. A file of format 6 or
+	/// older has the clock that turns at the normal speed.
+	online::room_clock::State clock;
 
 	bool operator==(const Room&) const = default;
 };
+
+/// The kind of a file that the editor sent to the server in a network game
+enum class EditorFileKind : uint8_t
+{
+	/// A mind file of a creature
+	Mind = 0,
+	/// A compiled program of the scripts
+	ScriptProgram = 1,
+	/// The source of a script
+	ScriptSource = 2,
+	/// A land script
+	LandScript = 3,
+};
+
+/// A file that the server keeps for the commands of the editor. A turn after a restart can use the file, and a player who
+/// comes back gets it before the turns.
+struct EditorFile
+{
+	EditorFileKind kind {EditorFileKind::Mind};
+	std::vector<uint8_t> bytes;
+
+	bool operator==(const EditorFile&) const = default;
+};
+
+/// The bytes of an editor file in a journal: the kind, then the bytes of the file
+[[nodiscard]] std::vector<uint8_t> EditorFileRecordBytes(const EditorFile& file);
+/// The editor file of the bytes of a journal record. None when the bytes do not read.
+[[nodiscard]] std::optional<EditorFile> ReadEditorFileRecord(std::span<const uint8_t> bytes);
 
 [[nodiscard]] std::vector<uint8_t> EncodeRoom(const Room& room);
 /// The room of the bytes. None when the bytes do not read.
@@ -129,6 +161,9 @@ struct Snapshot
 	std::vector<uint8_t> world;
 	/// The last block of each god that the turns before this turn hold
 	BlockSequences blocks;
+	/// The files of the editor that the server kept before this turn, in the order that they came. A file of format 6 or
+	/// older has none.
+	std::vector<EditorFile> editorFiles;
 };
 
 /// The bytes of a snapshot file, which end with a checksum of all the bytes before it
@@ -143,6 +178,8 @@ enum class RecordKind : uint8_t
 	Turn = 1,
 	/// The room, after a change
 	Room = 2,
+	/// A file of the editor that the server keeps from now
+	EditorFile = 3,
 };
 
 struct Record
@@ -191,6 +228,9 @@ struct Restored
 	std::map<uint32_t, std::vector<uint8_t>> turns;
 	/// The last block of each god that the turns hold. A slot that got a new session after its last block has no number.
 	BlockSequences blocks;
+	/// The files of the editor of the snapshot and of the journals, in the order that they came. They move out of
+	/// `snapshot`, which then has none.
+	std::vector<EditorFile> editorFiles;
 	/// The snapshot files that did not read, newest first
 	std::vector<std::string> skipped;
 	/// The journals ended with a torn or bad record
@@ -223,6 +263,8 @@ public:
 	void AddTurn(uint32_t turn, std::span<const uint8_t> bytes, const BlockSequences& blocks = {});
 	/// Adds the room after a change. Nothing when no journal is open.
 	void AddRoom(const Room& room);
+	/// Adds a file that the editor sent, before a turn uses it. Nothing when no journal is open.
+	void AddEditorFile(const EditorFile& file);
 	[[nodiscard]] bool JournalOpen() const { return _journal.is_open(); }
 
 	/// The newest snapshot that reads, with the turns and the room changes of the journals after it. None when the folder

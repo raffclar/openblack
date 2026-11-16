@@ -75,6 +75,11 @@ summary gives these lines ("resent"). Compare the server checksums with a run wi
 
     python tools/sim/net_check.py --land "Online Maps/mpm_2p_1.map" --turns 1500 --restart-server-at 1000
 
+With --editor-desync mind or scripts, the lines of the editor of both server logs must be the same as the lines of
+each client: a turn that both servers did must have the same lines. With --editor-desync time, the server stops in the
+pause of the editor, and the room must still be paused at the same turn with the same speed after the restart.
+--snapshot-every N sets the turns between two snapshots of the server.
+
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
 
@@ -1448,7 +1453,39 @@ def script_inputs(options, folder):
     return {"source": os.path.abspath(source), "land": os.path.abspath(land), "program": os.path.abspath(program)}
 
 
-def script_act_lines(server_log, client_logs):
+def turn_of_line(line):
+    """The number of the turn of a line that starts with "Turn N:", or None"""
+    found = re.match(r"Turn (\d+):", line)
+    return int(found.group(1)) if found else None
+
+
+def lines_of_both_servers(first, restarted):
+    """The turn lines of a server that stopped and of the server that continued from its snapshot. The new server does
+    again the turns after its snapshot: a turn that both logs have must have the same lines, and counts one time.
+    Returns the lines in the order of the turns, and False when a turn of both logs has other lines."""
+    by_turn = {}
+    for line in first:
+        by_turn.setdefault(turn_of_line(line), []).append(line)
+    again = {}
+    for line in restarted:
+        again.setdefault(turn_of_line(line), []).append(line)
+    same = True
+    for turn, lines in again.items():
+        if turn in by_turn and by_turn[turn] != lines:
+            same = False
+        by_turn[turn] = lines
+    return [line for turn in sorted(by_turn, key=lambda value: -1 if value is None else value)
+            for line in by_turn[turn]], same
+
+
+def server_turn_lines(server_log, restarted_log, lines):
+    """The turn lines of the server: of both logs when the server restarted"""
+    if restarted_log is None or not os.path.exists(restarted_log):
+        return lines(server_log), True
+    return lines_of_both_servers(lines(server_log), lines(restarted_log))
+
+
+def script_act_lines(server_log, client_logs, restarted_log=None):
     """The lines of the acts of the script tabs of the editor at the turns, without the time and the name of the log.
     Each computer must have the same lines: the same turns, acts and results."""
     marks = (" the land script act ", " (address ", " with the file ")
@@ -1456,10 +1493,10 @@ def script_act_lines(server_log, client_logs):
     def lines(log):
         return [line[line.index("Turn "):] for line in lines_with(log, ["the editor of player"])
                 if "Turn " in line and any(mark in line for mark in marks)]
-    server = lines(server_log)
+    server, both_same = server_turn_lines(server_log, restarted_log, lines)
     clients = [lines(log) for log in client_logs]
     return {"server": server, "clients": clients, "acts": len(server),
-            "same": all(client == server for client in clients) and bool(server)}
+            "same": both_same and all(client == server for client in clients) and bool(server)}
 
 
 def mind_files(options):
@@ -1470,18 +1507,18 @@ def mind_files(options):
     return [os.path.join(folder, name) for name in ("C4a76f23d.erc", "C643e7b7f.erc")]
 
 
-def mind_load_lines(server_log, client_logs):
+def mind_load_lines(server_log, client_logs, restarted_log=None):
     """The lines of the mind loads of the editor at the turns, without the time and the name of the log. Each
     computer must have the same lines: the same turns, files and things."""
     def lines(log):
         return [line[line.index("Turn "):] for line in lines_with(log, ["the mind file"]) if "Turn " in line]
-    server = lines(server_log)
+    server, both_same = server_turn_lines(server_log, restarted_log, lines)
     clients = [lines(log) for log in client_logs]
     return {"server": server, "clients": clients, "loads": len(server),
-            "same": all(client == server for client in clients) and bool(server)}
+            "same": both_same and all(client == server for client in clients) and bool(server)}
 
 
-def editor_desync(pids, case, shots=None, mind_files=None, script_files=None):
+def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, restart=None):
     """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
     "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
     second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. With "animals"
@@ -1621,7 +1658,7 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None):
         for error in done["history"].get("errors", []):
             done.setdefault("errors", []).append(error)
     if case == "time":
-        done["time"] = editor_time(pids, shots)
+        done["time"] = editor_time(pids, shots, restart)
         if done["time"].get("error"):
             done["error"] = done["time"]["error"]
     if case in ("land", "all"):
@@ -1668,12 +1705,14 @@ def room_time(pid):
     return answer if isinstance(answer, dict) else {}
 
 
-def editor_time(pids, shots=None):
+def editor_time(pids, shots=None, restart=None):
     """The editor pauses the clock of the room, steps three turns, changes the time of a turn to 2 and plays again. The
     second client (no editor claim) asks for a play with force while the room is paused: the server must refuse it.
     Every client must stop at the same turn, do each step, follow the speed, and keep the same checksums. Returns what
     each step saw. With a folder for the shots, the first client opens its editor, and both clients take a picture
-    in the pause and in the slow play."""
+    in the pause and in the slow play. With restart (a function that stops the server and starts it again from its
+    snapshots), the editor sets the speed 2 in the pause, the server restarts, and the room must still be paused at the
+    same turn with the speed 2; then one step must give one turn."""
     editor = pids[0]
     done = {"steps": []}
     if shots:
@@ -1710,6 +1749,25 @@ def editor_time(pids, shots=None):
     time.sleep(1.0)
     stepped = note("after 3 steps")
     answers.append(inspector_answer(editor, "editor.time", {"params": {"act": "speed", "speed": 2.0}}))
+    restart_problems = []
+    if restart is not None:
+        # The snapshot room keeps the clock: the room stays paused at the same turn with the speed 2
+        time.sleep(1.0)
+        done["restart"] = restart()
+        back = note("after the restart")
+        turns_back = [state.get("turn") for state in back]
+        if not all(state.get("paused") for state in back):
+            restart_problems.append("a client did not see the pause after the restart")
+        if not all(abs((state.get("speed") or 0) - 2.0) < 1e-6 for state in back):
+            restart_problems.append(f"the speed after the restart is not 2: {[state.get('speed') for state in back]}")
+        if turns_back != [state.get("turn") for state in stepped]:
+            restart_problems.append(f"the turns moved over the restart: {[s.get('turn') for s in stepped]} then {turns_back}")
+        answers.append(inspector_answer(editor, "editor.time", {"params": {"act": "step"}}))
+        time.sleep(2.0)
+        one_step = note("1 step after the restart")
+        if None in turns_back or any((state.get("turn") or 0) - before != 1 for state, before in zip(one_step, turns_back)):
+            restart_problems.append(f"1 step after the restart did not give 1 turn: {turns_back} then "
+                                    f"{[state.get('turn') for state in one_step]}")
     answers.append(inspector_answer(editor, "editor.time", {"params": {"act": "play"}}))
     time.sleep(1.0)
     slow_start = note("slow play")
@@ -1739,6 +1797,7 @@ def editor_time(pids, shots=None):
     done["slow_turns_per_second"] = rates
     if not all(3.0 <= rate <= 7.0 for rate in rates):
         problems.append(f"the turns at speed 2 were not about 5 a second: {rates}")
+    problems += restart_problems
     if problems:
         done["error"] = "; ".join(problems)
     return done
@@ -2867,7 +2926,10 @@ def main():
                         help="before the clients join, a client of another build id tries to join, and the server must "
                              "refuse it with \"version\"")
     parser.add_argument("--restart-server-at", type=int,
-                        help="stop the server by its process id after this turn, and start it again from its snapshots")
+                        help="stop the server by its process id after this turn, and start it again from its snapshots; "
+                             "with --editor-desync time, the server stops in the pause of the editor")
+    parser.add_argument("--snapshot-every", type=int,
+                        help="the turns between two snapshots of the server (the server's default is 100)")
     parser.add_argument("--ban-account", type=int,
                         help="a fake lobby bans this account id; a client of that account must be refused before the "
                              "start (the other clients use the ids 100 and up)")
@@ -3068,6 +3130,8 @@ def main():
         server_command.append(f"--profile-folder={os.path.abspath(options.server_profile)}")
     if options.server_frame_ms is not None:
         server_command += ["--frame-ms", str(options.server_frame_ms)]
+    if options.snapshot_every is not None:
+        server_command += ["--snapshot-every", str(options.snapshot_every)]
     # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
     land_kind = {"land": options.land, "testbed": options.testbed, "gods_ring_map": options.gods_ring_map}
     server_command += sim_report.gods_need_no_temple_args(True, **land_kind)
@@ -3291,20 +3355,38 @@ def main():
                         (value.split(":", 1) for value in options.tattoo_menu)]
         tattooed = set()
         cameras_again = set()
+        def restart_server():
+            """The server stops with no warning, as in a crash, and a new server continues from its snapshots. Returns
+            the turn of the stop, the files of the editor that the new server kept again, and the players that came back,
+            or None when the new server did not listen."""
+            nonlocal server, killed_at, restarted_log
+            stop(server)
+            killed_at = max(server_checksums(server_log), default=0)
+            restarted_log = os.path.join(server_dir, "server-restarted.log")
+            if os.path.exists(restarted_log):
+                os.remove(restarted_log)
+            command = list(server_command)
+            command[command.index("-l") + 1] = restarted_log
+            server = start(command + ["--resume-snapshot"], server_dir)
+            processes.append(server)
+            if wait_for_port(restarted_log, server) != port:
+                return None
+            # The players come back to the new server
+            end = time.monotonic() + 90
+            backs = []
+            while time.monotonic() < end and len(backs) < len(clients):
+                time.sleep(1.0)
+                backs = lines_with(restarted_log, ["is back from turn"])
+            time.sleep(2.0)
+            return {"killed_at": killed_at, "backs": len(backs),
+                    "editor_files": lines_with(restarted_log, ["keeps the files of the editor of the snapshot"])}
+
+        # The time case stops the server in its pause
+        restart_in_pause = options.restart_server_at is not None and options.editor_desync == "time"
         while time.monotonic() - started < run_limit_seconds(options.turns):
-            if (options.restart_server_at is not None and restarted_log is None
+            if (options.restart_server_at is not None and restarted_log is None and not restart_in_pause
                     and max(server_checksums(server_log), default=0) >= options.restart_server_at):
-                # The server stops with no warning, as in a crash, and a new server continues from its snapshots
-                stop(server)
-                killed_at = max(server_checksums(server_log), default=0)
-                restarted_log = os.path.join(server_dir, "server-restarted.log")
-                if os.path.exists(restarted_log):
-                    os.remove(restarted_log)
-                command = list(server_command)
-                command[command.index("-l") + 1] = restarted_log
-                server = start(command + ["--resume-snapshot"], server_dir)
-                processes.append(server)
-                if wait_for_port(restarted_log, server) != port:
+                if restart_server() is None:
                     print(f"the restarted server did not listen on port {port}; see {restarted_log}")
                     return 1
             if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
@@ -3349,7 +3431,8 @@ def main():
                     and reached_turn(os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
                 editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync,
                                                    options.editor_shots, mind_files(options),
-                                                   script_inputs(options, os.path.join(out, "editor_scripts")))
+                                                   script_inputs(options, os.path.join(out, "editor_scripts")),
+                                                   restart_server if restart_in_pause else None)
                 print(f"editor desync: {json.dumps(editor_desync_done)[:400]}")
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
@@ -3410,7 +3493,9 @@ def main():
                    # The commands that the clients sent again after the stop, and the blocks that the new server had
                    "resent": [line for client_dir in client_dirs for line in lines_with(
                        os.path.join(client_dir, "client.log"), ["sends again"])],
-                   "left_out": lines_with(restarted_log, ["it leaves out the block"]) if again else []}
+                   "left_out": lines_with(restarted_log, ["it leaves out the block"]) if again else [],
+                   "editor_files": lines_with(restarted_log, ["keeps the files of the editor of the snapshot"])
+                   if again else []}
         server_turns.update(again)
     summary = {"turns": options.turns, "server_turns": len(server_turns), "clients": []}
     # A decided game: the server stops its turns after one turn, and every computer must stop at that turn. The stop
@@ -3591,7 +3676,7 @@ def main():
         summary["editor_desync"] = editor_desync_done
         if options.editor_desync == "scripts":
             summary["script_acts"] = script_act_lines(
-                server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
+                server_log, [os.path.join(folder, "client.log") for folder in client_dirs], restarted_log)
             states = (editor_desync_done or {}).get("scripts", {}).get("states") or []
             summary["script_states_same"] = len(states) == 2 and states[0] == states[1]
             if not summary["script_acts"]["same"] or not summary["script_states_same"]:
@@ -3600,7 +3685,7 @@ def main():
                 all_same = False
         if options.editor_desync in ("mind", "all"):
             summary["mind_loads"] = mind_load_lines(
-                server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
+                server_log, [os.path.join(folder, "client.log") for folder in client_dirs], restarted_log)
             if not summary["mind_loads"]["same"]:
                 print(f"the mind loads differ or did not come: {json.dumps(summary['mind_loads'])[:2000]}")
                 all_same = False

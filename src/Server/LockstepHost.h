@@ -242,12 +242,29 @@ public:
 	[[nodiscard]] snapshots::Room RoomRecord() const;
 	/// The number of the last block of commands of the session of each god slot that a closed turn holds
 	[[nodiscard]] snapshots::BlockSequences BlocksInTurns() const;
+	/// The counts of the mind files and of the script files of the editor that the server keeps. The server never lets go
+	/// of a file in a game, so a count only goes up.
+	struct EditorFileCounts
+	{
+		size_t minds {0};
+		size_t scripts {0};
+
+		[[nodiscard]] bool operator==(const EditorFileCounts&) const = default;
+	};
+	[[nodiscard]] EditorFileCounts KeptEditorFiles() const
+	{
+		return {.minds = _mindFiles.Files().size(), .scripts = _scriptFiles.Files().size()};
+	}
+	/// The files of the editor that the server kept after the counts, as a snapshot keeps them: the mind files first,
+	/// then the script files, each in the order that they came
+	[[nodiscard]] std::vector<snapshots::EditorFile> EditorFilesAfter(EditorFileCounts counts) const;
 	/// Continues a game from a snapshot, before any client connects. The world of the server is at the start of the turn
 	/// turnsDone. The gods of the room wait for their players, who come back with the secrets of their sessions. The
 	/// world turns the replayed turns first, with no player: these are the turns that the server sent before it stopped.
 	/// The server leaves out the blocks of commands up to the last block of each god that the sent turns hold.
+	/// The server keeps the files of the editor again, so that the replayed turns and the next turns can use them.
 	void Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed,
-	             const snapshots::BlockSequences& blocks = {});
+	             const snapshots::BlockSequences& blocks = {}, std::vector<snapshots::EditorFile> editorFiles = {});
 	/// True while the world must turn the replayed turns of a restored game. The server reads no socket until then.
 	[[nodiscard]] bool Replaying() const { return !_replayed.empty(); }
 	/// The next turn that the server closes
@@ -478,6 +495,8 @@ private:
 	void EditorMindFileFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorMindFile& mind);
 	/// Sends each mind file of the editor that the server keeps to a player who comes back or joins, before the turns
 	void SendEditorMindFiles(ConnectionId connection);
+	/// Keeps the files of the editor of a snapshot again, each in its store
+	void RestoreEditorFiles(std::vector<snapshots::EditorFile> files);
 	/// A part of a file of the script tabs of the editor from a player. The server checks the claim and the whole file,
 	/// keeps it and sends it to every player before any turn that holds a command that uses it.
 	void EditorScriptFileFrom(ConnectionId connection, Peer& peer, const game_socket::EditorScriptFile& part);

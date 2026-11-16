@@ -58,8 +58,13 @@ Room MakeRoom()
 	             .arrivingNumbers = {3},
 	             .arrivingNames = {"dave"},
 	             .departingNumbers = {1},
-	             .watcherEditors = {true}};
+	             .watcherEditors = {true},
+	             .clock = {.paused = true, .speed = 2.0f, .steps = 1}};
 }
+
+/// The bytes of the clock at the end of the room of format 7: the pause (1 byte), the speed (4 bytes) and the steps
+/// (4 bytes)
+constexpr size_t k_ClockBytes = 9;
 
 /// The bytes of the claims at the end of the room of format 6: two lists, each with a 4-byte count and one byte for each
 /// god slot or observer
@@ -168,7 +173,7 @@ TEST(ServerSnapshots, TheRoomOfTheThirdFormatReadsWithNoNames)
 	auto bytes = EncodeRoom(room);
 	// The four empty lists of the observers (4 bytes each) end the room of format 5. The count of the names (4 bytes)
 	// and the god of the observers (1 byte) end the room of format 4.
-	bytes.resize(bytes.size() - ClaimBytes(room) - 16 - 5);
+	bytes.resize(bytes.size() - k_ClockBytes - ClaimBytes(room) - 16 - 5);
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->watchers, room.watchers);
@@ -194,7 +199,7 @@ TEST(ServerSnapshots, TheRoomOfTheFifthFormatReadsWithNoClaims)
 {
 	const auto room = MakeRoom();
 	auto bytes = EncodeRoom(room);
-	bytes.resize(bytes.size() - ClaimBytes(room));
+	bytes.resize(bytes.size() - k_ClockBytes - ClaimBytes(room));
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->departingNumbers, room.departingNumbers);
@@ -209,7 +214,7 @@ TEST(ServerSnapshots, TheRoomWithClaimsForTheWrongGodSlotsDoesNotRead)
 	room.watcherEditors.clear();
 	auto bytes = EncodeRoom(room);
 	// Put a list of claims for two god slots in place of the list for the three god slots of the room
-	bytes.resize(bytes.size() - ClaimBytes(room));
+	bytes.resize(bytes.size() - k_ClockBytes - ClaimBytes(room));
 	const std::array<uint8_t, 4> twoSlots {2, 0, 0, 0};
 	bytes.insert(bytes.end(), twoSlots.begin(), twoSlots.end());
 	bytes.push_back(1);
@@ -441,7 +446,7 @@ TEST(ServerSnapshots, TheRoomOfTheFourthFormatReadsWithNoNumbersOfObservers)
 	room.arrivingNames.clear();
 	room.departingNumbers.clear();
 	auto bytes = EncodeRoom(room);
-	bytes.resize(bytes.size() - ClaimBytes(room) - 16);
+	bytes.resize(bytes.size() - k_ClockBytes - ClaimBytes(room) - 16);
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->watcherNames, room.watcherNames);
@@ -456,12 +461,12 @@ TEST(ServerSnapshots, ASnapshotOfAnEarlierFormatDoesNotLoad)
 	ASSERT_TRUE(DecodeSnapshot(now).has_value());
 	// The first format kept the secrets of the sessions, and the second format kept no blocks of commands. The version is
 	// after the 8 bytes of the magic text.
-	// The third, the fourth and the fifth formats still load.
-	for (const uint8_t version : {1, 2, 3, 4, 5})
+	// The formats 3 to 6 still load.
+	for (const uint8_t version : {1, 2, 3, 4, 5, 6})
 	{
 		auto bytes = now;
 		bytes.resize(bytes.size() - sizeof(uint64_t));
-		ASSERT_EQ(bytes[8], 6);
+		ASSERT_EQ(bytes[8], 7);
 		bytes[8] = version;
 		const auto checksum = Checksum(bytes);
 		for (int shift = 0; shift < 64; shift += 8)
@@ -521,4 +526,134 @@ TEST_F(SnapshotStoreTest, ASlotWithANewSessionAfterItsLastBlockHasNoLastBlock)
 	const auto restored = Store(folder, 3).LoadNewest();
 	ASSERT_TRUE(restored.has_value());
 	EXPECT_EQ(restored->blocks, (BlockSequences {{1, 2}}));
+}
+
+// The room keeps the clock of the room, so that a restart does not end an editor pause or change the speed
+TEST(ServerSnapshots, TheRoomKeepsThePauseTheStepsAndTheSpeedOfTheClock)
+{
+	const auto room = MakeRoom();
+	const auto read = DecodeRoom(EncodeRoom(room));
+	ASSERT_TRUE(read.has_value());
+	EXPECT_TRUE(read->clock.paused);
+	EXPECT_FLOAT_EQ(read->clock.speed, 2.0f);
+	EXPECT_EQ(read->clock.steps, 1u);
+}
+
+// A room of format 6 has no clock. It still reads, with the clock that turns at the normal speed.
+TEST(ServerSnapshots, TheRoomOfTheSixthFormatReadsWithTheNormalClock)
+{
+	const auto room = MakeRoom();
+	auto bytes = EncodeRoom(room);
+	bytes.resize(bytes.size() - k_ClockBytes);
+	const auto old = DecodeRoom(bytes);
+	ASSERT_TRUE(old.has_value());
+	EXPECT_EQ(old->watcherEditors, room.watcherEditors);
+	EXPECT_EQ(old->clock, openblack::online::room_clock::State {});
+	// A room that ends in the clock does not read
+	bytes = EncodeRoom(room);
+	bytes.pop_back();
+	EXPECT_FALSE(DecodeRoom(bytes).has_value());
+}
+
+TEST(ServerSnapshots, ASnapshotKeepsTheFilesOfTheEditorInTheOrderThatTheyCame)
+{
+	const Snapshot snapshot {.turn = 300,
+	                         .room = MakeRoom(),
+	                         .world = World(300),
+	                         .blocks = {},
+	                         .editorFiles = {{.kind = EditorFileKind::Mind, .bytes = {1, 2, 3}},
+	                                         {.kind = EditorFileKind::ScriptProgram, .bytes = {4}},
+	                                         {.kind = EditorFileKind::ScriptSource, .bytes = {5, 6}},
+	                                         {.kind = EditorFileKind::LandScript, .bytes = {7}}}};
+	const auto read = DecodeSnapshot(EncodeSnapshot(snapshot));
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(read->editorFiles, snapshot.editorFiles);
+}
+
+// A snapshot of format 6 has no files of the editor. It still reads, with no files.
+TEST(ServerSnapshots, ASnapshotOfTheSixthFormatReadsWithNoFilesOfTheEditor)
+{
+	auto bytes = EncodeSnapshot({.turn = 300, .room = MakeRoom(), .world = World(300), .blocks = {{0, 2}}});
+	// Remove the checksum and the count of the files (4 bytes), then add the checksum of the bytes of format 6
+	bytes.resize(bytes.size() - sizeof(uint64_t) - 4);
+	bytes[8] = 6;
+	const auto checksum = Checksum(bytes);
+	for (int shift = 0; shift < 64; shift += 8)
+	{
+		bytes.push_back(static_cast<uint8_t>(checksum >> shift));
+	}
+	const auto old = DecodeSnapshot(bytes);
+	ASSERT_TRUE(old.has_value());
+	EXPECT_EQ(old->blocks, (BlockSequences {{0, 2}}));
+	EXPECT_TRUE(old->editorFiles.empty());
+}
+
+TEST(ServerSnapshots, AnEditorFileRecordOfAnUnknownKindOrWithMissingBytesDoesNotRead)
+{
+	const EditorFile file {.kind = EditorFileKind::LandScript, .bytes = {9, 8, 7}};
+	EXPECT_EQ(ReadEditorFileRecord(EditorFileRecordBytes(file)), file);
+	auto unknown = EditorFileRecordBytes(file);
+	unknown[0] = 4;
+	EXPECT_FALSE(ReadEditorFileRecord(unknown).has_value());
+	auto torn = EditorFileRecordBytes(file);
+	torn.pop_back();
+	EXPECT_FALSE(ReadEditorFileRecord(torn).has_value());
+}
+
+// The files of the snapshot come first, then the files of the journal, so that a replayed turn finds its file
+TEST_F(SnapshotStoreTest, TheFilesOfTheEditorComeFromTheSnapshotAndThenFromTheJournals)
+{
+	const EditorFile first {.kind = EditorFileKind::Mind, .bytes = {1}};
+	const EditorFile second {.kind = EditorFileKind::ScriptProgram, .bytes = {2, 2}};
+	const EditorFile third {.kind = EditorFileKind::LandScript, .bytes = {3, 3, 3}};
+	Store store(folder, 3);
+	auto room = MakeRoom();
+	ASSERT_TRUE(store.OpenJournal(10, room));
+	ASSERT_TRUE(
+	    store.Write(10, EncodeSnapshot({.turn = 10, .room = room, .world = World(10), .blocks = {}, .editorFiles = {first}})));
+	store.AddTurn(10, TurnBytes(10));
+	store.AddEditorFile(second);
+	store.AddTurn(11, TurnBytes(11));
+	room.clock = {.paused = false, .speed = 0.5f, .steps = 0};
+	store.AddRoom(room);
+	store.AddEditorFile(third);
+	store.AddTurn(12, TurnBytes(12));
+
+	const auto restored = Store(folder, 3).LoadNewest();
+	ASSERT_TRUE(restored.has_value());
+	EXPECT_EQ(restored->editorFiles, (std::vector<EditorFile> {first, second, third}));
+	EXPECT_TRUE(restored->snapshot.editorFiles.empty());
+	EXPECT_EQ(restored->turns.size(), 3u);
+	EXPECT_EQ(restored->room.clock, room.clock);
+	EXPECT_EQ(restored->snapshot.room.clock, MakeRoom().clock);
+}
+
+// When the newest snapshot is torn, the older snapshot and both journals still give every file
+TEST_F(SnapshotStoreTest, ATornNewestSnapshotStillGivesEveryFileOfTheEditor)
+{
+	const EditorFile early {.kind = EditorFileKind::Mind, .bytes = {1}};
+	const EditorFile middle {.kind = EditorFileKind::ScriptSource, .bytes = {2}};
+	const EditorFile late {.kind = EditorFileKind::Mind, .bytes = {3}};
+	const auto room = MakeRoom();
+	Store store(folder, 3);
+	ASSERT_TRUE(store.OpenJournal(1, room));
+	ASSERT_TRUE(
+	    store.Write(1, EncodeSnapshot({.turn = 1, .room = room, .world = World(1), .blocks = {}, .editorFiles = {early}})));
+	store.AddEditorFile(middle);
+	store.AddTurn(1, TurnBytes(1));
+	ASSERT_TRUE(store.OpenJournal(2, room));
+	ASSERT_TRUE(store.Write(
+	    2, EncodeSnapshot({.turn = 2, .room = room, .world = World(2), .blocks = {}, .editorFiles = {early, middle}})));
+	store.AddEditorFile(late);
+	store.AddTurn(2, TurnBytes(2));
+	const auto newest = folder / SnapshotFileName(2);
+	auto bytes = ReadAll(newest);
+	bytes.resize(bytes.size() / 2);
+	WriteAll(newest, bytes);
+
+	const auto restored = Store(folder, 3).LoadNewest();
+	ASSERT_TRUE(restored.has_value());
+	EXPECT_EQ(restored->snapshot.turn, 1u);
+	EXPECT_EQ(restored->editorFiles, (std::vector<EditorFile> {early, middle, late}));
+	EXPECT_EQ(restored->turns.size(), 2u);
 }
