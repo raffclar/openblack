@@ -94,6 +94,9 @@ public:
 	/// In the turn of the start of a network game: the humans of the network session join. The game makes the player of
 	/// each human when the land has none. Then, when the land waits for its humans, the slots with no player fill.
 	virtual void HumansJoined(std::span<const PlayerNames> humans) = 0;
+	/// The god of the player gets a computer god, as a slot with no player at the start of a network game. Its mind
+	/// switches on. With makeCreature, the god also gets a fully grown creature of a random species at its citadel.
+	virtual void FillSlotOf([[maybe_unused]] PlayerNames player, [[maybe_unused]] bool makeCreature) {}
 	/// Tools only: the seed of the personalities of the computer gods. The mind of each god gets the weights of that seed
 	/// as it starts. None: each god keeps its built-in personality. The seed is not part of the saved world: every
 	/// computer of a network game sets it before its land loads.

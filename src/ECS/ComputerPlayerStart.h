@@ -207,6 +207,10 @@ void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::sp
 [[nodiscard]] std::vector<PlayerNames> GodsOfOpenSlots(std::span<const PlayerNames> gods,
                                                        std::span<const bool, player_slots::k_PlayerNumbers> closed);
 
+/// One slot with no player gets a computer god, as FillEmptySlots gives it. When the god keeps a creature of its own, the
+/// game makes no creature and takes no random value for it.
+void FillSlot(SlotWorld& world, PlayerNames god, bool makeCreature);
+
 /// The gods of the slots of a network game, in the order of the players. The neutral player is not a god of a slot.
 constexpr std::array<PlayerNames, 7> k_SlotGods {PlayerNames::PLAYER_ONE,  PlayerNames::PLAYER_TWO,  PlayerNames::PLAYER_THREE,
                                                  PlayerNames::PLAYER_FOUR, PlayerNames::PLAYER_FIVE, PlayerNames::PLAYER_SIX,

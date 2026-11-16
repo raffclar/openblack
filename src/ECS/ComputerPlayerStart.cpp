@@ -201,11 +201,7 @@ void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::sp
 		{
 			continue;
 		}
-		// The game takes the random value for the name before the species. The name does not use the value.
-		std::ignore = world.GameRand(k_SlotNameChoices);
-		const auto species = SpeciesFor(world.GameRand(k_SlotSpeciesChoices));
-		world.SwitchOn(god);
-		world.MakeSlotCreature(god, species, SlotCreatureName(world.SpeciesDebugName(species)), k_SlotCreatureStage);
+		FillSlot(world, god, true);
 	}
 }
 
@@ -231,6 +227,20 @@ std::vector<PlayerNames> GodsOfOpenSlots(std::span<const PlayerNames> gods,
 		return number >= closed.size() || !closed[number];
 	});
 	return open;
+}
+
+void FillSlot(SlotWorld& world, PlayerNames god, bool makeCreature)
+{
+	if (!makeCreature)
+	{
+		world.SwitchOn(god);
+		return;
+	}
+	// The game takes the random value for the name before the species. The name does not use the value.
+	std::ignore = world.GameRand(k_SlotNameChoices);
+	const auto species = SpeciesFor(world.GameRand(k_SlotSpeciesChoices));
+	world.SwitchOn(god);
+	world.MakeSlotCreature(god, species, SlotCreatureName(world.SpeciesDebugName(species)), k_SlotCreatureStage);
 }
 
 void HumansJoin(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans, bool landWaits)
