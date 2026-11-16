@@ -136,6 +136,9 @@ public:
 	/// The editor right of the account of the session, or none while no account is logged in. Each answer of the
 	/// lobby with a session gives the right again: a login, a refresh of the access token, and a sign-in from the site.
 	[[nodiscard]] virtual std::optional<bool> GetAccountEditor() const { return std::nullopt; }
+	/// The debugger mark of the account of the session, or none while no account is logged in. Each answer of the lobby
+	/// with a session gives the mark again, as for the editor right.
+	[[nodiscard]] virtual std::optional<bool> GetAccountDebugger() const { return std::nullopt; }
 
 	/// Logs in with a name and a password. The client checks the name before it calls the lobby.
 	virtual void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) = 0;

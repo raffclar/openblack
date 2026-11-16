@@ -87,43 +87,64 @@ enum class Action : uint8_t
 	return !RefusalOf(built, networkSessionLive).has_value();
 }
 
-/// The editor right of the player of this computer. The editor right also gives the debug cheats of the editor.
-enum class EditorRight : uint8_t
+/// A right of the account of the player of this computer, as the editor right or the debugger right
+enum class AccountRight : uint8_t
 {
 	/// No network game is live and no account is signed in, so the right is not known
 	Unknown,
-	/// The join ticket or the signed-in account has the editor right
+	/// The join ticket or the signed-in account has the right
 	Granted,
-	/// The join ticket or the signed-in account does not have the editor right
+	/// The join ticket or the signed-in account does not have the right
 	Refused,
 };
 
-/// The editor right of the player of this computer. In a network game it is the editor claim of the join ticket.
-/// Outside a network game it is the editor right of the signed-in account, or Unknown when no account is signed in.
-[[nodiscard]] constexpr EditorRight EditorRightOf(bool networkSessionLive, bool ticketEditor,
-                                                  std::optional<bool> accountEditor) noexcept
+/// The editor right of the player of this computer. The editor right also gives the debug cheats of the editor.
+using EditorRight = AccountRight;
+
+/// The debugger right of the player of this computer. Only this right shows the debug menu bar and the debug windows
+/// that the bar opens.
+using DebuggerRight = AccountRight;
+
+/// A right of the player of this computer. In a network game it is the claim of the join ticket. Outside a network
+/// game it is the right of the signed-in account, or Unknown when no account is signed in.
+[[nodiscard]] constexpr AccountRight AccountRightOf(bool networkSessionLive, bool ticketClaim,
+                                                    std::optional<bool> accountMark) noexcept
 {
 	if (networkSessionLive)
 	{
-		return ticketEditor ? EditorRight::Granted : EditorRight::Refused;
+		return ticketClaim ? AccountRight::Granted : AccountRight::Refused;
 	}
-	if (!accountEditor.has_value())
+	if (!accountMark.has_value())
 	{
-		return EditorRight::Unknown;
+		return AccountRight::Unknown;
 	}
-	return *accountEditor ? EditorRight::Granted : EditorRight::Refused;
+	return *accountMark ? AccountRight::Granted : AccountRight::Refused;
 }
 
-/// The name of the editor right, for the log and the inspector
-[[nodiscard]] constexpr std::string_view NameOf(EditorRight right) noexcept
+/// The editor right of the player of this computer, from the editor claim or the editor right of the account
+[[nodiscard]] constexpr EditorRight EditorRightOf(bool networkSessionLive, bool ticketEditor,
+                                                  std::optional<bool> accountEditor) noexcept
+{
+	return AccountRightOf(networkSessionLive, ticketEditor, accountEditor);
+}
+
+/// The debugger right of the player of this computer, from the debugger claim or the debugger mark of the account
+[[nodiscard]] constexpr DebuggerRight DebuggerRightOf(bool networkSessionLive, bool ticketDebugger,
+                                                      std::optional<bool> accountDebugger) noexcept
+{
+	return AccountRightOf(networkSessionLive, ticketDebugger, accountDebugger);
+}
+
+/// The name of the right, for the log and the inspector
+[[nodiscard]] constexpr std::string_view NameOf(AccountRight right) noexcept
 {
 	switch (right)
 	{
-	case EditorRight::Unknown:
+	case AccountRight::Unknown:
 		return "unknown";
-	case EditorRight::Granted:
+	case AccountRight::Granted:
 		return "granted";
-	case EditorRight::Refused:
+	case AccountRight::Refused:
 		return "refused";
 	}
 	return "unknown";
@@ -175,7 +196,7 @@ inline constexpr std::u16string_view k_EditorRefusedLine = u"Your account cannot
 /// What the debug windows show and take
 enum class GuiMode : uint8_t
 {
-	/// All the debug windows, the menu and the editor
+	/// The debug menu bar and the debug windows. The editor shows only when the editor can open (see ShowsWindow).
 	Full,
 	/// Only the editor. In a network game the editor sends its edits and the debug cheats as commands of the turns.
 	EditorOnly,
@@ -198,22 +219,49 @@ enum class GuiMode : uint8_t
 	return "dormant";
 }
 
-/// What the debug windows show:
-/// - In a network game, only the editor for a player with the editor claim, else nothing.
-/// - In a developer build outside a network game, all the windows.
-/// - In a build that players get outside a network game, only the editor when the signed-in account has the editor
-///   right, else nothing.
-[[nodiscard]] constexpr GuiMode GuiModeOf(bool built, bool networkSessionLive, EditorRight right) noexcept
+/// What the debug windows show. The debugger right decides the debug menu bar and its windows. The editor right decides
+/// the editor. The rules are:
+/// - A player with the debugger right gets the debug menu bar, in every build and also in a network game.
+/// - A player without the debugger right gets only the editor when the editor can open (see EditorRefusalOf). Else
+///   the player gets nothing.
+/// - A developer build outside a network game always shows the debug menu bar, also for an account without the debugger
+///   right (user, 2026-11-16: "always show it"). A build that players get keeps the rules above.
+[[nodiscard]] constexpr GuiMode GuiModeOf(bool built, bool networkSessionLive, EditorRight editor,
+                                          DebuggerRight debugger) noexcept
 {
-	if (networkSessionLive)
-	{
-		return right == EditorRight::Granted ? GuiMode::EditorOnly : GuiMode::Dormant;
-	}
-	if (built)
+	if (debugger == DebuggerRight::Granted)
 	{
 		return GuiMode::Full;
 	}
-	return right == EditorRight::Granted ? GuiMode::EditorOnly : GuiMode::Dormant;
+	if (built && !networkSessionLive)
+	{
+		return GuiMode::Full;
+	}
+	return EditorRefusalOf(built, networkSessionLive, editor).has_value() ? GuiMode::Dormant : GuiMode::EditorOnly;
+}
+
+/// Whether a debug window shows and takes events in the mode. The editor shows only when the editor can open. In a
+/// network game no other debug window shows, so that no debug window changes the shared world.
+[[nodiscard]] constexpr bool ShowsWindow(GuiMode mode, bool networkSessionLive, bool editorWindow, bool editorAllowed) noexcept
+{
+	switch (mode)
+	{
+	case GuiMode::Full:
+		return editorWindow ? editorAllowed : !networkSessionLive;
+	case GuiMode::EditorOnly:
+		return editorWindow && editorAllowed;
+	case GuiMode::Dormant:
+		return false;
+	}
+	return false;
+}
+
+/// Whether the debug menu bar shows in this frame. The bar shows only in the Full mode, and only while the game's menu
+/// is open (user, 2026-11-16: "debug bar only shows when escape main menu is showing"). When the game's menu did not
+/// load, the bar shows always in the Full mode, because then the bar is the only menu.
+[[nodiscard]] constexpr bool ShowsMenuBar(GuiMode mode, bool hasGameMenu, bool gameMenuOpen) noexcept
+{
+	return mode == GuiMode::Full && (!hasGameMenu || gameMenuOpen);
 }
 
 /// An option of the command line that only developers and tools use
@@ -278,6 +326,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-network-game"},
     DeveloperOption {.name = "throw-lead-latency-ms", .takesValue = true},
     DeveloperOption {.name = "sim-account-editor", .takesValue = true},
+    DeveloperOption {.name = "sim-account-debugger", .takesValue = true},
     DeveloperOption {.name = "sim-still-hand"},
     DeveloperOption {.name = "sim-no-hand-reports"},
     DeveloperOption {.name = "sim-temple-loss", .takesValue = true},

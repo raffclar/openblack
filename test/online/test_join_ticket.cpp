@@ -243,6 +243,33 @@ TEST(JoinTicket, TheEditorClaimIsApartFromTheStaffClaim)
 	EXPECT_FALSE(ParseClaims(with(R"("editor":1)")).has_value());
 }
 
+TEST(JoinTicket, TheDebuggerClaimIsApartFromTheEditorClaim)
+{
+	const auto text = ClaimsText();
+	const auto with = [&](std::string_view field) {
+		auto changed = text;
+		changed.insert(changed.size() - 1, std::string(",") + std::string(field));
+		return changed;
+	};
+	// A ticket of an older lobby has no debugger claim
+	const auto none = ParseClaims(text);
+	ASSERT_TRUE(none.has_value());
+	EXPECT_FALSE(none->debugger);
+	const auto debugger = ParseClaims(with(R"("debugger":true)"));
+	ASSERT_TRUE(debugger.has_value());
+	EXPECT_TRUE(debugger->debugger);
+	EXPECT_FALSE(debugger->editor);
+	const auto editor = ParseClaims(with(R"("editor":true,"debugger":false)"));
+	ASSERT_TRUE(editor.has_value());
+	EXPECT_TRUE(editor->editor);
+	EXPECT_FALSE(editor->debugger);
+	EXPECT_FALSE(ParseClaims(with(R"("debugger":"true")")).has_value());
+	// An unknown claim changes nothing, so that an older game server takes a ticket with the new claim
+	const auto unknown = ParseClaims(with(R"("a_later_claim":true)"));
+	ASSERT_TRUE(unknown.has_value());
+	EXPECT_FALSE(unknown->debugger);
+}
+
 TEST(JoinTicket, TheGodsClaimGivesTheGodsOfTheLobbyGame)
 {
 	const auto text = ClaimsText();

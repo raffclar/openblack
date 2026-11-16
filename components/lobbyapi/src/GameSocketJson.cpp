@@ -652,7 +652,8 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 			return std::nullopt;
 		}
 		joined.observer = static_cast<uint8_t>(observer);
-		if (!ReadBool(object, "editor", joined.editor, false) || !ReadBool(object, "capture", joined.capture, false) ||
+		if (!ReadBool(object, "editor", joined.editor, false) || !ReadBool(object, "debugger", joined.debugger, false) ||
+		    !ReadBool(object, "capture", joined.capture, false) ||
 		    !ReadNames(object, "data_files", joined.dataFiles, k_MostDataFiles, k_MostDataPathBytes, false))
 		{
 			return std::nullopt;
@@ -1191,6 +1192,10 @@ std::string ToJson(const Frame& frame)
 			    if (value.editor)
 			    {
 				    object["editor"] = true;
+			    }
+			    if (value.debugger)
+			    {
+				    object["debugger"] = true;
 			    }
 			    if (!value.name.empty())
 			    {

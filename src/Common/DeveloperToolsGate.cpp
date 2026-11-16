@@ -37,10 +37,23 @@ namespace
 	return std::nullopt;
 }
 
-/// Whether the editor rule is the rule of a developer build. A tool run can ask for the rule of a build that players get.
+/// The debugger right that a tool run gives to a signed-in account, or none. Only a developer build reads it.
+[[nodiscard]] std::optional<bool> SimAccountDebugger()
+{
+	if constexpr (k_Built)
+	{
+		if (Locator::config::has_value())
+		{
+			return Locator::config::value().simAccountDebugger;
+		}
+	}
+	return std::nullopt;
+}
+
+/// Whether the rules are the rules of a developer build. A tool run can ask for the rules of a build that players get.
 [[nodiscard]] bool BuiltRule()
 {
-	return k_Built && !SimAccountEditor().has_value();
+	return k_Built && !SimAccountEditor().has_value() && !SimAccountDebugger().has_value();
 }
 
 /// The editor right of the account that is signed in to the lobby, or none when no account is signed in
@@ -50,11 +63,35 @@ namespace
 	{
 		return sim;
 	}
+	if (SimAccountDebugger().has_value())
+	{
+		// A tool run that gives only the debugger right has a signed-in account with no editor right
+		return false;
+	}
 	if (!Locator::lobbyClient::has_value())
 	{
 		return std::nullopt;
 	}
 	return Locator::lobbyClient::value().GetAccountEditor();
+}
+
+/// The debugger mark of the account that is signed in to the lobby, or none when no account is signed in
+[[nodiscard]] std::optional<bool> AccountDebugger()
+{
+	if (const auto sim = SimAccountDebugger(); sim.has_value())
+	{
+		return sim;
+	}
+	if (SimAccountEditor().has_value())
+	{
+		// A tool run that gives only the editor right has a signed-in account with no debugger mark
+		return false;
+	}
+	if (!Locator::lobbyClient::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::lobbyClient::value().GetAccountDebugger();
 }
 
 } // namespace
@@ -79,6 +116,26 @@ EditorRight LocalEditorRight()
 	return EditorRightOf(NetworkSessionLive(), LocalPlayerHasEditorClaim(), AccountEditor());
 }
 
+bool LocalPlayerHasDebuggerClaim()
+{
+	if (!NetworkSessionLive())
+	{
+		return false;
+	}
+	const auto* session = Locator::networkGame::value().Session();
+	return session != nullptr && session->GetJoined().has_value() && session->GetJoined()->debugger;
+}
+
+DebuggerRight LocalDebuggerRight()
+{
+	return DebuggerRightOf(NetworkSessionLive(), LocalPlayerHasDebuggerClaim(), AccountDebugger());
+}
+
+bool EditorCanOpen()
+{
+	return !EditorRefusalOf(BuiltRule(), NetworkSessionLive(), LocalEditorRight()).has_value();
+}
+
 void ShowEditorRefusal()
 {
 	if (!ShowsRefusalLine(BuiltRule(), NetworkSessionLive(), LocalEditorRight()) ||
@@ -96,7 +153,7 @@ void ShowEditorRefusal()
 
 GuiMode CurrentGuiMode()
 {
-	return GuiModeOf(BuiltRule(), NetworkSessionLive(), LocalEditorRight());
+	return GuiModeOf(BuiltRule(), NetworkSessionLive(), LocalEditorRight(), LocalDebuggerRight());
 }
 
 bool EditorAllowed()

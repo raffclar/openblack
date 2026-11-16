@@ -321,10 +321,10 @@ std::optional<Claims> ParseClaims(std::string_view message)
 	claims.issuedAt = *issuedAt;
 	claims.notBefore = *notBefore;
 	claims.expires = *expires;
-	// The admin, the staff and the editor claims are optional. A ticket of an older lobby has no editor claim: the account
-	// does not open the editor.
-	for (const auto& [name, flag] :
-	     {std::pair {"admin", &claims.admin}, std::pair {"staff", &claims.staff}, std::pair {"editor", &claims.editor}})
+	// The admin, the staff, the editor and the debugger claims are optional. A ticket of an older lobby has no editor
+	// claim and no debugger claim: the account does not open the editor and does not see the debug menu bar.
+	for (const auto& [name, flag] : {std::pair {"admin", &claims.admin}, std::pair {"staff", &claims.staff},
+	                                 std::pair {"editor", &claims.editor}, std::pair {"debugger", &claims.debugger}})
 	{
 		if (const auto found = value.find(name); found != value.end() && !found->is_null())
 		{
