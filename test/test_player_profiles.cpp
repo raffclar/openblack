@@ -202,7 +202,7 @@ TEST(PlayerProfiles, TheCreaturesNameIsThePlayersUntilOneIsGivenAndTheSymbolOneO
 TEST(PlayerProfiles, SettingsAreTheGamesOwnUntilKeptAndAreReadBackAsWritten)
 {
 	// The game's own: intelligent tooltips, the important texts, help level 3, creature help, middle reading speed, the
-	// newest text at the top, the right hand, no push scrolling, saving automatically, no crash reports
+	// newest text at the top, the right hand, no push scrolling, saving automatically, sending crash reports
 	constexpr Settings k_Default;
 	EXPECT_EQ(k_Default.toolTips, 2);
 	EXPECT_EQ(k_Default.storyText, 1);
@@ -213,7 +213,7 @@ TEST(PlayerProfiles, SettingsAreTheGamesOwnUntilKeptAndAreReadBackAsWritten)
 	EXPECT_FALSE(k_Default.leftHanded);
 	EXPECT_FALSE(k_Default.pushScrolling);
 	EXPECT_TRUE(k_Default.autoSave);
-	EXPECT_FALSE(k_Default.crashReports);
+	EXPECT_TRUE(k_Default.crashReports);
 
 	Profiles profiles;
 	Add(profiles, u"Matt", u"", "C1.erc", 0);
@@ -235,6 +235,11 @@ TEST(PlayerProfiles, SettingsAreTheGamesOwnUntilKeptAndAreReadBackAsWritten)
 	ASSERT_EQ(read.profiles.size(), 1u);
 	EXPECT_EQ(read.profiles.front().settings.helpLevel, 3);
 	EXPECT_EQ(read.profiles.front().settings.toolTips, 3);
+	// A profile with no crash_reports field reads as the default, set. A stored 0 stays 0.
+	EXPECT_TRUE(read.profiles.front().settings.crashReports);
+	const auto cleared = Read("profile\tAnn\tC2.erc\t7\tRex\nsetting\tAnn\tcrash_reports\t0\n");
+	ASSERT_EQ(cleared.profiles.size(), 1u);
+	EXPECT_FALSE(cleared.profiles.front().settings.crashReports);
 }
 
 TEST(PlayerProfiles, ToolsAndDevelopersKeepTheirProfileApartFromThePlayers)
