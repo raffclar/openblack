@@ -50,6 +50,14 @@ std::string DesyncKey(std::span<const std::string> parts)
 	return CleanPartName(parts.front());
 }
 
+void DesyncReportRule::AdoptGame(std::string_view game)
+{
+	if (!game.empty())
+	{
+		_game = std::string(game);
+	}
+}
+
 DesyncReportRule::DesyncReportRule(std::string game, uint8_t turnCodec)
     : _game(std::move(game))
     , _turnCodec(turnCodec)

@@ -220,6 +220,21 @@ TEST(GameSocket, TheTimeLimitGoesInTheStartAndIsLeftOutWhenNotSet)
 	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"time_limit":"30"})").has_value());
 }
 
+TEST(GameSocket, TheGameIdGoesInTheStartAndIsLeftOutWhenEmpty)
+{
+	Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
+	// A start with no id is the frame of an old server: it reads with an empty id
+	EXPECT_TRUE(RoundTrip(start).gameId.empty());
+	const auto old = Parse(R"({"type":"game.start","land":"Land1.txt","testbed":false,"seed":1,"turn":0})");
+	ASSERT_TRUE(old.has_value());
+	start.gameId = "0123abcd";
+	EXPECT_EQ(RoundTrip(start).gameId, "0123abcd");
+	// An id that is not a word, or is too long, does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"game_id":3})").has_value());
+	start.gameId = std::string(k_MostGameIdCharacters + 1, 'a');
+	EXPECT_FALSE(Parse(ToJson(start)).has_value());
+}
+
 TEST(GameSocket, TheConditionsGoInTheStartAndAreLeftOutWhenNone)
 {
 	Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};

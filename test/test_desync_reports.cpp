@@ -270,6 +270,23 @@ TEST(DesyncReports, TheGameIdOfAClientHasSixteenDigits)
 	EXPECT_EQ(ClientGameId(0x1234), "0000000000001234");
 }
 
+TEST(DesyncReports, TheEventCarriesTheGameIdThatTheServerTold)
+{
+	DesyncRunBudget budget;
+	DesyncReportRule rule("own", k_Codec);
+	// A server with no lobby id sends no id: the own id stays
+	rule.AdoptGame("");
+	EXPECT_EQ(rule.Game(), "own");
+	rule.AdoptGame("lobby-game");
+	Desync(rule, 100, {"Transform"}, 0);
+	const auto reports = rule.Update(0, budget);
+	ASSERT_EQ(reports.size(), 1u);
+	EXPECT_EQ(reports[0].game, "lobby-game");
+	// A later empty id does not remove the id of the lobby
+	rule.AdoptGame("");
+	EXPECT_EQ(rule.Game(), "lobby-game");
+}
+
 TEST(DesyncReports, TheEventWaitsForTheDetailOfItsCaptureForATime)
 {
 	DesyncRunBudget budget;
