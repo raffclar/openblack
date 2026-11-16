@@ -902,10 +902,12 @@ void MultiplayerBoxes::ShowMessage(Message message)
 		shown.text = FormatText(shown.text, nameArgument);
 	}
 	// A map package that did not give the map adds its reason under the vanilla text (deviation 274)
-	if (const auto& line = _frontEnd->GetMapFailureLine(); message == Message::CouldNotDownloadMap && !line.empty())
+	const auto& reason = _frontEnd->GetMapFailureLine();
+	const bool reasonLine = message == Message::CouldNotDownloadMap && !reason.empty();
+	if (reasonLine)
 	{
 		shown.text += u'\n';
-		shown.text += ToUtf16(line);
+		shown.text += ToUtf16(reason);
 	}
 	if (message == Message::LobbyNotice || message == Message::LobbyQuestion || message == Message::LobbyPassword ||
 	    message == Message::LobbyCode || message == Message::LobbyNewPassword)
@@ -915,7 +917,7 @@ void MultiplayerBoxes::ShowMessage(Message message)
 		_messageFade.SetDestination(1.0f, k_FadeInSeconds);
 		return;
 	}
-	shown.textControl = &shown.answers.Add<StaticText>(k_MessageText, shown.text, Layout::Wrapped);
+	shown.textControl = &shown.answers.Add<StaticText>(reasonLine ? k_ReasonText : k_MessageText, shown.text, Layout::Wrapped);
 	shown.textControl->takesClicks = true;
 	switch (ButtonsOf(message))
 	{

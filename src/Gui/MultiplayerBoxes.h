@@ -62,6 +62,14 @@ public:
 	}
 	static constexpr DialogRect k_MessageBox {.min = {150, 200}, .max = {650, 400}};
 	static constexpr DialogRect k_MessageText {.min = {200, 220}, .max = {600, 350}};
+	/// The text of a box with a line of a reason (deviation 274). The text ends 20 above the OK button (338), the same
+	/// space as between the top of the box and its text. The text gets smaller until it fits.
+	static constexpr DialogRect k_ReasonText {.min = {200, 220}, .max = {600, 318}};
+	/// A lobby notice has a line of a reason when its text has a line break: only these notices have one
+	[[nodiscard]] static bool HasReasonLine(std::u16string_view text) noexcept
+	{
+		return text.find(u'\n') != std::u16string_view::npos;
+	}
 
 	/// The thumbnail of a land by the name of its file in localmaps.txt, such as "mpm_2p_1"; null when there is none
 	using ThumbnailSource = std::function<std::shared_ptr<const land_thumbnail::LandThumbnail>(const std::string& file)>;
