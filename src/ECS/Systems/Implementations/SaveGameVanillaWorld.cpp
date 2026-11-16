@@ -82,6 +82,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -102,6 +103,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 #include "SaveGameSystem.h"
 #include "SaveGameVanillaPlaces.h"
 
@@ -1783,6 +1785,70 @@ std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registr
 }
 
 } // namespace
+
+void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world, VanillaMade& made)
+{
+	if (!_vanilla.has_value() || !Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	auto& magicSystem = Locator::magicSystem::value();
+	for (const auto& creature : _vanilla->creatures)
+	{
+		const auto entity = EntityOf(made, creature.number);
+		const auto number = gamesave::NumberOf(creature.object.creature.spellVisuals[0].key);
+		if (entity == entt::null || !number.has_value())
+		{
+			continue;
+		}
+		const auto* record = world.Record(*number);
+		const auto file = record != nullptr ? world_import::ReadHeldSpell(world, *record) : std::nullopt;
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The creature {} of the file holds the object {}, which is not a spell",
+			                   creature.number, *number);
+			continue;
+		}
+		if (file->creator != creature.number)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The creature {} of the file holds the spell {} of the object {}", creature.number,
+			                   file->number, file->creator);
+		}
+		// The spell gives its particles the point of the creature's hands. A creature that casts from above casts from
+		// the second point of the file.
+		const auto handPoint = [](const std::array<float, 3>& point) { return glm::vec3(point[0], point[1], point[2]); };
+		const bool fromAbove = Locator::infoConstants::has_value() &&
+		                       magic::IsCreatureCastFromAbove(Locator::infoConstants::value(), file->magicType);
+		const magic::ImportedCast cast {
+		    .type = file->magicType,
+		    .position = GroundPosition(file->position),
+		    .chants = file->chants,
+		    .initialChants = file->initialChants,
+		    .closedDown = file->closedDown,
+		    .duration = file->duration,
+		    .age = file->age,
+		    .magnitude = file->magnitude,
+		    .processInfo = {.handPosition = handPoint(fromAbove ? file->abovePoint : file->casterPoint),
+		                    .cameraForward = handPoint(file->cameraForward),
+		                    .direction = handPoint(file->handMovement),
+		                    .power = file->power,
+		                    .enabled = file->casting},
+		    .firstDone = file->firstDone,
+		    .lastRipple = file->lastRipple,
+		};
+		const auto spell = magicSystem.ImportCreatureCast(entity, cast);
+		if (spell == entt::null)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The spell {} of magic type {} that the creature {} holds is not made",
+			                   file->number, static_cast<int>(file->magicType), creature.number);
+			continue;
+		}
+		made.emplace(file->number, spell);
+		SPDLOG_LOGGER_INFO(
+		    ImportLog(), "The creature {} holds the spell {} of magic type {} again: time {} of {} seconds, size {}",
+		    creature.number, file->number, static_cast<int>(file->magicType), file->age, file->duration, file->magnitude);
+	}
+}
 
 void SaveGameSystem::ImportVanillaReactions(const gamesave::VanillaWorld& world, const VanillaMade& made)
 {

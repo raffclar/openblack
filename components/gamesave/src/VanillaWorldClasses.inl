@@ -1152,23 +1152,28 @@ void ReadSpell(WorldReader& r)
 	r.Bytes(12);
 	r.Bytes(12);
 	r.Bytes(12);
+	// The prayer power that is left, the prayer power after the last fill, and the flag of a spell that closed down
+	r.Float("spellChants");
+	r.Float("spellInitialChants");
+	r.Word("spellClosedDown");
 	r.Word();
 	r.Word();
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Bytes(60);
-	r.Word();
+	// The values that the spell gives its particles each turn. These are two points, the view, the movement of the
+	// hand, the power, a word and the flag that the caster still casts.
+	r.Bytes(60, "spellProcessInfo");
+	// How long the spell can last in seconds, negative for no time limit
+	r.Float("spellDuration");
 	r.Byte();
 	r.Byte();
+	r.Ref("spellCreator");
 	r.Ref();
 	r.Ref();
 	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Word();
+	// The magic type, the seconds that the spell ran and its size
+	r.Word("spellMagicType");
+	r.Float("spellAge");
+	r.Float("spellMagnitude");
 	r.Word();
 	r.Bytes(12);
 	r.Word();
@@ -1179,14 +1184,16 @@ void ReadSpell(WorldReader& r)
 void ReadSpellResource(WorldReader& r)
 {
 	ReadSpell(r);
-	r.Byte();
+	// The flag that the first grain landed
+	r.Byte("spellFirstDone");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
 void ReadSpellWater(WorldReader& r)
 {
 	ReadSpell(r);
-	r.Word();
+	// The age of the spell when its last drop made a ring on the land
+	r.Float("spellLastRipple");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
