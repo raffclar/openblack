@@ -28,6 +28,7 @@
 #include "Common/DebugActRuns.h"
 #include "Common/DebugActs.h"
 #include "Common/DebugCheats.h"
+#include "Common/DebugThingActRuns.h"
 #include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureFileLoad.h"
 #include "Creature/CreatureHandRules.h"
@@ -560,6 +561,73 @@ void RunDebugConsoleLine(openblack::PlayerNames player, const DebugConsoleLine& 
 		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debugger of player {} {} the console line \"{}\"{}", turn,
 		                   static_cast<int>(player), error.has_value() ? "cannot run" : "runs", line.text,
 		                   error.has_value() ? fmt::format(": {}", *error) : std::string());
+	}
+}
+
+/// The words of the end of a log line of an act of the debug windows: the refusal, or nothing
+std::string RefusalWords(const std::optional<std::string_view>& refusal)
+{
+	return refusal.has_value() ? fmt::format(": {}", *refusal) : std::string();
+}
+
+/// Do a throw of the Physics debug window at the turn. The game server takes the throws only from a player with the
+/// debugger claim.
+void RunDebugPhysics(openblack::PlayerNames player, const DebugPhysics& act, uint32_t turn)
+{
+	const auto refusal = openblack::debug_thing_acts::PhysicsRefusal(act);
+	const bool done = !refusal.has_value() && openblack::debug_thing_acts::Run(act, player).done;
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debugger of player {} {} the throw of thing {} (type {}) at ({}, {}){}", turn,
+		                   static_cast<int>(player), done ? "does" : "cannot do", static_cast<uint32_t>(act.object), act.type,
+		                   act.place.x, act.place.y, RefusalWords(refusal));
+	}
+}
+
+/// Do an act of the Particles tab at the turn. The game server takes the acts only from a player with the debugger claim.
+void RunDebugParticle(openblack::PlayerNames player, const DebugParticle& act, uint32_t turn)
+{
+	const auto refusal = openblack::debug_thing_acts::ParticleRefusal(act);
+	const bool done = !refusal.has_value() && openblack::debug_thing_acts::Run(act).done;
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debugger of player {} {} the particle act {} ({}, type {}, effect {}){}", turn,
+		                   static_cast<int>(player), done ? "does" : "cannot do", openblack::debug_thing_acts::NameOf(act.act),
+		                   act.file.empty() ? "no file" : act.file, static_cast<int>(act.type), act.effect,
+		                   RefusalWords(refusal));
+	}
+}
+
+/// Do an act of the Temple villagers debug window at the turn. The game server takes the acts only from a player with the
+/// debugger claim.
+void RunDebugTempleVillager(openblack::PlayerNames player, const DebugTempleVillager& act, uint32_t turn)
+{
+	const auto refusal = openblack::debug_thing_acts::TempleVillagerRefusal(act);
+	openblack::debug_thing_acts::ActResult result;
+	if (!refusal.has_value())
+	{
+		result = openblack::debug_thing_acts::Run(act, player);
+	}
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debugger of player {} {} the temple act {} (town {}, villager {}, {} made){}",
+		                   turn, static_cast<int>(player), result.done ? "does" : "cannot do",
+		                   openblack::debug_thing_acts::NameOf(act.act), static_cast<uint32_t>(act.town),
+		                   static_cast<uint32_t>(act.villager), result.made.size(), RefusalWords(refusal));
+	}
+}
+
+/// Do an act of the Path finding debug window at the turn. The game server takes the acts only from a player with the
+/// debugger claim.
+void RunDebugVillagerPath(openblack::PlayerNames player, const DebugVillagerPath& act, uint32_t turn)
+{
+	const auto refusal = openblack::debug_thing_acts::VillagerPathRefusal(act);
+	const bool done = !refusal.has_value() && openblack::debug_thing_acts::Run(act).done;
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debugger of player {} {} the path act {} of villager {}{}", turn,
+		                   static_cast<int>(player), done ? "does" : "cannot do", openblack::debug_thing_acts::NameOf(act.act),
+		                   static_cast<uint32_t>(act.villager), RefusalWords(refusal));
 	}
 }
 
@@ -1401,6 +1469,22 @@ void Run(const Command& command, uint32_t turn, const TurnCommandSourceInterface
 		    else if constexpr (std::is_same_v<Kind, DebugConsoleLine>)
 		    {
 			    RunDebugConsoleLine(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugPhysics>)
+		    {
+			    RunDebugPhysics(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugParticle>)
+		    {
+			    RunDebugParticle(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugTempleVillager>)
+		    {
+			    RunDebugTempleVillager(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugVillagerPath>)
+		    {
+			    RunDebugVillagerPath(command.player, action, turn);
 		    }
 	    },
 	    command.action);

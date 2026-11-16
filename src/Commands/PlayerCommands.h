@@ -1060,6 +1060,136 @@ struct DebugConsoleLine
 	[[nodiscard]] bool operator==(const DebugConsoleLine&) const = default;
 };
 
+/// A throw of the Physics debug window (debug_thing_acts). Only a player with the debugger claim sends it in a network game,
+/// and the game server refuses it from every other player. Each computer does the throw at the turn.
+struct DebugPhysics
+{
+	/// The thing to throw, or none (or a thing that is not in the world) for a new static thing
+	entt::entity object {entt::null};
+	/// The type of the new static thing (MobileStaticInfo)
+	uint16_t type {0};
+	/// The new static thing goes this high above the land
+	float height {0.0f};
+	float scale {1.0f};
+	/// The place of the new static thing on the land, x and z. Each computer finds the height of the land at the turn.
+	glm::vec2 place {0.0f};
+	glm::vec3 velocity {0.0f};
+
+	[[nodiscard]] bool operator==(const DebugPhysics&) const = default;
+};
+
+/// The most bytes of the name of a particle file in a command of the Particles tab
+inline constexpr size_t k_MostParticleFileBytes = 64;
+
+/// An act of the Particles tab of the Magic debug window on the effects with the shared random numbers (debug_thing_acts).
+/// An effect with the random numbers of this computer shows only on this computer, and it goes as no command. Only a
+/// player with the debugger claim sends it in a network game, and the game server refuses it from every other player.
+struct DebugParticle
+{
+	enum class Act : uint8_t
+	{
+		/// A new effect with the shared random numbers, from the file or of the type
+		Start,
+		/// The effects stop or start their steps again
+		Pause,
+		/// Each effect closes down
+		CloseAll,
+		/// Each effect goes at once
+		DeleteAll,
+		/// The effect of the number closes down
+		Close,
+		/// The effect of the number goes at once
+		Delete,
+	};
+	Act act {Act::Start};
+	/// The name of the particle file, or empty for the type
+	std::string file;
+	/// The particle type (ParticleType)
+	uint8_t type {0};
+	glm::vec3 position {0.0f};
+	float magnitude {1.0f};
+	/// The player of the effect, 0 to 7
+	uint8_t player {0};
+	/// How the effect draws (particles::draw::DrawPath)
+	uint8_t drawPath {0};
+	/// The count of the nearest creatures and villagers that the effect gets to act on
+	uint8_t targets {0};
+	/// The number of the effect to close or delete. Only an effect with the shared random numbers has the same number on
+	/// each computer.
+	uint32_t effect {0};
+	/// Pause: true stops the steps
+	bool paused {false};
+
+	[[nodiscard]] bool operator==(const DebugParticle&) const = default;
+};
+
+/// The most villagers that one command of the Temple villagers window takes away
+inline constexpr size_t k_MostTakenVillagers = 64;
+
+/// An act of the Temple villagers debug window (debug_thing_acts). Only a player with the debugger claim sends it in a
+/// network game, and the game server refuses it from every other player. Each computer does the act at the turn.
+struct DebugTempleVillager
+{
+	enum class Act : uint8_t
+	{
+		/// The town takes the share of its people at worship, in the value
+		Share,
+		/// The town sends one more of its people to worship
+		SendOne,
+		/// The town calls one of its people back from worship
+		CallOneBack,
+		/// New villagers of the town stand round its home
+		Make,
+		/// The villager goes to the worship site of its town
+		SendToWorship,
+		/// The villagers that the window made go from the world
+		TakeAway,
+	};
+	Act act {Act::Share};
+	entt::entity town {entt::null};
+	/// The villager to send to worship
+	entt::entity villager {entt::null};
+	/// Make: the position of the home of the town
+	glm::vec3 home {0.0f};
+	/// Share: the share, 0 to 1
+	float value {0.0f};
+	/// Make: the tribe (Tribe), the job (VillagerNumber), the age in years and the count of the new villagers
+	uint8_t tribe {0};
+	uint8_t number {0};
+	uint8_t age {1};
+	uint8_t count {1};
+	/// Make: the new villagers go to worship
+	bool send {false};
+	/// TakeAway: the villagers, at most k_MostTakenVillagers
+	std::vector<entt::entity> villagers;
+
+	[[nodiscard]] bool operator==(const DebugTempleVillager&) const = default;
+};
+
+/// An act of the Path finding debug window on a villager (debug_thing_acts). Only a player with the debugger claim sends it
+/// in a network game, and the game server refuses it from every other player. Each computer does the act at the turn.
+struct DebugVillagerPath
+{
+	enum class Act : uint8_t
+	{
+		/// The villager goes to the position at once
+		Teleport,
+		/// The villager walks in a line to the position
+		MoveTo,
+		/// The villager gets the goal of its walk
+		Goal,
+		/// The villager gets the speed of its walk, in metres a second
+		Speed,
+	};
+	Act act {Act::Teleport};
+	entt::entity villager {entt::null};
+	glm::vec3 position {0.0f};
+	glm::ivec2 goal {0, 0};
+	float speed {0.0f};
+
+	[[nodiscard]] bool operator==(const DebugVillagerPath&) const = default;
+};
+
 /// What a command does
 using Action = std::variant<
     LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap, HandReport,
@@ -1070,7 +1200,7 @@ using Action = std::variant<
     DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit,
     DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip, EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke,
     EditorPath, EditorRemake, EditorMindLoad, EditorScript, EditorLandScript, EditorScriptProgram, DebugAdvisor, DebugWorld,
-    DebugConsoleLine>;
+    DebugConsoleLine, DebugPhysics, DebugParticle, DebugTempleVillager, DebugVillagerPath>;
 
 /// A command and the player that sent it
 struct Command
@@ -1110,7 +1240,9 @@ struct Command
 [[nodiscard]] constexpr bool OnlyDebuggerSends(const Action& action) noexcept
 {
 	return std::holds_alternative<DebugAdvisor>(action) || std::holds_alternative<DebugWorld>(action) ||
-	       std::holds_alternative<DebugConsoleLine>(action);
+	       std::holds_alternative<DebugConsoleLine>(action) || std::holds_alternative<DebugPhysics>(action) ||
+	       std::holds_alternative<DebugParticle>(action) || std::holds_alternative<DebugTempleVillager>(action) ||
+	       std::holds_alternative<DebugVillagerPath>(action);
 }
 
 /// Whether the game server refuses the command from every player, also from a player with the editor claim. A network game

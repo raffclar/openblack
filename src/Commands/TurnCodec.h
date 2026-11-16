@@ -72,11 +72,20 @@
 ///   (u8).
 /// - A change of the debug menus of the world: the act (u8), the player (u8), the index (u8), then the value (f32).
 /// - A line of the debug Console: the count of its bytes (u16), then each byte.
+/// - A throw of the Physics debug window: the thing, the type (u16), the height (f32), the scale (f32), the place (two f32),
+///   then the velocity.
+/// - An act of the Particles tab: the act (u8), the count of the bytes of the file (u8) and each byte, the type (u8), the
+///   position, the magnitude (f32), the player (u8), the draw (u8), the count of the targets (u8), the number of the
+///   effect (u32), then 1 for a pause or 0 (u8).
+/// - An act of the Temple villagers window: the act (u8), the town, the villager, the home, the value (f32), the tribe,
+///   the job, the age and the count (u8 each), 1 when the new villagers go to worship or 0 (u8), the count of the
+///   villagers (u8), then each villager.
+/// - An act of the Path finding window: the act (u8), the villager, the position, the goal (two i32), then the speed (f32).
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 43;
+inline constexpr uint8_t k_Version = 44;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -166,6 +175,10 @@ enum class CommandTag : uint8_t
 	DebugAdvisor = 76,
 	DebugWorld = 77,
 	DebugConsoleLine = 78,
+	DebugPhysics = 84,
+	DebugParticle = 85,
+	DebugTempleVillager = 86,
+	DebugVillagerPath = 87,
 };
 
 /// The sizes of the parts of the frames, in bytes

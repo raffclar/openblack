@@ -116,5 +116,8 @@ struct RegistryContext
 	std::optional<creature_exploration::RegionMap> explorationMap;
 	/// The statistics the game keeps once for everyone, which a new land starts again
 	statistics::GlobalFigures globalStatistics;
+	/// The villagers that the Temple villagers debug window of each player made, so that the window can take them away.
+	/// In a network game each computer adds them at the turn of the act, thus the list is the same on each computer.
+	std::array<std::vector<entt::entity>, player_slots::k_PlayerNumbers> debugMadeVillagers {};
 };
 } // namespace openblack::ecs

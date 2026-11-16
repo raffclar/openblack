@@ -33,8 +33,8 @@
 #include "Creature/CreatureMindFileBody.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
-#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1452,6 +1452,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	      .required = false}});
 	debugAct.writes = true;
 	provider->Add(std::move(debugAct), [](const QueryContext& context) { return DebugAct(context.params); });
+	AddDebugThingQueries(*provider);
 	return provider;
 }
 

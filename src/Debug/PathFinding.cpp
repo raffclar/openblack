@@ -18,6 +18,7 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Common/DebugThingActRuns.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -30,6 +31,7 @@
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack::debug::gui;
+using openblack::player_commands::DebugVillagerPath;
 
 PathFinding::PathFinding() noexcept
     : Window("Path Finding", ImVec2(400, 400))
@@ -38,6 +40,12 @@ PathFinding::PathFinding() noexcept
 
 void PathFinding::Draw() noexcept
 {
+	// A villager that went from the world, also by the act of another computer, is no longer selected
+	if (_selectedVillager.has_value() &&
+	    (!Locator::entitiesRegistry::has_value() || !Locator::entitiesRegistry::value().Valid(*_selectedVillager)))
+	{
+		_selectedVillager.reset();
+	}
 	ImGui::TextWrapped(
 	    "Select Villager by left clicking on it, then select a pathfinding action and right click the destination");
 
@@ -67,7 +75,33 @@ void PathFinding::Draw() noexcept
 
 		ImGui::Columns(1);
 
-		if (_selectedVillager.has_value())
+		if (_selectedVillager.has_value() && openblack::debug_thing_acts::SendsCommands())
+		{
+			// In a network game a change goes as a command of the turns when the drag ends
+			const auto villager = *_selectedVillager;
+			auto position = registry.Get<Transform>(villager).position;
+			auto goal = registry.Get<WallHug>(villager).goalPlace;
+			auto speed = registry.Get<WallHug>(villager).speed;
+			ImGui::DragFloat3("Position", glm::value_ptr(position));
+			if (ImGui::IsItemDeactivatedAfterEdit())
+			{
+				openblack::debug_thing_acts::Do(
+				    DebugVillagerPath {.act = DebugVillagerPath::Act::Teleport, .villager = villager, .position = position});
+			}
+			ImGui::DragInt2("Goal", glm::value_ptr(goal));
+			if (ImGui::IsItemDeactivatedAfterEdit())
+			{
+				openblack::debug_thing_acts::Do(
+				    DebugVillagerPath {.act = DebugVillagerPath::Act::Goal, .villager = villager, .goal = goal});
+			}
+			ImGui::DragFloat("Speed (m/s)", &speed);
+			if (ImGui::IsItemDeactivatedAfterEdit())
+			{
+				openblack::debug_thing_acts::Do(
+				    DebugVillagerPath {.act = DebugVillagerPath::Act::Speed, .villager = villager, .speed = speed});
+			}
+		}
+		else if (_selectedVillager.has_value())
 		{
 			auto& transform = registry.Get<Transform>(_selectedVillager.value());
 			auto& wallHug = registry.Get<WallHug>(_selectedVillager.value());
@@ -87,8 +121,6 @@ void PathFinding::Draw() noexcept
 	{
 		if (ImGui::BeginTabBar("Actions"))
 		{
-			using namespace ecs::components;
-			auto& registry = Locator::entitiesRegistry::value();
 			if (ImGui::BeginTabItem("Teleport"))
 			{
 				ImGui::DragFloat3("Destination", glm::value_ptr(_destination));
@@ -98,7 +130,8 @@ void PathFinding::Draw() noexcept
 				ImGui::PushItemFlag(ImGuiItemFlags_Disabled, !_selectedVillager.has_value());
 				if (ImGui::Button("Execute"))
 				{
-					registry.Get<Transform>(*_selectedVillager).position = _destination;
+					openblack::debug_thing_acts::Do(DebugVillagerPath {
+					    .act = DebugVillagerPath::Act::Teleport, .villager = *_selectedVillager, .position = _destination});
 				}
 				ImGui::PopItemFlag();
 				ImGui::PopStyleVar();
@@ -115,11 +148,8 @@ void PathFinding::Draw() noexcept
 				ImGui::PushItemFlag(ImGuiItemFlags_Disabled, !_selectedVillager.has_value());
 				if (ImGui::Button("Execute"))
 				{
-					auto& wallHug = registry.Get<WallHug>(*_selectedVillager);
-					wallHug.goalPlace = ecs::wall_hug::ToWhole(glm::xz(_destination));
-					registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
-					                MoveStateFinalStepTag, MoveStateArrivedTag>(*_selectedVillager);
-					registry.Assign<MoveStateLinearTag>(*_selectedVillager);
+					openblack::debug_thing_acts::Do(DebugVillagerPath {
+					    .act = DebugVillagerPath::Act::MoveTo, .villager = *_selectedVillager, .position = _destination});
 				}
 				ImGui::PopItemFlag();
 				ImGui::PopStyleVar();

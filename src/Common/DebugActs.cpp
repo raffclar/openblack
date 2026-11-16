@@ -13,6 +13,7 @@
 
 #include <algorithm>
 
+#include "Common/DebugThingActs.h"
 #include "Creature/BonusCreatures.h"
 #include "Help/Spirits.h"
 #include "PlayerSlots.h"
@@ -177,7 +178,8 @@ std::optional<std::string_view> RefusalOf(const player_commands::Action& action)
 	{
 		return ConsoleLineRefusal(*line);
 	}
-	return std::nullopt;
+	// The acts of the Physics, Particles, Temple villagers and Path finding windows
+	return debug_thing_acts::RefusalOf(action);
 }
 
 bool ApplyWorldAct(WorldTarget& target, const DebugWorld& act)

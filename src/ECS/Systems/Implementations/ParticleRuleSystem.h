@@ -284,10 +284,6 @@ private:
 class ParticleRuleSystem final: public ParticleRuleSystemInterface
 {
 public:
-	/// The first number of an effect of this computer only. The synced effects take the numbers below it, and the
-	/// simulation's numbers start above it, so the three sets of numbers never meet.
-	static constexpr EffectId k_FirstLocalEffect = 0x4000'0001u;
-
 	ParticleRuleSystem();
 	~ParticleRuleSystem() override;
 	ParticleRuleSystem(const ParticleRuleSystem&) = delete;

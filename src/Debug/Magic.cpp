@@ -19,6 +19,7 @@
 
 #include <fmt/format.h>
 
+#include "Common/DebugThingActRuns.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -106,6 +107,14 @@ void Magic::Draw() noexcept
 	if (!Locator::infoConstants::has_value())
 	{
 		ImGui::TextUnformatted("No info.dat loaded");
+		return;
+	}
+	// In a network game only the Particles tab shows. It sends its acts on the effects of each computer as commands of the
+	// turns. The other tabs change the world of this computer only.
+	if (debug_thing_acts::SendsCommands())
+	{
+		ImGui::TextWrapped("In a network game only the Particles tab shows.");
+		DrawParticles();
 		return;
 	}
 	if (ImGui::BeginTabBar("MagicTabs"))

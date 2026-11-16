@@ -598,6 +598,56 @@ void WriteAction(Writer& out, const Action& action)
 			               out.Byte(static_cast<uint8_t>(character));
 		               }
 	               },
+	               [&out](const DebugPhysics& command) {
+		               out.Entity(command.object);
+		               out.Number(command.type);
+		               out.Float(command.height);
+		               out.Float(command.scale);
+		               out.Float(command.place.x);
+		               out.Float(command.place.y);
+		               out.Vector(command.velocity);
+	               },
+	               [&out](const DebugParticle& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               out.Byte(static_cast<uint8_t>(command.file.size()));
+		               for (const auto character : command.file)
+		               {
+			               out.Byte(static_cast<uint8_t>(character));
+		               }
+		               out.Byte(command.type);
+		               out.Vector(command.position);
+		               out.Float(command.magnitude);
+		               out.Byte(command.player);
+		               out.Byte(command.drawPath);
+		               out.Byte(command.targets);
+		               out.Number(command.effect);
+		               out.Byte(command.paused ? 1 : 0);
+	               },
+	               [&out](const DebugTempleVillager& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               out.Entity(command.town);
+		               out.Entity(command.villager);
+		               out.Vector(command.home);
+		               out.Float(command.value);
+		               out.Byte(command.tribe);
+		               out.Byte(command.number);
+		               out.Byte(command.age);
+		               out.Byte(command.count);
+		               out.Byte(command.send ? 1 : 0);
+		               out.Byte(static_cast<uint8_t>(command.villagers.size()));
+		               for (const auto villager : command.villagers)
+		               {
+			               out.Entity(villager);
+		               }
+	               },
+	               [&out](const DebugVillagerPath& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               out.Entity(command.villager);
+		               out.Vector(command.position);
+		               out.Number(static_cast<uint32_t>(command.goal.x));
+		               out.Number(static_cast<uint32_t>(command.goal.y));
+		               out.Float(command.speed);
+	               },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -1442,6 +1492,119 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = std::move(line);
 		return DecodeError::None;
 	}
+	case CommandTag::DebugPhysics:
+	{
+		DebugPhysics physics {.object = in.Entity()};
+		physics.type = in.Number<uint16_t>();
+		physics.height = in.Float();
+		physics.scale = in.Float();
+		physics.place.x = in.Float();
+		physics.place.y = in.Float();
+		physics.velocity = in.Vector();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		action = physics;
+		return DecodeError::None;
+	}
+	case CommandTag::DebugParticle:
+	{
+		const auto act = in.Byte();
+		const auto count = in.Byte();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (act > static_cast<uint8_t>(DebugParticle::Act::Delete) || count > k_MostParticleFileBytes)
+		{
+			return DecodeError::Value;
+		}
+		if (count > in.Left())
+		{
+			return DecodeError::Truncated;
+		}
+		DebugParticle particle {.act = static_cast<DebugParticle::Act>(act)};
+		particle.file.resize(count);
+		for (auto& character : particle.file)
+		{
+			character = static_cast<char>(in.Byte());
+		}
+		particle.type = in.Byte();
+		particle.position = in.Vector();
+		particle.magnitude = in.Float();
+		particle.player = in.Byte();
+		particle.drawPath = in.Byte();
+		particle.targets = in.Byte();
+		particle.effect = in.Number<uint32_t>();
+		const auto paused = in.Byte();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (paused > 1)
+		{
+			return DecodeError::Value;
+		}
+		particle.paused = paused == 1;
+		action = std::move(particle);
+		return DecodeError::None;
+	}
+	case CommandTag::DebugTempleVillager:
+	{
+		const auto act = in.Byte();
+		DebugTempleVillager temple {.town = in.Entity()};
+		temple.villager = in.Entity();
+		temple.home = in.Vector();
+		temple.value = in.Float();
+		temple.tribe = in.Byte();
+		temple.number = in.Byte();
+		temple.age = in.Byte();
+		temple.count = in.Byte();
+		const auto send = in.Byte();
+		const auto count = in.Byte();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (act > static_cast<uint8_t>(DebugTempleVillager::Act::TakeAway) || send > 1 || count > k_MostTakenVillagers)
+		{
+			return DecodeError::Value;
+		}
+		if (static_cast<size_t>(count) * sizes::k_Entity > in.Left())
+		{
+			return DecodeError::Truncated;
+		}
+		temple.act = static_cast<DebugTempleVillager::Act>(act);
+		temple.send = send == 1;
+		temple.villagers.resize(count);
+		for (auto& villager : temple.villagers)
+		{
+			villager = in.Entity();
+		}
+		action = std::move(temple);
+		return DecodeError::None;
+	}
+	case CommandTag::DebugVillagerPath:
+	{
+		const auto act = in.Byte();
+		DebugVillagerPath path {.villager = in.Entity()};
+		path.position = in.Vector();
+		path.goal.x = static_cast<int32_t>(in.Number<uint32_t>());
+		path.goal.y = static_cast<int32_t>(in.Number<uint32_t>());
+		path.speed = in.Float();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (act > static_cast<uint8_t>(DebugVillagerPath::Act::Speed))
+		{
+			return DecodeError::Value;
+		}
+		path.act = static_cast<DebugVillagerPath::Act>(act);
+		action = path;
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -1630,6 +1793,10 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const DebugAdvisor& /*command*/) { return CommandTag::DebugAdvisor; },
 	                      [](const DebugWorld& /*command*/) { return CommandTag::DebugWorld; },
 	                      [](const DebugConsoleLine& /*command*/) { return CommandTag::DebugConsoleLine; },
+	                      [](const DebugPhysics& /*command*/) { return CommandTag::DebugPhysics; },
+	                      [](const DebugParticle& /*command*/) { return CommandTag::DebugParticle; },
+	                      [](const DebugTempleVillager& /*command*/) { return CommandTag::DebugTempleVillager; },
+	                      [](const DebugVillagerPath& /*command*/) { return CommandTag::DebugVillagerPath; },
 	                  },
 	                  action);
 }
@@ -1724,6 +1891,12 @@ size_t SizeOf(const Action& action) noexcept
 	        [](const DebugAdvisor& /*command*/) { return size_t {1 + 1 + 8 + k_Vector + 1 + 1 + 4 + 1}; },
 	        [](const DebugWorld& /*command*/) { return size_t {1 + 1 + 1 + 4}; },
 	        [](const DebugConsoleLine& command) { return 2 + command.text.size(); },
+	        [](const DebugPhysics& /*command*/) { return k_Entity + 2 + 4 + 4 + 8 + k_Vector; },
+	        [](const DebugParticle& command) { return 1 + 1 + command.file.size() + 1 + k_Vector + 4 + 1 + 1 + 1 + 4 + 1; },
+	        [](const DebugTempleVillager& command) {
+		        return 1 + k_Entity + k_Entity + k_Vector + 4 + 4 + 1 + 1 + (k_Entity * command.villagers.size());
+	        },
+	        [](const DebugVillagerPath& /*command*/) { return 1 + k_Entity + k_Vector + 8 + 4; },
 	    },
 	    action);
 	return 1 + fields;

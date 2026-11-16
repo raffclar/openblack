@@ -1773,6 +1773,10 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["debug"] = editor_debug(pids, focus, shots)
         if done["debug"].get("error"):
             done["error"] = done["debug"]["error"]
+    if case == "debug-things":
+        done["debug_things"] = editor_debug_things(pids, focus, shots)
+        if done["debug_things"].get("error"):
+            done["error"] = done["debug_things"]["error"]
     if case in ("land", "all"):
         # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
         # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
@@ -1874,6 +1878,75 @@ def editor_debug(pids, focus, shots=None):
         problems.append(f"a client did not follow the speed 2 of the debugger: {done['speed_clocks']}")
     if any(done["paused_after_refused_pause"]):
         problems.append("the server took a pause from the debugger claim")
+    if problems:
+        done["error"] = "; ".join(problems)
+    return done
+
+
+def editor_debug_things(pids, focus, shots=None):
+    """The first client has the debugger claim and no editor claim. It presses each button of the Physics window, of the
+    Particles tab of the Magic window, of the Temple villagers window and of the Path finding window, as the inspector
+    query editor.debug_thing does them. The second client (no claim) sends acts with force: the server must refuse them.
+    Every computer must do the same acts at the same turns and keep the same checksums. Returns what each step sent."""
+    debugger = pids[0]
+    done = {"answers": []}
+    x, y, z = focus[0], focus[1], focus[2]
+
+    def send(pid, params):
+        answer = inspector_answer(pid, "editor.debug_thing", {"params": params})
+        done["answers"].append({"params": params, "answer": answer})
+        time.sleep(0.4)
+        return answer
+
+    # The Physics window: a new rock, then a throw of the same type higher up
+    send(debugger, {"kind": "physics", "type": 36, "height": 20.0, "place": [x + 10.0, z], "velocity": [0.0, 5.0, 0.0]})
+    send(debugger, {"kind": "physics", "type": 36, "height": 40.0, "scale": 2.0, "place": [x - 10.0, z + 5.0],
+                    "velocity": [3.0, 0.0, -2.0]})
+    # The Particles tab: an effect with the shared random numbers, the pause, the close and the delete of one effect, and
+    # the close and the delete of all
+    send(debugger, {"kind": "particle", "act": "start", "type": 115, "position": [x, y + 5.0, z], "targets": 2})
+    send(debugger, {"kind": "particle", "act": "pause", "paused": True})
+    send(debugger, {"kind": "particle", "act": "pause", "paused": False})
+    time.sleep(1.0)
+    effects = inspector_answer(debugger, "particles.effects", {}) or []
+    shared = sorted(effect["id"] for effect in (effects if isinstance(effects, list) else [])
+                    if isinstance(effect, dict) and 0 < effect.get("id", 0) < 0x40000001)
+    done["shared_effects"] = len(shared)
+    if shared:
+        send(debugger, {"kind": "particle", "act": "close", "effect": shared[-1]})
+    send(debugger, {"kind": "particle", "act": "start", "type": 115, "position": [x + 5.0, y + 5.0, z]})
+    time.sleep(1.0)
+    effects = inspector_answer(debugger, "particles.effects", {}) or []
+    shared = sorted(effect["id"] for effect in (effects if isinstance(effects, list) else [])
+                    if isinstance(effect, dict) and 0 < effect.get("id", 0) < 0x40000001)
+    if shared:
+        send(debugger, {"kind": "particle", "act": "delete", "effect": shared[-1]})
+    send(debugger, {"kind": "particle", "act": "close_all"})
+    send(debugger, {"kind": "particle", "act": "delete_all"})
+    # The Temple villagers window: new villagers that go to worship, the share, one more and one less at worship, and a
+    # villager sent to worship
+    send(debugger, {"kind": "temple", "act": "make", "count": 3, "age": 25, "send": True})
+    time.sleep(1.0)
+    send(debugger, {"kind": "temple", "act": "share", "value": 0.4})
+    send(debugger, {"kind": "temple", "act": "send_one"})
+    send(debugger, {"kind": "temple", "act": "call_one_back"})
+    send(debugger, {"kind": "temple", "act": "send_to_worship"})
+    # The Path finding window on the first villager that the window made
+    send(debugger, {"kind": "path", "act": "teleport", "position": [x + 3.0, y, z + 3.0]})
+    send(debugger, {"kind": "path", "act": "move_to", "position": [x + 20.0, y, z + 20.0]})
+    send(debugger, {"kind": "path", "act": "goal", "goal": [int(x) + 25, int(z) + 25]})
+    send(debugger, {"kind": "path", "act": "speed", "speed": 1.5})
+    time.sleep(1.0)
+    editor_shots(pids, shots, "debug-things")
+    send(debugger, {"kind": "temple", "act": "take_away"})
+    if len(pids) > 1:
+        # The second client has no debugger claim: the server refuses its acts
+        send(pids[1], {"kind": "physics", "type": 36, "place": [x, z], "force": True})
+        send(pids[1], {"kind": "temple", "act": "share", "value": 0.9, "force": True})
+        send(pids[1], {"kind": "particle", "act": "delete_all", "force": True})
+    time.sleep(2.0)
+    problems = [f"{entry['params']}: {entry['answer']['error']}" for entry in done["answers"]
+                if isinstance(entry["answer"], dict) and entry["answer"].get("error")]
     if problems:
         done["error"] = "; ".join(problems)
     return done
@@ -3062,7 +3135,7 @@ def main():
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
-                                                    "creature-remove", "land", "history", "mind", "time", "scripts", "debug",
+                                                    "creature-remove", "land", "history", "mind", "time", "scripts", "debug", "debug-things",
                                                     "world", "scenario", "scenario-away", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
@@ -3451,10 +3524,10 @@ def main():
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
                                  "observer" if is_observer else "god", 600,
                                  editor=(options.editor_check or options.forest_camera
-                                         or (bool(options.editor_desync) and options.editor_desync != "debug"))
+                                         or (bool(options.editor_desync) and options.editor_desync not in ("debug", "debug-things")))
                                  and index == 0,
                                  staff=options.editor_check and index == 1,
-                                 debugger=options.editor_desync == "debug" and index == 0)
+                                 debugger=options.editor_desync in ("debug", "debug-things") and index == 0)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
@@ -3894,7 +3967,7 @@ def main():
                 print(f"the script acts differ or did not come: {json.dumps(summary['script_acts'])[:2000]} "
                       f"states {json.dumps(states)[:1000]}")
                 all_same = False
-        if options.editor_desync == "debug":
+        if options.editor_desync in ("debug", "debug-things"):
             summary["debug_acts"] = debug_act_check(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
             if not summary["debug_acts"]["same"]:
