@@ -44,6 +44,100 @@ TEST(GeneratedLand, ThePathKeepsTheSeed)
 	EXPECT_FALSE(generated_land::SeedOf("Data/Landscape/Land1.lnd").has_value());
 }
 
+TEST(GeneratedLand, TheFirstChoicesGiveTheFirstSettingsOfTheGenerator)
+{
+	const auto settings = generated_land::SettingsOf({.seed = 7});
+	const landgen::Settings first {.seed = 7};
+	EXPECT_EQ(settings.seed, 7u);
+	EXPECT_EQ(settings.base.landAmount, first.base.landAmount);
+	EXPECT_EQ(settings.base.ranges, first.base.ranges);
+	EXPECT_EQ(settings.base.mountainHeight, first.base.mountainHeight);
+	EXPECT_EQ(settings.base.plainHeight, first.base.plainHeight);
+	EXPECT_EQ(settings.base.hillHeight, first.base.hillHeight);
+	EXPECT_EQ(settings.base.hollows, first.base.hollows);
+	EXPECT_EQ(settings.hydraulic.drops, first.hydraulic.drops);
+	EXPECT_EQ(settings.rivers.sourceFlow, first.rivers.sourceFlow);
+	EXPECT_EQ(settings.climate.northTemperature, first.climate.northTemperature);
+	EXPECT_EQ(settings.climate.southTemperature, first.climate.southTemperature);
+	EXPECT_FALSE(settings.wind.has_value());
+}
+
+TEST(GeneratedLand, EachChoiceGoesToItsSettingOfTheGenerator)
+{
+	const auto settings = generated_land::SettingsOf({.seed = 9,
+	                                                  .landAmount = -20,
+	                                                  .ranges = 5,
+	                                                  .mountainHeight = 400,
+	                                                  .plainHeight = 40,
+	                                                  .hillHeight = 10,
+	                                                  .hollows = 2,
+	                                                  .rain = 250,
+	                                                  .riverFlow = 1500,
+	                                                  .northTemperature = 10,
+	                                                  .southTemperature = 80,
+	                                                  .wind = 2});
+	EXPECT_EQ(settings.seed, 9u);
+	EXPECT_FLOAT_EQ(settings.base.landAmount, -0.2f);
+	EXPECT_EQ(settings.base.ranges, 5);
+	EXPECT_EQ(settings.base.mountainHeight, 400.0f);
+	EXPECT_EQ(settings.base.plainHeight, 40.0f);
+	EXPECT_EQ(settings.base.hillHeight, 10.0f);
+	EXPECT_EQ(settings.base.hollows, 2);
+	EXPECT_EQ(settings.hydraulic.drops, 250000);
+	EXPECT_EQ(settings.rivers.sourceFlow, 1500.0f);
+	EXPECT_FLOAT_EQ(settings.climate.northTemperature, 0.1f);
+	EXPECT_FLOAT_EQ(settings.climate.southTemperature, 0.8f);
+	EXPECT_EQ(settings.wind, landgen::climate::Wind::South);
+}
+
+TEST(GeneratedLand, AChoiceOutOfItsRangeMovesToTheNearestEnd)
+{
+	const auto clamped = generated_land::Clamped({.seed = 3, .ranges = 99, .mountainHeight = 5, .wind = -8});
+	EXPECT_EQ(clamped.seed, 3u);
+	EXPECT_EQ(clamped.ranges, 6);
+	EXPECT_EQ(clamped.mountainHeight, 100);
+	EXPECT_EQ(clamped.wind, -1);
+	// The settings use the values in their ranges
+	EXPECT_EQ(generated_land::SettingsOf({.ranges = 99}).base.ranges, 6);
+	// Each range holds the first value of its choice
+	const generated_land::Choices first;
+	for (const auto& range : generated_land::ChoiceRanges())
+	{
+		EXPECT_LE(range.lowest, first.*range.member) << range.key;
+		EXPECT_GE(range.highest, first.*range.member) << range.key;
+	}
+}
+
+TEST(GeneratedLand, ThePathKeepsEachChoiceThatIsNotAtItsFirstValue)
+{
+	EXPECT_EQ(generated_land::PathOf(generated_land::Choices {.seed = 7}), "landgen:7");
+	const generated_land::Choices changed {.seed = 7, .landAmount = -12, .ranges = 5, .rain = 600, .wind = 0};
+	const auto path = generated_land::PathOf(changed);
+	EXPECT_EQ(path, "landgen:7;land=-12;ranges=5;rain=600;wind=0");
+	EXPECT_EQ(generated_land::ChoicesOf(path), changed);
+	EXPECT_EQ(generated_land::SeedOf(path), 7u);
+	// Each choice at each end of its range comes back from the path
+	for (const auto& range : generated_land::ChoiceRanges())
+	{
+		for (const auto value : {range.lowest, range.highest})
+		{
+			generated_land::Choices choices {.seed = 11};
+			choices.*range.member = value;
+			EXPECT_EQ(generated_land::ChoicesOf(generated_land::PathOf(choices)), choices) << range.key;
+		}
+	}
+}
+
+TEST(GeneratedLand, APathWithAnUnknownOrBadChoiceIsNotAGeneratedLand)
+{
+	EXPECT_FALSE(generated_land::ChoicesOf("landgen:7;colour=3").has_value());
+	EXPECT_FALSE(generated_land::ChoicesOf("landgen:7;ranges=7").has_value());
+	EXPECT_FALSE(generated_land::ChoicesOf("landgen:7;ranges").has_value());
+	EXPECT_FALSE(generated_land::ChoicesOf("landgen:7;ranges=").has_value());
+	EXPECT_FALSE(generated_land::ChoicesOf("landgen:7;").has_value());
+	EXPECT_FALSE(generated_land::ChoicesOf("landgen:;ranges=4").has_value());
+}
+
 TEST(GeneratedLand, EachSurfaceTakesAMaterialOfTheStory)
 {
 	for (const auto& source : generated_land::MaterialSources())

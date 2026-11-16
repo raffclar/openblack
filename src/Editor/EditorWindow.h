@@ -28,6 +28,7 @@
 #include "EditorEntities.h"
 #include "EditorNetworkEdits.h"
 #include "Panels/InspectorPanel.h"
+#include "Panels/LandGeneratorPanel.h"
 #include "Panels/LandScriptPanel.h"
 #include "Panels/LandToolsPanel.h"
 #include "Panels/LogPanel.h"
@@ -64,8 +65,8 @@ public:
 
 	void Open() noexcept override;
 	void Close() noexcept override;
-	/// Shows a tab of the strip along the bottom: "Palette", "Scenarios", "Scripts", "Land script", "Land tools", "Cheats"
-	/// or "Log"
+	/// Shows a tab of the strip along the bottom: "Palette", "Scenarios", "Scripts", "Land script", "Land tools", "Land
+	/// generator", "Cheats" or "Log"
 	void ShowTab(std::string_view tab) noexcept override;
 	void WindowDraw() noexcept override;
 
@@ -96,6 +97,8 @@ private:
 		Scripts,
 		LandScript,
 		LandTools,
+		/// The land generator, which makes a new land from a seed
+		LandGenerator,
 		/// The debug cheats of the player of this computer
 		Cheats,
 		Log,
@@ -146,6 +149,7 @@ private:
 	ScriptsPanel _scripts;
 	LandScriptPanel _landScript;
 	LandToolsPanel _landTools;
+	LandGeneratorPanel _landGenerator;
 	LogPanel _log;
 
 	bool _showOutliner {true};

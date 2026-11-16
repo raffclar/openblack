@@ -513,6 +513,26 @@ TEST(GameMenu, ButtonsActWhenLetGoOverTheOneTheyWentDownOn)
 	EXPECT_EQ(Click(f.menu, ButtonCentre(0)), Action::None);
 }
 
+TEST(GameMenu, WhileTheLandGeneratorIsOnTheThirdButtonIsExitEditor)
+{
+	MenuFixture f;
+	const auto hasButton = [&f](std::u16string_view name) {
+		const auto controls = f.menu.GetNamedControls();
+		return std::ranges::any_of(controls,
+		                           [name](const auto& control) { return control.kind == "button" && control.name == name; });
+	};
+	f.menu.SetLandGenerator(true);
+	EXPECT_TRUE(hasButton(u"Exit Editor"));
+	EXPECT_EQ(Click(f.menu, ButtonCentre(2)), Action::ExitEditor);
+	// The button shows in a skirmish too, at the place of Join Online Game
+	f.menu.SetSkirmish(true);
+	EXPECT_TRUE(hasButton(u"Exit Editor"));
+	f.menu.SetSkirmish(false);
+	f.menu.SetLandGenerator(false);
+	EXPECT_FALSE(hasButton(u"Exit Editor"));
+	EXPECT_EQ(Click(f.menu, ButtonCentre(2)), Action::JoinOnline);
+}
+
 TEST(GameMenu, AClickOnATabClosesAllTheBoxesBeforeItsPageShows)
 {
 	MenuFixture f;

@@ -176,6 +176,26 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.land_generator",
+	    .name = "The land generator of the editor, and Exit Editor",
+	    .facet = Facet::Editor,
+	    .description = "A hut and an oak on flat land, and the editor opens after a second. In the Land generator tab, "
+	                   "Start the land generator saves the game into an empty slot and loads a land from a random seed. "
+	                   "Type seed 7 and click Generate, then move a slider and click Generate again. Then open the "
+	                   "Escape menu and click Exit Editor.",
+	    .expected = "The save game room has a new save, Before the land generator, and no other save changes. Each "
+	                "Generate clears the world and loads an island with mountains, rivers and trees. The tab shows the "
+	                "seed of the land. The third button of the Escape menu is Exit Editor. Exit Editor and the exit "
+	                "button of the tab load the testbed again with the hut and the oak.",
+	    .environment = {.clockRuns = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-20.0f, 0.0f}}, {.type = TreeInfo::Oak, .offset = {20.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::PressPlainKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::platform_keys::EditorToggleKey(k_Platform))}},
+	});
+
+	all.push_back({
 	    .id = "editor.animals",
 	    .name = "Every animal of the palette",
 	    .facet = Facet::Editor,

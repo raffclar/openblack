@@ -48,6 +48,7 @@ public:
 	[[nodiscard]] editor::script_acts::LandScriptRun& GetLandScriptRun() override { return _landScript; }
 	[[nodiscard]] editor::script_acts::ActReports& GetScriptActReports() override { return _scriptActReports; }
 	[[nodiscard]] editor::land_brush::Brush& GetLandBrush() override { return _landBrush; }
+	[[nodiscard]] editor::land_generator::Session& GetLandGenerator() override { return _landGenerator; }
 	void SetTool(Tool tool) override { _tool = tool; }
 	[[nodiscard]] Tool GetTool() const override { return _tool; }
 	[[nodiscard]] editor::Snapping& GetSnapping() override { return _snapping; }
@@ -78,6 +79,7 @@ private:
 	editor::script_acts::LandScriptRun _landScript;
 	editor::script_acts::ActReports _scriptActReports;
 	editor::land_brush::Brush _landBrush;
+	editor::land_generator::Session _landGenerator;
 	/// The count of the registry's resets that the picks and the history belong to
 	std::optional<uint32_t> _registryResets;
 	Tool _tool {Tool::Select};
