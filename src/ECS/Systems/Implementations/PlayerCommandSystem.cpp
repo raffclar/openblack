@@ -25,6 +25,8 @@
 #include <spdlog/spdlog.h>
 
 #include "Commands/CommandOwnerRules.h"
+#include "Common/DebugActRuns.h"
+#include "Common/DebugActs.h"
 #include "Common/DebugCheats.h"
 #include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureFileLoad.h"
@@ -499,6 +501,53 @@ void RunDebugLandSkip(openblack::PlayerNames player, const DebugLandSkip& comman
 		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debug cheat of player {} {} from land {} to land {} of the story", turn,
 		                   static_cast<int>(player), done ? "skips" : "cannot skip", game.landNumber,
 		                   static_cast<int>(command.land));
+	}
+}
+
+/// Do an act of the Advisors debug window at the turn. The game server takes the acts only from a player with the debugger
+/// claim. A computer with no advisors, such as the game server, does nothing, but its log line is the same as on the other
+/// computers.
+void RunDebugAdvisor(openblack::PlayerNames player, const DebugAdvisor& act, uint32_t turn)
+{
+	const auto refusal = openblack::debug_acts::AdvisorActRefusal(act);
+	if (!refusal.has_value())
+	{
+		std::ignore = openblack::debug_acts::RunAdvisorAct(act);
+	}
+	const bool done = !refusal.has_value();
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debugger of player {} {} the act {} of advisor {}{}", turn,
+		                   static_cast<int>(player), done ? "does" : "cannot do", openblack::debug_acts::NameOf(act.act),
+		                   static_cast<int>(act.advisor), refusal.has_value() ? fmt::format(": {}", *refusal) : std::string());
+	}
+}
+
+/// Do a change of the debug menus of the world at the turn. The game server takes the changes only from a player with the
+/// debugger claim.
+void RunDebugWorld(openblack::PlayerNames player, const DebugWorld& act, uint32_t turn)
+{
+	const auto refusal = openblack::debug_acts::WorldActRefusal(act);
+	const bool done = !refusal.has_value() && openblack::debug_acts::RunWorldAct(act);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debugger of player {} {} the change {} ({}, {}, {}){}", turn,
+		                   static_cast<int>(player), done ? "does" : "cannot do", openblack::debug_acts::NameOf(act.act),
+		                   static_cast<int>(act.player), static_cast<int>(act.index), act.value,
+		                   refusal.has_value() ? fmt::format(": {}", *refusal) : std::string());
+	}
+}
+
+/// Run a line of land script commands of the debug Console at the turn. The game server takes the lines only from a player
+/// with the debugger claim.
+void RunDebugConsoleLine(openblack::PlayerNames player, const DebugConsoleLine& line, uint32_t turn)
+{
+	const auto error = openblack::debug_acts::RunConsoleLine(line);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debugger of player {} {} the console line \"{}\"{}", turn,
+		                   static_cast<int>(player), error.has_value() ? "cannot run" : "runs", line.text,
+		                   error.has_value() ? fmt::format(": {}", *error) : std::string());
 	}
 }
 
@@ -1328,6 +1377,18 @@ void Run(const Command& command, uint32_t turn, const TurnCommandSourceInterface
 		    else if constexpr (std::is_same_v<Kind, DebugLandSkip>)
 		    {
 			    RunDebugLandSkip(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugAdvisor>)
+		    {
+			    RunDebugAdvisor(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugWorld>)
+		    {
+			    RunDebugWorld(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugConsoleLine>)
+		    {
+			    RunDebugConsoleLine(command.player, action, turn);
 		    }
 	    },
 	    command.action);

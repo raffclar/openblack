@@ -22,6 +22,8 @@ namespace openblack::debug::gui
 class AlignmentHistory final: public Window
 {
 public:
+	/// The window shows in a network game. It only shows the alignment.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	AlignmentHistory() noexcept;
 
 protected:

@@ -17,6 +17,8 @@
 #include <fmt/format.h>
 
 #include "Camera/Camera.h"
+#include "Common/DebugActRuns.h"
+#include "Common/DebugActs.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
@@ -28,6 +30,8 @@
 using namespace openblack;
 using namespace openblack::debug::gui;
 using namespace openblack::help::spirits;
+using openblack::player_commands::DebugAdvisor;
+using Act = DebugAdvisor::Act;
 
 namespace
 {
@@ -36,9 +40,17 @@ constexpr std::array<const char*, 4> k_ControlStates {"Home", "Going home", "Out
 constexpr size_t k_ShownHelpMessages = 12;
 
 /// The help spirit type the scripts name an advisor by
-int32_t TypeOf(int advisor)
+uint8_t TypeOf(int advisor)
 {
-	return advisor == k_GoodDude ? 1 : 2;
+	return advisor == k_GoodDude ? debug_acts::k_GoodAdvisor : debug_acts::k_EvilAdvisor;
+}
+
+/// Does an act on the advisors. In a network game the act goes as a command of the turns, and each computer does it.
+void DoAct(Act act, uint8_t advisor, DebugAdvisor fields = {})
+{
+	fields.act = act;
+	fields.advisor = advisor;
+	debug_acts::Do(fields);
 }
 } // namespace
 
@@ -60,39 +72,38 @@ void Advisors::Draw() noexcept
 		ImGui::TextWrapped("The advisors' files did not load (Data/HelpSprite/MarkGood.Hd and MarkEvil.Hd)");
 	}
 	auto& control = system.GetController();
+	if (debug_acts::SendsCommands())
+	{
+		ImGui::TextWrapped("A network game: each act goes to every computer, and occurs at the next turn");
+	}
 	if (ImGui::Button("Both out"))
 	{
-		control.SpiritEject(1, false);
-		control.SpiritEject(2, false);
+		DoAct(Act::Out, debug_acts::k_BothAdvisors);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Both appear"))
 	{
-		control.SpiritEject(1, true);
-		control.SpiritEject(2, true);
+		DoAct(Act::Appear, debug_acts::k_BothAdvisors);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Both home"))
 	{
-		control.SpiritHome(1, false);
-		control.SpiritHome(2, false);
+		DoAct(Act::Home, debug_acts::k_BothAdvisors);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Both vanish"))
 	{
-		control.SpiritHome(1, true);
-		control.SpiritHome(2, true);
+		DoAct(Act::Vanish, debug_acts::k_BothAdvisors);
 	}
 	if (ImGui::Button("Cling at the bottom"))
 	{
-		control.SpiritCling(1, 0.25f, 0.95f);
-		control.SpiritCling(2, 0.75f, 0.95f);
+		DoAct(Act::Cling, debug_acts::k_GoodAdvisor, {.place = {0.25f, 0.95f}});
+		DoAct(Act::Cling, debug_acts::k_EvilAdvisor, {.place = {0.75f, 0.95f}});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Cling at the sides"))
 	{
-		control.SpiritCling(1, 0.0f, 0.0f);
-		control.SpiritCling(2, 0.0f, 0.0f);
+		DoAct(Act::Cling, debug_acts::k_BothAdvisors, {.place = {0.0f, 0.0f}});
 	}
 	ImGui::Text("Focus: %s", control.Focus() == k_GoodDude ? "good" : (control.Focus() == k_EvilDude ? "evil" : "none"));
 	for (int advisor = 0; advisor < k_Dudes; ++advisor)
@@ -176,61 +187,61 @@ void Advisors::DrawAdvisor(int advisor) noexcept
 
 	if (ImGui::Button("Out"))
 	{
-		control.SpiritEject(type, false);
+		DoAct(Act::Out, type);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Appear"))
 	{
-		control.SpiritEject(type, true);
+		DoAct(Act::Appear, type);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Home"))
 	{
-		control.SpiritHome(type, false);
+		DoAct(Act::Home, type);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Vanish"))
 	{
-		control.SpiritHome(type, true);
+		DoAct(Act::Vanish, type);
 	}
 
 	auto& place = _place.at(static_cast<size_t>(advisor));
 	ImGui::SliderFloat2("On the screen", place.data(), 0.0f, 1.0f);
+	const glm::vec2 there {place[0], place[1]};
 	if (ImGui::Button("Fly there"))
 	{
-		control.SpiritFly(type, place[0], place[1]);
+		DoAct(Act::Fly, type, {.place = there});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Cling there"))
 	{
-		control.SpiritCling(type, place[0], place[1]);
+		DoAct(Act::Cling, type, {.place = there});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Point there"))
 	{
-		const auto& screen = control.GetScreen();
-		control.SpiritScreenPoint(type, glm::ivec2(static_cast<int32_t>(static_cast<float>(screen.width) * place[0]),
-		                                           static_cast<int32_t>(static_cast<float>(screen.height) * place[1])));
+		DoAct(Act::ScreenPoint, type, {.place = there});
 	}
 	ImGui::Checkbox("Out in the world", &_inWorld.at(static_cast<size_t>(advisor)));
 	ImGui::SameLine();
 	if (ImGui::Button("Point at the camera's focus"))
 	{
-		control.SpiritPointPosition(type, Locator::camera::value().GetFocus(), _inWorld.at(static_cast<size_t>(advisor)));
+		DoAct(Act::PointAt, type,
+		      {.position = Locator::camera::value().GetFocus(), .inWorld = _inWorld.at(static_cast<size_t>(advisor))});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Look at it"))
 	{
-		control.SpiritLookAtPosition(type, Locator::camera::value().GetFocus());
+		DoAct(Act::LookAt, type, {.position = Locator::camera::value().GetFocus()});
 	}
 	if (ImGui::Button("Stop pointing"))
 	{
-		control.SpiritStopPointing(type);
+		DoAct(Act::StopPointing, type);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Stop looking"))
 	{
-		control.SpiritStopLooking(type);
+		DoAct(Act::StopLooking, type);
 	}
 
 	auto& anim = _anim.at(static_cast<size_t>(advisor));
@@ -248,8 +259,8 @@ void Advisors::DrawAdvisor(int advisor) noexcept
 	ImGui::SliderFloat("Speed", &_animSpeed.at(static_cast<size_t>(advisor)), 0.1f, 3.0f);
 	if (ImGui::Button("Play there"))
 	{
-		control.SpiritPlayAnim(type, place[0], place[1], static_cast<uint32_t>(anim),
-		                       _animSpeed.at(static_cast<size_t>(advisor)));
+		DoAct(Act::PlayAnim, type,
+		      {.place = there, .anim = static_cast<uint8_t>(anim), .speed = _animSpeed.at(static_cast<size_t>(advisor))});
 	}
 	ImGui::SameLine();
 	ImGui::Text(control.SpiritPlayingAnim(type) ? "playing" : "played");
@@ -259,6 +270,6 @@ void Advisors::DrawAdvisor(int advisor) noexcept
 	ImGui::SameLine();
 	if (ImGui::Button("Feel it"))
 	{
-		control.Dude(advisor).SetEmotion(static_cast<uint32_t>(emotion), 1.0f);
+		DoAct(Act::Feel, type, {.emotion = static_cast<uint8_t>(emotion)});
 	}
 }

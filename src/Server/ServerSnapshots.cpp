@@ -43,6 +43,8 @@ constexpr uint32_t k_OldestFormatVersion = 3;
 }
 /// The bit of the editor claim in the byte of the claims of a god or an observer
 constexpr uint8_t k_EditorClaimBit = 1;
+/// The bit of the debugger claim in the same byte. A file that has no such bit gives no debugger claim.
+constexpr uint8_t k_DebuggerClaimBit = 2;
 constexpr std::string_view k_SnapshotPrefix = "snapshot-";
 constexpr std::string_view k_SnapshotExtension = ".obsnap";
 constexpr std::string_view k_JournalPrefix = "journal-";
@@ -317,14 +319,17 @@ std::vector<uint8_t> EncodeRoom(const Room& room)
 	seatClaims.reserve(room.seats.size());
 	for (const auto& seat : room.seats)
 	{
-		seatClaims.push_back(seat.editor ? k_EditorClaimBit : uint8_t {0});
+		seatClaims.push_back(
+		    static_cast<uint8_t>((seat.editor ? k_EditorClaimBit : 0) | (seat.debugger ? k_DebuggerClaimBit : 0)));
 	}
 	PutBytes(out, seatClaims);
 	std::vector<uint8_t> watcherClaims;
 	watcherClaims.reserve(room.watcherEditors.size());
-	for (const bool editor : room.watcherEditors)
+	for (size_t i = 0; i < room.watcherEditors.size(); ++i)
 	{
-		watcherClaims.push_back(editor ? k_EditorClaimBit : uint8_t {0});
+		const bool debugger = i < room.watcherDebuggers.size() && room.watcherDebuggers[i];
+		watcherClaims.push_back(
+		    static_cast<uint8_t>((room.watcherEditors[i] ? k_EditorClaimBit : 0) | (debugger ? k_DebuggerClaimBit : 0)));
 	}
 	PutBytes(out, watcherClaims);
 	return out;
@@ -395,11 +400,19 @@ std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes)
 		for (size_t i = 0; i < seatClaims.size(); ++i)
 		{
 			room.seats[i].editor = (seatClaims[i] & k_EditorClaimBit) != 0;
+			room.seats[i].debugger = (seatClaims[i] & k_DebuggerClaimBit) != 0;
 		}
 		room.watcherEditors.reserve(watcherClaims.size());
+		room.watcherDebuggers.reserve(watcherClaims.size());
 		for (const auto claims : watcherClaims)
 		{
 			room.watcherEditors.push_back((claims & k_EditorClaimBit) != 0);
+			room.watcherDebuggers.push_back((claims & k_DebuggerClaimBit) != 0);
+		}
+		// A room with no observer that has the debugger claim keeps no list of the debugger claims
+		if (std::ranges::none_of(room.watcherDebuggers, [](bool debugger) { return debugger; }))
+		{
+			room.watcherDebuggers.clear();
 		}
 	}
 	if (!reader.Good() || !reader.AtEnd())

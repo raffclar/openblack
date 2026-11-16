@@ -40,6 +40,9 @@ public:
 	[[nodiscard]] bool WouldTakeEvent(const SDL_Event& event) const noexcept { return _open && TakesEvent(event); }
 	[[nodiscard]] bool IsOpen() const noexcept { return _open; }
 	[[nodiscard]] const std::string& GetName() const noexcept { return _name; }
+	/// Whether the window shows in a network game for a player with the debugger right. Such a window changes nothing of
+	/// the shared world, or it sends its changes as commands of the turns. Every other window stays closed there.
+	[[nodiscard]] virtual bool ShowsInNetworkGame() const noexcept { return false; }
 	virtual void Open() noexcept;
 	/// Shows the tab of this name the next time that the window draws; a window with no tabs does nothing
 	virtual void ShowTab([[maybe_unused]] std::string_view tab) noexcept {}

@@ -30,6 +30,8 @@ namespace openblack::debug::gui
 class StateHash final: public Window
 {
 public:
+	/// The window shows in a network game. It only reads the synced world.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	StateHash() noexcept;
 	~StateHash() noexcept override;
 

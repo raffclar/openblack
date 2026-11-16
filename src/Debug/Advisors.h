@@ -21,6 +21,8 @@ namespace openblack::debug::gui
 class Advisors final: public Window
 {
 public:
+	/// The window shows in a network game. Its acts on the advisors go as commands of the turns.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	Advisors() noexcept;
 
 protected:

@@ -27,6 +27,7 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
+#include "Common/DebugActRuns.h"
 #include "Debug/ImGuiUtils.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Registry.h"
@@ -202,7 +203,8 @@ void MeshViewer::Draw() noexcept
 	auto const& graphicsMesh = submesh->GetMesh();
 	ImGui::Text("Vertices %u, Indices %u", graphicsMesh.GetVertexBuffer().GetCount(), graphicsMesh.GetIndexBuffer().GetCount());
 
-	if (_selectedSubMesh >= 0 && ImGui::TreeNodeEx("Spawn"))
+	// A new mesh changes only the world of this computer, thus a network game does not make one
+	if (_selectedSubMesh >= 0 && !debug_acts::SendsCommands() && ImGui::TreeNodeEx("Spawn"))
 	{
 		ImGui::Text("Right click on map to set location");
 		ImGui::DragFloat3("Location", glm::value_ptr(_spawnLocation));

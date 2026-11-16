@@ -974,6 +974,92 @@ struct DebugLandSkip
 	[[nodiscard]] bool operator==(const DebugLandSkip&) const = default;
 };
 
+/// An act of the Advisors debug window on the advisors (debug_acts). Only a player with the debugger claim sends it in a
+/// network game, and the game server refuses it from every other player. Each computer does the act at the turn.
+struct DebugAdvisor
+{
+	enum class Act : uint8_t
+	{
+		/// The advisor flies out
+		Out,
+		/// The advisor appears where it is
+		Appear,
+		/// The advisor flies home
+		Home,
+		/// The advisor vanishes
+		Vanish,
+		/// The advisor flies to the place on the screen
+		Fly,
+		/// The advisor clings to the place on the screen
+		Cling,
+		/// The advisor points at the place on the screen
+		ScreenPoint,
+		/// The advisor points at the position in the world
+		PointAt,
+		/// The advisor looks at the position in the world
+		LookAt,
+		StopPointing,
+		StopLooking,
+		/// The advisor plays the animation at the place on the screen, at the speed
+		PlayAnim,
+		/// The advisor feels the emotion
+		Feel,
+	};
+	Act act {Act::Out};
+	/// The advisor: 1 the good one, 2 the evil one, or 0 for both
+	uint8_t advisor {0};
+	/// The place on the screen, as fractions across and down
+	glm::vec2 place {0.0f};
+	/// The position in the world
+	glm::vec3 position {0.0f};
+	/// When set, the advisor points out in the world, else near the screen
+	bool inWorld {false};
+	/// The animation (help::spirits::k_AnimSlots)
+	uint8_t anim {0};
+	/// The speed of the animation
+	float speed {1.0f};
+	/// The emotion
+	uint8_t emotion {0};
+
+	[[nodiscard]] bool operator==(const DebugAdvisor&) const = default;
+};
+
+/// A change of the World and the Bonus Creatures menus of the debug menu bar, or of the alignment slider of the Audio
+/// debug window (debug_acts). Only a player with the debugger claim sends it in a network game, and the game server
+/// refuses it from every other player. Each computer does the change at the turn.
+struct DebugWorld
+{
+	enum class Act : uint8_t
+	{
+		/// The time of the day goes to the value, in hours
+		TimeOfDay,
+		/// The alignment of the player goes to the value, -1 to 1
+		PlayerAlignment,
+		/// The bonus creature of the index is unlocked when the value is 1, and locked when it is 0
+		BonusCreature,
+	};
+	Act act {Act::TimeOfDay};
+	/// The player of an alignment (PlayerNames)
+	uint8_t player {0};
+	/// The bonus creature (creature_swap::Bonus)
+	uint8_t index {0};
+	float value {0.0f};
+
+	[[nodiscard]] bool operator==(const DebugWorld&) const = default;
+};
+
+/// The most bytes of a line of the debug Console that goes as a command
+inline constexpr size_t k_MostConsoleLineBytes = 512;
+
+/// A line of land script commands of the debug Console. Only a player with the debugger claim sends it in a network game,
+/// and the game server refuses it from every other player. Each computer runs the line at the turn.
+struct DebugConsoleLine
+{
+	std::string text;
+
+	[[nodiscard]] bool operator==(const DebugConsoleLine&) const = default;
+};
+
 /// What a command does
 using Action = std::variant<
     LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap, HandReport,
@@ -983,7 +1069,8 @@ using Action = std::variant<
     GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
     DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit,
     DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip, EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke,
-    EditorPath, EditorRemake, EditorMindLoad, EditorScript, EditorLandScript, EditorScriptProgram>;
+    EditorPath, EditorRemake, EditorMindLoad, EditorScript, EditorLandScript, EditorScriptProgram, DebugAdvisor, DebugWorld,
+    DebugConsoleLine>;
 
 /// A command and the player that sent it
 struct Command
@@ -1015,6 +1102,15 @@ struct Command
 	       std::holds_alternative<EditorPath>(action) || std::holds_alternative<EditorRemake>(action) ||
 	       std::holds_alternative<EditorMindLoad>(action) || std::holds_alternative<EditorScript>(action) ||
 	       std::holds_alternative<EditorLandScript>(action) || std::holds_alternative<EditorScriptProgram>(action);
+}
+
+/// Whether only a player with the debugger claim sends the command: the acts of the debug windows and of the menus of the
+/// debug menu bar. The game server refuses these commands from a player whose join ticket has no debugger claim. An
+/// observer does not send them.
+[[nodiscard]] constexpr bool OnlyDebuggerSends(const Action& action) noexcept
+{
+	return std::holds_alternative<DebugAdvisor>(action) || std::holds_alternative<DebugWorld>(action) ||
+	       std::holds_alternative<DebugConsoleLine>(action);
 }
 
 /// Whether the game server refuses the command from every player, also from a player with the editor claim. A network game

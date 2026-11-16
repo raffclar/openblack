@@ -20,6 +20,9 @@ namespace openblack::debug::gui
 class Gestures final: public Window
 {
 public:
+	/// The window shows in a network game. Its gestures go to the hand of this computer, which sends them as commands of the
+	/// turns.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	Gestures() noexcept;
 	/// The overlay is also drawn with the window closed while the testbed draws a gesture, and briefly after one is
 	/// recognised, so the scenarios can be watched

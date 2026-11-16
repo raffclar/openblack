@@ -22,6 +22,7 @@
 #include "Audio/AtmosPlayer.h"
 #include "Audio/MusicPlayer.h"
 #include "Camera/Camera.h"
+#include "Common/DebugActRuns.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -196,10 +197,24 @@ void Audio::Music() noexcept
 	if (Locator::alignmentSystem::has_value())
 	{
 		auto& alignment = Locator::alignmentSystem::value();
-		float own = alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE);
-		if (ImGui::SliderFloat("Player one's alignment", &own, -1.0f, 1.0f, "%.2f"))
+		// In a network game the slider keeps its own value while it moves, and it sends the value as a command of the turns
+		// when it lets go
+		const bool network = debug_acts::SendsCommands();
+		float own = _alignmentDrag.value_or(alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE));
+		const bool moved = ImGui::SliderFloat("Player one's alignment", &own, -1.0f, 1.0f, "%.2f");
+		if (network ? ImGui::IsItemDeactivatedAfterEdit() : moved)
 		{
-			alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, own);
+			debug_acts::Do(player_commands::DebugWorld {.act = player_commands::DebugWorld::Act::PlayerAlignment,
+			                                            .player = static_cast<uint8_t>(PlayerNames::PLAYER_ONE),
+			                                            .value = own});
+		}
+		if (network && ImGui::IsItemActive())
+		{
+			_alignmentDrag = own;
+		}
+		else
+		{
+			_alignmentDrag.reset();
 		}
 		ImGui::Text("Alignment at the camera %.2f (%s)", alignment.GetCameraAlignment(),
 		            std::array {"evil", "neutral", "good"}.at(

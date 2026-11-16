@@ -25,6 +25,8 @@ namespace openblack::debug::gui
 class MemoryUse final: public Window
 {
 public:
+	/// The window shows in a network game. It only reads the memory use.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	MemoryUse() noexcept;
 	MemoryUse(const MemoryUse&) = delete;
 	MemoryUse& operator=(const MemoryUse&) = delete;

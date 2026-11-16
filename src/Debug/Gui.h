@@ -72,6 +72,8 @@ private:
 	                                             const std::string& text, const glm::vec4& color, const ImVec2& pos,
 	                                             float arrowLength, std::function<void(void)> debugCallback) const noexcept;
 	bool ShowMenu() noexcept;
+	/// The Game Speed menu in a network game: it asks the game server to change the time of a turn for the whole room
+	void ShowRoomSpeedMenu() noexcept;
 	void ShowVillagerNames() noexcept;
 	/// Each miracle dispenser's miracle over it
 	void ShowDispenserNames() noexcept;
@@ -112,6 +114,10 @@ private:
 	    developer_tools::k_Built ? developer_tools::GuiMode::Full : developer_tools::GuiMode::Dormant;
 	/// A network game was live last frame
 	bool _networkSessionLive = false;
+	/// In a network game, the value of the alignment slider of the World menu while it moves
+	std::optional<float> _alignmentDrag;
+	/// In a network game, the value of the speed slider of the Game Speed menu while it moves
+	std::optional<float> _speedDrag;
 	/// The editor could open last frame
 	bool _editorCanOpen = developer_tools::k_Built;
 	/// Closes the editor when what the windows show changes, and tells the log

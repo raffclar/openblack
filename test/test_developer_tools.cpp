@@ -201,6 +201,19 @@ TEST(DeveloperTools, InTheFullModeTheEditorShowsOnlyWithTheEditorRightAndNoOther
 	}
 }
 
+TEST(DeveloperTools, AWindowThatShowsInANetworkGameShowsThereOnlyInTheFullMode)
+{
+	// A window that changes nothing of the shared world, or that sends its changes as commands, shows in a network game
+	EXPECT_TRUE(ShowsWindow(GuiMode::Full, true, false, false, true));
+	EXPECT_TRUE(ShowsWindow(GuiMode::Full, false, false, false, true));
+	EXPECT_FALSE(ShowsWindow(GuiMode::Full, true, false, false, false));
+	// The rule of the editor does not change
+	EXPECT_FALSE(ShowsWindow(GuiMode::Full, true, true, false, true));
+	// A player with only the editor right, or with no right, does not get the window
+	EXPECT_FALSE(ShowsWindow(GuiMode::EditorOnly, true, false, true, true));
+	EXPECT_FALSE(ShowsWindow(GuiMode::Dormant, true, false, true, true));
+}
+
 TEST(DeveloperTools, TheMenuBarShowsOnlyInTheFullModeWhileTheGameMenuIsOpen)
 {
 	EXPECT_TRUE(ShowsMenuBar(GuiMode::Full, true, true));

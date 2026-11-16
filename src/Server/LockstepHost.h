@@ -198,6 +198,9 @@ public:
 		/// The join ticket of the player has the editor claim. A seat that a snapshot gave back keeps the claim of the
 		/// snapshot.
 		bool editor {false};
+		/// The join ticket of the player has the debugger claim. A seat that a snapshot gave back keeps the claim of the
+		/// snapshot.
+		bool debugger {false};
 	};
 
 	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
@@ -217,6 +220,8 @@ public:
 		/// The join ticket of the observer has the editor claim. An observer that a snapshot gave back keeps the claim of the
 		/// snapshot.
 		bool editor {false};
+		/// The join ticket of the observer has the debugger claim
+		bool debugger {false};
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
@@ -354,6 +359,9 @@ public:
 	[[nodiscard]] uint32_t RefusedEditorCommands() const { return _refusedEditorCommands; }
 	/// The edits of the editor that the server refused for a value that no computer takes, such as a scale out of range
 	[[nodiscard]] uint32_t RefusedEditorValues() const { return _refusedEditorValues; }
+	/// The acts of the debug windows that the server refused because their player has no debugger claim, or for a value
+	/// that no computer takes
+	[[nodiscard]] uint32_t RefusedDebuggerCommands() const { return _refusedDebuggerCommands; }
 	/// The numbers of the observers that the server gave and whose leave is not in a turn yet, in order
 	[[nodiscard]] std::vector<uint8_t> ObserverNumbers() const;
 	/// One line for each god slot that had a player: the checksums compared and the same ones
@@ -381,6 +389,9 @@ private:
 		/// The join ticket of the player has the editor claim: the server takes the edits of the editor and the debug cheats
 		/// of the player
 		bool editor {false};
+		/// The join ticket of the player has the debugger claim: the server takes the acts of the debug windows of the
+		/// player
+		bool debugger {false};
 		/// The client sent the print of its game data. The server takes only the first.
 		bool printed {false};
 		/// The parts of the file of the script tabs of the editor that the connection sends now
@@ -423,7 +434,7 @@ private:
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
 	/// Gives a new session to an observer on a connection, with the number of the observer, and returns its secret. With
 	/// no secrets, the observer cannot come back.
-	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool editor);
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool editor, bool debugger);
 	/// A line of the room's chat from a player: it goes to every other player in a room on the local network, until the
 	/// start
 	void ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat);
@@ -617,6 +628,7 @@ private:
 	uint32_t _refusedBlocks {0};
 	uint32_t _refusedEditorCommands {0};
 	uint32_t _refusedEditorValues {0};
+	uint32_t _refusedDebuggerCommands {0};
 	WorldState _worldState;
 	PartListener _partListener;
 	PartsOfTurn _partsOfTurn;

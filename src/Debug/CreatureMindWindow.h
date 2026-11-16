@@ -28,6 +28,8 @@ namespace openblack::debug::gui
 class CreatureMindWindow final: public Window
 {
 public:
+	/// The window shows in a network game. It only shows the mind of a creature.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	CreatureMindWindow() noexcept;
 
 	/// Shows the mind of this creature
