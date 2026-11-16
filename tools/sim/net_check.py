@@ -1883,6 +1883,13 @@ def editor_debug(pids, focus, shots=None):
     return done
 
 
+def shared_effects(pid):
+    """The numbers of the running particle effects that each computer has (the shared random numbers), the oldest first"""
+    effects = items_of(inspector_answer(pid, "particles.effects", {}))
+    return sorted(effect["id"] for effect in effects
+                  if isinstance(effect, dict) and 0 < effect.get("id", 0) < 0x40000001)
+
+
 def editor_debug_things(pids, focus, shots=None):
     """The first client has the debugger claim and no editor claim. It presses each button of the Physics window, of the
     Particles tab of the Magic window, of the Temple villagers window and of the Path finding window, as the inspector
@@ -1908,17 +1915,14 @@ def editor_debug_things(pids, focus, shots=None):
     send(debugger, {"kind": "particle", "act": "pause", "paused": True})
     send(debugger, {"kind": "particle", "act": "pause", "paused": False})
     time.sleep(1.0)
-    effects = inspector_answer(debugger, "particles.effects", {}) or []
-    shared = sorted(effect["id"] for effect in (effects if isinstance(effects, list) else [])
-                    if isinstance(effect, dict) and 0 < effect.get("id", 0) < 0x40000001)
-    done["shared_effects"] = len(shared)
+    shared = shared_effects(debugger)
+    done["shared_effects"] = [len(shared)]
     if shared:
         send(debugger, {"kind": "particle", "act": "close", "effect": shared[-1]})
     send(debugger, {"kind": "particle", "act": "start", "type": 115, "position": [x + 5.0, y + 5.0, z]})
     time.sleep(1.0)
-    effects = inspector_answer(debugger, "particles.effects", {}) or []
-    shared = sorted(effect["id"] for effect in (effects if isinstance(effects, list) else [])
-                    if isinstance(effect, dict) and 0 < effect.get("id", 0) < 0x40000001)
+    shared = shared_effects(debugger)
+    done["shared_effects"].append(len(shared))
     if shared:
         send(debugger, {"kind": "particle", "act": "delete", "effect": shared[-1]})
     send(debugger, {"kind": "particle", "act": "close_all"})
@@ -1947,6 +1951,8 @@ def editor_debug_things(pids, focus, shots=None):
     time.sleep(2.0)
     problems = [f"{entry['params']}: {entry['answer']['error']}" for entry in done["answers"]
                 if isinstance(entry["answer"], dict) and entry["answer"].get("error")]
+    if not all(done["shared_effects"]):
+        problems.append(f"no effect of each computer to close or delete: {done['shared_effects']}")
     if problems:
         done["error"] = "; ".join(problems)
     return done
