@@ -31,10 +31,20 @@ namespace openblack::ecs
 class Registry;
 }
 
+namespace openblack::ecs::systems
+{
+class LivingActionSystemInterface;
+}
+
 /// The edits of the editor as commands of the turns. In a network game the editor does not change the world itself: it
 /// sends each edit to the game server, and each computer does the edit at the same turn.
 namespace openblack::editor
 {
+
+/// The smallest scale that the editor gives to the first axis of a thing
+inline constexpr float k_SmallestEditorScale = 0.05f;
+/// The largest scale that the editor gives to the first axis of a thing
+inline constexpr float k_LargestEditorScale = 50.0f;
 
 /// How the editor changes the things on the land. The game gives one that changes the world at once (a single player
 /// game) and one that sends commands (a network game). The tests give a fake.
@@ -51,6 +61,8 @@ public:
 	virtual void MoveTo(entt::entity entity, glm::vec3 position) = 0;
 	/// Turns a thing about the up axis by an angle in radians
 	virtual void Turn(entt::entity entity, float radians) = 0;
+	/// Changes the size of a thing to a new scale of its first axis. The other axes keep their ratio to the first axis.
+	virtual void ScaleTo(entt::entity entity, float firstAxis) = 0;
 	virtual void Remove(entt::entity entity) = 0;
 	/// Puts a copy of a thing beside it. Gives the copy, or none when the copy comes at a later turn or cannot be made.
 	virtual std::optional<entt::entity> Duplicate(entt::entity entity, glm::vec2 offset) = 0;
@@ -68,13 +80,14 @@ public:
 	std::optional<entt::entity> Place(const PlaceItem& item, glm::vec3 position, float yawRadians) override;
 	void MoveTo(entt::entity entity, glm::vec3 position) override;
 	void Turn(entt::entity entity, float radians) override;
+	void ScaleTo(entt::entity entity, float firstAxis) override;
 	void Remove(entt::entity entity) override;
 	std::optional<entt::entity> Duplicate(entt::entity entity, glm::vec2 offset) override;
 };
 
 /// The editor sends its edits as commands of the turns. A drag moves and turns the things in each frame, so the moves
 /// and the turns of a thing wait and go at most once for each turn: the last move, and the sum of the turns. The
-/// placements and the removals go at once, after the moves that wait.
+/// placements, the changes of size and the removals go at once, after the moves that wait.
 class CommandWrites final: public EditorWrites
 {
 public:
@@ -92,6 +105,7 @@ public:
 	std::optional<entt::entity> Place(const PlaceItem& item, glm::vec3 position, float yawRadians) override;
 	void MoveTo(entt::entity entity, glm::vec3 position) override;
 	void Turn(entt::entity entity, float radians) override;
+	void ScaleTo(entt::entity entity, float firstAxis) override;
 	void Remove(entt::entity entity) override;
 	std::optional<entt::entity> Duplicate(entt::entity entity, glm::vec2 offset) override;
 	/// Sends the moves and the turns that wait, if the turn changed since the last send
@@ -133,6 +147,17 @@ bool ApplyEdit(const player_commands::EditorEdit& edit);
 /// The writes of the editor in a network game: the commands go to the game server as commands of the player of this
 /// computer
 [[nodiscard]] std::unique_ptr<EditorWrites> MakeNetworkWrites();
+
+/// Why the world does not do an edit of a villager, or none when it does it. The rules keep no state.
+[[nodiscard]] std::optional<std::string_view> VillagerEditRefusal(const player_commands::EditorVillagerEdit& edit) noexcept;
+
+/// Does an edit of a villager at the turn, as each computer of a network game does it. The states of the villager change
+/// through the actions, and with no actions a state does not change. False when the world refused the edit.
+bool ApplyVillagerEdit(ecs::Registry& registry, const ecs::systems::LivingActionSystemInterface* actions,
+                       const player_commands::EditorVillagerEdit& edit);
+
+/// Sends an edit of a villager as a command of the turns. The edit comes at the next turn.
+void SendVillagerEdit(const player_commands::EditorVillagerEdit& edit);
 
 /// Sends a debug cheat of the player of this computer as a command of the turns. The cheat goes on at the next turn,
 /// also in a single player game.

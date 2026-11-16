@@ -698,6 +698,15 @@ TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 	EXPECT_TRUE(ServerTakesFromObserver(EditorCreatureAct {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(EditorCreatureAct {}, false));
 	EXPECT_FALSE(server::LeavesOut(EditorCreatureAct {}, false));
+	// A new creature of the creature tools is an edit of the editor too
+	EXPECT_TRUE(OnlyEditorSends(EditorCreatureSpawn {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorCreatureSpawn {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorCreatureSpawn {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorCreatureSpawn {}, false));
+	EXPECT_TRUE(OnlyEditorSends(EditorVillagerEdit {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorVillagerEdit {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorVillagerEdit {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorVillagerEdit {}, false));
 	EXPECT_FALSE(OnlyEditorSends(CreatureTattoo {}));
 	EXPECT_TRUE(ServerTakesFromObserver(CreatureTattoo {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(CreatureTattoo {}, false));
@@ -772,6 +781,38 @@ TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAGodWithTheEditor
 	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
 	EXPECT_EQ(bob.session.TakeEditorRefusals(), 0u);
 	// The worlds stay in step
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheEditsOfTheEditorOnlyWithValuesInTheirRange)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	alice.session.Send(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = Entity(5), .scale = 2.0f});
+	// A changed client can send a scale that the editor does not give
+	alice.session.Send(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = Entity(5), .scale = 500.0f});
+	alice.session.Send(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = entt::null, .scale = 2.0f});
+	bob.session.Send(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = Entity(5), .scale = 2.0f});
+	// A new creature with a size that the creature tools do not give
+	alice.session.Send(EditorCreatureSpawn {.species = 1, .scale = 40.0f});
+	// A life of a villager above full
+	alice.session.Send(EditorVillagerEdit {.villager = Entity(6), .field = EditorVillagerEdit::Field::Life, .amount = 2.0f});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorValues(), 4u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 1u);
+	const auto count = [this](size_t seat) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(turn_codec::CommandTag::EditorEdit));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0), 1u);
+	EXPECT_EQ(count(1), 0u);
+	// A refused value gives no line to the player with the editor claim
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }

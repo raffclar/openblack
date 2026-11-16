@@ -42,15 +42,19 @@
 ///   characters (u16) and each character as UTF-16 (u16). A taunt has its number (u32) in place of the characters.
 /// - An observer that comes in: the count of the characters of its name (u8), then each character as UTF-16 (u16).
 /// - An edit of the editor: the kind (u8), the thing, the kind of the item (u8), the type of the item (u32), the
-///   challenge (u32), the position and the angle (f32).
+///   challenge (u32), the position, the angle (f32) and the scale (f32).
 /// - A debug cheat: the cheat (u8), then 1 for on or 0 for off (u8).
 /// - An edit of a creature by the editor: the creature, the value (u8) and the amount (f32).
 /// - A skip to a land of the story: the land (u8), 2 to 5.
+/// - An edit of a villager by the editor: the villager, the field (u8), the slot of states (u8), the number (u32) and the
+///   amount (f32).
+/// - A new creature of the editor: the species (u8), the owner (u8), the position, the angle, the size, the alignment,
+///   the fatness and the strength (f32), 1 when it has tattoos or 0 (u8), then each tattoo as a tattoo command has it.
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 37;
+inline constexpr uint8_t k_Version = 38;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -128,6 +132,8 @@ enum class CommandTag : uint8_t
 	EditorCreatureEdit = 57,
 	EditorCreatureAct = 58,
 	DebugLandSkip = 59,
+	EditorVillagerEdit = 60,
+	EditorCreatureSpawn = 61,
 };
 
 /// The sizes of the parts of the frames, in bytes

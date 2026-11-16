@@ -109,3 +109,30 @@ TEST(EditorCreatureEdits, AnEditChangesOnlyItsOwnValue)
 		}
 	}
 }
+
+TEST(EditorCreatureEdits, TheRuleTakesANewCreatureOnlyWithTheValuesOfTheCreatureTools)
+{
+	using player_commands::EditorCreatureSpawn;
+	const EditorCreatureSpawn good {.species = static_cast<uint8_t>(CreatureType::Tiger),
+	                                .owner = static_cast<uint8_t>(PlayerNames::PLAYER_TWO),
+	                                .scale = creature_morph::k_MaxScale,
+	                                .alignment = -1.0f,
+	                                .fatness = 1.0f,
+	                                .strength = 0.0f};
+	EXPECT_FALSE(CreatureSpawnRefusal(good).has_value());
+	const auto refused = [&good](auto change) {
+		auto spawn = good;
+		change(spawn);
+		return CreatureSpawnRefusal(spawn).has_value();
+	};
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.species = 0; }));
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.species = static_cast<uint8_t>(CreatureType::_COUNT); }));
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.owner = static_cast<uint8_t>(PlayerNames::_COUNT); }));
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.scale = creature_morph::k_MinScale / 2.0f; }));
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.scale = creature_morph::k_MaxScale * 2.0f; }));
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.alignment = 1.5f; }));
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.fatness = -0.1f; }));
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.strength = 1.1f; }));
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.position.x = std::numeric_limits<float>::quiet_NaN(); }));
+	EXPECT_TRUE(refused([](EditorCreatureSpawn& spawn) { spawn.radians = std::numeric_limits<float>::infinity(); }));
+}

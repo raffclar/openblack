@@ -14,14 +14,18 @@
 #include <utility>
 
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DebugCheatSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/VillagerAge.h"
 #include "EditorEntities.h"
 #include "EditorMath.h"
 #include "Input/LocalPlayer.h"
@@ -46,6 +50,11 @@ void LocalWrites::MoveTo(entt::entity entity, glm::vec3 position)
 void LocalWrites::Turn(entt::entity entity, float radians)
 {
 	editor::Turn(entity, radians);
+}
+
+void LocalWrites::ScaleTo(entt::entity entity, float firstAxis)
+{
+	editor::ScaleTo(entity, firstAxis);
 }
 
 void LocalWrites::Remove(entt::entity entity)
@@ -86,6 +95,12 @@ void CommandWrites::MoveTo(entt::entity entity, glm::vec3 position)
 void CommandWrites::Turn(entt::entity entity, float radians)
 {
 	_waiting[entity].radians += radians;
+}
+
+void CommandWrites::ScaleTo(entt::entity entity, float firstAxis)
+{
+	FlushNow();
+	_submit(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = entity, .scale = firstAxis});
 }
 
 void CommandWrites::Remove(entt::entity entity)
@@ -138,7 +153,7 @@ void CommandWrites::FlushNow()
 std::optional<std::string_view> EditRefusal(const EditorEdit& edit) noexcept
 {
 	const auto finite = std::isfinite(edit.position.x) && std::isfinite(edit.position.y) && std::isfinite(edit.position.z) &&
-	                    std::isfinite(edit.radians);
+	                    std::isfinite(edit.radians) && std::isfinite(edit.scale);
 	if (!finite)
 	{
 		return "a value is not a finite number";
@@ -150,10 +165,10 @@ std::optional<std::string_view> EditRefusal(const EditorEdit& edit) noexcept
 		{
 			return "the palette has no such kind of item";
 		}
-		// A creature of the palette needs the creature tools of this computer, which a network game does not share
+		// A creature of the palette goes as a new creature of the creature tools, with the settings of the tools
 		if (edit.placeKind == static_cast<uint8_t>(PlaceKind::Creature))
 		{
-			return "the editor does not place a creature in a network game";
+			return "a creature goes as a new creature of the creature tools";
 		}
 		if (edit.placeType < 0)
 		{
@@ -166,6 +181,16 @@ std::optional<std::string_view> EditRefusal(const EditorEdit& edit) noexcept
 		if (edit.object == entt::null)
 		{
 			return "the edit names no thing";
+		}
+		return std::nullopt;
+	case EditorEdit::Kind::Scale:
+		if (edit.object == entt::null)
+		{
+			return "the edit names no thing";
+		}
+		if (edit.scale < k_SmallestEditorScale || edit.scale > k_LargestEditorScale)
+		{
+			return "the scale is not in the range of the editor";
 		}
 		return std::nullopt;
 	}
@@ -216,6 +241,9 @@ bool ApplyEdit(const EditorEdit& edit)
 	case EditorEdit::Kind::Remove:
 		editor::Remove(edit.object);
 		return true;
+	case EditorEdit::Kind::Scale:
+		editor::ScaleTo(edit.object, edit.scale);
+		return true;
 	case EditorEdit::Kind::Place:
 		break;
 	}
@@ -261,6 +289,103 @@ std::unique_ptr<EditorWrites> MakeNetworkWrites()
 		    }
 		    return CopyEditOf(Locator::entitiesRegistry::value(), entity, offset);
 	    });
+}
+
+std::optional<std::string_view> VillagerEditRefusal(const player_commands::EditorVillagerEdit& edit) noexcept
+{
+	using Field = player_commands::EditorVillagerEdit::Field;
+	using ecs::components::LivingAction;
+	using ecs::components::Villager;
+	if (edit.villager == entt::null)
+	{
+		return "the edit names no villager";
+	}
+	if (!std::isfinite(edit.amount))
+	{
+		return "a value is not a finite number";
+	}
+	const auto below = [&edit](auto count) { return edit.number < static_cast<uint32_t>(count); };
+	switch (edit.field)
+	{
+	case Field::Life:
+		return edit.amount >= 0.0f && edit.amount <= 1.0f ? std::nullopt
+		                                                  : std::optional<std::string_view>("the life is not from 0 to 1");
+	case Field::Food:
+		return edit.amount >= 0.0f ? std::nullopt : std::optional<std::string_view>("the food is below zero");
+	case Field::Age:
+		return std::nullopt;
+	case Field::LifeStage:
+		return below(Villager::LifeStage::_COUNT) ? std::nullopt : std::optional<std::string_view>("no such life stage");
+	case Field::Sex:
+		return below(Villager::Sex::_COUNT) ? std::nullopt : std::optional<std::string_view>("no such sex");
+	case Field::Tribe:
+		return below(Tribe::_COUNT) ? std::nullopt : std::optional<std::string_view>("no such tribe");
+	case Field::Role:
+		return below(VillagerNumber::_COUNT) ? std::nullopt : std::optional<std::string_view>("no such role");
+	case Field::State:
+		if (edit.index >= static_cast<uint8_t>(LivingAction::Index::_Count))
+		{
+			return "no such slot of states";
+		}
+		return below(VillagerStates::_COUNT) ? std::nullopt : std::optional<std::string_view>("no such state");
+	}
+	return "the edit has no such field";
+}
+
+bool ApplyVillagerEdit(ecs::Registry& registry, const ecs::systems::LivingActionSystemInterface* actions,
+                       const player_commands::EditorVillagerEdit& edit)
+{
+	using Field = player_commands::EditorVillagerEdit::Field;
+	using ecs::components::LivingAction;
+	using ecs::components::Villager;
+	if (VillagerEditRefusal(edit).has_value() || !registry.Valid(edit.villager) ||
+	    !registry.AllOf<Villager, LivingAction>(edit.villager))
+	{
+		return false;
+	}
+	auto& villager = registry.Get<Villager>(edit.villager);
+	switch (edit.field)
+	{
+	case Field::Life:
+		villager.life = edit.amount;
+		break;
+	case Field::Age:
+		ecs::villager_age::SetBirthTurnForAge(villager, edit.number);
+		break;
+	case Field::Food:
+		villager.food = edit.amount;
+		break;
+	case Field::LifeStage:
+		villager.lifeStage = static_cast<Villager::LifeStage>(edit.number);
+		break;
+	case Field::Sex:
+		villager.sex = static_cast<Villager::Sex>(edit.number);
+		break;
+	case Field::Tribe:
+		villager.tribe = static_cast<Tribe>(edit.number);
+		break;
+	case Field::Role:
+		villager.number = static_cast<VillagerNumber>(edit.number);
+		break;
+	case Field::State:
+		if (actions == nullptr)
+		{
+			return false;
+		}
+		actions->VillagerSetState(registry.Get<LivingAction>(edit.villager), static_cast<LivingAction::Index>(edit.index),
+		                          static_cast<VillagerStates>(edit.number), true);
+		break;
+	}
+	registry.SetDirty();
+	return true;
+}
+
+void SendVillagerEdit(const player_commands::EditorVillagerEdit& edit)
+{
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(edit);
+	}
 }
 
 void SendDebugCheat(debug_cheats::Cheat cheat, bool on)

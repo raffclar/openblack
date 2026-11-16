@@ -19,6 +19,8 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/DebugCheats.h"
+#include "Editor/EditorCreatureEdits.h"
+#include "Editor/EditorNetworkEdits.h"
 #include "Gui/TextDatabase.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameBuildId.h"
@@ -1090,6 +1092,29 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoEditorClaim),
 		                                                .commands = static_cast<uint32_t>(refused)});
 	}
+	// The server also refuses an edit of the editor with a value that no computer takes, such as a scale out of the range
+	// of the editor. The editor of the game does not send such an edit, so the player gets no line. The log tells each one.
+	const auto badValue = std::erase_if(actions, [this, &peer](const auto& action) {
+		std::optional<std::string_view> refusal;
+		if (const auto* edit = std::get_if<player_commands::EditorEdit>(&action))
+		{
+			refusal = editor::EditRefusal(*edit);
+		}
+		else if (const auto* spawn = std::get_if<player_commands::EditorCreatureSpawn>(&action))
+		{
+			refusal = editor::CreatureSpawnRefusal(*spawn);
+		}
+		else if (const auto* villager = std::get_if<player_commands::EditorVillagerEdit>(&action))
+		{
+			refusal = editor::VillagerEditRefusal(*villager);
+		}
+		if (refusal.has_value())
+		{
+			Log(spdlog::level::warn, fmt::format("The server refuses an edit of the editor of {}: {}", peer.name, *refusal));
+		}
+		return refusal.has_value();
+	});
+	_refusedEditorValues += static_cast<uint32_t>(badValue);
 }
 
 void LockstepHost::LogDebugCheats(const Peer& peer, const std::vector<player_commands::Action>& actions)
