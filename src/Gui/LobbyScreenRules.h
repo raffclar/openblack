@@ -92,6 +92,9 @@ using MeasureText = std::function<float(std::u16string_view text)>;
 [[nodiscard]] std::u16string ServersText(const std::optional<lobby_api::PoolState>& pool);
 /// The line about the map of a session: its name, its host, and the bytes to download for a map of the service
 [[nodiscard]] std::u16string DetailText(const lobby_api::LobbySummary& lobby, std::u16string_view mapName);
+/// The name of the thumbnail of a session's map: the map's file name with no folder and no extension, in lower case.
+/// The picture comes from "Online Maps/<name>.thm". Empty when the map is not a land of a network game.
+[[nodiscard]] std::string ThumbnailName(const lobby_api::LobbyMap& map);
 
 /// What a join of the picked session does
 enum class JoinStep : uint8_t

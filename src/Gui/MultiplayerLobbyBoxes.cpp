@@ -92,6 +92,11 @@ constexpr int k_AnswerArrowSize = 32;
 // the main lobby room takes its right (deviation 267).
 constexpr DialogRect k_ListRect {.min = {30, 162}, .max = {520, 405}};
 constexpr std::array<int, screens::k_ColumnCount + 1> k_ColumnLeft {34, 186, 268, 368, 418, 516};
+/// The thumbnail of the map of the picked session (deviation 274) is at the right of the filters and of the two lines
+/// under them. These lines then stop at the left of the thumbnail.
+constexpr DialogRect k_LobbyThumbnailPlace {.min = {444, 410}, .max = {520, 486}};
+constexpr int k_LineRight = 520;
+constexpr int k_LineRightBesideThumbnail = 438;
 
 // The panel of the main lobby room, at the right of the list and its buttons
 constexpr DialogRect k_RoomHeading {.min = {535, 104}, .max = {770, 132}};
@@ -235,10 +240,10 @@ void MultiplayerBoxes::BuildLobbyList(Dialog& dialog)
 	_showOtherVersions =
 	    addFilter(314, u"Other versions", filter.showOtherVersions, &online::lobby::ListFilter::showOtherVersions);
 
-	_detail =
-	    &dialog.Add<StaticText>(DialogRect {.min = {30, 440}, .max = {520, 464}}, std::u16string(), Layout::Left, Small());
-	_servers =
-	    &dialog.Add<StaticText>(DialogRect {.min = {30, 464}, .max = {520, 488}}, std::u16string(), Layout::Left, Small());
+	_detail = &dialog.Add<StaticText>(DialogRect {.min = {30, 440}, .max = {k_LineRight, 464}}, std::u16string(), Layout::Left,
+	                                  Small());
+	_servers = &dialog.Add<StaticText>(DialogRect {.min = {30, 464}, .max = {k_LineRight, 488}}, std::u16string(), Layout::Left,
+	                                   Small());
 
 	// The buttons of the list. "Create session" is the user's name for the button (2026-11-12).
 	auto& create = dialog.Add<Button>(DialogRect {.min = {30, 492}, .max = {190, 524}}, u"Create session", Mid());
@@ -293,6 +298,19 @@ void MultiplayerBoxes::SyncLobbyList()
 	                    : (_shownLobbies.empty() ? std::u16string(u"No open game. Click Create session.")
 	                                             : std::u16string(u"Click a game, then Join Game."));
 	_servers->text = screens::ServersText(_frontEnd->GetServerPool());
+
+	// The thumbnail of the picked session's map, from the resource cache. A map with no thumbnail shows no picture.
+	auto thumbnailName = picked != nullptr ? screens::ThumbnailName(picked->map) : std::string();
+	if (thumbnailName != _lobbyThumbnailName)
+	{
+		_lobbyThumbnailName = std::move(thumbnailName);
+		_thumbnail = !_lobbyThumbnailName.empty() && _thumbnailSource ? _thumbnailSource(_lobbyThumbnailName) : nullptr;
+	}
+	_thumbnailPlace = k_LobbyThumbnailPlace;
+	SyncPictures(true, false);
+	const auto lineRight = _thumbnailShown ? k_LineRightBesideThumbnail : k_LineRight;
+	_detail->rect.max.x = lineRight;
+	_servers->rect.max.x = lineRight;
 
 	// The main lobby room: the panel changes only when the room changed, which keeps the scroll of the people
 	const auto& room = _frontEnd->GetMainRoom();

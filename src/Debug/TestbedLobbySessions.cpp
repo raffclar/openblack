@@ -10,6 +10,8 @@
 #include "TestbedLobbySessions.h"
 
 #include <algorithm>
+#include <array>
+#include <string_view>
 #include <utility>
 
 #include <fmt/format.h>
@@ -41,6 +43,19 @@ std::string Account(const lobby_api::AccountRef& account)
 	return fmt::format(R"({{"id":{},"name":"{}"}})", account.id, account.name);
 }
 
+/// The file of a map of the demonstration. The maps for two, three and four gods are the lands of the game's "Online
+/// Maps" folder, which have thumbnails. The other maps have a file of their name.
+std::string MapFile(std::string_view map)
+{
+	constexpr std::array<std::pair<std::string_view, std::string_view>, 3> k_GameLands {{
+	    {"Two gods", "mpm_2p_1"},
+	    {"Three gods", "mpm_3p_1"},
+	    {"Four gods", "mpm_4p_1"},
+	}};
+	const auto land = std::ranges::find(k_GameLands, map, &std::pair<std::string_view, std::string_view>::first);
+	return fmt::format("Online Maps/{}.map", land != k_GameLands.end() ? land->second : map);
+}
+
 lobby_api::LobbySummary Summary(std::string id, std::string name, lobby_api::AccountRef host, std::string map, int32_t gods,
                                 int32_t slots, LobbyState state, std::string build)
 {
@@ -48,7 +63,7 @@ lobby_api::LobbySummary Summary(std::string id, std::string name, lobby_api::Acc
 	    .id = std::move(id),
 	    .name = std::move(name),
 	    .host = std::move(host),
-	    .map = {.file = "Online Maps/" + map + ".map", .name = map, .sha256 = std::string(k_RingHash), .size = 182'000},
+	    .map = {.file = MapFile(map), .name = map, .sha256 = std::string(k_RingHash), .size = 182'000},
 	    .gods = gods,
 	    .godSlots = slots,
 	    .openSlots = slots,

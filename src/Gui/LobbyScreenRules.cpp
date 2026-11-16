@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 
 #include "MultiplayerFrontEndRules.h"
+#include "Online/OnlineMapLand.h"
 #include "TextDatabase.h"
 
 namespace openblack::gui::lobby_screens
@@ -231,6 +232,11 @@ std::u16string ServersText(const std::optional<lobby_api::PoolState>& pool)
 		return u"All servers are in use: your game will wait for a free one.";
 	}
 	return Utf16(fmt::format("Servers: {} of {} free", pool->free, pool->total));
+}
+
+std::string ThumbnailName(const lobby_api::LobbyMap& map)
+{
+	return online_map_land::MapName(map.file);
 }
 
 std::u16string DetailText(const lobby_api::LobbySummary& lobby, std::u16string_view mapName)

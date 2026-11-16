@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 35> boxes = {{
+	const std::array<BoxScenario, 36> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -176,6 +176,12 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The status column shows Open, Full, \"In game 0:42\", \"Waiting for a server (2)\" and \"(Wrong Version)\". "
 	     "The line under the list shows that all servers are in use. The buttons \"Create session\", \"Quick join\" "
 	     "and \"Join by code\" are under the filters."},
+	    {"multiplayer.lobby_map_picture", "The lobby sessions: the picture of the map", Stage::LobbyMapPicture,
+	     "The player logs in as Alice. The demonstration lobby gives six sessions, and \"Clan practice\" is picked. Its "
+	     "map is the land of the game for two gods.",
+	     "The thumbnail of Bombardment shows at the right of the filters, under the list. The line that starts with \"Two "
+	     "gods - Host: Carol\" and the line about the servers stop at the left of the picture. A click on \"Friday Ring\" "
+	     "removes the picture, because its map has no thumbnail."},
 	    {"multiplayer.lobby_create", "The lobby sessions: Create session", Stage::LobbyCreate,
 	     "The player opens the box \"Create session\" from the lobby list.",
 	     "The box has the name \"<profile>'s game\", the list of the maps with \"Ring of gods (8) - download\" picked, 8 "
