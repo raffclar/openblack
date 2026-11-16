@@ -76,6 +76,13 @@ public:
 		return pending;
 	}
 
+	[[nodiscard]] size_t HeldCount() const override
+	{
+		size_t held = 0;
+		ForEachManager([&held](const auto& manager) { held += manager.HeldCount(); });
+		return held;
+	}
+
 	[[nodiscard]] size_t LoadingCount() const override
 	{
 		if (_loadQueue.GetThreadCount() == 0)

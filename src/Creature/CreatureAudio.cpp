@@ -9,6 +9,7 @@
 
 #include "CreatureAudio.h"
 
+#include <cctype>
 #include <cmath>
 
 #include <algorithm>
@@ -317,6 +318,15 @@ std::string creature_audio::VoiceBank(std::string_view rigBankName, CreatureType
 	std::ranges::transform(name, name.begin(),
 	                       [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; });
 	return name + ".sad";
+}
+
+bool creature_audio::IsSpeciesVoiceBank(std::string_view file)
+{
+	return std::ranges::any_of(k_SpeciesVoiceBanks, [file](std::string_view bank) {
+		return std::ranges::equal(bank, file, [](char a, char b) {
+			return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+		});
+	});
 }
 
 bool creature_audio::IsHeard(EventKind kind, const Gate& gate)

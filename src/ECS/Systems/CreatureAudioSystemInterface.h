@@ -44,6 +44,10 @@ public:
 	/// Sounds an event on a creature at once under the same rules as the sounds of its animations, for the sounds that
 	/// its actions make: the acknowledgement of an order and the refusal when it has no way to go
 	virtual void PlayAction(entt::entity creature, const creature_audio::SoundEvent& event) = 0;
+	/// Asks the loading threads for the samples of the voice bank of each creature's species. The web game holds these
+	/// banks back from the start (see RegisterWorldData), so that only the species in the world get their samples. Update
+	/// asks for the bank of each creature too.
+	virtual void AskForVoiceBanks() = 0;
 };
 
 } // namespace openblack::ecs::systems
