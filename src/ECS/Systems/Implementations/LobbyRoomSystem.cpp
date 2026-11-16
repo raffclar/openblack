@@ -12,6 +12,7 @@
 #include "LobbyRoomSystem.h"
 
 #include <algorithm>
+#include <chrono>
 #include <utility>
 
 #include <LobbiesJson.h>
@@ -90,12 +91,32 @@ bool IsPathId(std::string_view id)
 
 } // namespace
 
-LobbyRoomSystem::LobbyRoomSystem(LobbyClientSystemInterface& client, std::string buildId, Clock clock)
+LobbyRoomSystem::LobbyRoomSystem(LobbyClientSystemInterface& client, std::string buildId, Clock clock,
+                                 BuildHashStart startBuildHash)
     : _client(client)
     , _buildId(std::move(buildId))
+    , _startBuildHash(std::move(startBuildHash))
     , _clock(std::move(clock))
 {
 	_listener = _client.AddEventListener([this](const lobby_api::PushEvent& event) { HandleEvent(event); });
+}
+
+void LobbyRoomSystem::StartBuildHash()
+{
+	if (_startBuildHash)
+	{
+		_buildHash = std::exchange(_startBuildHash, {})();
+	}
+}
+
+std::string LobbyRoomSystem::BuildHash()
+{
+	StartBuildHash();
+	if (!_buildHash.valid() || _buildHash.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+	{
+		return {};
+	}
+	return _buildHash.get();
 }
 
 LobbyRoomSystem::~LobbyRoomSystem()
@@ -143,6 +164,8 @@ void LobbyRoomSystem::HandleEvent(const lobby_api::PushEvent& event)
 
 void LobbyRoomSystem::RefreshList(LobbyCallback<LobbyDone> callback)
 {
+	// The list comes before a make or a join, so the build hash is ready for them
+	StartBuildHash();
 	std::vector<online::HttpHeader> headers;
 	if (_listTag.has_value())
 	{
@@ -298,6 +321,7 @@ void LobbyRoomSystem::Create(lobby_api::LobbyCreateRequest request, LobbyCallbac
 	// A room that ended goes before the player enters a different room
 	DismissRoom();
 	request.buildId = _buildId;
+	request.buildHash = BuildHash();
 	_client.SendApiCall(HttpMethod::Post, "/lobbies", lobby_api::ToJson(request), {},
 	                    [this, callback = std::move(callback)](LobbyResult<HttpResponse>&& result) {
 		                    if (!result.Ok())
@@ -334,6 +358,7 @@ void LobbyRoomSystem::Join(std::string lobbyId, std::optional<std::string> passw
 	const lobby_api::LobbyJoinRequest request {
 	    .password = std::move(password),
 	    .buildId = _buildId,
+	    .buildHash = BuildHash(),
 	    .role = role,
 	    .slot = slot,
 	};
@@ -403,7 +428,7 @@ void LobbyRoomSystem::QuickJoin(LobbyCallback<LobbyDone> callback)
 	// A room that ended goes before the player enters a different room
 	DismissRoom();
 	_client.SendApiCall(HttpMethod::Post, "/lobbies/quick-join",
-	                    lobby_api::ToJson(lobby_api::QuickJoinRequest {.buildId = _buildId}), {},
+	                    lobby_api::ToJson(lobby_api::QuickJoinRequest {.buildId = _buildId, .buildHash = BuildHash()}), {},
 	                    [this, callback = std::move(callback)](LobbyResult<HttpResponse>&& result) {
 		                    if (!result.Ok())
 		                    {

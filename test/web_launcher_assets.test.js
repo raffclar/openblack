@@ -4,8 +4,9 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const {
-  isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hexText, refusalReason, fetchAssetIndex, fetchAsset,
-  keepAssets, streamAssets, isStartAsset, planAssetStart, planAssetPrefetch, assetBlockBounds, assetBlockRange,
+  isSafeAssetPath, parseAssetIndex, planAssetCache, assetAddress, hashedAssetAddress, assetRequest, hexText,
+  refusalReason, fetchAssetIndex, fetchAsset, keepAssets, askToKeepStorage, streamAssets, isStartAsset, planAssetStart,
+  planAssetPrefetch, assetBlockBounds, assetBlockRange,
   parseContentRange,
   k_AssetIndexAddress, k_AssetCacheFolder,
 } = require('../web/page/launcher-assets.js');
@@ -54,16 +55,20 @@ const fakeResponse = (status, text, headers = {}) => ({
 });
 
 // A fake fetch that gives the site's files. It counts the requests for each address.
+// It also keeps the cache mode of each request.
 const fakeSite = (files, { status = 200, index = indexText(files), change = {} } = {}) => {
   const requests = new Map();
+  const caches = new Map();
   const fetchFile = async (address, options = {}) => {
     const range = options.headers && options.headers.Range;
     const key = range ? `${address} ${range}` : address;
     requests.set(key, (requests.get(key) ?? 0) + 1);
+    caches.set(key, options.cache);
     if (address === k_AssetIndexAddress) {
       return fakeResponse(status, status === 200 ? index : 'Your account cannot download the game files yet.');
     }
-    const path = Object.keys(files).find((name) => assetAddress(name) === address);
+    const path = Object.keys(files).find((name) =>
+      assetAddress(name) === address || hashedAssetAddress(sha(files[name])) === address);
     if (path === undefined) {
       return fakeResponse(404, '');
     }
@@ -76,7 +81,7 @@ const fakeSite = (files, { status = 200, index = indexText(files), change = {} }
     }
     return fakeResponse(200, text);
   };
-  return { fetchFile, requests };
+  return { fetchFile, requests, caches };
 };
 
 // A fake folder of the private storage of the site
@@ -153,7 +158,10 @@ check('the list gives each file with its path, size and SHA-256', () => {
   assert.equal(index.files.length, 4);
   assert.equal(index.totalBytes, 24);
   assert.equal(index.archive, 'a'.repeat(64));
-  assert.deepEqual(index.files[0], { path: 'Data/AllMeshes.g3d', size: 6, sha256: sha('meshes') });
+  assert.deepEqual(index.files[0], {
+    path: 'Data/AllMeshes.g3d', size: 6, sha256: sha('meshes'), address: '/assets/files/Data/AllMeshes.g3d',
+    hashed: false,
+  });
 });
 
 check('the page refuses a list that is not correct', () => {
@@ -312,10 +320,11 @@ const blocksOf = (text) => {
   }
   return blocks;
 };
-const streamedText = (files = k_Streamed, blocked = ['Audio/Music/align/Good.sad', 'Data/INTRO.bik']) =>
+const streamedText = (files = k_Streamed, blocked = ['Audio/Music/align/Good.sad', 'Data/INTRO.bik'], extra = {}) =>
   JSON.stringify({
     format: 2,
     block_size: k_BlockSize,
+    ...extra,
     files: Object.fromEntries(Object.entries(files).map(([path, text]) => [path, {
       size: Buffer.byteLength(text), sha256: sha(text), ...(blocked.includes(path) ? { blocks: blocksOf(text) } : {}),
     }])),
@@ -431,6 +440,88 @@ check('before the start the page gets only the start files and the first block o
   assert.equal(bank.file, null);
   assert.equal(Buffer.from(bank.blocks[0].bytes).toString(), 'HEAD');
   assert.deepEqual(bank.blocks.slice(1), [null, null, null, null, null, null]);
+});
+
+check('a list with hashed addresses gives each file at its address by SHA-256', () => {
+  const files = { 'Data/AllMeshes.g3d': 'meshes', 'Online Maps/mpm_2p_1.map': 'two gods' };
+  const hashed = parseAssetIndex(indexText(files, { format: 2, hashed_addresses: true })).files;
+  assert.deepEqual(hashed.map((file) => [file.address, file.hashed]), [
+    [`/assets/sha256/${sha('meshes')}`, true], [`/assets/sha256/${sha('two gods')}`, true]]);
+  const byPath = parseAssetIndex(indexText(files)).files;
+  assert.deepEqual(byPath.map((file) => [file.address, file.hashed]), [
+    ['/assets/files/Data/AllMeshes.g3d', false], ['/assets/files/Online%20Maps/mpm_2p_1.map', false]]);
+  assert.equal(parseAssetIndex(indexText(files, { hashed_addresses: false })).files[0].hashed, false);
+  assert.throws(() => parseAssetIndex(indexText(files, { hashed_addresses: 'yes' })), /hashed_addresses/);
+});
+
+check('only a file at its address by SHA-256 can come from the cache of the browser', () => {
+  assert.deepEqual(assetRequest({ path: 'Data/a b.txt', address: '/assets/sha256/x', hashed: true }),
+    { address: '/assets/sha256/x', cache: 'default' });
+  assert.deepEqual(assetRequest({ path: 'Data/a b.txt', address: '/assets/files/Data/a%20b.txt', hashed: false }),
+    { address: '/assets/files/Data/a%20b.txt', cache: 'no-store' });
+  // A file that a test makes with no address has its address by path
+  assert.deepEqual(assetRequest({ path: 'Data/a b.txt' }),
+    { address: '/assets/files/Data/a%20b.txt', cache: 'no-store' });
+});
+
+check('with hashed addresses the page gets the files and the blocks at their addresses by SHA-256', async () => {
+  const root = new FakeFolder();
+  const text = streamedText(k_Streamed, ['Audio/Music/align/Good.sad', 'Data/INTRO.bik'], { hashed_addresses: true });
+  const site = fakeSite(k_Streamed, { index: text });
+  const { index } = await fetchAssetIndex(site.fetchFile);
+  const { store } = await streamAssets(index, { fetchFile: site.fetchFile, digest, root });
+  const music = hashedAssetAddress(sha(k_Streamed['Audio/Music/align/Good.sad']));
+  assert.deepEqual([...site.requests.keys()].sort(), [k_AssetIndexAddress,
+    hashedAssetAddress(sha('meshes')), hashedAssetAddress(sha('the intro film')), hashedAssetAddress(sha('land one')),
+    `${music} bytes=0-3`].sort());
+  await store.obtain(numberOf(index.files, 'Data/Landscape/Land2.lnd'));
+  assert.equal(site.requests.get(hashedAssetAddress(sha('land two'))), 1);
+  for (const [key, cache] of site.caches) {
+    assert.equal(cache, key === k_AssetIndexAddress ? 'no-cache' : 'default', key);
+  }
+});
+
+check('the page asks the browser to keep the storage, but not when the browser keeps it already', async () => {
+  const fakeStorage = (persisted, answer) => {
+    const storage = { asked: 0, persisted: async () => persisted };
+    storage.persist = async () => {
+      storage.asked += 1;
+      if (answer instanceof Error) {
+        throw answer;
+      }
+      return answer;
+    };
+    return storage;
+  };
+  const kept = fakeStorage(true, false);
+  assert.equal(await askToKeepStorage(kept), true);
+  assert.equal(kept.asked, 0);
+  const given = fakeStorage(false, true);
+  assert.equal(await askToKeepStorage(given), true);
+  assert.equal(given.asked, 1);
+  assert.equal(await askToKeepStorage(fakeStorage(false, false)), false);
+  assert.equal(await askToKeepStorage(fakeStorage(false, new Error('SecurityError'))), null);
+  assert.equal(await askToKeepStorage(undefined), null);
+  assert.equal(await askToKeepStorage({}), null);
+});
+
+check('the voice banks of the species come after the start, after the files of the miracles', () => {
+  const files = parseAssetIndex(indexText({
+    'Audio/SFX/Creature/btiger.sad': 'tiger',
+    'Audio/SFX/Creature/creature.sad': 'every creature',
+    'Data/Spells/Anims/heal.anm': 'heal',
+    'Audio/SFX/Creature/BCOW.sad': 'cow',
+    'Audio/SFX/Game/InGame.sad': 'hand',
+  })).files;
+  assert.equal(isStartAsset('Audio/SFX/Creature/btiger.sad'), false);
+  assert.equal(isStartAsset('AUDIO/SFX/CREATURE/BGREEK.SAD'), false);
+  assert.equal(isStartAsset('Audio/SFX/Creature/creature.sad'), true);
+  assert.equal(isStartAsset('Audio/SFX/Game/InGame.sad'), true);
+  assert.equal(isStartAsset('Audio/Dialogue/HelpSprites.sad'), true);
+  assert.deepEqual(planAssetStart(files).whole.map((number) => files[number].path),
+    ['Audio/SFX/Creature/creature.sad', 'Audio/SFX/Game/InGame.sad']);
+  assert.deepEqual(planAssetPrefetch(files, {}).map((number) => files[number].path),
+    ['Data/Spells/Anims/heal.anm', 'Audio/SFX/Creature/btiger.sad', 'Audio/SFX/Creature/BCOW.sad']);
 });
 
 check('a second visit gets nothing again, and all the files come with the option all', async () => {

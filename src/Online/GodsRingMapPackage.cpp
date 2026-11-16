@@ -13,6 +13,7 @@
 #include <OnlineMapFile.h>
 
 #include "3D/GodsRingLand.h"
+#include "CustomMapPackage.h"
 #include "GodsRingMap.h"
 #include "PlayerSlots.h"
 #include "Sha256.h"
@@ -110,7 +111,18 @@ gods_ring_map_package::AssembleDownloaded(const lobby_api::OnlineMap& map, std::
 	}
 	if (map.file != gods_ring_map::k_File)
 	{
-		return Failure::OtherMap;
+		// A custom land: its package needs no game data
+		auto custom = custom_map_package::Assemble(package);
+		if (const auto* failure = std::get_if<Failure>(&custom); failure != nullptr)
+		{
+			return *failure;
+		}
+		auto& assembled = std::get<custom_map_package::Assembled>(custom);
+		if (assembled.manifest.file != map.file)
+		{
+			return Failure::OtherMap;
+		}
+		return std::move(assembled.map);
 	}
 	if (!templateMap.has_value())
 	{

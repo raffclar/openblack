@@ -14,11 +14,13 @@
 #include <fstream>
 #include <iterator>
 #include <span>
+#include <string>
 #include <vector>
 
 #include <OnlineMapFile.h>
 
 #include "FileSystem/FileSystemInterface.h"
+#include "Online/CustomMapPackage.h"
 #include "Online/DownloadTestMap.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
@@ -26,6 +28,7 @@
 #include "Online/HttpClientInterface.h"
 #include "Online/OnlineMapLand.h"
 #include "Online/OnlineMapStoreInterface.h"
+#include "Online/Sha256.h"
 
 namespace openblack::server
 {
@@ -132,7 +135,77 @@ std::variant<CustomMapRead, std::string> ReadCustomMap(const std::filesystem::pa
 	{
 		return "the file " + path.generic_string() + " is not a land of a network game of at most 64 MiB";
 	}
-	return CustomMapRead {.file = online_map_land::MapName(name), .bytes = std::move(*bytes)};
+	auto file = online_map_land::MapName(name);
+	return CustomMapRead {.file = file, .name = file, .bytes = std::move(*bytes)};
+}
+
+std::variant<CustomMapRead, std::string> ReadMapPackage(const std::filesystem::path& path)
+{
+	const auto package = ReadBytes(path);
+	if (!package.has_value())
+	{
+		return "the file " + path.generic_string() + " does not read";
+	}
+	if (package->size() > online::k_MostLargeAnswerBytes)
+	{
+		return "the file " + path.generic_string() + " is larger than 64 MiB";
+	}
+	auto assembled = custom_map_package::Assemble(*package);
+	if (const auto* failure = std::get_if<gods_ring_map_package::Failure>(&assembled); failure != nullptr)
+	{
+		return "the map package " + path.generic_string() +
+		       " gives no land: " + std::string(gods_ring_map_package::TextOf(*failure));
+	}
+	auto& land = std::get<custom_map_package::Assembled>(assembled);
+	return CustomMapRead {
+	    .file = land.manifest.file,
+	    .name = land.manifest.name,
+	    .bytes = std::move(land.map),
+	    .packageSha256 = online::sha256::HexOf(*package),
+	    .packageSize = static_cast<int64_t>(package->size()),
+	};
+}
+
+std::variant<std::filesystem::path, std::string> WriteCustomMapPackage(const std::filesystem::path& customMap,
+                                                                       std::string_view name, int32_t players,
+                                                                       const std::filesystem::path& folder)
+{
+	auto read = ReadCustomMap(customMap);
+	if (const auto* error = std::get_if<std::string>(&read); error != nullptr)
+	{
+		return *error;
+	}
+	const auto& map = std::get<CustomMapRead>(read);
+	const auto package =
+	    custom_map_package::Make(map.file, name.empty() ? std::string_view(map.file) : name, players, map.bytes);
+	if (!package.has_value())
+	{
+		return "the map package of " + customMap.generic_string() + " could not be made: the script must load the landscape " +
+		       map.file + ".lnd, the name has 1 to 64 characters, and the gods are 1 to " +
+		       std::to_string(gods_ring_map::k_Slots);
+	}
+	std::error_code error;
+	std::filesystem::create_directories(folder, error);
+	if (error)
+	{
+		return "the folder " + folder.generic_string() + " could not be made: " + error.message();
+	}
+	auto out = folder / gods_ring_map_package::FileName(*package);
+	if (const auto written = WriteBytes(out, *package); written.has_value())
+	{
+		return *written;
+	}
+	return out;
+}
+
+std::optional<std::string> WritePackageMap(const std::filesystem::path& package, const std::filesystem::path& out)
+{
+	auto read = ReadMapPackage(package);
+	if (const auto* error = std::get_if<std::string>(&read); error != nullptr)
+	{
+		return *error;
+	}
+	return WriteBytes(out, std::get<CustomMapRead>(read).bytes);
 }
 
 } // namespace openblack::server

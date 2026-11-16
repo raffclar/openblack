@@ -134,14 +134,21 @@ struct ServerSettings
 	std::optional<std::string> scenario;
 	/// The network map for 32 gods in place of a land
 	bool godsRingMap {false};
-	/// A land of a network game from a file outside the game folder (--custom-map). The server plays it as the land
-	/// "Online Maps/<file>.map" and sends it to the lobby, so that the players get it.
+	/// A land of a network game from a file outside the game folder (--custom-map or --map-package). The server plays it as the
+	/// land "Online Maps/<file>.map" and sends it to the lobby, so that the players get it.
 	struct CustomMapFile
 	{
 		/// The name of the file with no folder and no extension
 		std::string file;
 		/// The bytes of the ".map" file
 		std::vector<uint8_t> bytes;
+		/// The name of the land in the list of the lands. Empty gives the name of the file.
+		std::string name;
+		/// The SHA-256 of the map package that gave the land (--map-package), as 64 hex digits. Empty for a ".map" file.
+		/// The lobby then gives the players the package in place of the file (deviation 249).
+		std::string packageSha256;
+		/// The bytes of the map package
+		int64_t packageSize {0};
 	};
 	std::optional<CustomMapFile> customMap;
 	/// Tools: the modes of the AI soak. Every client takes them from the start of the game.

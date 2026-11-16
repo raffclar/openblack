@@ -203,6 +203,7 @@
 #include "Input/InputDeviceInterface.h"
 #include "LHVM.h"
 #include "Online/FriendList.h"
+#include "Online/GameBuildHash.h"
 #include "Online/GameBuildId.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/LobbyPingServer.h"
@@ -499,10 +500,13 @@ void InitializeOnline(const player_profiles::Store& profiles)
 #else
 	    nullptr);
 #endif
-	Locator::lobbyRoom::emplace<LobbyRoomSystem>(Locator::lobbyClient::value(), online::build_id::Own(), []() {
-		return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-		    .count();
-	});
+	Locator::lobbyRoom::emplace<LobbyRoomSystem>(
+	    Locator::lobbyClient::value(), online::build_id::Own(),
+	    []() {
+		    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+		        .count();
+	    },
+	    &online::build_hash::OwnLater);
 	Locator::clanCreatureSystem::emplace<ClanCreatureSystem>([]() -> LobbyClientSystemInterface* {
 		return Locator::lobbyClient::has_value() ? &Locator::lobbyClient::value() : nullptr;
 	});

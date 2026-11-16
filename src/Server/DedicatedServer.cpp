@@ -1208,6 +1208,8 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"),
 		                       "The file of the land has the SHA-256 {}, but the lobby gave its members the file {}",
 		                       landSha256.empty() ? std::string("of no file") : landSha256, settings.network->mapSha256);
+		// The role has no host yet, so the end of the run must not read it
+		network.reset();
 		return false;
 	}
 	game_socket::Start start {
@@ -1276,14 +1278,18 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	}
 	else if (settings.customMap.has_value())
 	{
-		// The land of --custom-map has a god for each of its citadels. Its shown name is its file name, or the name of
-		// the land of the map download test.
+		// The land of --custom-map or --map-package has a god for each of its citadels. Its shown name is the name of
+		// its package, its file name, or the name of the land of the map download test. The lobby gives the players the
+		// package of a land from a package.
 		const auto& file = settings.customMap->file;
+		auto name = settings.customMap->name.empty() ? file : settings.customMap->name;
 		customMap = lobby_status::CustomMap {
 		    .file = file,
-		    .name = file == download_test_map::k_File ? std::string(download_test_map::k_Name) : file,
+		    .name = file == download_test_map::k_File ? std::string(download_test_map::k_Name) : std::move(name),
 		    .players = static_cast<int32_t>(godSlots),
 		    .bytes = settings.customMap->bytes,
+		    .packageSha256 = settings.customMap->packageSha256,
+		    .packageSize = settings.customMap->packageSize,
 		};
 	}
 	const auto landSha256Logged = landSha256;
