@@ -326,7 +326,7 @@ protected:
 		        .minGods = gods,
 		        .godSlots = slots,
 		        .comeBackMicroseconds = comeBack,
-		        .keptTurns = 3200,
+		        .keptTurns = keptTurns,
 		        .testCommands = testCommands,
 		        .sessionHasher = hasher,
 		        .lanNames = lan,
@@ -515,6 +515,8 @@ protected:
 	std::shared_ptr<const server::SessionHasherInterface> hasher = std::make_shared<FakeSessionHasher>();
 	int64_t now {1'000'000};
 	int secrets {0};
+	/// The turns that the room of MakeHost keeps to send again
+	uint32_t keptTurns {3200};
 	LoopbackSockets network;
 	std::unique_ptr<LockstepHost> host;
 	FakeWorld serverWorld;
@@ -4075,6 +4077,84 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringAScenarioStartComesBackIntoTheScenar
 	EXPECT_FALSE(seat.oldWorldChecksums);
 	EXPECT_FALSE(seat.missedWorldChange);
 	EXPECT_EQ(seat.compares.compared, seat.compares.same);
+}
+
+// A fast room clock can do more turns of the scenario than the server usually keeps before the away player comes back.
+// The server keeps each turn of the scenario until that player is back, and then keeps only the usual turns again.
+TEST_F(LockstepTest, APlayerWhoWasAwayAtAScenarioStartComesBackAfterMoreTurnsThanTheServerUsuallyKeeps)
+{
+	keptTurns = 10;
+	MakeHost(2);
+	host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
+		serverWorld = FakeWorld {};
+		serverWorld.mindFileHere = [this](uint64_t hash) { return !host->EditorMindFile(hash).empty(); };
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+	});
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 40);
+	ASSERT_TRUE(host->Started());
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	bob.Frame();
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Reconnecting);
+	ASSERT_TRUE(alice.session.SendEditorScenario("creature.walk"));
+	// The scenario does four times the turns that the server usually keeps while bob is away
+	Frames({&alice}, 40);
+	ASSERT_EQ(alice.restarts, 1u);
+	ASSERT_GT(serverWorld.turns, 4 * keptTurns - 5);
+	EXPECT_TRUE(host->KeepsTurn(0));
+	Frames({&alice, &bob}, 30);
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.restarts, 1u);
+	EXPECT_LE(bob.world.turns, serverWorld.turns);
+	EXPECT_GE(bob.world.turns + 2, serverWorld.turns);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+	EXPECT_TRUE(bob.desyncs.empty());
+	EXPECT_TRUE(alice.desyncs.empty());
+	// Bob is back, so the server keeps only the usual turns again
+	EXPECT_FALSE(host->KeepsTurn(0));
+	EXPECT_FALSE(host->KeepsTurn(serverWorld.turns - keptTurns - 2));
+}
+
+// A player who never comes back loses the seat at the end of the time to come back. Then the server keeps only the usual
+// turns again.
+TEST_F(LockstepTest, TheServerKeepsTheTurnsOfAScenarioOnlyWhileTheAwayPlayerCanComeBack)
+{
+	keptTurns = 10;
+	MakeHost(2, 2'000'000);
+	host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
+		serverWorld = FakeWorld {};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+	});
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 40);
+	ASSERT_TRUE(host->Started());
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	ASSERT_TRUE(alice.session.SendEditorScenario("creature.walk"));
+	// The scenario does more turns than the server usually keeps
+	Frames({&alice}, 15);
+	ASSERT_EQ(alice.restarts, 1u);
+	EXPECT_TRUE(host->KeepsTurn(0));
+	// The time to come back ends, and the seat of bob closes
+	for (int i = 0; i < 200 && host->Seats()[1].state == server::LockstepHost::SeatState::Away; ++i)
+	{
+		Frames({&alice}, 1);
+	}
+	ASSERT_NE(host->Seats()[1].state, server::LockstepHost::SeatState::Away);
+	Frames({&alice}, 2);
+	EXPECT_FALSE(host->KeepsTurn(0));
+}
+
+TEST(LockstepRules, TheFirstKeptTurnFollowsTheKeptTurnsAndTheHeldTurn)
+{
+	EXPECT_EQ(server::FirstKeptTurn(5, 10, std::nullopt), 0u);
+	EXPECT_EQ(server::FirstKeptTurn(10, 10, std::nullopt), 0u);
+	EXPECT_EQ(server::FirstKeptTurn(25, 10, std::nullopt), 15u);
+	EXPECT_EQ(server::FirstKeptTurn(25, 10, 3u), 3u);
+	EXPECT_EQ(server::FirstKeptTurn(25, 10, 20u), 15u);
 }
 
 TEST(RoomClock, OnlyAPlayerWithTheEditorClaimChangesTheClockAndTheValuesStayInTheirLimits)
