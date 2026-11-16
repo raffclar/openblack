@@ -230,6 +230,7 @@ std::vector<SpellIconSystemInterface::ChargePulse> SpellIconSystem::ChargePulses
 void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
                                           bool landDrawn)
 {
+	_handsToLight.clear();
 	const auto step = particles::drawn_steps::StepSeconds(_holderPace, frameRealTime, frameGameTime, landDrawn);
 	if (!Locator::infoConstants::has_value())
 	{
@@ -265,26 +266,12 @@ void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTim
 	const auto* sites = Locator::worshipSiteSystem::has_value() ? &Locator::worshipSiteSystem::value() : nullptr;
 	const float gameSeconds = std::chrono::duration<float>(frameGameTime).count();
 	// The seed turns, and the effect of its holder continues, only in a frame that draws the seed
-	const auto drawSeed = [this, particles, step, gameSeconds](entt::entity seed, bool drawn, uint8_t alpha) {
+	const auto drawSeed = [this, particles, step, gameSeconds](entt::entity seed, bool drawn, std::optional<uint8_t> alpha) {
 		TurnSeedOf(seed, gameSeconds, drawn);
 		if (particles != nullptr)
 		{
 			StepHolderEffect(seed, drawn, step, alpha);
 		}
-	};
-	// The light of the land of this frame, made once for all the stone hands that the frame draws
-	std::optional<FrameLightTable> handLight;
-	const auto handHolderAlpha = [&registry, &handLight](entt::entity hand) {
-		const auto* transform = registry.TryGet<const Transform>(hand);
-		if (transform == nullptr || !Locator::resources::has_value())
-		{
-			return looks::StoneHandHolderAlpha(looks::k_ThroughWhite);
-		}
-		if (!handLight.has_value())
-		{
-			handLight = FrameLandLightTable();
-		}
-		return looks::StoneHandHolderAlpha(FrameDrawnLightAt(*handLight, transform->position, looks::k_ThroughWhite));
 	};
 	for (const auto drawer : order)
 	{
@@ -300,10 +287,14 @@ void SpellIconSystem::UpdateHolderEffects(std::chrono::milliseconds frameRealTim
 		{
 			if (registry.Valid(hand) && registry.AllOf<IconSeed>(hand))
 			{
-				// The effect has the alpha that the centre gives it from the colour of the hand's model. The effect of a
-				// hand that the frame does not draw does not use the alpha.
+				// The effect gets its alpha from the light of the land after the frame shades the land (see
+				// LightHandHolderEffects). The effect of a hand that the frame does not draw does not use the alpha.
 				const bool drawn = StoneHandDrawn(registry, drawList, drawer, hand, landDrawn);
-				drawSeed(hand, drawn, drawn ? handHolderAlpha(hand) : uint8_t {0});
+				drawSeed(hand, drawn, std::nullopt);
+				if (drawn)
+				{
+					_handsToLight.push_back(hand);
+				}
 			}
 		}
 	}
@@ -331,7 +322,41 @@ void SpellIconSystem::TurnSeedOf(entt::entity icon, float gameSeconds, bool draw
 	shown.phialPhase = turned.seed.phialPhase;
 }
 
-void SpellIconSystem::StepHolderEffect(entt::entity icon, bool drawn, std::optional<float> step, uint8_t alpha)
+void SpellIconSystem::LightHandHolderEffects()
+{
+	if (_handsToLight.empty() || !Locator::particleRuleSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& particles = Locator::particleRuleSystem::value();
+	// The light of the land of this frame, made once for all the stone hands that the frame draws
+	std::optional<FrameLightTable> light;
+	for (const auto hand : _handsToLight)
+	{
+		const auto found = _holderEffects.find(hand);
+		auto* running = found != _holderEffects.end() ? particles.Find(found->second.effect) : nullptr;
+		if (running == nullptr || !registry.Valid(hand))
+		{
+			continue;
+		}
+		// The effect has the alpha that the centre gives it from the colour of the hand's model, lit by the land
+		const auto* transform = registry.TryGet<const Transform>(hand);
+		if (transform == nullptr || !Locator::resources::has_value())
+		{
+			running->SetGlobalAlpha(static_cast<float>(looks::StoneHandHolderAlpha(looks::k_ThroughWhite)));
+			continue;
+		}
+		if (!light.has_value())
+		{
+			light = FrameLandLightTable();
+		}
+		const auto drawnColour = FrameDrawnLightAt(*light, transform->position, looks::k_ThroughWhite);
+		running->SetGlobalAlpha(static_cast<float>(looks::StoneHandHolderAlpha(drawnColour)));
+	}
+}
+
+void SpellIconSystem::StepHolderEffect(entt::entity icon, bool drawn, std::optional<float> step, std::optional<uint8_t> alpha)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& particles = Locator::particleRuleSystem::value();
@@ -378,9 +403,9 @@ void SpellIconSystem::StepHolderEffect(entt::entity icon, bool drawn, std::optio
 	{
 		return;
 	}
-	if (auto* running = particles.Find(found->second.effect); running != nullptr)
+	if (auto* running = alpha.has_value() ? particles.Find(found->second.effect) : nullptr; running != nullptr)
 	{
-		running->SetGlobalAlpha(static_cast<float>(alpha));
+		running->SetGlobalAlpha(static_cast<float>(*alpha));
 	}
 	// The effect moves on with the place of the model from the last draw. Then the frame draws the model in its new place.
 	if (step.has_value())
