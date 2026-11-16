@@ -1773,6 +1773,10 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["debug"] = editor_debug(pids, focus, shots)
         if done["debug"].get("error"):
             done["error"] = done["debug"]["error"]
+    if case == "debug-magic":
+        done["debug_magic"] = editor_debug_magic(pids, shots)
+        if done["debug_magic"].get("error"):
+            done["error"] = done["debug_magic"]["error"]
     if case in ("land", "all"):
         # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
         # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
@@ -1819,6 +1823,77 @@ DEBUG_ADVISOR_ACTS = [
     {"act": "play_anim", "advisor": 1, "place": [0.5, 0.5], "anim": 3, "speed": 1.5},
     {"act": "feel", "advisor": 2, "emotion": 4}, {"act": "home", "advisor": 1}, {"act": "vanish", "advisor": 0},
 ]
+
+
+# The cases where the first client has only the debugger claim
+DEBUGGER_CASES = ("debug", "debug-magic")
+
+# Each button of the Magic, Weather and Moon debug windows that the debug-magic case presses, in order. The miracles
+# are magic types: 1 the fireball, 10 the heal, 14 the food, 22 the water, 28 the big creature spell.
+DEBUG_MAGIC_ACTS = [
+    {"kind": "magic", "act": "ignore_influence", "on": True},
+    {"kind": "magic", "act": "place_dispenser", "magic": 1},
+    {"kind": "magic", "act": "place_bubble", "magic": 22},
+    {"kind": "magic", "act": "give_to_hand", "magic": 10},
+    {"kind": "magic", "act": "drop_seed"},
+    {"kind": "magic", "act": "summon_from_worship", "magic": 10},
+    {"kind": "magic", "act": "drop_seed"},
+    {"kind": "magic", "act": "cast_at_point", "magic": 14},
+    {"kind": "magic", "act": "cast_on_creature", "magic": 28},
+    {"kind": "magic", "act": "prayer_power", "value": 50000.0},
+    {"kind": "magic", "act": "infinite_prayer", "on": True},
+    {"kind": "magic", "act": "infinite_prayer", "on": False},
+    {"kind": "magic", "act": "ignore_influence", "on": False},
+    {"kind": "town", "act": "give", "magic": 10},
+    {"kind": "town", "act": "take", "magic": 10},
+    {"kind": "weather", "act": "preset", "rain": 100, "overcast": 100, "temperature": 20, "wind_x": 20, "wind_z": 20,
+     "lightning": True},
+    {"kind": "weather", "act": "bolt"},
+    {"kind": "weather", "act": "thunder"},
+    {"kind": "weather", "act": "force_storm", "snow": 70, "overcast": 80, "temperature": -5, "seconds": 120.0},
+    {"kind": "weather", "act": "end_storm"},
+    {"kind": "weather", "act": "clear_storms"},
+    {"kind": "weather", "act": "melt_snow"},
+    {"kind": "weather", "act": "climates", "on": False},
+    {"kind": "weather", "act": "climates", "on": True},
+    {"kind": "weather", "act": "climate_storms", "on": True},
+    {"kind": "sky", "act": "script_hour", "value": 19.5},
+    {"kind": "sky", "act": "clock_runs", "on": False},
+    {"kind": "sky", "act": "clock_runs", "on": True},
+    {"kind": "sky", "act": "moon_date", "date": 1000000000},
+    {"kind": "sky", "act": "computer_date"},
+    {"kind": "sky", "act": "moon_date", "date": 1000086400},
+    {"kind": "sky", "act": "reset"},
+]
+
+
+def editor_debug_magic(pids, shots=None):
+    """The first client has the debugger claim and no editor claim. It presses each button of the Magic, Weather and
+    Moon debug windows near its camera. The second client (no claim) sends three acts with force: the server must
+    refuse them. Every computer must do the same acts at the same turns and keep the same checksums. Returns what each
+    step sent."""
+    debugger = pids[0]
+    done = {"answers": []}
+
+    def send(pid, params):
+        answer = inspector_answer(pid, "editor.debug_act", {"params": params})
+        done["answers"].append({"params": params, "answer": answer})
+        time.sleep(0.4)
+        return answer
+
+    for act in DEBUG_MAGIC_ACTS:
+        send(debugger, dict(act))
+    if len(pids) > 1:
+        send(pids[1], {"kind": "magic", "act": "place_dispenser", "magic": 1, "force": True})
+        send(pids[1], {"kind": "weather", "act": "bolt", "force": True})
+        send(pids[1], {"kind": "sky", "act": "script_hour", "value": 6.0, "force": True})
+    time.sleep(2.0)
+    editor_shots(pids, shots, "debug-magic")
+    problems = [f"{entry['params']}: {entry['answer']['error']}" for entry in done["answers"]
+                if isinstance(entry["answer"], dict) and entry["answer"].get("error")]
+    if problems:
+        done["error"] = "; ".join(problems)
+    return done
 
 
 def debug_act_lines(log):
@@ -3063,7 +3138,7 @@ def main():
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
                                                     "creature-remove", "land", "history", "mind", "time", "scripts", "debug",
-                                                    "world", "scenario", "scenario-away", "all"),
+                                                    "debug-magic", "world", "scenario", "scenario-away", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -3079,7 +3154,10 @@ def main():
                              "every computer must keep the same checksums. Not in all, as each ends the game of the "
                              "room: the editor writes the world into a file and loads it 10 seconds later for the room "
                              "(world), or starts the room again on a testbed scenario (scenario), also while the second "
-                             "client is away for 15 seconds (scenario-away)")
+                             "client is away for 15 seconds (scenario-away). With debug and debug-magic the first "
+                             "client has only the debugger claim: it does the acts of the Advisors, World, Console "
+                             "and Gestures debug windows (debug), or each button of the Magic, Weather and Moon "
+                             "windows (debug-magic)")
     parser.add_argument("--world-file", metavar="FILE",
                         help="with --editor-desync world: the first client sends this world file, for example the world "
                              "of a room with other players, and does not write its own")
@@ -3451,10 +3529,10 @@ def main():
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
                                  "observer" if is_observer else "god", 600,
                                  editor=(options.editor_check or options.forest_camera
-                                         or (bool(options.editor_desync) and options.editor_desync != "debug"))
+                                         or (bool(options.editor_desync) and options.editor_desync not in DEBUGGER_CASES))
                                  and index == 0,
                                  staff=options.editor_check and index == 1,
-                                 debugger=options.editor_desync == "debug" and index == 0)
+                                 debugger=options.editor_desync in DEBUGGER_CASES and index == 0)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
@@ -3894,7 +3972,7 @@ def main():
                 print(f"the script acts differ or did not come: {json.dumps(summary['script_acts'])[:2000]} "
                       f"states {json.dumps(states)[:1000]}")
                 all_same = False
-        if options.editor_desync == "debug":
+        if options.editor_desync in DEBUGGER_CASES:
             summary["debug_acts"] = debug_act_check(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
             if not summary["debug_acts"]["same"]:

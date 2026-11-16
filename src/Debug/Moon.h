@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "Window.h"
 
 namespace openblack::debug::gui
@@ -22,6 +24,9 @@ class Moon final: public Window
 public:
 	Moon() noexcept;
 
+	/// The window shows in a network game. Its acts on the world go as commands of the turns.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
+
 protected:
 	void Draw() noexcept override;
 	void Update() noexcept override {}
@@ -33,6 +38,10 @@ private:
 	void DrawSky() noexcept;
 	void DrawTimeControls() noexcept;
 	void DrawDateControls() noexcept;
+
+	/// In a network game a slider keeps its own value while it moves, and the value goes when the slider lets go
+	std::optional<float> _hourDrag;
+	std::optional<float> _dayDrag;
 };
 
 } // namespace openblack::debug::gui

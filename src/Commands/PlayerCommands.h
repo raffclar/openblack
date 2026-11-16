@@ -1060,6 +1060,148 @@ struct DebugConsoleLine
 	[[nodiscard]] bool operator==(const DebugConsoleLine&) const = default;
 };
 
+/// An act of the Running tab of the Magic debug window (debug_acts). Only a player with the debugger claim sends it in a
+/// network game, and the game server refuses it from every other player. Each computer does the act at the turn, for the
+/// player of the command.
+struct DebugMagic
+{
+	enum class Act : uint8_t
+	{
+		/// The miracles go also outside the influence of their player when the value is on
+		IgnoreInfluence,
+		/// A dispenser of the miracle goes down at the position
+		PlaceDispenser,
+		/// A bubble of the miracle comes above the position
+		PlaceBubble,
+		/// The hand of the player gets the miracle
+		GiveToHand,
+		/// The worship site of the player makes the miracle for the hand
+		SummonFromWorship,
+		/// The player casts the miracle down on the position
+		CastAtPoint,
+		/// The player casts the miracle on the creature
+		CastOnCreature,
+		/// The hand of the player drops the miracle that it holds
+		DropSeed,
+		/// The prayer power of the player goes to the value
+		PrayerPower,
+		/// The prayer power of the player is infinite when the value is on
+		InfinitePrayer,
+	};
+	Act act {Act::IgnoreInfluence};
+	/// The miracle (MagicType)
+	uint8_t magic {0};
+	/// The position on the land that the window gives, before the window adds its height for a bubble or a cast
+	glm::vec3 position {0.0f};
+	/// The direction of the camera of the sender, for the effect of a cast
+	glm::vec3 forward {0.0f, 0.0f, 1.0f};
+	/// The creature of a cast on a creature
+	entt::entity creature {entt::null};
+	/// The prayer power
+	float value {0.0f};
+	bool on {false};
+
+	[[nodiscard]] bool operator==(const DebugMagic&) const = default;
+};
+
+/// An act of the Town miracles tab of the Magic debug window (debug_acts): a town gets a miracle or loses it. Only a
+/// player with the debugger claim sends it in a network game. Each computer does the act at the turn.
+struct DebugTownMiracle
+{
+	/// The number of the town
+	uint32_t town {0};
+	/// The miracle (MagicType)
+	uint8_t magic {0};
+	/// The town gets the miracle, else it loses it
+	bool give {true};
+	/// The town also gets the plain miracle of a power-up level
+	bool withPlain {true};
+	/// The town loses the plain miracle and each power-up level
+	bool allLevels {false};
+	/// A town with no worship site can then have its site
+	bool openSite {true};
+	/// The first land can also have the site
+	bool anyLand {true};
+
+	[[nodiscard]] bool operator==(const DebugTownMiracle&) const = default;
+};
+
+/// An act of the Weather debug window (debug_acts). Only a player with the debugger claim sends it in a network game.
+/// Each computer does the act at the turn.
+struct DebugWeather
+{
+	enum class Act : uint8_t
+	{
+		/// Each storm clears and the climates stop the new storms. Then the storm comes, if it has rain or snow.
+		Preset,
+		/// The storm comes over the whole island
+		ForceStorm,
+		/// Each storm clears
+		ClearStorms,
+		/// Each storm with lightning flashes with a bolt on its next turn
+		Bolt,
+		/// Each storm with lightning flashes with thunder on its next turn
+		Thunder,
+		/// All the snow on the land melts at once
+		MeltSnow,
+		/// The climates work when the value is on
+		Climates,
+		/// The climates make new storms when the value is on
+		ClimateStorms,
+		/// The storm clears over its time to fade
+		EndStorm,
+	};
+	Act act {Act::ClearStorms};
+	/// What the storm brings: the temperature, the rain, the snow and the cloud in percent, and the wind
+	int8_t temperature {0};
+	int8_t rain {0};
+	int8_t snow {0};
+	int8_t overcast {0};
+	int8_t windX {0};
+	int8_t windZ {0};
+	/// How long the storm lasts and how long it fades, in seconds
+	float seconds {600.0f};
+	float fadeSeconds {5.0f};
+	/// The least and the most seconds between the flashes with thunder, and between the flashes with a bolt
+	glm::vec2 thunderWait {0.0f};
+	glm::vec2 boltWait {0.0f};
+	/// How high the clouds are and how fast the rain falls. The climate gives them when they are 0.
+	float cloudHeight {0.0f};
+	float rainSpeed {0.0f};
+	/// The storm of an end
+	entt::entity storm {entt::null};
+	bool on {false};
+
+	[[nodiscard]] bool operator==(const DebugWeather&) const = default;
+};
+
+/// An act of the Moon debug window on the clock of the day and on the date of the moon (debug_acts). Only a player with
+/// the debugger claim sends it in a network game. Each computer does the act at the turn.
+struct DebugSky
+{
+	enum class Act : uint8_t
+	{
+		/// The script time goes to the hour
+		ScriptHour,
+		/// The clock of the day runs when the value is on
+		ClockRuns,
+		/// The moon takes its phase from the date
+		MoonDate,
+		/// The moon takes its phase from the date of the computer again
+		ComputerDate,
+		/// The moon takes its phase from the date of the computer again, and the clock runs
+		Reset,
+	};
+	Act act {Act::ScriptHour};
+	/// The script time, in hours
+	float hour {0.0f};
+	bool on {false};
+	/// The date, in seconds after 1970
+	int64_t date {0};
+
+	[[nodiscard]] bool operator==(const DebugSky&) const = default;
+};
+
 /// What a command does
 using Action = std::variant<
     LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap, HandReport,
@@ -1070,7 +1212,7 @@ using Action = std::variant<
     DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit,
     DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip, EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke,
     EditorPath, EditorRemake, EditorMindLoad, EditorScript, EditorLandScript, EditorScriptProgram, DebugAdvisor, DebugWorld,
-    DebugConsoleLine>;
+    DebugConsoleLine, DebugMagic, DebugTownMiracle, DebugWeather, DebugSky>;
 
 /// A command and the player that sent it
 struct Command
@@ -1110,7 +1252,9 @@ struct Command
 [[nodiscard]] constexpr bool OnlyDebuggerSends(const Action& action) noexcept
 {
 	return std::holds_alternative<DebugAdvisor>(action) || std::holds_alternative<DebugWorld>(action) ||
-	       std::holds_alternative<DebugConsoleLine>(action);
+	       std::holds_alternative<DebugConsoleLine>(action) || std::holds_alternative<DebugMagic>(action) ||
+	       std::holds_alternative<DebugTownMiracle>(action) || std::holds_alternative<DebugWeather>(action) ||
+	       std::holds_alternative<DebugSky>(action);
 }
 
 /// Whether the game server refuses the command from every player, also from a player with the editor claim. A network game

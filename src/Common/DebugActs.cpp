@@ -13,6 +13,7 @@
 
 #include <algorithm>
 
+#include "Common/DebugMagicWeatherActs.h"
 #include "Creature/BonusCreatures.h"
 #include "Help/Spirits.h"
 #include "PlayerSlots.h"
@@ -176,6 +177,22 @@ std::optional<std::string_view> RefusalOf(const player_commands::Action& action)
 	if (const auto* line = std::get_if<DebugConsoleLine>(&action))
 	{
 		return ConsoleLineRefusal(*line);
+	}
+	if (const auto* magic = std::get_if<player_commands::DebugMagic>(&action))
+	{
+		return MagicActRefusal(*magic);
+	}
+	if (const auto* town = std::get_if<player_commands::DebugTownMiracle>(&action))
+	{
+		return TownMiracleRefusal(*town);
+	}
+	if (const auto* weather = std::get_if<player_commands::DebugWeather>(&action))
+	{
+		return WeatherActRefusal(*weather);
+	}
+	if (const auto* sky = std::get_if<player_commands::DebugSky>(&action))
+	{
+		return SkyActRefusal(*sky);
 	}
 	return std::nullopt;
 }

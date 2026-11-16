@@ -12,7 +12,9 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <bit>
+#include <initializer_list>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -38,6 +40,30 @@ constexpr auto k_LastFightMoveKind = static_cast<uint8_t>(creature_fight::Move::
 
 /// The largest block of tattoo pictures: its head, and one picture of 64 by 64 four-bit levels for each slot
 constexpr size_t k_MostTattooPictures = 0x28 + creature_tattoo::k_SlotCount * 0x800;
+
+/// The count of the choices of an act on the miracles of a town. The choices go in one byte, one bit each.
+constexpr unsigned k_TownMiracleFlagCount = 5;
+
+uint8_t TownMiracleFlags(const DebugTownMiracle& command)
+{
+	const std::array choices {command.give, command.withPlain, command.allLevels, command.openSite, command.anyLand};
+	unsigned flags = 0;
+	for (unsigned i = 0; i < choices.size(); ++i)
+	{
+		flags |= (choices.at(i) ? 1U : 0U) << i;
+	}
+	return static_cast<uint8_t>(flags);
+}
+
+void SetTownMiracleFlags(DebugTownMiracle& command, uint8_t flags)
+{
+	const auto bit = [flags](unsigned index) { return ((static_cast<unsigned>(flags) >> index) & 1U) != 0; };
+	command.give = bit(0);
+	command.withPlain = bit(1);
+	command.allLevels = bit(2);
+	command.openSite = bit(3);
+	command.anyLand = bit(4);
+}
 
 static_assert(sizeof(entt::id_type) == sizes::k_Entity, "An entity goes on the wire as 32 bits");
 static_assert(std::numeric_limits<float>::is_iec559, "A float goes on the wire as its IEEE 754 bits");
@@ -597,6 +623,44 @@ void WriteAction(Writer& out, const Action& action)
 		               {
 			               out.Byte(static_cast<uint8_t>(character));
 		               }
+	               },
+	               [&out](const DebugMagic& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               out.Byte(command.magic);
+		               out.Vector(command.position);
+		               out.Vector(command.forward);
+		               out.Entity(command.creature);
+		               out.Float(command.value);
+		               out.Byte(command.on ? 1 : 0);
+	               },
+	               [&out](const DebugTownMiracle& command) {
+		               out.Number(command.town);
+		               out.Byte(command.magic);
+		               out.Byte(TownMiracleFlags(command));
+	               },
+	               [&out](const DebugWeather& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               for (const auto value :
+		                    {command.temperature, command.rain, command.snow, command.overcast, command.windX, command.windZ})
+		               {
+			               out.Byte(static_cast<uint8_t>(value));
+		               }
+		               out.Float(command.seconds);
+		               out.Float(command.fadeSeconds);
+		               out.Float(command.thunderWait.x);
+		               out.Float(command.thunderWait.y);
+		               out.Float(command.boltWait.x);
+		               out.Float(command.boltWait.y);
+		               out.Float(command.cloudHeight);
+		               out.Float(command.rainSpeed);
+		               out.Entity(command.storm);
+		               out.Byte(command.on ? 1 : 0);
+	               },
+	               [&out](const DebugSky& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               out.Float(command.hour);
+		               out.Byte(command.on ? 1 : 0);
+		               out.Number(static_cast<uint64_t>(command.date));
 	               },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
@@ -1442,6 +1506,96 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = std::move(line);
 		return DecodeError::None;
 	}
+	case CommandTag::DebugMagic:
+	{
+		const auto act = in.Byte();
+		DebugMagic magic {.magic = in.Byte()};
+		magic.position = in.Vector();
+		magic.forward = in.Vector();
+		magic.creature = in.Entity();
+		magic.value = in.Float();
+		const auto on = in.Byte();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (act > static_cast<uint8_t>(DebugMagic::Act::InfinitePrayer) || on > 1)
+		{
+			return DecodeError::Value;
+		}
+		magic.act = static_cast<DebugMagic::Act>(act);
+		magic.on = on == 1;
+		action = magic;
+		return DecodeError::None;
+	}
+	case CommandTag::DebugTownMiracle:
+	{
+		DebugTownMiracle town {.town = in.Number<uint32_t>()};
+		town.magic = in.Byte();
+		const auto flags = in.Byte();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (flags >= (1U << k_TownMiracleFlagCount))
+		{
+			return DecodeError::Value;
+		}
+		SetTownMiracleFlags(town, flags);
+		action = town;
+		return DecodeError::None;
+	}
+	case CommandTag::DebugWeather:
+	{
+		const auto act = in.Byte();
+		DebugWeather weather;
+		for (auto* value :
+		     {&weather.temperature, &weather.rain, &weather.snow, &weather.overcast, &weather.windX, &weather.windZ})
+		{
+			*value = static_cast<int8_t>(in.Byte());
+		}
+		weather.seconds = in.Float();
+		weather.fadeSeconds = in.Float();
+		weather.thunderWait.x = in.Float();
+		weather.thunderWait.y = in.Float();
+		weather.boltWait.x = in.Float();
+		weather.boltWait.y = in.Float();
+		weather.cloudHeight = in.Float();
+		weather.rainSpeed = in.Float();
+		weather.storm = in.Entity();
+		const auto on = in.Byte();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (act > static_cast<uint8_t>(DebugWeather::Act::EndStorm) || on > 1)
+		{
+			return DecodeError::Value;
+		}
+		weather.act = static_cast<DebugWeather::Act>(act);
+		weather.on = on == 1;
+		action = weather;
+		return DecodeError::None;
+	}
+	case CommandTag::DebugSky:
+	{
+		const auto act = in.Byte();
+		DebugSky sky {.hour = in.Float()};
+		const auto on = in.Byte();
+		sky.date = static_cast<int64_t>(in.Number<uint64_t>());
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (act > static_cast<uint8_t>(DebugSky::Act::Reset) || on > 1)
+		{
+			return DecodeError::Value;
+		}
+		sky.act = static_cast<DebugSky::Act>(act);
+		sky.on = on == 1;
+		action = sky;
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -1630,6 +1784,10 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const DebugAdvisor& /*command*/) { return CommandTag::DebugAdvisor; },
 	                      [](const DebugWorld& /*command*/) { return CommandTag::DebugWorld; },
 	                      [](const DebugConsoleLine& /*command*/) { return CommandTag::DebugConsoleLine; },
+	                      [](const DebugMagic& /*command*/) { return CommandTag::DebugMagic; },
+	                      [](const DebugTownMiracle& /*command*/) { return CommandTag::DebugTownMiracle; },
+	                      [](const DebugWeather& /*command*/) { return CommandTag::DebugWeather; },
+	                      [](const DebugSky& /*command*/) { return CommandTag::DebugSky; },
 	                  },
 	                  action);
 }
@@ -1724,6 +1882,10 @@ size_t SizeOf(const Action& action) noexcept
 	        [](const DebugAdvisor& /*command*/) { return size_t {1 + 1 + 8 + k_Vector + 1 + 1 + 4 + 1}; },
 	        [](const DebugWorld& /*command*/) { return size_t {1 + 1 + 1 + 4}; },
 	        [](const DebugConsoleLine& command) { return 2 + command.text.size(); },
+	        [](const DebugMagic& /*command*/) { return size_t {1 + 1 + k_Vector + k_Vector + k_Entity + 4 + 1}; },
+	        [](const DebugTownMiracle& /*command*/) { return size_t {4 + 1 + 1}; },
+	        [](const DebugWeather& /*command*/) { return size_t {1 + 6 + (8 * 4) + k_Entity + 1}; },
+	        [](const DebugSky& /*command*/) { return size_t {1 + 4 + 1 + 8}; },
 	    },
 	    action);
 	return 1 + fields;

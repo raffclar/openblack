@@ -21,6 +21,8 @@
 
 #include "3D/DayNightClock.h"
 #include "3D/SkyFrame.h"
+#include "Common/DebugActRuns.h"
+#include "Common/DebugMagicWeatherActRuns.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Registry.h"
@@ -35,6 +37,7 @@ using namespace openblack::debug::gui;
 namespace
 {
 namespace moon = graphics::moon;
+using player_commands::DebugSky;
 
 /// Days in a moon month
 constexpr double k_MonthDays = 1.0 / moon::k_MonthsPerDay;
@@ -213,73 +216,107 @@ void Moon::DrawSky() noexcept
 
 void Moon::DrawTimeControls() noexcept
 {
-	auto& clock = Locator::skyClockSystem::value().GetClock();
+	const auto& clock = Locator::skyClockSystem::value().GetClock();
+	const bool network = debug_acts::SendsCommands();
+	const auto setHour = [](float hour) { debug_acts::Do(DebugSky {.act = DebugSky::Act::ScriptHour, .hour = hour}); };
 	ImGui::TextUnformatted("Time of day");
-	float hour = clock.GetScriptTime();
-	if (ImGui::SliderFloat("Script hour", &hour, 0.0f, 24.0f, "%.2f"))
+	float hour = _hourDrag.value_or(clock.GetScriptTime());
+	if (ImGui::SliderFloat("Script hour", &hour, 0.0f, 24.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp))
 	{
-		clock.SetScriptTime(hour);
+		if (network)
+		{
+			_hourDrag = hour;
+		}
+		else
+		{
+			setHour(hour);
+		}
+	}
+	if (ImGui::IsItemDeactivated() && _hourDrag.has_value())
+	{
+		setHour(*_hourDrag);
+		_hourDrag.reset();
 	}
 	bool running = clock.IsRunning();
 	if (ImGui::Checkbox("Clock runs", &running))
 	{
-		clock.SetRunning(running);
+		debug_acts::Do(DebugSky {.act = DebugSky::Act::ClockRuns, .on = running});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Midnight"))
 	{
-		clock.SetScriptTime(0.0f);
+		setHour(0.0f);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Evening (19:30)"))
 	{
-		clock.SetScriptTime(19.5f);
+		setHour(19.5f);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Noon"))
 	{
-		clock.SetScriptTime(12.0f);
+		setHour(12.0f);
 	}
 }
 
 void Moon::DrawDateControls() noexcept
 {
-	auto& theMoon = *MoonOfTheSky();
+	const auto& theMoon = *MoonOfTheSky();
 	const auto date = DateInUse(theMoon);
+	const bool network = debug_acts::SendsCommands();
+	const auto setDate = [](int64_t value) { debug_acts::Do(DebugSky {.act = DebugSky::Act::MoonDate, .date = value}); };
 	ImGui::TextUnformatted("Date for the phase");
 	bool overridden = theMoon.dateOverride.has_value();
 	if (ImGui::Checkbox("Override the computer's date", &overridden))
 	{
-		theMoon.dateOverride = overridden ? std::optional(date) : std::nullopt;
+		if (overridden)
+		{
+			setDate(date);
+		}
+		else
+		{
+			debug_acts::Do(DebugSky {.act = DebugSky::Act::ComputerDate});
+		}
 	}
 
-	auto day = static_cast<float>(Wrapped(moon::MonthFraction(date)) * k_MonthDays);
+	auto day = _dayDrag.value_or(static_cast<float>(Wrapped(moon::MonthFraction(date)) * k_MonthDays));
 	if (ImGui::SliderFloat("Day of the moon month", &day, 0.0f, static_cast<float>(k_MonthDays), "%.0f"))
 	{
-		theMoon.dateOverride = moon::DateAtFraction(date, static_cast<double>(day) / k_MonthDays);
+		if (network)
+		{
+			_dayDrag = day;
+		}
+		else
+		{
+			setDate(moon::DateAtFraction(date, static_cast<double>(day) / k_MonthDays));
+		}
+	}
+	if (ImGui::IsItemDeactivated() && _dayDrag.has_value())
+	{
+		setDate(moon::DateAtFraction(date, static_cast<double>(*_dayDrag) / k_MonthDays));
+		_dayDrag.reset();
 	}
 	if (ImGui::Button("< Day"))
 	{
-		theMoon.dateOverride = date - moon::k_SecondsPerDay;
+		setDate(date - moon::k_SecondsPerDay);
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Day >"))
 	{
-		theMoon.dateOverride = date + moon::k_SecondsPerDay;
+		setDate(date + moon::k_SecondsPerDay);
 	}
 	for (const auto& phase : k_NamedPhases)
 	{
 		ImGui::SameLine();
 		if (ImGui::Button(std::string(phase.name).c_str()))
 		{
-			theMoon.dateOverride = moon::DateAtFraction(date, phase.fraction);
+			setDate(moon::DateAtFraction(date, phase.fraction));
 		}
 	}
 
 	if (ImGui::Button("Reset to the game's values"))
 	{
-		theMoon.dateOverride.reset();
-		Locator::skyClockSystem::value().GetClock().SetRunning(true);
+		debug_acts::Do(DebugSky {.act = DebugSky::Act::Reset});
 	}
 	if (ImGui::IsItemHovered())
 	{

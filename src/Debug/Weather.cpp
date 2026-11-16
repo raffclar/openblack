@@ -18,6 +18,8 @@
 #include <fmt/format.h>
 
 #include "Camera/Camera.h"
+#include "Common/DebugMagicWeatherActRuns.h"
+#include "Common/DebugMagicWeatherActs.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -67,6 +69,26 @@ constexpr std::array<Preset, 6> k_Presets {{
 /// How often a lightning storm flashes, in seconds: with thunder, then with a bolt
 constexpr glm::vec2 k_ThunderWait {3.0f, 15.0f};
 constexpr glm::vec2 k_BoltWait {2.0f, 8.0f};
+
+using player_commands::DebugWeather;
+
+/// The act of the Weather window with the storm of the window
+DebugWeather ActWithStorm(DebugWeather::Act act, const ForcedStorm& storm)
+{
+	return {.act = act,
+	        .temperature = storm.effect.temperature,
+	        .rain = storm.effect.rain,
+	        .snow = storm.effect.snow,
+	        .overcast = storm.effect.overcast,
+	        .windX = storm.effect.windX,
+	        .windZ = storm.effect.windZ,
+	        .seconds = storm.seconds,
+	        .fadeSeconds = storm.fadeSeconds,
+	        .thunderWait = storm.thunderWait,
+	        .boltWait = storm.boltWait,
+	        .cloudHeight = storm.cloudHeight,
+	        .rainSpeed = storm.rainSpeed};
+}
 
 ImVec4 Darker(ImVec4 colour, float by)
 {
@@ -189,11 +211,9 @@ void Weather::DrawPresets() noexcept
 		}
 		// A preset becomes the island's weather: the other storms clear and the climates stop breeding new ones, so
 		// only a thunderstorm brings thunder
-		auto& weather = Locator::weatherSystem::value();
-		weather.ClearStorms();
-		weather.SetStormCreationEnabled(false);
 		if (preset.rain == 0 && preset.snow == 0)
 		{
+			debug_acts::Do(DebugWeather {.act = DebugWeather::Act::Preset});
 			continue;
 		}
 		// The made-to-measure storm takes the preset, keeping its own length, so it can be tweaked from there
@@ -207,7 +227,7 @@ void Weather::DrawPresets() noexcept
 		_storm.effect.windZ = static_cast<int8_t>(std::lround(std::cos(_windDegrees * k_DegreesToRadians) * _windStrength));
 		_storm.thunderWait = _lightning ? k_ThunderWait : glm::vec2(0.0f);
 		_storm.boltWait = _lightning ? k_BoltWait : glm::vec2(0.0f);
-		weather.ForceStorm(_storm);
+		debug_acts::Do(ActWithStorm(DebugWeather::Act::Preset, _storm));
 	}
 }
 
@@ -217,9 +237,11 @@ void Weather::DrawCustom() noexcept
 	{
 		return;
 	}
+	// The sliders keep each value in their limits, also a typed value: each computer refuses a storm out of the limits
+	constexpr auto k_Clamp = ImGuiSliderFlags_AlwaysClamp;
 	const auto byteSlider = [](const char* label, int8_t& value, int min, int max, const char* format) {
 		int wide = value;
-		if (ImGui::SliderInt(label, &wide, min, max, format))
+		if (ImGui::SliderInt(label, &wide, min, max, format, ImGuiSliderFlags_AlwaysClamp))
 		{
 			value = static_cast<int8_t>(wide);
 		}
@@ -228,8 +250,8 @@ void Weather::DrawCustom() noexcept
 	byteSlider("Snow", _storm.effect.snow, 0, 100, "%d%%");
 	byteSlider("Cloud", _storm.effect.overcast, 0, 100, "%d%%");
 	byteSlider("Temperature", _storm.effect.temperature, -30, 45, "%d C");
-	ImGui::SliderFloat("Wind from", &_windDegrees, 0.0f, 360.0f, "%.0f deg");
-	ImGui::SliderInt("Wind strength", &_windStrength, 0, 100);
+	ImGui::SliderFloat("Wind from", &_windDegrees, 0.0f, 360.0f, "%.0f deg", k_Clamp);
+	ImGui::SliderInt("Wind strength", &_windStrength, 0, 100, "%d", k_Clamp);
 	_storm.effect.windX = static_cast<int8_t>(std::lround(std::sin(_windDegrees * k_DegreesToRadians) * _windStrength));
 	_storm.effect.windZ = static_cast<int8_t>(std::lround(std::cos(_windDegrees * k_DegreesToRadians) * _windStrength));
 
@@ -242,8 +264,9 @@ void Weather::DrawCustom() noexcept
 			_storm.boltWait = k_BoltWait;
 		}
 		ImGui::DragFloatRange2("Thunder every", &_storm.thunderWait.x, &_storm.thunderWait.y, 0.1f, 0.5f, 120.0f, "%.1f s",
-		                       "%.1f s");
-		ImGui::DragFloatRange2("Bolt every", &_storm.boltWait.x, &_storm.boltWait.y, 0.1f, 0.5f, 120.0f, "%.1f s", "%.1f s");
+		                       "%.1f s", k_Clamp);
+		ImGui::DragFloatRange2("Bolt every", &_storm.boltWait.x, &_storm.boltWait.y, 0.1f, 0.5f, 120.0f, "%.1f s", "%.1f s",
+		                       k_Clamp);
 	}
 	else
 	{
@@ -251,36 +274,37 @@ void Weather::DrawCustom() noexcept
 		_storm.boltWait = glm::vec2(0.0f);
 	}
 
-	ImGui::SliderFloat("Lasts", &_storm.seconds, 10.0f, 3600.0f, "%.0f s", ImGuiSliderFlags_Logarithmic);
-	ImGui::SliderFloat("Comes in over", &_storm.fadeSeconds, 0.1f, 60.0f, "%.1f s", ImGuiSliderFlags_Logarithmic);
-	ImGui::SliderFloat("Cloud height", &_storm.cloudHeight, 0.0f, 500.0f, _storm.cloudHeight > 0.0f ? "%.0f" : "climate's");
-	ImGui::SliderFloat("Rain speed", &_storm.rainSpeed, 0.0f, 5.0f, _storm.rainSpeed > 0.0f ? "%.2f" : "climate's");
+	ImGui::SliderFloat("Lasts", &_storm.seconds, 10.0f, 3600.0f, "%.0f s", ImGuiSliderFlags_Logarithmic | k_Clamp);
+	ImGui::SliderFloat("Comes in over", &_storm.fadeSeconds, 0.1f, 60.0f, "%.1f s", ImGuiSliderFlags_Logarithmic | k_Clamp);
+	ImGui::SliderFloat("Cloud height", &_storm.cloudHeight, 0.0f, 500.0f, _storm.cloudHeight > 0.0f ? "%.0f" : "climate's",
+	                   k_Clamp);
+	ImGui::SliderFloat("Rain speed", &_storm.rainSpeed, 0.0f, 5.0f, _storm.rainSpeed > 0.0f ? "%.2f" : "climate's", k_Clamp);
 
 	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.45f, 0.30f, 1.0f));
 	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.60f, 0.38f, 1.0f));
 	if (ImGui::Button("Force this storm", ImVec2(-1.0f, 28.0f)))
 	{
-		Locator::weatherSystem::value().ForceStorm(_storm);
+		debug_acts::Do(ActWithStorm(DebugWeather::Act::ForceStorm, _storm));
 	}
 	ImGui::PopStyleColor(2);
 }
 
 void Weather::DrawActions() noexcept
 {
-	auto& weather = Locator::weatherSystem::value();
+	const auto& weather = Locator::weatherSystem::value();
 	if (ImGui::Button("Clear every storm"))
 	{
-		weather.ClearStorms();
+		debug_acts::Do(DebugWeather {.act = DebugWeather::Act::ClearStorms});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Bolt now"))
 	{
-		weather.StrikeLightning(true);
+		debug_acts::Do(DebugWeather {.act = DebugWeather::Act::Bolt});
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Thunder now"))
 	{
-		weather.StrikeLightning(false);
+		debug_acts::Do(DebugWeather {.act = DebugWeather::Act::Thunder});
 	}
 	if (ImGui::IsItemHovered())
 	{
@@ -289,19 +313,19 @@ void Weather::DrawActions() noexcept
 	ImGui::SameLine();
 	if (ImGui::Button("Melt all snow") && Locator::snowSystem::has_value())
 	{
-		Locator::snowSystem::value().Reset();
+		debug_acts::Do(DebugWeather {.act = DebugWeather::Act::MeltSnow});
 	}
 
 	auto climates = weather.IsClimateSystemEnabled();
 	if (ImGui::Checkbox("Climates", &climates))
 	{
-		weather.SetClimateSystemEnabled(climates);
+		debug_acts::Do(DebugWeather {.act = DebugWeather::Act::Climates, .on = climates});
 	}
 	ImGui::SameLine();
 	auto storms = weather.IsStormCreationEnabled();
 	if (ImGui::Checkbox("Climates breed storms", &storms))
 	{
-		weather.SetStormCreationEnabled(storms);
+		debug_acts::Do(DebugWeather {.act = DebugWeather::Act::ClimateStorms, .on = storms});
 	}
 }
 
@@ -326,8 +350,7 @@ void Weather::DrawStorms() noexcept
 	ImGui::TableSetupColumn("Lightning");
 	ImGui::TableSetupColumn("");
 	ImGui::TableHeadersRow();
-	auto& weather = Locator::weatherSystem::value();
-	registry.Each<const Storm>([&weather](entt::entity entity, const Storm& storm) {
+	registry.Each<const Storm>([](entt::entity entity, const Storm& storm) {
 		if (storm.dead)
 		{
 			return;
@@ -353,7 +376,7 @@ void Weather::DrawStorms() noexcept
 		}
 		else if (ImGui::SmallButton("End"))
 		{
-			weather.EndStorm(entity);
+			debug_acts::Do(DebugWeather {.act = DebugWeather::Act::EndStorm, .storm = entity});
 		}
 		ImGui::PopID();
 	});

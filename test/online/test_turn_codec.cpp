@@ -218,6 +218,30 @@ std::vector<Action> EachCommand()
 	                  .emotion = 3},
 	    DebugWorld {.act = DebugWorld::Act::PlayerAlignment, .player = 1, .index = 0, .value = -0.5f},
 	    DebugConsoleLine {.text = "CREATE_TOWN(1, \"1000,1000\", \"Celtic\")"},
+	    DebugMagic {.act = DebugMagic::Act::CastOnCreature,
+	                .magic = 7,
+	                .position = {1.0f, 2.0f, 3.0f},
+	                .forward = {0.0f, -0.5f, 0.5f},
+	                .creature = Entity(41),
+	                .value = 2500.0f,
+	                .on = true},
+	    DebugTownMiracle {.town = 3, .magic = 9, .give = false, .withPlain = true, .allLevels = true, .openSite = false},
+	    DebugWeather {.act = DebugWeather::Act::ForceStorm,
+	                  .temperature = -15,
+	                  .rain = 80,
+	                  .snow = 20,
+	                  .overcast = 90,
+	                  .windX = -30,
+	                  .windZ = 40,
+	                  .seconds = 120.0f,
+	                  .fadeSeconds = 2.5f,
+	                  .thunderWait = {3.0f, 15.0f},
+	                  .boltWait = {2.0f, 8.0f},
+	                  .cloudHeight = 250.0f,
+	                  .rainSpeed = 1.5f,
+	                  .storm = Entity(42),
+	                  .on = true},
+	    DebugSky {.act = DebugSky::Act::MoonDate, .hour = 19.5f, .on = true, .date = -86400},
 	};
 }
 
@@ -258,7 +282,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 71)
+	switch (bits(random) % 75)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -603,6 +627,43 @@ Action RandomAction(std::mt19937& random)
 		}
 		return line;
 	}
+	case 71:
+		return DebugMagic {.act = static_cast<DebugMagic::Act>(bits(random) % 10),
+		                   .magic = static_cast<uint8_t>(bits(random)),
+		                   .position = vector(),
+		                   .forward = vector(),
+		                   .creature = entity(),
+		                   .value = number(),
+		                   .on = bits(random) % 2 == 1};
+	case 72:
+		return DebugTownMiracle {.town = bits(random),
+		                         .magic = static_cast<uint8_t>(bits(random)),
+		                         .give = bits(random) % 2 == 1,
+		                         .withPlain = bits(random) % 2 == 1,
+		                         .allLevels = bits(random) % 2 == 1,
+		                         .openSite = bits(random) % 2 == 1,
+		                         .anyLand = bits(random) % 2 == 1};
+	case 73:
+		return DebugWeather {.act = static_cast<DebugWeather::Act>(bits(random) % 9),
+		                     .temperature = static_cast<int8_t>(bits(random)),
+		                     .rain = static_cast<int8_t>(bits(random)),
+		                     .snow = static_cast<int8_t>(bits(random)),
+		                     .overcast = static_cast<int8_t>(bits(random)),
+		                     .windX = static_cast<int8_t>(bits(random)),
+		                     .windZ = static_cast<int8_t>(bits(random)),
+		                     .seconds = number(),
+		                     .fadeSeconds = number(),
+		                     .thunderWait = {number(), number()},
+		                     .boltWait = {number(), number()},
+		                     .cloudHeight = number(),
+		                     .rainSpeed = number(),
+		                     .storm = entity(),
+		                     .on = bits(random) % 2 == 1};
+	case 74:
+		return DebugSky {.act = static_cast<DebugSky::Act>(bits(random) % 5),
+		                 .hour = number(),
+		                 .on = bits(random) % 2 == 1,
+		                 .date = static_cast<int64_t>((static_cast<uint64_t>(bits(random)) << 32U) | bits(random))};
 	default:
 		return PlayerLeft {};
 	}
@@ -665,9 +726,10 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5, 9, 5,  53, 5, 10, 18, 5,  49, 17, 5,  5,  5,  9,  12,  1,  18, 11, 5,  19, 15, 7, 5,
-	                                 1,  2, 1, 61, 5,  2, 1,  13, 10, 18, 1,  58, 1,  5,  51, 5,   16, 7,  1,  1,  13, 1,  2, 9,
-	                                 13, 1, 1, 8,  1,  5, 37, 3,  10, 34, 2,  15, 78, 20, 36, 107, 14, 85, 25, 17, 14, 14, 30, 8, 40};
+	const std::vector<size_t> sizes {2,  5,  9,  5,   53, 5,  10, 18, 5,  49, 17, 5,  5,  5,  9,  12, 1,  18, 11, 5,
+	                                 19, 15, 7,  5,   1,  2,  1,  61, 5,  2,  1,  13, 10, 18, 1,  58, 1,  5,  51, 5,
+	                                 16, 7,  1,  1,   13, 1,  2,  9,  13, 1,  1,  8,  1,  5,  37, 3,  10, 34, 2,  15,
+	                                 78, 20, 36, 107, 14, 85, 25, 17, 14, 14, 30, 8,  40, 36, 7,  45, 15};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -770,6 +832,24 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 78;
 		}
+		// The acts of the Magic, the Weather and the Moon windows have the tags 90 to 93. The tags 79 to 89 are for other
+		// lanes.
+		if (std::holds_alternative<DebugMagic>(commands[i]))
+		{
+			tag = 90;
+		}
+		if (std::holds_alternative<DebugTownMiracle>(commands[i]))
+		{
+			tag = 91;
+		}
+		if (std::holds_alternative<DebugWeather>(commands[i]))
+		{
+			tag = 92;
+		}
+		if (std::holds_alternative<DebugSky>(commands[i]))
+		{
+			tag = 93;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
@@ -810,6 +890,53 @@ TEST(TurnCodec, TheDecoderRefusesABadActOfTheDebugWindows)
 	// A line has at most the most bytes of a line of the Console
 	line.text.assign(k_MostConsoleLineBytes + 1, 'a');
 	EXPECT_EQ(Decode(encode(line)).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, TheDecoderRefusesABadActOfTheMagicWeatherAndMoonWindows)
+{
+	const auto encode = [](Action action) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {std::move(action)}}});
+	};
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_FirstField = 10;
+	auto magic = encode(DebugMagic {.act = DebugMagic::Act::InfinitePrayer, .on = true});
+	ASSERT_EQ(magic.size(), k_FirstField + 35);
+	ASSERT_EQ(Decode(magic).error, DecodeError::None);
+	// The infinite prayer power is the last act, and the switch is 0 or 1
+	magic[k_FirstField] = 10;
+	EXPECT_EQ(Decode(magic).error, DecodeError::Value);
+	magic[k_FirstField] = 0;
+	magic.back() = 2;
+	EXPECT_EQ(Decode(magic).error, DecodeError::Value);
+	magic.pop_back();
+	EXPECT_EQ(Decode(magic).error, DecodeError::Truncated);
+
+	const DebugTownMiracle town {.town = 7, .magic = 2, .give = true, .withPlain = false, .anyLand = true};
+	auto townBytes = encode(town);
+	ASSERT_EQ(townBytes.size(), k_FirstField + 6);
+	ASSERT_EQ(std::get<DebugTownMiracle>(std::get<CommandBlock>(*Decode(townBytes).frame).actions.front()), town);
+	// The choices have five bits
+	townBytes.back() = 0x20;
+	EXPECT_EQ(Decode(townBytes).error, DecodeError::Value);
+
+	auto weather = encode(DebugWeather {.act = DebugWeather::Act::EndStorm, .storm = Entity(5)});
+	ASSERT_EQ(weather.size(), k_FirstField + 44);
+	ASSERT_EQ(Decode(weather).error, DecodeError::None);
+	weather[k_FirstField] = 9;
+	EXPECT_EQ(Decode(weather).error, DecodeError::Value);
+
+	auto sky = encode(DebugSky {.act = DebugSky::Act::Reset});
+	ASSERT_EQ(sky.size(), k_FirstField + 14);
+	ASSERT_EQ(Decode(sky).error, DecodeError::None);
+	sky[k_FirstField] = 5;
+	EXPECT_EQ(Decode(sky).error, DecodeError::Value);
+	// The hour is not a number
+	sky[k_FirstField] = 0;
+	sky[k_FirstField + 1] = 0x00;
+	sky[k_FirstField + 2] = 0x00;
+	sky[k_FirstField + 3] = 0xC0;
+	sky[k_FirstField + 4] = 0x7F;
+	EXPECT_EQ(Decode(sky).error, DecodeError::Value);
 }
 
 TEST(TurnCodec, TheDecoderRefusesABadStrokeOrPath)

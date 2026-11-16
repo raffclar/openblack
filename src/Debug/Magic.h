@@ -37,6 +37,9 @@ class Magic final: public Window
 public:
 	Magic() noexcept;
 
+	/// The acts on the world go as commands in a network game. The Particles tab does not show there.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
+
 protected:
 	void Draw() noexcept override;
 	void Update() noexcept override;

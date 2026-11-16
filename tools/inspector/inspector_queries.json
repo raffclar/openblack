@@ -2869,17 +2869,17 @@
   "writes": true
  },
  {
-  "description": "Does an act of the debug windows or of the debug menus, as their buttons do: an act on the advisors (kind advisor), a change of the time of the day, of the alignment of a player or of a bonus creature (kind world), a line of land script commands of the Console (kind console), or a gesture of the Gestures window (kind gesture). In a network game the first three go as commands of the turns, and the game server takes them only from a player with the debugger claim. A gesture goes to the hand of this computer. force sends the act also when the debug windows of this computer do not show.",
+  "description": "Does an act of the debug windows or of the debug menus, as their buttons do: an act on the advisors (kind advisor), a change of the time of the day, of the alignment of a player or of a bonus creature (kind world), a line of land script commands of the Console (kind console), a gesture of the Gestures window (kind gesture), an act of the Magic window (kind magic, or town for the town miracles), of the Weather window (kind weather) or of the Moon window (kind sky). In a network game each act but a gesture goes as a command of the turns, and the game server takes it only from a player with the debugger claim. A gesture goes to the hand of this computer. force sends the act also when the debug windows of this computer do not show.",
   "kind": "object",
   "parameters": [
    {
-    "description": "advisor, world, console or gesture",
+    "description": "advisor, world, console, gesture, magic, town, weather or sky",
     "name": "kind",
     "required": true,
     "type": "string"
    },
    {
-    "description": "advisor: out, appear, home, vanish, fly, cling, screen_point, point_at, look_at, stop_pointing, stop_looking, play_anim or feel. world: time_of_day, player_alignment or bonus_creature. gesture: circle, power_up_0, power_up_1 or scribble.",
+    "description": "advisor: out, appear, home, vanish, fly, cling, screen_point, point_at, look_at, stop_pointing, stop_looking, play_anim or feel. world: time_of_day, player_alignment or bonus_creature. gesture: circle, power_up_0, power_up_1 or scribble. magic: ignore_influence, place_dispenser, place_bubble, give_to_hand, summon_from_worship, cast_at_point, cast_on_creature, drop_seed, prayer_power or infinite_prayer. town: give or take. weather: preset, force_storm, clear_storms, bolt, thunder, melt_snow, climates, climate_storms or end_storm. sky: script_hour, clock_runs, moon_date, computer_date or reset.",
     "name": "act",
     "type": "string"
    },
@@ -2929,9 +2929,99 @@
     "type": "integer"
    },
    {
-    "description": "world: the hours, the alignment, or 1 or 0",
+    "description": "world: the hours, the alignment, or 1 or 0. magic prayer_power: the prayer power. sky script_hour: the hour",
     "name": "value",
     "type": "number"
+   },
+   {
+    "description": "magic, town: the miracle (magic type)",
+    "name": "magic",
+    "type": "integer"
+   },
+   {
+    "description": "magic, weather, sky: the value of a switch",
+    "name": "on",
+    "type": "boolean"
+   },
+   {
+    "description": "magic cast_on_creature: the creature, else the creature nearest to the position",
+    "name": "creature",
+    "type": "integer"
+   },
+   {
+    "description": "town: the number of the town, else the first town",
+    "name": "town",
+    "type": "integer"
+   },
+   {
+    "description": "town give: also the plain miracle",
+    "name": "with_plain",
+    "type": "boolean"
+   },
+   {
+    "description": "town take: each level",
+    "name": "all_levels",
+    "type": "boolean"
+   },
+   {
+    "description": "town give: the town can have a worship site",
+    "name": "open_site",
+    "type": "boolean"
+   },
+   {
+    "description": "town give: also on the first land",
+    "name": "any_land",
+    "type": "boolean"
+   },
+   {
+    "description": "weather preset, force_storm: rain, 0 to 100",
+    "name": "rain",
+    "type": "integer"
+   },
+   {
+    "description": "weather preset, force_storm: snow, 0 to 100",
+    "name": "snow",
+    "type": "integer"
+   },
+   {
+    "description": "weather preset, force_storm: cloud, 0 to 100",
+    "name": "overcast",
+    "type": "integer"
+   },
+   {
+    "description": "weather preset, force_storm: temperature, -30 to 45",
+    "name": "temperature",
+    "type": "integer"
+   },
+   {
+    "description": "weather: wind along x, -100 to 100",
+    "name": "wind_x",
+    "type": "integer"
+   },
+   {
+    "description": "weather: wind along z, -100 to 100",
+    "name": "wind_z",
+    "type": "integer"
+   },
+   {
+    "description": "weather: how long the storm lasts",
+    "name": "seconds",
+    "type": "number"
+   },
+   {
+    "description": "weather: the storm has lightning",
+    "name": "lightning",
+    "type": "boolean"
+   },
+   {
+    "description": "weather end_storm: the storm, else the first storm",
+    "name": "storm",
+    "type": "integer"
+   },
+   {
+    "description": "sky moon_date: seconds after 1970",
+    "name": "date",
+    "type": "integer"
    },
    {
     "description": "console: the line",
