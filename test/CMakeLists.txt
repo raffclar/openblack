@@ -2657,3 +2657,7 @@ openblack_setup_and_add_test(test_editor_land_edits test_editor_land_edits.cpp)
 openblack_setup_and_add_test(test_editor_mind_loads test_editor_mind_loads.cpp)
 openblack_setup_and_add_test(test_editor_script_acts test_editor_script_acts.cpp)
 openblack_setup_and_add_test(test_debug_acts test_debug_acts.cpp)
+if(MSVC)
+  # The lockstep tests have more sections than the default object file takes
+  target_compile_options(test_lockstep PRIVATE /bigobj)
+endif()

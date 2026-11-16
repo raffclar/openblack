@@ -268,6 +268,52 @@ void LobbyClientSystem::Update()
 			OpenPush();
 		}
 	}
+	CheckRight();
+}
+
+void LobbyClientSystem::CheckRight()
+{
+	if (_state != LobbySessionState::LoggedIn || _push->IsOpen() || _checkingRight)
+	{
+		return;
+	}
+	const auto now = _clock();
+	if (!_rightCheckAt.has_value())
+	{
+		_rightCheckAt = now + lobby_times::k_RightCheckInterval;
+		return;
+	}
+	if (now < *_rightCheckAt)
+	{
+		return;
+	}
+	_checkingRight = true;
+	const auto generation = _generation;
+	GetMe([this, generation](LobbyResult<lobby_api::Me>&& result) {
+		if (generation != _generation)
+		{
+			return;
+		}
+		_checkingRight = false;
+		_rightCheckAt = _clock() + lobby_times::k_RightCheckInterval;
+		// An older lobby does not give the right in the account: the right then changes only with a session answer
+		if (result.Ok() && result.value->editor.has_value())
+		{
+			FollowEditorRight(*result.value->editor, "the account");
+		}
+	});
+}
+
+void LobbyClientSystem::FollowEditorRight(bool editor, std::string_view source)
+{
+	if (_state != LobbySessionState::LoggedIn || !_account.has_value() || editor == _accountEditor)
+	{
+		return;
+	}
+	_accountEditor = editor;
+	// The test tools find the words "the editor right"
+	LogSession("The lobby session of {} {} the editor right now ({})", _account->name, editor ? "has" : "does not have",
+	           source);
 }
 
 void LobbyClientSystem::Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback)
@@ -641,6 +687,8 @@ void LobbyClientSystem::EndSession()
 	_emailRequired = false;
 	_accountEditor = false;
 	_accountDebugger = false;
+	_rightCheckAt.reset();
+	_checkingRight = false;
 	_accessToken.clear();
 	_accessExpiry = {};
 	_refreshToken.reset();
@@ -1569,6 +1617,14 @@ void LobbyClientSystem::HandlePush(std::string_view text)
 		if (listener)
 		{
 			listener(*event);
+		}
+	}
+	if (event->type == lobby_api::events::k_AccountEditor)
+	{
+		// Staff changed the editor right of the account: the game follows it at once
+		if (const auto change = lobby_api::ParseEditorChange(event->data); change.has_value())
+		{
+			FollowEditorRight(change->editor, "an event of the lobby");
 		}
 	}
 	if (event->type == lobby_api::events::k_AccountBanned)

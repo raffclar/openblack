@@ -355,8 +355,11 @@ class FakeLobby:
     does (mutual TLS). With a result key, it checks the signature of each result as the lobby does, and its status
     answers say that the first client's account plays for clan 7."""
 
-    def __init__(self, certs, banned, result_key=None):
+    def __init__(self, certs, banned, result_key=None, editors=None):
         self.counts = {"status": 0, "bans": 0, "results": 0, "host_reports": 0, "other": 0}
+        # The accounts of the room with the editor right that each status answer gives. None gives no "editors", as an
+        # older lobby. The test changes the list while the game runs.
+        self.editors = editors
         self.results = []
         # The reports of the host as bytes, each with the size check of the lobby
         self.host_reports = []
@@ -380,7 +383,10 @@ class FakeLobby:
                 body = self.rfile.read(length)
                 if self.path == f"/api/v1/servers/{SERVER_ID}/status":
                     lobby.counts["status"] += 1
-                    self.answer(200, {"next_status_in": 5, "listed": True, "clans": clans})
+                    reply = {"next_status_in": 5, "listed": True, "clans": clans}
+                    if lobby.editors is not None:
+                        reply["editors"] = list(lobby.editors)
+                    self.answer(200, reply)
                 elif self.path == f"/api/v1/servers/{SERVER_ID}/host-report":
                     # The lobby takes 72 bytes, and 20 bytes for each of at most 15 conditions
                     lobby.counts["host_reports"] += 1
@@ -1292,6 +1298,82 @@ def editor_check(pids, client_logs, server_log, shots=None):
         and done["key_refusal_lines"][1] >= 1 and done["server_refusals_told"][0] == 0
         and done["server_refusals_told"][1] >= 1 and done["refusal_lines"][0] == 0
         and done["refusal_lines"][1] > done["key_refusal_lines"][1])
+    return done
+
+
+def wait_for_lines(logs, words, limit=30.0):
+    """Waits until each log has a line with the words. Returns whether each log has one."""
+    end = time.monotonic() + limit
+    while True:
+        found = [bool(lines_with(log, [words])) for log in logs]
+        if all(found) or time.monotonic() >= end:
+            return found
+        time.sleep(0.5)
+
+
+def editor_right_check(pids, client_logs, server_log, lobby, shots=None):
+    """A change of the editor right while the game runs. The first client has the editor claim and the second has not.
+    The fake lobby then gives the right to the second account and removes it from the first. Within one status report,
+    the server must tell each client its new right, and the server and the clients must follow it: the editor key opens
+    the editor only on the second client, the first client sees the refusal line, the server takes the edit of the
+    second client and refuses the edit of the first. Returns what each step did."""
+    first, second = pids
+    done = {"states": [inspector_answer(pid, "editor.state", {}) for pid in pids]}
+    for pid in pids:
+        close_land_info_box(pid)
+        press_key(pid, "F10", True)
+    done["opened_before"] = [(inspector_answer(pid, "editor.state", {}) or {}).get("open") for pid in pids]
+    # The first client closes its editor again, so that the key opens it after the change
+    press_key(first, "F10", True)
+    lines_before = [len(lines_with(log, ["The player sees the refusal line"])) for log in client_logs]
+    editor_shots(pids, shots, "00_before")
+    # Staff move the right from the first account to the second
+    changed_at = time.monotonic()
+    lobby.editors = [101]
+    wait_for_lines([server_log], "The lobby gave the editor right of", 30.0)
+    done["server_followed"] = [bool(lines_with(server_log, ["The lobby removed the editor right of Player1"])),
+                               bool(lines_with(server_log, ["The lobby gave the editor right of Player2"]))]
+    done["clients_followed"] = wait_for_lines(client_logs, "the editor right of this player", 30.0)
+    done["seconds_to_follow"] = round(time.monotonic() - changed_at, 1)
+    done["states_after"] = [inspector_answer(pid, "editor.state", {}) for pid in pids]
+    for pid in pids:
+        press_key(pid, "F10", True)
+    done["opened_after"] = [(inspector_answer(pid, "editor.state", {}) or {}).get("open") for pid in pids]
+    time.sleep(1)
+    done["key_refusal_lines"] = [len(lines_with(log, ["The player sees the refusal line"])) - before
+                                 for log, before in zip(client_logs, lines_before)]
+    editor_shots(pids, shots, "01_after_change")
+    camera = inspector_answer(second, "camera.state", {}) or {}
+    focus = camera.get("focus") or [0.0, 0.0, 0.0]
+    trees = items_of(inspector_answer(second, "objects.find", {"params": {
+        "near": [focus[0], focus[2]], "radius": 400.0, "kind": "Tree", "limit": 1}}))
+    if not trees:
+        done["error"] = f"no tree near the camera at {focus}"
+        return done
+    tree = trees[0]
+    start = tree.get("position") or [0.0, 0.0, 0.0]
+    target = [start[0] + 6.0, start[2] + 6.0]
+    refused_before = len(lines_with(server_log, ["the join ticket has no editor claim"]))
+    done["move"] = inspector_answer(second, "editor.network_edit", {"params": {
+        "kind": "move", "id": tree["id"], "position": target}})
+    done["forced_edit"] = inspector_answer(first, "editor.network_edit", {"params": {
+        "kind": "move", "id": tree["id"], "position": [start[0] - 6.0, start[2] - 6.0], "force": True}})
+    time.sleep(5)
+
+    def position(pid):
+        entity = inspector_answer(pid, "ecs.entity", {"params": {"id": tree["id"]}}) or {}
+        return entity.get("position")
+
+    done["positions"] = [position(pid) for pid in pids]
+    done["refused"] = len(lines_with(server_log, ["the join ticket has no editor claim"])) - refused_before
+    done["server_refusals_told"] = [len(lines_with(log, ["The game server refused"])) for log in client_logs]
+    editor_shots(pids, shots, "02_after_edits")
+    moved = [p is not None and abs(p[0] - target[0]) < 0.01 and abs(p[2] - target[1]) < 0.01 for p in done["positions"]]
+    done["passed"] = bool(
+        done["opened_before"] == [True, False] and done["server_followed"] == [True, True]
+        and done["clients_followed"] == [True, True] and done["opened_after"] == [False, True]
+        and done["key_refusal_lines"][0] >= 1 and done["key_refusal_lines"][1] == 0 and all(moved)
+        and done["refused"] >= 1 and done["server_refusals_told"][0] >= 1 and done["server_refusals_told"][1] == 0)
     return done
 
 
@@ -2897,6 +2979,11 @@ def main():
                              "--hold-after turns "
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
+    parser.add_argument("--editor-right-change", action="store_true",
+                        help="the first client has the editor claim and the second has not; a fake lobby gives the "
+                             "rights of the room in its status answers. After --hold-after turns the lobby moves the "
+                             "right to the second account: the server and both clients must follow it at once "
+                             "(--editor-shots takes the pictures)")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
                                                     "creature-remove", "land", "history", "mind", "time", "scripts", "debug",
                                                     "all"),
@@ -3175,14 +3262,14 @@ def main():
         server_command += ["--lobby-id", LOBBY_ID, "--expect-members", members_file, "--game-id", SERVER_ID,
                            "--join-window", str(options.join_window)]
     lobby = None
-    if options.ban_account is not None or options.lobby_results:
+    if options.ban_account is not None or options.lobby_results or options.editor_right_change:
         if options.ban_account is not None and 100 <= options.ban_account < 100 + options.clients:
             parser.error("--ban-account must not be the account of a client that plays")
         result_key = None
         if options.lobby_results:
             result_key, result_key_path = make_result_key(out)
             server_command += ["--result-key", result_key_path]
-        lobby = FakeLobby(certs, options.ban_account, result_key)
+        lobby = FakeLobby(certs, options.ban_account, result_key, [100] if options.editor_right_change else None)
         server_command += ["--lobby-api", lobby.address, "--client-cert", certs["client.pem"],
                            "--client-key", certs["client.key"], "--lobby-test-ca", certs["ca.pem"]]
     banned_result = None
@@ -3210,6 +3297,7 @@ def main():
     miracle_done = None
     fight_done = None
     editor_done = None
+    editor_right_done = None
     forest_done = None
     editor_desync_done = None
     give_done = None
@@ -3273,7 +3361,7 @@ def main():
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
                                  "observer" if is_observer else "god", 600,
-                                 editor=(options.editor_check or options.forest_camera
+                                 editor=(options.editor_check or options.forest_camera or options.editor_right_change
                                          or (bool(options.editor_desync) and options.editor_desync != "debug"))
                                  and index == 0,
                                  staff=options.editor_check and index == 1,
@@ -3431,6 +3519,13 @@ def main():
                 editor_done = editor_check([client.pid for client in clients],
                                            [os.path.join(client_dirs[index], "client.log") for index in range(2)],
                                            server_log, options.editor_shots)
+            if (options.editor_right_change and editor_right_done is None and len(clients) == 2
+                    and all(client.poll() is None for client in clients) and all(reached_turn(
+                        os.path.join(client_dirs[index], "client.log"), clients[index].pid, options.hold_after)
+                        for index in range(2))):
+                editor_right_done = editor_right_check([client.pid for client in clients],
+                                                       [os.path.join(client_dirs[index], "client.log") for index in range(2)],
+                                                       server_log, lobby, options.editor_shots)
             if (options.forest_camera and forest_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients) and all(reached_turn(
                         os.path.join(client_dirs[index], "client.log"), clients[index].pid, options.hold_after)
@@ -3704,6 +3799,11 @@ def main():
                 all_same = False
         if editor_desync_done is None or editor_desync_done.get("error"):
             print(f"the editor desync check did not run: {editor_desync_done}")
+            all_same = False
+    if options.editor_right_change:
+        summary["editor_right_change"] = editor_right_done
+        if not (editor_right_done or {}).get("passed"):
+            print(f"the editor right check did not pass: {editor_right_done}")
             all_same = False
     if options.editor_check:
         summary["editor_check"] = editor_done

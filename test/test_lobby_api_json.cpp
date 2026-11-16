@@ -131,6 +131,17 @@ TEST(LobbyApi, MeHasTheClansAndThePlaceForTheWeather)
 	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc","clans":[{"id":1,"name":"Gods"}]})").has_value());
 }
 
+TEST(LobbyApi, MeAndTheEventOfTheLobbyGiveTheEditorRight)
+{
+	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc"})")->editor.has_value());
+	EXPECT_EQ(ParseMe(R"({"id":3,"name":"abc","editor":true})")->editor, std::optional<bool>(true));
+	EXPECT_EQ(ParseMe(R"({"id":3,"name":"abc","editor":false})")->editor, std::optional<bool>(false));
+	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc","editor":"yes"})").has_value());
+	EXPECT_TRUE(ParseEditorChange(R"({"editor":true})")->editor);
+	EXPECT_FALSE(ParseEditorChange(R"({"editor":false})")->editor);
+	EXPECT_FALSE(ParseEditorChange("{}").has_value());
+}
+
 TEST(LobbyApi, ServerListReadsEachServer)
 {
 	const auto list = ParseServerList(R"({"servers":[)" + ServerJson() + "]}");

@@ -862,6 +862,104 @@ TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAGodWithTheEditor
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
+TEST_F(LockstepTest, AChangeOfTheEditorRightDuringTheGameTakesEffectAtOnce)
+{
+	MakeHost(2);
+	Computer watcher(network, now, "observer:13");
+	Frames({&watcher}, 3);
+	Computer alice(network, now, "god+editor:11");
+	Computer bob(network, now, "god:12");
+	Frames({&alice, &bob, &watcher}, 8);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.GetJoined()->editor);
+	ASSERT_FALSE(bob.session.GetJoined()->editor);
+	// Staff remove the right of Alice and give it to Bob and to the observer. The next status answer of the lobby tells
+	// the server.
+	const std::vector<int64_t> editors {12, 13};
+	host->SetEditors(editors);
+	EXPECT_FALSE(host->Seats()[0].editor);
+	EXPECT_TRUE(host->Seats()[1].editor);
+	Frames({&alice, &bob, &watcher}, 2);
+	EXPECT_FALSE(alice.session.GetJoined()->editor);
+	EXPECT_TRUE(bob.session.GetJoined()->editor);
+	EXPECT_TRUE(watcher.session.GetJoined()->editor);
+	// The server takes the edits and the cheats by the new rights
+	const EditorEdit move {.kind = EditorEdit::Kind::Move, .object = Entity(5), .position = {1.0f, 0.0f, 2.0f}};
+	alice.session.Send(move);
+	alice.session.Send(DebugCheat {.cheat = 0, .on = true});
+	bob.session.Send(move);
+	Frames({&alice, &bob, &watcher}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	const auto& bobCommands = host->Seats()[1].commands;
+	const auto edits = bobCommands.find(static_cast<uint8_t>(turn_codec::CommandTag::EditorEdit));
+	EXPECT_TRUE(edits != bobCommands.end() && edits->second == 1u);
+	EXPECT_GE(alice.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(bob.session.TakeEditorRefusals(), 0u);
+	// The same rights again change nothing
+	host->SetEditors(editors);
+	EXPECT_TRUE(host->Seats()[1].editor);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, APlayerWithNoAccountKeepsTheEditorClaimOfTheJoin)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:12");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	host->SetEditors({});
+	EXPECT_TRUE(host->Seats()[0].editor);
+	EXPECT_FALSE(host->Seats()[1].editor);
+	Frames({&alice, &bob}, 2);
+	EXPECT_TRUE(alice.session.GetJoined()->editor);
+}
+
+TEST_F(LockstepTest, APlayerWhoIsAwayGetsTheChangedEditorRightWhenThePlayerComesBack)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:11");
+	Computer bob(network, now, "god:12");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	network.Cut(bob.sockets->Ids().back());
+	bob.Frame();
+	Frames({&alice}, 10);
+	ASSERT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	const std::vector<int64_t> editors {12};
+	host->SetEditors(editors);
+	EXPECT_TRUE(host->Seats()[1].editor);
+	EXPECT_FALSE(bob.session.GetJoined()->editor);
+	Frames({&alice, &bob}, 10);
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_TRUE(bob.session.GetJoined()->editor);
+	EXPECT_FALSE(alice.session.GetJoined()->editor);
+}
+
+TEST_F(LockstepTest, ThePauseOfTheEditorEndsWhenTheLobbyRemovesTheLastEditorRight)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:11");
+	Computer bob(network, now, "god:12");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Pause});
+	Frames({&alice, &bob}, 5);
+	ASSERT_TRUE(host->RoomClock().paused);
+	const auto pausedAt = serverWorld.turns;
+	host->SetEditors({});
+	Frames({&alice, &bob}, 10);
+	EXPECT_FALSE(host->RoomClock().paused);
+	EXPECT_GT(bob.world.turns, pausedAt);
+	// Without the right, a new pause of Alice is refused
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Pause});
+	Frames({&alice, &bob}, 5);
+	EXPECT_FALSE(host->RoomClock().paused);
+}
+
 TEST_F(LockstepTest, TheJoinAnswerGivesTheDebuggerClaimOfTheTicketApartFromTheEditorClaim)
 {
 	MakeHost(2);

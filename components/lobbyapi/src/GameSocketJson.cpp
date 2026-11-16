@@ -55,6 +55,7 @@ constexpr std::string_view k_SyncAsk = "sync.ask";
 constexpr std::string_view k_SyncEntities = "sync.entities";
 constexpr std::string_view k_SyncWorld = "sync.world";
 constexpr std::string_view k_CommandRefused = "command.refused";
+constexpr std::string_view k_EditorRight = "editor.right";
 constexpr std::string_view k_EditorMindFile = "editor.mind_file";
 constexpr std::string_view k_EditorTime = "editor.time";
 constexpr std::string_view k_GameTime = "game.time";
@@ -965,6 +966,15 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		file.bytes = std::move(*bytes);
 		return file;
 	}
+	if (type == k_EditorRight)
+	{
+		EditorRight right;
+		if (!ReadBool(object, "editor", right.editor))
+		{
+			return std::nullopt;
+		}
+		return right;
+	}
 	if (type == k_CommandRefused)
 	{
 		CommandRefused refused;
@@ -1346,6 +1356,10 @@ std::string ToJson(const Frame& frame)
 			                   {"count", value.count},
 			                   {"size", value.size},
 			                   {"data", join_ticket::EncodeBase64Url(value.bytes)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorRight>)
+		    {
+			    object = Json {{"type", k_EditorRight}, {"editor", value.editor}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, CommandRefused>)
 		    {

@@ -529,6 +529,17 @@ void NetworkSession::Text(std::string_view text)
 			}
 		}
 	}
+	else if (const auto* right = std::get_if<game_socket::EditorRight>(&*frame))
+	{
+		// The lobby changed the editor right of the account while the game runs. The game follows the new right at once.
+		if (_joined.has_value() && _joined->editor != right->editor)
+		{
+			_joined->editor = right->editor;
+			// The test tools find the words "the editor right of this player"
+			_log->Write(spdlog::level::info,
+			            fmt::format("The game server {} the editor right of this player", right->editor ? "gave" : "removed"));
+		}
+	}
 	else if (const auto* commands = std::get_if<game_socket::CommandRefused>(&*frame))
 	{
 		// The game shows a line to the player. A refusal for another reason shows the same line, as no other reason exists.

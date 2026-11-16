@@ -196,8 +196,10 @@ public:
 		/// The blocks whose commands the server refused because the commands of the god did not fit in the turn
 		uint32_t refusedBlocks {0};
 		/// The join ticket of the player has the editor claim. A seat that a snapshot gave back keeps the claim of the
-		/// snapshot.
+		/// snapshot. The lobby can change it while the game runs (SetEditors).
 		bool editor {false};
+		/// The lobby changed the editor right after the join. The player gets the right again when the player comes back.
+		bool editorChanged {false};
 		/// The join ticket of the player has the debugger claim. A seat that a snapshot gave back keeps the claim of the
 		/// snapshot.
 		bool debugger {false};
@@ -218,10 +220,14 @@ public:
 		/// The number of the observer in the game, from 1. The turns stamp the blocks of the observer with it.
 		uint8_t number {0};
 		/// The join ticket of the observer has the editor claim. An observer that a snapshot gave back keeps the claim of the
-		/// snapshot.
+		/// snapshot. The lobby can change it while the game runs (SetEditors).
 		bool editor {false};
+		/// The lobby changed the editor right after the join. The observer gets the right again when it comes back.
+		bool editorChanged {false};
 		/// The join ticket of the observer has the debugger claim
 		bool debugger {false};
+		/// The account of the ticket. Empty for an observer that joined by name, or that a restore gave.
+		std::string account;
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
@@ -288,6 +294,11 @@ public:
 	/// "kicked", and the room refuses the join of a banned god. After the start, a ban changes nothing (deviation 146).
 	void SetBans(std::set<int64_t> accounts);
 	[[nodiscard]] const std::set<int64_t>& Bans() const { return _bans; }
+	/// The accounts of the room that have the editor right now, from each answer of the lobby to a status report. A god or
+	/// an observer whose right changed gets the new right at once ("editor.right"). From then, the server takes or refuses
+	/// the edits of the editor and the debug cheats of that player by the new right. A player with no account keeps the
+	/// claim of its join.
+	void SetEditors(std::span<const int64_t> accounts);
 
 	/// The commands of the server itself: it has no player
 	void Send(const player_commands::Action& action) override;
@@ -434,7 +445,8 @@ private:
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
 	/// Gives a new session to an observer on a connection, with the number of the observer, and returns its secret. With
 	/// no secrets, the observer cannot come back.
-	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool editor, bool debugger);
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, std::string account, uint8_t number,
+	                                     bool editor, bool debugger);
 	/// A line of the room's chat from a player: it goes to every other player in a room on the local network, until the
 	/// start
 	void ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat);

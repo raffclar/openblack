@@ -839,7 +839,8 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		}
 		peer.observer = ObserverCame(claims.name);
 		joined.observer = peer.observer;
-		joined.session = NewWatcher(connection, claims.name, peer.observer, claims.editor, claims.debugger);
+		joined.session = NewWatcher(connection, claims.name, lan ? std::string() : claims.subject, peer.observer, claims.editor,
+		                            claims.debugger);
 		Log(spdlog::level::info, fmt::format("{} joins as observer {}", claims.name, peer.observer));
 	}
 	peer.joined = true;
@@ -923,6 +924,11 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	peer.seat = seat;
 	peer.editor = found->editor;
 	peer.debugger = found->debugger;
+	// The client keeps the editor claim of its join. When the lobby changed the right since then, the client gets it again.
+	if (found->editorChanged)
+	{
+		SendTo(connection, game_socket::EditorRight {.editor = found->editor});
+	}
 	// A client whose world parted gets the server's world at the start of the next turn, and then the turns from there
 	if (world && SendWorld(connection))
 	{
@@ -974,6 +980,10 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 	peer.observer = found->number;
 	peer.editor = found->editor;
 	peer.debugger = found->debugger;
+	if (found->editorChanged)
+	{
+		SendTo(connection, game_socket::EditorRight {.editor = found->editor});
+	}
 	// An observer comes back as a god does: the world of the server when its world parted, else the turns that it missed.
 	// An observer has no god, so the other players get no message.
 	if (world && SendWorld(connection))
@@ -1084,7 +1094,8 @@ void LockstepHost::TimeFrom(ConnectionId connection, const Peer& peer, const gam
 	Broadcast(RoomClockFrame(request.act, room_clock::k_Rule.tellsEveryPlayer ? peer.name : std::string()));
 }
 
-std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool editor, bool debugger)
+std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, std::string account, uint8_t number,
+                                     bool editor, bool debugger)
 {
 	if (!_makeSecret)
 	{
@@ -1099,7 +1110,8 @@ std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, 
 	                             .name = std::move(name),
 	                             .number = number,
 	                             .editor = editor,
-	                             .debugger = debugger});
+	                             .debugger = debugger,
+	                             .account = std::move(account)});
 	return session;
 }
 
@@ -1501,7 +1513,8 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 		peer.role = game_socket::Role::Observer;
 		peer.observer = ObserverCame(claims.name);
 		joined.observer = peer.observer;
-		joined.session = NewWatcher(connection, claims.name, peer.observer, claims.editor, claims.debugger);
+		joined.session = NewWatcher(connection, claims.name, byName ? std::string() : claims.subject, peer.observer,
+		                            claims.editor, claims.debugger);
 		Log(spdlog::level::info,
 		    fmt::format("{} joins the game at turn {} as observer {}", claims.name, _turnsDone, peer.observer));
 	}
@@ -2229,6 +2242,49 @@ void LockstepHost::SetBans(std::set<int64_t> accounts)
 	if (!banned.empty() && Starting())
 	{
 		StopStart(game_socket::StartStop {});
+	}
+}
+
+void LockstepHost::SetEditors(std::span<const int64_t> accounts)
+{
+	const auto follow = [this, accounts](std::string_view account, std::string_view name, bool& editor, bool& changed,
+	                                     std::optional<ConnectionId> connection) {
+		const auto id = lobby_status::AccountId(account);
+		if (!id.has_value())
+		{
+			return;
+		}
+		const bool granted = std::ranges::find(accounts, *id) != accounts.end();
+		if (granted == editor)
+		{
+			return;
+		}
+		editor = granted;
+		changed = true;
+		// The test tools find the words "the editor right of"
+		Log(spdlog::level::info,
+		    fmt::format("The lobby {} the editor right of {}: the server {} the edits and the debug cheats of this player",
+		                granted ? "gave" : "removed", name, granted ? "takes" : "refuses"));
+		if (!connection.has_value())
+		{
+			return;
+		}
+		if (const auto peer = _peers.find(*connection); peer != _peers.end())
+		{
+			peer->second.editor = granted;
+		}
+		SendTo(*connection, game_socket::EditorRight {.editor = granted});
+	};
+	for (auto& seat : _seats)
+	{
+		if (seat.state == SeatState::Taken || seat.state == SeatState::Away)
+		{
+			follow(seat.account, seat.name, seat.editor, seat.editorChanged, seat.connection);
+		}
+	}
+	for (auto& watcher : _watchers)
+	{
+		follow(watcher.account, watcher.name, watcher.editor, watcher.editorChanged, watcher.connection);
 	}
 }
 

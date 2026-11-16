@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <optional>
 #include <set>
 #include <span>
@@ -23,6 +24,7 @@
 #include <gtest/gtest.h>
 
 using namespace openblack::developer_tools;
+using openblack::GameLanguage;
 
 namespace
 {
@@ -113,6 +115,26 @@ TEST(DeveloperTools, InASinglePlayerGameAnAccountWithoutTheEditorRightSeesTheRef
 	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Refused, DebuggerRight::Unknown), GuiMode::Dormant);
 	EXPECT_TRUE(ShowsRefusalLine(false, false, EditorRight::Refused));
 	EXPECT_FALSE(k_EditorRefusedLine.empty());
+}
+
+TEST(DeveloperTools, TheRefusalLineIsInTheLanguageOfTheGameOrInEnglish)
+{
+	EXPECT_EQ(EditorRefusedLineOf(GameLanguage::UkEnglish), k_EditorRefusedLine);
+	EXPECT_EQ(EditorRefusedLineOf(GameLanguage::UsEnglish), k_EditorRefusedLine);
+	// The game's text files have no refusal line, so a language with no row of its own shows the English line
+	for (const auto language : {GameLanguage::French, GameLanguage::German, GameLanguage::Japanese, GameLanguage::Thai})
+	{
+		const bool hasRow =
+		    std::ranges::any_of(k_EditorRefusedLines, [language](const auto& row) { return row.language == language; });
+		EXPECT_EQ(EditorRefusedLineOf(language) == k_EditorRefusedLine, !hasRow);
+		EXPECT_FALSE(EditorRefusedLineOf(language).empty());
+	}
+	// Each language has one row at most
+	for (const auto& row : k_EditorRefusedLines)
+	{
+		EXPECT_EQ(std::ranges::count(k_EditorRefusedLines, row.language, &EditorRefusedLine::language), 1);
+		EXPECT_FALSE(row.line.empty());
+	}
 }
 
 TEST(DeveloperTools, InASinglePlayerGameWithNoSignInTheEditorStaysClosedAndShowsNothing)

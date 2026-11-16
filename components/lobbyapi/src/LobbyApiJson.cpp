@@ -38,6 +38,8 @@ using json_read::ReadArray;
 using json_read::ReadBool;
 using json_read::ReadInteger;
 using json_read::ReadNumber;
+using json_read::ReadOptionalBool;
+using json_read::ReadOptionalIntegers;
 using json_read::ReadString;
 using json_read::ReadTime;
 
@@ -340,7 +342,7 @@ std::optional<Me> ParseMe(std::string_view text)
 		       ReadNumber(object, "points", out.points, false) && ReadInteger(object, "games_ranked", out.gamesRanked, false) &&
 		       ReadString(object, "country", out.country, false) && ReadString(object, "area", out.area, false) &&
 		       ReadString(object, "city", out.city, false) && ReadArray(object, "clans", out.clans, ReadClanRef, false) &&
-		       ReadTime(object, "date_joined", out.dateJoined, false);
+		       ReadTime(object, "date_joined", out.dateJoined, false) && ReadOptionalBool(object, "editor", out.editor);
 	});
 }
 
@@ -503,9 +505,11 @@ std::optional<ServerStatusReply> ParseServerStatusReply(std::string_view text)
 {
 	return ParseWith<ServerStatusReply>(text, [](const Json& object, ServerStatusReply& out) {
 		return ReadInteger(object, "next_status_in", out.nextStatusIn) && ReadBool(object, "listed", out.listed) &&
-		       ReadArray(object, "clans", out.clans, [](const Json& item, ServerStatusClan& clan) {
-			       return ReadInteger(item, "account", clan.account) && ReadInteger(item, "clan", clan.clan);
-		       });
+		       ReadArray(object, "clans", out.clans,
+		                 [](const Json& item, ServerStatusClan& clan) {
+			                 return ReadInteger(item, "account", clan.account) && ReadInteger(item, "clan", clan.clan);
+		                 }) &&
+		       ReadOptionalIntegers(object, "editors", out.editors);
 	});
 }
 
@@ -863,6 +867,12 @@ std::optional<PointsChange> ParsePointsChange(std::string_view text)
 std::optional<Ban> ParseBan(std::string_view text)
 {
 	return ParseWith<Ban>(text, [](const Json& object, Ban& out) { return ReadString(object, "reason", out.reason, false); });
+}
+
+std::optional<EditorChange> ParseEditorChange(std::string_view text)
+{
+	return ParseWith<EditorChange>(
+	    text, [](const Json& object, EditorChange& out) { return ReadBool(object, "editor", out.editor); });
 }
 
 std::optional<int64_t> ParseTime(std::string_view text)
