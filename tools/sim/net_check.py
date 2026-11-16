@@ -1528,6 +1528,10 @@ def editor_desync(pids, case, shots=None, mind_files=None):
         done["history"] = editor_history(pids, focus)
         for error in done["history"].get("errors", []):
             done.setdefault("errors", []).append(error)
+    if case == "time":
+        done["time"] = editor_time(pids, shots)
+        if done["time"].get("error"):
+            done["error"] = done["time"]["error"]
     if case in ("land", "all"):
         # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
         # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
@@ -1562,6 +1566,89 @@ def editor_desync(pids, case, shots=None, mind_files=None):
         time.sleep(1.0)
         # Both clients show the same hills, the same painted ground and the same paths
         editor_shots(pids, shots, "land")
+    return done
+
+
+def room_time(pid):
+    """The clock of the room as a client has it: whether it is paused, the time of a turn, the turn of the client and
+    the speed of its game clock"""
+    answer = inspector_answer(pid, "editor.time", {}) or {}
+    return answer if isinstance(answer, dict) else {}
+
+
+def editor_time(pids, shots=None):
+    """The editor pauses the clock of the room, steps three turns, changes the time of a turn to 2 and plays again. The
+    second client (no editor claim) asks for a play with force while the room is paused: the server must refuse it.
+    Every client must stop at the same turn, do each step, follow the speed, and keep the same checksums. Returns what
+    each step saw. With a folder for the shots, the first client opens its editor, and both clients take a picture
+    in the pause and in the slow play."""
+    editor = pids[0]
+    done = {"steps": []}
+    if shots:
+        for pid in pids:
+            close_land_info_box(pid)
+        press_key(editor, "F10", True)
+        time.sleep(1.0)
+
+    def turns():
+        return [room_time(pid).get("turn") for pid in pids]
+
+    def note(name):
+        states = [room_time(pid) for pid in pids]
+        done["steps"].append({"step": name, "turns": [state.get("turn") for state in states],
+                              "paused": [state.get("paused") for state in states],
+                              "speed": [state.get("speed") for state in states],
+                              "clock_speed": [state.get("clock_speed") for state in states]})
+        return states
+
+    note("before")
+    answers = [inspector_answer(editor, "editor.time", {"params": {"act": "pause"}})]
+    time.sleep(2.0)
+    paused = note("paused")
+    editor_shots(pids, shots, "time_paused")
+    time.sleep(2.0)
+    still = note("paused 2 s later")
+    if len(pids) > 1:
+        answers.append(inspector_answer(pids[1], "editor.time", {"params": {"act": "play", "force": True}}))
+        time.sleep(2.0)
+        still = note("after the refused play")
+    for _ in range(3):
+        answers.append(inspector_answer(editor, "editor.time", {"params": {"act": "step"}}))
+        time.sleep(0.7)
+    time.sleep(1.0)
+    stepped = note("after 3 steps")
+    answers.append(inspector_answer(editor, "editor.time", {"params": {"act": "speed", "speed": 2.0}}))
+    answers.append(inspector_answer(editor, "editor.time", {"params": {"act": "play"}}))
+    time.sleep(1.0)
+    slow_start = note("slow play")
+    editor_shots(pids, shots, "time_slow_play")
+    time.sleep(4.0)
+    slow_end = note("slow play 4 s later")
+    answers.append(inspector_answer(editor, "editor.time", {"params": {"act": "speed", "speed": 1.0}}))
+    time.sleep(1.0)
+    note("normal speed")
+    done["answers"] = answers
+    errors = [answer["error"] for answer in answers if isinstance(answer, dict) and answer.get("error")]
+    first = [state.get("turn") for state in paused]
+    later = [state.get("turn") for state in still]
+    after = [state.get("turn") for state in stepped]
+    problems = []
+    if errors:
+        problems.append(f"inspector errors {errors}")
+    if not all(state.get("paused") for state in paused):
+        problems.append("a client did not see the pause")
+    if None in first or len(set(first)) != 1 or first != later:
+        problems.append(f"the turns moved in the pause: {first} then {later}")
+    if None in after or None in later or any(a - b != 3 for a, b in zip(after, later)):
+        problems.append(f"3 steps did not give 3 turns: {later} then {after}")
+    if not all(abs((state.get("clock_speed") or 0) - 0.5) < 1e-6 for state in slow_start):
+        problems.append("a client did not follow the speed 2")
+    rates = [(b - a) / 4.0 for a, b in zip([s.get("turn") or 0 for s in slow_start], [s.get("turn") or 0 for s in slow_end])]
+    done["slow_turns_per_second"] = rates
+    if not all(3.0 <= rate <= 7.0 for rate in rates):
+        problems.append(f"the turns at speed 2 were not about 5 a second: {rates}")
+    if problems:
+        done["error"] = "; ".join(problems)
     return done
 
 
@@ -2630,7 +2717,7 @@ def main():
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
-                                                    "creature-remove", "land", "history", "mind", "all"),
+                                                    "creature-remove", "land", "history", "mind", "time", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -2640,14 +2727,17 @@ def main():
                              "lowers and paints the land and draws a footpath and a stream (land), or undoes and redoes "
                              "a placement, a move, a turn, a removal and a copy of a creature (history), or makes "
                              "creatures from mind files and loads mind files into the creatures near the camera "
-                             "(mind), or all of them; "
+                             "(mind), or pauses, steps and changes the speed of the clock of the room (time), or all of "
+                             "them but time; "
                              "every computer must keep the same checksums")
     parser.add_argument("--mind-files", nargs="+", metavar="FILE",
                         help="with --editor-desync mind: the mind files that the first client opens (the default is "
                              "the two saved creatures of Scripts/CreatureMind of the game folder)")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps; "
-                             "with --editor-desync land: screenshots of both clients after the strokes and the paths")
+                             "with --editor-desync land: screenshots of both clients after the strokes and the paths; "
+                             "with --editor-desync time: the editor of the first client opens, and both clients take "
+                             "pictures in the pause and in the slow play")
     parser.add_argument("--forest-camera", action="store_true",
                         help="the first client casts the forest once both clients compared --hold-after turns (with "
                              "--scenario, the scenario casts it): only the camera of the first client may follow the "

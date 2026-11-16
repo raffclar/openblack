@@ -725,11 +725,18 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		_snowTexture = textures.Find(snow_cover::k_TextureId.value());
 		_snowAlphaTexture = textures.Find(snow_cover::k_AlphaTextureId.value());
 	}
-	// What the particle effects draw, once for the land's colours and every pass
-	CollectParticles();
+	// The light maps and shadows of the frame that ended stamp the land in this frame
+	_landStamps.swap(_particleFrame.lightStamps);
 	// The land's light of the frame that ended, before this frame makes its own
 	KeepLightOfFrameBefore();
 	DrawLandLuminosityPass(drawDesc);
+	// The things that read the land's luminosity of this frame before the particle effects draw
+	if (drawDesc.landShaded)
+	{
+		drawDesc.landShaded();
+	}
+	// What the particle effects draw, once for the land's colours and every pass
+	CollectParticles();
 	DrawLandColourPass(drawDesc);
 	DrawSkyDomePass(drawDesc);
 	PaintLandFootprints(drawDesc);

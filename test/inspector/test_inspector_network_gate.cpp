@@ -156,7 +156,8 @@ TEST(InspectorNetworkGate, RefusedQueries)
 	                          "editor.villager_edit",
 	                          "editor.land_stroke",
 	                          "editor.path",
-	                          "editor.act"})
+	                          "editor.act",
+	                          "editor.time"})
 	{
 		EXPECT_FALSE(RefusedInNetworkGame(query, true)) << query;
 	}

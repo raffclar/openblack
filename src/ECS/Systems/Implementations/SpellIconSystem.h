@@ -105,6 +105,7 @@ public:
 	[[nodiscard]] std::vector<ChargePulse> ChargePulses() const override;
 	void UpdateHolderEffects(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
 	                         bool landDrawn) override;
+	void LightHandHolderEffects() override;
 	[[nodiscard]] std::optional<HolderTarget> FindHolderTarget(entt::entity icon) const override;
 	void Reset() override;
 
@@ -173,8 +174,8 @@ private:
 		HolderTarget target {};
 	};
 	/// The effect of the holder of an icon's seed: made once for its seed, and shown and moved on when the frame draws
-	/// the icon, at the alpha of the icon's model
-	void StepHolderEffect(entt::entity icon, bool drawn, std::optional<float> step, uint8_t alpha);
+	/// the icon. With an alpha, the effect gets the alpha of the icon's model.
+	void StepHolderEffect(entt::entity icon, bool drawn, std::optional<float> step, std::optional<uint8_t> alpha);
 	/// The seed above an icon turns by the game time of the frame, only in a frame that draws the icon on the screen
 	void TurnSeedOf(entt::entity icon, float gameSeconds, bool drawn);
 
@@ -206,6 +207,8 @@ private:
 	/// The effects of the holders of the seeds of the stone hands and the worship sites' icons. A saved game does not
 	/// keep these.
 	std::unordered_map<entt::entity, HolderEffect> _holderEffects;
+	/// The stone hands that this frame draws, which get the alpha of their effects after the frame shades the land
+	std::vector<entt::entity> _handsToLight;
 	/// When the effects of the holders take a step
 	frame_pace::Pace _holderPace;
 };
