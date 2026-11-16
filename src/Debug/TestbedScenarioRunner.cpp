@@ -169,6 +169,7 @@
 #include "TestbedDispenserGrid.h"
 #include "TestbedScenarioRunnerParts.h"
 #include "Visual/RendererRequestsInterface.h"
+#include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
@@ -424,6 +425,12 @@ void Runner::Start(const Scenario& scenario)
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
+	// The pointer starts in the middle of the window, not in its corner. A scenario that puts a leash on before it moves
+	// the pointer then does not make a creature walk to a far point of the land.
+	if (_stage != nullptr && Locator::windowing::has_value())
+	{
+		_stage->SetMousePosition(Locator::windowing::value().GetSize() / 2);
+	}
 	// A network game fills its empty slots after the land script. The temples of the scenario must stand first.
 	if (scenario.fillEmptySlots && Locator::computerPlayerSystem::has_value())
 	{
