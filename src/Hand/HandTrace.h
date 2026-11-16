@@ -90,7 +90,6 @@ public:
 
 	/// The frames kept, oldest first
 	[[nodiscard]] std::vector<Frame> Frames() const;
-	[[nodiscard]] size_t Capacity() const { return _capacity; }
 
 private:
 	size_t _capacity {0};
