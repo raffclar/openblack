@@ -32,6 +32,7 @@
 #include "3D/LandData.h"
 #include "FileSystem/DefaultFileSystem.h"
 #include "Online/DownloadTestMap.h"
+#include "Online/GameBuildHash.h"
 #include "Online/GodsRingMapFile.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/MapDownload.h"
@@ -371,6 +372,58 @@ TEST(Sha256, TheHashOfTheStandardTextsIsTheHashOfTheStandard)
 	EXPECT_EQ(HexOf(Bytes(std::string(64, 'a'))), "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb");
 	EXPECT_EQ(HexOf(Bytes(std::string(1000, 'a'))), "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3");
 	EXPECT_EQ(HexOf(std::vector<uint8_t> {1, 2, 3}), "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81");
+}
+
+TEST(Sha256, TheHashOfBytesInPartsIsTheHashOfTheBytesInOnePart)
+{
+	std::vector<uint8_t> bytes(300);
+	for (size_t i = 0; i < bytes.size(); ++i)
+	{
+		bytes.at(i) = static_cast<uint8_t>(i * 7 + 3);
+	}
+	const auto whole = online::sha256::HexOf(bytes);
+	const std::span<const uint8_t> all(bytes);
+	// Each place of the cut: in a block, at the end of a block and after the last whole block
+	for (const size_t first : {size_t {0}, size_t {1}, size_t {55}, size_t {63}, size_t {64}, size_t {65}, size_t {200}})
+	{
+		for (const size_t second : {size_t {0}, size_t {1}, size_t {64}, size_t {70}})
+		{
+			const auto middle = std::min(second, bytes.size() - first);
+			online::sha256::Hasher hasher;
+			hasher.Add(all.first(first));
+			hasher.Add(all.subspan(first, middle));
+			hasher.Add(all.subspan(first + middle));
+			EXPECT_EQ(online::sha256::Hex(hasher.Finish()), whole) << first << " " << second;
+		}
+	}
+	EXPECT_EQ(online::sha256::Hex(online::sha256::Hasher {}.Finish()),
+	          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+}
+
+TEST(GameBuildHash, TheHashOfAFileIsTheHashOfItsBytes)
+{
+	const test::TestTempFolder folder;
+	// More than one part of the read, so that the hash takes the file in parts
+	std::vector<uint8_t> bytes((size_t {1} << 20) * 2 + 77);
+	for (size_t i = 0; i < bytes.size(); ++i)
+	{
+		bytes.at(i) = static_cast<uint8_t>(i % 251);
+	}
+	const auto path = folder.Path() / "program.bin";
+	{
+		std::ofstream file(path, std::ios::binary);
+		file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	}
+	EXPECT_EQ(online::build_hash::OfFile(path), online::sha256::HexOf(bytes));
+	EXPECT_EQ(online::build_hash::OfFile(folder.Path() / "missing.bin"), std::nullopt);
+}
+
+TEST(GameBuildHash, TheProgramOfTheTestIsAFile)
+{
+	const auto program = online::build_hash::ProgramPath();
+	ASSERT_FALSE(program.empty());
+	// The test does not hash the program: the test program of a debug build is large
+	EXPECT_TRUE(std::filesystem::is_regular_file(program));
 }
 
 TEST(MapDownload, AnAnswerAfterTheStopDoesNothing)

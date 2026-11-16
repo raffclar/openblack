@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <future>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -1011,6 +1012,49 @@ TEST_F(LobbyRoomSystemTest, CreateSendsTheBuild)
 	std::optional<LobbyError> error;
 	_system.Create({.name = "h"}, [&](auto&& result) { error = result.error; });
 	EXPECT_EQ(error->code, "in_room");
+}
+
+TEST(LobbyRoomSystemBuildHash, TheGameSendsTheBuildHashWhenTheThreadGaveIt)
+{
+	FakeLobbyClient client;
+	std::promise<std::string> hash;
+	int starts = 0;
+	ecs::systems::LobbyRoomSystem system(
+	    client, std::string(k_Build), []() { return k_TenOClock; },
+	    [&]() {
+		    ++starts;
+		    return hash.get_future().share();
+	    });
+	EXPECT_EQ(starts, 0); // the game server also has the system: no thread before the player uses the lobby
+	// The thread did not give the hash yet: the game sends the build id only, and the frame does not wait
+	system.QuickJoin({});
+	EXPECT_EQ(client.calls.back().body, R"({"build_id":"0.1.0+abc/codec34"})");
+	client.Refuse(404, "no_lobby");
+	hash.set_value(std::string(64, 'e'));
+	system.QuickJoin({});
+	EXPECT_EQ(client.calls.back().body, R"({"build_hash":")" + std::string(64, 'e') + R"(","build_id":"0.1.0+abc/codec34"})");
+	client.Refuse(404, "no_lobby");
+	system.Create({.name = "g", .map = {.file = "m"}, .godSlots = 2}, {});
+	EXPECT_NE(client.calls.back().body.find(R"("build_hash":")" + std::string(64, 'e') + "\""), std::string::npos);
+	client.Refuse(409, "wrong_version");
+	system.Join("l1", std::nullopt, lobby_api::MemberRole::God, std::nullopt, {});
+	EXPECT_NE(client.calls.back().body.find(R"("build_hash":")" + std::string(64, 'e') + "\""), std::string::npos);
+	EXPECT_EQ(starts, 1);
+}
+
+TEST(LobbyRoomSystemBuildHash, TheListStartsTheThread)
+{
+	FakeLobbyClient client;
+	int starts = 0;
+	ecs::systems::LobbyRoomSystem system(
+	    client, std::string(k_Build), []() { return k_TenOClock; },
+	    [&]() {
+		    ++starts;
+		    return std::shared_future<std::string> {};
+	    });
+	system.RefreshList({});
+	system.RefreshList({});
+	EXPECT_EQ(starts, 1);
 }
 
 TEST_F(LobbyRoomSystemTest, TheListUsesItsTagAndItsEvents)

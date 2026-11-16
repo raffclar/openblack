@@ -32,11 +32,6 @@ constexpr std::array<uint32_t, 64> k_Rounds {
     0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 };
 
-/// The first 32 bits of the fractional parts of the square roots of the first 8 primes
-constexpr std::array<uint32_t, 8> k_Start {
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-};
-
 /// Add one block of 64 bytes to the state
 void AddBlock(std::array<uint32_t, 8>& state, std::span<const uint8_t, k_BlockBytes> block) noexcept
 {
@@ -81,22 +76,42 @@ void AddBlock(std::array<uint32_t, 8>& state, std::span<const uint8_t, k_BlockBy
 
 } // namespace
 
-Digest Of(std::span<const uint8_t> bytes) noexcept
+void Hasher::Add(std::span<const uint8_t> bytes) noexcept
 {
-	auto state = k_Start;
+	_totalBytes += bytes.size();
+	if (_restBytes > 0)
+	{
+		const auto taken = std::min(bytes.size(), k_BlockBytes - _restBytes);
+		std::ranges::copy(bytes.first(taken), _rest.begin() + static_cast<std::ptrdiff_t>(_restBytes));
+		_restBytes += taken;
+		bytes = bytes.subspan(taken);
+		if (_restBytes < k_BlockBytes)
+		{
+			return;
+		}
+		AddBlock(_state, std::span<const uint8_t, k_BlockBytes>(_rest));
+		_restBytes = 0;
+	}
 	const auto whole = bytes.size() / k_BlockBytes;
 	for (size_t i = 0; i < whole; ++i)
 	{
-		AddBlock(state, bytes.subspan(i * k_BlockBytes).first<k_BlockBytes>());
+		AddBlock(_state, bytes.subspan(i * k_BlockBytes).first<k_BlockBytes>());
 	}
+	const auto rest = bytes.subspan(whole * k_BlockBytes);
+	std::ranges::copy(rest, _rest.begin());
+	_restBytes = rest.size();
+}
+
+Digest Hasher::Finish() const noexcept
+{
+	auto state = _state;
 	// The last bytes, then the byte 0x80, then zeros, then the length in bits as 8 bytes, high byte first. This makes one
 	// or two blocks.
-	const auto rest = bytes.subspan(whole * k_BlockBytes);
 	std::array<uint8_t, k_BlockBytes * 2> tail {};
-	std::ranges::copy(rest, tail.begin());
-	tail.at(rest.size()) = 0x80;
-	const size_t tailBytes = rest.size() + 1 + 8 <= k_BlockBytes ? k_BlockBytes : k_BlockBytes * 2;
-	const uint64_t bits = static_cast<uint64_t>(bytes.size()) * 8;
+	std::ranges::copy(std::span<const uint8_t>(_rest).first(_restBytes), tail.begin());
+	tail.at(_restBytes) = 0x80;
+	const size_t tailBytes = _restBytes + 1 + 8 <= k_BlockBytes ? k_BlockBytes : k_BlockBytes * 2;
+	const uint64_t bits = _totalBytes * 8;
 	for (size_t i = 0; i < 8; ++i)
 	{
 		tail.at(tailBytes - 1 - i) = static_cast<uint8_t>(bits >> (i * 8));
@@ -116,17 +131,29 @@ Digest Of(std::span<const uint8_t> bytes) noexcept
 	return digest;
 }
 
-std::string HexOf(std::span<const uint8_t> bytes)
+Digest Of(std::span<const uint8_t> bytes) noexcept
+{
+	Hasher hasher;
+	hasher.Add(bytes);
+	return hasher.Finish();
+}
+
+std::string Hex(const Digest& digest)
 {
 	constexpr std::string_view k_Digits = "0123456789abcdef";
 	std::string text;
-	text.reserve(64);
-	for (const auto byte : Of(bytes))
+	text.reserve(digest.size() * 2);
+	for (const auto byte : digest)
 	{
 		text.push_back(k_Digits[byte >> 4]);
 		text.push_back(k_Digits[byte & 0x0F]);
 	}
 	return text;
+}
+
+std::string HexOf(std::span<const uint8_t> bytes)
+{
+	return Hex(Of(bytes));
 }
 
 } // namespace openblack::online::sha256
