@@ -62,6 +62,10 @@ private:
 	/// Gives the game the work that lays out a scenario and the work that a scenario does before each turn
 	void ConnectToGame() noexcept;
 	void DrawTime() noexcept;
+	/// The time controls in a network game: each asks the game server for a change of the time of the whole room
+	void DrawNetworkTime() noexcept;
+	/// True in a network game, where a change of the scenario or of the time goes to the whole room
+	[[nodiscard]] static bool InNetworkGame() noexcept;
 	void DrawCamera() noexcept;
 	void DrawCreatures() noexcept;
 

@@ -891,14 +891,19 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	});
 	const bool missed =
 	    found != _seats.end() ? found->missedWorldChange : watcher != _watchers.end() && watcher->missedWorldChange;
-	if (missed && _settings.start.scenario.has_value())
+	// The scenario keeps its state out of the world, so the server has no world of it to send. The player gets the start of
+	// the scenario again, and then each turn of it.
+	const bool scenarioAgain = missed && _settings.start.scenario.has_value();
+	if (scenarioAgain && !KeepsScenarioTurns())
 	{
-		// The scenario keeps its state out of the world, so the server has no world of it to send
-		Refuse(connection, "resume", "the room started again on a testbed scenario while the player was away");
+		Refuse(connection, "resume",
+		       "the room started again on a testbed scenario while the player was away, and the server no longer keeps "
+		       "the first turn of the scenario");
 		return;
 	}
-	const bool keptTurns = !missed && (resume.turn == _turnsDone || _history.contains(resume.turn));
-	const bool world = static_cast<bool>(_worldState) && (resume.world || missed || (_restored && (ahead || !keptTurns)));
+	const bool keptTurns = scenarioAgain || (!missed && (resume.turn == _turnsDone || _history.contains(resume.turn)));
+	const bool world =
+	    !scenarioAgain && static_cast<bool>(_worldState) && (resume.world || missed || (_restored && (ahead || !keptTurns)));
 	const bool kept = world || keptTurns;
 	if (peer.joined)
 	{
@@ -922,7 +927,7 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	if (found == _seats.end())
 	{
 		// A session of no god can be the session of an observer
-		if (!ResumeObserver(connection, peer, resume, world))
+		if (!ResumeObserver(connection, peer, resume, world, scenarioAgain))
 		{
 			const bool awayGod = std::ranges::any_of(_seats, [](const Seat& seat) { return seat.state == SeatState::Away; });
 			Refuse(connection, "resume",
@@ -966,6 +971,24 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 		}
 		return;
 	}
+	if (scenarioAgain)
+	{
+		// The checksums that the client sends are of its old world until its report that the testbed of the scenario
+		// loaded
+		std::erase_if(_early, [seat](const auto& early) { return early.first.first == seat; });
+		found->compares.differs = false;
+		found->oldWorldChecksums = true;
+		SendScenarioAgain(connection);
+		Log(spdlog::level::info,
+		    fmt::format("The player of slot {} is back from turn {} and plays the testbed scenario {} from its turn {}; the "
+		                "server is at turn {}",
+		                seat, resume.turn, *_settings.start.scenario, _scenarioStart->turn, _turnsDone));
+		if (wasAway)
+		{
+			Broadcast(game_socket::PlayerState {.slot = seat, .state = game_socket::PlayerState::State::Back});
+		}
+		return;
+	}
 	SendTo(connection, game_socket::Resumed {.turn = _turnsDone});
 	SendKeptTurns(connection, resume.turn);
 	Log(spdlog::level::info,
@@ -976,7 +999,8 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	}
 }
 
-bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const game_socket::Resume& resume, bool world)
+bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const game_socket::Resume& resume, bool world,
+                                  bool scenarioAgain)
 {
 	const auto found = std::ranges::find_if(_watchers, [this, &resume](const Watcher& watcher) {
 		return SessionMatches(watcher.session, watcher.sessionHash, resume.session);
@@ -1011,11 +1035,32 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 		    fmt::format("An observer is back from turn {} with the world of turn {}", resume.turn, _turnsDone));
 		return true;
 	}
+	if (scenarioAgain)
+	{
+		SendScenarioAgain(connection);
+		Log(spdlog::level::info, fmt::format("An observer is back from turn {} and plays the testbed scenario from its turn {}",
+		                                     resume.turn, _scenarioStart->turn));
+		return true;
+	}
 	SendTo(connection, game_socket::Resumed {.turn = _turnsDone});
 	SendKeptTurns(connection, resume.turn);
 	Log(spdlog::level::info,
 	    fmt::format("An observer is back from turn {}; the server is at turn {}", resume.turn, _turnsDone));
 	return true;
+}
+
+bool LockstepHost::KeepsScenarioTurns() const
+{
+	return _scenarioStart.has_value() && (_turnsDone == _scenarioStart->turn || _history.contains(_scenarioStart->turn));
+}
+
+void LockstepHost::SendScenarioAgain(ConnectionId connection)
+{
+	// The client starts the game again on the testbed with the scenario, as the other players did at the start of the
+	// scenario. It then does each turn from the first turn of the scenario.
+	SendTo(connection, *_scenarioStart);
+	SendTo(connection, game_socket::Resumed {.turn = _turnsDone});
+	SendKeptTurns(connection, _scenarioStart->turn);
 }
 
 void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
@@ -2164,8 +2209,12 @@ void LockstepHost::EditorWorldFrom(ConnectionId connection, Peer& peer, const ga
 	auto file = peer.worldUpload.Take();
 	Log(spdlog::level::info,
 	    fmt::format("{} sends a world file of {} bytes: the world loads it before the next turn", peer.name, file.size()));
-	_worldChange =
-	    WorldChange {.kind = WorldChange::Kind::WorldFile, .file = std::move(file), .scenario = {}, .by = peer.name, .seed = 0};
+	_worldChange = WorldChange {.kind = WorldChange::Kind::WorldFile,
+	                            .file = std::move(file),
+	                            .scenario = {},
+	                            .by = peer.name,
+	                            .seed = 0,
+	                            .players = {}};
 	_worldChangeFrom = connection;
 }
 
@@ -2189,7 +2238,8 @@ void LockstepHost::EditorScenarioFrom(ConnectionId connection, const Peer& peer,
 	                            .file = {},
 	                            .scenario = scenario.id,
 	                            .by = peer.name,
-	                            .seed = _settings.start.seed};
+	                            .seed = _settings.start.seed,
+	                            .players = {}};
 	_worldChangeFrom = connection;
 }
 
@@ -2199,8 +2249,17 @@ void LockstepHost::ApplyWorldChange()
 	{
 		return;
 	}
-	const auto change = std::move(*_worldChange);
+	auto change = std::move(*_worldChange);
 	_worldChange.reset();
+	// The gods of the players of the room at the change, also of a player who is away
+	change.players.clear();
+	for (size_t i = 0; i < _seats.size(); ++i)
+	{
+		if (_seats[i].state == SeatState::Taken || _seats[i].state == SeatState::Away)
+		{
+			change.players.push_back(SeatPlayer(i));
+		}
+	}
 	if (!_changeWorld)
 	{
 		RefuseWorldChange(_worldChangeFrom, change.by, "the server has no world that can change");
@@ -2262,12 +2321,12 @@ void LockstepHost::ApplyWorldChange()
 	start.godsRingMap = false;
 	start.land.clear();
 	start.opening.clear();
-	// The first turn gives each god with a connected player its hands again, and brings the god of the observers and each
-	// observer
+	// The first turn gives each god with a player its hands again, and brings the god of the observers and each observer.
+	// A player who is away keeps a god too: the player comes back into the scenario later.
 	_joining.clear();
 	for (size_t i = 0; i < _seats.size(); ++i)
 	{
-		if (_seats[i].state == SeatState::Taken)
+		if (_seats[i].state == SeatState::Taken || _seats[i].state == SeatState::Away)
 		{
 			_joining.push_back(static_cast<uint8_t>(i));
 		}
@@ -2285,6 +2344,7 @@ void LockstepHost::ApplyWorldChange()
 	auto frame = start;
 	frame.turn = _turnsDone;
 	frame.gods = Gods();
+	_scenarioStart = frame;
 	Log(spdlog::level::info,
 	    fmt::format("After turn {}, {} started the room again on the testbed scenario {}: the game starts again at turn {}",
 	                before, change.by, change.scenario, _turnsDone));

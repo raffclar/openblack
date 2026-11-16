@@ -14,6 +14,7 @@
 #include <chrono>
 #include <string>
 #include <string_view>
+#include <tuple>
 
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -33,9 +34,11 @@
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/ToolRunSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
 #include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Locator.h"
+#include "Online/NetworkSession.h"
 
 using namespace openblack;
 using namespace openblack::debug::gui;
@@ -258,9 +261,10 @@ void TestbedScenarios::RunRequested() noexcept
 void TestbedScenarios::Draw() noexcept
 {
 	DrawPicker();
-	// In a network game a scenario runs for the whole room. The benchmark and the time measure and change only the world of
-	// this computer, so a network game does not have them. The camera and the list of creatures change no world.
-	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+	// In a network game a scenario runs for the whole room. The benchmark measures only the world of this computer, so a
+	// network game does not have it. The time controls change the time of the whole room. The camera and the list of
+	// creatures change no world.
+	if (InNetworkGame())
 	{
 		DrawNetworkControls();
 	}
@@ -268,8 +272,8 @@ void TestbedScenarios::Draw() noexcept
 	{
 		DrawControls();
 		DrawBenchmark();
-		DrawTime();
 	}
+	DrawTime();
 	DrawCamera();
 	DrawCreatures();
 }
@@ -521,6 +525,11 @@ void TestbedScenarios::DrawBenchmark() noexcept
 void TestbedScenarios::DrawTime() noexcept
 {
 	ImGui::SeparatorText("Time");
+	if (InNetworkGame())
+	{
+		DrawNetworkTime();
+		return;
+	}
 	if (auto* game = Game::Instance())
 	{
 		ImGui::TextUnformatted("Game");
@@ -548,6 +557,51 @@ void TestbedScenarios::DrawTime() noexcept
 		}
 		ImGui::SetItemTooltip("Game turns of every creature's body that pass each game turn, to watch them grow and tire");
 	}
+}
+
+void TestbedScenarios::DrawNetworkTime() noexcept
+{
+	// The game server keeps the clock of the room. The editor asks it for a change, and each computer follows its clock.
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const auto room = session != nullptr ? session->RoomClock() : std::nullopt;
+	// The editor cannot change the clock before the server sent it
+	ImGui::BeginDisabled(!room.has_value());
+	ImGui::TextUnformatted("Game");
+	for (const auto& speed : k_Speeds)
+	{
+		ImGui::SameLine();
+		if (ImGui::RadioButton(speed.name.data(), room.has_value() && room->speed == speed.multiplier))
+		{
+			Locator::networkGame::value().RequestTime(
+			    game_socket::EditorTime {.act = game_socket::TimeAct::Speed, .speed = speed.multiplier});
+		}
+	}
+	ImGui::SetItemTooltip("Asks the game server to change the time of a game turn for every player");
+	ImGui::EndDisabled();
+	if (!Locator::creaturePhysiologySystem::has_value())
+	{
+		return;
+	}
+	// The body time of the creatures is a part of the world: each computer changes it at the turn of the act
+	const auto scale = Locator::creaturePhysiologySystem::value().GetTimeScale();
+	ImGui::SameLine(0.0f, 24.0f);
+	ImGui::TextUnformatted("Body");
+	for (size_t i = 0; i < creature_edit_acts::k_TimeScales.size(); ++i)
+	{
+		const auto option = creature_edit_acts::k_TimeScales.at(i);
+		ImGui::SameLine();
+		if (ImGui::RadioButton(fmt::format("x{:.0f}##body", option).c_str(), scale == option))
+		{
+			std::ignore = editor::DoCreatureAct(editor::IndexOf(entt::null, creature_edit_acts::Act::BodyTime, i));
+		}
+	}
+	ImGui::SetItemTooltip("Asks the game server to change the game turns of every creature's body that pass each game turn, "
+	                      "for every player");
+}
+
+bool TestbedScenarios::InNetworkGame() noexcept
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 }
 
 void TestbedScenarios::DrawCamera() noexcept

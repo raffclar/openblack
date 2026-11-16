@@ -99,6 +99,7 @@ public:
 			_session->RequestTime(request);
 		}
 	}
+	bool GoAwayForTest(int64_t microseconds) override { return _session && _session->GoAwayForTest(microseconds); }
 	[[nodiscard]] std::vector<std::string> TakeTimeNotices() override
 	{
 		return _session ? _session->TakeTimeNotices() : std::vector<std::string>();

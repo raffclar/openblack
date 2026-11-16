@@ -1489,7 +1489,7 @@ def mind_load_lines(server_log, client_logs):
 EDITOR_SCENARIO = "mind.computer_player_start"
 
 
-def editor_world(pids, world_file, shots=None):
+def editor_world(pids, world_file, shots=None, given=False):
     """Load world file of the editor in a network game. The first client writes the world of its computer into a file,
     as Save land files does, and sends it some turns later. The game server loads the file between two turns, and every
     computer gets the new world: each world goes back to the turn of the file and goes on in step."""
@@ -1499,7 +1499,8 @@ def editor_world(pids, world_file, shots=None):
         inspector_answer(editor, "editor.show_tab", {"params": {"tab": "Land tools"}})
         time.sleep(1.0)
         editor_shots(pids, shots, "world_00_land_tools")
-    done["saved"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file, "save": True}})
+    if not given:
+        done["saved"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file, "save": True}})
     time.sleep(10.0)
     done["sent"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file}})
     if not (done["sent"] or {}).get("sent"):
@@ -1509,12 +1510,19 @@ def editor_world(pids, world_file, shots=None):
     return done
 
 
-def editor_scenario(pids, shots=None):
+def editor_scenario(pids, shots=None, away=False):
     """The Scenarios tab of the editor in a network game: the first client asks the game server to start the room again
     on a testbed scenario. Every computer loads the testbed and lays the scenario out before the first turn of the new
-    game, and the worlds go on in step."""
+    game, and the worlds go on in step. With away, the second client drops its socket before the start and comes back
+    15 seconds later: it gets the start of the scenario again and does each turn of it."""
     editor = pids[0]
     done = {"id": EDITOR_SCENARIO}
+    if away and len(pids) > 1:
+        done["away"] = inspector_answer(pids[1], "engine.online_away", {"params": {"seconds": 15}})
+        if not (done["away"] or {}).get("away"):
+            done["error"] = f"the second client did not go away: {done['away']}"
+            return done
+        time.sleep(2.0)
     if shots:
         inspector_answer(editor, "editor.show_tab", {"params": {"tab": "Scenarios"}})
         time.sleep(1.0)
@@ -1522,7 +1530,7 @@ def editor_scenario(pids, shots=None):
     done["sent"] = inspector_answer(editor, "editor.scenario", {"params": {"id": EDITOR_SCENARIO}})
     if not (done["sent"] or {}).get("sent"):
         done["error"] = f"the scenario did not go: {done['sent']}"
-    time.sleep(20.0)
+    time.sleep(35.0 if away else 20.0)
     editor_shots(pids, shots, "scenario_01_after_restart")
     return done
 
@@ -1542,7 +1550,8 @@ def world_change_lines(server_log, client_logs):
             "clients": clients, "same": same}
 
 
-def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, world_file=None):
+def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, world_file=None,
+                  given_world=False):
     """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
     "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
     second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. With "animals"
@@ -1674,11 +1683,11 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         if done["mind"].get("errors"):
             done.setdefault("errors", []).extend(done["mind"]["errors"])
     if case == "world":
-        done["world"] = editor_world(pids, world_file, shots)
+        done["world"] = editor_world(pids, world_file, shots, given_world)
         if done["world"].get("error"):
             done.setdefault("errors", []).append(done["world"]["error"])
-    if case == "scenario":
-        done["scenario"] = editor_scenario(pids, shots)
+    if case in ("scenario", "scenario-away"):
+        done["scenario"] = editor_scenario(pids, shots, away=case == "scenario-away")
         if done["scenario"].get("error"):
             done.setdefault("errors", []).append(done["scenario"]["error"])
     if case in ("creature-remove", "all"):
@@ -2965,7 +2974,7 @@ def main():
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
                                                     "creature-remove", "land", "history", "mind", "time", "scripts", "debug",
-                                                    "world", "scenario", "all"),
+                                                    "world", "scenario", "scenario-away", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -2980,7 +2989,11 @@ def main():
                              "opens the program of the game again), or all of them but time and scripts; "
                              "every computer must keep the same checksums. Not in all, as each ends the game of the "
                              "room: the editor writes the world into a file and loads it 10 seconds later for the room "
-                             "(world), or starts the room again on a testbed scenario (scenario)")
+                             "(world), or starts the room again on a testbed scenario (scenario), also while the second "
+                             "client is away for 15 seconds (scenario-away)")
+    parser.add_argument("--world-file", metavar="FILE",
+                        help="with --editor-desync world: the first client sends this world file, for example the world "
+                             "of a room with other players, and does not write its own")
     parser.add_argument("--mind-files", nargs="+", metavar="FILE",
                         help="with --editor-desync mind: the mind files that the first client opens (the default is "
                              "the two saved creatures of Scripts/CreatureMind of the game folder)")
@@ -3511,7 +3524,9 @@ def main():
                 editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync,
                                                    options.editor_shots, mind_files(options),
                                                    script_inputs(options, os.path.join(out, "editor_scripts")),
-                                                   os.path.join(os.path.abspath(options.out), "editor-world.world"))
+                                                   os.path.abspath(options.world_file) if options.world_file else
+                                                   os.path.join(os.path.abspath(options.out), "editor-world.world"),
+                                                   bool(options.world_file))
                 print(f"editor desync: {json.dumps(editor_desync_done)[:400]}")
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
@@ -3772,7 +3787,7 @@ def main():
             if not summary["mind_loads"]["same"]:
                 print(f"the mind loads differ or did not come: {json.dumps(summary['mind_loads'])[:2000]}")
                 all_same = False
-        if options.editor_desync in ("world", "scenario"):
+        if options.editor_desync in ("world", "scenario", "scenario-away"):
             summary["world_changes"] = world_change_lines(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
             if not summary["world_changes"]["same"]:

@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -185,6 +187,28 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		    };
 		    return QueryResult::Value(std::move(result));
 	    });
+	auto away = Query("online_away",
+	                  "Tools: the client of a network game drops its socket, as at a loss of the network, and tries to come "
+	                  "back to the game server only after the seconds",
+	                  {{.name = "seconds",
+	                    .type = "number",
+	                    .description = "The seconds before the client tries to come back, 0 to 600",
+	                    .required = true}});
+	away.writes = true;
+	provider->Add(std::move(away), [](const QueryContext& context) {
+		const auto seconds = context.params.find("seconds");
+		if (seconds == context.params.end() || !seconds->is_number() || seconds->get<double>() < 0.0 ||
+		    seconds->get<double>() > 600.0)
+		{
+			return QueryResult::Error("engine.online_away needs the seconds, 0 to 600");
+		}
+		const auto microseconds = static_cast<int64_t>(seconds->get<double>() * 1'000'000.0);
+		if (!Locator::networkGame::has_value() || !Locator::networkGame::value().GoAwayForTest(microseconds))
+		{
+			return QueryResult::Error("engine.online_away needs a network game that plays");
+		}
+		return QueryResult::Value({{"away", true}, {"seconds", seconds->get<double>()}});
+	});
 	provider->Add(
 	    Query("config", "The engine's settings: what is drawn, the display and the camera's clip"),
 	    Serve<Locator::config>("the config", [](const EngineConfig& config, const QueryContext& /*context*/) {

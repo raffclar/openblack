@@ -45,6 +45,7 @@ public:
 	[[nodiscard]] std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
 	GetHandsOf(PlayerNames player) const noexcept override;
 	std::array<entt::entity, static_cast<size_t>(Side::_Count)> MakeHandsOf(PlayerNames player) override;
+	bool RemoveHandsOf(PlayerNames player) override;
 	void LinkHandsOf(entt::entity playerEntity) override;
 	void StartAtCitadel(PlayerNames owner, const glm::vec3& point) override;
 	void ReportSent(const player_commands::HandReport& report) override;

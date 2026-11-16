@@ -143,6 +143,8 @@ public:
 	[[nodiscard]] virtual uint32_t TakeEditorRefusals() { return 0; }
 	/// The editor asks the game server to pause, play, step or change the speed of the clock of the room
 	virtual void RequestTime(const game_socket::EditorTime& /*request*/) {}
+	/// Tools: the client drops its socket, as at a loss of the network, and tries to come back after the time
+	virtual bool GoAwayForTest(int64_t /*microseconds*/) { return false; }
 	/// The lines of the changes of the clock of the room since the last call, which every player sees
 	[[nodiscard]] virtual std::vector<std::string> TakeTimeNotices() { return {}; }
 	/// Writes a line to the connection log of the network games, such as a step of the request of a ticket

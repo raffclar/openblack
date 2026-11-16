@@ -1342,6 +1342,20 @@
   "query": "engine.online"
  },
  {
+  "description": "Tools: the client of a network game drops its socket, as at a loss of the network, and tries to come back to the game server only after the seconds",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The seconds before the client tries to come back, 0 to 600",
+    "name": "seconds",
+    "required": true,
+    "type": "number"
+   }
+  ],
+  "query": "engine.online_away",
+  "writes": true
+ },
+ {
   "description": "The engine's settings: what is drawn, the display and the camera's clip",
   "kind": "object",
   "parameters": [],

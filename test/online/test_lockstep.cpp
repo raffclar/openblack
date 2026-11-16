@@ -4183,7 +4183,9 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringAWorldFileComesBackWithTheNewWorld)
 {
 	MakeHost(2);
 	GiveWorldState();
-	host->SetChangeWorld([this](const server::LockstepHost::WorldChange& change) {
+	std::vector<PlayerNames> players;
+	host->SetChangeWorld([this, &players](const server::LockstepHost::WorldChange& change) {
+		players = change.players;
 		std::memcpy(&serverWorld.hash, change.file.data(), sizeof(uint64_t));
 		std::memcpy(&serverWorld.turns, change.file.data() + sizeof(uint64_t), sizeof(uint32_t));
 		return server::LockstepHost::WorldChanged {.turn = serverWorld.turns, .refusal = {}};
@@ -4208,6 +4210,55 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringAWorldFileComesBackWithTheNewWorld)
 	EXPECT_EQ(bob.world.hash, serverWorld.hash);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 	EXPECT_TRUE(bob.desyncs.empty());
+	// The world of the server gives a god to each player of the room, also to the player who was away
+	EXPECT_EQ(players, (std::vector<PlayerNames> {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO}));
+}
+
+TEST_F(LockstepTest, APlayerWhoWasAwayDuringAScenarioStartComesBackIntoTheScenario)
+{
+	MakeHost(2);
+	host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
+		serverWorld = FakeWorld {};
+		serverWorld.mindFileHere = [this](uint64_t hash) { return !host->EditorMindFile(hash).empty(); };
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+	});
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 40);
+	ASSERT_TRUE(host->Started());
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	bob.Frame();
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Reconnecting);
+	ASSERT_TRUE(alice.session.SendEditorScenario("creature.walk"));
+	Frames({&alice}, 20);
+	ASSERT_EQ(alice.restarts, 1u);
+	// The god of the away player gets its hands in the first turn of the scenario too
+	EXPECT_TRUE(alice.world.players.contains(PlayerNames::PLAYER_TWO));
+	Frames({&alice, &bob}, 30);
+	// The client of bob got the start of the scenario again, and did each turn of it from its first turn
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.restarts, 1u);
+	EXPECT_EQ(bob.loads, 0u);
+	const auto& start = bob.session.GetStart();
+	ASSERT_TRUE(start.has_value());
+	EXPECT_EQ(start->scenario, std::optional<std::string>("creature.walk"));
+	EXPECT_TRUE(start->testbed);
+	EXPECT_EQ(start->turn, 0u);
+	// The playout of a client that came back keeps a turn or two in hand
+	EXPECT_LE(bob.world.turns, serverWorld.turns);
+	EXPECT_GE(bob.world.turns + 2, serverWorld.turns);
+	EXPECT_TRUE(bob.world.players.contains(PlayerNames::PLAYER_TWO));
+	// The checksum of each turn of the scenario is the same as the server's
+	EXPECT_GE(bob.session.GetCompares().compared, 40u);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+	EXPECT_TRUE(bob.desyncs.empty());
+	EXPECT_TRUE(alice.desyncs.empty());
+	// The server compares the checksums of the client of bob again after the report of its load, and each is the same
+	const auto& seat = host->Seats()[1];
+	EXPECT_FALSE(seat.oldWorldChecksums);
+	EXPECT_FALSE(seat.missedWorldChange);
+	EXPECT_EQ(seat.compares.compared, seat.compares.same);
 }
 
 TEST(RoomClock, ThePlayerWithTheDebuggerClaimChangesOnlyTheSpeed)

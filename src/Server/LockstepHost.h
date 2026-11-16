@@ -250,6 +250,9 @@ public:
 		std::string by;
 		/// The seed of the room, with which a scenario starts the land again
 		uint32_t seed {0};
+		/// The gods of the players of the room: each seat with a player, also a player who is away. After a world file,
+		/// each of these gods keeps a player, and each other god of the file is as a slot with no player.
+		std::vector<PlayerNames> players;
 	};
 	/// The world of the server after a change: the turn that it is at, or why it did not change
 	struct WorldChanged
@@ -477,7 +480,13 @@ private:
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
 	void Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume);
 	/// An observer comes back with the secret of its session. False when no observer has the secret.
-	bool ResumeObserver(ConnectionId connection, Peer& peer, const game_socket::Resume& resume, bool world);
+	bool ResumeObserver(ConnectionId connection, Peer& peer, const game_socket::Resume& resume, bool world, bool scenarioAgain);
+	/// True when the server keeps each turn of the testbed scenario that the editor started, from its first turn. A player
+	/// who was away at that start can then come back: the start goes again to the player, and then each turn of it.
+	[[nodiscard]] bool KeepsScenarioTurns() const;
+	/// Sends the start of the scenario that the editor started, and then each turn of it, to a player who was away at
+	/// that start
+	void SendScenarioAgain(ConnectionId connection);
 	/// Sends the kept turns from a turn, with the server's checksums, and the stop of the turns if they stopped
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
 	/// Gives a new session to an observer on a connection, with the number of the observer, and returns its secret. With
@@ -706,6 +715,8 @@ private:
 	ScenarioRefusal _scenarioRefusal;
 	/// The change of the world that the server does before the next turn, and the connection that asked for it
 	std::optional<WorldChange> _worldChange;
+	/// The start that the server sent to the room when the editor started the room again on a testbed scenario
+	std::optional<game_socket::Start> _scenarioStart;
 	ConnectionId _worldChangeFrom {0};
 	uint32_t _worldChanges {0};
 };
