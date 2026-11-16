@@ -13,11 +13,14 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include <GameSocket.h>
+#include <Lobbies.h>
 #include <LobbyMembers.h>
 
 /// The rules of the join of a game server of the pool, which plays the game of one lobby (deviation 236). The server
@@ -76,5 +79,17 @@ inline constexpr std::string_view k_EndedRefusal = "ended";
 /// Why the server refuses the SHA-256 of the client's file of the land, or none. A client that gives no SHA-256 is not
 /// refused here: the check of the land before the start still compares the files.
 [[nodiscard]] std::optional<std::string_view> MapRefusal(std::string_view serverMap, std::string_view clientMap) noexcept;
+
+/// The kinds of the god slots of the room, from slot 0 (deviation 243), or why the text is not a list of kinds. The text
+/// is the kinds of the lobby with a comma between them, such as "open,computer,closed". The room keeps the slots after the
+/// last kind open.
+[[nodiscard]] std::variant<std::vector<lobby_api::SlotKind>, std::string> ParseSlotKinds(std::string_view text);
+
+/// The god slots that the kinds close, from 0. The start tells each computer that no god plays these slots.
+[[nodiscard]] std::vector<uint8_t> ClosedSlotsOf(std::span<const lobby_api::SlotKind> kinds);
+
+/// The first god of the lobby whose slot is not an open slot of the kinds, or none. No player can take such a slot.
+[[nodiscard]] const lobby_members::Member* MemberInShutSlot(const Lobby& lobby,
+                                                            std::span<const lobby_api::SlotKind> kinds) noexcept;
 
 } // namespace openblack::server::lobby_game

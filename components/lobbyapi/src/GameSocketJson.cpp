@@ -475,6 +475,21 @@ bool ReadStart(const Json& object, Start& start)
 			start.names.push_back(name.get<std::string>());
 		}
 	}
+	if (const auto* closed = Member(object, "closed_slots"); closed != nullptr && !closed->is_null())
+	{
+		if (!closed->is_array() || closed->size() > k_MostSlots)
+		{
+			return false;
+		}
+		for (const auto& slot : *closed)
+		{
+			if (!slot.is_number_unsigned() || slot.get<uint64_t>() >= k_MostSlots)
+			{
+				return false;
+			}
+			start.closedSlots.push_back(static_cast<uint8_t>(slot.get<uint64_t>()));
+		}
+	}
 	// Each god of the list has a slot and a name
 	const auto gods = object.find("gods");
 	if (gods == object.end())
@@ -558,6 +573,10 @@ void WriteStart(const Start& start, Json& object)
 	if (!start.names.empty())
 	{
 		object["names"] = start.names;
+	}
+	if (!start.closedSlots.empty())
+	{
+		object["closed_slots"] = start.closedSlots;
 	}
 	if (!start.gods.empty())
 	{

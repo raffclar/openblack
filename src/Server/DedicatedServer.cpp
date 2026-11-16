@@ -17,6 +17,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <iterator>
 #include <memory>
 #include <random>
 #include <span>
@@ -28,6 +29,7 @@
 #include <vector>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <glm/gtc/constants.hpp>
 #include <spdlog/spdlog.h>
 
@@ -54,6 +56,7 @@
 #include "ECS/SaveFileWriter.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/SyncedState.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
@@ -1250,6 +1253,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The room has {} god slots and starts with {} gods at least", godSlots,
 	                   settings.network->minGods);
+	if (!settings.network->slotKinds.empty())
+	{
+		std::vector<std::string_view> names;
+		std::ranges::transform(settings.network->slotKinds, std::back_inserter(names), lobby_api::SlotKindName);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The kinds of the god slots from slot 0: {}", fmt::join(names, ","));
+	}
 	// The game of a snapshot continues with the start that its clients got
 	if (restored.has_value())
 	{
@@ -1428,6 +1437,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		{
 			Locator::time::value().SetSpeed(online::room_clock::ClockSpeedOf(speed));
 			appliedSpeed = speed;
+	}
+		// No computer god of the server's world takes the slots that the lobby closed. The start gives them before the
+		// first turn, in which the humans join.
+		if (host.Started() && Locator::computerPlayerSystem::has_value())
+		{
+			Locator::computerPlayerSystem::value().CloseSlots(host.ClosedSlots());
 		}
 		if (role->HostReportDue())
 		{

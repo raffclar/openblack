@@ -22,6 +22,8 @@ namespace
 using Json = nlohmann::json;
 
 constexpr std::string_view k_Header = "v4.public.";
+/// The most god slots of a game whose kinds a ticket gives
+constexpr size_t k_MostSlotKinds = 32;
 constexpr std::string_view k_PublicKeyPrefix = "k4.public.";
 constexpr std::string_view k_Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -343,6 +345,23 @@ std::optional<Claims> ParseClaims(std::string_view message)
 			return std::nullopt;
 		}
 		claims.gods = static_cast<uint32_t>(found->get<uint64_t>());
+	}
+	// The kinds of the slots are optional. A ticket of an older lobby does not give them.
+	if (const auto found = value.find("slot_kinds"); found != value.end() && !found->is_null())
+	{
+		if (!found->is_array() || found->size() > k_MostSlotKinds)
+		{
+			return std::nullopt;
+		}
+		for (const auto& each : *found)
+		{
+			const auto kind = each.is_string() ? lobby_api::SlotKindOf(each.get<std::string>()) : std::nullopt;
+			if (!kind.has_value())
+			{
+				return std::nullopt;
+			}
+			claims.slotKinds.push_back(*kind);
+		}
 	}
 	// The lobby's tickets name the role. A ticket with no role is a god's ticket, as the lobby's default.
 	if (!role.empty())

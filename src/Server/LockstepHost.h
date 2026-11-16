@@ -68,6 +68,9 @@ struct HostSettings
 	uint32_t minGods {1};
 	/// The god slots of the room: the citadels of the land. A god who joins when all the slots have a player is refused.
 	uint8_t godSlots {k_DefaultGodSlots};
+	/// The kinds of the god slots from slot 0, as the lobby set them (deviation 243). No player can take a computer slot
+	/// or a closed slot. The slots after the last kind are open.
+	std::vector<lobby_api::SlotKind> slotKinds;
 	/// How long a god's player can be away before the god is defeated (user decision MP-Q6: 5 minutes, set by the server)
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
 	/// How long the gods wait when the players of all the gods lost the connection (user, 2026-11-14: 10 seconds). Then
@@ -154,8 +157,10 @@ public:
 		Taken,
 		/// The player of the god lost the socket. The god is idle until the player comes back or the time ends.
 		Away,
-		/// The god left or was defeated. The slot stays closed.
+		/// The god left or was defeated, or the lobby closed the slot. The slot stays closed.
 		Closed,
+		/// The lobby gave the slot to a computer god. No player can take it.
+		Computer,
 	};
 
 	struct Compares
@@ -383,6 +388,8 @@ public:
 	void EndRoom(std::string_view reason);
 	/// True from the query of the lands until the start of the game or a stop of the start
 	[[nodiscard]] bool Starting() const { return _startStep != StartStep::None; }
+	/// The god slots that the lobby closed, from 0, as the start gives them to every computer
+	[[nodiscard]] const std::vector<uint8_t>& ClosedSlots() const { return _settings.start.closedSlots; }
 	/// True when the game started and no god's player is connected
 	[[nodiscard]] bool Paused() const;
 	/// The clock of the room: the pause, the steps and the speed that the editor of a player asked for
@@ -609,6 +616,11 @@ private:
 	[[nodiscard]] bool AnyGodConnected() const;
 	/// Tools: the room has no human god. The game starts at once, and observers watch it.
 	[[nodiscard]] bool AllComputerGods() const { return _settings.start.allComputerGods; }
+	/// Shuts the open slots that the kinds of the slots make computer slots or closed slots, and gives the start the
+	/// closed slots
+	void ShutSlots();
+	/// The kinds of the slots of the lobby's game from a ticket, on a server with no member list of the lobby
+	void ShutSlotsOfTicket(const join_ticket::Claims& claims);
 
 	WebSocketServerInterface& _sockets;
 	CheckTicket _checkTicket;

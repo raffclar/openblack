@@ -784,6 +784,8 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	_newGameStart = start.opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(start.opening);
 	auto& lands = Locator::landSystem::value();
 	lands.SetNewGameStart(_newGameStart);
+	// No god plays the slots that the lobby closed, as on the game server
+	lands.SetClosedSlots(start.closedSlots);
 	auto& clock = Locator::time::value();
 	const auto pinnedDate = clock.GetPinnedDate();
 	clock.RestartClock(pinnedDate);

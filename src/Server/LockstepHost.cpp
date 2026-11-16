@@ -16,6 +16,7 @@
 #include <utility>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
 #include "Common/DebugActs.h"
@@ -230,6 +231,7 @@ LockstepHost::LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkT
                          : _settings.minGods)
     , _createdAt(_clock())
 {
+	ShutSlots();
 	_sockets.SetHandlers(ServerSocketHandlers {
 	    .opened = [this](ConnectionId connection) { Opened(connection); },
 	    .text = [this](ConnectionId connection, std::string_view text) { Text(connection, text); },
@@ -772,6 +774,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		JoinRunning(connection, peer, claims, lan);
 		return;
 	}
+	ShutSlotsOfTicket(claims);
 	game_socket::Joined joined {
 	    .role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name, .start = _settings.start};
 	joined.editor = claims.editor;
@@ -2627,6 +2630,51 @@ void LockstepHost::StopTurns()
 	// log uses the number of the world, so that it names the same turn as the line of the decision.
 	Log(spdlog::level::info, fmt::format("The game is decided: the turns of the game stop after turn {}", *_stoppedAfter + 1));
 	Broadcast(game_socket::GameStop {.turn = *_stoppedAfter});
+}
+
+void LockstepHost::ShutSlots()
+{
+	// The lobby shuts its computer slots and its closed slots to the players. The start tells every computer the closed
+	// slots, so that no computer god takes them.
+	for (size_t slot = 0; slot < _seats.size() && slot < _settings.slotKinds.size(); ++slot)
+	{
+		if (_seats[slot].state != SeatState::Open)
+		{
+			continue;
+		}
+		switch (_settings.slotKinds[slot])
+		{
+		case lobby_api::SlotKind::Open:
+			break;
+		case lobby_api::SlotKind::Computer:
+			_seats[slot].state = SeatState::Computer;
+			break;
+		case lobby_api::SlotKind::Closed:
+			_seats[slot].state = SeatState::Closed;
+			break;
+		}
+	}
+	if (!_settings.slotKinds.empty())
+	{
+		_settings.start.closedSlots = lobby_game::ClosedSlotsOf(_settings.slotKinds);
+	}
+}
+
+void LockstepHost::ShutSlotsOfTicket(const join_ticket::Claims& claims)
+{
+	// A server with no member list of the lobby gets the kinds of the slots from the first ticket of the lobby's game
+	// that gives them, before its start. The kinds of the server's own command line come first.
+	if (_settings.lobby.has_value() || claims.lobby.empty() || claims.slotKinds.empty() || !_settings.slotKinds.empty() ||
+	    _started || _startStep != StartStep::None)
+	{
+		return;
+	}
+	_settings.slotKinds = claims.slotKinds;
+	ShutSlots();
+	std::vector<std::string_view> names;
+	std::ranges::transform(_settings.slotKinds, std::back_inserter(names), lobby_api::SlotKindName);
+	Log(spdlog::level::info,
+	    fmt::format("The game of the lobby {} gives the kinds of the slots: {}", claims.lobby, fmt::join(names, ",")));
 }
 
 void LockstepHost::WaitForGodsOfTicket(const join_ticket::Claims& claims)

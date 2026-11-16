@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <bit>
 #include <map>
 #include <optional>
@@ -471,6 +472,32 @@ TEST(ComputerPlayerStart, AnEmptySlotAfterTheSeventhGetsAComputerGodAsTheSlotsBe
 	EXPECT_EQ(world.switchedOn, (std::vector {ninth}));
 	ASSERT_EQ(world.made.size(), 1);
 	EXPECT_EQ(world.made[0].player, ninth);
+}
+
+TEST(ComputerPlayerStart, TheClosedSlotsNameTheirPlayersAndTheLandSkipsThemWhenItFills)
+{
+	// Slot 1 is the second god. Slot 8 is player 9, after the neutral player. Slot 40 is after the last slot of a game.
+	const std::vector<uint8_t> slots {1, 8, 40};
+	const auto closed = ClosedPlayers(slots);
+	EXPECT_TRUE(closed.at(static_cast<size_t>(PlayerNames::PLAYER_TWO)));
+	EXPECT_TRUE(closed.at(9));
+	EXPECT_FALSE(closed.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)));
+	EXPECT_FALSE(closed.at(static_cast<size_t>(PlayerNames::NEUTRAL)));
+	EXPECT_EQ(std::ranges::count(closed, true), 2);
+
+	const auto ninth = static_cast<PlayerNames>(9);
+	const std::vector gods {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE, ninth};
+	const auto open = GodsOfOpenSlots(gods, closed);
+	EXPECT_EQ(open, (std::vector {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE}));
+
+	// The closed slot gets no computer god, and the random values of the open slot come first
+	FakeSlotWorld world;
+	world.citadels = {{PlayerNames::PLAYER_ONE, true}, {PlayerNames::PLAYER_TWO, true}, {PlayerNames::PLAYER_THREE, true}};
+	const std::vector humans {PlayerNames::PLAYER_ONE};
+	HumansJoin(world, open, humans, true);
+	EXPECT_EQ(world.switchedOn, (std::vector {PlayerNames::PLAYER_THREE}));
+	ASSERT_EQ(world.made.size(), 1);
+	EXPECT_EQ(world.made[0].player, PlayerNames::PLAYER_THREE);
 }
 
 TEST(ComputerPlayerStart, TheGodsOfTheSlotsAreTheSevenPlayersInOrder)

@@ -26,6 +26,8 @@ std::string_view StateName(LockstepHost::SeatState state) noexcept
 		return "away";
 	case LockstepHost::SeatState::Closed:
 		return "closed";
+	case LockstepHost::SeatState::Computer:
+		return "computer";
 	}
 	return "unknown";
 }

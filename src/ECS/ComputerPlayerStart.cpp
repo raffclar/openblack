@@ -10,6 +10,7 @@
 #include "ComputerPlayerStart.h"
 
 #include <algorithm>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -206,6 +207,30 @@ void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::sp
 		world.SwitchOn(god);
 		world.MakeSlotCreature(god, species, SlotCreatureName(world.SpeciesDebugName(species)), k_SlotCreatureStage);
 	}
+}
+
+std::array<bool, player_slots::k_PlayerNumbers> ClosedPlayers(std::span<const uint8_t> slots) noexcept
+{
+	std::array<bool, player_slots::k_PlayerNumbers> closed {};
+	for (const auto slot : slots)
+	{
+		if (const auto player = player_slots::PlayerOfSlot(slot); player.has_value())
+		{
+			closed.at(static_cast<size_t>(*player)) = true;
+		}
+	}
+	return closed;
+}
+
+std::vector<PlayerNames> GodsOfOpenSlots(std::span<const PlayerNames> gods,
+                                         std::span<const bool, player_slots::k_PlayerNumbers> closed)
+{
+	std::vector<PlayerNames> open;
+	std::ranges::copy_if(gods, std::back_inserter(open), [closed](PlayerNames god) {
+		const auto number = static_cast<size_t>(god);
+		return number >= closed.size() || !closed[number];
+	});
+	return open;
 }
 
 void HumansJoin(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans, bool landWaits)
