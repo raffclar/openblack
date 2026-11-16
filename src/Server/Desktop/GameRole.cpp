@@ -14,6 +14,7 @@
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <set>
 #include <span>
 #include <stdexcept>
@@ -23,12 +24,15 @@
 #include <vector>
 
 #include <JoinTicket.h>
+#include <LNDFile.h>
 #include <LobbyApiJson.h>
 #include <openssl/rand.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "Common/BuildVersion.h"
 #include "Creature/CreatureFileLoad.h"
+#include "Locator.h"
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Online/Desktop/UdpLanDiscovery.h"
 #include "Online/GameBuildId.h"
@@ -467,6 +471,13 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                  .sessionHasher = std::make_shared<Sha256SessionHasher>(),
 	                  .lanNames = settings.lan,
 	                  .relaysCreature = creature_file_load::ServerRelays,
+	                  .landCountries =
+	                      [] {
+		                      return Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded()
+		                                 ? std::optional<int>(
+		                                       static_cast<int>(Locator::terrainSystem::value().GetCountries().size()))
+		                                 : std::nullopt;
+	                      },
 	                  .lobby = settings.lobby,
 	                  .buildId = online::build_id::Own(),
 	                  .mapSha256 = std::move(landSha256),

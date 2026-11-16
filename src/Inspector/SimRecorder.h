@@ -109,9 +109,11 @@ private:
 		uint32_t turn {0};
 		/// Null while the hash of the turn waits for the draw of the frame
 		Json value;
-		/// The values of the systems that the checksum mixes: the music of the scripts, the synced seed and draws
+		/// The values of the systems that the checksum mixes: the music of the scripts, the synced seed and draws, the land
 		std::optional<std::array<int64_t, 5>> music;
 		std::optional<std::pair<uint32_t, uint64_t>> random;
+		/// The digest of the altitude and the country of each corner of the land
+		std::optional<uint64_t> land;
 	};
 	/// The turns to record that ended since the last record. A frame can end more than one turn: for example, when the
 	/// turns of the next frame play beside the draw

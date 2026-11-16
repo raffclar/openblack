@@ -2415,6 +2415,86 @@
   "writes": true
  },
  {
+  "description": "Sends a stroke of the land brush as a command of the turns, as the land tools send it in a network game: each computer raises, lowers or paints the land at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "raise, lower or paint",
+    "name": "mode",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "[x, z] of the middle of the stroke",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   },
+   {
+    "description": "The inner radius in metres (10 when not given)",
+    "name": "inner",
+    "type": "number"
+   },
+   {
+    "description": "The outer radius in metres (30 when not given)",
+    "name": "outer",
+    "type": "number"
+   },
+   {
+    "description": "The altitude steps, 1 to 64 (4 when not given)",
+    "name": "step",
+    "type": "integer"
+   },
+   {
+    "description": "The country of a paint (0 when not given)",
+    "name": "country",
+    "type": "integer"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.land_stroke",
+  "writes": true
+ },
+ {
+  "description": "Sends a footpath or a stream as a command of the turns, as the paths of the land tools send it in a network game: each computer makes it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "footpath or stream",
+    "name": "kind",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The points [[x, z], ...], 2 to 256",
+    "name": "points",
+    "required": true,
+    "type": "array"
+   },
+   {
+    "description": "The building at the first point",
+    "name": "first",
+    "type": "integer"
+   },
+   {
+    "description": "The building at the last point",
+    "name": "last",
+    "type": "integer"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.path",
+  "writes": true
+ },
+ {
   "description": "Sends an act of the creature tools as a command of the turns, as the tabs of the creature section send it in a network game: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
   "kind": "object",
   "parameters": [

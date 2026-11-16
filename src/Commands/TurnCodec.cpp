@@ -430,6 +430,26 @@ void WriteAction(Writer& out, const Action& action)
 		               }
 	               },
 	               [&out](const DebugLandSkip& command) { out.Byte(command.land); },
+	               [&out](const EditorLandStroke& command) {
+		               out.Byte(command.mode);
+		               out.Float(command.innerRadius);
+		               out.Float(command.outerRadius);
+		               out.Byte(command.step);
+		               out.Byte(command.country);
+		               out.Float(command.centre.x);
+		               out.Float(command.centre.y);
+	               },
+	               [&out](const EditorPath& command) {
+		               out.Byte(command.kind);
+		               out.Number(static_cast<uint16_t>(command.points.size()));
+		               for (const auto& point : command.points)
+		               {
+			               out.Float(point.x);
+			               out.Float(point.y);
+		               }
+		               out.Entity(command.firstHolder);
+		               out.Entity(command.lastHolder);
+	               },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -1033,6 +1053,59 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = spawn;
 		return DecodeError::None;
 	}
+	case CommandTag::EditorLandStroke:
+	{
+		EditorLandStroke stroke {.mode = in.Byte()};
+		stroke.innerRadius = in.Float();
+		stroke.outerRadius = in.Float();
+		stroke.step = in.Byte();
+		stroke.country = in.Byte();
+		stroke.centre.x = in.Float();
+		stroke.centre.y = in.Float();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		// The mode is raise, lower or paint
+		if (stroke.mode > 2)
+		{
+			return DecodeError::Value;
+		}
+		action = stroke;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorPath:
+	{
+		EditorPath path {.kind = in.Byte()};
+		const auto count = in.Number<uint16_t>();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		// The kind is a footpath or a stream
+		if (path.kind > 1 || count > k_MostEditorPathPoints)
+		{
+			return DecodeError::Value;
+		}
+		if (static_cast<size_t>(count) * 8 > in.Left())
+		{
+			return DecodeError::Truncated;
+		}
+		path.points.resize(count);
+		for (auto& point : path.points)
+		{
+			point.x = in.Float();
+			point.y = in.Float();
+		}
+		path.firstHolder = in.Entity();
+		path.lastHolder = in.Entity();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		action = std::move(path);
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -1211,6 +1284,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const DebugLandSkip& /*command*/) { return CommandTag::DebugLandSkip; },
 	                      [](const EditorVillagerEdit& /*command*/) { return CommandTag::EditorVillagerEdit; },
 	                      [](const EditorCreatureSpawn& /*command*/) { return CommandTag::EditorCreatureSpawn; },
+	                      [](const EditorLandStroke& /*command*/) { return CommandTag::EditorLandStroke; },
+	                      [](const EditorPath& /*command*/) { return CommandTag::EditorPath; },
 	                  },
 	                  action);
 }
@@ -1289,6 +1364,8 @@ size_t SizeOf(const Action& action) noexcept
 	        [](const EditorCreatureSpawn& /*command*/) {
 		        return 1 + 1 + k_Vector + (5 * 4) + 1 + (5 * creature_tattoo::k_SlotCount);
 	        },
+	        [](const EditorLandStroke& /*command*/) { return size_t {1 + 4 + 4 + 1 + 1 + 4 + 4}; },
+	        [](const EditorPath& command) { return 1 + 2 + (8 * command.points.size()) + (2 * k_Entity); },
 	    },
 	    action);
 	return 1 + fields;
