@@ -250,8 +250,8 @@ private:
 	/// Writes the submesh's vertices as they are drawn into the bytes, which have the size that PackedSize gives
 	static void PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates,
 	                         std::span<uint8_t> bytes);
-	/// Writes the submesh's vertices as they are drawn into the bytes, with the indices that PackedIndices gives. The box
-	/// about the places of the vertices, in their order.
+	/// Writes the submesh's vertices into the bytes in the form that the renderer draws, with the indices that
+	/// PackedIndices gives. Gives the box about the places of the vertices, in their order.
 	[[nodiscard]] static AxisAlignedBoundingBox PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex,
 	                                                         bool hasLightmapCoordinates, std::span<uint8_t> bytes,
 	                                                         std::span<const PackedIndex> indices);

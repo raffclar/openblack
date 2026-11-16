@@ -807,7 +807,7 @@ void L3DSubMesh::UpdateVertices(const l3d::L3DFile& l3d) noexcept
 		_packedIndices = PackedIndices(l3d, _data.meshIndex, count);
 	}
 	const auto box = PackVertices(l3d, _data.meshIndex, _data.hasLightmapCoordinates, device.Bytes(vertices), _packedIndices);
-	// Without bones the box about the vertices as they are packed is the box about the submesh
+	// Without bones, the box about the packed vertices is the box about the submesh
 	_data.boundingBox = _data.flags.hasBones ? BoundVertices(l3d, _data.meshIndex, true) : box;
 	if (_data.flags.hasBones && _blendSource)
 	{
