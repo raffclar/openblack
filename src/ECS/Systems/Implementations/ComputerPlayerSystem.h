@@ -61,6 +61,7 @@ public:
 	void WaitForHumans() override;
 	void HumansJoined(std::span<const PlayerNames> humans) override;
 	void GiveToHuman(PlayerNames player) override;
+	void FillSlotOf(PlayerNames player, bool makeCreature) override;
 	void SetAiSeed(std::optional<uint32_t> seed) override { _aiSeed = seed; }
 	void SetTimesReport(uint32_t everyTurns) override { _timesEvery = everyTurns; }
 

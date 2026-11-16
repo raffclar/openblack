@@ -429,6 +429,29 @@ TEST(ComputerPlayerStart, AComputerGodOrAGodWithNoCitadelTakesNoRoll)
 	EXPECT_TRUE(world.switchedOn.empty());
 }
 
+TEST(ComputerPlayerStart, ASlotThatKeepsItsCreatureSwitchesOnTheMindAndTakesNoRoll)
+{
+	FakeSlotWorld world;
+	FillSlot(world, PlayerNames::PLAYER_FOUR, false);
+	EXPECT_TRUE(world.rangesAsked.empty());
+	EXPECT_TRUE(world.made.empty());
+	EXPECT_EQ(world.switchedOn, (std::vector {PlayerNames::PLAYER_FOUR}));
+}
+
+TEST(ComputerPlayerStart, ASlotWithANewCreatureTakesTheRollsOfAnEmptySlot)
+{
+	FakeSlotWorld world;
+	world.debugNames = {{CreatureType::Tiger, "Tiger creature"}};
+	world.rolls = {5, 2};
+	FillSlot(world, PlayerNames::PLAYER_FOUR, true);
+	EXPECT_EQ(world.rangesAsked, (std::vector<uint32_t> {k_SlotNameChoices, k_SlotSpeciesChoices}));
+	EXPECT_EQ(world.switchedOn, (std::vector {PlayerNames::PLAYER_FOUR}));
+	ASSERT_EQ(world.made.size(), 1);
+	EXPECT_EQ(world.made[0].player, PlayerNames::PLAYER_FOUR);
+	EXPECT_EQ(world.made[0].name, "Tiger");
+	EXPECT_EQ(world.made[0].stage, k_SlotCreatureStage);
+}
+
 TEST(ComputerPlayerStart, TheHumansWhoJoinGetTheirPlayersAndTheSlotsOfAWaitingLandFill)
 {
 	FakeSlotWorld world;

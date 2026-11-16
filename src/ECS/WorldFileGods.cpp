@@ -14,8 +14,10 @@
 
 #include <spdlog/spdlog.h>
 
+#include "ECS/Components/Temple.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/LeaverHand.h"
+#include "ECS/Registry.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -23,6 +25,17 @@
 
 namespace openblack::ecs::world_file_gods
 {
+
+namespace
+{
+bool HasCitadel(PlayerNames player)
+{
+	bool citadel = false;
+	Locator::entitiesRegistry::value().Each<const components::Temple>(
+	    [&citadel, player](const components::Temple& building) { citadel = citadel || building.owner == player; });
+	return citadel;
+}
+} // namespace
 
 void GiveToRoom(std::span<const PlayerNames> players)
 {
@@ -37,7 +50,9 @@ void GiveToRoom(std::span<const PlayerNames> players)
 		const God god {.player = player,
 		               .roomPlayer = std::ranges::find(players, player) != players.end(),
 		               .hands = hands.GetHandsOf(player).has_value(),
-		               .computerMind = gods.IsComputerPlayer(player)};
+		               .computerMind = gods.IsComputerPlayer(player),
+		               .citadel = HasCitadel(player),
+		               .creature = gods.GetPrimaryCreature(player).has_value()};
 		const auto change = ChangeOf(god);
 		if (change.mindOff && Locator::computerPlayerSystem::has_value())
 		{
@@ -53,12 +68,20 @@ void GiveToRoom(std::span<const PlayerNames> players)
 			std::ignore = leaver_hand::ReleaseHandInGame(player);
 			std::ignore = hands.RemoveHandsOf(player);
 		}
+		// The computer god starts after the hands of the file go, in the order of the gods, as the slots at a network start
+		if (change.computerGod && Locator::computerPlayerSystem::has_value())
+		{
+			Locator::computerPlayerSystem::value().FillSlotOf(player, change.makeCreature);
+		}
 		if (change != Change {})
 		{
-			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The god of player {} after the world file: {} of the room{}{}{}",
-			                   static_cast<int>(player), god.roomPlayer ? "a player" : "no player",
-			                   change.makeHands ? ", new hands" : "", change.mindOff ? ", no computer mind" : "",
-			                   change.removeHands ? ", no hands" : "");
+			SPDLOG_LOGGER_INFO(
+			    spdlog::get("game"), "The god of player {} after the world file: {} of the room{}{}{}{}",
+			    static_cast<int>(player), god.roomPlayer ? "a player" : "no player", change.makeHands ? ", new hands" : "",
+			    change.mindOff ? ", no computer mind" : "", change.removeHands ? ", no hands" : "",
+			    change.computerGod
+			        ? (change.makeCreature ? ", a computer god with a new creature" : ", a computer god with its own creature")
+			        : "");
 		}
 	}
 }
