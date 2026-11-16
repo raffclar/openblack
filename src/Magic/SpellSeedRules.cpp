@@ -34,11 +34,6 @@ CastStyle magic::CastStyleOf(SpellCastType castType)
 	return CastStyle::OnPress;
 }
 
-CastStyle magic::CastStyleOf(const GSpellSeedInfo& seed)
-{
-	return CastStyleOf(seed.castType);
-}
-
 float magic::ChantNeeded(float costToCreate, float store)
 {
 	return costToCreate - store;

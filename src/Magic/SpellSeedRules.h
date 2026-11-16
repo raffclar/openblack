@@ -19,11 +19,6 @@
 
 #include "Enums.h"
 
-namespace openblack
-{
-struct GSpellSeedInfo;
-}
-
 // A miracle held in the hand as a seed: how the hand casts it, how charged it is and when it is ready. Pure functions of
 // a seed's record and state.
 
@@ -43,7 +38,6 @@ enum class CastStyle : uint8_t
 	OnPress,
 };
 [[nodiscard]] CastStyle CastStyleOf(SpellCastType castType);
-[[nodiscard]] CastStyle CastStyleOf(const GSpellSeedInfo& seed);
 
 /// The prayer power a seed still needs to cast a miracle that costs so much to create
 [[nodiscard]] float ChantNeeded(float costToCreate, float store);

@@ -345,11 +345,6 @@ Json SettingsJson(const LobbySettings& settings)
 
 } // namespace
 
-std::string_view LobbyStateName(LobbyState state)
-{
-	return NameIn(k_StateNames, state);
-}
-
 std::optional<LobbyState> LobbyStateOf(std::string_view name)
 {
 	return ValueIn(k_StateNames, name);

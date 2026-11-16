@@ -329,12 +329,3 @@ void SaveGameBoxes::Draw(const DialogPainter& painter) const
 	}
 	painter.SetAlpha(1.0f);
 }
-
-std::vector<Dialog::NamedControl> SaveGameBoxes::GetNamedControls() const
-{
-	if (_question.has_value())
-	{
-		return _question->answers.GetNamedControls();
-	}
-	return _nameActive ? _nameDialog.GetNamedControls() : std::vector<Dialog::NamedControl> {};
-}

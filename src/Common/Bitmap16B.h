@@ -12,8 +12,6 @@
 #include <cstdint>
 
 #include <array>
-#include <filesystem>
-#include <string>
 
 namespace openblack
 {
@@ -35,9 +33,6 @@ private:
 	unsigned int _height;
 	uint16_t* _data;
 	size_t _size;
-
-public:
-	static Bitmap16B* LoadFromFile(const std::filesystem::path& path);
 };
 
 /// A texel of 5 bits for each of red, green and blue and 1 bit of alpha, as red, green, blue and alpha bytes. Each colour

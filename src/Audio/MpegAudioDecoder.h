@@ -21,7 +21,6 @@ class MpegAudioDecoder final: public AudioDecoderInterface
 public:
 	bool Open(const std::vector<uint8_t>& buffer) override;
 	void Read(std::vector<int16_t>& buffer) override;
-	[[nodiscard]] ChannelLayout GetChannelLayout() override;
 
 private:
 	drmp3 _mp3;

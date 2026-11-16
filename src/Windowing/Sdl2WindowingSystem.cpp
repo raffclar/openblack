@@ -349,20 +349,10 @@ uint32_t Sdl2WindowingSystem::GetID() const
 	return SDL_GetWindowID(_window.get());
 }
 
-uint32_t Sdl2WindowingSystem::GetFlags() const
-{
-	return SDL_GetWindowFlags(_window.get());
-}
-
 Sdl2WindowingSystem& Sdl2WindowingSystem::SetMousePosition(glm::ivec2 position)
 {
 	system_pointer::Warp(_window.get(), position, _background);
 	return *this;
-}
-
-std::string Sdl2WindowingSystem::GetTitle() const
-{
-	return SDL_GetWindowTitle(_window.get());
 }
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::SetTitle(const std::string& str)
@@ -381,13 +371,6 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::SetPosition(glm::ivec2 position)
 {
 	SDL_SetWindowPosition(_window.get(), position.x, position.y);
 	return *this;
-}
-
-glm::ivec2 Sdl2WindowingSystem::GetPosition() const
-{
-	glm::ivec2 result;
-	SDL_GetWindowPosition(_window.get(), &result.x, &result.y);
-	return result;
 }
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::SetSize(glm::ivec2 size)
@@ -491,21 +474,9 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::Show()
 	return *this;
 }
 
-Sdl2WindowingSystem& Sdl2WindowingSystem::Hide()
-{
-	SDL_HideWindow(_window.get());
-	return *this;
-}
-
 Sdl2WindowingSystem& Sdl2WindowingSystem::Restore()
 {
 	SDL_RestoreWindow(_window.get());
-	return *this;
-}
-
-Sdl2WindowingSystem& Sdl2WindowingSystem::Raise()
-{
-	SDL_RaiseWindow(_window.get());
 	return *this;
 }
 

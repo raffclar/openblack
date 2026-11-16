@@ -686,9 +686,6 @@ public:
 	void StopLooking(int dude) { _lookOn[dude] = false; }
 	/// State 0 or 1
 	[[nodiscard]] bool IsHome(int dude) const;
-	/// The delay Say gives the sentence: |hx| - 0.95 < 0 ? 0 : min((v + 1) 250, 500) ms (for audio::advisor::Say,
-	/// which has no hover)
-	[[nodiscard]] uint32_t SayDelayMs(int dude) const;
 
 	// --- help spirits (type 1 / 2) as the CHL calls them ---
 	/// CHL 7 SPIRIT_EJECT with isHelp, 300 SPIRIT_APPEAR with 1
