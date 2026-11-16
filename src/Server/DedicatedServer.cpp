@@ -1437,7 +1437,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		{
 			Locator::time::value().SetSpeed(online::room_clock::ClockSpeedOf(speed));
 			appliedSpeed = speed;
-	}
+		}
 		// No computer god of the server's world takes the slots that the lobby closed. The start gives them before the
 		// first turn, in which the humans join.
 		if (host.Started() && Locator::computerPlayerSystem::has_value())

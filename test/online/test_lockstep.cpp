@@ -327,6 +327,12 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 		claims.slotKinds = std::get<std::vector<lobby_api::SlotKind>>(kinds);
 		subject = subject.substr(0, percent);
 	}
+	// "god:alice@lobby1#3!2" gives the slot that the lobby gave the player
+	if (const auto bang = subject.find('!'); bang != std::string_view::npos)
+	{
+		claims.slot = static_cast<uint8_t>(std::stoul(std::string(subject.substr(bang + 1))));
+		subject = subject.substr(0, bang);
+	}
 	if (const auto at = subject.find('@'); at != std::string_view::npos)
 	{
 		auto lobby = subject.substr(at + 1);
@@ -2270,6 +2276,86 @@ TEST_F(LockstepTest, AFixedServerTakesTheSlotKindsOfTheLobbyFromTheTicket)
 	EXPECT_EQ(host->ClosedSlots(), (std::vector<uint8_t> {0}));
 	ASSERT_TRUE(bob.session.GetStart().has_value());
 	EXPECT_EQ(bob.session.GetStart()->closedSlots, (std::vector<uint8_t> {0}));
+}
+
+// A fixed server has no member list: each god takes the slot that its ticket gives, in any order of the joins
+TEST_F(LockstepTest, AFixedServerSeatsEachGodInTheSlotOfItsTicket)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 4);
+	GiveWorldState();
+	Computer bob(network, now, "god:bob@lobby1#3!2");
+	Computer carol(network, now, "god:carol@lobby1#3!0");
+	Computer alice(network, now, "god:alice@lobby1#3!3");
+	Frames({&bob}, 3);
+	Frames({&bob, &carol}, 3);
+	Frames({&bob, &carol, &alice}, 30);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(bob.session.GetJoined()->slot, std::optional<uint8_t>(2));
+	EXPECT_EQ(carol.session.GetJoined()->slot, std::optional<uint8_t>(0));
+	EXPECT_EQ(alice.session.GetJoined()->slot, std::optional<uint8_t>(3));
+	EXPECT_EQ(host->Seats()[0].account, "carol");
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Open);
+	EXPECT_EQ(host->Seats()[2].account, "bob");
+	EXPECT_EQ(host->Seats()[3].account, "alice");
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+// The room refuses a ticket for a slot that another player holds, a slot that the lobby shuts or a slot out of the room
+TEST_F(LockstepTest, AFixedServerRefusesATicketForASlotThatIsNotFree)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 4);
+	Computer alice(network, now, "god:alice@lobby1#2!1%open,open,closed");
+	alice.session.SetReady(false);
+	Frames({&alice}, 3);
+	EXPECT_EQ(alice.session.GetJoined()->slot, std::optional<uint8_t>(1));
+	Computer taken(network, now, "god:mallory@lobby1#2!1");
+	Computer closed(network, now, "god:trent@lobby1#2!2");
+	Computer outside(network, now, "god:oscar@lobby1#2!4");
+	Frames({&alice, &taken, &closed, &outside}, 3);
+	for (const auto* refused : {&taken, &closed, &outside})
+	{
+		EXPECT_EQ(refused->session.GetEnd(), NetworkSession::End::Refused);
+		EXPECT_EQ(refused->session.RefusedReason(), "full");
+	}
+	EXPECT_EQ(host->Seats()[1].account, "alice");
+	EXPECT_EQ(host->Seats()[2].state, LockstepHost::SeatState::Closed);
+	// A god of the lobby without a slot in the ticket, as from an older lobby, takes the first free slot
+	Computer dave(network, now, "god:dave@lobby1#2");
+	Frames({&alice, &dave}, 3);
+	EXPECT_EQ(dave.session.GetJoined()->slot, std::optional<uint8_t>(0));
+}
+
+// A slot claim outside a lobby's game changes nothing: the god takes the first free slot
+TEST_F(LockstepTest, ASlotClaimWithNoLobbyGivesTheFirstFreeSlot)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 4);
+	Computer alice(network, now, "god:alice!3");
+	alice.session.SetReady(false);
+	Frames({&alice}, 3);
+	EXPECT_EQ(alice.session.GetJoined()->slot, std::optional<uint8_t>(0));
+}
+
+// The player of a god of a fixed server comes back into the slot of the ticket after the start
+TEST_F(LockstepTest, APlayerOfAFixedServerComesBackIntoTheSlotOfTheTicket)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 4);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice@lobby1#2!0");
+	auto bob = std::make_unique<Computer>(network, now, "god:bob@lobby1#2!3");
+	Frames({&alice, bob.get()}, 30);
+	ASSERT_TRUE(host->Started());
+	ASSERT_EQ(bob->session.GetJoined()->slot, std::optional<uint8_t>(3));
+	network.Cut(bob->sockets->Ids().back());
+	bob.reset();
+	Frames({&alice}, 20);
+	ASSERT_EQ(host->Seats()[3].state, LockstepHost::SeatState::Away);
+	Computer again(network, now, "god:bob@lobby1#2!3");
+	Frames({&alice, &again}, 40);
+	ASSERT_TRUE(again.session.GetJoined().has_value());
+	EXPECT_EQ(again.session.GetJoined()->role, game_socket::Role::God);
+	EXPECT_EQ(again.session.GetJoined()->slot, std::optional<uint8_t>(3));
+	EXPECT_EQ(again.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(host->Seats()[3].state, LockstepHost::SeatState::Taken);
 }
 
 TEST_F(LockstepTest, AFixedServerWaitsForEachGodOfTheLobbyGameThatTheTicketsGive)

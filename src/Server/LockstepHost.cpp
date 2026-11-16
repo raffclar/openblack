@@ -775,6 +775,17 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		return;
 	}
 	ShutSlotsOfTicket(claims);
+	// The slot that the lobby gave the god: from the member list of the lobby, or from the ticket of the lobby's game on a
+	// server with no member list
+	std::optional<uint8_t> wanted;
+	if (member != nullptr)
+	{
+		wanted = member->slot;
+	}
+	else if (!_settings.lobby.has_value() && !lan && !claims.lobby.empty())
+	{
+		wanted = claims.slot;
+	}
 	game_socket::Joined joined {
 	    .role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name, .start = _settings.start};
 	joined.editor = claims.editor;
@@ -802,11 +813,11 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 			Refuse(connection, "full", fmt::format("the player finds each of the {} god slots taken", _seats.size()));
 			return;
 		}
-		// A member of the lobby with a slot takes that slot
-		if (member != nullptr && member->slot.has_value() &&
-		    (*member->slot >= _seats.size() || _seats.at(*member->slot).state != SeatState::Open))
+		// A member of the lobby with a slot takes that slot. The room refuses the god when another player or the lobby
+		// holds the slot.
+		if (wanted.has_value() && (*wanted >= _seats.size() || _seats.at(*wanted).state != SeatState::Open))
 		{
-			Log(spdlog::level::info, fmt::format("The slot {} of the player is not free in the room", *member->slot));
+			Log(spdlog::level::info, fmt::format("The slot {} of the player is not free in the room", *wanted));
 			Refuse(connection, "full");
 			return;
 		}
@@ -820,9 +831,8 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	if (claims.role == game_socket::Role::God)
 	{
-		const auto free = member != nullptr && member->slot.has_value()
-		                      ? _seats.begin() + *member->slot
-		                      : std::ranges::find(_seats, SeatState::Open, &Seat::state);
+		const auto free =
+		    wanted.has_value() ? _seats.begin() + *wanted : std::ranges::find(_seats, SeatState::Open, &Seat::state);
 		const auto seat = static_cast<uint8_t>(free - _seats.begin());
 		*free = Seat {.state = SeatState::Taken,
 		              .connection = connection,

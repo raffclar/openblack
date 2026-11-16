@@ -115,6 +115,9 @@ struct Claims
 	/// The kinds of the god slots of the lobby's game from slot 0 ("slot_kinds", optional). Empty when the ticket does not
 	/// give them.
 	std::vector<lobby_api::SlotKind> slotKinds;
+	/// The god slot that the lobby gave the player, from 0 ("slot", optional). None for an observer and when the ticket
+	/// does not give it.
+	std::optional<uint8_t> slot;
 };
 
 /// The claims of a ticket's message. None when a claim is missing, has the wrong type or names a role that is not known.
