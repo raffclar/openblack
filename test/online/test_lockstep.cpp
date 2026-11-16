@@ -280,6 +280,13 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 	}
 	join_ticket::Claims claims;
 	auto subject = token.substr(colon + 1);
+	// "god:alice@lobby1#2%open,closed" gives the kinds of the slots of the lobby's game
+	if (const auto percent = subject.find('%'); percent != std::string_view::npos)
+	{
+		auto kinds = server::lobby_game::ParseSlotKinds(subject.substr(percent + 1));
+		claims.slotKinds = std::get<std::vector<lobby_api::SlotKind>>(kinds);
+		subject = subject.substr(0, percent);
+	}
 	if (const auto at = subject.find('@'); at != std::string_view::npos)
 	{
 		auto lobby = subject.substr(at + 1);
@@ -342,6 +349,23 @@ protected:
 		        .buildId = std::move(build),
 		        .mapSha256 = std::move(map),
 		        .loadWindowMicroseconds = loadWindow});
+	}
+
+	/// A room of four slots whose kinds the lobby set. The start names the closed slots.
+	void MakeKindsHost(std::vector<lobby_api::SlotKind> kinds, std::vector<uint8_t> closedSlots)
+	{
+		game_socket::Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
+		start.closedSlots = std::move(closedSlots);
+		host = std::make_unique<LockstepHost>(
+		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
+		    server::HostSettings {.start = std::move(start),
+		                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+		                          .minGods = 1,
+		                          .godSlots = 4,
+		                          .slotKinds = std::move(kinds),
+		                          .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+		                          .keptTurns = 3200,
+		                          .sessionHasher = hasher});
 	}
 
 	/// A room with no human god (tools): the game starts at once, and the world turns when this many observers joined
@@ -1974,6 +1998,75 @@ TEST_F(LockstepTest, AThirdGodIsRefusedFromARoomOfTwoSlotsAndAnObserverIsLetIn)
 	alice.session.SetReady(true);
 	Frames({&alice, &bob, &watcher}, 6);
 	EXPECT_TRUE(host->Started());
+}
+
+// The lobby gave slot 1 to a computer god and closed slot 3: the players take only the open slots
+TEST_F(LockstepTest, NoPlayerTakesAComputerSlotOrAClosedSlot)
+{
+	using lobby_api::SlotKind;
+	MakeKindsHost({SlotKind::Open, SlotKind::Computer, SlotKind::Open, SlotKind::Closed}, {3});
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Computer);
+	EXPECT_EQ(host->Seats()[3].state, LockstepHost::SeatState::Closed);
+	Computer alice(network, now, "god:alice");
+	alice.session.SetReady(false);
+	Computer bob(network, now, "god:bob");
+	Computer carol(network, now, "god:carol");
+	Frames({&alice, &bob, &carol}, 3);
+	EXPECT_EQ(alice.session.GetJoined()->slot, 0);
+	EXPECT_EQ(bob.session.GetJoined()->slot, 2);
+	EXPECT_EQ(carol.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(carol.session.RefusedReason(), "full");
+	alice.session.SetReady(true);
+	Frames({&alice, &bob}, 6);
+	ASSERT_TRUE(host->Started());
+	// The computer slot and the closed slot have no player. The start tells every computer which slot is closed.
+	ASSERT_TRUE(alice.session.GetStart().has_value());
+	const auto& start = *alice.session.GetStart();
+	EXPECT_EQ(start.names, (std::vector<std::string> {"alice", "", "bob", ""}));
+	EXPECT_EQ(start.closedSlots, (std::vector<uint8_t> {3}));
+	ASSERT_TRUE(bob.session.GetStart().has_value());
+	EXPECT_EQ(bob.session.GetStart()->closedSlots, (std::vector<uint8_t> {3}));
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Computer);
+	EXPECT_EQ(host->Seats()[3].state, LockstepHost::SeatState::Closed);
+}
+
+// A list of kinds that is shorter than the room keeps the last slots open
+TEST_F(LockstepTest, TheSlotsAfterTheLastKindAreOpen)
+{
+	using lobby_api::SlotKind;
+	MakeKindsHost({SlotKind::Open, SlotKind::Computer}, {});
+	Computer alice(network, now, "god:alice");
+	alice.session.SetReady(false);
+	Frames({&alice}, 3);
+	EXPECT_EQ(alice.session.GetJoined()->slot, 0);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Computer);
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 3);
+	EXPECT_EQ(bob.session.GetJoined()->slot, 2);
+}
+
+// A fixed server has no member list: the first ticket of the lobby's game gives the kinds of the slots
+TEST_F(LockstepTest, AFixedServerTakesTheSlotKindsOfTheLobbyFromTheTicket)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 4);
+	Computer alice(network, now, "god:alice@lobby1#2%closed,open,computer");
+	alice.session.SetReady(false);
+	Frames({&alice}, 3);
+	EXPECT_EQ(alice.session.GetJoined()->slot, 1);
+	ASSERT_TRUE(alice.session.GetJoined()->start.has_value());
+	EXPECT_EQ(alice.session.GetJoined()->start->closedSlots, (std::vector<uint8_t> {0}));
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Closed);
+	EXPECT_EQ(host->Seats()[2].state, LockstepHost::SeatState::Computer);
+	// A later ticket with other kinds changes nothing
+	Computer bob(network, now, "god:bob@lobby1#2%open,open,open,open");
+	Frames({&alice, &bob}, 3);
+	EXPECT_EQ(bob.session.GetJoined()->slot, 3);
+	alice.session.SetReady(true);
+	Frames({&alice, &bob}, 6);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(host->ClosedSlots(), (std::vector<uint8_t> {0}));
+	ASSERT_TRUE(bob.session.GetStart().has_value());
+	EXPECT_EQ(bob.session.GetStart()->closedSlots, (std::vector<uint8_t> {0}));
 }
 
 TEST_F(LockstepTest, AFixedServerWaitsForEachGodOfTheLobbyGameThatTheTicketsGive)

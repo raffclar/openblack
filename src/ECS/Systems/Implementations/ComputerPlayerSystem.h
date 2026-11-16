@@ -58,7 +58,8 @@ public:
 	void PlayerTurn(PlayerNames name) override;
 	void ProcessTurn() override;
 	void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) override;
-	void WaitForHumans() override;
+	void WaitForHumans(std::span<const uint8_t> closedSlots) override;
+	void CloseSlots(std::span<const uint8_t> closedSlots) override;
 	void HumansJoined(std::span<const PlayerNames> humans) override;
 	void SetAiSeed(std::optional<uint32_t> seed) override { _aiSeed = seed; }
 	void SetTimesReport(uint32_t everyTurns) override { _timesEvery = everyTurns; }

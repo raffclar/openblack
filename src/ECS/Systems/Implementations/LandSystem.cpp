@@ -784,7 +784,7 @@ void LandSystem::FillSlotsOfNetworkLand(std::span<const PlayerNames> gods)
 	}
 	if (_humansFromSession)
 	{
-		minds.WaitForHumans();
+		minds.WaitForHumans(_closedSlots);
 		return;
 	}
 	// On this computer alone, the local player is the one human

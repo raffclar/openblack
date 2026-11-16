@@ -100,6 +100,22 @@ int SearchLocalNetwork(uint32_t seconds)
 }
 #endif
 
+/// Reads the kinds of the god slots of the room. Gives the error, or none.
+std::optional<std::string> ReadSlotKinds(const cxxopts::ParseResult& result, openblack::server::NetworkSettings& network)
+{
+	if (result.count("slot-kinds") == 0)
+	{
+		return std::nullopt;
+	}
+	auto kinds = openblack::server::lobby_game::ParseSlotKinds(result["slot-kinds"].as<std::string>());
+	if (const auto* error = std::get_if<std::string>(&kinds); error != nullptr)
+	{
+		return "--slot-kinds: " + *error;
+	}
+	network.slotKinds = std::move(std::get<std::vector<openblack::lobby_api::SlotKind>>(kinds));
+	return std::nullopt;
+}
+
 /// Reads the options of the game of one lobby. Gives the error, or none.
 std::optional<std::string> ReadLobbyGame(const cxxopts::ParseResult& result, const openblack::server::ServerSettings& settings,
                                          openblack::server::NetworkSettings& network)
@@ -219,6 +235,7 @@ int main(int argc, char* argv[])
 		("join-window", "With --lobby-id, the seconds in which the members join after the server listens. The room waits for each god of the lobby until then. With fewer gods than --min-gods at its end, or no start at two times its length, the server ends with exit code 12.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::game_lifetime::k_DefaultJoinWindowSeconds)))
 		("deadline", "With --lobby-id, the time (UTC, ISO 8601 such as 2026-11-12T18:00:00+00:00) at which the server ends with exit code 11. The server also ends 6 hours after it starts to listen at the latest.", cxxopts::value<std::string>())
 		("build-id", "The build id that the lobby gave the game, such as 0.1.0+0123456789ab/codec34. The server does not start when its own build id is another: it ends with exit code 14.", cxxopts::value<std::string>())
+		("slot-kinds", "The kinds of the god slots of the room from slot 0, as the lobby set them: open, computer or closed with a comma between them, such as open,computer,closed. No player can take a computer slot or a closed slot. A computer slot gets a computer god at the start, and no god plays a closed slot. The slots after the last kind are open.", cxxopts::value<std::string>())
 		("map-sha256", "The SHA-256 of the file of the land that the lobby gave its members, as 64 hex digits. The server does not start with another file.", cxxopts::value<std::string>())
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
@@ -476,6 +493,11 @@ int main(int argc, char* argv[])
 		{
 			settings.commandsPath = std::filesystem::path(result["commands"].as<std::string>());
 		}
+		if (result.count("slot-kinds") != 0 && result.count("listen") == 0)
+		{
+			std::cerr << "openblack-server: --slot-kinds needs --listen" << std::endl;
+			return EXIT_FAILURE;
+		}
 		if (result.count("listen") != 0)
 		{
 			const auto listen = result["listen"].as<std::string>();
@@ -546,10 +568,25 @@ int main(int argc, char* argv[])
 			{
 				network.lobbyTestAuthorities = std::filesystem::path(result["lobby-test-ca"].as<std::string>());
 			}
+			if (const auto error = ReadSlotKinds(result, network); error.has_value())
+			{
+				std::cerr << "openblack-server: " << *error << std::endl;
+				return EXIT_FAILURE;
+			}
 			if (const auto error = ReadLobbyGame(result, settings, network); error.has_value())
 			{
 				std::cerr << "openblack-server: " << *error << std::endl;
 				return EXIT_FAILURE;
+			}
+			if (network.lobby.has_value())
+			{
+				if (const auto* member = openblack::server::lobby_game::MemberInShutSlot(*network.lobby, network.slotKinds);
+				    member != nullptr)
+				{
+					std::cerr << "openblack-server: the member " << member->account << " has the slot "
+					          << static_cast<int>(*member->slot) << ", which is not an open slot of --slot-kinds" << std::endl;
+					return EXIT_FAILURE;
+				}
 			}
 			settings.network = std::move(network);
 		}

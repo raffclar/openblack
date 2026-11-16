@@ -2694,6 +2694,10 @@ def main():
                              "with a good signature, a position, the gods defeated and the time played of each god")
     parser.add_argument("--clients", type=int, choices=(0, 1, 2, 3, 4), default=2,
                         help="the number of clients that play a god (a god slot each)")
+    parser.add_argument("--slot-kinds",
+                        help="the kinds of the god slots from slot 0 (the server's --slot-kinds), such as "
+                             "open,computer,open,closed: the clients take the open slots; with --lobby-game the "
+                             "members get the open slots in order")
     parser.add_argument("--min-gods", type=int,
                         help="the fewest gods that start the game (the server's --min-gods); the clients with none")
     parser.add_argument("--observers", type=int, choices=(0, 1, 2, 3, 4), default=0,
@@ -2874,6 +2878,8 @@ def main():
                                          else options.clients + (1 if options.web_god else 0))]
     if options.all_computer_gods:
         server_command.append("--all-computer-gods")
+    if options.slot_kinds:
+        server_command += ["--slot-kinds", options.slot_kinds]
     if options.slot_fight:
         server_command.append("--test-commands")
     if options.ai_seed is not None:
@@ -2892,7 +2898,11 @@ def main():
         if options.web_client or options.all_computer_gods or options.scenario:
             parser.error("--lobby-game does not go with --web-client, --all-computer-gods or --scenario")
         TICKET_LOBBY["lobby"] = LOBBY_ID
-        members = [{"account": str(100 + index), "role": "god", "slot": index} for index in range(options.clients)]
+        # The gods of the lobby take the open slots in order: the slots after the last kind are open too
+        kinds = options.slot_kinds.split(",") if options.slot_kinds else []
+        member_slots = [slot for slot in range(32) if slot >= len(kinds) or kinds[slot] == "open"]
+        members = [{"account": str(100 + index), "role": "god", "slot": member_slots[index]}
+                   for index in range(options.clients)]
         members += [{"account": str(100 + options.clients + index), "role": "observer"}
                     for index in range(options.observers)]
         members.append({"account": str(WRONG_BUILD_ACCOUNT), "role": "observer"})

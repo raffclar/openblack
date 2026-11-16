@@ -188,6 +188,7 @@ void NetworkGameSystem::Detach()
 	if (Locator::landSystem::has_value())
 	{
 		Locator::landSystem::value().SetHumansFromSession(false);
+		Locator::landSystem::value().SetClosedSlots({});
 	}
 	if (Locator::time::has_value())
 	{

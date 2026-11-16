@@ -200,7 +200,8 @@ public:
 	void PlayerTurn(PlayerNames /*player*/) override {}
 	void ProcessTurn() override {}
 	void FillEmptySlots(std::span<const PlayerNames> /*gods*/, std::span<const PlayerNames> /*humans*/) override {}
-	void WaitForHumans() override {}
+	void WaitForHumans(std::span<const uint8_t> /*closedSlots*/) override {}
+	void CloseSlots(std::span<const uint8_t> /*closedSlots*/) override {}
 	void HumansJoined(std::span<const PlayerNames> humans) override
 	{
 		joins.emplace_back(humans.begin(), humans.end());

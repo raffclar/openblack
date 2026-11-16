@@ -136,6 +136,9 @@ struct Start
 	std::vector<std::string> names;
 	/// The human gods of the game, by slot, as the game starts or as an observer joins ("gods", optional)
 	std::vector<God> gods;
+	/// The god slots that the lobby closed, from 0 ("closed_slots", optional). No human and no computer god plays such a
+	/// slot. Each other slot with no human gets a computer god at the start.
+	std::vector<uint8_t> closedSlots;
 };
 
 /// Server to client: "room.joined". The server accepted the ticket.

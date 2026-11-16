@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "GameSocket.h"
+#include "Lobbies.h"
 
 /// The join tickets of the lobby: PASETO v4.public tokens that the lobby signs with Ed25519, and the keys that a game
 /// server checks them with. Here are only the parts of the format: the parts of a token, the bytes that the signature
@@ -108,6 +109,9 @@ struct Claims
 	std::string lobby;
 	/// The number of gods of the lobby's game at its start ("gods", optional). 0 when the ticket does not give it.
 	uint32_t gods {0};
+	/// The kinds of the god slots of the lobby's game from slot 0 ("slot_kinds", optional). Empty when the ticket does not
+	/// give them.
+	std::vector<lobby_api::SlotKind> slotKinds;
 };
 
 /// The claims of a ticket's message. None when a claim is missing, has the wrong type or names a role that is not known.

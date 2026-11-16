@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -197,6 +198,9 @@ public:
 	/// The humans of a land of a network game come from the network session at the start of the game. Without a session,
 	/// the player of this computer is the one human when the land loads.
 	virtual void SetHumansFromSession(bool fromSession) = 0;
+	/// The god slots of a network game that the lobby closed, from 0. When the humans of the session join, no computer
+	/// god takes these slots.
+	virtual void SetClosedSlots(std::vector<uint8_t> slots) = 0;
 	/// The map script of a land of a network game runs now. While it runs, its lines do not switch a computer mind on or
 	/// off: the slots with no human get their computer gods after the script.
 	[[nodiscard]] virtual bool RunsNetworkMapScript() const = 0;

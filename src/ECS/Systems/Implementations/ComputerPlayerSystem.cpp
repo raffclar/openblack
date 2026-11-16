@@ -710,18 +710,37 @@ void ComputerPlayerSystem::FillEmptySlots(std::span<const PlayerNames> gods, std
 	computer_player::FillEmptySlots(world, gods, humans);
 }
 
-void ComputerPlayerSystem::WaitForHumans()
+void ComputerPlayerSystem::WaitForHumans(std::span<const uint8_t> closedSlots)
 {
 	Locator::entitiesRegistry::value().Context().slotsWaitForHumans = true;
+	CloseSlots(closedSlots);
+}
+
+void ComputerPlayerSystem::CloseSlots(std::span<const uint8_t> closedSlots)
+{
+	// The slots fill one time on the land: after that, the closed slots change nothing
+	auto& context = Locator::entitiesRegistry::value().Context();
+	if (context.slotsWaitForHumans)
+	{
+		context.closedSlots = computer_player::ClosedPlayers(closedSlots);
+	}
 }
 
 void ComputerPlayerSystem::HumansJoined(std::span<const PlayerNames> humans)
 {
 	// The slots fill one time on the land
-	const bool waits = std::exchange(Locator::entitiesRegistry::value().Context().slotsWaitForHumans, false);
+	auto& context = Locator::entitiesRegistry::value().Context();
+	const bool waits = std::exchange(context.slotsWaitForHumans, false);
 	GameSlotWorld world(*this);
-	// The gods of the slots of the game: the 7 of a land, or more on a land with more god slots
+	// The gods of the slots of the game: the 7 of a land, or more on a land with more god slots. No god plays a slot
+	// that the lobby closed.
 	auto all = ecs::game_players::Gods();
-	const std::vector<PlayerNames> gods(all.begin(), all.end());
+	const std::vector<PlayerNames> allGods(all.begin(), all.end());
+	const auto gods = computer_player::GodsOfOpenSlots(allGods, context.closedSlots);
+	if (waits && gods.size() != allGods.size())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby closed {} god slots: no computer god takes them",
+		                   allGods.size() - gods.size());
+	}
 	computer_player::HumansJoin(world, gods, humans, waits);
 }
