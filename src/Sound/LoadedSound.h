@@ -72,10 +72,17 @@ public:
 	/// The wave format tag of the sample data (0x50 for MPEG)
 	uint16_t waveFormat {0};
 	/// The first and last sample frames of the part it loops over while it loops, both -1 (or not in order) to loop all
-	/// of it; let go of, it plays on from there to its end
+	/// of it; let go of, it plays on from there to its end. The mixer does not play the last frame in the loop.
 	int32_t loopStart {-1};
 	int32_t loopEnd {-1};
 	BufferId bufferId;
+	/// The number of sample frames in bufferId
+	int32_t frames {0};
+	/// The buffers of the frames before the loop region, the region, and the frames after it, for a sample with a loop
+	/// region. A voice with a finite loop count queues these parts. The value is 0 for an empty part.
+	BufferId beforeRegionBufferId {0};
+	BufferId regionBufferId {0};
+	BufferId afterRegionBufferId {0};
 	float duration;
 	std::vector<std::vector<uint8_t>> buffer;
 	/// The parts of buffer decoded ahead of the sample's first play, on a loading thread; let go once it is played
