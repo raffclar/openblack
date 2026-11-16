@@ -113,7 +113,15 @@ void DemoLobbyRoom::RefreshList(LobbyCallback<LobbyDone> callback)
 	queued.queuePosition = 2;
 	lobbies.push_back(std::move(queued));
 	lobbies.push_back(Summary("d6", "Old friends", dan, "Two gods", 1, 2, LobbyState::Open, "0.0.1+old/codec1"));
-	_list.Replace({.lobbies = std::move(lobbies), .pool = lobby_api::PoolState {.free = 0, .total = 4}});
+	// A private game that plays is not in the list. The list gives it only to a player who holds a god in it.
+	std::optional<lobby_api::LobbySummary> rejoin;
+	if (_holdsGod)
+	{
+		rejoin = Summary("d7", "Last night", carol, "Two gods", 1, 2, LobbyState::InGame, _build);
+		rejoin->startedAt = _nowMs - (75 * k_MsPerMinute);
+		rejoin->players = {carol, _self};
+	}
+	_list.Replace({.lobbies = std::move(lobbies), .pool = lobby_api::PoolState {.free = 0, .total = 4}, .rejoin = rejoin});
 	if (callback)
 	{
 		callback({.value = LobbyDone {}, .error = {}});
@@ -228,6 +236,12 @@ void DemoLobbyRoom::Create(lobby_api::LobbyCreateRequest request, LobbyCallback<
 	callback({.value = LobbyDone {}, .error = {}});
 }
 
+void DemoLobbyRoom::HoldGod(std::optional<lobby_api::JoinTicket> ticket)
+{
+	_holdsGod = true;
+	_ticket = std::move(ticket);
+}
+
 void DemoLobbyRoom::Join(std::string lobbyId, std::optional<std::string> password, lobby_api::MemberRole,
                          std::optional<int32_t>, LobbyCallback<LobbyDone> callback)
 {
@@ -239,6 +253,23 @@ void DemoLobbyRoom::Join(std::string lobbyId, std::optional<std::string> passwor
 	if (summary == nullptr)
 	{
 		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::Refused, .status = 404, .code = "no_such_lobby"}});
+		return;
+	}
+	// The player is a member of the game that plays. As the service does, the join gives the lobby with its game server.
+	if (lobbyId == _list.RejoinId())
+	{
+		auto lobby = JoinedLobby(*summary);
+		lobby.visibility = lobby_api::LobbyVisibility::Private;
+		lobby.state = LobbyState::InGame;
+		lobby.startedAt = summary->startedAt;
+		lobby.gameId = "game-" + lobbyId;
+		for (auto& member : lobby.members)
+		{
+			member.ready = true;
+			member.slot = member.account.id == _self.id ? 1 : 0;
+		}
+		_room = std::make_unique<online::lobby::LobbyRoom>(std::move(lobby), _self);
+		callback({.value = LobbyDone {}, .error = {}});
 		return;
 	}
 	if (summary->locked && password != k_Password)
