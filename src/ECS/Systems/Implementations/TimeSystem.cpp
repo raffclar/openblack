@@ -24,8 +24,7 @@ namespace
 constexpr auto k_TurnMs = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
 /// Further behind than this, a game with one player gives up on the time it lost
 constexpr int32_t k_MaxLagMs = 2000;
-/// The turns that a frame can do: one alone, and up to 10 in a network game, so that a computer that is behind catches up
-constexpr uint32_t k_MaxTurnsPerFrame = 1;
+/// The turns that a frame can do: up to 10 in a network game, so that a computer that is behind catches up
 constexpr uint32_t k_MaxNetworkTurnsPerFrame = 10;
 constexpr int32_t k_MaxRemainderMs = 99;
 constexpr float k_FractionPerMs = 0.01f;
@@ -223,7 +222,7 @@ void TimeSystem::ResumeAtTurn(uint32_t turn, int32_t remainderMs)
 
 bool TimeSystem::IsTurnDue()
 {
-	if (Stopped() || _turnsThisFrame >= (_catchesUp ? k_MaxNetworkTurnsPerFrame : k_MaxTurnsPerFrame))
+	if (Stopped() || _turnsThisFrame >= (_catchesUp ? k_MaxNetworkTurnsPerFrame : _mostTurnsInFrame))
 	{
 		return false;
 	}
@@ -236,6 +235,11 @@ bool TimeSystem::IsTurnDue()
 	}
 	// From the time taken before any reset
 	return timer >= due;
+}
+
+void TimeSystem::SetMostTurnsInFrame(uint32_t turns)
+{
+	_mostTurnsInFrame = std::clamp(turns, 1u, k_MaxNetworkTurnsPerFrame);
 }
 
 void TimeSystem::StartTurn()

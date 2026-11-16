@@ -7,11 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -4368,6 +4370,30 @@ TEST(RoomClock, TheClockOfAComputerFollowsTheSpeedOfTheRoomAndStartsFromTheTurnA
 	// After a pause, the next turn of a play or of a step starts from its turn
 	EXPECT_TRUE(room_clock::FollowOf(GameTime {.paused = false, .speed = 1.0f, .act = TimeAct::Play}, 1.0f).fromTurn);
 	EXPECT_TRUE(room_clock::FollowOf(GameTime {.paused = true, .speed = 1.0f, .act = TimeAct::Step}, 1.0f).fromTurn);
+}
+
+TEST(RoomClock, TheGameServerPlaysInAFrameTheTurnsThatTheClockOfTheRoomGives)
+{
+	namespace room_clock = online::room_clock;
+	using std::chrono::milliseconds;
+	// The default frame of the server is 100 ms: one turn at the normal speed, ten at the fastest speed
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(1.0f, milliseconds(100)), 1u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.1f, milliseconds(100)), 10u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.5f, milliseconds(100)), 2u);
+	// A part of a turn goes up to a full turn
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.3f, milliseconds(100)), 4u);
+	// A slow clock and a short frame give one turn
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(10.0f, milliseconds(100)), 1u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.1f, milliseconds(10)), 1u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(1.0f, milliseconds(10)), 1u);
+	// The number stays at the limit, also for a long frame
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.1f, milliseconds(1000)), room_clock::k_MostServerTurnsInFrame);
+	// No fixed frame time: the frame takes the time of a normal turn
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.1f, std::nullopt), 10u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(1.0f, std::nullopt), 1u);
+	// A speed out of the limits gives one turn
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.0f, milliseconds(100)), 1u);
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(std::nanf(""), milliseconds(100)), 1u);
 }
 
 TEST(RoomClock, EveryPlayerSeesALineForAPauseAPlayAndASpeedOfAPlayer)

@@ -588,6 +588,76 @@ TEST(GameClock, ANetworkGameCatchesUpTenTurnsAFrameAndKeepsTheTimeItLost)
 	EXPECT_EQ(turns(alone), 0u);
 }
 
+namespace
+{
+/// The game server: frames of a fixed 100 ms, a clock ten times as fast as the normal clock, and this limit of turns
+void StartFastServer(Clock& server, uint32_t mostTurns)
+{
+	server.time.SetNetworkGame(true);
+	server.time.SetFixedFrameTime(std::chrono::milliseconds(100));
+	server.time.SetSpeed(10.0f);
+	server.time.SetMostTurnsInFrame(mostTurns);
+	server.time.StartGameClock(false);
+}
+
+/// Plays a frame of the server with all the turns that are due. The number of turns
+uint32_t ServerFrame(Clock& server)
+{
+	uint32_t count = 0;
+	server.time.Update();
+	while (server.time.IsTurnDue())
+	{
+		server.time.StartTurn();
+		++count;
+	}
+	server.time.UpdateFrame();
+	return count;
+}
+} // namespace
+
+TEST(GameClock, TheGameServerPlaysTheTurnsOfAFastClockInOneFrame)
+{
+	// With one turn in a frame, the fast clock gives no more turns than the normal clock
+	Clock one;
+	StartFastServer(one, 1);
+	EXPECT_EQ(ServerFrame(one), 1u);
+	EXPECT_EQ(ServerFrame(one), 1u);
+	// With ten turns in a frame, each frame of 100 ms plays the ten turns of its time
+	Clock ten;
+	StartFastServer(ten, 10);
+	for (uint32_t frame = 1; frame <= 50; ++frame)
+	{
+		EXPECT_EQ(ServerFrame(ten), 10u);
+		EXPECT_EQ(ten.time.GetTurn(), frame * 10);
+	}
+}
+
+TEST(GameClock, TheLimitOfTurnsInAFrameIsFromOneToTen)
+{
+	Clock none;
+	StartFastServer(none, 0);
+	EXPECT_EQ(ServerFrame(none), 1u);
+	Clock many;
+	StartFastServer(many, 50);
+	EXPECT_EQ(ServerFrame(many), 10u);
+	EXPECT_EQ(ServerFrame(many), 10u);
+}
+
+TEST(GameClock, OneTurnInAFrameAtTheNormalSpeedOfTheGameServer)
+{
+	Clock server;
+	server.time.SetNetworkGame(true);
+	server.time.SetFixedFrameTime(std::chrono::milliseconds(100));
+	server.time.SetMostTurnsInFrame(1);
+	server.time.StartGameClock(false);
+	for (uint32_t frame = 1; frame <= 20; ++frame)
+	{
+		server.time.Update();
+		EXPECT_TRUE(server.Frame());
+		EXPECT_EQ(server.time.GetTurn(), frame);
+	}
+}
+
 TEST(GameClock, AFrameBetweenTwoTurnsOfOneFrameTakesTheTimeOfATurnAndKeepsTheCount)
 {
 	Clock network;
