@@ -2257,7 +2257,8 @@ snapshots::Room LockstepHost::RoomRecord() const
 		room.seats.push_back({.state = static_cast<uint8_t>(seat.state),
 		                      .session = seat.sessionHash,
 		                      .account = seat.account,
-		                      .name = seat.name});
+		                      .name = seat.name,
+		                      .editor = seat.editor});
 	}
 	for (const auto& watcher : _watchers)
 	{
@@ -2266,6 +2267,7 @@ snapshots::Room LockstepHost::RoomRecord() const
 			room.watchers.push_back(*watcher.sessionHash);
 			room.watcherNames.push_back(watcher.name);
 			room.watcherNumbers.push_back(watcher.number);
+			room.watcherEditors.push_back(watcher.editor);
 		}
 	}
 	for (const auto& [number, name] : _observerArrivals)
@@ -2335,7 +2337,7 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                  .lastBlockInTurn = std::nullopt,
 		                  .blocksAgain = 0,
 		                  .refusedBlocks = 0,
-		                  .editor = false};
+		                  .editor = saved.editor};
 		// The server takes only the blocks after the last block that the sent turns hold
 		if (const auto last = blocks.find(static_cast<uint8_t>(i)); last != blocks.end())
 		{
@@ -2381,7 +2383,7 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                             .resumes = 0,
 		                             .name = std::move(name),
 		                             .number = number,
-		                             .editor = false});
+		                             .editor = i < room.watcherEditors.size() && room.watcherEditors[i]});
 	}
 	// The server takes only the blocks of each observer after the last block that the sent turns hold
 	for (const auto& [key, sequence] : blocks)

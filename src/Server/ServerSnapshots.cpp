@@ -31,7 +31,9 @@ constexpr std::array<uint8_t, 8> k_JournalMagic {'O', 'B', 'J', 'O', 'U', 'R', '
 /// Version 3 keeps the last block of commands of each god. The files of version 2 do not load.
 /// Version 4 keeps the names of the observers and whether the god of the observers is in the game. The files of version 3
 /// still load, with no names and with the god of the observers out of the game.
-constexpr uint32_t k_FormatVersion = 5;
+/// Version 6 keeps the claims of the join tickets of the gods and the observers. The files of versions 3 to 5 still load,
+/// with no claims.
+constexpr uint32_t k_FormatVersion = 6;
 constexpr uint32_t k_OldestFormatVersion = 3;
 
 /// True for a version of the format that the server reads
@@ -39,6 +41,8 @@ constexpr uint32_t k_OldestFormatVersion = 3;
 {
 	return version >= k_OldestFormatVersion && version <= k_FormatVersion;
 }
+/// The bit of the editor claim in the byte of the claims of a god or an observer
+constexpr uint8_t k_EditorClaimBit = 1;
 constexpr std::string_view k_SnapshotPrefix = "snapshot-";
 constexpr std::string_view k_SnapshotExtension = ".obsnap";
 constexpr std::string_view k_JournalPrefix = "journal-";
@@ -309,6 +313,20 @@ std::vector<uint8_t> EncodeRoom(const Room& room)
 		PutText(out, name);
 	}
 	PutBytes(out, room.departingNumbers);
+	std::vector<uint8_t> seatClaims;
+	seatClaims.reserve(room.seats.size());
+	for (const auto& seat : room.seats)
+	{
+		seatClaims.push_back(seat.editor ? k_EditorClaimBit : uint8_t {0});
+	}
+	PutBytes(out, seatClaims);
+	std::vector<uint8_t> watcherClaims;
+	watcherClaims.reserve(room.watcherEditors.size());
+	for (const bool editor : room.watcherEditors)
+	{
+		watcherClaims.push_back(editor ? k_EditorClaimBit : uint8_t {0});
+	}
+	PutBytes(out, watcherClaims);
 	return out;
 }
 
@@ -364,6 +382,25 @@ std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes)
 			room.arrivingNames.push_back(reader.Text());
 		}
 		room.departingNumbers = reader.Bytes();
+	}
+	// The room of a file of format 5 ends here
+	if (reader.Good() && !reader.AtEnd())
+	{
+		const auto seatClaims = reader.Bytes();
+		const auto watcherClaims = reader.Bytes();
+		if (seatClaims.size() != room.seats.size())
+		{
+			return std::nullopt;
+		}
+		for (size_t i = 0; i < seatClaims.size(); ++i)
+		{
+			room.seats[i].editor = (seatClaims[i] & k_EditorClaimBit) != 0;
+		}
+		room.watcherEditors.reserve(watcherClaims.size());
+		for (const auto claims : watcherClaims)
+		{
+			room.watcherEditors.push_back((claims & k_EditorClaimBit) != 0);
+		}
 	}
 	if (!reader.Good() || !reader.AtEnd())
 	{

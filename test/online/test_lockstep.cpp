@@ -2361,6 +2361,56 @@ TEST_F(LockstepTest, TheGodOfTheObserversFollowsTheGodSlotsOfTheRoom)
 	EXPECT_EQ(host->ObserversGod(), static_cast<PlayerNames>(33));
 }
 
+// A god and an observer with the editor claim keep the claim when they come back to a server that a snapshot restored.
+// The server still refuses the edits of the god with no editor claim.
+TEST_F(LockstepTest, ARestoredServerKeepsTheEditorClaimsOfTheGodsAndTheObservers)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Computer carol(network, now, "observer+editor:carol");
+	Frames({&alice, &bob, &carol}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto room = host->RoomRecord();
+	ASSERT_GE(room.seats.size(), 2u);
+	EXPECT_TRUE(room.seats[0].editor);
+	EXPECT_FALSE(room.seats[1].editor);
+	EXPECT_EQ(room.watcherEditors, (std::vector<bool> {true}));
+	RestartFrom(room, host->TurnsDone(), serverWorld, {&alice, &bob, &carol});
+	EXPECT_TRUE(host->Seats()[0].editor);
+	EXPECT_FALSE(host->Seats()[1].editor);
+	ASSERT_EQ(host->Watchers().size(), 1u);
+	EXPECT_TRUE(host->Watchers()[0].editor);
+	Frames({&alice, &bob, &carol}, 40);
+	ASSERT_EQ(alice.session.Resumes(), 1u);
+	ASSERT_EQ(bob.session.Resumes(), 1u);
+	ASSERT_EQ(carol.session.Resumes(), 1u);
+	const EditorEdit move {.kind = EditorEdit::Kind::Move, .object = Entity(5), .position = {1.0f, 0.0f, 2.0f}};
+	alice.session.Send(move);
+	bob.session.Send(move);
+	carol.session.Send(EditorEdit {.kind = EditorEdit::Kind::Remove, .object = Entity(7)});
+	Frames({&alice, &bob, &carol}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 1u);
+	const auto count = [this](size_t seat) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(turn_codec::CommandTag::EditorEdit));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0), 1u);
+	EXPECT_EQ(count(1), 0u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+	EXPECT_EQ(carol.session.TakeEditorRefusals(), 0u);
+	const auto edits = std::ranges::count_if(alice.world.observerCommands, [](const Command& command) {
+		return std::holds_alternative<EditorEdit>(command.action);
+	});
+	EXPECT_EQ(edits, 1);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
 // A server that a snapshot restores knows the names of its observers and whether their god is in the game. So the
 // players still see the name of an observer that leaves after the restart.
 TEST_F(LockstepTest, ARestoredServerTellsTheNameOfAnObserverThatLeaves)
