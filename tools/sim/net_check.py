@@ -1383,9 +1383,6 @@ def editor_scripts(pids, inputs, shots=None):
     shows in a screenshot after the start and after the refusal."""
     editor = pids[0]
     done = {"acts": []}
-    if shots:
-        for pid in pids:
-            inspector_answer(pid, "editor.show_tab", {"params": {"tab": "Scripts"}})
 
     def act(query, params, wait=1.0):
         answer = inspector_answer(editor, query, {"params": params})
@@ -1407,6 +1404,10 @@ def editor_scripts(pids, inputs, shots=None):
     done["task"] = ours[0] if ours else None
     # The Scripts tab of the editor shows the new task of the start that the turn did
     done["start_report"] = inspector_answer(editor, "editor.script_reports", {})
+    if shots:
+        # The editor opens only after the claim of the editor came, so the tab opens after the first acts
+        done["show_tab"] = [inspector_answer(pid, "editor.show_tab", {"params": {"tab": "Scripts"}}) for pid in pids]
+        time.sleep(1.0)
     editor_shots(pids, shots, "scripts_start")
     if ours:
         task = ours[0]
