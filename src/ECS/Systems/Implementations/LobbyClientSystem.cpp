@@ -349,6 +349,15 @@ std::optional<bool> LobbyClientSystem::GetAccountEditor() const
 	return _accountEditor;
 }
 
+std::optional<bool> LobbyClientSystem::GetAccountDebugger() const
+{
+	if (_state != LobbySessionState::LoggedIn || !_account.has_value())
+	{
+		return std::nullopt;
+	}
+	return _accountDebugger;
+}
+
 void LobbyClientSystem::ResumeSession(LobbyCallback<lobby_api::AccountRef> callback)
 {
 	Resume(std::move(callback), true);
@@ -605,9 +614,16 @@ void LobbyClientSystem::ApplySession(const lobby_api::Session& session)
 		LogSession("The lobby session of {} {} the editor right", session.account.name,
 		           session.editor ? "has" : "does not have");
 	}
+	if (!known || _accountDebugger != session.debugger)
+	{
+		// The test tools find the words "the debugger right"
+		LogSession("The lobby session of {} {} the debugger right", session.account.name,
+		           session.debugger ? "has" : "does not have");
+	}
 	_account = session.account;
 	_emailRequired = session.emailRequired;
 	_accountEditor = session.editor;
+	_accountDebugger = session.debugger;
 	_state = LobbySessionState::LoggedIn;
 	if (session.refreshToken.has_value())
 	{
@@ -624,6 +640,7 @@ void LobbyClientSystem::EndSession()
 	_account.reset();
 	_emailRequired = false;
 	_accountEditor = false;
+	_accountDebugger = false;
 	_accessToken.clear();
 	_accessExpiry = {};
 	_refreshToken.reset();

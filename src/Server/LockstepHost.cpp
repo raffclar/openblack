@@ -742,6 +742,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	game_socket::Joined joined {
 	    .role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name, .start = _settings.start};
 	joined.editor = claims.editor;
+	joined.debugger = claims.debugger;
 	joined.dataFiles = DataFiles();
 	joined.capture = _capture != nullptr;
 	if (claims.role == game_socket::Role::God)
@@ -1269,6 +1270,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	game_socket::Joined joined {
 	    .role = game_socket::Role::Observer, .slot = std::nullopt, .session = {}, .name = claims.name, .start = start};
 	joined.editor = claims.editor;
+	joined.debugger = claims.debugger;
 	joined.dataFiles = DataFiles();
 	joined.capture = _capture != nullptr;
 	if (own != _seats.end())

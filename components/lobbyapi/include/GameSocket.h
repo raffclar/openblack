@@ -154,6 +154,9 @@ struct Joined
 	/// The join ticket of the player has the editor claim ("editor", optional). Then the player can open the editor and
 	/// turn on the debug cheats. The server refuses the edits and the cheats of every other player.
 	bool editor {false};
+	/// The join ticket of the player has the debugger claim ("debugger", optional). Only then the client shows its
+	/// debug menu bar. An older server does not send it, and then the client does not show the bar.
+	bool debugger {false};
 	/// The files of the game's folder that the server's world read, relative to the game's folder ("data_files",
 	/// optional). The client sends the print of these files from its own folder (data.print). An older server sends
 	/// none, and then the client sends no print.

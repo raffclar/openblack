@@ -91,10 +91,10 @@ TEST(DeveloperTools, InANetworkGameOnlyAPlayerWithTheEditorClaimOpensTheEditorIn
 			EXPECT_EQ(EditorRefusalOf(built, true, right),
 			          "only a player with the editor claim opens the editor in a network game")
 			    << built;
-			EXPECT_EQ(GuiModeOf(built, true, right), GuiMode::Dormant) << built;
+			EXPECT_EQ(GuiModeOf(built, true, right, DebuggerRight::Refused), GuiMode::Dormant) << built;
 			EXPECT_TRUE(ShowsRefusalLine(built, true, right)) << built;
 		}
-		EXPECT_EQ(GuiModeOf(built, true, EditorRight::Granted), GuiMode::EditorOnly) << built;
+		EXPECT_EQ(GuiModeOf(built, true, EditorRight::Granted, DebuggerRight::Refused), GuiMode::EditorOnly) << built;
 		EXPECT_FALSE(ShowsRefusalLine(built, true, EditorRight::Granted)) << built;
 	}
 }
@@ -103,14 +103,14 @@ TEST(DeveloperTools, InASinglePlayerGameAnAccountWithTheEditorRightOpensTheEdito
 {
 	// A build that players get: only the editor shows, and the editor opens
 	EXPECT_FALSE(EditorRefusalOf(false, false, EditorRight::Granted).has_value());
-	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Granted), GuiMode::EditorOnly);
+	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Granted, DebuggerRight::Unknown), GuiMode::EditorOnly);
 	EXPECT_FALSE(ShowsRefusalLine(false, false, EditorRight::Granted));
 }
 
 TEST(DeveloperTools, InASinglePlayerGameAnAccountWithoutTheEditorRightSeesTheRefusalLine)
 {
 	EXPECT_EQ(EditorRefusalOf(false, false, EditorRight::Refused), "the signed-in account does not have the editor right");
-	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Refused), GuiMode::Dormant);
+	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Refused, DebuggerRight::Unknown), GuiMode::Dormant);
 	EXPECT_TRUE(ShowsRefusalLine(false, false, EditorRight::Refused));
 	EXPECT_FALSE(k_EditorRefusedLine.empty());
 }
@@ -119,7 +119,7 @@ TEST(DeveloperTools, InASinglePlayerGameWithNoSignInTheEditorStaysClosedAndShows
 {
 	// The rule from before: a build that players get has no editor outside a network game, and shows no line
 	EXPECT_EQ(EditorRefusalOf(false, false, EditorRight::Unknown), "the build has no developer tools");
-	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Unknown), GuiMode::Dormant);
+	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Unknown, DebuggerRight::Unknown), GuiMode::Dormant);
 	EXPECT_FALSE(ShowsRefusalLine(false, false, EditorRight::Unknown));
 }
 
@@ -129,8 +129,79 @@ TEST(DeveloperTools, ADeveloperBuildOutsideANetworkGameKeepsAllItsWindows)
 	for (const auto right : {EditorRight::Unknown, EditorRight::Granted, EditorRight::Refused})
 	{
 		EXPECT_FALSE(EditorRefusalOf(true, false, right).has_value());
-		EXPECT_EQ(GuiModeOf(true, false, right), GuiMode::Full);
+		EXPECT_EQ(GuiModeOf(true, false, right, DebuggerRight::Unknown), GuiMode::Full);
 		EXPECT_FALSE(ShowsRefusalLine(true, false, right));
+	}
+}
+
+TEST(DeveloperTools, TheDebuggerRightComesFromTheTicketInANetworkGameAndElseFromTheAccount)
+{
+	EXPECT_EQ(DebuggerRightOf(true, true, false), DebuggerRight::Granted);
+	EXPECT_EQ(DebuggerRightOf(true, false, true), DebuggerRight::Refused);
+	EXPECT_EQ(DebuggerRightOf(false, false, true), DebuggerRight::Granted);
+	EXPECT_EQ(DebuggerRightOf(false, true, false), DebuggerRight::Refused);
+	EXPECT_EQ(DebuggerRightOf(false, true, std::nullopt), DebuggerRight::Unknown);
+}
+
+TEST(DeveloperTools, ThePlayerWithTheDebuggerRightGetsTheMenuBarInEveryBuildAndGame)
+{
+	for (const bool built : {false, true})
+	{
+		for (const bool live : {false, true})
+		{
+			for (const auto editor : {EditorRight::Unknown, EditorRight::Granted, EditorRight::Refused})
+			{
+				EXPECT_EQ(GuiModeOf(built, live, editor, DebuggerRight::Granted), GuiMode::Full) << built << live;
+			}
+		}
+	}
+}
+
+TEST(DeveloperTools, ThePlayerWithoutTheDebuggerRightGetsOnlyTheEditorOfTheEditorRight)
+{
+	// A developer build outside a network game always opens the editor, thus only the editor shows
+	for (const auto editor : {EditorRight::Unknown, EditorRight::Granted, EditorRight::Refused})
+	{
+		EXPECT_EQ(GuiModeOf(true, false, editor, DebuggerRight::Refused), GuiMode::EditorOnly);
+	}
+	for (const bool built : {false, true})
+	{
+		EXPECT_EQ(GuiModeOf(built, true, EditorRight::Granted, DebuggerRight::Refused), GuiMode::EditorOnly);
+		EXPECT_EQ(GuiModeOf(built, true, EditorRight::Refused, DebuggerRight::Refused), GuiMode::Dormant);
+	}
+	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Granted, DebuggerRight::Refused), GuiMode::EditorOnly);
+	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Refused, DebuggerRight::Refused), GuiMode::Dormant);
+}
+
+TEST(DeveloperTools, InTheFullModeTheEditorShowsOnlyWithTheEditorRightAndNoOtherWindowInANetworkGame)
+{
+	// A single player game: the debug windows show, and the editor shows only when it can open
+	EXPECT_TRUE(ShowsWindow(GuiMode::Full, false, false, false));
+	EXPECT_TRUE(ShowsWindow(GuiMode::Full, false, true, true));
+	EXPECT_FALSE(ShowsWindow(GuiMode::Full, false, true, false));
+	// A network game: no debug window other than the editor shows, so that the shared world stays the same
+	EXPECT_FALSE(ShowsWindow(GuiMode::Full, true, false, true));
+	EXPECT_TRUE(ShowsWindow(GuiMode::Full, true, true, true));
+	EXPECT_FALSE(ShowsWindow(GuiMode::Full, true, true, false));
+	for (const bool live : {false, true})
+	{
+		EXPECT_TRUE(ShowsWindow(GuiMode::EditorOnly, live, true, true));
+		EXPECT_FALSE(ShowsWindow(GuiMode::EditorOnly, live, false, true));
+		EXPECT_FALSE(ShowsWindow(GuiMode::Dormant, live, true, true));
+		EXPECT_FALSE(ShowsWindow(GuiMode::Dormant, live, false, true));
+	}
+}
+
+TEST(DeveloperTools, TheMenuBarShowsOnlyInTheFullModeWhileTheGameMenuIsOpen)
+{
+	EXPECT_TRUE(ShowsMenuBar(GuiMode::Full, true, true));
+	EXPECT_FALSE(ShowsMenuBar(GuiMode::Full, true, false));
+	// With no game's menu, the bar is the only menu
+	EXPECT_TRUE(ShowsMenuBar(GuiMode::Full, false, false));
+	for (const auto mode : {GuiMode::EditorOnly, GuiMode::Dormant})
+	{
+		EXPECT_FALSE(ShowsMenuBar(mode, true, true));
+		EXPECT_FALSE(ShowsMenuBar(mode, false, false));
 	}
 }
 

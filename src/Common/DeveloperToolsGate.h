@@ -26,6 +26,17 @@ namespace openblack::developer_tools
 /// game, else the editor right of the account that is signed in to the lobby
 [[nodiscard]] EditorRight LocalEditorRight();
 
+/// True while a network session is live and the join ticket of the player of this computer has the debugger claim
+[[nodiscard]] bool LocalPlayerHasDebuggerClaim();
+
+/// The debugger right of the player of this computer (see DebuggerRightOf): the debugger claim of the join ticket in a
+/// network game, else the debugger mark of the account that is signed in to the lobby
+[[nodiscard]] DebuggerRight LocalDebuggerRight();
+
+/// Whether the editor can open now (see EditorRefusalOf). It does not log and does not show the refusal line, thus the
+/// game can call it in each frame.
+[[nodiscard]] bool EditorCanOpen();
+
 /// Shows the refusal line of the editor and the debug cheats to the player, in the incoming messages (see
 /// ShowsRefusalLine). The game calls it for a refusal of this computer and for a refusal of the game server.
 void ShowEditorRefusal();

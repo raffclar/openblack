@@ -358,6 +358,7 @@ Game::Game(Arguments&& args) noexcept
 	config.lobbyTestAuthorities = args.lobbyTestAuthorities;
 	config.useInternetWeather = args.useInternetWeather;
 	config.simAccountEditor = args.simAccountEditor;
+	config.simAccountDebugger = args.simAccountDebugger;
 	config.showPing = args.showPing;
 	config.mapPieceDelayMs = args.mapPieceDelayMs;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;

@@ -124,6 +124,13 @@ TEST(GameSocket, TheEditorMarkGoesWithTheGodAndTheJoinAndIsLeftOutWhenNotSet)
 	ASSERT_TRUE(old.has_value());
 	EXPECT_FALSE(std::get<Joined>(*old).editor);
 	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","editor":"yes"})").has_value());
+	// The debugger mark goes with the join, apart from the editor mark. An older server does not send it.
+	EXPECT_TRUE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s", .debugger = true}).debugger);
+	EXPECT_FALSE(RoundTrip(Joined {.role = Role::God, .slot = 0, .session = "s", .editor = true}).debugger);
+	EXPECT_EQ(ToJson(Joined {.role = Role::God, .slot = 0, .session = "s", .debugger = true}),
+	          R"({"debugger":true,"role":"god","session":"s","slot":0,"type":"room.joined"})");
+	EXPECT_FALSE(std::get<Joined>(*old).debugger);
+	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","debugger":1})").has_value());
 	// The old staff mark of an older server gives no editor
 	const auto staff = Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","staff":true})");
 	ASSERT_TRUE(staff.has_value());

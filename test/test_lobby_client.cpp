@@ -1259,6 +1259,34 @@ TEST_F(LobbyClientTest, AnAnswerWithNoEditorFieldGivesNoRight)
 	        .has_value());
 }
 
+TEST_F(LobbyClientTest, EachSessionAnswerGivesTheDebuggerMarkOfTheAccountApartFromTheEditorRight)
+{
+	Make();
+	EXPECT_FALSE(_client->GetAccountDebugger().has_value());
+	_client->Login("abc", "secret", [](auto&& /*result*/) {});
+	_http.Answer(201, R"({"access_token":"access1","access_token_expires":"2026-10-22T10:15:00Z",)"
+	                  R"("refresh_token":"refresh1","refresh_token_expires":"2026-11-21T10:00:00Z",)"
+	                  R"("account":{"id":7,"name":"abc"},"debugger":true})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(true));
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+
+	// The next refresh of the access token gives the new value. An older lobby sends no field, which gives no mark.
+	_now += 15min;
+	_client->GetMe([](auto&& /*result*/) {});
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/sessions/refresh");
+	_http.Answer(200, k_Rotated);
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(false));
+	_http.Answer(200, R"({"id":7,"name":"abc"})");
+
+	_client->Logout(false, [](auto&& /*result*/) {});
+	_http.Answer(204, "");
+	EXPECT_FALSE(_client->GetAccountDebugger().has_value());
+	EXPECT_FALSE(
+	    lobby_api::ParseSession(
+	        R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z","account":{"id":7,"name":"abc"},"debugger":1})")
+	        .has_value());
+}
+
 TEST_F(LobbyClientTest, TheLoginAtTheStartUsesTheStoredTokenAndOpensNoPushChannel)
 {
 	_kept = "stored";
