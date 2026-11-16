@@ -321,6 +321,8 @@ TEST(CreatureHelp, FeedbackLessonsTellOfTheOpinionOrTheSource)
 	EXPECT_EQ(lesson.parameter, 12u);
 	EXPECT_EQ(FeedbackLesson(-0.4f, false, Desire::Hunger, 12).kind, Kind::LessonDecreaseSource);
 	EXPECT_EQ(Text(Kind::LessonDecreaseSource, 12), 535u);
+	EXPECT_TRUE(IsFeedbackLesson(FeedbackLesson(-0.4f, true, Desire::Hunger, 12).kind));
+	EXPECT_FALSE(IsFeedbackLesson(Kind::LessonNormalAction));
 }
 
 TEST(CreatureHelp, AMoveToAStageClearsTheValueThatTheHelpKeepsForIt)
@@ -359,4 +361,30 @@ TEST(CreatureHelp, AScriptMakesTheHelpForgetEveryMessageWaitingOrTold)
 	EXPECT_EQ(memory.tutorialToldTurn[3], 90u);
 	EXPECT_EQ(memory.physicalProblemTurn, 100u);
 	EXPECT_EQ(memory.handOver, 0.5f);
+}
+
+TEST(CreatureHelp, TheLessonOfAStrokeWaitsUntilTheHandLetsGo)
+{
+	// The lesson arrives while the lock of the hand stays on the creature after the release, so it goes on the stack
+	Memory memory;
+	const auto lesson = Of(Kind::LessonIncreaseSource, 12);
+	const Situation held {.handOnCreature = true};
+	ASSERT_EQ(Decide(lesson, held, ToldLately(memory, lesson.kind, lesson.parameter, 100, k_Tps)), Outcome::Stack);
+	Stack(memory, lesson, 100, k_Tps);
+
+	// The turns of the hold do not raise it again, so it does not settle as told while nobody can hear it
+	for (uint32_t turn = 101; turn < 120; ++turn)
+	{
+		EXPECT_FALSE(WaitingToRaise(memory, true, false).has_value());
+	}
+	EXPECT_FALSE(WaitingToRaise(memory, false, true).has_value());
+
+	// When the lock ends, the next turn tells it
+	const auto waiting = WaitingToRaise(memory, false, false);
+	ASSERT_TRUE(waiting.has_value());
+	EXPECT_EQ(waiting->kind, Kind::LessonIncreaseSource);
+	const auto& entry = memory.entries.at(static_cast<size_t>(waiting->kind)).at(waiting->index);
+	EXPECT_EQ(entry.parameter, 12u);
+	EXPECT_EQ(Decide(Of(waiting->kind, entry.parameter), Situation {}, ToldLately(memory, waiting->kind, 12, 120, k_Tps)),
+	          Outcome::Tell);
 }

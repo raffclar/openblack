@@ -1430,8 +1430,8 @@ void CreatureHandSystem::DrawFrame(const input_steps::Steps& steps)
 	if (sends.feedback.has_value())
 	{
 		const auto* last = registry.TryGet<const HandLastFeedback>(hand);
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The draw of the hand sends the feedback to creature {}",
-		                   entt::to_integral(*sends.feedback));
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The draw of the hand sends the feedback {} to creature {}",
+		                   last != nullptr ? last->sum : 0.0f, entt::to_integral(*sends.feedback));
 		SendFeedback(*sends.feedback, last != nullptr ? last->sum : 0.0f);
 	}
 }

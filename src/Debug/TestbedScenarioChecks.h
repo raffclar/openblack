@@ -91,6 +91,8 @@ enum class Quantity : uint8_t
 	/// 1 when the empty hand of the player, at the place of the scenario's object at the index, may take that object,
 	/// else 0
 	HandMayTake,
+	/// How many lessons of a stroke or a slap the help told of the scenario's creature at the index, with a text
+	CreatureLessonsTold,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its

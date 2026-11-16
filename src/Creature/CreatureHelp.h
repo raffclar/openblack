@@ -245,6 +245,9 @@ struct Waiting
 	size_t index;
 };
 [[nodiscard]] std::optional<Waiting> FirstWaiting(const Memory& memory);
+/// The message that the turn of the creature raises again. The turn raises no message while a hand holds the creature
+/// or while a script holds the dialogue. Thus a message that waits for the end of a hold stays in the stack.
+[[nodiscard]] std::optional<Waiting> WaitingToRaise(const Memory& memory, bool held, bool dialogueTaken);
 /// The waiting message was raised again: whatever became of it, it is done waiting and counts as told now
 void Settle(Memory& memory, Waiting waiting, uint32_t turn);
 
@@ -345,6 +348,8 @@ constexpr uint32_t k_StrokedTooYoung = 4;
 constexpr uint32_t k_SlappedTooYoung = 5;
 /// Stroked (or not slapped) or slapped, too young to learn anything from it
 [[nodiscard]] Message TooYoungToLearn(float feedback);
+/// Whether the kind is one of the four lessons that a stroke or a slap teaches (see FeedbackLesson)
+[[nodiscard]] bool IsFeedbackLesson(Kind kind);
 /// What the creature learnt from the player's feedback for something it did: that it now thinks better or worse of
 /// doing it to things like that (by the desire it served), when the lesson split what it knows of such things, else
 /// that the reason it did it (by the source) is a better or worse one
