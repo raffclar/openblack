@@ -126,7 +126,9 @@ TEST(LobbyScreenRules, TheListSortsAndFilters)
 	    Summary("gamma", "bob", 3, lobby_api::LobbyState::InGame),
 	};
 	online::lobby::ListFilter filter;
-	// The default order puts the session with more gods first
+	// The default order puts the session with more gods first, and the game that plays after the open sessions
+	EXPECT_EQ(Names(ShownLobbies(lobbies, filter, k_Build, {})), (std::vector<std::string> {"Alpha", "beta", "gamma"}));
+	filter.showInGame = false;
 	EXPECT_EQ(Names(ShownLobbies(lobbies, filter, k_Build, {})), (std::vector<std::string> {"Alpha", "beta"}));
 	filter.showInGame = true;
 	EXPECT_EQ(Names(ShownLobbies(lobbies, filter, k_Build, {.column = Column::Name, .descending = false})),
@@ -157,6 +159,31 @@ TEST(LobbyScreenRules, TheStatusColumn)
 	EXPECT_EQ(Utf8(StatusText(lobby, Status::WrongVersion, 0, u"(Wrong Version)")), "(Wrong Version)");
 	lobby.locked = true;
 	EXPECT_EQ(Utf8(NameText(lobby)), "# a");
+}
+
+TEST(LobbyScreenRules, AGameThatPlaysShowsItsPlayersAndNoJoin)
+{
+	auto lobby = Summary("a", "amy", 2, lobby_api::LobbyState::Open);
+	lobby.players = {{.id = 1, .name = "amy"}, {.id = 2, .name = "bob"}};
+	EXPECT_TRUE(ShowsJoinButton(&lobby));
+	EXPECT_FALSE(ShowsJoinButton(nullptr));
+	EXPECT_EQ(Utf8(DetailText(lobby, u"Two Gods")), "Two Gods - Host: amy - Password: no");
+	for (const auto state : {lobby_api::LobbyState::Assigned, lobby_api::LobbyState::InGame})
+	{
+		lobby.state = state;
+		EXPECT_FALSE(ShowsJoinButton(&lobby));
+		EXPECT_EQ(Utf8(DetailText(lobby, u"Two Gods")), "Two Gods - Host: amy - Players: amy, bob");
+	}
+	// A long list of players gives the number of the other players
+	lobby.players.clear();
+	for (int64_t i = 1; i <= 9; ++i)
+	{
+		lobby.players.push_back({.id = i, .name = "p" + std::to_string(i)});
+	}
+	EXPECT_EQ(Utf8(DetailText(lobby, u"Ring")), "Ring - Host: amy - Players: p1, p2, p3, p4, p5, p6 and 3 more");
+	// An old service gives no names: the line gives the number of gods
+	lobby.players.clear();
+	EXPECT_EQ(Utf8(DetailText(lobby, u"Ring")), "Ring - Host: amy - Players: 2");
 }
 
 TEST(LobbyScreenRules, AJoinAsksOrRefuses)

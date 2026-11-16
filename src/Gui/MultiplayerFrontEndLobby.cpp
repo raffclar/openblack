@@ -188,8 +188,9 @@ void MultiplayerFrontEnd::JoinSelectedLobby()
 	{
 		return;
 	}
+	// A game that plays has no join: Return does nothing, as the list shows no button
 	const auto* lobby = GetSelectedSummary();
-	if (lobby == nullptr)
+	if (!screens::ShowsJoinButton(lobby))
 	{
 		return;
 	}

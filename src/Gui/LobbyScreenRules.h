@@ -90,8 +90,14 @@ using MeasureText = std::function<float(std::u16string_view text)>;
 
 /// The line under the list: the free game servers
 [[nodiscard]] std::u16string ServersText(const std::optional<lobby_api::PoolState>& pool);
-/// The line about the map of a session: its name, its host, and the bytes to download for a map of the service
+/// The line about the map of a session: its name, its host, and the bytes to download for a map of the service. For a
+/// game that plays, the line gives the names of its players in place of the password and the download.
 [[nodiscard]] std::u16string DetailText(const lobby_api::LobbySummary& lobby, std::u16string_view mapName);
+/// The most names of players that the line of a game that plays shows. A note gives the number of the other players.
+inline constexpr size_t k_MostShownPlayers = 6;
+/// The list shows the button "Join Game" for the picked session. A game that plays takes no player, so it has no
+/// button.
+[[nodiscard]] bool ShowsJoinButton(const lobby_api::LobbySummary* picked);
 
 /// What a join of the picked session does
 enum class JoinStep : uint8_t

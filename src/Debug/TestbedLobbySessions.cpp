@@ -106,6 +106,8 @@ void DemoLobbyRoom::RefreshList(LobbyCallback<LobbyDone> callback)
 	    Summary("d3", "Big battle of the thirty-two gods", dan, "Ring of gods", 32, 32, LobbyState::Open, _build));
 	auto playing = Summary("d4", "Evening game", bob, "Three gods", 3, 3, LobbyState::InGame, _build);
 	playing.startedAt = _nowMs - (42 * k_MsPerMinute);
+	// The line under the list names the players of a picked game that plays (deviation 265)
+	playing.players = {bob, carol, dan};
 	lobbies.push_back(std::move(playing));
 	auto queued = Summary("d5", "Waiting room", carol, "Four gods", 4, 4, LobbyState::Queued, _build);
 	queued.queuePosition = 2;

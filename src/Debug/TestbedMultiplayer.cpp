@@ -651,6 +651,9 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 	case Stage::LobbyList:
 		frontEnd.SelectLobby("d1");
 		break;
+	case Stage::LobbyListPlaying:
+		frontEnd.SelectLobby("d4");
+		break;
 	case Stage::LobbyChatRoom:
 		frontEnd.SendMainRoomChat(u"Hello, everyone! I will make a session for four gods.");
 		break;
