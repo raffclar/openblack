@@ -18,8 +18,11 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/LivingAction.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "Editor/EditorEntities.h"
+#include "Editor/EditorMath.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "Editor/EditorOutline.h"
 
@@ -132,6 +135,46 @@ TEST(EditorNetworkEdits, ACopySendsThePlacementOfTheCopy)
 	EXPECT_EQ(sent.Edit(0).position, glm::vec3(2.0f, 0.0f, 3.0f));
 }
 
+TEST(EditorNetworkEdits, AChangeOfSizeSendsTheWaitingMovesFirstThenTheScale)
+{
+	Sent sent;
+	auto writes = sent.Writes();
+	writes.MoveTo(Entity(4), {1.0f, 0.0f, 1.0f});
+	writes.ScaleTo(Entity(4), 2.5f);
+	ASSERT_EQ(sent.actions.size(), 2u);
+	EXPECT_EQ(sent.Edit(0).kind, EditorEdit::Kind::Move);
+	EXPECT_EQ(sent.Edit(1).kind, EditorEdit::Kind::Scale);
+	EXPECT_EQ(sent.Edit(1).object, Entity(4));
+	EXPECT_EQ(sent.Edit(1).scale, 2.5f);
+	// Nothing waits after the change of size
+	EXPECT_EQ(writes.Waiting(), 0u);
+}
+
+TEST(EditorNetworkEdits, TheRuleTakesOnlyAScaleInTheRangeOfTheEditor)
+{
+	const auto scale = [](entt::entity entity, float value) {
+		return EditorEdit {.kind = EditorEdit::Kind::Scale, .object = entity, .scale = value};
+	};
+	EXPECT_FALSE(EditRefusal(scale(Entity(1), 1.0f)).has_value());
+	EXPECT_FALSE(EditRefusal(scale(Entity(1), k_SmallestEditorScale)).has_value());
+	EXPECT_FALSE(EditRefusal(scale(Entity(1), k_LargestEditorScale)).has_value());
+	EXPECT_TRUE(EditRefusal(scale(entt::null, 1.0f)).has_value());
+	EXPECT_TRUE(EditRefusal(scale(Entity(1), 0.0f)).has_value());
+	EXPECT_TRUE(EditRefusal(scale(Entity(1), -1.0f)).has_value());
+	EXPECT_TRUE(EditRefusal(scale(Entity(1), std::nextafter(k_LargestEditorScale, 100.0f))).has_value());
+	EXPECT_TRUE(EditRefusal(scale(Entity(1), std::numeric_limits<float>::quiet_NaN())).has_value());
+	EXPECT_TRUE(EditRefusal(scale(Entity(1), std::numeric_limits<float>::infinity())).has_value());
+}
+
+TEST(EditorNetworkEdits, TheScaleOfTheFirstAxisKeepsTheRatioOfTheOtherAxes)
+{
+	EXPECT_EQ(ScaledTo({1.0f, 1.0f, 1.0f}, 2.0f), glm::vec3(2.0f, 2.0f, 2.0f));
+	EXPECT_EQ(ScaledTo({2.0f, 4.0f, 1.0f}, 1.0f), glm::vec3(1.0f, 2.0f, 0.5f));
+	// A thing with a scale of zero does not divide by zero
+	const auto fromZero = ScaledTo({0.0f, 0.0f, 0.0f}, 1.0f);
+	EXPECT_TRUE(std::isfinite(fromZero.x) && std::isfinite(fromZero.y) && std::isfinite(fromZero.z));
+}
+
 TEST(EditorNetworkEdits, TheRuleRefusesABadEdit)
 {
 	EXPECT_FALSE(EditRefusal(EditorEdit {.kind = EditorEdit::Kind::Move, .object = Entity(1)}).has_value());
@@ -180,4 +223,59 @@ TEST(EditorNetworkEdits, AnAnimalOfThePaletteIsCopiedByItsKind)
 	EXPECT_EQ(copy->kind, PlaceKind::Animal);
 	EXPECT_EQ(copy->type, static_cast<int32_t>(AnimalInfo::Horse));
 	EXPECT_FALSE(ItemOf(registry, spellWolf).has_value());
+}
+
+TEST(EditorNetworkEdits, TheRuleTakesAnEditOfAVillagerOnlyWithAFieldInItsRange)
+{
+	using player_commands::EditorVillagerEdit;
+	using Field = EditorVillagerEdit::Field;
+	const auto refused = [](Field field, uint32_t number, float amount, uint8_t index = 0) {
+		return VillagerEditRefusal(
+		           EditorVillagerEdit {
+		               .villager = Entity(2), .field = field, .index = index, .number = number, .amount = amount})
+		    .has_value();
+	};
+	EXPECT_FALSE(refused(Field::Life, 0, 1.0f));
+	EXPECT_TRUE(refused(Field::Life, 0, 1.5f));
+	EXPECT_TRUE(refused(Field::Life, 0, -0.5f));
+	EXPECT_FALSE(refused(Field::Food, 0, 300.0f));
+	EXPECT_TRUE(refused(Field::Food, 0, -1.0f));
+	EXPECT_TRUE(refused(Field::Food, 0, std::numeric_limits<float>::quiet_NaN()));
+	EXPECT_FALSE(refused(Field::Age, 90, 0.0f));
+	using ecs::components::Villager;
+	EXPECT_FALSE(refused(Field::Sex, static_cast<uint32_t>(Villager::Sex::_COUNT) - 1, 0.0f));
+	EXPECT_TRUE(refused(Field::Sex, static_cast<uint32_t>(Villager::Sex::_COUNT), 0.0f));
+	EXPECT_TRUE(refused(Field::LifeStage, static_cast<uint32_t>(Villager::LifeStage::_COUNT), 0.0f));
+	EXPECT_TRUE(refused(Field::Tribe, static_cast<uint32_t>(Tribe::_COUNT), 0.0f));
+	EXPECT_TRUE(refused(Field::Role, static_cast<uint32_t>(VillagerNumber::_COUNT), 0.0f));
+	EXPECT_FALSE(refused(Field::State, 1, 0.0f, 2));
+	EXPECT_TRUE(refused(Field::State, 1, 0.0f, 3));
+	EXPECT_TRUE(refused(Field::State, static_cast<uint32_t>(VillagerStates::_COUNT), 0.0f));
+	EXPECT_TRUE(VillagerEditRefusal(EditorVillagerEdit {.villager = entt::null}).has_value());
+}
+
+TEST(EditorNetworkEdits, AnEditOfAVillagerChangesOnlyItsField)
+{
+	using player_commands::EditorVillagerEdit;
+	using Field = EditorVillagerEdit::Field;
+	using ecs::components::LivingAction;
+	using ecs::components::Villager;
+	ecs::Registry registry;
+	const auto villager = registry.Create();
+	registry.Assign<Villager>(villager, Villager {.life = 1.0f, .food = 10.0f, .sex = Villager::Sex::MALE});
+	registry.Assign<LivingAction>(villager);
+	EXPECT_TRUE(ApplyVillagerEdit(registry, nullptr, {.villager = villager, .field = Field::Life, .amount = 0.25f}));
+	EXPECT_EQ(registry.Get<Villager>(villager).life, 0.25f);
+	EXPECT_EQ(registry.Get<Villager>(villager).food, 10.0f);
+	EXPECT_TRUE(
+	    ApplyVillagerEdit(registry, nullptr,
+	                      {.villager = villager, .field = Field::Sex, .number = static_cast<uint32_t>(Villager::Sex::FEMALE)}));
+	EXPECT_EQ(registry.Get<Villager>(villager).sex, Villager::Sex::FEMALE);
+	// A refused edit changes nothing, and with no actions a state does not change
+	EXPECT_FALSE(ApplyVillagerEdit(registry, nullptr, {.villager = villager, .field = Field::Life, .amount = 3.0f}));
+	EXPECT_EQ(registry.Get<Villager>(villager).life, 0.25f);
+	EXPECT_FALSE(ApplyVillagerEdit(registry, nullptr, {.villager = villager, .field = Field::State, .number = 1}));
+	// A thing that is not a villager takes no edit
+	const auto other = registry.Create();
+	EXPECT_FALSE(ApplyVillagerEdit(registry, nullptr, {.villager = other, .field = Field::Life, .amount = 0.5f}));
 }

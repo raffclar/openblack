@@ -326,6 +326,8 @@ public:
 	[[nodiscard]] uint32_t RefusedBlocks() const { return _refusedBlocks; }
 	/// The edits of the editor and the debug cheats that the server refused because their player has no editor claim
 	[[nodiscard]] uint32_t RefusedEditorCommands() const { return _refusedEditorCommands; }
+	/// The edits of the editor that the server refused for a value that no computer takes, such as a scale out of range
+	[[nodiscard]] uint32_t RefusedEditorValues() const { return _refusedEditorValues; }
 	/// The numbers of the observers that the server gave and whose leave is not in a turn yet, in order
 	[[nodiscard]] std::vector<uint8_t> ObserverNumbers() const;
 	/// One line for each god slot that had a player: the checksums compared and the same ones
@@ -410,7 +412,7 @@ private:
 	/// The lowest number that no observer has, none when every number is taken
 	[[nodiscard]] std::optional<uint8_t> FreeObserverNumber() const;
 	/// Removes the edits of the editor and the debug cheats of a player with no editor claim, logs the refusal, and sends
-	/// the reason to the connection of the player
+	/// the reason to the connection of the player. Also removes and logs each edit with a value that no computer takes.
 	void RefuseEditorCommands(ConnectionId connection, const Peer& peer, std::vector<player_commands::Action>& actions);
 	/// Logs each debug cheat that the server takes into its turns, so that the log of the server tells each change
 	void LogDebugCheats(const Peer& peer, const std::vector<player_commands::Action>& actions);
@@ -560,6 +562,7 @@ private:
 	std::map<std::pair<uint8_t, uint32_t>, uint64_t> _early;
 	uint32_t _refusedBlocks {0};
 	uint32_t _refusedEditorCommands {0};
+	uint32_t _refusedEditorValues {0};
 	WorldState _worldState;
 	PartListener _partListener;
 	PartsOfTurn _partsOfTurn;

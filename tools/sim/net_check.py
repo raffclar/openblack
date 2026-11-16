@@ -1417,8 +1417,34 @@ def editor_desync(pids, case):
                 time.sleep(1.0)
             turn = inspector_answer(editor, "editor.network_edit", {"params": {
                 "kind": "turn", "id": thing["id"], "radians": 0.9}})
-            done["sent"].append({kind: thing["id"], "moves": moves, "turn": turn})
             time.sleep(1.0)
+            # The thing grows, then becomes small, as the scale field of the entity panel sends it
+            scales = []
+            for scale in (1.75, 0.6):
+                scales.append(inspector_answer(editor, "editor.network_edit", {"params": {
+                    "kind": "scale", "id": thing["id"], "scale": scale}}))
+                time.sleep(1.0)
+            done["sent"].append({kind: thing["id"], "moves": moves, "turn": turn, "scales": scales})
+            if kind == "Villager":
+                # Each field of the villager changes, as the villager section of the entity panel sends it
+                fields = []
+                for field, values in (("life", {"amount": 0.4}), ("food", {"amount": 2.5}), ("age", {"number": 50}),
+                                      ("sex", {"number": 1}), ("state", {"index": 1, "number": 1})):
+                    fields.append(inspector_answer(editor, "editor.villager_edit", {"params": dict(
+                        values, id=thing["id"], field=field)}))
+                    time.sleep(0.5)
+                done["sent"].append({"villager_fields": fields})
+            time.sleep(1.0)
+    if case in ("spawn", "all"):
+        # The creature tools put down creatures of three species with other sizes and bodies, then one grows
+        made = []
+        for index, (species, scale) in enumerate(((4, 1.5), (13, 0.8), (17, 2.0))):
+            made.append(inspector_answer(editor, "editor.creature_spawn", {"params": {
+                "species": species, "position": [focus[0] + 20.0 * index, focus[2] + 15.0], "owner": index % 2,
+                "radians": 0.5 * index, "scale": scale, "alignment": -0.5 + 0.5 * index, "fatness": 0.3,
+                "strength": 0.7}}))
+            time.sleep(1.0)
+        done["sent"].append({"spawns": made})
     return done
 
 
@@ -2308,11 +2334,12 @@ def main():
                              "--hold-after turns "
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
-    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "all"),
+    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
-                             "camera (creature), or moves and turns a building, a tree, a feature and a villager "
-                             "(objects), or all of them; every computer must keep the same checksums")
+                             "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
+                             "and changes the fields of the villager (objects), or puts down creatures with the creature "
+                             "tools (spawn), or all of them; every computer must keep the same checksums")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
     parser.add_argument("--forest-camera", action="store_true",

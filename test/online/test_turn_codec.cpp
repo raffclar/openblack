@@ -147,7 +147,8 @@ std::vector<Action> EachCommand()
 	                .placeType = 12,
 	                .challenge = 7,
 	                .position = {1.0f, 2.0f, 3.0f},
-	                .radians = 0.5f},
+	                .radians = 0.5f,
+	                .scale = 2.5f},
 	    DebugCheat {.cheat = 1, .on = true},
 	    EditorCreatureEdit {.creature = Entity(32), .value = 3, .amount = 1.25f},
 	    EditorCreatureAct {.creature = Entity(33),
@@ -157,6 +158,18 @@ std::vector<Action> EachCommand()
 	                       .amount = 0.5f,
 	                       .index = 300,
 	                       .args = {1, 2, 3, 4, 5, 6}},
+	    EditorVillagerEdit {
+	        .villager = Entity(35), .field = EditorVillagerEdit::Field::State, .index = 1, .number = 77, .amount = 0.25f},
+	    EditorCreatureSpawn {.species = 4,
+	                         .owner = 2,
+	                         .position = {7.0f, 8.0f, 9.0f},
+	                         .radians = 1.5f,
+	                         .scale = 1.25f,
+	                         .alignment = -0.5f,
+	                         .fatness = 0.25f,
+	                         .strength = 0.75f,
+	                         .hasTattoos = true,
+	                         .tattoos = {creature_tattoo::Slot {.design = 3, .site = 2, .colour = {10, 20, 30}}}},
 	};
 }
 
@@ -197,7 +210,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 58)
+	switch (bits(random) % 60)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -399,13 +412,14 @@ Action RandomAction(std::mt19937& random)
 	case 52:
 		return HandLockRelease {.creature = entity()};
 	case 53:
-		return EditorEdit {.kind = static_cast<EditorEdit::Kind>(bits(random) % 4),
+		return EditorEdit {.kind = static_cast<EditorEdit::Kind>(bits(random) % 5),
 		                   .object = entity(),
 		                   .placeKind = static_cast<uint8_t>(bits(random)),
 		                   .placeType = static_cast<int32_t>(bits(random)),
 		                   .challenge = bits(random),
 		                   .position = vector(),
-		                   .radians = number()};
+		                   .radians = number(),
+		                   .scale = number()};
 	case 54:
 		return DebugCheat {.cheat = static_cast<uint8_t>(bits(random) % debug_cheats::k_CheatCount),
 		                   .on = (bits(random) % 2) == 1};
@@ -423,6 +437,22 @@ Action RandomAction(std::mt19937& random)
 		                          .args = {static_cast<uint8_t>(bits(random)), static_cast<uint8_t>(bits(random)),
 		                                   static_cast<uint8_t>(bits(random)), static_cast<uint8_t>(bits(random)),
 		                                   static_cast<uint8_t>(bits(random)), static_cast<uint8_t>(bits(random))}};
+	case 58:
+		return EditorVillagerEdit {.villager = entity(),
+		                           .field = static_cast<EditorVillagerEdit::Field>(bits(random) % 8),
+		                           .index = static_cast<uint8_t>(bits(random)),
+		                           .number = bits(random),
+		                           .amount = number()};
+	case 57:
+		return EditorCreatureSpawn {.species = static_cast<uint8_t>(1 + (bits(random) % 17)),
+		                            .owner = static_cast<uint8_t>(bits(random) % 8),
+		                            .position = vector(),
+		                            .radians = number(),
+		                            .scale = number(),
+		                            .alignment = number(),
+		                            .fatness = number(),
+		                            .strength = number(),
+		                            .hasTattoos = (bits(random) % 2) == 1};
 	default:
 		return PlayerLeft {};
 	}
@@ -487,7 +517,7 @@ TEST(TurnCodec, EachCommandHasItsSize)
 {
 	const std::vector<size_t> sizes {2,  5,  9, 5, 53, 5, 10, 18, 5,  49, 17, 5,  5,  5,  9,  12, 1,  18, 11, 5,
 	                                 19, 15, 7, 5, 1,  2, 1,  61, 5,  2,  1,  13, 10, 18, 1,  58, 1,  5,  51, 5,
-	                                 16, 7,  1, 1, 13, 1, 2,  9,  13, 1,  1,  8,  1,  5,  31, 3,  10, 34};
+	                                 16, 7,  1, 1, 13, 1, 2,  9,  13, 1,  1,  8,  1,  5,  35, 3,  10, 34, 15, 76};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -531,6 +561,16 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 58;
 		}
+		// The edit of a villager and the new creature of the editor have the tags 60 and 61. The tag 59 belongs to another
+		// command.
+		if (std::holds_alternative<EditorVillagerEdit>(commands[i]))
+		{
+			tag = 60;
+		}
+		if (std::holds_alternative<EditorCreatureSpawn>(commands[i]))
+		{
+			tag = 61;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
@@ -543,9 +583,12 @@ TEST(TurnCodec, TheDecoderRefusesABadEditOrCheat)
 	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
 	constexpr size_t k_FirstField = 10;
 	auto edit = encode(EditorEdit {.kind = EditorEdit::Kind::Move, .object = Entity(4), .position = {1.0f, 0.0f, 2.0f}});
-	ASSERT_EQ(edit.size(), k_FirstField + 30);
+	ASSERT_EQ(edit.size(), k_FirstField + 34);
 	ASSERT_EQ(Decode(edit).error, DecodeError::None);
-	edit[k_FirstField] = static_cast<uint8_t>(EditorEdit::Kind::Remove) + 1;
+	// The change of size is the last kind of edit
+	edit[k_FirstField] = static_cast<uint8_t>(EditorEdit::Kind::Scale);
+	EXPECT_EQ(Decode(edit).error, DecodeError::None);
+	edit[k_FirstField] = static_cast<uint8_t>(EditorEdit::Kind::Scale) + 1;
 	EXPECT_EQ(Decode(edit).error, DecodeError::Value);
 
 	auto cheat = encode(DebugCheat {.cheat = 0, .on = true});
@@ -1332,4 +1375,58 @@ TEST(TurnCodec, TheGodsOfALandHaveTheBytesOfTheirNumbers)
 		ASSERT_FALSE(bytes.empty());
 		EXPECT_EQ(bytes[8], number);
 	}
+}
+
+TEST(TurnCodec, AChangeOfSizeOfTheEditorKeepsItsThingAndItsScale)
+{
+	const EditorEdit scale {.kind = EditorEdit::Kind::Scale, .object = Entity(9), .scale = 3.75f};
+	const auto decoded = Decode(Encode(CommandBlock {.sequence = 1, .turn = 2, .actions = {scale}}));
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& block = std::get<CommandBlock>(*decoded.frame);
+	ASSERT_EQ(block.actions.size(), 1u);
+	EXPECT_EQ(std::get<EditorEdit>(block.actions.front()), scale);
+}
+
+TEST(TurnCodec, TheDecoderRefusesANewCreatureOfNoSpeciesOrNoPlayer)
+{
+	const auto encode = [](const EditorCreatureSpawn& spawn) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {spawn}}});
+	};
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_Species = 10;
+	constexpr size_t k_Owner = k_Species + 1;
+	const EditorCreatureSpawn spawn {.species = 1, .owner = 0};
+	auto bytes = encode(spawn);
+	ASSERT_EQ(Decode(bytes).error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorCreatureSpawn>(std::get<CommandBlock>(*Decode(bytes).frame).actions.front()), spawn);
+	bytes[k_Species] = 0;
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+	bytes[k_Species] = static_cast<uint8_t>(CreatureType::_COUNT);
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+	bytes[k_Species] = 1;
+	bytes[k_Owner] = static_cast<uint8_t>(PlayerNames::_COUNT);
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+	// A tattoo of no design is not a tattoo
+	auto tattoo = encode(EditorCreatureSpawn {.species = 1, .hasTattoos = true});
+	constexpr size_t k_FirstDesign = k_Owner + 1 + 12 + (5 * 4) + 1;
+	ASSERT_EQ(Decode(tattoo).error, DecodeError::None);
+	tattoo[k_FirstDesign] = creature_tattoo::k_DesignCount;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	// A command with only a part of its bytes is not whole
+	auto truncated = encode(spawn);
+	truncated.pop_back();
+	EXPECT_NE(Decode(truncated).error, DecodeError::None);
+}
+
+TEST(TurnCodec, TheDecoderRefusesAnEditOfAVillagerWithNoSuchField)
+{
+	const EditorVillagerEdit edit {.villager = Entity(3), .field = EditorVillagerEdit::Field::Age, .number = 40};
+	auto bytes = Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {edit}}});
+	// The field comes after the tag and the villager
+	constexpr size_t k_Field = 10 + sizes::k_Entity;
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorVillagerEdit>(std::get<CommandBlock>(*decoded.frame).actions.front()), edit);
+	bytes[k_Field] = static_cast<uint8_t>(EditorVillagerEdit::Field::State) + 1;
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
 }

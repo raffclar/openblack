@@ -331,16 +331,43 @@ void InspectorPanel::DrawTransform(EditorContext& context, entt::entity entity) 
 		}
 	}
 	track("Turn");
-	// In a network game the editor sends only moves and turns, so the size stays as it is
-	auto scale = transform->scale.x;
-	ImGui::BeginDisabled(!context.writes.ChangesAtOnce());
-	if (ImGui::DragFloat("Scale", &scale, 0.01f, 0.05f, 50.0f, "%.2f"))
+	if (context.writes.ChangesAtOnce())
 	{
-		const auto ratio = scale / std::max(transform->scale.x, 0.0001f);
-		transform->scale *= ratio;
-		context.registry.SetDirty();
+		auto scale = transform->scale.x;
+		if (ImGui::DragFloat("Scale", &scale, 0.01f, k_SmallestEditorScale, k_LargestEditorScale, "%.2f",
+		                     ImGuiSliderFlags_AlwaysClamp))
+		{
+			context.writes.ScaleTo(entity, scale);
+		}
 	}
-	ImGui::EndDisabled();
+	else
+	{
+		// In a network game the size changes at a later turn. Thus the field keeps its own scale, and sends it one time,
+		// when it lets go.
+		if (_heldScale.has_value() && _heldScale->entity != entity)
+		{
+			_heldScale.reset();
+		}
+		auto scale = _heldScale.has_value() ? _heldScale->scale : transform->scale.x;
+		const bool changed = ImGui::DragFloat("Scale", &scale, 0.01f, k_SmallestEditorScale, k_LargestEditorScale, "%.2f",
+		                                      ImGuiSliderFlags_AlwaysClamp);
+		if (ImGui::IsItemActivated())
+		{
+			_heldScale = HeldScale {.entity = entity, .scale = transform->scale.x};
+		}
+		if (changed && _heldScale.has_value())
+		{
+			_heldScale->scale = scale;
+		}
+		if (ImGui::IsItemDeactivated() && _heldScale.has_value())
+		{
+			if (_heldScale->scale != transform->scale.x)
+			{
+				context.writes.ScaleTo(entity, _heldScale->scale);
+			}
+			_heldScale.reset();
+		}
+	}
 	track("Scale");
 	if (const auto bounds = WorldBoundsOf(context.registry, entity))
 	{
@@ -358,21 +385,30 @@ void InspectorPanel::DrawVillager(EditorContext& context, entt::entity entity) n
 	}
 	auto& villager = context.registry.Get<Villager>(entity);
 	auto& action = context.registry.Get<LivingAction>(entity);
-	// In a network game the fields of a villager only show: a change would change the world of this computer only
-	ImGui::BeginDisabled(!context.writes.ChangesAtOnce());
-	struct EndDisabled
-	{
-		EndDisabled() = default;
-		EndDisabled(const EndDisabled&) = delete;
-		EndDisabled& operator=(const EndDisabled&) = delete;
-		EndDisabled(EndDisabled&&) = delete;
-		EndDisabled& operator=(EndDisabled&&) = delete;
-		~EndDisabled() { ImGui::EndDisabled(); }
-	} const endDisabled;
 	if (villager.abode == entt::null)
 	{
 		ImGui::TextColored(style::k_Warning, "Homeless");
 	}
+	const auto* actions = Locator::livingActionSystem::has_value() ? &Locator::livingActionSystem::value() : nullptr;
+	if (context.writes.ChangesAtOnce())
+	{
+		DrawLocalVillager(villager, action, actions);
+	}
+	else
+	{
+		DrawNetworkVillager(entity, villager, action, actions);
+	}
+	if (actions == nullptr)
+	{
+		return;
+	}
+	ImGui::Text("%u turns in the state, %u until it changes", static_cast<unsigned>(action.turnsSinceStateChange),
+	            static_cast<unsigned>(action.turnsUntilStateChange));
+}
+
+void InspectorPanel::DrawLocalVillager(Villager& villager, LivingAction& action,
+                                       const ecs::systems::LivingActionSystemInterface* actions) noexcept
+{
 	ImGui::SliderFloat("Life", &villager.life, 0.0f, 1.0f);
 	if (auto age = ecs::villager_age::AgeNow(villager); ImGui::InputScalar("Age", ImGuiDataType_U32, &age))
 	{
@@ -383,23 +419,91 @@ void InspectorPanel::DrawVillager(EditorContext& context, entt::entity entity) n
 	EnumCombo("Sex", villager.sex, Villager::k_SexStrs);
 	EnumCombo("Tribe", villager.tribe, k_TribeStrs);
 	EnumCombo("Role", villager.number, k_VillagerNumberStrs);
-	if (!Locator::livingActionSystem::has_value())
+	if (actions == nullptr)
 	{
 		return;
 	}
-	auto& actions = Locator::livingActionSystem::value();
 	ImGui::SeparatorText("States");
 	for (size_t index = 0; index < LivingAction::k_IndexStrings.size(); ++index)
 	{
 		const auto which = static_cast<LivingAction::Index>(index);
-		auto state = actions.VillagerGetState(action, which);
+		auto state = actions->VillagerGetState(action, which);
 		if (EnumCombo(LivingAction::k_IndexStrings.at(index).data(), state, k_VillagerStateStrings))
 		{
-			actions.VillagerSetState(action, which, state, true);
+			actions->VillagerSetState(action, which, state, true);
 		}
 	}
-	ImGui::Text("%u turns in the state, %u until it changes", static_cast<unsigned>(action.turnsSinceStateChange),
-	            static_cast<unsigned>(action.turnsUntilStateChange));
+}
+
+void InspectorPanel::DrawNetworkVillager(entt::entity entity, const Villager& villager, const LivingAction& action,
+                                         const ecs::systems::LivingActionSystemInterface* actions) noexcept
+{
+	// In a network game the fields change at a later turn. The fields show copies, and each change goes as a command of
+	// the turns. A field that the player types or drags goes one time, when it lets go.
+	using Field = player_commands::EditorVillagerEdit::Field;
+	const auto send = [entity](Field field, uint32_t number, float amount, uint8_t index = 0) {
+		SendVillagerEdit({.villager = entity, .field = field, .index = index, .number = number, .amount = amount});
+	};
+	if (_heldVillager.has_value() && _heldVillager->entity != entity)
+	{
+		_heldVillager.reset();
+	}
+	// A field that the player types or drags shows the held amount until it lets go
+	const auto held = [this](Field field, float now) {
+		return _heldVillager.has_value() && _heldVillager->field == field ? _heldVillager->amount : now;
+	};
+	const auto follow = [this, entity, &send](Field field, bool changed, float amount) {
+		if (changed)
+		{
+			_heldVillager = HeldVillager {.entity = entity, .field = field, .amount = amount};
+		}
+		if (ImGui::IsItemDeactivated() && _heldVillager.has_value() && _heldVillager->field == field)
+		{
+			const auto value = _heldVillager->amount;
+			_heldVillager.reset();
+			send(field, field == Field::Age ? static_cast<uint32_t>(value) : 0u, value);
+		}
+	};
+	auto life = held(Field::Life, villager.life);
+	const bool lifeChanged = ImGui::SliderFloat("Life", &life, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+	follow(Field::Life, lifeChanged, life);
+	auto age = static_cast<uint32_t>(held(Field::Age, static_cast<float>(ecs::villager_age::AgeNow(villager))));
+	const bool ageChanged = ImGui::InputScalar("Age", ImGuiDataType_U32, &age);
+	follow(Field::Age, ageChanged, static_cast<float>(age));
+	auto food = held(Field::Food, villager.food);
+	const bool foodChanged = ImGui::InputFloat("Food", &food);
+	follow(Field::Food, foodChanged, std::max(food, 0.0f));
+	// A list sends its choice at once
+	if (auto stage = villager.lifeStage; EnumCombo("Life stage", stage, Villager::k_LifeStageStrs))
+	{
+		send(Field::LifeStage, static_cast<uint32_t>(stage), 0.0f);
+	}
+	if (auto sex = villager.sex; EnumCombo("Sex", sex, Villager::k_SexStrs))
+	{
+		send(Field::Sex, static_cast<uint32_t>(sex), 0.0f);
+	}
+	if (auto tribe = villager.tribe; EnumCombo("Tribe", tribe, k_TribeStrs))
+	{
+		send(Field::Tribe, static_cast<uint32_t>(tribe), 0.0f);
+	}
+	if (auto role = villager.number; EnumCombo("Role", role, k_VillagerNumberStrs))
+	{
+		send(Field::Role, static_cast<uint32_t>(role), 0.0f);
+	}
+	if (actions == nullptr)
+	{
+		return;
+	}
+	ImGui::SeparatorText("States");
+	for (size_t index = 0; index < LivingAction::k_IndexStrings.size(); ++index)
+	{
+		const auto which = static_cast<LivingAction::Index>(index);
+		if (auto state = actions->VillagerGetState(action, which);
+		    EnumCombo(LivingAction::k_IndexStrings.at(index).data(), state, k_VillagerStateStrings))
+		{
+			send(Field::State, static_cast<uint32_t>(state), 0.0f, static_cast<uint8_t>(index));
+		}
+	}
 }
 
 void InspectorPanel::DrawComponents(EditorContext& context, entt::entity entity) noexcept
