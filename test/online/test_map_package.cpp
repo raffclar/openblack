@@ -10,6 +10,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <filesystem>
+#include <fstream>
 #include <optional>
 #include <span>
 #include <string>
@@ -22,11 +24,13 @@
 #include <OnlineMapFile.h>
 #include <gtest/gtest.h>
 
+#include "Online/CustomMapPackage.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
 #include "Online/GodsRingMapPackage.h"
 #include "Online/Sha256.h"
 #include "Server/LobbyStatus.h"
+#include "Server/MapExport.h"
 
 using namespace openblack;
 
@@ -263,4 +267,135 @@ TEST(GodsRingMapPackage, TheServerTellsTheLobbyThePackageOfItsMap)
 	EXPECT_EQ(server::lobby_status::MapAddress("https://lobby.test/api/v1", "s1", map),
 	          "https://lobby.test/api/v1/servers/s1/map?file=obm_32p_1&name=Ring&players=32&package=" + std::string(k_Hash) +
 	              "&package_size=1234");
+}
+
+namespace
+{
+/// A small land whose script loads the landscape of its own file, obm_custom_1.map
+std::vector<uint8_t> CustomMap()
+{
+	std::string script(k_TemplateScript);
+	const std::string_view other = "TEST.lnd";
+	script.replace(script.find(other), other.size(), "obm_custom_1.lnd");
+	return TemplateMap(script);
+}
+
+std::optional<Failure> CustomFailureOf(const std::variant<custom_map_package::Assembled, Failure>& result)
+{
+	if (const auto* failure = std::get_if<Failure>(&result); failure != nullptr)
+	{
+		return *failure;
+	}
+	return std::nullopt;
+}
+
+lobby_api::OnlineMap CustomMapOfList(std::string_view file, const std::vector<uint8_t>& package)
+{
+	lobby_api::OnlineMap map;
+	map.file = std::string(file);
+	map.packageSha256 = online::sha256::HexOf(package);
+	map.packageSize = static_cast<int64_t>(package.size());
+	map.packageUrl = "/maps/" + map.packageSha256 + ".obmap";
+	return map;
+}
+} // namespace
+
+TEST(CustomMapPackage, ThePackageGivesTheSameFileAndNeedsNoGameData)
+{
+	const auto map = CustomMap();
+	const auto package = custom_map_package::Make("obm_custom_1", "A custom land", 2, map);
+	ASSERT_TRUE(package.has_value());
+	// The same file always gives the same package
+	EXPECT_EQ(custom_map_package::Make("obm_custom_1", "A custom land", 2, map), package);
+	const auto read = onlinemap::package::Read(std::as_bytes(std::span(*package)));
+	ASSERT_TRUE(read.has_value());
+	EXPECT_TRUE(read->manifest.needs.empty());
+	EXPECT_EQ(read->manifest.file, "obm_custom_1");
+	EXPECT_EQ(read->manifest.name, "A custom land");
+	EXPECT_EQ(read->manifest.players, 2);
+
+	const auto assembled = custom_map_package::Assemble(*package);
+	ASSERT_FALSE(CustomFailureOf(assembled).has_value());
+	const auto& land = std::get<custom_map_package::Assembled>(assembled);
+	EXPECT_EQ(land.map, map);
+	EXPECT_EQ(land.manifest, read->manifest);
+}
+
+TEST(CustomMapPackage, ABadNameOrABadFileGivesNoPackage)
+{
+	const auto map = CustomMap();
+	EXPECT_FALSE(custom_map_package::Make("", "Land", 2, map).has_value());
+	EXPECT_FALSE(custom_map_package::Make("../obm", "Land", 2, map).has_value());
+	EXPECT_FALSE(custom_map_package::Make("obm_custom_1", "", 2, map).has_value());
+	EXPECT_FALSE(custom_map_package::Make("obm_custom_1", std::string(65, 'a'), 2, map).has_value());
+	EXPECT_FALSE(custom_map_package::Make("obm_custom_1", "Land", 0, map).has_value());
+	EXPECT_FALSE(custom_map_package::Make("obm_custom_1", "Land", 33, map).has_value());
+	const std::vector<uint8_t> notALand {1, 2, 3};
+	EXPECT_FALSE(custom_map_package::Make("obm_custom_1", "Land", 2, notALand).has_value());
+	// The game finds the landscape of a network map only by the name of the map
+	EXPECT_FALSE(custom_map_package::Make("obm_custom_1", "Land", 2, TemplateMap()).has_value());
+	EXPECT_FALSE(custom_map_package::Make("obm_custom_2", "Land", 2, map).has_value());
+}
+
+TEST(CustomMapPackage, ADamagedPackageOrAPackageThatNeedsGameDataGivesNoLand)
+{
+	const auto package = custom_map_package::Make("obm_custom_1", "Land", 2, CustomMap()).value();
+	auto damaged = package;
+	damaged[damaged.size() - 1] ^= 0x01U;
+	EXPECT_EQ(CustomFailureOf(custom_map_package::Assemble(damaged)), Failure::NotAPackage);
+	EXPECT_EQ(CustomFailureOf(custom_map_package::Assemble(TemplateMap())), Failure::NotAPackage);
+	// The package of the map for 32 gods needs the player's game data
+	EXPECT_EQ(CustomFailureOf(custom_map_package::Assemble(Package())), Failure::OtherMap);
+}
+
+TEST(CustomMapPackage, ADownloadedPackageGivesTheLandOfTheList)
+{
+	const auto map = CustomMap();
+	const auto package = custom_map_package::Make("obm_custom_1", "Land", 2, map).value();
+	// A custom land needs no land of the game data
+	const auto good =
+	    gods_ring_map_package::AssembleDownloaded(CustomMapOfList("obm_custom_1", package), package, std::nullopt);
+	ASSERT_FALSE(FailureOf(good).has_value());
+	EXPECT_EQ(std::get<std::vector<uint8_t>>(good), map);
+	EXPECT_EQ(
+	    FailureOf(gods_ring_map_package::AssembleDownloaded(CustomMapOfList("obm_other", package), package, std::nullopt)),
+	    Failure::OtherMap);
+	auto wrongHash = CustomMapOfList("obm_custom_1", package);
+	wrongHash.packageSha256 = std::string(k_Hash);
+	EXPECT_EQ(FailureOf(gods_ring_map_package::AssembleDownloaded(wrongHash, package, std::nullopt)), Failure::WrongPackage);
+}
+
+TEST(CustomMapPackage, TheServerReadsThePackageAndWritesItsLand)
+{
+	const auto folder = std::filesystem::temp_directory_path() / "openblack_test_custom_map_package";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+	const auto map = CustomMap();
+	const auto mapPath = folder / "obm_custom_1.map";
+	{
+		std::ofstream out(mapPath, std::ios::binary);
+		out.write(reinterpret_cast<const char*>(map.data()), static_cast<std::streamsize>(map.size()));
+	}
+	const auto written = server::WriteCustomMapPackage(mapPath, "A custom land", 2, folder / "packages");
+	ASSERT_TRUE(std::holds_alternative<std::filesystem::path>(written));
+	const auto packagePath = std::get<std::filesystem::path>(written);
+	const auto expected = custom_map_package::Make("obm_custom_1", "A custom land", 2, map).value();
+	EXPECT_EQ(packagePath.filename().generic_string(), online::sha256::HexOf(expected) + ".obmap");
+
+	const auto read = server::ReadMapPackage(packagePath);
+	ASSERT_TRUE(std::holds_alternative<server::CustomMapRead>(read));
+	const auto& land = std::get<server::CustomMapRead>(read);
+	EXPECT_EQ(land.file, "obm_custom_1");
+	EXPECT_EQ(land.name, "A custom land");
+	EXPECT_EQ(land.bytes, map);
+	EXPECT_EQ(land.packageSha256, online::sha256::HexOf(expected));
+	EXPECT_EQ(land.packageSize, static_cast<int64_t>(expected.size()));
+
+	EXPECT_FALSE(server::WritePackageMap(packagePath, folder / "out.map").has_value());
+	EXPECT_TRUE(std::filesystem::exists(folder / "out.map"));
+	EXPECT_EQ(std::filesystem::file_size(folder / "out.map"), map.size());
+	// A ".map" file is not a package, and a package needs the gods of the land
+	EXPECT_TRUE(std::holds_alternative<std::string>(server::ReadMapPackage(mapPath)));
+	EXPECT_TRUE(std::holds_alternative<std::string>(server::WriteCustomMapPackage(mapPath, "", 0, folder)));
+	std::filesystem::remove_all(folder);
 }
