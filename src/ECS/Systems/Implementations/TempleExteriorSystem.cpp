@@ -19,7 +19,9 @@
 #include <memory>
 #include <mutex>
 #include <ranges>
+#include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -207,6 +209,7 @@ void TempleExteriorSystem::ForgetLand()
 		}
 	}
 	_blends.clear();
+	_shownSkins.clear();
 	_spareShapes.clear();
 	_spareShapesSource.reset();
 }
@@ -241,36 +244,29 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 		{
 			_spareShapes.pop_back();
 		}
+		// The sum of the meshes by their weights goes into the vertices, which start at zero. Each value of a vertex
+		// (its place, its texture coordinates and its normal) is a float that takes the same weight, so the sum reads
+		// the vertices as one row of floats.
+		static_assert(std::is_standard_layout_v<l3d::L3DVertex> && sizeof(l3d::L3DVertex) == 8 * sizeof(float));
 		auto vertices = blended.EditVertices();
-		std::vector<l3d::L3DVertex> sum(vertices.size());
+		const std::span<float> sum(reinterpret_cast<float*>(vertices.data()), vertices.size() * 8);
+		std::ranges::fill(sum, 0.0f);
 		for (const auto& corner : Corners(exterior.size, exterior.alignment))
 		{
-			const auto id = entt::hashed_string(fmt::format("temple/{}", MeshName(corner.size, corner.stage)).c_str()).value();
+			const auto id = CornerMeshId(corner.size, corner.stage);
 			if (corner.weight == 0.0f || !files.Contains(id))
 			{
 				continue;
 			}
 			const auto& source = files.Handle(id)->GetVertices();
-			if (source.size() != sum.size())
+			if (source.size() != vertices.size())
 			{
 				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The temple's mesh {} isn't the shape of the first temple's",
 				                    MeshName(corner.size, corner.stage));
 				return;
 			}
-			const auto add = [&corner](l3d::L3DPoint& to, const l3d::L3DPoint& from) {
-				to.x += from.x * corner.weight;
-				to.y += from.y * corner.weight;
-				to.z += from.z * corner.weight;
-			};
-			for (size_t i = 0; i < sum.size(); ++i)
-			{
-				add(sum[i].position, source[i].position);
-				add(sum[i].normal, source[i].normal);
-				sum[i].texCoord.x += source[i].texCoord.x * corner.weight;
-				sum[i].texCoord.y += source[i].texCoord.y * corner.weight;
-			}
+			AddWeighted(sum, std::span(reinterpret_cast<const float*>(source.data()), source.size() * 8), corner.weight);
 		}
-		std::ranges::copy(sum, vertices.begin());
 		made.shapes.emplace_back(look, std::move(blended));
 		shape = std::prev(made.shapes.end());
 	}
@@ -512,6 +508,7 @@ void TempleExteriorSystem::Unbind(entt::id_type id)
 {
 	auto& resources = Locator::resources::value();
 	auto& meshes = resources.GetMeshes();
+	_shownSkins.erase(id);
 	// The worship site mesh first, as it wears the skins of the temple's mesh
 	const auto madeFor = TempleExteriorMorph::MeshesMadeFor(id);
 	for (const auto made : madeFor | std::views::reverse)
@@ -572,7 +569,15 @@ void TempleExteriorSystem::Dress(entt::id_type id, const l3d::L3DFile& blended, 
 	{
 		files.Load(id, resources::L3DFileLoader::FromFileTag {}, blended);
 	}
-	DressSkin(temple, blended, alignment, owner, made);
+	// The texture of the mesh changes only with the alignment's texture or the set
+	const ShownSkin shown {.mesh = &temple, .texture = TempleExteriorMorph::TextureOf(alignment), .set = TextureSetOf(owner)};
+	if (const auto before = _shownSkins.find(id); before == _shownSkins.end() || before->second != shown)
+	{
+		DressSkin(temple, blended, alignment, owner, made);
+		// Other temples can share the mesh, and their notes of its texture are old now
+		std::erase_if(_shownSkins, [&temple](const auto& note) { return note.second.mesh == &temple; });
+		_shownSkins.insert_or_assign(id, shown);
+	}
 
 	// After a restore of the graphics device the mesh gets its shape and its texture again, from the kept shape
 	temple.SetModelSource(

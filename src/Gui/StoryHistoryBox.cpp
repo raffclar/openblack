@@ -112,8 +112,3 @@ void StoryHistoryBox::Draw(const DialogPainter& painter) const
 	_dialog.Draw(painter, _active);
 	painter.SetAlpha(1.0f);
 }
-
-std::vector<Dialog::NamedControl> StoryHistoryBox::GetNamedControls() const
-{
-	return _active ? _dialog.GetNamedControls() : std::vector<Dialog::NamedControl> {};
-}

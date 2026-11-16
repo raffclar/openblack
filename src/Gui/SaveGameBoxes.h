@@ -100,9 +100,6 @@ public:
 	/// The name in the name's box
 	[[nodiscard]] std::u16string_view GetName() const;
 
-	/// The controls that act, for tools pressing them by name
-	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
-
 private:
 	struct Question
 	{

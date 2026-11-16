@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <span>
@@ -242,9 +243,18 @@ private:
 	[[nodiscard]] SnowFaces MakeSnowFaces() const;
 	/// The bytes of the submesh's packed vertices
 	[[nodiscard]] static size_t PackedSize(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates);
+	/// The four indices of a packed vertex: its bone, the vertex that it moves toward or -1, how far in 32767ths, and 0
+	using PackedIndex = std::array<int16_t, 4>;
+	/// The indices of the count packed vertices of the submesh, from its bones and its seams
+	[[nodiscard]] static std::vector<PackedIndex> PackedIndices(const l3d::L3DFile& l3d, uint32_t meshIndex, size_t count);
 	/// Writes the submesh's vertices as they are drawn into the bytes, which have the size that PackedSize gives
 	static void PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates,
 	                         std::span<uint8_t> bytes);
+	/// Writes the submesh's vertices into the bytes in the form that the renderer draws, with the indices that
+	/// PackedIndices gives. Gives the box about the places of the vertices, in their order.
+	[[nodiscard]] static AxisAlignedBoundingBox PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex,
+	                                                         bool hasLightmapCoordinates, std::span<uint8_t> bytes,
+	                                                         std::span<const PackedIndex> indices);
 	/// The box about the submesh's vertices, as they are placed by its bones
 	[[nodiscard]] static AxisAlignedBoundingBox BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasBones);
 	/// The blend source texture of count packed vertices, where the renderer can read one in the vertex shader
@@ -262,5 +272,7 @@ private:
 	bool _hasBlends {false};
 	std::unique_ptr<Texture2D> _blendSource;
 	uint32_t _blendSourceWidth {0};
+	/// The indices of the packed vertices that UpdateVertices found first, which each later file of the same shape uses
+	std::vector<PackedIndex> _packedIndices;
 };
 } // namespace openblack::graphics

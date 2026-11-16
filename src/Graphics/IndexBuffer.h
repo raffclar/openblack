@@ -54,9 +54,7 @@ public:
 	~IndexBuffer();
 
 	[[nodiscard]] uint32_t GetCount() const;
-	[[nodiscard]] uint32_t GetSize() const;
 	[[nodiscard]] uint32_t GetStride() const;
-	[[nodiscard]] Type GetType() const;
 
 	/// Whether bgfx made the buffer; one it couldn't make isn't drawn
 	[[nodiscard]] bool IsValid() const noexcept;

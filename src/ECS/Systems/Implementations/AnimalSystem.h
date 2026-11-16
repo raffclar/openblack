@@ -227,7 +227,6 @@ private:
 	[[nodiscard]] static components::HuntState* HuntOf(entt::entity hunter);
 	/// A hunter that eats is hungry no more
 	static void Fed(entt::entity hunter, components::Animal& animal);
-	[[nodiscard]] bool IsHungry(entt::entity hunter, const components::Animal& animal) const;
 	/// A wild hunter's speed by its place in its kind's speed group, and its clip at that speed. A spell wolf keeps its
 	/// run
 	static void SetHunterSpeed(entt::entity hunter, components::Animal& animal, size_t speed);

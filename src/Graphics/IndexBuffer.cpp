@@ -140,19 +140,9 @@ uint32_t IndexBuffer::GetCount() const
 	return _count;
 }
 
-uint32_t IndexBuffer::GetSize() const
-{
-	return _count * GetStride();
-}
-
 uint32_t IndexBuffer::GetStride() const
 {
 	return GetTypeSize(_type);
-}
-
-IndexBuffer::Type IndexBuffer::GetType() const
-{
-	return _type;
 }
 
 uint32_t IndexBuffer::GetTypeSize(Type type)

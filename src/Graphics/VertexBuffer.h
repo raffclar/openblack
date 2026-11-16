@@ -106,10 +106,6 @@ public:
 	void Bind() const;
 	/// Binds a run of the buffer's vertices
 	void Bind(uint32_t firstVertex, uint32_t count) const;
-	/// Binds the buffer to another stream, its vertices read by a layout of its own: a creature's variant meshes, whose
-	/// positions and normals come in as other attributes than the base mesh's. The layout must have the stride of the
-	/// buffer, because the first vertex of a shared buffer counts in that stride.
-	void BindStream(uint8_t stream, VertexLayoutHandle layout) const;
 	/// The same into the encoder given
 	void Bind(bgfx::Encoder& encoder) const;
 	void BindStream(bgfx::Encoder& encoder, uint8_t stream, VertexLayoutHandle layout) const;

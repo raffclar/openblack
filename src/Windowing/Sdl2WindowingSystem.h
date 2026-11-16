@@ -58,21 +58,16 @@ private:
 	/// The size to keep is the one that was asked for at the opening
 	void KeepInsideDesktop(glm::ivec2 asked);
 	[[nodiscard]] bool IsOpen() const;
-	[[nodiscard]] uint32_t GetFlags() const;
 	Sdl2WindowingSystem& SetMousePosition(glm::ivec2 position);
 
 	Sdl2WindowingSystem& SetTitle(const std::string& str);
-	[[nodiscard]] std::string GetTitle() const;
 
 	Sdl2WindowingSystem& Show();
-	Sdl2WindowingSystem& Hide();
 
 	Sdl2WindowingSystem& SetPosition(glm::ivec2 position);
-	[[nodiscard]] glm::ivec2 GetPosition() const;
 	Sdl2WindowingSystem& SetSize(glm::ivec2 size);
 
 	Sdl2WindowingSystem& Restore();
-	Sdl2WindowingSystem& Raise();
 	Sdl2WindowingSystem& SetFullscreen(bool f = true);
 
 	Sdl2WindowingSystem& Close();

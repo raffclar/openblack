@@ -111,7 +111,6 @@ public:
 	[[nodiscard]] Operator Op() const { return this->_u.op; }
 
 	// print the token for debugging
-	void Print(FILE* file) const;
 
 private:
 	explicit Token(Type type)

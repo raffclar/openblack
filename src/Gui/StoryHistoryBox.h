@@ -61,9 +61,6 @@ public:
 	void Update(float deltaSeconds);
 	void Draw(const DialogPainter& painter) const;
 
-	/// The buttons, for tools that press them by name
-	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
-
 private:
 	Dialog _dialog;
 	std::optional<help::StoryTurn> _turn;

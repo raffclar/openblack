@@ -1540,16 +1540,3 @@ void MultiplayerFrontEnd::SetReady(bool ready)
 	// The server starts the game when its gods are ready. The room shows no box while the player waits, and the tick
 	// of the Ready box takes the Ready away.
 }
-
-void MultiplayerFrontEnd::ShowBox(Box box, LobbyKind kind)
-{
-	LeaveRoom();
-	_message = Message::None;
-	_busy = false;
-	++_generation;
-	_flow = {.box = box, .kind = kind};
-	if (box == Box::GameList || box == Box::LobbyList)
-	{
-		EnterGameList();
-	}
-}

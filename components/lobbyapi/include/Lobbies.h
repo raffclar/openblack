@@ -68,7 +68,6 @@ enum class MemberRole : uint8_t
 	Observer,
 };
 
-[[nodiscard]] std::string_view LobbyStateName(LobbyState state);
 [[nodiscard]] std::optional<LobbyState> LobbyStateOf(std::string_view name);
 [[nodiscard]] std::string_view SlotKindName(SlotKind kind);
 [[nodiscard]] std::optional<SlotKind> SlotKindOf(std::string_view name);
