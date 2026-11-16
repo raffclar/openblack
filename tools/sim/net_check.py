@@ -1456,10 +1456,17 @@ def editor_desync(pids, case, shots=None):
             strokes.append(inspector_answer(editor, "editor.land_stroke", {"params": dict(
                 extra, mode=mode, position=[x + offset, z])}))
             time.sleep(0.5)
+        # The time of the last frame of each client while the strokes of the drag come (100 frames a second is 10 ms)
+        frames = [[] for _ in pids]
         for step in range(8):
             strokes.append(inspector_answer(editor, "editor.land_stroke", {"params": {
                 "mode": "raise", "position": [x + step * 10.0, z + 40.0], "inner": 5.0, "outer": 15.0}}))
             time.sleep(0.12)
+            for index, pid in enumerate(pids):
+                frame = inspector_answer(pid, "engine.frame", {})
+                if isinstance(frame, dict) and "frame_ms" in frame:
+                    frames[index].append(round(frame["frame_ms"], 2))
+        done["drag_frame_ms"] = frames
         time.sleep(1.0)
         paths = [inspector_answer(editor, "editor.path", {"params": {
                      "kind": "footpath", "points": [[x - 30.0, z - 30.0], [x, z - 50.0], [x + 30.0, z - 30.0]]}}),
