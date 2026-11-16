@@ -28,6 +28,8 @@ namespace openblack::debug::gui
 class Console final: public Window
 {
 public:
+	/// The window shows in a network game. Its lines of land script commands go as commands of the turns.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	Console() noexcept;
 	void Open() noexcept override;
 

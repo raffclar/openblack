@@ -67,6 +67,8 @@ struct RoomSeat
 	/// The join ticket of the player had the editor claim. The player keeps the claim when it comes back to the server
 	/// that a snapshot restored. A file of format 5 or older has no claims.
 	bool editor {false};
+	/// The join ticket of the player had the debugger claim, kept as the editor claim is
+	bool debugger {false};
 
 	bool operator==(const RoomSeat&) const = default;
 };
@@ -98,6 +100,9 @@ struct Room
 	/// For each observer of `watchers`, in the same order: true when the join ticket of the observer had the editor
 	/// claim. A file of format 5 or older has no claims.
 	std::vector<bool> watcherEditors;
+	/// For each observer of `watchers`, in the same order: true when the join ticket of the observer had the debugger
+	/// claim
+	std::vector<bool> watcherDebuggers;
 
 	bool operator==(const Room&) const = default;
 };

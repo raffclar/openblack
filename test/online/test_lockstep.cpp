@@ -3873,6 +3873,28 @@ TEST_F(LockstepTest, AGameThatStartsAfterTheTimeToLoadGetsTheWholeTimeFromItsSta
 	EXPECT_EQ(bob.session.RefusedReason(), "load");
 }
 
+TEST(RoomClock, ThePlayerWithTheDebuggerClaimChangesOnlyTheSpeed)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	namespace room_clock = online::room_clock;
+	const room_clock::State paused {.paused = true, .speed = 1.0f, .steps = 0};
+	const auto& rule = room_clock::k_Rule;
+	const room_clock::Claims debugger {.editor = false, .debugger = true};
+	// The Game Speed menu of the debug menu bar changes the speed
+	EXPECT_FALSE(room_clock::RefusalOf(rule, debugger, paused, EditorTime {.act = TimeAct::Speed, .speed = 2.0f}));
+	EXPECT_EQ(room_clock::RefusalOf(rule, debugger, paused, EditorTime {.act = TimeAct::Speed, .speed = 20.0f}),
+	          room_clock::Refusal::SpeedOutOfRange);
+	// The pause, the play and the step stay with the editor claim
+	for (const auto act : {TimeAct::Pause, TimeAct::Play, TimeAct::Step})
+	{
+		EXPECT_EQ(room_clock::RefusalOf(rule, debugger, paused, EditorTime {.act = act}), room_clock::Refusal::NoRight);
+		EXPECT_FALSE(room_clock::RefusalOf(rule, room_clock::Claims {.editor = true}, paused, EditorTime {.act = act}));
+	}
+	EXPECT_EQ(room_clock::RefusalOf(rule, room_clock::Claims {}, paused, EditorTime {.act = TimeAct::Speed, .speed = 2.0f}),
+	          room_clock::Refusal::NoRight);
+}
+
 TEST(RoomClock, OnlyAPlayerWithTheEditorClaimChangesTheClockAndTheValuesStayInTheirLimits)
 {
 	using game_socket::EditorTime;
@@ -3967,6 +3989,56 @@ TEST(RoomClock, EveryPlayerSeesALineForAPauseAPlayAndASpeedOfAPlayer)
 	EXPECT_FALSE(room_clock::NoticeOf(GameTime {.paused = true, .act = TimeAct::Step, .by = "alice"}).has_value());
 	// A frame to a player who comes back, or a change of the server, names no player and shows no line
 	EXPECT_FALSE(room_clock::NoticeOf(GameTime {.paused = true, .act = TimeAct::Play, .by = {}}).has_value());
+}
+
+TEST_F(LockstepTest, TheServerTakesTheActsOfTheDebugWindowsOnlyFromAGodWithTheDebuggerClaim)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	MakeHost(2);
+	Computer alice(network, now, "god+debugger:alice");
+	Computer bob(network, now, "god+editor:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.GetJoined()->debugger);
+	ASSERT_FALSE(bob.session.GetJoined()->debugger);
+	const DebugAdvisor out {.act = DebugAdvisor::Act::Out, .advisor = 1};
+	const DebugWorld noon {.act = DebugWorld::Act::TimeOfDay, .value = 12.0f};
+	const DebugConsoleLine line {.text = "CREATE_TOWN(1, \"1,1\", \"Celtic\")"};
+	alice.session.Send(out);
+	alice.session.Send(noon);
+	alice.session.Send(line);
+	// No computer takes a time of the day after 24 hours, thus the server refuses it also from a player with the claim
+	alice.session.Send(DebugWorld {.act = DebugWorld::Act::TimeOfDay, .value = 30.0f});
+	// The editor claim does not give the acts of the debug windows
+	bob.session.Send(out);
+	bob.session.Send(noon);
+	bob.session.Send(line);
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedDebuggerCommands(), 4u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugAdvisor), 1u);
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugWorld), 1u);
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugConsoleLine), 1u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::DebugAdvisor), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::DebugWorld), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::DebugConsoleLine), 0u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+
+	// The Game Speed menu of a player with the debugger claim changes the speed of the room, but not the pause
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Speed, .speed = 2.0f});
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Pause});
+	Frames({&alice, &bob}, 4);
+	EXPECT_FLOAT_EQ(host->RoomClock().speed, 2.0f);
+	EXPECT_FALSE(host->RoomClock().paused);
+	EXPECT_EQ(host->RefusedTimeRequests(), 1u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
 TEST_F(LockstepTest, TheEditorPausesStepsAndChangesTheSpeedOfTheTurnsOfEveryComputer)

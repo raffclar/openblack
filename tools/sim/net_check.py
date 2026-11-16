@@ -261,10 +261,11 @@ def ticket_file(folder, ticket):
     return path
 
 
-def make_ticket(key, kid, account, name, role, lifetime, editor=False, staff=False):
+def make_ticket(key, kid, account, name, role, lifetime, editor=False, staff=False, debugger=False):
     """A PASETO v4.public join ticket as the lobby makes one, for this test server. editor gives the editor claim of an
     account with the editor right (game_session_editor); only that claim opens the editor in a network game. staff gives
-    the staff claim of a confirmed staff account, which does not open the editor."""
+    the staff claim of a confirmed staff account, which does not open the editor. debugger gives the debugger claim of an
+    account with the debugger mark, which shows the debug menu bar and the debug windows."""
     now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
     claims = {
         "iss": "bwgame-service", "sub": str(account), "aud": SERVER_ID,
@@ -278,6 +279,8 @@ def make_ticket(key, kid, account, name, role, lifetime, editor=False, staff=Fal
         claims["editor"] = True
     if staff:
         claims["staff"] = True
+    if debugger:
+        claims["debugger"] = True
     message = json.dumps(claims, separators=(",", ":")).encode("utf-8")
     footer = json.dumps({"kid": kid}, separators=(",", ":")).encode("utf-8")
     header = b"v4.public."
@@ -1532,6 +1535,10 @@ def editor_desync(pids, case, shots=None, mind_files=None):
         done["time"] = editor_time(pids, shots)
         if done["time"].get("error"):
             done["error"] = done["time"]["error"]
+    if case == "debug":
+        done["debug"] = editor_debug(pids, focus, shots)
+        if done["debug"].get("error"):
+            done["error"] = done["debug"]["error"]
     if case in ("land", "all"):
         # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
         # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
@@ -1567,6 +1574,88 @@ def editor_desync(pids, case, shots=None, mind_files=None):
         # Both clients show the same hills, the same painted ground and the same paths
         editor_shots(pids, shots, "land")
     return done
+
+
+# The acts of the Advisors window that the debug case sends, each with its fields
+DEBUG_ADVISOR_ACTS = [
+    {"act": "out", "advisor": 0}, {"act": "appear", "advisor": 1}, {"act": "fly", "advisor": 1, "place": [0.3, 0.4]},
+    {"act": "cling", "advisor": 2, "place": [0.75, 0.95]}, {"act": "screen_point", "advisor": 1, "place": [0.5, 0.5]},
+    {"act": "point_at", "advisor": 2, "in_world": True}, {"act": "look_at", "advisor": 2},
+    {"act": "stop_pointing", "advisor": 2}, {"act": "stop_looking", "advisor": 2},
+    {"act": "play_anim", "advisor": 1, "place": [0.5, 0.5], "anim": 3, "speed": 1.5},
+    {"act": "feel", "advisor": 2, "emotion": 4}, {"act": "home", "advisor": 1}, {"act": "vanish", "advisor": 0},
+]
+
+
+def debug_act_lines(log):
+    """The lines of the acts of the debug windows at the turns, without the time and the name of the log"""
+    return [line[line.index("Turn "):] for line in lines_with(log, ["the debugger of player"]) if "Turn " in line]
+
+
+def editor_debug(pids, focus, shots=None):
+    """The first client has the debugger claim and no editor claim. It does each act of the Advisors window, the
+    changes of the World and Bonus Creatures menus, two lines of the Console (a new tree and a line that does not run),
+    the gestures of the Gestures window, and the Game Speed menu. The second client (no claim) sends acts with force:
+    the server must refuse them. Every computer must do the same acts at the same turns and keep the same checksums.
+    Returns what each step sent."""
+    debugger = pids[0]
+    done = {"answers": []}
+    position = [focus[0], focus[1], focus[2]]
+
+    def send(pid, params):
+        answer = inspector_answer(pid, "editor.debug_act", {"params": params})
+        done["answers"].append({"params": params, "answer": answer})
+        time.sleep(0.3)
+        return answer
+
+    for act in DEBUG_ADVISOR_ACTS:
+        send(debugger, dict(act, kind="advisor", position=position))
+    for act in ({"act": "time_of_day", "value": 6.5}, {"act": "player_alignment", "player": 0, "value": -0.5},
+                {"act": "bonus_creature", "index": 0, "value": 1}, {"act": "bonus_creature", "index": 0, "value": 0}):
+        send(debugger, dict(act, kind="world"))
+    tree = f'CREATE_NEW_TREE(-1, "{focus[0] + 12.0:.2f},{focus[2] + 12.0:.2f}", 3, 1, 1.0, 0.7, 0.7)'
+    send(debugger, {"kind": "console", "text": tree})
+    send(debugger, {"kind": "console", "text": "NOT_A_COMMAND(1)"})
+    for act in ("circle", "power_up_0", "scribble"):
+        send(debugger, {"kind": "gesture", "act": act})
+    # The Game Speed menu: the debugger claim changes the speed of the room, but the pause stays with the editor claim
+    done["speed"] = [inspector_answer(debugger, "editor.time", {"params": {"act": "speed", "speed": 2.0, "force": True}})]
+    time.sleep(1.5)
+    done["speed_clocks"] = [room_time(pid).get("clock_speed") for pid in pids]
+    done["speed"].append(inspector_answer(debugger, "editor.time", {"params": {"act": "pause", "force": True}}))
+    time.sleep(1.0)
+    done["paused_after_refused_pause"] = [room_time(pid).get("paused") for pid in pids]
+    done["speed"].append(inspector_answer(debugger, "editor.time", {"params": {"act": "speed", "speed": 1.0, "force": True}}))
+    time.sleep(1.0)
+    if len(pids) > 1:
+        # The second client has no debugger claim: the server refuses its acts
+        send(pids[1], {"kind": "advisor", "act": "out", "advisor": 0, "force": True})
+        send(pids[1], {"kind": "world", "act": "time_of_day", "value": 18.0, "force": True})
+        send(pids[1], {"kind": "console", "text": tree, "force": True})
+    time.sleep(2.0)
+    editor_shots(pids, shots, "debug")
+    problems = [f"{entry['params']}: {entry['answer']['error']}" for entry in done["answers"]
+                if isinstance(entry["answer"], dict) and entry["answer"].get("error")]
+    if not all(abs((speed or 0) - 0.5) < 1e-6 for speed in done["speed_clocks"]):
+        problems.append(f"a client did not follow the speed 2 of the debugger: {done['speed_clocks']}")
+    if any(done["paused_after_refused_pause"]):
+        problems.append("the server took a pause from the debugger claim")
+    if problems:
+        done["error"] = "; ".join(problems)
+    return done
+
+
+def debug_act_check(server_log, client_logs):
+    """The acts of the debug windows at the turns: the server and each client must have the same lines, and the server
+    must refuse the acts of the client with no debugger claim"""
+    server = debug_act_lines(server_log)
+    clients = [debug_act_lines(log) for log in client_logs]
+    refused = len(lines_with(server_log, ["acts of the debug windows of"]))
+    does = [line for line in server if " does " in line or " runs " in line]
+    cannot = [line for line in server if "cannot" in line]
+    return {"server": server, "clients_same": [client == server for client in clients], "refusals": refused,
+            "does": len(does), "cannot": len(cannot),
+            "same": bool(server) and all(client == server for client in clients) and refused >= 1}
 
 
 def room_time(pid):
@@ -2717,7 +2806,8 @@ def main():
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
-                                                    "creature-remove", "land", "history", "mind", "time", "all"),
+                                                    "creature-remove", "land", "history", "mind", "time", "debug",
+                                                    "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -3091,8 +3181,10 @@ def main():
             ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
                                  "observer" if is_observer else "god", 600,
                                  editor=(options.editor_check or options.forest_camera
-                                         or bool(options.editor_desync)) and index == 0,
-                                 staff=options.editor_check and index == 1)
+                                         or (bool(options.editor_desync) and options.editor_desync != "debug"))
+                                 and index == 0,
+                                 staff=options.editor_check and index == 1,
+                                 debugger=options.editor_desync == "debug" and index == 0)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
@@ -3495,6 +3587,12 @@ def main():
             print(f"the forest camera check did not pass: {json.dumps(forest_done)[:2000]}")
     if options.editor_desync:
         summary["editor_desync"] = editor_desync_done
+        if options.editor_desync == "debug":
+            summary["debug_acts"] = debug_act_check(
+                server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
+            if not summary["debug_acts"]["same"]:
+                print(f"the acts of the debug windows differ or did not come: {json.dumps(summary['debug_acts'])[:2000]}")
+                all_same = False
         if options.editor_desync in ("mind", "all"):
             summary["mind_loads"] = mind_load_lines(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])

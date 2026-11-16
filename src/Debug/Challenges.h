@@ -19,6 +19,8 @@ namespace openblack::debug::gui
 class Challenges final: public Window
 {
 public:
+	/// The window shows in a network game. It only shows the challenges.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	Challenges() noexcept;
 
 protected:

@@ -34,6 +34,9 @@ namespace debug::gui
 class MeshViewer final: public Window
 {
 public:
+	/// The window shows in a network game. It does not make a new mesh there, because the new mesh does not go to the
+	/// other computers.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	MeshViewer() noexcept;
 	~MeshViewer() noexcept;
 

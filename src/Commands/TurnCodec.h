@@ -63,11 +63,16 @@
 ///   size, the alignment, the fatness and the strength (f32).
 /// - A mind file of the editor: the use (u8), the hash of the file (u64), then for a load the creature, or for a new
 ///   creature each field as a new creature of the editor has it.
+/// - An act of the Advisors debug window: the act (u8), the advisor (u8), the place on the screen (two f32), the
+///   position, 1 when the advisor points in the world or 0 (u8), the animation (u8), the speed (f32), then the emotion
+///   (u8).
+/// - A change of the debug menus of the world: the act (u8), the player (u8), the index (u8), then the value (f32).
+/// - A line of the debug Console: the count of its bytes (u16), then each byte.
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 41;
+inline constexpr uint8_t k_Version = 42;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -151,6 +156,9 @@ enum class CommandTag : uint8_t
 	EditorPath = 63,
 	EditorRemake = 65,
 	EditorMindLoad = 67,
+	DebugAdvisor = 76,
+	DebugWorld = 77,
+	DebugConsoleLine = 78,
 };
 
 /// The sizes of the parts of the frames, in bytes

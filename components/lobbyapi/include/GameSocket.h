@@ -329,6 +329,7 @@ struct CommandRefused
 {
 	/// Why the server refused the commands. k_NoEditorClaim: edits of the editor or debug cheats from a player whose join
 	/// ticket has no editor claim. k_NoStoryLands: a skip to a land of the story, which a network game does not have.
+	/// k_NoDebuggerClaim: acts of the debug windows from a player whose join ticket has no debugger claim.
 	std::string reason;
 	/// The number of commands that the server refused
 	uint32_t commands {0};
@@ -340,6 +341,8 @@ struct CommandRefused
 inline constexpr std::string_view k_NoEditorClaim = "no_editor_claim";
 /// The reason of a refusal of a skip to a land of the story: a network game has no lands of the story
 inline constexpr std::string_view k_NoStoryLands = "no_story_lands";
+/// The reason of a refusal of the acts of the debug windows from a player whose join ticket has no debugger claim
+inline constexpr std::string_view k_NoDebuggerClaim = "no_debugger_claim";
 
 /// What the editor asks of the clock of the room (see EditorTime)
 enum class TimeAct : uint8_t

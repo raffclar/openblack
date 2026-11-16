@@ -49,6 +49,7 @@
 #include "Camera.h"
 #include "Camera/Camera.h"
 #include "Challenges.h"
+#include "Common/DebugActRuns.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Console.h"
 #include "Creature/BonusCreatures.h"
@@ -62,6 +63,8 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
@@ -84,6 +87,8 @@
 #include "MemoryUse.h"
 #include "MeshViewer.h"
 #include "Moon.h"
+#include "Online/NetworkSession.h"
+#include "Online/RoomClock.h"
 #include "PathFinding.h"
 #include "Physics.h"
 #include "PointerSpeedSlider.h"
@@ -340,7 +345,8 @@ void Gui::FollowNetworkSession() noexcept
 
 bool Gui::Shows(const Window& window) const noexcept
 {
-	return developer_tools::ShowsWindow(_mode, _networkSessionLive, window.GetName() == k_EditorWindow, _editorCanOpen);
+	return developer_tools::ShowsWindow(_mode, _networkSessionLive, window.GetName() == k_EditorWindow, _editorCanOpen,
+	                                    window.ShowsInNetworkGame());
 }
 
 bool Gui::ProcessEvents(const SDL_Event& event) noexcept
@@ -871,14 +877,70 @@ void Gui::WarmUp() noexcept
 	}
 }
 
+void Gui::ShowRoomSpeedMenu() noexcept
+{
+	if (!ImGui::BeginMenu("Game Speed"))
+	{
+		return;
+	}
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const auto room = session != nullptr ? session->RoomClock() : std::nullopt;
+	const auto request = [](float speed) {
+		if (Locator::networkGame::has_value())
+		{
+			Locator::networkGame::value().RequestTime(
+			    game_socket::EditorTime {.act = game_socket::TimeAct::Speed, .speed = speed});
+		}
+	};
+	ImGui::TextWrapped("A network game: the game server changes the time of a turn for every player");
+	if (!room.has_value())
+	{
+		// The controls wait for the first clock of the room, as the editor does
+		ImGui::TextDisabled("The clock of the room did not come yet");
+		ImGui::EndMenu();
+		return;
+	}
+	ImGui::Text("Scaled game duration: %.3fms (%.3f Hz)", room->speed * Game::k_TurnDuration.count(),
+	            1000.0f / (room->speed * Game::k_TurnDuration.count()));
+	if (ImGui::MenuItem("Slow"))
+	{
+		request(Game::k_TurnDurationMultiplierSlow);
+	}
+	if (ImGui::MenuItem("Normal"))
+	{
+		request(Game::k_TurnDurationMultiplierNormal);
+	}
+	if (ImGui::MenuItem("Fast"))
+	{
+		request(Game::k_TurnDurationMultiplierFast);
+	}
+	// The slider sends its value when it lets go, so that one drag sends one request
+	float multiplier = _speedDrag.value_or(room->speed);
+	ImGui::SliderFloat("Multiplier", &multiplier, online::room_clock::k_FastestSpeed, online::room_clock::k_SlowestSpeed,
+	                   "%.3f", ImGuiSliderFlags_Logarithmic);
+	if (ImGui::IsItemDeactivatedAfterEdit())
+	{
+		request(multiplier);
+	}
+	if (ImGui::IsItemActive())
+	{
+		_speedDrag = multiplier;
+	}
+	else
+	{
+		_speedDrag.reset();
+	}
+	ImGui::EndMenu();
+}
+
 bool Gui::ShowMenu() noexcept
 {
 	if (ImGui::BeginMainMenuBar())
 	{
 		auto& game = *Game::Instance();
-		// In a network game the menus that change the shared world do not open, so that the worlds stay the same
-		const bool changesWorld = !_networkSessionLive;
-		if (ImGui::BeginMenu("Load Island", changesWorld))
+		// In a network game the World, Bonus Creatures and Game Speed menus send their changes as commands of the turns or
+		// as requests to the game server. A new land needs a new start of the room, thus Load Island does not open there.
+		if (ImGui::BeginMenu("Load Island", !_networkSessionLive))
 		{
 			auto& resources = Locator::resources::value();
 			auto& levelsManager = resources.GetLevels();
@@ -952,20 +1014,42 @@ bool Gui::ShowMenu() noexcept
 
 		auto& config = Locator::config::value();
 
-		if (ImGui::BeginMenu("World", changesWorld))
+		if (ImGui::BeginMenu("World"))
 		{
-			if (ImGui::SliderFloat("Time of Day", &config.timeOfDay, 0.0f, 24.0f, "%.3f"))
+			// In a network game a slider sends its value when it lets go, so that one drag sends one command
+			const auto changed = [this](bool moved) {
+				return _networkSessionLive ? ImGui::IsItemDeactivatedAfterEdit() : moved;
+			};
+			const bool timeMoved = ImGui::SliderFloat("Time of Day", &config.timeOfDay, 0.0f, 24.0f, "%.3f");
+			if (changed(timeMoved))
 			{
-				Game::Instance()->SetTime(fmodf(config.timeOfDay, 24.0f));
+				debug_acts::Do(player_commands::DebugWorld {.act = player_commands::DebugWorld::Act::TimeOfDay,
+				                                            .value = config.timeOfDay});
 			}
 
 			ImGui::Text("Sky Type Index %f", Locator::skyClockSystem::value().GetCurrentSkyType());
 			// The player's alignment, which the sky turns to and the temple shows
 			auto& alignment = Locator::alignmentSystem::value();
-			float player = alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE);
-			if (ImGui::SliderFloat("Player alignment", &player, -1.0f, 1.0f, "%.3f"))
+			// In a network game the slider changes the alignment of the player of this computer. While the slider moves, it
+			// keeps its own value, and it sends the value when it lets go.
+			const auto own = _networkSessionLive && Locator::playerSystem::has_value()
+			                     ? Locator::playerSystem::value().GetLocalPlayer()
+			                     : PlayerNames::PLAYER_ONE;
+			float player = _alignmentDrag.value_or(alignment.GetPlayerAlignment(own));
+			const bool alignmentMoved = ImGui::SliderFloat("Player alignment", &player, -1.0f, 1.0f, "%.3f");
+			if (changed(alignmentMoved))
 			{
-				alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, player);
+				debug_acts::Do(player_commands::DebugWorld {.act = player_commands::DebugWorld::Act::PlayerAlignment,
+				                                            .player = static_cast<uint8_t>(own),
+				                                            .value = player});
+			}
+			if (_networkSessionLive && ImGui::IsItemActive())
+			{
+				_alignmentDrag = player;
+			}
+			else
+			{
+				_alignmentDrag.reset();
 			}
 			ImGui::Text("Camera alignment %.3f, sky value %.3f", alignment.GetCameraAlignment(), alignment.GetSkyLand());
 
@@ -1029,7 +1113,7 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
-			if (ImGui::BeginMenu("Bonus Creatures", changesWorld))
+			if (ImGui::BeginMenu("Bonus Creatures"))
 			{
 				// The breeder's bonus creatures, which vanilla only had once unlocked from outside the game
 				for (size_t i = 0; i < creature_swap::k_BonusCount; ++i)
@@ -1038,7 +1122,9 @@ bool Gui::ShowMenu() noexcept
 					bool unlocked = config.unlockedBonusCreatures.test(i);
 					if (ImGui::Checkbox(std::string(name).c_str(), &unlocked))
 					{
-						config.unlockedBonusCreatures.set(i, unlocked);
+						debug_acts::Do(player_commands::DebugWorld {.act = player_commands::DebugWorld::Act::BonusCreature,
+						                                            .index = static_cast<uint8_t>(i),
+						                                            .value = unlocked ? 1.0f : 0.0f});
 					}
 				}
 
@@ -1074,7 +1160,11 @@ bool Gui::ShowMenu() noexcept
 				ImGui::EndMenu();
 			}
 
-			if (ImGui::BeginMenu("Game Speed", changesWorld))
+			if (_networkSessionLive)
+			{
+				ShowRoomSpeedMenu();
+			}
+			else if (ImGui::BeginMenu("Game Speed"))
 			{
 				float multiplier = game.GetGameSpeed();
 				ImGui::Text("Scaled game duration: %.3fms (%.3f Hz)", multiplier * Game::k_TurnDuration.count(),

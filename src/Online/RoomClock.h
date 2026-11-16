@@ -81,7 +81,7 @@ enum class Refusal : uint8_t
 	switch (refusal)
 	{
 	case Refusal::NoRight:
-		return "the player has no editor claim";
+		return "the player has no editor claim, or a debugger claim for a change of the speed";
 	case Refusal::SpeedOutOfRange:
 		return "the speed is not from 0.1 to 10";
 	case Refusal::StepWhilePlaying:
@@ -91,6 +91,14 @@ enum class Refusal : uint8_t
 	}
 	return "";
 }
+
+/// The claims of the join ticket of a player that the rule reads
+struct Claims
+{
+	bool editor {false};
+	/// The debugger claim lets the player change only the speed, as the Game Speed menu of the debug menu bar does
+	bool debugger {false};
+};
 
 /// Whether the rule lets a player change the clock
 [[nodiscard]] constexpr bool MayChange(const Rule& rule, bool editorClaim) noexcept
@@ -105,11 +113,18 @@ enum class Refusal : uint8_t
 	return false;
 }
 
+/// Whether the rule lets a player with the claims do the act. The editor claim gives each act, and the debugger claim
+/// gives only a change of the speed.
+[[nodiscard]] constexpr bool MayDo(const Rule& rule, const Claims& claims, game_socket::TimeAct act) noexcept
+{
+	return MayChange(rule, claims.editor || (claims.debugger && act == game_socket::TimeAct::Speed));
+}
+
 /// Why the server does not take the request, none when it takes it
-[[nodiscard]] inline std::optional<Refusal> RefusalOf(const Rule& rule, bool editorClaim, const State& state,
+[[nodiscard]] inline std::optional<Refusal> RefusalOf(const Rule& rule, const Claims& claims, const State& state,
                                                       const game_socket::EditorTime& request) noexcept
 {
-	if (!MayChange(rule, editorClaim))
+	if (!MayDo(rule, claims, request.act))
 	{
 		return Refusal::NoRight;
 	}
@@ -136,6 +151,13 @@ enum class Refusal : uint8_t
 		break;
 	}
 	return std::nullopt;
+}
+
+/// Why the server does not take the request of a player with only the editor claim or no claim
+[[nodiscard]] inline std::optional<Refusal> RefusalOf(const Rule& rule, bool editorClaim, const State& state,
+                                                      const game_socket::EditorTime& request) noexcept
+{
+	return RefusalOf(rule, Claims {.editor = editorClaim}, state, request);
 }
 
 /// The clock after a request that the server took. A pause or a play also drops the steps that wait.

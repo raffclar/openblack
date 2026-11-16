@@ -204,6 +204,16 @@ std::vector<Action> EachCommand()
 	                              .alignment = 0.5f,
 	                              .fatness = 0.75f,
 	                              .strength = 0.25f}},
+	    DebugAdvisor {.act = DebugAdvisor::Act::PointAt,
+	                  .advisor = 2,
+	                  .place = {0.25f, 0.75f},
+	                  .position = {10.0f, 20.0f, 30.0f},
+	                  .inWorld = true,
+	                  .anim = 12,
+	                  .speed = 1.5f,
+	                  .emotion = 3},
+	    DebugWorld {.act = DebugWorld::Act::PlayerAlignment, .player = 1, .index = 0, .value = -0.5f},
+	    DebugConsoleLine {.text = "CREATE_TOWN(1, \"1000,1000\", \"Celtic\")"},
 	};
 }
 
@@ -244,7 +254,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 65)
+	switch (bits(random) % 68)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -543,6 +553,30 @@ Action RandomAction(std::mt19937& random)
 		                                 .alignment = number(),
 		                                 .fatness = number(),
 		                                 .strength = number()}};
+	case 65:
+		return DebugAdvisor {.act = static_cast<DebugAdvisor::Act>(bits(random) % 13),
+		                     .advisor = static_cast<uint8_t>(bits(random) % 3),
+		                     .place = {number(), number()},
+		                     .position = vector(),
+		                     .inWorld = bits(random) % 2 == 1,
+		                     .anim = static_cast<uint8_t>(bits(random)),
+		                     .speed = number(),
+		                     .emotion = static_cast<uint8_t>(bits(random))};
+	case 66:
+		return DebugWorld {.act = static_cast<DebugWorld::Act>(bits(random) % 3),
+		                   .player = static_cast<uint8_t>(bits(random)),
+		                   .index = static_cast<uint8_t>(bits(random)),
+		                   .value = number()};
+	case 67:
+	{
+		DebugConsoleLine line;
+		line.text.resize(bits(random) % (k_MostConsoleLineBytes + 1));
+		for (auto& character : line.text)
+		{
+			character = static_cast<char>(bits(random));
+		}
+		return line;
+	}
 	default:
 		return PlayerLeft {};
 	}
@@ -605,9 +639,9 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5, 9, 5, 53, 5,  10, 18, 5, 49, 17, 5,  5,  5,  9, 12, 1,  18, 11, 5,  19, 15,
-	                                 7,  5, 1, 2, 1,  61, 5,  2,  1, 13, 10, 18, 1,  58, 1, 5,  51, 5,  16, 7,  1,  1,
-	                                 13, 1, 2, 9, 13, 1,  1,  8,  1, 5,  37, 3,  10, 34, 2, 15, 78, 20, 36, 107, 14, 85};
+	const std::vector<size_t> sizes {2, 5, 9,  5, 53, 5, 10, 18, 5,  49, 17, 5,  5,  5,  9,  12, 1,  18,  11, 5,  19, 15, 7,
+	                                 5, 1, 2,  1, 61, 5, 2,  1,  13, 10, 18, 1,  58, 1,  5,  51, 5,  16,  7,  1,  1,  13, 1,
+	                                 2, 9, 13, 1, 1,  8, 1,  5,  37, 3,  10, 34, 2,  15, 78, 20, 36, 107, 14, 85, 30, 8,  40};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -684,8 +718,59 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 67;
 		}
+		// The acts of the debug windows have the tags 76, 77 and 78. The tags 68 to 75 are for other lanes.
+		if (std::holds_alternative<DebugAdvisor>(commands[i]))
+		{
+			tag = 76;
+		}
+		if (std::holds_alternative<DebugWorld>(commands[i]))
+		{
+			tag = 77;
+		}
+		if (std::holds_alternative<DebugConsoleLine>(commands[i]))
+		{
+			tag = 78;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
+}
+
+TEST(TurnCodec, TheDecoderRefusesABadActOfTheDebugWindows)
+{
+	const auto encode = [](Action action) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {std::move(action)}}});
+	};
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_FirstField = 10;
+	auto advisor = encode(DebugAdvisor {.act = DebugAdvisor::Act::Feel, .advisor = 1, .emotion = 2});
+	ASSERT_EQ(advisor.size(), k_FirstField + 29);
+	ASSERT_EQ(Decode(advisor).error, DecodeError::None);
+	// Feel is the last act, and 2 the last advisor
+	advisor[k_FirstField] = 13;
+	EXPECT_EQ(Decode(advisor).error, DecodeError::Value);
+	advisor[k_FirstField] = 0;
+	advisor[k_FirstField + 1] = 3;
+	EXPECT_EQ(Decode(advisor).error, DecodeError::Value);
+	advisor.pop_back();
+	EXPECT_EQ(Decode(advisor).error, DecodeError::Truncated);
+
+	auto world = encode(DebugWorld {.act = DebugWorld::Act::BonusCreature, .index = 1, .value = 1.0f});
+	ASSERT_EQ(world.size(), k_FirstField + 7);
+	ASSERT_EQ(Decode(world).error, DecodeError::None);
+	world[k_FirstField] = 3;
+	EXPECT_EQ(Decode(world).error, DecodeError::Value);
+
+	DebugConsoleLine line {.text = "abc"};
+	auto bytes = encode(line);
+	ASSERT_EQ(bytes.size(), k_FirstField + 2 + 3);
+	ASSERT_EQ(Decode(bytes).error, DecodeError::None);
+	EXPECT_EQ(std::get<DebugConsoleLine>(std::get<CommandBlock>(*Decode(bytes).frame).actions.front()), line);
+	// The count of the bytes is more than the frame gives
+	bytes[k_FirstField] = 4;
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Truncated);
+	// A line has at most the most bytes of a line of the Console
+	line.text.assign(k_MostConsoleLineBytes + 1, 'a');
+	EXPECT_EQ(Decode(encode(line)).error, DecodeError::Value);
 }
 
 TEST(TurnCodec, TheDecoderRefusesABadStrokeOrPath)

@@ -552,6 +552,30 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.firstHolder);
 		               out.Entity(command.lastHolder);
 	               },
+	               [&out](const DebugAdvisor& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               out.Byte(command.advisor);
+		               out.Float(command.place.x);
+		               out.Float(command.place.y);
+		               out.Vector(command.position);
+		               out.Byte(command.inWorld ? 1 : 0);
+		               out.Byte(command.anim);
+		               out.Float(command.speed);
+		               out.Byte(command.emotion);
+	               },
+	               [&out](const DebugWorld& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               out.Byte(command.player);
+		               out.Byte(command.index);
+		               out.Float(command.value);
+	               },
+	               [&out](const DebugConsoleLine& command) {
+		               out.Number(static_cast<uint16_t>(command.text.size()));
+		               for (const auto character : command.text)
+		               {
+			               out.Byte(static_cast<uint8_t>(character));
+		               }
+	               },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -1262,6 +1286,73 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = std::move(path);
 		return DecodeError::None;
 	}
+	case CommandTag::DebugAdvisor:
+	{
+		const auto act = in.Byte();
+		DebugAdvisor advisor {.advisor = in.Byte()};
+		advisor.place.x = in.Float();
+		advisor.place.y = in.Float();
+		advisor.position = in.Vector();
+		const auto inWorld = in.Byte();
+		advisor.anim = in.Byte();
+		advisor.speed = in.Float();
+		advisor.emotion = in.Byte();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		// The act is one of the acts of the window, the advisor is both, the good one or the evil one
+		if (act > static_cast<uint8_t>(DebugAdvisor::Act::Feel) || advisor.advisor > 2 || inWorld > 1)
+		{
+			return DecodeError::Value;
+		}
+		advisor.act = static_cast<DebugAdvisor::Act>(act);
+		advisor.inWorld = inWorld == 1;
+		action = advisor;
+		return DecodeError::None;
+	}
+	case CommandTag::DebugWorld:
+	{
+		const auto act = in.Byte();
+		DebugWorld world {.player = in.Byte()};
+		world.index = in.Byte();
+		world.value = in.Float();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (act > static_cast<uint8_t>(DebugWorld::Act::BonusCreature))
+		{
+			return DecodeError::Value;
+		}
+		world.act = static_cast<DebugWorld::Act>(act);
+		action = world;
+		return DecodeError::None;
+	}
+	case CommandTag::DebugConsoleLine:
+	{
+		const auto count = in.Number<uint16_t>();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (count > k_MostConsoleLineBytes)
+		{
+			return DecodeError::Value;
+		}
+		if (count > in.Left())
+		{
+			return DecodeError::Truncated;
+		}
+		DebugConsoleLine line;
+		line.text.resize(count);
+		for (auto& character : line.text)
+		{
+			character = static_cast<char>(in.Byte());
+		}
+		action = std::move(line);
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -1444,6 +1535,9 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const EditorPath& /*command*/) { return CommandTag::EditorPath; },
 	                      [](const EditorRemake& /*command*/) { return CommandTag::EditorRemake; },
 	                      [](const EditorMindLoad& /*command*/) { return CommandTag::EditorMindLoad; },
+	                      [](const DebugAdvisor& /*command*/) { return CommandTag::DebugAdvisor; },
+	                      [](const DebugWorld& /*command*/) { return CommandTag::DebugWorld; },
+	                      [](const DebugConsoleLine& /*command*/) { return CommandTag::DebugConsoleLine; },
 	                  },
 	                  action);
 }
@@ -1532,6 +1626,9 @@ size_t SizeOf(const Action& action) noexcept
 	        },
 	        [](const EditorLandStroke& /*command*/) { return size_t {1 + 4 + 4 + 1 + 1 + 4 + 4}; },
 	        [](const EditorPath& command) { return 1 + 2 + (8 * command.points.size()) + (2 * k_Entity); },
+	        [](const DebugAdvisor& /*command*/) { return size_t {1 + 1 + 8 + k_Vector + 1 + 1 + 4 + 1}; },
+	        [](const DebugWorld& /*command*/) { return size_t {1 + 1 + 1 + 4}; },
+	        [](const DebugConsoleLine& command) { return 2 + command.text.size(); },
 	    },
 	    action);
 	return 1 + fields;
