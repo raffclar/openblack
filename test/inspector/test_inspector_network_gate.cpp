@@ -136,10 +136,26 @@ TEST(InspectorNetworkGate, RefusedQueries)
 	{
 		EXPECT_FALSE(RefusedInNetworkGame(query, false)) << query;
 	}
-	for (const auto* query : {"input.key", "input.pointer", "camera.set", "screenshot.take", "sim.record", "sim.feedback",
-	                          "fights.transcript_folder", "fights.clear_transcripts", "audio.lose_device", "autopilot.start",
-	                          "autopilot.stop", "creatures.fight_cheat", "editor.network_edit", "editor.cheat",
-	                          "editor.creature_edit", "editor.creature_act", "editor.creature_spawn", "editor.villager_edit"})
+	for (const auto* query : {"input.key",
+	                          "input.pointer",
+	                          "camera.set",
+	                          "screenshot.take",
+	                          "sim.record",
+	                          "sim.feedback",
+	                          "fights.transcript_folder",
+	                          "fights.clear_transcripts",
+	                          "audio.lose_device",
+	                          "autopilot.start",
+	                          "autopilot.stop",
+	                          "creatures.fight_cheat",
+	                          "editor.network_edit",
+	                          "editor.cheat",
+	                          "editor.creature_edit",
+	                          "editor.creature_act",
+	                          "editor.creature_spawn",
+	                          "editor.villager_edit",
+	                          "editor.land_stroke",
+	                          "editor.path"})
 	{
 		EXPECT_FALSE(RefusedInNetworkGame(query, true)) << query;
 	}

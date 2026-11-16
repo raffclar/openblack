@@ -1085,6 +1085,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_creature_stomp test_creature_stomp.cpp)
 openblack_setup_and_add_test(test_posed_draws graphics/test_posed_draws.cpp)
+openblack_setup_and_add_test(test_temple_room_order graphics/test_temple_room_order.cpp)
 openblack_setup_and_add_test(
   test_creature_alignment_motes test_creature_alignment_motes.cpp
 )
@@ -2646,3 +2647,4 @@ target_link_libraries(test_creature_freeze_stop PRIVATE edt psys)
 openblack_setup_and_add_test(test_story_land_skip test_story_land_skip.cpp)
 openblack_setup_and_add_test(test_script_global_assign test_script_global_assign.cpp)
 target_link_libraries(test_script_global_assign PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_editor_land_edits test_editor_land_edits.cpp)

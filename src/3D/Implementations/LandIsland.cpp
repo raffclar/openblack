@@ -445,6 +445,15 @@ void LandIsland::Build(const LandData& data)
 		std::ranges::transform(block.GetLndBlock()->cells, std::back_inserter(altitudes), &lnd::LNDCell::altitude);
 		return altitudes;
 	});
+	// The countries of the land as it is built, which a load of a world state of this land puts back
+	_builtCountries.clear();
+	std::ranges::transform(_landBlocks, std::back_inserter(_builtCountries), [](const LandBlock& block) {
+		std::vector<uint8_t> countries;
+		std::ranges::transform(block.GetLndBlock()->cells, std::back_inserter(countries),
+		                       [](const lnd::LNDCell& cell) { return static_cast<uint8_t>(cell.properties.country); });
+		return countries;
+	});
+	MakeDigest();
 	if (device)
 	{
 		for (size_t i = 0; i < _landBlocks.size(); ++i)
@@ -570,18 +579,41 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 
 void LandIsland::SetCellCountry(glm::u16vec2 coordinates, uint8_t country)
 {
-	SetCorner(coordinates, [this, country](size_t block, int x, int z) {
-		if (!_landBlocks.at(block).SetCellCountry(static_cast<size_t>(x * 17 + z), country))
+	SetCorner(coordinates, [this, country](size_t block, int x, int z) { return SetBlockCellCountry(block, x, z, country); });
+}
+
+bool LandIsland::SetBlockCellCountry(size_t block, int x, int z, uint8_t country)
+{
+	if (!_landBlocks.at(block).SetCellCountry(static_cast<size_t>(x * 17 + z), country))
+	{
+		return false;
+	}
+	// The country paints the ground of the cells round the corner
+	auto& cells = _changedCells.at(block);
+	constexpr int k_LastCell = block_texture::k_BlockCells - 1;
+	cells.Add(glm::clamp(glm::ivec2(x - 1, z - 1), 0, k_LastCell));
+	cells.Add(glm::clamp(glm::ivec2(x, z), 0, k_LastCell));
+	return true;
+}
+
+void LandIsland::MakeDigest()
+{
+	// Each block gives its own 16 by 16 corners. The 17th row and column are copies of the corners of the next blocks.
+	_digest = 0;
+	for (const auto& block : _landBlocks)
+	{
+		const auto& cells = block.GetLndBlock()->cells;
+		const auto first = block.GetBlockPosition() * static_cast<int>(k_CellCount);
+		for (int x = 0; x < static_cast<int>(k_CellCount); ++x)
 		{
-			return false;
+			for (int z = 0; z < static_cast<int>(k_CellCount); ++z)
+			{
+				const auto& cell = cells.at(static_cast<size_t>(x * 17 + z));
+				_digest ^= land_reuse::CornerDigest(static_cast<uint16_t>(first.x + x), static_cast<uint16_t>(first.y + z),
+				                                    cell.altitude, static_cast<uint8_t>(cell.properties.country));
+			}
 		}
-		// The country paints the ground of the cells round the corner
-		auto& cells = _changedCells.at(block);
-		constexpr int k_LastCell = block_texture::k_BlockCells - 1;
-		cells.Add(glm::clamp(glm::ivec2(x - 1, z - 1), 0, k_LastCell));
-		cells.Add(glm::clamp(glm::ivec2(x, z), 0, k_LastCell));
-		return true;
-	});
+	}
 }
 
 void LandIsland::SetCorner(glm::u16vec2 coordinates, const std::function<bool(size_t, int, int)>& change)
@@ -590,6 +622,17 @@ void LandIsland::SetCorner(glm::u16vec2 coordinates, const std::function<bool(si
 	{
 		return;
 	}
+	// The digest of the land takes the corner of the block that the corner is in. The copies in other blocks change with it.
+	const auto partOf = [this, coordinates]() -> std::optional<uint64_t> {
+		const auto* cell = FindCell(coordinates);
+		if (cell == nullptr)
+		{
+			return std::nullopt;
+		}
+		return land_reuse::CornerDigest(coordinates.x, coordinates.y, cell->altitude,
+		                                static_cast<uint8_t>(cell->properties.country));
+	};
+	const auto before = partOf();
 	// A block keeps a 17th row and column of its neighbours' first cells: a corner on a block's edge is in up to four
 	// blocks, and each copy changes, with the cells of each block it is a corner of. A copy that already has the
 	// value does not change, so its block is not built and painted again for no change.
@@ -626,6 +669,10 @@ void LandIsland::SetCorner(glm::u16vec2 coordinates, const std::function<bool(si
 	if (changedAny)
 	{
 		_changedCorners.Add(glm::ivec2(coordinates));
+		if (const auto after = partOf(); before.has_value() && after.has_value())
+		{
+			_digest ^= *before ^ *after;
+		}
 	}
 }
 
@@ -663,8 +710,49 @@ size_t LandIsland::RestoreBuiltAltitudes()
 			}
 		}
 	}
+	MakeDigest();
 	CommitAltitudeChanges();
 	return restored;
+}
+
+size_t LandIsland::RestoreBuiltCountries()
+{
+	// Each copy of a corner is in the cells of its own block, so each block puts back its own cells
+	size_t restored = 0;
+	for (size_t block = 0; block < _landBlocks.size(); ++block)
+	{
+		const auto& built = _builtCountries.at(block);
+		const auto& cells = _landBlocks[block].GetLndBlock()->cells;
+		const auto corner = _landBlocks[block].GetBlockPosition() * static_cast<int>(k_CellCount);
+		for (const auto index : land_reuse::ChangedCountryCells(cells, built))
+		{
+			const int x = index / 17;
+			const int z = index % 17;
+			if (SetBlockCellCountry(block, x, z, built[index]))
+			{
+				_changedCorners.Add(corner + glm::ivec2(x, z));
+				++restored;
+			}
+		}
+	}
+	MakeDigest();
+	CommitAltitudeChanges();
+	return restored;
+}
+
+std::vector<land_reuse::CellCountry> LandIsland::ChangedCountries() const
+{
+	std::vector<land_reuse::CellCountry> changed;
+	for (size_t block = 0; block < _landBlocks.size(); ++block)
+	{
+		const auto& cells = _landBlocks[block].GetLndBlock()->cells;
+		const auto corner = _landBlocks[block].GetBlockPosition() * static_cast<int>(k_CellCount);
+		const auto indices = land_reuse::ChangedCountryCells(cells, _builtCountries.at(block));
+		const auto corners =
+		    land_reuse::CountriesOfBlock(static_cast<uint16_t>(corner.x), static_cast<uint16_t>(corner.y), indices, cells);
+		changed.insert(changed.end(), corners.begin(), corners.end());
+	}
+	return changed;
 }
 
 std::vector<land_reuse::CellAltitude> LandIsland::ChangedAltitudes() const

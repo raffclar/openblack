@@ -144,6 +144,13 @@ struct ShowFacts
 /// Thus after the creature leaves the hand, the speech button stays away until a message comes in (vanilla bug).
 [[nodiscard]] bool ShowsNext(bool shownBefore, const ShowFacts& facts) noexcept;
 
+/// Whether the chat of a network game closes in this frame: a network game was live at the last frame, and it is not
+/// live now. The player left the game, the connection to the game was lost, or the world turns alone after a desync.
+[[nodiscard]] constexpr bool NetworkGameEnded(bool liveBefore, bool liveNow) noexcept
+{
+	return liveBefore && !liveNow;
+}
+
 /// The colour of a player in the list of players, as 0xAARRGGBB: the colour of the god, half of the way to white, with
 /// no alpha. A selected player has full alpha, which gives the row its bar.
 [[nodiscard]] uint32_t PlayerColour(uint32_t godColour) noexcept;

@@ -1604,13 +1604,14 @@ public:
 	[[nodiscard]] uint32_t Leaves(size_t self) const { return _leaves.at(self); }
 	[[nodiscard]] StopChainResult Result() const
 	{
-		return {.gains = _gains, .bodyEnds = _leaves, .after = {.duels = _duels, .partners = _hasPartner}};
+		return {.gains = _gains, .bodyEnds = _leaves, .stopped = _stopped, .after = {.duels = _duels, .partners = _hasPartner}};
 	}
 
 	/// The creature stops what it does. In its duel, it gives the gain to its partner, which leaves its duel and gives up
 	/// its action. The body of the creature ends its own fight last.
 	void Stop(size_t self, bool endsBody = true)
 	{
+		_stopped.at(self) = true;
 		if (_duels.at(self))
 		{
 			const auto other = Other(self);
@@ -1638,6 +1639,7 @@ private:
 	std::array<bool, 2> _hasPartner;
 	std::array<uint32_t, 2> _gains {};
 	std::array<uint32_t, 2> _leaves {};
+	std::array<bool, 2> _stopped {};
 };
 } // namespace
 

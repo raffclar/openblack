@@ -74,6 +74,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
+#include "Editor/EditorLandEdits.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "Hand/HandSendWait.h"
 #include "Input/LocalPlayer.h"
@@ -325,6 +326,34 @@ void RunEditorCreatureSpawn(openblack::PlayerNames player, const EditorCreatureS
 	}
 }
 
+/// Do a stroke of the land brush of the editor at the turn. The game server takes the strokes only from a player with the
+/// editor claim.
+void RunEditorLandStroke(openblack::PlayerNames player, const EditorLandStroke& stroke, uint32_t turn)
+{
+	const auto changed = openblack::editor::land_edits::RunLandStroke(stroke);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} a stroke of mode {} at ({}, {}): {} corners", turn,
+		                   static_cast<int>(player), changed.has_value() ? "does" : "cannot do", static_cast<int>(stroke.mode),
+		                   stroke.centre.x, stroke.centre.y, changed.value_or(0));
+	}
+}
+
+/// Make a footpath or a stream of the editor at the turn. The game server takes the paths only from a player with the
+/// editor claim.
+void RunEditorPath(openblack::PlayerNames player, const EditorPath& path, uint32_t turn)
+{
+	const auto made = openblack::editor::land_edits::RunPath(path);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(
+		    logger, "Turn {}: the editor of player {} {} a path of kind {} with {} points: {}", turn, static_cast<int>(player),
+		    made.has_value() ? "makes" : "cannot make", static_cast<int>(path.kind), path.points.size(),
+		    made.has_value() ? fmt::format("thing {}, {} links", entt::to_integral(made->entity), made->links)
+		                     : std::string(openblack::editor::land_edits::PathRefusal(path).value_or("the world refused it")));
+	}
+}
+
 /// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a player with the editor
 /// claim.
 void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uint32_t turn)
@@ -415,6 +444,14 @@ void RunObserver(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, EditorVillagerEdit>)
 		    {
 			    RunEditorVillagerEdit(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorLandStroke>)
+		    {
+			    RunEditorLandStroke(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorPath>)
+		    {
+			    RunEditorPath(command.player, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
 		    {
@@ -1128,6 +1165,14 @@ void Run(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, EditorVillagerEdit>)
 		    {
 			    RunEditorVillagerEdit(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorLandStroke>)
+		    {
+			    RunEditorLandStroke(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorPath>)
+		    {
+			    RunEditorPath(command.player, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, DebugCheat>)
 		    {

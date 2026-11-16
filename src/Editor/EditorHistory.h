@@ -146,6 +146,9 @@ public:
 	/// Keeps things as the things that the editor made, in this order, through the next clear. A world that the editor
 	/// loads gives back the things that the editor made before it saved the world. The history has no step for them.
 	void KeepMadeAtNextClear(std::vector<entt::entity> entities);
+	/// Keeps a thing as a thing that the editor made, with no step. In a network game the history has no steps, and the
+	/// things that the editors place at the turns come here, so that a save of the land files writes them.
+	void AddMade(entt::entity entity);
 
 	[[nodiscard]] bool CanUndo() const { return !_undo.empty(); }
 	[[nodiscard]] bool CanRedo() const { return !_redo.empty(); }

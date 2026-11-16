@@ -1037,6 +1037,9 @@ struct StopChainResult
 	/// How many times the body of each creature ends its fight. Each time, the life of the creature pays for the fight
 	/// again if its body is in a state of the fight. The body does not change its state during the chain.
 	std::array<uint32_t, 2> bodyEnds {};
+	/// Whether each creature stopped what it did at least one time. A stop ends the lead of the creature that started
+	/// the fight.
+	std::array<bool, 2> stopped {};
 	/// The two creatures after the chain
 	StopSides after {};
 };

@@ -803,6 +803,27 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.eats_named_food_while_holding_villager",
+	    .name = "Creature eats a sheep while it holds a villager",
+	    .facet = Facet::Needs,
+	    .description = "A tiger with a villager and a sheep in front of it. A script tells it to hold the villager, then "
+	                   "to eat the sheep alive while the villager is still in its hand.",
+	    .expected = "It picks up the villager. When it is told to eat the sheep, it eats the villager in its hand, and at "
+	                "the same moment the sheep goes from the land, as in the game. The villager does not come back: it "
+	                "is not on the map and is not seen again, but the inspector still finds it in the state for the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -55.0f}, {30.0f, 10.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.5f, .dehydration = 0.0f, .poo = 0.0f},
+	    }},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -35.0f}},
+	                {.type = AnimalInfo::Sheep, .offset = {20.0f, -45.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 10.0f, .object = 1, .action = "EatAlive"}},
+	});
+
+	all.push_back({
 	    .id = "needs.hungry_with_no_food",
 	    .name = "Hungry creature with no food",
 	    .facet = Facet::Needs,

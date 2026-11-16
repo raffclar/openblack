@@ -113,9 +113,9 @@ public:
 	virtual void HandLetGo(entt::entity /*creature*/) {}
 	/// Whether the creature is in a fight's setup, going to the arena before the duel
 	[[nodiscard]] virtual bool IsSettingUpFight(entt::entity /*creature*/) const { return false; }
-	/// Whether the creature started the fight that it is in. Out of its duel, the creature that started a fight takes no
-	/// leash orders.
-	[[nodiscard]] virtual bool StartedFight(entt::entity /*creature*/) const { return false; }
+	/// Whether the creature started the fight that it is in, and did not stop what it did after that. Out of its duel, the
+	/// creature that leads a fight takes no leash orders. A stop, as the failure of its action, ends the lead.
+	[[nodiscard]] virtual bool LeadsFight(entt::entity /*creature*/) const { return false; }
 	[[nodiscard]] virtual bool IsFighting(entt::entity creature) const = 0;
 	/// Scripts: whether the creature duels now, from the start of its duel until its fight ends. The walk to the arena,
 	/// the taunt and what it does after the fight do not count.

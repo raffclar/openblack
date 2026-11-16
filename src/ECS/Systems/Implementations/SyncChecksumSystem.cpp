@@ -26,6 +26,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/EntityHashes.h"
@@ -78,6 +79,11 @@ void SyncChecksumSystem::ProcessTurn()
 	if (Locator::scriptMusicSystem::has_value())
 	{
 		values.music = Locator::scriptMusicSystem::value().GetMusic().SyncedValues();
+	}
+	// The land is synced too: the strokes of the editor and the miracles change its altitudes and its countries
+	if (Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded())
+	{
+		values.land = Locator::terrainSystem::value().LandDigest();
 	}
 	bool rowDump = false;
 	bool worldStates = false;
@@ -199,6 +205,11 @@ void SyncChecksumSystem::Finish(const TurnValues& values, synced_state::Hash has
 	{
 		stateHash = synced_state::MixValues(stateHash, *values.music);
 	}
+	if (values.land.has_value())
+	{
+		const std::array land {static_cast<int64_t>(*values.land)};
+		stateHash = synced_state::MixValues(stateHash, land);
+	}
 	// A component with no registration is left out of the checksum, so a change in it is never seen: tell of each name once
 	if (const auto fresh = _reported.Fresh(hash.unregistered); !fresh.empty())
 	{
@@ -224,6 +235,10 @@ void SyncChecksumSystem::Finish(const TurnValues& values, synced_state::Hash has
 	if (values.music.has_value())
 	{
 		hash.parts.emplace_back("music", synced_state::MixValues(0, *values.music));
+	}
+	if (values.land.has_value())
+	{
+		hash.parts.emplace_back("land", *values.land);
 	}
 	_partHistory.Keep(values.turn, hash.parts);
 	hash.parts.resize(worldParts);

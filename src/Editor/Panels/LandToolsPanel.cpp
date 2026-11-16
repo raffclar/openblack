@@ -31,7 +31,6 @@
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
 #include "Common/UserData.h"
-#include "ECS/Archetypes/StreamSegmentArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
@@ -69,6 +68,8 @@
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerAge.h"
 #include "Editor/EditorEntities.h"
+#include "Editor/EditorLandEdits.h"
+#include "Editor/EditorNetworkEdits.h"
 #include "Editor/EditorStyle.h"
 #include "Editor/LandSave.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -98,13 +99,6 @@ constexpr ImU32 k_OuterCircle = IM_COL32(255, 220, 90, 120);
 constexpr ImU32 k_FootpathLine = IM_COL32(230, 190, 120, 240);
 constexpr ImU32 k_StreamLine = IM_COL32(90, 170, 255, 240);
 constexpr ImU32 k_MarkerColour = IM_COL32(255, 120, 220, 240);
-
-/// Whether a building can keep the footpaths that lead from it, as the land's footpath file links them
-bool CanHoldLink(const ecs::Registry& registry, entt::entity entity)
-{
-	return registry.Valid(entity) && registry.AllOf<Transform>(entity) &&
-	       registry.AnyOf<Abode, Field, FishFarm, WorshipSite, BigForest, Temple>(entity);
-}
 
 /// A mobile static or a mobile object that the land script makes, as the game compares them: the game writes one line
 /// for all the things of one row at the same place and height
@@ -671,63 +665,38 @@ void LandToolsPanel::SetPathKind(paths::Kind kind) noexcept
 	}
 }
 
-void LandToolsPanel::Stroke(glm::vec2 centre) noexcept
+void LandToolsPanel::Stroke(const EditorContext& context, glm::vec2 centre) noexcept
 {
-	if (!Locator::terrainSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	if (!Locator::terrainSystem::has_value())
 	{
 		return;
 	}
+	const auto stroke = land_edits::StrokeOf(GetBrush(), centre);
 	auto& land = Locator::terrainSystem::value();
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto cellAt = [&land](glm::u16vec2 corner) { return land.FindCell(corner); };
-	if (GetBrush().mode == land_brush::Mode::Paint)
+	if (const auto refusal = land_edits::LandStrokeRefusal(stroke, static_cast<int>(land.GetCountries().size())))
 	{
-		const auto changes =
-		    land_brush::Paint(GetBrush(), centre, static_cast<int>(land.GetCountries().size()), [&cellAt](glm::u16vec2 corner) {
-			    const auto* cell = cellAt(corner);
-			    return cell != nullptr ? std::optional<uint8_t>(cell->properties.country) : std::nullopt;
-		    });
-		for (const auto& change : changes)
-		{
-			land.SetCellCountry(change.corner, change.country);
-		}
-		land.CommitAltitudeChanges();
-		_status = fmt::format("Painted {} corners with country {}", changes.size(), GetBrush().country);
+		_status = fmt::format("The brush cannot make the stroke: {}", *refusal);
 		return;
 	}
-	const auto changes = land_brush::Stroke(GetBrush(), centre, [&cellAt](glm::u16vec2 corner) {
-		const auto* cell = cellAt(corner);
-		return cell != nullptr ? std::optional<uint8_t>(cell->altitude) : std::nullopt;
-	});
-	if (changes.empty())
+	const bool paint = GetBrush().mode == land_brush::Mode::Paint;
+	// In a network game each computer does the stroke at the next turn
+	if (!context.writes.ChangesAtOnce())
 	{
+		land_edits::SendLandStroke(stroke);
+		_status = paint ? "The paint comes at the next turn" : "The stroke comes at the next turn";
 		return;
 	}
-	// The things on the land in reach keep their heights above it, so that they are not buried or left in the air
-	const auto reach = glm::vec2(GetBrush().outerRadius + land_brush::k_CornerSpacing);
-	const auto lowest = centre - reach;
-	const auto highest = centre + reach;
-	std::vector<std::pair<entt::entity, float>> standing;
-	registry.Each<const Transform>([&](entt::entity entity, const Transform& transform) {
-		const glm::vec2 at {transform.position.x, transform.position.z};
-		if (glm::any(glm::lessThan(at, lowest)) || glm::any(glm::greaterThan(at, highest)) ||
-		    registry.AnyOf<Hand, InHand, InPhysics>(entity))
-		{
-			return;
-		}
-		standing.emplace_back(entity, land.GetHeightAt(at));
-	});
-	for (const auto& change : changes)
-	{
-		land.SetCellAltitude(change.corner, change.altitude);
-	}
+	land_edits::WorldLand world(land);
+	const auto changed = land_edits::ApplyLandStroke(context.registry, world, stroke);
 	land.CommitAltitudeChanges();
-	for (const auto& [entity, before] : standing)
+	if (paint)
 	{
-		auto& transform = registry.Get<Transform>(entity);
-		transform.position.y += land.GetHeightAt({transform.position.x, transform.position.z}) - before;
+		_status = fmt::format("Painted {} corners with country {}", changed, GetBrush().country);
 	}
-	_status = fmt::format("{} {} corners", GetBrush().mode == land_brush::Mode::Raise ? "Raised" : "Lowered", changes.size());
+	else if (changed > 0)
+	{
+		_status = fmt::format("{} {} corners", GetBrush().mode == land_brush::Mode::Raise ? "Raised" : "Lowered", changed);
+	}
 }
 
 void LandToolsPanel::PressAt(EditorContext& context, std::optional<glm::vec3> land, std::optional<entt::entity> picked) noexcept
@@ -739,7 +708,7 @@ void LandToolsPanel::PressAt(EditorContext& context, std::optional<glm::vec3> la
 	}
 	if (context.system.GetTool() == Tool::Land)
 	{
-		Stroke({land->x, land->z});
+		Stroke(context, {land->x, land->z});
 		_lastStroke = glm::vec2(land->x, land->z);
 		return;
 	}
@@ -758,7 +727,7 @@ void LandToolsPanel::PressAt(EditorContext& context, std::optional<glm::vec3> la
 		return;
 	}
 	// A footpath's ends that are put on a building lead from that building
-	const auto holder = picked.has_value() && CanHoldLink(context.registry, *picked) ? picked : std::nullopt;
+	const auto holder = picked.has_value() && land_edits::CanHoldLink(context.registry, *picked) ? picked : std::nullopt;
 	if (_draft.Points().size() == 1)
 	{
 		_firstHolder = holder;
@@ -766,7 +735,7 @@ void LandToolsPanel::PressAt(EditorContext& context, std::optional<glm::vec3> la
 	_lastHolder = holder;
 }
 
-void LandToolsPanel::DragTo(std::optional<glm::vec3> land) noexcept
+void LandToolsPanel::DragTo(const EditorContext& context, std::optional<glm::vec3> land) noexcept
 {
 	if (!land.has_value() || !_lastStroke.has_value())
 	{
@@ -775,7 +744,7 @@ void LandToolsPanel::DragTo(std::optional<glm::vec3> land) noexcept
 	const glm::vec2 now {land->x, land->z};
 	if (land_brush::MovedFarEnough(*_lastStroke, now))
 	{
-		Stroke(now);
+		Stroke(context, now);
 		_lastStroke = now;
 	}
 }
@@ -787,66 +756,43 @@ void LandToolsPanel::FinishPath(EditorContext& context) noexcept
 		_status = "A path needs two points or more";
 		return;
 	}
-	auto& registry = context.registry;
-	const auto& land = Locator::terrainSystem::value();
-	const auto points = _draft.Points();
-	if (_pathKind == paths::Kind::Stream)
+	player_commands::EditorPath path {.kind = static_cast<uint8_t>(_pathKind)};
+	for (const auto point : _draft.Points())
 	{
-		auto& streams = registry.Context().streams;
-		std::vector<int> ids;
-		ids.reserve(streams.size());
-		for (const auto& [id, entity] : streams)
-		{
-			ids.push_back(id);
-		}
-		const auto id = paths::NextStreamId(ids);
-		const auto entity = registry.Create();
-		auto& stream = registry.Assign<Stream>(entity, id);
-		streams.insert({id, entity});
-		for (const auto point : points)
-		{
-			stream.points.push_back(point);
-			if (stream.points.size() >= 2)
-			{
-				ecs::archetypes::StreamSegmentArchetype::Create(stream.points[stream.points.size() - 2], stream.points.back());
-			}
-		}
-		context.system.GetDrawnPaths().streams.push_back(id);
-		_status = fmt::format("Made stream {} of {} points", id, points.size());
+		path.points.emplace_back(point.x, point.z);
+	}
+	if (_pathKind == paths::Kind::Footpath)
+	{
+		path.firstHolder = _firstHolder.value_or(entt::null);
+		path.lastHolder = _lastHolder.value_or(entt::null);
+	}
+	if (const auto refusal = land_edits::PathRefusal(path))
+	{
+		_status = fmt::format("The editor cannot make the path: {}", *refusal);
+		return;
+	}
+	// In a network game each computer makes the path at the next turn
+	if (!context.writes.ChangesAtOnce())
+	{
+		land_edits::SendPath(path);
+		_status = fmt::format("The path of {} points comes at the next turn", path.points.size());
 	}
 	else
 	{
-		const auto entity = registry.Create();
-		auto& footpath = registry.Assign<Footpath>(entity);
-		for (const auto point : points)
+		const land_edits::WorldLand land(Locator::terrainSystem::value());
+		const auto made = land_edits::ApplyPath(context.registry, land, path, &context.system.GetDrawnPaths());
+		if (!made.has_value())
 		{
-			// The node goes on the land at its place, as the land's script puts its nodes
-			const auto place = paths::PlaceOf(point);
-			const auto ground = map_coords::ToMetres(map_coords::MapCoords {.x = place.x, .z = place.y, .altitude = 0.0f});
-			footpath.nodes.push_back({.position = {ground.x, land.GetHeightAt(ground), ground.y}, .place = place});
+			_status = "The editor cannot make the path";
 		}
-		context.system.GetDrawnPaths().footpaths.push_back(entity);
-		const auto id = static_cast<Footpath::Id>(entity);
-		size_t links = 0;
-		for (const auto holder : {_firstHolder, _lastHolder})
+		else if (made->stream.has_value())
 		{
-			if (!holder.has_value() || !CanHoldLink(registry, *holder) || (links == 1 && _firstHolder == _lastHolder))
-			{
-				continue;
-			}
-			// The newest link comes first, as the land's script links them
-			if (auto* link = registry.TryGet<FootpathLink>(*holder))
-			{
-				link->footpaths.insert(link->footpaths.begin(), id);
-			}
-			else
-			{
-				registry.Assign<FootpathLink>(*holder, registry.Get<const Transform>(*holder).position,
-				                              std::vector<Footpath::Id> {id});
-			}
-			++links;
+			_status = fmt::format("Made stream {} of {} points", *made->stream, path.points.size());
 		}
-		_status = fmt::format("Made a footpath of {} nodes, linked to {} buildings", points.size(), links);
+		else
+		{
+			_status = fmt::format("Made a footpath of {} nodes, linked to {} buildings", path.points.size(), made->links);
+		}
 	}
 	_draft.Clear();
 	_firstHolder.reset();
@@ -1281,10 +1227,14 @@ void LandToolsPanel::Draw(EditorContext& context) noexcept
 		}
 		ImGui::SetItemTooltip("A landscape file, a land script of what the editor placed and drew, a footpath file and a "
 		                      "world file");
-		ImGui::SameLine();
-		if (ImGui::Button("Load world file"))
+		// A load of a world file changes the world of this computer only, so a network game does not have it
+		if (context.writes.ChangesAtOnce())
 		{
-			_status = LoadWorld(context);
+			ImGui::SameLine();
+			if (ImGui::Button("Load world file"))
+			{
+				_status = LoadWorld(context);
+			}
 		}
 		ImGui::TextColored(style::k_Muted, "Into the profile folder's %s folder", std::string(k_SaveFolder).c_str());
 		ImGui::EndTable();

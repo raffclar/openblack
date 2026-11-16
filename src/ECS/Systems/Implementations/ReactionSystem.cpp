@@ -611,9 +611,10 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	{
 		return false;
 	}
-	// Nor does one whose plan is a fight, or the creature that started a fight, whatever its plan
+	// Nor does one whose plan is a fight. Nor does the creature that started a fight, whatever its plan, until it stops
+	// what it did.
 	const auto* fight = registry.TryGet<const CreatureFighting>(entity);
-	if (PlanIs(registry, entity, "Fight") || (fight != nullptr && fight->madeArena))
+	if (PlanIs(registry, entity, "Fight") || (fight != nullptr && LeadsFight(*fight)))
 	{
 		return false;
 	}

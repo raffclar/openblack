@@ -20,6 +20,7 @@
 
 #include "Common/DebugCheats.h"
 #include "Editor/EditorCreatureEdits.h"
+#include "Editor/EditorLandEdits.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "Gui/TextDatabase.h"
 #include "Online/ConnectionLog.h"
@@ -1107,6 +1108,15 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		else if (const auto* villager = std::get_if<player_commands::EditorVillagerEdit>(&action))
 		{
 			refusal = editor::VillagerEditRefusal(*villager);
+		}
+		else if (const auto* stroke = std::get_if<player_commands::EditorLandStroke>(&action))
+		{
+			refusal = editor::land_edits::LandStrokeRefusal(*stroke, _settings.landCountries ? _settings.landCountries()
+			                                                                                 : std::optional<int> {});
+		}
+		else if (const auto* path = std::get_if<player_commands::EditorPath>(&action))
+		{
+			refusal = editor::land_edits::PathRefusal(*path);
 		}
 		if (refusal.has_value())
 		{

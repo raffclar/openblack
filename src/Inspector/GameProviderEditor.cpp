@@ -26,6 +26,7 @@
 #include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorEntities.h"
+#include "Editor/EditorLandEdits.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
@@ -353,6 +354,109 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			return QueryResult::Error(std::string(*refusal));
 		}
 		editor::SendCreatureSpawn(spawn);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto landStroke = Query(
+	    "land_stroke",
+	    "Sends a stroke of the land brush as a command of the turns, as the land tools send it in a network game: each "
+	    "computer raises, lowers or paints the land at the same turn, and the game server takes it only from a player with "
+	    "the editor claim. force sends it also when the editor of this computer is refused.",
+	    {{.name = "mode", .type = "string", .description = "raise, lower or paint", .required = true},
+	     {.name = "position", .type = "point", .description = "[x, z] of the middle of the stroke", .required = true},
+	     {.name = "inner",
+	      .type = "number",
+	      .description = "The inner radius in metres (10 when not given)",
+	      .required = false},
+	     {.name = "outer",
+	      .type = "number",
+	      .description = "The outer radius in metres (30 when not given)",
+	      .required = false},
+	     {.name = "step",
+	      .type = "integer",
+	      .description = "The altitude steps, 1 to 64 (4 when not given)",
+	      .required = false},
+	     {.name = "country", .type = "integer", .description = "The country of a paint (0 when not given)", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	landStroke.writes = true;
+	provider->Add(std::move(landStroke), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		constexpr std::array<std::pair<std::string_view, editor::land_brush::Mode>, 3> k_Modes {{
+		    {"raise", editor::land_brush::Mode::Raise},
+		    {"lower", editor::land_brush::Mode::Lower},
+		    {"paint", editor::land_brush::Mode::Paint},
+		}};
+		const auto modeParam = context.params.find("mode");
+		const auto modeName =
+		    modeParam != context.params.end() && modeParam->is_string() ? modeParam->get<std::string>() : std::string();
+		const auto mode = std::ranges::find(k_Modes, std::string_view(modeName), &decltype(k_Modes)::value_type::first);
+		const auto position = PositionParam(context.params);
+		if (mode == k_Modes.end() || !position.has_value())
+		{
+			return QueryResult::Error("editor.land_stroke needs a mode (raise, lower or paint) and a position");
+		}
+		const editor::land_brush::Brush brush {.mode = mode->second,
+		                                       .innerRadius = NumberParam(context.params, "inner").value_or(10.0f),
+		                                       .outerRadius = NumberParam(context.params, "outer").value_or(30.0f),
+		                                       .step = static_cast<int>(NumberParam(context.params, "step").value_or(4.0f)),
+		                                       .country =
+		                                           static_cast<uint8_t>(NumberParam(context.params, "country").value_or(0.0f))};
+		const glm::vec2 centre {position->x, position->z};
+		const auto stroke = editor::land_edits::StrokeOf(brush, centre);
+		if (const auto refusal = editor::land_edits::LandStrokeRefusal(stroke, std::nullopt))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		editor::land_edits::SendLandStroke(stroke);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto path = Query(
+	    "path",
+	    "Sends a footpath or a stream as a command of the turns, as the paths of the land tools send it in a network game: "
+	    "each computer makes it at the same turn, and the game server takes it only from a player with the editor claim. "
+	    "force sends it also when the editor of this computer is refused.",
+	    {{.name = "kind", .type = "string", .description = "footpath or stream", .required = true},
+	     {.name = "points", .type = "array", .description = "The points [[x, z], ...], 2 to 256", .required = true},
+	     {.name = "first", .type = "integer", .description = "The building at the first point", .required = false},
+	     {.name = "last", .type = "integer", .description = "The building at the last point", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	path.writes = true;
+	provider->Add(std::move(path), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto kindParam = context.params.find("kind");
+		const auto kindName =
+		    kindParam != context.params.end() && kindParam->is_string() ? kindParam->get<std::string>() : std::string();
+		const auto points = context.params.find("points");
+		if ((kindName != "footpath" && kindName != "stream") || points == context.params.end() || !points->is_array())
+		{
+			return QueryResult::Error("editor.path needs a kind (footpath or stream) and the points");
+		}
+		player_commands::EditorPath command {
+		    .kind = static_cast<uint8_t>(kindName == "stream" ? editor::paths::Kind::Stream : editor::paths::Kind::Footpath)};
+		for (const auto& point : *points)
+		{
+			if (!point.is_array() || point.size() != 2 || !point[0].is_number() || !point[1].is_number())
+			{
+				return QueryResult::Error("editor.path needs each point as [x, z]");
+			}
+			command.points.emplace_back(point[0].get<float>(), point[1].get<float>());
+		}
+		const auto holder = [&context](std::string_view name) {
+			const auto number = NumberParam(context.params, name);
+			return number.has_value() ? static_cast<entt::entity>(static_cast<uint32_t>(*number)) : entt::entity {entt::null};
+		};
+		command.firstHolder = holder("first");
+		command.lastHolder = holder("last");
+		if (const auto refusal = editor::land_edits::PathRefusal(command))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		editor::land_edits::SendPath(command);
 		return QueryResult::Value({{"sent", true}});
 	});
 	auto creatureAct =

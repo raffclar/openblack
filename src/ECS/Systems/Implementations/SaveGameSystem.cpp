@@ -402,6 +402,18 @@ std::optional<gamesave::Chunk> ChangedAltitudesChunk()
 	return land_reuse::AltitudesChunk(Locator::terrainSystem::value().ChangedAltitudes());
 }
 
+/// The blocks of the land that the game changed: the altitudes, then the countries. Empty when no land is open.
+std::vector<gamesave::Chunk> ChangedLandChunks()
+{
+	std::vector<gamesave::Chunk> chunks;
+	if (auto altitudes = ChangedAltitudesChunk(); altitudes.has_value())
+	{
+		chunks.push_back(std::move(*altitudes));
+		chunks.push_back(land_reuse::CountriesChunk(Locator::terrainSystem::value().ChangedCountries()));
+	}
+	return chunks;
+}
+
 /// Gives back the altitudes of the land that a saved game or a world state keeps. A file of an older build keeps none.
 void LoadChangedAltitudes(const gamesave::WorldFile& world)
 {
@@ -419,6 +431,18 @@ void LoadChangedAltitudes(const gamesave::WorldFile& world)
 	for (const auto& corner : *altitudes)
 	{
 		land.SetCellAltitude({corner.x, corner.z}, corner.altitude);
+	}
+	// The countries that the editor painted come back too. A file of an older build keeps none.
+	if (const auto countries = land_reuse::KeptCountries(world); countries.has_value())
+	{
+		for (const auto& corner : *countries)
+		{
+			land.SetCellCountry({corner.x, corner.z}, corner.country);
+		}
+	}
+	else
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The countries of the land in the file do not read");
 	}
 	land.CommitAltitudeChanges();
 }
@@ -1016,7 +1040,7 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	auto whole =
 	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
 	// The land as it is now, so that a load gives back the ground that the game changed
-	auto altitudes = ChangedAltitudesChunk();
+	auto altitudes = ChangedLandChunks();
 	const auto worldBlocksDone = std::chrono::steady_clock::now();
 	// A game that came from a file of the game also goes back into that file's layout: the file as it was, with the
 	// records of its creatures and their leashes as openblack has them now
@@ -1048,17 +1072,14 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	files.world = slotFolder / gamesave::WorldFileName(slot);
 	// The writer makes the last blocks and puts the blocks together into the file on its own thread
 	files.worldFiles = [path = files.world, world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole,
-	                    altitudes = std::make_shared<std::optional<gamesave::Chunk>>(std::move(altitudes)),
+	                    altitudes = std::make_shared<std::vector<gamesave::Chunk>>(std::move(altitudes)),
 	                    vanilla = std::make_shared<std::vector<ecs::save_files::SaveFile>>(std::move(vanilla)), scriptCopy]() {
 		for (const auto& pending : *whole)
 		{
 			world->chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
 		}
 		whole->clear();
-		if (altitudes->has_value())
-		{
-			world->chunks.push_back(**altitudes);
-		}
+		std::ranges::move(*altitudes, std::back_inserter(world->chunks));
 		std::vector<ecs::save_files::SaveFile> written {{.path = path, .bytes = gamesave::Write(*world)}};
 		std::ranges::move(*vanilla, std::back_inserter(written));
 		if (scriptCopy.has_value())
@@ -1399,17 +1420,14 @@ std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 	auto whole =
 	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
 	// The land as it is now, which another computer must have to go on with the same world
-	auto altitudes = std::make_shared<std::optional<gamesave::Chunk>>(ChangedAltitudesChunk());
+	auto altitudes = std::make_shared<std::vector<gamesave::Chunk>>(ChangedLandChunks());
 	return [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole, altitudes]() {
 		auto file = *world;
 		for (const auto& pending : *whole)
 		{
 			file.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
 		}
-		if (altitudes->has_value())
-		{
-			file.chunks.push_back(**altitudes);
-		}
+		file.chunks.insert(file.chunks.end(), altitudes->begin(), altitudes->end());
 		return gamesave::Write(file);
 	};
 }

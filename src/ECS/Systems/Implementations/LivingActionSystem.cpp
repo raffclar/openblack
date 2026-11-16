@@ -23,6 +23,7 @@
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/LivingAction.h"
@@ -1365,7 +1366,8 @@ void UpdateHiddenByState(entt::entity villager, VillagerStates state)
 	{
 		return;
 	}
-	const bool hidden = villager_animate::IsHiddenByState(state);
+	// A villager that a creature lost from its hand as the creature ate stays out of sight in all states
+	const bool hidden = villager_animate::IsHiddenByState(state) || registry.AllOf<LostFromCreatureHand>(villager);
 	if (hidden != registry.AllOf<HiddenByState>(villager))
 	{
 		if (hidden)

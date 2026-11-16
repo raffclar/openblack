@@ -50,11 +50,15 @@
 ///   amount (f32).
 /// - A new creature of the editor: the species (u8), the owner (u8), the position, the angle, the size, the alignment,
 ///   the fatness and the strength (f32), 1 when it has tattoos or 0 (u8), then each tattoo as a tattoo command has it.
+/// - A stroke of the land brush of the editor: the mode (u8), the inner and the outer radius (f32), the step (u8), the
+///   country (u8), then the x and the z of the middle (f32).
+/// - A path of the editor: the kind (u8), the count of the points (u16), the x and the z of each point (f32), then the
+///   first and the last building.
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 38;
+inline constexpr uint8_t k_Version = 39;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -134,6 +138,8 @@ enum class CommandTag : uint8_t
 	DebugLandSkip = 59,
 	EditorVillagerEdit = 60,
 	EditorCreatureSpawn = 61,
+	EditorLandStroke = 62,
+	EditorPath = 63,
 };
 
 /// The sizes of the parts of the frames, in bytes

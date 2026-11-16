@@ -989,8 +989,10 @@ void openblack::InitializeLevelOnOpenLand(OpenLandAltitudes altitudes)
 			return;
 		}
 		const auto restored = Locator::terrainSystem::value().RestoreBuiltAltitudes();
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The level keeps its land: {} cells went back to their built altitude",
-		                   restored);
+		const auto countries = Locator::terrainSystem::value().RestoreBuiltCountries();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The level keeps its land: {} cells went back to their built altitude and {} to their built country",
+		                   restored, countries);
 	});
 }
 

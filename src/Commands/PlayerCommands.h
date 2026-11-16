@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureMarks.h"
@@ -732,6 +733,47 @@ struct EditorCreatureSpawn
 	[[nodiscard]] bool operator==(const EditorCreatureSpawn&) const = default;
 };
 
+/// A stroke of the land brush of the editor: it raises or lowers the land, or paints its country, in a circle round a
+/// point. Each computer does the stroke on its own land at the same turn. Only a player with the editor claim sends it in
+/// a network game, and the game server refuses it from every other player.
+struct EditorLandStroke
+{
+	/// The mode of the brush (editor::land_brush::Mode): raise, lower or paint
+	uint8_t mode {0};
+	/// The radius of the circle that takes the full change, in metres
+	float innerRadius {0.0f};
+	/// The radius of the circle out of which nothing changes, in metres
+	float outerRadius {0.0f};
+	/// The altitude steps that a corner in the inner circle goes up or down
+	uint8_t step {0};
+	/// The country that a paint gives, an index into the countries of the land
+	uint8_t country {0};
+	/// The middle of the stroke on the land, x and z in metres
+	glm::vec2 centre {0.0f};
+
+	[[nodiscard]] bool operator==(const EditorLandStroke&) const = default;
+};
+
+/// The most points of a path of the editor
+inline constexpr size_t k_MostEditorPathPoints = 256;
+
+/// A footpath or a stream that the editor drew, point by point. Each computer makes it at the same turn, and the land of
+/// that turn gives the height of each point. Only a player with the editor claim sends it in a network game, and the game
+/// server refuses it from every other player.
+struct EditorPath
+{
+	/// The kind of the path (editor::paths::Kind): a footpath or a stream
+	uint8_t kind {0};
+	/// The points of the path on the land, x and z in metres, in the order of the clicks
+	std::vector<glm::vec2> points;
+	/// The building that the first point of a footpath is on, which the footpath leads from. None for no building.
+	entt::entity firstHolder {entt::null};
+	/// The building that the last point of a footpath is on. None for no building.
+	entt::entity lastHolder {entt::null};
+
+	[[nodiscard]] bool operator==(const EditorPath&) const = default;
+};
+
 /// A debug cheat of the player of the command goes on or off (debug_cheats::Cheat). Only a player with the editor claim sends
 /// it in a network game, and the game server refuses it from every other player.
 struct DebugCheat
@@ -752,15 +794,15 @@ struct DebugLandSkip
 };
 
 /// What a command does
-using Action =
-    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
-                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
-                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
-                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
-                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap, FishScare,
-                 ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit, DebugCheat,
-                 EditorCreatureEdit, EditorCreatureAct, DebugLandSkip, EditorVillagerEdit, EditorCreatureSpawn>;
+using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
+                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
+                            GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
+                            CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
+                            DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut,
+                            HandLockRelease, EditorEdit, DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip,
+                            EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke, EditorPath>;
 
 /// A command and the player that sent it
 struct Command
@@ -788,7 +830,8 @@ struct Command
 	return std::holds_alternative<EditorEdit>(action) || std::holds_alternative<DebugCheat>(action) ||
 	       std::holds_alternative<EditorCreatureEdit>(action) || std::holds_alternative<EditorCreatureAct>(action) ||
 	       std::holds_alternative<EditorVillagerEdit>(action) || std::holds_alternative<EditorCreatureSpawn>(action) ||
-	       std::holds_alternative<DebugLandSkip>(action);
+	       std::holds_alternative<DebugLandSkip>(action) || std::holds_alternative<EditorLandStroke>(action) ||
+	       std::holds_alternative<EditorPath>(action);
 }
 
 /// Whether the game server refuses the command from every player, also from a player with the editor claim. A network game
@@ -799,15 +842,16 @@ struct Command
 }
 
 /// Whether the game server takes the command from an observer. An observer with the editor claim also sends the edits of the
-/// editor, also the edits, the acts, the new creatures and the tattoos of a creature, and the edits of a villager. The god of
-/// the observers has no citadel, so an observer sends no debug cheat.
+/// editor, also the edits, the acts, the new creatures and the tattoos of a creature, the edits of a villager, and the
+/// strokes and the paths of the land tools. The god of the observers has no citadel, so an observer sends no debug cheat.
 [[nodiscard]] constexpr bool ServerTakesFromObserver(const Action& action, bool editor) noexcept
 {
 	return ObserverSends(action) ||
 	       (editor &&
 	        (std::holds_alternative<EditorEdit>(action) || std::holds_alternative<EditorCreatureEdit>(action) ||
 	         std::holds_alternative<EditorCreatureAct>(action) || std::holds_alternative<EditorCreatureSpawn>(action) ||
-	         std::holds_alternative<EditorVillagerEdit>(action) || std::holds_alternative<CreatureTattoo>(action)));
+	         std::holds_alternative<EditorVillagerEdit>(action) || std::holds_alternative<CreatureTattoo>(action) ||
+	         std::holds_alternative<EditorLandStroke>(action) || std::holds_alternative<EditorPath>(action)));
 }
 
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that
