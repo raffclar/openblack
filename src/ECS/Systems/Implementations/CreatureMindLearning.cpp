@@ -309,6 +309,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	// With nothing it did lately to credit the feedback to, it learns nothing from it
 	if (context == nullptr)
 	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} has nothing that it did to learn from the feedback",
+		                    entt::to_integral(creature));
 		return;
 	}
 	const auto strength = creature_learning::Strengthened(feedback);
@@ -374,6 +376,8 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	context->credited = strength;
 	// It is taught: the player has dealt with it
 	mind.attention.turnsSinceInteraction = 0;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} learns from the feedback {} for desire {} (it can learn it: {})",
+	                    entt::to_integral(creature), strength, d, tables->rules.at(d).learnable);
 	if (tables->rules.at(d).learnable)
 	{
 		creature_learning::LearnDesireLesson(desires, desire, creature_learning::DominantSource(desires[desire]), strength,

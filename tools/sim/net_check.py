@@ -1329,7 +1329,9 @@ def place_row(pid, place_type, copies, start, step):
 def editor_desync(pids, case):
     """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
     "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
-    second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. Every
+    second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. With "animals"
+    it puts down each row of the animals' table, and with "creature-remove" it removes a wild creature and the creature
+    of a player. Every
     computer must then have the same checksums: net_check compares them for each turn. Returns what each step sent."""
     editor = pids[0]
     done = {"case": case, "sent": []}
@@ -1417,8 +1419,124 @@ def editor_desync(pids, case):
                 time.sleep(1.0)
             turn = inspector_answer(editor, "editor.network_edit", {"params": {
                 "kind": "turn", "id": thing["id"], "radians": 0.9}})
-            done["sent"].append({kind: thing["id"], "moves": moves, "turn": turn})
             time.sleep(1.0)
+            # The thing grows, then becomes small, as the scale field of the entity panel sends it
+            scales = []
+            for scale in (1.75, 0.6):
+                scales.append(inspector_answer(editor, "editor.network_edit", {"params": {
+                    "kind": "scale", "id": thing["id"], "scale": scale}}))
+                time.sleep(1.0)
+            done["sent"].append({kind: thing["id"], "moves": moves, "turn": turn, "scales": scales})
+            if kind == "Villager":
+                # Each field of the villager changes, as the villager section of the entity panel sends it
+                fields = []
+                for field, values in (("life", {"amount": 0.4}), ("food", {"amount": 2.5}), ("age", {"number": 50}),
+                                      ("sex", {"number": 1}), ("state", {"index": 1, "number": 1})):
+                    fields.append(inspector_answer(editor, "editor.villager_edit", {"params": dict(
+                        values, id=thing["id"], field=field)}))
+                    time.sleep(0.5)
+                done["sent"].append({"villager_fields": fields})
+            time.sleep(1.0)
+    if case in ("spawn", "all"):
+        # The creature tools put down creatures of three species with other sizes and bodies, then one grows
+        made = []
+        for index, (species, scale) in enumerate(((4, 1.5), (13, 0.8), (17, 2.0))):
+            made.append(inspector_answer(editor, "editor.creature_spawn", {"params": {
+                "species": species, "position": [focus[0] + 20.0 * index, focus[2] + 15.0], "owner": index % 2,
+                "radians": 0.5 * index, "scale": scale, "alignment": -0.5 + 0.5 * index, "fatness": 0.3,
+                "strength": 0.7}}))
+            time.sleep(1.0)
+        done["sent"].append({"spawns": made})
+    if case in ("animals", "all"):
+        done["animals"] = editor_animals(pids, focus)
+    if case in ("creature-remove", "all"):
+        done["creature_remove"] = editor_creature_remove(pids, focus)
+        if done["creature_remove"].get("error"):
+            done.setdefault("errors", []).append(done["creature_remove"]["error"])
+    return done
+
+
+# The kind of the palette for an animal of the land (editor::PlaceKind::Animal)
+ANIMAL_PLACE_KIND = 11
+# The player of a wild creature (PlayerNames::NEUTRAL), and the god of the second client (PlayerNames::PLAYER_TWO)
+NEUTRAL_PLAYER = 7
+SECOND_PLAYER = 1
+
+
+def animal_count(pid):
+    """The turn of the client and the count of its animals, from the record of the game now"""
+    sample = inspector_answer(pid, "sim.sample", {}) or {}
+    return [sample.get("turn"), (sample.get("counts") or {}).get("Animal")] if isinstance(sample, dict) else [None, None]
+
+
+def editor_animals(pids, focus):
+    """The editor puts down each row of the animals' table near the camera, two times. Only the animal kinds of the
+    palette make an animal, on every computer. Returns the rows sent, and the turn and the count of the animals of each
+    client before and after."""
+    editor = pids[0]
+    rows = items_of(inspector_answer(editor, "edit.kinds", {"params": {"kind": "animal"}}))
+    done = {"rows": len(rows), "before": [animal_count(pid) for pid in pids], "sent": 0}
+    for round_index in range(2):
+        for row in rows:
+            answer = inspector_answer(editor, "editor.network_edit", {"params": {
+                "kind": "place", "place_kind": ANIMAL_PLACE_KIND, "place_type": row.get("type", 0),
+                "position": [focus[0] - 40.0 + (row.get("type", 0) % 8) * 10.0,
+                             focus[2] - 20.0 + (row.get("type", 0) // 8) * 10.0 + round_index * 25.0],
+                "radians": 0.4 * round_index}})
+            done["sent"] += 1 if isinstance(answer, dict) and answer.get("sent") else 0
+            time.sleep(0.3)
+    time.sleep(3.0)
+    done["after"] = [animal_count(pid) for pid in pids]
+    return done
+
+
+def editor_creature_remove(pids, focus):
+    """The editor removes a wild creature and the creature of a player. When the land has no such creature, the
+    creature tools put one down first: a creature of the second god, and a creature of no god. Every client must then
+    have neither creature. Returns what each step sent."""
+    editor = pids[0]
+
+    def creatures():
+        return [item["id"] for item in items_of(inspector_answer(editor, "objects.find", {"params": {
+            "near": [focus[0], focus[2]], "radius": 6000.0, "kind": "Creature", "limit": 64}}))]
+
+    def primaries():
+        players = items_of(inspector_answer(editor, "players.list", {}))
+        return {item.get("primary_creature") for item in players
+                if isinstance(item.get("primary_creature"), int) and item.get("primary_creature") > 0}
+
+    def spawn(owner, offset):
+        """Puts down a creature of the owner with the creature tools. Returns its id, or None."""
+        before = set(creatures())
+        done.setdefault("spawns", []).append(inspector_answer(editor, "editor.creature_spawn", {"params": {
+            "species": 4, "position": [focus[0] + offset, focus[2] - 25.0], "owner": owner}}))
+        made = wait_for(lambda: [creature for creature in creatures() if creature not in before], 10.0) or []
+        return made[0] if made else None
+
+    done = {}
+    owned = primaries()
+    done["player_creatures"] = sorted(owned)
+    player_creature = sorted(owned)[-1] if owned else spawn(SECOND_PLAYER, 25.0)
+    wild = [creature for creature in creatures() if creature not in owned and creature != player_creature]
+    wild_creature = wild[0] if wild else spawn(NEUTRAL_PLAYER, -25.0)
+    if wild_creature is None or player_creature is None:
+        done["error"] = f"no wild creature ({wild_creature}) or no creature of a player ({player_creature})"
+        return done
+    targets = [wild_creature, player_creature]
+    done["removed"] = targets
+    done["answers"] = []
+    for creature in targets:
+        done["answers"].append(inspector_answer(editor, "editor.network_edit", {"params": {
+            "kind": "remove", "id": creature}}))
+        time.sleep(1.0)
+    time.sleep(3.0)
+    done["left"] = []
+    for pid in pids:
+        found = {item["id"] for item in items_of(inspector_answer(pid, "objects.find", {"params": {
+            "near": [focus[0], focus[2]], "radius": 6000.0, "kind": "Creature", "limit": 64}}))}
+        done["left"].append(sorted(found & set(targets)))
+    if any(done["left"]):
+        done["error"] = f"a client still has a removed creature: {done['left']}"
     return done
 
 
@@ -2308,11 +2426,15 @@ def main():
                              "--hold-after turns "
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
-    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "all"),
+    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
+                                                    "creature-remove", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
-                             "camera (creature), or moves and turns a building, a tree, a feature and a villager "
-                             "(objects), or all of them; every computer must keep the same checksums")
+                             "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
+                             "and changes the fields of the villager (objects), or puts down creatures with the creature "
+                             "tools (spawn), or puts down each row of the animals' table two times (animals), or "
+                             "removes a wild creature and the creature of a player (creature-remove), or all of them; "
+                             "every computer must keep the same checksums")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
     parser.add_argument("--forest-camera", action="store_true",

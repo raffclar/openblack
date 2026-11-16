@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <string_view>
 
 #include <entt/entity/entity.hpp>
 
@@ -70,5 +71,15 @@ bool ApplyCreatureEdit(ecs::Registry& registry, const player_commands::EditorCre
 
 /// Sends a change of a value of a creature as a command of the turns. The change comes at the next turn.
 void SendCreatureEdit(entt::entity creature, creature_edit_values::Value value, float amount);
+
+/// Why the world does not make a new creature of the editor, or none when it makes it. The rules keep no state.
+[[nodiscard]] std::optional<std::string_view> CreatureSpawnRefusal(const player_commands::EditorCreatureSpawn& spawn) noexcept;
+
+/// Makes a new creature of the editor at the turn, as each computer of a network game does it. Gives the creature, or
+/// entt::null when the world refused it.
+entt::entity ApplyCreatureSpawn(const player_commands::EditorCreatureSpawn& spawn);
+
+/// Sends a new creature of the creature tools as a command of the turns. The creature comes at the next turn.
+void SendCreatureSpawn(const player_commands::EditorCreatureSpawn& spawn);
 
 } // namespace openblack::editor

@@ -13,6 +13,7 @@
 
 #include <iterator>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -60,6 +61,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -288,6 +290,41 @@ void RunEditorCreatureAct(openblack::PlayerNames player, const EditorCreatureAct
 	}
 }
 
+/// Do an edit of a villager by the editor at the turn. The game server takes the edits only from a player with the editor
+/// claim.
+void RunEditorVillagerEdit(openblack::PlayerNames player, const EditorVillagerEdit& edit, uint32_t turn)
+{
+	if (!openblack::Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	const auto* actions =
+	    openblack::Locator::livingActionSystem::has_value() ? &openblack::Locator::livingActionSystem::value() : nullptr;
+	const bool done = openblack::editor::ApplyVillagerEdit(openblack::Locator::entitiesRegistry::value(), actions, edit);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} the field {} of villager {}", turn,
+		                   static_cast<int>(player), done ? "sets" : "cannot set", static_cast<int>(edit.field),
+		                   static_cast<uint32_t>(entt::to_integral(edit.villager)));
+	}
+}
+
+/// Make a new creature of the creature tools of the editor at the turn. The game server takes the new creatures only from a
+/// player with the editor claim.
+void RunEditorCreatureSpawn(openblack::PlayerNames player, const EditorCreatureSpawn& spawn, uint32_t turn)
+{
+	const auto refusal = openblack::editor::CreatureSpawnRefusal(spawn);
+	const auto creature = refusal.has_value() ? entt::entity {entt::null} : openblack::editor::ApplyCreatureSpawn(spawn);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} a creature of species {} for player {}: {}", turn,
+		                   static_cast<int>(player), creature != entt::null ? "makes" : "cannot make",
+		                   static_cast<int>(spawn.species), static_cast<int>(spawn.owner),
+		                   creature != entt::null ? fmt::format("thing {}", entt::to_integral(creature))
+		                                          : std::string(refusal.value_or("the world refused it")));
+	}
+}
+
 /// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a player with the editor
 /// claim.
 void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uint32_t turn)
@@ -370,6 +407,14 @@ void RunObserver(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, EditorCreatureAct>)
 		    {
 			    RunEditorCreatureAct(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorCreatureSpawn>)
+		    {
+			    RunEditorCreatureSpawn(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorVillagerEdit>)
+		    {
+			    RunEditorVillagerEdit(command.player, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
 		    {
@@ -1075,6 +1120,14 @@ void Run(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, EditorCreatureAct>)
 		    {
 			    RunEditorCreatureAct(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorCreatureSpawn>)
+		    {
+			    RunEditorCreatureSpawn(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorVillagerEdit>)
+		    {
+			    RunEditorVillagerEdit(command.player, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, DebugCheat>)
 		    {

@@ -339,13 +339,15 @@ void EditorWindow::PlaceAt(EditorContext& context, glm::vec2 screen) noexcept
 	const auto& item = *_placement.item;
 	if (InNetworkGame())
 	{
-		// The creature tools of this computer make a creature, which the other computers do not have
+		// The creature tools send a creature with their settings, and the other items go as edits
 		if (item.kind == PlaceKind::Creature)
 		{
-			_placement.last = "The editor does not place a creature in a network game";
-			return;
+			static_cast<void>(_spawner.SpawnAt(position, _placement.yawRadians));
 		}
-		static_cast<void>(context.writes.Place(item, position, _placement.yawRadians));
+		else
+		{
+			static_cast<void>(context.writes.Place(item, position, _placement.yawRadians));
+		}
 		_placement.last = fmt::format("Sent {} to {:.0f}, {:.0f}: it comes at the next turn",
 		                              context.names.NameOf(item.kind, item.type), position.x, position.z);
 		return;

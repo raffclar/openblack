@@ -19,6 +19,8 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/DebugCheats.h"
+#include "Editor/EditorCreatureEdits.h"
+#include "Editor/EditorNetworkEdits.h"
 #include "Gui/TextDatabase.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameBuildId.h"
@@ -1090,6 +1092,29 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoEditorClaim),
 		                                                .commands = static_cast<uint32_t>(refused)});
 	}
+	// The server also refuses an edit of the editor with a value that no computer takes, such as a scale out of the range
+	// of the editor. The editor of the game does not send such an edit, so the player gets no line. The log tells each one.
+	const auto badValue = std::erase_if(actions, [this, &peer](const auto& action) {
+		std::optional<std::string_view> refusal;
+		if (const auto* edit = std::get_if<player_commands::EditorEdit>(&action))
+		{
+			refusal = editor::EditRefusal(*edit);
+		}
+		else if (const auto* spawn = std::get_if<player_commands::EditorCreatureSpawn>(&action))
+		{
+			refusal = editor::CreatureSpawnRefusal(*spawn);
+		}
+		else if (const auto* villager = std::get_if<player_commands::EditorVillagerEdit>(&action))
+		{
+			refusal = editor::VillagerEditRefusal(*villager);
+		}
+		if (refusal.has_value())
+		{
+			Log(spdlog::level::warn, fmt::format("The server refuses an edit of the editor of {}: {}", peer.name, *refusal));
+		}
+		return refusal.has_value();
+	});
+	_refusedEditorValues += static_cast<uint32_t>(badValue);
 }
 
 void LockstepHost::LogDebugCheats(const Peer& peer, const std::vector<player_commands::Action>& actions)
@@ -2232,7 +2257,8 @@ snapshots::Room LockstepHost::RoomRecord() const
 		room.seats.push_back({.state = static_cast<uint8_t>(seat.state),
 		                      .session = seat.sessionHash,
 		                      .account = seat.account,
-		                      .name = seat.name});
+		                      .name = seat.name,
+		                      .editor = seat.editor});
 	}
 	for (const auto& watcher : _watchers)
 	{
@@ -2241,6 +2267,7 @@ snapshots::Room LockstepHost::RoomRecord() const
 			room.watchers.push_back(*watcher.sessionHash);
 			room.watcherNames.push_back(watcher.name);
 			room.watcherNumbers.push_back(watcher.number);
+			room.watcherEditors.push_back(watcher.editor);
 		}
 	}
 	for (const auto& [number, name] : _observerArrivals)
@@ -2310,7 +2337,7 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                  .lastBlockInTurn = std::nullopt,
 		                  .blocksAgain = 0,
 		                  .refusedBlocks = 0,
-		                  .editor = false};
+		                  .editor = saved.editor};
 		// The server takes only the blocks after the last block that the sent turns hold
 		if (const auto last = blocks.find(static_cast<uint8_t>(i)); last != blocks.end())
 		{
@@ -2356,7 +2383,7 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                             .resumes = 0,
 		                             .name = std::move(name),
 		                             .number = number,
-		                             .editor = false});
+		                             .editor = i < room.watcherEditors.size() && room.watcherEditors[i]});
 	}
 	// The server takes only the blocks of each observer after the last block that the sent turns hold
 	for (const auto& [key, sequence] : blocks)

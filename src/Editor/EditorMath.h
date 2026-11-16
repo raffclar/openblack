@@ -98,5 +98,7 @@ struct ScreenRect
 [[nodiscard]] glm::vec3 MiddleOf(std::span<const glm::vec3> points);
 /// A point turned about the up axis through a centre, by an angle in radians in the direction of YawRotation
 [[nodiscard]] glm::vec3 TurnedAbout(glm::vec3 point, glm::vec3 centre, float radians);
+/// The scale of a thing with a new scale of its first axis. The other axes keep their ratio to the first axis.
+[[nodiscard]] glm::vec3 ScaledTo(glm::vec3 scale, float firstAxis);
 
 } // namespace openblack::editor

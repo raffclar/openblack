@@ -64,6 +64,9 @@ struct RoomSeat
 	/// The account id of the player in the lobby, and the name of the account
 	std::string account;
 	std::string name;
+	/// The join ticket of the player had the editor claim. The player keeps the claim when it comes back to the server
+	/// that a snapshot restored. A file of format 5 or older has no claims.
+	bool editor {false};
 
 	bool operator==(const RoomSeat&) const = default;
 };
@@ -92,6 +95,9 @@ struct Room
 	std::vector<uint8_t> arrivingNumbers;
 	std::vector<std::string> arrivingNames;
 	std::vector<uint8_t> departingNumbers;
+	/// For each observer of `watchers`, in the same order: true when the join ticket of the observer had the editor
+	/// claim. A file of format 5 or older has no claims.
+	std::vector<bool> watcherEditors;
 
 	bool operator==(const Room&) const = default;
 };

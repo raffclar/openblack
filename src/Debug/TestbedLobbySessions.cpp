@@ -287,6 +287,14 @@ void DemoLobbyRoom::Leave(LobbyCallback<LobbyDone> callback)
 	}
 }
 
+void DemoLobbyRoom::LeaveGame()
+{
+	if (_room != nullptr && online::lobby::HasGameServer(_room->Phase()))
+	{
+		_room->Finish(online::lobby::EndReason::Left);
+	}
+}
+
 void DemoLobbyRoom::Send(std::string_view type, std::string data)
 {
 	if (_room != nullptr)
