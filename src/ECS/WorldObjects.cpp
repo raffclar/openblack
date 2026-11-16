@@ -271,10 +271,7 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	{
 		return Row(info.mobileStatic, MobileStaticInfo::DeadTree);
 	}
-	if (const auto* field = registry.TryGet<const Field>(object))
-	{
-		return Row(info.fieldType, field->type);
-	}
+	// A field is a building of the buildings' table. Its crop row sets only how the crop grows and what food it gives.
 	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
 		return AbodeInfoOf(object);
