@@ -50,6 +50,7 @@
 #include "Graphics/PartialBuildCap.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/SeaRows.h"
+#include "Graphics/TempleRoomOrder.h"
 #include "Graphics/VolumeGlowShell.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleSymbolLayout.h"
@@ -552,8 +553,9 @@ private:
 	void DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) const;
 	/// Draws the models: the entities, the vegetation, the lights of the temple and the sprites
 	void DrawPassModels(const DrawSceneDesc& desc, const ScenePass& pass) const;
-	/// Draws the solid models placed this frame. The threads that encode draws can draw them at the same time.
-	void DrawPassPlacedModels(const DrawSceneDesc& desc, auto& draws) const;
+	/// Draws the solid models placed this frame of one step of the temple's room order. The threads that encode draws can
+	/// draw them at the same time.
+	void DrawPassPlacedModels(const DrawSceneDesc& desc, auto& draws, temple_room_order::Step step) const;
 	/// Draws the creatures, the creatures of the interface and of the menu, and the creatures of the warm-up
 	void DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
 	/// Draws the animals by model, then each thing that is posed by itself
@@ -564,6 +566,11 @@ private:
 	void DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) const;
 	/// Draws the things that blend over the solid models
 	void DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
+	/// Draws all the placed things of the meshes of only blended primitives, of one step of the temple's room order
+	void DrawPassBlendedPlaced(const DrawSceneDesc& desc, auto& draws, temple_room_order::Step step,
+	                           const auto& sortDepthOf) const;
+	/// In the temple, draws the meshes of the rooms that the player is not in, after the room that the player is in
+	void DrawPassOtherTempleRooms(const DrawSceneDesc& desc, const ScenePass& pass, auto& draws) const;
 	/// Draws the temple's pool and map, the seeds, the learning words, the mists, the leashes and the other effects that
 	/// the game adds before the hand
 	void DrawPassEffects(const DrawSceneDesc& desc) const;
