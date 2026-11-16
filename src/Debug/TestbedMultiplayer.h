@@ -89,6 +89,8 @@ enum class Stage : uint8_t
 	/// A game server of another version stops the start: the line of the room and the box that tells the player to
 	/// update the game
 	LobbyServerVersion,
+	/// The lobby list with a session picked whose map has a thumbnail: the picture shows at the right of the filters
+	LobbyMapPicture,
 	/// The events of a joined room give their notices one after the other: a join, a ready, the countdown and a kick
 	LobbyNotices,
 	_Count

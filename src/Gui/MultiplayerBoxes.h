@@ -236,12 +236,16 @@ private:
 	/// The places of the warning symbols of the last draw, for the text under the pointer
 	mutable std::vector<DialogRect> _warningRects;
 
-	// The pictures of the game room
+	// The pictures of the game room and of the lobby list
 	ThumbnailSource _thumbnailSource;
 	/// The land whose thumbnail the room has, and its thumbnail
 	std::optional<size_t> _thumbnailLand;
+	/// The name of the thumbnail of the session that the lobby list shows
+	std::string _lobbyThumbnailName;
 	std::shared_ptr<const land_thumbnail::LandThumbnail> _thumbnail;
 	bool _thumbnailShown {false};
+	/// The place of the thumbnail in the box that shows it
+	DialogRect _thumbnailPlace {land_thumbnail::k_Place};
 	/// The texels of the clan's logo; empty when the clan has no logo
 	land_thumbnail::Texels _logoSheet;
 	bool _logoShown {false};

@@ -114,6 +114,9 @@ enum class ListButton : uint8_t
 [[nodiscard]] bool ShowsJoinButton(const lobby_api::LobbySummary* picked, std::string_view rejoinId = {});
 /// The session that the list picks: the session that the player clicked, else the game to rejoin
 [[nodiscard]] std::string_view PickedLobby(std::string_view clicked, std::string_view rejoinId);
+/// The name of the thumbnail of a session's map: the map's file name with no folder and no extension, in lower case.
+/// The picture comes from "Online Maps/<name>.thm". Empty when the map is not a land of a network game.
+[[nodiscard]] std::string ThumbnailName(const lobby_api::LobbyMap& map);
 
 /// What a join of the picked session does
 enum class JoinStep : uint8_t
