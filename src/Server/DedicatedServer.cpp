@@ -1407,8 +1407,8 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		                   settings.network->gameId, lobby->id, online::build_id::Own(), start.land, landSha256Logged, members);
 	}
 	lifetime.Listened();
-	world.SetNetwork([&host, role = network.get(), keeper, &lifetime, desyncs,
-	                  appliedSpeed = std::optional<float> {}]() mutable {
+	world.SetNetwork([&host, role = network.get(), keeper, &lifetime, desyncs, appliedSpeed = std::optional<float> {},
+	                  appliedChanges = uint32_t {0}]() mutable {
 		// After a restart, the world first does again the turns that the server sent. The server reads no socket until then.
 		if (host.Replaying())
 		{
@@ -1417,14 +1417,16 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		role->Update();
 		desyncs->Update();
 		// The world of the server turns at the speed of the clock of the room, as the world of each player does. After a
-		// restart the room starts again at the normal speed. A fast room gives more turns than one in a frame, so the
-		// server then plays more turns in a frame.
-		if (const auto speed = host.RoomClock().speed; speed != appliedSpeed)
+		// restart the room starts again at the normal speed. A world file or a scenario of the editor sets the speed of
+		// the clock of its world, so the server gives the clock the speed of the room again after each change of the world.
+		// A fast room gives more turns than one in a frame, so the server then plays more turns in a frame.
+		if (const auto speed = host.RoomClock().speed; speed != appliedSpeed || host.WorldChanges() != appliedChanges)
 		{
 			auto& clock = Locator::time::value();
 			clock.SetSpeed(online::room_clock::ClockSpeedOf(speed));
 			clock.SetMostTurnsInFrame(online::room_clock::ServerTurnsInFrame(speed, clock.GetFixedFrameTime()));
 			appliedSpeed = speed;
+			appliedChanges = host.WorldChanges();
 		}
 		if (role->HostReportDue())
 		{
