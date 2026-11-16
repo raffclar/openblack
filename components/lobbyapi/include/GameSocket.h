@@ -126,6 +126,9 @@ struct Start
 	/// The time limit of the game in minutes ("time_limit", optional). Every computer decides the game at the same turn
 	/// when the time is up. None: the default time limit of the game.
 	std::optional<uint32_t> timeLimit;
+	/// The id of the game in the lobby ("game_id", optional). The desync events of the server and of the clients of one
+	/// game carry this id. Empty: the server has no lobby id, and each client makes its own id.
+	std::string gameId;
 	/// The winning conditions of the game ("conditions", optional). Each god gets each condition at the start. Empty: the
 	/// game has no winning conditions.
 	std::vector<ConditionValue> conditions;
@@ -341,6 +344,8 @@ struct LoadWait
 	[[nodiscard]] bool operator==(const LoadWait&) const = default;
 };
 
+/// The most characters of the game id in a "game.start" frame
+inline constexpr size_t k_MostGameIdCharacters = 64;
 /// The most parts in a "sync.parts" frame
 inline constexpr size_t k_MostSyncParts = 4096;
 /// The most bytes of the name of a part in a "sync.parts" frame

@@ -1093,6 +1093,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .aiSeed = settings.soak.aiSeed,
 	    .scenario = settings.scenario,
 	    .timeLimit = settings.timeLimit.value_or(game_end::k_DefaultTimeLimitMinutes),
+	    .gameId = settings.network.has_value() ? settings.network->gameId : std::string(),
 	    .conditions = {},
 	    .gods = {},
 	};
