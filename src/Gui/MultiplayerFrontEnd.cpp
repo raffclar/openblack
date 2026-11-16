@@ -762,10 +762,10 @@ void MultiplayerFrontEnd::FollowLanChat()
 			const auto god = place.has_value() ? std::optional(_seats[*place].god) : std::nullopt;
 			_chat.push_back(ReceivedChatLine(from, text, privacy, god));
 		}
-		// The log keeps who spoke, never the words
+		// The log keeps that a line came, never who spoke or the words
 		if (auto logger = spdlog::get("game"))
 		{
-			logger->info("A chat line from {} came on the room's game server", line.from);
+			logger->info("A chat line came on the room's game server");
 		}
 	}
 }

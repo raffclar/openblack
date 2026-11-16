@@ -119,6 +119,22 @@ TEST(ErrorReports, TheGameServerAttachesNoLogFile)
 	EXPECT_EQ(LogAttachmentOf(Role::Server, "logs/game.log"), std::nullopt);
 }
 
+TEST(ErrorReports, OnlyAReportWithPersonalDataAttachesTheLog)
+{
+	const std::optional<std::filesystem::path> log = std::filesystem::path("logs/openblack.log");
+	EXPECT_EQ(LogAttachmentFor(log, true), log);
+	EXPECT_EQ(LogAttachmentFor(log, false), std::nullopt);
+	EXPECT_EQ(LogAttachmentFor(std::nullopt, true), std::nullopt);
+	// The choices Anonymous and Off never give personal data, and the log stays at home
+	for (const auto consent : {ReportsConsent::Anonymous, ReportsConsent::Off})
+	{
+		const auto plan = ReportsPlanOf(true, AccountConsent {.choice = consent, .accountId = "7", .name = "Name"});
+		EXPECT_EQ(LogAttachmentFor(log, plan.personalData), std::nullopt);
+	}
+	const auto full = ReportsPlanOf(true, AccountConsent {.choice = ReportsConsent::Full, .accountId = "7", .name = "Name"});
+	EXPECT_EQ(LogAttachmentFor(log, full.personalData), log);
+}
+
 TEST(ErrorReports, TheChoiceOfTheLobbyReadsBackAsWritten)
 {
 	for (const auto consent : {ReportsConsent::Full, ReportsConsent::Anonymous, ReportsConsent::Off})

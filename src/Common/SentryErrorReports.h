@@ -32,7 +32,7 @@ struct SentrySettings
 	std::string release;
 	std::string environment;
 	Role role {Role::Client};
-	/// The log file that each report attaches
+	/// The log file that a report attaches when it has personal data (LogAttachmentFor)
 	std::optional<std::filesystem::path> attachment;
 	/// The folder of the reports that wait to go
 	std::filesystem::path databaseFolder;
@@ -85,6 +85,10 @@ private:
 	bool _enabled {false};
 	std::optional<AccountConsent> _account;
 	bool _personalData {false};
+	/// The running service attaches the log file to its reports
+	bool _logAttached {false};
+	/// The next start of the service attaches the log file
+	bool _attachLog {false};
 	/// The id of the account that the reports name now, or empty
 	std::string _namedAccount;
 	uint32_t _desyncEvents {0};

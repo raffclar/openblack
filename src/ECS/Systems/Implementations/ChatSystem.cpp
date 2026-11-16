@@ -150,11 +150,12 @@ void ChatSystem::Arrive(PlayerNames sender, std::span<const PlayerNames> recipie
 			}
 		}
 	}
-	// The game's log has each line that comes in, for the checks of a network game
+	// The game's log has each line that comes in, for the checks of a network game. It has the length of the line and
+	// never the words, because the players type them.
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
 	{
-		SPDLOG_LOGGER_INFO(logger, "Chat: turn {} god {} says \"{}\" to {} players, shown here: {}",
-		                   _services.turn ? _services.turn() : 0, static_cast<int>(sender), gui::ToUtf8(text),
+		SPDLOG_LOGGER_INFO(logger, "Chat: turn {} god {} says {} characters to {} players, shown here: {}",
+		                   _services.turn ? _services.turn() : 0, static_cast<int>(sender), text.size(),
 		                   recipients.empty() ? std::string("all") : std::to_string(recipients.size()), shown);
 	}
 	_received.push_back({.sender = sender,
