@@ -33,6 +33,7 @@
 #include "Server/GameLifetime.h"
 #include "Server/LobbyBans.h"
 #include "Server/LobbyStatus.h"
+#include "Server/ServerLogNames.h"
 
 namespace openblack::server
 {
@@ -281,6 +282,11 @@ void LockstepHost::BroadcastBinary(std::span<const uint8_t> bytes)
 	}
 }
 
+std::string LockstepHost::Who(const Peer& peer)
+{
+	return log_names::PlayerOf(peer.seat, peer.observer, peer.joined);
+}
+
 std::string LockstepHost::WhoIs(ConnectionId connection) const
 {
 	const auto found = _peers.find(connection);
@@ -288,16 +294,11 @@ std::string LockstepHost::WhoIs(ConnectionId connection) const
 	{
 		return "not known";
 	}
-	const auto name = PeerName(connection, found->second);
 	if (!found->second.joined)
 	{
-		return name.empty() ? std::string("not joined") : fmt::format("{}, not joined", name);
+		return "not joined";
 	}
-	if (found->second.seat.has_value())
-	{
-		return fmt::format("{}, slot {}", name, *found->second.seat);
-	}
-	return fmt::format("{}, observer {}", name, found->second.observer);
+	return Who(found->second);
 }
 
 void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std::string_view detail, std::string_view path)
@@ -727,14 +728,14 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	if (const auto refusal = lobby_game::BuildRefusal(_settings.buildId, join.build, _settings.lobby.has_value());
 	    refusal.has_value())
 	{
-		Log(spdlog::level::info, fmt::format("{} has the build \"{}\", not the build \"{}\" of the server", claims.name,
-		                                     join.build, _settings.buildId));
+		Log(spdlog::level::info, fmt::format("Connection {} has the build \"{}\", not the build \"{}\" of the server",
+		                                     connection, join.build, _settings.buildId));
 		Refuse(connection, *refusal);
 		return;
 	}
 	if (const auto refusal = lobby_game::MapRefusal(_settings.mapSha256, join.map); refusal.has_value())
 	{
-		Log(spdlog::level::info, fmt::format("{} has another file of the land: SHA-256 {}", claims.name, join.map));
+		Log(spdlog::level::info, fmt::format("Connection {} has another file of the land: SHA-256 {}", connection, join.map));
 		Refuse(connection, *refusal);
 		return;
 	}
@@ -747,7 +748,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		if (admission != lobby_game::Admission::Member)
 		{
 			Log(spdlog::level::info,
-			    fmt::format("The server refuses the account {}: {}", claims.subject, lobby_game::AdmissionName(admission)));
+			    fmt::format("The server refuses connection {}: {}", connection, lobby_game::AdmissionName(admission)));
 			Refuse(connection, "ticket");
 			return;
 		}
@@ -755,14 +756,15 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	// The lobby's host can kick or ban an account also after the start: the server refuses the account in every role
 	if (!lan && lobby_bans::IsBanned(claims.subject, _bans))
 	{
-		Log(spdlog::level::info, fmt::format("The lobby removed the account {}: the server refuses it", claims.subject));
+		Log(spdlog::level::info,
+		    fmt::format("The lobby removed the account of connection {}: the server refuses it", connection));
 		Refuse(connection, "kicked");
 		return;
 	}
 	// The room takes nobody new during the start
 	if (Starting())
 	{
-		Refuse(connection, "started", fmt::format("{} joins during the start of the game", claims.name));
+		Refuse(connection, "started", "a player joins during the start of the game");
 		return;
 	}
 	if (_started)
@@ -781,27 +783,27 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		// The room refuses a god that the lobby banned, as the host's channel refuses a banned player
 		if (lobby_bans::IsBanned(claims.subject, _bans))
 		{
-			Refuse(connection, "kicked", fmt::format("the lobby banned {}", claims.name));
+			Refuse(connection, "kicked", "the lobby banned the account");
 			return;
 		}
 		const auto same = std::ranges::find_if(
 		    _seats, [&claims](const Seat& seat) { return seat.state != SeatState::Open && seat.account == claims.subject; });
 		if (same != _seats.end())
 		{
-			Refuse(connection, "already", fmt::format("{} already has the god of slot {}", claims.name, same - _seats.begin()));
+			Refuse(connection, "already", fmt::format("the player already has the god of slot {}", same - _seats.begin()));
 			return;
 		}
 		const auto free = std::ranges::find(_seats, SeatState::Open, &Seat::state);
 		if (free == _seats.end() && !lan)
 		{
-			Refuse(connection, "full", fmt::format("{} finds each of the {} god slots taken", claims.name, _seats.size()));
+			Refuse(connection, "full", fmt::format("the player finds each of the {} god slots taken", _seats.size()));
 			return;
 		}
 		// A member of the lobby with a slot takes that slot
 		if (member != nullptr && member->slot.has_value() &&
 		    (*member->slot >= _seats.size() || _seats.at(*member->slot).state != SeatState::Open))
 		{
-			Log(spdlog::level::info, fmt::format("The slot {} of {} is not free in the room", *member->slot, claims.name));
+			Log(spdlog::level::info, fmt::format("The slot {} of the player is not free in the room", *member->slot));
 			Refuse(connection, "full");
 			return;
 		}
@@ -841,7 +843,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		peer.seat = seat;
 		joined.slot = seat;
 		joined.session = free->session;
-		Log(spdlog::level::info, fmt::format("{} joins as the god of slot {}", claims.name, seat));
+		Log(spdlog::level::info, fmt::format("The player of god {} joins", seat));
 		WaitForGodsOfTicket(claims);
 	}
 	else
@@ -854,7 +856,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		peer.observer = ObserverCame(claims.name);
 		joined.observer = peer.observer;
 		joined.session = NewWatcher(connection, claims.name, peer.observer, claims.editor, claims.debugger);
-		Log(spdlog::level::info, fmt::format("{} joins as observer {}", claims.name, peer.observer));
+		Log(spdlog::level::info, fmt::format("An observer joins as observer {}", peer.observer));
 	}
 	peer.joined = true;
 	peer.role = claims.role;
@@ -866,7 +868,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	{
 		Log(spdlog::level::info, fmt::format("{} has the editor claim: the server takes the edits and the debug cheats of "
 		                                     "this player",
-		                                     claims.name));
+		                                     log_names::Capitalised(Who(peer))));
 	}
 	SendTo(connection, joined);
 }
@@ -1130,7 +1132,7 @@ void LockstepHost::TimeFrom(ConnectionId connection, const Peer& peer, const gam
 		++_refusedTimeRequests;
 		Log(spdlog::level::warn,
 		    fmt::format("The server refuses the request \"{}\" of the clock from {}: {}", game_socket::TimeActName(request.act),
-		                peer.name, room_clock::RefusalText(*refusal)));
+		                Who(peer), room_clock::RefusalText(*refusal)));
 		const auto reason =
 		    *refusal == room_clock::Refusal::NoRight ? game_socket::k_NoEditorClaim : game_socket::k_TimeRefused;
 		SendTo(connection, game_socket::CommandRefused {.reason = std::string(reason), .commands = 1});
@@ -1140,18 +1142,20 @@ void LockstepHost::TimeFrom(ConnectionId connection, const Peer& peer, const gam
 	switch (request.act)
 	{
 	case game_socket::TimeAct::Pause:
-		Log(spdlog::level::info,
-		    fmt::format("{} paused the game after turn {}: the server sends no turns", peer.name, _turnsDone));
+		Log(spdlog::level::info, fmt::format("{} paused the game after turn {}: the server sends no turns",
+		                                     log_names::Capitalised(Who(peer)), _turnsDone));
 		break;
 	case game_socket::TimeAct::Play:
-		Log(spdlog::level::info, fmt::format("{} started the game again after turn {}", peer.name, _turnsDone));
+		Log(spdlog::level::info,
+		    fmt::format("{} started the game again after turn {}", log_names::Capitalised(Who(peer)), _turnsDone));
 		break;
 	case game_socket::TimeAct::Step:
-		Log(spdlog::level::info, fmt::format("{} asked for one turn after turn {}", peer.name, _turnsDone));
+		Log(spdlog::level::info,
+		    fmt::format("{} asked for one turn after turn {}", log_names::Capitalised(Who(peer)), _turnsDone));
 		break;
 	case game_socket::TimeAct::Speed:
 		Log(spdlog::level::info, fmt::format("{} set the time of a turn to {:.2f} times a tenth of a second after turn {}",
-		                                     peer.name, _roomClock.speed, _turnsDone));
+		                                     log_names::Capitalised(Who(peer)), _roomClock.speed, _turnsDone));
 		break;
 	}
 	// With the rule, every player sees a line. Without it, each computer sets its clock but shows no line.
@@ -1238,7 +1242,7 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		_refusedEditorCommands += static_cast<uint32_t>(refusedSkips);
 		Log(spdlog::level::warn,
 		    fmt::format("The server refuses {} skips to a land of the story of {}: a network game has none", refusedSkips,
-		                peer.name));
+		                Who(peer)));
 		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoStoryLands),
 		                                                .commands = static_cast<uint32_t>(refusedSkips)});
 	}
@@ -1251,7 +1255,7 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		_refusedEditorCommands += static_cast<uint32_t>(refused);
 		Log(spdlog::level::warn,
 		    fmt::format("The server refuses {} edit or cheat commands of {}: the join ticket has no editor claim", refused,
-		                peer.name));
+		                Who(peer)));
 		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoEditorClaim),
 		                                                .commands = static_cast<uint32_t>(refused)});
 	}
@@ -1264,7 +1268,7 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		_refusedDebuggerCommands += static_cast<uint32_t>(noDebugger);
 		Log(spdlog::level::warn,
 		    fmt::format("The server refuses {} acts of the debug windows of {}: the join ticket has no debugger claim",
-		                noDebugger, peer.name));
+		                noDebugger, Who(peer)));
 		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoDebuggerClaim),
 		                                                .commands = static_cast<uint32_t>(noDebugger)});
 	}
@@ -1273,7 +1277,7 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		if (refusal.has_value())
 		{
 			Log(spdlog::level::warn,
-			    fmt::format("The server refuses an act of the debug windows of {}: {}", peer.name, *refusal));
+			    fmt::format("The server refuses an act of the debug windows of {}: {}", Who(peer), *refusal));
 		}
 		return refusal.has_value();
 	});
@@ -1330,7 +1334,7 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		}
 		if (refusal.has_value())
 		{
-			Log(spdlog::level::warn, fmt::format("The server refuses an edit of the editor of {}: {}", peer.name, *refusal));
+			Log(spdlog::level::warn, fmt::format("The server refuses an edit of the editor of {}: {}", Who(peer), *refusal));
 		}
 		return refusal.has_value();
 	});
@@ -1345,7 +1349,7 @@ void LockstepHost::LogDebugCheats(const Peer& peer, const std::vector<player_com
 		{
 			Log(spdlog::level::info, fmt::format("The server takes the debug cheat {} {} of {}, who has the editor claim",
 			                                     debug_cheats::NameOf(static_cast<debug_cheats::Cheat>(cheat->cheat)),
-			                                     cheat->on ? "on" : "off", peer.name));
+			                                     cheat->on ? "on" : "off", Who(peer)));
 		}
 	}
 }
@@ -1507,7 +1511,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	if (!_worldState || _settings.start.scenario.has_value())
 	{
 		Refuse(connection, "started",
-		       fmt::format("{} joins a game that turns, and {}", claims.name,
+		       fmt::format("a player joins a game that turns, and {}",
 		                   _worldState ? "a scenario game takes nobody after the start" : "the server has no world to send"));
 		return;
 	}
@@ -1521,8 +1525,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	});
 	if (own == _seats.end() && ObserversFull())
 	{
-		Refuse(connection, "full",
-		       fmt::format("{} finds the room full of observers ({})", claims.name, _settings.mostObservers));
+		Refuse(connection, "full", fmt::format("a player finds the room full of observers ({})", _settings.mostObservers));
 		return;
 	}
 	auto start = _settings.start;
@@ -1562,8 +1565,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 		joined.role = game_socket::Role::God;
 		joined.slot = seat;
 		joined.session = own->session;
-		Log(spdlog::level::info,
-		    fmt::format("{} comes back into the god of slot {} at turn {}", claims.name, seat, _turnsDone));
+		Log(spdlog::level::info, fmt::format("The player of god {} comes back at turn {}", seat, _turnsDone));
 		if (wasAway)
 		{
 			Broadcast(game_socket::PlayerState {.slot = seat, .state = game_socket::PlayerState::State::Back});
@@ -1577,7 +1579,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 		joined.observer = peer.observer;
 		joined.session = NewWatcher(connection, claims.name, peer.observer, claims.editor, claims.debugger);
 		Log(spdlog::level::info,
-		    fmt::format("{} joins the game at turn {} as observer {}", claims.name, _turnsDone, peer.observer));
+		    fmt::format("An observer joins the game at turn {} as observer {}", _turnsDone, peer.observer));
 	}
 	peer.joined = true;
 	peer.name = claims.name;
@@ -2019,7 +2021,7 @@ void LockstepHost::EditorMindFileFrom(ConnectionId connection, const Peer& peer,
 	{
 		++_refusedEditorCommands;
 		Log(spdlog::level::warn,
-		    fmt::format("The server refuses a mind file of {}: the join ticket has no editor claim", peer.name));
+		    fmt::format("The server refuses a mind file of {}: the join ticket has no editor claim", Who(peer)));
 		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoEditorClaim), .commands = 1});
 		return;
 	}
@@ -2028,7 +2030,7 @@ void LockstepHost::EditorMindFileFrom(ConnectionId connection, const Peer& peer,
 	{
 		++_refusedEditorValues;
 		Log(spdlog::level::warn, fmt::format("The server refuses a mind file of {} bytes of {}: the file does not read",
-		                                     mind.file.size(), peer.name));
+		                                     mind.file.size(), Who(peer)));
 		return;
 	}
 	const auto size = mind.file.size();
@@ -2039,16 +2041,16 @@ void LockstepHost::EditorMindFileFrom(ConnectionId connection, const Peer& peer,
 		Log(spdlog::level::info,
 		    fmt::format("The server keeps a mind file of the editor of {} bytes (hash {:016x}) of {} and sends it to every "
 		                "player",
-		                size, hash, peer.name));
+		                size, hash, Who(peer)));
 		Broadcast(mind);
 		break;
 	case editor::mind_loads::MindFileStore::Added::Known:
 		// Every player got the file when it came first, or when the player came back
-		Log(spdlog::level::info, fmt::format("The server keeps the mind file {:016x} of {} from before", hash, peer.name));
+		Log(spdlog::level::info, fmt::format("The server keeps the mind file {:016x} of {} from before", hash, Who(peer)));
 		break;
 	case editor::mind_loads::MindFileStore::Added::Refused:
 		++_refusedEditorValues;
-		Log(spdlog::level::warn, fmt::format("The server refuses a mind file of {}: it keeps the most files ({})", peer.name,
+		Log(spdlog::level::warn, fmt::format("The server refuses a mind file of {}: it keeps the most files ({})", Who(peer),
 		                                     editor::mind_loads::k_MostKeptFiles));
 		break;
 	}
@@ -2071,7 +2073,7 @@ void LockstepHost::EditorScriptFileFrom(ConnectionId connection, Peer& peer, con
 		{
 			++_refusedEditorCommands;
 			Log(spdlog::level::warn,
-			    fmt::format("The server refuses a script file of {}: the join ticket has no editor claim", peer.name));
+			    fmt::format("The server refuses a script file of {}: the join ticket has no editor claim", Who(peer)));
 			SendTo(connection,
 			       game_socket::CommandRefused {.reason = std::string(game_socket::k_NoEditorClaim), .commands = 1});
 		}
@@ -2084,7 +2086,7 @@ void LockstepHost::EditorScriptFileFrom(ConnectionId connection, Peer& peer, con
 		++_refusedEditorValues;
 		Log(spdlog::level::warn,
 		    fmt::format("The server refuses a part of the script file {:016x} of {}: the part does not continue the file",
-		                part.hash, peer.name));
+		                part.hash, Who(peer)));
 		return;
 	}
 	if (step == Step::Waiting)
@@ -2098,7 +2100,7 @@ void LockstepHost::EditorScriptFileFrom(ConnectionId connection, Peer& peer, con
 	{
 		++_refusedEditorValues;
 		Log(spdlog::level::warn, fmt::format("The server refuses a script program of {} bytes of {}: the program does not read",
-		                                     file->bytes.size(), peer.name));
+		                                     file->bytes.size(), Who(peer)));
 		return;
 	}
 	const auto size = file->bytes.size();
@@ -2110,7 +2112,7 @@ void LockstepHost::EditorScriptFileFrom(ConnectionId connection, Peer& peer, con
 		Log(spdlog::level::info,
 		    fmt::format("The server keeps a script file of the editor of {} bytes (hash {:016x}) of {} and sends it to every "
 		                "player",
-		                size, hash, peer.name));
+		                size, hash, Who(peer)));
 		for (const auto& out : editor::script_files::SplitFile(kind, _scriptFiles.Find(kind, hash)))
 		{
 			Broadcast(out);
@@ -2118,11 +2120,11 @@ void LockstepHost::EditorScriptFileFrom(ConnectionId connection, Peer& peer, con
 		break;
 	case editor::script_files::FileStore::Added::Known:
 		// Every player got the file when it came first, or when the player came back
-		Log(spdlog::level::info, fmt::format("The server keeps the script file {:016x} of {} from before", hash, peer.name));
+		Log(spdlog::level::info, fmt::format("The server keeps the script file {:016x} of {} from before", hash, Who(peer)));
 		break;
 	case editor::script_files::FileStore::Added::Refused:
 		++_refusedEditorValues;
-		Log(spdlog::level::warn, fmt::format("The server refuses a script file of {}: it keeps the most files ({})", peer.name,
+		Log(spdlog::level::warn, fmt::format("The server refuses a script file of {}: it keeps the most files ({})", Who(peer),
 		                                     editor::script_files::k_MostKeptFiles));
 		break;
 	}
@@ -2160,13 +2162,13 @@ bool LockstepHost::TakesWorldChange(ConnectionId connection, const Peer& peer, s
 	{
 		++_refusedEditorCommands;
 		Log(spdlog::level::warn,
-		    fmt::format("The server refuses {} of {}: the join ticket has no editor claim", what, peer.name));
+		    fmt::format("The server refuses {} of {}: the join ticket has no editor claim", what, Who(peer)));
 		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoEditorClaim), .commands = 1});
 		return false;
 	}
 	if (_stoppedAfter.has_value())
 	{
-		RefuseWorldChange(connection, peer.name, fmt::format("{}: the turns of the game stopped", what));
+		RefuseWorldChange(connection, Who(peer), fmt::format("{}: the turns of the game stopped", what));
 		return false;
 	}
 	return true;
@@ -2194,7 +2196,7 @@ void LockstepHost::EditorWorldFrom(ConnectionId connection, Peer& peer, const ga
 	case online::editor_world::Upload::Added::More:
 		return;
 	case online::editor_world::Upload::Added::Broken:
-		RefuseWorldChange(connection, peer.name,
+		RefuseWorldChange(connection, Who(peer),
 		                  fmt::format("part {} of {} of a world file is not the next part", part.index, part.count));
 		return;
 	case online::editor_world::Upload::Added::Done:
@@ -2203,16 +2205,16 @@ void LockstepHost::EditorWorldFrom(ConnectionId connection, Peer& peer, const ga
 	// The testbed scenario keeps its state out of the world, so a world file would part the scenarios of the computers
 	if (_settings.start.scenario.has_value())
 	{
-		RefuseWorldChange(connection, peer.name, "a room that plays a testbed scenario loads no world file");
+		RefuseWorldChange(connection, Who(peer), "a room that plays a testbed scenario loads no world file");
 		return;
 	}
 	auto file = peer.worldUpload.Take();
 	Log(spdlog::level::info,
-	    fmt::format("{} sends a world file of {} bytes: the world loads it before the next turn", peer.name, file.size()));
+	    fmt::format("{} sends a world file of {} bytes: the world loads it before the next turn", log_names::Capitalised(Who(peer)), file.size()));
 	_worldChange = WorldChange {.kind = WorldChange::Kind::WorldFile,
 	                            .file = std::move(file),
 	                            .scenario = {},
-	                            .by = peer.name,
+	                            .by = Who(peer),
 	                            .seed = 0,
 	                            .players = {}};
 	_worldChangeFrom = connection;
@@ -2228,16 +2230,16 @@ void LockstepHost::EditorScenarioFrom(ConnectionId connection, const Peer& peer,
 	{
 		if (const auto refusal = _scenarioRefusal(scenario.id); refusal.has_value())
 		{
-			RefuseWorldChange(connection, peer.name, fmt::format("the testbed scenario {}: {}", scenario.id, *refusal));
+			RefuseWorldChange(connection, Who(peer), fmt::format("the testbed scenario {}: {}", scenario.id, *refusal));
 			return;
 		}
 	}
 	Log(spdlog::level::info, fmt::format("{} runs the testbed scenario {}: the room starts again on it before the next turn",
-	                                     peer.name, scenario.id));
+	                                     log_names::Capitalised(Who(peer)), scenario.id));
 	_worldChange = WorldChange {.kind = WorldChange::Kind::Scenario,
 	                            .file = {},
 	                            .scenario = scenario.id,
-	                            .by = peer.name,
+	                            .by = Who(peer),
 	                            .seed = _settings.start.seed,
 	                            .players = {}};
 	_worldChangeFrom = connection;
@@ -3116,8 +3118,8 @@ void LockstepHost::CompareClient(uint8_t seat, uint32_t turn, uint64_t checksum)
 	{
 		compares.firstDifferent = turn;
 		Log(spdlog::level::warn,
-		    fmt::format("The world of slot {} ({}) parts from the server's world at turn {} (client {:016x}, server {:016x})",
-		                seat, _seats[seat].name, turn, checksum, own->second));
+		    fmt::format("The world of slot {} parts from the server's world at turn {} (client {:016x}, server {:016x})", seat,
+		                turn, checksum, own->second));
 	}
 	if (compares.compared % k_CompareLogEvery == 0)
 	{
@@ -3163,8 +3165,8 @@ std::vector<std::string> LockstepHost::SummaryLines() const
 			commands += fmt::format("{}{}x{}", commands.empty() ? "" : " ", count, tag);
 		}
 		lines.push_back(fmt::format(
-		    "slot {} {}: commands [{}], {} checksums compared, {} the same, first different {}, {} resumes", i, seat.name,
-		    commands, seat.compares.compared, seat.compares.same,
+		    "slot {}: commands [{}], {} checksums compared, {} the same, first different {}, {} resumes", i, commands,
+		    seat.compares.compared, seat.compares.same,
 		    seat.compares.firstDifferent.has_value() ? std::to_string(*seat.compares.firstDifferent) : std::string("none"),
 		    seat.resumes));
 	}

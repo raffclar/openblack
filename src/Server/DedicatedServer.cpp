@@ -1400,9 +1400,8 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		std::string members;
 		for (const auto& member : lobby->members)
 		{
-			members +=
-			    fmt::format("{}{} ({}{})", members.empty() ? "" : ", ", member.account, game_socket::RoleName(member.role),
-			                member.slot.has_value() ? fmt::format(" of slot {}", *member.slot) : std::string());
+			members += fmt::format("{}{}{}", members.empty() ? "" : ", ", game_socket::RoleName(member.role),
+			                       member.slot.has_value() ? fmt::format(" of slot {}", *member.slot) : std::string());
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game {} of the lobby {}, build {}, land {} (SHA-256 {}): members {}",
 		                   settings.network->gameId, lobby->id, online::build_id::Own(), start.land, landSha256Logged, members);

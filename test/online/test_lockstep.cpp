@@ -44,6 +44,7 @@
 #include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/LockstepHost.h"
 #include "Server/ServerAdmin.h"
+#include "Server/ServerLogNames.h"
 #include "Server/SessionHash.h"
 
 using namespace openblack;
@@ -1534,7 +1535,10 @@ TEST_F(LockstepTest, AClientThatPartsSendsItsPartsAndBothLogsNameThePartThatDiff
 		return line.find("parted at turn") != std::string::npos && line.find("1 parts differ: Transform") != std::string::npos;
 	});
 	ASSERT_NE(serverPart, serverLines.end());
-	EXPECT_NE(serverPart->find("(alice, slot 0)"), std::string::npos) << *serverPart;
+	EXPECT_NE(serverPart->find("(the player of god 0)"), std::string::npos) << *serverPart;
+	// No line of the server's log names the player
+	EXPECT_TRUE(
+	    std::ranges::none_of(serverLines, [](const std::string& line) { return line.find("alice") != std::string::npos; }));
 	// The checksums of the part are in the line of the compare
 	EXPECT_TRUE(std::ranges::any_of(serverLines, [](const std::string& line) {
 		return line.find("parts from the server's world at turn") != std::string::npos &&
@@ -4584,6 +4588,18 @@ TEST_F(LockstepTest, TheWorldStillWaitsWithNoPlayersAfterAPauseOfTheEditor)
 	const auto turns = serverWorld.turns;
 	Frames({}, 20);
 	EXPECT_EQ(serverWorld.turns, turns);
+}
+
+TEST(ServerLogNames, APlayerIsNamedByItsGodOrObserverNumber)
+{
+	using server::log_names::Capitalised;
+	using server::log_names::PlayerOf;
+	EXPECT_EQ(PlayerOf(2, 0, true), "the player of god 2");
+	EXPECT_EQ(PlayerOf(std::nullopt, 3, true), "observer 3");
+	EXPECT_EQ(PlayerOf(std::nullopt, 0, true), "an observer");
+	EXPECT_EQ(PlayerOf(std::nullopt, 0, false), "a player");
+	EXPECT_EQ(Capitalised("the player of god 0"), "The player of god 0");
+	EXPECT_EQ(Capitalised(""), "");
 }
 
 // The snapshot keeps the files of the editor and the journal keeps the files that came after it. The restored server
