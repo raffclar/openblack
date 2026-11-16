@@ -161,7 +161,6 @@ public:
 	void MarkRead() { ++_marksRead; }
 
 	[[nodiscard]] bool TurnEnded() const { return _turn.Ended(); }
-	[[nodiscard]] bool FrameEnded() const { return _frame.Ended(); }
 	/// The next record that each side plays
 	[[nodiscard]] size_t TurnNext() const { return _turn.Next(); }
 	[[nodiscard]] size_t FrameNext() const { return _frame.Next(); }

@@ -42,7 +42,6 @@ public:
 	void Stop(std::string_view why) override;
 	[[nodiscard]] fight_autopilot::Status GetStatus() const override;
 	[[nodiscard]] std::span<const fight_autopilot::LogEntry> GetLog() const override { return _log; }
-	void ClearLog() override { _log.clear(); }
 
 	/// Once a frame, before the game reads its input
 	void Frame(uint64_t frame);
