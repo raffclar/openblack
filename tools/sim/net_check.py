@@ -1476,7 +1476,7 @@ def editor_desync(pids, case, shots=None):
         if done["creature_remove"].get("error"):
             done.setdefault("errors", []).append(done["creature_remove"]["error"])
     if case == "time":
-        done["time"] = editor_time(pids)
+        done["time"] = editor_time(pids, shots)
         if done["time"].get("error"):
             done["error"] = done["time"]["error"]
     if case in ("land", "all"):
@@ -1523,13 +1523,19 @@ def room_time(pid):
     return answer if isinstance(answer, dict) else {}
 
 
-def editor_time(pids):
+def editor_time(pids, shots=None):
     """The editor pauses the clock of the room, steps three turns, changes the time of a turn to 2 and plays again. The
     second client (no editor claim) asks for a play with force while the room is paused: the server must refuse it.
     Every client must stop at the same turn, do each step, follow the speed, and keep the same checksums. Returns what
-    each step saw."""
+    each step saw. With a folder for the shots, the first client opens its editor, and both clients take a picture
+    in the pause and in the slow play."""
     editor = pids[0]
     done = {"steps": []}
+    if shots:
+        for pid in pids:
+            close_land_info_box(pid)
+        press_key(editor, "F10", True)
+        time.sleep(1.0)
 
     def turns():
         return [room_time(pid).get("turn") for pid in pids]
@@ -1546,6 +1552,7 @@ def editor_time(pids):
     answers = [inspector_answer(editor, "editor.time", {"params": {"act": "pause"}})]
     time.sleep(2.0)
     paused = note("paused")
+    editor_shots(pids, shots, "time_paused")
     time.sleep(2.0)
     still = note("paused 2 s later")
     if len(pids) > 1:
@@ -1561,6 +1568,7 @@ def editor_time(pids):
     answers.append(inspector_answer(editor, "editor.time", {"params": {"act": "play"}}))
     time.sleep(1.0)
     slow_start = note("slow play")
+    editor_shots(pids, shots, "time_slow_play")
     time.sleep(4.0)
     slow_end = note("slow play 4 s later")
     answers.append(inspector_answer(editor, "editor.time", {"params": {"act": "speed", "speed": 1.0}}))
@@ -2574,7 +2582,9 @@ def main():
                              "every computer must keep the same checksums")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps; "
-                             "with --editor-desync land: screenshots of both clients after the strokes and the paths")
+                             "with --editor-desync land: screenshots of both clients after the strokes and the paths; "
+                             "with --editor-desync time: the editor of the first client opens, and both clients take "
+                             "pictures in the pause and in the slow play")
     parser.add_argument("--forest-camera", action="store_true",
                         help="the first client casts the forest once both clients compared --hold-after turns (with "
                              "--scenario, the scenario casts it): only the camera of the first client may follow the "
