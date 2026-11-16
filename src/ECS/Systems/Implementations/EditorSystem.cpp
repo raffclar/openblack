@@ -231,6 +231,8 @@ void EditorSystem::Update([[maybe_unused]] std::chrono::microseconds dt)
 		}
 		_registryResets = resets;
 	}
+	// The land script stepper starts again with the script of the new land. A turn does the same check before its act.
+	editor::script_acts::RestartLandScriptAtNewWorld();
 	// A request that gets no answer, such as a command that the game server refused, does not hold undo and redo
 	if (_history.Waiting() && Locator::time::has_value())
 	{

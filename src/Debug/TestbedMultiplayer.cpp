@@ -659,6 +659,9 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		lobbies.HoldGod();
 		frontEnd.RefreshLobbies();
 		break;
+	case Stage::LobbyMapPicture:
+		frontEnd.SelectLobby("d2");
+		break;
 	case Stage::LobbyChatRoom:
 		frontEnd.SendMainRoomChat(u"Hello, everyone! I will make a session for four gods.");
 		break;

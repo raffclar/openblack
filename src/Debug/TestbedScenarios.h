@@ -12,6 +12,7 @@
 #include <cstddef>
 
 #include <optional>
+#include <string>
 
 #include <entt/entity/fwd.hpp>
 
@@ -50,6 +51,8 @@ protected:
 private:
 	void DrawPicker() noexcept;
 	void DrawControls() noexcept;
+	/// In a network game: Run and Restart ask the game server to start the room again on the scenario
+	void DrawNetworkControls() noexcept;
 	/// The crowd of a benchmark as it spawns, and its frames as they are measured
 	void DrawBenchmark() noexcept;
 	/// Runs the scenario the command line or the game server asked for, once
@@ -59,6 +62,10 @@ private:
 	/// Gives the game the work that lays out a scenario and the work that a scenario does before each turn
 	void ConnectToGame() noexcept;
 	void DrawTime() noexcept;
+	/// The time controls in a network game: each asks the game server for a change of the time of the whole room
+	void DrawNetworkTime() noexcept;
+	/// True in a network game, where a change of the scenario or of the time goes to the whole room
+	[[nodiscard]] static bool InNetworkGame() noexcept;
 	void DrawCamera() noexcept;
 	void DrawCreatures() noexcept;
 
@@ -78,6 +85,8 @@ private:
 	/// The time that the running scenario counts, never less than the time of the turns that passed
 	testbed_scenarios::TurnClock _turnClock;
 	const testbed_scenarios::Scenario* _clockScenario {nullptr};
+	/// What happened to the last request of a scenario in a network game
+	std::string _networkStatus;
 };
 
 } // namespace openblack::debug::gui

@@ -33,9 +33,10 @@
 #include "Creature/CreatureMindFileBody.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
-#include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Editor/EditorActions.h"
 #include "Editor/EditorCreatureActs.h"
@@ -48,6 +49,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
+#include "Online/EditorWorldUpload.h"
 #include "Online/NetworkSession.h"
 #include "Story/StoryLandSkip.h"
 
@@ -732,6 +734,81 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		                           {"use", load.use == player_commands::EditorMindLoad::Use::Spawn ? "spawn" : "load"},
 		                           {"species", static_cast<int>(load.spawn.species)}});
 	});
+	auto worldLoad = Query(
+	    "world_load",
+	    "Sends a world file of this computer to the game server, as Load world file of the editor does in a network game: "
+	    "the world of the server loads it between two turns, and every computer gets the server's new world. This ends the "
+	    "current game of every player. save writes the world of this computer into the file and sends nothing, as Save "
+	    "land files writes the world file. force sends it also when the editor of this computer is refused.",
+	    {{.name = "path", .type = "string", .description = "The world file on this computer", .required = true},
+	     {.name = "save", .type = "boolean", .description = "Write the world file and send nothing", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	worldLoad.writes = true;
+	provider->Add(std::move(worldLoad), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto pathParam = context.params.find("path");
+		if (pathParam == context.params.end() || !pathParam->is_string())
+		{
+			return QueryResult::Error("editor.world_load needs the path of a world file");
+		}
+		if (BoolParam(context.params, "save", false))
+		{
+			// The world state of this computer, which changes nothing in the world
+			const auto state =
+			    Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
+			if (state.empty() || !online::editor_world::WriteFile(pathParam->get<std::string>(), state))
+			{
+				return QueryResult::Error("the world file was not written");
+			}
+			return QueryResult::Value({{"saved", true},
+			                           {"bytes", state.size()},
+			                           {"turn", Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u}});
+		}
+		const auto read = online::editor_world::ReadFile(pathParam->get<std::string>());
+		if (!read.has_value())
+		{
+			return QueryResult::Error("the world file does not open");
+		}
+		const auto& bytes = *read;
+		if (bytes.empty() || bytes.size() > game_socket::k_MostEditorWorldBytes)
+		{
+			return QueryResult::Error(fmt::format("a network game takes a world file of 1 byte to {} MB",
+			                                      game_socket::k_MostEditorWorldBytes / (1024 * 1024)));
+		}
+		if (!Locator::networkGame::has_value() || !Locator::networkGame::value().SendEditorWorld(bytes))
+		{
+			return QueryResult::Error("the game socket is not open: the world file did not go");
+		}
+		return QueryResult::Value({{"sent", true}, {"bytes", bytes.size()}});
+	});
+	auto scenario = Query(
+	    "scenario",
+	    "Asks the game server to start the room again on a testbed scenario, as the Scenarios tab of the editor does in a "
+	    "network game: every computer loads the testbed and lays the scenario out before the first turn of the new game. "
+	    "This ends the current game of every player. force sends it also when the editor of this computer is refused.",
+	    {{.name = "id", .type = "string", .description = "The id of the testbed scenario", .required = true},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	scenario.writes = true;
+	provider->Add(std::move(scenario), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto idParam = context.params.find("id");
+		if (idParam == context.params.end() || !idParam->is_string() || idParam->get<std::string>().empty())
+		{
+			return QueryResult::Error("editor.scenario needs the id of a testbed scenario");
+		}
+		const auto id = idParam->get<std::string>();
+		if (!Locator::networkGame::has_value() || !Locator::networkGame::value().SendEditorScenario(id))
+		{
+			return QueryResult::Error("the game socket is not open: the request did not go");
+		}
+		return QueryResult::Value({{"sent", true}, {"id", id}});
+	});
 	auto scriptAct = Query(
 	    "script",
 	    "Does an act of the Scripts tab on the script machine, as the tab does it: at once in a game alone, or as a command "
@@ -1045,6 +1122,31 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		                                         {"instructions", instructions},
 		                                         {"land_script", std::move(land)}});
 	              });
+	provider->Add(
+	    Query("script_reports",
+	          "What the Scripts tab of this computer shows of its acts at the turns of a network game: the last act on "
+	          "the script machine and the last change of the program, each with its turn, whether the machine did it, "
+	          "the new task of a start and the line of the tab. Only the computer that sent the act has the report."),
+	    [](const QueryContext& /*context*/) {
+		    const auto toJson = [](const std::optional<editor::script_acts::ActReport>& report) -> Json {
+			    if (!report.has_value())
+			    {
+				    return nullptr;
+			    }
+			    return {{"turn", report->turn},
+			            {"done", report->done},
+			            {"task", report->task},
+			            {"text", report->text},
+			            {"number", report->number}};
+		    };
+		    if (!Locator::editorSystem::has_value())
+		    {
+			    return QueryResult::Value({{"script", nullptr}, {"program", nullptr}, {"changes", 0}});
+		    }
+		    const auto& reports = Locator::editorSystem::value().GetScriptActReports();
+		    return QueryResult::Value(
+		        {{"script", toJson(reports.script)}, {"program", toJson(reports.program)}, {"changes", reports.changes}});
+	    });
 	auto landStroke = Query(
 	    "land_stroke",
 	    "Sends a stroke of the land brush as a command of the turns, as the land tools send it in a network game: each "

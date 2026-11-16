@@ -307,8 +307,10 @@ void MultiplayerBoxes::Build()
 	_shownTab.reset();
 	_shownPick.reset();
 	_thumbnailLand.reset();
+	_lobbyThumbnailName.clear();
 	_thumbnail.reset();
 	_thumbnailShown = false;
+	_thumbnailPlace = land_thumbnail::k_Place;
 	_logoShown = false;
 	if (_frontEnd == nullptr)
 	{
@@ -845,7 +847,7 @@ std::vector<DialogRect> MultiplayerBoxes::GetPictureRects() const
 	std::vector<DialogRect> rects;
 	if (_thumbnailShown)
 	{
-		rects.push_back(land_thumbnail::k_Place);
+		rects.push_back(_thumbnailPlace);
 	}
 	if (_logoShown && _clanInfo != nullptr)
 	{
@@ -871,8 +873,8 @@ void MultiplayerBoxes::DrawPictures(const DialogPainter& painter) const
 	// The game draws the pictures after the controls, at the box's opacity
 	if (_thumbnailShown && _thumbnail->texture != nullptr)
 	{
-		painter.DrawPicture(land_thumbnail::k_Place, *_thumbnail->texture, glm::vec2(0.0f),
-		                    land_thumbnail::UvMax(_thumbnail->side), glm::vec4(1.0f));
+		painter.DrawPicture(_thumbnailPlace, *_thumbnail->texture, glm::vec2(0.0f), land_thumbnail::UvMax(_thumbnail->side),
+		                    glm::vec4(1.0f));
 	}
 	// The logo is a faint mark behind the lines of the clan's information
 	if (_logoShown && _logoTexture != nullptr && _clanInfo != nullptr)

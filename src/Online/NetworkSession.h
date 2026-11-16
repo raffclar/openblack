@@ -193,6 +193,16 @@ public:
 	/// Sends a mind file of the creature tools of the editor to the server, during the game. False when the socket is not
 	/// open or the game did not start: then the file does not go.
 	[[nodiscard]] bool SendEditorMindFile(std::vector<uint8_t> file);
+	/// Sends a world file of the editor to the server in parts, during the game. The world of the server loads it, and
+	/// every player gets the new world. False when the socket is not open, the game did not start or the file is empty or
+	/// too large: then the file does not go.
+	[[nodiscard]] bool SendEditorWorld(std::span<const uint8_t> file);
+	/// Asks the server to start the room again on a testbed scenario, during the game. False when the socket is not open
+	/// or the game did not start.
+	[[nodiscard]] bool SendEditorScenario(std::string_view id);
+	/// True one time after the server started the game again (a new game.start in the game, for a scenario of the
+	/// editor). The game then loads the land of the new start.
+	[[nodiscard]] bool TakeRestart() { return std::exchange(_restarted, false); }
 	/// Sends a file of the script tabs of the editor to the server in parts, during the game. False when the socket is not
 	/// open, the game did not start or the file is too large: then the file does not go.
 	[[nodiscard]] bool SendEditorScriptFile(game_socket::EditorScriptFile::Kind kind, std::vector<uint8_t> file);
@@ -203,6 +213,9 @@ public:
 	/// The editor asks the server to pause, play, step or change the speed of the clock of the room. The server takes the
 	/// request only from a player with the editor claim, and then sends the new clock to every player.
 	void RequestTime(const game_socket::EditorTime& request);
+	/// Tools: the client drops its socket in a game, as at a loss of the network, and tries to come back only after the
+	/// time. Gives false when the session does not play.
+	bool GoAwayForTest(int64_t microseconds);
 	/// The clock of the room that the server sent last. None before the first.
 	[[nodiscard]] const std::optional<game_socket::GameTime>& RoomClock() const { return _roomClock; }
 	/// The count of the frames of the clock that came, so that the game sees each change one time
@@ -474,6 +487,10 @@ private:
 	int64_t _nextHealthLog {0};
 	bool _pingsWarned {false};
 	std::optional<uint32_t> _stoppedAfter;
+	/// The server started the game again, and the game did not load the land of the new start yet
+	bool _restarted {false};
+	/// The server started the game again, and the land of the new start did not load yet: the world does no turn
+	bool _landOfRestartDue {false};
 };
 
 [[nodiscard]] std::string_view StateName(NetworkSession::State state) noexcept;

@@ -75,6 +75,8 @@ private:
 	/// Does an act on the script machine: at once in a game alone, or at the next turn in a network game. Gives what the
 	/// act did in a game alone, and none in a network game.
 	std::optional<script_acts::ActResult> Act(const player_commands::EditorScript& act) noexcept;
+	/// Shows the results of the acts that the turns did since the last frame, in a network game
+	void ShowReports() noexcept;
 	/// Sends a change of the program in a network game, after its file. Gives the text for the panel.
 	[[nodiscard]] static std::string SendProgram(player_commands::EditorScriptProgram change,
 	                                             std::span<const uint8_t> file) noexcept;
@@ -118,6 +120,8 @@ private:
 	std::vector<float> _parameters;
 	std::string _lastStart;
 	std::string _loadMessage;
+	/// The number of the last report of an act that the panel showed
+	uint32_t _shownReports {0};
 	/// The file browsers of the panel, where the platform has no file dialog
 	debug::gui::FileBrowser _programBrowser;
 	debug::gui::FileBrowser _sourceBrowser;

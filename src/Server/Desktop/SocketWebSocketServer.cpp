@@ -454,7 +454,7 @@ void SocketWebSocketServer::Accept()
 		const bool countNow = !limits::IsLoopback(peer);
 		if (_connections.size() >= limits::k_MostConnections || (countNow && !_addresses.Add(peer)))
 		{
-			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server refuses a connection from {}: too many connections", peer);
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server refuses a connection: too many connections");
 			CloseSocket(client);
 			continue;
 		}
@@ -567,8 +567,7 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 			{
 				if (!_addresses.Add(client))
 				{
-					SPDLOG_LOGGER_INFO(spdlog::get("game"),
-					                   "The game server refuses a connection from {}: too many connections", client);
+					SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server refuses a connection: too many connections");
 					const auto answer = frames::RefuseAnswer();
 					std::ignore = connection.out.Add(reinterpret_cast<const uint8_t*>(answer.data()), answer.size());
 					connection.Flush();
@@ -594,7 +593,7 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 		bytes.assign(connection.handshake.begin() + static_cast<std::ptrdiff_t>(used), connection.handshake.end());
 		connection.handshake.clear();
 		connection.stage = Stage::Open;
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Game socket {} opened on {}", id, handshake.path);
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Game socket {} opened", id);
 		if (_handlers.opened)
 		{
 			_handlers.opened(id);

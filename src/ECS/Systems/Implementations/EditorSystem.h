@@ -46,6 +46,7 @@ public:
 	[[nodiscard]] editor::paths::DrawnPaths& GetDrawnPaths() override { return _drawnPaths; }
 	[[nodiscard]] const editor::paths::DrawnPaths& GetDrawnPaths() const override { return _drawnPaths; }
 	[[nodiscard]] editor::script_acts::LandScriptRun& GetLandScriptRun() override { return _landScript; }
+	[[nodiscard]] editor::script_acts::ActReports& GetScriptActReports() override { return _scriptActReports; }
 	[[nodiscard]] editor::land_brush::Brush& GetLandBrush() override { return _landBrush; }
 	void SetTool(Tool tool) override { _tool = tool; }
 	[[nodiscard]] Tool GetTool() const override { return _tool; }
@@ -75,6 +76,7 @@ private:
 	editor::EditorHistory _history;
 	editor::paths::DrawnPaths _drawnPaths;
 	editor::script_acts::LandScriptRun _landScript;
+	editor::script_acts::ActReports _scriptActReports;
 	editor::land_brush::Brush _landBrush;
 	/// The count of the registry's resets that the picks and the history belong to
 	std::optional<uint32_t> _registryResets;

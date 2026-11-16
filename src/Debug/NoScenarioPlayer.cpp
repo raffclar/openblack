@@ -22,4 +22,9 @@ std::vector<std::string> ScenarioIds()
 	return {};
 }
 
+std::optional<std::string> NetworkRestartRefusal([[maybe_unused]] std::string_view id)
+{
+	return "the build has no developer tools, so it has no testbed scenario";
+}
+
 } // namespace openblack::testbed_scenarios

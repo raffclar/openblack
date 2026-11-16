@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <iterator>
 #include <ranges>
 #include <system_error>
@@ -33,7 +34,9 @@ constexpr std::array<uint8_t, 8> k_JournalMagic {'O', 'B', 'J', 'O', 'U', 'R', '
 /// still load, with no names and with the god of the observers out of the game.
 /// Version 6 keeps the claims of the join tickets of the gods and the observers. The files of versions 3 to 5 still load,
 /// with no claims.
-constexpr uint32_t k_FormatVersion = 6;
+/// Version 7 keeps the clock of the room and the files of the editor. The files of versions 3 to 6 still load, with the
+/// clock at the normal speed and with no files.
+constexpr uint32_t k_FormatVersion = 7;
 constexpr uint32_t k_OldestFormatVersion = 3;
 
 /// True for a version of the format that the server reads
@@ -332,6 +335,9 @@ std::vector<uint8_t> EncodeRoom(const Room& room)
 		    static_cast<uint8_t>((room.watcherEditors[i] ? k_EditorClaimBit : 0) | (debugger ? k_DebuggerClaimBit : 0)));
 	}
 	PutBytes(out, watcherClaims);
+	PutU8(out, room.clock.paused ? 1 : 0);
+	PutU32(out, std::bit_cast<uint32_t>(room.clock.speed));
+	PutU32(out, room.clock.steps);
 	return out;
 }
 
@@ -415,11 +421,39 @@ std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes)
 			room.watcherDebuggers.clear();
 		}
 	}
+	// The room of a file of format 6 ends here
+	if (reader.Good() && !reader.AtEnd())
+	{
+		room.clock.paused = reader.U8() != 0;
+		room.clock.speed = std::bit_cast<float>(reader.U32());
+		room.clock.steps = reader.U32();
+	}
 	if (!reader.Good() || !reader.AtEnd())
 	{
 		return std::nullopt;
 	}
 	return room;
+}
+
+std::vector<uint8_t> EditorFileRecordBytes(const EditorFile& file)
+{
+	std::vector<uint8_t> out;
+	out.reserve(1 + 4 + file.bytes.size());
+	PutU8(out, static_cast<uint8_t>(file.kind));
+	PutBytes(out, file.bytes);
+	return out;
+}
+
+std::optional<EditorFile> ReadEditorFileRecord(std::span<const uint8_t> bytes)
+{
+	Reader reader(bytes);
+	const auto kind = reader.U8();
+	EditorFile file {.kind = static_cast<EditorFileKind>(kind), .bytes = reader.Bytes()};
+	if (!reader.Good() || !reader.AtEnd() || kind > static_cast<uint8_t>(EditorFileKind::LandScript))
+	{
+		return std::nullopt;
+	}
+	return file;
 }
 
 bool SameGame(const game_socket::Start& saved, const game_socket::Start& now)
@@ -438,6 +472,11 @@ std::vector<uint8_t> EncodeSnapshot(const Snapshot& snapshot)
 	out.reserve(out.size() + 4 + snapshot.world.size() + k_ChecksumBytes);
 	PutBytes(out, snapshot.world);
 	PutBlocks(out, snapshot.blocks);
+	PutU32(out, static_cast<uint32_t>(snapshot.editorFiles.size()));
+	for (const auto& file : snapshot.editorFiles)
+	{
+		PutBytes(out, EditorFileRecordBytes(file));
+	}
 	PutU64(out, Checksum(out));
 	return out;
 }
@@ -465,6 +504,20 @@ std::optional<Snapshot> DecodeSnapshot(std::span<const uint8_t> bytes)
 	const auto room = DecodeRoom(reader.Bytes());
 	snapshot.world = reader.Bytes();
 	snapshot.blocks = ReadBlocks(reader);
+	// The snapshot of a file of format 6 ends here
+	if (reader.Good() && !reader.AtEnd())
+	{
+		const auto files = reader.U32();
+		for (uint32_t i = 0; i < files && reader.Good(); ++i)
+		{
+			auto file = ReadEditorFileRecord(reader.Bytes());
+			if (!file.has_value())
+			{
+				return std::nullopt;
+			}
+			snapshot.editorFiles.push_back(std::move(*file));
+		}
+	}
 	if (!reader.Good() || !reader.AtEnd() || !room.has_value())
 	{
 		return std::nullopt;
@@ -532,7 +585,8 @@ std::pair<std::vector<Record>, bool> ReadJournal(std::span<const uint8_t> bytes)
 		const auto end = reader.At();
 		const auto checksum = reader.U64();
 		if (!reader.Good() || checksum != Checksum(bytes.subspan(start, end - start)) ||
-		    (kind != static_cast<uint8_t>(RecordKind::Turn) && kind != static_cast<uint8_t>(RecordKind::Room)))
+		    (kind != static_cast<uint8_t>(RecordKind::Turn) && kind != static_cast<uint8_t>(RecordKind::Room) &&
+		     kind != static_cast<uint8_t>(RecordKind::EditorFile)))
 		{
 			return {records, true};
 		}
@@ -674,6 +728,11 @@ void Store::AddRoom(const Room& room)
 	AddRecord(RecordKind::Room, EncodeRoom(room));
 }
 
+void Store::AddEditorFile(const EditorFile& file)
+{
+	AddRecord(RecordKind::EditorFile, EditorFileRecordBytes(file));
+}
+
 std::optional<Restored> Store::LoadNewest() const
 {
 	const auto snapshots = FilesByTurn(_folder, SnapshotTurnOf);
@@ -688,10 +747,17 @@ std::optional<Restored> Store::LoadNewest() const
 			skipped.push_back(path.filename().string());
 			continue;
 		}
-		Restored restored {
-		    .snapshot = std::move(*snapshot), .room = {}, .turns = {}, .blocks = {}, .skipped = skipped, .tornJournal = false};
+		Restored restored {.snapshot = std::move(*snapshot),
+		                   .room = {},
+		                   .turns = {},
+		                   .blocks = {},
+		                   .editorFiles = {},
+		                   .skipped = skipped,
+		                   .tornJournal = false};
 		restored.room = restored.snapshot.room;
 		restored.blocks = restored.snapshot.blocks;
+		// The files move out of the snapshot, so that the server keeps only one copy of them
+		restored.editorFiles = std::move(restored.snapshot.editorFiles);
 		// The turns after the snapshot follow one after the other through the journals. A gap or a torn record ends them.
 		auto next = turn;
 		bool ended = false;
@@ -724,6 +790,15 @@ std::optional<Restored> Store::LoadNewest() const
 							}
 						}
 						restored.room = std::move(*room);
+					}
+					continue;
+				}
+				if (record.kind == RecordKind::EditorFile)
+				{
+					// The file came before the turns that use it
+					if (auto file = ReadEditorFileRecord(record.bytes); file.has_value())
+					{
+						restored.editorFiles.push_back(std::move(*file));
 					}
 					continue;
 				}

@@ -88,6 +88,10 @@ public:
 	/// The blocks that went to the server and that no turn holds yet, oldest first
 	[[nodiscard]] const std::deque<turn_codec::CommandBlock>& Kept() const { return _kept; }
 
+	/// The server started the game again: no turn of the new game holds a block of the old game. The next block keeps
+	/// its number, so that the server takes it.
+	void DropKept() { _kept.clear(); }
+
 	/// A new session counts its blocks from 0
 	void Reset()
 	{

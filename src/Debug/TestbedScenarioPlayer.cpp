@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+#include <string>
 #include <utility>
 
 #include "ScenarioPlayer.h"
@@ -50,6 +52,20 @@ std::unique_ptr<ScenarioPlayer> MakeScenarioPlayer(std::string_view id)
 {
 	const Scenario* scenario = Find(id);
 	return scenario == nullptr ? nullptr : std::make_unique<RunnerPlayer>(*scenario);
+}
+
+std::optional<std::string> NetworkRestartRefusal(std::string_view id)
+{
+	const Scenario* scenario = Find(id);
+	if (scenario == nullptr)
+	{
+		return "no testbed scenario has this id";
+	}
+	if (scenario->environment.land == Land::GodsRingMap)
+	{
+		return "the scenario plays on the map for 32 gods, which only the server makes";
+	}
+	return std::nullopt;
 }
 
 std::vector<std::string> ScenarioIds()

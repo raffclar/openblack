@@ -78,6 +78,11 @@ public:
 	{
 		return _session && _session->SendEditorMindFile(std::move(file));
 	}
+	[[nodiscard]] bool SendEditorWorld(std::span<const uint8_t> file) override
+	{
+		return _session && _session->SendEditorWorld(file);
+	}
+	[[nodiscard]] bool SendEditorScenario(std::string_view id) override { return _session && _session->SendEditorScenario(id); }
 	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat() override
 	{
 		return _session ? _session->TakeRoomChat() : std::vector<game_socket::RoomChat> {};
@@ -94,6 +99,7 @@ public:
 			_session->RequestTime(request);
 		}
 	}
+	bool GoAwayForTest(int64_t microseconds) override { return _session && _session->GoAwayForTest(microseconds); }
 	[[nodiscard]] std::vector<std::string> TakeTimeNotices() override
 	{
 		return _session ? _session->TakeTimeNotices() : std::vector<std::string>();
@@ -129,6 +135,8 @@ private:
 	/// The join came from the command line: the game loads the server's land of the server's reply to the join, before
 	/// the player is ready
 	bool _fromCommandLine {false};
+	/// The server started the game again during the game: the land of the new start loads as after the front end
+	bool _restarting {false};
 	/// The reply of the server to the join of the command line was read
 	bool _joinReplyRead {false};
 	/// The clock stopped after the last turn of the game

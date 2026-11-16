@@ -1030,7 +1030,8 @@ void EditorWindow::WindowDraw() noexcept
 
 	if (_showOutliner)
 	{
-		_leftWidth = std::clamp(_leftWidth, 160.0f, size.x * 0.4f);
+		// A small window, or one with no size, keeps the least width of the panel
+		_leftWidth = std::clamp(_leftWidth, 160.0f, std::max(160.0f, size.x * 0.4f));
 		ImGui::SetNextWindowPos(ImVec2(origin.x, top));
 		ImGui::SetNextWindowSize(ImVec2(_leftWidth, sideHeight));
 		if (ImGui::Begin("Outliner##Editor", &_showOutliner, k_PanelFlags))
@@ -1042,7 +1043,7 @@ void EditorWindow::WindowDraw() noexcept
 	}
 	if (_showInspector)
 	{
-		_rightWidth = std::clamp(_rightWidth, 220.0f, size.x * 0.5f);
+		_rightWidth = std::clamp(_rightWidth, 220.0f, std::max(220.0f, size.x * 0.5f));
 		ImGui::SetNextWindowPos(ImVec2(origin.x + size.x - _rightWidth, top));
 		ImGui::SetNextWindowSize(ImVec2(_rightWidth, sideHeight));
 		if (ImGui::Begin("Inspector##Editor", &_showInspector, k_PanelFlags))
@@ -1322,9 +1323,9 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 		_palette.Draw(context);
 		ImGui::EndTabItem();
 	}
-	// The scenarios change the world of this computer only, so a network game does not have them. The land tools and the
+	// In a network game, a scenario starts the room again on the game server for every player. The land tools and the
 	// script tabs send their acts as commands of the turns.
-	if (!InNetworkGame() && ImGui::BeginTabItem("Scenarios", nullptr, flags(BottomTab::Scenarios)))
+	if (ImGui::BeginTabItem("Scenarios", nullptr, flags(BottomTab::Scenarios)))
 	{
 		ImGui::BeginChild("Scenarios");
 		_scenarios.DrawContents();

@@ -520,3 +520,12 @@ TEST(LobbyScreenRules, TheLoadPauseNamesThePlayersThatLoad)
 	// The game server gives the seconds left
 	EXPECT_EQ(Utf8(LoadPauseLines(names, int64_t {75})[0]), "The game is paused: waiting for remaining players to load (1:15)");
 }
+
+TEST(LobbyScreenRules, TheThumbnailOfAMapIsItsFileName)
+{
+	EXPECT_EQ(ThumbnailName({.file = "Online Maps/mpm_2p_1.map", .name = "Two", .sha256 = {}, .size = 0}), "mpm_2p_1");
+	EXPECT_EQ(ThumbnailName({.file = "Online Maps\\MPM_4P_1.MAP", .name = "Four", .sha256 = {}, .size = 0}), "mpm_4p_1");
+	// A map that is not a land of a network game has no thumbnail
+	EXPECT_EQ(ThumbnailName({.file = "Scripts/Land1.txt", .name = "Land", .sha256 = {}, .size = 0}), "");
+	EXPECT_EQ(ThumbnailName({}), "");
+}

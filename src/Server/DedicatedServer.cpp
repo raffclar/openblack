@@ -48,6 +48,7 @@
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/GameEndConditions.h"
+#include "ECS/Map.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveFileWriter.h"
@@ -66,6 +67,7 @@
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorldFileGods.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/GameTexts.h"
 #include "Gui/MenuSettings.h"
@@ -162,6 +164,13 @@ public:
 
 /// The world of the server. It starts the services of the world, loads the land and plays the frames of the world,
 /// with no window and no view of a player.
+/// The world after a change that the editor asked for: the turn that it is at, or why it did not change
+struct WorldChangeResult
+{
+	std::optional<uint32_t> turn;
+	std::string refusal;
+};
+
 class ServerWorld final:
     public simulation::WorldDataViewInterface,
     public simulation::PlayStartViewInterface,
@@ -213,6 +222,14 @@ public:
 	/// Loads the world of a snapshot of the server. The world waits at the start of the turn of the snapshot. Gives false
 	/// when the world does not load.
 	[[nodiscard]] bool LoadSnapshot(const snapshots::Snapshot& snapshot);
+	/// Between two turns: the world loads a world file of the editor of a player, as a client loads the server's world.
+	/// Then each player of the room keeps a god, and each other god of the file is as a slot with no player. Gives the turn
+	/// of the loaded world, or why the world did not load it.
+	[[nodiscard]] WorldChangeResult LoadEditorWorld(std::span<const uint8_t> file, std::span<const PlayerNames> players);
+	/// Between two turns: the world starts again on the testbed with a testbed scenario, as a network game that starts
+	/// on the scenario. The scenario is laid out in the first frame in which the world turns. Gives the turn of the new
+	/// world, or why it did not start.
+	[[nodiscard]] WorldChangeResult RestartOnScenario(std::string_view id, uint32_t seed);
 	/// What the game role lets the world do in a frame
 	enum class NetworkStep : uint8_t
 	{
@@ -762,6 +779,83 @@ bool ServerWorld::LoadSnapshot(const snapshots::Snapshot& snapshot)
 	return true;
 }
 
+WorldChangeResult ServerWorld::LoadEditorWorld(std::span<const uint8_t> file, std::span<const PlayerNames> players)
+{
+	if (!Locator::saveGameSystem::has_value())
+	{
+		return {.turn = std::nullopt, .refusal = "the server has no world states"};
+	}
+	// The checksum of the last turn takes the world of that turn, before the load replaces it
+	Locator::syncChecksumSystem::value().FinishHash();
+	const auto start = std::chrono::steady_clock::now();
+	// The file must be a whole world of the land that is open, with the scripts of the land, as each client loads the
+	// world of the server
+	if (!Locator::saveGameSystem::value().LoadServerWorldState(file))
+	{
+		return {.turn = std::nullopt, .refusal = "the file is not a whole world of the open land with the scripts of the land"};
+	}
+	// The world is still the world of a network game
+	auto& clock = Locator::time::value();
+	clock.SetNetworkGame(true);
+	Locator::syncChecksumSystem::value().SetEnabled(true);
+	// The gods of the file go to the players of the room before the server sends its world to them
+	ecs::world_file_gods::GiveToRoom(players);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"),
+	                   "The world file of the editor ({} bytes) loaded in {:.2f} ms: the world is at turn {}", file.size(),
+	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count(),
+	                   clock.GetTurn());
+	return {.turn = clock.GetTurn(), .refusal = {}};
+}
+
+WorldChangeResult ServerWorld::RestartOnScenario(std::string_view id, uint32_t seed)
+{
+	if (const auto refusal = testbed_scenarios::NetworkRestartRefusal(id); refusal.has_value())
+	{
+		return {.turn = std::nullopt, .refusal = *refusal};
+	}
+	auto scenario = testbed_scenarios::MakeScenarioPlayer(id);
+	if (scenario == nullptr)
+	{
+		return {.turn = std::nullopt, .refusal = "the server has no such scenario"};
+	}
+	Locator::syncChecksumSystem::value().FinishHash();
+	// The land starts from the state that every client starts it from, as at the start of a network game
+	simulation::PrepareNetworkLand(seed);
+	auto& land = Locator::landSystem::value();
+	if (!land.LoadTestbed())
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The testbed of the scenario {} did not load", id);
+		return {.turn = std::nullopt, .refusal = "the testbed did not load"};
+	}
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().SetConditions(_conditionPicks);
+	}
+	// The testbed starts no story
+	if (!land.StartChallengeScripts(false))
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The scripts of the testbed of the scenario {} did not start", id);
+		return {.turn = std::nullopt, .refusal = "the scripts of the testbed did not start"};
+	}
+	// As each client starts the land of a start: the things go into the map's cells, and the clock starts from the start
+	// of the current turn
+	Locator::entitiesMap::value().Sync();
+	auto& clock = Locator::time::value();
+	clock.Start();
+	if (_simulation.frameTime.has_value())
+	{
+		simulation::LoadEveryResource();
+	}
+	clock.ResetTimerToTurn();
+	clock.SetNetworkGame(true);
+	Locator::syncChecksumSystem::value().SetEnabled(true);
+	_scenario = std::move(scenario);
+	_scenarioStarted = false;
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world starts again on the testbed scenario {} at turn {}", id,
+	                   clock.GetTurn());
+	return {.turn = clock.GetTurn(), .refusal = {}};
+}
+
 /// The seconds since 1970 (UTC) on the clock of the computer
 int64_t UtcSeconds()
 {
@@ -892,7 +986,7 @@ public:
 	~SnapshotKeeper() = default;
 
 	/// Once a frame, after the game role read the sockets and before the turn: a snapshot when one is due, else the room
-	/// in the journal when it changed
+	/// in the journal when it changed, and each new file of the editor before the turn that can use it
 	void BeforeTurn(const LockstepHost& host)
 	{
 		if (_ended || _settings.everyTurns == 0 || !host.Started() || host.Replaying() || !Locator::saveGameSystem::has_value())
@@ -902,6 +996,7 @@ public:
 		auto room = host.RoomRecord();
 		auto blocks = host.BlocksInTurns();
 		const auto turn = host.TurnsDone();
+		const auto files = host.KeptEditorFiles();
 		// The first turn brings the creatures from the files of the players, so the first snapshot comes after it
 		const bool due = turn >= 1 && (!_lastTurn.has_value() || turn >= *_lastTurn + _settings.everyTurns);
 		if (due && _writer->Pending() == 0)
@@ -916,11 +1011,15 @@ public:
 			}
 			_lastRoom = room;
 			_lastTurn = turn;
+			// The snapshot keeps every file of the editor, so the new journal starts with none
+			_lastFiles = files;
 			_writer->Queue(fmt::format("the snapshot of turn {}", turn), [store = &_store, make = std::move(make),
 			                                                              room = std::move(room), blocks = std::move(blocks),
-			                                                              turn, takenMs]() {
+			                                                              editorFiles = host.EditorFilesAfter({}), turn,
+			                                                              takenMs]() mutable {
 				const auto writeStart = std::chrono::steady_clock::now();
-				const auto bytes = snapshots::EncodeSnapshot({.turn = turn, .room = room, .world = make(), .blocks = blocks});
+				const auto bytes = snapshots::EncodeSnapshot(
+				    {.turn = turn, .room = room, .world = make(), .blocks = blocks, .editorFiles = std::move(editorFiles)});
 				const bool written = store->Write(turn, bytes);
 				SPDLOG_LOGGER_INFO(
 				    spdlog::get("game"),
@@ -936,6 +1035,15 @@ public:
 			_store.AddRoom(room);
 			_lastRoom = std::move(room);
 		}
+		// A new file goes into the journal before the turn of the command that uses it
+		if (files != _lastFiles && _store.JournalOpen())
+		{
+			for (const auto& file : host.EditorFilesAfter(_lastFiles))
+			{
+				_store.AddEditorFile(file);
+			}
+			_lastFiles = files;
+		}
 	}
 
 	/// A turn that the server closed, before it sends the turn
@@ -945,6 +1053,24 @@ public:
 		{
 			_store.AddTurn(turn, bytes, blocks);
 		}
+	}
+
+	/// The editor changed the world of the room. A world that a snapshot can continue gets a new snapshot before the next
+	/// turn. A room that plays a testbed scenario keeps no snapshot, as the scenario keeps its state out of the world.
+	void WorldChanged(bool continues)
+	{
+		if (continues)
+		{
+			_lastTurn.reset();
+			return;
+		}
+		if (std::exchange(_ended, true))
+		{
+			return;
+		}
+		_writer->Flush();
+		_store.Clear();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The room plays a testbed scenario: the server removed its snapshots");
 	}
 
 	/// The game ended, so no server continues it: the snapshots go
@@ -964,6 +1090,8 @@ private:
 	snapshots::Store _store;
 	std::optional<uint32_t> _lastTurn;
 	snapshots::Room _lastRoom;
+	/// The counts of the files of the editor that the snapshot and the journal keep
+	LockstepHost::EditorFileCounts _lastFiles;
 	bool _ended {false};
 	/// Last, so that it writes the snapshots that wait before the store goes
 	std::unique_ptr<ecs::save_files::BackgroundWriter> _writer {std::make_unique<ecs::save_files::BackgroundWriter>(
@@ -1170,7 +1298,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	auto& host = network->Host();
 	if (restored.has_value())
 	{
-		host.Restore(restored->room, restored->snapshot.turn, restored->turns, restored->blocks);
+		host.Restore(restored->room, restored->snapshot.turn, restored->turns, restored->blocks, restored->editorFiles);
 	}
 	if (keeper != nullptr)
 	{
@@ -1255,14 +1383,25 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	host.SetWorldState([] {
 		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
 	});
+	// A world file or a testbed scenario of the editor of a player changes the world between two turns
+	host.SetScenarioRefusal([](std::string_view id) { return testbed_scenarios::NetworkRestartRefusal(id); });
+	host.SetChangeWorld([&world, keeper](const LockstepHost::WorldChange& change) {
+		const bool file = change.kind == LockstepHost::WorldChange::Kind::WorldFile;
+		const auto changed =
+		    file ? world.LoadEditorWorld(change.file, change.players) : world.RestartOnScenario(change.scenario, change.seed);
+		if (changed.turn.has_value() && keeper != nullptr)
+		{
+			keeper->WorldChanged(file);
+		}
+		return LockstepHost::WorldChanged {.turn = changed.turn, .refusal = changed.refusal};
+	});
 	if (const auto& lobby = settings.network->lobby; lobby.has_value())
 	{
 		std::string members;
 		for (const auto& member : lobby->members)
 		{
-			members +=
-			    fmt::format("{}{} ({}{})", members.empty() ? "" : ", ", member.account, game_socket::RoleName(member.role),
-			                member.slot.has_value() ? fmt::format(" of slot {}", *member.slot) : std::string());
+			members += fmt::format("{}{}{}", members.empty() ? "" : ", ", game_socket::RoleName(member.role),
+			                       member.slot.has_value() ? fmt::format(" of slot {}", *member.slot) : std::string());
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game {} of the lobby {}, build {}, land {} (SHA-256 {}): members {}",
 		                   settings.network->gameId, lobby->id, online::build_id::Own(), start.land, landSha256Logged, members);

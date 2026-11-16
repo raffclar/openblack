@@ -14,6 +14,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,5 +44,10 @@ public:
 
 /// The ids of all the scenarios, in their order. None in a build without the developer tools.
 [[nodiscard]] std::vector<std::string> ScenarioIds();
+
+/// Why a network game cannot start again on the scenario of this id for the editor, or none when it can. The scenario
+/// must be in the registry, and every computer must make its land from its own game folder: no scenario on the map for
+/// 32 gods, whose file only the server makes. A build without the developer tools has no scenario.
+[[nodiscard]] std::optional<std::string> NetworkRestartRefusal(std::string_view id);
 
 } // namespace openblack::testbed_scenarios

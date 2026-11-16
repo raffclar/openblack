@@ -239,6 +239,41 @@ std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>
 	return hands;
 }
 
+bool HandSystem::RemoveHandsOf(PlayerNames player)
+{
+	const auto hands = GetHandsOf(player);
+	if (player == PlayerNames::PLAYER_ONE || !hands.has_value())
+	{
+		return false;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	// The entities of the player no longer link to the hands
+	std::vector<entt::entity> linked;
+	registry.Each<const Player, const PlayerHands>(
+	    [&linked, player](entt::entity entity, const Player& self, const PlayerHands&) {
+		    if (self.name == player)
+		    {
+			    linked.push_back(entity);
+		    }
+	    });
+	for (const auto entity : linked)
+	{
+		registry.Remove<PlayerHands>(entity);
+	}
+	for (const auto hand : *hands)
+	{
+		if (hand != entt::null && registry.Valid(hand))
+		{
+			registry.Destroy(hand);
+		}
+	}
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The god of player {} has no hands now", static_cast<int>(player));
+	}
+	return true;
+}
+
 void HandSystem::StartAtCitadel(PlayerNames owner, const glm::vec3& point)
 {
 	auto& registry = Locator::entitiesRegistry::value();
