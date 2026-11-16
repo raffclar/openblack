@@ -91,6 +91,9 @@ enum class Quantity : uint8_t
 	/// 1 when the empty hand of the player, at the place of the scenario's object at the index, may take that object,
 	/// else 0
 	HandMayTake,
+	/// How many things within the radius of the point paint a footprint into the land: things in the map's cells with a
+	/// model that has a footprint for the ground
+	FootprintsNear,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
@@ -104,9 +107,10 @@ struct Check
 	size_t index {0};
 	/// For Entities: the kind of thing
 	std::string_view kind;
-	/// For CreatureDistance, ObjectDistance and FireNear: the point, from the middle of the map, x east and y north in metres
+	/// For CreatureDistance, ObjectDistance, FireNear and FootprintsNear: the point, from the middle of the map, x east and y
+	/// north in metres
 	glm::vec2 point {0.0f};
-	/// For FireNear: the radius in metres
+	/// For FireNear and FootprintsNear: the radius in metres
 	float radius {0.0f};
 	/// The game turns after the scenario starts. A turn is a tenth of a second.
 	uint32_t afterTurns {0};

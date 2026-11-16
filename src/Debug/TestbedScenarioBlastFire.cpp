@@ -298,6 +298,48 @@ void AddFire(std::vector<Scenario>& all)
 	                {.type = AbodeInfo::CelticHut, .offset = k_Ground + glm::vec2(6.0f, 0.0f), .alight = true}},
 	});
 
+	// The footprint of a burnt building, when its town plans it again and when it does not
+	all.push_back({
+	    .id = "miracles.burnt_hut_footprint",
+	    .name = "The footprints of two huts that burn down",
+	    .facet = Facet::Miracles,
+	    .description = "Two finished huts of the town, 12 metres apart, catch fire with little life left. The town does "
+	                   "not plan the west hut again when it goes, as a hut that a scaffold made. It plans the east hut "
+	                   "again, as any finished hut of a town.",
+	    .expected = "When the fire takes the last of its life, each hut goes from the land and a ghost of it flickers "
+	                "out. The footprint of the west hut goes from the land at once and does not come back. At the next "
+	                "turns of the town, a new site of the east hut with nothing built comes at the same place. As in the "
+	                "game, the site paints the same footprint, and the footprint stays until the builders finish the hut. "
+	                "A far block shows the old footprint until the camera comes near, as in the game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Ground - glm::vec2(15.0f), k_Ground + glm::vec2(15.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticHut,
+	                 .offset = k_Ground + glm::vec2(-6.0f, 0.0f),
+	                 .life = 0.02f,
+	                 .notPlannedAgain = true,
+	                 .alight = true},
+	                {.type = AbodeInfo::CelticHut, .offset = k_Ground + glm::vec2(6.0f, 0.0f), .life = 0.02f, .alight = true}},
+	    .checks = {{.label = "the footprint of the west hut goes when the hut burns down",
+	                .quantity = checks::Quantity::FootprintsNear,
+	                .point = k_Ground + glm::vec2(-6.0f, 0.0f),
+	                .radius = 3.0f,
+	                .afterTurns = 20,
+	                .byTurn = 900,
+	                .atMost = 0.0},
+	               {.label = "the footprint of the west hut does not come back",
+	                .quantity = checks::Quantity::FootprintsNear,
+	                .point = k_Ground + glm::vec2(-6.0f, 0.0f),
+	                .radius = 3.0f,
+	                .afterTurns = 1200,
+	                .atMost = 0.0},
+	               {.label = "the new site of the east hut paints its footprint",
+	                .quantity = checks::Quantity::FootprintsNear,
+	                .point = k_Ground + glm::vec2(6.0f, 0.0f),
+	                .radius = 3.0f,
+	                .afterTurns = 1200,
+	                .atLeast = 1.0}},
+	});
+
 	// The smoke of a fire in clear weather, where only the wind of the climates blows
 	all.push_back({
 	    .id = "sky.climate_wind_smoke",
