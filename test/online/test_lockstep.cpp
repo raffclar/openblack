@@ -4776,6 +4776,47 @@ TEST_F(LockstepTest, TheServerTakesTheActsOfTheDebugWindowsOnlyFromAGodWithTheDe
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
+TEST_F(LockstepTest, TheServerTakesTheActsOfTheMagicWeatherAndMoonWindowsOnlyFromAGodWithTheDebuggerClaim)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+debugger:alice");
+	Computer bob(network, now, "god+editor:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	const DebugMagic dispenser {.act = DebugMagic::Act::PlaceDispenser, .magic = 1, .position = {10.0f, 0.0f, 10.0f}};
+	const DebugTownMiracle town {.town = 1, .magic = 2};
+	const DebugWeather storm {.act = DebugWeather::Act::ForceStorm, .temperature = 12, .rain = 80, .overcast = 90};
+	const DebugSky noon {.act = DebugSky::Act::ScriptHour, .hour = 12.0f};
+	for (auto* computer : {&alice, &bob})
+	{
+		computer->session.Send(dispenser);
+		computer->session.Send(town);
+		computer->session.Send(storm);
+		computer->session.Send(noon);
+	}
+	// No computer takes a miracle out of the table, a storm hotter than the window gives, or an hour after 24
+	alice.session.Send(DebugMagic {.act = DebugMagic::Act::PlaceBubble, .magic = 200});
+	alice.session.Send(DebugWeather {.act = DebugWeather::Act::Preset, .temperature = 90, .rain = 10});
+	alice.session.Send(DebugSky {.act = DebugSky::Act::ScriptHour, .hour = 25.0f});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedDebuggerCommands(), 7u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	for (const auto tag : {turn_codec::CommandTag::DebugMagic, turn_codec::CommandTag::DebugTownMiracle,
+	                       turn_codec::CommandTag::DebugWeather, turn_codec::CommandTag::DebugSky})
+	{
+		EXPECT_EQ(count(0, tag), 1u) << static_cast<int>(tag);
+		EXPECT_EQ(count(1, tag), 0u) << static_cast<int>(tag);
+	}
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
 TEST_F(LockstepTest, TheEditorPausesStepsAndChangesTheSpeedOfTheTurnsOfEveryComputer)
 {
 	using game_socket::EditorTime;

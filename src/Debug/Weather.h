@@ -22,6 +22,9 @@ class Weather final: public Window
 public:
 	Weather() noexcept;
 
+	/// The window shows in a network game. Its acts on the world go as commands of the turns.
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
+
 protected:
 	void Draw() noexcept override;
 	void Update() noexcept override;

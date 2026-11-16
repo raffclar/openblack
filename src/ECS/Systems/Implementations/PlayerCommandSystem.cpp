@@ -28,6 +28,8 @@
 #include "Common/DebugActRuns.h"
 #include "Common/DebugActs.h"
 #include "Common/DebugCheats.h"
+#include "Common/DebugMagicWeatherActRuns.h"
+#include "Common/DebugMagicWeatherActs.h"
 #include "Creature/ClanCreatureOrder.h"
 #include "Creature/CreatureFileLoad.h"
 #include "Creature/CreatureHandRules.h"
@@ -561,6 +563,63 @@ void RunDebugConsoleLine(openblack::PlayerNames player, const DebugConsoleLine& 
 		                   static_cast<int>(player), error.has_value() ? "cannot run" : "runs", line.text,
 		                   error.has_value() ? fmt::format(": {}", *error) : std::string());
 	}
+}
+
+/// Log a debug act at the turn. Each computer writes the same line, so that a check can compare the logs.
+void LogDebugAct(openblack::PlayerNames player, std::string_view window, std::string_view act, std::string_view values,
+                 std::optional<std::string_view> refusal, uint32_t turn)
+{
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debugger of player {} {} the {} act {} ({}){}", turn, static_cast<int>(player),
+		                   refusal.has_value() ? "cannot do" : "does", window, act, values,
+		                   refusal.has_value() ? fmt::format(": {}", *refusal) : std::string());
+	}
+}
+
+/// Do an act of the Magic debug window at the turn, for the player of the command. The game server takes the acts only
+/// from a player with the debugger claim.
+void RunDebugMagic(openblack::PlayerNames player, const DebugMagic& act, uint32_t turn)
+{
+	const auto refusal = openblack::debug_acts::RunMagicAct(player, act);
+	LogDebugAct(player, "Magic", openblack::debug_acts::NameOf(act.act),
+	            fmt::format("miracle {}, at {:.2f} {:.2f} {:.2f}, creature {}, value {}, {}", static_cast<int>(act.magic),
+	                        act.position.x, act.position.y, act.position.z, entt::to_integral(act.creature), act.value,
+	                        act.on ? "on" : "off"),
+	            refusal, turn);
+}
+
+/// Do an act of the town miracles of the Magic debug window at the turn
+void RunDebugTownMiracle(openblack::PlayerNames player, const DebugTownMiracle& act, uint32_t turn)
+{
+	const auto outcome = openblack::debug_acts::RunTownMiracle(act);
+	std::string changed;
+	for (const auto type : outcome.changed)
+	{
+		changed += fmt::format("{}{}", changed.empty() ? "" : " ", static_cast<int>(type));
+	}
+	LogDebugAct(player, "Magic", act.give ? "town_give" : "town_take",
+	            fmt::format("town {}, miracle {}, changed [{}]{}", act.town, static_cast<int>(act.magic), changed,
+	                        outcome.siteIsNew ? ", new worship site" : ""),
+	            outcome.error.empty() ? std::nullopt : std::optional<std::string_view>(outcome.error), turn);
+}
+
+/// Do an act of the Weather debug window at the turn
+void RunDebugWeather(openblack::PlayerNames player, const DebugWeather& act, uint32_t turn)
+{
+	const auto refusal = openblack::debug_acts::RunWeatherAct(act);
+	LogDebugAct(player, "Weather", openblack::debug_acts::NameOf(act.act),
+	            fmt::format("rain {}, snow {}, cloud {}, storm {}, {}", static_cast<int>(act.rain), static_cast<int>(act.snow),
+	                        static_cast<int>(act.overcast), entt::to_integral(act.storm), act.on ? "on" : "off"),
+	            refusal, turn);
+}
+
+/// Do an act of the Moon debug window at the turn
+void RunDebugSky(openblack::PlayerNames player, const DebugSky& act, uint32_t turn)
+{
+	const auto refusal = openblack::debug_acts::RunSkyAct(act);
+	LogDebugAct(player, "Moon", openblack::debug_acts::NameOf(act.act),
+	            fmt::format("hour {}, date {}, {}", act.hour, act.date, act.on ? "on" : "off"), refusal, turn);
 }
 
 /// Do one command of an observer at a turn. Each observer has its own hand and camera, so its report changes only the
@@ -1401,6 +1460,22 @@ void Run(const Command& command, uint32_t turn, const TurnCommandSourceInterface
 		    else if constexpr (std::is_same_v<Kind, DebugConsoleLine>)
 		    {
 			    RunDebugConsoleLine(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugMagic>)
+		    {
+			    RunDebugMagic(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugTownMiracle>)
+		    {
+			    RunDebugTownMiracle(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugWeather>)
+		    {
+			    RunDebugWeather(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugSky>)
+		    {
+			    RunDebugSky(command.player, action, turn);
 		    }
 	    },
 	    command.action);

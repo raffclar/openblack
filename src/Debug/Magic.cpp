@@ -19,6 +19,7 @@
 
 #include <fmt/format.h>
 
+#include "Common/DebugActRuns.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -135,7 +136,9 @@ void Magic::Draw() noexcept
 			DrawSandbox();
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("Particles"))
+		// The effects of the Particles tab change the world of this computer only, thus a network game does not show
+		// the tab
+		if (!debug_acts::SendsCommands() && ImGui::BeginTabItem("Particles"))
 		{
 			DrawParticles();
 			ImGui::EndTabItem();
