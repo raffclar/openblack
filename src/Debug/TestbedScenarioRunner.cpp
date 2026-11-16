@@ -74,6 +74,8 @@
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Reward.h"
@@ -1450,6 +1452,28 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const bool inInfluence =
 		    Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, transform->position);
 		return inInfluence && Locator::handGrabSystem::value().WhyNotTake(*object).empty() ? 1.0 : 0.0;
+	}
+	case checks::Quantity::FootprintsNear:
+	{
+		if (!Locator::resources::has_value())
+		{
+			return std::nullopt;
+		}
+		// The land paints the footprint of a thing only while the thing is in the map's cells
+		const auto& meshes = Locator::resources::value().GetMeshes();
+		const auto point = MapPoint(_middle, check.point);
+		size_t near = 0;
+		registry.Each<const ecs::components::MapCellResident, const ecs::components::Mesh, const ecs::components::Transform>(
+		    [&](const ecs::components::MapCellResident& /*resident*/, const ecs::components::Mesh& mesh,
+		        const ecs::components::Transform& transform) {
+			    if (glm::distance(glm::xz(transform.position), point) > check.radius || !meshes.Contains(mesh.id))
+			    {
+				    return;
+			    }
+			    const auto model = meshes.Handle(mesh.id);
+			    near += model && model->GetGroundFootprint() != nullptr ? 1 : 0;
+		    });
+		return static_cast<double>(near);
 	}
 	}
 	return std::nullopt;
