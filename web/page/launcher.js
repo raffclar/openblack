@@ -962,7 +962,8 @@ async function start(online = false) {
   // The saved games and creatures from the site come back before the game starts, because the game reads its
   // profiles at the start. Then the game owns the Profiles folder, and the page only reads it.
   await waitForCloudRestore(cloudSaves);
-  if ((await storageRoot()) !== undefined) {
+  const storage = (await storageRoot()) !== undefined;
+  if (storage) {
     // Ask the browser to keep the saves when it needs space
     keepStorage();
   }
