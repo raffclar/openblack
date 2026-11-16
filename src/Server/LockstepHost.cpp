@@ -2214,7 +2214,7 @@ void LockstepHost::EditorWorldFrom(ConnectionId connection, Peer& peer, const ga
 	_worldChange = WorldChange {.kind = WorldChange::Kind::WorldFile,
 	                            .file = std::move(file),
 	                            .scenario = {},
-	                            .by = Who(peer),
+	                            .by = peer.name,
 	                            .seed = 0,
 	                            .players = {}};
 	_worldChangeFrom = connection;
@@ -2239,7 +2239,7 @@ void LockstepHost::EditorScenarioFrom(ConnectionId connection, const Peer& peer,
 	_worldChange = WorldChange {.kind = WorldChange::Kind::Scenario,
 	                            .file = {},
 	                            .scenario = scenario.id,
-	                            .by = Who(peer),
+	                            .by = peer.name,
 	                            .seed = _settings.start.seed,
 	                            .players = {}};
 	_worldChangeFrom = connection;
@@ -2264,13 +2264,13 @@ void LockstepHost::ApplyWorldChange()
 	}
 	if (!_changeWorld)
 	{
-		RefuseWorldChange(_worldChangeFrom, change.by, "the server has no world that can change");
+		RefuseWorldChange(_worldChangeFrom, WhoIs(_worldChangeFrom), "the server has no world that can change");
 		return;
 	}
 	const auto changed = _changeWorld(change);
 	if (!changed.turn.has_value())
 	{
-		RefuseWorldChange(_worldChangeFrom, change.by, changed.refusal);
+		RefuseWorldChange(_worldChangeFrom, WhoIs(_worldChangeFrom), changed.refusal);
 		return;
 	}
 	const auto before = _turnsDone;
@@ -2299,7 +2299,7 @@ void LockstepHost::ApplyWorldChange()
 		Log(spdlog::level::info,
 		    fmt::format("After turn {}, the world of the server loaded the world file of {} ({} bytes): the world goes on "
 		                "from turn {}, and every player gets it",
-		                before, change.by, change.file.size(), _turnsDone));
+		                before, WhoIs(_worldChangeFrom), change.file.size(), _turnsDone));
 		// Every player loads the server's new world, as a player whose world parted
 		std::vector<ConnectionId> connections;
 		for (const auto& [connection, peer] : _peers)
@@ -2349,7 +2349,7 @@ void LockstepHost::ApplyWorldChange()
 	_scenarioStart = frame;
 	Log(spdlog::level::info,
 	    fmt::format("After turn {}, {} started the room again on the testbed scenario {}: the game starts again at turn {}",
-	                before, change.by, change.scenario, _turnsDone));
+	                before, WhoIs(_worldChangeFrom), change.scenario, _turnsDone));
 	Broadcast(frame);
 }
 

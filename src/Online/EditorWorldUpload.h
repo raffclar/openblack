@@ -10,6 +10,8 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
+#include <string>
 
 #include <span>
 #include <vector>
@@ -22,6 +24,10 @@ namespace openblack::online::editor_world
 
 /// The parts of the editor.world frames of a world file, in order. Empty when the file is empty or larger than the limit.
 [[nodiscard]] std::vector<game_socket::EditorWorld> Split(std::span<const uint8_t> file);
+/// The bytes of a world file on this computer. None when the file does not open.
+[[nodiscard]] std::optional<std::vector<uint8_t>> ReadFile(const std::string& path);
+/// Writes the bytes into a world file on this computer. False when the file was not written.
+[[nodiscard]] bool WriteFile(const std::string& path, std::span<const uint8_t> bytes);
 
 /// Puts the parts of one world file together, in the order that they come. A part 0 starts a new file.
 class Upload

@@ -12,6 +12,9 @@
 #include <cstddef>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <utility>
 
 namespace openblack::online::editor_world
@@ -81,6 +84,24 @@ void Upload::Clear()
 	_count = 0;
 	_size = 0;
 	_done = false;
+}
+
+
+std::optional<std::vector<uint8_t>> ReadFile(const std::string& path)
+{
+	std::ifstream file(std::filesystem::path(path), std::ios::binary);
+	if (!file)
+	{
+		return std::nullopt;
+	}
+	return std::vector<uint8_t> {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
+
+bool WriteFile(const std::string& path, std::span<const uint8_t> bytes)
+{
+	std::ofstream out(std::filesystem::path(path), std::ios::binary);
+	out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	return static_cast<bool>(out);
 }
 
 } // namespace openblack::online::editor_world

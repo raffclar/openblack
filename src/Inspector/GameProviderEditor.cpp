@@ -9,9 +9,6 @@
 
 #include <algorithm>
 #include <array>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <bit>
 #include <exception>
 #include <memory>
@@ -52,6 +49,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
+#include "Online/EditorWorldUpload.h"
 #include "Online/NetworkSession.h"
 #include "Story/StoryLandSkip.h"
 
@@ -761,9 +759,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			// The world state of this computer, which changes nothing in the world
 			const auto state =
 			    Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
-			std::ofstream out(std::filesystem::path(pathParam->get<std::string>()), std::ios::binary);
-			out.write(reinterpret_cast<const char*>(state.data()), static_cast<std::streamsize>(state.size()));
-			if (state.empty() || !out)
+			if (state.empty() || !online::editor_world::WriteFile(pathParam->get<std::string>(), state))
 			{
 				return QueryResult::Error("the world file was not written");
 			}
@@ -771,12 +767,12 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			                           {"bytes", state.size()},
 			                           {"turn", Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u}});
 		}
-		std::ifstream file(std::filesystem::path(pathParam->get<std::string>()), std::ios::binary);
-		if (!file)
+		const auto read = online::editor_world::ReadFile(pathParam->get<std::string>());
+		if (!read.has_value())
 		{
 			return QueryResult::Error("the world file does not open");
 		}
-		const std::vector<uint8_t> bytes {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+		const auto& bytes = *read;
 		if (bytes.empty() || bytes.size() > game_socket::k_MostEditorWorldBytes)
 		{
 			return QueryResult::Error(fmt::format("a network game takes a world file of 1 byte to {} MB",

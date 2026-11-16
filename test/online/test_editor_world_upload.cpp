@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 
 #include <vector>
 
@@ -90,4 +91,14 @@ TEST(EditorWorldUpload, ALastPartThatDoesNotFillTheSizeBreaksTheFile)
 	EXPECT_EQ(upload.Add({.index = 0, .count = 1, .size = 10, .bytes = {1, 2, 3}}), Upload::Added::Broken);
 	EXPECT_EQ(upload.Add({.index = 0, .count = 1, .size = 2, .bytes = {1, 2, 3}}), Upload::Added::Broken);
 	EXPECT_EQ(upload.Add({.index = 0, .count = 1, .size = 3, .bytes = {1, 2, 3}}), Upload::Added::Done);
+}
+
+TEST(EditorWorldUpload, AWorldFileWrittenIsReadBackAndAMissingFileDoesNotOpen)
+{
+	const auto path = (std::filesystem::temp_directory_path() / "openblack_editor_world_upload_test.bin").string();
+	const std::vector<uint8_t> bytes {1, 2, 3, 250};
+	ASSERT_TRUE(online::editor_world::WriteFile(path, bytes));
+	EXPECT_EQ(online::editor_world::ReadFile(path), std::optional<std::vector<uint8_t>> {bytes});
+	std::filesystem::remove(path);
+	EXPECT_FALSE(online::editor_world::ReadFile(path).has_value());
 }
