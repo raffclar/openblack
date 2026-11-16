@@ -201,6 +201,8 @@ struct Arguments
 	bool preIntro {false};
 	/// Leave out the logo pictures at start-up
 	bool skipLogos {false};
+	/// Developers: save a picture of the tips screen at full fade, through the renderer, to this file
+	std::optional<std::filesystem::path> tipsScreenshot;
 	/// Developers: throw a test error after the start, to test the error reports
 	bool sentryTestError {false};
 	/// Developers: stop with a trap after the start, to test the crash reports
@@ -615,6 +617,7 @@ private:
 	std::string _filmSurface;
 	bool _preIntro {false};
 	bool _skipLogos {false};
+	std::optional<std::filesystem::path> _tipsScreenshot;
 	bool _logoEffectAsked {false};
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The command line asked for a new game, or to continue as a plain start does

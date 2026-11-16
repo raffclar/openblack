@@ -286,6 +286,7 @@ Game::Game(Arguments&& args) noexcept
     , _filmSurface(args.filmSurface)
     , _preIntro(args.preIntro || args.launchSwitches.preIntroVideo)
     , _skipLogos(args.skipLogos)
+    , _tipsScreenshot(args.tipsScreenshot)
     , _logoEffectAsked(args.logoEffect)
     , _newGameStart(args.newGameStart)
     , _newGameAsked(args.newGame || launch_switches::FirstGameOf(args.launchSwitches) == launch_switches::FirstGame::NewGame)
