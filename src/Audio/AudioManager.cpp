@@ -44,6 +44,7 @@
 #include "Locator.h"
 #include "MixVolume.h"
 #include "PanPlace.h"
+#include "Resources/MissingGameData.h"
 #include "Resources/Resources.h"
 #include "SampleFeed.h"
 #include "Sound/EmitterFollow.h"
@@ -1148,6 +1149,13 @@ std::shared_ptr<const MusicBank> AudioManager::LoadMusicBank(const std::string& 
 	const auto path = FindIgnoringCase(bankPath);
 	if (!path)
 	{
+		// The original game also does not find these banks and continues without their music
+		if (resources::IsFileNotInGameData(bankPath))
+		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Music bank {} is not in the game data, as in the original game",
+			                    bankPath);
+			return nullptr;
+		}
 		SPDLOG_LOGGER_WARN(spdlog::get("audio"), "Music bank {} not found", bankPath);
 		return nullptr;
 	}
