@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <future>
 #include <memory>
 #include <optional>
 #include <string>
@@ -32,7 +33,11 @@ public:
 	/// of the calendar.
 	using Clock = std::function<int64_t()>;
 
-	LobbyRoomSystem(LobbyClientSystemInterface& client, std::string buildId, Clock clock);
+	/// Starts the thread that gives the build hash (online::build_hash::OwnLater)
+	using BuildHashStart = std::function<std::shared_future<std::string>()>;
+
+	/// The system starts the build hash when the player first uses the lobby. With no start function, it sends no hash.
+	LobbyRoomSystem(LobbyClientSystemInterface& client, std::string buildId, Clock clock, BuildHashStart startBuildHash = {});
 	~LobbyRoomSystem() override;
 	LobbyRoomSystem(const LobbyRoomSystem&) = delete;
 	LobbyRoomSystem& operator=(const LobbyRoomSystem&) = delete;
@@ -86,9 +91,17 @@ private:
 	/// Gets the lobby after a join, and opens its room
 	void EnterLobby(std::string lobbyId, LobbyCallback<LobbyDone> callback);
 	void HandleEvent(const lobby_api::PushEvent& event);
+	/// Starts the thread of the build hash once. The game server also has this system, and it does not use the lobby, so
+	/// the thread starts only when the player uses the lobby.
+	void StartBuildHash();
+	/// The build hash that the game sends with its build id. Until the thread gives it, the hash is empty, and the
+	/// lobby checks the build id only. The frame does not wait for the thread.
+	[[nodiscard]] std::string BuildHash();
 
 	LobbyClientSystemInterface& _client;
 	std::string _buildId;
+	BuildHashStart _startBuildHash;
+	std::shared_future<std::string> _buildHash;
 	Clock _clock;
 	uint32_t _listener {0};
 
