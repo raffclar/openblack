@@ -1159,9 +1159,18 @@ void IsCreatureAvailable() // 271 IS_CREATURE_AVAILABLE
 	// The five bonus creatures are only there once unlocked; any other species always is. The game's unlocks came from
 	// a program outside it, so none is unlocked unless the debug option says so, as on a normal install
 	const auto species = Pop().intVal;
-	const auto unlocked =
+	Pushb(creature_swap::IsAvailable(species, ScriptBonusCreatures()));
+}
+
+creature_swap::Unlocked ScriptBonusCreatures()
+{
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto option =
 	    Locator::config::has_value() ? Locator::config::value().unlockedBonusCreatures : creature_swap::Unlocked {};
-	Pushb(creature_swap::IsAvailable(species, unlocked));
+	const auto world = Locator::entitiesRegistry::has_value()
+	                       ? Locator::entitiesRegistry::value().Context().networkBonusCreatures
+	                       : uint8_t {0};
+	return creature_swap::ScriptUnlocked(networkGame, option, world);
 }
 
 void GetActionCount() // 274 GET_ACTION_COUNT

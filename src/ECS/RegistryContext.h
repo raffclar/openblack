@@ -116,5 +116,9 @@ struct RegistryContext
 	std::optional<creature_exploration::RegionMap> explorationMap;
 	/// The statistics the game keeps once for everyone, which a new land starts again
 	statistics::GlobalFigures globalStatistics;
+	/// The bonus creatures that the scripts of a network game read, one bit for each (creature_swap::MaskOf). A network
+	/// game starts with none, as a normal install. Only the turn command of the debug menu changes the set, thus each
+	/// computer keeps the same set.
+	uint8_t networkBonusCreatures {0};
 };
 } // namespace openblack::ecs

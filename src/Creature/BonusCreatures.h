@@ -47,4 +47,14 @@ using Unlocked = std::bitset<k_BonusCount>;
 /// text names something else
 [[nodiscard]] std::optional<Unlocked> ParseUnlocked(std::string_view text);
 
+/// The set as one byte: one bit for each bonus creature, in the order of the unlocks
+[[nodiscard]] uint8_t MaskOf(const Unlocked& unlocked);
+
+/// The set of a byte that MaskOf gave. The bits past the five bonus creatures change nothing.
+[[nodiscard]] Unlocked FromMask(uint8_t mask);
+
+/// The set that the scripts read. In a network game, this is the set of the world, which each computer keeps the same at
+/// each turn. In a game alone, this is the set of the debug option of this computer.
+[[nodiscard]] Unlocked ScriptUnlocked(bool networkGame, const Unlocked& option, uint8_t world);
+
 } // namespace openblack::creature_swap

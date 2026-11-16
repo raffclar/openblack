@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "3D/L3DMesh.h"
+#include "CHLApi/NativeHelpers.h"
 #include "Common/ErrorReportsInterface.h"
 #include "Common/ErrorReportsRules.h"
 #include "Common/EventManager.h"
@@ -30,10 +31,12 @@
 #include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/ToolRunSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "GameProviderShared.h"
+#include "Help/ScriptSpirits.h"
 #include "Locator.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/LobbyRoom.h"
@@ -209,6 +212,34 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		        {"running", config.running},
 		    };
 	    }));
+	provider->Add(
+	    Query("script_reads",
+	          "What the scripts read of the bonus creatures and the advisors now. every_computer is what a script that each "
+	          "computer runs reads (in a network game, the same on each computer). this_computer is what a help script of "
+	          "this computer reads. The spirits are those of the script spirits 3 (by the alignment) and 4 (the opposite "
+	          "of the alignment); the query draws no random number"),
+	    [](const QueryContext& /*context*/) {
+		    const auto reads = [](bool readsThisComputer) {
+			    const auto unlocked = readsThisComputer && Locator::config::has_value()
+			                              ? Locator::config::value().unlockedBonusCreatures
+			                              : chlapi::ScriptBonusCreatures();
+			    const auto alignmentSpirit = chlapi::ScriptHelpSpirit(3, readsThisComputer);
+			    const auto oppositeSpirit = chlapi::ScriptHelpSpirit(4, readsThisComputer);
+			    return Json {
+			        {"unlocked_bonus_creatures", UnlockedBonusCreatureNames(unlocked)},
+			        {"alignment_spirit", alignmentSpirit},
+			        {"opposite_spirit", oppositeSpirit},
+			        {"good_spirit_played", chlapi::ScriptSpiritPlayed(help::script_spirits::k_GoodSpirit, readsThisComputer)},
+			        {"evil_spirit_played", chlapi::ScriptSpiritPlayed(help::script_spirits::k_EvilSpirit, readsThisComputer)},
+			    };
+		    };
+		    const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+		    return QueryResult::Value(
+		        {{"network_game", networkGame},
+		         {"turn", Locator::time::has_value() ? Json(Locator::time::value().GetTurn()) : Json(nullptr)},
+		         {"every_computer", reads(!networkGame)},
+		         {"this_computer", reads(true)}});
+	    });
 	provider->Add(
 	    Query("computer_settings", "The settings of this computer (settings.json) as the game read them at the start, with the "
 	                               "changes kept since; a value the file does not keep is null"),
