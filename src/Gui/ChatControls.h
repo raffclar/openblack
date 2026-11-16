@@ -101,6 +101,10 @@ public:
 	void PeopleChanged() { RebuildRows(); }
 	/// The chat opens with the focus in its line, as a click on the speech button opens it
 	void Open() { OpenChat(false); }
+	/// Every frame, before the facts of the frame are read: tells the controls whether a network game is live. When the
+	/// network game ends, the chat of that game closes. The line, the quick chat list and the speech button go, so that
+	/// the next game of this computer alone does not show them.
+	void FollowNetworkGame(bool networkGame);
 	/// Every frame, before the input. True when the controls came on the screen in this frame.
 	bool Update(const Frame& frame);
 
@@ -149,6 +153,8 @@ private:
 	};
 
 	void OpenChat(bool closeAfterSend);
+	/// Closes the chat and removes the line, the quick chat list and what the player did not send yet
+	void CloseChat();
 	void Send(std::optional<uint32_t> taunt);
 	void StartQuickChat(glm::ivec2 point);
 	void ClickPlayers(glm::ivec2 point, bool shift, bool ctrl, bool otherModifier);
@@ -187,6 +193,8 @@ private:
 	bool _closeAfterSend {false};
 	bool _quickOpen {false};
 	bool _onlyShift {false};
+	/// A network game was live at the last frame
+	bool _networkGame {false};
 };
 
 } // namespace openblack::gui
