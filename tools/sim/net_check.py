@@ -686,6 +686,28 @@ def purposeful_part_left_out(different, recoveries, part_at):
     return [turn for turn in different if not part_at <= turn <= back_at]
 
 
+def purposeful_part_gap(part_turns, recoveries, part_at):
+    """The turns that a client differs from the server on purpose (--part-second-at): from the first turn at which its
+    world parted, at or after the turn of the part, up to the first world that it went on from after it. Gives the
+    first turn, the turn of the world that it went on from and the number of turns between them, both ends included.
+    Gives None when the client did not part or did not come back. Capturing a big world takes some seconds, so the
+    gap is many turns on a big land; it is not a failure. A client that differs after it is back is judged on its own
+    parts and on the compares that the gap does not explain."""
+    back_at = next((turn for turn in recoveries if turn >= part_at), None)
+    first = next((turn for turn in sorted(part_turns) if turn >= part_at), None)
+    if back_at is None or first is None or back_at < first:
+        return None
+    return first, back_at, back_at - first + 1
+
+
+def differing_compares_allowed(parted_on_purpose, gap):
+    """How many compares of a client's session may differ from the server. A client that parts on purpose differs in the
+    turns of its gap, and in one more. Another client differs in none."""
+    if not parted_on_purpose:
+        return 0
+    return PURPOSEFUL_PART_COMPARES + (gap[2] if gap else 0)
+
+
 def session_counts(log):
     """The last counts of the compares that the client's session wrote: compared, the same, and the resumes"""
     if not os.path.exists(log):
@@ -3083,8 +3105,16 @@ def main():
         if server_end and not left and not decided_after_run and client_end != server_end:
             print(f"client {index + 1} tells another end of the game than the server: {client_end} against {server_end}")
             different = different + [-3]
+        # The compares of the turns between the part on purpose and the world that the client went on from differ; they
+        # are the gap, and the client is judged on its turns after it
+        gap = purposeful_part_gap(session_parts, recovery_turns(recovered), options.part_second_at) if parted_on_purpose else None
+        allowed_differing = differing_compares_allowed(parted_on_purpose, gap)
+        if gap and counts is not None:
+            print(f"client {index + 1} was apart from the server from turn {gap[0]} to its world of turn {gap[1]} "
+                  f"({gap[2]} turns, not counted as a difference); it differs in {counts[0] - counts[1]} compares of "
+                  f"{counts[0]}")
         same = (not different and enough and counts is not None
-                and (counts[0] - counts[1] <= (PURPOSEFUL_PART_COMPARES if parted_on_purpose else 0))
+                and (counts[0] - counts[1] <= allowed_differing)
                 and (left or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         draws = None
@@ -3102,6 +3132,7 @@ def main():
                                   ["The end box opens", "The end box asks", "leaves the network game"])[-3:],
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
             "recovered": recovered[-1:] if recovered else [],
+            "gap_turns": gap[2] if gap else None, "gap_from": gap[0] if gap else None, "gap_back_at": gap[1] if gap else None,
             "different": different[:20], "same": same, "parts_against_server": parts, "draws_against_server": draws,
             "rows_against_server": rows_against_server(server_dir, client_dir) if options.row_dump else None,
             "session": lines_with(os.path.join(client_dir, "client.log"),

@@ -2,7 +2,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { exitToHome, exitGoesHome, homepageAddress, k_ExitMessageType } = require('../web/page/launcher-exit.js');
+const { exitToHome, exitGoesHome, stopsAtChosenTurn, homepageAddress, k_ExitMessageType } = require('../web/page/launcher-exit.js');
 
 let count = 0;
 const check = (name, body) => {
@@ -54,6 +54,12 @@ check('a framed game under another origin gives a message to the parent', () => 
 });
 check('a normal exit goes home', () => {
   assert.equal(exitGoesHome(0, false), true);
+});
+check('a run that stops at a chosen turn stays on the page', () => {
+  assert.equal(exitGoesHome(0, false, true), false);
+  assert.equal(stopsAtChosenTurn(['--skip-logos', '--sim-until-turn', '300']), true);
+  assert.equal(stopsAtChosenTurn(['--sim-until-turn=300']), true);
+  assert.equal(stopsAtChosenTurn(['--sim-fast', '-n', '600']), false);
 });
 check('an exit with an error code stays', () => {
   assert.equal(exitGoesHome(1, false), false);
