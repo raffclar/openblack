@@ -224,8 +224,8 @@ enum class GuiMode : uint8_t
 /// - A player with the debugger right gets the debug menu bar, in every build and also in a network game.
 /// - A player without the debugger right gets only the editor when the editor can open (see EditorRefusalOf). Else
 ///   the player gets nothing.
-/// - When the debugger right is not known (no network game and no sign-in), the rule from before stays. A developer
-///   build shows all the windows. A build that players get shows only the editor when the editor can open.
+/// - A developer build outside a network game always shows the debug menu bar, also for an account without the debugger
+///   right (user, 2026-11-16: "always show it"). A build that players get keeps the rules above.
 [[nodiscard]] constexpr GuiMode GuiModeOf(bool built, bool networkSessionLive, EditorRight editor,
                                           DebuggerRight debugger) noexcept
 {
@@ -233,7 +233,7 @@ enum class GuiMode : uint8_t
 	{
 		return GuiMode::Full;
 	}
-	if (built && !networkSessionLive && debugger == DebuggerRight::Unknown)
+	if (built && !networkSessionLive)
 	{
 		return GuiMode::Full;
 	}

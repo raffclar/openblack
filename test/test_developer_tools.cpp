@@ -157,13 +157,22 @@ TEST(DeveloperTools, ThePlayerWithTheDebuggerRightGetsTheMenuBarInEveryBuildAndG
 	}
 }
 
-TEST(DeveloperTools, ThePlayerWithoutTheDebuggerRightGetsOnlyTheEditorOfTheEditorRight)
+TEST(DeveloperTools, ADeveloperBuildOutsideANetworkGameShowsTheBarWithoutTheDebuggerRight)
 {
-	// A developer build outside a network game always opens the editor, thus only the editor shows
 	for (const auto editor : {EditorRight::Unknown, EditorRight::Granted, EditorRight::Refused})
 	{
-		EXPECT_EQ(GuiModeOf(true, false, editor, DebuggerRight::Refused), GuiMode::EditorOnly);
+		for (const auto debugger : {DebuggerRight::Unknown, DebuggerRight::Granted, DebuggerRight::Refused})
+		{
+			EXPECT_EQ(GuiModeOf(true, false, editor, debugger), GuiMode::Full);
+		}
 	}
+	// A network game and a build that players get keep the rule of the debugger right
+	EXPECT_EQ(GuiModeOf(true, true, EditorRight::Granted, DebuggerRight::Refused), GuiMode::EditorOnly);
+	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Granted, DebuggerRight::Refused), GuiMode::EditorOnly);
+}
+
+TEST(DeveloperTools, ThePlayerWithoutTheDebuggerRightGetsOnlyTheEditorOfTheEditorRight)
+{
 	for (const bool built : {false, true})
 	{
 		EXPECT_EQ(GuiModeOf(built, true, EditorRight::Granted, DebuggerRight::Refused), GuiMode::EditorOnly);
