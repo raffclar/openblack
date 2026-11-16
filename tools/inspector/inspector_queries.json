@@ -2869,6 +2869,30 @@
   "writes": true
  },
  {
+  "description": "Does an act of the Land generator tab of the editor, as its buttons do. start saves the game into an empty slot of the player and loads a land from the seed (a random seed when none is given). generate loads a land from the seed and the choices. exit loads the save from before the generator. state gives the state only. Each answer gives whether the generator is on, the slot of its save, the choices and the path of the open land. A network game refuses the acts.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "start, generate, exit or state",
+    "name": "act",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "start and generate: the seed of the land",
+    "name": "seed",
+    "type": "integer"
+   },
+   {
+    "description": "generate: choices by their key in the land path (land, ranges, mountains, plains, hills, hollows, rain, rivers, north, south, wind); the others keep their values",
+    "name": "choices",
+    "type": "object"
+   }
+  ],
+  "query": "editor.land_generator",
+  "writes": true
+ },
+ {
   "description": "Does an act of the debug windows or of the debug menus, as their buttons do: an act on the advisors (kind advisor), a change of the time of the day, of the alignment of a player or of a bonus creature (kind world), a line of land script commands of the Console (kind console), or a gesture of the Gestures window (kind gesture). In a network game the first three go as commands of the turns, and the game server takes them only from a player with the debugger claim. A gesture goes to the hand of this computer. force sends the act also when the debug windows of this computer do not show.",
   "kind": "object",
   "parameters": [

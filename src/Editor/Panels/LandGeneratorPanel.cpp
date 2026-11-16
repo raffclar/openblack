@@ -88,8 +88,8 @@ void LandGeneratorPanel::Draw(EditorContext& context) noexcept
 	}
 	else
 	{
+		// The buttons come first, so that they show without a scroll of the tab
 		const auto returnSlot = *session.returnSlot;
-		DrawChoices(session.choices);
 		if (ImGui::Button("Generate"))
 		{
 			land_generator::Generate(session);
@@ -103,6 +103,7 @@ void LandGeneratorPanel::Draw(EditorContext& context) noexcept
 		ImGui::SetItemTooltip("Loads the save from before the generator started (slot %u)", returnSlot);
 		if (const auto open = generated_land::ChoicesOf(landPath); open.has_value())
 		{
+			ImGui::SameLine();
 			ImGui::TextColored(style::k_Muted, "The land that is open has the seed %llu.",
 			                   static_cast<unsigned long long>(open->seed));
 		}
@@ -110,5 +111,10 @@ void LandGeneratorPanel::Draw(EditorContext& context) noexcept
 	if (!session.status.empty())
 	{
 		ImGui::TextColored(style::k_Muted, "%s", session.status.c_str());
+	}
+	if (land_generator::IsOn(session, landPath))
+	{
+		ImGui::Separator();
+		DrawChoices(session.choices);
 	}
 }
