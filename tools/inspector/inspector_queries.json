@@ -3044,6 +3044,150 @@
   "writes": true
  },
  {
+  "description": "Does an act of the Physics, Particles, Temple villagers or Path finding debug windows, as their buttons do: a throw (kind physics), an act on the effects with the shared random numbers (kind particle), an act on the towns and the villagers of the temple of the first player (kind temple), or a move of a villager (kind path). In a network game the acts go as commands of the turns, and the game server takes them only from a player with the debugger claim. force sends the act also when the debug windows of this computer do not show.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "physics, particle, temple or path",
+    "name": "kind",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "particle: start, pause, close_all, delete_all, close or delete. temple: share, send_one, call_one_back, make, send_to_worship or take_away. path: teleport, move_to, goal or speed.",
+    "name": "act",
+    "type": "string"
+   },
+   {
+    "description": "physics: the thing to throw, -1 for a new one",
+    "name": "object",
+    "type": "integer"
+   },
+   {
+    "description": "physics: the type of the new static thing. particle start: the particle type",
+    "name": "type",
+    "type": "integer"
+   },
+   {
+    "description": "physics: the height above the land",
+    "name": "height",
+    "type": "number"
+   },
+   {
+    "description": "physics: the scale",
+    "name": "scale",
+    "type": "number"
+   },
+   {
+    "description": "physics: x and z, else the focus of the camera",
+    "name": "place",
+    "type": "array"
+   },
+   {
+    "description": "physics: the velocity x, y and z",
+    "name": "velocity",
+    "type": "array"
+   },
+   {
+    "description": "particle start: the particle file",
+    "name": "file",
+    "type": "string"
+   },
+   {
+    "description": "particle start and path: x, y and z, else the focus of the camera",
+    "name": "position",
+    "type": "array"
+   },
+   {
+    "description": "particle start: the magnitude",
+    "name": "magnitude",
+    "type": "number"
+   },
+   {
+    "description": "particle start: the player, 0 to 7",
+    "name": "player",
+    "type": "integer"
+   },
+   {
+    "description": "particle start: the draw, 0 to 5",
+    "name": "draw",
+    "type": "integer"
+   },
+   {
+    "description": "particle start: the count of the targets",
+    "name": "targets",
+    "type": "integer"
+   },
+   {
+    "description": "particle close and delete: the effect",
+    "name": "effect",
+    "type": "integer"
+   },
+   {
+    "description": "particle pause: true stops the steps",
+    "name": "paused",
+    "type": "boolean"
+   },
+   {
+    "description": "temple: the town, else the first town",
+    "name": "town",
+    "type": "integer"
+   },
+   {
+    "description": "temple and path: the villager, else the first villager that the window made",
+    "name": "villager",
+    "type": "integer"
+   },
+   {
+    "description": "temple share: the share, 0 to 1",
+    "name": "value",
+    "type": "number"
+   },
+   {
+    "description": "temple make: the tribe",
+    "name": "tribe",
+    "type": "integer"
+   },
+   {
+    "description": "temple make: the job",
+    "name": "number",
+    "type": "integer"
+   },
+   {
+    "description": "temple make: the age, 1 to 80",
+    "name": "age",
+    "type": "integer"
+   },
+   {
+    "description": "temple make: the count, 1 to 32",
+    "name": "count",
+    "type": "integer"
+   },
+   {
+    "description": "temple make: the villagers go to worship",
+    "name": "send",
+    "type": "boolean"
+   },
+   {
+    "description": "path goal: the goal x and z",
+    "name": "goal",
+    "type": "array"
+   },
+   {
+    "description": "path speed: the speed in metres a second",
+    "name": "speed",
+    "type": "number"
+   },
+   {
+    "description": "Send also when the debug windows do not show",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.debug_thing",
+  "writes": true
+ },
+ {
   "description": "The script machine: its scripts, tasks, globals and the task running",
   "kind": "object",
   "parameters": [],

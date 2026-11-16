@@ -21,6 +21,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
+#include "Common/DebugThingActRuns.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -37,11 +38,13 @@ using namespace openblack::debug::gui;
 
 namespace
 {
-constexpr int k_PlayerCount = 8;
-constexpr float k_MaxMagnitude = 10.0f;
+constexpr int k_PlayerCount = debug_thing_acts::k_EffectPlayers;
+constexpr float k_MaxMagnitude = debug_thing_acts::k_MostMagnitude;
 constexpr float k_MaxHeight = 50.0f;
 constexpr float k_MaxCloseAfter = 30.0f;
-constexpr int k_MaxTargets = 10;
+constexpr int k_MaxTargets = debug_thing_acts::k_MostTargets;
+
+using player_commands::DebugParticle;
 
 std::string TypeLabel(ParticleType type)
 {
@@ -155,40 +158,86 @@ void Magic::DrawParticles() noexcept
 		                  "miracle's chakra is given the people it heals.");
 	}
 
+	// In a network game an effect with the shared random numbers, the pause and the closes of all the effects go as
+	// commands of the turns. An effect with the random numbers of this computer shows only on this computer, thus it starts
+	// at once.
+	const bool sends = debug_thing_acts::SendsCommands();
+	if (sends && _synced && _closeAfter > 0.0f)
+	{
+		ImGui::TextWrapped("In a network game an effect of each computer does not close by itself. Use Close.");
+	}
 	if (ImGui::Button("Spawn"))
 	{
 		const auto point = SpawnPoint();
-		const auto id = _byFile && !_particleFiles.empty()
-		                    ? particles.Start(_particleFiles.at(static_cast<size_t>(_particleFile)), point, _magnitude, _synced)
-		                    : particles.Start(_particleType, point, _magnitude, _synced);
-		particles.SetPlayer(id, _player);
-		particles.SetDrawPath(id, _drawPath);
-		GiveNearestTargets(id, point);
-		if (id != ecs::systems::ParticleRuleSystemInterface::k_NoEffect && _closeAfter > 0.0f)
+		const bool byFile = _byFile && !_particleFiles.empty();
+		if (sends && _synced)
 		{
-			_timedEffects.push_back({id, _closeAfter});
+			debug_thing_acts::Do(DebugParticle {
+			    .act = DebugParticle::Act::Start,
+			    .file = byFile ? _particleFiles.at(static_cast<size_t>(_particleFile)) : std::string(),
+			    .type = static_cast<uint8_t>(_particleType),
+			    .position = point,
+			    .magnitude = std::clamp(_magnitude, 0.0f, k_MaxMagnitude),
+			    .player = static_cast<uint8_t>(std::clamp(_player, 0, k_PlayerCount - 1)),
+			    .drawPath = static_cast<uint8_t>(_drawPath),
+			    .targets = static_cast<uint8_t>(std::clamp(_targets, 0, k_MaxTargets)),
+			});
+		}
+		else
+		{
+			const auto id =
+			    byFile ? particles.Start(_particleFiles.at(static_cast<size_t>(_particleFile)), point, _magnitude, _synced)
+			           : particles.Start(_particleType, point, _magnitude, _synced);
+			particles.SetPlayer(id, _player);
+			particles.SetDrawPath(id, _drawPath);
+			debug_thing_acts::GiveNearestTargets(id, point, static_cast<uint8_t>(std::clamp(_targets, 0, k_MaxTargets)));
+			if (id != ecs::systems::ParticleRuleSystemInterface::k_NoEffect && _closeAfter > 0.0f)
+			{
+				_timedEffects.push_back({id, _closeAfter});
+			}
 		}
 	}
 	ImGui::SameLine();
 	bool paused = particles.IsPaused();
 	if (ImGui::Checkbox("Pause", &paused))
 	{
-		particles.SetPaused(paused);
+		if (sends)
+		{
+			debug_thing_acts::Do(DebugParticle {.act = DebugParticle::Act::Pause, .paused = paused});
+		}
+		else
+		{
+			particles.SetPaused(paused);
+		}
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Close all"))
 	{
-		for (const auto& effect : particles.GetEffects())
+		if (sends)
 		{
-			particles.CloseDown(effect.id);
+			debug_thing_acts::Do(DebugParticle {.act = DebugParticle::Act::CloseAll});
+		}
+		else
+		{
+			for (const auto& effect : particles.GetEffects())
+			{
+				particles.CloseDown(effect.id);
+			}
 		}
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Delete all"))
 	{
-		for (const auto& effect : particles.GetEffects())
+		if (sends)
 		{
-			particles.Delete(effect.id);
+			debug_thing_acts::Do(DebugParticle {.act = DebugParticle::Act::DeleteAll});
+		}
+		else
+		{
+			for (const auto& effect : particles.GetEffects())
+			{
+				particles.Delete(effect.id);
+			}
 		}
 	}
 	ImGui::Separator();
@@ -205,34 +254,6 @@ void Magic::DrawParticleStats() const noexcept
 	const auto stats = Locator::particleSystem::value().GetDrawStats();
 	ImGui::Text("Drawn: %zu sprites, %zu ribbons, %zu models, %zu mists, %zu light maps, from %zu effects", stats.sprites,
 	            stats.chains, stats.meshes, stats.mists, stats.lightStamps, stats.effects);
-}
-
-void Magic::GiveNearestTargets(uint32_t effect, const glm::vec3& origin) const noexcept
-{
-	if (_targets <= 0 || !Locator::entitiesRegistry::has_value())
-	{
-		return;
-	}
-	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<std::pair<float, entt::entity>> nearest;
-	const auto add = [&nearest, &origin](entt::entity entity, const ecs::components::Transform& transform) {
-		nearest.emplace_back(glm::distance(transform.position, origin), entity);
-	};
-	registry.Each<const ecs::components::Creature, const ecs::components::Transform>(
-	    [&add](entt::entity entity, const ecs::components::Creature&, const ecs::components::Transform& transform) {
-		    add(entity, transform);
-	    });
-	registry.Each<const ecs::components::Villager, const ecs::components::Transform>(
-	    [&add](entt::entity entity, const ecs::components::Villager&, const ecs::components::Transform& transform) {
-		    add(entity, transform);
-	    });
-	std::ranges::sort(nearest, {}, &std::pair<float, entt::entity>::first);
-	const auto count = std::min(nearest.size(), static_cast<size_t>(_targets));
-	// The rules take the last given first: the nearest goes last
-	for (size_t i = count; i > 0; --i)
-	{
-		Locator::particleRuleSystem::value().AddTarget(effect, nearest.at(i - 1).second);
-	}
 }
 
 void Magic::DrawRunningEffects() noexcept
@@ -301,14 +322,31 @@ void Magic::DrawRunningEffects() noexcept
 			ImGui::TextUnformatted(effect.ownedBySpell ? "miracle" : "running");
 		}
 		ImGui::TableNextColumn();
+		// In a network game each computer closes an effect of each computer at the turn. An effect of this computer only
+		// closes at once.
+		const bool sends = debug_thing_acts::SendsCommands() && debug_thing_acts::IsSharedEffect(effect.id);
 		if (ImGui::SmallButton("Close"))
 		{
-			particles.CloseDown(effect.id);
+			if (sends)
+			{
+				debug_thing_acts::Do(DebugParticle {.act = DebugParticle::Act::Close, .effect = effect.id});
+			}
+			else
+			{
+				particles.CloseDown(effect.id);
+			}
 		}
 		ImGui::SameLine();
 		if (ImGui::SmallButton("Delete"))
 		{
-			particles.Delete(effect.id);
+			if (sends)
+			{
+				debug_thing_acts::Do(DebugParticle {.act = DebugParticle::Act::Delete, .effect = effect.id});
+			}
+			else
+			{
+				particles.Delete(effect.id);
+			}
 		}
 		ImGui::PopID();
 	}

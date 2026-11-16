@@ -9,14 +9,15 @@
 
 #include "Physics.h"
 
+#include <algorithm>
+#include <limits>
+
 #include <imgui.h>
 
-#include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
-#include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "Common/DebugThingActRuns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
-#include "Enums.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -45,20 +46,26 @@ void Physics::Draw() noexcept
 	ImGui::InputFloat("Scale", &_scale);
 	ImGui::InputFloat3("Velocity", _velocity.data());
 	ImGui::InputInt("Object (-1: a new one)", &_entity);
-	if (ImGui::Button("Throw at the camera's focus") && Locator::camera::has_value() && Locator::terrainSystem::has_value())
+	if (ImGui::Button("Throw at the camera's focus") && Locator::camera::has_value())
 	{
-		auto object = static_cast<entt::entity>(_entity);
-		auto& registry = Locator::entitiesRegistry::value();
-		if (_entity < 0 || !registry.Valid(object))
-		{
-			auto focus = Locator::camera::value().GetFocus();
-			focus.y = Locator::terrainSystem::value().GetHeightAt(glm::vec2(focus.x, focus.z));
-			object = ecs::archetypes::MobileStaticArchetype::Create(focus, static_cast<MobileStaticInfo>(_type), _height, 0.0f,
-			                                                        0.0f, 0.0f, _scale);
-		}
-		const auto started = dynamics.InitialisePhysics(
-		    object, {.velocity = glm::vec3(_velocity[0], _velocity[1], _velocity[2]), .player = PlayerNames::PLAYER_ONE});
-		ImGui::Text("%s", started.entry != nullptr ? "Thrown" : "Refused");
+		// Each computer finds the height of the land under the focus at the turn. A type below 0 is not a type, thus each
+		// computer refuses the act.
+		const auto focus = Locator::camera::value().GetFocus();
+		const player_commands::DebugPhysics act {
+		    .object = _entity < 0 ? entt::entity {entt::null} : static_cast<entt::entity>(_entity),
+		    .type = static_cast<uint16_t>(_type < 0 ? std::numeric_limits<uint16_t>::max()
+		                                            : std::min(_type, static_cast<int>(std::numeric_limits<uint16_t>::max()))),
+		    .height = _height,
+		    .scale = _scale,
+		    .place = glm::vec2(focus.x, focus.z),
+		    .velocity = glm::vec3(_velocity[0], _velocity[1], _velocity[2]),
+		};
+		const auto result = debug_thing_acts::Do(act);
+		_result = !result.has_value() ? "Sent as a command of the turns" : result->done ? "Thrown" : "Refused";
+	}
+	if (!_result.empty())
+	{
+		ImGui::TextUnformatted(_result.c_str());
 	}
 }
 

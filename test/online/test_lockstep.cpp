@@ -4817,6 +4817,51 @@ TEST_F(LockstepTest, TheServerTakesTheActsOfTheMagicWeatherAndMoonWindowsOnlyFro
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
+TEST_F(LockstepTest, TheServerTakesTheActsOnTheThingsOfTheWorldOnlyFromAGodWithTheDebuggerClaim)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+debugger:alice");
+	Computer bob(network, now, "god+editor:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(host->Started());
+	const DebugPhysics throwAct {.type = 36, .height = 20.0f, .scale = 1.0f, .place = {100.0f, 100.0f}};
+	const DebugParticle pause {.act = DebugParticle::Act::Pause, .paused = true};
+	const DebugTempleVillager share {.act = DebugTempleVillager::Act::Share, .value = 0.5f};
+	const DebugVillagerPath speed {.act = DebugVillagerPath::Act::Speed, .speed = 1.0f};
+	alice.session.Send(throwAct);
+	alice.session.Send(pause);
+	alice.session.Send(share);
+	alice.session.Send(speed);
+	// No computer takes these acts, thus the server refuses them also from a player with the claim: a type that is not a
+	// type of a static thing, a share above 1, an effect of one computer only and too many new villagers
+	alice.session.Send(DebugPhysics {.type = 999, .scale = 1.0f});
+	alice.session.Send(DebugTempleVillager {.act = DebugTempleVillager::Act::Share, .value = 1.5f});
+	alice.session.Send(DebugParticle {.act = DebugParticle::Act::Close, .effect = 0x4000'0001u});
+	alice.session.Send(DebugTempleVillager {.act = DebugTempleVillager::Act::Make, .age = 30, .count = 33});
+	// The editor claim does not give the acts of the debug windows
+	bob.session.Send(throwAct);
+	bob.session.Send(pause);
+	bob.session.Send(share);
+	bob.session.Send(speed);
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedDebuggerCommands(), 8u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	for (const auto tag : {turn_codec::CommandTag::DebugPhysics, turn_codec::CommandTag::DebugParticle,
+	                       turn_codec::CommandTag::DebugTempleVillager, turn_codec::CommandTag::DebugVillagerPath})
+	{
+		EXPECT_EQ(count(0, tag), 1u) << static_cast<int>(tag);
+		EXPECT_EQ(count(1, tag), 0u) << static_cast<int>(tag);
+	}
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
 TEST_F(LockstepTest, TheEditorPausesStepsAndChangesTheSpeedOfTheTurnsOfEveryComputer)
 {
 	using game_socket::EditorTime;

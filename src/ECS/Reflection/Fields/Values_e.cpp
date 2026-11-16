@@ -112,7 +112,8 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::impressiveMiracleCastTurn>("impressiveMiracleCastTurn")
 	    .Field<&openblack::ecs::RegistryContext::explorationMap>("explorationMap")
 	    .PresentationField<&openblack::ecs::RegistryContext::globalStatistics>("globalStatistics")
-	    .Field<&openblack::ecs::RegistryContext::networkBonusCreatures>("networkBonusCreatures");
+	    .Field<&openblack::ecs::RegistryContext::networkBonusCreatures>("networkBonusCreatures")
+	    .Field<&openblack::ecs::RegistryContext::debugMadeVillagers>("debugMadeVillagers", {k_PlayerNamesNames});
 	Reflect<openblack::ecs::components::Animal::DrawnPlace>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::position>("position")
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::rotation>("rotation");

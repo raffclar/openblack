@@ -1987,6 +1987,10 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["debug_magic"] = editor_debug_magic(pids, shots)
         if done["debug_magic"].get("error"):
             done["error"] = done["debug_magic"]["error"]
+    if case == "debug-things":
+        done["debug_things"] = editor_debug_things(pids, focus, shots)
+        if done["debug_things"].get("error"):
+            done["error"] = done["debug_things"]["error"]
     if case in ("land", "all"):
         # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
         # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
@@ -2036,7 +2040,7 @@ DEBUG_ADVISOR_ACTS = [
 
 
 # The cases where the first client has only the debugger claim
-DEBUGGER_CASES = ("debug", "debug-reads", "debug-magic")
+DEBUGGER_CASES = ("debug", "debug-reads", "debug-magic", "debug-things")
 
 # Each button of the Magic, Weather and Moon debug windows that the debug-magic case presses, in order. The miracles
 # are magic types: 1 the fireball, 10 the heal, 14 the food, 22 the water, 28 the big creature spell.
@@ -2229,6 +2233,81 @@ def editor_debug_reads(pids, focus):
     problems += errors
     if problems:
         done["error"] = "; ".join(map(str, problems))
+    return done
+
+
+def shared_effects(pid):
+    """The numbers of the running particle effects that each computer has (the shared random numbers), the oldest first"""
+    effects = items_of(inspector_answer(pid, "particles.effects", {}))
+    return sorted(effect["id"] for effect in effects
+                  if isinstance(effect, dict) and 0 < effect.get("id", 0) < 0x40000001)
+
+
+def editor_debug_things(pids, focus, shots=None):
+    """The first client has the debugger claim and no editor claim. It presses each button of the Physics window, of the
+    Particles tab of the Magic window, of the Temple villagers window and of the Path finding window, as the inspector
+    query editor.debug_thing does them. The second client (no claim) sends acts with force: the server must refuse them.
+    Every computer must do the same acts at the same turns and keep the same checksums. Returns what each step sent."""
+    debugger = pids[0]
+    done = {"answers": []}
+    x, y, z = focus[0], focus[1], focus[2]
+
+    def send(pid, params):
+        answer = inspector_answer(pid, "editor.debug_thing", {"params": params})
+        done["answers"].append({"params": params, "answer": answer})
+        time.sleep(0.4)
+        return answer
+
+    # The Physics window: a new rock, then a throw of the same type higher up
+    send(debugger, {"kind": "physics", "type": 36, "height": 20.0, "place": [x + 10.0, z], "velocity": [0.0, 5.0, 0.0]})
+    send(debugger, {"kind": "physics", "type": 36, "height": 40.0, "scale": 2.0, "place": [x - 10.0, z + 5.0],
+                    "velocity": [3.0, 0.0, -2.0]})
+    # The Particles tab: an effect with the shared random numbers, the pause, the close and the delete of one effect, and
+    # the close and the delete of all
+    send(debugger, {"kind": "particle", "act": "start", "type": 115, "position": [x, y + 5.0, z], "targets": 2})
+    send(debugger, {"kind": "particle", "act": "pause", "paused": True})
+    send(debugger, {"kind": "particle", "act": "pause", "paused": False})
+    time.sleep(1.0)
+    shared = shared_effects(debugger)
+    done["shared_effects"] = [len(shared)]
+    if shared:
+        send(debugger, {"kind": "particle", "act": "close", "effect": shared[-1]})
+    send(debugger, {"kind": "particle", "act": "start", "type": 115, "position": [x + 5.0, y + 5.0, z]})
+    time.sleep(1.0)
+    shared = shared_effects(debugger)
+    done["shared_effects"].append(len(shared))
+    if shared:
+        send(debugger, {"kind": "particle", "act": "delete", "effect": shared[-1]})
+    send(debugger, {"kind": "particle", "act": "close_all"})
+    send(debugger, {"kind": "particle", "act": "delete_all"})
+    # The Temple villagers window: new villagers that go to worship, the share, one more and one less at worship, and a
+    # villager sent to worship
+    send(debugger, {"kind": "temple", "act": "make", "count": 3, "age": 25, "send": True})
+    time.sleep(1.0)
+    send(debugger, {"kind": "temple", "act": "share", "value": 0.4})
+    send(debugger, {"kind": "temple", "act": "send_one"})
+    send(debugger, {"kind": "temple", "act": "call_one_back"})
+    send(debugger, {"kind": "temple", "act": "send_to_worship"})
+    # The Path finding window on the first villager that the window made
+    send(debugger, {"kind": "path", "act": "teleport", "position": [x + 3.0, y, z + 3.0]})
+    send(debugger, {"kind": "path", "act": "move_to", "position": [x + 20.0, y, z + 20.0]})
+    send(debugger, {"kind": "path", "act": "goal", "goal": [int(x) + 25, int(z) + 25]})
+    send(debugger, {"kind": "path", "act": "speed", "speed": 1.5})
+    time.sleep(1.0)
+    editor_shots(pids, shots, "debug-things")
+    send(debugger, {"kind": "temple", "act": "take_away"})
+    if len(pids) > 1:
+        # The second client has no debugger claim: the server refuses its acts
+        send(pids[1], {"kind": "physics", "type": 36, "place": [x, z], "force": True})
+        send(pids[1], {"kind": "temple", "act": "share", "value": 0.9, "force": True})
+        send(pids[1], {"kind": "particle", "act": "delete_all", "force": True})
+    time.sleep(2.0)
+    problems = [f"{entry['params']}: {entry['answer']['error']}" for entry in done["answers"]
+                if isinstance(entry["answer"], dict) and entry["answer"].get("error")]
+    if not all(done["shared_effects"]):
+        problems.append(f"no effect of each computer to close or delete: {done['shared_effects']}")
+    if problems:
+        done["error"] = "; ".join(problems)
     return done
 
 
@@ -3416,7 +3495,7 @@ def main():
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
                                                     "creature-remove", "land", "history", "mind", "time", "scripts", "debugger",
-                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "debug-reads", "debug-magic", "all"),
+                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "debug-reads", "debug-magic", "debug-things", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -3439,7 +3518,8 @@ def main():
                              "changes the body time and the fainting switch and loads a world file (body-away). With debug and "
                              "debug-magic the first client has only the debugger claim: it does the acts of the Advisors, "
                              "World, Console and Gestures debug windows (debug), or each button of the Magic, Weather and "
-                             "Moon windows (debug-magic)")
+                             "Moon windows (debug-magic), or each button of the Physics window, of the Particles tab, of the "
+                             "Temple villagers window and of the Path finding window (debug-things)")
     parser.add_argument("--world-file", metavar="FILE",
                         help="with --editor-desync world: the first client sends this world file, for example the world "
                              "of a room with other players, and does not write its own")

@@ -36,6 +36,8 @@ class TempleVillagers final: public Window
 {
 public:
 	TempleVillagers() noexcept;
+	/// In a network game the acts on the towns and the villagers go as commands of the turns
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 
 protected:
 	void Draw() noexcept override;
@@ -56,8 +58,7 @@ private:
 	/// Marks the villagers, their walks and the sites' places on the screen, over the world
 	void DrawMarks(const temple_villagers::Survey& survey) const noexcept;
 
-	void Spawn(const temple_villagers::Town& town) noexcept;
-	void ClearSpawned() noexcept;
+	void Spawn(const temple_villagers::Town& town) const noexcept;
 	/// Puts the camera looking at the point, as it looks now, from no further than the distance
 	static void LookAt(const glm::vec3& point, float distance) noexcept;
 
@@ -80,11 +81,6 @@ private:
 	int _count {4};
 	bool _sendOnSpawn {true};
 	size_t _town {0};
-	/// The villagers this window made, which it can take away again
-	std::vector<entt::entity> _spawned;
-	/// Made last frame, to be sent to worship once their first state is set
-	std::vector<entt::entity> _toSend;
-
 	/// The turn the game is paused again at, when stepping
 	std::optional<uint32_t> _stepUntil;
 };

@@ -23,6 +23,8 @@ class PathFinding final: public Window
 {
 public:
 	PathFinding() noexcept;
+	/// In a network game the moves of a villager go as commands of the turns
+	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 
 protected:
 	void Draw() noexcept override;

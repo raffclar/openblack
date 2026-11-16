@@ -54,6 +54,9 @@ public:
 	/// A running effect, by a number that is never reused
 	using EffectId = uint32_t;
 	static constexpr EffectId k_NoEffect = 0;
+	/// The first number of an effect of this computer only. The synced effects take the numbers below it, and the
+	/// simulation's numbers start above it, so the three sets of numbers never meet.
+	static constexpr EffectId k_FirstLocalEffect = 0x4000'0001u;
 
 	/// What the draw reads of a running effect
 	struct DrawnEffect

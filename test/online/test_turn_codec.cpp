@@ -242,6 +242,38 @@ std::vector<Action> EachCommand()
 	                  .storm = Entity(42),
 	                  .on = true},
 	    DebugSky {.act = DebugSky::Act::MoonDate, .hour = 19.5f, .on = true, .date = -86400},
+	    DebugPhysics {.object = Entity(40),
+	                  .type = 36,
+	                  .height = 20.0f,
+	                  .scale = 1.5f,
+	                  .place = {100.0f, 200.0f},
+	                  .velocity = {1.0f, 2.0f, 3.0f}},
+	    DebugParticle {.act = DebugParticle::Act::Start,
+	                   .file = "SF_Smoke",
+	                   .type = 7,
+	                   .position = {1.0f, 2.0f, 3.0f},
+	                   .magnitude = 2.5f,
+	                   .player = 3,
+	                   .drawPath = 1,
+	                   .targets = 4,
+	                   .effect = 12,
+	                   .paused = true},
+	    DebugTempleVillager {.act = DebugTempleVillager::Act::TakeAway,
+	                         .town = Entity(41),
+	                         .villager = Entity(42),
+	                         .home = {4.0f, 5.0f, 6.0f},
+	                         .value = 0.25f,
+	                         .tribe = 2,
+	                         .number = 3,
+	                         .age = 30,
+	                         .count = 4,
+	                         .send = true,
+	                         .villagers = {Entity(43), Entity(44)}},
+	    DebugVillagerPath {.act = DebugVillagerPath::Act::Goal,
+	                       .villager = Entity(45),
+	                       .position = {7.0f, 8.0f, 9.0f},
+	                       .goal = {-10, 20},
+	                       .speed = 1.25f},
 	};
 }
 
@@ -282,7 +314,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 75)
+	switch (bits(random) % 79)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -664,6 +696,56 @@ Action RandomAction(std::mt19937& random)
 		                 .hour = number(),
 		                 .on = bits(random) % 2 == 1,
 		                 .date = static_cast<int64_t>((static_cast<uint64_t>(bits(random)) << 32U) | bits(random))};
+	case 75:
+		return DebugPhysics {.object = entity(),
+		                     .type = static_cast<uint16_t>(bits(random)),
+		                     .height = number(),
+		                     .scale = number(),
+		                     .place = {number(), number()},
+		                     .velocity = vector()};
+	case 76:
+	{
+		DebugParticle particle {.act = static_cast<DebugParticle::Act>(bits(random) % 6),
+		                        .type = static_cast<uint8_t>(bits(random)),
+		                        .position = vector(),
+		                        .magnitude = number(),
+		                        .player = static_cast<uint8_t>(bits(random)),
+		                        .drawPath = static_cast<uint8_t>(bits(random)),
+		                        .targets = static_cast<uint8_t>(bits(random)),
+		                        .effect = bits(random),
+		                        .paused = bits(random) % 2 == 1};
+		particle.file.resize(bits(random) % (k_MostParticleFileBytes + 1));
+		for (auto& character : particle.file)
+		{
+			character = static_cast<char>(bits(random));
+		}
+		return particle;
+	}
+	case 77:
+	{
+		DebugTempleVillager temple {.act = static_cast<DebugTempleVillager::Act>(bits(random) % 6),
+		                            .town = entity(),
+		                            .villager = entity(),
+		                            .home = vector(),
+		                            .value = number(),
+		                            .tribe = static_cast<uint8_t>(bits(random)),
+		                            .number = static_cast<uint8_t>(bits(random)),
+		                            .age = static_cast<uint8_t>(bits(random)),
+		                            .count = static_cast<uint8_t>(bits(random)),
+		                            .send = bits(random) % 2 == 1};
+		temple.villagers.resize(bits(random) % (k_MostTakenVillagers + 1));
+		for (auto& villager : temple.villagers)
+		{
+			villager = entity();
+		}
+		return temple;
+	}
+	case 78:
+		return DebugVillagerPath {.act = static_cast<DebugVillagerPath::Act>(bits(random) % 4),
+		                          .villager = entity(),
+		                          .position = vector(),
+		                          .goal = {static_cast<int32_t>(bits(random)), static_cast<int32_t>(bits(random))},
+		                          .speed = number()};
 	default:
 		return PlayerLeft {};
 	}
@@ -729,7 +811,8 @@ TEST(TurnCodec, EachCommandHasItsSize)
 	const std::vector<size_t> sizes {2,  5,  9,  5,   53, 5,  10, 18, 5,  49, 17, 5,  5,  5,  9,  12, 1,  18, 11, 5,
 	                                 19, 15, 7,  5,   1,  2,  1,  61, 5,  2,  1,  13, 10, 18, 1,  58, 1,  5,  51, 5,
 	                                 16, 7,  1,  1,   13, 1,  2,  9,  13, 1,  1,  8,  1,  5,  37, 3,  10, 34, 2,  15,
-	                                 78, 20, 36, 107, 14, 85, 25, 17, 14, 14, 30, 8,  40, 36, 7,  45, 15};
+	                                 78, 20, 36, 107, 14, 85, 25, 17, 14, 14, 30, 8,  40, 36, 7,  45, 15,
+	                                 35, 36, 40, 30};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -850,8 +933,75 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 93;
 		}
+		// The acts of the Physics, Particles, Temple villagers and Path finding windows have the tags 84 to 87. The tags
+		// 79 to 83 are for the Magic, Weather and Moon windows.
+		if (std::holds_alternative<DebugPhysics>(commands[i]))
+		{
+			tag = 84;
+		}
+		if (std::holds_alternative<DebugParticle>(commands[i]))
+		{
+			tag = 85;
+		}
+		if (std::holds_alternative<DebugTempleVillager>(commands[i]))
+		{
+			tag = 86;
+		}
+		if (std::holds_alternative<DebugVillagerPath>(commands[i]))
+		{
+			tag = 87;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
+}
+
+TEST(TurnCodec, TheDecoderRefusesABadActOfThePhysicsParticlesTempleAndPathWindows)
+{
+	const auto encode = [](Action action) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {std::move(action)}}});
+	};
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_FirstField = 10;
+	auto physics = encode(DebugPhysics {.type = 36, .scale = 1.0f});
+	ASSERT_EQ(physics.size(), k_FirstField + 4 + 2 + 4 + 4 + 8 + 12);
+	ASSERT_EQ(Decode(physics).error, DecodeError::None);
+	physics.pop_back();
+	EXPECT_EQ(Decode(physics).error, DecodeError::Truncated);
+
+	DebugParticle start {.act = DebugParticle::Act::Start, .file = "abc"};
+	auto particle = encode(start);
+	ASSERT_EQ(particle.size(), k_FirstField + 1 + 1 + 3 + 1 + 12 + 4 + 1 + 1 + 1 + 4 + 1);
+	ASSERT_EQ(Decode(particle).error, DecodeError::None);
+	EXPECT_EQ(std::get<DebugParticle>(std::get<CommandBlock>(*Decode(particle).frame).actions.front()), start);
+	// Delete is the last act
+	particle[k_FirstField] = 6;
+	EXPECT_EQ(Decode(particle).error, DecodeError::Value);
+	particle[k_FirstField] = 0;
+	// A name has at most the most bytes of the name of a particle file
+	particle[k_FirstField + 1] = static_cast<uint8_t>(k_MostParticleFileBytes + 1);
+	EXPECT_EQ(Decode(particle).error, DecodeError::Value);
+	particle[k_FirstField + 1] = 3;
+	// The pause is 0 or 1
+	particle.back() = 2;
+	EXPECT_EQ(Decode(particle).error, DecodeError::Value);
+
+	auto temple = encode(DebugTempleVillager {.act = DebugTempleVillager::Act::TakeAway, .villagers = {Entity(1)}});
+	ASSERT_EQ(temple.size(), k_FirstField + 1 + 4 + 4 + 12 + 4 + 4 + 1 + 1 + 4);
+	ASSERT_EQ(Decode(temple).error, DecodeError::None);
+	// The count of the villagers is more than the frame gives
+	temple[temple.size() - 5] = 2;
+	EXPECT_EQ(Decode(temple).error, DecodeError::Truncated);
+	temple[temple.size() - 5] = static_cast<uint8_t>(k_MostTakenVillagers + 1);
+	EXPECT_EQ(Decode(temple).error, DecodeError::Value);
+	temple[temple.size() - 5] = 1;
+	temple[k_FirstField] = 6;
+	EXPECT_EQ(Decode(temple).error, DecodeError::Value);
+
+	auto path = encode(DebugVillagerPath {.act = DebugVillagerPath::Act::Speed, .speed = 2.0f});
+	ASSERT_EQ(path.size(), k_FirstField + 1 + 4 + 12 + 8 + 4);
+	ASSERT_EQ(Decode(path).error, DecodeError::None);
+	path[k_FirstField] = 4;
+	EXPECT_EQ(Decode(path).error, DecodeError::Value);
 }
 
 TEST(TurnCodec, TheDecoderRefusesABadActOfTheDebugWindows)

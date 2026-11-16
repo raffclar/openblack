@@ -1678,6 +1678,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	      .required = false}});
 	debugAct.writes = true;
 	provider->Add(std::move(debugAct), [](const QueryContext& context) { return DebugAct(context.params); });
+	AddDebugThingQueries(*provider);
 	return provider;
 }
 
