@@ -42,6 +42,7 @@ public:
 	[[nodiscard]] const online::lobby::LobbyRoom* Room() const override { return _room.get(); }
 	void DismissRoom() override { _room.reset(); }
 	void Leave(ecs::systems::LobbyCallback<ecs::systems::LobbyDone> callback) override;
+	void LeaveGame() override;
 	void SetReady(bool ready, ecs::systems::LobbyCallback<ecs::systems::LobbyDone> callback) override;
 	void PickSlot(int32_t slot, ecs::systems::LobbyCallback<ecs::systems::LobbyDone> callback) override;
 	void ReportMap(lobby_api::MapReport report, ecs::systems::LobbyCallback<ecs::systems::LobbyDone> callback) override;

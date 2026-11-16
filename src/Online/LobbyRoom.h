@@ -65,6 +65,12 @@ enum class RoomPhase : uint8_t
 	Ended,
 };
 
+/// The room has a game server for its game. The player can get a ticket for that game.
+[[nodiscard]] constexpr bool HasGameServer(RoomPhase phase) noexcept
+{
+	return phase == RoomPhase::Assigned || phase == RoomPhase::InGame;
+}
+
 /// Why the player is not in the lobby now
 enum class EndReason : uint8_t
 {
