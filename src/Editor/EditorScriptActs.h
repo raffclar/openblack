@@ -123,6 +123,9 @@ struct ProgramResult
 /// Whether the bytes read as a compiled program, as the script machine reads a program that it loads
 [[nodiscard]] bool ReadsProgram(std::span<const uint8_t> bytes);
 
+/// The bytes of a file of the game folder or of the disk. It throws when the file does not read.
+[[nodiscard]] std::vector<uint8_t> ReadProgramFile(const std::string& path);
+
 /// Why no computer takes the change of the program, or none when it can go. kept tells whether the store of the computer
 /// keeps the file of the command.
 [[nodiscard]] std::optional<std::string_view> ProgramRefusal(const EditorScriptProgram& change, bool kept) noexcept;

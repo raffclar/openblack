@@ -837,7 +837,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			}
 			try
 			{
-				file = Locator::filesystem::value().ReadAll(path->get<std::string>());
+				file = editor::script_acts::ReadProgramFile(path->get<std::string>());
 			}
 			catch (const std::exception& error)
 			{

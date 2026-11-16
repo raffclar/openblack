@@ -342,6 +342,11 @@ std::optional<game_socket::EditorScriptFile::Kind> FileKindOf(const EditorScript
 	return std::nullopt;
 }
 
+std::vector<uint8_t> ReadProgramFile(const std::string& path)
+{
+	return Locator::filesystem::value().ReadAll(path);
+}
+
 bool ReadsProgram(std::span<const uint8_t> bytes)
 {
 	if (bytes.empty())
