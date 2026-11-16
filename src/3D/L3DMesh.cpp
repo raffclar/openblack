@@ -676,28 +676,6 @@ bool L3DMesh::LoadFromFilesystem(const std::filesystem::path& path) noexcept
 	return true;
 }
 
-bool L3DMesh::LoadFromFile(const std::filesystem::path& path) noexcept
-{
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading L3DMesh from file: {}", path.generic_string());
-	l3d::L3DFile l3d;
-
-	const auto result = l3d.Open(Locator::filesystem::value().FindPath(path));
-	if (result != l3d::L3DResult::Success)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to open l3d mesh from filesystem {}: {}", path.generic_string(),
-		                    l3d::ResultToStr(result));
-		return false;
-	}
-
-	if (!Load(l3d))
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Some issues were seen while loading l3d mesh from from file: {}.",
-		                   path.generic_string());
-	}
-
-	return true;
-}
-
 bool L3DMesh::LoadFromBuffer(const std::vector<uint8_t>& data) noexcept
 {
 	l3d::L3DFile l3d;

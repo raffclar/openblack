@@ -2819,19 +2819,6 @@ void AdvisorSpiritController::LookAt(int dude, const glm::vec3& position)
 	_lookPosition[dude] = position;
 }
 
-uint32_t AdvisorSpiritController::SayDelayMs(int dude) const
-{
-	// each step rounded to a float: fabs, minus 0.95f as a double (the float subtraction), the test against 0, plus 1,
-	// times 250 (as audio::advisor::Say)
-	const float v = std::abs(_dudes[dude]->HoverX().GetValue()) - 0.95f;
-	if (v < 0.0f)
-	{
-		return 0;
-	}
-	const float ms = (v + 1.0f) * 250.0f;
-	return static_cast<uint32_t>(ms > 500.0f ? 500.0f : ms);
-}
-
 void AdvisorSpiritController::SpiritEject(int32_t type, bool isHelp)
 {
 	const int dude = DudeOf(type);

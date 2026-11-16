@@ -72,9 +72,6 @@ public:
 		return std::exchange(_answer, std::nullopt);
 	}
 
-	/// The controls that show, for tools that press them by name
-	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
-
 private:
 	void Pushed(gathering_box::question::Push push);
 

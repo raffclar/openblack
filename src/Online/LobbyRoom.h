@@ -253,8 +253,6 @@ public:
 	void Tick(int64_t nowMs);
 	/// Uses a new snapshot of the lobby, after the push channel lost events. The lines stay.
 	void Reload(lobby_api::Lobby lobby);
-	/// Uses the answer of a change of the member of the player
-	void ApplyOwnMember(lobby_api::LobbyMember member);
 	/// Uses the answer of the start of the host
 	void ApplyStart(const lobby_api::StartReply& reply);
 	/// The player is not in the lobby now

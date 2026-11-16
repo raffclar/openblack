@@ -328,8 +328,6 @@ public:
 
 	/// The download of the room's land from the lobby, none when the room has no such land
 	[[nodiscard]] const online::MapDownload* GetMapDownload() const noexcept { return _mapDownload.get(); }
-	/// Puts the front end on a box, as if the player had come to it
-	void ShowBox(multiplayer::Box box, multiplayer::LobbyKind kind);
 
 private:
 	/// Keeps the clan that the player plays for in this room, and tells the network game

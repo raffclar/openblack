@@ -21,7 +21,6 @@ class WavAudioDecoder final: public AudioDecoderInterface
 public:
 	bool Open(const std::vector<uint8_t>& buffer) override;
 	void Read(std::vector<int16_t>& buffer) override;
-	[[nodiscard]] ChannelLayout GetChannelLayout() override;
 
 private:
 	drwav _wav;

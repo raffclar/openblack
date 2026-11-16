@@ -39,16 +39,3 @@ void MpegAudioDecoder::Read(std::vector<int16_t>& buffer)
 	buffer.resize(static_cast<size_t>(frameCount * _mp3.channels));
 	[[maybe_unused]] const auto framesRead = drmp3_read_pcm_frames_s16(&_mp3, frameCount, buffer.data());
 }
-
-ChannelLayout MpegAudioDecoder::GetChannelLayout()
-{
-	switch (_mp3.channels)
-	{
-	case 1:
-		return ChannelLayout::Mono;
-	case 2:
-		return ChannelLayout::Stereo;
-	default:
-		throw std::runtime_error("Unsupported channel layout");
-	}
-}

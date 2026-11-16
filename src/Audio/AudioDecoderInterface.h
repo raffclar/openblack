@@ -23,6 +23,5 @@ class AudioDecoderInterface
 public:
 	virtual bool Open(const std::vector<uint8_t>& buffer) = 0;
 	virtual void Read(std::vector<int16_t>& buffer) = 0;
-	[[nodiscard]] virtual ChannelLayout GetChannelLayout() = 0;
 };
 } // namespace openblack::audio
