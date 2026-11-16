@@ -250,9 +250,11 @@ private:
 	/// Writes the submesh's vertices as they are drawn into the bytes, which have the size that PackedSize gives
 	static void PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates,
 	                         std::span<uint8_t> bytes);
-	/// Writes the submesh's vertices as they are drawn into the bytes, with the indices that PackedIndices gives
-	static void PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates, std::span<uint8_t> bytes,
-	                         std::span<const PackedIndex> indices);
+	/// Writes the submesh's vertices as they are drawn into the bytes, with the indices that PackedIndices gives. The box
+	/// about the places of the vertices, in their order.
+	[[nodiscard]] static AxisAlignedBoundingBox PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex,
+	                                                         bool hasLightmapCoordinates, std::span<uint8_t> bytes,
+	                                                         std::span<const PackedIndex> indices);
 	/// The box about the submesh's vertices, as they are placed by its bones
 	[[nodiscard]] static AxisAlignedBoundingBox BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasBones);
 	/// The blend source texture of count packed vertices, where the renderer can read one in the vertex shader

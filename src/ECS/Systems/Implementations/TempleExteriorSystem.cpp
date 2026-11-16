@@ -19,7 +19,9 @@
 #include <memory>
 #include <mutex>
 #include <ranges>
+#include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -242,9 +244,13 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 		{
 			_spareShapes.pop_back();
 		}
-		// The sum of the meshes by their weights goes into the vertices, which start at zero
-		auto sum = blended.EditVertices();
-		std::ranges::fill(sum, l3d::L3DVertex {});
+		// The sum of the meshes by their weights goes into the vertices, which start at zero. Each value of a vertex
+		// (its place, its texture coordinates and its normal) is a float that takes the same weight, so the sum reads
+		// the vertices as one row of floats.
+		static_assert(std::is_standard_layout_v<l3d::L3DVertex> && sizeof(l3d::L3DVertex) == 8 * sizeof(float));
+		auto vertices = blended.EditVertices();
+		const std::span<float> sum(reinterpret_cast<float*>(vertices.data()), vertices.size() * 8);
+		std::ranges::fill(sum, 0.0f);
 		for (const auto& corner : Corners(exterior.size, exterior.alignment))
 		{
 			const auto id = CornerMeshId(corner.size, corner.stage);
@@ -253,24 +259,13 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 				continue;
 			}
 			const auto& source = files.Handle(id)->GetVertices();
-			if (source.size() != sum.size())
+			if (source.size() != vertices.size())
 			{
 				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The temple's mesh {} isn't the shape of the first temple's",
 				                    MeshName(corner.size, corner.stage));
 				return;
 			}
-			const auto add = [&corner](l3d::L3DPoint& to, const l3d::L3DPoint& from) {
-				to.x += from.x * corner.weight;
-				to.y += from.y * corner.weight;
-				to.z += from.z * corner.weight;
-			};
-			for (size_t i = 0; i < sum.size(); ++i)
-			{
-				add(sum[i].position, source[i].position);
-				add(sum[i].normal, source[i].normal);
-				sum[i].texCoord.x += source[i].texCoord.x * corner.weight;
-				sum[i].texCoord.y += source[i].texCoord.y * corner.weight;
-			}
+			AddWeighted(sum, std::span(reinterpret_cast<const float*>(source.data()), source.size() * 8), corner.weight);
 		}
 		made.shapes.emplace_back(look, std::move(blended));
 		shape = std::prev(made.shapes.end());

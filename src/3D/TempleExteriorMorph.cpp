@@ -118,6 +118,15 @@ std::array<Corner, 4> Corners(float size, float alignment)
 	}};
 }
 
+void AddWeighted(std::span<float> sum, std::span<const float> source, float weight)
+{
+	assert(sum.size() == source.size());
+	for (size_t i = 0; i < sum.size(); ++i)
+	{
+		sum[i] += source[i] * weight;
+	}
+}
+
 std::string MeshName(uint32_t size, uint32_t stage)
 {
 	return fmt::format("b_temple{}{}_l3d", size, stage);
