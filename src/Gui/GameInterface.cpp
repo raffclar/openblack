@@ -1534,6 +1534,8 @@ void GameInterface::UpdateChat(bool dialogOpen, glm::u16vec2 resolution)
 	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
 	const bool network = Locator::networkGame::has_value() && Locator::networkGame::value().InGame();
 	facts.singlePlayer = !network;
+	// The chat of a network game closes as the game ends, before the facts read whether it is open
+	_chatControls->FollowNetworkGame(network);
 	facts.connected = !network || (session != nullptr && session->GetState() == online::NetworkSession::State::Playing);
 	const bool videoPlays = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
 	const bool wideScreen =

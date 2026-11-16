@@ -707,6 +707,12 @@ void Game::UpdateMultiplayerFrontEnd()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
 		                   "The multiplayer front end closes: the player goes back to the screen before it");
 		boxes.Close();
+		// A room that the player left before its start keeps no session. The next land of this computer alone then gets
+		// its computer gods, and Back in the land information box ends the skirmish, as in a game alone.
+		if (Locator::networkGame::has_value() && Locator::networkGame::value().Session() != nullptr)
+		{
+			Locator::networkGame::value().PlayAlone();
+		}
 		if (Locator::temple::has_value())
 		{
 			Locator::temple::value().LeaveMultiplayerFrontEnd();
