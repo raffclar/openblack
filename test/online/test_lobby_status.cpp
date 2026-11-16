@@ -140,6 +140,21 @@ TEST(LobbyStatus, TheAnswerGivesTheAccountsOfTheRoomWithTheEditorRight)
 	EXPECT_FALSE(ParseServerStatusReply(R"({"next_status_in":5,"listed":true,"clans":[],"editors":7})").has_value());
 }
 
+TEST(LobbyStatus, TheAnswerGivesTheAccountsOfTheRoomWithTheDebuggerRight)
+{
+	using openblack::lobby_api::ParseServerStatusReply;
+	const auto reply =
+	    ParseServerStatusReply(R"({"next_status_in":5,"listed":true,"clans":[],"editors":[7],"debuggers":[9,11]})");
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_EQ(reply->debuggers, (std::optional<std::vector<int64_t>>(std::vector<int64_t> {9, 11})));
+	EXPECT_EQ(reply->editors, (std::optional<std::vector<int64_t>>(std::vector<int64_t> {7})));
+	// An older lobby gives no accounts: the server then keeps the claims of the tickets
+	const auto older = ParseServerStatusReply(R"({"next_status_in":5,"listed":true,"clans":[],"editors":[]})");
+	ASSERT_TRUE(older.has_value());
+	EXPECT_FALSE(older->debuggers.has_value());
+	EXPECT_FALSE(ParseServerStatusReply(R"({"next_status_in":5,"listed":true,"clans":[],"debuggers":[true]})").has_value());
+}
+
 TEST(LobbyStatus, TheGameListComparesTheVersionThatTheServerReports)
 {
 	// The game server reports its semantic version whole, and the game list of a client of the same build shows no

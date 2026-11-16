@@ -342,7 +342,8 @@ std::optional<Me> ParseMe(std::string_view text)
 		       ReadNumber(object, "points", out.points, false) && ReadInteger(object, "games_ranked", out.gamesRanked, false) &&
 		       ReadString(object, "country", out.country, false) && ReadString(object, "area", out.area, false) &&
 		       ReadString(object, "city", out.city, false) && ReadArray(object, "clans", out.clans, ReadClanRef, false) &&
-		       ReadTime(object, "date_joined", out.dateJoined, false) && ReadOptionalBool(object, "editor", out.editor);
+		       ReadTime(object, "date_joined", out.dateJoined, false) && ReadOptionalBool(object, "editor", out.editor) &&
+		       ReadOptionalBool(object, "debugger", out.debugger);
 	});
 }
 
@@ -509,7 +510,7 @@ std::optional<ServerStatusReply> ParseServerStatusReply(std::string_view text)
 		                 [](const Json& item, ServerStatusClan& clan) {
 			                 return ReadInteger(item, "account", clan.account) && ReadInteger(item, "clan", clan.clan);
 		                 }) &&
-		       ReadOptionalIntegers(object, "editors", out.editors);
+		       ReadOptionalIntegers(object, "editors", out.editors) && ReadOptionalIntegers(object, "debuggers", out.debuggers);
 	});
 }
 
@@ -873,6 +874,12 @@ std::optional<EditorChange> ParseEditorChange(std::string_view text)
 {
 	return ParseWith<EditorChange>(
 	    text, [](const Json& object, EditorChange& out) { return ReadBool(object, "editor", out.editor); });
+}
+
+std::optional<DebuggerChange> ParseDebuggerChange(std::string_view text)
+{
+	return ParseWith<DebuggerChange>(
+	    text, [](const Json& object, DebuggerChange& out) { return ReadBool(object, "debugger", out.debugger); });
 }
 
 std::optional<int64_t> ParseTime(std::string_view text)

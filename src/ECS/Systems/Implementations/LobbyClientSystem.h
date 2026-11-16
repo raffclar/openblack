@@ -50,8 +50,9 @@ constexpr std::chrono::seconds k_RefreshMargin {30};
 /// The first wait before the push channel opens again after a loss. Each loss after it doubles the wait, to the most.
 constexpr std::chrono::seconds k_FirstReconnectWait {1};
 constexpr std::chrono::seconds k_MostReconnectWait {60};
-/// While the push channel is not open, the client reads the editor right of the account again at this interval, so that
-/// a change takes effect while the game runs. With the channel open, the event "account.editor" gives the change.
+/// While the push channel is not open, the client reads the editor right and the debugger right of the account again at
+/// this interval, so that a change takes effect while the game runs. With the channel open, the events "account.editor"
+/// and "account.debugger" give the change.
 constexpr std::chrono::seconds k_RightCheckInterval {30};
 } // namespace lobby_times
 
@@ -169,7 +170,10 @@ private:
 	void ApplySession(const lobby_api::Session& session);
 	/// Keeps a new editor right of the account, from a session answer, an event or a read of the account
 	void FollowEditorRight(bool editor, std::string_view source);
-	/// While the push channel is not open, reads the account again at each interval to follow its editor right
+	/// Keeps a new debugger right of the account, from a session answer, an event or a read of the account
+	void FollowDebuggerRight(bool debugger, std::string_view source);
+	/// While the push channel is not open, reads the account again at each interval to follow its editor right and its
+	/// debugger right
 	void CheckRight();
 	/// Forgets the session and the tokens here and in the store
 	void EndSession();
@@ -201,7 +205,7 @@ private:
 	bool _accountEditor {false};
 	/// The debugger mark of the account, from the last answer of the lobby with a session
 	bool _accountDebugger {false};
-	/// The time of the next read of the editor right, while the push channel is not open
+	/// The time of the next read of the rights of the account, while the push channel is not open
 	std::optional<std::chrono::system_clock::time_point> _rightCheckAt;
 	bool _checkingRight {false};
 	std::string _accessToken;

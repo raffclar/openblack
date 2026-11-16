@@ -1363,6 +1363,47 @@ TEST_F(LobbyClientTest, WithNoPushChannelTheClientReadsTheEditorRightAgainAtASho
 	EXPECT_TRUE(_http.sent.empty());
 }
 
+TEST_F(LobbyClientTest, AnEventOfTheLobbyChangesTheDebuggerRightAtOnce)
+{
+	Make();
+	LogIn();
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(false));
+	// Staff give the mark during the game: the event comes on the push channel
+	_push->Deliver(R"({"seq":1,"type":"account.debugger","time":"2026-10-22T10:00:01Z","data":{"debugger":true}})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(true));
+	// The editor right does not change
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	_push->Deliver(R"({"seq":2,"type":"account.debugger","time":"2026-10-22T10:00:02Z","data":{"debugger":false}})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(false));
+	// Bad data changes nothing
+	_push->Deliver(R"({"seq":3,"type":"account.debugger","time":"2026-10-22T10:00:03Z","data":{"debugger":"yes"}})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(false));
+}
+
+TEST_F(LobbyClientTest, WithNoPushChannelTheClientReadsTheDebuggerRightAgainAtAShortInterval)
+{
+	_kept = "stored";
+	Make();
+	_client->SignInAtStart();
+	_http.Answer(200, k_Rotated);
+	ASSERT_EQ(_client->GetState(), LobbySessionState::LoggedIn);
+	ASSERT_EQ(_push->opens, 0);
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(false));
+	_client->Update();
+	_now += lobby_times::k_RightCheckInterval;
+	_client->Update();
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/me");
+	_http.Answer(200, R"({"id":7,"name":"abc","debugger":true})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(true));
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	// An older lobby gives no mark in the account: the mark stays
+	_now += lobby_times::k_RightCheckInterval;
+	_client->Update();
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/me");
+	_http.Answer(200, R"({"id":7,"name":"abc"})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(true));
+}
+
 TEST_F(LobbyClientTest, TheLoginAtTheStartWithNoTokenSendsNothing)
 {
 	Make();

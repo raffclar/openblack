@@ -253,6 +253,11 @@ struct GameRole::Parts
 				{
 					host->SetEditors(*reply->editors);
 				}
+				// The debugger right follows a change in the same way
+				if (reply->debuggers.has_value() && host)
+				{
+					host->SetDebuggers(*reply->debuggers);
+				}
 			}
 			const bool ok = reply.has_value() && reply->listed;
 			if (ok != listed)
