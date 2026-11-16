@@ -209,6 +209,9 @@ public:
 	/// The editor asks the server to pause, play, step or change the speed of the clock of the room. The server takes the
 	/// request only from a player with the editor claim, and then sends the new clock to every player.
 	void RequestTime(const game_socket::EditorTime& request);
+	/// Tools: the client drops its socket in a game, as at a loss of the network, and tries to come back only after the
+	/// time. Gives false when the session does not play.
+	bool GoAwayForTest(int64_t microseconds);
 	/// The clock of the room that the server sent last. None before the first.
 	[[nodiscard]] const std::optional<game_socket::GameTime>& RoomClock() const { return _roomClock; }
 	/// The count of the frames of the clock that came, so that the game sees each change one time

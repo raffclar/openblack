@@ -329,6 +329,21 @@ void NetworkSession::RequestTime(const game_socket::EditorTime& request)
 	}
 }
 
+bool NetworkSession::GoAwayForTest(int64_t microseconds)
+{
+	if (_state != State::Playing)
+	{
+		return false;
+	}
+	_log->Write(spdlog::level::warn,
+	            fmt::format("Tests: the client drops its socket and comes back after {} ms", microseconds / 1000));
+	DropStream();
+	_lostAt = _clock();
+	_state = State::Reconnecting;
+	_nextAttempt = _lostAt + microseconds;
+	return true;
+}
+
 void NetworkSession::DropStream()
 {
 	// The handlers of the old socket do nothing more. The socket closes in the next update, never inside its own handler.
@@ -427,6 +442,8 @@ void NetworkSession::Text(std::string_view text)
 			_loaded = false;
 			_loadedSent = false;
 			_turns.clear();
+			// The commands of the old game go to no turn of the new game, also after a come back
+			_sent.DropKept();
 			_waitingCommands = 0;
 			_playout.Reset();
 			_turnsDone = start->turn;

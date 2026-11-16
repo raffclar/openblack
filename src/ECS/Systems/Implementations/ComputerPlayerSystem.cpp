@@ -383,6 +383,18 @@ void ComputerPlayerSystem::SwitchOn(PlayerNames player, bool on)
 	computer_player::SwitchOn(MindOf(player), on);
 }
 
+void ComputerPlayerSystem::GiveToHuman(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const Player, ComputerPlayer>([player](entt::entity, const Player& name, ComputerPlayer& mind) {
+		if (name.name == player)
+		{
+			mind.switchedOn = false;
+			mind.marked = false;
+		}
+	});
+}
+
 void ComputerPlayerSystem::SetCreatureLike(PlayerNames player, PlayerNames like)
 {
 	MindOf(player).creatureLike = like;

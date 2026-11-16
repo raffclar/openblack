@@ -478,8 +478,9 @@ bool openblack::inspector::RefusedInNetworkGame(std::string_view query, bool wri
 	constexpr std::array<std::string_view, 4> k_LocalProviders {"input.", "camera.", "screenshot.", "autopilot."};
 	// The fight cheat goes to the game server as a command of this computer's player. The server lets it through only
 	// with its test commands on. The edits of the editor and the debug cheats also go as commands of this computer's
-	// player, and the server lets them through only from a player with the editor claim.
-	constexpr std::array<std::string_view, 19> k_LocalQueries {"sim.record",
+	// player, and the server lets them through only from a player with the editor claim. A tool can drop the socket of
+	// this computer, as at a loss of the network.
+	constexpr std::array<std::string_view, 20> k_LocalQueries {"sim.record",
 	                                                           "sim.feedback",
 	                                                           "fights.transcript_folder",
 	                                                           "fights.clear_transcripts",
@@ -497,7 +498,8 @@ bool openblack::inspector::RefusedInNetworkGame(std::string_view query, bool wri
 	                                                           "editor.mind_load",
 	                                                           "editor.world_load",
 	                                                           "editor.scenario",
-	                                                           "editor.time"};
+	                                                           "editor.time",
+	                                                           "engine.online_away"};
 	if (std::ranges::find(k_RunControls, query) != k_RunControls.end())
 	{
 		return true;

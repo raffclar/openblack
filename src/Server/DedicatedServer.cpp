@@ -67,6 +67,7 @@
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorldFileGods.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/GameTexts.h"
 #include "Gui/MenuSettings.h"
@@ -222,8 +223,9 @@ public:
 	/// when the world does not load.
 	[[nodiscard]] bool LoadSnapshot(const snapshots::Snapshot& snapshot);
 	/// Between two turns: the world loads a world file of the editor of a player, as a client loads the server's world.
-	/// Gives the turn of the loaded world, or why the world did not load it.
-	[[nodiscard]] WorldChangeResult LoadEditorWorld(std::span<const uint8_t> file);
+	/// Then each player of the room keeps a god, and each other god of the file is as a slot with no player. Gives the turn
+	/// of the loaded world, or why the world did not load it.
+	[[nodiscard]] WorldChangeResult LoadEditorWorld(std::span<const uint8_t> file, std::span<const PlayerNames> players);
 	/// Between two turns: the world starts again on the testbed with a testbed scenario, as a network game that starts
 	/// on the scenario. The scenario is laid out in the first frame in which the world turns. Gives the turn of the new
 	/// world, or why it did not start.
@@ -777,7 +779,7 @@ bool ServerWorld::LoadSnapshot(const snapshots::Snapshot& snapshot)
 	return true;
 }
 
-WorldChangeResult ServerWorld::LoadEditorWorld(std::span<const uint8_t> file)
+WorldChangeResult ServerWorld::LoadEditorWorld(std::span<const uint8_t> file, std::span<const PlayerNames> players)
 {
 	if (!Locator::saveGameSystem::has_value())
 	{
@@ -796,6 +798,8 @@ WorldChangeResult ServerWorld::LoadEditorWorld(std::span<const uint8_t> file)
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(true);
 	Locator::syncChecksumSystem::value().SetEnabled(true);
+	// The gods of the file go to the players of the room before the server sends its world to them
+	ecs::world_file_gods::GiveToRoom(players);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"),
 	                   "The world file of the editor ({} bytes) loaded in {:.2f} ms: the world is at turn {}", file.size(),
 	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count(),
@@ -1367,7 +1371,8 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	host.SetScenarioRefusal([](std::string_view id) { return testbed_scenarios::NetworkRestartRefusal(id); });
 	host.SetChangeWorld([&world, keeper](const LockstepHost::WorldChange& change) {
 		const bool file = change.kind == LockstepHost::WorldChange::Kind::WorldFile;
-		const auto changed = file ? world.LoadEditorWorld(change.file) : world.RestartOnScenario(change.scenario, change.seed);
+		const auto changed =
+		    file ? world.LoadEditorWorld(change.file, change.players) : world.RestartOnScenario(change.scenario, change.seed);
 		if (changed.turn.has_value() && keeper != nullptr)
 		{
 			keeper->WorldChanged(file);

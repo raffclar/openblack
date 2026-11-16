@@ -32,6 +32,9 @@ public:
 
 	/// A land script switches the mind of the player on or off. The game makes the player when the land has none yet.
 	virtual void SwitchOn(PlayerNames player, bool on) = 0;
+	/// A human plays the god of the player now: the mind of the player switches off, and the player is no longer marked as
+	/// a computer player
+	virtual void GiveToHuman([[maybe_unused]] PlayerNames player) {}
 	/// A land script names the player whose creature gives the size of this player's creature
 	virtual void SetCreatureLike(PlayerNames player, PlayerNames like) = 0;
 	/// A land script switches the mind of the player on or off, and leaves the mark of a computer player as it is

@@ -145,6 +145,9 @@ public:
 	{
 		return GetPlayerHands();
 	}
+	/// The hands of a player go from the world, and the player has no hands again. The first player always keeps its
+	/// hands. Gives true when hands went.
+	virtual bool RemoveHandsOf([[maybe_unused]] PlayerNames player) { return false; }
 	/// The game made the entity of a player. The entity gets the link to the hands of its player, if they are there.
 	virtual void LinkHandsOf([[maybe_unused]] entt::entity playerEntity) {}
 	/// A land script made the citadel of a player at a point. The reported hand, the camera and the computer mind of
