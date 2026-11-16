@@ -24,7 +24,8 @@
 namespace openblack::editor::script_acts
 {
 struct LandScriptRun;
-}
+struct ActReports;
+} // namespace openblack::editor::script_acts
 
 namespace openblack::ecs::systems
 {
@@ -85,6 +86,8 @@ public:
 	[[nodiscard]] virtual editor::paths::DrawnPaths& GetDrawnPaths() = 0;
 	/// The land script that the Land script tab steps through. Each computer of a network game steps it at the turns.
 	[[nodiscard]] virtual editor::script_acts::LandScriptRun& GetLandScriptRun() = 0;
+	/// The results of the acts of the Scripts tab of this computer at the turns of a network game
+	[[nodiscard]] virtual editor::script_acts::ActReports& GetScriptActReports() = 0;
 	[[nodiscard]] virtual const editor::paths::DrawnPaths& GetDrawnPaths() const = 0;
 	/// The settings of the land brush. A land script's height change, country change and brush size commands set them.
 	[[nodiscard]] virtual editor::land_brush::Brush& GetLandBrush() = 0;

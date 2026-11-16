@@ -1377,12 +1377,13 @@ def editor_mind(pids, focus, files):
     return done
 
 
-def editor_scripts(pids, inputs):
+def editor_scripts(pids, inputs, shots=None):
     """The script tabs of the editor in a network game. The first client opens the program of the game from a file of
     its computer (about 3 MB, in parts), compiles a new script into it and starts the script. Then it holds, steps,
     continues and stops the task, changes breakpoints and a global, steps the land script of the land and of a file of
     its computer, and opens the program of the game again. Each act is a command of the turns. Returns the answer of
-    each act and the state of the script tabs of each client after the acts."""
+    each act and the state of the script tabs of each client after the acts. With shots, the Scripts tab of each client
+    shows in a screenshot after the start and after the refusal."""
     editor = pids[0]
     done = {"acts": []}
 
@@ -1404,6 +1405,13 @@ def editor_scripts(pids, inputs):
     tasks = (inspector_answer(editor, "editor.script_state", {}) or {}).get("tasks") or []
     ours = [task["id"] for task in tasks if task.get("script") == "NetCheckEditorScript"]
     done["task"] = ours[0] if ours else None
+    # The Scripts tab of the editor shows the new task of the start that the turn did
+    done["start_report"] = inspector_answer(editor, "editor.script_reports", {})
+    if shots:
+        # The editor opens only after the claim of the editor came, so the tab opens after the first acts
+        done["show_tab"] = [inspector_answer(pid, "editor.show_tab", {"params": {"tab": "Scripts"}}) for pid in pids]
+        time.sleep(1.0)
+    editor_shots(pids, shots, "scripts_start")
     if ours:
         task = ours[0]
         act("editor.script", {"act": "hold", "id": task})
@@ -1413,6 +1421,9 @@ def editor_scripts(pids, inputs):
         act("editor.script", {"act": "hold_all"})
         act("editor.script", {"act": "continue_all"})
         act("editor.script", {"act": "set_local", "id": task, "index": 0, "value": 1.0})
+        # The tab shows the refusal of the turn
+        done["refusal_report"] = inspector_answer(editor, "editor.script_reports", {})
+        editor_shots(pids, shots, "scripts_refusal")
         act("editor.script", {"act": "stop", "id": task})
         act("editor.script", {"act": "start", "script": "NetCheckEditorScript"}, 2.0)
         act("editor.script", {"act": "stop_script", "script": "NetCheckEditorScript"})
@@ -1434,7 +1445,26 @@ def editor_scripts(pids, inputs):
     act("editor.land_script", {"act": "restart"})
     act("editor.script_program", {"use": "games"}, 4.0)
     done["states"] = [inspector_answer(pid, "editor.script_state", {}) for pid in pids]
+    # Only the computer that sent the acts has the reports
+    done["other_reports"] = inspector_answer(pids[1], "editor.script_reports", {}) if len(pids) > 1 else None
     return done
+
+
+def script_reports_check(scripts):
+    """Whether the Scripts tab of the editor showed the results of the turns: the new task of the start, the refusal of
+    the bad local, and no report on the other client"""
+    scripts = scripts or {}
+    start = ((scripts.get("start_report") or {}).get("script")) or {}
+    refusal = ((scripts.get("refusal_report") or {}).get("script")) or {}
+    other = scripts.get("other_reports") or {}
+    return {
+        "start_task": start.get("task"),
+        "start_text": start.get("text"),
+        "refusal_text": refusal.get("text"),
+        "other_changes": other.get("changes"),
+        "passed": (scripts.get("task") is not None and start.get("task") == scripts.get("task")
+                   and refusal.get("done") is False and other.get("changes") == 0),
+    }
 
 
 def script_inputs(options, folder):
@@ -1675,7 +1705,7 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
     if case in ("animals", "all"):
         done["animals"] = editor_animals(pids, focus)
     if case == "scripts":
-        done["scripts"] = editor_scripts(pids, script_files or {})
+        done["scripts"] = editor_scripts(pids, script_files or {}, shots)
         if done["scripts"].get("errors"):
             done.setdefault("errors", []).extend(done["scripts"]["errors"])
     if case in ("mind", "all"):
@@ -3002,6 +3032,7 @@ def main():
                              "with --editor-desync land: screenshots of both clients after the strokes and the paths; "
                              "with --editor-desync time: the editor of the first client opens, and both clients take "
                              "pictures in the pause and in the slow play; "
+                             "with --editor-desync scripts: the Scripts tab of both clients after a start and a refusal; "
                              "with --editor-desync world or scenario: the tab of the editor before and both clients after")
     parser.add_argument("--forest-camera", action="store_true",
                         help="the first client casts the forest once both clients compared --hold-after turns (with "
@@ -3771,6 +3802,10 @@ def main():
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
             states = (editor_desync_done or {}).get("scripts", {}).get("states") or []
             summary["script_states_same"] = len(states) == 2 and states[0] == states[1]
+            summary["script_reports"] = script_reports_check((editor_desync_done or {}).get("scripts"))
+            if not summary["script_reports"]["passed"]:
+                print(f"the Scripts tab did not show the results of the turns: {json.dumps(summary['script_reports'])}")
+                all_same = False
             if not summary["script_acts"]["same"] or not summary["script_states_same"]:
                 print(f"the script acts differ or did not come: {json.dumps(summary['script_acts'])[:2000]} "
                       f"states {json.dumps(states)[:1000]}")

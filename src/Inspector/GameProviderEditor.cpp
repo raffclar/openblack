@@ -1126,6 +1126,31 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		                                         {"instructions", instructions},
 		                                         {"land_script", std::move(land)}});
 	              });
+	provider->Add(
+	    Query("script_reports",
+	          "What the Scripts tab of this computer shows of its acts at the turns of a network game: the last act on "
+	          "the script machine and the last change of the program, each with its turn, whether the machine did it, "
+	          "the new task of a start and the line of the tab. Only the computer that sent the act has the report."),
+	    [](const QueryContext& /*context*/) {
+		    const auto toJson = [](const std::optional<editor::script_acts::ActReport>& report) -> Json {
+			    if (!report.has_value())
+			    {
+				    return nullptr;
+			    }
+			    return {{"turn", report->turn},
+			            {"done", report->done},
+			            {"task", report->task},
+			            {"text", report->text},
+			            {"number", report->number}};
+		    };
+		    if (!Locator::editorSystem::has_value())
+		    {
+			    return QueryResult::Value({{"script", nullptr}, {"program", nullptr}, {"changes", 0}});
+		    }
+		    const auto& reports = Locator::editorSystem::value().GetScriptActReports();
+		    return QueryResult::Value(
+		        {{"script", toJson(reports.script)}, {"program", toJson(reports.program)}, {"changes", reports.changes}});
+	    });
 	auto landStroke = Query(
 	    "land_stroke",
 	    "Sends a stroke of the land brush as a command of the turns, as the land tools send it in a network game: each "

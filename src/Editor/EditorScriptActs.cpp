@@ -20,6 +20,7 @@
 #include <OnlineMapFile.h>
 #include <fmt/format.h>
 
+#include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
@@ -538,9 +539,74 @@ std::optional<std::string_view> LandScriptRefusal(const EditorLandScript& act, b
 	return std::nullopt;
 }
 
+namespace
+{
+[[nodiscard]] uint32_t WorldResets(const LandScriptWorld& world)
+{
+	return world.worldResets ? world.worldResets() : 0;
+}
+
+/// Reads the script of the loaded land into the run
+LandScriptResult ReadLoadedLand(LandScriptRun& run, const LandScriptWorld& world)
+{
+	const auto path = world.loadedLand();
+	if (!path.has_value())
+	{
+		return {.refusal = "no land is loaded"};
+	}
+	run.world = WorldResets(world);
+	const auto text = world.readText(*path);
+	if (!text.has_value())
+	{
+		run.read = {};
+		run.stepper.Reset(0);
+		run.name = path->filename().generic_string();
+		run.message = fmt::format("The land script {} is not a file", path->generic_string());
+		++run.changes;
+		return {.refusal = "the land script does not read"};
+	}
+	ReadLandScript(run, path->filename().generic_string(), *text);
+	return {.done = true};
+}
+} // namespace
+
+bool RestartAtNewWorld(LandScriptRun& run, const LandScriptWorld& world)
+{
+	// A run that read no script waits for the first read
+	if (run.changes == 0)
+	{
+		return false;
+	}
+	const auto resets = WorldResets(world);
+	// A read in a game alone gives no count: the first check keeps the count of the world of the read
+	if (!run.world.has_value())
+	{
+		run.world = resets;
+		return false;
+	}
+	if (*run.world == resets)
+	{
+		return false;
+	}
+	run.world = resets;
+	const auto read = ReadLoadedLand(run, world);
+	if (!read.done && read.refusal == "no land is loaded")
+	{
+		// No land to read: the old commands do not agree with the new world, so the run stops with no commands
+		run.read = {};
+		run.stepper.Reset(0);
+		run.name.clear();
+		run.message = "No land is loaded.";
+		++run.changes;
+	}
+	run.message = fmt::format("The game loaded another world, so the stepper started again. {}", run.message);
+	return true;
+}
+
 LandScriptResult ApplyLandScript(const EditorLandScript& act, std::span<const uint8_t> file, LandScriptRun& run,
                                  const LandScriptWorld& world)
 {
+	RestartAtNewWorld(run, world);
 	if (const auto refusal = LandScriptRefusal(act, !file.empty()))
 	{
 		return {.refusal = *refusal};
@@ -564,28 +630,11 @@ LandScriptResult ApplyLandScript(const EditorLandScript& act, std::span<const ui
 	switch (act.act)
 	{
 	case LandAct::LoadedLand:
-	{
-		const auto path = world.loadedLand();
-		if (!path.has_value())
-		{
-			return {.refusal = "no land is loaded"};
-		}
-		const auto text = world.readText(*path);
-		if (!text.has_value())
-		{
-			run.read = {};
-			stepper.Reset(0);
-			run.name = path->filename().generic_string();
-			run.message = fmt::format("The land script {} is not a file", path->generic_string());
-			++run.changes;
-			return {.refusal = "the land script does not read"};
-		}
-		ReadLandScript(run, path->filename().generic_string(), *text);
-		return result;
-	}
+		return ReadLoadedLand(run, world);
 	case LandAct::Open:
 		ReadLandScript(run, fmt::format("the land script {:016x} of the editor", act.file),
 		               std::string(reinterpret_cast<const char*>(file.data()), file.size()));
+		run.world = WorldResets(world);
 		return result;
 	case LandAct::Step:
 		if (!stepper.Step(doCommand))
@@ -649,6 +698,9 @@ LandScriptWorld LocatorLandScriptWorld()
 			    return std::string(error.what());
 		    }
 	    },
+	    .worldResets = []() -> uint32_t {
+		    return Locator::entitiesRegistry::has_value() ? Locator::entitiesRegistry::value().GetResets() : 0;
+	    },
 	};
 }
 
@@ -659,6 +711,52 @@ LandScriptResult RunLandScript(const EditorLandScript& act, std::span<const uint
 		return {.refusal = "the game has no editor"};
 	}
 	return ApplyLandScript(act, file, Locator::editorSystem::value().GetLandScriptRun(), LocatorLandScriptWorld());
+}
+
+void RestartLandScriptAtNewWorld()
+{
+	if (Locator::editorSystem::has_value())
+	{
+		RestartAtNewWorld(Locator::editorSystem::value().GetLandScriptRun(), LocatorLandScriptWorld());
+	}
+}
+
+ActReport ReportOf(const EditorScript& act, const ActResult& result, uint32_t turn)
+{
+	ActReport report {.kind = ActReport::Kind::Script, .act = act.act, .turn = turn, .done = result.done, .task = result.task};
+	if (!result.done)
+	{
+		report.text = fmt::format("Turn {}: the machine did not {}: {}", turn, NameOf(act.act), result.refusal);
+	}
+	else if (act.act == EditorScript::Act::Start)
+	{
+		report.text = result.task != 0 ? fmt::format("Turn {}: started task {}", turn, result.task)
+		                               : fmt::format("Turn {}: the machine started no task", turn);
+	}
+	else
+	{
+		report.text = fmt::format("Turn {}: {}: done", turn, NameOf(act.act));
+	}
+	return report;
+}
+
+ActReport ReportOf(const EditorScriptProgram& change, const ProgramResult& result, uint32_t turn)
+{
+	return {
+	    .kind = ActReport::Kind::Program,
+	    .use = change.use,
+	    .turn = turn,
+	    .done = result.done,
+	    .text = result.done ? fmt::format("Turn {}: {}: done", turn, NameOf(change.use))
+	                        : fmt::format("Turn {}: the machine did not {}: {}", turn, NameOf(change.use), result.refusal),
+	};
+}
+
+void Keep(ActReports& reports, ActReport report)
+{
+	auto& kept = report.kind == ActReport::Kind::Script ? reports.script : reports.program;
+	report.number = ++reports.changes;
+	kept = std::move(report);
 }
 
 std::optional<uint64_t> SendFile(game_socket::EditorScriptFile::Kind kind, std::span<const uint8_t> bytes)

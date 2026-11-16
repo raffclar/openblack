@@ -410,11 +410,22 @@ void RunEditorMindLoad(openblack::PlayerNames player, const EditorMindLoad& load
 	}
 }
 
+/// Keep the result of an act of the editor of this computer, so that the Scripts tab shows it
+void KeepEditorScriptReport(openblack::PlayerNames player, uint8_t observer, openblack::editor::script_acts::ActReport report)
+{
+	if (!openblack::Locator::editorSystem::has_value() || !openblack::editor::SentByThisComputer(player, observer))
+	{
+		return;
+	}
+	openblack::editor::script_acts::Keep(openblack::Locator::editorSystem::value().GetScriptActReports(), std::move(report));
+}
+
 /// Do an act of the Scripts tab of the editor on the script machine at the turn. The game server takes the acts only from a
 /// player with the editor claim.
-void RunEditorScript(openblack::PlayerNames player, const EditorScript& script, uint32_t turn)
+void RunEditorScript(openblack::PlayerNames player, uint8_t observer, const EditorScript& script, uint32_t turn)
 {
 	const auto result = openblack::editor::script_acts::RunScriptAct(script);
+	KeepEditorScriptReport(player, observer, openblack::editor::script_acts::ReportOf(script, result, turn));
 	if (auto logger = spdlog::get("game"))
 	{
 		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} {} {} (address {}, index {}): {}", turn,
@@ -446,7 +457,7 @@ void RunEditorLandScript(openblack::PlayerNames player, const EditorLandScript& 
 
 /// Change the program of the script machine at the turn. The game server takes the changes only from a player with the
 /// editor claim, and sends the file to each computer before the turn.
-void RunEditorScriptProgram(openblack::PlayerNames player, const EditorScriptProgram& program, uint32_t turn,
+void RunEditorScriptProgram(openblack::PlayerNames player, uint8_t observer, const EditorScriptProgram& program, uint32_t turn,
                             const TurnCommandSourceInterface* source)
 {
 	const auto kind = openblack::editor::script_acts::FileKindOf(program);
@@ -454,6 +465,7 @@ void RunEditorScriptProgram(openblack::PlayerNames player, const EditorScriptPro
 	                      ? source->EditorScriptFile(static_cast<uint8_t>(*kind), program.file)
 	                      : std::span<const uint8_t> {};
 	const auto result = openblack::editor::script_acts::RunProgram(program, file);
+	KeepEditorScriptReport(player, observer, openblack::editor::script_acts::ReportOf(program, result, turn));
 	if (auto logger = spdlog::get("game"))
 	{
 		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} {} with the file {:016x} (script {}): {}", turn,
@@ -619,7 +631,7 @@ void RunObserver(const Command& command, uint32_t turn, const TurnCommandSourceI
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorScript>)
 		    {
-			    RunEditorScript(command.player, action, turn);
+			    RunEditorScript(command.player, command.observer, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorLandScript>)
 		    {
@@ -627,7 +639,7 @@ void RunObserver(const Command& command, uint32_t turn, const TurnCommandSourceI
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorScriptProgram>)
 		    {
-			    RunEditorScriptProgram(command.player, action, turn, source);
+			    RunEditorScriptProgram(command.player, command.observer, action, turn, source);
 		    }
 		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
 		    {
@@ -1360,7 +1372,7 @@ void Run(const Command& command, uint32_t turn, const TurnCommandSourceInterface
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorScript>)
 		    {
-			    RunEditorScript(command.player, action, turn);
+			    RunEditorScript(command.player, command.observer, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorLandScript>)
 		    {
@@ -1368,7 +1380,7 @@ void Run(const Command& command, uint32_t turn, const TurnCommandSourceInterface
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorScriptProgram>)
 		    {
-			    RunEditorScriptProgram(command.player, action, turn, source);
+			    RunEditorScriptProgram(command.player, command.observer, action, turn, source);
 		    }
 		    else if constexpr (std::is_same_v<Kind, DebugCheat>)
 		    {
