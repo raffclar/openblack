@@ -29,6 +29,7 @@
 #include "Editor/EditorNetworkEdits.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
+#include "Story/StoryLandSkip.h"
 
 using namespace openblack;
 using namespace openblack::inspector;
@@ -333,6 +334,34 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		const auto cheatOf = static_cast<debug_cheats::Cheat>(found - debug_cheats::k_CheatNames.begin());
 		editor::SendDebugCheat(cheatOf, BoolParam(context.params, "on", true));
 		return QueryResult::Value({{"sent", true}});
+	});
+	auto landSkip =
+	    Query("land_skip",
+	          "Sends the skip to a land of the story, 2 to 5, as a command of the turns, as the cheats tab of the "
+	          "editor does. The story changes the land as at the end of the land before. Only a game of the story "
+	          "on this computer alone does it. The skip to land 1 starts a new game, so only the editor does it.",
+	          {{.name = "land", .type = "integer", .description = "The land of the story, 2 to 5", .required = true}});
+	landSkip.writes = true;
+	provider->Add(std::move(landSkip), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto landParam = context.params.find("land");
+		if (landParam == context.params.end() || !landParam->is_number_integer())
+		{
+			return QueryResult::Error("editor.land_skip needs the land, 2 to 5");
+		}
+		const auto land = landParam->get<int32_t>();
+		if (!story_land_skip::GoesAsCommand(land))
+		{
+			return QueryResult::Error("editor.land_skip takes only the lands 2 to 5");
+		}
+		if (!editor::SendStoryLandSkip(land))
+		{
+			return QueryResult::Error("editor.land_skip: this game is not a game of the story on this computer alone");
+		}
+		return QueryResult::Value({{"sent", true}, {"land", land}});
 	});
 	return provider;
 }

@@ -2388,6 +2388,20 @@
   "writes": true
  },
  {
+  "description": "Sends the skip to a land of the story, 2 to 5, as a command of the turns, as the cheats tab of the editor does. The story changes the land as at the end of the land before. Only a game of the story on this computer alone does it. The skip to land 1 starts a new game, so only the editor does it.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The land of the story, 2 to 5",
+    "name": "land",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "editor.land_skip",
+  "writes": true
+ },
+ {
   "description": "The script machine: its scripts, tasks, globals and the task running",
   "kind": "object",
   "parameters": [],

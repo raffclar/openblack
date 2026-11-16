@@ -58,6 +58,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
@@ -75,6 +76,7 @@
 #include "Hand/HandSendWait.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
+#include "Story/StoryLandSkip.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::player_commands;
@@ -300,6 +302,30 @@ void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uin
 	{
 		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debug cheat {} of player {} is {}", turn,
 		                   openblack::debug_cheats::NameOf(*cheat), static_cast<int>(player), command.on ? "on" : "off");
+	}
+}
+
+/// Skip to a land of the story at the turn, as the debug cheat of the editor asks. Only a game of the story on this
+/// computer alone does it. The game server refuses the command in every network game.
+void RunDebugLandSkip(openblack::PlayerNames player, const DebugLandSkip& command, uint32_t turn)
+{
+	if (!openblack::Locator::entitiesRegistry::has_value() || !openblack::Locator::landSystem::has_value())
+	{
+		return;
+	}
+	const auto& context = openblack::Locator::entitiesRegistry::value().Context();
+	const openblack::story_land_skip::GameFacts game {
+	    .networkGame = openblack::Locator::time::has_value() && openblack::Locator::time::value().IsNetworkGame(),
+	    .skirmish = context.skirmish,
+	    .landNumber = context.mapScriptGlobals.landNumber,
+	};
+	const bool done = openblack::story_land_skip::WorldDoes(game, command.land) &&
+	                  openblack::Locator::landSystem::value().StartStoryAtLand(command.land);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debug cheat of player {} {} from land {} to land {} of the story", turn,
+		                   static_cast<int>(player), done ? "skips" : "cannot skip", game.landNumber,
+		                   static_cast<int>(command.land));
 	}
 }
 
@@ -1053,6 +1079,10 @@ void Run(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, DebugCheat>)
 		    {
 			    RunDebugCheat(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugLandSkip>)
+		    {
+			    RunDebugLandSkip(command.player, action, turn);
 		    }
 	    },
 	    command.action);
