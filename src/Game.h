@@ -384,6 +384,9 @@ public:
 	/// line and a run of the tools stop the game. A join from the front end goes to the box that the control gives: the
 	/// multiplayer front end after Leave Game, the skirmish box after Back in the land information box.
 	void LeaveNetworkGame(game_session::NetworkLeave leave = game_session::NetworkLeave::LeaveGame);
+	/// The player leaves the lobby room of the network game that the player left. A new front end then shows the lobby
+	/// list and asks for no ticket of that game.
+	void LeaveLobbyGame();
 	/// Tests: the player leaves the network game through the menu and the question to leave, as a player does
 	void LeaveAsAPlayerDoes();
 	/// A run of the tools that stops: an observer leaves the network game at once, so that the server does not wait
@@ -450,18 +453,12 @@ public:
 	bool LoadFromLandMenu(const std::filesystem::path& path) noexcept;
 	/// Whether a land's script is one of the playground lands, played as a skirmish
 	[[nodiscard]] static bool IsPlaygroundLand(const std::filesystem::path& path);
-	void LoadLandscape(const std::filesystem::path& path);
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
 	void LoadTestbed() noexcept;
 	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village
 	/// in each slot. The village comes from a land of the game for network play. Returns false when that land is not there.
 	bool LoadGodsRingMap() noexcept;
-	/// Loads a saved game: the saved land's landscape with no map script (the flat land for the testbed), then `restore`
-	/// puts the saved entities in place of the land's own. The systems then find their entities again and the land starts.
-	/// Returns whether the landscape loaded and `restore` gave true.
-	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
-	                   const std::function<bool()>& restore) noexcept;
 	/// Starts a new game on the first land from scratch, as the game's new game does, the story's scripts starting
 	/// again; for developers and agents, `start` asks the start-of-game question or answers it at once
 	bool StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept;
@@ -539,11 +536,6 @@ public:
 	void RequestJoinOnline() noexcept { _joinOnlineAsked = true; }
 	/// The size of the villagers' names display, 0 to 1
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
-	/// The map script of the land loaded last, or "testbed"; empty before one is
-	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept;
-	/// The land's file, as the land's script asked for it
-	[[nodiscard]] const std::filesystem::path& GetLandscapePath() const noexcept;
-
 	static Game* Instance() { return sInstance; }
 
 	/// The situation that Escape in play finds now, with these modifier keys held
@@ -557,9 +549,6 @@ private:
 	void PlayStartupScreens();
 	/// The tips screen, or the banner, shows while a land loads, drawn again at the loading's redraw points
 	void BeginLoadingScreen(loading::LoadingClock::Mode look) override;
-	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due, or at once when drawNow is true.
-	/// drawUnder, when given, draws first in a frame that is shown. Returns whether a frame was shown.
-	bool RenderLoadingFrame(bool drawNow = false, const std::function<void()>& drawUnder = nullptr);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen() override;
 	/// A load that showed no loading screen ends: the load finish system does the work of the first frames

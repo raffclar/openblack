@@ -14,7 +14,19 @@
 #include <entt/entity/entity.hpp>
 #include <entt/entity/fwd.hpp>
 
+#include "Commands/PlayerCommands.h"
 #include "Editor/EditorActions.h"
+
+namespace openblack::ecs::components
+{
+struct LivingAction;
+struct Villager;
+} // namespace openblack::ecs::components
+
+namespace openblack::ecs::systems
+{
+class LivingActionSystemInterface;
+}
 
 namespace openblack::editor
 {
@@ -32,6 +44,13 @@ private:
 	void DrawHeader(EditorContext& context, entt::entity entity) noexcept;
 	void DrawTransform(EditorContext& context, entt::entity entity) noexcept;
 	void DrawVillager(EditorContext& context, entt::entity entity) noexcept;
+	/// The fields of a villager change the world of this computer at once
+	static void DrawLocalVillager(ecs::components::Villager& villager, ecs::components::LivingAction& action,
+	                              const ecs::systems::LivingActionSystemInterface* actions) noexcept;
+	/// The fields of a villager send each change as a command of the turns
+	void DrawNetworkVillager(entt::entity entity, const ecs::components::Villager& villager,
+	                         const ecs::components::LivingAction& action,
+	                         const ecs::systems::LivingActionSystemInterface* actions) noexcept;
 	void DrawComponents(EditorContext& context, entt::entity entity) noexcept;
 
 	/// The pose of the main pick as a field of the transform starts to change it
@@ -45,6 +64,23 @@ private:
 		float degrees {0.0f};
 	};
 	std::optional<HeldTurn> _heldTurn;
+	/// While the scale field of a network game moves: the thing and the scale of the field. The scale goes as one command
+	/// when the field lets go, because the size of the thing changes only at a later turn.
+	struct HeldScale
+	{
+		entt::entity entity {entt::null};
+		float scale {1.0f};
+	};
+	std::optional<HeldScale> _heldScale;
+	/// While a field of a villager that the player types or drags changes in a network game: the villager, the field and
+	/// its amount. The amount goes as one command when the field lets go.
+	struct HeldVillager
+	{
+		entt::entity entity {entt::null};
+		player_commands::EditorVillagerEdit::Field field {player_commands::EditorVillagerEdit::Field::Life};
+		float amount {0.0f};
+	};
+	std::optional<HeldVillager> _heldVillager;
 };
 
 } // namespace openblack::editor

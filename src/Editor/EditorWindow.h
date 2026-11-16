@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <memory>
 #include <optional>
 #include <string>
@@ -103,7 +105,9 @@ private:
 	void DrawToolbar(EditorContext& context) noexcept;
 	void DrawBottom(EditorContext& context) noexcept;
 	/// The debug cheats of the player of this computer, each one with a box to turn it on or off
-	static void DrawCheats() noexcept;
+	void DrawCheats() noexcept;
+	/// The skip to a land of the story: a choice of the land, a button and a question before the land changes
+	void DrawStoryLandSkip() noexcept;
 	/// True while the editor is open in a network game
 	[[nodiscard]] bool InNetworkGame() const noexcept { return !_writes->ChangesAtOnce(); }
 	void DrawOverlays(EditorContext& context) noexcept;
@@ -154,6 +158,12 @@ private:
 	float _cameraGroupWidth {0.0f};
 	float _panelGroupWidth {0.0f};
 	std::optional<BottomTab> _showTab;
+	/// The land of the story that the skip goes to
+	int32_t _skipLand {2};
+	/// The question before the skip opens at the next draw
+	bool _askToSkip {false};
+	/// What the last skip did, for the line under the button
+	std::string _skipStatus;
 
 	/// Clicks in the world to act on at the next update, as points of the screen from 0 to 1
 	std::optional<glm::vec2> _pickAt;

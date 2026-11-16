@@ -977,4 +977,40 @@ void PutIconValues(components::WorshipIcon& icon, const ImportedWorshipIcon& fil
 [[nodiscard]] std::optional<ImportedWorshipIcon> ReadWorshipIcon(const gamesave::VanillaWorld& world,
                                                                  const gamesave::VanillaRecord& record);
 
+/// The values of a spell of the file that the import keeps for the spell that a creature holds. These are the values
+/// of every spell, and the value that food, wood and water add.
+struct ImportedHeldSpell
+{
+	uint32_t number {0};
+	MagicType magicType {MagicType::None};
+	/// The point where the spell is
+	gamesave::MapCoords position {};
+	/// The number of the object that cast the spell
+	uint32_t creator {0};
+	/// The prayer power that is left, and the prayer power after the last fill
+	float chants {0.0f};
+	float initialChants {0.0f};
+	bool closedDown {false};
+	/// How long the spell can last in seconds, negative for no time limit, and the seconds that it ran
+	float duration {-1.0f};
+	float age {0.0f};
+	float magnitude {0.0f};
+	/// What the spell gives its particles each turn: the point of the caster, the point that a creature casts from
+	/// above, the view, the movement of the hand, the power and the flag that the caster still casts
+	std::array<float, 3> casterPoint {};
+	std::array<float, 3> abovePoint {};
+	std::array<float, 3> cameraForward {};
+	std::array<float, 3> handMovement {};
+	float power {1.0f};
+	bool casting {false};
+	/// Food and wood: the first grain landed
+	std::optional<bool> firstDone;
+	/// Water: the age of the spell when its last drop made a ring on the land
+	std::optional<float> lastRipple;
+};
+
+/// The values of a spell of the file. Nothing for a record that is not a spell, or that has no magic type.
+[[nodiscard]] std::optional<ImportedHeldSpell> ReadHeldSpell(const gamesave::VanillaWorld& world,
+                                                             const gamesave::VanillaRecord& record);
+
 } // namespace openblack::ecs::vanilla_world_import

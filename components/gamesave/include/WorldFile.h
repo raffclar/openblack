@@ -61,6 +61,9 @@ inline constexpr Tag k_SystemsTag {'S', 'Y', 'S', 'T'};
 /// The altitudes of the land that the world changed. A saved game of openblack and a world state keep them. A saved game
 /// of the game itself does not keep them, so its land comes back from the landscape file.
 inline constexpr Tag k_AltitudesTag {'L', 'A', 'L', 'T'};
+/// The countries of the land that the world changed, such as the paint of the editor. A saved game of openblack and a
+/// world state keep them.
+inline constexpr Tag k_CountriesTag {'L', 'C', 'N', 'T'};
 
 struct Chunk
 {

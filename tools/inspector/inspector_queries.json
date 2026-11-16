@@ -2103,7 +2103,7 @@
   "query": "view.script_control"
  },
  {
-  "description": "The editor: open, its tool, its camera, what is selected (the main pick and all picks), the steps to undo and redo with their labels, and the counts of the streams and footpaths that it drew",
+  "description": "The editor: open, its tool, its camera, what is selected (the main pick and all picks), the steps to undo and redo with their labels, whether the history waits for the answer of a turn, and the counts of the streams and footpaths that it drew",
   "kind": "object",
   "parameters": [],
   "query": "view.editor"
@@ -2234,13 +2234,13 @@
   "kind": "object",
   "parameters": [
    {
-    "description": "move, turn, place or remove",
+    "description": "move, turn, scale, place or remove",
     "name": "kind",
     "required": true,
     "type": "string"
    },
    {
-    "description": "The thing of a move, a turn or a removal",
+    "description": "The thing of a move, a turn, a scale or a removal",
     "name": "id",
     "type": "integer"
    },
@@ -2252,6 +2252,11 @@
    {
     "description": "The angle of a turn or a placement",
     "name": "radians",
+    "type": "number"
+   },
+   {
+    "description": "The new scale of the first axis (scale)",
+    "name": "scale",
     "type": "number"
    },
    {
@@ -2284,6 +2289,55 @@
   "writes": true
  },
  {
+  "description": "Does an action of the editor on things, as the tool bar and the keys of the editor do it, with the history of the editor: delete, duplicate, place, move, turn, undo or redo. In a network game each change goes as a command of the turns, and the history learns it from the answer at the turn. force acts also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "delete, duplicate, place, move, turn, undo or redo",
+    "name": "act",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The things to pick before the act (delete, duplicate, move, turn)",
+    "name": "ids",
+    "type": "array"
+   },
+   {
+    "description": "[x, z] that a move adds to each thing",
+    "name": "offset",
+    "type": "point"
+   },
+   {
+    "description": "The angle of a turn",
+    "name": "radians",
+    "type": "number"
+   },
+   {
+    "description": "[x, z] of a placement",
+    "name": "position",
+    "type": "point"
+   },
+   {
+    "description": "The kind of the palette item (place)",
+    "name": "place_kind",
+    "type": "integer"
+   },
+   {
+    "description": "The type of the palette item (place)",
+    "name": "place_type",
+    "type": "integer"
+   },
+   {
+    "description": "Act also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.act",
+  "writes": true
+ },
+ {
   "description": "Sends a change of a value of a creature as a command of the turns, as the creature section of the editor sends it in a network game: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
   "kind": "object",
   "parameters": [
@@ -2312,6 +2366,220 @@
    }
   ],
   "query": "editor.creature_edit",
+  "writes": true
+ },
+ {
+  "description": "Sends a change of a field of a villager as a command of the turns, as the villager section of the editor sends it in a network game: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The villager",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "life, age, food, life stage, sex, tribe, role or state",
+    "name": "field",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The age, the life stage, the sex, the tribe, the role or the state",
+    "name": "number",
+    "type": "integer"
+   },
+   {
+    "description": "The life or the food",
+    "name": "amount",
+    "type": "number"
+   },
+   {
+    "description": "The slot of states of a state, 0 to 2",
+    "name": "index",
+    "type": "integer"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.villager_edit",
+  "writes": true
+ },
+ {
+  "description": "Sends a new creature as a command of the turns, as the creature tools send it in a network game: each computer makes it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The species (CreatureType, from 1)",
+    "name": "species",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] or [x, y, z] of the creature",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   },
+   {
+    "description": "The player that owns it (0 when not given)",
+    "name": "owner",
+    "type": "integer"
+   },
+   {
+    "description": "The angle that it faces",
+    "name": "radians",
+    "type": "number"
+   },
+   {
+    "description": "Its size (1 when not given)",
+    "name": "scale",
+    "type": "number"
+   },
+   {
+    "description": "-1 to 1 (0 when not given)",
+    "name": "alignment",
+    "type": "number"
+   },
+   {
+    "description": "0 to 1 (0.5 when not given)",
+    "name": "fatness",
+    "type": "number"
+   },
+   {
+    "description": "0 to 1 (0.5 when not given)",
+    "name": "strength",
+    "type": "number"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.creature_spawn",
+  "writes": true
+ },
+ {
+  "description": "Sends a mind file of this computer and its command of the turns, as the creature tools send them in a network game: the file goes to the game server, which sends it to every computer, and each computer loads it at the same turn. With an id, the creature takes the mind. With a position, a new creature with the body of the file takes it. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The mind file on this computer",
+    "name": "path",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The creature that takes the mind",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] or [x, y, z] of a new creature from the file",
+    "name": "position",
+    "type": "point"
+   },
+   {
+    "description": "The player that owns a new creature",
+    "name": "owner",
+    "type": "integer"
+   },
+   {
+    "description": "The angle that a new creature faces",
+    "name": "radians",
+    "type": "number"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.mind_load",
+  "writes": true
+ },
+ {
+  "description": "Sends a stroke of the land brush as a command of the turns, as the land tools send it in a network game: each computer raises, lowers or paints the land at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "raise, lower or paint",
+    "name": "mode",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "[x, z] of the middle of the stroke",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   },
+   {
+    "description": "The inner radius in metres (10 when not given)",
+    "name": "inner",
+    "type": "number"
+   },
+   {
+    "description": "The outer radius in metres (30 when not given)",
+    "name": "outer",
+    "type": "number"
+   },
+   {
+    "description": "The altitude steps, 1 to 64 (4 when not given)",
+    "name": "step",
+    "type": "integer"
+   },
+   {
+    "description": "The country of a paint (0 when not given)",
+    "name": "country",
+    "type": "integer"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.land_stroke",
+  "writes": true
+ },
+ {
+  "description": "Sends a footpath or a stream as a command of the turns, as the paths of the land tools send it in a network game: each computer makes it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "footpath or stream",
+    "name": "kind",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The points [[x, z], ...], 2 to 256",
+    "name": "points",
+    "required": true,
+    "type": "array"
+   },
+   {
+    "description": "The building at the first point",
+    "name": "first",
+    "type": "integer"
+   },
+   {
+    "description": "The building at the last point",
+    "name": "last",
+    "type": "integer"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.path",
   "writes": true
  },
  {
@@ -2385,6 +2653,20 @@
    }
   ],
   "query": "editor.cheat",
+  "writes": true
+ },
+ {
+  "description": "Sends the skip to a land of the story, 2 to 5, as a command of the turns, as the cheats tab of the editor does. The story changes the land as at the end of the land before. Only a game of the story on this computer alone does it. The skip to land 1 starts a new game, so only the editor does it.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The land of the story, 2 to 5",
+    "name": "land",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "editor.land_skip",
   "writes": true
  },
  {

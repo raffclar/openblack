@@ -16,13 +16,17 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureMorph.h"
+#include "Creature/LeashRules.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "EditorNetworkEdits.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -202,6 +206,76 @@ void SendCreatureEdit(entt::entity creature, Value value, float amount)
 		Locator::playerCommandSystem::value().Submit(
 		    player_commands::EditorCreatureEdit {.creature = creature, .value = static_cast<uint8_t>(value), .amount = amount});
 	}
+}
+
+std::optional<std::string_view> CreatureSpawnRefusal(const player_commands::EditorCreatureSpawn& spawn) noexcept
+{
+	const auto& point = spawn.position;
+	const bool finite = std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z) &&
+	                    std::isfinite(spawn.radians) && std::isfinite(spawn.scale) && std::isfinite(spawn.alignment) &&
+	                    std::isfinite(spawn.fatness) && std::isfinite(spawn.strength);
+	if (!finite)
+	{
+		return "a value is not a finite number";
+	}
+	if (spawn.species <= static_cast<uint8_t>(CreatureType::Unknown) ||
+	    spawn.species >= static_cast<uint8_t>(CreatureType::_COUNT))
+	{
+		return "the game has no such creature";
+	}
+	if (spawn.owner >= static_cast<uint8_t>(PlayerNames::_COUNT))
+	{
+		return "the game has no such player";
+	}
+	// The creature tools give these limits to a new creature
+	if (spawn.scale < creature_morph::k_MinScale || spawn.scale > creature_morph::k_MaxScale)
+	{
+		return "the size is not in the range of the creature tools";
+	}
+	if (spawn.alignment < -1.0f || spawn.alignment > 1.0f || spawn.fatness < 0.0f || spawn.fatness > 1.0f ||
+	    spawn.strength < 0.0f || spawn.strength > 1.0f)
+	{
+		return "a value of the body is not in its range";
+	}
+	return std::nullopt;
+}
+
+entt::entity ApplyCreatureSpawn(const player_commands::EditorCreatureSpawn& spawn)
+{
+	using ecs::archetypes::CreatureArchetype;
+	if (CreatureSpawnRefusal(spawn).has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return entt::null;
+	}
+	const auto entity = CreatureArchetype::Create(
+	    spawn.position, static_cast<PlayerNames>(spawn.owner), static_cast<CreatureType>(spawn.species), 0, spawn.radians,
+	    spawn.scale, {.alignment = spawn.alignment, .fatness = spawn.fatness, .strength = spawn.strength});
+	// A creature of the creature tools knows every leash, as the creatures of the debug tools of the game do
+	if (Locator::leashSystem::has_value())
+	{
+		for (const auto type : creature_leash::k_Types)
+		{
+			Locator::leashSystem::value().SetKnown(entity, type, true);
+		}
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* tattoos = registry.TryGet<ecs::components::CreatureTattoos>(entity); tattoos != nullptr && spawn.hasTattoos)
+	{
+		tattoos->slots = spawn.tattoos;
+		++tattoos->revision;
+	}
+	return entity;
+}
+
+Request SendCreatureSpawn(player_commands::EditorCreatureSpawn spawn)
+{
+	if (!Locator::playerCommandSystem::has_value())
+	{
+		return 0;
+	}
+	spawn.request = NewEditorRequest();
+	Locator::playerCommandSystem::value().Submit(spawn);
+	return spawn.request;
 }
 
 } // namespace openblack::editor

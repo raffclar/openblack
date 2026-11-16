@@ -27,11 +27,22 @@ namespace
 /// The distance across the land between a thing and its copy
 constexpr glm::vec2 k_CopyOffset {8.0f, 0.0f};
 
-std::string Describe(std::string_view done, const std::optional<HistoryResult>& result)
+std::string Describe(std::string_view done, const EditorHistory& history, bool atOnce,
+                     const std::optional<HistoryResult>& result)
 {
+	if (!result.has_value() && history.Waiting())
+	{
+		return "The editor waits for the turn of its last change";
+	}
 	if (!result.has_value())
 	{
 		return fmt::format("Nothing to {}", done == "Undid" ? "undo" : "redo");
+	}
+	// In a network game the change comes at the next turn
+	if (!atOnce)
+	{
+		return fmt::format("{} {}: it comes at the next turn", done == "Undid" ? "Sent the undo of" : "Sent the redo of",
+		                   result->label);
 	}
 	if (result->skipped > 0)
 	{
@@ -46,7 +57,7 @@ std::string StepLabel(std::string_view action, size_t count)
 	return count == 1 ? std::string(action) : fmt::format("{} {} things", action, count);
 }
 
-void DeletePicked(EditorContext& context)
+void DeletePicked(const EditorActs& context)
 {
 	auto& selection = context.system.GetSelection();
 	auto& history = context.system.GetHistory();
@@ -66,14 +77,11 @@ void DeletePicked(EditorContext& context)
 		}
 		context.writes.Remove(entity);
 	}
-	// In a network game the world changes at a later turn, and the editor keeps no history
-	if (context.writes.ChangesAtOnce())
-	{
-		history.Push(std::move(step));
-	}
+	// The recipe is from before the removal, so the step is the same when the removal comes at a later turn
+	history.Push(std::move(step));
 }
 
-void DuplicatePicked(EditorContext& context)
+void DuplicatePicked(const EditorActs& context)
 {
 	auto& selection = context.system.GetSelection();
 	auto& history = context.system.GetHistory();
@@ -86,7 +94,14 @@ void DuplicatePicked(EditorContext& context)
 		{
 			continue;
 		}
+		const auto sentBefore = context.writes.LastMakeRequest();
 		const auto copy = context.writes.Duplicate(entity, k_CopyOffset);
+		// In a network game the copy comes at a later turn, and the answer to its request gives it
+		if (const auto sent = context.writes.LastMakeRequest(); !copy.has_value() && sent != sentBefore && sent != 0)
+		{
+			step.changes.emplace_back(MakeChange {.awaits = sent});
+			continue;
+		}
 		if (!copy.has_value())
 		{
 			continue;
@@ -101,13 +116,10 @@ void DuplicatePicked(EditorContext& context)
 	{
 		selection.SelectAll(copies);
 	}
-	if (context.writes.ChangesAtOnce())
-	{
-		history.Push(std::move(step));
-	}
+	history.Push(std::move(step));
 }
 
-void RecordMade(EditorContext& context, entt::entity entity, std::string label)
+void RecordMade(const EditorActs& context, entt::entity entity, std::string label)
 {
 	if (!context.writes.ChangesAtOnce())
 	{
@@ -120,7 +132,7 @@ void RecordMade(EditorContext& context, entt::entity entity, std::string label)
 	}
 }
 
-void RecordAllMade(EditorContext& context, std::span<const entt::entity> entities, std::string_view action)
+void RecordAllMade(const EditorActs& context, std::span<const entt::entity> entities, std::string_view action)
 {
 	if (!context.writes.ChangesAtOnce())
 	{
@@ -143,26 +155,62 @@ void RecordAllMade(EditorContext& context, std::span<const entt::entity> entitie
 	history.Push(std::move(step));
 }
 
-std::string UndoStep(EditorContext& context)
+void RecordAllSent(const EditorActs& context, std::span<const Request> requests, std::string_view action)
 {
-	RegistryWorld world;
-	const auto result = context.system.GetHistory().Undo(world);
-	if (result.has_value())
+	HistoryStep step;
+	for (const auto request : requests)
 	{
-		context.system.GetSelection().SelectAll(result->touched);
+		if (request != 0)
+		{
+			step.changes.emplace_back(MakeChange {.awaits = request});
+		}
 	}
-	return Describe("Undid", result);
+	step.label = StepLabel(action, step.changes.size());
+	context.system.GetHistory().Push(std::move(step));
 }
 
-std::string RedoStep(EditorContext& context)
+std::string UndoStep(const EditorActs& context)
 {
-	RegistryWorld world;
-	const auto result = context.system.GetHistory().Redo(world);
+	WritesWorld world(context.registry, context.writes);
+	auto& history = context.system.GetHistory();
+	const auto result = history.Undo(world);
 	if (result.has_value())
 	{
 		context.system.GetSelection().SelectAll(result->touched);
 	}
-	return Describe("Redid", result);
+	return Describe("Undid", history, context.writes.ChangesAtOnce(), result);
+}
+
+std::string RedoStep(const EditorActs& context)
+{
+	WritesWorld world(context.registry, context.writes);
+	auto& history = context.system.GetHistory();
+	const auto result = history.Redo(world);
+	if (result.has_value())
+	{
+		context.system.GetSelection().SelectAll(result->touched);
+	}
+	return Describe("Redid", history, context.writes.ChangesAtOnce(), result);
+}
+
+bool WritesWorld::Exists(entt::entity entity) const
+{
+	return _registry.Valid(entity);
+}
+
+void WritesWorld::SetPose(entt::entity entity, const Pose& pose)
+{
+	_writes.SetPose(entity, pose);
+}
+
+MakeResult WritesWorld::Make(const Recipe& recipe)
+{
+	return _writes.Make(recipe);
+}
+
+void WritesWorld::Remove(entt::entity entity)
+{
+	_writes.Remove(entity);
 }
 
 void PoseEdit::Begin(const ecs::Registry& registry, std::span<const entt::entity> entities)
@@ -177,15 +225,10 @@ void PoseEdit::Begin(const ecs::Registry& registry, std::span<const entt::entity
 	}
 }
 
-void PoseEdit::Finish(EditorContext& context, std::string_view action)
+void PoseEdit::Finish(const EditorActs& context, std::string_view action)
 {
 	// The editor sends the moves and the turns that wait, so that a drag ends with its last place
 	context.writes.FlushNow();
-	if (!context.writes.ChangesAtOnce())
-	{
-		_before.clear();
-		return;
-	}
 	auto& history = context.system.GetHistory();
 	HistoryStep step;
 	for (const auto& [entity, before] : _before)
@@ -193,6 +236,22 @@ void PoseEdit::Finish(EditorContext& context, std::string_view action)
 		if (!context.registry.Valid(entity))
 		{
 			continue;
+		}
+		// In a network game the pose after the edit comes at the turn of the last command for the thing. A thing with
+		// no command did not change.
+		if (!context.writes.ChangesAtOnce())
+		{
+			const auto request = context.writes.TakeRequestOf(entity);
+			if (request == 0)
+			{
+				continue;
+			}
+			if (history.IsOpen(request))
+			{
+				step.changes.emplace_back(
+				    PoseChange {.ref = history.Track(entity), .before = before, .after = before, .awaits = request});
+				continue;
+			}
 		}
 		const auto after = PoseOf(context.registry, entity);
 		if (after.has_value() && *after != before)

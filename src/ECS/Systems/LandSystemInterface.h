@@ -209,6 +209,10 @@ public:
 	virtual bool StartChallengeScripts(bool startStory) = 0;
 	/// Starts the scripts of the story of a new game on the first land, and asks the player what to skip
 	virtual void StartStoryScripts() = 0;
+	/// For the debug cheat of the editor: the top script of the story starts again at its change to a land after the first
+	/// (story_land_skip). The script then stops the scripts of the land, loads the next land and runs its control script, as
+	/// in the story. Gives false when the challenge has no such change of land.
+	virtual bool StartStoryAtLand(int32_t land) = 0;
 
 	/// Plays the turn of the world when it is due, and the own turns of the temple while the player is in it
 	virtual void PlayTurns(simulation::TurnViewInterface& view) = 0;

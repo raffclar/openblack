@@ -256,11 +256,6 @@ void Game::BeginLoadingScreen(loading::LoadingClock::Mode look)
 	Locator::loadingScreenSystem::value().BeginLoading(look);
 }
 
-bool Game::RenderLoadingFrame(bool drawNow, const std::function<void()>& drawUnder)
-{
-	return Locator::loadingScreenSystem::value().RenderLoadingFrame(drawNow, drawUnder);
-}
-
 void Game::EndLoadWithoutScreen()
 {
 	Locator::loadFinishSystem::value().EndWithoutScreen();

@@ -686,23 +686,6 @@ void LobbyRoom::Reload(lobby_api::Lobby lobby)
 	}
 }
 
-void LobbyRoom::ApplyOwnMember(lobby_api::LobbyMember member)
-{
-	if (_phase == RoomPhase::Ended || member.account.id != _self.id)
-	{
-		return;
-	}
-	if (auto* own = MutableMember(_self.id); own != nullptr)
-	{
-		*own = std::move(member);
-	}
-	else
-	{
-		_lobby.members.push_back(std::move(member));
-	}
-	Changed();
-}
-
 void LobbyRoom::ApplyStart(const lobby_api::StartReply& reply)
 {
 	if (_phase == RoomPhase::Ended)

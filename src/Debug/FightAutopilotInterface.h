@@ -81,7 +81,6 @@ public:
 	[[nodiscard]] virtual Status GetStatus() const = 0;
 	/// The log, the oldest entry first
 	[[nodiscard]] virtual std::span<const LogEntry> GetLog() const = 0;
-	virtual void ClearLog() = 0;
 };
 
 } // namespace openblack::fight_autopilot

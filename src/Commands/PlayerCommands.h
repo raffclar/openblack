@@ -20,6 +20,8 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureMarks.h"
@@ -612,6 +614,11 @@ struct EditorEdit
 		Turn,
 		/// Remove the thing from the land
 		Remove,
+		/// Change the size of the thing to the scale
+		Scale,
+		/// Put the thing to the full pose: the position, the turn, the angles that it keeps and the scale of each axis.
+		/// An undo and a redo of the editor send it, so that the thing gets back the same bits.
+		Pose,
 	};
 	Kind kind {Kind::Move};
 	/// The thing of a move, a turn or a removal. None for a placement.
@@ -626,6 +633,19 @@ struct EditorEdit
 	glm::vec3 position {0.0f};
 	/// The angle of a placement or a turn, in radians
 	float radians {0.0f};
+	/// The new scale of the first axis of a thing. The other axes keep their ratio to it.
+	float scale {1.0f};
+	/// The number that the editor of the sender gives to the edit, so that the turn tells it what the edit made. 0 when
+	/// the editor needs no answer.
+	uint16_t request {0};
+	/// The turn of the thing of a pose
+	glm::mat3 rotation {1.0f};
+	/// When set, the thing of a pose keeps the angles with its turn
+	bool keepsAngles {false};
+	/// The angles that the thing of a pose keeps with its turn
+	glm::vec3 keptAngles {0.0f};
+	/// The scale of each axis of the thing of a pose
+	glm::vec3 poseScale {1.0f};
 
 	[[nodiscard]] bool operator==(const EditorEdit&) const = default;
 };
@@ -668,6 +688,171 @@ struct EditorCreatureAct
 	[[nodiscard]] bool operator==(const EditorCreatureAct&) const = default;
 };
 
+/// An edit of the editor to a field of a villager, such as its life, its age, its tribe or one of its states. Only a player
+/// with the editor claim sends it in a network game, and the game server refuses it from every other player.
+struct EditorVillagerEdit
+{
+	enum class Field : uint8_t
+	{
+		/// The life, 0 to 1, in the amount
+		Life,
+		/// The age in years, in the number
+		Age,
+		/// The food, in the amount
+		Food,
+		/// The life stage (Villager::LifeStage), in the number
+		LifeStage,
+		/// The sex (Villager::Sex), in the number
+		Sex,
+		/// The tribe (Tribe), in the number
+		Tribe,
+		/// The role (VillagerNumber), in the number
+		Role,
+		/// The state (VillagerStates) of the slot of states in the index, in the number
+		State,
+	};
+	entt::entity villager {entt::null};
+	Field field {Field::Life};
+	/// The slot of states of a state (LivingAction::Index)
+	uint8_t index {0};
+	/// The new number of the field
+	uint32_t number {0};
+	/// The new amount of the field
+	float amount {0.0f};
+
+	[[nodiscard]] bool operator==(const EditorVillagerEdit&) const = default;
+};
+
+/// A new creature of the creature tools of the editor, with the settings of the tools on the editor computer. Each computer
+/// makes the creature at the same turn. Only a player with the editor claim sends it in a network game, and the game server
+/// refuses it from every other player.
+struct EditorCreatureSpawn
+{
+	/// The species of the creature (CreatureType)
+	uint8_t species {0};
+	/// The player that owns the creature (PlayerNames)
+	uint8_t owner {0};
+	/// The point on the land where the creature stands
+	glm::vec3 position {0.0f};
+	/// The angle that the creature faces, in radians
+	float radians {0.0f};
+	/// The size of the creature
+	float scale {1.0f};
+	float alignment {0.0f};
+	float fatness {0.5f};
+	float strength {0.5f};
+	/// When set, the creature has the tattoos
+	bool hasTattoos {false};
+	creature_tattoo::Slots tattoos {};
+	/// The number that the editor of the sender gives to the new creature, so that the turn tells it which creature it
+	/// made. 0 when the editor needs no answer.
+	uint16_t request {0};
+
+	[[nodiscard]] bool operator==(const EditorCreatureSpawn&) const = default;
+};
+
+/// The editor makes a thing again from all that it kept of the thing: the item of the palette, the full pose and, for a
+/// creature, its body. An undo of a removal, a redo of a placement and a copy of a creature send it. Only a player with
+/// the editor claim sends it in a network game, and the game server refuses it from every other player.
+struct EditorRemake
+{
+	/// The number that the editor of the sender gives to the new thing, so that the turn tells it which thing it made
+	uint16_t request {0};
+	/// The kind of the item of the palette (editor::PlaceKind)
+	uint8_t placeKind {0};
+	/// The type of the item within its kind
+	int32_t placeType {0};
+	/// The challenge of a scroll, or the text of a tip sign
+	uint32_t challenge {0};
+	glm::vec3 position {0.0f};
+	glm::mat3 rotation {1.0f};
+	/// When set, the thing keeps the angles with its turn
+	bool keepsAngles {false};
+	glm::vec3 keptAngles {0.0f};
+	/// The scale of each axis
+	glm::vec3 scale {1.0f};
+	/// When set, the thing is a creature with the body below
+	bool creature {false};
+	/// The player that owns the creature (PlayerNames)
+	uint8_t owner {0};
+	/// The mind of the creature
+	uint32_t mind {0};
+	/// The size of the creature
+	float size {1.0f};
+	float alignment {0.0f};
+	float fatness {0.5f};
+	float strength {0.5f};
+
+	[[nodiscard]] bool operator==(const EditorRemake&) const = default;
+};
+
+/// A stroke of the land brush of the editor: it raises or lowers the land, or paints its country, in a circle round a
+/// point. Each computer does the stroke on its own land at the same turn. Only a player with the editor claim sends it in
+/// a network game, and the game server refuses it from every other player.
+struct EditorLandStroke
+{
+	/// The mode of the brush (editor::land_brush::Mode): raise, lower or paint
+	uint8_t mode {0};
+	/// The radius of the circle that takes the full change, in metres
+	float innerRadius {0.0f};
+	/// The radius of the circle out of which nothing changes, in metres
+	float outerRadius {0.0f};
+	/// The altitude steps that a corner in the inner circle goes up or down
+	uint8_t step {0};
+	/// The country that a paint gives, an index into the countries of the land
+	uint8_t country {0};
+	/// The middle of the stroke on the land, x and z in metres
+	glm::vec2 centre {0.0f};
+
+	[[nodiscard]] bool operator==(const EditorLandStroke&) const = default;
+};
+
+/// The most points of a path of the editor
+inline constexpr size_t k_MostEditorPathPoints = 256;
+
+/// A footpath or a stream that the editor drew, point by point. Each computer makes it at the same turn, and the land of
+/// that turn gives the height of each point. Only a player with the editor claim sends it in a network game, and the game
+/// server refuses it from every other player.
+struct EditorPath
+{
+	/// The kind of the path (editor::paths::Kind): a footpath or a stream
+	uint8_t kind {0};
+	/// The points of the path on the land, x and z in metres, in the order of the clicks
+	std::vector<glm::vec2> points;
+	/// The building that the first point of a footpath is on, which the footpath leads from. None for no building.
+	entt::entity firstHolder {entt::null};
+	/// The building that the last point of a footpath is on. None for no building.
+	entt::entity lastHolder {entt::null};
+
+	[[nodiscard]] bool operator==(const EditorPath&) const = default;
+};
+
+/// A mind file of the creature tools of the editor goes into a creature at the turn. The file goes to the game server on
+/// the game socket before the command, and the server sends it to each computer before the turn that holds the command.
+/// Each computer finds the file by the hash of its bytes. Only a player with the editor claim sends it in a network game,
+/// and the game server refuses it from every other player.
+struct EditorMindLoad
+{
+	/// What the mind file does
+	enum class Use : uint8_t
+	{
+		/// The creature takes the learning, the desires and the stage of growing up of the file
+		LoadInto = 0,
+		/// A new creature with the body of the file takes the mind of the file
+		Spawn = 1,
+	};
+
+	Use use {Use::LoadInto};
+	/// The hash of the bytes of the mind file (editor::mind_loads::HashOf)
+	uint64_t file {0};
+	/// The creature that takes the mind. Only for LoadInto.
+	entt::entity creature {entt::null};
+	/// The new creature. Only for Spawn.
+	EditorCreatureSpawn spawn {};
+
+	[[nodiscard]] bool operator==(const EditorMindLoad&) const = default;
+};
+
 /// A debug cheat of the player of the command goes on or off (debug_cheats::Cheat). Only a player with the editor claim sends
 /// it in a network game, and the game server refuses it from every other player.
 struct DebugCheat
@@ -678,6 +863,15 @@ struct DebugCheat
 	[[nodiscard]] bool operator==(const DebugCheat&) const = default;
 };
 
+/// The debug cheat of the editor skips to a land of the story after the first (story_land_skip). Only a single player
+/// game does it. The game server refuses it in every network game, because a network game has no lands of the story.
+struct DebugLandSkip
+{
+	uint8_t land {0};
+
+	[[nodiscard]] bool operator==(const DebugLandSkip&) const = default;
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
@@ -686,7 +880,9 @@ using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, Hand
                             GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
                             CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
                             DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut,
-                            HandLockRelease, EditorEdit, DebugCheat, EditorCreatureEdit, EditorCreatureAct>;
+                            HandLockRelease, EditorEdit, DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip,
+                            EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke, EditorPath, EditorRemake,
+                            EditorMindLoad>;
 
 /// A command and the player that sent it
 struct Command
@@ -712,17 +908,33 @@ struct Command
 [[nodiscard]] constexpr bool OnlyEditorSends(const Action& action) noexcept
 {
 	return std::holds_alternative<EditorEdit>(action) || std::holds_alternative<DebugCheat>(action) ||
-	       std::holds_alternative<EditorCreatureEdit>(action) || std::holds_alternative<EditorCreatureAct>(action);
+	       std::holds_alternative<EditorCreatureEdit>(action) || std::holds_alternative<EditorCreatureAct>(action) ||
+	       std::holds_alternative<EditorVillagerEdit>(action) || std::holds_alternative<EditorCreatureSpawn>(action) ||
+	       std::holds_alternative<DebugLandSkip>(action) || std::holds_alternative<EditorLandStroke>(action) ||
+	       std::holds_alternative<EditorPath>(action) || std::holds_alternative<EditorRemake>(action) ||
+	       std::holds_alternative<EditorMindLoad>(action);
+}
+
+/// Whether the game server refuses the command from every player, also from a player with the editor claim. A network game
+/// has no lands of the story, so the server refuses the skip to a land of the story.
+[[nodiscard]] constexpr bool ServerAlwaysRefuses(const Action& action) noexcept
+{
+	return std::holds_alternative<DebugLandSkip>(action);
 }
 
 /// Whether the game server takes the command from an observer. An observer with the editor claim also sends the edits of the
-/// editor, also the edits, the acts and the tattoos of a creature. The god of the observers has no citadel, so an observer
-/// sends no debug cheat.
+/// editor, also the edits, the acts, the new creatures and the tattoos of a creature, the edits of a villager, and the
+/// strokes and the paths of the land tools, and the mind files of a creature. The god of the observers has no citadel, so
+/// an observer sends no debug cheat.
 [[nodiscard]] constexpr bool ServerTakesFromObserver(const Action& action, bool editor) noexcept
 {
 	return ObserverSends(action) ||
-	       (editor && (std::holds_alternative<EditorEdit>(action) || std::holds_alternative<EditorCreatureEdit>(action) ||
-	                   std::holds_alternative<EditorCreatureAct>(action) || std::holds_alternative<CreatureTattoo>(action)));
+	       (editor &&
+	        (std::holds_alternative<EditorEdit>(action) || std::holds_alternative<EditorCreatureEdit>(action) ||
+	         std::holds_alternative<EditorCreatureAct>(action) || std::holds_alternative<EditorCreatureSpawn>(action) ||
+	         std::holds_alternative<EditorVillagerEdit>(action) || std::holds_alternative<CreatureTattoo>(action) ||
+	         std::holds_alternative<EditorLandStroke>(action) || std::holds_alternative<EditorPath>(action) ||
+	         std::holds_alternative<EditorRemake>(action) || std::holds_alternative<EditorMindLoad>(action)));
 }
 
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that

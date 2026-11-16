@@ -845,11 +845,11 @@ void CreatureFightSystem::CallOffWith(entt::entity creature, fight::CallOffStart
 	StopAsked(registry, asked);
 }
 
-bool CreatureFightSystem::StartedFight(entt::entity creature) const
+bool CreatureFightSystem::LeadsFight(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
-	return fighting != nullptr && fighting->madeArena;
+	return fighting != nullptr && ecs::components::LeadsFight(*fighting);
 }
 
 bool CreatureFightSystem::IsSettingUpFight(entt::entity creature) const
@@ -1759,10 +1759,13 @@ fight::StopChainResult CreatureFightSystem::RunStops(entt::entity stopper, std::
 	        .partners = {together && fighting->partnerInMind, together && other->partnerInMind},
 	    },
 	    steps);
+	// A creature that stops what it did no longer leads its fight, and takes leash orders again
+	fighting->leadEnded = fighting->leadEnded || result.stopped[0];
 	if (together)
 	{
 		fighting->partnerInMind = result.after.partners[0];
 		other->partnerInMind = result.after.partners[1];
+		other->leadEnded = other->leadEnded || result.stopped[1];
 	}
 	if (result.gains[0] != 0 || result.gains[1] != 0)
 	{

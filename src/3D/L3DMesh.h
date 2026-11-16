@@ -120,7 +120,6 @@ public:
 
 	bool Load(const l3d::L3DFile& l3d) noexcept;
 	bool LoadFromFilesystem(const std::filesystem::path& path) noexcept;
-	bool LoadFromFile(const std::filesystem::path& path) noexcept;
 	bool LoadFromBuffer(const std::vector<uint8_t>& data) noexcept;
 	/// A model made while the game runs from the triangles of another, whose skins it is drawn with (which must outlive
 	/// it): one submesh for each group of primitives. The mesh keeps a copy of its vertices and indices and gives them to
@@ -193,6 +192,16 @@ public:
 		return found != _skinAlpha.end() ? &found->second : nullptr;
 	}
 	[[nodiscard]] const std::vector<Footprint>& GetFootprints() const { return _footprints; }
+	/// The footprint that the game paints into the land under the model: the first footprint of a landscape feature with
+	/// triangles. None for any other model.
+	[[nodiscard]] const Footprint* GetGroundFootprint() const
+	{
+		if (!ContainsLandscapeFeature() || _footprints.empty() || _footprints.front().triangles.empty())
+		{
+			return nullptr;
+		}
+		return &_footprints.front();
+	}
 	[[nodiscard]] const std::vector<VolumeLight>& GetVolumeLights() const { return _volumeLights; }
 	[[nodiscard]] const std::vector<uint32_t>& GetBoneParents() const { return _bonesParents; }
 	[[nodiscard]] const std::vector<glm::mat4>& GetBoneMatrices() const { return _bonesDefaultMatrices; }

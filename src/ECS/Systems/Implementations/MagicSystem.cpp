@@ -281,6 +281,34 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 	// is remembered
 	Empathise(type, player, point);
 	RecordCast(type, player, point);
+	const auto entity = MakeSpell(type, caster, point, cast, info);
+	if (entity == entt::null)
+	{
+		return entt::null;
+	}
+	auto& registry = EntityRegistry();
+	if (!magic::spells::Start(*this, registry.Get<Spell>(entity)))
+	{
+		Delete(entity);
+		return entt::null;
+	}
+	// One without an effect starts at its point by itself
+	if (!registry.Get<Spell>(entity).hasParticleType)
+	{
+		OnSpellEvent(entity, {.type = particles::SpellEventInfo::Type::InitWithoutEffect, .position = point});
+	}
+	if (auto* started = FindSpell(entity);
+	    started != nullptr && magic::GetMagicEffectInfo(Info(), type).createReactionOnCast != 0)
+	{
+		ReactToSpell(*started, true);
+	}
+	return FindSpell(entity) != nullptr ? entity : entt::null;
+}
+
+entt::entity MagicSystem::MakeSpell(MagicType type, const components::SpellCaster& caster, glm::vec3 point,
+                                    const magic::SpellCastData& cast, const particles::ProcessInfo& info)
+{
+	const auto player = caster.player;
 	auto& registry = EntityRegistry();
 	const auto entity = registry.Create();
 	auto& spell = registry.Assign<Spell>(entity);
@@ -330,22 +358,7 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 		Delete(entity);
 		return entt::null;
 	}
-	if (!magic::spells::Start(*this, registry.Get<Spell>(entity)))
-	{
-		Delete(entity);
-		return entt::null;
-	}
-	// One without an effect starts at its point by itself
-	if (!registry.Get<Spell>(entity).hasParticleType)
-	{
-		OnSpellEvent(entity, {.type = particles::SpellEventInfo::Type::InitWithoutEffect, .position = point});
-	}
-	if (auto* started = FindSpell(entity);
-	    started != nullptr && magic::GetMagicEffectInfo(Info(), type).createReactionOnCast != 0)
-	{
-		ReactToSpell(*started, true);
-	}
-	return FindSpell(entity) != nullptr ? entity : entt::null;
+	return entity;
 }
 
 entt::entity MagicSystem::CastOnObject(MagicType type, PlayerNames player, entt::entity target,

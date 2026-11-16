@@ -1411,6 +1411,29 @@ TEST_F(Reactions, AnAskedCreatureTakesUpReactionsOutOfItsDuelButTheStarterNever)
 	Locator::creatureFightSystem::reset();
 }
 
+// The creature that started a fight takes up reactions again after it stops what it did, while its fight continues
+TEST_F(Reactions, TheStarterTakesUpReactionsAfterItStopsWhatItDid)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fights = static_cast<ListedFights&>(Locator::creatureFightSystem::emplace<ListedFights>());
+	const auto impressed = [&]() {
+		const auto* impression = registry.TryGet<const CreatureImpression>(_creature);
+		const bool was = impression != nullptr && impression->byOwnPlayer > 0.0f;
+		registry.Remove<CreatureImpression>(_creature);
+		return was;
+	};
+	registry.Assign<CreatureFighting>(_creature, CreatureFighting {.madeArena = true});
+	fights.fighting = {_creature};
+	fights.settingUp = {_creature};
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	registry.Get<CreatureFighting>(_creature).leadEnded = true;
+	_reactions.Create(Miracle());
+	EXPECT_TRUE(impressed());
+	registry.Remove<CreatureFighting>(_creature);
+	Locator::creatureFightSystem::reset();
+}
+
 // A creature that is asked to fight takes up reactions again after its duel, while its fight continues
 TEST_F(Reactions, AnAskedCreatureTakesUpReactionsAfterItsDuel)
 {

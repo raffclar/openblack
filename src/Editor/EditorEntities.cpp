@@ -786,9 +786,9 @@ void RegistryWorld::SetPose(entt::entity entity, const Pose& pose)
 	editor::SetPose(entity, pose);
 }
 
-entt::entity RegistryWorld::Make(const Recipe& recipe)
+MakeResult RegistryWorld::Make(const Recipe& recipe)
 {
-	return editor::Make(recipe);
+	return {.entity = editor::Make(recipe)};
 }
 
 void RegistryWorld::Remove(entt::entity entity)
@@ -919,6 +919,16 @@ void Turn(entt::entity entity, float radians)
 	}
 	KeepTurnPoses(registry, entity, placedBefore);
 	registry.SetDirty();
+}
+
+void ScaleTo(entt::entity entity, float firstAxis)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* transform = registry.TryGet<Transform>(entity))
+	{
+		transform->scale = ScaledTo(transform->scale, firstAxis);
+		registry.SetDirty();
+	}
 }
 
 float LandHeight(glm::vec2 point)

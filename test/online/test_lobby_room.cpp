@@ -958,6 +958,46 @@ TEST_F(LobbyRoomSystemTest, LeaveAndClose)
 	EXPECT_EQ(_system.Room()->End()->reason, EndReason::Closed);
 }
 
+TEST_F(LobbyRoomSystemTest, ALeaveOfTheGameEndsTheRoomAtOnce)
+{
+	JoinTestLobby();
+	// Before the start the room has no game: the leave of a game does not change the room
+	_system.LeaveGame();
+	EXPECT_TRUE(_client.calls.empty());
+	EXPECT_EQ(_system.Room()->Phase(), RoomPhase::Open);
+
+	_client.Deliver(Event("game.assigned", R"({"game_id":"g1"})"));
+	ASSERT_EQ(_system.Room()->Phase(), RoomPhase::Assigned);
+	_system.LeaveGame();
+	// The room ends before the service answers, so that no screen asks for a ticket of the game again
+	EXPECT_EQ(_system.Room()->Phase(), RoomPhase::Ended);
+	EXPECT_EQ(_system.Room()->End()->reason, EndReason::Left);
+	EXPECT_TRUE(_client.channels.empty());
+	ASSERT_EQ(_client.calls.size(), 1u);
+	EXPECT_EQ(_client.calls.back().method, HttpMethod::Delete);
+	EXPECT_EQ(_client.calls.back().path, "/lobbies/l1/members/me");
+	std::optional<LobbyError> error;
+	_system.RequestTicket([&](auto&& result) { error = result.error; });
+	ASSERT_TRUE(error.has_value());
+	EXPECT_EQ(error->code, "no_room");
+	// A refusal of the service does not open the room again
+	_client.Refuse(403, "not_member");
+	EXPECT_EQ(_system.Room()->Phase(), RoomPhase::Ended);
+	// A second leave sends nothing
+	_system.LeaveGame();
+	EXPECT_TRUE(_client.calls.empty());
+}
+
+TEST(LobbyRoom, OnlyARoomWithAGameServerHasAGameToLeave)
+{
+	EXPECT_FALSE(online::lobby::HasGameServer(RoomPhase::Open));
+	EXPECT_FALSE(online::lobby::HasGameServer(RoomPhase::Countdown));
+	EXPECT_FALSE(online::lobby::HasGameServer(RoomPhase::Queued));
+	EXPECT_TRUE(online::lobby::HasGameServer(RoomPhase::Assigned));
+	EXPECT_TRUE(online::lobby::HasGameServer(RoomPhase::InGame));
+	EXPECT_FALSE(online::lobby::HasGameServer(RoomPhase::Ended));
+}
+
 TEST_F(LobbyRoomSystemTest, CreateSendsTheBuild)
 {
 	_system.Create({.name = "g", .map = {.file = "m"}, .godSlots = 2, .buildId = "other"}, {});

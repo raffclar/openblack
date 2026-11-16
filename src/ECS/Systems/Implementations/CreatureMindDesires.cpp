@@ -641,6 +641,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 	const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
 	const bool obeysInFight = creature_fight::ObeysInFight({
 	    .fighting = fighting != nullptr,
+	    // A stop does not change which creature started the fight. Only the other creature stands still.
 	    .startedIt = fighting != nullptr && fighting->madeArena,
 	    .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
 	    .onlyAsked = fighting != nullptr && fighting->part == CreatureFighting::Part::Asked,

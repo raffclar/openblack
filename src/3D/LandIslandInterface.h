@@ -86,6 +86,15 @@ public:
 	/// The cell corners whose altitude is not the altitude of the land as the game built it, with their altitudes now.
 	/// A corner on the edge of a block can come once for each block that keeps a copy of it.
 	[[nodiscard]] virtual std::vector<land_reuse::CellAltitude> ChangedAltitudes() const { return {}; }
+	/// Puts the country of each cell corner back to the country that it had when the land was built. Only the blocks that
+	/// change are painted again, as for CommitAltitudeChanges. Returns the count of the block cells that changed.
+	virtual size_t RestoreBuiltCountries() { return 0; }
+	/// The cell corners whose country is not the country of the land as the game built it, with their countries now.
+	/// A corner on the edge of a block can come once for each block that keeps a copy of it.
+	[[nodiscard]] virtual std::vector<land_reuse::CellCountry> ChangedCountries() const { return {}; }
+	/// The digest of the altitude and the country of each cell corner of the map (see land_reuse::CornerDigest). Two lands
+	/// with the same altitudes and countries give the same digest. The checksum of each turn mixes it in.
+	[[nodiscard]] virtual uint64_t LandDigest() const { return 0; }
 
 	// Debug
 	virtual void DumpTextures() const = 0;

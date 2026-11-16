@@ -89,6 +89,33 @@ TEST(TempleExteriorMorph, MeshNames)
 	EXPECT_EQ(MeshName(1, 4), "b_temple14_l3d");
 }
 
+TEST(TempleExteriorMorph, AddWeightedAddsEachValueTimesTheWeight)
+{
+	std::vector<float> sum {0.0f, 1.0f, -2.0f, 0.25f};
+	const std::vector<float> source {3.0f, -1.5f, 0.1f, 8.0f};
+	constexpr float k_Weight = 0.37f;
+	auto expected = sum;
+	for (size_t i = 0; i < expected.size(); ++i)
+	{
+		const float product = source[i] * k_Weight;
+		expected[i] = expected[i] + product;
+	}
+	AddWeighted(sum, source, k_Weight);
+	EXPECT_EQ(sum, expected);
+}
+
+TEST(TempleExteriorMorph, EachCornerMeshIdIsTheHashOfTheMeshName)
+{
+	for (uint32_t size = 0; size < k_Sizes; ++size)
+	{
+		for (uint32_t stage = 0; stage < k_Stages; ++stage)
+		{
+			const auto name = fmt::format("temple/{}", MeshName(size, stage));
+			EXPECT_EQ(CornerMeshId(size, stage), entt::hashed_string(name.c_str()).value()) << name;
+		}
+	}
+}
+
 TEST(TempleExteriorMorph, TexturesGoEvilToNeutralToGood)
 {
 	const auto evil = TextureOf(0.0f);

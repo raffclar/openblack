@@ -485,6 +485,15 @@ void NetworkGameSystem::Update()
 	// The desync events that the flood limits let go now
 	if (_desyncs)
 	{
+		// The server of a lobby game tells the id of the game in its start. The events of both sides then match.
+		if (const auto& start = _session->GetStart(); start.has_value())
+		{
+			_desyncs->AdoptGame(start->gameId);
+		}
+		else if (const auto& joined = _session->GetJoined(); joined.has_value() && joined->start.has_value())
+		{
+			_desyncs->AdoptGame(joined->start->gameId);
+		}
 		for (const auto& report : _desyncs->Update(Microseconds() / 1000, _desyncBudget))
 		{
 			SendDesyncReport(report);

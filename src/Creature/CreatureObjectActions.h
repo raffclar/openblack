@@ -448,6 +448,28 @@ enum class EatenThingEnd : uint8_t
 /// stopped early; openblack swallows it as the eat would have (deviations list).
 [[nodiscard]] EatenThingEnd EatenThingEndFor(bool eatGoesOn, bool creatureExists);
 
+/// What happens to the thing in a creature's hand when the creature eats and swallows a thing that it does not hold
+enum class HeldAtOtherMeal : uint8_t
+{
+	/// A thing that is not alive goes
+	Goes,
+	/// A person or an animal stays in its state for the hand, out of the map and out of sight, and never comes back
+	LostFromHand,
+};
+/// The end of the held thing when the creature swallows other food. A person or an animal is alive.
+[[nodiscard]] HeldAtOtherMeal HeldAtOtherMealFor(bool alive);
+/// What a plan to eat a named thing needs from the creature's hand, so that the creature takes in the food of the held
+/// thing and swallows the named thing where it is
+struct OtherMealFacts
+{
+	bool holds {false};
+	bool holdsNamedThing {false};
+	bool namedThingExists {false};
+	bool heldIsCreature {false};
+};
+/// Whether the creature swallows the named thing in place of the held thing. If not, it eats the held thing as usual.
+[[nodiscard]] bool SwallowsOtherMeal(const OtherMealFacts& facts);
+
 /// How long a creature that brought its food back up isn't hungry for
 constexpr float k_NotHungryAfterBringingUpSeconds = 20.0f;
 

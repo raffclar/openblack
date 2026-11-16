@@ -63,6 +63,9 @@ public:
 	virtual void DismissRoom() = 0;
 
 	virtual void Leave(LobbyCallback<LobbyDone> callback) = 0;
+	/// The player left the game of the room. When the room has a game server, the room ends at once and the service
+	/// gets the leave. Then no screen asks for a ticket of that game again. A room before its start does not change.
+	virtual void LeaveGame() = 0;
 	virtual void SetReady(bool ready, LobbyCallback<LobbyDone> callback) = 0;
 	/// Moves the player to a free god slot
 	virtual void PickSlot(int32_t slot, LobbyCallback<LobbyDone> callback) = 0;

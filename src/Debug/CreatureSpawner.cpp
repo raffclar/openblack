@@ -52,6 +52,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
+#include "Editor/EditorMindLoads.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -1136,6 +1137,31 @@ entt::entity CreatureSpawner::SpawnAt(const glm::vec3& position) noexcept
 
 entt::entity CreatureSpawner::SpawnAt(glm::vec3 position, float yawRadians) noexcept
 {
+	// In a network game each computer makes the creature at the next turn. A mind file goes to every computer first, and
+	// the new creature takes the mind of the file at that turn.
+	if (InNetworkGame())
+	{
+		const player_commands::EditorCreatureSpawn spawn {.species = static_cast<uint8_t>(_species),
+		                                                  .owner = static_cast<uint8_t>(_owner),
+		                                                  .position = position,
+		                                                  .radians = yawRadians,
+		                                                  .scale = _scale,
+		                                                  .alignment = _alignment,
+		                                                  .fatness = _fatness,
+		                                                  .strength = _strength,
+		                                                  .hasTattoos = _spawnTattoos.has_value(),
+		                                                  .tattoos = _spawnTattoos.value_or(creature_tattoo::Slots {})};
+		if (_spawnMind == nullptr || _spawnMindBytes.empty())
+		{
+			_lastSpawnRequest = editor::SendCreatureSpawn(spawn);
+		}
+		else if (!editor::mind_loads::SendMindLoad(_spawnMindBytes,
+		                                           {.use = player_commands::EditorMindLoad::Use::Spawn, .spawn = spawn}))
+		{
+			_lastMindFile = "The game socket is not open: the mind file did not go";
+		}
+		return entt::null;
+	}
 	const auto entity = CreatureArchetype::Create(position, _owner, _species, 0, yawRadians, _scale,
 	                                              {.alignment = _alignment, .fatness = _fatness, .strength = _strength});
 	auto& registry = Locator::entitiesRegistry::value();

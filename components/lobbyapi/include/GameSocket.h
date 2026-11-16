@@ -126,6 +126,9 @@ struct Start
 	/// The time limit of the game in minutes ("time_limit", optional). Every computer decides the game at the same turn
 	/// when the time is up. None: the default time limit of the game.
 	std::optional<uint32_t> timeLimit;
+	/// The id of the game in the lobby ("game_id", optional). The desync events of the server and of the clients of one
+	/// game carry this id. Empty: the server has no lobby id, and each client makes its own id.
+	std::string gameId;
 	/// The winning conditions of the game ("conditions", optional). Each god gets each condition at the start. Empty: the
 	/// game has no winning conditions.
 	std::vector<ConditionValue> conditions;
@@ -264,6 +267,21 @@ struct StartCreature
 	float alignment {0.0f};
 };
 
+/// The largest mind file of the creature tools of the editor that an editor.mind_file frame holds. This is a limit of the
+/// network game only; a game alone opens a mind file of any size.
+inline constexpr size_t k_MostEditorMindFileBytes = 512 * 1024;
+
+/// "editor.mind_file". Client to server: a mind file that the creature tools of the editor opened on the computer of a
+/// player with the editor claim. The server keeps the file, and sends it to every player in the game, also to the sender.
+/// Then a turn command uses the file by the hash of its bytes (player_commands::EditorMindLoad). The server sends each
+/// file that it keeps again to a player who comes back or joins, before the turns.
+struct EditorMindFile
+{
+	std::vector<uint8_t> file;
+
+	[[nodiscard]] bool operator==(const EditorMindFile&) const = default;
+};
+
 /// Client to server: "game.stop_request". The end box of a decided game opened on the client. The server stops the turns
 /// of the game, if they did not stop before.
 struct StopRequest
@@ -310,7 +328,7 @@ struct ObserverLeft
 struct CommandRefused
 {
 	/// Why the server refused the commands. k_NoEditorClaim: edits of the editor or debug cheats from a player whose join
-	/// ticket has no editor claim.
+	/// ticket has no editor claim. k_NoStoryLands: a skip to a land of the story, which a network game does not have.
 	std::string reason;
 	/// The number of commands that the server refused
 	uint32_t commands {0};
@@ -320,6 +338,8 @@ struct CommandRefused
 
 /// The reason of a refusal of edits of the editor or of debug cheats (see CommandRefused)
 inline constexpr std::string_view k_NoEditorClaim = "no_editor_claim";
+/// The reason of a refusal of a skip to a land of the story: a network game has no lands of the story
+inline constexpr std::string_view k_NoStoryLands = "no_story_lands";
 
 /// Client to server: "game.loaded". The player's computer has the land and loaded the world of the started game. The
 /// client sends it once after game.start, and again after it comes back if the server did not get it.
@@ -342,6 +362,8 @@ struct LoadWait
 	[[nodiscard]] bool operator==(const LoadWait&) const = default;
 };
 
+/// The most characters of the game id in a "game.start" frame
+inline constexpr size_t k_MostGameIdCharacters = 64;
 /// The most parts in a "sync.parts" frame
 inline constexpr size_t k_MostSyncParts = 4096;
 /// The most bytes of the name of a part in a "sync.parts" frame
@@ -522,10 +544,10 @@ struct SyncWorld
 	[[nodiscard]] bool operator==(const SyncWorld&) const = default;
 };
 
-using Frame =
-    std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply, StartCancel,
-                 StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft, SyncParts, Loaded,
-                 LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities, SyncWorld, CommandRefused>;
+using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
+                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
+                           SyncParts, Loaded, LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities,
+                           SyncWorld, CommandRefused, EditorMindFile>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

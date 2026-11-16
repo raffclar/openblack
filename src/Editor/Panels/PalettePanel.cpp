@@ -337,12 +337,6 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 	{
 		return;
 	}
-	// The creature tools of this computer make a creature, so a network game has no layout of creatures
-	if (kind == PlaceKind::Creature && !context.writes.ChangesAtOnce())
-	{
-		_lastLayout = "The editor does not place a creature in a network game";
-		return;
-	}
 	const auto& camera = Locator::camera::value();
 	const auto hit = camera.RaycastScreenCoordToLand({0.5f, 0.5f}, false);
 	const auto centre = hit.has_value() ? hit->position : camera.GetFocus();
@@ -350,6 +344,7 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 	const auto points = GridLayout(count, SpacingOf(kind));
 	std::vector<entt::entity> placed;
 	placed.reserve(count);
+	std::vector<Request> sent;
 	for (size_t i = 0; i < count; ++i)
 	{
 		const glm::vec2 point {centre.x + points.at(i).x, centre.z + points.at(i).y};
@@ -363,6 +358,17 @@ void PalettePanel::LayOut(EditorContext& context, PlaceKind kind, const std::vec
 		{
 			placed.push_back(entity);
 		}
+		else if (!context.writes.ChangesAtOnce())
+		{
+			sent.push_back(kind == PlaceKind::Creature ? context.spawner.LastSpawnRequest() : context.writes.LastMakeRequest());
+		}
+	}
+	// In a network game the things come at a later turn, and the answers to the requests give them to the history
+	if (!context.writes.ChangesAtOnce())
+	{
+		RecordAllSent(context, sent, "Lay out");
+		_lastLayout = fmt::format("Sent {}: they come at the next turn", count);
+		return;
 	}
 	// The layout is one step of the history, so the land script can write the things that it made
 	RecordAllMade(context, placed, "Lay out");

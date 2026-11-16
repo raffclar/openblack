@@ -31,6 +31,8 @@
 #include <spdlog/spdlog.h>
 
 #include "Commands/TurnCodec.h"
+#include "Editor/EditorMindLoads.h"
+#include "Editor/LandBrush.h"
 #include "LoopbackSockets.h"
 #include "Online/ConnectionLostNotice.h"
 #include "Online/GameBuildId.h"
@@ -72,6 +74,10 @@ struct FakeWorld
 	std::vector<Command> observersGod;
 	/// The commands of the observers and the commands of their comes and goes, in the order of the turns
 	std::vector<Command> observerCommands;
+	/// Whether the computer has the mind file of the editor with the hash
+	std::function<bool(uint64_t hash)> mindFileHere;
+	/// For each mind load of the editor that the world did, whether the computer had its file at the turn
+	std::vector<bool> mindFilesAtTurn;
 
 	uint64_t Play(uint32_t turn, const std::vector<Command>& commands)
 	{
@@ -92,6 +98,10 @@ struct FakeWorld
 			if (command.observer != 0)
 			{
 				observerCommands.push_back(command);
+			}
+			if (const auto* load = std::get_if<EditorMindLoad>(&command.action))
+			{
+				mindFilesAtTurn.push_back(mindFileHere && mindFileHere(load->file));
 			}
 			hash = (hash ^ (static_cast<uint64_t>(command.player) + 1) * 31 + command.action.index()) * 1099511628211ull;
 			hash = (hash ^ command.observer) * 1099511628211ull;
@@ -192,6 +202,7 @@ struct Computer
 		});
 		this->landFile = std::move(landFile);
 		this->creature = std::move(creature);
+		world.mindFileHere = [this](uint64_t hash) { return !session.EditorMindFile(hash).empty(); };
 		session.SetReady(true);
 	}
 
@@ -299,7 +310,7 @@ class LockstepTest: public ::testing::Test
 {
 protected:
 	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7, bool testCommands = false,
-	              bool lan = false)
+	              bool lan = false, std::function<bool(std::span<const uint8_t>)> readsMindFile = {})
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
@@ -312,7 +323,8 @@ protected:
 		        .keptTurns = 3200,
 		        .testCommands = testCommands,
 		        .sessionHasher = hasher,
-		        .lanNames = lan});
+		        .lanNames = lan,
+		        .readsMindFile = std::move(readsMindFile)});
 	}
 
 	/// The room of the game of one lobby: the members of the lobby, the build of the server and the SHA-256 of its land
@@ -382,6 +394,7 @@ protected:
 		{
 			const auto turn = serverWorld.turns;
 			const auto commands = host->TakeTurn(turn);
+			serverWorld.mindFileHere = [this](uint64_t hash) { return !host->EditorMindFile(hash).empty(); };
 			host->TurnChecksum(turn + 1, serverWorld.Play(turn, commands));
 		}
 		for (auto* computer : computers)
@@ -705,9 +718,71 @@ TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 	EXPECT_TRUE(ServerTakesFromObserver(EditorCreatureAct {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(EditorCreatureAct {}, false));
 	EXPECT_FALSE(server::LeavesOut(EditorCreatureAct {}, false));
+	// A new creature of the creature tools is an edit of the editor too
+	EXPECT_TRUE(OnlyEditorSends(EditorCreatureSpawn {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorCreatureSpawn {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorCreatureSpawn {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorCreatureSpawn {}, false));
+	EXPECT_TRUE(OnlyEditorSends(EditorVillagerEdit {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorVillagerEdit {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorVillagerEdit {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorVillagerEdit {}, false));
+	// The strokes and the paths of the land tools are edits of the editor too
+	EXPECT_TRUE(OnlyEditorSends(EditorLandStroke {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorLandStroke {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorLandStroke {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorLandStroke {}, false));
+	// The mind loads of the creature tools are edits of the editor too
+	EXPECT_TRUE(OnlyEditorSends(EditorMindLoad {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorMindLoad {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorMindLoad {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorMindLoad {}, false));
+	EXPECT_TRUE(OnlyEditorSends(EditorPath {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorPath {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorPath {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorPath {}, false));
+	// The make again of an undo or a redo is an edit of the editor too
+	EXPECT_TRUE(OnlyEditorSends(EditorRemake {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorRemake {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorRemake {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorRemake {}, false));
 	EXPECT_FALSE(OnlyEditorSends(CreatureTattoo {}));
 	EXPECT_TRUE(ServerTakesFromObserver(CreatureTattoo {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(CreatureTattoo {}, false));
+	// A skip to a land of the story is a debug cheat, and the server refuses it from every player
+	EXPECT_TRUE(OnlyEditorSends(DebugLandSkip {}));
+	EXPECT_TRUE(ServerAlwaysRefuses(DebugLandSkip {}));
+	EXPECT_FALSE(ServerAlwaysRefuses(DebugCheat {}));
+	EXPECT_FALSE(ServerAlwaysRefuses(EditorEdit {}));
+	EXPECT_FALSE(ServerTakesFromObserver(DebugLandSkip {}, true));
+}
+
+TEST_F(LockstepTest, TheServerRefusesASkipToALandOfTheStoryAlsoFromAGodWithTheEditorClaim)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.GetJoined()->editor);
+	alice.session.Send(DebugLandSkip {.land = 3});
+	alice.session.Send(DebugCheat {.cheat = 0, .on = true});
+	bob.session.Send(DebugLandSkip {.land = 2});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugLandSkip), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::DebugLandSkip), 0u);
+	// The other cheat of the player with the editor claim stays
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugCheat), 1u);
+	EXPECT_GE(alice.session.TakeEditorRefusals(), 1u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
 TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAGodWithTheEditorClaim)
@@ -767,6 +842,218 @@ TEST_F(LockstepTest, TheJoinAnswerGivesTheDebuggerClaimOfTheTicketApartFromTheEd
 	EXPECT_TRUE(bob.session.GetJoined()->editor);
 	EXPECT_TRUE(watcher.session.GetJoined()->debugger);
 	EXPECT_FALSE(watcher.session.GetJoined()->editor);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheEditsOfTheEditorOnlyWithValuesInTheirRange)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	alice.session.Send(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = Entity(5), .scale = 2.0f});
+	// A changed client can send a scale that the editor does not give
+	alice.session.Send(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = Entity(5), .scale = 500.0f});
+	alice.session.Send(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = entt::null, .scale = 2.0f});
+	bob.session.Send(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = Entity(5), .scale = 2.0f});
+	// A new creature with a size that the creature tools do not give
+	alice.session.Send(EditorCreatureSpawn {.species = 1, .scale = 40.0f});
+	// A life of a villager above full
+	alice.session.Send(EditorVillagerEdit {.villager = Entity(6), .field = EditorVillagerEdit::Field::Life, .amount = 2.0f});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorValues(), 4u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 1u);
+	const auto count = [this](size_t seat) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(turn_codec::CommandTag::EditorEdit));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0), 1u);
+	EXPECT_EQ(count(1), 0u);
+	// A refused value gives no line to the player with the editor claim
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheLandToolsOnlyFromTheEditorAndInTheirLimits)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	const EditorLandStroke raise {.mode = 0, .innerRadius = 10.0f, .outerRadius = 30.0f, .step = 4, .centre = {800.0f, 900.0f}};
+	const EditorPath footpath {.kind = 0, .points = {{100.0f, 100.0f}, {140.0f, 120.0f}}};
+	alice.session.Send(raise);
+	alice.session.Send(footpath);
+	// A player with no editor claim sends a stroke and a path
+	bob.session.Send(raise);
+	bob.session.Send(footpath);
+	// A changed client can send values that the land tools do not give
+	auto wide = raise;
+	wide.outerRadius = openblack::editor::land_brush::k_MostRadius * 2.0f;
+	alice.session.Send(wide);
+	auto steep = raise;
+	steep.step = openblack::editor::land_brush::k_MostStep + 1;
+	alice.session.Send(steep);
+	auto country = raise;
+	country.mode = 2;
+	country.country = openblack::editor::land_brush::k_MostCountries;
+	alice.session.Send(country);
+	auto away = raise;
+	away.centre = {-50.0f, 900.0f};
+	alice.session.Send(away);
+	auto longPath = footpath;
+	longPath.points.push_back({9000.0f, 100.0f});
+	alice.session.Send(longPath);
+	Frames({&alice, &bob}, 6);
+	EXPECT_EQ(host->RefusedEditorValues(), 5u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorLandStroke), 1u);
+	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorPath), 1u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorLandStroke), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorPath), 0u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheUndoAndRedoOfTheEditorOnlyFromTheEditorAndInTheirLimits)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	const EditorEdit pose {.kind = EditorEdit::Kind::Pose, .object = Entity(5), .request = 1, .poseScale = {2.0f, 2.0f, 2.0f}};
+	const EditorRemake remake {.request = 2, .placeKind = 3, .placeType = 1};
+	alice.session.Send(pose);
+	alice.session.Send(remake);
+	// A player with no editor claim sends a pose and a make again
+	bob.session.Send(pose);
+	bob.session.Send(remake);
+	// A changed client can send values that the editor does not give
+	auto huge = pose;
+	huge.poseScale.x = 500.0f;
+	alice.session.Send(huge);
+	auto noThing = pose;
+	noThing.object = entt::null;
+	alice.session.Send(noThing);
+	auto treeWithBody = remake;
+	treeWithBody.creature = true;
+	alice.session.Send(treeWithBody);
+	auto bigCreature = EditorRemake {.placeKind = 0, .placeType = 1, .creature = true, .size = 40.0f};
+	alice.session.Send(bigCreature);
+	Frames({&alice, &bob}, 6);
+	EXPECT_EQ(host->RefusedEditorValues(), 4u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorEdit), 1u);
+	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorRemake), 1u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorEdit), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorRemake), 0u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, EveryComputerHasTheMindFileOfTheEditorAtTheTurnOfItsLoad)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	const std::vector<uint8_t> file {'M', 'I', 'N', 'D', 1, 2, 3};
+	const auto hash = openblack::editor::mind_loads::HashOf(file);
+	// The file goes on the game socket first, then the command in a block of commands
+	ASSERT_TRUE(alice.session.SendEditorMindFile(file));
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = hash, .creature = Entity(5)});
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::Spawn, .file = hash, .spawn = {.species = 2}});
+	Frames({&alice, &bob}, 6);
+	const auto& commands = host->Seats()[0].commands;
+	const auto found = commands.find(static_cast<uint8_t>(turn_codec::CommandTag::EditorMindLoad));
+	ASSERT_NE(found, commands.end());
+	EXPECT_EQ(found->second, 2u);
+	// The server, the sender and the other player had the file at the turn of each load
+	EXPECT_EQ(serverWorld.mindFilesAtTurn, (std::vector<bool> {true, true}));
+	EXPECT_EQ(alice.world.mindFilesAtTurn, (std::vector<bool> {true, true}));
+	EXPECT_EQ(bob.world.mindFilesAtTurn, (std::vector<bool> {true, true}));
+	const auto kept = bob.session.EditorMindFile(hash);
+	EXPECT_EQ(std::vector<uint8_t>(kept.begin(), kept.end()), file);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	EXPECT_EQ(host->RefusedEditorValues(), 0u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesAMindFileAndItsLoadOnlyFromTheEditorAndOnlyForAKeptFile)
+{
+	MakeHost(2, 5LL * 60 * 1'000'000, 7, false, false,
+	         [](std::span<const uint8_t> data) { return !data.empty() && data.front() == 'M'; });
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	const std::vector<uint8_t> file {'M', 9};
+	const std::vector<uint8_t> bad {'X', 9};
+	const auto hash = openblack::editor::mind_loads::HashOf(file);
+	const auto badHash = openblack::editor::mind_loads::HashOf(bad);
+	// A player with no editor claim sends a file and a load
+	ASSERT_TRUE(bob.session.SendEditorMindFile(file));
+	bob.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = hash, .creature = Entity(5)});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	EXPECT_TRUE(host->EditorMindFile(hash).empty());
+	EXPECT_TRUE(alice.session.EditorMindFile(hash).empty());
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	// The editor sends a file that does not read, and a load of that file, which the server does not keep
+	ASSERT_TRUE(alice.session.SendEditorMindFile(bad));
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = badHash, .creature = Entity(5)});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorValues(), 2u);
+	EXPECT_TRUE(bob.session.EditorMindFile(badHash).empty());
+	EXPECT_EQ(host->Seats()[0].commands.count(static_cast<uint8_t>(turn_codec::CommandTag::EditorMindLoad)), 0u);
+	EXPECT_TRUE(serverWorld.mindFilesAtTurn.empty());
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+}
+
+TEST_F(LockstepTest, APlayerWhoComesBackGetsTheMindFilesBeforeTheTurnsThatItMissed)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	bob.Frame();
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Reconnecting);
+	// The editor loads a mind while the other player is away
+	const std::vector<uint8_t> file {'M', 7, 7};
+	const auto hash = openblack::editor::mind_loads::HashOf(file);
+	ASSERT_TRUE(alice.session.SendEditorMindFile(file));
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = hash, .creature = Entity(5)});
+	Frames({&alice}, 10);
+	ASSERT_EQ(alice.world.mindFilesAtTurn, (std::vector<bool> {true}));
+	EXPECT_TRUE(bob.session.EditorMindFile(hash).empty());
+	Frames({&alice, &bob}, 10);
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	// The kept turn with the load came after the file
+	EXPECT_EQ(bob.world.mindFilesAtTurn, (std::vector<bool> {true}));
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
 TEST_F(LockstepTest, AnObserverWithTheEditorClaimSendsTheEditsButNoCheat)
@@ -2311,6 +2598,56 @@ TEST_F(LockstepTest, TheGodOfTheObserversFollowsTheGodSlotsOfTheRoom)
 	EXPECT_EQ(host->ObserversGod(), PlayerNames::PLAYER_SEVEN);
 	MakeHost(1, 5LL * 60 * 1'000'000, 32);
 	EXPECT_EQ(host->ObserversGod(), static_cast<PlayerNames>(33));
+}
+
+// A god and an observer with the editor claim keep the claim when they come back to a server that a snapshot restored.
+// The server still refuses the edits of the god with no editor claim.
+TEST_F(LockstepTest, ARestoredServerKeepsTheEditorClaimsOfTheGodsAndTheObservers)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Computer carol(network, now, "observer+editor:carol");
+	Frames({&alice, &bob, &carol}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto room = host->RoomRecord();
+	ASSERT_GE(room.seats.size(), 2u);
+	EXPECT_TRUE(room.seats[0].editor);
+	EXPECT_FALSE(room.seats[1].editor);
+	EXPECT_EQ(room.watcherEditors, (std::vector<bool> {true}));
+	RestartFrom(room, host->TurnsDone(), serverWorld, {&alice, &bob, &carol});
+	EXPECT_TRUE(host->Seats()[0].editor);
+	EXPECT_FALSE(host->Seats()[1].editor);
+	ASSERT_EQ(host->Watchers().size(), 1u);
+	EXPECT_TRUE(host->Watchers()[0].editor);
+	Frames({&alice, &bob, &carol}, 40);
+	ASSERT_EQ(alice.session.Resumes(), 1u);
+	ASSERT_EQ(bob.session.Resumes(), 1u);
+	ASSERT_EQ(carol.session.Resumes(), 1u);
+	const EditorEdit move {.kind = EditorEdit::Kind::Move, .object = Entity(5), .position = {1.0f, 0.0f, 2.0f}};
+	alice.session.Send(move);
+	bob.session.Send(move);
+	carol.session.Send(EditorEdit {.kind = EditorEdit::Kind::Remove, .object = Entity(7)});
+	Frames({&alice, &bob, &carol}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 1u);
+	const auto count = [this](size_t seat) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(turn_codec::CommandTag::EditorEdit));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0), 1u);
+	EXPECT_EQ(count(1), 0u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+	EXPECT_EQ(carol.session.TakeEditorRefusals(), 0u);
+	const auto edits = std::ranges::count_if(alice.world.observerCommands, [](const Command& command) {
+		return std::holds_alternative<EditorEdit>(command.action);
+	});
+	EXPECT_EQ(edits, 1);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
 // A server that a snapshot restores knows the names of its observers and whether their god is in the game. So the

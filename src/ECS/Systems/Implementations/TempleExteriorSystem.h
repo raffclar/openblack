@@ -95,13 +95,14 @@ private:
 	/// a new mesh on the processor, and then this thread makes the objects on the graphics device.
 	void FinishMorphs(MadeBlends& made);
 	/// Takes the temple's own mesh, the mesh of its worship sites and its shape out of the cache
-	static void Unbind(entt::id_type id);
+	void Unbind(entt::id_type id);
 	/// Gives the temple the mesh and the shape that the cache keeps for the other temple
-	static void Share(entt::id_type id, entt::id_type source);
+	void Share(entt::id_type id, entt::id_type source);
 	/// Keeps the temple's blended shape in the cache, and gives its own mesh the texture between the two looks about its
 	/// alignment, of its player's set. The shape is a copy of the blend that the threads made, or nothing for a copy here.
-	static void Dress(entt::id_type id, const l3d::L3DFile& blended, std::shared_ptr<l3d::L3DFile> copy, float alignment,
-	                  PlayerNames owner, MadeBlends& made);
+	/// A mesh that already shows the texture of the same alignment and set keeps it.
+	void Dress(entt::id_type id, const l3d::L3DFile& blended, std::shared_ptr<l3d::L3DFile> copy, float alignment,
+	           PlayerNames owner, MadeBlends& made);
 	/// Gives the temple's mesh the texture between the two looks about its alignment, of its player's set
 	static void DressSkin(graphics::L3DMesh& temple, const l3d::L3DFile& blended, float alignment, PlayerNames owner,
 	                      MadeBlends& made);
@@ -112,6 +113,17 @@ private:
 
 	/// Of each temple's own mesh in the cache, by its id, the blend that this computer last made for it
 	std::unordered_map<entt::id_type, TempleExteriorMorph::Blend> _blends;
+	/// The texture that a mesh in the cache shows, which Dress gave it
+	struct ShownSkin
+	{
+		const graphics::L3DMesh* mesh;
+		TempleExteriorMorph::TextureBlend texture;
+		uint32_t set;
+
+		bool operator==(const ShownSkin&) const = default;
+	};
+	/// Of each mesh that Dress gave a texture, by its id, the texture that it shows
+	std::unordered_map<entt::id_type, ShownSkin> _shownSkins;
 	/// Copies of the first temple's shape that the blends of earlier calls used. A new blend takes one and writes all
 	/// its vertices, so it does not copy the whole shape again.
 	std::vector<l3d::L3DFile> _spareShapes;

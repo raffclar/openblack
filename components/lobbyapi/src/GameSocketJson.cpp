@@ -55,6 +55,7 @@ constexpr std::string_view k_SyncAsk = "sync.ask";
 constexpr std::string_view k_SyncEntities = "sync.entities";
 constexpr std::string_view k_SyncWorld = "sync.world";
 constexpr std::string_view k_CommandRefused = "command.refused";
+constexpr std::string_view k_EditorMindFile = "editor.mind_file";
 /// The most bytes of the hints of a copy of the game (the patch and the language)
 constexpr size_t k_MostHintBytes = 16;
 /// The most bytes of the words of the file in a refusal "data"
@@ -370,6 +371,10 @@ bool ReadStart(const Json& object, Start& start)
 		}
 		start.aiSeed = static_cast<uint32_t>(value);
 	}
+	if (!ReadString(object, "game_id", start.gameId, false) || start.gameId.size() > k_MostGameIdCharacters)
+	{
+		return false;
+	}
 	if (const auto* timeLimit = Member(object, "time_limit"); timeLimit != nullptr && !timeLimit->is_null())
 	{
 		uint64_t value = 0;
@@ -479,6 +484,10 @@ void WriteStart(const Start& start, Json& object)
 	if (start.aiSeed.has_value())
 	{
 		object["ai_seed"] = *start.aiSeed;
+	}
+	if (!start.gameId.empty())
+	{
+		object["game_id"] = start.gameId;
 	}
 	if (start.timeLimit.has_value())
 	{
@@ -834,6 +843,25 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		parts.turn = static_cast<uint32_t>(turn);
 		return parts;
 	}
+	if (type == k_EditorMindFile)
+	{
+		std::string file;
+		if (!ReadString(object, "file", file, true))
+		{
+			return std::nullopt;
+		}
+		// Base64 holds 3 bytes in 4 characters: a longer text is a file that is too large
+		if (file.size() > (k_MostEditorMindFileBytes + 2) / 3 * 4)
+		{
+			return std::nullopt;
+		}
+		auto bytes = join_ticket::DecodeBase64Url(file);
+		if (!bytes.has_value() || bytes->empty() || bytes->size() > k_MostEditorMindFileBytes)
+		{
+			return std::nullopt;
+		}
+		return EditorMindFile {.file = std::move(*bytes)};
+	}
 	if (type == k_CommandRefused)
 	{
 		CommandRefused refused;
@@ -1173,6 +1201,10 @@ std::string ToJson(const Frame& frame)
 			    {
 				    object["team"] = true;
 			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorMindFile>)
+		    {
+			    object = Json {{"type", k_EditorMindFile}, {"file", join_ticket::EncodeBase64Url(value.file)}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, CommandRefused>)
 		    {

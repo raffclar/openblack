@@ -307,6 +307,16 @@ void ChatControls::FitQuickList()
 	}
 }
 
+void ChatControls::FollowNetworkGame(bool networkGame)
+{
+	if (chat_controls::NetworkGameEnded(_networkGame, networkGame))
+	{
+		CloseChat();
+		_shown = false;
+	}
+	_networkGame = networkGame;
+}
+
 bool ChatControls::Update(const Frame& frame)
 {
 	_shown = ShowsNext(_shown, frame.show);
@@ -504,6 +514,17 @@ void ChatControls::OpenChat(bool closeAfterSend)
 	_open = true;
 	_edit->SetText(u"");
 	_dialog.SetFocus(_edit);
+}
+
+void ChatControls::CloseChat()
+{
+	_open = false;
+	_closeAfterSend = false;
+	_quickOpen = false;
+	_quickList->visible = false;
+	_edit->SetText(u"");
+	_sent.clear();
+	_dialog.SetFocus(nullptr);
 }
 
 void ChatControls::Send(std::optional<uint32_t> taunt)

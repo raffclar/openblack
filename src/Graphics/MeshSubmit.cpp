@@ -62,12 +62,6 @@ void VertexBuffer::Bind(uint32_t firstVertex, uint32_t count) const
 	}
 }
 
-void VertexBuffer::BindStream(uint8_t stream, VertexLayoutHandle layout) const
-{
-	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::BindStream");
-	BindStream(*bgfx::begin(), stream, layout);
-}
-
 void VertexBuffer::BindStream(bgfx::Encoder& encoder, uint8_t stream, VertexLayoutHandle layout) const
 {
 	if (!IsValid())

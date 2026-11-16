@@ -9,26 +9,35 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
+#include <GameSocket.h>
+#include <MindFile.h>
 #include <fmt/format.h>
 #include <glm/vec2.hpp>
 
 #include "Common/CreatureEditValues.h"
 #include "Common/DebugCheats.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Creature/CreatureMindFileBody.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "Editor/EditorActions.h"
 #include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorEntities.h"
+#include "Editor/EditorLandEdits.h"
+#include "Editor/EditorMindLoads.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
+#include "Story/StoryLandSkip.h"
 
 using namespace openblack;
 using namespace openblack::inspector;
@@ -124,13 +133,17 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	    "does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also "
 	    "when the "
 	    "editor of this computer is refused, so that a test sees the refusal of the server.",
-	    {{.name = "kind", .type = "string", .description = "move, turn, place or remove", .required = true},
-	     {.name = "id", .type = "integer", .description = "The thing of a move, a turn or a removal", .required = false},
+	    {{.name = "kind", .type = "string", .description = "move, turn, scale, place or remove", .required = true},
+	     {.name = "id",
+	      .type = "integer",
+	      .description = "The thing of a move, a turn, a scale or a removal",
+	      .required = false},
 	     {.name = "position",
 	      .type = "point",
 	      .description = "[x, z] or [x, y, z] of a move or a placement",
 	      .required = false},
 	     {.name = "radians", .type = "number", .description = "The angle of a turn or a placement", .required = false},
+	     {.name = "scale", .type = "number", .description = "The new scale of the first axis (scale)", .required = false},
 	     {.name = "place_kind", .type = "integer", .description = "The kind of the palette item (place)", .required = false},
 	     {.name = "place_type", .type = "integer", .description = "The type of the palette item (place)", .required = false},
 	     {.name = "copies",
@@ -152,17 +165,18 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		const auto kindParam = context.params.find("kind");
 		const auto kindName =
 		    kindParam != context.params.end() && kindParam->is_string() ? kindParam->get<std::string>() : std::string();
-		constexpr std::array<std::pair<std::string_view, EditorEdit::Kind>, 4> k_Kinds {{
+		constexpr std::array<std::pair<std::string_view, EditorEdit::Kind>, 5> k_Kinds {{
 		    {"place", EditorEdit::Kind::Place},
 		    {"move", EditorEdit::Kind::Move},
 		    {"turn", EditorEdit::Kind::Turn},
 		    {"remove", EditorEdit::Kind::Remove},
+		    {"scale", EditorEdit::Kind::Scale},
 		}};
 		const auto kind =
 		    std::ranges::find(k_Kinds, std::string_view(kindName), &std::pair<std::string_view, EditorEdit::Kind>::first);
 		if (kind == k_Kinds.end())
 		{
-			return QueryResult::Error("editor.network_edit needs a kind: move, turn, place or remove");
+			return QueryResult::Error("editor.network_edit needs a kind: move, turn, scale, place or remove");
 		}
 		EditorEdit command {.kind = kind->second};
 		if (command.kind != EditorEdit::Kind::Place)
@@ -184,6 +198,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			}
 		}
 		command.radians = NumberParam(context.params, "radians").value_or(0.0f);
+		command.scale = NumberParam(context.params, "scale").value_or(1.0f);
 		command.placeKind = static_cast<uint8_t>(NumberParam(context.params, "place_kind").value_or(0.0f));
 		command.placeType = static_cast<int32_t>(NumberParam(context.params, "place_type").value_or(0.0f));
 		if (const auto refusal = editor::EditRefusal(command))
@@ -213,6 +228,151 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			Locator::playerCommandSystem::value().Submit(command);
 		}
 		return QueryResult::Value({{"sent", count}});
+	});
+
+	auto act = Query(
+	    "act",
+	    "Does an action of the editor on things, as the tool bar and the keys of the editor do it, with the history of the "
+	    "editor: delete, duplicate, place, move, turn, undo or redo. In a network game each change goes as a command of the "
+	    "turns, and the history learns it from the answer at the turn. force acts also when the editor of this computer is "
+	    "refused.",
+	    {{.name = "act",
+	      .type = "string",
+	      .description = "delete, duplicate, place, move, turn, undo or redo",
+	      .required = true},
+	     {.name = "ids",
+	      .type = "array",
+	      .description = "The things to pick before the act (delete, duplicate, move, turn)",
+	      .required = false},
+	     {.name = "offset", .type = "point", .description = "[x, z] that a move adds to each thing", .required = false},
+	     {.name = "radians", .type = "number", .description = "The angle of a turn", .required = false},
+	     {.name = "position", .type = "point", .description = "[x, z] of a placement", .required = false},
+	     {.name = "place_kind", .type = "integer", .description = "The kind of the palette item (place)", .required = false},
+	     {.name = "place_type", .type = "integer", .description = "The type of the palette item (place)", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Act also when the editor is refused", .required = false}});
+	act.writes = true;
+	provider->Add(std::move(act), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		if (!Locator::editorSystem::has_value() || !Locator::entitiesRegistry::has_value())
+		{
+			return QueryResult::Error("there is no editor");
+		}
+		const auto actParam = context.params.find("act");
+		const auto name = actParam != context.params.end() && actParam->is_string() ? actParam->get<std::string>() : "";
+		auto& system = Locator::editorSystem::value();
+		auto& registry = Locator::entitiesRegistry::value();
+		// The act uses writes of its own, as the editor window does: a network game sends commands
+		std::unique_ptr<editor::EditorWrites> writes;
+		if (developer_tools::NetworkSessionLive())
+		{
+			writes = editor::MakeNetworkWrites();
+		}
+		else
+		{
+			writes = std::make_unique<editor::LocalWrites>();
+		}
+		const editor::EditorActs acts {.system = system, .registry = registry, .writes = *writes};
+		std::vector<entt::entity> picks;
+		if (const auto ids = context.params.find("ids"); ids != context.params.end() && ids->is_array())
+		{
+			for (const auto& id : *ids)
+			{
+				if (id.is_number_integer() && registry.Valid(static_cast<entt::entity>(id.get<uint32_t>())))
+				{
+					picks.push_back(static_cast<entt::entity>(id.get<uint32_t>()));
+				}
+			}
+			system.GetSelection().SelectAll(picks);
+		}
+		std::string note;
+		if (name == "delete")
+		{
+			editor::DeletePicked(acts);
+		}
+		else if (name == "duplicate")
+		{
+			editor::DuplicatePicked(acts);
+		}
+		else if (name == "undo")
+		{
+			note = editor::UndoStep(acts);
+		}
+		else if (name == "redo")
+		{
+			note = editor::RedoStep(acts);
+		}
+		else if (name == "move" || name == "turn")
+		{
+			editor::PoseEdit edit;
+			edit.Begin(registry, picks);
+			glm::vec2 offset {0.0f};
+			if (const auto found = context.params.find("offset"); found != context.params.end() && found->is_array() &&
+			                                                      found->size() == 2 && (*found)[0].is_number() &&
+			                                                      (*found)[1].is_number())
+			{
+				offset = {(*found)[0].get<float>(), (*found)[1].get<float>()};
+			}
+			const auto radians = NumberParam(context.params, "radians").value_or(0.0f);
+			for (const auto entity : picks)
+			{
+				const auto pose = editor::PoseOf(registry, entity);
+				if (!pose.has_value())
+				{
+					continue;
+				}
+				if (name == "move")
+				{
+					const glm::vec2 point {pose->position.x + offset.x, pose->position.z + offset.y};
+					writes->MoveTo(entity, {point.x, editor::LandHeight(point), point.y});
+				}
+				else
+				{
+					writes->Turn(entity, radians);
+				}
+			}
+			edit.Finish(acts, name == "move" ? "Move" : "Turn");
+		}
+		else if (name == "place")
+		{
+			const auto position = PositionParam(context.params);
+			if (!position.has_value())
+			{
+				return QueryResult::Error("editor.act place needs a position");
+			}
+			const editor::PlaceItem item {
+			    .kind = static_cast<editor::PlaceKind>(NumberParam(context.params, "place_kind").value_or(0.0f)),
+			    .type = static_cast<int32_t>(NumberParam(context.params, "place_type").value_or(0.0f))};
+			const glm::vec3 point {position->x, editor::LandHeight({position->x, position->z}), position->z};
+			if (const auto made = writes->Place(item, point, 0.0f))
+			{
+				editor::RecordMade(acts, *made, "Place");
+			}
+			else
+			{
+				const std::array requests {writes->LastMakeRequest()};
+				editor::RecordAllSent(acts, requests, "Place");
+			}
+		}
+		else
+		{
+			return QueryResult::Error("editor.act needs an act: delete, duplicate, place, move, turn, undo or redo");
+		}
+		const auto& history = system.GetHistory();
+		auto selected = Json::array();
+		for (const auto entity : system.GetSelection().All())
+		{
+			selected.push_back(Id(entity));
+		}
+		return QueryResult::Value({{"note", note},
+		                           {"undo_steps", history.UndoCount()},
+		                           {"redo_steps", history.RedoCount()},
+		                           {"undo_label", history.UndoLabel().value_or("")},
+		                           {"redo_label", history.RedoLabel().value_or("")},
+		                           {"waiting", history.Waiting()},
+		                           {"selected", std::move(selected)}});
 	});
 
 	auto creatureEdit = Query(
@@ -245,6 +405,298 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			return QueryResult::Error("editor.creature_edit needs the id of a creature, the name of a value and an amount");
 		}
 		editor::SendCreatureEdit(*entity, *value, *amount);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto villagerEdit = Query(
+	    "villager_edit",
+	    "Sends a change of a field of a villager as a command of the turns, as the villager section of the editor sends it in "
+	    "a network game: each computer does it at the same turn, and the game server takes it only from a player with the "
+	    "editor claim. force sends it also when the editor of this computer is refused.",
+	    {{.name = "id", .type = "integer", .description = "The villager", .required = true},
+	     {.name = "field",
+	      .type = "string",
+	      .description = "life, age, food, life stage, sex, tribe, role or state",
+	      .required = true},
+	     {.name = "number",
+	      .type = "integer",
+	      .description = "The age, the life stage, the sex, the tribe, the role or the state",
+	      .required = false},
+	     {.name = "amount", .type = "number", .description = "The life or the food", .required = false},
+	     {.name = "index", .type = "integer", .description = "The slot of states of a state, 0 to 2", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	villagerEdit.writes = true;
+	provider->Add(std::move(villagerEdit), [](const QueryContext& context) {
+		using Field = player_commands::EditorVillagerEdit::Field;
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		constexpr std::array<std::pair<std::string_view, Field>, 8> k_Fields {{
+		    {"life", Field::Life},
+		    {"age", Field::Age},
+		    {"food", Field::Food},
+		    {"life stage", Field::LifeStage},
+		    {"sex", Field::Sex},
+		    {"tribe", Field::Tribe},
+		    {"role", Field::Role},
+		    {"state", Field::State},
+		}};
+		const auto fieldParam = context.params.find("field");
+		const auto fieldName =
+		    fieldParam != context.params.end() && fieldParam->is_string() ? fieldParam->get<std::string>() : std::string();
+		const auto field = std::ranges::find(k_Fields, std::string_view(fieldName), &std::pair<std::string_view, Field>::first);
+		const auto entity = EntityParam(context.params);
+		if (!entity.has_value() || field == k_Fields.end())
+		{
+			return QueryResult::Error("editor.villager_edit needs the id of a villager and a field");
+		}
+		const player_commands::EditorVillagerEdit edit {
+		    .villager = *entity,
+		    .field = field->second,
+		    .index = static_cast<uint8_t>(NumberParam(context.params, "index").value_or(0.0f)),
+		    .number = static_cast<uint32_t>(NumberParam(context.params, "number").value_or(0.0f)),
+		    .amount = NumberParam(context.params, "amount").value_or(0.0f)};
+		if (const auto refusal = editor::VillagerEditRefusal(edit))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		editor::SendVillagerEdit(edit);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto creatureSpawn = Query(
+	    "creature_spawn",
+	    "Sends a new creature as a command of the turns, as the creature tools send it in a network game: each computer makes "
+	    "it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also "
+	    "when the editor of this computer is refused.",
+	    {{.name = "species", .type = "integer", .description = "The species (CreatureType, from 1)", .required = true},
+	     {.name = "position", .type = "point", .description = "[x, z] or [x, y, z] of the creature", .required = true},
+	     {.name = "owner", .type = "integer", .description = "The player that owns it (0 when not given)", .required = false},
+	     {.name = "radians", .type = "number", .description = "The angle that it faces", .required = false},
+	     {.name = "scale", .type = "number", .description = "Its size (1 when not given)", .required = false},
+	     {.name = "alignment", .type = "number", .description = "-1 to 1 (0 when not given)", .required = false},
+	     {.name = "fatness", .type = "number", .description = "0 to 1 (0.5 when not given)", .required = false},
+	     {.name = "strength", .type = "number", .description = "0 to 1 (0.5 when not given)", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	creatureSpawn.writes = true;
+	provider->Add(std::move(creatureSpawn), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto species = NumberParam(context.params, "species");
+		auto position = PositionParam(context.params);
+		if (!species.has_value() || !position.has_value())
+		{
+			return QueryResult::Error("editor.creature_spawn needs a species and a position");
+		}
+		// A point of [x, z] stands on the land, as the creature tools put a creature
+		if (const auto found = context.params.find("position"); found->is_array() && found->size() == 2)
+		{
+			position->y = editor::LandHeight({position->x, position->z});
+		}
+		const player_commands::EditorCreatureSpawn spawn {
+		    .species = static_cast<uint8_t>(*species),
+		    .owner = static_cast<uint8_t>(NumberParam(context.params, "owner").value_or(0.0f)),
+		    .position = *position,
+		    .radians = NumberParam(context.params, "radians").value_or(0.0f),
+		    .scale = NumberParam(context.params, "scale").value_or(1.0f),
+		    .alignment = NumberParam(context.params, "alignment").value_or(0.0f),
+		    .fatness = NumberParam(context.params, "fatness").value_or(0.5f),
+		    .strength = NumberParam(context.params, "strength").value_or(0.5f)};
+		if (const auto refusal = editor::CreatureSpawnRefusal(spawn))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		editor::SendCreatureSpawn(spawn);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto mindLoad = Query(
+	    "mind_load",
+	    "Sends a mind file of this computer and its command of the turns, as the creature tools send them in a network game: "
+	    "the file goes to the game server, which sends it to every computer, and each computer loads it at the same turn. "
+	    "With an id, the creature takes the mind. With a position, a new creature with the body of the file takes it. force "
+	    "sends it also when the editor of this computer is refused.",
+	    {{.name = "path", .type = "string", .description = "The mind file on this computer", .required = true},
+	     {.name = "id", .type = "integer", .description = "The creature that takes the mind", .required = false},
+	     {.name = "position",
+	      .type = "point",
+	      .description = "[x, z] or [x, y, z] of a new creature from the file",
+	      .required = false},
+	     {.name = "owner", .type = "integer", .description = "The player that owns a new creature", .required = false},
+	     {.name = "radians", .type = "number", .description = "The angle that a new creature faces", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	mindLoad.writes = true;
+	provider->Add(std::move(mindLoad), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto pathParam = context.params.find("path");
+		if (pathParam == context.params.end() || !pathParam->is_string())
+		{
+			return QueryResult::Error("editor.mind_load needs the path of a mind file");
+		}
+		const auto bytes = creaturemind::ReadFileBytes(pathParam->get<std::string>());
+		const auto mind = bytes.has_value() ? editor::mind_loads::ReadMind(*bytes) : nullptr;
+		if (mind == nullptr)
+		{
+			return QueryResult::Error("the mind file does not read");
+		}
+		if (bytes->size() > game_socket::k_MostEditorMindFileBytes)
+		{
+			return QueryResult::Error(fmt::format("a network game takes a mind file of at most {} KB",
+			                                      game_socket::k_MostEditorMindFileBytes / 1024));
+		}
+		player_commands::EditorMindLoad load;
+		auto position = PositionParam(context.params);
+		if (const auto entity = EntityParam(context.params); entity.has_value())
+		{
+			load.use = player_commands::EditorMindLoad::Use::LoadInto;
+			load.creature = *entity;
+		}
+		else if (position.has_value())
+		{
+			// The new creature has the body of the file, as the creature tools make it
+			const auto body = creature_mind_body::FromMindFile(*mind);
+			if (!body.has_value())
+			{
+				return QueryResult::Error("the species of the mind file is not one that the game knows");
+			}
+			if (const auto found = context.params.find("position"); found->is_array() && found->size() == 2)
+			{
+				position->y = editor::LandHeight({position->x, position->z});
+			}
+			load.use = player_commands::EditorMindLoad::Use::Spawn;
+			load.spawn = {.species = static_cast<uint8_t>(body->species),
+			              .owner = static_cast<uint8_t>(NumberParam(context.params, "owner").value_or(0.0f)),
+			              .position = *position,
+			              .radians = NumberParam(context.params, "radians").value_or(0.0f),
+			              .scale = body->size.value_or(1.0f),
+			              .alignment = body->alignment.value_or(0.0f),
+			              .fatness = body->fatness,
+			              .strength = body->strength,
+			              .hasTattoos = body->tattoos.has_value(),
+			              .tattoos = body->tattoos.value_or(creature_tattoo::Slots {})};
+		}
+		else
+		{
+			return QueryResult::Error("editor.mind_load needs the id of a creature or a position");
+		}
+		if (const auto refusal = editor::mind_loads::MindLoadRefusal(load, true))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		if (!editor::mind_loads::SendMindLoad(*bytes, load))
+		{
+			return QueryResult::Error("the game socket is not open: the mind file did not go");
+		}
+		return QueryResult::Value({{"sent", true},
+		                           {"bytes", bytes->size()},
+		                           {"hash", fmt::format("{:016x}", editor::mind_loads::HashOf(*bytes))},
+		                           {"use", load.use == player_commands::EditorMindLoad::Use::Spawn ? "spawn" : "load"},
+		                           {"species", static_cast<int>(load.spawn.species)}});
+	});
+	auto landStroke = Query(
+	    "land_stroke",
+	    "Sends a stroke of the land brush as a command of the turns, as the land tools send it in a network game: each "
+	    "computer raises, lowers or paints the land at the same turn, and the game server takes it only from a player with "
+	    "the editor claim. force sends it also when the editor of this computer is refused.",
+	    {{.name = "mode", .type = "string", .description = "raise, lower or paint", .required = true},
+	     {.name = "position", .type = "point", .description = "[x, z] of the middle of the stroke", .required = true},
+	     {.name = "inner",
+	      .type = "number",
+	      .description = "The inner radius in metres (10 when not given)",
+	      .required = false},
+	     {.name = "outer",
+	      .type = "number",
+	      .description = "The outer radius in metres (30 when not given)",
+	      .required = false},
+	     {.name = "step",
+	      .type = "integer",
+	      .description = "The altitude steps, 1 to 64 (4 when not given)",
+	      .required = false},
+	     {.name = "country", .type = "integer", .description = "The country of a paint (0 when not given)", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	landStroke.writes = true;
+	provider->Add(std::move(landStroke), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		constexpr std::array<std::pair<std::string_view, editor::land_brush::Mode>, 3> k_Modes {{
+		    {"raise", editor::land_brush::Mode::Raise},
+		    {"lower", editor::land_brush::Mode::Lower},
+		    {"paint", editor::land_brush::Mode::Paint},
+		}};
+		const auto modeParam = context.params.find("mode");
+		const auto modeName =
+		    modeParam != context.params.end() && modeParam->is_string() ? modeParam->get<std::string>() : std::string();
+		const auto mode = std::ranges::find(k_Modes, std::string_view(modeName), &decltype(k_Modes)::value_type::first);
+		const auto position = PositionParam(context.params);
+		if (mode == k_Modes.end() || !position.has_value())
+		{
+			return QueryResult::Error("editor.land_stroke needs a mode (raise, lower or paint) and a position");
+		}
+		const editor::land_brush::Brush brush {.mode = mode->second,
+		                                       .innerRadius = NumberParam(context.params, "inner").value_or(10.0f),
+		                                       .outerRadius = NumberParam(context.params, "outer").value_or(30.0f),
+		                                       .step = static_cast<int>(NumberParam(context.params, "step").value_or(4.0f)),
+		                                       .country =
+		                                           static_cast<uint8_t>(NumberParam(context.params, "country").value_or(0.0f))};
+		const glm::vec2 centre {position->x, position->z};
+		const auto stroke = editor::land_edits::StrokeOf(brush, centre);
+		if (const auto refusal = editor::land_edits::LandStrokeRefusal(stroke, std::nullopt))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		editor::land_edits::SendLandStroke(stroke);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto path = Query(
+	    "path",
+	    "Sends a footpath or a stream as a command of the turns, as the paths of the land tools send it in a network game: "
+	    "each computer makes it at the same turn, and the game server takes it only from a player with the editor claim. "
+	    "force sends it also when the editor of this computer is refused.",
+	    {{.name = "kind", .type = "string", .description = "footpath or stream", .required = true},
+	     {.name = "points", .type = "array", .description = "The points [[x, z], ...], 2 to 256", .required = true},
+	     {.name = "first", .type = "integer", .description = "The building at the first point", .required = false},
+	     {.name = "last", .type = "integer", .description = "The building at the last point", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	path.writes = true;
+	provider->Add(std::move(path), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto kindParam = context.params.find("kind");
+		const auto kindName =
+		    kindParam != context.params.end() && kindParam->is_string() ? kindParam->get<std::string>() : std::string();
+		const auto points = context.params.find("points");
+		if ((kindName != "footpath" && kindName != "stream") || points == context.params.end() || !points->is_array())
+		{
+			return QueryResult::Error("editor.path needs a kind (footpath or stream) and the points");
+		}
+		player_commands::EditorPath command {
+		    .kind = static_cast<uint8_t>(kindName == "stream" ? editor::paths::Kind::Stream : editor::paths::Kind::Footpath)};
+		for (const auto& point : *points)
+		{
+			if (!point.is_array() || point.size() != 2 || !point[0].is_number() || !point[1].is_number())
+			{
+				return QueryResult::Error("editor.path needs each point as [x, z]");
+			}
+			command.points.emplace_back(point[0].get<float>(), point[1].get<float>());
+		}
+		const auto holder = [&context](std::string_view name) {
+			const auto number = NumberParam(context.params, name);
+			return number.has_value() ? static_cast<entt::entity>(static_cast<uint32_t>(*number)) : entt::entity {entt::null};
+		};
+		command.firstHolder = holder("first");
+		command.lastHolder = holder("last");
+		if (const auto refusal = editor::land_edits::PathRefusal(command))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		editor::land_edits::SendPath(command);
 		return QueryResult::Value({{"sent", true}});
 	});
 	auto creatureAct =
@@ -335,6 +787,34 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		const auto cheatOf = static_cast<debug_cheats::Cheat>(found - debug_cheats::k_CheatNames.begin());
 		editor::SendDebugCheat(cheatOf, BoolParam(context.params, "on", true));
 		return QueryResult::Value({{"sent", true}});
+	});
+	auto landSkip =
+	    Query("land_skip",
+	          "Sends the skip to a land of the story, 2 to 5, as a command of the turns, as the cheats tab of the "
+	          "editor does. The story changes the land as at the end of the land before. Only a game of the story "
+	          "on this computer alone does it. The skip to land 1 starts a new game, so only the editor does it.",
+	          {{.name = "land", .type = "integer", .description = "The land of the story, 2 to 5", .required = true}});
+	landSkip.writes = true;
+	provider->Add(std::move(landSkip), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto landParam = context.params.find("land");
+		if (landParam == context.params.end() || !landParam->is_number_integer())
+		{
+			return QueryResult::Error("editor.land_skip needs the land, 2 to 5");
+		}
+		const auto land = landParam->get<int32_t>();
+		if (!story_land_skip::GoesAsCommand(land))
+		{
+			return QueryResult::Error("editor.land_skip takes only the lands 2 to 5");
+		}
+		if (!editor::SendStoryLandSkip(land))
+		{
+			return QueryResult::Error("editor.land_skip: this game is not a game of the story on this computer alone");
+		}
+		return QueryResult::Value({{"sent", true}, {"land", land}});
 	});
 	return provider;
 }

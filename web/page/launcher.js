@@ -291,8 +291,10 @@ globalThis.openblackShowMessage = showMessage;
 
 // The end of a normal game run sends the browser to the homepage. A crash keeps its message and stays on the page.
 let leftForHome = false;
+// A developer run that stops at a game turn of its own choice stays on the page, so that its log shows the end
+let staysAtEnd = false;
 function leaveForHome(code) {
-  if (leftForHome || !exitGoesHome(code, pageCrashKept)) {
+  if (leftForHome || !exitGoesHome(code, pageCrashKept, staysAtEnd)) {
     return;
   }
   leftForHome = true;
@@ -969,6 +971,7 @@ async function start(online = false) {
   // The page takes the arguments of a player from a list (launcher-arguments.js), and "args" in a developer build.
   // With no profile, the multiplayer front end asks for the new player's name first.
   const gameArguments = playerArguments(parameters, developer, online);
+  staysAtEnd = developer && stopsAtChosenTurn(gameArguments);
   const renderer = await chooseRenderer(parameters, gameArguments);
   if (renderer.backend) {
     gameArguments.push('--backend-type', renderer.backend);

@@ -227,6 +227,21 @@ TEST(GameSocket, TheTimeLimitGoesInTheStartAndIsLeftOutWhenNotSet)
 	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"time_limit":"30"})").has_value());
 }
 
+TEST(GameSocket, TheGameIdGoesInTheStartAndIsLeftOutWhenEmpty)
+{
+	Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
+	// A start with no id is the frame of an old server: it reads with an empty id
+	EXPECT_TRUE(RoundTrip(start).gameId.empty());
+	const auto old = Parse(R"({"type":"game.start","land":"Land1.txt","testbed":false,"seed":1,"turn":0})");
+	ASSERT_TRUE(old.has_value());
+	start.gameId = "0123abcd";
+	EXPECT_EQ(RoundTrip(start).gameId, "0123abcd");
+	// An id that is not a word, or is too long, does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"game_id":3})").has_value());
+	start.gameId = std::string(k_MostGameIdCharacters + 1, 'a');
+	EXPECT_FALSE(Parse(ToJson(start)).has_value());
+}
+
 TEST(GameSocket, TheConditionsGoInTheStartAndAreLeftOutWhenNone)
 {
 	Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
@@ -331,6 +346,22 @@ TEST(GameSocket, ACreatureFileThatIsTooLargeDoesNotRead)
 	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","slot":32})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"start.reply"})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"start.query","land":"Land1.txt"})").has_value());
+}
+
+TEST(GameSocket, AMindFileOfTheEditorGoesToJsonAndBackUpToItsLimit)
+{
+	const std::vector<uint8_t> file {0, 1, 2, 250, 251, 252, 253};
+	const auto back = RoundTrip(EditorMindFile {.file = file});
+	EXPECT_EQ(back.file, file);
+	EXPECT_EQ(ToJson(EditorMindFile {.file = {1, 2, 3}}), R"({"file":"AQID","type":"editor.mind_file"})");
+	const std::vector<uint8_t> largest(k_MostEditorMindFileBytes, 7);
+	EXPECT_TRUE(Parse(ToJson(EditorMindFile {.file = largest})).has_value());
+	const std::vector<uint8_t> tooLarge(k_MostEditorMindFileBytes + 1, 7);
+	EXPECT_FALSE(Parse(ToJson(EditorMindFile {.file = tooLarge})).has_value());
+	// A frame with no file, an empty file or bytes that are not Base64 is not a mind file
+	EXPECT_FALSE(Parse(R"({"type":"editor.mind_file"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.mind_file","file":""})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.mind_file","file":"!!"})").has_value());
 }
 
 // The start names the players of the gods by slot, and the server tells the clients that the turns of the game stopped

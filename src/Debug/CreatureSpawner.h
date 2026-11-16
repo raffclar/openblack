@@ -9,12 +9,15 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <random>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
@@ -23,6 +26,7 @@
 #include "Common/CreatureEditValues.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/CreatureTattoo.h"
+#include "Editor/EditorHistory.h"
 #include "Enums.h"
 #include "FileBrowser.h"
 #include "Window.h"
@@ -70,6 +74,9 @@ public:
 	/// Places a creature as the settings say, with the mind and tattoos of the mind file it is to be spawned from, if
 	/// any, facing an angle about the up axis
 	entt::entity SpawnAt(glm::vec3 position, float yawRadians) noexcept;
+	/// The request of the last new creature that SpawnAt sent in a network game, whose answer gives the creature at the
+	/// turn
+	[[nodiscard]] editor::Request LastSpawnRequest() const noexcept { return _lastSpawnRequest; }
 	/// While hosted, the clicks on the land that command the picked creature, and their orders. In a network game each
 	/// order goes as a command of the turns. A network game places no creature, because the creature tools of this
 	/// computer make it.
@@ -179,6 +186,8 @@ private:
 
 	CreatureType _species {CreatureType::Tiger};
 	PlayerNames _owner {PlayerNames::PLAYER_ONE};
+	/// The request of the last new creature that went as a command of the turns
+	editor::Request _lastSpawnRequest {0};
 	float _alignment {0.0f};
 	float _fatness {0.5f};
 	float _strength {0.5f};
@@ -256,6 +265,8 @@ private:
 	std::string _lastMindFile;
 	/// The mind file new creatures are spawned from, its name, and the tattoos it gives them
 	std::shared_ptr<const creaturemind::MindFileData> _spawnMind;
+	/// The bytes of the mind file new creatures are spawned from. A network game sends them with each new creature.
+	std::vector<uint8_t> _spawnMindBytes;
 	std::string _spawnMindName;
 	std::optional<creature_tattoo::Slots> _spawnTattoos;
 	/// Stands in for the file dialog where the platform has none, and what the file it gives is for

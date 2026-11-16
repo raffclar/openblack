@@ -686,6 +686,28 @@ def purposeful_part_left_out(different, recoveries, part_at):
     return [turn for turn in different if not part_at <= turn <= back_at]
 
 
+def purposeful_part_gap(part_turns, recoveries, part_at):
+    """The turns that a client differs from the server on purpose (--part-second-at): from the first turn at which its
+    world parted, at or after the turn of the part, up to the first world that it went on from after it. Gives the
+    first turn, the turn of the world that it went on from and the number of turns between them, both ends included.
+    Gives None when the client did not part or did not come back. Capturing a big world takes some seconds, so the
+    gap is many turns on a big land; it is not a failure. A client that differs after it is back is judged on its own
+    parts and on the compares that the gap does not explain."""
+    back_at = next((turn for turn in recoveries if turn >= part_at), None)
+    first = next((turn for turn in sorted(part_turns) if turn >= part_at), None)
+    if back_at is None or first is None or back_at < first:
+        return None
+    return first, back_at, back_at - first + 1
+
+
+def differing_compares_allowed(parted_on_purpose, gap):
+    """How many compares of a client's session may differ from the server. A client that parts on purpose differs in the
+    turns of its gap, and in one more. Another client differs in none."""
+    if not parted_on_purpose:
+        return 0
+    return PURPOSEFUL_PART_COMPARES + (gap[2] if gap else 0)
+
+
 def session_counts(log):
     """The last counts of the compares that the client's session wrote: compared, the same, and the resumes"""
     if not os.path.exists(log):
@@ -1326,10 +1348,57 @@ def place_row(pid, place_type, copies, start, step):
     return int(answer.get("sent", 0)) if isinstance(answer, dict) else 0, None
 
 
-def editor_desync(pids, case):
+def editor_mind(pids, focus, files):
+    """The creature tools of the editor in a network game open mind files of the first client's computer. First a new
+    creature comes from each file, near the camera. Then each creature near the camera takes the mind of another file.
+    Each file goes to the game server, which sends it to every computer before the turn of its load. Returns the
+    answer of each send."""
+    editor = pids[0]
+    done = {"files": files, "spawns": [], "loads": []}
+    for index, path in enumerate(files):
+        done["spawns"].append(inspector_answer(editor, "editor.mind_load", {"params": {
+            "path": path, "position": [focus[0] - 30.0 + 25.0 * index, focus[2] - 20.0], "owner": index % 2,
+            "radians": 0.3 * index}}))
+        time.sleep(1.5)
+    time.sleep(1.0)
+    creatures = items_of(inspector_answer(editor, "objects.find", {"params": {
+        "near": [focus[0], focus[2]], "radius": 400.0, "kind": "Creature", "limit": 8}}))
+    done["creatures"] = [creature.get("id") for creature in creatures]
+    for index, creature in enumerate(creatures):
+        done["loads"].append(inspector_answer(editor, "editor.mind_load", {"params": {
+            "path": files[(index + 1) % len(files)], "id": creature["id"]}}))
+        time.sleep(1.0)
+    for answer in done["spawns"] + done["loads"]:
+        if isinstance(answer, dict) and answer.get("error"):
+            done.setdefault("errors", []).append(answer["error"])
+    return done
+
+
+def mind_files(options):
+    """The mind files of the case mind: the files of the command line, or the two saved creatures of the game folder"""
+    if options.mind_files:
+        return [os.path.abspath(path) for path in options.mind_files]
+    folder = os.path.join(options.game_path, "Scripts", "CreatureMind")
+    return [os.path.join(folder, name) for name in ("C4a76f23d.erc", "C643e7b7f.erc")]
+
+
+def mind_load_lines(server_log, client_logs):
+    """The lines of the mind loads of the editor at the turns, without the time and the name of the log. Each
+    computer must have the same lines: the same turns, files and things."""
+    def lines(log):
+        return [line[line.index("Turn "):] for line in lines_with(log, ["the mind file"]) if "Turn " in line]
+    server = lines(server_log)
+    clients = [lines(log) for log in client_logs]
+    return {"server": server, "clients": clients, "loads": len(server),
+            "same": all(client == server for client in clients) and bool(server)}
+
+
+def editor_desync(pids, case, shots=None, mind_files=None):
     """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
     "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
-    second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. Every
+    second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. With "animals"
+    it puts down each row of the animals' table, and with "creature-remove" it removes a wild creature and the creature
+    of a player. Every
     computer must then have the same checksums: net_check compares them for each turn. Returns what each step sent."""
     editor = pids[0]
     done = {"case": case, "sent": []}
@@ -1417,8 +1486,260 @@ def editor_desync(pids, case):
                 time.sleep(1.0)
             turn = inspector_answer(editor, "editor.network_edit", {"params": {
                 "kind": "turn", "id": thing["id"], "radians": 0.9}})
-            done["sent"].append({kind: thing["id"], "moves": moves, "turn": turn})
             time.sleep(1.0)
+            # The thing grows, then becomes small, as the scale field of the entity panel sends it
+            scales = []
+            for scale in (1.75, 0.6):
+                scales.append(inspector_answer(editor, "editor.network_edit", {"params": {
+                    "kind": "scale", "id": thing["id"], "scale": scale}}))
+                time.sleep(1.0)
+            done["sent"].append({kind: thing["id"], "moves": moves, "turn": turn, "scales": scales})
+            if kind == "Villager":
+                # Each field of the villager changes, as the villager section of the entity panel sends it
+                fields = []
+                for field, values in (("life", {"amount": 0.4}), ("food", {"amount": 2.5}), ("age", {"number": 50}),
+                                      ("sex", {"number": 1}), ("state", {"index": 1, "number": 1})):
+                    fields.append(inspector_answer(editor, "editor.villager_edit", {"params": dict(
+                        values, id=thing["id"], field=field)}))
+                    time.sleep(0.5)
+                done["sent"].append({"villager_fields": fields})
+            time.sleep(1.0)
+    if case in ("spawn", "all"):
+        # The creature tools put down creatures of three species with other sizes and bodies, then one grows
+        made = []
+        for index, (species, scale) in enumerate(((4, 1.5), (13, 0.8), (17, 2.0))):
+            made.append(inspector_answer(editor, "editor.creature_spawn", {"params": {
+                "species": species, "position": [focus[0] + 20.0 * index, focus[2] + 15.0], "owner": index % 2,
+                "radians": 0.5 * index, "scale": scale, "alignment": -0.5 + 0.5 * index, "fatness": 0.3,
+                "strength": 0.7}}))
+            time.sleep(1.0)
+        done["sent"].append({"spawns": made})
+    if case in ("animals", "all"):
+        done["animals"] = editor_animals(pids, focus)
+    if case in ("mind", "all"):
+        done["mind"] = editor_mind(pids, focus, mind_files or [])
+        if done["mind"].get("errors"):
+            done.setdefault("errors", []).extend(done["mind"]["errors"])
+    if case in ("creature-remove", "all"):
+        done["creature_remove"] = editor_creature_remove(pids, focus)
+        if done["creature_remove"].get("error"):
+            done.setdefault("errors", []).append(done["creature_remove"]["error"])
+    if case in ("history", "all"):
+        done["history"] = editor_history(pids, focus)
+        for error in done["history"].get("errors", []):
+            done.setdefault("errors", []).append(error)
+    if case in ("land", "all"):
+        # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
+        # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
+        # the same: the checksum of each turn has the digest of the altitudes and the countries.
+        x, z = focus[0], focus[2]
+        strokes = []
+        for mode, offset, extra in (("raise", 0.0, {}), ("raise", 20.0, {"step": 8}), ("lower", -40.0, {}),
+                                    ("paint", 0.0, {"country": 1, "outer": 50.0})):
+            strokes.append(inspector_answer(editor, "editor.land_stroke", {"params": dict(
+                extra, mode=mode, position=[x + offset, z])}))
+            time.sleep(0.5)
+        # The time of the last frame of each client while the strokes of the drag come (100 frames a second is 10 ms)
+        frames = [[] for _ in pids]
+        for step in range(8):
+            strokes.append(inspector_answer(editor, "editor.land_stroke", {"params": {
+                "mode": "raise", "position": [x + step * 10.0, z + 40.0], "inner": 5.0, "outer": 15.0}}))
+            time.sleep(0.12)
+            for index, pid in enumerate(pids):
+                frame = inspector_answer(pid, "engine.frame", {})
+                if isinstance(frame, dict) and "frame_ms" in frame:
+                    frames[index].append(round(frame["frame_ms"], 2))
+        done["drag_frame_ms"] = frames
+        time.sleep(1.0)
+        paths = [inspector_answer(editor, "editor.path", {"params": {
+                     "kind": "footpath", "points": [[x - 30.0, z - 30.0], [x, z - 50.0], [x + 30.0, z - 30.0]]}}),
+                 inspector_answer(editor, "editor.path", {"params": {
+                     "kind": "stream", "points": [[x - 60.0, z + 60.0], [x - 20.0, z + 80.0], [x + 20.0, z + 60.0]]}})]
+        for answer in strokes + paths:
+            if isinstance(answer, dict) and answer.get("error"):
+                done.setdefault("errors", []).append(answer["error"])
+        done["sent"].append({"strokes": len(strokes), "paths": paths})
+        time.sleep(1.0)
+        # Both clients show the same hills, the same painted ground and the same paths
+        editor_shots(pids, shots, "land")
+    return done
+
+
+# The kind of the palette for an animal of the land (editor::PlaceKind::Animal)
+ANIMAL_PLACE_KIND = 11
+# The player of a wild creature (PlayerNames::NEUTRAL), and the god of the second client (PlayerNames::PLAYER_TWO)
+NEUTRAL_PLAYER = 7
+SECOND_PLAYER = 1
+
+
+def animal_count(pid):
+    """The turn of the client and the count of its animals, from the record of the game now"""
+    sample = inspector_answer(pid, "sim.sample", {}) or {}
+    return [sample.get("turn"), (sample.get("counts") or {}).get("Animal")] if isinstance(sample, dict) else [None, None]
+
+
+def editor_animals(pids, focus):
+    """The editor puts down each row of the animals' table near the camera, two times. Only the animal kinds of the
+    palette make an animal, on every computer. Returns the rows sent, and the turn and the count of the animals of each
+    client before and after."""
+    editor = pids[0]
+    rows = items_of(inspector_answer(editor, "edit.kinds", {"params": {"kind": "animal"}}))
+    done = {"rows": len(rows), "before": [animal_count(pid) for pid in pids], "sent": 0}
+    for round_index in range(2):
+        for row in rows:
+            answer = inspector_answer(editor, "editor.network_edit", {"params": {
+                "kind": "place", "place_kind": ANIMAL_PLACE_KIND, "place_type": row.get("type", 0),
+                "position": [focus[0] - 40.0 + (row.get("type", 0) % 8) * 10.0,
+                             focus[2] - 20.0 + (row.get("type", 0) // 8) * 10.0 + round_index * 25.0],
+                "radians": 0.4 * round_index}})
+            done["sent"] += 1 if isinstance(answer, dict) and answer.get("sent") else 0
+            time.sleep(0.3)
+    time.sleep(3.0)
+    done["after"] = [animal_count(pid) for pid in pids]
+    return done
+
+
+def editor_creature_remove(pids, focus):
+    """The editor removes a wild creature and the creature of a player. When the land has no such creature, the
+    creature tools put one down first: a creature of the second god, and a creature of no god. Every client must then
+    have neither creature. Returns what each step sent."""
+    editor = pids[0]
+
+    def creatures():
+        return [item["id"] for item in items_of(inspector_answer(editor, "objects.find", {"params": {
+            "near": [focus[0], focus[2]], "radius": 6000.0, "kind": "Creature", "limit": 64}}))]
+
+    def primaries():
+        players = items_of(inspector_answer(editor, "players.list", {}))
+        return {item.get("primary_creature") for item in players
+                if isinstance(item.get("primary_creature"), int) and item.get("primary_creature") > 0}
+
+    def spawn(owner, offset):
+        """Puts down a creature of the owner with the creature tools. Returns its id, or None."""
+        before = set(creatures())
+        done.setdefault("spawns", []).append(inspector_answer(editor, "editor.creature_spawn", {"params": {
+            "species": 4, "position": [focus[0] + offset, focus[2] - 25.0], "owner": owner}}))
+        made = wait_for(lambda: [creature for creature in creatures() if creature not in before], 10.0) or []
+        return made[0] if made else None
+
+    done = {}
+    owned = primaries()
+    done["player_creatures"] = sorted(owned)
+    player_creature = sorted(owned)[-1] if owned else spawn(SECOND_PLAYER, 25.0)
+    wild = [creature for creature in creatures() if creature not in owned and creature != player_creature]
+    wild_creature = wild[0] if wild else spawn(NEUTRAL_PLAYER, -25.0)
+    if wild_creature is None or player_creature is None:
+        done["error"] = f"no wild creature ({wild_creature}) or no creature of a player ({player_creature})"
+        return done
+    targets = [wild_creature, player_creature]
+    done["removed"] = targets
+    done["answers"] = []
+    for creature in targets:
+        done["answers"].append(inspector_answer(editor, "editor.network_edit", {"params": {
+            "kind": "remove", "id": creature}}))
+        time.sleep(1.0)
+    time.sleep(3.0)
+    done["left"] = []
+    for pid in pids:
+        found = {item["id"] for item in items_of(inspector_answer(pid, "objects.find", {"params": {
+            "near": [focus[0], focus[2]], "radius": 6000.0, "kind": "Creature", "limit": 64}}))}
+        done["left"].append(sorted(found & set(targets)))
+    if any(done["left"]):
+        done["error"] = f"a client still has a removed creature: {done['left']}"
+    return done
+
+
+# The kind of the palette for a tree (editor::PlaceKind::Tree)
+TREE_PLACE_KIND = 3
+
+
+def editor_history(pids, focus):
+    """The editor undoes and redoes each kind of change in a network game, through its own history: a placement, a
+    move, a turn, a removal and a copy of a creature. Each undo and redo goes as a command of the turns, and the answer
+    of the turn gives the history the thing or the pose. Every computer must then have the same checksums. Returns
+    what each step did."""
+    editor = pids[0]
+    done = {"steps": []}
+
+    def idle():
+        """Waits until the history has the answer of each request"""
+        return wait_for(lambda: not (inspector_answer(editor, "view.editor", {}) or {}).get("waiting", True), 15.0)
+
+    def act(params):
+        answer = inspector_answer(editor, "editor.act", {"params": params})
+        done["steps"].append({"act": params.get("act"), "answer": answer})
+        if not isinstance(answer, dict) or answer.get("error"):
+            done.setdefault("errors", []).append(f"{params.get('act')}: {answer}")
+        if not idle():
+            done.setdefault("errors", []).append(f"{params.get('act')}: the history still waits")
+        time.sleep(0.5)
+        return answer if isinstance(answer, dict) else {}
+
+    def pose(pid, thing):
+        """The place, the turn and the scale of a thing on a client, as text to compare"""
+        found = inspector_answer(pid, "ecs.entity", {"params": {"id": thing, "components": ["Transform"]}}) or {}
+        if not isinstance(found, dict):
+            return None
+        return json.dumps(found.get("components") or found.get("position"), sort_keys=True)
+
+    def creatures(pid):
+        return sorted(item["id"] for item in items_of(inspector_answer(pid, "objects.find", {"params": {
+            "near": [focus[0], focus[2]], "radius": 6000.0, "kind": "Creature", "limit": 64}})))
+
+    # A placement, then its undo and its redo
+    act({"act": "place", "place_kind": TREE_PLACE_KIND, "place_type": 1, "position": [focus[0] + 30.0, focus[2]]})
+    act({"act": "undo"})
+    act({"act": "redo"})
+    # A move and a turn of a tree of the land, then the undo of both and the redo of both
+    trees = items_of(inspector_answer(editor, "objects.find", {"params": {
+        "near": [focus[0], focus[2]], "radius": 3000.0, "kind": "Tree", "limit": 1}}))
+    if not trees:
+        done.setdefault("errors", []).append(f"no tree near the camera at {focus}")
+        return done
+    tree = trees[0]["id"]
+    done["tree"] = tree
+    before = pose(editor, tree)
+    act({"act": "move", "ids": [tree], "offset": [6.0, 4.0]})
+    act({"act": "turn", "ids": [tree], "radians": 0.8})
+    moved = pose(editor, tree)
+    act({"act": "undo"})
+    act({"act": "undo"})
+    back = [pose(pid, tree) for pid in pids]
+    done["pose_back"] = all(item == before for item in back)
+    if not done["pose_back"]:
+        done.setdefault("errors", []).append(f"the undo did not put back the pose: {before} -> {back}")
+    act({"act": "redo"})
+    act({"act": "redo"})
+    again = [pose(pid, tree) for pid in pids]
+    done["pose_again"] = all(item == moved for item in again)
+    if not done["pose_again"]:
+        done.setdefault("errors", []).append(f"the redo did not give the pose again: {moved} -> {again}")
+    # A removal, its undo (the tree comes again from its recipe), its redo and the undo again
+    act({"act": "delete", "ids": [tree]})
+    act({"act": "undo"})
+    act({"act": "redo"})
+    act({"act": "undo"})
+    # A copy of a creature, with its body, then the undo and the redo of the copy
+    start = creatures(editor)
+    inspector_answer(editor, "editor.creature_spawn", {"params": {
+        "species": 5, "position": [focus[0] - 30.0, focus[2] + 20.0], "owner": NEUTRAL_PLAYER, "scale": 1.4,
+        "alignment": 0.5, "fatness": 0.2, "strength": 0.9}})
+    made = wait_for(lambda: [item for item in creatures(editor) if item not in start], 10.0) or []
+    if not made:
+        done.setdefault("errors", []).append("the creature tools made no creature")
+        return done
+    creature = made[0]
+    act({"act": "duplicate", "ids": [creature]})
+    copies = [item for item in creatures(editor) if item not in start and item != creature]
+    done["creature_copy"] = copies
+    if not copies:
+        done.setdefault("errors", []).append("the copy of the creature did not come")
+    act({"act": "undo"})
+    act({"act": "redo"})
+    time.sleep(2.0)
+    done["creatures"] = [creatures(pid) for pid in pids]
+    if any(item != done["creatures"][0] for item in done["creatures"]):
+        done.setdefault("errors", []).append(f"the clients have other creatures: {done['creatures']}")
     return done
 
 
@@ -2308,13 +2629,25 @@ def main():
                              "--hold-after turns "
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
-    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "all"),
+    parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
+                                                    "creature-remove", "land", "history", "mind", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
-                             "camera (creature), or moves and turns a building, a tree, a feature and a villager "
-                             "(objects), or all of them; every computer must keep the same checksums")
+                             "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
+                             "and changes the fields of the villager (objects), or puts down creatures with the creature "
+                             "tools (spawn), or puts down each row of the animals' table two times (animals), or "
+                             "removes a wild creature and the creature of a player (creature-remove), or raises, "
+                             "lowers and paints the land and draws a footpath and a stream (land), or undoes and redoes "
+                             "a placement, a move, a turn, a removal and a copy of a creature (history), or makes "
+                             "creatures from mind files and loads mind files into the creatures near the camera "
+                             "(mind), or all of them; "
+                             "every computer must keep the same checksums")
+    parser.add_argument("--mind-files", nargs="+", metavar="FILE",
+                        help="with --editor-desync mind: the mind files that the first client opens (the default is "
+                             "the two saved creatures of Scripts/CreatureMind of the game folder)")
     parser.add_argument("--editor-shots", metavar="FOLDER",
-                        help="with --editor-check: screenshots of both clients at each step, and of the move in steps")
+                        help="with --editor-check: screenshots of both clients at each step, and of the move in steps; "
+                             "with --editor-desync land: screenshots of both clients after the strokes and the paths")
     parser.add_argument("--forest-camera", action="store_true",
                         help="the first client casts the forest once both clients compared --hold-after turns (with "
                              "--scenario, the scenario casts it): only the camera of the first client may follow the "
@@ -2831,7 +3164,8 @@ def main():
                                                   cast=not options.scenario)
             if (options.editor_desync and editor_desync_done is None and clients and clients[0].poll() is None
                     and reached_turn(os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
-                editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync)
+                editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync,
+                                                   options.editor_shots, mind_files(options))
                 print(f"editor desync: {json.dumps(editor_desync_done)[:400]}")
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
@@ -2961,8 +3295,16 @@ def main():
         if server_end and not left and not decided_after_run and client_end != server_end:
             print(f"client {index + 1} tells another end of the game than the server: {client_end} against {server_end}")
             different = different + [-3]
+        # The compares of the turns between the part on purpose and the world that the client went on from differ; they
+        # are the gap, and the client is judged on its turns after it
+        gap = purposeful_part_gap(session_parts, recovery_turns(recovered), options.part_second_at) if parted_on_purpose else None
+        allowed_differing = differing_compares_allowed(parted_on_purpose, gap)
+        if gap and counts is not None:
+            print(f"client {index + 1} was apart from the server from turn {gap[0]} to its world of turn {gap[1]} "
+                  f"({gap[2]} turns, not counted as a difference); it differs in {counts[0] - counts[1]} compares of "
+                  f"{counts[0]}")
         same = (not different and enough and counts is not None
-                and (counts[0] - counts[1] <= (PURPOSEFUL_PART_COMPARES if parted_on_purpose else 0))
+                and (counts[0] - counts[1] <= allowed_differing)
                 and (left or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         draws = None
@@ -2980,6 +3322,7 @@ def main():
                                   ["The end box opens", "The end box asks", "leaves the network game"])[-3:],
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
             "recovered": recovered[-1:] if recovered else [],
+            "gap_turns": gap[2] if gap else None, "gap_from": gap[0] if gap else None, "gap_back_at": gap[1] if gap else None,
             "different": different[:20], "same": same, "parts_against_server": parts, "draws_against_server": draws,
             "rows_against_server": rows_against_server(server_dir, client_dir) if options.row_dump else None,
             "session": lines_with(os.path.join(client_dir, "client.log"),
@@ -3062,6 +3405,12 @@ def main():
             print(f"the forest camera check did not pass: {json.dumps(forest_done)[:2000]}")
     if options.editor_desync:
         summary["editor_desync"] = editor_desync_done
+        if options.editor_desync in ("mind", "all"):
+            summary["mind_loads"] = mind_load_lines(
+                server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
+            if not summary["mind_loads"]["same"]:
+                print(f"the mind loads differ or did not come: {json.dumps(summary['mind_loads'])[:2000]}")
+                all_same = False
         if editor_desync_done is None or editor_desync_done.get("error"):
             print(f"the editor desync check did not run: {editor_desync_done}")
             all_same = False

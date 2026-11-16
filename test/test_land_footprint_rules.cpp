@@ -100,6 +100,27 @@ TEST(LandFootprintRules, ThingsWithoutFootprintsAreLeftOut)
 	EXPECT_EQ(things, (std::vector {Thing(1), Thing(3)}));
 }
 
+TEST(LandFootprintRules, ABuildingThatGoesFromTheCellsPaintsNoMoreAndItsNewSitePaintsAgain)
+{
+	FakeCells fixed;
+	FakeCells mobile;
+	// A burning hut stands in two cells beside a hut that stays
+	fixed.Put({2, 2}, {Thing(1), Thing(2)});
+	fixed.Put({2, 3}, {Thing(1)});
+	EXPECT_EQ(land_footprints::ThingsOverBlock({0, 0}, fixed.List(), mobile.List(), AllHaveFootprints),
+	          (std::vector {Thing(1), Thing(2)}));
+	// The hut burns down and goes from its cells: the block takes only the hut that stays
+	fixed.Put({2, 2}, {Thing(2)});
+	fixed.Put({2, 3}, {});
+	EXPECT_EQ(land_footprints::ThingsOverBlock({0, 0}, fixed.List(), mobile.List(), AllHaveFootprints),
+	          (std::vector {Thing(2)}));
+	// The town puts up a new site with nothing built at the same place: the site is in the cells, so it paints again
+	fixed.Put({2, 2}, {Thing(2), Thing(3)});
+	fixed.Put({2, 3}, {Thing(3)});
+	EXPECT_EQ(land_footprints::ThingsOverBlock({0, 0}, fixed.List(), mobile.List(), AllHaveFootprints),
+	          (std::vector {Thing(2), Thing(3)}));
+}
+
 TEST(LandFootprintRules, TheLastBlocksTakeNoCellsBeyondTheMap)
 {
 	FakeCells fixed;

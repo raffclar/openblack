@@ -388,6 +388,29 @@ TEST(CreatureObjectActions, AThingLeftOutOfSightByAStoppedEatIsSwallowedOrFalls)
 	EXPECT_EQ(EatenThingEndFor(true, false), EatenThingEnd::Fall);
 }
 
+TEST(CreatureObjectActions, AHeldPersonOrAnimalIsLostFromTheHandWhenTheCreatureSwallowsOtherFood)
+{
+	using creature_object_actions::HeldAtOtherMeal;
+	using creature_object_actions::HeldAtOtherMealFor;
+	// A person or an animal stays in the world, out of the map and out of sight
+	EXPECT_EQ(HeldAtOtherMealFor(true), HeldAtOtherMeal::LostFromHand);
+	// A thing that is not alive goes
+	EXPECT_EQ(HeldAtOtherMealFor(false), HeldAtOtherMeal::Goes);
+}
+
+TEST(CreatureObjectActions, APlanThatNamesOtherFoodSwallowsTheNamedThing)
+{
+	using creature_object_actions::SwallowsOtherMeal;
+	// It holds a person, an animal or a thing that is not alive, and the plan names another thing
+	EXPECT_TRUE(SwallowsOtherMeal({.holds = true, .namedThingExists = true}));
+	// It holds the named thing, it holds nothing, or the named thing is gone: the usual eat
+	EXPECT_FALSE(SwallowsOtherMeal({.holds = true, .holdsNamedThing = true, .namedThingExists = true}));
+	EXPECT_FALSE(SwallowsOtherMeal({.namedThingExists = true}));
+	EXPECT_FALSE(SwallowsOtherMeal({.holds = true}));
+	// A held creature is eaten as it is
+	EXPECT_FALSE(SwallowsOtherMeal({.holds = true, .namedThingExists = true, .heldIsCreature = true}));
+}
+
 TEST(CreatureObjectActions, ACreatureBringsBackUpWhatCantBeEaten)
 {
 	EXPECT_FALSE(creature_object_actions::BringsBackUp(false, false));

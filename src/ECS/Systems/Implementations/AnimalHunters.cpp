@@ -186,16 +186,6 @@ void AnimalSystem::Fed(entt::entity hunter, Animal& animal)
 	}
 }
 
-bool AnimalSystem::IsHungry(entt::entity hunter, const Animal& animal) const
-{
-	const auto limit = static_cast<int32_t>(InfoOf(animal.type).hunger);
-	if (const auto* wild = EntityRegistry().TryGet<const Hunter>(hunter))
-	{
-		return limit != 0 && limit <= wild->needs.hunger;
-	}
-	return animal.hunger >= limit;
-}
-
 void AnimalSystem::SetHunterSpeed(entt::entity hunter, Animal& animal, size_t speed)
 {
 	// A spell wolf keeps the speed of its run

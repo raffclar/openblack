@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <map>
 #include <mutex>
@@ -27,6 +28,7 @@
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
@@ -677,6 +679,10 @@ void SimProvider::TurnEnded(uint32_t turn)
 	{
 		synced.music = Locator::scriptMusicSystem::value().GetMusic().SyncedValues();
 	}
+	if (Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded())
+	{
+		synced.land = Locator::terrainSystem::value().LandDigest();
+	}
 	if (Locator::gameRandom::has_value())
 	{
 		const auto& random = Locator::gameRandom::value();
@@ -734,6 +740,13 @@ void SimProvider::AddHash(Synced& synced, const synced_state::Hash& hash)
 	{
 		value["script_music"] = *synced.music;
 		stateHash = synced_state::MixValues(stateHash, *synced.music);
+	}
+	// The land is synced too, as the checksum of the turn mixes it
+	if (synced.land.has_value())
+	{
+		value["land"] = fmt::format("{:016x}", *synced.land);
+		const std::array land {static_cast<int64_t>(*synced.land)};
+		stateHash = synced_state::MixValues(stateHash, land);
 	}
 	if (synced.random.has_value())
 	{

@@ -19,6 +19,9 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/DebugCheats.h"
+#include "Editor/EditorCreatureEdits.h"
+#include "Editor/EditorLandEdits.h"
+#include "Editor/EditorNetworkEdits.h"
 #include "Gui/TextDatabase.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameBuildId.h"
@@ -444,6 +447,10 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	else if (const auto* chat = std::get_if<game_socket::RoomChat>(&*frame))
 	{
 		ChatInRoom(connection, peer, *chat);
+	}
+	else if (const auto* mind = std::get_if<game_socket::EditorMindFile>(&*frame))
+	{
+		EditorMindFileFrom(connection, peer, *mind);
 	}
 	else if (const auto* parts = std::get_if<game_socket::SyncParts>(&*frame))
 	{
@@ -970,6 +977,8 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 
 void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
 {
+	// A kept turn can hold a mind load of the editor: its file goes first
+	SendEditorMindFiles(connection);
 	for (auto turn = _history.lower_bound(from); turn != _history.end(); ++turn)
 	{
 		_sockets.SendBinary(connection, turn->second);
@@ -1065,6 +1074,19 @@ std::vector<uint8_t> LockstepHost::ObserverNumbers() const
 void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& peer,
                                         std::vector<player_commands::Action>& actions)
 {
+	// A network game has no lands of the story. Thus the server refuses each skip to a land of the story, also from a player
+	// with the editor claim.
+	const auto refusedSkips =
+	    std::erase_if(actions, [](const auto& action) { return player_commands::ServerAlwaysRefuses(action); });
+	if (refusedSkips > 0)
+	{
+		_refusedEditorCommands += static_cast<uint32_t>(refusedSkips);
+		Log(spdlog::level::warn,
+		    fmt::format("The server refuses {} skips to a land of the story of {}: a network game has none", refusedSkips,
+		                peer.name));
+		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoStoryLands),
+		                                                .commands = static_cast<uint32_t>(refusedSkips)});
+	}
 	// The server refuses the edits of the editor and the debug cheats of a player with no editor claim. No turn holds them,
 	// so the other players do not get them. The log tells each refusal, and the player gets the reason.
 	const auto refused = std::erase_if(
@@ -1078,6 +1100,47 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoEditorClaim),
 		                                                .commands = static_cast<uint32_t>(refused)});
 	}
+	// The server also refuses an edit of the editor with a value that no computer takes, such as a scale out of the range
+	// of the editor. The editor of the game does not send such an edit, so the player gets no line. The log tells each one.
+	const auto badValue = std::erase_if(actions, [this, &peer](const auto& action) {
+		std::optional<std::string_view> refusal;
+		if (const auto* edit = std::get_if<player_commands::EditorEdit>(&action))
+		{
+			refusal = editor::EditRefusal(*edit);
+		}
+		else if (const auto* spawn = std::get_if<player_commands::EditorCreatureSpawn>(&action))
+		{
+			refusal = editor::CreatureSpawnRefusal(*spawn);
+		}
+		else if (const auto* villager = std::get_if<player_commands::EditorVillagerEdit>(&action))
+		{
+			refusal = editor::VillagerEditRefusal(*villager);
+		}
+		else if (const auto* stroke = std::get_if<player_commands::EditorLandStroke>(&action))
+		{
+			refusal = editor::land_edits::LandStrokeRefusal(*stroke, _settings.landCountries ? _settings.landCountries()
+			                                                                                 : std::optional<int> {});
+		}
+		else if (const auto* path = std::get_if<player_commands::EditorPath>(&action))
+		{
+			refusal = editor::land_edits::PathRefusal(*path);
+		}
+		else if (const auto* remake = std::get_if<player_commands::EditorRemake>(&action))
+		{
+			refusal = editor::RemakeRefusal(*remake);
+		}
+		else if (const auto* load = std::get_if<player_commands::EditorMindLoad>(&action))
+		{
+			// The file came on the game socket before the block, so the server keeps it now
+			refusal = editor::mind_loads::MindLoadRefusal(*load, !_mindFiles.Find(load->file).empty());
+		}
+		if (refusal.has_value())
+		{
+			Log(spdlog::level::warn, fmt::format("The server refuses an edit of the editor of {}: {}", peer.name, *refusal));
+		}
+		return refusal.has_value();
+	});
+	_refusedEditorValues += static_cast<uint32_t>(badValue);
 }
 
 void LockstepHost::LogDebugCheats(const Peer& peer, const std::vector<player_commands::Action>& actions)
@@ -1215,6 +1278,8 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 		return false;
 	}
 	SendTo(connection, game_socket::Resumed {.turn = _turnsDone, .world = true});
+	// The turns after the world can hold a mind load of the editor: the files go first
+	SendEditorMindFiles(connection);
 	size_t parts = 0;
 	size_t refused = 0;
 	for (const auto& part : turn_codec::SplitWorld(_turnsDone, state))
@@ -1733,6 +1798,63 @@ void LockstepHost::StartCreature(ConnectionId connection, const Peer& peer, cons
 	}
 }
 
+void LockstepHost::EditorMindFileFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorMindFile& mind)
+{
+	if (!peer.joined || !_started)
+	{
+		Log(spdlog::level::warn,
+		    fmt::format("Connection {} sends a mind file of the editor out of a game: the server does not take it",
+		                connection));
+		return;
+	}
+	// Only a player with the editor claim sends a mind file, as only that player sends the command that uses it
+	if (!peer.editor)
+	{
+		++_refusedEditorCommands;
+		Log(spdlog::level::warn,
+		    fmt::format("The server refuses a mind file of {}: the join ticket has no editor claim", peer.name));
+		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoEditorClaim), .commands = 1});
+		return;
+	}
+	// No computer loads a mind from a file that does not read, so the server does not send such a file
+	if (_settings.readsMindFile && !_settings.readsMindFile(mind.file))
+	{
+		++_refusedEditorValues;
+		Log(spdlog::level::warn, fmt::format("The server refuses a mind file of {} bytes of {}: the file does not read",
+		                                     mind.file.size(), peer.name));
+		return;
+	}
+	const auto size = mind.file.size();
+	const auto [added, hash] = _mindFiles.Add(mind.file);
+	switch (added)
+	{
+	case editor::mind_loads::MindFileStore::Added::New:
+		Log(spdlog::level::info,
+		    fmt::format("The server keeps a mind file of the editor of {} bytes (hash {:016x}) of {} and sends it to every "
+		                "player",
+		                size, hash, peer.name));
+		Broadcast(mind);
+		break;
+	case editor::mind_loads::MindFileStore::Added::Known:
+		// Every player got the file when it came first, or when the player came back
+		Log(spdlog::level::info, fmt::format("The server keeps the mind file {:016x} of {} from before", hash, peer.name));
+		break;
+	case editor::mind_loads::MindFileStore::Added::Refused:
+		++_refusedEditorValues;
+		Log(spdlog::level::warn, fmt::format("The server refuses a mind file of {}: it keeps the most files ({})", peer.name,
+		                                     editor::mind_loads::k_MostKeptFiles));
+		break;
+	}
+}
+
+void LockstepHost::SendEditorMindFiles(ConnectionId connection)
+{
+	for (const auto& [hash, file] : _mindFiles.Files())
+	{
+		SendTo(connection, game_socket::EditorMindFile {.file = file});
+	}
+}
+
 void LockstepHost::StartGame()
 {
 	_startStep = StartStep::None;
@@ -2221,7 +2343,8 @@ snapshots::Room LockstepHost::RoomRecord() const
 		room.seats.push_back({.state = static_cast<uint8_t>(seat.state),
 		                      .session = seat.sessionHash,
 		                      .account = seat.account,
-		                      .name = seat.name});
+		                      .name = seat.name,
+		                      .editor = seat.editor});
 	}
 	for (const auto& watcher : _watchers)
 	{
@@ -2230,6 +2353,7 @@ snapshots::Room LockstepHost::RoomRecord() const
 			room.watchers.push_back(*watcher.sessionHash);
 			room.watcherNames.push_back(watcher.name);
 			room.watcherNumbers.push_back(watcher.number);
+			room.watcherEditors.push_back(watcher.editor);
 		}
 	}
 	for (const auto& [number, name] : _observerArrivals)
@@ -2299,7 +2423,7 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                  .lastBlockInTurn = std::nullopt,
 		                  .blocksAgain = 0,
 		                  .refusedBlocks = 0,
-		                  .editor = false};
+		                  .editor = saved.editor};
 		// The server takes only the blocks after the last block that the sent turns hold
 		if (const auto last = blocks.find(static_cast<uint8_t>(i)); last != blocks.end())
 		{
@@ -2345,7 +2469,7 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                             .resumes = 0,
 		                             .name = std::move(name),
 		                             .number = number,
-		                             .editor = false});
+		                             .editor = i < room.watcherEditors.size() && room.watcherEditors[i]});
 	}
 	// The server takes only the blocks of each observer after the last block that the sent turns hold
 	for (const auto& [key, sequence] : blocks)

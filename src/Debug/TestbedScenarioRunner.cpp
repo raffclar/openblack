@@ -74,6 +74,8 @@
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Reward.h"
@@ -107,6 +109,7 @@
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -166,6 +169,7 @@
 #include "TestbedDispenserGrid.h"
 #include "TestbedScenarioRunnerParts.h"
 #include "Visual/RendererRequestsInterface.h"
+#include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
@@ -421,6 +425,12 @@ void Runner::Start(const Scenario& scenario)
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
+	// The pointer starts in the middle of the window, not in its corner. A scenario that puts a leash on before it moves
+	// the pointer then does not make a creature walk to a far point of the land.
+	if (_stage != nullptr && Locator::windowing::has_value())
+	{
+		_stage->SetMousePosition(Locator::windowing::value().GetSize() / 2);
+	}
 	// A network game fills its empty slots after the land script. The temples of the scenario must stand first.
 	if (scenario.fillEmptySlots && Locator::computerPlayerSystem::has_value())
 	{
@@ -1450,6 +1460,40 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const bool inInfluence =
 		    Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, transform->position);
 		return inInfluence && Locator::handGrabSystem::value().WhyNotTake(*object).empty() ? 1.0 : 0.0;
+	}
+	case checks::Quantity::CreatureLessonsTold:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value() || !Locator::creatureHelpSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& told = Locator::creatureHelpSystem::value().GetTold();
+		return static_cast<double>(std::ranges::count_if(told, [&creature](const auto& message) {
+			return message.creature == *creature && message.text.has_value() && creature_help::IsFeedbackLesson(message.kind);
+		}));
+	}
+	case checks::Quantity::FootprintsNear:
+	{
+		if (!Locator::resources::has_value())
+		{
+			return std::nullopt;
+		}
+		// The land paints the footprint of a thing only while the thing is in the map's cells
+		const auto& meshes = Locator::resources::value().GetMeshes();
+		const auto point = MapPoint(_middle, check.point);
+		size_t near = 0;
+		registry.Each<const ecs::components::MapCellResident, const ecs::components::Mesh, const ecs::components::Transform>(
+		    [&](const ecs::components::MapCellResident& /*resident*/, const ecs::components::Mesh& mesh,
+		        const ecs::components::Transform& transform) {
+			    if (glm::distance(glm::xz(transform.position), point) > check.radius || !meshes.Contains(mesh.id))
+			    {
+				    return;
+			    }
+			    const auto model = meshes.Handle(mesh.id);
+			    near += model && model->GetGroundFootprint() != nullptr ? 1 : 0;
+		    });
+		return static_cast<double>(near);
 	}
 	}
 	return std::nullopt;

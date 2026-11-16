@@ -65,6 +65,12 @@ enum class RoomPhase : uint8_t
 	Ended,
 };
 
+/// The room has a game server for its game. The player can get a ticket for that game.
+[[nodiscard]] constexpr bool HasGameServer(RoomPhase phase) noexcept
+{
+	return phase == RoomPhase::Assigned || phase == RoomPhase::InGame;
+}
+
 /// Why the player is not in the lobby now
 enum class EndReason : uint8_t
 {
@@ -247,8 +253,6 @@ public:
 	void Tick(int64_t nowMs);
 	/// Uses a new snapshot of the lobby, after the push channel lost events. The lines stay.
 	void Reload(lobby_api::Lobby lobby);
-	/// Uses the answer of a change of the member of the player
-	void ApplyOwnMember(lobby_api::LobbyMember member);
 	/// Uses the answer of the start of the host
 	void ApplyStart(const lobby_api::StartReply& reply);
 	/// The player is not in the lobby now

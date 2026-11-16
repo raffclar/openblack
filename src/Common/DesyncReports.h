@@ -145,6 +145,9 @@ public:
 	void Detected(uint8_t source, const DesyncFacts& facts, int64_t nowMilliseconds);
 	/// The names of the parts that differ for the desync of the source that waits. Nothing when no desync waits.
 	void Parted(uint8_t source, std::span<const std::string> parts, int64_t nowMilliseconds);
+	/// The server told the id of the game in the lobby. The events that go after this call carry it in place of the
+	/// own id of the client. An empty id changes nothing, so a server with no lobby id keeps the own id.
+	void AdoptGame(std::string_view game);
 	/// The event of a new key waits up to k_DesyncDetailWaitMilliseconds for the detail of its capture. Off by default.
 	void SetDetailWait(bool wait) noexcept { _detailWait = wait; }
 	/// The detail of the capture of the last desync of the source. It goes with the event of that desync when the event

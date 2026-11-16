@@ -86,8 +86,12 @@ struct Corner
 };
 /// The meshes for a size and an alignment, each from 0 to 1, and their weights
 [[nodiscard]] std::array<Corner, 4> Corners(float size, float alignment);
+/// Adds each value of the source, times the weight, to the value at the same place in the sum
+void AddWeighted(std::span<float> sum, std::span<const float> source, float weight);
 /// The name of a size's and stage's mesh
 [[nodiscard]] std::string MeshName(uint32_t size, uint32_t stage);
+/// The id in the cache of the file of a size's and stage's mesh, the hash of "temple/" and its name
+[[nodiscard]] uint32_t CornerMeshId(uint32_t size, uint32_t stage);
 
 /// The name in the cache of the own mesh of the temple with this entity number
 [[nodiscard]] std::string OwnMeshName(uint32_t temple);
@@ -109,6 +113,8 @@ struct TextureBlend
 	Look from;
 	Look to;
 	uint8_t weight;
+
+	bool operator==(const TextureBlend&) const = default;
 };
 [[nodiscard]] TextureBlend TextureOf(float alignment);
 /// The name of a look's image of one of the four sets of textures

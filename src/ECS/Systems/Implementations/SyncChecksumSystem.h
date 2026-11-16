@@ -96,6 +96,8 @@ private:
 		uint32_t seed {0};
 		uint64_t draws {0};
 		std::optional<std::array<int64_t, 5>> music;
+		/// The digest of the altitudes and the countries of the land, when a land is open
+		std::optional<uint64_t> land;
 	};
 	[[nodiscard]] WorkerPool& Pool();
 	/// Makes the checksum of the turn from the hash of its world, and gives it to the listeners

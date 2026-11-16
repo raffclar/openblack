@@ -38,12 +38,13 @@ public:
 	/// thing under the click.
 	void PressAt(EditorContext& context, std::optional<glm::vec3> land, std::optional<entt::entity> picked) noexcept;
 	/// The land tool's drag: another stroke each time the mouse moves far enough over the land
-	void DragTo(std::optional<glm::vec3> land) noexcept;
+	void DragTo(const EditorContext& context, std::optional<glm::vec3> land) noexcept;
 	/// Draws the brush's circles round the point of the land under the mouse, the path being drawn and the scripts'
 	/// markers, which the game does not draw
 	void DrawOverlays(const EditorContext& context, std::optional<glm::vec3> mouseLand) const noexcept;
 
-	/// The path being drawn ends and becomes a footpath or a stream on the land
+	/// The path being drawn ends and becomes a footpath or a stream on the land. In a network game the path goes as a
+	/// command of the turns.
 	void FinishPath(EditorContext& context) noexcept;
 
 	/// The brush is the editor's, so that the land script can set it
@@ -64,7 +65,8 @@ public:
 	std::string LoadWorld(EditorContext& context) noexcept;
 
 private:
-	void Stroke(glm::vec2 centre) noexcept;
+	/// A stroke of the brush at a point on the land. In a network game the stroke goes as a command of the turns.
+	void Stroke(const EditorContext& context, glm::vec2 centre) noexcept;
 	/// The Yes and No dialog that stands before a save over existing files
 	void DrawConfirmation(EditorContext& context) noexcept;
 

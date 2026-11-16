@@ -157,8 +157,3 @@ void StaffQuestionBox::Draw(const DialogPainter& painter) const
 	_dialog.Draw(painter, true);
 	painter.SetAlpha(1.0f);
 }
-
-std::vector<Dialog::NamedControl> StaffQuestionBox::GetNamedControls() const
-{
-	return _question.has_value() ? _dialog.GetNamedControls() : std::vector<Dialog::NamedControl> {};
-}

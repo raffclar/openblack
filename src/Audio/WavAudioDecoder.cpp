@@ -31,16 +31,3 @@ void WavAudioDecoder::Read(std::vector<int16_t>& buffer)
 	buffer.resize(static_cast<size_t>(frameCount * _wav.channels));
 	[[maybe_unused]] auto framesRead = drwav_read_pcm_frames_s16(&_wav, frameCount, buffer.data());
 }
-
-ChannelLayout WavAudioDecoder::GetChannelLayout()
-{
-	switch (_wav.channels)
-	{
-	case 1:
-		return ChannelLayout::Mono;
-	case 2:
-		return ChannelLayout::Stereo;
-	default:
-		throw std::runtime_error("Unsupported channel layout");
-	}
-}

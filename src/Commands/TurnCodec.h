@@ -42,14 +42,32 @@
 ///   characters (u16) and each character as UTF-16 (u16). A taunt has its number (u32) in place of the characters.
 /// - An observer that comes in: the count of the characters of its name (u8), then each character as UTF-16 (u16).
 /// - An edit of the editor: the kind (u8), the thing, the kind of the item (u8), the type of the item (u32), the
-///   challenge (u32), the position and the angle (f32).
+///   challenge (u32), the position, the angle (f32), the scale (f32) and the request (u16). A pose then has the nine
+///   numbers of the turn by columns (f32), 1 when the thing keeps its angles or 0 (u8), the kept angles and the scale of
+///   each axis.
 /// - A debug cheat: the cheat (u8), then 1 for on or 0 for off (u8).
 /// - An edit of a creature by the editor: the creature, the value (u8) and the amount (f32).
+/// - A skip to a land of the story: the land (u8), 2 to 5.
+/// - An edit of a villager by the editor: the villager, the field (u8), the slot of states (u8), the number (u32) and the
+///   amount (f32).
+/// - A new creature of the editor: the species (u8), the owner (u8), the position, the angle, the size, the alignment,
+///   the fatness and the strength (f32), 1 when it has tattoos or 0 (u8), each tattoo as a tattoo command has it, then
+///   the request (u16).
+/// - A stroke of the land brush of the editor: the mode (u8), the inner and the outer radius (f32), the step (u8), the
+///   country (u8), then the x and the z of the middle (f32).
+/// - A path of the editor: the kind (u8), the count of the points (u16), the x and the z of each point (f32), then the
+///   first and the last building.
+/// - A thing that the editor makes again: the request (u16), the kind of the item (u8), the type of the item (u32), the
+///   challenge (u32), the position, the nine numbers of the turn by columns (f32), 1 when the thing keeps its angles or 0
+///   (u8), the kept angles, the scale of each axis, 1 for a creature or 0 (u8), the owner (u8), the mind (u32), then the
+///   size, the alignment, the fatness and the strength (f32).
+/// - A mind file of the editor: the use (u8), the hash of the file (u64), then for a load the creature, or for a new
+///   creature each field as a new creature of the editor has it.
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 36;
+inline constexpr uint8_t k_Version = 41;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -126,6 +144,13 @@ enum class CommandTag : uint8_t
 	DebugCheat = 56,
 	EditorCreatureEdit = 57,
 	EditorCreatureAct = 58,
+	DebugLandSkip = 59,
+	EditorVillagerEdit = 60,
+	EditorCreatureSpawn = 61,
+	EditorLandStroke = 62,
+	EditorPath = 63,
+	EditorRemake = 65,
+	EditorMindLoad = 67,
 };
 
 /// The sizes of the parts of the frames, in bytes
@@ -134,6 +159,9 @@ namespace sizes
 inline constexpr size_t k_Header = 2;
 inline constexpr size_t k_Entity = 4;
 inline constexpr size_t k_Vector = 12;
+/// The fields of a new creature of the editor: the species, the owner, the place, five numbers, the tattoo flag and the
+/// tattoos
+inline constexpr size_t k_CreatureSpawn = 1 + 1 + k_Vector + (5 * 4) + 1 + (5 * creature_tattoo::k_SlotCount);
 /// The sequence, the turn and the count of a block that a client sends
 inline constexpr size_t k_CommandsBody = 7;
 /// The turn and the block count of a turn

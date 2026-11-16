@@ -81,6 +81,16 @@ TEST(CreatureFileLoad, AGodWithNoCitadelBringsNoCreatureFirst)
 	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::NoCitadel);
 }
 
+// The god asks for its creature one time only, at the start. A good file does not wait for a citadel that comes later
+// (vanilla-bugs row 2406, kept).
+TEST(CreatureFileLoad, AGoodFileBringsNoCreatureBeforeTheCitadel)
+{
+	auto request = GoodBrought();
+	request.citadel = false;
+	request.onMap = false;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::NoCitadel);
+}
+
 TEST(CreatureFileLoad, AGodWithNoCreatureFilePlaysWithNoCreature)
 {
 	auto request = GoodBrought();

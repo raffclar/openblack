@@ -684,40 +684,17 @@ size_t L3DSubMesh::PackedSize(const l3d::L3DFile& l3d, uint32_t meshIndex, bool 
 	return (hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex)) * nVertices;
 }
 
-void L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates,
-                              std::span<uint8_t> bytes)
+std::vector<L3DSubMesh::PackedIndex> L3DSubMesh::PackedIndices(const l3d::L3DFile& l3d, uint32_t meshIndex, size_t count)
 {
-	const auto& verticesSpan = l3d.GetVertexSpan(meshIndex);
-	const auto& vertexGroupSpans = l3d.GetVertexGroupSpan(meshIndex);
-	const auto& lightmapCoordinates = l3d.GetLightmapCoordinates();
-	const auto vertexOffset = static_cast<size_t>(verticesSpan.data() - l3d.GetVertices().data());
-	const auto stride = hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
-	const auto nVertices = static_cast<uint32_t>(bytes.size() / stride);
-	const auto vertexAt = [&bytes, stride](uint32_t i) {
-		return reinterpret_cast<EnhancedL3DVertex*>(bytes.data() + (stride * i));
-	};
-	for (uint32_t i = 0; i < nVertices; ++i)
-	{
-		auto& vertex = *vertexAt(i);
-		vertex.pos = glm::make_vec3(&verticesSpan[i].position.x);
-		vertex.uv = glm::make_vec2(&verticesSpan[i].texCoord.x);
-		// TODO(bwrsandman): build normals from mesh
-		vertex.norm = glm::make_vec3(&verticesSpan[i].normal.x);
-		vertex.index = glm::i16vec4(-1, -1, 0, 0);
-		if (hasLightmapCoordinates)
-		{
-			const auto& lightmapUv = lightmapCoordinates[vertexOffset + i];
-			reinterpret_cast<LightmappedL3DVertex*>(&vertex)->lightmapUv = glm::vec2(lightmapUv.x, lightmapUv.y);
-		}
-	}
+	std::vector<PackedIndex> indices(count, PackedIndex {-1, -1, 0, 0});
 
 	// Fill bone index
-	uint32_t vertexIndex = 0;
-	for (const auto& vertexGroupSpan : vertexGroupSpans)
+	size_t vertexIndex = 0;
+	for (const auto& vertexGroupSpan : l3d.GetVertexGroupSpan(meshIndex))
 	{
-		for (uint32_t i = 0; i < vertexGroupSpan.vertexCount; ++i)
+		for (uint32_t i = 0; i < vertexGroupSpan.vertexCount && vertexIndex < count; ++i)
 		{
-			vertexAt(vertexIndex)->index[0] = static_cast<int16_t>(vertexGroupSpan.boneIndex);
+			indices[vertexIndex][0] = static_cast<int16_t>(vertexGroupSpan.boneIndex);
 			vertexIndex++;
 		}
 	}
@@ -737,15 +714,56 @@ void L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool 
 		blends.push_back({.vertex = blend.indices[0], .towards = blend.indices[1], .weight = blend.weight});
 	}
 	const auto partners = vertex_blend::Partners(primitiveVertices, primitiveBlends, blends);
-	for (uint32_t i = 0; i < nVertices && i < partners.size(); ++i)
+	for (size_t i = 0; i < count && i < partners.size(); ++i)
 	{
 		const auto& partner = partners[i];
 		if (partner.Blended() && partner.vertex <= std::numeric_limits<int16_t>::max())
 		{
-			vertexAt(i)->index[1] = static_cast<int16_t>(partner.vertex);
-			vertexAt(i)->index[2] = vertex_blend::QuantiseWeight(partner.weight);
+			indices[i][1] = static_cast<int16_t>(partner.vertex);
+			indices[i][2] = vertex_blend::QuantiseWeight(partner.weight);
 		}
 	}
+	return indices;
+}
+
+void L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates,
+                              std::span<uint8_t> bytes)
+{
+	const auto stride = hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
+	static_cast<void>(
+	    PackVertices(l3d, meshIndex, hasLightmapCoordinates, bytes, PackedIndices(l3d, meshIndex, bytes.size() / stride)));
+}
+
+AxisAlignedBoundingBox L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex, bool hasLightmapCoordinates,
+                                                std::span<uint8_t> bytes, std::span<const PackedIndex> indices)
+{
+	AxisAlignedBoundingBox box;
+	box.maxima = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+	box.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
+	const auto& verticesSpan = l3d.GetVertexSpan(meshIndex);
+	const auto& lightmapCoordinates = l3d.GetLightmapCoordinates();
+	const auto vertexOffset = static_cast<size_t>(verticesSpan.data() - l3d.GetVertices().data());
+	const auto stride = hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
+	const auto nVertices = static_cast<uint32_t>(bytes.size() / stride);
+	assert(indices.size() == nVertices);
+	for (uint32_t i = 0; i < nVertices; ++i)
+	{
+		auto& vertex = *reinterpret_cast<EnhancedL3DVertex*>(bytes.data() + (stride * i));
+		const auto position = glm::make_vec3(&verticesSpan[i].position.x);
+		vertex.pos = position;
+		vertex.uv = glm::make_vec2(&verticesSpan[i].texCoord.x);
+		// TODO(bwrsandman): build normals from mesh
+		vertex.norm = glm::make_vec3(&verticesSpan[i].normal.x);
+		vertex.index = glm::i16vec4(indices[i][0], indices[i][1], indices[i][2], indices[i][3]);
+		box.maxima = glm::max(box.maxima, position);
+		box.minima = glm::min(box.minima, position);
+		if (hasLightmapCoordinates)
+		{
+			const auto& lightmapUv = lightmapCoordinates[vertexOffset + i];
+			reinterpret_cast<LightmappedL3DVertex*>(&vertex)->lightmapUv = glm::vec2(lightmapUv.x, lightmapUv.y);
+		}
+	}
+	return box;
 }
 
 void L3DSubMesh::CreateBlendSource(std::span<const uint8_t> vertices, uint32_t count)
@@ -773,15 +791,24 @@ void L3DSubMesh::CreateBlendSource(std::span<const uint8_t> vertices, uint32_t c
 
 void L3DSubMesh::UpdateVertices(const l3d::L3DFile& l3d) noexcept
 {
-	_data.boundingBox = BoundVertices(l3d, _data.meshIndex, _data.flags.hasBones);
 	// A submesh that keeps only its data has no buffer to change
 	if (!_mesh)
 	{
+		_data.boundingBox = BoundVertices(l3d, _data.meshIndex, _data.flags.hasBones);
 		return;
 	}
 	const auto& device = Locator::graphicsDevice::value();
-	const auto* vertices = device.Alloc(static_cast<uint32_t>(PackedSize(l3d, _data.meshIndex, _data.hasLightmapCoordinates)));
-	PackVertices(l3d, _data.meshIndex, _data.hasLightmapCoordinates, device.Bytes(vertices));
+	const auto size = PackedSize(l3d, _data.meshIndex, _data.hasLightmapCoordinates);
+	const auto* vertices = device.Alloc(static_cast<uint32_t>(size));
+	// A file of the same shape gives the same bones and seams, so only the first update finds them
+	const auto count = size / (_data.hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex));
+	if (_packedIndices.size() != count)
+	{
+		_packedIndices = PackedIndices(l3d, _data.meshIndex, count);
+	}
+	const auto box = PackVertices(l3d, _data.meshIndex, _data.hasLightmapCoordinates, device.Bytes(vertices), _packedIndices);
+	// Without bones, the box about the packed vertices is the box about the submesh
+	_data.boundingBox = _data.flags.hasBones ? BoundVertices(l3d, _data.meshIndex, true) : box;
 	if (_data.flags.hasBones && _blendSource)
 	{
 		CreateBlendSource(device.Bytes(vertices), _blendSourceWidth);

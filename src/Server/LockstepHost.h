@@ -27,6 +27,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Editor/EditorMindLoads.h"
 #include "Online/GameDataPrint.h"
 #include "Server/DesyncCapture.h"
 #include "Server/GameLifetime.h"
@@ -85,6 +86,12 @@ struct HostSettings
 	/// Whether the server sends the start data of a god (its creature file) to the players as it is. The server sends
 	/// empty data in place of data that this refuses. With none, the server sends all data as it is.
 	std::function<bool(std::span<const uint8_t> data)> relaysCreature;
+	/// Whether the server takes a mind file of the editor (editor.mind_file): each computer must read it as the creature
+	/// tools read a file. With none, the server takes every file that is not empty.
+	std::function<bool(std::span<const uint8_t> data)> readsMindFile;
+	/// The count of the countries of the land of the server's world, which a paint of the editor must stay under. With
+	/// none, or when it gives none, the server checks only the most countries that a cell keeps.
+	std::function<std::optional<int>()> landCountries;
 	/// The game of one lobby (deviation 236): the room takes only the members of the lobby, each in its role and slot,
 	/// and waits for every god of the lobby until the time to join ends. None for a room with no lobby.
 	std::optional<lobby_game::Lobby> lobby;
@@ -183,7 +190,8 @@ public:
 		uint32_t blocksAgain {0};
 		/// The blocks whose commands the server refused because the commands of the god did not fit in the turn
 		uint32_t refusedBlocks {0};
-		/// The join ticket of the player has the editor claim. A seat that a snapshot gave back has no editor claim.
+		/// The join ticket of the player has the editor claim. A seat that a snapshot gave back keeps the claim of the
+		/// snapshot.
 		bool editor {false};
 	};
 
@@ -201,7 +209,8 @@ public:
 		std::string name;
 		/// The number of the observer in the game, from 1. The turns stamp the blocks of the observer with it.
 		uint8_t number {0};
-		/// The join ticket of the observer has the editor claim
+		/// The join ticket of the observer has the editor claim. An observer that a snapshot gave back keeps the claim of the
+		/// snapshot.
 		bool editor {false};
 	};
 
@@ -282,6 +291,8 @@ public:
 	/// creatures as the worlds of the clients from these files.
 	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
+	/// The mind files of the editor that the server keeps for its own world and sends to every player
+	[[nodiscard]] std::span<const uint8_t> EditorMindFile(uint64_t hash) const override { return _mindFiles.Find(hash); }
 	/// The checksum of the server's world after a turn. It goes to every client.
 	void TurnChecksum(uint32_t turn, uint64_t checksum);
 
@@ -324,8 +335,11 @@ public:
 	/// The blocks of commands that the server did not accept: before the start, a command that only the server sends, or
 	/// a command that an observer does not send
 	[[nodiscard]] uint32_t RefusedBlocks() const { return _refusedBlocks; }
-	/// The edits of the editor and the debug cheats that the server refused because their player has no editor claim
+	/// The edits of the editor and the debug cheats that the server refused because their player has no editor claim, and
+	/// the skips to a land of the story, which the server refuses from every player
 	[[nodiscard]] uint32_t RefusedEditorCommands() const { return _refusedEditorCommands; }
+	/// The edits of the editor that the server refused for a value that no computer takes, such as a scale out of range
+	[[nodiscard]] uint32_t RefusedEditorValues() const { return _refusedEditorValues; }
 	/// The numbers of the observers that the server gave and whose leave is not in a turn yet, in order
 	[[nodiscard]] std::vector<uint8_t> ObserverNumbers() const;
 	/// One line for each god slot that had a player: the checksums compared and the same ones
@@ -409,8 +423,9 @@ private:
 	void ObserverGone(uint8_t number);
 	/// The lowest number that no observer has, none when every number is taken
 	[[nodiscard]] std::optional<uint8_t> FreeObserverNumber() const;
-	/// Removes the edits of the editor and the debug cheats of a player with no editor claim, logs the refusal, and sends
-	/// the reason to the connection of the player
+	/// Removes the edits of the editor and the debug cheats of a player with no editor claim, and every skip to a land of
+	/// the story. Logs the refusal, and sends the reason to the connection of the player. Also removes and logs each edit
+	/// with a value that no computer takes.
 	void RefuseEditorCommands(ConnectionId connection, const Peer& peer, std::vector<player_commands::Action>& actions);
 	/// Logs each debug cheat that the server takes into its turns, so that the log of the server tells each change
 	void LogDebugCheats(const Peer& peer, const std::vector<player_commands::Action>& actions);
@@ -442,6 +457,11 @@ private:
 	void RemoveBannedFromGame();
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
 	void StartCreature(ConnectionId connection, const Peer& peer, const game_socket::StartCreature& creature);
+	/// A mind file of the editor from a player. The server checks the claim and the file, keeps it and sends it to every
+	/// player before any turn that holds a command that uses it.
+	void EditorMindFileFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorMindFile& mind);
+	/// Sends each mind file of the editor that the server keeps to a player who comes back or joins, before the turns
+	void SendEditorMindFiles(ConnectionId connection);
 	/// The gods are ready: the server asks the gods if they have the land
 	void QueryLands();
 	/// Every god has the land: the gods send their creature files
@@ -509,6 +529,8 @@ private:
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	/// The alignments that the gods sent with their creature files, by god slot
 	std::map<uint8_t, float> _startAlignments;
+	/// The mind files of the editor that the players with the editor claim sent during the game
+	editor::mind_loads::MindFileStore _mindFiles;
 	bool _pausedBefore {false};
 	/// When the last god's player of this process went and a god started to wait for its player. None while a god's
 	/// player is connected.
@@ -560,6 +582,7 @@ private:
 	std::map<std::pair<uint8_t, uint32_t>, uint64_t> _early;
 	uint32_t _refusedBlocks {0};
 	uint32_t _refusedEditorCommands {0};
+	uint32_t _refusedEditorValues {0};
 	WorldState _worldState;
 	PartListener _partListener;
 	PartsOfTurn _partsOfTurn;

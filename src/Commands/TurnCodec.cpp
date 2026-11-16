@@ -24,6 +24,7 @@
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFight.h"
 #include "PlayerSlots.h"
+#include "Story/StoryLandSkip.h"
 
 namespace openblack::turn_codec
 {
@@ -74,6 +75,14 @@ public:
 		Float(value.x);
 		Float(value.y);
 		Float(value.z);
+	}
+	/// The nine numbers of a turn, by columns
+	void Matrix(const glm::mat3& value)
+	{
+		for (int column = 0; column < 3; ++column)
+		{
+			Vector(value[column]);
+		}
 	}
 
 private:
@@ -128,6 +137,16 @@ public:
 		const float z = Float();
 		return {x, y, z};
 	}
+	/// The nine numbers of a turn, by columns
+	glm::mat3 Matrix()
+	{
+		glm::mat3 value {1.0f};
+		for (int column = 0; column < 3; ++column)
+		{
+			value[column] = Vector();
+		}
+		return value;
+	}
 
 	[[nodiscard]] bool Bad() const { return _bad; }
 	/// False after a read of a number that is not finite: an infinity or not a number
@@ -178,6 +197,67 @@ DecodeError ReadRecipients(Reader& in, std::vector<PlayerNames>& recipients)
 		recipient = *player;
 	}
 	return in.Bad() ? DecodeError::Truncated : DecodeError::None;
+}
+
+/// A new creature of the editor: its species, owner, place and body, then its tattoos
+void WriteCreatureSpawn(Writer& out, const EditorCreatureSpawn& spawn)
+{
+	out.Byte(spawn.species);
+	out.Byte(spawn.owner);
+	out.Vector(spawn.position);
+	out.Float(spawn.radians);
+	out.Float(spawn.scale);
+	out.Float(spawn.alignment);
+	out.Float(spawn.fatness);
+	out.Float(spawn.strength);
+	out.Byte(static_cast<uint8_t>(spawn.hasTattoos ? 1 : 0));
+	for (const auto& slot : spawn.tattoos)
+	{
+		out.Byte(slot.design);
+		out.Byte(slot.site);
+		out.Byte(slot.colour.r);
+		out.Byte(slot.colour.g);
+		out.Byte(slot.colour.b);
+	}
+}
+
+/// Reads a new creature of the editor. The species is one of the creatures of the game, the owner is one of the players,
+/// and each tattoo has a known design and site.
+DecodeError ReadCreatureSpawn(Reader& in, EditorCreatureSpawn& spawn)
+{
+	spawn.species = in.Byte();
+	spawn.owner = in.Byte();
+	spawn.position = in.Vector();
+	spawn.radians = in.Float();
+	spawn.scale = in.Float();
+	spawn.alignment = in.Float();
+	spawn.fatness = in.Float();
+	spawn.strength = in.Float();
+	const auto hasTattoos = in.Byte();
+	for (auto& slot : spawn.tattoos)
+	{
+		slot.design = in.Byte();
+		slot.site = in.Byte();
+		slot.colour.r = in.Byte();
+		slot.colour.g = in.Byte();
+		slot.colour.b = in.Byte();
+	}
+	if (in.Bad())
+	{
+		return DecodeError::Truncated;
+	}
+	const bool known = spawn.species > static_cast<uint8_t>(CreatureType::Unknown) &&
+	                   spawn.species < static_cast<uint8_t>(CreatureType::_COUNT) &&
+	                   spawn.owner < static_cast<uint8_t>(PlayerNames::_COUNT) && hasTattoos <= 1;
+	const bool tattoosKnown = std::ranges::all_of(spawn.tattoos, [](const auto& slot) {
+		return slot.design < creature_tattoo::k_DesignCount && slot.site <= creature_tattoo::k_NoSite;
+	});
+	if (!known || !tattoosKnown)
+	{
+		return DecodeError::Value;
+	}
+	spawn.hasTattoos = hasTattoos == 1;
+	return DecodeError::None;
 }
 
 void WriteAction(Writer& out, const Action& action)
@@ -379,6 +459,33 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Number(command.challenge);
 		               out.Vector(command.position);
 		               out.Float(command.radians);
+		               out.Float(command.scale);
+		               out.Number(command.request);
+		               if (command.kind == EditorEdit::Kind::Pose)
+		               {
+			               out.Matrix(command.rotation);
+			               out.Byte(command.keepsAngles ? 1 : 0);
+			               out.Vector(command.keptAngles);
+			               out.Vector(command.poseScale);
+		               }
+	               },
+	               [&out](const EditorRemake& command) {
+		               out.Number(command.request);
+		               out.Byte(command.placeKind);
+		               out.Number(static_cast<uint32_t>(command.placeType));
+		               out.Number(command.challenge);
+		               out.Vector(command.position);
+		               out.Matrix(command.rotation);
+		               out.Byte(command.keepsAngles ? 1 : 0);
+		               out.Vector(command.keptAngles);
+		               out.Vector(command.scale);
+		               out.Byte(command.creature ? 1 : 0);
+		               out.Byte(command.owner);
+		               out.Number(command.mind);
+		               out.Float(command.size);
+		               out.Float(command.alignment);
+		               out.Float(command.fatness);
+		               out.Float(command.strength);
 	               },
 	               [&out](const DebugCheat& command) {
 		               out.Byte(command.cheat);
@@ -388,6 +495,29 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.creature);
 		               out.Byte(command.value);
 		               out.Float(command.amount);
+	               },
+	               [&out](const EditorVillagerEdit& command) {
+		               out.Entity(command.villager);
+		               out.Byte(static_cast<uint8_t>(command.field));
+		               out.Byte(command.index);
+		               out.Number(command.number);
+		               out.Float(command.amount);
+	               },
+	               [&out](const EditorCreatureSpawn& command) {
+		               WriteCreatureSpawn(out, command);
+		               out.Number(command.request);
+	               },
+	               [&out](const EditorMindLoad& command) {
+		               out.Byte(static_cast<uint8_t>(command.use));
+		               out.Number(command.file);
+		               if (command.use == EditorMindLoad::Use::LoadInto)
+		               {
+			               out.Entity(command.creature);
+		               }
+		               else
+		               {
+			               WriteCreatureSpawn(out, command.spawn);
+		               }
 	               },
 	               [&out](const EditorCreatureAct& command) {
 		               out.Entity(command.creature);
@@ -400,6 +530,27 @@ void WriteAction(Writer& out, const Action& action)
 		               {
 			               out.Byte(arg);
 		               }
+	               },
+	               [&out](const DebugLandSkip& command) { out.Byte(command.land); },
+	               [&out](const EditorLandStroke& command) {
+		               out.Byte(command.mode);
+		               out.Float(command.innerRadius);
+		               out.Float(command.outerRadius);
+		               out.Byte(command.step);
+		               out.Byte(command.country);
+		               out.Float(command.centre.x);
+		               out.Float(command.centre.y);
+	               },
+	               [&out](const EditorPath& command) {
+		               out.Byte(command.kind);
+		               out.Number(static_cast<uint16_t>(command.points.size()));
+		               for (const auto& point : command.points)
+		               {
+			               out.Float(point.x);
+			               out.Float(point.y);
+		               }
+		               out.Entity(command.firstHolder);
+		               out.Entity(command.lastHolder);
 	               },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
@@ -887,7 +1038,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::EditorEdit:
 	{
 		const auto kind = in.Byte();
-		if (kind > static_cast<uint8_t>(EditorEdit::Kind::Remove))
+		if (kind > static_cast<uint8_t>(EditorEdit::Kind::Pose))
 		{
 			return DecodeError::Value;
 		}
@@ -898,7 +1049,55 @@ DecodeError ReadAction(Reader& in, Action& action)
 		edit.challenge = in.Number<uint32_t>();
 		edit.position = in.Vector();
 		edit.radians = in.Float();
+		edit.scale = in.Float();
+		edit.request = in.Number<uint16_t>();
+		if (edit.kind == EditorEdit::Kind::Pose)
+		{
+			edit.rotation = in.Matrix();
+			const auto keeps = in.Byte();
+			edit.keptAngles = in.Vector();
+			edit.poseScale = in.Vector();
+			if (in.Bad())
+			{
+				return DecodeError::Truncated;
+			}
+			if (keeps > 1)
+			{
+				return DecodeError::Value;
+			}
+			edit.keepsAngles = keeps == 1;
+		}
 		action = edit;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorRemake:
+	{
+		EditorRemake remake {.request = in.Number<uint16_t>(), .placeKind = in.Byte()};
+		remake.placeType = static_cast<int32_t>(in.Number<uint32_t>());
+		remake.challenge = in.Number<uint32_t>();
+		remake.position = in.Vector();
+		remake.rotation = in.Matrix();
+		const auto keeps = in.Byte();
+		remake.keptAngles = in.Vector();
+		remake.scale = in.Vector();
+		const auto creature = in.Byte();
+		remake.owner = in.Byte();
+		remake.mind = in.Number<uint32_t>();
+		remake.size = in.Float();
+		remake.alignment = in.Float();
+		remake.fatness = in.Float();
+		remake.strength = in.Float();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (keeps > 1 || creature > 1 || remake.owner >= static_cast<uint8_t>(PlayerNames::_COUNT))
+		{
+			return DecodeError::Value;
+		}
+		remake.keepsAngles = keeps == 1;
+		remake.creature = creature == 1;
+		action = remake;
 		return DecodeError::None;
 	}
 	case CommandTag::DebugCheat:
@@ -939,6 +1138,128 @@ DecodeError ReadAction(Reader& in, Action& action)
 			arg = in.Byte();
 		}
 		action = act;
+		return DecodeError::None;
+	}
+	case CommandTag::DebugLandSkip:
+	{
+		const auto land = in.Byte();
+		if (!story_land_skip::GoesAsCommand(land))
+		{
+			return in.Bad() ? DecodeError::Truncated : DecodeError::Value;
+		}
+		action = DebugLandSkip {.land = land};
+		return DecodeError::None;
+	}
+	case CommandTag::EditorVillagerEdit:
+	{
+		EditorVillagerEdit edit {.villager = in.Entity()};
+		const auto field = in.Byte();
+		if (field > static_cast<uint8_t>(EditorVillagerEdit::Field::State))
+		{
+			return in.Bad() ? DecodeError::Truncated : DecodeError::Value;
+		}
+		edit.field = static_cast<EditorVillagerEdit::Field>(field);
+		edit.index = in.Byte();
+		edit.number = in.Number<uint32_t>();
+		edit.amount = in.Float();
+		action = edit;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorCreatureSpawn:
+	{
+		EditorCreatureSpawn spawn;
+		if (const auto error = ReadCreatureSpawn(in, spawn); error != DecodeError::None)
+		{
+			return error;
+		}
+		spawn.request = in.Number<uint16_t>();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		action = spawn;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorMindLoad:
+	{
+		const auto use = in.Byte();
+		EditorMindLoad load {.file = in.Number<uint64_t>()};
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		// The use is a load into a creature or a new creature
+		if (use > static_cast<uint8_t>(EditorMindLoad::Use::Spawn))
+		{
+			return DecodeError::Value;
+		}
+		load.use = static_cast<EditorMindLoad::Use>(use);
+		if (load.use == EditorMindLoad::Use::LoadInto)
+		{
+			load.creature = in.Entity();
+			if (in.Bad())
+			{
+				return DecodeError::Truncated;
+			}
+		}
+		else if (const auto error = ReadCreatureSpawn(in, load.spawn); error != DecodeError::None)
+		{
+			return error;
+		}
+		action = load;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorLandStroke:
+	{
+		EditorLandStroke stroke {.mode = in.Byte()};
+		stroke.innerRadius = in.Float();
+		stroke.outerRadius = in.Float();
+		stroke.step = in.Byte();
+		stroke.country = in.Byte();
+		stroke.centre.x = in.Float();
+		stroke.centre.y = in.Float();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		// The mode is raise, lower or paint
+		if (stroke.mode > 2)
+		{
+			return DecodeError::Value;
+		}
+		action = stroke;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorPath:
+	{
+		EditorPath path {.kind = in.Byte()};
+		const auto count = in.Number<uint16_t>();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		// The kind is a footpath or a stream
+		if (path.kind > 1 || count > k_MostEditorPathPoints)
+		{
+			return DecodeError::Value;
+		}
+		if (static_cast<size_t>(count) * 8 > in.Left())
+		{
+			return DecodeError::Truncated;
+		}
+		path.points.resize(count);
+		for (auto& point : path.points)
+		{
+			point.x = in.Float();
+			point.y = in.Float();
+		}
+		path.firstHolder = in.Entity();
+		path.lastHolder = in.Entity();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		action = std::move(path);
 		return DecodeError::None;
 	}
 	case CommandTag::MusicMood:
@@ -1116,6 +1437,13 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const DebugCheat& /*command*/) { return CommandTag::DebugCheat; },
 	                      [](const EditorCreatureEdit& /*command*/) { return CommandTag::EditorCreatureEdit; },
 	                      [](const EditorCreatureAct& /*command*/) { return CommandTag::EditorCreatureAct; },
+	                      [](const DebugLandSkip& /*command*/) { return CommandTag::DebugLandSkip; },
+	                      [](const EditorVillagerEdit& /*command*/) { return CommandTag::EditorVillagerEdit; },
+	                      [](const EditorCreatureSpawn& /*command*/) { return CommandTag::EditorCreatureSpawn; },
+	                      [](const EditorLandStroke& /*command*/) { return CommandTag::EditorLandStroke; },
+	                      [](const EditorPath& /*command*/) { return CommandTag::EditorPath; },
+	                      [](const EditorRemake& /*command*/) { return CommandTag::EditorRemake; },
+	                      [](const EditorMindLoad& /*command*/) { return CommandTag::EditorMindLoad; },
 	                  },
 	                  action);
 }
@@ -1185,10 +1513,25 @@ size_t SizeOf(const Action& action) noexcept
 	        [](const ObserverIn& command) { return 1 + (2 * command.name.size()); },
 	        [](const ObserverOut& /*command*/) { return size_t {0}; },
 	        [](const HandLockRelease& /*command*/) { return k_Entity; },
-	        [](const EditorEdit& /*command*/) { return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4; },
+	        [](const EditorEdit& command) {
+		        // A pose adds the turn, the switch of the kept angles, the kept angles and the scale of each axis
+		        const size_t pose = command.kind == EditorEdit::Kind::Pose ? (3 * k_Vector) + 1 + k_Vector + k_Vector : 0;
+		        return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4 + 4 + 2 + pose;
+	        },
+	        [](const EditorRemake& /*command*/) {
+		        return 2 + 1 + 4 + 4 + k_Vector + (3 * k_Vector) + 1 + k_Vector + k_Vector + 1 + 1 + 4 + (4 * 4);
+	        },
 	        [](const DebugCheat& /*command*/) { return size_t {2}; },
 	        [](const EditorCreatureEdit& /*command*/) { return k_Entity + 1 + 4; },
 	        [](const EditorCreatureAct& command) { return k_Entity + 1 + k_Entity + k_Vector + 4 + 2 + command.args.size(); },
+	        [](const DebugLandSkip& /*command*/) { return size_t {1}; },
+	        [](const EditorVillagerEdit& /*command*/) { return k_Entity + 1 + 1 + 4 + 4; },
+	        [](const EditorCreatureSpawn& /*command*/) { return k_CreatureSpawn + 2; },
+	        [](const EditorMindLoad& command) {
+		        return 1 + 8 + (command.use == EditorMindLoad::Use::LoadInto ? k_Entity : k_CreatureSpawn);
+	        },
+	        [](const EditorLandStroke& /*command*/) { return size_t {1 + 4 + 4 + 1 + 1 + 4 + 4}; },
+	        [](const EditorPath& command) { return 1 + 2 + (8 * command.points.size()) + (2 * k_Entity); },
 	    },
 	    action);
 	return 1 + fields;

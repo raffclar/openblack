@@ -96,6 +96,14 @@ TEST(ChatControlsRules, AGameOfOnePlayerShowsTheControlsOnlyWithMusicOrAnOpenCha
 	EXPECT_FALSE(rules::ShowsNext(false, facts));
 }
 
+TEST(ChatControlsRules, TheChatClosesOnlyWhenALiveNetworkGameEnds)
+{
+	EXPECT_TRUE(rules::NetworkGameEnded(true, false));
+	EXPECT_FALSE(rules::NetworkGameEnded(true, true));
+	EXPECT_FALSE(rules::NetworkGameEnded(false, true));
+	EXPECT_FALSE(rules::NetworkGameEnded(false, false));
+}
+
 TEST(ChatControlsRules, APlayerGoesHalfOfTheWayToWhite)
 {
 	EXPECT_EQ(rules::PlayerColour(0xFFFF0000u), 0x00FF7F7Fu);
@@ -283,4 +291,34 @@ TEST_F(ChatFixture, TheFriendButtonMakesTheSelectedPlayersFriends)
 	// The players stay selected, and now they are friends
 	Update();
 	EXPECT_EQ(FriendButtonName(chat.GetNamedControls()), u"Unmake");
+}
+
+TEST_F(ChatFixture, TheChatOfANetworkGameClosesWhenTheGameEnds)
+{
+	chat.FollowNetworkGame(true);
+	Update();
+	Click(k_OpenButton);
+	Update();
+	chat.TextInput(u"AB");
+	chat.KeyDown(SDLK_RETURN, false);
+	chat.TextInput(u"BA");
+	ASSERT_TRUE(chat.IsOpen());
+	// The player leaves the game with the chat open: the next game alone shows no chat and no speech button
+	chat.FollowNetworkGame(false);
+	EXPECT_FALSE(chat.IsOpen());
+	EXPECT_FALSE(chat.IsQuickChatOpen());
+	EXPECT_TRUE(chat.GetLine().empty());
+	EXPECT_TRUE(chat.TakeSent().empty());
+	const rules::ShowFacts alone {.connected = true, .singlePlayer = true, .inGame = true, .open = chat.IsOpen()};
+	chat.Update({.show = alone, .otherBox = false, .onlyShift = false, .layoutSize = {800, 600}});
+	EXPECT_FALSE(chat.IsActive());
+	EXPECT_TRUE(chat.GetNamedControls().empty());
+}
+
+TEST_F(ChatFixture, AChatThatOpensInAGameAloneStaysOpen)
+{
+	chat.FollowNetworkGame(false);
+	chat.Open();
+	chat.FollowNetworkGame(false);
+	EXPECT_TRUE(chat.IsOpen());
 }
