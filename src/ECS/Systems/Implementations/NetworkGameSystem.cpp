@@ -240,6 +240,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	_fromCommandLine = join.fromCommandLine;
 	_joinReplyRead = false;
 	_pendingStart.reset();
+	_restarting = false;
 
 	// A join from the command line: the clock of this computer waits for the server's land and start, so that the frames
 	// of the wait take no game time
@@ -403,7 +404,9 @@ void NetworkGameSystem::BeginPlay()
 	Attach();
 	// The server of a lobby game starts the turns when each god's player loaded the world
 	_session->ReportLoaded();
-	if (_fromCommandLine)
+	// The start of a game that the server started again came before its land: the world does the turns at once
+	const bool restarting = std::exchange(_restarting, false);
+	if (_fromCommandLine && !restarting)
 	{
 		// The land of the server loaded: the player is ready, and the world waits for the server's start
 		Locator::time::value().SetPaused(true);
@@ -437,6 +440,7 @@ void NetworkGameSystem::EndNetworkGame()
 	_joinReplyRead = false;
 	_stopped = false;
 	_pendingStart.reset();
+	_restarting = false;
 	_resumeTurn.reset();
 	// The clock is the clock of a game alone again, and it no longer waits for the turns of a server
 	auto& clock = Locator::time::value();
@@ -608,6 +612,18 @@ void NetworkGameSystem::Update()
 				Locator::time::value().SetPaused(false);
 			}
 		}
+	}
+	// The editor of a player started the room again on a scenario: the land of the new start loads, as after the front
+	// end, and the world does the turns of the new game from its first turn
+	if (_started && _session->TakeRestart())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server started the game again: the game loads {}",
+		                   network_land::DisplayName(*_session->GetStart()));
+		_pendingStart = *_session->GetStart();
+		_awaitingLand = true;
+		_restarting = true;
+		_resumeTurn.reset();
+		_stopped = false;
 	}
 	// After a resync, or after a join to a game that turns, the server's world comes. This computer's world loads it
 	// after the land of the start, and continues from the turn of the world.

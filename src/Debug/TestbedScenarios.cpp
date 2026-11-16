@@ -29,6 +29,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/ToolRunSystemInterface.h"
@@ -257,11 +258,57 @@ void TestbedScenarios::RunRequested() noexcept
 void TestbedScenarios::Draw() noexcept
 {
 	DrawPicker();
-	DrawControls();
-	DrawBenchmark();
-	DrawTime();
+	// In a network game a scenario runs for the whole room. The benchmark and the time measure and change only the world of
+	// this computer, so a network game does not have them. The camera and the list of creatures change no world.
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+	{
+		DrawNetworkControls();
+	}
+	else
+	{
+		DrawControls();
+		DrawBenchmark();
+		DrawTime();
+	}
 	DrawCamera();
 	DrawCreatures();
+}
+
+void TestbedScenarios::DrawNetworkControls() noexcept
+{
+	const auto& picked = All()[_picked];
+	const auto* current = _runner.GetScenario();
+	const auto send = [this](std::string_view id) {
+		const bool sent =
+		    Locator::networkGame::has_value() && Locator::networkGame::value().SendEditorScenario(std::string(id));
+		_networkStatus = sent ? fmt::format("Asked the game server to run {} for the whole room", id)
+		                      : std::string("The request did not go: the game socket is not open");
+	};
+	ImGui::PushStyleColor(ImGuiCol_Button, k_RunColour);
+	if (ImGui::Button("Run", ImVec2(90.0f, 0.0f)))
+	{
+		send(picked.id);
+	}
+	ImGui::PopStyleColor();
+	ImGui::SetItemTooltip("Ends the game of every player in the room, and starts the room again on the testbed with this "
+	                      "scenario");
+	ImGui::SameLine();
+	ImGui::BeginDisabled(current == nullptr);
+	if (ImGui::Button("Restart", ImVec2(90.0f, 0.0f)) && current != nullptr)
+	{
+		send(current->id);
+	}
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip("Starts the room again on the last scenario, from its start");
+	if (current != nullptr)
+	{
+		ImGui::Text("%s %s, %.1f s in", _runner.IsRunning() ? "Running" : "Stopped", current->name.data(),
+		            static_cast<double>(_runner.GetSeconds()));
+	}
+	if (!_networkStatus.empty())
+	{
+		ImGui::TextDisabled("%s", _networkStatus.c_str());
+	}
 }
 
 void TestbedScenarios::DrawPicker() noexcept

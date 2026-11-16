@@ -56,6 +56,8 @@ constexpr std::string_view k_SyncEntities = "sync.entities";
 constexpr std::string_view k_SyncWorld = "sync.world";
 constexpr std::string_view k_CommandRefused = "command.refused";
 constexpr std::string_view k_EditorMindFile = "editor.mind_file";
+constexpr std::string_view k_EditorWorld = "editor.world";
+constexpr std::string_view k_EditorScenario = "editor.scenario";
 /// The most bytes of the hints of a copy of the game (the patch and the language)
 constexpr size_t k_MostHintBytes = 16;
 /// The most bytes of the words of the file in a refusal "data"
@@ -861,6 +863,42 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		}
 		return EditorMindFile {.file = std::move(*bytes)};
 	}
+	if (type == k_EditorWorld)
+	{
+		EditorWorld world;
+		uint64_t index = 0;
+		uint64_t count = 0;
+		uint64_t size = 0;
+		std::string data;
+		constexpr auto k_MostChunks = (k_MostEditorWorldBytes + k_MostEditorWorldChunkBytes - 1) / k_MostEditorWorldChunkBytes;
+		// Base64 holds 3 bytes in 4 characters
+		constexpr auto k_MostDataCharacters = (k_MostEditorWorldChunkBytes + 2) / 3 * 4;
+		if (!ReadUnsigned(object, "index", k_MostChunks - 1, index) || !ReadUnsigned(object, "count", k_MostChunks, count) ||
+		    !ReadUnsigned(object, "size", k_MostEditorWorldBytes, size) ||
+		    !ReadShort(object, "data", data, k_MostDataCharacters, true) || index >= count || size == 0)
+		{
+			return std::nullopt;
+		}
+		auto bytes = join_ticket::DecodeBase64Url(data);
+		if (!bytes.has_value() || bytes->empty() || bytes->size() > k_MostEditorWorldChunkBytes)
+		{
+			return std::nullopt;
+		}
+		world.index = static_cast<uint32_t>(index);
+		world.count = static_cast<uint32_t>(count);
+		world.size = static_cast<uint32_t>(size);
+		world.bytes = std::move(*bytes);
+		return world;
+	}
+	if (type == k_EditorScenario)
+	{
+		EditorScenario scenario;
+		if (!ReadShort(object, "id", scenario.id, k_MostScenarioIdBytes, true) || scenario.id.empty())
+		{
+			return std::nullopt;
+		}
+		return scenario;
+	}
 	if (type == k_CommandRefused)
 	{
 		CommandRefused refused;
@@ -1200,6 +1238,18 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, EditorMindFile>)
 		    {
 			    object = Json {{"type", k_EditorMindFile}, {"file", join_ticket::EncodeBase64Url(value.file)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorWorld>)
+		    {
+			    object = Json {{"type", k_EditorWorld},
+			                   {"index", value.index},
+			                   {"count", value.count},
+			                   {"size", value.size},
+			                   {"data", join_ticket::EncodeBase64Url(value.bytes)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorScenario>)
+		    {
+			    object = Json {{"type", k_EditorScenario}, {"id", value.id}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, CommandRefused>)
 		    {

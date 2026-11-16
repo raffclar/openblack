@@ -9,6 +9,9 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -27,6 +30,7 @@
 #include "Creature/CreatureMindFileBody.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "Editor/EditorActions.h"
 #include "Editor/EditorCreatureActs.h"
@@ -593,6 +597,66 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		                           {"hash", fmt::format("{:016x}", editor::mind_loads::HashOf(*bytes))},
 		                           {"use", load.use == player_commands::EditorMindLoad::Use::Spawn ? "spawn" : "load"},
 		                           {"species", static_cast<int>(load.spawn.species)}});
+	});
+	auto worldLoad = Query(
+	    "world_load",
+	    "Sends a world file of this computer to the game server, as Load world file of the editor does in a network game: "
+	    "the world of the server loads it between two turns, and every computer gets the server's new world. This ends the "
+	    "current game of every player. force sends it also when the editor of this computer is refused.",
+	    {{.name = "path", .type = "string", .description = "The world file on this computer", .required = true},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	worldLoad.writes = true;
+	provider->Add(std::move(worldLoad), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto pathParam = context.params.find("path");
+		if (pathParam == context.params.end() || !pathParam->is_string())
+		{
+			return QueryResult::Error("editor.world_load needs the path of a world file");
+		}
+		std::ifstream file(std::filesystem::path(pathParam->get<std::string>()), std::ios::binary);
+		if (!file)
+		{
+			return QueryResult::Error("the world file does not open");
+		}
+		const std::vector<uint8_t> bytes {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+		if (bytes.empty() || bytes.size() > game_socket::k_MostEditorWorldBytes)
+		{
+			return QueryResult::Error(fmt::format("a network game takes a world file of 1 byte to {} MB",
+			                                      game_socket::k_MostEditorWorldBytes / (1024 * 1024)));
+		}
+		if (!Locator::networkGame::has_value() || !Locator::networkGame::value().SendEditorWorld(bytes))
+		{
+			return QueryResult::Error("the game socket is not open: the world file did not go");
+		}
+		return QueryResult::Value({{"sent", true}, {"bytes", bytes.size()}});
+	});
+	auto scenario = Query(
+	    "scenario",
+	    "Asks the game server to start the room again on a testbed scenario, as the Scenarios tab of the editor does in a "
+	    "network game: every computer loads the testbed and lays the scenario out before the first turn of the new game. "
+	    "This ends the current game of every player. force sends it also when the editor of this computer is refused.",
+	    {{.name = "id", .type = "string", .description = "The id of the testbed scenario", .required = true},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	scenario.writes = true;
+	provider->Add(std::move(scenario), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto idParam = context.params.find("id");
+		if (idParam == context.params.end() || !idParam->is_string() || idParam->get<std::string>().empty())
+		{
+			return QueryResult::Error("editor.scenario needs the id of a testbed scenario");
+		}
+		const auto id = idParam->get<std::string>();
+		if (!Locator::networkGame::has_value() || !Locator::networkGame::value().SendEditorScenario(id))
+		{
+			return QueryResult::Error("the game socket is not open: the request did not go");
+		}
+		return QueryResult::Value({{"sent", true}, {"id", id}});
 	});
 	auto landStroke = Query(
 	    "land_stroke",

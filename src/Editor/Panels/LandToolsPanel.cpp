@@ -62,6 +62,7 @@
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
@@ -1107,6 +1108,19 @@ std::string LandToolsPanel::LoadWorld(EditorContext& context) noexcept
 		return fmt::format("No world file {}", path.filename().string());
 	}
 	const std::vector<uint8_t> bytes {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+	// In a network game the file goes to the game server. The world of the server loads it between two turns, and every
+	// player gets the new world.
+	if (!context.writes.ChangesAtOnce())
+	{
+		if (!Locator::networkGame::has_value() || !Locator::networkGame::value().SendEditorWorld(bytes))
+		{
+			return fmt::format("{} did not go to the game server: the socket is not open, or the file is empty or larger "
+			                   "than {} MB",
+			                   path.filename().string(), game_socket::k_MostEditorWorldBytes / (1024 * 1024));
+		}
+		return fmt::format("Sent {} ({} bytes) to the game server: the world of every player loads it",
+		                   path.filename().string(), bytes.size());
+	}
 	if (!Locator::saveGameSystem::value().LoadWorldState(bytes))
 	{
 		return fmt::format("Could not load {}", path.filename().string());
@@ -1227,14 +1241,16 @@ void LandToolsPanel::Draw(EditorContext& context) noexcept
 		}
 		ImGui::SetItemTooltip("A landscape file, a land script of what the editor placed and drew, a footpath file and a "
 		                      "world file");
-		// A load of a world file changes the world of this computer only, so a network game does not have it
-		if (context.writes.ChangesAtOnce())
+		ImGui::SameLine();
+		if (ImGui::Button("Load world file"))
 		{
-			ImGui::SameLine();
-			if (ImGui::Button("Load world file"))
-			{
-				_status = LoadWorld(context);
-			}
+			_status = LoadWorld(context);
+		}
+		// In a network game the world file loads for the whole room
+		if (!context.writes.ChangesAtOnce())
+		{
+			ImGui::SetItemTooltip("Ends the game of every player in the room: the game server loads the world file, and "
+			                      "every player gets its world");
 		}
 		ImGui::TextColored(style::k_Muted, "Into the profile folder's %s folder", std::string(k_SaveFolder).c_str());
 		ImGui::EndTable();

@@ -23,6 +23,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Online/EditorWorldUpload.h"
 #include "Online/GameDataPrint.h"
 #include "Online/JoinRetryRule.h"
 #include "Online/Sha256.h"
@@ -128,6 +129,8 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_startCreatures.clear();
 	_startAlignments.clear();
 	_mindFiles.Clear();
+	_restarted = false;
+	_landOfRestartDue = false;
 	_ownGodPlaysForClan = false;
 	_turns.clear();
 	_waitingCommands = 0;
@@ -263,6 +266,33 @@ bool NetworkSession::SendEditorMindFile(std::vector<uint8_t> file)
 	return _stream->SendText(game_socket::ToJson(game_socket::EditorMindFile {.file = std::move(file)}));
 }
 
+bool NetworkSession::SendEditorWorld(std::span<const uint8_t> file)
+{
+	if (!_start.has_value() || !_stream || !_stream->IsOpen())
+	{
+		return false;
+	}
+	const auto parts = editor_world::Split(file);
+	if (parts.empty())
+	{
+		return false;
+	}
+	_log->Write(spdlog::level::info, fmt::format("This computer sends a world file of the editor of {} bytes in {} parts",
+	                                             file.size(), parts.size()));
+	// The parts go in order on the one socket. A part that does not go leaves the server with a broken file.
+	return std::ranges::all_of(parts, [this](const auto& part) { return _stream->SendText(game_socket::ToJson(part)); });
+}
+
+bool NetworkSession::SendEditorScenario(std::string_view id)
+{
+	if (!_start.has_value() || !_stream || !_stream->IsOpen() || id.empty() || id.size() > game_socket::k_MostScenarioIdBytes)
+	{
+		return false;
+	}
+	_log->Write(spdlog::level::info, fmt::format("This computer asks the server to run the testbed scenario {}", id));
+	return _stream->SendText(game_socket::ToJson(game_socket::EditorScenario {.id = std::string(id)}));
+}
+
 void NetworkSession::Leave()
 {
 	if (_stream && _stream->IsOpen())
@@ -375,6 +405,27 @@ void NetworkSession::Text(std::string_view text)
 	}
 	else if (const auto* start = std::get_if<game_socket::Start>(&*frame))
 	{
+		// A start in the game: the editor of a player started the room again on a scenario. The turns, the checksums and
+		// the stop of the old game are of no use.
+		if (_start.has_value())
+		{
+			_restarted = true;
+			_landOfRestartDue = true;
+			_turns.clear();
+			_waitingCommands = 0;
+			_playout.Reset();
+			_turnsDone = start->turn;
+			_localChecksums.clear();
+			_serverChecksums.clear();
+			_stoppedAfter.reset();
+			_worldTurn.reset();
+			_worldParts.clear();
+			_world.reset();
+			_log->Write(spdlog::level::info,
+			            fmt::format("The game server started the game again{}",
+			                        start->scenario.has_value() ? fmt::format(" on the scenario {}", *start->scenario)
+			                                                    : std::string()));
+		}
 		_start = *start;
 		_state = State::Playing;
 		_log->Write(spdlog::level::info, fmt::format("The network game starts at turn {}", start->turn));
@@ -412,6 +463,9 @@ void NetworkSession::Text(std::string_view text)
 			_worldStartedAt = _clock();
 			_world.reset();
 			_turns.clear();
+			// After a world file of the editor, the server's world can be at an earlier turn: no checksum of the old world
+			// stays to compare
+			_serverChecksums.clear();
 			_waitingCommands = 0;
 			_playout.Reset();
 		}
@@ -1009,6 +1063,7 @@ void NetworkSession::SendKeptAgain()
 void NetworkSession::ReportLoaded()
 {
 	_loaded = true;
+	_landOfRestartDue = false;
 	SendLoaded();
 }
 
@@ -1083,7 +1138,8 @@ void NetworkSession::Send(const player_commands::Action& action)
 
 bool NetworkSession::HasTurn(uint32_t turn) const
 {
-	if ((_state != State::Playing && _state != State::Reconnecting) || _worldTurn.has_value())
+	// The world of the old game does no turn of the game that the server started again
+	if ((_state != State::Playing && _state != State::Reconnecting) || _worldTurn.has_value() || _landOfRestartDue)
 	{
 		return false;
 	}
