@@ -31,6 +31,27 @@
 namespace openblack::magic
 {
 struct EffectSource;
+
+/// The spell that a creature of a saved game of the game holds, with the values of the file that the import keeps
+struct ImportedCast
+{
+	MagicType type {MagicType::None};
+	/// The point where the spell is
+	glm::vec3 position {0.0f};
+	float chants {0.0f};
+	float initialChants {0.0f};
+	bool closedDown {false};
+	/// How long the spell can last in seconds, negative for no time limit, and the seconds that it ran
+	float duration {-1.0f};
+	float age {0.0f};
+	float magnitude {k_DefaultSpellMagnitude};
+	/// What the spell gives its particles each turn
+	particles::ProcessInfo processInfo;
+	/// Food and wood: the first grain landed
+	std::optional<bool> firstDone;
+	/// Water: the age of the spell when its last drop made a ring on the land
+	std::optional<float> lastRipple;
+};
 } // namespace openblack::magic
 
 namespace openblack::player_commands
@@ -174,6 +195,15 @@ public:
 	virtual bool CastByCreatureAt(entt::entity /*creature*/, MagicType /*type*/, glm::vec3 /*place*/) { return false; }
 	/// The creature lets go of the miracle it cast: one that lasts only while it is held stops
 	virtual void ReleaseCreatureCast(entt::entity /*creature*/) {}
+	/// The creature holds the spell of a saved game of the game. The spell continues with the values of the file. The
+	/// creature does not pay for it, and nothing sees a new cast. Return the spell, or none for a spell that openblack
+	/// cannot make from these values.
+	virtual entt::entity ImportCreatureCast(entt::entity /*creature*/, const magic::ImportedCast& /*cast*/)
+	{
+		return entt::null;
+	}
+	/// The miracle that the creature cast and holds, or none
+	[[nodiscard]] virtual entt::entity CreatureCastOf(entt::entity /*creature*/) const { return entt::null; }
 	/// The beams from the hands of a creature that casts from above stop. The miracle that it casts continues. The hold
 	/// of the creature by a hand does this.
 	virtual void EndCreatureCastBeams(entt::entity /*creature*/) {}

@@ -302,6 +302,56 @@ void MagicSystem::ReleaseCreatureCast(entt::entity creature)
 	_creatureCasts.erase(found);
 }
 
+entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic::ImportedCast& cast)
+{
+	auto& registry = Entities();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr || !Locator::infoConstants::has_value() || static_cast<size_t>(cast.type) >= magic::k_MagicTypeCount ||
+	    cast.type == MagicType::None)
+	{
+		return entt::null;
+	}
+	// The import makes only the miracles that keep all their state in these values: the fireball, the lightning, the
+	// beam explosion, food, wood and water. The other kinds keep more values in the file.
+	const auto kind = magic::ClassOf(cast.type);
+	if (kind != magic::SpellClass::General && kind != magic::SpellClass::Resource && kind != magic::SpellClass::Water)
+	{
+		return entt::null;
+	}
+	ReleaseCreatureCast(creature);
+	const SpellCaster caster {.kind = SpellCaster::Kind::Creature, .player = body->owner, .entity = creature};
+	const magic::SpellCastData data {
+	    .magnitude = cast.magnitude,
+	    .chants = cast.initialChants,
+	    .duration = cast.duration,
+	    .maxObjectsToCreate = -1,
+	};
+	const auto spell = MakeSpell(cast.type, caster, cast.position, data, cast.processInfo);
+	if (spell == entt::null)
+	{
+		return entt::null;
+	}
+	// The miracle continues with the prayer power and the age of the file
+	auto& made = registry.Get<Spell>(spell);
+	made.chants.chants = cast.chants;
+	made.chants.initialChants = cast.initialChants;
+	made.age = cast.age;
+	made.resourceFirstDone = cast.firstDone.value_or(false);
+	made.lastRipple = cast.lastRipple.value_or(0.0f);
+	_creatureCasts.insert_or_assign(creature, spell);
+	if (cast.closedDown)
+	{
+		CloseDown(spell);
+	}
+	return spell;
+}
+
+entt::entity MagicSystem::CreatureCastOf(entt::entity creature) const
+{
+	const auto found = _creatureCasts.find(creature);
+	return found != _creatureCasts.end() ? found->second : entt::null;
+}
+
 void MagicSystem::UpdateCreatureCast(Spell& spell)
 {
 	auto& registry = Entities();

@@ -1042,6 +1042,61 @@ std::optional<ImportedWorshipIcon> ReadWorshipIcon(const VanillaWorld& world, co
 	return icon;
 }
 
+namespace
+{
+/// The places of the values in the bytes that a spell gives its particles each turn
+constexpr size_t k_CasterPointAt = 0x00;
+constexpr size_t k_AbovePointAt = 0x0C;
+constexpr size_t k_CameraForwardAt = 0x18;
+constexpr size_t k_HandMovementAt = 0x24;
+constexpr size_t k_PowerAt = 0x30;
+constexpr size_t k_CastingAt = 0x38;
+constexpr size_t k_ProcessInfoSize = 0x3C;
+
+std::array<float, 3> PointAt(std::span<const uint8_t> bytes, size_t at)
+{
+	std::array<float, 3> point {};
+	std::memcpy(point.data(), bytes.data() + at, sizeof(point));
+	return point;
+}
+} // namespace
+
+std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto type = world.Word(record, "spellMagicType");
+	if (!type.has_value() || *type == static_cast<uint32_t>(MagicType::None))
+	{
+		return std::nullopt;
+	}
+	ImportedHeldSpell spell {
+	    .number = record.number,
+	    .magicType = static_cast<MagicType>(*type),
+	    .position = PositionOf(world, record).value_or(gamesave::MapCoords {}),
+	    .creator = world.Ref(record, "spellCreator").value_or(0),
+	    .chants = world.Float(record, "spellChants").value_or(0.0f),
+	    .initialChants = world.Float(record, "spellInitialChants").value_or(0.0f),
+	    .closedDown = world.Word(record, "spellClosedDown").value_or(0) != 0,
+	    .duration = world.Float(record, "spellDuration").value_or(-1.0f),
+	    .age = world.Float(record, "spellAge").value_or(0.0f),
+	    .magnitude = world.Float(record, "spellMagnitude").value_or(0.0f),
+	};
+	if (const auto info = world.Raw(record, "spellProcessInfo"); info.size() == k_ProcessInfoSize)
+	{
+		spell.casterPoint = PointAt(info, k_CasterPointAt);
+		spell.abovePoint = PointAt(info, k_AbovePointAt);
+		spell.cameraForward = PointAt(info, k_CameraForwardAt);
+		spell.handMovement = PointAt(info, k_HandMovementAt);
+		std::memcpy(&spell.power, info.data() + k_PowerAt, sizeof(spell.power));
+		spell.casting = info[k_CastingAt] != 0;
+	}
+	if (const auto firstDone = world.Byte(record, "spellFirstDone"))
+	{
+		spell.firstDone = *firstDone != 0;
+	}
+	spell.lastRipple = world.Float(record, "spellLastRipple");
+	return spell;
+}
+
 void PutDanceValues(components::Dance& dance, const ImportedDance& file)
 {
 	dance.clock = file.clock;

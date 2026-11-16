@@ -199,6 +199,9 @@ private:
 	void ImportVanillaAnimals(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaCircles& circles);
 	/// Each player takes the computer god of the file. A player that the file gives no computer god has no computer god.
 	void ImportVanillaPlayers(const gamesave::VanillaWorld& world);
+	/// Each creature of the file that holds a spell holds the same spell, with the time, the size and the prayer power of
+	/// the file. The spells that the import makes go into the numbers of the made things.
+	void ImportVanillaHeldCasts(const gamesave::VanillaWorld& world, VanillaMade& made);
 	/// The reactions of the file replace the reactions of the land, when all the things of the file are made. Each living
 	/// thing of the file remembers the kinds of reaction that it took up.
 	void ImportVanillaReactions(const gamesave::VanillaWorld& world, const VanillaMade& made);
