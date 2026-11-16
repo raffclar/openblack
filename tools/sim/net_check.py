@@ -1348,7 +1348,52 @@ def place_row(pid, place_type, copies, start, step):
     return int(answer.get("sent", 0)) if isinstance(answer, dict) else 0, None
 
 
-def editor_desync(pids, case, shots=None):
+def editor_mind(pids, focus, files):
+    """The creature tools of the editor in a network game open mind files of the first client's computer. First a new
+    creature comes from each file, near the camera. Then each creature near the camera takes the mind of another file.
+    Each file goes to the game server, which sends it to every computer before the turn of its load. Returns the
+    answer of each send."""
+    editor = pids[0]
+    done = {"files": files, "spawns": [], "loads": []}
+    for index, path in enumerate(files):
+        done["spawns"].append(inspector_answer(editor, "editor.mind_load", {"params": {
+            "path": path, "position": [focus[0] - 30.0 + 25.0 * index, focus[2] - 20.0], "owner": index % 2,
+            "radians": 0.3 * index}}))
+        time.sleep(1.5)
+    time.sleep(1.0)
+    creatures = items_of(inspector_answer(editor, "objects.find", {"params": {
+        "near": [focus[0], focus[2]], "radius": 400.0, "kind": "Creature", "limit": 8}}))
+    done["creatures"] = [creature.get("id") for creature in creatures]
+    for index, creature in enumerate(creatures):
+        done["loads"].append(inspector_answer(editor, "editor.mind_load", {"params": {
+            "path": files[(index + 1) % len(files)], "id": creature["id"]}}))
+        time.sleep(1.0)
+    for answer in done["spawns"] + done["loads"]:
+        if isinstance(answer, dict) and answer.get("error"):
+            done.setdefault("errors", []).append(answer["error"])
+    return done
+
+
+def mind_files(options):
+    """The mind files of the case mind: the files of the command line, or the two saved creatures of the game folder"""
+    if options.mind_files:
+        return [os.path.abspath(path) for path in options.mind_files]
+    folder = os.path.join(options.game_path, "Scripts", "CreatureMind")
+    return [os.path.join(folder, name) for name in ("C4a76f23d.erc", "C643e7b7f.erc")]
+
+
+def mind_load_lines(server_log, client_logs):
+    """The lines of the mind loads of the editor at the turns, without the time and the name of the log. Each
+    computer must have the same lines: the same turns, files and things."""
+    def lines(log):
+        return [line[line.index("Turn "):] for line in lines_with(log, ["the mind file"]) if "Turn " in line]
+    server = lines(server_log)
+    clients = [lines(log) for log in client_logs]
+    return {"server": server, "clients": clients, "loads": len(server),
+            "same": all(client == server for client in clients) and bool(server)}
+
+
+def editor_desync(pids, case, shots=None, mind_files=None):
     """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
     "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
     second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. With "animals"
@@ -1471,6 +1516,10 @@ def editor_desync(pids, case, shots=None):
         done["sent"].append({"spawns": made})
     if case in ("animals", "all"):
         done["animals"] = editor_animals(pids, focus)
+    if case in ("mind", "all"):
+        done["mind"] = editor_mind(pids, focus, mind_files or [])
+        if done["mind"].get("errors"):
+            done.setdefault("errors", []).extend(done["mind"]["errors"])
     if case in ("creature-remove", "all"):
         done["creature_remove"] = editor_creature_remove(pids, focus)
         if done["creature_remove"].get("error"):
@@ -2581,7 +2630,7 @@ def main():
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
-                                                    "creature-remove", "land", "history", "all"),
+                                                    "creature-remove", "land", "history", "mind", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -2589,8 +2638,13 @@ def main():
                              "tools (spawn), or puts down each row of the animals' table two times (animals), or "
                              "removes a wild creature and the creature of a player (creature-remove), or raises, "
                              "lowers and paints the land and draws a footpath and a stream (land), or undoes and redoes "
-                             "a placement, a move, a turn, a removal and a copy of a creature (history), or all of them; "
+                             "a placement, a move, a turn, a removal and a copy of a creature (history), or makes "
+                             "creatures from mind files and loads mind files into the creatures near the camera "
+                             "(mind), or all of them; "
                              "every computer must keep the same checksums")
+    parser.add_argument("--mind-files", nargs="+", metavar="FILE",
+                        help="with --editor-desync mind: the mind files that the first client opens (the default is "
+                             "the two saved creatures of Scripts/CreatureMind of the game folder)")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps; "
                              "with --editor-desync land: screenshots of both clients after the strokes and the paths")
@@ -3111,7 +3165,7 @@ def main():
             if (options.editor_desync and editor_desync_done is None and clients and clients[0].poll() is None
                     and reached_turn(os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
                 editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync,
-                                                   options.editor_shots)
+                                                   options.editor_shots, mind_files(options))
                 print(f"editor desync: {json.dumps(editor_desync_done)[:400]}")
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
@@ -3351,6 +3405,12 @@ def main():
             print(f"the forest camera check did not pass: {json.dumps(forest_done)[:2000]}")
     if options.editor_desync:
         summary["editor_desync"] = editor_desync_done
+        if options.editor_desync in ("mind", "all"):
+            summary["mind_loads"] = mind_load_lines(
+                server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
+            if not summary["mind_loads"]["same"]:
+                print(f"the mind loads differ or did not come: {json.dumps(summary['mind_loads'])[:2000]}")
+                all_same = False
         if editor_desync_done is None or editor_desync_done.get("error"):
             print(f"the editor desync check did not run: {editor_desync_done}")
             all_same = False

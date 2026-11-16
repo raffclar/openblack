@@ -97,6 +97,9 @@ public:
 	virtual void SendRoomChat(std::string /*text*/, std::string /*to*/, bool /*team*/) {}
 	/// The lines of the room's chat that the game server sent since the last call, in the order that they came
 	[[nodiscard]] virtual std::vector<game_socket::RoomChat> TakeRoomChat() { return {}; }
+	/// A mind file of the creature tools of the editor goes to the game server on the game socket. The server sends it to
+	/// every player. False when the socket of the game is not open: then the file does not go.
+	[[nodiscard]] virtual bool SendEditorMindFile(std::vector<uint8_t> /*file*/) { return false; }
 	/// The player leaves the network game
 	virtual void Leave() = 0;
 	/// The end box of a decided game opened: the game server stops the turns of the game. When the last turn came, the

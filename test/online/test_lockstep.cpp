@@ -31,6 +31,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Commands/TurnCodec.h"
+#include "Editor/EditorMindLoads.h"
 #include "Editor/LandBrush.h"
 #include "LoopbackSockets.h"
 #include "Online/ConnectionLostNotice.h"
@@ -73,6 +74,10 @@ struct FakeWorld
 	std::vector<Command> observersGod;
 	/// The commands of the observers and the commands of their comes and goes, in the order of the turns
 	std::vector<Command> observerCommands;
+	/// Whether the computer has the mind file of the editor with the hash
+	std::function<bool(uint64_t hash)> mindFileHere;
+	/// For each mind load of the editor that the world did, whether the computer had its file at the turn
+	std::vector<bool> mindFilesAtTurn;
 
 	uint64_t Play(uint32_t turn, const std::vector<Command>& commands)
 	{
@@ -93,6 +98,10 @@ struct FakeWorld
 			if (command.observer != 0)
 			{
 				observerCommands.push_back(command);
+			}
+			if (const auto* load = std::get_if<EditorMindLoad>(&command.action))
+			{
+				mindFilesAtTurn.push_back(mindFileHere && mindFileHere(load->file));
 			}
 			hash = (hash ^ (static_cast<uint64_t>(command.player) + 1) * 31 + command.action.index()) * 1099511628211ull;
 			hash = (hash ^ command.observer) * 1099511628211ull;
@@ -193,6 +202,7 @@ struct Computer
 		});
 		this->landFile = std::move(landFile);
 		this->creature = std::move(creature);
+		world.mindFileHere = [this](uint64_t hash) { return !session.EditorMindFile(hash).empty(); };
 		session.SetReady(true);
 	}
 
@@ -293,7 +303,7 @@ class LockstepTest: public ::testing::Test
 {
 protected:
 	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7, bool testCommands = false,
-	              bool lan = false)
+	              bool lan = false, std::function<bool(std::span<const uint8_t>)> readsMindFile = {})
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
@@ -306,7 +316,8 @@ protected:
 		        .keptTurns = 3200,
 		        .testCommands = testCommands,
 		        .sessionHasher = hasher,
-		        .lanNames = lan});
+		        .lanNames = lan,
+		        .readsMindFile = std::move(readsMindFile)});
 	}
 
 	/// The room of the game of one lobby: the members of the lobby, the build of the server and the SHA-256 of its land
@@ -376,6 +387,7 @@ protected:
 		{
 			const auto turn = serverWorld.turns;
 			const auto commands = host->TakeTurn(turn);
+			serverWorld.mindFileHere = [this](uint64_t hash) { return !host->EditorMindFile(hash).empty(); };
 			host->TurnChecksum(turn + 1, serverWorld.Play(turn, commands));
 		}
 		for (auto* computer : computers)
@@ -713,6 +725,11 @@ TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 	EXPECT_TRUE(ServerTakesFromObserver(EditorLandStroke {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(EditorLandStroke {}, false));
 	EXPECT_FALSE(server::LeavesOut(EditorLandStroke {}, false));
+	// The mind loads of the creature tools are edits of the editor too
+	EXPECT_TRUE(OnlyEditorSends(EditorMindLoad {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorMindLoad {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorMindLoad {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorMindLoad {}, false));
 	EXPECT_TRUE(OnlyEditorSends(EditorPath {}));
 	EXPECT_TRUE(ServerTakesFromObserver(EditorPath {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(EditorPath {}, false));
@@ -922,6 +939,93 @@ TEST_F(LockstepTest, TheServerTakesTheUndoAndRedoOfTheEditorOnlyFromTheEditorAnd
 	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
 	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, EveryComputerHasTheMindFileOfTheEditorAtTheTurnOfItsLoad)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	const std::vector<uint8_t> file {'M', 'I', 'N', 'D', 1, 2, 3};
+	const auto hash = openblack::editor::mind_loads::HashOf(file);
+	// The file goes on the game socket first, then the command in a block of commands
+	ASSERT_TRUE(alice.session.SendEditorMindFile(file));
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = hash, .creature = Entity(5)});
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::Spawn, .file = hash, .spawn = {.species = 2}});
+	Frames({&alice, &bob}, 6);
+	const auto& commands = host->Seats()[0].commands;
+	const auto found = commands.find(static_cast<uint8_t>(turn_codec::CommandTag::EditorMindLoad));
+	ASSERT_NE(found, commands.end());
+	EXPECT_EQ(found->second, 2u);
+	// The server, the sender and the other player had the file at the turn of each load
+	EXPECT_EQ(serverWorld.mindFilesAtTurn, (std::vector<bool> {true, true}));
+	EXPECT_EQ(alice.world.mindFilesAtTurn, (std::vector<bool> {true, true}));
+	EXPECT_EQ(bob.world.mindFilesAtTurn, (std::vector<bool> {true, true}));
+	const auto kept = bob.session.EditorMindFile(hash);
+	EXPECT_EQ(std::vector<uint8_t>(kept.begin(), kept.end()), file);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	EXPECT_EQ(host->RefusedEditorValues(), 0u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesAMindFileAndItsLoadOnlyFromTheEditorAndOnlyForAKeptFile)
+{
+	MakeHost(2, 5LL * 60 * 1'000'000, 7, false, false,
+	         [](std::span<const uint8_t> data) { return !data.empty() && data.front() == 'M'; });
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	const std::vector<uint8_t> file {'M', 9};
+	const std::vector<uint8_t> bad {'X', 9};
+	const auto hash = openblack::editor::mind_loads::HashOf(file);
+	const auto badHash = openblack::editor::mind_loads::HashOf(bad);
+	// A player with no editor claim sends a file and a load
+	ASSERT_TRUE(bob.session.SendEditorMindFile(file));
+	bob.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = hash, .creature = Entity(5)});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	EXPECT_TRUE(host->EditorMindFile(hash).empty());
+	EXPECT_TRUE(alice.session.EditorMindFile(hash).empty());
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	// The editor sends a file that does not read, and a load of that file, which the server does not keep
+	ASSERT_TRUE(alice.session.SendEditorMindFile(bad));
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = badHash, .creature = Entity(5)});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorValues(), 2u);
+	EXPECT_TRUE(bob.session.EditorMindFile(badHash).empty());
+	EXPECT_EQ(host->Seats()[0].commands.count(static_cast<uint8_t>(turn_codec::CommandTag::EditorMindLoad)), 0u);
+	EXPECT_TRUE(serverWorld.mindFilesAtTurn.empty());
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+}
+
+TEST_F(LockstepTest, APlayerWhoComesBackGetsTheMindFilesBeforeTheTurnsThatItMissed)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	bob.Frame();
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Reconnecting);
+	// The editor loads a mind while the other player is away
+	const std::vector<uint8_t> file {'M', 7, 7};
+	const auto hash = openblack::editor::mind_loads::HashOf(file);
+	ASSERT_TRUE(alice.session.SendEditorMindFile(file));
+	alice.session.Send(EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = hash, .creature = Entity(5)});
+	Frames({&alice}, 10);
+	ASSERT_EQ(alice.world.mindFilesAtTurn, (std::vector<bool> {true}));
+	EXPECT_TRUE(bob.session.EditorMindFile(hash).empty());
+	Frames({&alice, &bob}, 10);
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	// The kept turn with the load came after the file
+	EXPECT_EQ(bob.world.mindFilesAtTurn, (std::vector<bool> {true}));
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 

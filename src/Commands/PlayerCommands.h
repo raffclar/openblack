@@ -827,6 +827,32 @@ struct EditorPath
 	[[nodiscard]] bool operator==(const EditorPath&) const = default;
 };
 
+/// A mind file of the creature tools of the editor goes into a creature at the turn. The file goes to the game server on
+/// the game socket before the command, and the server sends it to each computer before the turn that holds the command.
+/// Each computer finds the file by the hash of its bytes. Only a player with the editor claim sends it in a network game,
+/// and the game server refuses it from every other player.
+struct EditorMindLoad
+{
+	/// What the mind file does
+	enum class Use : uint8_t
+	{
+		/// The creature takes the learning, the desires and the stage of growing up of the file
+		LoadInto = 0,
+		/// A new creature with the body of the file takes the mind of the file
+		Spawn = 1,
+	};
+
+	Use use {Use::LoadInto};
+	/// The hash of the bytes of the mind file (editor::mind_loads::HashOf)
+	uint64_t file {0};
+	/// The creature that takes the mind. Only for LoadInto.
+	entt::entity creature {entt::null};
+	/// The new creature. Only for Spawn.
+	EditorCreatureSpawn spawn {};
+
+	[[nodiscard]] bool operator==(const EditorMindLoad&) const = default;
+};
+
 /// A debug cheat of the player of the command goes on or off (debug_cheats::Cheat). Only a player with the editor claim sends
 /// it in a network game, and the game server refuses it from every other player.
 struct DebugCheat
@@ -855,7 +881,8 @@ using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, Hand
                             CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
                             DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut,
                             HandLockRelease, EditorEdit, DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip,
-                            EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke, EditorPath, EditorRemake>;
+                            EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke, EditorPath, EditorRemake,
+                            EditorMindLoad>;
 
 /// A command and the player that sent it
 struct Command
@@ -884,7 +911,8 @@ struct Command
 	       std::holds_alternative<EditorCreatureEdit>(action) || std::holds_alternative<EditorCreatureAct>(action) ||
 	       std::holds_alternative<EditorVillagerEdit>(action) || std::holds_alternative<EditorCreatureSpawn>(action) ||
 	       std::holds_alternative<DebugLandSkip>(action) || std::holds_alternative<EditorLandStroke>(action) ||
-	       std::holds_alternative<EditorPath>(action) || std::holds_alternative<EditorRemake>(action);
+	       std::holds_alternative<EditorPath>(action) || std::holds_alternative<EditorRemake>(action) ||
+	       std::holds_alternative<EditorMindLoad>(action);
 }
 
 /// Whether the game server refuses the command from every player, also from a player with the editor claim. A network game
@@ -896,7 +924,8 @@ struct Command
 
 /// Whether the game server takes the command from an observer. An observer with the editor claim also sends the edits of the
 /// editor, also the edits, the acts, the new creatures and the tattoos of a creature, the edits of a villager, and the
-/// strokes and the paths of the land tools. The god of the observers has no citadel, so an observer sends no debug cheat.
+/// strokes and the paths of the land tools, and the mind files of a creature. The god of the observers has no citadel, so
+/// an observer sends no debug cheat.
 [[nodiscard]] constexpr bool ServerTakesFromObserver(const Action& action, bool editor) noexcept
 {
 	return ObserverSends(action) ||
@@ -905,7 +934,7 @@ struct Command
 	         std::holds_alternative<EditorCreatureAct>(action) || std::holds_alternative<EditorCreatureSpawn>(action) ||
 	         std::holds_alternative<EditorVillagerEdit>(action) || std::holds_alternative<CreatureTattoo>(action) ||
 	         std::holds_alternative<EditorLandStroke>(action) || std::holds_alternative<EditorPath>(action) ||
-	         std::holds_alternative<EditorRemake>(action)));
+	         std::holds_alternative<EditorRemake>(action) || std::holds_alternative<EditorMindLoad>(action)));
 }
 
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that

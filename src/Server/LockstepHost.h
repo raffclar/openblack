@@ -27,6 +27,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Editor/EditorMindLoads.h"
 #include "Online/GameDataPrint.h"
 #include "Server/DesyncCapture.h"
 #include "Server/GameLifetime.h"
@@ -85,6 +86,9 @@ struct HostSettings
 	/// Whether the server sends the start data of a god (its creature file) to the players as it is. The server sends
 	/// empty data in place of data that this refuses. With none, the server sends all data as it is.
 	std::function<bool(std::span<const uint8_t> data)> relaysCreature;
+	/// Whether the server takes a mind file of the editor (editor.mind_file): each computer must read it as the creature
+	/// tools read a file. With none, the server takes every file that is not empty.
+	std::function<bool(std::span<const uint8_t> data)> readsMindFile;
 	/// The count of the countries of the land of the server's world, which a paint of the editor must stay under. With
 	/// none, or when it gives none, the server checks only the most countries that a cell keeps.
 	std::function<std::optional<int>()> landCountries;
@@ -287,6 +291,8 @@ public:
 	/// creatures as the worlds of the clients from these files.
 	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
+	/// The mind files of the editor that the server keeps for its own world and sends to every player
+	[[nodiscard]] std::span<const uint8_t> EditorMindFile(uint64_t hash) const override { return _mindFiles.Find(hash); }
 	/// The checksum of the server's world after a turn. It goes to every client.
 	void TurnChecksum(uint32_t turn, uint64_t checksum);
 
@@ -451,6 +457,11 @@ private:
 	void RemoveBannedFromGame();
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
 	void StartCreature(ConnectionId connection, const Peer& peer, const game_socket::StartCreature& creature);
+	/// A mind file of the editor from a player. The server checks the claim and the file, keeps it and sends it to every
+	/// player before any turn that holds a command that uses it.
+	void EditorMindFileFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorMindFile& mind);
+	/// Sends each mind file of the editor that the server keeps to a player who comes back or joins, before the turns
+	void SendEditorMindFiles(ConnectionId connection);
 	/// The gods are ready: the server asks the gods if they have the land
 	void QueryLands();
 	/// Every god has the land: the gods send their creature files
@@ -518,6 +529,8 @@ private:
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	/// The alignments that the gods sent with their creature files, by god slot
 	std::map<uint8_t, float> _startAlignments;
+	/// The mind files of the editor that the players with the editor claim sent during the game
+	editor::mind_loads::MindFileStore _mindFiles;
 	bool _pausedBefore {false};
 	/// When the last god's player of this process went and a god started to wait for its player. None while a god's
 	/// player is connected.
