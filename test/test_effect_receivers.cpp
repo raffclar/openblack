@@ -281,6 +281,25 @@ TEST_F(EffectReceivers, AScriptsUnfinishedBuildingWithASiteGetsAllItsLifeAgain)
 	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 0.0f);
 }
 
+TEST_F(EffectReceivers, ATownsFieldStaysAndLosesOnlyItsCropWhenAnEffectDestroysIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto field = Made();
+	registry.Assign<Abode>(field, Abode {.type = AbodeNumber::Field, .townId = 7});
+	auto& crop = registry.Assign<Field>(field).crop;
+	crop.timesSown = 3;
+	crop.age = 40.0f;
+	crop.food = 900.0f;
+	ecs::world_objects::DestroyedByEffect(field, {});
+	// The field and its footprint stay. Its town does not plan it again.
+	ASSERT_TRUE(registry.Valid(field));
+	EXPECT_TRUE(registry.AllOf<Abode>(field));
+	const auto& after = registry.Get<const Field>(field).crop;
+	EXPECT_EQ(after.timesSown, 0);
+	EXPECT_FLOAT_EQ(after.age, 0.0f);
+	EXPECT_FLOAT_EQ(after.food, 0.0f);
+}
+
 TEST_F(EffectReceivers, AVillageTotemGivesHarmAndLifeToItsTownCentreAndTakesTheLifeOfItsTownCentre)
 {
 	auto& registry = Locator::entitiesRegistry::value();
