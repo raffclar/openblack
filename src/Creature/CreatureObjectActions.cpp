@@ -567,6 +567,17 @@ creature_object_actions::EatenThingEnd creature_object_actions::EatenThingEndFor
 	return eatGoesOn ? EatenThingEnd::Wait : EatenThingEnd::Swallow;
 }
 
+creature_object_actions::HeldAtOtherMeal creature_object_actions::HeldAtOtherMealFor(bool alive)
+{
+	return alive ? HeldAtOtherMeal::LostFromHand : HeldAtOtherMeal::Goes;
+}
+
+bool creature_object_actions::SwallowsOtherMeal(const OtherMealFacts& facts)
+{
+	// A held creature is eaten as it is
+	return facts.holds && !facts.holdsNamedThing && facts.namedThingExists && !facts.heldIsCreature;
+}
+
 creature_object_actions::HoldStart creature_object_actions::HoldStartFor(bool living, bool creature, bool acceptsHandState)
 {
 	if (!living || creature)

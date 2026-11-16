@@ -2449,9 +2449,9 @@ bool LeashSystem::AskedForFight(entt::entity creature) const
 		return false;
 	}
 	const auto& fights = Locator::creatureFightSystem::value();
-	// The creature that started a fight takes no orders out of its duel. The other creature takes orders before its duel
-	// and after it.
-	if (fights.StartedFight(creature) && !fights.IsDuelling(creature))
+	// The creature that started a fight takes no orders out of its duel, until it stops what it does. The other creature
+	// takes orders before its duel and after it. The tie of the leash stops the creature first, so its order is taken.
+	if (fights.LeadsFight(creature) && !fights.IsDuelling(creature))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders while it leads a fight",
 		                   entt::to_integral(creature));

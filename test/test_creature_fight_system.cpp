@@ -2643,10 +2643,41 @@ TEST_F(CreatureFightSystemTest, ANewPlanAfterTheDuelStopsBothCreatures)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureFightSystemTest, OnlyTheCreatureThatStartedTheFightLeadsIt)
 {
-	EXPECT_TRUE(fights.StartedFight(first));
-	EXPECT_FALSE(fights.StartedFight(second));
+	EXPECT_TRUE(fights.LeadsFight(first));
+	EXPECT_FALSE(fights.LeadsFight(second));
 	Locator::entitiesRegistry::value().Remove<CreatureFighting>(first);
-	EXPECT_FALSE(fights.StartedFight(first));
+	EXPECT_FALSE(fights.LeadsFight(first));
+}
+
+// A call-off in the duel stops both creatures. The first creature then no longer leads the fight while it winds down, so
+// the order of a leash tie is taken.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AStopEndsTheLeadOfTheCreatureThatStartedTheFight)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	fights.CallOff(first);
+	ASSERT_TRUE(registry.AllOf<CreatureFighting>(first));
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, CreatureFighting::Stage::Respond);
+	EXPECT_FALSE(fights.LeadsFight(first));
+	EXPECT_FALSE(fights.LeadsFight(second));
+}
+
+// A call-off on the other creature stops its partner too, so the first creature also no longer leads the fight
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AStopOfThePartnerEndsTheLeadOfTheFirstCreature)
+{
+	fights.CallOff(second);
+	EXPECT_FALSE(fights.LeadsFight(first));
+}
+
+// After a duel that ended with no stop, the first creature still leads the fight
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheFirstCreatureLeadsTheFightAfterTheDuelUntilItStops)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	AfterTheDuel(registry, first, 1.0f, second, 0.5f);
+	EXPECT_TRUE(fights.LeadsFight(first));
+	EXPECT_FALSE(fights.IsDuelling(first));
 }
 
 // A fighter whose opponent has its order to start its duel has an opponent: its start goes on to its stance, and not to

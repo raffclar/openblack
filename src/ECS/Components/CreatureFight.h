@@ -82,6 +82,9 @@ struct CreatureFighting
 	/// Whether this creature started the fight, takes the arena and takes its place to the east of the middle; the arena
 	/// that it took, from the moment the arena appears
 	bool madeArena {false};
+	/// Whether the creature that started the fight stopped what it did after the start. Then it no longer leads the fight,
+	/// and it takes leash orders again.
+	bool leadEnded {false};
 	entt::entity arenaEntity {entt::null};
 	/// Whether this creature started the fight by a plan of its own, and not by the leash, a script or the debug tools
 	bool planned {false};
