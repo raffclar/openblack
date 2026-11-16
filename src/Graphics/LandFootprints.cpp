@@ -146,11 +146,9 @@ const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
 	if (meshes.Contains(mesh))
 	{
 		kept.mesh = meshes.Handle(mesh);
-		// The game paints the first footprint of the model of a landscape feature
-		if (kept.mesh && kept.mesh->ContainsLandscapeFeature() && !kept.mesh->GetFootprints().empty() &&
-		    !kept.mesh->GetFootprints().front().triangles.empty())
+		if (kept.mesh)
 		{
-			kept.footprint = &kept.mesh->GetFootprints().front();
+			kept.footprint = kept.mesh->GetGroundFootprint();
 		}
 	}
 	const auto* footprint = kept.footprint;
