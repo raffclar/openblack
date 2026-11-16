@@ -1475,6 +1475,10 @@ def editor_desync(pids, case, shots=None):
         done["creature_remove"] = editor_creature_remove(pids, focus)
         if done["creature_remove"].get("error"):
             done.setdefault("errors", []).append(done["creature_remove"]["error"])
+    if case in ("history", "all"):
+        done["history"] = editor_history(pids, focus)
+        for error in done["history"].get("errors", []):
+            done.setdefault("errors", []).append(error)
     if case in ("land", "all"):
         # The land brush raises, lowers and paints the land near the camera, then a drag makes a row of strokes in one
         # second, as the land tools send them. Then a footpath and a stream go down. Each computer must change its land
@@ -1593,6 +1597,100 @@ def editor_creature_remove(pids, focus):
         done["left"].append(sorted(found & set(targets)))
     if any(done["left"]):
         done["error"] = f"a client still has a removed creature: {done['left']}"
+    return done
+
+
+# The kind of the palette for a tree (editor::PlaceKind::Tree)
+TREE_PLACE_KIND = 3
+
+
+def editor_history(pids, focus):
+    """The editor undoes and redoes each kind of change in a network game, through its own history: a placement, a
+    move, a turn, a removal and a copy of a creature. Each undo and redo goes as a command of the turns, and the answer
+    of the turn gives the history the thing or the pose. Every computer must then have the same checksums. Returns
+    what each step did."""
+    editor = pids[0]
+    done = {"steps": []}
+
+    def idle():
+        """Waits until the history has the answer of each request"""
+        return wait_for(lambda: not (inspector_answer(editor, "view.editor", {}) or {}).get("waiting", True), 15.0)
+
+    def act(params):
+        answer = inspector_answer(editor, "editor.act", {"params": params})
+        done["steps"].append({"act": params.get("act"), "answer": answer})
+        if not isinstance(answer, dict) or answer.get("error"):
+            done.setdefault("errors", []).append(f"{params.get('act')}: {answer}")
+        if not idle():
+            done.setdefault("errors", []).append(f"{params.get('act')}: the history still waits")
+        time.sleep(0.5)
+        return answer if isinstance(answer, dict) else {}
+
+    def pose(pid, thing):
+        """The place, the turn and the scale of a thing on a client, as text to compare"""
+        found = inspector_answer(pid, "ecs.entity", {"params": {"id": thing, "components": ["Transform"]}}) or {}
+        if not isinstance(found, dict):
+            return None
+        return json.dumps(found.get("components") or found.get("position"), sort_keys=True)
+
+    def creatures(pid):
+        return sorted(item["id"] for item in items_of(inspector_answer(pid, "objects.find", {"params": {
+            "near": [focus[0], focus[2]], "radius": 6000.0, "kind": "Creature", "limit": 64}})))
+
+    # A placement, then its undo and its redo
+    act({"act": "place", "place_kind": TREE_PLACE_KIND, "place_type": 1, "position": [focus[0] + 30.0, focus[2]]})
+    act({"act": "undo"})
+    act({"act": "redo"})
+    # A move and a turn of a tree of the land, then the undo of both and the redo of both
+    trees = items_of(inspector_answer(editor, "objects.find", {"params": {
+        "near": [focus[0], focus[2]], "radius": 3000.0, "kind": "Tree", "limit": 1}}))
+    if not trees:
+        done.setdefault("errors", []).append(f"no tree near the camera at {focus}")
+        return done
+    tree = trees[0]["id"]
+    done["tree"] = tree
+    before = pose(editor, tree)
+    act({"act": "move", "ids": [tree], "offset": [6.0, 4.0]})
+    act({"act": "turn", "ids": [tree], "radians": 0.8})
+    moved = pose(editor, tree)
+    act({"act": "undo"})
+    act({"act": "undo"})
+    back = [pose(pid, tree) for pid in pids]
+    done["pose_back"] = all(item == before for item in back)
+    if not done["pose_back"]:
+        done.setdefault("errors", []).append(f"the undo did not put back the pose: {before} -> {back}")
+    act({"act": "redo"})
+    act({"act": "redo"})
+    again = [pose(pid, tree) for pid in pids]
+    done["pose_again"] = all(item == moved for item in again)
+    if not done["pose_again"]:
+        done.setdefault("errors", []).append(f"the redo did not give the pose again: {moved} -> {again}")
+    # A removal, its undo (the tree comes again from its recipe), its redo and the undo again
+    act({"act": "delete", "ids": [tree]})
+    act({"act": "undo"})
+    act({"act": "redo"})
+    act({"act": "undo"})
+    # A copy of a creature, with its body, then the undo and the redo of the copy
+    start = creatures(editor)
+    inspector_answer(editor, "editor.creature_spawn", {"params": {
+        "species": 5, "position": [focus[0] - 30.0, focus[2] + 20.0], "owner": NEUTRAL_PLAYER, "scale": 1.4,
+        "alignment": 0.5, "fatness": 0.2, "strength": 0.9}})
+    made = wait_for(lambda: [item for item in creatures(editor) if item not in start], 10.0) or []
+    if not made:
+        done.setdefault("errors", []).append("the creature tools made no creature")
+        return done
+    creature = made[0]
+    act({"act": "duplicate", "ids": [creature]})
+    copies = [item for item in creatures(editor) if item not in start and item != creature]
+    done["creature_copy"] = copies
+    if not copies:
+        done.setdefault("errors", []).append("the copy of the creature did not come")
+    act({"act": "undo"})
+    act({"act": "redo"})
+    time.sleep(2.0)
+    done["creatures"] = [creatures(pid) for pid in pids]
+    if any(item != done["creatures"][0] for item in done["creatures"]):
+        done.setdefault("errors", []).append(f"the clients have other creatures: {done['creatures']}")
     return done
 
 
@@ -2483,14 +2581,15 @@ def main():
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
-                                                    "creature-remove", "land", "all"),
+                                                    "creature-remove", "land", "history", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
                              "and changes the fields of the villager (objects), or puts down creatures with the creature "
                              "tools (spawn), or puts down each row of the animals' table two times (animals), or "
                              "removes a wild creature and the creature of a player (creature-remove), or raises, "
-                             "lowers and paints the land and draws a footpath and a stream (land), or all of them; "
+                             "lowers and paints the land and draws a footpath and a stream (land), or undoes and redoes "
+                             "a placement, a move, a turn, a removal and a copy of a creature (history), or all of them; "
                              "every computer must keep the same checksums")
     parser.add_argument("--editor-shots", metavar="FOLDER",
                         help="with --editor-check: screenshots of both clients at each step, and of the move in steps; "

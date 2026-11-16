@@ -9,10 +9,12 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <fmt/format.h>
 #include <glm/vec2.hpp>
@@ -23,6 +25,7 @@
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "Editor/EditorActions.h"
 #include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorEntities.h"
@@ -219,6 +222,151 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			Locator::playerCommandSystem::value().Submit(command);
 		}
 		return QueryResult::Value({{"sent", count}});
+	});
+
+	auto act = Query(
+	    "act",
+	    "Does an action of the editor on things, as the tool bar and the keys of the editor do it, with the history of the "
+	    "editor: delete, duplicate, place, move, turn, undo or redo. In a network game each change goes as a command of the "
+	    "turns, and the history learns it from the answer at the turn. force acts also when the editor of this computer is "
+	    "refused.",
+	    {{.name = "act",
+	      .type = "string",
+	      .description = "delete, duplicate, place, move, turn, undo or redo",
+	      .required = true},
+	     {.name = "ids",
+	      .type = "array",
+	      .description = "The things to pick before the act (delete, duplicate, move, turn)",
+	      .required = false},
+	     {.name = "offset", .type = "point", .description = "[x, z] that a move adds to each thing", .required = false},
+	     {.name = "radians", .type = "number", .description = "The angle of a turn", .required = false},
+	     {.name = "position", .type = "point", .description = "[x, z] of a placement", .required = false},
+	     {.name = "place_kind", .type = "integer", .description = "The kind of the palette item (place)", .required = false},
+	     {.name = "place_type", .type = "integer", .description = "The type of the palette item (place)", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Act also when the editor is refused", .required = false}});
+	act.writes = true;
+	provider->Add(std::move(act), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		if (!Locator::editorSystem::has_value() || !Locator::entitiesRegistry::has_value())
+		{
+			return QueryResult::Error("there is no editor");
+		}
+		const auto actParam = context.params.find("act");
+		const auto name = actParam != context.params.end() && actParam->is_string() ? actParam->get<std::string>() : "";
+		auto& system = Locator::editorSystem::value();
+		auto& registry = Locator::entitiesRegistry::value();
+		// The act uses writes of its own, as the editor window does: a network game sends commands
+		std::unique_ptr<editor::EditorWrites> writes;
+		if (developer_tools::NetworkSessionLive())
+		{
+			writes = editor::MakeNetworkWrites();
+		}
+		else
+		{
+			writes = std::make_unique<editor::LocalWrites>();
+		}
+		const editor::EditorActs acts {.system = system, .registry = registry, .writes = *writes};
+		std::vector<entt::entity> picks;
+		if (const auto ids = context.params.find("ids"); ids != context.params.end() && ids->is_array())
+		{
+			for (const auto& id : *ids)
+			{
+				if (id.is_number_integer() && registry.Valid(static_cast<entt::entity>(id.get<uint32_t>())))
+				{
+					picks.push_back(static_cast<entt::entity>(id.get<uint32_t>()));
+				}
+			}
+			system.GetSelection().SelectAll(picks);
+		}
+		std::string note;
+		if (name == "delete")
+		{
+			editor::DeletePicked(acts);
+		}
+		else if (name == "duplicate")
+		{
+			editor::DuplicatePicked(acts);
+		}
+		else if (name == "undo")
+		{
+			note = editor::UndoStep(acts);
+		}
+		else if (name == "redo")
+		{
+			note = editor::RedoStep(acts);
+		}
+		else if (name == "move" || name == "turn")
+		{
+			editor::PoseEdit edit;
+			edit.Begin(registry, picks);
+			glm::vec2 offset {0.0f};
+			if (const auto found = context.params.find("offset"); found != context.params.end() && found->is_array() &&
+			                                                      found->size() == 2 && (*found)[0].is_number() &&
+			                                                      (*found)[1].is_number())
+			{
+				offset = {(*found)[0].get<float>(), (*found)[1].get<float>()};
+			}
+			const auto radians = NumberParam(context.params, "radians").value_or(0.0f);
+			for (const auto entity : picks)
+			{
+				const auto pose = editor::PoseOf(registry, entity);
+				if (!pose.has_value())
+				{
+					continue;
+				}
+				if (name == "move")
+				{
+					const glm::vec2 point {pose->position.x + offset.x, pose->position.z + offset.y};
+					writes->MoveTo(entity, {point.x, editor::LandHeight(point), point.y});
+				}
+				else
+				{
+					writes->Turn(entity, radians);
+				}
+			}
+			edit.Finish(acts, name == "move" ? "Move" : "Turn");
+		}
+		else if (name == "place")
+		{
+			const auto position = PositionParam(context.params);
+			if (!position.has_value())
+			{
+				return QueryResult::Error("editor.act place needs a position");
+			}
+			const editor::PlaceItem item {
+			    .kind = static_cast<editor::PlaceKind>(NumberParam(context.params, "place_kind").value_or(0.0f)),
+			    .type = static_cast<int32_t>(NumberParam(context.params, "place_type").value_or(0.0f))};
+			const glm::vec3 point {position->x, editor::LandHeight({position->x, position->z}), position->z};
+			if (const auto made = writes->Place(item, point, 0.0f))
+			{
+				editor::RecordMade(acts, *made, "Place");
+			}
+			else
+			{
+				const std::array requests {writes->LastMakeRequest()};
+				editor::RecordAllSent(acts, requests, "Place");
+			}
+		}
+		else
+		{
+			return QueryResult::Error("editor.act needs an act: delete, duplicate, place, move, turn, undo or redo");
+		}
+		const auto& history = system.GetHistory();
+		auto selected = Json::array();
+		for (const auto entity : system.GetSelection().All())
+		{
+			selected.push_back(Id(entity));
+		}
+		return QueryResult::Value({{"note", note},
+		                           {"undo_steps", history.UndoCount()},
+		                           {"redo_steps", history.RedoCount()},
+		                           {"undo_label", history.UndoLabel().value_or("")},
+		                           {"redo_label", history.RedoLabel().value_or("")},
+		                           {"waiting", history.Waiting()},
+		                           {"selected", std::move(selected)}});
 	});
 
 	auto creatureEdit = Query(

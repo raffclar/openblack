@@ -717,6 +717,11 @@ TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 	EXPECT_TRUE(ServerTakesFromObserver(EditorPath {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(EditorPath {}, false));
 	EXPECT_FALSE(server::LeavesOut(EditorPath {}, false));
+	// The make again of an undo or a redo is an edit of the editor too
+	EXPECT_TRUE(OnlyEditorSends(EditorRemake {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorRemake {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorRemake {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorRemake {}, false));
 	EXPECT_FALSE(OnlyEditorSends(CreatureTattoo {}));
 	EXPECT_TRUE(ServerTakesFromObserver(CreatureTattoo {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(CreatureTattoo {}, false));
@@ -870,6 +875,50 @@ TEST_F(LockstepTest, TheServerTakesTheLandToolsOnlyFromTheEditorAndInTheirLimits
 	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorPath), 1u);
 	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorLandStroke), 0u);
 	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorPath), 0u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheUndoAndRedoOfTheEditorOnlyFromTheEditorAndInTheirLimits)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	const EditorEdit pose {.kind = EditorEdit::Kind::Pose, .object = Entity(5), .request = 1, .poseScale = {2.0f, 2.0f, 2.0f}};
+	const EditorRemake remake {.request = 2, .placeKind = 3, .placeType = 1};
+	alice.session.Send(pose);
+	alice.session.Send(remake);
+	// A player with no editor claim sends a pose and a make again
+	bob.session.Send(pose);
+	bob.session.Send(remake);
+	// A changed client can send values that the editor does not give
+	auto huge = pose;
+	huge.poseScale.x = 500.0f;
+	alice.session.Send(huge);
+	auto noThing = pose;
+	noThing.object = entt::null;
+	alice.session.Send(noThing);
+	auto treeWithBody = remake;
+	treeWithBody.creature = true;
+	alice.session.Send(treeWithBody);
+	auto bigCreature = EditorRemake {.placeKind = 0, .placeType = 1, .creature = true, .size = 40.0f};
+	alice.session.Send(bigCreature);
+	Frames({&alice, &bob}, 6);
+	EXPECT_EQ(host->RefusedEditorValues(), 4u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorEdit), 1u);
+	EXPECT_EQ(count(0, turn_codec::CommandTag::EditorRemake), 1u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorEdit), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorRemake), 0u);
 	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
 	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);

@@ -22,6 +22,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "Editor/EditorEntities.h"
+#include "Editor/EditorHistory.h"
 #include "Editor/EditorMath.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "Editor/EditorOutline.h"
@@ -30,6 +31,7 @@ using namespace openblack;
 using namespace openblack::editor;
 using player_commands::Action;
 using player_commands::EditorEdit;
+using player_commands::EditorRemake;
 
 namespace
 {
@@ -48,6 +50,13 @@ struct Sent
 	CommandWrites Writes(CommandWrites::CopyOf copyOf = {})
 	{
 		return {[this](Action action) { actions.push_back(std::move(action)); }, [this] { return turn; }, std::move(copyOf)};
+	}
+
+	/// The writes with request numbers from a history, as the writes of a network game take them
+	CommandWrites WritesWithRequests(EditorHistory& history, CommandWrites::CopyOf copyOf = {})
+	{
+		return {[this](Action action) { actions.push_back(std::move(action)); }, [this] { return turn; }, std::move(copyOf),
+		        [this, &history] { return history.NewRequest(turn); }};
 	}
 
 	[[nodiscard]] const EditorEdit& Edit(size_t index) const { return std::get<EditorEdit>(actions.at(index)); }
@@ -122,7 +131,7 @@ TEST(EditorNetworkEdits, ARemovalSendsTheWaitingMovesFirst)
 TEST(EditorNetworkEdits, ACopySendsThePlacementOfTheCopy)
 {
 	Sent sent;
-	auto writes = sent.Writes([](entt::entity entity, glm::vec2 offset) -> std::optional<EditorEdit> {
+	auto writes = sent.Writes([](entt::entity entity, glm::vec2 offset) -> std::optional<Action> {
 		if (entity != Entity(6))
 		{
 			return std::nullopt;
@@ -278,4 +287,144 @@ TEST(EditorNetworkEdits, AnEditOfAVillagerChangesOnlyItsField)
 	// A thing that is not a villager takes no edit
 	const auto other = registry.Create();
 	EXPECT_FALSE(ApplyVillagerEdit(registry, nullptr, {.villager = other, .field = Field::Life, .amount = 0.5f}));
+}
+
+TEST(EditorNetworkEdits, EachEditTakesARequestAndAThingKeepsItsNewest)
+{
+	Sent sent;
+	EditorHistory history;
+	auto writes = sent.WritesWithRequests(history);
+	writes.MoveTo(Entity(3), {1.0f, 0.0f, 1.0f});
+	writes.Turn(Entity(3), 0.5f);
+	writes.FlushNow();
+	ASSERT_EQ(sent.actions.size(), 2u);
+	EXPECT_NE(sent.Edit(0).request, 0);
+	EXPECT_NE(sent.Edit(1).request, sent.Edit(0).request);
+	EXPECT_TRUE(history.IsOpen(sent.Edit(1).request));
+	// The end of an edit takes the request of the last command for the thing, one time
+	EXPECT_EQ(writes.TakeRequestOf(Entity(3)), sent.Edit(1).request);
+	EXPECT_EQ(writes.TakeRequestOf(Entity(3)), 0);
+	EXPECT_EQ(writes.TakeRequestOf(Entity(4)), 0);
+
+	EXPECT_FALSE(writes.Place({.kind = PlaceKind::Tree, .type = 2}, {1.0f, 0.0f, 2.0f}, 0.0f).has_value());
+	EXPECT_EQ(writes.LastMakeRequest(), sent.Edit(2).request);
+	// With no history, the edits go with no request
+	Sent plain;
+	auto noRequests = plain.Writes();
+	noRequests.Remove(Entity(5));
+	EXPECT_EQ(plain.Edit(0).request, 0);
+}
+
+TEST(EditorNetworkEdits, AnUndoSendsTheFullPoseAndAMakeAgain)
+{
+	Sent sent;
+	EditorHistory history;
+	auto writes = sent.WritesWithRequests(history);
+	const Pose pose {.position = {1.0f, 2.0f, 3.0f},
+	                 .rotation = glm::mat3 {0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f},
+	                 .keptAngles = glm::vec3 {0.1f, 0.2f, 0.3f},
+	                 .scale = {2.0f, 2.5f, 3.0f}};
+	writes.SetPose(Entity(8), pose);
+	ASSERT_EQ(sent.actions.size(), 1u);
+	EXPECT_EQ(sent.Edit(0).kind, EditorEdit::Kind::Pose);
+	EXPECT_EQ(sent.Edit(0).object, Entity(8));
+	EXPECT_EQ(PoseOf(sent.Edit(0)), pose);
+
+	// A pose that the world refuses does not go
+	auto small = pose;
+	small.scale.x = k_SmallestEditorScale / 2.0f;
+	writes.SetPose(Entity(8), small);
+	EXPECT_EQ(sent.actions.size(), 1u);
+
+	const Recipe recipe {.item = {.kind = PlaceKind::Tree, .type = 4}, .pose = pose};
+	const auto made = writes.Make(recipe);
+	EXPECT_EQ(made.entity, entt::entity {entt::null});
+	ASSERT_EQ(sent.actions.size(), 2u);
+	const auto& remake = std::get<EditorRemake>(sent.actions.at(1));
+	EXPECT_EQ(remake.request, made.request);
+	EXPECT_NE(made.request, 0);
+	EXPECT_EQ(RecipeOf(remake), recipe);
+}
+
+TEST(EditorNetworkEdits, TheRecipeOfACreatureGoesWithItsBody)
+{
+	const Recipe recipe {.item = {.kind = PlaceKind::Creature, .type = static_cast<int32_t>(CreatureType::Tiger)},
+	                     .pose = {.position = {5.0f, 0.0f, 6.0f}},
+	                     .creature = CreatureCopy {.owner = PlayerNames::PLAYER_TWO,
+	                                               .mind = 77,
+	                                               .size = 1.5f,
+	                                               .alignment = -0.25f,
+	                                               .fatness = 0.75f,
+	                                               .strength = 0.125f}};
+	const auto remake = RemakeOf(recipe);
+	EXPECT_TRUE(remake.creature);
+	EXPECT_EQ(remake.owner, static_cast<uint8_t>(PlayerNames::PLAYER_TWO));
+	EXPECT_EQ(RecipeOf(remake), recipe);
+	EXPECT_FALSE(RemakeRefusal(remake).has_value());
+
+	// A copy of a creature goes as a make again with the body of the creature
+	Sent sent;
+	EditorHistory history;
+	auto writes = sent.WritesWithRequests(
+	    history, [&remake](entt::entity /*entity*/, glm::vec2 /*offset*/) { return std::optional<Action>(remake); });
+	EXPECT_FALSE(writes.Duplicate(Entity(2), {8.0f, 0.0f}).has_value());
+	ASSERT_EQ(sent.actions.size(), 1u);
+	const auto& copy = std::get<EditorRemake>(sent.actions.front());
+	EXPECT_EQ(copy.request, writes.LastMakeRequest());
+	EXPECT_TRUE(copy.creature);
+}
+
+TEST(EditorNetworkEdits, TheRuleRefusesABadPoseOrMakeAgain)
+{
+	const auto nan = std::numeric_limits<float>::quiet_NaN();
+	const EditorEdit pose {.kind = EditorEdit::Kind::Pose, .object = Entity(1)};
+	EXPECT_FALSE(EditRefusal(pose).has_value());
+	auto noThing = pose;
+	noThing.object = entt::null;
+	EXPECT_TRUE(EditRefusal(noThing).has_value());
+	auto badTurn = pose;
+	badTurn.rotation[1].y = nan;
+	EXPECT_TRUE(EditRefusal(badTurn).has_value());
+	auto badScale = pose;
+	badScale.poseScale.x = k_LargestEditorScale * 2.0f;
+	EXPECT_TRUE(EditRefusal(badScale).has_value());
+
+	const EditorRemake tree {.placeKind = static_cast<uint8_t>(PlaceKind::Tree), .placeType = 2};
+	EXPECT_FALSE(RemakeRefusal(tree).has_value());
+	auto unknownKind = tree;
+	unknownKind.placeKind = static_cast<uint8_t>(k_LastPlaceKind) + 1;
+	EXPECT_TRUE(RemakeRefusal(unknownKind).has_value());
+	auto badType = tree;
+	badType.placeType = -1;
+	EXPECT_TRUE(RemakeRefusal(badType).has_value());
+	auto treeWithBody = tree;
+	treeWithBody.creature = true;
+	EXPECT_TRUE(RemakeRefusal(treeWithBody).has_value());
+	auto badPoint = tree;
+	badPoint.keptAngles.z = nan;
+	EXPECT_TRUE(RemakeRefusal(badPoint).has_value());
+
+	const EditorRemake creature {.placeKind = static_cast<uint8_t>(PlaceKind::Creature),
+	                             .placeType = static_cast<int32_t>(CreatureType::Cow),
+	                             .creature = true};
+	EXPECT_FALSE(RemakeRefusal(creature).has_value());
+	auto noBody = creature;
+	noBody.creature = false;
+	EXPECT_TRUE(RemakeRefusal(noBody).has_value());
+	auto noSpecies = creature;
+	noSpecies.placeType = static_cast<int32_t>(CreatureType::_COUNT);
+	EXPECT_TRUE(RemakeRefusal(noSpecies).has_value());
+	auto big = creature;
+	big.size = 100.0f;
+	EXPECT_TRUE(RemakeRefusal(big).has_value());
+	auto bent = creature;
+	bent.alignment = 2.0f;
+	EXPECT_TRUE(RemakeRefusal(bent).has_value());
+}
+
+TEST(EditorNetworkEdits, OnlyTheOwnRequestsGoToTheHistory)
+{
+	// The answer to question ED-2: an editor undoes only its own steps
+	EXPECT_TRUE(HistoryTakesAnswer(true));
+	EXPECT_FALSE(HistoryTakesAnswer(false));
 }

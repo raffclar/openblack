@@ -13,6 +13,7 @@
 
 #include <utility>
 
+#include "Creature/CreatureMorph.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mesh.h"
@@ -24,6 +25,7 @@
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
@@ -32,11 +34,26 @@
 #include "EditorMath.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
+#include "Online/NetworkSession.h"
 
 namespace openblack::editor
 {
 
 using player_commands::EditorEdit;
+using player_commands::EditorRemake;
+
+namespace
+{
+[[nodiscard]] bool Finite(const glm::vec3& value) noexcept
+{
+	return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+}
+
+[[nodiscard]] bool Finite(const glm::mat3& value) noexcept
+{
+	return Finite(value[0]) && Finite(value[1]) && Finite(value[2]);
+}
+} // namespace
 
 std::optional<entt::entity> LocalWrites::Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 {
@@ -69,23 +86,64 @@ std::optional<entt::entity> LocalWrites::Duplicate(entt::entity entity, glm::vec
 	return editor::Duplicate(entity, offset);
 }
 
-CommandWrites::CommandWrites(Submit submit, TurnNow turnNow, CopyOf copyOf)
+void LocalWrites::SetPose(entt::entity entity, const Pose& pose)
+{
+	editor::SetPose(entity, pose);
+}
+
+MakeResult LocalWrites::Make(const Recipe& recipe)
+{
+	return {.entity = editor::Make(recipe)};
+}
+
+CommandWrites::CommandWrites(Submit submit, TurnNow turnNow, CopyOf copyOf, NewRequest newRequest)
     : _submit(std::move(submit))
     , _turnNow(std::move(turnNow))
     , _copyOf(std::move(copyOf))
+    , _newRequest(std::move(newRequest))
 {
+}
+
+void CommandWrites::SubmitEdit(EditorEdit edit)
+{
+	edit.request = _newRequest ? _newRequest() : Request {0};
+	if (edit.object != entt::null)
+	{
+		_requestOf.insert_or_assign(edit.object, edit.request);
+	}
+	if (edit.kind == EditorEdit::Kind::Place)
+	{
+		_lastMakeRequest = edit.request;
+	}
+	_submit(edit);
+}
+
+void CommandWrites::SubmitMake(player_commands::Action action)
+{
+	if (auto* edit = std::get_if<EditorEdit>(&action))
+	{
+		SubmitEdit(*edit);
+		return;
+	}
+	const auto request = _newRequest ? _newRequest() : Request {0};
+	if (auto* remake = std::get_if<EditorRemake>(&action))
+	{
+		remake->request = request;
+	}
+	_lastMakeRequest = request;
+	_submit(std::move(action));
 }
 
 std::optional<entt::entity> CommandWrites::Place(const PlaceItem& item, glm::vec3 position, float yawRadians)
 {
 	FlushNow();
-	_submit(EditorEdit {.kind = EditorEdit::Kind::Place,
-	                    .object = entt::null,
-	                    .placeKind = static_cast<uint8_t>(item.kind),
-	                    .placeType = item.type,
-	                    .challenge = item.challenge,
-	                    .position = position,
-	                    .radians = yawRadians});
+	SubmitEdit(EditorEdit {.kind = EditorEdit::Kind::Place,
+	                       .object = entt::null,
+	                       .placeKind = static_cast<uint8_t>(item.kind),
+	                       .placeType = item.type,
+	                       .challenge = item.challenge,
+	                       .position = position,
+	                       .radians = yawRadians});
 	return std::nullopt;
 }
 
@@ -102,23 +160,58 @@ void CommandWrites::Turn(entt::entity entity, float radians)
 void CommandWrites::ScaleTo(entt::entity entity, float firstAxis)
 {
 	FlushNow();
-	_submit(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = entity, .scale = firstAxis});
+	SubmitEdit(EditorEdit {.kind = EditorEdit::Kind::Scale, .object = entity, .scale = firstAxis});
 }
 
 void CommandWrites::Remove(entt::entity entity)
 {
 	FlushNow();
-	_submit(EditorEdit {.kind = EditorEdit::Kind::Remove, .object = entity});
+	SubmitEdit(EditorEdit {.kind = EditorEdit::Kind::Remove, .object = entity});
 }
 
 std::optional<entt::entity> CommandWrites::Duplicate(entt::entity entity, glm::vec2 offset)
 {
-	if (const auto copy = _copyOf ? _copyOf(entity, offset) : std::nullopt; copy.has_value())
+	if (auto copy = _copyOf ? _copyOf(entity, offset) : std::nullopt; copy.has_value())
 	{
 		FlushNow();
-		_submit(*copy);
+		SubmitMake(std::move(*copy));
 	}
 	return std::nullopt;
+}
+
+void CommandWrites::SetPose(entt::entity entity, const Pose& pose)
+{
+	FlushNow();
+	// The editor does not send a pose that the world refuses, so that the history does not wait for it
+	const auto edit = PoseEditOf(entity, pose);
+	if (!EditRefusal(edit).has_value())
+	{
+		SubmitEdit(edit);
+	}
+}
+
+MakeResult CommandWrites::Make(const Recipe& recipe)
+{
+	FlushNow();
+	const auto remake = RemakeOf(recipe);
+	if (RemakeRefusal(remake).has_value())
+	{
+		return {};
+	}
+	SubmitMake(remake);
+	return {.request = _lastMakeRequest};
+}
+
+Request CommandWrites::TakeRequestOf(entt::entity entity)
+{
+	const auto found = _requestOf.find(entity);
+	if (found == _requestOf.end())
+	{
+		return 0;
+	}
+	const auto request = found->second;
+	_requestOf.erase(found);
+	return request;
 }
 
 void CommandWrites::Flush()
@@ -142,11 +235,11 @@ void CommandWrites::FlushNow()
 	{
 		if (pending.radians != 0.0f)
 		{
-			_submit(EditorEdit {.kind = EditorEdit::Kind::Turn, .object = entity, .radians = pending.radians});
+			SubmitEdit(EditorEdit {.kind = EditorEdit::Kind::Turn, .object = entity, .radians = pending.radians});
 		}
 		if (pending.position.has_value())
 		{
-			_submit(EditorEdit {.kind = EditorEdit::Kind::Move, .object = entity, .position = *pending.position});
+			SubmitEdit(EditorEdit {.kind = EditorEdit::Kind::Move, .object = entity, .position = *pending.position});
 		}
 	}
 	_waiting.clear();
@@ -195,6 +288,20 @@ std::optional<std::string_view> EditRefusal(const EditorEdit& edit) noexcept
 			return "the scale is not in the range of the editor";
 		}
 		return std::nullopt;
+	case EditorEdit::Kind::Pose:
+		if (edit.object == entt::null)
+		{
+			return "the edit names no thing";
+		}
+		if (!Finite(edit.rotation) || !Finite(edit.keptAngles) || !Finite(edit.poseScale))
+		{
+			return "a value is not a finite number";
+		}
+		if (edit.poseScale.x < k_SmallestEditorScale || edit.poseScale.x > k_LargestEditorScale)
+		{
+			return "the scale is not in the range of the editor";
+		}
+		return std::nullopt;
 	}
 	return "the edit has no such kind";
 }
@@ -209,11 +316,11 @@ bool EditableInNetworkGame(const ecs::Registry& registry, entt::entity entity)
 	return registry.AllOf<Mesh>(entity) || registry.AllOf<ScriptMarker>(entity);
 }
 
-bool ApplyEdit(const EditorEdit& edit)
+std::optional<entt::entity> ApplyEdit(const EditorEdit& edit)
 {
 	if (EditRefusal(edit).has_value() || !Locator::entitiesRegistry::has_value())
 	{
-		return false;
+		return std::nullopt;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (edit.kind == EditorEdit::Kind::Place)
@@ -224,7 +331,7 @@ bool ApplyEdit(const EditorEdit& edit)
 		const auto names = NameTables::Load();
 		if (!names.has_value() || static_cast<size_t>(edit.placeType) >= names->Of(item.kind).size())
 		{
-			return false;
+			return std::nullopt;
 		}
 		const auto made = editor::Place(item, edit.position, edit.radians);
 		// The thing goes in the list of the things that the editor made, which a save of the land files writes
@@ -232,30 +339,164 @@ bool ApplyEdit(const EditorEdit& edit)
 		{
 			Locator::editorSystem::value().GetHistory().AddMade(made);
 		}
-		return made != entt::null;
+		return made != entt::null ? std::optional(made) : std::nullopt;
 	}
 	if (!EditableInNetworkGame(registry, edit.object))
 	{
-		return false;
+		return std::nullopt;
 	}
 	switch (edit.kind)
 	{
 	case EditorEdit::Kind::Move:
 		editor::MoveTo(edit.object, edit.position);
-		return true;
+		return edit.object;
 	case EditorEdit::Kind::Turn:
 		editor::Turn(edit.object, edit.radians);
-		return true;
+		return edit.object;
 	case EditorEdit::Kind::Remove:
 		editor::Remove(edit.object);
-		return true;
+		return edit.object;
 	case EditorEdit::Kind::Scale:
 		editor::ScaleTo(edit.object, edit.scale);
-		return true;
+		return edit.object;
+	case EditorEdit::Kind::Pose:
+		editor::SetPose(edit.object, PoseOf(edit));
+		return edit.object;
 	case EditorEdit::Kind::Place:
 		break;
 	}
-	return false;
+	return std::nullopt;
+}
+
+EditorEdit PoseEditOf(entt::entity entity, const Pose& pose) noexcept
+{
+	return {.kind = EditorEdit::Kind::Pose,
+	        .object = entity,
+	        .position = pose.position,
+	        .rotation = pose.rotation,
+	        .keepsAngles = pose.keptAngles.has_value(),
+	        .keptAngles = pose.keptAngles.value_or(glm::vec3 {0.0f}),
+	        .poseScale = pose.scale};
+}
+
+Pose PoseOf(const EditorEdit& edit) noexcept
+{
+	return {.position = edit.position,
+	        .rotation = edit.rotation,
+	        .keptAngles = edit.keepsAngles ? std::optional(edit.keptAngles) : std::nullopt,
+	        .scale = edit.poseScale};
+}
+
+EditorRemake RemakeOf(const Recipe& recipe) noexcept
+{
+	EditorRemake remake {.placeKind = static_cast<uint8_t>(recipe.item.kind),
+	                     .placeType = recipe.item.type,
+	                     .challenge = recipe.item.challenge,
+	                     .position = recipe.pose.position,
+	                     .rotation = recipe.pose.rotation,
+	                     .keepsAngles = recipe.pose.keptAngles.has_value(),
+	                     .keptAngles = recipe.pose.keptAngles.value_or(glm::vec3 {0.0f}),
+	                     .scale = recipe.pose.scale};
+	if (const auto& body = recipe.creature; body.has_value())
+	{
+		remake.creature = true;
+		remake.owner = static_cast<uint8_t>(body->owner);
+		remake.mind = body->mind;
+		remake.size = body->size;
+		remake.alignment = body->alignment;
+		remake.fatness = body->fatness;
+		remake.strength = body->strength;
+	}
+	return remake;
+}
+
+Recipe RecipeOf(const EditorRemake& remake) noexcept
+{
+	Recipe recipe {
+	    .item = {.kind = static_cast<PlaceKind>(remake.placeKind), .type = remake.placeType, .challenge = remake.challenge},
+	    .pose = {.position = remake.position,
+	             .rotation = remake.rotation,
+	             .keptAngles = remake.keepsAngles ? std::optional(remake.keptAngles) : std::nullopt,
+	             .scale = remake.scale}};
+	if (remake.creature)
+	{
+		recipe.creature = CreatureCopy {.owner = static_cast<PlayerNames>(remake.owner),
+		                                .mind = remake.mind,
+		                                .size = remake.size,
+		                                .alignment = remake.alignment,
+		                                .fatness = remake.fatness,
+		                                .strength = remake.strength};
+	}
+	return recipe;
+}
+
+std::optional<std::string_view> RemakeRefusal(const EditorRemake& remake) noexcept
+{
+	const bool finite = Finite(remake.position) && Finite(remake.rotation) && Finite(remake.keptAngles) &&
+	                    Finite(remake.scale) && std::isfinite(remake.size) && std::isfinite(remake.alignment) &&
+	                    std::isfinite(remake.fatness) && std::isfinite(remake.strength);
+	if (!finite)
+	{
+		return "a value is not a finite number";
+	}
+	if (remake.placeKind > static_cast<uint8_t>(k_LastPlaceKind))
+	{
+		return "the palette has no such kind of item";
+	}
+	if (remake.placeType < 0)
+	{
+		return "the item has no such type";
+	}
+	if (remake.creature != (remake.placeKind == static_cast<uint8_t>(PlaceKind::Creature)))
+	{
+		return "only a creature has the body of a creature";
+	}
+	if (!remake.creature)
+	{
+		if (remake.scale.x < k_SmallestEditorScale || remake.scale.x > k_LargestEditorScale)
+		{
+			return "the scale is not in the range of the editor";
+		}
+		return std::nullopt;
+	}
+	if (remake.placeType <= static_cast<int32_t>(CreatureType::Unknown) ||
+	    remake.placeType >= static_cast<int32_t>(CreatureType::_COUNT))
+	{
+		return "the game has no such creature";
+	}
+	if (remake.owner >= static_cast<uint8_t>(PlayerNames::_COUNT))
+	{
+		return "the game has no such player";
+	}
+	if (remake.size < creature_morph::k_MinScale || remake.size > creature_morph::k_MaxScale)
+	{
+		return "the size is not in the range of the creature tools";
+	}
+	if (remake.alignment < -1.0f || remake.alignment > 1.0f || remake.fatness < 0.0f || remake.fatness > 1.0f ||
+	    remake.strength < 0.0f || remake.strength > 1.0f)
+	{
+		return "a value of the body is not in its range";
+	}
+	return std::nullopt;
+}
+
+entt::entity ApplyRemake(const EditorRemake& remake)
+{
+	if (RemakeRefusal(remake).has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return entt::null;
+	}
+	// The palette's names give the types of each kind. A type out of its table makes nothing.
+	if (!remake.creature)
+	{
+		const auto names = NameTables::Load();
+		const auto kind = static_cast<PlaceKind>(remake.placeKind);
+		if (!names.has_value() || static_cast<size_t>(remake.placeType) >= names->Of(kind).size())
+		{
+			return entt::null;
+		}
+	}
+	return editor::Make(RecipeOf(remake));
 }
 
 std::optional<EditorEdit> CopyEditOf(const ecs::Registry& registry, entt::entity entity, glm::vec2 offset)
@@ -280,6 +521,71 @@ std::optional<EditorEdit> CopyEditOf(const ecs::Registry& registry, entt::entity
 	                   .radians = -YawOf(pose->rotation)};
 }
 
+std::optional<player_commands::Action> CopyCommandOf(const ecs::Registry& registry, entt::entity entity, glm::vec2 offset)
+{
+	const auto item = ItemOf(registry, entity);
+	if (!item.has_value())
+	{
+		return std::nullopt;
+	}
+	if (item->kind != PlaceKind::Creature)
+	{
+		const auto edit = CopyEditOf(registry, entity, offset);
+		return edit.has_value() ? std::optional<player_commands::Action>(*edit) : std::nullopt;
+	}
+	auto recipe = RecipeOf(registry, entity);
+	if (!recipe.has_value())
+	{
+		return std::nullopt;
+	}
+	// The copy of a creature has the body of the creature, and stands as high above the land as the creature
+	auto& position = recipe->pose.position;
+	const auto aboveLand = position.y - LandHeight({position.x, position.z});
+	const glm::vec2 point {position.x + offset.x, position.z + offset.y};
+	position = {point.x, LandHeight(point) + aboveLand, point.y};
+	return player_commands::Action {RemakeOf(*recipe)};
+}
+
+bool SentByThisComputer(PlayerNames player, uint8_t observer)
+{
+	const auto* hands = Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr;
+	if (!input::IsLocalPlayer(hands, player))
+	{
+		return false;
+	}
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const auto own = session != nullptr ? session->OwnObserver() : std::nullopt;
+	return observer == own.value_or(0);
+}
+
+Request NewEditorRequest()
+{
+	if (!Locator::editorSystem::has_value())
+	{
+		return 0;
+	}
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : uint32_t {0};
+	return Locator::editorSystem::value().GetHistory().NewRequest(turn);
+}
+
+RequestAnswer AnswerOf(const ecs::Registry& registry, entt::entity entity, Awaited awaited)
+{
+	if (entity == entt::null || !registry.Valid(entity))
+	{
+		return {};
+	}
+	RequestAnswer answer {.entity = entity};
+	if (awaited == Awaited::Thing)
+	{
+		answer.recipe = RecipeOf(registry, entity);
+	}
+	else
+	{
+		answer.pose = PoseOf(registry, entity);
+	}
+	return answer;
+}
+
 std::unique_ptr<EditorWrites> MakeNetworkWrites()
 {
 	return std::make_unique<CommandWrites>(
@@ -290,13 +596,14 @@ std::unique_ptr<EditorWrites> MakeNetworkWrites()
 		    }
 	    },
 	    []() { return Locator::time::has_value() ? Locator::time::value().GetTurn() : uint32_t {0}; },
-	    [](entt::entity entity, glm::vec2 offset) -> std::optional<EditorEdit> {
+	    [](entt::entity entity, glm::vec2 offset) -> std::optional<player_commands::Action> {
 		    if (!Locator::entitiesRegistry::has_value())
 		    {
 			    return std::nullopt;
 		    }
-		    return CopyEditOf(Locator::entitiesRegistry::value(), entity, offset);
-	    });
+		    return CopyCommandOf(Locator::entitiesRegistry::value(), entity, offset);
+	    },
+	    [] { return NewEditorRequest(); });
 }
 
 std::optional<std::string_view> VillagerEditRefusal(const player_commands::EditorVillagerEdit& edit) noexcept

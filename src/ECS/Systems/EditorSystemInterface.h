@@ -72,6 +72,10 @@ public:
 	/// again empty when the land loads again.
 	[[nodiscard]] virtual editor::EditorHistory& GetHistory() = 0;
 	[[nodiscard]] virtual const editor::EditorHistory& GetHistory() const = 0;
+	/// In a network game the turn gives the answer to a request of the editor of this computer: the thing that the
+	/// command made or changed, or entt::null when the world refused it. The history reads what it waits for from the
+	/// thing at once, in the turn. It changes nothing of the synced world.
+	virtual void AnswerRequest(editor::Request request, entt::entity entity) = 0;
 	/// The streams and footpaths that the editor drew, to save. They start again empty when the land loads again.
 	[[nodiscard]] virtual editor::paths::DrawnPaths& GetDrawnPaths() = 0;
 	[[nodiscard]] virtual const editor::paths::DrawnPaths& GetDrawnPaths() const = 0;

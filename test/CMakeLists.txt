@@ -173,6 +173,9 @@ openblack_setup_and_add_test(test_hand_grab hand/test_hand_grab.cpp)
 openblack_setup_and_add_test(
   test_hand_grab_system hand/test_hand_grab_system.cpp
 )
+if(MSVC)
+  target_compile_options(test_hand_grab_system PRIVATE /bigobj)
+endif()
 openblack_setup_and_add_test(test_hand_feel hand/test_hand_feel.cpp)
 openblack_setup_and_add_test(test_hand_reach hand/test_hand_reach.cpp)
 openblack_setup_and_add_test(test_villager_pickup hand/test_villager_pickup.cpp)

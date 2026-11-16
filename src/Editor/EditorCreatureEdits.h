@@ -18,6 +18,7 @@
 
 #include "Commands/PlayerCommands.h"
 #include "Common/CreatureEditValues.h"
+#include "EditorHistory.h"
 
 namespace openblack::ecs
 {
@@ -79,7 +80,8 @@ void SendCreatureEdit(entt::entity creature, creature_edit_values::Value value, 
 /// entt::null when the world refused it.
 entt::entity ApplyCreatureSpawn(const player_commands::EditorCreatureSpawn& spawn);
 
-/// Sends a new creature of the creature tools as a command of the turns. The creature comes at the next turn.
-void SendCreatureSpawn(const player_commands::EditorCreatureSpawn& spawn);
+/// Sends a new creature of the creature tools as a command of the turns. The creature comes at the next turn. Gives the
+/// request of the command, whose answer gives the creature to the history of the editor.
+Request SendCreatureSpawn(player_commands::EditorCreatureSpawn spawn);
 
 } // namespace openblack::editor

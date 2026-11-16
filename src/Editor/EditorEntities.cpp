@@ -786,9 +786,9 @@ void RegistryWorld::SetPose(entt::entity entity, const Pose& pose)
 	editor::SetPose(entity, pose);
 }
 
-entt::entity RegistryWorld::Make(const Recipe& recipe)
+MakeResult RegistryWorld::Make(const Recipe& recipe)
 {
-	return editor::Make(recipe);
+	return {.entity = editor::Make(recipe)};
 }
 
 void RegistryWorld::Remove(entt::entity entity)
