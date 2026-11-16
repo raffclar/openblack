@@ -324,18 +324,20 @@ void LockstepHost::Refuse(ConnectionId connection, std::string_view reason, std:
 	                                         .file = reason == "data" ? std::string(detail) : std::string(),
 	                                         .path = std::string(path)});
 	_sockets.Close(connection, server_close::k_Refused);
-	std::optional<std::string> observer;
+	std::optional<std::pair<std::string, uint8_t>> observer;
 	if (const auto found = _peers.find(connection);
 	    found != _peers.end() && found->second.joined && found->second.role == game_socket::Role::Observer)
 	{
-		observer = found->second.name;
+		observer.emplace(found->second.name, found->second.observer);
 	}
 	_peers.erase(connection);
 	// A refused observer cannot come back with its session
 	std::erase_if(_watchers, [connection](const Watcher& watcher) { return watcher.connection == connection; });
 	if (observer.has_value())
 	{
-		ObserverLeft(*observer);
+		// The next turn tells the worlds that the observer left
+		ObserverGone(observer->second);
+		ObserverLeft(observer->first);
 	}
 }
 
@@ -868,7 +870,8 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		}
 		peer.observer = ObserverCame(claims.name);
 		joined.observer = peer.observer;
-		joined.session = NewWatcher(connection, claims.name, peer.observer, claims.editor, claims.debugger);
+		joined.session = NewWatcher(connection, claims.name, lan ? std::string() : claims.subject, peer.observer, claims.editor,
+		                            claims.debugger);
 		Log(spdlog::level::info, fmt::format("An observer joins as observer {}", peer.observer));
 	}
 	peer.joined = true;
@@ -1038,6 +1041,7 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 	peer.joined = true;
 	peer.role = game_socket::Role::Observer;
 	peer.name = found->name;
+	peer.account = found->account;
 	peer.seat.reset();
 	peer.observer = found->number;
 	peer.editor = found->editor;
@@ -1198,7 +1202,8 @@ void LockstepHost::TimeFrom(ConnectionId connection, const Peer& peer, const gam
 	Broadcast(RoomClockFrame(request.act, room_clock::k_Rule.tellsEveryPlayer ? peer.name : std::string()));
 }
 
-std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool editor, bool debugger)
+std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, std::string account, uint8_t number,
+                                     bool editor, bool debugger)
 {
 	if (!_makeSecret)
 	{
@@ -1211,6 +1216,7 @@ std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, 
 	                             .awaySince = 0,
 	                             .resumes = 0,
 	                             .name = std::move(name),
+	                             .account = std::move(account),
 	                             .number = number,
 	                             .editor = editor,
 	                             .debugger = debugger});
@@ -1613,7 +1619,8 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 		peer.role = game_socket::Role::Observer;
 		peer.observer = ObserverCame(claims.name);
 		joined.observer = peer.observer;
-		joined.session = NewWatcher(connection, claims.name, peer.observer, claims.editor, claims.debugger);
+		joined.session = NewWatcher(connection, claims.name, byName ? std::string() : claims.subject, peer.observer,
+		                            claims.editor, claims.debugger);
 		Log(spdlog::level::info,
 		    fmt::format("An observer joins the game at turn {} as observer {}", _turnsDone, peer.observer));
 	}
@@ -2245,8 +2252,8 @@ void LockstepHost::EditorWorldFrom(ConnectionId connection, Peer& peer, const ga
 		return;
 	}
 	auto file = peer.worldUpload.Take();
-	Log(spdlog::level::info,
-	    fmt::format("{} sends a world file of {} bytes: the world loads it before the next turn", log_names::Capitalised(Who(peer)), file.size()));
+	Log(spdlog::level::info, fmt::format("{} sends a world file of {} bytes: the world loads it before the next turn",
+	                                     log_names::Capitalised(Who(peer)), file.size()));
 	_worldChange = WorldChange {.kind = WorldChange::Kind::WorldFile,
 	                            .file = std::move(file),
 	                            .scenario = {},
@@ -2614,6 +2621,23 @@ void LockstepHost::RemoveBannedFromGame()
 		Log(spdlog::level::info, fmt::format("The lobby removed the observer of connection {} from the game", connection));
 		Refuse(connection, "kicked");
 	}
+	// The away session of an observer of a removed account ends, so that the observer cannot come back with it
+	std::vector<std::pair<std::string, uint8_t>> gone;
+	std::erase_if(_watchers, [this, &gone](const Watcher& watcher) {
+		const bool ends =
+		    !watcher.connection.has_value() && !watcher.account.empty() && lobby_bans::IsBanned(watcher.account, _bans);
+		if (ends)
+		{
+			gone.emplace_back(watcher.name, watcher.number);
+		}
+		return ends;
+	});
+	for (const auto& [name, number] : gone)
+	{
+		Log(spdlog::level::info, fmt::format("The lobby removed the away observer {} from the game: its session ends", number));
+		ObserverGone(number);
+		ObserverLeft(name);
+	}
 }
 
 void LockstepHost::StopStart(const game_socket::Frame& why)
@@ -2967,6 +2991,7 @@ snapshots::Room LockstepHost::RoomRecord() const
 			room.watcherNumbers.push_back(watcher.number);
 			room.watcherEditors.push_back(watcher.editor);
 			room.watcherDebuggers.push_back(watcher.debugger);
+			room.watcherAccounts.push_back(watcher.account);
 		}
 	}
 	for (const auto& [number, name] : _observerArrivals)
@@ -3104,6 +3129,7 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                             .awaySince = now,
 		                             .resumes = 0,
 		                             .name = std::move(name),
+		                             .account = i < room.watcherAccounts.size() ? room.watcherAccounts[i] : std::string(),
 		                             .number = number,
 		                             .editor = i < room.watcherEditors.size() && room.watcherEditors[i],
 		                             .debugger = i < room.watcherDebuggers.size() && room.watcherDebuggers[i]});

@@ -417,3 +417,30 @@ TEST(LobbyApiJson, AServerEntryCanNameTheLandThatTheLobbyGives)
 	ASSERT_TRUE(list.has_value());
 	EXPECT_EQ(list->servers.at(0).map, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
 }
+
+// A "gamever" is the same as the build id of the client when it is the whole build id, or the first 16 characters of it
+// that an older lobby keeps
+TEST(LobbyApiJson, TheGameVersionIsTheBuildIdOrTheCutThatAnOlderLobbyKeeps)
+{
+	using openblack::lobby_api::SameGameVersion;
+	constexpr std::string_view k_Own = "0.1.0+0123456789ab/codec34";
+	EXPECT_TRUE(SameGameVersion(k_Own, k_Own));
+	EXPECT_TRUE(SameGameVersion(k_Own.substr(0, 16), k_Own));
+	EXPECT_FALSE(SameGameVersion("0.1.0", k_Own));
+	EXPECT_FALSE(SameGameVersion(k_Own.substr(0, 15), k_Own));
+	EXPECT_FALSE(SameGameVersion("0.1.0+0123456789ab/codec33", k_Own));
+	EXPECT_FALSE(SameGameVersion("0.1.0+9999999999", k_Own));
+	EXPECT_FALSE(SameGameVersion("", k_Own));
+}
+
+// A problem gives the names of the fields that the lobby did not take
+TEST(LobbyApiJson, AProblemGivesTheFieldsOfItsErrors)
+{
+	const auto problem = openblack::lobby_api::ParseProblem(
+	    R"({"status":422,"code":"invalid","errors":{"gamever":["Too long."],"land":["Too long."]}})");
+	ASSERT_TRUE(problem.has_value());
+	EXPECT_EQ(problem->errorFields, (std::vector<std::string> {"gamever", "land"}));
+	const auto plain = openblack::lobby_api::ParseProblem(R"({"status":404,"code":"not_found"})");
+	ASSERT_TRUE(plain.has_value());
+	EXPECT_TRUE(plain->errorFields.empty());
+}

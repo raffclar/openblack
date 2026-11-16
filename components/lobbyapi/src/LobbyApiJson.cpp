@@ -783,6 +783,23 @@ std::optional<ClanCreatureReply> ParseClanCreatureReply(std::string_view text)
 	});
 }
 
+namespace
+{
+/// The names of the members of the "errors" object of a problem. A problem with no "errors" object gives no names.
+bool ReadErrorFields(const Json& object, std::vector<std::string>& out)
+{
+	const auto* errors = Member(object, "errors");
+	if (errors != nullptr && errors->is_object())
+	{
+		for (const auto& [name, messages] : errors->items())
+		{
+			out.push_back(name);
+		}
+	}
+	return true;
+}
+} // namespace
+
 std::optional<Problem> ParseProblem(std::string_view text)
 {
 	return ParseWith<Problem>(text, [](const Json& object, Problem& out) {
@@ -790,7 +807,7 @@ std::optional<Problem> ParseProblem(std::string_view text)
 		       ReadInteger(object, "status", out.status, false) && ReadString(object, "detail", out.detail, false) &&
 		       ReadString(object, "code", out.code, false) && ReadInteger(object, "members", out.members, false) &&
 		       ReadInteger(object, "slots", out.slots, false) && ReadString(object, "expected", out.expected, false) &&
-		       ReadString(object, "download", out.download, false);
+		       ReadString(object, "download", out.download, false) && ReadErrorFields(object, out.errorFields);
 	});
 }
 

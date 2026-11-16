@@ -301,7 +301,7 @@ std::u16string GameLine(const lobby_api::ServerEntry& server, const GameLineText
 	{
 		line += texts.playing;
 	}
-	if (server.gamever != gameVersion)
+	if (!lobby_api::SameGameVersion(server.gamever, gameVersion))
 	{
 		line += texts.wrongVersion;
 	}

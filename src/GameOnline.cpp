@@ -31,10 +31,10 @@
 #include "Camera/Camera.h"
 #include "Camera/FreeCameraModel.h"
 #include "Commands/PlayerCommands.h"
-#include "Common/BuildVersion.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Common/ErrorReportsInterface.h"
 #include "Game.h"
+#include "Online/GameBuildId.h"
 #include "Sound/ClipSounds.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
@@ -327,9 +327,9 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	{
 		settings.profileName = gui::ToUtf16(profile->name);
 	}
-	// A game server of another version shows "(Wrong Version)" in the game list. The lobby keeps 16 characters of a
-	// server's version, so the game servers report their semantic version and the list compares that.
-	settings.gameVersion = std::string(build_version::Semantic());
+	// A game server of another build shows "(Wrong Version)" in the game list. The game servers report their build id,
+	// and the list compares it with the build id of this client.
+	settings.gameVersion = online::build_id::Own();
 	auto maps = gui::ReadOnlineMapTexts();
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);

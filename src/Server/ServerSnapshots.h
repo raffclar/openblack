@@ -107,6 +107,9 @@ struct Room
 	/// The clock of the room: a pause of the editor, the steps that wait and the time of a turn. A file of format 6 or
 	/// older has the clock that turns at the normal speed.
 	online::room_clock::State clock;
+	/// The account of the join ticket of each observer of `watchers`, in the same order. A kick or a ban of the account
+	/// ends the session of the observer. A file of format 7 or older has no accounts.
+	std::vector<std::string> watcherAccounts;
 
 	bool operator==(const Room&) const = default;
 };
