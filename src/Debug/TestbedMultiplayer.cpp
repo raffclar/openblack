@@ -309,9 +309,10 @@ public:
 
 	/// The lobby gives a land that the player does not have, and the room of Bob's game plays it. The demonstration has
 	/// no network, so the download of the land fails.
-	void GiveMaps()
+	void GiveMaps(bool package = false)
 	{
 		_givesMaps = true;
+		_givesPackage = package;
 		_servers.front().map = std::string(k_DemoMapHash);
 	}
 	/// The lobby gives a map of 8 places for the sessions, which the players download
@@ -336,15 +337,26 @@ public:
 			LobbyClientSystemInterface::GetMaps(std::move(callback));
 			return;
 		}
-		const lobby_api::OnlineMap map {.number = 1,
-		                                .name = "Two gods",
-		                                .file = "mpm_2p_1",
-		                                .players = 2,
-		                                .sha256 = std::string(k_DemoMapHash),
-		                                .checksum = 0,
-		                                .size = 0,
-		                                .url = "/api/v1/maps/" + std::string(k_DemoMapHash)};
+		lobby_api::OnlineMap map {.number = 1,
+		                          .name = "Two gods",
+		                          .file = "mpm_2p_1",
+		                          .players = 2,
+		                          .sha256 = std::string(k_DemoMapHash),
+		                          .checksum = 0,
+		                          .size = 0,
+		                          .url = "/api/v1/maps/" + std::string(k_DemoMapHash)};
+		if (_givesPackage)
+		{
+			map.packageSha256 = std::string(k_DemoMapHash);
+			map.packageSize = 3;
+			map.packageUrl = "/maps/" + map.packageSha256 + ".obmap";
+		}
 		callback({.value = lobby_api::MapList {.maps = {map}}, .error = {}});
+	}
+	/// The bytes are not the package that the list names, so the package gives no map
+	void DownloadMapPackage(const lobby_api::OnlineMap&, LobbyCallback<std::vector<uint8_t>> callback) override
+	{
+		callback({.value = std::vector<uint8_t> {1, 2, 3}, .error = {}});
 	}
 	void DownloadMap(const lobby_api::OnlineMap&, LobbyCallback<std::vector<uint8_t>> callback) override
 	{
@@ -404,6 +416,8 @@ private:
 	std::vector<lobby_api::PushEvent> _pending;
 	int64_t _seq {0};
 	bool _givesMaps {false};
+	/// The land of the lobby comes as a map package, and the download gives bytes that are not that package
+	bool _givesPackage {false};
 	bool _givesSessionMaps {false};
 };
 
@@ -710,6 +724,12 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		frontEnd.JoinSelectedLobby();
 		lobbies.StopForServerVersion("0.9.0+new/codec36", "0.9.0+new/codec36");
 		break;
+	case Stage::LobbyServerProblem:
+		frontEnd.OpenCreateLobby();
+		frontEnd.SubmitCreateLobby();
+		lobbies.RefuseStartForServer("This server plays only Two Gods for up to 2 gods.");
+		frontEnd.StartOrCancelLobby();
+		break;
 	case Stage::LobbyPassword:
 		frontEnd.SelectLobby("d2");
 		frontEnd.JoinSelectedLobby();
@@ -896,10 +916,10 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 {
 	auto demo = std::make_shared<DemoServices>();
 	demo->stage = stage;
-	const bool mapDownload = stage == Stage::MapDownloadFailed;
+	const bool mapDownload = stage == Stage::MapDownloadFailed || stage == Stage::MapPackageFailed;
 	if (mapDownload)
 	{
-		demo->lobby.GiveMaps();
+		demo->lobby.GiveMaps(stage == Stage::MapPackageFailed);
 	}
 	const bool lobbySessions = IsLobbyStage(stage);
 	if (lobbySessions)

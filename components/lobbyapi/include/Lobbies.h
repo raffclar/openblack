@@ -482,6 +482,8 @@ constexpr std::string_view k_NotOpen = "not_open";
 constexpr std::string_view k_NotStarting = "not_starting";
 /// The new map of the host has fewer slots than the players of the lobby
 constexpr std::string_view k_TooManyPlayers = "too_many_players";
+/// The game server cannot play the lobby's map or gods. The detail is the lobby's server_problem.
+constexpr std::string_view k_ServerLand = "server_land";
 } // namespace lobby_problems
 
 } // namespace openblack::lobby_api

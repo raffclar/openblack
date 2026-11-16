@@ -153,6 +153,9 @@ struct VersionNeed
 /// The box for a refusal of the game server at the join of the game of a session ("version", "map", "ticket" and
 /// others)
 [[nodiscard]] std::string GameRefusalText(std::string_view refusal, lobby_api::ClientKind client, const VersionNeed& need = {});
+/// The box when the game server of the lobby cannot play the lobby's map or gods (the problem "server_land" of the
+/// start). The lobby's reason, its server_problem, is the second line, in fixed English (deviation 274).
+[[nodiscard]] std::string ServerProblemText(std::string_view problem);
 
 /// The values of the box that makes a session
 struct CreateForm

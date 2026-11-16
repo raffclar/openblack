@@ -434,8 +434,22 @@ void DemoLobbyRoom::Close(LobbyCallback<LobbyDone> callback)
 	callback({.value = LobbyDone {}, .error = {}});
 }
 
+void DemoLobbyRoom::RefuseStartForServer(std::string problem)
+{
+	_serverProblem = std::move(problem);
+}
+
 void DemoLobbyRoom::Start(LobbyCallback<LobbyDone> callback)
 {
+	if (!_serverProblem.empty())
+	{
+		callback({.value = std::nullopt,
+		          .error = {.kind = LobbyErrorKind::Refused,
+		                    .status = 409,
+		                    .detail = _serverProblem,
+		                    .code = std::string(lobby_api::lobby_problems::k_ServerLand)}});
+		return;
+	}
 	if (_room != nullptr)
 	{
 		_room->ApplyStart({.state = LobbyState::Countdown, .at = _nowMs + k_CountdownMs, .position = std::nullopt});

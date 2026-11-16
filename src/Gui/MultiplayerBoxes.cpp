@@ -901,6 +901,12 @@ void MultiplayerBoxes::ShowMessage(Message message)
 		const std::array<TextArgument, 1> nameArgument = {std::u16string_view(name)};
 		shown.text = FormatText(shown.text, nameArgument);
 	}
+	// A map package that did not give the map adds its reason under the vanilla text (deviation 274)
+	if (const auto& line = _frontEnd->GetMapFailureLine(); message == Message::CouldNotDownloadMap && !line.empty())
+	{
+		shown.text += u'\n';
+		shown.text += ToUtf16(line);
+	}
 	if (message == Message::LobbyNotice || message == Message::LobbyQuestion || message == Message::LobbyPassword ||
 	    message == Message::LobbyCode || message == Message::LobbyNewPassword)
 	{

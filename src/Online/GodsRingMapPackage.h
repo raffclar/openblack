@@ -64,4 +64,8 @@ AssembleDownloaded(const lobby_api::OnlineMap& map, std::span<const uint8_t> pac
 /// The text for the log of a failure
 [[nodiscard]] std::string_view TextOf(Failure failure);
 
+/// The line under the vanilla text of the box "Could not download map" for a failure, in fixed English (deviation
+/// 274)
+[[nodiscard]] std::string_view BoxLineOf(Failure failure);
+
 } // namespace openblack::gods_ring_map_package

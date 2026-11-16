@@ -136,3 +136,21 @@ std::string_view gods_ring_map_package::TextOf(Failure failure)
 	}
 	return "unknown";
 }
+
+std::string_view gods_ring_map_package::BoxLineOf(Failure failure)
+{
+	switch (failure)
+	{
+	case Failure::NotAPackage:
+		return "The map file is damaged.";
+	case Failure::WrongPackage:
+		return "The map file is not the map of this game.";
+	case Failure::OtherMap:
+		return "The map file is of another map.";
+	case Failure::NoGameData:
+		return "Your game data does not have the land of this map.";
+	case Failure::GameDataDoesNotMatch:
+		return "Your game data does not match.";
+	}
+	return {};
+}

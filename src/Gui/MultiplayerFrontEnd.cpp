@@ -241,9 +241,14 @@ void MultiplayerFrontEnd::FollowSession()
 		{
 			return;
 		}
-		// A file of the game data is not the server's: the box names the file (deviation 266)
+		// A file of the game data is not the server's: the box names the file (deviation 266). The player also leaves
+		// the lobby room, so that no front end asks for a ticket of this game again (user, 2026-11-16).
 		if (const auto text = online::DataRefusalText(session->GetEnd(), refusal, session->RefusedPath()))
 		{
+			if (_services.lobbyRoom != nullptr)
+			{
+				_services.lobbyRoom->LeaveGame();
+			}
 			ShowLobbyNotice(ToUtf16(*text));
 			return;
 		}
@@ -912,8 +917,9 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 				_delayedPieces.emplace_back(NowMs() + _settings.mapPieceDelayMs, std::move(send));
 			};
 			// A map with a package: the game adds the village of its own game data to the package (deviation 249)
-			auto assemble = [read = _services.readGameFile](const lobby_api::OnlineMap& wanted,
-			                                                std::vector<uint8_t> bytes) -> std::optional<std::vector<uint8_t>> {
+			auto assemble = [read = _services.readGameFile,
+			                 line = _mapFailureLine](const lobby_api::OnlineMap& wanted,
+			                                         std::vector<uint8_t> bytes) -> std::optional<std::vector<uint8_t>> {
 				if (wanted.packageSha256.empty())
 				{
 					return bytes;
@@ -924,8 +930,13 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 				    templateMap.has_value() ? std::optional<std::span<const uint8_t>>(*templateMap) : std::nullopt);
 				if (const auto* failure = std::get_if<gods_ring_map_package::Failure>(&map); failure != nullptr)
 				{
-					SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map {} does not come from its package: {}", wanted.file,
-					                    gods_ring_map_package::TextOf(*failure));
+					// The tests have no game log
+					if (const auto log = spdlog::get("game"); log != nullptr)
+					{
+						SPDLOG_LOGGER_ERROR(log, "The map {} does not come from its package: {}", wanted.file,
+						                    gods_ring_map_package::TextOf(*failure));
+					}
+					*line = gods_ring_map_package::BoxLineOf(*failure);
 					return std::nullopt;
 				}
 				return std::move(std::get<std::vector<uint8_t>>(map));
@@ -937,6 +948,7 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 			SPDLOG_LOGGER_INFO(log, "The map download starts or continues: {} ({}), {} bytes kept", map->file, map->sha256,
 			                   _mapDownload->KeptBytes(map->sha256));
 		}
+		_mapFailureLine->clear();
 		_mapDownload->Start(*map);
 	});
 }

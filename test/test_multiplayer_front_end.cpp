@@ -166,6 +166,11 @@ public:
 		downloads.push_back(map.sha256);
 		download = std::move(callback);
 	}
+	void DownloadMapPackage(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback) override
+	{
+		downloads.push_back(map.packageSha256);
+		download = std::move(callback);
+	}
 	uint32_t AddEventListener(LobbyEventListener listener) override
 	{
 		listeners.push_back(std::move(listener));
@@ -2679,6 +2684,80 @@ void SetRoomMapOfTheService(FrontEndTest& test, const lobby_api::OnlineMap& map)
 	test.frontEnd->Update();
 	ASSERT_TRUE(test.lobby.maps);
 	FakeLobby::Give(test.lobby.maps, lobby_api::MapList {.maps = {map}});
+}
+
+TEST_F(FrontEndTest, APackageThatGivesNoMapShowsTheReasonUnderTheVanillaText)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	mapStore = &store;
+	Make();
+	// The list names a package that the downloaded bytes are not
+	auto map = RoomMap();
+	map.packageSha256 = std::string(64, '0');
+	map.packageSize = 3;
+	map.packageUrl = "/maps/" + map.packageSha256 + ".obmap";
+	SetRoomMapOfTheService(*this, map);
+	ASSERT_EQ(lobby.downloads.size(), 1u);
+	FakeLobby::Give(lobby.download, std::vector<uint8_t> {1, 2, 3});
+	ASSERT_EQ(lobby.downloads.size(), 2u);
+	FakeLobby::Give(lobby.download, std::vector<uint8_t> {1, 2, 3});
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
+	EXPECT_EQ(frontEnd->GetMapFailureLine(), "The map file is not the map of this game.");
+}
+
+TEST_F(FrontEndTest, AFailureOfThePiecesGivesNoLineOfAReason)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	mapStore = &store;
+	Make();
+	SetRoomMapOfTheService(*this, RoomMap());
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	FakeLobby::Fail(lobby.download, LobbyErrorKind::Network);
+	frontEnd->Update();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::CouldNotDownloadMap);
+	EXPECT_TRUE(frontEnd->GetMapFailureLine().empty());
+}
+
+TEST_F(FrontEndTest, AfterTheGameServerRefusesTheGameDataThePlayerLeavesTheLobbyAndGetsNoNewTicket)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	frontEnd->OpenCreateLobby();
+	frontEnd->SubmitCreateLobby();
+	frontEnd->Update();
+	lobbySessions->StartCountdown();
+	lobbySessions->AssignGame(
+	    "game-1",
+	    lobby_api::JoinTicket {.url = "wss://lobby.test/game/s1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	frontEnd->Update();
+	ASSERT_EQ(network.joins.size(), 1u);
+	sockets.Accept(sockets.order.back());
+	Step();
+
+	// The game server refuses a file of the game data: the box names the file, and the player leaves the lobby room
+	sockets.ServerText(sockets.order.back(),
+	                   game_socket::ToJson(game_socket::Refused {.reason = "data", .path = "Data/landscape.txt"}));
+	Step();
+	ASSERT_EQ(frontEnd->GetMessage(), Message::LobbyNotice);
+	EXPECT_NE(frontEnd->GetLobbyMessageText().find(u"Data/landscape.txt"), std::u16string::npos);
+	ASSERT_NE(lobbySessions->Room(), nullptr);
+	EXPECT_EQ(lobbySessions->Room()->Phase(), online::lobby::RoomPhase::Ended);
+
+	// OK goes to the lobby list, and no new join of the game starts
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	frontEnd->Update();
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(network.joins.size(), 1u);
+	EXPECT_EQ(lobbySessions->Room(), nullptr);
 }
 
 TEST_F(FrontEndTest, EachPieceOfAMapWaitsForTheDelayOfTheTestsOnTheClockOfTheFrontEnd)

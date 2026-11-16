@@ -53,6 +53,8 @@ enum class Stage : uint8_t
 	RoomPing,
 	/// The game room's box "Could not download map from Internet.": the lobby did not give the room's land
 	MapDownloadFailed,
+	/// The box "Could not download map" with the reason of a map package under the vanilla text (deviation 274)
+	MapPackageFailed,
 	/// The conditions page of a game whose server picked winning conditions and a time limit
 	ConditionsPicked,
 	/// The chat of a room on the local network, which goes through the room's game server
@@ -85,6 +87,8 @@ enum class Stage : uint8_t
 	/// A game server of another version stops the start: the line of the room and the box that tells the player to
 	/// update the game
 	LobbyServerVersion,
+	/// The game server cannot play the map of the session: the box of the Start gives the reason on a second line
+	LobbyServerProblem,
 	/// The events of a joined room give their notices one after the other: a join, a ready, the countdown and a kick
 	LobbyNotices,
 	_Count
