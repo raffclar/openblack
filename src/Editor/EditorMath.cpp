@@ -241,4 +241,11 @@ glm::vec3 TurnedAbout(glm::vec3 point, glm::vec3 centre, float radians)
 	return centre + (YawRotation(radians) * (point - centre));
 }
 
+glm::vec3 ScaledTo(glm::vec3 scale, float firstAxis)
+{
+	// A scale near zero does not divide by zero
+	constexpr float k_SmallestScale = 0.0001f;
+	return scale * (firstAxis / std::max(scale.x, k_SmallestScale));
+}
+
 } // namespace openblack::editor

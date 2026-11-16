@@ -285,6 +285,15 @@ std::optional<Waiting> creature_help::FirstWaiting(const Memory& memory)
 	return std::nullopt;
 }
 
+std::optional<Waiting> creature_help::WaitingToRaise(const Memory& memory, bool held, bool dialogueTaken)
+{
+	if (held || dialogueTaken)
+	{
+		return std::nullopt;
+	}
+	return FirstWaiting(memory);
+}
+
 void creature_help::Settle(Memory& memory, Waiting waiting, uint32_t turn)
 {
 	auto& entries = EntriesOf(memory, waiting.kind);
@@ -454,6 +463,12 @@ std::optional<creature_desires::Desire> creature_help::DesireShownOnHold(std::op
 Message creature_help::TooYoungToLearn(float feedback)
 {
 	return {.kind = Kind::MiscellaneousStacked, .parameter = feedback >= 0.0f ? k_StrokedTooYoung : k_SlappedTooYoung};
+}
+
+bool creature_help::IsFeedbackLesson(Kind kind)
+{
+	return kind == Kind::LessonIncreaseSource || kind == Kind::LessonDecreaseSource || kind == Kind::LessonIncreaseOpinion ||
+	       kind == Kind::LessonDecreaseOpinion;
 }
 
 Message creature_help::FeedbackLesson(float feedback, bool opinionChanged, creature_desires::Desire desire, uint32_t source)

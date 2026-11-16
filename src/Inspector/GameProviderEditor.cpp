@@ -123,13 +123,17 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	    "does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also "
 	    "when the "
 	    "editor of this computer is refused, so that a test sees the refusal of the server.",
-	    {{.name = "kind", .type = "string", .description = "move, turn, place or remove", .required = true},
-	     {.name = "id", .type = "integer", .description = "The thing of a move, a turn or a removal", .required = false},
+	    {{.name = "kind", .type = "string", .description = "move, turn, scale, place or remove", .required = true},
+	     {.name = "id",
+	      .type = "integer",
+	      .description = "The thing of a move, a turn, a scale or a removal",
+	      .required = false},
 	     {.name = "position",
 	      .type = "point",
 	      .description = "[x, z] or [x, y, z] of a move or a placement",
 	      .required = false},
 	     {.name = "radians", .type = "number", .description = "The angle of a turn or a placement", .required = false},
+	     {.name = "scale", .type = "number", .description = "The new scale of the first axis (scale)", .required = false},
 	     {.name = "place_kind", .type = "integer", .description = "The kind of the palette item (place)", .required = false},
 	     {.name = "place_type", .type = "integer", .description = "The type of the palette item (place)", .required = false},
 	     {.name = "copies",
@@ -151,17 +155,18 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		const auto kindParam = context.params.find("kind");
 		const auto kindName =
 		    kindParam != context.params.end() && kindParam->is_string() ? kindParam->get<std::string>() : std::string();
-		constexpr std::array<std::pair<std::string_view, EditorEdit::Kind>, 4> k_Kinds {{
+		constexpr std::array<std::pair<std::string_view, EditorEdit::Kind>, 5> k_Kinds {{
 		    {"place", EditorEdit::Kind::Place},
 		    {"move", EditorEdit::Kind::Move},
 		    {"turn", EditorEdit::Kind::Turn},
 		    {"remove", EditorEdit::Kind::Remove},
+		    {"scale", EditorEdit::Kind::Scale},
 		}};
 		const auto kind =
 		    std::ranges::find(k_Kinds, std::string_view(kindName), &std::pair<std::string_view, EditorEdit::Kind>::first);
 		if (kind == k_Kinds.end())
 		{
-			return QueryResult::Error("editor.network_edit needs a kind: move, turn, place or remove");
+			return QueryResult::Error("editor.network_edit needs a kind: move, turn, scale, place or remove");
 		}
 		EditorEdit command {.kind = kind->second};
 		if (command.kind != EditorEdit::Kind::Place)
@@ -183,6 +188,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			}
 		}
 		command.radians = NumberParam(context.params, "radians").value_or(0.0f);
+		command.scale = NumberParam(context.params, "scale").value_or(1.0f);
 		command.placeKind = static_cast<uint8_t>(NumberParam(context.params, "place_kind").value_or(0.0f));
 		command.placeType = static_cast<int32_t>(NumberParam(context.params, "place_type").value_or(0.0f));
 		if (const auto refusal = editor::EditRefusal(command))
@@ -244,6 +250,109 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			return QueryResult::Error("editor.creature_edit needs the id of a creature, the name of a value and an amount");
 		}
 		editor::SendCreatureEdit(*entity, *value, *amount);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto villagerEdit = Query(
+	    "villager_edit",
+	    "Sends a change of a field of a villager as a command of the turns, as the villager section of the editor sends it in "
+	    "a network game: each computer does it at the same turn, and the game server takes it only from a player with the "
+	    "editor claim. force sends it also when the editor of this computer is refused.",
+	    {{.name = "id", .type = "integer", .description = "The villager", .required = true},
+	     {.name = "field",
+	      .type = "string",
+	      .description = "life, age, food, life stage, sex, tribe, role or state",
+	      .required = true},
+	     {.name = "number",
+	      .type = "integer",
+	      .description = "The age, the life stage, the sex, the tribe, the role or the state",
+	      .required = false},
+	     {.name = "amount", .type = "number", .description = "The life or the food", .required = false},
+	     {.name = "index", .type = "integer", .description = "The slot of states of a state, 0 to 2", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	villagerEdit.writes = true;
+	provider->Add(std::move(villagerEdit), [](const QueryContext& context) {
+		using Field = player_commands::EditorVillagerEdit::Field;
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		constexpr std::array<std::pair<std::string_view, Field>, 8> k_Fields {{
+		    {"life", Field::Life},
+		    {"age", Field::Age},
+		    {"food", Field::Food},
+		    {"life stage", Field::LifeStage},
+		    {"sex", Field::Sex},
+		    {"tribe", Field::Tribe},
+		    {"role", Field::Role},
+		    {"state", Field::State},
+		}};
+		const auto fieldParam = context.params.find("field");
+		const auto fieldName =
+		    fieldParam != context.params.end() && fieldParam->is_string() ? fieldParam->get<std::string>() : std::string();
+		const auto field = std::ranges::find(k_Fields, std::string_view(fieldName), &std::pair<std::string_view, Field>::first);
+		const auto entity = EntityParam(context.params);
+		if (!entity.has_value() || field == k_Fields.end())
+		{
+			return QueryResult::Error("editor.villager_edit needs the id of a villager and a field");
+		}
+		const player_commands::EditorVillagerEdit edit {
+		    .villager = *entity,
+		    .field = field->second,
+		    .index = static_cast<uint8_t>(NumberParam(context.params, "index").value_or(0.0f)),
+		    .number = static_cast<uint32_t>(NumberParam(context.params, "number").value_or(0.0f)),
+		    .amount = NumberParam(context.params, "amount").value_or(0.0f)};
+		if (const auto refusal = editor::VillagerEditRefusal(edit))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		editor::SendVillagerEdit(edit);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto creatureSpawn = Query(
+	    "creature_spawn",
+	    "Sends a new creature as a command of the turns, as the creature tools send it in a network game: each computer makes "
+	    "it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also "
+	    "when the editor of this computer is refused.",
+	    {{.name = "species", .type = "integer", .description = "The species (CreatureType, from 1)", .required = true},
+	     {.name = "position", .type = "point", .description = "[x, z] or [x, y, z] of the creature", .required = true},
+	     {.name = "owner", .type = "integer", .description = "The player that owns it (0 when not given)", .required = false},
+	     {.name = "radians", .type = "number", .description = "The angle that it faces", .required = false},
+	     {.name = "scale", .type = "number", .description = "Its size (1 when not given)", .required = false},
+	     {.name = "alignment", .type = "number", .description = "-1 to 1 (0 when not given)", .required = false},
+	     {.name = "fatness", .type = "number", .description = "0 to 1 (0.5 when not given)", .required = false},
+	     {.name = "strength", .type = "number", .description = "0 to 1 (0.5 when not given)", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	creatureSpawn.writes = true;
+	provider->Add(std::move(creatureSpawn), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto species = NumberParam(context.params, "species");
+		auto position = PositionParam(context.params);
+		if (!species.has_value() || !position.has_value())
+		{
+			return QueryResult::Error("editor.creature_spawn needs a species and a position");
+		}
+		// A point of [x, z] stands on the land, as the creature tools put a creature
+		if (const auto found = context.params.find("position"); found->is_array() && found->size() == 2)
+		{
+			position->y = editor::LandHeight({position->x, position->z});
+		}
+		const player_commands::EditorCreatureSpawn spawn {
+		    .species = static_cast<uint8_t>(*species),
+		    .owner = static_cast<uint8_t>(NumberParam(context.params, "owner").value_or(0.0f)),
+		    .position = *position,
+		    .radians = NumberParam(context.params, "radians").value_or(0.0f),
+		    .scale = NumberParam(context.params, "scale").value_or(1.0f),
+		    .alignment = NumberParam(context.params, "alignment").value_or(0.0f),
+		    .fatness = NumberParam(context.params, "fatness").value_or(0.5f),
+		    .strength = NumberParam(context.params, "strength").value_or(0.5f)};
+		if (const auto refusal = editor::CreatureSpawnRefusal(spawn))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		editor::SendCreatureSpawn(spawn);
 		return QueryResult::Value({{"sent", true}});
 	});
 	auto creatureAct =

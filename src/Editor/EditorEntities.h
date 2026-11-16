@@ -90,6 +90,8 @@ void Remove(entt::entity entity);
 void MoveTo(entt::entity entity, glm::vec3 position);
 /// Turns a thing about the up axis by an angle in radians
 void Turn(entt::entity entity, float radians);
+/// Changes the size of a thing to a new scale of its first axis. The other axes keep their ratio to the first axis.
+void ScaleTo(entt::entity entity, float firstAxis);
 
 /// Where a thing is, how it turns and its size, if it has a place on the land
 [[nodiscard]] std::optional<Pose> PoseOf(const ecs::Registry& registry, entt::entity entity);

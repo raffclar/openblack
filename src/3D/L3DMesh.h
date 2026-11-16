@@ -193,6 +193,16 @@ public:
 		return found != _skinAlpha.end() ? &found->second : nullptr;
 	}
 	[[nodiscard]] const std::vector<Footprint>& GetFootprints() const { return _footprints; }
+	/// The footprint that the game paints into the land under the model: the first footprint of a landscape feature with
+	/// triangles. None for any other model.
+	[[nodiscard]] const Footprint* GetGroundFootprint() const
+	{
+		if (!ContainsLandscapeFeature() || _footprints.empty() || _footprints.front().triangles.empty())
+		{
+			return nullptr;
+		}
+		return &_footprints.front();
+	}
 	[[nodiscard]] const std::vector<VolumeLight>& GetVolumeLights() const { return _volumeLights; }
 	[[nodiscard]] const std::vector<uint32_t>& GetBoneParents() const { return _bonesParents; }
 	[[nodiscard]] const std::vector<glm::mat4>& GetBoneMatrices() const { return _bonesDefaultMatrices; }

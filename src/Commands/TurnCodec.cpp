@@ -380,6 +380,7 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Number(command.challenge);
 		               out.Vector(command.position);
 		               out.Float(command.radians);
+		               out.Float(command.scale);
 	               },
 	               [&out](const DebugCheat& command) {
 		               out.Byte(command.cheat);
@@ -389,6 +390,32 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.creature);
 		               out.Byte(command.value);
 		               out.Float(command.amount);
+	               },
+	               [&out](const EditorVillagerEdit& command) {
+		               out.Entity(command.villager);
+		               out.Byte(static_cast<uint8_t>(command.field));
+		               out.Byte(command.index);
+		               out.Number(command.number);
+		               out.Float(command.amount);
+	               },
+	               [&out](const EditorCreatureSpawn& command) {
+		               out.Byte(command.species);
+		               out.Byte(command.owner);
+		               out.Vector(command.position);
+		               out.Float(command.radians);
+		               out.Float(command.scale);
+		               out.Float(command.alignment);
+		               out.Float(command.fatness);
+		               out.Float(command.strength);
+		               out.Byte(static_cast<uint8_t>(command.hasTattoos ? 1 : 0));
+		               for (const auto& slot : command.tattoos)
+		               {
+			               out.Byte(slot.design);
+			               out.Byte(slot.site);
+			               out.Byte(slot.colour.r);
+			               out.Byte(slot.colour.g);
+			               out.Byte(slot.colour.b);
+		               }
 	               },
 	               [&out](const EditorCreatureAct& command) {
 		               out.Entity(command.creature);
@@ -889,7 +916,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::EditorEdit:
 	{
 		const auto kind = in.Byte();
-		if (kind > static_cast<uint8_t>(EditorEdit::Kind::Remove))
+		if (kind > static_cast<uint8_t>(EditorEdit::Kind::Scale))
 		{
 			return DecodeError::Value;
 		}
@@ -900,6 +927,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 		edit.challenge = in.Number<uint32_t>();
 		edit.position = in.Vector();
 		edit.radians = in.Float();
+		edit.scale = in.Float();
 		action = edit;
 		return DecodeError::None;
 	}
@@ -951,6 +979,58 @@ DecodeError ReadAction(Reader& in, Action& action)
 			return in.Bad() ? DecodeError::Truncated : DecodeError::Value;
 		}
 		action = DebugLandSkip {.land = land};
+		return DecodeError::None;
+	}
+	case CommandTag::EditorVillagerEdit:
+	{
+		EditorVillagerEdit edit {.villager = in.Entity()};
+		const auto field = in.Byte();
+		if (field > static_cast<uint8_t>(EditorVillagerEdit::Field::State))
+		{
+			return in.Bad() ? DecodeError::Truncated : DecodeError::Value;
+		}
+		edit.field = static_cast<EditorVillagerEdit::Field>(field);
+		edit.index = in.Byte();
+		edit.number = in.Number<uint32_t>();
+		edit.amount = in.Float();
+		action = edit;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorCreatureSpawn:
+	{
+		EditorCreatureSpawn spawn {.species = in.Byte(), .owner = in.Byte()};
+		spawn.position = in.Vector();
+		spawn.radians = in.Float();
+		spawn.scale = in.Float();
+		spawn.alignment = in.Float();
+		spawn.fatness = in.Float();
+		spawn.strength = in.Float();
+		const auto hasTattoos = in.Byte();
+		for (auto& slot : spawn.tattoos)
+		{
+			slot.design = in.Byte();
+			slot.site = in.Byte();
+			slot.colour.r = in.Byte();
+			slot.colour.g = in.Byte();
+			slot.colour.b = in.Byte();
+		}
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		// The species is one of the creatures of the game, and the owner is one of the players
+		const bool known = spawn.species > static_cast<uint8_t>(CreatureType::Unknown) &&
+		                   spawn.species < static_cast<uint8_t>(CreatureType::_COUNT) &&
+		                   spawn.owner < static_cast<uint8_t>(PlayerNames::_COUNT) && hasTattoos <= 1;
+		const bool tattoosKnown = std::ranges::all_of(spawn.tattoos, [](const auto& slot) {
+			return slot.design < creature_tattoo::k_DesignCount && slot.site <= creature_tattoo::k_NoSite;
+		});
+		if (!known || !tattoosKnown)
+		{
+			return DecodeError::Value;
+		}
+		spawn.hasTattoos = hasTattoos == 1;
+		action = spawn;
 		return DecodeError::None;
 	}
 	case CommandTag::MusicMood:
@@ -1129,6 +1209,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const EditorCreatureEdit& /*command*/) { return CommandTag::EditorCreatureEdit; },
 	                      [](const EditorCreatureAct& /*command*/) { return CommandTag::EditorCreatureAct; },
 	                      [](const DebugLandSkip& /*command*/) { return CommandTag::DebugLandSkip; },
+	                      [](const EditorVillagerEdit& /*command*/) { return CommandTag::EditorVillagerEdit; },
+	                      [](const EditorCreatureSpawn& /*command*/) { return CommandTag::EditorCreatureSpawn; },
 	                  },
 	                  action);
 }
@@ -1198,11 +1280,15 @@ size_t SizeOf(const Action& action) noexcept
 	        [](const ObserverIn& command) { return 1 + (2 * command.name.size()); },
 	        [](const ObserverOut& /*command*/) { return size_t {0}; },
 	        [](const HandLockRelease& /*command*/) { return k_Entity; },
-	        [](const EditorEdit& /*command*/) { return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4; },
+	        [](const EditorEdit& /*command*/) { return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4 + 4; },
 	        [](const DebugCheat& /*command*/) { return size_t {2}; },
 	        [](const EditorCreatureEdit& /*command*/) { return k_Entity + 1 + 4; },
 	        [](const EditorCreatureAct& command) { return k_Entity + 1 + k_Entity + k_Vector + 4 + 2 + command.args.size(); },
 	        [](const DebugLandSkip& /*command*/) { return size_t {1}; },
+	        [](const EditorVillagerEdit& /*command*/) { return k_Entity + 1 + 1 + 4 + 4; },
+	        [](const EditorCreatureSpawn& /*command*/) {
+		        return 1 + 1 + k_Vector + (5 * 4) + 1 + (5 * creature_tattoo::k_SlotCount);
+	        },
 	    },
 	    action);
 	return 1 + fields;
