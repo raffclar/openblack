@@ -1742,6 +1742,13 @@ TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlagsAndKeys)
 	auto wrongKey = bytes;
 	*(wrongKey.end() - 5) = 255;
 	EXPECT_EQ(Decode(wrongKey).error, DecodeError::Value);
+	// Keys out of order, or a key twice, are refused: they would give other bytes when the frame goes out again
+	auto wrongOrder = bytes;
+	std::swap(*(wrongOrder.end() - 6), *(wrongOrder.end() - 5));
+	EXPECT_EQ(Decode(wrongOrder).error, DecodeError::Value);
+	auto sameKey = bytes;
+	*(sameKey.end() - 5) = *(sameKey.end() - 6);
+	EXPECT_EQ(Decode(sameKey).error, DecodeError::Value);
 }
 
 TEST(TurnCodec, ALineOfTheChatHasItsPlayersThenItsCharacters)
