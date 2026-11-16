@@ -111,7 +111,8 @@ void DemoLobbyRoom::RefreshList(LobbyCallback<LobbyDone> callback)
 	queued.queuePosition = 2;
 	lobbies.push_back(std::move(queued));
 	lobbies.push_back(Summary("d6", "Old friends", dan, "Two gods", 1, 2, LobbyState::Open, "0.0.1+old/codec1"));
-	_list.Replace({.lobbies = std::move(lobbies), .pool = lobby_api::PoolState {.free = 0, .total = 4}});
+	_list.Replace(
+	    {.lobbies = std::move(lobbies), .pool = lobby_api::PoolState {.free = 0, .total = 4, .serverMap = _serverMap}});
 	if (callback)
 	{
 		callback({.value = LobbyDone {}, .error = {}});
@@ -214,6 +215,7 @@ void DemoLobbyRoom::Create(lobby_api::LobbyCreateRequest request, LobbyCallback<
 	                 .away = false,
 	                 .haveMap = true,
 	                 .host = true}},
+	    .serverProblem = _lobbyServerProblem,
 	};
 	_room = std::make_unique<online::lobby::LobbyRoom>(std::move(lobby), _self);
 	// Two players come in: Bob is ready, and Carol downloads a map of the service
@@ -434,20 +436,29 @@ void DemoLobbyRoom::Close(LobbyCallback<LobbyDone> callback)
 	callback({.value = LobbyDone {}, .error = {}});
 }
 
-void DemoLobbyRoom::RefuseStartForServer(std::string problem)
+void DemoLobbyRoom::RefuseStart(std::string code, std::string detail)
 {
-	_serverProblem = std::move(problem);
+	_startRefusal = std::move(code);
+	_startDetail = std::move(detail);
+}
+
+void DemoLobbyRoom::SetServerMap(lobby_api::ServerMap map)
+{
+	_serverMap = std::move(map);
+	RefreshList({});
+}
+
+void DemoLobbyRoom::SetLobbyServerProblem(std::string problem)
+{
+	_lobbyServerProblem = std::move(problem);
 }
 
 void DemoLobbyRoom::Start(LobbyCallback<LobbyDone> callback)
 {
-	if (!_serverProblem.empty())
+	if (!_startRefusal.empty())
 	{
 		callback({.value = std::nullopt,
-		          .error = {.kind = LobbyErrorKind::Refused,
-		                    .status = 409,
-		                    .detail = _serverProblem,
-		                    .code = std::string(lobby_api::lobby_problems::k_ServerLand)}});
+		          .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = _startDetail, .code = _startRefusal}});
 		return;
 	}
 	if (_room != nullptr)

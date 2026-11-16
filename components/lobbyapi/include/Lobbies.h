@@ -116,6 +116,19 @@ struct LobbySettings
 	bool observersAllowed {true};
 };
 
+/// "server_map" of the pool: the one land that each game plays on the fixed game server
+struct ServerMap
+{
+	/// "file", for example "Online Maps/mpm_2p_1.map"
+	std::string file;
+	/// "name"
+	std::string name;
+	/// "sha256": empty for a land of the game itself
+	std::string sha256;
+	/// "gods": the most gods of a game on the server
+	int32_t gods {0};
+};
+
 /// The game servers of the service: "pool" of the list, and the data of "pool.changed"
 struct PoolState
 {
@@ -123,6 +136,8 @@ struct PoolState
 	int32_t free {0};
 	/// "total"
 	int32_t total {0};
+	/// "server_map": none when a game can have each land. Only the list gives it, "pool.changed" does not.
+	std::optional<ServerMap> serverMap;
 };
 
 /// A lobby in the lobby list
@@ -227,6 +242,8 @@ struct Lobby
 	std::string gameId;
 	/// "members"
 	std::vector<LobbyMember> members;
+	/// "server_problem": why the game server cannot play the map or the gods of the lobby. Empty when it can.
+	std::string serverProblem;
 };
 
 /// POST /api/v1/lobbies
@@ -484,6 +501,8 @@ constexpr std::string_view k_NotStarting = "not_starting";
 constexpr std::string_view k_TooManyPlayers = "too_many_players";
 /// The game server cannot play the lobby's map or gods. The detail is the lobby's server_problem.
 constexpr std::string_view k_ServerLand = "server_land";
+/// The site does not have the map package of the lobby's map
+constexpr std::string_view k_MapPackageMissing = "map_package_missing";
 } // namespace lobby_problems
 
 } // namespace openblack::lobby_api

@@ -89,6 +89,12 @@ enum class Stage : uint8_t
 	LobbyServerVersion,
 	/// The game server cannot play the map of the session: the box of the Start gives the reason on a second line
 	LobbyServerProblem,
+	/// The site does not have the map package of the session's map: the Start gives its own notice (deviation 275)
+	LobbyMapPackageMissing,
+	/// The box that makes a session shows the map of the fixed game server (deviation 276)
+	LobbyCreateServerMap,
+	/// The box of the session settings shows the lobby's server_problem (deviation 276)
+	LobbySettingsServerProblem,
 	/// The events of a joined room give their notices one after the other: a join, a ready, the countdown and a kick
 	LobbyNotices,
 	_Count

@@ -128,7 +128,32 @@ TEST(LobbiesJson, TheLobbyReads)
 	                 std::string(k_LobbyJson).replace(std::string(k_LobbyJson).find(R"("index":5)"), 9, R"("index":6)"))
 	                 .has_value());
 	EXPECT_FALSE(lobby_api::ParseLobby(R"({"id":"l1"})").has_value());
+	// A lobby with no server_problem has an empty problem
+	EXPECT_TRUE(lobby.serverProblem.empty());
 	EXPECT_FALSE(lobby_api::ParseLobby(std::string(k_LobbyJson).replace(0, 1, "[")).has_value());
+}
+
+TEST(LobbiesJson, TheLobbyAndThePoolGiveTheProblemAndTheMapOfTheGameServer)
+{
+	auto text = std::string(k_LobbyJson);
+	text.insert(text.size() - 1, R"(,"server_problem":"The map Land Two takes at most 2 gods.")");
+	const auto lobby = lobby_api::ParseLobby(text);
+	ASSERT_TRUE(lobby.has_value());
+	EXPECT_EQ(lobby->serverProblem, "The map Land Two takes at most 2 gods.");
+
+	const auto list = lobby_api::ParseLobbyList(
+	    R"({"lobbies":[],"pool":{"free":1,"total":1,)"
+	    R"("server_map":{"file":"Online Maps/mpm_2p_1.map","name":"Two Gods","sha256":"ab","gods":2}}})");
+	ASSERT_TRUE(list.has_value() && list->pool.has_value() && list->pool->serverMap.has_value());
+	EXPECT_EQ(list->pool->serverMap->file, "Online Maps/mpm_2p_1.map");
+	EXPECT_EQ(list->pool->serverMap->name, "Two Gods");
+	EXPECT_EQ(list->pool->serverMap->gods, 2);
+	// A null server_map is a pool where a game can have each land
+	const auto any = lobby_api::ParseLobbyList(R"({"lobbies":[],"pool":{"free":1,"total":3,"server_map":null}})");
+	ASSERT_TRUE(any.has_value() && any->pool.has_value());
+	EXPECT_FALSE(any->pool->serverMap.has_value());
+	// A server_map with no file is not a pool
+	EXPECT_FALSE(lobby_api::ParseLobbyList(R"({"lobbies":[],"pool":{"free":1,"total":1,"server_map":{"gods":2}}})"));
 }
 
 TEST(LobbiesJson, TheListAndItsEventsRead)
@@ -633,6 +658,21 @@ TEST(LobbyList, TheEventsChangeTheList)
 	EXPECT_TRUE(list.Apply(Event("pool.changed", R"({"free":1,"total":6})")));
 	EXPECT_EQ(list.Pool()->free, 1);
 	EXPECT_FALSE(list.Apply(Event("chat.line", "{}")));
+}
+
+TEST(LobbyList, AChangeOfThePoolKeepsTheMapOfTheGameServer)
+{
+	LobbyListModel list;
+	list.Replace(
+	    {.pool = lobby_api::PoolState {.free = 1, .total = 1, .serverMap = lobby_api::ServerMap {.file = "m", .gods = 2}}});
+	EXPECT_TRUE(list.Apply(Event("pool.changed", R"({"free":0,"total":1})")));
+	ASSERT_TRUE(list.Pool().has_value());
+	EXPECT_EQ(list.Pool()->free, 0);
+	ASSERT_TRUE(list.Pool()->serverMap.has_value());
+	EXPECT_EQ(list.Pool()->serverMap->gods, 2);
+	// A new list with no server map removes it
+	list.Replace({.pool = lobby_api::PoolState {.free = 3, .total = 3}});
+	EXPECT_FALSE(list.Pool()->serverMap.has_value());
 }
 
 namespace

@@ -55,6 +55,8 @@ constexpr glm::ivec2 k_NextPosition {730, 530};
 constexpr int k_ArrowSize = 40;
 constexpr int k_TickSize = 20;
 constexpr DialogRect k_Title {.min = {40, 62}, .max = {760, 100}};
+/// The line of the game server in the box that makes a session: between the labels of the Back and Next buttons
+constexpr DialogRect k_ServerLineRect {.min = {190, 522}, .max = {560, 578}};
 
 // The vanilla texts that the boxes use again
 constexpr std::string_view k_BackText = "HELP_TEXT_DIALOG_BACK";
@@ -412,6 +414,8 @@ void MultiplayerBoxes::BuildCreateLobby(Dialog& dialog)
 		                       u"An empty password keeps the password. A change clears the ready of each player.",
 		                       Layout::Centre, Small());
 	}
+	// The line of the game server sits between the Back and Next buttons (deviation 276)
+	_serverLine = &dialog.Add<StaticText>(k_ServerLineRect, std::u16string(), Layout::Wrapped, Small());
 	dialog.SetFocus(_sessionName);
 }
 
@@ -442,6 +446,7 @@ void MultiplayerBoxes::SyncCreateLobby()
 	_privateBox->SetChecked(form.isPrivate);
 	const auto problem = screens::CreateProblem(form);
 	_help->text = problem.has_value() ? ToUtf16(*problem) : std::u16string();
+	_serverLine->text = screens::ServerLineOf(_frontEnd->GetServerPool(), room != nullptr ? &room->Data() : nullptr);
 }
 
 void MultiplayerBoxes::BuildLobbyRoom(Dialog& dialog)

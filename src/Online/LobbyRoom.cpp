@@ -772,12 +772,17 @@ bool LobbyListModel::Apply(const lobby_api::PushEvent& event)
 {
 	if (event.type == events::k_PoolChanged)
 	{
-		const auto pool = lobby_api::ParsePoolState(event.data);
+		auto pool = lobby_api::ParsePoolState(event.data);
 		if (!pool.has_value())
 		{
 			return false;
 		}
-		_pool = pool;
+		// The event gives only the free servers. The map of the fixed game server stays as the list gave it.
+		if (_pool.has_value() && !pool->serverMap.has_value())
+		{
+			pool->serverMap = _pool->serverMap;
+		}
+		_pool = std::move(pool);
 		++_revision;
 		return true;
 	}

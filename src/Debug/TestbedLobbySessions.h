@@ -73,8 +73,12 @@ public:
 	/// The game server of the start has another build than the session: the service stops the start. expected: the
 	/// build that the service needs now, empty when it gives none.
 	void StopForServerVersion(std::string serverBuild, std::string expected);
-	/// The game server cannot play the lobby's map or gods: the Start gets the problem "server_land" with this reason
-	void RefuseStartForServer(std::string problem);
+	/// The service refuses the Start with this problem code and detail, for example "server_land" and its reason
+	void RefuseStart(std::string code, std::string detail);
+	/// The pool of the list has one fixed game server, which plays only this map
+	void SetServerMap(lobby_api::ServerMap map);
+	/// The lobby that the player makes has this server_problem
+	void SetLobbyServerProblem(std::string problem);
 	/// The lobby gives the room a game server after the countdown. Then the room gets this ticket.
 	void AssignGame(std::string gameId, lobby_api::JoinTicket ticket);
 
@@ -91,8 +95,14 @@ private:
 	int64_t _seq {0};
 	/// The ticket of the game server that the lobby gave the room, none before AssignGame
 	std::optional<lobby_api::JoinTicket> _ticket;
-	/// The reason of the game server for a refusal of the start, empty when the start is possible
-	std::string _serverProblem;
+	/// The problem code of a refusal of the start, empty when the start is possible
+	std::string _startRefusal;
+	/// The detail of the refusal of the start
+	std::string _startDetail;
+	/// The map of the fixed game server of the pool, none when a game can have each land
+	std::optional<lobby_api::ServerMap> _serverMap;
+	/// The server_problem of the lobby that the player makes
+	std::string _lobbyServerProblem;
 };
 
 } // namespace openblack::testbed_multiplayer

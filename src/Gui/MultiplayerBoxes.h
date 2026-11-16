@@ -173,6 +173,8 @@ private:
 	EditBox* _password {nullptr};
 	StaticText* _passwordLabel {nullptr};
 	StaticText* _help {nullptr};
+	/// The line of the game server in the box that makes a session or changes its settings
+	StaticText* _serverLine {nullptr};
 	StaticText* _playersLabel {nullptr};
 	BigButton* _next {nullptr};
 	std::vector<size_t> _shownGames;
