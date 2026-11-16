@@ -24,6 +24,7 @@
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFight.h"
 #include "PlayerSlots.h"
+#include "Story/StoryLandSkip.h"
 
 namespace openblack::turn_codec
 {
@@ -428,6 +429,7 @@ void WriteAction(Writer& out, const Action& action)
 			               out.Byte(arg);
 		               }
 	               },
+	               [&out](const DebugLandSkip& command) { out.Byte(command.land); },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -969,6 +971,16 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = act;
 		return DecodeError::None;
 	}
+	case CommandTag::DebugLandSkip:
+	{
+		const auto land = in.Byte();
+		if (!story_land_skip::GoesAsCommand(land))
+		{
+			return in.Bad() ? DecodeError::Truncated : DecodeError::Value;
+		}
+		action = DebugLandSkip {.land = land};
+		return DecodeError::None;
+	}
 	case CommandTag::EditorVillagerEdit:
 	{
 		EditorVillagerEdit edit {.villager = in.Entity()};
@@ -1196,6 +1208,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const DebugCheat& /*command*/) { return CommandTag::DebugCheat; },
 	                      [](const EditorCreatureEdit& /*command*/) { return CommandTag::EditorCreatureEdit; },
 	                      [](const EditorCreatureAct& /*command*/) { return CommandTag::EditorCreatureAct; },
+	                      [](const DebugLandSkip& /*command*/) { return CommandTag::DebugLandSkip; },
 	                      [](const EditorVillagerEdit& /*command*/) { return CommandTag::EditorVillagerEdit; },
 	                      [](const EditorCreatureSpawn& /*command*/) { return CommandTag::EditorCreatureSpawn; },
 	                  },
@@ -1271,6 +1284,7 @@ size_t SizeOf(const Action& action) noexcept
 	        [](const DebugCheat& /*command*/) { return size_t {2}; },
 	        [](const EditorCreatureEdit& /*command*/) { return k_Entity + 1 + 4; },
 	        [](const EditorCreatureAct& command) { return k_Entity + 1 + k_Entity + k_Vector + 4 + 2 + command.args.size(); },
+	        [](const DebugLandSkip& /*command*/) { return size_t {1}; },
 	        [](const EditorVillagerEdit& /*command*/) { return k_Entity + 1 + 1 + 4 + 4; },
 	        [](const EditorCreatureSpawn& /*command*/) {
 		        return 1 + 1 + k_Vector + (5 * 4) + 1 + (5 * creature_tattoo::k_SlotCount);

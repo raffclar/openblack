@@ -160,6 +160,7 @@
 #include "ScriptHeaders/ScriptStart.h"
 #include "Serializer/FotFile.h"
 #include "Sound/SoundRequestInterface.h"
+#include "Story/StoryLandSkip.h"
 #include "Temple/TempleHelp.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -1570,6 +1571,33 @@ void LandSystem::StartStoryScripts()
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The direct start could not start the story at the script {}", script);
 		}
 	}
+}
+
+bool LandSystem::StartStoryAtLand(int32_t land)
+{
+	const auto before = story_land_skip::ControlScriptBefore(land);
+	if (!before.has_value() || !Locator::vm::has_value())
+	{
+		return false;
+	}
+	auto& vm = Locator::vm::value();
+	const std::string top(story_land_skip::k_TopScript);
+	const auto run = vm.FindRunOfScript(top, *before);
+	if (!run.has_value())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The skip to land {} found no run of {} in the script {}", land, *before, top);
+		return false;
+	}
+	// The change of land of the top script stops all the scripts but the scripts of its own file. Thus stop the top script
+	// that runs now first, so that only the new top script continues.
+	vm.StopScripts([&top](const std::string& name, [[maybe_unused]] const std::string& filename) { return name == top; });
+	if (vm.StartScriptAt(top, script::start::StartableScripts(), story_land_skip::StartAfterRun(*run)) == 0)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The skip to land {} could not start the script {}", land, top);
+		return false;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skip to land {} starts the script {} after its run of {}", land, top, *before);
+	return true;
 }
 
 bool LandSystem::AskNewGameChoice()

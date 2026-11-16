@@ -407,4 +407,27 @@ uint32_t OwnDebugCheats()
 	return Locator::debugCheatSystem::value().CheatsOf(input::LocalPlayer(hands));
 }
 
+story_land_skip::GameFacts OwnStoryGame()
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return {.networkGame = true};
+	}
+	const auto& context = Locator::entitiesRegistry::value().Context();
+	return {.networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
+	        .skirmish = context.skirmish,
+	        .landNumber = context.mapScriptGlobals.landNumber};
+}
+
+bool SendStoryLandSkip(int32_t land)
+{
+	if (!story_land_skip::Shown(OwnStoryGame()) || !story_land_skip::GoesAsCommand(land) ||
+	    !Locator::playerCommandSystem::has_value())
+	{
+		return false;
+	}
+	Locator::playerCommandSystem::value().Submit(player_commands::DebugLandSkip {.land = static_cast<uint8_t>(land)});
+	return true;
+}
+
 } // namespace openblack::editor

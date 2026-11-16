@@ -158,6 +158,7 @@ std::vector<Action> EachCommand()
 	                       .amount = 0.5f,
 	                       .index = 300,
 	                       .args = {1, 2, 3, 4, 5, 6}},
+	    DebugLandSkip {.land = 3},
 	    EditorVillagerEdit {
 	        .villager = Entity(35), .field = EditorVillagerEdit::Field::State, .index = 1, .number = 77, .amount = 0.25f},
 	    EditorCreatureSpawn {.species = 4,
@@ -210,7 +211,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 60)
+	switch (bits(random) % 61)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -437,13 +438,15 @@ Action RandomAction(std::mt19937& random)
 		                          .args = {static_cast<uint8_t>(bits(random)), static_cast<uint8_t>(bits(random)),
 		                                   static_cast<uint8_t>(bits(random)), static_cast<uint8_t>(bits(random)),
 		                                   static_cast<uint8_t>(bits(random)), static_cast<uint8_t>(bits(random))}};
-	case 58:
+	case 57:
+		return DebugLandSkip {.land = static_cast<uint8_t>(2 + (bits(random) % 4))};
+	case 59:
 		return EditorVillagerEdit {.villager = entity(),
 		                           .field = static_cast<EditorVillagerEdit::Field>(bits(random) % 8),
 		                           .index = static_cast<uint8_t>(bits(random)),
 		                           .number = bits(random),
 		                           .amount = number()};
-	case 57:
+	case 58:
 		return EditorCreatureSpawn {.species = static_cast<uint8_t>(1 + (bits(random) % 17)),
 		                            .owner = static_cast<uint8_t>(bits(random) % 8),
 		                            .position = vector(),
@@ -515,9 +518,9 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5,  9, 5, 53, 5, 10, 18, 5,  49, 17, 5,  5,  5,  9,  12, 1,  18, 11, 5,
-	                                 19, 15, 7, 5, 1,  2, 1,  61, 5,  2,  1,  13, 10, 18, 1,  58, 1,  5,  51, 5,
-	                                 16, 7,  1, 1, 13, 1, 2,  9,  13, 1,  1,  8,  1,  5,  35, 3,  10, 34, 15, 76};
+	const std::vector<size_t> sizes {2,  5, 9,  5, 53, 5, 10, 18, 5, 49, 17, 5,  5,  5, 9,  12, 1, 18, 11, 5,  19,
+	                                 15, 7, 5,  1, 2,  1, 61, 5,  2, 1,  13, 10, 18, 1, 58, 1,  5, 51, 5,  16, 7,
+	                                 1,  1, 13, 1, 2,  9, 13, 1,  1, 8,  1,  5,  35, 3, 10, 34, 2, 15, 76};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -561,8 +564,12 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 58;
 		}
-		// The edit of a villager and the new creature of the editor have the tags 60 and 61. The tag 59 belongs to another
-		// command.
+		// The skip to a land of the story has the tag 59
+		if (std::holds_alternative<DebugLandSkip>(commands[i]))
+		{
+			tag = 59;
+		}
+		// The edit of a villager and the new creature of the editor have the tags 60 and 61
 		if (std::holds_alternative<EditorVillagerEdit>(commands[i]))
 		{
 			tag = 60;
@@ -602,6 +609,23 @@ TEST(TurnCodec, TheDecoderRefusesABadEditOrCheat)
 	auto notBool = cheat;
 	notBool[k_FirstField + 1] = 2;
 	EXPECT_EQ(Decode(notBool).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, TheDecoderTakesOnlyASkipToALandOfTheStoryAfterTheFirst)
+{
+	auto skip = Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {DebugLandSkip {.land = 5}}}});
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_Land = 10;
+	ASSERT_EQ(skip.size(), k_Land + 1);
+	const auto back = Decode(skip);
+	ASSERT_EQ(back.error, DecodeError::None);
+	EXPECT_EQ(std::get<DebugLandSkip>(std::get<CommandBlock>(*back.frame).actions[0]), (DebugLandSkip {.land = 5}));
+	for (const uint8_t land : {0, 1, 6, 255})
+	{
+		auto bad = skip;
+		bad[k_Land] = land;
+		EXPECT_EQ(Decode(bad).error, DecodeError::Value) << static_cast<int>(land);
+	}
 }
 
 TEST(TurnCodec, TheDecoderRefusesAnEditOfACreatureWithNoSuchValue)

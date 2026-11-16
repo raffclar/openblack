@@ -324,7 +324,8 @@ public:
 	/// The blocks of commands that the server did not accept: before the start, a command that only the server sends, or
 	/// a command that an observer does not send
 	[[nodiscard]] uint32_t RefusedBlocks() const { return _refusedBlocks; }
-	/// The edits of the editor and the debug cheats that the server refused because their player has no editor claim
+	/// The edits of the editor and the debug cheats that the server refused because their player has no editor claim, and
+	/// the skips to a land of the story, which the server refuses from every player
 	[[nodiscard]] uint32_t RefusedEditorCommands() const { return _refusedEditorCommands; }
 	/// The edits of the editor that the server refused for a value that no computer takes, such as a scale out of range
 	[[nodiscard]] uint32_t RefusedEditorValues() const { return _refusedEditorValues; }
@@ -411,8 +412,9 @@ private:
 	void ObserverGone(uint8_t number);
 	/// The lowest number that no observer has, none when every number is taken
 	[[nodiscard]] std::optional<uint8_t> FreeObserverNumber() const;
-	/// Removes the edits of the editor and the debug cheats of a player with no editor claim, logs the refusal, and sends
-	/// the reason to the connection of the player. Also removes and logs each edit with a value that no computer takes.
+	/// Removes the edits of the editor and the debug cheats of a player with no editor claim, and every skip to a land of
+	/// the story. Logs the refusal, and sends the reason to the connection of the player. Also removes and logs each edit
+	/// with a value that no computer takes.
 	void RefuseEditorCommands(ConnectionId connection, const Peer& peer, std::vector<player_commands::Action>& actions);
 	/// Logs each debug cheat that the server takes into its turns, so that the log of the server tells each change
 	void LogDebugCheats(const Peer& peer, const std::vector<player_commands::Action>& actions);

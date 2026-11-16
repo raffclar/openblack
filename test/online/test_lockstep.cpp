@@ -710,6 +710,40 @@ TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 	EXPECT_FALSE(OnlyEditorSends(CreatureTattoo {}));
 	EXPECT_TRUE(ServerTakesFromObserver(CreatureTattoo {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(CreatureTattoo {}, false));
+	// A skip to a land of the story is a debug cheat, and the server refuses it from every player
+	EXPECT_TRUE(OnlyEditorSends(DebugLandSkip {}));
+	EXPECT_TRUE(ServerAlwaysRefuses(DebugLandSkip {}));
+	EXPECT_FALSE(ServerAlwaysRefuses(DebugCheat {}));
+	EXPECT_FALSE(ServerAlwaysRefuses(EditorEdit {}));
+	EXPECT_FALSE(ServerTakesFromObserver(DebugLandSkip {}, true));
+}
+
+TEST_F(LockstepTest, TheServerRefusesASkipToALandOfTheStoryAlsoFromAGodWithTheEditorClaim)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.GetJoined()->editor);
+	alice.session.Send(DebugLandSkip {.land = 3});
+	alice.session.Send(DebugCheat {.cheat = 0, .on = true});
+	bob.session.Send(DebugLandSkip {.land = 2});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugLandSkip), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::DebugLandSkip), 0u);
+	// The other cheat of the player with the editor claim stays
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugCheat), 1u);
+	EXPECT_GE(alice.session.TakeEditorRefusals(), 1u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
 TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAGodWithTheEditorClaim)

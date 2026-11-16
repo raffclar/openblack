@@ -109,6 +109,9 @@ public:
 	void SetSymbolPictures(const creature_tattoo::Pictures& pictures);
 	/// What the player last chose in the menu, once
 	GameMenu::Action TakeAction();
+	/// A developer tool chooses an action as the menu chooses it, such as the start of a new game. The game takes it in
+	/// this frame, as it takes a choice of the menu.
+	void ChooseMenuAction(GameMenu::Action action) { TakeMenuAction(action); }
 	/// Whether the menu's settings changed since last asked
 	bool TakeSettingsChanged() { return _menu->TakeSettingsChanged(); }
 
