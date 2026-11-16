@@ -182,6 +182,7 @@ void Game::UpdateOnline()
 				else
 				{
 					_leaveNetworkGame = true;
+					LeaveLobbyGame();
 				}
 			}
 			// After the last try to come back, the box tells the player that the connection to the game is lost
@@ -475,6 +476,23 @@ void Game::ExitOnlineGame()
 	AskToLeaveNetworkGame();
 }
 
+void Game::LeaveLobbyGame()
+{
+	// After the game session closes, the player also leaves the lobby room of that game
+	if (!Locator::lobbyRoom::has_value())
+	{
+		return;
+	}
+	auto& lobbyRoom = Locator::lobbyRoom::value();
+	const auto* room = lobbyRoom.Room();
+	if (room == nullptr || !online::lobby::HasGameServer(room->Phase()))
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player leaves the lobby {} of the network game", room->Data().id);
+	lobbyRoom.LeaveGame();
+}
+
 void Game::LeaveAsObserverAtTheEndOfTheRun()
 {
 	if (!Locator::networkGame::has_value())
@@ -503,6 +521,7 @@ void Game::LeaveNetworkGame(game_session::NetworkLeave leave)
 	// The game server makes the god of the player a leaver for every computer
 	Locator::networkGame::value().Leave();
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player leaves the network game");
+	LeaveLobbyGame();
 	// A join from the command line, and a run of the tools, stop the game. A join from the front end goes to the box
 	// that the control gives.
 	const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();

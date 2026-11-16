@@ -859,7 +859,7 @@ void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
 
 void MultiplayerFrontEnd::FollowLobbyGame(const online::lobby::LobbyRoom& room)
 {
-	const bool hasServer = room.Phase() == RoomPhase::Assigned || room.Phase() == RoomPhase::InGame;
+	const bool hasServer = online::lobby::HasGameServer(room.Phase());
 	if (!hasServer && _lobbyGame && !IsStarted())
 	{
 		// The lobby took the game back before the start, for example when too few players joined in time. The session

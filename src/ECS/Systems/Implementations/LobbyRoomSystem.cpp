@@ -461,6 +461,21 @@ void LobbyRoomSystem::Leave(LobbyCallback<LobbyDone> callback)
 	         [this](const HttpResponse& /*response*/) { _room->Finish(online::lobby::EndReason::Left); });
 }
 
+void LobbyRoomSystem::LeaveGame()
+{
+	if (_room == nullptr || !online::lobby::HasGameServer(_room->Phase()))
+	{
+		return;
+	}
+	// The room ends before the call, so that a front end that opens now does not ask for a ticket of this game
+	const auto lobbyId = _room->Data().id;
+	_room->Finish(online::lobby::EndReason::Left);
+	FollowRoomEnd();
+	// The leave has no answer to show: the player is out of the game already, and the service ends the membership
+	_client.SendApiCall(HttpMethod::Delete, fmt::format("/lobbies/{}/members/me", lobbyId), {}, {},
+	                    [](LobbyResult<HttpResponse>&& /*result*/) {});
+}
+
 void LobbyRoomSystem::ReloadFrom(const HttpResponse& response)
 {
 	// The calls of the room give the whole lobby back

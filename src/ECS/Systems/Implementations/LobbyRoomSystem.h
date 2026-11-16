@@ -56,6 +56,7 @@ public:
 	void DismissRoom() override;
 
 	void Leave(LobbyCallback<LobbyDone> callback) override;
+	void LeaveGame() override;
 	void SetReady(bool ready, LobbyCallback<LobbyDone> callback) override;
 	void PickSlot(int32_t slot, LobbyCallback<LobbyDone> callback) override;
 	void ReportMap(lobby_api::MapReport report, LobbyCallback<LobbyDone> callback) override;
