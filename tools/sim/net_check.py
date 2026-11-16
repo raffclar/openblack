@@ -1469,7 +1469,7 @@ def editor_scenario(pids, shots=None, away=False, fast=False):
     on a testbed scenario. Every computer loads the testbed and lays the scenario out before the first turn of the new
     game, and the worlds go on in step. With away, the second client drops its socket before the start and comes back
     15 seconds later: it gets the start of the scenario again and does each turn of it. With fast, the editor first sets
-    the time of a turn to 0.1 (100 turns a second) and the second client is away for 45 seconds, so that the scenario
+    the time of a turn to 0.1 (100 turns a second) and the second client is away for 75 seconds, so that the scenario
     does more turns than the server usually keeps (3200)."""
     editor = pids[0]
     done = {"id": EDITOR_SCENARIO}
@@ -1477,7 +1477,7 @@ def editor_scenario(pids, shots=None, away=False, fast=False):
         done["speed"] = inspector_answer(editor, "editor.time", {"params": {"act": "speed", "speed": 0.1}})
         time.sleep(2.0)
     if away and len(pids) > 1:
-        done["away"] = inspector_answer(pids[1], "engine.online_away", {"params": {"seconds": 45 if fast else 15}})
+        done["away"] = inspector_answer(pids[1], "engine.online_away", {"params": {"seconds": 75 if fast else 15}})
         if not (done["away"] or {}).get("away"):
             done["error"] = f"the second client did not go away: {done['away']}"
             return done
@@ -1489,11 +1489,10 @@ def editor_scenario(pids, shots=None, away=False, fast=False):
     done["sent"] = inspector_answer(editor, "editor.scenario", {"params": {"id": EDITOR_SCENARIO}})
     if not (done["sent"] or {}).get("sent"):
         done["error"] = f"the scenario did not go: {done['sent']}"
-    time.sleep(70.0 if fast else 35.0 if away else 20.0)
+    time.sleep(100.0 if fast else 35.0 if away else 20.0)
     if fast:
+        # The room clock stays fast, so the run ends soon after the check
         done["turns"] = [room_time(pid).get("turn") for pid in pids]
-        done["normal_speed"] = inspector_answer(editor, "editor.time", {"params": {"act": "speed", "speed": 1.0}})
-        time.sleep(3.0)
     editor_shots(pids, shots, "scenario_01_after_restart")
     return done
 
@@ -2867,7 +2866,7 @@ def main():
                              "room, the editor writes the world into a file and loads it 10 seconds later for the room "
                              "(world), or starts the room again on a testbed scenario (scenario), also while the second "
                              "client is away for 15 seconds (scenario-away), or at 100 turns a second while the second client is "
-                             "away for 45 seconds (scenario-away-fast), or the second client is away while the editor "
+                             "away for 75 seconds (scenario-away-fast), or the second client is away while the editor "
                              "changes the body time and the fainting switch and loads a world file (body-away)")
     parser.add_argument("--world-file", metavar="FILE",
                         help="with --editor-desync world: the first client sends this world file, for example the world "
@@ -3539,9 +3538,13 @@ def main():
             print(f"client {index + 1} was apart from the server from turn {gap[0]} to its world of turn {gap[1]} "
                   f"({gap[2]} turns, not counted as a difference); it differs in {counts[0] - counts[1]} compares of "
                   f"{counts[0]}")
+        # A player who comes back with the world of the server does not compare the turns that it missed while away
+        away_gap = sum(int(match.group(2)) - int(match.group(1)) for line in lines_with(
+            server_log, [f"The player of slot {index} is back from turn"])
+            if (match := re.search(r"back from turn (\d+) with the world of turn (\d+)", line)))
         same = (not different and enough and counts is not None
                 and (counts[0] - counts[1] <= allowed_differing)
-                and (left or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
+                and (left or counts[0] >= expected - 100 - away_gap) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         draws = None
         if options.trace_draws and os.path.exists(server_trace) and os.path.exists(os.path.join(client_dir, "draws.tsv")):
@@ -3559,6 +3562,7 @@ def main():
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
             "recovered": recovered[-1:] if recovered else [],
             "gap_turns": gap[2] if gap else None, "gap_from": gap[0] if gap else None, "gap_back_at": gap[1] if gap else None,
+            "away_gap_turns": away_gap,
             "different": different[:20], "same": same, "parts_against_server": parts, "draws_against_server": draws,
             "rows_against_server": rows_against_server(server_dir, client_dir) if options.row_dump else None,
             "session": lines_with(os.path.join(client_dir, "client.log"),

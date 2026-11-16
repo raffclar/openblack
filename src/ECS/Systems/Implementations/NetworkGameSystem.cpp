@@ -417,8 +417,22 @@ void NetworkGameSystem::BeginPlay()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land of the game server loaded: the player is ready for the start");
 		return;
 	}
+	// The new land started its clock at the normal speed, but the room keeps the speed of its clock
+	if (restarting)
+	{
+		FollowRoomSpeed();
+	}
 	Locator::time::value().SetPaused(false);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land of the network game loaded: the world does the server's turns");
+}
+
+void NetworkGameSystem::FollowRoomSpeed()
+{
+	if (const auto& room = _session->RoomClock(); room.has_value())
+	{
+		Locator::time::value().SetSpeed(online::room_clock::ClockSpeedOf(room->speed));
+		_roomSpeed = room->speed;
+	}
 }
 
 void NetworkGameSystem::Leave()
@@ -689,6 +703,8 @@ void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& worl
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(true);
 	clock.SetCatchesUp(true);
+	// The world state keeps the speed of the clock of the computer that wrote it. The clock of the room sets the speed.
+	FollowRoomSpeed();
 	// The clock stands still until the server's turn of the state is here, as it does before the start: the frames until
 	// then take no game time, so the world is the same as the server's when that turn starts
 	clock.SetPaused(true);
