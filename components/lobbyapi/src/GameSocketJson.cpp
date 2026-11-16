@@ -370,6 +370,10 @@ bool ReadStart(const Json& object, Start& start)
 		}
 		start.aiSeed = static_cast<uint32_t>(value);
 	}
+	if (!ReadString(object, "game_id", start.gameId, false) || start.gameId.size() > k_MostGameIdCharacters)
+	{
+		return false;
+	}
 	if (const auto* timeLimit = Member(object, "time_limit"); timeLimit != nullptr && !timeLimit->is_null())
 	{
 		uint64_t value = 0;
@@ -479,6 +483,10 @@ void WriteStart(const Start& start, Json& object)
 	if (start.aiSeed.has_value())
 	{
 		object["ai_seed"] = *start.aiSeed;
+	}
+	if (!start.gameId.empty())
+	{
+		object["game_id"] = start.gameId;
 	}
 	if (start.timeLimit.has_value())
 	{
