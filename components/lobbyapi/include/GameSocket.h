@@ -264,6 +264,21 @@ struct StartCreature
 	float alignment {0.0f};
 };
 
+/// The largest mind file of the creature tools of the editor that an editor.mind_file frame holds. This is a limit of the
+/// network game only; a game alone opens a mind file of any size.
+inline constexpr size_t k_MostEditorMindFileBytes = 512 * 1024;
+
+/// "editor.mind_file". Client to server: a mind file that the creature tools of the editor opened on the computer of a
+/// player with the editor claim. The server keeps the file, and sends it to every player in the game, also to the sender.
+/// Then a turn command uses the file by the hash of its bytes (player_commands::EditorMindLoad). The server sends each
+/// file that it keeps again to a player who comes back or joins, before the turns.
+struct EditorMindFile
+{
+	std::vector<uint8_t> file;
+
+	[[nodiscard]] bool operator==(const EditorMindFile&) const = default;
+};
+
 /// Client to server: "game.stop_request". The end box of a decided game opened on the client. The server stops the turns
 /// of the game, if they did not stop before.
 struct StopRequest
@@ -526,10 +541,10 @@ struct SyncWorld
 	[[nodiscard]] bool operator==(const SyncWorld&) const = default;
 };
 
-using Frame =
-    std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply, StartCancel,
-                 StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft, SyncParts, Loaded,
-                 LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities, SyncWorld, CommandRefused>;
+using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
+                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
+                           SyncParts, Loaded, LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities,
+                           SyncWorld, CommandRefused, EditorMindFile>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

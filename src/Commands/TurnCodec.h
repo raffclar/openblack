@@ -54,11 +54,13 @@
 ///   country (u8), then the x and the z of the middle (f32).
 /// - A path of the editor: the kind (u8), the count of the points (u16), the x and the z of each point (f32), then the
 ///   first and the last building.
+/// - A mind file of the editor: the use (u8), the hash of the file (u64), then for a load the creature, or for a new
+///   creature each field as a new creature of the editor has it.
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 39;
+inline constexpr uint8_t k_Version = 40;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -140,6 +142,7 @@ enum class CommandTag : uint8_t
 	EditorCreatureSpawn = 61,
 	EditorLandStroke = 62,
 	EditorPath = 63,
+	EditorMindLoad = 67,
 };
 
 /// The sizes of the parts of the frames, in bytes
@@ -148,6 +151,9 @@ namespace sizes
 inline constexpr size_t k_Header = 2;
 inline constexpr size_t k_Entity = 4;
 inline constexpr size_t k_Vector = 12;
+/// The fields of a new creature of the editor: the species, the owner, the place, five numbers, the tattoo flag and the
+/// tattoos
+inline constexpr size_t k_CreatureSpawn = 1 + 1 + k_Vector + (5 * 4) + 1 + (5 * creature_tattoo::k_SlotCount);
 /// The sequence, the turn and the count of a block that a client sends
 inline constexpr size_t k_CommandsBody = 7;
 /// The turn and the block count of a turn

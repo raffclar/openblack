@@ -127,6 +127,7 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_roomChat.clear();
 	_startCreatures.clear();
 	_startAlignments.clear();
+	_mindFiles.Clear();
 	_ownGodPlaysForClan = false;
 	_turns.clear();
 	_waitingCommands = 0;
@@ -249,6 +250,17 @@ void NetworkSession::SendRoomChat(std::string_view text, std::string_view to, bo
 std::vector<game_socket::RoomChat> NetworkSession::TakeRoomChat()
 {
 	return std::exchange(_roomChat, {});
+}
+
+bool NetworkSession::SendEditorMindFile(std::vector<uint8_t> file)
+{
+	if (!_start.has_value() || !_stream || !_stream->IsOpen() || file.empty() ||
+	    file.size() > game_socket::k_MostEditorMindFileBytes)
+	{
+		return false;
+	}
+	_log->Write(spdlog::level::info, fmt::format("This computer sends a mind file of the editor of {} bytes", file.size()));
+	return _stream->SendText(game_socket::ToJson(game_socket::EditorMindFile {.file = std::move(file)}));
 }
 
 void NetworkSession::Leave()
@@ -432,6 +444,22 @@ void NetworkSession::Text(std::string_view text)
 	{
 		_observersLeft.push_back(left->name);
 		_log->Write(spdlog::level::info, fmt::format("The observer {} left the game", left->name));
+	}
+	else if (const auto* mind = std::get_if<game_socket::EditorMindFile>(&*frame))
+	{
+		// The file comes before the turn of the command that uses it, on the same socket
+		const auto size = mind->file.size();
+		const auto [added, hash] = _mindFiles.Add(mind->file);
+		if (added == editor::mind_loads::MindFileStore::Added::New)
+		{
+			_log->Write(spdlog::level::info,
+			            fmt::format("The server sent a mind file of the editor of {} bytes (hash {:016x})", size, hash));
+		}
+		else if (added == editor::mind_loads::MindFileStore::Added::Refused)
+		{
+			_log->Write(spdlog::level::warn,
+			            fmt::format("The session keeps the most mind files and does not keep the file {:016x}", hash));
+		}
 	}
 	else if (const auto* commands = std::get_if<game_socket::CommandRefused>(&*frame))
 	{

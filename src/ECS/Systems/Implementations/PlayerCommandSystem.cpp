@@ -13,6 +13,7 @@
 
 #include <iterator>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -75,6 +76,7 @@
 #include "Editor/EditorCreatureActs.h"
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorLandEdits.h"
+#include "Editor/EditorMindLoads.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "Hand/HandSendWait.h"
 #include "Input/LocalPlayer.h"
@@ -354,6 +356,24 @@ void RunEditorPath(openblack::PlayerNames player, const EditorPath& path, uint32
 	}
 }
 
+/// Load a mind file of the editor into a creature, or into a new creature, at the turn. The game server takes the loads only
+/// from a player with the editor claim, and sends the file to each computer before the turn.
+void RunEditorMindLoad(openblack::PlayerNames player, const EditorMindLoad& load, uint32_t turn,
+                       const TurnCommandSourceInterface* source)
+{
+	const auto file = source != nullptr ? source->EditorMindFile(load.file) : std::span<const uint8_t> {};
+	const auto result = openblack::editor::mind_loads::RunMindLoad(load, file);
+	if (auto logger = spdlog::get("game"))
+	{
+		const bool spawn = load.use == EditorMindLoad::Use::Spawn;
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} the mind file {:016x} {}: {}", turn,
+		                   static_cast<int>(player), result.creature != entt::null ? "loads" : "cannot load", load.file,
+		                   spawn ? "into a new creature" : "into a creature",
+		                   result.creature != entt::null ? fmt::format("thing {}", entt::to_integral(result.creature))
+		                                                 : std::string(result.refusal));
+	}
+}
+
 /// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a player with the editor
 /// claim.
 void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uint32_t turn)
@@ -399,10 +419,10 @@ void RunDebugLandSkip(openblack::PlayerNames player, const DebugLandSkip& comman
 /// place of its own hand and camera, never the hand of the god. The game server sends only the commands that an observer
 /// sends (player_commands::ObserverSends), and the come and the go of an observer. The world leaves out any other
 /// command of an observer.
-void RunObserver(const Command& command, uint32_t turn)
+void RunObserver(const Command& command, uint32_t turn, const TurnCommandSourceInterface* source)
 {
 	std::visit(
-	    [&command, turn](const auto& action) {
+	    [&command, turn, source](const auto& action) {
 		    using Kind = std::decay_t<decltype(action)>;
 		    if constexpr (std::is_same_v<Kind, ObserverIn>)
 		    {
@@ -452,6 +472,10 @@ void RunObserver(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, EditorPath>)
 		    {
 			    RunEditorPath(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorMindLoad>)
+		    {
+			    RunEditorMindLoad(command.player, action, turn, source);
 		    }
 		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
 		    {
@@ -590,11 +614,11 @@ void EndLockOfRefusedCommand(const Command& command)
 }
 
 /// Do one command for the player that sent it, at a turn
-void Run(const Command& command, uint32_t turn)
+void Run(const Command& command, uint32_t turn, const TurnCommandSourceInterface* source)
 {
 	if (command.observer != 0)
 	{
-		RunObserver(command, turn);
+		RunObserver(command, turn, source);
 		return;
 	}
 	// The hand of the sender keeps the turn before the command acts, also when the command then does nothing
@@ -1174,6 +1198,10 @@ void Run(const Command& command, uint32_t turn)
 		    {
 			    RunEditorPath(command.player, action, turn);
 		    }
+		    else if constexpr (std::is_same_v<Kind, EditorMindLoad>)
+		    {
+			    RunEditorMindLoad(command.player, action, turn, source);
+		    }
 		    else if constexpr (std::is_same_v<Kind, DebugCheat>)
 		    {
 			    RunDebugCheat(command.player, action, turn);
@@ -1235,7 +1263,7 @@ void PlayerCommandSystem::RunSent(uint32_t turn)
 	{
 		if (std::holds_alternative<PlayerJoined>(command.action))
 		{
-			Run(command, turn);
+			Run(command, turn, _source);
 			joined.push_back(command.player);
 		}
 	}
@@ -1247,7 +1275,7 @@ void PlayerCommandSystem::RunSent(uint32_t turn)
 	{
 		if (!std::holds_alternative<PlayerJoined>(command.action))
 		{
-			Run(command, turn);
+			Run(command, turn, _source);
 		}
 	}
 	// The worship sites and the prayer power of each player keep the flags that the debug cheats of the player give

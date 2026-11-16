@@ -177,6 +177,17 @@ std::vector<Action> EachCommand()
 	                .points = {{10.0f, 20.0f}, {30.0f, 40.0f}, {50.0f, 60.0f}},
 	                .firstHolder = Entity(36),
 	                .lastHolder = Entity(37)},
+	    EditorMindLoad {.use = EditorMindLoad::Use::LoadInto, .file = 0x0123456789ABCDEFULL, .creature = Entity(38)},
+	    EditorMindLoad {.use = EditorMindLoad::Use::Spawn,
+	                    .file = 0xFEDCBA9876543210ULL,
+	                    .spawn = {.species = 5,
+	                              .owner = 1,
+	                              .position = {1.0f, 2.0f, 3.0f},
+	                              .radians = 0.25f,
+	                              .scale = 1.5f,
+	                              .alignment = 0.5f,
+	                              .fatness = 0.75f,
+	                              .strength = 0.25f}},
 	};
 }
 
@@ -217,7 +228,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 62)
+	switch (bits(random) % 64)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -479,6 +490,21 @@ Action RandomAction(std::mt19937& random)
 		}
 		return path;
 	}
+	case 62:
+		return EditorMindLoad {.use = EditorMindLoad::Use::LoadInto,
+		                       .file = (static_cast<uint64_t>(bits(random)) << 32U) | bits(random),
+		                       .creature = entity()};
+	case 63:
+		return EditorMindLoad {.use = EditorMindLoad::Use::Spawn,
+		                       .file = (static_cast<uint64_t>(bits(random)) << 32U) | bits(random),
+		                       .spawn = {.species = static_cast<uint8_t>(1 + (bits(random) % 17)),
+		                                 .owner = static_cast<uint8_t>(bits(random) % 8),
+		                                 .position = vector(),
+		                                 .radians = number(),
+		                                 .scale = number(),
+		                                 .alignment = number(),
+		                                 .fatness = number(),
+		                                 .strength = number()}};
 	default:
 		return PlayerLeft {};
 	}
@@ -541,9 +567,9 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5, 9,  5, 53, 5, 10, 18, 5, 49, 17, 5,  5,  5, 9,  12, 1, 18, 11, 5,  19,
-	                                 15, 7, 5,  1, 2,  1, 61, 5,  2, 1,  13, 10, 18, 1, 58, 1,  5, 51, 5,  16, 7,
-	                                 1,  1, 13, 1, 2,  9, 13, 1,  1, 8,  1,  5,  35, 3, 10, 34, 2, 15, 76, 20, 36};
+	const std::vector<size_t> sizes {2,  5, 9, 5, 53, 5,  10, 18, 5, 49, 17, 5,  5,  5,  9, 12, 1,  18, 11, 5,  19, 15,
+	                                 7,  5, 1, 2, 1,  61, 5,  2,  1, 13, 10, 18, 1,  58, 1, 5,  51, 5,  16, 7,  1,  1,
+	                                 13, 1, 2, 9, 13, 1,  1,  8,  1, 5,  35, 3,  10, 34, 2, 15, 76, 20, 36, 14, 85};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -609,6 +635,11 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		if (std::holds_alternative<EditorPath>(commands[i]))
 		{
 			tag = 63;
+		}
+		// The mind file of the editor has the tag 67, in both of its uses
+		if (std::holds_alternative<EditorMindLoad>(commands[i]))
+		{
+			tag = 67;
 		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
@@ -1507,6 +1538,39 @@ TEST(TurnCodec, TheDecoderRefusesANewCreatureOfNoSpeciesOrNoPlayer)
 	auto truncated = encode(spawn);
 	truncated.pop_back();
 	EXPECT_NE(Decode(truncated).error, DecodeError::None);
+}
+
+TEST(TurnCodec, TheDecoderRefusesAMindFileOfNoUseOrABadNewCreature)
+{
+	const auto encode = [](const EditorMindLoad& load) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {load}}});
+	};
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_Use = 10;
+	constexpr size_t k_Species = k_Use + 1 + 8;
+	const EditorMindLoad load {.use = EditorMindLoad::Use::LoadInto, .file = 77, .creature = Entity(9)};
+	auto bytes = encode(load);
+	ASSERT_EQ(bytes.size(), k_Use + 1 + 8 + sizes::k_Entity);
+	ASSERT_EQ(Decode(bytes).error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorMindLoad>(std::get<CommandBlock>(*Decode(bytes).frame).actions.front()), load);
+	// A new creature is the last use of a mind file
+	bytes[k_Use] = 2;
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+	bytes[k_Use] = 0;
+	bytes.pop_back();
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Truncated);
+
+	const EditorMindLoad spawn {.use = EditorMindLoad::Use::Spawn, .file = 78, .spawn = {.species = 2, .owner = 1}};
+	auto made = encode(spawn);
+	ASSERT_EQ(made.size(), k_Use + 1 + 8 + sizes::k_CreatureSpawn);
+	ASSERT_EQ(Decode(made).error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorMindLoad>(std::get<CommandBlock>(*Decode(made).frame).actions.front()), spawn);
+	// The new creature has the same checks as a new creature of the editor
+	made[k_Species] = 0;
+	EXPECT_EQ(Decode(made).error, DecodeError::Value);
+	made[k_Species] = 2;
+	made.pop_back();
+	EXPECT_EQ(Decode(made).error, DecodeError::Truncated);
 }
 
 TEST(TurnCodec, TheDecoderRefusesAnEditOfAVillagerWithNoSuchField)

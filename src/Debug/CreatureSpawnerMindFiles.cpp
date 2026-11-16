@@ -7,12 +7,17 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
+#include <vector>
 
+#include <GameSocket.h>
 #include <MindFile.h>
 #include <fmt/format.h>
 #include <imgui.h>
@@ -22,6 +27,7 @@
 #include "Creature/CreatureMindFileBody.h"
 #include "CreatureSpawner.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "Editor/EditorMindLoads.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -98,13 +104,6 @@ void CreatureSpawner::UseMindFile(MindFileUse use, const std::filesystem::path& 
 {
 	file_dialog::RememberPath(k_FolderKey, path.parent_path());
 	const auto name = path.filename().string();
-	// A mind from a file of this computer would change the world of this computer only
-	if (use != MindFileUse::SaveSelected && InNetworkGame())
-	{
-		_lastMindFile = "A network game does not take a mind file";
-		return;
-	}
-
 	if (use == MindFileUse::SaveSelected)
 	{
 		if (!_selected.has_value() || !Locator::creatureMindSystem::has_value())
@@ -134,6 +133,25 @@ void CreatureSpawner::UseMindFile(MindFileUse use, const std::filesystem::path& 
 		_lastMindFile = fmt::format("Couldn't load {}: {}", name, creaturemind::ResultToStr(result));
 		return;
 	}
+	// In a network game the bytes of the file go to every computer, and each computer reads them at the turn
+	const bool network = InNetworkGame();
+	std::vector<uint8_t> bytes;
+	if (network)
+	{
+		auto read = creaturemind::ReadFileBytes(path);
+		if (!read.has_value() || editor::mind_loads::ReadMind(*read) == nullptr)
+		{
+			_lastMindFile = fmt::format("Couldn't load {}: the file does not read", name);
+			return;
+		}
+		if (read->size() > game_socket::k_MostEditorMindFileBytes)
+		{
+			_lastMindFile = fmt::format("Couldn't load {}: a network game takes a mind file of at most {} KB", name,
+			                            game_socket::k_MostEditorMindFileBytes / 1024);
+			return;
+		}
+		bytes = std::move(*read);
+	}
 	file_dialog::RememberPath(k_FileKey, path);
 	const auto body = creature_mind_body::FromMindFile(*data);
 	const auto who = fmt::format("\"{}\", a version {} mind{}", Narrow(data->name), data->version,
@@ -144,6 +162,14 @@ void CreatureSpawner::UseMindFile(MindFileUse use, const std::filesystem::path& 
 		if (!_selected.has_value() || !Locator::creatureMindSystem::has_value())
 		{
 			_lastMindFile = "No creature is selected to load the mind into";
+			return;
+		}
+		if (network)
+		{
+			const bool sent = editor::mind_loads::SendMindLoad(
+			    bytes, {.use = player_commands::EditorMindLoad::Use::LoadInto, .creature = *_selected});
+			_lastMindFile = sent ? fmt::format("Sent {} from {}: the creature takes it at the next turn", who, name)
+			                     : std::string("The game socket is not open: the mind file did not go");
 			return;
 		}
 		Locator::creatureMindSystem::value().LoadMind(*_selected, data);
@@ -165,6 +191,7 @@ void CreatureSpawner::UseMindFile(MindFileUse use, const std::filesystem::path& 
 	_scale = body->size.value_or(_scale);
 	_spawnTattoos = body->tattoos;
 	_spawnMind = data;
+	_spawnMindBytes = std::move(bytes);
 	_spawnMindName = fmt::format("{} from {}", who, name);
 	_placing = true;
 	_placeAt.reset();
@@ -191,6 +218,7 @@ void CreatureSpawner::DrawSpawnMind() noexcept
 		if (ImGui::Button("Fresh mind"))
 		{
 			_spawnMind.reset();
+			_spawnMindBytes.clear();
 			_spawnTattoos.reset();
 			_spawnMindName.clear();
 		}

@@ -9,12 +9,15 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <filesystem>
 #include <memory>
 #include <optional>
 #include <random>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
@@ -256,6 +259,8 @@ private:
 	std::string _lastMindFile;
 	/// The mind file new creatures are spawned from, its name, and the tattoos it gives them
 	std::shared_ptr<const creaturemind::MindFileData> _spawnMind;
+	/// The bytes of the mind file new creatures are spawned from. A network game sends them with each new creature.
+	std::vector<uint8_t> _spawnMindBytes;
 	std::string _spawnMindName;
 	std::optional<creature_tattoo::Slots> _spawnTattoos;
 	/// Stands in for the file dialog where the platform has none, and what the file it gives is for

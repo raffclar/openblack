@@ -181,6 +181,67 @@ DecodeError ReadRecipients(Reader& in, std::vector<PlayerNames>& recipients)
 	return in.Bad() ? DecodeError::Truncated : DecodeError::None;
 }
 
+/// A new creature of the editor: its species, owner, place and body, then its tattoos
+void WriteCreatureSpawn(Writer& out, const EditorCreatureSpawn& spawn)
+{
+	out.Byte(spawn.species);
+	out.Byte(spawn.owner);
+	out.Vector(spawn.position);
+	out.Float(spawn.radians);
+	out.Float(spawn.scale);
+	out.Float(spawn.alignment);
+	out.Float(spawn.fatness);
+	out.Float(spawn.strength);
+	out.Byte(static_cast<uint8_t>(spawn.hasTattoos ? 1 : 0));
+	for (const auto& slot : spawn.tattoos)
+	{
+		out.Byte(slot.design);
+		out.Byte(slot.site);
+		out.Byte(slot.colour.r);
+		out.Byte(slot.colour.g);
+		out.Byte(slot.colour.b);
+	}
+}
+
+/// Reads a new creature of the editor. The species is one of the creatures of the game, the owner is one of the players,
+/// and each tattoo has a known design and site.
+DecodeError ReadCreatureSpawn(Reader& in, EditorCreatureSpawn& spawn)
+{
+	spawn.species = in.Byte();
+	spawn.owner = in.Byte();
+	spawn.position = in.Vector();
+	spawn.radians = in.Float();
+	spawn.scale = in.Float();
+	spawn.alignment = in.Float();
+	spawn.fatness = in.Float();
+	spawn.strength = in.Float();
+	const auto hasTattoos = in.Byte();
+	for (auto& slot : spawn.tattoos)
+	{
+		slot.design = in.Byte();
+		slot.site = in.Byte();
+		slot.colour.r = in.Byte();
+		slot.colour.g = in.Byte();
+		slot.colour.b = in.Byte();
+	}
+	if (in.Bad())
+	{
+		return DecodeError::Truncated;
+	}
+	const bool known = spawn.species > static_cast<uint8_t>(CreatureType::Unknown) &&
+	                   spawn.species < static_cast<uint8_t>(CreatureType::_COUNT) &&
+	                   spawn.owner < static_cast<uint8_t>(PlayerNames::_COUNT) && hasTattoos <= 1;
+	const bool tattoosKnown = std::ranges::all_of(spawn.tattoos, [](const auto& slot) {
+		return slot.design < creature_tattoo::k_DesignCount && slot.site <= creature_tattoo::k_NoSite;
+	});
+	if (!known || !tattoosKnown)
+	{
+		return DecodeError::Value;
+	}
+	spawn.hasTattoos = hasTattoos == 1;
+	return DecodeError::None;
+}
+
 void WriteAction(Writer& out, const Action& action)
 {
 	out.Byte(static_cast<uint8_t>(TagOf(action)));
@@ -398,23 +459,17 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Number(command.number);
 		               out.Float(command.amount);
 	               },
-	               [&out](const EditorCreatureSpawn& command) {
-		               out.Byte(command.species);
-		               out.Byte(command.owner);
-		               out.Vector(command.position);
-		               out.Float(command.radians);
-		               out.Float(command.scale);
-		               out.Float(command.alignment);
-		               out.Float(command.fatness);
-		               out.Float(command.strength);
-		               out.Byte(static_cast<uint8_t>(command.hasTattoos ? 1 : 0));
-		               for (const auto& slot : command.tattoos)
+	               [&out](const EditorCreatureSpawn& command) { WriteCreatureSpawn(out, command); },
+	               [&out](const EditorMindLoad& command) {
+		               out.Byte(static_cast<uint8_t>(command.use));
+		               out.Number(command.file);
+		               if (command.use == EditorMindLoad::Use::LoadInto)
 		               {
-			               out.Byte(slot.design);
-			               out.Byte(slot.site);
-			               out.Byte(slot.colour.r);
-			               out.Byte(slot.colour.g);
-			               out.Byte(slot.colour.b);
+			               out.Entity(command.creature);
+		               }
+		               else
+		               {
+			               WriteCreatureSpawn(out, command.spawn);
 		               }
 	               },
 	               [&out](const EditorCreatureAct& command) {
@@ -1018,39 +1073,41 @@ DecodeError ReadAction(Reader& in, Action& action)
 	}
 	case CommandTag::EditorCreatureSpawn:
 	{
-		EditorCreatureSpawn spawn {.species = in.Byte(), .owner = in.Byte()};
-		spawn.position = in.Vector();
-		spawn.radians = in.Float();
-		spawn.scale = in.Float();
-		spawn.alignment = in.Float();
-		spawn.fatness = in.Float();
-		spawn.strength = in.Float();
-		const auto hasTattoos = in.Byte();
-		for (auto& slot : spawn.tattoos)
+		EditorCreatureSpawn spawn;
+		if (const auto error = ReadCreatureSpawn(in, spawn); error != DecodeError::None)
 		{
-			slot.design = in.Byte();
-			slot.site = in.Byte();
-			slot.colour.r = in.Byte();
-			slot.colour.g = in.Byte();
-			slot.colour.b = in.Byte();
+			return error;
 		}
+		action = spawn;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorMindLoad:
+	{
+		const auto use = in.Byte();
+		EditorMindLoad load {.file = in.Number<uint64_t>()};
 		if (in.Bad())
 		{
 			return DecodeError::Truncated;
 		}
-		// The species is one of the creatures of the game, and the owner is one of the players
-		const bool known = spawn.species > static_cast<uint8_t>(CreatureType::Unknown) &&
-		                   spawn.species < static_cast<uint8_t>(CreatureType::_COUNT) &&
-		                   spawn.owner < static_cast<uint8_t>(PlayerNames::_COUNT) && hasTattoos <= 1;
-		const bool tattoosKnown = std::ranges::all_of(spawn.tattoos, [](const auto& slot) {
-			return slot.design < creature_tattoo::k_DesignCount && slot.site <= creature_tattoo::k_NoSite;
-		});
-		if (!known || !tattoosKnown)
+		// The use is a load into a creature or a new creature
+		if (use > static_cast<uint8_t>(EditorMindLoad::Use::Spawn))
 		{
 			return DecodeError::Value;
 		}
-		spawn.hasTattoos = hasTattoos == 1;
-		action = spawn;
+		load.use = static_cast<EditorMindLoad::Use>(use);
+		if (load.use == EditorMindLoad::Use::LoadInto)
+		{
+			load.creature = in.Entity();
+			if (in.Bad())
+			{
+				return DecodeError::Truncated;
+			}
+		}
+		else if (const auto error = ReadCreatureSpawn(in, load.spawn); error != DecodeError::None)
+		{
+			return error;
+		}
+		action = load;
 		return DecodeError::None;
 	}
 	case CommandTag::EditorLandStroke:
@@ -1286,6 +1343,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const EditorCreatureSpawn& /*command*/) { return CommandTag::EditorCreatureSpawn; },
 	                      [](const EditorLandStroke& /*command*/) { return CommandTag::EditorLandStroke; },
 	                      [](const EditorPath& /*command*/) { return CommandTag::EditorPath; },
+	                      [](const EditorMindLoad& /*command*/) { return CommandTag::EditorMindLoad; },
 	                  },
 	                  action);
 }
@@ -1361,8 +1419,9 @@ size_t SizeOf(const Action& action) noexcept
 	        [](const EditorCreatureAct& command) { return k_Entity + 1 + k_Entity + k_Vector + 4 + 2 + command.args.size(); },
 	        [](const DebugLandSkip& /*command*/) { return size_t {1}; },
 	        [](const EditorVillagerEdit& /*command*/) { return k_Entity + 1 + 1 + 4 + 4; },
-	        [](const EditorCreatureSpawn& /*command*/) {
-		        return 1 + 1 + k_Vector + (5 * 4) + 1 + (5 * creature_tattoo::k_SlotCount);
+	        [](const EditorCreatureSpawn& /*command*/) { return k_CreatureSpawn; },
+	        [](const EditorMindLoad& command) {
+		        return 1 + 8 + (command.use == EditorMindLoad::Use::LoadInto ? k_Entity : k_CreatureSpawn);
 	        },
 	        [](const EditorLandStroke& /*command*/) { return size_t {1 + 4 + 4 + 1 + 1 + 4 + 4}; },
 	        [](const EditorPath& command) { return 1 + 2 + (8 * command.points.size()) + (2 * k_Entity); },
