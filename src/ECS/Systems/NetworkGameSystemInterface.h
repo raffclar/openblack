@@ -129,6 +129,10 @@ public:
 	/// The refusals of the game server since the last call: each time that it refused edits of the editor or debug cheats
 	/// of this player because the join ticket has no editor claim
 	[[nodiscard]] virtual uint32_t TakeEditorRefusals() { return 0; }
+	/// The editor asks the game server to pause, play, step or change the speed of the clock of the room
+	virtual void RequestTime(const game_socket::EditorTime& /*request*/) {}
+	/// The lines of the changes of the clock of the room since the last call, which every player sees
+	[[nodiscard]] virtual std::vector<std::string> TakeTimeNotices() { return {}; }
 	/// Writes a line to the connection log of the network games, such as a step of the request of a ticket
 	virtual void LogConnection(std::string_view /*text*/) {}
 	/// The text of the "Copy diagnostics" report: the build, the renderer, the state of the session and the last lines of

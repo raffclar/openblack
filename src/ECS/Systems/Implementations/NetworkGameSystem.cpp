@@ -50,6 +50,7 @@
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapStoreInterface.h"
+#include "Online/RoomClock.h"
 #include "PlayerSlots.h"
 
 using namespace openblack::ecs::systems;
@@ -234,6 +235,8 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	}
 	_partAt = join.partAt;
 	_partAgain = join.partAgain;
+	_roomClockChanges = 0;
+	_roomSpeed = online::room_clock::k_NormalSpeed;
 	_started = false;
 	_endLogged = false;
 	_awaitingLand = !join.fromCommandLine;
@@ -530,6 +533,28 @@ void NetworkGameSystem::Update()
 		else if (!hands.IsOwnPlayer(*own))
 		{
 			hands.SetOwnPlayer(*own);
+		}
+	}
+
+	// The clock of this computer follows the clock of the room: the frames take the game time of the room's speed. While
+	// the room is paused, the turns of the server do not come, so the world waits. After a pause, the next turn starts
+	// from its turn, and not as a turn that is late.
+	if (_session->RoomClockChanges() != _roomClockChanges)
+	{
+		_roomClockChanges = _session->RoomClockChanges();
+		if (const auto& room = _session->RoomClock(); room.has_value())
+		{
+			auto& clock = Locator::time::value();
+			const auto follow = online::room_clock::FollowOf(*room, _roomSpeed);
+			if (follow.clockSpeed.has_value())
+			{
+				clock.SetSpeed(*follow.clockSpeed);
+				_roomSpeed = room->speed;
+			}
+			if (follow.fromTurn)
+			{
+				clock.ResetTimerToTurn();
+			}
 		}
 	}
 

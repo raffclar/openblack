@@ -36,6 +36,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EditorMath.h"
 #include "EditorStyle.h"
@@ -44,6 +45,8 @@
 #include "Input/DeveloperKeys.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "Online/NetworkSession.h"
+#include "Online/RoomClock.h"
 #include "Story/StoryLandSkip.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -55,6 +58,27 @@ using CameraMode = ecs::systems::EditorSystemInterface::CameraMode;
 
 namespace
 {
+
+/// The clock of the room of a network game, as the game server sent it last. None before the first, and in a game of this
+/// computer alone.
+std::optional<game_socket::GameTime> RoomClock()
+{
+	if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
+	{
+		return std::nullopt;
+	}
+	return Locator::networkGame::value().Session()->RoomClock();
+}
+
+/// The editor asks the game server to change the clock of the room
+void RequestRoomTime(game_socket::TimeAct act, float speed = online::room_clock::k_NormalSpeed)
+{
+	if (Locator::networkGame::has_value())
+	{
+		Locator::networkGame::value().RequestTime(game_socket::EditorTime {.act = act, .speed = speed});
+	}
+}
+
 /// Radians the camera turns for a pixel dragged
 constexpr float k_CameraTurnPerPixel = 0.006f;
 /// Radians a thing turns for a pixel dragged across
@@ -747,10 +771,14 @@ void EditorWindow::HandleKey(const SDL_Event& event) noexcept
 		system.SetTool(Tool::GameHand);
 		break;
 	case Action::StepTurn:
-		// The game server sets the time of a network game
+		// The game server sets the time of a network game: the editor asks it for one turn while the room is paused
 		if (!InNetworkGame())
 		{
 			system.StepTurn();
+		}
+		else if (const auto room = RoomClock(); room.has_value() && room->paused)
+		{
+			RequestRoomTime(game_socket::TimeAct::Step);
 		}
 		break;
 	case Action::TurnPlacementLeft:
@@ -1040,6 +1068,52 @@ void EditorWindow::WindowDraw() noexcept
 	_spawner.DrawDialogs();
 }
 
+void EditorWindow::DrawRoomClock() noexcept
+{
+	namespace room_clock = online::room_clock;
+	const auto room = RoomClock();
+	const bool paused = room.has_value() && room->paused;
+	// The editor cannot change the clock before the server sent it
+	ImGui::BeginDisabled(!room.has_value());
+	if (ImGui::Button(paused ? "Play" : "Pause", ImVec2(ImGui::GetFontSize() * 4.0f, 0.0f)))
+	{
+		RequestRoomTime(paused ? game_socket::TimeAct::Play : game_socket::TimeAct::Pause);
+	}
+	ImGui::SetItemTooltip("Asks the game server to play or pause the game of every player");
+	ImGui::SameLine();
+	ImGui::BeginDisabled(!paused);
+	if (ImGui::Button("Step"))
+	{
+		RequestRoomTime(game_socket::TimeAct::Step);
+	}
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip("Asks the game server for one game turn, a tenth of a second (.)");
+	ImGui::SameLine();
+	if (Locator::time::has_value())
+	{
+		ImGui::TextColored(style::k_Muted, "turn %u", Locator::time::value().GetTurn());
+		ImGui::SameLine();
+	}
+	auto speed = _heldRoomSpeed.value_or(room.has_value() ? room->speed : room_clock::k_NormalSpeed);
+	ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7.0f);
+	if (ImGui::SliderFloat("##RoomSpeed", &speed, room_clock::k_FastestSpeed, room_clock::k_SlowestSpeed, "speed %.2f",
+	                       ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp))
+	{
+		_heldRoomSpeed = speed;
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit() && _heldRoomSpeed.has_value())
+	{
+		RequestRoomTime(game_socket::TimeAct::Speed, *_heldRoomSpeed);
+	}
+	if (!ImGui::IsItemActive())
+	{
+		_heldRoomSpeed.reset();
+	}
+	ImGui::SetItemTooltip("Asks the game server to change the time of a game turn for every player, as a multiple of its "
+	                      "tenth of a second");
+	ImGui::EndDisabled();
+}
+
 void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 {
 	auto& system = context.system;
@@ -1061,10 +1135,15 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		ImGui::SameLine();
 	};
 
-	// The game server sets the time of a network game
+	// The game server sets the time of a network game: the editor asks it to change the clock of the room for every
+	// player. The editor keeps no history there.
 	const bool network = InNetworkGame();
+	if (network)
+	{
+		DrawRoomClock();
+	}
 	ImGui::BeginDisabled(network);
-	if (Locator::time::has_value())
+	if (!network && Locator::time::has_value())
 	{
 		auto& time = Locator::time::value();
 		const bool paused = time.IsPaused();
@@ -1084,7 +1163,7 @@ void EditorWindow::DrawToolbar(EditorContext& context) noexcept
 		ImGui::SameLine();
 		ImGui::TextColored(style::k_Muted, "turn %u", time.GetTurn());
 	}
-	if (auto* game = Game::Instance())
+	if (auto* game = Game::Instance(); game != nullptr && !network)
 	{
 		ImGui::SameLine();
 		auto speed = game->GetGameSpeed();

@@ -338,6 +338,54 @@ inline constexpr std::string_view k_NoEditorClaim = "no_editor_claim";
 /// The reason of a refusal of a skip to a land of the story: a network game has no lands of the story
 inline constexpr std::string_view k_NoStoryLands = "no_story_lands";
 
+/// What the editor asks of the clock of the room (see EditorTime)
+enum class TimeAct : uint8_t
+{
+	/// The server sends no turns
+	Pause,
+	/// The server sends the turns again
+	Play,
+	/// While the clock is paused, the server sends one turn
+	Step,
+	/// The server changes the time between two turns
+	Speed,
+};
+
+/// Client to server: "editor.time". The editor of a player with the editor claim asks the server to pause, play, step or
+/// change the speed of the clock of the room. The server checks the request, logs it and tells every player (GameTime).
+/// The server refuses the request with "command.refused" when the player has no editor claim.
+struct EditorTime
+{
+	TimeAct act {TimeAct::Pause};
+	/// With the act Speed: the time of a turn as a multiple of a tenth of a second, as the speed of the editor gives it.
+	/// The server takes 0.1 to 10.
+	float speed {1.0f};
+
+	[[nodiscard]] bool operator==(const EditorTime&) const = default;
+};
+
+/// Server to client: "game.time". The clock of the room after a change. The server sends it to every player after each
+/// request that it took, and to a player who joins or comes back. Each computer then sets its clock to this speed.
+struct GameTime
+{
+	/// The server sends no turns, except the turns of a step
+	bool paused {false};
+	/// The time of a turn as a multiple of a tenth of a second (1 is normal)
+	float speed {1.0f};
+	/// The change that the server took. A frame to a player who joins or comes back has the act Play.
+	TimeAct act {TimeAct::Play};
+	/// The name of the player who asked for the change. Empty when the server made the change, or for a frame to a
+	/// player who joins or comes back.
+	std::string by;
+	/// The number of turns that the server sent when it took the change
+	uint32_t turn {0};
+
+	[[nodiscard]] bool operator==(const GameTime&) const = default;
+};
+
+/// The reason of a refusal of a request of the clock with a value that the server does not take
+inline constexpr std::string_view k_TimeRefused = "time_refused";
+
 /// Client to server: "game.loaded". The player's computer has the land and loaded the world of the started game. The
 /// client sends it once after game.start, and again after it comes back if the server did not get it.
 struct Loaded
@@ -544,12 +592,16 @@ struct SyncWorld
 using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
                            StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
                            SyncParts, Loaded, LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities,
-                           SyncWorld, CommandRefused, EditorMindFile>;
+                           SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);
 
 [[nodiscard]] std::string_view RoleName(Role role) noexcept;
 [[nodiscard]] std::optional<Role> RoleFrom(std::string_view name) noexcept;
+
+/// The name of an act of the clock in the frames: "pause", "play", "step" or "speed"
+[[nodiscard]] std::string_view TimeActName(TimeAct act) noexcept;
+[[nodiscard]] std::optional<TimeAct> TimeActFrom(std::string_view name) noexcept;
 
 } // namespace openblack::game_socket

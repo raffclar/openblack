@@ -374,6 +374,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		FollowGameEnd();
 		TellLeaves();
 		TellEditorRefusals();
+		TellTimeNotices();
 		break;
 	case Step::CameraKeys:
 		UpdateCameraKeys(frame.deltaTime);

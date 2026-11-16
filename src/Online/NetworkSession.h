@@ -196,6 +196,15 @@ public:
 	void Leave();
 	/// The end box of a decided game opened: the client asks the server to stop the turns of the game, one time
 	void StopGame();
+	/// The editor asks the server to pause, play, step or change the speed of the clock of the room. The server takes the
+	/// request only from a player with the editor claim, and then sends the new clock to every player.
+	void RequestTime(const game_socket::EditorTime& request);
+	/// The clock of the room that the server sent last. None before the first.
+	[[nodiscard]] const std::optional<game_socket::GameTime>& RoomClock() const { return _roomClock; }
+	/// The count of the frames of the clock that came, so that the game sees each change one time
+	[[nodiscard]] uint32_t RoomClockChanges() const { return _roomClockChanges; }
+	/// The lines of the changes of the clock since the last call, such as "alice paused the game"
+	[[nodiscard]] std::vector<std::string> TakeTimeNotices() { return std::exchange(_timeNotices, {}); }
 	/// The last turn of the game, after the server stopped the turns. None before.
 	[[nodiscard]] std::optional<uint32_t> StoppedAfter() const { return _stoppedAfter; }
 	/// Once a frame, after the poll of the sockets: the attempts to come back and the pings
@@ -353,6 +362,9 @@ private:
 	std::vector<game_socket::RoomChat> _roomChat;
 	std::vector<std::string> _observersLeft;
 	uint32_t _editorRefusals {0};
+	std::optional<game_socket::GameTime> _roomClock;
+	uint32_t _roomClockChanges {0};
+	std::vector<std::string> _timeNotices;
 	/// The computer loaded the world (ReportLoaded)
 	bool _loaded {false};
 	/// The session sent game.loaded on its socket

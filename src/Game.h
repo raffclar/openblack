@@ -374,6 +374,8 @@ public:
 	void TellLeaves();
 	/// The game server refused edits of the editor or debug cheats of this player: the player sees the refusal line
 	void TellEditorRefusals();
+	/// The editor of a player changed the clock of the room: every player sees a line, such as "alice paused the game"
+	void TellTimeNotices();
 	/// The player asks to leave the network game: the end box asks the question to leave
 	void AskToLeaveNetworkGame();
 	/// Exit Online Game of the menu: the question to leave, or a leave at once when the god of the player is out
