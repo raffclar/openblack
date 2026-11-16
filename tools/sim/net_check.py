@@ -1398,7 +1398,7 @@ def mind_load_lines(server_log, client_logs):
 EDITOR_SCENARIO = "mind.computer_player_start"
 
 
-def editor_world(pids, world_file, shots=None):
+def editor_world(pids, world_file, shots=None, given=False):
     """Load world file of the editor in a network game. The first client writes the world of its computer into a file,
     as Save land files does, and sends it some turns later. The game server loads the file between two turns, and every
     computer gets the new world: each world goes back to the turn of the file and goes on in step."""
@@ -1408,7 +1408,8 @@ def editor_world(pids, world_file, shots=None):
         inspector_answer(editor, "editor.show_tab", {"params": {"tab": "Land tools"}})
         time.sleep(1.0)
         editor_shots(pids, shots, "world_00_land_tools")
-    done["saved"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file, "save": True}})
+    if not given:
+        done["saved"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file, "save": True}})
     time.sleep(10.0)
     done["sent"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file}})
     if not (done["sent"] or {}).get("sent"):
@@ -1458,7 +1459,7 @@ def world_change_lines(server_log, client_logs):
             "clients": clients, "same": same}
 
 
-def editor_desync(pids, case, shots=None, mind_files=None, world_file=None):
+def editor_desync(pids, case, shots=None, mind_files=None, world_file=None, given_world=False):
     """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
     "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
     second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. With "animals"
@@ -1586,7 +1587,7 @@ def editor_desync(pids, case, shots=None, mind_files=None, world_file=None):
         if done["mind"].get("errors"):
             done.setdefault("errors", []).extend(done["mind"]["errors"])
     if case == "world":
-        done["world"] = editor_world(pids, world_file, shots)
+        done["world"] = editor_world(pids, world_file, shots, given_world)
         if done["world"].get("error"):
             done.setdefault("errors", []).append(done["world"]["error"])
     if case in ("scenario", "scenario-away"):
@@ -2807,6 +2808,9 @@ def main():
                              "room, the editor writes the world into a file and loads it 10 seconds later for the room "
                              "(world), or starts the room again on a testbed scenario (scenario), also while the second "
                              "client is away for 15 seconds (scenario-away)")
+    parser.add_argument("--world-file", metavar="FILE",
+                        help="with --editor-desync world: the first client sends this world file, for example the world "
+                             "of a room with other players, and does not write its own")
     parser.add_argument("--mind-files", nargs="+", metavar="FILE",
                         help="with --editor-desync mind: the mind files that the first client opens (the default is "
                              "the two saved creatures of Scripts/CreatureMind of the game folder)")
@@ -3334,7 +3338,9 @@ def main():
                     and reached_turn(os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
                 editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync,
                                                    options.editor_shots, mind_files(options),
-                                                   os.path.join(os.path.abspath(options.out), "editor-world.world"))
+                                                   os.path.abspath(options.world_file) if options.world_file else
+                                                   os.path.join(os.path.abspath(options.out), "editor-world.world"),
+                                                   bool(options.world_file))
                 print(f"editor desync: {json.dumps(editor_desync_done)[:400]}")
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
