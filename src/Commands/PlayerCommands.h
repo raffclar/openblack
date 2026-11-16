@@ -678,6 +678,15 @@ struct DebugCheat
 	[[nodiscard]] bool operator==(const DebugCheat&) const = default;
 };
 
+/// The debug cheat of the editor skips to a land of the story after the first (story_land_skip). Only a single player
+/// game does it. The game server refuses it in every network game, because a network game has no lands of the story.
+struct DebugLandSkip
+{
+	uint8_t land {0};
+
+	[[nodiscard]] bool operator==(const DebugLandSkip&) const = default;
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
@@ -686,7 +695,7 @@ using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, Hand
                             GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
                             CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
                             DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut,
-                            HandLockRelease, EditorEdit, DebugCheat, EditorCreatureEdit, EditorCreatureAct>;
+                            HandLockRelease, EditorEdit, DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip>;
 
 /// A command and the player that sent it
 struct Command
@@ -712,7 +721,15 @@ struct Command
 [[nodiscard]] constexpr bool OnlyEditorSends(const Action& action) noexcept
 {
 	return std::holds_alternative<EditorEdit>(action) || std::holds_alternative<DebugCheat>(action) ||
-	       std::holds_alternative<EditorCreatureEdit>(action) || std::holds_alternative<EditorCreatureAct>(action);
+	       std::holds_alternative<EditorCreatureEdit>(action) || std::holds_alternative<EditorCreatureAct>(action) ||
+	       std::holds_alternative<DebugLandSkip>(action);
+}
+
+/// Whether the game server refuses the command from every player, also from a player with the editor claim. A network game
+/// has no lands of the story, so the server refuses the skip to a land of the story.
+[[nodiscard]] constexpr bool ServerAlwaysRefuses(const Action& action) noexcept
+{
+	return std::holds_alternative<DebugLandSkip>(action);
 }
 
 /// Whether the game server takes the command from an observer. An observer with the editor claim also sends the edits of the

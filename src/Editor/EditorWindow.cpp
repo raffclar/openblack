@@ -40,9 +40,11 @@
 #include "EditorMath.h"
 #include "EditorStyle.h"
 #include "Game.h"
+#include "Gui/GameInterface.h"
 #include "Input/DeveloperKeys.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
+#include "Story/StoryLandSkip.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::editor
@@ -75,6 +77,28 @@ glm::mat3 PlacedRotation(PlaceKind kind, float yawRadians)
 ecs::systems::EditorSystemInterface* System()
 {
 	return Locator::editorSystem::has_value() ? &Locator::editorSystem::value() : nullptr;
+}
+
+constexpr const char* k_SkipPopup = "Skip to a land of the story?";
+
+/// Skips to a land of the story. The first land starts a new game, as the menu starts it. A later land goes as a command
+/// of the turns, and the land changes at the next turn. Gives false when the game cannot skip now.
+bool SkipToStoryLand(int32_t land)
+{
+	if (!story_land_skip::Shown(OwnStoryGame()) || !story_land_skip::Offers(land))
+	{
+		return false;
+	}
+	if (story_land_skip::PathTo(land) == story_land_skip::Path::NewGame)
+	{
+		if (!Locator::gameInterface::has_value())
+		{
+			return false;
+		}
+		Locator::gameInterface::value().ChooseMenuAction(gui::GameMenu::Action::StartNewGame);
+		return true;
+	}
+	return SendStoryLandSkip(land);
 }
 } // namespace
 
@@ -1300,6 +1324,82 @@ void EditorWindow::DrawCheats() noexcept
 		    "Hold the middle button and move the mouse to turn the camera up, down, left and right.\n"
 		    "Only this computer sees the free camera. Its keys do nothing else in the temple while it is on.");
 	}
+	DrawStoryLandSkip();
+}
+
+void EditorWindow::DrawStoryLandSkip() noexcept
+{
+	// A network game has no lands of the story, so the editor does not show the skip there
+	if (!story_land_skip::Shown(OwnStoryGame()))
+	{
+		return;
+	}
+	ImGui::Separator();
+	ImGui::TextUnformatted("Skip to a land of the story");
+	ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+	if (ImGui::BeginCombo("##SkipLand", fmt::format("land {}", _skipLand).c_str()))
+	{
+		for (int32_t land = story_land_skip::k_FirstLand; land <= story_land_skip::k_LastLand; ++land)
+		{
+			if (ImGui::Selectable(fmt::format("land {}", land).c_str(), land == _skipLand))
+			{
+				_skipLand = land;
+			}
+		}
+		ImGui::EndCombo();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Skip to the land"))
+	{
+		_askToSkip = true;
+	}
+	ImGui::SetItemTooltip("Lands 2 to 5: the story changes the land as at the end of the land before.\n"
+	                      "The creature, the alignment and the miracles of the player go with the player.\n"
+	                      "The land starts as on a new arrival: no gold scroll of a skipped land is done.\n"
+	                      "Land 1: a new game starts, as the menu starts it. Keep the creature in the first question.");
+	if (!_skipStatus.empty())
+	{
+		ImGui::TextColored(style::k_Muted, "%s", _skipStatus.c_str());
+	}
+	if (_askToSkip)
+	{
+		_askToSkip = false;
+		ImGui::OpenPopup(k_SkipPopup);
+	}
+	ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	if (!ImGui::BeginPopupModal(k_SkipPopup, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		return;
+	}
+	ImGui::Text("This ends the land that you play now, and goes to land %d.", _skipLand);
+	if (story_land_skip::PathTo(_skipLand) == story_land_skip::Path::NewGame)
+	{
+		ImGui::TextUnformatted("A new game starts, as the menu starts it.");
+		ImGui::TextUnformatted("To keep the creature, choose to keep it in the first question of the game.");
+	}
+	else
+	{
+		ImGui::TextUnformatted("The story changes the land as at the end of the land before it.");
+		ImGui::TextUnformatted("The creature, the alignment and the miracles go with the player.");
+		ImGui::TextUnformatted("The land starts as on a new arrival: no gold scroll of a skipped land is done.");
+	}
+	if (ImGui::Button("Yes"))
+	{
+		_skipStatus = SkipToStoryLand(_skipLand) ? fmt::format("The game goes to land {}", _skipLand)
+		                                         : std::string("The game cannot skip to a land now");
+		ImGui::CloseCurrentPopup();
+	}
+	ImGui::SameLine();
+	// No is the choice that the keyboard has at first, so that a stray Enter keeps the land
+	if (ImGui::Button("No") || ImGui::IsKeyPressed(ImGuiKey_Escape))
+	{
+		ImGui::CloseCurrentPopup();
+	}
+	if (ImGui::IsWindowAppearing())
+	{
+		ImGui::SetKeyboardFocusHere(-1);
+	}
+	ImGui::EndPopup();
 }
 
 void EditorWindow::DrawBox(const AxisAlignedBoundingBox& box, uint32_t colour, float thickness) noexcept

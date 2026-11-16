@@ -1064,6 +1064,19 @@ std::vector<uint8_t> LockstepHost::ObserverNumbers() const
 void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& peer,
                                         std::vector<player_commands::Action>& actions)
 {
+	// A network game has no lands of the story. Thus the server refuses each skip to a land of the story, also from a player
+	// with the editor claim.
+	const auto refusedSkips =
+	    std::erase_if(actions, [](const auto& action) { return player_commands::ServerAlwaysRefuses(action); });
+	if (refusedSkips > 0)
+	{
+		_refusedEditorCommands += static_cast<uint32_t>(refusedSkips);
+		Log(spdlog::level::warn,
+		    fmt::format("The server refuses {} skips to a land of the story of {}: a network game has none", refusedSkips,
+		                peer.name));
+		SendTo(connection, game_socket::CommandRefused {.reason = std::string(game_socket::k_NoStoryLands),
+		                                                .commands = static_cast<uint32_t>(refusedSkips)});
+	}
 	// The server refuses the edits of the editor and the debug cheats of a player with no editor claim. No turn holds them,
 	// so the other players do not get them. The log tells each refusal, and the player gets the reason.
 	const auto refused = std::erase_if(
