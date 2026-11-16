@@ -340,6 +340,27 @@ void AddFire(std::vector<Scenario>& all)
 	                .atLeast = 1.0}},
 	});
 
+	// A field of a town that an effect destroys keeps its place and its footprint
+	all.push_back({
+	    .id = "miracles.field_destroyed_by_effect",
+	    .name = "A field of the town destroyed by an effect",
+	    .facet = Facet::Miracles,
+	    .description = "A hut of the town and a ripe wheat field beside it. After three seconds an effect destroys the "
+	                   "field, as a lightning bolt or a meteor does.",
+	    .expected = "As in the game, the effect takes only the crop of the field. The field stays where it is, with its "
+	                "footprint, and no ghost flickers out. The town does not plan the field again and makes no new site "
+	                "there. The hut does not change.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Ground - glm::vec2(20.0f), k_Ground + glm::vec2(20.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Ground + glm::vec2(-12.0f, 0.0f)},
+	                {.type = FieldTypeInfo::Wheat, .offset = k_Ground + glm::vec2(6.0f, 0.0f), .ripeCrop = true}},
+	    .commands = {{.kind = Command::Kind::DestroyObjectByEffect, .delaySeconds = 3.0f, .object = 1}},
+	    .checks = {{.label = "the hut and the field stay after the effect",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 200,
+	                .atLeast = 2.0}},
+	});
+
 	// The smoke of a fire in clear weather, where only the wind of the climates blows
 	all.push_back({
 	    .id = "sky.climate_wind_smoke",

@@ -1071,6 +1071,19 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 	{
 		return;
 	}
+	// A field is a building of its town, but an effect takes only its crop and its fire. The field stays where it is, with
+	// its footprint, and it leaves no ghost.
+	if (auto* field = registry.TryGet<Field>(object))
+	{
+		field->crop.timesSown = 0;
+		field->crop.age = 0.0f;
+		field->crop.food = 0.0f;
+		if (Locator::fireSystem::has_value())
+		{
+			Locator::fireSystem::value().Forget(object);
+		}
+		return;
+	}
 	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
 		// A ghost of it flickers out where it stood, also when it stays
@@ -1114,18 +1127,6 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 	if (registry.AllOf<FishFarm>(object) && Locator::fishFarmSystem::has_value())
 	{
 		Locator::fishFarmSystem::value().RemoveFarm(object);
-		return;
-	}
-	if (auto* field = registry.TryGet<Field>(object))
-	{
-		// Its crop is gone, and its fire with it
-		field->crop.timesSown = 0;
-		field->crop.age = 0.0f;
-		field->crop.food = 0.0f;
-		if (Locator::fireSystem::has_value())
-		{
-			Locator::fireSystem::value().Forget(object);
-		}
 		return;
 	}
 	Destroy(object);
