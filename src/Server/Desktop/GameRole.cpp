@@ -30,7 +30,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "Common/BuildVersion.h"
 #include "Creature/CreatureFileLoad.h"
 #include "Editor/EditorMindLoads.h"
 #include "Editor/EditorScriptActs.h"
@@ -106,6 +105,8 @@ struct GameRole::Parts
 	lobby_status::Room room;
 	std::chrono::steady_clock::time_point nextReport {};
 	bool reporting {false};
+	/// The most characters of the build id in a report. An older lobby takes fewer.
+	size_t mostVersionCharacters {lobby_api::k_MostGameVersionCharacters};
 	/// The gods of the last report. A change goes to the lobby at once, so that its lists show the connected players.
 	std::vector<lobby_api::ServerStatusPlayer> reportedPlayers;
 	bool listed {false};
@@ -228,7 +229,7 @@ struct GameRole::Parts
 		reporting = true;
 		const auto sentAt = std::chrono::steady_clock::now();
 		nextReport = sentAt + lobby_status::k_ReportInterval;
-		auto status = lobby_status::MakeStatus(room, phase, host->Seats());
+		auto status = lobby_status::MakeStatus(room, phase, host->Seats(), mostVersionCharacters);
 		reportedPlayers = status.players;
 		const auto text = lobby_api::ToJson(status);
 		online::HttpRequest request {.method = online::HttpMethod::Put,
@@ -247,6 +248,16 @@ struct GameRole::Parts
 			{
 				nextReport = sentAt + std::chrono::seconds(reply->nextStatusIn);
 				clans = reply->clans;
+			}
+			if (!reply.has_value() && mostVersionCharacters > lobby_api::k_OldMostGameVersionCharacters &&
+			    lobby_status::RefusedTheVersionLength(response.status, response.Text()))
+			{
+				// An older lobby keeps 16 characters of the build id. The next report goes at once with the cut build id.
+				SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby keeps {} characters of the build id: the server cuts it",
+				                   lobby_api::k_OldMostGameVersionCharacters);
+				mostVersionCharacters = lobby_api::k_OldMostGameVersionCharacters;
+				nextReport = sentAt;
+				return;
 			}
 			const bool ok = reply.has_value() && reply->listed;
 			if (ok != listed)
@@ -391,10 +402,8 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		}
 		return result;
 	};
-	parts.room = lobby_status::Room {.hostname = settings.roomName,
-	                                 .land = start.land,
-	                                 .maxGods = godSlots,
-	                                 .version = std::string(build_version::Semantic())};
+	parts.room = lobby_status::Room {
+	    .hostname = settings.roomName, .land = start.land, .maxGods = godSlots, .version = online::build_id::Own()};
 	if (settings.lan)
 	{
 		parts.lan = online::MakeUdpLanResponder([] {

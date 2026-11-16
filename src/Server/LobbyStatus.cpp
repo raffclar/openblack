@@ -15,6 +15,8 @@
 #include <string>
 #include <system_error>
 
+#include <LobbyApiJson.h>
+
 namespace openblack::server::lobby_status
 {
 
@@ -62,7 +64,8 @@ std::vector<lobby_api::ServerStatusPlayer> StatusPlayers(std::span<const Lockste
 	return players;
 }
 
-lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<const LockstepHost::Seat> seats)
+lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<const LockstepHost::Seat> seats,
+                                   size_t mostVersionCharacters)
 {
 	return {
 	    .hostname = room.hostname,
@@ -71,9 +74,23 @@ lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<cons
 	    .locked = false,
 	    .password = false,
 	    .maxplayers = std::clamp(room.maxGods, 1, 32),
-	    .gamever = room.version.substr(0, std::min(room.version.size(), k_MostVersionCharacters)),
+	    .gamever = room.version.substr(0, std::min(room.version.size(), mostVersionCharacters)),
 	    .players = StatusPlayers(seats),
 	};
+}
+
+bool RefusedTheVersionLength(int32_t status, std::string_view body)
+{
+	// The lobby answers 422 with the fields that it did not take. The server cuts the build id only when the build id is
+	// longer than an older lobby keeps.
+	constexpr int32_t k_FieldsNotValid = 422;
+	if (status != k_FieldsNotValid)
+	{
+		return false;
+	}
+	const auto problem = lobby_api::ParseProblem(body);
+	return problem.has_value() &&
+	       std::ranges::find(problem->errorFields, std::string_view("gamever")) != problem->errorFields.end();
 }
 
 namespace

@@ -15,6 +15,7 @@
 
 #include "Common/BuildVersion.h"
 #include "Gui/MultiplayerFrontEndRules.h"
+#include "Online/GameBuildId.h"
 #include "Server/LobbyStatus.h"
 
 using namespace openblack::server;
@@ -91,11 +92,14 @@ TEST(LobbyStatus, TheGodsChangeWhenAPlayerGoesOrComesBack)
 
 TEST(LobbyStatus, ReportKeepsTheLimitsOfTheLobby)
 {
-	const Room room {.hostname = "Room", .land = "", .maxGods = 99, .version = "0.1.0-really-long-version-text"};
+	const Room room {.hostname = "Room", .land = "", .maxGods = 99, .version = std::string(80, 'v')};
 	const auto status = MakeStatus(room, Phase::Playing, {});
 	EXPECT_EQ(status.gamemode, "closedplaying");
 	EXPECT_EQ(status.maxplayers, 32);
-	EXPECT_EQ(status.gamever.size(), k_MostVersionCharacters);
+	EXPECT_EQ(status.gamever.size(), openblack::lobby_api::k_MostGameVersionCharacters);
+	// For an older lobby, the report has the first 16 characters
+	EXPECT_EQ(MakeStatus(room, Phase::Playing, {}, openblack::lobby_api::k_OldMostGameVersionCharacters).gamever,
+	          std::string(16, 'v'));
 	EXPECT_EQ(MakeStatus(k_Room, Phase::Exiting, {}).gamemode, "exiting");
 }
 
@@ -123,15 +127,29 @@ TEST(LobbyStatus, TheAnswerGivesTheListingAndTheTimeOfTheNextReport)
 	EXPECT_FALSE(openblack::lobby_api::ParseServerStatusReply("{}").has_value());
 }
 
+TEST(LobbyStatus, AnOlderLobbyThatRefusesTheLengthOfTheVersionGetsTheCutVersion)
+{
+	// An older lobby answers 422 with the field "gamever" in the errors
+	constexpr std::string_view k_Refusal = R"({"type":"about:blank","title":"Unprocessable Content","status":422,)"
+	                                       R"("detail":"The request has fields that are not valid.","instance":"",)"
+	                                       R"("code":"invalid","errors":{"gamever":["Too long."]}})";
+	EXPECT_TRUE(RefusedTheVersionLength(422, k_Refusal));
+	// Another field, another status or a body that is not a problem do not cut the version
+	EXPECT_FALSE(RefusedTheVersionLength(422, R"({"status":422,"code":"invalid","errors":{"hostname":["Too long."]}})"));
+	EXPECT_FALSE(RefusedTheVersionLength(400, k_Refusal));
+	EXPECT_FALSE(RefusedTheVersionLength(422, "not json"));
+	EXPECT_FALSE(RefusedTheVersionLength(422, R"({"status":422,"code":"invalid"})"));
+}
+
 TEST(LobbyStatus, TheGameListComparesTheVersionThatTheServerReports)
 {
-	// The game server reports its semantic version whole, and the game list of a client of the same build shows no
+	// The game server reports its build id whole, and the game list of a client of the same build shows no
 	// "(Wrong Version)" for it
-	const Room room {
-	    .hostname = "Room", .land = "", .maxGods = 2, .version = std::string(openblack::build_version::Semantic())};
+	const auto own = openblack::online::build_id::Own();
+	const Room room {.hostname = "Room", .land = "", .maxGods = 2, .version = own};
 	const auto status = MakeStatus(room, Phase::Staging, {});
-	EXPECT_LE(openblack::build_version::Semantic().size(), k_MostVersionCharacters);
-	EXPECT_EQ(status.gamever, openblack::build_version::Semantic());
+	EXPECT_LE(own.size(), openblack::lobby_api::k_MostGameVersionCharacters);
+	EXPECT_EQ(status.gamever, own);
 
 	openblack::lobby_api::ServerEntry listed;
 	listed.hostname = status.hostname;
@@ -144,9 +162,13 @@ TEST(LobbyStatus, TheGameListComparesTheVersionThatTheServerReports)
 	                                                        .needsPassword = u"(Needs Password)",
 	                                                        .locked = u"Locked"};
 	using openblack::gui::multiplayer::LobbyKind;
-	EXPECT_EQ(GameLine(listed, texts, openblack::build_version::Semantic(), LobbyKind::Internet), u"Room (1/2)");
-	// A server of another build shows it
+	EXPECT_EQ(GameLine(listed, texts, own, LobbyKind::Internet), u"Room (1/2)");
+	// An older lobby keeps the first 16 characters of the build id: the line shows no "(Wrong Version)" either
+	listed.gamever = MakeStatus(room, Phase::Staging, {}, openblack::lobby_api::k_OldMostGameVersionCharacters).gamever;
+	EXPECT_EQ(GameLine(listed, texts, own, LobbyKind::Internet), u"Room (1/2)");
+	// A server of another build shows it, and so does a server of the same version and another commit
 	listed.gamever = "0.0.1";
-	EXPECT_EQ(GameLine(listed, texts, openblack::build_version::Semantic(), LobbyKind::Internet),
-	          u"Room (1/2) (Wrong Version)");
+	EXPECT_EQ(GameLine(listed, texts, own, LobbyKind::Internet), u"Room (1/2) (Wrong Version)");
+	listed.gamever = std::string(openblack::build_version::Semantic());
+	EXPECT_EQ(GameLine(listed, texts, own, LobbyKind::Internet), u"Room (1/2) (Wrong Version)");
 }

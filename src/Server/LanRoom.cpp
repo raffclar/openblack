@@ -24,7 +24,7 @@ lobby_api::LanAnswer AnswerOf(const lobby_status::Room& room, bool started, std:
 	    .password = false,
 	    .numplayers = 0,
 	    .maxplayers = std::clamp(room.maxGods, 1, 32),
-	    .gamever = room.version.substr(0, std::min(room.version.size(), lobby_status::k_MostVersionCharacters)),
+	    .gamever = room.version.substr(0, std::min(room.version.size(), lobby_api::k_MostGameVersionCharacters)),
 	    .port = port,
 	    .host = host,
 	    .players = {},
