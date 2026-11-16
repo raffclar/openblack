@@ -58,6 +58,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
@@ -69,10 +70,13 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
+#include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "Hand/HandSendWait.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
+#include "Story/StoryLandSkip.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::player_commands;
@@ -234,7 +238,7 @@ openblack::ecs::components::ObserverInterfaces* ObserversOf(openblack::PlayerNam
 	return &registry.Assign<openblack::ecs::components::ObserverInterfaces>(*player);
 }
 
-/// Do an edit of the editor at the turn. The game server takes the edits only from a staff player.
+/// Do an edit of the editor at the turn. The game server takes the edits only from a player with the editor claim.
 void RunEditorEdit(openblack::PlayerNames player, const EditorEdit& edit, uint32_t turn)
 {
 	const bool done = openblack::editor::ApplyEdit(edit);
@@ -246,7 +250,46 @@ void RunEditorEdit(openblack::PlayerNames player, const EditorEdit& edit, uint32
 	}
 }
 
-/// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a staff player.
+/// Do an edit of a creature by the editor at the turn. The game server takes the edits only from a player with the editor
+/// claim.
+void RunEditorCreatureEdit(openblack::PlayerNames player, const EditorCreatureEdit& edit, uint32_t turn)
+{
+	if (!openblack::Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	const bool done = openblack::editor::ApplyCreatureEdit(openblack::Locator::entitiesRegistry::value(), edit);
+	if (auto logger = spdlog::get("game"))
+	{
+		const auto value = openblack::creature_edit_values::ValueFrom(edit.value);
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} the {} of creature {}", turn, static_cast<int>(player),
+		                   done ? "sets" : "cannot set",
+		                   value.has_value() ? openblack::creature_edit_values::NameOf(*value) : "unknown value",
+		                   static_cast<uint32_t>(entt::to_integral(edit.creature)));
+	}
+}
+
+/// Do an act of the creature tools of the editor at the turn. The game server takes the acts only from a player with the
+/// editor claim.
+void RunEditorCreatureAct(openblack::PlayerNames player, const EditorCreatureAct& act, uint32_t turn)
+{
+	if (!openblack::Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	const auto result = openblack::editor::ApplyCreatureAct(openblack::Locator::entitiesRegistry::value(), act);
+	if (auto logger = spdlog::get("game"))
+	{
+		const auto kind = openblack::creature_edit_acts::ActFrom(act.act);
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} the act {} on creature {}", turn,
+		                   static_cast<int>(player), result.done ? "does" : "cannot do",
+		                   kind.has_value() ? openblack::creature_edit_acts::NameOf(*kind) : "unknown act",
+		                   static_cast<uint32_t>(entt::to_integral(act.creature)));
+	}
+}
+
+/// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a player with the editor
+/// claim.
 void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uint32_t turn)
 {
 	const auto cheat = openblack::debug_cheats::CheatFrom(command.cheat);
@@ -259,6 +302,30 @@ void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uin
 	{
 		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debug cheat {} of player {} is {}", turn,
 		                   openblack::debug_cheats::NameOf(*cheat), static_cast<int>(player), command.on ? "on" : "off");
+	}
+}
+
+/// Skip to a land of the story at the turn, as the debug cheat of the editor asks. Only a game of the story on this
+/// computer alone does it. The game server refuses the command in every network game.
+void RunDebugLandSkip(openblack::PlayerNames player, const DebugLandSkip& command, uint32_t turn)
+{
+	if (!openblack::Locator::entitiesRegistry::has_value() || !openblack::Locator::landSystem::has_value())
+	{
+		return;
+	}
+	const auto& context = openblack::Locator::entitiesRegistry::value().Context();
+	const openblack::story_land_skip::GameFacts game {
+	    .networkGame = openblack::Locator::time::has_value() && openblack::Locator::time::value().IsNetworkGame(),
+	    .skirmish = context.skirmish,
+	    .landNumber = context.mapScriptGlobals.landNumber,
+	};
+	const bool done = openblack::story_land_skip::WorldDoes(game, command.land) &&
+	                  openblack::Locator::landSystem::value().StartStoryAtLand(command.land);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the debug cheat of player {} {} from land {} to land {} of the story", turn,
+		                   static_cast<int>(player), done ? "skips" : "cannot skip", game.landNumber,
+		                   static_cast<int>(command.land));
 	}
 }
 
@@ -295,6 +362,14 @@ void RunObserver(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, EditorEdit>)
 		    {
 			    RunEditorEdit(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorCreatureEdit>)
+		    {
+			    RunEditorCreatureEdit(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorCreatureAct>)
+		    {
+			    RunEditorCreatureAct(command.player, action, turn);
 		    }
 		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
 		    {
@@ -993,9 +1068,21 @@ void Run(const Command& command, uint32_t turn)
 		    {
 			    RunEditorEdit(command.player, action, turn);
 		    }
+		    else if constexpr (std::is_same_v<Kind, EditorCreatureEdit>)
+		    {
+			    RunEditorCreatureEdit(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorCreatureAct>)
+		    {
+			    RunEditorCreatureAct(command.player, action, turn);
+		    }
 		    else if constexpr (std::is_same_v<Kind, DebugCheat>)
 		    {
 			    RunDebugCheat(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, DebugLandSkip>)
+		    {
+			    RunDebugLandSkip(command.player, action, turn);
 		    }
 	    },
 	    command.action);

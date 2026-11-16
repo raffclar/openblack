@@ -24,6 +24,8 @@ namespace openblack::gamesave
 
 /// An autosave comes when more turns than this go by after the last autosave: ten minutes of game time
 inline constexpr uint32_t k_AutosaveInterval = 6000;
+/// The web game autosaves after five minutes of game time. The player of a browser can lose the page at any time.
+inline constexpr uint32_t k_WebAutosaveInterval = 3000;
 /// The game does not autosave in the Gods' Playground
 inline constexpr uint32_t k_PlaygroundLand = 6;
 /// A quick save or a quick load needs more turns than this after the last one
@@ -48,14 +50,22 @@ struct AutosaveState
 	uint32_t land {0};
 	uint32_t turn {0};
 	uint32_t lastAutosaveTurn {0};
+	/// The count of turns after the last autosave that the next autosave must pass
+	uint32_t interval {k_AutosaveInterval};
 };
+
+/// The interval of the autosaves: the web game autosaves more frequently than the desktop game
+[[nodiscard]] constexpr uint32_t AutosaveInterval(bool webGame)
+{
+	return webGame ? k_WebAutosaveInterval : k_AutosaveInterval;
+}
 
 /// Whether the game autosaves at the end of this turn. The count of turns since the last autosave wraps as a whole
 /// number with no sign.
 [[nodiscard]] constexpr bool AutosaveDue(const AutosaveState& state)
 {
 	return state.autosaveOn && !state.gameOver && !state.scriptCutScene && !state.networkGame &&
-	       state.land != k_PlaygroundLand && state.turn - state.lastAutosaveTurn > k_AutosaveInterval && !state.paused;
+	       state.land != k_PlaygroundLand && state.turn - state.lastAutosaveTurn > state.interval && !state.paused;
 }
 
 /// The slot of an autosave: the autosaves of each land go in turn into the three autosave slots, by the count of the

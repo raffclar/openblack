@@ -98,7 +98,7 @@ public:
 	virtual void LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place) = 0;
 	virtual void LeashTapThing(PlayerNames player, entt::entity thing) = 0;
 	virtual bool LeashPressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection,
-	                              glm::vec2 cursor, uint32_t nowMs) = 0;
+	                              glm::vec2 cursor, uint32_t nowMs, bool mayTie) = 0;
 	virtual bool PressRope(PlayerNames player) = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersCreature(PlayerNames player) const = 0;
 	[[nodiscard]] virtual bool IsLeashed(entt::entity creature) const = 0;

@@ -97,12 +97,17 @@ struct Claims
 	std::string name;
 	/// The account has the admin right on this server
 	bool admin {false};
-	/// The account is a staff account of the lobby, and its sign-in gave the second factor. Only such an account opens
-	/// the editor and turns on the cheats in a network game.
+	/// The account is a confirmed staff account of the lobby ("staff", optional). The game does not use it for the
+	/// editor.
 	bool staff {false};
+	/// The account has the editor right of the lobby ("editor", optional). Only such an account opens the editor and
+	/// turns on the debug cheats in a network game.
+	bool editor {false};
 	game_socket::Role role {game_socket::Role::God};
 	/// The id of the lobby whose game the ticket is for ("lobby", optional). Empty for a ticket of a server with no lobby.
 	std::string lobby;
+	/// The number of gods of the lobby's game at its start ("gods", optional). 0 when the ticket does not give it.
+	uint32_t gods {0};
 };
 
 /// The claims of a ticket's message. None when a claim is missing, has the wrong type or names a role that is not known.

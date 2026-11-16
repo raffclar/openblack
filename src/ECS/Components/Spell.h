@@ -90,7 +90,8 @@ struct Spell
 	bool closedDown {false};
 	/// Its magic type starts a particle effect: it lives while that does
 	bool hasParticleType {false};
-	/// Cast by this computer's player's hand
+	/// Cast by the hand of a player. Each computer casts it for the hand of any player, thus it is the same on all
+	/// computers. Only the cast of the player of this computer shows as its own (see spells::IsCastOfThisComputer).
 	bool fromLocalHand {false};
 	/// Held in this computer's hand: a locked miracle (lightning, water, food, wood) follows the hand
 	bool castFromHand {false};

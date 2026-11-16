@@ -77,6 +77,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/DebugCheatSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -401,6 +402,24 @@ bool Runner::GiveStoryCommand(const Command& command)
 			Locator::temple::value().LookAtScroll(command.value);
 		}
 		Log(fmt::format("{:.1f}s: the temple's camera looks at scroll {}", _seconds, command.value));
+		return true;
+	}
+	if (command.kind == Kind::TempleFreeCamera)
+	{
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().SetFreeCamera(command.value != 0);
+		}
+		Log(fmt::format("{:.1f}s: the free camera in the temple is {}", _seconds, command.value != 0 ? "on" : "off"));
+		return true;
+	}
+	if (command.kind == Kind::InfiniteInfluenceCheat)
+	{
+		if (Locator::debugCheatSystem::has_value())
+		{
+			Locator::debugCheatSystem::value().Set(command.player, debug_cheats::Cheat::InfiniteInfluence, command.value != 0);
+		}
+		Log(fmt::format("{:.1f}s: the cheat of infinite influence is {}", _seconds, command.value != 0 ? "on" : "off"));
 		return true;
 	}
 	if (command.kind == Kind::ZoomToTempleCaveTarget)

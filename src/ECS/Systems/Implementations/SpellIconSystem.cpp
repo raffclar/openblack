@@ -239,15 +239,26 @@ void SpellIconSystem::RemoveHands(entt::entity centre, entt::entity town, SpellS
 			hand = entt::null;
 		}
 	}
-	// The site keeps its icon of the seed while another of its towns still has a hand of it
-	const auto site = registry.Get<const Town>(town).worshipSite;
-	const auto* component = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
+	RemoveSiteIconUnlessOffered(town, seed);
+}
+
+void SpellIconSystem::RemoveSiteIconUnlessOffered(entt::entity town, SpellSeedType seed)
+{
+	auto& registry = Entities();
+	const auto* component = registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
 	if (component == nullptr)
 	{
 		return;
 	}
+	// The site keeps its icon of the seed while another of its towns still has a hand of it
+	const auto site = component->worshipSite;
+	const auto* worship = registry.Valid(site) ? registry.TryGet<const WorshipSite>(site) : nullptr;
+	if (worship == nullptr)
+	{
+		return;
+	}
 	std::vector<std::vector<SpellSeedType>> offered;
-	for (const auto other : component->towns)
+	for (const auto other : worship->towns)
 	{
 		offered.push_back(SeedsOfTown(other));
 	}
@@ -327,6 +338,37 @@ void SpellIconSystem::CentreWorking(entt::entity centre)
 	{
 		TownJoinedSite(site, town);
 	}
+}
+
+void SpellIconSystem::CentreRemoved(entt::entity centre)
+{
+	auto& registry = Entities();
+	auto* hands = registry.Valid(centre) ? registry.TryGet<CentreHands>(centre) : nullptr;
+	const auto* abode = hands != nullptr ? registry.TryGet<const Abode>(centre) : nullptr;
+	if (abode == nullptr)
+	{
+		return;
+	}
+	const auto& towns = registry.Context().towns;
+	const auto found = towns.find(abode->townId);
+	const auto town = found != towns.end() ? found->second : entt::null;
+	// Each hand goes in the order of its place. The town's site then keeps the icon of the hand's miracle only while
+	// another of its towns still has a hand of that miracle. The town keeps the magic types that it holds.
+	for (auto& hand : hands->hands)
+	{
+		const auto* icon = registry.Valid(hand) ? registry.TryGet<const TownCentreIcon>(hand) : nullptr;
+		if (icon == nullptr)
+		{
+			hand = entt::null;
+			continue;
+		}
+		const auto seed = icon->seed;
+		const auto handTown = registry.Valid(icon->town) ? icon->town : town;
+		registry.Destroy(hand);
+		hand = entt::null;
+		RemoveSiteIconUnlessOffered(handTown, seed);
+	}
+	registry.Remove<CentreHands>(centre);
 }
 
 void SpellIconSystem::TownChangedHands(entt::entity town, PlayerNames previous)

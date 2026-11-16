@@ -32,6 +32,7 @@
 #include "Common/BuildVersion.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "ECS/EntityHashes.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
@@ -45,6 +46,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Online/GameBuildId.h"
+#include "Online/GameDataFiles.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapStoreInterface.h"
@@ -326,6 +328,28 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		        {
 			        _desyncs->Parted(0, parts, Microseconds() / 1000);
 		        }
+	        },
+	    .printData =
+	        [this](std::span<const std::string> files) {
+		        // The print of the files that the server's world read, from the game's folder of this computer
+		        auto& fileSystem = Locator::filesystem::value();
+		        const auto hints = online::game_data::HintsOfGameFolder(fileSystem);
+		        game_socket::DataPrint print {.files = {}, .patch = hints.patch, .language = hints.language};
+		        for (const auto& file : online::game_data::PrintFiles(fileSystem, files, &_printCache))
+		        {
+			        print.files.push_back({.path = file.path, .present = file.present, .size = file.size, .hash = file.hash});
+		        }
+		        return print;
+	        },
+	    .entities =
+	        [](std::span<const std::string> parts) {
+		        return Locator::syncChecksumSystem::has_value() ? Locator::syncChecksumSystem::value().EntitiesOfParts(parts)
+		                                                        : std::vector<synced_state::PartEntities> {};
+	        },
+	    .saveWorld =
+	        []() {
+		        return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState()
+		                                                    : std::vector<uint8_t> {};
 	        },
 	});
 	return true;

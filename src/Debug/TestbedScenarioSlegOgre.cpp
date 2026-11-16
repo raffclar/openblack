@@ -11,6 +11,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -45,6 +46,8 @@ constexpr glm::vec2 k_UndeadVillage = glm::vec2(3001.083f, 3457.676f) - k_LandMi
 constexpr float k_UndeadVillageSearch = 100.0f;
 /// The mountain top where the Creed comes, from the middle of the land
 constexpr glm::vec2 k_CreedTop = glm::vec2(2694.475f, 2594.948f) - k_LandMiddle;
+/// The radius of the ring of anti-influence that the land's script puts on the Creed
+constexpr float k_CreedRing = 30.0f;
 /// The kinds of thing and of town that the land's script gives to find a village
 constexpr float k_TownThing = 9.0f;
 constexpr float k_AnyTown = 5000.0f;
@@ -77,6 +80,57 @@ void AddSlegFight(std::vector<Scenario>& all)
 	                  .delaySeconds = 0.5f,
 	                  .script = "Land4Ogre",
 	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
+	});
+}
+
+void AddSlegFightDoubleTap(std::vector<Scenario>& all)
+{
+	// The duel starts at about 60 seconds. Then the player puts the aggression leash on the Tiger, makes the camera show
+	// the fight and double taps the Action button on Sleg. The fight takes both presses.
+	constexpr float k_DuelSeconds = 60.0f;
+	constexpr size_t k_RightButton = 3;
+	std::vector<Command> commands {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand4"},
+	                               {.kind = Kind::RunScript,
+	                                .delaySeconds = 0.5f,
+	                                .script = "Land4Ogre",
+	                                .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                               Fight(Kind::PointerOnOpponent, 0, 0, k_DuelSeconds),
+	                               Leash(0, LeashType::Evil, 0.2f),
+	                               Fight(Kind::FightView, 0, 0, 0.3f)};
+	// The pointer stays on Sleg, so that the hand that holds the leash stays near the Tiger
+	for (int step = 0; step < 5; ++step)
+	{
+		commands.push_back(Fight(Kind::PointerOnOpponent, 0, 0, 1.0f));
+	}
+	for (int press = 0; press < 2; ++press)
+	{
+		commands.push_back({.kind = Kind::PointerPress, .delaySeconds = 0.05f, .value = k_RightButton});
+		commands.push_back({.kind = Kind::PointerRelease, .delaySeconds = 0.05f, .value = k_RightButton});
+	}
+	all.push_back({
+	    .id = "story.l4_sleg_fight_leash_double_tap",
+	    .name = "Story: a double tap with the leash on Sleg in the fight view on the fourth land",
+	    .facet = Facet::Story,
+	    .description = "As Sleg the ogre fights the creature at his lair. When the duel starts, the player puts the "
+	                   "aggression leash on the Tiger. A double click into the arena makes the camera show the fight. Then "
+	                   "the hand double taps the Action button on Sleg.",
+	    .expected = "The fight takes both presses, and the Tiger strikes at Sleg. The leash does not tie to Sleg. The duel "
+	                "continues until one creature wins, and Sleg does not laugh after the double tap.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_FightIntro.x - 30.0f, 35.0f, k_FightIntro.y - 40.0f},
+	                .look = {k_FightIntro.x, 5.0f, k_FightIntro.y}},
+	    .creatures = {PlayersTiger(k_NearTheFight)},
+	    .commands = std::move(commands),
+	    .checks = {{.label = "the duel starts",
+	                .quantity = checks::Quantity::CreatureInDuel,
+	                .afterTurns = 300,
+	                .byTurn = 1500,
+	                .atLeast = 1.0},
+	               {.label = "the Tiger still duels after the double tap",
+	                .quantity = checks::Quantity::CreatureInDuel,
+	                .afterTurns = 700,
+	                .atLeast = 1.0}},
 	});
 }
 
@@ -258,15 +312,100 @@ void AddUndeadVillageCreed(std::vector<Scenario>& all)
 	                                    {"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
 	});
 }
+
+void AddCreedScene(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_creed_scene",
+	    .name = "Story: the Creed of the fourth land on its hill top, with the scene that waits for the creature",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The Creed is on the mountain top, with the "
+	                   "ring of anti-influence that the land's script puts on it. The cheat of infinite influence is "
+	                   "on. The scene that waits for the Creed in the creature's hand runs. The player's tiger stands 20 "
+	                   "metres east of the Creed on the learning leash, and the leash tells it to act on the Creed.",
+	    .expected = "The hand can not take the Creed, also with the cheat. The tiger takes the Creed, and the scene "
+	                "fades to white and plays.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_CreedTop.x + 40.0f, 35.0f, k_CreedTop.y + 40.0f},
+	                .look = {k_CreedTop.x, 2.0f, k_CreedTop.y}},
+	    .creatures = {PlayersTiger(k_CreedTop + glm::vec2(20.0f, 0.0f))},
+	    .objects = {{.type = MobileObjectInfo::Creed, .offset = k_CreedTop}},
+	    .commands = {{.kind = Kind::InfiniteInfluenceCheat, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "INFLUENCE_OBJECT",
+	                  .scriptArguments = {{.kind = Argument::Kind::Object, .index = 0},
+	                                      {.number = k_CreedRing},
+	                                      {.kind = Argument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 1.0f}}},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.0f,
+	                  .script = "CreatureGetsCreed",
+	                  .scriptGlobals = {{"CreedL4", {.kind = Argument::Kind::Object, .index = 0}},
+	                                    {"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
+	                 {.kind = Kind::LeashOrderOn, .creature = 0, .delaySeconds = 2.0f, .waitUntilFree = false, .object = 0}},
+	    .checks = {{.label = "the hand can not take the Creed with the cheat on",
+	                .quantity = checks::Quantity::HandMayTake,
+	                .afterTurns = 20,
+	                .atMost = 0.0},
+	               {.label = "the creature takes the Creed and the scene deletes it",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 40,
+	                .byTurn = 900,
+	                .atMost = 0.0}},
+	});
+}
+
+void AddSlegFightTwice(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "story.l4_sleg_fight_twice",
+	    .name = "Story: Sleg the ogre fights the creature two times in a row on the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The set-up script of the land runs, then the "
+	                   "script of the ogre. The player's Tiger stands 55 metres from the place where the ogre speaks, and "
+	                   "nobody fights for it.",
+	    .expected = "The first scene plays: Sleg walks to his side and says his four lines, then the fight starts. When "
+	                "it ends, Sleg walks back to his lair and the Tiger goes to the temple. When the Tiger comes near "
+	                "again, the second scene plays: Sleg says his one line, and the second fight starts. Neither scene "
+	                "stays on the screen.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_FightIntro.x - 30.0f, 35.0f, k_FightIntro.y - 40.0f},
+	                .look = {k_FightIntro.x, 5.0f, k_FightIntro.y}},
+	    .creatures = {PlayersTiger(k_NearTheFight)},
+	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand4"},
+	                 {.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "Land4Ogre",
+	                  .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}}},
+	    .checks = {{.label = "the first fight starts after the first scene",
+	                .quantity = checks::Quantity::CreatureDuels,
+	                .afterTurns = 10,
+	                .byTurn = 1500,
+	                .atLeast = 1.0},
+	               {.label = "the second fight starts after the second scene",
+	                .quantity = checks::Quantity::CreatureDuels,
+	                .afterTurns = 10,
+	                .byTurn = 3500,
+	                .atLeast = 2.0}},
+	});
+}
+
 } // namespace
 
 void testbed_scenarios::AddLand4SlegScenarios(std::vector<Scenario>& all)
 {
 	AddSlegFight(all);
+	AddSlegFightDoubleTap(all);
+	AddSlegFightTwice(all);
 	AddSlegBeatenScroll(all);
 	AddGremlins(all);
 	AddOgreFence(all);
 	AddCreatureSentBack(all);
 	AddSlegEatsVillagers(all);
 	AddUndeadVillageCreed(all);
+	AddCreedScene(all);
 }

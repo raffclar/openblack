@@ -425,7 +425,7 @@ public:
 	void Update(float /*seconds*/) override {}
 	void ShowPosts(bool /*handShown*/) override {}
 	bool PressAction(PlayerNames /*player*/, const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/,
-	                 glm::vec2 /*cursor*/, uint32_t /*milliseconds*/) override
+	                 glm::vec2 /*cursor*/, uint32_t /*milliseconds*/, bool /*mayTie*/) override
 	{
 		return false;
 	}

@@ -20,6 +20,7 @@
 #include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Locator.h"
+#include "MainLobbyChatRules.h"
 #include "MultiplayerFrontEnd.h"
 #include "Online/MapDownload.h"
 #include "Online/NetworkSession.h"
@@ -58,8 +59,7 @@ void MultiplayerFrontEnd::ShowLobbyNotice(std::u16string text)
 
 void MultiplayerFrontEnd::ShowLobbyProblem(const LobbyError& error)
 {
-	const auto client = _settings.browser ? lobby_api::ClientKind::Browser : lobby_api::ClientKind::Desktop;
-	const auto problem = screens::ProblemOf(error, client);
+	const auto problem = screens::ProblemOf(error, ClientKind(), OwnBuild());
 	switch (problem.box)
 	{
 	case screens::ProblemBox::Notice:
@@ -79,6 +79,8 @@ void MultiplayerFrontEnd::ShowLobbyProblem(const LobbyError& error)
 		break;
 	case screens::ProblemBox::ConnectionFailed:
 		Show(Message::ConnectionFailed);
+		break;
+	case screens::ProblemBox::None:
 		break;
 	}
 }
@@ -108,6 +110,7 @@ void MultiplayerFrontEnd::EnterLobbyList()
 		_services.lobby->WatchServers(false);
 	}
 	_services.lobbyRoom->WatchList(true);
+	WatchMainRoom(true);
 	RefreshLobbies();
 	// The names of the maps of the service, for the box that makes a session
 	GetLobbyMaps({});
@@ -136,6 +139,7 @@ void MultiplayerFrontEnd::RefreshLobbies()
 		{
 			_noLobbySessions = true;
 			_services.lobbyRoom->WatchList(false);
+			WatchMainRoom(false);
 			EnterGameList();
 			return;
 		}
@@ -202,7 +206,9 @@ void MultiplayerFrontEnd::JoinSelectedLobby()
 		Show(Message::LobbyPassword);
 		break;
 	case screens::JoinStep::Refuse:
-		ShowLobbyProblem(LobbyError {.status = 409, .code = std::string(screens::RefusalOf(*lobby, build))});
+		// A session of another version names the version that it needs
+		ShowLobbyProblem(
+		    LobbyError {.status = 409, .code = std::string(screens::RefusalOf(*lobby, build)), .expected = lobby->buildId});
 		break;
 	}
 }
@@ -389,6 +395,43 @@ void MultiplayerFrontEnd::SendLobbyChat(std::u16string_view text)
 			ShowLobbyProblem(result.error);
 		}
 	});
+}
+
+void MultiplayerFrontEnd::WatchMainRoom(bool watch)
+{
+	if (_services.lobby == nullptr)
+	{
+		return;
+	}
+	if (!watch)
+	{
+		_mainRoom.Clear();
+	}
+	_services.lobby->WatchChannel(std::string(lobby_api::k_LobbyChannel), watch);
+}
+
+int64_t MultiplayerFrontEnd::GetOwnAccount() const
+{
+	const auto account = _services.lobby != nullptr ? _services.lobby->GetAccount() : std::nullopt;
+	return account.has_value() ? account->id : 0;
+}
+
+void MultiplayerFrontEnd::SendMainRoomChat(std::u16string_view text)
+{
+	const auto line = ClampChat(text);
+	if (!HasChatText(line) || _services.lobby == nullptr)
+	{
+		return;
+	}
+	// The line comes back from the lobby to all the people in the room, also to the player. A refused line gives a line
+	// of the game in the room.
+	_services.lobby->SendChatLine(std::string(lobby_api::k_LobbyChannel), ToUtf8(line),
+	                              [this, generation = _generation](LobbyResult<LobbyDone>&& result) {
+		                              if (generation == _generation && !result.Ok())
+		                              {
+			                              _mainRoom.AddSystemLine(main_chat::RefusalLine(result.error));
+		                              }
+	                              });
 }
 
 void MultiplayerFrontEnd::PickLobbySlot(int32_t slot)
@@ -645,6 +688,7 @@ void MultiplayerFrontEnd::ForgetLobbyRoom()
 	}
 	_reportedMap.reset();
 	_editsLobby = false;
+	_serverVersionLines = 0;
 	_ticketGame.clear();
 	_roomMapHash.clear();
 	if (_mapDownload != nullptr)
@@ -716,6 +760,25 @@ void MultiplayerFrontEnd::FollowLobbySession()
 	}
 	FollowLobbyMap(*room);
 	FollowLobbyGame(*room);
+	FollowServerVersion(*room);
+}
+
+void MultiplayerFrontEnd::FollowServerVersion(const online::lobby::LobbyRoom& room)
+{
+	const auto lines = room.SystemLineCount(online::lobby::SystemLineKind::ServerVersion);
+	if (lines == _serverVersionLines)
+	{
+		return;
+	}
+	_serverVersionLines = lines;
+	// A game server of another version stopped the start. When the service needs another version than this game, the
+	// box tells the player to update the game. Else the line in the chat of the room is sufficient.
+	const auto& needed = room.NeededBuild();
+	if (needed.empty() || needed == OwnBuild() || _message != Message::None)
+	{
+		return;
+	}
+	ShowLobbyNotice(ToUtf16(screens::VersionRefusalText(ClientKind(), {.own = OwnBuild(), .needed = needed, .download = {}})));
 }
 
 void MultiplayerFrontEnd::FollowLobbyNotices(const online::lobby::LobbyRoom* room)
@@ -747,9 +810,12 @@ void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
 	{
 	case screens::MapNeed::Have:
 		have = true;
+		// A later map of the service starts its download again, also after a failure
+		_roomMapHash.clear();
 		break;
 	case screens::MapNeed::Missing:
 		have = false;
+		_roomMapHash.clear();
 		break;
 	case screens::MapNeed::Download:
 	{
@@ -787,6 +853,7 @@ void MultiplayerFrontEnd::FollowLobbyMap(const online::lobby::LobbyRoom& room)
 	_services.lobbyRoom->ReportMap({.haveMap = *have, .sha256 = map.sha256}, {});
 	if (!*have && need == screens::MapNeed::Download && _message == Message::None)
 	{
+		ReportMapFailure();
 		Show(Message::CouldNotDownloadMap);
 	}
 }

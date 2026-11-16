@@ -23,9 +23,11 @@
 
 #include <LobbyApi.h>
 
+#include "Common/ErrorReportsInterface.h"
 #include "LobbyScreenRules.h"
 #include "MultiplayerFrontEndRules.h"
 #include "Online/LobbyNotices.h"
+#include "Online/MainLobbyRoom.h"
 
 namespace openblack::ecs::systems
 {
@@ -90,6 +92,9 @@ public:
 		/// Gives the notice of the events of the lobby room: a sound, or a flash of the window (deviation 251). When this
 		/// function is empty, the room gives no notices.
 		std::function<void(const online::lobby::LobbyNotice& notice)> notice;
+		/// Sends an event of a failure to the error reports, for example a map download that failed. When this function
+		/// is empty, the front end sends no events.
+		std::function<void(const error_reports::FailureEvent& event)> report;
 	};
 
 	struct Settings
@@ -114,6 +119,8 @@ public:
 		bool showPing {false};
 		/// Tests: the wait in milliseconds before each request of a piece of a map (--map-piece-delay-ms)
 		uint32_t mapPieceDelayMs {0};
+		/// The box where the front end opens: the connection list, or the site's lobby in the browser build
+		multiplayer::FrontEndStart start {multiplayer::FrontEndStart::ConnectionList};
 	};
 
 	/// How the player answers a message box
@@ -289,6 +296,12 @@ public:
 	[[nodiscard]] const online::lobby::LobbyRoom* GetLobbyRoom() const;
 	void ToggleLobbyReady();
 	void SendLobbyChat(std::u16string_view text);
+	/// The main lobby room at the right of the list of the sessions (deviation 267)
+	[[nodiscard]] const online::main_room::MainLobbyRoom& GetMainRoom() const noexcept { return _mainRoom; }
+	/// The account of the player, 0 before the login
+	[[nodiscard]] int64_t GetOwnAccount() const;
+	/// Sends a line to the main lobby room. The line shows when the lobby sends it back to the room.
+	void SendMainRoomChat(std::u16string_view text);
 	void PickLobbySlot(int32_t slot);
 	void DoHostAction(int32_t slot, lobby_screens::HostAction action);
 	/// Start, or Cancel during the countdown and the wait in the line
@@ -326,8 +339,13 @@ private:
 	/// In the login box: logs in as the account that is signed in on the lobby site, when the lobby client can. The login
 	/// box stays when nobody is signed in on the site.
 	void SignInFromSite();
+	/// The login box opens on the internet: a player with a session of the lobby goes to the list at once, else the front
+	/// end asks the site for its session
+	void EnterLogin();
 	void LeaveRoom();
 	void HandleEvent(const lobby_api::PushEvent& event);
+	/// Asks the lobby for the lines and the people of the main lobby room, or stops them and forgets them
+	void WatchMainRoom(bool watch);
 	void RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password);
 	/// Writes a line to the connection log of the network game
 	void LogConnection(std::string_view text) const;
@@ -338,6 +356,8 @@ private:
 	void FetchRoomMap(std::string sha256);
 	/// Starts the download when the room gets a land of the lobby, and shows the box of a download that failed
 	void FollowMapDownload();
+	/// Writes the failure of the download of the room's map to the game log, and sends it to the error reports
+	void ReportMapFailure();
 	/// Tests: sends each request of a map piece whose wait ended
 	void SendDelayedPieces();
 	/// Follows the session of the network game: the join, a refusal, a loss
@@ -370,9 +390,17 @@ private:
 	void FollowLobbyMap(const online::lobby::LobbyRoom& room);
 	/// After the session gets a game server: a ticket, then the network game joins the server
 	void FollowLobbyGame(const online::lobby::LobbyRoom& room);
+	/// A start that a game server of another version stopped: the box tells the player to update the game
+	void FollowServerVersion(const online::lobby::LobbyRoom& room);
 	/// The box for a problem of a call of the lobby sessions
 	void ShowLobbyProblem(const ecs::systems::LobbyError& error);
 	void ShowLobbyNotice(std::u16string text);
+	/// The desktop game or the web page
+	[[nodiscard]] lobby_api::ClientKind ClientKind() const noexcept;
+	/// The build id that this game gives in its joins
+	[[nodiscard]] const std::string& OwnBuild() const;
+	/// The versions of a refusal of the game server for the version
+	[[nodiscard]] lobby_screens::VersionNeed VersionNeedOf(const online::NetworkSession& session) const;
 	/// The answer of a call of the lobby sessions: the busy state ends, and a problem shows its box
 	[[nodiscard]] ecs::systems::LobbyCallback<ecs::systems::LobbyDone> LobbyDoneCallback();
 	void JoinLobby(std::string id, std::optional<std::string> password);
@@ -408,6 +436,9 @@ private:
 	bool _observer {false};
 	/// The player was logged in to the lobby, so a loss of the session goes back to the login box
 	bool _loggedIn {false};
+	/// The lobby client was busy with another login when the login box asked the site. The login box asks again when
+	/// the lobby client is free.
+	bool _askSiteAgain {false};
 
 	std::vector<multiplayer::LocalMap> _maps;
 	/// The lands of network games that the lobby gives, with the hash of each file
@@ -421,6 +452,9 @@ private:
 	std::optional<online::lobby::NoticeSnapshot> _noticeSnapshot;
 	/// The lobby's list did not have the room's land, or the list did not come
 	bool _mapFailed {false};
+	/// The HTTP status and the kind of error of the last piece of a map that the lobby did not give. The answers of the
+	/// lobby hold a copy, so that an answer after the end of the front end writes nothing of the front end.
+	std::shared_ptr<std::pair<int32_t, int32_t>> _lastPieceError {std::make_shared<std::pair<int32_t, int32_t>>(0, 0)};
 	/// Tests: the requests of map pieces that wait for the time of --map-piece-delay-ms, with the time to send each
 	std::vector<std::pair<int64_t, std::function<void()>>> _delayedPieces;
 	std::optional<size_t> _shownLand;
@@ -443,9 +477,14 @@ private:
 	online::lobby::ListFilter _listFilter;
 	lobby_screens::Sort _listSort;
 	std::string _selectedLobby;
+	online::main_room::MainLobbyRoom _mainRoom;
 	lobby_screens::CreateForm _createForm;
 	bool _editsLobby {false};
 	std::u16string _lobbyMessageText;
+	/// The build id of this build, for a front end with no lobby sessions
+	std::string _ownBuild;
+	/// The lines of the room that tell of a game server of another version, which the front end showed
+	uint32_t _serverVersionLines {0};
 	/// What Yes does on a LobbyQuestion
 	enum class LobbyQuestionKind : uint8_t
 	{

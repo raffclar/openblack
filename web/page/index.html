@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- The page loads nothing from other sites and sends nothing to a server -->
+<!-- The page loads nothing from other sites. It sends nothing to a server, with two exceptions: the error reports, when
+     the player turns them on (for them, the build adds the address of the reports to connect-src), and the saved games
+     and creatures of a player who is signed in on the site, which the site's page around this page sends. -->
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>openblack</title>
@@ -14,12 +16,27 @@
 <main id="chooser">
   <h1>openblack</h1>
   <p class="build">Build <a class="build-link" target="_blank" rel="noopener">unknown</a></p>
-  <p>openblack plays Black &amp; White in this browser tab. It needs the folder of your own install of Black &amp; White.</p>
-  <p class="privacy">The game data stays on this computer. The page reads the files in this tab and sends nothing to a
+  <!-- The page shows the folder picker, or the game files of the site for an account with the mark for them
+       (launcher-assets.js). It shows neither until the site answers. -->
+  <p id="own-install-intro" hidden>openblack plays Black &amp; White in this browser tab. It needs the folder of your
+    own install of Black &amp; White.</p>
+  <p id="site-files-intro" hidden>openblack plays Black &amp; White in this browser tab. The site sends the game files of
+    your account to this browser, which keeps them for the next visit.</p>
+  <p id="own-install-privacy" class="privacy" hidden>The game data stays on this computer. The page reads the files in this tab and sends nothing to a
     server. The browser can show a message such as "Upload files to this site". That message is the standard text of the
-    browser: the page does not send the files.</p>
+    browser: the page does not send the files. When you turn on "Send Crash Reports" on the Options page of the game,
+    the game sends its error and crash reports with the game log to Sentry.</p>
 
-  <section id="sources">
+  <section id="site-files" hidden>
+    <h2>Game files</h2>
+    <p id="site-files-progress">The page asks the site for the game files.</p>
+    <!-- Without this choice, the page gets only the files for the start, and the game gets each other file when it
+         first reads it. With it, the page gets all the files, and the browser keeps the choice for the next visit. -->
+    <label><input id="site-files-all" type="checkbox"> Download all the game files now, so that the game never waits
+      for the network (about 700 MB)</label>
+  </section>
+
+  <section id="sources" hidden>
     <button id="pick-folder" type="button">Choose the Black &amp; White folder</button>
     <label id="folder-input-label" class="file-button">Choose the folder with the file dialog
       <input id="folder-input" type="file" webkitdirectory multiple>
@@ -64,7 +81,11 @@
   <button id="log-save" type="button">Save log</button>
 </aside>
 <script src="launcher-arguments.js"></script>
+<script src="launcher-buttons.js"></script>
 <script src="launcher-exit.js"></script>
+<script src="launcher-reports.js"></script>
+<script src="launcher-assets.js"></script>
+<script src="launcher-cloud.js"></script>
 <script src="launcher.js"></script>
 </body>
 </html>

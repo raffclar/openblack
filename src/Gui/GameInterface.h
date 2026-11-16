@@ -109,6 +109,9 @@ public:
 	void SetSymbolPictures(const creature_tattoo::Pictures& pictures);
 	/// What the player last chose in the menu, once
 	GameMenu::Action TakeAction();
+	/// A developer tool chooses an action as the menu chooses it, such as the start of a new game. The game takes it in
+	/// this frame, as it takes a choice of the menu.
+	void ChooseMenuAction(GameMenu::Action action) { TakeMenuAction(action); }
 	/// Whether the menu's settings changed since last asked
 	bool TakeSettingsChanged() { return _menu->TakeSettingsChanged(); }
 
@@ -246,6 +249,9 @@ public:
 	/// The game server took the player out of the game for the lobby's host: the box tells the player "<name> has kicked
 	/// you from the game." with an OK, with the name of the room. The OK goes as the OK of the lost connection does.
 	void ShowKicked(std::u16string_view roomName);
+	/// The game server refused the player because a file of the game data is not the server's: the box shows the text
+	/// with an OK (deviation 266). The OK goes as the OK of the lost connection does.
+	void ShowDataRefused(std::u16string_view text);
 	/// The box of the lost connection went since this was last asked: true once. The OK goes back to the network front
 	/// end.
 	[[nodiscard]] bool TakeConnectionLostOk() { return std::exchange(_connectionLostOk, false); }

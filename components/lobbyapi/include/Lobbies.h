@@ -447,6 +447,12 @@ struct LobbyStateEvent
 	std::string url;
 	/// "reason": the reason of a close, for example "host_closed"
 	std::string reason;
+	/// "server_build": the build id of the game server, with the "why" "wrong_version". The server did not start, because
+	/// its build is not the build of the lobby.
+	std::string serverBuild;
+	/// "expected": the build id that the service needs now, with the "why" "wrong_version". A player of another build
+	/// must get the new version. Empty when the service did not give it.
+	std::string expected;
 };
 
 /// The codes of the problems that the calls of the lobbies give ("code" of the problem)
@@ -475,6 +481,8 @@ constexpr std::string_view k_TooManyLobbies = "too_many_lobbies";
 constexpr std::string_view k_NoLobby = "none";
 constexpr std::string_view k_NotHost = "not_host";
 constexpr std::string_view k_NotOpen = "not_open";
+/// The cancel of a start found no start that runs: the start stopped already
+constexpr std::string_view k_NotStarting = "not_starting";
 /// The new map of the host has fewer slots than the players of the lobby
 constexpr std::string_view k_TooManyPlayers = "too_many_players";
 } // namespace lobby_problems

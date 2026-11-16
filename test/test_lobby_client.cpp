@@ -1217,3 +1217,98 @@ TEST_F(LobbyClientTest, ApiCallsNeedALobby)
 	EXPECT_EQ(kind, LobbyErrorKind::NotConfigured);
 	EXPECT_TRUE(_http.sent.empty());
 }
+
+TEST_F(LobbyClientTest, EachSessionAnswerGivesTheEditorRightOfTheAccount)
+{
+	Make();
+	// With no account logged in, the right is not known
+	EXPECT_FALSE(_client->GetAccountEditor().has_value());
+	_client->Login("abc", "secret", [](auto&& /*result*/) {});
+	_http.Answer(201, R"({"access_token":"access1","access_token_expires":"2026-10-22T10:15:00Z",)"
+	                  R"("refresh_token":"refresh1","refresh_token_expires":"2026-11-21T10:00:00Z",)"
+	                  R"("account":{"id":7,"name":"abc"},"editor":true})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(true));
+
+	// Staff took the right away: the next refresh of the access token gives the new value
+	_now += 15min;
+	_client->GetMe([](auto&& /*result*/) {});
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/sessions/refresh");
+	_http.Answer(200, k_Rotated);
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	_http.Answer(200, R"({"id":7,"name":"abc"})");
+
+	_client->Logout(false, [](auto&& /*result*/) {});
+	_http.Answer(204, "");
+	EXPECT_FALSE(_client->GetAccountEditor().has_value());
+}
+
+TEST_F(LobbyClientTest, AnAnswerWithNoEditorFieldGivesNoRight)
+{
+	// An older lobby sends no "editor" field
+	const auto session = lobby_api::ParseSession(k_Session);
+	ASSERT_TRUE(session.has_value());
+	EXPECT_FALSE(session->editor);
+	const auto granted = lobby_api::ParseSession(
+	    R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z","account":{"id":7,"name":"abc"},"editor":true})");
+	ASSERT_TRUE(granted.has_value());
+	EXPECT_TRUE(granted->editor);
+	// A field of the wrong type makes the answer bad
+	EXPECT_FALSE(
+	    lobby_api::ParseSession(
+	        R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z","account":{"id":7,"name":"abc"},"editor":1})")
+	        .has_value());
+}
+
+TEST_F(LobbyClientTest, TheLoginAtTheStartUsesTheStoredTokenAndOpensNoPushChannel)
+{
+	_kept = "stored";
+	Make();
+	_client->SignInAtStart();
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/sessions/refresh");
+	_http.Answer(200, k_Rotated);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedIn);
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	EXPECT_EQ(_push->opens, 0);
+
+	// The multiplayer screens then use the session, and the push channel opens
+	std::optional<lobby_api::AccountRef> account;
+	_client->ResumeSession([&](auto&& result) { account = result.value; });
+	ASSERT_TRUE(account.has_value());
+	EXPECT_EQ(_push->opens, 1);
+}
+
+TEST_F(LobbyClientTest, TheLoginAtTheStartWithNoTokenSendsNothing)
+{
+	Make();
+	_client->SignInAtStart();
+	EXPECT_TRUE(_http.sent.empty());
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+	EXPECT_FALSE(_client->GetAccountEditor().has_value());
+
+	// With no lobby, the login at the start does nothing
+	Make(lobby_api::ClientKind::Desktop, false);
+	_client->SignInAtStart();
+	EXPECT_TRUE(_http.sent.empty());
+}
+
+TEST_F(LobbyClientTest, TheBrowserGameLogsInAtTheStartWithTheSignInOfTheSite)
+{
+	Make(lobby_api::ClientKind::Browser, true, true);
+	_client->SignInAtStart();
+	EXPECT_TRUE(_http.sent.empty());
+	ASSERT_EQ(_site->asked.size(), 1u);
+	_site->Answer(200, R"({"token_type":"Bearer","access_token":"site1","access_token_expires":"2026-10-22T10:15:00Z",)"
+	                   R"("account":{"id":7,"name":"abc"},"email_required":false,"editor":true})");
+	EXPECT_TRUE(_client->IsSignedInFromSite());
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(true));
+	EXPECT_EQ(_push->opens, 0);
+
+	_client->SignInFromSite([](auto&& /*result*/) {});
+	EXPECT_EQ(_push->opens, 1);
+
+	// The renewal from the site gives the right again
+	_now += 15min;
+	_client->GetMe([](auto&& /*result*/) {});
+	_site->Answer(200, k_SiteRenewed);
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+}

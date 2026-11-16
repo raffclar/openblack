@@ -69,6 +69,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/Football.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
@@ -104,6 +105,7 @@
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -125,6 +127,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -911,13 +914,13 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::TakeIconSeed || command.kind == Kind::TapSiteIcon || command.kind == Kind::TapStoneHand ||
 	    command.kind == Kind::TapTempleEntrance || command.kind == Kind::FinishBuilding ||
 	    command.kind == Kind::ScaffoldStartsSite || command.kind == Kind::DestroyScaffoldSite ||
-	    command.kind == Kind::ScaffoldClearsGround || command.kind == Kind::FillBuiltAmount ||
-	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
-	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::ObserverCamera ||
-	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
-	    command.kind == Kind::ComputerUntaughtSends || command.kind == Kind::HandCastOnDispenser ||
-	    command.kind == Kind::HandCastOnCreature || command.kind == Kind::CloseHeldMiracle ||
-	    command.kind == Kind::JoinFootball)
+	    command.kind == Kind::DestroyObjectByEffect || command.kind == Kind::ScaffoldClearsGround ||
+	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
+	    command.kind == Kind::ObserverCamera || command.kind == Kind::OwnGod || command.kind == Kind::BringCreature ||
+	    command.kind == Kind::ComputerPersonality || command.kind == Kind::ComputerUntaughtSends ||
+	    command.kind == Kind::HandCastOnDispenser || command.kind == Kind::HandCastOnCreature ||
+	    command.kind == Kind::CloseHeldMiracle || command.kind == Kind::JoinFootball)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -1400,6 +1403,54 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 			return std::nullopt;
 		}
 		return static_cast<double>(Locator::magicShieldSystem::value().GetDomes(0.0f).size());
+	case checks::Quantity::CreatureInDuel:
+	case checks::Quantity::CreatureFightHealth:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value() || !Locator::creatureFightSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& fights = Locator::creatureFightSystem::value();
+		if (check.quantity == checks::Quantity::CreatureInDuel)
+		{
+			return fights.IsDuelling(*creature) ? 1.0 : 0.0;
+		}
+		return static_cast<double>(fights.GetFightHealth(*creature));
+	}
+	case checks::Quantity::FootballMatchState:
+	{
+		const auto object = ObjectAt(check.index);
+		const auto* pitch = object.has_value() ? registry.TryGet<const ecs::components::FootballPitch>(*object) : nullptr;
+		if (pitch == nullptr)
+		{
+			return std::nullopt;
+		}
+		return static_cast<double>(pitch->match.state);
+	}
+	case checks::Quantity::CreatureDuels:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto* record = registry.TryGet<const ecs::components::CreatureFightRecord>(*creature);
+		return record != nullptr ? static_cast<double>(record->fights) : 0.0;
+	}
+	case checks::Quantity::HandMayTake:
+	{
+		const auto object = ObjectAt(check.index);
+		const auto* transform = object.has_value() ? registry.TryGet<const ecs::components::Transform>(*object) : nullptr;
+		if (transform == nullptr || !Locator::handGrabSystem::has_value() || !Locator::influenceSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		// The hand takes a thing where the thing is, so the influence is read at the place of the thing
+		const bool inInfluence =
+		    Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, transform->position);
+		return inInfluence && Locator::handGrabSystem::value().WhyNotTake(*object).empty() ? 1.0 : 0.0;
+	}
 	}
 	return std::nullopt;
 }

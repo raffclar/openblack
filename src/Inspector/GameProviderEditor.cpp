@@ -7,21 +7,29 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include <fmt/format.h>
+#include <glm/vec2.hpp>
+
+#include "Common/CreatureEditValues.h"
 #include "Common/DebugCheats.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "Editor/EditorCreatureActs.h"
+#include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
+#include "Story/StoryLandSkip.h"
 
 using namespace openblack;
 using namespace openblack::inspector;
@@ -53,7 +61,7 @@ namespace
 	{
 		return std::nullopt;
 	}
-	return QueryResult::Error("the editor is refused: only a staff player opens the editor in a network game");
+	return QueryResult::Error("the editor is refused: only a player with the editor right opens the editor");
 }
 
 } // namespace
@@ -65,7 +73,9 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("editor");
 	provider->Add(Query("state", "The editor of this computer: whether it is open, whether a network game is live, whether "
-	                             "the player of this computer is staff, and the debug cheats of that player"),
+	                             "the player of this computer has the editor right (from the join ticket in a network game, "
+	                             "else from the signed-in account: granted, refused or unknown), what the debug windows "
+	                             "show, and the debug cheats of that player"),
 	              [](const QueryContext& /*context*/) {
 		              Json cheats = Json::array();
 		              const auto own = editor::OwnDebugCheats();
@@ -80,7 +90,9 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		              return QueryResult::Value({
 		                  {"open", Locator::editorSystem::has_value() && Locator::editorSystem::value().IsOpen()},
 		                  {"network", developer_tools::NetworkSessionLive()},
-		                  {"staff", developer_tools::LocalPlayerIsStaff()},
+		                  {"editor", developer_tools::LocalEditorRight() == developer_tools::EditorRight::Granted},
+		                  {"right", std::string(developer_tools::NameOf(developer_tools::LocalEditorRight()))},
+		                  {"mode", std::string(developer_tools::NameOf(developer_tools::CurrentGuiMode()))},
 		                  {"cheats", std::move(cheats)},
 		              });
 	              });
@@ -108,7 +120,8 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	auto edit = Query(
 	    "network_edit",
 	    "Sends an edit of the editor as a command of the turns, as the editor of a network game sends it: each computer "
-	    "does it at the same turn, and the game server takes it only from a staff player. force sends it also when the "
+	    "does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also "
+	    "when the "
 	    "editor of this computer is refused, so that a test sees the refusal of the server.",
 	    {{.name = "kind", .type = "string", .description = "move, turn, place or remove", .required = true},
 	     {.name = "id", .type = "integer", .description = "The thing of a move, a turn or a removal", .required = false},
@@ -119,6 +132,11 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	     {.name = "radians", .type = "number", .description = "The angle of a turn or a placement", .required = false},
 	     {.name = "place_kind", .type = "integer", .description = "The kind of the palette item (place)", .required = false},
 	     {.name = "place_type", .type = "integer", .description = "The type of the palette item (place)", .required = false},
+	     {.name = "copies",
+	      .type = "integer",
+	      .description = "Placements in a row from the position, all in one frame (place; 1 when not given)",
+	      .required = false},
+	     {.name = "step", .type = "point", .description = "[x, z] from each placement to the next (place)", .required = false},
 	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
 	edit.writes = true;
 	provider->Add(std::move(edit), [](const QueryContext& context) {
@@ -171,14 +189,130 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		{
 			return QueryResult::Error(std::string(*refusal));
 		}
-		Locator::playerCommandSystem::value().Submit(command);
-		return QueryResult::Value({{"sent", true}});
+		// A tool sends a row of placements in one frame, so that they go in the same turn
+		const auto count = command.kind == EditorEdit::Kind::Place
+		                       ? std::clamp(static_cast<int>(NumberParam(context.params, "copies").value_or(1.0f)), 1, 256)
+		                       : 1;
+		glm::vec2 step {0.0f};
+		if (const auto found = context.params.find("step"); found != context.params.end() && found->is_array() &&
+		                                                    found->size() == 2 && (*found)[0].is_number() &&
+		                                                    (*found)[1].is_number())
+		{
+			step = {(*found)[0].get<float>(), (*found)[1].get<float>()};
+		}
+		const auto start = command.position;
+		for (int index = 0; index < count; ++index)
+		{
+			if (index > 0)
+			{
+				const glm::vec2 point {start.x + step.x * static_cast<float>(index),
+				                       start.z + step.y * static_cast<float>(index)};
+				command.position = {point.x, editor::LandHeight(point), point.y};
+			}
+			Locator::playerCommandSystem::value().Submit(command);
+		}
+		return QueryResult::Value({{"sent", count}});
 	});
 
+	auto creatureEdit = Query(
+	    "creature_edit",
+	    "Sends a change of a value of a creature as a command of the turns, as the creature section of the editor sends it "
+	    "in a network game: each computer does it at the same turn, and the game server takes it only from a player with the "
+	    "editor claim. force sends it also when the editor of this computer is refused.",
+	    {{.name = "id", .type = "integer", .description = "The creature", .required = true},
+	     {.name = "value",
+	      .type = "string",
+	      .description = "alignment, fatness, strength, size, energy, exhaustion, thirst, poo, life, warmth, itchiness or "
+	                     "grown up",
+	      .required = true},
+	     {.name = "amount", .type = "number", .description = "The new amount of the value", .required = true},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	creatureEdit.writes = true;
+	provider->Add(std::move(creatureEdit), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto entity = EntityParam(context.params);
+		const auto nameParam = context.params.find("value");
+		const auto name =
+		    nameParam != context.params.end() && nameParam->is_string() ? nameParam->get<std::string>() : std::string();
+		const auto value = creature_edit_values::ValueNamed(name);
+		const auto amount = NumberParam(context.params, "amount");
+		if (!entity.has_value() || !value.has_value() || !amount.has_value())
+		{
+			return QueryResult::Error("editor.creature_edit needs the id of a creature, the name of a value and an amount");
+		}
+		editor::SendCreatureEdit(*entity, *value, *amount);
+		return QueryResult::Value({{"sent", true}});
+	});
+	auto creatureAct =
+	    Query("creature_act",
+	          "Sends an act of the creature tools as a command of the turns, as the tabs of the creature section send it in a "
+	          "network game: each computer does it at the same turn, and the game server takes it only from a player with the "
+	          "editor claim. force sends it also when the editor of this computer is refused.",
+	          {{.name = "id",
+	            .type = "integer",
+	            .description = "The creature (none for an act on every creature)",
+	            .required = false},
+	           {.name = "act", .type = "string", .description = "The name of the act, such as \"sit down\"", .required = true},
+	           {.name = "other", .type = "integer", .description = "The other thing of the act", .required = false},
+	           {.name = "position", .type = "array", .description = "The place of the act [x, y, z]", .required = false},
+	           {.name = "amount", .type = "number", .description = "The amount of the act", .required = false},
+	           {.name = "index", .type = "integer", .description = "The index of the act in its list", .required = false},
+	           {.name = "args", .type = "array", .description = "Up to six small numbers of the act", .required = false},
+	           {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	creatureAct.writes = true;
+	provider->Add(std::move(creatureAct), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto nameParam = context.params.find("act");
+		const auto name =
+		    nameParam != context.params.end() && nameParam->is_string() ? nameParam->get<std::string>() : std::string();
+		const auto kind = creature_edit_acts::ActNamed(name);
+		if (!kind.has_value())
+		{
+			return QueryResult::Error("editor.creature_act needs the name of an act");
+		}
+		player_commands::EditorCreatureAct act {.creature = EntityParam(context.params).value_or(entt::null),
+		                                        .act = static_cast<uint8_t>(*kind)};
+		if (const auto other = context.params.find("other"); other != context.params.end() && other->is_number_integer())
+		{
+			act.other = static_cast<entt::entity>(other->get<uint32_t>());
+		}
+		if (const auto position = context.params.find("position");
+		    position != context.params.end() && position->is_array() && position->size() == 3)
+		{
+			act.position = {(*position)[0].get<float>(), (*position)[1].get<float>(), (*position)[2].get<float>()};
+		}
+		act.amount = NumberParam(context.params, "amount").value_or(0.0f);
+		if (const auto index = context.params.find("index"); index != context.params.end() && index->is_number_integer())
+		{
+			act.index = index->get<uint16_t>();
+		}
+		if (const auto args = context.params.find("args"); args != context.params.end() && args->is_array())
+		{
+			for (size_t i = 0; i < std::min(args->size(), act.args.size()); ++i)
+			{
+				act.args.at(i) = (*args)[i].get<uint8_t>();
+			}
+		}
+		if (const auto refusal = editor::ActRefusal(act))
+		{
+			return QueryResult::Error(fmt::format("editor.creature_act refuses the act: {}", *refusal));
+		}
+		if (Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(act);
+		}
+		return QueryResult::Value({{"sent", true}});
+	});
 	auto cheat =
 	    Query("cheat",
 	          "Sends a debug cheat of the player of this computer as a command of the turns, as the cheats tab "
-	          "of the editor does. The game server takes it only from a staff player. force sends it also when "
+	          "of the editor does. The game server takes it only from a player with the editor claim. force sends it also when "
 	          "the editor of this computer is refused.",
 	          {{.name = "cheat", .type = "string", .description = "The name of the cheat", .required = true},
 	           {.name = "on", .type = "boolean", .description = "On (the default) or off", .required = false},
@@ -200,6 +334,34 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		const auto cheatOf = static_cast<debug_cheats::Cheat>(found - debug_cheats::k_CheatNames.begin());
 		editor::SendDebugCheat(cheatOf, BoolParam(context.params, "on", true));
 		return QueryResult::Value({{"sent", true}});
+	});
+	auto landSkip =
+	    Query("land_skip",
+	          "Sends the skip to a land of the story, 2 to 5, as a command of the turns, as the cheats tab of the "
+	          "editor does. The story changes the land as at the end of the land before. Only a game of the story "
+	          "on this computer alone does it. The skip to land 1 starts a new game, so only the editor does it.",
+	          {{.name = "land", .type = "integer", .description = "The land of the story, 2 to 5", .required = true}});
+	landSkip.writes = true;
+	provider->Add(std::move(landSkip), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto landParam = context.params.find("land");
+		if (landParam == context.params.end() || !landParam->is_number_integer())
+		{
+			return QueryResult::Error("editor.land_skip needs the land, 2 to 5");
+		}
+		const auto land = landParam->get<int32_t>();
+		if (!story_land_skip::GoesAsCommand(land))
+		{
+			return QueryResult::Error("editor.land_skip takes only the lands 2 to 5");
+		}
+		if (!editor::SendStoryLandSkip(land))
+		{
+			return QueryResult::Error("editor.land_skip: this game is not a game of the story on this computer alone");
+		}
+		return QueryResult::Value({{"sent", true}, {"land", land}});
 	});
 	return provider;
 }

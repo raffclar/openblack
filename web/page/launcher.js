@@ -1,6 +1,7 @@
 // openblack web page: it gets the user's Black & White folder, checks the install and starts the game.
 //
-// The page sends nothing to a server. It reads the game data only with the local file interfaces of the browser:
+// The page sends nothing to a server. It gets the game data in one of these ways:
+// - the game files of the site (launcher-assets.js), for an account with the mark for them, with no folder picker,
 // - the folder picker (Chrome, Edge), which reads the install in place and keeps the choice of the folder,
 // - a file input or a dropped folder (all browsers), which give local File objects,
 // - an optional copy in the private storage of the site (OPFS), for browsers that cannot keep the choice of a folder.
@@ -138,19 +139,23 @@ const k_DiagnosticTail = 40;
 // What the page found out for the report: the renderer and its adapter, and the size of the canvas
 const diagnostics = { renderer: 'not chosen', adapter: 'not known', canvas: 'not known' };
 
-/** Write a line of the page to the game log, with the tag of the page */
+// The error and crash reports to Sentry (launcher-reports.js). The game starts and stops them with the option of the
+// player. Until the game starts them, the page sends nothing.
+const errorReports = new ErrorReports({
+  loadSdk: () => loadSentryScript(document),
+  logText: () => logLines.join('\n'),
+  log: (text) => log(k_PageTag + text),
+});
+globalThis.openblackErrorReports = errorReports;
+
+/** Write a line of the page to the game log, with the tag of the page. The line is also a breadcrumb of the reports. */
 function pageLog(text) {
   log(k_PageTag + text);
+  errorReports.breadcrumb('page', text);
 }
 globalThis.openblackPageLog = pageLog;
 
-/** The text with each secret in it replaced by a mark, as the game does (MaskSecrets) */
-function maskSecrets(text) {
-  return text
-    .replace(/v4\.(public|local)\.[A-Za-z0-9_\-.=+/]+/g, '<hidden>')
-    .replace(/Bearer [A-Za-z0-9_\-.=+/]+/g, '<hidden>')
-    .replace(/(\w*(?:ticket|password|token|session|secret)\w*"?\s*[=:]\s*"?)([^"\s,;&]+)/gi, '$1<hidden>');
-}
+// The masks of the secrets in the texts of the diagnostics come from maskSecrets in launcher-reports.js
 
 /** The text of the report of "Copy diagnostics": the build, the browser, the renderer and the last lines of the logs */
 async function diagnosticsReport() {
@@ -563,12 +568,13 @@ function watchGameFrames(gameFrames, displayFrames) {
 
 // The game stopped on an error of the browser: the page keeps one report, then shows the reports
 let pageCrashKept = false;
-async function gameFailed(reason) {
+async function gameFailed(reason, error) {
   if (pageCrashKept) {
     return;
   }
   pageCrashKept = true;
   log(`The game stopped on an error: ${reason}`);
+  errorReports.pageFailed(reason, error);
   const kept = await keepPageCrashReport(reason);
   if (!kept || (await showCrashReports('The game stopped on an error',
     'The browser keeps the crash reports below. The "Save log" button gives the whole game log.', true)) === 0) {
@@ -612,9 +618,110 @@ function copyToStorage(entries) {
   });
 }
 
+// ------------------------------------------------------------------------------------------------ the game files of the site
+
+/** The number of bytes as megabytes, for the player */
+function megabytes(bytes) {
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
+}
+
+/**
+ * When the site gives the game files to the account, the page keeps them in this browser and chooses them, with no
+ * folder picker. Gives false when the site refuses them or the page cannot get them: the player then chooses a folder.
+ */
+// The choice of the player to get all the game files before the start, which the browser keeps for the next visit
+const k_DownloadAllKey = 'openblack.downloadAllGameFiles';
+
+/** True when the player chose to get all the game files before the start. A browser with no storage gives false. */
+function wantsAllGameFiles() {
+  try {
+    return localStorage.getItem(k_DownloadAllKey) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function keepAllGameFilesChoice(all) {
+  try {
+    localStorage.setItem(k_DownloadAllKey, all ? '1' : '0');
+  } catch {
+    // The browser keeps no storage for the page. The choice is only for this visit.
+  }
+}
+
+// The store of the game files that the site streams, while the game plays them (see launcher-assets.js)
+let siteFiles = null;
+
+async function useSiteGameFiles() {
+  const fetchFile = (address, options) => fetch(address, options);
+  const answer = await fetchAssetIndex(fetchFile);
+  if (!answer.granted) {
+    log(`The site gives no game files to this account (status ${answer.status}): ${answer.reason || 'no reason'}.`);
+    return false;
+  }
+  const root = await storageRoot();
+  if (!root) {
+    log('The site gives the game files, but this browser has no private storage for them.');
+    return false;
+  }
+  element('site-files-intro').hidden = false;
+  element('site-files').hidden = false;
+  const progress = element('site-files-progress');
+  let shown = '';
+  let last = { bytes: 0, files: 0 };
+  const show = (state) => {
+    last = state;
+    const percent = state.totalBytes === 0 ? 100 : Math.floor(100 * state.bytes / state.totalBytes);
+    const text = state.totalFiles === 0
+      ? 'This browser has all the game files already.'
+      : `The page gets the game files from the site: ${percent}% (${megabytes(state.bytes)} of ` +
+        `${megabytes(state.totalBytes)}, ${state.files} of ${state.totalFiles} files).`;
+    if (text !== shown) {
+      shown = text;
+      progress.textContent = text;
+    }
+  };
+  log(`The site gives ${answer.index.files.length} game files (${megabytes(answer.index.totalBytes)}).`);
+  const allBox = element('site-files-all');
+  allBox.checked = wantsAllGameFiles();
+  // A player who chooses it after the start of the download gets the other files after the start files
+  const getAll = () => siteFiles && allBox.checked && siteFiles.store.prefetch(siteFiles.store.files.map((_, number) => number));
+  allBox.addEventListener('change', () => {
+    keepAllGameFilesChoice(allBox.checked);
+    getAll();
+  });
+  const all = allBox.checked;
+  try {
+    const { entries, store, blockSize } = await streamAssets(answer.index, {
+      fetchFile, digest: (algorithm, bytes) => crypto.subtle.digest(algorithm, bytes), root,
+      wanted: isGameFile, progress: show, all,
+      share: (number, block, file) => globalThis.Module?.openblackWeb?.shareGameFile?.(number, block, file),
+      log,
+    });
+    siteFiles = { store, blockSize };
+    getAll();
+    log(`The page downloaded ${last.files} game files and blocks (${megabytes(last.bytes)}). The browser kept the ` +
+      'other files.');
+    progress.textContent = all
+      ? 'This browser has all the game files. The next visit downloads only the files that change.'
+      : 'This browser has the game files for the start. The game gets the other files from the site when it reads ' +
+        'them.';
+    await choose(entries, 'the site', { copyAllowed: false });
+    return true;
+  } catch (error) {
+    element('site-files-intro').hidden = true;
+    element('site-files').hidden = true;
+    showMessage('The page cannot get the game files from the site',
+      `${error.message || error}. Load the page again to continue the download, or choose your own folder.`);
+    return false;
+  }
+}
+
 // ------------------------------------------------------------------------------------------------ start
 
 let chosen = null;
+// The saved games and creatures on the site (launcher-cloud.js)
+let cloudSaves = null;
 
 // The game thread draws into an OffscreenCanvas. In the frames of its game loop, the thread gives control back to the
 // browser after each frame, and the browser shows the game canvas. While it draws other frames, such as a loading
@@ -635,7 +742,7 @@ function showFrame(frame) {
   screenContext.transferFromImageBitmap(frame);
 }
 
-async function choose(entries, source) {
+async function choose(entries, source, { copyAllowed = source !== 'the copy in this browser' } = {}) {
   chosen = entries;
   const check = checkInstall(entries);
   const list = element('check-list');
@@ -657,7 +764,7 @@ async function choose(entries, source) {
   element('check').hidden = false;
   setPlayEnabled(false);
   log(`The page has ${entries.length} files from ${source}. Missing: ${check.missing.join(', ') || 'none'}.`);
-  if (check.missing.length === 0 && element('keep-copy').checked && source !== 'the copy in this browser') {
+  if (check.missing.length === 0 && element('keep-copy').checked && copyAllowed) {
     await copyToStorage(entries);
   }
   setPlayEnabled(check.missing.length === 0);
@@ -790,6 +897,42 @@ async function addToolFiles(parameters) {
   }
 }
 
+/**
+ * The folder for the game threads: the files of the chosen folder, or the files and the blocks that the page has of the
+ * files that the site streams, with an empty place for each file that it does not have yet.
+ */
+function gameFolder(list) {
+  if (!siteFiles) {
+    return { list, files: chosen.map((entry) => entry.file) };
+  }
+  const { store, blockSize } = siteFiles;
+  const inStore = (number) => number < store.files.length && chosen[number].path === store.files[number].path;
+  return {
+    list,
+    blockSize,
+    files: chosen.map((entry, number) => (inStore(number) ? store.fileOf(number) : entry.file)),
+    blocks: chosen.map((entry, number) => (inStore(number) && store.files[number].blocks ? store.blocksOf(number) : null)),
+  };
+}
+
+// The game files that a game thread read and the page got from the site, for the log
+const obtainedGameFiles = new Set();
+
+/**
+ * A game thread reads bytes of a game file that the page does not have. The page gets them first, then the files that
+ * the game will probably read next.
+ */
+async function obtainGameFile(number, offset, length) {
+  const { store } = siteFiles;
+  const file = store.files[number];
+  if (!obtainedGameFiles.has(number)) {
+    obtainedGameFiles.add(number);
+    log(`The game reads ${file.path}, which the page gets from the site now.`);
+  }
+  await store.obtain(number, offset, length);
+  store.prefetch(planAssetPrefetch(store.files, { path: file.path, have: (sha256) => store.kept.has(sha256) }));
+}
+
 async function start(online = false) {
   if (!chosen) {
     return;
@@ -802,6 +945,9 @@ async function start(online = false) {
     return;
   }
   setPlayEnabled(false);
+  // The saved games and creatures from the site come back before the game starts, because the game reads its
+  // profiles at the start. Then the game owns the Profiles folder, and the page only reads it.
+  await waitForCloudRestore(cloudSaves);
   const storage = (await storageRoot()) !== undefined;
   if (storage && navigator.storage.persist) {
     // Ask the browser to keep the saves when it needs space
@@ -811,10 +957,15 @@ async function start(online = false) {
   const developer = await developerTools;
   if (developer) {
     await addToolFiles(parameters);
+    // A developer run can give its reports another environment, such as "lane-test", so that the tests do not mix
+    // with the reports of the players
+    if (parameters.get('sentry-environment')) {
+      errorReports.environment = parameters.get('sentry-environment');
+    }
   } else if (parameters.has('args') || parameters.has('tool-file')) {
     log('This build has no developer tools: the page ignores the parameters "args" and "tool-file".');
   }
-  const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
+  const list = chosen.map((entry, index) => `${index}\t${entry.size ?? entry.file.size}\t${entry.path}`).join('\n');
   // The page takes the arguments of a player from a list (launcher-arguments.js), and "args" in a developer build.
   // With no profile, the multiplayer front end asks for the new player's name first.
   const gameArguments = playerArguments(parameters, developer, online);
@@ -876,14 +1027,14 @@ async function start(online = false) {
     print: log,
     printErr: log,
     openblackWeb: {
-      folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
-      requests, displayFrames, gameFrames,
+      folder: gameFolder(list), storage, version: version.file, showFrame, setPresent, requests, displayFrames, gameFrames,
+      obtainGameFile: siteFiles ? obtainGameFile : undefined,
     },
     onExit: (code) => {
       log(`The game stopped with the code ${code}.`);
       leaveForHome(code);
     },
-    onAbort: (reason) => gameFailed(String(reason)),
+    onAbort: (reason) => gameFailed(String(reason), reason),
   };
   // An error on a game thread that the game does not catch, such as a WebAssembly trap, comes to the page as an error.
   // The page ignores the error of the size watch of the browser, which is harmless.
@@ -897,12 +1048,22 @@ async function start(online = false) {
         'Make sure that the network works, then load the page again.'
       : (event.error && event.error.message) || event.message || String(event.error);
     if (!reason.includes('ResizeObserver')) {
-      gameFailed(reason);
+      gameFailed(reason, event.error);
     }
+  });
+  // A promise of the page that failed with no code to take the error does not stop the game. It goes to the reports
+  // as an error.
+  window.addEventListener('unhandledrejection', (event) => {
+    errorReports.pageError(event.reason);
   });
   const script = document.createElement('script');
   script.src = 'openblack.js';
   document.body.append(script);
+  // After the start, the page gets the files that the first land can read in its play, one at a time
+  if (siteFiles) {
+    const { store } = siteFiles;
+    store.prefetch(planAssetPrefetch(store.files, { have: (sha256) => store.kept.has(sha256) }));
+  }
 }
 
 async function main() {
@@ -991,6 +1152,10 @@ async function main() {
 
   showCrashReports('Crash reports', 'The browser keeps these crash reports of earlier games.');
 
+  if (await storageRoot()) {
+    cloudSaves = startCloudSaves({ log });
+  }
+
   const copy = await keptCopy();
   if (copy) {
     const useCopy = element('use-copy');
@@ -1005,6 +1170,13 @@ async function main() {
   element('play-online').addEventListener('click', () => start(true));
   if (parameterIsOn(new URLSearchParams(location.search), 'multiplayer')) {
     element('play').hidden = true;
+  }
+
+  // An account with the mark for the game files gets them from the site. The other players choose their own folder.
+  if (!(await useSiteGameFiles())) {
+    for (const id of ['own-install-intro', 'own-install-privacy', 'sources']) {
+      element(id).hidden = false;
+    }
   }
 }
 

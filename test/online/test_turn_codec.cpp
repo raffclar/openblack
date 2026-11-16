@@ -22,6 +22,8 @@
 #include <gtest/gtest.h>
 
 #include "Commands/TurnCodec.h"
+#include "Common/CreatureEditActs.h"
+#include "Common/CreatureEditValues.h"
 #include "Common/DebugCheats.h"
 #include "PlayerSlots.h"
 
@@ -147,6 +149,15 @@ std::vector<Action> EachCommand()
 	                .position = {1.0f, 2.0f, 3.0f},
 	                .radians = 0.5f},
 	    DebugCheat {.cheat = 1, .on = true},
+	    EditorCreatureEdit {.creature = Entity(32), .value = 3, .amount = 1.25f},
+	    EditorCreatureAct {.creature = Entity(33),
+	                       .act = 4,
+	                       .other = Entity(34),
+	                       .position = {4.0f, 5.0f, 6.0f},
+	                       .amount = 0.5f,
+	                       .index = 300,
+	                       .args = {1, 2, 3, 4, 5, 6}},
+	    DebugLandSkip {.land = 3},
 	};
 }
 
@@ -187,7 +198,7 @@ Action RandomAction(std::mt19937& random)
 		return value;
 	};
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 56)
+	switch (bits(random) % 59)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -399,6 +410,22 @@ Action RandomAction(std::mt19937& random)
 	case 54:
 		return DebugCheat {.cheat = static_cast<uint8_t>(bits(random) % debug_cheats::k_CheatCount),
 		                   .on = (bits(random) % 2) == 1};
+	case 55:
+		return EditorCreatureEdit {.creature = entity(),
+		                           .value = static_cast<uint8_t>(bits(random) % creature_edit_values::k_ValueCount),
+		                           .amount = number()};
+	case 56:
+		return EditorCreatureAct {.creature = entity(),
+		                          .act = static_cast<uint8_t>(bits(random) % creature_edit_acts::k_ActCount),
+		                          .other = entity(),
+		                          .position = vector(),
+		                          .amount = number(),
+		                          .index = static_cast<uint16_t>(bits(random)),
+		                          .args = {static_cast<uint8_t>(bits(random)), static_cast<uint8_t>(bits(random)),
+		                                   static_cast<uint8_t>(bits(random)), static_cast<uint8_t>(bits(random)),
+		                                   static_cast<uint8_t>(bits(random)), static_cast<uint8_t>(bits(random))}};
+	case 57:
+		return DebugLandSkip {.land = static_cast<uint8_t>(2 + (bits(random) % 4))};
 	default:
 		return PlayerLeft {};
 	}
@@ -461,9 +488,9 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5,  9,  5, 53, 5, 10, 18, 5,  49, 17, 5, 5,  5,  9,  12, 1,  18, 11,
-	                                 5,  19, 15, 7, 5,  1, 2,  1,  61, 5,  2,  1, 13, 10, 18, 1,  58, 1,  5,
-	                                 51, 5,  16, 7, 1,  1, 13, 1,  2,  9,  13, 1, 1,  8,  1,  5,  31, 3};
+	const std::vector<size_t> sizes {2,  5,  9, 5, 53, 5, 10, 18, 5,  49, 17, 5,  5,  5,  9,  12, 1,  18, 11, 5,
+	                                 19, 15, 7, 5, 1,  2, 1,  61, 5,  2,  1,  13, 10, 18, 1,  58, 1,  5,  51, 5,
+	                                 16, 7,  1, 1, 13, 1, 2,  9,  13, 1,  1,  8,  1,  5,  31, 3,  10, 34, 2};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -498,6 +525,20 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		{
 			tag = 56;
 		}
+		// The edit and the act of a creature by the editor have the tags 57 and 58
+		if (std::holds_alternative<EditorCreatureEdit>(commands[i]))
+		{
+			tag = 57;
+		}
+		if (std::holds_alternative<EditorCreatureAct>(commands[i]))
+		{
+			tag = 58;
+		}
+		// The skip to a land of the story has the tag 59
+		if (std::holds_alternative<DebugLandSkip>(commands[i]))
+		{
+			tag = 59;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
@@ -526,6 +567,57 @@ TEST(TurnCodec, TheDecoderRefusesABadEditOrCheat)
 	auto notBool = cheat;
 	notBool[k_FirstField + 1] = 2;
 	EXPECT_EQ(Decode(notBool).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, TheDecoderTakesOnlyASkipToALandOfTheStoryAfterTheFirst)
+{
+	auto skip = Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {DebugLandSkip {.land = 5}}}});
+	// The command starts after the version, the kind, the sequence, the turn and the count. Its tag comes first.
+	constexpr size_t k_Land = 10;
+	ASSERT_EQ(skip.size(), k_Land + 1);
+	const auto back = Decode(skip);
+	ASSERT_EQ(back.error, DecodeError::None);
+	EXPECT_EQ(std::get<DebugLandSkip>(std::get<CommandBlock>(*back.frame).actions[0]), (DebugLandSkip {.land = 5}));
+	for (const uint8_t land : {0, 1, 6, 255})
+	{
+		auto bad = skip;
+		bad[k_Land] = land;
+		EXPECT_EQ(Decode(bad).error, DecodeError::Value) << static_cast<int>(land);
+	}
+}
+
+TEST(TurnCodec, TheDecoderRefusesAnEditOfACreatureWithNoSuchValue)
+{
+	const auto encode = [](Action action) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {std::move(action)}}});
+	};
+	// The tag, the creature, the value and the amount
+	constexpr size_t k_Tag = 9;
+	const EditorCreatureEdit edit {.creature = Entity(4), .value = 0, .amount = -0.5f};
+	auto bytes = encode(edit);
+	ASSERT_EQ(bytes.size(), k_Tag + 1 + sizes::k_Entity + 1 + 4);
+	const auto back = Decode(bytes);
+	ASSERT_EQ(back.error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorCreatureEdit>(std::get<CommandBlock>(*back.frame).actions[0]), edit);
+	bytes[k_Tag + 1 + sizes::k_Entity] = static_cast<uint8_t>(creature_edit_values::k_ValueCount);
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, TheDecoderRefusesAnActOfACreatureThatIsNotKnown)
+{
+	const auto encode = [](Action action) {
+		return Encode(Frame {CommandBlock {.sequence = 0, .turn = 0, .actions = {std::move(action)}}});
+	};
+	// The tag, the creature, the act, the other thing, the place, the amount, the index and the small numbers
+	constexpr size_t k_Tag = 9;
+	const EditorCreatureAct act {.creature = Entity(4), .act = 2, .other = Entity(5), .index = 7, .args = {1}};
+	auto bytes = encode(act);
+	ASSERT_EQ(bytes.size(), k_Tag + 1 + sizes::k_Entity + 1 + sizes::k_Entity + (3 * 4) + 4 + 2 + 6);
+	const auto back = Decode(bytes);
+	ASSERT_EQ(back.error, DecodeError::None);
+	EXPECT_EQ(std::get<EditorCreatureAct>(std::get<CommandBlock>(*back.frame).actions[0]), act);
+	bytes[k_Tag + 1 + sizes::k_Entity] = static_cast<uint8_t>(creature_edit_acts::k_ActCount);
+	EXPECT_EQ(Decode(bytes).error, DecodeError::Value);
 }
 
 TEST(TurnCodec, TheBytesOfABlockAreLittleEndianWithTheRawBitsOfTheFloats)

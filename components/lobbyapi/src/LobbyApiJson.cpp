@@ -327,7 +327,7 @@ std::optional<Session> ParseSession(std::string_view text)
 		return ReadString(object, "access_token", out.accessToken) && !out.accessToken.empty() &&
 		       ReadTime(object, "access_token_expires", out.accessTokenExpires) &&
 		       ReadTime(object, "refresh_token_expires", out.refreshTokenExpires, false) &&
-		       ReadBool(object, "email_required", out.emailRequired, false);
+		       ReadBool(object, "email_required", out.emailRequired, false) && ReadBool(object, "editor", out.editor, false);
 	});
 }
 
@@ -449,6 +449,7 @@ std::string ToJson(const ServerStatus& status)
 		    {"account", player.account},
 		    {"role", player.role},
 		    {"clan", player.clan.has_value() ? Json(*player.clan) : Json(nullptr)},
+		    {"away", player.away},
 		});
 	}
 	return Dump(Json {
@@ -569,7 +570,35 @@ std::optional<ChatLine> ParseChatLine(std::string_view data)
 	return ParseWith<ChatLine>(data, [](const Json& object, ChatLine& out) {
 		const auto* from = Member(object, "from");
 		return from != nullptr && from->is_object() && ReadAccountRef(*from, out.from) &&
-		       ReadString(object, "channel", out.channel) && ReadString(object, "text", out.text);
+		       ReadString(object, "channel", out.channel) && ReadString(object, "text", out.text) &&
+		       ReadBool(object, "staff", out.staff, false);
+	});
+}
+
+std::optional<ChannelSubscribed> ParseChannelSubscribed(std::string_view data)
+{
+	return ParseWith<ChannelSubscribed>(data, [](const Json& object, ChannelSubscribed& out) {
+		const auto readMember = [](const Json& member, AccountRef& account) {
+			const auto* ref = Member(member, "account");
+			return ref != nullptr && ref->is_object() && ReadAccountRef(*ref, account);
+		};
+		const auto readLine = [](const Json& line, ChatHistoryLine& history) {
+			const auto* from = Member(line, "from");
+			return from != nullptr && from->is_object() && ReadAccountRef(*from, history.from) &&
+			       ReadString(line, "text", history.text) && ReadTime(line, "time", history.time, false) &&
+			       ReadInteger(line, "seq", history.seq, false) && ReadBool(line, "staff", history.staff, false);
+		};
+		return ReadString(object, "channel", out.channel) && ReadArray(object, "members", out.members, readMember, false) &&
+		       ReadArray(object, "history", out.history, readLine, false);
+	});
+}
+
+std::optional<ChatPresence> ParseChatPresence(std::string_view data)
+{
+	return ParseWith<ChatPresence>(data, [](const Json& object, ChatPresence& out) {
+		const auto* account = Member(object, "account");
+		return account != nullptr && account->is_object() && ReadAccountRef(*account, out.account) &&
+		       ReadString(object, "channel", out.channel);
 	});
 }
 
@@ -759,7 +788,8 @@ std::optional<Problem> ParseProblem(std::string_view text)
 		return ReadString(object, "type", out.type, false) && ReadString(object, "title", out.title, false) &&
 		       ReadInteger(object, "status", out.status, false) && ReadString(object, "detail", out.detail, false) &&
 		       ReadString(object, "code", out.code, false) && ReadInteger(object, "members", out.members, false) &&
-		       ReadInteger(object, "slots", out.slots, false);
+		       ReadInteger(object, "slots", out.slots, false) && ReadString(object, "expected", out.expected, false) &&
+		       ReadString(object, "download", out.download, false);
 	});
 }
 

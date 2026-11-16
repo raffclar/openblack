@@ -75,6 +75,7 @@
 #include "Locator.h"
 #include "Online/DownloadTestMap.h"
 #include "Online/GameBuildId.h"
+#include "Online/GameDataFiles.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapFile.h"
 #include "Online/GodsRingMapPackage.h"
@@ -95,6 +96,7 @@
 #define OPENBLACK_GAME_ROLE 1
 #include "Online/StartRules.h"
 #include "Server/Desktop/GameRole.h"
+#include "Server/DesyncBundle.h"
 #include "Server/LobbyGame.h"
 #include "Server/LobbyHostReport.h"
 #include "Server/LobbyResults.h"
@@ -1196,6 +1198,56 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	host.SetPartedListener([desyncs](uint8_t seat, std::span<const std::string> parts) {
 		desyncs->rule.Parted(seat, parts, ServerDesyncs::Now());
 	});
+	// The game data that the server's world read: each player's computer sends the print of the same files from its own
+	// game folder, and the room refuses a player whose land, scripts or table of objects differ
+	auto print = online::game_data::PrintOfReadFiles(fileSystem);
+	const auto hints = online::game_data::HintsOfGameFolder(fileSystem);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"),
+	                   "The print of the server's game data has {} files, hash {:016x} (patch {}, language {})", print.size(),
+	                   online::game_data::HashOfPrint(print), hints.patch.empty() ? "not known" : hints.patch,
+	                   hints.language.empty() ? "not known" : hints.language);
+	// The facts of the server's world, which the capture of a desync compares with the facts of the player
+	game_socket::SyncFacts facts {
+	    .turn = 0,
+	    .build = online::build_id::Own(),
+	    .land = start.land,
+	    .landSha256 = landSha256Logged,
+	    .map = settings.network->mapSha256,
+	    .seed = start.seed,
+	    .data = online::game_data::HashOfPrint(print),
+	    .patch = hints.patch,
+	    .language = hints.language,
+	};
+	host.SetDataPrint(std::move(print));
+	// The capture of the first desync of each god: the record goes to the disk, and its detail goes with the event
+	const auto records = settings.network->desyncRecords;
+	desync_bundle::Prune(records, std::chrono::system_clock::now());
+	desyncs->rule.SetDetailWait(true);
+	host.SetCapture(
+	    std::move(facts),
+	    [](std::span<const std::string> parts) { return Locator::syncChecksumSystem::value().EntitiesOfParts(parts); },
+	    [desyncs, records, gameId = game.id](CaptureRecord record) {
+		    auto logger = spdlog::get("game");
+		    for (const auto& line : desync_bundle::Lines(record))
+		    {
+			    SPDLOG_LOGGER_WARN(logger, "{}", line);
+		    }
+		    const auto folder = desync_bundle::Write(records, record, gameId, std::chrono::system_clock::now());
+		    const auto name = folder.has_value() ? folder->filename().string() : std::string("not written");
+		    if (folder.has_value())
+		    {
+			    SPDLOG_LOGGER_INFO(logger,
+			                       "The server keeps the record of the desync in {} ({} bytes of the server's world, {} of "
+			                       "the player's world)",
+			                       folder->generic_string(), record.serverWorld.size(), record.playerWorld.size());
+		    }
+		    else
+		    {
+			    SPDLOG_LOGGER_WARN(logger, "The server could not write the record of the desync in {}",
+			                       records.folder.generic_string());
+		    }
+		    desyncs->rule.Detailed(record.seat, desync_bundle::DetailOf(record, gameId, name));
+	    });
 	// The log names the parts that differ when a client sends its parts of the turn at which its world parted
 	host.SetPartsOfTurn([](uint32_t turn) { return Locator::syncChecksumSystem::value().PartsOfTurn(turn); });
 	// A client whose world parted gets the world of the server, at the start of the next turn
@@ -1230,6 +1282,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		if (host.GameOver())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every god left the game: the game ends");
+			host.FinishCaptures();
 			desyncs->Finish();
 		}
 		if (lifetime.Ends(host))

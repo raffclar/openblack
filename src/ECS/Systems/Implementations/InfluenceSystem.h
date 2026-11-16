@@ -83,6 +83,8 @@ private:
 	/// place. What the hand keeps past the border does not reach such a place.
 	[[nodiscard]] static bool InAntiInfluence(PlayerNames player, const glm::vec3& point);
 	[[nodiscard]] static bool InAntiInfluence(PlayerNames player, const map_coords::MapCoords& position);
+	/// Whether the place is in an anti-influence that a script made for the player, up to and at its edge
+	[[nodiscard]] static bool InScriptAntiInfluence(PlayerNames player, const map_coords::MapCoords& position);
 	/// One turn of what a player's hand keeps past the border, with the hand where it is
 	void ProcessVirtualInfluence(entt::entity playerEntity, PlayerNames player, glm::vec3 hand, uint32_t turn);
 	/// The own influence of a player at a place, or where it is none or less, the influence that an ally lends there
@@ -93,6 +95,8 @@ private:
 	{
 		std::array<float, k_Players> raw {};
 		std::array<bool, k_Players> keptOut {};
+		/// The place is in an anti-influence that a script made for the player
+		std::array<bool, k_Players> scriptAnti {};
 	};
 	[[nodiscard]] static NearInfluence RawInfluences(const map_coords::MapCoords& position);
 	/// What the hand of a player keeps of their influence at a place, if it keeps some there. The state is what the hand

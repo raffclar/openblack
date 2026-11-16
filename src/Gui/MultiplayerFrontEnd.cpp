@@ -22,6 +22,8 @@
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/LobbyRoomSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Online/ConnectionLostNotice.h"
+#include "Online/GameBuildId.h"
 #include "Online/GodsRingMap.h"
 #include "Online/GodsRingMapPackage.h"
 #include "Online/LanDiscoveryInterface.h"
@@ -60,6 +62,7 @@ MultiplayerFrontEnd::MultiplayerFrontEnd(Services services, Settings settings)
     : _services(std::move(services))
     , _settings(std::move(settings))
     , _maps(ParseLocalMaps(_settings.localMaps))
+    , _ownBuild(online::build_id::Own())
 {
 	if (_services.lobby != nullptr)
 	{
@@ -70,6 +73,19 @@ MultiplayerFrontEnd::MultiplayerFrontEnd(Services services, Settings settings)
 	if (!connections.empty())
 	{
 		_connection = connections.size() - 1;
+	}
+	_flow = multiplayer::FirstFlow(_settings.start);
+	// The site's lobby opens the login box at once, as Next on the internet does. With no lobby, the box tells the player.
+	if (_flow.start == multiplayer::FrontEndStart::SiteLobby)
+	{
+		if (HasInternetConnection())
+		{
+			EnterLogin();
+		}
+		else
+		{
+			Show(Message::NoConnections);
+		}
 	}
 }
 
@@ -83,6 +99,7 @@ MultiplayerFrontEnd::~MultiplayerFrontEnd()
 	if (_services.lobby != nullptr)
 	{
 		_services.lobby->WatchServers(false);
+		WatchMainRoom(false);
 		if (_listener.has_value())
 		{
 			_services.lobby->RemoveEventListener(*_listener);
@@ -108,6 +125,15 @@ void MultiplayerFrontEnd::Update()
 		if (inLanRoom)
 		{
 			FollowLanRoom();
+		}
+	}
+	if (_askSiteAgain && _services.lobby != nullptr &&
+	    _services.lobby->GetState() != ecs::systems::LobbySessionState::LoggingIn)
+	{
+		_askSiteAgain = false;
+		if (_flow.box == Box::Login && !_busy && _message == Message::None)
+		{
+			EnterLogin();
 		}
 	}
 	FollowSession();
@@ -170,11 +196,17 @@ void MultiplayerFrontEnd::FollowSession()
 	const auto state = session->GetState();
 	if (!_joined && session->GetJoined().has_value() && state != State::Ended && _lobbyGame)
 	{
-		// The game of a lobby session starts when its players joined: the room of the session stays on its box
+		// The game of a lobby session starts when its players joined: the room of the session stays on its box. The
+		// player was ready in the lobby before the start, so the player is ready in the room of the game server too. The
+		// game server starts the room only when each god in it is ready.
 		_busy = false;
 		_joined = true;
 		_observer = session->GetJoined()->role == game_socket::Role::Observer;
 		TakeHostPicks(session->GetJoined()->start);
+		if (!_observer)
+		{
+			_services.network->SetReady(true);
+		}
 		return;
 	}
 	if (!_joined && session->GetJoined().has_value() && state != State::Ended)
@@ -209,25 +241,69 @@ void MultiplayerFrontEnd::FollowSession()
 		{
 			return;
 		}
-		ShowLobbyNotice(ToUtf16(lobby_screens::GameRefusalText(refusal, _settings.browser ? lobby_api::ClientKind::Browser
-		                                                                                  : lobby_api::ClientKind::Desktop)));
+		// A file of the game data is not the server's: the box names the file (deviation 266)
+		if (const auto text = online::DataRefusalText(session->GetEnd(), refusal, session->RefusedPath()))
+		{
+			ShowLobbyNotice(ToUtf16(*text));
+			return;
+		}
+		ShowLobbyNotice(ToUtf16(lobby_screens::GameRefusalText(refusal, ClientKind(), VersionNeedOf(*session))));
 		return;
 	}
 	if (_joined)
 	{
 		// The server removed the player, the room's server went, or the player could not come back to it
-		const bool kicked = session->GetEnd() == online::NetworkSession::End::Refused && session->RefusedReason() == "kicked";
+		const auto reason =
+		    session->GetEnd() == online::NetworkSession::End::Refused ? session->RefusedReason() : std::string();
 		_joined = false;
-		if (kicked)
+		if (reason == "kicked")
 		{
 			ShowKicked();
+			return;
+		}
+		// The server closed the player for another version of the format of the turns: the box tells the player to
+		// update the game, not that the host left
+		if (reason == lobby_screens::k_VersionRefusal)
+		{
+			LeaveRoom();
+			_flow.box = Box::GameList;
+			EnterGameList();
+			ShowLobbyNotice(ToUtf16(lobby_screens::VersionRefusalText(ClientKind(), VersionNeedOf(*session))));
 			return;
 		}
 		Show(Message::HostLeft);
 		return;
 	}
 	const auto refusal = session->GetEnd() == online::NetworkSession::End::Refused ? session->RefusedReason() : std::string();
+	// A file of the game data is not the server's: the box names the file (deviation 266)
+	if (const auto text = online::DataRefusalText(session->GetEnd(), refusal, session->RefusedPath()))
+	{
+		ShowLobbyNotice(ToUtf16(*text));
+		return;
+	}
+	// A server of another version refused the join: the box tells the player to update the game, not "Connection
+	// Failed."
+	if (refusal == lobby_screens::k_VersionRefusal)
+	{
+		ShowLobbyNotice(ToUtf16(lobby_screens::VersionRefusalText(ClientKind(), VersionNeedOf(*session))));
+		return;
+	}
 	Show(JoinFailureMessage(refusal, _flow.kind));
+}
+
+openblack::lobby_api::ClientKind MultiplayerFrontEnd::ClientKind() const noexcept
+{
+	return _settings.browser ? lobby_api::ClientKind::Browser : lobby_api::ClientKind::Desktop;
+}
+
+const std::string& MultiplayerFrontEnd::OwnBuild() const
+{
+	return _services.lobbyRoom != nullptr ? _services.lobbyRoom->BuildId() : _ownBuild;
+}
+
+openblack::gui::lobby_screens::VersionNeed MultiplayerFrontEnd::VersionNeedOf(const online::NetworkSession& session) const
+{
+	return {.own = OwnBuild(), .needed = session.RefusedBuild(), .download = {}};
 }
 
 void MultiplayerFrontEnd::FollowStart()
@@ -337,20 +413,13 @@ void MultiplayerFrontEnd::Next()
 		break;
 	case Box::FindGames:
 		multiplayer::Next(_flow);
-		// A player with a session goes to the list at once
-		if (_flow.box == Box::Login && UsesLobbySessions() &&
-		    _services.lobby->GetState() == ecs::systems::LobbySessionState::LoggedIn && !_services.lobby->IsEmailRequired())
-		{
-			_loggedIn = true;
-			EnterGameList();
-		}
 		if (_flow.box == Box::GameList)
 		{
 			EnterGameList();
 		}
 		else if (_flow.box == Box::Login)
 		{
-			SignInFromSite();
+			EnterLogin();
 		}
 		break;
 	case Box::Room:
@@ -404,6 +473,7 @@ void MultiplayerFrontEnd::Back()
 		{
 			_services.lobbyRoom->WatchList(false);
 		}
+		WatchMainRoom(false);
 		multiplayer::Back(_flow);
 		break;
 	case Box::CreateLobby:
@@ -421,8 +491,12 @@ void MultiplayerFrontEnd::Back()
 		break;
 	default:
 		multiplayer::Back(_flow);
-		_left = _flow.left;
 		break;
+	}
+	// Back on a first box leaves the front end
+	if (_flow.left)
+	{
+		_left = true;
 	}
 }
 
@@ -446,6 +520,13 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 			_services.openPage(_settings.accountPage);
 		}
 		break;
+	case Message::NoConnections:
+		// The site's lobby has no box before it: the front end closes
+		if (_flow.start == multiplayer::FrontEndStart::SiteLobby)
+		{
+			_left = true;
+		}
+		break;
 	case Message::HostLeft:
 	case Message::KickedFromGame:
 		LeaveRoom();
@@ -453,12 +534,8 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 		EnterGameList();
 		break;
 	case Message::CouldNotDownloadMap:
-		// In the room of a lobby session, the download of the room's map continues from its kept bytes after the box
-		// (deviation 257). The host does not have to set the map again.
-		if (_flow.box == Box::LobbyRoom || _flow.box == Box::CreateLobby)
-		{
-			_roomMapHash.clear();
-		}
+		// OK does not start the download again, so that one failure shows one box (deviation 257). A new map of the
+		// room, a new map set of the host, or a new entry into the room starts it again from the kept bytes.
 		break;
 	case Message::LobbyNotice:
 	case Message::LobbyQuestion:
@@ -470,6 +547,22 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 	default:
 		break;
 	}
+}
+
+void MultiplayerFrontEnd::EnterLogin()
+{
+	// A player with a session goes to the list at once
+	if (UsesLobbySessions() && _services.lobby->GetState() == ecs::systems::LobbySessionState::LoggedIn &&
+	    !_services.lobby->IsEmailRequired())
+	{
+		// The sign-in at the start of the game opens no push channel. The front end needs the events of the lobby, so
+		// the session continues with the push channel open.
+		_services.lobby->ResumeSession([](ecs::systems::LobbyResult<lobby_api::AccountRef>&&) {});
+		_loggedIn = true;
+		EnterGameList();
+		return;
+	}
+	SignInFromSite();
 }
 
 void MultiplayerFrontEnd::SignInFromSite()
@@ -489,6 +582,11 @@ void MultiplayerFrontEnd::SignInFromSite()
 		_busy = false;
 		if (!result.Ok())
 		{
+			// The lobby client continues a stored session, as at the start of the game: the login box asks again later
+			if (result.error.kind == ecs::systems::LobbyErrorKind::Busy)
+			{
+				_askSiteAgain = true;
+			}
 			// Nobody is signed in on the site, or the page cannot ask: the login box stays for a name and a password
 			return;
 		}
@@ -784,27 +882,34 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 		if (_mapDownload == nullptr)
 		{
 			auto* lobby = _services.lobby;
+			auto lastError = _lastPieceError;
 			// The pieces come from the lobby, or from the site for a map with a package (deviation 257)
-			auto fetch = [this, lobby](const lobby_api::OnlineMap& wanted, uint64_t offset, uint64_t count, auto done) {
+			auto fetch = [this, lobby, lastError](const lobby_api::OnlineMap& wanted, uint64_t offset, uint64_t count,
+			                                      auto done) {
 				// The tests have no game log
 				if (const auto log = spdlog::get("game"); log != nullptr)
 				{
 					SPDLOG_LOGGER_INFO(log, "The map download asks for {} bytes from byte {} of {}", count, offset,
 					                   wanted.file);
 				}
-				auto send = [lobby, wanted, offset, count, done = std::move(done)]() mutable {
+				auto send = [lobby, lastError, wanted, offset, count, done = std::move(done)]() mutable {
 					lobby->DownloadMapPiece(
 					    wanted, offset, count,
-					    [done = std::move(done)](ecs::systems::LobbyResult<lobby_api::FilePiece>&& piece) mutable {
+					    [lastError, done = std::move(done)](ecs::systems::LobbyResult<lobby_api::FilePiece>&& piece) mutable {
+						    if (!piece.Ok())
+						    {
+							    *lastError = {piece.error.status, static_cast<int32_t>(piece.error.kind)};
+						    }
 						    done(std::move(piece.value));
 					    });
 				};
-				if (_settings.mapPieceDelayMs == 0 || !_services.nowMs)
+				if (_settings.mapPieceDelayMs == 0)
 				{
 					send();
 					return;
 				}
-				_delayedPieces.emplace_back(_services.nowMs() + _settings.mapPieceDelayMs, std::move(send));
+				// The game gives no clock of its own, so the delay uses the clock of the computer
+				_delayedPieces.emplace_back(NowMs() + _settings.mapPieceDelayMs, std::move(send));
 			};
 			// A map with a package: the game adds the village of its own game data to the package (deviation 249)
 			auto assemble = [read = _services.readGameFile](const lobby_api::OnlineMap& wanted,
@@ -838,11 +943,11 @@ void MultiplayerFrontEnd::FetchRoomMap(std::string sha256)
 
 void MultiplayerFrontEnd::SendDelayedPieces()
 {
-	if (_delayedPieces.empty() || !_services.nowMs)
+	if (_delayedPieces.empty())
 	{
 		return;
 	}
-	const auto now = _services.nowMs();
+	const auto now = NowMs();
 	std::vector<std::function<void()>> due;
 	std::erase_if(_delayedPieces, [now, &due](auto& delayed) {
 		if (delayed.first > now)
@@ -876,12 +981,51 @@ void MultiplayerFrontEnd::FollowMapDownload()
 	    _mapFailed || (_mapDownload != nullptr && _mapDownload->GetState() == online::MapDownload::State::Failed);
 	if (failed && _flow.box == Box::Room && _message == Message::None)
 	{
+		ReportMapFailure();
 		_mapFailed = false;
 		if (_mapDownload != nullptr)
 		{
 			_mapDownload->Stop();
 		}
 		Show(Message::CouldNotDownloadMap);
+	}
+}
+
+void MultiplayerFrontEnd::ReportMapFailure()
+{
+	const auto map = online::MapDownload::MapOfRoom(_lobbyMaps, _roomMapHash);
+	std::string_view step = "list";
+	uint64_t offset = 0;
+	if (!_mapFailed && _mapDownload != nullptr)
+	{
+		switch (_mapDownload->GetFailure())
+		{
+		case online::MapDownload::Failure::Piece:
+			step = "piece";
+			offset = _mapDownload->GetFailedOffset();
+			break;
+		case online::MapDownload::Failure::Check:
+			step = "check";
+			break;
+		case online::MapDownload::Failure::Store:
+			step = "store";
+			break;
+		case online::MapDownload::Failure::None:
+			break;
+		}
+	}
+	const auto [status, error] = *_lastPieceError;
+	auto event = online::MapDownload::ReportOf(_roomMapHash, map.has_value() ? &*map : nullptr, step, offset, status, error);
+	// The tests have no game log
+	if (const auto log = spdlog::get("game"); log != nullptr)
+	{
+		SPDLOG_LOGGER_WARN(log, "The map download of {} failed at the step {}: byte {}, HTTP status {}, error kind {}",
+		                   _roomMapHash, step, offset, status, error);
+	}
+	*_lastPieceError = {0, 0};
+	if (_services.report)
+	{
+		_services.report(event);
 	}
 }
 
@@ -1142,6 +1286,10 @@ void MultiplayerFrontEnd::SendChat(std::u16string_view text)
 
 void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 {
+	if (_mainRoom.Apply(event))
+	{
+		return;
+	}
 	if (!_room.has_value())
 	{
 		return;

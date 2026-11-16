@@ -19,6 +19,7 @@
 #include "Common/DesyncReports.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/ConnectionLog.h"
+#include "Online/GameDataFiles.h"
 #include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
 
@@ -77,6 +78,7 @@ public:
 	{
 		return _session ? _session->TakeObserversLeft() : std::vector<std::string>();
 	}
+	[[nodiscard]] uint32_t TakeEditorRefusals() override { return _session ? _session->TakeEditorRefusals() : 0; }
 	void LogConnection(std::string_view text) override { _log->Info(text); }
 	[[nodiscard]] std::string DiagnosticsReport() const override;
 	[[nodiscard]] std::string_view RoomName() const override { return _roomName; }
@@ -122,6 +124,8 @@ private:
 	error_reports::DesyncRunBudget _desyncBudget;
 	/// The desyncs of the network game, from the join to the end of the game
 	std::optional<error_reports::DesyncReportRule> _desyncs;
+	/// The prints of the game data from the joins before, so that a rejoin reads only the files that changed
+	online::game_data::PrintCache _printCache;
 };
 
 } // namespace openblack::ecs::systems

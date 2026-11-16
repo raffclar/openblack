@@ -284,6 +284,23 @@ void SowCrop(entt::entity field, FieldTypeInfo type, bool sown)
 	state->crop = {.timesSown = static_cast<uint8_t>(types.at(row).timesToSow)};
 }
 
+/// Make the crop of a testbed field half grown: fully sown, half way to the ripe age of its type, with the food that
+/// the crop grows by that age
+void HalfGrowCrop(entt::entity field, FieldTypeInfo type, bool unripe)
+{
+	auto* state =
+	    unripe && field != entt::null ? Locator::entitiesRegistry::value().TryGet<ecs::components::Field>(field) : nullptr;
+	const auto& types = Locator::infoConstants::value().fieldType;
+	const auto row = static_cast<size_t>(type);
+	if (state == nullptr || row >= types.size())
+	{
+		return;
+	}
+	const auto& info = types.at(row);
+	state->crop = {
+	    .timesSown = static_cast<uint8_t>(info.timesToSow), .age = info.ageRecolt * 0.5f, .food = info.totalFoodInField * 0.5f};
+}
+
 void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -803,6 +820,7 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 				        ecs::archetypes::FieldArchetype::Create(static_cast<int>(ScenarioTown(middle)), position, type, yaw);
 				    RipenCrop(field, type, object.ripeCrop);
 				    SowCrop(field, type, object.sownCrop);
+				    HalfGrowCrop(field, type, object.unripeCrop);
 				    return field;
 			    }
 			    else if constexpr (std::is_same_v<T, AnimalInfo>)

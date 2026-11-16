@@ -64,6 +64,28 @@ uint64_t MapDownload::TransferSizeOf(const lobby_api::OnlineMap& map)
 	return static_cast<uint64_t>(std::max<int64_t>(map.packageSha256.empty() ? map.size : map.packageSize, 0));
 }
 
+std::string MapDownload::AddressOf(const lobby_api::OnlineMap& map)
+{
+	return map.packageSha256.empty() ? std::string(lobby_api::k_ApiPrefix) + "/maps/" + map.sha256 : map.packageUrl;
+}
+
+error_reports::FailureEvent MapDownload::ReportOf(std::string_view sha256, const lobby_api::OnlineMap* map,
+                                                  std::string_view step, uint64_t offset, int32_t status, int32_t error)
+{
+	return {
+	    .message = "The map download failed: " + std::string(step),
+	    .level = "warning",
+	    .fingerprint = {"map-download", std::string(step)},
+	    .tags = {{"map_step", std::string(step)},
+	             {"map_status", std::to_string(status)},
+	             {"map_file", map != nullptr ? map->file : std::string()}},
+	    .extras = {{"map_sha256", std::string(sha256)},
+	               {"map_address", map != nullptr ? AddressOf(*map) : std::string()},
+	               {"map_offset", std::to_string(offset)},
+	               {"map_error_kind", std::to_string(error)}},
+	};
+}
+
 std::optional<lobby_api::OnlineMap> MapDownload::MapOfRoom(std::span<const lobby_api::OnlineMap> maps, std::string_view roomMap)
 {
 	if (roomMap.empty())
@@ -234,6 +256,8 @@ void MapDownload::TryFailed()
 		Continue();
 		return;
 	}
+	_failure = Failure::Piece;
+	_failedOffset = OwnPart().bytes.size();
 	_state = State::Failed;
 }
 
@@ -252,6 +276,7 @@ void MapDownload::Finish()
 			Continue();
 			return;
 		}
+		_failure = Failure::Check;
 		_state = State::Failed;
 		return;
 	}
@@ -260,6 +285,7 @@ void MapDownload::Finish()
 	_store.Write(FileOf(*_map), std::move(*file), [this, guard](bool written) {
 		if (guard.Live())
 		{
+			_failure = written ? Failure::None : Failure::Store;
 			_state = written ? State::Ready : State::Failed;
 		}
 	});

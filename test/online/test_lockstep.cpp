@@ -182,6 +182,13 @@ struct Computer
 		    .desynced = [this](uint32_t turn, uint64_t local,
 		                       uint64_t server) { desyncs.push_back({.turn = turn, .local = local, .server = server}); },
 		    .partedParts = [this](std::span<const std::string> names) { partedNames.assign(names.begin(), names.end()); },
+		    .printData =
+		        [this](std::span<const std::string> files) { return printData ? printData(files) : game_socket::DataPrint {}; },
+		    .entities =
+		        [this](std::span<const std::string> names) {
+			        return entities ? entities(names) : std::vector<synced_state::PartEntities> {};
+		        },
+		    .saveWorld = [this] { return saveWorld ? saveWorld() : std::vector<uint8_t> {}; },
 		});
 		this->landFile = std::move(landFile);
 		this->creature = std::move(creature);
@@ -227,6 +234,10 @@ struct Computer
 	};
 	std::vector<Desync> desyncs;
 	std::vector<std::string> partedNames;
+	/// The print of the game data, the hash of each entity and the world of this computer, for the capture of a desync
+	std::function<game_socket::DataPrint(std::span<const std::string> files)> printData;
+	std::function<std::vector<synced_state::PartEntities>(std::span<const std::string> names)> entities;
+	std::function<std::vector<uint8_t>()> saveWorld;
 	NetworkSession session;
 	FakeWorld world;
 	std::vector<size_t> played;
@@ -235,20 +246,21 @@ struct Computer
 
 server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 {
-	// "god:name" or "observer:name", with "+staff" after the role for a staff player and "@lobby" after the name for a
-	// ticket of a lobby's game; anything else is not a ticket
+	// "god:name" or "observer:name", with "+editor" after the role for a player with the editor claim and "@lobby" after the
+	// name for a ticket of a lobby's game, and "#gods" after the lobby for the gods of the lobby's game; anything else is not a
+	// ticket
 	const auto colon = token.find(':');
 	if (colon == std::string_view::npos)
 	{
 		return {.problem = server::TicketProblem::Signature, .claims = std::nullopt};
 	}
-	// "+staff" after the role gives the staff claim
+	// "+editor" after the role gives the editor claim
 	auto roleText = token.substr(0, colon);
-	constexpr std::string_view k_Staff = "+staff";
-	const auto staff = roleText.ends_with(k_Staff);
-	if (staff)
+	constexpr std::string_view k_Editor = "+editor";
+	const auto editor = roleText.ends_with(k_Editor);
+	if (editor)
 	{
-		roleText.remove_suffix(k_Staff.size());
+		roleText.remove_suffix(k_Editor.size());
 	}
 	const auto role = game_socket::RoleFrom(roleText);
 	if (!role.has_value())
@@ -259,13 +271,19 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 	auto subject = token.substr(colon + 1);
 	if (const auto at = subject.find('@'); at != std::string_view::npos)
 	{
-		claims.lobby = std::string(subject.substr(at + 1));
+		auto lobby = subject.substr(at + 1);
+		if (const auto hash = lobby.find('#'); hash != std::string_view::npos)
+		{
+			claims.gods = static_cast<uint32_t>(std::stoul(std::string(lobby.substr(hash + 1))));
+			lobby = lobby.substr(0, hash);
+		}
+		claims.lobby = std::string(lobby);
 		subject = subject.substr(0, at);
 	}
 	claims.subject = std::string(subject);
 	claims.name = claims.subject;
 	claims.role = *role;
-	claims.staff = staff;
+	claims.editor = editor;
 	return {.problem = server::TicketProblem::None, .claims = claims};
 }
 
@@ -657,31 +675,78 @@ TEST(LockstepRules, TheServerLeavesOutOnlyTheCommandsThatAClientNeverSends)
 	EXPECT_FALSE(server::LeavesOut(TotemShare {}, false));
 }
 
-TEST(LockstepRules, OnlyAStaffPlayerSendsTheEditsAndTheCheats)
+TEST(LockstepRules, OnlyAPlayerWithTheEditorClaimSendsTheEditsAndTheCheats)
 {
-	EXPECT_TRUE(OnlyStaffSends(EditorEdit {}));
-	EXPECT_TRUE(OnlyStaffSends(DebugCheat {}));
-	EXPECT_FALSE(OnlyStaffSends(HandTap {}));
-	EXPECT_FALSE(OnlyStaffSends(CreatureFightCheat {}));
-	// An observer sends the edits of the editor only with the staff claim, and never a debug cheat, as it has no god
+	EXPECT_TRUE(OnlyEditorSends(EditorEdit {}));
+	EXPECT_TRUE(OnlyEditorSends(DebugCheat {}));
+	EXPECT_FALSE(OnlyEditorSends(HandTap {}));
+	EXPECT_FALSE(OnlyEditorSends(CreatureFightCheat {}));
+	// An observer sends the edits of the editor only with the editor claim, and never a debug cheat, as it has no god
 	EXPECT_TRUE(ServerTakesFromObserver(EditorEdit {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(EditorEdit {}, false));
 	EXPECT_FALSE(ServerTakesFromObserver(DebugCheat {}, true));
 	EXPECT_FALSE(ServerTakesFromObserver(HandTap {}, true));
 	EXPECT_FALSE(server::LeavesOut(EditorEdit {}, false));
 	EXPECT_FALSE(server::LeavesOut(DebugCheat {}, false));
+	// An edit of a creature is an edit of the editor
+	EXPECT_TRUE(OnlyEditorSends(EditorCreatureEdit {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorCreatureEdit {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorCreatureEdit {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorCreatureEdit {}, false));
+	// An act of the creature tools is an edit of the editor too. An observer with the editor claim also sends the tattoos.
+	EXPECT_TRUE(OnlyEditorSends(EditorCreatureAct {}));
+	EXPECT_TRUE(ServerTakesFromObserver(EditorCreatureAct {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(EditorCreatureAct {}, false));
+	EXPECT_FALSE(server::LeavesOut(EditorCreatureAct {}, false));
+	EXPECT_FALSE(OnlyEditorSends(CreatureTattoo {}));
+	EXPECT_TRUE(ServerTakesFromObserver(CreatureTattoo {}, true));
+	EXPECT_FALSE(ServerTakesFromObserver(CreatureTattoo {}, false));
+	// A skip to a land of the story is a debug cheat, and the server refuses it from every player
+	EXPECT_TRUE(OnlyEditorSends(DebugLandSkip {}));
+	EXPECT_TRUE(ServerAlwaysRefuses(DebugLandSkip {}));
+	EXPECT_FALSE(ServerAlwaysRefuses(DebugCheat {}));
+	EXPECT_FALSE(ServerAlwaysRefuses(EditorEdit {}));
+	EXPECT_FALSE(ServerTakesFromObserver(DebugLandSkip {}, true));
 }
 
-TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAStaffGod)
+TEST_F(LockstepTest, TheServerRefusesASkipToALandOfTheStoryAlsoFromAGodWithTheEditorClaim)
 {
 	MakeHost(2);
-	Computer alice(network, now, "god+staff:alice");
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.GetJoined()->editor);
+	alice.session.Send(DebugLandSkip {.land = 3});
+	alice.session.Send(DebugCheat {.cheat = 0, .on = true});
+	bob.session.Send(DebugLandSkip {.land = 2});
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(tag));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugLandSkip), 0u);
+	EXPECT_EQ(count(1, turn_codec::CommandTag::DebugLandSkip), 0u);
+	// The other cheat of the player with the editor claim stays
+	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugCheat), 1u);
+	EXPECT_GE(alice.session.TakeEditorRefusals(), 1u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAGodWithTheEditorClaim)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+editor:alice");
 	Computer bob(network, now, "god:bob");
 	Frames({&alice, &bob}, 8);
 	ASSERT_TRUE(host->Started());
 	ASSERT_TRUE(alice.session.GetJoined().has_value());
-	EXPECT_TRUE(alice.session.GetJoined()->staff);
-	EXPECT_FALSE(bob.session.GetJoined()->staff);
+	EXPECT_TRUE(alice.session.GetJoined()->editor);
+	EXPECT_FALSE(bob.session.GetJoined()->editor);
 	const EditorEdit move {.kind = EditorEdit::Kind::Move, .object = Entity(5), .position = {1.0f, 0.0f, 2.0f}};
 	alice.session.Send(move);
 	alice.session.Send(DebugCheat {.cheat = 0, .on = true});
@@ -689,7 +754,7 @@ TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAStaffGod)
 	bob.session.Send(DebugCheat {.cheat = 1, .on = true});
 	bob.session.Send(HandTap {.object = Entity(2)});
 	Frames({&alice, &bob}, 4);
-	EXPECT_EQ(host->RefusedStaffCommands(), 2u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
 	const auto count = [this](size_t seat, turn_codec::CommandTag tag) {
 		const auto& commands = host->Seats()[seat].commands;
 		const auto found = commands.find(static_cast<uint8_t>(tag));
@@ -699,31 +764,36 @@ TEST_F(LockstepTest, TheServerTakesTheEditsAndTheCheatsOnlyFromAStaffGod)
 	EXPECT_EQ(count(0, turn_codec::CommandTag::DebugCheat), 1u);
 	EXPECT_EQ(count(1, turn_codec::CommandTag::EditorEdit), 0u);
 	EXPECT_EQ(count(1, turn_codec::CommandTag::DebugCheat), 0u);
-	// The other commands of the block of the player with no staff claim stay
+	// The other commands of the block of the player with no editor claim stay
 	EXPECT_EQ(count(1, turn_codec::CommandTag::HandTap), 1u);
+	// Only the player with no editor claim gets the refusal, and the world of the other player does not get the edit
+	// The server sends one refusal for each block of commands that it refused commands from
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(alice.session.TakeEditorRefusals(), 0u);
+	EXPECT_EQ(bob.session.TakeEditorRefusals(), 0u);
 	// The worlds stay in step
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
-TEST_F(LockstepTest, AStaffObserverSendsTheEditsButNoCheat)
+TEST_F(LockstepTest, AnObserverWithTheEditorClaimSendsTheEditsButNoCheat)
 {
 	MakeHost(1);
 	// The observers join before the start, as this server has no world state for a later join
-	Computer watcher(network, now, "observer+staff:carol");
+	Computer watcher(network, now, "observer+editor:carol");
 	Computer other(network, now, "observer:dave");
 	Frames({&watcher, &other}, 3);
 	Computer alice(network, now, "god:alice");
 	Frames({&alice, &watcher, &other}, 8);
 	ASSERT_TRUE(host->Started());
-	EXPECT_TRUE(watcher.session.GetJoined()->staff);
+	EXPECT_TRUE(watcher.session.GetJoined()->editor);
 	const EditorEdit remove {.kind = EditorEdit::Kind::Remove, .object = Entity(7)};
 	watcher.session.Send(remove);
 	watcher.session.Send(DebugCheat {.cheat = 0, .on = true});
 	other.session.Send(remove);
 	Frames({&alice, &watcher, &other}, 4);
-	// The client of an observer with no staff claim does not send the edit, and no observer client sends a cheat
-	EXPECT_EQ(host->RefusedStaffCommands(), 0u);
+	// The client of an observer with no editor claim does not send the edit, and no observer client sends a cheat
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
 	const auto edits = std::ranges::count_if(alice.world.observerCommands, [](const Command& command) {
 		return std::holds_alternative<EditorEdit>(command.action);
 	});
@@ -844,6 +914,92 @@ TEST_F(LockstepTest, AnAwayGodIsDefeatedAfterTheTimeToComeBack)
 	EXPECT_EQ(commands, 3u);
 }
 
+TEST_F(LockstepTest, WhenThePlayersOfAllTheGodsLoseTheConnectionTheGameEndsAfterTheShortTime)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 10);
+	ASSERT_TRUE(host->Started());
+	network.Cut(alice.sockets->Ids().back());
+	network.Cut(bob.sockets->Ids().back());
+	// Both computers stop. The gods wait 10 seconds, not the time to come back of 5 minutes.
+	for (int i = 0; i < 90; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Away);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	EXPECT_FALSE(host->GameOver());
+	for (int i = 0; i < 30; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Closed);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+	EXPECT_TRUE(host->GameOver());
+}
+
+TEST_F(LockstepTest, TheShortTimeStartsWhenThePlayerOfTheLastGodLosesTheConnection)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 10);
+	network.Cut(alice.sockets->Ids().back());
+	for (int i = 0; i < 50; ++i)
+	{
+		Frame({&bob});
+	}
+	network.Cut(bob.sockets->Ids().back());
+	// Alice is away for 13 seconds, but Bob for 8 seconds only: both gods still wait
+	for (int i = 0; i < 80; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Away);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	for (int i = 0; i < 30; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Closed);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+}
+
+TEST_F(LockstepTest, WhenTheLastConnectedGodLeavesAnAwayGodWaitsOnlyTheShortTime)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 10);
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 5);
+	alice.session.Leave();
+	alice.Frame();
+	for (int i = 0; i < 120; ++i)
+	{
+		Frame({});
+	}
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+	EXPECT_TRUE(host->GameOver());
+}
+
+TEST_F(LockstepTest, AnAwayGodKeepsTheTimeToComeBackWhileAnotherGodsPlayerIsConnected)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 10);
+	network.Cut(bob.sockets->Ids().back());
+	for (int i = 0; i < 200; ++i)
+	{
+		Frame({&alice});
+	}
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+}
+
 TEST_F(LockstepTest, AClientThatPartsTriesThreeRejoinsAndThenLeaves)
 {
 	MakeHost(1);
@@ -940,6 +1096,106 @@ TEST_F(LockstepTest, AClientThatPartsSendsItsPartsAndBothLogsNameThePartThatDiff
 	EXPECT_TRUE(std::ranges::any_of(
 	    lines, [](const std::string& line) { return line.find("The client asks to resume from turn") != std::string::npos; }));
 	EXPECT_EQ(alice.loads, 1u);
+}
+
+TEST_F(LockstepTest, TheRoomRefusesAGodWhoseGameDataIsNotTheServers)
+{
+	MakeHost(2);
+	host->SetDataPrint({{.path = "Data/info.dat", .present = true, .size = 4, .hash = 1},
+	                    {.path = "Data/Text/english.txt", .present = true, .size = 4, .hash = 2}});
+	const auto print = [](uint64_t infoHash, uint64_t textHash) {
+		return [infoHash, textHash](std::span<const std::string> files) {
+			EXPECT_EQ(files.size(), 2U);
+			return game_socket::DataPrint {
+			    .files = {{.path = "Data/info.dat", .present = true, .size = 4, .hash = infoHash},
+			              {.path = "Data/Text/english.txt", .present = true, .size = 4, .hash = textHash}},
+			    .patch = "1.20",
+			    .language = {}};
+		};
+	};
+	// A file of the table of objects refuses the join, another file only goes in the log
+	Computer alice(network, now, "god:alice");
+	alice.printData = print(1, 3);
+	Computer bob(network, now, "god:bob");
+	bob.printData = print(9, 2);
+	Frames({&alice, &bob}, 10);
+	EXPECT_EQ(bob.session.RefusedReason(), "data");
+	EXPECT_EQ(bob.session.RefusedPath(), "Data/info.dat");
+	EXPECT_TRUE(alice.session.RefusedReason().empty());
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
+	EXPECT_TRUE(std::ranges::any_of(bob.session.Log().Lines(),
+	                                [](const std::string& line) { return line.find("Data/info.dat") != std::string::npos; }));
+	// A god with the same data takes the free seat, and the game starts
+	Computer carol(network, now, "god:carol");
+	carol.printData = print(1, 2);
+	Frames({&alice, &carol}, 10);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(carol.session.GetState(), NetworkSession::State::Playing);
+}
+
+TEST_F(LockstepTest, TheServerCapturesTheFirstDesyncOfAGodEntityByEntity)
+{
+	MakeHost(1);
+	GiveWorldState();
+	host->SetPartsOfTurn(
+	    [](uint32_t turn) { return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}}; });
+	const auto entities = [](uint64_t change) {
+		return [change](std::span<const std::string> names) {
+			std::vector<synced_state::PartEntities> parts;
+			for (const auto& name : names)
+			{
+				synced_state::PartEntities part {.part = name, .entities = {}};
+				for (uint32_t i = 0; i < 300; ++i)
+				{
+					part.entities.push_back(
+					    {.entity = i, .hash = i == 270 ? change : i + 1, .kind = "Villager", .position = {}});
+				}
+				parts.push_back(std::move(part));
+			}
+			return parts;
+		};
+	};
+	std::vector<server::CaptureRecord> records;
+	host->SetCapture({.turn = 0,
+	                  .build = "b",
+	                  .land = "Land1.txt",
+	                  .landSha256 = {},
+	                  .map = {},
+	                  .seed = 1,
+	                  .data = 5,
+	                  .patch = {},
+	                  .language = {}},
+	                 entities(5), [&records](server::CaptureRecord record) { records.push_back(std::move(record)); });
+	Computer alice(network, now, "god:alice");
+	constexpr uint32_t k_PartsAfter = 20;
+	alice.parts = [](uint32_t turn) {
+		return online::PartHashes {
+		    {"entities", 1}, {"Transform", 10 + turn + (turn > k_PartsAfter ? 1 : 0)}, {"synced seed", 7}};
+	};
+	alice.entities = entities(6);
+	alice.saveWorld = [] { return std::vector<uint8_t> {4, 3, 2, 1}; };
+	alice.world.partsAfter = k_PartsAfter;
+	Frames({&alice}, 120);
+	std::string clientLines;
+	for (const auto& line : alice.session.Log().Lines())
+	{
+		clientLines += line + '\n';
+	}
+	ASSERT_EQ(records.size(), 1U) << clientLines;
+	const auto& record = records[0];
+	EXPECT_TRUE(record.missing.empty());
+	EXPECT_EQ(record.playerWorld, (std::vector<uint8_t> {4, 3, 2, 1}));
+	EXPECT_FALSE(record.serverWorld.empty());
+	ASSERT_TRUE(record.player.has_value());
+	ASSERT_FALSE(record.parts.empty());
+	EXPECT_EQ(record.parts[0].part, "Transform");
+	ASSERT_EQ(record.parts[0].differences.size(), 1U);
+	EXPECT_EQ(record.parts[0].differences[0].entity, 270U);
+	// After the capture the client loads the server's world
+	EXPECT_EQ(alice.loads, 1u);
+	EXPECT_TRUE(std::ranges::any_of(alice.session.Log().Lines(), [](const std::string& line) {
+		return line.find("The resync starts") != std::string::npos;
+	}));
 }
 
 TEST_F(LockstepTest, BothSidesTellTheDesyncWithItsChecksumsAndThePartsThatDiffer)
@@ -1465,6 +1721,54 @@ TEST_F(LockstepTest, AThirdGodIsRefusedFromARoomOfTwoSlotsAndAnObserverIsLetIn)
 	alice.session.SetReady(true);
 	Frames({&alice, &bob, &watcher}, 6);
 	EXPECT_TRUE(host->Started());
+}
+
+TEST_F(LockstepTest, AFixedServerWaitsForEachGodOfTheLobbyGameThatTheTicketsGive)
+{
+	// The fixed room has 2 slots and starts with 1 god, but the tickets of the lobby's game give 2 gods
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	Computer alice(network, now, "god:alice@lobby1#2");
+	Frames({&alice}, 6);
+	// Alice is ready, but the second god of the lobby's game is not in the room: the room does not start
+	EXPECT_FALSE(host->Started());
+	EXPECT_FALSE(host->Starting());
+	EXPECT_EQ(host->GodsToWaitFor(), 2u);
+	Computer bob(network, now, "god:bob@lobby1#2");
+	bob.session.SetReady(false);
+	Frames({&alice, &bob}, 6);
+	// Bob is in the room, but he is not ready: the room does not start
+	EXPECT_FALSE(host->Started());
+	bob.session.SetReady(true);
+	Frames({&alice, &bob}, 6);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+}
+
+TEST_F(LockstepTest, AFixedServerWaitsForItsOwnFewestGodsAgainAfterTheLobbyGodsLeave)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	Computer alice(network, now, "god:alice@lobby1#2");
+	Frames({&alice}, 6);
+	EXPECT_EQ(host->GodsToWaitFor(), 2u);
+	alice.session.Leave();
+	alice.Frame();
+	Frames({}, 3);
+	EXPECT_FALSE(host->Started());
+	EXPECT_EQ(host->GodsToWaitFor(), 1u);
+	// A player of the server's own room with no lobby starts it alone, as before
+	Computer carol(network, now, "god:carol");
+	Frames({&carol}, 6);
+	EXPECT_TRUE(host->Started());
+}
+
+TEST_F(LockstepTest, AFixedServerStartsAOneGodLobbyGameWithOneGod)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	Computer alice(network, now, "god:alice@lobby1#1");
+	Frames({&alice}, 6);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
 }
 
 TEST(LockstepRules, ALanNameHasNoControlCharacterAndAMostLength)

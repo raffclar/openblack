@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+#include <string>
 #include <string_view>
 
 #include "Online/NetworkSession.h"
@@ -27,6 +29,10 @@ struct ConnectionLostFacts
 	NetworkSession::End end {NetworkSession::End::None};
 	/// A run of the tools shows no box: its game stops when its network game ends
 	bool toolRun {false};
+	/// The player joined the game from the command line, so no front end tells the player of a refusal
+	bool joinedFromCommandLine {false};
+	/// The server refused the player because a file of the game data is not the server's, and named the file
+	bool dataRefused {false};
 };
 
 /// The network game ended because the connection to the game server is gone, and the player did not choose it: the
@@ -56,9 +62,43 @@ struct ConnectionLostFacts
 	return end == NetworkSession::End::Refused && refusal == "kicked";
 }
 
+/// The most letters of the path of a file in the box of a refusal for the game data
+inline constexpr size_t k_MostDataRefusalPathLetters = 260;
+
+/// The text of the box when the game server refused the player because a file of the game data is not the server's
+/// (deviation 266). The box names the path of the file, in place of the box of the lost connection. There is no text
+/// for other refusals, or when the server did not send the path. The text keeps only the printable ASCII letters of the
+/// path.
+[[nodiscard]] inline std::optional<std::string> DataRefusalText(NetworkSession::End end, std::string_view refusal,
+                                                                std::string_view path)
+{
+	if (end != NetworkSession::End::Refused || refusal != "data")
+	{
+		return std::nullopt;
+	}
+	std::string shown;
+	for (const char letter : path)
+	{
+		if (shown.size() == k_MostDataRefusalPathLetters)
+		{
+			break;
+		}
+		if (letter >= ' ' && letter <= '~')
+		{
+			shown.push_back(letter);
+		}
+	}
+	if (shown.empty())
+	{
+		return std::nullopt;
+	}
+	return "Your game data is not the server's: " + shown;
+}
+
 /// Tells when the box that the connection to the network game is lost shows: once for each network session, when a
 /// started game ends because the connection is gone. The tries to come back come first, so the box shows only after
-/// the last try. Before the start, the front end tells the player.
+/// the last try. Before the start, the front end tells the player. A join from the command line has no front end, so the
+/// box of a refusal for the game data shows before the start too.
 class ConnectionLostNotice
 {
 public:
@@ -71,8 +111,11 @@ public:
 			_told = false;
 			return false;
 		}
-		if (_told || facts.toolRun || !facts.started || facts.state != NetworkSession::State::Ended ||
-		    !LostTheConnection(facts.end))
+		if (_told || facts.toolRun || facts.state != NetworkSession::State::Ended || !LostTheConnection(facts.end))
+		{
+			return false;
+		}
+		if (!facts.started && !(facts.joinedFromCommandLine && facts.dataRefused))
 		{
 			return false;
 		}

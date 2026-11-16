@@ -33,6 +33,9 @@
 #include <processenv.h>
 // clang-format on
 #endif
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
@@ -251,6 +254,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-conditions", "Tools: the winning conditions of a network game, as the host picks them: [LAND:]NAME=VALUE,... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0 (for example WC_HOUSES_BUILT=3,WC_GROW_TREES=5). A client of a game server takes the conditions of the server.", cxxopts::value<std::string>())
 		("sim-leave-at", "Tests: at this turn the player of a network game leaves it as a player does, by Escape, Exit Online Game and Leave Game.", cxxopts::value<uint32_t>())
 		("sim-info-box-back-at", "Tests: at this turn the player of a network game clicks Back in the land information box. The player leaves the network game.", cxxopts::value<uint32_t>())
+		("sim-account-editor", "Tools: the game acts as a build that players get, with a signed-in account that has the editor right (granted) or does not have it (refused). Use it to check the editor rule of a single player game.", cxxopts::value<std::string>())
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
 		("sim-no-hand-reports", "Tools: the player's computer sends no report of its hand and its view in its commands, in a network game and in a single player game. The reports carry the camera, which moves at each frame, so two runs with the same seed get the same commands only with this switch.")
 		("sim-checksums", "Tools: write the checksum of the synced world at the end of each turn to this file, as JSON lines (- for the standard output, as the web build needs). Two builds that play the same land, seed and commands must write the same lines.", cxxopts::value<std::string>())
@@ -286,6 +290,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-world-states", "Tools: write the world state of this computer to this folder at the end of each turn of --sim-world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
 		("sim-world-state-turns", "Tools: with --sim-world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
 		("sentry-test-error", "Developers: after the start, throw an exception with the message \"Sentry test error\" and the time, to test the error reports. The player's option for the reports must be on.")
+		("sentry-test-trap", "Developers: after the start, stop the game with a trap of the processor (in the web game, a trap of the WebAssembly code), to test the crash reports. The player's option for the reports must be on.")
 		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
 		("turn-beside-draw", "Developers: the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later.");
 #endif
@@ -717,6 +722,15 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.lobbyTestAuthorities = result["lobby-test-ca"].as<std::string>();
 		}
 		args.useInternetWeather = result["internet-weather"].as<bool>();
+		if (result.count("sim-account-editor") != 0)
+		{
+			const auto right = result["sim-account-editor"].as<std::string>();
+			if (right != "granted" && right != "refused")
+			{
+				throw cxxopts::exceptions::parsing("--sim-account-editor takes granted or refused");
+			}
+			args.simAccountEditor = right == "granted";
+		}
 		args.showPing = result.count("show-ping") != 0;
 		if (result.count("map-piece-delay-ms") != 0)
 		{
@@ -742,6 +756,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.skipLogos = result.count("skip-logos") != 0;
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 		args.sentryTestError = result.count("sentry-test-error") != 0;
+		args.sentryTestTrap = result.count("sentry-test-trap") != 0;
 #endif
 		args.logoEffect = result.count("logo-effect") != 0;
 		args.newGame = result.count("new-game") != 0;
@@ -953,6 +968,7 @@ int main(int argc, char* argv[]) noexcept
 		openblack::crash_handler::SetLogFile(args.logFile);
 		errorReports.emplace(openblack::error_reports::Role::Client, args.logFile);
 		const bool sentryTestError = args.sentryTestError;
+		const bool sentryTestTrap = args.sentryTestTrap;
 #if defined(__EMSCRIPTEN__)
 		// The page gives links to the crash reports that the private storage of the site keeps, also with a log file
 		openblack::crash_handler::SetReportFolder(openblack::web::CrashReportFolder());
@@ -968,6 +984,16 @@ int main(int argc, char* argv[]) noexcept
 			const auto now = std::chrono::system_clock::now().time_since_epoch();
 			throw std::runtime_error(
 			    openblack::error_reports::TestErrorMessage(std::chrono::duration_cast<std::chrono::seconds>(now).count()));
+		}
+		// A developer test of the crash reports. The trap goes to the crash handler as a crash of the system, and in a web
+		// browser to the page as an error of the game thread.
+		if (sentryTestTrap)
+		{
+#if defined(_MSC_VER)
+			__ud2();
+#else
+			__builtin_trap();
+#endif
 		}
 #if defined(__EMSCRIPTEN__)
 		// In a web browser the game thread waits for the browser after each frame, so that the browser shows the frame

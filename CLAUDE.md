@@ -16,6 +16,7 @@ installed.
 - `openblack-visual-review`
 - `openblack-deviations`
 - `openblack-vanilla-bugs`
+- `openblack-new-bug`
 - `openblack-commit-check`
 - `openblack-code-comments`
 - `openblack-modern-cpp`

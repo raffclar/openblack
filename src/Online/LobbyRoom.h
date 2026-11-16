@@ -119,6 +119,8 @@ enum class SystemLineKind : uint8_t
 	CouldNotStart,
 	/// Too few gods joined the game server in the time to join
 	NotEnoughJoined,
+	/// The game server did not start, because its version is not the version of the session
+	ServerVersion,
 	/// The lobby waits in the line for a free game server
 	Queued,
 };
@@ -238,6 +240,9 @@ public:
 	void Apply(const lobby_api::PushEvent& event);
 	/// A change of the lobby came, and the room needs the lobby again for the new values. The flag clears.
 	[[nodiscard]] bool TakeReloadWanted() noexcept { return std::exchange(_reloadWanted, false); }
+	/// The build id that the service needs, from the last start that a game server of another version stopped. Empty
+	/// when the service did not give it.
+	[[nodiscard]] const std::string& NeededBuild() const noexcept { return _neededBuild; }
 	/// Writes the line of each second of the countdown. The time is milliseconds since 1970 (UTC).
 	void Tick(int64_t nowMs);
 	/// Uses a new snapshot of the lobby, after the push channel lost events. The lines stay.
@@ -277,6 +282,7 @@ private:
 	std::array<uint32_t, k_SystemLineKinds> _systemLineCounts {};
 	/// A change of the lobby came: the room needs the lobby again
 	bool _reloadWanted {false};
+	std::string _neededBuild;
 	/// The fields of the changes that have no line yet, until the next reload
 	std::vector<std::string> _changedFields;
 	/// A change cleared the ready of each member, and the line comes after the next reload

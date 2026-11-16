@@ -2211,7 +2211,7 @@
   "query": "creatures.route"
  },
  {
-  "description": "The editor of this computer: whether it is open, whether a network game is live, whether the player of this computer is staff, and the debug cheats of that player",
+  "description": "The editor of this computer: whether it is open, whether a network game is live, whether the player of this computer has the editor right (from the join ticket in a network game, else from the signed-in account: granted, refused or unknown), what the debug windows show, and the debug cheats of that player",
   "kind": "object",
   "parameters": [],
   "query": "editor.state"
@@ -2230,7 +2230,7 @@
   "query": "editor.show_tab"
  },
  {
-  "description": "Sends an edit of the editor as a command of the turns, as the editor of a network game sends it: each computer does it at the same turn, and the game server takes it only from a staff player. force sends it also when the editor of this computer is refused, so that a test sees the refusal of the server.",
+  "description": "Sends an edit of the editor as a command of the turns, as the editor of a network game sends it: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused, so that a test sees the refusal of the server.",
   "kind": "object",
   "parameters": [
    {
@@ -2265,6 +2265,16 @@
     "type": "integer"
    },
    {
+    "description": "Placements in a row from the position, all in one frame (place; 1 when not given)",
+    "name": "copies",
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] from each placement to the next (place)",
+    "name": "step",
+    "type": "point"
+   },
+   {
     "description": "Send also when the editor is refused",
     "name": "force",
     "type": "boolean"
@@ -2274,7 +2284,87 @@
   "writes": true
  },
  {
-  "description": "Sends a debug cheat of the player of this computer as a command of the turns, as the cheats tab of the editor does. The game server takes it only from a staff player. force sends it also when the editor of this computer is refused.",
+  "description": "Sends a change of a value of a creature as a command of the turns, as the creature section of the editor sends it in a network game: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "alignment, fatness, strength, size, energy, exhaustion, thirst, poo, life, warmth, itchiness or grown up",
+    "name": "value",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The new amount of the value",
+    "name": "amount",
+    "required": true,
+    "type": "number"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.creature_edit",
+  "writes": true
+ },
+ {
+  "description": "Sends an act of the creature tools as a command of the turns, as the tabs of the creature section send it in a network game: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature (none for an act on every creature)",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The name of the act, such as \"sit down\"",
+    "name": "act",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The other thing of the act",
+    "name": "other",
+    "type": "integer"
+   },
+   {
+    "description": "The place of the act [x, y, z]",
+    "name": "position",
+    "type": "array"
+   },
+   {
+    "description": "The amount of the act",
+    "name": "amount",
+    "type": "number"
+   },
+   {
+    "description": "The index of the act in its list",
+    "name": "index",
+    "type": "integer"
+   },
+   {
+    "description": "Up to six small numbers of the act",
+    "name": "args",
+    "type": "array"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.creature_act",
+  "writes": true
+ },
+ {
+  "description": "Sends a debug cheat of the player of this computer as a command of the turns, as the cheats tab of the editor does. The game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
   "kind": "object",
   "parameters": [
    {
@@ -2295,6 +2385,20 @@
    }
   ],
   "query": "editor.cheat",
+  "writes": true
+ },
+ {
+  "description": "Sends the skip to a land of the story, 2 to 5, as a command of the turns, as the cheats tab of the editor does. The story changes the land as at the end of the land before. Only a game of the story on this computer alone does it. The skip to land 1 starts a new game, so only the editor does it.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The land of the story, 2 to 5",
+    "name": "land",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "editor.land_skip",
   "writes": true
  },
  {

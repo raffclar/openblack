@@ -174,6 +174,8 @@ struct Arguments
 	std::optional<std::string> lobbyTestAuthorities;
 	/// The game asks the lobby for the real-world weather. The setting of the lobby account decides if it comes.
 	bool useInternetWeather {true};
+	/// Tools: the editor rule of a build that players get, with this editor right of a signed-in account
+	std::optional<bool> simAccountEditor;
 	/// A network game shows the player's own ping (off by default)
 	bool showPing {false};
 	/// Tests: the wait before each request of a piece of a map that the lobby room downloads
@@ -199,6 +201,8 @@ struct Arguments
 	bool skipLogos {false};
 	/// Developers: throw a test error after the start, to test the error reports
 	bool sentryTestError {false};
+	/// Developers: stop with a trap after the start, to test the crash reports
+	bool sentryTestTrap {false};
 	/// Play the logo effect of the first game, a run of a developer or a tool too
 	bool logoEffect {false};
 	/// Start a new game rather than continue from the save on exit
@@ -368,6 +372,8 @@ public:
 	void FollowGameEnd();
 	/// A human of another computer left the network game: the advisors can remark on it, and a box tells the name
 	void TellLeaves();
+	/// The game server refused edits of the editor or debug cheats of this player: the player sees the refusal line
+	void TellEditorRefusals();
 	/// The player asks to leave the network game: the end box asks the question to leave
 	void AskToLeaveNetworkGame();
 	/// Exit Online Game of the menu: the question to leave, or a leave at once when the god of the player is out

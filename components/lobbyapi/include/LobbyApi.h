@@ -95,6 +95,10 @@ struct Session
 	/// "email_required": the account has no email address. The lobby refuses every other call with 403
 	/// "email_required" until the player adds an address on the account page of the site.
 	bool emailRequired {false};
+	/// "editor": the account has the editor right (optional). In a single player game, this right opens the editor and
+	/// its debug cheats in a build that players get. In a network game, only the editor claim of the join ticket
+	/// counts.
+	bool editor {false};
 };
 
 /// A clan of the account in GET /api/v1/me
@@ -284,6 +288,10 @@ struct ServerStatusPlayer
 	std::string role;
 	/// "clan": the clan that the god plays for, or null
 	std::optional<int64_t> clan;
+	/// "away": the player of the god lost the connection and can come back. The god keeps its seat.
+	bool away {false};
+
+	bool operator==(const ServerStatusPlayer&) const = default;
 };
 
 /// PUT /api/v1/servers/{id}/status: the report of a game server every 5 seconds, over mutual TLS
@@ -633,6 +641,11 @@ struct Problem
 	/// when the problem does not give them.
 	int32_t members {0};
 	int32_t slots {0};
+	/// "expected" of the problem "wrong_version": the build id that the service needs. Empty when the problem does not
+	/// give it.
+	std::string expected;
+	/// "download" of the problem "wrong_version": the page where the player gets the new version. Can be empty.
+	std::string download;
 };
 
 /// A frame of the push channel. An event: {"seq": n, "type": "...", "time": "...", "data": {...}}. A control frame
@@ -657,8 +670,11 @@ namespace events
 constexpr std::string_view k_Hello = "hello";
 constexpr std::string_view k_Resumed = "resumed";
 constexpr std::string_view k_Resync = "resync";
+constexpr std::string_view k_Subscribed = "subscribed";
 // The events
 constexpr std::string_view k_ChatLine = "chat.line";
+constexpr std::string_view k_ChatJoined = "chat.joined";
+constexpr std::string_view k_ChatLeft = "chat.left";
 constexpr std::string_view k_ServersChanged = "servers.changed";
 constexpr std::string_view k_ServersRemoved = "servers.removed";
 constexpr std::string_view k_RoomChanged = "room.changed";
@@ -731,6 +747,44 @@ struct ChatLine
 	AccountRef from;
 	/// "text"
 	std::string text;
+	/// "staff": true for a line of a confirmed staff account, false when it is missing
+	bool staff {false};
+};
+
+/// A line of "history" in "subscribed": {"seq": n, "time": "...", "from": {...}, "text": "...", "staff": true}
+struct ChatHistoryLine
+{
+	/// "seq": the number of the "chat.line" event of the line, 0 when it is missing
+	int64_t seq {0};
+	/// "time": milliseconds since 1970 (UTC)
+	int64_t time {0};
+	/// "from"
+	AccountRef from;
+	/// "text"
+	std::string text;
+	/// "staff"
+	bool staff {false};
+};
+
+/// The data of the control frame "subscribed": the channel, the people in a chat channel and, for the main lobby
+/// room, its last lines
+struct ChannelSubscribed
+{
+	/// "channel"
+	std::string channel;
+	/// "members": the account of each person, from {"account": {...}, "status": "..."}
+	std::vector<AccountRef> members;
+	/// "history": the last lines, the oldest first. Empty for a channel that has no history.
+	std::vector<ChatHistoryLine> history;
+};
+
+/// The data of "chat.joined" and of "chat.left": {"channel": "...", "account": {...}}
+struct ChatPresence
+{
+	/// "channel"
+	std::string channel;
+	/// "account"
+	AccountRef account;
 };
 
 /// The ping server of the game goes through the lobby (user answer GBX-1 b): the ping, the lines to one account, and the
@@ -837,6 +891,8 @@ struct Ban
 
 /// The channels of the push channel
 constexpr std::string_view k_ServersChannel = "servers";
+/// The main lobby room: the chat beside the list of the sessions
+constexpr std::string_view k_LobbyChannel = "lobby";
 /// The channel of the room of a game server is this text and the id of the server
 constexpr std::string_view k_ServerChannelPrefix = "server-";
 

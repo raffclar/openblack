@@ -2092,6 +2092,22 @@ if (NODE_EXECUTABLE)
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_exit.test.js
   )
+  add_test(NAME test_web_launcher_reports
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_reports.test.js
+  )
+  add_test(NAME test_web_launcher_assets
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_assets.test.js
+  )
+  add_test(NAME test_web_launcher_buttons
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_buttons.test.js
+  )
+  add_test(NAME test_web_launcher_cloud
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_cloud.test.js
+  )
 endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
 openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
@@ -2617,3 +2633,14 @@ openblack_setup_and_add_test(test_lobby_room online/test_lobby_room.cpp)
 openblack_setup_and_add_test(test_lobby_screen_rules gui/test_lobby_screen_rules.cpp)
 openblack_setup_and_add_test(test_camera_jump test_camera_jump.cpp)
 openblack_setup_and_add_test(test_desync_reports test_desync_reports.cpp)
+openblack_setup_and_add_test(test_game_data_print online/test_game_data_print.cpp)
+openblack_setup_and_add_test(test_entity_hashes test_entity_hashes.cpp)
+openblack_setup_and_add_test(test_desync_capture online/test_desync_capture.cpp)
+openblack_setup_and_add_test(test_main_lobby_chat gui/test_main_lobby_chat.cpp)
+openblack_setup_and_add_test(test_temple_free_camera camera/test_temple_free_camera.cpp)
+openblack_setup_and_add_test(test_editor_creature_edits test_editor_creature_edits.cpp)
+openblack_setup_and_add_test(test_editor_creature_acts test_editor_creature_acts.cpp)
+openblack_setup_and_add_test(test_desync_fields online/test_desync_fields.cpp)
+openblack_setup_and_add_test(test_creature_freeze_stop test_creature_freeze_stop.cpp)
+target_link_libraries(test_creature_freeze_stop PRIVATE edt psys)
+openblack_setup_and_add_test(test_story_land_skip test_story_land_skip.cpp)

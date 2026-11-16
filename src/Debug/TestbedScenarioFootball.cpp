@@ -28,6 +28,14 @@ constexpr size_t k_Villagers = 14;
 constexpr size_t k_FirstHomePlayer = 2;
 /// The time from the last villager to the creature's action: the match plays by then
 constexpr float k_MatchPlaysSeconds = 60.0f;
+/// The pitch, by its place in the scenario's objects
+constexpr size_t k_PitchObject = 0;
+/// The match waits 30 seconds from its first player before the ball goes on the centre spot. The players come in the
+/// first seven seconds, so the kick-off comes within a minute.
+constexpr uint32_t k_KickOffWaitTurns = 300;
+constexpr uint32_t k_KickOffByTurn = 600;
+/// A match with too few players sends them home after 180 seconds. A turn after that time, the players still wait.
+constexpr uint32_t k_PastSendHomeTurns = 2000;
 
 /// The pitch and fourteen villagers of the town in front of it, and the commands that bring them to the pitch one after
 /// the other
@@ -95,6 +103,36 @@ void testbed_scenarios::AddFootballScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {k_Pitch, glm::vec2 {0.0f, 10.0f}}, .distance = 0.5f},
 	    .objects = std::move(objects),
 	    .commands = std::move(commands),
+	    .checks = {{.label = "the match kicks off within a minute",
+	                .quantity = checks::Quantity::FootballMatchState,
+	                .index = k_PitchObject,
+	                .afterTurns = k_KickOffWaitTurns,
+	                .byTurn = k_KickOffByTurn,
+	                .atLeast = 1.0}},
+	});
+	auto [offObjects, offCommands] = MatchScene();
+	all.push_back({
+	    .id = "villagers.football_switch_off",
+	    .name = "A football pitch with the Soccer Add-On off",
+	    .facet = Facet::Idle,
+	    .description = "The switch of the Soccer Add-On is off, as on a normal install and in every multiplayer game. "
+	                   "A Celtic football pitch of the player's town stands built, as a land's script can make one. "
+	                   "Fourteen grown villagers of the town come to it one after the other, as in the football match "
+	                   "scenario.",
+	    .expected = "As in the game, the pitch still takes the villagers that relax: the first is the referee, ten "
+	                "walk to places near the centre spot, and three watch at the side. Then nothing more happens. The "
+	                "match does not start, the ball does not go on the centre spot, and the players are not sent home "
+	                "after three minutes. They stay in the state of waiting for the kick-off for ever (vanilla bugs "
+	                "list).",
+	    .environment = {.dispenserGrid = false, .football = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pitch, glm::vec2 {0.0f, 10.0f}}, .distance = 0.5f},
+	    .objects = std::move(offObjects),
+	    .commands = std::move(offCommands),
+	    .checks = {{.label = "the match still waits after the time that sends players home",
+	                .quantity = checks::Quantity::FootballMatchState,
+	                .index = k_PitchObject,
+	                .afterTurns = k_PastSendHomeTurns,
+	                .atMost = 0.0}},
 	});
 	std::vector<ObjectSetup> site {{.type = AbodeInfo::CelticFootballPitch, .offset = k_Pitch, .built = 0.3f},
 	                               {.type = AbodeInfo::CelticTownCentre, .offset = {-30.0f, -15.0f}},

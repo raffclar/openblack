@@ -515,6 +515,21 @@ TEST(LobbyRoom, TheCountdownWritesEachSecond)
 	EXPECT_EQ(LineTexts(room).back(), "The start was cancelled.");
 }
 
+TEST(LobbyRoom, AGameServerOfAnotherVersionTellsEachPlayerWhyTheStartStopped)
+{
+	LobbyRoom room(TestLobby(), k_Me);
+	room.Apply(Event("start.cancelled",
+	                 R"({"why":"wrong_version","server_build":"0.2.0+bbb/codec36","expected":"0.2.0+bbb/codec36"})"));
+	EXPECT_EQ(room.Phase(), RoomPhase::Open);
+	EXPECT_EQ(LineTexts(room).back(), "The game could not start: the game server has version 0.2.0+bbb/codec36.");
+	EXPECT_EQ(room.NeededBuild(), "0.2.0+bbb/codec36");
+	EXPECT_EQ(room.SystemLineCount(SystemLineKind::ServerVersion), 1U);
+	// A service that does not give the build of the server still gives the reason
+	room.Apply(Event("start.cancelled", R"({"why":"wrong_version"})"));
+	EXPECT_EQ(LineTexts(room).back(), "The game could not start: the game server has another version of openblack.");
+	EXPECT_TRUE(room.NeededBuild().empty());
+}
+
 TEST(LobbyRoom, TheQueueShowsThePlace)
 {
 	LobbyRoom room(TestLobby(), k_Me);
@@ -884,6 +899,42 @@ TEST_F(LobbyRoomSystemTest, TheStartAndTheCountdown)
 	                    R"("role":"god","game_id":"g1"})");
 	ASSERT_TRUE(ticket.has_value());
 	EXPECT_EQ(ticket->url, "wss://bw.example/game/s1/g1");
+}
+
+TEST_F(LobbyRoomSystemTest, ACancelReturnsTheRoomToTheOpenRoom)
+{
+	JoinTestLobby();
+	const auto members = _system.Room()->Data().members.size();
+	const auto owlReady = _system.Room()->Data().members[1].ready;
+	_system.Start({});
+	_client.Answer(202, R"({"state":"countdown","at":"2026-11-12T10:00:05Z"})");
+	ASSERT_EQ(_system.Room()->Phase(), RoomPhase::Countdown);
+
+	std::optional<LobbyError> first;
+	_system.CancelStart([&](auto&& result) { first = result.error; });
+	EXPECT_EQ(_client.calls.back().path, "/lobbies/l1/start/cancel");
+	_client.Answer(200, R"({"state":"open","at":null})");
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->kind, LobbyErrorKind::None);
+	_client.Deliver(Event("start.cancelled", R"({"why":"host_cancelled"})"));
+	EXPECT_EQ(_system.Room()->Phase(), RoomPhase::Open);
+	EXPECT_EQ(RoomLineText(_system.Room()->Lines().back()), "The start was cancelled.");
+	// The players stay in the room, with their ready
+	EXPECT_EQ(_system.Room()->Data().members.size(), members);
+	EXPECT_EQ(_system.Room()->Data().members[1].ready, owlReady);
+
+	// A second cancel that comes after the stop: the service refuses it, and the room stays open
+	std::optional<LobbyError> second;
+	_system.CancelStart([&](auto&& result) { second = result.error; });
+	_client.Refuse(409, "not_starting");
+	ASSERT_TRUE(second.has_value());
+	EXPECT_EQ(second->code, "not_starting");
+	EXPECT_EQ(_system.Room()->Phase(), RoomPhase::Open);
+
+	// The host can start again
+	_system.Start({});
+	_client.Answer(202, R"({"state":"countdown","at":"2026-11-12T10:01:05Z"})");
+	EXPECT_EQ(_system.Room()->Phase(), RoomPhase::Countdown);
 }
 
 TEST_F(LobbyRoomSystemTest, TheEndStopsTheChannelOfTheRoom)

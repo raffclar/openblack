@@ -93,3 +93,21 @@ TEST(ErrorReports, TheTestErrorStartsWithItsTextAndHasTheTime)
 {
 	EXPECT_EQ(TestErrorMessage(1763035200), "Sentry test error 1763035200");
 }
+
+TEST(ErrorReports, TheCrashEventHasTheDetailAndTheMessageOrElseTheNameOfTheKind)
+{
+	openblack::crash_report::CrashInfo info;
+	info.kind = openblack::crash_report::CrashKind::Terminate;
+	info.detail = "class std::runtime_error";
+	info.message = "Sentry test error 1";
+	auto texts = CrashEventTextsOf(info);
+	EXPECT_EQ(texts.type, "class std::runtime_error");
+	EXPECT_EQ(texts.message, "Sentry test error 1");
+	// A crash with no exception, such as an abort, has the name of its kind in both texts
+	info.kind = openblack::crash_report::CrashKind::Abort;
+	info.detail = {};
+	info.message = {};
+	texts = CrashEventTextsOf(info);
+	EXPECT_EQ(texts.type, "abort() called");
+	EXPECT_EQ(texts.message, "abort() called");
+}

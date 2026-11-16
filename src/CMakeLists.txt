@@ -57,10 +57,19 @@ if (EMSCRIPTEN OR ANDROID)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Server/Desktop/")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Server/Desktop/")
 endif ()
-# The reports to Sentry are built only with the option
-if (NOT OPENBLACK_SENTRY)
+# The reports to Sentry are built only with the option: through sentry-native on the desktop, and through the browser
+# SDK of the page on the web
+if (NOT OPENBLACK_SENTRY OR EMSCRIPTEN)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Common/SentryErrorReports[.]cpp$")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Common/SentryErrorReports[.]h$")
+endif ()
+if (NOT OPENBLACK_SENTRY OR NOT EMSCRIPTEN)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX
+       "/Common/BrowserErrorReports[.]cpp$"
+  )
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX
+       "/Common/BrowserErrorReports[.]h$"
+  )
 endif ()
 if (APPLE)
   file(GLOB_RECURSE OPENBLACK_OBJC_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.mm")
@@ -87,14 +96,14 @@ set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Audio/(MpegAudioDecoder|WavAudioDecoder|AudioDecoderInterface)"
     "Debug/(SimRun|SimChecks|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TestbedLobbySessions|TownMiracleRules|TownMiracles|TestbedScenarioRunner|NoScenarioPlayer|ScenarioPlayer|DebugGuiInterface|FightAutopilotInterface|TestbedGameStageInterface|TestbedHandSweep|StateHashWatch)"
     "Debug/TestbedScenario[A-Z][A-Za-z]*"
-    "Editor/(EditorMath|EditorEntities|EditorNetworkEdits|EditorPalette|EditorSelection|EditorOutline|EditorHistory|EditorPaths|LandBrush|LandSave)"
+    "Editor/(EditorMath|EditorEntities|EditorNetworkEdits|EditorCreatureEdits|EditorCreatureActs|EditorPalette|EditorSelection|EditorOutline|EditorHistory|EditorPaths|LandBrush|LandSave)"
     "Graphics/(HandLight|PixelCentres|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize|GraphicsDeviceInterface|DeviceDataGivers|GraphicsHandle|FilmSurface|ZSort|FizzDrawOrder|HandReflection|ObjectTint|TempleHeartLook)"
-    "Gui/(ChatControlsRules|ScreenPixels|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|GodWindowRules|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndLobby|MultiplayerFrontEndRules|LobbyScreenRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips|DialogRect|SavingBoxRules)"
+    "Gui/(ChatControlsRules|MainLobbyChatRules|ScreenPixels|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|GodWindowRules|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndLobby|MultiplayerFrontEndRules|LobbyScreenRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips|DialogRect|SavingBoxRules)"
     "Input/(AltHeldPresses|HandButtonMessages|InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice|GameActionMapInterface|InputDeviceInterface|BindableActions|LocalPlayer|PointerSettle|BoxKeyboard|MouseMotion|PlatformKeys|DeveloperKeys|PointerButtons|HandPointer)"
     "Windowing/(WindowFit|WindowPixels|WindowingInterface)"
     "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
     "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProvider[A-Za-z]*|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|ServerProviders|SimRecorder|StartupBoxInput|SystemProviders|WorldProviders|GameSeamInterface)"
-    "Web/(WebPointer|FetchHttpClient|BrowserWebSocketClient|IndexedDbMapStore|PageSiteSession)"
+    "Web/(WebPointer|FetchHttpClient|BrowserWebSocketClient|IndexedDbMapStore|PageSiteSession|ProfileWriteNotice)"
 )
 list(JOIN OPENBLACK_SIM_IN_CLIENT_FOLDERS "|" OPENBLACK_SIM_IN_CLIENT_FOLDERS)
 list(FILTER OPENBLACK_CLIENT_SOURCES EXCLUDE REGEX
@@ -371,7 +380,9 @@ endif ()
 if (OPENBLACK_SENTRY)
   # The error and crash reports. The simulation libraries take this link and the definition, so the game server has
   # them too.
-  target_link_libraries(openblack_lib PRIVATE sentry::sentry)
+  if (NOT EMSCRIPTEN)
+    target_link_libraries(openblack_lib PRIVATE sentry::sentry)
+  endif ()
   target_compile_definitions(openblack_lib PUBLIC OPENBLACK_SENTRY)
 endif ()
 
@@ -782,14 +793,38 @@ else ()
                "${CMAKE_SOURCE_DIR}/web/page/input.js"
     )
     # The page files go next to the game
-    file(
-      GLOB
-      OPENBLACK_WEB_PAGE_FILES
-      "${CMAKE_SOURCE_DIR}/web/page/*.html"
-      "${CMAKE_SOURCE_DIR}/web/page/*.css"
-      "${CMAKE_SOURCE_DIR}/web/page/launcher*.js"
-      "${CMAKE_SOURCE_DIR}/web/page/*-worker.js"
+    file(GLOB OPENBLACK_WEB_PAGE_FILES "${CMAKE_SOURCE_DIR}/web/page/*.css"
+         "${CMAKE_SOURCE_DIR}/web/page/launcher*.js"
+         "${CMAKE_SOURCE_DIR}/web/page/*-worker.js"
     )
+    # The page of a build with the error reports may connect to the origin of the DSN, which gets the reports. The
+    # configure step writes the page with this origin in its content security policy. The page holds no key of the DSN.
+    set(OPENBLACK_WEB_INDEX_SOURCE "${CMAKE_SOURCE_DIR}/web/page/index.html")
+    set(OPENBLACK_WEB_INDEX "${CMAKE_CURRENT_BINARY_DIR}/web-page/index.html")
+    set_property(
+      DIRECTORY
+      APPEND
+      PROPERTY CMAKE_CONFIGURE_DEPENDS "${OPENBLACK_WEB_INDEX_SOURCE}"
+    )
+    file(READ "${OPENBLACK_WEB_INDEX_SOURCE}" OPENBLACK_WEB_INDEX_TEXT)
+    if (OPENBLACK_SENTRY)
+      openblack_sentry_report_origin(
+        "${OPENBLACK_SENTRY_DSN}" OPENBLACK_SENTRY_REPORT_ORIGIN
+      )
+      if (OPENBLACK_SENTRY_REPORT_ORIGIN)
+        string(REPLACE "connect-src 'self';"
+                       "connect-src 'self' ${OPENBLACK_SENTRY_REPORT_ORIGIN};"
+                       OPENBLACK_WEB_INDEX_TEXT "${OPENBLACK_WEB_INDEX_TEXT}"
+        )
+      endif ()
+      list(APPEND OPENBLACK_WEB_PAGE_FILES "${OPENBLACK_SENTRY_BROWSER_SCRIPT}"
+           "${OPENBLACK_SENTRY_BROWSER_LICENSE}"
+      )
+    endif ()
+    file(CONFIGURE OUTPUT "${OPENBLACK_WEB_INDEX}" CONTENT
+         "${OPENBLACK_WEB_INDEX_TEXT}" @ONLY
+    )
+    list(APPEND OPENBLACK_WEB_PAGE_FILES "${OPENBLACK_WEB_INDEX}")
     add_custom_command(
       TARGET openblack
       POST_BUILD

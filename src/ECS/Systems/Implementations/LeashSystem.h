@@ -67,7 +67,7 @@ public:
 	bool OrderOn(PlayerNames player, entt::entity object) override;
 	[[nodiscard]] std::optional<glm::vec3> OrderTarget(entt::entity creature) const override;
 	bool PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-	                 uint32_t milliseconds) override;
+	                 uint32_t milliseconds, bool mayTie) override;
 	bool TapThing(PlayerNames player, entt::entity object) override;
 	[[nodiscard]] bool TakesTap(PlayerNames player, entt::entity object) const override;
 	[[nodiscard]] std::optional<float> RopeUnderCursor(PlayerNames player, const RopeFrame& frame) override;

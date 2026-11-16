@@ -21,6 +21,8 @@
 
 #include <LobbyApi.h>
 
+#include "Common/ErrorReportsInterface.h"
+
 namespace openblack::online
 {
 class OnlineMapStoreInterface;
@@ -67,6 +69,18 @@ public:
 	using Assemble =
 	    std::function<std::optional<std::vector<uint8_t>>(const lobby_api::OnlineMap& map, std::vector<uint8_t> bytes)>;
 
+	/// The step of the download that failed
+	enum class Failure : uint8_t
+	{
+		None,
+		/// The lobby did not give a piece, also after the second try
+		Piece,
+		/// All the bytes came, but they did not make the map of the list, also after the second check
+		Check,
+		/// The store could not keep the file
+		Store,
+	};
+
 	/// The tries of the lobby before the download fails
 	static constexpr int k_Tries = 2;
 	/// The most bytes of one piece
@@ -89,6 +103,10 @@ public:
 	void Stop();
 
 	[[nodiscard]] State GetState() const noexcept { return _state; }
+	/// The step that failed when the state is Failed, else None
+	[[nodiscard]] Failure GetFailure() const noexcept { return _state == State::Failed ? _failure : Failure::None; }
+	/// The first byte of the piece that the lobby did not give, for a failure of a piece
+	[[nodiscard]] uint64_t GetFailedOffset() const noexcept { return _failedOffset; }
 	/// The map of the download
 	[[nodiscard]] const std::optional<lobby_api::OnlineMap>& GetMap() const noexcept { return _map; }
 	/// The bytes that the download keeps for a map, by the SHA-256 of the map. 0 when it keeps none.
@@ -99,6 +117,14 @@ public:
 	/// The bytes of the file that the lobby gives for a map: the map package when the map has one, else the map file. 0
 	/// when the list does not give the size.
 	[[nodiscard]] static uint64_t TransferSizeOf(const lobby_api::OnlineMap& map);
+	/// The address that the download asks for the pieces of a map: the map package, or else the map file of the lobby
+	[[nodiscard]] static std::string AddressOf(const lobby_api::OnlineMap& map);
+	/// The event of the error reports for a failed download, with no player name. The step is "list" (the lobby did not
+	/// give the map list, or the list has no such map), "piece", "check" or "store". The status is the HTTP status of the
+	/// last refused piece, 0 when no answer came, and the error is the kind of the last error of the lobby.
+	[[nodiscard]] static error_reports::FailureEvent ReportOf(std::string_view sha256, const lobby_api::OnlineMap* map,
+	                                                          std::string_view step, uint64_t offset, int32_t status,
+	                                                          int32_t error);
 	/// The map of the list that a room plays, by the hash that the room gives. None when the room plays a land of the
 	/// game, or the list has no such map.
 	[[nodiscard]] static std::optional<lobby_api::OnlineMap> MapOfRoom(std::span<const lobby_api::OnlineMap> maps,
@@ -135,6 +161,8 @@ private:
 	Assemble _assemble;
 	uint64_t _pieceBytes;
 	State _state {State::Idle};
+	Failure _failure {Failure::None};
+	uint64_t _failedOffset {0};
 	std::optional<lobby_api::OnlineMap> _map;
 	/// The tries of the lobby for the next piece
 	int _triesLeft {k_Tries};

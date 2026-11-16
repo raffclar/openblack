@@ -18,10 +18,13 @@
 #include <type_traits>
 #include <utility>
 
+#include "Common/CreatureEditActs.h"
+#include "Common/CreatureEditValues.h"
 #include "Common/DebugCheats.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFight.h"
 #include "PlayerSlots.h"
+#include "Story/StoryLandSkip.h"
 
 namespace openblack::turn_codec
 {
@@ -382,6 +385,24 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Byte(command.cheat);
 		               out.Byte(command.on ? 1 : 0);
 	               },
+	               [&out](const EditorCreatureEdit& command) {
+		               out.Entity(command.creature);
+		               out.Byte(command.value);
+		               out.Float(command.amount);
+	               },
+	               [&out](const EditorCreatureAct& command) {
+		               out.Entity(command.creature);
+		               out.Byte(command.act);
+		               out.Entity(command.other);
+		               out.Vector(command.position);
+		               out.Float(command.amount);
+		               out.Number(command.index);
+		               for (const auto arg : command.args)
+		               {
+			               out.Byte(arg);
+		               }
+	               },
+	               [&out](const DebugLandSkip& command) { out.Byte(command.land); },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -893,6 +914,45 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = DebugCheat {.cheat = cheat, .on = on == 1};
 		return DecodeError::None;
 	}
+	case CommandTag::EditorCreatureEdit:
+	{
+		const auto creature = in.Entity();
+		const auto value = in.Byte();
+		if (!creature_edit_values::ValueFrom(value).has_value())
+		{
+			return DecodeError::Value;
+		}
+		action = EditorCreatureEdit {.creature = creature, .value = value, .amount = in.Float()};
+		return DecodeError::None;
+	}
+	case CommandTag::EditorCreatureAct:
+	{
+		EditorCreatureAct act {.creature = in.Entity(), .act = in.Byte()};
+		if (!creature_edit_acts::ActFrom(act.act).has_value())
+		{
+			return DecodeError::Value;
+		}
+		act.other = in.Entity();
+		act.position = in.Vector();
+		act.amount = in.Float();
+		act.index = in.Number<uint16_t>();
+		for (auto& arg : act.args)
+		{
+			arg = in.Byte();
+		}
+		action = act;
+		return DecodeError::None;
+	}
+	case CommandTag::DebugLandSkip:
+	{
+		const auto land = in.Byte();
+		if (!story_land_skip::GoesAsCommand(land))
+		{
+			return in.Bad() ? DecodeError::Truncated : DecodeError::Value;
+		}
+		action = DebugLandSkip {.land = land};
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -1066,6 +1126,9 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandLockRelease& /*command*/) { return CommandTag::HandLockRelease; },
 	                      [](const EditorEdit& /*command*/) { return CommandTag::EditorEdit; },
 	                      [](const DebugCheat& /*command*/) { return CommandTag::DebugCheat; },
+	                      [](const EditorCreatureEdit& /*command*/) { return CommandTag::EditorCreatureEdit; },
+	                      [](const EditorCreatureAct& /*command*/) { return CommandTag::EditorCreatureAct; },
+	                      [](const DebugLandSkip& /*command*/) { return CommandTag::DebugLandSkip; },
 	                  },
 	                  action);
 }
@@ -1073,72 +1136,75 @@ CommandTag TagOf(const Action& action) noexcept
 size_t SizeOf(const Action& action) noexcept
 {
 	using namespace sizes;
-	const size_t fields =
-	    std::visit(Overloaded {
-	                   [](const LeashKey& /*command*/) { return size_t {1}; },
-	                   [](const CreatureFightCheat& /*command*/) { return size_t {0}; },
-	                   [](const TempleLeashOff& /*command*/) { return size_t {0}; },
-	                   [](const LeashTap& /*command*/) { return k_Entity; },
-	                   [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
-	                   [](const HandTake& /*command*/) { return k_Entity; },
-	                   [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
-	                   [](const HandTap& /*command*/) { return k_Entity; },
-	                   [](const HandGive& /*command*/) { return 2 * k_Entity + 1; },
-	                   [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
-	                   [](const LeashPostTap& /*command*/) { return k_Entity; },
-	                   [](const HandReport& /*command*/) { return 4 * k_Vector; },
-	                   [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
-	                   [](const HandLock& /*command*/) { return k_Entity; },
-	                   [](const HandUnlock& /*command*/) { return k_Entity; },
-	                   [](const HandApply& /*command*/) { return k_Entity; },
-	                   [](const TotemShare& /*command*/) { return k_Entity + 4; },
-	                   [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
-	                   [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
-	                   [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
-	                   [](const FightCharge& /*command*/) { return size_t {4}; },
-	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 1 + 8 + 1; },
-	                   [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
-	                   [](const SeedGesture& /*command*/) { return 2 + k_Entity; },
-	                   [](const PlayerLeft& /*command*/) { return size_t {0}; },
-	                   [](const HandPick& /*command*/) { return k_Entity; },
-	                   [](const PlayerJoined& /*command*/) { return size_t {0}; },
-	                   [](const MiracleRequest& /*command*/) { return size_t {1}; },
-	                   [](const MiracleRepeat& /*command*/) { return size_t {0}; },
-	                   [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
-	                   [](const HandCastUnlock& /*command*/) { return k_Entity; },
-	                   [](const LeashPick& /*command*/) { return size_t {1}; },
-	                   [](const HandShakeOff& /*command*/) { return size_t {0}; },
-	                   [](const GripDust& /*command*/) { return k_Vector; },
-	                   [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
-	                   [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
-	                   [](const ViewReport& command) {
-		                   // The camera icons, the count of keys held, each key held and the count of mouse buttons follow the
-		                   // flags
-		                   return 2 * k_Vector + 7 * 4 + 1 + 2 + 1 + command.keysHeld.count();
-	                   },
-	                   [](const GiveCallOff& /*command*/) { return k_Entity; },
-	                   [](const CreatureTattoo& command) {
-		                   return k_Entity + 5 * creature_tattoo::k_SlotCount + 1 + 2 + command.pictures.size();
-	                   },
-	                   [](const LeashLength& /*command*/) { return size_t {4}; },
-	                   [](const ChatSpeech& command) { return 1 + command.recipients.size() + 2 + (2 * command.text.size()); },
-	                   [](const ChatTaunt& command) { return 1 + command.recipients.size() + 4; },
-	                   [](const QuickSave& /*command*/) { return size_t {0}; },
-	                   [](const QuickLoad& /*command*/) { return size_t {0}; },
-	                   [](const MusicMood& /*command*/) { return k_Entity + 4 + 4; },
-	                   [](const IconChargeStop& /*command*/) { return size_t {0}; },
-	                   [](const DialogueClick& /*command*/) { return size_t {1}; },
-	                   [](const PuzzleTap& /*command*/) { return size_t {4 + 4}; },
-	                   [](const FishScare& /*command*/) { return k_Vector; },
-	                   [](const ObserversJoined& /*command*/) { return size_t {0}; },
-	                   [](const ObserversLeft& /*command*/) { return size_t {0}; },
-	                   [](const ObserverIn& command) { return 1 + (2 * command.name.size()); },
-	                   [](const ObserverOut& /*command*/) { return size_t {0}; },
-	                   [](const HandLockRelease& /*command*/) { return k_Entity; },
-	                   [](const EditorEdit& /*command*/) { return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4; },
-	                   [](const DebugCheat& /*command*/) { return size_t {2}; },
-	               },
-	               action);
+	const size_t fields = std::visit(
+	    Overloaded {
+	        [](const LeashKey& /*command*/) { return size_t {1}; },
+	        [](const CreatureFightCheat& /*command*/) { return size_t {0}; },
+	        [](const TempleLeashOff& /*command*/) { return size_t {0}; },
+	        [](const LeashTap& /*command*/) { return k_Entity; },
+	        [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
+	        [](const HandTake& /*command*/) { return k_Entity; },
+	        [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
+	        [](const HandTap& /*command*/) { return k_Entity; },
+	        [](const HandGive& /*command*/) { return 2 * k_Entity + 1; },
+	        [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
+	        [](const LeashPostTap& /*command*/) { return k_Entity; },
+	        [](const HandReport& /*command*/) { return 4 * k_Vector; },
+	        [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
+	        [](const HandLock& /*command*/) { return k_Entity; },
+	        [](const HandUnlock& /*command*/) { return k_Entity; },
+	        [](const HandApply& /*command*/) { return k_Entity; },
+	        [](const TotemShare& /*command*/) { return k_Entity + 4; },
+	        [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
+	        [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
+	        [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
+	        [](const FightCharge& /*command*/) { return size_t {4}; },
+	        [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 1 + 8 + 1; },
+	        [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
+	        [](const SeedGesture& /*command*/) { return 2 + k_Entity; },
+	        [](const PlayerLeft& /*command*/) { return size_t {0}; },
+	        [](const HandPick& /*command*/) { return k_Entity; },
+	        [](const PlayerJoined& /*command*/) { return size_t {0}; },
+	        [](const MiracleRequest& /*command*/) { return size_t {1}; },
+	        [](const MiracleRepeat& /*command*/) { return size_t {0}; },
+	        [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
+	        [](const HandCastUnlock& /*command*/) { return k_Entity; },
+	        [](const LeashPick& /*command*/) { return size_t {1}; },
+	        [](const HandShakeOff& /*command*/) { return size_t {0}; },
+	        [](const GripDust& /*command*/) { return k_Vector; },
+	        [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
+	        [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
+	        [](const ViewReport& command) {
+		        // The camera icons, the count of keys held, each key held and the count of mouse buttons follow the
+		        // flags
+		        return 2 * k_Vector + 7 * 4 + 1 + 2 + 1 + command.keysHeld.count();
+	        },
+	        [](const GiveCallOff& /*command*/) { return k_Entity; },
+	        [](const CreatureTattoo& command) {
+		        return k_Entity + 5 * creature_tattoo::k_SlotCount + 1 + 2 + command.pictures.size();
+	        },
+	        [](const LeashLength& /*command*/) { return size_t {4}; },
+	        [](const ChatSpeech& command) { return 1 + command.recipients.size() + 2 + (2 * command.text.size()); },
+	        [](const ChatTaunt& command) { return 1 + command.recipients.size() + 4; },
+	        [](const QuickSave& /*command*/) { return size_t {0}; },
+	        [](const QuickLoad& /*command*/) { return size_t {0}; },
+	        [](const MusicMood& /*command*/) { return k_Entity + 4 + 4; },
+	        [](const IconChargeStop& /*command*/) { return size_t {0}; },
+	        [](const DialogueClick& /*command*/) { return size_t {1}; },
+	        [](const PuzzleTap& /*command*/) { return size_t {4 + 4}; },
+	        [](const FishScare& /*command*/) { return k_Vector; },
+	        [](const ObserversJoined& /*command*/) { return size_t {0}; },
+	        [](const ObserversLeft& /*command*/) { return size_t {0}; },
+	        [](const ObserverIn& command) { return 1 + (2 * command.name.size()); },
+	        [](const ObserverOut& /*command*/) { return size_t {0}; },
+	        [](const HandLockRelease& /*command*/) { return k_Entity; },
+	        [](const EditorEdit& /*command*/) { return 1 + k_Entity + 1 + 4 + 4 + k_Vector + 4; },
+	        [](const DebugCheat& /*command*/) { return size_t {2}; },
+	        [](const EditorCreatureEdit& /*command*/) { return k_Entity + 1 + 4; },
+	        [](const EditorCreatureAct& command) { return k_Entity + 1 + k_Entity + k_Vector + 4 + 2 + command.args.size(); },
+	        [](const DebugLandSkip& /*command*/) { return size_t {1}; },
+	    },
+	    action);
 	return 1 + fields;
 }
 

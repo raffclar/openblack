@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
 #include <set>
 #include <span>
 #include <string>
@@ -59,26 +60,77 @@ TEST(DeveloperTools, ADeveloperBuildWithNoNetworkGameAllowsTheActions)
 	EXPECT_FALSE(RefusalOf(true, false).has_value());
 }
 
-TEST(DeveloperTools, InANetworkGameOnlyAStaffPlayerOpensTheEditorInEveryBuild)
+TEST(DeveloperTools, TheEditorRightComesFromTheTicketInANetworkGameAndElseFromTheAccount)
 {
-	for (const bool built : {false, true})
+	// In a network game only the join ticket counts, also when an account is signed in
+	EXPECT_EQ(EditorRightOf(true, true, std::nullopt), EditorRight::Granted);
+	EXPECT_EQ(EditorRightOf(true, false, true), EditorRight::Refused);
+	EXPECT_EQ(EditorRightOf(true, true, false), EditorRight::Granted);
+	// Outside a network game the signed-in account gives the right
+	EXPECT_EQ(EditorRightOf(false, false, true), EditorRight::Granted);
+	EXPECT_EQ(EditorRightOf(false, true, false), EditorRight::Refused);
+	// With no account signed in, the right is not known
+	EXPECT_EQ(EditorRightOf(false, true, std::nullopt), EditorRight::Unknown);
+	for (const auto right : {EditorRight::Unknown, EditorRight::Granted, EditorRight::Refused})
 	{
-		EXPECT_FALSE(EditorRefusalOf(built, true, true).has_value()) << built;
-		EXPECT_EQ(EditorRefusalOf(built, true, false), "only a staff player opens the editor in a network game") << built;
-		EXPECT_EQ(GuiModeOf(built, true, true), GuiMode::EditorOnly) << built;
-		EXPECT_EQ(GuiModeOf(built, true, false), GuiMode::Dormant) << built;
+		EXPECT_FALSE(NameOf(right).empty());
+	}
+	for (const auto mode : {GuiMode::Full, GuiMode::EditorOnly, GuiMode::Dormant})
+	{
+		EXPECT_FALSE(NameOf(mode).empty());
 	}
 }
 
-TEST(DeveloperTools, OutsideANetworkGameTheEditorIsADeveloperTool)
+TEST(DeveloperTools, InANetworkGameOnlyAPlayerWithTheEditorClaimOpensTheEditorInEveryBuild)
 {
-	// The staff claim comes only from a network game, so it changes nothing here
-	for (const bool staff : {false, true})
+	for (const bool built : {false, true})
 	{
-		EXPECT_FALSE(EditorRefusalOf(true, false, staff).has_value()) << staff;
-		EXPECT_EQ(EditorRefusalOf(false, false, staff), "the build has no developer tools") << staff;
-		EXPECT_EQ(GuiModeOf(true, false, staff), GuiMode::Full) << staff;
-		EXPECT_EQ(GuiModeOf(false, false, staff), GuiMode::Dormant) << staff;
+		EXPECT_FALSE(EditorRefusalOf(built, true, EditorRight::Granted).has_value()) << built;
+		for (const auto right : {EditorRight::Refused, EditorRight::Unknown})
+		{
+			EXPECT_EQ(EditorRefusalOf(built, true, right),
+			          "only a player with the editor claim opens the editor in a network game")
+			    << built;
+			EXPECT_EQ(GuiModeOf(built, true, right), GuiMode::Dormant) << built;
+			EXPECT_TRUE(ShowsRefusalLine(built, true, right)) << built;
+		}
+		EXPECT_EQ(GuiModeOf(built, true, EditorRight::Granted), GuiMode::EditorOnly) << built;
+		EXPECT_FALSE(ShowsRefusalLine(built, true, EditorRight::Granted)) << built;
+	}
+}
+
+TEST(DeveloperTools, InASinglePlayerGameAnAccountWithTheEditorRightOpensTheEditor)
+{
+	// A build that players get: only the editor shows, and the editor opens
+	EXPECT_FALSE(EditorRefusalOf(false, false, EditorRight::Granted).has_value());
+	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Granted), GuiMode::EditorOnly);
+	EXPECT_FALSE(ShowsRefusalLine(false, false, EditorRight::Granted));
+}
+
+TEST(DeveloperTools, InASinglePlayerGameAnAccountWithoutTheEditorRightSeesTheRefusalLine)
+{
+	EXPECT_EQ(EditorRefusalOf(false, false, EditorRight::Refused), "the signed-in account does not have the editor right");
+	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Refused), GuiMode::Dormant);
+	EXPECT_TRUE(ShowsRefusalLine(false, false, EditorRight::Refused));
+	EXPECT_FALSE(k_EditorRefusedLine.empty());
+}
+
+TEST(DeveloperTools, InASinglePlayerGameWithNoSignInTheEditorStaysClosedAndShowsNothing)
+{
+	// The rule from before: a build that players get has no editor outside a network game, and shows no line
+	EXPECT_EQ(EditorRefusalOf(false, false, EditorRight::Unknown), "the build has no developer tools");
+	EXPECT_EQ(GuiModeOf(false, false, EditorRight::Unknown), GuiMode::Dormant);
+	EXPECT_FALSE(ShowsRefusalLine(false, false, EditorRight::Unknown));
+}
+
+TEST(DeveloperTools, ADeveloperBuildOutsideANetworkGameKeepsAllItsWindows)
+{
+	// The editor right of the account changes nothing here
+	for (const auto right : {EditorRight::Unknown, EditorRight::Granted, EditorRight::Refused})
+	{
+		EXPECT_FALSE(EditorRefusalOf(true, false, right).has_value());
+		EXPECT_EQ(GuiModeOf(true, false, right), GuiMode::Full);
+		EXPECT_FALSE(ShowsRefusalLine(true, false, right));
 	}
 }
 

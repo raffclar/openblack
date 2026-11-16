@@ -123,6 +123,9 @@ public:
 	[[nodiscard]] virtual std::optional<online::StartEvent> TakeStartEvent() = 0;
 	/// The names of the observers that left the game since the last call
 	[[nodiscard]] virtual std::vector<std::string> TakeObserversLeft() { return {}; }
+	/// The refusals of the game server since the last call: each time that it refused edits of the editor or debug cheats
+	/// of this player because the join ticket has no editor claim
+	[[nodiscard]] virtual uint32_t TakeEditorRefusals() { return 0; }
 	/// Writes a line to the connection log of the network games, such as a step of the request of a ticket
 	virtual void LogConnection(std::string_view /*text*/) {}
 	/// The text of the "Copy diagnostics" report: the build, the renderer, the state of the session and the last lines of

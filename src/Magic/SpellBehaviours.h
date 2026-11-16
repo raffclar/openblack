@@ -205,6 +205,11 @@ void ProcessTurn(SpellServicesInterface& services, ecs::components::Spell& spell
 /// Whether its kind keeps following its caster's hand after the cast: a flock while it still makes its animals
 [[nodiscard]] bool FollowsHand(SpellServicesInterface& services, const ecs::components::Spell& spell);
 
+/// Whether this computer shows the miracle as the cast of its own player. This is true only when the hand of the player of
+/// this computer cast it. Only that computer shows what follows the caster's hand and view, such as the forest's camera
+/// and the trail of a flock. The turns must not read it, because each computer has a different answer.
+[[nodiscard]] bool IsCastOfThisComputer(const ecs::components::Spell& spell, PlayerNames thisComputer);
+
 /// Whether it is a flock that made fewer animals than its total
 [[nodiscard]] bool MakesAnimals(SpellServicesInterface& services, const ecs::components::Spell& spell);
 

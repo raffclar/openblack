@@ -744,6 +744,82 @@ void testbed_scenarios::AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.eats_food_pile",
+	    .name = "Hungry creature eats a pile of grain",
+	    .facet = Facet::Needs,
+	    .description = "A hungry tiger with a pile of grain on the land in front of it, such as the hand drops, and no "
+	                   "other food.",
+	    .expected = "It walks to the pile and takes all the grain in one handful, so the pile goes. Then it eats the "
+	                "handful in its hand. Its energy fills up and the hunger desire falls.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -45.0f}, {15.0f, 10.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = PotInfo::MagicFood, .offset = {0.0f, -35.0f}, .amount = 1000}},
+	});
+
+	all.push_back({
+	    .id = "needs.eats_food_pile_after_field",
+	    .name = "Hungry creature eats from a field, then a pile of grain",
+	    .facet = Facet::Needs,
+	    .description = "A hungry tiger with a ripe wheat field in front of it and a pile of grain to one side, such as "
+	                   "the hand drops.",
+	    .expected = "It eats a handful of wheat from the field. The handful holds no food, so it brings the wheat back "
+	                "up and refuses pots and piles from then on. Then it takes all the grain of the pile in one handful, "
+	                "and the pile goes. It holds the grain, does not eat it and stays hungry, as in the game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -50.0f}, {45.0f, 10.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {0.0f, -40.0f}, .ripeCrop = true},
+	                {.type = PotInfo::MagicFood, .offset = {40.0f, -10.0f}, .amount = 1000}},
+	});
+
+	all.push_back({
+	    .id = "needs.eats_named_food_while_holding",
+	    .name = "Creature eats a villager while it holds grain",
+	    .facet = Facet::Needs,
+	    .description = "A tiger with a small pile of grain and a villager in front of it. A script tells it to eat from "
+	                   "the pile, then to eat the villager alive while the grain is still in its hand.",
+	    .expected = "It takes all the grain of the pile in one handful, and the pile goes. When it is told to eat the "
+	                "villager, it eats the grain in its hand, and at the same moment the villager goes from the land, as "
+	                "in the game. The grain gives the energy, and the villager makes the hunger fall.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -55.0f}, {30.0f, 10.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.5f, .dehydration = 0.0f, .poo = 0.0f},
+	    }},
+	    .objects = {{.type = PotInfo::MagicFood, .offset = {0.0f, -35.0f}, .amount = 300},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {20.0f, -45.0f}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "EatFromFoodPile"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 20.0f, .object = 1, .action = "EatAlive"}},
+	});
+
+	all.push_back({
+	    .id = "needs.hungry_with_no_food",
+	    .name = "Hungry creature with no food",
+	    .facet = Facet::Needs,
+	    .description = "A hungry tiger with no food near it. Put one kind of food in front of it with the inspector "
+	                   "(edit.create) to see if it eats that kind.",
+	    .expected = "It shows that it is hungry. When a thing that it can eat comes near, it walks to the thing and eats "
+	                "it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -45.0f}, {15.0f, 10.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	});
+
+	all.push_back({
 	    .id = "objects.holds_wheat",
 	    .name = "Creature holds a handful of wheat",
 	    .facet = Facet::Objects,

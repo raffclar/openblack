@@ -103,4 +103,12 @@ struct FoundedTownCentre
 	return heartScale * landInfluence;
 }
 
+/// The influence that the debug cheat of infinite influence gives at a place. The cheat gives full influence at each
+/// point, also under the shield of another player. But it gives no influence in an anti-influence that a script made
+/// for the player, so the hand can not take a thing that a script keeps from it.
+[[nodiscard]] constexpr float CheatInfluence(bool inScriptAntiInfluence)
+{
+	return inScriptAntiInfluence ? 0.0f : 1.0f;
+}
+
 } // namespace openblack::influence_rules

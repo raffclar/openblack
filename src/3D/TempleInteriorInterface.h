@@ -296,5 +296,9 @@ public:
 	/// them. After the draw, the rooms go and the island draws again. Nothing that the game keeps or saves changes. When
 	/// the player is in the temple, this does nothing.
 	virtual void WarmUpVisit(const std::function<void()>& draw) = 0;
+	/// The editor's cheat of the free camera in the temple, for this computer only. While it is on, the player flies the
+	/// camera through the rooms. The cheat stays on between visits to the temple.
+	virtual void SetFreeCamera(bool on) = 0;
+	[[nodiscard]] virtual bool IsFreeCameraOn() const = 0;
 };
 } // namespace openblack

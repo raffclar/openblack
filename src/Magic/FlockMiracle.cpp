@@ -23,6 +23,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -214,21 +215,27 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 	const auto tables = TablesOf(info, spell.magicType);
 	const int number = flock::NumberToCreate(tables.numberToCreate, services.TribalPower(spell));
 
-	// This computer's caster's hand leaves a trail of sparkles or smoke while the doves or bats are made
+	// The caster's hand leaves a trail of sparkles or smoke while the doves or bats are made. All computers mark the start
+	// alike, because the mark is a part of the synced state. Only the computer of the caster shows the trail.
 	if (!data.castEffectStarted && !tables.ground && spell.fromLocalHand && Locator::effectRequestSystem::has_value())
 	{
 		data.castEffectStarted = true;
-		// Only the computer of the hand shows the trail, so the particles of this computer give it its number. It starts at
-		// the cast point, then steps in each frame at the hand. A save does not keep it.
-		data.castEffect = Locator::effectRequestSystem::value().StartHere({
-		    .type = data.evil ? ParticleType::FlockFlyingCastEvil : ParticleType::FlockFlyingCastGood,
-		    .position = spell.originalCastPosition,
-		    .synced = false,
-		    .player = static_cast<int>(spell.caster.player),
-		    .processInfo = spell.processInfo,
-		    .saved = false,
-		    .followsLocalHand = true,
-		});
+		const auto thisComputer =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		if (spells::IsCastOfThisComputer(spell, thisComputer))
+		{
+			// The particles of this computer give the trail its number. It starts at the cast point, then steps in each
+			// frame at the hand. A save does not keep it.
+			data.castEffect = Locator::effectRequestSystem::value().StartHere({
+			    .type = data.evil ? ParticleType::FlockFlyingCastEvil : ParticleType::FlockFlyingCastGood,
+			    .position = spell.originalCastPosition,
+			    .synced = false,
+			    .player = static_cast<int>(spell.caster.player),
+			    .processInfo = spell.processInfo,
+			    .saved = false,
+			    .followsLocalHand = true,
+			});
+		}
 	}
 	if (data.created >= number)
 	{

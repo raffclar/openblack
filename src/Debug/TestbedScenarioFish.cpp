@@ -370,8 +370,8 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	    .id = "needs.fish_and_eat",
 	    .name = "Hungry creature fishes",
 	    .facet = Facet::Needs,
-	    .description = "A hungry tiger on the bank above the lake, a fish farm on the shore below it and no other food "
-	                   "anywhere.",
+	    .description = "A hungry tiger that knows how to fish, on the bank above the lake, a fish farm on the shore below "
+	                   "it and no other food anywhere. A creature that does not know how to fish never plans to fish.",
 	    .expected = "It walks down to within 15 m of the farm's shoal, a bundle of food half as big again as it appears at "
 	                "its feet out of the water, and it picks it up and eats it; the farm's fish stay as they were.",
 	    .framing = {.shot = Shot::Follow},
@@ -381,6 +381,7 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	        .facingDegrees = 180.0f,
 	        .needs = {.energy = 0.2f, .dehydration = 0.0f, .poo = 0.0f},
 	        .desires = {{.desire = creature_desires::Desire::Hunger, .fraction = 1.0f}},
+	        .skills = {CreatureActionKnownAbout::Fish},
 	    }},
 	    .objects = FarmAndTown(),
 	});

@@ -435,6 +435,8 @@ struct ObjectSetup
 	bool ripeCrop {false};
 	/// The crop of a field is fully sown, with no age and no food yet, so it starts to grow at once
 	bool sownCrop {false};
+	/// The crop of a field is fully sown and half way to ripe, with the food that it has grown by then
+	bool unripeCrop {false};
 	/// A firefly hides exactly where the thing stands, as a land's script places one
 	bool firefly {false};
 	/// The thing is set alight as it is made, burning as at the start of a fire
@@ -1128,6 +1130,9 @@ struct Command
 		/// An effect destroys the building on whose site the scenario's object, a scaffold, stands, as when a fire takes
 		/// the last of the life of the building. Needs no creature.
 		DestroyScaffoldSite,
+		/// An effect takes all of the life of the scenario's object and then destroys it, as a fire does. Needs no
+		/// creature.
+		DestroyObjectByEffect,
 		/// The scenario's object, a scaffold that a script marked to clear its ground, clears it at once, as when the
 		/// hand lets it go. Needs no creature.
 		ScaffoldClearsGround,
@@ -1322,6 +1327,12 @@ struct Command
 		/// The pointer moves onto the totem of the scenario's object (object), a town centre, at a height (amount) over
 		/// the place of the totem on the screen, as the mouse moves it. Needs no creature
 		PointerOnTotem,
+		/// The editor's cheat of the free camera in the temple goes on (value 1) or off (value 0), as its box in the
+		/// Cheats tab does. Needs no creature
+		TempleFreeCamera,
+		/// The editor's cheat of infinite influence for the player goes on (value 1) or off (value 0), as its box in
+		/// the Cheats tab does. Needs no creature
+		InfiniteInfluenceCheat,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

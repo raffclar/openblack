@@ -79,6 +79,18 @@ enum class Quantity : uint8_t
 	HandMiracle,
 	/// The number of physical shields on the land
 	PhysicalShields,
+	/// 1 when the scenario's creature at the index fights its duel, else 0
+	CreatureInDuel,
+	/// The fight health of the scenario's creature at the index, from 0 to 1, as a script reads it
+	CreatureFightHealth,
+	/// The state of the match on the football pitch that is the scenario's object at the index: 0 when it waits for
+	/// players, 1 when it plays, 2 when it is paused, 3 after a goal
+	FootballMatchState,
+	/// How many duels the scenario's creature at the index has started, as its fight record counts them
+	CreatureDuels,
+	/// 1 when the empty hand of the player, at the place of the scenario's object at the index, may take that object,
+	/// else 0
+	HandMayTake,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
