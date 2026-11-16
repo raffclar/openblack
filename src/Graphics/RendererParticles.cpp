@@ -952,9 +952,16 @@ void Renderer::DrawLearningBulbs(const DrawSceneDesc& desc) const
 		return;
 	}
 	particles::draw::MeshesWithLearningWords(_particleFrame, _learningBulbMeshes);
-	for (const auto index : _learningBulbMeshes)
+	// The bulbs come in the order of their marks. The words of a mark go just before its bulb, so the words of a later
+	// mark show over the bulb of an earlier mark.
+	const bool withWords = desc.viewId == RenderPass::Main && desc.submitLearningWords;
+	for (size_t mark = 0; mark < _learningBulbMeshes.size(); ++mark)
 	{
-		DrawParticleMesh(desc, _particleFrame.meshes[index], graphics::zsort::k_AfterSolidBeforeSorted);
+		if (withWords)
+		{
+			desc.submitLearningWords(static_cast<uint32_t>(mark));
+		}
+		DrawParticleMesh(desc, _particleFrame.meshes[_learningBulbMeshes[mark]], graphics::zsort::k_AfterSolidBeforeSorted);
 	}
 }
 

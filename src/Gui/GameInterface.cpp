@@ -15,6 +15,7 @@
 #include <array>
 #include <filesystem>
 #include <functional>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string>
@@ -1966,6 +1967,20 @@ void GameInterface::SubmitWorldLabels(graphics::WorldLabelGroup group)
 	}
 }
 
+void GameInterface::SubmitLearningWords(uint32_t throughMark)
+{
+	if (!_groupedLabelsWaiting.Waits(graphics::WorldLabelGroup::LearningWords))
+	{
+		return;
+	}
+	// The texts are in the order of their marks
+	const auto after = std::ranges::upper_bound(_learningWordParts, throughMark, {}, &std::pair<uint32_t, size_t>::first);
+	if (after != _learningWordParts.begin())
+	{
+		GroupedLabelCanvas(graphics::WorldLabelGroup::LearningWords).SubmitThrough(std::prev(after)->second);
+	}
+}
+
 void GameInterface::SubmitWaitingWorldLabels()
 {
 	for (size_t index = 0; index < _groupedLabelCanvases.size(); ++index)
@@ -3442,6 +3457,7 @@ void GameInterface::DrawLearningTexts(glm::u16vec2 resolution)
 	// solid models and before the see-through things.
 	auto& canvas = GroupedLabelCanvas(graphics::WorldLabelGroup::LearningWords);
 	const auto view = PrepareWorldTextCanvas(canvas);
+	_learningWordParts.clear();
 	for (const auto& text : _learningTexts)
 	{
 		// Centred across on the point, and half a line above it; the shadow right of it and below it, at the same depth
@@ -3462,6 +3478,8 @@ void GameInterface::DrawLearningTexts(glm::u16vec2 resolution)
 		canvas.SetDepth(world_text::BufferDepth(view.projection, world_text::WordsDepth(text.depth, view.nearClip)));
 		DrawBubbleLine(canvas, line(at + shadow), glm::vec3(0.0f));
 		DrawBubbleLine(canvas, line(at), glm::vec3(1.0f, 1.0f, 0.0f));
+		// The game draws the words of each mark just before the bulb of the mark, thus each text is a part of its own
+		_learningWordParts.emplace_back(text.mark, canvas.EndPart());
 	}
 }
 

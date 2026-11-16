@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -151,6 +152,10 @@ public:
 	/// A one pixel wide line of the game's line draw between two pixels, along a row or a column. It fills the pixels
 	/// that the game fills (see screen_pixels::LinePixels).
 	void DrawLine(glm::ivec2 from, glm::ivec2 to, glm::vec4 colour);
+	/// Ends a part of the frame's draws and gives the number of the part. The draws after it go in the next part.
+	size_t EndPart();
+	/// Submits the parts of the frame up to and with this part, if they are not submitted yet. End submits the rest.
+	void SubmitThrough(size_t part);
 	/// Submits the frame's interface
 	void End();
 	/// Makes the renderer's pipelines for a canvas in a view before the canvas first draws there: a draw that covers no
@@ -183,6 +188,10 @@ private:
 
 	/// Starts a batch of a texture unless the last batch can take more of it
 	void StartBatch(const graphics::Texture2D* texture);
+	/// The projection from the window's pixels to the render target
+	[[nodiscard]] std::array<float, 16> Projection() const;
+	/// Submits the batches before this batch that are not submitted yet
+	void SubmitBatchesBefore(size_t last);
 	/// The pixels of the clip rectangle for the draws that place their corners in the current way
 	[[nodiscard]] std::optional<Clip> ClipInPixels() const noexcept;
 	/// The point in the render target of a corner from the canvas's origin
@@ -201,6 +210,10 @@ private:
 	std::optional<std::array<glm::vec2, 2>> _clip;
 	std::vector<Vertex> _vertices;
 	std::vector<Batch> _batches;
+	/// For each part, the number of batches up to its end
+	std::vector<size_t> _partEnds;
+	/// The batches before this batch are submitted
+	size_t _submittedBatches {0};
 	std::unique_ptr<graphics::Texture2D> _white;
 };
 

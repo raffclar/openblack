@@ -283,6 +283,7 @@ void Runner::Start(const Scenario& scenario)
 	}
 	_walks.clear();
 	_particles.clear();
+	_learningMarks.clear();
 	_miracles.clear();
 	_started.clear();
 	_log.clear();
@@ -722,6 +723,15 @@ void Runner::Stop()
 		}
 	}
 	_particles.clear();
+	// Its learning marks go
+	for (const auto mark : _learningMarks)
+	{
+		if (Locator::entitiesRegistry::value().Valid(mark))
+		{
+			Locator::entitiesRegistry::value().Destroy(mark);
+		}
+	}
+	_learningMarks.clear();
 	// Its vortices go, though the ground they levelled stays levelled as the game leaves it
 	for (const auto& running : _vortices)
 	{
@@ -1148,6 +1158,7 @@ void Runner::Update(float seconds)
 	Measure();
 	SpawnCrowd();
 	UpdateParticles(seconds);
+	UpdateLearningMarks();
 	UpdateVortices();
 	UpdateRewards();
 	UpdateMiracles(seconds);
