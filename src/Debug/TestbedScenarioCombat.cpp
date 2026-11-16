@@ -897,6 +897,39 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 			                .afterTurns = k_AfterTapTurns,
 			                .atLeast = 0.1}},
 			});
+			// The tie comes at about 16.5 seconds. Then the red tiger finishes its move for about two seconds before it
+			// leaves its fight.
+			constexpr uint32_t k_FlockAfterTieTurns = 176;
+			constexpr uint32_t k_StillInFightTurns = 188;
+			all.push_back({
+			    .id = "combat.leash_tie_then_reaction",
+			    .name = "After a tie of the leash stops its fight, the first creature takes up a reaction",
+			    .facet = Facet::Combat,
+			    .description = "As A double tap with the leash out of the fight view. The second press ties the leash to "
+			                   "the blue tiger, and the fight of the red tiger stops. At 17.5 seconds, while the red tiger "
+			                   "finishes its move, its player casts the flying flock 30 metres south of the arena.",
+			    .expected = "The red tiger started the fight, but the tie stopped what it did. Thus it takes up the "
+			                "reaction of the impressive miracle before it leaves its fight.",
+			    .framing = ringside,
+			    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, 0.0f), blue(PlayerNames::PLAYER_TWO, 0.5f, 0.0f)},
+			    .miracles = {{.type = MagicType::FlockFlying,
+			                  .point = {0.0f, 10.0f},
+			                  .handOffset = {0.0f, 20.0f},
+			                  .handHeight = 12.0f,
+			                  .delaySeconds = 17.5f,
+			                  .holdSeconds = 6.0f}},
+			    .commands = doubleTap(false),
+			    .checks = {{.label = "the red tiger left its duel",
+			                .quantity = checks::Quantity::CreatureInDuel,
+			                .afterTurns = k_FlockAfterTieTurns,
+			                .atMost = 0.0},
+			               {.label = "the red tiger keeps the reaction of an impressive miracle in its fight",
+			                .quantity = checks::Quantity::CreatureReaction,
+			                .afterTurns = k_FlockAfterTieTurns,
+			                .byTurn = k_StillInFightTurns,
+			                .atLeast = static_cast<double>(Reaction::ReactToImpressiveSpell),
+			                .atMost = static_cast<double>(Reaction::ReactToImpressiveSpell)}},
+			});
 		}
 		// The fight autopilot plays the stages of the lesson with the real mouse, then checks them in the transcript
 		constexpr size_t k_LessonPolicy = 0;

@@ -1434,6 +1434,7 @@ bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const
 	return creature_fight::LetsChoose({
 	    .knockedOut = registry.AllOf<CreatureKnockedOut>(creature),
 	    .fighting = fighting != nullptr,
+	    // A stop does not change which creature started the fight. Only the other creature stands still.
 	    .startedIt = fighting != nullptr && fighting->madeArena,
 	    .planned = fighting != nullptr && fighting->planned,
 	    .waitsForFight = mind.planActive && mind.idle.step < mind.idle.agenda.size() &&
