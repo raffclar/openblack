@@ -190,6 +190,8 @@ private:
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);
 	void UpdateParticles(float seconds);
+	/// Makes the scenario's learning marks again, all at one turn, once they are all gone
+	void UpdateLearningMarks();
 	/// The scenario's vortices open when it is time and are told to fade out when it is time
 	void UpdateVortices();
 	/// The crossing file a vortex out of the last land would have left, written for a vortex into this one to read
@@ -386,6 +388,8 @@ private:
 		float seconds;
 	};
 	std::vector<RunningParticle> _particles;
+	/// The scenario's learning marks, as last made
+	std::vector<entt::entity> _learningMarks;
 	/// The scenario's vortices: each once made, whether it has been told to fade out, and the crowd of its newcomers
 	struct RunningVortex
 	{

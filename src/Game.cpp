@@ -1237,6 +1237,7 @@ bool Game::RunFrame() noexcept
 				drawDesc.submitWorldLabels = [](graphics::WorldLabelGroup group) {
 					Locator::gameInterface::value().SubmitWorldLabels(group);
 				};
+				drawDesc.submitLearningWords = [](uint32_t mark) { Locator::gameInterface::value().SubmitLearningWords(mark); };
 			}
 			// The sun, the moon and the dome's blend of this frame, for drawing it
 			if (Locator::skySystem::has_value())

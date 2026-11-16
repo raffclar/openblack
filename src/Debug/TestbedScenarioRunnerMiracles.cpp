@@ -46,6 +46,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/ComputerPlayerStart.h"
+#include "ECS/LearningMarker.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -62,6 +63,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -686,6 +688,30 @@ void Runner::UpdateParticles(float seconds)
 			particles.CloseDown(running.effect);
 			running = {StartParticle(i), 0.0f};
 		}
+	}
+}
+
+void Runner::UpdateLearningMarks()
+{
+	if (_scenario->learningMarks.empty() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (std::ranges::any_of(_learningMarks, [&registry](entt::entity mark) { return registry.Valid(mark); }))
+	{
+		return;
+	}
+	// A creature makes a mark over its head, under the middle of the glow
+	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u;
+	_learningMarks.clear();
+	for (const auto& setup : _scenario->learningMarks)
+	{
+		const auto point = MapPoint(_middle, setup.offset);
+		const glm::vec3 head {
+		    point.x, Locator::terrainSystem::value().GetHeightAt(point) + setup.height - ecs::learning_marker::k_OverHead,
+		    point.y};
+		_learningMarks.push_back(ecs::learning_marker::Make(registry, head, setup.creatureHeight, setup.share, turn));
 	}
 }
 

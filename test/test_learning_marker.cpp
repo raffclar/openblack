@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <bit>
+#include <vector>
 
 #include <glm/glm.hpp>
 #include <gtest/gtest.h>
@@ -158,4 +159,34 @@ TEST(LearningMarker, ItsTextShowsOffTheScreenButNotCloserThanTheNearPlane)
 	EXPECT_FALSE(marker::PlaceText({0.0f, 0.0f, 0.0f, 0.5f}, 1.0f, half).has_value());
 	// On the near plane it shows
 	EXPECT_TRUE(marker::PlaceText({0.0f, 0.0f, 0.0f, 1.0f}, 1.0f, half).has_value());
+}
+
+TEST(LearningMarker, TheNewestMarkIsDrawnFirst)
+{
+	auto older = marker::Start({}, 15.0f, 0.5f, 10);
+	auto newer = marker::Start({}, 15.0f, 0.5f, 11);
+	EXPECT_TRUE(marker::DrawnBefore(newer, older));
+	EXPECT_FALSE(marker::DrawnBefore(older, newer));
+	// At one turn, the mark made after the other is the newer
+	newer.madeTurn = older.madeTurn;
+	newer.madeIndex = 1;
+	EXPECT_TRUE(marker::DrawnBefore(newer, older));
+	EXPECT_FALSE(marker::DrawnBefore(older, older));
+}
+
+TEST(LearningMarker, TheMarksAreDrawnInTheReverseOfTheOrderTheyWereMade)
+{
+	ecs::Registry registry;
+	const auto first = marker::Make(registry, {}, 15.0f, 0.5f, 5);
+	const auto second = marker::Make(registry, {}, 15.0f, 0.5f, 5);
+	const auto third = marker::Make(registry, {}, 15.0f, 0.5f, 7);
+	const auto fourth = marker::Make(registry, {}, 15.0f, 0.5f, 7);
+	EXPECT_EQ(registry.Get<const ecs::components::LearningMarker>(second).madeIndex, 1u);
+	EXPECT_EQ(registry.Get<const ecs::components::LearningMarker>(third).madeIndex, 0u);
+	EXPECT_EQ(marker::InDrawOrder(registry), (std::vector {fourth, third, second, first}));
+	// The order stays when an old mark goes and its entity is used again
+	registry.Destroy(first);
+	const auto fifth = marker::Make(registry, {}, 15.0f, 0.5f, 7);
+	EXPECT_EQ(registry.Get<const ecs::components::LearningMarker>(fifth).madeIndex, 2u);
+	EXPECT_EQ(marker::InDrawOrder(registry), (std::vector {fifth, fourth, third, second}));
 }
