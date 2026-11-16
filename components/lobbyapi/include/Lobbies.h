@@ -169,6 +169,8 @@ struct LobbyList
 	std::vector<LobbySummary> lobbies;
 	/// "pool", when the service gives it
 	std::optional<PoolState> pool;
+	/// "rejoin": the game that plays in which the account still holds a god. The filters of the list do not apply to it.
+	std::optional<LobbySummary> rejoin;
 };
 
 /// A member of a lobby
@@ -225,7 +227,7 @@ struct Lobby
 	std::optional<int64_t> countdownAt;
 	/// "started_at": milliseconds since 1970 (UTC), after the service gave a game server
 	std::optional<int64_t> startedAt;
-	/// The game server of the lobby, from "game.assigned" or from the ticket. The lobby itself does not give it.
+	/// "game_id": the game server of the lobby after the start, for a member. "game.assigned" and the ticket also give it.
 	std::string gameId;
 	/// "members"
 	std::vector<LobbyMember> members;

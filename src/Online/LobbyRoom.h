@@ -317,14 +317,17 @@ struct ListFilter
 /// The order of the list with no sort column: the open lobbies first, then the other lobbies before their start, then
 /// the games that play. In each group the lobby with the most gods comes first, then the newest.
 [[nodiscard]] bool DefaultOrderBefore(const lobby_api::LobbySummary& left, const lobby_api::LobbySummary& right);
-/// The lobbies that the filter shows, in the default order
+/// The lobbies that the filter shows, in the default order. The game in which the player still holds a god (rejoinId)
+/// comes first, and the filter does not apply to it (design 2.9).
 [[nodiscard]] std::vector<lobby_api::LobbySummary> VisibleLobbies(std::span<const lobby_api::LobbySummary> lobbies,
-                                                                  const ListFilter& filter, std::string_view ownBuild);
+                                                                  const ListFilter& filter, std::string_view ownBuild,
+                                                                  std::string_view rejoinId = {});
 
 /// The lobby list with the changes of the push channel
 class LobbyListModel
 {
 public:
+	/// The game of "rejoin" goes in the entries, also when the list does not have it
 	void Replace(lobby_api::LobbyList list);
 	/// Uses an event of the channel "lobbies". Gives true when the list changed.
 	bool Apply(const lobby_api::PushEvent& event);
@@ -334,9 +337,12 @@ public:
 	[[nodiscard]] const lobby_api::LobbySummary* Find(std::string_view id) const;
 	[[nodiscard]] std::optional<lobby_api::PoolState> Pool() const noexcept { return _pool; }
 	[[nodiscard]] uint32_t Revision() const noexcept { return _revision; }
+	/// The id of the game that plays in which the player still holds a god, or empty
+	[[nodiscard]] const std::string& RejoinId() const noexcept { return _rejoinId; }
 
 private:
 	std::vector<lobby_api::LobbySummary> _lobbies;
+	std::string _rejoinId;
 	std::optional<lobby_api::PoolState> _pool;
 	uint32_t _revision {0};
 };

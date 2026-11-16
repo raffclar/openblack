@@ -658,7 +658,7 @@ void LobbyRoom::Reload(lobby_api::Lobby lobby)
 	}
 	const bool wasHost = IsHost();
 	const auto oldMap = _lobby.map;
-	// The lobby does not give its game server: the room keeps the one of "game.assigned"
+	// A lobby with no game server in its data keeps the one of "game.assigned"
 	auto gameId = std::move(_lobby.gameId);
 	_lobby = std::move(lobby);
 	if (_lobby.gameId.empty())
@@ -745,11 +745,17 @@ bool DefaultOrderBefore(const lobby_api::LobbySummary& left, const lobby_api::Lo
 }
 
 std::vector<lobby_api::LobbySummary> VisibleLobbies(std::span<const lobby_api::LobbySummary> lobbies, const ListFilter& filter,
-                                                    std::string_view ownBuild)
+                                                    std::string_view ownBuild, std::string_view rejoinId)
 {
 	std::vector<lobby_api::LobbySummary> visible;
+	std::optional<lobby_api::LobbySummary> rejoin;
 	for (const auto& lobby : lobbies)
 	{
+		if (!rejoinId.empty() && lobby.id == rejoinId)
+		{
+			rejoin = lobby;
+			continue;
+		}
 		const bool matches = ContainsFolded(lobby.name, filter.search) || ContainsFolded(lobby.host.name, filter.search) ||
 		                     ContainsFolded(lobby.map.name, filter.search);
 		if (!matches || (!filter.mapFile.empty() && lobby.map.file != filter.mapFile) || (!filter.showFull && IsFull(lobby)) ||
@@ -761,12 +767,30 @@ std::vector<lobby_api::LobbySummary> VisibleLobbies(std::span<const lobby_api::L
 		visible.push_back(lobby);
 	}
 	std::ranges::stable_sort(visible, DefaultOrderBefore);
+	if (rejoin.has_value())
+	{
+		visible.insert(visible.begin(), std::move(*rejoin));
+	}
 	return visible;
 }
 
 void LobbyListModel::Replace(lobby_api::LobbyList list)
 {
 	_lobbies = std::move(list.lobbies);
+	_rejoinId.clear();
+	if (list.rejoin.has_value())
+	{
+		_rejoinId = list.rejoin->id;
+		const auto found = std::ranges::find(_lobbies, _rejoinId, &lobby_api::LobbySummary::id);
+		if (found != _lobbies.end())
+		{
+			*found = std::move(*list.rejoin);
+		}
+		else
+		{
+			_lobbies.push_back(std::move(*list.rejoin));
+		}
+	}
 	if (list.pool.has_value())
 	{
 		_pool = list.pool;
@@ -799,6 +823,11 @@ bool LobbyListModel::Apply(const lobby_api::PushEvent& event)
 		{
 			return false;
 		}
+		// A game that ends has no rejoin
+		if (found->id == _rejoinId)
+		{
+			_rejoinId.clear();
+		}
 		_lobbies.erase(found);
 	}
 	else if (found != _lobbies.end())
@@ -816,6 +845,7 @@ bool LobbyListModel::Apply(const lobby_api::PushEvent& event)
 void LobbyListModel::Clear()
 {
 	_lobbies.clear();
+	_rejoinId.clear();
 	_pool.reset();
 	++_revision;
 }

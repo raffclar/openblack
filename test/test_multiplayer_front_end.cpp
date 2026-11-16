@@ -36,6 +36,7 @@
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Gui/LandThumbnail.h"
+#include "Gui/LobbyScreenRules.h"
 #include "Gui/MultiplayerBoxes.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
@@ -1940,6 +1941,45 @@ TEST_F(FrontEndTest, AfterTheLeaveOfALobbyGameANewFrontEndShowsTheLobbyListAndAs
 	EXPECT_EQ(network.joins.size(), 1u);
 	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 	EXPECT_EQ(lobbySessions->Room(), nullptr);
+}
+
+TEST_F(FrontEndTest, APlayerWhoHoldsAGodRejoinsItFromTheFirstLineOfTheList)
+{
+	lobbySessions = std::make_unique<testbed_multiplayer::DemoLobbyRoom>(lobby_api::AccountRef {.id = 7, .name = "Alice"}, 0);
+	lobbySessions->HoldGod(
+	    lobby_api::JoinTicket {.url = "wss://lobby.test/game/s7", .ticket = "v4.public.back", .expires = 0, .role = "god"});
+	Make();
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Internet);
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	FakeLobby::Give(lobby.login, *lobby.account);
+	ASSERT_EQ(frontEnd->GetBox(), Box::LobbyList);
+
+	// The game is the first line and the list picks it
+	const auto shown = frontEnd->GetShownLobbies();
+	ASSERT_FALSE(shown.empty());
+	EXPECT_EQ(shown.front().id, "d7");
+	EXPECT_EQ(frontEnd->GetSelectedLobby(), "d7");
+	EXPECT_EQ(gui::lobby_screens::ListButtonOf(frontEnd->GetSelectedSummary(), frontEnd->GetRejoinLobby()),
+	          gui::lobby_screens::ListButton::Rejoin);
+
+	// Another game that plays has no button, and Return does nothing for it
+	frontEnd->SelectLobby("d4");
+	frontEnd->JoinSelectedLobby();
+	EXPECT_EQ(frontEnd->GetBox(), Box::LobbyList);
+	EXPECT_EQ(lobbySessions->Room(), nullptr);
+
+	// Rejoin opens the room of the game, and the front end joins its game server with the ticket of the god
+	frontEnd->SelectLobby("d7");
+	frontEnd->JoinSelectedLobby();
+	frontEnd->Update();
+	ASSERT_NE(lobbySessions->Room(), nullptr);
+	EXPECT_EQ(lobbySessions->Room()->Phase(), online::lobby::RoomPhase::InGame);
+	ASSERT_EQ(network.joins.size(), 1u);
+	EXPECT_EQ(network.joins.back().ticket, "v4.public.back");
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 }
 
 TEST_F(FrontEndTest, AnObserverOfALobbyGameSendsNoReady)

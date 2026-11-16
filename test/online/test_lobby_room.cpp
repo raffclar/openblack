@@ -178,6 +178,35 @@ TEST(LobbiesJson, TheListAndItsEventsRead)
 	EXPECT_FALSE(lobby_api::ParseLobbyListChange(lobby_api::lobby_events::k_LobbiesChanged, R"({"id":"a"})").has_value());
 }
 
+TEST(LobbiesJson, TheGameToRejoinAndTheGameServerOfTheLobbyRead)
+{
+	const auto list = lobby_api::ParseLobbyList(
+	    R"({"lobbies":[],"pool":{"free":0,"total":1},"rejoin":{"id":"r","name":"R","host":{"id":1,"name":"h"},)"
+	    R"("map":{"file":"m"},"gods":1,"god_slots":2,"players":[{"id":1,"name":"h"},{"id":3,"name":"gavxn"}],)"
+	    R"("state":"in_game","build_id":"b"}})");
+	ASSERT_TRUE(list.has_value());
+	ASSERT_TRUE(list->rejoin.has_value());
+	EXPECT_EQ(list->rejoin->id, "r");
+	EXPECT_EQ(list->rejoin->state, lobby_api::LobbyState::InGame);
+	const auto none = lobby_api::ParseLobbyList(R"({"lobbies":[],"rejoin":null})");
+	ASSERT_TRUE(none.has_value());
+	EXPECT_FALSE(none->rejoin.has_value());
+	EXPECT_FALSE(lobby_api::ParseLobbyList(R"({"lobbies":[],"rejoin":{"id":"r"}})").has_value());
+	EXPECT_FALSE(lobby_api::ParseLobbyList(R"({"lobbies":[],"rejoin":"r"})").has_value());
+
+	// After the start the lobby gives its game server to a member, and null to the other players
+	auto text = std::string(k_LobbyJson);
+	text.insert(text.find(R"("state":"open")"), R"("game_id":"g7",)");
+	const auto started = lobby_api::ParseLobby(text);
+	ASSERT_TRUE(started.has_value());
+	EXPECT_EQ(started->gameId, "g7");
+	auto hidden = std::string(k_LobbyJson);
+	hidden.insert(hidden.find(R"("state":"open")"), R"("game_id":null,)");
+	const auto other = lobby_api::ParseLobby(hidden);
+	ASSERT_TRUE(other.has_value());
+	EXPECT_TRUE(other->gameId.empty());
+}
+
 TEST(LobbiesJson, TheEventsOfTheServiceRead)
 {
 	const auto change =
@@ -635,6 +664,47 @@ TEST(LobbyList, TheFilterAndTheOrder)
 	auto computers = lobbies[0];
 	computers.freeSlots = 0;
 	EXPECT_TRUE(IsFull(computers));
+}
+
+TEST(LobbyList, TheGameToRejoinComesFirstAndNoFilterHidesIt)
+{
+	using lobby_api::LobbyState;
+	const std::vector lobbies {
+	    Summary("a", 1, 2, LobbyState::Open, 1),
+	    Summary("e", 2, 2, LobbyState::InGame, 5),
+	    Summary("f", 1, 2, LobbyState::InGame, 6, "0.1.0+old/codec33"),
+	};
+	const auto ids = [](const std::vector<lobby_api::LobbySummary>& list) {
+		std::string text;
+		for (const auto& lobby : list)
+		{
+			text += lobby.id;
+		}
+		return text;
+	};
+	EXPECT_EQ(ids(VisibleLobbies(lobbies, {}, k_Build, "e")), "ea");
+	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.search = "nothing", .showInGame = false}, k_Build, "e")), "e");
+	EXPECT_EQ(ids(VisibleLobbies(lobbies, {.showInGame = false}, k_Build, "f")), "fa");
+	EXPECT_EQ(ids(VisibleLobbies(lobbies, {}, k_Build, "x")), "ae");
+
+	// The list puts the game to rejoin in its entries, also when the list itself does not have it
+	LobbyListModel list;
+	list.Replace({.lobbies = {lobbies[0], lobbies[1]}, .pool = std::nullopt, .rejoin = lobbies[2]});
+	EXPECT_EQ(list.RejoinId(), "f");
+	EXPECT_EQ(list.Entries().size(), 3u);
+	auto changed = lobbies[1];
+	changed.gods = 1;
+	list.Replace({.lobbies = {lobbies[0], lobbies[1]}, .pool = std::nullopt, .rejoin = changed});
+	EXPECT_EQ(list.RejoinId(), "e");
+	EXPECT_EQ(list.Entries().size(), 2u);
+	ASSERT_NE(list.Find("e"), nullptr);
+	EXPECT_EQ(list.Find("e")->gods, 1);
+	// A game that ends has no rejoin, and a list with no rejoin clears it
+	EXPECT_TRUE(list.Apply(Event("lobbies.removed", R"({"id":"e","reason":"ended"})")));
+	EXPECT_TRUE(list.RejoinId().empty());
+	list.Replace({.lobbies = {lobbies[0]}, .pool = std::nullopt, .rejoin = lobbies[1]});
+	list.Replace({.lobbies = {lobbies[0]}});
+	EXPECT_TRUE(list.RejoinId().empty());
 }
 
 TEST(LobbyList, TheEventsChangeTheList)

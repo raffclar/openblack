@@ -271,7 +271,10 @@ public:
 	void SetListFilter(online::lobby::ListFilter filter) { _listFilter = std::move(filter); }
 	[[nodiscard]] lobby_screens::Sort GetListSort() const noexcept { return _listSort; }
 	void ClickListHeading(lobby_screens::Column column) { _listSort = lobby_screens::ClickHeading(_listSort, column); }
-	[[nodiscard]] const std::string& GetSelectedLobby() const noexcept { return _selectedLobby; }
+	/// The session that the player clicked, else the game in which the player still holds a god
+	[[nodiscard]] std::string_view GetSelectedLobby() const;
+	/// The game that plays in which the player still holds a god, or empty
+	[[nodiscard]] std::string_view GetRejoinLobby() const;
 	void SelectLobby(std::string id) { _selectedLobby = std::move(id); }
 	/// The picked session, none when the list does not have it
 	[[nodiscard]] const lobby_api::LobbySummary* GetSelectedSummary() const;

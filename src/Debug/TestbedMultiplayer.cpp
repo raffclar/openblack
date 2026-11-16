@@ -654,6 +654,11 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 	case Stage::LobbyListPlaying:
 		frontEnd.SelectLobby("d4");
 		break;
+	case Stage::LobbyListRejoin:
+		// No click: the list picks the game to rejoin
+		lobbies.HoldGod();
+		frontEnd.RefreshLobbies();
+		break;
 	case Stage::LobbyChatRoom:
 		frontEnd.SendMainRoomChat(u"Hello, everyone! I will make a session for four gods.");
 		break;

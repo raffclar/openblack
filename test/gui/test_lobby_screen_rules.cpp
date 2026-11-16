@@ -161,6 +161,38 @@ TEST(LobbyScreenRules, TheStatusColumn)
 	EXPECT_EQ(Utf8(NameText(lobby)), "# a");
 }
 
+TEST(LobbyScreenRules, TheGameToRejoinIsTheFirstLinePickedWithRejoin)
+{
+	const std::vector<lobby_api::LobbySummary> lobbies = {
+	    Summary("beta", "Zed", 2, lobby_api::LobbyState::Open),
+	    Summary("Alpha", "amy", 5, lobby_api::LobbyState::Open),
+	    Summary("gamma", "bob", 3, lobby_api::LobbyState::InGame),
+	    Summary("delta", "cal", 1, lobby_api::LobbyState::InGame),
+	};
+	online::lobby::ListFilter filter;
+	filter.showInGame = false;
+	EXPECT_EQ(Names(ShownLobbies(lobbies, filter, k_Build, {}, "gamma")),
+	          (std::vector<std::string> {"gamma", "Alpha", "beta"}));
+	// No sort moves it from the first line
+	EXPECT_EQ(Names(ShownLobbies(lobbies, filter, k_Build, {.column = Column::Name, .descending = false}, "gamma")),
+	          (std::vector<std::string> {"gamma", "Alpha", "beta"}));
+	EXPECT_EQ(Names(ShownLobbies(lobbies, filter, k_Build, {.column = Column::Name, .descending = true}, "gamma")),
+	          (std::vector<std::string> {"gamma", "beta", "Alpha"}));
+
+	// The game to rejoin has Rejoin. Another game that plays has no button.
+	EXPECT_EQ(ListButtonOf(&lobbies[2], "gamma"), ListButton::Rejoin);
+	EXPECT_EQ(ListButtonOf(&lobbies[3], "gamma"), ListButton::None);
+	EXPECT_EQ(ListButtonOf(&lobbies[2]), ListButton::None);
+	EXPECT_EQ(ListButtonOf(&lobbies[0], "gamma"), ListButton::Join);
+	EXPECT_EQ(ListButtonOf(nullptr, "gamma"), ListButton::None);
+	EXPECT_TRUE(ShowsJoinButton(&lobbies[2], "gamma"));
+
+	// The list picks the game to rejoin until the player clicks another line
+	EXPECT_EQ(PickedLobby("", "gamma"), "gamma");
+	EXPECT_EQ(PickedLobby("beta", "gamma"), "beta");
+	EXPECT_EQ(PickedLobby("", ""), "");
+}
+
 TEST(LobbyScreenRules, AGameThatPlaysShowsItsPlayersAndNoJoin)
 {
 	auto lobby = Summary("a", "amy", 2, lobby_api::LobbyState::Open);

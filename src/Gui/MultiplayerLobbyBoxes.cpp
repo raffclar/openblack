@@ -61,6 +61,8 @@ constexpr std::string_view k_BackText = "HELP_TEXT_DIALOG_BACK";
 constexpr std::string_view k_RoomBackText = "HELP_TEXT_DIALOG_TATOOBACK";
 constexpr std::string_view k_InternetListTitle = "HELP_TEXT_DIALOG_ADDITION_57";
 constexpr std::string_view k_JoinGameText = "HELP_TEXT_DIALOG_ADDITION_76";
+/// The button for the game in which the player still holds a god (design 2.9; deviation 98)
+constexpr std::u16string_view k_RejoinText = u"Rejoin";
 constexpr std::string_view k_RefreshText = "HELP_TEXT_PATCH_09";
 constexpr std::string_view k_WrongVersionText = "HELP_TEXT_MPFE_WRONGVER";
 constexpr std::string_view k_GameNameText = "HELP_TEXT_MPFE_CS_GAME_LABEL";
@@ -287,7 +289,9 @@ void MultiplayerBoxes::SyncLobbyList()
 		_headings.at(i)->label = screens::HeadingText(k_Headings.at(i), static_cast<screens::Column>(i), sort);
 	}
 	const auto* picked = _frontEnd->GetSelectedSummary();
-	_next->visible = screens::ShowsJoinButton(picked);
+	const auto button = screens::ListButtonOf(picked, _frontEnd->GetRejoinLobby());
+	_next->visible = button != screens::ListButton::None;
+	_next->label = button == screens::ListButton::Rejoin ? std::u16string(k_RejoinText) : Text(k_JoinGameText);
 	_detail->text = picked != nullptr
 	                    ? screens::DetailText(*picked, ToUtf16(picked->map.name.empty() ? picked->map.file : picked->map.name))
 	                    : (_shownLobbies.empty() ? std::u16string(u"No open game. Click Create session.")
