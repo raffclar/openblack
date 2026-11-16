@@ -341,6 +341,22 @@ TEST(GameSocket, ACreatureFileThatIsTooLargeDoesNotRead)
 	EXPECT_FALSE(Parse(R"({"type":"start.query","land":"Land1.txt"})").has_value());
 }
 
+TEST(GameSocket, AMindFileOfTheEditorGoesToJsonAndBackUpToItsLimit)
+{
+	const std::vector<uint8_t> file {0, 1, 2, 250, 251, 252, 253};
+	const auto back = RoundTrip(EditorMindFile {.file = file});
+	EXPECT_EQ(back.file, file);
+	EXPECT_EQ(ToJson(EditorMindFile {.file = {1, 2, 3}}), R"({"file":"AQID","type":"editor.mind_file"})");
+	const std::vector<uint8_t> largest(k_MostEditorMindFileBytes, 7);
+	EXPECT_TRUE(Parse(ToJson(EditorMindFile {.file = largest})).has_value());
+	const std::vector<uint8_t> tooLarge(k_MostEditorMindFileBytes + 1, 7);
+	EXPECT_FALSE(Parse(ToJson(EditorMindFile {.file = tooLarge})).has_value());
+	// A frame with no file, an empty file or bytes that are not Base64 is not a mind file
+	EXPECT_FALSE(Parse(R"({"type":"editor.mind_file"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.mind_file","file":""})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.mind_file","file":"!!"})").has_value());
+}
+
 // The start names the players of the gods by slot, and the server tells the clients that the turns of the game stopped
 TEST(GameSocket, TheNamesOfTheGodsAndTheStopOfTheGameGoToJsonAndBack)
 {

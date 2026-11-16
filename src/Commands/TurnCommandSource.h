@@ -44,6 +44,9 @@ public:
 	/// The alignment that the player of the god sent to all the players with its creature file before the start. None
 	/// when the god has no player that sent its start, as a slot that the computer fills.
 	[[nodiscard]] virtual std::optional<float> StartAlignment(PlayerNames /*god*/) const { return std::nullopt; }
+	/// The bytes of a mind file of the editor that the server sent to all the players, by the hash of the bytes. None when
+	/// this computer does not have the file. The server sends each file before the turn of the command that uses it.
+	[[nodiscard]] virtual std::span<const uint8_t> EditorMindFile(uint64_t /*hash*/) const { return {}; }
 	/// The god that the player of this computer plays. The server plays no god.
 	[[nodiscard]] virtual std::optional<PlayerNames> OwnGod() const { return std::nullopt; }
 	/// Whether the god that the player of this computer plays, plays for a clan. The server plays no god.

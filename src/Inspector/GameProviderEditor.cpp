@@ -16,12 +16,15 @@
 #include <utility>
 #include <vector>
 
+#include <GameSocket.h>
+#include <MindFile.h>
 #include <fmt/format.h>
 #include <glm/vec2.hpp>
 
 #include "Common/CreatureEditValues.h"
 #include "Common/DebugCheats.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Creature/CreatureMindFileBody.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -30,6 +33,7 @@
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorEntities.h"
 #include "Editor/EditorLandEdits.h"
+#include "Editor/EditorMindLoads.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
@@ -503,6 +507,92 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		}
 		editor::SendCreatureSpawn(spawn);
 		return QueryResult::Value({{"sent", true}});
+	});
+	auto mindLoad = Query(
+	    "mind_load",
+	    "Sends a mind file of this computer and its command of the turns, as the creature tools send them in a network game: "
+	    "the file goes to the game server, which sends it to every computer, and each computer loads it at the same turn. "
+	    "With an id, the creature takes the mind. With a position, a new creature with the body of the file takes it. force "
+	    "sends it also when the editor of this computer is refused.",
+	    {{.name = "path", .type = "string", .description = "The mind file on this computer", .required = true},
+	     {.name = "id", .type = "integer", .description = "The creature that takes the mind", .required = false},
+	     {.name = "position",
+	      .type = "point",
+	      .description = "[x, z] or [x, y, z] of a new creature from the file",
+	      .required = false},
+	     {.name = "owner", .type = "integer", .description = "The player that owns a new creature", .required = false},
+	     {.name = "radians", .type = "number", .description = "The angle that a new creature faces", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	mindLoad.writes = true;
+	provider->Add(std::move(mindLoad), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto pathParam = context.params.find("path");
+		if (pathParam == context.params.end() || !pathParam->is_string())
+		{
+			return QueryResult::Error("editor.mind_load needs the path of a mind file");
+		}
+		const auto bytes = creaturemind::ReadFileBytes(pathParam->get<std::string>());
+		const auto mind = bytes.has_value() ? editor::mind_loads::ReadMind(*bytes) : nullptr;
+		if (mind == nullptr)
+		{
+			return QueryResult::Error("the mind file does not read");
+		}
+		if (bytes->size() > game_socket::k_MostEditorMindFileBytes)
+		{
+			return QueryResult::Error(fmt::format("a network game takes a mind file of at most {} KB",
+			                                      game_socket::k_MostEditorMindFileBytes / 1024));
+		}
+		player_commands::EditorMindLoad load;
+		auto position = PositionParam(context.params);
+		if (const auto entity = EntityParam(context.params); entity.has_value())
+		{
+			load.use = player_commands::EditorMindLoad::Use::LoadInto;
+			load.creature = *entity;
+		}
+		else if (position.has_value())
+		{
+			// The new creature has the body of the file, as the creature tools make it
+			const auto body = creature_mind_body::FromMindFile(*mind);
+			if (!body.has_value())
+			{
+				return QueryResult::Error("the species of the mind file is not one that the game knows");
+			}
+			if (const auto found = context.params.find("position"); found->is_array() && found->size() == 2)
+			{
+				position->y = editor::LandHeight({position->x, position->z});
+			}
+			load.use = player_commands::EditorMindLoad::Use::Spawn;
+			load.spawn = {.species = static_cast<uint8_t>(body->species),
+			              .owner = static_cast<uint8_t>(NumberParam(context.params, "owner").value_or(0.0f)),
+			              .position = *position,
+			              .radians = NumberParam(context.params, "radians").value_or(0.0f),
+			              .scale = body->size.value_or(1.0f),
+			              .alignment = body->alignment.value_or(0.0f),
+			              .fatness = body->fatness,
+			              .strength = body->strength,
+			              .hasTattoos = body->tattoos.has_value(),
+			              .tattoos = body->tattoos.value_or(creature_tattoo::Slots {})};
+		}
+		else
+		{
+			return QueryResult::Error("editor.mind_load needs the id of a creature or a position");
+		}
+		if (const auto refusal = editor::mind_loads::MindLoadRefusal(load, true))
+		{
+			return QueryResult::Error(std::string(*refusal));
+		}
+		if (!editor::mind_loads::SendMindLoad(*bytes, load))
+		{
+			return QueryResult::Error("the game socket is not open: the mind file did not go");
+		}
+		return QueryResult::Value({{"sent", true},
+		                           {"bytes", bytes->size()},
+		                           {"hash", fmt::format("{:016x}", editor::mind_loads::HashOf(*bytes))},
+		                           {"use", load.use == player_commands::EditorMindLoad::Use::Spawn ? "spawn" : "load"},
+		                           {"species", static_cast<int>(load.spawn.species)}});
 	});
 	auto landStroke = Query(
 	    "land_stroke",

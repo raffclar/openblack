@@ -27,6 +27,7 @@
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
 #include "ECS/EntityHashes.h"
+#include "Editor/EditorMindLoads.h"
 #include "Online/Backoff.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameOrigin.h"
@@ -188,6 +189,9 @@ public:
 	void SendRoomChat(std::string_view text, std::string_view to = {}, bool team = false);
 	/// The lines of the room's chat that the server sent since the last call, in the order that they came
 	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat();
+	/// Sends a mind file of the creature tools of the editor to the server, during the game. False when the socket is not
+	/// open or the game did not start: then the file does not go.
+	[[nodiscard]] bool SendEditorMindFile(std::vector<uint8_t> file);
 	/// The player leaves the game. The server defeats the god.
 	void Leave();
 	/// The end box of a decided game opened: the client asks the server to stop the turns of the game, one time
@@ -205,6 +209,7 @@ public:
 	[[nodiscard]] std::vector<player_commands::Command> TakeTurn(uint32_t turn) override;
 	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
+	[[nodiscard]] std::span<const uint8_t> EditorMindFile(uint64_t hash) const override { return _mindFiles.Find(hash); }
 	/// The god of the slot that the server gave to this computer. None for an observer.
 	[[nodiscard]] std::optional<PlayerNames> OwnGod() const override;
 	/// The number of the observer that the server gave to this computer. None for a god, and for an observer of a
@@ -363,6 +368,8 @@ private:
 	void SendLoaded();
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	std::map<uint8_t, float> _startAlignments;
+	/// The mind files of the editor that the server sent during this game. A resume keeps them; a new join clears them.
+	editor::mind_loads::MindFileStore _mindFiles;
 	bool _ownGodPlaysForClan {false};
 	std::string _refusedReason;
 	std::string _refusedPath;
