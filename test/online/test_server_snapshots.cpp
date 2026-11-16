@@ -59,12 +59,31 @@ Room MakeRoom()
 	             .arrivingNames = {"dave"},
 	             .departingNumbers = {1},
 	             .watcherEditors = {true},
-	             .clock = {.paused = true, .speed = 2.0f, .steps = 1}};
+	             .clock = {.paused = true, .speed = 2.0f, .steps = 1},
+	             .watcherAccounts = {"17"}};
 }
 
 /// The bytes of the clock at the end of the room of format 7: the pause (1 byte), the speed (4 bytes) and the steps
 /// (4 bytes)
 constexpr size_t k_ClockBytes = 9;
+
+/// The bytes of the accounts of the observers at the end of the room of format 8: a 4-byte count, then each account as
+/// a 4-byte length and its characters
+size_t AccountBytes(const Room& room)
+{
+	size_t bytes = 4;
+	for (const auto& account : room.watcherAccounts)
+	{
+		bytes += 4 + account.size();
+	}
+	return bytes;
+}
+
+/// The bytes after the claims of the room of format 6: the clock and the accounts of the observers
+size_t TailBytes(const Room& room)
+{
+	return k_ClockBytes + AccountBytes(room);
+}
 
 /// The bytes of the claims at the end of the room of format 6: two lists, each with a 4-byte count and one byte for each
 /// god slot or observer
@@ -173,7 +192,7 @@ TEST(ServerSnapshots, TheRoomOfTheThirdFormatReadsWithNoNames)
 	auto bytes = EncodeRoom(room);
 	// The four empty lists of the observers (4 bytes each) end the room of format 5. The count of the names (4 bytes)
 	// and the god of the observers (1 byte) end the room of format 4.
-	bytes.resize(bytes.size() - k_ClockBytes - ClaimBytes(room) - 16 - 5);
+	bytes.resize(bytes.size() - TailBytes(room) - ClaimBytes(room) - 16 - 5);
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->watchers, room.watchers);
@@ -221,7 +240,7 @@ TEST(ServerSnapshots, TheRoomOfTheFifthFormatReadsWithNoClaims)
 {
 	const auto room = MakeRoom();
 	auto bytes = EncodeRoom(room);
-	bytes.resize(bytes.size() - k_ClockBytes - ClaimBytes(room));
+	bytes.resize(bytes.size() - TailBytes(room) - ClaimBytes(room));
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->departingNumbers, room.departingNumbers);
@@ -236,7 +255,7 @@ TEST(ServerSnapshots, TheRoomWithClaimsForTheWrongGodSlotsDoesNotRead)
 	room.watcherEditors.clear();
 	auto bytes = EncodeRoom(room);
 	// Put a list of claims for two god slots in place of the list for the three god slots of the room
-	bytes.resize(bytes.size() - k_ClockBytes - ClaimBytes(room));
+	bytes.resize(bytes.size() - TailBytes(room) - ClaimBytes(room));
 	const std::array<uint8_t, 4> twoSlots {2, 0, 0, 0};
 	bytes.insert(bytes.end(), twoSlots.begin(), twoSlots.end());
 	bytes.push_back(1);
@@ -468,7 +487,7 @@ TEST(ServerSnapshots, TheRoomOfTheFourthFormatReadsWithNoNumbersOfObservers)
 	room.arrivingNames.clear();
 	room.departingNumbers.clear();
 	auto bytes = EncodeRoom(room);
-	bytes.resize(bytes.size() - k_ClockBytes - ClaimBytes(room) - 16);
+	bytes.resize(bytes.size() - TailBytes(room) - ClaimBytes(room) - 16);
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->watcherNames, room.watcherNames);
@@ -483,12 +502,12 @@ TEST(ServerSnapshots, ASnapshotOfAnEarlierFormatDoesNotLoad)
 	ASSERT_TRUE(DecodeSnapshot(now).has_value());
 	// The first format kept the secrets of the sessions, and the second format kept no blocks of commands. The version is
 	// after the 8 bytes of the magic text.
-	// The formats 3 to 6 still load.
-	for (const uint8_t version : {1, 2, 3, 4, 5, 6})
+	// The formats 3 to 7 still load.
+	for (const uint8_t version : {1, 2, 3, 4, 5, 6, 7})
 	{
 		auto bytes = now;
 		bytes.resize(bytes.size() - sizeof(uint64_t));
-		ASSERT_EQ(bytes[8], 7);
+		ASSERT_EQ(bytes[8], 8);
 		bytes[8] = version;
 		const auto checksum = Checksum(bytes);
 		for (int shift = 0; shift < 64; shift += 8)
@@ -566,12 +585,37 @@ TEST(ServerSnapshots, TheRoomOfTheSixthFormatReadsWithTheNormalClock)
 {
 	const auto room = MakeRoom();
 	auto bytes = EncodeRoom(room);
-	bytes.resize(bytes.size() - k_ClockBytes);
+	bytes.resize(bytes.size() - TailBytes(room));
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->watcherEditors, room.watcherEditors);
 	EXPECT_EQ(old->clock, openblack::online::room_clock::State {});
 	// A room that ends in the clock does not read
+	bytes = EncodeRoom(room);
+	bytes.pop_back();
+	EXPECT_FALSE(DecodeRoom(bytes).has_value());
+}
+
+// The room keeps the account of each observer, so that a kick or a ban after a restart also ends an away session
+TEST(ServerSnapshots, TheRoomKeepsTheAccountsOfTheObservers)
+{
+	const auto room = MakeRoom();
+	const auto read = DecodeRoom(EncodeRoom(room));
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(read->watcherAccounts, (std::vector<std::string> {"17"}));
+}
+
+// A room of format 7 has no accounts of the observers. It still reads, with no accounts.
+TEST(ServerSnapshots, TheRoomOfTheSeventhFormatReadsWithNoAccountsOfObservers)
+{
+	const auto room = MakeRoom();
+	auto bytes = EncodeRoom(room);
+	bytes.resize(bytes.size() - AccountBytes(room));
+	const auto old = DecodeRoom(bytes);
+	ASSERT_TRUE(old.has_value());
+	EXPECT_EQ(old->clock, room.clock);
+	EXPECT_TRUE(old->watcherAccounts.empty());
+	// A room that ends in the accounts does not read
 	bytes = EncodeRoom(room);
 	bytes.pop_back();
 	EXPECT_FALSE(DecodeRoom(bytes).has_value());

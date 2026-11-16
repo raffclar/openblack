@@ -2462,6 +2462,62 @@ TEST_F(LockstepTest, AnAwayGodThatTheLobbyKicksCannotComeBack)
 	EXPECT_EQ(host->Seats()[1].resumes, 0u);
 }
 
+TEST_F(LockstepTest, AnAwayObserverThatTheLobbyKicksCannotComeBack)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	Computer carol(network, now, "observer:102");
+	Frames({&alice, &bob, &carol}, 10);
+	ASSERT_TRUE(host->Started());
+	ASSERT_EQ(host->Observers(), 1u);
+	// Carol's network stops, then the lobby's host kicks her while her session waits
+	network.Cut(carol.sockets->Ids().back());
+	Frames({&alice, &bob}, 1);
+	carol.Frame();
+	Frames({&alice, &bob}, 3);
+	ASSERT_EQ(host->Watchers().size(), 1u);
+	ASSERT_FALSE(host->Watchers()[0].connection.has_value());
+	EXPECT_EQ(host->Watchers()[0].account, "102");
+	host->SetBans({102});
+	EXPECT_TRUE(host->Watchers().empty());
+	// Carol's session tries to come back, and the server refuses it
+	Frames({&alice, &bob, &carol}, 10);
+	EXPECT_NE(carol.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(carol.session.RefusedReason(), "resume");
+	EXPECT_EQ(host->Observers(), 0u);
+	// The gods play on
+	Frames({&alice, &bob}, 10);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+}
+
+TEST_F(LockstepTest, AnObserverThatCameBackKeepsItsAccountForAKick)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	Computer carol(network, now, "observer:102");
+	Frames({&alice, &bob, &carol}, 10);
+	ASSERT_TRUE(host->Started());
+	// Carol's network stops, and her session comes back
+	network.Cut(carol.sockets->Ids().back());
+	Frames({&alice, &bob}, 1);
+	carol.Frame();
+	Frames({&alice, &bob, &carol}, 20);
+	ASSERT_EQ(carol.session.GetState(), NetworkSession::State::Playing);
+	ASSERT_EQ(host->Watchers().size(), 1u);
+	ASSERT_EQ(host->Watchers()[0].resumes, 1u);
+	// The kick of her account takes the observer that came back out of the game
+	host->SetBans({102});
+	Frames({&alice, &bob, &carol}, 3);
+	EXPECT_EQ(carol.session.RefusedReason(), "kicked");
+	EXPECT_TRUE(host->Watchers().empty());
+	EXPECT_EQ(host->Observers(), 0u);
+}
+
 TEST_F(LockstepTest, ABanAfterTheStartTakesThePlayerOutOfTheGame)
 {
 	MakeHost(2);

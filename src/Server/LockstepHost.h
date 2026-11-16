@@ -28,8 +28,8 @@
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
 #include "Editor/EditorMindLoads.h"
-#include "Online/EditorWorldUpload.h"
 #include "Editor/EditorScriptFiles.h"
+#include "Online/EditorWorldUpload.h"
 #include "Online/GameDataPrint.h"
 #include "Online/RoomClock.h"
 #include "Server/DesyncCapture.h"
@@ -222,6 +222,9 @@ public:
 		uint32_t resumes {0};
 		/// The name of the observer's account, for the room's chat and for the leave. Empty for a session that a restore gave.
 		std::string name;
+		/// The account of the join ticket, so that a kick or a ban of the account also ends an away session. Empty for an
+		/// observer on the local network, and for a session that a snapshot of format 7 or older gave.
+		std::string account;
 		/// The number of the observer in the game, from 1. The turns stamp the blocks of the observer with it.
 		uint8_t number {0};
 		/// The join ticket of the observer has the editor claim. An observer that a snapshot gave back keeps the claim of the
@@ -510,7 +513,8 @@ private:
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
 	/// Gives a new session to an observer on a connection, with the number of the observer, and returns its secret. With
 	/// no secrets, the observer cannot come back.
-	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, uint8_t number, bool editor, bool debugger);
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection, std::string name, std::string account, uint8_t number,
+	                                     bool editor, bool debugger);
 	/// A line of the room's chat from a player: it goes to every other player in a room on the local network, until the
 	/// start
 	void ChatInRoom(ConnectionId connection, const Peer& peer, const game_socket::RoomChat& chat);

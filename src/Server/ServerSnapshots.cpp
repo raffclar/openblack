@@ -36,7 +36,7 @@ constexpr std::array<uint8_t, 8> k_JournalMagic {'O', 'B', 'J', 'O', 'U', 'R', '
 /// with no claims.
 /// Version 7 keeps the clock of the room and the files of the editor. The files of versions 3 to 6 still load, with the
 /// clock at the normal speed and with no files.
-constexpr uint32_t k_FormatVersion = 7;
+constexpr uint32_t k_FormatVersion = 8;
 constexpr uint32_t k_OldestFormatVersion = 3;
 
 /// True for a version of the format that the server reads
@@ -338,6 +338,11 @@ std::vector<uint8_t> EncodeRoom(const Room& room)
 	PutU8(out, room.clock.paused ? 1 : 0);
 	PutU32(out, std::bit_cast<uint32_t>(room.clock.speed));
 	PutU32(out, room.clock.steps);
+	PutU32(out, static_cast<uint32_t>(room.watcherAccounts.size()));
+	for (const auto& account : room.watcherAccounts)
+	{
+		PutText(out, account);
+	}
 	return out;
 }
 
@@ -427,6 +432,15 @@ std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes)
 		room.clock.paused = reader.U8() != 0;
 		room.clock.speed = std::bit_cast<float>(reader.U32());
 		room.clock.steps = reader.U32();
+	}
+	// The room of a file of format 7 ends here
+	if (reader.Good() && !reader.AtEnd())
+	{
+		const auto accounts = reader.U32();
+		for (uint32_t i = 0; i < accounts && reader.Good(); ++i)
+		{
+			room.watcherAccounts.push_back(reader.Text());
+		}
 	}
 	if (!reader.Good() || !reader.AtEnd())
 	{
