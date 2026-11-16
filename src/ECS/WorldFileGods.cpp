@@ -10,6 +10,7 @@
 #include "WorldFileGods.h"
 
 #include <algorithm>
+#include <string_view>
 #include <tuple>
 
 #include <spdlog/spdlog.h>
@@ -75,13 +76,17 @@ void GiveToRoom(std::span<const PlayerNames> players)
 		}
 		if (change != Change {})
 		{
-			SPDLOG_LOGGER_INFO(
-			    spdlog::get("game"), "The god of player {} after the world file: {} of the room{}{}{}{}",
-			    static_cast<int>(player), god.roomPlayer ? "a player" : "no player", change.makeHands ? ", new hands" : "",
-			    change.mindOff ? ", no computer mind" : "", change.removeHands ? ", no hands" : "",
-			    change.computerGod
-			        ? (change.makeCreature ? ", a computer god with a new creature" : ", a computer god with its own creature")
-			        : "");
+			std::string_view computerGod;
+			if (change.computerGod)
+			{
+				computerGod = change.makeCreature ? ", a computer god with a new creature"
+				              : god.creature      ? ", a computer god with its own creature"
+				                                  : ", a computer god with no creature and no citadel";
+			}
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The god of player {} after the world file: {} of the room{}{}{}{}",
+			                   static_cast<int>(player), god.roomPlayer ? "a player" : "no player",
+			                   change.makeHands ? ", new hands" : "", change.mindOff ? ", no computer mind" : "",
+			                   change.removeHands ? ", no hands" : "", computerGod);
 		}
 	}
 }

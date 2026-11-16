@@ -1411,6 +1411,7 @@ def editor_world(pids, world_file, shots=None, given=False):
     if not given:
         done["saved"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file, "save": True}})
     time.sleep(10.0)
+    done["creatures_before"] = [creatures_of(pid) for pid in pids]
     done["sent"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file}})
     if not (done["sent"] or {}).get("sent"):
         done["error"] = f"the world file did not go: {done['sent']}"
@@ -1419,16 +1420,27 @@ def editor_world(pids, world_file, shots=None, given=False):
     # The computer gods on each client after the load: a god of the file with no player of the room gets one, and every
     # client must tell the same gods
     done["computer_gods"] = [computer_gods_of(pid) for pid in pids]
+    done["creatures"] = [creatures_of(pid) for pid in pids]
+    # A second look shows whether each mind still works out what to do as the turns go by
+    time.sleep(10.0)
+    done["computer_gods_later"] = [computer_gods_of(pid) for pid in pids]
     return done
+
+
+def creatures_of(pid):
+    """The creatures on one client, by their ids and names"""
+    return sorted((item.get("id"), item.get("name")) for item in
+                  items_of(inspector_answer(pid, "ecs.entities", {"params": {"component": "Creature"}}))
+                  if isinstance(item, dict))
 
 
 def computer_gods_of(pid):
     """The players whose computer mind is on, with whether it started and its creature, on one client"""
-    players = inspector_answer(pid, "players.list", {}) or []
-    if not isinstance(players, list):
-        return []
+    players = items_of(inspector_answer(pid, "players.list", {}))
     return [{"player": item.get("player"), "started": item["computer_mind"].get("started"),
-             "creature": item.get("primary_creature"), "hand": item["computer_mind"].get("hand")}
+             "creature": item.get("primary_creature"), "hand": item["computer_mind"].get("hand"),
+             "doing": item["computer_mind"].get("doing"), "paused": item["computer_mind"].get("paused"),
+             "last_empty_turn": item["computer_mind"].get("last_empty_turn")}
             for item in players
             if isinstance(item, dict) and (item.get("computer_mind") or {}).get("switched_on")]
 
