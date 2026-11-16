@@ -183,7 +183,8 @@ public:
 		uint32_t blocksAgain {0};
 		/// The blocks whose commands the server refused because the commands of the god did not fit in the turn
 		uint32_t refusedBlocks {0};
-		/// The join ticket of the player has the editor claim. A seat that a snapshot gave back has no editor claim.
+		/// The join ticket of the player has the editor claim. A seat that a snapshot gave back keeps the claim of the
+		/// snapshot.
 		bool editor {false};
 	};
 
@@ -201,7 +202,8 @@ public:
 		std::string name;
 		/// The number of the observer in the game, from 1. The turns stamp the blocks of the observer with it.
 		uint8_t number {0};
-		/// The join ticket of the observer has the editor claim
+		/// The join ticket of the observer has the editor claim. An observer that a snapshot gave back keeps the claim of the
+		/// snapshot.
 		bool editor {false};
 	};
 

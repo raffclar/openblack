@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
 #include <cstdint>
 
 #include <algorithm>
@@ -44,7 +45,7 @@ SessionHash FixedHash(uint8_t value)
 Room MakeRoom()
 {
 	return Room {.start = R"({"type":"room.start","land":"Land1.txt"})",
-	             .seats = {{.state = 1, .session = FixedHash(1), .account = "11", .name = "alice"},
+	             .seats = {{.state = 1, .session = FixedHash(1), .account = "11", .name = "alice", .editor = true},
 	                       {.state = 2, .session = FixedHash(3), .account = "12", .name = "bob"},
 	                       {.state = 0, .session = std::nullopt, .account = {}, .name = {}}},
 	             .watchers = {FixedHash(5)},
@@ -56,7 +57,15 @@ Room MakeRoom()
 	             .watcherNumbers = {2},
 	             .arrivingNumbers = {3},
 	             .arrivingNames = {"dave"},
-	             .departingNumbers = {1}};
+	             .departingNumbers = {1},
+	             .watcherEditors = {true}};
+}
+
+/// The bytes of the claims at the end of the room of format 6: two lists, each with a 4-byte count and one byte for each
+/// god slot or observer
+size_t ClaimBytes(const Room& room)
+{
+	return 8 + room.seats.size() + room.watcherEditors.size();
 }
 
 /// True when the bytes have the text in them
@@ -159,12 +168,55 @@ TEST(ServerSnapshots, TheRoomOfTheThirdFormatReadsWithNoNames)
 	auto bytes = EncodeRoom(room);
 	// The four empty lists of the observers (4 bytes each) end the room of format 5. The count of the names (4 bytes)
 	// and the god of the observers (1 byte) end the room of format 4.
-	bytes.resize(bytes.size() - 16 - 5);
+	bytes.resize(bytes.size() - ClaimBytes(room) - 16 - 5);
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->watchers, room.watchers);
 	EXPECT_TRUE(old->watcherNames.empty());
 	EXPECT_FALSE(old->observersIn);
+}
+
+// The room keeps the editor claims of the gods and the observers, so that they keep the claim after a restart
+TEST(ServerSnapshots, TheRoomKeepsTheEditorClaimsOfTheGodsAndTheObservers)
+{
+	const auto room = MakeRoom();
+	const auto read = DecodeRoom(EncodeRoom(room));
+	ASSERT_TRUE(read.has_value());
+	ASSERT_EQ(read->seats.size(), 3u);
+	EXPECT_TRUE(read->seats[0].editor);
+	EXPECT_FALSE(read->seats[1].editor);
+	EXPECT_FALSE(read->seats[2].editor);
+	EXPECT_EQ(read->watcherEditors, (std::vector<bool> {true}));
+}
+
+// A room of format 5 has no claims. It still reads, and no god or observer has the editor claim.
+TEST(ServerSnapshots, TheRoomOfTheFifthFormatReadsWithNoClaims)
+{
+	const auto room = MakeRoom();
+	auto bytes = EncodeRoom(room);
+	bytes.resize(bytes.size() - ClaimBytes(room));
+	const auto old = DecodeRoom(bytes);
+	ASSERT_TRUE(old.has_value());
+	EXPECT_EQ(old->departingNumbers, room.departingNumbers);
+	EXPECT_TRUE(std::ranges::none_of(old->seats, [](const RoomSeat& seat) { return seat.editor; }));
+	EXPECT_TRUE(old->watcherEditors.empty());
+}
+
+// The list of the claims of the gods has one byte for each god slot. A list of a different length does not read.
+TEST(ServerSnapshots, TheRoomWithClaimsForTheWrongGodSlotsDoesNotRead)
+{
+	auto room = MakeRoom();
+	room.watcherEditors.clear();
+	auto bytes = EncodeRoom(room);
+	// Put a list of claims for two god slots in place of the list for the three god slots of the room
+	bytes.resize(bytes.size() - ClaimBytes(room));
+	const std::array<uint8_t, 4> twoSlots {2, 0, 0, 0};
+	bytes.insert(bytes.end(), twoSlots.begin(), twoSlots.end());
+	bytes.push_back(1);
+	bytes.push_back(0);
+	const std::array<uint8_t, 4> noObservers {0, 0, 0, 0};
+	bytes.insert(bytes.end(), noObservers.begin(), noObservers.end());
+	EXPECT_FALSE(DecodeRoom(bytes).has_value());
 }
 
 TEST(ServerSnapshots, ASnapshotReadsBackAndATornOrChangedSnapshotDoesNot)
@@ -389,7 +441,7 @@ TEST(ServerSnapshots, TheRoomOfTheFourthFormatReadsWithNoNumbersOfObservers)
 	room.arrivingNames.clear();
 	room.departingNumbers.clear();
 	auto bytes = EncodeRoom(room);
-	bytes.resize(bytes.size() - 16);
+	bytes.resize(bytes.size() - ClaimBytes(room) - 16);
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->watcherNames, room.watcherNames);
@@ -404,12 +456,12 @@ TEST(ServerSnapshots, ASnapshotOfAnEarlierFormatDoesNotLoad)
 	ASSERT_TRUE(DecodeSnapshot(now).has_value());
 	// The first format kept the secrets of the sessions, and the second format kept no blocks of commands. The version is
 	// after the 8 bytes of the magic text.
-	// The third and the fourth formats still load.
-	for (const uint8_t version : {1, 2, 3, 4})
+	// The third, the fourth and the fifth formats still load.
+	for (const uint8_t version : {1, 2, 3, 4, 5})
 	{
 		auto bytes = now;
 		bytes.resize(bytes.size() - sizeof(uint64_t));
-		ASSERT_EQ(bytes[8], 5);
+		ASSERT_EQ(bytes[8], 6);
 		bytes[8] = version;
 		const auto checksum = Checksum(bytes);
 		for (int shift = 0; shift < 64; shift += 8)
