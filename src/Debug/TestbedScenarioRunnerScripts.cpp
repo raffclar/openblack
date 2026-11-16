@@ -273,7 +273,9 @@ std::string Runner::RunScript(const Command& command)
 		{
 			return fmt::format("no global {} or nothing to set it to", name);
 		}
-		vm.SetVariable(static_cast<uint32_t>(std::distance(globals.begin(), found)), *given);
+		// The global takes the type of the value, as the assignment of a script does. An object global that the scenario
+		// sets then reads as an object, also after a save and a load.
+		vm.AssignVariable(static_cast<uint32_t>(std::distance(globals.begin(), found)), *given, type(argument));
 	}
 	for (const auto& argument : command.scriptArguments)
 	{
