@@ -503,6 +503,40 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	                 Act(Kind::Stroke, 0, 4.0f)},
 	});
 
+	// The lesson of a stroke with the hand waits while the lock of the hand stays on the creature, then the help tells it.
+	// The Action button is the right button of the mouse.
+	constexpr size_t k_ActionButton = 3;
+	all.push_back({
+	    .id = "mind.hand_stroke_lesson",
+	    .name = "The help tells what a stroke with the hand taught",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger on the learning leash is told to act on a cow. The leash comes off. When the tiger "
+	                   "goes to the cow, the pointer goes on the tiger. The hand holds it with the Action button, moves "
+	                   "from side to side over it four times and lets go.",
+	    .expected = "When the tiger is still after the hand lets go, the good advisor comes out, looks at the tiger and "
+	                "says what the stroke taught it, such as \"From now on, your Creature will want to look around "
+	                "more.\" The line has its voice.",
+	    .framing = {.shot = Shot::Follow, .distance = 2.0f},
+	    .creatures = {grown},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {30.0f, 60.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.9f, 0.1f}},
+	                 Leash(0, LeashType::Rope, 0.5f),
+	                 OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false),
+	                 Act(Kind::TakeOffLeash, 0, 8.0f),
+	                 {.kind = Kind::PointerOnCreature, .creature = 0, .delaySeconds = 9.5f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.0f, .value = k_ActionButton},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 3.0f, .point = {0.04f, 0.0f}, .amount = 0.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.6f, .point = {-0.04f, 0.0f}, .amount = 0.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.6f, .point = {0.04f, 0.0f}, .amount = 0.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.6f, .point = {-0.04f, 0.0f}, .amount = 0.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.6f, .value = k_ActionButton}},
+	    .checks = {{.label = "the help told the lesson of the stroke",
+	                .quantity = checks::Quantity::CreatureLessonsTold,
+	                .afterTurns = 220,
+	                .byTurn = 500,
+	                .atLeast = 1.0}},
+	});
+
 	// The help is held back while the plan of the creature is to sleep at home, but not while it sleeps on the spot
 	CreatureSetup lowOnEnergy {.species = CreatureType::Tiger,
 	                           .offset = {0.0f, 20.0f},

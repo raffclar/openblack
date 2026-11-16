@@ -603,6 +603,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	{
 		return;
 	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} gets the feedback {}", entt::to_integral(creature), feedback);
 	mind->lastFeedback = CreatureMindState::Feedback {.value = feedback, .activity = mind->idle.activity};
 	// Let go of, however slightly it was stroked or slapped, it stops whatever it was doing: it stops walking, puts down
 	// what it was doing with a thing, drops its agenda and gets up out of a sitting or lying pose. An action it is playing,

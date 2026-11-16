@@ -98,6 +98,8 @@ std::string_view Name(Quantity quantity)
 		return "duels started";
 	case Quantity::HandMayTake:
 		return "the hand may take the object";
+	case Quantity::CreatureLessonsTold:
+		return "lessons that the help told";
 	case Quantity::FootprintsNear:
 		return "footprints on the land near the point";
 	}

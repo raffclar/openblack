@@ -355,20 +355,21 @@ void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 	}
 	const auto turn = Turn();
 
-	// The first waiting message is raised again, unless a script holds the dialogue; whatever becomes of it, it is done
-	// waiting
-	if (!DialogueTaken())
+	// While a hand holds the creature, its turn does not raise the waiting messages and does not watch it for help.
+	// The lock stays after the release until the creature is still. Thus the lesson of a stroke waits for the end of
+	// the lock.
+	const bool held = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(creature);
+
+	// The first waiting message is raised again. Whatever becomes of it, it is done waiting.
+	if (const auto waiting = help::WaitingToRaise(MemoryOf(registry, creature), held, DialogueTaken()); waiting.has_value())
 	{
-		if (const auto waiting = help::FirstWaiting(MemoryOf(registry, creature)); waiting.has_value())
-		{
-			const auto entry = MemoryOf(registry, creature).entries.at(static_cast<size_t>(waiting->kind)).at(waiting->index);
-			Raise(creature,
-			      {.kind = waiting->kind, .parameter = entry.parameter, .thing = entry.thing, .position = entry.position});
-			help::Settle(MemoryOf(registry, creature), *waiting, turn);
-		}
+		const auto entry = MemoryOf(registry, creature).entries.at(static_cast<size_t>(waiting->kind)).at(waiting->index);
+		Raise(creature,
+		      {.kind = waiting->kind, .parameter = entry.parameter, .thing = entry.thing, .position = entry.position});
+		help::Settle(MemoryOf(registry, creature), *waiting, turn);
 	}
 
-	[&]() {
+	const auto watch = [&]() {
 		const auto* info = SpeciesInfo(registry, creature);
 		auto& memory = MemoryOf(registry, creature);
 		// A problem with its body, at most every two minutes
@@ -421,7 +422,11 @@ void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 			after.tutorialTurn = turn;
 			after.tutorialToldTurn.at(*prompt) = turn;
 		}
-	}();
+	};
+	if (!held)
+	{
+		watch();
+	}
 
 	// The help counts how steadily the hand of the creature's player stays over it. Only that hand counts. The turn knows
 	// the thing under the cursor from the last pick of that player, so the count is the same on every computer.

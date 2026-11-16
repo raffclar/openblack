@@ -109,6 +109,7 @@
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -1452,6 +1453,18 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const bool inInfluence =
 		    Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, transform->position);
 		return inInfluence && Locator::handGrabSystem::value().WhyNotTake(*object).empty() ? 1.0 : 0.0;
+	}
+	case checks::Quantity::CreatureLessonsTold:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value() || !Locator::creatureHelpSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& told = Locator::creatureHelpSystem::value().GetTold();
+		return static_cast<double>(std::ranges::count_if(told, [&creature](const auto& message) {
+			return message.creature == *creature && message.text.has_value() && creature_help::IsFeedbackLesson(message.kind);
+		}));
 	}
 	case checks::Quantity::FootprintsNear:
 	{
