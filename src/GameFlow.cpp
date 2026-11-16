@@ -326,13 +326,6 @@ bool Game::LoadGodsRingMap() noexcept
 	return Locator::landSystem::value().LoadGodsRingMap();
 }
 
-bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
-                         const std::function<bool()>& restore) noexcept
-{
-	return Locator::landSystem::value().LoadSavedLand(landPath, landscape, restore,
-	                                                  ecs::systems::LandSystemInterface::SavedLandUse::SavedGame);
-}
-
 void Game::StartLandAudio()
 {
 	Locator::gameAudioSystem::value().StartLandAudio(!_launchSwitches.noLoadMusic);
@@ -655,11 +648,6 @@ bool Game::ContinueFromExitSave() noexcept
 	}
 	ShowMenuOnStart();
 	return true;
-}
-
-void Game::LoadLandscape(const std::filesystem::path& path)
-{
-	Locator::landSystem::value().LoadLandscape(path);
 }
 
 void Game::SetTime(float time) noexcept

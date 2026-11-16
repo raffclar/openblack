@@ -609,16 +609,6 @@ std::chrono::duration<float, std::milli> Game::GetDeltaTime() const
 	return Locator::landSystem::value().GetTurnDeltaTime();
 }
 
-const std::filesystem::path& Game::GetLandPath() const noexcept
-{
-	return Locator::landSystem::value().GetLandPath();
-}
-
-const std::filesystem::path& Game::GetLandscapePath() const noexcept
-{
-	return Locator::landSystem::value().GetLandscapePath();
-}
-
 bool Game::Initialize() noexcept
 {
 	auto& config = Locator::config::value();
