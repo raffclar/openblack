@@ -38,12 +38,19 @@ function exitToHome(win) {
   return 'parent';
 }
 
-// True when the end of the program is a normal exit that sends the player to the homepage: the code is zero, and the
-// page did not keep a crash.
-function exitGoesHome(code, crashKept) {
-  return code === 0 && !crashKept;
+// True when a run of the developer tools stops at a game turn that it chose (the game argument --sim-until-turn). The
+// desktop game ends its process there. The page then stays, so that the log keeps the end of the game for the tool
+// that reads it.
+function stopsAtChosenTurn(gameArguments) {
+  return gameArguments.some((argument) => argument === '--sim-until-turn' || argument.startsWith('--sim-until-turn='));
+}
+
+// True when the end of the program is a normal exit that sends the player to the homepage: the code is zero, the
+// page did not keep a crash, and the run did not ask to stop on the page at a chosen turn.
+function exitGoesHome(code, crashKept, staysAtEnd = false) {
+  return code === 0 && !crashKept && !staysAtEnd;
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { exitToHome, exitGoesHome, homepageAddress, topWindowIsOurs, k_ExitMessageType };
+  module.exports = { exitToHome, exitGoesHome, stopsAtChosenTurn, homepageAddress, topWindowIsOurs, k_ExitMessageType };
 }

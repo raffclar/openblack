@@ -354,6 +354,23 @@ class NetCheckHelpers(unittest.TestCase):
                 file.write("[game] [info] Network game: 300 turns compared with the server, 300 the same\n")
             self.assertEqual(net_check.session_counts(log), (300, 300, 0))
 
+    def test_the_gap_of_a_part_on_purpose_counts_both_ends(self):
+        # Parts at 901, the world of turn 950 comes back: 50 turns apart
+        self.assertEqual(net_check.purposeful_part_gap([901, 902, 950], [0, 950], 900), (901, 950, 50))
+
+    def test_a_part_on_purpose_that_never_came_back_has_no_gap(self):
+        self.assertIsNone(net_check.purposeful_part_gap([901], [0], 900))
+        self.assertIsNone(net_check.purposeful_part_gap([], [0, 950], 900))
+
+    def test_a_part_before_the_one_on_purpose_is_not_its_gap(self):
+        self.assertEqual(net_check.purposeful_part_gap([400, 901], [0, 410, 950], 900), (901, 950, 50))
+
+    def test_only_the_gap_of_a_part_on_purpose_may_differ(self):
+        gap = (901, 950, 50)
+        self.assertEqual(net_check.differing_compares_allowed(True, gap), 51)
+        self.assertEqual(net_check.differing_compares_allowed(True, None), 1)
+        self.assertEqual(net_check.differing_compares_allowed(False, gap), 0)
+
     def test_a_part_on_purpose_with_no_recovery_keeps_every_turn(self):
         self.assertEqual(net_check.purposeful_part_left_out([301, 302], [0], 300), [301, 302])
 
