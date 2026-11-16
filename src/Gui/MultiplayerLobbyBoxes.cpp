@@ -731,7 +731,9 @@ void MultiplayerBoxes::BuildLobbyMessage(MessageShown& shown)
 	shown.text = _frontEnd->GetLobbyMessageText();
 	const bool asksText =
 	    message == Message::LobbyPassword || message == Message::LobbyCode || message == Message::LobbyNewPassword;
-	shown.textControl = &shown.answers.Add<StaticText>(asksText ? k_PromptText : k_NoticeText, shown.text, Layout::Wrapped);
+	// A notice with a line of a reason keeps a clear space above its OK button (deviation 275)
+	const auto textRect = asksText ? k_PromptText : (HasReasonLine(shown.text) ? k_ReasonText : k_NoticeText);
+	shown.textControl = &shown.answers.Add<StaticText>(textRect, shown.text, Layout::Wrapped);
 	shown.textControl->takesClicks = true;
 	if (asksText)
 	{

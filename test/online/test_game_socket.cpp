@@ -280,6 +280,19 @@ TEST(GameSocket, TheGameIdGoesInTheStartAndIsLeftOutWhenEmpty)
 	EXPECT_FALSE(Parse(ToJson(start)).has_value());
 }
 
+TEST(GameSocket, TheClosedSlotsGoInTheStartAndAreLeftOutWhenNone)
+{
+	Start start {.land = "Online Maps/mpm_4p_1.map", .testbed = false, .seed = 1, .turn = 0, .opening = {}};
+	EXPECT_EQ(ToJson(start).find("closed_slots"), std::string::npos);
+	EXPECT_TRUE(RoundTrip(start).closedSlots.empty());
+	start.closedSlots = {1, 3};
+	EXPECT_EQ(RoundTrip(start).closedSlots, (std::vector<uint8_t> {1, 3}));
+	// A slot that is not a number, or is after the last slot of a game, does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"closed_slots":["1"]})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"closed_slots":[32]})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"closed_slots":[-1]})").has_value());
+}
+
 TEST(GameSocket, TheConditionsGoInTheStartAndAreLeftOutWhenNone)
 {
 	Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};

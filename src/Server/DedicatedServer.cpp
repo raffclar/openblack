@@ -17,6 +17,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <iterator>
 #include <memory>
 #include <random>
 #include <span>
@@ -28,6 +29,7 @@
 #include <vector>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <glm/gtc/constants.hpp>
 #include <spdlog/spdlog.h>
 
@@ -54,6 +56,7 @@
 #include "ECS/SaveFileWriter.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/SyncedState.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
@@ -1250,6 +1253,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The room has {} god slots and starts with {} gods at least", godSlots,
 	                   settings.network->minGods);
+	if (!settings.network->slotKinds.empty())
+	{
+		std::vector<std::string_view> names;
+		std::ranges::transform(settings.network->slotKinds, std::back_inserter(names), lobby_api::SlotKindName);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The kinds of the god slots from slot 0: {}", fmt::join(names, ","));
+	}
 	// The game of a snapshot continues with the start that its clients got
 	if (restored.has_value())
 	{
@@ -1413,8 +1422,8 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		                   settings.network->gameId, lobby->id, online::build_id::Own(), start.land, landSha256Logged, members);
 	}
 	lifetime.Listened();
-	world.SetNetwork([&host, role = network.get(), keeper, &lifetime, desyncs,
-	                  appliedSpeed = std::optional<float> {}]() mutable {
+	world.SetNetwork([&host, role = network.get(), keeper, &lifetime, desyncs, appliedSpeed = std::optional<float> {},
+	                  appliedChanges = uint32_t {0}]() mutable {
 		// After a restart, the world first does again the turns that the server sent. The server reads no socket until then.
 		if (host.Replaying())
 		{
@@ -1423,11 +1432,19 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		role->Update();
 		desyncs->Update();
 		// The world of the server turns at the speed of the clock of the room, as the world of each player does. After a
-		// restart the room starts again at the normal speed.
-		if (const auto speed = host.RoomClock().speed; speed != appliedSpeed)
+		// restart the room starts again at the normal speed. A world file or a scenario of the editor sets the speed of
+		// the clock of its world, so the server gives the clock the speed of the room again after each change of the world.
+		if (const auto speed = host.RoomClock().speed; speed != appliedSpeed || host.WorldChanges() != appliedChanges)
 		{
 			Locator::time::value().SetSpeed(online::room_clock::ClockSpeedOf(speed));
 			appliedSpeed = speed;
+			appliedChanges = host.WorldChanges();
+		}
+		// No computer god of the server's world takes the slots that the lobby closed. The start gives them before the
+		// first turn, in which the humans join.
+		if (host.Started() && Locator::computerPlayerSystem::has_value())
+		{
+			Locator::computerPlayerSystem::value().CloseSlots(host.ClosedSlots());
 		}
 		if (role->HostReportDue())
 		{

@@ -114,6 +114,9 @@ private:
 	void Attach();
 	/// Loads the world state that the server sent after a resync
 	void LoadWorld(const online::NetworkSession::WorldState& world);
+	/// Gives the game clock the speed of the clock of the room again. A new land or a loaded world sets the speed of its
+	/// own clock, and the room keeps its speed through a change of the world.
+	void FollowRoomSpeed();
 	/// The game ended or the session goes: the summary of the desyncs, once
 	void FinishDesyncs();
 

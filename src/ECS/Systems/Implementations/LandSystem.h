@@ -75,6 +75,7 @@ public:
 	void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) override { _newGameStart = start; }
 	[[nodiscard]] const std::optional<new_game_choice::NewGameStart>& GetNewGameStart() const override { return _newGameStart; }
 	void SetHumansFromSession(bool fromSession) override { _humansFromSession = fromSession; }
+	void SetClosedSlots(std::vector<uint8_t> slots) override { _closedSlots = std::move(slots); }
 	[[nodiscard]] bool RunsNetworkMapScript() const override { return _runsNetworkMapScript; }
 	void SetAllComputerGods(bool allComputer) override { _allComputerGods = allComputer; }
 	bool StartChallengeScripts(bool startStory) override;
@@ -134,6 +135,8 @@ private:
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The humans of a land of a network game come from the network session
 	bool _humansFromSession {false};
+	/// The god slots of the network game that the lobby closed, from 0
+	std::vector<uint8_t> _closedSlots;
 	/// The count of the lands that started to load
 	uint32_t _landLoads {0};
 	/// The map script of a land of a network game runs now

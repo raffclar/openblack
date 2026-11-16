@@ -236,6 +236,18 @@ TEST(LobbyScreenRules, AJoinAsksOrRefuses)
 	EXPECT_EQ(RefusalOf(lobby, k_Build), "wrong_version");
 }
 
+TEST(LobbyScreenRules, AStartThatTheGameServerCannotPlayGivesTheReasonOnASecondLine)
+{
+	// The lobby's server_problem comes as the detail of the problem "server_land" (deviation 275)
+	const auto problem = ProblemOf(
+	    ecs::systems::LobbyError {.status = 409, .detail = "The map Land Two takes at most 2 gods.", .code = "server_land"},
+	    lobby_api::ClientKind::Desktop);
+	EXPECT_EQ(problem.box, ProblemBox::Notice);
+	EXPECT_EQ(problem.text, "The game server cannot play this game.\nThe map Land Two takes at most 2 gods.");
+	// With no reason the box has one line
+	EXPECT_EQ(ServerProblemText(""), "The game server cannot play this game.");
+}
+
 TEST(LobbyScreenRules, EachProblemHasItsOwnBox)
 {
 	using ecs::systems::LobbyError;

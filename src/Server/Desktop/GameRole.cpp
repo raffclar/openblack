@@ -467,6 +467,7 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	        .landChecksum = landChecksum,
 	        .minGods = settings.minGods,
 	        .godSlots = godSlots,
+	        .slotKinds = settings.slotKinds,
 	        .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,
 	        .allGoneMicroseconds = static_cast<int64_t>(settings.allGoneSeconds) * 1'000'000,
 	        .keptTurns = settings.comeBackSeconds * 10 + 200,

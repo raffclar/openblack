@@ -197,6 +197,19 @@ TEST(GodsRingMapPackage, ADamagedPackageOrOtherGameDataGivesNoFile)
 	EXPECT_EQ(FailureOf(gods_ring_map_package::Assemble(otherBytes, templateMap)), Failure::OtherMap);
 }
 
+TEST(GodsRingMapPackage, EachFailureHasALineForTheBox)
+{
+	// The box "Could not download map" shows the vanilla text, then this line (deviation 275)
+	for (const auto failure :
+	     {Failure::NotAPackage, Failure::WrongPackage, Failure::OtherMap, Failure::NoGameData, Failure::GameDataDoesNotMatch})
+	{
+		const auto line = gods_ring_map_package::BoxLineOf(failure);
+		EXPECT_FALSE(line.empty());
+		EXPECT_TRUE(line.ends_with('.'));
+	}
+	EXPECT_EQ(gods_ring_map_package::BoxLineOf(Failure::GameDataDoesNotMatch), "Your game data does not match.");
+}
+
 TEST(GodsRingMapPackage, ADownloadedPackageMustHaveTheHashOfTheList)
 {
 	const auto templateMap = TemplateMap();

@@ -9,6 +9,8 @@
 
 #include <array>
 #include <initializer_list>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -421,6 +423,41 @@ TEST_F(DebuggerTest, HoldsByHandAndChangesVariables)
 	_vm.HoldTask(_task);
 	_vm.StopTask(_task);
 	EXPECT_FALSE(_vm.IsTaskHeld(_task));
+}
+
+TEST_F(DebuggerTest, TheDebuggerStateComesBackAfterALoadOfTheRunningState)
+{
+	_vm.SetBreakpoint(3, true);
+	_vm.LookIn(lhvm::ScriptType::All);
+	_vm.StepTask(_task);
+	const auto debugger = _vm.GetDebuggerState();
+	EXPECT_EQ(debugger.breakpoints, (std::set<uint32_t> {3}));
+	EXPECT_EQ(debugger.heldTasks, (std::map<uint32_t, uint32_t> {{_task, 1}}));
+	// A load of the running state clears the debugger, so the task runs on
+	const auto bytes = _vm.SaveState();
+	ASSERT_EQ(_vm.RestoreState(bytes), EXIT_SUCCESS);
+	EXPECT_FALSE(_vm.IsTaskHeld(_task));
+	EXPECT_TRUE(_vm.GetBreakpoints().empty());
+	// The kept state holds the task again, with the one step that it had
+	_vm.SetDebuggerState(debugger);
+	EXPECT_EQ(_vm.GetDebuggerState(), debugger);
+	_vm.LookIn(lhvm::ScriptType::All);
+	EXPECT_EQ(Counter(), 1);
+	EXPECT_EQ(Address(), 4u);
+	_vm.LookIn(lhvm::ScriptType::All);
+	EXPECT_EQ(Counter(), 1);
+	EXPECT_TRUE(_vm.IsTaskHeld(_task));
+}
+
+TEST_F(DebuggerTest, TheDebuggerStateDropsTheEntriesOfTasksThatAreNotThere)
+{
+	lhvm::LHVM::DebuggerState state {
+	    .breakpoints = {2}, .heldTasks = {{_task, 0}, {_task + 7, 0}}, .resumeFrom = {{_task + 7, 1}}};
+	_vm.SetDebuggerState(state);
+	const auto kept = _vm.GetDebuggerState();
+	EXPECT_EQ(kept.breakpoints, (std::set<uint32_t> {2}));
+	EXPECT_EQ(kept.heldTasks, (std::map<uint32_t, uint32_t> {{_task, 0}}));
+	EXPECT_TRUE(kept.resumeFrom.empty());
 }
 
 namespace

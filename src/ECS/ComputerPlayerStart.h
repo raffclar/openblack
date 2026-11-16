@@ -24,6 +24,7 @@
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Player.h"
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 /// The rules of a computer player's start on a land: the creature it gets when it has none, the size of its creature and
 /// the miracles that its creature knows.
@@ -197,6 +198,14 @@ public:
 /// - The game takes a random species. The creature gets the name of its species from the creature table.
 /// - The mind of the god switches on, and the game makes its creature fully grown at the creature home of its citadel.
 void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans);
+
+/// The players of the god slots (from 0) of a network game, by player number. A slot after the last god slot of a
+/// network game names no player.
+[[nodiscard]] std::array<bool, player_slots::k_PlayerNumbers> ClosedPlayers(std::span<const uint8_t> slots) noexcept;
+
+/// The gods in the order of the list, but for the players that are closed (by player number)
+[[nodiscard]] std::vector<PlayerNames> GodsOfOpenSlots(std::span<const PlayerNames> gods,
+                                                       std::span<const bool, player_slots::k_PlayerNumbers> closed);
 
 /// The gods of the slots of a network game, in the order of the players. The neutral player is not a god of a slot.
 constexpr std::array<PlayerNames, 7> k_SlotGods {PlayerNames::PLAYER_ONE,  PlayerNames::PLAYER_TWO,  PlayerNames::PLAYER_THREE,

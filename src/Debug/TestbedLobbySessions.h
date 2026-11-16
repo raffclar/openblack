@@ -73,6 +73,8 @@ public:
 	/// The game server of the start has another build than the session: the service stops the start. expected: the
 	/// build that the service needs now, empty when it gives none.
 	void StopForServerVersion(std::string serverBuild, std::string expected);
+	/// The game server cannot play the lobby's map or gods: the Start gets the problem "server_land" with this reason
+	void RefuseStartForServer(std::string problem);
 	/// The lobby gives the room a game server after the countdown. Then the room gets this ticket.
 	void AssignGame(std::string gameId, lobby_api::JoinTicket ticket);
 	/// The player lost the connection to a game that plays and still holds a god in it. The next list gives that game,
@@ -92,6 +94,8 @@ private:
 	int64_t _seq {0};
 	/// The ticket of the game server that the lobby gave the room, none before AssignGame
 	std::optional<lobby_api::JoinTicket> _ticket;
+	/// The reason of the game server for a refusal of the start, empty when the start is possible
+	std::string _serverProblem;
 	/// The next list gives a game to rejoin
 	bool _holdsGod {false};
 };

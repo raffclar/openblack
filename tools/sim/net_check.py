@@ -1472,6 +1472,76 @@ def script_reports_check(scripts):
     }
 
 
+def editor_debugger(pids, inputs, restart=None):
+    """The debugger state that every computer must keep over a restart of the server and a load of the world state of
+    the server. The first client compiles a script that takes a number from the synced random numbers in each turn,
+    starts it, holds it and steps it one time. It also steps the land script of the land to the middle. With restart, the
+    server then stops and continues from its snapshots. After that, the task gets one more step, and the land script
+    does more commands up to its breakpoint. The task stays held until the end. A computer that ran the held task, or
+    did not do a land script step, takes other random numbers or makes other things, so its checksums differ."""
+    editor = pids[0]
+    done = {"acts": []}
+
+    def act(query, params, wait=1.0):
+        answer = inspector_answer(editor, query, {"params": params})
+        done["acts"].append({"query": query, "params": params, "answer": answer})
+        if isinstance(answer, dict) and answer.get("error"):
+            done.setdefault("errors", []).append(f"{query} {params}: {answer['error']}")
+        time.sleep(wait)
+        return answer
+
+    def states():
+        return [inspector_answer(pid, "editor.script_state", {}) for pid in pids]
+
+    act("editor.script_program", {"use": "open", "path": inputs["program"]}, 8.0)
+    scripts = items_of(inspector_answer(editor, "script.scripts", {"params": {"name": ""}}))
+    if not scripts:
+        done["error"] = "the program has no scripts"
+        return done
+    act("editor.script_program", {"use": "compile", "path": inputs["debugger_source"], "script": scripts[0]["name"]}, 2.0)
+    act("editor.script", {"act": "start", "script": "NetCheckDebuggerScript"}, 2.0)
+    tasks = (inspector_answer(editor, "editor.script_state", {}) or {}).get("tasks") or []
+    ours = [task["id"] for task in tasks if task.get("script") == "NetCheckDebuggerScript"]
+    if not ours:
+        done["error"] = "the new script has no task"
+        return done
+    task = ours[0]
+    done["task"] = task
+    act("editor.script", {"act": "hold", "id": task})
+    act("editor.script", {"act": "step", "id": task}, 0.5)
+    # The stepper moves past the first commands, which load the land, and does two commands of the camera and the
+    # influence. A breakpoint waits before the second abode.
+    act("editor.land_script", {"act": "loaded_land"})
+    act("editor.land_script", {"act": "breakpoint", "command": 9})
+    for _ in range(3):
+        act("editor.land_script", {"act": "skip"}, 0.3)
+    for _ in range(2):
+        act("editor.land_script", {"act": "step"}, 0.5)
+    time.sleep(2.0)
+    done["before"] = states()
+    if restart is not None:
+        done["restart"] = restart()
+        if done["restart"] is None:
+            done["error"] = "the restarted server did not listen"
+            return done
+    done["after_restart"] = states()
+    act("editor.script", {"act": "step", "id": task}, 0.5)
+    # Three steps make a town and its belief. The continue makes the first abode and stops at the breakpoint.
+    for _ in range(3):
+        act("editor.land_script", {"act": "step"}, 0.5)
+    act("editor.land_script", {"act": "continue"})
+    time.sleep(2.0)
+    done["states"] = states()
+    held = [any(t.get("id") == task and t.get("held") for t in (state or {}).get("tasks") or [])
+            for state in done["states"]]
+    nexts = [((state or {}).get("land_script") or {}).get("next") for state in done["states"]]
+    done["held"] = held
+    done["land_next"] = nexts
+    if not all(held) or nexts != [9] * len(pids):
+        done["error"] = f"the task is not held or the land script is not at command 9: held {held}, next {nexts}"
+    return done
+
+
 def script_inputs(options, folder):
     """The files of the case scripts: a source with one new script, a small land script and the program of the game"""
     os.makedirs(folder, exist_ok=True)
@@ -1479,11 +1549,16 @@ def script_inputs(options, folder):
     with open(source, "w", encoding="latin-1", newline="\n") as file:
         file.write("begin script NetCheckEditorScript\nstart\n\tbegin loop\n\t\twait 1 seconds\n\tend loop\n"
                    "end script NetCheckEditorScript\n")
+    debugger_source = os.path.join(folder, "net_check_debugger_script.txt")
+    with open(debugger_source, "w", encoding="latin-1", newline="\n") as file:
+        file.write("begin script NetCheckDebuggerScript\n\tDraw = 0\nstart\n\tbegin loop\n"
+                   "\t\tDraw = number from 1 to 1000\n\tend loop\nend script NetCheckDebuggerScript\n")
     land = os.path.join(folder, "net_check_land_script.txt")
     with open(land, "w", encoding="latin-1", newline="\n") as file:
         file.write("VERSION(2.300000)\nSET_LAND_NUMBER(1)\n")
     program = os.path.join(options.game_path, "Scripts", "Quests", "challenge.chl")
-    return {"source": os.path.abspath(source), "land": os.path.abspath(land), "program": os.path.abspath(program)}
+    return {"source": os.path.abspath(source), "debugger_source": os.path.abspath(debugger_source),
+            "land": os.path.abspath(land), "program": os.path.abspath(program)}
 
 
 def turn_of_line(line):
@@ -1577,15 +1652,65 @@ def editor_world(pids, world_file, shots=None, given=False):
     return done
 
 
-def editor_scenario(pids, shots=None, away=False):
+def body_switches(pid):
+    """The body time and the fainting switch of the creature tools on a client"""
+    answer = inspector_answer(pid, "creatures.systems", {}) or {}
+    if not isinstance(answer, dict):
+        return {}
+    return {"body_time": answer.get("physiology_time_scale"), "fainting": answer.get("fainting")}
+
+
+def editor_body_away(pids, world_file):
+    """The second client goes away. The editor then changes the body time and the fainting switch of the creature tools,
+    writes the world into a file and loads it for the room. The second client missed the turns of the change and the
+    load, so it comes back with the world of the server: it must then have the body time and the fainting switch of the
+    room."""
+    editor = pids[0]
+    done = {"file": world_file}
+    if len(pids) < 2:
+        done["error"] = "the body-away check needs 2 clients"
+        return done
+    done["before"] = [body_switches(pid) for pid in pids]
+    done["away"] = inspector_answer(pids[1], "engine.online_away", {"params": {"seconds": 30}})
+    if not (done["away"] or {}).get("away"):
+        done["error"] = f"the second client did not go away: {done['away']}"
+        return done
+    time.sleep(2.0)
+    done["acts"] = [inspector_answer(editor, "editor.creature_act", {"params": {"act": "body time", "index": 2}}),
+                    inspector_answer(editor, "editor.creature_act", {"params": {"act": "fainting", "args": [0]}})]
+    time.sleep(2.0)
+    done["editor_after_acts"] = body_switches(editor)
+    done["saved"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file, "save": True}})
+    time.sleep(3.0)
+    done["sent"] = inspector_answer(editor, "editor.world_load", {"params": {"path": world_file}})
+    if not (done["sent"] or {}).get("sent"):
+        done["error"] = f"the world file did not go: {done['sent']}"
+        return done
+    # The second client comes back 30 seconds after it went away, and loads the world of the server
+    time.sleep(40.0)
+    done["after"] = [body_switches(pid) for pid in pids]
+    want = {"body_time": 100.0, "fainting": False}
+    if done["before"][1] == want:
+        done["error"] = f"the second client had the new values before it went away: {done['before']}"
+    elif any(after != want for after in done["after"]):
+        done["error"] = f"a client does not have the body time and the fainting switch of the room: {done['after']}"
+    return done
+
+
+def editor_scenario(pids, shots=None, away=False, fast=False):
     """The Scenarios tab of the editor in a network game: the first client asks the game server to start the room again
     on a testbed scenario. Every computer loads the testbed and lays the scenario out before the first turn of the new
     game, and the worlds go on in step. With away, the second client drops its socket before the start and comes back
-    15 seconds later: it gets the start of the scenario again and does each turn of it."""
+    15 seconds later: it gets the start of the scenario again and does each turn of it. With fast, the editor first sets
+    the time of a turn to 0.1 (100 turns a second) and the second client is away for 75 seconds, so that the scenario
+    does more turns than the server usually keeps (3200)."""
     editor = pids[0]
     done = {"id": EDITOR_SCENARIO}
+    if fast:
+        done["speed"] = inspector_answer(editor, "editor.time", {"params": {"act": "speed", "speed": 0.1}})
+        time.sleep(2.0)
     if away and len(pids) > 1:
-        done["away"] = inspector_answer(pids[1], "engine.online_away", {"params": {"seconds": 15}})
+        done["away"] = inspector_answer(pids[1], "engine.online_away", {"params": {"seconds": 75 if fast else 15}})
         if not (done["away"] or {}).get("away"):
             done["error"] = f"the second client did not go away: {done['away']}"
             return done
@@ -1597,7 +1722,10 @@ def editor_scenario(pids, shots=None, away=False):
     done["sent"] = inspector_answer(editor, "editor.scenario", {"params": {"id": EDITOR_SCENARIO}})
     if not (done["sent"] or {}).get("sent"):
         done["error"] = f"the scenario did not go: {done['sent']}"
-    time.sleep(35.0 if away else 20.0)
+    time.sleep(100.0 if fast else 35.0 if away else 20.0)
+    if fast:
+        # The room clock stays fast, so the run ends soon after the check
+        done["turns"] = [room_time(pid).get("turn") for pid in pids]
     editor_shots(pids, shots, "scenario_01_after_restart")
     return done
 
@@ -1741,6 +1869,12 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["sent"].append({"spawns": made})
     if case in ("animals", "all"):
         done["animals"] = editor_animals(pids, focus)
+    if case == "debugger":
+        done["debugger"] = editor_debugger(pids, script_files or {}, restart)
+        if done["debugger"].get("error"):
+            done["error"] = done["debugger"]["error"]
+        if done["debugger"].get("errors"):
+            done.setdefault("errors", []).extend(done["debugger"]["errors"])
     if case == "scripts":
         done["scripts"] = editor_scripts(pids, script_files or {}, shots)
         if done["scripts"].get("errors"):
@@ -1753,8 +1887,8 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["world"] = editor_world(pids, world_file, shots, given_world)
         if done["world"].get("error"):
             done.setdefault("errors", []).append(done["world"]["error"])
-    if case in ("scenario", "scenario-away"):
-        done["scenario"] = editor_scenario(pids, shots, away=case == "scenario-away")
+    if case in ("scenario", "scenario-away", "scenario-away-fast"):
+        done["scenario"] = editor_scenario(pids, shots, away=case != "scenario", fast=case == "scenario-away-fast")
         if done["scenario"].get("error"):
             done.setdefault("errors", []).append(done["scenario"]["error"])
     if case in ("creature-remove", "all"):
@@ -1765,6 +1899,10 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["history"] = editor_history(pids, focus)
         for error in done["history"].get("errors", []):
             done.setdefault("errors", []).append(error)
+    if case == "body-away":
+        done["body_away"] = editor_body_away(pids, world_file)
+        if done["body_away"].get("error"):
+            done["error"] = done["body_away"]["error"]
     if case == "time":
         done["time"] = editor_time(pids, shots, restart)
         if done["time"].get("error"):
@@ -3062,8 +3200,8 @@ def main():
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
-                                                    "creature-remove", "land", "history", "mind", "time", "scripts", "debug",
-                                                    "world", "scenario", "scenario-away", "all"),
+                                                    "creature-remove", "land", "history", "mind", "time", "scripts", "debugger",
+                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -3075,11 +3213,14 @@ def main():
                              "creatures from mind files and loads mind files into the creatures near the camera "
                              "(mind), or pauses, steps and changes the speed of the clock of the room (time), "
                              "or does the acts of the script tabs and changes the program (scripts, which "
-                             "opens the program of the game again), or all of them but time and scripts; "
+                             "opens the program of the game again), or holds a task and steps the land script "
+                             "over a restart of the server or a part (debugger), or all of them but time and scripts; "
                              "every computer must keep the same checksums. Not in all, as each ends the game of the "
                              "room: the editor writes the world into a file and loads it 10 seconds later for the room "
                              "(world), or starts the room again on a testbed scenario (scenario), also while the second "
-                             "client is away for 15 seconds (scenario-away)")
+                             "client is away for 15 seconds (scenario-away), or at 100 turns a second while the second client is "
+                             "away for 75 seconds (scenario-away-fast), or the second client is away while the editor "
+                             "changes the body time and the fainting switch and loads a world file (body-away)")
     parser.add_argument("--world-file", metavar="FILE",
                         help="with --editor-desync world: the first client sends this world file, for example the world "
                              "of a room with other players, and does not write its own")
@@ -3142,6 +3283,10 @@ def main():
                              "with a good signature, a position, the gods defeated and the time played of each god")
     parser.add_argument("--clients", type=int, choices=(0, 1, 2, 3, 4), default=2,
                         help="the number of clients that play a god (a god slot each)")
+    parser.add_argument("--slot-kinds",
+                        help="the kinds of the god slots from slot 0 (the server's --slot-kinds), such as "
+                             "open,computer,open,closed: the clients take the open slots; with --lobby-game the "
+                             "members get the open slots in order")
     parser.add_argument("--min-gods", type=int,
                         help="the fewest gods that start the game (the server's --min-gods); the clients with none")
     parser.add_argument("--observers", type=int, choices=(0, 1, 2, 3, 4), default=0,
@@ -3322,6 +3467,8 @@ def main():
                                          else options.clients + (1 if options.web_god else 0))]
     if options.all_computer_gods:
         server_command.append("--all-computer-gods")
+    if options.slot_kinds:
+        server_command += ["--slot-kinds", options.slot_kinds]
     if options.slot_fight:
         server_command.append("--test-commands")
     if options.ai_seed is not None:
@@ -3342,7 +3489,11 @@ def main():
         if options.web_client or options.all_computer_gods or options.scenario:
             parser.error("--lobby-game does not go with --web-client, --all-computer-gods or --scenario")
         TICKET_LOBBY["lobby"] = LOBBY_ID
-        members = [{"account": str(100 + index), "role": "god", "slot": index} for index in range(options.clients)]
+        # The gods of the lobby take the open slots in order: the slots after the last kind are open too
+        kinds = options.slot_kinds.split(",") if options.slot_kinds else []
+        member_slots = [slot for slot in range(32) if slot >= len(kinds) or kinds[slot] == "open"]
+        members = [{"account": str(100 + index), "role": "god", "slot": member_slots[index]}
+                   for index in range(options.clients)]
         members += [{"account": str(100 + options.clients + index), "role": "observer"}
                     for index in range(options.observers)]
         members.append({"account": str(WRONG_BUILD_ACCOUNT), "role": "observer"})
@@ -3528,9 +3679,12 @@ def main():
                 print(f"client {index + 1} did not join; see {client_dir}")
                 return 1
             joins = lines_with(os.path.join(client_dir, "client.log"), ["Joined the game server"])
+            # With --slot-kinds the gods take the open slots in order
+            kinds = options.slot_kinds.split(",") if options.slot_kinds else []
+            wanted = [slot for slot in range(32) if slot >= len(kinds) or kinds[slot] == "open"][index]
             if (not is_observer and any("in slot" in line for line in joins)
-                    and not any(line.endswith(f"in slot {index}") for line in joins)):
-                print(f"client {index + 1} did not get god slot {index}; see {client_dir}")
+                    and not any(line.endswith(f"in slot {wanted}") for line in joins)):
+                print(f"client {index + 1} did not get god slot {wanted}; see {client_dir}")
                 return 1
         web_process = None
         web_folder = None
@@ -3587,7 +3741,7 @@ def main():
                     "editor_files": lines_with(restarted_log, ["keeps the files of the editor of the snapshot"])}
 
         # The time case stops the server in its pause
-        restart_in_pause = options.restart_server_at is not None and options.editor_desync == "time"
+        restart_in_pause = options.restart_server_at is not None and options.editor_desync in ("time", "debugger")
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (options.restart_server_at is not None and restarted_log is None and not restart_in_pause
                     and max(server_checksums(server_log), default=0) >= options.restart_server_at):
@@ -3779,9 +3933,13 @@ def main():
             print(f"client {index + 1} was apart from the server from turn {gap[0]} to its world of turn {gap[1]} "
                   f"({gap[2]} turns, not counted as a difference); it differs in {counts[0] - counts[1]} compares of "
                   f"{counts[0]}")
+        # A player who comes back with the world of the server does not compare the turns that it missed while away
+        away_gap = sum(int(match.group(2)) - int(match.group(1)) for line in lines_with(
+            server_log, [f"The player of slot {index} is back from turn"])
+            if (match := re.search(r"back from turn (\d+) with the world of turn (\d+)", line)))
         same = (not different and enough and counts is not None
                 and (counts[0] - counts[1] <= allowed_differing)
-                and (left or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
+                and (left or counts[0] >= expected - 100 - away_gap) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         draws = None
         if options.trace_draws and os.path.exists(server_trace) and os.path.exists(os.path.join(client_dir, "draws.tsv")):
@@ -3799,6 +3957,7 @@ def main():
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
             "recovered": recovered[-1:] if recovered else [],
             "gap_turns": gap[2] if gap else None, "gap_from": gap[0] if gap else None, "gap_back_at": gap[1] if gap else None,
+            "away_gap_turns": away_gap,
             "different": different[:20], "same": same, "parts_against_server": parts, "draws_against_server": draws,
             "rows_against_server": rows_against_server(server_dir, client_dir) if options.row_dump else None,
             "session": lines_with(os.path.join(client_dir, "client.log"),
@@ -3900,13 +4059,23 @@ def main():
             if not summary["debug_acts"]["same"]:
                 print(f"the acts of the debug windows differ or did not come: {json.dumps(summary['debug_acts'])[:2000]}")
                 all_same = False
+        if options.editor_desync == "debugger":
+            summary["script_acts"] = script_act_lines(
+                server_log, [os.path.join(folder, "client.log") for folder in client_dirs], restarted_log)
+            states = (editor_desync_done or {}).get("debugger", {}).get("states") or []
+            summary["script_states_same"] = len(states) == len(client_dirs) and all(
+                state == states[0] for state in states)
+            if not summary["script_acts"]["same"] or not summary["script_states_same"]:
+                print(f"the script acts differ or did not come: {json.dumps(summary['script_acts'])[:2000]} "
+                      f"states {json.dumps(states)[:1000]}")
+                all_same = False
         if options.editor_desync in ("mind", "all"):
             summary["mind_loads"] = mind_load_lines(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs], restarted_log)
             if not summary["mind_loads"]["same"]:
                 print(f"the mind loads differ or did not come: {json.dumps(summary['mind_loads'])[:2000]}")
                 all_same = False
-        if options.editor_desync in ("world", "scenario", "scenario-away"):
+        if options.editor_desync in ("world", "scenario", "scenario-away", "scenario-away-fast", "body-away"):
             summary["world_changes"] = world_change_lines(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
             if not summary["world_changes"]["same"]:

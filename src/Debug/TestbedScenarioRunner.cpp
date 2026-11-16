@@ -14,6 +14,7 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -327,10 +328,14 @@ void Runner::Start(const Scenario& scenario)
 		SetBenchmarkReads(true);
 	}
 
-	// A fresh testbed: the last one's creatures, objects, footprints, weather and scripts all go with it
+	// A fresh testbed: the last one's creatures, objects, footprints, weather and scripts all go with it. A new land starts
+	// its clock at the normal speed. In a network game the clock of the room sets the speed, so the clock keeps its speed.
 	if (Locator::landSystem::has_value())
 	{
 		auto& land = Locator::landSystem::value();
+		const std::optional<float> roomSpeed = Locator::time::has_value() && Locator::time::value().IsNetworkGame()
+		                                           ? std::optional<float>(Locator::time::value().GetSpeed())
+		                                           : std::nullopt;
 		if (scenario.environment.land == Land::GodsRingMap)
 		{
 			if (!land.LoadGodsRingMap())
@@ -354,6 +359,10 @@ void Runner::Start(const Scenario& scenario)
 		else
 		{
 			land.LoadTestbed();
+		}
+		if (roomSpeed.has_value())
+		{
+			Locator::time::value().SetSpeed(*roomSpeed);
 		}
 	}
 	if (!Locator::terrainSystem::has_value())

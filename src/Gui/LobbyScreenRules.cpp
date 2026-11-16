@@ -406,6 +406,10 @@ Problem ProblemOf(const ecs::systems::LobbyError& error, lobby_api::ClientKind c
 	{
 		return notice(TooManyPlayersText(error.slots));
 	}
+	if (code == problems::k_ServerLand)
+	{
+		return notice(ServerProblemText(error.detail));
+	}
 	if (code == problems::k_NotHost)
 	{
 		return notice("Only the host can do that.");
@@ -484,6 +488,17 @@ std::string GameRefusalText(std::string_view refusal, lobby_api::ClientKind clie
 		return "This game is full.";
 	}
 	return "The game server refused the join.";
+}
+
+std::string ServerProblemText(std::string_view problem)
+{
+	std::string text = "The game server cannot play this game.";
+	if (!problem.empty())
+	{
+		text += '\n';
+		text += problem;
+	}
+	return text;
 }
 
 std::u16string DefaultSessionName(std::u16string_view profileName)

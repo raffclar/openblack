@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <set>
 #include <string>
 #include <variant>
@@ -258,4 +259,51 @@ TEST(LobbyGame, TheWaitForTheLoadsGoesAsJson)
 	ASSERT_TRUE(end.has_value());
 	EXPECT_TRUE(std::get<game_socket::LoadWait>(*end).loading.empty());
 	EXPECT_FALSE(game_socket::Parse(R"({"type":"game.wait","loading":[1],"seconds_left":0})").has_value());
+}
+
+TEST(LobbyGame, TheSlotKindsReadFromTheTextOfTheLobby)
+{
+	using lobby_api::SlotKind;
+	const auto kinds = lobby_game::ParseSlotKinds("open,computer,closed,open");
+	ASSERT_TRUE(std::holds_alternative<std::vector<SlotKind>>(kinds));
+	EXPECT_EQ(std::get<std::vector<SlotKind>>(kinds),
+	          (std::vector<SlotKind> {SlotKind::Open, SlotKind::Computer, SlotKind::Closed, SlotKind::Open}));
+	// No text gives no kinds: each slot is open
+	const auto none = lobby_game::ParseSlotKinds("");
+	ASSERT_TRUE(std::holds_alternative<std::vector<SlotKind>>(none));
+	EXPECT_TRUE(std::get<std::vector<SlotKind>>(none).empty());
+	// A word that is not a kind, an empty word or more kinds than the slots of a room do not read
+	EXPECT_TRUE(std::holds_alternative<std::string>(lobby_game::ParseSlotKinds("open,human")));
+	EXPECT_TRUE(std::holds_alternative<std::string>(lobby_game::ParseSlotKinds("open,,closed")));
+	EXPECT_TRUE(std::holds_alternative<std::string>(lobby_game::ParseSlotKinds("open,")));
+	EXPECT_TRUE(std::holds_alternative<std::string>(lobby_game::ParseSlotKinds("Open")));
+	std::string many = "open";
+	for (int i = 1; i < 33; ++i)
+	{
+		many += ",closed";
+	}
+	EXPECT_TRUE(std::holds_alternative<std::string>(lobby_game::ParseSlotKinds(many)));
+}
+
+TEST(LobbyGame, TheStartClosesOnlyTheClosedSlots)
+{
+	using lobby_api::SlotKind;
+	const std::vector kinds {SlotKind::Closed, SlotKind::Open, SlotKind::Computer, SlotKind::Closed};
+	EXPECT_EQ(lobby_game::ClosedSlotsOf(kinds), (std::vector<uint8_t> {0, 3}));
+	EXPECT_TRUE(lobby_game::ClosedSlotsOf({}).empty());
+}
+
+TEST(LobbyGame, AMemberInASlotThatIsNotOpenIsFound)
+{
+	using lobby_api::SlotKind;
+	const std::vector kinds {SlotKind::Open, SlotKind::Computer, SlotKind::Closed};
+	lobby_game::Lobby lobby {.id = "lobby1",
+	                         .members = {{.account = "101", .role = game_socket::Role::God, .slot = 0},
+	                                     {.account = "102", .role = game_socket::Role::God, .slot = 3},
+	                                     {.account = "103", .role = game_socket::Role::Observer, .slot = std::nullopt}}};
+	EXPECT_EQ(lobby_game::MemberInShutSlot(lobby, kinds), nullptr);
+	lobby.members.push_back({.account = "104", .role = game_socket::Role::God, .slot = 2});
+	const auto* found = lobby_game::MemberInShutSlot(lobby, kinds);
+	ASSERT_NE(found, nullptr);
+	EXPECT_EQ(found->account, "104");
 }

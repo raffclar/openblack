@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <limits>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -275,6 +276,55 @@ TEST(EditorScriptActs, TheLandScriptActsStepTheSameCommandsOnEveryRun)
 	EXPECT_EQ(ApplyLandScript({.act = LandAct::Step}, {}, run, world.World()).commands, 1u);
 	EXPECT_EQ(run.stepper.StateOf(2), editor::scripts::LandScriptStepper::State::Failed);
 	EXPECT_NE(run.message.find("failed: it fails"), std::string::npos);
+}
+
+TEST(EditorScriptActs, AKeptRunOfTheLandScriptComesBackAtTheSamePosition)
+{
+	FakeLandWorld world;
+	LandScriptRun run;
+	ASSERT_TRUE(ApplyLandScript({.act = LandAct::LoadedLand}, {}, run, world.World()).done);
+	ASSERT_TRUE(ApplyLandScript({.act = LandAct::Breakpoint, .command = 2}, {}, run, world.World()).done);
+	ASSERT_TRUE(ApplyLandScript({.act = LandAct::Step}, {}, run, world.World()).done);
+	ASSERT_TRUE(ApplyLandScript({.act = LandAct::Skip}, {}, run, world.World()).done);
+	const auto kept = KeepLandScriptRun(run);
+	EXPECT_EQ(kept.name, "Land2.txt");
+	EXPECT_EQ(kept.text, k_Land);
+
+	// A computer with no run, such as a restarted server, gets the same run
+	LandScriptRun restored;
+	FakeLandWorld other;
+	other.resets = 7;
+	ASSERT_TRUE(RestoreLandScriptRun(restored, kept, other.resets));
+	// The restored run holds the count of the world of the load, so the next act does not start it again
+	EXPECT_EQ(restored.world, std::optional<uint32_t> {7});
+	EXPECT_EQ(KeepLandScriptRun(restored).stepper, kept.stepper);
+	EXPECT_EQ(restored.read.commands.size(), 3u);
+	EXPECT_EQ(restored.stepper.Next(), std::optional<size_t> {2});
+	EXPECT_TRUE(restored.stepper.HasBreakpoint(2));
+	EXPECT_EQ(restored.stepper.StateOf(1), editor::scripts::LandScriptStepper::State::Skipped);
+	EXPECT_EQ(restored.message, run.message);
+	EXPECT_GT(restored.changes, kept.changes);
+
+	// The next step does the same command on both runs
+	ASSERT_TRUE(ApplyLandScript({.act = LandAct::Step}, {}, run, world.World()).done);
+	ASSERT_TRUE(ApplyLandScript({.act = LandAct::Step}, {}, restored, other.World()).done);
+	EXPECT_EQ(world.done.back(), "CREATE_TOWN");
+	EXPECT_EQ(other.done, (std::vector<std::string> {"CREATE_TOWN"}));
+}
+
+TEST(EditorScriptActs, AKeptRunThatDoesNotAgreeWithItsTextStartsAtTheFirstCommand)
+{
+	LandScriptRun run;
+	KeptLandScriptRun kept {.name = "Land2.txt", .text = std::string(k_Land), .changes = 4};
+	kept.stepper.states.assign(2, editor::scripts::LandScriptStepper::State::Done);
+	kept.stepper.next = 2;
+	EXPECT_FALSE(RestoreLandScriptRun(run, kept, std::nullopt));
+	EXPECT_EQ(run.read.commands.size(), 3u);
+	EXPECT_EQ(run.stepper.Next(), std::optional<size_t> {0});
+	// A kept run that read no script gives a run with no script
+	ASSERT_TRUE(RestoreLandScriptRun(run, {}, std::nullopt));
+	EXPECT_EQ(run.changes, 0u);
+	EXPECT_TRUE(run.read.commands.empty());
 }
 
 TEST(EditorScriptActs, AnOpenReadsTheTextOfTheFileAndNeedsTheFile)

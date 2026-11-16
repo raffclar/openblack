@@ -16,6 +16,7 @@
 #include <utility>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
 #include "Common/DebugActs.h"
@@ -230,6 +231,7 @@ LockstepHost::LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkT
                          : _settings.minGods)
     , _createdAt(_clock())
 {
+	ShutSlots();
 	_sockets.SetHandlers(ServerSocketHandlers {
 	    .opened = [this](ConnectionId connection) { Opened(connection); },
 	    .text = [this](ConnectionId connection, std::string_view text) { Text(connection, text); },
@@ -772,6 +774,18 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		JoinRunning(connection, peer, claims, lan);
 		return;
 	}
+	ShutSlotsOfTicket(claims);
+	// The slot that the lobby gave the god: from the member list of the lobby, or from the ticket of the lobby's game on a
+	// server with no member list
+	std::optional<uint8_t> wanted;
+	if (member != nullptr)
+	{
+		wanted = member->slot;
+	}
+	else if (!_settings.lobby.has_value() && !lan && !claims.lobby.empty())
+	{
+		wanted = claims.slot;
+	}
 	game_socket::Joined joined {
 	    .role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name, .start = _settings.start};
 	joined.editor = claims.editor;
@@ -799,11 +813,11 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 			Refuse(connection, "full", fmt::format("the player finds each of the {} god slots taken", _seats.size()));
 			return;
 		}
-		// A member of the lobby with a slot takes that slot
-		if (member != nullptr && member->slot.has_value() &&
-		    (*member->slot >= _seats.size() || _seats.at(*member->slot).state != SeatState::Open))
+		// A member of the lobby with a slot takes that slot. The room refuses the god when another player or the lobby
+		// holds the slot.
+		if (wanted.has_value() && (*wanted >= _seats.size() || _seats.at(*wanted).state != SeatState::Open))
 		{
-			Log(spdlog::level::info, fmt::format("The slot {} of the player is not free in the room", *member->slot));
+			Log(spdlog::level::info, fmt::format("The slot {} of the player is not free in the room", *wanted));
 			Refuse(connection, "full");
 			return;
 		}
@@ -817,9 +831,8 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	if (claims.role == game_socket::Role::God)
 	{
-		const auto free = member != nullptr && member->slot.has_value()
-		                      ? _seats.begin() + *member->slot
-		                      : std::ranges::find(_seats, SeatState::Open, &Seat::state);
+		const auto free =
+		    wanted.has_value() ? _seats.begin() + *wanted : std::ranges::find(_seats, SeatState::Open, &Seat::state);
 		const auto seat = static_cast<uint8_t>(free - _seats.begin());
 		*free = Seat {.state = SeatState::Taken,
 		              .connection = connection,
@@ -1054,6 +1067,29 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 bool LockstepHost::KeepsScenarioTurns() const
 {
 	return _scenarioStart.has_value() && (_turnsDone == _scenarioStart->turn || _history.contains(_scenarioStart->turn));
+}
+
+std::optional<uint32_t> LockstepHost::HeldScenarioTurn() const
+{
+	if (!_scenarioStart.has_value() || !_settings.start.scenario.has_value())
+	{
+		return std::nullopt;
+	}
+	// An away seat or observer that missed the start loses its place after the time to come back, and the hold then ends
+	const bool seatMissed = std::ranges::any_of(_seats, [](const Seat& seat) {
+		return (seat.state == SeatState::Taken || seat.state == SeatState::Away) && seat.missedWorldChange;
+	});
+	const bool observerMissed = std::ranges::any_of(_watchers, &Watcher::missedWorldChange);
+	if (!seatMissed && !observerMissed)
+	{
+		return std::nullopt;
+	}
+	return _scenarioStart->turn;
+}
+
+void LockstepHost::ForgetOldTurns(uint32_t turn)
+{
+	_history.erase(_history.begin(), _history.lower_bound(FirstKeptTurn(turn, _settings.keptTurns, HeldScenarioTurn())));
 }
 
 void LockstepHost::SendScenarioAgain(ConnectionId connection)
@@ -2629,6 +2665,51 @@ void LockstepHost::StopTurns()
 	Broadcast(game_socket::GameStop {.turn = *_stoppedAfter});
 }
 
+void LockstepHost::ShutSlots()
+{
+	// The lobby shuts its computer slots and its closed slots to the players. The start tells every computer the closed
+	// slots, so that no computer god takes them.
+	for (size_t slot = 0; slot < _seats.size() && slot < _settings.slotKinds.size(); ++slot)
+	{
+		if (_seats[slot].state != SeatState::Open)
+		{
+			continue;
+		}
+		switch (_settings.slotKinds[slot])
+		{
+		case lobby_api::SlotKind::Open:
+			break;
+		case lobby_api::SlotKind::Computer:
+			_seats[slot].state = SeatState::Computer;
+			break;
+		case lobby_api::SlotKind::Closed:
+			_seats[slot].state = SeatState::Closed;
+			break;
+		}
+	}
+	if (!_settings.slotKinds.empty())
+	{
+		_settings.start.closedSlots = lobby_game::ClosedSlotsOf(_settings.slotKinds);
+	}
+}
+
+void LockstepHost::ShutSlotsOfTicket(const join_ticket::Claims& claims)
+{
+	// A server with no member list of the lobby gets the kinds of the slots from the first ticket of the lobby's game
+	// that gives them, before its start. The kinds of the server's own command line come first.
+	if (_settings.lobby.has_value() || claims.lobby.empty() || claims.slotKinds.empty() || !_settings.slotKinds.empty() ||
+	    _started || _startStep != StartStep::None)
+	{
+		return;
+	}
+	_settings.slotKinds = claims.slotKinds;
+	ShutSlots();
+	std::vector<std::string_view> names;
+	std::ranges::transform(_settings.slotKinds, std::back_inserter(names), lobby_api::SlotKindName);
+	Log(spdlog::level::info,
+	    fmt::format("The game of the lobby {} gives the kinds of the slots: {}", claims.lobby, fmt::join(names, ",")));
+}
+
 void LockstepHost::WaitForGodsOfTicket(const join_ticket::Claims& claims)
 {
 	// A server with no member list of the lobby gets the gods of the lobby's game from the tickets. The room then waits
@@ -2782,10 +2863,7 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 	}
 	BroadcastBinary(bytes);
 	_history[turn] = std::move(bytes);
-	if (turn >= _settings.keptTurns)
-	{
-		_history.erase(_history.begin(), _history.lower_bound(turn - _settings.keptTurns));
-	}
+	ForgetOldTurns(turn);
 	_turnsDone = turn + 1;
 
 	std::vector<player_commands::Command> commands;
@@ -2851,10 +2929,7 @@ std::vector<player_commands::Command> LockstepHost::TakeReplayedTurn(uint32_t tu
 		}
 	}
 	_history[turn] = std::move(bytes);
-	if (turn >= _settings.keptTurns)
-	{
-		_history.erase(_history.begin(), _history.lower_bound(turn - _settings.keptTurns));
-	}
+	ForgetOldTurns(turn);
 	_turnsDone = turn + 1;
 	if (_replayed.empty())
 	{
@@ -3063,10 +3138,7 @@ void LockstepHost::TurnChecksum(uint32_t turn, uint64_t checksum)
 	{
 		_capture->TurnDone(turn);
 	}
-	if (turn > _settings.keptTurns)
-	{
-		_checksums.erase(_checksums.begin(), _checksums.lower_bound(turn - _settings.keptTurns));
-	}
+	_checksums.erase(_checksums.begin(), _checksums.lower_bound(FirstKeptTurn(turn, _settings.keptTurns, HeldScenarioTurn())));
 	BroadcastBinary(turn_codec::Encode(turn_codec::TurnChecksum {.turn = turn, .checksum = checksum}));
 	for (auto early = _early.begin(); early != _early.end();)
 	{

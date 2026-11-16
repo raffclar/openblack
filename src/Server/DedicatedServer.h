@@ -118,6 +118,9 @@ struct NetworkSettings
 	/// The SHA-256 of the file of the land that the lobby gives its members, as 64 hex digits in lower case. The server
 	/// does not start with another file. Empty: no check.
 	std::string mapSha256;
+	/// The kinds of the god slots from slot 0 (deviation 243). A computer slot gets a computer god at the start, and no
+	/// god plays a closed slot. No player can take either slot. The slots after the last kind are open.
+	std::vector<lobby_api::SlotKind> slotKinds;
 };
 
 /// What the command line of the dedicated server gives

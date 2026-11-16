@@ -207,9 +207,11 @@ void Game::UpdateOnline()
 					SPDLOG_LOGGER_INFO(spdlog::get("game"),
 					                   "The host kicked the player from the network game: the box tells the player");
 				}
-				// A file of the game data is not the server's: the box names the file (deviation 266)
+				// A file of the game data is not the server's: the box names the file (deviation 266). The player also
+				// leaves the lobby room, so that the front end after the box asks for no ticket of this game.
 				else if (dataRefusal.has_value())
 				{
+					LeaveLobbyGame();
 					Locator::gameInterface::value().ShowDataRefused(gui::ToUtf16(*dataRefusal));
 					SPDLOG_LOGGER_INFO(spdlog::get("game"),
 					                   "The game server refused the game data of the player: the box names {}",
@@ -784,6 +786,8 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	_newGameStart = start.opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(start.opening);
 	auto& lands = Locator::landSystem::value();
 	lands.SetNewGameStart(_newGameStart);
+	// No god plays the slots that the lobby closed, as on the game server
+	lands.SetClosedSlots(start.closedSlots);
 	auto& clock = Locator::time::value();
 	const auto pinnedDate = clock.GetPinnedDate();
 	clock.RestartClock(pinnedDate);

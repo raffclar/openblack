@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
@@ -68,6 +69,9 @@ struct HostSettings
 	uint32_t minGods {1};
 	/// The god slots of the room: the citadels of the land. A god who joins when all the slots have a player is refused.
 	uint8_t godSlots {k_DefaultGodSlots};
+	/// The kinds of the god slots from slot 0, as the lobby set them (deviation 243). No player can take a computer slot
+	/// or a closed slot. The slots after the last kind are open.
+	std::vector<lobby_api::SlotKind> slotKinds;
 	/// How long a god's player can be away before the god is defeated (user decision MP-Q6: 5 minutes, set by the server)
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
 	/// How long the gods wait when the players of all the gods lost the connection (user, 2026-11-14: 10 seconds). Then
@@ -127,6 +131,14 @@ constexpr size_t k_MostLanNameBytes = 64;
 /// - The commands of the test tools, when the test commands of the server are off.
 [[nodiscard]] bool LeavesOut(const player_commands::Action& action, bool testCommands) noexcept;
 
+/// The first turn that the server keeps after the turn that it did last. The server keeps the last keptTurns turns. With a
+/// held turn, the server also keeps each turn from that turn.
+[[nodiscard]] constexpr uint32_t FirstKeptTurn(uint32_t turn, uint32_t keptTurns, std::optional<uint32_t> held) noexcept
+{
+	const uint32_t last = turn > keptTurns ? turn - keptTurns : 0;
+	return held.has_value() ? std::min(last, *held) : last;
+}
+
 /// True when a line of the room's chat can go to the players: it has a character above the space, as the game sends no
 /// line of only spaces, and it has at most the characters that the chat box of the game takes. The game counts the
 /// characters in UTF-16 code units.
@@ -154,8 +166,10 @@ public:
 		Taken,
 		/// The player of the god lost the socket. The god is idle until the player comes back or the time ends.
 		Away,
-		/// The god left or was defeated. The slot stays closed.
+		/// The god left or was defeated, or the lobby closed the slot. The slot stays closed.
 		Closed,
+		/// The lobby gave the slot to a computer god. No player can take it.
+		Computer,
 	};
 
 	struct Compares
@@ -323,6 +337,8 @@ public:
 	[[nodiscard]] bool Replaying() const { return !_replayed.empty(); }
 	/// The next turn that the server closes
 	[[nodiscard]] uint32_t TurnsDone() const { return _turnsDone; }
+	/// Whether the server keeps a turn that it did, to send it again to a player who comes back
+	[[nodiscard]] bool KeepsTurn(uint32_t turn) const { return _history.contains(turn); }
 	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
 	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
 	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
@@ -383,6 +399,8 @@ public:
 	void EndRoom(std::string_view reason);
 	/// True from the query of the lands until the start of the game or a stop of the start
 	[[nodiscard]] bool Starting() const { return _startStep != StartStep::None; }
+	/// The god slots that the lobby closed, from 0, as the start gives them to every computer
+	[[nodiscard]] const std::vector<uint8_t>& ClosedSlots() const { return _settings.start.closedSlots; }
 	/// True when the game started and no god's player is connected
 	[[nodiscard]] bool Paused() const;
 	/// The clock of the room: the pause, the steps and the speed that the editor of a player asked for
@@ -503,6 +521,11 @@ private:
 	/// True when the server keeps each turn of the testbed scenario that the editor started, from its first turn. A player
 	/// who was away at that start can then come back: the start goes again to the player, and then each turn of it.
 	[[nodiscard]] bool KeepsScenarioTurns() const;
+	/// The first turn of the scenario while a player or an observer who was away at its start can still come back. The
+	/// server then keeps each turn of the scenario, also when a fast room clock does more turns than it usually keeps.
+	[[nodiscard]] std::optional<uint32_t> HeldScenarioTurn() const;
+	/// Removes the turns and the checksums that the server no longer keeps after it did a turn
+	void ForgetOldTurns(uint32_t turn);
 	/// Sends the start of the scenario that the editor started, and then each turn of it, to a player who was away at
 	/// that start
 	void SendScenarioAgain(ConnectionId connection);
@@ -609,6 +632,11 @@ private:
 	[[nodiscard]] bool AnyGodConnected() const;
 	/// Tools: the room has no human god. The game starts at once, and observers watch it.
 	[[nodiscard]] bool AllComputerGods() const { return _settings.start.allComputerGods; }
+	/// Shuts the open slots that the kinds of the slots make computer slots or closed slots, and gives the start the
+	/// closed slots
+	void ShutSlots();
+	/// The kinds of the slots of the lobby's game from a ticket, on a server with no member list of the lobby
+	void ShutSlotsOfTicket(const join_ticket::Claims& claims);
 
 	WebSocketServerInterface& _sockets;
 	CheckTicket _checkTicket;

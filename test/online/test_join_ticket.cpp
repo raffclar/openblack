@@ -291,6 +291,52 @@ TEST(JoinTicket, TheGodsClaimGivesTheGodsOfTheLobbyGame)
 	EXPECT_FALSE(ParseClaims(with(R"("gods":1.5)")).has_value());
 }
 
+TEST(JoinTicket, TheSlotKindsClaimGivesTheKindsOfTheLobbySlots)
+{
+	using openblack::lobby_api::SlotKind;
+	const auto text = ClaimsText();
+	const auto with = [&](std::string_view field) {
+		auto changed = text;
+		changed.insert(changed.size() - 1, std::string(",") + std::string(field));
+		return changed;
+	};
+	// A ticket without the claim, as from an older lobby, gives no kinds
+	const auto none = ParseClaims(text);
+	ASSERT_TRUE(none.has_value());
+	EXPECT_TRUE(none->slotKinds.empty());
+	const auto kinds = ParseClaims(with(R"("slot_kinds":["open","computer","closed"])"));
+	ASSERT_TRUE(kinds.has_value());
+	EXPECT_EQ(kinds->slotKinds, (std::vector<SlotKind> {SlotKind::Open, SlotKind::Computer, SlotKind::Closed}));
+	// A kind that is not known, or a claim that is not a list, makes the ticket bad
+	EXPECT_FALSE(ParseClaims(with(R"("slot_kinds":["open","human"])")).has_value());
+	EXPECT_FALSE(ParseClaims(with(R"("slot_kinds":"open")")).has_value());
+	EXPECT_FALSE(ParseClaims(with(R"("slot_kinds":[1])")).has_value());
+}
+
+TEST(JoinTicket, TheSlotClaimGivesTheSlotThatTheLobbyGaveThePlayer)
+{
+	const auto text = ClaimsText();
+	const auto with = [&](std::string_view field) {
+		auto changed = text;
+		changed.insert(changed.size() - 1, std::string(",") + std::string(field));
+		return changed;
+	};
+	// A ticket without the claim, or with a null slot as for an observer, gives no slot
+	const auto none = ParseClaims(text);
+	ASSERT_TRUE(none.has_value());
+	EXPECT_FALSE(none->slot.has_value());
+	const auto observer = ParseClaims(with(R"("slot":null)"));
+	ASSERT_TRUE(observer.has_value());
+	EXPECT_FALSE(observer->slot.has_value());
+	const auto two = ParseClaims(with(R"("slot":2)"));
+	ASSERT_TRUE(two.has_value());
+	EXPECT_EQ(two->slot, std::optional<uint8_t>(2));
+	// A claim that is not a slot from 0 to 31 makes the ticket bad
+	EXPECT_FALSE(ParseClaims(with(R"("slot":"2")")).has_value());
+	EXPECT_FALSE(ParseClaims(with(R"("slot":-1)")).has_value());
+	EXPECT_FALSE(ParseClaims(with(R"("slot":32)")).has_value());
+}
+
 TEST(TicketCheck, TheStaffClaimComesOnlyFromASignedTicket)
 {
 	auto check = MakeCheck();
