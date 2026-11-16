@@ -44,7 +44,7 @@ struct Settings
 	bool pushScrolling {false};
 	bool autoSave {true};
 	/// The player lets the game send error and crash reports to Sentry. Vanilla has no such option (deviation 261).
-	bool crashReports {false};
+	bool crashReports {true};
 
 	bool operator==(const Settings&) const = default;
 };

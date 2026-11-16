@@ -720,19 +720,19 @@ TEST(GameMenu, TheOptionsShowThePlayersPushScrolling)
 
 TEST(GameMenu, TheOptionsHaveACrashReportsBoxOnlyWhenTheGameCanSendReports)
 {
-	// Deviation 261: the Send Crash Reports box is clear for a new profile, and a click turns the reports on and off.
+	// Deviation 261: the Send Crash Reports box is set for a new profile, and a click turns the reports off and on.
 	// Deviation 262: the three boxes are centred as on the Advanced page, at 185, 385 and 585.
 	const TextDatabase texts = MenuTexts();
 	const GameFont font = LoadFont();
 	GameMenu menu {texts, font, u"aaa", MenuSettings {.crashReportsAvailable = true}};
 	menu.Open();
 	Click(menu, ButtonCentre(3));
-	EXPECT_FALSE(menu.GetSettings().crashReports);
+	EXPECT_TRUE(menu.GetSettings().crashReports);
 	// The square at 585, 450
 	Click(menu, {597, 462});
-	EXPECT_TRUE(menu.GetSettings().crashReports);
-	Click(menu, {597, 462});
 	EXPECT_FALSE(menu.GetSettings().crashReports);
+	Click(menu, {597, 462});
+	EXPECT_TRUE(menu.GetSettings().crashReports);
 	// AutoSave at 185 and Push Scrolling at 385
 	EXPECT_TRUE(menu.GetSettings().autoSave);
 	Click(menu, {197, 462});
@@ -746,7 +746,7 @@ TEST(GameMenu, TheOptionsHaveACrashReportsBoxOnlyWhenTheGameCanSendReports)
 	without.Open();
 	Click(without, ButtonCentre(3));
 	Click(without, {597, 462});
-	EXPECT_FALSE(without.GetSettings().crashReports);
+	EXPECT_TRUE(without.GetSettings().crashReports);
 	Click(without, {497, 462});
 	EXPECT_TRUE(without.GetSettings().pushScrolling);
 }
