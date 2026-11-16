@@ -1374,6 +1374,94 @@ def editor_mind(pids, focus, files):
     return done
 
 
+def editor_scripts(pids, inputs):
+    """The script tabs of the editor in a network game. The first client opens the program of the game from a file of
+    its computer (about 3 MB, in parts), compiles a new script into it and starts the script. Then it holds, steps,
+    continues and stops the task, changes breakpoints and a global, steps the land script of the land and of a file of
+    its computer, and opens the program of the game again. Each act is a command of the turns. Returns the answer of
+    each act and the state of the script tabs of each client after the acts."""
+    editor = pids[0]
+    done = {"acts": []}
+
+    def act(query, params, wait=1.0):
+        answer = inspector_answer(editor, query, {"params": params})
+        done["acts"].append({"query": query, "params": params, "answer": answer})
+        if isinstance(answer, dict) and answer.get("error"):
+            done.setdefault("errors", []).append(f"{query} {params}: {answer['error']}")
+        time.sleep(wait)
+        return answer
+
+    act("editor.script_program", {"use": "open", "path": inputs["program"]}, 8.0)
+    scripts = items_of(inspector_answer(editor, "script.scripts", {"params": {"name": ""}}))
+    done["scripts"] = len(scripts)
+    if scripts:
+        # The new script goes into the program next to its first script, then a task of it starts
+        act("editor.script_program", {"use": "compile", "path": inputs["source"], "script": scripts[0]["name"]}, 2.0)
+        act("editor.script", {"act": "start", "script": "NetCheckEditorScript"}, 2.0)
+    tasks = (inspector_answer(editor, "editor.script_state", {}) or {}).get("tasks") or []
+    ours = [task["id"] for task in tasks if task.get("script") == "NetCheckEditorScript"]
+    done["task"] = ours[0] if ours else None
+    if ours:
+        task = ours[0]
+        act("editor.script", {"act": "hold", "id": task})
+        for _ in range(3):
+            act("editor.script", {"act": "step", "id": task}, 0.5)
+        act("editor.script", {"act": "continue", "id": task})
+        act("editor.script", {"act": "hold_all"})
+        act("editor.script", {"act": "continue_all"})
+        act("editor.script", {"act": "set_local", "id": task, "index": 0, "value": 1.0})
+        act("editor.script", {"act": "stop", "id": task})
+        act("editor.script", {"act": "start", "script": "NetCheckEditorScript"}, 2.0)
+        act("editor.script", {"act": "stop_script", "script": "NetCheckEditorScript"})
+    else:
+        done.setdefault("errors", []).append("the new script has no task")
+    for address in (10, 20, 30):
+        act("editor.script", {"act": "breakpoint", "address": address, "index": 1}, 0.3)
+    act("editor.script", {"act": "breakpoint", "address": 20, "index": 0})
+    act("editor.script", {"act": "remove_breakpoints"})
+    act("editor.script", {"act": "set_global", "id": 1, "value": 2.0})
+    act("editor.land_script", {"act": "loaded_land"})
+    act("editor.land_script", {"act": "breakpoint", "command": 3})
+    act("editor.land_script", {"act": "step"}, 0.5)
+    act("editor.land_script", {"act": "continue"})
+    act("editor.land_script", {"act": "skip"}, 0.5)
+    act("editor.land_script", {"act": "run_to", "command": 5})
+    act("editor.land_script", {"act": "open", "path": inputs["land"]}, 2.0)
+    act("editor.land_script", {"act": "step"})
+    act("editor.land_script", {"act": "restart"})
+    act("editor.script_program", {"use": "games"}, 4.0)
+    done["states"] = [inspector_answer(pid, "editor.script_state", {}) for pid in pids]
+    return done
+
+
+def script_inputs(options, folder):
+    """The files of the case scripts: a source with one new script, a small land script and the program of the game"""
+    os.makedirs(folder, exist_ok=True)
+    source = os.path.join(folder, "net_check_editor_script.txt")
+    with open(source, "w", encoding="latin-1", newline="\n") as file:
+        file.write("begin script NetCheckEditorScript\nstart\n\tbegin loop\n\t\twait 1 seconds\n\tend loop\n"
+                   "end script NetCheckEditorScript\n")
+    land = os.path.join(folder, "net_check_land_script.txt")
+    with open(land, "w", encoding="latin-1", newline="\n") as file:
+        file.write("VERSION(2.300000)\nSET_LAND_NUMBER(1)\n")
+    program = os.path.join(options.game_path, "Scripts", "Quests", "challenge.chl")
+    return {"source": os.path.abspath(source), "land": os.path.abspath(land), "program": os.path.abspath(program)}
+
+
+def script_act_lines(server_log, client_logs):
+    """The lines of the acts of the script tabs of the editor at the turns, without the time and the name of the log.
+    Each computer must have the same lines: the same turns, acts and results."""
+    marks = (" the land script act ", " (address ", " with the file ")
+
+    def lines(log):
+        return [line[line.index("Turn "):] for line in lines_with(log, ["the editor of player"])
+                if "Turn " in line and any(mark in line for mark in marks)]
+    server = lines(server_log)
+    clients = [lines(log) for log in client_logs]
+    return {"server": server, "clients": clients, "acts": len(server),
+            "same": all(client == server for client in clients) and bool(server)}
+
+
 def mind_files(options):
     """The mind files of the case mind: the files of the command line, or the two saved creatures of the game folder"""
     if options.mind_files:
@@ -1393,7 +1481,7 @@ def mind_load_lines(server_log, client_logs):
             "same": all(client == server for client in clients) and bool(server)}
 
 
-def editor_desync(pids, case, shots=None, mind_files=None):
+def editor_desync(pids, case, shots=None, mind_files=None, script_files=None):
     """The edits of the editor that parted the worlds of a network game. The first client has the editor claim. With
     "villagers" it puts down rows of each villager type near the camera, first all in one frame and then one row in each
     second (a build whose inspector does not take a row sends each placement on its own, so not in one frame). With "creature" it changes each value of the creature nearest the camera, and moves and turns it. With "animals"
@@ -1516,6 +1604,10 @@ def editor_desync(pids, case, shots=None, mind_files=None):
         done["sent"].append({"spawns": made})
     if case in ("animals", "all"):
         done["animals"] = editor_animals(pids, focus)
+    if case == "scripts":
+        done["scripts"] = editor_scripts(pids, script_files or {})
+        if done["scripts"].get("errors"):
+            done.setdefault("errors", []).extend(done["scripts"]["errors"])
     if case in ("mind", "all"):
         done["mind"] = editor_mind(pids, focus, mind_files or [])
         if done["mind"].get("errors"):
@@ -2717,7 +2809,7 @@ def main():
                              "the first client opens the editor, moves a tree and turns on a debug cheat; the server must refuse "
                              "the edit and the cheat of the second client")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
-                                                    "creature-remove", "land", "history", "mind", "time", "all"),
+                                                    "creature-remove", "land", "history", "mind", "time", "scripts", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -2727,8 +2819,9 @@ def main():
                              "lowers and paints the land and draws a footpath and a stream (land), or undoes and redoes "
                              "a placement, a move, a turn, a removal and a copy of a creature (history), or makes "
                              "creatures from mind files and loads mind files into the creatures near the camera "
-                             "(mind), or pauses, steps and changes the speed of the clock of the room (time), or all of "
-                             "them but time; "
+                             "(mind), or pauses, steps and changes the speed of the clock of the room (time), "
+                             "or does the acts of the script tabs and changes the program (scripts, which "
+                             "opens the program of the game again), or all of them but time and scripts; "
                              "every computer must keep the same checksums")
     parser.add_argument("--mind-files", nargs="+", metavar="FILE",
                         help="with --editor-desync mind: the mind files that the first client opens (the default is "
@@ -3255,7 +3348,8 @@ def main():
             if (options.editor_desync and editor_desync_done is None and clients and clients[0].poll() is None
                     and reached_turn(os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
                 editor_desync_done = editor_desync([client.pid for client in clients], options.editor_desync,
-                                                   options.editor_shots, mind_files(options))
+                                                   options.editor_shots, mind_files(options),
+                                                   script_inputs(options, os.path.join(out, "editor_scripts")))
                 print(f"editor desync: {json.dumps(editor_desync_done)[:400]}")
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients)
@@ -3495,6 +3589,15 @@ def main():
             print(f"the forest camera check did not pass: {json.dumps(forest_done)[:2000]}")
     if options.editor_desync:
         summary["editor_desync"] = editor_desync_done
+        if options.editor_desync == "scripts":
+            summary["script_acts"] = script_act_lines(
+                server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
+            states = (editor_desync_done or {}).get("scripts", {}).get("states") or []
+            summary["script_states_same"] = len(states) == 2 and states[0] == states[1]
+            if not summary["script_acts"]["same"] or not summary["script_states_same"]:
+                print(f"the script acts differ or did not come: {json.dumps(summary['script_acts'])[:2000]} "
+                      f"states {json.dumps(states)[:1000]}")
+                all_same = False
         if options.editor_desync in ("mind", "all"):
             summary["mind_loads"] = mind_load_lines(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])

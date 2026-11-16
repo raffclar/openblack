@@ -282,6 +282,44 @@ struct EditorMindFile
 	[[nodiscard]] bool operator==(const EditorMindFile&) const = default;
 };
 
+/// The largest file of the script tabs of the editor that the editor.script_file frames hold: a compiled script program,
+/// the source of a script or a land script. The program of the game has about 3 MB. This is a limit of the network game
+/// only.
+inline constexpr size_t k_MostEditorScriptFileBytes = 8 * 1024 * 1024;
+/// The most bytes of one editor.script_file frame. Each part but the last holds this many bytes.
+inline constexpr size_t k_MostEditorScriptPartBytes = 48 * 1024;
+
+/// "editor.script_file", both ways. One part of a file of the script tabs of the editor, from the computer of a player with
+/// the editor claim. The parts of a file go in order. The server keeps the whole file and sends it in parts to every
+/// player, also to the sender. Then a turn command uses the file by the hash of its bytes. The server sends each file that
+/// it keeps again to a player who comes back or joins, before the turns.
+struct EditorScriptFile
+{
+	/// What the file holds
+	enum class Kind : uint8_t
+	{
+		/// A compiled script program (.chl)
+		Program = 0,
+		/// The edited source of one script, which each computer compiles at the turn
+		Source = 1,
+		/// The text of a land script
+		LandScript = 2,
+	};
+
+	Kind kind {Kind::Program};
+	/// The hash of the bytes of the whole file (editor::mind_loads::HashOf)
+	uint64_t hash {0};
+	/// The part, from 0, and the count of the parts
+	uint32_t index {0};
+	uint32_t count {0};
+	/// The bytes of the whole file
+	uint32_t size {0};
+	/// The bytes of this part
+	std::vector<uint8_t> bytes;
+
+	[[nodiscard]] bool operator==(const EditorScriptFile&) const = default;
+};
+
 /// Client to server: "game.stop_request". The end box of a decided game opened on the client. The server stops the turns
 /// of the game, if they did not stop before.
 struct StopRequest
@@ -595,7 +633,7 @@ struct SyncWorld
 using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
                            StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
                            SyncParts, Loaded, LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities,
-                           SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime>;
+                           SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime, EditorScriptFile>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

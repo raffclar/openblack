@@ -22,6 +22,7 @@
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorLandEdits.h"
 #include "Editor/EditorNetworkEdits.h"
+#include "Editor/EditorScriptActs.h"
 #include "Gui/TextDatabase.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameBuildId.h"
@@ -455,6 +456,10 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	else if (const auto* time = std::get_if<game_socket::EditorTime>(&*frame))
 	{
 		TimeFrom(connection, peer, *time);
+	}
+	else if (const auto* script = std::get_if<game_socket::EditorScriptFile>(&*frame))
+	{
+		EditorScriptFileFrom(connection, peer, *script);
 	}
 	else if (const auto* parts = std::get_if<game_socket::SyncParts>(&*frame))
 	{
@@ -981,8 +986,9 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 
 void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
 {
-	// A kept turn can hold a mind load of the editor: its file goes first
+	// A kept turn can hold a mind load or a script act of the editor: its file goes first
 	SendEditorMindFiles(connection);
+	SendEditorScriptFiles(connection);
 	for (auto turn = _history.lower_bound(from); turn != _history.end(); ++turn)
 	{
 		_sockets.SendBinary(connection, turn->second);
@@ -1202,6 +1208,22 @@ void LockstepHost::RefuseEditorCommands(ConnectionId connection, const Peer& pee
 			// The file came on the game socket before the block, so the server keeps it now
 			refusal = editor::mind_loads::MindLoadRefusal(*load, !_mindFiles.Find(load->file).empty());
 		}
+		else if (const auto* script = std::get_if<player_commands::EditorScript>(&action))
+		{
+			refusal = editor::script_acts::ScriptActRefusal(*script);
+		}
+		else if (const auto* land = std::get_if<player_commands::EditorLandScript>(&action))
+		{
+			// The file of an open came on the game socket before the block, so the server keeps it now
+			refusal = editor::script_acts::LandScriptRefusal(
+			    *land, !_scriptFiles.Find(game_socket::EditorScriptFile::Kind::LandScript, land->file).empty());
+		}
+		else if (const auto* program = std::get_if<player_commands::EditorScriptProgram>(&action))
+		{
+			const auto kind = editor::script_acts::FileKindOf(*program);
+			refusal = editor::script_acts::ProgramRefusal(*program, !kind.has_value() ||
+			                                                            !_scriptFiles.Find(*kind, program->file).empty());
+		}
 		if (refusal.has_value())
 		{
 			Log(spdlog::level::warn, fmt::format("The server refuses an edit of the editor of {}: {}", peer.name, *refusal));
@@ -1346,8 +1368,9 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 		return false;
 	}
 	SendTo(connection, game_socket::Resumed {.turn = _turnsDone, .world = true});
-	// The turns after the world can hold a mind load of the editor: the files go first
+	// The turns after the world can hold a mind load or a script act of the editor: the files go first
 	SendEditorMindFiles(connection);
+	SendEditorScriptFiles(connection);
 	size_t parts = 0;
 	size_t refused = 0;
 	for (const auto& part : turn_codec::SplitWorld(_turnsDone, state))
@@ -1920,6 +1943,91 @@ void LockstepHost::EditorMindFileFrom(ConnectionId connection, const Peer& peer,
 		Log(spdlog::level::warn, fmt::format("The server refuses a mind file of {}: it keeps the most files ({})", peer.name,
 		                                     editor::mind_loads::k_MostKeptFiles));
 		break;
+	}
+}
+
+void LockstepHost::EditorScriptFileFrom(ConnectionId connection, Peer& peer, const game_socket::EditorScriptFile& part)
+{
+	if (!peer.joined || !_started)
+	{
+		Log(spdlog::level::warn,
+		    fmt::format("Connection {} sends a script file of the editor out of a game: the server does not take it",
+		                connection));
+		return;
+	}
+	// Only a player with the editor claim sends a script file, as only that player sends the command that uses it. The
+	// first part of the file gives the line to the player.
+	if (!peer.editor)
+	{
+		if (part.index == 0)
+		{
+			++_refusedEditorCommands;
+			Log(spdlog::level::warn,
+			    fmt::format("The server refuses a script file of {}: the join ticket has no editor claim", peer.name));
+			SendTo(connection,
+			       game_socket::CommandRefused {.reason = std::string(game_socket::k_NoEditorClaim), .commands = 1});
+		}
+		return;
+	}
+	using Step = editor::script_files::PartAssembly::Step;
+	const auto step = peer.scriptParts.Add(part);
+	if (step == Step::Bad)
+	{
+		++_refusedEditorValues;
+		Log(spdlog::level::warn,
+		    fmt::format("The server refuses a part of the script file {:016x} of {}: the part does not continue the file",
+		                part.hash, peer.name));
+		return;
+	}
+	if (step == Step::Waiting)
+	{
+		return;
+	}
+	auto file = peer.scriptParts.Take();
+	// No computer loads a program that does not read, so the server does not send such a program
+	if (file->kind == game_socket::EditorScriptFile::Kind::Program && _settings.readsScriptProgram &&
+	    !_settings.readsScriptProgram(file->bytes))
+	{
+		++_refusedEditorValues;
+		Log(spdlog::level::warn, fmt::format("The server refuses a script program of {} bytes of {}: the program does not read",
+		                                     file->bytes.size(), peer.name));
+		return;
+	}
+	const auto size = file->bytes.size();
+	const auto kind = file->kind;
+	const auto [added, hash] = _scriptFiles.Add(kind, std::move(file->bytes));
+	switch (added)
+	{
+	case editor::script_files::FileStore::Added::New:
+		Log(spdlog::level::info,
+		    fmt::format("The server keeps a script file of the editor of {} bytes (hash {:016x}) of {} and sends it to every "
+		                "player",
+		                size, hash, peer.name));
+		for (const auto& out : editor::script_files::SplitFile(kind, _scriptFiles.Find(kind, hash)))
+		{
+			Broadcast(out);
+		}
+		break;
+	case editor::script_files::FileStore::Added::Known:
+		// Every player got the file when it came first, or when the player came back
+		Log(spdlog::level::info, fmt::format("The server keeps the script file {:016x} of {} from before", hash, peer.name));
+		break;
+	case editor::script_files::FileStore::Added::Refused:
+		++_refusedEditorValues;
+		Log(spdlog::level::warn, fmt::format("The server refuses a script file of {}: it keeps the most files ({})", peer.name,
+		                                     editor::script_files::k_MostKeptFiles));
+		break;
+	}
+}
+
+void LockstepHost::SendEditorScriptFiles(ConnectionId connection)
+{
+	for (const auto& file : _scriptFiles.Files())
+	{
+		for (const auto& part : editor::script_files::SplitFile(file.kind, file.bytes))
+		{
+			SendTo(connection, part);
+		}
 	}
 }
 

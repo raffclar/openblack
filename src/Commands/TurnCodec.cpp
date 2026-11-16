@@ -532,6 +532,28 @@ void WriteAction(Writer& out, const Action& action)
 		               }
 	               },
 	               [&out](const DebugLandSkip& command) { out.Byte(command.land); },
+	               [&out](const EditorScript& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               out.Number(command.id);
+		               out.Number(command.address);
+		               out.Number(command.index);
+		               out.Number(command.value);
+		               out.Byte(static_cast<uint8_t>(command.parameters.size()));
+		               for (const auto parameter : command.parameters)
+		               {
+			               out.Float(parameter);
+		               }
+	               },
+	               [&out](const EditorLandScript& command) {
+		               out.Byte(static_cast<uint8_t>(command.act));
+		               out.Number(command.command);
+		               out.Number(command.file);
+	               },
+	               [&out](const EditorScriptProgram& command) {
+		               out.Byte(static_cast<uint8_t>(command.use));
+		               out.Number(command.file);
+		               out.Number(command.script);
+	               },
 	               [&out](const EditorLandStroke& command) {
 		               out.Byte(command.mode);
 		               out.Float(command.innerRadius);
@@ -1209,6 +1231,73 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = load;
 		return DecodeError::None;
 	}
+	case CommandTag::EditorScript:
+	{
+		const auto act = in.Byte();
+		EditorScript script {.id = in.Number<uint32_t>()};
+		script.address = in.Number<uint32_t>();
+		script.index = in.Number<uint16_t>();
+		script.value = in.Number<uint32_t>();
+		const auto count = in.Byte();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (act > static_cast<uint8_t>(EditorScript::Act::SetTaskVariable) || count > k_MostEditorScriptParameters)
+		{
+			return DecodeError::Value;
+		}
+		if (static_cast<size_t>(count) * 4 > in.Left())
+		{
+			return DecodeError::Truncated;
+		}
+		script.act = static_cast<EditorScript::Act>(act);
+		script.parameters.resize(count);
+		for (auto& parameter : script.parameters)
+		{
+			parameter = in.Float();
+		}
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		action = std::move(script);
+		return DecodeError::None;
+	}
+	case CommandTag::EditorLandScript:
+	{
+		const auto act = in.Byte();
+		EditorLandScript script {.command = in.Number<uint32_t>()};
+		script.file = in.Number<uint64_t>();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (act > static_cast<uint8_t>(EditorLandScript::Act::Breakpoint))
+		{
+			return DecodeError::Value;
+		}
+		script.act = static_cast<EditorLandScript::Act>(act);
+		action = script;
+		return DecodeError::None;
+	}
+	case CommandTag::EditorScriptProgram:
+	{
+		const auto use = in.Byte();
+		EditorScriptProgram program {.file = in.Number<uint64_t>()};
+		program.script = in.Number<uint32_t>();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (use > static_cast<uint8_t>(EditorScriptProgram::Use::GamesProgram))
+		{
+			return DecodeError::Value;
+		}
+		program.use = static_cast<EditorScriptProgram::Use>(use);
+		action = program;
+		return DecodeError::None;
+	}
 	case CommandTag::EditorLandStroke:
 	{
 		EditorLandStroke stroke {.mode = in.Byte()};
@@ -1444,6 +1533,9 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const EditorPath& /*command*/) { return CommandTag::EditorPath; },
 	                      [](const EditorRemake& /*command*/) { return CommandTag::EditorRemake; },
 	                      [](const EditorMindLoad& /*command*/) { return CommandTag::EditorMindLoad; },
+	                      [](const EditorScript& /*command*/) { return CommandTag::EditorScript; },
+	                      [](const EditorLandScript& /*command*/) { return CommandTag::EditorLandScript; },
+	                      [](const EditorScriptProgram& /*command*/) { return CommandTag::EditorScriptProgram; },
 	                  },
 	                  action);
 }
@@ -1532,6 +1624,9 @@ size_t SizeOf(const Action& action) noexcept
 	        },
 	        [](const EditorLandStroke& /*command*/) { return size_t {1 + 4 + 4 + 1 + 1 + 4 + 4}; },
 	        [](const EditorPath& command) { return 1 + 2 + (8 * command.points.size()) + (2 * k_Entity); },
+	        [](const EditorScript& command) { return 1 + 4 + 4 + 2 + 4 + 1 + (4 * command.parameters.size()); },
+	        [](const EditorLandScript& /*command*/) { return size_t {1 + 4 + 8}; },
+	        [](const EditorScriptProgram& /*command*/) { return size_t {1 + 8 + 4}; },
 	    },
 	    action);
 	return 1 + fields;

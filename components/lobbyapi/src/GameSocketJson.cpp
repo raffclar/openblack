@@ -64,6 +64,7 @@ constexpr double k_LeastTimeSpeed = 0.001;
 constexpr double k_MostTimeSpeed = 1000.0;
 /// The most bytes of the name of the player in a "game.time" frame
 constexpr size_t k_MostTimeNameBytes = 64;
+constexpr std::string_view k_EditorScriptFile = "editor.script_file";
 /// The most bytes of the hints of a copy of the game (the patch and the language)
 constexpr size_t k_MostHintBytes = 16;
 /// The most bytes of the words of the file in a refusal "data"
@@ -930,6 +931,40 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		time.turn = static_cast<uint32_t>(turn);
 		return time;
 	}
+	if (type == k_EditorScriptFile)
+	{
+		EditorScriptFile file;
+		uint64_t kind = 0;
+		uint64_t hash = 0;
+		uint64_t index = 0;
+		uint64_t count = 0;
+		uint64_t size = 0;
+		std::string data;
+		constexpr auto k_MostParts =
+		    (k_MostEditorScriptFileBytes + k_MostEditorScriptPartBytes - 1) / k_MostEditorScriptPartBytes;
+		// Base64 holds 3 bytes in 4 characters
+		constexpr auto k_MostDataCharacters = (k_MostEditorScriptPartBytes + 2) / 3 * 4;
+		if (!ReadUnsigned(object, "kind", static_cast<uint64_t>(EditorScriptFile::Kind::LandScript), kind) ||
+		    !ReadUnsigned(object, "hash", std::numeric_limits<uint64_t>::max(), hash) ||
+		    !ReadUnsigned(object, "index", k_MostParts - 1, index) || !ReadUnsigned(object, "count", k_MostParts, count) ||
+		    !ReadUnsigned(object, "size", k_MostEditorScriptFileBytes, size) ||
+		    !ReadShort(object, "data", data, k_MostDataCharacters, true) || index >= count || size == 0)
+		{
+			return std::nullopt;
+		}
+		auto bytes = join_ticket::DecodeBase64Url(data);
+		if (!bytes.has_value() || bytes->empty() || bytes->size() > k_MostEditorScriptPartBytes)
+		{
+			return std::nullopt;
+		}
+		file.kind = static_cast<EditorScriptFile::Kind>(kind);
+		file.hash = hash;
+		file.index = static_cast<uint32_t>(index);
+		file.count = static_cast<uint32_t>(count);
+		file.size = static_cast<uint32_t>(size);
+		file.bytes = std::move(*bytes);
+		return file;
+	}
 	if (type == k_CommandRefused)
 	{
 		CommandRefused refused;
@@ -1301,6 +1336,16 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, EditorMindFile>)
 		    {
 			    object = Json {{"type", k_EditorMindFile}, {"file", join_ticket::EncodeBase64Url(value.file)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorScriptFile>)
+		    {
+			    object = Json {{"type", k_EditorScriptFile},
+			                   {"kind", static_cast<uint32_t>(value.kind)},
+			                   {"hash", value.hash},
+			                   {"index", value.index},
+			                   {"count", value.count},
+			                   {"size", value.size},
+			                   {"data", join_ticket::EncodeBase64Url(value.bytes)}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, CommandRefused>)
 		    {

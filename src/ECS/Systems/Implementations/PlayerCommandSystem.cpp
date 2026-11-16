@@ -79,6 +79,7 @@
 #include "Editor/EditorLandEdits.h"
 #include "Editor/EditorMindLoads.h"
 #include "Editor/EditorNetworkEdits.h"
+#include "Editor/EditorScriptActs.h"
 #include "Hand/HandSendWait.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
@@ -407,6 +408,59 @@ void RunEditorMindLoad(openblack::PlayerNames player, const EditorMindLoad& load
 	}
 }
 
+/// Do an act of the Scripts tab of the editor on the script machine at the turn. The game server takes the acts only from a
+/// player with the editor claim.
+void RunEditorScript(openblack::PlayerNames player, const EditorScript& script, uint32_t turn)
+{
+	const auto result = openblack::editor::script_acts::RunScriptAct(script);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} {} {} (address {}, index {}): {}", turn,
+		                   static_cast<int>(player), result.done ? "does" : "cannot do",
+		                   openblack::editor::script_acts::NameOf(script.act), script.id, script.address, script.index,
+		                   result.done ? (result.task != 0 ? fmt::format("task {}", result.task) : std::string("done"))
+		                               : std::string(result.refusal));
+	}
+}
+
+/// Do an act of the Land script tab of the editor at the turn. The game server takes the acts only from a player with the
+/// editor claim, and sends the text of an open to each computer before the turn.
+void RunEditorLandScript(openblack::PlayerNames player, const EditorLandScript& script, uint32_t turn,
+                         const TurnCommandSourceInterface* source)
+{
+	const auto file = source != nullptr && script.act == EditorLandScript::Act::Open
+	                      ? source->EditorScriptFile(
+	                            static_cast<uint8_t>(openblack::game_socket::EditorScriptFile::Kind::LandScript), script.file)
+	                      : std::span<const uint8_t> {};
+	const auto result = openblack::editor::script_acts::RunLandScript(script, file);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} the land script act {} (command {}): {}", turn,
+		                   static_cast<int>(player), result.done ? "does" : "cannot do",
+		                   openblack::editor::script_acts::NameOf(script.act), script.command,
+		                   result.done ? fmt::format("{} commands", result.commands) : std::string(result.refusal));
+	}
+}
+
+/// Change the program of the script machine at the turn. The game server takes the changes only from a player with the
+/// editor claim, and sends the file to each computer before the turn.
+void RunEditorScriptProgram(openblack::PlayerNames player, const EditorScriptProgram& program, uint32_t turn,
+                            const TurnCommandSourceInterface* source)
+{
+	const auto kind = openblack::editor::script_acts::FileKindOf(program);
+	const auto file = source != nullptr && kind.has_value()
+	                      ? source->EditorScriptFile(static_cast<uint8_t>(*kind), program.file)
+	                      : std::span<const uint8_t> {};
+	const auto result = openblack::editor::script_acts::RunProgram(program, file);
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Turn {}: the editor of player {} {} {} with the file {:016x} (script {}): {}", turn,
+		                   static_cast<int>(player), result.done ? "does" : "cannot do",
+		                   openblack::editor::script_acts::NameOf(program.use), program.file, program.script,
+		                   result.done ? std::string("done") : result.refusal);
+	}
+}
+
 /// Turn a debug cheat of the player on or off at the turn. The game server takes the cheats only from a player with the editor
 /// claim.
 void RunDebugCheat(openblack::PlayerNames player, const DebugCheat& command, uint32_t turn)
@@ -513,6 +567,18 @@ void RunObserver(const Command& command, uint32_t turn, const TurnCommandSourceI
 		    else if constexpr (std::is_same_v<Kind, EditorMindLoad>)
 		    {
 			    RunEditorMindLoad(command.player, action, turn, source);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorScript>)
+		    {
+			    RunEditorScript(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorLandScript>)
+		    {
+			    RunEditorLandScript(command.player, action, turn, source);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorScriptProgram>)
+		    {
+			    RunEditorScriptProgram(command.player, action, turn, source);
 		    }
 		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
 		    {
@@ -1242,6 +1308,18 @@ void Run(const Command& command, uint32_t turn, const TurnCommandSourceInterface
 		    else if constexpr (std::is_same_v<Kind, EditorMindLoad>)
 		    {
 			    RunEditorMindLoad(command.player, action, turn, source);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorScript>)
+		    {
+			    RunEditorScript(command.player, action, turn);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorLandScript>)
+		    {
+			    RunEditorLandScript(command.player, action, turn, source);
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorScriptProgram>)
+		    {
+			    RunEditorScriptProgram(command.player, action, turn, source);
 		    }
 		    else if constexpr (std::is_same_v<Kind, DebugCheat>)
 		    {
