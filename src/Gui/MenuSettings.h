@@ -29,7 +29,7 @@ struct MenuSettings
 	bool autoSave {true};
 	bool pushScrolling {false};
 	/// The player lets the game send error and crash reports. Vanilla has no such option (deviation 261).
-	bool crashReports {false};
+	bool crashReports {true};
 	/// The game can send the reports: the build has them and a DSN. Without it, the Options page does not show the box.
 	bool crashReportsAvailable {false};
 	/// HELP_TEXT_DIALOG_NOHELP to ALLHELP
