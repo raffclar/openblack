@@ -2234,13 +2234,13 @@
   "kind": "object",
   "parameters": [
    {
-    "description": "move, turn, place or remove",
+    "description": "move, turn, scale, place or remove",
     "name": "kind",
     "required": true,
     "type": "string"
    },
    {
-    "description": "The thing of a move, a turn or a removal",
+    "description": "The thing of a move, a turn, a scale or a removal",
     "name": "id",
     "type": "integer"
    },
@@ -2252,6 +2252,11 @@
    {
     "description": "The angle of a turn or a placement",
     "name": "radians",
+    "type": "number"
+   },
+   {
+    "description": "The new scale of the first axis (scale)",
+    "name": "scale",
     "type": "number"
    },
    {
@@ -2312,6 +2317,101 @@
    }
   ],
   "query": "editor.creature_edit",
+  "writes": true
+ },
+ {
+  "description": "Sends a change of a field of a villager as a command of the turns, as the villager section of the editor sends it in a network game: each computer does it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The villager",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "life, age, food, life stage, sex, tribe, role or state",
+    "name": "field",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The age, the life stage, the sex, the tribe, the role or the state",
+    "name": "number",
+    "type": "integer"
+   },
+   {
+    "description": "The life or the food",
+    "name": "amount",
+    "type": "number"
+   },
+   {
+    "description": "The slot of states of a state, 0 to 2",
+    "name": "index",
+    "type": "integer"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.villager_edit",
+  "writes": true
+ },
+ {
+  "description": "Sends a new creature as a command of the turns, as the creature tools send it in a network game: each computer makes it at the same turn, and the game server takes it only from a player with the editor claim. force sends it also when the editor of this computer is refused.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The species (CreatureType, from 1)",
+    "name": "species",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "[x, z] or [x, y, z] of the creature",
+    "name": "position",
+    "required": true,
+    "type": "point"
+   },
+   {
+    "description": "The player that owns it (0 when not given)",
+    "name": "owner",
+    "type": "integer"
+   },
+   {
+    "description": "The angle that it faces",
+    "name": "radians",
+    "type": "number"
+   },
+   {
+    "description": "Its size (1 when not given)",
+    "name": "scale",
+    "type": "number"
+   },
+   {
+    "description": "-1 to 1 (0 when not given)",
+    "name": "alignment",
+    "type": "number"
+   },
+   {
+    "description": "0 to 1 (0.5 when not given)",
+    "name": "fatness",
+    "type": "number"
+   },
+   {
+    "description": "0 to 1 (0.5 when not given)",
+    "name": "strength",
+    "type": "number"
+   },
+   {
+    "description": "Send also when the editor is refused",
+    "name": "force",
+    "type": "boolean"
+   }
+  ],
+  "query": "editor.creature_spawn",
   "writes": true
  },
  {
