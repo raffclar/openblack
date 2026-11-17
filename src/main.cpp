@@ -296,7 +296,6 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
 		("turn-beside-draw", "Developers: the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later.");
 #endif
-#if defined(OPENBLACK_INSPECTOR)
 	options.add_options("Developer")
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
 		("sim-record-every", "Tools: with --sim-record, write a record each time this many game turns go by.", cxxopts::value<uint32_t>()->default_value("100"))
@@ -317,7 +316,6 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("fight-autopilot-stage", "The stage of the fight lesson that the autopilot starts at: hit, hits, block, step or bout.", cxxopts::value<std::string>())
 		("fight-autopilot-sequence", "The moves of the sequence policy, as seconds:move pairs divided by commas (\"1:high,2.5:block,4:step_back\").", cxxopts::value<std::string>())
 		("fight-transcript-dir", "Write the transcript of each creature fight to this folder, as one file of JSON lines a fight. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>());
-#endif
 	// clang-format on
 
 	try
@@ -809,11 +807,16 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		// web build: its run of the commands of a file does the commands of the file, not those of its own player
 		const bool simNoHandReports = result.count("sim-no-hand-reports") != 0;
 		const bool simPlayCommands = result.count("sim-play-commands") != 0;
-		if (simNoHandReports || simPlayCommands)
+		const bool simCommands = result.count("sim-commands") != 0;
+		if (simNoHandReports || simPlayCommands || simCommands)
 		{
 			if (!args.simulation.has_value())
 			{
 				args.simulation = openblack::sim_run::Request {};
+			}
+			if (simCommands)
+			{
+				args.simulation->commandsPath = std::filesystem::path(result["sim-commands"].as<std::string>());
 			}
 			args.simulation->settings.noHandReports = simNoHandReports;
 			if (simPlayCommands)
@@ -821,7 +824,25 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				args.simulation->playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());
 			}
 		}
-#if defined(OPENBLACK_INSPECTOR)
+#if !defined(OPENBLACK_INSPECTOR)
+		// A build with no inspector, such as the web build, cannot do the options that need it. It says so and stops.
+		{
+			std::vector<std::string> needInspector;
+			for (const auto name : openblack::developer_tools::k_InspectorOptions)
+			{
+				if (result.count(std::string(name)) != 0)
+				{
+					needInspector.emplace_back(name);
+				}
+			}
+			if (const auto error = openblack::developer_tools::InspectorOptionsError(needInspector); error.has_value())
+			{
+				std::cerr << *error << std::endl;
+				returnCode = EXIT_FAILURE;
+				return false;
+			}
+		}
+#else
 		if (result.count("inspect-port") != 0)
 		{
 			args.inspectPort = result["inspect-port"].as<uint16_t>();
@@ -851,9 +872,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		}
 		const bool simRecord = result.count("sim-record") != 0;
 		const bool simInput = result.count("sim-input") != 0;
-		const bool simCommands = result.count("sim-commands") != 0;
 		const bool simLimits = result.count("sim-limits") != 0;
-		if (simRecord || simInput || simCommands || simLimits)
+		if (simRecord || simInput || simLimits)
 		{
 			if (!args.simulation.has_value())
 			{
@@ -875,10 +895,6 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			if (simInput)
 			{
 				args.simulation->inputPath = std::filesystem::path(result["sim-input"].as<std::string>());
-			}
-			if (simCommands)
-			{
-				args.simulation->commandsPath = std::filesystem::path(result["sim-commands"].as<std::string>());
 			}
 			if (simLimits)
 			{
