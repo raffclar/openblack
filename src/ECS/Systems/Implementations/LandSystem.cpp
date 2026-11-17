@@ -52,6 +52,7 @@
 #endif
 #include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/CloudArchetype.h"
+#include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/StreamSegmentArchetype.h"
@@ -510,6 +511,10 @@ static_assert(landgen::features::k_DeadTreeStatic == static_cast<uint8_t>(Mobile
 static_assert(static_cast<int>(BigForestInfo::Info4) == 3);
 static_assert(landgen::features::RockType(landgen::features::RockShape::Square, landgen::features::Stone::Volcanic) ==
               static_cast<uint8_t>(MobileStaticInfo::SquarerockVolcanic));
+static_assert(landgen::features::k_PlainRockStatic == static_cast<uint8_t>(MobileStaticInfo::Rock));
+static_assert(landgen::features::k_SpikyPillarFeature == static_cast<uint8_t>(FeatureInfo::SpikeyPilarChalk));
+static_assert(landgen::features::k_SpikyPillarFeature + static_cast<uint8_t>(landgen::features::Stone::Limestone) ==
+              static_cast<uint8_t>(FeatureInfo::SpikeyPilarLime));
 
 /// Puts the trees, rocks and rivers of a generated land on the land, as the land script of a land of the story does
 void PlaceGeneratedThings(const landgen::GeneratedLand& land)
@@ -543,10 +548,15 @@ void PlaceGeneratedThings(const landgen::GeneratedLand& land)
 			archetypes::BigForestArchetype::Create(position, static_cast<BigForestInfo>(feature.type), 0, feature.angle,
 			                                       feature.size);
 		}
+		else if (feature.kind == landgen::features::Kind::Feature)
+		{
+			archetypes::FeatureArchetype::Create(position, static_cast<FeatureInfo>(feature.type), feature.angle, feature.size);
+		}
 		else
 		{
-			archetypes::MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(feature.type), 0.0f, 0.0f,
-			                                          feature.angle, 0.0f, feature.size);
+			// A rock leans and stands at a height above the land, as a rock of a land script of the story does
+			archetypes::MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(feature.type), feature.altitude,
+			                                          feature.xAngle, feature.angle, feature.zAngle, feature.size);
 		}
 	}
 

@@ -46,6 +46,10 @@ enum class Tree : uint8_t
 
 /// The game's number of the dead tree of the mobile statics
 constexpr uint8_t k_DeadTreeStatic = 3;
+/// The game's number of the plain rock of the mobile statics, which has no stone
+constexpr uint8_t k_PlainRockStatic = 2;
+/// The game's number of the spiky pillar of chalk. The game's number of a spiky pillar is this number plus its stone.
+constexpr uint8_t k_SpikyPillarFeature = 41;
 
 /// The shapes of rock of the game. The game's number of a rock is the number of its shape plus its stone.
 enum class RockShape : uint8_t
@@ -80,6 +84,9 @@ enum class Kind : uint8_t
 	/// A big forest: one model of many pines that grows pines round its edge when the villagers take its wood. Type is
 	/// the game's number of the big forest, and size and maxSize are its scale.
 	BigForest,
+	/// A feature of the scenery, such as a pillar of rock; type is the game's number of the feature, and size and
+	/// maxSize are its scale
+	Feature,
 };
 
 struct Feature
@@ -96,15 +103,22 @@ struct Feature
 	float maxSize;
 	/// The number of the forest of a tree, or 0 for a tree in no forest
 	uint32_t forest {0};
+	/// The lean of a static about the two horizontal axes in radians, and its height above the land in metres, as a land
+	/// script gives them to a rock
+	float xAngle {0.0f};
+	float zAngle {0.0f};
+	float altitude {0.0f};
 };
 
 struct Settings
 {
-	/// The distance between the points where a rock or a dead tree can be, in corners. Each point moves by a random
-	/// amount inside its square.
+	/// The distance between the points where a dead tree can be, in corners. Each point moves by a random amount inside
+	/// its square.
 	float spacing {2.0f};
-	/// No rock lies on a slope steeper than this, in altitude units for each corner
-	float rockSlope {16.0f};
+	/// The distance between the points where a clump of rocks can start, in corners
+	float rockSpacing {4.0f};
+	/// The distance between the points where a group of pillars on the beach can start, in corners
+	float stackSpacing {12.0f};
 	/// The distance between the points where a stand of trees can start, in corners
 	float standSpacing {4.0f};
 	/// The distance between the points where a big forest can be, in corners
@@ -135,6 +149,9 @@ struct Ground
 	/// The middle of the town of the start, in corners
 	float townX;
 	float townZ;
+	/// A corner that is not 0 is on a river or its bank. Without it, the features on the shore keep off the corners
+	/// of keepClear.
+	const Grid<uint8_t>* rivers {nullptr};
 };
 
 /// The ground at one point, in the units of the lands of the story
@@ -158,11 +175,31 @@ struct Spot
 /// trees on the lands of the story. A jungle has the larger groups of the palm island of the story.
 [[nodiscard]] uint32_t StandSize(float unit, bool jungle);
 
+/// The three classes of rock on the lands of the story. Each class has its own scales, lean and sizes of clumps.
+enum class RockClass : uint8_t
+{
+	/// The small rocks: the plain rock, or the small rock of a stone
+	Small,
+	Boulder,
+	/// The flat, long, sharp and square rocks
+	Slab,
+};
+
+/// The number of rocks of a clump, from a random number from 0 to below 1. The sizes have the spread of the clumps of
+/// each class on the lands of the story: most boulders and slabs lie alone or in pairs, and small rocks lie in clumps.
+[[nodiscard]] uint32_t ClumpSize(RockClass rockClass, float unit);
+
+/// The main class of a clump of rocks on ground of a slope (the rise for each metre) and a height above the sea in
+/// metres, from a random number from 0 to below 1. Slabs lie on steeper ground, and boulders on high ground.
+[[nodiscard]] RockClass MainClassAt(float slope, float height, float unit);
+
 /// The features of the land:
 /// - The big forests stand alone on ground with no trees round them, far from the sea and the town.
 /// - The trees grow in stands. A stand has a main kind and some trees of the kinds that grow with it. Each biome has
 ///   its own number of stands, and the stands have the sizes and the spread of the groups on the lands of the story.
-/// - The rocks and the dead trees lie at the points of a grid, by the chances of the biome.
+/// - The rocks lie in clumps. Each rock takes the scale, the lean and the height of a rock of the story.
+/// - One ring of eight rocks stands on flat ground, and groups of spiky pillars stand on the beaches.
+/// - The dead trees lie at the points of a grid, by the chances of the biome.
 ///
 /// A point draws its random numbers from its own place, so a change elsewhere does not move it. Nothing stands in
 /// water, on a river or in a clearing.

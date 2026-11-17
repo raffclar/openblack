@@ -362,6 +362,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	// Nothing grows in the water, on the rivers or on their banks
 	const auto keepClear =
 	    Mask(side, [&](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude + 1 || riverDistance.values[i] <= 1.5f; });
+	const auto rivers = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 1.5f; });
 	const std::array clearings {features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
 	land.features = features::Place({.biomes = land.biomes,
 	                                 .heights = heights,
@@ -369,7 +370,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                 .keepClear = keepClear,
 	                                 .clearings = clearings,
 	                                 .townX = land.start.x,
-	                                 .townZ = land.start.z},
+	                                 .townZ = land.start.z,
+	                                 .rivers = &rivers},
 	                                seed, settings.features);
 	clock.Done("features");
 

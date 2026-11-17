@@ -303,6 +303,172 @@ TEST(LandgenFeatures, BigForestsStandApartWithNoTreesRoundThem)
 	}
 }
 
+namespace
+{
+bool IsRock(const features::Feature& feature)
+{
+	return feature.kind == features::Kind::Static && feature.type != features::k_DeadTreeStatic;
+}
+} // namespace
+
+TEST(LandgenFeatures, ClumpsOfRocksHaveTheSizesOfTheClumpsOfTheStory)
+{
+	using features::ClumpSize;
+	using features::RockClass;
+	EXPECT_EQ(ClumpSize(RockClass::Small, 0.0f), 1u);
+	EXPECT_EQ(ClumpSize(RockClass::Small, 0.5f), 3u);
+	EXPECT_EQ(ClumpSize(RockClass::Boulder, 0.4f), 1u);
+	EXPECT_EQ(ClumpSize(RockClass::Slab, 1.0f), 5u);
+	EXPECT_GE(ClumpSize(RockClass::Small, 0.999f), 14u);
+	for (float u = 0.0f; u < 0.99f; u += 0.01f)
+	{
+		EXPECT_LE(ClumpSize(RockClass::Boulder, u), ClumpSize(RockClass::Boulder, u + 0.01f));
+		// A clump of small rocks is never smaller than a clump of slabs of the same random number
+		EXPECT_GE(ClumpSize(RockClass::Small, u), ClumpSize(RockClass::Slab, u));
+	}
+}
+
+TEST(LandgenFeatures, SlabsLieOnSteepGroundAndBouldersOnHighGround)
+{
+	using features::MainClassAt;
+	using features::RockClass;
+	// On flat ground at 20 m: small rocks first, slabs last
+	EXPECT_EQ(MainClassAt(0.0f, 20.0f, 0.1f), RockClass::Small);
+	EXPECT_EQ(MainClassAt(0.0f, 20.0f, 0.95f), RockClass::Slab);
+	EXPECT_EQ(MainClassAt(0.0f, 20.0f, 0.8f), RockClass::Boulder);
+	// Steep ground has more slabs, high ground more boulders
+	EXPECT_EQ(MainClassAt(0.5f, 20.0f, 0.8f), RockClass::Slab);
+	EXPECT_EQ(MainClassAt(0.0f, 100.0f, 0.3f), RockClass::Boulder);
+	const auto count = [](float slope, float height, RockClass rockClass) {
+		int found = 0;
+		for (float u = 0.0f; u < 1.0f; u += 0.001f)
+		{
+			found += MainClassAt(slope, height, u) == rockClass ? 1 : 0;
+		}
+		return found;
+	};
+	EXPECT_GT(count(0.5f, 20.0f, RockClass::Slab), count(0.0f, 20.0f, RockClass::Slab));
+	EXPECT_GT(count(0.0f, 100.0f, RockClass::Boulder), count(0.0f, 20.0f, RockClass::Boulder));
+}
+
+TEST(LandgenFeatures, RocksLieInClumpsWithTheLeanOfTheStory)
+{
+	const auto placed = PlaceOn(Biome::Alpine, 90.0f, 21, {}, 128);
+	std::vector<features::Feature> rocks;
+	std::ranges::copy_if(placed, std::back_inserter(rocks), IsRock);
+	ASSERT_GE(rocks.size(), 50u);
+	size_t inClump = 0;
+	size_t leaning = 0;
+	for (size_t i = 0; i < rocks.size(); ++i)
+	{
+		bool near = false;
+		for (size_t j = 0; j < rocks.size(); ++j)
+		{
+			if (i == j)
+			{
+				continue;
+			}
+			const float distance = std::hypot(rocks[i].x - rocks[j].x, rocks[i].z - rocks[j].z);
+			EXPECT_GE(distance, 1.2f);
+			near = near || distance <= 8.0f;
+		}
+		inClump += near ? 1 : 0;
+		leaning += std::max(std::fabs(rocks[i].xAngle), std::fabs(rocks[i].zAngle)) > 0.05f ? 1 : 0;
+		// The poses are the poses of the rocks of the story
+		EXPECT_GE(rocks[i].altitude, -1.5f);
+		EXPECT_LE(rocks[i].altitude, 3.0f);
+		EXPECT_GT(rocks[i].size, 0.1f);
+		EXPECT_LT(rocks[i].size, 7.5f);
+	}
+	// Most rocks of the story lie near another rock, and most lean
+	EXPECT_GT(inClump * 2, rocks.size());
+	EXPECT_GT(leaning * 2, rocks.size());
+	// The rocks are boulders, slabs and small rocks
+	EXPECT_TRUE(std::ranges::any_of(rocks, [](const auto& rock) { return rock.type >= 16 && rock.type <= 27; }));
+	EXPECT_TRUE(std::ranges::any_of(rocks, [](const auto& rock) { return rock.type >= 28 && rock.type <= 35; }));
+	EXPECT_TRUE(std::ranges::any_of(rocks, [](const auto& rock) { return rock.type == 2 || rock.type == 37; }));
+}
+
+TEST(LandgenFeatures, TheRingOfRocksStandsOnFlatGrass)
+{
+	// On a land whose small rocks are of a stone, the ring holds the only plain rocks
+	bool found = false;
+	for (uint64_t seed = 1; seed <= 40 && !found; ++seed)
+	{
+		const auto placed = PlaceOn(Biome::Grassland, 60.0f, seed, {}, 96);
+		std::vector<features::Feature> plain;
+		std::ranges::copy_if(placed, std::back_inserter(plain), [](const auto& feature) {
+			return IsRock(feature) && feature.type == features::k_PlainRockStatic;
+		});
+		if (plain.size() != 8 ||
+		    std::ranges::any_of(placed, [](const auto& feature) { return IsRock(feature) && feature.type == 37; }) == false)
+		{
+			continue;
+		}
+		found = true;
+		float middleX = 0.0f;
+		float middleZ = 0.0f;
+		for (const auto& rock : plain)
+		{
+			middleX += rock.x / 8.0f;
+			middleZ += rock.z / 8.0f;
+		}
+		for (const auto& rock : plain)
+		{
+			const float radius = std::hypot(rock.x - middleX, rock.z - middleZ);
+			EXPECT_GE(radius, 15.0f);
+			EXPECT_LE(radius, 46.0f);
+			EXPECT_GE(rock.size, 0.47f);
+			EXPECT_LE(rock.size, 0.79f);
+		}
+	}
+	EXPECT_TRUE(found);
+}
+
+TEST(LandgenFeatures, SpikyPillarsStandInGroupsOnTheBeach)
+{
+	constexpr int k_Side = 96;
+	Grid<Biome> biomes(k_Side, Biome::Grassland);
+	Grid<float> heights(k_Side, 60.0f);
+	Grid<float> sea(k_Side, 40.0f);
+	for (int z = 0; z < k_Side; ++z)
+	{
+		for (int x = 0; x < 30; ++x)
+		{
+			// The sea, then a beach 2.7 m above the sea, then the grass
+			biomes.At(x, z) = x < 10 ? Biome::Sea : Biome::Beach;
+			heights.At(x, z) = x < 10 ? 0.0f : 4.0f;
+			sea.At(x, z) = x < 10 ? 0.0f : static_cast<float>(x - 9);
+		}
+	}
+	const auto keepClear = Clear(k_Side);
+	size_t total = 0;
+	for (uint64_t seed = 1; seed <= 10; ++seed)
+	{
+		const auto placed = features::Place({.biomes = biomes,
+		                                     .heights = heights,
+		                                     .seaDistance = sea,
+		                                     .keepClear = keepClear,
+		                                     .clearings = {},
+		                                     .townX = k_FarTown,
+		                                     .townZ = k_FarTown},
+		                                    seed, {});
+		std::vector<features::Feature> pillars;
+		std::ranges::copy_if(placed, std::back_inserter(pillars),
+		                     [](const auto& feature) { return feature.kind == features::Kind::Feature; });
+		EXPECT_LE(pillars.size(), 4u * 7u);
+		for (const auto& pillar : pillars)
+		{
+			// Spiky pillars of limestone on the beach
+			EXPECT_EQ(pillar.type, features::k_SpikyPillarFeature + 1);
+			EXPECT_GE(pillar.x / 10.0f, 9.5f);
+			EXPECT_LT(pillar.x / 10.0f, 30.5f);
+		}
+		total += pillars.size();
+	}
+	EXPECT_GE(total, 3u);
+}
+
 TEST(LandgenGenerator, CellsTakeTheirWaterAndSoundFromTheirCorners)
 {
 	// Open sea at x 0 and 1, the shallows' edge at x 2, then land
