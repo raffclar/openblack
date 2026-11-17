@@ -30,7 +30,7 @@ public:
 	{
 	}
 
-	void FollowGives(std::map<uint32_t, std::vector<size_t>> gives) override { _runner.FollowGives(std::move(gives)); }
+	void FollowGives(std::vector<command_log::Give> gives) override { _runner.FollowGives(std::move(gives)); }
 	void BeforeTurn() override { _runner.BeforeTurn(); }
 
 	void Start() override

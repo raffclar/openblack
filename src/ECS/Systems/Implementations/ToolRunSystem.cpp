@@ -186,11 +186,14 @@ void ToolRunSystem::StartFightTools(bool networkLandPending)
 	{
 		_commandLog = std::make_unique<command_log::Writer>(*_simulation->commandsPath);
 		_scenarioGives = std::make_unique<command_log::GivesWriter>(command_log::GivesPathOf(*_simulation->commandsPath));
+		_lands = std::make_unique<command_log::LandCounter>();
 		if (_commandLog->IsOpen())
 		{
+			// Each turn goes to the counter of the lands, also a turn with no commands
 			Locator::playerCommandSystem::value().SetTurnListener(
-			    [log = _commandLog.get()](uint32_t turn, std::span<const player_commands::Command> commands) {
-				    log->Write(turn, commands);
+			    [log = _commandLog.get(), lands = _lands.get()](uint32_t turn,
+			                                                    std::span<const player_commands::Command> commands) {
+				    log->Write(turn, commands, lands->Note(turn));
 			    });
 		}
 		else
@@ -244,9 +247,9 @@ void ToolRunSystem::StartInputTools()
 
 void ToolRunSystem::RecordScenarioGive(uint32_t turn, size_t command)
 {
-	if (_scenarioGives != nullptr)
+	if (_scenarioGives != nullptr && _lands != nullptr)
 	{
-		_scenarioGives->Write(turn, command);
+		_scenarioGives->Write(turn, command, _lands->Note(turn));
 	}
 }
 

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <set>
@@ -60,11 +61,57 @@ TEST(TestbedScenarios, IdsAreUniqueAndFindable)
 
 TEST(TestbedScenarios, AServerGivesTheCommandsThatTheGameGaveBeforeATurn)
 {
-	const std::map<uint32_t, std::vector<size_t>> gives {{5, {2, 3}}, {9, {0, 12}}};
-	EXPECT_EQ(GivesAt(gives, 5, 4), (std::vector<size_t> {2, 3}));
+	GivesFollower gives(
+	    {{.turn = 5, .command = 2}, {.turn = 5, .command = 3}, {.turn = 9, .command = 0}, {.turn = 9, .command = 12}});
+	EXPECT_TRUE(gives.DueAt(4, 4).empty());
+	EXPECT_EQ(gives.DueAt(5, 4), (std::vector<size_t> {2, 3}));
+	EXPECT_TRUE(gives.DueAt(6, 4).empty());
 	// A place that the scenario does not have is left out
-	EXPECT_EQ(GivesAt(gives, 9, 4), (std::vector<size_t> {0}));
-	EXPECT_TRUE(GivesAt(gives, 6, 4).empty());
+	EXPECT_EQ(gives.DueAt(9, 4), (std::vector<size_t> {0}));
+	EXPECT_EQ(gives.Left(), 0);
+}
+
+TEST(TestbedScenarios, AServerGivesTheCommandOfALandLoadOneTime)
+{
+	// The command at turn 10 loads a land, and the turn count starts again. The game gave a command at turn 10 of the
+	// next land too.
+	GivesFollower gives({{.turn = 10, .command = 0}, {.turn = 10, .command = 1, .land = 1}});
+	for (uint32_t turn = 1; turn <= 10; ++turn)
+	{
+		EXPECT_EQ(gives.DueAt(turn, 2), turn == 10 ? std::vector<size_t> {0} : std::vector<size_t> {});
+	}
+	std::vector<size_t> afterLoad;
+	for (uint32_t loads = 0; loads < 3; ++loads)
+	{
+		for (uint32_t turn = 1; turn <= 20; ++turn)
+		{
+			std::ranges::copy(gives.DueAt(turn, 2), std::back_inserter(afterLoad));
+		}
+	}
+	EXPECT_EQ(afterLoad, (std::vector<size_t> {1}));
+	EXPECT_EQ(gives.Left(), 0);
+}
+
+TEST(TestbedScenarios, AServerGivesNoCommandOfATurnThatWent)
+{
+	// The server gave no commands before turn 5, so the command of turn 5 does not stop the command of turn 7
+	GivesFollower gives({{.turn = 5, .command = 0}, {.turn = 7, .command = 1}});
+	EXPECT_TRUE(gives.DueAt(6, 2).empty());
+	EXPECT_EQ(gives.DueAt(7, 2), (std::vector<size_t> {1}));
+	EXPECT_EQ(gives.Left(), 0);
+}
+
+TEST(TestbedScenarios, AServerThatDoesNotLoadGivesNoCommandOfALaterLand)
+{
+	// The game loaded a saved world at turn 6. The server keeps no saves, so it plays on with no load.
+	GivesFollower gives({{.turn = 6, .command = 0}, {.turn = 8, .command = 1, .land = 1}});
+	std::vector<size_t> given;
+	for (uint32_t turn = 1; turn <= 20; ++turn)
+	{
+		std::ranges::copy(gives.DueAt(turn, 2), std::back_inserter(given));
+	}
+	EXPECT_EQ(given, (std::vector<size_t> {0}));
+	EXPECT_EQ(gives.Left(), 1);
 }
 
 TEST(TestbedScenarios, EveryFacetHasScenarios)

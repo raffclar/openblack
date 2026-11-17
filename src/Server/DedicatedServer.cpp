@@ -296,6 +296,8 @@ public:
 	[[nodiscard]] int32_t FrameRate() const override { return _frameRate.Rate(); }
 	/// The testbed scenario gives its commands before the turns, as on each client of the network game
 	void BeforeTurn() override;
+	/// The commands of the game on its lands up to this land go to the command system, each land one time
+	void ReceiveCommandsOfLand(uint32_t land);
 
 private:
 	ServerSettings _settings;
@@ -321,6 +323,12 @@ private:
 	std::chrono::steady_clock::time_point _frameStart;
 	/// The testbed scenario that the server plays, as the game's window of scenarios plays it
 	std::unique_ptr<testbed_scenarios::ScenarioPlayer> _scenario;
+	/// The commands of the game that a tool gives, by the land of the game and then by the turn
+	std::vector<std::map<uint32_t, std::vector<player_commands::Command>>> _commandLands;
+	/// The count of the lands in _commandLands whose commands went to the command system
+	uint32_t _commandLandsReceived {0};
+	/// The count of the lands that the server loaded
+	command_log::LandCounter _lands;
 	bool _scenarioStarted {false};
 	/// Gives false when the game of the network ended
 	std::function<NetworkStep()> _beforeTurns;
@@ -445,23 +453,26 @@ bool ServerWorld::Initialize()
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The simulation record cannot start: {}", *error);
 		}
 	}
-	// A tool can give the commands that a game did at each turn, which the server then does at the same turns
+	// A tool can give the commands that a game did at each turn, which the server then does at the same turns. The
+	// commands of a land that the game loaded later go to the server when the server loads its next land.
 	if (_settings.commandsPath.has_value())
 	{
-		auto turns = command_log::ReadFile(*_settings.commandsPath);
-		if (!turns.has_value())
+		auto lands = command_log::ReadLandsFile(*_settings.commandsPath);
+		if (!lands.has_value())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the commands does not read: {}",
 			                    _settings.commandsPath->string());
 			return false;
 		}
-		auto& commands = Locator::playerCommandSystem::value();
-		for (auto& [turn, turnCommands] : *turns)
+		_commandLands = std::move(*lands);
+		size_t turns = 0;
+		for (const auto& landTurns : _commandLands)
 		{
-			commands.Receive(turn, std::move(turnCommands));
+			turns += landTurns.size();
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Commands of {} turns from {}", turns->size(),
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Commands of {} turns in {} lands from {}", turns, _commandLands.size(),
 		                   _settings.commandsPath->string());
+		ReceiveCommandsOfLand(0);
 	}
 	return simulation::RegisterWorldData(*this);
 }
@@ -600,6 +611,29 @@ void ServerWorld::BeforeTurn()
 	if (_scenario != nullptr)
 	{
 		_scenario->BeforeTurn();
+	}
+	// A command of the scenario can load a land, which starts the turn count again. The commands of the game on its next
+	// land then go to the server before the first turn of that land.
+	if (const auto land = _lands.Note(Locator::time::value().GetTurn()); land < _commandLands.size())
+	{
+		ReceiveCommandsOfLand(land);
+	}
+}
+
+void ServerWorld::ReceiveCommandsOfLand(uint32_t land)
+{
+	auto& commands = Locator::playerCommandSystem::value();
+	for (; _commandLandsReceived <= land && _commandLandsReceived < _commandLands.size(); ++_commandLandsReceived)
+	{
+		for (auto& [turn, turnCommands] : _commandLands[_commandLandsReceived])
+		{
+			commands.Receive(turn, std::move(turnCommands));
+		}
+		if (_commandLandsReceived > 0)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The commands of land {} of the game go to the server: {} turns",
+			                   _commandLandsReceived, _commandLands[_commandLandsReceived].size());
+		}
 	}
 }
 

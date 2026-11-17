@@ -29,6 +29,7 @@ namespace command_log
 {
 class Writer;
 class GivesWriter;
+class LandCounter;
 } // namespace command_log
 namespace checksum_log
 {
@@ -74,6 +75,8 @@ private:
 	std::unique_ptr<command_log::Writer> _commandLog;
 	/// The file that a tool's run writes the commands of the testbed scenario to, with the turn before which each went
 	std::unique_ptr<command_log::GivesWriter> _scenarioGives;
+	/// The count of the lands that the game loaded, for the lines of the two files above
+	std::unique_ptr<command_log::LandCounter> _lands;
 	/// The file that a tool's run writes the checksum of each turn to
 	std::unique_ptr<checksum_log::Writer> _checksumLog;
 	/// A tool's run that looks for the frame steps that change the synced world
