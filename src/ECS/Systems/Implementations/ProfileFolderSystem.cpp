@@ -49,7 +49,7 @@ std::optional<std::filesystem::path> ProfileFolderSystem::MakeFolder(const std::
 	{
 		if (const auto logger = spdlog::get("game"); logger != nullptr)
 		{
-			SPDLOG_LOGGER_WARN(logger, "The game could not make the folder {}", path.generic_string());
+			SPDLOG_LOGGER_WARN(logger, "The game could not make the folder {}", player_profiles::PathForLog(path));
 		}
 		return std::nullopt;
 	}
@@ -76,7 +76,7 @@ std::optional<std::vector<uint8_t>> ProfileFolderSystem::ReadPlayerFile(std::u16
 	{
 		if (const auto logger = spdlog::get("game"); logger != nullptr)
 		{
-			SPDLOG_LOGGER_WARN(logger, "The game could not read {}: {}", path.generic_string(), error.what());
+			SPDLOG_LOGGER_WARN(logger, "The game could not read {}: {}", player_profiles::PathForLog(path), error.what());
 		}
 		return std::nullopt;
 	}
@@ -97,7 +97,7 @@ bool ProfileFolderSystem::WritePlayerFile(std::u16string_view player, std::strin
 	const bool written = _fileSystem.WriteAll(path, bytes);
 	if (const auto logger = spdlog::get("game"); !written && logger != nullptr)
 	{
-		SPDLOG_LOGGER_WARN(logger, "The game could not write {}", path.generic_string());
+		SPDLOG_LOGGER_WARN(logger, "The game could not write {}", player_profiles::PathForLog(path));
 	}
 	return written;
 }
@@ -115,7 +115,7 @@ bool ProfileFolderSystem::AppendPlayerFile(std::u16string_view player, std::stri
 	const bool written = stream.good();
 	if (const auto logger = spdlog::get("game"); !written && logger != nullptr)
 	{
-		SPDLOG_LOGGER_WARN(logger, "The game could not write {}", path.generic_string());
+		SPDLOG_LOGGER_WARN(logger, "The game could not write {}", player_profiles::PathForLog(path));
 	}
 	return written;
 }
@@ -130,7 +130,7 @@ bool ProfileFolderSystem::EmptyPlayerFolder(std::u16string_view player)
 	const bool emptied = _fileSystem.EmptyFolder(*folder);
 	if (const auto logger = spdlog::get("game"); !emptied && logger != nullptr)
 	{
-		SPDLOG_LOGGER_WARN(logger, "The game could not empty the folder {}", folder->generic_string());
+		SPDLOG_LOGGER_WARN(logger, "The game could not empty the folder {}", player_profiles::PathForLog(*folder));
 	}
 	return emptied;
 }

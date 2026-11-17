@@ -105,6 +105,10 @@ main hash. Its steps:
    Post-merge checks ONCE per batch on the new main branch: `uz_shots.py` pixels old against new (name the car that
    explains each changed scene), server_check Land 1 100/100, net_check mpm_2p_1 with 2 clients for 2000 turns, a
    TwoGods all-computer net_check with 2 observers, plus any car-specific check from its queue line.
+   Also run `scripts/net_plain_check.sh <worktree> <bin folder> <out folder>` once (exit 0 needed). It is the
+   mpm_2p_1 net_check with no `--hash-parts` or `--hash-fields`, so the clients hash as the live clients do. Only
+   this run finds a frame step that changes the synced world (Sentry OPENBLACK-N). The runs with the hash options
+   hash in the turn and do not find it.
 5. Write one "Batch <n>" section in `merge-train_handover.md`. Remove the merge worktree, its build and the local
    batch branch (keep the remote branches). No `rm -rf` on globs.
 

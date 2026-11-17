@@ -64,6 +64,8 @@ public:
 			GivenIndices,
 			GivenSharedVertices,
 			GivenSharedIndices,
+			IndexPage,
+			IndexPageUpdate,
 		};
 		Kind kind;
 		std::vector<uint8_t> bytes;
@@ -144,6 +146,15 @@ public:
 	{
 		Keep(Made::Kind::SharedIndexBuffer, indices);
 		return {static_cast<uint32_t>(_made.size())};
+	}
+	[[nodiscard]] DynamicIndexBufferHandle CreateIndexPage(uint32_t, bool) const override
+	{
+		Keep(Made::Kind::IndexPage, nullptr);
+		return {static_cast<uint32_t>(_made.size())};
+	}
+	void Update(DynamicIndexBufferHandle, uint32_t, const DeviceMemory* indices) const override
+	{
+		Keep(Made::Kind::IndexPageUpdate, indices);
 	}
 	void SetName(IndexBufferHandle, std::string_view) const override {}
 	void SetContentsGivenAgain(IndexBufferHandle) const override { Mark(Made::Kind::GivenIndices); }

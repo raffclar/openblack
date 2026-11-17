@@ -28,6 +28,7 @@
 
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/PlayerProfiles.h"
 #include "Creature/CreatureAttention.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -128,7 +129,8 @@ std::optional<std::vector<uint8_t>> ReadFileIfThere(filesystem::FileSystemInterf
 	}
 	catch (const std::exception& error)
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game could not read {}: {}", path.generic_string(), error.what());
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game could not read {}: {}", player_profiles::PathForLog(path),
+		                   error.what());
 		return std::nullopt;
 	}
 }
@@ -210,8 +212,7 @@ void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
 	    Locator::helpTextSystem::has_value() ? Locator::helpTextSystem::value().GetWords(text) : std::u16string {});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game took picture {} of creature {}: action {}, score {}", *slot,
 	                   entt::to_integral(entity), plan.action, score);
-	if (!player.has_value() || !Locator::rendererRequests::has_value() ||
-	    !creature_web_page::MayAskForPicture(_waiting.size()))
+	if (!player.has_value() || !Locator::rendererRequests::has_value() || !creature_web_page::MayAskForPicture(_waiting.size()))
 	{
 		return;
 	}
@@ -428,16 +429,16 @@ void CreatureWebPageSystem::WritePageFile(const PageJob& job)
 	if (!job.files->MakeFolder(job.playerFolder / creature_web_page::k_PageFolder))
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game could not make the folder {}",
-		                   (job.playerFolder / creature_web_page::k_PageFolder).generic_string());
+		                   player_profiles::PathForLog(job.playerFolder / creature_web_page::k_PageFolder));
 		return;
 	}
 	const auto path = job.playerFolder / job.pageFile;
 	if (job.files->WriteAll(path, AsBytes(linked)))
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the web page of the creature to {}", path.generic_string());
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the web page of the creature to {}", player_profiles::PathForLog(path));
 	}
 	else
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game could not write {}", path.generic_string());
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game could not write {}", player_profiles::PathForLog(path));
 	}
 }

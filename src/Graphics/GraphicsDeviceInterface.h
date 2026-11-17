@@ -125,6 +125,10 @@ public:
 	[[nodiscard]] virtual IndexBufferHandle CreateIndexBuffer(const DeviceMemory* indices, bool wide) const = 0;
 	/// Makes an index buffer in a part of a large buffer, which the device shares between many small buffers
 	[[nodiscard]] virtual DynamicIndexBufferHandle CreateSharedIndexBuffer(const DeviceMemory* indices, bool wide) const = 0;
+	/// Makes an empty index buffer for this count of indices, in which the game writes runs of indices later
+	[[nodiscard]] virtual DynamicIndexBufferHandle CreateIndexPage(uint32_t count, bool wide) const = 0;
+	/// Writes indices into an index buffer, from the first index on
+	virtual void Update(DynamicIndexBufferHandle buffer, uint32_t firstIndex, const DeviceMemory* indices) const = 0;
 	virtual void SetName(IndexBufferHandle buffer, std::string_view name) const = 0;
 	/// Tells the device that the game gives the indices again after the device is made again. The device then keeps no
 	/// copy of the indices.

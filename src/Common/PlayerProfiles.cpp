@@ -183,6 +183,45 @@ std::string ProfileKey(std::u16string_view name)
 	return key;
 }
 
+namespace
+{
+/// Whether the text has the form of a ProfileKey: each part is an underscore and a letter or a digit, or four
+/// lower-case hexadecimal digits
+bool LooksLikeProfileKey(std::string_view text)
+{
+	constexpr size_t k_HexGroup = 4;
+	const auto isPlain = [](char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); };
+	const auto isHex = [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); };
+	size_t at = 0;
+	while (at < text.size())
+	{
+		if (text[at] == '_' && at + 1 < text.size() && isPlain(text[at + 1]))
+		{
+			at += 2;
+		}
+		else if (at + k_HexGroup <= text.size() && std::ranges::all_of(text.substr(at, k_HexGroup), isHex))
+		{
+			at += k_HexGroup;
+		}
+		else
+		{
+			return false;
+		}
+	}
+	return !text.empty();
+}
+} // namespace
+
+std::string PathForLog(const std::filesystem::path& path)
+{
+	std::filesystem::path shown;
+	for (const auto& part : path)
+	{
+		shown /= LooksLikeProfileKey(part.generic_string()) ? std::filesystem::path("<player>") : part;
+	}
+	return shown.generic_string();
+}
+
 bool SameName(std::u16string_view a, std::u16string_view b)
 {
 	return std::ranges::equal(a, b, [](char16_t x, char16_t y) { return FoldCase(x) == FoldCase(y); });

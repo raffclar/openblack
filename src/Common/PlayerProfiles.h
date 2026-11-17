@@ -152,6 +152,9 @@ enum class NameCheck : uint8_t
 [[nodiscard]] std::string ProfileKey(std::u16string_view name);
 /// A profile's folder name stops growing once it is this long, finishing the character it is on
 constexpr size_t k_LongestKey = 252;
+/// The text of a path for the log. The folder of a player has the name of the player in its own name (ProfileKey), so
+/// the text shows "<player>" in place of each part that has the form of a ProfileKey.
+[[nodiscard]] std::string PathForLog(const std::filesystem::path& path);
 
 /// The profile being played, if there is one by its name
 [[nodiscard]] const Profile* Current(const Profiles& profiles);

@@ -443,3 +443,16 @@ TEST(PlayerProfiles, AGameServerKeepsNoProfileAndNoSavedGames)
 	system.StopPlaying(2000);
 	system.CreateProfile(u"Ann", 0);
 }
+
+TEST(PlayerProfiles, ThePathForTheLogHidesTheNameOfThePlayer)
+{
+	const auto key = player_profiles::ProfileKey(u"Zorblax Quillfeather");
+	const std::filesystem::path folder = "/game/tool-files";
+	EXPECT_EQ(player_profiles::PathForLog(folder / key / "Saved Games" / "Pictures"),
+	          "/game/tool-files/<player>/Saved Games/Pictures");
+	// A name with other characters has hexadecimal digits in its key
+	EXPECT_EQ(player_profiles::PathForLog(folder / player_profiles::ProfileKey(u"\u00c9mile") / "C1a2b.erc"),
+	          "/game/tool-files/<player>/C1a2b.erc");
+	EXPECT_EQ(player_profiles::PathForLog(folder / "Profiles.txt"), "/game/tool-files/Profiles.txt");
+	EXPECT_EQ(player_profiles::PathForLog("Saved Games/Land1"), "Saved Games/Land1");
+}

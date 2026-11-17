@@ -16,10 +16,8 @@
 
 #include <LNDFile.h>
 
-#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/VertexBuffer.h"
-#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::graphics;
@@ -44,7 +42,7 @@ void LandBlock::BuildMesh(LandIslandInterface& island, std::span<LandVertex> ver
 	BuildVertexList(vertices, island);
 }
 
-const IndexBuffer* LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coarserSides, bool dropOpenSea) const
+LandBlock::TriangleRun LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coarserSides, bool dropOpenSea) const
 {
 	const size_t set = (static_cast<size_t>(mesh) * 16 + (coarserSides & 0xF)) * 2 + (dropOpenSea ? 1 : 0);
 	auto& triangles = _triangles.at(set);
@@ -58,17 +56,14 @@ const IndexBuffer* LandBlock::GetTriangles(land_detail::Mesh mesh, uint8_t coars
 		std::ranges::transform(_block->cells, flags.begin(), [](const lnd::LNDCell& cell) {
 			return land_detail::CellFlags {.split = cell.properties.split != 0, .openSea = (cell.flags & k_OpenSeaFlag) != 0};
 		});
-		triangles = _triangleSets->Get(
-		    land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, flags), [](std::span<const uint16_t> indices) {
-			    // bgfx keeps a copy: the list is gone before it reads it
-			    const auto* memory = Locator::graphicsDevice::value().Copy(
-			        indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t)));
-			    // The sets come as the camera moves, so they go in the shared buffer and do not make a buffer each
-			    auto buffer = std::make_unique<IndexBuffer>("LandBlockTriangles", memory, IndexBuffer::Type::Uint16,
-			                                                IndexBuffer::Storage::Shared);
+		triangles =
+		    _triangleSets->Get(land_detail::BlockTriangles(mesh, coarserSides, dropOpenSea, flags), [](uint32_t capacity) {
+			    // The sets come as the camera moves. A page holds the sets of many blocks, so that the sets do not use up
+			    // the buffers of the graphics library.
+			    auto page = std::make_unique<IndexBuffer>("LandBlockTriangles", capacity);
 			    // The land gives the indices again after a restore of the device, thus the device keeps no copy
-			    buffer->SetContentsGivenAgain();
-			    return buffer;
+			    page->SetContentsGivenAgain();
+			    return page;
 		    });
 	}
 	return *triangles;
