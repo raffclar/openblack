@@ -37,6 +37,10 @@ public:
 		uint32_t count {0};
 	};
 
+	/// Each run starts at a multiple of this count of indices, thus at a multiple of four bytes. The web device writes
+	/// buffers only at these offsets, and it fills a write of an odd count of indices to four bytes with zeros.
+	static constexpr uint32_t k_Alignment = 2;
+
 	/// Each page has room for this count of indices
 	explicit SharedIndexLists(uint32_t pageCapacity)
 	    : _pageCapacity(pageCapacity)
@@ -65,7 +69,7 @@ public:
 			}
 			const Range range {.page = _pages.back().get(), .first = _used, .count = count};
 			range.page->Write(range.first, std::span<const uint16_t>(indices));
-			_used += count;
+			_used += count + ((k_Alignment - (count % k_Alignment)) % k_Alignment);
 			found = _lists.emplace(std::move(indices), range).first;
 		}
 		return found->second;

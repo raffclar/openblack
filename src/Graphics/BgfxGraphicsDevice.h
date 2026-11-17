@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "BufferPages.h"
 #include "GraphicsDeviceInterface.h"
 
 namespace openblack::graphics
@@ -38,6 +39,7 @@ public:
 	[[nodiscard]] VertexBufferHandle CreateVertexBuffer(const DeviceMemory* vertices, const VertexDecl& decl) const override;
 	[[nodiscard]] DynamicVertexBufferHandle CreateDynamicVertexBuffer(const DeviceMemory* vertices,
 	                                                                  const VertexDecl& decl) const override;
+	[[nodiscard]] DynamicVertexBufferHandle CreateVertexPage(uint32_t count, const VertexDecl& decl) const override;
 	[[nodiscard]] VertexLayoutHandle CreateVertexLayout(const VertexDecl& decl) const override;
 	void Update(DynamicVertexBufferHandle buffer, uint32_t firstVertex, const DeviceMemory* vertices) const override;
 	void SetName(VertexBufferHandle buffer, std::string_view name) const override;
@@ -62,9 +64,11 @@ public:
 	void Destroy(DynamicIndexBufferHandle buffer) const override;
 
 	[[nodiscard]] DeviceDataGivers& GetDataGivers() const override { return _givers; }
+	[[nodiscard]] BufferPages& GetBufferPages() const override { return _pages; }
 
 private:
 	mutable DeviceDataGivers _givers;
+	mutable BufferPages _pages {*this};
 };
 
 } // namespace openblack::graphics

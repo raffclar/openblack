@@ -18,6 +18,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "BufferPages.h"
 #include "Common/MainThreadQueue.h"
 #include "GraphicsDeviceInterface.h"
 #include "Locator.h"
@@ -103,6 +104,17 @@ void IndexBuffer::Make(const void* memory)
 		UploadPacer::Pace(static_cast<uint32_t>(Locator::graphicsDevice::value().Bytes(memBgfx).size()));
 		const bool wide = _type == Type::Uint32;
 		const auto& device = Locator::graphicsDevice::value();
+		if (_storage == Storage::Paged)
+		{
+			assert(!wide);
+			_run = device.GetBufferPages().TakeIndices(memBgfx);
+			// A part with no triangles has no run and draws no triangles
+			if (!_run.has_value() && _count > 0)
+			{
+				SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
+			}
+			return;
+		}
 		if (_storage == Storage::Shared)
 		{
 			// bgfx gives a part of its shared buffer. A name is only for a buffer of its own.
@@ -131,7 +143,11 @@ void IndexBuffer::SetContentsGivenAgain() const
 		{
 			return;
 		}
-		if (_storage == Storage::Shared)
+		if (_storage == Storage::Paged)
+		{
+			Locator::graphicsDevice::value().GetBufferPages().SetGivenAgain(*_run);
+		}
+		else if (_storage == Storage::Shared)
 		{
 			Locator::graphicsDevice::value().SetContentsGivenAgain(_sharedHandle);
 		}
@@ -152,7 +168,11 @@ void IndexBuffer::GiveContentsAgain(std::vector<uint8_t> bytes) const
 		}
 		const auto& device = Locator::graphicsDevice::value();
 		const auto* memory = device.Copy(bytes.data(), static_cast<uint32_t>(bytes.size()));
-		if (_storage == Storage::Shared)
+		if (_storage == Storage::Paged)
+		{
+			device.GetBufferPages().Write(*_run, 0, memory);
+		}
+		else if (_storage == Storage::Shared)
 		{
 			device.GiveContentsAgain(_sharedHandle, memory);
 		}
@@ -166,6 +186,10 @@ void IndexBuffer::GiveContentsAgain(std::vector<uint8_t> bytes) const
 IndexBuffer::~IndexBuffer()
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "IndexBuffer::~IndexBuffer");
+	if (_run.has_value())
+	{
+		Locator::graphicsDevice::value().GetBufferPages().Give(*_run);
+	}
 	if (IsValidHandle(_handle))
 	{
 		Locator::graphicsDevice::value().Destroy(_handle);
@@ -193,5 +217,14 @@ uint32_t IndexBuffer::GetTypeSize(Type type)
 
 bool IndexBuffer::IsValid() const noexcept
 {
-	return _storage == Storage::Shared ? IsValidHandle(_sharedHandle) : IsValidHandle(_handle);
+	switch (_storage)
+	{
+	case Storage::Paged:
+		return _run.has_value();
+	case Storage::Shared:
+		return IsValidHandle(_sharedHandle);
+	case Storage::Own:
+		break;
+	}
+	return IsValidHandle(_handle);
 }
