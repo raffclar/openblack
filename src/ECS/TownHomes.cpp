@@ -228,6 +228,7 @@ bool town_homes::AddVillagerToTown(Registry& registry, const Homes& homes, entt:
 	}
 	auto& person = registry.Get<Villager>(villager);
 	person.town = town;
+	registry.TownMembersChanged();
 	const auto abode = person.abode;
 	if (abode == entt::null || TownOfAbode(registry, abode) != town)
 	{
@@ -444,6 +445,7 @@ void town_homes::RemoveVillagerFromTown(Registry& registry, const Homes& homes, 
 		homes.leavingWorship(villager);
 	}
 	registry.Get<Villager>(villager).town = entt::null;
+	registry.TownMembersChanged();
 	if (auto* data = TownData(registry, town); data != nullptr)
 	{
 		uint32_t people = 0;
@@ -478,6 +480,7 @@ void town_homes::RemoveDeadVillager(Registry& registry, entt::entity villager)
 		std::erase(town->homelessVillagers, villager);
 	}
 	person.town = entt::null;
+	registry.TownMembersChanged();
 }
 
 void town_homes::MoveInAnyway(Registry& registry, const Homes& homes, entt::entity abode, entt::entity villager)
