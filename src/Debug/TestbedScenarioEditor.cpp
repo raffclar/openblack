@@ -241,6 +241,20 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_cursed",
+	    .name = "The cursed places of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 1 and the game loads it. Fly from the "
+	                   "start area to the high ground far from the town, where the cursed places are.",
+	    .expected = "One to three cursed places stand on high ground, far from the town. Each place has groups of "
+	                "burnt trees and one to three stacks of dark mist over a clump of boulders. Some places have one "
+	                "or two craters with a puff of grey smoke. The ground of a place is the ground of the land round it.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_cliffs",
 	    .name = "The terraces, cliffs and shore of a generated land",
 	    .facet = Facet::Editor,

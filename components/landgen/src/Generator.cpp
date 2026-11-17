@@ -15,6 +15,7 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <utility>
 
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
@@ -374,6 +375,18 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                 .rivers = &rivers},
 	                                seed, settings.features);
 	clock.Done("features");
+	auto cursed = cursed::Place({.biomes = land.biomes,
+	                             .heights = heights,
+	                             .seaDistance = seaDistance,
+	                             .keepClear = keepClear,
+	                             .clearings = clearings,
+	                             .townX = land.start.x,
+	                             .townZ = land.start.z,
+	                             .rivers = &rivers},
+	                            land.features, seed, settings.cursed);
+	land.cursedPatches = std::move(cursed.patches);
+	land.mists = std::move(cursed.mists);
+	clock.Done("cursed places");
 
 	// The temple and the town on the start area, then the forests nearest the town first
 	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);

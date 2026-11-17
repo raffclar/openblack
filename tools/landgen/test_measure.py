@@ -115,6 +115,22 @@ class GroupMeasures(unittest.TestCase):
         self.assertAlmostEqual(out["rock_clumps_per_km2"], 2.0)
 
 
+class CursedMeasures(unittest.TestCase):
+    def test_things_within_the_link_are_one_place(self):
+        things = [[0, 0], [100, 0], [200, 0], [2000, 0]]
+        out = measure.cursed_measures(things, 2)
+        self.assertEqual(out["cursed_patches"], 2)
+        self.assertEqual(out["dark_mists"], 2)
+        self.assertEqual(measure.cursed_measures([], 0)["cursed_patches"], 0)
+
+    def test_only_dark_mists_are_cursed(self):
+        self.assertTrue(measure.is_dark(0xC90A0400))
+        self.assertTrue(measure.is_dark(0xAC212B29))
+        self.assertTrue(measure.is_dark(0x6D505050))
+        self.assertFalse(measure.is_dark(0x80808080))
+        self.assertFalse(measure.is_dark(0x7E50632F))
+
+
 class Comparison(unittest.TestCase):
     def test_the_status_of_a_number(self):
         self.assertEqual(measure.status_of(5, (1, 10)), "ok")
@@ -138,19 +154,25 @@ class Dump(unittest.TestCase):
         dump = {"side": side, "altitude": altitude, "water": [0] * 16, "country": country, "countries": [table],
                 "surfaces": [0, 3], "features": [[0, 8, 5.0, 5.0, 0.0, 1.0, 1.0, 1], [1, 3, 6.0, 6.0, 0.0, 1.0, 1.0, 0],
                                                  [1, 36, 7.0, 7.0, 0.0, 1.0, 1.0, 0, 0.2, -0.4, 0.3],
-                                                 [3, 42, 8.0, 8.0, 0.0, 1.0, 1.0, 0, 0.0, 0.0, 0.0]],
-                "forests": [[1, 5.0, 5.0]], "footpaths": 0, "mists": [], "towns": 1}
+                                                 [3, 42, 8.0, 8.0, 0.0, 1.0, 1.0, 0, 0.0, 0.0, 0.0],
+                                                 [0, 22, 900.0, 900.0, 0.0, 1.0, 1.0, 0],
+                                                 [3, 74, 1000.0, 900.0, 0.0, 4.0, 4.0, 0, 0.0, 0.0, 0.0]],
+                "forests": [[1, 5.0, 5.0]], "footpaths": 0, "towns": 1,
+                "mists": [[1000.0, 900.0, 0.0, 0x6D505050, 0.58, 2.64], [5.0, 5.0, 0.0, 0x80808080, 1.0, 1.0]]}
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "seed1.json")
             with open(path, "w", encoding="utf-8") as handle:
                 json.dump(dump, handle)
             model = measure.load_dump(path)
         self.assertEqual(int(model["land"].sum()), 4)
-        self.assertEqual(model["trees"], [(5.0, 5.0, "Palm", True)])
+        self.assertEqual(model["trees"], [(5.0, 5.0, "Palm", True), (900.0, 900.0, "Burnt", False)])
         self.assertEqual(model["rocks"], [(7.0, 7.0)])
         self.assertEqual(model["rock_poses"], [(0.4, 0.3)])
         self.assertEqual(model["pillars"], [(8.0, 8.0)])
         self.assertTrue(model["sand"][1, 1])
+        self.assertEqual(model["mists"], 2)
+        self.assertEqual(model["dark_mists"], 1)
+        self.assertEqual(len(model["cursed_things"]), 3)
 
 
 if __name__ == "__main__":

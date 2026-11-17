@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <landgen/Cursed.h>
 #include <landgen/Features.h>
 #include <landgen/Generator.h>
 
@@ -467,6 +468,251 @@ TEST(LandgenFeatures, SpikyPillarsStandInGroupsOnTheBeach)
 		total += pillars.size();
 	}
 	EXPECT_GE(total, 3u);
+}
+
+namespace
+{
+/// A fake land for the cursed places: alpine ground at 60 m, 400 m from the sea, with the town at the middle. The
+/// first columns are sea.
+struct CursedLand
+{
+	static constexpr int k_Side = 160;
+	static constexpr int k_SeaColumns = 20;
+	Grid<Biome> biomes {k_Side, Biome::Alpine};
+	Grid<float> heights {k_Side, 90.0f};
+	Grid<float> sea {k_Side, 40.0f};
+	Grid<uint8_t> keepClear {k_Side, 0};
+
+	CursedLand()
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			for (int x = 0; x < k_SeaColumns; ++x)
+			{
+				biomes.At(x, z) = Biome::Sea;
+				heights.At(x, z) = 0.0f;
+				sea.At(x, z) = 0.0f;
+			}
+		}
+	}
+
+	[[nodiscard]] features::Ground Ground() const
+	{
+		return {.biomes = biomes,
+		        .heights = heights,
+		        .seaDistance = sea,
+		        .keepClear = keepClear,
+		        .clearings = {},
+		        .townX = k_Side / 2.0f,
+		        .townZ = k_Side / 2.0f};
+	}
+};
+
+bool IsVolcanicBoulder(const features::Feature& feature)
+{
+	using features::RockShape;
+	using features::RockType;
+	using features::Stone;
+	return feature.kind == features::Kind::Static && (feature.type == RockType(RockShape::Boulder1, Stone::Volcanic) ||
+	                                                  feature.type == RockType(RockShape::Boulder2, Stone::Volcanic) ||
+	                                                  feature.type == RockType(RockShape::Boulder3, Stone::Volcanic));
+}
+
+bool IsCrater(const features::Feature& feature)
+{
+	return feature.kind == features::Kind::Feature && feature.type == cursed::k_CraterFeature;
+}
+
+bool IsBurnt(const features::Feature& feature)
+{
+	return feature.kind == features::Kind::Tree && feature.type == static_cast<uint8_t>(features::Tree::Burnt);
+}
+} // namespace
+
+TEST(LandgenCursed, MostLandsHaveOnePlaceAndSomeHaveThree)
+{
+	const cursed::Settings settings;
+	EXPECT_EQ(cursed::PatchCount(0.0f, settings), 1u);
+	EXPECT_EQ(cursed::PatchCount(0.5f, settings), 1u);
+	EXPECT_EQ(cursed::PatchCount(0.7f, settings), 2u);
+	EXPECT_EQ(cursed::PatchCount(0.999f, settings), 3u);
+	EXPECT_EQ(cursed::PatchCount(0.5f, {.fewest = 0, .most = 0}), 0u);
+}
+
+TEST(LandgenCursed, PlacesKeepFarFromTheTownTheSeaAndEachOther)
+{
+	const CursedLand land;
+	const auto ground = land.Ground();
+	const cursed::Settings settings;
+	const float town = CursedLand::k_Side * 5.0f;
+	size_t patches = 0;
+	for (uint64_t seed = 1; seed <= 12; ++seed)
+	{
+		std::vector<features::Feature> placed;
+		const auto result = cursed::Place(ground, placed, seed, settings);
+		ASSERT_GE(result.patches.size(), 1u);
+		ASSERT_LE(result.patches.size(), 3u);
+		patches += result.patches.size();
+		for (size_t i = 0; i < result.patches.size(); ++i)
+		{
+			const auto& patch = result.patches[i];
+			EXPECT_GE(patch.radius, settings.smallestRadius);
+			EXPECT_LE(patch.radius, settings.largestRadius);
+			EXPECT_GE(std::hypot(patch.x - town, patch.z - town), settings.nearestTown + patch.radius);
+			for (size_t j = 0; j < i; ++j)
+			{
+				const auto& other = result.patches[j];
+				EXPECT_GE(std::hypot(patch.x - other.x, patch.z - other.z), patch.radius + other.radius + settings.gap);
+			}
+		}
+		// Nothing of a cursed place stands in the sea
+		for (const auto& feature : placed)
+		{
+			EXPECT_GE(feature.x, CursedLand::k_SeaColumns * 10.0f);
+		}
+	}
+	EXPECT_GT(patches, 12u);
+}
+
+TEST(LandgenCursed, EachPlaceHasTheThingsOfTheStory)
+{
+	const CursedLand land;
+	const auto ground = land.Ground();
+	for (uint64_t seed = 1; seed <= 12; ++seed)
+	{
+		std::vector<features::Feature> placed;
+		const auto result = cursed::Place(ground, placed, seed, {});
+		uint32_t stacks = 0;
+		uint32_t craters = 0;
+		uint32_t burnt = 0;
+		for (const auto& patch : result.patches)
+		{
+			EXPECT_GE(patch.stacks, 1u);
+			EXPECT_LE(patch.stacks, 3u);
+			EXPECT_LE(patch.craters, 2u);
+			EXPECT_GE(patch.burntTrees, 10u);
+			EXPECT_LE(patch.burntTrees, 40u);
+			stacks += patch.stacks;
+			craters += patch.craters;
+			burnt += patch.burntTrees;
+		}
+		// Three puffs for each stack and one puff of smoke for each crater
+		EXPECT_EQ(result.mists.size(), (stacks * 3) + craters);
+		EXPECT_EQ(std::ranges::count_if(placed, IsCrater), craters);
+		EXPECT_EQ(std::ranges::count_if(placed, IsBurnt), burnt);
+		for (const auto& mist : result.mists)
+		{
+			// The near black mist of the first land, the dark mist of the fourth and the grey smoke of the fifth
+			const auto colour = mist.colour & 0xFFFFFFu;
+			EXPECT_TRUE(colour == 0x0A0400u || colour == 0x212B29u || colour == 0x505050u);
+			if (colour == 0x505050u)
+			{
+				EXPECT_FLOAT_EQ(mist.edgeShrink, 2.642276f);
+				// The smoke is at the middle of a crater
+				EXPECT_TRUE(std::ranges::any_of(placed, [&mist](const auto& feature) {
+					return IsCrater(feature) && feature.x == mist.x && feature.z == mist.z;
+				}));
+			}
+		}
+		for (const auto& patch : result.patches)
+		{
+			// Each stack of the fourth land has its seven volcanic boulders
+			const auto boulders = std::ranges::count_if(placed, [&patch](const auto& feature) {
+				return IsVolcanicBoulder(feature) && std::hypot(feature.x - patch.x, feature.z - patch.z) <= patch.radius;
+			});
+			EXPECT_EQ(boulders, patch.stack == cursed::Stack::Volcanic ? patch.stacks * 7 : 0);
+		}
+	}
+}
+
+TEST(LandgenCursed, AStackOrACraterClearsTheFeaturesInItsWay)
+{
+	const CursedLand land;
+	const auto ground = land.Ground();
+	// Small rocks every 5 m over the whole land
+	std::vector<features::Feature> rocks;
+	for (int x = 0; x < CursedLand::k_Side * 2; ++x)
+	{
+		for (int z = 0; z < CursedLand::k_Side * 2; ++z)
+		{
+			rocks.push_back({.kind = features::Kind::Static,
+			                 .type = features::k_PlainRockStatic,
+			                 .x = (static_cast<float>(x) * 5.0f) + 2.5f,
+			                 .z = (static_cast<float>(z) * 5.0f) + 2.5f,
+			                 .angle = 0.0f,
+			                 .size = 0.5f,
+			                 .maxSize = 0.5f});
+		}
+	}
+	for (uint64_t seed = 1; seed <= 6; ++seed)
+	{
+		auto placed = rocks;
+		const auto result = cursed::Place(ground, placed, seed, {});
+		for (const auto& crater : placed)
+		{
+			if (!IsCrater(crater))
+			{
+				continue;
+			}
+			// Only the crater is near its middle
+			EXPECT_EQ(std::ranges::count_if(placed,
+			                                [&crater](const auto& feature) {
+				                                return std::hypot(feature.x - crater.x, feature.z - crater.z) < 20.0f;
+			                                }),
+			          1);
+		}
+		// No plain rock is left among the boulders of a stack
+		for (const auto& mist : result.mists)
+		{
+			if ((mist.colour & 0xFFFFFFu) == 0x505050u)
+			{
+				continue;
+			}
+			EXPECT_FALSE(std::ranges::any_of(placed, [&mist](const auto& feature) {
+				return feature.type == features::k_PlainRockStatic && std::hypot(feature.x - mist.x, feature.z - mist.z) < 5.0f;
+			}));
+		}
+	}
+}
+
+TEST(LandgenCursed, TheSameSeedGivesTheSamePlaces)
+{
+	const CursedLand land;
+	const auto ground = land.Ground();
+	std::vector<features::Feature> first;
+	std::vector<features::Feature> second;
+	const auto a = cursed::Place(ground, first, 9, {});
+	const auto b = cursed::Place(ground, second, 9, {});
+	ASSERT_EQ(a.patches.size(), b.patches.size());
+	ASSERT_EQ(a.mists.size(), b.mists.size());
+	ASSERT_EQ(first.size(), second.size());
+	for (size_t i = 0; i < first.size(); ++i)
+	{
+		EXPECT_EQ(first[i].type, second[i].type);
+		EXPECT_EQ(first[i].x, second[i].x);
+		EXPECT_EQ(first[i].z, second[i].z);
+	}
+}
+
+TEST(LandgenCursed, BurntTreesStayInNoForest)
+{
+	std::vector<features::Feature> placed;
+	for (int i = 0; i < 20; ++i)
+	{
+		placed.push_back({.kind = features::Kind::Tree,
+		                  .type = static_cast<uint8_t>(i % 2 == 0 ? features::Tree::Burnt : features::Tree::Oak),
+		                  .x = 10.0f + static_cast<float>(i),
+		                  .z = 10.0f,
+		                  .angle = 0.0f,
+		                  .size = 1.0f,
+		                  .maxSize = 1.0f});
+	}
+	const auto forests = features::GroupForests(placed, 0.0f, 0.0f, {.square = 120.0f, .fewest = 5, .most = 4});
+	ASSERT_EQ(forests.size(), 1u);
+	for (const auto& feature : placed)
+	{
+		EXPECT_EQ(feature.forest, IsBurnt(feature) ? 0u : 1u);
+	}
 }
 
 TEST(LandgenGenerator, CellsTakeTheirWaterAndSoundFromTheirCorners)
