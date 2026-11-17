@@ -26,6 +26,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -311,10 +312,10 @@ entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic:
 	{
 		return entt::null;
 	}
-	// The import makes only the miracles that keep all their state in these values: the fireball, the lightning, the
-	// beam explosion, food, wood and water. The other kinds keep more values in the file.
+	// The forest, the shields and the teleport keep their state in the things that they made: the trees, the domes and
+	// the stones. The import does not make these things, so it does not make these kinds of spell.
 	const auto kind = magic::ClassOf(cast.type);
-	if (kind != magic::SpellClass::General && kind != magic::SpellClass::Resource && kind != magic::SpellClass::Water)
+	if (kind == magic::SpellClass::Forest || kind == magic::SpellClass::Shield || kind == magic::SpellClass::Teleport)
 	{
 		return entt::null;
 	}
@@ -326,7 +327,17 @@ entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic:
 	    .duration = cast.duration,
 	    .maxObjectsToCreate = -1,
 	};
-	const auto spell = MakeSpell(cast.type, caster, cast.position, data, cast.processInfo);
+	// The effect continues from its state in the file. When that state does not agree with the particle file, the
+	// effect starts from its start.
+	auto spell = MakeSpell(cast.type, caster, cast.position, data, cast.processInfo, cast.effect);
+	const bool restored = spell != entt::null && cast.effect != nullptr;
+	if (spell == entt::null && cast.effect != nullptr)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"),
+		                   "The saved effect of the spell of creature {} does not start, so it starts again",
+		                   entt::to_integral(creature));
+		spell = MakeSpell(cast.type, caster, cast.position, data, cast.processInfo);
+	}
 	if (spell == entt::null)
 	{
 		return entt::null;
@@ -338,12 +349,51 @@ entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic:
 	made.age = cast.age;
 	made.resourceFirstDone = cast.firstDone.value_or(false);
 	made.lastRipple = cast.lastRipple.value_or(0.0f);
+	// A creature spell acts on its creature. The saved effect knows the creature already.
+	if (kind == magic::SpellClass::Creature && registry.Valid(cast.target))
+	{
+		made.target = cast.target;
+		if (!restored)
+		{
+			AddEffectTarget(made, cast.target);
+		}
+	}
+	// A new effect of the heal takes the people near the spell, as at the cast
+	if (kind == magic::SpellClass::Heal && !restored)
+	{
+		static_cast<void>(magic::spells::Start(*this, made));
+	}
+	// A flock continues with its flock, its animals and its sweep
+	if ((kind == magic::SpellClass::FlockFlying || kind == magic::SpellClass::FlockGround) && cast.flock.has_value())
+	{
+		_flocks.Resume(*this, made,
+		               FlockSpell {.flock = cast.flock->flock,
+		                           .created = cast.flock->created,
+		                           .emitted = cast.flock->emitted,
+		                           .lastSpawn = cast.flock->lastSpawn,
+		                           .lastSpawnHeight = cast.flock->lastSpawnHeight,
+		                           .closedDown = cast.closedDown});
+	}
 	_creatureCasts.insert_or_assign(creature, spell);
 	if (cast.closedDown)
 	{
 		CloseDown(spell);
 	}
 	return spell;
+}
+
+void MagicSystem::ImportCreatureCastBeams(entt::entity creature, const std::array<uint32_t, 2>& beams)
+{
+	if (!Locator::effectRequestSystem::has_value() || !Entities().Valid(creature))
+	{
+		return;
+	}
+	const auto& effects = Locator::effectRequestSystem::value();
+	if (std::ranges::none_of(beams, [&effects](uint32_t beam) { return effects.IsRunning(beam); }))
+	{
+		return;
+	}
+	_creatureBeams.insert_or_assign(creature, beams);
 }
 
 entt::entity MagicSystem::CreatureCastOf(entt::entity creature) const

@@ -9,17 +9,20 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
@@ -51,7 +54,7 @@ public:
 		return handle;
 	}
 	void Move(EffectHandle, glm::vec3) override {}
-	void Stop(EffectHandle) override {}
+	void Stop(EffectHandle handle) override { stopped.push_back(handle); }
 	void Remove(EffectHandle) override {}
 	void RemoveOwnedBy(entt::entity) override {}
 	void SetPlayer(EffectHandle, int) override {}
@@ -80,6 +83,8 @@ public:
 	bool Renumber(EffectHandle, EffectHandle) override { return false; }
 
 	EffectLifeListener* listener {nullptr};
+	/// The effects that were told to stop
+	std::vector<EffectHandle> stopped;
 };
 
 class CreatureHeldCastImport: public ::testing::Test
@@ -167,16 +172,93 @@ TEST_F(CreatureHeldCastImport, TheCreatureHoldsTheSpellWithTheValuesOfTheFile)
 	EXPECT_FALSE(made.closedDown);
 }
 
-// The import makes no spell of a kind that keeps more values in the file, such as the heal
-TEST_F(CreatureHeldCastImport, TheImportMakesNoSpellOfAKindWithMoreValues)
+// The import makes no forest, shield or teleport, which keep their state in the things that they made. It makes the
+// heal and the storm, which keep their state in the spell.
+TEST_F(CreatureHeldCastImport, TheImportMakesNoSpellThatKeepsItsStateInItsThings)
 {
-	auto heal = Water();
-	heal.type = MagicType::Heal;
-	EXPECT_TRUE(_magic->ImportCreatureCast(_creature, heal) == entt::null);
-	EXPECT_TRUE(_magic->CreatureCastOf(_creature) == entt::null);
+	for (const auto type : {MagicType::Forest, MagicType::Shield, MagicType::PhysicalShield, MagicType::Teleport})
+	{
+		auto cast = Water();
+		cast.type = type;
+		EXPECT_TRUE(_magic->ImportCreatureCast(_creature, cast) == entt::null) << static_cast<int>(type);
+		EXPECT_TRUE(_magic->CreatureCastOf(_creature) == entt::null) << static_cast<int>(type);
+	}
 	auto none = Water();
 	none.type = MagicType::None;
 	EXPECT_TRUE(_magic->ImportCreatureCast(_creature, none) == entt::null);
+	for (const auto type : {MagicType::Heal, MagicType::StormWindRain, MagicType::Tornado})
+	{
+		auto cast = Water();
+		cast.type = type;
+		cast.lastRipple = std::nullopt;
+		const auto spell = _magic->ImportCreatureCast(_creature, cast);
+		ASSERT_TRUE(spell != entt::null) << static_cast<int>(type);
+		EXPECT_EQ(SpellOf(spell).magicType, type);
+		EXPECT_EQ(SpellOf(spell).age, 3.25f);
+		EXPECT_EQ(_magic->CreatureCastOf(_creature), spell);
+	}
+}
+
+// A creature spell of the file acts on the creature that the file gives
+TEST_F(CreatureHeldCastImport, ACreatureSpellActsOnItsCreature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto other = registry.Create();
+	registry.Assign<Creature>(other, Creature {.owner = PlayerNames::PLAYER_TWO});
+	auto cast = Water();
+	cast.type = MagicType::CreatureSpellStrong;
+	cast.duration = -1.0f;
+	cast.lastRipple = std::nullopt;
+	cast.target = other;
+	const auto spell = _magic->ImportCreatureCast(_creature, cast);
+	ASSERT_TRUE(spell != entt::null);
+	EXPECT_EQ(SpellOf(spell).target, other);
+	EXPECT_EQ(SpellOf(spell).duration, -1.0f);
+}
+
+// A flock spell continues with the flock, the animals and the sweep of the file. The trail of the hand does not start
+// again.
+TEST_F(CreatureHeldCastImport, AFlockSpellContinuesWithItsFlockAndItsSweep)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto flock = registry.Create();
+	auto cast = Water();
+	cast.type = MagicType::FlockFlying;
+	cast.lastRipple = std::nullopt;
+	cast.flock = magic::ImportedFlock {
+	    .flock = flock, .created = 4, .emitted = 4.5f, .lastSpawn = {0x10000, 0x20000}, .lastSpawnHeight = 3.0f};
+	const auto spell = _magic->ImportCreatureCast(_creature, cast);
+	ASSERT_TRUE(spell != entt::null);
+	const auto* data = registry.TryGet<const FlockSpell>(spell);
+	ASSERT_NE(data, nullptr);
+	EXPECT_EQ(data->flock, flock);
+	EXPECT_EQ(data->created, 4);
+	EXPECT_EQ(data->emitted, 4.5f);
+	EXPECT_EQ(data->lastSpawn, glm::ivec2(0x10000, 0x20000));
+	EXPECT_EQ(data->lastSpawnHeight, 3.0f);
+	EXPECT_EQ(data->castEffect, 0u);
+	EXPECT_TRUE(data->castEffectStarted);
+	EXPECT_FALSE(data->closedDown);
+}
+
+// The beams from the hands of the file follow the creature until it lets go of its spell
+TEST_F(CreatureHeldCastImport, TheBeamsOfTheFileStopWhenTheCreatureLetsGo)
+{
+	auto& effects = Locator::effectRequestSystem::value();
+	const auto left = effects.Start({.type = SpotVisualType::MagicBeam, .owner = _creature});
+	const auto right = effects.Start({.type = SpotVisualType::MagicBeam, .owner = _creature});
+	ASSERT_TRUE(effects.IsRunning(left));
+	ASSERT_TRUE(effects.IsRunning(right));
+	auto food = Water();
+	food.type = MagicType::Food;
+	food.duration = -1.0f;
+	food.lastRipple = std::nullopt;
+	ASSERT_TRUE(_magic->ImportCreatureCast(_creature, food) != entt::null);
+	_magic->ImportCreatureCastBeams(_creature, {left, right});
+	EXPECT_TRUE(_effects.stopped.empty());
+	_magic->ReleaseCreatureCast(_creature);
+	EXPECT_NE(std::ranges::find(_effects.stopped, left), _effects.stopped.end());
+	EXPECT_NE(std::ranges::find(_effects.stopped, right), _effects.stopped.end());
 }
 
 // A spell that lasts only while the creature holds it stops when the creature lets go. A closed spell of the file

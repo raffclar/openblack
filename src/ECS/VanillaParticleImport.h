@@ -73,6 +73,10 @@ struct ReadResult
 	std::string why;
 };
 [[nodiscard]] ReadResult ReadEffect(const gamesave::VanillaWorld& world, uint32_t system, const EntityOf& entityOf);
+/// The particle system with this number of the spell with the number spell, or the reason why the import cannot take
+/// it. The effect belongs to that spell or to no miracle. The spell steps this effect and gets its events.
+[[nodiscard]] ReadResult ReadSpellEffect(const gamesave::VanillaWorld& world, uint32_t system, uint32_t spell,
+                                         const EntityOf& entityOf);
 
 /// The particle containers of the file, the oldest first, as the game steps them. A container that the import cannot
 /// take goes to the skipped list with the reason.

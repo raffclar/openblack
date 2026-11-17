@@ -41,6 +41,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
@@ -95,6 +96,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingCircles.h"
+#include "ECS/VanillaParticleImport.h"
 #include "ECS/VanillaPlayerImport.h"
 #include "ECS/VanillaReactionImport.h"
 #include "ECS/VanillaScriptImport.h"
@@ -112,6 +114,7 @@ using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace world_import = openblack::ecs::vanilla_world_import;
 namespace vanilla_reaction_import = openblack::ecs::vanilla_reaction_import;
+namespace particle_import = openblack::ecs::vanilla_particle_import;
 using openblack::ecs::systems::vanilla_import::EntityOf;
 using openblack::ecs::systems::vanilla_import::GroundPosition;
 using openblack::ecs::systems::vanilla_import::PutMoveTag;
@@ -1753,15 +1756,40 @@ void SaveGameSystem::ImportVanillaPlayers(const gamesave::VanillaWorld& world)
 namespace
 {
 
+/// The reaction to a spell that a creature holds. The spell is as impressive as the table of its magic type says. It is
+/// as strong as it is now, and the creature that cast it does not react to it.
+std::optional<vanilla_reaction_import::Initiator> SpellInitiatorOf(const ecs::Registry& registry, entt::entity entity)
+{
+	const auto& spell = registry.Get<const Spell>(entity);
+	if (!Locator::infoConstants::has_value() || !Locator::magicSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& effect = magic::GetMagicEffectInfo(Locator::infoConstants::value(), spell.magicType);
+	return vanilla_reaction_import::Initiator {
+	    .entity = entity,
+	    .position = spell.position,
+	    .impressiveValue = effect.impressiveValue,
+	    .strength = Locator::magicSystem::value().SpellStrength(entity),
+	    .magicType = spell.magicType,
+	    .casterCreature = spell.caster.kind == SpellCaster::Kind::Creature ? spell.caster.entity : entt::null,
+	    .balance = ReactionSystemInterface::Balance::Miracles,
+	};
+}
+
 /// The thing that the living react to, as the import made it. None when the import did not make it, or when another
-/// system keeps the reaction of the thing: a fire, a miracle, a shield, a teleport stone or the control of a missionary.
-/// The import makes none of these.
+/// system keeps the reaction of the thing: a fire, a shield, a teleport stone or the control of a missionary. The import
+/// makes none of these. The only spells that the import makes are the spells that creatures hold.
 std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registry& registry, entt::entity entity)
 {
 	if (entity == entt::null || !registry.Valid(entity) ||
-	    registry.AnyOf<Fire, Spell, MagicShield, TeleportStone, MissionaryControl>(entity))
+	    registry.AnyOf<Fire, MagicShield, TeleportStone, MissionaryControl>(entity))
 	{
 		return std::nullopt;
+	}
+	if (registry.AllOf<Spell>(entity))
+	{
+		return SpellInitiatorOf(registry, entity);
 	}
 	const auto* transform = registry.TryGet<const Transform>(entity);
 	if (transform == nullptr)
@@ -1786,19 +1814,35 @@ std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registr
 
 } // namespace
 
-void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world, VanillaMade& made)
+void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world, VanillaMade& made,
+                                            const VanillaEffects& effects)
 {
 	if (!_vanilla.has_value() || !Locator::magicSystem::has_value())
 	{
 		return;
 	}
+	auto& registry = Locator::entitiesRegistry::value();
 	auto& magicSystem = Locator::magicSystem::value();
+	const auto entityOf = [&made](uint32_t number) { return EntityOf(made, number); };
 	for (const auto& creature : _vanilla->creatures)
 	{
 		const auto entity = EntityOf(made, creature.number);
-		const auto number = gamesave::NumberOf(creature.object.creature.spellVisuals[0].key);
-		if (entity == entt::null || !number.has_value())
+		if (entity == entt::null)
 		{
+			continue;
+		}
+		// The beams from its hands of a cast from above, its left hand first
+		std::array<uint32_t, 2> beams {};
+		for (size_t hand = 0; hand < beams.size(); ++hand)
+		{
+			const auto number = gamesave::NumberOf(creature.object.creature.handParticles.at(hand).key);
+			const auto found = number.has_value() ? effects.find(*number) : effects.end();
+			beams.at(hand) = found != effects.end() ? found->second : 0;
+		}
+		const auto number = gamesave::NumberOf(creature.object.creature.spellVisuals[0].key);
+		if (!number.has_value())
+		{
+			magicSystem.ImportCreatureCastBeams(entity, beams);
 			continue;
 		}
 		const auto* record = world.Record(*number);
@@ -1807,6 +1851,7 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 		{
 			SPDLOG_LOGGER_WARN(ImportLog(), "The creature {} of the file holds the object {}, which is not a spell",
 			                   creature.number, *number);
+			magicSystem.ImportCreatureCastBeams(entity, beams);
 			continue;
 		}
 		if (file->creator != creature.number)
@@ -1819,7 +1864,7 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 		const auto handPoint = [](const std::array<float, 3>& point) { return glm::vec3(point[0], point[1], point[2]); };
 		const bool fromAbove = Locator::infoConstants::has_value() &&
 		                       magic::IsCreatureCastFromAbove(Locator::infoConstants::value(), file->magicType);
-		const magic::ImportedCast cast {
+		magic::ImportedCast cast {
 		    .type = file->magicType,
 		    .position = GroundPosition(file->position),
 		    .chants = file->chants,
@@ -1835,8 +1880,34 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 		                    .enabled = file->casting},
 		    .firstDone = file->firstDone,
 		    .lastRipple = file->lastRipple,
+		    .target = file->target.has_value() ? EntityOf(made, *file->target) : entt::null,
 		};
+		if (file->flock.has_value())
+		{
+			cast.flock = magic::ImportedFlock {
+			    .flock = EntityOf(made, file->flock->flock),
+			    .created = file->flock->created,
+			    .emitted = file->flock->emitted,
+			    .lastSpawn = {file->flock->lastSpawnX, file->flock->lastSpawnZ},
+			    .lastSpawnHeight = file->flock->lastSpawnHeight,
+			};
+		}
+		// The effect of the spell continues from its state in the file
+		if (file->system != 0)
+		{
+			const auto effect = particle_import::ReadSpellEffect(world, file->system, file->number, entityOf);
+			if (effect.effect.has_value())
+			{
+				cast.effect = std::make_shared<particles::RestoredEffect>(effect.effect->state);
+			}
+			else
+			{
+				SPDLOG_LOGGER_WARN(ImportLog(), "The import does not take the effect of the spell {}: {}", file->number,
+				                   effect.why);
+			}
+		}
 		const auto spell = magicSystem.ImportCreatureCast(entity, cast);
+		magicSystem.ImportCreatureCastBeams(entity, beams);
 		if (spell == entt::null)
 		{
 			SPDLOG_LOGGER_WARN(ImportLog(), "The spell {} of magic type {} that the creature {} holds is not made",
@@ -1847,6 +1918,42 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 		SPDLOG_LOGGER_INFO(
 		    ImportLog(), "The creature {} holds the spell {} of magic type {} again: time {} of {} seconds, size {}",
 		    creature.number, file->number, static_cast<int>(file->magicType), file->age, file->duration, file->magnitude);
+	}
+	// Each creature spell that a creature of the file has, or waits for, takes its spell
+	for (const auto& creature : _vanilla->creatures)
+	{
+		const auto entity = EntityOf(made, creature.number);
+		auto* spells = entity != entt::null ? registry.TryGet<CreatureSpells>(entity) : nullptr;
+		if (spells == nullptr)
+		{
+			continue;
+		}
+		const auto spellOf = [&made](const gamesave::ObjectRef& ref) {
+			const auto number = gamesave::NumberOf(ref.key);
+			return number.has_value() ? EntityOf(made, *number) : entt::null;
+		};
+		const auto& file = creature.object.creature;
+		for (size_t i = 0; i < file.spells.size() && i < spells->spells.slots.size(); ++i)
+		{
+			if (const auto spell = spellOf(file.spells.at(i).miracle); spell != entt::null)
+			{
+				spells->spells.slots.at(i).miracle = spell;
+			}
+		}
+		// The load of the creature keeps only the waiting spells of a known kind, in the order of the file
+		size_t waiting = 0;
+		for (const auto& queued : file.queued)
+		{
+			if (queued.spell >= creature_spells::k_SpellCount)
+			{
+				continue;
+			}
+			if (const auto spell = spellOf(queued.miracle); spell != entt::null && waiting < spells->spells.waiting.size())
+			{
+				spells->spells.waiting.at(waiting).miracle = spell;
+			}
+			++waiting;
+		}
 	}
 }
 
@@ -1926,9 +2033,13 @@ void SaveGameSystem::ImportVanillaReactions(const gamesave::VanillaWorld& world,
 	}
 	auto& reactions = Locator::reactionSystem::value();
 	const auto ids = reactions.Restore(restored, turn);
-	// Each reaction takes its dance
+	// Each reaction takes its dance, and a spell takes its reaction
 	for (size_t i = 0; i < ids.size() && i < kept.size(); ++i)
 	{
+		if (const auto spell = living(kept[i]->target); spell != entt::null && registry.AllOf<Spell>(spell))
+		{
+			registry.Get<Spell>(spell).reaction = ids[i];
+		}
 		if (const auto dance = living(kept[i]->dance); dance != entt::null && registry.AllOf<Dance>(dance))
 		{
 			reactions.SetDance(ids[i], dance);

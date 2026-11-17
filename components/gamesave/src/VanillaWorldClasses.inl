@@ -1145,10 +1145,11 @@ void ReadFootpathFinder(WorldReader& r)
 void ReadSpell(WorldReader& r)
 {
 	ReadPositioned(r);
+	// A mark word, the particle system of the spell, a mark word and the reaction to the spell
 	r.Word();
-	r.Ref();
+	r.Ref("spellSystem");
 	r.Word();
-	r.Ref();
+	r.Ref("spellReaction");
 	r.Bytes(12);
 	r.Bytes(12);
 	r.Bytes(12);
@@ -1200,17 +1201,21 @@ void ReadSpellWater(WorldReader& r)
 void ReadSpellWithObjects(WorldReader& r)
 {
 	ReadSpell(r);
-	r.Refs();
+	// The things that the spell made
+	r.Refs("spellObjects");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
 void ReadSpellFlock(WorldReader& r)
 {
 	ReadSpellWithObjects(r);
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Bytes(12);
+	// The flock of the animals, how many animals the spell made, and how many it must make by now
+	r.Ref("flockSpellFlock");
+	r.Word("flockSpellCreated");
+	r.Float("flockSpellEmitted");
+	// The point of the hand in map units and its height above the land, when the spell made its last animals
+	r.Bytes(12, "flockSpellLastSpawn");
+	// The game sets this word to 0 and does not read it
 	r.Word();
 }
 
@@ -1218,6 +1223,7 @@ void ReadSpellFlock(WorldReader& r)
 void ReadSpellFlockFlying(WorldReader& r)
 {
 	ReadSpellFlock(r);
+	// The game sets these values to 0 and does not read them
 	r.Word();
 	r.Word();
 	r.Byte();
@@ -1233,9 +1239,10 @@ void ReadSpellFlockGround(WorldReader& r)
 void ReadSpellForest(WorldReader& r)
 {
 	ReadSpell(r);
-	r.Byte();
-	r.Ref();
-	r.Word();
+	// The flag that the spell planted its trees, the forest of the trees, and the most trees that the spell can make
+	r.Byte("forestSpellPlanted");
+	r.Ref("forestSpellForest");
+	r.Word("forestSpellMostTrees");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -1251,8 +1258,9 @@ void ReadSpellShield(WorldReader& r)
 void ReadSpellCreature(WorldReader& r)
 {
 	ReadSpell(r);
-	r.Ref();
-	r.Byte();
+	// The creature that the spell is on, and the flag that the hand started to pour the spell on it
+	r.Ref("creatureSpellTarget");
+	r.Byte("creatureSpellPoured");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

@@ -14,7 +14,8 @@
 namespace openblack::ecs::components
 {
 struct Spell;
-}
+struct FlockSpell;
+} // namespace openblack::ecs::components
 
 namespace openblack::magic
 {
@@ -37,6 +38,10 @@ public:
 	[[nodiscard]] virtual ParticleType ParticleTypeOf(const ecs::components::Spell& spell) const = 0;
 	/// It starts: its flock, and its sweep from the hand
 	virtual void Start(SpellServicesInterface& services, ecs::components::Spell& spell) = 0;
+	/// It continues from the values of a saved game of the game: its flock, its animals and its sweep. The trail of the
+	/// hand does not start again.
+	virtual void Resume(SpellServicesInterface& services, ecs::components::Spell& spell,
+	                    const ecs::components::FlockSpell& saved) = 0;
 	/// Its turn: the animals the sweep makes, shields they fly into, and their fading once it is over
 	virtual void ProcessTurn(SpellServicesInterface& services, ecs::components::Spell& spell) = 0;
 	/// Whether it still has animals about, which keep it alive

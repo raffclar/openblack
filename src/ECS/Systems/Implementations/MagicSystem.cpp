@@ -306,7 +306,8 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 }
 
 entt::entity MagicSystem::MakeSpell(MagicType type, const components::SpellCaster& caster, glm::vec3 point,
-                                    const magic::SpellCastData& cast, const particles::ProcessInfo& info)
+                                    const magic::SpellCastData& cast, const particles::ProcessInfo& info,
+                                    std::shared_ptr<const particles::RestoredEffect> restored)
 {
 	const auto player = caster.player;
 	auto& registry = EntityRegistry();
@@ -342,7 +343,8 @@ entt::entity MagicSystem::MakeSpell(MagicType type, const components::SpellCaste
 	                              .player = static_cast<int>(player),
 	                              .direction = spell.direction,
 	                              .processInfo = spell.processInfo,
-	                              .sink = link.get()});
+	                              .sink = link.get(),
+	                              .restored = std::move(restored)});
 	// A miracle whose effect did not start keeps no number
 	if (!effects.IsRunning(spell.effect))
 	{

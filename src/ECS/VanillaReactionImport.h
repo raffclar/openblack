@@ -78,6 +78,13 @@ struct Initiator
 	glm::vec3 position {0.0f};
 	/// How impressive the thing is, from the table row of its kind
 	float impressiveValue {0.0f};
+	/// How strong the thing is: the strength of a spell, 1 for a thing in the world
+	float strength {1.0f};
+	/// The magic type of a spell, and the creature that cast it. None for a thing in the world.
+	MagicType magicType {MagicType::None};
+	entt::entity casterCreature {entt::null};
+	/// The balance of the land that scales how impressive the thing is
+	systems::ReactionSystemInterface::Balance balance {systems::ReactionSystemInterface::Balance::Things};
 };
 
 /// A reaction of the file as the reactions system keeps it at the turn of the file:
@@ -85,7 +92,7 @@ struct Initiator
 /// - A reaction of no player impresses no one.
 /// - The time of a reaction that a living thing took up started at the turn of the file. It continues for the turns
 ///   since then.
-/// - A thing in the world is as strong as 1. It has no magic type and no creature cast it.
+/// - The reaction is as strong as its thing. A spell gives its magic type and the creature that cast it.
 [[nodiscard]] systems::ReactionSystemInterface::Active ActiveOf(const ImportedReaction& file, const Initiator& initiator,
                                                                 uint32_t turn);
 

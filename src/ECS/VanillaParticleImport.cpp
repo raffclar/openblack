@@ -118,7 +118,9 @@ public:
 
 	[[nodiscard]] const std::string& Error() const { return _why; }
 
-	std::optional<particle_import::ImportedEffect> Effect(uint32_t systemNumber)
+	/// The effect of the particle system. The effect can belong to no miracle, or to the spell with the number when the
+	/// number is not 0.
+	std::optional<particle_import::ImportedEffect> Effect(uint32_t systemNumber, uint32_t spell)
 	{
 		const auto* system = Expect(systemNumber, VanillaType::ParticleSystem);
 		if (system == nullptr)
@@ -130,9 +132,9 @@ public:
 		{
 			return std::nullopt;
 		}
-		if (_world.Ref(*manager, "managerSpell").value_or(0) != 0)
+		if (const auto owner = _world.Ref(*manager, "managerSpell").value_or(0); owner != 0 && owner != spell)
 		{
-			return Fail(*manager, "the effect belongs to a miracle");
+			return Fail(*manager, spell == 0 ? "the effect belongs to a miracle" : "the effect belongs to another miracle");
 		}
 		particle_import::ImportedEffect imported;
 		imported.type = static_cast<ParticleType>(_world.Word(*manager, "managerType").value_or(0));
@@ -361,7 +363,15 @@ private:
 particle_import::ReadResult particle_import::ReadEffect(const VanillaWorld& world, uint32_t system, const EntityOf& entityOf)
 {
 	EffectReader reader(world, entityOf);
-	auto effect = reader.Effect(system);
+	auto effect = reader.Effect(system, 0);
+	return {.effect = std::move(effect), .why = reader.Error()};
+}
+
+particle_import::ReadResult particle_import::ReadSpellEffect(const VanillaWorld& world, uint32_t system, uint32_t spell,
+                                                             const EntityOf& entityOf)
+{
+	EffectReader reader(world, entityOf);
+	auto effect = reader.Effect(system, spell);
 	return {.effect = std::move(effect), .why = reader.Error()};
 }
 

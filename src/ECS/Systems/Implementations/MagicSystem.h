@@ -154,6 +154,7 @@ public:
 	bool CastByCreatureAt(entt::entity creature, MagicType type, glm::vec3 place) override;
 	void ReleaseCreatureCast(entt::entity creature) override;
 	entt::entity ImportCreatureCast(entt::entity creature, const magic::ImportedCast& cast) override;
+	void ImportCreatureCastBeams(entt::entity creature, const std::array<uint32_t, 2>& beams) override;
 	[[nodiscard]] entt::entity CreatureCastOf(entt::entity creature) const override;
 	void EndCreatureCastBeams(entt::entity creature) override;
 	entt::entity CastOnObject(MagicType type, PlayerNames player, entt::entity target, const magic::SpellCastData& cast,
@@ -319,9 +320,10 @@ private:
 	entt::entity Cast(MagicType type, const components::SpellCaster& caster, glm::vec3 point, const magic::SpellCastData& cast,
 	                  const particles::ProcessInfo& info);
 	/// The miracle and its effect, which a cast starts. Nothing for a miracle that is its effect when the effect cannot
-	/// start.
+	/// start. An effect with a saved state continues from that state.
 	entt::entity MakeSpell(MagicType type, const components::SpellCaster& caster, glm::vec3 point,
-	                       const magic::SpellCastData& cast, const particles::ProcessInfo& info);
+	                       const magic::SpellCastData& cast, const particles::ProcessInfo& info,
+	                       std::shared_ptr<const particles::RestoredEffect> restored = nullptr);
 	entt::entity CastOn(MagicType type, const components::SpellCaster& caster, entt::entity target,
 	                    const magic::SpellCastData& cast, const particles::ProcessInfo& info);
 	/// Whether a miracle may be cast at an object by a creature, which no influence holds back

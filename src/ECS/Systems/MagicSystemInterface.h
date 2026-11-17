@@ -11,11 +11,14 @@
 
 #include <cstdint>
 
+#include <array>
 #include <chrono>
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "Common/InputSteps.h"
@@ -28,9 +31,27 @@
 #include "Magic/SpellRules.h"
 #include "Particles/ParticleSpellLink.h"
 
+namespace openblack::particles
+{
+struct RestoredEffect;
+} // namespace openblack::particles
+
 namespace openblack::magic
 {
 struct EffectSource;
+
+/// The values of a flock spell of a saved game of the game: its flock, the animals that it made, and its sweep
+struct ImportedFlock
+{
+	/// The flock of the animals, none when the import did not make it
+	entt::entity flock {entt::null};
+	/// How many animals the spell made, and how many it must make by now along the sweep of the hand
+	int created {0};
+	float emitted {0.0f};
+	/// The point of the hand in map units and its height above the land, when the spell made its last animals
+	glm::ivec2 lastSpawn {0};
+	float lastSpawnHeight {0.0f};
+};
 
 /// The spell that a creature of a saved game of the game holds, with the values of the file that the import keeps
 struct ImportedCast
@@ -51,6 +72,13 @@ struct ImportedCast
 	std::optional<bool> firstDone;
 	/// Water: the age of the spell when its last drop made a ring on the land
 	std::optional<float> lastRipple;
+	/// A creature spell: the creature that the spell is on
+	entt::entity target {entt::null};
+	/// The flocks: the values of the flock spell
+	std::optional<ImportedFlock> flock;
+	/// The running state of the particle effect of the spell in the file. The effect continues from this state. With
+	/// no state, the effect starts from its start.
+	std::shared_ptr<const particles::RestoredEffect> effect;
 };
 } // namespace openblack::magic
 
@@ -202,6 +230,10 @@ public:
 	{
 		return entt::null;
 	}
+	/// The creature of a saved game of the game has the beams from its left hand and its right hand of a cast from
+	/// above. The beams are the running effects with these numbers. Each turn the beams move to the hands of the
+	/// creature, until they stop.
+	virtual void ImportCreatureCastBeams(entt::entity /*creature*/, const std::array<uint32_t, 2>& /*beams*/) {}
 	/// The miracle that the creature cast and holds, or none
 	[[nodiscard]] virtual entt::entity CreatureCastOf(entt::entity /*creature*/) const { return entt::null; }
 	/// The beams from the hands of a creature that casts from above stop. The miracle that it casts continues. The hold
