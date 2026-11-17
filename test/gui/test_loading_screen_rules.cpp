@@ -193,17 +193,10 @@ TEST(LoadingScreen, Version)
 	EXPECT_EQ(VersionText(105, 3), u"V1.05 Beta 3");
 }
 
-TEST(LoadingScreen, TheVersionComesFromTheInstallsRecords)
+TEST(LoadingScreen, TheTipsScreenAlwaysShowsVersionOnePointTwenty)
 {
-	EXPECT_EQ(InstallVersionText(142, 0), u"V1.42");
-	EXPECT_EQ(InstallVersionText(120, 7), u"V1.20 Beta 7");
-	// A missing record of the version gives 1.20, and a missing record of the patch gives no patch
-	EXPECT_EQ(InstallVersionText(std::nullopt, std::nullopt), u"V1.20");
-	EXPECT_EQ(InstallVersionText(std::nullopt, 2), u"V1.20 Beta 2");
-	EXPECT_EQ(InstallVersionText(std::nullopt, std::nullopt), VersionText(k_DefaultVersion, 0));
-	EXPECT_EQ(InstallVersionText(142, std::nullopt), u"V1.42");
-	// The patch number is written as a signed number
-	EXPECT_EQ(InstallVersionText(100, 0xFFFFFFFFU), u"V1.00 Beta -1");
+	EXPECT_EQ(TipsVersionText(), u"V1.20");
+	EXPECT_EQ(TipsVersionText(), VersionText(k_ShownVersion, 0));
 }
 
 TEST(LoadingScreen, ClockRedrawsEveryOneHundredAndFiftyMilliseconds)
