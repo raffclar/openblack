@@ -21,6 +21,7 @@
 #include "Editor/EditorPaths.h"
 #include "Editor/EditorSelection.h"
 #include "Editor/LandBrush.h"
+#include "Editor/LandGeneratorSession.h"
 
 namespace openblack::editor::script_acts
 {
@@ -95,6 +96,9 @@ public:
 	[[nodiscard]] virtual const editor::paths::DrawnPaths& GetDrawnPaths() const = 0;
 	/// The settings of the land brush. A land script's height change, country change and brush size commands set them.
 	[[nodiscard]] virtual editor::land_brush::Brush& GetLandBrush() = 0;
+	/// The state of the land generator of the editor. It stays while lands load, so that the generator can load the
+	/// save from before it.
+	[[nodiscard]] virtual editor::land_generator::Session& GetLandGenerator() = 0;
 
 	virtual void SetTool(Tool tool) = 0;
 	[[nodiscard]] virtual Tool GetTool() const = 0;

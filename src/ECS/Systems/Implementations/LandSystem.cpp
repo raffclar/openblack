@@ -554,7 +554,7 @@ void PlaceGeneratedThings(const landgen::GeneratedLand& land)
 }
 } // namespace
 
-bool LandSystem::LoadGeneratedLand(uint64_t seed)
+bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 {
 	const InspectorLoading loading("generated land");
 	const auto parts = generated_land::ReadStoryParts(Locator::filesystem::value());
@@ -569,14 +569,15 @@ bool LandSystem::LoadGeneratedLand(uint64_t seed)
 	}
 	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
 	PrepareNewLand(land_change::Kind::Testbed);
-	_landPath = generated_land::PathOf(seed);
+	_landPath = generated_land::PathOf(choices);
 	// The generator makes the land, so it has no landscape file
 	_landscapePath.clear();
 	View().ShowLoadingFrame();
-	const auto land = landgen::Generate(generated_land::SettingsFor(seed));
+	const auto land = landgen::Generate(generated_land::SettingsOf(choices));
 	for (const auto& time : land.times)
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Generated land {}: {} took {:.1f} ms", seed, time.stage, time.milliseconds);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Generated land {}: {} took {:.1f} ms", choices.seed, time.stage,
+		                   time.milliseconds);
 	}
 	InitializeLevel(generated_land::Build(land, *parts));
 	SetUpLandscape();
@@ -603,7 +604,7 @@ bool LandSystem::LoadGeneratedLand(uint64_t seed)
 	return true;
 }
 #else
-bool LandSystem::LoadGeneratedLand(uint64_t /*seed*/)
+bool LandSystem::LoadGeneratedLand(const generated_land::Choices& /*choices*/)
 {
 	// The generated lands are a developer tool for now: a build for players has none
 	return false;
@@ -800,7 +801,7 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// A world state of the land that is open keeps the land: the landscape is the same, so only the altitudes that the
 	// world changed go back. The world loads its own changes after. The load is short and shows no loading screen.
 	const bool builtByGame = landPath == k_TestbedLandPath || gods_ring_map::IsThisMap(landPath.generic_string()) ||
-	                         generated_land::SeedOf(landPath.generic_string()).has_value();
+	                         generated_land::ChoicesOf(landPath.generic_string()).has_value();
 	const bool keepsLand = land_reuse::KeepsLand({
 	    .worldState = use == SavedLandUse::WorldState,
 	    .landLoaded = Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded(),
@@ -846,7 +847,7 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 			SetUpLandscape();
 		}
 		// A generated land comes from no file: the generator makes it again from its seed
-		else if (const auto seed = generated_land::SeedOf(landPath.generic_string()); seed.has_value())
+		else if (const auto choices = generated_land::ChoicesOf(landPath.generic_string()); choices.has_value())
 		{
 			const auto parts = generated_land::ReadStoryParts(Locator::filesystem::value());
 			if (!parts.has_value())
@@ -854,7 +855,7 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 				throw std::runtime_error("The landscapes of a generated land are not in the game folder");
 			}
 			_landscapePath.clear();
-			InitializeLevel(generated_land::Build(landgen::Generate(generated_land::SettingsFor(*seed)), *parts));
+			InitializeLevel(generated_land::Build(landgen::Generate(generated_land::SettingsOf(*choices)), *parts));
 			SetUpLandscape();
 		}
 		else if (online_map_land::IsOnlineMap(landPath.generic_string()))

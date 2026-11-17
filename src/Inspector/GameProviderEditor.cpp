@@ -43,6 +43,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
@@ -55,6 +56,7 @@
 #include "Editor/EditorMindLoads.h"
 #include "Editor/EditorNetworkEdits.h"
 #include "Editor/EditorScriptActs.h"
+#include "Editor/LandGenerator.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "GameProviderShared.h"
 #include "Locator.h"
@@ -1597,6 +1599,78 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			return QueryResult::Error("editor.land_skip: this game is not a game of the story on this computer alone");
 		}
 		return QueryResult::Value({{"sent", true}, {"land", land}});
+	});
+	auto landGenerator = Query(
+	    "land_generator",
+	    "Does an act of the Land generator tab of the editor, as its buttons do. start saves the game into an empty slot of "
+	    "the player and loads a land from the seed (a random seed when none is given). generate loads a land from the seed "
+	    "and the choices. exit loads the save from before the generator. state gives the state only. Each answer gives "
+	    "whether the generator is on, the slot of its save, the choices and the path of the open land. A network game "
+	    "refuses the acts.",
+	    {{.name = "act", .type = "string", .description = "start, generate, exit or state", .required = true},
+	     {.name = "seed", .type = "integer", .description = "start and generate: the seed of the land", .required = false},
+	     {.name = "choices",
+	      .type = "object",
+	      .description = "generate: choices by their key in the land path (land, ranges, mountains, plains, hills, "
+	                     "hollows, rain, rivers, north, south, wind); the others keep their values",
+	      .required = false}});
+	landGenerator.writes = true;
+	provider->Add(std::move(landGenerator), [](const QueryContext& context) {
+		if (!Locator::editorSystem::has_value() || !Locator::landSystem::has_value())
+		{
+			return QueryResult::Error("editor.land_generator: the game has no editor");
+		}
+		auto& session = Locator::editorSystem::value().GetLandGenerator();
+		const auto act = TextParam(context.params, "act");
+		const auto seedParam = context.params.find("seed");
+		const auto seed = seedParam != context.params.end() && seedParam->is_number_unsigned()
+		                      ? std::optional(seedParam->get<uint64_t>())
+		                      : std::nullopt;
+		bool done = true;
+		if (act == "start")
+		{
+			done = editor::land_generator::Start(session, seed.value_or(editor::land_generator::RandomSeed()));
+		}
+		else if (act == "generate")
+		{
+			if (seed.has_value())
+			{
+				session.choices.seed = *seed;
+			}
+			if (const auto choices = context.params.find("choices"); choices != context.params.end() && choices->is_object())
+			{
+				for (const auto& range : generated_land::ChoiceRanges())
+				{
+					if (const auto value = choices->find(std::string(range.key));
+					    value != choices->end() && value->is_number_integer())
+					{
+						session.choices.*range.member = value->get<int32_t>();
+					}
+				}
+			}
+			done = editor::land_generator::Generate(session);
+		}
+		else if (act == "exit")
+		{
+			done = editor::land_generator::Exit(session);
+		}
+		else if (act != "state")
+		{
+			return QueryResult::Error("editor.land_generator needs the act start, generate, exit or state");
+		}
+		const auto landPath = Locator::landSystem::value().GetLandPath().generic_string();
+		Json choices = Json::object();
+		for (const auto& range : generated_land::ChoiceRanges())
+		{
+			choices[std::string(range.key)] = session.choices.*range.member;
+		}
+		return QueryResult::Value({{"done", done},
+		                           {"on", editor::land_generator::IsOn(session, landPath)},
+		                           {"return_slot", session.returnSlot.has_value() ? Json(*session.returnSlot) : Json()},
+		                           {"seed", session.choices.seed},
+		                           {"choices", choices},
+		                           {"land", landPath},
+		                           {"status", session.status}});
 	});
 	auto debugAct = Query(
 	    "debug_act",

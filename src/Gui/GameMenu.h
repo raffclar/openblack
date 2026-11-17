@@ -61,6 +61,8 @@ public:
 		/// Exit Online Game, in a network game: the game asks the question to leave, or leaves at once when the god of
 		/// the player is out
 		ExitOnlineGame,
+		/// Exit Editor, while the land generator of the editor is on: the game loads the save from before the generator
+		ExitEditor,
 		/// The Quit arrow of the options, in a network game: the game asks the question to leave
 		AskToLeave,
 		/// Create New Player: the new player's box is to be shown
@@ -149,6 +151,10 @@ public:
 	/// buttons are 100 apart.
 	void SetSkirmish(bool skirmish);
 	[[nodiscard]] bool IsSkirmish() const noexcept { return _skirmish; }
+	/// While the land generator of the editor is on, the third button of the main menu is Exit Editor, at the place of
+	/// Exit Online Game in a network game
+	void SetLandGenerator(bool on);
+	[[nodiscard]] bool IsLandGenerator() const noexcept { return _landGenerator; }
 
 	void Update(float deltaSeconds);
 	/// The row of the mice picture for the player's mouse, which the Controls page shows its mice in
@@ -254,6 +260,8 @@ private:
 	/// Places the main menu's buttons that show from the top, each a step lower. In a skirmish or a network game they
 	/// are bigger and further apart.
 	void LayOutMainButtons();
+	/// Gives the third button of the main menu its label and shows or hides it
+	void LabelThirdButton();
 
 	struct Question
 	{
@@ -373,6 +381,7 @@ private:
 	std::u16string _multiplayerTab;
 	bool _networkGame {false};
 	bool _skirmish {false};
+	bool _landGenerator {false};
 	/// The options' first tab, outside the temple and inside it
 	std::u16string _mainMenuTab;
 	std::u16string _worldRoomTab;
