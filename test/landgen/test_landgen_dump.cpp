@@ -69,6 +69,14 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 	out << "{\"seed\":" << seed << ",\"side\":" << land.cells.side;
 	out << ",\"altitude\":";
 	WriteList(out, land.cells.values, [](const lnd::LNDCell& cell) { return static_cast<int>(cell.altitude); });
+	out << ",\"metres\":[";
+	for (int altitude = 0; altitude <= 255; ++altitude)
+	{
+		out << (altitude == 0 ? "" : ",") << land.heightCurve.MetresOf(static_cast<float>(altitude));
+	}
+	out << ']';
+	out << ",\"units\":";
+	WriteList(out, land.heightUnits.values, [](uint16_t units) { return static_cast<int>(units); });
 	out << ",\"water\":";
 	WriteList(out, land.cells.values, [](const lnd::LNDCell& cell) { return static_cast<int>(cell.properties.hasWater); });
 	out << ",\"country\":";

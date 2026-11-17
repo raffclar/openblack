@@ -23,13 +23,15 @@
 namespace openblack::land_line
 {
 
-/// The height units of the land's corners, from the corner at the cell itself across x, across z and across both
+/// The height units of the land's corners, from the corner at the cell itself across x, across z and across both. A
+/// height unit is 0.67 m. A corner of a land of the story is at its altitude. A corner of a higher generated land can be
+/// above 255 units.
 struct CellHeights
 {
-	uint8_t here;
-	uint8_t acrossX;
-	uint8_t acrossZ;
-	uint8_t acrossBoth;
+	uint16_t here;
+	uint16_t acrossX;
+	uint16_t acrossZ;
+	uint16_t acrossBoth;
 };
 
 /// The corner heights of the map cell at x, z (each 0 to 511), none for a cell the land doesn't have

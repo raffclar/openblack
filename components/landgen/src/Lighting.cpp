@@ -20,10 +20,10 @@ namespace
 {
 constexpr float k_MetresPerAltitude = 0.67f;
 constexpr float k_MetresPerCorner = 10.0f;
-constexpr uint8_t k_SeaLevelAltitude = 3;
+constexpr uint16_t k_SeaLevelAltitude = 3;
 
 /// The drawn height of a corner in metres
-float Metres(const Grid<uint8_t>& altitudes, int x, int z)
+float Metres(const Grid<uint16_t>& altitudes, int x, int z)
 {
 	x = std::clamp(x, 0, altitudes.side - 1);
 	z = std::clamp(z, 0, altitudes.side - 1);
@@ -31,7 +31,7 @@ float Metres(const Grid<uint8_t>& altitudes, int x, int z)
 	return altitude <= k_SeaLevelAltitude ? 0.0f : static_cast<float>(altitude) * k_MetresPerAltitude;
 }
 
-float MetresBetween(const Grid<uint8_t>& altitudes, float x, float z)
+float MetresBetween(const Grid<uint16_t>& altitudes, float x, float z)
 {
 	const float fx = std::floor(x);
 	const float fz = std::floor(z);
@@ -48,6 +48,13 @@ float MetresBetween(const Grid<uint8_t>& altitudes, float x, float z)
 } // namespace
 
 Grid<uint8_t> lighting::Luminosity(const Grid<uint8_t>& altitudes, const Settings& settings)
+{
+	Grid<uint16_t> units(altitudes.side, 0);
+	std::ranges::copy(altitudes.values, units.values.begin());
+	return Luminosity(units, settings);
+}
+
+Grid<uint8_t> lighting::Luminosity(const Grid<uint16_t>& altitudes, const Settings& settings)
 {
 	Grid<uint8_t> luminosity(altitudes.side, 255);
 	const float across = std::sqrt((k_Sun.x * k_Sun.x) + (k_Sun.z * k_Sun.z));

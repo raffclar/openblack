@@ -38,13 +38,13 @@ namespace openblack::ecs::systems
 class LandShadeSystem final: public LandShadeSystemInterface
 {
 public:
-	/// A land as it was laid: an identity that changes when another land loads, its blocks, the highest altitude of each
+	/// A land as it was laid: an identity that changes when another land loads, its blocks, the highest height of each
 	/// block's cells, and the luminosity map's first block and size
 	struct LaidLand
 	{
 		uint64_t identity {0};
 		std::vector<land_shade::LaidBlock> blocks;
-		std::vector<uint8_t> highest;
+		std::vector<uint16_t> highest;
 		glm::ivec2 firstBlock {0};
 		glm::u16vec2 mapSize {0};
 	};
@@ -87,7 +87,7 @@ private:
 	Sources _sources;
 	std::optional<uint64_t> _identity;
 	land_shade::ShadedLand _land;
-	std::vector<uint8_t> _highest;
+	std::vector<uint16_t> _highest;
 	std::vector<glm::vec2> _corners;
 	glm::ivec2 _firstBlock {0};
 	glm::u16vec2 _mapSize {0};

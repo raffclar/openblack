@@ -144,6 +144,30 @@ class Comparison(unittest.TestCase):
         self.assertEqual(ranges["b"], [1.0, 1.0])
 
 
+class GeneratedTargets(unittest.TestCase):
+    def test_the_height_curve_moves_the_height_targets(self):
+        curve = np.arange(256) * measure.HEIGHT_UNIT
+        curve[200:] += np.arange(56) * 2.0
+        self.assertEqual(measure.curve_metres(None, 100.0), 100.0)
+        self.assertAlmostEqual(measure.curve_metres(curve, 100.0), 100.0)
+        self.assertAlmostEqual(measure.curve_metres(curve, 255 * measure.HEIGHT_UNIT), 255 * measure.HEIGHT_UNIT + 110.0)
+        targets = {"ranges": {"height_max_m": [128.0, 170.85], "slope_p50": [13.0, 23.0]}, "tree_kinds": {}}
+        m = {"name": "x", "height_max_m": 250.0, "slope_p50": 15.0, "tree_kind_counts": {}, "land_km2": 1.0}
+        _lines, bad = measure.compare_lines(m, targets, curve)
+        self.assertEqual(bad, [])
+        _lines, bad = measure.compare_lines(m, targets)
+        self.assertEqual(bad, ["height_max_m"])
+
+    def test_the_area_totals_do_not_bind_a_generated_land(self):
+        targets = {"ranges": {"land_km2": [1.1, 3.9], "trees_per_km2": [200.0, 800.0]}, "tree_kinds": {}}
+        m = {"name": "x", "land_km2": 12.0, "trees_per_km2": 100.0, "tree_kind_counts": {}}
+        lines, bad = measure.compare_lines(m, targets, generated=True)
+        self.assertEqual(bad, ["trees_per_km2"])
+        self.assertTrue(any("free" in line for line in lines))
+        _lines, bad = measure.compare_lines(m, targets)
+        self.assertEqual(bad, ["land_km2", "trees_per_km2"])
+
+
 class Dump(unittest.TestCase):
     def test_a_dump_gives_a_land(self):
         side = 4

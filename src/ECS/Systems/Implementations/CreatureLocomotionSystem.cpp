@@ -1069,7 +1069,8 @@ const route::WalkableLand& CreatureLocomotionSystem::GetWalkableLand()
 		// the land as it was built, and is the same at each time that it is made.
 		_land = route::WalkableLand::Build(
 		    [&land](int32_t x, int32_t z) {
-			    const auto altitude = land.FindBuiltAltitude(glm::u16vec2(static_cast<uint16_t>(x), static_cast<uint16_t>(z)));
+			    const auto altitude =
+			        land.FindBuiltHeightUnits(glm::u16vec2(static_cast<uint16_t>(x), static_cast<uint16_t>(z)));
 			    return static_cast<float>(altitude.value_or(0)) * LandIslandInterface::k_HeightUnit;
 		    },
 		    [&land](int32_t x, int32_t z) -> std::optional<bool> {

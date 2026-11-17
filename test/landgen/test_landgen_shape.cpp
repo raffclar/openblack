@@ -14,6 +14,7 @@
 #include <numeric>
 
 #include <gtest/gtest.h>
+#include <landgen/HeightCurve.h>
 #include <landgen/Hydrology.h>
 #include <landgen/Noise.h>
 #include <landgen/Random.h>
@@ -675,4 +676,55 @@ TEST(LandgenTerrain, TheHighestEdgeLimitsTheSteps)
 	const std::vector<float> highest(heights.values.size(), 90.0f);
 	const auto limited = terrain::TerraceSteps(heights, levels, 1, settings, highest);
 	EXPECT_EQ(limited.At(10, 10), 2);
+}
+
+TEST(LandgenHeightCurve, TheLinearCurveGivesTheHeightsOfTheStory)
+{
+	const HeightCurve curve;
+	EXPECT_TRUE(curve.IsLinear());
+	for (int altitude = 0; altitude <= 255; ++altitude)
+	{
+		const auto a = static_cast<float>(altitude);
+		EXPECT_EQ(curve.MetresOf(a), a * 0.67f);
+		EXPECT_EQ(curve.UnitsOf(a), a);
+		EXPECT_EQ(curve.WholeUnitsOf(a), altitude);
+		EXPECT_EQ(curve.AltitudeOf(a), a);
+	}
+	EXPECT_EQ(HeightCurve::WithTop(60.0f, 150.0f), HeightCurve {});
+	EXPECT_EQ(HeightCurve::WithTop(255.0f, 400.0f), HeightCurve {});
+}
+
+TEST(LandgenHeightCurve, AHigherCurveKeepsTheLowLandAndReachesTheTop)
+{
+	const auto curve = HeightCurve::WithTop(60.0f, 1100.0f);
+	EXPECT_FALSE(curve.IsLinear());
+	for (int altitude = 0; altitude <= 60; ++altitude)
+	{
+		const auto a = static_cast<float>(altitude);
+		EXPECT_EQ(curve.MetresOf(a), a * 0.67f);
+		EXPECT_EQ(curve.WholeUnitsOf(a), altitude);
+	}
+	EXPECT_NEAR(curve.HighestMetres(), 1100.0f, 0.1f);
+	float before = -1.0f;
+	float step = 0.0f;
+	for (int altitude = 0; altitude <= 255; ++altitude)
+	{
+		const float metres = curve.MetresOf(static_cast<float>(altitude));
+		// Each altitude is higher than the one below, by a step that does not get smaller
+		EXPECT_GT(metres, before);
+		if (altitude > 0)
+		{
+			EXPECT_GE(metres - before, step - 1e-4f);
+			step = metres - before;
+		}
+		before = metres;
+		EXPECT_NEAR(curve.AltitudeOf(curve.UnitsOf(static_cast<float>(altitude))), static_cast<float>(altitude), 1e-3f);
+	}
+}
+
+TEST(LandgenHeightCurve, TheTopStopsAtTheMostUnits)
+{
+	const auto curve = HeightCurve::WithTop(60.0f, 10000.0f);
+	EXPECT_NEAR(curve.UnitsOf(255.0f), k_MostUnits, 0.5f);
+	EXPECT_EQ(curve.WholeUnitsOf(255.0f), static_cast<uint16_t>(k_MostUnits));
 }

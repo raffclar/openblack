@@ -21,6 +21,7 @@
 #include <entt/core/hashed_string.hpp>
 #include <glm/gtc/type_precision.hpp>
 #include <glm/mat4x4.hpp>
+#include <landgen/HeightCurve.h>
 
 #include "Extent.h"
 #include "LandReuse.h"
@@ -193,7 +194,42 @@ public:
 	[[nodiscard]] bool AltitudeInputs(const MapReach& reach, std::vector<std::byte>& bytes) const;
 	/// A world coordinate in 1/65536 of a cell (map_coords::ToFixed)
 	[[nodiscard]] static int32_t ToMapCoords(float unit);
-	/// The height the game draws land of a cell altitude at: land at or below sea level is drawn flat at height 0
-	[[nodiscard]] static float GetDrawnAltitude(uint8_t altitude);
+	/// The height the game draws land of a height in units at: land at or below sea level is drawn flat at height 0. On a
+	/// land of the story, the height in units is the altitude of the cell.
+	[[nodiscard]] static float GetDrawnAltitude(uint16_t units);
+
+	/// The corners along each side of the map
+	static constexpr int32_t k_MapCornersPerSide = k_MapCellsPerSide + 1;
+	/// True when the land keeps the height of each corner in more units than its altitude byte holds: a generated land
+	/// with high mountains. A land of the story has no height field: the height of a corner is its altitude.
+	[[nodiscard]] bool HasHeightField() const { return !_heightUnits.empty(); }
+	/// The height units of each altitude: one for each altitude unit on a land of the story
+	[[nodiscard]] const landgen::HeightCurve& GetHeightCurve() const { return _heightCurve; }
+	/// The height of a map corner in units of 0.67 m: the altitude of the cell on a land of the story, or the value of the
+	/// height field. The cell is the cell of the corner (x, z), for example from FindCell.
+	[[nodiscard]] uint16_t HeightUnitsOf(const lnd::LNDCell& cell, int32_t x, int32_t z) const;
+	/// The height of a map corner in units of 0.67 m; 0 off the map or where there is no block
+	[[nodiscard]] uint16_t CornerUnits(glm::u16vec2 corner) const;
+	/// The height in metres of the highest ground that the land can have: 170.85 m on a land of the story
+	[[nodiscard]] float HighestHeight() const;
+	/// The height in units of a map corner when the land was built, as FindBuiltAltitude gives the altitude
+	[[nodiscard]] std::optional<uint16_t> FindBuiltHeightUnits(const glm::u16vec2& coordinates) const;
+
+protected:
+	/// Gives the land a height field: the height units of each corner, [x * 513 + z], and the curve of its altitudes.
+	/// No units give a land of the story.
+	void SetHeightField(const landgen::HeightCurve& curve, std::vector<uint16_t> units);
+	/// Sets the height units of a corner of the height field to those of the altitude on the curve. A land with no
+	/// height field does not change.
+	void SetFieldAltitude(int32_t x, int32_t z, uint8_t altitude);
+	[[nodiscard]] std::vector<uint16_t>& HeightField() { return _heightUnits; }
+	[[nodiscard]] const std::vector<uint16_t>& BuiltHeightField() const { return _builtHeightUnits; }
+
+private:
+	landgen::HeightCurve _heightCurve;
+	std::vector<uint16_t> _heightUnits;
+	/// The height field when the land was built
+	std::vector<uint16_t> _builtHeightUnits;
+	uint16_t _highestUnits {255};
 };
 } // namespace openblack

@@ -200,10 +200,11 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	// than that by the largest distance from the point to a corner.
 	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
 	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
-	const auto seesColumn = [&seenBy](const glm::vec3& centre, float reach, float lift) {
-		return view_frustum::SeesWorldBox(
-		    seenBy, glm::vec3(centre.x - reach, -reach, centre.z - reach),
-		    glm::vec3(centre.x + reach, view_frustum::k_HighestLand + lift + reach, centre.z + reach));
+	const float highestLand =
+	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().HighestHeight() : view_frustum::k_HighestLand;
+	const auto seesColumn = [&seenBy, highestLand](const glm::vec3& centre, float reach, float lift) {
+		return view_frustum::SeesWorldBox(seenBy, glm::vec3(centre.x - reach, -reach, centre.z - reach),
+		                                  glm::vec3(centre.x + reach, highestLand + lift + reach, centre.z + reach));
 	};
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
 	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& placed,

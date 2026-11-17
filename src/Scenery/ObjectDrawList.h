@@ -52,7 +52,7 @@ constexpr float k_AltitudeUnit = 0.67f;
 struct Block
 {
 	glm::vec2 corner {0.0f};
-	uint8_t highestAltitude {0};
+	uint16_t highestAltitude {0};
 	bool reflected {true};
 };
 
@@ -78,7 +78,7 @@ private:
 		glm::vec2 corner {0.0f};
 		/// The camera of the answer; zero for no answer
 		uint32_t camera {0};
-		uint8_t highestAltitude {0};
+		uint16_t highestAltitude {0};
 		bool reflected {false};
 		bool inView {false};
 	};

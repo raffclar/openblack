@@ -229,6 +229,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 {
 	GeneratedLand land;
 	StageClock clock(land.times);
+	land.heightCurve = HeightCurve::WithTop(settings.heightKnee, settings.topHeight);
 	const int side = settings.side;
 	const auto seed = settings.seed;
 
@@ -307,11 +308,17 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	FlattenStartArea(heights, land.start, startSettings);
 	clock.Done("start area");
 
+	// The altitude byte of each corner is its height rounded. The height units come from the height before the rounding,
+	// through the curve, so that the high ground has no steps of many units.
 	Grid<uint8_t> altitudes(side, 0);
+	land.heightUnits = Grid<uint16_t>(side, 0);
 	for (size_t i = 0; i < heights.values.size(); ++i)
 	{
-		altitudes.values[i] =
-		    static_cast<uint8_t>(std::clamp(std::floor(heights.values[i] + 0.5f), 0.0f, terrain::k_HighestAltitude));
+		const float height = std::clamp(heights.values[i], 0.0f, terrain::k_HighestAltitude);
+		const auto altitude = static_cast<uint8_t>(std::floor(height + 0.5f));
+		altitudes.values[i] = altitude;
+		land.heightUnits.values[i] =
+		    height <= land.heightCurve.knee ? uint16_t {altitude} : land.heightCurve.WholeUnitsOf(height);
 	}
 
 	// The climate and the biomes
@@ -354,7 +361,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	clock.Done("biomes");
 
 	// What the landscape holds
-	const auto luminosity = lighting::Luminosity(altitudes, settings.lighting);
+	const auto luminosity = lighting::Luminosity(land.heightUnits, settings.lighting);
 	clock.Done("light");
 	Grid<uint8_t> freshWater(side, 0);
 	for (const auto& lake : lakes.seaLakes)
