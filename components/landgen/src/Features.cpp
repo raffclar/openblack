@@ -139,9 +139,11 @@ struct Planting
 	bool jungle;
 	/// The main kinds of the stands
 	std::span<const Choice> mains;
-	/// The chance of a dead tree that lies on the ground, and of a rock, at a point of the grid of rocks
+	/// The chance of a dead tree that lies on the ground at a point of its grid
 	float deadChance;
-	float rockChance;
+	/// The clumps of rocks that start in each square kilometre of open ground. More clumps start near the trees.
+	float rockClumps;
+	/// The stone of the rocks: limestone, sandstone on dry ground and volcanic stone in the dead woods
 	Stone stone;
 };
 
@@ -170,15 +172,15 @@ Planting PlantingOf(Biome biome)
 		        .jungle = false,
 		        .mains = k_BeachTrees,
 		        .deadChance = 0.0f,
-		        .rockChance = 0.004f,
-		        .stone = Stone::Sandstone};
+		        .rockClumps = 4.0f,
+		        .stone = Stone::Limestone};
 	case Biome::Grassland:
 		return {.stands = 150.0f,
 		        .woods = true,
 		        .jungle = false,
 		        .mains = k_GrasslandTrees,
 		        .deadChance = 0.0f,
-		        .rockChance = 0.01f,
+		        .rockClumps = 8.0f,
 		        .stone = Stone::Limestone};
 	case Biome::TemperateForest:
 		return {.stands = 170.0f,
@@ -186,7 +188,7 @@ Planting PlantingOf(Biome biome)
 		        .jungle = false,
 		        .mains = k_ForestTrees,
 		        .deadChance = 0.0f,
-		        .rockChance = 0.01f,
+		        .rockClumps = 8.0f,
 		        .stone = Stone::Limestone};
 	case Biome::DenseJungle:
 		return {.stands = 212.5f,
@@ -194,7 +196,7 @@ Planting PlantingOf(Biome biome)
 		        .jungle = true,
 		        .mains = k_JungleTrees,
 		        .deadChance = 0.0f,
-		        .rockChance = 0.005f,
+		        .rockClumps = 6.0f,
 		        .stone = Stone::Limestone};
 	case Biome::Desert:
 		return {.stands = 7.5f,
@@ -202,7 +204,7 @@ Planting PlantingOf(Biome biome)
 		        .jungle = false,
 		        .mains = k_DesertTrees,
 		        .deadChance = 0.0f,
-		        .rockChance = 0.03f,
+		        .rockClumps = 30.0f,
 		        .stone = Stone::Sandstone};
 	case Biome::Swamp:
 		return {.stands = 75.0f,
@@ -210,7 +212,7 @@ Planting PlantingOf(Biome biome)
 		        .jungle = false,
 		        .mains = k_SwampTrees,
 		        .deadChance = 0.01f,
-		        .rockChance = 0.0f,
+		        .rockClumps = 3.0f,
 		        .stone = Stone::Limestone};
 	case Biome::DeadWoods:
 		return {.stands = 12.5f,
@@ -218,7 +220,7 @@ Planting PlantingOf(Biome biome)
 		        .jungle = false,
 		        .mains = k_DeadTrees,
 		        .deadChance = 0.08f,
-		        .rockChance = 0.015f,
+		        .rockClumps = 20.0f,
 		        .stone = Stone::Volcanic};
 	case Biome::NordicWastes:
 		return {.stands = 60.0f,
@@ -226,15 +228,15 @@ Planting PlantingOf(Biome biome)
 		        .jungle = false,
 		        .mains = k_NordicTrees,
 		        .deadChance = 0.0f,
-		        .rockChance = 0.03f,
-		        .stone = Stone::Chalk};
+		        .rockClumps = 15.0f,
+		        .stone = Stone::Limestone};
 	case Biome::Alpine:
 		return {.stands = 110.0f,
 		        .woods = true,
 		        .jungle = false,
 		        .mains = k_AlpineTrees,
 		        .deadChance = 0.0f,
-		        .rockChance = 0.05f,
+		        .rockClumps = 20.0f,
 		        .stone = Stone::Limestone};
 	case Biome::Sea:
 	case Biome::_Count:
@@ -245,7 +247,7 @@ Planting PlantingOf(Biome biome)
 	        .jungle = false,
 	        .mains = {},
 	        .deadChance = 0.0f,
-	        .rockChance = 0.0f,
+	        .rockClumps = 0.0f,
 	        .stone = Stone::Limestone};
 }
 
@@ -388,11 +390,17 @@ float GradientAt(const Grid<float>& heights, int x, int z)
 	return std::sqrt((dx * dx) + (dz * dz));
 }
 
-/// The trees placed so far, in squares of the map, so that a new tree finds its neighbours quickly
-class TreeSquares
+/// The trees or the rocks placed so far, in squares of the map, so that a new one finds its neighbours quickly
+class PointSquares
 {
 public:
-	/// Whether a tree stands nearer to the point than the gap, in metres
+	/// The side of a square in metres must be at least the largest gap that AnyNear looks for
+	explicit PointSquares(float side = 4.0f)
+	    : _side(side)
+	{
+	}
+
+	/// Whether a point lies nearer to the place than the gap, in metres
 	[[nodiscard]] bool AnyNear(float x, float z, float gap) const
 	{
 		const auto sx = SquareOf(x);
@@ -423,20 +431,281 @@ public:
 	void Add(float x, float z) { _squares[Key(SquareOf(x), SquareOf(z))].emplace_back(x, z); }
 
 private:
-	/// The side of a square in metres, larger than the gap between trees
-	static constexpr float k_Side = 4.0f;
-	[[nodiscard]] static int32_t SquareOf(float metres) { return static_cast<int32_t>(std::floor(metres / k_Side)); }
+	[[nodiscard]] int32_t SquareOf(float metres) const { return static_cast<int32_t>(std::floor(metres / _side)); }
 	[[nodiscard]] static uint64_t Key(int32_t i, int32_t j)
 	{
 		return (static_cast<uint64_t>(static_cast<uint32_t>(i)) << 32u) | static_cast<uint64_t>(static_cast<uint32_t>(j));
 	}
+	float _side;
 	std::unordered_map<uint64_t, std::vector<std::pair<float, float>>> _squares;
 };
 
-/// The shapes of rock, the round ones more often
-constexpr std::array<RockShape, 12> k_RockShapes {
-    RockShape::Rock,     RockShape::Rock, RockShape::Rock, RockShape::Boulder1, RockShape::Boulder2, RockShape::Boulder3,
-    RockShape::Boulder1, RockShape::Flat, RockShape::Long, RockShape::Sharp,    RockShape::Square,   RockShape::Rock};
+/// The look of one rock of the story: its shape, its scale, its height above the land in metres and its lean about the
+/// two horizontal axes in radians
+struct RockPose
+{
+	RockShape shape;
+	float scale;
+	float altitude;
+	float xAngle;
+	float zAngle;
+};
+
+// The poses are rocks of the lands of the story, 64 for each class, from the smallest scale to the largest. The choice
+// keeps the spread of the scales, the heights, the leans and the shapes of all the rocks of the class. The few rocks
+// more than 3 m above the land are not in the choice: they lie on steep slopes or on other things of the story.
+constexpr std::array<RockPose, 64> k_PlainPoses {{
+    {RockShape::Rock, 0.160f, 0.013f, -0.548f, 0.118f},  {RockShape::Rock, 0.241f, 0.206f, -0.264f, 0.006f},
+    {RockShape::Rock, 0.241f, 0.294f, -0.404f, -0.524f}, {RockShape::Rock, 0.241f, 0.238f, -0.551f, 0.724f},
+    {RockShape::Rock, 0.241f, 0.205f, -0.190f, 0.069f},  {RockShape::Rock, 0.257f, 0.303f, -0.899f, -0.516f},
+    {RockShape::Rock, 0.263f, 0.212f, -0.758f, 0.720f},  {RockShape::Rock, 0.264f, 0.076f, -0.340f, -0.069f},
+    {RockShape::Rock, 0.267f, 0.372f, 0.156f, 0.081f},   {RockShape::Rock, 0.267f, 0.190f, -0.423f, -0.536f},
+    {RockShape::Rock, 0.267f, 0.278f, -0.234f, 0.704f},  {RockShape::Rock, 0.267f, 0.515f, 1.012f, 2.447f},
+    {RockShape::Rock, 0.267f, 0.641f, 1.193f, -2.650f},  {RockShape::Rock, 0.279f, 0.571f, 1.049f, -2.996f},
+    {RockShape::Rock, 0.279f, 0.275f, -0.478f, -0.034f}, {RockShape::Rock, 0.339f, 0.380f, -0.670f, -0.388f},
+    {RockShape::Rock, 0.358f, 0.242f, -0.470f, -0.179f}, {RockShape::Rock, 0.363f, 0.352f, 0.171f, 0.232f},
+    {RockShape::Rock, 0.365f, 0.950f, 1.060f, 2.697f},   {RockShape::Rock, 0.365f, 0.412f, 0.177f, 0.578f},
+    {RockShape::Rock, 0.366f, 0.469f, 0.298f, 0.356f},   {RockShape::Rock, 0.366f, 0.533f, -0.225f, -1.081f},
+    {RockShape::Rock, 0.368f, 0.342f, -0.126f, 0.807f},  {RockShape::Rock, 0.369f, 0.328f, -0.299f, 0.604f},
+    {RockShape::Rock, 0.382f, 0.899f, 0.635f, 1.589f},   {RockShape::Rock, 0.384f, 0.212f, -0.310f, 0.197f},
+    {RockShape::Rock, 0.387f, 0.049f, -0.023f, 0.193f},  {RockShape::Rock, 0.423f, 0.474f, -0.502f, -0.372f},
+    {RockShape::Rock, 0.423f, 0.678f, -0.498f, 0.683f},  {RockShape::Rock, 0.455f, 0.349f, -0.517f, 0.076f},
+    {RockShape::Rock, 0.474f, 0.305f, -0.420f, 0.021f},  {RockShape::Rock, 0.474f, 0.613f, 0.278f, 0.687f},
+    {RockShape::Rock, 0.474f, 0.382f, -0.794f, 0.447f},  {RockShape::Rock, 0.491f, 0.396f, -0.478f, 0.306f},
+    {RockShape::Rock, 0.557f, 0.924f, 0.221f, 0.282f},   {RockShape::Rock, 0.559f, 0.425f, -0.437f, 0.162f},
+    {RockShape::Rock, 0.577f, -0.007f, -0.465f, 0.246f}, {RockShape::Rock, 0.577f, -0.009f, -0.454f, 0.249f},
+    {RockShape::Rock, 0.582f, 0.824f, 0.636f, 0.292f},   {RockShape::Rock, 0.597f, 0.510f, -0.579f, 0.019f},
+    {RockShape::Rock, 0.597f, 1.346f, 1.113f, -2.117f},  {RockShape::Rock, 0.605f, 0.905f, -0.482f, 0.556f},
+    {RockShape::Rock, 0.605f, 0.956f, 0.299f, -0.045f},  {RockShape::Rock, 0.605f, 2.012f, -0.274f, -2.861f},
+    {RockShape::Rock, 0.640f, 0.641f, -0.461f, 0.308f},  {RockShape::Rock, 0.681f, 0.000f, -0.501f, -0.334f},
+    {RockShape::Rock, 0.749f, 0.787f, -0.350f, 0.727f},  {RockShape::Rock, 0.780f, 0.875f, -0.501f, -0.384f},
+    {RockShape::Rock, 0.784f, 0.000f, 0.764f, -0.366f},  {RockShape::Rock, 0.787f, 0.847f, -0.608f, -0.158f},
+    {RockShape::Rock, 0.920f, 0.993f, -0.565f, -0.195f}, {RockShape::Rock, 1.000f, 1.020f, -0.374f, 0.186f},
+    {RockShape::Rock, 1.000f, 0.046f, -0.528f, 0.201f},  {RockShape::Rock, 1.000f, 0.020f, -0.477f, 0.261f},
+    {RockShape::Rock, 1.000f, 0.136f, -0.424f, -0.307f}, {RockShape::Rock, 1.000f, 0.020f, -0.477f, 0.261f},
+    {RockShape::Rock, 1.000f, 0.187f, 0.089f, 0.410f},   {RockShape::Rock, 1.000f, 0.031f, -0.486f, 0.429f},
+    {RockShape::Rock, 1.000f, 0.023f, -0.477f, 0.348f},  {RockShape::Rock, 1.000f, 0.020f, -0.477f, 0.261f},
+    {RockShape::Rock, 1.000f, 0.216f, 0.130f, 0.430f},   {RockShape::Rock, 1.000f, 0.060f, -0.378f, 0.260f},
+    {RockShape::Rock, 1.000f, 0.020f, -0.477f, 0.261f},  {RockShape::Rock, 1.000f, 0.020f, -0.477f, 0.261f},
+}};
+constexpr std::array<RockPose, 64> k_StonePoses {{
+    {RockShape::Rock, 0.219f, -0.025f, 0.064f, 0.343f},   {RockShape::Rock, 0.279f, -0.051f, 0.055f, -0.099f},
+    {RockShape::Rock, 0.339f, 0.042f, -0.071f, -0.575f},  {RockShape::Rock, 0.339f, -0.086f, 0.000f, 0.000f},
+    {RockShape::Rock, 0.339f, 0.118f, 0.836f, 0.125f},    {RockShape::Rock, 0.339f, -0.051f, 0.002f, 0.244f},
+    {RockShape::Rock, 0.370f, -0.012f, 0.204f, 0.039f},   {RockShape::Rock, 0.399f, 0.051f, 0.121f, 0.648f},
+    {RockShape::Rock, 0.399f, -0.107f, 0.000f, 0.000f},   {RockShape::Rock, 0.399f, -0.024f, -0.430f, 0.012f},
+    {RockShape::Rock, 0.399f, 0.274f, -1.187f, 0.526f},   {RockShape::Rock, 0.399f, -0.029f, -0.309f, -0.206f},
+    {RockShape::Rock, 0.399f, 0.054f, 0.052f, -0.572f},   {RockShape::Rock, 0.459f, -0.126f, 0.000f, 0.000f},
+    {RockShape::Rock, 0.459f, -0.126f, 0.000f, 0.000f},   {RockShape::Rock, 0.459f, -0.060f, -0.162f, 0.038f},
+    {RockShape::Rock, 0.459f, -0.126f, 0.000f, 0.000f},   {RockShape::Rock, 0.459f, -0.126f, 0.000f, 0.000f},
+    {RockShape::Rock, 0.459f, -0.126f, 0.000f, 0.000f},   {RockShape::Rock, 0.519f, 0.027f, 0.487f, 0.442f},
+    {RockShape::Rock, 0.520f, 0.069f, 0.016f, -0.614f},   {RockShape::Rock, 0.520f, -0.145f, 0.000f, 0.000f},
+    {RockShape::Rock, 0.579f, -0.163f, 0.000f, 0.000f},   {RockShape::Rock, 0.579f, -0.163f, 0.000f, 0.000f},
+    {RockShape::Rock, 0.579f, -0.037f, -0.204f, -0.209f}, {RockShape::Rock, 0.580f, 0.074f, -0.007f, -0.420f},
+    {RockShape::Rock, 0.639f, 0.075f, 0.007f, -0.390f},   {RockShape::Rock, 0.639f, 0.000f, -0.046f, 0.505f},
+    {RockShape::Rock, 0.639f, 0.561f, -0.828f, -1.613f},  {RockShape::Rock, 0.640f, -0.149f, 0.000f, 0.000f},
+    {RockShape::Rock, 0.681f, 1.216f, 0.222f, 2.263f},    {RockShape::Rock, 0.699f, -0.012f, -0.243f, -0.199f},
+    {RockShape::Rock, 0.699f, 0.089f, -0.021f, 0.489f},   {RockShape::Rock, 0.699f, 0.039f, -0.368f, 0.402f},
+    {RockShape::Rock, 0.759f, -0.002f, -0.322f, -0.151f}, {RockShape::Rock, 0.759f, 0.101f, -0.041f, -0.503f},
+    {RockShape::Rock, 0.759f, 0.120f, 0.032f, -0.698f},   {RockShape::Rock, 0.759f, 0.113f, -0.075f, -0.612f},
+    {RockShape::Rock, 0.759f, 0.011f, -0.360f, 0.240f},   {RockShape::Rock, 0.759f, -0.025f, 0.327f, 0.101f},
+    {RockShape::Rock, 0.759f, 0.095f, -0.149f, 0.530f},   {RockShape::Rock, 0.759f, 0.096f, 0.172f, -0.595f},
+    {RockShape::Rock, 0.759f, 0.413f, -0.149f, -1.376f},  {RockShape::Rock, 0.819f, 0.110f, 0.259f, 0.653f},
+    {RockShape::Rock, 0.880f, 0.022f, -0.246f, 0.321f},   {RockShape::Rock, 0.939f, 0.026f, -0.259f, 0.244f},
+    {RockShape::Rock, 0.939f, -0.003f, -0.096f, -0.253f}, {RockShape::Rock, 0.954f, 0.105f, 0.024f, 0.647f},
+    {RockShape::Rock, 0.999f, 0.137f, -0.051f, -0.685f},  {RockShape::Rock, 1.000f, 0.240f, -0.385f, 0.730f},
+    {RockShape::Rock, 1.000f, 1.781f, 0.385f, 2.730f},    {RockShape::Rock, 1.024f, 0.120f, 0.005f, 0.653f},
+    {RockShape::Rock, 1.060f, -0.030f, 0.164f, -0.148f},  {RockShape::Rock, 1.060f, 0.114f, 0.010f, 0.471f},
+    {RockShape::Rock, 1.095f, 0.034f, -0.266f, 0.249f},   {RockShape::Rock, 1.119f, 1.122f, 0.715f, 1.989f},
+    {RockShape::Rock, 1.179f, 1.231f, 0.024f, -1.704f},   {RockShape::Rock, 1.239f, 0.156f, -0.156f, 0.539f},
+    {RockShape::Rock, 1.239f, 0.166f, 0.090f, 0.560f},    {RockShape::Rock, 1.299f, 0.145f, -0.103f, 0.573f},
+    {RockShape::Rock, 1.539f, 0.230f, -0.026f, 0.728f},   {RockShape::Rock, 2.648f, 0.270f, 0.132f, 0.113f},
+    {RockShape::Rock, 2.855f, 1.277f, 0.008f, -0.939f},   {RockShape::Rock, 3.939f, 0.672f, 0.234f, -0.476f},
+}};
+constexpr std::array<RockPose, 64> k_BoulderPoses {{
+    {RockShape::Boulder1, 0.219f, 0.030f, 0.002f, -0.006f},   {RockShape::Boulder3, 0.279f, -0.011f, -0.001f, -0.070f},
+    {RockShape::Boulder2, 0.399f, -0.057f, -0.124f, 0.151f},  {RockShape::Boulder1, 0.468f, -0.040f, 0.062f, 0.096f},
+    {RockShape::Boulder1, 0.519f, 0.012f, 0.001f, -0.003f},   {RockShape::Boulder1, 0.579f, 0.016f, -0.048f, 0.051f},
+    {RockShape::Boulder2, 0.579f, -0.018f, 0.004f, -0.001f},  {RockShape::Boulder2, 0.579f, -0.062f, -0.019f, 0.082f},
+    {RockShape::Boulder3, 0.639f, 0.095f, 0.079f, -0.279f},   {RockShape::Boulder3, 0.699f, 0.046f, 0.259f, 0.234f},
+    {RockShape::Boulder2, 0.759f, -0.018f, -0.015f, 0.188f},  {RockShape::Boulder3, 0.760f, 0.025f, 0.493f, -0.535f},
+    {RockShape::Boulder3, 0.939f, 0.999f, -1.039f, -0.014f},  {RockShape::Boulder3, 0.947f, 0.183f, 0.018f, 0.081f},
+    {RockShape::Boulder1, 0.986f, 0.045f, 0.121f, -0.215f},   {RockShape::Boulder3, 0.987f, 0.000f, 0.000f, 0.000f},
+    {RockShape::Boulder1, 0.992f, 0.052f, -0.085f, -0.046f},  {RockShape::Boulder3, 1.000f, 0.277f, 0.760f, 0.266f},
+    {RockShape::Boulder2, 1.000f, 0.009f, -0.857f, -0.223f},  {RockShape::Boulder2, 1.000f, 0.070f, 0.588f, 0.679f},
+    {RockShape::Boulder2, 1.000f, -0.014f, -0.171f, 0.353f},  {RockShape::Boulder1, 1.000f, 0.065f, -0.046f, -0.040f},
+    {RockShape::Boulder2, 1.000f, -0.046f, -0.065f, 0.198f},  {RockShape::Boulder3, 1.000f, 0.049f, 0.071f, -0.000f},
+    {RockShape::Boulder3, 1.000f, 0.649f, -0.178f, 0.279f},   {RockShape::Boulder1, 1.008f, 0.053f, 0.000f, -0.001f},
+    {RockShape::Boulder2, 1.027f, 0.065f, 0.072f, 0.110f},    {RockShape::Boulder3, 1.034f, 0.059f, 0.001f, 0.001f},
+    {RockShape::Boulder1, 1.036f, 0.059f, -0.255f, -0.119f},  {RockShape::Boulder3, 1.059f, 0.000f, -0.067f, -0.167f},
+    {RockShape::Boulder1, 1.119f, 0.063f, -0.044f, 0.376f},   {RockShape::Boulder1, 1.202f, 0.097f, 0.209f, 0.057f},
+    {RockShape::Boulder2, 1.299f, -0.081f, 0.028f, 0.172f},   {RockShape::Boulder3, 1.302f, 0.072f, -0.204f, 0.066f},
+    {RockShape::Boulder3, 1.302f, 0.065f, -0.186f, -0.353f},  {RockShape::Boulder2, 1.359f, 0.000f, -0.004f, -0.157f},
+    {RockShape::Boulder1, 1.370f, 0.073f, 0.102f, 0.188f},    {RockShape::Boulder2, 1.419f, -0.038f, 0.139f, 0.339f},
+    {RockShape::Boulder1, 1.440f, 0.086f, -0.310f, -0.216f},  {RockShape::Boulder3, 1.599f, 0.108f, 0.001f, -0.000f},
+    {RockShape::Boulder3, 1.599f, 0.113f, 0.151f, 0.114f},    {RockShape::Boulder3, 1.599f, 0.161f, 0.046f, -0.001f},
+    {RockShape::Boulder1, 1.659f, 0.126f, 0.043f, -0.275f},   {RockShape::Boulder1, 1.834f, 0.342f, 0.418f, -0.129f},
+    {RockShape::Boulder1, 1.839f, 0.267f, -0.344f, 0.661f},   {RockShape::Boulder3, 1.839f, 0.479f, 0.081f, 0.018f},
+    {RockShape::Boulder3, 1.839f, 0.437f, 0.045f, 0.059f},    {RockShape::Boulder1, 1.839f, 0.462f, -0.022f, -0.302f},
+    {RockShape::Boulder1, 2.019f, 0.182f, 0.243f, -0.584f},   {RockShape::Boulder2, 2.139f, -0.058f, 0.002f, 0.001f},
+    {RockShape::Boulder1, 2.162f, 0.191f, -0.030f, 0.243f},   {RockShape::Boulder3, 2.199f, 0.272f, 0.037f, -0.091f},
+    {RockShape::Boulder2, 2.199f, 0.814f, 0.315f, -0.385f},   {RockShape::Boulder3, 2.259f, 0.158f, -0.042f, 0.049f},
+    {RockShape::Boulder1, 2.379f, 0.148f, 0.120f, 0.012f},    {RockShape::Boulder2, 2.439f, 0.000f, -0.124f, -0.214f},
+    {RockShape::Boulder1, 2.739f, 0.185f, -0.068f, -0.003f},  {RockShape::Boulder2, 2.752f, 0.162f, -0.367f, 0.120f},
+    {RockShape::Boulder2, 2.799f, -0.110f, -0.243f, -0.101f}, {RockShape::Boulder2, 2.799f, -0.032f, 0.615f, 0.844f},
+    {RockShape::Boulder1, 2.919f, 0.000f, -0.279f, 0.070f},   {RockShape::Boulder1, 3.159f, 0.635f, -0.064f, 0.133f},
+    {RockShape::Boulder1, 3.819f, 0.310f, -0.188f, -0.068f},  {RockShape::Boulder2, 3.939f, 1.238f, -0.061f, 0.222f},
+}};
+constexpr std::array<RockPose, 64> k_SlabPoses {{
+    {RockShape::Long, 0.370f, 0.018f, 0.224f, 0.138f},     {RockShape::Long, 0.370f, -0.055f, 0.000f, 0.000f},
+    {RockShape::Long, 0.370f, 0.071f, -0.024f, 0.512f},    {RockShape::Long, 0.378f, 0.744f, 0.124f, -2.944f},
+    {RockShape::Square, 0.577f, -0.033f, 0.001f, -0.011f}, {RockShape::Flat, 0.579f, -0.027f, 0.000f, 0.000f},
+    {RockShape::Flat, 0.580f, -0.026f, 0.213f, 0.016f},    {RockShape::Long, 0.681f, 0.171f, 0.070f, 0.618f},
+    {RockShape::Square, 0.699f, 0.080f, -0.000f, 0.338f},  {RockShape::Sharp, 0.699f, -0.180f, 0.126f, -0.105f},
+    {RockShape::Sharp, 0.699f, 0.030f, -0.329f, -0.466f},  {RockShape::Square, 0.759f, 0.097f, -0.227f, 0.313f},
+    {RockShape::Square, 0.784f, -0.027f, 0.001f, -0.011f}, {RockShape::Long, 0.793f, 0.000f, -0.564f, 1.155f},
+    {RockShape::Long, 0.858f, 0.000f, 0.000f, 0.000f},     {RockShape::Sharp, 0.939f, -0.093f, -0.011f, -0.021f},
+    {RockShape::Long, 0.939f, 0.055f, 0.008f, -0.179f},    {RockShape::Sharp, 0.939f, 0.000f, 0.057f, -0.060f},
+    {RockShape::Sharp, 0.954f, 0.587f, 0.482f, -0.835f},   {RockShape::Long, 1.000f, -0.066f, 0.106f, 0.031f},
+    {RockShape::Square, 1.000f, 0.205f, -0.289f, -0.210f}, {RockShape::Long, 1.000f, 0.079f, 0.181f, 0.537f},
+    {RockShape::Square, 1.000f, 0.082f, 0.568f, -0.119f},  {RockShape::Flat, 1.000f, -0.022f, 0.000f, 0.000f},
+    {RockShape::Flat, 1.000f, 1.125f, -0.030f, -2.747f},   {RockShape::Sharp, 1.000f, 1.722f, 0.119f, 0.757f},
+    {RockShape::Flat, 1.000f, 0.416f, 0.585f, -0.643f},    {RockShape::Long, 1.000f, -0.025f, 0.835f, -0.257f},
+    {RockShape::Long, 1.000f, -0.004f, -0.164f, -0.376f},  {RockShape::Long, 1.000f, 2.954f, 0.689f, 2.978f},
+    {RockShape::Square, 1.000f, 0.000f, -0.011f, -0.290f}, {RockShape::Sharp, 1.001f, -0.125f, -0.221f, -0.183f},
+    {RockShape::Flat, 1.004f, -0.107f, 0.080f, -0.080f},   {RockShape::Sharp, 1.015f, -0.085f, -0.131f, 0.124f},
+    {RockShape::Sharp, 1.026f, 0.123f, -0.064f, -0.354f},  {RockShape::Flat, 1.033f, -0.076f, 0.055f, 0.013f},
+    {RockShape::Long, 1.059f, 0.053f, -0.124f, 0.293f},    {RockShape::Long, 1.059f, 0.000f, -0.007f, 0.107f},
+    {RockShape::Long, 1.239f, -0.056f, 0.205f, -0.012f},   {RockShape::Flat, 1.266f, 0.076f, -0.098f, -0.152f},
+    {RockShape::Square, 1.359f, 0.064f, 0.303f, 0.129f},   {RockShape::Sharp, 1.406f, 1.416f, 0.535f, -0.745f},
+    {RockShape::Square, 1.419f, 0.464f, 0.459f, -0.228f},  {RockShape::Long, 1.539f, 0.192f, 0.005f, 0.289f},
+    {RockShape::Long, 1.539f, -0.052f, -0.087f, -0.055f},  {RockShape::Sharp, 1.659f, -0.478f, 0.105f, 0.079f},
+    {RockShape::Sharp, 1.659f, -0.121f, -0.336f, -0.167f}, {RockShape::Sharp, 1.719f, 0.455f, -0.077f, -0.088f},
+    {RockShape::Flat, 1.719f, -0.017f, 0.116f, -0.047f},   {RockShape::Long, 1.839f, 0.038f, 0.519f, -0.118f},
+    {RockShape::Long, 1.839f, 0.504f, -0.503f, 0.512f},    {RockShape::Flat, 1.899f, 2.816f, 0.305f, -0.945f},
+    {RockShape::Sharp, 1.959f, -0.442f, 0.005f, -0.150f},  {RockShape::Flat, 2.139f, 0.356f, 0.160f, -0.333f},
+    {RockShape::Long, 2.259f, -0.019f, 0.722f, -0.032f},   {RockShape::Long, 2.319f, 1.478f, -0.029f, 0.072f},
+    {RockShape::Sharp, 2.379f, -0.086f, 0.050f, -0.071f},  {RockShape::Sharp, 2.739f, 0.351f, -0.208f, -0.415f},
+    {RockShape::Long, 3.219f, 0.028f, -0.182f, -0.077f},   {RockShape::Sharp, 3.269f, -0.154f, -0.468f, 0.137f},
+    {RockShape::Sharp, 3.339f, 0.097f, 0.328f, 0.067f},    {RockShape::Sharp, 3.399f, -1.380f, 0.326f, -0.496f},
+    {RockShape::Sharp, 3.994f, -0.419f, 0.293f, -0.098f},  {RockShape::Long, 3.999f, 2.731f, 0.036f, -0.020f},
+}};
+
+/// The classes of rock in the order of their weights
+constexpr std::array<RockClass, 3> k_RockClasses {RockClass::Small, RockClass::Boulder, RockClass::Slab};
+
+/// The steps of the count of the spreads of the clumps of rocks: the 1st, 5th, 10th, 25th, 50th, 75th, 90th, 95th and
+/// 99th percentiles
+constexpr std::array<float, 9> k_PoseSteps {0.0f, 0.05f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 0.95f, 1.0f};
+/// The mean distance in metres from the middle of a clump of rocks of the story to its rocks, divided by the square
+/// root of the number of its rocks. A clump links the rocks that are 20 m or less apart.
+constexpr std::array<float, 9> k_ClumpSpreads {0.611f, 0.820f, 0.948f, 1.341f, 2.199f, 3.562f, 4.718f, 5.317f, 6.243f};
+/// The sizes of the clumps of each main class on the lands of the story, at the steps of the groups of trees
+constexpr std::array<float, 13> k_SmallClumpSizes {1.0f, 1.0f, 1.0f, 2.0f, 2.0f,  3.0f, 3.0f,
+                                                   4.0f, 5.0f, 7.0f, 8.0f, 10.1f, 15.0f};
+constexpr std::array<float, 13> k_BoulderClumpSizes {1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  2.0f, 2.0f,
+                                                     3.0f, 3.0f, 4.0f, 5.0f, 11.9f, 20.0f};
+constexpr std::array<float, 13> k_SlabClumpSizes {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 2.0f, 2.0f, 2.0f, 3.0f, 4.0f, 4.0f, 4.0f, 5.0f};
+/// The share of the rocks of a clump of the story that are of the main class of the clump
+constexpr float k_ClumpMainShare = 0.8f;
+/// The share of the small rocks of a clump that have almost the same scale as the first small rock of the clump
+constexpr float k_ClumpSameScaleShare = 0.5f;
+/// A clump tries this many points for each of its rocks, so that it keeps its size on rough ground
+constexpr uint32_t k_ClumpTries = 3;
+/// A small rock is a plain rock on three of the four lands of the story with small rocks. On the other land, the small
+/// rocks are of the stone of the ground.
+constexpr float k_PlainRockShare = 0.75f;
+/// No rock of the story lies nearer to the sea than this, in metres
+constexpr float k_RockNearestSea = 30.0f;
+/// A clump of rocks that has a tree within this distance in metres starts with the second value times the chance of a
+/// clump in the open
+constexpr float k_RockWoodsReach = 25.0f;
+constexpr float k_RockWoodsFactor = 15.0f;
+/// No two rocks of the story lie nearer than this, in metres, and no rock lies nearer to a tree than the second value
+constexpr float k_RockGap = 1.2f;
+constexpr float k_RockTreeGap = 1.0f;
+/// No dead tree lies on a slope steeper than this, in altitude units for each corner
+constexpr float k_DeadTreeSlope = 16.0f;
+/// The rise for each metre at the slopes of 10 and 20 degrees, and the height of the high ground in metres
+constexpr float k_TenDegrees = 0.1763f;
+constexpr float k_TwentyDegrees = 0.3640f;
+constexpr float k_HighGround = 80.0f;
+
+// The ring of rocks of the first land of the story: eight plain rocks at 20 m to 42 m from the middle, on grass at
+// 34 m to 39 m, far from the sea. The radius spread of a ring is 0.22 of its mean radius.
+constexpr size_t k_RingRocks = 8;
+constexpr float k_RingRadius = 30.4f;
+constexpr float k_RingRadiusSpread = 0.38f;
+/// Each rock of the ring moves along the ring by a random part of the angle between two rocks, up to this part
+constexpr float k_RingTurnSpread = 0.3f;
+/// The rocks of the ring differ by this many metres in height or less
+constexpr float k_RingRise = 6.0f;
+constexpr float k_RingLowest = 10.0f;
+constexpr float k_RingHighest = 110.0f;
+constexpr float k_RingNearestSea = 60.0f;
+constexpr float k_RingSmallest = 0.47f;
+constexpr float k_RingLargest = 0.79f;
+/// The distance between the points where the ring can stand, in corners
+constexpr float k_RingSpacing = 8.0f;
+
+// The sea stacks of the story: groups of three to seven spiky pillars of limestone on the beach, 2 m to 11 m above the
+// sea, with a mean distance of 7 m to 16 m from the middle of the group to a pillar
+constexpr std::array<Weighted<uint32_t>, 3> k_StackGroupSizes {{{3, 2}, {4, 1}, {7, 1}}};
+/// The scales of the spiky pillars on the beaches of the story
+constexpr std::array<float, 19> k_StackScales {0.458f, 0.458f, 0.458f, 0.578f, 0.578f, 0.662f, 0.671f, 0.694f, 0.759f, 0.860f,
+                                               0.884f, 0.912f, 0.912f, 1.054f, 1.116f, 1.118f, 1.121f, 1.353f, 1.396f};
+constexpr Stone k_StackStone = Stone::Limestone;
+constexpr float k_StackSmallestRadius = 11.0f;
+constexpr float k_StackLargestRadius = 23.0f;
+constexpr float k_StackHighest = 12.0f;
+constexpr float k_StackFarthestSea = 100.0f;
+constexpr float k_StackGap = 2.0f;
+/// The chance of a group at a point of its grid where the beach suits it, the most groups on a land, and the smallest
+/// distance between two groups in metres
+constexpr float k_StackChance = 0.25f;
+constexpr size_t k_MostStackGroups = 4;
+constexpr float k_StackGroupGap = 300.0f;
+
+/// A value from a table of values at steps of a random number from 0 to 1, along the line between two steps
+template <size_t N>
+float Interpolate(const std::array<float, N>& steps, const std::array<float, N>& values, float unit)
+{
+	const float u = std::clamp(unit, 0.0f, 1.0f);
+	size_t step = 1;
+	while (step + 1 < N && u > steps[step])
+	{
+		++step;
+	}
+	const float low = steps[step - 1];
+	const float high = steps[step];
+	const float along = (u - low) / (high - low);
+	return values[step - 1] + ((values[step] - values[step - 1]) * along);
+}
+
+/// The weights of the main classes of the clumps of the story on ground of a slope and a height, in the order of
+/// k_RockClasses
+std::array<float, 3> ClassWeightsAt(float slope, float height)
+{
+	if (height >= k_HighGround)
+	{
+		return {26.0f, 59.0f, 15.0f};
+	}
+	if (slope < k_TenDegrees)
+	{
+		return {50.0f, 37.0f, 13.0f};
+	}
+	if (slope < k_TwentyDegrees)
+	{
+		return {44.0f, 35.0f, 21.0f};
+	}
+	return {37.0f, 36.0f, 27.0f};
+}
+
+/// The biomes where the ring of rocks stands: open grass and woods, as on the first land of the story
+bool RingStandsIn(Biome biome)
+{
+	return biome == Biome::Grassland || biome == Biome::TemperateForest;
+}
 
 /// The ground of the land with the circles that the big forests keep clear
 class Placement
@@ -460,6 +729,28 @@ public:
 		}
 		const auto [cx, cz] = CornerOf(x, z);
 		if (_ground.keepClear.At(cx, cz) != 0 || _ground.heights.At(cx, cz) <= terrain::k_SeaLevel + 1.0f)
+		{
+			return false;
+		}
+		const auto outside = [x, z](const Clearing& clearing) {
+			const float dx = x - clearing.x;
+			const float dz = z - clearing.z;
+			return (dx * dx) + (dz * dz) >= clearing.radius * clearing.radius;
+		};
+		return std::ranges::all_of(_ground.clearings, outside) && std::ranges::all_of(_bigForests, outside);
+	}
+
+	/// A feature can stand at a place in corners at the edge of the sea: on land, off the rivers and out of the clearings
+	[[nodiscard]] bool FreeOnShore(float x, float z) const
+	{
+		const auto last = static_cast<float>(_side - 1);
+		if (x < 0.0f || z < 0.0f || x > last || z > last)
+		{
+			return false;
+		}
+		const auto [cx, cz] = CornerOf(x, z);
+		const auto& rivers = _ground.rivers != nullptr ? *_ground.rivers : _ground.keepClear;
+		if (rivers.At(cx, cz) != 0 || _ground.heights.At(cx, cz) <= terrain::k_SeaLevel)
 		{
 			return false;
 		}
@@ -575,7 +866,7 @@ void PlaceBigForests(Placement& placement, uint64_t seed, const Settings& settin
 }
 
 /// The trees of one stand round its middle in corners
-void PlaceStand(const Placement& placement, float x, float z, Tree main, uint32_t count, Random& random, TreeSquares& trees,
+void PlaceStand(const Placement& placement, float x, float z, Tree main, uint32_t count, Random& random, PointSquares& trees,
                 std::vector<Feature>& placed)
 {
 	const auto& rule = *RuleOf(main);
@@ -643,14 +934,14 @@ void PlaceStand(const Placement& placement, float x, float z, Tree main, uint32_
 	}
 }
 
-void PlaceStands(const Placement& placement, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
+void PlaceStands(const Placement& placement, uint64_t seed, const Settings& settings, PointSquares& trees,
+                 std::vector<Feature>& placed)
 {
 	const auto standSeed = StageSeed(seed, 43);
 	const float last = static_cast<float>(placement.Side() - 1);
 	const int points = static_cast<int>(last / settings.standSpacing);
 	const float squareSide = settings.standSpacing * k_MetresPerCorner;
 	const float squareKm = squareSide * squareSide / 1.0e6f;
-	TreeSquares trees;
 	for (int i = 0; i < points; ++i)
 	{
 		for (int j = 0; j < points; ++j)
@@ -686,7 +977,7 @@ void PlaceStands(const Placement& placement, uint64_t seed, const Settings& sett
 	}
 }
 
-void PlaceRocks(const Placement& placement, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
+void PlaceDeadTrees(const Placement& placement, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
 {
 	const auto pointSeed = StageSeed(seed, 40);
 	const int points = static_cast<int>(static_cast<float>(placement.Side() - 1) / settings.spacing);
@@ -700,31 +991,366 @@ void PlaceRocks(const Placement& placement, uint64_t seed, const Settings& setti
 			const float roll = random.NextUnit();
 			const float angle = random.NextUnit() * k_FullTurn;
 			const float size = random.NextRange(0.8f, 1.05f);
-			if (!placement.Free(x, z) || placement.SlopeUnitsAt(x, z) > settings.rockSlope)
+			if (!placement.Free(x, z) || placement.SlopeUnitsAt(x, z) > k_DeadTreeSlope)
 			{
 				continue;
 			}
-			const auto planting = PlantingOf(placement.BiomeAt(x, z));
-			const auto metresX = x * k_MetresPerCorner;
-			const auto metresZ = z * k_MetresPerCorner;
-			if (roll < planting.deadChance)
+			if (roll < PlantingOf(placement.BiomeAt(x, z)).deadChance)
 			{
 				placed.push_back({.kind = Kind::Static,
 				                  .type = k_DeadTreeStatic,
-				                  .x = metresX,
-				                  .z = metresZ,
+				                  .x = x * k_MetresPerCorner,
+				                  .z = z * k_MetresPerCorner,
 				                  .angle = angle,
 				                  .size = size,
 				                  .maxSize = size});
 			}
-			else if (roll < planting.deadChance + planting.rockChance)
+		}
+	}
+}
+
+/// The rocks of the land so far, and the trees that they keep away from
+struct RockPlaces
+{
+	const Placement& placement;
+	const PointSquares& trees;
+	/// The same trees in larger squares, so that a clump finds the woods near it
+	const PointSquares& woods;
+	PointSquares rocks;
+	/// The small rocks of this land are plain rocks, or the small rocks of the stone of the ground
+	bool plain;
+};
+
+std::span<const RockPose> PosesOf(RockClass rockClass, bool plain)
+{
+	switch (rockClass)
+	{
+	case RockClass::Small:
+		return plain ? std::span<const RockPose>(k_PlainPoses) : std::span<const RockPose>(k_StonePoses);
+	case RockClass::Boulder:
+		return k_BoulderPoses;
+	case RockClass::Slab:
+		return k_SlabPoses;
+	}
+	return k_BoulderPoses;
+}
+
+/// The steepest ground of a class of rock, as the rise for each metre: the 95th percentile of the rocks of the story
+float SteepestOf(RockClass rockClass, bool plain)
+{
+	switch (rockClass)
+	{
+	case RockClass::Small:
+		return plain ? 1.213f : 0.804f;
+	case RockClass::Boulder:
+		return 1.010f;
+	case RockClass::Slab:
+		return 1.397f;
+	}
+	return 1.0f;
+}
+
+/// Puts one rock at a place in corners with a pose, if the ground there takes it. Gives true when it puts the rock.
+bool PlaceRock(RockPlaces& places, float x, float z, RockClass rockClass, const RockPose& pose, float angle,
+               std::vector<Feature>& placed)
+{
+	const auto& placement = places.placement;
+	if (!placement.Free(x, z))
+	{
+		return false;
+	}
+	const auto spot = placement.SpotAt(x, z);
+	if (spot.sea < k_RockNearestSea || spot.slope > SteepestOf(rockClass, places.plain))
+	{
+		return false;
+	}
+	const float metresX = x * k_MetresPerCorner;
+	const float metresZ = z * k_MetresPerCorner;
+	if (places.rocks.AnyNear(metresX, metresZ, k_RockGap) || places.trees.AnyNear(metresX, metresZ, k_RockTreeGap))
+	{
+		return false;
+	}
+	places.rocks.Add(metresX, metresZ);
+	const bool plainType = rockClass == RockClass::Small && places.plain;
+	const auto stone = PlantingOf(placement.BiomeAt(x, z)).stone;
+	placed.push_back({.kind = Kind::Static,
+	                  .type = plainType ? k_PlainRockStatic : RockType(pose.shape, stone),
+	                  .x = metresX,
+	                  .z = metresZ,
+	                  .angle = angle,
+	                  .size = pose.scale,
+	                  .maxSize = pose.scale,
+	                  .xAngle = pose.xAngle,
+	                  .zAngle = pose.zAngle,
+	                  .altitude = pose.altitude});
+	return true;
+}
+
+/// The class of a rock of a clump: mostly the main class of the clump, else one of the two other classes by the
+/// weights of the ground
+RockClass MemberClass(RockClass main, float slope, float height, Random& random)
+{
+	const float mainRoll = random.NextUnit();
+	const float otherRoll = random.NextUnit();
+	if (mainRoll < k_ClumpMainShare)
+	{
+		return main;
+	}
+	const auto weights = ClassWeightsAt(slope, height);
+	std::array<RockClass, 2> others {};
+	std::array<float, 2> otherWeights {};
+	size_t count = 0;
+	for (size_t i = 0; i < k_RockClasses.size(); ++i)
+	{
+		if (k_RockClasses[i] != main)
+		{
+			others[count] = k_RockClasses[i];
+			otherWeights[count] = weights[i];
+			++count;
+		}
+	}
+	return otherRoll * (otherWeights[0] + otherWeights[1]) < otherWeights[0] ? others[0] : others[1];
+}
+
+void PlaceRockClumps(RockPlaces& places, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
+{
+	const auto& placement = places.placement;
+	const auto clumpSeed = StageSeed(seed, 45);
+	const float last = static_cast<float>(placement.Side() - 1);
+	const int points = static_cast<int>(last / settings.rockSpacing);
+	const float squareSide = settings.rockSpacing * k_MetresPerCorner;
+	const float squareKm = squareSide * squareSide / 1.0e6f;
+	const auto smallPoses = PosesOf(RockClass::Small, places.plain);
+	for (int i = 0; i < points; ++i)
+	{
+		for (int j = 0; j < points; ++j)
+		{
+			auto random = RandomAt(clumpSeed, i, j);
+			const float x = (static_cast<float>(i) + random.NextUnit()) * settings.rockSpacing;
+			const float z = (static_cast<float>(j) + random.NextUnit()) * settings.rockSpacing;
+			const float roll = random.NextUnit();
+			const float classRoll = random.NextUnit();
+			const float sizeRoll = random.NextUnit();
+			const float spreadRoll = random.NextUnit();
+			const auto firstSmall = static_cast<int>(random.NextBelow(static_cast<uint32_t>(smallPoses.size())));
+			if (!placement.Free(x, z))
 			{
-				const auto shape = k_RockShapes[random.NextBelow(static_cast<uint32_t>(k_RockShapes.size()))];
-				const float scale = random.NextRange(0.6f, 1.8f);
-				placed.push_back({.kind = Kind::Static,
-				                  .type = RockType(shape, planting.stone),
-				                  .x = metresX,
-				                  .z = metresZ,
+				continue;
+			}
+			// Most clumps of the story lie in or beside a wood; few lie in the open
+			const float metresX = x * k_MetresPerCorner;
+			const float metresZ = z * k_MetresPerCorner;
+			const float woods = places.woods.AnyNear(metresX, metresZ, k_RockWoodsReach) ? k_RockWoodsFactor : 1.0f;
+			if (roll >= PlantingOf(placement.BiomeAt(x, z)).rockClumps * squareKm * woods)
+			{
+				continue;
+			}
+			const auto centre = placement.SpotAt(x, z);
+			const auto main = MainClassAt(centre.slope, centre.height, classRoll);
+			const auto count = ClumpSize(main, sizeRoll);
+			// The rocks lie evenly in a circle. The mean distance from the middle to a rock is two thirds of the radius.
+			const float spread = Interpolate(k_PoseSteps, k_ClumpSpreads, spreadRoll);
+			const float radius = 1.5f * spread * std::sqrt(static_cast<float>(count)) / k_MetresPerCorner;
+			uint32_t laid = 0;
+			for (uint32_t attempt = 0; attempt < count * k_ClumpTries && laid < count; ++attempt)
+			{
+				float dx = 0.0f;
+				float dz = 0.0f;
+				if (count > 1)
+				{
+					do
+					{
+						dx = random.NextRange(-1.0f, 1.0f);
+						dz = random.NextRange(-1.0f, 1.0f);
+					} while ((dx * dx) + (dz * dz) > 1.0f);
+				}
+				const auto rockClass = MemberClass(main, centre.slope, centre.height, random);
+				const auto poses = PosesOf(rockClass, places.plain);
+				const float sameRoll = random.NextUnit();
+				const int near = static_cast<int>(random.NextBelow(5)) - 2;
+				auto index = static_cast<int>(random.NextBelow(static_cast<uint32_t>(poses.size())));
+				// The small rocks of a clump often have almost the same scale. The poses go from the smallest scale to the
+				// largest.
+				if (rockClass == RockClass::Small && sameRoll < k_ClumpSameScaleShare)
+				{
+					index = std::clamp(firstSmall + near, 0, static_cast<int>(poses.size()) - 1);
+				}
+				const float angle = random.NextUnit() * k_FullTurn;
+				if (PlaceRock(places, x + (dx * radius), z + (dz * radius), rockClass, poses[static_cast<size_t>(index)], angle,
+				              placed))
+				{
+					++laid;
+				}
+			}
+		}
+	}
+}
+
+/// The rocks of a ring round a middle in corners
+using Ring = std::array<std::pair<float, float>, k_RingRocks>;
+
+Ring RingAt(Random& random, float x, float z)
+{
+	Ring ring {};
+	for (size_t k = 0; k < ring.size(); ++k)
+	{
+		const float turn = (static_cast<float>(k) + random.NextRange(-k_RingTurnSpread, k_RingTurnSpread)) /
+		                   static_cast<float>(ring.size()) * k_FullTurn;
+		const float radius =
+		    k_RingRadius * (1.0f + random.NextRange(-k_RingRadiusSpread, k_RingRadiusSpread)) / k_MetresPerCorner;
+		ring[k] = {x + (std::cos(turn) * radius), z + (std::sin(turn) * radius)};
+	}
+	return ring;
+}
+
+/// The ring of the story stands away from the sea, on ground where its rocks differ by a few metres in height
+bool RingSuits(const Placement& placement, float x, float z, const Ring& ring)
+{
+	if (!placement.Free(x, z) || !RingStandsIn(placement.BiomeAt(x, z)))
+	{
+		return false;
+	}
+	const auto centre = placement.SpotAt(x, z);
+	if (centre.height < k_RingLowest || centre.height > k_RingHighest || centre.sea < k_RingNearestSea)
+	{
+		return false;
+	}
+	float lowest = centre.height;
+	float highest = centre.height;
+	for (const auto& [rx, rz] : ring)
+	{
+		if (!placement.Free(rx, rz))
+		{
+			return false;
+		}
+		const auto spot = placement.SpotAt(rx, rz);
+		lowest = std::min(lowest, spot.height);
+		highest = std::max(highest, spot.height);
+	}
+	return highest - lowest <= k_RingRise;
+}
+
+/// One ring of eight plain rocks with a radius of about 30 metres, as on the first land of the story. The ring stands at
+/// the point of a grid that has the lowest random key of all the points where the ground suits it.
+void PlaceStoneRing(RockPlaces& places, uint64_t seed, std::vector<Feature>& placed)
+{
+	const auto& placement = places.placement;
+	const auto ringSeed = StageSeed(seed, 46);
+	const int points = static_cast<int>(static_cast<float>(placement.Side() - 1) / k_RingSpacing);
+	std::optional<std::pair<uint32_t, std::pair<int, int>>> best;
+	for (int i = 0; i < points; ++i)
+	{
+		for (int j = 0; j < points; ++j)
+		{
+			auto random = RandomAt(ringSeed, i, j);
+			const auto key = random.Next();
+			if (best && key >= best->first)
+			{
+				continue;
+			}
+			const float x = (static_cast<float>(i) + random.NextUnit()) * k_RingSpacing;
+			const float z = (static_cast<float>(j) + random.NextUnit()) * k_RingSpacing;
+			if (RingSuits(placement, x, z, RingAt(random, x, z)))
+			{
+				best = {key, {i, j}};
+			}
+		}
+	}
+	if (!best)
+	{
+		return;
+	}
+	// The same random numbers give the same ring again
+	const auto [i, j] = best->second;
+	auto random = RandomAt(ringSeed, i, j);
+	random.Next();
+	const float x = (static_cast<float>(i) + random.NextUnit()) * k_RingSpacing;
+	const float z = (static_cast<float>(j) + random.NextUnit()) * k_RingSpacing;
+	const auto ring = RingAt(random, x, z);
+	// The rocks of the ring of the story have scales from 0.47 to 0.79
+	const auto lower = std::ranges::lower_bound(k_PlainPoses, k_RingSmallest, {}, &RockPose::scale);
+	const auto upper = std::ranges::upper_bound(k_PlainPoses, k_RingLargest, {}, &RockPose::scale);
+	const auto choices = static_cast<uint32_t>(std::max<std::ptrdiff_t>(std::distance(lower, upper), 1));
+	const bool plain = places.plain;
+	places.plain = true;
+	for (const auto& [rx, rz] : ring)
+	{
+		const auto& pose = *(lower + random.NextBelow(choices));
+		const float angle = random.NextUnit() * k_FullTurn;
+		PlaceRock(places, rx, rz, RockClass::Small, pose, angle, placed);
+	}
+	places.plain = plain;
+}
+
+/// Groups of three to seven spiky pillars on the beaches, as the sea stacks of the story. No two groups stand near.
+void PlaceSeaStacks(const Placement& placement, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
+{
+	const auto stackSeed = StageSeed(seed, 47);
+	const int points = static_cast<int>(static_cast<float>(placement.Side() - 1) / settings.stackSpacing);
+	std::vector<std::pair<float, float>> groups;
+	PointSquares pillars;
+	for (int i = 0; i < points; ++i)
+	{
+		for (int j = 0; j < points; ++j)
+		{
+			auto random = RandomAt(stackSeed, i, j);
+			const float x = (static_cast<float>(i) + random.NextUnit()) * settings.stackSpacing;
+			const float z = (static_cast<float>(j) + random.NextUnit()) * settings.stackSpacing;
+			const float roll = random.NextUnit();
+			const auto count = PickWeighted(k_StackGroupSizes, random);
+			const float radius = random.NextRange(k_StackSmallestRadius, k_StackLargestRadius) / k_MetresPerCorner;
+			if (groups.size() >= k_MostStackGroups || roll >= k_StackChance || !placement.FreeOnShore(x, z) ||
+			    placement.BiomeAt(x, z) != Biome::Beach)
+			{
+				continue;
+			}
+			const auto centre = placement.SpotAt(x, z);
+			if (centre.sea > k_StackFarthestSea || centre.height > k_StackHighest)
+			{
+				continue;
+			}
+			const float metresX = x * k_MetresPerCorner;
+			const float metresZ = z * k_MetresPerCorner;
+			const bool crowded = std::ranges::any_of(groups, [metresX, metresZ](const std::pair<float, float>& group) {
+				const float dx = group.first - metresX;
+				const float dz = group.second - metresZ;
+				return (dx * dx) + (dz * dz) < k_StackGroupGap * k_StackGroupGap;
+			});
+			if (crowded)
+			{
+				continue;
+			}
+			groups.emplace_back(metresX, metresZ);
+			uint32_t stood = 0;
+			for (uint32_t attempt = 0; attempt < count * k_ClumpTries && stood < count; ++attempt)
+			{
+				float dx = 0.0f;
+				float dz = 0.0f;
+				do
+				{
+					dx = random.NextRange(-1.0f, 1.0f);
+					dz = random.NextRange(-1.0f, 1.0f);
+				} while ((dx * dx) + (dz * dz) > 1.0f);
+				const float scale = k_StackScales[random.NextBelow(static_cast<uint32_t>(k_StackScales.size()))];
+				const float angle = random.NextUnit() * k_FullTurn;
+				const float px = x + (dx * radius);
+				const float pz = z + (dz * radius);
+				if (!placement.FreeOnShore(px, pz) || placement.SpotAt(px, pz).height > k_StackHighest)
+				{
+					continue;
+				}
+				const float pillarX = px * k_MetresPerCorner;
+				const float pillarZ = pz * k_MetresPerCorner;
+				if (pillars.AnyNear(pillarX, pillarZ, k_StackGap))
+				{
+					continue;
+				}
+				pillars.Add(pillarX, pillarZ);
+				++stood;
+				placed.push_back({.kind = Kind::Feature,
+				                  .type = static_cast<uint8_t>(k_SpikyPillarFeature + static_cast<uint8_t>(k_StackStone)),
+				                  .x = pillarX,
+				                  .z = pillarZ,
 				                  .angle = angle,
 				                  .size = scale,
 				                  .maxSize = scale});
@@ -743,18 +1369,32 @@ bool features::Suits(Tree tree, const Spot& spot)
 
 uint32_t features::StandSize(float unit, bool jungle)
 {
-	const auto& sizes = jungle ? k_JungleGroupSizes : k_GroupSizes;
-	const float u = std::clamp(unit, 0.0f, 1.0f);
-	size_t step = 1;
-	while (step + 1 < k_SizeSteps.size() && u > k_SizeSteps[step])
-	{
-		++step;
-	}
-	const float low = k_SizeSteps[step - 1];
-	const float high = k_SizeSteps[step];
-	const float along = (u - low) / (high - low);
-	const float size = sizes[step - 1] + ((sizes[step] - sizes[step - 1]) * along);
+	const float size = Interpolate(k_SizeSteps, jungle ? k_JungleGroupSizes : k_GroupSizes, unit);
 	return std::max(static_cast<uint32_t>(std::floor(size + 0.5f)), 1u);
+}
+
+uint32_t features::ClumpSize(RockClass rockClass, float unit)
+{
+	const auto& sizes = rockClass == RockClass::Small     ? k_SmallClumpSizes
+	                    : rockClass == RockClass::Boulder ? k_BoulderClumpSizes
+	                                                      : k_SlabClumpSizes;
+	const float size = Interpolate(k_SizeSteps, sizes, unit);
+	return std::max(static_cast<uint32_t>(std::floor(size + 0.5f)), 1u);
+}
+
+RockClass features::MainClassAt(float slope, float height, float unit)
+{
+	const auto weights = ClassWeightsAt(slope, height);
+	float pick = std::clamp(unit, 0.0f, 1.0f) * (weights[0] + weights[1] + weights[2]);
+	for (size_t i = 0; i < k_RockClasses.size(); ++i)
+	{
+		if (pick < weights[i])
+		{
+			return k_RockClasses[i];
+		}
+		pick -= weights[i];
+	}
+	return k_RockClasses.back();
 }
 
 std::vector<Feature> features::Place(const Ground& ground, uint64_t seed, const Settings& settings)
@@ -763,8 +1403,23 @@ std::vector<Feature> features::Place(const Ground& ground, uint64_t seed, const 
 	std::vector<Feature> bigForests;
 	PlaceBigForests(placement, seed, settings, bigForests);
 	std::vector<Feature> placed;
-	PlaceStands(placement, seed, settings, placed);
-	PlaceRocks(placement, seed, settings, placed);
+	PointSquares trees;
+	PlaceStands(placement, seed, settings, trees, placed);
+	// The rocks lie in and beside the woods, so they come after the trees
+	PointSquares woods(k_RockWoodsReach);
+	for (const auto& feature : placed)
+	{
+		woods.Add(feature.x, feature.z);
+	}
+	RockPlaces rocks {.placement = placement,
+	                  .trees = trees,
+	                  .woods = woods,
+	                  .rocks = PointSquares {},
+	                  .plain = Random(StageSeed(seed, 44)).NextUnit() < k_PlainRockShare};
+	PlaceStoneRing(rocks, seed, placed);
+	PlaceRockClumps(rocks, seed, settings, placed);
+	PlaceSeaStacks(placement, seed, settings, placed);
+	PlaceDeadTrees(placement, seed, settings, placed);
 
 	// Too many features: keep an even share of them all over the land
 	if (placed.size() > settings.most)

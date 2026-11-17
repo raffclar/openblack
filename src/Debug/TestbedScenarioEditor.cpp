@@ -226,6 +226,21 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_rocks",
+	    .name = "The rocks, the ring of rocks and the sea stacks of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Fly over "
+	                   "the woods, the ring of rocks and the beaches.",
+	    .expected = "Small rocks lie in clumps of two to fifteen, a few metres apart, and most boulders and slabs lie "
+	                "alone or in pairs. The rocks lean and sink into the ground as the rocks of the story do. Most "
+	                "clumps lie in or near a wood. One ring of eight rocks, about 60 metres across, stands on flat "
+	                "grass. Groups of three to seven spiky pillars stand on the beaches.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_cliffs",
 	    .name = "The terraces, cliffs and shore of a generated land",
 	    .facet = Facet::Editor,

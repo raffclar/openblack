@@ -89,7 +89,7 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		std::ostringstream text;
 		text << '[' << static_cast<int>(feature.kind) << ',' << static_cast<int>(feature.type) << ',' << feature.x << ','
 		     << feature.z << ',' << feature.angle << ',' << feature.size << ',' << feature.maxSize << ',' << feature.forest
-		     << ']';
+		     << ',' << feature.xAngle << ',' << feature.zAngle << ',' << feature.altitude << ']';
 		return text.str();
 	});
 	out << ",\"forests\":";
