@@ -250,6 +250,8 @@ enum class Step : uint8_t
 	SyncChecksum,
 	/// The run record of a tool sees the world as the turn left it, before the steps of the frame
 	RunRecord,
+	/// The light, flames and glow of a street lantern that the turn removed go too
+	LanternLights,
 
 	_Count
 };
@@ -389,6 +391,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::WalkerLookahead, .stage = Stage::AfterTurn},
     // The frames only draw, so a creature that the turn made gets its skeleton and its first pose at the end of the turn
     {.step = Step::CreatureShapes, .stage = Stage::AfterTurn},
+    // The lights of the street lanterns that the turn removed go in the turn, before the checksum reads the world
+    {.step = Step::LanternLights, .stage = Stage::AfterTurn},
     // The frames only read the map's cells, so the things that the turn made go into them at the end of the turn
     {.step = Step::MapCellsAtTurnEnd, .stage = Stage::AfterTurn},
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
