@@ -1737,11 +1737,12 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	// The animals and their flocks replace those of the land
 	ImportVanillaAnimals(*read.world, made, circles);
 	// The markers, the timers, the highlights and the influences of the scripts replace those of the land
-	ImportVanillaScriptThings(*read.world, made);
+	VanillaEffects effects;
+	ImportVanillaScriptThings(*read.world, made, effects);
 	// The dances of the creatures and of the scripts, when the things that they are for are made
 	ImportVanillaDances(dances, made);
 	// The spells that the creatures of the file hold
-	ImportVanillaHeldCasts(*read.world, made);
+	ImportVanillaHeldCasts(*read.world, made, effects);
 	// The reactions of the file and their dances, when the things that they come from are made
 	ImportVanillaReactions(*read.world, made);
 	// The walkers take the circles of their walks when all the things of the file are made

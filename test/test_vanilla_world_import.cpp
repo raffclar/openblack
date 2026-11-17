@@ -17,6 +17,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -3045,6 +3046,32 @@ TEST(VanillaParticleImport, AContainerOfAMiracleIsNotTaken)
 	EXPECT_NE(read.why.find("miracle"), std::string::npos);
 }
 
+// The effect of a spell is taken only for that spell, which steps it
+TEST(VanillaParticleImport, TheEffectOfASpellIsTakenOnlyForItsSpell)
+{
+	auto fake = GameAtTurn(5);
+	// 2: the system, 3: the manager of the spell 9
+	fake.Record(VanillaType::ParticleSystem).Ref("systemManager", 3);
+	fake.Record(VanillaType::ParticleManager)
+	    .Value("managerAtomCount", uint32_t {0})
+	    .Ref("managerPlayer", 0)
+	    .Refs("managerRoots", {})
+	    .Value("managerInfo", std::array<float, 15> {0.0f, 0.0f, 0.0f, 1.0f, 2.0f, 3.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+	                                                 1.0f, 0.0f, std::bit_cast<float>(uint32_t {1})})
+	    .Value("managerAge", 2.5f)
+	    .Ref("managerSpell", 9)
+	    .Value("managerType", uint32_t {20});
+	const auto world = fake.Make();
+	EXPECT_FALSE(particle_import::ReadEffect(world, 2, SameNumber).effect.has_value());
+	EXPECT_FALSE(particle_import::ReadSpellEffect(world, 2, 8, SameNumber).effect.has_value());
+	const auto read = particle_import::ReadSpellEffect(world, 2, 9, SameNumber);
+	ASSERT_TRUE(read.effect.has_value()) << read.why;
+	EXPECT_EQ(read.effect->type, static_cast<ParticleType>(20));
+	EXPECT_EQ(read.effect->state.age, 2.5f);
+	EXPECT_EQ(read.effect->state.info.handPosition, glm::vec3(1.0f, 2.0f, 3.0f));
+	EXPECT_TRUE(read.effect->state.info.enabled);
+}
+
 TEST(VanillaParticleImport, SavedGamesOfLandOneKeepEveryValueOfTheirParticleContainers)
 {
 	Checked checked;
@@ -4469,6 +4496,29 @@ TEST(VanillaWorldImport, AReactionOfTheFileGoesOnFromTheThingThatTheImportMade)
 	EXPECT_TRUE(waiting.spreads);
 }
 
+// The reaction to a spell goes on with the strength, the magic type and the caster of the spell, and the balance of
+// the miracles
+TEST(VanillaWorldImport, AReactionToASpellGoesOnWithTheValuesOfTheSpell)
+{
+	constexpr auto k_Spell = static_cast<entt::entity>(9);
+	constexpr auto k_Caster = static_cast<entt::entity>(4);
+	const reaction_import::Initiator spell {.entity = k_Spell,
+	                                        .position = {1.0f, 2.0f, 3.0f},
+	                                        .impressiveValue = 2.0f,
+	                                        .strength = 0.5f,
+	                                        .magicType = MagicType::Water,
+	                                        .casterCreature = k_Caster,
+	                                        .balance = openblack::ecs::systems::ReactionSystemInterface::Balance::Miracles};
+	const auto active = reaction_import::ActiveOf(
+	    {.type = static_cast<uint32_t>(Reaction::LookAtSpell), .player = PlayerNames::PLAYER_ONE, .reach = 30.0f}, spell, 1000);
+	EXPECT_EQ(active.source.initiator, k_Spell);
+	EXPECT_FLOAT_EQ(active.source.strength, 0.5f);
+	EXPECT_EQ(active.source.magicType, MagicType::Water);
+	EXPECT_EQ(active.source.casterCreature, k_Caster);
+	EXPECT_EQ(active.source.balance, openblack::ecs::systems::ReactionSystemInterface::Balance::Miracles);
+	EXPECT_FLOAT_EQ(active.source.impressiveValue, 2.0f);
+}
+
 // A living thing remembers the kinds of reaction of the file, the oldest first. The game keeps only the newest three.
 TEST(VanillaWorldImport, ALivingThingRemembersTheNewestThreeKindsOfReaction)
 {
@@ -4852,14 +4902,14 @@ TEST(VanillaWorldImport, SavedGamesHaveACameraWhosePointsGlideTogether)
 
 namespace
 {
-/// The record of a new water spell, as the game writes it, after the reference to it. The values are not the values of
-/// a real file.
-std::vector<uint8_t> WaterSpellRecord(StreamStart start, uint32_t number)
+/// The record of a new spell, as the game writes it, after the reference to it. The kind of the spell writes its own
+/// values at the end. The values are not the values of a real file.
+std::vector<uint8_t> SpellRecord(StreamStart start, uint32_t number, uint32_t saveType, MagicType magicType,
+                                 const std::function<void(StreamWriter&)>& kind)
 {
-	constexpr uint32_t k_SpellWaterType = 0x0C;
 	StreamWriter writer(start);
 	EXPECT_TRUE(writer.PutReference(NumberKey(number)));
-	writer.Put(k_SpellWaterType);
+	writer.Put(saveType);
 	writer.Put(uint32_t {0});
 	writer.PutChecksum();
 	writer.Put(uint32_t {0});
@@ -4900,16 +4950,25 @@ std::vector<uint8_t> WaterSpellRecord(StreamStart start, uint32_t number)
 		writer.Put(uint32_t {0});
 	}
 	// The magic type, the age, the size and one more float
-	writer.Put(static_cast<uint32_t>(MagicType::Water));
+	writer.Put(static_cast<uint32_t>(magicType));
 	writer.Put(3.25f);
 	writer.Put(40.0f);
 	writer.Put(0.0f);
 	writer.Put(std::array<uint8_t, 12> {});
 	writer.Put(0.5f);
 	writer.Put(0.25f);
-	// The age when the last drop made a ring on the land
-	writer.Put(2.0f);
+	kind(writer);
 	return writer.Take();
+}
+
+/// The record of a new water spell
+std::vector<uint8_t> WaterSpellRecord(StreamStart start, uint32_t number)
+{
+	constexpr uint32_t k_SpellWaterType = 0x0C;
+	return SpellRecord(start, number, k_SpellWaterType, MagicType::Water, [](StreamWriter& writer) {
+		// The age when the last drop made a ring on the land
+		writer.Put(2.0f);
+	});
 }
 } // namespace
 
@@ -4967,6 +5026,86 @@ TEST(VanillaWorldImport, OnlyASpellWithAMagicTypeIsAHeldSpell)
 	EXPECT_EQ(food->duration, -1.0f);
 	EXPECT_EQ(food->firstDone, std::optional(true));
 	EXPECT_FALSE(food->lastRipple.has_value());
+}
+
+// A creature spell keeps the creature that it is on. Each spell keeps its particle system and the reaction to it.
+TEST(VanillaWorldImport, ACreatureSpellReadsItsCreature)
+{
+	constexpr StreamStart k_Start {.objects = 100, .checksum = 0};
+	constexpr uint32_t k_SpellCreatureType = 0x13;
+	const auto bytes = SpellRecord(k_Start, 101, k_SpellCreatureType, MagicType::CreatureSpellStrong, [](StreamWriter& writer) {
+		// The creature (object 40) and the flag that the hand poured the spell on it
+		writer.Put(uint32_t {40});
+		writer.Put(uint8_t {1});
+	});
+	std::string error;
+	const auto world = ReadVanillaRecords(bytes, k_Start, &error);
+	ASSERT_TRUE(world.has_value()) << error;
+	const auto spell = world_import::ReadHeldSpell(*world, world->Records().front());
+	ASSERT_TRUE(spell.has_value());
+	EXPECT_EQ(spell->saveType, k_SpellCreatureType);
+	EXPECT_EQ(spell->magicType, MagicType::CreatureSpellStrong);
+	EXPECT_EQ(spell->target, std::optional<uint32_t>(40));
+	EXPECT_FALSE(spell->flock.has_value());
+	EXPECT_FALSE(spell->lastRipple.has_value());
+	EXPECT_EQ(spell->system, 0u);
+	EXPECT_EQ(spell->reaction, 0u);
+}
+
+// A flying flock keeps its flock, the animals that it made, and the last point of the sweep of the hand
+TEST(VanillaWorldImport, AFlockSpellReadsItsFlockAndItsSweep)
+{
+	constexpr StreamStart k_Start {.objects = 100, .checksum = 0};
+	constexpr uint32_t k_SpellFlockFlyingType = 0x0D;
+	const auto bytes = SpellRecord(k_Start, 101, k_SpellFlockFlyingType, MagicType::FlockFlying, [](StreamWriter& writer) {
+		// Two animals (objects 50 and 51), the flock (object 60), 2 made, 2.5 to make by now
+		writer.Put(uint32_t {2});
+		writer.Put(uint32_t {50});
+		writer.Put(uint32_t {51});
+		writer.Put(uint32_t {60});
+		writer.Put(uint32_t {2});
+		writer.Put(2.5f);
+		// The point of the hand in map units and its height above the land
+		writer.Put(int32_t {0x30000});
+		writer.Put(int32_t {-0x10000});
+		writer.Put(4.0f);
+		// The values that the game does not read
+		writer.Put(uint32_t {0});
+		writer.Put(uint32_t {0});
+		writer.Put(uint32_t {0});
+		writer.Put(uint8_t {0});
+	});
+	std::string error;
+	const auto world = ReadVanillaRecords(bytes, k_Start, &error);
+	ASSERT_TRUE(world.has_value()) << error;
+	const auto spell = world_import::ReadHeldSpell(*world, world->Records().front());
+	ASSERT_TRUE(spell.has_value());
+	EXPECT_EQ(spell->magicType, MagicType::FlockFlying);
+	ASSERT_TRUE(spell->flock.has_value());
+	EXPECT_EQ(spell->flock->flock, 60u);
+	EXPECT_EQ(spell->flock->created, 2);
+	EXPECT_EQ(spell->flock->emitted, 2.5f);
+	EXPECT_EQ(spell->flock->lastSpawnX, 0x30000);
+	EXPECT_EQ(spell->flock->lastSpawnZ, -0x10000);
+	EXPECT_EQ(spell->flock->lastSpawnHeight, 4.0f);
+	EXPECT_FALSE(spell->target.has_value());
+}
+
+// A spell keeps the numbers of its particle system and of the reaction to it
+TEST(VanillaWorldImport, AHeldSpellReadsItsParticlesAndItsReaction)
+{
+	FakeWorld fake;
+	fake.Record(static_cast<VanillaType>(0x12))
+	    .Position(3, 4)
+	    .Ref("spellSystem", 7)
+	    .Ref("spellReaction", 8)
+	    .Value<uint32_t>("spellMagicType", static_cast<uint32_t>(MagicType::Heal));
+	const auto world = fake.Make();
+	const auto heal = world_import::ReadHeldSpell(world, world.Records().front());
+	ASSERT_TRUE(heal.has_value());
+	EXPECT_EQ(heal->saveType, 0x12u);
+	EXPECT_EQ(heal->system, 7u);
+	EXPECT_EQ(heal->reaction, 8u);
 }
 
 // Each spell that a creature of a saved game holds reads as a spell that the creature cast

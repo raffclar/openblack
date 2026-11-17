@@ -20,6 +20,8 @@ class FlockMiracle final: public FlockMiracleInterface
 public:
 	[[nodiscard]] ParticleType ParticleTypeOf(const ecs::components::Spell& spell) const override;
 	void Start(SpellServicesInterface& services, ecs::components::Spell& spell) override;
+	void Resume(SpellServicesInterface& services, ecs::components::Spell& spell,
+	            const ecs::components::FlockSpell& saved) override;
 	void ProcessTurn(SpellServicesInterface& services, ecs::components::Spell& spell) override;
 	[[nodiscard]] bool AnimalsLeft(const ecs::components::Spell& spell) const override;
 	[[nodiscard]] bool FollowsHand(SpellServicesInterface& services, const ecs::components::Spell& spell) const override;
