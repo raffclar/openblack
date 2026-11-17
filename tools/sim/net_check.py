@@ -4609,6 +4609,11 @@ def main():
         if index >= options.clients and min(record_checksums(os.path.join(client_dir, "record.jsonl")), default=0) > 1:
             # An observer that joined a running game did not see the deeds of the turns before its world
             continue
+        if (lines_with(server_log, ["started the room again on the land"])
+                and lines_with(server_log, [f"The player of slot {index} is back from turn"])):
+            # A player who was away at a change of the land did the old land for longer than the server, and did not do
+            # the turns of the new land before the world that it came back with: the counts of the deeds differ
+            continue
         steady = (stopped_after is None and options.stop_second_after is None and leaver is None
                   and options.part_second_at is None)
         if client_deeds != server_deeds_common and steady:
