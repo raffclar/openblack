@@ -57,7 +57,7 @@ void Renderer::DrawTempleLeashes(const DrawSceneDesc& desc) const
 	const auto& mesh = *meshes.Handle(LeashPost::k_MeshId);
 	const auto skin = textures.Handle(LeashPost::k_TextureId)->GetNativeHandle();
 	const auto eye = desc.camera->GetOrigin();
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	const auto translucent = TranslucentView(desc.viewId);
 	const auto* program = _shaderManager->GetShader("Object");
 

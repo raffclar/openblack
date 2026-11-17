@@ -13,14 +13,15 @@
 
 using namespace openblack;
 
-ReflectionXZCamera::ReflectionXZCamera()
+ReflectionXZCamera::ReflectionXZCamera(float level)
     : Camera(glm::zero<glm::vec3>())
+    , _level(level)
 {
 }
 
 glm::mat4 ReflectionXZCamera::GetViewMatrix(Interpolation interpolation) const
 {
+	// The reflection in the plane y = level: the height turns over about the level
 	return Camera::GetViewMatrix(interpolation) *
-	       // Reflection matrix when the normal is (0, 1, 0)
-	       glm::mat4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+	       glm::mat4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 2.0f * _level, 0.0f, 1.0f);
 }

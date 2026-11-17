@@ -5,9 +5,15 @@ $input v_texcoord0, v_world
 // The water of a lake above the sea of a generated land. It has the look of the sea (see fs_water) at the lake's own
 // level, and it is blended over the land that is drawn before it, by the coast alpha of the land under it.
 
-// The sea's texture, and the sea's reflection
+// The sea's texture, and the layer that holds the mirror of the lake's level
 SAMPLER2D(s_diffuse, 0);
 SAMPLER2D(s_reflection, 1);
+
+// Where the lake's mirror is in its layer, in pixels from the top left. xy: the rectangle of the screen that the mirror
+// shows. zw: the rectangle of the layer that the mirror is drawn into.
+uniform vec4 u_lakeMirrorRect;
+// xy: the size of the layer's rectangle over the size of the screen's rectangle. zw: the size of the layer.
+uniform vec4 u_lakeMirrorScale;
 
 // The uniforms of the sea, as fs_water has them
 uniform vec4 u_seaColour;
@@ -85,7 +91,16 @@ float CoastAlpha(float aboveLevel)
 void main()
 {
 	float level = v_texcoord0.y;
-	vec2 reflectionUv = (gl_FragCoord.xy - u_viewRect.xy) / u_viewRect.zw;
+	// The pixel of the mirror under the pixel of the water, as the sea finds the pixel of its reflection
+	vec2 screen = (gl_FragCoord.xy - u_viewRect.xy) / u_viewRect.zw;
+#if BGFX_SHADER_LANGUAGE_GLSL
+	screen.y = 1.0f - screen.y;
+#endif
+	vec2 mirrorPixel = screen * u_lakeMirrorScale.zw;
+	vec2 reflectionUv = (u_lakeMirrorRect.zw + (mirrorPixel - u_lakeMirrorRect.xy) * u_lakeMirrorScale.xy) / u_lakeMirrorScale.zw;
+#if BGFX_SHADER_LANGUAGE_GLSL
+	reflectionUv.y = 1.0f - reflectionUv.y;
+#endif
 	float px = floor(gl_FragCoord.x - u_viewRect.x);
 #if BGFX_SHADER_LANGUAGE_GLSL
 	float py = floor(u_viewRect.w - (gl_FragCoord.y - u_viewRect.y));
@@ -118,8 +133,8 @@ void main()
 		rowAlpha = halfway < 0.5f ? RowAlpha(r, level) : 0.5f * (RowAlpha(r, level) + RowAlpha(r + 1.0f, level));
 	}
 
-	// The sea's texture in the sea's colour, blended by its alpha over the reflection. The reflection is the sky that the
-	// sea mirrors. The sky has no height, so the pixel of the sea's mirror under the lake's pixel shows it.
+	// The sea's texture in the sea's colour, blended by its alpha over the reflection. The reflection is the mirror of the
+	// world at the lake's level, as the sea's reflection is at the sea's level.
 	vec4 texel = texture2D(s_diffuse, uv);
 	vec3 sea = u_seaColour.rgb * texel.rgb;
 	vec3 beneath = texture2D(s_reflection, reflectionUv).rgb;

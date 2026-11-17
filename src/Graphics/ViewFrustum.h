@@ -31,12 +31,20 @@ namespace openblack::graphics::view_frustum
 
 struct Frustum
 {
-	/// Each side's plane, its normal pointing into the view: a point is inside where dot(xyz, point) + w >= 0
-	std::array<glm::vec4, 4> sides;
+	/// Each side's plane, its normal pointing into the view: a point is inside where dot(xyz, point) + w >= 0. The last
+	/// plane is the floor of a lake's mirror, which shows only what is above the lake's level. Every other view has a
+	/// floor that every point is inside.
+	std::array<glm::vec4, 5> sides;
 };
 
-/// The sides of the view a view-projection matrix draws
+/// The floor of a view that every point is inside
+inline constexpr glm::vec4 k_NoFloor {0.0f, 0.0f, 0.0f, 1.0f};
+
+/// The sides of the view a view-projection matrix draws, with no floor
 [[nodiscard]] Frustum FromViewProjection(const glm::mat4& viewProjection) noexcept;
+
+/// The view with a floor at a height: only what is at or above the height is in it
+[[nodiscard]] Frustum WithFloor(Frustum frustum, float height) noexcept;
 
 /// Whether any of a sphere is inside the view
 [[nodiscard]] bool SeesSphere(const Frustum& frustum, glm::vec3 centre, float radius) noexcept;

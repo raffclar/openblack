@@ -54,6 +54,7 @@ constexpr uint64_t k_OpaqueState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | B
 
 void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 {
+	// The fish swim under the sea, so only the sea's reflection has them
 	if (desc.viewId != RenderPass::Reflection || (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;

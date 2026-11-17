@@ -855,7 +855,7 @@ TextureHandle Renderer::GetLandLightTexture() const
 void Renderer::DrawFilmReflections(const DrawSceneDesc& desc) const
 {
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
-	if (desc.viewId != RenderPass::Reflection || renderCtx.filmReflections.empty())
+	if (!IsMirrorScene(desc.viewId) || renderCtx.filmReflections.empty())
 	{
 		return;
 	}

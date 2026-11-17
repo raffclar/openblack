@@ -136,7 +136,9 @@ public:
 	[[nodiscard]] glm::vec3 GetRight() const;
 	[[nodiscard]] glm::vec3 GetUp(Interpolation interpolation = Interpolation::Current) const;
 
-	[[nodiscard]] std::unique_ptr<Camera> Reflect() const;
+	/// The camera mirrored in the flat water at a height: the sea at 0, or a lake at its level. The change of clip space
+	/// comes after the projection, so that the mirror can draw a part of the screen.
+	[[nodiscard]] std::unique_ptr<Camera> Reflect(float level = 0.0f, const glm::mat4& clipChange = glm::mat4(1.0f)) const;
 
 	void DeprojectScreenToWorld(glm::vec2 screenCoord, glm::vec3& outWorldOrigin, glm::vec3& outWorldDirection,
 	                            Interpolation interpolation = Camera::Interpolation::Current) const;

@@ -164,7 +164,7 @@ bool IsOwnLeashMarker(const ecs::Registry& registry, const ecs::components::Leas
 
 /// Whether the game mirrors a creature's body in the sea this frame (see creature_reflection). The block under the
 /// creature is tested against the main camera's view. Its box reaches below the water when the land is mirrored.
-bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
+bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz, float waterLevel)
 {
 	if (!Locator::playerSystem::has_value() || !Locator::terrainSystem::has_value() || !Locator::camera::has_value())
 	{
@@ -175,7 +175,7 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
 	    .primaryCreature =
 	        players.GetPrimaryCreature((Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
 	                                                                     : PlayerNames::PLAYER_ONE)) == entity,
-	    .height = position.y,
+	    .height = position.y - waterLevel,
 	    .fizz = fizz,
 	};
 	const auto under = creature_reflection::BlockUnder(position);
@@ -291,12 +291,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			desc.frameBuffer->Bind(translucentViewId);
 		}
 		_shaderManager->SetViewOrder(translucentViewId, ViewOrder::DepthDescending);
-		_shaderManager->SetCamera(translucentViewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
+		_shaderManager->SetCamera(translucentViewId, *desc.camera, SceneTargetOf(desc));
 	}
 	// Outside the temple, the hand, the thing that it holds and the creature that the game mirrors in the sea are drawn
 	// over all of the mirrored world, in their order
-	const auto mirroredViewId =
-	    desc.viewId == RenderPass::Reflection && !inTemple ? RenderPass::ReflectionMirrored : desc.viewId;
+	const auto mirroredViewId = !inTemple ? MirroredPassOf(desc.viewId) : desc.viewId;
 	if (mirroredViewId != desc.viewId)
 	{
 		if (desc.frameBuffer != nullptr)
@@ -305,13 +304,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		}
 		bgfx::touch(static_cast<bgfx::ViewId>(mirroredViewId));
 		_shaderManager->SetViewOrder(mirroredViewId, ViewOrder::DepthAscending);
-		_shaderManager->SetCamera(mirroredViewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
+		_shaderManager->SetCamera(mirroredViewId, *desc.camera, SceneTargetOf(desc));
 	}
 	const auto cameraOrigin = desc.camera->GetOrigin();
 
-	_shaderManager->SetCamera(skyViewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
-	_shaderManager->SetCamera(landViewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
-	_shaderManager->SetCamera(desc.viewId, *desc.camera, detail::SceneTarget(desc.frameBuffer));
+	_shaderManager->SetCamera(skyViewId, *desc.camera, SceneTargetOf(desc));
+	_shaderManager->SetCamera(landViewId, *desc.camera, SceneTargetOf(desc));
+	_shaderManager->SetCamera(desc.viewId, *desc.camera, SceneTargetOf(desc));
 	_modelLight = GetModelLight();
 	if (Locator::camera::has_value())
 	{
@@ -323,7 +322,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	}
 	const auto skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
 	// The land mirrored under the sea is lit at half
-	const float landLightScale = desc.viewId == RenderPass::Reflection ? 0.5f : 1.0f;
+	const float landLightScale = IsMirrorScene(desc.viewId) ? 0.5f : 1.0f;
 	const glm::vec4 landSkyAndBump = {skyType, landLightScale, desc.smallBumpMapStrength, 0.0f};
 	const ScenePass pass {
 	    .skyViewId = skyViewId,
@@ -374,8 +373,8 @@ void Renderer::DrawPassSky(const DrawSceneDesc& desc, const ScenePass& pass) con
 	auto& profiler = Locator::profiler::value();
 	const auto skyViewId = pass.skyViewId;
 	const auto* skyShader = _shaderManager->GetShader("Sky");
-	auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawSky
-	                                                                          : Profiler::Stage::MainPassDrawSky);
+	auto section = profiler.BeginScoped(IsMirrorScene(desc.viewId) ? Profiler::Stage::ReflectionDrawSky
+	                                                               : Profiler::Stage::MainPassDrawSky);
 	if (desc.drawSky && _skyDomeFrameBuffer)
 	{
 		const auto modelMatrix = sky_dome::Placement();
@@ -420,8 +419,8 @@ void Renderer::DrawPassWater(const DrawSceneDesc& desc, const ScenePass& pass) c
 	auto& profiler = Locator::profiler::value();
 	const auto skyViewId = pass.skyViewId;
 	const auto* waterShader = _shaderManager->GetShader("Water");
-	auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawWater
-	                                                                          : Profiler::Stage::MainPassDrawWater);
+	auto section = profiler.BeginScoped(IsMirrorScene(desc.viewId) ? Profiler::Stage::ReflectionDrawWater
+	                                                               : Profiler::Stage::MainPassDrawWater);
 	if (desc.drawWater)
 	{
 		const auto& ocean = Locator::oceanSystem::value();
@@ -442,7 +441,7 @@ void Renderer::DrawPassWater(const DrawSceneDesc& desc, const ScenePass& pass) c
 		// swirl) goes over the sea and under the land, as the game draws them in turn
 		waterShader->Submit(static_cast<bgfx::ViewId>(skyViewId));
 	}
-	if (desc.viewId != RenderPass::Reflection)
+	if (!IsMirrorScene(desc.viewId))
 	{
 		DrawVortexDepthWalls(desc, skyViewId);
 	}
@@ -455,10 +454,10 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 	const auto cameraOrigin = pass.cameraOrigin;
 	const auto landSkyAndBump = pass.landSkyAndBump;
 	const auto* terrainShader = _shaderManager->GetShader("Terrain");
-	auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawIsland
-	                                                                          : Profiler::Stage::MainPassDrawIsland);
+	auto section = profiler.BeginScoped(IsMirrorScene(desc.viewId) ? Profiler::Stage::ReflectionDrawIsland
+	                                                               : Profiler::Stage::MainPassDrawIsland);
 	// Below High detail the sea doesn't mirror the land
-	const bool landShown = desc.viewId != RenderPass::Reflection || Locator::config::value().detail.landReflection;
+	const bool landShown = !IsMirrorScene(desc.viewId) || Locator::config::value().detail.landReflection;
 	if (desc.drawIsland && landShown)
 	{
 		auto& island = Locator::terrainSystem::value();
@@ -468,6 +467,9 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 		auto smallBump = textures.Handle(LandIslandInterface::k_SmallBumpTextureId);
 		auto smallBumpAlpha = textures.Handle(LandIslandInterface::k_SmallBumpAlphaTextureId);
 		const auto& u_skyAndBump = landSkyAndBump;
+		// A lake's mirror shows only the land over the lake's level, as its floor leaves out the rest
+		const bool clipped = LakeMirrorSlotOf(desc.viewId).has_value();
+		const glm::vec4 u_landClip {clipped ? 1.0f : 0.0f, MirrorLevelOf(desc.viewId), 0.0f, 0.0f};
 
 		// The small bump detail fades out about a line across the ground: where the plane square to the camera's
 		// view, 50 units ahead of it, meets the ground at the camera's height, or at 110.55 if the camera is higher
@@ -545,6 +547,7 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			terrainShader->SetUniformValue("u_haze", &_haze[0]);
 			terrainShader->SetUniformValue("u_hazeColour", &_haze[1]);
 			terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
+			terrainShader->SetUniformValue("u_landClip", &u_landClip);
 			terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
 			terrainShader->SetUniformValue("u_landTexels", &landTexels);
 			// The moving shadows fall on the land, not on its reflection
@@ -648,15 +651,25 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 		};
 		if (!blocks.empty())
 		{
-			// Only the blocks in view of the scene's own camera are drawn, also when they are mirrored
-			const bool culled = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Reflection;
+			// Only the blocks in view of the scene's own camera are drawn, also when they are mirrored. A lake's mirror
+			// has its own blocks in view.
+			const bool culled = desc.viewId == RenderPass::Main || IsMirrorScene(desc.viewId);
+			const auto lakeSlot = LakeMirrorSlotOf(desc.viewId);
+			const auto blockInView = [&](size_t index) {
+				if (lakeSlot.has_value())
+				{
+					const auto& inView = _lakeBlocksInView.at(*lakeSlot);
+					return index < inView.size() && inView[index] != 0;
+				}
+				return index >= _landDetail.inView.size() || _landDetail.inView[index];
+			};
 			// The land's pass keeps the order the blocks come in, so they come the nearest first. Each block's depth is
 			// found one time, and only the blocks that are drawn are put in order.
 			std::vector<std::pair<decltype(blockDepth(blocks.front())), size_t>> order;
 			order.reserve(blocks.size());
 			for (size_t index = 0; index < blocks.size(); ++index)
 			{
-				if (!culled || index >= _landDetail.inView.size() || _landDetail.inView[index])
+				if (!culled || blockInView(index))
 				{
 					order.emplace_back(blockDepth(blocks[index]), index);
 				}
@@ -702,8 +715,8 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 void Renderer::DrawPassModels(const DrawSceneDesc& desc, const ScenePass& pass) const
 {
 	auto& profiler = Locator::profiler::value();
-	auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawModels
-	                                                                          : Profiler::Stage::MainPassDrawModels);
+	auto section = profiler.BeginScoped(IsMirrorScene(desc.viewId) ? Profiler::Stage::ReflectionDrawModels
+	                                                               : Profiler::Stage::MainPassDrawModels);
 	if (desc.drawEntities)
 	{
 		DrawPassEntities(desc, pass);
@@ -744,7 +757,7 @@ void Renderer::DrawPassPlacedModels(const DrawSceneDesc& desc, auto& draws, temp
 	{
 		if (meshId != ecs::components::Hand::k_MeshId && !placers.translucent && !placers.perEntity &&
 		    temple_room_order::StepOf(placers.behindCurrentRoom, placers.translucent) == step &&
-		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+		    !(IsMirrorScene(desc.viewId) && placers.hiddenFromReflection))
 		{
 			placed.push_back({.meshId = meshId, .mesh = &*meshManager.Handle(meshId), .placers = &placers});
 		}
@@ -832,7 +845,7 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 		}
 		const auto placers = renderCtx.instancedDrawDescs.find(mesh->id);
 		if (placers == renderCtx.instancedDrawDescs.end() ||
-		    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+		    (IsMirrorScene(desc.viewId) && placers->second.hiddenFromReflection))
 		{
 			continue;
 		}
@@ -877,7 +890,7 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 		const auto* spells = posers.TryGet<const ecs::components::CreatureSpells>(poser);
 		const float fizz = spells != nullptr ? spells->fizz : 0.0f;
 		submitDesc.modelLight = drawn.light;
-		if (desc.viewId == RenderPass::Reflection)
+		if (IsMirrorScene(desc.viewId))
 		{
 			// The sea reflects the body of the local player's creature alone, without its eyes or hair, whole.
 			// It does so only while the creature stands low on a near land block in view, and until it has fizzed
@@ -886,7 +899,7 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 			                          ? glm::vec3(renderCtx.instanceUniforms.at(instance).model[3])
 			                          : glm::vec3(0.0f);
 			// It shows none of the creature's frozen look. It comes after the hand and what the hand holds.
-			if (!copy && CreatureMirrored(entity, position, fizz))
+			if (!copy && CreatureMirrored(entity, position, fizz, MirrorLevelOf(desc.viewId)))
 			{
 				flatReflection = FlatLook {.colour = creature_reflection::Colour(), .added = creature_reflection::Added()};
 				submitDesc.iceShown = false;
@@ -955,13 +968,13 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 		    glows != nullptr && transform != nullptr)
 		{
 			DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *glows,
-			                      desc.camera->GetProjectionMatrix(), desc.viewId == RenderPass::Reflection,
+			                      desc.camera->GetProjectionMatrix(), IsMirrorScene(desc.viewId),
 			                      zsort::Depth(transform->position, cameraOrigin));
 		}
 	}
 	// The glows of the creed objects, which show no model of their own
 	DrawCreedGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), renderCtx, desc.camera->GetProjectionMatrix(),
-	               desc.viewId == RenderPass::Reflection, cameraOrigin);
+	               IsMirrorScene(desc.viewId), cameraOrigin);
 	// The creatures that the interface shows over itself, each moved for its draw to its place before the
 	// interface's own camera, in a view of their own
 	if (desc.viewId == RenderPass::Main && _interfaceCreatures.has_value())
@@ -1039,17 +1052,17 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 				continue;
 			}
 			// The body takes the posed models' light, as in the world, but not in the reflection
-			submitDesc.posedModelLight = desc.viewId != RenderPass::Reflection;
+			submitDesc.posedModelLight = !IsMirrorScene(desc.viewId);
 			drawInstances(ids.base, placers, false, 0, 1, &pose, nullptr, *_warmUpInstances);
 			// And fizzing, as it comes into sight
-			if (desc.viewId != RenderPass::Reflection)
+			if (!IsMirrorScene(desc.viewId))
 			{
 				drawFizzing(ids.base, placers, 0, *_warmUpInstances, pose, creature_fizz_look::Level(warm_up::k_CreatureFizz),
 				            glm::vec2(0.0f), 0, warm_up::k_CreatureFreeze);
 			}
 			submitDesc.posedModelLight = false;
 		}
-		if (desc.viewId != RenderPass::Reflection)
+		if (!IsMirrorScene(desc.viewId))
 		{
 			ecs::components::CreatureEyes eyes;
 			eyes.drawn.at(0) = {.eyeball = glm::mat4(0.0f), .eyelid = glm::mat4(0.0f)};
@@ -1083,7 +1096,7 @@ void Renderer::DrawPassAnimals(const DrawSceneDesc& desc, auto& draws) const
 	{
 		const auto placers = renderCtx.instancedDrawDescs.find(meshId);
 		if (placers == renderCtx.instancedDrawDescs.end() ||
-		    (desc.viewId == RenderPass::Reflection && placers->second.hiddenFromReflection))
+		    (IsMirrorScene(desc.viewId) && placers->second.hiddenFromReflection))
 		{
 			continue;
 		}
@@ -1173,8 +1186,7 @@ void Renderer::DrawPassPaletteVillagers(const DrawSceneDesc& desc, auto& draws) 
 		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
 		for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
 		{
-			if (placers.bonePalette && placers.filled > 0 &&
-			    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+			if (placers.bonePalette && placers.filled > 0 && !(IsMirrorScene(desc.viewId) && placers.hiddenFromReflection))
 			{
 				inSegments(placers, [&](uint32_t first, uint32_t count) {
 					drawInstances(meshId, placers, placers.materialBlending, first, count, &palettePose);
@@ -1242,7 +1254,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 		std::vector<std::tuple<uint64_t, entt::id_type, uint32_t>> yardCopies;
 		for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
 		{
-			if (placers.filled == 0 || (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection) ||
+			if (placers.filled == 0 || (IsMirrorScene(desc.viewId) && placers.hiddenFromReflection) ||
 			    !meshManager.Contains(meshId) || (placers.bonePalette && !renderCtx.bonePaletteTexture) ||
 			    (placers.perEntity && !placers.bonePalette))
 			{
@@ -1290,7 +1302,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 	drawRootsPiles(true);
 	// The souls of the dead rising or sinking, each white and see-through, posed by its own clip; the sea doesn't
 	// reflect them
-	if (desc.viewId != RenderPass::Reflection)
+	if (!IsMirrorScene(desc.viewId))
 	{
 		for (const auto& soul : renderCtx.soulDraws)
 		{
@@ -1327,7 +1339,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 		const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
 		const auto warmUpModel = [&](entt::id_type meshId, RenderContext::InstancedDrawDesc placers) {
 			if (meshId == ecs::components::Hand::k_MeshId || !meshManager.Contains(meshId) ||
-			    (desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+			    (IsMirrorScene(desc.viewId) && placers.hiddenFromReflection))
 			{
 				return;
 			}
@@ -1389,7 +1401,7 @@ void Renderer::DrawPassBlendedPlaced(const DrawSceneDesc& desc, auto& draws, tem
 		                                                      .perEntity = placers.perEntity,
 		                                                      .hand = meshId == ecs::components::Hand::k_MeshId}) &&
 		    temple_room_order::StepOf(placers.behindCurrentRoom, placers.translucent) == step &&
-		    !(desc.viewId == RenderPass::Reflection && placers.hiddenFromReflection))
+		    !(IsMirrorScene(desc.viewId) && placers.hiddenFromReflection))
 		{
 			for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 			{
@@ -1537,7 +1549,7 @@ void Renderer::DrawPassHand(const DrawSceneDesc& desc, const ScenePass& pass, au
 	// The game's reflection of the main room has no hand in it
 	if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
 	    mirroredViewId == desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
-	    !(desc.viewId == RenderPass::Reflection && hand->second.hiddenFromReflection))
+	    !(IsMirrorScene(desc.viewId) && hand->second.hiddenFromReflection))
 	{
 		// L3D meshes face clockwise, which the mirrored reflection pass and a mirrored hand each turn around
 		const bool facesTurned = hand_faces::FacesTurned(desc.cullBack, renderCtx.handMirrored);
@@ -1750,7 +1762,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		// The temple's walking worshippers are drawn in a grey of their own, darker in the reflection
 		if (placers.templeGrey.has_value())
 		{
-			const float grey = desc.viewId == RenderPass::Reflection ? placers.templeGrey->y : placers.templeGrey->x;
+			const float grey = IsMirrorScene(desc.viewId) ? placers.templeGrey->y : placers.templeGrey->x;
 			sd.tint = glm::vec4(light.Colour(glm::vec3(grey)), 0.0f);
 		}
 		sd.lightMultiply = light.multiply;
@@ -1895,8 +1907,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		}
 		// The scripts' scrolls and signs take the first environment map, each primitive as its material says. The
 		// sea mirrors them without it.
-		const bool reflected = desc.viewId == RenderPass::Reflection || desc.viewId == RenderPass::ReflectionTranslucent ||
-		                       desc.viewId == RenderPass::ReflectionMirrored || flatReflection.has_value();
+		const bool reflected = IsMirrorView(desc.viewId) || flatReflection.has_value();
 		const bool environmentMapped =
 		    placers.environmentMapped && environmentMap != nullptr && !reflected && sd.program == objectShaderStaticInstanced;
 		sd.environment = environmentMapped ? environmentMap : nullptr;
@@ -2002,8 +2013,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	};
 	// The view of this pass, as the pass sets it. An instance out of it puts no pixel on the screen, so the pass
 	// does not draw it. A warm-up draws all instances, so that each draw makes its pipeline.
-	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
-	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto seenBy = SceneFrustum(desc);
 	const auto instanceSeen = [&](const L3DMesh& mesh, const RenderContext::InstancedDrawDesc& placers, uint32_t instance) {
 		// The bones of a model can move its parts out of its box, and so can the offsets of its submeshes
 		if (_warmingUp || mesh.IsBoned() || placers.bonePalette || placers.perEntity || !placers.subMeshOffsets.empty() ||
@@ -2177,7 +2187,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		drawn.second.instanceAlpha = false;
 		const auto* placers = &drawn;
 		// A swimmer drawn under the sea as it is isn't mirrored in it, as the game mirrors only the land
-		if (desc.viewId == RenderPass::Reflection && (placers->second.hiddenFromReflection || pose->underSea.has_value()))
+		if (IsMirrorScene(desc.viewId) && (placers->second.hiddenFromReflection || pose->underSea.has_value()))
 		{
 			return;
 		}
@@ -2241,7 +2251,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	const bool handReflected = desc.drawHand && handDraw != renderCtx.instancedDrawDescs.end() && handDraw->second.count > 0 &&
 	                           !handDraw->second.hiddenFromReflection;
 	const auto drawVillager = [&](entt::entity entity, uint32_t instance) {
-		const bool reflection = desc.viewId == RenderPass::Reflection;
+		const bool reflection = IsMirrorScene(desc.viewId);
 		const auto* pose = desc.entities.TryGet<const ecs::components::VillagerPose>(entity);
 		if (pose == nullptr || (reflection && !graphics::sea_reflection::ReflectsVillager(
 		                                          {.inPhysics = desc.entities.AllOf<ecs::components::InPhysics>(entity),
@@ -2305,7 +2315,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		const bool fading = fadingHolds(instance);
 		// The sea mirrors none of the explorers' boat film this way, even one sharing its model with things it
 		// mirrors
-		const bool reflection = desc.viewId == RenderPass::Reflection;
+		const bool reflection = IsMirrorScene(desc.viewId);
 		if (reflection && from.AllOf<ecs::components::BoatFilmPart>(entity))
 		{
 			return;
@@ -2363,8 +2373,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	const auto drawHeld = [&](bool fading) {
 		for (const auto& held : renderCtx.heldDraws)
 		{
-			if (held.fading != fading || (desc.viewId == RenderPass::Reflection && !held.reflected) ||
-			    !meshManager.Contains(held.meshId))
+			if (held.fading != fading || (IsMirrorScene(desc.viewId) && !held.reflected) || !meshManager.Contains(held.meshId))
 			{
 				continue;
 			}
@@ -2480,8 +2489,8 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 	// Trees are placed on the land already, so they are drawn where they are rather than moved onto the height map
 	const auto* vegetationShaderInstanced = _shaderManager->GetShader("Vegetation");
 	const auto* debugShaderInstanced = _shaderManager->GetShader("DebugLineInstanced");
-	auto subSection = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawVegetation
-	                                                                             : Profiler::Stage::MainPassDrawVegetation);
+	auto subSection = profiler.BeginScoped(IsMirrorScene(desc.viewId) ? Profiler::Stage::ReflectionDrawVegetation
+	                                                                  : Profiler::Stage::MainPassDrawVegetation);
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 
 	if (desc.drawVegetation)
@@ -2530,7 +2539,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 			{
 				for (uint32_t instance = run.first; instance < run.first + run.count; ++instance)
 				{
-					if (desc.viewId == RenderPass::Reflection &&
+					if (IsMirrorScene(desc.viewId) &&
 					    std::ranges::any_of(renderCtx.heldTreeDraws,
 					                        [instance](const auto& held) { return held.instance == instance; }))
 					{
@@ -2556,7 +2565,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 				submitDesc.sortDepth = graphics::fizz_draw_order::SegmentDepth(run.segment);
 			}
 			// The sea mirrors a tree in a hand only with the hand, not with the land
-			if (desc.viewId == RenderPass::Reflection && !renderCtx.heldTreeDraws.empty())
+			if (IsMirrorScene(desc.viewId) && !renderCtx.heldTreeDraws.empty())
 			{
 				uint32_t from = run.first;
 				const uint32_t end = run.first + run.count;
@@ -2585,7 +2594,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 		// The game mirrors a tree in the hand right after the hand, flat in the light that the tree kept: the land's
 		// light at its place on the map, the haze there and the grey of a fire on it, of the frame before
 		if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
-		    desc.viewId == RenderPass::Reflection && !inTemple && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
+		    IsMirrorScene(desc.viewId) && !inTemple && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
 		    hand->second.count > 0 && !hand->second.hiddenFromReflection)
 		{
 			for (const auto& held : renderCtx.heldTreeDraws)
@@ -2600,7 +2609,7 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 				submitDesc.instanceDesc =
 				    std::make_unique<graphics::InstanceDesc>(renderCtx.treeInstanceUniformBuffer, held.instance, 1);
 				submitDesc.detailLevel = run->level;
-				submitDesc.viewId = RenderPass::ReflectionMirrored;
+				submitDesc.viewId = MirroredPassOf(desc.viewId);
 				submitDesc.sortDepth = hand_reflection::SortKey(hand_reflection::MirroredThing::Held);
 				submitDesc.state = opaqueState;
 				submitDesc.useMaterialBlending = true;
@@ -2644,8 +2653,8 @@ void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass)
 	const auto translucentViewId = pass.translucentViewId;
 	const auto cameraOrigin = pass.cameraOrigin;
 	const auto* spriteShader = _shaderManager->GetShader("Sprite");
-	auto subSection = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawSprites
-	                                                                             : Profiler::Stage::MainPassDrawSprites);
+	auto subSection = profiler.BeginScoped(IsMirrorScene(desc.viewId) ? Profiler::Stage::ReflectionDrawSprites
+	                                                                  : Profiler::Stage::MainPassDrawSprites);
 
 	if (desc.drawSprites)
 	{
@@ -2676,8 +2685,7 @@ void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass)
 		// The sprites name their textures by their ids in the cache
 		const auto& textures = Locator::resources::value().GetTextures();
 		// The view of this pass. A sprite out of it puts no pixel on the screen, so the pass does not draw it.
-		const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
-		                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+		const auto seenBy = SceneFrustum(desc);
 		const auto drawSprites = [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, bookmarksShown,
 		                          leashMarkersShown, &seenBy](const ecs::Registry& from) {
 			// The walk makes no component, so the stores of the components stay the same for all of it
@@ -2704,7 +2712,7 @@ void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass)
 				    {
 					    const bool inMainRoom = templePart->room == TempleRoom::Main;
 					    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
-					    const bool inReflection = desc.viewId == RenderPass::Reflection;
+					    const bool inReflection = IsMirrorScene(desc.viewId);
 					    if ((inReflection ? !inMainRoom : !drawn) ||
 					        !detail_level::TempleGlowsShown(Locator::config::value().detail, inReflection))
 					    {

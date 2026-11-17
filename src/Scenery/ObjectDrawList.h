@@ -54,6 +54,9 @@ struct Block
 	glm::vec2 corner {0.0f};
 	uint8_t highestAltitude {0};
 	bool reflected {true};
+	/// With the reflection, the height that the box reaches at least: twice the highest level of the lakes above the
+	/// sea, whose mirrors turn the block over at their levels. 0 on a land with no lakes.
+	float mirrorTop {0.0f};
 };
 
 /// Whether any of a block can be seen: false only when all eight corners of the box over it lie beyond the same side
@@ -80,6 +83,7 @@ private:
 		uint32_t camera {0};
 		uint8_t highestAltitude {0};
 		bool reflected {false};
+		float mirrorTop {0.0f};
 		bool inView {false};
 	};
 

@@ -53,7 +53,7 @@ using namespace openblack::graphics;
 
 void Renderer::DrawTempleExitGlow(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId == RenderPass::Reflection || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	if (IsMirrorScene(desc.viewId) || !Locator::temple::has_value() || !Locator::temple::value().Active())
 	{
 		return;
 	}

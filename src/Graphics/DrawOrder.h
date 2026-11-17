@@ -39,7 +39,7 @@ namespace openblack::graphics::draw_order
 	{
 		return true;
 	}
-	if (view != RenderPass::Main && view != RenderPass::Reflection)
+	if (view != RenderPass::Main && !IsMirrorScene(view))
 	{
 		return false;
 	}
