@@ -199,7 +199,7 @@ TEST(LobbyScreenRules, AStartWithNoMapPackageOnTheSiteGivesItsOwnNotice)
 
 TEST(LobbyScreenRules, TheBoxesBeforeTheStartShowTheLineOfTheGameServer)
 {
-	// The box that makes a session shows the map of the fixed game server (deviation 276)
+	// The box that makes a session shows the map of the fixed game server (deviation 277)
 	const lobby_api::PoolState fixed {
 	    .free = 1,
 	    .total = 1,

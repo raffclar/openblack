@@ -247,12 +247,12 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.lobby_create_server_map", "The lobby sessions: the map of the fixed game server",
 	     Stage::LobbyCreateServerMap,
 	     "The site has one fixed game server that plays only one map. The player opens the box that makes a session "
-	     "(deviation 276).",
+	     "(deviation 277).",
 	     "Between the Back and Create session buttons, the box shows \"The game server plays only the map Two Gods, "
 	     "with a maximum of 2 gods.\""},
 	    {"multiplayer.lobby_settings_server_problem", "The lobby sessions: the server problem in the settings",
 	     Stage::LobbySettingsServerProblem,
-	     "The player makes a session that the game server cannot play, and opens the session settings (deviation 276).",
+	     "The player makes a session that the game server cannot play, and opens the session settings (deviation 277).",
 	     "Between the Back and Change settings buttons, the box shows \"This server plays only Two Gods for up to 2 "
 	     "gods.\""},
 	    {"multiplayer.lobby_notices", "The lobby sessions: the notices of the room", Stage::LobbyNotices,

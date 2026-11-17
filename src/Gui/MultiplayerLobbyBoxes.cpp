@@ -414,7 +414,7 @@ void MultiplayerBoxes::BuildCreateLobby(Dialog& dialog)
 		                       u"An empty password keeps the password. A change clears the ready of each player.",
 		                       Layout::Centre, Small());
 	}
-	// The line of the game server sits between the Back and Next buttons (deviation 276)
+	// The line of the game server sits between the Back and Next buttons (deviation 277)
 	_serverLine = &dialog.Add<StaticText>(k_ServerLineRect, std::u16string(), Layout::Wrapped, Small());
 	dialog.SetFocus(_sessionName);
 }
