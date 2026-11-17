@@ -1541,7 +1541,8 @@ void GameInterface::UpdateChat(bool dialogOpen, glm::u16vec2 resolution)
 	const bool videoPlays = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
 	const bool wideScreen =
 	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
-	facts.inGame = !videoPlays;
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	facts.inGame = chat_controls::InWorld(videoPlays, inTemple);
 	facts.open = _chatControls->IsOpen();
 	facts.incoming = Locator::incomingMessageSystem::has_value() && !Locator::incomingMessageSystem::value().GetQueue().Empty();
 	facts.creatureInteracting =

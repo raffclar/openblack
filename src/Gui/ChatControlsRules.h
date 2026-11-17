@@ -125,7 +125,7 @@ struct ShowFacts
 	/// A game of one player, or a network game that is connected
 	bool connected {false};
 	bool singlePlayer {false};
-	/// The world shows, with no video
+	/// The world shows: no video plays and the player is not in the temple (see InWorld)
 	bool inGame {false};
 	bool open {false};
 	/// A message is in the incoming messages
@@ -135,6 +135,12 @@ struct ShowFacts
 	/// The custom music player plays, with no video and no cinema bars
 	bool music {false};
 };
+/// Whether the world shows for the chat controls. In a video or in the temple, the controls go, and they come back with
+/// the same state when the player is in the world again.
+[[nodiscard]] constexpr bool InWorld(bool videoPlays, bool inTemple) noexcept
+{
+	return !videoPlays && !inTemple;
+}
 /// Whether the controls show after this frame. The answer stays from frame to frame until a fact changes it:
 /// 1. With no connected game, or in a game of one player with the chat shut, the controls go.
 /// 2. Out of the world, nothing more changes.
