@@ -293,9 +293,11 @@ bool GameObjectEffects::IsDryLand(glm::vec3 point) const
 	// Dry where its cell stands above the sea's level, whether or not the land's file marks water in it, as a coast's
 	// cells may be; off the map is not
 	constexpr uint8_t k_HighestWetAltitude = 3;
-	const auto* cell =
-	    Locator::terrainSystem::value().FindCell(glm::u16vec2(glm::floor(glm::vec2(point.x, point.z) / k_CellSize)));
-	const bool dry = cell != nullptr && cell->altitude > k_HighestWetAltitude;
+	const auto& island = Locator::terrainSystem::value();
+	const auto coordinates = glm::u16vec2(glm::floor(glm::vec2(point.x, point.z) / k_CellSize));
+	const auto* cell = island.FindCell(coordinates);
+	// On a generated land, the ground under a lake above the sea is not dry either
+	const bool dry = cell != nullptr && cell->altitude > k_HighestWetAltitude && !island.IsUnderLake(coordinates);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Blast: land at ({:.1f}, {:.1f}) altitude {} water flag {}: {}", point.x, point.z,
 	                    static_cast<int>(cell != nullptr ? cell->altitude : 0),
 	                    static_cast<int>(cell != nullptr ? cell->properties.hasWater : 0), dry ? "dry" : "wet");

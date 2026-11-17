@@ -52,7 +52,7 @@ IndexBuffer::IndexBuffer(std::string name, const void* mem, Type type, Storage s
     , _storage(storage)
 {
 	const auto* memBgfx = static_cast<const DeviceMemory*>(mem);
-	_count = static_cast<uint32_t>(Locator::graphicsDevice::value().Bytes(memBgfx).size() / sizeof(uint16_t));
+	_count = static_cast<uint32_t>(Locator::graphicsDevice::value().Bytes(memBgfx).size() / GetTypeSize(type));
 	Make(memBgfx);
 }
 

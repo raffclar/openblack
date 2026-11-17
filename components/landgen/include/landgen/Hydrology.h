@@ -48,6 +48,10 @@ struct LakeSettings
 	/// The altitude of the bed of a lake at the sea level, and of the channel to the sea
 	float bed {-3.0f};
 	float channel {1.0f};
+	/// A higher basin with at least this many corners, whose water is this deep at the deepest, keeps its hollow: it
+	/// holds a lake at its own level (see lakes::Find). A smaller or shallower basin fills as wet ground.
+	int highLakeCorners {40};
+	float highLakeDeepest {2.0f};
 };
 
 struct Lakes
@@ -59,8 +63,8 @@ struct Lakes
 };
 
 /// Finds the basins that the filled heights cover. A low basin becomes a lake at the sea level, with a channel along the
-/// way that its water flows to the sea. A higher basin fills with ground and stays wet, because the game draws water
-/// only at the sea level.
+/// way that its water flows to the sea. A large, deep higher basin keeps its hollow for a lake at its own level. A
+/// smaller higher basin fills with ground and stays wet.
 [[nodiscard]] Lakes FormLakes(Grid<float>& heights, const Drainage& drainage, const LakeSettings& settings);
 
 struct RiverSettings

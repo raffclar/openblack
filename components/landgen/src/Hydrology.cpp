@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <functional>
 #include <queue>
+#include <ranges>
 
 using namespace openblack::landgen;
 using namespace openblack::landgen::hydrology;
@@ -207,6 +208,13 @@ Lakes hydrology::FormLakes(Grid<float>& heights, const Drainage& drainage, const
 				index = drainage.receivers[static_cast<size_t>(index)];
 			}
 			lakes.seaLakes.push_back(basin);
+			continue;
+		}
+		// A large, deep basin keeps its hollow, which then holds a lake at its own level
+		const float lowest =
+		    std::ranges::min(basin | std::views::transform([&heights](uint32_t corner) { return heights.values[corner]; }));
+		if (static_cast<int>(basin.size()) >= settings.highLakeCorners && spill - lowest >= settings.highLakeDeepest)
+		{
 			continue;
 		}
 		const bool wet = static_cast<int>(basin.size()) >= settings.minCorners;

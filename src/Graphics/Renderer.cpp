@@ -483,6 +483,7 @@ Renderer::~Renderer() noexcept
 		bgfx::destroy(toBgfx(*_landLightTexture));
 	}
 	ReleaseLightOfFrameBefore();
+	ReleaseLakes();
 	if (_iconsTexture)
 	{
 		bgfx::destroy(toBgfx(*_iconsTexture));
@@ -781,6 +782,10 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 			// only the sky, the land and a few moving things, everything is mirrored here.
 			drawPassDesc.smallBumpMapStrength = 0.0f;
 
+			if (drawDesc.drawWater)
+			{
+				CopyLakeSky();
+			}
 			DrawPass(drawPassDesc);
 
 			// Then what is under the sea's surface, seen from the view itself, into the same target and against its

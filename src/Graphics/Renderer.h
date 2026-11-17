@@ -385,6 +385,8 @@ private:
 	void DrawHandWaterGlow(const DrawSceneDesc& desc) const;
 	/// The sea's rows, ripple, period and colour for the camera
 	void SetSeaUniforms(const ShaderProgram& waterShader, const Camera& camera) const;
+	/// The sea's uniforms of this frame, as SetSeaUniforms gave them to the sea, for the lakes' water
+	void SetLakeUniforms(const ShaderProgram& lakeShader) const;
 	/// Bakes the shadows of the island's trees, rocks and buildings into its land (see LandShadowBake), and draws the trees'
 	/// moving shadows when they are asked for (see ObjectShadows)
 	void DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const;
@@ -551,6 +553,12 @@ private:
 	void DrawPassWater(const DrawSceneDesc& desc, const ScenePass& pass) const;
 	/// Draws the land in its own view, then the creature footprints on it
 	void DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) const;
+	/// Draws the water of the lakes above the sea of a generated land in the view itself, after the land
+	void DrawPassLakes(const DrawSceneDesc& desc) const;
+	/// Copies the sky of the sea's reflection for the lakes, before the land of the reflection is drawn
+	void CopyLakeSky() const;
+	/// Releases the lakes' mesh and the copy of the sky
+	void ReleaseLakes() const;
 	/// Draws the models: the entities, the vegetation, the lights of the temple and the sprites
 	void DrawPassModels(const DrawSceneDesc& desc, const ScenePass& pass) const;
 	/// Draws the solid models placed this frame of one step of the temple's room order. The threads that encode draws can
@@ -844,6 +852,15 @@ private:
 	mutable sea_rows::Ripple _seaRipple;
 	/// How far the sea's texture drifted with the ambient wind, moving on with the frames the sea is drawn in
 	mutable sea_rows::Drift _seaDrift;
+	/// The water surface of the lakes above the sea (see lake_surface), and the digest of the lakes that it is made from
+	mutable std::unique_ptr<Mesh> _lakeMesh;
+	/// The uniforms that SetSeaUniforms gave to the sea this frame: params, rows, mode, colour, camera and drift
+	mutable std::array<glm::vec4, 6> _seaUniforms {};
+	mutable uint64_t _lakeMeshDigest {0};
+	/// The sky that the sea mirrors, copied before the land is mirrored over it. The sky has no height, so the lakes
+	/// above the sea mirror it as well. The size of the copy is the size of the sea's reflection.
+	mutable std::optional<TextureHandle> _lakeSky;
+	mutable glm::u16vec2 _lakeSkySize {0};
 	/// The land's luminosity of this frame and of the frame before, a copy of the shaded land (see land_shade) sized to
 	/// the land's. Each frame changes the other one and keeps the rows it changed: the next frame changes those too.
 	mutable std::array<std::unique_ptr<Texture2D>, 2> _landLuminosity;

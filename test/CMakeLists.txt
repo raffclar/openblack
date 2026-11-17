@@ -259,6 +259,7 @@ openblack_setup_and_add_test(test_particle_plasma test_particle_plasma.cpp)
 target_link_libraries(test_particle_plasma PRIVATE psys)
 openblack_setup_and_add_test(test_map_coords test_map_coords.cpp)
 openblack_setup_and_add_test(test_land_normal test_land_normal.cpp)
+openblack_setup_and_add_test(test_lake_surface test_lake_surface.cpp)
 openblack_setup_and_add_test(test_temple_ground test_temple_ground.cpp)
 openblack_setup_and_add_test(test_picking test_picking.cpp)
 openblack_setup_and_add_test(test_tree_brightness test_tree_brightness.cpp)
@@ -2672,6 +2673,8 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_landgen_shape landgen/test_landgen_shape.cpp)
 target_link_libraries(test_landgen_shape PRIVATE landgen)
+openblack_setup_and_add_test(test_landgen_lakes landgen/test_landgen_lakes.cpp)
+target_link_libraries(test_landgen_lakes PRIVATE landgen)
 openblack_setup_and_add_test(
   test_landgen_climate landgen/test_landgen_climate.cpp
 )

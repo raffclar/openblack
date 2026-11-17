@@ -167,12 +167,16 @@ void openblack::landgen::FlattenStartArea(Grid<float>& heights, const StartArea&
 
 Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>& altitudes, const Grid<uint8_t>& luminosity,
                                                             const Grid<Biome>& biomes, const Grid<uint8_t>& freshWater,
-                                                            const Grid<uint8_t>& runningWater)
+                                                            const Grid<uint8_t>& runningWater, const Grid<float>* lakeLevels)
 {
 	const int side = altitudes.side;
 	Grid<openblack::lnd::LNDCell> cells(side, openblack::lnd::LNDCell {});
 	const auto altitude = [&](int x, int z) {
 		return static_cast<int>(altitudes.At(std::min(x, side - 1), std::min(z, side - 1)));
+	};
+	// The level of the lake at a corner, or below 0 where no lake is
+	const auto lakeLevel = [&](int x, int z) {
+		return lakeLevels != nullptr ? lakeLevels->At(std::min(x, side - 1), std::min(z, side - 1)) : -1.0f;
 	};
 	for (int x = 0; x < side; ++x)
 	{
@@ -210,6 +214,21 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 			{
 				cell.properties.coastLine = 1;
 				sound = static_cast<uint8_t>(fresh ? Sound::StillFreshWater : Sound::Coastal);
+			}
+			else if (const float lake =
+			             std::max({lakeLevel(x, z), lakeLevel(x + 1, z), lakeLevel(x, z + 1), lakeLevel(x + 1, z + 1)});
+			         lake >= 0.0f && static_cast<float>(low) <= lake)
+			{
+				// A lake above the sea: its water and its shore are as the sea's, with the sound of still fresh water
+				if (static_cast<float>(high) <= lake)
+				{
+					cell.properties.hasWater = 1;
+				}
+				else
+				{
+					cell.properties.coastLine = 1;
+				}
+				sound = static_cast<uint8_t>(Sound::StillFreshWater);
 			}
 			else if (runningWater.At(x, z) != 0)
 			{
@@ -258,8 +277,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 
 	// The water: lakes first, then the rivers on the land that the lakes leave
 	const auto firstDrainage = hydrology::Drain(heights, terrain::k_SeaLevel);
-	auto lakes = hydrology::FormLakes(heights, firstDrainage, settings.lakes);
-	land.lakes = lakes.seaLakes.size();
+	auto basins = hydrology::FormLakes(heights, firstDrainage, settings.lakes);
+	land.lakes = basins.seaLakes.size();
 	clock.Done("lakes");
 	// The rivers follow a little noise over the land, so that they bend as rivers do on gentle slopes
 	Grid<float> bent = heights;
@@ -307,12 +326,44 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	FlattenStartArea(heights, land.start, startSettings);
 	clock.Done("start area");
 
+	// The lakes on the hills: round hollows dug into high flat ground, away from the sea, the rivers and the start
+	const auto awayFromHollows =
+	    Mask(side, [&](size_t i) { return heights.values[i] <= terrain::k_SeaLevel || riverCorners.values[i] != 0; });
+	lakes::DigHollows(heights, awayFromHollows, {{.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}},
+	                  StageSeed(seed, 35), settings.hillHollows);
+	clock.Done("hill hollows");
+
 	Grid<uint8_t> altitudes(side, 0);
 	for (size_t i = 0; i < heights.values.size(); ++i)
 	{
 		altitudes.values[i] =
 		    static_cast<uint8_t>(std::clamp(std::floor(heights.values[i] + 0.5f), 0.0f, terrain::k_HighestAltitude));
 	}
+	// The lakes above the sea, from the altitudes that the game draws: each basin holds water at its own level
+	Grid<float> drawn(side, 0.0f);
+	for (size_t i = 0; i < drawn.values.size(); ++i)
+	{
+		drawn.values[i] = static_cast<float>(altitudes.values[i]);
+	}
+	land.highLakes = lakes::Find(drawn, static_cast<float>(k_SeaLevelAltitude), settings.highLakes);
+	Grid<float> lakeLevels(side, -1.0f);
+	for (size_t i = 0; i < drawn.values.size(); ++i)
+	{
+		// A joined lake lowers the bed of the higher lake
+		if (drawn.values[i] != static_cast<float>(altitudes.values[i]))
+		{
+			altitudes.values[i] = static_cast<uint8_t>(std::clamp(drawn.values[i], 0.0f, terrain::k_HighestAltitude));
+			heights.values[i] = drawn.values[i];
+		}
+	}
+	for (const auto& lake : land.highLakes)
+	{
+		for (const auto corner : lake.corners)
+		{
+			lakeLevels.values[corner] = lake.level;
+		}
+	}
+	clock.Done("high lakes");
 
 	// The climate and the biomes
 	auto climateSettings = settings.climate;
@@ -344,7 +395,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 			        .seaDistance = seaDistance.values[index],
 			        .beachWidth =
 			            4.0f + (8.0f * noise::SmoothStep(-0.4f, 0.4f, noise::Fractal(beachSeed, u * 10.0f, v * 10.0f, 2))),
-			        .wet = lakes.wet.values[index] != 0,
+			        .wet = basins.wet.values[index] != 0 || lakeLevels.values[index] >= 0.0f,
 			        .blight = noise::Fractal(blightSeed, u * 6.0f, v * 6.0f, 3),
 			    },
 			    settings.thresholds);
@@ -357,7 +408,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	const auto luminosity = lighting::Luminosity(altitudes, settings.lighting);
 	clock.Done("light");
 	Grid<uint8_t> freshWater(side, 0);
-	for (const auto& lake : lakes.seaLakes)
+	for (const auto& lake : basins.seaLakes)
 	{
 		for (const auto corner : lake)
 		{
@@ -365,7 +416,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 		}
 	}
 	const auto runningWater = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 2.0f; });
-	land.cells = MakeCells(altitudes, luminosity, land.biomes, freshWater, runningWater);
+	land.cells = MakeCells(altitudes, luminosity, land.biomes, freshWater, runningWater, &lakeLevels);
 	land.materials = countries::UsedSurfaces();
 	for (size_t biome = 0; biome < biomes::k_BiomeCount; ++biome)
 	{
@@ -374,8 +425,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	clock.Done("cells and countries");
 
 	// Nothing grows in the water, on the rivers or on their banks
-	const auto keepClear =
-	    Mask(side, [&](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude + 1 || riverDistance.values[i] <= 1.5f; });
+	const auto keepClear = Mask(side, [&](size_t i) {
+		return altitudes.values[i] <= k_SeaLevelAltitude + 1 || riverDistance.values[i] <= 1.5f || lakeLevels.values[i] >= 0.0f;
+	});
 	const auto rivers = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 1.5f; });
 	const std::array clearings {features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
 	land.features = features::Place({.biomes = land.biomes,

@@ -89,27 +89,70 @@ std::optional<uint8_t> PhysicsGround::CellAltitudeDown(glm::vec2 xz) const
 	return Altitude(glm::ivec2(glm::floor(xz / k_CellSize)));
 }
 
-std::optional<uint8_t> PhysicsGround::CellAltitudeNearest(glm::vec2 xz) const
+glm::ivec2 PhysicsGround::NearestCell(glm::vec2 xz) const
 {
 	// Scaled to cells by a tenth and rounded to the nearest, halves to even, as the game's rounding does
 	constexpr float k_CellsPerMetre = 0.1f;
-	return Altitude(glm::ivec2(NearestInteger(xz.x * k_CellsPerMetre), NearestInteger(xz.y * k_CellsPerMetre)));
+	return {NearestInteger(xz.x * k_CellsPerMetre), NearestInteger(xz.y * k_CellsPerMetre)};
+}
+
+std::optional<uint8_t> PhysicsGround::CellAltitudeNearest(glm::vec2 xz) const
+{
+	return Altitude(NearestCell(xz));
+}
+
+std::optional<float> PhysicsGround::LakeDepth(glm::ivec2 cell) const
+{
+	const auto* lakes = _land.GetLakeMap();
+	if (lakes == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto lake = lakes->LakeOfCorner(cell.x, cell.y);
+	const auto* found = lake.has_value() ? CellAt(cell) : nullptr;
+	if (found == nullptr)
+	{
+		return std::nullopt;
+	}
+	return lakes->GetLakes()[*lake].level - LandIslandInterface::GetDrawnAltitude(found->altitude);
+}
+
+float PhysicsGround::WaterLevelAt(glm::vec2 xz) const
+{
+	return _land.GetWaterLevelAt(LandPlace(xz));
 }
 
 bool PhysicsGround::IsSeaCell(glm::vec2 xz) const
 {
 	const auto altitude = CellAltitudeNearest(xz);
-	return !altitude.has_value() || *altitude == 0;
+	if (!altitude.has_value() || *altitude == 0)
+	{
+		return true;
+	}
+	// The water of a lake above the sea of a generated land counts as the sea does
+	const auto depth = LakeDepth(NearestCell(xz));
+	return depth.has_value() && *depth > 0.0f;
 }
 
 bool PhysicsGround::IsDryLand(glm::vec2 xz) const
 {
 	const auto altitude = CellAltitudeDown(xz);
-	return altitude.has_value() && *altitude > k_HighestWater;
+	if (!altitude.has_value() || *altitude <= k_HighestWater)
+	{
+		return false;
+	}
+	const auto depth = LakeDepth(glm::ivec2(glm::floor(xz / k_CellSize)));
+	return !depth.has_value() || *depth <= 0.0f;
 }
 
 bool PhysicsGround::IsDeepWater(glm::vec2 xz) const
 {
 	const auto altitude = CellAltitudeNearest(xz);
-	return !altitude.has_value() || *altitude < k_HighestWater;
+	if (!altitude.has_value() || *altitude < k_HighestWater)
+	{
+		return true;
+	}
+	// Deep in a lake: one altitude unit or more under its level, as the sea is deep below altitude 3
+	const auto depth = LakeDepth(NearestCell(xz));
+	return depth.has_value() && *depth >= LandIslandInterface::k_HeightUnit;
 }

@@ -277,14 +277,15 @@ TEST(LandgenHydrology, ALowBasinBecomesALakeAtTheSeaLevel)
 	EXPECT_EQ(std::ranges::count(lakes.wet.values, uint8_t {1}), 0);
 }
 
-TEST(LandgenHydrology, AHighBasinFillsWithWetGround)
+TEST(LandgenHydrology, AShallowHighBasinFillsWithWetGround)
 {
+	// A deep, large basin keeps its hollow for a lake at its own level (see test_landgen_lakes); a shallow one fills
 	auto heights = MakeGrid(24, [](int x, int z) {
 		const float dx = static_cast<float>(x - 12);
 		const float dz = static_cast<float>(z - 12);
 		if ((dx * dx) + (dz * dz) < 16.0f)
 		{
-			return 40.0f;
+			return 58.5f;
 		}
 		return x == 0 ? 0.0f : 60.0f;
 	});

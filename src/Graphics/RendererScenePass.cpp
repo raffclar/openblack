@@ -338,6 +338,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	DrawPassSky(desc, pass);
 	DrawPassWater(desc, pass);
 	DrawPassLand(desc, pass);
+	DrawPassLakes(desc);
 	DrawPassModels(desc, pass);
 
 	if (desc.viewId == RenderPass::Main && desc.drawEntities)
