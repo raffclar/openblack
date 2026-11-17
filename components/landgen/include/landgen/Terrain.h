@@ -100,11 +100,11 @@ void ErodeThermal(Grid<float>& heights, const ThermalSettings& settings, std::sp
 struct TerraceSettings
 {
 	/// The altitude of the lowest edge of a terrace, from the lowest to the highest that the seed can pick
-	float firstLevelLow {20.8f};
-	float firstLevelHigh {38.0f};
+	float firstLevelLow {25.679f};
+	float firstLevelHigh {44.746f};
 	/// The difference of altitude between two edges, from the lowest to the highest that the seed can pick
-	float spacingLow {43.8f};
-	float spacingHigh {45.0f};
+	float spacingLow {51.548f};
+	float spacingHigh {54.774f};
 	/// No edge is higher than this altitude
 	float highestLevel {235.0f};
 	/// The part of the shape of the ground that a terrace keeps: less on the low land, more on the mountains
@@ -128,8 +128,8 @@ struct TerraceSettings
 	float lowKnee {0.6f};
 	/// The rise of the face of a cliff in altitude units for each corner, from the lowest to the highest that the noise
 	/// gives. 16 is about 47 degrees and 34 is about 66 degrees.
-	float cliffRiseLow {32.0f};
-	float cliffRiseHigh {47.0f};
+	float cliffRiseLow {28.318f};
+	float cliffRiseHigh {46.785f};
 	float cliffFrequency {11.0f};
 };
 
@@ -154,15 +154,17 @@ struct TerraceSettings
 struct MassifSettings
 {
 	/// How many massifs the land has, from the lowest to the highest that the seed can pick
-	int countLow {8};
-	int countHigh {11};
+	int countLow {15};
+	int countHigh {17};
 	/// The radius of the main peak of a massif as a part of the side of the map, from the lowest to the highest that the
 	/// seed can pick
-	float radiusLow {0.1f};
-	float radiusHigh {0.13f};
+	float radiusLow {0.134f};
+	float radiusHigh {0.134f};
 	/// The altitude of the main summit of a massif, from the lowest to the highest that the seed can pick
 	float summitLow {240.0f};
 	float summitHigh {254.0f};
+	/// The power of the profile of a peak: 1 is a straight cone, more is steep at the summit and gentle at the foot
+	float profile {1.191f};
 	/// How many lower peaks stand next to the main peak of a massif, from the lowest to the highest that the seed can pick
 	int sidePeaksLow {1};
 	int sidePeaksHigh {2};
@@ -179,7 +181,7 @@ struct MassifSettings
 	/// The spurs: the waves of the spur noise round a peak, and the depth of the gullies between the spurs as a part of
 	/// the height of the peak
 	float spurWaves {2.5f};
-	float gullyDepth {0.45f};
+	float gullyDepth {0.382f};
 	/// How much the spurs turn from the summit to the foot, in waves of the spur noise
 	float spurBend {5.0f};
 	/// How much the noise moves the outline of a peak, as a part of its radius, and the waves of that noise across the map
@@ -188,18 +190,18 @@ struct MassifSettings
 	/// The cliff bands of the massifs: the rise of a band in altitude units, from the lowest to the highest that the seed
 	/// can pick, the part of the width of a band that its cliff takes, and the part of the rise of the band that the cliff
 	/// takes. The rest of the band is a slope.
-	float bandLow {40.0f};
-	float bandHigh {50.0f};
-	float faceWidth {0.25f};
-	float faceRise {0.75f};
+	float bandLow {37.912f};
+	float bandHigh {47.778f};
+	float faceWidth {0.133f};
+	float faceRise {0.568f};
 	/// How far the noise moves the cliff bands up or down in altitude units, and the waves of that noise across the map
 	float bandNoise {35.0f};
 	float bandFrequency {14.0f};
 	/// Away from the massifs, the edge noise of the terraces lifts the ground by this many altitude units at most
 	float lowlandRise {84.0f};
 	/// The land away from the massifs rises slower and slower above the knee, and stays below the ceiling
-	float lowlandKnee {75.0f};
-	float lowlandCeiling {88.0f};
+	float lowlandKnee {75.818f};
+	float lowlandCeiling {81.681f};
 };
 
 /// A peak of a massif, in corners, and the altitude of its summit
@@ -228,6 +230,37 @@ void RaiseMassifs(Grid<float>& heights, const Grid<float>& massifs, Grid<uint8_t
 /// The ground above the knee rises slower and slower, and stays below the ceiling. The ground below the knee does not
 /// change. A ceiling that is not above the knee changes nothing.
 void LowerHighGround(Grid<float>& heights, float knee, float ceiling);
+
+struct RollSettings
+{
+	/// The largest change of altitude of the rolling ground, up or down, on the calm and on the rough parts of the land
+	float calmAmount {25.972f};
+	float roughAmount {59.4f};
+	/// The waves of the noise of the rolling ground across the map, its octaves and the part of it that is ridged
+	float frequency {59.119f};
+	int octaves {3};
+	float ridge {0.365f};
+	/// The waves across the map of the noise that divides the calm and rough parts, and the part of the land that is calm
+	float partFrequency {4.0f};
+	float calmShare {0.447f};
+	/// The rolling ground starts at this distance from the sea in corners, and gets its full change at the second distance
+	float seaStart {4.0f};
+	float seaFull {12.0f};
+	/// The change is full below the first altitude and stops at the second, so that the high ground keeps its summits
+	float highStart {56.158f};
+	float highEnd {88.951f};
+	/// The part of a fall of the ground that the high ground keeps, so that valleys cut into the high plateaus
+	float highFall {0.0f};
+	/// The rolling ground rises in steps: the rise of a step in altitude units (0 for no steps), the part of the width
+	/// of a step that its face takes, and the part of the rise that the face takes
+	float stepRise {11.409f};
+	float stepFace {0.124f};
+	float stepFaceRise {0.613f};
+};
+
+/// Makes the ground roll: noise of short waves moves the land up and down, more on the rough parts and on the high
+/// ground. The shore and the sea do not change. A flood from the sea then fills the pits that the noise makes.
+void RollGround(Grid<float>& heights, uint64_t seed, const RollSettings& settings);
 
 struct ShelfSettings
 {

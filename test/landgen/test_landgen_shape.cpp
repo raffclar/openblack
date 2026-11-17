@@ -678,6 +678,81 @@ TEST(LandgenTerrain, TheHighestEdgeLimitsTheSteps)
 	EXPECT_EQ(limited.At(10, 10), 2);
 }
 
+TEST(LandgenTerrain, RollGroundMovesTheInlandGroundAndKeepsTheShore)
+{
+	// An island: sea round the edge, a strip of shore, and a plateau inland
+	constexpr int k_Side = 96;
+	auto heights = MakeGrid(k_Side, [](int x, int z) {
+		const int edge = std::min({x, z, k_Side - 1 - x, k_Side - 1 - z});
+		return edge < 6 ? -5.0f : (edge < 10 ? 5.0f : 40.0f);
+	});
+	const auto before = heights;
+	terrain::RollSettings settings;
+	settings.calmAmount = 20.0f;
+	settings.roughAmount = 20.0f;
+	settings.seaStart = 6.0f;
+	settings.seaFull = 12.0f;
+	settings.highStart = 200.0f;
+	settings.highEnd = 220.0f;
+	settings.highFall = 1.0f;
+	settings.stepRise = 0.0f;
+	terrain::RollGround(heights, 3, settings);
+	int moved = 0;
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			const int edge = std::min({x, z, k_Side - 1 - x, k_Side - 1 - z});
+			if (edge < 8)
+			{
+				// The sea and the shore near the water do not change
+				EXPECT_EQ(heights.At(x, z), before.At(x, z));
+			}
+			else if (heights.At(x, z) != before.At(x, z))
+			{
+				++moved;
+			}
+		}
+	}
+	EXPECT_GT(moved, (k_Side - 30) * (k_Side - 30) / 2);
+	// No pit: the flood that fills the pits does not lift the ground by more than its small rise on flat ground
+	const auto drainage = hydrology::Drain(heights, terrain::k_SeaLevel);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		EXPECT_LT(drainage.filled.values[i] - heights.values[i], 0.05f);
+	}
+}
+
+TEST(LandgenTerrain, RollGroundStepsMakeFacesSteeperThanTheBenches)
+{
+	constexpr int k_Side = 64;
+	auto heights = MakeGrid(k_Side, [](int x, int /*z*/) { return x < 4 ? -5.0f : static_cast<float>(x) * 2.0f; });
+	terrain::RollSettings settings;
+	settings.calmAmount = 0.0f;
+	settings.roughAmount = 0.0f;
+	settings.seaStart = 0.0f;
+	settings.seaFull = 0.5f;
+	settings.highStart = 500.0f;
+	settings.highEnd = 600.0f;
+	settings.stepRise = 20.0f;
+	settings.stepFace = 0.25f;
+	settings.stepFaceRise = 0.8f;
+	terrain::RollGround(heights, 5, settings);
+	// The ramp rises 2 units for each corner. A step of 20 units is 10 corners wide: its face rises 16 units in 2.5
+	// corners, and its bench rises 4 units in 7.5 corners.
+	float steepest = 0.0f;
+	float gentlest = 100.0f;
+	for (int x = 10; x < k_Side - 2; ++x)
+	{
+		const float rise = heights.At(x + 1, 30) - heights.At(x, 30);
+		EXPECT_GE(rise, 0.0f);
+		steepest = std::max(steepest, rise);
+		gentlest = std::min(gentlest, rise);
+	}
+	EXPECT_GT(steepest, 5.0f);
+	EXPECT_LT(gentlest, 1.0f);
+}
+
 TEST(LandgenHeightCurve, TheLinearCurveGivesTheHeightsOfTheStory)
 {
 	const HeightCurve curve;

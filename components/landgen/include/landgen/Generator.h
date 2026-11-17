@@ -64,12 +64,13 @@ struct Settings
 	/// The height in metres of the highest altitude, and the altitude above which each altitude unit adds more height.
 	/// The lands of the story have 170.85 m at the highest altitude. Snowdon, the highest mountain of Wales, is 1085 m.
 	float topHeight {1100.0f};
-	float heightKnee {60.0f};
+	float heightKnee {68.196f};
 	terrain::BaseSettings base;
 	terrain::HydraulicSettings hydraulic;
 	terrain::ThermalSettings thermal;
 	terrain::TerraceSettings terraces;
 	terrain::MassifSettings massifs;
+	terrain::RollSettings roll;
 	terrain::ShelfSettings shelf;
 	hydrology::LakeSettings lakes;
 	hydrology::RiverSettings rivers;

@@ -256,6 +256,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	terrain::LowerHighGround(heights, settings.massifs.lowlandKnee, settings.massifs.lowlandCeiling);
 	terrain::RaiseMassifs(heights, massifs, cliffs);
 	clock.Done("massifs");
+	terrain::RollGround(heights, seed, settings.roll);
+	clock.Done("rolling ground");
 
 	// The water: lakes first, then the rivers on the land that the lakes leave
 	const auto firstDrainage = hydrology::Drain(heights, terrain::k_SeaLevel);

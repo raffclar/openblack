@@ -69,7 +69,7 @@ constexpr std::array<ChoiceRange, 13> k_ChoiceRanges {{
     {"north", "north temperature", &Choices::northTemperature, 0, 100},
     {"south", "south temperature", &Choices::southTemperature, 0, 100},
     {"wind", "wind", &Choices::wind, -1, 7},
-    {"massifs", "mountain massifs", &Choices::massifs, -1, 8},
+    {"massifs", "mountain massifs", &Choices::massifs, -1, 20},
     {"top", "highest ground (m)", &Choices::topHeight, 171, 2700},
 }};
 
