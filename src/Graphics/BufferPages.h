@@ -14,6 +14,7 @@
 
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <variant>
 #include <vector>
@@ -50,7 +51,8 @@ struct BufferPage
 /// The device keeps no copy of a page. After a restore of the device, the owner of a run gives its elements again. The
 /// pages keep a copy of each run whose owner does not give it again, and write these copies again after a restore.
 ///
-/// Use this only on the main thread.
+/// A load on a worker thread makes its buffers at once, thus a mutex guards the pages. A draw reads only the handle of a
+/// page, which does not change.
 class BufferPages
 {
 public:
@@ -91,7 +93,7 @@ public:
 	[[nodiscard]] static DynamicVertexBufferHandle VertexHandle(const BufferRun& run);
 	[[nodiscard]] static DynamicIndexBufferHandle IndexHandle(const BufferRun& run);
 
-	[[nodiscard]] size_t PageCount() const { return _pages.size(); }
+	[[nodiscard]] size_t PageCount() const;
 	/// The bytes of the copies that the pages keep
 	[[nodiscard]] size_t KeptBytes() const;
 
@@ -104,6 +106,7 @@ private:
 
 	const GraphicsDeviceInterface& _device;
 	std::vector<std::unique_ptr<BufferPage>> _pages;
+	mutable std::mutex _mutex;
 };
 
 } // namespace openblack::graphics

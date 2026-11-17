@@ -993,3 +993,33 @@ TEST_F(MeshPrepare, APagedBufferIsARunOfAPage)
 	// The buffers give their runs back, and the pages go
 	EXPECT_EQ(pages.PageCount(), 0U);
 }
+
+TEST_F(MeshPrepare, ManyThreadsTakeAndGiveRunsAtOnce)
+{
+	// A load on worker threads makes the buffers of its parts at once
+	BufferPages pages(Device());
+	const VertexDecl decl {VertexAttrib(VertexAttrib::Attribute::Position, 3, VertexAttrib::Type::Float)};
+	const std::vector<uint8_t> bytes(5U * 12U, 0x5AU);
+	constexpr int k_Threads = 8;
+	constexpr int k_Runs = 200;
+	std::vector<std::thread> threads;
+	threads.reserve(k_Threads);
+	for (int thread = 0; thread < k_Threads; ++thread)
+	{
+		threads.emplace_back([&pages, &decl, &bytes] {
+			for (int i = 0; i < k_Runs; ++i)
+			{
+				const auto run = pages.TakeVertices(decl, 12, Device().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+				ASSERT_TRUE(run.has_value());
+				pages.SetGivenAgain(*run);
+				pages.Give(*run);
+			}
+		});
+	}
+	for (auto& thread : threads)
+	{
+		thread.join();
+	}
+	EXPECT_EQ(pages.PageCount(), 0U);
+	EXPECT_EQ(pages.KeptBytes(), 0U);
+}

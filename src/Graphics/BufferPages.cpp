@@ -74,6 +74,7 @@ std::optional<BufferRun> BufferPages::Take(uint32_t count, Fits&& fits, MakePage
 std::optional<BufferRun> BufferPages::TakeVertices(const VertexDecl& decl, uint32_t stride, const DeviceMemory* vertices)
 {
 	assert(stride > 0);
+	const std::scoped_lock lock(_mutex);
 	const auto count = static_cast<uint32_t>(_device.Bytes(vertices).size() / stride);
 	const auto run = Take(
 	    count,
@@ -100,6 +101,7 @@ std::optional<BufferRun> BufferPages::TakeVertices(const VertexDecl& decl, uint3
 
 std::optional<BufferRun> BufferPages::TakeIndices(const DeviceMemory* indices)
 {
+	const std::scoped_lock lock(_mutex);
 	const auto count = static_cast<uint32_t>(_device.Bytes(indices).size() / sizeof(uint16_t));
 	const auto run = Take(
 	    count, [](const BufferPage& page) { return std::holds_alternative<DynamicIndexBufferHandle>(page.handle); },
@@ -135,6 +137,7 @@ void BufferPages::WriteFirst(const BufferRun& run, const DeviceMemory* memory)
 void BufferPages::Write(const BufferRun& run, uint32_t first, const DeviceMemory* memory)
 {
 	assert(run.page != nullptr);
+	const std::scoped_lock lock(_mutex);
 	const auto bytes = _device.Bytes(memory);
 	const auto& page = *run.page;
 	const auto offset = static_cast<size_t>(first) * page.elementBytes;
@@ -158,12 +161,14 @@ void BufferPages::Write(const BufferRun& run, uint32_t first, const DeviceMemory
 void BufferPages::SetGivenAgain(const BufferRun& run)
 {
 	assert(run.page != nullptr);
+	const std::scoped_lock lock(_mutex);
 	run.page->kept.erase(run.first);
 }
 
 void BufferPages::Give(const BufferRun& run)
 {
 	assert(run.page != nullptr);
+	const std::scoped_lock lock(_mutex);
 	auto& page = *run.page;
 	page.kept.erase(run.first);
 	page.runs.Give(run.first, run.count);
@@ -177,6 +182,7 @@ void BufferPages::Give(const BufferRun& run)
 
 void BufferPages::WriteKeptAgain() const
 {
+	const std::scoped_lock lock(_mutex);
 	for (const auto& page : _pages)
 	{
 		for (const auto& [first, bytes] : page->kept)
@@ -199,8 +205,15 @@ DynamicIndexBufferHandle BufferPages::IndexHandle(const BufferRun& run)
 	return std::get<DynamicIndexBufferHandle>(run.page->handle);
 }
 
+size_t BufferPages::PageCount() const
+{
+	const std::scoped_lock lock(_mutex);
+	return _pages.size();
+}
+
 size_t BufferPages::KeptBytes() const
 {
+	const std::scoped_lock lock(_mutex);
 	return std::accumulate(_pages.begin(), _pages.end(), size_t {0}, [](size_t sum, const auto& page) {
 		return std::accumulate(page->kept.begin(), page->kept.end(), sum,
 		                       [](size_t inner, const auto& kept) { return inner + kept.second.size(); });
