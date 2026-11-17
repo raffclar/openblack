@@ -60,6 +60,7 @@ constexpr std::string_view k_DebuggerRight = "debugger.right";
 constexpr std::string_view k_EditorMindFile = "editor.mind_file";
 constexpr std::string_view k_EditorWorld = "editor.world";
 constexpr std::string_view k_EditorScenario = "editor.scenario";
+constexpr std::string_view k_EditorLand = "editor.land";
 constexpr std::string_view k_EditorTime = "editor.time";
 constexpr std::string_view k_GameTime = "game.time";
 /// The fastest and the slowest time of a turn that a frame of the clock can give, as a multiple of a tenth of a second.
@@ -969,6 +970,17 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		}
 		return scenario;
 	}
+	if (type == k_EditorLand)
+	{
+		EditorLand land;
+		// A request names a land or the testbed, not both
+		if (!ReadShort(object, "land", land.land, k_MostLandNameBytes, false) ||
+		    !ReadBool(object, "testbed", land.testbed, false) || land.land.empty() == !land.testbed)
+		{
+			return std::nullopt;
+		}
+		return land;
+	}
 	if (type == k_EditorTime)
 	{
 		EditorTime time;
@@ -1425,6 +1437,10 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, EditorScenario>)
 		    {
 			    object = Json {{"type", k_EditorScenario}, {"id", value.id}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, EditorLand>)
+		    {
+			    object = Json {{"type", k_EditorLand}, {"land", value.land}, {"testbed", value.testbed}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorScriptFile>)
 		    {

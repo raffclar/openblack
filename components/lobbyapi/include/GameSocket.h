@@ -371,7 +371,7 @@ struct CommandRefused
 	/// Why the server refused the commands. k_NoEditorClaim: edits of the editor or debug cheats from a player whose join
 	/// ticket has no editor claim. k_NoStoryLands: a skip to a land of the story, which a network game does not have.
 	/// k_NoDebuggerClaim: acts of the debug windows from a player whose join ticket has no debugger claim.
-	/// k_WorldRefused: a world file or a scenario of the editor that the server cannot load.
+	/// k_WorldRefused: a world file, a scenario or a land of the editor that the server cannot load.
 	std::string reason;
 	/// The number of commands that the server refused
 	uint32_t commands {0};
@@ -691,6 +691,22 @@ struct EditorScenario
 	[[nodiscard]] bool operator==(const EditorScenario&) const = default;
 };
 
+/// The most bytes of the name of a land in an "editor.land" frame
+inline constexpr size_t k_MostLandNameBytes = 256;
+
+/// "editor.land". Client to server: a player with the editor claim loads a land for the whole room, as the Load Island
+/// menu of the debug menu bar does. The server ends the current game, and starts the room again on the land: every
+/// player gets a new "game.start" that names the land.
+struct EditorLand
+{
+	/// The script of the land, as the "land" of a "game.start" names it. Empty for the testbed.
+	std::string land;
+	/// The room starts again on the testbed in place of a land ("testbed", optional)
+	bool testbed {false};
+
+	[[nodiscard]] bool operator==(const EditorLand&) const = default;
+};
+
 /// The reason of a refusal of a world file or a scenario of the editor that no computer can load (see CommandRefused)
 inline constexpr std::string_view k_WorldRefused = "world_refused";
 
@@ -698,7 +714,7 @@ using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, R
                            StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
                            SyncParts, Loaded, LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities,
                            SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime, EditorScriptFile, EditorWorld,
-                           EditorScenario, EditorRight, DebuggerRight>;
+                           EditorScenario, EditorLand, EditorRight, DebuggerRight>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

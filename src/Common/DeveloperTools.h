@@ -291,6 +291,28 @@ enum class GuiMode : uint8_t
 	return mode == GuiMode::Full && (!hasGameMenu || gameMenuOpen);
 }
 
+/// What a land of the Load Island menu of the debug menu bar does
+enum class LandMenuAct : uint8_t
+{
+	/// The menu does not open
+	Closed,
+	/// The land loads at once on this computer
+	LoadsHere,
+	/// The request goes to the game server, which starts the room again on the land on every computer
+	AsksServer,
+};
+
+/// What the Load Island menu does. In a network game only a player with the editor claim can load a land for the room
+/// (user, 2026-11-17). The debugger claim alone does not open the menu.
+[[nodiscard]] constexpr LandMenuAct LandMenuActOf(bool networkSessionLive, bool editorClaim) noexcept
+{
+	if (!networkSessionLive)
+	{
+		return LandMenuAct::LoadsHere;
+	}
+	return editorClaim ? LandMenuAct::AsksServer : LandMenuAct::Closed;
+}
+
 /// An option of the command line that only developers and tools use
 struct DeveloperOption
 {
