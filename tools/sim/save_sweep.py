@@ -32,10 +32,12 @@ them:
     turns         the same hash at the end of each of N turns after the save, and of N turns after the load of A, must be
                   the same. The game then sends no reports of its hand and its view (--sim-no-hand-reports): these
                   reports carry the camera, which moves at each frame, so they are input of the player and not state of
-                  the world. The tool also gives the first turn where the checksums of the synced world differ. On a
-                  land with no computer god they are the same. Elsewhere they can differ, as each load starts the mind
-                  of each computer god again and the sounds go (see save_diff.GAME_START): the entities that the world
-                  makes after the load can then get other ids.
+                  the world. With --hand-reports the game sends them all the same: the first report after a load
+                  starts from the loaded camera and from the reports that the loaded world keeps, so on a still camera
+                  the checksums are the same too. The tool also gives the first turn where the checksums of the synced
+                  world differ. On a land with no computer god they are the same. Elsewhere they can differ, as each
+                  load starts the mind of each computer god again and the sounds go (see save_diff.GAME_START): the
+                  entities that the world makes after the load can then get other ids.
 
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/sweep --scenarios all --turns 100
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/land1 --land Land1.txt --at 0,500,2000
@@ -86,7 +88,7 @@ def game_arguments(options):
             args += ["--skip-opening", options.opening]
     else:
         args.append("--testbed")
-    if options.after > 0:
+    if options.after > 0 and not getattr(options, "hand_reports", False):
         # The reports of the hand and the view carry the camera, which moves at each frame. Without them, the turns after
         # a load get the same commands as the turns after the save.
         args.append("--sim-no-hand-reports")
@@ -327,6 +329,8 @@ def main(argv=None):
     parser.add_argument("--keep", action="store_true", help="keep the text report of each difference")
     parser.add_argument("--after", type=int, default=0,
                         help="also compare the hash at the save and after the load, and this many turn checksums")
+    parser.add_argument("--hand-reports", action="store_true",
+                        help="with --after: the game sends the reports of its hand and its view after the save and the load")
     parser.add_argument("extra", nargs="*", help="more arguments for the game, after --")
     options = parser.parse_args(argv)
     options.exe = options.exe or sim_run.default_exe(options.config)

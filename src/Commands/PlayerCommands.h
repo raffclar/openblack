@@ -1413,6 +1413,16 @@ struct Command
 	         std::holds_alternative<EditorScriptProgram>(action)));
 }
 
+/// The commands that wait for a turn: those that went and wait for the start of the next turn, and those in the open
+/// block, which go after the turns of this frame
+struct WaitingCommands
+{
+	std::vector<Command> sent;
+	std::vector<Command> open;
+
+	[[nodiscard]] bool Empty() const noexcept { return sent.empty() && open.empty(); }
+};
+
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that
 /// the game and the tests use it both.
 class CommandQueue
@@ -1429,6 +1439,10 @@ public:
 	[[nodiscard]] std::vector<Command> TakeSent();
 	/// Remove all the commands, those that wait and those in the open block
 	void Clear();
+	/// The commands that wait, in the order that they go
+	[[nodiscard]] WaitingCommands Waiting() const;
+	/// Put back the commands that waited, in place of all the commands of the queue
+	void PutBack(WaitingCommands waiting);
 
 	/// The number of commands in the open block
 	[[nodiscard]] size_t OpenCount() const { return _open.size(); }

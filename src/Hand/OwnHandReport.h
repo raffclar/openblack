@@ -125,6 +125,19 @@ public:
 		return sends;
 	}
 
+	/// A load of a world puts the reporter at the turn of the load, because the pass of that turn occurred before the save.
+	/// The last report and the last pick are the values that the loaded world keeps. The wait continues from the load.
+	void ContinueAfterLoad(uint32_t turn, entt::entity hand, const player_commands::HandReport& last, entt::entity lastPick,
+	                       uint8_t wait)
+	{
+		_turn = turn;
+		_hand = hand;
+		_last = last;
+		_collidePoint = last.collidePoint;
+		_lastPick = lastPick;
+		_wait = wait;
+	}
+
 	/// The turns that the report still waits after its last send
 	[[nodiscard]] uint8_t TurnsToWait() const noexcept { return _wait; }
 

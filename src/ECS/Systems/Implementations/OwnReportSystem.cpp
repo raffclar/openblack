@@ -20,6 +20,7 @@
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Commands/PlayerCommands.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
@@ -32,6 +33,7 @@
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Gui/GameInterface.h"
+#include "Hand/LoadedReports.h"
 #include "Hand/OwnHandReport.h"
 #include "Hand/ViewReportRules.h"
 #include "Help/HelpProfile.h"
@@ -75,6 +77,41 @@ bool OwnReportSystem::SendViewReport(const player_commands::ViewReport& report, 
 	_state.lastViewReport = report;
 	commands.Submit(report);
 	return true;
+}
+
+void OwnReportSystem::ContinueViewAfterLoad(uint32_t turn, const std::optional<player_commands::ViewReport>& lastView)
+{
+	// The passes of the turn of the load occurred before the save
+	_state.lastViewReport = lastView;
+	_state.landGrip = lastView.has_value() && lastView->gripsLand;
+	_state.cameraTurned = lastView.has_value() && lastView->cameraTurned;
+	_state.cameraTurnTurn = turn;
+	_state.helpReportTurn = turn;
+}
+
+std::optional<player_commands::ViewReport> OwnReportSystem::ContinueAfterLoad()
+{
+	auto* reporter = Locator::handSystem::value().GetOwnReporter();
+	if (reporter == nullptr)
+	{
+		return std::nullopt;
+	}
+	// The loaded world keeps the last reports of the player on its left hand. A world with no reports yet starts with
+	// none.
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ecs::components::ReportedHand>(hand) : nullptr;
+	// The reports that waited at the save for the next turn are the last reports that the player sent
+	const auto& commands = Locator::playerCommandSystem::value();
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const auto origin = session != nullptr ? std::optional(session->Origin()) : std::nullopt;
+	const auto loaded = hand_report::WithWaiting(
+	    hand_report::FromLoadedWorld(reported != nullptr ? *reported : ecs::components::ReportedHand {}),
+	    commands.GetWaiting().sent, commands.GetSender(), hand_report::TurnsToWaitAfterSend(origin));
+	const auto turn = Locator::time::value().GetTurn();
+	reporter->ContinueAfterLoad(turn, hand, loaded.hand, loaded.pick, loaded.wait);
+	ContinueViewAfterLoad(turn, loaded.view);
+	return loaded.view;
 }
 
 bool OwnReportSystem::TakeHelpTurn(uint32_t turn, bool helpThere)
