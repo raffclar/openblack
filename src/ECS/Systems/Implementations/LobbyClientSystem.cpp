@@ -23,6 +23,8 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/ErrorReportsRules.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -268,6 +270,72 @@ void LobbyClientSystem::Update()
 			OpenPush();
 		}
 	}
+	CheckRight();
+}
+
+void LobbyClientSystem::CheckRight()
+{
+	if (_state != LobbySessionState::LoggedIn || _push->IsOpen() || _checkingRight)
+	{
+		return;
+	}
+	const auto now = _clock();
+	if (!_rightCheckAt.has_value())
+	{
+		_rightCheckAt = now + lobby_times::k_RightCheckInterval;
+		return;
+	}
+	if (now < *_rightCheckAt)
+	{
+		return;
+	}
+	_checkingRight = true;
+	const auto generation = _generation;
+	GetMe([this, generation](LobbyResult<lobby_api::Me>&& result) {
+		if (generation != _generation)
+		{
+			return;
+		}
+		_checkingRight = false;
+		_rightCheckAt = _clock() + lobby_times::k_RightCheckInterval;
+		// An older lobby does not give the rights in the account: a right then changes only with a session answer
+		if (!result.Ok())
+		{
+			return;
+		}
+		if (result.value->editor.has_value())
+		{
+			FollowEditorRight(*result.value->editor, "the account");
+		}
+		if (result.value->debugger.has_value())
+		{
+			FollowDebuggerRight(*result.value->debugger, "the account");
+		}
+	});
+}
+
+void LobbyClientSystem::FollowEditorRight(bool editor, std::string_view source)
+{
+	if (_state != LobbySessionState::LoggedIn || !_account.has_value() || editor == _accountEditor)
+	{
+		return;
+	}
+	_accountEditor = editor;
+	// The test tools find the words "the editor right"
+	LogSession("The lobby session of {} {} the editor right now ({})", _account->name, editor ? "has" : "does not have",
+	           source);
+}
+
+void LobbyClientSystem::FollowDebuggerRight(bool debugger, std::string_view source)
+{
+	if (_state != LobbySessionState::LoggedIn || !_account.has_value() || debugger == _accountDebugger)
+	{
+		return;
+	}
+	_accountDebugger = debugger;
+	// The test tools find the words "the debugger right"
+	LogSession("The lobby session of {} {} the debugger right now ({})", _account->name, debugger ? "has" : "does not have",
+	           source);
 }
 
 void LobbyClientSystem::Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback)
@@ -356,6 +424,55 @@ std::optional<bool> LobbyClientSystem::GetAccountDebugger() const
 		return std::nullopt;
 	}
 	return _accountDebugger;
+}
+
+std::optional<error_reports::AccountConsent> LobbyClientSystem::GetAccountErrorReports() const
+{
+	if (_state != LobbySessionState::LoggedIn || !_account.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto choice = error_reports::ParseReportsConsent(_accountErrorReports);
+	if (!choice.has_value())
+	{
+		return std::nullopt;
+	}
+	return error_reports::AccountConsent {.choice = *choice, .accountId = std::to_string(_account->id), .name = _account->name};
+}
+
+void LobbyClientSystem::SendErrorReportsChoice(bool option)
+{
+	if (!_config.has_value() || _state != LobbySessionState::LoggedIn)
+	{
+		return;
+	}
+	const auto generation = _generation;
+	const auto choice = error_reports::ReportsConsentText(error_reports::ConsentOfOption(option));
+	// The choice applies at once. When the call fails, the next answer of the lobby with a session gives the kept choice.
+	_accountErrorReports = choice;
+	Authorized(Call {
+	    .method = HttpMethod::Put,
+	    .path = "/me/consent",
+	    .headers = {{"Accept", std::string(k_JsonType)}, {"Content-Type", std::string(k_JsonType)}},
+	    .body = BytesOf(lobby_api::ConsentBody(choice)),
+	    .done =
+	        [this, generation](HttpResponse&& response) {
+		        if (generation != _generation)
+		        {
+			        return;
+		        }
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        LogSession("The lobby did not keep the choice for the error reports (status {})", response.status);
+			        return;
+		        }
+		        if (const auto consent = lobby_api::ParseConsent(TextOf(response)); consent.has_value())
+		        {
+			        _accountErrorReports = consent->errorReports;
+			        LogSession("The lobby keeps the choice \"{}\" for the error reports", _accountErrorReports);
+		        }
+	        },
+	});
 }
 
 void LobbyClientSystem::ResumeSession(LobbyCallback<lobby_api::AccountRef> callback)
@@ -479,7 +596,8 @@ void LobbyClientSystem::SiteSignIn(LobbyCallback<lobby_api::AccountRef> callback
 		}
 		ApplySession(*session);
 		_fromSite = true;
-		LogSession("The lobby session comes from the sign-in of the site, as {}", session->account.name);
+		// The log goes with the error reports, so it has no account name
+		LogSession("The lobby session comes from the sign-in of the site");
 		if (openPush)
 		{
 			OpenPush();
@@ -610,9 +728,14 @@ void LobbyClientSystem::ApplySession(const lobby_api::Session& session)
 	const bool known = _state == LobbySessionState::LoggedIn && _account.has_value() && _account->id == session.account.id;
 	if (!known || _accountEditor != session.editor)
 	{
-		// The test tools find the words "the editor right"
-		LogSession("The lobby session of {} {} the editor right", session.account.name,
-		           session.editor ? "has" : "does not have");
+		// The test tools find the words "the editor right". The log goes with the error reports, so it has no account
+		// name.
+		LogSession("The lobby session {} the editor right", session.editor ? "has" : "does not have");
+	}
+	if (!known || _accountErrorReports != session.errorReports)
+	{
+		LogSession("The lobby session gives the choice \"{}\" for the error reports",
+		           session.errorReports.empty() ? "none" : session.errorReports);
 	}
 	if (!known || _accountDebugger != session.debugger)
 	{
@@ -624,6 +747,7 @@ void LobbyClientSystem::ApplySession(const lobby_api::Session& session)
 	_emailRequired = session.emailRequired;
 	_accountEditor = session.editor;
 	_accountDebugger = session.debugger;
+	_accountErrorReports = session.errorReports;
 	_state = LobbySessionState::LoggedIn;
 	if (session.refreshToken.has_value())
 	{
@@ -641,6 +765,9 @@ void LobbyClientSystem::EndSession()
 	_emailRequired = false;
 	_accountEditor = false;
 	_accountDebugger = false;
+	_accountErrorReports.clear();
+	_rightCheckAt.reset();
+	_checkingRight = false;
 	_accessToken.clear();
 	_accessExpiry = {};
 	_refreshToken.reset();
@@ -1569,6 +1696,22 @@ void LobbyClientSystem::HandlePush(std::string_view text)
 		if (listener)
 		{
 			listener(*event);
+		}
+	}
+	if (event->type == lobby_api::events::k_AccountEditor)
+	{
+		// Staff changed the editor right of the account: the game follows it at once
+		if (const auto change = lobby_api::ParseEditorChange(event->data); change.has_value())
+		{
+			FollowEditorRight(change->editor, "an event of the lobby");
+		}
+	}
+	if (event->type == lobby_api::events::k_AccountDebugger)
+	{
+		// Staff changed the debugger mark of the account: the debug menu bar shows or hides at once
+		if (const auto change = lobby_api::ParseDebuggerChange(event->data); change.has_value())
+		{
+			FollowDebuggerRight(change->debugger, "an event of the lobby");
 		}
 	}
 	if (event->type == lobby_api::events::k_AccountBanned)

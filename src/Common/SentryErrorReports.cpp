@@ -13,8 +13,10 @@
 
 #include <array>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -136,6 +138,31 @@ sentry_value_t HideUserFolders(sentry_value_t event, sentry_hint_t* /*hint*/, vo
 	return event;
 }
 
+/// Names the players of the event: the first player is the user of the event, with the address of the player's computer.
+/// All the players are in the extra data "players". Does nothing when the list is empty.
+void NamePlayers(sentry_value_t event, const std::vector<ReportedPlayer>& players)
+{
+	if (players.empty())
+	{
+		return;
+	}
+	auto user = sentry_value_new_object();
+	sentry_value_set_by_key(user, "username", sentry_value_new_string(players.front().name.c_str()));
+	if (!players.front().address.empty())
+	{
+		sentry_value_set_by_key(user, "ip_address", sentry_value_new_string(players.front().address.c_str()));
+	}
+	sentry_value_set_by_key(event, "user", user);
+	std::string text;
+	for (const auto& player : players)
+	{
+		text += text.empty() ? "" : "; ";
+		text += player.address.empty() ? player.name : player.name + " " + player.address;
+	}
+	auto extra = sentry_value_get_by_key(event, "extra");
+	sentry_value_set_by_key(extra, "players", sentry_value_new_string(text.c_str()));
+}
+
 } // namespace
 
 SentryErrorReports::SentryErrorReports(SentrySettings settings)
@@ -151,14 +178,41 @@ SentryErrorReports::~SentryErrorReports()
 void SentryErrorReports::SetEnabled(bool enabled)
 {
 	_enabled = enabled;
-	if (enabled)
+	Apply();
+}
+
+void SentryErrorReports::SetAccountConsent(std::optional<AccountConsent> consent)
+{
+	_account = std::move(consent);
+	Apply();
+}
+
+void SentryErrorReports::Apply()
+{
+	const auto plan = ReportsPlanOf(_enabled, _account);
+	if (plan.running)
 	{
+		// The log goes with a report only for the choice Full. Sentry reads the attachments at its start, thus a change of
+		// that choice restarts the service.
+		if (_running && _logAttached != plan.personalData)
+		{
+			Stop();
+		}
+		_attachLog = plan.personalData;
 		Start();
 	}
 	else
 	{
 		Stop();
 	}
+	const bool personalData = _running && plan.personalData;
+	if (personalData == _personalData && (!personalData || _namedAccount == _account->accountId))
+	{
+		return;
+	}
+	SetUser(personalData ? _account : std::nullopt);
+	_personalData = personalData;
+	_namedAccount = personalData ? _account->accountId : std::string();
 }
 
 void SentryErrorReports::SendDesync(const DesyncReport& report)
@@ -188,6 +242,7 @@ void SentryErrorReports::SendDesync(const DesyncReport& report)
 		sentry_value_set_by_key(extra, key.c_str(), sentry_value_new_string(value.c_str()));
 	}
 	sentry_value_set_by_key(event, "extra", extra);
+	NamePlayers(event, report.players);
 	// The capture of the desync gives its facts as a file of the event, when the file is small
 	if (report.detail.has_value() && !report.detail->attachment.empty() &&
 	    report.detail->attachment.size() <= k_MostDesyncAttachmentBytes)
@@ -243,8 +298,8 @@ void SentryErrorReports::Start()
 	sentry_options_set_dsn(options, _settings.dsn.c_str());
 	sentry_options_set_release(options, _settings.release.c_str());
 	sentry_options_set_environment(options, _settings.environment.c_str());
-	// The reports have no user and no IP address: the service never sets a user, and sentry-native sends no personal
-	// data when there is no user
+	// The reports have no user and no IP address until the account gives the choice Full (SetUser). Sentry-native sends
+	// no personal data when there is no user.
 	// The reports have no traces of the performance
 	sentry_options_set_traces_sample_rate(options, 0.0);
 	sentry_options_set_shutdown_timeout(options, k_CloseMilliseconds);
@@ -254,15 +309,15 @@ void SentryErrorReports::Start()
 	}
 #ifdef _WIN32
 	sentry_options_set_database_pathw(options, _settings.databaseFolder.wstring().c_str());
-	if (_settings.attachment.has_value())
+	if (const auto log = LogAttachmentFor(_settings.attachment, _attachLog); log.has_value())
 	{
-		sentry_options_add_attachmentw(options, _settings.attachment->wstring().c_str());
+		sentry_options_add_attachmentw(options, log->wstring().c_str());
 	}
 #else
 	sentry_options_set_database_path(options, _settings.databaseFolder.string().c_str());
-	if (_settings.attachment.has_value())
+	if (const auto log = LogAttachmentFor(_settings.attachment, _attachLog); log.has_value())
 	{
-		sentry_options_add_attachment(options, _settings.attachment->string().c_str());
+		sentry_options_add_attachment(options, log->string().c_str());
 	}
 #endif
 	if (sentry_init(options) != 0)
@@ -280,7 +335,8 @@ void SentryErrorReports::Start()
 	crash_handler::ReclaimSystemHooks();
 	crash_handler::SetReportForwarder(ForwardCrash);
 	_running = true;
-	LogInfo("The error reports to Sentry started");
+	_logAttached = _attachLog;
+	LogInfo(_logAttached ? "The error reports to Sentry started, with the log" : "The error reports to Sentry started");
 }
 
 void SentryErrorReports::Stop()
@@ -292,7 +348,32 @@ void SentryErrorReports::Stop()
 	crash_handler::SetReportForwarder(nullptr);
 	sentry_close();
 	_running = false;
+	// A new start has no user and no log until Apply gives them again
+	_personalData = false;
+	_logAttached = false;
+	_namedAccount.clear();
 	LogInfo("The error reports to Sentry stopped");
+}
+
+void SentryErrorReports::SetUser(const std::optional<AccountConsent>& account)
+{
+	if (!_running)
+	{
+		return;
+	}
+	if (!account.has_value())
+	{
+		sentry_remove_user();
+		LogInfo("The error reports have no personal data");
+		return;
+	}
+	auto user = sentry_value_new_object();
+	sentry_value_set_by_key(user, "id", sentry_value_new_string(account->accountId.c_str()));
+	sentry_value_set_by_key(user, "username", sentry_value_new_string(account->name.c_str()));
+	// Sentry takes the IP address from the connection of the report
+	sentry_value_set_by_key(user, "ip_address", sentry_value_new_string("{{auto}}"));
+	sentry_set_user(user);
+	LogInfo("The error reports name the account, as its choice tells");
 }
 
 } // namespace openblack::error_reports

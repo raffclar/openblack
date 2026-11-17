@@ -131,6 +131,28 @@ TEST(LobbyApi, MeHasTheClansAndThePlaceForTheWeather)
 	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc","clans":[{"id":1,"name":"Gods"}]})").has_value());
 }
 
+TEST(LobbyApi, MeAndTheEventOfTheLobbyGiveTheEditorRight)
+{
+	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc"})")->editor.has_value());
+	EXPECT_EQ(ParseMe(R"({"id":3,"name":"abc","editor":true})")->editor, std::optional<bool>(true));
+	EXPECT_EQ(ParseMe(R"({"id":3,"name":"abc","editor":false})")->editor, std::optional<bool>(false));
+	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc","editor":"yes"})").has_value());
+	EXPECT_TRUE(ParseEditorChange(R"({"editor":true})")->editor);
+	EXPECT_FALSE(ParseEditorChange(R"({"editor":false})")->editor);
+	EXPECT_FALSE(ParseEditorChange("{}").has_value());
+}
+
+TEST(LobbyApi, MeAndTheEventOfTheLobbyGiveTheDebuggerRight)
+{
+	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc"})")->debugger.has_value());
+	EXPECT_EQ(ParseMe(R"({"id":3,"name":"abc","debugger":true})")->debugger, std::optional<bool>(true));
+	EXPECT_EQ(ParseMe(R"({"id":3,"name":"abc","debugger":false,"editor":true})")->debugger, std::optional<bool>(false));
+	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc","debugger":1})").has_value());
+	EXPECT_TRUE(ParseDebuggerChange(R"({"debugger":true})")->debugger);
+	EXPECT_FALSE(ParseDebuggerChange(R"({"debugger":false})")->debugger);
+	EXPECT_FALSE(ParseDebuggerChange(R"({"editor":true})").has_value());
+}
+
 TEST(LobbyApi, ServerListReadsEachServer)
 {
 	const auto list = ParseServerList(R"({"servers":[)" + ServerJson() + "]}");

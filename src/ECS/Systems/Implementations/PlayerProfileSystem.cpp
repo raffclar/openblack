@@ -146,8 +146,7 @@ void PlayerProfileSystem::CreateProfile(std::u16string_view name, int symbol)
 	_profiles.current = made.name;
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
 	{
-		SPDLOG_LOGGER_INFO(logger, "Made the player profile \"{}\", its creature to be kept in {}", made.name,
-		                   made.creatureFile);
+		SPDLOG_LOGGER_INFO(logger, "Made a player profile, its creature to be kept in {}", made.creatureFile);
 	}
 	Save();
 }
@@ -166,7 +165,9 @@ bool PlayerProfileSystem::SelectProfile(std::u16string_view name)
 	}
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
 	{
-		SPDLOG_LOGGER_INFO(logger, "Playing as the player profile \"{}\"", _profiles.current);
+		const auto* current = CurrentProfile();
+		SPDLOG_LOGGER_INFO(logger, "Playing as the player profile of the creature file {}",
+		                   current != nullptr ? current->creatureFile : std::string());
 	}
 	Save();
 	return true;
@@ -189,7 +190,7 @@ bool PlayerProfileSystem::DeleteProfile(std::u16string_view name)
 	}
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
 	{
-		SPDLOG_LOGGER_INFO(logger, "Deleted the player profile \"{}\"", gui::ToUtf8(name));
+		SPDLOG_LOGGER_INFO(logger, "Deleted the player profile of the creature file {}", creatureFile);
 	}
 	Save();
 	return true;

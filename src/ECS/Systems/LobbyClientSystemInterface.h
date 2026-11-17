@@ -20,6 +20,7 @@
 #include <GameSocket.h>
 #include <LobbyApi.h>
 
+#include "Common/ErrorReportsInterface.h"
 #include "Online/HttpClientInterface.h"
 
 namespace openblack::ecs::systems
@@ -139,6 +140,13 @@ public:
 	/// The debugger mark of the account of the session, or none while no account is logged in. Each answer of the lobby
 	/// with a session gives the mark again, as for the editor right.
 	[[nodiscard]] virtual std::optional<bool> GetAccountDebugger() const { return std::nullopt; }
+	/// The choice of the account of the session for the error reports, from the privacy choices of the site. None while
+	/// no account is logged in, or when the account made no choice for the privacy notice of now. Each answer of the
+	/// lobby with a session gives the choice again.
+	[[nodiscard]] virtual std::optional<error_reports::AccountConsent> GetAccountErrorReports() const { return std::nullopt; }
+	/// Keeps the box "Send Crash Reports" with the account of the session (PUT /api/v1/me/consent): a set box gives the
+	/// choice Anonymous, and a clear box gives Off. Nothing while no account is logged in.
+	virtual void SendErrorReportsChoice(bool /*option*/) {}
 
 	/// Logs in with a name and a password. The client checks the name before it calls the lobby.
 	virtual void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) = 0;

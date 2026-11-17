@@ -1242,6 +1242,64 @@ TEST_F(LobbyClientTest, EachSessionAnswerGivesTheEditorRightOfTheAccount)
 	EXPECT_FALSE(_client->GetAccountEditor().has_value());
 }
 
+TEST_F(LobbyClientTest, EachSessionAnswerGivesTheChoiceOfTheAccountForTheErrorReports)
+{
+	Make();
+	EXPECT_FALSE(_client->GetAccountErrorReports().has_value());
+	_client->Login("abc", "secret", [](auto&& /*result*/) {});
+	_http.Answer(201, R"({"access_token":"access1","access_token_expires":"2026-10-22T10:15:00Z",)"
+	                  R"("refresh_token":"refresh1","refresh_token_expires":"2026-11-21T10:00:00Z",)"
+	                  R"("account":{"id":7,"name":"abc"},"error_reports":"full"})");
+	const auto full = _client->GetAccountErrorReports();
+	ASSERT_TRUE(full.has_value());
+	EXPECT_EQ(*full,
+	          (error_reports::AccountConsent {.choice = error_reports::ReportsConsent::Full, .accountId = "7", .name = "abc"}));
+
+	// The next answer has no choice (the notice changed, or the lobby is older): the game has no choice of the account
+	_now += 15min;
+	_client->GetMe([](auto&& /*result*/) {});
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/sessions/refresh");
+	_http.Answer(200, k_Rotated);
+	EXPECT_FALSE(_client->GetAccountErrorReports().has_value());
+	_http.Answer(200, R"({"id":7,"name":"abc"})");
+
+	// A text that the game does not know counts as no choice
+	EXPECT_FALSE(lobby_api::ParseSession(
+	                 R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z","account":{"id":7,"name":"abc"},)"
+	                 R"("error_reports":3})")
+	                 .has_value());
+	_client->Logout(false, [](auto&& /*result*/) {});
+	_http.Answer(204, "");
+	EXPECT_FALSE(_client->GetAccountErrorReports().has_value());
+}
+
+TEST_F(LobbyClientTest, TheBoxOfTheReportsKeepsItsValueWithTheAccount)
+{
+	Make();
+	// With no session, nothing goes
+	_client->SendErrorReportsChoice(false);
+	EXPECT_TRUE(_http.sent.empty());
+
+	_client->Login("abc", "secret", [](auto&& /*result*/) {});
+	_http.Answer(201, R"({"access_token":"access1","access_token_expires":"2026-10-22T10:15:00Z",)"
+	                  R"("refresh_token":"refresh1","refresh_token_expires":"2026-11-21T10:00:00Z",)"
+	                  R"("account":{"id":7,"name":"abc"},"error_reports":"full"})");
+	_client->SendErrorReportsChoice(false);
+	ASSERT_EQ(_http.sent.size(), 1u);
+	EXPECT_EQ(_http.Next().method, HttpMethod::Put);
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/me/consent");
+	EXPECT_EQ(_http.NextBody(), R"({"error_reports":"off"})");
+	// The choice applies at once, before the answer
+	EXPECT_EQ(_client->GetAccountErrorReports()->choice, error_reports::ReportsConsent::Off);
+	_http.Answer(200, R"({"error_reports":"off","version":1,"chosen":"2026-11-16T10:00:00Z","notice_version":1})");
+	EXPECT_EQ(_client->GetAccountErrorReports()->choice, error_reports::ReportsConsent::Off);
+
+	// A set box never gives the choice Full: the player gives it on the site
+	_client->SendErrorReportsChoice(true);
+	EXPECT_EQ(_http.NextBody(), R"({"error_reports":"anonymous"})");
+	EXPECT_EQ(_client->GetAccountErrorReports()->choice, error_reports::ReportsConsent::Anonymous);
+}
+
 TEST_F(LobbyClientTest, AnAnswerWithNoEditorFieldGivesNoRight)
 {
 	// An older lobby sends no "editor" field
@@ -1303,6 +1361,105 @@ TEST_F(LobbyClientTest, TheLoginAtTheStartUsesTheStoredTokenAndOpensNoPushChanne
 	_client->ResumeSession([&](auto&& result) { account = result.value; });
 	ASSERT_TRUE(account.has_value());
 	EXPECT_EQ(_push->opens, 1);
+}
+
+TEST_F(LobbyClientTest, AnEventOfTheLobbyChangesTheEditorRightAtOnce)
+{
+	Make();
+	LogIn();
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	// Staff give the right during the game: the event comes on the push channel
+	_push->Deliver(R"({"seq":1,"type":"account.editor","time":"2026-10-22T10:00:01Z","data":{"editor":true}})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(true));
+	_push->Deliver(R"({"seq":2,"type":"account.editor","time":"2026-10-22T10:00:02Z","data":{"editor":false}})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	// Bad data changes nothing
+	_push->Deliver(R"({"seq":3,"type":"account.editor","time":"2026-10-22T10:00:03Z","data":{"editor":1}})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	// With the channel open, the client does not read the account again
+	_now += 5min;
+	_client->Update();
+	EXPECT_TRUE(_http.sent.empty());
+}
+
+TEST_F(LobbyClientTest, WithNoPushChannelTheClientReadsTheEditorRightAgainAtAShortInterval)
+{
+	_kept = "stored";
+	Make();
+	_client->SignInAtStart();
+	_http.Answer(200, k_Rotated);
+	ASSERT_EQ(_client->GetState(), LobbySessionState::LoggedIn);
+	ASSERT_EQ(_push->opens, 0);
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	_client->Update();
+	EXPECT_TRUE(_http.sent.empty());
+	// Before the interval ends, the client sends nothing
+	_now += lobby_times::k_RightCheckInterval - 1s;
+	_client->Update();
+	EXPECT_TRUE(_http.sent.empty());
+	_now += 1s;
+	_client->Update();
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/me");
+	// One read waits at a time
+	_client->Update();
+	EXPECT_EQ(_http.sent.size(), 1u);
+	_http.Answer(200, R"({"id":7,"name":"abc","editor":true})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(true));
+	// The next read comes one interval after the answer
+	_now += lobby_times::k_RightCheckInterval;
+	_client->Update();
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/me");
+	// An older lobby gives no right in the account: the right stays
+	_http.Answer(200, R"({"id":7,"name":"abc"})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(true));
+	// After the logout, the client reads nothing
+	_client->Logout(false, [](auto&& /*result*/) {});
+	_http.Answer(204, "");
+	_now += lobby_times::k_RightCheckInterval * 2;
+	_client->Update();
+	_client->Update();
+	EXPECT_TRUE(_http.sent.empty());
+}
+
+TEST_F(LobbyClientTest, AnEventOfTheLobbyChangesTheDebuggerRightAtOnce)
+{
+	Make();
+	LogIn();
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(false));
+	// Staff give the mark during the game: the event comes on the push channel
+	_push->Deliver(R"({"seq":1,"type":"account.debugger","time":"2026-10-22T10:00:01Z","data":{"debugger":true}})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(true));
+	// The editor right does not change
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	_push->Deliver(R"({"seq":2,"type":"account.debugger","time":"2026-10-22T10:00:02Z","data":{"debugger":false}})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(false));
+	// Bad data changes nothing
+	_push->Deliver(R"({"seq":3,"type":"account.debugger","time":"2026-10-22T10:00:03Z","data":{"debugger":"yes"}})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(false));
+}
+
+TEST_F(LobbyClientTest, WithNoPushChannelTheClientReadsTheDebuggerRightAgainAtAShortInterval)
+{
+	_kept = "stored";
+	Make();
+	_client->SignInAtStart();
+	_http.Answer(200, k_Rotated);
+	ASSERT_EQ(_client->GetState(), LobbySessionState::LoggedIn);
+	ASSERT_EQ(_push->opens, 0);
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(false));
+	_client->Update();
+	_now += lobby_times::k_RightCheckInterval;
+	_client->Update();
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/me");
+	_http.Answer(200, R"({"id":7,"name":"abc","debugger":true})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(true));
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	// An older lobby gives no mark in the account: the mark stays
+	_now += lobby_times::k_RightCheckInterval;
+	_client->Update();
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/me");
+	_http.Answer(200, R"({"id":7,"name":"abc"})");
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(true));
 }
 
 TEST_F(LobbyClientTest, TheLoginAtTheStartWithNoTokenSendsNothing)

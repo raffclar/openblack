@@ -24,6 +24,7 @@
 #include "landgen/Grid.h"
 #include "landgen/Hydrology.h"
 #include "landgen/Lighting.h"
+#include "landgen/Settlement.h"
 #include "landgen/Terrain.h"
 
 /// The generator of lands: from a seed and its settings, a whole land that the game loads as it loads a landscape of the
@@ -66,7 +67,9 @@ struct Settings
 	climate::Settings climate;
 	biomes::Thresholds thresholds;
 	features::Settings features;
+	features::ForestSettings forests;
 	lighting::Settings lighting;
+	settlement::Settings settlement;
 };
 
 /// A flat place for the player's temple and first town, in corners
@@ -119,12 +122,16 @@ struct GeneratedLand
 	std::vector<hydrology::River> rivers;
 	size_t lakes {0};
 	std::vector<features::Feature> features;
+	/// The forests that hold the trees of the features
+	std::vector<features::Forest> forests;
 	StartArea start {};
+	/// The player's temple and first town on the start area
+	settlement::Plan settlement;
 	std::vector<StageTime> times;
 };
 
 /// Makes a land: the base heights, the erosion, the lakes and rivers, the start area, the climate, the biomes, the light,
-/// the cells and countries, and the features
+/// the cells and countries, the features and their forests, and the temple and town of the start
 [[nodiscard]] GeneratedLand Generate(const Settings& settings);
 
 /// The cell of each corner, from the altitudes, the luminosity and the biomes. A cell's water and sound come from the

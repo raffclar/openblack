@@ -139,6 +139,20 @@ TEST(GameSocket, TheEditorMarkGoesWithTheGodAndTheJoinAndIsLeftOutWhenNotSet)
 
 TEST(GameSocket, TheRefusalOfCommandsGivesTheReasonAndTheCount)
 {
+	const EditorRight right {.editor = true};
+	EXPECT_EQ(ToJson(right), R"({"editor":true,"type":"editor.right"})");
+	EXPECT_EQ(std::get<EditorRight>(*Parse(ToJson(right))), right);
+	EXPECT_EQ(std::get<EditorRight>(*Parse(R"({"type":"editor.right","editor":false})")), EditorRight {});
+	EXPECT_FALSE(Parse(R"({"type":"editor.right"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.right","editor":1})").has_value());
+
+	const DebuggerRight debugger {.debugger = true};
+	EXPECT_EQ(ToJson(debugger), R"({"debugger":true,"type":"debugger.right"})");
+	EXPECT_EQ(std::get<DebuggerRight>(*Parse(ToJson(debugger))), debugger);
+	EXPECT_EQ(std::get<DebuggerRight>(*Parse(R"({"type":"debugger.right","debugger":false})")), DebuggerRight {});
+	EXPECT_FALSE(Parse(R"({"type":"debugger.right"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"debugger.right","debugger":"yes"})").has_value());
+
 	const CommandRefused refused {.reason = std::string(k_NoEditorClaim), .commands = 2};
 	EXPECT_EQ(ToJson(refused), R"({"commands":2,"reason":"no_editor_claim","type":"command.refused"})");
 	EXPECT_EQ(std::get<CommandRefused>(*Parse(ToJson(refused))), refused);

@@ -11,12 +11,15 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "Common/GameLanguage.h"
 
 /// The rules of the developer tools: the debug windows and the editor, the inspector, the testbed scenarios, the debug
 /// keys, and the options of the command line that only developers and tools use. These rules keep no state, so that
@@ -178,8 +181,30 @@ using DebuggerRight = AccountRight;
 	return RefusalOf(built, false);
 }
 
-/// The line that the player sees when the game or the game server refuses the editor or a debug cheat (deviation 269)
+/// The line that the player sees when the game or the game server refuses the editor or a debug cheat (deviation 269).
+/// The game's text files have no such line, so the words are English.
 inline constexpr std::u16string_view k_EditorRefusedLine = u"Your account cannot use the editor or the cheats in this game.";
+
+/// The refusal line of the editor in one language of the game
+struct EditorRefusedLine
+{
+	GameLanguage language {GameLanguage::UkEnglish};
+	std::u16string_view line;
+};
+
+/// The refusal line in each language that has its own words. To give a language its line, add a row with the words
+/// from a person who speaks the language. A language with no row shows the English line.
+inline constexpr std::array k_EditorRefusedLines = {
+    EditorRefusedLine {.language = GameLanguage::UkEnglish, .line = k_EditorRefusedLine},
+    EditorRefusedLine {.language = GameLanguage::UsEnglish, .line = k_EditorRefusedLine},
+};
+
+/// The refusal line in the language of the game, or the English line when the language has no row
+[[nodiscard]] constexpr std::u16string_view EditorRefusedLineOf(GameLanguage language) noexcept
+{
+	const auto found = std::ranges::find(k_EditorRefusedLines, language, &EditorRefusedLine::language);
+	return found != k_EditorRefusedLines.end() ? found->line : k_EditorRefusedLine;
+}
 
 /// Whether a refusal of the editor or of a debug cheat shows the refusal line to the player. The line shows when the
 /// join ticket or the signed-in account does not have the editor right. A developer build outside a network game never

@@ -9,16 +9,45 @@
 
 #include "CrashReport.h"
 
+#include <cstdlib>
+
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <utility>
+
+#if __has_include(<cxxabi.h>)
+#include <cxxabi.h>
+#endif
 
 #include <spdlog/fmt/fmt.h>
 
 namespace openblack::crash_report
 {
+
+std::string ReadableTypeName(const char* name)
+{
+	if (name == nullptr)
+	{
+		return {};
+	}
+#if __has_include(<cxxabi.h>)
+	int status = 0;
+	const std::unique_ptr<char, decltype(&std::free)> decoded(abi::__cxa_demangle(name, nullptr, nullptr, &status), &std::free);
+	if (status == 0 && decoded)
+	{
+		return decoded.get();
+	}
+#endif
+	return name;
+}
+
+std::string ReadableTypeName(const std::type_info& type)
+{
+	return ReadableTypeName(type.name());
+}
 
 std::string_view KindName(CrashKind kind)
 {

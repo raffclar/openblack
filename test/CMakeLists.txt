@@ -2668,3 +2668,8 @@ openblack_setup_and_add_test(test_debug_acts test_debug_acts.cpp)
 openblack_setup_and_add_test(test_debug_thing_acts test_debug_thing_acts.cpp)
 openblack_setup_and_add_test(test_world_file_gods test_world_file_gods.cpp)
 openblack_setup_and_add_test(test_debug_magic_weather_acts test_debug_magic_weather_acts.cpp)
+openblack_setup_and_add_test(test_editor_land_generator test_editor_land_generator.cpp)
+openblack_setup_and_add_test(
+  test_landgen_settlement landgen/test_landgen_settlement.cpp
+)
+target_link_libraries(test_landgen_settlement PRIVATE landgen)

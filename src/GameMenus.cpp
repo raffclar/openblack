@@ -16,6 +16,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -68,6 +69,7 @@
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GameKeysSystemInterface.h"
 #include "ECS/Systems/GatheringBoxSystemInterface.h"
@@ -79,7 +81,9 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LoadingScreenSystemInterface.h"
+#include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -93,6 +97,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/VillagerLabelSource.h"
+#include "Editor/LandGenerator.h"
 #include "EngineConfig.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
@@ -352,7 +357,14 @@ void Game::HandleInterfaceAction()
 			});
 		}
 		const auto kept = gui::ToProfileSettings(settings);
+		// A change of the box "Send Crash Reports" goes to the lobby account too, when one is logged in (deviation 261)
+		const bool reportsBoxChanged =
+		    Locator::errorReports::has_value() && Locator::errorReports::value().GetState().enabled != kept.crashReports;
 		ApplyPlayerSettings(kept);
+		if (reportsBoxChanged && Locator::lobbyClient::has_value())
+		{
+			Locator::lobbyClient::value().SendErrorReportsChoice(kept.crashReports);
+		}
 		// The player's options are kept with their profile
 		Locator::playerProfileSystem::value().SetCurrentSettings(kept);
 		SaveHelpRecord();
@@ -477,6 +489,14 @@ void Game::HandleInterfaceAction()
 		break;
 	case Action::ExitOnlineGame:
 		ExitOnlineGame();
+		break;
+	case Action::ExitEditor:
+		// The game loads the save from before the land generator, so the player is back where the generator started
+		Locator::gameInterface::value().GetMenu().Close();
+		if (Locator::editorSystem::has_value())
+		{
+			std::ignore = editor::land_generator::Exit(Locator::editorSystem::value().GetLandGenerator());
+		}
 		break;
 	case Action::AskToLeave:
 		AskToLeaveNetworkGame();
@@ -660,6 +680,9 @@ void Game::TellMenuTheGame()
 	menu.SetNetworkGame(InNetworkGame());
 	// The land of a network game also plays as a skirmish, but its menu is the menu of a network game
 	menu.SetSkirmish(Locator::entitiesRegistry::value().Context().skirmish && !Locator::time::value().IsNetworkGame());
+	menu.SetLandGenerator(Locator::editorSystem::has_value() && Locator::landSystem::has_value() &&
+	                      editor::land_generator::IsOn(Locator::editorSystem::value().GetLandGenerator(),
+	                                                   Locator::landSystem::value().GetLandPath().generic_string()));
 }
 
 void Game::ShowMenuOnStart()

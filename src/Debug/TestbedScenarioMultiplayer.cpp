@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 40> boxes = {{
+	const std::array<BoxScenario, 43> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -255,6 +255,22 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "service refuses the start (deviation 275).",
 	     "A box over the room tells \"The game server cannot play this game.\" and, on a second line, \"This server "
 	     "plays only Two Gods for up to 2 gods.\" with OK. The room stays open."},
+	    {"multiplayer.lobby_map_package_missing", "The lobby sessions: a map that the site does not have",
+	     Stage::LobbyMapPackageMissing,
+	     "The player makes a session and clicks Start. The site does not have the map package of the session's map, so "
+	     "the service refuses the start (deviation 275).",
+	     "A box over the room tells \"The site does not have the map of this game.\" with OK. The room stays open."},
+	    {"multiplayer.lobby_create_server_map", "The lobby sessions: the map of the fixed game server",
+	     Stage::LobbyCreateServerMap,
+	     "The site has one fixed game server that plays only one map. The player opens the box that makes a session "
+	     "(deviation 277).",
+	     "Between the Back and Create session buttons, the box shows \"The game server plays only the map Two Gods, "
+	     "with a maximum of 2 gods.\""},
+	    {"multiplayer.lobby_settings_server_problem", "The lobby sessions: the server problem in the settings",
+	     Stage::LobbySettingsServerProblem,
+	     "The player makes a session that the game server cannot play, and opens the session settings (deviation 277).",
+	     "Between the Back and Change settings buttons, the box shows \"This server plays only Two Gods for up to 2 "
+	     "gods.\""},
 	    {"multiplayer.lobby_notices", "The lobby sessions: the notices of the room", Stage::LobbyNotices,
 	     "The player joins \"Friday Ring\". Each two seconds an event occurs: Dave joins, Dave is ready, Bob starts the "
 	     "countdown, and Bob kicks the player. Run the game in the background, so that the window does not have the "

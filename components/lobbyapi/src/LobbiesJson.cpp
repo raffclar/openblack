@@ -237,9 +237,30 @@ bool ReadSummary(const Json& object, LobbySummary& out)
 	       ReadString(object, "build_id", out.buildId, false);
 }
 
+bool ReadServerMap(const Json& object, ServerMap& out)
+{
+	return ReadString(object, "file", out.file) && ReadString(object, "name", out.name, false) &&
+	       ReadString(object, "sha256", out.sha256, false) && ReadInteger(object, "gods", out.gods);
+}
+
 bool ReadPool(const Json& object, PoolState& out)
 {
-	return ReadInteger(object, "free", out.free) && ReadInteger(object, "total", out.total);
+	if (!ReadInteger(object, "free", out.free) || !ReadInteger(object, "total", out.total))
+	{
+		return false;
+	}
+	const auto* map = Member(object, "server_map");
+	if (map == nullptr || map->is_null())
+	{
+		return true;
+	}
+	ServerMap found;
+	if (!map->is_object() || !ReadServerMap(*map, found))
+	{
+		return false;
+	}
+	out.serverMap = std::move(found);
+	return true;
 }
 
 bool ReadMember(const Json& object, LobbyMember& out)
@@ -288,7 +309,8 @@ bool ReadLobby(const Json& object, Lobby& out)
 	    !ReadOptionalInteger(object, "queue_position", out.queuePosition) ||
 	    !ReadOptionalTime(object, "countdown_at", out.countdownAt) || !ReadOptionalTime(object, "started_at", out.startedAt) ||
 	    !ReadArray(object, "members", out.members, ReadMember) || !ReadSlots(object, out.slotKinds) ||
-	    !ReadString(object, "game_id", out.gameId, false))
+	    !ReadString(object, "game_id", out.gameId, false) || !ReadString(object, "server_problem", out.serverProblem, false))
+
 	{
 		return false;
 	}

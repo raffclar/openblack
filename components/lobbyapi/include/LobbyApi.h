@@ -102,6 +102,18 @@ struct Session
 	/// "debugger": the account has the debugger mark (optional). Outside a network game, only this mark shows the debug
 	/// menu bar. In a network game, only the debugger claim of the join ticket counts.
 	bool debugger {false};
+	/// "error_reports": the choice of the account for the error reports (optional): "full", "anonymous" or "off". Empty
+	/// when the account made no choice for the privacy notice of now, or the lobby is older.
+	std::string errorReports;
+};
+
+/// The answer of GET and PUT /api/v1/me/consent
+struct Consent
+{
+	/// "error_reports": as in Session
+	std::string errorReports;
+	/// "notice_version": the version of the privacy notice that the site shows now
+	int64_t noticeVersion {0};
 };
 
 /// A clan of the account in GET /api/v1/me
@@ -140,6 +152,10 @@ struct Me
 	std::vector<ClanRef> clans;
 	/// "date_joined"
 	int64_t dateJoined {0};
+	/// "editor": the editor right of the account now. None when the lobby does not give it.
+	std::optional<bool> editor;
+	/// "debugger": the debugger mark of the account now. None when the lobby does not give it.
+	std::optional<bool> debugger;
 };
 
 /// A god or an observer in the room of a game server
@@ -353,6 +369,12 @@ struct ServerStatusReply
 	bool listed {false};
 	/// "clans": the gods of the room that play for a clan
 	std::vector<ServerStatusClan> clans;
+	/// "editors": the accounts of the room that have the editor right now. None when the lobby does not give them: the
+	/// server then keeps the claims of the join tickets.
+	std::optional<std::vector<int64_t>> editors;
+	/// "debuggers": the accounts of the room that have the debugger mark now. None when the lobby does not give them: the
+	/// server then keeps the claims of the join tickets.
+	std::optional<std::vector<int64_t>> debuggers;
 };
 
 /// GET /api/v1/servers: {"servers": [...]}
@@ -703,6 +725,8 @@ constexpr std::string_view k_ServersRemoved = "servers.removed";
 constexpr std::string_view k_RoomChanged = "room.changed";
 constexpr std::string_view k_ServerBanned = "server.banned";
 constexpr std::string_view k_AccountBanned = "account.banned";
+constexpr std::string_view k_AccountEditor = "account.editor";
+constexpr std::string_view k_AccountDebugger = "account.debugger";
 constexpr std::string_view k_RoomClanChosen = "room.clan_chosen";
 constexpr std::string_view k_PingLine = "ping.line";
 constexpr std::string_view k_PingHere = "ping.here";
@@ -903,6 +927,20 @@ struct ServerBanned
 	std::string name;
 	/// "reason"
 	std::string reason;
+};
+
+/// The data of "account.editor": staff gave or removed the editor right of the account
+struct EditorChange
+{
+	/// "editor"
+	bool editor {false};
+};
+
+/// The data of "account.debugger": staff gave or removed the debugger mark of the account
+struct DebuggerChange
+{
+	/// "debugger"
+	bool debugger {false};
 };
 
 /// The data of "account.banned"

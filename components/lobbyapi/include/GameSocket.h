@@ -379,6 +379,26 @@ struct CommandRefused
 	[[nodiscard]] bool operator==(const CommandRefused&) const = default;
 };
 
+/// Server to client: "editor.right". The lobby changed the editor right of the account of this player while the game
+/// runs. The server takes the edits of the editor and the debug cheats of the player only while the right is true. The
+/// game of the player follows the new right at once.
+struct EditorRight
+{
+	bool editor {false};
+
+	[[nodiscard]] bool operator==(const EditorRight&) const = default;
+};
+
+/// Server to client: "debugger.right". The lobby changed the debugger mark of the account of this player while the game
+/// runs. The server takes the acts of the debug windows of the player only while the right is true. The game of the
+/// player shows or hides the debug menu bar at once.
+struct DebuggerRight
+{
+	bool debugger {false};
+
+	[[nodiscard]] bool operator==(const DebuggerRight&) const = default;
+};
+
 /// The reason of a refusal of edits of the editor or of debug cheats (see CommandRefused)
 inline constexpr std::string_view k_NoEditorClaim = "no_editor_claim";
 /// The reason of a refusal of a skip to a land of the story: a network game has no lands of the story
@@ -678,7 +698,7 @@ using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, R
                            StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
                            SyncParts, Loaded, LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities,
                            SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime, EditorScriptFile, EditorWorld,
-                           EditorScenario>;
+                           EditorScenario, EditorRight, DebuggerRight>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

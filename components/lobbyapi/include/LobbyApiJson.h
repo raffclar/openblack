@@ -50,6 +50,10 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string RoomReadyFrame(bool ready);
 
 [[nodiscard]] std::optional<Session> ParseSession(std::string_view text);
+/// The answer of GET and PUT /api/v1/me/consent
+[[nodiscard]] std::optional<Consent> ParseConsent(std::string_view text);
+/// The body of PUT /api/v1/me/consent: {"error_reports": "anonymous"} or {"error_reports": "off"}
+[[nodiscard]] std::string ConsentBody(std::string_view errorReports);
 [[nodiscard]] std::optional<Me> ParseMe(std::string_view text);
 [[nodiscard]] std::optional<ServerList> ParseServerList(std::string_view text);
 [[nodiscard]] std::optional<MapList> ParseMapList(std::string_view text);
@@ -100,6 +104,10 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<PushError> ParsePushError(std::string_view data);
 [[nodiscard]] std::optional<PointsChange> ParsePointsChange(std::string_view text);
 [[nodiscard]] std::optional<Ban> ParseBan(std::string_view text);
+/// The data of "account.editor"
+[[nodiscard]] std::optional<EditorChange> ParseEditorChange(std::string_view text);
+/// The data of "account.debugger"
+[[nodiscard]] std::optional<DebuggerChange> ParseDebuggerChange(std::string_view text);
 
 /// An ISO 8601 time of the lobby, such as "2026-10-22T10:15:00.123Z" or "2026-10-22T10:15:00+00:00", as milliseconds
 /// since 1970 (UTC). None when the text is not such a time.

@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <array>
+#include <stdexcept>
 #include <string>
+#include <typeinfo>
 
 #include <Common/CrashHandler.h>
 #include <Common/CrashReport.h>
@@ -64,6 +66,19 @@ TEST(CrashReport, SignalsExitAsShellsReportThem)
 TEST(CrashReport, ExceptionsCaughtInMainKeepTheOldExitCode)
 {
 	EXPECT_EQ(crash_report::ExitCodeFor(CrashKind::UncaughtException, 0, true), 1);
+}
+
+TEST(CrashReport, GivesExceptionTypesInReadableForm)
+{
+	// MSVC adds the word "class" before the name. The other compilers give the name only.
+	const auto name = crash_report::ReadableTypeName(typeid(std::runtime_error));
+	EXPECT_TRUE(name.ends_with("std::runtime_error")) << name;
+	EXPECT_EQ(name.find("St13"), std::string::npos) << name;
+	EXPECT_EQ(crash_report::ReadableTypeName("not a mangled name"), "not a mangled name");
+	EXPECT_TRUE(crash_report::ReadableTypeName(static_cast<const char*>(nullptr)).empty());
+#ifndef _MSC_VER
+	EXPECT_EQ(crash_report::ReadableTypeName("St13runtime_error"), "std::runtime_error");
+#endif
 }
 
 TEST(CrashReport, NamesExceptionsAndSignals)

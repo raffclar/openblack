@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <map>
 #include <utility>
 
 #include "landgen/Noise.h"
@@ -326,4 +327,60 @@ std::vector<Feature> features::Place(const Grid<Biome>& biomes, const Grid<float
 		placed = std::move(kept);
 	}
 	return placed;
+}
+
+std::vector<Forest> features::GroupForests(std::span<Feature> features, float nearX, float nearZ,
+                                           const ForestSettings& settings)
+{
+	// The trees of each square, in the order of the features
+	std::map<std::pair<int, int>, std::vector<size_t>> squares;
+	for (size_t i = 0; i < features.size(); ++i)
+	{
+		const auto& feature = features[i];
+		if (feature.kind != Kind::Tree)
+		{
+			continue;
+		}
+		const auto key = std::pair {static_cast<int>(std::floor(feature.x / settings.square)),
+		                            static_cast<int>(std::floor(feature.z / settings.square))};
+		squares[key].push_back(i);
+	}
+
+	struct Candidate
+	{
+		float distance;
+		std::pair<int, int> key;
+	};
+	std::vector<Candidate> candidates;
+	for (const auto& [key, trees] : squares)
+	{
+		if (trees.size() < settings.fewest)
+		{
+			continue;
+		}
+		const float dx = ((static_cast<float>(key.first) + 0.5f) * settings.square) - nearX;
+		const float dz = ((static_cast<float>(key.second) + 0.5f) * settings.square) - nearZ;
+		candidates.push_back({.distance = (dx * dx) + (dz * dz), .key = key});
+	}
+	std::ranges::sort(candidates, [](const Candidate& a, const Candidate& b) {
+		return a.distance != b.distance ? a.distance < b.distance : a.key < b.key;
+	});
+
+	std::vector<Forest> forests;
+	for (const auto& candidate : candidates)
+	{
+		if (forests.size() >= settings.most)
+		{
+			break;
+		}
+		const auto id = static_cast<uint32_t>(forests.size() + 1);
+		const auto& trees = squares.at(candidate.key);
+		const auto& first = features[trees.front()];
+		forests.push_back({.id = id, .x = first.x, .z = first.z});
+		for (const auto tree : trees)
+		{
+			features[tree].forest = id;
+		}
+	}
+	return forests;
 }

@@ -28,6 +28,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Common/ErrorReportsInterface.h"
 #include "Editor/EditorMindLoads.h"
 #include "Editor/EditorScriptFiles.h"
 #include "Online/EditorWorldUpload.h"
@@ -211,7 +212,7 @@ public:
 		/// The blocks whose commands the server refused because the commands of the god did not fit in the turn
 		uint32_t refusedBlocks {0};
 		/// The join ticket of the player has the editor claim. A seat that a snapshot gave back keeps the claim of the
-		/// snapshot.
+		/// snapshot. The lobby can change it while the game runs (SetEditors).
 		bool editor {false};
 		/// The player was away when the editor changed the world of the room. The turns that the client did are of the old
 		/// world: the player comes back only with the server's new world.
@@ -219,9 +220,13 @@ public:
 		/// The editor changed the world while the player was connected. The checksums that the client sends are of the old
 		/// world until its report that it loaded the new world (game.loaded): the server leaves them out.
 		bool oldWorldChecksums {false};
+		/// The lobby changed the editor right after the join. The player gets the right again when the player comes back.
+		bool editorChanged {false};
 		/// The join ticket of the player has the debugger claim. A seat that a snapshot gave back keeps the claim of the
-		/// snapshot.
+		/// snapshot. The lobby can change it while the game runs (SetDebuggers).
 		bool debugger {false};
+		/// The lobby changed the debugger right after the join. The player gets the right again when the player comes back.
+		bool debuggerChanged {false};
 	};
 
 	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
@@ -242,12 +247,17 @@ public:
 		/// The number of the observer in the game, from 1. The turns stamp the blocks of the observer with it.
 		uint8_t number {0};
 		/// The join ticket of the observer has the editor claim. An observer that a snapshot gave back keeps the claim of the
-		/// snapshot.
+		/// snapshot. The lobby can change it while the game runs (SetEditors).
 		bool editor {false};
 		/// The observer was away when the editor changed the world of the room
 		bool missedWorldChange {false};
-		/// The join ticket of the observer has the debugger claim
+		/// The lobby changed the editor right after the join. The observer gets the right again when it comes back.
+		bool editorChanged {false};
+		/// The join ticket of the observer has the debugger claim. The lobby can change it while the game runs
+		/// (SetDebuggers).
 		bool debugger {false};
+		/// The lobby changed the debugger right after the join. The observer gets the right again when it comes back.
+		bool debuggerChanged {false};
 	};
 
 	/// A change of the whole world of the room that a player with the editor claim asked for
@@ -357,6 +367,8 @@ public:
 	/// of the turn at which its world parted
 	using PartedListener = std::function<void(uint8_t seat, std::span<const std::string> parts)>;
 	void SetPartedListener(PartedListener listener) { _partedListener = std::move(listener); }
+	/// The players that a report may name: the players that joined with the ticket choice Full for the error reports
+	[[nodiscard]] std::vector<error_reports::ReportedPlayer> ReportedPlayers() const;
 	/// The print of the game data that the server's world read, before a client joins. The room sends the names of its
 	/// files in its join, and refuses a player whose file of a land, of a script or of the table of objects differs, with
 	/// "data". With no print, the room makes no check.
@@ -373,6 +385,16 @@ public:
 	/// "kicked", and the room refuses the join of a banned god. After the start, a ban changes nothing (deviation 146).
 	void SetBans(std::set<int64_t> accounts);
 	[[nodiscard]] const std::set<int64_t>& Bans() const { return _bans; }
+	/// The accounts of the room that have the editor right now, from each answer of the lobby to a status report. A god or
+	/// an observer whose right changed gets the new right at once ("editor.right"). From then, the server takes or refuses
+	/// the edits of the editor and the debug cheats of that player by the new right. A player with no account keeps the
+	/// claim of its join.
+	void SetEditors(std::span<const int64_t> accounts);
+	/// The accounts of the room that have the debugger right now, from each answer of the lobby to a status report. A god
+	/// or an observer whose right changed gets the new right at once ("debugger.right"). From then, the server takes or
+	/// refuses the acts of the debug windows of that player by the new right. A player with no account keeps the claim
+	/// of its join.
+	void SetDebuggers(std::span<const int64_t> accounts);
 
 	/// The commands of the server itself: it has no player
 	void Send(const player_commands::Action& action) override;
@@ -485,6 +507,9 @@ private:
 		online::editor_world::Upload worldUpload;
 		/// The parts of the file of the script tabs of the editor that the connection sends now
 		editor::script_files::PartAssembly scriptParts;
+		/// The choice of the error reports on the join ticket of the player. None when the player joined with no ticket or
+		/// came back with a session: the server then never names the player in a report.
+		std::optional<error_reports::ReportsConsent> reports;
 	};
 
 	/// The most "sync.parts" frames of one connection that the server answers
@@ -585,6 +610,15 @@ private:
 	void Refuse(ConnectionId connection, std::string_view reason, std::string_view detail = {}, std::string_view path = {});
 	/// Takes the players of the accounts that the lobby banned out of the started game
 	void RemoveBannedFromGame();
+	/// A right of an account that the lobby can change while the game runs
+	enum class RoomRight : uint8_t
+	{
+		Editor,
+		Debugger,
+	};
+	/// Gives the right to each god and observer whose account is in the list, and removes it from the others. A player
+	/// whose right changed gets the new right at once. A player with no account keeps the claim of its join.
+	void FollowRoomRight(RoomRight right, std::span<const int64_t> accounts);
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
 	void StartCreature(ConnectionId connection, const Peer& peer, const game_socket::StartCreature& creature);
 	/// A mind file of the editor from a player. The server checks the claim and the file, keeps it and sends it to every

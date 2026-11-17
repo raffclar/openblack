@@ -143,7 +143,8 @@ void ShowEditorRefusal()
 	{
 		return;
 	}
-	Locator::incomingMessageSystem::value().Add(incoming_messages::Kind::Chat, k_EditorRefusedLine, 0);
+	const auto language = Locator::config::has_value() ? Locator::config::value().language : GameLanguage::UkEnglish;
+	Locator::incomingMessageSystem::value().Add(incoming_messages::Kind::Chat, EditorRefusedLineOf(language), 0);
 	// The test tools find the words "The player sees the refusal line"
 	if (auto logger = spdlog::get("game"))
 	{

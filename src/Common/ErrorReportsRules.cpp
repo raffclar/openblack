@@ -159,4 +159,84 @@ CrashEventTexts CrashEventTextsOf(const crash_report::CrashInfo& info)
 	        .message = std::string(info.message.empty() ? kind : info.message)};
 }
 
+std::optional<std::filesystem::path> LogAttachmentOf(Role role, std::string_view logFile)
+{
+	if (role == Role::Server)
+	{
+		return std::nullopt;
+	}
+	return LogAttachment(logFile);
+}
+
+std::optional<std::filesystem::path> LogAttachmentFor(const std::optional<std::filesystem::path>& logFile, bool personalData)
+{
+	return personalData ? logFile : std::nullopt;
+}
+
+std::optional<ReportsConsent> ParseReportsConsent(std::string_view text) noexcept
+{
+	if (text == "full")
+	{
+		return ReportsConsent::Full;
+	}
+	if (text == "anonymous")
+	{
+		return ReportsConsent::Anonymous;
+	}
+	if (text == "off")
+	{
+		return ReportsConsent::Off;
+	}
+	return std::nullopt;
+}
+
+std::string_view ReportsConsentText(ReportsConsent consent) noexcept
+{
+	switch (consent)
+	{
+	case ReportsConsent::Full:
+		return "full";
+	case ReportsConsent::Anonymous:
+		return "anonymous";
+	case ReportsConsent::Off:
+		return "off";
+	}
+	return "off";
+}
+
+ReportsPlan ReportsPlanOf(bool option, const std::optional<AccountConsent>& account) noexcept
+{
+	if (!account.has_value())
+	{
+		return {.running = option, .personalData = false};
+	}
+	const bool running = account->choice != ReportsConsent::Off;
+	return {.running = running, .personalData = running && account->choice == ReportsConsent::Full};
+}
+
+bool OptionOfConsent(ReportsConsent consent) noexcept
+{
+	return consent != ReportsConsent::Off;
+}
+
+ReportsConsent ConsentOfOption(bool option) noexcept
+{
+	return option ? ReportsConsent::Anonymous : ReportsConsent::Off;
+}
+
+bool MayNamePlayer(std::optional<ReportsConsent> ticketChoice) noexcept
+{
+	return ticketChoice == ReportsConsent::Full;
+}
+
+std::optional<ReportedPlayer> ReportedPlayerOf(std::string_view name, std::string_view address,
+                                               std::optional<ReportsConsent> ticketChoice)
+{
+	if (!MayNamePlayer(ticketChoice) || name.empty())
+	{
+		return std::nullopt;
+	}
+	return ReportedPlayer {.name = std::string(name), .address = std::string(address)};
+}
+
 } // namespace openblack::error_reports

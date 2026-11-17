@@ -162,12 +162,13 @@ void EditorWindow::Open() noexcept
 
 void EditorWindow::ShowTab(std::string_view tab) noexcept
 {
-	constexpr std::array<std::pair<std::string_view, BottomTab>, 7> k_Tabs {{
+	constexpr std::array<std::pair<std::string_view, BottomTab>, 8> k_Tabs {{
 	    {"Palette", BottomTab::Palette},
 	    {"Scenarios", BottomTab::Scenarios},
 	    {"Scripts", BottomTab::Scripts},
 	    {"Land script", BottomTab::LandScript},
 	    {"Land tools", BottomTab::LandTools},
+	    {"Land generator", BottomTab::LandGenerator},
 	    {"Cheats", BottomTab::Cheats},
 	    {"Log", BottomTab::Log},
 	}};
@@ -1345,6 +1346,14 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 	if (ImGui::BeginTabItem("Land tools", nullptr, flags(BottomTab::LandTools)))
 	{
 		_landTools.Draw(context);
+		ImGui::EndTabItem();
+	}
+	// The generator is a developer tool. The land of a network game must be the same on each computer, so a network game
+	// does not show the generator.
+	if (developer_tools::k_Built && !InNetworkGame() &&
+	    ImGui::BeginTabItem("Land generator", nullptr, flags(BottomTab::LandGenerator)))
+	{
+		_landGenerator.Draw(context);
 		ImGui::EndTabItem();
 	}
 	if (ImGui::BeginTabItem("Cheats", nullptr, flags(BottomTab::Cheats)))

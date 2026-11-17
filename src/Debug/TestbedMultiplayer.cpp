@@ -738,8 +738,26 @@ void BeginLobby(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 	case Stage::LobbyServerProblem:
 		frontEnd.OpenCreateLobby();
 		frontEnd.SubmitCreateLobby();
-		lobbies.RefuseStartForServer("This server plays only Two Gods for up to 2 gods.");
+		lobbies.RefuseStart(std::string(lobby_api::lobby_problems::k_ServerLand),
+		                    "This server plays only Two Gods for up to 2 gods.");
 		frontEnd.StartOrCancelLobby();
+		break;
+	case Stage::LobbyMapPackageMissing:
+		frontEnd.OpenCreateLobby();
+		frontEnd.SubmitCreateLobby();
+		lobbies.RefuseStart(std::string(lobby_api::lobby_problems::k_MapPackageMissing),
+		                    "The site does not have the map package of the lobby's map.");
+		frontEnd.StartOrCancelLobby();
+		break;
+	case Stage::LobbyCreateServerMap:
+		lobbies.SetServerMap({.file = "Online Maps/mpm_2p_1.map", .name = "Two Gods", .sha256 = {}, .gods = 2});
+		frontEnd.OpenCreateLobby();
+		break;
+	case Stage::LobbySettingsServerProblem:
+		lobbies.SetLobbyServerProblem("This server plays only Two Gods for up to 2 gods.");
+		frontEnd.OpenCreateLobby();
+		frontEnd.SubmitCreateLobby();
+		frontEnd.OpenLobbySettings();
 		break;
 	case Stage::LobbyPassword:
 		frontEnd.SelectLobby("d2");

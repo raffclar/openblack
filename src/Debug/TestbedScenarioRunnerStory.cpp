@@ -21,6 +21,7 @@
 #include <fmt/format.h>
 
 #include "3D/FlatLand.h"
+#include "3D/GeneratedLandChoices.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/ScreenPick.h"
@@ -86,6 +87,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -420,6 +422,13 @@ bool Runner::GiveStoryCommand(const Command& command)
 			Locator::debugCheatSystem::value().Set(command.player, debug_cheats::Cheat::InfiniteInfluence, command.value != 0);
 		}
 		Log(fmt::format("{:.1f}s: the cheat of infinite influence is {}", _seconds, command.value != 0 ? "on" : "off"));
+		return true;
+	}
+	if (command.kind == Kind::LoadGeneratedLand)
+	{
+		const bool loaded = Locator::landSystem::has_value() &&
+		                    Locator::landSystem::value().LoadGeneratedLand({.seed = static_cast<uint64_t>(command.value)});
+		Log(fmt::format("{:.1f}s: generated land {}: {}", _seconds, command.value, loaded ? "loaded" : "not loaded"));
 		return true;
 	}
 	if (command.kind == Kind::ZoomToTempleCaveTarget)

@@ -679,6 +679,6 @@ int main(int argc, char* argv[])
 	catch (const std::exception& error)
 	{
 		openblack::crash_handler::ReportFatal(openblack::crash_report::CrashKind::UncaughtException, error.what(), {}, 0,
-		                                      typeid(error).name());
+		                                      openblack::crash_report::ReadableTypeName(typeid(error)));
 	}
 }

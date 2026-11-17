@@ -111,3 +111,81 @@ TEST(ErrorReports, TheCrashEventHasTheDetailAndTheMessageOrElseTheNameOfTheKind)
 	EXPECT_EQ(texts.type, "abort() called");
 	EXPECT_EQ(texts.message, "abort() called");
 }
+
+TEST(ErrorReports, TheGameServerAttachesNoLogFile)
+{
+	EXPECT_EQ(LogAttachmentOf(Role::Client, "logs/openblack.log"), std::filesystem::path("logs/openblack.log"));
+	EXPECT_EQ(LogAttachmentOf(Role::Client, "stdout"), std::nullopt);
+	EXPECT_EQ(LogAttachmentOf(Role::Server, "logs/game.log"), std::nullopt);
+}
+
+TEST(ErrorReports, OnlyAReportWithPersonalDataAttachesTheLog)
+{
+	const std::optional<std::filesystem::path> log = std::filesystem::path("logs/openblack.log");
+	EXPECT_EQ(LogAttachmentFor(log, true), log);
+	EXPECT_EQ(LogAttachmentFor(log, false), std::nullopt);
+	EXPECT_EQ(LogAttachmentFor(std::nullopt, true), std::nullopt);
+	// The choices Anonymous and Off never give personal data, and the log stays at home
+	for (const auto consent : {ReportsConsent::Anonymous, ReportsConsent::Off})
+	{
+		const auto plan = ReportsPlanOf(true, AccountConsent {.choice = consent, .accountId = "7", .name = "Name"});
+		EXPECT_EQ(LogAttachmentFor(log, plan.personalData), std::nullopt);
+	}
+	const auto full = ReportsPlanOf(true, AccountConsent {.choice = ReportsConsent::Full, .accountId = "7", .name = "Name"});
+	EXPECT_EQ(LogAttachmentFor(log, full.personalData), log);
+}
+
+TEST(ErrorReports, TheChoiceOfTheLobbyReadsBackAsWritten)
+{
+	for (const auto consent : {ReportsConsent::Full, ReportsConsent::Anonymous, ReportsConsent::Off})
+	{
+		EXPECT_EQ(ParseReportsConsent(ReportsConsentText(consent)), consent);
+	}
+	EXPECT_EQ(ParseReportsConsent(""), std::nullopt);
+	EXPECT_EQ(ParseReportsConsent("Full"), std::nullopt);
+	EXPECT_EQ(ParseReportsConsent("yes"), std::nullopt);
+}
+
+TEST(ErrorReports, TheChoiceOfTheAccountWinsAndOnlyFullGivesPersonalData)
+{
+	const auto account = [](ReportsConsent choice) {
+		return std::optional(AccountConsent {.choice = choice, .accountId = "7", .name = "abc"});
+	};
+	// No account or no choice: the option decides, and the reports never have personal data
+	EXPECT_EQ(ReportsPlanOf(true, std::nullopt), (ReportsPlan {.running = true, .personalData = false}));
+	EXPECT_EQ(ReportsPlanOf(false, std::nullopt), (ReportsPlan {.running = false, .personalData = false}));
+	// The choice of the account wins over the option
+	EXPECT_EQ(ReportsPlanOf(false, account(ReportsConsent::Full)), (ReportsPlan {.running = true, .personalData = true}));
+	EXPECT_EQ(ReportsPlanOf(true, account(ReportsConsent::Anonymous)), (ReportsPlan {.running = true, .personalData = false}));
+	EXPECT_EQ(ReportsPlanOf(true, account(ReportsConsent::Off)), (ReportsPlan {.running = false, .personalData = false}));
+}
+
+TEST(ErrorReports, TheBoxFollowsTheChoiceAndNeverGivesFull)
+{
+	EXPECT_TRUE(OptionOfConsent(ReportsConsent::Full));
+	EXPECT_TRUE(OptionOfConsent(ReportsConsent::Anonymous));
+	EXPECT_FALSE(OptionOfConsent(ReportsConsent::Off));
+	EXPECT_EQ(ConsentOfOption(true), ReportsConsent::Anonymous);
+	EXPECT_EQ(ConsentOfOption(false), ReportsConsent::Off);
+}
+
+TEST(ErrorReports, TheGameServerNamesOnlyAPlayerWhoseTicketSaysFull)
+{
+	EXPECT_TRUE(MayNamePlayer(ReportsConsent::Full));
+	EXPECT_FALSE(MayNamePlayer(ReportsConsent::Anonymous));
+	EXPECT_FALSE(MayNamePlayer(ReportsConsent::Off));
+	EXPECT_FALSE(MayNamePlayer(std::nullopt));
+	EXPECT_FALSE(MayNamePlayer(ParseReportsConsent("")));
+}
+
+TEST(ErrorReports, AReportOfTheGameServerHasTheNameAndAddressOfAConsentingPlayerOnly)
+{
+	const auto full = ReportedPlayerOf("matt", "203.0.113.7", ReportsConsent::Full);
+	ASSERT_TRUE(full.has_value());
+	EXPECT_EQ(full->name, "matt");
+	EXPECT_EQ(full->address, "203.0.113.7");
+	EXPECT_FALSE(ReportedPlayerOf("matt", "203.0.113.7", ReportsConsent::Anonymous).has_value());
+	EXPECT_FALSE(ReportedPlayerOf("matt", "203.0.113.7", ReportsConsent::Off).has_value());
+	EXPECT_FALSE(ReportedPlayerOf("matt", "203.0.113.7", std::nullopt).has_value());
+	EXPECT_FALSE(ReportedPlayerOf("", "203.0.113.7", ReportsConsent::Full).has_value());
+}

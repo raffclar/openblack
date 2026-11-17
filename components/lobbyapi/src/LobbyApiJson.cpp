@@ -38,6 +38,8 @@ using json_read::ReadArray;
 using json_read::ReadBool;
 using json_read::ReadInteger;
 using json_read::ReadNumber;
+using json_read::ReadOptionalBool;
+using json_read::ReadOptionalIntegers;
 using json_read::ReadString;
 using json_read::ReadTime;
 
@@ -328,8 +330,22 @@ std::optional<Session> ParseSession(std::string_view text)
 		       ReadTime(object, "access_token_expires", out.accessTokenExpires) &&
 		       ReadTime(object, "refresh_token_expires", out.refreshTokenExpires, false) &&
 		       ReadBool(object, "email_required", out.emailRequired, false) && ReadBool(object, "editor", out.editor, false) &&
-		       ReadBool(object, "debugger", out.debugger, false);
+		       ReadBool(object, "debugger", out.debugger, false) &&
+		       ReadString(object, "error_reports", out.errorReports, false);
 	});
+}
+
+std::optional<Consent> ParseConsent(std::string_view text)
+{
+	return ParseWith<Consent>(text, [](const Json& object, Consent& out) {
+		return ReadString(object, "error_reports", out.errorReports, false) &&
+		       ReadInteger(object, "notice_version", out.noticeVersion, false);
+	});
+}
+
+std::string ConsentBody(std::string_view errorReports)
+{
+	return Dump(Json {{"error_reports", std::string(errorReports)}});
 }
 
 std::optional<Me> ParseMe(std::string_view text)
@@ -340,7 +356,8 @@ std::optional<Me> ParseMe(std::string_view text)
 		       ReadNumber(object, "points", out.points, false) && ReadInteger(object, "games_ranked", out.gamesRanked, false) &&
 		       ReadString(object, "country", out.country, false) && ReadString(object, "area", out.area, false) &&
 		       ReadString(object, "city", out.city, false) && ReadArray(object, "clans", out.clans, ReadClanRef, false) &&
-		       ReadTime(object, "date_joined", out.dateJoined, false);
+		       ReadTime(object, "date_joined", out.dateJoined, false) && ReadOptionalBool(object, "editor", out.editor) &&
+		       ReadOptionalBool(object, "debugger", out.debugger);
 	});
 }
 
@@ -503,9 +520,11 @@ std::optional<ServerStatusReply> ParseServerStatusReply(std::string_view text)
 {
 	return ParseWith<ServerStatusReply>(text, [](const Json& object, ServerStatusReply& out) {
 		return ReadInteger(object, "next_status_in", out.nextStatusIn) && ReadBool(object, "listed", out.listed) &&
-		       ReadArray(object, "clans", out.clans, [](const Json& item, ServerStatusClan& clan) {
-			       return ReadInteger(item, "account", clan.account) && ReadInteger(item, "clan", clan.clan);
-		       });
+		       ReadArray(object, "clans", out.clans,
+		                 [](const Json& item, ServerStatusClan& clan) {
+			                 return ReadInteger(item, "account", clan.account) && ReadInteger(item, "clan", clan.clan);
+		                 }) &&
+		       ReadOptionalIntegers(object, "editors", out.editors) && ReadOptionalIntegers(object, "debuggers", out.debuggers);
 	});
 }
 
@@ -880,6 +899,18 @@ std::optional<PointsChange> ParsePointsChange(std::string_view text)
 std::optional<Ban> ParseBan(std::string_view text)
 {
 	return ParseWith<Ban>(text, [](const Json& object, Ban& out) { return ReadString(object, "reason", out.reason, false); });
+}
+
+std::optional<EditorChange> ParseEditorChange(std::string_view text)
+{
+	return ParseWith<EditorChange>(
+	    text, [](const Json& object, EditorChange& out) { return ReadBool(object, "editor", out.editor); });
+}
+
+std::optional<DebuggerChange> ParseDebuggerChange(std::string_view text)
+{
+	return ParseWith<DebuggerChange>(
+	    text, [](const Json& object, DebuggerChange& out) { return ReadBool(object, "debugger", out.debugger); });
 }
 
 std::optional<int64_t> ParseTime(std::string_view text)

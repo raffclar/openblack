@@ -91,6 +91,8 @@ struct Feature
 	/// For a tree, its size now and the size that it grows to; for a static, its scale in both
 	float size;
 	float maxSize;
+	/// The number of the forest of a tree, or 0 for a tree in no forest
+	uint32_t forest {0};
 };
 
 struct Settings
@@ -120,4 +122,29 @@ struct Clearing
 [[nodiscard]] std::vector<Feature> Place(const Grid<biomes::Biome>& biomes, const Grid<float>& heights,
                                          const Grid<uint8_t>& keepClear, std::span<const Clearing> clearings, uint64_t seed,
                                          const Settings& settings);
+/// A forest of the land: its number and its place in metres, which is the place of its first tree, as on the lands of
+/// the story
+struct Forest
+{
+	uint32_t id;
+	float x;
+	float z;
+};
+
+struct ForestSettings
+{
+	/// The side of the squares of the map that hold one forest each, in metres
+	float square {120.0f};
+	/// A square with fewer trees than this holds no forest
+	size_t fewest {12};
+	/// The most forests on the land. Each forest grows its trees on each game turn, so that the forests keep the frame
+	/// rate. The lands of the story have up to 20 forests.
+	size_t most {16};
+};
+
+/// Puts trees into forests. The trees of each square of the map make one forest when the square has enough trees. The
+/// squares nearest the point in metres make the forests first, and get the first numbers from 1. The other trees stay in
+/// no forest.
+[[nodiscard]] std::vector<Forest> GroupForests(std::span<Feature> features, float nearX, float nearZ,
+                                               const ForestSettings& settings);
 } // namespace openblack::landgen::features

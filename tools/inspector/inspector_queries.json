@@ -1392,7 +1392,7 @@
   "query": "engine.tool_run"
  },
  {
-  "description": "The error and crash reports to Sentry: whether the program has a DSN, whether the reports go now, the option of the player, the role, the release and the environment. The answer never holds the DSN.",
+  "description": "The error and crash reports to Sentry: whether the program has a DSN, whether the reports go now, the option of the player, the role, the release, the environment, the choice of the lobby account and whether the reports name the account. The answer never holds the DSN or the name.",
   "kind": "object",
   "parameters": [],
   "query": "engine.error_reports"
@@ -2872,6 +2872,30 @@
    }
   ],
   "query": "editor.land_skip",
+  "writes": true
+ },
+ {
+  "description": "Does an act of the Land generator tab of the editor, as its buttons do. start saves the game into an empty slot of the player and loads a land from the seed (a random seed when none is given). generate loads a land from the seed and the choices. exit loads the save from before the generator. state gives the state only. Each answer gives whether the generator is on, the slot of its save, the choices and the path of the open land. A network game refuses the acts.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "start, generate, exit or state",
+    "name": "act",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "start and generate: the seed of the land",
+    "name": "seed",
+    "type": "integer"
+   },
+   {
+    "description": "generate: choices by their key in the land path (land, ranges, mountains, plains, hills, hollows, rain, rivers, north, south, wind); the others keep their values",
+    "name": "choices",
+    "type": "object"
+   }
+  ],
+  "query": "editor.land_generator",
   "writes": true
  },
  {

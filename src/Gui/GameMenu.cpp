@@ -333,7 +333,15 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 		     }
 		     Settle(Action::StartSkirmish);
 	     }},
-	    {"HELP_TEXT_DIALOG_JOINGONLINE", [this] { Settle(_networkGame ? Action::ExitOnlineGame : Action::JoinOnline); }},
+	    {"HELP_TEXT_DIALOG_JOINGONLINE",
+	     [this] {
+		     if (_landGenerator)
+		     {
+			     Settle(Action::ExitEditor);
+			     return;
+		     }
+		     Settle(_networkGame ? Action::ExitOnlineGame : Action::JoinOnline);
+	     }},
 	    {"HELP_TEXT_DIALOG_OPTIONS", [this] { ShowPage(Page::Options); }},
 	    {"HELP_TEXT_DIALOG_QUIT", [this] { Ask(_quitQuestion, Action::Quit); }},
 	}};
@@ -1115,7 +1123,7 @@ void GameMenu::SetNetworkGame(bool networkGame)
 	_networkGame = networkGame;
 	auto& page = *_pages.at(static_cast<size_t>(Page::Main));
 	page.SetTabLabel(2, networkGame ? _multiplayerTab : std::u16string());
-	_mainButtons.at(2)->label = networkGame ? _exitOnlineLabel : _buttonLabels.at(2);
+	LabelThirdButton();
 	// Start Skirmish Game does not show in a network game
 	_mainButtons.at(1)->visible = !networkGame;
 	LayOutMainButtons();
@@ -1125,9 +1133,24 @@ void GameMenu::SetSkirmish(bool skirmish)
 {
 	_skirmish = skirmish;
 	_mainButtons.at(1)->label = skirmish ? _leaveSkirmishLabel : _buttonLabels.at(1);
-	// Join Online Game does not show in a skirmish
-	_mainButtons.at(2)->visible = !skirmish;
+	LabelThirdButton();
 	LayOutMainButtons();
+}
+
+void GameMenu::SetLandGenerator(bool on)
+{
+	_landGenerator = on;
+	LabelThirdButton();
+}
+
+void GameMenu::LabelThirdButton()
+{
+	// The editor has no text in the texts of the game, so the label of Exit Editor is in English
+	static constexpr std::u16string_view k_ExitEditorLabel = u"Exit Editor";
+	auto& button = *_mainButtons.at(2);
+	button.label = _landGenerator ? std::u16string(k_ExitEditorLabel) : (_networkGame ? _exitOnlineLabel : _buttonLabels.at(2));
+	// Join Online Game does not show in a skirmish
+	button.visible = _landGenerator || !_skirmish;
 }
 
 void GameMenu::LayOutMainButtons()

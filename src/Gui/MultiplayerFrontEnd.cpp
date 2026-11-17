@@ -767,10 +767,10 @@ void MultiplayerFrontEnd::FollowLanChat()
 			const auto god = place.has_value() ? std::optional(_seats[*place].god) : std::nullopt;
 			_chat.push_back(ReceivedChatLine(from, text, privacy, god));
 		}
-		// The log keeps who spoke, never the words
+		// The log keeps that a line came, never who spoke or the words
 		if (auto logger = spdlog::get("game"))
 		{
-			logger->info("A chat line from {} came on the room's game server", line.from);
+			logger->info("A chat line came on the room's game server");
 		}
 	}
 }
@@ -1323,10 +1323,10 @@ void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 		const auto seat = std::ranges::find(_seats, line->from.id, [](const Seat& s) { return s.account.id; });
 		const auto god = seat != _seats.end() ? std::optional(seat->god) : std::nullopt;
 		_chat.push_back(ReceivedChatLine(ToUtf16(line->from.name), ClampChat(ToUtf16(line->text)), ChatPrivacy::Public, god));
-		// The log keeps who spoke, never the words
+		// The log keeps neither the words nor the name of the player, because the log goes with the error reports
 		if (auto logger = spdlog::get("game"))
 		{
-			logger->info("A chat line from {} came on the room's channel", line->from.name);
+			logger->info("A chat line came on the room's channel");
 		}
 		return;
 	}

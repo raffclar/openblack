@@ -22,6 +22,7 @@
 #include <LNDFile.h>
 #include <landgen/Generator.h>
 
+#include "3D/GeneratedLandChoices.h"
 #include "3D/LandData.h"
 
 namespace openblack::filesystem
@@ -34,11 +35,8 @@ class FileSystemInterface;
 /// of the story, so the ground looks as it does on those lands.
 namespace openblack::generated_land
 {
-/// A generated land has no file. Its path names its seed, so that the game can make the land again.
-constexpr std::string_view k_PathPrefix = "landgen:";
-[[nodiscard]] std::string PathOf(uint64_t seed);
-/// The seed of the path of a generated land, or nothing for another path
-[[nodiscard]] std::optional<uint64_t> SeedOf(std::string_view path);
+/// The settings of the generator for the choices
+[[nodiscard]] landgen::Settings SettingsOf(const Choices& choices);
 
 /// A material of a landscape of the story: the file and the index of the material in it
 struct MaterialSource
@@ -70,6 +68,13 @@ struct StoryParts
 /// x, and the land's countries and materials. surfaces holds the material of each surface.
 [[nodiscard]] LandData Build(const landgen::GeneratedLand& land, const StoryParts& parts);
 
-/// The settings of the generator for the land of a seed
+/// The name of a tribe of the plan, as a land script gives it
+[[nodiscard]] std::string_view TribeName(landgen::settlement::Tribe tribe);
+
+/// The lines of a land script that make the temple, the town, its people and its fields of a generated land, as a land of
+/// the story makes them. The town has the number 0 and belongs to player one. The lines use only kinds of the game.
+[[nodiscard]] std::string SettlementScript(const landgen::settlement::Plan& plan);
+
+/// The settings of the generator for the land of a seed, with each other choice at its first value
 [[nodiscard]] landgen::Settings SettingsFor(uint64_t seed);
 } // namespace openblack::generated_land
