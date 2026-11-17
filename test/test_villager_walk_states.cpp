@@ -10,6 +10,7 @@
 #include <array>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <vector>
 
@@ -21,11 +22,13 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
@@ -38,6 +41,7 @@
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorshipSites.h"
 #include "InfoConstants.h"
@@ -144,6 +148,44 @@ public:
 	std::vector<Step> steps;
 	bool arrives {false};
 };
+
+/// One reaction, of one creature, that every living thing finds. It does no other work.
+class OneCreatureReaction final: public systems::ReactionSystemInterface
+{
+public:
+	explicit OneCreatureReaction(entt::entity creature)
+	    : _creature(creature)
+	{
+	}
+	uint32_t Create(const Source& /*source*/) override { return k_Id; }
+	void Move(uint32_t /*id*/, const glm::vec3& /*position*/, const glm::vec3& /*velocity*/, float /*strength*/) override {}
+	[[nodiscard]] std::optional<Active> Find(uint32_t id) const override
+	{
+		if (id != k_Id)
+		{
+			return std::nullopt;
+		}
+		return Active {.id = k_Id, .source = {.initiator = _creature, .type = Reaction::ReactToCreature}};
+	}
+	void RemoveFrom(entt::entity /*initiator*/) override {}
+	void RemoveFrom(entt::entity /*initiator*/, Reaction /*type*/) override {}
+	void Remove(uint32_t /*id*/) override {}
+	void SetInitiator(uint32_t /*id*/, entt::entity /*initiator*/) override {}
+	[[nodiscard]] bool IsActive(uint32_t id) const override { return id == k_Id; }
+	void StopReacting(entt::entity /*living*/) override {}
+	[[nodiscard]] bool HasReaction(entt::entity initiator) const override { return initiator == _creature; }
+	void ProcessTurn() override {}
+	void Reset() override {}
+	void SetLandBalance(Balance /*balance*/, float /*value*/) override {}
+	[[nodiscard]] float GetLandBalance(Balance /*balance*/) const override { return 1.0f; }
+	[[nodiscard]] std::span<const Active> GetReactions() const override { return {}; }
+	[[nodiscard]] std::vector<Active> ReactionsAt(const glm::vec3& /*position*/) const override { return {}; }
+
+	static constexpr uint32_t k_Id = 1;
+
+private:
+	entt::entity _creature;
+};
 } // namespace
 
 /// One villager with a walk under way, and a recorder in the place of the walk
@@ -199,6 +241,7 @@ protected:
 	}
 	void TearDown() override
 	{
+		Locator::reactionSystem::reset();
 		Locator::terrainSystem::reset();
 		Locator::infoConstants::reset();
 		Locator::pathfindingSystem::reset();
@@ -675,6 +718,23 @@ TEST_F(VillagerWalkStates, AWalkToACreatureThatIsNotThereTakesNoStep)
 	SetStates(VillagerStates::MoveTowardsCreatureReaction, k_Next);
 	villager_creature::MoveTowardsCreatureReaction(Action());
 	EXPECT_TRUE(_steps->steps.empty());
+}
+
+// A villager that walks to its place near a creature goes into the state it walked to when the walk ends on the place
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AWalkToACreatureEndsOnItsPlace)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = registry.Create();
+	registry.Assign<Transform>(creature, k_Here + glm::vec3(40.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Creature>(creature);
+	Locator::reactionSystem::emplace<OneCreatureReaction>(creature);
+	registry.Assign<LivingReaction>(_villager).reaction = OneCreatureReaction::k_Id;
+	_steps->arrives = true;
+	SetStates(VillagerStates::MoveTowardsCreatureReaction, k_Next);
+	villager_creature::MoveTowardsCreatureReaction(Action());
+	ASSERT_EQ(_steps->steps.size(), 1u);
+	EXPECT_EQ(Top(), k_Next);
 }
 
 // The two states of the way to the worship site have one exit. The states of a food run for the site have one other exit.
