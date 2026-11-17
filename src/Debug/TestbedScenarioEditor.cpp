@@ -274,7 +274,7 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Turn the "
 	                   "camera from the start area to the mountains inland.",
-	    .expected = "Fifteen to seventeen massifs stand inland. Each massif has a main peak and one or two lower peaks. "
+	    .expected = "Nine to thirteen massifs stand inland. Each massif has a main peak and one or two lower peaks. "
 	                "Spurs go down from each summit with gullies between them, and bands of cliffs go round the slopes. "
 	                "The ground between the massifs rolls in low steps with short faces.",
 	    .environment = {.clockRuns = true},
@@ -288,7 +288,7 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Fly the "
 	                   "camera from the start area to the highest summits and round them.",
-	    .expected = "The highest summits are about 900 to 1050 metres high, as high as the mountains of Snowdonia. Their "
+	    .expected = "The highest summits are about 980 to 1130 metres high, as high as the mountains of Snowdonia. Their "
 	                "slopes are steep, with snow on the high ground. The low land, the shore and the town are as on a "
 	                "land of the story. The land has no steps or gaps on the high slopes.",
 	    .environment = {.clockRuns = true},

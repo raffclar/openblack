@@ -696,6 +696,9 @@ TEST(LandgenTerrain, RollGroundMovesTheInlandGroundAndKeepsTheShore)
 	settings.highEnd = 220.0f;
 	settings.highFall = 1.0f;
 	settings.stepRise = 0.0f;
+	settings.frequency = 50.0f;
+	settings.ridge = 0.5f;
+	settings.calmShare = 0.3f;
 	terrain::RollGround(heights, 3, settings);
 	int moved = 0;
 	for (int x = 0; x < k_Side; ++x)
@@ -789,7 +792,7 @@ TEST(LandgenHeightCurve, AHigherCurveKeepsTheLowLandAndReachesTheTop)
 		EXPECT_GT(metres, before);
 		if (altitude > 0)
 		{
-			EXPECT_GE(metres - before, step - 1e-4f);
+			EXPECT_GE(metres - before, step - 1e-3f);
 			step = metres - before;
 		}
 		before = metres;

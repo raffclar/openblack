@@ -25,7 +25,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0x73632454EE4C2D4Full;
+constexpr uint64_t k_SmallLandHash = 0x4EA9AEC4B941BE2Bull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)
@@ -789,8 +789,9 @@ TEST(LandgenGenerator, TheHeightFieldKeepsTheLowLandAndRisesAboveTheBytes)
 		{
 			const auto altitude = land.cells.At(x, z).altitude;
 			const auto units = land.heightUnits.At(x, z);
-			// Below the knee, the height is the altitude, as on the lands of the story
-			if (static_cast<float>(altitude) < land.heightCurve.knee)
+			// Below the knee, the height is the altitude, as on the lands of the story. An altitude rounded down to the
+			// knee can come from a height above it.
+			if (static_cast<float>(altitude) + 0.5f <= land.heightCurve.knee)
 			{
 				EXPECT_EQ(units, altitude);
 			}

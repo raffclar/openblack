@@ -63,8 +63,8 @@ struct Settings
 	std::optional<climate::Wind> wind;
 	/// The height in metres of the highest altitude, and the altitude above which each altitude unit adds more height.
 	/// The lands of the story have 170.85 m at the highest altitude. Snowdon, the highest mountain of Wales, is 1085 m.
-	float topHeight {1100.0f};
-	float heightKnee {68.196f};
+	float topHeight {1250.0f};
+	float heightKnee {73.471f};
 	terrain::BaseSettings base;
 	terrain::HydraulicSettings hydraulic;
 	terrain::ThermalSettings thermal;
