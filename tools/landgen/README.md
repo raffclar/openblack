@@ -41,4 +41,6 @@ beyond that.
 
 Heights are in metres (the altitude times 0.67), slopes in degrees from the corner gradient with cells of 10 m, and
 distances in metres. A group of trees links trees that are 15 m or less apart. A clump of rocks links rocks that are
-20 m or less apart. The generator dump has no mists and no footpaths yet, so these two numbers are zero for it.
+20 m or less apart. The big forest numbers count the big forests, the median distance to the nearest big forest and
+the median distance from a big forest to the nearest tree. The generator dump has no mists and no footpaths yet, so
+these two numbers are zero for it.

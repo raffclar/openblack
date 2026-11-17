@@ -26,8 +26,10 @@ CELL = 10.0
 # The names of the kinds of tree, in the order of the game's numbers
 TREES = ("Beech Birch Cedar Conifer ConiferA Oak OakA Olive Palm PalmA PalmB PalmC Pine Bush BushA BushB Cypress "
          "CypressA Copse CopseA Hedge HedgeA Burnt").split()
-# A generated feature of kind 0 is a tree and one of kind 1 is a static. Static number 3 is the dead tree.
+# A generated feature of kind 0 is a tree, one of kind 1 is a static and one of kind 2 is a big forest. Static number 3
+# is the dead tree.
 DEAD_TREE_STATIC = 3
+BIG_FOREST_FEATURE = 2
 SURFACE_SAND = (0, 1, 2)  # wet sand, sand and desert sand of the generator
 GROUND_SAND = (7, 8)  # sand and wet sand of the land files
 
@@ -183,6 +185,20 @@ def rock_measures(points, area_km2):
     return out
 
 
+def big_forest_measures(points, trees, area_km2):
+    """The numbers of the big forests. points is a list of (x, z) in metres, trees the list of the trees."""
+    n = len(points)
+    out = {"big_forests": n, "big_forests_per_km2": n / area_km2 if area_km2 else float("nan")}
+    if n >= 2:
+        pts = np.array(points, dtype=float)
+        dist, _ = cKDTree(pts).query(pts, 2)
+        out["big_forest_gap_median_m"] = float(np.median(dist[:, 1]))
+    if n and trees:
+        dist, _ = cKDTree(np.array([(t[0], t[1]) for t in trees], dtype=float)).query(np.array(points, dtype=float))
+        out["big_forest_tree_median_m"] = float(np.median(dist))
+    return out
+
+
 def measure_land(land):
     """All numbers of a land. land is a dict with heights, land, sand, trees (a list of (x, z, kind, in_forest)), rocks
     (a list of (x, z)), forests, footpaths, mists and towns."""
@@ -193,6 +209,7 @@ def measure_land(land):
     out.update(rock_measures(land["rocks"], area))
     for key in ("forests", "footpaths", "mists", "towns"):
         out[key] = land[key]
+    out.update(big_forest_measures(land.get("big_forests", []), land.get("trees", []), area))
     kinds = {}
     for t in trees:
         kinds[t[2]] = kinds.get(t[2], 0) + 1
@@ -225,14 +242,17 @@ def load_dump(path):
     surfaces = d["surfaces"]
     land = (alt > 0) & (water == 0)
     sand = sand_mask(country, alt, tables, lambda i: surfaces[i] if i < len(surfaces) else -1, SURFACE_SAND)
-    trees, rocks = [], []
+    trees, rocks, big_forests = [], [], []
     for kind, typ, x, z, _angle, _size, _max, forest in d["features"]:
         if kind == 0:
             trees.append((x, z, TREES[typ] if typ < len(TREES) else f"#{typ}", forest != 0))
+        elif kind == BIG_FOREST_FEATURE:
+            big_forests.append((x, z))
         elif typ != DEAD_TREE_STATIC:
             rocks.append((x, z))
     return {"name": os.path.splitext(os.path.basename(path))[0], "heights": alt * HEIGHT_UNIT, "land": land,
-            "sand": sand, "trees": trees, "rocks": rocks, "forests": len(d["forests"]), "footpaths": d["footpaths"],
+            "sand": sand, "trees": trees, "rocks": rocks, "big_forests": big_forests, "forests": len(d["forests"]),
+            "footpaths": d["footpaths"],
             "mists": len(d["mists"]), "towns": d["towns"]}
 
 
@@ -246,8 +266,10 @@ def vanilla_models():
         rocks = [o["pos"] for o in objs if o["cls"] == "static" and (
             "rock" in o["kind"].lower() or o["kind"].startswith("Boulder"))]
         mists = sum(1 for o in objs if o["cls"] == "mist")
+        big_forests = [o["pos"] for o in objs if o["cls"] == "bigforest"]
         sand = land.land & np.isin(land.mtype, GROUND_SAND)
         yield {"name": name, "heights": land.H, "land": land.land, "sand": sand, "trees": trees, "rocks": rocks,
+               "big_forests": big_forests,
                "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns)}
 
 

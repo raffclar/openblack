@@ -238,6 +238,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	clock.Done("hydraulic erosion");
 	terrain::ErodeThermal(heights, settings.thermal);
 	clock.Done("thermal erosion");
+	// The terraces and cliffs come after the erosion, which would wear the cliffs down
+	const auto cliffs = terrain::Terrace(heights, seed, settings.terraces);
+	clock.Done("terraces");
 
 	// The water: lakes first, then the rivers on the land that the lakes leave
 	const auto firstDrainage = hydrology::Drain(heights, terrain::k_SeaLevel);
@@ -266,10 +269,14 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	land.rivers = hydrology::TraceRivers(drainage, flow, settings.rivers);
 	hydrology::CarveRivers(heights, land.rivers, flow, settings.rivers);
 	clock.Done("rivers");
-	terrain::ErodeThermal(heights, {.passes = 4,
-	                                .plainTalus = settings.thermal.plainTalus,
-	                                .mountainTalus = settings.thermal.mountainTalus,
-	                                .rate = settings.thermal.rate});
+	terrain::ErodeThermal(heights,
+	                      {.passes = 4,
+	                       .plainTalus = settings.thermal.plainTalus,
+	                       .mountainTalus = settings.thermal.mountainTalus,
+	                       .rate = settings.thermal.rate},
+	                      cliffs.values);
+	terrain::ShoreShelf(heights, seed, settings.shelf);
+	clock.Done("shore");
 
 	Grid<uint8_t> riverCorners(side, 0);
 	for (const auto& river : land.rivers)
@@ -356,7 +363,14 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	const auto keepClear =
 	    Mask(side, [&](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude + 1 || riverDistance.values[i] <= 1.5f; });
 	const std::array clearings {features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
-	land.features = features::Place(land.biomes, heights, keepClear, clearings, seed, settings.features);
+	land.features = features::Place({.biomes = land.biomes,
+	                                 .heights = heights,
+	                                 .seaDistance = seaDistance,
+	                                 .keepClear = keepClear,
+	                                 .clearings = clearings,
+	                                 .townX = land.start.x,
+	                                 .townZ = land.start.z},
+	                                seed, settings.features);
 	clock.Done("features");
 
 	// The temple and the town on the start area, then the forests nearest the town first

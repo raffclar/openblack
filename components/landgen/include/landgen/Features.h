@@ -77,6 +77,9 @@ enum class Kind : uint8_t
 	Tree,
 	/// A mobile static, a rock or a dead tree; type is the game's number of the mobile static
 	Static,
+	/// A big forest: one model of many pines that grows pines round its edge when the villagers take its wood. Type is
+	/// the game's number of the big forest, and size and maxSize are its scale.
+	BigForest,
 };
 
 struct Feature
@@ -97,13 +100,16 @@ struct Feature
 
 struct Settings
 {
-	/// The distance between the points where a feature can be, in corners. Each point moves by a random amount inside
-	/// its square.
+	/// The distance between the points where a rock or a dead tree can be, in corners. Each point moves by a random
+	/// amount inside its square.
 	float spacing {2.0f};
-	/// No tree grows on a slope steeper than this, and no rock lies on one steeper than the second
-	float treeSlope {9.0f};
+	/// No rock lies on a slope steeper than this, in altitude units for each corner
 	float rockSlope {16.0f};
-	/// The most features on the land, so that the game keeps its frame rate
+	/// The distance between the points where a stand of trees can start, in corners
+	float standSpacing {4.0f};
+	/// The distance between the points where a big forest can be, in corners
+	float bigForestSpacing {20.0f};
+	/// The most features on the land, so that the game keeps its frame rate. The big forests are not in this count.
 	size_t most {12000};
 };
 
@@ -115,13 +121,52 @@ struct Clearing
 	float radius;
 };
 
-/// The features of the land. Each point of a grid over the map takes a feature by the biome under it: its chance of a
-/// tree, of a rock, and the kinds of tree and rock. The trees grow in clumps where the clump noise is high. A point
-/// draws its random numbers from its own place, so a change elsewhere does not move it. Nothing stands in water, on a
-/// river, on a steep slope or in a clearing.
-[[nodiscard]] std::vector<Feature> Place(const Grid<biomes::Biome>& biomes, const Grid<float>& heights,
-                                         const Grid<uint8_t>& keepClear, std::span<const Clearing> clearings, uint64_t seed,
-                                         const Settings& settings);
+/// The ground that the features stand on
+struct Ground
+{
+	const Grid<biomes::Biome>& biomes;
+	/// The altitude of each corner
+	const Grid<float>& heights;
+	/// The distance from each corner to the sea, in corners
+	const Grid<float>& seaDistance;
+	/// A corner that is not 0 holds no feature, such as a corner of a river
+	const Grid<uint8_t>& keepClear;
+	std::span<const Clearing> clearings;
+	/// The middle of the town of the start, in corners
+	float townX;
+	float townZ;
+};
+
+/// The ground at one point, in the units of the lands of the story
+struct Spot
+{
+	/// The height above the sea in metres
+	float height;
+	/// The slope as the rise for each metre along the ground
+	float slope;
+	/// The distances to the sea and to the town in metres
+	float sea;
+	float town;
+};
+
+/// Whether a kind of tree can grow at a spot. The limits of each kind come from the trees of the lands of the story:
+/// the height, the slope, the distance from the sea and the distance from a town where almost all trees of the kind
+/// stand.
+[[nodiscard]] bool Suits(Tree tree, const Spot& spot);
+
+/// The number of trees of a stand, from a random number from 0 to below 1. The sizes have the spread of the groups of
+/// trees on the lands of the story. A jungle has the larger groups of the palm island of the story.
+[[nodiscard]] uint32_t StandSize(float unit, bool jungle);
+
+/// The features of the land:
+/// - The big forests stand alone on ground with no trees round them, far from the sea and the town.
+/// - The trees grow in stands. A stand has a main kind and some trees of the kinds that grow with it. Each biome has
+///   its own number of stands, and the stands have the sizes and the spread of the groups on the lands of the story.
+/// - The rocks and the dead trees lie at the points of a grid, by the chances of the biome.
+///
+/// A point draws its random numbers from its own place, so a change elsewhere does not move it. Nothing stands in
+/// water, on a river or in a clearing.
+[[nodiscard]] std::vector<Feature> Place(const Ground& ground, uint64_t seed, const Settings& settings);
 /// A forest of the land: its number and its place in metres, which is the place of its first tree, as on the lands of
 /// the story
 struct Forest

@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <landgen/Features.h>
@@ -22,7 +24,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0x3BE2FF15B006F707ull;
+constexpr uint64_t k_SmallLandHash = 0x717B67AFD2386430ull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)
@@ -65,12 +67,42 @@ Grid<uint8_t> Clear(int side)
 {
 	return {side, 0};
 }
+
+/// The town is far from a small test land
+constexpr float k_FarTown = -1000.0f;
+
+/// The features of a land of one biome at one altitude, far from the sea and the town
+std::vector<features::Feature> PlaceOn(Biome biome, float altitude, uint64_t seed, const features::Settings& settings = {},
+                                       int side = 64)
+{
+	const Grid<Biome> biomes(side, biome);
+	const Grid<float> heights(side, altitude);
+	const Grid<float> sea(side, 40.0f);
+	const auto keepClear = Clear(side);
+	return features::Place({.biomes = biomes,
+	                        .heights = heights,
+	                        .seaDistance = sea,
+	                        .keepClear = keepClear,
+	                        .clearings = {},
+	                        .townX = k_FarTown,
+	                        .townZ = k_FarTown},
+	                       seed, settings);
+}
+
+bool IsTree(const features::Feature& feature)
+{
+	return feature.kind == features::Kind::Tree;
+}
+
+/// Ground of grassland at 20 m, 400 m from the sea and 10 km from the town
+constexpr features::Spot k_Lowland {.height = 20.0f, .slope = 0.1f, .sea = 400.0f, .town = 10000.0f};
 } // namespace
 
 TEST(LandgenFeatures, NothingStandsInTheWaterOrInAClearing)
 {
 	Grid<Biome> biomes(64, Biome::DenseJungle);
 	Grid<float> heights(64, 30.0f);
+	const Grid<float> sea(64, 40.0f);
 	auto keepClear = Clear(64);
 	for (int z = 0; z < 64; ++z)
 	{
@@ -82,7 +114,14 @@ TEST(LandgenFeatures, NothingStandsInTheWaterOrInAClearing)
 		keepClear.At(40, z) = 1;
 	}
 	const std::array clearings {features::Clearing {.x = 50.0f, .z = 50.0f, .radius = 6.0f}};
-	const auto placed = features::Place(biomes, heights, keepClear, clearings, 5, {});
+	const features::Ground ground {.biomes = biomes,
+	                               .heights = heights,
+	                               .seaDistance = sea,
+	                               .keepClear = keepClear,
+	                               .clearings = clearings,
+	                               .townX = k_FarTown,
+	                               .townZ = k_FarTown};
+	const auto placed = features::Place(ground, 5, {});
 	ASSERT_FALSE(placed.empty());
 	for (const auto& feature : placed)
 	{
@@ -92,38 +131,176 @@ TEST(LandgenFeatures, NothingStandsInTheWaterOrInAClearing)
 		EXPECT_GE(std::hypot(x - 50.0f, z - 50.0f), 6.0f);
 		EXPECT_NE(static_cast<int>(x + 0.5f), 40);
 	}
-	EXPECT_EQ(placed.size(), features::Place(biomes, heights, keepClear, clearings, 5, {}).size());
+	EXPECT_EQ(placed.size(), features::Place(ground, 5, {}).size());
+}
+
+TEST(LandgenFeatures, TheSameSeedPlacesTheSameFeatures)
+{
+	const auto first = PlaceOn(Biome::TemperateForest, 60.0f, 11, {}, 128);
+	const auto second = PlaceOn(Biome::TemperateForest, 60.0f, 11, {}, 128);
+	ASSERT_EQ(first.size(), second.size());
+	for (size_t i = 0; i < first.size(); ++i)
+	{
+		EXPECT_EQ(first[i].type, second[i].type);
+		EXPECT_EQ(first[i].x, second[i].x);
+		EXPECT_EQ(first[i].z, second[i].z);
+		EXPECT_EQ(first[i].maxSize, second[i].maxSize);
+	}
 }
 
 TEST(LandgenFeatures, TheJungleIsDenserThanTheGrassland)
 {
-	const Grid<float> heights(64, 30.0f);
-	const auto jungle = features::Place(Grid<Biome>(64, Biome::DenseJungle), heights, Clear(64), {}, 3, {});
-	const auto grassland = features::Place(Grid<Biome>(64, Biome::Grassland), heights, Clear(64), {}, 3, {});
-	EXPECT_GT(jungle.size(), grassland.size() * 5);
-	// The jungle has palms and bushes; the dead woods have burnt trees
-	for (const auto& feature : jungle)
-	{
-		if (feature.kind == features::Kind::Tree)
-		{
-			const auto tree = static_cast<features::Tree>(feature.type);
-			EXPECT_TRUE((tree >= features::Tree::Palm && tree <= features::Tree::PalmC) ||
-			            (tree >= features::Tree::Bush && tree <= features::Tree::BushB));
-		}
-	}
-	const auto dead = features::Place(Grid<Biome>(64, Biome::DeadWoods), heights, Clear(64), {}, 3, {});
-	EXPECT_TRUE(std::ranges::any_of(dead, [](const auto& feature) {
-		return feature.kind == features::Kind::Tree && feature.type == static_cast<uint8_t>(features::Tree::Burnt);
+	const auto jungle = PlaceOn(Biome::DenseJungle, 30.0f, 3, {}, 128);
+	const auto grassland = PlaceOn(Biome::Grassland, 30.0f, 3, {}, 128);
+	EXPECT_GT(std::ranges::count_if(jungle, IsTree), std::ranges::count_if(grassland, IsTree) * 2);
+	// Most trees of the jungle are palms
+	const auto palms = std::ranges::count_if(jungle, [](const auto& feature) {
+		const auto tree = static_cast<features::Tree>(feature.type);
+		return IsTree(feature) && tree >= features::Tree::Palm && tree <= features::Tree::PalmC;
+	});
+	EXPECT_GT(palms * 10, std::ranges::count_if(jungle, IsTree) * 7);
+}
+
+TEST(LandgenFeatures, BurntTreesStandOnlyOnHighGroundFarFromTheTown)
+{
+	// 60 m is in the band of the burnt trees of the story, 20 m is under it
+	const auto high = PlaceOn(Biome::DeadWoods, 90.0f, 3, {}, 128);
+	EXPECT_TRUE(std::ranges::any_of(high, [](const auto& feature) {
+		return IsTree(feature) && feature.type == static_cast<uint8_t>(features::Tree::Burnt);
 	}));
+	const auto low = PlaceOn(Biome::DeadWoods, 30.0f, 3, {}, 128);
+	EXPECT_EQ(std::ranges::count_if(low, IsTree), 0);
+	EXPECT_FALSE(features::Suits(features::Tree::Burnt, {.height = 60.0f, .slope = 0.5f, .sea = 400.0f, .town = 300.0f}));
 }
 
 TEST(LandgenFeatures, TheMostKeepsAnEvenShare)
 {
-	const Grid<float> heights(64, 30.0f);
 	features::Settings settings;
 	settings.most = 50;
-	const auto placed = features::Place(Grid<Biome>(64, Biome::DenseJungle), heights, Clear(64), {}, 3, settings);
-	EXPECT_EQ(placed.size(), 50u);
+	const auto placed = PlaceOn(Biome::DenseJungle, 30.0f, 3, settings);
+	EXPECT_EQ(std::ranges::count_if(placed, [](const auto& feature) { return feature.kind != features::Kind::BigForest; }), 50);
+}
+
+TEST(LandgenFeatures, EachKindGrowsWhereItGrowsOnTheLandsOfTheStory)
+{
+	using features::Suits;
+	using features::Tree;
+	// Conifers never grow under 10 m
+	EXPECT_FALSE(Suits(Tree::Conifer, {.height = 9.0f, .slope = 0.1f, .sea = 400.0f, .town = 10000.0f}));
+	EXPECT_TRUE(Suits(Tree::Conifer, k_Lowland));
+	// Palms grow on the coast and on plateaus inland up to about 66 m
+	EXPECT_TRUE(Suits(Tree::Palm, {.height = 5.0f, .slope = 0.1f, .sea = 40.0f, .town = 10000.0f}));
+	EXPECT_TRUE(Suits(Tree::PalmB, {.height = 50.0f, .slope = 0.1f, .sea = 400.0f, .town = 10000.0f}));
+	EXPECT_FALSE(Suits(Tree::PalmB, {.height = 80.0f, .slope = 0.1f, .sea = 400.0f, .town = 10000.0f}));
+	// Trees grow on slopes of 40 degrees, and bushes on slopes of 45 degrees
+	EXPECT_TRUE(Suits(Tree::Pine, {.height = 40.0f, .slope = 0.84f, .sea = 400.0f, .town = 10000.0f}));
+	EXPECT_TRUE(Suits(Tree::Bush, {.height = 40.0f, .slope = 1.0f, .sea = 400.0f, .town = 10000.0f}));
+	EXPECT_FALSE(Suits(Tree::ConiferA, {.height = 40.0f, .slope = 1.0f, .sea = 400.0f, .town = 10000.0f}));
+	// Cypresses grow only near a town
+	EXPECT_FALSE(Suits(Tree::Cypress, {.height = 50.0f, .slope = 0.1f, .sea = 400.0f, .town = 1000.0f}));
+	EXPECT_TRUE(Suits(Tree::Cypress, {.height = 50.0f, .slope = 0.1f, .sea = 400.0f, .town = 100.0f}));
+}
+
+TEST(LandgenFeatures, StandsHaveTheSizesOfTheGroupsOfTheStory)
+{
+	EXPECT_EQ(features::StandSize(0.0f, false), 1u);
+	EXPECT_EQ(features::StandSize(0.5f, false), 3u);
+	EXPECT_EQ(features::StandSize(0.9f, false), 15u);
+	EXPECT_EQ(features::StandSize(0.9f, true), 30u);
+	EXPECT_GE(features::StandSize(0.999f, false), 150u);
+	for (float u = 0.0f; u < 0.99f; u += 0.01f)
+	{
+		EXPECT_LE(features::StandSize(u, false), features::StandSize(u + 0.01f, false));
+	}
+}
+
+TEST(LandgenFeatures, TheTreesOfAForestStandInGroupsOfMixedKinds)
+{
+	const auto placed = PlaceOn(Biome::TemperateForest, 60.0f, 7, {}, 128);
+	std::vector<features::Feature> trees;
+	std::ranges::copy_if(placed, std::back_inserter(trees), IsTree);
+	ASSERT_GT(trees.size(), 200u);
+	size_t lone = 0;
+	size_t pairs = 0;
+	size_t mixed = 0;
+	size_t tooNear = 0;
+	for (size_t i = 0; i < trees.size(); ++i)
+	{
+		bool near = false;
+		for (size_t j = 0; j < trees.size(); ++j)
+		{
+			const float distance = std::hypot(trees[i].x - trees[j].x, trees[i].z - trees[j].z);
+			if (i != j && distance <= 15.0f)
+			{
+				near = true;
+				if (j > i)
+				{
+					++pairs;
+					mixed += trees[i].type != trees[j].type ? 1 : 0;
+				}
+			}
+			tooNear += i != j && distance < 1.0f ? 1 : 0;
+		}
+		lone += near ? 0 : 1;
+	}
+	// No two trees stand nearer than 1 m
+	EXPECT_EQ(tooNear, 0u);
+	// The lands of the story have 2% to 7% lone trees, and 40% to 64% of the near pairs are of two kinds
+	EXPECT_LT(static_cast<float>(lone), 0.1f * static_cast<float>(trees.size()));
+	EXPECT_GT(static_cast<float>(mixed), 0.25f * static_cast<float>(pairs));
+	EXPECT_LT(static_cast<float>(mixed), 0.75f * static_cast<float>(pairs));
+}
+
+TEST(LandgenFeatures, BigForestsStandApartWithNoTreesRoundThem)
+{
+	const auto placed = PlaceOn(Biome::Grassland, 60.0f, 9, {}, 400);
+	ASSERT_TRUE(std::ranges::any_of(placed, [](const auto& feature) { return feature.kind == features::Kind::BigForest; }));
+	for (const auto& forest : placed)
+	{
+		if (forest.kind != features::Kind::BigForest)
+		{
+			continue;
+		}
+		EXPECT_TRUE(forest.type == 0 || forest.type == 1 || forest.type == 3);
+		EXPECT_GE(forest.size, 0.58f);
+		EXPECT_LE(forest.size, 1.07f);
+		for (const auto& other : placed)
+		{
+			const float distance = std::hypot(forest.x - other.x, forest.z - other.z);
+			if (&other == &forest)
+			{
+				continue;
+			}
+			if (other.kind == features::Kind::BigForest)
+			{
+				EXPECT_GE(distance, 55.0f);
+			}
+			else
+			{
+				EXPECT_GE(distance, 33.0f * forest.size - 0.01f);
+			}
+		}
+	}
+	// No big forest stands near the town
+	const Grid<Biome> biomes(400, Biome::Grassland);
+	const Grid<float> heights(400, 60.0f);
+	const Grid<float> sea(400, 40.0f);
+	const auto keepClear = Clear(400);
+	const auto nearTown = features::Place({.biomes = biomes,
+	                                       .heights = heights,
+	                                       .seaDistance = sea,
+	                                       .keepClear = keepClear,
+	                                       .clearings = {},
+	                                       .townX = 200.0f,
+	                                       .townZ = 200.0f},
+	                                      9, {});
+	for (const auto& feature : nearTown)
+	{
+		if (feature.kind == features::Kind::BigForest)
+		{
+			EXPECT_GE(std::hypot(feature.x - 2000.0f, feature.z - 2000.0f), 84.0f);
+		}
+	}
 }
 
 TEST(LandgenGenerator, CellsTakeTheirWaterAndSoundFromTheirCorners)

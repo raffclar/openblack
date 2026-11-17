@@ -50,6 +50,7 @@
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/TestbedDispenserGrid.h"
 #endif
+#include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/CloudArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
@@ -506,6 +507,7 @@ namespace
 static_assert(static_cast<int>(landgen::features::Tree::Burnt) == static_cast<int>(TreeInfo::Burnt));
 static_assert(static_cast<int>(landgen::features::Tree::CypressA) == static_cast<int>(TreeInfo::CypressA));
 static_assert(landgen::features::k_DeadTreeStatic == static_cast<uint8_t>(MobileStaticInfo::DeadTree));
+static_assert(static_cast<int>(BigForestInfo::Info4) == 3);
 static_assert(landgen::features::RockType(landgen::features::RockShape::Square, landgen::features::Stone::Volcanic) ==
               static_cast<uint8_t>(MobileStaticInfo::SquarerockVolcanic));
 
@@ -534,6 +536,12 @@ void PlaceGeneratedThings(const landgen::GeneratedLand& land)
 			const auto forest = forests.contains(feature.forest) ? feature.forest : 0;
 			archetypes::TreeArchetype::Create(forest, position, static_cast<TreeInfo>(feature.type), true, feature.angle,
 			                                  feature.maxSize, feature.size);
+		}
+		else if (feature.kind == landgen::features::Kind::BigForest)
+		{
+			// A big forest makes its own forest, as a big forest of a land script of the story does
+			archetypes::BigForestArchetype::Create(position, static_cast<BigForestInfo>(feature.type), 0, feature.angle,
+			                                       feature.size);
 		}
 		else
 		{

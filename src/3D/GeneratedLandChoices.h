@@ -30,8 +30,8 @@ struct Choices
 	int32_t ranges {3};
 	/// The altitude of a crest of a range before the erosion, and of the plains and the hills
 	int32_t mountainHeight {300};
-	int32_t plainHeight {60};
-	int32_t hillHeight {22};
+	int32_t plainHeight {55};
+	int32_t hillHeight {55};
 	/// How many hollows of the low land hold the lakes and lagoons
 	int32_t hollows {6};
 	/// The drops of rain of the erosion, in thousands
