@@ -1040,11 +1040,12 @@ void TempleInterior::ProcessToolTipTurn()
 	{
 		return;
 	}
-	// The turn submits the tooltip that the rooms chose, or none under a dialog, and the help system keeps it or ends it
+	// The turn submits the tooltip that the rooms chose, or none under a box of the front end, and the help system keeps
+	// it or ends it
 	auto& toolTips = _interface->GetToolTips();
-	if (!_interface->IsMenuOpen() && _toolTip.index.has_value())
+	if (const auto submitted = TempleToolTipToSubmit(_toolTip, _interface->IsFrontEndBoxActive()); submitted.has_value())
 	{
-		toolTips.Submit(*_toolTip.index, _toolTip.action, _toolTip.arrows);
+		toolTips.Submit(*submitted->index, submitted->action, submitted->arrows);
 	}
 	toolTips.ProcessTurn();
 }

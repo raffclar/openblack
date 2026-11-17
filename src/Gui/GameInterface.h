@@ -359,6 +359,7 @@ public:
 	void SetHandOnScreen(std::optional<glm::vec2> position) override { _handOnScreen = position; }
 
 	[[nodiscard]] bool IsMenuOpen() const noexcept override { return _menu->IsOpen(); }
+	[[nodiscard]] bool IsFrontEndBoxActive() const override;
 	void OpenOptions() override;
 	void CloseMenu() override;
 	void SetMenuInsideTemple(bool inside) override;
