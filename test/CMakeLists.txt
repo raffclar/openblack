@@ -1949,6 +1949,7 @@ openblack_setup_and_add_test(test_checksum_log test_checksum_log.cpp)
 openblack_setup_and_add_test(test_portable_math test_portable_math.cpp)
 openblack_setup_and_add_test(test_build_sized_save test_build_sized_save.cpp)
 openblack_setup_and_add_test(test_registry_fresh_ids test_registry_fresh_ids.cpp)
+openblack_setup_and_add_test(test_saved_world_ids test_saved_world_ids.cpp)
 openblack_setup_and_add_test(test_particle_turn_order test_particle_turn_order.cpp)
 openblack_setup_and_add_test(test_start_rules online/test_start_rules.cpp)
 openblack_setup_and_add_test(test_developer_tools test_developer_tools.cpp)
@@ -2068,6 +2069,10 @@ openblack_setup_and_add_test(test_window_pixels windowing/test_window_pixels.cpp
 add_test(NAME test_save_diff
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_save_diff.py
+)
+add_test(NAME test_save_sweep
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_save_sweep.py
 )
 openblack_setup_and_add_test(test_scroll_pictures temple/test_scroll_pictures.cpp)
 openblack_setup_and_add_test(test_real_clock test_real_clock.cpp)

@@ -30,6 +30,9 @@ ENTITIES_MAGIC = b"OBEW"
 ATTEMPTS_VERSION = 4
 # The bytes that a line of the report shows of each value that differs
 SHOWN_BYTES = 24
+# The player numbers of the game (k_PlayerNumbers in src/PlayerSlots.h): the villagers that the debug windows made, at
+# the end of the RCTX block, are a list for each player number
+PLAYER_NUMBERS = 34
 
 
 class Reader:
@@ -140,6 +143,40 @@ def compare_bytes(a, b):
     result["b"] = window(b, at)
     result["at"] = at
     return result
+
+
+def towns_at_start_place(context):
+    """The place of the count of the towns at the start in the RCTX block.
+
+    After the count come the bonus creatures of a network game (one byte) and the villagers that the debug windows made:
+    the count of the player numbers, then for each player number a count of entities and the entities (four bytes each).
+    The tool finds the start of these values from the end of the block. A block of an older save has none of them, and
+    its count of the towns is its last value."""
+    size = len(context)
+    shortest = 1 + 4 + 4 * PLAYER_NUMBERS
+    for start in range(size - shortest, 3, -1):
+        at = start + 1
+        if struct.unpack_from("<I", context, at)[0] != PLAYER_NUMBERS:
+            continue
+        at += 4
+        for _ in range(PLAYER_NUMBERS):
+            if at + 4 > size:
+                break
+            at += 4 + 4 * struct.unpack_from("<I", context, at)[0]
+        else:
+            if at == size:
+                return start - 4
+    return size - 4
+
+
+def only_towns_at_start(a, b):
+    """Whether two RCTX blocks of the same size differ only in the count of the towns at the start"""
+    if len(a) != len(b) or len(a) < 4:
+        return False
+    place = towns_at_start_place(a)
+    if place != towns_at_start_place(b):
+        return False
+    return all(a[i] == b[i] for i in range(len(a)) if not place <= i < place + 4)
 
 
 def compare_entities(a, b):
@@ -491,6 +528,8 @@ def compare_files(data_a, data_b):
         result[key] = {"bytes": byte_places(data, others[index]), **({"detail": detail} if detail else {})}
         if reader is None:
             result[key]["bytes"] = compare_bytes(data, others[index])
+        if tag == "RCTX":
+            result[key]["towns_at_start_only"] = only_towns_at_start(data, others[index])
     # The clock block and the records block name their values when the tool can read them
     first = dict(blocks_a)
     if "TIME" in result:
@@ -546,7 +585,8 @@ GAME_START = {
     "rows": {"PlayerStatistics": "only_b", "SoundTag": "only_a"},
     # The components that a load can remove from the list of the components
     "order": {"SoundTag"},
-    # The bytes at the end of the RCTX block that the start of a game sets: the count of the towns at the start
+    # The bytes of the RCTX block that the start of a game sets: the count of the towns at the start, before the last
+    # values of the block (towns_at_start_place)
     "context_bytes": 4,
     # The tags of the sounds that went leave their places in the list of the entities
     "sounds": True,
@@ -623,9 +663,7 @@ def not_explained(result, allowance):
     for key, value in result.items():
         detail = value.get("detail") or {}
         if key == "RCTX":
-            size = value["bytes"]
-            if allowance["context_bytes"] and size["sizes"][0] == size["sizes"][1] and \
-                    size["first"] >= size["sizes"][0] - allowance["context_bytes"]:
+            if allowance["context_bytes"] and value.get("towns_at_start_only"):
                 continue
             left.append(key)
             continue

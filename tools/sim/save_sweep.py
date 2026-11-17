@@ -22,12 +22,29 @@ At each check the game is held, and three round trips follow with no frame and n
                   creatures; A and B can differ only by the start of a game and the new creatures. A saved game keeps
                   the altitudes that the world changed (the LALT block, deviation 168), as a world state does.
 
+With --after N, each check also compares the world at the save with the world right after its load, and the game after
+them:
+
+    hash          ecs.hash with no ids at the save and right after the load of A must be the same. The hash leaves out
+                  the things that each frame moves, also while the game is held, so they are not the state of the world
+                  at a turn (HASH_EXCLUDE): the hand eases towards the pointer, and the glow of a script's highlight
+                  stays between the highlight and the camera.
+    turns         the same hash at the end of each of N turns after the save, and of N turns after the load of A, must be
+                  the same. The game then sends no reports of its hand and its view (--sim-no-hand-reports): these
+                  reports carry the camera, which moves at each frame, so they are input of the player and not state of
+                  the world. The tool also gives the first turn where the checksums of the synced world differ. On a
+                  land with no computer god they are the same. Elsewhere they can differ, as each load starts the mind
+                  of each computer god again and the sounds go (see save_diff.GAME_START): the entities that the world
+                  makes after the load can then get other ids.
+
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/sweep --scenarios all --turns 100
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/land1 --land Land1.txt --at 0,500,2000
+    python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/land2 --land Land2.txt --at 50 --after 30
 
 The result is one line of JSON for each check in sweep.jsonl, and a summary in sweep.json. The exit code is 0 only when
 every world state has the same bytes, the new creatures explain every difference of the second saved-game round trip,
-and the start of a game and the new creatures explain every difference of the first saved-game round trip.
+and the start of a game and the new creatures explain every difference of the first saved-game round trip. With --after,
+also the hashes of each check must be the same.
 """
 
 import argparse
@@ -55,6 +72,9 @@ STILL_WAIT = 10.0
 SCENARIO_WAIT = 600.0
 # How long the tool waits for the writer of the game to put a save in its slot, in seconds
 WRITE_TIMEOUT = 60.0
+# The things that each frame moves, so the hash of the world at a turn leaves them out: the hand eases towards the
+# pointer, and the glow of a script's highlight stays between the highlight and the camera
+HASH_EXCLUDE = ("HandGrab", "ScriptHighlightGlow")
 
 
 def game_arguments(options):
@@ -66,6 +86,10 @@ def game_arguments(options):
             args += ["--skip-opening", options.opening]
     else:
         args.append("--testbed")
+    if options.after > 0:
+        # The reports of the hand and the view carry the camera, which moves at each frame. Without them, the turns after
+        # a load get the same commands as the turns after the save.
+        args.append("--sim-no-hand-reports")
     return args + options.extra
 
 
@@ -81,6 +105,44 @@ def saved_world(out, slot, since):
                 return file.read()
         time.sleep(0.1)
     raise RuntimeError(f"the game wrote no world file for slot {slot}")
+
+
+def has_component(game, name):
+    """Whether the registry has the component: ecs.hash can leave out only a component that the registry has"""
+    try:
+        game.call("ecs.entities", {"component": name})
+        return True
+    except RuntimeError:
+        return False
+
+
+def world_hash(game):
+    """The hash of where every entity is, with no ids and with none of the things that each frame moves"""
+    exclude = [name for name in HASH_EXCLUDE if has_component(game, name)]
+    return game.call("ecs.hash", {"ids": False, "exclude": exclude}).get("hash")
+
+
+def turn_values(game, turns):
+    """The turn, the checksum of the synced world and the world hash at the end of each of some turns"""
+    game.call("players.checksum", {"on": True})
+    values = []
+    for _ in range(turns):
+        if not play_turns(game, 1):
+            break
+        last = game.call("players.checksum")
+        values.append([last.get("turn"), last.get("checksum"), world_hash(game)])
+    return values
+
+
+def first_different(first, second, column):
+    """The first turn where a column of two lists of turn values differs, or None when it is the same"""
+    for a, b in zip(first, second):
+        if a[column] != b[column]:
+            return a[0]
+    if len(first) != len(second):
+        shorter = first if len(first) < len(second) else second
+        return shorter[-1][0] + 1 if shorter else 0
+    return None
 
 
 def check(game, options, name):
@@ -112,12 +174,16 @@ def check(game, options, name):
         if differs and options.keep:
             entry["world_state"]["report"] = save_diff.text_report(differs)
     first_slot, second_slot, third_slot = SLOTS
+    hashes = [world_hash(game)] if options.after > 0 else []
     since = time.time() - 1.0
     if not game.call("saves.save", {"slot": first_slot, "name": "sweep"}).get("saved"):
         entry["saved_game"] = {"error": "the first save did not happen"}
         return entry
     a = saved_world(options.out, first_slot, since)
+    # The turns after the save with no load, to compare with the turns after the load
+    no_load = turn_values(game, options.after) if options.after > 0 else []
     results = {}
+    after_load = []
     for slot, into in ((first_slot, second_slot), (second_slot, third_slot)):
         since = time.time() - 1.0
         answer = game.call("saves.load_and_save", {"slot": slot, "into": into, "name": "sweep"})
@@ -125,6 +191,15 @@ def check(game, options, name):
             entry["saved_game"] = {"error": answer}
             return entry
         results[into] = saved_world(options.out, into, since)
+        if options.after > 0 and slot == first_slot:
+            hashes.append(world_hash(game))
+            after_load = turn_values(game, options.after)
+    if options.after > 0:
+        different = first_different(no_load, after_load, 2)
+        entry["after_load"] = {"hash_same": hashes[0] == hashes[1], "hashes": hashes, "turns": len(no_load),
+                               "same": different is None and len(no_load) == options.after,
+                               "first_different_turn": different,
+                               "first_different_checksum_turn": first_different(no_load, after_load, 1)}
     b, c = results[second_slot], results[third_slot]
     game_start = save_diff.compare_files(a, b)
     again = save_diff.compare_files(b, c)
@@ -250,6 +325,8 @@ def main(argv=None):
     parser.add_argument("--opening", default=None, help="with --land: the opening to skip, as cow")
     parser.add_argument("--at", default="0,500,2000", help="with --land: the turns of the checks")
     parser.add_argument("--keep", action="store_true", help="keep the text report of each difference")
+    parser.add_argument("--after", type=int, default=0,
+                        help="also compare the hash at the save and after the load, and this many turn checksums")
     parser.add_argument("extra", nargs="*", help="more arguments for the game, after --")
     options = parser.parse_args(argv)
     options.exe = options.exe or sim_run.default_exe(options.config)
@@ -258,7 +335,9 @@ def main(argv=None):
         results = sweep(options, record)
     failed = [entry["check"] for entry in results
               if "error" in entry or not (entry.get("world_state") or {}).get("same")
-              or not (entry.get("saved_game") or {}).get("same")]
+              or not (entry.get("saved_game") or {}).get("same")
+              or (options.after > 0 and not (entry.get("after_load") or {}).get("same"))
+              or (options.after > 0 and not (entry.get("after_load") or {}).get("hash_same"))]
     summary = {"checks": len(results), "failed": failed, "same": not failed}
     with open(os.path.join(options.out, "sweep.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=1)

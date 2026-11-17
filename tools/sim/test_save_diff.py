@@ -235,6 +235,27 @@ class SaveDiffTests(unittest.TestCase):
                                          world([("ECSW", second), ("RCTX", context_b)]))
         self.assertEqual(save_diff.not_game_start(result), [])
 
+    def test_the_towns_at_the_start_come_before_the_last_values_of_the_context(self):
+        # The bonus creatures, then the villagers that the debug windows made: one list for each player number. The
+        # second player number has one villager.
+        lists = [u32(0)] * save_diff.PLAYER_NUMBERS
+        lists[1] = u32(1) + u32(9)
+        tail = b"\x00" + u32(save_diff.PLAYER_NUMBERS) + b"".join(lists)
+        context_a = b"\x07" * 8 + u32(0) + tail
+        context_b = b"\x07" * 8 + u32(6) + tail
+        self.assertEqual(save_diff.towns_at_start_place(context_a), 8)
+        result = save_diff.compare_files(world([("RCTX", context_a)]), world([("RCTX", context_b)]))
+        self.assertTrue(result["RCTX"]["towns_at_start_only"])
+        self.assertEqual(save_diff.not_game_start(result), [])
+
+    def test_the_start_of_a_game_does_not_explain_the_values_after_the_towns(self):
+        tail = b"\x00" + u32(save_diff.PLAYER_NUMBERS) + u32(0) * save_diff.PLAYER_NUMBERS
+        context_a = b"\x07" * 8 + u32(0) + tail
+        context_b = b"\x07" * 8 + u32(0) + b"\x01" + tail[1:]
+        result = save_diff.compare_files(world([("RCTX", context_a)]), world([("RCTX", context_b)]))
+        self.assertFalse(result["RCTX"]["towns_at_start_only"])
+        self.assertEqual(save_diff.not_game_start(result), ["RCTX"])
+
     def test_the_start_of_a_game_does_not_explain_other_values(self):
         first = entities_block([1], [("Transform", ["position"], [(1, [b"\x00"])])])
         second = entities_block([1], [("Transform", ["position"], [(1, [b"\x01"])])])
