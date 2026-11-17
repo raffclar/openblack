@@ -9,6 +9,7 @@
 
 #include "TurnBody.h"
 
+#include <cassert>
 #include <cstdint>
 
 #include <algorithm>
@@ -245,16 +246,37 @@ void FootpathsCatchUp()
 	}
 }
 
-void PlayLivingTurn()
+using LivingList = std::vector<living_turn::Living<entt::entity>>;
+
+/// Add an entry for each kind of living thing that the entity is now. A creature that is not in the list (as the body
+/// that the tattoo menu shows) is not part of the walk.
+void AddLiving(const ecs::Registry& registry, entt::entity entity, LivingList& out)
 {
 	using namespace ecs::components;
 	using living_turn::Kind;
+	const auto& world = registry.Underlying();
+	const auto* place = world.try_get<const LivingListPlace>(entity);
+	const uint64_t made = place != nullptr ? place->made : 0;
+	if (world.all_of<Villager>(entity))
+	{
+		out.push_back({.id = entity, .made = made, .kind = Kind::Villager});
+	}
+	if (world.all_of<Animal>(entity))
+	{
+		out.push_back({.id = entity, .made = made, .kind = Kind::Animal});
+	}
+	if (place != nullptr && world.all_of<Creature>(entity))
+	{
+		out.push_back({.id = entity, .made = made, .kind = Kind::Creature});
+	}
+}
 
-	auto& registry = Locator::entitiesRegistry::value();
-	auto& profiler = Locator::profiler::value();
-	// The list as the turn starts. A living thing made in the turn goes to the front of the list, which the walk has
-	// passed, so its first turn is the next one.
-	std::vector<living_turn::Living<entt::entity>> list;
+/// The list of all the living things from a walk of the world, in the order of their turn
+LivingList AllLivingInOrder(const ecs::Registry& registry)
+{
+	using namespace ecs::components;
+	using living_turn::Kind;
+	LivingList list;
 	const auto add = [&registry, &list](entt::entity entity, Kind kind) {
 		const auto* place = registry.TryGet<const LivingListPlace>(entity);
 		list.push_back({.id = entity, .made = place != nullptr ? place->made : 0, .kind = kind});
@@ -265,6 +287,43 @@ void PlayLivingTurn()
 	registry.Each<const Creature, const LivingListPlace>(
 	    [&add](entt::entity entity, const Creature&, const LivingListPlace&) { add(entity, Kind::Creature); });
 	living_turn::NewestFirst(list);
+	return list;
+}
+
+#ifndef NDEBUG
+/// The debug builds make sure each turn that the kept list is the same as a walk of the world gives
+bool SameLiving(const LivingList& kept, const LivingList& walked)
+{
+	return std::ranges::equal(
+	    kept, walked, [](const auto& a, const auto& b) { return a.id == b.id && a.made == b.made && a.kind == b.kind; });
+}
+#endif
+
+void PlayLivingTurn()
+{
+	using namespace ecs::components;
+	using living_turn::Kind;
+
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& profiler = Locator::profiler::value();
+	// The list as the turn starts. A living thing made in the turn goes to the front of the list, which the walk has
+	// passed, so its first turn is the next one. The list stays from turn to turn, and only the living things that
+	// came, went or changed their place since the last turn move in it.
+	auto& kept = registry.KeptLivingList();
+	if (kept.resets != registry.GetResets() || kept.rebuild)
+	{
+		kept.list = AllLivingInOrder(registry);
+		kept.resets = registry.GetResets();
+		kept.rebuild = false;
+	}
+	else
+	{
+		living_turn::Refresh(kept.list, kept.changed,
+		                     [&registry](entt::entity entity, LivingList& out) { AddLiving(registry, entity, out); });
+	}
+	kept.changed.clear();
+	assert(SameLiving(kept.list, AllLivingInOrder(registry)));
+	const auto& list = kept.list;
 
 	// A creature that the turn made takes its first pose in its own turn. The blends of that pose are made first, on
 	// the shared threads.
