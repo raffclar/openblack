@@ -254,6 +254,11 @@ struct GameRole::Parts
 				{
 					host->SetEditors(*reply->editors);
 				}
+				// The debugger right follows a change in the same way
+				if (reply->debuggers.has_value() && host)
+				{
+					host->SetDebuggers(*reply->debuggers);
+				}
 			}
 			if (!reply.has_value() && mostVersionCharacters > lobby_api::k_OldMostGameVersionCharacters &&
 			    lobby_status::RefusedTheVersionLength(response.status, response.Text()))

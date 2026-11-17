@@ -5255,3 +5255,95 @@ TEST_F(LockstepTest, ARestoredServerKeepsThePauseAndTheSpeedOfTheEditor)
 	EXPECT_GT(bob.world.turns, pausedAt + 1);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
+
+TEST_F(LockstepTest, AChangeOfTheDebuggerRightDuringTheGameTakesEffectAtOnce)
+{
+	using game_socket::EditorTime;
+	using game_socket::TimeAct;
+	MakeHost(2);
+	Computer watcher(network, now, "observer:13");
+	Frames({&watcher}, 3);
+	Computer alice(network, now, "god+debugger:11");
+	Computer bob(network, now, "god:12");
+	Frames({&alice, &bob, &watcher}, 8);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.GetJoined()->debugger);
+	ASSERT_FALSE(bob.session.GetJoined()->debugger);
+	// Staff remove the mark of Alice and give it to Bob and to the observer. The next status answer of the lobby tells
+	// the server.
+	const std::vector<int64_t> debuggers {12, 13};
+	host->SetDebuggers(debuggers);
+	EXPECT_FALSE(host->Seats()[0].debugger);
+	EXPECT_TRUE(host->Seats()[1].debugger);
+	EXPECT_TRUE(host->Seats()[1].debuggerChanged);
+	Frames({&alice, &bob, &watcher}, 2);
+	EXPECT_FALSE(alice.session.GetJoined()->debugger);
+	EXPECT_TRUE(bob.session.GetJoined()->debugger);
+	EXPECT_TRUE(watcher.session.GetJoined()->debugger);
+	// The editor right does not change
+	EXPECT_FALSE(bob.session.GetJoined()->editor);
+	// The server takes the acts of the debug windows by the new rights
+	const DebugAdvisor out {.act = DebugAdvisor::Act::Out, .advisor = 1};
+	alice.session.Send(out);
+	bob.session.Send(out);
+	Frames({&alice, &bob, &watcher}, 4);
+	EXPECT_EQ(host->RefusedDebuggerCommands(), 1u);
+	EXPECT_EQ(host->RefusedEditorCommands(), 0u);
+	const auto count = [this](size_t seat) {
+		const auto& commands = host->Seats()[seat].commands;
+		const auto found = commands.find(static_cast<uint8_t>(turn_codec::CommandTag::DebugAdvisor));
+		return found != commands.end() ? found->second : 0u;
+	};
+	EXPECT_EQ(count(0), 0u);
+	EXPECT_EQ(count(1), 1u);
+	EXPECT_GE(alice.session.TakeEditorRefusals(), 1u);
+	// The speed of the room follows the new right too
+	alice.session.RequestTime(EditorTime {.act = TimeAct::Speed, .speed = 2.0f});
+	Frames({&alice, &bob, &watcher}, 4);
+	EXPECT_EQ(host->RefusedTimeRequests(), 1u);
+	bob.session.RequestTime(EditorTime {.act = TimeAct::Speed, .speed = 2.0f});
+	Frames({&alice, &bob, &watcher}, 4);
+	EXPECT_FLOAT_EQ(host->RoomClock().speed, 2.0f);
+	// The same rights again change nothing
+	host->SetDebuggers(debuggers);
+	EXPECT_TRUE(host->Seats()[1].debugger);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, APlayerWithNoAccountKeepsTheDebuggerClaimOfTheJoin)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god+debugger:alice");
+	Computer bob(network, now, "god:12");
+	Frames({&alice, &bob}, 8);
+	ASSERT_TRUE(host->Started());
+	host->SetDebuggers({});
+	EXPECT_TRUE(host->Seats()[0].debugger);
+	EXPECT_FALSE(host->Seats()[1].debugger);
+	Frames({&alice, &bob}, 2);
+	EXPECT_TRUE(alice.session.GetJoined()->debugger);
+}
+
+TEST_F(LockstepTest, APlayerWhoIsAwayGetsTheChangedDebuggerRightWhenThePlayerComesBack)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:11");
+	Computer bob(network, now, "god:12");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	network.Cut(bob.sockets->Ids().back());
+	bob.Frame();
+	Frames({&alice}, 10);
+	ASSERT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	const std::vector<int64_t> debuggers {12};
+	host->SetDebuggers(debuggers);
+	EXPECT_TRUE(host->Seats()[1].debugger);
+	EXPECT_FALSE(bob.session.GetJoined()->debugger);
+	Frames({&alice, &bob}, 10);
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_TRUE(bob.session.GetJoined()->debugger);
+	EXPECT_FALSE(alice.session.GetJoined()->debugger);
+	// The editor right stays as the join gave it
+	EXPECT_FALSE(bob.session.GetJoined()->editor);
+}

@@ -997,6 +997,10 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	{
 		SendTo(connection, game_socket::EditorRight {.editor = found->editor});
 	}
+	if (found->debuggerChanged)
+	{
+		SendTo(connection, game_socket::DebuggerRight {.debugger = found->debugger});
+	}
 	// A client whose world parted gets the server's world at the start of the next turn, and then the turns from there
 	found->missedWorldChange = false;
 	found->oldWorldChecksums = false;
@@ -1074,6 +1078,10 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 	if (found->editorChanged)
 	{
 		SendTo(connection, game_socket::EditorRight {.editor = found->editor});
+	}
+	if (found->debuggerChanged)
+	{
+		SendTo(connection, game_socket::DebuggerRight {.debugger = found->debugger});
 	}
 	// An observer comes back as a god does: the world of the server when its world parted, else the turns that it missed.
 	// An observer has no god, so the other players get no message.
@@ -2620,44 +2628,65 @@ void LockstepHost::SetBans(std::set<int64_t> accounts)
 
 void LockstepHost::SetEditors(std::span<const int64_t> accounts)
 {
-	const auto follow = [this, accounts](std::string_view account, std::string_view name, bool& editor, bool& changed,
-	                                     std::optional<ConnectionId> connection) {
+	FollowRoomRight(RoomRight::Editor, accounts);
+}
+
+void LockstepHost::SetDebuggers(std::span<const int64_t> accounts)
+{
+	FollowRoomRight(RoomRight::Debugger, accounts);
+}
+
+void LockstepHost::FollowRoomRight(RoomRight right, std::span<const int64_t> accounts)
+{
+	const bool editorRight = right == RoomRight::Editor;
+	const auto follow = [this, accounts, editorRight](std::string_view account, std::string_view name, bool& value,
+	                                                  bool& changed, std::optional<ConnectionId> connection) {
 		const auto id = lobby_status::AccountId(account);
 		if (!id.has_value())
 		{
 			return;
 		}
 		const bool granted = std::ranges::find(accounts, *id) != accounts.end();
-		if (granted == editor)
+		if (granted == value)
 		{
 			return;
 		}
-		editor = granted;
+		value = granted;
 		changed = true;
-		// The test tools find the words "the editor right of"
+		// The test tools find the words "the editor right of" and "the debugger right of"
 		Log(spdlog::level::info,
-		    fmt::format("The lobby {} the editor right of {}: the server {} the edits and the debug cheats of this player",
-		                granted ? "gave" : "removed", name, granted ? "takes" : "refuses"));
+		    fmt::format("The lobby {} the {} right of {}: the server {} the {} of this player", granted ? "gave" : "removed",
+		                editorRight ? "editor" : "debugger", name, granted ? "takes" : "refuses",
+		                editorRight ? "edits and the debug cheats" : "acts of the debug windows"));
 		if (!connection.has_value())
 		{
 			return;
 		}
 		if (const auto peer = _peers.find(*connection); peer != _peers.end())
 		{
-			peer->second.editor = granted;
+			(editorRight ? peer->second.editor : peer->second.debugger) = granted;
 		}
-		SendTo(*connection, game_socket::EditorRight {.editor = granted});
+		if (editorRight)
+		{
+			SendTo(*connection, game_socket::EditorRight {.editor = granted});
+		}
+		else
+		{
+			SendTo(*connection, game_socket::DebuggerRight {.debugger = granted});
+		}
 	};
 	for (auto& seat : _seats)
 	{
 		if (seat.state == SeatState::Taken || seat.state == SeatState::Away)
 		{
-			follow(seat.account, seat.name, seat.editor, seat.editorChanged, seat.connection);
+			follow(seat.account, seat.name, editorRight ? seat.editor : seat.debugger,
+			       editorRight ? seat.editorChanged : seat.debuggerChanged, seat.connection);
 		}
 	}
 	for (auto& watcher : _watchers)
 	{
-		follow(watcher.account, watcher.name, watcher.editor, watcher.editorChanged, watcher.connection);
+		follow(watcher.account, watcher.name, editorRight ? watcher.editor : watcher.debugger,
+		       editorRight ? watcher.editorChanged : watcher.debuggerChanged, watcher.connection);
 	}
 }
 

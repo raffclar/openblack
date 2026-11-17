@@ -106,6 +106,8 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<Ban> ParseBan(std::string_view text);
 /// The data of "account.editor"
 [[nodiscard]] std::optional<EditorChange> ParseEditorChange(std::string_view text);
+/// The data of "account.debugger"
+[[nodiscard]] std::optional<DebuggerChange> ParseDebuggerChange(std::string_view text);
 
 /// An ISO 8601 time of the lobby, such as "2026-10-22T10:15:00.123Z" or "2026-10-22T10:15:00+00:00", as milliseconds
 /// since 1970 (UTC). None when the text is not such a time.

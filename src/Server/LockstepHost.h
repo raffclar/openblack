@@ -223,8 +223,10 @@ public:
 		/// The lobby changed the editor right after the join. The player gets the right again when the player comes back.
 		bool editorChanged {false};
 		/// The join ticket of the player has the debugger claim. A seat that a snapshot gave back keeps the claim of the
-		/// snapshot.
+		/// snapshot. The lobby can change it while the game runs (SetDebuggers).
 		bool debugger {false};
+		/// The lobby changed the debugger right after the join. The player gets the right again when the player comes back.
+		bool debuggerChanged {false};
 	};
 
 	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
@@ -251,8 +253,11 @@ public:
 		bool missedWorldChange {false};
 		/// The lobby changed the editor right after the join. The observer gets the right again when it comes back.
 		bool editorChanged {false};
-		/// The join ticket of the observer has the debugger claim
+		/// The join ticket of the observer has the debugger claim. The lobby can change it while the game runs
+		/// (SetDebuggers).
 		bool debugger {false};
+		/// The lobby changed the debugger right after the join. The observer gets the right again when it comes back.
+		bool debuggerChanged {false};
 		/// The account of the ticket. Empty for an observer that joined by name, or that a restore gave.
 		std::string account;
 	};
@@ -387,6 +392,11 @@ public:
 	/// the edits of the editor and the debug cheats of that player by the new right. A player with no account keeps the
 	/// claim of its join.
 	void SetEditors(std::span<const int64_t> accounts);
+	/// The accounts of the room that have the debugger right now, from each answer of the lobby to a status report. A god
+	/// or an observer whose right changed gets the new right at once ("debugger.right"). From then, the server takes or
+	/// refuses the acts of the debug windows of that player by the new right. A player with no account keeps the claim
+	/// of its join.
+	void SetDebuggers(std::span<const int64_t> accounts);
 
 	/// The commands of the server itself: it has no player
 	void Send(const player_commands::Action& action) override;
@@ -602,6 +612,15 @@ private:
 	void Refuse(ConnectionId connection, std::string_view reason, std::string_view detail = {}, std::string_view path = {});
 	/// Takes the players of the accounts that the lobby banned out of the started game
 	void RemoveBannedFromGame();
+	/// A right of an account that the lobby can change while the game runs
+	enum class RoomRight : uint8_t
+	{
+		Editor,
+		Debugger,
+	};
+	/// Gives the right to each god and observer whose account is in the list, and removes it from the others. A player
+	/// whose right changed gets the new right at once. A player with no account keeps the claim of its join.
+	void FollowRoomRight(RoomRight right, std::span<const int64_t> accounts);
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
 	void StartCreature(ConnectionId connection, const Peer& peer, const game_socket::StartCreature& creature);
 	/// A mind file of the editor from a player. The server checks the claim and the file, keeps it and sends it to every

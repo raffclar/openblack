@@ -142,6 +142,17 @@ TEST(LobbyApi, MeAndTheEventOfTheLobbyGiveTheEditorRight)
 	EXPECT_FALSE(ParseEditorChange("{}").has_value());
 }
 
+TEST(LobbyApi, MeAndTheEventOfTheLobbyGiveTheDebuggerRight)
+{
+	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc"})")->debugger.has_value());
+	EXPECT_EQ(ParseMe(R"({"id":3,"name":"abc","debugger":true})")->debugger, std::optional<bool>(true));
+	EXPECT_EQ(ParseMe(R"({"id":3,"name":"abc","debugger":false,"editor":true})")->debugger, std::optional<bool>(false));
+	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc","debugger":1})").has_value());
+	EXPECT_TRUE(ParseDebuggerChange(R"({"debugger":true})")->debugger);
+	EXPECT_FALSE(ParseDebuggerChange(R"({"debugger":false})")->debugger);
+	EXPECT_FALSE(ParseDebuggerChange(R"({"editor":true})").has_value());
+}
+
 TEST(LobbyApi, ServerListReadsEachServer)
 {
 	const auto list = ParseServerList(R"({"servers":[)" + ServerJson() + "]}");

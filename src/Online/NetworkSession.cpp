@@ -614,6 +614,17 @@ void NetworkSession::Text(std::string_view text)
 			            fmt::format("The game server {} the editor right of this player", right->editor ? "gave" : "removed"));
 		}
 	}
+	else if (const auto* debugger = std::get_if<game_socket::DebuggerRight>(&*frame))
+	{
+		// The lobby changed the debugger right of the account while the game runs. The debug menu bar shows or hides at once.
+		if (_joined.has_value() && _joined->debugger != debugger->debugger)
+		{
+			_joined->debugger = debugger->debugger;
+			// The test tools find the words "the debugger right of this player"
+			_log->Write(spdlog::level::info, fmt::format("The game server {} the debugger right of this player",
+			                                             debugger->debugger ? "gave" : "removed"));
+		}
+	}
 	else if (const auto* commands = std::get_if<game_socket::CommandRefused>(&*frame))
 	{
 		// The game shows a line to the player. A refusal for another reason shows the same line, as no other reason exists.

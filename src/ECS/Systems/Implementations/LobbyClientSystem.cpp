@@ -298,10 +298,18 @@ void LobbyClientSystem::CheckRight()
 		}
 		_checkingRight = false;
 		_rightCheckAt = _clock() + lobby_times::k_RightCheckInterval;
-		// An older lobby does not give the right in the account: the right then changes only with a session answer
-		if (result.Ok() && result.value->editor.has_value())
+		// An older lobby does not give the rights in the account: a right then changes only with a session answer
+		if (!result.Ok())
+		{
+			return;
+		}
+		if (result.value->editor.has_value())
 		{
 			FollowEditorRight(*result.value->editor, "the account");
+		}
+		if (result.value->debugger.has_value())
+		{
+			FollowDebuggerRight(*result.value->debugger, "the account");
 		}
 	});
 }
@@ -315,6 +323,18 @@ void LobbyClientSystem::FollowEditorRight(bool editor, std::string_view source)
 	_accountEditor = editor;
 	// The test tools find the words "the editor right"
 	LogSession("The lobby session of {} {} the editor right now ({})", _account->name, editor ? "has" : "does not have",
+	           source);
+}
+
+void LobbyClientSystem::FollowDebuggerRight(bool debugger, std::string_view source)
+{
+	if (_state != LobbySessionState::LoggedIn || !_account.has_value() || debugger == _accountDebugger)
+	{
+		return;
+	}
+	_accountDebugger = debugger;
+	// The test tools find the words "the debugger right"
+	LogSession("The lobby session of {} {} the debugger right now ({})", _account->name, debugger ? "has" : "does not have",
 	           source);
 }
 
@@ -1684,6 +1704,14 @@ void LobbyClientSystem::HandlePush(std::string_view text)
 		if (const auto change = lobby_api::ParseEditorChange(event->data); change.has_value())
 		{
 			FollowEditorRight(change->editor, "an event of the lobby");
+		}
+	}
+	if (event->type == lobby_api::events::k_AccountDebugger)
+	{
+		// Staff changed the debugger mark of the account: the debug menu bar shows or hides at once
+		if (const auto change = lobby_api::ParseDebuggerChange(event->data); change.has_value())
+		{
+			FollowDebuggerRight(change->debugger, "an event of the lobby");
 		}
 	}
 	if (event->type == lobby_api::events::k_AccountBanned)

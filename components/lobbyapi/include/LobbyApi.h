@@ -154,6 +154,8 @@ struct Me
 	int64_t dateJoined {0};
 	/// "editor": the editor right of the account now. None when the lobby does not give it.
 	std::optional<bool> editor;
+	/// "debugger": the debugger mark of the account now. None when the lobby does not give it.
+	std::optional<bool> debugger;
 };
 
 /// A god or an observer in the room of a game server
@@ -370,6 +372,9 @@ struct ServerStatusReply
 	/// "editors": the accounts of the room that have the editor right now. None when the lobby does not give them: the
 	/// server then keeps the claims of the join tickets.
 	std::optional<std::vector<int64_t>> editors;
+	/// "debuggers": the accounts of the room that have the debugger mark now. None when the lobby does not give them: the
+	/// server then keeps the claims of the join tickets.
+	std::optional<std::vector<int64_t>> debuggers;
 };
 
 /// GET /api/v1/servers: {"servers": [...]}
@@ -721,6 +726,7 @@ constexpr std::string_view k_RoomChanged = "room.changed";
 constexpr std::string_view k_ServerBanned = "server.banned";
 constexpr std::string_view k_AccountBanned = "account.banned";
 constexpr std::string_view k_AccountEditor = "account.editor";
+constexpr std::string_view k_AccountDebugger = "account.debugger";
 constexpr std::string_view k_RoomClanChosen = "room.clan_chosen";
 constexpr std::string_view k_PingLine = "ping.line";
 constexpr std::string_view k_PingHere = "ping.here";
@@ -928,6 +934,13 @@ struct EditorChange
 {
 	/// "editor"
 	bool editor {false};
+};
+
+/// The data of "account.debugger": staff gave or removed the debugger mark of the account
+struct DebuggerChange
+{
+	/// "debugger"
+	bool debugger {false};
 };
 
 /// The data of "account.banned"
