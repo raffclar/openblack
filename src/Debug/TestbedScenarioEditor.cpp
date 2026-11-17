@@ -255,6 +255,20 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_swamp",
+	    .name = "The green mist over a swamp of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 1 and the game loads it. Fly about "
+	                   "800 metres to the west of the start area, to the swamp at about (2010, 1730).",
+	    .expected = "A sheet of dark green mist stands over the wet ground of a swamp: a group of four puffs, a pair "
+	                "of puffs and a line of five flat puffs, as on the fourth land of the story. Bushes, oaks, "
+	                "birches and other trees of the stream banks of the story grow in the swamp.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_cliffs",
 	    .name = "The terraces, cliffs and shore of a generated land",
 	    .facet = Facet::Editor,

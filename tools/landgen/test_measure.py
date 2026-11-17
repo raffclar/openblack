@@ -131,6 +131,31 @@ class CursedMeasures(unittest.TestCase):
         self.assertFalse(measure.is_dark(0x7E50632F))
 
 
+class SwampMeasures(unittest.TestCase):
+    def test_the_wet_ground_and_its_trees(self):
+        land = np.zeros((10, 10), dtype=bool)
+        land[0:10, 0:5] = True
+        wet = np.zeros_like(land)
+        wet[0:2, 0:5] = True
+        # Two trees on the wet ground, one on the dry ground and one in the sea
+        trees = [(0.0, 0.0), (10.0, 40.0), (50.0, 20.0), (50.0, 90.0)]
+        mists = [(0.0, 0.0, 0x8650632F), (40.0, 30.0, 0xFF50632F), (900.0, 0.0, 0x8650632F), (5.0, 5.0, 0x80808080)]
+        out = measure.swamp_measures(wet, land, trees, mists)
+        self.assertAlmostEqual(out["wet_pct"], 20.0)
+        self.assertAlmostEqual(out["wet_trees_per_km2"], 2 / (10 * 100 / 1e6))
+        # 50 corners of land are 0.005 square kilometres
+        self.assertAlmostEqual(out["green_mists_per_km2"], 3 / 0.005)
+        self.assertAlmostEqual(out["green_mist_sheets_per_km2"], 2 / 0.005)
+
+    def test_no_wet_ground_and_no_mist(self):
+        land = np.ones((4, 4), dtype=bool)
+        out = measure.swamp_measures(np.zeros_like(land), land, [(0.0, 0.0)], [])
+        self.assertEqual(out["wet_pct"], 0.0)
+        self.assertNotIn("wet_trees_per_km2", out)
+        self.assertEqual(out["green_mists_per_km2"], 0.0)
+        self.assertEqual(out["green_mist_sheets_per_km2"], 0.0)
+
+
 class Comparison(unittest.TestCase):
     def test_the_status_of_a_number(self):
         self.assertEqual(measure.status_of(5, (1, 10)), "ok")
@@ -173,6 +198,9 @@ class Dump(unittest.TestCase):
         self.assertEqual(model["mists"], 2)
         self.assertEqual(model["dark_mists"], 1)
         self.assertEqual(len(model["cursed_things"]), 3)
+        # The surfaces 0 and 3 are wet sand and grass, which are not wet ground
+        self.assertFalse(model["wet"].any())
+        self.assertEqual(len(model["mist_list"]), 2)
 
 
 if __name__ == "__main__":

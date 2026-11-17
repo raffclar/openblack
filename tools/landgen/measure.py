@@ -41,6 +41,13 @@ CURSED_LINK = 150.0
 DARK_CHANNEL = 0x50
 SURFACE_SAND = (0, 1, 2)  # wet sand, sand and desert sand of the generator
 GROUND_SAND = (7, 8)  # sand and wet sand of the land files
+# The wet grounds: river mud and wet grass of the generator, and river mud, wet earth, wet gravel, wet solid rock, wet
+# grass and rushes of the land files
+SURFACE_WET = (7, 8)
+GROUND_WET = (3, 4, 10, 16, 19, 21)
+# The colour of the green mist of the swamps, without its alpha. The puffs of one sheet are 70 m or less apart.
+GREEN_MIST = 0x50632F
+SHEET_LINK = 70.0
 
 
 def percentile(values, p):
@@ -234,6 +241,33 @@ def cursed_measures(things, dark_mists):
     return {"cursed_patches": len(set(groups.tolist())), "dark_mists": dark_mists}
 
 
+def swamp_measures(wet, land_mask, trees, mists):
+    """The numbers of the wet ground and the green mist. wet and land_mask are masks of the corners, trees a list of
+    (x, z) in metres and mists a list of (x, z, colour)."""
+    n = int(land_mask.sum())
+    out = {}
+    wet = wet & land_mask
+    count = int(wet.sum())
+    if n:
+        out["wet_pct"] = count * 100.0 / n
+    if count:
+        side = wet.shape[0]
+        on = 0
+        for x, z in trees:
+            i = min(max(int(round(x / CELL)), 0), side - 1)
+            j = min(max(int(round(z / CELL)), 0), wet.shape[1] - 1)
+            on += bool(wet[i, j])
+        out["wet_trees_per_km2"] = on / (count * CELL * CELL / 1e6)
+    # The green mist for each square kilometre of land, so that a large land compares with the lands of the story
+    green = [(m[0], m[1]) for m in mists if (int(m[2]) & 0xFFFFFF) == GREEN_MIST]
+    sheets = len(set(groups_of(np.array(green, dtype=float).reshape(-1, 2), SHEET_LINK).tolist()))
+    if n:
+        area = n * CELL * CELL / 1e6
+        out["green_mists_per_km2"] = len(green) / area
+        out["green_mist_sheets_per_km2"] = sheets / area
+    return out
+
+
 def measure_land(land):
     """All numbers of a land. land is a dict with heights, land, sand, trees (a list of (x, z, kind, in_forest)), rocks
     (a list of (x, z)), forests, footpaths, mists and towns."""
@@ -247,6 +281,8 @@ def measure_land(land):
         out[key] = land[key]
     out.update(big_forest_measures(land.get("big_forests", []), land.get("trees", []), area))
     out.update(cursed_measures(land.get("cursed_things", []), land.get("dark_mists", 0)))
+    if "wet" in land:
+        out.update(swamp_measures(land["wet"], land["land"], [(t[0], t[1]) for t in trees], land.get("mist_list", [])))
     kinds = {}
     for t in trees:
         kinds[t[2]] = kinds.get(t[2], 0) + 1
@@ -278,7 +314,9 @@ def load_dump(path):
     tables = [np.array(c, dtype=int).reshape(256, 3) for c in d["countries"]]
     surfaces = d["surfaces"]
     land = (alt > 0) & (water == 0)
-    sand = sand_mask(country, alt, tables, lambda i: surfaces[i] if i < len(surfaces) else -1, SURFACE_SAND)
+    surface_of = lambda i: surfaces[i] if i < len(surfaces) else -1  # noqa: E731
+    sand = sand_mask(country, alt, tables, surface_of, SURFACE_SAND)
+    wet = sand_mask(country, alt, tables, surface_of, SURFACE_WET)
     trees, rocks, rock_poses, pillars, big_forests, cursed = [], [], [], [], [], []
     for feature in d["features"]:
         kind, typ, x, z, _angle, _size, _max, forest = feature[:8]
@@ -305,7 +343,8 @@ def load_dump(path):
             "sand": sand, "trees": trees, "rocks": rocks, "rock_poses": rock_poses, "pillars": pillars,
             "big_forests": big_forests, "forests": len(d["forests"]),
             "footpaths": d["footpaths"],
-            "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark)}
+            "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark),
+            "wet": wet, "mist_list": [(m[0], m[1], m[3]) for m in d["mists"] if len(m) >= 4]}
 
 
 def vanilla_models():
@@ -326,11 +365,13 @@ def vanilla_models():
             o["cls"] == "feature" and o["kind"] == "Crater")] + dark
         big_forests = [o["pos"] for o in objs if o["cls"] == "bigforest"]
         sand = land.land & np.isin(land.mtype, GROUND_SAND)
+        wet = land.land & np.isin(land.mtype, GROUND_WET)
+        mist_list = [(o["pos"][0], o["pos"][1], o.get("colour", 0)) for o in objs if o["cls"] == "mist"]
         yield {"name": name, "heights": land.H, "land": land.land, "sand": sand, "trees": trees, "rocks": rocks,
                "rock_poses": rock_poses, "pillars": pillars,
                "big_forests": big_forests,
                "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns),
-               "cursed_things": cursed, "dark_mists": len(dark)}
+               "cursed_things": cursed, "dark_mists": len(dark), "wet": wet, "mist_list": mist_list}
 
 
 def ranges_of(measures):
