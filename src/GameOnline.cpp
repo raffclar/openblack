@@ -665,7 +665,10 @@ void Game::TellLeaves()
 		{
 			Locator::gameInterface::value().ShowPlayerLeft(gui::ToUtf16(name));
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{} left the network game{}", name,
+		// The log names the god of the human, never the name of the player
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{} left the network game{}",
+		                   leave.god.has_value() ? fmt::format("The player of god {}", static_cast<int>(*leave.god))
+		                                         : std::string("An observer"),
 		                   notice.box ? ": the box tells the players" : "");
 	}
 }

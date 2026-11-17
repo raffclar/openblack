@@ -48,6 +48,10 @@ constexpr std::string_view k_DatabaseFolderName = ".sentry-native";
 /// The log file that the reports of the role attach. The game server attaches none: its log has the names of the
 /// players, and each player gives a separate choice for the error reports. The staff find the log of a game on the host.
 [[nodiscard]] std::optional<std::filesystem::path> LogAttachmentOf(Role role, std::string_view logFile);
+/// The log file that a report really attaches. The log can hold the name of a profile, the names of other players, the
+/// home folder of the user and other personal data, so only a report with personal data (the choice Full) attaches it.
+[[nodiscard]] std::optional<std::filesystem::path> LogAttachmentFor(const std::optional<std::filesystem::path>& logFile,
+                                                                    bool personalData);
 /// The folder of the reports that wait: next to the log file, or in the working folder when the log goes to the
 /// terminal
 [[nodiscard]] std::filesystem::path DatabaseFolder(std::string_view logFile);

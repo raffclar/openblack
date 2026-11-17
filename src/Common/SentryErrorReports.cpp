@@ -192,6 +192,13 @@ void SentryErrorReports::Apply()
 	const auto plan = ReportsPlanOf(_enabled, _account);
 	if (plan.running)
 	{
+		// The log goes with a report only for the choice Full. Sentry reads the attachments at its start, thus a change of
+		// that choice restarts the service.
+		if (_running && _logAttached != plan.personalData)
+		{
+			Stop();
+		}
+		_attachLog = plan.personalData;
 		Start();
 	}
 	else
@@ -302,15 +309,15 @@ void SentryErrorReports::Start()
 	}
 #ifdef _WIN32
 	sentry_options_set_database_pathw(options, _settings.databaseFolder.wstring().c_str());
-	if (_settings.attachment.has_value())
+	if (const auto log = LogAttachmentFor(_settings.attachment, _attachLog); log.has_value())
 	{
-		sentry_options_add_attachmentw(options, _settings.attachment->wstring().c_str());
+		sentry_options_add_attachmentw(options, log->wstring().c_str());
 	}
 #else
 	sentry_options_set_database_path(options, _settings.databaseFolder.string().c_str());
-	if (_settings.attachment.has_value())
+	if (const auto log = LogAttachmentFor(_settings.attachment, _attachLog); log.has_value())
 	{
-		sentry_options_add_attachment(options, _settings.attachment->string().c_str());
+		sentry_options_add_attachment(options, log->string().c_str());
 	}
 #endif
 	if (sentry_init(options) != 0)
@@ -328,7 +335,8 @@ void SentryErrorReports::Start()
 	crash_handler::ReclaimSystemHooks();
 	crash_handler::SetReportForwarder(ForwardCrash);
 	_running = true;
-	LogInfo("The error reports to Sentry started");
+	_logAttached = _attachLog;
+	LogInfo(_logAttached ? "The error reports to Sentry started, with the log" : "The error reports to Sentry started");
 }
 
 void SentryErrorReports::Stop()
@@ -340,6 +348,10 @@ void SentryErrorReports::Stop()
 	crash_handler::SetReportForwarder(nullptr);
 	sentry_close();
 	_running = false;
+	// A new start has no user and no log until Apply gives them again
+	_personalData = false;
+	_logAttached = false;
+	_namedAccount.clear();
 	LogInfo("The error reports to Sentry stopped");
 }
 

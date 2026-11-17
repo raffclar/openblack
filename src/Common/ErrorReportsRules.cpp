@@ -168,6 +168,11 @@ std::optional<std::filesystem::path> LogAttachmentOf(Role role, std::string_view
 	return LogAttachment(logFile);
 }
 
+std::optional<std::filesystem::path> LogAttachmentFor(const std::optional<std::filesystem::path>& logFile, bool personalData)
+{
+	return personalData ? logFile : std::nullopt;
+}
+
 std::optional<ReportsConsent> ParseReportsConsent(std::string_view text) noexcept
 {
 	if (text == "full")
