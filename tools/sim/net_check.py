@@ -3298,6 +3298,9 @@ def web_join_plan(options, join_url, ticket, turns):
                  "--sim-still-hand", "--sim-checksums", "-", "--join", web_join_path(join_url), "--join-ticket", ticket]
     if getattr(options, "web_part_at", None) is not None:
         arguments += ["--join-part-at", str(options.web_part_at)]
+    if getattr(options, "trace_draws", False):
+        # The web build has no file that a tool can read: the draw lines go with the checksum lines
+        arguments += ["--sim-trace-draws", "-"]
     if getattr(options, "web_creature", None):
         # The page reads the game folder at its own path
         arguments += ["--join-creature", "/game/" + options.web_creature.replace("\\", "/")]
@@ -3373,6 +3376,22 @@ def start_web_client(options, out, join_url, ticket, certs, turns, processes):
 def web_log_of(folder):
     """The game log of the web client: cdp-run writes the log that the page keeps to page-log.txt at the end"""
     return os.path.join(folder, "page-log.txt")
+
+
+def web_draw_trace(folder):
+    """The draw trace of the web client (--sim-trace-draws -): the page keeps its lines with the checksum lines. Writes
+    them to draws.tsv in the folder and returns its path, or None when the page wrote no draw line"""
+    path = os.path.join(folder, "checksums.jsonl")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as file:
+        lines = [line for line in file if not line.startswith("{")]
+    if not lines:
+        return None
+    trace = os.path.join(folder, "draws.tsv")
+    with open(trace, "w", encoding="utf-8") as file:
+        file.writelines(lines)
+    return trace
 
 
 def web_back_at(log):
@@ -4319,8 +4338,15 @@ def main():
             different = different or [options.web_part_at]
         web_same = not different and len(compared) >= max(1, (options.turns - 1 - min(web, default=0)) // 2)
         all_same = all_same and web_same
+        web_draws = None
+        if options.trace_draws and os.path.exists(server_trace):
+            web_trace = web_draw_trace(web_folder)
+            if web_trace is not None:
+                web_draws = draw_trace.compare(server_trace, web_trace)
+                for line in draw_trace.summary_lines(web_draws, "server", "the web client"):
+                    print(line)
         summary["clients"].append({"client": "web", "turns": len(web), "compared": len(compared),
-                                   "different": different[:20], "same": web_same})
+                                   "different": different[:20], "same": web_same, "draws_against_server": web_draws})
         if options.web_god:
             joins = lines_with(web_log_of(web_folder), ["Joined the game server"])
             in_slot = any(f"in slot {options.clients}" in line for line in joins)
