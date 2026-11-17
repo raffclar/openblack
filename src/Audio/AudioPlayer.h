@@ -20,6 +20,10 @@
 namespace openblack::audio
 {
 
+#ifdef __EMSCRIPTEN__
+class WebAudioOutput;
+#endif
+
 class AudioPlayer final: public AudioPlayerInterface
 {
 public:
@@ -61,10 +65,19 @@ public:
 
 private:
 	static void SetupLogging();
+#ifdef __EMSCRIPTEN__
+	/// Opens a device that the game mixes itself and sends to the audio worklet of the page. Returns false when the
+	/// page cannot play sound with an audio worklet.
+	bool OpenWebOutput();
+#endif
 	static void DeleteDevice(ALCdevice* device);
 	static void DeleteContext(ALCcontext* context);
 	std::unique_ptr<ALCdevice, decltype(&DeleteDevice)> _device;
 	std::unique_ptr<ALCcontext, decltype(&DeleteContext)> _context;
+#ifdef __EMSCRIPTEN__
+	/// The sound output of the page. It stops before the context and the device go.
+	std::unique_ptr<WebAudioOutput> _webOutput;
+#endif
 	float _volume {1.0f};
 };
 } // namespace openblack::audio
