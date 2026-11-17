@@ -113,15 +113,17 @@ struct TerraceSettings
 	float keepLowAltitude {90.0f};
 	float keepHighAltitude {190.0f};
 	/// The noise that moves the edges of the terraces: its largest change of altitude, and its waves across the map
-	float edgeNoise {340.0f};
+	float edgeNoise {420.0f};
 	float edgeFrequency {16.0f};
 	/// How far the warp moves the noise of the edges, in waves of the noise, and the part of the noise that is ridged
 	float edgeWarp {2.0f};
 	float edgeRidge {0.7f};
 	/// The largest change of the edge noise on the calm parts of the land, and the waves of the calm and rough parts
 	/// across the map. The edge noise is the change on the rough parts.
-	float calmNoise {100.0f};
+	float calmNoise {120.0f};
 	float roughFrequency {3.0f};
+	/// An area of a step with fewer corners than this goes down one step
+	int smallestArea {25};
 	/// The rise of the face of a cliff in altitude units for each corner, from the lowest to the highest that the noise
 	/// gives. 16 is about 47 degrees and 34 is about 66 degrees.
 	float cliffRiseLow {16.0f};

@@ -451,6 +451,56 @@ Grid<uint8_t> terrain::TerraceSteps(const Grid<float>& heights, std::span<const 
 		}
 	}
 
+	// A small area of a high step makes a spike, because its cliffs meet at the top. Each small area goes down one
+	// step, from the highest step down.
+	std::vector<uint8_t> seen(steps.values.size(), 0);
+	std::vector<uint32_t> area;
+	std::vector<uint32_t> stack;
+	for (auto level = static_cast<uint8_t>(levels.size()); level >= 1; --level)
+	{
+		std::ranges::fill(seen, uint8_t {0});
+		for (size_t start = 0; start < steps.values.size(); ++start)
+		{
+			if (steps.values[start] < level || seen[start] != 0)
+			{
+				continue;
+			}
+			area.clear();
+			stack.assign(1, static_cast<uint32_t>(start));
+			seen[start] = 1;
+			while (!stack.empty())
+			{
+				const auto index = stack.back();
+				stack.pop_back();
+				area.push_back(index);
+				const int x = steps.XOf(index);
+				const int z = steps.ZOf(index);
+				for (size_t i = 0; i < 4; ++i)
+				{
+					const int nx = x + k_Neighbours[i].dx;
+					const int nz = z + k_Neighbours[i].dz;
+					if (!steps.Contains(nx, nz))
+					{
+						continue;
+					}
+					const auto next = steps.Index(nx, nz);
+					if (steps.values[next] >= level && seen[next] == 0)
+					{
+						seen[next] = 1;
+						stack.push_back(static_cast<uint32_t>(next));
+					}
+				}
+			}
+			if (static_cast<int>(area.size()) < settings.smallestArea)
+			{
+				for (const auto index : area)
+				{
+					steps.values[index] = static_cast<uint8_t>(level - 1);
+				}
+			}
+		}
+	}
+
 	// A low step that higher steps close in all round would hold water as a lake above the sea, which the lands of the
 	// story do not have. A flood from the sea and the edges of the map lifts each closed step to the step of its rim.
 	std::vector<std::vector<uint32_t>> queues(levels.size() + 1);
