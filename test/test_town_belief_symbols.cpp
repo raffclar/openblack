@@ -112,10 +112,14 @@ TEST(TownBeliefSymbols, RanksGiveTheRankOfEachPlayer)
 	{
 		const auto some = std::span<const float>(beliefs).first(players);
 		const auto ranks = Ranks(some);
-		ASSERT_EQ(ranks.size(), players);
 		for (size_t player = 0; player < players; ++player)
 		{
-			EXPECT_EQ(ranks[player], Rank(some, player)) << "player " << player << " of " << players;
+			EXPECT_EQ(ranks.at(player), Rank(some, player)) << "player " << player << " of " << players;
+		}
+		// The places after the players of the game hold no rank
+		for (size_t player = players; player < ranks.size(); ++player)
+		{
+			EXPECT_EQ(ranks.at(player), 0) << "player " << player << " of " << players;
 		}
 	}
 	// A belief that is not a number gives the same ranks as each rank found alone

@@ -2724,3 +2724,5 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_landgen_settlement PRIVATE landgen)
 openblack_setup_and_add_test(test_page_runs test_page_runs.cpp)
+openblack_setup_and_add_test(test_town_belief_rule_equal test_town_belief_rule_equal.cpp)
+target_link_libraries(test_town_belief_rule_equal PRIVATE psys)
