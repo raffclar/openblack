@@ -228,6 +228,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("football-add-on", "Debug: turn on the switch of the free Soccer Add-On. Towns then build football pitches, and their villagers play football. Off by default, as on a normal install. It has no effect in a multiplayer game.")
 		("no-draw", "Tools: open the window but draw nothing on the graphics card, so that a long run that the inspector drives does not wait on a busy graphics card. Screenshots are black.")
 		("skip-logos", "Leave out the logo pictures at start-up, and the pre-intro film of a first run.")
+		("tips-screenshot", "Tools: save a picture of the tips screen at full fade, with its tip and version text, to this file. The renderer takes it, so it works with --background.", cxxopts::value<std::string>())
 		("logo-effect", "For developers and tools: play the logo effect before the first game, as a plain start does. A developer's or a tool's run otherwise leaves it out.")
 		("continue", "For developers and tools: start as a plain start does, a run of a developer too. The save on exit of the profile loads, with the menu over it, or a new game starts when there is none. A developer's or a tool's run otherwise starts a new game.")
 		("skip-opening", "For developers: start the new game with the start-of-game question answered, the story then going as it does for that answer: creature (straight to choosing a creature, the opening skipped), story (all of the first land's creature tutorial skipped too), old (keep the old creature; story when the profile has none), cow (debug: skip the creature choice, the Cow is the player's creature), normal; or ask, to be asked it as every new game is.", cxxopts::value<std::string>())
@@ -764,6 +765,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.filmSurface = result["film-surface"].as<std::string>();
 		args.preIntro = result.count("pre-intro") != 0;
 		args.skipLogos = result.count("skip-logos") != 0;
+		if (result.count("tips-screenshot") != 0)
+		{
+			args.tipsScreenshot = std::filesystem::path(result["tips-screenshot"].as<std::string>());
+		}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 		args.sentryTestError = result.count("sentry-test-error") != 0;
 		args.sentryTestTrap = result.count("sentry-test-trap") != 0;

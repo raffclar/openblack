@@ -301,6 +301,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "unlock-bonus-creatures", .takesValue = true},
     DeveloperOption {.name = "no-draw"},
     DeveloperOption {.name = "skip-logos"},
+    DeveloperOption {.name = "tips-screenshot", .takesValue = true},
     DeveloperOption {.name = "logo-effect"},
     DeveloperOption {.name = "continue"},
     DeveloperOption {.name = "skip-opening", .takesValue = true},

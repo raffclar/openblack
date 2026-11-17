@@ -324,6 +324,7 @@ void LoadingScreenSystem::PlayStartupScreens(const StartupScreenOptions& options
 		return;
 	}
 	_loadingScreen->SetBuild(options.build);
+	_tipsScreenshot = options.tipsScreenshot;
 	if (!options.skipLogos)
 	{
 		PlayLogoScreens();
@@ -588,6 +589,17 @@ void LoadingScreenSystem::StartTipOfTheDay()
 		PresentStartupFrame([this, fade](glm::u16vec2 resolution) { _loadingScreen->DrawTips(resolution, fade, 0.0f); });
 		fadeIn.Step(Milliseconds());
 		TakeStartupInput(_hooks);
+	}
+	// A tool asked for a picture: hold one frame at full fade, and ask the renderer for its picture
+	if (startup::TipPictureDue(_tipsScreenshot.has_value(), false, 1.0f) && !QuitRequested())
+	{
+		const auto path = *_tipsScreenshot;
+		_tipsScreenshot.reset();
+		PresentStartupFrame([this, &path](glm::u16vec2 resolution) {
+			_loadingScreen->DrawTips(resolution, 1.0f, 0.0f);
+			Locator::rendererInterface::value().RequestScreenshot(path);
+		});
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The tips screen picture is requested: {}", path.string());
 	}
 }
 

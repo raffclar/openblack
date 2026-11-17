@@ -80,6 +80,8 @@ private:
 	std::optional<loading::LoadingClock::Mode> _loadingLook;
 	/// The tips screen faded in once. Later loads show it at once.
 	bool _tipFadedIn {false};
+	/// Developer tools: the file for a picture of the tips screen, until the game takes it
+	std::optional<std::filesystem::path> _tipsScreenshot;
 };
 
 } // namespace openblack::ecs::systems

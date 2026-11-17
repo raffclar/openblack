@@ -47,6 +47,8 @@ struct StartupScreenOptions
 	bool preIntro {false};
 	/// The command line started a testbed scenario
 	bool scenario {false};
+	/// Developer tools: the file for a picture of the tips screen at full fade, through the renderer
+	std::optional<std::filesystem::path> tipsScreenshot;
 };
 
 /// A save box that the game shows as a frame of its own
