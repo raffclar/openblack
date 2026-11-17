@@ -476,6 +476,57 @@ TEST(GameTurnOrder, ADecidedGameDoesOnlyTheInputTheCountAndTheStepsAfterTheTurn)
 	EXPECT_EQ(recorder.Steps(), expected);
 }
 
+// When the input of the turn stops the clock, for example with a tap on the entrance of the temple, the world does not
+// do its turn. The input, the turn count, the end of the turn and the steps after the turn still play.
+TEST(GameTurnOrder, AnInputThatStopsTheClockSkipsTheTurnOfTheWorld)
+{
+	TurnRecorder recorder;
+	bool stopped = false;
+	PlayTurn(
+	    [&recorder, &stopped](Step step) {
+		    recorder(step);
+		    // The commands of the players take the player into the temple
+		    if (step == Step::PlayerCommands)
+		    {
+			    stopped = true;
+		    }
+	    },
+	    false, [&stopped] { return stopped; });
+	const std::vector<Step> expected {
+	    Step::DrawnPlaces,     Step::PlayerCommands, Step::HandStillness, Step::VirtualInfluence,  Step::HandInterface,
+	    Step::ChimneySmoke,    Step::Clock,          Step::SoundTags,     Step::Ambience,          Step::ScriptMusic,
+	    Step::Music,           Step::Autosave,       Step::GameOver,      Step::GlobalStatistics,  Step::RealWeather,
+	    Step::WalkerLookahead, Step::CreatureShapes, Step::LanternLights, Step::MapCellsAtTurnEnd, Step::InfluenceTurnEnd,
+	    Step::SyncChecksum,    Step::RunRecord};
+	EXPECT_EQ(recorder.Steps(), expected);
+}
+
+// The clock that stops after the clock step does not change the turn
+TEST(GameTurnOrder, AClockThatStopsAfterTheClockStepPlaysTheWholeTurn)
+{
+	TurnRecorder recorder;
+	bool stopped = false;
+	PlayTurn(
+	    [&recorder, &stopped](Step step) {
+		    recorder(step);
+		    if (step == Step::Living)
+		    {
+			    stopped = true;
+		    }
+	    },
+	    false, [&stopped] { return stopped; });
+	EXPECT_EQ(recorder.Steps(), PlayTurnSteps().Steps());
+}
+
+// A step with no stage after the start of the turn follows the stage before it, so a stopped clock skips it
+TEST(GameTurnOrder, AStoppedClockSkipsAStepWithNoStageInTheTurnOfTheWorld)
+{
+	const auto index =
+	    static_cast<size_t>(std::distance(k_Turn.begin(), std::ranges::find(k_Turn, Step::TownFlags, &Place::step)));
+	EXPECT_FALSE(PlaysWhileStopped(k_Turn, index));
+	EXPECT_TRUE(PlaysWhileStopped(k_Turn, 0));
+}
+
 // A step with no stage between two steps of the players' turns is part of the players' turns
 TEST(GameTurnOrder, AStepWithNoStageFollowsTheStepBeforeIt)
 {

@@ -35,9 +35,14 @@ bool Finished(const Settings& settings, uint32_t turn)
 	return settings.untilTurn.has_value() && turn >= *settings.untilTurn;
 }
 
-bool EndsHeldInTemple(const Settings& settings, bool clockHeld, bool networkGame, bool scenarioGaveAll)
+bool EndsHeldInTemple(const Settings& settings, bool clockHeld, bool networkGame, bool toolInputDone)
 {
-	return settings.untilTurn.has_value() && clockHeld && !networkGame && scenarioGaveAll;
+	return settings.untilTurn.has_value() && clockHeld && !networkGame && toolInputDone;
+}
+
+bool ToolInputDone(bool scenarioGaveAll, bool playsFiles, bool recordedInputWaits)
+{
+	return scenarioGaveAll || (playsFiles && !recordedInputWaits);
 }
 
 bool EndsAtGameOver(const Settings& settings, bool clockHeld, bool gameOver)

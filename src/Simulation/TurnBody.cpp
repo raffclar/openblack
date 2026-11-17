@@ -1191,6 +1191,7 @@ void PlayTurn(TurnViewInterface& view)
 	                                      Locator::time::value().GetTurn() + 1);
 #endif
 	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn
+	// When the input stops the clock, the turn does only the input and the end of the turn
 	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
 	// The queue of the main thread knows the step, so that the check of the turn's calls can name it
 	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
@@ -1214,7 +1215,13 @@ void PlayTurn(TurnViewInterface& view)
 			    stepTimes.Add(step, std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count());
 		    }
 	    },
-	    decided);
+	    decided,
+	    // The input of a game alone can stop the clock, for example with a tap on the entrance of the temple. Then the
+	    // world does not do the rest of this turn.
+	    [] {
+		    const auto& clock = Locator::time::value();
+		    return clock.IsPaused() || clock.IsHeld();
+	    });
 	if (stepTimesFrom.has_value() && stepTimes.Total() >= *stepTimesFrom)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
