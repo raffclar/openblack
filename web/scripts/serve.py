@@ -29,6 +29,8 @@ extra_connect = ""
 game_upstream = None
 
 GAME_PATH = "/game/"
+# The list of the game files that the site gives to an account. This server has no game files.
+ASSET_INDEX_PATH = "/assets/index.json"
 
 
 def upstream_of(origin):
@@ -81,6 +83,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if game_upstream is not None and self.path.startswith(GAME_PATH):
             self.pass_to_game_server()
+            return
+        if self.path.split("?", 1)[0] == ASSET_INDEX_PATH:
+            # The page asks for this list at each start. An answer with no content gives no game files and no
+            # error in the browser console, as 404 would.
+            self.send_response(204)
+            self.end_headers()
             return
         super().do_GET()
 
