@@ -173,4 +173,11 @@ private:
 	uint32_t _last;
 };
 
+/// Developer tools: gives true when the tips screen at full fade is due a picture. The picture is of the first frame at full
+/// fade, and the game takes it one time.
+[[nodiscard]] constexpr bool TipPictureDue(bool requested, bool taken, float fade) noexcept
+{
+	return requested && !taken && fade >= 1.0f;
+}
+
 } // namespace openblack::startup

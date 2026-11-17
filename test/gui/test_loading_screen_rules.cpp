@@ -476,3 +476,12 @@ TEST(LoadingScreen, LayoutTextBoxes)
 	EXPECT_EQ(small.start, 166 + 147);
 	EXPECT_NEAR(small.size, 35.0f * 480.0f / 650.0f, 1e-4f);
 }
+
+TEST(Startup, TheTipPictureIsDueOneTimeAtFullFade)
+{
+	EXPECT_TRUE(TipPictureDue(true, false, 1.0f));
+	EXPECT_TRUE(TipPictureDue(true, false, 1.5f));
+	EXPECT_FALSE(TipPictureDue(true, false, 0.99f));
+	EXPECT_FALSE(TipPictureDue(true, true, 1.0f));
+	EXPECT_FALSE(TipPictureDue(false, false, 1.0f));
+}

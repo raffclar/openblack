@@ -248,7 +248,8 @@ void Game::PlayStartupScreens()
 	Locator::loadingScreenSystem::value().PlayStartupScreens({.build = _buildVersion.Short(),
 	                                                          .skipLogos = _skipLogos,
 	                                                          .preIntro = _preIntro,
-	                                                          .scenario = _scenarioRequest.has_value()});
+	                                                          .scenario = _scenarioRequest.has_value(),
+	                                                          .tipsScreenshot = _tipsScreenshot});
 }
 
 void Game::BeginLoadingScreen(loading::LoadingClock::Mode look)
