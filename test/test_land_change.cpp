@@ -100,6 +100,46 @@ TEST(ProfileAlignment, ANetworkGameDoesNotUseTheProfileOfThisComputer)
 	EXPECT_FALSE(KeptInOwnProfile(true));
 }
 
+// A player who leaves a network game for the skirmish box stays on the network land under the box. That land never
+// changes the profile, because the god of this computer on it can be the god of another human. The next land of this
+// computer alone changes the profile again.
+TEST(ProfileAlignment, ALandOfANetworkGameNeverChangesTheProfileAfterThePlayerLeaves)
+{
+	using namespace openblack::profile_alignment;
+	NetworkLand land;
+	// A single player land
+	land.StartLand(false);
+	land.See(false);
+	EXPECT_TRUE(KeptInOwnProfile(land.Is()));
+	// A land of a network game
+	land.StartLand(true);
+	land.See(true);
+	EXPECT_FALSE(KeptInOwnProfile(land.Is()));
+	// The player leaves the network game, and the network land stays under the skirmish box
+	land.See(false);
+	EXPECT_FALSE(KeptInOwnProfile(land.Is()));
+	land.See(false);
+	EXPECT_FALSE(KeptInOwnProfile(land.Is()));
+	// The skirmish land starts after the network game ended
+	land.StartLand(false);
+	land.See(false);
+	EXPECT_TRUE(KeptInOwnProfile(land.Is()));
+}
+
+// A land that becomes the land of a network game after it started, as a world state that a player who joins late
+// loads, is a land of a network game from that frame.
+TEST(ProfileAlignment, ALandBecomesALandOfANetworkGameWhenTheGameBecomesOne)
+{
+	using namespace openblack::profile_alignment;
+	NetworkLand land;
+	land.StartLand(false);
+	EXPECT_TRUE(KeptInOwnProfile(land.Is()));
+	land.See(true);
+	EXPECT_FALSE(KeptInOwnProfile(land.Is()));
+	land.See(false);
+	EXPECT_FALSE(KeptInOwnProfile(land.Is()));
+}
+
 TEST(ProfileAlignment, TheAlignmentIsKeptEverySixHundredTurnsAndAtOnceOnANewLand)
 {
 	using namespace openblack::profile_alignment;

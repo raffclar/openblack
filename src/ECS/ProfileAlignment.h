@@ -81,12 +81,28 @@ using SentAlignment = std::function<std::optional<float>(PlayerNames god)>;
 /// with the start. A god with no such player starts at 0. The neutral player does not change.
 void StartGods(ecs::Registry& registry, const SentAlignment& sent);
 
-/// Whether the game keeps the player's alignment with the profile of this computer. A network game does not change
-/// the profile's alignment.
-[[nodiscard]] constexpr bool KeptInOwnProfile(bool networkGame)
+/// Whether the game keeps the player's alignment with the profile of this computer. A land of a network game does not
+/// change the profile's alignment.
+[[nodiscard]] constexpr bool KeptInOwnProfile(bool landOfNetworkGame)
 {
-	return !networkGame;
+	return !landOfNetworkGame;
 }
+
+/// Records whether the land that is loaded now is the land of a network game. A player who leaves the network game
+/// can stay on that land for some time, for example under the skirmish box. The land stays a land of a network game
+/// until the next land replaces it. Thus the profile never gets the alignment of a god of a network game.
+class NetworkLand
+{
+public:
+	/// A new land starts. It is a land of a network game when the game is a network game at this time.
+	constexpr void StartLand(bool networkGame) { _networkLand = networkGame; }
+	/// The game is (or is not) a network game now. A land that was a land of a network game stays one.
+	constexpr void See(bool networkGame) { _networkLand = _networkLand || networkGame; }
+	[[nodiscard]] constexpr bool Is() const { return _networkLand; }
+
+private:
+	bool _networkLand {false};
+};
 
 /// Whether the player's alignment is due to be kept with their profile at this game turn, it having last been kept at
 /// another. The turns count again from nothing on each new land while the turn it was last kept at stays, so the first

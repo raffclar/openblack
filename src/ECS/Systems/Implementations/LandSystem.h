@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "ECS/ProfileAlignment.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "Enums.h"
 
@@ -141,6 +142,8 @@ private:
 	uint32_t _landLoads {0};
 	/// The map script of a land of a network game runs now
 	bool _runsNetworkMapScript {false};
+	/// Whether the land that is loaded now is the land of a network game, also after the player left the game
+	profile_alignment::NetworkLand _networkLand;
 	bool _allComputerGods {false};
 	/// A load of a land does not clear them
 	lhscriptx::ScriptLineValues _scriptLineValues;
