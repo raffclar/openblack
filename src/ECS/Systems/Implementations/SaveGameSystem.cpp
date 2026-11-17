@@ -268,7 +268,7 @@ ecs::save_files::SaveStep MindStep(std::filesystem::path path, creaturemind::Min
 		const bool written = creaturemind::WriteFile(path, *mind) == creaturemind::MindResult::Success;
 		if (!written)
 		{
-			SPDLOG_LOGGER_WARN(Log(), "The game could not write {}", path.generic_string());
+			SPDLOG_LOGGER_WARN(Log(), "The game could not write {}", player_profiles::PathForLog(path));
 		}
 		return written;
 	};
@@ -280,7 +280,7 @@ ecs::save_files::SaveStep SlotPictureStep(std::filesystem::path pictures, uint32
 	return [pictures = std::move(pictures), slot](filesystem::FileSystemInterface& files) {
 		if (!files.MakeFolder(pictures))
 		{
-			SPDLOG_LOGGER_WARN(Log(), "The game could not make the folder {}", pictures.generic_string());
+			SPDLOG_LOGGER_WARN(Log(), "The game could not make the folder {}", player_profiles::PathForLog(pictures));
 			return false;
 		}
 		const auto largePath = pictures / gamesave::LargePictureFileName(slot);
@@ -311,7 +311,8 @@ ecs::save_files::SaveStep ChallengePictureCopyStep(std::filesystem::path from, s
 		{
 			if (const auto bytes = ReadFile(from / name); bytes.has_value() && !files.WriteAll(to / name, *bytes))
 			{
-				SPDLOG_LOGGER_WARN(Log(), "The game could not copy the challenge picture {}", (to / name).generic_string());
+				SPDLOG_LOGGER_WARN(Log(), "The game could not copy the challenge picture {}",
+				                   player_profiles::PathForLog(to / name));
 			}
 		}
 		return true;
@@ -668,7 +669,7 @@ MindForLoad MindToLoad(const gamesave::CreatureRecord& record, const std::filesy
 	auto mind = std::make_shared<creaturemind::MindFileData>();
 	if (creaturemind::ReadFile(*path, *mind) != creaturemind::MindResult::Success)
 	{
-		SPDLOG_LOGGER_WARN(Log(), "The mind file {} could not be read", path->generic_string());
+		SPDLOG_LOGGER_WARN(Log(), "The mind file {} could not be read", player_profiles::PathForLog(*path));
 		return found;
 	}
 	found.mind = std::move(mind);
@@ -1257,7 +1258,7 @@ bool SaveGameSystem::LoadSlot(uint32_t slot)
 		{
 			// The previous land and the next land load from the folder of another land, so the log gives the folder
 			SPDLOG_LOGGER_WARN(Log(), "Slot {} has no world file in {}", slot,
-			                   gamesave::LoadSlotFolder(slot, land).generic_string());
+			                   player_profiles::PathForLog(gamesave::LoadSlotFolder(slot, land)));
 			return false;
 		}
 		// A slot of the game itself: its world file in the game's layout
