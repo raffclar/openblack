@@ -154,6 +154,13 @@ if (ANDROID OR IOS)
 else ()
   set(OPENBLACK_SENTRY_DEFAULT ON)
 endif ()
+# The web build writes the DWARF debug information of the game code (names and source lines) to a file of its own, so
+# that Sentry can show the source lines of the stacks of the web reports. The page never loads the file. The shipped
+# WebAssembly keeps only its build id and the name of the file. Emscripten then runs fewer optimisations of the final
+# WebAssembly (see the note at OPENBLACK_WEB_DEBUG_FILE in src/CMakeLists.txt).
+option(OPENBLACK_WEB_DEBUG_INFO
+       "Web build: write the DWARF debug information to a separate file" OFF
+)
 option(OPENBLACK_SENTRY "Send error and crash reports to Sentry"
        ${OPENBLACK_SENTRY_DEFAULT}
 )

@@ -3,8 +3,8 @@
 
 const assert = require('node:assert/strict');
 const {
-  ErrorReports, scrubEvent, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
-  k_LogAttachmentName,
+  ErrorReports, scrubEvent, applyIpChoice, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
+  wasmModuleInfo, addWasmDebugImage, k_LogAttachmentName,
 } = require('../web/page/launcher-reports.js');
 
 let count = 0;
@@ -123,7 +123,7 @@ check('the SDK gets the settings of the game, the role tag and no default integr
   assert.equal(options.dsn, settings.dsn);
   assert.equal(options.release, 'openblack@0.1.0+abc');
   assert.equal(options.environment, 'production');
-  assert.equal(options.sendDefaultPii, false);
+  assert.equal(options.sendDefaultPii, true);
   assert.equal(options.tracesSampleRate, 0);
   assert.equal(options.defaultIntegrations, false);
   assert.deepEqual(options.integrations, ['dedupe', 'linked', 'http']);
@@ -173,6 +173,13 @@ check('without consent the event asks Sentry to keep no IP address', () => {
   assert.equal(event.sdk.name, 'sentry.javascript.browser');
   assert.doesNotMatch(JSON.stringify(event), /matt/);
 });
+check('the envelope takes the IP choice after the SDK wrote its own', () => {
+  const make = () => [{}, [[{ type: 'event' }, { sdk: { settings: { infer_ip: 'auto' } } }],
+    [{ type: 'attachment' }, 'text']]];
+  assert.equal(applyIpChoice(make(), undefined)[1][0][1].sdk.settings.infer_ip, 'never');
+  assert.equal(applyIpChoice(make(), { id: 7, username: 'matt' })[1][0][1].sdk.settings.infer_ip, 'auto');
+  assert.equal(applyIpChoice(make(), undefined)[1][1][1], 'text');
+});
 check('with the choice full the event names only the id and the name of the account', () => {
   const event = scrubEvent({ user: { email: 'a@b.c', segment: 'x' } }, { id: 7, username: 'matt' });
   assert.deepEqual(event.user, { id: '7', username: 'matt', ip_address: '{{auto}}' });
@@ -183,7 +190,7 @@ check('the reports name the user that the game gives, and a stop forgets it', as
   reports.start(settings);
   await settle();
   const options = sentry.calls.find((call) => call[0] === 'init')[1];
-  assert.equal(options.sendDefaultPii, false);
+  assert.equal(options.sendDefaultPii, true);
   assert.equal(options.beforeSend({ user: { ip_address: '1.2.3.4' } }, {}).user, undefined);
   reports.setUser({ id: 7, username: 'matt' });
   assert.equal(options.beforeSend({}, {}).user.username, 'matt');
@@ -267,6 +274,58 @@ check('the event of a failure of the game goes to Sentry with its fingerprint, t
   assert.deepEqual(event.fingerprint, ['map-download', 'piece']);
   assert.deepEqual(event.tags, { map_step: 'piece' });
   assert.deepEqual(event.extra, { map_offset: '0' });
+});
+
+// A WebAssembly module with a build id and the name of a debug file in its custom sections
+const customSection = (name, bytes) => {
+  const nameBytes = Buffer.from(name, 'utf-8');
+  const body = Buffer.concat([Buffer.from([nameBytes.length]), nameBytes, Buffer.from(bytes)]);
+  return Buffer.concat([Buffer.from([0, body.length]), body]);
+};
+const k_BuildId = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe,
+  0xaa, 0xbb, 0xcc, 0xdd];
+const wasmModule = (sections) => new WebAssembly.Module(Buffer.concat([
+  Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]), ...sections]));
+
+check('the page reads the build id and the debug file of the module', () => {
+  const info = wasmModuleInfo(wasmModule([customSection('build_id', k_BuildId),
+    customSection('external_debug_info', Buffer.from('openblack.debug.wasm'))]));
+  assert.equal(info.buildId, '0123456789abcdef1032547698badcfeaabbccdd');
+  assert.equal(info.debugFile, 'openblack.debug.wasm');
+  assert.deepEqual(wasmModuleInfo(wasmModule([])), { buildId: undefined, debugFile: undefined });
+});
+const wasmEvent = () => ({
+  exception: { values: [{ type: 'std::runtime_error', stacktrace: { frames: [
+    { filename: 'https://example.org/play/game/openblack.js', function: 'callMain', lineno: 4, colno: 9 },
+    { filename: 'https://example.org/play/game/openblack.wasm:wasm-function[1234]:0x5a6b7', function: 'main' },
+    { abs_path: 'https://example.org/play/game/openblack.wasm:wasm-function[77]:0x1f', function: 'abort' },
+  ] } }] },
+});
+check('the wasm frames of a report name the instruction and the debug image of the module', () => {
+  const event = addWasmDebugImage(wasmEvent(), '0123456789abcdef1032547698badcfeaabbccdd');
+  const [jsFrame, mainFrame, abortFrame] = event.exception.values[0].stacktrace.frames;
+  assert.equal(jsFrame.instruction_addr, undefined, 'the frames of the JavaScript code do not change');
+  assert.equal(jsFrame.lineno, 4);
+  assert.deepEqual(mainFrame, { filename: 'https://example.org/play/game/openblack.wasm',
+    abs_path: 'https://example.org/play/game/openblack.wasm', function: 'main', instruction_addr: '0x5a6b7',
+    addr_mode: 'rel:0', platform: 'native' });
+  assert.equal(abortFrame.instruction_addr, '0x1f');
+  assert.deepEqual(event.debug_meta.images, [{ type: 'wasm', code_id: '0123456789abcdef1032547698badcfeaabbccdd',
+    code_file: 'https://example.org/play/game/openblack.wasm', debug_id: '0123456789abcdef1032547698badcfe0' }]);
+});
+check('a report keeps its frames when the build id is not known or no frame is in the wasm code', () => {
+  assert.deepEqual(addWasmDebugImage(wasmEvent(), undefined), wasmEvent());
+  const event = { exception: { values: [{ stacktrace: { frames: [{ filename: 'https://example.org/a.js' }] } }] } };
+  assert.equal(addWasmDebugImage(event, 'abcd').debug_meta, undefined);
+  assert.deepEqual(addWasmDebugImage({ message: 'Desync: A' }, 'abcd'), { message: 'Desync: A' });
+});
+check('the options of the SDK add the debug image and remove the personal data', () => {
+  const options = sentryOptions(fakeSentry(), settings, () => '', () => undefined, () => 'abcd');
+  const event = options.beforeSend({ user: { id: 'x' }, exception: { values: [{ stacktrace: { frames: [
+    { filename: 'https://example.org/openblack.wasm?args=x:wasm-function[1]:0x10' }] } }] } }, {});
+  assert.equal(event.user, undefined);
+  assert.equal(event.debug_meta.images[0].code_file, 'https://example.org/openblack.wasm');
+  assert.equal(event.exception.values[0].stacktrace.frames[0].instruction_addr, '0x10');
 });
 
 (async () => {

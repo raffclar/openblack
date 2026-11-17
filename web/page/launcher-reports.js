@@ -8,6 +8,10 @@
 // attachment. The reports have no page parameters and no secrets: the page removes them before a report goes. They
 // have no user and no IP address, unless the lobby account of the player gave the choice "full" on the site. Then the
 // game gives the page the id and the name of the account (setUser), and Sentry takes the IP address of the report.
+//
+// The frames of the WebAssembly code in a report have the offset of each instruction in the module. The page gives the
+// build id of the module with each report, so that Sentry finds the debug file of the build and shows the function
+// names and the source lines. The deploy of the build gives the debug file to Sentry. The page never loads it.
 'use strict';
 
 // The file of the Sentry browser SDK next to the page (the build copies it there)
@@ -20,6 +24,9 @@ const k_RoleTagName = 'role';
 const k_CloseMilliseconds = 2000;
 // The most breadcrumbs that one report keeps
 const k_MostBreadcrumbs = 100;
+// A frame of the WebAssembly code in a stack of the browser: the address of the module, the index of the function and
+// the offset of the instruction in the module
+const k_WasmFramePattern = /^(.*?):wasm-function\[\d+\]:(0x[0-9a-fA-F]+)$/;
 
 /** The text with each secret in it replaced by a mark, as the game does */
 function maskSecrets(text) {
@@ -100,15 +107,95 @@ function scrubEvent(event, user) {
 }
 
 /**
+ * Sets the choice about the IP address in each event of an envelope, just before the envelope goes. The SDK writes its
+ * own choice into the events after the function scrubEvent ran, and with sendDefaultPii the SDK choice is "auto".
+ * An account with the choice "full" keeps "auto". All other reports get "never", so that Sentry keeps no IP address.
+ */
+function applyIpChoice(envelope, user) {
+  for (const [header, payload] of (envelope && envelope[1]) || []) {
+    if (header && header.type === 'event' && payload && typeof payload === 'object') {
+      payload.sdk = payload.sdk || {};
+      payload.sdk.settings = { ...(payload.sdk.settings || {}), infer_ip: user ? 'auto' : 'never' };
+    }
+  }
+  return envelope;
+}
+
+/** The hexadecimal text of the bytes */
+function hexText(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * The build id of a WebAssembly module and the name of its debug file, from the custom sections of the module. The
+ * build id is undefined when the module has no build id.
+ */
+function wasmModuleInfo(module, wasm = globalThis.WebAssembly) {
+  const buildIds = wasm.Module.customSections(module, 'build_id');
+  const debugFiles = wasm.Module.customSections(module, 'external_debug_info');
+  return {
+    buildId: buildIds.length > 0 && buildIds[0].byteLength > 0 ? hexText(new Uint8Array(buildIds[0])) : undefined,
+    debugFile: debugFiles.length > 0 ? new TextDecoder('utf-8').decode(new Uint8Array(debugFiles[0])) : undefined,
+  };
+}
+
+/**
+ * The debug image of the WebAssembly module for Sentry. Sentry finds the debug file of the build with the debug id,
+ * which is the first 16 bytes of the build id (as the Sentry CLI makes it when it gets the debug file).
+ */
+function wasmDebugImage(buildId, codeFile) {
+  return {
+    type: 'wasm',
+    code_id: buildId,
+    code_file: codeFile,
+    debug_id: `${buildId.padEnd(32, '0').slice(0, 32)}0`,
+  };
+}
+
+/**
+ * Gives the frames of the WebAssembly code the offset of their instruction and the debug image of the module, so that
+ * Sentry can find the function and the source line of each frame. The event does not change when the build id is not
+ * known or when no frame is in the WebAssembly code. The page has one module only.
+ */
+function addWasmDebugImage(event, buildId) {
+  if (!buildId) {
+    return event;
+  }
+  let codeFile;
+  for (const value of (event.exception && event.exception.values) || []) {
+    for (const frame of (value.stacktrace && value.stacktrace.frames) || []) {
+      const match = k_WasmFramePattern.exec(frame.filename || '') || k_WasmFramePattern.exec(frame.abs_path || '');
+      if (!match) {
+        continue;
+      }
+      const file = addressWithoutParameters(match[1]);
+      codeFile = codeFile || file;
+      frame.filename = file;
+      frame.abs_path = file;
+      frame.instruction_addr = match[2];
+      frame.addr_mode = 'rel:0';
+      frame.platform = 'native';
+    }
+  }
+  if (codeFile) {
+    // The frames name the image with its place in the list: the image of the module is the first
+    const images = (event.debug_meta && event.debug_meta.images) || [];
+    event.debug_meta = { ...event.debug_meta, images: [wasmDebugImage(buildId, codeFile), ...images] };
+  }
+  return event;
+}
+
+/**
  * The options of the Sentry SDK. The SDK uses only the integrations in the list: the page reports the errors itself,
  * and makes its own breadcrumbs. The SDK makes no traces and no replays.
  */
-function sentryOptions(Sentry, settings, logText, user = () => undefined) {
+function sentryOptions(Sentry, settings, logText, user = () => undefined, buildId = () => undefined) {
   return {
     dsn: settings.dsn,
     release: settings.release,
     environment: settings.environment,
-    sendDefaultPii: false,
+    // The page removes the cookies, the headers and the IP address again unless the account chose "full" (scrubEvent)
+    sendDefaultPii: true,
     tracesSampleRate: 0,
     maxBreadcrumbs: k_MostBreadcrumbs,
     defaultIntegrations: false,
@@ -119,7 +206,7 @@ function sentryOptions(Sentry, settings, logText, user = () => undefined) {
         hint.attachments = [...(hint.attachments || []),
           { filename: k_LogAttachmentName, data: maskSecrets(logText()), contentType: 'text/plain' }];
       }
-      return scrubEvent(event, user());
+      return scrubEvent(addWasmDebugImage(event, buildId()), user());
     },
   };
 }
@@ -147,13 +234,15 @@ function desyncEvent(message, level, fingerprint, tags, extras) {
 
 /**
  * The reports of the page. The calls before the SDK loads wait in a list. A stop before the SDK loads removes the list.
- * The functions of the page (load, log) come from the caller, so that the tests can give fakes.
+ * The functions of the page (load, log, the build id of the module) come from the caller, so that the tests can give
+ * fakes.
  */
 class ErrorReports {
-  constructor({ loadSdk, logText, log }) {
+  constructor({ loadSdk, logText, log, buildId = () => undefined }) {
     this.loadSdk = loadSdk;
     this.logText = logText;
     this.log = log;
+    this.buildId = buildId;
     this.sentry = undefined;
     this.running = false;
     this.ready = false;
@@ -191,7 +280,11 @@ class ErrorReports {
         }
         this.sentry = Sentry;
         const environment = this.environment || settings.environment;
-        Sentry.init(sentryOptions(Sentry, { ...settings, environment }, this.logText, () => this.user));
+        Sentry.init(sentryOptions(Sentry, { ...settings, environment }, this.logText, () => this.user, this.buildId));
+        const client = Sentry.getClient && Sentry.getClient();
+        if (client && client.on) {
+          client.on('beforeEnvelope', (envelope) => applyIpChoice(envelope, this.user));
+        }
         this.ready = true;
         this.log('The error reports to Sentry started');
         const waiting = this.waiting;
@@ -311,7 +404,7 @@ function loadSentryScript(document) {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    ErrorReports, scrubEvent, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
-    k_LogAttachmentName, k_RoleTagName,
+    ErrorReports, scrubEvent, applyIpChoice, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
+    wasmModuleInfo, wasmDebugImage, addWasmDebugImage, k_LogAttachmentName, k_RoleTagName,
   };
 }

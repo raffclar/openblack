@@ -102,6 +102,9 @@ struct DesyncReport
 	uint32_t notSent {0};
 	/// A desync event: what its capture found, when it came in time
 	std::optional<DesyncDetail> detail;
+	/// The players of the game that agreed to be named. Only the game server fills it. The first one is the user of the
+	/// event.
+	std::vector<ReportedPlayer> players;
 };
 
 /// The events of desyncs that one run of the program can still send. It lives as long as the program runs.

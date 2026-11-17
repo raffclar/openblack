@@ -91,6 +91,11 @@ struct ReportsPlan
 /// join ticket of the player
 [[nodiscard]] bool MayNamePlayer(std::optional<ReportsConsent> ticketChoice) noexcept;
 
+/// The player that a report of the game server may name, or nothing when the choice on the join ticket of the player is
+/// not Full or the player has no name
+[[nodiscard]] std::optional<ReportedPlayer> ReportedPlayerOf(std::string_view name, std::string_view address,
+                                                             std::optional<ReportsConsent> ticketChoice);
+
 /// The type and the message of the exception of a crash event
 struct CrashEventTexts
 {

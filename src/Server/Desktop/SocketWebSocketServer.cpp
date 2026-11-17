@@ -259,6 +259,8 @@ struct SocketWebSocketServer::Connection
 	std::string peer;
 	/// The address that the limit per address counts for this connection. Empty when no count is kept.
 	std::string counted;
+	/// The address of the client, after the handshake: behind a proxy, the address that the proxy saw
+	std::string client;
 	/// The server had more bytes for the client than the queue takes: the connection ends at the next poll
 	bool overflow {false};
 	std::chrono::steady_clock::time_point started;
@@ -559,10 +561,14 @@ bool SocketWebSocketServer::Service(ConnectionId id, Connection& connection)
 		frames::Handshake handshake;
 		size_t used = 0;
 		const auto result = frames::ReadHandshake(connection.handshake, handshake, used);
+		if (result == frames::HandshakeResult::Ready)
+		{
+			connection.client = limits::ClientAddress(connection.peer, handshake.forwardedFor);
+		}
 		if (result == frames::HandshakeResult::Ready && connection.counted.empty())
 		{
 			// Behind the proxy, the limit per address counts the address of the proxy's client
-			const auto client = limits::ClientAddress(connection.peer, handshake.forwardedFor);
+			const auto& client = connection.client;
 			if (!limits::IsLoopback(client))
 			{
 				if (!_addresses.Add(client))
@@ -812,6 +818,12 @@ void SocketWebSocketServer::Close(ConnectionId id, uint16_t code)
 	{
 		connection.stage = Connection::Stage::Ended;
 	}
+}
+
+std::string SocketWebSocketServer::AddressOf(ConnectionId id) const
+{
+	const auto found = _connections.find(id);
+	return found == _connections.end() ? std::string() : found->second->client;
 }
 
 size_t SocketWebSocketServer::Count() const

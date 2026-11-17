@@ -121,6 +121,8 @@ struct ServerDesyncs
 {
 	error_reports::DesyncReportRule rule;
 	error_reports::DesyncRunBudget budget;
+	/// The players that a report may name, at the time of the report. Empty when the server names nobody.
+	std::function<std::vector<error_reports::ReportedPlayer>()> players;
 
 	/// Milliseconds of a steady clock
 	[[nodiscard]] static int64_t Now()
@@ -131,16 +133,18 @@ struct ServerDesyncs
 	/// Once a frame: the events that the flood limits let go now
 	void Update()
 	{
-		for (const auto& report : rule.Update(Now(), budget))
+		for (auto report : rule.Update(Now(), budget))
 		{
+			report.players = players ? players() : std::vector<error_reports::ReportedPlayer> {};
 			SendDesyncReport(report);
 		}
 	}
 	/// The end of the game: the summary, once
 	void Finish()
 	{
-		if (const auto summary = rule.Finish(budget); summary.has_value())
+		if (auto summary = rule.Finish(budget); summary.has_value())
 		{
+			summary->players = players ? players() : std::vector<error_reports::ReportedPlayer> {};
 			SendDesyncReport(*summary);
 		}
 	}
@@ -1335,6 +1339,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	// Each desync of a client goes to the error reports, inside the flood limits. The events have the id of the game.
 	desyncs = std::make_shared<ServerDesyncs>(
 	    ServerDesyncs {.rule = error_reports::DesyncReportRule(game.id, turn_codec::k_Version), .budget = {}});
+	desyncs->players = [&host] { return host.ReportedPlayers(); };
 	host.SetDesyncListener([desyncs](uint8_t seat, uint32_t turn, uint64_t server, uint64_t client) {
 		desyncs->rule.Detected(seat, {.turn = turn, .ownChecksum = server, .otherChecksum = client, .slot = seat},
 		                       ServerDesyncs::Now());

@@ -14,6 +14,7 @@
 
 #include <functional>
 #include <span>
+#include <string>
 #include <string_view>
 
 /// The WebSocket end of the game server. The clients open the game socket to it. It moves on only in Poll, with no
@@ -52,6 +53,9 @@ public:
 	virtual void Poll() = 0;
 	/// The number of open connections
 	[[nodiscard]] virtual size_t Count() const = 0;
+	/// The address of the client of the connection (behind a proxy, the address that the proxy saw). Empty when it is not
+	/// known.
+	[[nodiscard]] virtual std::string AddressOf(ConnectionId /*connection*/) const { return {}; }
 };
 
 /// The close codes of RFC 6455 and of the game server

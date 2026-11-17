@@ -64,6 +64,7 @@ public:
 	void Close(ConnectionId connection, uint16_t code) override;
 	void Poll() override;
 	[[nodiscard]] size_t Count() const override;
+	[[nodiscard]] std::string AddressOf(ConnectionId connection) const override;
 
 	struct Connection;
 	struct Tls;

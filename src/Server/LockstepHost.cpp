@@ -21,6 +21,7 @@
 
 #include "Common/DebugActs.h"
 #include "Common/DebugCheats.h"
+#include "Common/ErrorReportsRules.h"
 #include "Editor/EditorCreatureEdits.h"
 #include "Editor/EditorLandEdits.h"
 #include "Editor/EditorNetworkEdits.h"
@@ -259,6 +260,24 @@ void LockstepHost::Opened(ConnectionId connection)
 void LockstepHost::SendTo(ConnectionId connection, const game_socket::Frame& frame)
 {
 	_sockets.SendText(connection, game_socket::ToJson(frame));
+}
+
+std::vector<error_reports::ReportedPlayer> LockstepHost::ReportedPlayers() const
+{
+	std::vector<error_reports::ReportedPlayer> players;
+	for (const auto& [connection, peer] : _peers)
+	{
+		if (!peer.joined)
+		{
+			continue;
+		}
+		if (auto player = error_reports::ReportedPlayerOf(peer.name, _sockets.AddressOf(connection), peer.reports);
+		    player.has_value())
+		{
+			players.push_back(std::move(*player));
+		}
+	}
+	return players;
 }
 
 void LockstepHost::Broadcast(const game_socket::Frame& frame)
@@ -878,6 +897,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	peer.role = claims.role;
 	peer.name = claims.name;
 	peer.account = lan ? std::string() : claims.subject;
+	peer.reports = lan ? std::nullopt : error_reports::ParseReportsConsent(claims.errorReports);
 	peer.editor = claims.editor;
 	peer.debugger = claims.debugger;
 	if (claims.editor)
@@ -1627,6 +1647,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	peer.joined = true;
 	peer.name = claims.name;
 	peer.account = byName ? std::string() : claims.subject;
+	peer.reports = byName ? std::nullopt : error_reports::ParseReportsConsent(claims.errorReports);
 	peer.editor = claims.editor;
 	peer.debugger = claims.debugger;
 	SendTo(connection, joined);

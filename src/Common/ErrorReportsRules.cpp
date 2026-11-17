@@ -224,4 +224,14 @@ bool MayNamePlayer(std::optional<ReportsConsent> ticketChoice) noexcept
 	return ticketChoice == ReportsConsent::Full;
 }
 
+std::optional<ReportedPlayer> ReportedPlayerOf(std::string_view name, std::string_view address,
+                                               std::optional<ReportsConsent> ticketChoice)
+{
+	if (!MayNamePlayer(ticketChoice) || name.empty())
+	{
+		return std::nullopt;
+	}
+	return ReportedPlayer {.name = std::string(name), .address = std::string(address)};
+}
+
 } // namespace openblack::error_reports
