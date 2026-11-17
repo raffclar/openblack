@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <any>
+#include <functional>
 #include <numbers>
 #include <string>
 #include <vector>
@@ -201,6 +202,9 @@ public:
 		slot.data = target;
 	}
 
+	static_assert(TownCentreBelief::k_MostPlayerNumbers == town_belief::k_MostPlayers,
+	              "The ranks of the symbols hold a place for each player number");
+
 	explicit TownCentreBeliefRule(const ParticleObject& object)
 	    : params(ReadParams(object))
 	    , nextGroups(object.IntArray("NextGroups"))
@@ -245,8 +249,8 @@ public:
 		const glm::vec3 base = belief->totemTop + glm::vec3(0.0f, params.heightAt1, 0.0f);
 		const float distanceScale =
 		    town_belief::DistanceScale(params, x87::Distance<x87::SumOrder::Xzy>(world.CameraPosition(), base));
-		const auto random = [&effect](float min, float max) { return effect.Random(min, max); };
-		// The village's beliefs and the rank of each player are the same for each symbol
+		// All the symbols use one random function, the beliefs of the village and the rank of each player
+		const std::function<float(float, float)> random = [&effect](float min, float max) { return effect.Random(min, max); };
 		const auto beliefs = belief->OfPlayers();
 		const auto ranks = town_belief::Ranks(beliefs);
 		for (size_t a = 0; a < collection.atoms.size(); ++a)
