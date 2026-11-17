@@ -356,6 +356,8 @@ public:
 	/// world turns the replayed turns first, with no player: these are the turns that the server sent before it stopped.
 	/// The server leaves out the blocks of commands up to the last block of each god that the sent turns hold.
 	/// The server keeps the files of the editor again, so that the replayed turns and the next turns can use them.
+	/// When the land of the room changed, each player who was away and each observer gets the start of the land before
+	/// the world, because the server does not know the land of that client.
 	void Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed,
 	             const snapshots::BlockSequences& blocks = {}, std::vector<snapshots::EditorFile> editorFiles = {});
 	/// True while the world must turn the replayed turns of a restored game. The server reads no socket until then.
@@ -640,6 +642,9 @@ private:
 	void EditorMindFileFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorMindFile& mind);
 	/// Sends each mind file of the editor that the server keeps to a player who comes back or joins, before the turns
 	void SendEditorMindFiles(ConnectionId connection);
+	/// Keeps the start of the command line of a snapshot of a room that changed its land. Then marks the clients that
+	/// must load the land of the room again when they come back.
+	void RestoreLandChange(const snapshots::Room& room);
 	/// Keeps the files of the editor of a snapshot again, each in its store
 	void RestoreEditorFiles(std::vector<snapshots::EditorFile> files);
 	/// A part of a world file of the editor from a player. When the last part came, the world of the server loads the file
@@ -827,6 +832,9 @@ private:
 	/// The start that the server sent to the room when the editor started the room again on a land. A player who was away
 	/// gets it before the server's world, so that the client loads the land of the world first.
 	std::optional<game_socket::Start> _landStart;
+	/// The start of the room before the first change of its land. A snapshot keeps it, so that a server that continues the
+	/// game knows the game of its command line.
+	std::optional<game_socket::Start> _firstStart;
 	ConnectionId _worldChangeFrom {0};
 	uint32_t _worldChanges {0};
 };
