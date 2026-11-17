@@ -85,7 +85,8 @@ TEST(SharedIndexLists, DifferentListsTakeRunsOfOnePage)
 	EXPECT_EQ(lists.Size(), 2u);
 	EXPECT_EQ(first.page, second.page);
 	EXPECT_EQ(first.first, 0u);
-	EXPECT_EQ(second.first, 3u);
+	// Each run starts at a multiple of two indices
+	EXPECT_EQ(second.first, 4u);
 	EXPECT_EQ(Read(first), (std::vector<uint16_t> {0, 1, 2}));
 	EXPECT_EQ(Read(second), (std::vector<uint16_t> {0, 2, 1}));
 }
@@ -103,7 +104,7 @@ TEST(SharedIndexLists, AListThatDoesNotFitStartsANewPage)
 	EXPECT_EQ(second.first, 0u);
 	// A list that fits in the last page goes there
 	EXPECT_EQ(third.page, second.page);
-	EXPECT_EQ(third.first, 3u);
+	EXPECT_EQ(third.first, 4u);
 	EXPECT_EQ(Read(first), (std::vector<uint16_t> {0, 1, 2, 3, 4, 5}));
 	EXPECT_EQ(Read(second), (std::vector<uint16_t> {6, 7, 8}));
 	EXPECT_EQ(Read(third), (std::vector<uint16_t> {9, 10}));
@@ -120,8 +121,8 @@ TEST(SharedIndexLists, ManyListsTakeFewPages)
 		static_cast<void>(lists.Get({i, i, i}, CountingMaker {&made}));
 	}
 	EXPECT_EQ(lists.Size(), 2001u);
-	// 6001 indices in pages of 1024 indices
-	EXPECT_EQ(made, 6);
+	// 6001 indices in pages of 1024 indices. Each list takes a multiple of two indices, thus 8002 indices.
+	EXPECT_EQ(made, 8);
 	const auto again = lists.Get({7}, CountingMaker {&made});
 	EXPECT_EQ(first.page, again.page);
 	EXPECT_EQ(first.first, again.first);

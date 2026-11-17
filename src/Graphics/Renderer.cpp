@@ -50,9 +50,11 @@
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
 #include "3D/WaterRings.h"
+#include "BufferPages.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
 #include "Common/MainThreadQueue.h"
+#include "Common/PlayerProfiles.h"
 #include "Common/UserData.h"
 #include "Common/WorkerPool.h"
 #include "Creature/CreatureHairLight.h"
@@ -266,12 +268,13 @@ struct BgfxCallback: public bgfx::CallbackI
 		}
 		if (const auto why = graphics::WriteScreenshotPng(path, width, height, pitch, bgra, yflip); !why.empty())
 		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot ({}x{}) at {}: {}", width, height, filePath,
-			                    why);
+			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot ({}x{}) at {}: {}", width, height,
+			                    player_profiles::PathForLog(filePath), why);
 			failures.Record(filePath, "couldn't be written: " + why);
 			return;
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot ({}x{}) saved at {}", width, height, filePath);
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot ({}x{}) saved at {}", width, height,
+		                   player_profiles::PathForLog(filePath));
 	}
 	// Saving a video
 	void captureBegin(uint32_t width, uint32_t height, [[maybe_unused]] uint32_t pitch,
@@ -991,6 +994,8 @@ void Renderer::Frame() noexcept
 		{
 			resources::Rereads rereads(
 			    [](const std::filesystem::path& path) { return Locator::filesystem::value().ReadAll(path); });
+			// The buffer pages write the runs whose owners do not give them again
+			Locator::graphicsDevice::value().GetBufferPages().WriteKeptAgain();
 			auto& givers = Locator::graphicsDevice::value().GetDataGivers();
 			givers.GiveAll(rereads);
 			SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "{} meshes and textures gave their data again from {} files",

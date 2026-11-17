@@ -11,9 +11,11 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "BufferRun.h"
 #include "GraphicsHandle.h"
 
 namespace bgfx
@@ -72,6 +74,8 @@ struct VertexAttrib
 	    , asInt(asInt)
 	{
 	}
+
+	[[nodiscard]] bool operator==(const VertexAttrib& other) const = default;
 };
 
 using VertexDecl = std::vector<VertexAttrib>;
@@ -87,6 +91,9 @@ public:
 		/// A part of a large buffer that bgfx shares between many vertex lists. Then a new list does not get new memory
 		/// from the driver. A dynamic buffer is always in this shared buffer.
 		Shared,
+		/// A run of a page of the device's buffer pages, which many vertex lists share. Then a new list does not take one
+		/// of the device's buffers, of which the device has a limit. A dynamic buffer can also be in a page.
+		Paged,
 	};
 
 	/// A dynamic buffer's vertices can be changed after, by Update
@@ -100,6 +107,8 @@ public:
 	[[nodiscard]] bool IsDynamic() const noexcept { return _dynamic; }
 	/// Whether the vertices are in the shared buffer of bgfx
 	[[nodiscard]] bool IsShared() const noexcept { return _shared; }
+	/// Whether the vertices are a run of a buffer page
+	[[nodiscard]] bool IsPaged() const noexcept { return _paged; }
 
 	/// Whether bgfx made the buffer; one it couldn't make isn't drawn
 	[[nodiscard]] bool IsValid() const noexcept;
@@ -130,6 +139,10 @@ private:
 	bool _dynamic;
 	/// The vertices are in the shared buffer of bgfx, through _dynamicHandle
 	bool _shared;
+	/// The vertices are a run of a buffer page, through _run
+	bool _paged;
+	/// The run of the vertices in a buffer page, after the device made it
+	std::optional<BufferRun> _run;
 	VertexLayoutHandle _layoutHandle;
 };
 

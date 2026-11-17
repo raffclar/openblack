@@ -16,6 +16,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "BufferPages.h"
 #include "Common/MainThreadQueue.h"
 #include "GraphicsDeviceInterface.h"
 #include "Locator.h"
@@ -32,7 +33,8 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
     , _handle(InvalidHandle<VertexBufferHandle>())
     , _dynamicHandle(InvalidHandle<DynamicVertexBufferHandle>())
     , _dynamic(dynamic)
-    , _shared(dynamic || storage == Storage::Shared)
+    , _shared(storage == Storage::Shared || (dynamic && storage == Storage::Own))
+    , _paged(storage == Storage::Paged)
     , _layoutHandle(InvalidHandle<VertexLayoutHandle>())
 {
 	// assert(vertices != nullptr);
@@ -62,7 +64,11 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 	PostToMainThread(MainThreadApi::Graphics, [this, bgfxMem, bytes] {
 		UploadPacer::Pace(bytes);
 		const auto& device = Locator::graphicsDevice::value();
-		if (_shared)
+		if (_paged)
+		{
+			_run = device.GetBufferPages().TakeVertices(_vertexDecl, _strideBytes, bgfxMem);
+		}
+		else if (_shared)
 		{
 			_dynamicHandle = device.CreateDynamicVertexBuffer(bgfxMem, _vertexDecl);
 		}
@@ -77,7 +83,7 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
 			return;
 		}
-		if (!_shared)
+		if (!_shared && !_paged)
 		{
 			device.SetName(_handle, _name);
 		}
@@ -91,7 +97,11 @@ void VertexBuffer::SetContentsGivenAgain() const
 		{
 			return;
 		}
-		if (_shared)
+		if (_paged)
+		{
+			Locator::graphicsDevice::value().GetBufferPages().SetGivenAgain(*_run);
+		}
+		else if (_shared)
 		{
 			Locator::graphicsDevice::value().SetContentsGivenAgain(_dynamicHandle);
 		}
@@ -112,7 +122,11 @@ void VertexBuffer::GiveContentsAgain(std::vector<uint8_t> bytes) const
 		}
 		const auto& device = Locator::graphicsDevice::value();
 		const auto* memory = device.Copy(bytes.data(), static_cast<uint32_t>(bytes.size()));
-		if (_shared)
+		if (_paged)
+		{
+			device.GetBufferPages().Write(*_run, 0, memory);
+		}
+		else if (_shared)
 		{
 			device.GiveContentsAgain(_dynamicHandle, memory);
 		}
@@ -126,6 +140,10 @@ void VertexBuffer::GiveContentsAgain(std::vector<uint8_t> bytes) const
 VertexBuffer::~VertexBuffer() noexcept
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::~VertexBuffer");
+	if (_run.has_value())
+	{
+		Locator::graphicsDevice::value().GetBufferPages().Give(*_run);
+	}
 	if (IsValidHandle(_handle))
 	{
 		Locator::graphicsDevice::value().Destroy(_handle);
@@ -152,6 +170,10 @@ uint32_t VertexBuffer::GetStrideBytes() const noexcept
 
 bool VertexBuffer::IsValid() const noexcept
 {
+	if (_paged)
+	{
+		return _run.has_value();
+	}
 	return _shared ? IsValidHandle(_dynamicHandle) : IsValidHandle(_handle);
 }
 
@@ -168,6 +190,11 @@ void VertexBuffer::Update(uint32_t firstVertex, const void* memory) const
 	PostToMainThread(MainThreadApi::Graphics, [this, firstVertex, vertices] {
 		if (!IsValid())
 		{
+			return;
+		}
+		if (_paged)
+		{
+			Locator::graphicsDevice::value().GetBufferPages().Write(*_run, firstVertex, vertices);
 			return;
 		}
 		Locator::graphicsDevice::value().Update(_dynamicHandle, firstVertex, vertices);

@@ -19,6 +19,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Common/PlayerProfiles.h"
+
 using namespace openblack::ecs::systems;
 
 namespace
@@ -71,7 +73,8 @@ ComputerSettingsSystem::ComputerSettingsSystem(std::optional<std::filesystem::pa
 	{
 		if (const auto log = Log())
 		{
-			SPDLOG_LOGGER_INFO(log, "No settings of this computer at {}: the defaults hold", _file->generic_string());
+			SPDLOG_LOGGER_INFO(log, "No settings of this computer at {}: the defaults hold",
+			                   player_profiles::PathForLog(*_file));
 		}
 		return;
 	}
@@ -81,10 +84,10 @@ ComputerSettingsSystem::ComputerSettingsSystem(std::optional<std::filesystem::pa
 	_settings = std::move(settings);
 	if (const auto log = Log())
 	{
-		SPDLOG_LOGGER_INFO(log, "The settings of this computer are read from {}", _file->generic_string());
+		SPDLOG_LOGGER_INFO(log, "The settings of this computer are read from {}", player_profiles::PathForLog(*_file));
 		for (const auto& problem : problems)
 		{
-			SPDLOG_LOGGER_WARN(log, "In {}: {}; the default holds", _file->generic_string(), problem);
+			SPDLOG_LOGGER_WARN(log, "In {}: {}; the default holds", player_profiles::PathForLog(*_file), problem);
 		}
 	}
 }
@@ -103,7 +106,8 @@ void ComputerSettingsSystem::Keep(const computer_settings::Settings& changed)
 	{
 		if (const auto log = Log())
 		{
-			SPDLOG_LOGGER_WARN(log, "The settings of this computer cannot be written to {}", _file->generic_string());
+			SPDLOG_LOGGER_WARN(log, "The settings of this computer cannot be written to {}",
+			                   player_profiles::PathForLog(*_file));
 		}
 		return;
 	}

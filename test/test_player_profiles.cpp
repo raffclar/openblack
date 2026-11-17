@@ -456,3 +456,15 @@ TEST(PlayerProfiles, ThePathForTheLogHidesTheNameOfThePlayer)
 	EXPECT_EQ(player_profiles::PathForLog(folder / "Profiles.txt"), "/game/tool-files/Profiles.txt");
 	EXPECT_EQ(player_profiles::PathForLog("Saved Games/Land1"), "Saved Games/Land1");
 }
+
+TEST(PlayerProfiles, ThePathForTheLogHidesTheAccountOfTheComputer)
+{
+	EXPECT_EQ(player_profiles::PathForLog("C:/Users/Zorblax/AppData/openblack/Profiles.txt"),
+	          "C:/Users/<user>/AppData/openblack/Profiles.txt");
+	EXPECT_EQ(player_profiles::PathForLog("/home/zorblax/.local/share/openblack"), "/home/<user>/.local/share/openblack");
+	EXPECT_EQ(player_profiles::PathForLog("/Users/Zorblax/Library"), "/Users/<user>/Library");
+	// Only the first such folder counts, and a path without one does not change
+	EXPECT_EQ(player_profiles::PathForLog("/home/home/x"), "/home/<user>/x");
+	EXPECT_EQ(player_profiles::PathForLog("/game/users"), "/game/users");
+	EXPECT_EQ(player_profiles::PathForLog("/game/tool-files/Profiles.txt"), "/game/tool-files/Profiles.txt");
+}

@@ -13,6 +13,7 @@
 #include <bgfx/bgfx.h>
 
 #include "3D/LandBlock.h"
+#include "BufferPages.h"
 #include "Common/MainThreadQueue.h"
 #include "GraphicsHandleBgfx.h"
 #include "IndexBuffer.h"
@@ -35,7 +36,11 @@ void VertexBuffer::Bind(bgfx::Encoder& encoder) const
 	{
 		return;
 	}
-	if (_shared)
+	if (_paged)
+	{
+		encoder.setVertexBuffer(0, toBgfx(BufferPages::VertexHandle(*_run)), _run->first, _vertexCount, toBgfx(_layoutHandle));
+	}
+	else if (_shared)
 	{
 		encoder.setVertexBuffer(0, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(_layoutHandle));
 	}
@@ -52,7 +57,12 @@ void VertexBuffer::Bind(uint32_t firstVertex, uint32_t count) const
 	{
 		return;
 	}
-	if (_shared)
+	if (_paged)
+	{
+		bgfx::setVertexBuffer(0, toBgfx(BufferPages::VertexHandle(*_run)), _run->first + firstVertex, count,
+		                      toBgfx(_layoutHandle));
+	}
+	else if (_shared)
 	{
 		bgfx::setVertexBuffer(0, toBgfx(_dynamicHandle), firstVertex, count, toBgfx(_layoutHandle));
 	}
@@ -68,7 +78,11 @@ void VertexBuffer::BindStream(bgfx::Encoder& encoder, uint8_t stream, VertexLayo
 	{
 		return;
 	}
-	if (_shared)
+	if (_paged)
+	{
+		encoder.setVertexBuffer(stream, toBgfx(BufferPages::VertexHandle(*_run)), _run->first, _vertexCount, toBgfx(layout));
+	}
+	else if (_shared)
 	{
 		encoder.setVertexBuffer(stream, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(layout));
 	}
@@ -88,6 +102,11 @@ void IndexBuffer::Bind(bgfx::Encoder& encoder, uint32_t count, uint32_t startInd
 {
 	if (!IsValid())
 	{
+		return;
+	}
+	if (_storage == Storage::Paged)
+	{
+		encoder.setIndexBuffer(toBgfx(BufferPages::IndexHandle(*_run)), _run->first + startIndex, count);
 		return;
 	}
 	if (_storage == Storage::Shared)

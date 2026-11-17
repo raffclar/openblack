@@ -47,6 +47,7 @@
 #include "3D/Light.h"
 #include "3D/LowResolutionTextures.h"
 #include "Common/Bitmap16B.h"
+#include "Common/PlayerProfiles.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
 #include "ECS/Components/Player.h"
@@ -611,7 +612,7 @@ CreatureMindLoader::result_type CreatureMindLoader::operator()(FromDiskTag, cons
 	mind->result = creaturemind::ReadFile(creatureMindPath, mind->data);
 	if (!mind->Loaded())
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Creature mind {}: {}", creatureMindPath.generic_string(),
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Creature mind {}: {}", player_profiles::PathForLog(creatureMindPath),
 		                   creaturemind::ResultToStr(mind->result));
 	}
 	return mind;

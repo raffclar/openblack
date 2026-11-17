@@ -41,6 +41,7 @@
 #include "Camera/FightCameraModel.h"
 #include "Commands/PlayerCommands.h"
 #include "Common/BuildVersion.h"
+#include "Common/PlayerProfiles.h"
 #include "GameDetail.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/HelpSpeech.h"
@@ -771,7 +772,7 @@ bool Game::Initialize() noexcept
 
 	fileSystem.SetGamePath(_gamePath);
 
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The GamePath is \"{}\".", fileSystem.GetGamePath().generic_string());
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The GamePath is \"{}\".", player_profiles::PathForLog(fileSystem.GetGamePath()));
 	Locator::config::value().language = game_assets::ReadGameLanguage(fileSystem);
 
 	if (std::filesystem::path(_startMap).is_absolute())
