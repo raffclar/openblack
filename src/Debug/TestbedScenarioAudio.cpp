@@ -918,6 +918,24 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::Chat, .delaySeconds = 1.5f, .value = k_ChatTypes, .action = "Shall we trade"}},
 	});
 
+	// The chat controls are a part of a box of the game that does not show in the temple. An open chat goes as the player
+	// goes into the temple, and it comes back open as the player comes out.
+	all.push_back({
+	    .id = "interface.chat_goes_in_temple",
+	    .name = "The open chat goes in the temple",
+	    .facet = Facet::Interface,
+	    .description = "The chat opens with a line in it. One second later the player goes into the main room of the "
+	                   "temple. Fifteen seconds later the player comes out of the temple.",
+	    .expected = "Before the temple, the line of the chat, the quick chat and the send buttons show at the top right. "
+	                "In the temple no part of the chat shows. After the temple, the chat shows again, open, with its "
+	                "line.",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::Chat, .delaySeconds = 1.0f, .value = k_ChatTypes, .action = "Shall we trade"},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 15.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
+	});
+
 	// A speech bubble over a creature that the hand holds to stroke it
 	all.push_back({
 	    .id = "interface.chat_bubble_held_creature",

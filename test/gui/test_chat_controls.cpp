@@ -322,3 +322,32 @@ TEST_F(ChatFixture, AChatThatOpensInAGameAloneStaysOpen)
 	chat.FollowNetworkGame(false);
 	EXPECT_TRUE(chat.IsOpen());
 }
+
+TEST(ChatControlsRules, TheWorldDoesNotShowInAVideoOrInTheTemple)
+{
+	EXPECT_TRUE(rules::InWorld(false, false));
+	EXPECT_FALSE(rules::InWorld(true, false));
+	EXPECT_FALSE(rules::InWorld(false, true));
+	EXPECT_FALSE(rules::InWorld(true, true));
+}
+
+TEST_F(ChatFixture, TheOpenChatGoesInTheTempleAndComesBackOpen)
+{
+	Update();
+	Click(k_OpenButton);
+	Update();
+	ASSERT_TRUE(chat.IsOpen());
+	ASSERT_TRUE(chat.IsActive());
+	// In the temple the controls do not show and take no pointer and no keys
+	network.inGame = rules::InWorld(false, true);
+	Update();
+	EXPECT_FALSE(chat.IsActive());
+	EXPECT_FALSE(chat.WantsMouse(false));
+	EXPECT_FALSE(chat.WantsKeys(false));
+	EXPECT_TRUE(chat.IsOpen());
+	// Out of the temple the chat shows again, still open
+	network.inGame = rules::InWorld(false, false);
+	EXPECT_TRUE(Update());
+	EXPECT_TRUE(chat.IsActive());
+	EXPECT_TRUE(chat.IsOpen());
+}
