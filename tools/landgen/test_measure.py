@@ -6,13 +6,17 @@ import sys
 import tempfile
 import unittest
 
-try:
-    import numpy as np
-    import scipy  # noqa: F401
-except ImportError:
-    # ctest reads 77 as a skipped test: the tool needs numpy and scipy
-    print("numpy and scipy are not installed: skipped")
+missing = []
+for name in ("numpy", "scipy"):
+    try:
+        __import__(name)
+    except ImportError:
+        missing.append(name)
+if missing:
+    # ctest reads 77 as a skipped test. Set OPENBLACK_LANDGEN_PYTHON to a Python that has the packages.
+    print("Python %s lacks %s: skipped" % (sys.executable, " and ".join(missing)))
     sys.exit(77)
+import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import measure  # noqa: E402

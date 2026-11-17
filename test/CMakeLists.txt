@@ -690,9 +690,33 @@ if (Python3_Interpreter_FOUND)
             ${CMAKE_SOURCE_DIR}/tools/inspector/check_registered_components.py
   )
   # The measures of the land generator tool, on small made-up lands
+  # The land tool needs numpy and scipy. Use the Python of the cache option when it has them. Else look for one in
+  # the usual places of the machine. Else use the Python of the build, and the test skips with a message.
+  set(OPENBLACK_LANDGEN_PYTHON "" CACHE FILEPATH "A Python with numpy and scipy for the land generator tool tests")
+  set(landgen_python_candidates ${OPENBLACK_LANDGEN_PYTHON} ${Python3_EXECUTABLE})
+  foreach (landgen_home "$ENV{USERPROFILE}" "$ENV{HOME}")
+    foreach (landgen_dist miniconda3 anaconda3 miniforge3)
+      list(APPEND landgen_python_candidates "${landgen_home}/${landgen_dist}/python.exe"
+           "${landgen_home}/${landgen_dist}/bin/python")
+    endforeach ()
+  endforeach ()
+  set(landgen_python ${Python3_EXECUTABLE})
+  foreach (landgen_candidate ${landgen_python_candidates})
+    if (landgen_candidate AND EXISTS "${landgen_candidate}")
+      execute_process(
+        COMMAND "${landgen_candidate}" -c "import numpy, scipy" RESULT_VARIABLE landgen_result
+        OUTPUT_QUIET ERROR_QUIET
+      )
+      if (landgen_result EQUAL 0)
+        set(landgen_python "${landgen_candidate}")
+        break()
+      endif ()
+    endif ()
+  endforeach ()
+  message(STATUS "Land generator tool tests use Python: ${landgen_python}")
   add_test(
     NAME test_landgen_measure
-    COMMAND ${Python3_EXECUTABLE}
+    COMMAND ${landgen_python}
             ${CMAKE_SOURCE_DIR}/tools/landgen/test_measure.py
   )
   set_tests_properties(test_landgen_measure PROPERTIES SKIP_RETURN_CODE 77)
