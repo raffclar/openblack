@@ -253,6 +253,7 @@ void MultiplayerBoxes::Build()
 	_password = nullptr;
 	_passwordLabel = nullptr;
 	_help = nullptr;
+	_serverLine = nullptr;
 	_playersLabel = nullptr;
 	_next = nullptr;
 	_caption = nullptr;

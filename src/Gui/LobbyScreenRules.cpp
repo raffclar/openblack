@@ -410,6 +410,10 @@ Problem ProblemOf(const ecs::systems::LobbyError& error, lobby_api::ClientKind c
 	{
 		return notice(ServerProblemText(error.detail));
 	}
+	if (code == problems::k_MapPackageMissing)
+	{
+		return notice("The site does not have the map of this game.");
+	}
 	if (code == problems::k_NotHost)
 	{
 		return notice("Only the host can do that.");
@@ -499,6 +503,21 @@ std::string ServerProblemText(std::string_view problem)
 		text += problem;
 	}
 	return text;
+}
+
+std::u16string ServerLineOf(const std::optional<lobby_api::PoolState>& pool, const lobby_api::Lobby* lobby)
+{
+	if (lobby != nullptr)
+	{
+		return Utf16(lobby->serverProblem);
+	}
+	if (!pool.has_value() || !pool->serverMap.has_value())
+	{
+		return {};
+	}
+	const auto& map = *pool->serverMap;
+	const auto& name = map.name.empty() ? map.file : map.name;
+	return Utf16(fmt::format("The game server plays only the map {}, with a maximum of {} gods.", name, map.gods));
 }
 
 std::u16string DefaultSessionName(std::u16string_view profileName)

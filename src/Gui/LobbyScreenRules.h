@@ -181,6 +181,10 @@ struct VersionNeed
 /// The box when the game server of the lobby cannot play the lobby's map or gods (the problem "server_land" of the
 /// start). The lobby's reason, its server_problem, is the second line, in fixed English (deviation 275).
 [[nodiscard]] std::string ServerProblemText(std::string_view problem);
+/// The line of the game server in the box that makes a session or changes its settings, before the start (deviation
+/// 277). The settings of a lobby show its server_problem. The box that makes a session shows the map of the fixed game
+/// server. The line is empty when there is nothing to show.
+[[nodiscard]] std::u16string ServerLineOf(const std::optional<lobby_api::PoolState>& pool, const lobby_api::Lobby* lobby);
 
 /// The values of the box that makes a session
 struct CreateForm

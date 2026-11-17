@@ -248,6 +248,37 @@ TEST(LobbyScreenRules, AStartThatTheGameServerCannotPlayGivesTheReasonOnASecondL
 	EXPECT_EQ(ServerProblemText(""), "The game server cannot play this game.");
 }
 
+TEST(LobbyScreenRules, AStartWithNoMapPackageOnTheSiteGivesItsOwnNotice)
+{
+	const auto problem = ProblemOf(ecs::systems::LobbyError {.status = 409, .detail = "", .code = "map_package_missing"},
+	                               lobby_api::ClientKind::Desktop);
+	EXPECT_EQ(problem.box, ProblemBox::Notice);
+	EXPECT_EQ(problem.text, "The site does not have the map of this game.");
+}
+
+TEST(LobbyScreenRules, TheBoxesBeforeTheStartShowTheLineOfTheGameServer)
+{
+	// The box that makes a session shows the map of the fixed game server (deviation 277)
+	const lobby_api::PoolState fixed {
+	    .free = 1,
+	    .total = 1,
+	    .serverMap = lobby_api::ServerMap {.file = "Online Maps/mpm_2p_1.map", .name = "Two Gods", .gods = 2}};
+	EXPECT_EQ(Utf8(ServerLineOf(fixed, nullptr)), "The game server plays only the map Two Gods, with a maximum of 2 gods.");
+	// A map with no name shows its file
+	auto noName = fixed;
+	noName.serverMap->name.clear();
+	EXPECT_EQ(Utf8(ServerLineOf(noName, nullptr)),
+	          "The game server plays only the map Online Maps/mpm_2p_1.map, with a maximum of 2 gods.");
+	// No fixed game server and no pool give no line
+	EXPECT_TRUE(ServerLineOf(lobby_api::PoolState {.free = 2, .total = 4}, nullptr).empty());
+	EXPECT_TRUE(ServerLineOf(std::nullopt, nullptr).empty());
+	// The settings of a lobby show its server_problem, and no line when it has none
+	lobby_api::Lobby lobby;
+	EXPECT_TRUE(ServerLineOf(fixed, &lobby).empty());
+	lobby.serverProblem = "This server plays only Two Gods for up to 2 gods.";
+	EXPECT_EQ(Utf8(ServerLineOf(fixed, &lobby)), "This server plays only Two Gods for up to 2 gods.");
+}
+
 TEST(LobbyScreenRules, EachProblemHasItsOwnBox)
 {
 	using ecs::systems::LobbyError;
