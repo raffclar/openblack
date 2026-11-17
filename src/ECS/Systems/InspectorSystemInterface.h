@@ -78,6 +78,8 @@ public:
 	{
 		return "this inspector makes no input";
 	}
+	/// Tools: true while an event of the recorded input that ReplayOnLoad read waits to be made
+	[[nodiscard]] virtual bool InputWaits() const { return false; }
 	/// Tools: the next land or scenario that starts records the input made from its first frame on, with the frames as
 	/// ReplayOnLoad reads them. The recording goes to the file as the inspector stops.
 	virtual void RecordInputOnLoad([[maybe_unused]] const std::filesystem::path& path) {}
