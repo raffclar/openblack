@@ -13,14 +13,20 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <memory>
 #include <numeric>
+#include <optional>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "Common/WorkerPool.h"
+#include "Common/WorkerPools.h"
 
 using openblack::WorkerPool;
+using openblack::WorkerPools;
+using openblack::WorkerThreads;
 
 namespace
 {
@@ -121,4 +127,100 @@ TEST(WorkerPool, AStartedCallFinishesEveryJobOnce)
 		// A Finish with no Start does nothing
 		pool.Finish();
 	}
+}
+
+TEST(WorkerPool, PoolsThatShareThreadsUseTheSameLanes)
+{
+	const auto threads = std::make_shared<WorkerThreads>(3);
+	WorkerPool first(threads);
+	WorkerPool second(threads);
+	EXPECT_EQ(first.GetLaneCount(), 4U);
+	EXPECT_EQ(second.GetLaneCount(), 4U);
+	const auto squares = MakeSquares(second, 200);
+	EXPECT_EQ(squares.values[199], uint64_t {199} * 199);
+	EXPECT_TRUE(std::ranges::all_of(squares.lanes, [](size_t lane) { return lane < 4; }));
+}
+
+TEST(WorkerPool, ThreadsThatShareAPoolCallItAtTheSameTime)
+{
+	// Each caller has a pool of its own on the same threads, as the systems have in the browser
+	const auto threads = std::make_shared<WorkerThreads>(4);
+	constexpr size_t k_Callers = 4;
+	constexpr int k_Calls = 500;
+	std::array<uint64_t, k_Callers> totals {};
+	{
+		std::vector<std::jthread> callers;
+		for (size_t caller = 0; caller < k_Callers; ++caller)
+		{
+			callers.emplace_back([&threads, &totals, caller] {
+				WorkerPool pool(threads);
+				for (int call = 0; call < k_Calls; ++call)
+				{
+					const auto squares = MakeSquares(pool, 37);
+					totals[caller] += std::accumulate(squares.values.begin(), squares.values.end(), uint64_t {0});
+				}
+			});
+		}
+	}
+	for (const auto total : totals)
+	{
+		EXPECT_EQ(total, uint64_t {k_Calls} * 16'206);
+	}
+}
+
+TEST(WorkerPool, AStartedCallAndACallOfAnotherPoolShareTheThreads)
+{
+	const auto threads = std::make_shared<WorkerThreads>(3);
+	WorkerPool background(threads);
+	WorkerPool frame(threads);
+	for (int round = 0; round < 200; ++round)
+	{
+		std::vector<std::atomic<int>> started(50);
+		background.Start(started.size(), [&started](size_t index, size_t /*lane*/) { started[index].fetch_add(1); });
+		const auto squares = MakeSquares(frame, 20);
+		EXPECT_EQ(squares.values[19], 361U);
+		background.Finish();
+		for (const auto& runs : started)
+		{
+			ASSERT_EQ(runs.load(), 1) << "round " << round;
+		}
+	}
+}
+
+TEST(WorkerPool, AJobCanCallAnotherPoolOfTheSameThreads)
+{
+	const auto threads = std::make_shared<WorkerThreads>(3);
+	WorkerPool outer(threads);
+	WorkerPool inner(threads);
+	std::vector<uint64_t> sums(8, 0);
+	outer.ForEach(sums.size(), [&inner, &sums](size_t index, size_t /*lane*/) {
+		std::vector<uint64_t> values(10, 0);
+		inner.ForEach(values.size(), [&values, index](size_t at, size_t /*lane*/) { values[at] = index * at; });
+		sums[index] = std::accumulate(values.begin(), values.end(), uint64_t {0});
+	});
+	for (size_t index = 0; index < sums.size(); ++index)
+	{
+		EXPECT_EQ(sums[index], index * 45);
+	}
+}
+
+TEST(WorkerPools, WithACountAllPoolsShareTheThreads)
+{
+	const WorkerPools pools(2);
+	ASSERT_NE(pools.GetShared(), nullptr);
+	const auto first = pools.Make();
+	const auto second = pools.Make();
+	EXPECT_EQ(first->GetLaneCount(), 3U);
+	EXPECT_EQ(second->GetLaneCount(), 3U);
+	// The service and the two pools own the threads
+	EXPECT_EQ(pools.GetShared().use_count(), 3);
+	EXPECT_EQ(MakeSquares(*first, 9).values[8], 64U);
+}
+
+TEST(WorkerPools, WithNoCountEachPoolHasThreadsOfItsOwn)
+{
+	const WorkerPools pools(std::nullopt);
+	EXPECT_EQ(pools.GetShared(), nullptr);
+	const auto pool = pools.Make();
+	EXPECT_EQ(pool->GetLaneCount(), WorkerPool::DefaultThreadCount() + 1);
 }

@@ -40,6 +40,7 @@
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
+#include "Common/WorkerPools.h"
 #if defined(OPENBLACK_SENTRY) && defined(__EMSCRIPTEN__)
 #include "Common/BrowserErrorReports.h"
 #elif defined(OPENBLACK_SENTRY)
@@ -376,6 +377,7 @@ void openblack::InitializeSimulationCore()
 
 	Locator::profiler::emplace();
 	Locator::mainThreadQueue::emplace();
+	Locator::workerPools::emplace(WorkerPools::SharedThreadCount());
 	Locator::events::emplace<EventManager>();
 #if __ANDROID__
 	Locator::filesystem::emplace<AndroidFileSystem>();
@@ -1294,6 +1296,7 @@ void openblack::ShutDownServices()
 	Locator::infoConstants::reset();
 	Locator::profiler::reset();
 	Locator::mainThreadQueue::reset();
+	Locator::workerPools::reset();
 
 	Locator::vm::reset();
 	Locator::gameRandom::reset();
