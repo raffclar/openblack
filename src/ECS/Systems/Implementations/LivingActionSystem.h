@@ -9,18 +9,36 @@
 
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include <glm/mat4x4.hpp>
 
+#include "Common/WorkerPool.h"
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "Resources/KeptHandles.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
 #endif
+
+namespace openblack
+{
+class L3DAnim;
+namespace graphics
+{
+class L3DMesh;
+}
+namespace ecs::components
+{
+struct HighDetail;
+struct Transform;
+struct VillagerPose;
+} // namespace ecs::components
+} // namespace openblack
 
 namespace openblack::ecs::systems
 {
@@ -97,5 +115,45 @@ private:
 	ecs::clip_sound_player::RefreshPace _soundPace;
 	/// The old clip's pose of a high-detail villager changing clip, reused from frame to frame
 	std::vector<glm::mat4> _blendBones;
+
+	/// What the threads need to play the clip of one villager in a frame, and the clip sounds that it plays
+	struct ClipJob
+	{
+		entt::entity entity {entt::null};
+		const components::LivingAction* action {nullptr};
+		const components::Transform* transform {nullptr};
+		components::VillagerPose* pose {nullptr};
+		/// The clip, found by the main thread. The villager plays no clip when it is null.
+		const L3DAnim* clip {nullptr};
+		/// The clip and its place before the frame, and how far the frame played it on
+		AnimId clipId {AnimId::Invalid};
+		uint32_t soundPlace {0};
+		uint32_t soundPlayed {0};
+	};
+	/// What the threads need to pose one villager for the camera, and what the main thread does after the threads
+	struct ViewJob
+	{
+		entt::entity entity {entt::null};
+		const components::Transform* transform {nullptr};
+		components::VillagerPose* pose {nullptr};
+		/// The model, found by the main thread. The villager has no pose when it is null.
+		const graphics::L3DMesh* model {nullptr};
+		/// Whether the villager has a clip, and the clip when it is loaded already
+		entt::id_type clipId {0};
+		bool hasClip {false};
+		const L3DAnim* clip {nullptr};
+		/// One in view in high detail, or with a clip that is not loaded yet, goes on after the threads
+		const components::HighDetail* highDetail {nullptr};
+		bool afterJobs {false};
+		bool posed {false};
+	};
+	/// The jobs of the last frame, kept for their memory
+	std::vector<ClipJob> _clipJobs;
+	std::vector<ViewJob> _viewJobs;
+	/// The clips and the models that the villagers of a walk use, each found in the resources one time
+	resources::KeptHandles<L3DAnim> _keptClips;
+	resources::KeptHandles<graphics::L3DMesh> _keptModels;
+	/// The threads that pose the villagers, made at the first frame
+	std::unique_ptr<WorkerPool> _poseWorkers;
 };
 } // namespace openblack::ecs::systems
