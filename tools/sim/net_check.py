@@ -4505,9 +4505,15 @@ def main():
                   f"({gap[2]} turns, not counted as a difference); it differs in {counts[0] - counts[1]} compares of "
                   f"{counts[0]}")
         # A player who comes back with the world of the server does not compare the turns that it missed while away
-        away_gap = sum(int(match.group(2)) - int(match.group(1)) for line in lines_with(
+        away_gap = sum(max(0, int(match.group(2)) - int(match.group(1))) for line in lines_with(
             server_log, [f"The player of slot {index} is back from turn"])
             if (match := re.search(r"back from turn (\d+) with the world of turn (\d+)", line)))
+        # After a change of the land while the player was away, the record of the client keeps the turns of the old land
+        # up to the turn of the world that it came back with: the client never did those turns of the new land
+        back_worlds = [int(match.group(1)) for line in lines_with(server_log, [f"The player of slot {index} is back from turn"])
+                       if (match := re.search(r"with the world of turn (\d+)", line))]
+        if back_worlds and lines_with(server_log, ["started the room again on the land"]):
+            different = [turn for turn in different if turn < 0 or turn > max(back_worlds)]
         same = (not different and enough and counts is not None
                 and (counts[0] - counts[1] <= allowed_differing)
                 and (left or kicked_observer or counts[0] >= expected - 100 - away_gap) and bool(recovered or not parted_on_purpose))
