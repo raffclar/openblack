@@ -1256,8 +1256,7 @@ std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, 
 	                             .account = std::move(account),
 	                             .number = number,
 	                             .editor = editor,
-	                             .debugger = debugger,
-	                             .account = std::move(account)});
+	                             .debugger = debugger});
 	return session;
 }
 
