@@ -27,11 +27,11 @@ struct Choices
 	/// How much of the map the island takes, in hundredths, from -30 (small) to 30 (large)
 	int32_t landAmount {0};
 	/// How many mountain ranges cross the island
-	int32_t ranges {3};
+	int32_t ranges {0};
 	/// The altitude of a crest of a range before the erosion, and of the plains and the hills
 	int32_t mountainHeight {300};
-	int32_t plainHeight {55};
-	int32_t hillHeight {55};
+	int32_t plainHeight {42};
+	int32_t hillHeight {100};
 	/// How many hollows of the low land hold the lakes and lagoons
 	int32_t hollows {6};
 	/// The drops of rain of the erosion, in thousands
@@ -43,6 +43,8 @@ struct Choices
 	int32_t southTemperature {95};
 	/// The direction of the wind, in the order of landgen::climate::Wind, or -1 when the seed picks the direction
 	int32_t wind {-1};
+	/// How many massifs the island has, or -1 when the seed picks the number
+	int32_t massifs {-1};
 
 	bool operator==(const Choices&) const = default;
 };

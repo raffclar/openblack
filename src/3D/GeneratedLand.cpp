@@ -57,18 +57,19 @@ using generated_land::ChoiceRange;
 using generated_land::Choices;
 
 /// The ranges keep the land inside the limits of the map. Above the highest altitude, the crests of the land are flat.
-constexpr std::array<ChoiceRange, 11> k_ChoiceRanges {{
+constexpr std::array<ChoiceRange, 12> k_ChoiceRanges {{
     {"land", "land amount", &Choices::landAmount, -30, 30},
     {"ranges", "mountain ranges", &Choices::ranges, 0, 6},
     {"mountains", "mountain height", &Choices::mountainHeight, 100, 450},
     {"plains", "plain height", &Choices::plainHeight, 20, 120},
-    {"hills", "hill height", &Choices::hillHeight, 0, 60},
+    {"hills", "hill height", &Choices::hillHeight, 0, 200},
     {"hollows", "lake hollows", &Choices::hollows, 0, 16},
     {"rain", "rain drops (thousands)", &Choices::rain, 0, 1000},
     {"rivers", "river source flow", &Choices::riverFlow, 300, 3000},
     {"north", "north temperature", &Choices::northTemperature, 0, 100},
     {"south", "south temperature", &Choices::southTemperature, 0, 100},
     {"wind", "wind", &Choices::wind, -1, 7},
+    {"massifs", "mountain massifs", &Choices::massifs, -1, 8},
 }};
 
 /// Reads a whole number that fills all of the text, or gives false
@@ -175,6 +176,11 @@ landgen::Settings generated_land::SettingsOf(const Choices& choices)
 	if (clamped.wind >= 0)
 	{
 		settings.wind = static_cast<landgen::climate::Wind>(clamped.wind);
+	}
+	if (clamped.massifs >= 0)
+	{
+		settings.massifs.countLow = clamped.massifs;
+		settings.massifs.countHigh = clamped.massifs;
 	}
 	return settings;
 }

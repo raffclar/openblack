@@ -238,9 +238,22 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	clock.Done("hydraulic erosion");
 	terrain::ErodeThermal(heights, settings.thermal);
 	clock.Done("thermal erosion");
-	// The terraces and cliffs come after the erosion, which would wear the cliffs down
-	const auto cliffs = terrain::Terrace(heights, seed, settings.terraces);
+	// The terraces and cliffs come after the erosion, which would wear the cliffs down. Away from the massifs the edge
+	// noise lifts the ground by a limited height, so that no high tower stands on the plains.
+	const auto peaks = terrain::PlaceMassifs(heights, seed, settings.massifs);
+	const auto massifs = terrain::MassifHeights(side, peaks, seed, settings.massifs);
+	std::vector<float> highestEdge(massifs.values.size());
+	for (size_t i = 0; i < highestEdge.size(); ++i)
+	{
+		highestEdge[i] =
+		    massifs.values[i] > 0.0f ? terrain::k_HighestAltitude : heights.values[i] + settings.massifs.lowlandRise;
+	}
+	auto cliffs = terrain::Terrace(heights, seed, settings.terraces, highestEdge);
 	clock.Done("terraces");
+	// The high land is on the massifs only
+	terrain::LowerHighGround(heights, settings.massifs.lowlandKnee, settings.massifs.lowlandCeiling);
+	terrain::RaiseMassifs(heights, massifs, cliffs);
+	clock.Done("massifs");
 
 	// The water: lakes first, then the rivers on the land that the lakes leave
 	const auto firstDrainage = hydrology::Drain(heights, terrain::k_SeaLevel);
