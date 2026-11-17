@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <functional>
+#include <optional>
 #include <queue>
 #include <utility>
 #include <vector>
@@ -392,7 +393,7 @@ std::vector<float> terrain::TerraceLevels(uint64_t seed, const TerraceSettings& 
 }
 
 Grid<uint8_t> terrain::TerraceSteps(const Grid<float>& heights, std::span<const float> levels, uint64_t seed,
-                                    const TerraceSettings& settings)
+                                    const TerraceSettings& settings, std::span<const float> highestEdge)
 {
 	const int side = heights.side;
 	const float last = static_cast<float>(std::max(side - 1, 1));
@@ -424,7 +425,11 @@ Grid<uint8_t> terrain::TerraceSteps(const Grid<float>& heights, std::span<const 
 			                      noise::Fractal(roughSeed, u0 * settings.roughFrequency / settings.edgeFrequency,
 			                                     v0 * settings.roughFrequency / settings.edgeFrequency, 2));
 			const float amount = settings.calmNoise + ((settings.edgeNoise - settings.calmNoise) * rough);
-			const float moved = height + (amount * shape);
+			float moved = height + (amount * shape);
+			if (!highestEdge.empty())
+			{
+				moved = std::min(moved, highestEdge[steps.Index(x, z)]);
+			}
 			const auto above = std::ranges::upper_bound(levels, moved);
 			steps.At(x, z) = static_cast<uint8_t>(std::distance(levels.begin(), above));
 		}
@@ -546,7 +551,8 @@ Grid<uint8_t> terrain::TerraceSteps(const Grid<float>& heights, std::span<const 
 	return steps;
 }
 
-Grid<uint8_t> terrain::Terrace(Grid<float>& heights, uint64_t seed, const TerraceSettings& settings)
+Grid<uint8_t> terrain::Terrace(Grid<float>& heights, uint64_t seed, const TerraceSettings& settings,
+                               std::span<const float> highestEdge)
 {
 	const int side = heights.side;
 	Grid<uint8_t> cliffs(side, 0);
@@ -555,7 +561,7 @@ Grid<uint8_t> terrain::Terrace(Grid<float>& heights, uint64_t seed, const Terrac
 	{
 		return cliffs;
 	}
-	const auto steps = TerraceSteps(heights, levels, seed, settings);
+	const auto steps = TerraceSteps(heights, levels, seed, settings, highestEdge);
 	const float last = static_cast<float>(std::max(side - 1, 1));
 	const auto widthSeed = StageSeed(seed, 13);
 
@@ -571,9 +577,15 @@ Grid<uint8_t> terrain::Terrace(Grid<float>& heights, uint64_t seed, const Terrac
 		}
 		if (step == 0)
 		{
-			// The low land keeps its shape, but the edge noise can put high ground on it. That ground stops at the first
-			// edge.
-			terraced.values[i] = std::min(height, levels.front());
+			// The low land keeps its shape, but the edge noise can put high ground on it. That ground rises slower and
+			// slower above the knee and stays below the first edge, so that it does not become one flat top.
+			const float first = levels.front();
+			const float knee = first * std::clamp(settings.lowKnee, 0.0f, 0.99f);
+			if (height > knee)
+			{
+				const float over = (height - knee) / (first - knee);
+				terraced.values[i] = knee + ((first - knee) * over / (1.0f + over));
+			}
 			continue;
 		}
 		const float edge = levels[step - 1U];
@@ -671,6 +683,256 @@ Grid<uint8_t> terrain::Terrace(Grid<float>& heights, uint64_t seed, const Terrac
 	}
 	heights = std::move(terraced);
 	return cliffs;
+}
+
+std::vector<terrain::Peak> terrain::PlaceMassifs(const Grid<float>& heights, uint64_t seed, const MassifSettings& settings)
+{
+	const int side = heights.side;
+	std::vector<Peak> peaks;
+	if (side < 2 || settings.countHigh <= 0)
+	{
+		return peaks;
+	}
+	const float last = static_cast<float>(side - 1);
+	Grid<uint8_t> sea(side, 0);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		sea.values[i] = heights.values[i] <= k_SeaLevel ? 1 : 0;
+	}
+	const auto seaDistance = climate::DistanceToWater(sea);
+
+	Random random(StageSeed(seed, 19));
+	const int lowest = std::max(settings.countLow, 0);
+	const int count =
+	    lowest + static_cast<int>(random.NextBelow(static_cast<uint32_t>(std::max(settings.countHigh - lowest, 0) + 1)));
+	std::vector<Peak> mains;
+	for (int massif = 0; massif < count; ++massif)
+	{
+		const float radius = random.NextRange(settings.radiusLow, settings.radiusHigh) * last;
+		std::optional<Peak> best;
+		float bestInland = 0.0f;
+		for (int attempt = 0; attempt < settings.tries; ++attempt)
+		{
+			const float x = random.NextRange(0.1f, 0.9f) * last;
+			const float z = random.NextRange(0.1f, 0.9f) * last;
+			const float inland = seaDistance.At(static_cast<int>(x), static_cast<int>(z));
+			if (inland < radius * settings.seaClearance)
+			{
+				continue;
+			}
+			const bool apart = std::ranges::none_of(mains, [x, z, radius](const Peak& other) {
+				const float dx = other.x - x;
+				const float dz = other.z - z;
+				const float reach = (other.radius + radius) * 0.9f;
+				return (dx * dx) + (dz * dz) < reach * reach;
+			});
+			if (apart && (!best.has_value() || inland > bestInland))
+			{
+				best = Peak {.x = x, .z = z, .radius = radius, .summit = 0.0f};
+				bestInland = inland;
+			}
+		}
+		// The random numbers of the massif come after the search, so that each massif takes the same numbers
+		const float summit = random.NextRange(settings.summitLow, settings.summitHigh);
+		const int sidePeaks = settings.sidePeaksLow + static_cast<int>(random.NextBelow(static_cast<uint32_t>(
+		                                                  std::max(settings.sidePeaksHigh - settings.sidePeaksLow, 0) + 1)));
+		if (!best.has_value())
+		{
+			continue;
+		}
+		best->summit = std::min(summit, k_HighestAltitude);
+		mains.push_back(*best);
+		peaks.push_back(*best);
+		for (int i = 0; i < sidePeaks; ++i)
+		{
+			// A direction from a point in the square that is not too near its middle or its corners
+			float dx = 0.0f;
+			float dz = 0.0f;
+			float length = 0.0f;
+			do
+			{
+				dx = random.NextRange(-1.0f, 1.0f);
+				dz = random.NextRange(-1.0f, 1.0f);
+				length = std::sqrt((dx * dx) + (dz * dz));
+			} while (length < 0.25f || length > 1.0f);
+			const float distance = random.NextRange(settings.sideDistanceLow, settings.sideDistanceHigh) * best->radius;
+			const float x = std::clamp(best->x + (dx / length * distance), 0.0f, last);
+			const float z = std::clamp(best->z + (dz / length * distance), 0.0f, last);
+			const float sideRadius = best->radius * settings.sideRadius * random.NextRange(0.8f, 1.2f);
+			const float sideSummit = best->summit * settings.sideSummit * random.NextRange(0.85f, 1.1f);
+			peaks.push_back({.x = x, .z = z, .radius = sideRadius, .summit = std::min(sideSummit, k_HighestAltitude)});
+		}
+	}
+	return peaks;
+}
+
+Grid<float> terrain::MassifHeights(int side, std::span<const Peak> peaks, uint64_t seed, const MassifSettings& settings)
+{
+	Grid<float> massifs(side, 0.0f);
+	const float last = static_cast<float>(std::max(side - 1, 1));
+	const auto outlineSeed = StageSeed(seed, 20);
+	const auto spurSeeds = StageSeed(seed, 21);
+	for (size_t p = 0; p < peaks.size(); ++p)
+	{
+		const auto& peak = peaks[p];
+		const auto spurSeed = StageSeed(spurSeeds, p);
+		const auto reach = static_cast<int>(peak.radius * (1.0f + settings.outline)) + 1;
+		const auto cx = static_cast<int>(peak.x);
+		const auto cz = static_cast<int>(peak.z);
+		for (int x = std::max(cx - reach, 0); x <= std::min(cx + reach, side - 1); ++x)
+		{
+			for (int z = std::max(cz - reach, 0); z <= std::min(cz + reach, side - 1); ++z)
+			{
+				const float dx = static_cast<float>(x) - peak.x;
+				const float dz = static_cast<float>(z) - peak.z;
+				const float distance = std::sqrt((dx * dx) + (dz * dz));
+				const float bend = noise::Fractal(outlineSeed, static_cast<float>(x) / last * settings.outlineFrequency,
+				                                  static_cast<float>(z) / last * settings.outlineFrequency, 2);
+				const float d = distance / (peak.radius * (1.0f + (settings.outline * bend)));
+				if (d >= 1.0f)
+				{
+					continue;
+				}
+				// The cone is steep at the summit and gentle at the foot
+				const float rest = 1.0f - d;
+				float height = peak.summit * rest * std::sqrt(rest);
+				if (distance > 0.0f)
+				{
+					// The ridged noise round the peak gives the spurs. The gullies between them are deeper down the slope,
+					// and the noise turns a little with the distance, so that the spurs bend.
+					const float ridge = noise::Ridged(spurSeed, (dx / distance * settings.spurWaves) + (d * settings.spurBend),
+					                                  (dz / distance * settings.spurWaves) - (d * settings.spurBend * 0.5f), 3);
+					height *= 1.0f - (settings.gullyDepth * (1.0f - ridge) * noise::SmoothStep(0.05f, 0.45f, d));
+				}
+				auto& value = massifs.At(x, z);
+				value = std::max(value, height);
+			}
+		}
+	}
+	// The cliff bands: in each band the height rises gently over most of the width, then steeply
+	if (settings.bandHigh > 0.0f && settings.faceWidth > 0.0f && settings.faceWidth < 1.0f)
+	{
+		Random random(StageSeed(seed, 22));
+		const float band = random.NextRange(settings.bandLow, settings.bandHigh);
+		const auto bandSeed = StageSeed(seed, 23);
+		const float faceSlope = settings.faceRise / settings.faceWidth;
+		const float slope = (1.0f - settings.faceRise) / (1.0f - settings.faceWidth);
+		for (int x = 0; x < side; ++x)
+		{
+			for (int z = 0; z < side; ++z)
+			{
+				auto& value = massifs.At(x, z);
+				if (value <= 0.0f)
+				{
+					continue;
+				}
+				const float shift =
+				    settings.bandNoise * noise::Fractal(bandSeed, static_cast<float>(x) / last * settings.bandFrequency,
+				                                        static_cast<float>(z) / last * settings.bandFrequency, 3);
+				const float moved = value + shift + band;
+				const float index = std::floor(moved / band);
+				const float part = (moved / band) - index;
+				// The slope comes first and the cliff last, so that the bands never raise the cone
+				const float rest = 1.0f - settings.faceWidth;
+				const float rise = part < rest ? part * slope : (1.0f - settings.faceRise) + ((part - rest) * faceSlope);
+				// The bands only lower the cone, so that no summit goes above its peak
+				value = std::clamp((index * band) + (rise * band) - shift - band, 0.0f, value);
+			}
+		}
+	}
+	return massifs;
+}
+
+void terrain::RaiseMassifs(Grid<float>& heights, const Grid<float>& massifs, Grid<uint8_t>& cliffs)
+{
+	const int side = heights.side;
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		if (massifs.values[i] > heights.values[i] && heights.values[i] > k_SeaLevel)
+		{
+			heights.values[i] = massifs.values[i];
+			cliffs.values[i] = 0;
+		}
+	}
+
+	// A massif can close a low place of the land in all round. A flood from the sea and the edges of the map fills each
+	// such hollow on the ground of the massifs, and next to it, to the height where it spills over.
+	std::vector<uint8_t> onMassif(heights.values.size(), 0);
+	for (int x = 0; x < side; ++x)
+	{
+		for (int z = 0; z < side; ++z)
+		{
+			if (massifs.At(x, z) <= 0.0f)
+			{
+				continue;
+			}
+			onMassif[heights.Index(x, z)] = 1;
+			for (const auto& neighbour : k_Neighbours)
+			{
+				if (heights.Contains(x + neighbour.dx, z + neighbour.dz))
+				{
+					onMassif[heights.Index(x + neighbour.dx, z + neighbour.dz)] = 1;
+				}
+			}
+		}
+	}
+	using Entry = std::pair<float, uint32_t>;
+	std::priority_queue<Entry, std::vector<Entry>, std::greater<>> open;
+	std::vector<uint8_t> reached(heights.values.size(), 0);
+	for (int x = 0; x < side; ++x)
+	{
+		for (int z = 0; z < side; ++z)
+		{
+			const auto index = heights.Index(x, z);
+			if (heights.values[index] <= k_SeaLevel || x == 0 || z == 0 || x == side - 1 || z == side - 1)
+			{
+				reached[index] = 1;
+				open.emplace(heights.values[index], static_cast<uint32_t>(index));
+			}
+		}
+	}
+	while (!open.empty())
+	{
+		const auto [level, index] = open.top();
+		open.pop();
+		const int x = heights.XOf(index);
+		const int z = heights.ZOf(index);
+		for (const auto& neighbour : k_Neighbours)
+		{
+			if (!heights.Contains(x + neighbour.dx, z + neighbour.dz))
+			{
+				continue;
+			}
+			const auto other = heights.Index(x + neighbour.dx, z + neighbour.dz);
+			if (reached[other] != 0)
+			{
+				continue;
+			}
+			reached[other] = 1;
+			auto& height = heights.values[other];
+			if (onMassif[other] != 0)
+			{
+				height = std::max(height, level);
+			}
+			open.emplace(std::max(height, level), static_cast<uint32_t>(other));
+		}
+	}
+}
+
+void terrain::LowerHighGround(Grid<float>& heights, float knee, float ceiling)
+{
+	if (ceiling <= knee)
+	{
+		return;
+	}
+	for (auto& height : heights.values)
+	{
+		if (height > knee)
+		{
+			const float over = (height - knee) / (ceiling - knee);
+			height = knee + ((ceiling - knee) * over / (1.0f + over));
+		}
+	}
 }
 
 void terrain::ShoreShelf(Grid<float>& heights, uint64_t seed, const ShelfSettings& settings)

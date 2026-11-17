@@ -64,6 +64,7 @@ struct Settings
 	terrain::HydraulicSettings hydraulic;
 	terrain::ThermalSettings thermal;
 	terrain::TerraceSettings terraces;
+	terrain::MassifSettings massifs;
 	terrain::ShelfSettings shelf;
 	hydrology::LakeSettings lakes;
 	hydrology::RiverSettings rivers;

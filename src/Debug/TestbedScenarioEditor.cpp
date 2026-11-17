@@ -269,6 +269,20 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_massifs",
+	    .name = "The mountain massifs of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Turn the "
+	                   "camera from the start area to the mountains inland.",
+	    .expected = "Eight to eleven massifs stand inland. Each massif has a main peak and one or two lower peaks. Spurs "
+	                "go down from each summit with gullies between them, and bands of cliffs go round the slopes. The "
+	                "land away from the massifs stays below about 60 metres, so that its tops are not summits.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	});
+
+	all.push_back({
 	    .id = "editor.animals",
 	    .name = "Every animal of the palette",
 	    .facet = Facet::Editor,

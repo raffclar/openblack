@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <numeric>
 
 #include <gtest/gtest.h>
@@ -401,10 +402,16 @@ TEST(LandgenTerrain, TerracesAreFlatWithSharpCliffsBetweenThem)
 	};
 	const auto cliffs = terrain::Terrace(heights, 3, settings);
 	constexpr int k_Z = 20;
-	// The sea and the land below the first edge do not change
-	for (int x = 0; x <= 8; ++x)
+	// The sea and the land below the knee of the first edge do not change
+	for (int x = 0; x <= 6; ++x)
 	{
 		EXPECT_EQ(heights.At(x, k_Z), before.At(x, k_Z)) << x;
+	}
+	// The land above the knee rises slower and stays below the first edge
+	for (int x = 7; x <= 8; ++x)
+	{
+		EXPECT_LT(heights.At(x, k_Z), before.At(x, k_Z)) << x;
+		EXPECT_LT(heights.At(x, k_Z), 30.0f) << x;
 	}
 	// The first terrace is nearly flat, from its edge at 30
 	for (int x = 10; x <= 21; ++x)
@@ -492,4 +499,180 @@ TEST(LandgenTerrain, ShoreShelfMakesAFlatStripAndABank)
 	EXPECT_EQ(heights.At(20, k_Z), 100.0f);
 	// Ground lower than the bank does not change
 	EXPECT_EQ(heights.At(10, 10), 4.0f);
+}
+
+namespace
+{
+/// An island: a dome of land with the sea round it
+Grid<float> Island(int side)
+{
+	const float middle = static_cast<float>(side - 1) * 0.5f;
+	return MakeGrid(side, [middle](int x, int z) {
+		const float dx = static_cast<float>(x) - middle;
+		const float dz = static_cast<float>(z) - middle;
+		return 40.0f - (std::sqrt((dx * dx) + (dz * dz)) * 40.0f / middle);
+	});
+}
+
+/// The number of land corners that are lower than each of their eight neighbours
+int CountPits(const Grid<float>& heights)
+{
+	int pits = 0;
+	for (int x = 1; x < heights.side - 1; ++x)
+	{
+		for (int z = 1; z < heights.side - 1; ++z)
+		{
+			const float height = heights.At(x, z);
+			if (height > terrain::k_SeaLevel && std::ranges::all_of(k_Neighbours, [&](const Step& step) {
+				    return heights.At(x + step.dx, z + step.dz) > height;
+			    }))
+			{
+				++pits;
+			}
+		}
+	}
+	return pits;
+}
+} // namespace
+
+TEST(LandgenTerrain, MassifsStandInlandAndApart)
+{
+	const auto heights = Island(129);
+	const terrain::MassifSettings settings {.countLow = 2,
+	                                        .countHigh = 2,
+	                                        .radiusLow = 0.1f,
+	                                        .radiusHigh = 0.1f,
+	                                        .sidePeaksLow = 0,
+	                                        .sidePeaksHigh = 0,
+	                                        .seaClearance = 1.0f};
+	const auto peaks = terrain::PlaceMassifs(heights, 5, settings);
+	ASSERT_EQ(peaks.size(), 2U);
+	const float radius = 0.1f * 128.0f;
+	for (const auto& peak : peaks)
+	{
+		EXPECT_NEAR(peak.radius, radius, 1e-3f);
+		EXPECT_GE(peak.summit, settings.summitLow);
+		EXPECT_LE(peak.summit, settings.summitHigh);
+		// The sea is 64 corners from the middle
+		const float fromMiddle = std::hypot(peak.x - 64.0f, peak.z - 64.0f);
+		EXPECT_LE(fromMiddle, 64.0f - radius);
+	}
+	EXPECT_GE(std::hypot(peaks[0].x - peaks[1].x, peaks[0].z - peaks[1].z), 2.0f * radius * 0.9f);
+	// The same seed gives the same peaks
+	const auto again = terrain::PlaceMassifs(heights, 5, settings);
+	ASSERT_EQ(again.size(), peaks.size());
+	EXPECT_EQ(again[0].x, peaks[0].x);
+	EXPECT_EQ(again[1].summit, peaks[1].summit);
+}
+
+TEST(LandgenTerrain, AMassifHasLowerPeaksNextToItsMainPeak)
+{
+	const auto heights = Island(129);
+	const terrain::MassifSettings settings {.countLow = 1, .countHigh = 1, .sidePeaksLow = 3, .sidePeaksHigh = 3};
+	const auto peaks = terrain::PlaceMassifs(heights, 9, settings);
+	ASSERT_EQ(peaks.size(), 4U);
+	for (size_t i = 1; i < peaks.size(); ++i)
+	{
+		EXPECT_LT(peaks[i].radius, peaks[0].radius);
+		EXPECT_LE(std::hypot(peaks[i].x - peaks[0].x, peaks[i].z - peaks[0].z),
+		          (settings.sideDistanceHigh * peaks[0].radius) + 1e-3f);
+	}
+}
+
+TEST(LandgenTerrain, AMassifIsHighestAtItsSummitAndEndsAtItsFoot)
+{
+	const std::array peaks {terrain::Peak {.x = 32.0f, .z = 32.0f, .radius = 20.0f, .summit = 200.0f}};
+	terrain::MassifSettings settings;
+	settings.outline = 0.0f;
+	settings.bandHigh = 0.0f;
+	const auto massifs = terrain::MassifHeights(65, peaks, 3, settings);
+	EXPECT_NEAR(massifs.At(32, 32), 200.0f, 1e-3f);
+	EXPECT_EQ(massifs.At(32, 53), 0.0f);
+	EXPECT_EQ(massifs.At(0, 0), 0.0f);
+	// The cone is steeper near the summit than near the foot
+	EXPECT_GT(massifs.At(32, 32) - massifs.At(32, 34), massifs.At(32, 48) - massifs.At(32, 50));
+	EXPECT_LE(*std::ranges::max_element(massifs.values), 200.0f);
+}
+
+TEST(LandgenTerrain, MassifBandsHaveSteepCliffsAndGentleSlopes)
+{
+	const std::array peaks {terrain::Peak {.x = 64.0f, .z = 64.0f, .radius = 60.0f, .summit = 240.0f}};
+	terrain::MassifSettings settings;
+	settings.outline = 0.0f;
+	settings.gullyDepth = 0.0f;
+	settings.bandNoise = 0.0f;
+	settings.bandLow = 60.0f;
+	settings.bandHigh = 60.0f;
+	settings.faceWidth = 0.1f;
+	settings.faceRise = 0.6f;
+	const auto massifs = terrain::MassifHeights(129, peaks, 3, settings);
+	// Along a line from the summit, a few steps are cliffs and most are gentle
+	int cliffs = 0;
+	int gentle = 0;
+	for (int z = 70; z < 110; ++z)
+	{
+		const float drop = massifs.At(64, z) - massifs.At(64, z + 1);
+		EXPECT_GE(drop, -1e-3f);
+		cliffs += drop > 15.0f ? 1 : 0;
+		gentle += drop < 5.0f ? 1 : 0;
+	}
+	EXPECT_GE(cliffs, 2);
+	EXPECT_GT(gentle, cliffs * 3);
+}
+
+TEST(LandgenTerrain, RaiseMassifsTakesTheHigherGroundAndLeavesNoPits)
+{
+	auto heights = Island(129);
+	Grid<uint8_t> cliffs(129, 1);
+	const terrain::MassifSettings settings {.countLow = 3, .countHigh = 3};
+	const auto peaks = terrain::PlaceMassifs(heights, 4, settings);
+	const auto massifs = terrain::MassifHeights(129, peaks, 4, settings);
+	const auto before = heights;
+	terrain::RaiseMassifs(heights, massifs, cliffs);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		EXPECT_GE(heights.values[i],
+		          std::max(before.values[i], before.values[i] > terrain::k_SeaLevel ? massifs.values[i] : before.values[i]) -
+		              1e-3f);
+		if (massifs.values[i] > before.values[i] && before.values[i] > terrain::k_SeaLevel)
+		{
+			EXPECT_EQ(cliffs.values[i], 0);
+		}
+	}
+	EXPECT_EQ(CountPits(heights), 0);
+}
+
+TEST(LandgenTerrain, LowerHighGroundStaysBelowTheCeiling)
+{
+	auto heights = MakeGrid(4, [](int x, int z) { return static_cast<float>((x * 4) + z) * 20.0f; });
+	const auto before = heights;
+	terrain::LowerHighGround(heights, 60.0f, 90.0f);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		if (before.values[i] <= 60.0f)
+		{
+			EXPECT_EQ(heights.values[i], before.values[i]);
+		}
+		else
+		{
+			EXPECT_LT(heights.values[i], 90.0f);
+			EXPECT_GT(heights.values[i], 60.0f);
+		}
+		if (i > 0)
+		{
+			EXPECT_GT(heights.values[i], heights.values[i - 1]);
+		}
+	}
+}
+
+TEST(LandgenTerrain, TheHighestEdgeLimitsTheSteps)
+{
+	const auto heights = MakeGrid(20, [](int, int) { return 150.0f; });
+	const std::array levels {30.0f, 80.0f, 130.0f};
+	const terrain::TerraceSettings settings {.edgeNoise = 0.0f, .calmNoise = 0.0f};
+	const auto free = terrain::TerraceSteps(heights, levels, 1, settings);
+	EXPECT_EQ(free.At(10, 10), 3);
+	const std::vector<float> highest(heights.values.size(), 90.0f);
+	const auto limited = terrain::TerraceSteps(heights, levels, 1, settings, highest);
+	EXPECT_EQ(limited.At(10, 10), 2);
 }
