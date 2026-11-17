@@ -141,6 +141,23 @@ TEST(LobbyStatus, AnOlderLobbyThatRefusesTheLengthOfTheVersionGetsTheCutVersion)
 	EXPECT_FALSE(RefusedTheVersionLength(422, R"({"status":422,"code":"invalid"})"));
 }
 
+TEST(LobbyStatus, TheAnswerGivesTheAccountsOfTheRoomWithTheEditorRight)
+{
+	using openblack::lobby_api::ParseServerStatusReply;
+	const auto reply = ParseServerStatusReply(R"({"next_status_in":5,"listed":true,"clans":[],"editors":[7,9]})");
+	ASSERT_TRUE(reply.has_value());
+	EXPECT_EQ(reply->editors, (std::optional<std::vector<int64_t>>(std::vector<int64_t> {7, 9})));
+	const auto none = ParseServerStatusReply(R"({"next_status_in":5,"listed":true,"clans":[],"editors":[]})");
+	ASSERT_TRUE(none.has_value() && none->editors.has_value());
+	EXPECT_TRUE(none->editors->empty());
+	// An older lobby gives no accounts: the server then keeps the claims of the tickets
+	const auto older = ParseServerStatusReply(R"({"next_status_in":5,"listed":true,"clans":[]})");
+	ASSERT_TRUE(older.has_value());
+	EXPECT_FALSE(older->editors.has_value());
+	EXPECT_FALSE(ParseServerStatusReply(R"({"next_status_in":5,"listed":true,"clans":[],"editors":["7"]})").has_value());
+	EXPECT_FALSE(ParseServerStatusReply(R"({"next_status_in":5,"listed":true,"clans":[],"editors":7})").has_value());
+}
+
 TEST(LobbyStatus, TheGameListComparesTheVersionThatTheServerReports)
 {
 	// The game server reports its build id whole, and the game list of a client of the same build shows no

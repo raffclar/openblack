@@ -130,6 +130,50 @@ inline bool ReadBool(const Json& object, std::string_view key, bool& out, bool r
 	return true;
 }
 
+/// Reads a boolean member that can be missing. A missing member or null gives none.
+inline bool ReadOptionalBool(const Json& object, std::string_view key, std::optional<bool>& out)
+{
+	const auto* member = Member(object, key);
+	if (member == nullptr || member->is_null())
+	{
+		out.reset();
+		return true;
+	}
+	if (!member->is_boolean())
+	{
+		return false;
+	}
+	out = member->get<bool>();
+	return true;
+}
+
+/// Reads an array of integers that can be missing. A missing member or null gives none.
+inline bool ReadOptionalIntegers(const Json& object, std::string_view key, std::optional<std::vector<int64_t>>& out)
+{
+	const auto* member = Member(object, key);
+	if (member == nullptr || member->is_null())
+	{
+		out.reset();
+		return true;
+	}
+	if (!member->is_array())
+	{
+		return false;
+	}
+	std::vector<int64_t> values;
+	values.reserve(member->size());
+	for (const auto& element : *member)
+	{
+		if (!element.is_number_integer())
+		{
+			return false;
+		}
+		values.push_back(element.get<int64_t>());
+	}
+	out = std::move(values);
+	return true;
+}
+
 /// Reads an array of objects, each with a reader. A missing array is empty when it is not required.
 template <typename Item, typename Reader>
 inline bool ReadArray(const Json& object, std::string_view key, std::vector<Item>& out, Reader&& read, bool required = true)

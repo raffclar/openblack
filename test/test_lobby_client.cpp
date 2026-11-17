@@ -1363,6 +1363,64 @@ TEST_F(LobbyClientTest, TheLoginAtTheStartUsesTheStoredTokenAndOpensNoPushChanne
 	EXPECT_EQ(_push->opens, 1);
 }
 
+TEST_F(LobbyClientTest, AnEventOfTheLobbyChangesTheEditorRightAtOnce)
+{
+	Make();
+	LogIn();
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	// Staff give the right during the game: the event comes on the push channel
+	_push->Deliver(R"({"seq":1,"type":"account.editor","time":"2026-10-22T10:00:01Z","data":{"editor":true}})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(true));
+	_push->Deliver(R"({"seq":2,"type":"account.editor","time":"2026-10-22T10:00:02Z","data":{"editor":false}})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	// Bad data changes nothing
+	_push->Deliver(R"({"seq":3,"type":"account.editor","time":"2026-10-22T10:00:03Z","data":{"editor":1}})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	// With the channel open, the client does not read the account again
+	_now += 5min;
+	_client->Update();
+	EXPECT_TRUE(_http.sent.empty());
+}
+
+TEST_F(LobbyClientTest, WithNoPushChannelTheClientReadsTheEditorRightAgainAtAShortInterval)
+{
+	_kept = "stored";
+	Make();
+	_client->SignInAtStart();
+	_http.Answer(200, k_Rotated);
+	ASSERT_EQ(_client->GetState(), LobbySessionState::LoggedIn);
+	ASSERT_EQ(_push->opens, 0);
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(false));
+	_client->Update();
+	EXPECT_TRUE(_http.sent.empty());
+	// Before the interval ends, the client sends nothing
+	_now += lobby_times::k_RightCheckInterval - 1s;
+	_client->Update();
+	EXPECT_TRUE(_http.sent.empty());
+	_now += 1s;
+	_client->Update();
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/me");
+	// One read waits at a time
+	_client->Update();
+	EXPECT_EQ(_http.sent.size(), 1u);
+	_http.Answer(200, R"({"id":7,"name":"abc","editor":true})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(true));
+	// The next read comes one interval after the answer
+	_now += lobby_times::k_RightCheckInterval;
+	_client->Update();
+	ASSERT_EQ(_http.Next().url, "https://bw.example/api/v1/me");
+	// An older lobby gives no right in the account: the right stays
+	_http.Answer(200, R"({"id":7,"name":"abc"})");
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(true));
+	// After the logout, the client reads nothing
+	_client->Logout(false, [](auto&& /*result*/) {});
+	_http.Answer(204, "");
+	_now += lobby_times::k_RightCheckInterval * 2;
+	_client->Update();
+	_client->Update();
+	EXPECT_TRUE(_http.sent.empty());
+}
+
 TEST_F(LobbyClientTest, TheLoginAtTheStartWithNoTokenSendsNothing)
 {
 	Make();

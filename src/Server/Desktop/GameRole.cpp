@@ -248,6 +248,12 @@ struct GameRole::Parts
 			{
 				nextReport = sentAt + std::chrono::seconds(reply->nextStatusIn);
 				clans = reply->clans;
+				// A change of the editor right of a player in the room takes effect at once. An older lobby gives no
+				// accounts, and the server then keeps the claims of the join tickets.
+				if (reply->editors.has_value() && host)
+				{
+					host->SetEditors(*reply->editors);
+				}
 			}
 			if (!reply.has_value() && mostVersionCharacters > lobby_api::k_OldMostGameVersionCharacters &&
 			    lobby_status::RefusedTheVersionLength(response.status, response.Text()))

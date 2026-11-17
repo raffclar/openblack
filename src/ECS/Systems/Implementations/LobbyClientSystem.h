@@ -50,6 +50,9 @@ constexpr std::chrono::seconds k_RefreshMargin {30};
 /// The first wait before the push channel opens again after a loss. Each loss after it doubles the wait, to the most.
 constexpr std::chrono::seconds k_FirstReconnectWait {1};
 constexpr std::chrono::seconds k_MostReconnectWait {60};
+/// While the push channel is not open, the client reads the editor right of the account again at this interval, so that
+/// a change takes effect while the game runs. With the channel open, the event "account.editor" gives the change.
+constexpr std::chrono::seconds k_RightCheckInterval {30};
 } // namespace lobby_times
 
 class LobbyClientSystem final: public LobbyClientSystemInterface
@@ -166,6 +169,10 @@ private:
 	/// The login from the sign-in of the site. The push channel opens after it only when openPush is true.
 	void SiteSignIn(LobbyCallback<lobby_api::AccountRef> callback, bool openPush);
 	void ApplySession(const lobby_api::Session& session);
+	/// Keeps a new editor right of the account, from a session answer, an event or a read of the account
+	void FollowEditorRight(bool editor, std::string_view source);
+	/// While the push channel is not open, reads the account again at each interval to follow its editor right
+	void CheckRight();
 	/// Forgets the session and the tokens here and in the store
 	void EndSession();
 	/// Sends a call that needs the session, and reads its answer with a parser
@@ -198,6 +205,9 @@ private:
 	bool _accountDebugger {false};
 	/// The choice of the account for the error reports, as the lobby gave it ("full", "anonymous", "off"), or empty
 	std::string _accountErrorReports;
+	/// The time of the next read of the editor right, while the push channel is not open
+	std::optional<std::chrono::system_clock::time_point> _rightCheckAt;
+	bool _checkingRight {false};
 	std::string _accessToken;
 	std::chrono::system_clock::time_point _accessExpiry {};
 	/// The refresh token of this run, also when the store cannot keep it
