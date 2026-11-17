@@ -152,7 +152,7 @@ TEST(LandgenFeatures, TheJungleIsDenserThanTheGrassland)
 {
 	const auto jungle = PlaceOn(Biome::DenseJungle, 30.0f, 3, {}, 128);
 	const auto grassland = PlaceOn(Biome::Grassland, 30.0f, 3, {}, 128);
-	EXPECT_GT(std::ranges::count_if(jungle, IsTree), std::ranges::count_if(grassland, IsTree) * 3);
+	EXPECT_GT(std::ranges::count_if(jungle, IsTree), std::ranges::count_if(grassland, IsTree) * 2);
 	// Most trees of the jungle are palms
 	const auto palms = std::ranges::count_if(jungle, [](const auto& feature) {
 		const auto tree = static_cast<features::Tree>(feature.type);

@@ -135,7 +135,7 @@ struct Planting
 	float stands;
 	/// The stands grow close together in woods, with open land between the woods
 	bool woods;
-	/// The stands have the sizes of the groups of the palm island, and their trees stand closer
+	/// The stands have the sizes of the groups of the palm island
 	bool jungle;
 	/// The main kinds of the stands
 	std::span<const Choice> mains;
@@ -173,7 +173,7 @@ Planting PlantingOf(Biome biome)
 		        .rockChance = 0.004f,
 		        .stone = Stone::Sandstone};
 	case Biome::Grassland:
-		return {.stands = 37.5f,
+		return {.stands = 150.0f,
 		        .woods = true,
 		        .jungle = false,
 		        .mains = k_GrasslandTrees,
@@ -181,7 +181,7 @@ Planting PlantingOf(Biome biome)
 		        .rockChance = 0.01f,
 		        .stone = Stone::Limestone};
 	case Biome::TemperateForest:
-		return {.stands = 275.0f,
+		return {.stands = 170.0f,
 		        .woods = true,
 		        .jungle = false,
 		        .mains = k_ForestTrees,
@@ -221,7 +221,7 @@ Planting PlantingOf(Biome biome)
 		        .rockChance = 0.015f,
 		        .stone = Stone::Volcanic};
 	case Biome::NordicWastes:
-		return {.stands = 25.0f,
+		return {.stands = 60.0f,
 		        .woods = true,
 		        .jungle = false,
 		        .mains = k_NordicTrees,
@@ -229,7 +229,7 @@ Planting PlantingOf(Biome biome)
 		        .rockChance = 0.03f,
 		        .stone = Stone::Chalk};
 	case Biome::Alpine:
-		return {.stands = 56.25f,
+		return {.stands = 110.0f,
 		        .woods = true,
 		        .jungle = false,
 		        .mains = k_AlpineTrees,
@@ -249,11 +249,15 @@ Planting PlantingOf(Biome biome)
 	        .stone = Stone::Limestone};
 }
 
-/// The trees of a jungle stand closer than the trees of a stand of the same kind elsewhere
-constexpr float k_JungleSpread = 0.8f;
+/// On the lands of the story, a group of 21 trees or more is looser than a small group: for the same number of trees,
+/// its radius is 1.5 times larger (18.5 m against 6.4 m at the median sizes of the two classes).
+constexpr uint32_t k_LargeStand = 21;
+constexpr float k_LargeStandSpread = 1.5f;
 /// The outer part of the radius of a stand is its edge, where the bushes grow more often
 constexpr float k_StandEdge = 0.7f;
 constexpr uint32_t k_EdgeBushFactor = 2;
+/// A stand tries this many points for each of its trees, so that it keeps its size on rough ground
+constexpr uint32_t k_StandTries = 2;
 /// No two trees stand nearer than this, in metres
 constexpr float k_TreeGap = 1.0f;
 /// The share of the trees that are still young, and the smallest part of the full size of a young tree
@@ -271,7 +275,7 @@ constexpr float k_BigForestNearestSea = 80.0f;
 constexpr float k_BigForestNearestTown = 84.0f;
 constexpr float k_BigForestGap = 55.0f;
 /// The chance of a big forest at a point of its grid where the ground suits it
-constexpr float k_BigForestChance = 0.5f;
+constexpr float k_BigForestChance = 0.8f;
 /// A big forest stands only in the woods, where the noise of the woods gives at least this share of the stands
 constexpr float k_BigForestWoods = 0.5f;
 /// The trees and the rocks keep this far from a big forest of scale 1, in metres
@@ -571,13 +575,14 @@ void PlaceBigForests(Placement& placement, uint64_t seed, const Settings& settin
 }
 
 /// The trees of one stand round its middle in corners
-void PlaceStand(const Placement& placement, float x, float z, Tree main, uint32_t count, bool jungle, Random& random,
-                TreeSquares& trees, std::vector<Feature>& placed)
+void PlaceStand(const Placement& placement, float x, float z, Tree main, uint32_t count, Random& random, TreeSquares& trees,
+                std::vector<Feature>& placed)
 {
 	const auto& rule = *RuleOf(main);
-	const float radius =
-	    rule.spread * (jungle ? k_JungleSpread : 1.0f) * std::sqrt(static_cast<float>(count)) / k_MetresPerCorner;
-	for (uint32_t t = 0; t < count; ++t)
+	const float looser = count >= k_LargeStand ? k_LargeStandSpread : 1.0f;
+	const float radius = rule.spread * looser * std::sqrt(static_cast<float>(count)) / k_MetresPerCorner;
+	uint32_t grown = 0;
+	for (uint32_t attempt = 0; attempt < count * k_StandTries && grown < count; ++attempt)
 	{
 		// A point in the circle of the stand. A stand of one tree has its tree at the middle.
 		float dx = 0.0f;
@@ -623,6 +628,7 @@ void PlaceStand(const Placement& placement, float x, float z, Tree main, uint32_
 			continue;
 		}
 		trees.Add(metresX, metresZ);
+		++grown;
 		const auto& kind = *RuleOf(tree);
 		const float full = kind.smallest + ((kind.largest - kind.smallest) * scaleRoll);
 		// Almost all trees of the story are at their full size; a few are still young
@@ -674,8 +680,7 @@ void PlaceStands(const Placement& placement, uint64_t seed, const Settings& sett
 			});
 			if (main)
 			{
-				PlaceStand(placement, x, z, *main, StandSize(sizeRoll, planting.jungle), planting.jungle, random, trees,
-				           placed);
+				PlaceStand(placement, x, z, *main, StandSize(sizeRoll, planting.jungle), random, trees, placed);
 			}
 		}
 	}
