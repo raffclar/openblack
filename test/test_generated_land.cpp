@@ -66,6 +66,8 @@ TEST(GeneratedLand, TheFirstChoicesGiveTheFirstSettingsOfTheGenerator)
 	EXPECT_EQ(settings.massifs.countLow, first.massifs.countLow);
 	EXPECT_EQ(settings.massifs.countHigh, first.massifs.countHigh);
 	EXPECT_EQ(settings.topHeight, first.topHeight);
+	EXPECT_EQ(settings.features.treeDensity, first.features.treeDensity);
+	EXPECT_EQ(settings.features.most, first.features.most);
 }
 
 TEST(GeneratedLand, EachChoiceGoesToItsSettingOfTheGenerator)
@@ -83,7 +85,8 @@ TEST(GeneratedLand, EachChoiceGoesToItsSettingOfTheGenerator)
 	                                                  .southTemperature = 80,
 	                                                  .wind = 2,
 	                                                  .massifs = 2,
-	                                                  .topHeight = 300});
+	                                                  .topHeight = 300,
+	                                                  .trees = 400});
 	EXPECT_EQ(settings.seed, 9u);
 	EXPECT_FLOAT_EQ(settings.base.landAmount, -0.2f);
 	EXPECT_EQ(settings.base.ranges, 5);
@@ -99,6 +102,8 @@ TEST(GeneratedLand, EachChoiceGoesToItsSettingOfTheGenerator)
 	EXPECT_EQ(settings.massifs.countLow, 2);
 	EXPECT_EQ(settings.massifs.countHigh, 2);
 	EXPECT_EQ(settings.topHeight, 300.0f);
+	EXPECT_FLOAT_EQ(settings.features.treeDensity, 4.0f);
+	EXPECT_EQ(settings.features.most, landgen::features::Settings {}.most * 4);
 }
 
 TEST(GeneratedLand, AChoiceOutOfItsRangeMovesToTheNearestEnd)
