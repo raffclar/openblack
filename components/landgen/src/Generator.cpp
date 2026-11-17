@@ -409,6 +409,18 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	land.cursedPatches = std::move(cursed.patches);
 	land.mists = std::move(cursed.mists);
 	clock.Done("cursed places");
+	auto swampMist = swamps::Place({.biomes = land.biomes,
+	                                .heights = heights,
+	                                .seaDistance = seaDistance,
+	                                .keepClear = keepClear,
+	                                .clearings = clearings,
+	                                .townX = land.start.x,
+	                                .townZ = land.start.z,
+	                                .rivers = &rivers},
+	                               seed, settings.swamps);
+	land.swampSheets = std::move(swampMist.sheets);
+	land.mists.insert(land.mists.end(), swampMist.mists.begin(), swampMist.mists.end());
+	clock.Done("swamp mist");
 
 	// The temple and the town on the start area, then the forests nearest the town first
 	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);
