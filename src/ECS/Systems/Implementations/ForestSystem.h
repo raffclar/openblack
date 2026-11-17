@@ -27,6 +27,7 @@ public:
 	ForestSystem();
 
 	uint32_t Plant(entt::entity spell, components::Spell& miracle, float tribalPower) override;
+	uint32_t RestoreForest(entt::entity spell, components::Spell& miracle, entt::entity landForest) override;
 	[[nodiscard]] bool CanGrowAt(glm::vec3 point) const override;
 	[[nodiscard]] bool HasTrees(entt::entity spell) const override;
 	[[nodiscard]] magic::forest::MiracleForest ForestOf(entt::entity spell) const override;

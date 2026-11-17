@@ -47,6 +47,12 @@ public:
 
 	/// A new stone of a miracle at a point on the land, at the head of its player's stones; none if one may not go there
 	virtual entt::entity CreateStone(glm::vec3 point, PlayerNames player, entt::entity spell) = 0;
+	/// The stone of a miracle of a saved game of the game, at its point on the land, at the head of its player's stones.
+	/// The load of the game does not look if a stone may go there.
+	virtual entt::entity RestoreStone(glm::vec3 /*point*/, PlayerNames /*player*/, entt::entity /*spell*/)
+	{
+		return entt::null;
+	}
 	/// The stone goes, with its pool, its sound and its reaction
 	virtual void RemoveStone(entt::entity stone) = 0;
 	/// A miracle closes down or goes: its stones go at that time, in the miracle's turn

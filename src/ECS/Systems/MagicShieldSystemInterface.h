@@ -11,7 +11,9 @@
 
 #include <cstdint>
 
+#include <memory>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -20,6 +22,17 @@
 
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
+#include "Magic/ShieldRules.h"
+
+namespace openblack::particles
+{
+struct RestoredEffect;
+} // namespace openblack::particles
+
+namespace openblack::ecs::components
+{
+struct Spell;
+} // namespace openblack::ecs::components
 
 namespace openblack::ecs::systems
 {
@@ -51,6 +64,32 @@ public:
 	}
 	/// Whether a shield miracle's object still stands
 	[[nodiscard]] virtual bool HasObject(entt::entity spell) const = 0;
+	/// The object of a shield miracle, none when it has none
+	[[nodiscard]] virtual entt::entity ObjectOf(entt::entity /*spell*/) const { return entt::null; }
+
+	/// The object of a shield miracle of a saved game of the game
+	struct RestoredShield
+	{
+		/// The point on the land where it stands
+		glm::vec3 position {0.0f};
+		/// A physical shield: its dome
+		std::optional<magic::shield::SavedDome> dome;
+		/// The running state of the particle effect of the dome. With none, the effect starts from its start.
+		std::shared_ptr<const particles::RestoredEffect> effect;
+	};
+	/// A shield miracle of a saved game takes its object again, with the values of the file and no reactions yet. The
+	/// load of the game does not keep the town that the shield protects, so the shield protects no town. Its object.
+	virtual entt::entity Restore(entt::entity /*spell*/, const components::Spell& /*miracle*/, const RestoredShield& /*file*/)
+	{
+		return entt::null;
+	}
+	/// A reaction of a saved game to a shield's object, already in the reactions with its number: the reaction to the
+	/// shield standing, to its strikes or to its fall. It reaches as far as the file says and was first taken up at
+	/// the turn of the file. Each villager that takes it up in the file keeps to it, as it takes up the reaction.
+	virtual void RestoreReaction(entt::entity /*object*/, uint32_t /*id*/, Reaction /*type*/, float /*reach*/,
+	                             uint32_t /*firstReacted*/, std::span<const entt::entity> /*villagers*/)
+	{
+	}
 
 	/// A circle across the land a creature has to walk round
 	struct Avoid

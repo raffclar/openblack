@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <array>
 #include <bit>
 #include <numbers>
 #include <vector>
@@ -126,6 +127,88 @@ TEST(ShieldRules, ADyingDomeFadesOverASecondAndAHalfAndGoesAtTwoAndAQuarter)
 	// Its effect keeps its alpha until the fade is over
 	EXPECT_FLOAT_EQ(shield::DyingEffectAlpha(200.0f, 1.0f), 200.0f);
 	EXPECT_FLOAT_EQ(shield::DyingEffectAlpha(200.0f, 1.6f), 0.0f);
+}
+
+// The angle of a pose of the dome comes from the first row of its turn, from 0 to two pi
+TEST(ShieldRules, TheAngleOfAPoseComesFromItsFirstRow)
+{
+	std::array<float, 13> pose {};
+	const float angle = 4.0f;
+	const float size = 0.5f;
+	pose[0] = std::cos(angle) * size;
+	pose[2] = std::sin(angle) * size;
+	EXPECT_NEAR(shield::PoseAngle(pose), angle, k_Epsilon);
+	pose[0] = size;
+	pose[2] = 0.0f;
+	EXPECT_FLOAT_EQ(shield::PoseAngle(pose), 0.0f);
+}
+
+// The dome of a saved game has the sizes and spins of the file and the sink and bob of its table. Its pose has the
+// size, the angle and the height of the file; its last pose the size and the angle of its pose, and the height moved as
+// far as its point moved.
+TEST(ShieldRules, TheDomeOfASavedGameGoesOnWithTheValuesOfTheFile)
+{
+	const auto table = shield::MakeDomeShape(PhysicalTables(), 30.0f, 0.0f);
+	shield::SavedDome saved {
+	    .turns = 40,
+	    .startScale = 0.006f,
+	    .finalScale = 0.6f,
+	    .startSpin = -2.0f,
+	    .endSpin = -0.15f,
+	    .angle = 1.25f,
+	    .bob = 2.5f,
+	    .dying = true,
+	    .dieTime = 0.3f,
+	    .alpha = 120,
+	    .height = -1.5f,
+	    .solidScale = 0.55f,
+	};
+	saved.pose[10] = 18.5f;
+	saved.pose[12] = 0.58f;
+	saved.lastPose[0] = std::cos(1.0f) * 0.57f;
+	saved.lastPose[2] = std::sin(1.0f) * 0.57f;
+	saved.lastPose[10] = 18.0f;
+	saved.lastPose[12] = 0.57f;
+	const auto dome = shield::RestoreDome(table, saved, k_Turn);
+	EXPECT_FLOAT_EQ(dome.shape.startScale, 0.006f);
+	EXPECT_FLOAT_EQ(dome.shape.finalScale, 0.6f);
+	EXPECT_FLOAT_EQ(dome.shape.startSpin, -2.0f);
+	EXPECT_FLOAT_EQ(dome.shape.endSpin, -0.15f);
+	EXPECT_FLOAT_EQ(dome.shape.raiseWithScale, table.raiseWithScale);
+	EXPECT_FLOAT_EQ(dome.shape.bobMagnitude, table.bobMagnitude);
+	EXPECT_FLOAT_EQ(dome.state.angle, 1.25f);
+	EXPECT_FLOAT_EQ(dome.state.bob, 2.5f);
+	EXPECT_TRUE(dome.state.dying);
+	EXPECT_FLOAT_EQ(dome.state.dieTime, 0.3f);
+	EXPECT_EQ(dome.turns, 40U);
+	EXPECT_FLOAT_EQ(dome.solidScale, 0.55f);
+	EXPECT_FLOAT_EQ(dome.alpha, 120.0f);
+	EXPECT_FLOAT_EQ(dome.pose.scale, 0.58f);
+	EXPECT_FLOAT_EQ(dome.pose.angle, 1.25f);
+	EXPECT_FLOAT_EQ(dome.pose.height, -1.5f);
+	EXPECT_TRUE(dome.pose.drawn);
+	EXPECT_FALSE(dome.pose.gone);
+	EXPECT_FLOAT_EQ(dome.previous.scale, 0.57f);
+	EXPECT_NEAR(dome.previous.angle, 1.0f, k_Epsilon);
+	EXPECT_FLOAT_EQ(dome.previous.height, -2.0f);
+	EXPECT_TRUE(dome.previous.drawn);
+}
+
+// A dome of a saved game is hidden for as long as a new dome: its last pose shows from the turn after its hidden time
+TEST(ShieldRules, TheDomeOfASavedGameIsHiddenForItsFirstHalfSecond)
+{
+	const auto table = shield::MakeDomeShape(PhysicalTables(), 30.0f, 0.0f);
+	shield::SavedDome saved {.turns = 4};
+	auto dome = shield::RestoreDome(table, saved, k_Turn);
+	EXPECT_FALSE(dome.pose.drawn);
+	EXPECT_FALSE(dome.previous.drawn);
+	saved.turns = 5;
+	dome = shield::RestoreDome(table, saved, k_Turn);
+	EXPECT_TRUE(dome.pose.drawn);
+	EXPECT_FALSE(dome.previous.drawn);
+	saved.turns = 0;
+	dome = shield::RestoreDome(table, saved, k_Turn);
+	EXPECT_FALSE(dome.previous.drawn);
 }
 
 TEST(ShieldRules, TheDomeIsDrawnByItsStrengthNeverFainterThanForty)

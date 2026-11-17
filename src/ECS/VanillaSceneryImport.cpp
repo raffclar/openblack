@@ -77,7 +77,11 @@ std::optional<ImportedTree> ReadTree(const VanillaWorld& world, const VanillaRec
 	                     .scale = scale,
 	                     .life = world.Float(record, "life").value_or(1.0f),
 	                     .maxSize = world.Float(record, "maxSize").value_or(scale),
-	                     .growthCountdown = world.Half(record, "growthCountdown").value_or(0)};
+	                     .growthCountdown = world.Half(record, "growthCountdown").value_or(0),
+	                     .magicWoodMultiplier =
+	                         record.Is(VanillaType::MagicTree)
+	                             ? std::optional(world.Float(record, "magicTreeWoodMultiplier").value_or(1.0f))
+	                             : std::nullopt};
 }
 
 std::optional<ImportedBigForest> ReadBigForest(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
@@ -294,7 +298,8 @@ ImportedForests ReadForests(const VanillaWorld& world)
 	for (const auto& record : world.Records())
 	{
 		std::string why;
-		if (record.Is(VanillaType::Tree))
+		// A tree of a forest spell is a tree with the values of its spell after the values of the tree
+		if (record.Is(VanillaType::Tree) || record.Is(VanillaType::MagicTree))
 		{
 			if (auto tree = ReadTree(world, record, why); tree.has_value())
 			{
