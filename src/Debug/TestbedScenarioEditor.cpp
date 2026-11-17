@@ -226,6 +226,20 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_cliffs",
+	    .name = "The terraces, cliffs and shore of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Turn the "
+	                   "camera from the start area to the land round it and to the coast.",
+	    .expected = "Flat terraces stand at a few levels, with sharp cliffs between them. Some parts of the land are "
+	                "calm, with wide terraces, and other parts have many cliffs. Along the sea, a flat strip of 30 to "
+	                "45 metres goes round the island, with a bank or a cliff behind it.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
+	});
+
+	all.push_back({
 	    .id = "editor.animals",
 	    .name = "Every animal of the palette",
 	    .facet = Facet::Editor,
