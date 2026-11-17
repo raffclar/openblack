@@ -14,6 +14,7 @@
 #include <limits>
 #include <ranges>
 #include <utility>
+#include <variant>
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -2471,6 +2472,11 @@ void LockstepHost::ApplyWorldChange()
 	start.land = change.land;
 	start.opening = change.opening;
 	start.godsRingMap = false;
+	// The snapshots keep the start of the command line, so that a server that continues the game can check it
+	if (change.kind == WorldChange::Kind::Land && !_firstStart.has_value())
+	{
+		_firstStart = _settings.start;
+	}
 	_settings.start = start;
 	const auto frame = StartRoomAgain(start);
 	if (change.kind == WorldChange::Kind::Scenario)
@@ -3187,6 +3193,10 @@ snapshots::Room LockstepHost::RoomRecord() const
 	}
 	room.departingNumbers = _observerDepartures;
 	room.clock = _roomClock;
+	if (_firstStart.has_value())
+	{
+		room.firstStart = game_socket::ToJson(*_firstStart);
+	}
 	return room;
 }
 
@@ -3337,10 +3347,39 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 	// A room with no human god turned before the restart, so it turns again when an observer comes back
 	_observersJoined = true;
 	_observerSeen = true;
+	RestoreLandChange(room);
 	std::erase_if(replayed, [turnsDone](const auto& entry) { return entry.first < turnsDone; });
 	_replayed = std::move(replayed);
 	Log(spdlog::level::info, fmt::format("The game continues from the snapshot of turn {}, with {} sent turns to do again",
 	                                     turnsDone, _replayed.size()));
+}
+
+void LockstepHost::RestoreLandChange(const snapshots::Room& room)
+{
+	_firstStart.reset();
+	_landStart.reset();
+	if (room.firstStart.empty())
+	{
+		return;
+	}
+	if (const auto frame = game_socket::Parse(room.firstStart); frame.has_value())
+	{
+		if (const auto* start = std::get_if<game_socket::Start>(&*frame); start != nullptr)
+		{
+			_firstStart = *start;
+		}
+	}
+	// A player who was away can still be on the old land. The player and each observer load the land of the room
+	// before the world of the server. A player who was in the game is on the land of the room already.
+	_landStart = _settings.start;
+	for (size_t i = 0; i < _seats.size() && i < room.seats.size(); ++i)
+	{
+		_seats[i].missedWorldChange = static_cast<SeatState>(room.seats[i].state) == SeatState::Away;
+	}
+	for (auto& watcher : _watchers)
+	{
+		watcher.missedWorldChange = true;
+	}
 }
 
 void LockstepHost::TurnChecksum(uint32_t turn, uint64_t checksum)

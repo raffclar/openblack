@@ -3796,7 +3796,8 @@ def main():
                              "refuse it with \"version\"")
     parser.add_argument("--restart-server-at", type=int,
                         help="stop the server by its process id after this turn, and start it again from its snapshots; "
-                             "with --editor-desync time, the server stops in the pause of the editor")
+                             "with --editor-desync time, the server stops in the pause of the editor; with island "
+                             "and island-away, the server stops only after the land change")
     parser.add_argument("--snapshot-every", type=int,
                         help="the turns between two snapshots of the server (the server's default is 100)")
     parser.add_argument("--ban-account", type=int,
@@ -4284,8 +4285,11 @@ def main():
 
         # The time case stops the server in its pause
         restart_in_pause = options.restart_server_at is not None and options.editor_desync in ("time", "debugger")
+        # The island cases stop the server only after the land change, so that the new server starts on the new land
+        restart_after_island = options.editor_desync in ("island", "island-away")
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (options.restart_server_at is not None and restarted_log is None and not restart_in_pause
+                    and (not restart_after_island or lines_with(server_log, ["started the room again on the land"]))
                     and max(server_checksums(server_log), default=0) >= options.restart_server_at):
                 if restart_server() is None:
                     print(f"the restarted server did not listen on port {port}; see {restarted_log}")
@@ -4423,7 +4427,9 @@ def main():
                        os.path.join(client_dir, "client.log"), ["sends again"])],
                    "left_out": lines_with(restarted_log, ["it leaves out the block"]) if again else [],
                    "editor_files": lines_with(restarted_log, ["keeps the files of the editor of the snapshot"])
-                   if again else []}
+                   if again else [],
+                   # The new server of a room that changed its land loads that land before the world of the snapshot
+                   "land": lines_with(restarted_log, ["The snapshot is of the land"]) if again else []}
         server_turns.update(again)
     summary = {"turns": options.turns, "server_turns": len(server_turns), "clients": []}
     # A decided game: the server stops its turns after one turn, and every computer must stop at that turn. The stop
@@ -4810,6 +4816,9 @@ def main():
                                                         "did again"]) if restart["restarted_turns"] else []
         if not restart["restarted_turns"] or not restart["overlap_same"] or not restart["resumed"]:
             print(f"the restarted server did not continue the game in step: {json.dumps(restart)}")
+            all_same = False
+        if options.editor_desync in ("island", "island-away") and not restart["land"]:
+            print(f"the restarted server did not load the land of the room: {json.dumps(restart)}")
             all_same = False
     summary["same"] = all_same
     with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:

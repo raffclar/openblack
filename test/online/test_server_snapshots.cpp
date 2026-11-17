@@ -79,10 +79,16 @@ size_t AccountBytes(const Room& room)
 	return bytes;
 }
 
-/// The bytes after the claims of the room of format 6: the clock and the accounts of the observers
+/// The bytes of the first start at the end of the room of format 9: a 4-byte length and its characters
+size_t FirstStartBytes(const Room& room)
+{
+	return 4 + room.firstStart.size();
+}
+
+/// The bytes after the claims of the room of format 6: the clock, the accounts of the observers and the first start
 size_t TailBytes(const Room& room)
 {
-	return k_ClockBytes + AccountBytes(room);
+	return k_ClockBytes + AccountBytes(room) + FirstStartBytes(room);
 }
 
 /// The bytes of the claims at the end of the room of format 6: two lists, each with a 4-byte count and one byte for each
@@ -502,12 +508,12 @@ TEST(ServerSnapshots, ASnapshotOfAnEarlierFormatDoesNotLoad)
 	ASSERT_TRUE(DecodeSnapshot(now).has_value());
 	// The first format kept the secrets of the sessions, and the second format kept no blocks of commands. The version is
 	// after the 8 bytes of the magic text.
-	// The formats 3 to 7 still load.
-	for (const uint8_t version : {1, 2, 3, 4, 5, 6, 7})
+	// The formats 3 to 8 still load.
+	for (const uint8_t version : {1, 2, 3, 4, 5, 6, 7, 8})
 	{
 		auto bytes = now;
 		bytes.resize(bytes.size() - sizeof(uint64_t));
-		ASSERT_EQ(bytes[8], 8);
+		ASSERT_EQ(bytes[8], 9);
 		bytes[8] = version;
 		const auto checksum = Checksum(bytes);
 		for (int shift = 0; shift < 64; shift += 8)
@@ -610,7 +616,7 @@ TEST(ServerSnapshots, TheRoomOfTheSeventhFormatReadsWithNoAccountsOfObservers)
 {
 	const auto room = MakeRoom();
 	auto bytes = EncodeRoom(room);
-	bytes.resize(bytes.size() - AccountBytes(room));
+	bytes.resize(bytes.size() - AccountBytes(room) - FirstStartBytes(room));
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->clock, room.clock);
@@ -722,4 +728,31 @@ TEST_F(SnapshotStoreTest, ATornNewestSnapshotStillGivesEveryFileOfTheEditor)
 	EXPECT_EQ(restored->snapshot.turn, 1u);
 	EXPECT_EQ(restored->editorFiles, (std::vector<EditorFile> {early, middle, late}));
 	EXPECT_EQ(restored->turns.size(), 2u);
+}
+
+// The room keeps the start of the game before a change of its land, so that a server that continues the game can
+// compare it with its command line
+TEST(ServerSnapshots, TheRoomKeepsTheFirstStartOfARoomThatChangedItsLand)
+{
+	auto room = MakeRoom();
+	room.firstStart = R"({"type":"room.start","land":"Land1.txt"})";
+	room.start = R"({"type":"room.start","land":"Land2.txt"})";
+	EXPECT_EQ(DecodeRoom(EncodeRoom(room)), room);
+	// A room that ends in the first start does not read
+	auto bytes = EncodeRoom(room);
+	bytes.pop_back();
+	EXPECT_FALSE(DecodeRoom(bytes).has_value());
+}
+
+// A room of format 8 has no first start. It still reads, as a room that did not change its land.
+TEST(ServerSnapshots, TheRoomOfTheEighthFormatReadsWithNoChangeOfTheLand)
+{
+	auto room = MakeRoom();
+	room.firstStart = R"({"type":"room.start","land":"Land1.txt"})";
+	auto bytes = EncodeRoom(room);
+	bytes.resize(bytes.size() - FirstStartBytes(room));
+	const auto old = DecodeRoom(bytes);
+	ASSERT_TRUE(old.has_value());
+	EXPECT_EQ(old->watcherAccounts, room.watcherAccounts);
+	EXPECT_TRUE(old->firstStart.empty());
 }

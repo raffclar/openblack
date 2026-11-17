@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <random>
 #include <span>
 #include <string>
@@ -26,6 +27,7 @@
 #include <system_error>
 #include <thread>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <fmt/format.h>
@@ -178,6 +180,27 @@ struct WorldChangeResult
 	std::optional<uint32_t> turn;
 	std::string refusal;
 };
+
+/// The land that the clients load, as they find it and compare its file
+struct PlayedLand
+{
+	/// The name of the land in the start. Empty for the testbed.
+	std::string name;
+	uint64_t checksum {0};
+	/// The SHA-256 of the file of the land, which the lobby gives its members and which a client can give in its join
+	std::string sha256;
+};
+
+/// The start in the text of a start frame. None when the text is not a start frame.
+std::optional<game_socket::Start> StartOfText(std::string_view text)
+{
+	const auto frame = game_socket::Parse(text);
+	if (const auto* start = frame.has_value() ? std::get_if<game_socket::Start>(&*frame) : nullptr; start != nullptr)
+	{
+		return *start;
+	}
+	return std::nullopt;
+}
 
 class ServerWorld final:
     public simulation::WorldDataViewInterface,
@@ -1137,23 +1160,35 @@ public:
 	}
 
 	/// The editor changed the world of the room. A world that a snapshot can continue gets a new snapshot before the next
-	/// turn. A room that plays a testbed scenario keeps no snapshot, as the scenario keeps its state out of the world. A
-	/// room on a new land keeps no snapshot either: a server starts again only on the land of its command line.
-	void WorldChanged(bool continues)
+	/// turn. A room that plays a testbed scenario keeps no snapshot, as the scenario keeps its state out of the world.
+	/// A room on a new land removes the snapshots of the old land, because the new land counts its turns from its start.
+	/// The snapshots of the new land keep the land, so that a server that starts again loads it.
+	void WorldChanged(LockstepHost::WorldChange::Kind kind)
 	{
-		if (continues)
-		{
-			_lastTurn.reset();
-			return;
-		}
-		if (std::exchange(_ended, true))
+		using Kind = LockstepHost::WorldChange::Kind;
+		if (_ended)
 		{
 			return;
 		}
-		_writer->Flush();
-		_store.Clear();
-		SPDLOG_LOGGER_INFO(spdlog::get("game"),
-		                   "The room plays a new land or a testbed scenario: the server removed its snapshots");
+		if (kind != Kind::WorldFile)
+		{
+			_writer->Flush();
+			_store.Clear();
+		}
+		if (kind == Kind::Scenario)
+		{
+			_ended = true;
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The room plays a testbed scenario: the server removed its snapshots");
+			return;
+		}
+		if (kind == Kind::Land)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"),
+			                   "The room plays a new land: the server removed the snapshots of the old land");
+			// The data of the world states of the new land are ready before the first snapshot of the land
+			Prepare();
+		}
+		_lastTurn.reset();
 	}
 
 	/// The game ended, so no server continues it: the snapshots go
@@ -1248,55 +1283,81 @@ std::string GameIdFor(const NetworkSettings& settings, bool restored)
 	return id;
 }
 
-/// Starts the game role after the land loaded: the clients start the same land with the same seed. A server that
-/// continues a game from a snapshot restores the room of the game.
-bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::unique_ptr<GameRole>& network,
-                  const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn, SnapshotKeeper* keeper,
-                  const std::optional<snapshots::Restored>& restored, LifetimeWatch& lifetime,
-                  std::shared_ptr<ServerDesyncs>& desyncs)
+/// The land that the world of the server plays now. The land goes as its path under the Scripts folder, so that each
+/// client finds it in its own game folder, and the clients compare the checksum of its file before the start.
+PlayedLand PlayedLandOf(const ServerSettings& settings, const ServerWorld& world)
 {
-	network = std::make_unique<GameRole>();
-	// The land goes as its path under the Scripts folder, so that each client finds it in its own game folder, and the
-	// clients compare the checksum of its file before the start. The clients take the land, the seed and the start from
-	// the server as they join.
 	auto& fileSystem = Locator::filesystem::value();
 	const bool scriptLand = !settings.testbed && !settings.godsRingMap;
 	const auto landPath = Locator::landSystem::value().GetLandPath();
-	uint64_t landChecksum = online::start_rules::LandChecksum({});
-	// The SHA-256 of the file of the land, which the lobby gives its members and which a client can give in its join
-	std::string landSha256;
+	PlayedLand played {.name = scriptLand ? network_land::WireName(landPath) : std::string(),
+	                   .checksum = online::start_rules::LandChecksum({}),
+	                   .sha256 = {}};
 	if (settings.customMap.has_value())
 	{
 		// The clients compare the checksum of the file that they got from the lobby
-		landChecksum = online::start_rules::LandChecksum(settings.customMap->bytes);
-		landSha256 = online::sha256::HexOf(settings.customMap->bytes);
+		played.checksum = online::start_rules::LandChecksum(settings.customMap->bytes);
+		played.sha256 = online::sha256::HexOf(settings.customMap->bytes);
 	}
 	else if (scriptLand && fileSystem.Exists(landPath))
 	{
 		const auto bytes = fileSystem.ReadAll(landPath);
-		landChecksum = online::start_rules::LandChecksum(bytes);
-		landSha256 = online::sha256::HexOf(bytes);
+		played.checksum = online::start_rules::LandChecksum(bytes);
+		played.sha256 = online::sha256::HexOf(bytes);
 	}
 	// The map for 32 gods is a file that the players get from the lobby, so the clients compare its checksum too
-	std::string landName = scriptLand ? network_land::WireName(landPath) : std::string();
 	if (settings.godsRingMap)
 	{
-		landName = gods_ring_map_file::WireName();
-		landChecksum = online::start_rules::LandChecksum(world.GodsRingMapFile());
-		landSha256 = online::sha256::HexOf(world.GodsRingMapFile());
+		played.name = gods_ring_map_file::WireName();
+		played.checksum = online::start_rules::LandChecksum(world.GodsRingMapFile());
+		played.sha256 = online::sha256::HexOf(world.GodsRingMapFile());
 	}
+	return played;
+}
+
+/// Starts the game role after the land loaded: the clients start the same land with the same seed. A server that
+/// continues a game from a snapshot restores the room of the game. The land of the command line is the land that the
+/// server loaded first. The snapshot of a room that changed its land has the world of another land.
+bool StartNetwork(const ServerSettings& settings, ServerWorld& world, const PlayedLand& commandLineLand,
+                  std::unique_ptr<GameRole>& network, const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn,
+                  SnapshotKeeper* keeper, const std::optional<snapshots::Restored>& restored, LifetimeWatch& lifetime,
+                  std::shared_ptr<ServerDesyncs>& desyncs)
+{
+	network = std::make_unique<GameRole>();
+	// The clients take the land, the seed and the start from the server as they join
+	const bool scriptLand = !settings.testbed && !settings.godsRingMap;
 	// The server of a lobby game plays only the file of the land that the lobby gave its members
-	if (!settings.network->mapSha256.empty() && settings.network->mapSha256 != landSha256)
+	if (!settings.network->mapSha256.empty() && settings.network->mapSha256 != commandLineLand.sha256)
 	{
-		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"),
-		                       "The file of the land has the SHA-256 {}, but the lobby gave its members the file {}",
-		                       landSha256.empty() ? std::string("of no file") : landSha256, settings.network->mapSha256);
+		SPDLOG_LOGGER_CRITICAL(
+		    spdlog::get("game"), "The file of the land has the SHA-256 {}, but the lobby gave its members the file {}",
+		    commandLineLand.sha256.empty() ? std::string("of no file") : commandLineLand.sha256, settings.network->mapSha256);
 		// The role has no host yet, so the end of the run must not read it
 		network.reset();
 		return false;
 	}
+	// The start that the clients got before the restart, and the start of the command line of that game. These are the
+	// same start when the land of the room did not change.
+	std::optional<game_socket::Start> savedStart;
+	std::optional<game_socket::Start> firstStart;
+	const bool landChanged = restored.has_value() && !restored->room.firstStart.empty();
+	if (restored.has_value())
+	{
+		savedStart = StartOfText(restored->room.start);
+		firstStart = landChanged ? StartOfText(restored->room.firstStart) : savedStart;
+	}
+	// The clients load the land of the world of the server. After a change of the land, this is the land of the snapshot.
+	auto played = commandLineLand;
+	if (landChanged && savedStart.has_value())
+	{
+		auto changedSettings = settings;
+		changedSettings.testbed = savedStart->testbed;
+		changedSettings.godsRingMap = false;
+		changedSettings.customMap.reset();
+		played = PlayedLandOf(changedSettings, world);
+	}
 	game_socket::Start start {
-	    .land = std::move(landName),
+	    .land = commandLineLand.name,
 	    .testbed = settings.testbed,
 	    .seed = RoomStartFor(settings).seed,
 	    .turn = Locator::time::value().GetTurn(),
@@ -1342,15 +1403,18 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	// The game of a snapshot continues with the start that its clients got
 	if (restored.has_value())
 	{
-		const auto saved = game_socket::Parse(restored->room.start);
-		const auto* savedStart = saved.has_value() ? std::get_if<game_socket::Start>(&*saved) : nullptr;
-		if (savedStart == nullptr || !snapshots::SameGame(*savedStart, start))
+		if (!savedStart.has_value() || !firstStart.has_value() || !snapshots::SameGame(*firstStart, start))
 		{
 			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"),
 			                       "The snapshot is of another game than the land and the seed of this server");
 			return false;
 		}
 		start = *savedStart;
+		// The room keeps its god slots on a new land
+		if (landChanged)
+		{
+			godSlots = static_cast<uint8_t>(std::min<size_t>(restored->room.seats.size(), player_slots::k_MaxPlayers));
+		}
 	}
 	// The players do not have the map for 32 gods: the server sends its file to the lobby (deviation 169)
 	std::optional<lobby_status::CustomMap> customMap;
@@ -1381,9 +1445,9 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		    .packageSize = settings.customMap->packageSize,
 		};
 	}
-	const auto landSha256Logged = landSha256;
+	const auto landSha256Logged = played.sha256;
 	if (const auto error =
-	        network->Start(*settings.network, start, landChecksum, godSlots, std::move(customMap), std::move(landSha256));
+	        network->Start(*settings.network, start, played.checksum, godSlots, std::move(customMap), std::move(played.sha256));
 	    error.has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The game role cannot start: {}", *error);
@@ -1425,6 +1489,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	});
 	// The game data that the server's world read: each player's computer sends the print of the same files from its own
 	// game folder, and the room refuses a player whose land, scripts or table of objects differ
+	auto& fileSystem = Locator::filesystem::value();
 	auto print = online::game_data::PrintOfReadFiles(fileSystem);
 	const auto hints = online::game_data::HintsOfGameFolder(fileSystem);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"),
@@ -1491,7 +1556,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		                         : world.RestartOnLand(change.land, change.testbed, change.opening, change.seed);
 		if (changed.turn.has_value() && keeper != nullptr)
 		{
-			keeper->WorldChanged(file);
+			keeper->WorldChanged(change.kind);
 		}
 		return LockstepHost::WorldChanged {.turn = changed.turn, .refusal = changed.refusal};
 	});
@@ -1599,10 +1664,10 @@ public:
 	explicit SnapshotKeeper(const snapshots::Settings& /*settings*/) {}
 };
 
-bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, std::unique_ptr<int>& /*network*/,
-                  const std::function<void(uint32_t turn, uint64_t checksum)>& /*onTurn*/, SnapshotKeeper* /*keeper*/,
-                  const std::optional<snapshots::Restored>& /*restored*/, LifetimeWatch& /*lifetime*/,
-                  std::shared_ptr<ServerDesyncs>& /*desyncs*/)
+bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, const PlayedLand& /*commandLineLand*/,
+                  std::unique_ptr<int>& /*network*/, const std::function<void(uint32_t turn, uint64_t checksum)>& /*onTurn*/,
+                  SnapshotKeeper* /*keeper*/, const std::optional<snapshots::Restored>& /*restored*/,
+                  LifetimeWatch& /*lifetime*/, std::shared_ptr<ServerDesyncs>& /*desyncs*/)
 {
 	SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "This build has no game role");
 	return false;
@@ -1638,6 +1703,25 @@ bool PrepareResume(const ServerSettings& settings, ServerWorld& world, std::opti
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The server continues its game from the snapshot of turn {} and {} sent turns",
 	                   restored->snapshot.turn, restored->turns.size());
+	// The room changed its land after the start: the world loads that land first, and then the world of the snapshot
+	if (!restored->room.firstStart.empty())
+	{
+		const auto start = StartOfText(restored->room.start);
+		if (!start.has_value())
+		{
+			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The start of the snapshot does not read");
+			return false;
+		}
+		const auto name = start->testbed ? std::string("of the testbed") : start->land;
+		if (const auto changed = world.RestartOnLand(start->land, start->testbed, start->opening, start->seed);
+		    !changed.turn.has_value())
+		{
+			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The land {} of the snapshot does not load: {}", name, changed.refusal);
+			return false;
+		}
+		// The test tools find the words "the snapshot is of the land"
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The snapshot is of the land {}, which the room changed to", name);
+	}
 	return world.LoadSnapshot(restored->snapshot);
 }
 
@@ -1786,6 +1870,14 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 		keeper = std::make_unique<SnapshotKeeper>(settings.network->snapshots);
 	}
 	bool ready = world->StartLand();
+	// The land of the command line, before the land of a snapshot replaces it
+	PlayedLand commandLineLand;
+#if defined(OPENBLACK_GAME_ROLE)
+	if (ready && settings.network.has_value())
+	{
+		commandLineLand = PlayedLandOf(settings, *world);
+	}
+#endif
 	if (ready && settings.network.has_value() && settings.network->snapshots.resume)
 	{
 		ready = PrepareResume(settings, *world, restored);
@@ -1795,7 +1887,7 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 		exitCode = EXIT_FAILURE;
 	}
 	else if (settings.network.has_value() &&
-	         !StartNetwork(settings, *world, network, onTurn, keeper.get(), restored, lifetime, desyncs))
+	         !StartNetwork(settings, *world, commandLineLand, network, onTurn, keeper.get(), restored, lifetime, desyncs))
 	{
 		exitCode = EXIT_FAILURE;
 	}

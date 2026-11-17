@@ -36,7 +36,10 @@ constexpr std::array<uint8_t, 8> k_JournalMagic {'O', 'B', 'J', 'O', 'U', 'R', '
 /// with no claims.
 /// Version 7 keeps the clock of the room and the files of the editor. The files of versions 3 to 6 still load, with the
 /// clock at the normal speed and with no files.
-constexpr uint32_t k_FormatVersion = 8;
+/// Version 8 keeps the accounts of the observers. The files of versions 3 to 7 still load, with no accounts.
+/// Version 9 keeps the start of the game before a change of its land. The files of versions 3 to 8 still load, with no
+/// change of the land.
+constexpr uint32_t k_FormatVersion = 9;
 constexpr uint32_t k_OldestFormatVersion = 3;
 
 /// True for a version of the format that the server reads
@@ -343,6 +346,7 @@ std::vector<uint8_t> EncodeRoom(const Room& room)
 	{
 		PutText(out, account);
 	}
+	PutText(out, room.firstStart);
 	return out;
 }
 
@@ -441,6 +445,11 @@ std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes)
 		{
 			room.watcherAccounts.push_back(reader.Text());
 		}
+	}
+	// The room of a file of format 8 ends here
+	if (reader.Good() && !reader.AtEnd())
+	{
+		room.firstStart = reader.Text();
 	}
 	if (!reader.Good() || !reader.AtEnd())
 	{
