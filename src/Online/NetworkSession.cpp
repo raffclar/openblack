@@ -311,6 +311,19 @@ bool NetworkSession::SendEditorScenario(std::string_view id)
 	return _stream->SendText(game_socket::ToJson(game_socket::EditorScenario {.id = std::string(id)}));
 }
 
+bool NetworkSession::SendEditorLand(std::string_view land, bool testbed)
+{
+	// A request names a land or the testbed, not both
+	if (!_start.has_value() || !_stream || !_stream->IsOpen() || land.empty() == !testbed ||
+	    land.size() > game_socket::k_MostLandNameBytes)
+	{
+		return false;
+	}
+	_log->Write(spdlog::level::info, fmt::format("This computer asks the server to load {}",
+	                                             testbed ? std::string("the testbed") : std::string(land)));
+	return _stream->SendText(game_socket::ToJson(game_socket::EditorLand {.land = std::string(land), .testbed = testbed}));
+}
+
 void NetworkSession::Leave()
 {
 	if (_stream && _stream->IsOpen())
@@ -447,8 +460,8 @@ void NetworkSession::Text(std::string_view text)
 	}
 	else if (const auto* start = std::get_if<game_socket::Start>(&*frame))
 	{
-		// A start in the game: the editor of a player started the room again on a scenario. The turns, the checksums and
-		// the stop of the old game are of no use.
+		// A start in the game: the editor of a player started the room again on a scenario or a land. The turns, the checksums
+		// and the stop of the old game are of no use.
 		if (_start.has_value())
 		{
 			_restarted = true;
@@ -468,10 +481,21 @@ void NetworkSession::Text(std::string_view text)
 			_worldTurn.reset();
 			_worldParts.clear();
 			_world.reset();
-			_log->Write(spdlog::level::info,
-			            fmt::format("The game server started the game again{}",
-			                        start->scenario.has_value() ? fmt::format(" on the scenario {}", *start->scenario)
-			                                                    : std::string()));
+			// The test tools find the words "on the scenario" and "on the land"
+			std::string on;
+			if (start->scenario.has_value())
+			{
+				on = fmt::format(" on the scenario {}", *start->scenario);
+			}
+			else if (start->testbed)
+			{
+				on = " on the land of the testbed";
+			}
+			else if (!start->land.empty())
+			{
+				on = fmt::format(" on the land {}", start->land);
+			}
+			_log->Write(spdlog::level::info, fmt::format("The game server started the game again{}", on));
 		}
 		_start = *start;
 		_state = State::Playing;

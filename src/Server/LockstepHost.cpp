@@ -492,6 +492,10 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	{
 		EditorScenarioFrom(connection, peer, *scenario);
 	}
+	else if (const auto* land = std::get_if<game_socket::EditorLand>(&*frame))
+	{
+		EditorLandFrom(connection, peer, *land);
+	}
 	else if (const auto* time = std::get_if<game_socket::EditorTime>(&*frame))
 	{
 		TimeFrom(connection, peer, *time);
@@ -1004,6 +1008,11 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	// A client whose world parted gets the server's world at the start of the next turn, and then the turns from there
 	found->missedWorldChange = false;
 	found->oldWorldChecksums = false;
+	// A player who missed a change of the land loads the new land before the world of the server
+	if (world && missed)
+	{
+		SendLandStart(connection);
+	}
 	if (world && SendWorld(connection))
 	{
 		// The checksums that the client sent for the turns of its parted world are no longer of use
@@ -1065,6 +1074,7 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 	found->connection = connection;
 	found->session = resume.session;
 	found->awaySince = 0;
+	const bool missed = found->missedWorldChange;
 	found->missedWorldChange = false;
 	++found->resumes;
 	peer.joined = true;
@@ -1085,6 +1095,10 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 	}
 	// An observer comes back as a god does: the world of the server when its world parted, else the turns that it missed.
 	// An observer has no god, so the other players get no message.
+	if (world && missed)
+	{
+		SendLandStart(connection);
+	}
 	if (world && SendWorld(connection))
 	{
 		Log(spdlog::level::info,
@@ -1140,6 +1154,19 @@ void LockstepHost::SendScenarioAgain(ConnectionId connection)
 	SendTo(connection, *_scenarioStart);
 	SendTo(connection, game_socket::Resumed {.turn = _turnsDone});
 	SendKeptTurns(connection, _scenarioStart->turn);
+}
+
+void LockstepHost::SendLandStart(ConnectionId connection)
+{
+	if (!_landStart.has_value())
+	{
+		return;
+	}
+	// The client starts the game again on the land, as the other players did at the change. The world of the server then
+	// replaces the world of the land.
+	auto start = *_landStart;
+	start.gods = Gods();
+	SendTo(connection, start);
 }
 
 void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
@@ -2295,6 +2322,9 @@ void LockstepHost::EditorWorldFrom(ConnectionId connection, Peer& peer, const ga
 	_worldChange = WorldChange {.kind = WorldChange::Kind::WorldFile,
 	                            .file = std::move(file),
 	                            .scenario = {},
+	                            .land = {},
+	                            .testbed = false,
+	                            .opening = {},
 	                            .by = peer.name,
 	                            .seed = 0,
 	                            .players = {}};
@@ -2320,6 +2350,39 @@ void LockstepHost::EditorScenarioFrom(ConnectionId connection, const Peer& peer,
 	_worldChange = WorldChange {.kind = WorldChange::Kind::Scenario,
 	                            .file = {},
 	                            .scenario = scenario.id,
+	                            .land = {},
+	                            .testbed = true,
+	                            .opening = {},
+	                            .by = peer.name,
+	                            .seed = _settings.start.seed,
+	                            .players = {}};
+	_worldChangeFrom = connection;
+}
+
+void LockstepHost::EditorLandFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorLand& land)
+{
+	const auto name = land.testbed ? std::string("the testbed") : fmt::format("the land {}", land.land);
+	if (!TakesWorldChange(connection, peer, name))
+	{
+		return;
+	}
+	if (!land.testbed && _landRefusal)
+	{
+		if (const auto refusal = _landRefusal(land.land); refusal.has_value())
+		{
+			RefuseWorldChange(connection, Who(peer), fmt::format("{}: {}", name, *refusal));
+			return;
+		}
+	}
+	Log(spdlog::level::info,
+	    fmt::format("{} loads {}: the room starts again on it before the next turn", log_names::Capitalised(Who(peer)), name));
+	// The new game on the land starts as the game of the room started. The testbed has no opening.
+	_worldChange = WorldChange {.kind = WorldChange::Kind::Land,
+	                            .file = {},
+	                            .scenario = {},
+	                            .land = land.testbed ? std::string() : land.land,
+	                            .testbed = land.testbed,
+	                            .opening = land.testbed ? std::string() : _settings.start.opening,
 	                            .by = peer.name,
 	                            .seed = _settings.start.seed,
 	                            .players = {}};
@@ -2396,16 +2459,41 @@ void LockstepHost::ApplyWorldChange()
 		}
 		return;
 	}
-	// The room starts again on the testbed with the scenario, as a room that the server started on it. Every computer
-	// loads the testbed and lays the scenario out before the first turn.
-	auto& start = _settings.start;
-	start.scenario = change.scenario;
-	start.testbed = true;
+	// The room starts again on the new start, as a room that the server started on it. Every computer loads the land of
+	// the start before the first turn. The computers lay a scenario out on the testbed before that turn.
+	auto start = _settings.start;
+	start.scenario.reset();
+	if (change.kind == WorldChange::Kind::Scenario)
+	{
+		start.scenario = change.scenario;
+	}
+	start.testbed = change.testbed;
+	start.land = change.land;
+	start.opening = change.opening;
 	start.godsRingMap = false;
-	start.land.clear();
-	start.opening.clear();
+	_settings.start = start;
+	const auto frame = StartRoomAgain(start);
+	if (change.kind == WorldChange::Kind::Scenario)
+	{
+		_scenarioStart = frame;
+		_landStart.reset();
+		Log(spdlog::level::info,
+		    fmt::format("After turn {}, {} started the room again on the testbed scenario {}: the game starts again at turn {}",
+		                before, WhoIs(_worldChangeFrom), change.scenario, _turnsDone));
+		return;
+	}
+	_landStart = frame;
+	_scenarioStart.reset();
+	// The test tools find the words "started the room again on the land"
+	Log(spdlog::level::info,
+	    fmt::format("After turn {}, {} started the room again on the land {}: the game starts again at turn {}", before,
+	                WhoIs(_worldChangeFrom), change.testbed ? std::string("of the testbed") : change.land, _turnsDone));
+}
+
+game_socket::Start LockstepHost::StartRoomAgain(game_socket::Start start)
+{
 	// The first turn gives each god with a player its hands again, and brings the god of the observers and each observer.
-	// A player who is away keeps a god too: the player comes back into the scenario later.
+	// A player who is away keeps a god too: the player comes back into the new game later.
 	_joining.clear();
 	for (size_t i = 0; i < _seats.size(); ++i)
 	{
@@ -2424,14 +2512,10 @@ void LockstepHost::ApplyWorldChange()
 			_observerArrivals.emplace_back(watcher.number, watcher.name);
 		}
 	}
-	auto frame = start;
-	frame.turn = _turnsDone;
-	frame.gods = Gods();
-	_scenarioStart = frame;
-	Log(spdlog::level::info,
-	    fmt::format("After turn {}, {} started the room again on the testbed scenario {}: the game starts again at turn {}",
-	                before, WhoIs(_worldChangeFrom), change.scenario, _turnsDone));
-	Broadcast(frame);
+	start.turn = _turnsDone;
+	start.gods = Gods();
+	Broadcast(start);
+	return start;
 }
 
 void LockstepHost::RestoreEditorFiles(std::vector<snapshots::EditorFile> files)

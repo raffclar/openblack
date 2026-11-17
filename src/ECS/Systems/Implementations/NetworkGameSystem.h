@@ -83,6 +83,10 @@ public:
 		return _session && _session->SendEditorWorld(file);
 	}
 	[[nodiscard]] bool SendEditorScenario(std::string_view id) override { return _session && _session->SendEditorScenario(id); }
+	[[nodiscard]] bool SendEditorLand(std::string_view land, bool testbed) override
+	{
+		return _session && _session->SendEditorLand(land, testbed);
+	}
 	[[nodiscard]] std::vector<game_socket::RoomChat> TakeRoomChat() override
 	{
 		return _session ? _session->TakeRoomChat() : std::vector<game_socket::RoomChat> {};

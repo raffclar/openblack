@@ -269,12 +269,20 @@ public:
 			WorldFile,
 			/// The room starts again on the testbed with a testbed scenario
 			Scenario,
+			/// The room starts again on a land, or on the testbed with no scenario, as the Load Island menu asks
+			Land,
 		};
 		Kind kind {Kind::WorldFile};
 		/// The bytes of the world file
 		std::vector<uint8_t> file;
 		/// The id of the scenario
 		std::string scenario;
+		/// The script of the land, as the start names it. Empty for the testbed.
+		std::string land;
+		/// The room starts again on the testbed, with a scenario or with no scenario
+		bool testbed {false};
+		/// How the new game on the land starts, as the start names it. Empty for the testbed.
+		std::string opening;
 		/// The name of the player who asked for the change
 		std::string by;
 		/// The seed of the room, with which a scenario starts the land again
@@ -312,6 +320,10 @@ public:
 	/// scenario, or none when it can. With none, the server takes every id and the change of the world checks it.
 	using ScenarioRefusal = std::function<std::optional<std::string>(std::string_view id)>;
 	void SetScenarioRefusal(ScenarioRefusal refusal) { _scenarioRefusal = std::move(refusal); }
+	/// A check of the name of a land before the server takes the change. Gives why the server cannot load the land, or
+	/// none when it can. With none, the server takes every name and the change of the world checks it.
+	using LandRefusal = std::function<std::optional<std::string>(std::string_view land)>;
+	void SetLandRefusal(LandRefusal refusal) { _landRefusal = std::move(refusal); }
 	/// The changes of the world that the editor asked for and that the server did
 	[[nodiscard]] uint32_t WorldChanges() const { return _worldChanges; }
 	/// Gets the bytes of each turn that the server closes, before the server sends them, and the last block of each god
@@ -557,6 +569,8 @@ private:
 	/// Sends the start of the scenario that the editor started, and then each turn of it, to a player who was away at
 	/// that start
 	void SendScenarioAgain(ConnectionId connection);
+	/// Sends the start of the land of the last change of the land to a player who was away at the change
+	void SendLandStart(ConnectionId connection);
 	/// Sends the kept turns from a turn, with the server's checksums, and the stop of the turns if they stopped
 	void SendKeptTurns(ConnectionId connection, uint32_t from);
 	/// Gives a new session to an observer on a connection, with the number of the observer, and returns its secret. With
@@ -633,6 +647,11 @@ private:
 	void EditorWorldFrom(ConnectionId connection, Peer& peer, const game_socket::EditorWorld& part);
 	/// A testbed scenario of the editor for the whole room. The room starts again on the scenario before the next turn.
 	void EditorScenarioFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorScenario& scenario);
+	/// A land of the Load Island menu for the whole room. The room starts again on the land before the next turn.
+	void EditorLandFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorLand& land);
+	/// The room starts again on the start of a change of the world: each god with a player gets its hands again at the
+	/// first turn, and each observer comes again. Gives the start that the server sent to the room.
+	game_socket::Start StartRoomAgain(game_socket::Start start);
 	/// True when the player can change the world of the room. Else logs why, counts the refusal and tells the player.
 	[[nodiscard]] bool TakesWorldChange(ConnectionId connection, const Peer& peer, std::string_view what);
 	/// Refuses a change of the world that no computer can do, and tells the player who asked for it
@@ -800,10 +819,14 @@ private:
 	std::set<int64_t> _bans;
 	ChangeWorld _changeWorld;
 	ScenarioRefusal _scenarioRefusal;
+	LandRefusal _landRefusal;
 	/// The change of the world that the server does before the next turn, and the connection that asked for it
 	std::optional<WorldChange> _worldChange;
 	/// The start that the server sent to the room when the editor started the room again on a testbed scenario
 	std::optional<game_socket::Start> _scenarioStart;
+	/// The start that the server sent to the room when the editor started the room again on a land. A player who was away
+	/// gets it before the server's world, so that the client loads the land of the world first.
+	std::optional<game_socket::Start> _landStart;
 	ConnectionId _worldChangeFrom {0};
 	uint32_t _worldChanges {0};
 };
