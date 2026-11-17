@@ -1185,6 +1185,8 @@ public:
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"),
 			                   "The room plays a new land: the server removed the snapshots of the old land");
+			// The data of the world states of the new land are ready before the first snapshot of the land
+			Prepare();
 		}
 		_lastTurn.reset();
 	}
