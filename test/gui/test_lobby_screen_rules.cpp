@@ -236,6 +236,31 @@ TEST(LobbyScreenRules, AJoinAsksOrRefuses)
 	EXPECT_EQ(RefusalOf(lobby, k_Build), "wrong_version");
 }
 
+TEST(LobbyScreenRules, AMemberOfAFullSessionThatHasNotStartedGoesBackIn)
+{
+	auto lobby = Summary("a", "amy", 2, lobby_api::LobbyState::Open);
+	lobby.locked = true;
+	lobby.freeSlots = 0;
+	lobby.players = {k_Host, k_Me};
+	// A player who is not a member gets the full box
+	EXPECT_EQ(JoinStepOf(lobby, k_Build, 77), JoinStep::Refuse);
+	EXPECT_EQ(JoinStepOf(lobby, k_Build), JoinStep::Refuse);
+	// A god in the list of players is a member: no refusal and no password
+	EXPECT_TRUE(IsMember(lobby, k_Me.id));
+	EXPECT_EQ(JoinStepOf(lobby, k_Build, k_Me.id), JoinStep::Join);
+	// The service flag covers the members that the list does not show, such as an observer
+	lobby.players = {k_Host};
+	EXPECT_FALSE(IsMember(lobby, k_Me.id));
+	lobby.member = true;
+	EXPECT_EQ(JoinStepOf(lobby, k_Build, 77), JoinStep::Join);
+	// A started session and a session of another build still refuse
+	lobby.state = lobby_api::LobbyState::Countdown;
+	EXPECT_EQ(JoinStepOf(lobby, k_Build, k_Me.id), JoinStep::Refuse);
+	lobby.state = lobby_api::LobbyState::Open;
+	lobby.buildId = "other";
+	EXPECT_EQ(JoinStepOf(lobby, k_Build, k_Me.id), JoinStep::Refuse);
+}
+
 TEST(LobbyScreenRules, AStartThatTheGameServerCannotPlayGivesTheReasonOnASecondLine)
 {
 	// The lobby's server_problem comes as the detail of the problem "server_land" (deviation 275)

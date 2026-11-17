@@ -165,6 +165,8 @@ struct LobbySummary
 	std::vector<AccountRef> players;
 	/// "locked": the lobby needs a password
 	bool locked {false};
+	/// "member": the account that asked for the list is a member of the lobby. An older service does not send it.
+	bool member {false};
 	/// "state"
 	LobbyState state {LobbyState::Open};
 	/// "queue_position": the place of the lobby in the line for a free server

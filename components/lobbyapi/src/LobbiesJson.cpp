@@ -231,7 +231,7 @@ bool ReadSummary(const Json& object, LobbySummary& out)
 	       ReadOptionalInteger(object, "open_slots", out.openSlots) &&
 	       ReadOptionalInteger(object, "free_slots", out.freeSlots) && ReadInteger(object, "observers", out.observers, false) &&
 	       ReadArray(object, "players", out.players, ReadAccountRef, false) && ReadBool(object, "locked", out.locked, false) &&
-	       ReadName(object, "state", out.state, LobbyStateOf) &&
+	       ReadBool(object, "member", out.member, false) && ReadName(object, "state", out.state, LobbyStateOf) &&
 	       ReadOptionalInteger(object, "queue_position", out.queuePosition) &&
 	       ReadOptionalTime(object, "started_at", out.startedAt) && ReadOptionalTime(object, "created", out.created) &&
 	       ReadString(object, "build_id", out.buildId, false);
