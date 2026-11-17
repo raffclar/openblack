@@ -102,6 +102,9 @@ public:
 	virtual void SetHandOnScreen(std::optional<glm::vec2> position) = 0;
 
 	[[nodiscard]] virtual bool IsMenuOpen() const noexcept = 0;
+	/// True while a box of the front end is the active box: the menu, a question or the name box of the save game
+	/// room, the tattoo editor, the boxes of the online front end, or the buttons of the story history
+	[[nodiscard]] virtual bool IsFrontEndBoxActive() const = 0;
 	/// Opens the game's menu at its options page
 	virtual void OpenOptions() = 0;
 	virtual void CloseMenu() = 0;

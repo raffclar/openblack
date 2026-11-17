@@ -78,4 +78,16 @@ constexpr TempleToolTip k_FirstTempleToolTip {.index = 4, .action = gui::ToolTip
 /// The save game room's named zoom also gives the name of the saved game it shows, which stays as it was otherwise
 void UpdateTempleToolTip(TempleToolTip& toolTip, const TempleToolTipInput& input, std::u16string* savedGameName = nullptr);
 
+/// The tooltip that the temple submits this turn. The temple submits none while a box of the front end is the active
+/// box, whatever the box. Then the shown tooltip stays for its linger time and then goes.
+/// The temple also submits none when the rooms chose none.
+[[nodiscard]] constexpr std::optional<TempleToolTip> TempleToolTipToSubmit(const TempleToolTip& chosen, bool frontEndBoxActive)
+{
+	if (frontEndBoxActive || !chosen.index.has_value())
+	{
+		return std::nullopt;
+	}
+	return chosen;
+}
+
 } // namespace openblack
