@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -50,6 +51,9 @@ public:
 
 	IndexBuffer(std::string name, const void* indices, uint32_t indexCount, Type type);
 	IndexBuffer(std::string name, const void* memory, Type type, Storage storage = Storage::Own);
+	/// An empty buffer for this count of indices of 16 bits, in a part of the shared buffer. The game writes runs of
+	/// indices into it later with Write.
+	IndexBuffer(std::string name, uint32_t capacity);
 
 	~IndexBuffer();
 
@@ -64,6 +68,8 @@ public:
 	/// Tells the graphics device that the game gives the indices again after a restore of the device. The device then
 	/// keeps no copy of the indices.
 	void SetContentsGivenAgain() const;
+	/// Writes a run of indices into an empty buffer, from the first index on. The run must fit in the buffer.
+	void Write(uint32_t firstIndex, std::span<const uint16_t> indices) const;
 	/// Gives the bytes of all the indices again after a restore of the device
 	void GiveContentsAgain(std::vector<uint8_t> bytes) const;
 

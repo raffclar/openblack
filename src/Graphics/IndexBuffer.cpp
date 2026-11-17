@@ -11,8 +11,10 @@
 
 #include <cassert>
 
+#include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <spdlog/spdlog.h>
 
@@ -51,6 +53,45 @@ IndexBuffer::IndexBuffer(std::string name, const void* mem, Type type, Storage s
 	const auto* memBgfx = static_cast<const DeviceMemory*>(mem);
 	_count = static_cast<uint32_t>(Locator::graphicsDevice::value().Bytes(memBgfx).size() / sizeof(uint16_t));
 	Make(memBgfx);
+}
+
+IndexBuffer::IndexBuffer(std::string name, uint32_t capacity)
+    : _name(std::move(name))
+    , _count(capacity)
+    , _type(Type::Uint16)
+    , _handle(InvalidHandle<IndexBufferHandle>())
+    , _sharedHandle(InvalidHandle<DynamicIndexBufferHandle>())
+    , _storage(Storage::Shared)
+{
+	assert(capacity > 0);
+	PostToMainThread(MainThreadApi::Graphics, [this, capacity] {
+		_sharedHandle = Locator::graphicsDevice::value().CreateIndexPage(capacity, false);
+		if (!IsValidHandle(_sharedHandle))
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
+		}
+	});
+}
+
+void IndexBuffer::Write(uint32_t firstIndex, std::span<const uint16_t> indices) const
+{
+	assert(_storage == Storage::Shared && _type == Type::Uint16);
+	assert(firstIndex + indices.size() <= _count);
+	if (indices.empty())
+	{
+		return;
+	}
+	// The work keeps a copy, because the indices can go before the main thread writes them. The device memory is made
+	// only for a buffer that takes it, because the device frees its memory only in a call.
+	PostToMainThread(MainThreadApi::Graphics, [this, firstIndex, copy = std::vector<uint16_t>(indices.begin(), indices.end())] {
+		if (!IsValid())
+		{
+			return;
+		}
+		const auto& device = Locator::graphicsDevice::value();
+		const auto bytes = std::as_bytes(std::span(copy));
+		device.Update(_sharedHandle, firstIndex, device.Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+	});
 }
 
 void IndexBuffer::Make(const void* memory)

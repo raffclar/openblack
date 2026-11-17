@@ -219,6 +219,16 @@ DynamicIndexBufferHandle BgfxGraphicsDevice::CreateSharedIndexBuffer(const Devic
 	return fromBgfx(bgfx::createDynamicIndexBuffer(ToBgfx(indices), IndexFlags(wide)));
 }
 
+DynamicIndexBufferHandle BgfxGraphicsDevice::CreateIndexPage(uint32_t count, bool wide) const
+{
+	return fromBgfx(bgfx::createDynamicIndexBuffer(count, IndexFlags(wide)));
+}
+
+void BgfxGraphicsDevice::Update(DynamicIndexBufferHandle buffer, uint32_t firstIndex, const DeviceMemory* indices) const
+{
+	bgfx::update(toBgfx(buffer), firstIndex, ToBgfx(indices));
+}
+
 void BgfxGraphicsDevice::SetName(IndexBufferHandle buffer, std::string_view name) const
 {
 	bgfx::setName(toBgfx(buffer), name.data(), static_cast<int32_t>(name.size()));
