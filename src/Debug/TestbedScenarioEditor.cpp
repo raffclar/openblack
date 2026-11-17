@@ -211,6 +211,21 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_trees",
+	    .name = "The stands of trees and the big forests of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly over "
+	                   "the land and look at the trees.",
+	    .expected = "Almost all trees stand in groups, and few trees stand alone. Each group has a main kind and some "
+	                "trees of the kinds that grow with it, such as palms with palms and conifers with pines. Bushes "
+	                "are more often at the edge of a group. Palms grow near the coast and on low plateaus, and no "
+	                "conifer grows below 10 metres. Big forests stand alone in the woods, with open ground round them.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	});
+
+	all.push_back({
 	    .id = "editor.animals",
 	    .name = "Every animal of the palette",
 	    .facet = Facet::Editor,

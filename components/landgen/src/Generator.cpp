@@ -356,7 +356,14 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	const auto keepClear =
 	    Mask(side, [&](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude + 1 || riverDistance.values[i] <= 1.5f; });
 	const std::array clearings {features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
-	land.features = features::Place(land.biomes, heights, keepClear, clearings, seed, settings.features);
+	land.features = features::Place({.biomes = land.biomes,
+	                                 .heights = heights,
+	                                 .seaDistance = seaDistance,
+	                                 .keepClear = keepClear,
+	                                 .clearings = clearings,
+	                                 .townX = land.start.x,
+	                                 .townZ = land.start.z},
+	                                seed, settings.features);
 	clock.Done("features");
 
 	// The temple and the town on the start area, then the forests nearest the town first
