@@ -166,6 +166,13 @@ struct Spot
 	float town;
 };
 
+/// Whether a feature can stand at a place in corners: on the map, out of the water, off the rivers and out of the
+/// clearings
+[[nodiscard]] bool IsFree(const Ground& ground, float x, float z);
+
+/// The ground at a place in corners
+[[nodiscard]] Spot SpotAt(const Ground& ground, float x, float z);
+
 /// Whether a kind of tree can grow at a spot. The limits of each kind come from the trees of the lands of the story:
 /// the height, the slope, the distance from the sea and the distance from a town where almost all trees of the kind
 /// stand.
@@ -226,7 +233,7 @@ struct ForestSettings
 
 /// Puts trees into forests. The trees of each square of the map make one forest when the square has enough trees. The
 /// squares nearest the point in metres make the forests first, and get the first numbers from 1. The other trees stay in
-/// no forest.
+/// no forest. The burnt trees stay in no forest, as on the lands of the story.
 [[nodiscard]] std::vector<Forest> GroupForests(std::span<Feature> features, float nearX, float nearZ,
                                                const ForestSettings& settings);
 } // namespace openblack::landgen::features

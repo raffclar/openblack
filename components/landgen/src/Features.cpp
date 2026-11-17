@@ -1360,6 +1360,16 @@ void PlaceSeaStacks(const Placement& placement, uint64_t seed, const Settings& s
 }
 } // namespace
 
+bool features::IsFree(const Ground& ground, float x, float z)
+{
+	return Placement(ground).Free(x, z);
+}
+
+Spot features::SpotAt(const Ground& ground, float x, float z)
+{
+	return Placement(ground).SpotAt(x, z);
+}
+
 bool features::Suits(Tree tree, const Spot& spot)
 {
 	const auto* rule = RuleOf(tree);
@@ -1448,7 +1458,7 @@ std::vector<Forest> features::GroupForests(std::span<Feature> features, float ne
 	for (size_t i = 0; i < features.size(); ++i)
 	{
 		const auto& feature = features[i];
-		if (feature.kind != Kind::Tree)
+		if (feature.kind != Kind::Tree || feature.type == static_cast<uint8_t>(Tree::Burnt))
 		{
 			continue;
 		}

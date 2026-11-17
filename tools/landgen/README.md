@@ -46,5 +46,10 @@ nearest rock and to the nearest tree, the lean of the rocks (the larger of the t
 their height above the land (median and 90th percentile). `pillars` counts the pillar features. A dump feature has
 11 values: kind, type, x, z, angle, size, largest size, forest, the two lean angles and the height above the land
 (older dumps have the first 8). The big forest numbers count the big forests, the median distance to the nearest big forest and
-the median distance from a big forest to the nearest tree. The generator dump has no mists and no footpaths yet, so
-these two numbers are zero for it.
+the median distance from a big forest to the nearest tree. A dump mist has 6 values: x, z, the height above the land, the
+colour (0xAARRGGBB), the size and the edge shrink. The generator dump has no footpaths yet, so this number is zero for
+it.
+
+`cursed_patches` counts the cursed places: the groups of burnt trees, craters and dark mists that are 150 m or less
+apart. A dark mist has no colour channel above 0x50 (the near black mist of Land 1, the dark mist of Land 4 and the grey
+smoke of the Land 5 craters). `dark_mists` counts the dark mists.

@@ -142,7 +142,8 @@ def objects_of(script):
                 objs.append(dict(cls="bigforest", kind=f"BigForest{a[1]}", pos=parse_pos(a[0]), rot=float(a[3]),
                                  scale=float(a[4])))
             elif cmd == "CREATE_MIST":
-                objs.append(dict(cls="mist", kind="Mist", pos=parse_pos(a[0]), scale=float(a[3])))
+                objs.append(dict(cls="mist", kind="Mist", pos=parse_pos(a[0]), scale=float(a[3]),
+                                 colour=int(float(a[2])) & 0xFFFFFFFF))
             elif cmd in ("CREATE_STREET_LANTERN", "CREATE_BONFIRE", "CREATE_POT", "CREATE_SCAFFOLD", "CREATE_ARENA",
                          "CREATE_SPELL_DISPENSER", "CREATE_DRINK_WAYPOINT", "CREATE_FIRE_FLY"):
                 p = next((parse_pos(x) for x in a if parse_pos(x)), None)
