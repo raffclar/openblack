@@ -258,8 +258,12 @@ void PlaceCover(const features::Ground& ground, uint64_t seed, const Settings& s
 				continue;
 			}
 			const auto& flat = k_Sheet.back();
-			result.mists.push_back(
-			    {.x = x, .z = z, .altitude = 0.0f, .colour = flat.colour, .size = flat.size, .edgeShrink = flat.edgeShrink});
+			result.mists.push_back({.x = x,
+			                        .z = z,
+			                        .altitude = 0.0f,
+			                        .colour = flat.colour,
+			                        .size = flat.size * (settings.coverSpacing / k_CoverBaseSpacing),
+			                        .edgeShrink = flat.edgeShrink});
 			++result.coverPuffs;
 		}
 	}

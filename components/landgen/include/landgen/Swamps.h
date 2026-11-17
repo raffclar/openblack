@@ -24,6 +24,10 @@ namespace openblack::landgen::swamps
 /// The colour of the green mist without its alpha, 0xRRGGBB
 constexpr uint32_t k_GreenMistColour = 0x50632Fu;
 
+/// The distance between the puffs of the sheets of the story, at most, in metres. A cover with this spacing has the
+/// flat puffs of the story at their own size.
+constexpr float k_CoverBaseSpacing = 30.0f;
+
 struct Settings
 {
 	/// The land for each sheet of green mist, in square kilometres. The fourth land of the story has one sheet on
@@ -33,11 +37,12 @@ struct Settings
 	uint32_t most {8};
 	/// The distance between the points where a sheet can start, in corners
 	float spacing {2.0f};
-	/// The distance between the flat puffs that cover the whole of each swamp, in metres. 0 gives no cover. The puffs
-	/// of a sheet of the story stand 5 m to 30 m apart.
-	float coverSpacing {30.0f};
+	/// The distance between the flat puffs that cover the whole of each swamp, in metres. 0 gives no cover. A puff of
+	/// the cover is k_CoverBaseSpacing / coverSpacing times fewer and coverSpacing / k_CoverBaseSpacing times larger
+	/// than a cover of the puffs of the story, so the cover looks the same with fewer puffs to draw.
+	float coverSpacing {60.0f};
 	/// The most puffs of the cover on a land, for the frame rate
-	uint32_t mostCoverPuffs {4000};
+	uint32_t mostCoverPuffs {1000};
 };
 
 /// One sheet of green mist: the place of its first puff in metres
@@ -69,7 +74,7 @@ struct Result
 ///   the story.
 /// - The sheets do not turn, as the land script places them.
 /// - The flat puffs of the sheet of the story cover the rest of each swamp, coverSpacing metres apart, but not the edge
-///   of a swamp or a small wet spot.
+///   of a swamp or a small wet spot. The puffs are larger in proportion to coverSpacing.
 ///
 /// The features under a sheet stay, as the bushes and oaks under the sheet of the story stay. The same seed gives the
 /// same sheets.

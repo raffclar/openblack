@@ -197,7 +197,8 @@ TEST(LandgenSwamps, ALandHasOneSheetForEachAreaOfTheFourthLandOfTheStory)
 TEST(LandgenSwamps, TheCoverOfFlatPuffsGoesOverTheWholeSwamp)
 {
 	const SwampLand land;
-	const swamps::Settings settings;
+	// The puffs of the story at their own size, 30 m apart
+	const swamps::Settings settings {.coverSpacing = swamps::k_CoverBaseSpacing};
 	const auto result = swamps::Place(land.Ground(), 6, settings);
 	ASSERT_EQ(result.sheets.size(), 1u);
 	const auto sheetPuffs = swamps::PuffsInSheet();
@@ -250,4 +251,16 @@ TEST(LandgenSwamps, TheCoverKeepsToItsMostPuffsAndOffSmallWetSpots)
 		}
 	}
 	EXPECT_EQ(swamps::Place(spots.Ground(), 6, {}).coverPuffs, 0u);
+}
+
+TEST(LandgenSwamps, AWiderCoverHasFewerLargerPuffs)
+{
+	const SwampLand land;
+	const auto fine = swamps::Place(land.Ground(), 6, {.coverSpacing = 30.0f});
+	const auto wide = swamps::Place(land.Ground(), 6, {.coverSpacing = 60.0f});
+	// Twice the spacing gives about a quarter of the puffs, each twice as large
+	EXPECT_LT(wide.coverPuffs * 3u, fine.coverPuffs);
+	EXPECT_GT(wide.coverPuffs * 6u, fine.coverPuffs);
+	EXPECT_FLOAT_EQ(wide.mists.back().size, 2.0f * 1.389350f);
+	EXPECT_EQ(wide.mists.back().colour, 0x8650632Fu);
 }
