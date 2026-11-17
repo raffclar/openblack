@@ -313,12 +313,8 @@ entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic:
 		return entt::null;
 	}
 	// The forest, the shields and the teleport keep their state in the things that they made: the trees, the domes and
-	// the stones. The import does not make these things, so it does not make these kinds of spell.
+	// the stones. The import of the world makes these things for the spell after the spell.
 	const auto kind = magic::ClassOf(cast.type);
-	if (kind == magic::SpellClass::Forest || kind == magic::SpellClass::Shield || kind == magic::SpellClass::Teleport)
-	{
-		return entt::null;
-	}
 	ReleaseCreatureCast(creature);
 	const SpellCaster caster {.kind = SpellCaster::Kind::Creature, .player = body->owner, .entity = creature};
 	const magic::SpellCastData data {
@@ -357,6 +353,12 @@ entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic:
 		{
 			AddEffectTarget(made, cast.target);
 		}
+	}
+	// A forest knows if it planted its trees and how many trees it can make
+	if (kind == magic::SpellClass::Forest && cast.forest.has_value())
+	{
+		made.forestPlanted = cast.forest->planted;
+		made.maxObjectsToCreate = cast.forest->mostTrees;
 	}
 	// A new effect of the heal takes the people near the spell, as at the cast
 	if (kind == magic::SpellClass::Heal && !restored)

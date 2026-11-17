@@ -80,6 +80,8 @@ struct ImportedTree
 	/// The largest size that it grows to
 	float maxSize {1.0f};
 	uint16_t growthCountdown {0};
+	/// A tree of a forest spell: the value of its wood against an ordinary tree. Nothing for an ordinary tree.
+	std::optional<float> magicWoodMultiplier;
 };
 
 struct ImportedBigForest

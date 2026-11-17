@@ -150,6 +150,55 @@ glm::vec2 PositionOf(entt::entity entity)
 }
 } // namespace
 
+void MagicShieldSystem::RestoreReaction(entt::entity object, uint32_t id, Reaction type, float reach, uint32_t firstReacted,
+                                        std::span<const entt::entity> villagers)
+{
+	auto& registry = EntityRegistry();
+	auto* shieldObject = id != 0 && registry.Valid(object) ? registry.TryGet<MagicShield>(object) : nullptr;
+	if (shieldObject == nullptr)
+	{
+		return;
+	}
+	_reactions.insert_or_assign(
+	    id, ShieldReaction {.object = object, .type = type, .radius = reach, .firstReacted = firstReacted, .reacting = {}});
+	if (type == Reaction::ReactToMagicShield)
+	{
+		shieldObject->reaction = id;
+	}
+	else if (type == Reaction::ReactToMagicShieldStruck)
+	{
+		shieldObject->struckReaction = id;
+	}
+	const auto centre = map_coords::WholeXZ(map_coords::FromMetres(PositionOf(object)));
+	for (const auto villager : villagers)
+	{
+		if (!registry.Valid(villager) || !registry.AllOf<LivingAction>(villager) ||
+		    registry.AllOf<VillagerShieldReaction>(villager))
+		{
+			continue;
+		}
+		// A villager that takes up the strikes on a shield keeps to the reaction to the shield standing, as when it takes
+		// the strikes up. A villager that takes up the fall of a shield watches no shield.
+		auto held = id;
+		auto heldType = type;
+		if (type == Reaction::ReactToMagicShieldStruck)
+		{
+			if (!_reactions.contains(shieldObject->reaction))
+			{
+				continue;
+			}
+			held = shieldObject->reaction;
+			heldType = Reaction::ReactToMagicShield;
+		}
+		registry.Assign<VillagerShieldReaction>(
+		    villager, VillagerShieldReaction {.reaction = held,
+		                                      .type = heldType,
+		                                      .shield = heldType == Reaction::ReactToMagicShieldDestroyed ? entt::null : object,
+		                                      .lookAt = centre});
+		_reactions.at(held).reacting.push_back(villager);
+	}
+}
+
 uint32_t MagicShieldSystem::CreateReaction(entt::entity object, Reaction type, glm::vec3 position, float multiplier)
 {
 	auto& registry = EntityRegistry();

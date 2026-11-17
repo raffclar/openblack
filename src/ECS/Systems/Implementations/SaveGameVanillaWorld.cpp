@@ -83,10 +83,13 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -106,6 +109,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Magic/ShieldRules.h"
 #include "SaveGameSystem.h"
 #include "SaveGameVanillaPlaces.h"
 
@@ -1777,19 +1781,65 @@ std::optional<vanilla_reaction_import::Initiator> SpellInitiatorOf(const ecs::Re
 	};
 }
 
+/// The kinds of reaction that a shield keeps: to the shield standing, to its strikes and to its fall
+bool IsShieldReaction(uint32_t type)
+{
+	return type == static_cast<uint32_t>(Reaction::ReactToMagicShield) ||
+	       type == static_cast<uint32_t>(Reaction::ReactToMagicShieldStruck) ||
+	       type == static_cast<uint32_t>(Reaction::ReactToMagicShieldDestroyed);
+}
+
+/// The object of a shield spell, which a reaction of the file to the shield comes from. The shield system keeps the
+/// reaction. None for a thing that is not a shield spell with an object.
+entt::entity ShieldObjectOf(const ecs::Registry& registry, entt::entity entity, uint32_t type)
+{
+	if (!IsShieldReaction(type) || entity == entt::null || !registry.Valid(entity) || !Locator::magicShieldSystem::has_value())
+	{
+		return entt::null;
+	}
+	const auto* spell = registry.TryGet<const Spell>(entity);
+	return spell != nullptr && spell->spellClass == magic::SpellClass::Shield
+	           ? Locator::magicShieldSystem::value().ObjectOf(entity)
+	           : entt::null;
+}
+
+/// A reaction of the file to a shield comes from the object of the shield, as impressive as the shield miracle makes it
+std::optional<vanilla_reaction_import::Initiator> ShieldInitiatorOf(const ecs::Registry& registry, entt::entity object,
+                                                                    uint32_t type)
+{
+	const auto& shield = registry.Get<const MagicShield>(object);
+	if (!Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto magicType = shield.kind == MagicShield::Kind::Physical ? MagicType::PhysicalShield : MagicType::Shield;
+	const float multiplier = magic::shield::ImpressiveMultiplier(static_cast<Reaction>(type), false);
+	return vanilla_reaction_import::Initiator {
+	    .entity = object,
+	    .position = registry.Get<const Transform>(object).position,
+	    .impressiveValue = magic::GetMagicEffectInfo(Locator::infoConstants::value(), magicType).impressiveValue * multiplier,
+	    .balance = ReactionSystemInterface::Balance::Miracles,
+	};
+}
+
 /// The thing that the living react to, as the import made it. None when the import did not make it, or when another
-/// system keeps the reaction of the thing: a fire, a shield, a teleport stone or the control of a missionary. The import
-/// makes none of these. The only spells that the import makes are the spells that creatures hold.
+/// system keeps the reaction of the thing: a fire, a shield or the control of a missionary. The import makes none of
+/// these. The only spells that the import makes are the spells that creatures hold.
 std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registry& registry, entt::entity entity)
 {
-	if (entity == entt::null || !registry.Valid(entity) ||
-	    registry.AnyOf<Fire, MagicShield, TeleportStone, MissionaryControl>(entity))
+	if (entity == entt::null || !registry.Valid(entity) || registry.AnyOf<Fire, MagicShield, MissionaryControl>(entity))
 	{
 		return std::nullopt;
 	}
 	if (registry.AllOf<Spell>(entity))
 	{
 		return SpellInitiatorOf(registry, entity);
+	}
+	// A teleport stone is not impressive, as when the stone is made
+	if (registry.AllOf<TeleportStone>(entity))
+	{
+		return vanilla_reaction_import::Initiator {.entity = entity,
+		                                           .position = registry.Get<const Transform>(entity).position};
 	}
 	const auto* transform = registry.TryGet<const Transform>(entity);
 	if (transform == nullptr)
@@ -1810,6 +1860,114 @@ std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registr
 	}
 	return vanilla_reaction_import::Initiator {
 	    .entity = entity, .position = transform->position, .impressiveValue = impressiveValue};
+}
+
+/// The things that a spell of the file made, which the spell of the creature keeps: the trees of a forest, the object of
+/// a shield, the stones of a teleport
+void ImportHeldSpellThings(const gamesave::VanillaWorld& world, std::unordered_map<uint32_t, entt::entity>& made,
+                           const world_import::ImportedHeldSpell& file, entt::entity spell)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& miracle = registry.Get<Spell>(spell);
+	const auto entityOf = [&made](uint32_t number) { return EntityOf(made, number); };
+	if (miracle.spellClass == magic::SpellClass::Forest && file.forest.has_value() && file.forest->forest != 0 &&
+	    Locator::forestSystem::has_value())
+	{
+		const auto trees = Locator::forestSystem::value().RestoreForest(spell, miracle, EntityOf(made, file.forest->forest));
+		SPDLOG_LOGGER_INFO(ImportLog(), "The forest spell {} takes its forest {} again with {} trees", file.number,
+		                   file.forest->forest, trees);
+	}
+	// A teleport that closed down has no stones
+	if (miracle.spellClass == magic::SpellClass::Teleport && !miracle.closedDown && Locator::teleportSystem::has_value())
+	{
+		for (const auto number : file.objects)
+		{
+			const auto* record = world.Record(number);
+			const auto stone = record != nullptr ? world_import::ReadTeleportStone(world, *record) : std::nullopt;
+			if (!stone.has_value())
+			{
+				SPDLOG_LOGGER_WARN(ImportLog(), "The object {} of the teleport spell {} is not a stone", number, file.number);
+				continue;
+			}
+			// The stone has the player of its spell
+			const auto entity =
+			    Locator::teleportSystem::value().RestoreStone(GroundPosition(stone->position), miracle.caster.player, spell);
+			if (entity != entt::null)
+			{
+				made.emplace(stone->number, entity);
+			}
+		}
+	}
+	if (miracle.spellClass == magic::SpellClass::Shield && Locator::magicShieldSystem::has_value())
+	{
+		auto& shields = Locator::magicShieldSystem::value();
+		const auto data = world.GameData();
+		const uint32_t turn = data.has_value() ? data->gameTurn : 0;
+		for (const auto number : file.objects)
+		{
+			const auto* record = world.Record(number);
+			const auto object = record != nullptr ? world_import::ReadShieldObject(world, *record) : std::nullopt;
+			if (!object.has_value())
+			{
+				SPDLOG_LOGGER_WARN(ImportLog(), "The object {} of the shield spell {} is not a shield", number, file.number);
+				continue;
+			}
+			MagicShieldSystemInterface::RestoredShield restored {.position = GroundPosition(object->position)};
+			if (const auto& dome = object->dome)
+			{
+				restored.dome = magic::shield::SavedDome {
+				    .turns = turn > dome->raisedTurn ? turn - dome->raisedTurn : 0,
+				    .startScale = dome->startScale,
+				    .finalScale = dome->finalScale,
+				    .startSpin = dome->startSpin,
+				    .endSpin = dome->endSpin,
+				    .angle = dome->angle,
+				    .bob = dome->bob,
+				    .dying = dome->dying,
+				    .dieTime = dome->dieTime,
+				    .alpha = dome->alpha,
+				    .height = object->position.altitude,
+				    .solidScale = object->scale,
+				    .pose = dome->pose,
+				    .lastPose = dome->lastPose,
+				};
+				if (dome->effect != 0)
+				{
+					const auto effect = particle_import::ReadEffect(world, dome->effect, entityOf);
+					if (effect.effect.has_value())
+					{
+						restored.effect = std::make_shared<particles::RestoredEffect>(effect.effect->state);
+					}
+					else
+					{
+						SPDLOG_LOGGER_WARN(ImportLog(), "The import does not take the effect of the dome {}: {}", number,
+						                   effect.why);
+					}
+				}
+			}
+			const auto entity = shields.Restore(spell, miracle, restored);
+			if (entity == entt::null)
+			{
+				continue;
+			}
+			made.emplace(object->number, entity);
+			// The shield takes away the influence of the other players itself, so the rings of the file for it go
+			if (file.shield.has_value())
+			{
+				for (const auto ring : file.shield->rings)
+				{
+					if (const auto found = made.find(ring); found != made.end())
+					{
+						if (registry.Valid(found->second))
+						{
+							registry.Destroy(found->second);
+						}
+						made.erase(found);
+					}
+				}
+			}
+		}
+	}
 }
 
 } // namespace
@@ -1882,6 +2040,10 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 		    .lastRipple = file->lastRipple,
 		    .target = file->target.has_value() ? EntityOf(made, *file->target) : entt::null,
 		};
+		if (file->forest.has_value())
+		{
+			cast.forest = magic::ImportedForestCast {.planted = file->forest->planted, .mostTrees = file->forest->mostTrees};
+		}
 		if (file->flock.has_value())
 		{
 			cast.flock = magic::ImportedFlock {
@@ -1915,6 +2077,7 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 			continue;
 		}
 		made.emplace(file->number, spell);
+		ImportHeldSpellThings(world, made, *file, spell);
 		SPDLOG_LOGGER_INFO(
 		    ImportLog(), "The creature {} holds the spell {} of magic type {} again: time {} of {} seconds, size {}",
 		    creature.number, file->number, static_cast<int>(file->magicType), file->age, file->duration, file->magnitude);
@@ -2003,9 +2166,13 @@ void SaveGameSystem::ImportVanillaReactions(const gamesave::VanillaWorld& world,
 	const auto files = vanilla_reaction_import::ReadReactions(world);
 	std::vector<ReactionSystemInterface::Restored> restored;
 	std::vector<const vanilla_reaction_import::ImportedReaction*> kept;
+	// The reactions to a shield, which the shield system keeps: the place of each in the kept reactions, and its object
+	std::vector<std::pair<size_t, entt::entity>> shieldReactions;
 	for (const auto& file : files)
 	{
-		const auto initiator = InitiatorOf(registry, living(file.target));
+		const auto shieldObject = ShieldObjectOf(registry, living(file.target), file.type);
+		const auto initiator = shieldObject != entt::null ? ShieldInitiatorOf(registry, shieldObject, file.type)
+		                                                  : InitiatorOf(registry, living(file.target));
 		if (file.type >= vanilla_reaction_import::k_ReactionKinds || !initiator.has_value())
 		{
 			SPDLOG_LOGGER_WARN(ImportLog(),
@@ -2021,11 +2188,19 @@ void SaveGameSystem::ImportVanillaReactions(const gamesave::VanillaWorld& world,
 			continue;
 		}
 		ReactionSystemInterface::Restored reaction {.reaction = vanilla_reaction_import::ActiveOf(file, *initiator, turn)};
-		for (const auto number : file.takers)
+		// The villagers that take up a reaction to a shield keep to it through the shield system
+		if (shieldObject != entt::null)
 		{
-			if (const auto taker = living(number); taker != entt::null)
+			shieldReactions.emplace_back(kept.size(), shieldObject);
+		}
+		else
+		{
+			for (const auto number : file.takers)
 			{
-				reaction.takers.push_back(taker);
+				if (const auto taker = living(number); taker != entt::null)
+				{
+					reaction.takers.push_back(taker);
+				}
 			}
 		}
 		restored.push_back(std::move(reaction));
@@ -2033,10 +2208,38 @@ void SaveGameSystem::ImportVanillaReactions(const gamesave::VanillaWorld& world,
 	}
 	auto& reactions = Locator::reactionSystem::value();
 	const auto ids = reactions.Restore(restored, turn);
-	// Each reaction takes its dance, and a spell takes its reaction
+	// Each reaction to a shield goes to its shield, with the villagers that take it up
+	for (const auto& [place, object] : shieldReactions)
+	{
+		if (place >= ids.size())
+		{
+			continue;
+		}
+		const auto& file = *kept[place];
+		std::vector<entt::entity> takers;
+		for (const auto number : file.takers)
+		{
+			if (const auto taker = living(number); taker != entt::null)
+			{
+				takers.push_back(taker);
+			}
+		}
+		Locator::magicShieldSystem::value().RestoreReaction(object, ids[place], static_cast<Reaction>(file.type), file.reach,
+		                                                    file.firstTaken.value_or(0), takers);
+	}
+	// Each reaction takes its dance, a spell takes its reaction and a teleport stone takes its reaction
 	for (size_t i = 0; i < ids.size() && i < kept.size(); ++i)
 	{
-		if (const auto spell = living(kept[i]->target); spell != entt::null && registry.AllOf<Spell>(spell))
+		const auto target = living(kept[i]->target);
+		if (auto* stone = target != entt::null ? registry.TryGet<TeleportStone>(target) : nullptr)
+		{
+			stone->reaction = ids[i];
+		}
+		if (std::ranges::any_of(shieldReactions, [i](const auto& entry) { return entry.first == i; }))
+		{
+			continue;
+		}
+		if (const auto spell = target; spell != entt::null && registry.AllOf<Spell>(spell))
 		{
 			registry.Get<Spell>(spell).reaction = ids[i];
 		}

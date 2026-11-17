@@ -41,6 +41,10 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ShieldStruck(entt::entity spell, bool destroyed) override;
 	[[nodiscard]] bool HasObject(entt::entity spell) const override;
+	[[nodiscard]] entt::entity ObjectOf(entt::entity spell) const override;
+	entt::entity Restore(entt::entity spell, const components::Spell& miracle, const RestoredShield& file) override;
+	void RestoreReaction(entt::entity object, uint32_t id, Reaction type, float reach, uint32_t firstReacted,
+	                     std::span<const entt::entity> villagers) override;
 	[[nodiscard]] std::vector<Avoid> CreatureAvoids(PlayerNames creaturePlayer, bool scripted) const override;
 	[[nodiscard]] bool KeepsReactionOff(glm::vec3 watcher, glm::vec3 initiator) const override;
 	[[nodiscard]] std::optional<entt::entity> ShieldAt(glm::vec3 point) const override;
@@ -53,6 +57,11 @@ public:
 private:
 	/// Raises the object of a shield miracle that has none yet
 	void Raise(entt::entity spell, const components::Spell& miracle);
+	/// Makes the object of a shield miracle where it stands. The object of a saved game protects no town.
+	entt::entity MakeObject(entt::entity spell, const components::Spell& miracle, glm::vec3 position, bool restored);
+	/// Gives a physical shield's object its dome, and puts the dome in the physics: a new dome takes its first two turns
+	/// at once, the dome of a saved game has the values of the file
+	void MakeDome(entt::entity object, const components::Spell& miracle, const RestoredShield* file);
 	/// The shield's miracle has let go of it: the spiritual shield's goes at once, the dome starts to fade
 	void LetGo(entt::entity object, components::MagicShield& shield);
 	/// Takes away what goes with a shield: its rings against influence and the reactions to it

@@ -18,6 +18,7 @@
 #include <limits>
 #include <ranges>
 #include <span>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -1054,6 +1055,18 @@ constexpr size_t k_CastingAt = 0x38;
 constexpr size_t k_ProcessInfoSize = 0x3C;
 /// The bytes of the point of the hand of a flock spell
 constexpr size_t k_LastSpawnSize = 12;
+/// The bytes of a pose of the dome of a physical shield: nine values of its turn, three of its point and its size
+constexpr size_t k_DomePoseSize = 13 * sizeof(float);
+
+std::array<float, 13> DomePoseOf(const VanillaWorld& world, const VanillaRecord& record, std::string_view name)
+{
+	std::array<float, 13> pose {};
+	if (const auto bytes = world.Raw(record, name); bytes.size() == k_DomePoseSize)
+	{
+		std::memcpy(pose.data(), bytes.data(), k_DomePoseSize);
+	}
+	return pose;
+}
 
 std::array<float, 3> PointAt(std::span<const uint8_t> bytes, size_t at)
 {
@@ -1119,7 +1132,74 @@ std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const 
 		}
 		spell.flock = flock;
 	}
+	const auto objects = world.Refs(record, "spellObjects");
+	spell.objects.assign(objects.begin(), objects.end());
+	if (world.Field(record, "forestSpellPlanted") != nullptr)
+	{
+		spell.forest = ImportedForestSpell {
+		    .planted = world.Byte(record, "forestSpellPlanted").value_or(0) != 0,
+		    .forest = world.Ref(record, "forestSpellForest").value_or(0),
+		    .mostTrees = std::bit_cast<int32_t>(world.Word(record, "forestSpellMostTrees").value_or(0xFFFFFFFFU)),
+		};
+	}
+	if (world.Field(record, "shieldSpellRings") != nullptr)
+	{
+		const auto rings = world.Refs(record, "shieldSpellRings");
+		spell.shield = ImportedShieldSpell {
+		    .rings = {rings.begin(), rings.end()},
+		    .struckReaction = world.Ref(record, "shieldSpellStruckReaction").value_or(0),
+		    .reaction = world.Ref(record, "shieldSpellReaction").value_or(0),
+		};
+	}
 	return spell;
+}
+
+std::optional<ImportedShieldObject> ReadShieldObject(const VanillaWorld& world, const VanillaRecord& record)
+{
+	if (!record.Is(VanillaType::MagicShield) && !record.Is(VanillaType::PhysicalShield))
+	{
+		return std::nullopt;
+	}
+	ImportedShieldObject shield {
+	    .number = record.number,
+	    .spell = world.Ref(record, "mapShieldSpell").value_or(0),
+	    .position = PositionOf(world, record).value_or(gamesave::MapCoords {}),
+	    .scale = world.Float(record, "scale").value_or(1.0f),
+	};
+	if (record.Is(VanillaType::PhysicalShield))
+	{
+		shield.dome = ImportedDome {
+		    .raisedTurn = world.Word(record, "domeRaisedTurn").value_or(0),
+		    .startScale = world.Float(record, "domeStartScale").value_or(0.0f),
+		    .finalScale = world.Float(record, "domeFinalScale").value_or(0.0f),
+		    .startSpin = world.Float(record, "domeStartSpin").value_or(0.0f),
+		    .endSpin = world.Float(record, "domeEndSpin").value_or(0.0f),
+		    .angle = world.Float(record, "domeAngle").value_or(0.0f),
+		    .bob = world.Float(record, "domeBob").value_or(0.0f),
+		    .dying = world.Byte(record, "domeDying").value_or(0) != 0,
+		    .dieTime = world.Float(record, "domeDieTime").value_or(0.0f),
+		    .alpha = world.Byte(record, "domeAlpha").value_or(0xFF),
+		    .pose = DomePoseOf(world, record, "domePose"),
+		    .lastPose = DomePoseOf(world, record, "domeLastPose"),
+		    .effect = world.Ref(record, "domeEffect").value_or(0),
+		};
+	}
+	return shield;
+}
+
+std::optional<ImportedTeleportStone> ReadTeleportStone(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto position = PositionOf(world, record);
+	if (!record.Is(VanillaType::MagicTeleport) || !position.has_value())
+	{
+		return std::nullopt;
+	}
+	return ImportedTeleportStone {
+	    .number = record.number,
+	    .position = *position,
+	    .spell = world.Ref(record, "teleportSpell").value_or(0),
+	    .player = world.Ref(record, "teleportPlayer").value_or(0),
+	};
 }
 
 void PutDanceValues(components::Dance& dance, const ImportedDance& file)

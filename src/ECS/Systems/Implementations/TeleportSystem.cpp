@@ -220,6 +220,11 @@ entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, en
 	{
 		return entt::null;
 	}
+	return RestoreStone(point, player, spell);
+}
+
+entt::entity TeleportSystem::RestoreStone(glm::vec3 point, PlayerNames player, entt::entity spell)
+{
 	auto& registry = EntityRegistry();
 	const auto position = OnLand({point.x, point.z});
 	const auto stone = registry.Create();
