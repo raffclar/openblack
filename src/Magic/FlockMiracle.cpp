@@ -131,6 +131,18 @@ void FlockMiracle::Start(SpellServicesInterface& services, Spell& spell)
 	}
 }
 
+void FlockMiracle::Resume(SpellServicesInterface& services, Spell& spell, const FlockSpell& saved)
+{
+	auto& registry = EntityRegistry();
+	const auto tables = TablesOf(services.Info(), spell.magicType);
+	auto& data = registry.AssignOrReplace<FlockSpell>(registry.ToEntity(spell), saved);
+	// The doves or the bats come from the alignment of the caster now, as at each animal that the spell makes
+	data.evil = !tables.ground && flock::IsEvil(AlignmentOf(spell.caster.player), tables.alignmentSwitch);
+	// The saved game does not keep the trail of the hand, and the trail does not start again
+	data.castEffect = 0;
+	data.castEffectStarted = true;
+}
+
 bool FlockMiracle::AnimalsLeft(const Spell& spell) const
 {
 	const auto* data = DataOf(spell);

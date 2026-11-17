@@ -1052,6 +1052,8 @@ constexpr size_t k_HandMovementAt = 0x24;
 constexpr size_t k_PowerAt = 0x30;
 constexpr size_t k_CastingAt = 0x38;
 constexpr size_t k_ProcessInfoSize = 0x3C;
+/// The bytes of the point of the hand of a flock spell
+constexpr size_t k_LastSpawnSize = 12;
 
 std::array<float, 3> PointAt(std::span<const uint8_t> bytes, size_t at)
 {
@@ -1070,7 +1072,10 @@ std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const 
 	}
 	ImportedHeldSpell spell {
 	    .number = record.number,
+	    .saveType = record.type,
 	    .magicType = static_cast<MagicType>(*type),
+	    .system = world.Ref(record, "spellSystem").value_or(0),
+	    .reaction = world.Ref(record, "spellReaction").value_or(0),
 	    .position = PositionOf(world, record).value_or(gamesave::MapCoords {}),
 	    .creator = world.Ref(record, "spellCreator").value_or(0),
 	    .chants = world.Float(record, "spellChants").value_or(0.0f),
@@ -1094,6 +1099,26 @@ std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const 
 		spell.firstDone = *firstDone != 0;
 	}
 	spell.lastRipple = world.Float(record, "spellLastRipple");
+	if (world.Field(record, "creatureSpellTarget") != nullptr)
+	{
+		spell.target = world.Ref(record, "creatureSpellTarget").value_or(0);
+	}
+	if (world.Field(record, "flockSpellFlock") != nullptr)
+	{
+		ImportedFlockSpell flock {
+		    .flock = world.Ref(record, "flockSpellFlock").value_or(0),
+		    .created = std::bit_cast<int32_t>(world.Word(record, "flockSpellCreated").value_or(0)),
+		    .emitted = world.Float(record, "flockSpellEmitted").value_or(0.0f),
+		};
+		// The point is two whole numbers and the height above the land
+		if (const auto last = world.Raw(record, "flockSpellLastSpawn"); last.size() == k_LastSpawnSize)
+		{
+			std::memcpy(&flock.lastSpawnX, last.data(), sizeof(flock.lastSpawnX));
+			std::memcpy(&flock.lastSpawnZ, last.data() + sizeof(int32_t), sizeof(flock.lastSpawnZ));
+			std::memcpy(&flock.lastSpawnHeight, last.data() + (2 * sizeof(int32_t)), sizeof(flock.lastSpawnHeight));
+		}
+		spell.flock = flock;
+	}
 	return spell;
 }
 

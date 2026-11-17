@@ -178,10 +178,12 @@ std::optional<uint32_t> StartContainer(const particle_import::ImportedContainer&
 	return handle;
 }
 
-/// Makes the particle containers of the file, the oldest first. A container of a temple heart is a part of the temple;
-/// each other container becomes a thing that holds its effect, as the things of the visuals that scripts start.
+/// Makes the particle containers of the file, the oldest first. A container of a temple heart is a part of the temple,
+/// and a container of a beam from the hand of a creature is a part of the creature. Each other container becomes a
+/// thing that holds its effect, as the things of the visuals that scripts start.
 std::unordered_map<uint32_t, uint32_t> PutContainers(const gamesave::VanillaWorld& world, ecs::Registry& registry,
                                                      const std::vector<script_import::ImportedTemple>& temples,
+                                                     const std::unordered_set<uint32_t>& creatureParts,
                                                      std::unordered_map<uint32_t, entt::entity>& made)
 {
 	std::unordered_map<uint32_t, uint32_t> effects;
@@ -218,7 +220,7 @@ std::unordered_map<uint32_t, uint32_t> PutContainers(const gamesave::VanillaWorl
 			continue;
 		}
 		effects.emplace(container.number, *handle);
-		if (!hearts.contains(container.number))
+		if (!hearts.contains(container.number) && !creatureParts.contains(container.number))
 		{
 			made.emplace(container.number,
 			             ecs::script_spot_visuals::MakeThing(registry, *handle, GroundPosition(container.position)));
@@ -298,7 +300,7 @@ void PutScriptValues(const gamesave::VanillaWorld& world, ecs::Registry& registr
 }
 } // namespace
 
-void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made)
+void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaEffects& effects)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto things = script_import::ReadScriptThings(world);
@@ -347,7 +349,23 @@ void SaveGameSystem::ImportVanillaScriptThings(const gamesave::VanillaWorld& wor
 	const auto arenas = script_import::ReadArenas(world);
 	PutArenas(registry, arenas, made);
 	const auto temples = script_import::ReadTemples(world);
-	const auto containers = PutContainers(world, registry, temples, made);
+	// The beams from the hands of a creature that casts from above are a part of the creature
+	std::unordered_set<uint32_t> creatureParts;
+	if (_vanilla.has_value())
+	{
+		for (const auto& creature : _vanilla->creatures)
+		{
+			for (const auto& beam : creature.object.creature.handParticles)
+			{
+				if (const auto number = gamesave::NumberOf(beam.key))
+				{
+					creatureParts.insert(*number);
+				}
+			}
+		}
+	}
+	const auto containers = PutContainers(world, registry, temples, creatureParts, made);
+	effects = containers;
 	const auto vortices = PutVorticesIn(world, made);
 	// The heart of a temple is a part of the temple of the land, and the temple takes the values of the heart
 	uint32_t hearts = 0;

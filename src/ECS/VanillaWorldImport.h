@@ -977,12 +977,31 @@ void PutIconValues(components::WorshipIcon& icon, const ImportedWorshipIcon& fil
 [[nodiscard]] std::optional<ImportedWorshipIcon> ReadWorshipIcon(const gamesave::VanillaWorld& world,
                                                                  const gamesave::VanillaRecord& record);
 
+/// The values that a flock spell of the file keeps: its flock, the animals that it made, and its sweep
+struct ImportedFlockSpell
+{
+	/// The number of the flock of the animals, 0 for none
+	uint32_t flock {0};
+	/// How many animals the spell made, and how many it must make by now along the sweep of the hand
+	int32_t created {0};
+	float emitted {0.0f};
+	/// The point of the hand in map units and its height above the land, when the spell made its last animals
+	int32_t lastSpawnX {0};
+	int32_t lastSpawnZ {0};
+	float lastSpawnHeight {0.0f};
+};
+
 /// The values of a spell of the file that the import keeps for the spell that a creature holds. These are the values
-/// of every spell, and the value that food, wood and water add.
+/// of every spell, and the values that some kinds of spell add.
 struct ImportedHeldSpell
 {
 	uint32_t number {0};
+	/// The save type of the record, which gives the kind of the spell
+	uint32_t saveType {0};
 	MagicType magicType {MagicType::None};
+	/// The number of the particle system of the spell, and of the reaction to the spell, 0 for none
+	uint32_t system {0};
+	uint32_t reaction {0};
 	/// The point where the spell is
 	gamesave::MapCoords position {};
 	/// The number of the object that cast the spell
@@ -1007,6 +1026,10 @@ struct ImportedHeldSpell
 	std::optional<bool> firstDone;
 	/// Water: the age of the spell when its last drop made a ring on the land
 	std::optional<float> lastRipple;
+	/// A creature spell: the number of the creature that the spell is on
+	std::optional<uint32_t> target;
+	/// The flocks: the values of the flock spell
+	std::optional<ImportedFlockSpell> flock;
 };
 
 /// The values of a spell of the file. Nothing for a record that is not a spell, or that has no magic type.

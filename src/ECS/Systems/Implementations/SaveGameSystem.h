@@ -191,17 +191,22 @@ private:
 	/// camera that follows a thing and turns with it, or the free camera. The world camera stays for a camera that
 	/// follows a thing that is not there.
 	static void ImportVanillaCameraMode(const ecs::vanilla_camera_import::ImportedCamera& file, const VanillaMade& made);
+	/// The number of the running effect of each particle container of a world file of the game, by the number of the
+	/// container in the file
+	using VanillaEffects = std::unordered_map<uint32_t, uint32_t>;
 	/// The markers, the timers, the highlights and the influences of the scripts replace those of the land. A heart of
-	/// a temple is the temple of the land.
-	void ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// a temple is the temple of the land. The effects get the effect of each particle container of the file.
+	void ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaEffects& effects);
 	/// The animals and the flocks of the file replace those of the land. The flock of a temple is the flock of the temple
 	/// of the land.
 	void ImportVanillaAnimals(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaCircles& circles);
 	/// Each player takes the computer god of the file. A player that the file gives no computer god has no computer god.
 	void ImportVanillaPlayers(const gamesave::VanillaWorld& world);
-	/// Each creature of the file that holds a spell holds the same spell, with the time, the size and the prayer power of
-	/// the file. The spells that the import makes go into the numbers of the made things.
-	void ImportVanillaHeldCasts(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// Each creature of the file that holds a spell holds the same spell, with the values of its kind in the file. The
+	/// effect of the spell continues from its state in the file. A creature that casts from above keeps the beams from
+	/// its hands, which are the effects of particle containers of the file. The spells that the import makes go into the
+	/// numbers of the made things, and each creature spell of a creature of the file takes its spell.
+	void ImportVanillaHeldCasts(const gamesave::VanillaWorld& world, VanillaMade& made, const VanillaEffects& effects);
 	/// The reactions of the file replace the reactions of the land, when all the things of the file are made. Each living
 	/// thing of the file remembers the kinds of reaction that it took up.
 	void ImportVanillaReactions(const gamesave::VanillaWorld& world, const VanillaMade& made);
