@@ -57,7 +57,7 @@ using generated_land::ChoiceRange;
 using generated_land::Choices;
 
 /// The ranges keep the land inside the limits of the map. Above the highest altitude, the crests of the land are flat.
-constexpr std::array<ChoiceRange, 12> k_ChoiceRanges {{
+constexpr std::array<ChoiceRange, 13> k_ChoiceRanges {{
     {"land", "land amount", &Choices::landAmount, -30, 30},
     {"ranges", "mountain ranges", &Choices::ranges, 0, 6},
     {"mountains", "mountain height", &Choices::mountainHeight, 100, 450},
@@ -70,6 +70,7 @@ constexpr std::array<ChoiceRange, 12> k_ChoiceRanges {{
     {"south", "south temperature", &Choices::southTemperature, 0, 100},
     {"wind", "wind", &Choices::wind, -1, 7},
     {"massifs", "mountain massifs", &Choices::massifs, -1, 8},
+    {"trees", "tree stands (percent)", &Choices::trees, 100, 10000},
 }};
 
 /// Reads a whole number that fills all of the text, or gives false
@@ -182,6 +183,10 @@ landgen::Settings generated_land::SettingsOf(const Choices& choices)
 		settings.massifs.countLow = clamped.massifs;
 		settings.massifs.countHigh = clamped.massifs;
 	}
+	// More stands of trees also let the land keep more features
+	const float density = static_cast<float>(clamped.trees) / k_Hundredths;
+	settings.features.treeDensity = density;
+	settings.features.most = static_cast<size_t>(static_cast<float>(settings.features.most) * density);
 	return settings;
 }
 

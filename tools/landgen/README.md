@@ -27,6 +27,9 @@ The game data folder is `C:/projects/black`. Set `OPENBLACK_GAME_DATA` to use an
      openblack_tests --openblack-test-source=landgen/test_landgen_dump.cpp
    ```
 
+   Add `OPENBLACK_LANDGEN_TREES=<hundredths>` for a land with more stands of trees, as `--landgen "7;trees=2600"`
+   gives in the game (the tree benchmarks).
+
 2. Compare: `python -I tools/landgen/measure.py compare <folder>/seed1.json <folder>/seed7.json`.
    `generated` prints the numbers only.
 

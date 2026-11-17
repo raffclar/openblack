@@ -252,6 +252,28 @@ TEST(LandgenFeatures, TheTreesOfAForestStandInGroupsOfMixedKinds)
 	EXPECT_LT(static_cast<float>(mixed), 0.75f * static_cast<float>(pairs));
 }
 
+TEST(LandgenFeatures, AHigherTreeDensityGivesMoreTreesOfTheSameKinds)
+{
+	features::Settings dense;
+	dense.treeDensity = 4.0f;
+	dense.most = 100000;
+	std::vector<features::Feature> usual;
+	std::vector<features::Feature> more;
+	std::ranges::copy_if(PlaceOn(Biome::TemperateForest, 60.0f, 7, {}, 128), std::back_inserter(usual), IsTree);
+	std::ranges::copy_if(PlaceOn(Biome::TemperateForest, 60.0f, 7, dense, 128), std::back_inserter(more), IsTree);
+	ASSERT_GT(usual.size(), 200u);
+	// Four times the stands give about four times the trees. Stands that overlap lose some trees.
+	EXPECT_GT(more.size(), 3 * usual.size());
+	EXPECT_LT(more.size(), 5 * usual.size());
+	// The dense land has only the kinds that the usual land has
+	std::vector<uint8_t> usualKinds;
+	std::ranges::transform(usual, std::back_inserter(usualKinds), &features::Feature::type);
+	for (const auto& tree : more)
+	{
+		EXPECT_NE(std::ranges::find(usualKinds, tree.type), usualKinds.end());
+	}
+}
+
 TEST(LandgenFeatures, BigForestsStandApartWithNoTreesRoundThem)
 {
 	const auto placed = PlaceOn(Biome::Grassland, 60.0f, 9, {}, 400);

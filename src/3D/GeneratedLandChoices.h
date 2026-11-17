@@ -45,6 +45,8 @@ struct Choices
 	int32_t wind {-1};
 	/// How many massifs the island has, or -1 when the seed picks the number
 	int32_t massifs {-1};
+	/// How many stands of trees the land has, in hundredths of the usual stands. Only for tests of the frame rate.
+	int32_t trees {100};
 
 	bool operator==(const Choices&) const = default;
 };
