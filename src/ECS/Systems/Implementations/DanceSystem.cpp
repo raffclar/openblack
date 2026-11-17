@@ -50,6 +50,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Resources/MissingGameData.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerDance.h"
 
@@ -110,6 +111,12 @@ std::shared_ptr<const dance::DanceFile> LoadDanceFile(const std::string& name)
 	const auto id = entt::hashed_string(name.c_str()).value();
 	if (!cache.Contains(id))
 	{
+		// The original game also does not find these files and continues without the dance
+		if (resources::IsFileNotInGameData(name))
+		{
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The dance {} is not in the game data, as in the original game", name);
+			return nullptr;
+		}
 		try
 		{
 			cache.Load(id, resources::DanceFileLoader::FromDiskTag {}, DanceFilePath(name));
