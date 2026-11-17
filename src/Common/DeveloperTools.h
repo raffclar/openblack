@@ -380,6 +380,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "turn-beside-draw"},
     DeveloperOption {.name = "sim-record", .takesValue = true},
     DeveloperOption {.name = "sim-record-every", .takesValue = true},
+    DeveloperOption {.name = "sim-record-fields-every", .takesValue = true},
     DeveloperOption {.name = "sim-start-paused"},
     DeveloperOption {.name = "sim-hash-parts"},
     DeveloperOption {.name = "sim-hash-fields"},
@@ -400,6 +401,47 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "fight-autopilot-sequence", .takesValue = true},
     DeveloperOption {.name = "fight-transcript-dir", .takesValue = true},
 };
+
+/// The options of the game that need the inspector. A build with the developer tools but with no inspector, such as the
+/// web build, cannot do them. --sim-commands is not here: it works with no inspector.
+inline constexpr std::array k_InspectorOptions {
+    std::string_view {"sim-record"},
+    std::string_view {"sim-record-every"},
+    std::string_view {"sim-record-fields-every"},
+    std::string_view {"sim-start-paused"},
+    std::string_view {"sim-hash-parts"},
+    std::string_view {"sim-hash-fields"},
+    std::string_view {"sim-record-input"},
+    std::string_view {"sim-input"},
+    std::string_view {"sim-limits"},
+    std::string_view {"inspect-port"},
+    std::string_view {"inspect-lock-input"},
+    std::string_view {"inspect-allow-player-input"},
+    std::string_view {"screenshot-root"},
+    std::string_view {"fight-autopilot"},
+    std::string_view {"fight-autopilot-seed"},
+    std::string_view {"fight-autopilot-stage"},
+    std::string_view {"fight-autopilot-sequence"},
+    std::string_view {"fight-transcript-dir"},
+};
+
+/// The text of the error for a build with no inspector that gets options that need it. It names each option. The
+/// result has no value when the list is empty.
+[[nodiscard]] inline std::optional<std::string> InspectorOptionsError(std::span<const std::string> given)
+{
+	if (given.empty())
+	{
+		return std::nullopt;
+	}
+	std::string text = "This build has no inspector. It cannot do the option";
+	text += given.size() == 1 ? " " : "s ";
+	for (size_t i = 0; i < given.size(); ++i)
+	{
+		text += (i == 0 ? "--" : ", --") + given[i];
+	}
+	text += ". Use a desktop build that has the inspector.";
+	return text;
+}
 
 /// The options of the dedicated server that only developers and tools use. A build without the developer tools ignores
 /// them. The server then keeps the options that a deployed game server uses: the game folder, the land, the socket and

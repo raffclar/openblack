@@ -127,7 +127,11 @@ enum class JoinStep : uint8_t
 	/// The session takes no player now: the box tells why
 	Refuse,
 };
-[[nodiscard]] JoinStep JoinStepOf(const lobby_api::LobbySummary& lobby, std::string_view ownBuild);
+/// The account is a member of the session: the service says so, or the account has a god in the list of players
+[[nodiscard]] bool IsMember(const lobby_api::LobbySummary& lobby, int64_t ownAccount);
+/// A member of a session that has not started always goes back into it, also when the session is full. The service
+/// gives the member back to the session before it checks the places, the password or the build.
+[[nodiscard]] JoinStep JoinStepOf(const lobby_api::LobbySummary& lobby, std::string_view ownBuild, int64_t ownAccount = 0);
 /// The code of the problem that a join of a session that takes no player gives, as the service gives it
 [[nodiscard]] std::string_view RefusalOf(const lobby_api::LobbySummary& lobby, std::string_view ownBuild);
 

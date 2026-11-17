@@ -173,6 +173,13 @@ TEST(LobbiesJson, TheListAndItsEventsRead)
 	ASSERT_TRUE(list->pool.has_value());
 	EXPECT_EQ(list->pool->total, 1);
 	EXPECT_TRUE(list->lobbies[0].players.empty());
+	// An older service sends no member flag
+	EXPECT_FALSE(list->lobbies[0].member);
+	const auto mine = lobby_api::ParseLobbyList(
+	    R"({"lobbies":[{"id":"a","name":"A","host":{"id":1,"name":"h"},"map":{"file":"m","name":"","sha256":"","size":0},)"
+	    R"("gods":1,"god_slots":1,"free_slots":0,"locked":false,"member":true,"state":"open","build_id":"b"}]})");
+	ASSERT_TRUE(mine.has_value());
+	EXPECT_TRUE(mine->lobbies[0].member);
 	EXPECT_FALSE(lobby_api::ParseLobbyList(R"({"lobbies":[{"id":"a"}]})").has_value());
 	// A game that plays gives the names of its players
 	const auto playing = lobby_api::ParseLobbyList(

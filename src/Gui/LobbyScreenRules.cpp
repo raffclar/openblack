@@ -315,8 +315,19 @@ std::string_view RefusalOf(const lobby_api::LobbySummary& lobby, std::string_vie
 	return {};
 }
 
-JoinStep JoinStepOf(const lobby_api::LobbySummary& lobby, std::string_view ownBuild)
+bool IsMember(const lobby_api::LobbySummary& lobby, int64_t ownAccount)
 {
+	return lobby.member || (ownAccount != 0 && std::ranges::any_of(lobby.players, [ownAccount](const auto& player) {
+		                        return player.id == ownAccount;
+	                        }));
+}
+
+JoinStep JoinStepOf(const lobby_api::LobbySummary& lobby, std::string_view ownBuild, int64_t ownAccount)
+{
+	if (lobby.state == LobbyState::Open && !online::lobby::IsWrongVersion(lobby, ownBuild) && IsMember(lobby, ownAccount))
+	{
+		return JoinStep::Join;
+	}
 	if (!RefusalOf(lobby, ownBuild).empty())
 	{
 		return JoinStep::Refuse;

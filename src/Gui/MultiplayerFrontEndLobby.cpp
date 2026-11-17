@@ -214,7 +214,7 @@ void MultiplayerFrontEnd::JoinSelectedLobby()
 		return;
 	}
 	const auto& build = _services.lobbyRoom->BuildId();
-	switch (screens::JoinStepOf(*lobby, build))
+	switch (screens::JoinStepOf(*lobby, build, GetOwnAccount()))
 	{
 	case screens::JoinStep::Join:
 		JoinLobby(lobby->id, std::nullopt);

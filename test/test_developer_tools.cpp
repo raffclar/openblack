@@ -496,3 +496,26 @@ TEST(DeveloperTools, TheScenarioPlayersExistOnlyInABuildWithTheTools)
 	}
 	EXPECT_EQ(openblack::testbed_scenarios::MakeScenarioPlayer("no.such.scenario"), nullptr);
 }
+
+TEST(DeveloperTools, EveryOptionThatNeedsTheInspectorIsAlsoADeveloperOption)
+{
+	for (const auto name : k_InspectorOptions)
+	{
+		EXPECT_TRUE(std::ranges::any_of(k_DeveloperOptions, [name](const DeveloperOption& option) {
+			return option.name == name;
+		})) << name;
+	}
+	// This option works with no inspector
+	EXPECT_EQ(std::ranges::count(k_InspectorOptions, std::string_view {"sim-commands"}), 0);
+}
+
+TEST(DeveloperTools, ABuildWithNoInspectorNamesEachOptionThatNeedsIt)
+{
+	EXPECT_FALSE(InspectorOptionsError({}).has_value());
+	const std::vector<std::string> one {"sim-record"};
+	EXPECT_EQ(*InspectorOptionsError(one),
+	          "This build has no inspector. It cannot do the option --sim-record. Use a desktop build that has the inspector.");
+	const std::vector<std::string> two {"sim-input", "inspect-port"};
+	EXPECT_EQ(*InspectorOptionsError(two), "This build has no inspector. It cannot do the options --sim-input, --inspect-port. "
+	                                       "Use a desktop build that has the inspector.");
+}

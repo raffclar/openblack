@@ -837,7 +837,10 @@ bool LobbyListModel::Apply(const lobby_api::PushEvent& event)
 	}
 	else if (found != _lobbies.end())
 	{
+		// The event does not say who the viewer is, so the member flag of the list stays
+		const bool member = found->member;
 		*found = *change->summary;
+		found->member = found->member || member;
 	}
 	else
 	{
