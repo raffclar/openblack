@@ -1221,7 +1221,8 @@ void LoadEveryResource()
 {
 	auto& loading = Locator::resources::value();
 	const auto loadStart = std::chrono::steady_clock::now();
-	while (loading.PendingCount() > 0)
+	// A held resource loads only when the game asks for it, so the loop does not wait for it
+	while (loading.PendingCount() > loading.HeldCount())
 	{
 		loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
 		// The graphics card takes what the loading made, as on the loading screen

@@ -68,6 +68,15 @@ class WebJoinPlan(unittest.TestCase):
         self.assertEqual(plan["actions"], [])
         self.assertEqual(plan["seconds"], net_check.run_limit_seconds(600))
 
+    def test_a_draw_trace_goes_to_the_standard_output_of_the_page(self):
+        options = argparse.Namespace(frame_ms=20.0, web_chat=[], trace_draws=True)
+        arguments = net_check.web_join_plan(options, "wss://127.0.0.1:5000/game/x", "ticket", 600)["arguments"]
+        self.assertEqual(arguments[arguments.index("--sim-trace-draws") + 1], "-")
+
+    def test_no_draw_trace_without_the_option(self):
+        arguments = net_check.web_join_plan(self.options([]), "wss://127.0.0.1:5000/game/x", "ticket", 600)["arguments"]
+        self.assertNotIn("--sim-trace-draws", arguments)
+
     def test_the_path_of_the_join_is_on_the_origin_of_the_page(self):
         self.assertEqual(net_check.web_join_path("wss://127.0.0.1:5000/game/net-check-1"), "/game/net-check-1")
 
@@ -101,6 +110,28 @@ class WebBackAt(unittest.TestCase):
     def test_a_page_with_no_load_gives_none(self):
         with tempfile.TemporaryDirectory() as folder:
             self.assertIsNone(net_check.web_back_at(os.path.join(folder, "page-log.txt")))
+
+
+# A draw line of a draw trace: the turn, the phase, the count of draws, the place, the function and no context
+DRAW_LINE = "\t".join(["draw", "1", "turn", "1", "a.cpp:2", "f", ""])
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class WebDrawTrace(unittest.TestCase):
+    def test_the_draw_lines_leave_the_checksum_lines(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with open(os.path.join(folder, "checksums.jsonl"), "w", encoding="utf-8") as file:
+                file.writelines(line + "\n" for line in ["restart", '{"turn":1,"checksum":"ab"}', DRAW_LINE])
+            trace = net_check.web_draw_trace(folder)
+            with open(trace, encoding="utf-8") as file:
+                self.assertEqual(file.read().splitlines(), ["restart", DRAW_LINE])
+
+    def test_a_page_with_no_draw_line_gives_none(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertIsNone(net_check.web_draw_trace(folder))
+            with open(os.path.join(folder, "checksums.jsonl"), "w", encoding="utf-8") as file:
+                file.writelines(['{"turn":1,"checksum":"ab"}', "\n"])
+            self.assertIsNone(net_check.web_draw_trace(folder))
 
 
 @unittest.skipIf(web_remote is None, "web_remote needs net_check")
