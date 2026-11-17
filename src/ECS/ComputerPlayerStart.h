@@ -23,6 +23,7 @@
 
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Player.h"
+#include "ECS/ComputerStartAlignment.h"
 #include "Enums.h"
 #include "PlayerSlots.h"
 
@@ -111,6 +112,24 @@ struct StartFacts
 /// creature learns each miracle that the player can cast, and the miracles that it always knows.
 [[nodiscard]] std::vector<MagicType> MiraclesToLearn(const ecs::components::Player::Miracles& miracles, bool temple);
 
+/// The random value that the game takes for a random alignment is below this value
+constexpr float k_AlignmentDrawRange = 2.0f;
+
+/// A random alignment changes the god only in a skirmish or a network game. A land of the story keeps the alignments
+/// that the game gives.
+[[nodiscard]] bool DrawsAlignment(StartAlignment alignment, const StartFacts& facts);
+
+/// The alignment of a random value below k_AlignmentDrawRange: the value less 1, from -1 (evil) to 1 (good)
+[[nodiscard]] float AlignmentOfDraw(float draw);
+
+/// The start alignments of the players of the god slots (from 0) of a network game. Each player of these slots starts
+/// at a random alignment, and each other player at the alignment that the game gives.
+[[nodiscard]] StartAlignments AlignmentsOfRandomSlots(std::span<const uint8_t> randomSlots) noexcept;
+
+/// The god slots (from 0) of a list of the tools, such as "0,1". Each slot must be below player_slots::k_Slots. An
+/// empty text gives no slot. None when a part of the text is not a slot.
+[[nodiscard]] std::optional<std::vector<uint8_t>> ParseSlotList(std::string_view text);
+
 /// What the start of a computer mind reads and changes in the game
 class World
 {
@@ -143,12 +162,21 @@ public:
 	/// The weight of the need of the mind with this name, as a land script sets it. Tools only: the AI soak sets the
 	/// weights of its computer gods.
 	virtual void SetPersonality(PlayerNames player, std::string_view need, float weight) = 0;
+	/// The god starts at this alignment. The statistics of the player note it as the alignment at the start.
+	virtual void StartGodAt(PlayerNames /*player*/, float /*alignment*/) {}
+	/// The creature starts at this alignment, and its body shows it at once. The statistics of its player note it as
+	/// the alignment of the creature at the start.
+	virtual void StartCreatureAt(entt::entity /*creature*/, float /*alignment*/) {}
 };
 
 /// The start of a computer mind on the land, in the order of the game. With an AI seed (tools only), the mind gets the
 /// personality weights of that seed before anything else. This draws no number from the game's random streams.
+///
+/// With a random start alignment in a skirmish or a network game, the game does these steps after all its own steps:
+/// 1. The game takes a random alignment for the god.
+/// 2. When the god has a creature, the game takes a second random alignment for the creature.
 void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state,
-           std::optional<uint32_t> aiSeed = std::nullopt);
+           std::optional<uint32_t> aiSeed = std::nullopt, StartAlignment alignment = StartAlignment::Vanilla);
 
 /// The number of species that the start of a network game chooses from for the creature of a slot with no player, by
 /// the species number from 0

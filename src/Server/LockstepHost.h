@@ -440,6 +440,8 @@ public:
 	[[nodiscard]] bool Starting() const { return _startStep != StartStep::None; }
 	/// The god slots that the lobby closed, from 0, as the start gives them to every computer
 	[[nodiscard]] const std::vector<uint8_t>& ClosedSlots() const { return _settings.start.closedSlots; }
+	/// The god slots from 0 whose computer god starts at a random alignment (deviation 280)
+	[[nodiscard]] const std::vector<uint8_t>& RandomAlignmentSlots() const { return _settings.start.randomAlignmentSlots; }
 	/// True when the game started and no god's player is connected
 	[[nodiscard]] bool Paused() const;
 	/// The clock of the room: the pause, the steps and the speed that the editor of a player asked for

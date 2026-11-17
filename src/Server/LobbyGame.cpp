@@ -97,7 +97,7 @@ std::variant<std::vector<lobby_api::SlotKind>, std::string> ParseSlotKinds(std::
 		const auto kind = lobby_api::SlotKindOf(word);
 		if (!kind.has_value())
 		{
-			return fmt::format("the slot kind \"{}\" is not open, computer or closed", word);
+			return fmt::format("the slot kind \"{}\" is not open, computer, computer_random or closed", word);
 		}
 		if (kinds.size() == player_slots::k_MaxPlayers)
 		{
@@ -123,6 +123,19 @@ std::vector<uint8_t> ClosedSlotsOf(std::span<const lobby_api::SlotKind> kinds)
 		}
 	}
 	return closed;
+}
+
+std::vector<uint8_t> RandomAlignmentSlotsOf(std::span<const lobby_api::SlotKind> kinds)
+{
+	std::vector<uint8_t> random;
+	for (size_t slot = 0; slot < kinds.size(); ++slot)
+	{
+		if (kinds[slot] == lobby_api::SlotKind::ComputerRandom)
+		{
+			random.push_back(static_cast<uint8_t>(slot));
+		}
+	}
+	return random;
 }
 
 const lobby_members::Member* MemberInShutSlot(const Lobby& lobby, std::span<const lobby_api::SlotKind> kinds) noexcept

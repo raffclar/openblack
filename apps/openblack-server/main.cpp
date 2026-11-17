@@ -42,6 +42,7 @@
 #include "Common/DeveloperTools.h"
 #include "Common/ErrorReportsInterface.h"
 #include "Common/ErrorReportsRules.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/GameEndConditions.h"
 #include "Locator.h"
 #include "Online/Desktop/UdpLanDiscovery.h"
@@ -264,6 +265,7 @@ int main(int argc, char* argv[])
 		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0) or FIRST-LAST:TURN for a range of players. Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
 		("all-computer-gods", "Tools: every god with a citadel is a computer god, and the room has no human god. The game starts at once: with --gods N the world turns when N observers joined (for the AI soak).")
 		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
+		("random-alignment-slots", "The god slots from 0 whose computer god and its creature start at a random alignment in a skirmish or a network game, such as 1,2. Each client takes them from the start. The computer_random slots of --slot-kinds replace them.", cxxopts::value<std::string>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
 		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.");
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -438,6 +440,17 @@ int main(int argc, char* argv[])
 			                                                                       .packageSize = map.packageSize};
 		}
 		settings.soak.allComputerGods = result.count("all-computer-gods") != 0;
+		if (result.count("random-alignment-slots") != 0)
+		{
+			auto slots = openblack::computer_player::ParseSlotList(result["random-alignment-slots"].as<std::string>());
+			if (!slots.has_value())
+			{
+				std::cerr << "openblack-server: --random-alignment-slots needs god slots from 0 with a comma between them"
+				          << std::endl;
+				return EXIT_FAILURE;
+			}
+			settings.randomAlignmentSlots = std::move(*slots);
+		}
 		if (result.count("ai-seed") != 0)
 		{
 			settings.soak.aiSeed = result["ai-seed"].as<uint32_t>();

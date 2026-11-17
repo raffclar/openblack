@@ -66,6 +66,7 @@
 #include "ECS/ChallengePictures.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/MagicShield.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/LearningMarker.h"
@@ -837,6 +838,12 @@ bool Game::Initialize() noexcept
 		{
 			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The simulation run cannot start: {}", *refusal);
 			return false;
+		}
+		// The computer gods of these slots start at a random alignment, as the skirmish box chooses them (deviation 280)
+		if (!_simulation->randomAlignmentSlots.empty() && Locator::computerPlayerSystem::has_value())
+		{
+			Locator::computerPlayerSystem::value().SetStartAlignments(
+			    computer_player::AlignmentsOfRandomSlots(_simulation->randomAlignmentSlots));
 		}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 		if (_simulation->worldSeed.has_value())

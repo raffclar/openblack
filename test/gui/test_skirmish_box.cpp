@@ -9,7 +9,10 @@
 
 // The skirmish box: the lands of its list, their order and names, Start Game and Back, and the menu in a skirmish
 
+#include <cstdint>
+
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -234,7 +237,35 @@ TEST(SkirmishBox, TheArrowsAndTheListAreInTheBox)
 		EXPECT_LE(control.rect.max.x, SkirmishBox::k_Box.max.x);
 		EXPECT_LE(control.rect.max.y, SkirmishBox::k_Box.max.y);
 	}
-	EXPECT_EQ(f.box.GetNamedControls().size(), 3u);
+	// The arrows, the three check boxes of the alignments and the land
+	EXPECT_EQ(f.box.GetNamedControls().size(), 6u);
+}
+
+TEST(SkirmishBox, TheCheckBoxesChooseARandomAlignmentForTheComputerGods)
+{
+	BoxFixture f;
+	f.Show({u"AA"});
+	EXPECT_TRUE(f.box.GetRandomAlignmentSlots().empty());
+	const auto god3 = f.Find(u"God 3: random alignment");
+	const auto god4 = f.Find(u"God 4: random alignment");
+	ASSERT_TRUE(god3.has_value());
+	ASSERT_TRUE(god4.has_value());
+	ASSERT_TRUE(f.Find(u"God 2: random alignment").has_value());
+	f.Click(*god3);
+	f.Click(*god4);
+	EXPECT_EQ(f.box.GetRandomAlignmentSlots(), (std::vector<uint8_t> {2, 3}));
+	// A second click takes the choice back, and the box keeps the choices when it opens again
+	f.Click(*god4);
+	f.Show({u"AA"});
+	EXPECT_EQ(f.box.GetRandomAlignmentSlots(), (std::vector<uint8_t> {2}));
+}
+
+TEST(SkirmishBoxRules, TheAlignmentChoicesNameTheGodsTwoToFour)
+{
+	EXPECT_EQ(skirmish_box::RandomAlignmentLabel(1), u"God 2: random alignment");
+	const std::array<bool, skirmish_box::k_AlignmentChoices> checked {true, false, true};
+	EXPECT_EQ(skirmish_box::RandomAlignmentSlots(checked), (std::vector<uint8_t> {1, 3}));
+	EXPECT_TRUE(skirmish_box::RandomAlignmentSlots(std::array<bool, skirmish_box::k_AlignmentChoices> {}).empty());
 }
 
 TEST(SkirmishBox, InASkirmishTheMenuHasLeaveSkirmishGameAndNoJoinOnlineGame)

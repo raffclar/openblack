@@ -156,6 +156,9 @@ struct ServerSettings
 	std::optional<CustomMapFile> customMap;
 	/// Tools: the modes of the AI soak. Every client takes them from the start of the game.
 	developer_tools::SoakTools soak;
+	/// The god slots from 0 whose computer god and its creature start at a random alignment (deviation 280). Every client
+	/// takes them from the start of the game. The kinds of the slots of a lobby replace them.
+	std::vector<uint8_t> randomAlignmentSlots;
 	/// How the new game on the first land starts, as the game's --skip-opening gives it
 	std::optional<new_game_choice::NewGameStart> opening;
 	/// The text of --skip-opening, which the game server sends to the clients in the start of the game

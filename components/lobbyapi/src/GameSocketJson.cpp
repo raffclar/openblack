@@ -493,6 +493,21 @@ bool ReadStart(const Json& object, Start& start)
 			start.closedSlots.push_back(static_cast<uint8_t>(slot.get<uint64_t>()));
 		}
 	}
+	if (const auto* random = Member(object, "random_alignment_slots"); random != nullptr && !random->is_null())
+	{
+		if (!random->is_array() || random->size() > k_MostSlots)
+		{
+			return false;
+		}
+		for (const auto& slot : *random)
+		{
+			if (!slot.is_number_unsigned() || slot.get<uint64_t>() >= k_MostSlots)
+			{
+				return false;
+			}
+			start.randomAlignmentSlots.push_back(static_cast<uint8_t>(slot.get<uint64_t>()));
+		}
+	}
 	// Each god of the list has a slot and a name
 	const auto gods = object.find("gods");
 	if (gods == object.end())
@@ -580,6 +595,10 @@ void WriteStart(const Start& start, Json& object)
 	if (!start.closedSlots.empty())
 	{
 		object["closed_slots"] = start.closedSlots;
+	}
+	if (!start.randomAlignmentSlots.empty())
+	{
+		object["random_alignment_slots"] = start.randomAlignmentSlots;
 	}
 	if (!start.gods.empty())
 	{

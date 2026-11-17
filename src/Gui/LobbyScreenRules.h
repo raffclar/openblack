@@ -240,7 +240,8 @@ struct SlotTexts
 	/// " (CURRENT)", the vanilla text of the room
 	std::u16string current;
 };
-/// "God 3: name (HOST)", "God 4: - Open -", "God 5: - Computer -" or "God 6: - Closed -"
+/// "God 3: name (HOST)", "God 4: - Open -", "God 5: - Computer -", "God 5: - Computer (random alignment) -" or
+/// "God 6: - Closed -"
 [[nodiscard]] std::u16string SlotLine(const online::lobby::SlotView& slot, const SlotTexts& texts);
 /// The note at the right of a slot: "downloading map" for a player with no map, "away" for a player whose connection
 /// went, else nothing
@@ -255,10 +256,12 @@ enum class HostAction : uint8_t
 	Open,
 	Computer,
 	Closed,
+	/// A computer god whose god and creature start at a random alignment (deviation 280)
+	ComputerRandom,
 };
 /// The actions of the host for a slot: a player of another person can be kicked, banned or made the host; an empty slot
-/// can be Open, Computer or Closed. Before the start only, but for kick and ban, which the host can also do after the
-/// start.
+/// can be Open, Computer, Computer with a random alignment or Closed. Before the start only, but for kick and ban, which the
+/// host can also do after the start.
 [[nodiscard]] std::vector<HostAction> HostActionsOf(const online::lobby::LobbyRoom& room, int32_t slot);
 [[nodiscard]] std::u16string_view HostActionText(HostAction action) noexcept;
 /// The players that a map must take: the players in god slots of the room

@@ -64,6 +64,8 @@ public:
 	void GiveToHuman(PlayerNames player) override;
 	void FillSlotOf(PlayerNames player, bool makeCreature) override;
 	void SetAiSeed(std::optional<uint32_t> seed) override { _aiSeed = seed; }
+	void SetStartAlignments(const computer_player::StartAlignments& alignments) override { _startAlignments = alignments; }
+	[[nodiscard]] const computer_player::StartAlignments& GetStartAlignments() const override { return _startAlignments; }
 	void SetTimesReport(uint32_t everyTurns) override { _timesEvery = everyTurns; }
 
 private:
@@ -78,6 +80,7 @@ private:
 
 	std::unique_ptr<computer_player::World> _world;
 	std::optional<uint32_t> _aiSeed;
+	computer_player::StartAlignments _startAlignments {};
 	/// Tools: the times of the gods, for the developer log
 	uint32_t _timesEvery {0};
 	computer_god_times::Times _times;
