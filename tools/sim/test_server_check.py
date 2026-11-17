@@ -7,7 +7,7 @@
 #
 # openblack is licensed under the GNU General Public License version 3.
 # ******************************************************************************
-"""Tests of how the server check reads the record and the commands of a game that loads a saved world"""
+"""Tests of how the server check reads the record and the commands of a game that loads a land or a saved world"""
 
 import json
 import os
@@ -62,21 +62,21 @@ class ServerCheckTest(unittest.TestCase):
         self.assertEqual(server_check.turns_gone_back(path), [[3, 2]])
         self.assertEqual(server_check.turns_gone_back(os.path.join(self.folder.name, "none.jsonl")), [])
 
-    def test_the_server_gets_the_commands_before_the_first_load(self):
-        source = write_lines(self.folder.name, "commands.jsonl",
-                             [{"turn": t, "give": t} for t in (1, 2, 3, 2, 3, 4)])
-        target = os.path.join(self.folder.name, "commands.before_load.jsonl")
-        server_check.copy_before_first_load(source, target)
-        with open(target, encoding="utf-8") as file:
-            self.assertEqual([json.loads(line)["turn"] for line in file], [1, 2, 3])
+    def test_the_checksums_of_each_land_stay_apart(self):
+        # The game plays turns 0 to 3, loads a land and plays turns 1 to 4 of it
+        records = [{"turn": 0, "frame": 1}] + [turn_record(turn, f"a{turn}") for turn in range(0, 4)]
+        records += [turn_record(turn, f"b{turn}") for turn in range(1, 5)]
+        path = write_lines(self.folder.name, "record.jsonl", records)
+        self.assertEqual(server_check.game_checksums_by_land(path),
+                         [{0: "a0", 1: "a1", 2: "a2", 3: "a3"}, {1: "b1", 2: "b2", 3: "b3", 4: "b4"}])
 
-    def test_the_given_commands_of_one_turn_stay_before_the_first_load(self):
-        source = write_lines(self.folder.name, "commands.gives.jsonl",
-                             [{"turn": t, "give": n} for n, t in enumerate((10, 10, 30, 71, 40))])
-        target = os.path.join(self.folder.name, "commands.before_load.gives.jsonl")
-        server_check.copy_before_first_load(source, target, lines_a_turn=0)
-        with open(target, encoding="utf-8") as file:
-            self.assertEqual([json.loads(line)["give"] for line in file], [0, 1, 2, 3])
+    def test_the_server_log_gives_each_land(self):
+        path = os.path.join(self.folder.name, "server.log")
+        with open(path, "w", encoding="utf-8") as file:
+            for turn, checksum in ((1, "1" * 16), (2, "2" * 16), (1, "3" * 16)):
+                file.write(f"[game] [info] turn {turn} checksum {checksum}\n")
+            file.write("[game] [info] another line\n")
+        self.assertEqual(server_check.server_checksums_by_land(path), [{1: "1" * 16, 2: "2" * 16}, {1: "3" * 16}])
 
     def test_compare_stops_at_the_turns_given(self):
         server = {1: "a1", 2: "a2", 3: "a3", 4: "x4"}

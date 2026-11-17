@@ -98,7 +98,7 @@ public:
 	/// Tools: the runner gives the commands of the scenario before the turns at which the computer of a game gave them,
 	/// and not as its own timeline has them. A server that plays the commands of a game thus gives each command of the
 	/// scenario with the game, also a command that waits for what only the computer of the game knows.
-	void FollowGives(std::map<uint32_t, std::vector<size_t>> gives) { _followedGives = std::move(gives); }
+	void FollowGives(std::vector<command_log::Give> gives) { _followedGives.emplace(std::move(gives)); }
 
 	[[nodiscard]] bool IsRunning() const { return _running; }
 	/// The scenario running, or last run
@@ -341,7 +341,7 @@ private:
 	float _nextMiracleLog {0.0f};
 	Timeline _timeline;
 	GiveObserver _giveObserver;
-	std::optional<std::map<uint32_t, std::vector<size_t>>> _followedGives;
+	std::optional<GivesFollower> _followedGives;
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
 	/// The creatures that the scenario's filled slots got, in the order of their ids

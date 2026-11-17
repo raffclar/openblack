@@ -37,6 +37,7 @@
 #include "ECS/StatisticsRules.h"
 #include "Enums.h"
 #include "Particles/ParticleDrawPath.h"
+#include "Simulation/CommandLog.h"
 #include "TestbedCrowd.h"
 #include "TestbedScenarioChecks.h"
 
@@ -1900,9 +1901,29 @@ struct Timeline
 [[nodiscard]] std::vector<size_t> Advance(Timeline& timeline, std::span<const Command> commands,
                                           std::optional<size_t> repeatFrom, float seconds,
                                           const std::function<bool(const Command& command)>& isFree);
-/// The commands that the computer of the game gave before a turn, in their order, without any place that the scenario
-/// does not have (it has this many commands)
-[[nodiscard]] std::vector<size_t> GivesAt(const std::map<uint32_t, std::vector<size_t>>& gives, uint32_t turn, size_t commands);
+/// The commands of a scenario that the computer of a game gave, in the order of the gives file. A load of a land starts
+/// the turn count again, so the same turn can occur in more than one land. Thus the follower counts the lands of its own
+/// game, and gives each line of the file one time only, in the land and at the turn of the line.
+class GivesFollower
+{
+public:
+	GivesFollower() = default;
+	explicit GivesFollower(std::vector<command_log::Give> gives)
+	    : _gives(std::move(gives))
+	{
+	}
+	/// The commands that the game gave before this turn of the present land, in their order, without any place that the
+	/// scenario does not have (it has this many commands). The follower then goes past these lines of the file. A line
+	/// of an earlier land or turn is not given.
+	[[nodiscard]] std::vector<size_t> DueAt(uint32_t turn, size_t commands);
+	/// The lines of the file that the follower did not give
+	[[nodiscard]] size_t Left() const noexcept { return _gives.size() - _next; }
+
+private:
+	std::vector<command_log::Give> _gives;
+	size_t _next {0};
+	command_log::LandCounter _lands;
+};
 
 /// What a testbed scenario does before one turn of a network game. In a network game the scenario steps by the turns, not
 /// by the frames, so that the server and every client give its commands before the same turn.
