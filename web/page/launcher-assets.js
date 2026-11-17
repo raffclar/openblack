@@ -285,6 +285,10 @@ async function fetchAssetIndex(fetchFile) {
   } catch (error) {
     return { granted: false, status: 0, reason: String(error) };
   }
+  // The site answers 204, with no body, to an account that has no game files. The page does not read a list then.
+  if (response.status === 204) {
+    return { granted: false, status: 204, reason: 'the site gives no game files to this account' };
+  }
   const text = await response.text();
   if (!response.ok) {
     return { granted: false, status: response.status, reason: refusalReason(text) };
