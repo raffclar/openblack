@@ -1060,6 +1060,7 @@ void LandSystem::RemakeModelsAfterLoad()
 void LandSystem::PrepareNewLand(land_change::Kind change)
 {
 	++_landLoads;
+	_networkLand.StartLand(Locator::time::value().IsNetworkGame());
 	const bool toTestbed = change == land_change::Kind::Testbed;
 	const auto rules = land_change::RulesFor(change);
 	// The start-of-game question is about the land that goes now. Close the question with no answer. Then release the
@@ -1377,9 +1378,11 @@ void LandSystem::SetPlayerAlignmentFromProfile()
 
 void LandSystem::KeepAlignmentInProfile()
 {
-	// The player's alignment is kept with their profile every so often as they play, never the testbed's
+	// The player's alignment is kept with their profile every so often as they play, never the testbed's. A land of a
+	// network game never changes the profile, also after the player left the network game.
+	_networkLand.See(Locator::time::value().IsNetworkGame());
 	if (_landPath.empty() || _landPath == k_TestbedLandPath || !Locator::playerProfileSystem::has_value() ||
-	    !Locator::playerSystem::has_value() || !profile_alignment::KeptInOwnProfile(Locator::time::value().IsNetworkGame()))
+	    !Locator::playerSystem::has_value() || !profile_alignment::KeptInOwnProfile(_networkLand.Is()))
 	{
 		return;
 	}
