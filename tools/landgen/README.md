@@ -40,7 +40,12 @@ beyond that.
 ## What the numbers are
 
 Heights are in metres (the altitude times 0.67), slopes in degrees from the corner gradient with cells of 10 m, and
-distances in metres. A group of trees links trees that are 15 m or less apart. A clump of rocks links rocks that are
+distances in metres. A generated land can be higher than the lands of the story (the user allowed it on 2026-11-17,
+deviation 233): its dump has the height of each corner in units of 0.67 m ("units") and the metres of each altitude
+("metres"). For such a land, the height targets and the thresholds of `above_100m_pct` and `peaks_60m` are the vanilla
+altitudes put through the curve. The slope, cliff, flat and summit-count numbers keep the vanilla ranges. The area and
+the totals that grow with the area (`land_km2`, `coast_km`, `trees`, `rocks`, `rock_clumps`, `big_forests`) show as
+`free` for a generated land: the user allowed lands over 4 km2 on 2026-11-17. A group of trees links trees that are 15 m or less apart. A clump of rocks links rocks that are
 20 m or less apart. The rock numbers also give the clumps on each square kilometre, the median distance to the
 nearest rock and to the nearest tree, the lean of the rocks (the larger of the two horizontal angles, in degrees) and
 their height above the land (median and 90th percentile). `pillars` counts the pillar features. A dump feature has
@@ -53,3 +58,10 @@ it.
 `cursed_patches` counts the cursed places: the groups of burnt trees, craters and dark mists that are 150 m or less
 apart. A dark mist has no colour channel above 0x50 (the near black mist of Land 1, the dark mist of Land 4 and the grey
 smoke of the Land 5 craters). `dark_mists` counts the dark mists.
+
+The swamp numbers: `wet_pct` is the share of the land whose main ground is wet (river mud, wet earth, wet gravel, wet
+solid rock, wet grass or rushes on a land file; mud and wet grass on a generated land). `wet_trees_per_km2` counts the
+trees on that wet ground for each square kilometre of it. `green_mists_per_km2` and `green_mist_sheets_per_km2` count
+the puffs of the dark green mist of Land 4 (colour 50632F) and their sheets (puffs 70 m or less apart) for each square
+kilometre of land. The cover of whole-swamp mist on generated lands (deviation 279) puts `green_mists_per_km2` far
+above the vanilla range on purpose.

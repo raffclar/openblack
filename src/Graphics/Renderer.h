@@ -765,8 +765,8 @@ private:
 		/// Whether a part of the box over the block can be seen from the view's camera. Only those blocks are drawn,
 		/// on the land and mirrored under the sea.
 		std::vector<bool> inView;
-		/// The texels of the corner texture (see GetLandCorners), two bytes each
-		std::vector<uint8_t> corners;
+		/// The texels of the corner texture (see GetLandCorners), two 16-bit values each
+		std::vector<uint16_t> corners;
 		/// For each block, the values from which its texels in corners came. A block with the same values keeps them.
 		std::vector<std::optional<land_detail::BlockCornerInputs>> cornersFrom;
 	};

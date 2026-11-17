@@ -76,9 +76,9 @@ Corners CornersOf(const std::array<float, 4>& offsets, float band)
 	return corners;
 }
 
-uint8_t Average(uint8_t a, uint8_t b)
+uint16_t Average(uint16_t a, uint16_t b)
 {
-	return static_cast<uint8_t>((a + b) / 2);
+	return static_cast<uint16_t>((a + b) / 2);
 }
 
 uint16_t Corner(size_t x, size_t z)
@@ -334,7 +334,7 @@ std::vector<uint16_t> BlockTriangles(Mesh mesh, uint8_t coarserSides, bool dropO
 	return indices;
 }
 
-MorphTargets TargetsAt(std::span<const uint8_t, k_CornerCount> altitudes, size_t x, size_t z)
+MorphTargets TargetsAt(std::span<const uint16_t, k_CornerCount> altitudes, size_t x, size_t z)
 {
 	const auto at = [&](size_t cornerX, size_t cornerZ) { return altitudes[cornerX * k_CornersPerSide + cornerZ]; };
 	const auto towards = [&](size_t step) {
@@ -363,7 +363,7 @@ MorphTargets TargetsAt(std::span<const uint8_t, k_CornerCount> altitudes, size_t
 	return targets;
 }
 
-uint8_t MorphedAltitude(uint8_t own, uint8_t target, float side, float width)
+uint16_t MorphedAltitude(uint16_t own, uint16_t target, float side, float width)
 {
 	const float scale = 256.0f / width;
 	const float half = width * 0.5f;
@@ -378,7 +378,7 @@ uint8_t MorphedAltitude(uint8_t own, uint8_t target, float side, float width)
 	// The share of the target, rounded to the nearest whole number and to the even one at a half
 	const float scaled = (half - side) * scale;
 	const auto share = static_cast<uint32_t>(NearestWhole(scaled));
-	return static_cast<uint8_t>(((256u - share) * own + share * target) >> 8);
+	return static_cast<uint16_t>(((256u - share) * own + share * target) >> 8);
 }
 
 float MorphCornerSide(const GroundLine& line, Morph morph, glm::vec2 blockCorner, size_t x, size_t z)
@@ -405,10 +405,10 @@ float MorphCornerSide(const GroundLine& line, Morph morph, glm::vec2 blockCorner
 	return SideOf(line, alongX, alongZ);
 }
 
-std::array<uint8_t, k_CornerCount> MorphedCorners(std::span<const uint8_t, k_CornerCount> altitudes, Morph morph,
-                                                  const GroundLine& line, float width, glm::vec2 blockCorner)
+std::array<uint16_t, k_CornerCount> MorphedCorners(std::span<const uint16_t, k_CornerCount> altitudes, Morph morph,
+                                                   const GroundLine& line, float width, glm::vec2 blockCorner)
 {
-	std::array<uint8_t, k_CornerCount> drawn {};
+	std::array<uint16_t, k_CornerCount> drawn {};
 	std::ranges::copy(altitudes, drawn.begin());
 	if (morph == Morph::None)
 	{
@@ -430,7 +430,7 @@ std::array<uint8_t, k_CornerCount> MorphedCorners(std::span<const uint8_t, k_Cor
 			for (size_t z = firstZ; z < k_CornersPerSide; z += step)
 			{
 				const auto targets = TargetsAt(altitudes, x, z);
-				const uint8_t target = morph == Morph::ToQuarter ? targets.quarter : targets.half;
+				const uint16_t target = morph == Morph::ToQuarter ? targets.quarter : targets.half;
 				const size_t corner = x * k_CornersPerSide + z;
 				drawn.at(corner) = MorphedAltitude(altitudes[corner], target, SideOf(line, alongX, alongZ), width);
 				alongZ = alongZ + stepUnits;
@@ -568,11 +568,11 @@ FrameDetail ClassifyFrame(const FrameInputs& inputs, std::span<const BlockPlace>
 	return frame;
 }
 
-uint8_t DrawnCornerAltitude(std::span<const uint8_t, k_CornerCount> altitudes, size_t x, size_t z, Morph morph,
-                            const FrameDetail& frame, glm::vec2 blockCorner)
+uint16_t DrawnCornerAltitude(std::span<const uint16_t, k_CornerCount> altitudes, size_t x, size_t z, Morph morph,
+                             const FrameDetail& frame, glm::vec2 blockCorner)
 {
 	const size_t corner = x * k_CornersPerSide + z;
-	const uint8_t own = altitudes[corner];
+	const uint16_t own = altitudes[corner];
 	const size_t step = morph == Morph::ToQuarter ? 4 : 2;
 	const size_t first = step / 2;
 	// Only the corners between the coarser mesh's corners morph, as the land draws them (see MorphedCorners)

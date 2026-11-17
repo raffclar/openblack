@@ -91,7 +91,7 @@ LandShadeSystem::Sources GameSources()
 			        std::ranges::transform(lnd->cells, laid.luminosity.begin(),
 			                               [](const lnd::LNDCell& cell) { return cell.luminosity; });
 			        land.blocks.push_back(laid);
-			        land.highest.push_back(std::ranges::max(lnd->cells, {}, &lnd::LNDCell::altitude).altitude);
+			        land.highest.push_back(block.GetHighestAltitude());
 		        }
 		        land.firstBlock = glm::ivec2(island.GetIndexExtent().minimum);
 		        land.mapSize = island.GetLuminosityMap().GetResolution();
@@ -177,7 +177,7 @@ void LandShadeSystem::Shade(const LandShadeFrame& frame)
 	{
 		const object_draw_list::Block box {
 		    .corner = glm::vec2(blocks[i]) * k_BlockSize,
-		    .highestAltitude = i < _highest.size() ? _highest[i] : uint8_t {0},
+		    .highestAltitude = i < _highest.size() ? _highest[i] : uint16_t {0},
 		    .reflected = frame.landReflection,
 		};
 		_land.SetInView(blocks[i], _sources.blockInView

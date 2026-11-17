@@ -23,9 +23,11 @@
 #include "landgen/Cursed.h"
 #include "landgen/Features.h"
 #include "landgen/Grid.h"
+#include "landgen/HeightCurve.h"
 #include "landgen/Hydrology.h"
 #include "landgen/Lighting.h"
 #include "landgen/Settlement.h"
+#include "landgen/Swamps.h"
 #include "landgen/Terrain.h"
 
 /// The generator of lands: from a seed and its settings, a whole land that the game loads as it loads a landscape of the
@@ -60,11 +62,16 @@ struct Settings
 	int side {k_MapCorners};
 	/// The direction of the wind. Without it, the seed picks the direction.
 	std::optional<climate::Wind> wind;
+	/// The height in metres of the highest altitude, and the altitude above which each altitude unit adds more height.
+	/// The lands of the story have 170.85 m at the highest altitude. Snowdon, the highest mountain of Wales, is 1085 m.
+	float topHeight {1250.0f};
+	float heightKnee {73.471f};
 	terrain::BaseSettings base;
 	terrain::HydraulicSettings hydraulic;
 	terrain::ThermalSettings thermal;
 	terrain::TerraceSettings terraces;
 	terrain::MassifSettings massifs;
+	terrain::RollSettings roll;
 	terrain::ShelfSettings shelf;
 	hydrology::LakeSettings lakes;
 	hydrology::RiverSettings rivers;
@@ -73,6 +80,7 @@ struct Settings
 	features::Settings features;
 	features::ForestSettings forests;
 	cursed::Settings cursed;
+	swamps::Settings swamps;
 	lighting::Settings lighting;
 	settlement::Settings settlement;
 };
@@ -129,17 +137,25 @@ struct GeneratedLand
 	std::vector<features::Feature> features;
 	/// The forests that hold the trees of the features
 	std::vector<features::Forest> forests;
-	/// The cursed places, and the puffs of mist and smoke over them
+	/// The cursed places
 	std::vector<cursed::Patch> cursedPatches;
+	/// The sheets of green mist over the swamps
+	std::vector<swamps::Sheet> swampSheets;
+	/// The puffs of mist and smoke over the cursed places, then the puffs of the green mist over the swamps
 	std::vector<cursed::Mist> mists;
 	StartArea start {};
 	/// The player's temple and first town on the start area
 	settlement::Plan settlement;
 	std::vector<StageTime> times;
+	/// The height units of each altitude, and the height of each corner in units of 0.67 m. The altitude of a cell is its
+	/// height in units on a land of the story, and the rounded altitude of the curve on a generated land.
+	HeightCurve heightCurve;
+	Grid<uint16_t> heightUnits;
 };
 
 /// Makes a land: the base heights, the erosion, the lakes and rivers, the start area, the climate, the biomes, the light,
-/// the cells and countries, the features, the cursed places, the forests, and the temple and town of the start
+/// the cells and countries, the features, the cursed places, the mist of the swamps, the forests, and the temple and town of
+/// the start
 [[nodiscard]] GeneratedLand Generate(const Settings& settings);
 
 /// The cell of each corner, from the altitudes, the luminosity and the biomes. A cell's water and sound come from the

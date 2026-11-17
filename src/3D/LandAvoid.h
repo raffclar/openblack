@@ -55,8 +55,9 @@ private:
 	glm::ivec2 _seed {0};
 };
 
-/// The altitude of a corner of the cells (0 off the map), and whether a cell holds water (or has no land)
-using Altitude = std::function<uint8_t(glm::ivec2 corner)>;
+/// The height in units of a corner of the cells (0 off the map), and whether a cell holds water (or has no land). On a
+/// land of the story, the height in units is the altitude.
+using Altitude = std::function<uint16_t(glm::ivec2 corner)>;
 using Water = std::function<bool(glm::ivec2 cell)>;
 
 /// Works out the map of a land of this many cells a side

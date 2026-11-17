@@ -2024,13 +2024,13 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		{
 			return true;
 		}
-		if (!view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * view_frustum::k_HighestLand))
+		const auto& land = Locator::terrainSystem::value();
+		if (!view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * land.HighestHeight()))
 		{
 			return false;
 		}
-		const auto& land = Locator::terrainSystem::value();
 		const float highestRise = view_frustum::HighestLandUnder(
-		    model, box.minima, box.maxima, [&land](glm::ivec2 corner) { return land.GetCell(glm::u16vec2(corner)).altitude; });
+		    model, box.minima, box.maxima, [&land](glm::ivec2 corner) { return land.CornerUnits(glm::u16vec2(corner)); });
 		return view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * highestRise);
 	};
 	// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own. A

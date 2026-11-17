@@ -72,9 +72,58 @@ int32_t LandIslandInterface::ToMapCoords(float unit)
 	return map_coords::ToFixed(unit);
 }
 
-float LandIslandInterface::GetDrawnAltitude(uint8_t altitude)
+float LandIslandInterface::GetDrawnAltitude(uint16_t units)
 {
-	return altitude <= k_SeaLevelAltitude ? 0.0f : static_cast<float>(altitude) * k_HeightUnit;
+	return units <= k_SeaLevelAltitude ? 0.0f : static_cast<float>(units) * k_HeightUnit;
+}
+
+uint16_t LandIslandInterface::HeightUnitsOf(const lnd::LNDCell& cell, int32_t x, int32_t z) const
+{
+	if (_heightUnits.empty() || x < 0 || z < 0 || x >= k_MapCornersPerSide || z >= k_MapCornersPerSide)
+	{
+		return cell.altitude;
+	}
+	return _heightUnits[(static_cast<size_t>(x) * k_MapCornersPerSide) + static_cast<size_t>(z)];
+}
+
+uint16_t LandIslandInterface::CornerUnits(glm::u16vec2 corner) const
+{
+	const auto* cell = FindCell(corner);
+	return cell == nullptr ? uint16_t {0} : HeightUnitsOf(*cell, corner.x, corner.y);
+}
+
+float LandIslandInterface::HighestHeight() const
+{
+	return static_cast<float>(_highestUnits) * k_HeightUnit;
+}
+
+void LandIslandInterface::SetHeightField(const landgen::HeightCurve& curve, std::vector<uint16_t> units)
+{
+	_heightCurve = curve;
+	_heightUnits = std::move(units);
+	_builtHeightUnits = _heightUnits;
+	_highestUnits = _heightUnits.empty() ? uint16_t {255}
+	                                     : std::max(curve.WholeUnitsOf(landgen::k_TopAltitude), std::ranges::max(_heightUnits));
+}
+
+std::optional<uint16_t> LandIslandInterface::FindBuiltHeightUnits(const glm::u16vec2& coordinates) const
+{
+	const auto altitude = FindBuiltAltitude(coordinates);
+	if (!altitude.has_value() || _builtHeightUnits.empty())
+	{
+		return altitude;
+	}
+	return _builtHeightUnits[(static_cast<size_t>(coordinates.x) * k_MapCornersPerSide) + coordinates.y];
+}
+
+void LandIslandInterface::SetFieldAltitude(int32_t x, int32_t z, uint8_t altitude)
+{
+	if (_heightUnits.empty() || x < 0 || z < 0 || x >= k_MapCornersPerSide || z >= k_MapCornersPerSide)
+	{
+		return;
+	}
+	_heightUnits[(static_cast<size_t>(x) * k_MapCornersPerSide) + static_cast<size_t>(z)] =
+	    _heightCurve.WholeUnitsOf(static_cast<float>(altitude));
 }
 
 bool LandIslandInterface::AltitudeInputs(const MapReach& reach, std::vector<std::byte>& bytes) const
@@ -123,6 +172,15 @@ bool LandIslandInterface::AltitudeInputs(const MapReach& reach, std::vector<std:
 			                           static_cast<std::byte>(cell[1].altitude), static_cast<std::byte>(cell[17].altitude),
 			                           static_cast<std::byte>(cell[18].altitude),
 			                           static_cast<std::byte>(cell[0].properties.split != 0 ? 1 : 0)});
+			if (HasHeightField())
+			{
+				// The height field has more units than the altitude bytes: two bytes for each corner
+				for (const auto units : {HeightUnitsOf(cell[0], x, z), HeightUnitsOf(cell[1], x, z + 1),
+				                         HeightUnitsOf(cell[17], x + 1, z), HeightUnitsOf(cell[18], x + 1, z + 1)})
+				{
+					bytes.insert(bytes.end(), {static_cast<std::byte>(units & 0xFFu), static_cast<std::byte>(units >> 8u)});
+				}
+			}
 		}
 	}
 	return true;
@@ -143,14 +201,14 @@ float LandIslandInterface::GetAltitude(int32_t mapX, int32_t mapZ, bool seaLevel
 	}
 
 	// Neighbours within the block's 17x17 cell array: +1 is z + 1, +17 is x + 1
-	const auto clamp = seaLevelFlat && cell[0].altitude <= k_SeaLevelClampAltitude;
-	const auto altitude = [clamp](const lnd::LNDCell& c) -> int32_t {
-		return clamp && c.altitude <= k_SeaLevelAltitude ? 0 : c.altitude;
-	};
-	const auto a00 = altitude(cell[0]);
-	const auto a01 = altitude(cell[1]);
-	const auto a10 = altitude(cell[17]);
-	const auto a11 = altitude(cell[18]);
+	// The height of each corner in units: its altitude on a land of the story
+	const int32_t u00 = HeightUnitsOf(cell[0], cellX, cellZ);
+	const auto clamp = seaLevelFlat && u00 <= k_SeaLevelClampAltitude;
+	const auto altitude = [clamp](int32_t units) -> int32_t { return clamp && units <= k_SeaLevelAltitude ? 0 : units; };
+	const auto a00 = altitude(u00);
+	const auto a01 = altitude(HeightUnitsOf(cell[1], cellX, cellZ + 1));
+	const auto a10 = altitude(HeightUnitsOf(cell[17], cellX + 1, cellZ));
+	const auto a11 = altitude(HeightUnitsOf(cell[18], cellX + 1, cellZ + 1));
 
 	const auto fractionX = static_cast<uint32_t>(mapX) & 0xFFFF;
 	const auto fractionZ = static_cast<uint32_t>(mapZ) & 0xFFFF;
@@ -247,10 +305,27 @@ void LandIsland::Build(const LandData& data)
 	// A page of a quarter of a million indices holds about two hundred triangle sets
 	constexpr uint32_t k_TrianglePageIndices = 1u << 18;
 	_blockTriangles = std::make_unique<SharedIndexLists<graphics::IndexBuffer>>(k_TrianglePageIndices);
+	constexpr size_t k_FieldCorners = static_cast<size_t>(k_MapCornersPerSide) * k_MapCornersPerSide;
+	SetHeightField(data.heightCurve, data.heightUnits.size() == k_FieldCorners ? data.heightUnits : std::vector<uint16_t> {});
 	for (size_t i = 0; i < _landBlocks.size(); i++)
 	{
 		_landBlocks[i].SetLndBlock(lndBlocks[i]);
 		_landBlocks[i].SetTriangleSets(*_blockTriangles);
+		if (HasHeightField())
+		{
+			// The box of a block of a height field reaches to its highest corner of the field
+			const auto first = _landBlocks[i].GetBlockPosition() * static_cast<int>(k_CellCount);
+			uint16_t highest = 0;
+			for (int x = 0; x <= static_cast<int>(k_CellCount); ++x)
+			{
+				for (int z = 0; z <= static_cast<int>(k_CellCount); ++z)
+				{
+					const auto& cell = lndBlocks[i].cells.at(static_cast<size_t>(x * 17 + z));
+					highest = std::max(highest, HeightUnitsOf(cell, first.x + x, first.y + z));
+				}
+			}
+			_landBlocks[i].SetHighestUnits(highest);
+		}
 	}
 
 	_extentIndexMin.x = std::numeric_limits<uint16_t>::max();
@@ -296,8 +371,9 @@ void LandIsland::Build(const LandData& data)
 	{
 		// The height map is made empty and filled after, so it can be filled again when the land changes height
 		const auto heightMapData = CreateHeightMap();
-		_heightMap->Create(mapWidth, mapHeight, 1, graphics::TextureFormat::RG8, Wrapping::ClampEdge, Filter::Nearest, nullptr);
-		_heightMap->Update(heightMapData.data(), static_cast<uint32_t>(heightMapData.size()));
+		_heightMap->Create(mapWidth, mapHeight, 1, graphics::TextureFormat::RG16, Wrapping::ClampEdge, Filter::Nearest,
+		                   nullptr);
+		_heightMap->Update(heightMapData.data(), static_cast<uint32_t>(heightMapData.size() * sizeof(uint16_t)));
 
 		const auto luminosityMapData = CreateLuminosityMap();
 		_luminosityMap->Create(
@@ -318,7 +394,7 @@ void LandIsland::Build(const LandData& data)
 	}
 	else
 	{
-		_heightMap->Describe(mapWidth, mapHeight, 1, graphics::TextureFormat::RG8);
+		_heightMap->Describe(mapWidth, mapHeight, 1, graphics::TextureFormat::RG16);
 		_luminosityMap->Describe(mapWidth, mapHeight, 1, graphics::TextureFormat::R8);
 		_cellColourMap->Describe(mapWidth, mapHeight, 1, graphics::TextureFormat::RGBA8);
 	}
@@ -494,8 +570,9 @@ glm::vec3 LandIsland::GetNormalAt(glm::vec2 vec) const
 	}
 	// Neighbours within the block's 17x17 cell array: +1 is z + 1, +17 is x + 1
 	return land_normal::OfCell(static_cast<uint32_t>(mapX) & 0xFFFF, static_cast<uint32_t>(mapZ) & 0xFFFF,
-	                           cell[0].properties.split != 0, cell[0].altitude, cell[1].altitude, cell[17].altitude,
-	                           cell[18].altitude);
+	                           cell[0].properties.split != 0, HeightUnitsOf(cell[0], cellX, cellZ),
+	                           HeightUnitsOf(cell[1], cellX, cellZ + 1), HeightUnitsOf(cell[17], cellX + 1, cellZ),
+	                           HeightUnitsOf(cell[18], cellX + 1, cellZ + 1));
 }
 
 uint8_t LandIsland::GetNoise(glm::u8vec2 pos)
@@ -684,6 +761,9 @@ bool LandIsland::SetBlockCellAltitude(size_t block, int x, int z, uint8_t altitu
 	{
 		return false;
 	}
+	// The height field of a generated land follows the new altitude through its curve
+	const auto corner = _landBlocks[block].GetBlockPosition() * static_cast<int>(k_CellCount) + glm::ivec2(x, z);
+	SetFieldAltitude(corner.x, corner.y, altitude);
 	auto& cells = _changedCells.at(block);
 	constexpr int k_LastCell = block_texture::k_BlockCells - 1;
 	cells.Add(glm::clamp(glm::ivec2(x - 1, z - 1), 0, k_LastCell));
@@ -710,6 +790,17 @@ size_t LandIsland::RestoreBuiltAltitudes()
 				_changedCorners.Add(corner + glm::ivec2(x, z));
 				++restored;
 			}
+		}
+	}
+	// The height field goes back to the heights of the land as it was built, not to the heights of the curve
+	auto& field = HeightField();
+	for (size_t i = 0; i < field.size(); ++i)
+	{
+		if (field[i] != BuiltHeightField()[i])
+		{
+			field[i] = BuiltHeightField()[i];
+			_changedCorners.Add(
+			    glm::ivec2(static_cast<int>(i / k_MapCornersPerSide), static_cast<int>(i % k_MapCornersPerSide)));
 		}
 	}
 	MakeDigest();
@@ -827,7 +918,7 @@ void LandIsland::CommitAltitudeChanges()
 		}
 		changed = {};
 	}
-	// The height map's changed corners, a texel each, two bytes a texel: its altitude and its cell's split
+	// The height map's changed corners, a texel each, two 16-bit values a texel: its height in units and its cell's split
 	const auto first =
 	    glm::max(_changedCorners.minimum - glm::ivec2(_extentIndexMin) * static_cast<int>(k_CellCount), glm::ivec2(0));
 	const auto resolution = glm::ivec2(_heightMap->GetResolution());
@@ -836,7 +927,7 @@ void LandIsland::CommitAltitudeChanges()
 	if (glm::all(glm::lessThanEqual(first, last)))
 	{
 		const auto size = last - first + 1;
-		std::vector<uint8_t> heights(static_cast<size_t>(size.x * size.y) * 2, 0);
+		std::vector<uint16_t> heights(static_cast<size_t>(size.x * size.y) * 2, 0);
 		for (int z = 0; z < size.y; ++z)
 		{
 			for (int x = 0; x < size.x; ++x)
@@ -844,12 +935,12 @@ void LandIsland::CommitAltitudeChanges()
 				const auto corner = first + glm::ivec2(x, z) + glm::ivec2(_extentIndexMin) * static_cast<int>(k_CellCount);
 				const auto& cell = GetCell(glm::u16vec2(corner));
 				const auto texel = static_cast<size_t>(z * size.x + x) * 2;
-				heights[texel] = cell.altitude;
+				heights[texel] = HeightUnitsOf(cell, corner.x, corner.y);
 				heights[texel + 1] = cell.properties.split != 0 ? 255 : 0;
 			}
 		}
 		_heightMap->UpdateLayerRegion(0, glm::u16vec2(first), glm::u16vec2(size), heights.data(),
-		                              static_cast<uint32_t>(heights.size()));
+		                              static_cast<uint32_t>(heights.size() * sizeof(uint16_t)));
 	}
 	_changedCorners = {};
 }
@@ -859,16 +950,16 @@ void LandIsland::DumpTextures() const
 	_blockTextures->DumpTexture();
 }
 
-std::vector<uint8_t> LandIsland::CreateHeightMap() const
+std::vector<uint16_t> LandIsland::CreateHeightMap() const
 {
 	// 16x16 cells but the last is shared
 	// max of 32x32 block grid
 	// max of 512 x 512 pixels
 	// extra pixel at the end of the map
-	std::vector<uint8_t> data;
+	std::vector<uint16_t> data;
 	const auto extentSize = _extentIndexMax - _extentIndexMin + glm::u16vec2(1, 1);
 	const auto resolution = extentSize * static_cast<uint16_t>(k_CellCount) + static_cast<uint16_t>(1);
-	// Two bytes a corner: its altitude, and whether its cell is split the other way
+	// Two 16-bit values a corner: its height in units, and whether its cell is split the other way
 	data.resize(static_cast<size_t>(resolution.x) * resolution.y * 2, 0);
 
 	for (const auto& block : _landBlocks)
@@ -885,7 +976,8 @@ std::vector<uint8_t> LandIsland::CreateHeightMap() const
 				const auto texel = static_cast<size_t>((cellPos.y * resolution.x) + cellPos.x) * 2;
 				if (texel + 1 < data.size())
 				{
-					data.at(texel) = cell.altitude;
+					const auto corner = blockOffset + offset;
+					data.at(texel) = HeightUnitsOf(cell, corner.x, corner.y);
 					data.at(texel + 1) = cell.properties.split != 0 ? 255 : 0;
 				}
 			}
@@ -981,7 +1073,8 @@ void LandIsland::GiveDeviceDataAgain()
 		return;
 	}
 	PaintBlockTextures(TextureSources());
-	_heightMap->GiveTexelsAgain(CreateHeightMap());
+	const auto heights = CreateHeightMap();
+	_heightMap->GiveTexelsAgain(std::span(reinterpret_cast<const uint8_t*>(heights.data()), heights.size() * sizeof(uint16_t)));
 	_luminosityMap->GiveTexelsAgain(CreateLuminosityMap());
 	_cellColourMap->GiveTexelsAgain(CreateCellColourMap());
 	if (_coarsePages != nullptr)

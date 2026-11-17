@@ -241,8 +241,8 @@ TEST(LandDetail, StitchedEdgesMatchTheGamesStrips)
 
 TEST(LandDetail, CornersMorphTowardsTheirCoarserNeighbours)
 {
-	std::array<uint8_t, k_CornerCount> altitudes {};
-	const auto set = [&](size_t x, size_t z, uint8_t altitude) { altitudes.at(x * 17 + z) = altitude; };
+	std::array<uint16_t, k_CornerCount> altitudes {};
+	const auto set = [&](size_t x, size_t z, uint16_t altitude) { altitudes.at(x * 17 + z) = altitude; };
 	set(0, 0, 10);
 	set(0, 2, 21);
 	set(2, 0, 30);
@@ -269,6 +269,8 @@ TEST(LandDetail, MorphBlendsAcrossTheBandIn256ths)
 	EXPECT_EQ(MorphedAltitude(100, 200, 0.0f, 50.0f), 150);
 	// A quarter of the way: 64/256
 	EXPECT_EQ(MorphedAltitude(100, 201, 12.5f, 50.0f), (192 * 100 + 64 * 201) >> 8);
+	// The heights of a high generated land morph by the same sums
+	EXPECT_EQ(MorphedAltitude(1000, 2001, 12.5f, 50.0f), (192 * 1000 + 64 * 2001) >> 8);
 }
 
 TEST(LandDetail, CoarseTextureFadesInAcrossTheBand)
@@ -306,10 +308,10 @@ TEST(LandDetail, GroundLineKeepsThePointOfBeforeWhenTheCameraLooksStraightDown)
 
 TEST(LandDetail, OnlyTheCornersBetweenTheCoarserMeshMorph)
 {
-	std::array<uint8_t, k_CornerCount> altitudes {};
+	std::array<uint16_t, k_CornerCount> altitudes {};
 	for (size_t i = 0; i < altitudes.size(); ++i)
 	{
-		altitudes.at(i) = static_cast<uint8_t>((i * 37) % 256);
+		altitudes.at(i) = static_cast<uint16_t>((i * 37) % 256);
 	}
 	// A line that lies across the whole block, every corner in the middle of its band
 	const GroundLine line {.along = {1.0f, 0.0f}, .point = {0.0f, 80.0f}};
@@ -474,7 +476,7 @@ TEST(LandDetail, AFrameGivesTheSameDetailAsTheClassificationOfEachBlock)
 
 TEST(LandDetail, ADrawnCornerMorphsByItsPlaceInTheBandOfTheLine)
 {
-	std::array<uint8_t, k_CornerCount> altitudes {};
+	std::array<uint16_t, k_CornerCount> altitudes {};
 	altitudes.at(0 * 17 + 0) = 10;
 	altitudes.at(1 * 17 + 0) = 40;
 	altitudes.at(2 * 17 + 0) = 20;

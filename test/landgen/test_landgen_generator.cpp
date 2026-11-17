@@ -25,7 +25,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0x225A19392EAF3BBAull;
+constexpr uint64_t k_SmallLandHash = 0x4EA9AEC4B941BE2Bull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)
@@ -776,6 +776,31 @@ TEST(LandgenGenerator, TheLandIsTheSameOnEveryPlatform)
 	// The bytes of a small land, as the generator gives them on Windows with MSVC and with Clang. A change of this value
 	// on another platform means that the maths of the generator is not the same there.
 	EXPECT_EQ(HashOf(Generate(SmallSettings(77)).cells), k_SmallLandHash);
+}
+
+TEST(LandgenGenerator, TheHeightFieldKeepsTheLowLandAndRisesAboveTheBytes)
+{
+	const auto land = Generate(SmallSettings(99));
+	ASSERT_EQ(land.heightUnits.side, land.cells.side);
+	bool above = false;
+	for (int x = 0; x < land.cells.side; ++x)
+	{
+		for (int z = 0; z < land.cells.side; ++z)
+		{
+			const auto altitude = land.cells.At(x, z).altitude;
+			const auto units = land.heightUnits.At(x, z);
+			// Below the knee, the height is the altitude, as on the lands of the story. An altitude rounded down to the
+			// knee can come from a height above it.
+			if (static_cast<float>(altitude) + 0.5f <= land.heightCurve.knee)
+			{
+				EXPECT_EQ(units, altitude);
+			}
+			// The altitude byte and the height units come from the same height, each rounded by half a unit or less
+			EXPECT_NEAR(land.heightCurve.AltitudeOf(static_cast<float>(units)), static_cast<float>(altitude), 1.0f);
+			above = above || units > 255;
+		}
+	}
+	EXPECT_TRUE(above);
 }
 
 TEST(LandgenGenerator, TheLandIsAnIslandWithEachPart)

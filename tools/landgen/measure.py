@@ -22,6 +22,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TARGETS = os.path.join(HERE, "vanilla_targets.json")
 HEIGHT_UNIT = 0.67
 CELL = 10.0
+# The heights of a generated land can go higher than the lands of the story: the user allowed it on 2026-11-17 ("For
+# custom lands via land gen, allow a much greater height"; "Allow for true mountains (snowdonia for example)", deviation
+# 233). Such a land has a height field (the "units" of the dump, 0.67 m each) and a curve that gives the metres of each
+# altitude. All its heights come from the field. Its height numbers use the heights of the story put through that curve: the targets of height_max_m
+# and height_median_m, and the thresholds of above_100m_pct and peaks_60m, are the vanilla altitudes in the metres of
+# the curve. The slope, cliff, flat and summit-count numbers keep the vanilla ranges, as the shape of the land.
+HEIGHT_TARGETS = ("height_max_m", "height_median_m")
+# A generated land can also be larger than the lands of the story (1.1 to 3.9 km2): the user allowed it on 2026-11-17
+# ("LGX-1: allow lands over 4 km2", deviation 233). The area and the totals that grow with the area do not bind a
+# generated land. The numbers for each km2 and the shape numbers stay the targets. The land stays one island.
+AREA_TOTALS = ("land_km2", "coast_km", "trees", "rocks", "rock_clumps", "big_forests")
 
 # The names of the kinds of tree, in the order of the game's numbers
 TREES = ("Beech Birch Cedar Conifer ConiferA Oak OakA Olive Palm PalmA PalmB PalmC Pine Bush BushA BushB Cypress "
@@ -41,6 +52,13 @@ CURSED_LINK = 150.0
 DARK_CHANNEL = 0x50
 SURFACE_SAND = (0, 1, 2)  # wet sand, sand and desert sand of the generator
 GROUND_SAND = (7, 8)  # sand and wet sand of the land files
+# The wet grounds: river mud and wet grass of the generator, and river mud, wet earth, wet gravel, wet solid rock, wet
+# grass and rushes of the land files
+SURFACE_WET = (7, 8)
+GROUND_WET = (3, 4, 10, 16, 19, 21)
+# The colour of the green mist of the swamps, without its alpha. The puffs of one sheet are 70 m or less apart.
+GREEN_MIST = 0x50632F
+SHEET_LINK = 70.0
 
 
 def percentile(values, p):
@@ -73,8 +91,16 @@ def groups_of(points, link):
     return np.array([find(i) for i in range(count)])
 
 
-def terrain_measures(heights, land, sand):
-    """The numbers of the ground. heights is in metres, land and sand are masks of the same shape."""
+def curve_metres(curve, metres):
+    """The height on a land with the curve (the metres of each altitude 0 to 255) of a height of the lands of the story"""
+    if curve is None:
+        return metres
+    return float(np.interp(metres / HEIGHT_UNIT, np.arange(len(curve)), curve))
+
+
+def terrain_measures(heights, land, sand, curve=None):
+    """The numbers of the ground. heights is in metres, land and sand are masks of the same shape. curve is the metres
+    of each altitude of a land that can be higher than the lands of the story, or None."""
     n = int(land.sum())
     out = {}
     if n == 0:
@@ -94,8 +120,9 @@ def terrain_measures(heights, land, sand):
     out["main_island_pct"] = float(sizes.max() * 100.0 / n)
     out["height_max_m"] = float(h.max())
     out["height_median_m"] = percentile(h, 50)
-    out["above_100m_pct"] = float((h >= 100).mean() * 100)
-    peaks = np.argwhere((heights == ndimage.maximum_filter(heights, size=31)) & land & (heights >= 60))
+    out["above_100m_pct"] = float((h >= curve_metres(curve, 100)).mean() * 100)
+    peaks = np.argwhere((heights == ndimage.maximum_filter(heights, size=31)) & land &
+                        (heights >= curve_metres(curve, 60)))
     out["peaks_60m"] = int(len(peaks))
     out["flat_pct"] = float((s < 5).mean() * 100)
     out["cliff_pct"] = float((s >= 40).mean() * 100)
@@ -234,10 +261,37 @@ def cursed_measures(things, dark_mists):
     return {"cursed_patches": len(set(groups.tolist())), "dark_mists": dark_mists}
 
 
+def swamp_measures(wet, land_mask, trees, mists):
+    """The numbers of the wet ground and the green mist. wet and land_mask are masks of the corners, trees a list of
+    (x, z) in metres and mists a list of (x, z, colour)."""
+    n = int(land_mask.sum())
+    out = {}
+    wet = wet & land_mask
+    count = int(wet.sum())
+    if n:
+        out["wet_pct"] = count * 100.0 / n
+    if count:
+        side = wet.shape[0]
+        on = 0
+        for x, z in trees:
+            i = min(max(int(round(x / CELL)), 0), side - 1)
+            j = min(max(int(round(z / CELL)), 0), wet.shape[1] - 1)
+            on += bool(wet[i, j])
+        out["wet_trees_per_km2"] = on / (count * CELL * CELL / 1e6)
+    # The green mist for each square kilometre of land, so that a large land compares with the lands of the story
+    green = [(m[0], m[1]) for m in mists if (int(m[2]) & 0xFFFFFF) == GREEN_MIST]
+    sheets = len(set(groups_of(np.array(green, dtype=float).reshape(-1, 2), SHEET_LINK).tolist()))
+    if n:
+        area = n * CELL * CELL / 1e6
+        out["green_mists_per_km2"] = len(green) / area
+        out["green_mist_sheets_per_km2"] = sheets / area
+    return out
+
+
 def measure_land(land):
     """All numbers of a land. land is a dict with heights, land, sand, trees (a list of (x, z, kind, in_forest)), rocks
     (a list of (x, z)), forests, footpaths, mists and towns."""
-    out = terrain_measures(land["heights"], land["land"], land["sand"])
+    out = terrain_measures(land["heights"], land["land"], land["sand"], land.get("curve"))
     area = out.get("land_km2", 0.0)
     trees = land["trees"]
     out.update(tree_measures([(t[0], t[1]) for t in trees], [t[2] for t in trees], [t[3] for t in trees], area))
@@ -247,6 +301,8 @@ def measure_land(land):
         out[key] = land[key]
     out.update(big_forest_measures(land.get("big_forests", []), land.get("trees", []), area))
     out.update(cursed_measures(land.get("cursed_things", []), land.get("dark_mists", 0)))
+    if "wet" in land:
+        out.update(swamp_measures(land["wet"], land["land"], [(t[0], t[1]) for t in trees], land.get("mist_list", [])))
     kinds = {}
     for t in trees:
         kinds[t[2]] = kinds.get(t[2], 0) + 1
@@ -273,12 +329,18 @@ def load_dump(path):
         d = json.load(handle)
     side = d["side"]
     alt = np.array(d["altitude"], dtype=int).reshape(side, side)
+    # A newer dump gives the metres of each altitude, and the height of each corner in units of 0.67 m
+    curve = np.array(d["metres"], dtype=float) if "metres" in d else None
+    plain = curve is None or np.allclose(curve, np.arange(256) * HEIGHT_UNIT)
+    units = np.array(d["units"], dtype=float).reshape(side, side) if "units" in d else alt
     water = np.array(d["water"], dtype=int).reshape(side, side)
     country = np.array(d["country"], dtype=int).reshape(side, side)
     tables = [np.array(c, dtype=int).reshape(256, 3) for c in d["countries"]]
     surfaces = d["surfaces"]
     land = (alt > 0) & (water == 0)
-    sand = sand_mask(country, alt, tables, lambda i: surfaces[i] if i < len(surfaces) else -1, SURFACE_SAND)
+    surface_of = lambda i: surfaces[i] if i < len(surfaces) else -1  # noqa: E731
+    sand = sand_mask(country, alt, tables, surface_of, SURFACE_SAND)
+    wet = sand_mask(country, alt, tables, surface_of, SURFACE_WET)
     trees, rocks, rock_poses, pillars, big_forests, cursed = [], [], [], [], [], []
     for feature in d["features"]:
         kind, typ, x, z, _angle, _size, _max, forest = feature[:8]
@@ -301,11 +363,13 @@ def load_dump(path):
     # A mist of a newer dump is x, z, height, colour, size and edge shrink
     dark = [(m[0], m[1]) for m in d["mists"] if len(m) >= 4 and is_dark(int(m[3]))]
     cursed += dark
-    return {"name": os.path.splitext(os.path.basename(path))[0], "heights": alt * HEIGHT_UNIT, "land": land,
+    return {"name": os.path.splitext(os.path.basename(path))[0],
+            "heights": units * HEIGHT_UNIT, "curve": None if plain else curve, "land": land,
             "sand": sand, "trees": trees, "rocks": rocks, "rock_poses": rock_poses, "pillars": pillars,
             "big_forests": big_forests, "forests": len(d["forests"]),
             "footpaths": d["footpaths"],
-            "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark)}
+            "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark),
+            "wet": wet, "mist_list": [(m[0], m[1], m[3]) for m in d["mists"] if len(m) >= 4]}
 
 
 def vanilla_models():
@@ -326,11 +390,13 @@ def vanilla_models():
             o["cls"] == "feature" and o["kind"] == "Crater")] + dark
         big_forests = [o["pos"] for o in objs if o["cls"] == "bigforest"]
         sand = land.land & np.isin(land.mtype, GROUND_SAND)
+        wet = land.land & np.isin(land.mtype, GROUND_WET)
+        mist_list = [(o["pos"][0], o["pos"][1], o.get("colour", 0)) for o in objs if o["cls"] == "mist"]
         yield {"name": name, "heights": land.H, "land": land.land, "sand": sand, "trees": trees, "rocks": rocks,
                "rock_poses": rock_poses, "pillars": pillars,
                "big_forests": big_forests,
                "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns),
-               "cursed_things": cursed, "dark_mists": len(dark)}
+               "cursed_things": cursed, "dark_mists": len(dark), "wet": wet, "mist_list": mist_list}
 
 
 def ranges_of(measures):
@@ -367,8 +433,10 @@ def status_of(value, bounds, slack=0.1):
     return "OUT"
 
 
-def compare_lines(measures, targets):
-    """The table that puts each number next to the vanilla range. Gives the lines and the numbers that are out."""
+def compare_lines(measures, targets, curve=None, generated=False):
+    """The table that puts each number next to the vanilla range. Gives the lines and the numbers that are out. On a
+    land with a height curve, the height targets are the vanilla heights put through the curve. On a generated land, the
+    area totals have the status "free" and are never out."""
     lines = [f"| number | {measures['name']} | vanilla min | vanilla max | status |", "|---|---|---|---|---|"]
     bad = []
     for key in sorted(targets["ranges"]):
@@ -376,7 +444,9 @@ def compare_lines(measures, targets):
         if value is None:
             continue
         low, high = targets["ranges"][key]
-        status = status_of(value, (low, high))
+        if key in HEIGHT_TARGETS:
+            low, high = curve_metres(curve, low), curve_metres(curve, high)
+        status = "free" if generated and key in AREA_TOTALS else status_of(value, (low, high))
         if status == "OUT":
             bad.append(key)
         lines.append(f"| {key} | {value:.1f} | {low:.1f} | {high:.1f} | {status} |")
@@ -417,12 +487,13 @@ def main(argv=None):
     with open(TARGETS, encoding="utf-8") as handle:
         targets = json.load(handle)
     for path in args.files:
-        m = measure_land(load_dump(path))
+        land = load_dump(path)
+        m = measure_land(land)
         m["name"] = os.path.basename(path)
         if args.mode == "generated":
             print(json.dumps({k: v for k, v in m.items()}, indent=1, sort_keys=True))
             continue
-        lines, bad = compare_lines(m, targets)
+        lines, bad = compare_lines(m, targets, land.get("curve"), generated=True)
         print(f"\n## {m['name']}\n")
         print("\n".join(lines))
         print(f"\nOut of the vanilla range: {len(bad)}" + (": " + ", ".join(bad) if bad else ""))

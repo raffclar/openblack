@@ -110,7 +110,7 @@ Map land_avoid::Build(int32_t cellsPerSide, const Altitude& altitude, const Wate
 	const Cells cells {.size = cellsPerSide, .values = values};
 	// Each corner is read one time: a corner off the map has no altitude. A cell reads its four corners from here.
 	const auto cornersPerSide = static_cast<size_t>(cellsPerSide) + 1;
-	std::vector<uint8_t> cornerAltitudes(cornersPerSide * cornersPerSide, 0);
+	std::vector<uint16_t> cornerAltitudes(cornersPerSide * cornersPerSide, 0);
 	for (int32_t z = 0; z < cellsPerSide; ++z)
 	{
 		for (int32_t x = 0; x < cellsPerSide; ++x)
@@ -118,7 +118,7 @@ Map land_avoid::Build(int32_t cellsPerSide, const Altitude& altitude, const Wate
 			cornerAltitudes[(static_cast<size_t>(z) * cornersPerSide) + static_cast<size_t>(x)] = altitude({x, z});
 		}
 	}
-	const auto cornerAltitude = [&cornerAltitudes, cornersPerSide](glm::ivec2 corner) -> uint8_t {
+	const auto cornerAltitude = [&cornerAltitudes, cornersPerSide](glm::ivec2 corner) -> uint16_t {
 		return cornerAltitudes[(static_cast<size_t>(corner.y) * cornersPerSide) + static_cast<size_t>(corner.x)];
 	};
 
@@ -130,8 +130,8 @@ Map land_avoid::Build(int32_t cellsPerSide, const Altitude& altitude, const Wate
 		int32_t runLength = 0;
 		for (int32_t x = 0; x < cellsPerSide; ++x)
 		{
-			const std::array<uint8_t, 4> corners {cornerAltitude({x, z}), cornerAltitude({x, z + 1}),
-			                                      cornerAltitude({x + 1, z}), cornerAltitude({x + 1, z + 1})};
+			const std::array<uint16_t, 4> corners {cornerAltitude({x, z}), cornerAltitude({x, z + 1}),
+			                                       cornerAltitude({x + 1, z}), cornerAltitude({x + 1, z + 1})};
 			float highest = static_cast<float>(corners[0]) * k_HeightPerAltitude;
 			float lowest = highest;
 			for (size_t i = 1; i < corners.size(); ++i)
@@ -140,7 +140,7 @@ Map land_avoid::Build(int32_t cellsPerSide, const Altitude& altitude, const Wate
 				highest = std::max(highest, height);
 				lowest = std::min(lowest, height);
 			}
-			const bool underSea = std::ranges::all_of(corners, [](uint8_t corner) { return corner == 0; });
+			const bool underSea = std::ranges::all_of(corners, [](uint16_t corner) { return corner == 0; });
 			if (highest - lowest > k_MaxRise || underSea)
 			{
 				cells[{x, z}] = k_Avoid;

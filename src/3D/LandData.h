@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <LNDFile.h>
+#include <landgen/HeightCurve.h>
 
 namespace openblack
 {
@@ -31,6 +32,10 @@ struct LandData
 	/// For each block of the map at [x * 32 + z], one more than its index in blocks, or 0 where there is no land. A
 	/// landscape file holds a byte for each, so has at most 255 blocks; the whole map takes 1024.
 	std::array<uint16_t, k_BlocksPerSide * k_BlocksPerSide> blockIndexLookup {};
+	/// The height units of each altitude, and the height of each map corner in units of 0.67 m, [x * 513 + z]. A landscape
+	/// file has no heights: the height of each corner is its altitude. A generated land can have higher mountains.
+	landgen::HeightCurve heightCurve;
+	std::vector<uint16_t> heightUnits;
 	std::vector<lnd::LNDBlock> blocks;
 	std::vector<lnd::LNDCountry> countries;
 	std::vector<lnd::LNDMaterial> materials;
