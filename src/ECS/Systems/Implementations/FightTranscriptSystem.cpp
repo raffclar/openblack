@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 #include <spdlog/spdlog.h>
 
+#include "Common/PlayerProfiles.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 
@@ -119,7 +120,7 @@ void FightTranscriptSystem::SetOutputFolder(std::optional<std::filesystem::path>
 		if (error)
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The fight transcript cannot use the folder {}: {}",
-			                   _folder->generic_string(), error.message());
+			                   player_profiles::PathForLog(*_folder), error.message());
 			_folder.reset();
 		}
 	}

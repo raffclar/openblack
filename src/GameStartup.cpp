@@ -20,6 +20,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/MachineClock.h"
+#include "Common/PlayerProfiles.h"
 #include "Common/UserData.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
@@ -62,11 +63,12 @@ player_profiles::Store Game::ProfileStore() const
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "A developer's run: playing as the profile \"{}\", its creature kept in {}",
 		                   player_profiles::k_DeveloperName,
-		                   store.creatureMinds.has_value() ? store.creatureMinds->generic_string() : "no folder");
+		                   store.creatureMinds.has_value() ? player_profiles::PathForLog(*store.creatureMinds) : "no folder");
 	}
 	else if (store.folder.has_value())
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The players' profiles are kept in {}", store.folder->generic_string());
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The players' profiles are kept in {}",
+		                   player_profiles::PathForLog(*store.folder));
 	}
 	return store;
 }

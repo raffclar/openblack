@@ -26,6 +26,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Common/PlayerProfiles.h"
+
 #ifdef _WIN32
 // clang-format off
 // windows.h has to come before the headers that build on it, and without its min and max macros
@@ -445,7 +447,8 @@ std::span<const StackFrame> CaptureStack()
 	{
 		if (auto logger = spdlog::get("game"))
 		{
-			logger->critical("The game crashed; report written to {}\n{}", state.reportPath, state.report);
+			logger->critical("The game crashed; report written to {}\n{}", player_profiles::PathForLog(state.reportPath),
+			                 state.report);
 		}
 	}
 	spdlog::apply_all([](const std::shared_ptr<spdlog::logger>& logger) { logger->flush(); });
