@@ -93,14 +93,18 @@ std::optional<land_line::CellHeights> CornersOf(int32_t x, int32_t z)
 	{
 		return std::nullopt;
 	}
-	const auto* cell = Locator::terrainSystem::value().FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
+	const auto& land = Locator::terrainSystem::value();
+	const auto* cell = land.FindCell({static_cast<uint16_t>(x), static_cast<uint16_t>(z)});
 	if (cell == nullptr)
 	{
 		return std::nullopt;
 	}
-	// Within a block's 17 by 17 cells, +1 is across z and +17 across x
-	return land_line::CellHeights {
-	    .here = cell[0].altitude, .acrossX = cell[17].altitude, .acrossZ = cell[1].altitude, .acrossBoth = cell[18].altitude};
+	// Within a block's 17 by 17 cells, +1 is across z and +17 across x. The heights are the altitudes on a land of the
+	// story.
+	return land_line::CellHeights {.here = land.HeightUnitsOf(cell[0], x, z),
+	                               .acrossX = land.HeightUnitsOf(cell[17], x + 1, z),
+	                               .acrossZ = land.HeightUnitsOf(cell[1], x, z + 1),
+	                               .acrossBoth = land.HeightUnitsOf(cell[18], x + 1, z + 1)};
 }
 
 float HeightAt(glm::vec2 point)

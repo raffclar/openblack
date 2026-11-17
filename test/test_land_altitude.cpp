@@ -64,6 +64,18 @@ public:
 	[[nodiscard]] Extent2 GetExtent() const override { return {}; }
 	uint8_t GetNoise(glm::u8vec2) override { return 0; }
 
+	/// Gives the island a height field with these heights in units at the four corners of the first cell
+	void SetFieldCorners(uint16_t u00, uint16_t u01, uint16_t u10, uint16_t u11)
+	{
+		std::vector<uint16_t> units(static_cast<size_t>(k_MapCornersPerSide) * k_MapCornersPerSide, 0);
+		units.at(0) = u00;
+		units.at(1) = u01;
+		units.at(k_MapCornersPerSide) = u10;
+		units.at(k_MapCornersPerSide + 1) = u11;
+		SetHeightField(landgen::HeightCurve::WithTop(60.0f, 1100.0f), std::move(units));
+	}
+	void SetCorner(uint8_t altitude) { SetFieldAltitude(0, 0, altitude); }
+
 private:
 	std::array<lnd::LNDCell, 17 * 17> _cells {};
 };
@@ -153,4 +165,36 @@ TEST(LandAltitude, AScriptFindsTheCellWithATruncatedTenth)
 	// A small negative coordinate truncates to cell 0, so the script gets the height of the land, not minus ten. The
 	// map position is off the map, thus the height is 0.
 	EXPECT_EQ(island.GetScriptLandHeight({-5.0f, 0.0f, 0.0f}), 0.0f);
+}
+
+TEST(LandHeightField, TheFieldGivesTheHeightAboveTheAltitudeByte)
+{
+	OneCellIsland island(200, 200, 200, 200, false);
+	EXPECT_FALSE(island.HasHeightField());
+	EXPECT_EQ(island.GetAltitude(0, 0), Steps(200 * 256));
+	EXPECT_EQ(island.HighestHeight(), 255.0f * LandIslandInterface::k_HeightUnit);
+	island.SetFieldCorners(1500, 1500, 1500, 1500);
+	EXPECT_TRUE(island.HasHeightField());
+	EXPECT_EQ(island.CornerUnits({0, 0}), 1500);
+	EXPECT_EQ(island.GetAltitude(0, 0), Steps(1500 * 256));
+	EXPECT_EQ(island.GetAltitude(k_Fixed / 2, k_Fixed / 2), Steps(1500 * 256));
+	EXPECT_NEAR(island.HighestHeight(), 1100.0f, 1.0f);
+}
+
+TEST(LandHeightField, TheFieldSlopesAcrossTheCellAsTheAltitudesDo)
+{
+	OneCellIsland island(0, 0, 0, 0, false);
+	island.SetFieldCorners(1000, 1000, 2000, 2000);
+	// Half way along x, the height is half way between the corners, in the same integer steps as the altitudes
+	EXPECT_EQ(island.GetAltitude(k_Fixed / 2, 0), Steps(1500 * 256));
+}
+
+TEST(LandHeightField, AChangedAltitudeSetsTheFieldThroughTheCurve)
+{
+	OneCellIsland island(0, 0, 0, 0, false);
+	island.SetFieldCorners(1000, 1000, 1000, 1000);
+	island.SetCorner(40);
+	EXPECT_EQ(island.CornerUnits({0, 0}), 40);
+	island.SetCorner(255);
+	EXPECT_EQ(island.CornerUnits({0, 0}), island.GetHeightCurve().WholeUnitsOf(255.0f));
 }

@@ -50,7 +50,7 @@ struct LandVertex
 };
 
 /// The vertex of a cell corner at cornerPosition (x and z in its block) of the given altitude
-[[nodiscard]] LandVertex MakeLandVertex(glm::vec2 cornerPosition, uint8_t altitude);
+[[nodiscard]] LandVertex MakeLandVertex(glm::vec2 cornerPosition, uint16_t altitude);
 
 class LandIslandInterface;
 
@@ -82,8 +82,8 @@ public:
 	/// Binds the block's vertices for a draw
 	void BindVertices() const;
 	[[nodiscard]] const lnd::LNDCell* GetCells() const;
-	/// The altitudes of the block's corners as its vertices were last built with them, [x * 17 + z]
-	[[nodiscard]] const std::array<uint8_t, graphics::land_detail::k_CornerCount>& GetCornerAltitudes() const
+	/// The heights in units of the block's corners as its vertices were last built with them, [x * 17 + z]
+	[[nodiscard]] const std::array<uint16_t, graphics::land_detail::k_CornerCount>& GetCornerAltitudes() const
 	{
 		return _cornerAltitudes;
 	}
@@ -95,9 +95,11 @@ public:
 	bool SetCellAltitude(size_t index, uint8_t altitude);
 	/// Sets the country of one of the block's 17 by 17 cells, [x * 17 + z]. Returns true when the country changed.
 	bool SetCellCountry(size_t index, uint8_t country);
-	/// The highest altitude of the block's cells when the land was loaded. A later change of the cells' altitudes does
-	/// not change it. Every view test of the block uses this box top.
-	[[nodiscard]] uint8_t GetHighestAltitude() const noexcept { return _highestAltitude; }
+	/// The highest height in units of the block's cells when the land was loaded: the highest altitude on a land of the
+	/// story. A later change of the cells' altitudes does not change it. Every view test of the block uses this box top.
+	[[nodiscard]] uint16_t GetHighestAltitude() const noexcept { return _highestAltitude; }
+	/// Sets the box top of a block of a land with a height field
+	void SetHighestUnits(uint16_t units) noexcept { _highestAltitude = units; }
 
 private:
 	/// Every mesh, coarser sides and open-sea choice
@@ -114,10 +116,10 @@ private:
 	/// do not read the cells of the block.
 	glm::ivec2 _blockPosition {-1};
 	glm::vec2 _mapPosition {0.0f};
-	uint8_t _highestAltitude {0};
+	uint16_t _highestAltitude {0};
 	/// The corners' altitudes of the last build of the vertices. The land works out the drawn altitudes of a block that
 	/// morphs from them each frame.
-	std::array<uint8_t, graphics::land_detail::k_CornerCount> _cornerAltitudes {};
+	std::array<uint16_t, graphics::land_detail::k_CornerCount> _cornerAltitudes {};
 
 	void BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island);
 };

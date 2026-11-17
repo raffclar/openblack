@@ -199,17 +199,17 @@ inline constexpr size_t k_CornerCount = k_CornersPerSide * k_CornersPerSide;
 /// whole altitudes rounded down; a corner of the coarser mesh keeps its own
 struct MorphTargets
 {
-	uint8_t half {0};
-	uint8_t quarter {0};
+	uint16_t half {0};
+	uint16_t quarter {0};
 };
 
 /// The morph targets of the corner at (x, z) of a block whose corner altitudes are [x * 17 + z]
-[[nodiscard]] MorphTargets TargetsAt(std::span<const uint8_t, k_CornerCount> altitudes, size_t x, size_t z);
+[[nodiscard]] MorphTargets TargetsAt(std::span<const uint16_t, k_CornerCount> altitudes, size_t x, size_t z);
 
 /// A corner's altitude as it is drawn while it morphs, by its side of the mesh line (see SideOf): its own before the
 /// band, the target beyond it, and between them blended in 256ths, rounded down to a whole altitude. The band is width
 /// units wide, half of it on each side of the line.
-[[nodiscard]] uint8_t MorphedAltitude(uint8_t own, uint8_t target, float side, float width);
+[[nodiscard]] uint16_t MorphedAltitude(uint16_t own, uint16_t target, float side, float width);
 
 /// The side of the mesh line (see SideOf) of the corner (x, z) of a block that morphs. The game finds each corner's
 /// place from the block's corner with the least x and z, in steps of the coarser mesh, and these float sums do the
@@ -218,8 +218,9 @@ struct MorphTargets
 
 /// The altitudes at which the corners of a block that morphs are drawn, [x * 17 + z], from the corners' own altitudes
 /// and the morph's line and band width
-[[nodiscard]] std::array<uint8_t, k_CornerCount> MorphedCorners(std::span<const uint8_t, k_CornerCount> altitudes, Morph morph,
-                                                                const GroundLine& line, float width, glm::vec2 blockCorner);
+[[nodiscard]] std::array<uint16_t, k_CornerCount> MorphedCorners(std::span<const uint16_t, k_CornerCount> altitudes,
+                                                                 Morph morph, const GroundLine& line, float width,
+                                                                 glm::vec2 blockCorner);
 
 /// How opaque the coarse texture is over the full one at a corner, 0 to 255, by its side of the texture line (see
 /// SideOf): clear before the band, opaque beyond it. The band is width units wide, band of them on each side of the
@@ -243,7 +244,7 @@ struct BlockCornerInputs
 	float textureWidth {0.0f};
 	float textureBand {0.0f};
 	glm::vec2 blockCorner {0.0f};
-	std::array<uint8_t, k_CornerCount> altitudes {};
+	std::array<uint16_t, k_CornerCount> altitudes {};
 };
 
 /// Whether two sets of values are the same, each float by its bits
@@ -251,7 +252,7 @@ struct BlockCornerInputs
 
 /// The land's vertex shader reads the blocks' corners as they are drawn in a frame from one texture: 32 by 32 squares,
 /// one for each block in the order of the blocks, of 17 by 17 texels, the corner's x along the width and z along the
-/// height. Each texel holds the drawn altitude and the coarse texture's opacity, a byte each. There is a square for
+/// height. Each texel holds the drawn height in units and the coarse texture's opacity, 16 bits each. There is a square for
 /// each block of the whole map, because a land made by the game can have more blocks than a landscape file.
 inline constexpr size_t k_CornerSquaresPerSide = 32;
 inline constexpr size_t k_CornerTextureSide = k_CornerSquaresPerSide * k_CornersPerSide;
@@ -311,8 +312,8 @@ struct FrameDetail
 /// The altitude at which the corner (x, z) of a block is drawn in a frame. This is the corner's own altitude. While the
 /// block morphs, the altitude goes towards the coarser mesh by the corner's place in the band of the morph's line. The
 /// corner altitudes are [x * 17 + z], and blockCorner is the corner of the block with the least x and z.
-[[nodiscard]] uint8_t DrawnCornerAltitude(std::span<const uint8_t, k_CornerCount> altitudes, size_t x, size_t z, Morph morph,
-                                          const FrameDetail& frame, glm::vec2 blockCorner);
+[[nodiscard]] uint16_t DrawnCornerAltitude(std::span<const uint16_t, k_CornerCount> altitudes, size_t x, size_t z, Morph morph,
+                                           const FrameDetail& frame, glm::vec2 blockCorner);
 
 /// The detail of the last frame. A frame with the same inputs and the same blocks uses it again. Thus all the users in a
 /// frame share one classification.

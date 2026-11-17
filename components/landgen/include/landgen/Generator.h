@@ -23,6 +23,7 @@
 #include "landgen/Cursed.h"
 #include "landgen/Features.h"
 #include "landgen/Grid.h"
+#include "landgen/HeightCurve.h"
 #include "landgen/Hydrology.h"
 #include "landgen/Lighting.h"
 #include "landgen/Settlement.h"
@@ -60,11 +61,16 @@ struct Settings
 	int side {k_MapCorners};
 	/// The direction of the wind. Without it, the seed picks the direction.
 	std::optional<climate::Wind> wind;
+	/// The height in metres of the highest altitude, and the altitude above which each altitude unit adds more height.
+	/// The lands of the story have 170.85 m at the highest altitude. Snowdon, the highest mountain of Wales, is 1085 m.
+	float topHeight {1250.0f};
+	float heightKnee {73.471f};
 	terrain::BaseSettings base;
 	terrain::HydraulicSettings hydraulic;
 	terrain::ThermalSettings thermal;
 	terrain::TerraceSettings terraces;
 	terrain::MassifSettings massifs;
+	terrain::RollSettings roll;
 	terrain::ShelfSettings shelf;
 	hydrology::LakeSettings lakes;
 	hydrology::RiverSettings rivers;
@@ -136,6 +142,10 @@ struct GeneratedLand
 	/// The player's temple and first town on the start area
 	settlement::Plan settlement;
 	std::vector<StageTime> times;
+	/// The height units of each altitude, and the height of each corner in units of 0.67 m. The altitude of a cell is its
+	/// height in units on a land of the story, and the rounded altitude of the curve on a generated land.
+	HeightCurve heightCurve;
+	Grid<uint16_t> heightUnits;
 };
 
 /// Makes a land: the base heights, the erosion, the lakes and rivers, the start area, the climate, the biomes, the light,

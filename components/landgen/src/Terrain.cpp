@@ -111,6 +111,18 @@ struct BrushPoint
 	float weight;
 };
 
+/// The rest to the power of the profile, between the powers 0.5, 1, 1.5 and 2 that need only a square root. Between
+/// two of those powers the result changes in a straight line.
+float ProfileOf(float rest, float profile)
+{
+	const float root = std::sqrt(rest);
+	const std::array<float, 4> powers {root, rest, rest * root, rest * rest};
+	const float position = std::clamp((profile - 0.5f) * 2.0f, 0.0f, 3.0f);
+	const auto low = std::min(static_cast<size_t>(position), size_t {2});
+	const float part = position - static_cast<float>(low);
+	return powers[low] + ((powers[low + 1] - powers[low]) * part);
+}
+
 std::vector<BrushPoint> MakeBrush(int radius)
 {
 	std::vector<BrushPoint> brush;
@@ -795,7 +807,7 @@ Grid<float> terrain::MassifHeights(int side, std::span<const Peak> peaks, uint64
 				}
 				// The cone is steep at the summit and gentle at the foot
 				const float rest = 1.0f - d;
-				float height = peak.summit * rest * std::sqrt(rest);
+				float height = peak.summit * ProfileOf(rest, settings.profile);
 				if (distance > 0.0f)
 				{
 					// The ridged noise round the peak gives the spurs. The gullies between them are deeper down the slope,
@@ -933,6 +945,114 @@ void terrain::LowerHighGround(Grid<float>& heights, float knee, float ceiling)
 			height = knee + ((ceiling - knee) * over / (1.0f + over));
 		}
 	}
+}
+
+namespace
+{
+/// A flood from the sea and the edges of the map: each corner that the mask has goes up to the height where the water
+/// spills over, so that no pit holds water
+void FillPits(Grid<float>& heights, std::span<const uint8_t> mask)
+{
+	const int side = heights.side;
+	using Entry = std::pair<float, uint32_t>;
+	std::priority_queue<Entry, std::vector<Entry>, std::greater<>> open;
+	std::vector<uint8_t> reached(heights.values.size(), 0);
+	for (int x = 0; x < side; ++x)
+	{
+		for (int z = 0; z < side; ++z)
+		{
+			const auto index = heights.Index(x, z);
+			if (heights.values[index] <= terrain::k_SeaLevel || x == 0 || z == 0 || x == side - 1 || z == side - 1)
+			{
+				reached[index] = 1;
+				open.emplace(heights.values[index], static_cast<uint32_t>(index));
+			}
+		}
+	}
+	while (!open.empty())
+	{
+		const auto [level, index] = open.top();
+		open.pop();
+		const int x = heights.XOf(index);
+		const int z = heights.ZOf(index);
+		for (const auto& neighbour : k_Neighbours)
+		{
+			if (!heights.Contains(x + neighbour.dx, z + neighbour.dz))
+			{
+				continue;
+			}
+			const auto other = heights.Index(x + neighbour.dx, z + neighbour.dz);
+			if (reached[other] != 0)
+			{
+				continue;
+			}
+			reached[other] = 1;
+			auto& height = heights.values[other];
+			if (mask[other] != 0)
+			{
+				height = std::max(height, level);
+			}
+			open.emplace(std::max(height, level), static_cast<uint32_t>(other));
+		}
+	}
+}
+} // namespace
+
+void terrain::RollGround(Grid<float>& heights, uint64_t seed, const RollSettings& settings)
+{
+	const int side = heights.side;
+	const float last = static_cast<float>(std::max(side - 1, 1));
+	Grid<uint8_t> sea(side, 0);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		sea.values[i] = heights.values[i] <= k_SeaLevel ? 1 : 0;
+	}
+	const auto distance = climate::DistanceToWater(sea);
+	const auto rollSeed = StageSeed(seed, 24);
+	const auto ridgeSeed = StageSeed(seed, 25);
+	const auto partSeed = StageSeed(seed, 26);
+	std::vector<uint8_t> moved(heights.values.size(), 0);
+	for (int x = 0; x < side; ++x)
+	{
+		for (int z = 0; z < side; ++z)
+		{
+			const auto index = heights.Index(x, z);
+			auto& height = heights.values[index];
+			const float fade = noise::SmoothStep(settings.seaStart, settings.seaFull, distance.values[index]);
+			if (height <= k_SeaLevel || fade <= 0.0f)
+			{
+				continue;
+			}
+			const float u = static_cast<float>(x) / last;
+			const float v = static_cast<float>(z) / last;
+			const float part = noise::Fractal(partSeed, u * settings.partFrequency, v * settings.partFrequency, 2);
+			const float calmEdge = (settings.calmShare * 2.0f) - 1.0f;
+			const float rough = noise::SmoothStep(calmEdge * 0.5f - 0.1f, calmEdge * 0.5f + 0.1f, part);
+			const float amount = settings.calmAmount + ((settings.roughAmount - settings.calmAmount) * rough);
+			const float high = 1.0f - noise::SmoothStep(settings.highStart, settings.highEnd, height);
+			const float fu = u * settings.frequency;
+			const float fv = v * settings.frequency;
+			const float shape = ((1.0f - settings.ridge) * noise::Fractal(rollSeed, fu, fv, settings.octaves)) +
+			                    (settings.ridge * ((2.0f * noise::Ridged(ridgeSeed, fu, fv, settings.octaves)) - 1.0f));
+			const float keep = shape > 0.0f ? high : high + ((1.0f - high) * settings.highFall);
+			float change = amount * keep * fade * shape;
+			if (settings.stepRise > 0.0f && settings.stepFace > 0.0f && settings.stepFace < 1.0f)
+			{
+				const float level = (height + change) / settings.stepRise;
+				const float whole = std::floor(level);
+				const float partOf = level - whole;
+				const float rest = 1.0f - settings.stepFace;
+				const float rise = partOf < rest ? partOf * (1.0f - settings.stepFaceRise) / rest
+				                                 : (1.0f - settings.stepFaceRise) +
+				                                       ((partOf - rest) * settings.stepFaceRise / settings.stepFace);
+				const float stepped = (whole + rise) * settings.stepRise;
+				change += (stepped - (height + change)) * high * fade;
+			}
+			height = std::max(height + change, k_SeaLevel + 0.01f);
+			moved[index] = 1;
+		}
+	}
+	FillPits(heights, moved);
 }
 
 void terrain::ShoreShelf(Grid<float>& heights, uint64_t seed, const ShelfSettings& settings)
