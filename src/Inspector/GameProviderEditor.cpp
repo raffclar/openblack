@@ -989,6 +989,39 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		}
 		return QueryResult::Value({{"sent", true}, {"id", id}});
 	});
+	auto land = Query(
+	    "land",
+	    "Asks the game server to start the room again on a land, as the Load Island menu of the debug menu bar does in a "
+	    "network game: every computer loads the land before the first turn of the new game. The server takes it only from "
+	    "a player with the editor claim. This ends the current game of every player. force sends it also when the editor "
+	    "of this computer is refused.",
+	    {{.name = "land",
+	      .type = "string",
+	      .description = "The script of the land, as a start names it (for example Land2.txt)",
+	      .required = false},
+	     {.name = "testbed", .type = "boolean", .description = "The testbed in place of a land", .required = false},
+	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
+	land.writes = true;
+	provider->Add(std::move(land), [](const QueryContext& context) {
+		if (auto refused = Refused(context.params))
+		{
+			return *refused;
+		}
+		const auto landParam = context.params.find("land");
+		const auto testbedParam = context.params.find("testbed");
+		const bool testbed = testbedParam != context.params.end() && testbedParam->is_boolean() && testbedParam->get<bool>();
+		const auto name =
+		    landParam != context.params.end() && landParam->is_string() ? landParam->get<std::string>() : std::string();
+		if (name.empty() == !testbed)
+		{
+			return QueryResult::Error("editor.land needs the name of a land or testbed true, not both");
+		}
+		if (!Locator::networkGame::has_value() || !Locator::networkGame::value().SendEditorLand(name, testbed))
+		{
+			return QueryResult::Error("the game socket is not open: the request did not go");
+		}
+		return QueryResult::Value({{"sent", true}, {"land", name}, {"testbed", testbed}});
+	});
 	auto scriptAct = Query(
 	    "script",
 	    "Does an act of the Scripts tab on the script machine, as the tab does it: at once in a game alone, or as a command "

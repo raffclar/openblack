@@ -238,6 +238,11 @@ public:
 	/// on the scenario. The scenario is laid out in the first frame in which the world turns. Gives the turn of the new
 	/// world, or why it did not start.
 	[[nodiscard]] WorldChangeResult RestartOnScenario(std::string_view id, uint32_t seed);
+	/// Between two turns: the world starts again on a land, or on the testbed with no scenario, as a network game that
+	/// starts on it. Gives the turn of the new world, or why it did not start.
+	[[nodiscard]] WorldChangeResult RestartOnLand(std::string_view land, bool testbed, std::string_view opening, uint32_t seed);
+	/// Why the server cannot load a land of the Load Island menu, or none when it can
+	[[nodiscard]] static std::optional<std::string> LandRefusal(std::string_view land);
 	/// What the game role lets the world do in a frame
 	enum class NetworkStep : uint8_t
 	{
@@ -864,6 +869,74 @@ WorldChangeResult ServerWorld::RestartOnScenario(std::string_view id, uint32_t s
 	return {.turn = clock.GetTurn(), .refusal = {}};
 }
 
+std::optional<std::string> ServerWorld::LandRefusal(std::string_view land)
+{
+	const auto& fileSystem = Locator::filesystem::value();
+	const auto path = network_land::PathOf(land, fileSystem.GetPath<filesystem::Path::Scripts>());
+	if (!path.has_value())
+	{
+		return "the name is not a land of the game";
+	}
+	if (!fileSystem.Exists(*path))
+	{
+		return "the game has no such land";
+	}
+	return std::nullopt;
+}
+
+WorldChangeResult ServerWorld::RestartOnLand(std::string_view land, bool testbed, std::string_view opening, uint32_t seed)
+{
+	std::optional<std::filesystem::path> path;
+	if (!testbed)
+	{
+		if (const auto refusal = LandRefusal(land); refusal.has_value())
+		{
+			return {.turn = std::nullopt, .refusal = *refusal};
+		}
+		path = network_land::PathOf(land, Locator::filesystem::value().GetPath<filesystem::Path::Scripts>());
+	}
+	const auto name = testbed ? std::string("the testbed") : std::string(land);
+	Locator::syncChecksumSystem::value().FinishHash();
+	// The land starts from the state that every client starts it from, as at the start of a network game
+	simulation::PrepareNetworkLand(seed);
+	auto& landSystem = Locator::landSystem::value();
+	landSystem.SetNewGameStart(opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(opening));
+	const bool loaded = testbed ? landSystem.LoadTestbed()
+	                            : landSystem.LoadMap(*path, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame);
+	if (!loaded)
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The land {} of the editor did not load", name);
+		return {.turn = std::nullopt, .refusal = "the land did not load"};
+	}
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().SetConditions(_conditionPicks);
+	}
+	// The world of a network game starts no story
+	if (!landSystem.StartChallengeScripts(false))
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The scripts of the land {} of the editor did not start", name);
+		return {.turn = std::nullopt, .refusal = "the scripts of the land did not start"};
+	}
+	// As each client starts the land of a start: the things go into the map's cells, and the clock starts from the start
+	// of the current turn
+	Locator::entitiesMap::value().Sync();
+	auto& clock = Locator::time::value();
+	clock.Start();
+	if (_simulation.frameTime.has_value())
+	{
+		simulation::LoadEveryResource();
+	}
+	clock.ResetTimerToTurn();
+	clock.SetNetworkGame(true);
+	Locator::syncChecksumSystem::value().SetEnabled(true);
+	// A land has no scenario
+	_scenario.reset();
+	_scenarioStarted = false;
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world starts again on the land {} at turn {}", name, clock.GetTurn());
+	return {.turn = clock.GetTurn(), .refusal = {}};
+}
+
 /// The seconds since 1970 (UTC) on the clock of the computer
 int64_t UtcSeconds()
 {
@@ -1064,7 +1137,8 @@ public:
 	}
 
 	/// The editor changed the world of the room. A world that a snapshot can continue gets a new snapshot before the next
-	/// turn. A room that plays a testbed scenario keeps no snapshot, as the scenario keeps its state out of the world.
+	/// turn. A room that plays a testbed scenario keeps no snapshot, as the scenario keeps its state out of the world. A
+	/// room on a new land keeps no snapshot either: a server starts again only on the land of its command line.
 	void WorldChanged(bool continues)
 	{
 		if (continues)
@@ -1078,7 +1152,8 @@ public:
 		}
 		_writer->Flush();
 		_store.Clear();
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The room plays a testbed scenario: the server removed its snapshots");
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The room plays a new land or a testbed scenario: the server removed its snapshots");
 	}
 
 	/// The game ended, so no server continues it: the snapshots go
@@ -1404,12 +1479,16 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	host.SetWorldState([] {
 		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
 	});
-	// A world file or a testbed scenario of the editor of a player changes the world between two turns
+	// A world file, a testbed scenario or a land of the editor of a player changes the world between two turns
 	host.SetScenarioRefusal([](std::string_view id) { return testbed_scenarios::NetworkRestartRefusal(id); });
+	host.SetLandRefusal([](std::string_view land) { return ServerWorld::LandRefusal(land); });
 	host.SetChangeWorld([&world, keeper](const LockstepHost::WorldChange& change) {
-		const bool file = change.kind == LockstepHost::WorldChange::Kind::WorldFile;
-		const auto changed =
-		    file ? world.LoadEditorWorld(change.file, change.players) : world.RestartOnScenario(change.scenario, change.seed);
+		using Kind = LockstepHost::WorldChange::Kind;
+		const bool file = change.kind == Kind::WorldFile;
+		const auto changed = file ? world.LoadEditorWorld(change.file, change.players)
+		                     : change.kind == Kind::Scenario
+		                         ? world.RestartOnScenario(change.scenario, change.seed)
+		                         : world.RestartOnLand(change.land, change.testbed, change.opening, change.seed);
 		if (changed.turn.has_value() && keeper != nullptr)
 		{
 			keeper->WorldChanged(file);

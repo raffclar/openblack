@@ -236,6 +236,18 @@ TEST(DeveloperTools, AWindowThatShowsInANetworkGameShowsThereOnlyInTheFullMode)
 	EXPECT_FALSE(ShowsWindow(GuiMode::Dormant, true, false, true, true));
 }
 
+TEST(DeveloperTools, InANetworkGameOnlyTheEditorClaimOpensTheLoadIslandMenu)
+{
+	using openblack::developer_tools::LandMenuAct;
+	using openblack::developer_tools::LandMenuActOf;
+	// A game alone loads the land at once, with or without the claim
+	EXPECT_EQ(LandMenuActOf(false, false), LandMenuAct::LoadsHere);
+	EXPECT_EQ(LandMenuActOf(false, true), LandMenuAct::LoadsHere);
+	// In a network game the editor claim asks the game server, and with no editor claim the menu does not open
+	EXPECT_EQ(LandMenuActOf(true, true), LandMenuAct::AsksServer);
+	EXPECT_EQ(LandMenuActOf(true, false), LandMenuAct::Closed);
+}
+
 TEST(DeveloperTools, TheMenuBarShowsOnlyInTheFullModeWhileTheGameMenuIsOpen)
 {
 	EXPECT_TRUE(ShowsMenuBar(GuiMode::Full, true, true));
