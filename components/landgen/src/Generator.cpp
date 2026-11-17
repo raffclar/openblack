@@ -358,5 +358,10 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	const std::array clearings {features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
 	land.features = features::Place(land.biomes, heights, keepClear, clearings, seed, settings.features);
 	clock.Done("features");
+
+	// The temple and the town on the start area, then the forests nearest the town first
+	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);
+	land.forests = features::GroupForests(land.features, land.settlement.townX, land.settlement.townZ, settings.forests);
+	clock.Done("town and forests");
 	return land;
 }

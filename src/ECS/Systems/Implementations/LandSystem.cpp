@@ -24,6 +24,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <unordered_set>
 #include <vector>
 
 #include <LHVM.h>
@@ -59,6 +60,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/Stream.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureExplorationLand.h"
@@ -513,13 +515,24 @@ void PlaceGeneratedThings(const landgen::GeneratedLand& land)
 	constexpr float k_MetresPerCorner = 10.0f;
 	const auto& terrain = Locator::terrainSystem::value();
 	const auto onLand = [&terrain](float x, float z) { return glm::vec3(x, terrain.GetHeightAt({x, z}), z); };
+	// Each forest is made at its first tree before its trees, as a land script of the story makes a forest
+	std::unordered_set<uint32_t> forests;
+	if (Locator::forestSystem::has_value())
+	{
+		auto& forestSystem = Locator::forestSystem::value();
+		for (const auto& forest : land.forests)
+		{
+			forests.insert(forestSystem.MakeLandForest(forest.id, onLand(forest.x, forest.z), entt::null, false));
+		}
+	}
 	for (const auto& feature : land.features)
 	{
 		const auto position = onLand(feature.x, feature.z);
 		if (feature.kind == landgen::features::Kind::Tree)
 		{
-			// A tree of the scenery in no forest, as the trees of the land scripts of the story are
-			archetypes::TreeArchetype::Create(0, position, static_cast<TreeInfo>(feature.type), true, feature.angle,
+			// A tree of the scenery, in its forest or in no forest, as the trees of the land scripts of the story are
+			const auto forest = forests.contains(feature.forest) ? feature.forest : 0;
+			archetypes::TreeArchetype::Create(forest, position, static_cast<TreeInfo>(feature.type), true, feature.angle,
 			                                  feature.maxSize, feature.size);
 		}
 		else
@@ -583,6 +596,19 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 	SetUpLandscape();
 	View().ShowLoadingFrame();
 	PlaceGeneratedThings(land);
+	// The temple and the first town of the player come from the lines of a land script, as on a land of the story
+	try
+	{
+		lhscriptx::Script script;
+		script.Load(generated_land::SettlementScript(land.settlement));
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the script of the town of generated land {}: {}", choices.seed,
+		                    e.what());
+	}
+	// As on a land: the land is laid out. A generated land has no footpath file and no slots to fill.
+	LayOutLand(std::nullopt, std::nullopt);
 
 	// The camera looks down over the start area from the south
 	constexpr float k_MetresPerCorner = 10.0f;
@@ -592,12 +618,20 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 	    .SetOrigin({start.x, ground + k_GeneratedCameraHeight, start.y - k_GeneratedCameraBack})
 	    .SetFocus({start.x, ground, start.y});
 
-	// The land has no temple yet. A source of influence over the start area gives the player the reach of a citadel,
-	// as on the testbed.
+	// When the temple did not fit, a source of influence over the start area gives the player the reach of a citadel, as
+	// on the testbed
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto influence = registry.Create();
-	registry.Assign<components::Transform>(influence, glm::vec3(start.x, ground, start.y), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<components::InfluenceSource>(influence, PlayerNames::PLAYER_ONE, k_TestbedInfluenceRadius);
+	bool hasTemple = false;
+	registry.Each<const components::Temple>(
+	    [&hasTemple](const components::Temple& temple) { hasTemple = hasTemple || temple.owner == PlayerNames::PLAYER_ONE; });
+	if (!hasTemple)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Generated land {}: the temple did not fit on the start area", choices.seed);
+		const auto influence = registry.Create();
+		registry.Assign<components::Transform>(influence, glm::vec3(start.x, ground, start.y), glm::mat3(1.0f),
+		                                       glm::vec3(1.0f));
+		registry.Assign<components::InfluenceSource>(influence, PlayerNames::PLAYER_ONE, k_TestbedInfluenceRadius);
+	}
 	View().EndLoadingScreen();
 
 	StartNewLand(land_change::Kind::Testbed);
