@@ -5,6 +5,7 @@ each request on as plain HTTP:
   /game/...          -> the game server's plain WebSocket port (the game socket)
   /api/v1/events     -> the push process
   /play/...          -> files of the web build, with the headers that the game threads need
+  /play/ itself      -> the Django process: the site's page with the game in a frame, as the live Caddyfile sends it
   everything else    -> the Django process (uvicorn)
 It adds the proxy secret and, after a verified client certificate, the certificate's SHA-256, as Caddy does. For tests
 on this computer only.
@@ -85,7 +86,7 @@ async def serve_play(path, writer):
         kind = mimetypes.guess_type(full)[0] or "application/octet-stream"
     # The same headers as the live Caddyfile (play) block
     csp = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ; img-src 'self' data: blob:; "
-           "style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+           "style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
     head = (
         "HTTP/1.1 200 OK\r\n"
         f"Content-Type: {kind}\r\nContent-Length: {len(body)}\r\n"
@@ -130,7 +131,8 @@ async def handle(reader, writer):
         if lower == b"connection" and not upgrade:
             continue
         headers.append(line)
-    if path.startswith("/play/") and ARGS.play_dir:
+    # The site's own page /play/ holds the game page in a frame: only the files under it come from the web build
+    if path.startswith("/play/") and path.split("?", 1)[0] != "/play/" and ARGS.play_dir:
         log(f"{peer} {method} {path.split('?', 1)[0]} (play)")
         await serve_play(path, writer)
         return
