@@ -13,7 +13,6 @@
 
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
-#include "ECS/Archetypes/VillageLightArchetype.h"
 #include "ECS/MobileObjectClassRules.h"
 #include "ECS/OtherPlayerSparkles.h"
 #include "ECS/Systems/AdvisorVoiceSystemInterface.h"
@@ -277,8 +276,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 	{
 		Locator::cloudSystem::value().AnimateStormClouds(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	}
-	// The lights of owners that have gone go on every computer, then the lights flicker where the world is drawn
-	ecs::archetypes::VillageLightArchetype::DestroyOwnerless();
+	// The lights flicker where the computer draws the world. The turns remove the lights of the lanterns that went.
 	if (Locator::villageLightSystem::has_value())
 	{
 		Locator::villageLightSystem::value().Update(gameTime);

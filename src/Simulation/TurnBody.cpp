@@ -32,6 +32,7 @@
 #endif
 #include "Common/MachineClock.h"
 #include "Common/MainThreadQueue.h"
+#include "ECS/Archetypes/VillageLightArchetype.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -1143,6 +1144,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::CreatureShapes:
 		// A creature that has no skeleton or no pose yet gets them, so that the frames have a body to draw
 		Locator::creatureAnimationSystem::value().ShapeBodies();
+		break;
+	case Step::LanternLights:
+		// The light of a street lantern goes in the turn that removed the lantern, on each computer at the same turn
+		ecs::archetypes::VillageLightArchetype::DestroyOwnerless();
 		break;
 	case Step::MapCellsAtTurnEnd:
 		// The things that the turn made go into the map's cells, so that the frames find them there and file nothing
