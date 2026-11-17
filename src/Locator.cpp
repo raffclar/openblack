@@ -524,7 +524,7 @@ void InitializeOnline(const player_profiles::Store& profiles)
 		}
 		catch (const std::exception& error)
 		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read {}: {}", file, error.what());
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read {}: {}", player_profiles::PathForLog(file), error.what());
 			return std::nullopt;
 		}
 	};

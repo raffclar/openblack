@@ -36,6 +36,7 @@
 #include "Commands/PlayerCommands.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Common/PlayerProfiles.h"
 #include "Game.h"
 #include "GameDetail.h"
 #include "Sound/ClipSounds.h"
@@ -264,7 +265,7 @@ const std::filesystem::path& Game::ChallengePath()
 	const std::filesystem::path settingsFile(*_launchSwitches.settingsFile);
 	if (!fileSystem.Exists(settingsFile))
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Settings file {} not found", settingsFile.generic_string());
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Settings file {} not found", player_profiles::PathForLog(settingsFile));
 		return *_challengePath;
 	}
 	const auto bytes = fileSystem.ReadAll(settingsFile);
@@ -273,8 +274,8 @@ const std::filesystem::path& Game::ChallengePath()
 	if (folder.has_value())
 	{
 		_challengePath = std::filesystem::path(launch_switches::ChallengePath(*folder));
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Settings file {}: the challenge file is {}", settingsFile.generic_string(),
-		                   _challengePath->generic_string());
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Settings file {}: the challenge file is {}",
+		                   player_profiles::PathForLog(settingsFile), player_profiles::PathForLog(*_challengePath));
 	}
 	return *_challengePath;
 }

@@ -43,6 +43,7 @@
 #include "Common/DesyncReports.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/ScenarioPlayer.h"
 #include "ECS/ChallengePictures.h"
@@ -356,7 +357,7 @@ bool ServerWorld::Initialize()
 	if (_settings.profileFolder.has_value())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The server keeps no profile: the profile folder {} is not used",
-		                   _settings.profileFolder->generic_string());
+		                   player_profiles::PathForLog(*_settings.profileFolder));
 	}
 	// The server shows nothing, so it makes none of the systems that only show the world
 	if (!InitializeSimulation(profiles))

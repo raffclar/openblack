@@ -992,7 +992,7 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	if (Locator::landSystem::has_value())
 	{
 		const auto& lands = Locator::landSystem::value();
-		game.landscape = lands.GetLandPath().generic_string();
+		game.landscape = player_profiles::PathForLog(lands.GetLandPath());
 		game.landscapeFile = lands.GetLandscapePath().generic_string();
 	}
 	if (Locator::creatureCaveSystem::has_value())
@@ -1400,7 +1400,7 @@ std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 	if (Locator::landSystem::has_value())
 	{
 		const auto& lands = Locator::landSystem::value();
-		game.landscape = lands.GetLandPath().generic_string();
+		game.landscape = player_profiles::PathForLog(lands.GetLandPath());
 		game.landscapeFile = lands.GetLandscapePath().generic_string();
 	}
 	world.chunks.push_back(gamesave::ToChunk(game));
@@ -1481,7 +1481,7 @@ bool SaveGameSystem::LoadServerWorldState(std::span<const uint8_t> bytes)
 		                          "game refuses the state");
 		return false;
 	}
-	game->landscape = lands.GetLandPath().generic_string();
+	game->landscape = player_profiles::PathForLog(lands.GetLandPath());
 	game->landscapeFile = lands.GetLandscapePath().generic_string();
 	return LoadWholeWorld(0, *world, *game, ecs::world_save::LoadKind::WorldState);
 }
@@ -1494,7 +1494,7 @@ void SaveGameSystem::StartLandAgain() const
 	}
 	auto& lands = Locator::landSystem::value();
 	SPDLOG_LOGGER_WARN(Log(), "The load did not happen; the land {} starts again as a new game",
-	                   lands.GetLandPath().generic_string());
+	                   player_profiles::PathForLog(lands.GetLandPath()));
 	const auto land = lands.GetLandPath();
 	std::ignore = lands.LoadMapWithFreshScripts(land, land_change::Kind::NewGame);
 }
@@ -2214,15 +2214,16 @@ void SaveGameSystem::WriteTemporaryPicture(std::span<const uint8_t> screenPictur
 	// before it
 	auto* files = &Locator::filesystem::value();
 	const auto path = *pictures / gamesave::k_TemporaryPictureFileName;
-	Writer().Queue(path.generic_string(), [files, folder = *pictures, path,
-	                                       screen = std::vector<uint8_t>(screenPicture.begin(), screenPicture.end())]() {
-		if (!files->MakeFolder(folder))
-		{
-			return false;
-		}
-		const auto old = ReadFile(path);
-		return files->WriteAll(path, gamesave::MakeTemporaryPicture(View(old), screen));
-	});
+	Writer().Queue(
+	    player_profiles::PathForLog(path),
+	    [files, folder = *pictures, path, screen = std::vector<uint8_t>(screenPicture.begin(), screenPicture.end())]() {
+		    if (!files->MakeFolder(folder))
+		    {
+			    return false;
+		    }
+		    const auto old = ReadFile(path);
+		    return files->WriteAll(path, gamesave::MakeTemporaryPicture(View(old), screen));
+	    });
 }
 
 void SaveGameSystem::PutSlotPicture(uint32_t slot)
@@ -2236,7 +2237,7 @@ void SaveGameSystem::PutSlotPicture(uint32_t slot)
 	// The writer copies the temporary picture into the slot's cells on its own thread, after the files before it
 	auto* files = &Locator::filesystem::value();
 	++_savedGamesChanges;
-	Writer().Queue((*pictures / gamesave::LargePictureFileName(slot)).generic_string(),
+	Writer().Queue(player_profiles::PathForLog(*pictures / gamesave::LargePictureFileName(slot)),
 	               [files, step = SlotPictureStep(*pictures, slot)]() { return step(*files); });
 }
 
@@ -2282,7 +2283,7 @@ void SaveGameSystem::PutChallengePicture(uint32_t place, std::span<const uint8_t
 	for (const auto& name : names)
 	{
 		const auto bytes = _challengePictures.File(name);
-		Writer().Queue((*_challengeFolder / name).generic_string(),
+		Writer().Queue(player_profiles::PathForLog(*_challengeFolder / name),
 		               [files, folder = *_challengeFolder, path = *_challengeFolder / name,
 		                bytes = std::vector<uint8_t>(bytes->begin(), bytes->end())]() {
 			               return files->MakeFolder(folder) && files->WriteAll(path, bytes);
@@ -2307,7 +2308,7 @@ std::vector<std::string> SaveGameSystem::CopyChallengePicturesFrom(const std::fi
 	auto& files = Locator::filesystem::value();
 	if (!files.MakeFolder(*_challengeFolder))
 	{
-		SPDLOG_LOGGER_WARN(Log(), "The game could not make the folder {}", _challengeFolder->generic_string());
+		SPDLOG_LOGGER_WARN(Log(), "The game could not make the folder {}", player_profiles::PathForLog(*_challengeFolder));
 	}
 	// A file that the slot does not have is not copied, and the file of the game that the player plays now stays
 	for (const auto& name : gamesave::ChallengePictureFileNames())
@@ -2320,7 +2321,7 @@ std::vector<std::string> SaveGameSystem::CopyChallengePicturesFrom(const std::fi
 		if (!files.WriteAll(*_challengeFolder / name, *bytes))
 		{
 			SPDLOG_LOGGER_WARN(Log(), "The game could not copy the challenge picture {}",
-			                   (*_challengeFolder / name).generic_string());
+			                   player_profiles::PathForLog(*_challengeFolder / name));
 		}
 		_challengePictures.Set(name, std::move(bytes));
 		copied.push_back(name);

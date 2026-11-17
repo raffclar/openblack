@@ -32,6 +32,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
@@ -271,7 +272,7 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server, std:
 	if (!_discovery->Written())
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The inspector couldn't write its discovery file {}",
-		                   _discovery->Path().generic_string());
+		                   player_profiles::PathForLog(_discovery->Path()));
 	}
 }
 

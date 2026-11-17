@@ -26,6 +26,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Common/PlayerProfiles.h"
 #include "Gui/TextDatabase.h"
 
 using namespace openblack;
@@ -310,7 +311,7 @@ std::function<bool()> PlayerProfileSystem::ProfilesFileJob() const
 		stream << text;
 		if (const auto logger = spdlog::get("game"); !stream && logger != nullptr)
 		{
-			SPDLOG_LOGGER_WARN(logger, "The player profiles could not be written to {}", path.string());
+			SPDLOG_LOGGER_WARN(logger, "The player profiles could not be written to {}", player_profiles::PathForLog(path));
 		}
 		return static_cast<bool>(stream);
 	};

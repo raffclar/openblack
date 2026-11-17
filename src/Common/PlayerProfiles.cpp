@@ -210,14 +210,33 @@ bool LooksLikeProfileKey(std::string_view text)
 	}
 	return !text.empty();
 }
+
+std::string LowerAscii(std::string_view text)
+{
+	std::string lower(text);
+	std::ranges::transform(lower, lower.begin(),
+	                       [](char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; });
+	return lower;
+}
 } // namespace
 
 std::string PathForLog(const std::filesystem::path& path)
 {
 	std::filesystem::path shown;
+	bool homeFolderBefore = false;
 	for (const auto& part : path)
 	{
-		shown /= LooksLikeProfileKey(part.generic_string()) ? std::filesystem::path("<player>") : part;
+		const auto text = part.generic_string();
+		// The part after "Users" or "home" is the name of the account of the operating system
+		if (homeFolderBefore)
+		{
+			shown /= "<user>";
+		}
+		else
+		{
+			shown /= LooksLikeProfileKey(text) ? std::filesystem::path("<player>") : part;
+		}
+		homeFolderBefore = !homeFolderBefore && (LowerAscii(text) == "users" || LowerAscii(text) == "home");
 	}
 	return shown.generic_string();
 }

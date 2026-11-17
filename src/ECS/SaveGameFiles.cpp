@@ -14,6 +14,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Common/PlayerProfiles.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 
@@ -33,7 +34,7 @@ std::optional<std::vector<uint8_t>> ecs::save_files::ReadFile(const std::filesys
 	{
 		if (const auto log = spdlog::get("game"); log != nullptr)
 		{
-			SPDLOG_LOGGER_WARN(log, "The game could not read {}: {}", path.generic_string(), error.what());
+			SPDLOG_LOGGER_WARN(log, "The game could not read {}: {}", player_profiles::PathForLog(path), error.what());
 		}
 		return std::nullopt;
 	}
@@ -80,7 +81,7 @@ ecs::save_files::SlotWriteResult ecs::save_files::WriteSlot(filesystem::FileSyst
 		{
 			if (const auto log = spdlog::get("game"); log != nullptr)
 			{
-				SPDLOG_LOGGER_WARN(log, "The game could not make the folder {}", folder.generic_string());
+				SPDLOG_LOGGER_WARN(log, "The game could not make the folder {}", player_profiles::PathForLog(folder));
 			}
 		}
 	}

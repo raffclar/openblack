@@ -21,6 +21,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/DebugDownload.h"
+#include "Common/PlayerProfiles.h"
 #include "GraphicsHandleBgfx.h"
 
 namespace openblack::graphics
@@ -274,13 +275,13 @@ void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failur
 		    !why.empty())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save the screenshot drawn aside at {}: {}",
-			                    capture.path.string(), why);
+			                    player_profiles::PathForLog(capture.path), why);
 			failures.Record(capture.path.string(), "the picture drawn aside couldn't be written: " + why);
 		}
 		else
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Screenshot drawn aside ({}x{}) saved at {}", capture.size.x,
-			                   capture.size.y, capture.path.string());
+			                   capture.size.y, player_profiles::PathForLog(capture.path));
 		}
 		Release(capture);
 		return true;
