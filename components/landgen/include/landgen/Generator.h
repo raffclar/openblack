@@ -20,6 +20,7 @@
 #include "landgen/Biomes.h"
 #include "landgen/Climate.h"
 #include "landgen/Countries.h"
+#include "landgen/Cursed.h"
 #include "landgen/Features.h"
 #include "landgen/Grid.h"
 #include "landgen/Hydrology.h"
@@ -62,12 +63,16 @@ struct Settings
 	terrain::BaseSettings base;
 	terrain::HydraulicSettings hydraulic;
 	terrain::ThermalSettings thermal;
+	terrain::TerraceSettings terraces;
+	terrain::MassifSettings massifs;
+	terrain::ShelfSettings shelf;
 	hydrology::LakeSettings lakes;
 	hydrology::RiverSettings rivers;
 	climate::Settings climate;
 	biomes::Thresholds thresholds;
 	features::Settings features;
 	features::ForestSettings forests;
+	cursed::Settings cursed;
 	lighting::Settings lighting;
 	settlement::Settings settlement;
 };
@@ -124,6 +129,9 @@ struct GeneratedLand
 	std::vector<features::Feature> features;
 	/// The forests that hold the trees of the features
 	std::vector<features::Forest> forests;
+	/// The cursed places, and the puffs of mist and smoke over them
+	std::vector<cursed::Patch> cursedPatches;
+	std::vector<cursed::Mist> mists;
 	StartArea start {};
 	/// The player's temple and first town on the start area
 	settlement::Plan settlement;
@@ -131,7 +139,7 @@ struct GeneratedLand
 };
 
 /// Makes a land: the base heights, the erosion, the lakes and rivers, the start area, the climate, the biomes, the light,
-/// the cells and countries, the features and their forests, and the temple and town of the start
+/// the cells and countries, the features, the cursed places, the forests, and the temple and town of the start
 [[nodiscard]] GeneratedLand Generate(const Settings& settings);
 
 /// The cell of each corner, from the altitudes, the luminosity and the biomes. A cell's water and sound come from the

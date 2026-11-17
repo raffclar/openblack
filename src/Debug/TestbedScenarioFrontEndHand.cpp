@@ -161,6 +161,28 @@ void testbed_scenarios::AddFrontEndHandScenarios(std::vector<Scenario>& all)
 	               OnOffCheck("the tooltip has gone on the button", checks::Quantity::HandToolTipShown, false, 70, 74),
 	               OnOffCheck("the tooltip shows again in the middle", checks::Quantity::HandToolTipShown, true, 80, 110)},
 	});
+	// The temple's tooltip while the buttons of the story history show. The buttons are a box of the front end that is
+	// active for all the time that it shows. The temple offers no tooltip under such a box, also with the pointer off the
+	// buttons, so the tooltip that it showed stays for its linger time, and then it goes.
+	all.push_back({
+	    .id = "hand.tooltip_goes_under_story_history",
+	    .name = "The temple's tooltip goes while the buttons of the story history show",
+	    .facet = Facet::Hand,
+	    .description = "A script says a line. Then the player goes through the temple's main room into the library. The "
+	                   "pointer rests in the middle of the screen. Four seconds later the camera looks at the Story "
+	                   "History scroll, and its buttons show.",
+	    .expected = "In the library, before the camera looks at the scroll, the hand shows the tooltip of the room. While "
+	                "the buttons of the story history show, the tooltip stays for a short time, and then it goes. The "
+	                "pointer is not on a button.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::RunText, .delaySeconds = 0.5f, .value = 4411},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 6}},
+	    .checks = {OnOffCheck("the room's tooltip shows before the scroll", checks::Quantity::HandToolTipShown, true, 50, 58),
+	               OnOffCheck("the tooltip has gone under the buttons", checks::Quantity::HandToolTipShown, false, 130, 150)},
+	});
 	// A plain pot that holds nothing, such as a creature's handful from a field that it put down, is not drawn. The cursor
 	// picks only what the game draws, so it never points at such a pot or takes it.
 	all.push_back({

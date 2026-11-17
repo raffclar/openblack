@@ -26,8 +26,19 @@ CELL = 10.0
 # The names of the kinds of tree, in the order of the game's numbers
 TREES = ("Beech Birch Cedar Conifer ConiferA Oak OakA Olive Palm PalmA PalmB PalmC Pine Bush BushA BushB Cypress "
          "CypressA Copse CopseA Hedge HedgeA Burnt").split()
-# A generated feature of kind 0 is a tree and one of kind 1 is a static. Static number 3 is the dead tree.
+# A generated feature of kind 0 is a tree, one of kind 1 is a static and one of kind 2 is a big forest. Static number 3
+# is the dead tree.
 DEAD_TREE_STATIC = 3
+BIG_FOREST_FEATURE = 2
+# A generated feature of kind 3 is a feature of the scenery. The game's numbers 23 to 26 and 29 to 44 are the pillars.
+FEATURE_FEATURE = 3
+PILLAR_FEATURES = set(range(23, 27)) | set(range(29, 45))
+# The game's number of the crater feature, the burnt tree and the link of the things of one cursed place in metres. A
+# dark mist has no colour channel above DARK_CHANNEL: the near black, dark and grey smoke mists of the story.
+CRATER_FEATURE = 74
+BURNT = "Burnt"
+CURSED_LINK = 150.0
+DARK_CHANNEL = 0x50
 SURFACE_SAND = (0, 1, 2)  # wet sand, sand and desert sand of the generator
 GROUND_SAND = (7, 8)  # sand and wet sand of the land files
 
@@ -170,17 +181,57 @@ def tree_measures(points, kinds, in_forest, area_km2):
     return out
 
 
-def rock_measures(points, area_km2):
-    """The numbers of the rocks and boulders."""
+def rock_measures(points, area_km2, poses=None, trees=None):
+    """The numbers of the rocks and boulders. points is a list of (x, z) in metres, poses a list of (lean in radians,
+    height above the land in metres) for each rock, and trees a list of (x, z)."""
     n = len(points)
     out = {"rocks": n, "rocks_per_km2": n / area_km2 if area_km2 else float("nan"), "rock_clumps": 0}
     if n == 0:
         return out
-    group = groups_of(np.asarray(points, dtype=float), 20)
+    pts = np.asarray(points, dtype=float)
+    group = groups_of(pts, 20)
     _, size = np.unique(group, return_counts=True)
     out["rock_clumps"] = int((size >= 3).sum())
+    out["rock_clumps_per_km2"] = float(len(size) / area_km2) if area_km2 else float("nan")
     out["rock_lone_pct"] = float((size == 1).sum() * 100.0 / n)
+    if n >= 2:
+        dist, _ = cKDTree(pts).query(pts, 2)
+        out["rock_nn_median_m"] = float(np.median(dist[:, 1]))
+    if poses:
+        lean = np.degrees([p[0] for p in poses])
+        out["rock_lean_median_deg"] = float(np.median(lean))
+        out["rock_lean_p90_deg"] = float(np.percentile(lean, 90))
+        out["rock_altitude_median_m"] = float(np.median([p[1] for p in poses]))
+        out["rock_altitude_p90_m"] = float(np.percentile([p[1] for p in poses], 90))
+    if trees:
+        dist, _ = cKDTree(np.asarray(trees, dtype=float)).query(pts)
+        out["rock_tree_median_m"] = float(np.median(dist))
     return out
+
+
+def big_forest_measures(points, trees, area_km2):
+    """The numbers of the big forests. points is a list of (x, z) in metres, trees the list of the trees."""
+    n = len(points)
+    out = {"big_forests": n, "big_forests_per_km2": n / area_km2 if area_km2 else float("nan")}
+    if n >= 2:
+        pts = np.array(points, dtype=float)
+        dist, _ = cKDTree(pts).query(pts, 2)
+        out["big_forest_gap_median_m"] = float(np.median(dist[:, 1]))
+    if n and trees:
+        dist, _ = cKDTree(np.array([(t[0], t[1]) for t in trees], dtype=float)).query(np.array(points, dtype=float))
+        out["big_forest_tree_median_m"] = float(np.median(dist))
+    return out
+
+
+def is_dark(colour):
+    """Whether a mist colour, 0xAARRGGBB, is a dark mist of a cursed place."""
+    return max((colour >> 16) & 0xFF, (colour >> 8) & 0xFF, colour & 0xFF) <= DARK_CHANNEL
+
+
+def cursed_measures(things, dark_mists):
+    """The cursed places: the groups of burnt trees, craters and dark mists that are CURSED_LINK metres or less apart."""
+    groups = groups_of(np.array(things, dtype=float).reshape(-1, 2), CURSED_LINK)
+    return {"cursed_patches": len(set(groups.tolist())), "dark_mists": dark_mists}
 
 
 def measure_land(land):
@@ -190,9 +241,12 @@ def measure_land(land):
     area = out.get("land_km2", 0.0)
     trees = land["trees"]
     out.update(tree_measures([(t[0], t[1]) for t in trees], [t[2] for t in trees], [t[3] for t in trees], area))
-    out.update(rock_measures(land["rocks"], area))
+    out.update(rock_measures(land["rocks"], area, land.get("rock_poses"), [(t[0], t[1]) for t in trees]))
+    out["pillars"] = len(land.get("pillars", []))
     for key in ("forests", "footpaths", "mists", "towns"):
         out[key] = land[key]
+    out.update(big_forest_measures(land.get("big_forests", []), land.get("trees", []), area))
+    out.update(cursed_measures(land.get("cursed_things", []), land.get("dark_mists", 0)))
     kinds = {}
     for t in trees:
         kinds[t[2]] = kinds.get(t[2], 0) + 1
@@ -225,15 +279,33 @@ def load_dump(path):
     surfaces = d["surfaces"]
     land = (alt > 0) & (water == 0)
     sand = sand_mask(country, alt, tables, lambda i: surfaces[i] if i < len(surfaces) else -1, SURFACE_SAND)
-    trees, rocks = [], []
-    for kind, typ, x, z, _angle, _size, _max, forest in d["features"]:
+    trees, rocks, rock_poses, pillars, big_forests, cursed = [], [], [], [], [], []
+    for feature in d["features"]:
+        kind, typ, x, z, _angle, _size, _max, forest = feature[:8]
+        # Newer dumps add the two angles of the lean and the height above the land of each static
+        x_angle, z_angle, altitude = feature[8:11] if len(feature) >= 11 else (0.0, 0.0, 0.0)
         if kind == 0:
             trees.append((x, z, TREES[typ] if typ < len(TREES) else f"#{typ}", forest != 0))
+            if trees[-1][2] == BURNT:
+                cursed.append((x, z))
+        elif kind == BIG_FOREST_FEATURE:
+            big_forests.append((x, z))
+        elif kind == FEATURE_FEATURE:
+            if typ in PILLAR_FEATURES:
+                pillars.append((x, z))
+            elif typ == CRATER_FEATURE:
+                cursed.append((x, z))
         elif typ != DEAD_TREE_STATIC:
             rocks.append((x, z))
+            rock_poses.append((max(abs(x_angle), abs(z_angle)), altitude))
+    # A mist of a newer dump is x, z, height, colour, size and edge shrink
+    dark = [(m[0], m[1]) for m in d["mists"] if len(m) >= 4 and is_dark(int(m[3]))]
+    cursed += dark
     return {"name": os.path.splitext(os.path.basename(path))[0], "heights": alt * HEIGHT_UNIT, "land": land,
-            "sand": sand, "trees": trees, "rocks": rocks, "forests": len(d["forests"]), "footpaths": d["footpaths"],
-            "mists": len(d["mists"]), "towns": d["towns"]}
+            "sand": sand, "trees": trees, "rocks": rocks, "rock_poses": rock_poses, "pillars": pillars,
+            "big_forests": big_forests, "forests": len(d["forests"]),
+            "footpaths": d["footpaths"],
+            "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark)}
 
 
 def vanilla_models():
@@ -243,12 +315,22 @@ def vanilla_models():
     for name, lnd, script, fot in analyze.LANDS:
         land, objs, towns, _streams, forests, (_links, paths) = analyze.measure(name, lnd, script, fot)
         trees = [(o["pos"][0], o["pos"][1], o["kind"], o["forest"] not in (-1, 0)) for o in objs if o["cls"] == "tree"]
-        rocks = [o["pos"] for o in objs if o["cls"] == "static" and (
+        rock_objs = [o for o in objs if o["cls"] == "static" and (
             "rock" in o["kind"].lower() or o["kind"].startswith("Boulder"))]
+        rocks = [o["pos"] for o in rock_objs]
+        rock_poses = [(o["tilt"], o["voff"]) for o in rock_objs]
+        pillars = [o["pos"] for o in objs if o["cls"] == "feature" and "pilar" in o["kind"].lower()]
         mists = sum(1 for o in objs if o["cls"] == "mist")
+        dark = [o["pos"] for o in objs if o["cls"] == "mist" and is_dark(o.get("colour", 0xFFFFFFFF))]
+        cursed = [o["pos"] for o in objs if (o["cls"] == "tree" and o["kind"] == BURNT) or (
+            o["cls"] == "feature" and o["kind"] == "Crater")] + dark
+        big_forests = [o["pos"] for o in objs if o["cls"] == "bigforest"]
         sand = land.land & np.isin(land.mtype, GROUND_SAND)
         yield {"name": name, "heights": land.H, "land": land.land, "sand": sand, "trees": trees, "rocks": rocks,
-               "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns)}
+               "rock_poses": rock_poses, "pillars": pillars,
+               "big_forests": big_forests,
+               "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns),
+               "cursed_things": cursed, "dark_mists": len(dark)}
 
 
 def ranges_of(measures):

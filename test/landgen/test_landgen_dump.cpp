@@ -89,7 +89,7 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		std::ostringstream text;
 		text << '[' << static_cast<int>(feature.kind) << ',' << static_cast<int>(feature.type) << ',' << feature.x << ','
 		     << feature.z << ',' << feature.angle << ',' << feature.size << ',' << feature.maxSize << ',' << feature.forest
-		     << ']';
+		     << ',' << feature.xAngle << ',' << feature.zAngle << ',' << feature.altitude << ']';
 		return text.str();
 	});
 	out << ",\"forests\":";
@@ -101,7 +101,14 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 	out << ",\"rivers\":" << land.rivers.size() << ",\"lakes\":" << land.lakes;
 	out << ",\"start\":[" << land.start.x << ',' << land.start.z << ',' << land.start.radius << ']';
 	out << ",\"towns\":" << (land.settlement.buildings.empty() ? 0 : 1);
-	out << ",\"mists\":[],\"footpaths\":0}\n";
+	out << ",\"mists\":";
+	WriteList(out, land.mists, [](const landgen::cursed::Mist& mist) {
+		std::ostringstream text;
+		text << '[' << mist.x << ',' << mist.z << ',' << mist.altitude << ',' << mist.colour << ',' << mist.size << ','
+		     << mist.edgeShrink << ']';
+		return text.str();
+	});
+	out << ",\"footpaths\":0}\n";
 }
 } // namespace
 

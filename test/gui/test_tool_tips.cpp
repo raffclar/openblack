@@ -355,6 +355,52 @@ TEST(TempleToolTips, NoneOnTheWayIn)
 	EXPECT_FALSE(toolTip.index.has_value());
 }
 
+TEST(TempleToolTips, SubmitTheRoomsToolTipWithNoBoxActive)
+{
+	const TempleToolTip chosen {.index = 0xE96 - 0xE73, .action = ToolTipAction::Select, .arrows = ToolTipArrows::k_None};
+	const auto submitted = TempleToolTipToSubmit(chosen, false);
+	ASSERT_TRUE(submitted.has_value());
+	EXPECT_EQ(submitted->index, chosen.index);
+	EXPECT_EQ(submitted->action, chosen.action);
+	EXPECT_EQ(submitted->arrows, chosen.arrows);
+}
+
+TEST(TempleToolTips, SubmitNoneWhileAFrontEndBoxIsActive)
+{
+	// A question of the save game room, or the buttons of the story history, are up: the room's tooltip does not show
+	const TempleToolTip chosen {.index = 0xE7E - 0xE73, .action = ToolTipAction::Select, .arrows = ToolTipArrows::k_All};
+	EXPECT_FALSE(TempleToolTipToSubmit(chosen, true).has_value());
+}
+
+TEST(TempleToolTips, SubmitNoneWhenTheRoomsChoseNone)
+{
+	const TempleToolTip chosen {.index = std::nullopt, .action = ToolTipAction::None, .arrows = ToolTipArrows::k_None};
+	EXPECT_FALSE(TempleToolTipToSubmit(chosen, false).has_value());
+}
+
+TEST(TempleToolTips, TheShownToolTipLingersAndThenGoesUnderABox)
+{
+	// The world's scroll tells of the world, and then a box of the front end becomes active
+	ToolTips toolTips(Info());
+	const TempleToolTip chosen {.index = k_Stat, .action = ToolTipAction::Select, .arrows = ToolTipArrows::k_None};
+	const auto turn = [&toolTips, &chosen](bool boxActive) {
+		if (const auto submitted = TempleToolTipToSubmit(chosen, boxActive); submitted.has_value())
+		{
+			toolTips.Submit(*submitted->index, submitted->action, submitted->arrows);
+		}
+		toolTips.ProcessTurn();
+	};
+	turn(false);
+	turn(false);
+	for (int i = 0; i < 25; ++i)
+	{
+		turn(true);
+		ASSERT_TRUE(toolTips.GetShown().has_value()) << i;
+	}
+	turn(true);
+	EXPECT_FALSE(toolTips.GetShown().has_value());
+}
+
 TEST(ToolTips, AChargeComesAfterTheWordsOfAForcedTooltip)
 {
 	ToolTips toolTips(Info());

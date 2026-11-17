@@ -2317,6 +2317,13 @@ bool GameInterface::DialogBoxOpen() const
 	       _staffQuestionBox->IsActive() || _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
 }
 
+bool GameInterface::IsFrontEndBoxActive() const
+{
+	// The buttons of the story history are a box that is active for all the time that it shows, also while the pointer
+	// is not on a button
+	return _menu->IsOpen() || DialogBoxOpen() || _storyHistoryBox->IsActive();
+}
+
 bool GameInterface::FrontEndPointerOn() const
 {
 	const auto mouseButtonDown = (SDL_GetMouseState(nullptr, nullptr) & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK)) != 0;

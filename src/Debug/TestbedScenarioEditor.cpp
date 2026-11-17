@@ -211,6 +211,78 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_trees",
+	    .name = "The stands of trees and the big forests of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly over "
+	                   "the land and look at the trees.",
+	    .expected = "Almost all trees stand in groups, and few trees stand alone. Each group has a main kind and some "
+	                "trees of the kinds that grow with it, such as palms with palms and conifers with pines. Bushes "
+	                "are more often at the edge of a group. Palms grow near the coast and on low plateaus, and no "
+	                "conifer grows below 10 metres. Big forests stand alone in the woods, with open ground round them.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_rocks",
+	    .name = "The rocks, the ring of rocks and the sea stacks of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Fly over "
+	                   "the woods, the ring of rocks and the beaches.",
+	    .expected = "Small rocks lie in clumps of two to fifteen, a few metres apart, and most boulders and slabs lie "
+	                "alone or in pairs. The rocks lean and sink into the ground as the rocks of the story do. Most "
+	                "clumps lie in or near a wood. One ring of eight rocks, about 60 metres across, stands on flat "
+	                "grass. Groups of three to seven spiky pillars stand on the beaches.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_cursed",
+	    .name = "The cursed places of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 1 and the game loads it. Fly from the "
+	                   "start area to the high ground far from the town, where the cursed places are.",
+	    .expected = "One to three cursed places stand on high ground, far from the town. Each place has groups of "
+	                "burnt trees and one to three stacks of dark mist over a clump of boulders. Some places have one "
+	                "or two craters with a puff of grey smoke. The ground of a place is the ground of the land round it.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_cliffs",
+	    .name = "The terraces, cliffs and shore of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Turn the "
+	                   "camera from the start area to the land round it and to the coast.",
+	    .expected = "Flat terraces stand at a few levels, with sharp cliffs between them. Some parts of the land are "
+	                "calm, with wide terraces, and other parts have many cliffs. Along the sea, a flat strip of 30 to "
+	                "45 metres goes round the island, with a bank or a cliff behind it.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_massifs",
+	    .name = "The mountain massifs of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Turn the "
+	                   "camera from the start area to the mountains inland.",
+	    .expected = "Eight to eleven massifs stand inland. Each massif has a main peak and one or two lower peaks. Spurs "
+	                "go down from each summit with gullies between them, and bands of cliffs go round the slopes. The "
+	                "land away from the massifs stays below about 60 metres, so that its tops are not summits.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	});
+
+	all.push_back({
 	    .id = "editor.animals",
 	    .name = "Every animal of the palette",
 	    .facet = Facet::Editor,

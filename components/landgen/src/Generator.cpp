@@ -15,6 +15,7 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <utility>
 
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
@@ -238,6 +239,22 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	clock.Done("hydraulic erosion");
 	terrain::ErodeThermal(heights, settings.thermal);
 	clock.Done("thermal erosion");
+	// The terraces and cliffs come after the erosion, which would wear the cliffs down. Away from the massifs the edge
+	// noise lifts the ground by a limited height, so that no high tower stands on the plains.
+	const auto peaks = terrain::PlaceMassifs(heights, seed, settings.massifs);
+	const auto massifs = terrain::MassifHeights(side, peaks, seed, settings.massifs);
+	std::vector<float> highestEdge(massifs.values.size());
+	for (size_t i = 0; i < highestEdge.size(); ++i)
+	{
+		highestEdge[i] =
+		    massifs.values[i] > 0.0f ? terrain::k_HighestAltitude : heights.values[i] + settings.massifs.lowlandRise;
+	}
+	auto cliffs = terrain::Terrace(heights, seed, settings.terraces, highestEdge);
+	clock.Done("terraces");
+	// The high land is on the massifs only
+	terrain::LowerHighGround(heights, settings.massifs.lowlandKnee, settings.massifs.lowlandCeiling);
+	terrain::RaiseMassifs(heights, massifs, cliffs);
+	clock.Done("massifs");
 
 	// The water: lakes first, then the rivers on the land that the lakes leave
 	const auto firstDrainage = hydrology::Drain(heights, terrain::k_SeaLevel);
@@ -266,10 +283,14 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	land.rivers = hydrology::TraceRivers(drainage, flow, settings.rivers);
 	hydrology::CarveRivers(heights, land.rivers, flow, settings.rivers);
 	clock.Done("rivers");
-	terrain::ErodeThermal(heights, {.passes = 4,
-	                                .plainTalus = settings.thermal.plainTalus,
-	                                .mountainTalus = settings.thermal.mountainTalus,
-	                                .rate = settings.thermal.rate});
+	terrain::ErodeThermal(heights,
+	                      {.passes = 4,
+	                       .plainTalus = settings.thermal.plainTalus,
+	                       .mountainTalus = settings.thermal.mountainTalus,
+	                       .rate = settings.thermal.rate},
+	                      cliffs.values);
+	terrain::ShoreShelf(heights, seed, settings.shelf);
+	clock.Done("shore");
 
 	Grid<uint8_t> riverCorners(side, 0);
 	for (const auto& river : land.rivers)
@@ -355,9 +376,30 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	// Nothing grows in the water, on the rivers or on their banks
 	const auto keepClear =
 	    Mask(side, [&](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude + 1 || riverDistance.values[i] <= 1.5f; });
+	const auto rivers = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 1.5f; });
 	const std::array clearings {features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
-	land.features = features::Place(land.biomes, heights, keepClear, clearings, seed, settings.features);
+	land.features = features::Place({.biomes = land.biomes,
+	                                 .heights = heights,
+	                                 .seaDistance = seaDistance,
+	                                 .keepClear = keepClear,
+	                                 .clearings = clearings,
+	                                 .townX = land.start.x,
+	                                 .townZ = land.start.z,
+	                                 .rivers = &rivers},
+	                                seed, settings.features);
 	clock.Done("features");
+	auto cursed = cursed::Place({.biomes = land.biomes,
+	                             .heights = heights,
+	                             .seaDistance = seaDistance,
+	                             .keepClear = keepClear,
+	                             .clearings = clearings,
+	                             .townX = land.start.x,
+	                             .townZ = land.start.z,
+	                             .rivers = &rivers},
+	                            land.features, seed, settings.cursed);
+	land.cursedPatches = std::move(cursed.patches);
+	land.mists = std::move(cursed.mists);
+	clock.Done("cursed places");
 
 	// The temple and the town on the start area, then the forests nearest the town first
 	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);
