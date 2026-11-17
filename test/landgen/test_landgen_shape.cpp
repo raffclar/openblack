@@ -324,3 +324,172 @@ TEST(LandgenHydrology, RiversRunFromTheirSourceToTheSeaAndCutTheirBed)
 		previous = heights.values[corner];
 	}
 }
+
+TEST(LandgenTerrain, ThermalErosionDoesNotMoveFixedCorners)
+{
+	auto heights = MakeGrid(16, [](int x, int /*z*/) { return x < 8 ? 100.0f : 0.0f; });
+	const auto before = heights;
+	const std::vector<uint8_t> fixed(heights.values.size(), 1);
+	terrain::ErodeThermal(heights, {.passes = 50, .plainTalus = 10.0f, .mountainTalus = 10.0f, .rate = 0.4f}, fixed);
+	EXPECT_EQ(heights.values, before.values);
+}
+
+TEST(LandgenTerrain, TerraceLevelsRiseByTheSpacing)
+{
+	const terrain::TerraceSettings settings;
+	const auto levels = terrain::TerraceLevels(5, settings);
+	ASSERT_GE(levels.size(), 2u);
+	EXPECT_GE(levels.front(), settings.firstLevelLow);
+	EXPECT_LE(levels.front(), settings.firstLevelHigh);
+	EXPECT_LE(levels.back(), settings.highestLevel);
+	for (size_t i = 1; i < levels.size(); ++i)
+	{
+		EXPECT_GE(levels[i] - levels[i - 1], settings.spacingLow);
+		EXPECT_LE(levels[i] - levels[i - 1], settings.spacingHigh);
+	}
+	EXPECT_EQ(levels, terrain::TerraceLevels(5, settings));
+	EXPECT_NE(levels, terrain::TerraceLevels(6, settings));
+}
+
+TEST(LandgenTerrain, TerraceStepsLiftAClosedHollowToItsRim)
+{
+	const terrain::TerraceSettings settings {.edgeNoise = 0.0f, .calmNoise = 0.0f};
+	const std::array levels {30.0f};
+	// A plateau at 60 next to the sea at x = 0, with a hollow at 20 in the middle
+	const auto closed = MakeGrid(20, [](int x, int z) {
+		if (x == 0)
+		{
+			return 0.0f;
+		}
+		return x >= 7 && x <= 12 && z >= 7 && z <= 12 ? 20.0f : 60.0f;
+	});
+	const auto steps = terrain::TerraceSteps(closed, levels, 1, settings);
+	EXPECT_EQ(steps.At(9, 9), 1);
+	EXPECT_EQ(steps.At(15, 15), 1);
+	EXPECT_EQ(steps.At(0, 9), 0);
+
+	// The same hollow with a valley to the sea keeps its low step
+	const auto open = MakeGrid(20, [](int x, int z) {
+		if (x == 0)
+		{
+			return 0.0f;
+		}
+		return (x >= 7 && x <= 12 && z >= 7 && z <= 12) || (x < 7 && z >= 8 && z <= 10) ? 20.0f : 60.0f;
+	});
+	const auto openSteps = terrain::TerraceSteps(open, levels, 1, settings);
+	EXPECT_EQ(openSteps.At(9, 9), 0);
+	EXPECT_EQ(openSteps.At(3, 9), 0);
+}
+
+TEST(LandgenTerrain, TerracesAreFlatWithSharpCliffsBetweenThem)
+{
+	// A ramp up from the sea at x = 0, 3 altitude units for each corner
+	auto heights = MakeGrid(40, [](int x, int /*z*/) { return static_cast<float>(x) * 3.0f; });
+	const auto before = heights;
+	const terrain::TerraceSettings settings {
+	    .firstLevelLow = 30.0f,
+	    .firstLevelHigh = 30.0f,
+	    .spacingLow = 40.0f,
+	    .spacingHigh = 40.0f,
+	    .highestLevel = 200.0f,
+	    .keepLow = 0.1f,
+	    .keepHigh = 0.1f,
+	    .edgeNoise = 0.0f,
+	    .calmNoise = 0.0f,
+	    .cliffRiseLow = 30.0f,
+	    .cliffRiseHigh = 30.0f,
+	};
+	const auto cliffs = terrain::Terrace(heights, 3, settings);
+	constexpr int k_Z = 20;
+	// The sea and the land below the first edge do not change
+	for (int x = 0; x <= 8; ++x)
+	{
+		EXPECT_EQ(heights.At(x, k_Z), before.At(x, k_Z)) << x;
+	}
+	// The first terrace is nearly flat, from its edge at 30
+	for (int x = 10; x <= 21; ++x)
+	{
+		EXPECT_GE(heights.At(x, k_Z), 30.0f) << x;
+		EXPECT_LE(heights.At(x, k_Z), 34.0f) << x;
+		EXPECT_EQ(cliffs.At(x, k_Z), 0) << x;
+	}
+	// The cliff to the next edge at 70 rises in two corners
+	EXPECT_EQ(cliffs.At(23, k_Z), 1);
+	EXPECT_NEAR(heights.At(23, k_Z), 55.0f, 1e-3f);
+	EXPECT_NEAR(heights.At(24, k_Z), 70.2f, 1e-2f);
+	// The ground never goes down from the sea inland
+	for (int x = 1; x < 40; ++x)
+	{
+		EXPECT_GE(heights.At(x, k_Z), heights.At(x - 1, k_Z)) << x;
+	}
+	// The same seed makes the same terraces
+	auto again = before;
+	static_cast<void>(terrain::Terrace(again, 3, settings));
+	EXPECT_EQ(heights.values, again.values);
+}
+
+TEST(LandgenTerrain, TerraceFillsTheHollowsOfItsFloor)
+{
+	// A plateau at 100 with a dip to 90, next to the sea at x = 0
+	auto heights = MakeGrid(20, [](int x, int z) {
+		if (x == 0)
+		{
+			return 0.0f;
+		}
+		return x >= 8 && x <= 11 && z >= 8 && z <= 11 ? 90.0f : 100.0f;
+	});
+	const terrain::TerraceSettings settings {
+	    .firstLevelLow = 50.0f,
+	    .firstLevelHigh = 50.0f,
+	    .spacingLow = 1000.0f,
+	    .spacingHigh = 1000.0f,
+	    .highestLevel = 200.0f,
+	    .keepLow = 0.5f,
+	    .keepHigh = 0.5f,
+	    .edgeNoise = 0.0f,
+	    .calmNoise = 0.0f,
+	};
+	static_cast<void>(terrain::Terrace(heights, 1, settings));
+	// The terrace keeps a part of the ground above its edge, and the dip fills to the height of the plateau
+	constexpr float k_Span = terrain::k_HighestAltitude - 50.0f;
+	constexpr float k_Above = 50.0f / k_Span;
+	constexpr float k_Plateau = 50.0f + (k_Span * 0.5f * k_Above / (1.0f + (0.5f * k_Above)));
+	for (int x = 1; x < 20; ++x)
+	{
+		for (int z = 0; z < 20; ++z)
+		{
+			EXPECT_NEAR(heights.At(x, z), k_Plateau, 1e-3f) << x << "," << z;
+		}
+	}
+}
+
+TEST(LandgenTerrain, ShoreShelfMakesAFlatStripAndABank)
+{
+	// Land at 100 from x = 2, a low strip of land at 4 along z = 10, and the sea at x = 0 and 1
+	auto heights = MakeGrid(30, [](int x, int z) {
+		if (x < 2)
+		{
+			return 0.0f;
+		}
+		return z == 10 ? 4.0f : 100.0f;
+	});
+	const terrain::ShelfSettings settings {
+	    .widthLow = 3.0f,
+	    .widthHigh = 3.0f,
+	    .altitude = 3.6f,
+	    .rise = 0.25f,
+	    .bankLow = 10.0f,
+	    .bankHigh = 10.0f,
+	};
+	terrain::ShoreShelf(heights, 1, settings);
+	constexpr int k_Z = 20;
+	EXPECT_EQ(heights.At(0, k_Z), 0.0f);
+	// The strip is flat for three corners from the water, then the bank rises 10 for each corner
+	EXPECT_NEAR(heights.At(2, k_Z), 3.85f, 1e-4f);
+	EXPECT_NEAR(heights.At(4, k_Z), 4.35f, 1e-4f);
+	EXPECT_NEAR(heights.At(5, k_Z), 14.35f, 1e-4f);
+	EXPECT_NEAR(heights.At(10, k_Z), 64.35f, 1e-4f);
+	EXPECT_EQ(heights.At(20, k_Z), 100.0f);
+	// Ground lower than the bank does not change
+	EXPECT_EQ(heights.At(10, 10), 4.0f);
+}

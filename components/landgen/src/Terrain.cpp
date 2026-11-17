@@ -13,8 +13,12 @@
 
 #include <algorithm>
 #include <array>
+#include <functional>
+#include <queue>
+#include <utility>
 #include <vector>
 
+#include "landgen/Climate.h"
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
 
@@ -176,7 +180,7 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 			}
 			else
 			{
-				height = (settings.plainHeight * noise::SmoothStep(0.0f, 0.35f, land)) + 0.5f;
+				height = (settings.plainHeight * noise::SmoothStep(0.0f, settings.plainRise, land)) + 0.5f;
 				height += settings.hillHeight * noise::Fractal(hills, wu * 9.0f, wv * 9.0f, 4) *
 				          noise::SmoothStep(0.03f, 0.25f, land);
 			}
@@ -331,8 +335,9 @@ void terrain::ErodeHydraulic(Grid<float>& heights, uint64_t seed, const Hydrauli
 	}
 }
 
-void terrain::ErodeThermal(Grid<float>& heights, const ThermalSettings& settings)
+void terrain::ErodeThermal(Grid<float>& heights, const ThermalSettings& settings, std::span<const uint8_t> fixed)
 {
+	const auto isFixed = [fixed](size_t index) { return !fixed.empty() && fixed[index] != 0; };
 	Grid<float> change(heights.side, 0.0f);
 	for (int pass = 0; pass < settings.passes; ++pass)
 	{
@@ -341,6 +346,10 @@ void terrain::ErodeThermal(Grid<float>& heights, const ThermalSettings& settings
 		{
 			for (int z = 0; z < heights.side; ++z)
 			{
+				if (isFixed(heights.Index(x, z)))
+				{
+					continue;
+				}
 				const float height = heights.At(x, z);
 				const float talus = settings.plainTalus +
 				                    ((settings.mountainTalus - settings.plainTalus) * noise::SmoothStep(60.0f, 180.0f, height));
@@ -348,7 +357,7 @@ void terrain::ErodeThermal(Grid<float>& heights, const ThermalSettings& settings
 				{
 					const int nx = x + k_Neighbours[i].dx;
 					const int nz = z + k_Neighbours[i].dz;
-					if (!heights.Contains(nx, nz))
+					if (!heights.Contains(nx, nz) || isFixed(heights.Index(nx, nz)))
 					{
 						continue;
 					}
@@ -365,6 +374,287 @@ void terrain::ErodeThermal(Grid<float>& heights, const ThermalSettings& settings
 		for (size_t i = 0; i < heights.values.size(); ++i)
 		{
 			heights.values[i] += change.values[i];
+		}
+	}
+}
+
+std::vector<float> terrain::TerraceLevels(uint64_t seed, const TerraceSettings& settings)
+{
+	Random random(StageSeed(seed, 11));
+	std::vector<float> levels;
+	float level = random.NextRange(settings.firstLevelLow, settings.firstLevelHigh);
+	while (level <= settings.highestLevel)
+	{
+		levels.push_back(level);
+		level += random.NextRange(settings.spacingLow, settings.spacingHigh);
+	}
+	return levels;
+}
+
+Grid<uint8_t> terrain::TerraceSteps(const Grid<float>& heights, std::span<const float> levels, uint64_t seed,
+                                    const TerraceSettings& settings)
+{
+	const int side = heights.side;
+	const float last = static_cast<float>(std::max(side - 1, 1));
+	const auto edgeSeed = StageSeed(seed, 12);
+	const auto warpSeed = StageSeed(seed, 16);
+	const auto ridgeSeed = StageSeed(seed, 17);
+	const auto roughSeed = StageSeed(seed, 18);
+	Grid<uint8_t> steps(side, 0);
+	for (int x = 0; x < side; ++x)
+	{
+		for (int z = 0; z < side; ++z)
+		{
+			const float height = heights.At(x, z);
+			if (height <= k_SeaLevel)
+			{
+				continue;
+			}
+			// The warp bends the edges, and the ridged noise makes long ridges and gorges rather than round hills
+			const float u0 = static_cast<float>(x) / last * settings.edgeFrequency;
+			const float v0 = static_cast<float>(z) / last * settings.edgeFrequency;
+			const float u = u0 + (settings.edgeWarp * noise::Fractal(warpSeed, u0 * 0.5f, v0 * 0.5f, 3));
+			const float v = v0 + (settings.edgeWarp * noise::Fractal(warpSeed, (u0 * 0.5f) + 7.3f, (v0 * 0.5f) + 2.9f, 3));
+			const float ridged = (2.0f * noise::Ridged(ridgeSeed, u, v, 4)) - 1.0f;
+			const float shape =
+			    ((1.0f - settings.edgeRidge) * noise::Fractal(edgeSeed, u, v, 4)) + (settings.edgeRidge * ridged);
+			// Some parts of the land are calm, with wide terraces, and other parts are rough, with many cliffs
+			const float rough =
+			    noise::SmoothStep(-0.35f, 0.35f,
+			                      noise::Fractal(roughSeed, u0 * settings.roughFrequency / settings.edgeFrequency,
+			                                     v0 * settings.roughFrequency / settings.edgeFrequency, 2));
+			const float amount = settings.calmNoise + ((settings.edgeNoise - settings.calmNoise) * rough);
+			const float moved = height + (amount * shape);
+			const auto above = std::ranges::upper_bound(levels, moved);
+			steps.At(x, z) = static_cast<uint8_t>(std::distance(levels.begin(), above));
+		}
+	}
+
+	// A step of one corner makes a spike or a pit. The corner takes the nearest step of its neighbours.
+	for (int pass = 0; pass < 2; ++pass)
+	{
+		const Grid<uint8_t> before = steps;
+		for (int x = 1; x < side - 1; ++x)
+		{
+			for (int z = 1; z < side - 1; ++z)
+			{
+				uint8_t lowest = 255;
+				uint8_t highest = 0;
+				for (size_t i = 0; i < 4; ++i)
+				{
+					const auto step = before.At(x + k_Neighbours[i].dx, z + k_Neighbours[i].dz);
+					lowest = std::min(lowest, step);
+					highest = std::max(highest, step);
+				}
+				steps.At(x, z) = std::clamp(before.At(x, z), lowest, highest);
+			}
+		}
+	}
+
+	// A low step that higher steps close in all round would hold water as a lake above the sea, which the lands of the
+	// story do not have. A flood from the sea and the edges of the map lifts each closed step to the step of its rim.
+	std::vector<std::vector<uint32_t>> queues(levels.size() + 1);
+	std::vector<uint8_t> reached(steps.values.size(), 0);
+	for (int x = 0; x < side; ++x)
+	{
+		for (int z = 0; z < side; ++z)
+		{
+			const auto index = steps.Index(x, z);
+			if (heights.values[index] <= k_SeaLevel || x == 0 || z == 0 || x == side - 1 || z == side - 1)
+			{
+				reached[index] = 1;
+				queues[steps.values[index]].push_back(static_cast<uint32_t>(index));
+			}
+		}
+	}
+	for (size_t level = 0; level < queues.size(); ++level)
+	{
+		// The queue of a level can grow while the flood goes through it
+		for (size_t next = 0; next < queues[level].size(); ++next)
+		{
+			const auto index = queues[level][next];
+			const int x = steps.XOf(index);
+			const int z = steps.ZOf(index);
+			for (const auto& neighbour : k_Neighbours)
+			{
+				if (!steps.Contains(x + neighbour.dx, z + neighbour.dz))
+				{
+					continue;
+				}
+				const auto other = steps.Index(x + neighbour.dx, z + neighbour.dz);
+				if (reached[other] != 0)
+				{
+					continue;
+				}
+				reached[other] = 1;
+				auto& step = steps.values[other];
+				step = std::max(step, static_cast<uint8_t>(level));
+				queues[step].push_back(static_cast<uint32_t>(other));
+			}
+		}
+	}
+	return steps;
+}
+
+Grid<uint8_t> terrain::Terrace(Grid<float>& heights, uint64_t seed, const TerraceSettings& settings)
+{
+	const int side = heights.side;
+	Grid<uint8_t> cliffs(side, 0);
+	const auto levels = TerraceLevels(seed, settings);
+	if (levels.empty())
+	{
+		return cliffs;
+	}
+	const auto steps = TerraceSteps(heights, levels, seed, settings);
+	const float last = static_cast<float>(std::max(side - 1, 1));
+	const auto widthSeed = StageSeed(seed, 13);
+
+	// The flat terraces: each corner goes down towards the edge of its terrace
+	Grid<float> terraced = heights;
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		const auto step = steps.values[i];
+		const float height = heights.values[i];
+		if (height <= k_SeaLevel)
+		{
+			continue;
+		}
+		if (step == 0)
+		{
+			// The low land keeps its shape, but the edge noise can put high ground on it. That ground stops at the first
+			// edge.
+			terraced.values[i] = std::min(height, levels.front());
+			continue;
+		}
+		const float edge = levels[step - 1U];
+		const float top = step < levels.size() ? levels[step] : k_HighestAltitude;
+		const float keep = settings.keepLow + ((settings.keepHigh - settings.keepLow) *
+		                                       noise::SmoothStep(settings.keepLowAltitude, settings.keepHighAltitude, height));
+		// The terrace keeps a part of the rise of its ground, less and less as the ground goes up. It never gets to the
+		// next edge, so that the cliff is always a rise, and high ground does not become one flat top.
+		const float span = top - edge;
+		// Ground below the edge is on a closed hollow that the steps lifted. It rises from the edge by its depth, so
+		// that it keeps the shape of its ground and does not become flat.
+		const float above = std::fabs(height - edge) / span;
+		terraced.values[i] = edge + (span * keep * above / (1.0f + (keep * above)));
+	}
+
+	// The cliffs: the ground on the low side of each edge rises to the edge
+	Grid<uint8_t> higher(side, 0);
+	for (size_t level = 1; level <= levels.size(); ++level)
+	{
+		for (size_t i = 0; i < steps.values.size(); ++i)
+		{
+			higher.values[i] = steps.values[i] >= level ? 1 : 0;
+		}
+		const auto distance = climate::DistanceToWater(higher);
+		const float edge = levels[level - 1];
+		for (int x = 0; x < side; ++x)
+		{
+			for (int z = 0; z < side; ++z)
+			{
+				const auto index = heights.Index(x, z);
+				if (higher.values[index] != 0 || heights.values[index] <= k_SeaLevel)
+				{
+					continue;
+				}
+				const float u = static_cast<float>(x) / last * settings.cliffFrequency;
+				const float v = static_cast<float>(z) / last * settings.cliffFrequency;
+				const float steepness =
+				    settings.cliffRiseLow + ((settings.cliffRiseHigh - settings.cliffRiseLow) *
+				                             noise::SmoothStep(-0.5f, 0.5f, noise::Fractal(widthSeed, u, v, 2)));
+				// The face of the cliff goes down from the edge at the same angle, and stops at the terrace below
+				const float face = edge - (steepness * (distance.values[index] - 0.5f));
+				auto& height = terraced.values[index];
+				if (face <= height)
+				{
+					continue;
+				}
+				height = face;
+				cliffs.values[index] = 1;
+			}
+		}
+	}
+
+	// A terrace floor that keeps a hollow of its ground would become a wet basin. A flood from the sea and the edges of
+	// the map fills each hollow of the terraces and cliffs to the height where it spills over.
+	using Entry = std::pair<float, uint32_t>;
+	std::priority_queue<Entry, std::vector<Entry>, std::greater<>> open;
+	std::vector<uint8_t> reached(terraced.values.size(), 0);
+	for (int x = 0; x < side; ++x)
+	{
+		for (int z = 0; z < side; ++z)
+		{
+			const auto index = terraced.Index(x, z);
+			if (terraced.values[index] <= k_SeaLevel || x == 0 || z == 0 || x == side - 1 || z == side - 1)
+			{
+				reached[index] = 1;
+				open.emplace(terraced.values[index], static_cast<uint32_t>(index));
+			}
+		}
+	}
+	while (!open.empty())
+	{
+		const auto [level, index] = open.top();
+		open.pop();
+		const int x = terraced.XOf(index);
+		const int z = terraced.ZOf(index);
+		for (const auto& neighbour : k_Neighbours)
+		{
+			if (!terraced.Contains(x + neighbour.dx, z + neighbour.dz))
+			{
+				continue;
+			}
+			const auto other = terraced.Index(x + neighbour.dx, z + neighbour.dz);
+			if (reached[other] != 0)
+			{
+				continue;
+			}
+			reached[other] = 1;
+			auto& height = terraced.values[other];
+			if (steps.values[other] != 0 || cliffs.values[other] != 0)
+			{
+				height = std::max(height, level);
+			}
+			open.emplace(std::max(height, level), static_cast<uint32_t>(other));
+		}
+	}
+	heights = std::move(terraced);
+	return cliffs;
+}
+
+void terrain::ShoreShelf(Grid<float>& heights, uint64_t seed, const ShelfSettings& settings)
+{
+	const int side = heights.side;
+	const float last = static_cast<float>(std::max(side - 1, 1));
+	Grid<uint8_t> sea(side, 0);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		sea.values[i] = heights.values[i] <= k_SeaLevel ? 1 : 0;
+	}
+	const auto distance = climate::DistanceToWater(sea);
+	const auto widthSeed = StageSeed(seed, 14);
+	const auto bankSeed = StageSeed(seed, 15);
+	for (int x = 0; x < side; ++x)
+	{
+		for (int z = 0; z < side; ++z)
+		{
+			const auto index = heights.Index(x, z);
+			auto& height = heights.values[index];
+			if (height <= k_SeaLevel)
+			{
+				continue;
+			}
+			const float u = static_cast<float>(x) / last * settings.frequency;
+			const float v = static_cast<float>(z) / last * settings.frequency;
+			const float width = settings.widthLow + ((settings.widthHigh - settings.widthLow) *
+			                                         noise::SmoothStep(-0.5f, 0.5f, noise::Fractal(widthSeed, u, v, 2)));
+			const float bank = settings.bankLow + ((settings.bankHigh - settings.bankLow) *
+			                                       noise::SmoothStep(-0.5f, 0.5f, noise::Fractal(bankSeed, u, v, 2)));
+			const float away = distance.values[index];
+			const float strip = settings.altitude + (settings.rise * std::min(away, width));
+			const float highest = strip + (bank * std::max(away - width, 0.0f));
+			height = std::max(std::min(height, highest), k_SeaLevel + 0.01f);
 		}
 	}
 }
