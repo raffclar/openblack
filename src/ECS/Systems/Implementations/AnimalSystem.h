@@ -15,6 +15,8 @@
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
 
+#include <cstddef>
+
 #include <optional>
 
 #include "3D/MapCoords.h"
