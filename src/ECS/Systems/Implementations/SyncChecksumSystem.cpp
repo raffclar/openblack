@@ -28,6 +28,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
+#include "Common/WorkerPools.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/EntityHashes.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -52,7 +53,7 @@ openblack::WorkerPool& SyncChecksumSystem::Pool()
 {
 	if (_pool == nullptr)
 	{
-		_pool = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+		_pool = MakeWorkerPool();
 	}
 	return *_pool;
 }

@@ -36,6 +36,7 @@
 #include "3D/LandLightFrame.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
+#include "Common/WorkerPools.h"
 #include "Common/X87.h"
 #include "Creature/CreatureAlignmentMotes.h"
 #include "Creature/CreatureAnimation.h"
@@ -1135,7 +1136,7 @@ WorkerPool& CreatureAnimationSystem::FrameWorkers()
 {
 	if (_frameWorkers == nullptr)
 	{
-		_frameWorkers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+		_frameWorkers = MakeWorkerPool();
 	}
 	return *_frameWorkers;
 }
@@ -1144,7 +1145,7 @@ WorkerPool& CreatureAnimationSystem::Workers()
 {
 	if (_workers == nullptr)
 	{
-		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+		_workers = MakeWorkerPool();
 	}
 	return *_workers;
 }

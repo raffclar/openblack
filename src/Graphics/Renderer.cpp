@@ -56,7 +56,7 @@
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/UserData.h"
-#include "Common/WorkerPool.h"
+#include "Common/WorkerPools.h"
 #include "Creature/CreatureHairLight.h"
 #include "Creature/CreatureSpells.h"
 #include "Creature/LeashOrders.h"
@@ -415,7 +415,7 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
     , _bgfxCallback(std::move(bgfxCallback))
     , _bgfxReset(bgfxReset)
     , _offscreenShots(std::make_unique<OffscreenScreenshots>())
-    , _workers(std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount()))
+    , _workers(MakeWorkerPool())
 {
 	_shaderManager->LoadShaders();
 	// Each program's mesh uniforms are found now, so that the threads that encode draws only read them

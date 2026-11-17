@@ -37,7 +37,7 @@
 #include "3D/TempleExteriorMorph.h"
 #include "3D/TempleLanterns.h"
 #include "Common/Bitmap16B.h"
-#include "Common/WorkerPool.h"
+#include "Common/WorkerPools.h"
 #include "ECS/Archetypes/VillageLightArchetype.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Mesh.h"
@@ -641,7 +641,7 @@ WorkerPool& TempleExteriorSystem::Workers()
 {
 	if (_workers == nullptr)
 	{
-		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+		_workers = MakeWorkerPool();
 	}
 	return *_workers;
 }

@@ -19,6 +19,7 @@
 #include <glm/gtx/transform.hpp>
 
 #include "3D/CreatureBody.h"
+#include "Common/WorkerPools.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureMorph.h"
@@ -174,7 +175,7 @@ WorkerPool& CreatureHairSystem::Workers()
 {
 	if (_workers == nullptr)
 	{
-		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+		_workers = MakeWorkerPool();
 	}
 	return *_workers;
 }
