@@ -16,6 +16,8 @@
 //
 // When a game thread wrote files of the profiles, it tells the page, which sends the saved games and creatures to the
 // site (launcher-cloud.js).
+//
+// It also makes the audio context and the audio worklet of the sound output (see audio-output-worklet.js).
 if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalScope)) {
   const openblackWeb = Module['openblackWeb'];
   globalThis.openblackWeb = openblackWeb;
@@ -142,5 +144,65 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
   PThread.loadWasmModuleToWorker = (worker) => {
     give(worker);
     return loadWorker(worker);
+  };
+
+  // The sound output (see src/Audio/WebAudioOutput.cpp). A game thread mixes the sound into a ring in the memory of
+  // the program, and an audio worklet plays the ring on the audio thread of the browser. The main thread only makes
+  // the audio context and the worklet, so a busy main thread does not stop the sound. The context starts when the
+  // player clicks or presses a key on the page, as the browser asks.
+  const audio = { context: null, node: null, memory: null, counters: 0 };
+  globalThis.openblackAudio = audio;
+  Module['openblackAudioOpen'] = () => {
+    if (!audio.context) {
+      try {
+        audio.context = new AudioContext({ latencyHint: 'interactive' });
+      } catch (error) {
+        console.error('openblack: the page cannot make an audio context:', error);
+        return 0;
+      }
+      if (!audio.context.audioWorklet) {
+        audio.context.close();
+        audio.context = null;
+        return 0;
+      }
+      const resume = () => {
+        if (audio.context && audio.context.state === 'suspended') {
+          audio.context.resume().catch(() => {});
+        }
+      };
+      ['pointerdown', 'mousedown', 'keydown', 'touchend'].forEach((type) => {
+        document.addEventListener(type, resume, { capture: true });
+      });
+      resume();
+    }
+    return audio.context.sampleRate | 0;
+  };
+  Module['openblackAudioConnect'] = (samples, frames, channels, counters) => {
+    const context = audio.context;
+    if (!context) {
+      return;
+    }
+    audio.memory = wasmMemory.buffer;
+    audio.counters = counters;
+    context.audioWorklet.addModule('audio-output-worklet.js').then(() => {
+      if (audio.context !== context) {
+        return;
+      }
+      audio.node = new AudioWorkletNode(context, 'openblack-output', {
+        numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [channels],
+        processorOptions: { memory: audio.memory, samples, frames, channels, counters },
+      });
+      audio.node.connect(context.destination);
+    }).catch((error) => console.error('openblack: the page cannot load the sound output:', error));
+  };
+  Module['openblackAudioClose'] = () => {
+    if (audio.node) {
+      audio.node.disconnect();
+      audio.node = null;
+    }
+    if (audio.context) {
+      audio.context.close().catch(() => {});
+      audio.context = null;
+    }
   };
 }

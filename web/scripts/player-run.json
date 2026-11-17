@@ -2,7 +2,7 @@
  {
   "at": 6,
   "do": "eval",
-  "expression": "(() => { const S = Module.SDL2; const node = S && S.audio && S.audio.scriptProcessorNode; if (!node) return 'no sound node'; const an = S.audioContext.createAnalyser(); an.fftSize = 2048; node.connect(an); const buf = new Float32Array(2048); globalThis.playerRunLoudness = []; setInterval(() => { an.getFloatTimeDomainData(buf); let s = 0; for (const v of buf) s += v * v; globalThis.playerRunLoudness.push(Math.round(Math.sqrt(s / buf.length) * 10000)); }, 1000); return 'loudness probe on, ' + S.audioContext.state + ' at ' + S.audioContext.sampleRate + ' Hz'; })()"
+  "expression": "(() => { const S = globalThis.openblackAudio; const node = S && S.node; if (!node) return 'no sound node'; const an = S.context.createAnalyser(); an.fftSize = 2048; node.connect(an); const buf = new Float32Array(2048); globalThis.playerRunLoudness = []; setInterval(() => { an.getFloatTimeDomainData(buf); let s = 0; for (const v of buf) s += v * v; globalThis.playerRunLoudness.push(Math.round(Math.sqrt(s / buf.length) * 10000)); }, 1000); return 'loudness probe on, ' + S.context.state + ' at ' + S.context.sampleRate + ' Hz'; })()"
  },
  {
   "at": 7,

@@ -135,6 +135,7 @@ openblack_setup_and_add_test(test_sound_decoding audio/test_sound_decoding.cpp)
 openblack_setup_and_add_test(test_music audio/test_music.cpp)
 openblack_setup_and_add_test(test_music_decoding audio/test_music_decoding.cpp)
 openblack_setup_and_add_test(test_serial_executor audio/test_serial_executor.cpp)
+openblack_setup_and_add_test(test_audio_ring audio/test_audio_ring.cpp)
 openblack_setup_and_add_test(test_anim_effects audio/test_anim_effects.cpp)
 openblack_setup_and_add_test(test_help_speech audio/test_help_speech.cpp)
 openblack_setup_and_add_test(test_listener_frame audio/test_listener_frame.cpp)
@@ -2118,6 +2119,10 @@ if (NODE_EXECUTABLE)
   add_test(NAME test_web_launcher_cloud
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_cloud.test.js
+  )
+  add_test(NAME test_web_audio_output_worklet
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_audio_output_worklet.test.js
   )
 endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
