@@ -17,7 +17,8 @@
 #include "landgen/Features.h"
 
 /// The mist of the swamps: the dark green mist of the fourth land of the story, as its land script makes it, over the
-/// wet ground of a swamp
+/// wet ground of a swamp. A cover of the flat puffs of that mist goes over the whole of each swamp. The cover is not on a
+/// land of the story: the user asked for it on generated lands.
 namespace openblack::landgen::swamps
 {
 /// The colour of the green mist without its alpha, 0xRRGGBB
@@ -32,6 +33,11 @@ struct Settings
 	uint32_t most {8};
 	/// The distance between the points where a sheet can start, in corners
 	float spacing {2.0f};
+	/// The distance between the flat puffs that cover the whole of each swamp, in metres. 0 gives no cover. The puffs
+	/// of a sheet of the story stand 5 m to 30 m apart.
+	float coverSpacing {30.0f};
+	/// The most puffs of the cover on a land, for the frame rate
+	uint32_t mostCoverPuffs {4000};
 };
 
 /// One sheet of green mist: the place of its first puff in metres
@@ -45,7 +51,9 @@ struct Sheet
 struct Result
 {
 	std::vector<Sheet> sheets;
+	/// The puffs of the sheets first, then the puffs of the cover
 	std::vector<cursed::Mist> mists;
+	uint32_t coverPuffs {0};
 };
 
 /// The number of puffs in one sheet of green mist
@@ -60,6 +68,8 @@ struct Result
 /// - Each puff is over the free ground of a swamp, and the ground under the sheet rises no more than under the sheet of
 ///   the story.
 /// - The sheets do not turn, as the land script places them.
+/// - The flat puffs of the sheet of the story cover the rest of each swamp, coverSpacing metres apart, but not the edge
+///   of a swamp or a small wet spot.
 ///
 /// The features under a sheet stay, as the bushes and oaks under the sheet of the story stay. The same seed gives the
 /// same sheets.

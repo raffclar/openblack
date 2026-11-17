@@ -53,3 +53,10 @@ it.
 `cursed_patches` counts the cursed places: the groups of burnt trees, craters and dark mists that are 150 m or less
 apart. A dark mist has no colour channel above 0x50 (the near black mist of Land 1, the dark mist of Land 4 and the grey
 smoke of the Land 5 craters). `dark_mists` counts the dark mists.
+
+The swamp numbers: `wet_pct` is the share of the land whose main ground is wet (river mud, wet earth, wet gravel, wet
+solid rock, wet grass or rushes on a land file; mud and wet grass on a generated land). `wet_trees_per_km2` counts the
+trees on that wet ground for each square kilometre of it. `green_mists_per_km2` and `green_mist_sheets_per_km2` count
+the puffs of the dark green mist of Land 4 (colour 50632F) and their sheets (puffs 70 m or less apart) for each square
+kilometre of land. The cover of whole-swamp mist on generated lands (deviation 279) puts `green_mists_per_km2` far
+above the vanilla range on purpose.

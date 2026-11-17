@@ -63,6 +63,9 @@ struct SwampLand
 	}
 };
 
+/// The sheets of the story only, with no cover
+constexpr swamps::Settings k_SheetsOnly {.coverSpacing = 0.0f};
+
 bool InSwamp(float x, float z)
 {
 	const auto i = static_cast<int>(std::lround(x / 10.0f));
@@ -76,7 +79,7 @@ TEST(LandgenSwamps, ASheetHasThePuffsOfTheGreenMistOfTheStory)
 	const SwampLand land;
 	for (uint64_t seed = 1; seed <= 8; ++seed)
 	{
-		const auto result = swamps::Place(land.Ground(), seed, {});
+		const auto result = swamps::Place(land.Ground(), seed, k_SheetsOnly);
 		ASSERT_EQ(result.sheets.size(), 1u);
 		ASSERT_EQ(result.mists.size(), 11u);
 		EXPECT_EQ(swamps::PuffsInSheet(), 11u);
@@ -122,7 +125,7 @@ TEST(LandgenSwamps, ASwampTooSmallForTheSheetGivesNoMist)
 			}
 		}
 	}
-	EXPECT_TRUE(swamps::Place(land.Ground(), 5, {}).mists.empty());
+	EXPECT_TRUE(swamps::Place(land.Ground(), 5, k_SheetsOnly).mists.empty());
 }
 
 TEST(LandgenSwamps, NoSheetGoesOverGroundThatRisesMoreThanUnderTheSheetOfTheStory)
@@ -136,14 +139,14 @@ TEST(LandgenSwamps, NoSheetGoesOverGroundThatRisesMoreThanUnderTheSheetOfTheStor
 			land.heights.At(x, z) = 12.0f + (4.0f * static_cast<float>(x + z));
 		}
 	}
-	EXPECT_TRUE(swamps::Place(land.Ground(), 2, {}).mists.empty());
+	EXPECT_TRUE(swamps::Place(land.Ground(), 2, k_SheetsOnly).mists.empty());
 }
 
 TEST(LandgenSwamps, TheSettingsLimitTheSheetsAndKeepThemApart)
 {
 	const SwampLand land;
-	EXPECT_TRUE(swamps::Place(land.Ground(), 4, {.landPerSheet = 2.99f, .most = 0}).sheets.empty());
-	const auto result = swamps::Place(land.Ground(), 4, {.landPerSheet = 0.5f, .most = 6});
+	EXPECT_TRUE(swamps::Place(land.Ground(), 4, {.landPerSheet = 2.99f, .most = 0, .coverSpacing = 0.0f}).sheets.empty());
+	const auto result = swamps::Place(land.Ground(), 4, {.landPerSheet = 0.5f, .most = 6, .coverSpacing = 0.0f});
 	ASSERT_GE(result.sheets.size(), 1u);
 	EXPECT_LE(result.sheets.size(), 6u);
 	EXPECT_EQ(result.mists.size(), result.sheets.size() * swamps::PuffsInSheet());
@@ -188,5 +191,63 @@ TEST(LandgenSwamps, ALandHasOneSheetForEachAreaOfTheFourthLandOfTheStory)
 			}
 		}
 	}
-	EXPECT_TRUE(swamps::Place(land.Ground(), 1, settings).mists.empty());
+	EXPECT_TRUE(swamps::Place(land.Ground(), 1, k_SheetsOnly).mists.empty());
+}
+
+TEST(LandgenSwamps, TheCoverOfFlatPuffsGoesOverTheWholeSwamp)
+{
+	const SwampLand land;
+	const swamps::Settings settings;
+	const auto result = swamps::Place(land.Ground(), 6, settings);
+	ASSERT_EQ(result.sheets.size(), 1u);
+	const auto sheetPuffs = swamps::PuffsInSheet();
+	ASSERT_EQ(result.mists.size(), sheetPuffs + result.coverPuffs);
+	// The swamp is 600 m a side. Its middle of 580 m a side holds about 19 x 19 squares of 30 m, less the sheet.
+	EXPECT_GE(result.coverPuffs, 300u);
+	EXPECT_LE(result.coverPuffs, 400u);
+	for (size_t i = sheetPuffs; i < result.mists.size(); ++i)
+	{
+		const auto& puff = result.mists[i];
+		// The flat puff of the line of the story
+		EXPECT_EQ(puff.colour, 0x8650632Fu);
+		EXPECT_FLOAT_EQ(puff.size, 1.389350f);
+		EXPECT_FLOAT_EQ(puff.edgeShrink, 3.780488f);
+		EXPECT_TRUE(InSwamp(puff.x, puff.z)) << puff.x << ' ' << puff.z;
+		// No puff of the cover is on a puff of the sheet
+		for (size_t k = 0; k < sheetPuffs; ++k)
+		{
+			EXPECT_GE(std::hypot(puff.x - result.mists[k].x, puff.z - result.mists[k].z), 15.0f);
+		}
+	}
+	// Every square of 60 m in the middle of the swamp has a puff
+	for (int x = 560; x < 1040; x += 60)
+	{
+		for (int z = 560; z < 1040; z += 60)
+		{
+			EXPECT_TRUE(std::ranges::any_of(result.mists,
+			                                [x, z](const auto& puff) {
+				                                return puff.x >= static_cast<float>(x) && puff.x < static_cast<float>(x + 60) &&
+				                                       puff.z >= static_cast<float>(z) && puff.z < static_cast<float>(z + 60);
+			                                }))
+			    << x << ' ' << z;
+		}
+	}
+}
+
+TEST(LandgenSwamps, TheCoverKeepsToItsMostPuffsAndOffSmallWetSpots)
+{
+	const SwampLand land;
+	const auto capped = swamps::Place(land.Ground(), 6, {.mostCoverPuffs = 25});
+	EXPECT_EQ(capped.coverPuffs, 25u);
+	// A wet spot of one corner gets no cover
+	SwampLand spots;
+	std::ranges::replace(spots.biomes.values, Biome::Swamp, Biome::Grassland);
+	for (int x = 20; x < 180; x += 3)
+	{
+		for (int z = 20; z < 180; z += 3)
+		{
+			spots.biomes.At(x, z) = Biome::Swamp;
+		}
+	}
+	EXPECT_EQ(swamps::Place(spots.Ground(), 6, {}).coverPuffs, 0u);
 }

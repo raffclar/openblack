@@ -10,6 +10,7 @@
 #include "landgen/Swamps.h"
 
 #include <cmath>
+#include <cstddef>
 
 #include <algorithm>
 #include <array>
@@ -134,16 +135,18 @@ uint32_t swamps::SheetsFor(float landKm2, const Settings& settings)
 	return static_cast<uint32_t>(std::floor(landKm2 / settings.landPerSheet));
 }
 
-Result swamps::Place(const features::Ground& ground, uint64_t seed, const Settings& settings)
+namespace
 {
-	Result result;
+/// The sheets of the story over the swamps
+void PlaceSheets(const features::Ground& ground, uint64_t seed, const Settings& settings, Result& result)
+{
 	const auto land = static_cast<float>(std::ranges::count_if(
 	                      ground.biomes.values, [](biomes::Biome biome) { return biome != biomes::Biome::Sea; })) *
 	                  k_SquareKmPerCorner;
 	const auto most = std::min(settings.most, SheetsFor(land, settings));
 	if (most == 0 || settings.spacing <= 0.0f)
 	{
-		return result;
+		return;
 	}
 	const auto siteSeed = StageSeed(seed, 70);
 	const float last = static_cast<float>(ground.biomes.side - 1);
@@ -200,5 +203,73 @@ Result swamps::Place(const features::Ground& ground, uint64_t seed, const Settin
 			                        .edgeShrink = puff.edgeShrink});
 		}
 	}
+}
+
+/// Whether a place in metres is in the middle of a swamp: the swamp is under it and at the distance of one corner on
+/// each side, so that no puff of the cover stands alone over a small wet spot
+bool InSwampMiddle(const features::Ground& ground, float x, float z)
+{
+	constexpr std::array<std::pair<float, float>, 5> k_Around {{{0.0f, 0.0f},
+	                                                            {k_MetresPerCorner, 0.0f},
+	                                                            {-k_MetresPerCorner, 0.0f},
+	                                                            {0.0f, k_MetresPerCorner},
+	                                                            {0.0f, -k_MetresPerCorner}}};
+	return std::ranges::all_of(
+	    k_Around, [&ground, x, z](const auto& offset) { return SwampAt(ground, x + offset.first, z + offset.second); });
+}
+
+/// The cover of flat puffs over the whole of each swamp. A sheet of the story keeps its own puffs.
+void PlaceCover(const features::Ground& ground, uint64_t seed, const Settings& settings, Result& result)
+{
+	if (settings.coverSpacing <= 0.0f)
+	{
+		return;
+	}
+	const auto coverSeed = StageSeed(seed, 71);
+	const float extent = static_cast<float>(ground.biomes.side - 1) * k_MetresPerCorner;
+	const int points = static_cast<int>(extent / settings.coverSpacing);
+	const float clear = settings.coverSpacing * 0.5f;
+	const auto sheetPuffs = result.mists.size();
+	for (int i = 0; i < points; ++i)
+	{
+		for (int j = 0; j < points; ++j)
+		{
+			if (result.mists.size() - sheetPuffs >= settings.mostCoverPuffs)
+			{
+				return;
+			}
+			// Each puff is in the middle half of its square, so that the gaps between the puffs stay near the spacing
+			auto random = RandomAt(coverSeed, i, j);
+			const float x = (static_cast<float>(i) + 0.25f + (0.5f * random.NextUnit())) * settings.coverSpacing;
+			const float z = (static_cast<float>(j) + 0.25f + (0.5f * random.NextUnit())) * settings.coverSpacing;
+			if (!InSwampMiddle(ground, x, z))
+			{
+				continue;
+			}
+			const bool nearSheet =
+			    std::any_of(result.mists.begin(), result.mists.begin() + static_cast<std::ptrdiff_t>(sheetPuffs),
+			                [x, z, clear](const cursed::Mist& puff) {
+				                const float dx = puff.x - x;
+				                const float dz = puff.z - z;
+				                return (dx * dx) + (dz * dz) < clear * clear;
+			                });
+			if (nearSheet)
+			{
+				continue;
+			}
+			const auto& flat = k_Sheet.back();
+			result.mists.push_back(
+			    {.x = x, .z = z, .altitude = 0.0f, .colour = flat.colour, .size = flat.size, .edgeShrink = flat.edgeShrink});
+			++result.coverPuffs;
+		}
+	}
+}
+} // namespace
+
+Result swamps::Place(const features::Ground& ground, uint64_t seed, const Settings& settings)
+{
+	Result result;
+	PlaceSheets(ground, seed, settings, result);
+	PlaceCover(ground, seed, settings, result);
 	return result;
 }
