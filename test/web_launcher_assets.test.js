@@ -204,6 +204,22 @@ check('the address of a file encodes each part of its path', () => {
   assert.equal(assetAddress('Online Maps/a#b?.lnd'), '/assets/files/Online%20Maps/a%23b%3F.lnd');
 });
 
+check('an answer of 204 gives no game files, with no attempt to read a list', async () => {
+  let read = false;
+  const answer = await fetchAssetIndex(async () => ({
+    status: 204,
+    ok: true,
+    text: async () => {
+      read = true;
+      return '';
+    },
+  }));
+  assert.deepEqual(answer, {
+    granted: false, status: 204, reason: 'the site gives no game files to this account',
+  });
+  assert.equal(read, false);
+});
+
 check('the text of bytes has two hexadecimal digits for each byte', () => {
   assert.equal(hexText(new Uint8Array([0, 15, 255]).buffer), '000fff');
 });
