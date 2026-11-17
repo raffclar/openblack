@@ -28,6 +28,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraJump.h"
+#include "Camera/CameraZones.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "Camera/FreeCameraModel.h"
@@ -39,6 +40,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -52,6 +54,7 @@
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
@@ -340,6 +343,36 @@ void Game::FitNearClip(const glm::vec3& eye)
 	if (nearClip != camera.GetNearClip())
 	{
 		camera.SetNearClip(nearClip);
+	}
+}
+
+void Game::ContinueAfterLoad()
+{
+	// The reports of the hand and the view continue from the last reports that the loaded world keeps
+	const auto lastView =
+	    Locator::ownReportSystem::has_value() ? Locator::ownReportSystem::value().ContinueAfterLoad() : std::nullopt;
+	if (!Locator::camera::has_value())
+	{
+		return;
+	}
+	// The next report reads the camera of the load, before the next frame moves and draws it. The near plane fits the
+	// height of the loaded eye over the land, and the drawn view keeps that near plane.
+	auto& camera = Locator::camera::value();
+	FitNearClip(camera.GetOrigin());
+	camera.KeepDrawnView();
+	// The load of the land removed the distance from the fence. The distance of the last view report comes back, because
+	// a camera that did not move since that report has the same distance. With no view report, the fence test of the
+	// loaded camera gives the distance.
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		auto& zones = Locator::cameraZoneSystem::value();
+		const auto& fence = zones.GetZones();
+		zones.SetInclusionDistance(lastView.has_value()
+		                               ? lastView->inclusionDistance
+		                               : camera_zones::PushInsideFence(fence.fence, fence.fenceOn, camera.GetOrigin(),
+		                                                               camera.GetOrigin(), camera.GetFocus(),
+		                                                               camera_zones::SearchRadius(false))
+		                                     .inclusionDistance);
 	}
 }
 

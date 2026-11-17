@@ -35,6 +35,8 @@ public:
 	void SetSender(PlayerNames player) override { _sender = player; }
 	[[nodiscard]] PlayerNames GetSender() const override { return _sender; }
 	[[nodiscard]] size_t PendingCount() const override { return _queue.OpenCount() + _queue.SentCount(); }
+	[[nodiscard]] player_commands::WaitingCommands GetWaiting() const override { return _queue.Waiting(); }
+	void PutBackWaiting(player_commands::WaitingCommands waiting) override { _queue.PutBack(std::move(waiting)); }
 	void SetSource(player_commands::TurnCommandSourceInterface* source) override;
 	[[nodiscard]] bool TurnReady(uint32_t turn) const override { return _source == nullptr || _source->HasTurn(turn); }
 	[[nodiscard]] bool HasSource() const override { return _source != nullptr; }

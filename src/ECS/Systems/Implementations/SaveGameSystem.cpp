@@ -53,6 +53,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/LandReuse.h"
 #include "3D/MapCoords.h"
+#include "Commands/WaitingCommandsFile.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/PlayerProfiles.h"
@@ -93,6 +94,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -1036,6 +1038,12 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	const auto chunks = gamesave::ToChunks(saved);
 	const auto creaturesDone = std::chrono::steady_clock::now();
 	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
+	// The commands that wait for the next turn, as the reports that the player sent after the turn of the save. The load
+	// puts them back, so that the next turn does them as it does with no load.
+	if (const auto waiting = waiting_commands_file::Write(Locator::playerCommandSystem::value().GetWaiting()); !waiting.empty())
+	{
+		world.chunks.push_back({.tag = gamesave::k_WaitingCommandsTag, .bytes = waiting});
+	}
 	// Then the whole world in openblack's own layout
 	ecs::world_save::SaveSummary summary;
 	auto whole =
@@ -1554,6 +1562,14 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	{
 		Locator::cameraBookmarkSystem::value().KeepPlayerBookmarks(*bookmarks);
 	}
+	// The commands that waited at the save for the next turn wait again. The load of the land removed the commands of the
+	// game before the load.
+	if (kind == ecs::world_save::LoadKind::SavedGame)
+	{
+		PutBackWaitingCommands(world);
+	}
+	// The view of this computer continues from the loaded world before the next report of its hand and its view
+	Locator::landSystem::value().ContinueViewAfterLoad();
 	// A load from a file of the game is not the origin of this world
 	_vanilla.reset();
 	// The next autosave and the next quick load come only after their full gap from the turn of the load
@@ -1563,6 +1579,22 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	_autosaveTurnToSave = game.lastAutosaveTurn;
 	SPDLOG_LOGGER_INFO(Log(), "Loaded the whole world of slot {} at turn {}", slot, game.turn);
 	return true;
+}
+
+void SaveGameSystem::PutBackWaitingCommands(const gamesave::WorldFile& world)
+{
+	const auto bytes = gamesave::FindChunk(world, gamesave::k_WaitingCommandsTag);
+	if (!bytes.has_value())
+	{
+		return;
+	}
+	auto waiting = waiting_commands_file::Read(*bytes);
+	if (!waiting.has_value())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The commands that waited at the save do not read: the next turn does no command");
+		return;
+	}
+	Locator::playerCommandSystem::value().PutBackWaiting(std::move(*waiting));
 }
 
 void SaveGameSystem::SetVanillaOrigin(uint32_t slot, uint32_t land, const std::filesystem::path& folder,

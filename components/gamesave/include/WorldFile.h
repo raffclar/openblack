@@ -64,6 +64,8 @@ inline constexpr Tag k_AltitudesTag {'L', 'A', 'L', 'T'};
 /// The countries of the land that the world changed, such as the paint of the editor. A saved game of openblack and a
 /// world state keep them.
 inline constexpr Tag k_CountriesTag {'L', 'C', 'N', 'T'};
+/// The commands of a single player game that wait for a turn at the save. Only a saved game of openblack keeps them.
+inline constexpr Tag k_WaitingCommandsTag {'C', 'M', 'D', 'S'};
 
 struct Chunk
 {

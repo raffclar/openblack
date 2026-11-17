@@ -57,6 +57,10 @@ public:
 	virtual void ReportHand(uint32_t worldCameraIcons) = 0;
 	/// Reports the help events of the player's input and the view of the world camera, when they changed
 	virtual void ReportHelp(const HelpInputs& inputs) = 0;
+	/// A world loaded at its saved turn. The pass of that turn occurred before the save, so the reports start again at the
+	/// next turn. They continue from the hand and the view that the loaded world keeps of this computer's player. Gives
+	/// the last view report that they continue from, none before the first view report.
+	virtual std::optional<player_commands::ViewReport> ContinueAfterLoad() = 0;
 
 	[[nodiscard]] virtual const OwnReportState& GetState() const = 0;
 };
