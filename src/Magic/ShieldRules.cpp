@@ -106,6 +106,44 @@ shield::DomePose shield::StepDome(const DomeShape& shape, DomeState& state, floa
 	return pose;
 }
 
+float shield::PoseAngle(const std::array<float, 13>& pose)
+{
+	// The first row of the turn is the cosine and the sine of the angle, times the size
+	return Wrap(portable_math::Atan2(pose[2], pose[0]));
+}
+
+shield::RestoredDome shield::RestoreDome(const DomeShape& table, const SavedDome& saved, float turnSeconds)
+{
+	constexpr size_t k_HeightAt = 10;
+	constexpr size_t k_ScaleAt = 12;
+	RestoredDome dome {
+	    .shape = table,
+	    .state = {.angle = saved.angle, .bob = saved.bob, .dieTime = saved.dieTime, .dying = saved.dying},
+	    .turns = saved.turns,
+	    .solidScale = saved.solidScale,
+	    .alpha = static_cast<float>(saved.alpha),
+	};
+	dome.shape.finalScale = saved.finalScale;
+	dome.shape.startScale = saved.startScale;
+	dome.shape.startSpin = saved.startSpin;
+	dome.shape.endSpin = saved.endSpin;
+	dome.pose = {
+	    .scale = saved.pose[k_ScaleAt],
+	    .angle = saved.angle,
+	    .height = saved.height,
+	    .drawn = !(DomeAge(saved.turns, turnSeconds) < k_DomeHiddenSeconds),
+	    .gone = false,
+	};
+	dome.previous = {
+	    .scale = saved.lastPose[k_ScaleAt],
+	    .angle = PoseAngle(saved.lastPose),
+	    .height = saved.height + (saved.lastPose[k_HeightAt] - saved.pose[k_HeightAt]),
+	    .drawn = saved.turns > 0 && !(DomeAge(saved.turns - 1, turnSeconds) < k_DomeHiddenSeconds),
+	    .gone = false,
+	};
+	return dome;
+}
+
 float shield::DomeAlpha(float strength)
 {
 	const auto byte = static_cast<uint8_t>(std::clamp(std::min(strength, 1.0f) * 255.0f, 0.0f, 255.0f));

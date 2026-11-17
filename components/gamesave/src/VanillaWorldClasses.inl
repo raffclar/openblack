@@ -1249,9 +1249,11 @@ void ReadSpellForest(WorldReader& r)
 void ReadSpellShield(WorldReader& r)
 {
 	ReadSpellWithObjects(r);
-	r.Refs();
-	r.Ref();
-	r.Ref();
+	// The influence rings that take away the influence of each other player under the shield, the reaction to the
+	// strikes on the shield, and the reaction to the shield
+	r.Refs("shieldSpellRings");
+	r.Ref("shieldSpellStruckReaction");
+	r.Ref("shieldSpellReaction");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -1267,28 +1269,35 @@ void ReadSpellCreature(WorldReader& r)
 void ReadMapShield(WorldReader& r)
 {
 	ReadFixed(r);
-	r.Ref();
-	r.Word();
+	// The spell of the shield and the row of the shield in its table
+	r.Ref("mapShieldSpell");
+	r.Word("mapShieldInfo");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
 void ReadPhysicalShield(WorldReader& r)
 {
 	ReadMapShield(r);
+	// The game sets this value to 1 and does not read it
 	r.Word();
-	r.Word();
-	r.Bytes(52);
-	r.Bytes(52);
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Byte();
-	r.Byte();
-	r.Word();
-	r.Ref();
+	// The turn when the dome came up
+	r.Word("domeRaisedTurn");
+	// The pose of the dome at this turn and at the turn before: the rows of its turn, its point and its size
+	r.Bytes(52, "domePose");
+	r.Bytes(52, "domeLastPose");
+	// The size of the dome at its start and at its end, its spin at its start and at its end, its angle and the angle of
+	// its bob
+	r.Float("domeStartScale");
+	r.Float("domeFinalScale");
+	r.Float("domeStartSpin");
+	r.Float("domeEndSpin");
+	r.Float("domeAngle");
+	r.Float("domeBob");
+	// The flag that the dome dies, how opaque it is drawn, the seconds since it started to die and its particle system
+	r.Byte("domeDying");
+	r.Byte("domeAlpha");
+	r.Float("domeDieTime");
+	r.Ref("domeEffect");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -1301,17 +1310,19 @@ void ReadMagicShield(WorldReader& r)
 void ReadMagicTeleport(WorldReader& r)
 {
 	ReadMobileStatic(r);
-	r.Ref();
-	r.Ref();
-	r.Ref();
+	// The reaction to the stone, the spell of the stone and the player of the stone
+	r.Ref("teleportReaction");
+	r.Ref("teleportSpell");
+	r.Ref("teleportPlayer");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
 void ReadMagicTree(WorldReader& r)
 {
 	ReadTree(r);
-	r.Word();
-	r.Word();
+	// The number of the player of the spell that made the tree, and the value of its wood against an ordinary tree
+	r.Word("magicTreePlayer");
+	r.Float("magicTreeWoodMultiplier");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

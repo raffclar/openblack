@@ -418,6 +418,42 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 	return miracle.objectCount;
 }
 
+uint32_t ForestSystem::RestoreForest(entt::entity spell, Spell& miracle, entt::entity landForest)
+{
+	auto& registry = EntityRegistry();
+	const auto* land =
+	    landForest != entt::null && registry.Valid(landForest) ? registry.TryGet<const LandForest>(landForest) : nullptr;
+	if (land == nullptr)
+	{
+		return 0;
+	}
+	// The trees of the spell in its forest, the grown trees first, then the trees that grow, in the order of the forest
+	std::vector<entt::entity> trees;
+	for (const bool growing : {false, true})
+	{
+		std::ranges::copy_if(TreesOf(landForest, growing), std::back_inserter(trees),
+		                     [&registry](entt::entity tree) { return registry.AllOf<MagicTree>(tree); });
+	}
+	// The forest stands where its forest of the land stands
+	const auto* place = registry.TryGet<const Transform>(landForest);
+	const auto forestEntity = registry.Create();
+	registry.Assign<Transform>(forestEntity, place != nullptr ? place->position : miracle.castPosition, glm::mat3(1.0f),
+	                           glm::vec3(1.0f));
+	registry.Assign<MagicForest>(forestEntity, MagicForest {.spell = spell,
+	                                                        .player = miracle.caster.player,
+	                                                        .centre = miracle.castPosition,
+	                                                        .trees = trees,
+	                                                        .landForest = landForest});
+	for (const auto tree : trees)
+	{
+		registry.Get<MagicTree>(tree).forest = forestEntity;
+	}
+	miracle.objectCount = static_cast<uint32_t>(trees.size());
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: a forest miracle takes its forest {} again with {} trees", land->id,
+	                    trees.size());
+	return miracle.objectCount;
+}
+
 bool ForestSystem::CanGrowAt(glm::vec3 point) const
 {
 	if (!Locator::entitiesMap::has_value())

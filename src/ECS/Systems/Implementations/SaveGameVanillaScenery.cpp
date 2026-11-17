@@ -57,6 +57,7 @@
 #include "ECS/WorldObjects.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 #include "SaveGameSystem.h"
 #include "SaveGameVanillaPlaces.h"
 
@@ -244,10 +245,24 @@ void SaveGameSystem::ImportVanillaForests(const gamesave::VanillaWorld& world, V
 		made.emplace(forest.number, forests.LandForests().front());
 	}
 
+	// Every tree of a forest spell is as impressive as the forest miracle. Its spell takes it later, when the import
+	// makes the spell.
+	const float magicTreeImpressiveValue =
+	    Locator::infoConstants::has_value()
+	        ? magic::GetMagicEffectInfo(Locator::infoConstants::value(), MagicType::Forest).impressiveValue
+	        : 0.0f;
+	size_t magicTrees = 0;
 	for (const auto& tree : imported.trees)
 	{
 		const auto entity = ecs::archetypes::TreeArchetype::CreateLoaded(GroundPosition(tree.position), tree.row, tree.heading,
 		                                                                 tree.maxSize, tree.scale, tree.growthCountdown);
+		if (tree.magicWoodMultiplier.has_value())
+		{
+			registry.Assign<MagicTree>(entity, MagicTree {.forest = entt::null,
+			                                              .woodMultiplier = *tree.magicWoodMultiplier,
+			                                              .impressiveValue = magicTreeImpressiveValue});
+			++magicTrees;
+		}
 		made.emplace(tree.number, entity);
 	}
 	// Each forest takes its grown trees, then its trees that grow, in the order of the file
@@ -292,8 +307,8 @@ void SaveGameSystem::ImportVanillaForests(const gamesave::VanillaWorld& world, V
 		}
 	}
 	registry.SetDirty();
-	SPDLOG_LOGGER_INFO(ImportLog(), "Imported {} forests, {} big forests and {} trees of the game's file",
-	                   imported.forests.size(), imported.bigForests.size(), imported.trees.size());
+	SPDLOG_LOGGER_INFO(ImportLog(), "Imported {} forests, {} big forests and {} trees ({} of forest spells) of the game's file",
+	                   imported.forests.size(), imported.bigForests.size(), imported.trees.size(), magicTrees);
 }
 
 void SaveGameSystem::ImportVanillaFarms(const gamesave::VanillaWorld& world, VanillaMade& made, const VanillaWorks& works)

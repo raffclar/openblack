@@ -5108,6 +5108,170 @@ TEST(VanillaWorldImport, AHeldSpellReadsItsParticlesAndItsReaction)
 	EXPECT_EQ(heal->reaction, 8u);
 }
 
+// A forest spell keeps the flag that it planted its trees, the forest of its trees and the most trees that it can make
+TEST(VanillaWorldImport, AForestSpellReadsItsForestAndItsMostTrees)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::SpellForest)
+	    .Position(3, 4)
+	    .Value<uint32_t>("spellMagicType", static_cast<uint32_t>(MagicType::Forest))
+	    .Value<uint8_t>("forestSpellPlanted", 1)
+	    .Ref("forestSpellForest", 12)
+	    .Value<uint32_t>("forestSpellMostTrees", 7);
+	fake.Record(VanillaType::SpellForest)
+	    .Position(3, 4)
+	    .Value<uint32_t>("spellMagicType", static_cast<uint32_t>(MagicType::Forest))
+	    .Value<uint8_t>("forestSpellPlanted", 0)
+	    .Ref("forestSpellForest", 0)
+	    .Value<uint32_t>("forestSpellMostTrees", 0xFFFFFFFFU);
+	const auto world = fake.Make();
+	const auto planted = world_import::ReadHeldSpell(world, world.Records()[0]);
+	ASSERT_TRUE(planted.has_value());
+	ASSERT_TRUE(planted->forest.has_value());
+	EXPECT_TRUE(planted->forest->planted);
+	EXPECT_EQ(planted->forest->forest, 12U);
+	EXPECT_EQ(planted->forest->mostTrees, 7);
+	EXPECT_FALSE(planted->shield.has_value());
+	const auto seed = world_import::ReadHeldSpell(world, world.Records()[1]);
+	ASSERT_TRUE(seed.has_value() && seed->forest.has_value());
+	EXPECT_FALSE(seed->forest->planted);
+	EXPECT_EQ(seed->forest->forest, 0U);
+	EXPECT_EQ(seed->forest->mostTrees, -1);
+}
+
+// A shield spell keeps its object, the rings that take away the influence of the other players, and its two reactions
+TEST(VanillaWorldImport, AShieldSpellReadsItsObjectItsRingsAndItsReactions)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::SpellShield)
+	    .Position(3, 4)
+	    .Value<uint32_t>("spellMagicType", static_cast<uint32_t>(MagicType::PhysicalShield))
+	    .Refs("spellObjects", {20})
+	    .Refs("shieldSpellRings", {21, 22})
+	    .Ref("shieldSpellStruckReaction", 0)
+	    .Ref("shieldSpellReaction", 23);
+	const auto world = fake.Make();
+	const auto spell = world_import::ReadHeldSpell(world, world.Records().front());
+	ASSERT_TRUE(spell.has_value());
+	EXPECT_EQ(spell->objects, std::vector<uint32_t> {20});
+	ASSERT_TRUE(spell->shield.has_value());
+	EXPECT_EQ(spell->shield->rings, (std::vector<uint32_t> {21, 22}));
+	EXPECT_EQ(spell->shield->struckReaction, 0U);
+	EXPECT_EQ(spell->shield->reaction, 23U);
+	EXPECT_FALSE(spell->forest.has_value());
+}
+
+// The dome of a physical shield keeps its turn, its sizes, its spins, its angles, its death and its two poses. The mark
+// of a spiritual shield keeps only its place and its spell.
+TEST(VanillaWorldImport, AShieldObjectReadsItsDome)
+{
+	std::array<float, 13> pose {};
+	std::array<float, 13> lastPose {};
+	pose[0] = 0.5f;
+	pose[10] = 20.0f;
+	pose[12] = 0.5f;
+	lastPose[12] = 0.49f;
+	FakeWorld fake;
+	fake.Record(VanillaType::PhysicalShield)
+	    .Value("position", MapCoords {.x = 0x10000, .z = 0x20000, .altitude = -1.5f})
+	    .Value("scale", 0.45f)
+	    .Ref("mapShieldSpell", 9)
+	    .Value<uint32_t>("domeRaisedTurn", 100)
+	    .Value("domePose", pose)
+	    .Value("domeLastPose", lastPose)
+	    .Value("domeStartScale", 0.005f)
+	    .Value("domeFinalScale", 0.5f)
+	    .Value("domeStartSpin", 2.0f)
+	    .Value("domeEndSpin", 0.15f)
+	    .Value("domeAngle", 1.5f)
+	    .Value("domeBob", 0.75f)
+	    .Value<uint8_t>("domeDying", 1)
+	    .Value<uint8_t>("domeAlpha", 200)
+	    .Value("domeDieTime", 0.25f)
+	    .Ref("domeEffect", 30);
+	fake.Record(VanillaType::MagicShield).Position(5, 6).Ref("mapShieldSpell", 10);
+	fake.Record(VanillaType::Tree).Position(5, 6);
+	const auto world = fake.Make();
+	const auto physical = world_import::ReadShieldObject(world, world.Records()[0]);
+	ASSERT_TRUE(physical.has_value());
+	EXPECT_EQ(physical->spell, 9U);
+	EXPECT_EQ(physical->position.x, 0x10000);
+	EXPECT_FLOAT_EQ(physical->position.altitude, -1.5f);
+	EXPECT_FLOAT_EQ(physical->scale, 0.45f);
+	ASSERT_TRUE(physical->dome.has_value());
+	const auto& dome = *physical->dome;
+	EXPECT_EQ(dome.raisedTurn, 100U);
+	EXPECT_FLOAT_EQ(dome.startScale, 0.005f);
+	EXPECT_FLOAT_EQ(dome.finalScale, 0.5f);
+	EXPECT_FLOAT_EQ(dome.startSpin, 2.0f);
+	EXPECT_FLOAT_EQ(dome.endSpin, 0.15f);
+	EXPECT_FLOAT_EQ(dome.angle, 1.5f);
+	EXPECT_FLOAT_EQ(dome.bob, 0.75f);
+	EXPECT_TRUE(dome.dying);
+	EXPECT_EQ(dome.alpha, 200);
+	EXPECT_FLOAT_EQ(dome.dieTime, 0.25f);
+	EXPECT_EQ(dome.pose, pose);
+	EXPECT_EQ(dome.lastPose, lastPose);
+	EXPECT_EQ(dome.effect, 30U);
+	const auto spiritual = world_import::ReadShieldObject(world, world.Records()[1]);
+	ASSERT_TRUE(spiritual.has_value());
+	EXPECT_EQ(spiritual->spell, 10U);
+	EXPECT_FALSE(spiritual->dome.has_value());
+	EXPECT_FALSE(world_import::ReadShieldObject(world, world.Records()[2]).has_value());
+}
+
+// A teleport stone keeps its place, its spell and its player
+TEST(VanillaWorldImport, ATeleportStoneReadsItsPlaceAndItsSpell)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::MagicTeleport)
+	    .Position(0x30000, 0x40000)
+	    .Ref("teleportReaction", 5)
+	    .Ref("teleportSpell", 6)
+	    .Ref("teleportPlayer", 7);
+	fake.Record(VanillaType::MagicTeleport);
+	const auto world = fake.Make();
+	const auto stone = world_import::ReadTeleportStone(world, world.Records()[0]);
+	ASSERT_TRUE(stone.has_value());
+	EXPECT_EQ(stone->number, 1U);
+	EXPECT_EQ(stone->position.x, 0x30000);
+	EXPECT_EQ(stone->position.z, 0x40000);
+	EXPECT_EQ(stone->spell, 6U);
+	EXPECT_EQ(stone->player, 7U);
+	// A stone with no place is not a stone
+	EXPECT_FALSE(world_import::ReadTeleportStone(world, world.Records()[1]).has_value());
+}
+
+// A tree of a forest spell reads as a tree, with the value of its wood
+TEST(VanillaWorldImport, ATreeOfAForestSpellReadsAsATreeWithItsWood)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::Game);
+	fake.Record(VanillaType::MagicTree)
+	    .Position(10, 20)
+	    .Value("info", world_import::k_FirstTreeRowNumber - static_cast<uint32_t>(TreeInfo::Oak))
+	    .Value("life", 1.0f)
+	    .Value("scale", 0.4f)
+	    .Value("heading", 0.5f)
+	    .Value<uint16_t>("growthCountdown", 0)
+	    .Value("maxSize", 1.1f)
+	    .Value<uint32_t>("magicTreePlayer", 0)
+	    .Value("magicTreeWoodMultiplier", 1.75f);
+	fake.Record(VanillaType::Tree)
+	    .Position(30, 40)
+	    .Value("info", world_import::k_FirstTreeRowNumber - static_cast<uint32_t>(TreeInfo::Pine))
+	    .Value("scale", 0.9f);
+	const auto imported = world_import::ReadForests(fake.Make());
+	ASSERT_EQ(imported.trees.size(), 2U);
+	EXPECT_EQ(imported.trees[0].number, 2U);
+	EXPECT_EQ(imported.trees[0].row, TreeInfo::Oak);
+	EXPECT_FLOAT_EQ(imported.trees[0].scale, 0.4f);
+	EXPECT_FLOAT_EQ(imported.trees[0].maxSize, 1.1f);
+	ASSERT_TRUE(imported.trees[0].magicWoodMultiplier.has_value());
+	EXPECT_FLOAT_EQ(*imported.trees[0].magicWoodMultiplier, 1.75f);
+	EXPECT_FALSE(imported.trees[1].magicWoodMultiplier.has_value());
+}
+
 // Each spell that a creature of a saved game holds reads as a spell that the creature cast
 TEST(VanillaWorldImport, SavedGamesGiveEachHeldSpellOfACreatureItsValues)
 {

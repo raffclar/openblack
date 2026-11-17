@@ -51,6 +51,12 @@ public:
 	[[nodiscard]] virtual magic::forest::MiracleForest ForestOf(entt::entity spell) const = 0;
 	/// A forest miracle lets go of its forest that went from the land
 	virtual void LetGoOfGoneForest(entt::entity spell) = 0;
+	/// A forest miracle of a saved game of the game takes its forest of the land again: the trees of its spell in that
+	/// forest are its trees, which it grows and keeps from then on. How many trees it took.
+	virtual uint32_t RestoreForest(entt::entity /*spell*/, components::Spell& /*miracle*/, entt::entity /*landForest*/)
+	{
+		return 0;
+	}
 	/// How many trees a forest miracle's forest has at this moment, a tree in the hand among them
 	[[nodiscard]] virtual uint32_t StandingTrees(entt::entity spell) const = 0;
 	/// How tall the tallest tree of a forest miracle's forest stands (none tall with no trees left); none before the

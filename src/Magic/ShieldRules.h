@@ -117,6 +117,48 @@ inline constexpr float k_DomeGoneSeconds = k_DomeFadeSeconds * 1.5f;
 }
 /// A turn of the dome, `age` seconds after it was raised and `dt` seconds long
 [[nodiscard]] DomePose StepDome(const DomeShape& shape, DomeState& state, float age, float dt);
+/// The dome as a saved game of the game keeps it
+struct SavedDome
+{
+	/// The game turns since the dome came up
+	uint32_t turns {0};
+	float startScale {0.0f};
+	float finalScale {0.0f};
+	float startSpin {0.0f};
+	float endSpin {0.0f};
+	float angle {0.0f};
+	float bob {0.0f};
+	bool dying {false};
+	float dieTime {0.0f};
+	/// How opaque it is drawn, 0 to 255
+	uint8_t alpha {255};
+	/// Its height above the land at this turn
+	float height {0.0f};
+	/// The size that its solid shape has
+	float solidScale {0.0f};
+	/// Its pose at this turn and at the turn before: the nine values of its turn, row by row, its point and its size
+	std::array<float, 13> pose {};
+	std::array<float, 13> lastPose {};
+};
+/// The dome of a saved game as the shield system keeps it
+struct RestoredDome
+{
+	DomeShape shape;
+	DomeState state;
+	DomePose pose;
+	DomePose previous;
+	uint32_t turns {0};
+	float solidScale {0.0f};
+	float alpha {255.0f};
+};
+/// The angle of a pose of the dome about the vertical, from 0 to two pi: the game turns the first row of the pose to
+/// (cos a, 0, sin a) times its size
+[[nodiscard]] float PoseAngle(const std::array<float, 13>& pose);
+/// The dome of a saved game. Its sizes and spins are the values of the file, its sink and bob the values of the table
+/// shape. The pose at this turn has the size, the angle and the height of the file. The pose at the turn before has
+/// the size and the angle of its pose, and the height of this turn moved as far as its point moved. Each pose shows
+/// once the dome is older than its hidden time.
+[[nodiscard]] RestoredDome RestoreDome(const DomeShape& table, const SavedDome& saved, float turnSeconds);
 /// How opaque the dome and its effect are drawn, 0 to 255: by its strength, never fainter than 40
 inline constexpr float k_DomeLeastAlpha = 40.0f;
 [[nodiscard]] float DomeAlpha(float strength);

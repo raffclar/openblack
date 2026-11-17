@@ -124,41 +124,59 @@ entt::entity NearestTown(glm::vec3 point)
 
 void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 {
+	auto position = miracle.castPosition;
+	position.y = LandHeight(position);
+	const auto object = MakeObject(spell, miracle, position, false);
+	// Its player's people react to it as far as a little beyond its edge
+	auto& shieldObject = EntityRegistry().Get<MagicShield>(object);
+	shieldObject.reaction = CreateReaction(object, Reaction::ReactToMagicShield, position, 1.0f);
+	// Spread at once out to its table's reach, it reaches a little beyond the shield's edge from then on
+	_reactions.at(shieldObject.reaction).radius = shield::ReactionReach(miracle.magnitude);
+	if (miracle.magicType == MagicType::PhysicalShield)
+	{
+		MakeDome(object, miracle, nullptr);
+	}
+}
+
+entt::entity MagicShieldSystem::MakeObject(entt::entity spell, const Spell& miracle, glm::vec3 position, bool restored)
+{
 	auto& registry = EntityRegistry();
 	const bool physical = miracle.magicType == MagicType::PhysicalShield;
 	const auto object = registry.Create();
 	// It takes its place in the order of the things made
 	openblack::ecs::archetypes::TakeThingMadePlace();
-	auto position = miracle.castPosition;
-	position.y = LandHeight(position);
 	registry.Assign<Transform>(object, position, glm::mat3(1.0f), glm::vec3(1.0f));
-	auto& shieldObject = registry.Assign<MagicShield>(
-	    object, MagicShield {.kind = physical ? MagicShield::Kind::Physical : MagicShield::Kind::Spiritual,
-	                         .spell = spell,
-	                         .player = miracle.caster.player,
-	                         .radius = miracle.magnitude,
-	                         .town = NearestTown(position),
-	                         .reaction = 0,
-	                         .struckReaction = 0});
+	registry.Assign<MagicShield>(object,
+	                             MagicShield {.kind = physical ? MagicShield::Kind::Physical : MagicShield::Kind::Spiritual,
+	                                          .spell = spell,
+	                                          .player = miracle.caster.player,
+	                                          .radius = miracle.magnitude,
+	                                          .town = restored ? entt::null : NearestTown(position),
+	                                          .reaction = 0,
+	                                          .struckReaction = 0});
 	// No other player has influence under it
 	registry.Assign<AntiInfluence>(object, AntiInfluence {.owner = miracle.caster.player, .radius = miracle.magnitude});
-	// Its player's people react to it as far as a little beyond its edge
-	shieldObject.reaction = CreateReaction(object, Reaction::ReactToMagicShield, position, 1.0f);
-	// Spread at once out to its table's reach, it reaches a little beyond the shield's edge from then on
-	_reactions.at(shieldObject.reaction).radius = shield::ReactionReach(miracle.magnitude);
 	_objects.insert_or_assign(spell, object);
+	return object;
+}
 
-	if (!physical)
-	{
-		return;
-	}
+void MagicShieldSystem::MakeDome(entt::entity object, const Spell& miracle, const RestoredShield* file)
+{
+	auto& registry = EntityRegistry();
 	const auto* info = magic::GetMagicInfoAs<GMagicShieldInfo>(Info(), miracle.magicType);
 	if (info == nullptr)
 	{
 		return;
 	}
+	const auto position = registry.Get<const Transform>(object).position;
 	auto& dome = registry.Assign<ShieldDome>(object);
 	dome.shape = shield::MakeDomeShape(*info, miracle.magnitude, miracle.processInfo.spin);
+	std::optional<shield::RestoredDome> restored;
+	if (file != nullptr && file->dome.has_value())
+	{
+		restored = shield::RestoreDome(dome.shape, *file->dome, k_TurnSeconds);
+		dome.shape = restored->shape;
+	}
 	dome.mesh = resources::HashIdentifier(ShieldDome::k_MeshId);
 	if (Locator::resources::has_value())
 	{
@@ -172,18 +190,35 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 			dome.hullScale = dome.shape.finalScale;
 		}
 	}
-	// It takes its first two turns at once, so it starts as it would have been made
-	for (int i = 0; i < 2; ++i)
+	if (restored.has_value())
 	{
-		dome.pose = shield::StepDome(dome.shape, dome.state, shield::DomeAge(dome.turns, k_TurnSeconds), k_TurnSeconds);
+		// The dome of a saved game goes on from its turn of the file
+		dome.state = restored->state;
+		dome.pose = restored->pose;
+		dome.previous = restored->previous;
+		dome.turns = restored->turns;
+		dome.solidScale = restored->solidScale;
+		dome.alpha = restored->alpha;
 	}
-	dome.previous = dome.pose;
-	dome.solidScale = dome.pose.scale;
+	else
+	{
+		// It takes its first two turns at once, so it starts as it would have been made
+		for (int i = 0; i < 2; ++i)
+		{
+			dome.pose = shield::StepDome(dome.shape, dome.state, shield::DomeAge(dome.turns, k_TurnSeconds), k_TurnSeconds);
+		}
+		dome.previous = dome.pose;
+		dome.solidScale = dome.pose.scale;
+	}
 	auto& transform = registry.Get<Transform>(object);
 	transform.position.y = position.y + dome.pose.height;
+	if (restored.has_value())
+	{
+		transform.rotation = portable_math::EulerAngleY(dome.pose.angle);
+	}
 	transform.scale = glm::vec3(dome.pose.scale);
 	// Its sparkling trail and hum, on the dome. Its random numbers are only this computer's: the trail does not change
-	// the world.
+	// the world. The trail of a saved game goes on from its state in the file.
 	if (Locator::effectRequestSystem::has_value())
 	{
 		auto& effects = Locator::effectRequestSystem::value();
@@ -193,7 +228,21 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 		    .magnitude = miracle.magnitude,
 		    .synced = false,
 		    .player = static_cast<int>(miracle.caster.player),
+		    .restored = file != nullptr ? file->effect : nullptr,
 		});
+		// A state of the file that does not agree with the particle file starts the trail from its start
+		if (file != nullptr && file->effect != nullptr && !effects.IsRunning(dome.effect))
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"),
+			                   "Magic: the saved trail of a shield dome does not start, so it starts again");
+			dome.effect = effects.Start({
+			    .type = ParticleType::PhysicalShieldFx,
+			    .position = transform.position,
+			    .magnitude = miracle.magnitude,
+			    .synced = false,
+			    .player = static_cast<int>(miracle.caster.player),
+			});
+		}
 		effects.AddTarget(dome.effect, object);
 	}
 	// The dome goes into the physics at once as a body at rest. It stays there until it goes, so that what flies at it
@@ -202,6 +251,28 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 	{
 		static_cast<void>(Locator::dynamicsSystem::value().AddObstacle(object));
 	}
+}
+
+entt::entity MagicShieldSystem::Restore(entt::entity spell, const Spell& miracle, const RestoredShield& file)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value() || _objects.contains(spell))
+	{
+		return entt::null;
+	}
+	const auto object = MakeObject(spell, miracle, file.position, true);
+	if (miracle.magicType == MagicType::PhysicalShield)
+	{
+		MakeDome(object, miracle, &file);
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: a shield of a saved game stands again at ({}, {})", file.position.x,
+	                    file.position.z);
+	return object;
+}
+
+entt::entity MagicShieldSystem::ObjectOf(entt::entity spell) const
+{
+	const auto found = _objects.find(spell);
+	return found != _objects.end() ? found->second : entt::null;
 }
 
 void MagicShieldSystem::Strip(entt::entity object, MagicShield& shieldObject)
