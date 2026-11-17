@@ -50,6 +50,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
 #include "3D/WaterRings.h"
+#include "BufferPages.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
 #include "Common/MainThreadQueue.h"
@@ -991,6 +992,8 @@ void Renderer::Frame() noexcept
 		{
 			resources::Rereads rereads(
 			    [](const std::filesystem::path& path) { return Locator::filesystem::value().ReadAll(path); });
+			// The buffer pages write the runs whose owners do not give them again
+			Locator::graphicsDevice::value().GetBufferPages().WriteKeptAgain();
 			auto& givers = Locator::graphicsDevice::value().GetDataGivers();
 			givers.GiveAll(rereads);
 			SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "{} meshes and textures gave their data again from {} files",

@@ -421,12 +421,13 @@ void L3DSubMesh::MakeDeviceObjects(std::span<const uint8_t> vertices) noexcept
 	const auto& indices = _data.bodyGeometry.indices;
 	const auto* verticesMem = device.Copy(vertices.data(), static_cast<uint32_t>(vertices.size()));
 	const auto* indicesMem = device.Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
-	// The buffers go in the shared buffers of bgfx. A model that the game makes during play, such as a creature or a
-	// temple, then gets no new memory from the driver for each part, and the next frame does not wait for that memory.
+	// The buffers are runs of the device's buffer pages. A model that the game makes during play, such as a creature or
+	// a temple, then gets no new memory from the driver for each part, and the next frame does not wait for that memory.
+	// The parts of a land also take only a few of the device's buffers, of which the device has a limit.
 	auto vertexBuffer = std::make_unique<VertexBuffer>(_l3dMesh.GetDebugName(), verticesMem, decl, _l3dMesh.IsDynamic(),
-	                                                   VertexBuffer::Storage::Shared);
+	                                                   VertexBuffer::Storage::Paged);
 	auto indexBuffer = std::make_unique<IndexBuffer>(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16,
-	                                                 IndexBuffer::Storage::Shared);
+	                                                 IndexBuffer::Storage::Paged);
 	// The mesh owns its buffers from here on
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer.release(), indexBuffer.release());
 
@@ -839,11 +840,11 @@ bool L3DSubMesh::SplitFacesForSnow()
 	decl.emplace_back(VertexAttrib::Attribute::Indices, static_cast<uint8_t>(4), VertexAttrib::Type::Int16,
 	                  /*normalized=*/false, /*asInt=*/true);
 	const auto* indicesMem = device.Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
-	// As the other submeshes: the buffers go in the shared buffers of bgfx
+	// As the other submeshes: the buffers are runs of the device's buffer pages
 	auto vertexBuffer =
-	    std::make_unique<VertexBuffer>(_l3dMesh.GetDebugName(), verticesMem, decl, false, VertexBuffer::Storage::Shared);
+	    std::make_unique<VertexBuffer>(_l3dMesh.GetDebugName(), verticesMem, decl, false, VertexBuffer::Storage::Paged);
 	auto indexBuffer = std::make_unique<IndexBuffer>(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16,
-	                                                 IndexBuffer::Storage::Shared);
+	                                                 IndexBuffer::Storage::Paged);
 	// The mesh owns its buffers from here on
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer.release(), indexBuffer.release());
 	_facesSplit = true;

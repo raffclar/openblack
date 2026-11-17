@@ -30,6 +30,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LowResolutionTextures.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/BufferPages.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/VertexBuffer.h"
@@ -64,8 +65,8 @@ public:
 			GivenIndices,
 			GivenSharedVertices,
 			GivenSharedIndices,
-			IndexPage,
 			IndexPageUpdate,
+			VertexPageUpdate,
 		};
 		Kind kind;
 		std::vector<uint8_t> bytes;
@@ -121,8 +122,15 @@ public:
 		Keep(Made::Kind::DynamicVertexBuffer, vertices);
 		return {static_cast<uint32_t>(_made.size())};
 	}
+	[[nodiscard]] DynamicVertexBufferHandle CreateVertexPage(uint32_t, const VertexDecl&) const override
+	{
+		return {MakePage()};
+	}
 	[[nodiscard]] VertexLayoutHandle CreateVertexLayout(const VertexDecl&) const override { return {1}; }
-	void Update(DynamicVertexBufferHandle, uint32_t, const DeviceMemory*) const override {}
+	void Update(DynamicVertexBufferHandle, uint32_t, const DeviceMemory* vertices) const override
+	{
+		Keep(Made::Kind::VertexPageUpdate, vertices);
+	}
 	void SetName(VertexBufferHandle, std::string_view) const override {}
 	void SetContentsGivenAgain(VertexBufferHandle) const override { Mark(Made::Kind::GivenVertices); }
 	void GiveContentsAgain(VertexBufferHandle, const DeviceMemory* vertices) const override
@@ -147,11 +155,7 @@ public:
 		Keep(Made::Kind::SharedIndexBuffer, indices);
 		return {static_cast<uint32_t>(_made.size())};
 	}
-	[[nodiscard]] DynamicIndexBufferHandle CreateIndexPage(uint32_t, bool) const override
-	{
-		Keep(Made::Kind::IndexPage, nullptr);
-		return {static_cast<uint32_t>(_made.size())};
-	}
+	[[nodiscard]] DynamicIndexBufferHandle CreateIndexPage(uint32_t, bool) const override { return {MakePage()}; }
 	void Update(DynamicIndexBufferHandle, uint32_t, const DeviceMemory* indices) const override
 	{
 		Keep(Made::Kind::IndexPageUpdate, indices);
@@ -170,6 +174,7 @@ public:
 	void Destroy(IndexBufferHandle) const override {}
 	void Destroy(DynamicIndexBufferHandle) const override {}
 	[[nodiscard]] DeviceDataGivers& GetDataGivers() const override { return _givers; }
+	[[nodiscard]] BufferPages& GetBufferPages() const override { return _pages; }
 
 	/// The calls that ask the device for memory, a format or an object
 	[[nodiscard]] size_t Calls() const
@@ -195,6 +200,12 @@ private:
 		const std::scoped_lock lock(_mutex);
 		++_calls;
 	}
+	/// A page is not an object of the list of made objects, because only the first part of a page makes it
+	[[nodiscard]] uint32_t MakePage() const
+	{
+		const std::scoped_lock lock(_mutex);
+		return k_FirstPage + _pagesMade++;
+	}
 	void Mark(Made::Kind kind) const
 	{
 		const std::scoped_lock lock(_mutex);
@@ -214,11 +225,14 @@ private:
 	}
 
 	mutable std::mutex _mutex;
+	static constexpr uint32_t k_FirstPage = 1000;
 	mutable size_t _calls {0};
+	mutable uint32_t _pagesMade {0};
 	mutable std::vector<std::unique_ptr<std::vector<uint8_t>>> _memories;
 	mutable std::vector<Made> _made;
 	mutable std::vector<Made::Kind> _marked;
 	mutable DeviceDataGivers _givers;
+	mutable BufferPages _pages {*this};
 };
 
 /// Game files in memory, by their path
@@ -338,9 +352,9 @@ TEST_F(MeshPrepare, AMeshFinishedFromAPreparationHasTheBitsOfALoadedMesh)
 		EXPECT_EQ(fromFinish[i].bytes, fromLoad[i].bytes);
 	}
 	EXPECT_EQ(fromLoad[0].kind, FakeDevice::Made::Kind::Texture);
-	// The vertices and the triangles go in the shared buffers, thus a new mesh gets no new memory from the driver
-	EXPECT_EQ(fromLoad[1].kind, FakeDevice::Made::Kind::DynamicVertexBuffer);
-	EXPECT_EQ(fromLoad[2].kind, FakeDevice::Made::Kind::SharedIndexBuffer);
+	// The vertices and the triangles are runs of the buffer pages, thus a new mesh takes none of the device's buffers
+	EXPECT_EQ(fromLoad[1].kind, FakeDevice::Made::Kind::VertexPageUpdate);
+	EXPECT_EQ(fromLoad[2].kind, FakeDevice::Made::Kind::IndexPageUpdate);
 	const std::vector<uint16_t> indices {0, 1, 2, 5, 4, 3};
 	ASSERT_EQ(fromLoad[2].bytes.size(), indices.size() * sizeof(uint16_t));
 	EXPECT_EQ(std::memcmp(fromLoad[2].bytes.data(), indices.data(), fromLoad[2].bytes.size()), 0);
@@ -585,12 +599,18 @@ TEST_F(MeshPrepare, AMeshTellsTheDeviceWhichBuffersItGivesAgain)
 	ASSERT_TRUE(dynamic.Load(Model()));
 	std::ignore = Device().TakeMarked();
 
-	// The vertices of a dynamic mesh change, thus only its triangles are given again
-	using Kind = FakeDevice::Made::Kind;
+	// The buffer pages keep a copy of each run until its owner gives it again. The vertices of a dynamic mesh change,
+	// thus only its triangles are given again.
+	constexpr size_t k_Vertices = 6U * 40U;
+	constexpr size_t k_Indices = 6U * sizeof(uint16_t);
+	const auto& pages = Locator::graphicsDevice::value().GetBufferPages();
+	EXPECT_EQ(pages.KeptBytes(), 2U * (k_Vertices + k_Indices));
 	still.SetFileSource([](resources::Rereads& rereads) { return rereads.File("mesh.l3d"); });
-	EXPECT_EQ(Device().TakeMarked(), (std::vector<Kind> {Kind::GivenSharedVertices, Kind::GivenSharedIndices}));
+	EXPECT_EQ(pages.KeptBytes(), k_Vertices + k_Indices);
 	dynamic.SetFileSource([](resources::Rereads& rereads) { return rereads.File("mesh.l3d"); });
-	EXPECT_EQ(Device().TakeMarked(), (std::vector<Kind> {Kind::GivenSharedIndices}));
+	EXPECT_EQ(pages.KeptBytes(), k_Vertices);
+	// The pages themselves tell the device that the game gives them again
+	EXPECT_TRUE(Device().TakeMarked().empty());
 }
 
 TEST_F(MeshPrepare, AMeshGivesTheBitsOfItsLoadAgainFromItsFile)
@@ -606,8 +626,8 @@ TEST_F(MeshPrepare, AMeshGivesTheBitsOfItsLoadAgainFromItsFile)
 	const auto given = Device().TakeMade();
 	ASSERT_EQ(given.size(), 3U);
 	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::TextureUpdate);
-	EXPECT_EQ(given[1].kind, FakeDevice::Made::Kind::GivenSharedVertices);
-	EXPECT_EQ(given[2].kind, FakeDevice::Made::Kind::GivenSharedIndices);
+	EXPECT_EQ(given[1].kind, FakeDevice::Made::Kind::VertexPageUpdate);
+	EXPECT_EQ(given[2].kind, FakeDevice::Made::Kind::IndexPageUpdate);
 	for (size_t i = 0; i < given.size(); ++i)
 	{
 		EXPECT_EQ(given[i].bytes, fromLoad[i].bytes);
@@ -647,7 +667,7 @@ TEST_F(MeshPrepare, ADynamicMeshGivesOnlyItsTrianglesAgain)
 	mesh.GiveDeviceDataAgain(model);
 	const auto given = Device().TakeMade();
 	ASSERT_EQ(given.size(), 1U);
-	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::GivenSharedIndices);
+	EXPECT_EQ(given[0].kind, FakeDevice::Made::Kind::IndexPageUpdate);
 	EXPECT_EQ(given[0].bytes, fromLoad.back().bytes);
 }
 
@@ -657,7 +677,8 @@ TEST_F(MeshPrepare, ADynamicMeshWithAModelSourceGivesItsShapeAndSkinsAgain)
 	L3DMesh mesh("dynamic", true, UploadMode::Device);
 	ASSERT_TRUE(mesh.Load(model));
 	const auto fromLoad = Device().TakeMade();
-	std::ignore = Device().TakeMarked();
+	const auto& pages = Locator::graphicsDevice::value().GetBufferPages();
+	EXPECT_NE(pages.KeptBytes(), 0U);
 	EXPECT_FALSE(mesh.GivesVerticesAgain());
 
 	// With a source, the device keeps no copy of the vertices and the triangles of the dynamic mesh
@@ -669,7 +690,7 @@ TEST_F(MeshPrepare, ADynamicMeshWithAModelSourceGivesItsShapeAndSkinsAgain)
 	});
 	EXPECT_TRUE(mesh.GivesVerticesAgain());
 	using Kind = FakeDevice::Made::Kind;
-	EXPECT_EQ(Device().TakeMarked(), (std::vector<Kind> {Kind::GivenSharedVertices, Kind::GivenSharedIndices}));
+	EXPECT_EQ(pages.KeptBytes(), 0U);
 	auto& givers = Locator::graphicsDevice::value().GetDataGivers();
 	ASSERT_EQ(givers.Count(), 1U);
 
@@ -678,7 +699,7 @@ TEST_F(MeshPrepare, ADynamicMeshWithAModelSourceGivesItsShapeAndSkinsAgain)
 		++secondCalls;
 		given.GiveDeviceDataAgain(model);
 	});
-	EXPECT_TRUE(Device().TakeMarked().empty());
+	EXPECT_EQ(pages.KeptBytes(), 0U);
 	ASSERT_EQ(givers.Count(), 1U);
 
 	resources::Rereads rereads([](const std::filesystem::path&) { return std::vector<uint8_t> {}; });
@@ -692,10 +713,10 @@ TEST_F(MeshPrepare, ADynamicMeshWithAModelSourceGivesItsShapeAndSkinsAgain)
 	const auto given = Device().TakeMade();
 	ASSERT_EQ(given.size(), 3U);
 	EXPECT_EQ(given[0].kind, Kind::TextureUpdate);
-	EXPECT_EQ(given[1].kind, Kind::GivenSharedVertices);
-	EXPECT_EQ(given[2].kind, Kind::GivenSharedIndices);
+	EXPECT_EQ(given[1].kind, Kind::VertexPageUpdate);
+	EXPECT_EQ(given[2].kind, Kind::IndexPageUpdate);
 	EXPECT_EQ(given[0].bytes, bytesOf(fromLoad, Kind::TextureUpdate));
-	EXPECT_EQ(given[1].bytes, bytesOf(fromLoad, Kind::DynamicVertexBuffer));
+	EXPECT_EQ(given[1].bytes, bytesOf(fromLoad, Kind::VertexPageUpdate));
 	EXPECT_EQ(given[2].bytes, fromLoad.back().bytes);
 }
 
@@ -708,21 +729,21 @@ TEST_F(MeshPrepare, TheFacesForTheSnowOfAMeshThatGivesItsDataAgainAreGivenAgain)
 	std::ignore = Device().TakeMarked();
 	std::ignore = Device().TakeMade();
 
-	// The new faces go in new buffers, which the device also does not keep
+	// The new faces go in new runs, of which the buffer pages also keep no copy
 	mesh.SplitFacesForSnow();
 	const auto split = Device().TakeMade();
 	using Kind = FakeDevice::Made::Kind;
 	ASSERT_EQ(split.size(), 2U);
-	EXPECT_EQ(Device().TakeMarked(), (std::vector<Kind> {Kind::GivenSharedVertices, Kind::GivenSharedIndices}));
+	EXPECT_EQ(Locator::graphicsDevice::value().GetBufferPages().KeptBytes(), 0U);
 
 	// The faces come again from the surface of the submesh, with the bytes of the split
 	mesh.GiveDeviceDataAgain(model);
 	const auto given = Device().TakeMade();
 	ASSERT_EQ(given.size(), 3U);
 	EXPECT_EQ(given[0].kind, Kind::TextureUpdate);
-	EXPECT_EQ(given[1].kind, Kind::GivenSharedVertices);
+	EXPECT_EQ(given[1].kind, Kind::VertexPageUpdate);
 	EXPECT_EQ(given[1].bytes, split[0].bytes);
-	EXPECT_EQ(given[2].kind, Kind::GivenSharedIndices);
+	EXPECT_EQ(given[2].kind, Kind::IndexPageUpdate);
 	EXPECT_EQ(given[2].bytes, split[1].bytes);
 }
 
@@ -826,4 +847,149 @@ TEST_F(MeshPrepare, ARawTextureOfAnotherSizeLoadsAtItsFullSize)
 	ASSERT_EQ(made.size(), 1U);
 	EXPECT_EQ(made[0].bytes, picture);
 	EXPECT_EQ(texture->GetResolution().x, 64U);
+}
+
+TEST_F(MeshPrepare, RunsOfOneDeclarationShareOnePageAndFollowEachOther)
+{
+	BufferPages pages(Device());
+	const VertexDecl decl {VertexAttrib(VertexAttrib::Attribute::Position, 3, VertexAttrib::Type::Float)};
+	const VertexDecl other {VertexAttrib(VertexAttrib::Attribute::Position, 3, VertexAttrib::Type::Float),
+	                        VertexAttrib(VertexAttrib::Attribute::TexCoord0, 2, VertexAttrib::Type::Float)};
+	const std::vector<uint8_t> three(3U * 12U, 0x5AU);
+	const std::vector<uint8_t> four(4U * 20U, 0xA5U);
+	const auto memory = [](const std::vector<uint8_t>& bytes) {
+		return Device().Copy(bytes.data(), static_cast<uint32_t>(bytes.size()));
+	};
+
+	const auto first = pages.TakeVertices(decl, 12, memory(three));
+	const auto second = pages.TakeVertices(decl, 12, memory(three));
+	const auto third = pages.TakeVertices(other, 20, memory(four));
+	ASSERT_TRUE(first.has_value() && second.has_value() && third.has_value());
+	EXPECT_EQ(first->page, second->page);
+	EXPECT_EQ(first->first, 0U);
+	EXPECT_EQ(second->first, 3U);
+	EXPECT_EQ(second->count, 3U);
+	// Other attributes take another page
+	EXPECT_NE(third->page, first->page);
+	EXPECT_EQ(third->first, 0U);
+	EXPECT_EQ(pages.PageCount(), 2U);
+
+	// Each run writes its vertices into its page from its first vertex
+	const auto made = Device().TakeMade();
+	ASSERT_EQ(made.size(), 3U);
+	EXPECT_EQ(made[0].kind, FakeDevice::Made::Kind::VertexPageUpdate);
+	EXPECT_EQ(made[0].bytes, three);
+	EXPECT_EQ(made[2].bytes, four);
+
+	// A page with no runs goes from the device
+	pages.Give(*third);
+	EXPECT_EQ(pages.PageCount(), 1U);
+	pages.Give(*first);
+	pages.Give(*second);
+	EXPECT_EQ(pages.PageCount(), 0U);
+}
+
+TEST_F(MeshPrepare, EachRunOfIndicesStartsAtAMultipleOfFourBytes)
+{
+	BufferPages pages(Device());
+	const std::vector<uint16_t> triangle {0, 1, 2};
+	const auto memory = [&triangle] {
+		return Device().Copy(triangle.data(), static_cast<uint32_t>(triangle.size() * sizeof(uint16_t)));
+	};
+	const auto first = pages.TakeIndices(memory());
+	const auto second = pages.TakeIndices(memory());
+	ASSERT_TRUE(first.has_value() && second.has_value());
+	EXPECT_EQ(first->first, 0U);
+	EXPECT_EQ(second->first, 4U);
+	EXPECT_EQ(second->count, 3U);
+	pages.Give(*first);
+	pages.Give(*second);
+}
+
+TEST_F(MeshPrepare, APartLargerThanAPageGetsAPageOfItsOwn)
+{
+	BufferPages pages(Device());
+	const std::vector<uint16_t> large(BufferPages::k_IndexPageCount + 1U, 0);
+	const std::vector<uint16_t> small {0, 1, 2};
+	const auto memory = [](const std::vector<uint16_t>& indices) {
+		return Device().Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(uint16_t)));
+	};
+	const auto big = pages.TakeIndices(memory(large));
+	ASSERT_TRUE(big.has_value());
+	EXPECT_EQ(big->count, large.size());
+	// The page of the large part is full, thus the next part takes a new page
+	const auto next = pages.TakeIndices(memory(small));
+	ASSERT_TRUE(next.has_value());
+	EXPECT_NE(next->page, big->page);
+	EXPECT_EQ(pages.PageCount(), 2U);
+	pages.Give(*big);
+	pages.Give(*next);
+}
+
+TEST_F(MeshPrepare, ThePagesWriteTheRunsThatNoOwnerGivesAgainAfterARestore)
+{
+	BufferPages pages(Device());
+	const VertexDecl decl {VertexAttrib(VertexAttrib::Attribute::Position, 3, VertexAttrib::Type::Float)};
+	const std::vector<uint8_t> bytes(3U * 12U, 0x5AU);
+	const std::vector<uint8_t> change(12U, 0xA5U);
+	const auto kept = pages.TakeVertices(decl, 12, Device().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+	const auto given = pages.TakeVertices(decl, 12, Device().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+	ASSERT_TRUE(kept.has_value() && given.has_value());
+	pages.SetGivenAgain(*given);
+	EXPECT_EQ(pages.KeptBytes(), bytes.size());
+
+	// A change of the vertices of a run also changes the copy
+	pages.Write(*kept, 1, Device().Copy(change.data(), static_cast<uint32_t>(change.size())));
+	std::ignore = Device().TakeMade();
+
+	// After a restore only the run whose owner does not give it again is written, with its changed vertices
+	pages.WriteKeptAgain();
+	const auto written = Device().TakeMade();
+	ASSERT_EQ(written.size(), 1U);
+	auto expected = bytes;
+	std::ranges::copy(change, expected.begin() + 12);
+	EXPECT_EQ(written[0].kind, FakeDevice::Made::Kind::VertexPageUpdate);
+	EXPECT_EQ(written[0].bytes, expected);
+
+	pages.Give(*kept);
+	EXPECT_EQ(pages.KeptBytes(), 0U);
+	pages.Give(*given);
+}
+
+TEST_F(MeshPrepare, APagedBufferIsARunOfAPage)
+{
+	const std::vector<uint8_t> bytes(3U * 12U, 0x5AU);
+	const VertexDecl decl {VertexAttrib(VertexAttrib::Attribute::Position, 3, VertexAttrib::Type::Float)};
+	const auto memory = [&bytes] { return Device().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())); };
+	const auto& pages = Locator::graphicsDevice::value().GetBufferPages();
+	{
+		const VertexBuffer vertices("paged", memory(), decl, true, VertexBuffer::Storage::Paged);
+		const IndexBuffer indices("paged indices", memory(), IndexBuffer::Type::Uint16, IndexBuffer::Storage::Paged);
+		EXPECT_TRUE(vertices.IsPaged());
+		EXPECT_FALSE(vertices.IsShared());
+		EXPECT_TRUE(vertices.IsValid());
+		EXPECT_TRUE(indices.IsValid());
+		EXPECT_EQ(vertices.GetCount(), 3U);
+		EXPECT_EQ(pages.PageCount(), 2U);
+
+		// An update of a dynamic buffer and a give after a restore write into the run
+		vertices.Update(memory());
+		vertices.SetContentsGivenAgain();
+		indices.SetContentsGivenAgain();
+		vertices.GiveContentsAgain(bytes);
+		indices.GiveContentsAgain(bytes);
+		using Kind = FakeDevice::Made::Kind;
+		const auto made = Device().TakeMade();
+		const std::vector<Kind> kinds {Kind::VertexPageUpdate, Kind::IndexPageUpdate, Kind::VertexPageUpdate,
+		                               Kind::VertexPageUpdate, Kind::IndexPageUpdate};
+		ASSERT_EQ(made.size(), kinds.size());
+		for (size_t i = 0; i < made.size(); ++i)
+		{
+			EXPECT_EQ(made[i].kind, kinds[i]);
+			EXPECT_EQ(made[i].bytes, bytes);
+		}
+		EXPECT_EQ(pages.KeptBytes(), 0U);
+	}
+	// The buffers give their runs back, and the pages go
+	EXPECT_EQ(pages.PageCount(), 0U);
 }

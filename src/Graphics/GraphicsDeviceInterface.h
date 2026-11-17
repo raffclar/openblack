@@ -24,6 +24,8 @@
 namespace openblack::graphics
 {
 
+class BufferPages;
+
 /// Memory that the device gives for the texels, the vertices or the indices of a resource. Only the device knows its
 /// layout: GraphicsDeviceInterface::Bytes gives its bytes. The device owns the memory and frees it after it uses it.
 struct DeviceMemory;
@@ -102,6 +104,9 @@ public:
 	/// Makes a vertex buffer whose vertices can change later
 	[[nodiscard]] virtual DynamicVertexBufferHandle CreateDynamicVertexBuffer(const DeviceMemory* vertices,
 	                                                                          const VertexDecl& decl) const = 0;
+	/// Makes an empty vertex buffer for this count of vertices with the attributes of the declaration, in which the game
+	/// writes runs of vertices later
+	[[nodiscard]] virtual DynamicVertexBufferHandle CreateVertexPage(uint32_t count, const VertexDecl& decl) const = 0;
 	/// Makes a vertex layout from the declaration. A draw reads a buffer with the layout.
 	[[nodiscard]] virtual VertexLayoutHandle CreateVertexLayout(const VertexDecl& decl) const = 0;
 	/// Replaces the vertices of a vertex buffer, from the first vertex on
@@ -145,6 +150,8 @@ public:
 
 	/// The owners that give their data to the device again after a restore of the device
 	[[nodiscard]] virtual DeviceDataGivers& GetDataGivers() const = 0;
+	/// The pages that hold the vertices and the indices of the parts of the models
+	[[nodiscard]] virtual BufferPages& GetBufferPages() const = 0;
 };
 
 } // namespace openblack::graphics

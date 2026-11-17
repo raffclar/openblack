@@ -158,6 +158,11 @@ DynamicVertexBufferHandle BgfxGraphicsDevice::CreateDynamicVertexBuffer(const De
 	return fromBgfx(bgfx::createDynamicVertexBuffer(ToBgfx(vertices), LayoutOf(decl)));
 }
 
+DynamicVertexBufferHandle BgfxGraphicsDevice::CreateVertexPage(uint32_t count, const VertexDecl& decl) const
+{
+	return fromBgfx(bgfx::createDynamicVertexBuffer(count, LayoutOf(decl)));
+}
+
 VertexLayoutHandle BgfxGraphicsDevice::CreateVertexLayout(const VertexDecl& decl) const
 {
 	return fromBgfx(bgfx::createVertexLayout(LayoutOf(decl)));

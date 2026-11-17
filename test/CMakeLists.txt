@@ -2675,3 +2675,4 @@ openblack_setup_and_add_test(
   test_landgen_settlement landgen/test_landgen_settlement.cpp
 )
 target_link_libraries(test_landgen_settlement PRIVATE landgen)
+openblack_setup_and_add_test(test_page_runs test_page_runs.cpp)

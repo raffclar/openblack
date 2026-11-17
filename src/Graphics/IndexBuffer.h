@@ -12,10 +12,12 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
 
+#include "BufferRun.h"
 #include "GraphicsHandle.h"
 
 namespace bgfx
@@ -43,6 +45,9 @@ public:
 		/// A part of a large buffer that bgfx shares between many small lists. A new list then does not make a new
 		/// buffer on the GPU, which can take a quarter of a millisecond.
 		Shared,
+		/// A run of a page of the device's buffer pages, which many small lists of 16 bits share. Then a new list does not
+		/// take one of the device's buffers, of which the device has a limit.
+		Paged,
 	};
 
 	IndexBuffer() = delete;
@@ -83,6 +88,8 @@ private:
 	IndexBufferHandle _handle;
 	DynamicIndexBufferHandle _sharedHandle;
 	Storage _storage {Storage::Own};
+	/// The run of the indices in a buffer page, after the device made it
+	std::optional<BufferRun> _run;
 };
 
 } // namespace openblack::graphics
