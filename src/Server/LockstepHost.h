@@ -258,8 +258,6 @@ public:
 		bool debugger {false};
 		/// The lobby changed the debugger right after the join. The observer gets the right again when it comes back.
 		bool debuggerChanged {false};
-		/// The account of the ticket. Empty for an observer that joined by name, or that a restore gave.
-		std::string account;
 	};
 
 	/// A change of the whole world of the room that a player with the editor claim asked for
