@@ -209,7 +209,7 @@ void Renderer::DrawTempleMapPass() const
 		{
 			for (const auto& block : Locator::terrainSystem::value().GetBlocks())
 			{
-				[[maybe_unused]] const auto* triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+				[[maybe_unused]] const auto triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
 			}
 		}
 		return;
@@ -273,8 +273,8 @@ void Renderer::DrawTempleMapPass() const
 	{
 		const auto index = i++;
 		// The map shows every block in full. A block of open sea only has no triangles and the map does not draw it.
-		const auto* triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
-		if (triangles == nullptr)
+		const auto triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+		if (triangles.page == nullptr)
 		{
 			continue;
 		}
@@ -283,7 +283,7 @@ void Renderer::DrawTempleMapPass() const
 		const glm::vec4 u_block {static_cast<float>(index), 0.0f, 0.0f, 0.0f};
 		terrainShader->SetUniformValue("u_block", &u_block);
 		block.BindVertices();
-		triangles->Bind(triangles->GetCount());
+		triangles.page->Bind(triangles.count, triangles.first);
 		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
 		// The textures stay bound from one block to the next
 		terrainShader->Submit(viewId, 0,

@@ -51,6 +51,8 @@ public:
 
 	[[nodiscard]] IndexBufferHandle CreateIndexBuffer(const DeviceMemory* indices, bool wide) const override;
 	[[nodiscard]] DynamicIndexBufferHandle CreateSharedIndexBuffer(const DeviceMemory* indices, bool wide) const override;
+	[[nodiscard]] DynamicIndexBufferHandle CreateIndexPage(uint32_t count, bool wide) const override;
+	void Update(DynamicIndexBufferHandle buffer, uint32_t firstIndex, const DeviceMemory* indices) const override;
 	void SetName(IndexBufferHandle buffer, std::string_view name) const override;
 	void SetContentsGivenAgain(IndexBufferHandle buffer) const override;
 	void GiveContentsAgain(IndexBufferHandle buffer, const DeviceMemory* indices) const override;

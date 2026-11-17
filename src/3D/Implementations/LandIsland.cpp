@@ -244,7 +244,9 @@ void LandIsland::Build(const LandData& data)
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "[LandIsland] loading {} blocks", lndBlocks.size());
 	_landBlocks.resize(lndBlocks.size());
-	_blockTriangles = std::make_unique<SharedIndexLists<graphics::IndexBuffer>>();
+	// A page of a quarter of a million indices holds about two hundred triangle sets
+	constexpr uint32_t k_TrianglePageIndices = 1u << 18;
+	_blockTriangles = std::make_unique<SharedIndexLists<graphics::IndexBuffer>>(k_TrianglePageIndices);
 	for (size_t i = 0; i < _landBlocks.size(); i++)
 	{
 		_landBlocks[i].SetLndBlock(lndBlocks[i]);
@@ -1004,11 +1006,8 @@ void LandIsland::GiveDeviceDataAgain()
 	}
 	if (_blockTriangles != nullptr)
 	{
-		_blockTriangles->ForEach([](std::span<const uint16_t> indices, const IndexBuffer& buffer) {
-			const auto bytes = std::as_bytes(indices);
-			const auto* first = reinterpret_cast<const uint8_t*>(bytes.data());
-			buffer.GiveContentsAgain(std::vector<uint8_t>(first, first + bytes.size()));
-		});
+		_blockTriangles->ForEach(
+		    [](std::span<const uint16_t> indices, const LandBlock::TriangleRun& run) { run.page->Write(run.first, indices); });
 	}
 }
 

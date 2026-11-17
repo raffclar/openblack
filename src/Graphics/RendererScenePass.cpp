@@ -594,8 +594,8 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			// The game leaves out open sea only from blocks wholly before the first line
 			const bool dropOpenSea = detail.mesh == land_detail::Mesh::Full && detail.morph == land_detail::Morph::None;
 			// A block of open sea only then has no triangles, and nothing to draw
-			const auto* triangles = block.GetTriangles(detail.mesh, coarserSides, dropOpenSea);
-			if (triangles == nullptr)
+			const auto triangles = block.GetTriangles(detail.mesh, coarserSides, dropOpenSea);
+			if (triangles.page == nullptr)
 			{
 				return;
 			}
@@ -641,7 +641,7 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			const glm::vec4 u_groundShadowBlock {shadows, 0.0f, 0.0f};
 			groundShadowBlockUniform.Set(&u_groundShadowBlock);
 			block.BindVertices();
-			triangles->Bind(triangles->GetCount());
+			triangles.page->Bind(triangles.count, triangles.first);
 			bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
 			terrainShader->Submit(static_cast<bgfx::ViewId>(landViewId), blockDepth(block), discard);
 		};
