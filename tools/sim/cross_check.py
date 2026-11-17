@@ -200,6 +200,18 @@ def play_desktop(options, out, commands):
     return checksums
 
 
+def require_commands_played(page_log, folder):
+    """Stops the check when the web game did not read the commands: a game that ignores --sim-play-commands plays its own
+    commands, and a check of such a run compares the wrong thing"""
+    try:
+        with open(page_log, encoding="utf-8", errors="replace") as file:
+            played = any("Commands of " in line and " turns to play from " in line for line in file)
+    except OSError:
+        return
+    if not played:
+        raise RuntimeError(f"the web game did not read the commands of the record; see {folder}")
+
+
 def play_web(options, out, commands):
     """The web build plays the commands of the record in headless Chrome and gives back the checksum of each turn"""
     folder = os.path.join(out, "web")
@@ -232,6 +244,7 @@ def play_web(options, out, commands):
         code = run(command, folder, limit=options.web_seconds + 600, log=os.path.join(folder, "cdp-run.log"))
         if code != 0:
             raise RuntimeError(f"the web run ended with exit code {code}; see {folder}")
+        require_commands_played(os.path.join(folder, "page-log.txt"), folder)
     finally:
         server.kill()
         server.wait()

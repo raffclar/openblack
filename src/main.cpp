@@ -805,6 +805,22 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 			args.newGameStart->directCreature = species;
 		}
+		// These tool switches work also in a run that has no fixed frame time, and in a build with no inspector, such as the
+		// web build: its run of the commands of a file does the commands of the file, not those of its own player
+		const bool simNoHandReports = result.count("sim-no-hand-reports") != 0;
+		const bool simPlayCommands = result.count("sim-play-commands") != 0;
+		if (simNoHandReports || simPlayCommands)
+		{
+			if (!args.simulation.has_value())
+			{
+				args.simulation = openblack::sim_run::Request {};
+			}
+			args.simulation->settings.noHandReports = simNoHandReports;
+			if (simPlayCommands)
+			{
+				args.simulation->playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());
+			}
+		}
 #if defined(OPENBLACK_INSPECTOR)
 		if (result.count("inspect-port") != 0)
 		{
@@ -824,24 +840,14 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			        result.count("fight-autopilot-sequence") != 0 ? result["fight-autopilot-sequence"].as<std::string>() : "",
 			};
 		}
-		// These tool switches work also in a run that has no fixed frame time, such as a run that an agent steps through the
-		// inspector
-		const bool simNoHandReports = result.count("sim-no-hand-reports") != 0;
-		const bool simPlayCommands = result.count("sim-play-commands") != 0;
-		const bool simStartPaused = result["sim-start-paused"].as<bool>();
-		if (simNoHandReports || simPlayCommands || simStartPaused)
+		// A tool that steps the run holds each land before its first frame, also when the run keeps no record
+		if (result["sim-start-paused"].as<bool>())
 		{
 			if (!args.simulation.has_value())
 			{
 				args.simulation = openblack::sim_run::Request {};
 			}
-			args.simulation->settings.noHandReports = simNoHandReports;
-			// A tool that steps the run holds each land before its first frame, also when the run keeps no record
-			args.simulation->startPaused = simStartPaused;
-			if (simPlayCommands)
-			{
-				args.simulation->playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());
-			}
+			args.simulation->startPaused = true;
 		}
 		const bool simRecord = result.count("sim-record") != 0;
 		const bool simInput = result.count("sim-input") != 0;
