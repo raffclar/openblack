@@ -184,9 +184,14 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 
 /// Whether a turn-limited run ends because the temple holds the world. In a game alone, the world's turns stop while
 /// the player is in the temple, so the last turn does not come. The run ends when the temple holds the clock and the
-/// scenario of the run gave all its commands, because then nothing takes the player out of the temple. A network game
-/// does not stop its turns, and in a run with no scenario, the player can still go out.
-[[nodiscard]] bool EndsHeldInTemple(const Settings& settings, bool clockHeld, bool networkGame, bool scenarioGaveAll);
+/// input of the tool is complete, because then nothing takes the player out of the temple. A network game does not stop
+/// its turns, and in a run with no input from a tool, the player can still go out.
+[[nodiscard]] bool EndsHeldInTemple(const Settings& settings, bool clockHeld, bool networkGame, bool toolInputDone);
+
+/// Whether the input of the tool that runs the game is complete: the scenario of the run gave all its commands, or the
+/// run plays from files and no event of a file of recorded input waits. A file of recorded input gives events by the
+/// frames. A file of commands gives commands only by the turns, which do not come while the temple holds the world.
+[[nodiscard]] bool ToolInputDone(bool scenarioGaveAll, bool playsFiles, bool recordedInputWaits);
 
 /// Whether a turn-limited run ends because the game is over. When the player loses the temple, the script of the game's
 /// end plays and then keeps the player in the save game room of the temple. The temple holds the world, and the only

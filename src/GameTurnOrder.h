@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <utility>
 
 /// The order of the steps of one game turn. The game does its turn in a fixed order of stages, and many systems depend
 /// on that order: what one stage changes, the next stages see in the same turn. Each step of openblack's turn has the
@@ -486,18 +487,52 @@ inline constexpr std::array k_CreaturesTurn = std::to_array<Step>({
 	return !stage.has_value() || *stage == Stage::Input || *stage == Stage::AfterTurn;
 }
 
-/// Does each step of the turn, in the order of the turn. After the game is decided, the turn does only the steps that
-/// PlaysOnceDecided gives.
-template <typename Do>
-void PlayTurn(Do&& step, bool decided = false)
+/// True when the step of the turn at the index plays after the input of the turn stopped the clock. The player can pause
+/// the game or go into the temple with the input. Then the turn count does not move on, and the world does not do its
+/// turn. The input of the players and the end of the turn still play. A step with no stage follows the stage of the last
+/// step before it that has a stage.
+[[nodiscard]] constexpr bool PlaysWhileStopped(std::span<const Place> turn, size_t index) noexcept
 {
+	if (turn[index].step == Step::Clock)
+	{
+		return true;
+	}
+	std::optional<Stage> stage;
+	for (size_t i = 0; i <= index; ++i)
+	{
+		if (turn[i].stage.has_value())
+		{
+			stage = turn[i].stage;
+		}
+	}
+	return !stage.has_value() || *stage == Stage::Input || *stage == Stage::EndTurn || *stage == Stage::AfterTurn;
+}
+
+/// Does each step of the turn, in the order of the turn. After the game is decided, the turn does only the steps that
+/// PlaysOnceDecided gives. The turn reads stopped just before the clock step. When it is true, the rest of the turn does
+/// only the steps that PlaysWhileStopped gives.
+template <typename Do, typename Stopped>
+void PlayTurn(Do&& step, bool decided, Stopped&& stopped)
+{
+	bool clockStopped = false;
 	for (size_t index = 0; index < k_Turn.size(); ++index)
 	{
-		if (!decided || PlaysOnceDecided(k_Turn, index))
+		if (k_Turn[index].step == Step::Clock)
+		{
+			clockStopped = stopped();
+		}
+		if ((!decided || PlaysOnceDecided(k_Turn, index)) && (!clockStopped || PlaysWhileStopped(k_Turn, index)))
 		{
 			step(k_Turn[index].step);
 		}
 	}
+}
+
+/// Does each step of the turn, in the order of the turn, with a clock that does not stop
+template <typename Do>
+void PlayTurn(Do&& step, bool decided = false)
+{
+	PlayTurn(std::forward<Do>(step), decided, [] { return false; });
 }
 
 /// Does each step of the creatures' turns, in their order

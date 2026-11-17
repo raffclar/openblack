@@ -509,16 +509,19 @@ bool Game::Update() noexcept
 		LeaveAsObserverAtTheEndOfTheRun();
 		return false;
 	}
-	// In a game alone, the temple holds the world. A run that stays there after its scenario does not come to its
-	// last turn
-	if (const auto& time = Locator::time::value();
-	    sim_run::EndsHeldInTemple(Locator::simulation::value().GetSettings(), time.IsHeld(), time.IsNetworkGame(),
-	                              _scenarioGaveAll && !_scenarioRequest.has_value() && _scenarioGaveAll()))
+	// In a game alone, the temple holds the world. A run that stays there after the last input of its tool does not
+	// come to its last turn. The tool gives a scenario, a file of recorded input or a file of commands.
+	if (const auto& time = Locator::time::value(); sim_run::EndsHeldInTemple(
+	        Locator::simulation::value().GetSettings(), time.IsHeld(), time.IsNetworkGame(),
+	        !_scenarioRequest.has_value() &&
+	            sim_run::ToolInputDone(_scenarioGaveAll && _scenarioGaveAll(),
+	                                   _simulation.has_value() &&
+	                                       (_simulation->inputPath.has_value() || _simulation->playCommandsPath.has_value()),
+	                                   Locator::inspector::has_value() && Locator::inspector::value().InputWaits())))
 	{
-		SPDLOG_LOGGER_INFO(
-		    spdlog::get("game"),
-		    "The temple holds the world after the last command of the scenario: the simulation run ends at turn {}",
-		    time.GetTurn());
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The temple holds the world after the last input of the tool: the simulation run ends at turn {}",
+		                   time.GetTurn());
 		return false;
 	}
 	// After the script of the game's end, the temple keeps the player in the save game room and holds the world. A run

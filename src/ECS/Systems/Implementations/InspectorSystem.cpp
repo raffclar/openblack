@@ -685,6 +685,11 @@ std::optional<std::string> InspectorSystem::ReplayOnLoad(const std::filesystem::
 	return std::nullopt;
 }
 
+bool InspectorSystem::InputWaits() const
+{
+	return _replayOnLoad.has_value() || (_input != nullptr && _input->Timeline().Pending() != 0);
+}
+
 void InspectorSystem::PauseOnLoad(bool pause)
 {
 	_game->SetPauseOnLoad(pause);
