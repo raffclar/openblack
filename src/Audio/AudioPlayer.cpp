@@ -20,6 +20,9 @@
 #include <spdlog/spdlog.h>
 
 #include "AlCheck.h"
+#ifdef __EMSCRIPTEN__
+#include "WebAudioOutput.h"
+#endif
 
 using namespace openblack::audio;
 
@@ -251,6 +254,12 @@ AudioPlayer::AudioPlayer()
 	// Register audio logging before doing any other calls to openal
 	SetupLogging();
 
+#ifdef __EMSCRIPTEN__
+	if (OpenWebOutput())
+	{
+		return;
+	}
+#endif
 	_device = decltype(_device)(alcOpenDevice(nullptr), DeleteDevice);
 	_context = decltype(_context)(alcCreateContext(_device.get(), nullptr), DeleteContext);
 
@@ -266,6 +275,44 @@ AudioPlayer::AudioPlayer()
 }
 
 AudioPlayer::~AudioPlayer() = default;
+
+#ifdef __EMSCRIPTEN__
+bool AudioPlayer::OpenWebOutput()
+{
+	const auto logger = spdlog::get("audio");
+	const auto sampleRate = WebAudioOutput::OpenPageAudio();
+	auto* openLoopback = reinterpret_cast<LPALCLOOPBACKOPENDEVICESOFT>(alcGetProcAddress(nullptr, "alcLoopbackOpenDeviceSOFT"));
+	auto* renderSamples = reinterpret_cast<LPALCRENDERSAMPLESSOFT>(alcGetProcAddress(nullptr, "alcRenderSamplesSOFT"));
+	if (sampleRate <= 0 || openLoopback == nullptr || renderSamples == nullptr)
+	{
+		SPDLOG_LOGGER_WARN(logger, "The page cannot play sound with an audio worklet");
+		return false;
+	}
+	_device = decltype(_device)(openLoopback(nullptr), DeleteDevice);
+	if (!_device)
+	{
+		SPDLOG_LOGGER_WARN(logger, "Could not open the device for the audio worklet");
+		return false;
+	}
+	const std::array<ALCint, 7> attributes {
+	    ALC_FORMAT_CHANNELS_SOFT, ALC_STEREO_SOFT, ALC_FORMAT_TYPE_SOFT, ALC_FLOAT_SOFT, ALC_FREQUENCY, sampleRate, 0,
+	};
+	_context = decltype(_context)(alcCreateContext(_device.get(), attributes.data()), DeleteContext);
+	if (!_context)
+	{
+		SPDLOG_LOGGER_WARN(logger, "Could not create the context for the audio worklet");
+		_device.reset();
+		return false;
+	}
+	auto* device = _device.get();
+	_webOutput =
+	    std::make_unique<WebAudioOutput>(sampleRate, [renderSamples, device](std::span<float> samples, uint32_t frames) {
+		    renderSamples(device, samples.data(), static_cast<ALCsizei>(frames));
+	    });
+	SPDLOG_LOGGER_INFO(logger, "The sound goes to the audio worklet of the page at {} Hz", sampleRate);
+	return true;
+}
+#endif
 
 void AudioPlayer::SetVolume(SourceId id, float volume)
 {
