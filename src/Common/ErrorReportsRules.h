@@ -45,6 +45,9 @@ constexpr std::string_view k_DatabaseFolderName = ".sentry-native";
 [[nodiscard]] std::string_view RoleTag(Role role) noexcept;
 /// The log file to attach to each report. None when the log goes to the terminal ("stdout" or "logcat") or nowhere.
 [[nodiscard]] std::optional<std::filesystem::path> LogAttachment(std::string_view logFile);
+/// The log file that the reports of the role attach. The game server attaches none: its log has the names of the
+/// players, and each player gives a separate choice for the error reports. The staff find the log of a game on the host.
+[[nodiscard]] std::optional<std::filesystem::path> LogAttachmentOf(Role role, std::string_view logFile);
 /// The folder of the reports that wait: next to the log file, or in the working folder when the log goes to the
 /// terminal
 [[nodiscard]] std::filesystem::path DatabaseFolder(std::string_view logFile);
@@ -58,6 +61,35 @@ constexpr std::string_view k_DatabaseFolderName = ".sentry-native";
 [[nodiscard]] std::string HideHomeFolderInText(std::string_view text, std::string_view homeFolder, bool windows);
 /// The message of the test error: the start text and the time in seconds since 1970
 [[nodiscard]] std::string TestErrorMessage(int64_t unixSeconds);
+
+/// The choice of the text that the lobby gives ("full", "anonymous" or "off"). None for another text.
+[[nodiscard]] std::optional<ReportsConsent> ParseReportsConsent(std::string_view text) noexcept;
+/// The text of the choice that the lobby reads
+[[nodiscard]] std::string_view ReportsConsentText(ReportsConsent consent) noexcept;
+
+/// What the service does with the option of the player and the choice of the account
+struct ReportsPlan
+{
+	/// The service sends reports
+	bool running {false};
+	/// The reports have the name of the account and the IP address
+	bool personalData {false};
+
+	bool operator==(const ReportsPlan&) const = default;
+};
+
+/// The plan of the reports. With a choice of the account, the choice wins: Off stops the reports, and only Full gives
+/// personal data. With no choice, the option of the player decides, and the reports never have personal data.
+[[nodiscard]] ReportsPlan ReportsPlanOf(bool option, const std::optional<AccountConsent>& account) noexcept;
+/// The value of the box "Send Crash Reports" that follows the choice of the account: set for Full and Anonymous, clear
+/// for Off
+[[nodiscard]] bool OptionOfConsent(ReportsConsent consent) noexcept;
+/// The choice that the game sends to the lobby when the player changes the box while an account is logged in. A set
+/// box gives Anonymous, because the player gives Full only on the site, where the privacy notice is.
+[[nodiscard]] ReportsConsent ConsentOfOption(bool option) noexcept;
+/// Whether the game server can put the name or the address of a player into a report: only for the choice Full in the
+/// join ticket of the player
+[[nodiscard]] bool MayNamePlayer(std::optional<ReportsConsent> ticketChoice) noexcept;
 
 /// The type and the message of the exception of a crash event
 struct CrashEventTexts

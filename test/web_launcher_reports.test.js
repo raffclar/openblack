@@ -165,6 +165,34 @@ check('the event has no user, no page parameters, no referrer and no secrets', (
   assert.equal(event.exception.values[0].stacktrace.frames[0].filename, 'https://bw.example.org/play/openblack.js');
   assert.equal(event.exception.values[0].stacktrace.frames[0].abs_path, 'https://bw.example.org/play/a.js');
 });
+check('without consent the event asks Sentry to keep no IP address', () => {
+  const event = scrubEvent({ user: { id: '7', username: 'matt', ip_address: '{{auto}}' },
+    sdk: { name: 'sentry.javascript.browser', settings: { infer_ip: 'auto' } } });
+  assert.equal(event.user, undefined);
+  assert.equal(event.sdk.settings.infer_ip, 'never');
+  assert.equal(event.sdk.name, 'sentry.javascript.browser');
+  assert.doesNotMatch(JSON.stringify(event), /matt/);
+});
+check('with the choice full the event names only the id and the name of the account', () => {
+  const event = scrubEvent({ user: { email: 'a@b.c', segment: 'x' } }, { id: 7, username: 'matt' });
+  assert.deepEqual(event.user, { id: '7', username: 'matt', ip_address: '{{auto}}' });
+  assert.equal(event.sdk.settings.infer_ip, 'auto');
+});
+check('the reports name the user that the game gives, and a stop forgets it', async () => {
+  const { reports, sentry } = makeReports();
+  reports.start(settings);
+  await settle();
+  const options = sentry.calls.find((call) => call[0] === 'init')[1];
+  assert.equal(options.sendDefaultPii, false);
+  assert.equal(options.beforeSend({ user: { ip_address: '1.2.3.4' } }, {}).user, undefined);
+  reports.setUser({ id: 7, username: 'matt' });
+  assert.equal(options.beforeSend({}, {}).user.username, 'matt');
+  reports.setUser(undefined);
+  assert.equal(options.beforeSend({}, {}).user, undefined);
+  reports.setUser({ id: 7, username: 'matt' });
+  reports.stop();
+  assert.equal(reports.user, undefined);
+});
 check('the crash error has the type, the message and only the frames of the stack', () => {
   const stack = 'Error\n    at openblack_reports_stack (https://h/openblack.js:1:2)\n' +
     '    at openblack.wasm.main (https://h/openblack.wasm:wasm-function[12]:0x34)';

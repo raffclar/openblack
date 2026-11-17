@@ -328,8 +328,22 @@ std::optional<Session> ParseSession(std::string_view text)
 		       ReadTime(object, "access_token_expires", out.accessTokenExpires) &&
 		       ReadTime(object, "refresh_token_expires", out.refreshTokenExpires, false) &&
 		       ReadBool(object, "email_required", out.emailRequired, false) && ReadBool(object, "editor", out.editor, false) &&
-		       ReadBool(object, "debugger", out.debugger, false);
+		       ReadBool(object, "debugger", out.debugger, false) &&
+		       ReadString(object, "error_reports", out.errorReports, false);
 	});
+}
+
+std::optional<Consent> ParseConsent(std::string_view text)
+{
+	return ParseWith<Consent>(text, [](const Json& object, Consent& out) {
+		return ReadString(object, "error_reports", out.errorReports, false) &&
+		       ReadInteger(object, "notice_version", out.noticeVersion, false);
+	});
+}
+
+std::string ConsentBody(std::string_view errorReports)
+{
+	return Dump(Json {{"error_reports", std::string(errorReports)}});
 }
 
 std::optional<Me> ParseMe(std::string_view text)

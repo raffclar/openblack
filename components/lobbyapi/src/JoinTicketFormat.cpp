@@ -309,7 +309,7 @@ std::optional<Claims> ParseClaims(std::string_view message)
 	if (!ReadString(value, "iss", claims.issuer) || !ReadString(value, "sub", claims.subject) ||
 	    !ReadString(value, "aud", claims.audience) || !ReadString(value, "jti", claims.id) ||
 	    !ReadString(value, "name", claims.name, false) || !ReadString(value, "role", role, false) ||
-	    !ReadString(value, "lobby", claims.lobby, false))
+	    !ReadString(value, "lobby", claims.lobby, false) || !ReadString(value, "error_reports", claims.errorReports, false))
 	{
 		return std::nullopt;
 	}

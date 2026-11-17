@@ -151,7 +151,19 @@ SentryErrorReports::~SentryErrorReports()
 void SentryErrorReports::SetEnabled(bool enabled)
 {
 	_enabled = enabled;
-	if (enabled)
+	Apply();
+}
+
+void SentryErrorReports::SetAccountConsent(std::optional<AccountConsent> consent)
+{
+	_account = std::move(consent);
+	Apply();
+}
+
+void SentryErrorReports::Apply()
+{
+	const auto plan = ReportsPlanOf(_enabled, _account);
+	if (plan.running)
 	{
 		Start();
 	}
@@ -159,6 +171,14 @@ void SentryErrorReports::SetEnabled(bool enabled)
 	{
 		Stop();
 	}
+	const bool personalData = _running && plan.personalData;
+	if (personalData == _personalData && (!personalData || _namedAccount == _account->accountId))
+	{
+		return;
+	}
+	SetUser(personalData ? _account : std::nullopt);
+	_personalData = personalData;
+	_namedAccount = personalData ? _account->accountId : std::string();
 }
 
 void SentryErrorReports::SendDesync(const DesyncReport& report)
@@ -243,8 +263,8 @@ void SentryErrorReports::Start()
 	sentry_options_set_dsn(options, _settings.dsn.c_str());
 	sentry_options_set_release(options, _settings.release.c_str());
 	sentry_options_set_environment(options, _settings.environment.c_str());
-	// The reports have no user and no IP address: the service never sets a user, and sentry-native sends no personal
-	// data when there is no user
+	// The reports have no user and no IP address until the account gives the choice Full (SetUser). Sentry-native sends
+	// no personal data when there is no user.
 	// The reports have no traces of the performance
 	sentry_options_set_traces_sample_rate(options, 0.0);
 	sentry_options_set_shutdown_timeout(options, k_CloseMilliseconds);
@@ -293,6 +313,27 @@ void SentryErrorReports::Stop()
 	sentry_close();
 	_running = false;
 	LogInfo("The error reports to Sentry stopped");
+}
+
+void SentryErrorReports::SetUser(const std::optional<AccountConsent>& account)
+{
+	if (!_running)
+	{
+		return;
+	}
+	if (!account.has_value())
+	{
+		sentry_remove_user();
+		LogInfo("The error reports have no personal data");
+		return;
+	}
+	auto user = sentry_value_new_object();
+	sentry_value_set_by_key(user, "id", sentry_value_new_string(account->accountId.c_str()));
+	sentry_value_set_by_key(user, "username", sentry_value_new_string(account->name.c_str()));
+	// Sentry takes the IP address from the connection of the report
+	sentry_value_set_by_key(user, "ip_address", sentry_value_new_string("{{auto}}"));
+	sentry_set_user(user);
+	LogInfo("The error reports name the account, as its choice tells");
 }
 
 } // namespace openblack::error_reports

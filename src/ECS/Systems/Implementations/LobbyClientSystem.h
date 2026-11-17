@@ -78,6 +78,8 @@ public:
 	[[nodiscard]] bool IsEmailRequired() const override { return _emailRequired; }
 	[[nodiscard]] std::optional<bool> GetAccountEditor() const override;
 	[[nodiscard]] std::optional<bool> GetAccountDebugger() const override;
+	[[nodiscard]] std::optional<error_reports::AccountConsent> GetAccountErrorReports() const override;
+	void SendErrorReportsChoice(bool option) override;
 
 	void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) override;
 	void ResumeSession(LobbyCallback<lobby_api::AccountRef> callback) override;
@@ -194,6 +196,8 @@ private:
 	bool _accountEditor {false};
 	/// The debugger mark of the account, from the last answer of the lobby with a session
 	bool _accountDebugger {false};
+	/// The choice of the account for the error reports, as the lobby gave it ("full", "anonymous", "off"), or empty
+	std::string _accountErrorReports;
 	std::string _accessToken;
 	std::chrono::system_clock::time_point _accessExpiry {};
 	/// The refresh token of this run, also when the store cannot keep it

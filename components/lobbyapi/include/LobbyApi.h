@@ -102,6 +102,18 @@ struct Session
 	/// "debugger": the account has the debugger mark (optional). Outside a network game, only this mark shows the debug
 	/// menu bar. In a network game, only the debugger claim of the join ticket counts.
 	bool debugger {false};
+	/// "error_reports": the choice of the account for the error reports (optional): "full", "anonymous" or "off". Empty
+	/// when the account made no choice for the privacy notice of now, or the lobby is older.
+	std::string errorReports;
+};
+
+/// The answer of GET and PUT /api/v1/me/consent
+struct Consent
+{
+	/// "error_reports": as in Session
+	std::string errorReports;
+	/// "notice_version": the version of the privacy notice that the site shows now
+	int64_t noticeVersion {0};
 };
 
 /// A clan of the account in GET /api/v1/me

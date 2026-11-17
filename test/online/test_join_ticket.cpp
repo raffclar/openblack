@@ -270,6 +270,22 @@ TEST(JoinTicket, TheDebuggerClaimIsApartFromTheEditorClaim)
 	EXPECT_FALSE(unknown->debugger);
 }
 
+TEST(JoinTicket, TheErrorReportsClaimGivesTheChoiceOfTheAccount)
+{
+	const auto text = ClaimsText();
+	const auto with = [&](std::string_view field) {
+		auto changed = text;
+		changed.insert(changed.size() - 1, std::string(",") + std::string(field));
+		return changed;
+	};
+	// A ticket of an older lobby, or of an account with no choice, has no choice
+	EXPECT_TRUE(ParseClaims(text)->errorReports.empty());
+	EXPECT_TRUE(ParseClaims(with(R"("error_reports":null)"))->errorReports.empty());
+	EXPECT_EQ(ParseClaims(with(R"("error_reports":"full")"))->errorReports, "full");
+	// A claim that is not a text makes the ticket bad
+	EXPECT_FALSE(ParseClaims(with(R"("error_reports":true)")).has_value());
+}
+
 TEST(JoinTicket, TheGodsClaimGivesTheGodsOfTheLobbyGame)
 {
 	const auto text = ClaimsText();

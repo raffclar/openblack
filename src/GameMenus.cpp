@@ -80,6 +80,7 @@
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/LoadingScreenSystemInterface.h"
+#include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -352,7 +353,14 @@ void Game::HandleInterfaceAction()
 			});
 		}
 		const auto kept = gui::ToProfileSettings(settings);
+		// A change of the box "Send Crash Reports" goes to the lobby account too, when one is logged in (deviation 261)
+		const bool reportsBoxChanged =
+		    Locator::errorReports::has_value() && Locator::errorReports::value().GetState().enabled != kept.crashReports;
 		ApplyPlayerSettings(kept);
+		if (reportsBoxChanged && Locator::lobbyClient::has_value())
+		{
+			Locator::lobbyClient::value().SendErrorReportsChoice(kept.crashReports);
+		}
 		// The player's options are kept with their profile
 		Locator::playerProfileSystem::value().SetCurrentSettings(kept);
 		SaveHelpRecord();

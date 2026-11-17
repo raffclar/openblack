@@ -110,7 +110,19 @@ BrowserErrorReports::~BrowserErrorReports()
 void BrowserErrorReports::SetEnabled(bool enabled)
 {
 	_enabled = enabled;
-	if (enabled)
+	Apply();
+}
+
+void BrowserErrorReports::SetAccountConsent(std::optional<AccountConsent> consent)
+{
+	_account = std::move(consent);
+	Apply();
+}
+
+void BrowserErrorReports::Apply()
+{
+	const auto plan = ReportsPlanOf(_enabled, _account);
+	if (plan.running)
 	{
 		Start();
 	}
@@ -118,6 +130,14 @@ void BrowserErrorReports::SetEnabled(bool enabled)
 	{
 		Stop();
 	}
+	const bool personalData = _running && plan.personalData;
+	if (personalData == _personalData && (!personalData || _namedAccount == _account->accountId))
+	{
+		return;
+	}
+	SetUser(personalData ? _account : std::nullopt);
+	_personalData = personalData;
+	_namedAccount = personalData ? _account->accountId : std::string();
 }
 
 void BrowserErrorReports::SendDesync(const DesyncReport& report)
@@ -245,6 +265,27 @@ void BrowserErrorReports::Stop()
 	// clang-format on
 	_running = false;
 	LogInfo("The game stopped the error reports of the page");
+}
+
+void BrowserErrorReports::SetUser(const std::optional<AccountConsent>& account)
+{
+	if (!_running)
+	{
+		return;
+	}
+	const std::string id = account.has_value() ? account->accountId : std::string();
+	const std::string name = account.has_value() ? account->name : std::string();
+	// An empty id removes the user. The page reads the strings before the call returns.
+	// clang-format off
+	MAIN_THREAD_EM_ASM({
+		if (globalThis.openblackErrorReports) {
+			const id = UTF8ToString($0);
+			globalThis.openblackErrorReports.setUser(id ? { id, username: UTF8ToString($1) } : undefined);
+		}
+	}, id.c_str(), name.c_str());
+	// clang-format on
+	LogInfo(account.has_value() ? "The error reports name the account, as its choice tells"
+	                            : "The error reports have no personal data");
 }
 
 } // namespace openblack::error_reports

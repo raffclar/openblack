@@ -107,6 +107,10 @@ struct Claims
 	/// The account has the debugger mark of the lobby ("debugger", optional). Only such an account sees the debug menu
 	/// bar in a network game. The server only sends it back to the player in the join answer.
 	bool debugger {false};
+	/// The choice of the account for the error reports ("error_reports", optional): "full", "anonymous" or "off". Empty
+	/// when the account made no choice or the lobby is older. The game server can put the name or the address of the
+	/// player into a report only for "full".
+	std::string errorReports;
 	game_socket::Role role {game_socket::Role::God};
 	/// The id of the lobby whose game the ticket is for ("lobby", optional). Empty for a ticket of a server with no lobby.
 	std::string lobby;
