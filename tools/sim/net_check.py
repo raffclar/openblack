@@ -1665,6 +1665,10 @@ def mind_load_lines(server_log, client_logs, restarted_log=None):
             "same": both_same and all(client == server for client in clients) and bool(server)}
 
 
+# The time that the server waits for a player who lost the connection, in the cases of --editor-desync in which the second
+# client is away on purpose: longer than the time away (15 s, 30 s and 75 s) and the start of the new world
+AWAY_CASE_COME_BACK_SECONDS = {"scenario-away": 120, "body-away": 120, "scenario-away-fast": 180}
+
 # The testbed scenario that the case scenario of --editor-desync runs for the whole room: a network game plays it with two
 # clients and an observer in step (merge train, car 979)
 EDITOR_SCENARIO = "mind.computer_player_start"
@@ -3559,7 +3563,10 @@ def main():
                         help="CLIENT:ARGUMENT: one more argument for the client (from 1), such as 2:--frame-stats=600; "
                              "give the option more times for more arguments")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
-    parser.add_argument("--come-back-seconds", type=int, default=10)
+    parser.add_argument("--come-back-seconds", type=int,
+                        help="the time that the server waits for a player who lost the connection (default 10 s; "
+                             "with --editor-desync scenario-away, scenario-away-fast or body-away the default is "
+                             "longer than the time that the client is away)")
     parser.add_argument("--lobby-game", action="store_true",
                         help="the server plays the game of one lobby, as a server of the pool: it takes only the members "
                              "of the lobby (each client in its slot), and each ticket names the lobby")
@@ -3672,6 +3679,9 @@ def main():
     parser.add_argument("--leave-room-wait", type=float, default=5.0,
                         help="the seconds that the server waits in its room after the leave of --leave-room-first")
     options = parser.parse_args()
+    if options.come_back_seconds is None:
+        # A client of these cases is away for 15, 30 or 75 seconds. The server must not defeat its god before it comes back.
+        options.come_back_seconds = AWAY_CASE_COME_BACK_SECONDS.get(options.editor_desync, 10)
     if options.frame_ms != 0 and not 1.0 <= options.frame_ms <= 1000.0:
         # The game does not start with another frame time, and the run would only say that the first client did not join
         parser.error("--frame-ms takes 0 (the real frame time of the clients) or 1 to 1000 milliseconds, as the game's --sim-frame-ms")
