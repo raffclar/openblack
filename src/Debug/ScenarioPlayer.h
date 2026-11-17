@@ -12,12 +12,13 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "Simulation/CommandLog.h"
 
 namespace openblack::testbed_scenarios
 {
@@ -31,7 +32,7 @@ public:
 	virtual ~ScenarioPlayer() = default;
 
 	/// The commands of the scenario go out before the turns in which the game that wrote them gave them
-	virtual void FollowGives(std::map<uint32_t, std::vector<size_t>> gives) = 0;
+	virtual void FollowGives(std::vector<command_log::Give> gives) = 0;
 	/// Gives the commands of the scenario that are due before the next turn
 	virtual void BeforeTurn() = 0;
 	/// Lays the scenario out, then gives the commands, throws and rewards that are due at its start

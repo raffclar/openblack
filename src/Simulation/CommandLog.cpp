@@ -25,6 +25,14 @@ constexpr std::string_view k_Digits = "0123456789abcdef";
 constexpr std::string_view k_TurnKey = "\"turn\":";
 constexpr std::string_view k_FrameKey = "\"frame\":\"";
 constexpr std::string_view k_GiveKey = "\"give\":";
+constexpr std::string_view k_LandKey = "\"land\":";
+
+/// The key and the value of the land of a line, with a comma after them. The first land has no key, as in the files
+/// that a game wrote before it counted the lands.
+std::string LandPartOf(uint32_t land)
+{
+	return land == 0 ? std::string() : std::string(k_LandKey) + std::to_string(land) + ",";
+}
 
 std::optional<uint8_t> DigitOf(char c)
 {
@@ -56,7 +64,7 @@ std::optional<Number> NumberAfter(std::string_view line, std::string_view key)
 }
 } // namespace
 
-std::string LineOf(uint32_t turn, std::span<const player_commands::Command> commands)
+std::string LineOf(uint32_t turn, std::span<const player_commands::Command> commands, uint32_t land)
 {
 	turn_codec::TurnBundle bundle {.turn = turn, .blocks = {}};
 	for (const auto& command : commands)
@@ -73,7 +81,7 @@ std::string LineOf(uint32_t turn, std::span<const player_commands::Command> comm
 		bundle.blocks.back().actions.push_back(command.action);
 	}
 	const auto bytes = turn_codec::Encode(bundle);
-	std::string line = "{" + std::string(k_TurnKey) + std::to_string(turn) + "," + std::string(k_FrameKey);
+	std::string line = "{" + std::string(k_TurnKey) + std::to_string(turn) + "," + LandPartOf(land) + std::string(k_FrameKey);
 	line.reserve(line.size() + bytes.size() * 2 + 2);
 	for (const auto byte : bytes)
 	{
@@ -119,7 +127,7 @@ std::optional<Turn> ReadLine(std::string_view line)
 	{
 		return std::nullopt;
 	}
-	Turn turn {.turn = bundle->turn, .commands = {}};
+	Turn turn {.turn = bundle->turn, .commands = {}, .land = NumberAfter<uint32_t>(line, k_LandKey).value_or(0)};
 	for (const auto& block : bundle->blocks)
 	{
 		for (const auto& action : block.actions)
@@ -135,13 +143,13 @@ Writer::Writer(const std::filesystem::path& path)
 {
 }
 
-void Writer::Write(uint32_t turn, std::span<const player_commands::Command> commands)
+void Writer::Write(uint32_t turn, std::span<const player_commands::Command> commands, uint32_t land)
 {
 	if (commands.empty() || !_file.is_open())
 	{
 		return;
 	}
-	_file << LineOf(turn, commands) << '\n';
+	_file << LineOf(turn, commands, land) << '\n';
 	_file.flush();
 }
 
@@ -171,14 +179,46 @@ std::optional<std::map<uint32_t, std::vector<player_commands::Command>>> ReadFil
 	return turns;
 }
 
+std::optional<std::vector<std::map<uint32_t, std::vector<player_commands::Command>>>>
+ReadLandsFile(const std::filesystem::path& path)
+{
+	std::ifstream file(path);
+	if (!file.is_open())
+	{
+		return std::nullopt;
+	}
+	std::vector<std::map<uint32_t, std::vector<player_commands::Command>>> lands(1);
+	std::string line;
+	while (std::getline(file, line))
+	{
+		if (line.find_first_not_of(" \t\r") == std::string::npos)
+		{
+			continue;
+		}
+		auto turn = ReadLine(line);
+		if (!turn.has_value())
+		{
+			return std::nullopt;
+		}
+		if (turn->land >= lands.size())
+		{
+			lands.resize(static_cast<size_t>(turn->land) + 1);
+		}
+		auto& commands = lands[turn->land][turn->turn];
+		commands.insert(commands.end(), turn->commands.begin(), turn->commands.end());
+	}
+	return lands;
+}
+
 std::filesystem::path GivesPathOf(const std::filesystem::path& commands)
 {
 	return commands.parent_path() / (commands.stem().string() + ".gives" + commands.extension().string());
 }
 
-std::string GiveLineOf(uint32_t turn, size_t command)
+std::string GiveLineOf(uint32_t turn, size_t command, uint32_t land)
 {
-	return "{" + std::string(k_TurnKey) + std::to_string(turn) + "," + std::string(k_GiveKey) + std::to_string(command) + "}";
+	return "{" + std::string(k_TurnKey) + std::to_string(turn) + "," + LandPartOf(land) + std::string(k_GiveKey) +
+	       std::to_string(command) + "}";
 }
 
 std::optional<Give> ReadGiveLine(std::string_view line)
@@ -189,7 +229,7 @@ std::optional<Give> ReadGiveLine(std::string_view line)
 	{
 		return std::nullopt;
 	}
-	return Give {.turn = *turn, .command = *command};
+	return Give {.turn = *turn, .command = *command, .land = NumberAfter<uint32_t>(line, k_LandKey).value_or(0)};
 }
 
 GivesWriter::GivesWriter(const std::filesystem::path& path)
@@ -197,26 +237,26 @@ GivesWriter::GivesWriter(const std::filesystem::path& path)
 {
 }
 
-void GivesWriter::Write(uint32_t turn, size_t command)
+void GivesWriter::Write(uint32_t turn, size_t command, uint32_t land)
 {
 	if (!_file.is_open())
 	{
 		return;
 	}
-	_file << GiveLineOf(turn, command) << '\n';
+	_file << GiveLineOf(turn, command, land) << '\n';
 	_file.flush();
 }
 
-std::map<uint32_t, std::vector<size_t>> ReadGivesFile(const std::filesystem::path& path)
+std::vector<Give> ReadGivesFile(const std::filesystem::path& path)
 {
-	std::map<uint32_t, std::vector<size_t>> gives;
+	std::vector<Give> gives;
 	std::ifstream file(path);
 	std::string line;
 	while (file.is_open() && std::getline(file, line))
 	{
 		if (const auto give = ReadGiveLine(line); give.has_value())
 		{
-			gives[give->turn].push_back(give->command);
+			gives.push_back(*give);
 		}
 	}
 	return gives;

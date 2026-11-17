@@ -1209,7 +1209,7 @@ void Runner::Update(float seconds)
 	const auto turn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 	if (_followedGives.has_value() && turn.has_value())
 	{
-		due = GivesAt(*_followedGives, *turn, _scenario->commands.size());
+		due = _followedGives->DueAt(*turn, _scenario->commands.size());
 	}
 	for (const auto index : due)
 	{
