@@ -689,6 +689,13 @@ if (Python3_Interpreter_FOUND)
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_SOURCE_DIR}/tools/inspector/check_registered_components.py
   )
+  # The measures of the land generator tool, on small made-up lands
+  add_test(
+    NAME test_landgen_measure
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tools/landgen/test_measure.py
+  )
+  set_tests_properties(test_landgen_measure PROPERTIES SKIP_RETURN_CODE 77)
   add_test(
     NAME test_registered_components_script
     COMMAND
@@ -2651,6 +2658,8 @@ openblack_setup_and_add_test(
 target_link_libraries(test_landgen_generator PRIVATE landgen)
 openblack_setup_and_add_test(test_generated_land test_generated_land.cpp)
 target_link_libraries(test_generated_land PRIVATE landgen lnd)
+openblack_setup_and_add_test(test_landgen_dump landgen/test_landgen_dump.cpp)
+target_link_libraries(test_landgen_dump PRIVATE landgen lnd)
 openblack_setup_and_add_test(test_particle_sound_resume test_particle_sound_resume.cpp)
 openblack_setup_and_add_test(test_lobby_room online/test_lobby_room.cpp)
 openblack_setup_and_add_test(test_lobby_screen_rules gui/test_lobby_screen_rules.cpp)
