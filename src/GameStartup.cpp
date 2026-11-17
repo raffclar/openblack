@@ -36,6 +36,7 @@
 #include "Gui/TextDatabase.h"
 #include "Input/WindowPointer.h"
 #include "Locator.h"
+#include "StartupBoxFrames.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -129,8 +130,18 @@ bool Game::AskForNewPlayer()
 	    false, [&profiles](std::u16string_view name) { return profiles.CheckNewName(name); });
 	gui::menu_backdrop::Fade fade;
 	auto last = Milliseconds();
+	// A run with a number of frames (-n) stops after that number of frames, also in the box. A tool run with an empty
+	// profile folder thus ends also when nobody answers the box.
+	StartupBoxFrames boxFrames(Locator::config::value().numFramesToSimulate);
 	while (!gui::menu_backdrop::FadeOver(fade) && !_quitRequested)
 	{
+		if (boxFrames.Step())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The run stops in the new player's name box after {} frames",
+			                   boxFrames.FrameLimit());
+			RequestQuit();
+			break;
+		}
 		const auto now = Milliseconds();
 		const auto frame = static_cast<int>(now - last);
 		last = now;
@@ -197,14 +208,13 @@ std::optional<std::filesystem::path> Game::AskForSkirmishLand()
 	auto last = Milliseconds();
 	std::optional<std::filesystem::path> picked;
 	// A run with a number of frames (-n) stops after that number of frames, also in the box
-	const auto frameLimit = Locator::config::value().numFramesToSimulate;
-	uint32_t boxFrames = 0;
+	StartupBoxFrames boxFrames(Locator::config::value().numFramesToSimulate);
 	while (!gui::menu_backdrop::FadeOver(fade) && !_quitRequested)
 	{
-		if (frameLimit > 0 && ++boxFrames > frameLimit)
+		if (boxFrames.Step())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -SKIRMISH switch: the run stops in the skirmish box after {} frames",
-			                   frameLimit);
+			                   boxFrames.FrameLimit());
 			RequestQuit();
 			break;
 		}

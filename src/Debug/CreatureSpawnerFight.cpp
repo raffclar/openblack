@@ -18,6 +18,7 @@
 #include <imgui.h>
 
 #include "Creature/CreatureFight.h"
+#include "CreatureFightNames.h"
 #include "CreatureSpawner.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
@@ -35,27 +36,12 @@ using openblack::ecs::components::CreatureFightRecord;
 using openblack::ecs::components::CreatureKnockedOut;
 using openblack::ecs::components::Transform;
 namespace fight = openblack::creature_fight;
+using openblack::debug::creature_fight_names::KnockedOutName;
+using openblack::debug::creature_fight_names::StageName;
 
 namespace
 {
 constexpr float k_BarWidth = 160.0f;
-
-std::string_view StageName(CreatureFighting::Stage stage)
-{
-	constexpr std::array<std::string_view, 10> k_Names {
-	    "turning to face", "taunting", "pointing at the arena", "walking to its place", "waiting",
-	    "squaring up",     "duelling", "celebrating",           "responding",           "stopping",
-	};
-	return k_Names.at(static_cast<size_t>(stage));
-}
-
-std::string_view KnockedOutName(CreatureKnockedOut::Stage stage)
-{
-	constexpr std::array<std::string_view, 6> k_Names {
-	    "lying out cold", "fading out", "fading in at home", "lying at home", "resting", "getting up",
-	};
-	return k_Names.at(static_cast<size_t>(stage));
-}
 
 std::string MoveName(const fight::QueuedMove& queued)
 {

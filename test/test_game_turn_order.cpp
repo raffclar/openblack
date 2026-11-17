@@ -453,25 +453,26 @@ TEST(GameTurnOrder, TheThingsThatTheTurnMadeGoIntoTheMapAtItsEnd)
 	EXPECT_TRUE(recorder.Before(Step::MapCellsAtTurnEnd, Step::SyncChecksum));
 }
 
+// A frame changes no synced thing: the light of a street lantern that the turn removed goes in the turn, after the steps
+// that can remove the lantern and before the checksum reads the world
+TEST(GameTurnOrder, TheLightOfARemovedLanternGoesInTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::LanternLights));
+	EXPECT_TRUE(recorder.Before(Step::GameOver, Step::LanternLights));
+	EXPECT_TRUE(recorder.Before(Step::LanternLights, Step::SyncChecksum));
+}
+
 // After the game is decided, the turn does only the input of the players, the turn count and the steps after the turn
 TEST(GameTurnOrder, ADecidedGameDoesOnlyTheInputTheCountAndTheStepsAfterTheTurn)
 {
 	TurnRecorder recorder;
 	PlayTurn([&recorder](Step step) { recorder(step); }, true);
-	const std::vector<Step> expected {Step::DrawnPlaces,
-	                                  Step::PlayerCommands,
-	                                  Step::HandStillness,
-	                                  Step::VirtualInfluence,
-	                                  Step::HandInterface,
-	                                  Step::ChimneySmoke,
-	                                  Step::Clock,
-	                                  Step::RealWeather,
-	                                  Step::WalkerLookahead,
-	                                  Step::CreatureShapes,
-	                                  Step::MapCellsAtTurnEnd,
-	                                  Step::InfluenceTurnEnd,
-	                                  Step::SyncChecksum,
-	                                  Step::RunRecord};
+	const std::vector<Step> expected {
+	    Step::DrawnPlaces,      Step::PlayerCommands, Step::HandStillness, Step::VirtualInfluence,
+	    Step::HandInterface,    Step::ChimneySmoke,   Step::Clock,         Step::RealWeather,
+	    Step::WalkerLookahead,  Step::CreatureShapes, Step::LanternLights, Step::MapCellsAtTurnEnd,
+	    Step::InfluenceTurnEnd, Step::SyncChecksum,   Step::RunRecord};
 	EXPECT_EQ(recorder.Steps(), expected);
 }
 

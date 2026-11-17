@@ -250,9 +250,9 @@ std::u16string VersionText(uint32_t version, uint32_t developerPatch)
 	return {text.begin(), text.end()};
 }
 
-std::u16string InstallVersionText(std::optional<uint32_t> version, std::optional<uint32_t> developerPatch)
+std::u16string TipsVersionText()
 {
-	return VersionText(version.value_or(k_DefaultVersion), developerPatch.value_or(0));
+	return VersionText(k_ShownVersion, 0);
 }
 
 bool LoadingClock::Tick(uint32_t now, Mode mode) noexcept

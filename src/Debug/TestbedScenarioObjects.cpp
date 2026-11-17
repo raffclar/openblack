@@ -1729,6 +1729,26 @@ CREATE_STREET_LIGHT("4.0,0.0")
 )",
 	});
 
+	// A script removes a street lantern at night. Its light, flames and glow go in the same turn, on each computer of a
+	// network game.
+	all.push_back({
+	    .id = "objects.lantern_removed_takes_its_light",
+	    .name = "A script removes a street lantern and its light goes",
+	    .facet = Facet::Objects,
+	    .description = "A street lantern stands in the middle. The clock stands still at night. At 3 seconds a script "
+	                   "removes the lantern.",
+	    .expected = "The lantern shows its post, its flames and its glow. At 3 seconds the post, the flames and the glow "
+	                "go together. In a network game, the checksum of each computer stays the same as the server's.",
+	    .environment = {.hour = 21.0f, .clockRuns = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -14.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::StreetLantern, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 3.0f,
+	                  .script = "OBJECT_DELETE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
+	});
+
 	// A creed, a pair of eyes and a crop lie on the land. A script sets the scale of the eyes, and the hand takes the crop.
 	constexpr glm::vec2 k_CreedsAt {0.0f, 40.0f};
 	all.push_back({
