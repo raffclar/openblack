@@ -39,6 +39,7 @@
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -77,11 +78,6 @@ constexpr float k_TurnsPerSecond = 1.0f / k_TurnSeconds;
 /// The spells' sound bank, which a creature spell's own sound is played from
 constexpr std::string_view k_SpellSoundBank = "spells.sad";
 
-/// The hand pours a creature spell onto its creature for this long, rising by this share of the creature's height and
-/// tipping by a radian
-constexpr float k_GrainSeconds = 4.0f;
-constexpr float k_GrainRaiseShare = 0.4f;
-constexpr float k_GrainTilt = 1.0f;
 /// A creature of size 1 is about this tall
 constexpr float k_HeightOfSizeOne = 15.0f;
 
@@ -201,22 +197,39 @@ void MagicSystem::ReceiveCreatureSpell(entt::entity creature, entt::entity mirac
 	{
 		CloseDown(result.replaced);
 	}
-	StartHandGrain(spell, creature);
 }
 
-void MagicSystem::StartHandGrain(const Spell& spell, entt::entity creature)
+void MagicSystem::PourPhialTurn(entt::entity entity, const Spell& spell)
 {
-	// Only the hand of this computer pours
-	if (!magic::spells::IsCastOfThisComputer(spell, OwnPlayer()))
+	// The miracle starts the pour in its turn, one time, while the hand of this computer holds its phial
+	auto& registry = EntityRegistry();
+	const auto held = HeldOf(OwnPlayer());
+	const bool hasCreature = spell.target != entt::null && registry.Valid(spell.target);
+	if (!magic::PoursPhial({.pouredBefore = _pouredSpell == entity,
+	                        .hasCreature = hasCreature,
+	                        .hasSeed = spell.seed != entt::null,
+	                        .castOfThisComputer = magic::spells::IsCastOfThisComputer(spell, OwnPlayer()),
+	                        .handHoldsSeed = held.has_value() && *held == spell.seed}))
 	{
 		return;
 	}
-	const auto* body = EntityRegistry().TryGet<const Creature>(creature);
+	_pouredSpell = entity;
+	const auto* body = registry.TryGet<const Creature>(spell.target);
 	const float height = body != nullptr ? ShownSize(*body) * k_HeightOfSizeOne : k_HeightOfSizeOne;
-	magic::StartPour(_pour, {.totalTime = k_GrainSeconds,
-	                         .heightToRaise = height * k_GrainRaiseShare,
-	                         .angleToRaise = k_GrainTilt,
-	                         .loops = false});
+	magic::StartPour(_pour, magic::PhialPour(height), _hand.handPosition);
+	_pourCreature = spell.target;
+}
+
+magic::PourPose MagicSystem::GetHandPour(float fraction) const
+{
+	// The pour of a phial keeps the hand at the head of its creature, as the frame draws the creature
+	std::optional<glm::vec3> head;
+	if (_pour.active && _pourCreature != entt::null && EntityRegistry().Valid(_pourCreature) &&
+	    Locator::creatureAnimationSystem::has_value())
+	{
+		head = Locator::creatureAnimationSystem::value().DrawnHeadOf(_pourCreature);
+	}
+	return magic::PourPoseAt(_pour, fraction, head);
 }
 
 void MagicSystem::StopHandGrain(const Spell& spell)

@@ -203,6 +203,7 @@ entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedT
 	}
 	// The hand takes hold of it afresh, its pour at rest; a tribe's power behind it rings the hand with its name
 	_pour = {};
+	_pourCreature = entt::null;
 	StartHandEffect(entity);
 	ShowHeldSeed();
 	if (const auto tribe = TribalPowerTribe(player, type); tribe.has_value() && Locator::miracleFxSystem::has_value())
