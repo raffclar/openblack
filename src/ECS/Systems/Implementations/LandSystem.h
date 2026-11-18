@@ -67,6 +67,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ShowLandMessage(const land_message::Message& message) override { View().ShowLandMessage(message); }
 	void ContinueViewAfterLoad() override { View().ContinueAfterLoad(); }
+	void MakeSymbolSheetAgain() override { View().MakeSymbolSheet(); }
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;
 	[[nodiscard]] uint32_t LandLoads() const override { return _landLoads; }

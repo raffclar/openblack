@@ -340,6 +340,34 @@ TEST_F(DynamicsSystemTest, AThrownRockComesToRestGoesBackIntoTheMapAndLeavesTheP
 	EXPECT_EQ(_world->Entities().Get<const Transform>(rock).position, rested);
 }
 
+TEST_F(DynamicsSystemTest, TheDrawnPoseOfAMovingBodyIsBetweenItsLastTwoTurns)
+{
+	const auto rock = Rock({1000.0f, 1000.0f});
+	_world->Entities().Get<Transform>(rock).position.y += 3.0f;
+	// Nothing is drawn of a thing that is not in the physics
+	EXPECT_FALSE(_dynamics->DrawnPoseOf(rock, 0.5f).has_value());
+	ASSERT_TRUE(_dynamics->InitialisePhysics(rock, {.velocity = {4.0f, 2.0f, 0.0f}}).started);
+	_dynamics->ProcessTurn();
+	_dynamics->ProcessTurn();
+
+	const auto start = _dynamics->DrawnPoseOf(rock, 0.0f);
+	const auto half = _dynamics->DrawnPoseOf(rock, 0.5f);
+	const auto end = _dynamics->DrawnPoseOf(rock, 1.0f);
+	ASSERT_TRUE(start.has_value() && half.has_value() && end.has_value());
+	// The pose moves on through the turn, and at half the turn it is half way
+	EXPECT_GT(end->origin.x, start->origin.x);
+	EXPECT_NEAR(half->origin.x, (start->origin.x + end->origin.x) * 0.5f, 0.05f);
+	// It is the same pose as the frame draws the body at
+	_dynamics->UpdateFrame(0.5f);
+	const auto& drawn = _world->Entities().Get<const PhysicsDrawPose>(rock);
+	EXPECT_TRUE(drawn.origin == half->origin);
+	EXPECT_TRUE(drawn.axes == half->axes);
+
+	// At rest it has no drawn pose of its own
+	ASSERT_TRUE(RunUntilEmpty(600).has_value());
+	EXPECT_FALSE(_dynamics->DrawnPoseOf(rock, 0.5f).has_value());
+}
+
 TEST_F(DynamicsSystemTest, AThingThatItsBodyMovesNoLongerKeepsAnExactMapPosition)
 {
 	const auto rock = Rock({1000.0f, 1000.0f});

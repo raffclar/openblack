@@ -457,6 +457,14 @@ void Runner::Start(const Scenario& scenario)
 		std::ranges::sort(filled);
 		_slotCreatures = std::move(filled);
 	}
+	// The land of a network session waits for its humans. Player one joins after the land made its sheet of symbols.
+	if (scenario.humansJoinLater && Locator::computerPlayerSystem::has_value())
+	{
+		constexpr std::array k_Humans {PlayerNames::PLAYER_ONE};
+		auto& minds = Locator::computerPlayerSystem::value();
+		minds.WaitForHumans({});
+		minds.HumansJoined(k_Humans);
+	}
 	if (Locator::playerSystem::has_value())
 	{
 		for (const auto& ally : scenario.allies)

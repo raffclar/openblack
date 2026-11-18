@@ -62,6 +62,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/CreatureFightSystem.h"
+#include "ECS/Systems/Implementations/FightTranscriptSystem.h"
 #include "camera/scenarios/FakeTemple.h"
 #include "camera/scenarios/Mock.h"
 
@@ -1002,6 +1003,23 @@ TEST_F(CreatureFightSystemTest, OnTheWayToAFightACreatureIsSettingItUp)
 	// Called off then, it simply leaves the fight
 	fights.CallOff(first);
 	EXPECT_FALSE(registry.AllOf<CreatureFighting>(first));
+}
+
+TEST_F(CreatureFightSystemTest, AFightThatStopsBeforeItsDuelEndsItsTranscript)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& transcript = Locator::fightTranscript::emplace<ecs::systems::FightTranscriptSystem>();
+	const auto fight = transcript.Begin(first, second, {});
+	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Approach;
+	registry.Get<CreatureFighting>(second).stage = CreatureFighting::Stage::Approach;
+	// The fight stops on the way. The transcript gets its end and the reason.
+	fights.CallOff(first);
+	const auto* found = transcript.GetRecorder().Find(fight);
+	ASSERT_NE(found, nullptr);
+	EXPECT_TRUE(found->ended.has_value());
+	const auto over = transcript.LastOf(first, "fight_over");
+	EXPECT_TRUE(over.has_value());
+	Locator::fightTranscript::reset();
 }
 
 TEST_F(CreatureFightSystemTest, AThingThatTheMindActsOnStartsNoFightInTheTurn)

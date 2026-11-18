@@ -1681,6 +1681,9 @@ struct Scenario
 	/// After the land script, the start of a network game fills each slot with no player, as for a game where player
 	/// one is the only human
 	bool fillEmptySlots {false};
+	/// After the land script, the land waits for the humans of a network session, and then player one joins as the only
+	/// human. The slots with no player fill as they fill in a network game, after the land made its sheet of symbols.
+	bool humansJoinLater {false};
 	/// The first player's statistics as the scenario starts, for the Game Statistics box and the temple's scrolls
 	std::function<void(ecs::components::PlayerStatistics&)> playerStatistics;
 	/// What the first player's creature has counted of its life

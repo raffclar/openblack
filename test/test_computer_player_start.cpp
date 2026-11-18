@@ -345,6 +345,7 @@ public:
 		}
 		return roll;
 	}
+	void MakeSymbolsAgain() override { ++symbolSheets; }
 
 	struct Made
 	{
@@ -360,6 +361,7 @@ public:
 	std::map<PlayerNames, bool> computers;
 	std::vector<uint32_t> rolls;
 	std::vector<uint32_t> rangesAsked;
+	int symbolSheets {0};
 	std::vector<PlayerNames> players;
 	std::vector<PlayerNames> switchedOn;
 	std::vector<Made> made;
@@ -483,6 +485,8 @@ TEST(ComputerPlayerStart, TheHumansWhoJoinGetTheirPlayersAndTheSlotsOfAWaitingLa
 	EXPECT_EQ(world.switchedOn, (std::vector {PlayerNames::PLAYER_TWO}));
 	ASSERT_EQ(world.made.size(), 1);
 	EXPECT_EQ(world.made[0].player, PlayerNames::PLAYER_TWO);
+	// The sheet of the players' symbols comes again after the slots got their gods, one time
+	EXPECT_EQ(world.symbolSheets, 1);
 }
 
 TEST(ComputerPlayerStart, ALandThatDoesNotWaitForItsHumansFillsNoSlotWhenTheyJoin)
@@ -496,6 +500,7 @@ TEST(ComputerPlayerStart, ALandThatDoesNotWaitForItsHumansFillsNoSlotWhenTheyJoi
 	EXPECT_TRUE(world.rangesAsked.empty());
 	EXPECT_TRUE(world.switchedOn.empty());
 	EXPECT_TRUE(world.made.empty());
+	EXPECT_EQ(world.symbolSheets, 0);
 }
 
 TEST(ComputerPlayerStart, AnEmptySlotAfterTheSeventhGetsAComputerGodAsTheSlotsBeforeIt)

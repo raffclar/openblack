@@ -175,6 +175,13 @@ public:
 	/// The moving bodies that the last frame drew, in the order of the list of bodies. A body at rest or sunk out of
 	/// sight is not in it.
 	[[nodiscard]] virtual std::span<const entt::entity> DrawnBodies() const { return {}; }
+	/// Where the moving body of an object is drawn at this fraction of the turn, between its last two turns. None when the
+	/// object has no moving body, or its body is at rest or sunk out of sight.
+	[[nodiscard]] virtual std::optional<physics::Pose> DrawnPoseOf([[maybe_unused]] entt::entity object,
+	                                                               [[maybe_unused]] float turnFraction) const
+	{
+		return std::nullopt;
+	}
 
 	/// An object starts to move, through its kind's own start
 	virtual PhysicsStarted InitialisePhysics([[maybe_unused]] entt::entity object, [[maybe_unused]] const PhysicsStart& start)

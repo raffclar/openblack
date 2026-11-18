@@ -676,6 +676,22 @@ std::optional<size_t> DynamicsSystem::IndexOf(entt::entity object) const
 	return std::nullopt;
 }
 
+std::optional<physics::Pose> DynamicsSystem::DrawnPoseOf(entt::entity object, float turnFraction) const
+{
+	const auto index = IndexOf(object);
+	if (!index.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& entry = *_entries[*index];
+	// Only the bodies that the frame draws between their turns have a drawn pose
+	if (entry.body == nullptr || entry.body->resting || turn::SunkOutOfSight(entry.body->Centre().y, entry.body->Radius()))
+	{
+		return std::nullopt;
+	}
+	return entry.body->DrawPose(turnFraction, entry.animated);
+}
+
 PhysicsEntry* DynamicsSystem::Find(entt::entity object)
 {
 	const auto index = IndexOf(object);

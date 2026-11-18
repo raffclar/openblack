@@ -751,6 +751,7 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 		}
 		else if (IsLeadIn(side->stage))
 		{
+			NoteFightOver(self, "aborted");
 			Leave(self);
 		}
 	}
@@ -826,6 +827,7 @@ void CreatureFightSystem::CallOffWith(entt::entity creature, fight::CallOffStart
 			{
 				PartnerPlanFails(self, creature, true);
 			}
+			NoteFightOver(self, "called_off");
 			Leave(self);
 		}
 		else if (IsAfterDuel(side->stage) && (self == creature || side->opponent == creature))
@@ -2084,6 +2086,11 @@ void CreatureFightSystem::Leave(entt::entity creature)
 	if (fighting == nullptr)
 	{
 		return;
+	}
+	// The transcript of a fight that ends before its duel also has an end. A stop of the fight wrote its reason before.
+	if (IsLeadIn(fighting->stage))
+	{
+		NoteFightOver(creature, "left_before_duel");
 	}
 	auto& record = registry.AllOf<CreatureFightRecord>(creature) ? registry.Get<CreatureFightRecord>(creature)
 	                                                             : registry.Assign<CreatureFightRecord>(creature);
