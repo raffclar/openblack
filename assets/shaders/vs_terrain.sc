@@ -21,8 +21,9 @@ uniform vec4 u_smallBumpLine;
 uniform vec4 u_smallBump;
 // The corners of the blocks that morph or cross-fade, as the game works them out on the CPU this frame (see
 // land_detail::CornerTexel): a square of 17 by 17 texels for each block, 32 squares along each side, 16 bits a value.
-// r: the height in units at which the corner is drawn while its block morphs, g: how opaque the coarse texture is at it
-// while its block cross-fades, 0 to 255.
+// Each value has two 8-bit channels with the low byte first, because all back ends can read this format. The first
+// value (red and green) is the height in units at which the game draws the corner while its block morphs. The second
+// value (blue and alpha) is how opaque the coarse texture is at it while its block cross-fades, 0 to 255.
 SAMPLER2D(s8_landCorners, 8);
 // x: the block's layer of the block textures, y: how its corners morph (0 not, 1 to the half mesh, 2 to the quarter
 // mesh), z: its texture (0 full, 1 cross-faded, 2 coarse)
@@ -39,7 +40,8 @@ void main()
 	// The corner as it is drawn this frame, when its block morphs or cross-fades
 	vec2 corner = floor(a_position.xz / 10.0f + 0.5f);
 	vec2 square = vec2(mod(u_block.x, 32.0f), floor(u_block.x / 32.0f)) * 17.0f;
-	vec2 drawn = floor(texture2DLod(s8_landCorners, (square + corner + 0.5f) / 544.0f, 0.0f).rg * 65535.0f + 0.5f);
+	vec4 drawnBytes = floor(texture2DLod(s8_landCorners, (square + corner + 0.5f) / 544.0f, 0.0f) * 255.0f + 0.5f);
+	vec2 drawn = drawnBytes.xz + drawnBytes.yw * 256.0f;
 	// z: how opaque the block's coarse texture is over its full one at the corner: clear before the texture line's band,
 	// opaque beyond it, in 255ths across it
 	float coarseFade = u_block.z > 0.5f && u_block.z < 1.5f ? drawn.y / 255.0f : 1.0f;
