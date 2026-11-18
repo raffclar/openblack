@@ -82,6 +82,10 @@ struct ImportedCast
 	float magnitude {k_DefaultSpellMagnitude};
 	/// What the spell gives its particles each turn
 	particles::ProcessInfo processInfo;
+	/// The hand of a player cast the spell
+	bool fromHand {false};
+	/// A person casts the spell, as the file says. Without a value, the caster decides.
+	std::optional<bool> humanCasting;
 	/// Food and wood: the first grain landed
 	std::optional<bool> firstDone;
 	/// Water: the age of the spell when its last drop made a ring on the land

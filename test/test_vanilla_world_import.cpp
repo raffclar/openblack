@@ -4926,14 +4926,14 @@ std::vector<uint8_t> SpellRecord(StreamStart start, uint32_t number, uint32_t sa
 	{
 		writer.Put(std::array<uint8_t, 12> {});
 	}
-	// The prayer power, the prayer power when last filled, the flag of a closed spell and three more words
+	// The prayer power, the prayer power when last filled, the flag of a closed spell, two more words and the flag that a
+	// person casts the spell
 	writer.Put(30.0f);
 	writer.Put(50.0f);
 	writer.Put(uint32_t {0});
-	for (int i = 0; i < 3; ++i)
-	{
-		writer.Put(uint32_t {7});
-	}
+	writer.Put(uint32_t {7});
+	writer.Put(uint32_t {7});
+	writer.Put(uint32_t {1});
 	// What the spell gives its particles: two points, the view, the movement of the hand, the power, a word and a flag
 	std::array<float, 15> info {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.0f, 0.0f, 0.75f, 0.0f, 0.0f};
 	std::array<uint8_t, 60> infoBytes {};
@@ -4998,6 +4998,7 @@ TEST(VanillaWorldImport, AHeldSpellReadsItsMagicTypeItsTimeAndItsPrayerPower)
 	EXPECT_EQ(spell->handMovement, (std::array {0.5f, 0.0f, 0.0f}));
 	EXPECT_EQ(spell->power, 0.75f);
 	EXPECT_TRUE(spell->casting);
+	EXPECT_TRUE(spell->humanCasting);
 	EXPECT_FALSE(spell->firstDone.has_value());
 	ASSERT_TRUE(spell->lastRipple.has_value());
 	EXPECT_EQ(*spell->lastRipple, 2.0f);
@@ -5347,22 +5348,58 @@ TEST(VanillaWorldImport, TheObjectThatCastASpellGivesItsCasterAndItsPlayer)
 	EXPECT_EQ(script.creator, 0U);
 }
 
-// The forest, the shield and the teleport are the spells that keep their things on the land
-TEST(VanillaWorldImport, TheForestTheShieldAndTheTeleportKeepThingsOnTheLand)
+// Each record of the spell family is a spell. The save type between food and wood and water is not.
+TEST(VanillaWorldImport, EachRecordOfTheSpellFamilyIsASpell)
 {
 	FakeWorld fake;
-	fake.Record(VanillaType::SpellForest);
-	fake.Record(VanillaType::SpellShield);
-	fake.Record(VanillaType::SpellTeleport);
+	for (uint32_t type = 0x09; type <= 0x15; ++type)
+	{
+		fake.Record(static_cast<VanillaType>(type));
+	}
 	fake.Record(VanillaType::MagicShield);
 	fake.Record(VanillaType::MagicTeleport);
 	const auto world = fake.Make();
-	const auto& records = world.Records();
-	EXPECT_TRUE(world_import::IsSpellWithThingsOnLand(records[0]));
-	EXPECT_TRUE(world_import::IsSpellWithThingsOnLand(records[1]));
-	EXPECT_TRUE(world_import::IsSpellWithThingsOnLand(records[2]));
-	EXPECT_FALSE(world_import::IsSpellWithThingsOnLand(records[3]));
-	EXPECT_FALSE(world_import::IsSpellWithThingsOnLand(records[4]));
+	for (const auto& record : world.Records())
+	{
+		const bool spell = record.type >= 0x09 && record.type <= 0x15 && record.type != 0x0B;
+		EXPECT_EQ(world_import::IsSpellRecord(record), spell) << record.type;
+	}
+}
+
+// The import makes each kind of spell that no creature holds, but a fireball and a spell that keeps only objects
+TEST(VanillaWorldImport, TheImportMakesEachKindOfSpellButTheFireball)
+{
+	const auto spellOf = [](VanillaType type, MagicType magicType) {
+		return world_import::ImportedHeldSpell {.saveType = static_cast<uint32_t>(type), .magicType = magicType};
+	};
+	for (const auto& [type, magicType] : std::array {
+	         std::pair {VanillaType::SpellStormAndTornado, MagicType::StormWindRain},
+	         std::pair {VanillaType::SpellStormAndTornado, MagicType::StormWindRainLightning},
+	         std::pair {VanillaType::SpellStormAndTornado, MagicType::Tornado},
+	         std::pair {VanillaType::SpellHeal, MagicType::Heal},
+	         std::pair {VanillaType::SpellHeal, MagicType::HealPowerUpOne},
+	         std::pair {VanillaType::SpellWater, MagicType::Water},
+	         std::pair {VanillaType::SpellResource, MagicType::Food},
+	         std::pair {VanillaType::SpellResource, MagicType::Wood},
+	         std::pair {VanillaType::Spell, MagicType::LightningBolt},
+	         std::pair {VanillaType::Spell, MagicType::LightningBoltPowerUpTwo},
+	         std::pair {VanillaType::Spell, MagicType::ExplosionOne},
+	         std::pair {VanillaType::SpellFlockFlying, MagicType::FlockFlying},
+	         std::pair {VanillaType::SpellFlockGround, MagicType::FlockGround},
+	         std::pair {VanillaType::SpellCreature, MagicType::CreatureSpellStrong},
+	         std::pair {VanillaType::SpellForest, MagicType::Forest},
+	         std::pair {VanillaType::SpellShield, MagicType::PhysicalShield},
+	         std::pair {VanillaType::SpellTeleport, MagicType::Teleport},
+	     })
+	{
+		EXPECT_TRUE(world_import::CanImportSpell(spellOf(type, magicType))) << static_cast<int>(magicType);
+	}
+	for (const auto magicType : {MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo})
+	{
+		EXPECT_FALSE(world_import::CanImportSpell(spellOf(VanillaType::Spell, magicType))) << static_cast<int>(magicType);
+	}
+	EXPECT_FALSE(world_import::CanImportSpell(spellOf(VanillaType::SpellWithObjects, MagicType::Food)));
+	EXPECT_FALSE(world_import::CanImportSpell(spellOf(VanillaType::SpellHeal, MagicType::None)));
 }
 
 // Each player record gives its list of teleport stones in the order of the file, the head first
@@ -5414,14 +5451,14 @@ TEST(VanillaWorldImport, AVillagerUnderAShieldGivesThePointThatItLooksAt)
 	EXPECT_FALSE(world_import::ShieldLookPointOf(world, world.Records()[1]).has_value());
 }
 
-// Each forest, shield and teleport of a saved game that no creature holds reads with its caster
-TEST(VanillaWorldImport, SavedGamesGiveEachSpellOnTheLandItsCaster)
+// Each spell of a saved game reads with its caster
+TEST(VanillaWorldImport, SavedGamesGiveEachSpellItsCaster)
 {
 	size_t spells = 0;
 	const auto files = ForEachSave([&spells](const std::filesystem::path& path, const VanillaWorld& world) {
 		for (const auto& record : world.Records())
 		{
-			if (!world_import::IsSpellWithThingsOnLand(record))
+			if (!world_import::IsSpellRecord(record))
 			{
 				continue;
 			}
@@ -5443,5 +5480,5 @@ TEST(VanillaWorldImport, SavedGamesGiveEachSpellOnTheLandItsCaster)
 	{
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
-	std::cout << spells << " forests, shields and teleports\n";
+	std::cout << spells << " spells\n";
 }

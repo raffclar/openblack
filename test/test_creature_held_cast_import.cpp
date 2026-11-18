@@ -330,6 +330,110 @@ TEST_F(CreatureHeldCastImport, ASpellOfTheHandContinuesWithItsPlayer)
 	EXPECT_TRUE(_magic->ImportCast(hand, cast) == entt::null);
 }
 
+// Each kind of spell of the hand continues with the values of the file: the storm, the heal, water, food, wood and the
+// lightning. The size of the file stays, also outside the limits of a new cast. The storm has no swirl after the load.
+TEST_F(CreatureHeldCastImport, EachSpellOfTheHandContinuesWithTheValuesOfTheFile)
+{
+	const SpellCaster hand {.kind = SpellCaster::Kind::Player, .player = PlayerNames::PLAYER_ONE, .withoutIcon = true};
+	for (const auto type : {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado, MagicType::Heal,
+	                        MagicType::HealPowerUpOne, MagicType::Water, MagicType::Food, MagicType::Wood,
+	                        MagicType::LightningBolt, MagicType::LightningBoltPowerUpTwo})
+	{
+		auto cast = Water();
+		cast.type = type;
+		cast.magnitude = 55.0f;
+		cast.fromHand = true;
+		cast.humanCasting = true;
+		const bool resource = type == MagicType::Food || type == MagicType::Wood;
+		cast.firstDone = resource ? std::optional {true} : std::nullopt;
+		cast.lastRipple = type == MagicType::Water ? std::optional {2.0f} : std::nullopt;
+		const auto spell = _magic->ImportCast(hand, cast);
+		ASSERT_TRUE(spell != entt::null) << static_cast<int>(type);
+		const auto& made = SpellOf(spell);
+		EXPECT_EQ(made.magicType, type);
+		EXPECT_EQ(made.caster.kind, SpellCaster::Kind::Player);
+		EXPECT_EQ(made.age, 3.25f);
+		EXPECT_EQ(made.duration, 12.5f);
+		EXPECT_EQ(made.magnitude, 55.0f) << static_cast<int>(type);
+		EXPECT_EQ(made.chants.chants, 30.0f);
+		EXPECT_EQ(made.processInfo.handPosition, glm::vec3(10.0f, 12.0f, 20.0f));
+		EXPECT_EQ(made.resourceFirstDone, resource);
+		EXPECT_EQ(made.lastRipple, type == MagicType::Water ? 2.0f : 0.0f);
+		EXPECT_EQ(made.castEffect, 0u);
+		EXPECT_TRUE(made.fromLocalHand);
+		EXPECT_TRUE(made.humanCasting);
+		// The hand does not hold the seed of the spell, so the spell does not follow the hand
+		EXPECT_FALSE(made.castFromHand);
+		EXPECT_FALSE(made.closedDown);
+	}
+}
+
+// A flock of the hand of a person continues to make its animals at the hand, with the flock and the sweep of the file
+TEST_F(CreatureHeldCastImport, AFlockOfTheHandContinuesAtTheHand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto flock = registry.Create();
+	const SpellCaster hand {.kind = SpellCaster::Kind::Player, .player = PlayerNames::PLAYER_ONE, .withoutIcon = true};
+	for (const auto type : {MagicType::FlockFlying, MagicType::FlockGround})
+	{
+		auto cast = Water();
+		cast.type = type;
+		cast.lastRipple = std::nullopt;
+		cast.fromHand = true;
+		cast.humanCasting = true;
+		cast.flock = magic::ImportedFlock {
+		    .flock = flock, .created = 2, .emitted = 2.5f, .lastSpawn = {0x30000, 0x40000}, .lastSpawnHeight = 1.0f};
+		const auto spell = _magic->ImportCast(hand, cast);
+		ASSERT_TRUE(spell != entt::null) << static_cast<int>(type);
+		const auto& made = SpellOf(spell);
+		EXPECT_TRUE(made.fromLocalHand);
+		EXPECT_TRUE(made.humanCasting);
+		const auto* data = registry.TryGet<const FlockSpell>(spell);
+		ASSERT_NE(data, nullptr);
+		EXPECT_EQ(data->flock, flock);
+		EXPECT_EQ(data->created, 2);
+		EXPECT_EQ(data->emitted, 2.5f);
+		EXPECT_EQ(data->lastSpawn, glm::ivec2(0x30000, 0x40000));
+		EXPECT_TRUE(data->castEffectStarted);
+	}
+}
+
+// A spell that a script cast is not a spell of the hand. The file decides that no person casts it, also for the player
+// of this computer.
+TEST_F(CreatureHeldCastImport, AScriptSpellIsNotASpellOfTheHand)
+{
+	const SpellCaster script {.kind = SpellCaster::Kind::Player, .player = PlayerNames::PLAYER_ONE};
+	auto cast = Water();
+	cast.type = MagicType::StormWindRain;
+	cast.lastRipple = std::nullopt;
+	cast.humanCasting = false;
+	const auto spell = _magic->ImportCast(script, cast);
+	ASSERT_TRUE(spell != entt::null);
+	EXPECT_FALSE(SpellOf(spell).fromLocalHand);
+	EXPECT_FALSE(SpellOf(spell).humanCasting);
+}
+
+// A creature spell that its creature cast and let go of continues on the creature of the file. The creature that cast
+// it does not hold it.
+TEST_F(CreatureHeldCastImport, ACreatureSpellThatNoCreatureHoldsActsOnItsCreature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto other = registry.Create();
+	registry.Assign<Creature>(other, Creature {.owner = PlayerNames::PLAYER_TWO});
+	auto cast = Water();
+	cast.type = MagicType::CreatureSpellFreeze;
+	cast.duration = -1.0f;
+	cast.lastRipple = std::nullopt;
+	cast.target = other;
+	const SpellCaster creature {.kind = SpellCaster::Kind::Creature, .player = PlayerNames::PLAYER_ONE, .entity = _creature};
+	const auto spell = _magic->ImportCast(creature, cast);
+	ASSERT_TRUE(spell != entt::null);
+	EXPECT_EQ(SpellOf(spell).target, other);
+	EXPECT_EQ(SpellOf(spell).caster.entity, _creature);
+	EXPECT_FALSE(SpellOf(spell).fromLocalHand);
+	EXPECT_TRUE(_magic->CreatureCastOf(_creature) == entt::null);
+}
+
 // The stones of a player take the order of the list of the file, the head first. The stones of another player and the
 // stones that the list does not give stay as they were, after the stones of the list.
 TEST_F(CreatureHeldCastImport, TheStonesOfAPlayerTakeTheOrderOfTheFile)
