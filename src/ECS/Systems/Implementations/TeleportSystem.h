@@ -26,6 +26,7 @@ class TeleportSystem final: public TeleportSystemInterface
 public:
 	entt::entity CreateStone(glm::vec3 point, PlayerNames player, entt::entity spell) override;
 	entt::entity RestoreStone(glm::vec3 point, PlayerNames player, entt::entity spell) override;
+	void OrderStones(PlayerNames player, std::span<const entt::entity> headFirst) override;
 	void RemoveStone(entt::entity stone) override;
 	void RemoveStonesOf(entt::entity spell) override;
 	[[nodiscard]] bool CanPlaceStone(glm::vec3 point) const override;

@@ -1825,7 +1825,7 @@ std::optional<vanilla_reaction_import::Initiator> ShieldInitiatorOf(const ecs::R
 
 /// The thing that the living react to, as the import made it. None when the import did not make it, or when another
 /// system keeps the reaction of the thing: a fire, a shield or the control of a missionary. The import makes none of
-/// these. The only spells that the import makes are the spells that creatures hold.
+/// these. The import makes the spells that creatures hold, and the forests, the shields and the teleports.
 std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registry& registry, entt::entity entity)
 {
 	if (entity == entt::null || !registry.Valid(entity) || registry.AnyOf<Fire, MagicShield, MissionaryControl>(entity))
@@ -1863,10 +1863,10 @@ std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registr
 	    .entity = entity, .position = transform->position, .impressiveValue = impressiveValue};
 }
 
-/// The things that a spell of the file made, which the spell of the creature keeps: the trees of a forest, the object of
-/// a shield, the stones of a teleport
-void ImportHeldSpellThings(const gamesave::VanillaWorld& world, std::unordered_map<uint32_t, entt::entity>& made,
-                           const world_import::ImportedHeldSpell& file, entt::entity spell)
+/// The things that a spell of the file made, which the spell keeps: the trees of a forest, the object of a shield, the
+/// stones of a teleport
+void ImportSpellThings(const gamesave::VanillaWorld& world, std::unordered_map<uint32_t, entt::entity>& made,
+                       const world_import::ImportedHeldSpell& file, entt::entity spell)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& miracle = registry.Get<Spell>(spell);
@@ -1971,6 +1971,60 @@ void ImportHeldSpellThings(const gamesave::VanillaWorld& world, std::unordered_m
 	}
 }
 
+/// The spell that the file keeps, as the magic system makes it again. The effect of the spell continues from its state
+/// in the file. A spell that a creature casts from above gives its particles the second point of the file.
+magic::ImportedCast CastOf(const gamesave::VanillaWorld& world, std::unordered_map<uint32_t, entt::entity>& made,
+                           const world_import::ImportedHeldSpell& file, bool fromAbove)
+{
+	const auto entityOf = [&made](uint32_t number) { return EntityOf(made, number); };
+	const auto point = [](const std::array<float, 3>& value) { return glm::vec3(value[0], value[1], value[2]); };
+	magic::ImportedCast cast {
+	    .type = file.magicType,
+	    .position = GroundPosition(file.position),
+	    .chants = file.chants,
+	    .initialChants = file.initialChants,
+	    .closedDown = file.closedDown,
+	    .duration = file.duration,
+	    .age = file.age,
+	    .magnitude = file.magnitude,
+	    .processInfo = {.handPosition = point(fromAbove ? file.abovePoint : file.casterPoint),
+	                    .cameraForward = point(file.cameraForward),
+	                    .direction = point(file.handMovement),
+	                    .power = file.power,
+	                    .enabled = file.casting},
+	    .firstDone = file.firstDone,
+	    .lastRipple = file.lastRipple,
+	    .target = file.target.has_value() ? EntityOf(made, *file.target) : entt::null,
+	};
+	if (file.forest.has_value())
+	{
+		cast.forest = magic::ImportedForestCast {.planted = file.forest->planted, .mostTrees = file.forest->mostTrees};
+	}
+	if (file.flock.has_value())
+	{
+		cast.flock = magic::ImportedFlock {
+		    .flock = EntityOf(made, file.flock->flock),
+		    .created = file.flock->created,
+		    .emitted = file.flock->emitted,
+		    .lastSpawn = {file.flock->lastSpawnX, file.flock->lastSpawnZ},
+		    .lastSpawnHeight = file.flock->lastSpawnHeight,
+		};
+	}
+	if (file.system != 0)
+	{
+		const auto effect = particle_import::ReadSpellEffect(world, file.system, file.number, entityOf);
+		if (effect.effect.has_value())
+		{
+			cast.effect = std::make_shared<particles::RestoredEffect>(effect.effect->state);
+		}
+		else
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The import does not take the effect of the spell {}: {}", file.number, effect.why);
+		}
+	}
+	return cast;
+}
+
 } // namespace
 
 void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world, VanillaMade& made,
@@ -1982,7 +2036,6 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& magicSystem = Locator::magicSystem::value();
-	const auto entityOf = [&made](uint32_t number) { return EntityOf(made, number); };
 	for (const auto& creature : _vanilla->creatures)
 	{
 		const auto entity = EntityOf(made, creature.number);
@@ -2020,55 +2073,9 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 		}
 		// The spell gives its particles the point of the creature's hands. A creature that casts from above casts from
 		// the second point of the file.
-		const auto handPoint = [](const std::array<float, 3>& point) { return glm::vec3(point[0], point[1], point[2]); };
 		const bool fromAbove = Locator::infoConstants::has_value() &&
 		                       magic::IsCreatureCastFromAbove(Locator::infoConstants::value(), file->magicType);
-		magic::ImportedCast cast {
-		    .type = file->magicType,
-		    .position = GroundPosition(file->position),
-		    .chants = file->chants,
-		    .initialChants = file->initialChants,
-		    .closedDown = file->closedDown,
-		    .duration = file->duration,
-		    .age = file->age,
-		    .magnitude = file->magnitude,
-		    .processInfo = {.handPosition = handPoint(fromAbove ? file->abovePoint : file->casterPoint),
-		                    .cameraForward = handPoint(file->cameraForward),
-		                    .direction = handPoint(file->handMovement),
-		                    .power = file->power,
-		                    .enabled = file->casting},
-		    .firstDone = file->firstDone,
-		    .lastRipple = file->lastRipple,
-		    .target = file->target.has_value() ? EntityOf(made, *file->target) : entt::null,
-		};
-		if (file->forest.has_value())
-		{
-			cast.forest = magic::ImportedForestCast {.planted = file->forest->planted, .mostTrees = file->forest->mostTrees};
-		}
-		if (file->flock.has_value())
-		{
-			cast.flock = magic::ImportedFlock {
-			    .flock = EntityOf(made, file->flock->flock),
-			    .created = file->flock->created,
-			    .emitted = file->flock->emitted,
-			    .lastSpawn = {file->flock->lastSpawnX, file->flock->lastSpawnZ},
-			    .lastSpawnHeight = file->flock->lastSpawnHeight,
-			};
-		}
-		// The effect of the spell continues from its state in the file
-		if (file->system != 0)
-		{
-			const auto effect = particle_import::ReadSpellEffect(world, file->system, file->number, entityOf);
-			if (effect.effect.has_value())
-			{
-				cast.effect = std::make_shared<particles::RestoredEffect>(effect.effect->state);
-			}
-			else
-			{
-				SPDLOG_LOGGER_WARN(ImportLog(), "The import does not take the effect of the spell {}: {}", file->number,
-				                   effect.why);
-			}
-		}
+		const auto cast = CastOf(world, made, *file, fromAbove);
 		const auto spell = magicSystem.ImportCreatureCast(entity, cast);
 		magicSystem.ImportCreatureCastBeams(entity, beams);
 		if (spell == entt::null)
@@ -2078,11 +2085,13 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 			continue;
 		}
 		made.emplace(file->number, spell);
-		ImportHeldSpellThings(world, made, *file, spell);
+		ImportSpellThings(world, made, *file, spell);
 		SPDLOG_LOGGER_INFO(
 		    ImportLog(), "The creature {} holds the spell {} of magic type {} again: time {} of {} seconds, size {}",
 		    creature.number, file->number, static_cast<int>(file->magicType), file->age, file->duration, file->magnitude);
 	}
+	// The forests, the shields and the teleports that no creature holds, such as the spells that the hand cast
+	ImportVanillaOtherCasts(world, made);
 	// Each creature spell that a creature of the file has, or waits for, takes its spell
 	for (const auto& creature : _vanilla->creatures)
 	{
@@ -2117,6 +2126,103 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 				spells->spells.waiting.at(waiting).miracle = spell;
 			}
 			++waiting;
+		}
+	}
+}
+
+void SaveGameSystem::ImportVanillaOtherCasts(const gamesave::VanillaWorld& world, VanillaMade& made)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& magicSystem = Locator::magicSystem::value();
+	for (const auto& record : world.Records())
+	{
+		if (!world_import::IsSpellWithThingsOnLand(record) || made.contains(record.number))
+		{
+			continue;
+		}
+		const auto file = world_import::ReadHeldSpell(world, record);
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The spell {} of the file has no magic type", record.number);
+			continue;
+		}
+		// The object that cast the spell decides who pays for it
+		using Kind = world_import::ImportedSpellCaster::Kind;
+		const auto from = world_import::CasterOfSpell(world, *file);
+		SpellCaster caster {.kind = SpellCaster::Kind::Player, .player = from.player};
+		bool fromAbove = false;
+		switch (from.kind)
+		{
+		case Kind::None:
+			break;
+		case Kind::Hand:
+			// A seed that no icon made is the player's own, which the player tops up with nothing
+			caster.withoutIcon = true;
+			break;
+		case Kind::Icon:
+		{
+			// The worship site of the icon tops up the spell while the site stands
+			caster.madeBySpellIcon = true;
+			caster.icon = EntityOf(made, from.creator);
+			if (caster.icon != entt::null && Locator::spellIconSystem::has_value())
+			{
+				caster.worshipSite = Locator::spellIconSystem::value().SiteOfIcon(caster.icon);
+			}
+			if (caster.worshipSite == entt::null)
+			{
+				SPDLOG_LOGGER_WARN(ImportLog(), "The icon {} that cast the spell {} has no worship site", from.creator,
+				                   file->number);
+			}
+			break;
+		}
+		case Kind::Creature:
+		case Kind::Object:
+		{
+			caster.entity = EntityOf(made, from.creator);
+			if (caster.entity == entt::null)
+			{
+				// The spell has no caster, so it closes down
+				SPDLOG_LOGGER_WARN(ImportLog(), "The object {} that cast the spell {} is not made", from.creator, file->number);
+				caster.kind = SpellCaster::Kind::None;
+				break;
+			}
+			caster.kind = from.kind == Kind::Creature ? SpellCaster::Kind::Creature : SpellCaster::Kind::Object;
+			if (const auto* body = registry.TryGet<const Creature>(caster.entity))
+			{
+				caster.player = body->owner;
+			}
+			fromAbove = from.kind == Kind::Creature && Locator::infoConstants::has_value() &&
+			            magic::IsCreatureCastFromAbove(Locator::infoConstants::value(), file->magicType);
+			break;
+		}
+		}
+		const auto spell = magicSystem.ImportCast(caster, CastOf(world, made, *file, fromAbove));
+		if (spell == entt::null)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The spell {} of magic type {} of the object {} is not made", file->number,
+			                   static_cast<int>(file->magicType), from.creator);
+			continue;
+		}
+		made.emplace(file->number, spell);
+		ImportSpellThings(world, made, *file, spell);
+		SPDLOG_LOGGER_INFO(ImportLog(), "The spell {} of magic type {} of player {} continues: time {} of {} seconds, size {}",
+		                   file->number, static_cast<int>(file->magicType), static_cast<int>(caster.player), file->age,
+		                   file->duration, file->magnitude);
+	}
+	// The stones of each player take the order of the list of the player in the file
+	if (Locator::teleportSystem::has_value())
+	{
+		for (const auto& list : world_import::ReadStoneLists(world))
+		{
+			std::vector<entt::entity> stones;
+			for (const auto number : list.stones)
+			{
+				if (const auto stone = EntityOf(made, number); stone != entt::null)
+				{
+					stones.push_back(stone);
+				}
+			}
+			Locator::teleportSystem::value().OrderStones(list.player, stones);
 		}
 	}
 }
@@ -2217,12 +2323,16 @@ void SaveGameSystem::ImportVanillaReactions(const gamesave::VanillaWorld& world,
 			continue;
 		}
 		const auto& file = *kept[place];
-		std::vector<entt::entity> takers;
+		// Each villager that shelters under the shield looks at the point of the file
+		std::vector<MagicShieldSystemInterface::RestoredTaker> takers;
 		for (const auto number : file.takers)
 		{
 			if (const auto taker = living(number); taker != entt::null)
 			{
-				takers.push_back(taker);
+				const auto* record = world.Record(number);
+				takers.push_back(
+				    {.villager = taker,
+				     .lookAt = record != nullptr ? world_import::ShieldLookPointOf(world, *record) : std::nullopt});
 			}
 		}
 		Locator::magicShieldSystem::value().RestoreReaction(object, ids[place], static_cast<Reaction>(file.type), file.reach,

@@ -5300,3 +5300,148 @@ TEST(VanillaWorldImport, SavedGamesGiveEachHeldSpellOfACreatureItsValues)
 	}
 	std::cout << held << " creatures hold a spell\n";
 }
+
+// The object that cast a spell of the file gives the kind of its caster and the player of the spell
+TEST(VanillaWorldImport, TheObjectThatCastASpellGivesItsCasterAndItsPlayer)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::Game);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 7);
+	fake.Record(VanillaType::WorshipSpellIcon);
+	fake.Record(VanillaType::Creature);
+	fake.Record(VanillaType::Tree);
+	fake.Record(VanillaType::SpellShield)
+	    .Value<uint32_t>("spellMagicType", static_cast<uint32_t>(MagicType::Shield))
+	    .Ref("spellCreator", 2)
+	    .Ref("spellPlayer", 2);
+	const auto world = fake.Make();
+	using Kind = world_import::ImportedSpellCaster::Kind;
+	// The spell reads the player record of the spell
+	const auto read = world_import::ReadHeldSpell(world, world.Records()[6]);
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(read->creator, 2U);
+	EXPECT_EQ(read->player, 2U);
+
+	// The hand of a player, with a seed that no icon made
+	auto hand = world_import::CasterOfSpell(world, *read);
+	EXPECT_EQ(hand.kind, Kind::Hand);
+	EXPECT_EQ(hand.player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(hand.creator, 2U);
+
+	world_import::ImportedHeldSpell spell {.creator = 4, .player = 2};
+	const auto icon = world_import::CasterOfSpell(world, spell);
+	EXPECT_EQ(icon.kind, Kind::Icon);
+	EXPECT_EQ(icon.player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(icon.creator, 4U);
+	spell.creator = 5;
+	EXPECT_EQ(world_import::CasterOfSpell(world, spell).kind, Kind::Creature);
+	spell.creator = 6;
+	EXPECT_EQ(world_import::CasterOfSpell(world, spell).kind, Kind::Object);
+
+	// A script spell has no object, and a spell with no player record has the neutral player
+	spell = {.creator = 0, .player = 0};
+	const auto script = world_import::CasterOfSpell(world, spell);
+	EXPECT_EQ(script.kind, Kind::None);
+	EXPECT_EQ(script.player, PlayerNames::NEUTRAL);
+	EXPECT_EQ(script.creator, 0U);
+}
+
+// The forest, the shield and the teleport are the spells that keep their things on the land
+TEST(VanillaWorldImport, TheForestTheShieldAndTheTeleportKeepThingsOnTheLand)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::SpellForest);
+	fake.Record(VanillaType::SpellShield);
+	fake.Record(VanillaType::SpellTeleport);
+	fake.Record(VanillaType::MagicShield);
+	fake.Record(VanillaType::MagicTeleport);
+	const auto world = fake.Make();
+	const auto& records = world.Records();
+	EXPECT_TRUE(world_import::IsSpellWithThingsOnLand(records[0]));
+	EXPECT_TRUE(world_import::IsSpellWithThingsOnLand(records[1]));
+	EXPECT_TRUE(world_import::IsSpellWithThingsOnLand(records[2]));
+	EXPECT_FALSE(world_import::IsSpellWithThingsOnLand(records[3]));
+	EXPECT_FALSE(world_import::IsSpellWithThingsOnLand(records[4]));
+}
+
+// Each player record gives its list of teleport stones in the order of the file, the head first
+TEST(VanillaWorldImport, EachPlayerGivesItsStonesInTheOrderOfTheFile)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::Game);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0).Refs("teleports", {9, 5, 7});
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1).Refs("teleports", {});
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 2).Refs("teleports", {6});
+	const auto lists = world_import::ReadStoneLists(fake.Make());
+	ASSERT_EQ(lists.size(), 2U);
+	EXPECT_EQ(lists[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(lists[0].stones, (std::vector<uint32_t> {9, 5, 7}));
+	EXPECT_EQ(lists[1].player, PlayerNames::PLAYER_THREE);
+	EXPECT_EQ(lists[1].stones, (std::vector<uint32_t> {6}));
+}
+
+// A villager in the state of the shelter keeps the point that it looks at as the one value of the state
+TEST(VanillaWorldImport, AVillagerUnderAShieldGivesThePointThatItLooksAt)
+{
+	constexpr auto k_Shelter = static_cast<uint8_t>(VillagerStates::AmazedByMagicShieldReaction);
+	constexpr auto k_Walk = static_cast<uint8_t>(VillagerStates::MoveToPos);
+	EXPECT_TRUE(world_import::CanKeepStateValues(k_Shelter));
+	const auto pointOf = [](int32_t x, int32_t z) {
+		std::vector<uint8_t> bytes(2 * sizeof(int32_t));
+		std::memcpy(bytes.data(), &x, sizeof(x));
+		std::memcpy(bytes.data() + sizeof(x), &z, sizeof(z));
+		return std::vector {world_import::ImportedStateValue {.object = std::nullopt, .bytes = bytes}};
+	};
+	const auto top = pointOf(0x12345, -0x678);
+	const auto final = pointOf(0x22222, 0x33333);
+	EXPECT_EQ(world_import::ShieldLookPointOf({k_Shelter, 0}, top, {}), glm::ivec2(0x12345, -0x678));
+	// A villager that walks to its shelter keeps the point in its final state
+	EXPECT_EQ(world_import::ShieldLookPointOf({k_Walk, k_Shelter}, {}, final), glm::ivec2(0x22222, 0x33333));
+	// Another state, or a value of another size, gives no point
+	EXPECT_FALSE(world_import::ShieldLookPointOf({k_Walk, 0}, top, final).has_value());
+	const std::vector reference {world_import::ImportedStateValue {.object = 3U, .bytes = {}}};
+	EXPECT_FALSE(world_import::ShieldLookPointOf({k_Shelter, 0}, reference, {}).has_value());
+
+	// The record of a villager gives its point from its states
+	FakeWorld fake;
+	fake.Record(VanillaType::Villager)
+	    .Value("action", std::array<uint8_t, 6> {k_Shelter, 0, 0, 0, 0, 0})
+	    .Value("topStateValue", std::array<int32_t, 2> {500, 600});
+	fake.Record(VanillaType::Villager).Value("action", std::array<uint8_t, 6> {k_Walk, 0, 0, 0, 0, 0});
+	const auto world = fake.Make();
+	EXPECT_EQ(world_import::ShieldLookPointOf(world, world.Records()[0]), glm::ivec2(500, 600));
+	EXPECT_FALSE(world_import::ShieldLookPointOf(world, world.Records()[1]).has_value());
+}
+
+// Each forest, shield and teleport of a saved game that no creature holds reads with its caster
+TEST(VanillaWorldImport, SavedGamesGiveEachSpellOnTheLandItsCaster)
+{
+	size_t spells = 0;
+	const auto files = ForEachSave([&spells](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto& record : world.Records())
+		{
+			if (!world_import::IsSpellWithThingsOnLand(record))
+			{
+				continue;
+			}
+			const auto spell = world_import::ReadHeldSpell(world, record);
+			ASSERT_TRUE(spell.has_value()) << path << " object " << record.number;
+			const auto caster = world_import::CasterOfSpell(world, *spell);
+			++spells;
+			std::cout << path << ": spell " << record.number << " of magic type " << static_cast<int>(spell->magicType)
+			          << " cast by object " << spell->creator << " of kind " << static_cast<int>(caster.kind) << " for player "
+			          << static_cast<int>(caster.player) << ", age " << spell->age << ", " << spell->objects.size()
+			          << " objects\n";
+		}
+		for (const auto& list : world_import::ReadStoneLists(world))
+		{
+			std::cout << path << ": player " << static_cast<int>(list.player) << " has " << list.stones.size() << " stones\n";
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << spells << " forests, shields and teleports\n";
+}

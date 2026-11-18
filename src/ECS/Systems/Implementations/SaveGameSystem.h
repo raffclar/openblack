@@ -209,6 +209,10 @@ private:
 	/// its hands, which are the effects of particle containers of the file. The spells that the import makes go into the
 	/// numbers of the made things, and each creature spell of a creature of the file takes its spell.
 	void ImportVanillaHeldCasts(const gamesave::VanillaWorld& world, VanillaMade& made, const VanillaEffects& effects);
+	/// Each forest, shield and teleport of the file that no creature holds continues, with the things that it made. The
+	/// object of the file that cast the spell decides who pays for it: the hand, an icon of a worship site, a creature
+	/// or another object. Then the stones of each player take the order of the list of the player in the file.
+	void ImportVanillaOtherCasts(const gamesave::VanillaWorld& world, VanillaMade& made);
 	/// The reactions of the file replace the reactions of the land, when all the things of the file are made. Each living
 	/// thing of the file remembers the kinds of reaction that it took up.
 	void ImportVanillaReactions(const gamesave::VanillaWorld& world, const VanillaMade& made);

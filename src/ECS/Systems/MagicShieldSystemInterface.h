@@ -83,11 +83,18 @@ public:
 	{
 		return entt::null;
 	}
+	/// A villager of a saved game that takes up a reaction to a shield, and the point that it looks at in the file, in
+	/// whole map units (x, z). With no point, it looks at the centre of the shield.
+	struct RestoredTaker
+	{
+		entt::entity villager {entt::null};
+		std::optional<glm::ivec2> lookAt;
+	};
 	/// A reaction of a saved game to a shield's object, already in the reactions with its number: the reaction to the
 	/// shield standing, to its strikes or to its fall. It reaches as far as the file says and was first taken up at
 	/// the turn of the file. Each villager that takes it up in the file keeps to it, as it takes up the reaction.
 	virtual void RestoreReaction(entt::entity /*object*/, uint32_t /*id*/, Reaction /*type*/, float /*reach*/,
-	                             uint32_t /*firstReacted*/, std::span<const entt::entity> /*villagers*/)
+	                             uint32_t /*firstReacted*/, std::span<const RestoredTaker> /*villagers*/)
 	{
 	}
 

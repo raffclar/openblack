@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <ranges>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -268,6 +269,20 @@ entt::entity TeleportSystem::RestoreStone(glm::vec3 point, PlayerNames player, e
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: stone of player {} at ({}, {})", static_cast<int>(player), position.x,
 	                    position.z);
 	return stone;
+}
+
+void TeleportSystem::OrderStones(PlayerNames player, std::span<const entt::entity> headFirst)
+{
+	auto& registry = EntityRegistry();
+	// The newest stone is the head of the list, so the tail takes the new numbers first
+	for (const auto stone : headFirst | std::views::reverse)
+	{
+		auto* component = registry.Valid(stone) ? registry.TryGet<TeleportStone>(stone) : nullptr;
+		if (component != nullptr && component->player == player)
+		{
+			component->serial = _nextSerial++;
+		}
+	}
 }
 
 void TeleportSystem::RemoveStone(entt::entity stone)

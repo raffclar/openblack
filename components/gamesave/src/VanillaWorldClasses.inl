@@ -1167,8 +1167,10 @@ void ReadSpell(WorldReader& r)
 	r.Float("spellDuration");
 	r.Byte();
 	r.Byte();
+	// The object that cast the spell, and the player of that object. The game gives the neutral player when the object
+	// has no player.
 	r.Ref("spellCreator");
-	r.Ref();
+	r.Ref("spellPlayer");
 	r.Ref();
 	r.Ref();
 	// The magic type, the seconds that the spell ran and its size

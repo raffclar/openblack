@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -53,6 +54,10 @@ public:
 	{
 		return entt::null;
 	}
+	/// The stones of the player of a saved game of the game take the order of the list of the file, the head first.
+	/// A stone of another player or of no stone is not in the list. The stones that the list does not give keep their
+	/// order after the stones of the list.
+	virtual void OrderStones(PlayerNames /*player*/, std::span<const entt::entity> /*headFirst*/) {}
 	/// The stone goes, with its pool, its sound and its reaction
 	virtual void RemoveStone(entt::entity stone) = 0;
 	/// A miracle closes down or goes: its stones go at that time, in the miracle's turn
