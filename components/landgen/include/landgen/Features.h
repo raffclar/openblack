@@ -125,6 +125,9 @@ struct Settings
 	float bigForestSpacing {20.0f};
 	/// The most features on the land, so that the game keeps its frame rate. The big forests are not in this count.
 	size_t most {12000};
+	/// How many more stands of trees the land has than the generator usually gives, for tests of the frame rate. At 1,
+	/// the land has the usual stands. The stands keep their kinds, sizes and spreads.
+	float treeDensity {1.0f};
 };
 
 /// A place that features keep away from, such as the start area: in corners

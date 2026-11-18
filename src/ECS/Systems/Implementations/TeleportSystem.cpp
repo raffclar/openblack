@@ -55,6 +55,7 @@
 #include "ECS/Components/Wonder.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
+#include "ECS/ReactionGroups.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -462,6 +463,7 @@ void TeleportSystem::ReactTo(entt::entity stone, entt::entity living, glm::vec3 
 	if (reacting.reaction != component.reaction)
 	{
 		reacting.reaction = component.reaction;
+		ecs::reaction_groups::Changed(registry, living);
 		reacting.type = Reaction::ReactToTeleport;
 	}
 	if (isVillager)
@@ -924,6 +926,7 @@ void TeleportSystem::StopControl(entt::entity creature)
 	    reacting != nullptr && reacting->type == Reaction::ReactToTeleport)
 	{
 		reacting->reaction = 0;
+		ecs::reaction_groups::Changed(registry, creature);
 		reacting->type = Reaction::None;
 	}
 }

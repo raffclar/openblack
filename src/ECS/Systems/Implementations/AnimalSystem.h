@@ -15,12 +15,33 @@
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
 
+#include <cstddef>
+
+#include <memory>
 #include <optional>
+#include <vector>
+
+#include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
 #include "Animals/AnimalMove.h"
+#include "Common/WorkerPool.h"
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/Animal.h"
+#include "Resources/KeptHandles.h"
+
+namespace openblack
+{
+class L3DAnim;
+namespace graphics
+{
+class L3DMesh;
+}
+namespace ecs::components
+{
+struct Transform;
+}
+} // namespace openblack
 
 namespace openblack::ecs::systems
 {
@@ -293,6 +314,30 @@ private:
 	uint32_t _flocksMade {0};
 	/// The game's screen refreshes, at which animals' clips held at their end play their sounds again
 	ecs::clip_sound_player::RefreshPace _soundPace;
+
+	/// What the threads need to pose one animal in a frame, and the clip sounds that its pose plays
+	struct PoseJob
+	{
+		entt::entity entity {entt::null};
+		components::Animal* animal {nullptr};
+		const components::Transform* transform {nullptr};
+		components::AnimalPose* pose {nullptr};
+		/// The clip and the model, found by the main thread. The animal has no pose when they are null.
+		const L3DAnim* clip {nullptr};
+		const graphics::L3DMesh* model {nullptr};
+		/// Whether the clip passed frames whose sounds can play, from its place before the frame
+		bool sound {false};
+		uint32_t soundPlace {0};
+		uint32_t soundPlayed {0};
+		glm::vec3 soundAt {0.0f};
+	};
+	/// The jobs of the last frame, kept for their memory
+	std::vector<PoseJob> _poseJobs;
+	/// The clips and the models that the animals of a frame use, each found in the resources one time
+	resources::KeptHandles<L3DAnim> _keptClips;
+	resources::KeptHandles<graphics::L3DMesh> _keptModels;
+	/// The threads that pose the animals, made at the first frame
+	std::unique_ptr<WorkerPool> _poseWorkers;
 };
 
 } // namespace openblack::ecs::systems

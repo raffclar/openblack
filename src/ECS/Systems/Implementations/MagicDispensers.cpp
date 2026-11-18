@@ -85,6 +85,7 @@ void JoinTown(entt::entity dispenser, entt::entity town)
 {
 	auto& registry = EntityRegistry();
 	registry.Get<SpellDispenser>(dispenser).town = town;
+	registry.TownMembersChanged();
 	if (town != entt::null)
 	{
 		auto& abodes = registry.Get<Town>(town).abodes;

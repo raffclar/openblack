@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <numbers>
 #include <optional>
 
@@ -72,6 +73,7 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TownCensus.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -132,18 +134,15 @@ bool OfTown(const Registry& registry, entt::entity thing)
 	{
 		return registry.Valid(flag->town) && registry.AllOf<Town>(flag->town);
 	}
-	bool found = false;
 	if (const auto* abode = registry.TryGet<const Abode>(thing))
 	{
-		registry.Each<const Town>(
-		    [&found, abode](entt::entity, const Town& town) { found = found || town.id == abode->townId; });
+		return town_census::TownByNumber(registry, abode->townId) != entt::null;
 	}
-	else if (const auto* field = registry.TryGet<const Field>(thing))
+	if (const auto* field = registry.TryGet<const Field>(thing))
 	{
-		registry.Each<const Town>(
-		    [&found, field](entt::entity, const Town& town) { found = found || static_cast<int>(town.id) == field->town; });
+		return town_census::TownBySignedNumber(registry, field->town) != entt::null;
 	}
-	return found;
+	return false;
 }
 
 /// The scenic forest of a thing's town, when it belongs to a town that has one
@@ -164,14 +163,13 @@ std::optional<uint32_t> TownScenicForest(const Registry& registry, entt::entity 
 		townId = field->town;
 	}
 	std::optional<uint32_t> forest;
-	if (townId.has_value())
+	// A town number is never below zero, and it is never above the largest number that a town can have
+	if (townId.has_value() && *townId >= 0 && *townId <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max()))
 	{
-		registry.Each<const Town>([&forest, townId](entt::entity, const Town& town) {
-			if (static_cast<int64_t>(town.id) == *townId)
-			{
-				forest = town.scenicForest;
-			}
-		});
+		if (const auto town = town_census::TownByNumber(registry, static_cast<uint32_t>(*townId)); town != entt::null)
+		{
+			forest = registry.Get<const Town>(town).scenicForest;
+		}
 	}
 	return forest;
 }
@@ -728,13 +726,7 @@ entt::entity object_physics::TownOfBuilding(const Registry& registry, entt::enti
 	}
 	else if (const auto* abode = registry.TryGet<const Abode>(building))
 	{
-		const auto townId = abode->townId;
-		registry.Each<const Town>([&town, townId](entt::entity entity, const Town& data) {
-			if (data.id == townId)
-			{
-				town = entity;
-			}
-		});
+		town = town_census::TownByNumber(registry, abode->townId);
 	}
 	return town != entt::null && registry.Valid(town) && registry.AllOf<Town>(town) ? town : entt::null;
 }

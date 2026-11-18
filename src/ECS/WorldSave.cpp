@@ -575,6 +575,11 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		SPDLOG_LOGGER_WARN(Log(), "The entities of the saved world do not read");
 		return std::nullopt;
 	}
+	// The load writes the stores directly, so the lists of the towns, their members, the
+	// living things and the reactions are made again
+	registry.TownMembersChanged();
+	registry.TownsChanged();
+	registry.StoresWritten();
 	if (const auto context = gamesave::FindChunk(file, gamesave::k_ContextTag); context.has_value())
 	{
 		RegistryContext loaded;

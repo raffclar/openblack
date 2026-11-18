@@ -28,6 +28,7 @@
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/TownCensus.h"
 #include "ECS/VillagerAge.h"
 #include "EditorEntities.h"
 #include "EditorHistory.h"
@@ -672,6 +673,7 @@ bool ApplyVillagerEdit(ecs::Registry& registry, const ecs::systems::LivingAction
 		break;
 	case Field::LifeStage:
 		villager.lifeStage = static_cast<Villager::LifeStage>(edit.number);
+		ecs::town_census::VillagerChanged(registry, edit.villager);
 		break;
 	case Field::Sex:
 		villager.sex = static_cast<Villager::Sex>(edit.number);

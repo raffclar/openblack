@@ -310,6 +310,17 @@ public:
 		return resource ? &*resource : nullptr;
 	}
 
+	/// The resource only when it is loaded already, else null. This question does not load a resource.
+	[[nodiscard]] const ResourceType* FindLoaded(entt::id_type identifier) const
+	{
+		if (!_resourceCache.contains(identifier))
+		{
+			return nullptr;
+		}
+		const auto resource = std::as_const(_resourceCache)[identifier];
+		return resource ? &*resource : nullptr;
+	}
+
 	template <typename T>
 	[[nodiscard]] bool Contains(T identifier) const
 	{

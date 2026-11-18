@@ -512,7 +512,7 @@ float town_planning::PlanDesireToBeRepaired(entt::entity plan)
 	return InfoOf(planned->info).desireToBeRepaired;
 }
 
-void town_planning::MendBest(entt::entity town)
+void town_planning::MendBest(entt::entity town, MendLists& lists)
 {
 	auto& registry = Entities();
 	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
@@ -520,10 +520,11 @@ void town_planning::MendBest(entt::entity town)
 		return;
 	}
 	const auto& data = registry.Get<const Town>(town);
-	std::vector<entt::entity> plans;
-	std::vector<float> planDesires;
-	plans.reserve(data.planned.size());
-	planDesires.reserve(data.planned.size());
+	auto& [plans, planDesires, buildings, candidates] = lists;
+	plans.clear();
+	planDesires.clear();
+	buildings.clear();
+	candidates.clear();
 	for (const auto plan : data.planned)
 	{
 		if (registry.Valid(plan) && registry.AnyOf<PlannedAbode, PlannedTemple>(plan))
@@ -532,10 +533,6 @@ void town_planning::MendBest(entt::entity town)
 			planDesires.push_back(PlanDesireToBeRepaired(plan));
 		}
 	}
-	std::vector<entt::entity> buildings;
-	std::vector<planned_building::MendCandidate> candidates;
-	buildings.reserve(data.abodes.size());
-	candidates.reserve(data.abodes.size());
 	for (const auto building : data.abodes)
 	{
 		// The town's buildings include its miracle dispensers

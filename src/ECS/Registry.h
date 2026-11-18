@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <memory>
 #include <optional>
 #include <tuple>
 #include <type_traits>
@@ -34,8 +35,26 @@ class DebugLines;
 class ShaderManager;
 } // namespace openblack::graphics
 
+namespace openblack::ecs::town_census
+{
+struct Caches;
+}
+
+namespace openblack::ecs::reaction_groups
+{
+struct Counts;
+}
+
+namespace openblack::living_turn
+{
+template <typename Id>
+struct Kept;
+}
+
 namespace openblack::ecs
 {
+struct KeptStores;
+
 class Registry
 {
 public:
@@ -219,9 +238,34 @@ public:
 	/// How many entities went from the registry since it was made, however they went. The count only goes up: emptying
 	/// the registry counts too.
 	[[nodiscard]] uint64_t GetEntitiesGone() const noexcept { return _entitiesGone; }
+	/// Goes up each time a villager, an abode or a miracle dispenser comes, goes or is replaced, and each time the code
+	/// tells of a new town for one of them. Lists of the members of the towns are right while this number stays.
+	[[nodiscard]] uint64_t GetTownMemberChanges() const noexcept { return _townMemberChanges; }
+	/// Tell the registry that a villager, an abode or a miracle dispenser has a different town now. The counts of the
+	/// people of the towns come again from a walk of all villagers at the next read.
+	void TownMembersChanged() noexcept;
+	/// Tell the registry that this villager has a different town now
+	void TownMembersChanged(entt::entity villager);
+	/// Goes up each time a town comes, goes or is replaced, and each time the code tells of a new town number
+	[[nodiscard]] uint64_t GetTownChanges() const noexcept { return _townChanges; }
+	/// Tell the registry that a town has a different number now
+	void TownsChanged() noexcept { ++_townChanges; }
+	/// The lists of the towns and their members (see town_census). The registry keeps them, not its context, because
+	/// a load and a world state copy the context. A read of the lists can make them again, also through a const registry.
+	[[nodiscard]] town_census::Caches& TownCaches() const noexcept { return *_townCaches; }
+	/// The list of the living things in the order of their turn (see living_turn::Kept). The registry keeps it, not its
+	/// context, for the same reason as the lists of the towns.
+	[[nodiscard]] living_turn::Kept<entt::entity>& KeptLivingList() const noexcept { return *_livingList; }
+	/// The counts of the members of the group of each reaction (see reaction_groups)
+	[[nodiscard]] reaction_groups::Counts& ReactionGroupCounts() const noexcept { return *_reactionGroups; }
+	/// Tell the registry that a direct write to the stores can change the list of the living things and the members of
+	/// the reactions. They come again from a walk of the world at their next use.
+	void StoresWritten() noexcept;
+	/// The stores of the components that the rules of life and the walks test most (see KeptStores)
+	[[nodiscard]] const KeptStores& Kept() const noexcept { return *_kept; }
 	Registry(const Registry&) = delete;
 	Registry& operator=(const Registry&) = delete;
-	virtual ~Registry() = default;
+	virtual ~Registry();
 
 protected:
 	/// What is drawn changes with the components an entity gains or loses (see k_ChangesDrawLayout)
@@ -245,11 +289,38 @@ private:
 	void EntityGone(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesGone; }
 	/// A living that goes leaves its flock. A flock that it leaves with no members goes too.
 	void LivingGone(entt::registry& registry, entt::entity living);
+	void TownMemberChanged(entt::registry& /*registry*/, entt::entity /*entity*/) noexcept { ++_townMemberChanges; }
+	void TownChanged(entt::registry& /*registry*/, entt::entity /*entity*/) noexcept { ++_townChanges; }
+	void CountedVillagerChanged(entt::registry& registry, entt::entity entity);
+	void CountedVillagerGoing(entt::registry& registry, entt::entity entity);
+	void CountedDiscipleGoing(entt::registry& registry, entt::entity entity);
+	void LivingChanged(entt::registry& registry, entt::entity entity);
+	void ReactionChanged(entt::registry& registry, entt::entity entity);
+	void ReactionGoing(entt::registry& registry, entt::entity entity);
+	template <typename Component>
+	void ConnectLiving()
+	{
+		_registry.on_construct<Component>().template connect<&Registry::LivingChanged>(*this);
+		_registry.on_destroy<Component>().template connect<&Registry::LivingChanged>(*this);
+	}
+	template <typename Component>
+	void ConnectTownMember()
+	{
+		_registry.on_construct<Component>().template connect<&Registry::TownMemberChanged>(*this);
+		_registry.on_update<Component>().template connect<&Registry::TownMemberChanged>(*this);
+		_registry.on_destroy<Component>().template connect<&Registry::TownMemberChanged>(*this);
+	}
 
 	Drawn _drawn {Drawn::Yes};
 	uint32_t _entitiesMade {0};
 	uint32_t _resets {0};
 	uint64_t _entitiesGone {0};
+	uint64_t _townMemberChanges {0};
+	uint64_t _townChanges {0};
+	std::unique_ptr<town_census::Caches> _townCaches;
+	std::unique_ptr<living_turn::Kept<entt::entity>> _livingList;
+	std::unique_ptr<reaction_groups::Counts> _reactionGroups;
+	std::unique_ptr<KeptStores> _kept;
 	entt::sigh<void(entt::entity)> _destroying;
 	bool _freshIdsAtNextReset {false};
 };

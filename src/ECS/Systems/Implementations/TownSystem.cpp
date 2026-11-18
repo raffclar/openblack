@@ -11,6 +11,8 @@
 
 #include "TownSystem.h"
 
+#include <cassert>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -91,6 +93,7 @@
 #include "ECS/TemporaryStoreRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/TownAreaRules.h"
+#include "ECS/TownCensus.h"
 #include "ECS/TownCentreOrder.h"
 #include "ECS/TownCentreParts.h"
 #include "ECS/TownDesireAlignment.h"
@@ -492,15 +495,7 @@ void TownSystem::RemoveVillager(entt::entity villager)
 
 uint32_t TownSystem::PopulationOf(entt::entity town)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	uint32_t people = 0;
-	registry.Each<const Villager>([&people, town](const Villager& villager) {
-		if (villager.town == town)
-		{
-			++people;
-		}
-	});
-	return people;
+	return ecs::town_census::CountOf(Locator::entitiesRegistry::value(), town).people;
 }
 
 void TownSystem::StartEmptyTownTimerIfEmpty(entt::entity town)
@@ -913,6 +908,8 @@ void NeglectAbode(entt::entity town, entt::entity abode)
 
 void TownSystem::ProcessTurn()
 {
+	// The debug builds make sure each turn that the kept counts of the people of all towns are the same as a walk gives
+	assert(ecs::town_census::CountsMatchWalk(Locator::entitiesRegistry::value()));
 	for (const auto player : ecs::game_players::All())
 	{
 		for (const auto town : TownsInGainedOrder(player))
@@ -1144,7 +1141,7 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 		town_aggression::ProcessTurn(attacks->record, registry.Get<const Town>(townEntity).owner);
 	}
 	// It puts up at most one of its buildings, or a finished one that went, for mending
-	town_planning::MendBest(townEntity);
+	town_planning::MendBest(townEntity, _mendLists);
 	const bool inEmergency = IsInStateOfEmergency(townEntity);
 	// Out of an emergency, its main storage pit or its village centre on fire calls one. Another storage pit on fire
 	// calls none.

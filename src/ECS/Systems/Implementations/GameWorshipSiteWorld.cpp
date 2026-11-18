@@ -43,6 +43,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TownCensus.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -207,14 +208,8 @@ float GameWorshipSiteWorld::LandHeightAt(glm::vec2 point) const
 uint32_t GameWorshipSiteWorld::PopulationOf(entt::entity town) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	auto population = static_cast<uint32_t>(registry.Get<const Town>(town).homelessVillagers.size());
-	registry.Each<const Villager>([town, &population](entt::entity /*unused*/, const Villager& villager) {
-		if (villager.town == town)
-		{
-			++population;
-		}
-	});
-	return population;
+	return static_cast<uint32_t>(registry.Get<const Town>(town).homelessVillagers.size()) +
+	       ecs::town_census::CountOf(registry, town).people;
 }
 
 magic::WorshipBatteryRules GameWorshipSiteWorld::ChantRules(Tribe tribe, PlayerNames player) const

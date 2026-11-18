@@ -310,6 +310,35 @@ double Cos(double radians)
 	}
 }
 
+SinAndCos SinCos(double radians)
+{
+	// Each branch is the branch of Sin and of Cos for this angle
+	const uint32_t ix = HighWord(radians) & 0x7FFF'FFFFu;
+	if (ix <= 0x3FE9'21FBu)
+	{
+		return {.sin = ix < 0x3E50'0000u ? radians : SinKernel(radians, 0.0, false),
+		        .cos = ix < 0x3E46'A09Eu ? 1.0 : CosKernel(radians, 0.0)};
+	}
+	if (ix >= 0x7FF0'0000u)
+	{
+		return {.sin = radians - radians, .cos = radians - radians};
+	}
+	const auto reduced = Reduce(radians);
+	const double sin = SinKernel(reduced.head, reduced.tail, true);
+	const double cos = CosKernel(reduced.head, reduced.tail);
+	switch (reduced.quarters & 3)
+	{
+	case 0:
+		return {.sin = sin, .cos = cos};
+	case 1:
+		return {.sin = cos, .cos = -sin};
+	case 2:
+		return {.sin = -sin, .cos = -cos};
+	default:
+		return {.sin = -cos, .cos = sin};
+	}
+}
+
 double Tan(double radians)
 {
 	const uint32_t ix = HighWord(radians) & 0x7FFF'FFFFu;
@@ -900,6 +929,12 @@ float Sin(float radians)
 float Cos(float radians)
 {
 	return static_cast<float>(Cos(static_cast<double>(radians)));
+}
+
+SinAndCosF SinCos(float radians)
+{
+	const auto both = SinCos(static_cast<double>(radians));
+	return {.sin = static_cast<float>(both.sin), .cos = static_cast<float>(both.cos)};
 }
 
 float Tan(float radians)

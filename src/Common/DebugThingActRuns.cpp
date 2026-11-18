@@ -193,6 +193,7 @@ public:
 		    person != nullptr && IsTown(act.town) && person->town != act.town)
 		{
 			person->town = act.town;
+			registry.TownMembersChanged();
 		}
 		return villager;
 	}

@@ -50,16 +50,12 @@ public:
 
 	[[nodiscard]] const sas::ClipSounds* SoundsOf(AnimId clip) const override
 	{
-		if (!Locator::resources::has_value() || !Locator::sounds::has_value())
+		// The world finds the table one time, at the first clip that asks for it. The clips of a frame do not change it.
+		if (!_table.has_value())
 		{
-			return nullptr;
+			_table = FindTable();
 		}
-		auto& tables = Locator::resources::value().GetClipSounds();
-		if (!tables.Contains(clip_sounds::k_TableId.value()))
-		{
-			return nullptr;
-		}
-		return tables.Handle(clip_sounds::k_TableId.value())->OfClip(static_cast<uint32_t>(clip));
+		return *_table != nullptr ? (*_table)->OfClip(static_cast<uint32_t>(clip)) : nullptr;
 	}
 
 	[[nodiscard]] std::optional<creature_audio::Ground> GroundAt(const glm::vec3& position) const override
@@ -96,8 +92,25 @@ public:
 	}
 
 private:
+	/// The table of the sounds placed on the clips, none when there is no table or no audio to play them
+	[[nodiscard]] static const clip_sounds::ClipSoundTable* FindTable()
+	{
+		if (!Locator::resources::has_value() || !Locator::sounds::has_value())
+		{
+			return nullptr;
+		}
+		const auto& tables = Locator::resources::value().GetClipSounds();
+		if (!tables.Contains(clip_sounds::k_TableId.value()))
+		{
+			return nullptr;
+		}
+		return tables.Find(clip_sounds::k_TableId.value());
+	}
+
 	/// The game's sound conditions, found at the first sound that the sample rules play
 	std::optional<audio::SoundEffectConditions> _conditions;
+	/// The table of the sounds placed on the clips, found at the first clip that asks for it
+	mutable std::optional<const clip_sounds::ClipSoundTable*> _table;
 };
 
 } // namespace

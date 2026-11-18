@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -26,13 +27,13 @@ public:
 	[[nodiscard]] unsigned int Width() const { return _width; }
 	[[nodiscard]] unsigned int Height() const { return _height; }
 	uint16_t* Data() { return _data; }
-	[[nodiscard]] size_t Size() const { return _size; };
+	[[nodiscard]] std::size_t Size() const { return _size; };
 
 private:
 	unsigned int _width;
 	unsigned int _height;
 	uint16_t* _data;
-	size_t _size;
+	std::size_t _size;
 };
 
 /// A texel of 5 bits for each of red, green and blue and 1 bit of alpha, as red, green, blue and alpha bytes. Each colour

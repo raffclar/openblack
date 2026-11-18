@@ -249,6 +249,7 @@ entt::entity Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3
 			Locator::townSystem::value().StructuresChanged(dispenser.town);
 		}
 		dispenser.town = entt::null;
+		registry.TownMembersChanged();
 	}
 	const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(AbodeInfo::NorseSpellDispenser));
 	magic.SetDispenserMagic(made, setup.type, static_cast<uint32_t>(info.timeEachMobileObjectTakesToProduce));

@@ -24,6 +24,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/TownCensus.h"
 #include "ECS/TownEmpty.h"
 
 using namespace openblack;
@@ -228,6 +229,7 @@ bool town_homes::AddVillagerToTown(Registry& registry, const Homes& homes, entt:
 	}
 	auto& person = registry.Get<Villager>(villager);
 	person.town = town;
+	registry.TownMembersChanged(villager);
 	const auto abode = person.abode;
 	if (abode == entt::null || TownOfAbode(registry, abode) != town)
 	{
@@ -444,16 +446,10 @@ void town_homes::RemoveVillagerFromTown(Registry& registry, const Homes& homes, 
 		homes.leavingWorship(villager);
 	}
 	registry.Get<Villager>(villager).town = entt::null;
+	registry.TownMembersChanged(villager);
 	if (auto* data = TownData(registry, town); data != nullptr)
 	{
-		uint32_t people = 0;
-		registry.Each<const Villager>([&people, town](const Villager& other) {
-			if (other.town == town)
-			{
-				++people;
-			}
-		});
-		data->emptyTownTimer = town_empty::AfterLeaving(data->emptyTownTimer, people);
+		data->emptyTownTimer = town_empty::AfterLeaving(data->emptyTownTimer, town_census::CountOf(registry, town).people);
 	}
 	registry.Get<Villager>(villager).mother = entt::null;
 }
@@ -478,6 +474,7 @@ void town_homes::RemoveDeadVillager(Registry& registry, entt::entity villager)
 		std::erase(town->homelessVillagers, villager);
 	}
 	person.town = entt::null;
+	registry.TownMembersChanged(villager);
 }
 
 void town_homes::MoveInAnyway(Registry& registry, const Homes& homes, entt::entity abode, entt::entity villager)
