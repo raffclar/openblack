@@ -43,7 +43,8 @@ void openblack::ecs::reflection::RegisterFields_Values_co(entt::meta_ctx& contex
 	    .Field<&openblack::computer_hand::HandAction::counter>("counter")
 	    .Field<&openblack::computer_hand::HandAction::progress>("progress")
 	    .Field<&openblack::computer_hand::HandAction::castTarget>("castTarget")
-	    .Field<&openblack::computer_hand::HandAction::camera>("camera");
+	    .Field<&openblack::computer_hand::HandAction::camera>("camera")
+	    .Field<&openblack::computer_hand::HandAction::reported>("reported");
 	Reflect<openblack::computer_hand::Step>(context, ValueOnly {})
 	    .Field<&openblack::computer_hand::Step::kind>("kind")
 	    .Field<&openblack::computer_hand::Step::arguments>("arguments");

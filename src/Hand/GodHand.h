@@ -23,24 +23,26 @@
 
 /// The hand of a god that no person plays, as the world has it. Every god has such a hand, in a game alone and in a
 /// network game. A god with no computer mind has one too.
-/// - No person reports the hand, so the input of each turn moves the hand to the origin of the world.
+/// - No person reports the hand. The input of each turn moves the hand to the place that the computer mind of the god
+///   reported after the last turn of a step. Before the first report, and for a god with no mind, that place is the
+///   origin of the world.
 /// - In a turn in which the computer mind of the god does a step of its action, the mind then puts the hand where it
 ///   was before the step.
-/// - The minds take their turns before the creatures. Thus in such a turn a creature reads the hand of the mind. In all
-///   other turns it reads the origin of the world.
+/// - The minds take their turns before the creatures. Thus in such a turn a creature reads the hand of the mind before
+///   the step. In all other turns it reads the place of the last report.
 /// - The citadel of the god puts the hand at the citadel when the land loads. The input of the first turn moves the
 ///   hand from there.
 namespace openblack::god_hand
 {
 
-/// Where the input of a turn puts the hand of a god that no person plays
+/// Where the input of a turn puts the hand of a god that has no report of its computer mind
 constexpr glm::vec3 k_NoReport {0.0f};
 
-/// The input of a turn: the hand goes to the origin of the world, and its stillness and velocity count the movement
-/// from where the world had it (see hand_stillness::Step)
-inline void InputTurn(ecs::components::HandStillness& hand) noexcept
+/// The input of a turn: the hand goes to the place that the mind reported (the origin of the world with no report). Its
+/// stillness and velocity count the movement from where the world had it (see hand_stillness::Step).
+inline void InputTurn(ecs::components::HandStillness& hand, const std::optional<glm::vec3>& report) noexcept
 {
-	hand_stillness::Step(hand, k_NoReport);
+	hand_stillness::Step(hand, report.has_value() ? *report : k_NoReport);
 }
 
 /// The computer mind puts the hand where it was before the step of the turn. The stillness and the velocity do not
