@@ -305,6 +305,8 @@ struct CreatureSetup
 	std::optional<bool> leashable;
 	/// The leashes it knows. When not given, it knows every leash.
 	std::optional<std::vector<LeashType>> knownLeashes;
+	/// Whether it knows no leash, as the creature of an empty slot in a network game. Else it knows every leash.
+	bool knowsNoLeash {false};
 	/// Its alignment, fatness and strength, the species' start when not given, and its size, 1 when not given: a
 	/// creature well grown, about 15 units tall, rather than as small as a new one starts
 	std::optional<float> alignment;
