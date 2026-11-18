@@ -559,7 +559,7 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "to a point straight away from it, 1.2 times the reaction's reach off; with the tiger meaning nothing "
 	                "they stand. Thirty seconds after the tiger last frightened the town its fear lapses into "
 	                "indifference and they go back to what they were doing.");
-	creatureFeeling("villagers.creature_curious", "Villagers looking at a creature", PlayerNames::PLAYER_TWO,
+	creatureFeeling("villagers.creature_curious_look", "Villagers looking at a creature", PlayerNames::PLAYER_TWO,
 	                ecs::creature_attitude::Attitude::Curious, false,
 	                "The village of six by its hut, with another player's tiger standing still thirty metres to the east. "
 	                "The town is curious about the tiger.",
