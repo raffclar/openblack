@@ -9,7 +9,11 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/mat3x3.hpp>
@@ -149,4 +153,26 @@ TEST_F(SyncChecksumBesideDraw, KeptPartsDoNotWait)
 	EXPECT_FALSE(checksums.HashWaits(0));
 	ASSERT_TRUE(checksums.GetLast().has_value());
 	EXPECT_FALSE(checksums.GetLast()->parts.empty());
+}
+
+// The kept parts hold also the synced values that the checksum mixes, so that a tool that compares the parts of two runs
+// sees a difference in the seed, the count of draws, the music or the land
+TEST_F(SyncChecksumBesideDraw, KeptPartsHoldTheSyncedValuesThatTheChecksumMixes)
+{
+	SyncChecksumSystem checksums;
+	checksums.SetEnabled(true);
+	checksums.SetKeepParts(true, false);
+	checksums.ProcessTurn();
+	ASSERT_TRUE(checksums.GetLast().has_value());
+	const auto parts = checksums.GetLast()->parts;
+	const auto named = [&parts](std::string_view name) {
+		return std::ranges::find(parts, name, &std::pair<std::string, uint64_t>::first) != parts.end();
+	};
+	EXPECT_TRUE(named("synced seed"));
+	EXPECT_TRUE(named("synced draws"));
+	// This world has no music system and no land
+	EXPECT_FALSE(named("music"));
+	EXPECT_FALSE(named("land"));
+	// The history of the turn has the same parts
+	EXPECT_EQ(checksums.PartsOfTurn(0), parts);
 }
