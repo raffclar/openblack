@@ -60,6 +60,7 @@ enum class VanillaType : uint32_t
 	MagicTree = 0x1D,
 	MagicWood = 0x1F,
 	MagicFireBall = 0x20,
+	SpellSeed = 0x24,
 	StoragePit = 0x08,
 	ParticleSound = 0x16,
 	FireEffect = 0x29,

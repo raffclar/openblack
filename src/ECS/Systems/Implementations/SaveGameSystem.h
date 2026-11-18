@@ -212,6 +212,12 @@ private:
 	/// Each burning ball of a fireball of the file continues, before the import makes the effect of its spell, so that
 	/// the atom of the effect carries the ball again. The ball has the fire of the file.
 	void ImportVanillaFireBalls(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// Each spell seed of the file continues with the values of the file, before the import makes the icons that
+	/// the seeds came from
+	void ImportVanillaSeeds(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// When the import made the icons and the spells, each seed of the file takes the worship site of its icon and its
+	/// spell. Each hand of the file takes its seed again, and each spell of a seed follows that seed again.
+	void ImportVanillaSeedLinks(const gamesave::VanillaWorld& world, const VanillaMade& made);
 	/// Each spell of the file that no creature holds continues, with the things that it made. These are the spells of
 	/// every kind, such as the fireball, the storm, the heal or the flock that the hand cast. The object of the file
 	/// that cast the spell decides who pays for it: the hand, an icon of a worship site, a creature or another object.

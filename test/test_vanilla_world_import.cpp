@@ -41,6 +41,7 @@
 #include "Camera/CameraZoomer.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Systems/Implementations/AnimalSystemDetail.h"
 #include "ECS/VanillaCameraImport.h"
 #include "ECS/VanillaFootpathImport.h"
@@ -5697,4 +5698,212 @@ TEST(VanillaWorldImport, SavedGamesGiveEachSpellItsCaster)
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	std::cout << spells << " spells\n";
+}
+
+namespace
+{
+/// The number of the row of the table for the seed
+constexpr uint32_t SeedRow(SpellSeedType seed)
+{
+	return world_import::k_FirstSpellSeedRowNumber - static_cast<uint32_t>(seed);
+}
+} // namespace
+
+// A spell seed keeps its row, its power-up, its charge, what its last spell left, its flags, its icon and its spell. The
+// interface status of its hand gives its player.
+TEST(VanillaWorldImport, ASpellSeedReadsItsValues)
+{
+	FakeWorld fake;
+	// 1: the seed, 2: the player, 3: the interface, 4: the interface status
+	fake.Record(VanillaType::SpellSeed)
+	    .Position(5, 6)
+	    .Value<uint32_t>("seedPowerUp", 1)
+	    .Value<uint32_t>("seedInfo", SeedRow(SpellSeedType::Food))
+	    .Ref("seedIcon", 30)
+	    .Ref("seedCreator", 30)
+	    .Ref("seedSpell", 31)
+	    .Ref("seedStatus", 4)
+	    .Value<uint8_t>("seedLinkedByCast", 1)
+	    .Value<uint8_t>("seedLearnedFrom", 1)
+	    .Value<float>("seedChantStore", 120.0f)
+	    .Value<float>("seedStoredChants", 40.0f)
+	    .Value<float>("seedStoredAge", 2.5f)
+	    .Value<uint32_t>("seedStoredMaxObjects", 9)
+	    .Value<float>("seedPower", 0.75f)
+	    .Value<float>("seedMultiplier", 1.5f)
+	    .Value<uint8_t>("seedReady", 1)
+	    .Value<uint32_t>("seedTurnsInHand", 33)
+	    .Value<uint32_t>("seedLastCastType", static_cast<uint32_t>(MagicType::Food))
+	    .Value<uint8_t>("seedFromGlobe", 1);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1).Refs("interfaces", {3});
+	fake.Record(VanillaType::PlayerInterface);
+	fake.Record(VanillaType::PlayerInterfaceStatus).Ref("interface", 3);
+	const auto world = fake.Make();
+
+	const auto seed = world_import::ReadSpellSeed(world, world.Records().front());
+	ASSERT_TRUE(seed.has_value());
+	EXPECT_EQ(seed->number, 1U);
+	EXPECT_EQ(seed->position, (MapCoords {.x = 5, .z = 6, .altitude = 0.0f}));
+	EXPECT_EQ(seed->seedType, SpellSeedType::Food);
+	EXPECT_EQ(seed->powerUp, 1);
+	EXPECT_EQ(seed->player, std::optional(PlayerNames::PLAYER_TWO));
+	EXPECT_EQ(seed->icon, 30U);
+	EXPECT_EQ(seed->spell, 31U);
+	EXPECT_TRUE(seed->linkedByCast);
+	EXPECT_TRUE(seed->learnedFrom);
+	EXPECT_EQ(seed->chantStore, 120.0f);
+	EXPECT_EQ(seed->storedChants, 40.0f);
+	EXPECT_EQ(seed->storedAge, 2.5f);
+	EXPECT_EQ(seed->storedMaxObjects, 9);
+	EXPECT_EQ(seed->power, 0.75f);
+	EXPECT_EQ(seed->castMultiplier, 1.5f);
+	EXPECT_TRUE(seed->ready);
+	EXPECT_EQ(seed->turnsInHand, 33U);
+	EXPECT_EQ(seed->lastCastType, MagicType::Food);
+	EXPECT_TRUE(seed->fromGlobe);
+
+	// A record that is not a spell seed gives no seed
+	EXPECT_FALSE(world_import::ReadSpellSeed(world, world.Records()[1]).has_value());
+}
+
+// The plain miracle and no stored values are -1 in the file. A seed with no status has the player of the player record
+// that made it. A seed of no row of the table, and a last cast of no magic type of the tables, give nothing.
+TEST(VanillaWorldImport, ASpellSeedWithNoStatusHasThePlayerOfItsCreator)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::SpellSeed)
+	    .Position(1, 2)
+	    .Value<uint32_t>("seedPowerUp", 0xFFFFFFFFU)
+	    .Value<uint32_t>("seedInfo", SeedRow(SpellSeedType::Water))
+	    .Ref("seedCreator", 3)
+	    .Ref("seedStatus", 0)
+	    .Value<float>("seedStoredChants", -1.0f)
+	    .Value<uint32_t>("seedStoredMaxObjects", 0xFFFFFFFFU)
+	    .Value<uint32_t>("seedLastCastType", 999);
+	fake.Record(VanillaType::SpellSeed).Position(1, 2).Value<uint32_t>("seedInfo", 7);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0);
+	const auto world = fake.Make();
+
+	const auto seed = world_import::ReadSpellSeed(world, world.Records()[0]);
+	ASSERT_TRUE(seed.has_value());
+	EXPECT_EQ(seed->seedType, SpellSeedType::Water);
+	EXPECT_EQ(seed->powerUp, -1);
+	EXPECT_EQ(seed->player, std::optional(PlayerNames::PLAYER_ONE));
+	EXPECT_EQ(seed->icon, 0U);
+	EXPECT_EQ(seed->storedChants, -1.0f);
+	EXPECT_EQ(seed->storedMaxObjects, -1);
+	EXPECT_EQ(seed->lastCastType, MagicType::None);
+	EXPECT_FALSE(world_import::ReadSpellSeed(world, world.Records()[1]).has_value());
+}
+
+// The hand of each player keeps its seed with the other objects that it holds. A hand with no player is not in the list.
+TEST(VanillaWorldImport, EachHandGivesTheSeedThatItHolds)
+{
+	FakeWorld fake;
+	// 1: a seed, 2: a tree, 3: the player, 4: the interface, 5: the status of the hand, 6: a status with no player
+	fake.Record(VanillaType::SpellSeed).Position(1, 2).Value<uint32_t>("seedInfo", SeedRow(SpellSeedType::Wood));
+	fake.Record(VanillaType::Tree).Position(1, 2);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0).Refs("interfaces", {4});
+	fake.Record(VanillaType::PlayerInterface);
+	fake.Record(VanillaType::PlayerInterfaceStatus).Ref("interface", 4).Refs("handHeld", {2, 1});
+	fake.Record(VanillaType::PlayerInterfaceStatus).Ref("interface", 0).Refs("handHeld", {1});
+	const auto seeds = world_import::ReadHandSeeds(fake.Make());
+	ASSERT_EQ(seeds.size(), 1U);
+	EXPECT_EQ(seeds[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(seeds[0].seed, 1U);
+}
+
+// A spell keeps the seed in the hand that cast it
+TEST(VanillaWorldImport, ASpellReadsItsSeed)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::SpellResource)
+	    .Position(3, 4)
+	    .Value<uint32_t>("spellMagicType", static_cast<uint32_t>(MagicType::Wood))
+	    .Ref("spellSeed", 12);
+	const auto world = fake.Make();
+	const auto spell = world_import::ReadHeldSpell(world, world.Records().front());
+	ASSERT_TRUE(spell.has_value());
+	EXPECT_EQ(spell->seed, 12U);
+}
+
+// The seed takes the values of the file. A seed of an icon came from the worship, unless it came out of a globe. The
+// seed keeps its own player, worship site and spell.
+TEST(VanillaWorldImport, ASeedTakesTheValuesOfTheFile)
+{
+	const world_import::ImportedSpellSeed file {
+	    .seedType = SpellSeedType::LightningBolt,
+	    .powerUp = 2,
+	    .player = PlayerNames::PLAYER_TWO,
+	    .icon = 7,
+	    .spell = 8,
+	    .chantStore = 10.0f,
+	    .learnedFrom = true,
+	    .storedChants = 3.0f,
+	    .storedAge = 1.5f,
+	    .storedMaxObjects = 4,
+	    .castMultiplier = 2.0f,
+	    .power = 0.5f,
+	    .fromGlobe = false,
+	    .ready = true,
+	    .turnsInHand = 12,
+	    .lastCastType = MagicType::LightningBolt,
+	    .linkedByCast = true,
+	};
+	ecs::components::SpellSeed seed {.player = PlayerNames::PLAYER_ONE};
+	world_import::PutSeedValues(seed, file);
+	EXPECT_EQ(seed.seedType, SpellSeedType::LightningBolt);
+	EXPECT_EQ(seed.powerUp, 2);
+	EXPECT_EQ(seed.player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(seed.chantStore, 10.0f);
+	EXPECT_TRUE(seed.learnedFrom);
+	EXPECT_EQ(seed.storedChants, 3.0f);
+	EXPECT_EQ(seed.storedAge, 1.5f);
+	EXPECT_EQ(seed.storedMaxObjects, 4);
+	EXPECT_EQ(seed.castMultiplier, 2.0f);
+	EXPECT_EQ(seed.power, 0.5f);
+	EXPECT_TRUE(seed.hasIcon);
+	EXPECT_EQ(seed.origin, magic::SeedOrigin::Worship);
+	EXPECT_TRUE(seed.ready);
+	EXPECT_EQ(seed.turnsInHand, 12U);
+	EXPECT_EQ(seed.lastCastType, MagicType::LightningBolt);
+	EXPECT_TRUE(seed.linkedByCast);
+	EXPECT_EQ(seed.spell, entt::entity {entt::null});
+
+	auto globe = file;
+	globe.fromGlobe = true;
+	world_import::PutSeedValues(seed, globe);
+	EXPECT_TRUE(seed.fromGlobe);
+	EXPECT_EQ(seed.origin, magic::SeedOrigin::Bubble);
+	auto noIcon = file;
+	noIcon.icon = 0;
+	world_import::PutSeedValues(seed, noIcon);
+	EXPECT_FALSE(seed.hasIcon);
+	EXPECT_EQ(seed.origin, magic::SeedOrigin::Bubble);
+}
+
+// Each spell seed of the saved games reads, and each seed in a hand is a seed that reads
+TEST(VanillaWorldImport, TheSpellSeedsOfTheSavedGamesRead)
+{
+	size_t seeds = 0;
+	size_t held = 0;
+	const auto files = ForEachSave([&seeds, &held](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto* record : world.OfType(VanillaType::SpellSeed))
+		{
+			++seeds;
+			EXPECT_TRUE(world_import::ReadSpellSeed(world, *record).has_value()) << path << " " << record->number;
+		}
+		for (const auto& hand : world_import::ReadHandSeeds(world))
+		{
+			++held;
+			const auto* record = world.Record(hand.seed);
+			ASSERT_NE(record, nullptr) << path;
+			EXPECT_TRUE(world_import::ReadSpellSeed(world, *record).has_value()) << path << " " << hand.seed;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << seeds << " spell seeds and " << held << " seeds in a hand in the saves\n";
 }
