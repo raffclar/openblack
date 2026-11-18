@@ -780,12 +780,20 @@ public:
 	[[nodiscard]] Spot SpotAt(float x, float z) const
 	{
 		const auto [cx, cz] = CornerOf(x, z);
-		const float tx = (x - _ground.townX) * k_MetresPerCorner;
-		const float tz = (z - _ground.townZ) * k_MetresPerCorner;
+		const auto townDistance = [x, z](float townX, float townZ) {
+			const float tx = (x - townX) * k_MetresPerCorner;
+			const float tz = (z - townZ) * k_MetresPerCorner;
+			return std::sqrt((tx * tx) + (tz * tz));
+		};
+		float town = townDistance(_ground.townX, _ground.townZ);
+		for (const auto& other : _ground.towns)
+		{
+			town = std::min(town, townDistance(other.x, other.z));
+		}
 		return {.height = _ground.heights.At(cx, cz) * k_MetresPerAltitude,
 		        .slope = GradientAt(_ground.heights, cx, cz),
 		        .sea = _ground.seaDistance.At(cx, cz) * k_MetresPerCorner,
-		        .town = std::sqrt((tx * tx) + (tz * tz))};
+		        .town = town};
 	}
 
 	[[nodiscard]] Biome BiomeAt(float x, float z) const

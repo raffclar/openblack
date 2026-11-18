@@ -32,7 +32,12 @@ HEIGHT_TARGETS = ("height_max_m", "height_median_m")
 # A generated land can also be larger than the lands of the story (1.1 to 3.9 km2): the user allowed it on 2026-11-17
 # ("LGX-1: allow lands over 4 km2", deviation 233). The area and the totals that grow with the area do not bind a
 # generated land. The numbers for each km2 and the shape numbers stay the targets. The land stays one island.
-AREA_TOTALS = ("land_km2", "coast_km", "trees", "rocks", "rock_clumps", "big_forests")
+AREA_TOTALS = ("land_km2", "coast_km", "trees", "rocks", "rock_clumps", "big_forests", "towns_per_km2")
+# The towns of a generated land keep the vanilla count and the vanilla distances between towns, so the towns for each km2
+# of a land larger than the lands of the story are fewer: towns_per_km2 is free for a generated land.
+# A town with fewer buildings than this is a hamlet of the story (1 to 3 buildings). The size of a town (houses, people,
+# fields) is measured over the larger towns only.
+TOWN_FEWEST_BUILDINGS = 5
 
 # The names of the kinds of tree, in the order of the game's numbers
 TREES = ("Beech Birch Cedar Conifer ConiferA Oak OakA Olive Palm PalmA PalmB PalmC Pine Bush BushA BushB Cypress "
@@ -288,6 +293,35 @@ def swamp_measures(wet, land_mask, trees, mists):
     return out
 
 
+def town_measures(towns, heights, land_mask, area_km2):
+    """The numbers of the towns. towns is a list of dicts with x, z (metres), tribe, neutral, buildings, houses, fields
+    and villagers."""
+    out = {}
+    n = len(towns)
+    if n == 0:
+        return out
+    out["towns_per_km2"] = n / area_km2 if area_km2 else float("nan")
+    out["town_tribes"] = len({t["tribe"] for t in towns})
+    out["neutral_towns"] = sum(1 for t in towns if t["neutral"])
+    points = np.array([(t["x"], t["z"]) for t in towns])
+    if n > 1:
+        nearest = cKDTree(points).query(points, k=2)[0][:, 1]
+        out["town_nn_median_m"] = float(np.median(nearest))
+        out["town_nn_min_m"] = float(nearest.min())
+    sea = ndimage.distance_transform_edt(land_mask) * CELL
+    side = heights.shape[0]
+    corner = [(min(max(int(round(t["x"] / CELL)), 0), side - 1), min(max(int(round(t["z"] / CELL)), 0), side - 1))
+              for t in towns]
+    out["town_height_median_m"] = float(np.median([heights[i, j] for i, j in corner]))
+    out["town_sea_median_m"] = float(np.median([sea[i, j] for i, j in corner]))
+    large = [t for t in towns if t["buildings"] >= TOWN_FEWEST_BUILDINGS]
+    if large:
+        out["town_houses_median"] = float(np.median([t["houses"] for t in large]))
+        out["town_villagers_median"] = float(np.median([t["villagers"] for t in large]))
+        out["town_fields_median"] = float(np.median([t["fields"] for t in large]))
+    return out
+
+
 def measure_land(land):
     """All numbers of a land. land is a dict with heights, land, sand, trees (a list of (x, z, kind, in_forest)), rocks
     (a list of (x, z)), forests, footpaths, mists and towns."""
@@ -299,6 +333,7 @@ def measure_land(land):
     out["pillars"] = len(land.get("pillars", []))
     for key in ("forests", "footpaths", "mists", "towns"):
         out[key] = land[key]
+    out.update(town_measures(land.get("town_list", []), land["heights"], land["land"], area))
     out.update(big_forest_measures(land.get("big_forests", []), land.get("trees", []), area))
     out.update(cursed_measures(land.get("cursed_things", []), land.get("dark_mists", 0)))
     if "wet" in land:
@@ -369,7 +404,37 @@ def load_dump(path):
             "big_forests": big_forests, "forests": len(d["forests"]),
             "footpaths": d["footpaths"],
             "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark),
+            "town_list": [{"x": t[0], "z": t[1], "tribe": t[2], "neutral": t[3] != 0, "buildings": t[4], "houses": t[5],
+                           "fields": t[6], "villagers": t[7]} for t in d.get("town_list", [])],
             "wet": wet, "mist_list": [(m[0], m[1], m[3]) for m in d["mists"] if len(m) >= 4]}
+
+
+def vanilla_towns(script, objs, towns):
+    """The towns of a land of the story, as town_measures takes them. Each person of the script goes to the nearest
+    town."""
+    from lndread import parse_pos, read_script
+    ids = sorted(towns)
+    if not ids:
+        return []
+    tree = cKDTree(np.array([towns[t]["pos"] for t in ids]))
+    people = {t: 0 for t in ids}
+    for cmd, args in read_script(script):
+        place = None
+        if cmd == "CREATE_VILLAGER_POS":
+            place = parse_pos(args[0])
+        elif cmd == "CREATE_TOWN_VILLAGER":
+            place = parse_pos(args[1])
+        if place:
+            people[ids[tree.query(place)[1]]] += 1
+    out = []
+    for t in ids:
+        built = [o for o in objs if o["cls"] in ("abode", "planned") and o.get("town") == t]
+        houses = sum(1 for o in built if len(o["kind"].split("_ABODE_")[-1]) == 1)
+        fields = sum(1 for o in objs if o["cls"] == "field" and o.get("town") == t)
+        x, z = towns[t]["pos"]
+        out.append({"x": x, "z": z, "tribe": towns[t]["tribe"], "neutral": towns[t]["player"] == "NEUTRAL",
+                    "buildings": len(built), "houses": houses, "fields": fields, "villagers": people[t]})
+    return out
 
 
 def vanilla_models():
@@ -392,7 +457,8 @@ def vanilla_models():
         sand = land.land & np.isin(land.mtype, GROUND_SAND)
         wet = land.land & np.isin(land.mtype, GROUND_WET)
         mist_list = [(o["pos"][0], o["pos"][1], o.get("colour", 0)) for o in objs if o["cls"] == "mist"]
-        yield {"name": name, "heights": land.H, "land": land.land, "sand": sand, "trees": trees, "rocks": rocks,
+        town_list = vanilla_towns(f"{analyze.BLACK}/{script}", objs, towns)
+        yield {"town_list": town_list, "name": name, "heights": land.H, "land": land.land, "sand": sand, "trees": trees, "rocks": rocks,
                "rock_poses": rock_poses, "pillars": pillars,
                "big_forests": big_forests,
                "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns),

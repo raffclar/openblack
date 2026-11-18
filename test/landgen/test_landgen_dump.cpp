@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -114,7 +115,26 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		       std::to_string(land.cells.XOf(first)) + "," + std::to_string(land.cells.ZOf(first)) + "]";
 	});
 	out << ",\"start\":[" << land.start.x << ',' << land.start.z << ',' << land.start.radius << ']';
-	out << ",\"towns\":" << (land.settlement.buildings.empty() ? 0 : 1);
+	out << ",\"towns\":" << (land.settlement.town.buildings.empty() ? 0 : 1) + land.settlement.neutral.size();
+	// Each town: x and z in metres, the tribe, 1 for a neutral town, the buildings, the houses, the fields and the people
+	const auto houses = [](const landgen::settlement::Town& town) {
+		return std::ranges::count_if(town.buildings, [](const auto& placed) {
+			return std::ranges::find(landgen::settlement::k_Houses, placed.building) != landgen::settlement::k_Houses.end();
+		});
+	};
+	const auto town = [&houses](const landgen::settlement::Town& entry, int neutral) {
+		std::ostringstream text;
+		text << '[' << entry.x << ',' << entry.z << ',' << static_cast<int>(entry.tribe) << ',' << neutral << ','
+		     << entry.buildings.size() << ',' << houses(entry) << ',' << entry.fields.size() << ',' << entry.villagers.size()
+		     << ']';
+		return text.str();
+	};
+	out << ",\"town_list\":[" << town(land.settlement.town, 0);
+	for (const auto& entry : land.settlement.neutral)
+	{
+		out << ',' << town(entry, 1);
+	}
+	out << ']';
 	out << ",\"mists\":";
 	WriteList(out, land.mists, [](const landgen::cursed::Mist& mist) {
 		std::ostringstream text;
