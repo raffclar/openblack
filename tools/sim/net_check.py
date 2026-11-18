@@ -3404,6 +3404,65 @@ def free_port():
         return probe.getsockname()[1]
 
 
+# The image of the Linux game server for --server-linux: the image that the local act runs of the deploy workflows use
+LINUX_SERVER_IMAGE = "catthehacker/ubuntu:act-24.04"
+# The address of the error reports for a test server: a closed port of the container's own loopback, so that each report
+# fails at once and nothing leaves the container
+NO_REPORTS_DSN = "http://test@127.0.0.1:9/0"
+
+
+def container_path(text, mounts):
+    """The text with each folder of this computer in mounts changed to its folder in the container. The case of a drive
+    letter and the kind of slash do not matter."""
+    result = text.replace("\\", "/")
+    for here, there in mounts:
+        here = os.path.abspath(here).replace("\\", "/").rstrip("/")
+        at = result.lower().find(here.lower())
+        while at >= 0:
+            result = result[:at] + there + result[at + len(here):]
+            at = result.lower().find(here.lower(), at + len(there))
+    return result
+
+
+def linux_server_command(command, linux_folder, image, out, game_path, name):
+    """The command that starts the Linux game server of linux_folder in a container of the image, in place of the server
+    of this computer. The container sees the output folder as /out and the game folder as /game. The server listens on
+    all the addresses of the container at a free port, and only 127.0.0.1 of this computer gets that port.
+    A shipping server has the address (DSN) of the live error reports in its build. The container always gets the
+    SENTRY_DSN of this script's environment, which is a test address when the caller gives none, so that a test game
+    never sends a report to the live project."""
+    mounts = [(out, "/out"), (game_path, "/game"), (linux_folder, "/srv")]
+    port = free_port()
+    inner = ["/srv/openblack-server"]
+    for argument in command[1:]:
+        if argument.startswith("127.0.0.1:"):
+            argument = f"0.0.0.0:{port}"
+        inner.append(container_path(argument, mounts))
+    dsn = os.environ.get("SENTRY_DSN") or NO_REPORTS_DSN
+    return ["docker", "run", "--rm", "--pull=never", "--name", name, "-e", f"SENTRY_DSN={dsn}",
+            "-v", f"{os.path.abspath(out)}:/out", "-v", f"{os.path.abspath(game_path)}:/game:ro",
+            "-v", f"{os.path.abspath(linux_folder)}:/srv:ro", "-w", "/out/server",
+            "-p", f"127.0.0.1:{port}:{port}", image] + inner
+
+
+class ContainerProcess:
+    """A program in a container: it stops as a program of this computer does, and its container goes too"""
+
+    def __init__(self, process, name):
+        self.process = process
+        self.name = name
+
+    def poll(self):
+        return self.process.poll()
+
+    def kill(self):
+        subprocess.run(["docker", "rm", "-f", self.name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.process.kill()
+
+    def wait(self, timeout=None):
+        return self.process.wait(timeout)
+
+
 WEB_WIDTH = 1280
 # The height of the strip above the game in the web page (--badge-bar in web/page/page.css): the build, Join Online Game
 # and Log have their own strip, so they lie over no control of the game
@@ -3956,6 +4015,12 @@ def main():
                              "start; the game that follows must stay in step with the server from its first turn")
     parser.add_argument("--leave-room-wait", type=float, default=5.0,
                         help="the seconds that the server waits in its room after the leave of --leave-room-first")
+    parser.add_argument("--server-linux", metavar="FOLDER",
+                        help="start the Linux openblack-server of this folder (an unpacked server-build.tar) in a "
+                             "container of --server-image, in place of the server of --bin; the clients stay the "
+                             "programs of --bin")
+    parser.add_argument("--server-image", default=LINUX_SERVER_IMAGE,
+                        help="the container image of --server-linux; the script never downloads it")
     options = parser.parse_args()
     if options.come_back_seconds is None:
         # A client of these cases is away for 15, 30 or 75 seconds. The server must not defeat its god before it comes back.
@@ -4145,7 +4210,15 @@ def main():
     for leash in leashes:
         leash["tap"] = options.key_tap
     try:
-        server = start(server_command, server_dir)
+        if options.server_linux:
+            if options.restart_server_at is not None:
+                parser.error("--server-linux does not go with --restart-server-at")
+            name = f"ob-net-check-{os.getpid()}"
+            server_command = linux_server_command(server_command, options.server_linux, options.server_image, out,
+                                                  options.game_path, name)
+            server = ContainerProcess(start(server_command, server_dir), name)
+        else:
+            server = start(server_command, server_dir)
         processes.append(server)
         port = wait_for_port(server_log, server)
         if port is None:

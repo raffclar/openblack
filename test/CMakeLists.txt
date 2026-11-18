@@ -201,6 +201,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_model_light graphics/test_model_light.cpp)
 openblack_setup_and_add_test(test_sun graphics/test_sun.cpp)
+openblack_setup_and_add_test(test_land_texel_format graphics/test_land_texel_format.cpp)
 openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
 openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
 openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
@@ -731,6 +732,12 @@ if (Python3_Interpreter_FOUND)
       ${Python3_EXECUTABLE}
       ${CMAKE_SOURCE_DIR}/tools/inspector/check_registered_components.py --test
   )
+  # The pure checks of the deploy gate (skill openblack-deploy-check). The test skips with no PIL.
+  add_test(
+    NAME test_deploy_gate_checks
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.claude/skills/openblack-deploy-check/scripts/test_gate_checks.py
+  )
+  set_tests_properties(test_deploy_gate_checks PROPERTIES SKIP_RETURN_CODE 77)
 endif ()
 # The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
 # parallel ctest they don't also crowd each other
