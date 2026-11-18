@@ -76,6 +76,7 @@
 #include "Graphics/HandWaterGlow.h"
 #include "Graphics/LandFootprints.h"
 #include "Graphics/LandShadowBake.h"
+#include "Graphics/LandTexelFormat.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ModelLight.h"
@@ -1014,7 +1015,7 @@ const Texture2D& Renderer::GetLandCorners() const
 		_landDetail.corners.assign(2 * land_detail::k_CornerTextureSide * land_detail::k_CornerTextureSide, 0);
 		_landDetail.cornersFrom.clear();
 		_landCorners = std::make_unique<Texture2D>("LandCorners");
-		_landCorners->CreateWithinFrame(k_Side, k_Side, 1, TextureFormat::RG16, Wrapping::ClampEdge, Filter::Nearest, nullptr);
+		_landCorners->CreateWithinFrame(k_Side, k_Side, 1, k_LandTwoValueFormat, Wrapping::ClampEdge, Filter::Nearest, nullptr);
 		_landCorners->Update(_landDetail.corners.data(), static_cast<uint32_t>(_landDetail.corners.size() * sizeof(uint16_t)));
 	}
 	return *_landCorners;

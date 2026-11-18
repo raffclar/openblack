@@ -20,6 +20,7 @@ installed.
 - `openblack-commit-check`
 - `openblack-code-comments`
 - `openblack-modern-cpp`
+- `openblack-deploy-check`
 - `ghidra-catalogue`
 - `test-triage`
 

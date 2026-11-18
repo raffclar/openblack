@@ -231,5 +231,29 @@ class TurnsOfTwoLands(unittest.TestCase):
             self.assertEqual(net_check.session_part_turns(log), [14])
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class LinuxServerCommand(unittest.TestCase):
+    def test_the_paths_and_the_listen_address_change_for_the_container(self):
+        out, game, linux = os.path.abspath("E:/out"), os.path.abspath("C:/game"), os.path.abspath("E:/srv")
+        command = ["server.exe", "-g", game, "-l", os.path.join(out, "server", "server.log"), "--listen", "127.0.0.1:0",
+                   f"--profile-folder={os.path.join(out, 'profile')}", "-s", "Land1.txt"]
+        result = net_check.linux_server_command(command, linux, "image:1", out, game, "test-name")
+        inner = result[result.index("image:1") + 1:]
+        self.assertEqual(inner[:5], ["/srv/openblack-server", "-g", "/game", "-l", "/out/server/server.log"])
+        port = inner[6].split(":")[1]
+        self.assertEqual(inner[6], f"0.0.0.0:{port}")
+        self.assertIn(f"127.0.0.1:{port}:{port}", result)
+        self.assertEqual(inner[7:], ["--profile-folder=/out/profile", "-s", "Land1.txt"])
+
+    def test_the_container_gets_a_closed_report_address_by_default(self):
+        saved = os.environ.pop("SENTRY_DSN", None)
+        try:
+            result = net_check.linux_server_command(["server.exe"], "E:/srv", "image:1", "E:/out", "C:/game", "n")
+        finally:
+            if saved is not None:
+                os.environ["SENTRY_DSN"] = saved
+        self.assertIn(f"SENTRY_DSN={net_check.NO_REPORTS_DSN}", result)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,7 @@
 //    the locked pointer onto the OK button and a click on it. The game must make the player profile with the name.
 // 2. The testbed: a click locks the pointer, a drag with the left button moves the land, the first Escape frees the
 //    pointer, the second Escape opens the game menu, and a click locks the pointer again.
+// 3. The console of both runs has no error of the graphics device (WebGPU or WebGL 2).
 //
 // Usage: node mouse-check.mjs <chrome.exe> <page url> <game folder> <output folder> [--renderer webgpu|webgl2]
 //        [--dpr <ratio>]
@@ -173,6 +174,16 @@ check('second Escape opens the menu', menu > 0.05 && menu > 3 * still,
   `changed ${(menu * 100).toFixed(1)}% after the second Escape`);
 check('a click locks the pointer again', bedEvals[2] === 'canvas' && count(bed.log, 'Input: the game has the pointer') >= 2,
   `lock element ${bedEvals[2]}`);
+
+// The browser writes an error of the graphics device to the console, and the game does not see it. A texture that a
+// shader cannot read made each land pass invalid on WebGPU, and the screen stayed black with no crash report. The
+// graphics library asks WebGL 2 about each texture format at the start: an answer of INVALID_ENUM there is not an error.
+const deviceErrors = (text) => text.split(/\r?\n/)
+  .filter((line) => /is invalid due to a previous error|While calling \[Device\]|WebGL: INVALID|GL_INVALID/.test(line))
+  .filter((line) => !line.includes('getInternalformatParameter'));
+const errors = [...deviceErrors(box.console), ...deviceErrors(bed.console)];
+check('the graphics device gives no errors', errors.length === 0,
+  errors.length === 0 ? '' : `${errors.length} errors, the first: ${errors[0].slice(0, 200)}`);
 
 const failed = results.filter((r) => !r.pass).length;
 writeFileSync(path.join(out, `${tag}-results.json`), JSON.stringify(results, null, 1));
