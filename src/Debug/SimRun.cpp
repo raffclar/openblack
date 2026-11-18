@@ -55,10 +55,15 @@ bool SkipsHeldFrame(bool steppedByTool, bool paused, bool workWaits)
 	return steppedByTool && paused && !workWaits;
 }
 
+bool Paces(const Settings& settings, std::optional<std::chrono::microseconds> frameTime)
+{
+	return !settings.fast && settings.paceToWallClock && frameTime.has_value();
+}
+
 std::chrono::microseconds PaceWait(const Settings& settings, std::optional<std::chrono::microseconds> frameTime,
                                    std::chrono::microseconds frameTook)
 {
-	if (settings.fast || !settings.paceToWallClock || !frameTime.has_value())
+	if (!Paces(settings, frameTime))
 	{
 		return std::chrono::microseconds {0};
 	}

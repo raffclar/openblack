@@ -46,6 +46,7 @@
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/PlayerProfiles.h"
+#include "Common/PreciseWait.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/ScenarioPlayer.h"
 #include "ECS/ChallengePictures.h"
@@ -94,6 +95,7 @@
 #include "PlayerSlots.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
+#include "Server/TurnPace.h"
 #include "Simulation/CommandLog.h"
 #include "Simulation/FrameBody.h"
 #include "Simulation/ProfileMenu.h"
@@ -322,6 +324,10 @@ private:
 	/// The frame does again a turn that the server sent before a restart
 	bool _replaying {false};
 	std::chrono::steady_clock::time_point _frameStart;
+	/// The due times of the frames, and the wait to each due time. The pace starts at the end of the first frame, so that
+	/// the time of the start of the network does not count as lost time.
+	turn_pace::Deadline _pace;
+	precise_wait::Waiter _waiter;
 	/// The testbed scenario that the server plays, as the game's window of scenarios plays it
 	std::unique_ptr<testbed_scenarios::ScenarioPlayer> _scenario;
 	/// The commands of the game that a tool gives, by the land of the game and then by the turn
@@ -805,15 +811,17 @@ bool ServerWorld::Frame()
 	// The frame rate of the statistics uses the machine clock of the game. With a fixed frame time each run gets the
 	// same rate.
 	_frameRate.Frame(machine_clock::Ticks(), _frameCount);
-	// Unless the run is fast, the frame waits until it took its fixed game time in real time too. The turns that the server
-	// does again after a restart come with no wait.
+	// Unless the run is fast, the next frame waits for its due time: the start of the pace plus a fixed game time for each
+	// frame. After a slow frame, the next frame starts at once, and the server makes up the lost time. The turns that the
+	// server does again after a restart come with no wait, and the pace starts again after them.
 	auto& simulation = Locator::simulation::value();
-	if (const auto wait = sim_run::PaceWait(
-	        simulation.GetSettings(), clock.GetFixedFrameTime(),
-	        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - _frameStart));
-	    wait.count() > 0 && !_replaying)
+	if (const auto frameTime = clock.GetFixedFrameTime(); sim_run::Paces(simulation.GetSettings(), frameTime) && !_replaying)
 	{
-		std::this_thread::sleep_for(wait);
+		_waiter.WaitUntil(_pace.NextFrame(std::chrono::steady_clock::now(), *frameTime));
+	}
+	else
+	{
+		_pace.Restart(std::chrono::steady_clock::now());
 	}
 	const auto frameEnd = std::chrono::steady_clock::now();
 	simulation.FrameEnded(std::chrono::duration<float, std::milli>(frameEnd - _frameStart).count());
