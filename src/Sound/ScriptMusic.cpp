@@ -16,6 +16,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "ECS/Reflection/BinaryArchive.h"
+
 using namespace openblack::audio;
 
 namespace
@@ -276,4 +278,92 @@ void ScriptMusic::Restore(MusicType type, bool started, MusicLyrics lyrics)
 	_started = started;
 	_lyrics = lyrics;
 	_channel.reset();
+}
+
+std::optional<ScriptMusicChannel> ScriptMusic::GetChannel() const
+{
+	if (!_channel.has_value())
+	{
+		return std::nullopt;
+	}
+	return ScriptMusicChannel {.type = _channel->type,
+	                           .loops = _channel->loops,
+	                           .time = _channel->time,
+	                           .ticks = _channel->ticks,
+	                           .checked = _channel->checked,
+	                           .current = _channel->current,
+	                           .fadeTicks = _channel->fadeTicks};
+}
+
+bool ScriptMusic::RestoreChannel(const ScriptMusicChannel& channel, const TimingFor& timingFor)
+{
+	_channel.reset();
+	auto timing = timingFor ? timingFor(channel.type) : nullptr;
+	if (!timing || timing->chunkFrames.empty() || timing->sampleRate == 0)
+	{
+		return false;
+	}
+	_channel = Channel {.type = channel.type,
+	                    .timing = std::move(timing),
+	                    .loops = channel.loops,
+	                    .time = channel.time,
+	                    .ticks = channel.ticks,
+	                    .checked = channel.checked,
+	                    .current = channel.current,
+	                    .fadeTicks = channel.fadeTicks};
+	return true;
+}
+
+void openblack::audio::SaveScriptMusicChannel(ecs::reflection::BinaryWriter& out,
+                                              const std::optional<ScriptMusicChannel>& channel)
+{
+	ecs::reflection::Save(out, channel.has_value());
+	if (!channel.has_value())
+	{
+		return;
+	}
+	ecs::reflection::Save(out, channel->type);
+	ecs::reflection::Save(out, channel->loops);
+	ecs::reflection::Save(out, static_cast<int64_t>(channel->time.count()));
+	ecs::reflection::Save(out, channel->ticks);
+	ecs::reflection::Save(out, channel->checked.chunk);
+	ecs::reflection::Save(out, channel->checked.frame);
+	ecs::reflection::Save(out, channel->current);
+	ecs::reflection::Save(out, channel->fadeTicks.has_value());
+	ecs::reflection::Save(out, channel->fadeTicks.value_or(0));
+}
+
+bool openblack::audio::LoadScriptMusicChannel(ecs::reflection::BinaryReader& in, std::optional<ScriptMusicChannel>& channel)
+{
+	channel.reset();
+	bool has = false;
+	ecs::reflection::Load(in, has);
+	if (in.Failed() || !has)
+	{
+		return !in.Failed();
+	}
+	ScriptMusicChannel read;
+	int64_t time = 0;
+	bool fades = false;
+	uint32_t fadeTicks = 0;
+	ecs::reflection::Load(in, read.type);
+	ecs::reflection::Load(in, read.loops);
+	ecs::reflection::Load(in, time);
+	ecs::reflection::Load(in, read.ticks);
+	ecs::reflection::Load(in, read.checked.chunk);
+	ecs::reflection::Load(in, read.checked.frame);
+	ecs::reflection::Load(in, read.current);
+	ecs::reflection::Load(in, fades);
+	ecs::reflection::Load(in, fadeTicks);
+	if (in.Failed())
+	{
+		return false;
+	}
+	read.time = std::chrono::microseconds(time);
+	if (fades)
+	{
+		read.fadeTicks = fadeTicks;
+	}
+	channel = read;
+	return true;
 }

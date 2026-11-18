@@ -16,12 +16,14 @@
 #include <optional>
 #include <vector>
 
+#include <ECS/Reflection/BinaryArchive.h>
 #include <ECS/SyncedState.h>
 #include <PackFile.h>
 #include <Sound/AudioTurn.h>
 #include <Sound/MusicTimingFile.h>
 #include <Sound/ScriptMusic.h>
 #include <Sound/SoundDecoder.h>
+#include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
 using namespace openblack::audio;
@@ -377,4 +379,90 @@ TEST(ScriptMusicClock, ALoadKeepsTheSyncedValuesOnlyWhenNoChannelPlays)
 	EXPECT_TRUE(std::equal(before.begin(), before.begin() + 4, after.begin()));
 	EXPECT_NE(before[4], -1);
 	EXPECT_EQ(after[4], -1);
+}
+
+namespace
+{
+/// The copy of the music that a world state gives: the section of the system, then the block of the channel
+ScriptMusic WorldStateCopy(const ScriptMusic& server, const ScriptMusic::TimingFor& timing)
+{
+	const entt::meta_ctx context;
+	openblack::ecs::reflection::BinaryWriter out(context);
+	SaveScriptMusicChannel(out, server.GetChannel());
+	const openblack::ecs::reflection::EntityRemap remap;
+	openblack::ecs::reflection::BinaryReader in(context, out.Bytes(), remap);
+	std::optional<ScriptMusicChannel> channel;
+	EXPECT_TRUE(LoadScriptMusicChannel(in, channel));
+	EXPECT_EQ(in.Remaining(), 0U);
+	EXPECT_EQ(channel, server.GetChannel());
+	ScriptMusic client;
+	client.Restore(server.GetType(), server.IsStarted(), server.GetLyrics());
+	if (channel.has_value())
+	{
+		EXPECT_TRUE(client.RestoreChannel(*channel, timing));
+	}
+	return client;
+}
+} // namespace
+
+// A world state keeps the channel, so a client that joins while a piece plays has the synced values of the server at
+// once, and at each turn after, to the end of the piece
+TEST(ScriptMusicClock, AWorldStateKeepsTheSyncedValuesWhileAPiecePlays)
+{
+	const auto timing = Always(MakeTiming(k_Cues));
+	ScriptMusic server;
+	server.Start(k_Verse);
+	server.Turn(100ms, timing);
+	ASSERT_TRUE(server.GetChannelTime().has_value());
+	// The cue of the second word comes after the join
+	ASSERT_LT(server.GetLyrics().word, 2);
+	auto client = WorldStateCopy(server, timing);
+	EXPECT_EQ(client.SyncedValues(), server.SyncedValues());
+	EXPECT_EQ(client.GetPlace(), server.GetPlace());
+	// The cues and the end of the piece come at the same turns
+	for (int turn = 0; turn < 20; ++turn)
+	{
+		server.Turn(100ms, timing);
+		client.Turn(100ms, timing);
+		ASSERT_EQ(client.SyncedValues(), server.SyncedValues()) << "turn " << turn;
+	}
+	EXPECT_EQ(server.GetType(), MusicType::None);
+	EXPECT_EQ(client.GetLyrics().line, 1);
+	EXPECT_EQ(client.GetLyrics().word, 2);
+}
+
+// A channel that fades out after the script stopped it keeps its fade in the world state
+TEST(ScriptMusicClock, AWorldStateKeepsTheFadeOfAStoppedPiece)
+{
+	const auto timing = Always(MakeTiming(k_Cues, -1));
+	ScriptMusic server;
+	server.Start(k_Verse);
+	TurnsUntil(server, timing, 300ms);
+	server.Start(MusicType::None);
+	server.Turn(100ms, timing);
+	ASSERT_TRUE(server.GetChannel().has_value());
+	ASSERT_TRUE(server.GetChannel()->fadeTicks.has_value());
+	auto client = WorldStateCopy(server, timing);
+	for (int turn = 0; turn < 80; ++turn)
+	{
+		server.Turn(100ms, timing);
+		client.Turn(100ms, timing);
+		ASSERT_EQ(client.SyncedValues(), server.SyncedValues()) << "turn " << turn;
+	}
+	EXPECT_FALSE(server.GetChannel().has_value());
+}
+
+// With no channel, the block keeps only its flag; with a bank that cannot play, no channel comes back
+TEST(ScriptMusicClock, AWorldStateWithNoChannelOrNoBankKeepsNoChannel)
+{
+	const auto timing = Always(MakeTiming(k_Cues));
+	ScriptMusic quiet;
+	EXPECT_EQ(WorldStateCopy(quiet, timing).SyncedValues(), quiet.SyncedValues());
+
+	ScriptMusic playing;
+	playing.Start(k_Verse);
+	TurnsUntil(playing, timing, 300ms);
+	ScriptMusic client;
+	EXPECT_FALSE(client.RestoreChannel(*playing.GetChannel(), Always(nullptr)));
+	EXPECT_FALSE(client.GetChannel().has_value());
 }

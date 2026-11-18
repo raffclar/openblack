@@ -23,6 +23,12 @@
 
 #include "MusicType.h"
 
+namespace openblack::ecs::reflection
+{
+class BinaryWriter;
+class BinaryReader;
+} // namespace openblack::ecs::reflection
+
 namespace openblack::audio
 {
 
@@ -100,6 +106,32 @@ void ApplyMusicCue(MusicLyrics& lyrics, std::string_view cue);
 /// numbers, so a negative line is never reached.
 [[nodiscard]] bool ReachedMusicLine(int32_t lastLine, int32_t line);
 
+/// The channel that plays a piece of script music, as a world state keeps it. The times of the bank are not in it: the
+/// load takes them again from the bank of the piece.
+struct ScriptMusicChannel
+{
+	MusicType type {MusicType::None};
+	/// Times to play the bank again after the first, -1 for ever
+	int32_t loops {0};
+	/// The time since the channel started
+	std::chrono::microseconds time {0};
+	/// The looks of the music thread at the channel since it started
+	uint64_t ticks {0};
+	/// The place of the last cue check
+	MusicCuePosition checked;
+	/// The channel is the music heard, so it passes its cues
+	bool current {true};
+	/// The looks left before a channel that fades out stops
+	std::optional<uint32_t> fadeTicks;
+
+	bool operator==(const ScriptMusicChannel&) const = default;
+};
+
+/// Writes the channel, or a flag for no channel
+void SaveScriptMusicChannel(ecs::reflection::BinaryWriter& out, const std::optional<ScriptMusicChannel>& channel);
+/// Reads what SaveScriptMusicChannel wrote. Returns false when the bytes do not read.
+[[nodiscard]] bool LoadScriptMusicChannel(ecs::reflection::BinaryReader& in, std::optional<ScriptMusicChannel>& channel);
+
 /// Whether the world has the game's music. A game on one computer has it when the computer had a sound device at the
 /// start, as Black & White has. In a network game and on the server, every computer counts as one with a sound device,
 /// so that the world of each computer is the same.
@@ -168,6 +200,12 @@ public:
 	/// A saved game continues with the scripts' piece, whether it played and the lyrics. A piece that played before the
 	/// save gives no sound and does not end, because the save keeps no channel.
 	void Restore(MusicType type, bool started, MusicLyrics lyrics);
+
+	/// The channel that plays the piece, without the times of its bank. None when no channel plays.
+	[[nodiscard]] std::optional<ScriptMusicChannel> GetChannel() const;
+	/// A world state continues with the channel of the server. The times come again from the bank of the piece. Returns
+	/// false and keeps no channel when the bank cannot play.
+	bool RestoreChannel(const ScriptMusicChannel& channel, const TimingFor& timingFor);
 
 private:
 	struct Channel

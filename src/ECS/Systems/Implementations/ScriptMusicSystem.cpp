@@ -14,6 +14,7 @@
 #include <chrono>
 #include <exception>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -151,5 +152,28 @@ bool ScriptMusicSystem::LoadState(reflection::BinaryReader& in)
 		return false;
 	}
 	_music.Restore(type, started, lyrics);
+	return true;
+}
+
+void ScriptMusicSystem::SaveChannel(reflection::BinaryWriter& out) const
+{
+	audio::SaveScriptMusicChannel(out, _music.GetChannel());
+}
+
+bool ScriptMusicSystem::LoadChannel(reflection::BinaryReader& in)
+{
+	std::optional<audio::ScriptMusicChannel> channel;
+	if (!audio::LoadScriptMusicChannel(in, channel))
+	{
+		return false;
+	}
+	if (channel.has_value() && !_music.RestoreChannel(*channel, [this](audio::MusicType type) { return Timing(type); }))
+	{
+		if (const auto logger = spdlog::get("audio"); logger != nullptr)
+		{
+			SPDLOG_LOGGER_WARN(logger, "The channel of the script music {} has no bank that plays: it does not come back",
+			                   audio::GetMusicTypeName(channel->type));
+		}
+	}
 	return true;
 }
