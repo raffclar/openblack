@@ -10,6 +10,7 @@
 
     python -I pre_deploy_gate.py [--tars E:/openblack/scratch/live-deploy-4/out] [--reference <folder>]
         [--save-reference <folder>] [--only web|server] [--renderers webgpu,webgl2]
+    python -I pre_deploy_gate.py --web-page <web build>/bin/Release --renderers webgpu --work <folder>
 
 It prints one line PASS or FAIL for each item and a last line with the verdict. The exit code is 0 only when every item
 passes. The gate never contacts the live site and changes nothing of a deploy.
@@ -18,12 +19,16 @@ Web: it unpacks web-build.tar into the work folder and serves it on 127.0.0.1 wi
 (gate_serve.py). For each renderer (WebGPU, then WebGL 2 forced with the page parameter "renderer"), headless Chrome
 (web/scripts/cdp-run.mjs) starts the page as a player gets it: the new player's name box, the first question of Land 1,
 then a click on its OK button and the land after it. The page of a shipping build takes no developer arguments and
-ignores the -SKIRMISH switch, and a shipping game has no --landgen (a developer option), so Land 1 is the only land that
-the gate can start.
+ignores the -SKIRMISH switch, and a shipping game has no --landgen (a developer option). So the run then starts a
+skirmish as a player does: Continue on the advisors' lines, Escape for the main menu, Start Skirmish Game, a land of
+the skirmish box and Start Game (--land1-only leaves this part out).
 The gate tests each screenshot for the land (lit pixels and land colours, and the likeness of its colours to the same
 screenshot of a reference build), the console of each run (no error, no WebGPU or WebGL validation message, no
 uncaught exception, no worker load error), and the frame time of the game: the page counts the frames of the game in a
 shared counter, and the gate keeps the time of each change of the counter for 10 seconds.
+
+With --web-page, the gate runs the web items only, on the page folder of a web build in place of the tar. The merge
+train runs it so on WebGPU for each car (scripts/web_check.sh of the skill openblack-merge-train).
 
 Server: it unpacks server-build.tar and starts the Linux openblack-server in a container of the image that the local act
 runs use (no download; Docker must already run). It reads the build id, then plays one network game of 300 turns with
@@ -81,6 +86,21 @@ FRAME_LINE = re.compile(r"frames (\d+) avg ([\d.]+) p95 ([\d.]+) max ([\d.]+)")
 # below the box to lock the pointer, then moves the game pointer onto the OK button and presses it.
 LOCK_CLICK = (640, 960)
 QUESTION_OK = (405, 707)
+# The skirmish path of a player: the Continue button of the advisors' lines on Land 1, the empty band below the main
+# menu (a click there takes the pointer again), the Start Skirmish Game button of the main menu, the second land of the
+# skirmish box ("Death Comes To Those That Wait" with the game folder of this computer; the first land is the
+# developer's own construct.txt) and the Start Game button of the box
+CONTINUE = (1240, 844)
+BELOW_MENU = (640, 1000)
+START_SKIRMISH = (640, 456)
+SKIRMISH_LAND = (640, 310)
+START_GAME = (1080, 920)
+# The log lines of Land 1 that the skirmish path waits for: the first advisors' line that waits for Continue after
+# the opening scene, and the end of the music of the opening (the hand lessons start). Six more clicks on Continue
+# then go to the lesson "follow your worshippers", where no line holds the screen and Escape opens the menu.
+CONTINUE_LINE = "Help text 5218 is said"
+LESSONS_START = "Music Playing MUSIC_TYPE_NONE"
+SKIRMISH_STARTS = "The skirmish box: the skirmish starts on"
 
 results = []
 
@@ -110,8 +130,7 @@ def unpack(tar_path, folder):
     os.makedirs(folder)
     with tarfile.open(tar_path) as tar:
         tar.extractall(folder, filter="data")
-    version = os.path.join(folder, "version.txt")
-    return open(version, encoding="ascii").read().strip() if os.path.exists(version) else None
+    return page_version(folder)
 
 
 def land1_steps():
@@ -136,6 +155,48 @@ def land1_steps():
         {"at": 31, "do": "eval", "expression": SAMPLE_FRAMES},
         {"at": 42, "do": "eval", "expression": READ_FRAMES},
     ]
+
+
+def skirmish_steps(start):
+    """The steps after land1_steps that start a skirmish as a player does, with no developer option: the advisors'
+    lines of Land 1 with Continue, Escape for the main menu, Start Skirmish Game, the first land and Start Game"""
+    click = lambda at, place: [
+        {"at": at, "do": "pointer-to", "x": place[0], "y": place[1]},
+        {"at": at + 1, "do": "synth-click", "button": 0},
+    ]
+    escape = lambda at: {"at": at, "do": "key", "key": "Escape", "code": "Escape", "keyCode": 27}
+    steps = [
+        {"at": start, "do": "mouse", "type": "mouseMoved", "x": CONTINUE[0], "y": CONTINUE[1]},
+        {"at": start + 0.3, "do": "mouse", "type": "mousePressed", "x": CONTINUE[0], "y": CONTINUE[1], "button": "left"},
+        {"at": start + 0.4, "do": "mouse", "type": "mouseReleased", "x": CONTINUE[0], "y": CONTINUE[1], "button": "left"},
+        {"at": start + 1, "do": "wait-log", "text": CONTINUE_LINE, "seconds": 400},
+    ]
+    at = start + 3
+    for _ in range(3):
+        steps += click(at, CONTINUE)
+        at += 10
+    steps.append({"at": at, "do": "wait-log", "text": LESSONS_START, "seconds": 120})
+    at += 1
+    for _ in range(6):
+        steps += click(at, CONTINUE)
+        at += 10
+    at += 2
+    # The first Escape frees the pointer, the second opens the main menu
+    steps += [escape(at), escape(at + 1), {"at": at + 4, "do": "shot", "name": "menu"},
+              {"at": at + 5, "do": "mouse", "type": "mouseMoved", "x": BELOW_MENU[0], "y": BELOW_MENU[1]},
+              {"at": at + 5.3, "do": "mouse", "type": "mousePressed", "x": BELOW_MENU[0], "y": BELOW_MENU[1],
+               "button": "left"},
+              {"at": at + 5.4, "do": "mouse", "type": "mouseReleased", "x": BELOW_MENU[0], "y": BELOW_MENU[1],
+               "button": "left"}]
+    at += 7
+    steps += click(at, START_SKIRMISH)
+    steps += [{"at": at + 2, "do": "wait-log", "text": "The skirmish box shows", "seconds": 120},
+              {"at": at + 5, "do": "shot", "name": "skirmish-box"}]
+    at += 6
+    steps += click(at, SKIRMISH_LAND) + click(at + 3, START_GAME)
+    steps += [{"at": at + 5, "do": "wait-log", "text": SKIRMISH_STARTS, "seconds": 60},
+              {"at": at + 35, "do": "shot", "name": "skirmish"}]
+    return steps
 
 
 def run_page(port, folder, renderer, steps):
@@ -187,11 +248,24 @@ def check_console(label, run, serve_log_path, serve_from):
     item(f"{label}: every page file answered", not failed, ", ".join(failed[:5]) or "no failed request")
 
 
-def web_gate(tar, work, renderers, reference_dir, measures):
-    page = os.path.join(work, "page")
-    version = unpack(tar, page)
-    item("web: tar unpacks with version.txt", bool(version) and os.path.exists(os.path.join(page, "openblack.wasm")),
-         f"version {version}")
+def page_version(page):
+    """The commit in version.txt of a page folder, or None"""
+    version = os.path.join(page, "version.txt")
+    return open(version, encoding="ascii").read().strip() if os.path.exists(version) else None
+
+
+def web_gate(tar, work, renderers, reference_dir, measures, built_page=None, skirmish=True):
+    """The web items. built_page is the page folder of a web build (the merge train's car); else the tar unpacks."""
+    if built_page:
+        page = built_page
+        version = page_version(page)
+        item("web: page folder has openblack.wasm and version.txt",
+             bool(version) and os.path.exists(os.path.join(page, "openblack.wasm")), f"{page}, version {version}")
+    else:
+        page = os.path.join(work, "page")
+        version = unpack(tar, page)
+        item("web: tar unpacks with version.txt", bool(version) and os.path.exists(os.path.join(page, "openblack.wasm")),
+             f"version {version}")
     if not version:
         return None
     port = free_port()
@@ -209,7 +283,8 @@ def web_gate(tar, work, renderers, reference_dir, measures):
         for renderer in renderers:
             label = f"web {renderer} land1"
             serve_from = os.path.getsize(serve_log)
-            run = run_page(port, os.path.join(work, f"web-{renderer}-land1"), renderer, land1_steps())
+            steps = land1_steps() + (skirmish_steps(50) if skirmish else [])
+            run = run_page(port, os.path.join(work, f"web-{renderer}-land1"), renderer, steps)
             started = "Load startup: first frame" in run["log"]
             item(f"{label}: game started", started and run["exit"] == 0,
                  f"cdp-run exit {run['exit']}" + ("" if started else ", no first frame in the game log"))
@@ -223,6 +298,12 @@ def web_gate(tar, work, renderers, reference_dir, measures):
                      "(headless Chrome: compare with the reference run only)")
             else:
                 item(f"{label}: frame time", False, "the page gave no frame times")
+            if skirmish:
+                started = SKIRMISH_STARTS in run["log"]
+                item(f"web {renderer} skirmish: started from the main menu", started,
+                     next((line.split("] ")[-1] for line in run["log"].splitlines() if SKIRMISH_STARTS in line),
+                          "no skirmish start in the game log (see the shots menu and skirmish-box)"))
+                check_pictures(f"web {renderer} skirmish", run, ["skirmish"], reference_dir, measures)
     finally:
         subprocess.run(["powershell.exe", "-NoProfile", "-Command", f"Stop-Process -Id {server.pid}"],
                        capture_output=True)
@@ -287,10 +368,16 @@ def server_gate(tar, work, given_bin, image):
                           "--land", NET_LAND, "--turns", str(NET_TURNS), "--game-path", GAME_FOLDER, "--out", out],
                          capture_output=True, text=True, timeout=1800, cwd=REPO,
                          env={**os.environ, "SENTRY_DSN": NO_REPORTS_DSN})
+    # The output of net_check.py stays in the work folder: it shows why a network game did not start
+    with open(os.path.join(out, "net_check.txt"), "w", encoding="utf-8") as file:
+        file.write(f"exit {net.returncode}\n{net.stdout}{net.stderr}")
     read = lambda path: (open(path, encoding="utf-8", errors="replace").read() if os.path.exists(path) else "")
     server_log = read(os.path.join(out, "server", "server.log"))
     listen = re.search(r"The game server listens on \S+ \(wss\)", server_log)
-    item("server: ready (listens with TLS)", bool(listen), listen.group(0) if listen else "no listen line in the log")
+    last = ([line for line in (net.stdout + net.stderr).splitlines() if line.strip()] or [""])[-1].strip()[:200]
+    item("server: ready (listens with TLS)", bool(listen),
+         listen.group(0) if listen else f"no listen line in the log; net_check.py exit {net.returncode}: {last} "
+                                        f"(see {os.path.join(out, 'net_check.txt')})")
     ok, detail = gate_checks.lockstep_check(server_log, read(os.path.join(out, "client1", "client.log")), NET_TURNS)
     item(f"server: one desktop client plays {NET_TURNS} turns in step", ok, f"{NET_LAND}; {detail}")
     shutil.rmtree(os.path.join(out, "bin"), ignore_errors=True)
@@ -302,7 +389,11 @@ def main():
     parser.add_argument("--tars", default=DEFAULT_TARS, help="the folder of web-build.tar and server-build.tar")
     parser.add_argument("--work", help="the work folder (default: a new folder in E:/openblack/scratch/deploy-gate)")
     parser.add_argument("--only", choices=("web", "server"))
+    parser.add_argument("--web-page", help="the page folder of a web build (such as <build>/bin/Release) in place of "
+                                           "web-build.tar: the web items only, for the merge train's car")
     parser.add_argument("--renderers", default="webgpu,webgl2")
+    parser.add_argument("--land1-only", action="store_true",
+                        help="no skirmish after Land 1 (the merge train's short check)")
     parser.add_argument("--reference", help="the work folder of a gate run of the build that is live now")
     parser.add_argument("--save-reference", help="copy the screenshots and their measures to this folder")
     parser.add_argument("--client-bin", help="the desktop build of the same commit (default: ob-build master)")
@@ -312,12 +403,15 @@ def main():
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     work = os.path.abspath(options.work or os.path.join(DEFAULT_WORK, stamp))
     os.makedirs(work, exist_ok=True)
-    print(f"deploy gate: tars {options.tars}, work {work}", flush=True)
+    if options.web_page:
+        options.only = "web"
+    print(f"deploy gate: {'page ' + options.web_page if options.web_page else 'tars ' + options.tars}, work {work}",
+          flush=True)
     measures = {}
     web_version = server_version = None
     if options.only in (None, "web"):
         web_version = web_gate(os.path.join(options.tars, "web-build.tar"), work, options.renderers.split(","),
-                               options.reference, measures)
+                               options.reference, measures, options.web_page, not options.land1_only)
         with open(os.path.join(work, "measures.json"), "w", encoding="utf-8") as file:
             json.dump(measures, file)
     if options.only in (None, "server"):

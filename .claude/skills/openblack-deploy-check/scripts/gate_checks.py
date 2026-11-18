@@ -117,8 +117,10 @@ def land_check(measures, reference=None):
 
 
 # The lines of the game server and of the game
+# An older server puts the player name after the slot ("slot 0 Player1: commands"). A newer server does not
+# ("slot 0: commands").
 SERVER_SUMMARY = re.compile(
-    r"Network game: slot (\d+) .*?(\d+) checksums compared, (\d+) the same, first different (\w+), (\d+) resumes")
+    r"Network game: slot (\d+)[ :].*?(\d+) checksums compared, (\d+) the same, first different (\w+), (\d+) resumes")
 CLIENT_COMPARED = re.compile(r"Network game: (\d+) turns compared with the server, (\d+) the same")
 BUILD_ID = re.compile(r"\(build id ([^)]+)\)")
 
@@ -142,3 +144,21 @@ def build_id(version_output):
     match = BUILD_ID.search(version_output)
     return match.group(1) if match else None
 
+
+
+def checklist_summary(states):
+    """The summary line and the exit code of a checklist, from the PASS, FAIL and STOP word of each item.
+
+    A STOP item cannot run (the user must give something). It is not a fault, so the checklist passes when no item
+    failed, and the line gives the number of STOP items. A FAIL item makes the checklist fail (exit code 1).
+    """
+    fails = sum(1 for state in states if state == "FAIL")
+    stops = sum(1 for state in states if state == "STOP")
+    passes = sum(1 for state in states if state == "PASS")
+    word = "FAIL" if fails else "PASS"
+    line = f"{word}: {passes} of {len(states)} items pass"
+    if fails:
+        line += f", {fails} FAIL"
+    if stops:
+        line += f", {stops} STOP"
+    return line, 1 if fails else 0
