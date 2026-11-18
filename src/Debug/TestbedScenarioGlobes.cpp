@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "3D/TempleRoom.h"
+#include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -670,6 +671,30 @@ void AddLandTwoGifts(std::vector<Scenario>& all)
 	    .commands = {{.kind = Command::Kind::RunScript, .delaySeconds = 1.0f, .script = "GiveOneShots"}},
 	});
 }
+// A heal dispenser floats its globe at the top of the lake's near bank. The hand takes the globe and lets it go with a
+// slow push north, so that it rolls down the bank to the shallows.
+void AddSlopeRoll(std::vector<Scenario>& all)
+{
+	const glm::vec2 top {k_Lake.x, k_NearShallows - 34.0f};
+	all.push_back({
+	    .id = "miracles.globe_rolls_down_bank",
+	    .name = "A one-shot globe rolls down a slope",
+	    .facet = Facet::Miracles,
+	    .description = "The hand takes the dispenser's globe at the top of the lake's steep near bank. Then it lets go of "
+	                   "the globe with a slow push north, down the bank. The camera looks at the bank from the side.",
+	    .expected = "The globe falls on the bank and rolls or slides down to the shallows. It moves smoothly in each "
+	                "frame, also between the turns of the world. It does not move in steps ten times a second.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {top.x - 16.0f, 14.0f, top.y}, .look = {top.x, 2.0f, top.y}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = top}},
+	    .commands =
+	        {// Takes the dispenser's globe, holding the button past a tap
+	         {.kind = Command::Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.31f}},
+	         {.kind = Command::Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Command::Kind::PointerRelease, .delaySeconds = 0.6f, .value = 3},
+	         {.kind = Command::Kind::HandRelease, .delaySeconds = 1.0f, .velocity = {0.0f, 1.0f, 6.0f}}},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
@@ -682,4 +707,5 @@ void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
 	AddPiles(all);
 	AddScriptDeletes(all);
 	AddLandTwoGifts(all);
+	AddSlopeRoll(all);
 }
