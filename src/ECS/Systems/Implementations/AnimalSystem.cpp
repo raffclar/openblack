@@ -59,6 +59,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PoseThreads.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlockRules.h"
@@ -2803,18 +2804,39 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 	                     _soundPace.Step(static_cast<float>(Locator::time::value().GetFrameRealTime().count()));
 	const float elapsedSeconds = static_cast<float>(elapsed) * 0.001f;
 	const auto& animations = Locator::resources::value().GetAnimations();
-	auto& meshes = Locator::resources::value().GetMeshes();
-	// One world plays the clips' sounds of all the animals in this frame
-	const auto clipSounds = ecs::clip_sound_player::MakeGameWorld();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto* land = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
 	// The walk makes no component, so the stores of the components stay the same for all of it
 	const ecs::ComponentLookups<CarriedByTornado, InHand, HeldByCreature, InPhysics, SpellAnimal> stores(registry);
-	// The frame writes only the drawn place, the tilt, the clip and the pose. The turns go by the Transform.
+
+	// First the main thread finds the clip and the model of each animal, because only the main thread can use the
+	// resources. The clips are kept by the hash of their number in the animation pack.
+	_poseJobs.clear();
+	_keptClips.Clear();
+	_keptModels.Clear();
 	registry.Each<Animal, const Transform, const Mesh>([&](entt::entity entity, Animal& animal, const Transform& transform,
 	                                                       const Mesh& mesh) {
+		PoseJob job {.entity = entity, .animal = &animal, .transform = &transform, .pose = registry.TryGet<AnimalPose>(entity)};
+		const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(animal.animation));
+		if (job.pose != nullptr && animal.animation != AnimId::Invalid && _keptClips.Contains(animations, clipId) &&
+		    _keptModels.Contains(meshes, mesh.id))
+		{
+			job.clip = _keptClips.Find(animations, clipId);
+			job.model = _keptModels.Find(meshes, mesh.id);
+		}
+		_poseJobs.push_back(job);
+	});
+
+	// Then the threads pose the animals. The frame writes only the drawn place, the tilt, the clip and the pose of each
+	// animal. The turns go by the Transform.
+	const auto poseOne = [&](size_t index, size_t /*lane*/) {
+		auto& job = _poseJobs[index];
+		auto& animal = *job.animal;
+		const auto& transform = *job.transform;
 		// A tornado carrying it places it, as does a hand or a creature holding it or the physics moving it; it still plays
 		// its clip
 		animal.drawn.reset();
-		if (!stores.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
+		if (!stores.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(job.entity))
 		{
 			// Drawn between its last two turns, tilted as far as its bank has glided
 			const auto between = animals::DrawnAt(animal.previousPosition, animal.position, animal.previousHeading,
@@ -2822,15 +2844,14 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 			const float bank = animal.bank.Step(elapsedSeconds);
 			auto rotation = animals::Orientation(between.heading, bank);
 			// An animal on the land leans to its slope: each of its x and z axes lifts or drops to the land at its end
-			if (!(animal.height > animals::k_HighestToFollowSlope) && Locator::terrainSystem::has_value())
+			if (!(animal.height > animals::k_HighestToFollowSlope) && land != nullptr)
 			{
 				const auto turned = animals::Orientation(between.heading, 0.0f);
 				const float scale = transform.scale.x;
 				const auto& at = between.position;
-				const auto& land = Locator::terrainSystem::value();
 				const auto landAt = [&](const glm::vec3& axis) {
-					return land.GetAltitude(animals::SlopeSampleUnit(at.x + (axis.x * scale)),
-					                        animals::SlopeSampleUnit(at.z + (axis.z * scale)));
+					return land->GetAltitude(animals::SlopeSampleUnit(at.x + (axis.x * scale)),
+					                         animals::SlopeSampleUnit(at.z + (axis.z * scale)));
 				};
 				const float alongX = animals::SlopeLift(landAt(turned[0]), at.y);
 				const float alongZ = animals::SlopeLift(landAt(turned[2]), at.y);
@@ -2838,21 +2859,17 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 			}
 			animal.drawn = Animal::DrawnPlace {.position = between.position, .rotation = rotation};
 		}
-		const auto drawnAt = animal.drawn.has_value() ? animal.drawn->position : transform.position;
-		auto* pose = registry.TryGet<AnimalPose>(entity);
-		// The clips are kept by the hash of their number in the animation pack
-		const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(animal.animation));
-		if (pose == nullptr || animal.animation == AnimId::Invalid || !animations.Contains(clipId) || !meshes.Contains(mesh.id))
+		if (job.clip == nullptr || job.model == nullptr)
 		{
 			return;
 		}
 		// Each animal plays its own clip: by the ground it covers while it moves, else by the clock
-		const auto clip = animations.Handle(clipId);
-		const animals::ClipTiming timing {.playTime = clip->GetPlayTime(),
-		                                  .frameCount = clip->GetFrames().size(),
-		                                  .looping = clip->IsLooping(),
-		                                  .playedByTime = clip->IsPlayedByTime(),
-		                                  .stride = clip->GetStride()};
+		const auto& clip = *job.clip;
+		const animals::ClipTiming timing {.playTime = clip.GetPlayTime(),
+		                                  .frameCount = clip.GetFrames().size(),
+		                                  .looping = clip.IsLooping(),
+		                                  .playedByTime = clip.IsPlayedByTime(),
+		                                  .stride = clip.GetStride()};
 		const bool moving = (animal.state == AnimalState::Wander && animal.move.step != glm::ivec2(0)) ||
 		                    (animal.move.stage != animals::MoveStage::AtGoal &&
 		                     (animal.state == AnimalState::MoveToPos || animal.state == AnimalState::SpecialMoveToPos ||
@@ -2863,31 +2880,34 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 		    animals::FramePlay(timing, moving, animal.move.speed, elapsed, transform.scale.x, animal.groundCarry);
 		const auto played = carried.played;
 		animal.groundCarry = carried.carry;
-		// The sounds on the clip's frames it passes play from the animal
-		ecs::clip_sound_player::Play(*clipSounds, entity, animal.animation, *clip, animal.clipPlace,
-		                             static_cast<uint32_t>(std::max(played, 0)), drawnAt, refresh);
+		// The sounds on the frames that the clip passes play from the animal after all the jobs
+		job.sound = true;
+		job.soundPlace = animal.clipPlace;
+		job.soundPlayed = static_cast<uint32_t>(std::max(played, 0));
+		job.soundAt = animal.drawn.has_value() ? animal.drawn->position : transform.position;
 		animal.clipPlace = animals::AdvanceClip(timing, animal.clipPlace, played);
 
 		// A wolf fades out of sight as it goes; the doves and bats stay whole until they go
-		pose->alpha = 255;
-		if (const auto* spellAnimal = stores.TryGet<SpellAnimal>(entity);
-		    pose->light == AnimalLight::White && spellAnimal != nullptr)
+		auto& pose = *job.pose;
+		pose.alpha = 255;
+		if (const auto* spellAnimal = stores.TryGet<SpellAnimal>(job.entity);
+		    pose.light == AnimalLight::White && spellAnimal != nullptr)
 		{
-			pose->alpha = static_cast<uint8_t>(std::clamp(std::nearbyint(spellAnimal->Alpha()), 0.0f, 255.0f));
+			pose.alpha = static_cast<uint8_t>(std::clamp(std::nearbyint(spellAnimal->Alpha()), 0.0f, 255.0f));
 		}
 
 		// The pose between the two keyframes around its place, each bone then placed by its parent
-		const auto model = meshes.Handle(mesh.id);
-		const auto& frames = clip->GetFrames();
-		const auto& parents = model->GetBoneParents();
+		const auto& model = *job.model;
+		const auto& frames = clip.GetFrames();
+		const auto& parents = model.GetBoneParents();
 		const auto span = animals::SpanAt(timing, animal.clipPlace);
-		if (!model->IsBoned() || frames.empty() || frames[span.from].bones.size() != parents.size() ||
+		if (!model.IsBoned() || frames.empty() || frames[span.from].bones.size() != parents.size() ||
 		    frames[span.to].bones.size() != parents.size())
 		{
-			pose->bones.clear();
+			pose.bones.clear();
 			return;
 		}
-		auto& bones = pose->bones;
+		auto& bones = pose.bones;
 		bones.resize(parents.size());
 		const auto& from = frames[span.from].bones;
 		const auto& to = frames[span.to].bones;
@@ -2899,7 +2919,20 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 				bones[i] = bones[parents[i]] * bones[i];
 			}
 		}
-	});
+	};
+	ecs::pose_threads::ForEach(_poseWorkers, _poseJobs.size(), poseOne);
+
+	// Last the main thread plays the sounds on the frames that the clips passed, in the order of the walk. One world plays
+	// the sounds of all the animals in this frame.
+	const auto clipSounds = ecs::clip_sound_player::MakeGameWorld();
+	for (const auto& job : _poseJobs)
+	{
+		if (job.sound)
+		{
+			ecs::clip_sound_player::Play(*clipSounds, job.entity, job.animal->animation, *job.clip, job.soundPlace,
+			                             job.soundPlayed, job.soundAt, refresh);
+		}
+	}
 	registry.SetDirty();
 }
 

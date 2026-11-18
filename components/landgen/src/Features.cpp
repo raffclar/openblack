@@ -953,7 +953,10 @@ void PlaceStands(const Placement& placement, uint64_t seed, const Settings& sett
 {
 	const auto standSeed = StageSeed(seed, 43);
 	const float last = static_cast<float>(placement.Side() - 1);
-	const int points = static_cast<int>(last / settings.standSpacing);
+	// A higher density puts the points closer together. Each point keeps the chance of a stand of the usual spacing, so
+	// the land has that many times more stands.
+	const float spacing = settings.standSpacing / std::sqrt(std::max(settings.treeDensity, 1.0f));
+	const int points = static_cast<int>(last / spacing);
 	const float squareSide = settings.standSpacing * k_MetresPerCorner;
 	const float squareKm = squareSide * squareSide / 1.0e6f;
 	for (int i = 0; i < points; ++i)
@@ -961,8 +964,8 @@ void PlaceStands(const Placement& placement, uint64_t seed, const Settings& sett
 		for (int j = 0; j < points; ++j)
 		{
 			auto random = RandomAt(standSeed, i, j);
-			const float x = (static_cast<float>(i) + random.NextUnit()) * settings.standSpacing;
-			const float z = (static_cast<float>(j) + random.NextUnit()) * settings.standSpacing;
+			const float x = (static_cast<float>(i) + random.NextUnit()) * spacing;
+			const float z = (static_cast<float>(j) + random.NextUnit()) * spacing;
 			const float roll = random.NextUnit();
 			const float sizeRoll = random.NextUnit();
 			if (!placement.Free(x, z))

@@ -88,6 +88,7 @@
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TownCensus.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
@@ -227,17 +228,7 @@ entt::entity TownOf(entt::entity store)
 {
 	auto& registry = Entities();
 	const auto* abode = registry.TryGet<const Abode>(store);
-	entt::entity town = entt::null;
-	if (abode != nullptr)
-	{
-		registry.Each<const Town>([&](entt::entity entity, const Town& candidate) {
-			if (candidate.id == abode->townId)
-			{
-				town = entity;
-			}
-		});
-	}
-	return town;
+	return abode != nullptr ? ecs::town_census::TownByNumber(registry, abode->townId) : entt::null;
 }
 
 TownDesireInfo DesireFor(ResourceType type)

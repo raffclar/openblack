@@ -1400,6 +1400,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		}
 		auto& person = registry.Get<Villager>(entity);
 		person.town = EntityOf(made, villager.town);
+		registry.TownMembersChanged();
 		person.abode = EntityOf(made, villager.home);
 		if (person.abode != entt::null && world_import::IsInsideHome(static_cast<VillagerStates>(states[0])))
 		{

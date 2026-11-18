@@ -17,6 +17,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/PlannedBuildingRules.h"
 #include "ECS/ScaffoldOfferRules.h"
 #include "Enums.h"
 
@@ -55,10 +56,19 @@ std::vector<entt::entity> StartPlannedAt(glm::vec3 place, float scriptDesire);
 /// as much as its kind wants mending, any other plan not at all
 [[nodiscard]] float PlanDesireToBeRepaired(entt::entity plan);
 
+/// The lists that MendBest fills each turn. The caller keeps them from turn to turn, so that their memory stays.
+struct MendLists
+{
+	std::vector<entt::entity> plans;
+	std::vector<float> planDesires;
+	std::vector<entt::entity> buildings;
+	std::vector<planned_building::MendCandidate> candidates;
+};
+
 /// A town's turn: it puts up at most one thing for mending, the building with no site it hasn't put up already or the
 /// plan of a finished building that went, whichever wants repair most (see planned_building::ChooseToMend). A building
 /// gets a site for its builders; a plan goes up again with nothing of it built.
-void MendBest(entt::entity town);
+void MendBest(entt::entity town, MendLists& lists);
 
 /// A town's building going from the land is planned again by its town, where it stood and as it was turned, after the
 /// town's other plans; the plan remembers whether the building had been finished. A building of no town is not.

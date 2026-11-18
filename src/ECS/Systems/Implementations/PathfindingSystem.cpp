@@ -51,6 +51,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/KeptStores.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingCircles.h"
@@ -120,7 +121,7 @@ bool CircleStillThere(const ecs::Registry& registry, const WallHugObjectReferenc
 	{
 		return false;
 	}
-	const auto* resident = registry.TryGet<const MapCellResident>(reference.entity);
+	const auto* resident = registry.Kept().walk.TryGet<MapCellResident>(reference.entity);
 	if (resident == nullptr || resident->cells.empty())
 	{
 		return false;
@@ -732,13 +733,15 @@ Walker WalkerOf(ecs::Registry& registry, entt::entity entity, WallHug& wallHug, 
 	               .clockwise = MoveStateClockwise::Undefined,
 	               .speed = wall_hug::WholeSpeed(wallHug.speed),
 	               .goal = wallHug.goalPlace};
-	if (const auto* turning = registry.TryGet<const TurningWalker>(entity))
+	// The kept stores answer as the registry does, with no search of the registry for each walker
+	const auto& kinds = registry.Kept().walk;
+	if (const auto* turning = kinds.TryGet<TurningWalker>(entity))
 	{
 		walker.speed = turning->speed;
 		walker.turnAngle = turning->turnAngle;
 	}
-	const auto take = [&registry, &walker]<MoveState S>() {
-		if (const auto* tag = registry.TryGet<const MoveStateTagComponent<S>>(walker.entity); tag != nullptr)
+	const auto take = [&kinds, &walker]<MoveState S>() {
+		if (const auto* tag = kinds.TryGet<MoveStateTagComponent<S>>(walker.entity); tag != nullptr)
 		{
 			walker.state = S;
 			walker.clockwise = tag->clockwise;

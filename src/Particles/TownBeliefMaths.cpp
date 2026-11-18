@@ -75,28 +75,32 @@ int Rank(std::span<const float> beliefs, size_t player)
 	return rank;
 }
 
-std::vector<int> Ranks(std::span<const float> beliefs)
+RankList Ranks(std::span<const float> beliefs)
 {
-	std::vector<int> ranks(beliefs.size(), 0);
-	std::vector<float> shown(beliefs.size());
-	std::ranges::transform(beliefs, shown.begin(), Shown);
-	// A belief that is not a number does not order with the others, so each rank is then found alone
-	if (std::ranges::any_of(shown, [](float belief) { return std::isnan(belief); }))
+	RankList ranks {};
+	const size_t count = std::min(beliefs.size(), k_MostPlayers);
+	std::array<float, k_MostPlayers> shownOf {};
+	const auto shown = std::span(shownOf).first(count);
+	std::ranges::transform(beliefs.first(count), shown.begin(), Shown);
+	// A belief that is not a number does not order with the others, so each rank is then found alone. So is each rank of
+	// more players than the list holds.
+	if (beliefs.size() > k_MostPlayers || std::ranges::any_of(shown, [](float belief) { return std::isnan(belief); }))
 	{
-		for (size_t player = 0; player < beliefs.size(); ++player)
+		for (size_t player = 0; player < count; ++player)
 		{
-			ranks[player] = Rank(beliefs, player);
+			ranks.at(player) = Rank(beliefs, player);
 		}
 		return ranks;
 	}
 	// The most believed first, and of equal beliefs the later player first: a player's place in this order is the
 	// count of players that rank above it
-	std::vector<size_t> order(beliefs.size());
+	std::array<size_t, k_MostPlayers> orderOf {};
+	const auto order = std::span(orderOf).first(count);
 	std::iota(order.begin(), order.end(), size_t {0});
 	std::ranges::sort(order, [&shown](size_t a, size_t b) { return shown[a] > shown[b] || (shown[a] == shown[b] && a > b); });
-	for (size_t place = 0; place < order.size(); ++place)
+	for (size_t place = 0; place < count; ++place)
 	{
-		ranks[order[place]] = static_cast<int>(place);
+		ranks.at(order[place]) = static_cast<int>(place);
 	}
 	return ranks;
 }
@@ -156,12 +160,12 @@ Look Step(Symbol& symbol, const Params& params, float belief, int rank, float dt
 	const float swayed = (portable_math::Cos(symbol.sway) + 1.0f) * 0.25f + 0.5f;
 	symbol.tilt = Wrapped(symbol.tilt + swayed * speed * dt * k_TiltShare);
 	symbol.around = Wrapped(symbol.around + speed * dt);
-	const float flat = portable_math::Cos(symbol.tilt) * radius;
+	const auto tilt = portable_math::SinCos(symbol.tilt);
+	const auto around = portable_math::SinCos(symbol.around);
+	const float flat = tilt.cos * radius;
 	// Fighting, it comes down to the first's level
-	look.offset = glm::vec3(portable_math::Cos(symbol.around) * flat,
-	                        (1.0f - look.fight) * level + portable_math::Sin(symbol.tilt) * radius,
-	                        portable_math::Sin(symbol.around) * flat) *
-	              distanceScale;
+	look.offset =
+	    glm::vec3(around.cos * flat, (1.0f - look.fight) * level + tilt.sin * radius, around.sin * flat) * distanceScale;
 	return look;
 }
 

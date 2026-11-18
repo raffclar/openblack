@@ -47,6 +47,7 @@
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TownCensus.h"
 #include "ECS/TownDesire.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TownHomes.h"
@@ -114,11 +115,11 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	}
 	auto& stats = in.stats;
 
-	registry.Each<const Villager>([&](const Villager& villager) {
-		if (villager.town != townEntity)
-		{
-			return;
-		}
+	// The town's people, abodes and miracle dispensers come from the census in the order of a walk of the world. The
+	// last storage pit of that order gives the food and the wood in store.
+	for (const auto entity : ecs::town_census::PeopleOf(registry, townEntity))
+	{
+		const auto& villager = registry.Get<const Villager>(entity);
 		++(villager.sex == Villager::Sex::MALE ? stats.men : stats.women);
 		if (villager.lifeStage == Villager::LifeStage::Child)
 		{
@@ -128,7 +129,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		{
 			++stats.adults;
 		}
-		if (const auto* disciple = registry.TryGet<const Disciple>(registry.ToEntity(villager)); disciple != nullptr)
+		if (const auto* disciple = registry.TryGet<const Disciple>(entity); disciple != nullptr)
 		{
 			++stats.disciples.at(static_cast<size_t>(disciple->type));
 		}
@@ -136,13 +137,11 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		{
 			stats.foodForDinner += static_cast<float>(info->foodReqiredForDinner);
 		}
-	});
+	}
 
-	registry.Each<const Abode>([&](entt::entity entity, const Abode& abode) {
-		if (abode.townId != town.id)
-		{
-			return;
-		}
+	for (const auto entity : ecs::town_census::AbodesOf(registry, town.id))
+	{
+		const auto& abode = registry.Get<const Abode>(entity);
 		const auto* info = FindAbodeInfo(tribe, abode.type);
 		// A building counts among the town's buildings and their places once it is built
 		const auto* progress = registry.TryGet<const BuildProgress>(entity);
@@ -169,7 +168,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		{
 			in.crecheFunctional = true;
 		}
-	});
+	}
 
 	for (size_t i = 0; i < in.populationWhenNeeded.size(); ++i)
 	{
@@ -179,16 +178,13 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		}
 	}
 	// Its miracle dispensers count among its buildings
-	registry.Each<const SpellDispenser>([&](entt::entity entity, const SpellDispenser& dispenser) {
-		if (dispenser.town != townEntity)
-		{
-			return;
-		}
+	for (const auto entity : ecs::town_census::DispensersOf(registry, townEntity))
+	{
 		const auto* info = ecs::world_objects::AbodeInfoOf(entity);
 		// It is always built, thus it counts among the town's buildings, by its number, and among its civic buildings
 		ecs::town_desire::CountBuiltBuilding(in, info != nullptr ? info->abodeNumber : AbodeNumber::SpellDispenser,
 		                                     info != nullptr ? info->abodeType : AbodeType::SpellDispenser);
-	});
+	}
 	// Each of its buildings as worn as it is, by how much its kind wants mending, in the order of the town's own list
 	// (the newest first), so that the sum of their wants rounds as in the game. Nobody lives in a miracle dispenser.
 	in.abodes.reserve(town.abodes.size());

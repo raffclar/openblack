@@ -35,6 +35,7 @@
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/TownCensus.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -153,14 +154,7 @@ entt::entity construction::TownOfSite(entt::entity building)
 	{
 		return entt::null;
 	}
-	entt::entity town = entt::null;
-	Entities().Each<const Town>([&](entt::entity entity, const Town& candidate) {
-		if (candidate.id == *id)
-		{
-			town = entity;
-		}
-	});
-	return town;
+	return town_census::TownByNumber(Entities(), *id);
 }
 
 BuildingSite* construction::SiteOf(entt::entity town, entt::entity building)
@@ -243,21 +237,28 @@ float construction::DesireToBeRepaired(entt::entity building)
 		return town_desire::FixedDesireToBeRepaired(world_objects::LifeOf(building), info->desireToBeRepaired);
 	}
 	// The town wants to mend a miracle dispenser as one of its buildings with nobody in it
-	if ((abode == nullptr && !registry.AllOf<SpellDispenser>(building)) || info == nullptr ||
-	    TownOfSite(building) == entt::null)
+	if ((abode == nullptr && !registry.AllOf<SpellDispenser>(building)) || info == nullptr)
+	{
+		return 0.0f;
+	}
+	// A building with more life than the town needs to start a repair wants nothing. Most buildings are like this, so
+	// the test comes before the search for the town. A life that is not a number goes on to the full rule.
+	const auto& townInfo = Locator::infoConstants::value().town;
+	const float life = world_objects::LifeOf(building);
+	if (life > townInfo.thresholdToStartRepairing || TownOfSite(building) == entt::null)
 	{
 		return 0.0f;
 	}
 	const auto& abodeInfo = static_cast<const GAbodeInfo&>(*info);
 	return town_desire::AbodeDesireToBeRepaired(
 	    {
-	        .life = world_objects::LifeOf(building),
+	        .life = life,
 	        .livingQuarters =
 	            (static_cast<uint32_t>(abodeInfo.abodeType) & static_cast<uint32_t>(AbodeType::LivingQuarters)) != 0,
 	        .inhabitants = abode != nullptr ? static_cast<uint32_t>(abode->inhabitants.size()) : 0u,
 	        .desireToBeRepaired = abodeInfo.desireToBeRepaired,
 	    },
-	    Locator::infoConstants::value().town);
+	    townInfo);
 }
 
 bool construction::IsRepairSite(entt::entity town, entt::entity building)

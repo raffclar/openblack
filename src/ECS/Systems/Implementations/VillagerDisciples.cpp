@@ -77,6 +77,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/TownCensus.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Texture2D.h"
@@ -157,14 +158,8 @@ std::optional<entt::entity> ValidTown(entt::entity town)
 
 std::optional<entt::entity> TownById(uint32_t id)
 {
-	std::optional<entt::entity> found;
-	Entities().Each<const Town>([&found, id](entt::entity entity, const Town& town) {
-		if (town.id == id)
-		{
-			found = entity;
-		}
-	});
-	return found;
+	const auto town = ecs::town_census::TownByNumber(Entities(), id);
+	return town != entt::null ? std::optional(town) : std::nullopt;
 }
 
 std::optional<entt::entity> TownOfVillager(entt::entity villager)

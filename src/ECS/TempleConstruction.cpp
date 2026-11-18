@@ -73,6 +73,7 @@
 #include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
+#include "ECS/TownCensus.h"
 #include "ECS/TownCentreParts.h"
 #include "ECS/TownWorkshops.h"
 #include "ECS/WorldObjects.h"
@@ -116,14 +117,8 @@ float PlannedReach(const Transform& transform)
 /// The player a town's temple is built for: the town's own, else the one its plan names
 PlayerNames OwnerOf(const PlannedTemple& planned)
 {
-	std::optional<PlayerNames> owner;
-	Entities().Each<const Town>([&](entt::entity, const Town& town) {
-		if (static_cast<int32_t>(town.id) == planned.townId)
-		{
-			owner = town.owner;
-		}
-	});
-	return owner.value_or(planned.owner);
+	const auto town = town_census::TownBySignedNumber(Entities(), planned.townId);
+	return town != entt::null ? Entities().Get<const Town>(town).owner : planned.owner;
 }
 
 /// The town a building belongs to, if any
