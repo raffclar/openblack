@@ -124,7 +124,7 @@ void GameHandCreature::SetLeashType(entt::entity creature, LeashType type)
 {
 	if (IsCreature(creature) && Locator::leashSystem::has_value())
 	{
-		static_cast<void>(Locator::leashSystem::value().ChangeType(creature, type));
+		static_cast<void>(Locator::leashSystem::value().ComputerGodChangeType(creature, type));
 	}
 }
 
@@ -142,7 +142,7 @@ bool GameHandCreature::TieLeash(entt::entity creature, entt::entity object)
 	{
 		return false;
 	}
-	const bool tied = Locator::leashSystem::value().TieTo(creature, object);
+	const bool tied = Locator::leashSystem::value().ComputerGodTie(creature, object);
 	// The check tools and the scenarios look for this line
 	if (const auto logger = spdlog::get("game"))
 	{

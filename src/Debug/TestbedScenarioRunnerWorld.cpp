@@ -1089,7 +1089,7 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 			auto& leashes = Locator::leashSystem::value();
 			for (const auto type : creature_leash::k_Types)
 			{
-				leashes.SetKnown(entity, type, true);
+				leashes.SetKnown(entity, type, !setup.knowsNoLeash);
 			}
 			if (setup.leashable.has_value())
 			{

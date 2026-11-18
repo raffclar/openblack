@@ -99,15 +99,21 @@ public:
 	virtual bool Toggle(entt::entity creature) = 0;
 	/// Swaps the leash worn for another the creature knows, or picks the one to put on next
 	virtual bool ChangeType(entt::entity creature, LeashType type) = 0;
+	/// The hand of a computer god picks the leash type. It does not examine the leashes that the creature knows.
+	virtual bool ComputerGodChangeType(entt::entity creature, LeashType type) { return ChangeType(creature, type); }
 	/// The player picks a leash for their creature with a gesture or a key. The player cannot do this while a nice or
 	/// nasty spell is on the creature.
 	virtual bool PickType(PlayerNames player, LeashType type) = 0;
-	/// Ties the worn leash to something, or puts the picked leash on tied to it. A script and a computer god tie the leash
-	/// in this way. The creature continues with what it does.
+	/// Ties the worn leash to something, or puts the picked leash on tied to it. A script ties the leash in this way. The
+	/// creature continues with what it does.
 	virtual bool TieTo(entt::entity creature, entt::entity object) = 0;
 	/// The hand of the player ties the leash to something. What the creature does stops as a failure, and the creature
 	/// then acts on the thing, as for an order on the thing.
 	virtual bool HandTie(entt::entity creature, entt::entity object) { return TieTo(creature, object); }
+	/// The hand of a computer god ties the leash to something, and the creature continues with what it does. When the
+	/// creature does not know the learning leash, no leash goes on. The tie sound and the effects of the thing on the
+	/// mind still occur. Returns whether the leash holds.
+	virtual bool ComputerGodTie(entt::entity creature, entt::entity object) { return TieTo(creature, object); }
 	/// A loaded game ties the leash again as it was at the turn of the tie. No sound plays and the creature learns
 	/// nothing.
 	virtual bool RestoreTie(entt::entity creature, entt::entity object, [[maybe_unused]] uint32_t tiedTurn)

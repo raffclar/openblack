@@ -193,6 +193,30 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                         .second = CreatureThing(PlayerNames::PLAYER_TWO)}},
 	});
 	all.push_back({
+	    .id = "mind.computer_god_tie_without_leash",
+	    .name = "A computer god that ties the leash of a creature that knows no leash",
+	    .facet = Facet::Mind,
+	    .description = "As mind.computer_god_attack_creature_with_creature, but the tiger of player two knows no leash, as "
+	                   "the creature of an empty slot in a network game. After 30 seconds, a testbed tool gives the god the "
+	                   "action AttackCreatureWithCreature, with the cow and the tiger.",
+	    .expected = "The hand goes to the cow and the tie sound plays, but no rope goes on the tiger. The tiger continues "
+	                "with what it does. The log shows that the leash does not hold, because the tiger does not know the "
+	                "learning leash. The original game does the same in a network game.",
+	    .framing = BothTowns(),
+	    .creatures = {[] {
+		                  auto tiger =
+		                      CreatureOf("player two's", CreatureType::Tiger, PlayerNames::PLAYER_TWO, {40.0f, -40.0f});
+		                  tiger.knowsNoLeash = true;
+		                  return tiger;
+	                  }(),
+	                  CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {140.0f, 0.0f})},
+	    .landScript = k_WarScript,
+	    .computerActions = {{.afterTurns = k_Wait,
+	                         .node = "AttackCreatureWithCreature",
+	                         .first = CreatureThing(PlayerNames::PLAYER_ONE),
+	                         .second = CreatureThing(PlayerNames::PLAYER_TWO)}},
+	});
+	all.push_back({
 	    .id = "mind.computer_god_chooses_creature_fight",
 	    .name = "A computer god that chooses to send its creature at a creature in its influence",
 	    .facet = Facet::Mind,

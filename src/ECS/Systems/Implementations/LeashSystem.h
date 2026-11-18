@@ -48,8 +48,10 @@ public:
 	void TakeOff(entt::entity creature) override;
 	bool Toggle(entt::entity creature) override;
 	bool ChangeType(entt::entity creature, LeashType type) override;
+	bool ComputerGodChangeType(entt::entity creature, LeashType type) override;
 	bool TieTo(entt::entity creature, entt::entity object) override;
 	bool HandTie(entt::entity creature, entt::entity object) override;
+	bool ComputerGodTie(entt::entity creature, entt::entity object) override;
 	bool RestoreTie(entt::entity creature, entt::entity object, uint32_t tiedTurn) override;
 	void UntieToHand(entt::entity creature) override;
 	void PlayHandAttachSound(entt::entity creature) override;
@@ -92,6 +94,14 @@ public:
 private:
 	/// Ties the leash to the thing, and does what the source of the tie does in addition
 	bool Tie(entt::entity creature, entt::entity object, creature_leash::TieSource source);
+	/// Picks the leash type, with no test of the leashes that the creature knows
+	bool PickWithoutTest(entt::entity creature, LeashType type);
+	/// Plays the next tie sound for the tie of the creature's leash to the thing
+	void PlayTieSound(entt::entity creature, entt::entity object);
+	/// The effects of the tied thing on the creature's mind: a town's desire flag and the need flag of a worship site
+	void TiedThingEffects(entt::entity creature, entt::entity object);
+	/// A computer god ties the leash of a creature that does not know the learning leash. No leash goes on.
+	void TieWithoutLeash(entt::entity creature, entt::entity object);
 	/// The hand ties the leash: a fight of the creature stops, and what it does stops as a failure
 	void FailForTie(entt::entity creature);
 	/// Puts the leash on for the player, unless the rules refuse it, which is logged and remembered
