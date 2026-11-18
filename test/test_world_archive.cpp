@@ -1395,6 +1395,137 @@ TEST(WorldArchive, TheThreadsThatShareLargeRowsGiveTheSameHash)
 	EXPECT_EQ(memo.writers.size(), pool.GetLaneCount());
 }
 
+// The hash of the entities mixes the bytes that a save writes of them: the count of the entities, the count of the
+// entities in use, then each entity. This is so with and without the threads, and with free entities.
+TEST(WorldArchive, TheHashOfTheEntitiesIsTheHashOfTheirSavedBytes)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(40);
+	registry.create(made.begin(), made.end());
+	registry.destroy(made[7]);
+	registry.destroy(made[30]);
+	registry.emplace<FakeWalker>(made[0], SampleWalker(made[0], made[1]));
+	const auto expected = [&registry]() {
+		constexpr uint64_t k_Offset = 14695981039346656037ull;
+		constexpr uint64_t k_Prime = 1099511628211ull;
+		const auto* entities = std::as_const(registry).storage<entt::entity>();
+		std::vector<uint8_t> bytes;
+		const auto add = [&bytes](uint32_t value) {
+			const auto* first = reinterpret_cast<const uint8_t*>(&value);
+			bytes.insert(bytes.end(), first, first + sizeof(value));
+		};
+		add(static_cast<uint32_t>(entities->size()));
+		add(static_cast<uint32_t>(entities->free_list()));
+		for (size_t index = 0; index < entities->size(); ++index)
+		{
+			add(entt::to_integral(entities->data()[index]));
+		}
+		uint64_t hash = k_Offset;
+		for (const auto byte : bytes)
+		{
+			hash = (hash ^ byte) * k_Prime;
+		}
+		return hash;
+	}();
+	WorkerPool pool(3);
+	HashMemo memo;
+	EXPECT_EQ(HashWorld(registry, context).entities, expected);
+	EXPECT_EQ(HashWorld(registry, context, {}, false, {}, &pool).entities, expected);
+	EXPECT_EQ(HashWorld(registry, context, {}, false, {}, &pool, nullptr, &memo).entities, expected);
+}
+
+// The value at each place of the storage of a component is the value of the entity at that place, on each page of
+// the storage, also after the storage moved values to fill the places of removed rows
+TEST(WorldArchive, AComponentGivesTheValueAtEachPlaceOfItsStorage)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(2500);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakeWalker>(entity, SampleWalker(entity, entity));
+	}
+	for (size_t index = 0; index < made.size(); index += 7)
+	{
+		registry.remove<FakeWalker>(made[index]);
+	}
+	const auto type = entt::resolve<FakeWalker>(context);
+	const auto* info = static_cast<const ComponentInfo*>(type.custom());
+	ASSERT_NE(info, nullptr);
+	ASSERT_NE(info->valueAt, nullptr);
+	const auto& storage = registry.storage<FakeWalker>();
+	for (size_t place = 0; place < storage.size(); ++place)
+	{
+		EXPECT_EQ(info->valueAt(storage, place), storage.value(storage.data()[place])) << "place " << place;
+	}
+	// A component with no values has no value at a place
+	EXPECT_EQ(static_cast<const ComponentInfo*>(entt::resolve<FakeTag>(context).custom())->valueAt, nullptr);
+}
+
+// The rows of a component go to the threads in parts while the component has many rows, and in one job when it has
+// few. The memo keeps the bytes of each part, and the next parts use the memory of the last parts. The hash stays the
+// same when the count of the rows goes over and under the count that makes parts.
+TEST(WorldArchive, TheMemoOfAComponentInPartsGivesTheSameHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto add = [&registry](size_t count) {
+		std::vector<entt::entity> made(count);
+		registry.create(made.begin(), made.end());
+		for (const auto entity : made)
+		{
+			registry.emplace<FakeWalker>(entity, SampleWalker(entity, entity));
+			// A second component in parts, so that the threads share the parts of two components
+			registry.emplace<FakeCounted>(entity);
+		}
+		return made;
+	};
+	auto made = add(400);
+	WorkerPool pool(3);
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto plain = HashWorld(registry, context);
+		const auto remembered = HashWorld(registry, context, {}, false, {}, &pool, nullptr, &memo);
+		EXPECT_EQ(plain.entities, remembered.entities);
+		EXPECT_EQ(plain.components, remembered.components);
+	};
+	expectSame();
+	expectSame();
+	// The memo keeps one chunk for each part of the rows of a component in parts
+	EXPECT_GT(memo.components.at("FakeWalker").chunks.size(), 1u);
+	// The parts gave their memory back for the next hash
+	const auto& walkers = memo.components.at("FakeWalker");
+	EXPECT_EQ(walkers.spareBytes.size(), walkers.chunks.size());
+	EXPECT_EQ(walkers.spareEnds.size(), walkers.chunks.size());
+	// A change in the last row, then in the first row
+	registry.get<FakeWalker>(made.back()).name = "Tom";
+	expectSame();
+	registry.get<FakeWalker>(made.front()).name = "A much longer name than before";
+	expectSame();
+	// Few rows: one job hashes the component, and the memo keeps one chunk
+	for (size_t index = 10; index < made.size(); ++index)
+	{
+		registry.destroy(made[index]);
+	}
+	made.resize(10);
+	expectSame();
+	expectSame();
+	EXPECT_EQ(memo.components.at("FakeWalker").chunks.size(), 1u);
+	registry.get<FakeWalker>(made[4]).name = "Ann";
+	expectSame();
+	// Many rows again
+	const auto more = add(300);
+	expectSame();
+	registry.get<FakeWalker>(more[150]).name = "Bob";
+	expectSame();
+	expectSame();
+}
+
 // A footpath that the game still looks for keeps its search in a world state. A loaded search goes on to the same route
 // as the search that was saved.
 TEST(WorldArchive, AFootpathSearchContinuesAfterALoad)
