@@ -178,5 +178,16 @@ class WorldStatesAgainstServer(unittest.TestCase):
         self.assertIn("unread", result["turns"][0]["difference"])
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class ServerGone(unittest.TestCase):
+    def test_the_time_starts_at_the_first_stop_and_stays(self):
+        self.assertIsNone(net_check.server_gone_since(True, None, 5.0))
+        self.assertEqual(net_check.server_gone_since(False, None, 5.0), 5.0)
+        self.assertEqual(net_check.server_gone_since(False, 5.0, 9.0), 5.0)
+
+    def test_a_server_that_runs_again_clears_the_time(self):
+        self.assertIsNone(net_check.server_gone_since(True, 5.0, 9.0))
+
+
 if __name__ == "__main__":
     unittest.main()

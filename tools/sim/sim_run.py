@@ -147,8 +147,10 @@ class Game:
         environment["OPENBLACK_WORKTREE"] = worktree_root()
         # The game never opens a console window of its own, which would come to the front
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        self.process = subprocess.Popen([exe] + args, cwd=cwd, env=environment, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL, creationflags=flags)
+        # No path in the command line may start a switch of the original game
+        executable, arguments = sim_paths.switch_safe_command([exe] + args, cwd)
+        self.process = subprocess.Popen(arguments, executable=executable, cwd=cwd, env=environment,
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
         self.connection = None
 
     def connect(self, timeout=START_TIMEOUT):
