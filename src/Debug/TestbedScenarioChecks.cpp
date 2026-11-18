@@ -102,6 +102,8 @@ std::string_view Name(Quantity quantity)
 		return "lessons that the help told";
 	case Quantity::FootprintsNear:
 		return "footprints on the land near the point";
+	case Quantity::ShieldSphereAt:
+		return "a shield sphere around the point";
 	}
 	return "";
 }

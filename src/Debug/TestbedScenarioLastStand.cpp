@@ -10,6 +10,7 @@
 // The testbed scenarios of the last stand of Nemesis on the fifth land: the spiritual shield over the Tibetan village
 // and the defence of his last town
 
+#include <array>
 #include <string_view>
 #include <vector>
 
@@ -27,6 +28,10 @@ constexpr std::string_view k_FifthLand = "Land5.txt";
 constexpr glm::vec2 k_LandMiddle {2720.0f, 3040.0f};
 /// The middle of the spiritual shield, from the middle of the land
 constexpr glm::vec2 k_ShieldCentre = glm::vec2(1655.983f, 2331.104f) - k_LandMiddle;
+/// The three outer singing stones of the spiritual shield, at their spots, from the middle of the land
+constexpr std::array<glm::vec2, 3> k_ShieldStones {glm::vec2(2092.572f, 2070.963f) - k_LandMiddle,
+                                                   glm::vec2(1571.99f, 2105.337f) - k_LandMiddle,
+                                                   glm::vec2(1396.386f, 3000.66f) - k_LandMiddle};
 /// The point near the last town of Nemesis that sets off its defence, from the middle of the land
 constexpr glm::vec2 k_DefencePoint = glm::vec2(3088.801f, 2654.14f) - k_LandMiddle;
 /// The middle of the last town of Nemesis, from the middle of the land
@@ -65,6 +70,46 @@ void testbed_scenarios::AddLastStandScenarios(std::vector<Scenario>& all)
 	                .look = {k_ShieldCentre.x, 75.0f, k_ShieldCentre.y + 45.0f}},
 	    .creatures = {PlayersTiger(k_ShieldCentre + glm::vec2(194.0f, 0.0f), 270.0f)},
 	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "ThrowThroughShield"}},
+	});
+	// The player's hand takes each outer stone off its spot and throws it away once the shield is up. The stones are
+	// outside the player's influence, so the editor's cheat of infinite influence lets the hand reach them.
+	std::vector<Command> fallCommands {{.kind = Kind::InfiniteInfluenceCheat, .delaySeconds = 0.1f, .value = 1},
+	                                   {.kind = Kind::RunScript, .delaySeconds = 0.4f, .script = "ThrowThroughShield"}};
+	for (size_t stone = 0; stone < k_ShieldStones.size(); ++stone)
+	{
+		fallCommands.push_back(
+		    {.kind = Kind::HandTakeNear, .delaySeconds = stone == 0 ? 90.0f : 1.0f, .point = k_ShieldStones.at(stone)});
+		fallCommands.push_back({.kind = Kind::HandRelease, .delaySeconds = 1.0f, .velocity = {20.0f, 10.0f, 0.0f}});
+	}
+	all.push_back({
+	    .id = "story.l5_spiritual_shield_falls",
+	    .name = "Story: the spiritual shield of Nemesis falls when its three stones are off their spots",
+	    .facet = Facet::Story,
+	    .description = "As the scenario of the spiritual shield, with the editor's cheat of infinite influence. When the "
+	                   "shield is up, the player's hand takes each of the three outer singing stones off its spot and "
+	                   "throws it away.",
+	    .expected = "The shield goes up with a radius of 105. Each stone that leaves its spot stops its beam, and the "
+	                "shield gets 35 smaller. When the third stone is off its spot, the shield and the vertical beam go "
+	                "at once, and nothing of the shield stays on the screen. The good advisor says that the shield is "
+	                "down and no one died.",
+	    .environment = {.land = Land::Story, .storyLand = k_FifthLand, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_ShieldCentre.x + 60.0f, 290.0f, k_ShieldCentre.y - 300.0f},
+	                .look = {k_ShieldCentre.x, 75.0f, k_ShieldCentre.y + 45.0f}},
+	    .creatures = {PlayersTiger(k_ShieldCentre + glm::vec2(194.0f, 0.0f), 270.0f)},
+	    .commands = fallCommands,
+	    .checks = {{.label = "the shield sphere is up over the village before the hand takes the stones",
+	                .quantity = checks::Quantity::ShieldSphereAt,
+	                .point = k_ShieldCentre,
+	                .afterTurns = 100,
+	                .byTurn = 900,
+	                .atLeast = 1.0},
+	               {.label = "no shield sphere stays over the village after the three stones are off their spots",
+	                .quantity = checks::Quantity::ShieldSphereAt,
+	                .point = k_ShieldCentre,
+	                .afterTurns = 970,
+	                .byTurn = 1600,
+	                .atMost = 0.0}},
 	});
 	all.push_back({
 	    .id = "story.l5_last_town_defence",

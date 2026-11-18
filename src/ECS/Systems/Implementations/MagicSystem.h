@@ -161,6 +161,7 @@ public:
 	entt::entity CastOnObject(MagicType type, PlayerNames player, entt::entity target, const magic::SpellCastData& cast,
 	                          const particles::ProcessInfo& info) override;
 	void CloseDown(entt::entity spell) override;
+	void DeleteSpell(entt::entity spell) override;
 	void ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values, PlayerNames player) override
 	{
 		_world.ApplyEffectAt(point, values, {.player = player});
