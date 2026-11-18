@@ -219,6 +219,9 @@ public:
 	/// The result is false when the citadel has no creature home on the land, and the game makes no creature.
 	[[nodiscard]] virtual bool MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name,
 	                                            uint32_t stage) = 0;
+	/// The newest creature of the player becomes the creature that the player leads. When the land script made a
+	/// creature for the player before, the player does not lead that creature after this.
+	virtual void LeadNewCreature(PlayerNames player) = 0;
 	/// The creature of the player knows every leash, as a creature that a land script makes from a mind file
 	virtual void LearnEveryLeash(PlayerNames player) = 0;
 	virtual uint32_t GameRand(uint32_t range) = 0;
@@ -231,6 +234,7 @@ public:
 ///   sequence the same.
 /// - The game takes a random species. The creature gets the name of its species from the creature table.
 /// - The mind of the god switches on, and the game makes its creature fully grown at the creature home of its citadel.
+/// - The new creature becomes the creature of the god, also when the land script made a creature for the god before.
 /// - The creature knows every leash, so that the god can tie it (deviation 281).
 void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans);
 

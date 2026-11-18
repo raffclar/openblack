@@ -24,7 +24,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { changedShare } from './png.mjs';
+import { changedShare, whiteShare } from './png.mjs';
 
 const [chromePath, pageUrl, gameFolder, out, ...rest] = process.argv.slice(2);
 if (!chromePath || !pageUrl || !gameFolder || !out) {
@@ -56,11 +56,17 @@ const k_NameBoxOk = [290, 700];
 // Where the picture of the game pointer is when its point is on the OK button: the middle of the picture is a little
 // right of and below the point
 const k_PointerPictureOffset = [35, 12];
+// The inside of the text field of the name box at 1280x1024, [x, y, width, height]. The typed letters are white on a
+// dark field.
+const k_NameField = [328, 420, 626, 64];
 const k_MoveSteps = 25;
 const k_Name = 'ab';
 
 const nameBoxSteps = [
   { at: 1, do: 'wait-log', text: 'asking the new player for their name', seconds: 240 },
+  // The empty field, before the keys
+  { at: 2, do: 'wait-frames', count: 3, seconds: 120 },
+  { at: 3, do: 'shot', name: 'name-empty' },
   { at: 5, do: 'mouse', type: 'mouseMoved', x: 600, y: 480 },
   { at: 5.3, do: 'mouse', type: 'mouseMoved', x: k_LockAt[0], y: k_LockAt[1] },
   ...[...k_Name].map((key, i) => ({ at: 6 + i * 0.5, do: 'key', key, code: `Key${key.toUpperCase()}`,
@@ -84,7 +90,8 @@ const nameBoxSteps = [
   { at: 12, do: 'synth-button', type: 'mouseup', button: 0 },
   { at: 12.2, do: 'look-pointer', label: 'button up' },
   { at: 12.4, do: 'look-pointer', label: 'later' },
-  { at: 12.5, do: 'wait-log', text: `Made the player profile "${k_Name}"`, seconds: 120 },
+  // The log does not write the name of the player (it can go with a crash report)
+  { at: 12.5, do: 'wait-log', text: 'Made a player profile', seconds: 120 },
 ];
 
 const testbedSteps = [
@@ -155,9 +162,15 @@ check('game follows the lock',
 // What the steps saw of the game: when it read the lock, where its pointer was, and how many frames it drew
 const waits = box.console.split(/\r?\n/).filter((line) => /\[(wait|look)-(pointer|frames)\]/.test(line))
   .map((line) => line.replace(/^\S+ \[/, '').replace('] ', ' ')).join('; ');
-check('keys, locked moves and a locked click answer the name box',
-  box.log.includes(`Made the player profile "${k_Name}"`),
-  `typed "${k_Name}", ${box.log.includes('Made the player profile') ? 'profile made' : 'no profile made'}; ${waits}`);
+// The keys put white letters in the field. The log does not write the name, thus the pictures are the sign of the keys.
+const field = k_NameField.map((value) => Math.floor(value * pixelRatio));
+const emptyField = whiteShare(path.join(box.folder, 'name-empty.png'), field);
+const typedField = whiteShare(path.join(box.folder, 'name-over-ok.png'), field);
+const typed = emptyField >= 0 && typedField > emptyField + 0.005;
+const made = box.log.includes('Made a player profile');
+check('keys, locked moves and a locked click answer the name box', typed && made,
+  `typed "${k_Name}": white in the field ${(emptyField * 100).toFixed(2)}% before, ${(typedField * 100).toFixed(2)}% after; `
+  + `${made ? 'profile made' : 'no profile made'}; ${waits}`);
 
 const bed = run('testbed', '--skip-logos --testbed', testbedSteps, 23);
 const bedEvals = evals(bed.console);

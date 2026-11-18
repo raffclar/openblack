@@ -60,23 +60,49 @@ export const readPng = (file) => decodePng(readFileSync(file));
 
 // The place of the game's pointer in a screenshot: the middle of the pixels with the teal of the pointer, and how many
 // there are. The count is 0 when the picture has no pointer.
-export function findPointer(picture) {
+// The search is only in the box [left, top, right, bottom] (default: all the picture). Give the box of the game canvas:
+// the strip of the page above the canvas has buttons with the same teal. Other parts of the game picture (the moving
+// background of the start-up boxes) can also have some teal pixels. Thus the result counts only the pixels near the
+// part of the box that has the most teal pixels, and not the far pixels.
+export function findPointer(picture, box = [0, 0, picture.width, picture.height]) {
   const { width, height, channels, pixels } = picture;
-  let count = 0;
-  let sumX = 0;
-  let sumY = 0;
-  for (let y = 0; y < height; ++y) {
-    for (let x = 0; x < width; ++x) {
+  const k_Cell = 32;
+  // The pixels in the cells this number of cells (or less) from the cell with the most pixels are in the result
+  const k_Reach = 2;
+  const left = Math.max(0, Math.floor(box[0]));
+  const top = Math.max(0, Math.floor(box[1]));
+  const right = Math.min(width, Math.ceil(box[2]));
+  const bottom = Math.min(height, Math.ceil(box[3]));
+  const found = [];
+  const cells = new Map();
+  for (let y = top; y < bottom; ++y) {
+    for (let x = left; x < right; ++x) {
       const i = (y * width + x) * channels;
       const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
       if (r < 110 && g > 130 && b > 130 && Math.abs(g - b) < 40 && g - r > 60) {
-        ++count;
-        sumX += x;
-        sumY += y;
+        found.push(x, y);
+        const cell = `${Math.floor(x / k_Cell)},${Math.floor(y / k_Cell)}`;
+        cells.set(cell, (cells.get(cell) ?? 0) + 1);
       }
     }
   }
-  return count > 0 ? { x: Math.round(sumX / count), y: Math.round(sumY / count), count } : { x: -1, y: -1, count };
+  if (cells.size === 0) {
+    return { x: -1, y: -1, count: 0 };
+  }
+  const [densest] = [...cells].reduce((best, entry) => (entry[1] > best[1] ? entry : best));
+  const [cellX, cellY] = densest.split(',').map(Number);
+  let count = 0;
+  let sumX = 0;
+  let sumY = 0;
+  for (let i = 0; i < found.length; i += 2) {
+    const [x, y] = [found[i], found[i + 1]];
+    if (Math.abs(Math.floor(x / k_Cell) - cellX) <= k_Reach && Math.abs(Math.floor(y / k_Cell) - cellY) <= k_Reach) {
+      ++count;
+      sumX += x;
+      sumY += y;
+    }
+  }
+  return { x: Math.round(sumX / count), y: Math.round(sumY / count), count };
 }
 
 // The middle of the pixels of a screenshot whose colour is between two colours (each channel at least the low and at
@@ -142,6 +168,26 @@ export function litShare(file, box) {
     }
   }
   return lit / (width * height);
+}
+
+// The share of the pixels in a box of the picture that are near white (each channel above 200), for example the
+// letters in a text field. The box is [x, y, width, height] in the pixels of the picture.
+export function whiteShare(file, box) {
+  if (!existsSync(file)) {
+    return -1;
+  }
+  const picture = readPng(file);
+  const [left, top, width, height] = box;
+  let white = 0;
+  for (let y = top; y < top + height; ++y) {
+    for (let x = left; x < left + width; ++x) {
+      const i = (y * picture.width + x) * picture.channels;
+      if (picture.pixels[i] > 200 && picture.pixels[i + 1] > 200 && picture.pixels[i + 2] > 200) {
+        ++white;
+      }
+    }
+  }
+  return white / (width * height);
 }
 
 // The width and the height of a picture

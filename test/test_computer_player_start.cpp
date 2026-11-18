@@ -336,6 +336,7 @@ public:
 		made.push_back({.player = player, .species = species, .name = std::string(name), .stage = stage});
 		return hasCreatureHome;
 	}
+	void LeadNewCreature(PlayerNames player) override { led.push_back(player); }
 	void LearnEveryLeash(PlayerNames player) override { leashesLearnt.push_back(player); }
 	uint32_t GameRand(uint32_t range) override
 	{
@@ -368,6 +369,7 @@ public:
 	std::vector<PlayerNames> switchedOn;
 	std::vector<Made> made;
 	std::vector<PlayerNames> leashesLearnt;
+	std::vector<PlayerNames> led;
 	bool hasCreatureHome {true};
 };
 
@@ -480,6 +482,25 @@ TEST(ComputerPlayerStart, TheNewCreatureOfASlotKnowsEveryLeash)
 	FillSlot(world, PlayerNames::PLAYER_FOUR, true);
 	ASSERT_EQ(world.made.size(), 1);
 	EXPECT_EQ(world.leashesLearnt, (std::vector {PlayerNames::PLAYER_FOUR}));
+}
+
+TEST(ComputerPlayerStart, TheGodOfASlotLeadsItsNewCreature)
+{
+	FakeSlotWorld world;
+	FillSlot(world, PlayerNames::PLAYER_TWO, true);
+	ASSERT_EQ(world.made.size(), 1);
+	EXPECT_EQ(world.led, (std::vector {PlayerNames::PLAYER_TWO}));
+}
+
+TEST(ComputerPlayerStart, AGodThatKeepsItsCreatureOrHasNoCreatureHomeLeadsNoNewCreature)
+{
+	FakeSlotWorld keeps;
+	FillSlot(keeps, PlayerNames::PLAYER_TWO, false);
+	EXPECT_TRUE(keeps.led.empty());
+	FakeSlotWorld noHome;
+	noHome.hasCreatureHome = false;
+	FillSlot(noHome, PlayerNames::PLAYER_TWO, true);
+	EXPECT_TRUE(noHome.led.empty());
 }
 
 TEST(ComputerPlayerStart, ASlotThatKeepsItsCreatureTeachesNoLeash)

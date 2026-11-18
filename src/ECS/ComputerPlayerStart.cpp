@@ -301,6 +301,9 @@ void FillSlot(SlotWorld& world, PlayerNames god, bool makeCreature)
 	{
 		return;
 	}
+	// The game does not look for a creature that the land script made for the god. The new creature becomes the
+	// creature of the god, so the god leads the new creature.
+	world.LeadNewCreature(god);
 	// The original game gives this creature no leash, so each tie of the computer god fails. openblack gives it every
 	// leash, as a creature that a land script makes from a mind file has (deviation 281).
 	world.LearnEveryLeash(god);
