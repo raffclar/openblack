@@ -90,6 +90,12 @@ class ServerTest(unittest.TestCase):
     def test_lockstep_passes(self):
         self.assertTrue(gate_checks.lockstep_check(self.SERVER, self.CLIENT, 300)[0])
 
+    def test_lockstep_passes_with_no_player_name(self):
+        server = self.SERVER.replace("slot 0 Player1: commands", "slot 0: commands")
+        self.assertTrue(gate_checks.lockstep_check(server, self.CLIENT, 300)[0])
+        server = server.replace("300 the same, first different none", "299 the same, first different 7")
+        self.assertFalse(gate_checks.lockstep_check(server, self.CLIENT, 300)[0])
+
     def test_lockstep_fails_on_a_part(self):
         server = self.SERVER.replace("300 the same, first different none, 0 resumes",
                                      "0 the same, first different 1, 3 resumes")

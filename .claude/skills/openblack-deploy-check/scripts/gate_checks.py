@@ -117,8 +117,10 @@ def land_check(measures, reference=None):
 
 
 # The lines of the game server and of the game
+# An older server puts the player name after the slot ("slot 0 Player1: commands"). A newer server does not
+# ("slot 0: commands").
 SERVER_SUMMARY = re.compile(
-    r"Network game: slot (\d+) .*?(\d+) checksums compared, (\d+) the same, first different (\w+), (\d+) resumes")
+    r"Network game: slot (\d+)[ :].*?(\d+) checksums compared, (\d+) the same, first different (\w+), (\d+) resumes")
 CLIENT_COMPARED = re.compile(r"Network game: (\d+) turns compared with the server, (\d+) the same")
 BUILD_ID = re.compile(r"\(build id ([^)]+)\)")
 
