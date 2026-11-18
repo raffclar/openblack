@@ -187,6 +187,9 @@ public:
 	virtual void ShowLandMessage(const land_message::Message& message) = 0;
 	/// A world loaded: the view of this computer continues from it (LandViewInterface::ContinueAfterLoad)
 	virtual void ContinueViewAfterLoad() = 0;
+	/// The gods of the slots of a network game changed after the land loaded. The view of this computer makes the sheet of
+	/// the players' symbols again, so that each new computer god shows the picture of its god.
+	virtual void MakeSymbolSheetAgain() = 0;
 
 	/// Whether the script of a land is one of the playground lands, which the game plays as a skirmish
 	[[nodiscard]] virtual bool IsPlaygroundLand(const std::filesystem::path& path) const = 0;

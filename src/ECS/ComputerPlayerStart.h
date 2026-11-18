@@ -190,6 +190,8 @@ public:
 	/// Makes the creature of the player at the creature home of its citadel, gives it the name and grows it to the stage
 	virtual void MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) = 0;
 	virtual uint32_t GameRand(uint32_t range) = 0;
+	/// The view of this computer makes the sheet of the players' symbols again, after the slots got their gods
+	virtual void MakeSymbolsAgain() = 0;
 };
 
 /// At the start of a network game, in the order of the gods, each slot with no player gets a computer god:
@@ -218,7 +220,8 @@ constexpr std::array<PlayerNames, 7> k_SlotGods {PlayerNames::PLAYER_ONE,  Playe
 
 /// At the start of a network game, all the humans of the network session join in the same turn. The game makes the
 /// player of each human when the land has none. Then, when the land waits for its humans, each slot of the gods with no
-/// player gets a computer god.
+/// player gets a computer god, and the view makes the sheet of the players' symbols again. The sheet came before the
+/// slots got their gods, thus without the pictures of the new computer gods.
 void HumansJoin(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans, bool landWaits);
 
 } // namespace openblack::computer_player

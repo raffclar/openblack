@@ -252,6 +252,7 @@ void HumansJoin(SlotWorld& world, std::span<const PlayerNames> gods, std::span<c
 	if (landWaits)
 	{
 		FillEmptySlots(world, gods, humans);
+		world.MakeSymbolsAgain();
 	}
 }
 

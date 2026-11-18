@@ -51,6 +51,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
@@ -290,6 +291,14 @@ public:
 	}
 
 	uint32_t GameRand(uint32_t range) override { return Locator::gameRandom::value().GameRand(range); }
+
+	void MakeSymbolsAgain() override
+	{
+		if (Locator::landSystem::has_value())
+		{
+			Locator::landSystem::value().MakeSymbolSheetAgain();
+		}
+	}
 
 private:
 	ComputerPlayerSystemInterface& _minds;
