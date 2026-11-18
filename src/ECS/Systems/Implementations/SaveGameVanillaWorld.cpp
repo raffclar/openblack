@@ -1825,7 +1825,7 @@ std::optional<vanilla_reaction_import::Initiator> ShieldInitiatorOf(const ecs::R
 
 /// The thing that the living react to, as the import made it. None when the import did not make it, or when another
 /// system keeps the reaction of the thing: a fire, a shield or the control of a missionary. The import makes none of
-/// these. The import makes the spells that creatures hold, and the forests, the shields and the teleports.
+/// these. The import makes each spell of the file but the fireball.
 std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registry& registry, entt::entity entity)
 {
 	if (entity == entt::null || !registry.Valid(entity) || registry.AnyOf<Fire, MagicShield, MissionaryControl>(entity))
@@ -1992,6 +1992,7 @@ magic::ImportedCast CastOf(const gamesave::VanillaWorld& world, std::unordered_m
 	                    .direction = point(file.handMovement),
 	                    .power = file.power,
 	                    .enabled = file.casting},
+	    .humanCasting = file.humanCasting,
 	    .firstDone = file.firstDone,
 	    .lastRipple = file.lastRipple,
 	    .target = file.target.has_value() ? EntityOf(made, *file.target) : entt::null,
@@ -2090,7 +2091,7 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 		    ImportLog(), "The creature {} holds the spell {} of magic type {} again: time {} of {} seconds, size {}",
 		    creature.number, file->number, static_cast<int>(file->magicType), file->age, file->duration, file->magnitude);
 	}
-	// The forests, the shields and the teleports that no creature holds, such as the spells that the hand cast
+	// The spells that no creature holds, such as the spells that the hand cast
 	ImportVanillaOtherCasts(world, made);
 	// Each creature spell that a creature of the file has, or waits for, takes its spell
 	for (const auto& creature : _vanilla->creatures)
@@ -2136,7 +2137,7 @@ void SaveGameSystem::ImportVanillaOtherCasts(const gamesave::VanillaWorld& world
 	auto& magicSystem = Locator::magicSystem::value();
 	for (const auto& record : world.Records())
 	{
-		if (!world_import::IsSpellWithThingsOnLand(record) || made.contains(record.number))
+		if (!world_import::IsSpellRecord(record) || made.contains(record.number))
 		{
 			continue;
 		}
@@ -2144,6 +2145,12 @@ void SaveGameSystem::ImportVanillaOtherCasts(const gamesave::VanillaWorld& world
 		if (!file.has_value())
 		{
 			SPDLOG_LOGGER_WARN(ImportLog(), "The spell {} of the file has no magic type", record.number);
+			continue;
+		}
+		if (!world_import::CanImportSpell(*file))
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The import does not make the spell {} of magic type {} of save type {}",
+			                   file->number, static_cast<int>(file->magicType), file->saveType);
 			continue;
 		}
 		// The object that cast the spell decides who pays for it
@@ -2196,7 +2203,9 @@ void SaveGameSystem::ImportVanillaOtherCasts(const gamesave::VanillaWorld& world
 			break;
 		}
 		}
-		const auto spell = magicSystem.ImportCast(caster, CastOf(world, made, *file, fromAbove));
+		auto cast = CastOf(world, made, *file, fromAbove);
+		cast.fromHand = from.kind == Kind::Hand || from.kind == Kind::Icon;
+		const auto spell = magicSystem.ImportCast(caster, cast);
 		if (spell == entt::null)
 		{
 			SPDLOG_LOGGER_WARN(ImportLog(), "The spell {} of magic type {} of the object {} is not made", file->number,

@@ -51,6 +51,9 @@ uint32_t ReactionOf(const VanillaWorld& world, const VanillaRecord& record)
 /// The flag of a pot whose food is poisoned
 constexpr uint8_t k_PotPoisonedFlag = 0x01;
 
+/// The save type between the spell of food and wood and the spell of water. No kind of spell has this type.
+constexpr uint32_t k_NoSpellSaveType = 0x0B;
+
 /// The move states that the file gives a thing that does not walk: no state, arrived and the final step
 constexpr std::array<uint8_t, 3> k_StillMoveStates = {0x00, 0x01, 0x04};
 /// The move state of a walk that steps straight through all that is in its way
@@ -1098,6 +1101,7 @@ std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const 
 	    .duration = world.Float(record, "spellDuration").value_or(-1.0f),
 	    .age = world.Float(record, "spellAge").value_or(0.0f),
 	    .magnitude = world.Float(record, "spellMagnitude").value_or(0.0f),
+	    .humanCasting = world.Word(record, "spellHumanCasting").value_or(0) != 0,
 	};
 	if (const auto info = world.Raw(record, "spellProcessInfo"); info.size() == k_ProcessInfoSize)
 	{
@@ -1236,9 +1240,21 @@ ImportedSpellCaster CasterOfSpell(const VanillaWorld& world, const ImportedHeldS
 	return caster;
 }
 
-bool IsSpellWithThingsOnLand(const VanillaRecord& record)
+bool IsSpellRecord(const VanillaRecord& record)
 {
-	return record.Is(VanillaType::SpellForest) || record.Is(VanillaType::SpellShield) || record.Is(VanillaType::SpellTeleport);
+	return record.type >= static_cast<uint32_t>(VanillaType::Spell) &&
+	       record.type <= static_cast<uint32_t>(VanillaType::SpellTeleport) && record.type != k_NoSpellSaveType;
+}
+
+bool CanImportSpell(const ImportedHeldSpell& spell)
+{
+	const auto type = static_cast<VanillaType>(spell.saveType);
+	if (type == VanillaType::Spell)
+	{
+		return spell.magicType != MagicType::Fireball && spell.magicType != MagicType::FireballPowerUpOne &&
+		       spell.magicType != MagicType::FireballPowerUpTwo;
+	}
+	return type != VanillaType::SpellWithObjects && spell.magicType != MagicType::None;
 }
 
 std::vector<ImportedStoneList> ReadStoneLists(const VanillaWorld& world)

@@ -368,11 +368,16 @@ entt::entity MagicSystem::MakeImportedCast(const SpellCaster& caster, const magi
 	{
 		return entt::null;
 	}
-	// The miracle continues with the prayer power and the age of the file
+	// The miracle continues with the prayer power, the age and the size of the file. The size of the file is the size
+	// after the limits of the cast.
 	auto& made = registry.Get<Spell>(spell);
 	made.chants.chants = cast.chants;
 	made.chants.initialChants = cast.initialChants;
 	made.age = cast.age;
+	made.magnitude = cast.magnitude;
+	// A spell of the hand of a person follows that hand, such as a flock that still makes its animals
+	made.fromLocalHand = cast.fromHand;
+	made.humanCasting = cast.humanCasting.value_or(made.humanCasting);
 	made.resourceFirstDone = cast.firstDone.value_or(false);
 	made.lastRipple = cast.lastRipple.value_or(0.0f);
 	// A creature spell acts on its creature. The saved effect knows the creature already.

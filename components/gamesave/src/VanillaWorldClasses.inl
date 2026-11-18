@@ -1157,9 +1157,10 @@ void ReadSpell(WorldReader& r)
 	r.Float("spellChants");
 	r.Float("spellInitialChants");
 	r.Word("spellClosedDown");
+	// The flag that the hand of this computer casts the spell, a word, and the flag that a person casts the spell
 	r.Word();
 	r.Word();
-	r.Word();
+	r.Word("spellHumanCasting");
 	// The values that the spell gives its particles each turn. These are two points, the view, the movement of the
 	// hand, the power, a word and the flag that the caster still casts.
 	r.Bytes(60, "spellProcessInfo");

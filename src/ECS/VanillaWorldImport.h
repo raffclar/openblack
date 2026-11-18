@@ -1044,6 +1044,8 @@ struct ImportedHeldSpell
 	std::array<float, 3> handMovement {};
 	float power {1.0f};
 	bool casting {false};
+	/// A person casts the spell with the hand. The hand of a creature or of a computer player does not.
+	bool humanCasting {false};
 	/// Food and wood: the first grain landed
 	std::optional<bool> firstDone;
 	/// Water: the age of the spell when its last drop made a ring on the land
@@ -1150,9 +1152,15 @@ struct ImportedSpellCaster
 /// spell. A spell with no player record has the neutral player.
 [[nodiscard]] ImportedSpellCaster CasterOfSpell(const gamesave::VanillaWorld& world, const ImportedHeldSpell& spell);
 
-/// The kinds of spell that keep their things on the land after a cast: a forest, a shield and a teleport. The import
-/// makes each spell of these kinds, as the creature holds it or as the hand cast it.
-[[nodiscard]] bool IsSpellWithThingsOnLand(const gamesave::VanillaRecord& record);
+/// The record is a spell of one of the kinds of the file
+[[nodiscard]] bool IsSpellRecord(const gamesave::VanillaRecord& record);
+
+/// The import makes this spell of the file when no creature holds it, such as a spell that the hand cast. These are
+/// the storm, the heal, water, food, wood, the lightning, the beam explosion, the flocks, the creature spells, the
+/// forest, the shields and the teleport. The import does not make a fireball, because it does not make the ball of the
+/// fireball. It also does not make a spell of the kind that keeps only a list of objects, because no magic type of the
+/// tables is of that kind.
+[[nodiscard]] bool CanImportSpell(const ImportedHeldSpell& spell);
 
 /// The teleport stones of one player of the file, in the order of the list of the player. The first stone is the
 /// head of the list.
