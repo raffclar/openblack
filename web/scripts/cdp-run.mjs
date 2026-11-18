@@ -348,6 +348,11 @@ const canvasBox = async () => {
   const offset = await frameOffset();
   return box ? { ...box, left: box.left + offset.x, top: box.top + offset.y } : box;
 };
+// The box of the game canvas in the pixels of a screenshot, [left, top, right, bottom]
+const canvasPixels = async () => {
+  const box = await canvasBox();
+  return box ? [box.left, box.top, box.left + box.width, box.top + box.height].map((v) => v * pixelRatio) : undefined;
+};
 const pointerScale = (box) => 0.5 * Math.min(box.height * pixelRatio, box.width * pixelRatio * 0.75) / 600;
 const moveGamePointer = (dx, dy, scale, box) => {
   const clamp = (v, high) => Math.min(Math.max(v, 0.5), Math.max(high - 0.5, 0.5));
@@ -519,7 +524,7 @@ const runStep = async (step) => {
     while (near < 2 && Date.now() < until) {
       const picture = await screenshotWithin(20000);
       ++looks;
-      last = picture?.data ? findPointer(decodePng(Buffer.from(picture.data, 'base64'))) : last;
+      last = picture?.data ? findPointer(decodePng(Buffer.from(picture.data, 'base64')), await canvasPixels()) : last;
       near = last.count > 0 && Math.hypot(last.x - step.x, last.y - step.y) <= within ? near + 1 : 0;
     }
     record(`[wait-pointer] ${near >= 2 ? 'found' : 'NOT FOUND'}: pointer at ${last.x}, ${last.y} (wanted ${step.x}, ${step.y}) after ${looks} screenshots`);
@@ -528,7 +533,8 @@ const runStep = async (step) => {
   }
   case 'look-pointer': {
     const picture = await screenshotWithin(20000);
-    const seen = picture?.data ? findPointer(decodePng(Buffer.from(picture.data, 'base64'))) : { x: -1, y: -1 };
+    const seen = picture?.data ? findPointer(decodePng(Buffer.from(picture.data, 'base64')), await canvasPixels())
+      : { x: -1, y: -1 };
     record(`[look-pointer] ${step.label ?? ''} pointer at ${seen.x}, ${seen.y}`);
     break;
   }
