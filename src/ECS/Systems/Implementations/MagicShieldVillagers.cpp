@@ -151,7 +151,7 @@ glm::vec2 PositionOf(entt::entity entity)
 } // namespace
 
 void MagicShieldSystem::RestoreReaction(entt::entity object, uint32_t id, Reaction type, float reach, uint32_t firstReacted,
-                                        std::span<const entt::entity> villagers)
+                                        std::span<const RestoredTaker> villagers)
 {
 	auto& registry = EntityRegistry();
 	auto* shieldObject = id != 0 && registry.Valid(object) ? registry.TryGet<MagicShield>(object) : nullptr;
@@ -170,7 +170,7 @@ void MagicShieldSystem::RestoreReaction(entt::entity object, uint32_t id, Reacti
 		shieldObject->struckReaction = id;
 	}
 	const auto centre = map_coords::WholeXZ(map_coords::FromMetres(PositionOf(object)));
-	for (const auto villager : villagers)
+	for (const auto& [villager, lookAt] : villagers)
 	{
 		if (!registry.Valid(villager) || !registry.AllOf<LivingAction>(villager) ||
 		    registry.AllOf<VillagerShieldReaction>(villager))
@@ -190,11 +190,12 @@ void MagicShieldSystem::RestoreReaction(entt::entity object, uint32_t id, Reacti
 			held = shieldObject->reaction;
 			heldType = Reaction::ReactToMagicShield;
 		}
+		// It looks at the point of the file. A villager that the file gives no point looks at the centre of the shield.
 		registry.Assign<VillagerShieldReaction>(
 		    villager, VillagerShieldReaction {.reaction = held,
 		                                      .type = heldType,
 		                                      .shield = heldType == Reaction::ReactToMagicShieldDestroyed ? entt::null : object,
-		                                      .lookAt = centre});
+		                                      .lookAt = lookAt.value_or(centre)});
 		_reactions.at(held).reacting.push_back(villager);
 	}
 }

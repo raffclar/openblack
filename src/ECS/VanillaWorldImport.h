@@ -1025,8 +1025,9 @@ struct ImportedHeldSpell
 	uint32_t reaction {0};
 	/// The point where the spell is
 	gamesave::MapCoords position {};
-	/// The number of the object that cast the spell
+	/// The number of the object that cast the spell, and the number of the player record of the spell, 0 for none
 	uint32_t creator {0};
+	uint32_t player {0};
 	/// The prayer power that is left, and the prayer power after the last fill
 	float chants {0.0f};
 	float initialChants {0.0f};
@@ -1122,5 +1123,59 @@ struct ImportedTeleportStone
 /// The stone that a teleport spell of the file put on the land. Nothing for a record that is not a stone.
 [[nodiscard]] std::optional<ImportedTeleportStone> ReadTeleportStone(const gamesave::VanillaWorld& world,
                                                                      const gamesave::VanillaRecord& record);
+
+/// The object of the file that cast a spell. It gives the player of the spell and who pays for the spell.
+struct ImportedSpellCaster
+{
+	enum class Kind : uint8_t
+	{
+		/// No object: a script cast the spell
+		None,
+		/// The hand of the player cast a seed that no spell icon made
+		Hand,
+		/// The hand cast a seed that this spell icon made
+		Icon,
+		Creature,
+		/// Another object
+		Object,
+	};
+	Kind kind {Kind::None};
+	/// The player of the spell
+	PlayerNames player {PlayerNames::NEUTRAL};
+	/// The number of the object that cast the spell, 0 for none
+	uint32_t creator {0};
+};
+
+/// The object that cast a spell of the file. The player is the player of the hand, or else the player record of the
+/// spell. A spell with no player record has the neutral player.
+[[nodiscard]] ImportedSpellCaster CasterOfSpell(const gamesave::VanillaWorld& world, const ImportedHeldSpell& spell);
+
+/// The kinds of spell that keep their things on the land after a cast: a forest, a shield and a teleport. The import
+/// makes each spell of these kinds, as the creature holds it or as the hand cast it.
+[[nodiscard]] bool IsSpellWithThingsOnLand(const gamesave::VanillaRecord& record);
+
+/// The teleport stones of one player of the file, in the order of the list of the player. The first stone is the
+/// head of the list.
+struct ImportedStoneList
+{
+	PlayerNames player {PlayerNames::NEUTRAL};
+	std::vector<uint32_t> stones;
+};
+
+/// The list of teleport stones of each player record of the file. The load of the game puts each stone at the end of
+/// its list in the order of the file, so the list has the order that it had at the save.
+[[nodiscard]] std::vector<ImportedStoneList> ReadStoneLists(const gamesave::VanillaWorld& world);
+
+/// The point that a villager looks at while it shelters under a shield, in whole map units (x, z). The game keeps it
+/// as the one value of the state of the shelter. The top state comes first, then the final state, so a villager that
+/// walks to its shelter gives its point too. Nothing when no state is the state of the shelter.
+[[nodiscard]] std::optional<glm::ivec2> ShieldLookPointOf(const std::array<uint8_t, 2>& states,
+                                                          const std::vector<ImportedStateValue>& topValues,
+                                                          const std::vector<ImportedStateValue>& finalValues);
+
+/// The look point of the shelter of a villager record of the file. Nothing for a record that is not a villager in the
+/// state of the shelter.
+[[nodiscard]] std::optional<glm::ivec2> ShieldLookPointOf(const gamesave::VanillaWorld& world,
+                                                          const gamesave::VanillaRecord& record);
 
 } // namespace openblack::ecs::vanilla_world_import

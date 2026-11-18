@@ -44,7 +44,7 @@ public:
 	[[nodiscard]] entt::entity ObjectOf(entt::entity spell) const override;
 	entt::entity Restore(entt::entity spell, const components::Spell& miracle, const RestoredShield& file) override;
 	void RestoreReaction(entt::entity object, uint32_t id, Reaction type, float reach, uint32_t firstReacted,
-	                     std::span<const entt::entity> villagers) override;
+	                     std::span<const RestoredTaker> villagers) override;
 	[[nodiscard]] std::vector<Avoid> CreatureAvoids(PlayerNames creaturePlayer, bool scripted) const override;
 	[[nodiscard]] bool KeepsReactionOff(glm::vec3 watcher, glm::vec3 initiator) const override;
 	[[nodiscard]] std::optional<entt::entity> ShieldAt(glm::vec3 point) const override;

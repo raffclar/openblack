@@ -36,6 +36,11 @@ namespace openblack::particles
 struct RestoredEffect;
 } // namespace openblack::particles
 
+namespace openblack::ecs::components
+{
+struct SpellCaster;
+} // namespace openblack::ecs::components
+
 namespace openblack::magic
 {
 struct EffectSource;
@@ -238,6 +243,13 @@ public:
 	/// creature does not pay for it, and nothing sees a new cast. Return the spell, or none for a spell that openblack
 	/// cannot make from these values.
 	virtual entt::entity ImportCreatureCast(entt::entity /*creature*/, const magic::ImportedCast& /*cast*/)
+	{
+		return entt::null;
+	}
+	/// A spell of a saved game of the game that no creature holds, such as a spell that the hand cast. The spell
+	/// continues with the values of the file, and the caster pays only its upkeep. Nothing sees a new cast. Return the
+	/// spell, or none for a spell that openblack cannot make from these values.
+	virtual entt::entity ImportCast(const components::SpellCaster& /*caster*/, const magic::ImportedCast& /*cast*/)
 	{
 		return entt::null;
 	}

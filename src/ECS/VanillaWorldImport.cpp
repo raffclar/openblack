@@ -1091,6 +1091,7 @@ std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const 
 	    .reaction = world.Ref(record, "spellReaction").value_or(0),
 	    .position = PositionOf(world, record).value_or(gamesave::MapCoords {}),
 	    .creator = world.Ref(record, "spellCreator").value_or(0),
+	    .player = world.Ref(record, "spellPlayer").value_or(0),
 	    .chants = world.Float(record, "spellChants").value_or(0.0f),
 	    .initialChants = world.Float(record, "spellInitialChants").value_or(0.0f),
 	    .closedDown = world.Word(record, "spellClosedDown").value_or(0) != 0,
@@ -1200,6 +1201,64 @@ std::optional<ImportedTeleportStone> ReadTeleportStone(const VanillaWorld& world
 	    .spell = world.Ref(record, "teleportSpell").value_or(0),
 	    .player = world.Ref(record, "teleportPlayer").value_or(0),
 	};
+}
+
+ImportedSpellCaster CasterOfSpell(const VanillaWorld& world, const ImportedHeldSpell& spell)
+{
+	using Kind = ImportedSpellCaster::Kind;
+	ImportedSpellCaster caster {.kind = Kind::None,
+	                            .player = PlayerOfRecord(world, spell.player).value_or(PlayerNames::NEUTRAL),
+	                            .creator = spell.creator};
+	const auto* creator = spell.creator != 0 ? world.Record(spell.creator) : nullptr;
+	if (creator == nullptr)
+	{
+		caster.creator = 0;
+		return caster;
+	}
+	if (creator->Is(VanillaType::Player))
+	{
+		// A seed that no icon made has the player of the hand as the object that casts it
+		caster.kind = Kind::Hand;
+		caster.player = PlayerOfRecord(world, spell.creator).value_or(caster.player);
+	}
+	else if (creator->Is(VanillaType::WorshipSpellIcon) || creator->Is(VanillaType::TownSpellIcon))
+	{
+		caster.kind = Kind::Icon;
+	}
+	else if (creator->Is(VanillaType::Creature))
+	{
+		caster.kind = Kind::Creature;
+	}
+	else
+	{
+		caster.kind = Kind::Object;
+	}
+	return caster;
+}
+
+bool IsSpellWithThingsOnLand(const VanillaRecord& record)
+{
+	return record.Is(VanillaType::SpellForest) || record.Is(VanillaType::SpellShield) || record.Is(VanillaType::SpellTeleport);
+}
+
+std::vector<ImportedStoneList> ReadStoneLists(const VanillaWorld& world)
+{
+	std::vector<ImportedStoneList> lists;
+	for (const auto& record : world.Records())
+	{
+		if (!record.Is(VanillaType::Player))
+		{
+			continue;
+		}
+		const auto player = PlayerOfRecord(world, record.number);
+		const auto stones = world.Refs(record, "teleports");
+		if (!player.has_value() || stones.empty())
+		{
+			continue;
+		}
+		lists.push_back({.player = *player, .stones = {stones.begin(), stones.end()}});
+	}
+	return lists;
 }
 
 void PutDanceValues(components::Dance& dance, const ImportedDance& file)
@@ -1341,7 +1400,8 @@ bool CanKeepStateValues(uint8_t state)
 	       IsOneOf(state, k_ShepherdStates) || IsOneOf(state, k_ScriptValueStates) ||
 	       state == static_cast<uint8_t>(VillagerStates::MoveOnPath) || state == static_cast<uint8_t>(VillagerStates::Dead) ||
 	       state == static_cast<uint8_t>(VillagerStates::DiscipleNothingToDo) ||
-	       state == static_cast<uint8_t>(VillagerStates::BreederDisciple);
+	       state == static_cast<uint8_t>(VillagerStates::BreederDisciple) ||
+	       state == static_cast<uint8_t>(VillagerStates::AmazedByMagicShieldReaction);
 }
 
 bool CanKeepWalk(uint8_t moveState)
@@ -1425,6 +1485,38 @@ std::optional<ImportedScriptValues> ScriptValuesOf(uint8_t state, const std::vec
 		return std::nullopt;
 	}
 	return ImportedScriptValues {.x = (*place)[0], .z = (*place)[1], .number = *number, .first = *first, .second = *second};
+}
+
+std::optional<glm::ivec2> ShieldLookPointOf(const std::array<uint8_t, 2>& states,
+                                            const std::vector<ImportedStateValue>& topValues,
+                                            const std::vector<ImportedStateValue>& finalValues)
+{
+	constexpr auto k_Shelter = static_cast<uint8_t>(VillagerStates::AmazedByMagicShieldReaction);
+	const std::array<const std::vector<ImportedStateValue>*, 2> values {&topValues, &finalValues};
+	for (size_t i = 0; i < states.size(); ++i)
+	{
+		if (states.at(i) != k_Shelter || values.at(i)->size() != 1)
+		{
+			continue;
+		}
+		// The point is two whole numbers, x then z
+		if (const auto point = ValueOf<std::array<int32_t, 2>>(values.at(i)->front()))
+		{
+			return glm::ivec2((*point)[0], (*point)[1]);
+		}
+	}
+	return std::nullopt;
+}
+
+std::optional<glm::ivec2> ShieldLookPointOf(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto action = world.Raw(record, "action");
+	if (action.size() < 2)
+	{
+		return std::nullopt;
+	}
+	return ShieldLookPointOf({action[0], action[1]}, StateValues(world, record, "topStateValue"),
+	                         StateValues(world, record, "finalStateValue"));
 }
 
 float MetresOfMapUnits(int32_t units)

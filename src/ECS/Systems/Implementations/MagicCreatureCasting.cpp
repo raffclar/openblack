@@ -305,9 +305,41 @@ void MagicSystem::ReleaseCreatureCast(entt::entity creature)
 
 entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic::ImportedCast& cast)
 {
-	auto& registry = Entities();
-	const auto* body = registry.TryGet<const Creature>(creature);
+	const auto* body = Entities().TryGet<const Creature>(creature);
 	if (body == nullptr || !Locator::infoConstants::has_value() || static_cast<size_t>(cast.type) >= magic::k_MagicTypeCount ||
+	    cast.type == MagicType::None)
+	{
+		return entt::null;
+	}
+	ReleaseCreatureCast(creature);
+	const SpellCaster caster {.kind = SpellCaster::Kind::Creature, .player = body->owner, .entity = creature};
+	const auto spell = MakeImportedCast(caster, cast);
+	if (spell == entt::null)
+	{
+		return entt::null;
+	}
+	_creatureCasts.insert_or_assign(creature, spell);
+	if (cast.closedDown)
+	{
+		CloseDown(spell);
+	}
+	return spell;
+}
+
+entt::entity MagicSystem::ImportCast(const SpellCaster& caster, const magic::ImportedCast& cast)
+{
+	const auto spell = MakeImportedCast(caster, cast);
+	if (spell != entt::null && cast.closedDown)
+	{
+		CloseDown(spell);
+	}
+	return spell;
+}
+
+entt::entity MagicSystem::MakeImportedCast(const SpellCaster& caster, const magic::ImportedCast& cast)
+{
+	auto& registry = Entities();
+	if (!Locator::infoConstants::has_value() || static_cast<size_t>(cast.type) >= magic::k_MagicTypeCount ||
 	    cast.type == MagicType::None)
 	{
 		return entt::null;
@@ -315,8 +347,6 @@ entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic:
 	// The forest, the shields and the teleport keep their state in the things that they made: the trees, the domes and
 	// the stones. The import of the world makes these things for the spell after the spell.
 	const auto kind = magic::ClassOf(cast.type);
-	ReleaseCreatureCast(creature);
-	const SpellCaster caster {.kind = SpellCaster::Kind::Creature, .player = body->owner, .entity = creature};
 	const magic::SpellCastData data {
 	    .magnitude = cast.magnitude,
 	    .chants = cast.initialChants,
@@ -330,8 +360,8 @@ entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic:
 	if (spell == entt::null && cast.effect != nullptr)
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"),
-		                   "The saved effect of the spell of creature {} does not start, so it starts again",
-		                   entt::to_integral(creature));
+		                   "The saved effect of a spell of magic type {} does not start, so it starts again",
+		                   static_cast<int>(cast.type));
 		spell = MakeSpell(cast.type, caster, cast.position, data, cast.processInfo);
 	}
 	if (spell == entt::null)
@@ -375,11 +405,6 @@ entt::entity MagicSystem::ImportCreatureCast(entt::entity creature, const magic:
 		                           .lastSpawn = cast.flock->lastSpawn,
 		                           .lastSpawnHeight = cast.flock->lastSpawnHeight,
 		                           .closedDown = cast.closedDown});
-	}
-	_creatureCasts.insert_or_assign(creature, spell);
-	if (cast.closedDown)
-	{
-		CloseDown(spell);
 	}
 	return spell;
 }

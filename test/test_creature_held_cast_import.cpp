@@ -21,13 +21,19 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/FlockSpell.h"
+#include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Spell.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/Implementations/EffectRequestSystem.h"
+#include "ECS/Systems/Implementations/MagicShieldSystem.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
+#include "ECS/Systems/Implementations/TeleportSystem.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Particles/ParticleDrawFrame.h"
@@ -290,4 +296,85 @@ TEST_F(CreatureHeldCastImport, AHeldSpellOfTheFileStopsAsACastSpellStops)
 	const auto other = _magic->ImportCreatureCast(_creature, closed);
 	ASSERT_TRUE(other != entt::null);
 	EXPECT_TRUE(SpellOf(other).closedDown);
+}
+
+// A forest of the file that the hand cast continues with the player as its caster. No creature holds it.
+TEST_F(CreatureHeldCastImport, ASpellOfTheHandContinuesWithItsPlayer)
+{
+	auto cast = Water();
+	cast.type = MagicType::Forest;
+	cast.duration = -1.0f;
+	cast.lastRipple = std::nullopt;
+	cast.forest = magic::ImportedForestCast {.planted = true, .mostTrees = 4};
+	const SpellCaster hand {.kind = SpellCaster::Kind::Player, .player = PlayerNames::PLAYER_TWO, .withoutIcon = true};
+	const auto spell = _magic->ImportCast(hand, cast);
+	ASSERT_TRUE(spell != entt::null);
+	const auto& made = SpellOf(spell);
+	EXPECT_EQ(made.magicType, MagicType::Forest);
+	EXPECT_EQ(made.caster.kind, SpellCaster::Kind::Player);
+	EXPECT_EQ(made.caster.player, PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(made.caster.withoutIcon);
+	EXPECT_EQ(made.age, 3.25f);
+	EXPECT_EQ(made.chants.chants, 30.0f);
+	EXPECT_TRUE(made.forestPlanted);
+	EXPECT_EQ(made.maxObjectsToCreate, 4);
+	EXPECT_FALSE(made.closedDown);
+	EXPECT_TRUE(_magic->CreatureCastOf(_creature) == entt::null);
+
+	// A closed spell of the file stays closed, and a spell with no magic type is not made
+	cast.closedDown = true;
+	const auto closed = _magic->ImportCast(hand, cast);
+	ASSERT_TRUE(closed != entt::null);
+	EXPECT_TRUE(SpellOf(closed).closedDown);
+	cast.type = MagicType::None;
+	EXPECT_TRUE(_magic->ImportCast(hand, cast) == entt::null);
+}
+
+// The stones of a player take the order of the list of the file, the head first. The stones of another player and the
+// stones that the list does not give stay as they were, after the stones of the list.
+TEST_F(CreatureHeldCastImport, TheStonesOfAPlayerTakeTheOrderOfTheFile)
+{
+	auto& teleports = static_cast<TeleportSystem&>(Locator::teleportSystem::emplace<TeleportSystem>());
+	const auto one = teleports.RestoreStone({10.0f, 0.0f, 10.0f}, PlayerNames::PLAYER_ONE, entt::null);
+	const auto two = teleports.RestoreStone({20.0f, 0.0f, 10.0f}, PlayerNames::PLAYER_ONE, entt::null);
+	const auto three = teleports.RestoreStone({30.0f, 0.0f, 10.0f}, PlayerNames::PLAYER_ONE, entt::null);
+	const auto other = teleports.RestoreStone({40.0f, 0.0f, 10.0f}, PlayerNames::PLAYER_TWO, entt::null);
+	const auto unlisted = teleports.RestoreStone({50.0f, 0.0f, 10.0f}, PlayerNames::PLAYER_ONE, entt::null);
+	// The newest stone is the head of the list
+	EXPECT_EQ(teleports.GetStones(PlayerNames::PLAYER_ONE), (std::vector {unlisted, three, two, one}));
+
+	const std::vector headFirst {one, three, other, two};
+	teleports.OrderStones(PlayerNames::PLAYER_ONE, headFirst);
+	EXPECT_EQ(teleports.GetStones(PlayerNames::PLAYER_ONE), (std::vector {one, three, two, unlisted}));
+	EXPECT_EQ(teleports.GetStones(PlayerNames::PLAYER_TWO), (std::vector {other}));
+	Locator::teleportSystem::reset();
+}
+
+// A villager that shelters under a shield of the file looks at the point of the file. With no point, it looks at the
+// centre of the shield.
+TEST_F(CreatureHeldCastImport, AVillagerUnderAShieldOfTheFileLooksAtThePointOfTheFile)
+{
+	auto& shields = static_cast<MagicShieldSystem&>(Locator::magicShieldSystem::emplace<MagicShieldSystem>());
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto object = registry.Create();
+	registry.Assign<Transform>(object, glm::vec3 {100.0f, 0.0f, 200.0f}, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<MagicShield>(object, MagicShield {.spell = registry.Create(), .radius = 30.0f});
+	const auto looking = registry.Create();
+	registry.Assign<LivingAction>(looking);
+	const auto other = registry.Create();
+	registry.Assign<LivingAction>(other);
+
+	const std::vector<MagicShieldSystemInterface::RestoredTaker> takers {
+	    {.villager = looking, .lookAt = glm::ivec2 {12345, 67890}},
+	    {.villager = other, .lookAt = std::nullopt},
+	};
+	shields.RestoreReaction(object, 7, Reaction::ReactToMagicShield, 60.0f, 0, takers);
+	EXPECT_EQ(registry.Get<const MagicShield>(object).reaction, 7U);
+	const auto& first = registry.Get<const VillagerShieldReaction>(looking);
+	EXPECT_EQ(first.reaction, 7U);
+	EXPECT_EQ(first.shield, object);
+	EXPECT_EQ(first.lookAt, glm::ivec2(12345, 67890));
+	const auto centre = map_coords::WholeXZ(map_coords::FromMetres(glm::vec2 {100.0f, 200.0f}));
+	EXPECT_EQ(registry.Get<const VillagerShieldReaction>(other).lookAt, centre);
+	Locator::magicShieldSystem::reset();
 }
