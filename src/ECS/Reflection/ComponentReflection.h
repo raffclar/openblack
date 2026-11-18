@@ -365,6 +365,15 @@ template <typename Type>
 	}
 	return copy;
 }
+
+/// The value at a place of the storage of a component, with no search for the place of its entity
+template <typename Type>
+[[nodiscard]] const void* ValueAt(const entt::sparse_set& storage, size_t place)
+{
+	constexpr auto k_PageSize = entt::component_traits<Type>::page_size;
+	const auto& values = static_cast<const entt::storage_for_t<Type>&>(storage);
+	return &values.raw()[place / k_PageSize][place % k_PageSize];
+}
 } // namespace detail
 
 /// What is kept with each registered component: its storage in a registry, made if there is none yet, and the codec of
@@ -376,6 +385,9 @@ struct ComponentInfo
 	/// Copies the rows of a storage, for a writer on another thread to encode; none for a component that cannot be
 	/// copied, or that shares values which the game's thread changes
 	StorageCopy (*copy)(const entt::sparse_set& storage) {nullptr};
+	/// The value at a place of the storage of the component, as the storage keeps its entities; none for a component
+	/// with no values
+	const void* (*valueAt)(const entt::sparse_set& storage, size_t place) {nullptr};
 	/// Only this computer has the component, as drawn state: the world save, the world parts that the server sends and
 	/// the hashes of the world leave it out. A component tells this with a constant k_LocalOnly that is true.
 	bool localOnly {false};
@@ -410,12 +422,17 @@ public:
 	          .storage = [](entt::registry& registry) -> entt::sparse_set& { return registry.storage<Type>(); },
 	          .codec = {},
 	          .copy = nullptr,
+	          .valueAt = nullptr,
 	          .localOnly = detail::IsLocalOnly<Type>(),
 	      })
 	{
 		if constexpr (std::is_copy_constructible_v<Type>)
 		{
 			_component->copy = &detail::CopyRows<Type>;
+		}
+		if constexpr (entt::component_traits<Type>::page_size != 0)
+		{
+			_component->valueAt = &detail::ValueAt<Type>;
 		}
 		_factory.template custom<ComponentInfo>(*_component);
 	}
