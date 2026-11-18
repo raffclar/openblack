@@ -155,6 +155,9 @@ struct Ground
 	/// A corner that is not 0 is on a river or its bank. Without it, the features on the shore keep off the corners
 	/// of keepClear.
 	const Grid<uint8_t>* rivers {nullptr};
+	/// The middles of the other towns of the land, in corners. The distance to the town is the distance to the nearest
+	/// town.
+	std::span<const Clearing> towns {};
 };
 
 /// The ground at one point, in the units of the lands of the story
@@ -164,7 +167,7 @@ struct Spot
 	float height;
 	/// The slope as the rise for each metre along the ground
 	float slope;
-	/// The distances to the sea and to the town in metres
+	/// The distances to the sea and to the nearest town in metres
 	float sea;
 	float town;
 };

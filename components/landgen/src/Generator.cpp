@@ -325,7 +325,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	const auto riverDistance = climate::DistanceToWater(riverCorners);
 	const auto sea = Mask(side, [&heights](size_t i) { return heights.values[i] <= terrain::k_SeaLevel; });
 	const StartSettings startSettings;
-	land.start = FindStartArea(heights, climate::DistanceToWater(sea), riverDistance, startSettings);
+	const auto startSea = climate::DistanceToWater(sea);
+	land.start = FindStartArea(heights, startSea, riverDistance, startSettings);
 	FlattenStartArea(heights, land.start, startSettings);
 	clock.Done("start area");
 
@@ -335,6 +336,18 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	lakes::DigHollows(heights, awayFromHollows, {{.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}},
 	                  StageSeed(seed, 35), settings.hillHollows);
 	clock.Done("hill hollows");
+
+	// The neutral towns stand on flat ground, as the towns of the story do, so the ground of each town becomes flat
+	const auto firstTown = settlement::TownOfStart(land.start.x, land.start.z, seed, settings.settlement);
+	const std::array startArea {settlement::Area {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
+	const auto sites =
+	    settlement::FindSites(heights, land.heightCurve, startSea, riverDistance, firstTown, startArea, seed, settings.sites);
+	const StartSettings townGround {.flatRadius = settings.sites.flatRadius, .blendRadius = settings.sites.blendRadius};
+	for (const auto& site : sites)
+	{
+		FlattenStartArea(heights, {.x = site.x, .z = site.z, .radius = townGround.flatRadius}, townGround);
+	}
+	clock.Done("town places");
 
 	// The altitude byte of each corner is its height rounded. The height units come from the height before the rounding,
 	// through the curve, so that the high ground has no steps of many units.
@@ -438,7 +451,15 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 		return altitudes.values[i] <= k_SeaLevelAltitude + 1 || riverDistance.values[i] <= 1.5f || lakeLevels.values[i] >= 0.0f;
 	});
 	const auto rivers = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 1.5f; });
-	const std::array clearings {features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
+	// Nothing grows on the ground of the towns
+	std::vector<features::Clearing> clearings {
+	    features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
+	std::vector<features::Clearing> towns;
+	for (const auto& site : sites)
+	{
+		towns.push_back({.x = site.x, .z = site.z, .radius = settings.sites.blendRadius});
+	}
+	clearings.insert(clearings.end(), towns.begin(), towns.end());
 	land.features = features::Place({.biomes = land.biomes,
 	                                 .heights = heights,
 	                                 .seaDistance = seaDistance,
@@ -446,7 +467,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                 .clearings = clearings,
 	                                 .townX = land.start.x,
 	                                 .townZ = land.start.z,
-	                                 .rivers = &rivers},
+	                                 .rivers = &rivers,
+	                                 .towns = towns},
 	                                seed, settings.features);
 	clock.Done("features");
 	auto cursed = cursed::Place({.biomes = land.biomes,
@@ -456,7 +478,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                             .clearings = clearings,
 	                             .townX = land.start.x,
 	                             .townZ = land.start.z,
-	                             .rivers = &rivers},
+	                             .rivers = &rivers,
+	                             .towns = towns},
 	                            land.features, seed, settings.cursed);
 	land.cursedPatches = std::move(cursed.patches);
 	land.mists = std::move(cursed.mists);
@@ -468,15 +491,23 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                .clearings = clearings,
 	                                .townX = land.start.x,
 	                                .townZ = land.start.z,
-	                                .rivers = &rivers},
+	                                .rivers = &rivers,
+	                                .towns = towns},
 	                               seed, settings.swamps);
 	land.swampSheets = std::move(swampMist.sheets);
 	land.mists.insert(land.mists.end(), swampMist.mists.begin(), swampMist.mists.end());
 	clock.Done("swamp mist");
 
-	// The temple and the town on the start area, then the forests nearest the town first
+	// The temple and the town on the start area, the neutral towns, then the forests nearest the town of the start first
 	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);
-	land.forests = features::GroupForests(land.features, land.settlement.townX, land.settlement.townZ, settings.forests);
-	clock.Done("town and forests");
+	const auto tribes = settlement::TribesOf(land.settlement.town.tribe, seed, settings.sites);
+	const auto townTribes = settlement::TribesOfTowns(tribes, sites.size(), seed);
+	for (size_t i = 0; i < sites.size(); ++i)
+	{
+		land.settlement.neutral.push_back(
+		    settlement::MakeTown(sites[i], townTribes[i], keepClear, seed, static_cast<uint32_t>(i), settings.settlement));
+	}
+	land.forests = features::GroupForests(land.features, land.settlement.town.x, land.settlement.town.z, settings.forests);
+	clock.Done("towns and forests");
 	return land;
 }
