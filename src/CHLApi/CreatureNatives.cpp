@@ -1157,7 +1157,7 @@ void IsLeashedToObject() // 269 IS_LEASHED_TO_OBJECT
 void IsCreatureAvailable() // 271 IS_CREATURE_AVAILABLE
 {
 	// The five bonus creatures are only there once unlocked; any other species always is. The game's unlocks came from
-	// a program outside it, so none is unlocked unless the debug option says so, as on a normal install
+	// a program outside it. Here all five are unlocked unless the debug option says otherwise
 	const auto species = Pop().intVal;
 	Pushb(creature_swap::IsAvailable(species, ScriptBonusCreatures()));
 }

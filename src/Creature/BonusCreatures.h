@@ -34,6 +34,12 @@ enum class Bonus : uint8_t
 inline constexpr size_t k_BonusCount = static_cast<size_t>(Bonus::_Count);
 using Unlocked = std::bitset<k_BonusCount>;
 
+/// The set that a game starts with: all five bonus creatures, so that the breeders of the first and fourth lands offer
+/// each of them. The debug option can change the set, for example to none.
+inline constexpr Unlocked k_DefaultUnlocked {(1u << k_BonusCount) - 1u};
+/// The default set as one byte, as MaskOf gives it
+inline constexpr uint8_t k_DefaultUnlockedMask = static_cast<uint8_t>((1u << k_BonusCount) - 1u);
+
 /// The bonus creature a script's species number is, none for any other species
 [[nodiscard]] std::optional<Bonus> BonusOf(int32_t species);
 

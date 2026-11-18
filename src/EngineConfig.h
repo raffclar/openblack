@@ -126,9 +126,9 @@ struct EngineConfig
 	/// Trees cast their shadows as they are drawn each frame, swaying with them and bent away from the hand, rather than
 	/// baked into the land once as the game does (off: as the game does)
 	bool dynamicTreeShadows {false};
-	/// Debug: the Creature Breeder's bonus creatures taken as unlocked. Vanilla only had them once an unlock from outside
-	/// the game was installed; none is unlocked by default, as on a normal install
-	creature_swap::Unlocked unlockedBonusCreatures;
+	/// The Creature Breeder's bonus creatures taken as unlocked. Vanilla only had them once an unlock from outside the
+	/// game was installed. All five are unlocked by default; a debug option can change the set
+	creature_swap::Unlocked unlockedBonusCreatures {creature_swap::k_DefaultUnlocked};
 	/// Debug: the switch of the free Soccer Add-On, which lets towns build football pitches and play football. Off by
 	/// default, as on a normal install. It has no effect in a multiplayer game.
 	bool footballAddOn {false};

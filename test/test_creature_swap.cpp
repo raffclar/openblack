@@ -125,6 +125,24 @@ TEST(CreatureSwap, TheScriptsOfANetworkGameReadTheSetOfTheWorldAndNotTheDebugOpt
 	EXPECT_FALSE(IsAvailable(6, ScriptUnlocked(true, all, MaskOf(leopard))));
 }
 
+// A game starts with all five bonus creatures unlocked, alone and in a network game, so the breeder offers each of
+// them. The debug option "none" still takes them away.
+TEST(CreatureSwap, AllFiveBonusCreaturesAreUnlockedByDefault)
+{
+	EXPECT_EQ(k_DefaultUnlocked, *ParseUnlocked("all"));
+	EXPECT_EQ(k_DefaultUnlockedMask, MaskOf(k_DefaultUnlocked));
+	EXPECT_EQ(FromMask(k_DefaultUnlockedMask), k_DefaultUnlocked);
+	for (const bool networkGame : {false, true})
+	{
+		const auto unlocked = ScriptUnlocked(networkGame, k_DefaultUnlocked, k_DefaultUnlockedMask);
+		for (const int32_t bonus : {3, 6, 14, 15, 16})
+		{
+			EXPECT_TRUE(IsAvailable(bonus, unlocked)) << bonus;
+		}
+	}
+	EXPECT_FALSE(IsAvailable(3, ScriptUnlocked(false, *ParseUnlocked("none"), k_DefaultUnlockedMask)));
+}
+
 TEST(CreatureSwap, ABeamRunsEveryThirdTurn)
 {
 	EXPECT_TRUE(IsBeamTurn(0));
