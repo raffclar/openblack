@@ -223,12 +223,9 @@ void SyncChecksumSystem::Finish(const TurnValues& values, synced_state::Hash has
 	                      .parts = {},
 	                      .dump = std::move(dump),
 	                      .unregistered = hash.unregistered};
-	if (_keepParts)
-	{
-		_last->parts = hash.parts;
-	}
-	// The history keeps the parts of the world and the synced values that the checksum mixes, so that a part of the
-	// worlds of two computers shows which value differs. The values go after the parts of the world for this call only.
+	// The history and the kept parts hold the parts of the world and the synced values that the checksum mixes, so
+	// that a part of the worlds of two computers or of two runs shows which value differs. The values go after the parts
+	// of the world for this call only.
 	const auto worldParts = hash.parts.size();
 	hash.parts.emplace_back("synced seed", values.seed);
 	hash.parts.emplace_back("synced draws", values.draws);
@@ -239,6 +236,10 @@ void SyncChecksumSystem::Finish(const TurnValues& values, synced_state::Hash has
 	if (values.land.has_value())
 	{
 		hash.parts.emplace_back("land", *values.land);
+	}
+	if (_keepParts)
+	{
+		_last->parts = hash.parts;
 	}
 	_partHistory.Keep(values.turn, hash.parts);
 	hash.parts.resize(worldParts);

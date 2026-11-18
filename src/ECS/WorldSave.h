@@ -27,6 +27,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/WorldArchive.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Enums.h"
 
 namespace openblack::dance
@@ -72,6 +73,9 @@ struct ClockState
 	std::optional<std::mt19937> general;
 	/// How many numbers the synced seed gave, which the checksum of each turn has. A save of an older build has none.
 	std::optional<uint64_t> syncedDraws;
+	/// Where the turn timer and the frame clock were. A save of an older build has none, and its load puts the timer at
+	/// the time that the frames have drawn.
+	std::optional<systems::TimeSystemInterface::ClockPlace> place;
 };
 
 /// The bytes of the block of the clock
@@ -137,9 +141,14 @@ void TakeBlowHeightsFromTheMesh(entt::registry& registry);
 void TakeDanceFilesAgain(entt::registry& registry,
                          const std::function<std::shared_ptr<const dance::DanceFile>(DanceInfo)>& fileOf);
 
+/// The block of the channel that plays the music of the scripts, none without the music system. Only a world state
+/// writes it, so that its load hears the piece at the same place (see k_ScriptMusicChannelTag).
+[[nodiscard]] std::optional<gamesave::Chunk> ScriptMusicChannelChunk(const entt::meta_ctx& reflection);
+
 /// After the land starts again: puts back the game clock at the turn, the streams of random numbers, the camera (only
 /// when the kind of load takes it), the scripts, the table of the objects that they hold and the running state of the
-/// systems. Returns whether every block that the file has read.
+/// systems. A world state also puts back the channel of the scripts' music. Returns whether every block that the file
+/// has read.
 bool LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn,
                       LoadKind kind = LoadKind::SavedGame);
 

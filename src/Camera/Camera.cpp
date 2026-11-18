@@ -299,12 +299,12 @@ glm::vec3 Camera::GetUp(Interpolation interpolation) const
 	return static_cast<glm::mat3>(GetRotationMatrix(interpolation)) * glm::vec3(0.0f, 1.0f, 0.0f);
 }
 
-std::unique_ptr<Camera> Camera::Reflect() const
+std::unique_ptr<Camera> Camera::Reflect(float level, const glm::mat4& clipChange) const
 {
 	// TODO(bwrsandman): The copy to reflection camera has way too much of Camera including model which is useless
 	//                   This also touches on other cameras such as the citadel camera which use a different kind of model
-	auto reflectionCamera = std::make_unique<ReflectionXZCamera>();
-	(*reflectionCamera).SetOrigin(GetOrigin()).SetFocus(GetFocus()).SetProjectionMatrix(_projectionMatrix);
+	auto reflectionCamera = std::make_unique<ReflectionXZCamera>(level);
+	(*reflectionCamera).SetOrigin(GetOrigin()).SetFocus(GetFocus()).SetProjectionMatrix(clipChange * _projectionMatrix);
 	return reflectionCamera;
 }
 

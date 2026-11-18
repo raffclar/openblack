@@ -1429,14 +1429,20 @@ std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 	auto whole =
 	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
 	// The land as it is now, which another computer must have to go on with the same world
-	auto altitudes = std::make_shared<std::vector<gamesave::Chunk>>(ChangedLandChunks());
-	return [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole, altitudes]() {
+	auto lastChunks = std::make_shared<std::vector<gamesave::Chunk>>(ChangedLandChunks());
+	// The channel of the scripts' music, so that the other computer hears the piece at the same place. A saved game does
+	// not keep it (see k_ScriptMusicChannelTag).
+	if (auto channel = ecs::world_save::ScriptMusicChannelChunk(Reflection()); channel.has_value())
+	{
+		lastChunks->push_back(std::move(*channel));
+	}
+	return [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole, lastChunks]() {
 		auto file = *world;
 		for (const auto& pending : *whole)
 		{
 			file.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
 		}
-		file.chunks.insert(file.chunks.end(), altitudes->begin(), altitudes->end());
+		file.chunks.insert(file.chunks.end(), lastChunks->begin(), lastChunks->end());
 		return gamesave::Write(file);
 	};
 }
@@ -1759,6 +1765,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	VanillaCircles circles;
 	VanillaFootpathWalks footpathWalks;
 	VanillaDances dances;
+	// The seeds of the file, which the icons of the worship sites keep
+	ImportVanillaSeeds(*read.world, made);
 	ImportVanillaTowns(*read.world, made, works, circles, footpathWalks, dances);
 	// The forests, the big forests and the trees of the file replace those of the land
 	ImportVanillaForests(*read.world, made);
@@ -1775,6 +1783,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	ImportVanillaDances(dances, made);
 	// The spells that the creatures of the file hold
 	ImportVanillaHeldCasts(*read.world, made, effects);
+	// The seeds take their icons and their spells, and the hands take their seeds
+	ImportVanillaSeedLinks(*read.world, made);
 	// The reactions of the file and their dances, when the things that they come from are made
 	ImportVanillaReactions(*read.world, made);
 	// The walkers take the circles of their walks when all the things of the file are made

@@ -36,6 +36,11 @@ namespace openblack::particles
 struct RestoredEffect;
 } // namespace openblack::particles
 
+namespace openblack::ecs::components
+{
+struct SpellCaster;
+} // namespace openblack::ecs::components
+
 namespace openblack::magic
 {
 struct EffectSource;
@@ -77,6 +82,10 @@ struct ImportedCast
 	float magnitude {k_DefaultSpellMagnitude};
 	/// What the spell gives its particles each turn
 	particles::ProcessInfo processInfo;
+	/// The hand of a player cast the spell
+	bool fromHand {false};
+	/// A person casts the spell, as the file says. Without a value, the caster decides.
+	std::optional<bool> humanCasting;
 	/// Food and wood: the first grain landed
 	std::optional<bool> firstDone;
 	/// Water: the age of the spell when its last drop made a ring on the land
@@ -241,6 +250,13 @@ public:
 	{
 		return entt::null;
 	}
+	/// A spell of a saved game of the game that no creature holds, such as a spell that the hand cast. The spell
+	/// continues with the values of the file, and the caster pays only its upkeep. Nothing sees a new cast. Return the
+	/// spell, or none for a spell that openblack cannot make from these values.
+	virtual entt::entity ImportCast(const components::SpellCaster& /*caster*/, const magic::ImportedCast& /*cast*/)
+	{
+		return entt::null;
+	}
 	/// The creature of a saved game of the game has the beams from its left hand and its right hand of a cast from
 	/// above. The beams are the running effects with these numbers. Each turn the beams move to the hands of the
 	/// creature, until they stop.
@@ -317,6 +333,9 @@ public:
 	/// A seed straight into the player's hand, fully charged and ready, as from a bubble, if the hand is free: the seed,
 	/// or none
 	virtual entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) = 0;
+	/// The hand of the player holds the seed of a saved game of the game. The seed keeps the values of the file, and
+	/// nothing sees a new seed. Return false when the player has no hand, the hand holds a seed, or the seed is not a seed.
+	virtual bool ImportHeldSeed(PlayerNames /*player*/, entt::entity /*seed*/) { return false; }
 	/// The seed of a one-shot miracle (a globe, or a miracle that a script puts into the hand) goes into the player's
 	/// hand, as GiveSeedToHand does. The best icon of the player for the seed makes it. Thus the seed can power up, and
 	/// it gives its prayer power back to the site of the icon. With no such icon, the seed has no icon. The seed, or none.

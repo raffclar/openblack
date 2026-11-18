@@ -178,5 +178,58 @@ class WorldStatesAgainstServer(unittest.TestCase):
         self.assertIn("unread", result["turns"][0]["difference"])
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class ServerGone(unittest.TestCase):
+    def test_the_time_starts_at_the_first_stop_and_stays(self):
+        self.assertIsNone(net_check.server_gone_since(True, None, 5.0))
+        self.assertEqual(net_check.server_gone_since(False, None, 5.0), 5.0)
+        self.assertEqual(net_check.server_gone_since(False, 5.0, 9.0), 5.0)
+
+    def test_a_server_that_runs_again_clears_the_time(self):
+        self.assertIsNone(net_check.server_gone_since(True, 5.0, 9.0))
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class TurnsOfTwoLands(unittest.TestCase):
+    """A command of a scenario loads a land before turn 10: the turns of the new land go on after the old land's"""
+
+    def test_the_server_checksums_of_the_new_land_follow_the_old_land(self):
+        lines = [f"turn {turn} checksum {turn:016x}" for turn in range(1, 11)]
+        lines.append("Before turn 10, the world of the server loaded a land: the turns start again at turn 0")
+        lines += [f"turn {turn} checksum {turn + 100:016x}" for turn in range(1, 4)]
+        turns = net_check.game_turns_in_lines(lines, net_check.SERVER_LAND_AGAIN)
+        self.assertEqual(sorted(turns), list(range(1, 14)))
+        self.assertEqual(turns[10], f"{10:016x}")
+        self.assertEqual(turns[11], f"{101:016x}")
+
+    def test_the_record_of_a_client_falls_to_the_turns_of_the_new_land(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with open(os.path.join(folder, "client.log"), "w", encoding="utf-8") as log:
+                log.write("Before turn 10, the world of the game server loaded a land: its turns start again at turn 0\n")
+                log.write("Before turn 10, the world loaded the land of the game server: the turns go on from turn 0\n")
+            record = os.path.join(folder, "record.jsonl")
+            with open(record, "w", encoding="utf-8") as file:
+                # A client that catches up keeps only the last turn of each frame
+                for turn, checksum in ((8, "a"), (10, "b"), (2, "c"), (3, "d")):
+                    file.write(json.dumps({"turn": turn, "synced": {"checksum": checksum}}) + "\n")
+            self.assertEqual(net_check.record_checksums(record), {8: "a", 10: "b", 12: "c", 13: "d"})
+
+    def test_a_record_with_no_land_keeps_its_turns(self):
+        with tempfile.TemporaryDirectory() as folder:
+            record = os.path.join(folder, "record.jsonl")
+            with open(record, "w", encoding="utf-8") as file:
+                for turn in (5, 6, 2):
+                    file.write(json.dumps({"turn": turn, "synced": {"checksum": str(turn)}}) + "\n")
+            self.assertEqual(net_check.record_checksums(record), {5: "5", 6: "6", 2: "2"})
+
+    def test_a_part_after_the_land_is_at_the_turn_of_the_game(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log = os.path.join(folder, "client.log")
+            with open(log, "w", encoding="utf-8") as file:
+                file.write("Before turn 10, the world loaded the land of the game server: the turns go on from turn 0\n")
+                file.write("The world parts from the server's world at turn 4 (this 1, server 2)\n")
+            self.assertEqual(net_check.session_part_turns(log), [14])
+
+
 if __name__ == "__main__":
     unittest.main()

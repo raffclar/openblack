@@ -26,6 +26,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
@@ -257,6 +258,29 @@ entt::entity MagicSystem::TakeIconSeed(entt::entity site, PlayerNames holder, Sp
 	seed.turnsInHand = 0;
 	ShowHeldSeed();
 	return entity;
+}
+
+bool MagicSystem::ImportHeldSeed(PlayerNames player, entt::entity seed)
+{
+	const ActingAs acting(*this, player);
+	auto& registry = EntityRegistry();
+	if (!HasActingHand() || Held().has_value() || !registry.Valid(seed) || !registry.AllOf<SpellSeed>(seed))
+	{
+		return false;
+	}
+	SetHeld(seed);
+	// Only the hand of this computer shows the effect of the seed. The pour of the hand starts at rest.
+	if (ActsOnOwnHand())
+	{
+		_input = {};
+		_pour = {};
+		if (Locator::effectRequestSystem::has_value() && Locator::infoConstants::has_value())
+		{
+			StartHandEffect(seed);
+		}
+	}
+	ShowHeldSeed();
+	return true;
 }
 
 entt::entity MagicSystem::GiveOneShotSeedToHand(PlayerNames player, SpellSeedType seedType, int powerUp, float multiplier)

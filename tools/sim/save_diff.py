@@ -787,7 +787,8 @@ def text_report(result):
 LOCAL_BLOCKS = {"CAMR"}
 # The values of the clock block that each computer keeps for itself
 LOCAL_CLOCK_VALUES = {"speed", "paused", "remainderMs", "localSeed", "particleStream", "crtSeed", "runSeed", "streams",
-                      "general"}
+                      "general", "timerMs", "frameSampleMs", "turnsAfterFrame", "inputOwed",
+                      "inputSteps"}
 
 
 def read_clock(data):
@@ -801,6 +802,11 @@ def read_clock(data):
     clock["streams"] = [reader.name() for _ in range(reader.u32())]
     clock["general"] = reader.name() if reader.left() > 0 else ""
     clock["syncedDraws"] = struct.unpack("<Q", reader.take(8))[0] if reader.left() > 0 else None
+    # Where the turn timer and the frame clock were, from the start of the last turn (none in a save of an older build)
+    if reader.left() > 0:
+        clock["timerMs"], clock["frameSampleMs"] = struct.unpack("<ii", reader.take(8))
+        clock["turnsAfterFrame"] = reader.u32()
+        clock["inputOwed"], clock["inputSteps"] = struct.unpack("<qQ", reader.take(16))
     return clock
 
 

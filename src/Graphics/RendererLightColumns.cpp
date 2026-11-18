@@ -71,7 +71,7 @@ uint32_t ColourOf(PlayerNames player)
 
 void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId != RenderPass::Main && desc.viewId != RenderPass::Reflection)
+	if (desc.viewId != RenderPass::Main && !IsMirrorScene(desc.viewId))
 	{
 		return;
 	}
@@ -84,8 +84,7 @@ void Renderer::DrawTownColumns(const DrawSceneDesc& desc) const
 	                         : nullptr;
 	// The view of the main pass. A column out of it puts no pixel on the screen, so it is not drawn. A warm-up draws all
 	// of them.
-	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
-	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto seenBy = SceneFrustum(desc);
 	const auto* testedView = _warmingUp || (column != nullptr && column->IsBoned()) ? nullptr : &seenBy;
 	// A warm-up draws a column that adds nothing, as the first column of a land draws it
 	if (_warmingUp && column != nullptr)
@@ -168,8 +167,7 @@ void Renderer::DrawTempleColumns(const DrawSceneDesc& desc) const
 	using namespace ecs::components;
 	const auto& column = *meshes.Handle(columnId);
 	const auto& influence = Locator::influenceSystem::value();
-	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
-	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto seenBy = SceneFrustum(desc);
 	const auto* testedView = _warmingUp || column.IsBoned() ? nullptr : &seenBy;
 	// Over each temple, where it stands, beating with its player's heart
 	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;

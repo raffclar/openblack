@@ -502,13 +502,26 @@ def differing_counts(record_a, record_b):
             if counts_a.get(name) != counts_b.get(name)}
 
 
+def world_turns(records):
+    """Each record with its key (world, turn). The turn starts again when the game loads another world, for example a
+    testbed scenario that loads a generated land after the first turns of the testbed. So each fall of the turn starts
+    the next world, and records compare only with the records of the same world and turn."""
+    world, last, keyed = 0, None, []
+    for record in records:
+        if last is not None and record["turn"] < last:
+            world += 1
+        last = record["turn"]
+        keyed.append(((world, record["turn"]), record))
+    return keyed
+
+
 def compare(records_a, records_b):
     """Where two runs part: the first turn recorded in both whose hashes, seeds or counts of draws differ, and what
     differs there. Records from a game that does not write the seeds or the draws are compared by their hashes alone."""
-    by_turn_b = {record["turn"]: record for record in records_b}
+    by_turn_b = dict(world_turns(records_b))
     compared = 0
-    for record in records_a:
-        other = by_turn_b.get(record["turn"])
+    for key, record in world_turns(records_a):
+        other = by_turn_b.get(key)
         if other is None:
             continue
         compared += 1
@@ -524,6 +537,7 @@ def compare(records_a, records_b):
                 "same": False,
                 "compared": compared,
                 "turn": record["turn"],
+                "world": key[0],
                 "frame": [record.get("frame"), other.get("frame")],
                 "hash": [record.get("hash"), other.get("hash")],
                 "creature_same": state_a == state_b,
@@ -541,11 +555,11 @@ def compare_synced(records_a, records_b):
     """Where two runs part in their synced worlds: the first turn recorded in both whose synced hash, synced seed or
     count of synced draws differ. Only the synced part of each record counts: two runs at other frame rates or with
     other draws of the frames give other local draws and other drawn places, but the same synced world."""
-    by_turn_b = {record["turn"]: record for record in records_b if record.get("synced")}
+    by_turn_b = {key: record for key, record in world_turns(records_b) if record.get("synced")}
     compared = 0
-    for record in records_a:
+    for key, record in world_turns(records_a):
         synced_a = record.get("synced")
-        synced_b = (by_turn_b.get(record["turn"]) or {}).get("synced")
+        synced_b = (by_turn_b.get(key) or {}).get("synced")
         if not synced_a or not synced_b:
             continue
         compared += 1
@@ -556,7 +570,8 @@ def compare_synced(records_a, records_b):
                 "same": False,
                 "compared": compared,
                 "turn": record["turn"],
-                "frame": [record.get("frame"), by_turn_b[record["turn"]].get("frame")],
+                "world": key[0],
+                "frame": [record.get("frame"), by_turn_b[key].get("frame")],
                 "hash": [synced_a.get("hash"), synced_b.get("hash")],
                 "seeds": [synced_a.get("seed"), synced_b.get("seed")],
                 "draws": [synced_a.get("draws"), synced_b.get("draws")],
@@ -568,11 +583,11 @@ def compare_synced(records_a, records_b):
 def synced_part_firsts(records_a, records_b, limit=40):
     """For each synced part that differs between two runs, the first turn recorded in both at which it differs: the
     parts with the earliest turns first, at most limit of them. Empty without the hashes of the parts."""
-    by_turn_b = {record["turn"]: record for record in records_b if record.get("synced")}
+    by_turn_b = {key: record for key, record in world_turns(records_b) if record.get("synced")}
     firsts = {}
-    for record in records_a:
+    for key, record in world_turns(records_a):
         parts_a = (record.get("synced") or {}).get("parts")
-        parts_b = ((by_turn_b.get(record["turn"]) or {}).get("synced") or {}).get("parts")
+        parts_b = ((by_turn_b.get(key) or {}).get("synced") or {}).get("parts")
         if not parts_a or not parts_b:
             continue
         for key in set(parts_a) | set(parts_b):

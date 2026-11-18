@@ -73,6 +73,9 @@ public:
 	[[nodiscard]] virtual bool HasSource() const = 0;
 	/// True in a network game whose computer is behind the turns of the game server (see TurnCommandSourceInterface)
 	[[nodiscard]] virtual bool IsBehind([[maybe_unused]] uint32_t turn) const { return false; }
+	/// The world loaded a land before the turn after, and its turns start again at turn. The source of a network game
+	/// follows the turns of the new land.
+	virtual void TurnsStartAgain([[maybe_unused]] uint32_t after, [[maybe_unused]] uint32_t turn) {}
 };
 
 } // namespace openblack::ecs::systems

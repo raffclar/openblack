@@ -110,7 +110,7 @@ using namespace openblack::ecs::systems;
 
 void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 {
-	if (desc.viewId == RenderPass::Reflection || !Locator::temple::has_value() || !Locator::temple::value().Active())
+	if (IsMirrorScene(desc.viewId) || !Locator::temple::has_value() || !Locator::temple::value().Active())
 	{
 		return;
 	}
@@ -182,7 +182,7 @@ void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 {
 	// The lower detail levels draw no light shafts
-	if (desc.viewId == RenderPass::Reflection || !Locator::temple::has_value() || !Locator::temple::value().Active() ||
+	if (IsMirrorScene(desc.viewId) || !Locator::temple::has_value() || !Locator::temple::value().Active() ||
 	    !detail_level::TempleLightShafts(Locator::config::value().detail))
 	{
 		return;
@@ -363,7 +363,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	    view_frustum::FromViewProjection(camera.GetProjectionMatrix() * camera.GetViewMatrix(Camera::Interpolation::Current));
 	const bool testsView = desc.viewId == RenderPass::Main && !_warmingUp && !mesh->IsBoned();
 	const auto box = mesh->GetBoundingBox();
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 
 	// A storm's cloud is lit by the lightning of its storm
 	const auto drawMist = [&](const Mist& mist, const glm::vec3& position, uint32_t colour,

@@ -41,6 +41,13 @@ public:
 	[[nodiscard]] bool TurnReady(uint32_t turn) const override { return _source == nullptr || _source->HasTurn(turn); }
 	[[nodiscard]] bool HasSource() const override { return _source != nullptr; }
 	[[nodiscard]] bool IsBehind(uint32_t turn) const override { return _source != nullptr && _source->IsBehind(turn); }
+	void TurnsStartAgain(uint32_t after, uint32_t turn) override
+	{
+		if (_source != nullptr)
+		{
+			_source->TurnsStartAgain(after, turn);
+		}
+	}
 
 private:
 	/// At the start of a network game, each god starts at the alignment that its player sent

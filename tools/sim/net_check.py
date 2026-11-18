@@ -183,6 +183,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_BUILDS = sim_paths.DEFAULT_BUILDS
 DEFAULT_GAME_PATH = sim_paths.DEFAULT_GAME_PATH
 CHECKSUM_LINE = re.compile(r"turn (\d+) checksum ([0-9a-f]{16})")
+# A command of a testbed scenario loaded a land before a turn, and the turns of the new land start again: the line of the
+# server, and the line of a client when its own world loaded the land
+SERVER_LAND_AGAIN = re.compile(r"Before turn (\d+), the world of the server loaded a land: the turns start again at turn "
+                               r"(\d+)")
+CLIENT_LAND_AGAIN = re.compile(r"Before turn (\d+), the world loaded the land of the game server: the turns go on from "
+                               r"turn (\d+)")
 LISTEN_LINE = re.compile(r"The game server listens on [0-9.]+:(\d+)")
 SERVER_ID = "net-check-1"
 # The id of the lobby of a lobby game (--lobby-game). Each join ticket then names it.
@@ -207,6 +213,9 @@ MOST_TURNS = 100000
 # The run of a long game: a turn takes 100 ms on the server and the clients follow, with the time to load
 SECONDS_PER_TURN = 0.1
 LOAD_SECONDS = 600
+# The time that the clients get to end after the server ended. A client that still runs then waits for turns that no
+# server sends, and only tries to join again.
+SERVER_GONE_SECONDS = 30
 DEFAULT_CHROME = os.environ.get("OB_CHROME", "C:/Program Files/Google/Chrome/Application/chrome.exe")
 DEFAULT_NODE = os.environ.get("OB_NODE", "node")
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -543,7 +552,10 @@ def start(command, cwd):
     """Starts a program with no console window of its own"""
     os.makedirs(cwd, exist_ok=True)
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    return subprocess.Popen(command, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+    # No path in the command line may start a switch of the original game
+    executable, arguments = sim_paths.switch_safe_command(command, cwd)
+    return subprocess.Popen(arguments, executable=executable, cwd=cwd, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, creationflags=flags)
 
 
 def stop(process):
@@ -581,13 +593,43 @@ def wait_for_line(log, text, process, limit=300):
 
 
 def server_checksums(log):
-    turns = {}
+    """The checksum of each turn of the server, by the turn of the game. After a land that a command of a scenario
+    loaded, the turns of the world start again; the turn of the game goes on from the turn before the land (see
+    game_turns_in_lines), so the turns of the two lands do not mix."""
     with open(log, encoding="utf-8", errors="replace") as file:
-        for line in file:
-            match = CHECKSUM_LINE.search(line)
-            if match:
-                turns[int(match.group(1))] = match.group(2)
+        return game_turns_in_lines(file, SERVER_LAND_AGAIN)
+
+
+def game_turns_in_lines(lines, land_again, pattern=CHECKSUM_LINE):
+    """The value of each line that matches the pattern, by the turn of the game. Each land_again line moves the turns of
+    the lines after it by the turns that the world did before the land: the new land's turn 1 follows the turn of the
+    old land before which the land loaded."""
+    turns, base = {}, 0
+    for line in lines:
+        again = land_again.search(line)
+        if again:
+            base += int(again.group(1)) - int(again.group(2))
+            continue
+        match = pattern.search(line)
+        if match:
+            turns[int(match.group(1)) + base] = match.group(2) if match.lastindex >= 2 else None
     return turns
+
+
+def client_land_bases(log):
+    """The turns that each land of a client starts after, in the order of the client's log"""
+    if log is None or not os.path.exists(log):
+        return []
+    with open(log, encoding="utf-8", errors="replace") as file:
+        return [int(match.group(1)) - int(match.group(2)) for line in file if (match := CLIENT_LAND_AGAIN.search(line))]
+
+
+def session_part_turns(log):
+    """The turns of the game at which the session of the client tells that its world parts"""
+    if not os.path.exists(log):
+        return []
+    with open(log, encoding="utf-8", errors="replace") as file:
+        return sorted(game_turns_in_lines(file, CLIENT_LAND_AGAIN, PARTS_AT))
 
 
 def deeds_by_turn(lines, until_turn=None):
@@ -675,10 +717,14 @@ def world_states_against_server(server_folder, client_folder, turns):
     return {"same": all(result["same"] for result in results), "turns": results}
 
 
-def record_checksums(record):
+def record_checksums(record, log=None):
+    """The synced checksum of each turn of a client's record, by the turn of the game. The record has no line of the
+    land: each time that the turn falls, the next land of the client's log (client.log beside the record) starts."""
     turns = {}
     if not os.path.exists(record):
         return turns
+    bases = client_land_bases(log if log is not None else os.path.join(os.path.dirname(record), "client.log"))
+    base, last = 0, None
     with open(record, encoding="utf-8") as file:
         for line in file:
             line = line.strip()
@@ -687,7 +733,11 @@ def record_checksums(record):
             value = json.loads(line)
             synced = value.get("synced")
             if isinstance(synced, dict) and "checksum" in synced and "turn" in value:
-                turns[int(value["turn"])] = synced["checksum"]
+                turn = int(value["turn"])
+                if last is not None and turn < last and bases:
+                    base += bases.pop(0)
+                last = turn
+                turns[turn + base] = synced["checksum"]
     return turns
 
 
@@ -3321,6 +3371,14 @@ def longest_of(record, keys):
     return longest
 
 
+def server_gone_since(running, gone_at, now):
+    """The time from which the server is gone: the first check that found its process stopped, or None while it runs.
+    A server that the script started again runs, so the time starts again."""
+    if running:
+        return None
+    return gone_at if gone_at is not None else now
+
+
 def run_limit_seconds(turns):
     """The time that a run may take: the turns at the pace of the server, the load of the land, and the clients' catch up"""
     return max(RUN_LIMIT_SECONDS, int(turns * SECONDS_PER_TURN * 1.5) + LOAD_SECONDS)
@@ -4287,6 +4345,7 @@ def main():
         restart_in_pause = options.restart_server_at is not None and options.editor_desync in ("time", "debugger")
         # The island cases stop the server only after the land change, so that the new server starts on the new land
         restart_after_island = options.editor_desync in ("island", "island-away")
+        server_gone_at = None
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (options.restart_server_at is not None and restarted_log is None and not restart_in_pause
                     and (not restart_after_island or lines_with(server_log, ["started the room again on the land"]))
@@ -4297,6 +4356,12 @@ def main():
             if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
                     and (web_process is None or web_process.poll() is not None)
                     and (web_folder is None or not options.web_remote or web_remote_done(web_folder))):
+                break
+            server_gone_at = server_gone_since(server.poll() is None, server_gone_at, time.monotonic())
+            if server_gone_at is not None and time.monotonic() - server_gone_at >= SERVER_GONE_SECONDS:
+                running = [index + 1 for index, client in enumerate(clients) if client.poll() is None]
+                print(f"the server ended, and clients {running} still ran after {SERVER_GONE_SECONDS} s: the script "
+                      "stops them")
                 break
             for number, (turns, index, text) in enumerate(chats):
                 if (number not in said and 0 <= index < len(clients) and clients[index].poll() is None and lines_with(
@@ -4460,9 +4525,7 @@ def main():
         different = [turn for turn in compared if client_turns[turn] != server_turns[turn]]
         # The record keeps few turns of a client that catches up or resynchronises: the session of the client names the
         # turn at which its world parted too
-        session_parts = [int(match.group(1)) for line in lines_with(os.path.join(client_dir, "client.log"),
-                                                                    ["parts from the server's world at turn"])
-                         if (match := PARTS_AT.search(line))]
+        session_parts = session_part_turns(os.path.join(client_dir, "client.log"))
         different = sorted(set(different) | set(session_parts))
         parts = parted_parts(os.path.join(server_dir, "record.jsonl"), os.path.join(client_dir, "record.jsonl"),
                              different[0]) if different and options.hash_parts else None

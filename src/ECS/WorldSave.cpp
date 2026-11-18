@@ -151,6 +151,7 @@ world_save::PendingChunk ClockChunk()
 		state.speed = time.GetSpeed();
 		state.paused = time.IsPaused();
 		state.remainderMs = time.GetTurnRemainderMs();
+		state.place = time.GetClockPlace();
 	}
 	if (Locator::gameRandom::has_value())
 	{
@@ -175,7 +176,14 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 	{
 		auto& time = Locator::time::value();
 		time.SetSpeed(state->speed);
-		time.ResumeAtTurn(turn, state->remainderMs);
+		if (state->place.has_value())
+		{
+			time.ResumeAtPlace(turn, *state->place);
+		}
+		else
+		{
+			time.ResumeAtTurn(turn, state->remainderMs);
+		}
 		time.SetPaused(state->paused);
 	}
 	if (Locator::gameRandom::has_value())
@@ -555,6 +563,17 @@ std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx
 	return chunks;
 }
 
+std::optional<gamesave::Chunk> world_save::ScriptMusicChannelChunk(const entt::meta_ctx& reflection)
+{
+	if (!Locator::scriptMusicSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	reflection::BinaryWriter out(reflection);
+	Locator::scriptMusicSystem::value().SaveChannel(out);
+	return gamesave::Chunk {.tag = gamesave::k_ScriptMusicChannelTag, .bytes = std::move(out.Bytes())};
+}
+
 bool world_save::HasWholeWorld(const gamesave::WorldFile& file)
 {
 	return gamesave::FindChunk(file, gamesave::k_EntitiesTag).has_value();
@@ -671,6 +690,14 @@ std::vector<uint8_t> world_save::WriteClock(const ClockState& state)
 	reflection::Save(out, streams);
 	reflection::Save(out, state.general.has_value() ? GeneratorText(*state.general) : std::string {});
 	reflection::Save(out, state.syncedDraws.value_or(0));
+	if (state.place.has_value())
+	{
+		reflection::Save(out, state.place->timerMs);
+		reflection::Save(out, state.place->frameSampleMs);
+		reflection::Save(out, state.place->turnsAfterFrame);
+		reflection::Save(out, state.place->input.owed);
+		reflection::Save(out, state.place->input.taken);
+	}
 	return std::move(out.Bytes());
 }
 
@@ -702,6 +729,17 @@ std::optional<world_save::ClockState> world_save::ReadClock(std::span<const uint
 		uint64_t draws = 0;
 		reflection::Load(in, draws);
 		state.syncedDraws = draws;
+	}
+	// Nor the place of the timer and the frame clock
+	if (in.Remaining() > 0)
+	{
+		auto& place = state.place.emplace();
+		place.remainderMs = state.remainderMs;
+		reflection::Load(in, place.timerMs);
+		reflection::Load(in, place.frameSampleMs);
+		reflection::Load(in, place.turnsAfterFrame);
+		reflection::Load(in, place.input.owed);
+		reflection::Load(in, place.input.taken);
 	}
 	if (in.Failed())
 	{
@@ -813,6 +851,18 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 	if (const auto systems = gamesave::FindChunk(file, gamesave::k_SystemsTag); systems.has_value())
 	{
 		read = LoadSystems(reflection, *systems) && read;
+	}
+	// A world state then gives the channel of the scripts' music, after the section of the music cleared it
+	if (const auto channel = gamesave::FindChunk(file, gamesave::k_ScriptMusicChannelTag);
+	    kind == LoadKind::WorldState && channel.has_value() && Locator::scriptMusicSystem::has_value())
+	{
+		const reflection::EntityRemap identity;
+		reflection::BinaryReader in(reflection, *channel, identity);
+		if (!Locator::scriptMusicSystem::value().LoadChannel(in) || in.Failed() || in.Remaining() != 0)
+		{
+			SPDLOG_LOGGER_WARN(Log(), "The channel of the script music in the world state does not read");
+			read = false;
+		}
 	}
 	// The help shows its kept texts again, and the temple gives back the dialogue it kept, as the game does once every
 	// part of a saved game has loaded

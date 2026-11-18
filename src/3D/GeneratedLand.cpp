@@ -314,6 +314,11 @@ std::optional<generated_land::StoryParts> generated_land::ReadStoryParts(filesys
 	return parts;
 }
 
+float generated_land::LevelOf(const landgen::lakes::Lake& lake)
+{
+	return lake.level * k_MetresPerAltitude;
+}
+
 LandData generated_land::Build(const landgen::GeneratedLand& land, const StoryParts& parts)
 {
 	LandData data;
@@ -355,6 +360,11 @@ LandData generated_land::Build(const landgen::GeneratedLand& land, const StoryPa
 	}
 	data.noise = parts.noise;
 	data.bump = parts.bump;
+	// The lakes above the sea, with their levels in the heights of the world
+	for (const auto& lake : land.highLakes)
+	{
+		data.lakes.push_back({.level = LevelOf(lake), .corners = lake.corners});
+	}
 	return data;
 }
 

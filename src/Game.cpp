@@ -353,6 +353,15 @@ Game::Game(Arguments&& args) noexcept
 	config.numFramesToSimulate = args.numFramesToSimulate;
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
+	if (const auto lakeMirrors = graphics::lake_mirrors::ParseOptions(args.lakeMirrors))
+	{
+		config.lakeMirrors = *lakeMirrors;
+	}
+	else
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lake mirror options \"{}\" are not known: the game uses the defaults",
+		                   args.lakeMirrors);
+	}
 	config.aiTimesEvery = args.aiTimesEvery;
 	config.turnStepTimesMs = args.turnStepTimesMs;
 	config.frameStatsOut = args.frameStatsOut;

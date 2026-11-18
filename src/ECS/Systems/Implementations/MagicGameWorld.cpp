@@ -287,8 +287,10 @@ bool GameMagicWorld::IsDryLand(glm::vec3 point) const
 	constexpr float k_CellSize = 10.0f;
 	constexpr uint8_t k_LowestDryAltitude = 4;
 	const auto cell = glm::u16vec2(glm::floor(glm::vec2(point.x, point.z) / k_CellSize));
-	const auto* landCell = Locator::terrainSystem::value().FindCell(cell);
-	return landCell != nullptr && landCell->altitude >= k_LowestDryAltitude;
+	const auto& island = Locator::terrainSystem::value();
+	const auto* landCell = island.FindCell(cell);
+	// On a generated land, the ground under a lake above the sea is not dry either
+	return landCell != nullptr && landCell->altitude >= k_LowestDryAltitude && !island.IsUnderLake(cell);
 }
 
 bool GameMagicWorld::IsLand(glm::vec3 point) const

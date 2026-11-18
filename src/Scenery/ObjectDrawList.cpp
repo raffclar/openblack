@@ -45,7 +45,7 @@ BlockBox BoxOf(const Block& block)
 	const float height = static_cast<float>(block.highestAltitude) * k_AltitudeUnit;
 	if (block.reflected)
 	{
-		return {.bottom = -height, .top = height, .middle = 0.0f};
+		return {.bottom = -height, .top = std::max(height, block.mirrorTop), .middle = 0.0f};
 	}
 	const float half = height * 0.5f;
 	return {.bottom = half - half, .top = half + half, .middle = half};
@@ -117,13 +117,15 @@ bool object_draw_list::BlockViewMemo::InView(const glm::mat4& viewProjection, fl
 	}
 	auto& answer = _answers.at(static_cast<size_t>(x * k_BlocksPerSide + z));
 	if (answer.camera != _camera || std::bit_cast<uint64_t>(answer.corner) != std::bit_cast<uint64_t>(block.corner) ||
-	    answer.highestAltitude != block.highestAltitude || answer.reflected != block.reflected)
+	    answer.highestAltitude != block.highestAltitude || answer.reflected != block.reflected ||
+	    std::bit_cast<uint32_t>(answer.mirrorTop) != std::bit_cast<uint32_t>(block.mirrorTop))
 	{
 		++_tests;
 		answer = {.corner = block.corner,
 		          .camera = _camera,
 		          .highestAltitude = block.highestAltitude,
 		          .reflected = block.reflected,
+		          .mirrorTop = block.mirrorTop,
 		          .inView = BlockInView(viewProjection, nearPlane, block)};
 	}
 	return answer.inView;

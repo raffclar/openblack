@@ -418,6 +418,12 @@ public:
 	[[nodiscard]] std::vector<player_commands::Command> TakeTurn(uint32_t turn) override;
 	/// The world of the server turns by its own clock
 	[[nodiscard]] bool IsBehind(uint32_t /*turn*/) const override { return false; }
+	/// The world of the server loaded a land before the turn after, and its turns start again at turn. The turns and the
+	/// checksums of the old land are of no use. Every client gets a game.turns_again frame before the first turn of the
+	/// new land, and loads the same land before the same turn.
+	void TurnsStartAgain(uint32_t after, uint32_t turn) override;
+	/// The times that the turns started again because the world of the server loaded a land before a turn
+	[[nodiscard]] uint32_t TurnRestarts() const { return _turnRestarts; }
 	/// The creature file that the god of the slot sent before the start. The world of the server makes the same
 	/// creatures as the worlds of the clients from these files.
 	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
@@ -839,6 +845,7 @@ private:
 	std::optional<game_socket::Start> _firstStart;
 	ConnectionId _worldChangeFrom {0};
 	uint32_t _worldChanges {0};
+	uint32_t _turnRestarts {0};
 };
 
 } // namespace openblack::server

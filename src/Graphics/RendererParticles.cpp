@@ -388,7 +388,7 @@ void Renderer::DrawParticleMist(const DrawSceneDesc& desc, const particles::draw
 	const auto texture = textures.Handle(Mist::k_TextureId);
 	const auto alphaTexture = textures.Handle(Mist::k_AlphaTextureId);
 	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	for (const auto& subMesh : mesh->GetSubMeshes())
 	{
 		for (const auto& primitive : subMesh->GetPrimitives())
@@ -438,7 +438,7 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 	{
 		return;
 	}
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	const auto axes = creator.faceCamera
 	                      ? FacingCamera(draw.axes, draw.position, desc.camera->GetOrigin(), creator.heightStretch)
 	                      : draw.axes;
@@ -654,7 +654,7 @@ void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::dra
 		return;
 	}
 	SubmitGlowShell(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)), meshComponent->id, placed->model, shell,
-	                desc.camera->GetProjectionMatrix(), desc.viewId == RenderPass::Reflection, depth);
+	                desc.camera->GetProjectionMatrix(), IsMirrorScene(desc.viewId), depth);
 }
 
 void Renderer::SubmitGlowShell(uint16_t viewId, entt::id_type meshId, const glm::mat4& model,
@@ -905,7 +905,7 @@ void Renderer::DrawFilmEffects(const interface_creatures::FilmCreature& film) co
 
 void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 {
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	if (desc.viewId != RenderPass::Main && !reflection)
 	{
 		return;
@@ -945,7 +945,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 
 void Renderer::DrawLearningBulbs(const DrawSceneDesc& desc) const
 {
-	if ((desc.viewId != RenderPass::Main && desc.viewId != RenderPass::Reflection) || _particleFrame.meshes.empty())
+	if ((desc.viewId != RenderPass::Main && !IsMirrorScene(desc.viewId)) || _particleFrame.meshes.empty())
 	{
 		return;
 	}
@@ -966,7 +966,7 @@ void Renderer::DrawLearningBulbs(const DrawSceneDesc& desc) const
 void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity centre,
                                        const view_frustum::Frustum* seenBy) const
 {
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	if (desc.viewId != RenderPass::Main && !reflection)
 	{
 		return;
@@ -992,7 +992,7 @@ void Renderer::DrawTownBeliefParticles(const DrawSceneDesc& desc, entt::entity c
 void Renderer::DrawTownBeliefCentres(const DrawSceneDesc& desc, std::span<const entt::entity> centres,
                                      const view_frustum::Frustum* seenBy, const std::function<void(size_t)>& drawColumn) const
 {
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	const bool drawsSymbols = desc.viewId == RenderPass::Main || reflection;
 	const auto frames = std::span(_townBeliefFrames).first(_townBeliefFrameCount);
 	const auto origin = desc.camera->GetOrigin();
@@ -1133,7 +1133,7 @@ void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::d
                                    std::span<const particles::draw::Command> commands, std::span<const uint32_t> spriteOrder,
                                    std::span<const particles::draw::Command> beforeLand, const glm::vec3& origin) const
 {
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	const auto& textures = Locator::resources::value().GetTextures();
 
 	// Every sprite of the pass in one buffer of instances, in the order drawn
@@ -1363,7 +1363,7 @@ void Renderer::WarmUpParticles(const DrawSceneDesc& desc) const
 			states.push_back(state);
 		}
 	}
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	const auto translucent = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
 	// The sprites, the ribbons and the surfaces of what is drawn before the land go in the sky's pass of the main view
 	std::vector<bgfx::ViewId> views {translucent};

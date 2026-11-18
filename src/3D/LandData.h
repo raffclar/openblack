@@ -18,6 +18,8 @@
 #include <LNDFile.h>
 #include <landgen/HeightCurve.h>
 
+#include "3D/LandLakes.h"
+
 namespace openblack
 {
 /// Everything a land is built from: its blocks, where each lies on the map, and what paints them. It is read from a
@@ -45,6 +47,8 @@ struct LandData
 	/// The land's coarse texture pages, as the landscape file keeps them: each block's coarse texture is a 64 texel
 	/// square of one of them (see LNDBlock::lowResTexture, fuLrs and fvLrs)
 	std::vector<lnd::LNDLowResolutionTexture> coarsePages;
+	/// The lakes above the sea, each at its own level. Only a generated land has them; a landscape file holds none.
+	std::vector<land_lakes::Lake> lakes;
 
 	/// The land of a landscape file. The table of the file names each block by a byte, so a land of more than 255 blocks
 	/// takes its table from the place that each block keeps (its block x and z).

@@ -39,6 +39,7 @@ struct VanillaRecord;
 namespace openblack::ecs::components
 {
 struct Dance;
+struct SpellSeed;
 struct WorshipIcon;
 } // namespace openblack::ecs::components
 
@@ -1025,8 +1026,11 @@ struct ImportedHeldSpell
 	uint32_t reaction {0};
 	/// The point where the spell is
 	gamesave::MapCoords position {};
-	/// The number of the object that cast the spell
+	/// The number of the object that cast the spell, and the number of the player record of the spell, 0 for none
 	uint32_t creator {0};
+	uint32_t player {0};
+	/// The number of the seed in the hand that cast the spell while the spell is linked to it, 0 for none
+	uint32_t seed {0};
 	/// The prayer power that is left, and the prayer power after the last fill
 	float chants {0.0f};
 	float initialChants {0.0f};
@@ -1043,6 +1047,8 @@ struct ImportedHeldSpell
 	std::array<float, 3> handMovement {};
 	float power {1.0f};
 	bool casting {false};
+	/// A person casts the spell with the hand. The hand of a creature or of a computer player does not.
+	bool humanCasting {false};
 	/// Food and wood: the first grain landed
 	std::optional<bool> firstDone;
 	/// Water: the age of the spell when its last drop made a ring on the land
@@ -1122,5 +1128,141 @@ struct ImportedTeleportStone
 /// The stone that a teleport spell of the file put on the land. Nothing for a record that is not a stone.
 [[nodiscard]] std::optional<ImportedTeleportStone> ReadTeleportStone(const gamesave::VanillaWorld& world,
                                                                      const gamesave::VanillaRecord& record);
+
+/// The object of the file that cast a spell. It gives the player of the spell and who pays for the spell.
+struct ImportedSpellCaster
+{
+	enum class Kind : uint8_t
+	{
+		/// No object: a script cast the spell
+		None,
+		/// The hand of the player cast a seed that no spell icon made
+		Hand,
+		/// The hand cast a seed that this spell icon made
+		Icon,
+		Creature,
+		/// Another object
+		Object,
+	};
+	Kind kind {Kind::None};
+	/// The player of the spell
+	PlayerNames player {PlayerNames::NEUTRAL};
+	/// The number of the object that cast the spell, 0 for none
+	uint32_t creator {0};
+};
+
+/// The object that cast a spell of the file. The player is the player of the hand, or else the player record of the
+/// spell. A spell with no player record has the neutral player.
+[[nodiscard]] ImportedSpellCaster CasterOfSpell(const gamesave::VanillaWorld& world, const ImportedHeldSpell& spell);
+
+/// The record is a spell of one of the kinds of the file
+[[nodiscard]] bool IsSpellRecord(const gamesave::VanillaRecord& record);
+
+/// The import makes this spell of the file when no creature holds it, such as a spell that the hand cast. These are
+/// the fireball, the storm, the heal, water, food, wood, the lightning, the beam explosion, the flocks, the creature
+/// spells, the forest, the shields and the teleport. The import does not make a spell of the kind that keeps only a list
+/// of objects, because no magic type of the tables is of that kind.
+[[nodiscard]] bool CanImportSpell(const ImportedHeldSpell& spell);
+
+/// A fireball of the file: the burning ball that an atom of the effect of a fireball spell carries
+struct ImportedFireBall
+{
+	uint32_t number {0};
+	gamesave::MapCoords position {};
+	/// The numbers of the atom that carries the ball and of the spell of its effect, 0 for none
+	uint32_t atom {0};
+	uint32_t spell {0};
+	/// The player of the effect, nothing for none
+	std::optional<PlayerNames> player;
+	/// The strength of the miracle that the effect last had, and the size of the atom, which is the radius of the ball
+	float strength {1.0f};
+	float radius {1.0f};
+	/// The rain cools the ball. The rain does not cool the fireball of a script.
+	bool affectedByRain {true};
+	/// The fire of the ball: its temperature now and at the end of the last turn, and the number of the thing that
+	/// heated it
+	float temperature {0.0f};
+	float previous {0.0f};
+	uint32_t source {0};
+	/// The last game turn that the atom found the ball. Nothing when the atom keeps no data for the ball.
+	std::optional<uint32_t> lastTurn;
+};
+
+/// The fireball of the record. Nothing for a record that is not a fireball.
+[[nodiscard]] std::optional<ImportedFireBall> ReadFireBall(const gamesave::VanillaWorld& world,
+                                                           const gamesave::VanillaRecord& record);
+
+/// A spell seed of the file: a miracle that a hand holds, or a seed out of the hand that is linked to its spell
+struct ImportedSpellSeed
+{
+	uint32_t number {0};
+	gamesave::MapCoords position {};
+	SpellSeedType seedType {SpellSeedType::None};
+	/// The power-up level, -1 for the plain miracle of the seed
+	int powerUp {-1};
+	/// The player of the hand of the seed. Nothing when the file gives no player.
+	std::optional<PlayerNames> player;
+	/// The numbers of the spell icon that made the seed and of the spell of the seed, 0 for none
+	uint32_t icon {0};
+	uint32_t spell {0};
+	float chantStore {0.0f};
+	/// A creature looked at a spell of the seed, so no creature learns from its spells again
+	bool learnedFrom {false};
+	/// What the last spell had left when the hand let go of it: negative chants for none
+	float storedChants {-1.0f};
+	float storedAge {0.0f};
+	int storedMaxObjects {-1};
+	float castMultiplier {1.0f};
+	float power {1.0f};
+	bool fromGlobe {false};
+	bool ready {false};
+	uint32_t turnsInHand {0};
+	MagicType lastCastType {MagicType::None};
+	bool linkedByCast {false};
+};
+
+/// The spell seed of the record. Nothing for a record that is not a spell seed, or for a seed with no row of the table.
+[[nodiscard]] std::optional<ImportedSpellSeed> ReadSpellSeed(const gamesave::VanillaWorld& world,
+                                                             const gamesave::VanillaRecord& record);
+
+/// The spell seed that the hand of a player holds in the file
+struct ImportedHandSeed
+{
+	PlayerNames player {PlayerNames::NEUTRAL};
+	/// The number of the spell seed
+	uint32_t seed {0};
+};
+
+/// The spell seeds that the hands of the file hold, one for each hand that holds a seed. A hand with no player is not
+/// in the list.
+[[nodiscard]] std::vector<ImportedHandSeed> ReadHandSeeds(const gamesave::VanillaWorld& world);
+
+/// The spell seed takes the values of the file. The player, the worship site and the spell are not values of the file,
+/// so the seed keeps its own.
+void PutSeedValues(components::SpellSeed& seed, const ImportedSpellSeed& file);
+
+/// The teleport stones of one player of the file, in the order of the list of the player. The first stone is the
+/// head of the list.
+struct ImportedStoneList
+{
+	PlayerNames player {PlayerNames::NEUTRAL};
+	std::vector<uint32_t> stones;
+};
+
+/// The list of teleport stones of each player record of the file. The load of the game puts each stone at the end of
+/// its list in the order of the file, so the list has the order that it had at the save.
+[[nodiscard]] std::vector<ImportedStoneList> ReadStoneLists(const gamesave::VanillaWorld& world);
+
+/// The point that a villager looks at while it shelters under a shield, in whole map units (x, z). The game keeps it
+/// as the one value of the state of the shelter. The top state comes first, then the final state, so a villager that
+/// walks to its shelter gives its point too. Nothing when no state is the state of the shelter.
+[[nodiscard]] std::optional<glm::ivec2> ShieldLookPointOf(const std::array<uint8_t, 2>& states,
+                                                          const std::vector<ImportedStateValue>& topValues,
+                                                          const std::vector<ImportedStateValue>& finalValues);
+
+/// The look point of the shelter of a villager record of the file. Nothing for a record that is not a villager in the
+/// state of the shelter.
+[[nodiscard]] std::optional<glm::ivec2> ShieldLookPointOf(const gamesave::VanillaWorld& world,
+                                                          const gamesave::VanillaRecord& record);
 
 } // namespace openblack::ecs::vanilla_world_import

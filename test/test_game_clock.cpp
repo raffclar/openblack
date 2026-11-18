@@ -433,6 +433,111 @@ TEST(GameClock, ASavedGameResumesAtItsTurnWithTheTimePastIt)
 	EXPECT_EQ(clock.time.GetTurn(), 501u);
 }
 
+namespace
+{
+/// A clock that frames of 20 ms move on, as a tool's run has it
+struct FixedClock: Clock
+{
+	FixedClock() { time.SetFixedFrameTime(std::chrono::milliseconds(20)); }
+
+	/// Moves the frame clock on, then plays the frame. Whether it played a turn
+	bool Step()
+	{
+		time.Update();
+		return Frame();
+	}
+
+	/// The frames until the next turn plays
+	int FramesToTurn()
+	{
+		for (int frames = 1; frames <= 100; ++frames)
+		{
+			if (Step())
+			{
+				return frames;
+			}
+		}
+		return 0;
+	}
+};
+} // namespace
+
+// A pause that comes in a frame stops the timer after the frame clock moved on. The save keeps that time, so the turns
+// after a load come at the same frames as the turns with no load.
+TEST(GameClock, ALoadKeepsTheTimeThatAPauseInAFrameStopped)
+{
+	FixedClock played;
+	played.time.StartGameClock(false);
+	while (played.time.GetTurn() < 7)
+	{
+		played.Step();
+	}
+	// The hand and the camera step by sixtieths of a second, which do not fall on the frames of 20 ms
+	played.time.StepInput(std::chrono::milliseconds(20));
+	// The pause comes after the frame clock moved on, before the turns of the frame
+	played.time.Update();
+	played.time.SetPaused(true);
+	played.Frame();
+	const auto place = played.time.GetClockPlace();
+	EXPECT_EQ(place.remainderMs, 0);
+	EXPECT_EQ(place.timerMs, 20);
+
+	FixedClock loaded;
+	loaded.time.StartGameClock(true);
+	loaded.time.ResumeAtPlace(played.time.GetTurn(), place);
+	EXPECT_EQ(loaded.time.GetTurn(), 7u);
+
+	played.time.SetPaused(false);
+	loaded.time.SetPaused(false);
+	EXPECT_EQ(played.FramesToTurn(), 4);
+	EXPECT_EQ(loaded.FramesToTurn(), 4);
+	EXPECT_EQ(played.time.GetFrameGameTime(), loaded.time.GetFrameGameTime());
+	EXPECT_EQ(played.time.GetTurnFraction(), loaded.time.GetTurnFraction());
+	// The input steps of the next frames fall at the same places
+	for (int frame = 0; frame < 5; ++frame)
+	{
+		played.time.StepInput(std::chrono::milliseconds(20));
+		loaded.time.StepInput(std::chrono::milliseconds(20));
+		const auto& stepsPlayed = played.time.GetInputSteps();
+		const auto& stepsLoaded = loaded.time.GetInputSteps();
+		ASSERT_EQ(stepsPlayed.count, stepsLoaded.count) << "frame " << frame;
+		EXPECT_EQ(stepsPlayed.points, stepsLoaded.points) << "frame " << frame;
+		EXPECT_EQ(stepsPlayed.times, stepsLoaded.times) << "frame " << frame;
+	}
+}
+
+// A save that a turn makes is before the frame clock of its frame. After the load, the frame clock takes the turn's
+// length off the time past the turn before, as it does with no load.
+TEST(GameClock, ALoadInsideATurnKeepsTheFrameClockOfTheTurnBefore)
+{
+	FixedClock played;
+	played.time.StartGameClock(false);
+	while (played.time.GetTurn() < 3)
+	{
+		played.Step();
+	}
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		played.Step();
+	}
+	// The next frame plays a turn, and the turn saves
+	played.time.Update();
+	ASSERT_TRUE(played.time.IsTurnDue());
+	played.time.StartTurn();
+	const auto place = played.time.GetClockPlace();
+	EXPECT_EQ(place.turnsAfterFrame, 1u);
+
+	FixedClock loaded;
+	loaded.time.StartGameClock(false);
+	loaded.time.ResumeAtPlace(played.time.GetTurn(), place);
+
+	played.time.UpdateFrame();
+	loaded.time.UpdateFrame();
+	EXPECT_EQ(played.time.GetTurnRemainderMs(), loaded.time.GetTurnRemainderMs());
+	EXPECT_EQ(played.time.GetTurnFraction(), loaded.time.GetTurnFraction());
+	EXPECT_EQ(played.FramesToTurn(), loaded.FramesToTurn());
+}
+
 TEST(GameClock, ASavedGameResumesPausedAsItWasSaved)
 {
 	Clock clock;

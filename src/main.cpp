@@ -220,6 +220,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("device-loss-frame", "For tests: lose the graphics device at this frame, then find the loss and make the device again.", cxxopts::value<uint32_t>())
 		("frame-stats", "Log the average and 95th percentile frame time, the profiler stages and the memory in use every so many frames (0 for never), and each frame of 10 ms or more with its stages.", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
+		("lake-mirrors", "Developer switch: how the lakes above the sea draw their mirrors, in words that commas divide: off, no-floor, no-rects, occlusion, no-share, half=<share of the screen>, join=<height>, alternate=<share of the screen>.", cxxopts::value<std::string>()->default_value(""))
 		("ai-times", "Tools: log the mean and longest time of the seen list, the mind and the hand of each computer god each time this many turns go by (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
 		("turn-step-times", "Tools: log the time of each step of each turn that takes this many milliseconds or more.", cxxopts::value<float>())
 		("frame-stats-out", "With --frame-stats, write each frame of the run (its time, its time on the processor and the game turn) into this CSV file when the game ends.", cxxopts::value<std::string>())
@@ -262,7 +263,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
 		("sim-no-hand-reports", "Tools: the player's computer sends no report of its hand and its view in its commands, in a network game and in a single player game. The reports carry the camera, which moves at each frame, so two runs with the same seed get the same commands only with this switch.")
 		("sim-checksums", "Tools: write the checksum of the synced world at the end of each turn to this file, as JSON lines (- for the standard output, as the web build needs). Two builds that play the same land, seed and commands must write the same lines.", cxxopts::value<std::string>())
-		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world, to find the part where two builds part.")
+		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world and the synced seed, draws, music and land, to find the part where two builds part.")
 		("sim-checksum-fields", "Tools: as --sim-checksum-parts, and the hash of each field of each component too.")
 		("sim-checksum-dump", "Tools: with --sim-checksums, write each field of each row of some components at one turn, as TURN:Component,Component (for example 7:CreatureMindState), to compare two builds value by value.", cxxopts::value<std::string>())
 		("sim-frame-guard", "Tools: log each frame step that changes the synced world, and the components that it changes. The synced world must change only in the game turns. The run is slower.")
@@ -726,6 +727,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.startGodsRingMap = result.count("gods-ring-map") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
+		args.lakeMirrors = result["lake-mirrors"].as<std::string>();
 		args.aiTimesEvery = result["ai-times"].as<uint32_t>();
 		if (result.count("turn-step-times") != 0)
 		{

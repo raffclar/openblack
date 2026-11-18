@@ -483,6 +483,7 @@ Renderer::~Renderer() noexcept
 		bgfx::destroy(toBgfx(*_landLightTexture));
 	}
 	ReleaseLightOfFrameBefore();
+	ReleaseLakes();
 	if (_iconsTexture)
 	{
 		bgfx::destroy(toBgfx(*_iconsTexture));
@@ -573,9 +574,12 @@ void SetSceneViewRects(RenderPass viewId, glm::u16vec2 resolution) noexcept
 	{
 		setRect(RenderPass::Advisors);
 	}
+	if (IsMirrorScene(viewId))
+	{
+		setRect(MirroredPassOf(viewId));
+	}
 	if (viewId == RenderPass::Reflection)
 	{
-		setRect(RenderPass::ReflectionMirrored);
 		setRect(RenderPass::UnderSea);
 	}
 	if (const auto translucentId = TranslucentPassOf(viewId); translucentId != viewId)
@@ -609,9 +613,12 @@ void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolutio
 	}
 	// The hand and the creature that the game mirrors are drawn over the mirrored world with its depth cleared, as the
 	// game draws its mirrored land without depth. What is under the sea's surface is then drawn over it all.
+	if (IsMirrorScene(viewId))
+	{
+		bgfx::setViewClear(static_cast<bgfx::ViewId>(MirroredPassOf(viewId)), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
+	}
 	if (viewId == RenderPass::Reflection)
 	{
-		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::ReflectionMirrored), BGFX_CLEAR_DEPTH, 0, 0.0f, 0);
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(RenderPass::UnderSea), BGFX_CLEAR_NONE);
 	}
 	// And what blends in it is drawn over it after
@@ -790,6 +797,9 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 			bgfx::touch(static_cast<bgfx::ViewId>(RenderPass::UnderSea));
 		}
 	}
+
+	// The mirror of each level of the lakes above the sea, as the sea's reflection is the mirror at the sea's level
+	DrawLakeMirrors(drawDesc);
 
 	// Main Draw Pass
 	{

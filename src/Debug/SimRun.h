@@ -216,6 +216,10 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 /// first value of the land. None for another text, or for a condition that the text names two times.
 [[nodiscard]] std::optional<ConditionsRequest> ParseConditions(std::string_view text);
 
+/// Whether the frames of the run wait so that they take their fixed game time in real time: not in fast mode, not in a
+/// run that does not follow the wall clock, and not without a fixed frame time
+[[nodiscard]] bool Paces(const Settings& settings, std::optional<std::chrono::microseconds> frameTime);
+
 /// How long the frame waits at its end so that it takes its fixed game time in real time; no wait in fast mode, without
 /// a fixed frame time, or once the frame took that long or longer
 [[nodiscard]] std::chrono::microseconds PaceWait(const Settings& settings, std::optional<std::chrono::microseconds> frameTime,

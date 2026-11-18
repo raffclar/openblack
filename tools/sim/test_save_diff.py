@@ -51,11 +51,15 @@ def world(blocks, attempts=0):
     return data
 
 
-def clock_block(synced_seed=7, draws=100, remainder=0, local_seed=3, streams=()):
-    """A clock block (TIME) as the game writes it"""
+def clock_block(synced_seed=7, draws=100, remainder=0, local_seed=3, streams=(), place=None):
+    """A clock block (TIME) as the game writes it. place is (timer, frame sample, turns after the frame, input owed, input
+    steps), or None as in a save of an older build."""
     data = struct.pack("<f", 1.0) + b"\x00" + struct.pack("<i", remainder) + u32(synced_seed) + u32(local_seed)
     data += b"\x00" + b"\x00" + u32(1) + u32(len(streams)) + b"".join(name(text) for text in streams)
-    return data + name("general") + struct.pack("<Q", draws)
+    data += name("general") + struct.pack("<Q", draws)
+    if place is not None:
+        data += struct.pack("<iiIqQ", *place)
+    return data
 
 
 def state_map(sections, parts=(), turn=250, seed=7, draws=100):
@@ -159,6 +163,13 @@ class SyncedCompareTests(unittest.TestCase):
         first = [("CAMR", b"\x01"), ("TIME", clock_block(remainder=5, local_seed=1, streams=["a"]))]
         second = [("CAMR", b"\x02"), ("TIME", clock_block(remainder=9, local_seed=2, streams=["b"]))]
         self.assertEqual(self.compare(first, second), {})
+
+    def test_the_place_of_the_timer_is_local(self):
+        first = [("TIME", clock_block(place=(20, 0, 0, 5, 9)))]
+        second = [("TIME", clock_block(place=(40, 20, 1, 6, 10)))]
+        self.assertEqual(self.compare(first, second), {})
+        self.assertEqual(save_diff.read_clock(clock_block(place=(20, 0, 1, 5, 9)))["timerMs"], 20)
+        self.assertNotIn("timerMs", save_diff.read_clock(clock_block()))
 
     def test_the_synced_seed_and_its_draws_count(self):
         result = self.compare([("TIME", clock_block(draws=100))], [("TIME", clock_block(draws=101))],

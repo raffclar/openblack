@@ -26,6 +26,7 @@
 #include "DanceFile.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/VillagerWalkRules.h"
 #include "ECS/WallHugRules.h"
@@ -50,6 +51,9 @@ uint32_t ReactionOf(const VanillaWorld& world, const VanillaRecord& record)
 
 /// The flag of a pot whose food is poisoned
 constexpr uint8_t k_PotPoisonedFlag = 0x01;
+
+/// The save type between the spell of food and wood and the spell of water. No kind of spell has this type.
+constexpr uint32_t k_NoSpellSaveType = 0x0B;
 
 /// The move states that the file gives a thing that does not walk: no state, arrived and the final step
 constexpr std::array<uint8_t, 3> k_StillMoveStates = {0x00, 0x01, 0x04};
@@ -1091,12 +1095,15 @@ std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const 
 	    .reaction = world.Ref(record, "spellReaction").value_or(0),
 	    .position = PositionOf(world, record).value_or(gamesave::MapCoords {}),
 	    .creator = world.Ref(record, "spellCreator").value_or(0),
+	    .player = world.Ref(record, "spellPlayer").value_or(0),
+	    .seed = world.Ref(record, "spellSeed").value_or(0),
 	    .chants = world.Float(record, "spellChants").value_or(0.0f),
 	    .initialChants = world.Float(record, "spellInitialChants").value_or(0.0f),
 	    .closedDown = world.Word(record, "spellClosedDown").value_or(0) != 0,
 	    .duration = world.Float(record, "spellDuration").value_or(-1.0f),
 	    .age = world.Float(record, "spellAge").value_or(0.0f),
 	    .magnitude = world.Float(record, "spellMagnitude").value_or(0.0f),
+	    .humanCasting = world.Word(record, "spellHumanCasting").value_or(0) != 0,
 	};
 	if (const auto info = world.Raw(record, "spellProcessInfo"); info.size() == k_ProcessInfoSize)
 	{
@@ -1200,6 +1207,206 @@ std::optional<ImportedTeleportStone> ReadTeleportStone(const VanillaWorld& world
 	    .spell = world.Ref(record, "teleportSpell").value_or(0),
 	    .player = world.Ref(record, "teleportPlayer").value_or(0),
 	};
+}
+
+ImportedSpellCaster CasterOfSpell(const VanillaWorld& world, const ImportedHeldSpell& spell)
+{
+	using Kind = ImportedSpellCaster::Kind;
+	ImportedSpellCaster caster {.kind = Kind::None,
+	                            .player = PlayerOfRecord(world, spell.player).value_or(PlayerNames::NEUTRAL),
+	                            .creator = spell.creator};
+	const auto* creator = spell.creator != 0 ? world.Record(spell.creator) : nullptr;
+	if (creator == nullptr)
+	{
+		caster.creator = 0;
+		return caster;
+	}
+	if (creator->Is(VanillaType::Player))
+	{
+		// A seed that no icon made has the player of the hand as the object that casts it
+		caster.kind = Kind::Hand;
+		caster.player = PlayerOfRecord(world, spell.creator).value_or(caster.player);
+	}
+	else if (creator->Is(VanillaType::WorshipSpellIcon) || creator->Is(VanillaType::TownSpellIcon))
+	{
+		caster.kind = Kind::Icon;
+	}
+	else if (creator->Is(VanillaType::Creature))
+	{
+		caster.kind = Kind::Creature;
+	}
+	else
+	{
+		caster.kind = Kind::Object;
+	}
+	return caster;
+}
+
+bool IsSpellRecord(const VanillaRecord& record)
+{
+	return record.type >= static_cast<uint32_t>(VanillaType::Spell) &&
+	       record.type <= static_cast<uint32_t>(VanillaType::SpellTeleport) && record.type != k_NoSpellSaveType;
+}
+
+bool CanImportSpell(const ImportedHeldSpell& spell)
+{
+	return static_cast<VanillaType>(spell.saveType) != VanillaType::SpellWithObjects && spell.magicType != MagicType::None;
+}
+
+std::optional<ImportedFireBall> ReadFireBall(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto position = PositionOf(world, record);
+	if (!record.Is(VanillaType::MagicFireBall) || !position.has_value())
+	{
+		return std::nullopt;
+	}
+	ImportedFireBall ball {
+	    .number = record.number,
+	    .position = *position,
+	    .atom = world.Ref(record, "fireBallAtom").value_or(0),
+	    .affectedByRain = world.Byte(record, "fireBallRain").value_or(1) != 0,
+	};
+	if (const auto* fire = RecordOf(world, world.Ref(record, "fire").value_or(0), VanillaType::FireEffect))
+	{
+		ball.temperature = world.Float(*fire, "fireTemperature").value_or(0.0f);
+		ball.previous = world.Float(*fire, "firePrevious").value_or(ball.temperature);
+		ball.source = world.Ref(*fire, "fireSource").value_or(0);
+	}
+	// The atom gives the size of the ball and the last turn that it found the ball
+	const auto* atom = RecordOf(world, ball.atom, VanillaType::AtomCore);
+	if (atom == nullptr)
+	{
+		return ball;
+	}
+	ball.radius = world.Float(*atom, "atomBaseScale").value_or(1.0f) * world.Float(*atom, "atomRuleScale").value_or(1.0f);
+	for (const auto number : world.Refs(*atom, "atomRuleData"))
+	{
+		if (const auto* data = RecordOf(world, number, VanillaType::AtomDataAttachFireBall);
+		    data != nullptr && world.Ref(*data, "fireBallObject").value_or(0) == record.number)
+		{
+			ball.lastTurn = world.Word(*data, "fireBallTurn");
+		}
+	}
+	// The effect of the atom gives the spell, the player and the strength of the ball
+	const auto* collection = RecordOf(world, world.Ref(*atom, "atomCollection").value_or(0), VanillaType::AtomCollection);
+	const auto* manager = collection != nullptr ? RecordOf(world, world.Ref(*collection, "collectionManager").value_or(0),
+	                                                       VanillaType::ParticleManager)
+	                                            : nullptr;
+	if (manager == nullptr)
+	{
+		return ball;
+	}
+	ball.spell = world.Ref(*manager, "managerSpell").value_or(0);
+	ball.player = PlayerOfRecord(world, world.Ref(*manager, "managerPlayer").value_or(0));
+	if (const auto info = world.Raw(*manager, "managerInfo"); info.size() == k_ProcessInfoSize)
+	{
+		std::memcpy(&ball.strength, info.data() + k_PowerAt, sizeof(ball.strength));
+	}
+	return ball;
+}
+
+std::optional<ImportedSpellSeed> ReadSpellSeed(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto position = PositionOf(world, record);
+	const auto seedType = SpellSeedRowOf(world.Word(record, "seedInfo").value_or(0));
+	if (!record.Is(VanillaType::SpellSeed) || !position.has_value() || !seedType.has_value())
+	{
+		return std::nullopt;
+	}
+	// The interface status of the hand gives the player. A seed with no status has the player of the object that made it.
+	auto player = PlayerOfHand(world, world.Ref(record, "seedStatus").value_or(0));
+	if (!player.has_value())
+	{
+		player = PlayerOfRecord(world, world.Ref(record, "seedCreator").value_or(0));
+	}
+	const auto lastCast = world.Word(record, "seedLastCastType").value_or(0);
+	return ImportedSpellSeed {
+	    .number = record.number,
+	    .position = *position,
+	    .seedType = *seedType,
+	    .powerUp = std::bit_cast<int32_t>(world.Word(record, "seedPowerUp").value_or(std::bit_cast<uint32_t>(-1))),
+	    .player = player,
+	    .icon = world.Ref(record, "seedIcon").value_or(0),
+	    .spell = world.Ref(record, "seedSpell").value_or(0),
+	    .chantStore = world.Float(record, "seedChantStore").value_or(0.0f),
+	    .learnedFrom = world.Byte(record, "seedLearnedFrom").value_or(0) != 0,
+	    .storedChants = world.Float(record, "seedStoredChants").value_or(-1.0f),
+	    .storedAge = world.Float(record, "seedStoredAge").value_or(0.0f),
+	    .storedMaxObjects =
+	        std::bit_cast<int32_t>(world.Word(record, "seedStoredMaxObjects").value_or(std::bit_cast<uint32_t>(-1))),
+	    .castMultiplier = world.Float(record, "seedMultiplier").value_or(1.0f),
+	    .power = world.Float(record, "seedPower").value_or(1.0f),
+	    .fromGlobe = world.Byte(record, "seedFromGlobe").value_or(0) != 0,
+	    .ready = world.Byte(record, "seedReady").value_or(0) != 0,
+	    .turnsInHand = world.Word(record, "seedTurnsInHand").value_or(0),
+	    // A magic type that is not in the tables is no last cast
+	    .lastCastType = lastCast < magic::k_MagicTypeCount ? static_cast<MagicType>(lastCast) : MagicType::None,
+	    .linkedByCast = world.Byte(record, "seedLinkedByCast").value_or(0) != 0,
+	};
+}
+
+std::vector<ImportedHandSeed> ReadHandSeeds(const VanillaWorld& world)
+{
+	std::vector<ImportedHandSeed> seeds;
+	for (const auto* status : world.OfType(VanillaType::PlayerInterfaceStatus))
+	{
+		const auto player = PlayerOfHand(world, status->number);
+		if (!player.has_value())
+		{
+			continue;
+		}
+		// The hand keeps the seed with the other objects that it holds
+		for (const auto number : world.Refs(*status, "handHeld"))
+		{
+			if (RecordOf(world, number, VanillaType::SpellSeed) != nullptr)
+			{
+				seeds.push_back({.player = *player, .seed = number});
+				break;
+			}
+		}
+	}
+	return seeds;
+}
+
+void PutSeedValues(components::SpellSeed& seed, const ImportedSpellSeed& file)
+{
+	seed.seedType = file.seedType;
+	seed.powerUp = file.powerUp;
+	seed.chantStore = file.chantStore;
+	seed.learnedFrom = file.learnedFrom;
+	seed.storedChants = file.storedChants;
+	seed.storedAge = file.storedAge;
+	seed.storedMaxObjects = file.storedMaxObjects;
+	seed.castMultiplier = file.castMultiplier;
+	seed.power = file.power;
+	seed.fromGlobe = file.fromGlobe;
+	// Only a seed that a spell icon made can power up. A seed of an icon that is not from a globe came from the worship.
+	seed.hasIcon = file.icon != 0;
+	seed.origin = seed.hasIcon && !file.fromGlobe ? magic::SeedOrigin::Worship : magic::SeedOrigin::Bubble;
+	seed.ready = file.ready;
+	seed.turnsInHand = file.turnsInHand;
+	seed.lastCastType = file.lastCastType;
+	seed.linkedByCast = file.linkedByCast;
+}
+
+std::vector<ImportedStoneList> ReadStoneLists(const VanillaWorld& world)
+{
+	std::vector<ImportedStoneList> lists;
+	for (const auto& record : world.Records())
+	{
+		if (!record.Is(VanillaType::Player))
+		{
+			continue;
+		}
+		const auto player = PlayerOfRecord(world, record.number);
+		const auto stones = world.Refs(record, "teleports");
+		if (!player.has_value() || stones.empty())
+		{
+			continue;
+		}
+		lists.push_back({.player = *player, .stones = {stones.begin(), stones.end()}});
+	}
+	return lists;
 }
 
 void PutDanceValues(components::Dance& dance, const ImportedDance& file)
@@ -1341,7 +1548,8 @@ bool CanKeepStateValues(uint8_t state)
 	       IsOneOf(state, k_ShepherdStates) || IsOneOf(state, k_ScriptValueStates) ||
 	       state == static_cast<uint8_t>(VillagerStates::MoveOnPath) || state == static_cast<uint8_t>(VillagerStates::Dead) ||
 	       state == static_cast<uint8_t>(VillagerStates::DiscipleNothingToDo) ||
-	       state == static_cast<uint8_t>(VillagerStates::BreederDisciple);
+	       state == static_cast<uint8_t>(VillagerStates::BreederDisciple) ||
+	       state == static_cast<uint8_t>(VillagerStates::AmazedByMagicShieldReaction);
 }
 
 bool CanKeepWalk(uint8_t moveState)
@@ -1425,6 +1633,38 @@ std::optional<ImportedScriptValues> ScriptValuesOf(uint8_t state, const std::vec
 		return std::nullopt;
 	}
 	return ImportedScriptValues {.x = (*place)[0], .z = (*place)[1], .number = *number, .first = *first, .second = *second};
+}
+
+std::optional<glm::ivec2> ShieldLookPointOf(const std::array<uint8_t, 2>& states,
+                                            const std::vector<ImportedStateValue>& topValues,
+                                            const std::vector<ImportedStateValue>& finalValues)
+{
+	constexpr auto k_Shelter = static_cast<uint8_t>(VillagerStates::AmazedByMagicShieldReaction);
+	const std::array<const std::vector<ImportedStateValue>*, 2> values {&topValues, &finalValues};
+	for (size_t i = 0; i < states.size(); ++i)
+	{
+		if (states.at(i) != k_Shelter || values.at(i)->size() != 1)
+		{
+			continue;
+		}
+		// The point is two whole numbers, x then z
+		if (const auto point = ValueOf<std::array<int32_t, 2>>(values.at(i)->front()))
+		{
+			return glm::ivec2((*point)[0], (*point)[1]);
+		}
+	}
+	return std::nullopt;
+}
+
+std::optional<glm::ivec2> ShieldLookPointOf(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto action = world.Raw(record, "action");
+	if (action.size() < 2)
+	{
+		return std::nullopt;
+	}
+	return ShieldLookPointOf({action[0], action[1]}, StateValues(world, record, "topStateValue"),
+	                         StateValues(world, record, "finalStateValue"));
 }
 
 float MetresOfMapUnits(int32_t units)

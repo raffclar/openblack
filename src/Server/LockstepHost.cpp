@@ -3096,6 +3096,36 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 	return commands;
 }
 
+void LockstepHost::TurnsStartAgain(uint32_t after, uint32_t turn)
+{
+	++_turnRestarts;
+	Log(spdlog::level::info,
+	    fmt::format("Before turn {}, the world of the server loaded a land: the turns start again at turn {}", after, turn));
+	// The new land counts its own turns. No player gets the turns and the checksums of the old land again.
+	_turnsDone = turn;
+	_history.clear();
+	_checksums.clear();
+	_early.clear();
+	// The scenario keeps its state out of the world. A player who was away cannot play it again to the new land.
+	_scenarioStart.reset();
+	for (auto& seat : _seats)
+	{
+		seat.compares.differs = false;
+		if ((seat.state == SeatState::Taken || seat.state == SeatState::Away) && !seat.connection.has_value())
+		{
+			seat.missedWorldChange = true;
+		}
+		// The checksums that the client sends before its own land loads are of the old land
+		seat.oldWorldChecksums = seat.state == SeatState::Taken && seat.connection.has_value();
+	}
+	for (auto& watcher : _watchers)
+	{
+		watcher.missedWorldChange = !watcher.connection.has_value();
+	}
+	// The frame goes before the first turn of the new land, so each client knows the turns that come after it
+	Broadcast(game_socket::TurnsAgain {.after = after, .turn = turn});
+}
+
 std::vector<player_commands::Command> LockstepHost::TakeReplayedTurn(uint32_t turn)
 {
 	auto bytes = std::move(_replayed.at(turn));

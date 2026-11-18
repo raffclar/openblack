@@ -124,7 +124,7 @@ void Renderer::DrawMoon(RenderPass viewId) const
 	}
 	// The moon keeps its place beside the player's camera and faces it. The sea shows it mirrored, and the glow of a
 	// copy of it with its height mirrored through sea level.
-	const bool inTheSea = viewId == RenderPass::ReflectionSky;
+	const bool inTheSea = IsMirrorSky(viewId);
 	const auto& camera = Locator::camera::value();
 	const auto centre = camera.GetOrigin() + (placed ? moon->placement->offset : glm::vec3(0.0f));
 	const auto view = camera.GetViewMatrix(Camera::Interpolation::Current);
@@ -227,7 +227,7 @@ void Renderer::DrawSun(RenderPass viewId) const
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	// A script can also hide the sun
 	const bool hidden = inTemple || Locator::skySystem::value().IsSunHidden();
-	if (!_warmingUp && (hidden || viewId == RenderPass::ReflectionSky))
+	if (!_warmingUp && (hidden || IsMirrorSky(viewId)))
 	{
 		return;
 	}

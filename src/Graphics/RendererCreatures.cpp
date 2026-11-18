@@ -99,10 +99,7 @@ namespace openblack::graphics::detail
 float CreatureLandLightScale(RenderPass viewId)
 {
 	constexpr float k_ReflectionLight = 0.5f;
-	return viewId == RenderPass::Reflection || viewId == RenderPass::ReflectionTranslucent ||
-	               viewId == RenderPass::ReflectionMirrored
-	           ? k_ReflectionLight
-	           : 1.0f;
+	return IsMirrorView(viewId) ? k_ReflectionLight : 1.0f;
 }
 } // namespace openblack::graphics::detail
 

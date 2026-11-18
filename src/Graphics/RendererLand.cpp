@@ -310,6 +310,7 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 	waterShader.SetUniformValue("u_seaColour", &u_seaColour);
 	waterShader.SetUniformValue("u_seaCamera", &u_seaCamera);
 	waterShader.SetUniformValue("u_seaDrift", &u_seaDrift);
+	_seaUniforms = {u_seaParams, u_seaRows, u_seaMode, u_seaColour, u_seaCamera, u_seaDrift};
 }
 
 void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
@@ -854,7 +855,7 @@ TextureHandle Renderer::GetLandLightTexture() const
 void Renderer::DrawFilmReflections(const DrawSceneDesc& desc) const
 {
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
-	if (desc.viewId != RenderPass::Reflection || renderCtx.filmReflections.empty())
+	if (!IsMirrorScene(desc.viewId) || renderCtx.filmReflections.empty())
 	{
 		return;
 	}

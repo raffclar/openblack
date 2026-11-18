@@ -154,6 +154,7 @@ public:
 	bool CastByCreatureAt(entt::entity creature, MagicType type, glm::vec3 place) override;
 	void ReleaseCreatureCast(entt::entity creature) override;
 	entt::entity ImportCreatureCast(entt::entity creature, const magic::ImportedCast& cast) override;
+	entt::entity ImportCast(const components::SpellCaster& caster, const magic::ImportedCast& cast) override;
 	void ImportCreatureCastBeams(entt::entity creature, const std::array<uint32_t, 2>& beams) override;
 	[[nodiscard]] entt::entity CreatureCastOf(entt::entity creature) const override;
 	void EndCreatureCastBeams(entt::entity creature) override;
@@ -192,6 +193,7 @@ public:
 	entt::entity CreateOneOffSeedFor(glm::vec3 position, MagicType type) override;
 	entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
 	entt::entity GiveOneShotSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) override;
+	bool ImportHeldSeed(PlayerNames player, entt::entity seed) override;
 	entt::entity SummonSeed(PlayerNames player, SpellSeedType seed, int powerUp) override;
 	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
 	entt::entity TakeIconSeed(entt::entity site, PlayerNames holder, SpellSeedType seed, int powerUp, float chants) override;
@@ -321,6 +323,8 @@ private:
 	                  const particles::ProcessInfo& info);
 	/// The miracle and its effect, which a cast starts. Nothing for a miracle that is its effect when the effect cannot
 	/// start. An effect with a saved state continues from that state.
+	/// The spell of a saved game of the game with the values of the file, before it closes down when the file says so
+	entt::entity MakeImportedCast(const components::SpellCaster& caster, const magic::ImportedCast& cast);
 	entt::entity MakeSpell(MagicType type, const components::SpellCaster& caster, glm::vec3 point,
 	                       const magic::SpellCastData& cast, const particles::ProcessInfo& info,
 	                       std::shared_ptr<const particles::RestoredEffect> restored = nullptr);

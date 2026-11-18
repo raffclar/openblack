@@ -100,10 +100,7 @@ bool Fill(std::span<const leash_rope::RibbonVertex> corners, bool black, bgfx::T
 float LandLightScale(RenderPass viewId)
 {
 	constexpr float k_ReflectionLight = 0.5f;
-	return viewId == RenderPass::Reflection || viewId == RenderPass::ReflectionTranslucent ||
-	               viewId == RenderPass::ReflectionMirrored
-	           ? k_ReflectionLight
-	           : 1.0f;
+	return IsMirrorView(viewId) ? k_ReflectionLight : 1.0f;
 }
 } // namespace
 

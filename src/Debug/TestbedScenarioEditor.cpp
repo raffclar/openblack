@@ -298,6 +298,22 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_high_lakes",
+	    .name = "The lakes on the hills of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 9 and the game loads it. "
+	                   "Fly the camera round a lake on a hill and round a lake in a valley, and look at each shore from "
+	                   "below the slope.",
+	    .expected = "Each lake has its water at its own level. Its water surface follows its shore and is not a "
+	                "rectangle: no water shows through the slopes of the hill. The water has the ripple, texture and "
+	                "colour of the sea, and the land under the shallow water shows through it. Two lakes that touch "
+	                "have one surface at one level.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 9}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_high_mountains",
 	    .name = "The high mountains of a generated land",
 	    .facet = Facet::Editor,

@@ -119,7 +119,7 @@ Renderer::SeedModelLooks Renderer::FindSeedModelLooks() const
 void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown, const view_frustum::Frustum* seenBy,
                              DrawEncoder* encoder, const SeedModelLooks* looks) const
 {
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const auto& info = Locator::infoConstants::value();
 	const auto eye = desc.camera->GetOrigin();
@@ -330,7 +330,7 @@ void Renderer::DrawMapSpellSeeds(const DrawSceneDesc& desc) const
 
 void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 {
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	if ((desc.viewId != RenderPass::Main && !reflection) ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()) || !Locator::infoConstants::has_value())
 	{
@@ -417,7 +417,7 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 
 void Renderer::DrawRewardSeeds(const DrawSceneDesc& desc) const
 {
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	if ((desc.viewId != RenderPass::Main && !reflection) ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()) || !Locator::infoConstants::has_value())
 	{
@@ -445,7 +445,7 @@ void Renderer::DrawRewardSeeds(const DrawSceneDesc& desc) const
 
 void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 {
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	if ((desc.viewId != RenderPass::Main && !reflection) ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()) || !Locator::infoConstants::has_value())
 	{
@@ -456,8 +456,7 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	const bool haveRing = meshes.Contains(ecs::components::OneOffSpellSeed::k_RingMeshId.value());
 	// The view of this pass, as the pass sets it. The function does not draw the seeds and the rings out of it.
-	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
-	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto seenBy = SceneFrustum(desc);
 	// A warm-up draws the model of each kind of seed at no size, for a good and an evil player, as the first seeds of
 	// each kind draw them
 	if (_warmingUp)
@@ -716,7 +715,7 @@ std::optional<Renderer::HandGlowLook> Renderer::HandGlowOf(const DrawSceneDesc& 
 {
 	using ecs::components::Hand;
 	using ecs::components::HandMiracleFx;
-	if (!desc.drawHand || !desc.drawHandEffects || desc.viewId == RenderPass::Reflection)
+	if (!desc.drawHand || !desc.drawHandEffects || IsMirrorScene(desc.viewId))
 	{
 		return std::nullopt;
 	}

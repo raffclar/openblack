@@ -126,6 +126,18 @@ void LandIslandInterface::SetFieldAltitude(int32_t x, int32_t z, uint8_t altitud
 	    _heightCurve.WholeUnitsOf(static_cast<float>(altitude));
 }
 
+bool LandIslandInterface::IsUnderLake(glm::u16vec2 coordinates) const
+{
+	const auto* lakes = GetLakeMap();
+	if (lakes == nullptr)
+	{
+		return false;
+	}
+	const auto lake = lakes->LakeOfCorner(coordinates.x, coordinates.y);
+	const auto* cell = lake.has_value() ? FindCell(coordinates) : nullptr;
+	return cell != nullptr && GetDrawnAltitude(cell->altitude) < lakes->GetLakes()[*lake].level;
+}
+
 bool LandIslandInterface::AltitudeInputs(const MapReach& reach, std::vector<std::byte>& bytes) const
 {
 	if (reach.Empty())
@@ -295,6 +307,7 @@ void LandIsland::LoadFromFile(const std::filesystem::path& path)
 void LandIsland::Build(const LandData& data)
 {
 	_blockIndexLookup = data.blockIndexLookup;
+	_lakes = land_lakes::LakeMap(data.lakes);
 	// A place of the table that names a block that the land does not have holds no block. A damaged or hostile landscape
 	// file thus cannot make a look-up read past the last block.
 	const auto& lndBlocks = data.blocks;

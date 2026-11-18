@@ -46,6 +46,7 @@
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/PlayerProfiles.h"
+#include "Common/PreciseWait.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/ScenarioPlayer.h"
 #include "ECS/ChallengePictures.h"
@@ -94,6 +95,7 @@
 #include "PlayerSlots.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
+#include "Server/TurnPace.h"
 #include "Simulation/CommandLog.h"
 #include "Simulation/FrameBody.h"
 #include "Simulation/ProfileMenu.h"
@@ -322,6 +324,10 @@ private:
 	/// The frame does again a turn that the server sent before a restart
 	bool _replaying {false};
 	std::chrono::steady_clock::time_point _frameStart;
+	/// The due times of the frames, and the wait to each due time. The pace starts at the end of the first frame, so that
+	/// the time of the start of the network does not count as lost time.
+	turn_pace::Deadline _pace;
+	precise_wait::Waiter _waiter;
 	/// The testbed scenario that the server plays, as the game's window of scenarios plays it
 	std::unique_ptr<testbed_scenarios::ScenarioPlayer> _scenario;
 	/// The commands of the game that a tool gives, by the land of the game and then by the turn
@@ -805,15 +811,17 @@ bool ServerWorld::Frame()
 	// The frame rate of the statistics uses the machine clock of the game. With a fixed frame time each run gets the
 	// same rate.
 	_frameRate.Frame(machine_clock::Ticks(), _frameCount);
-	// Unless the run is fast, the frame waits until it took its fixed game time in real time too. The turns that the server
-	// does again after a restart come with no wait.
+	// Unless the run is fast, the next frame waits for its due time: the start of the pace plus a fixed game time for each
+	// frame. After a slow frame, the next frame starts at once, and the server makes up the lost time. The turns that the
+	// server does again after a restart come with no wait, and the pace starts again after them.
 	auto& simulation = Locator::simulation::value();
-	if (const auto wait = sim_run::PaceWait(
-	        simulation.GetSettings(), clock.GetFixedFrameTime(),
-	        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - _frameStart));
-	    wait.count() > 0 && !_replaying)
+	if (const auto frameTime = clock.GetFixedFrameTime(); sim_run::Paces(simulation.GetSettings(), frameTime) && !_replaying)
 	{
-		std::this_thread::sleep_for(wait);
+		_waiter.WaitUntil(_pace.NextFrame(std::chrono::steady_clock::now(), *frameTime));
+	}
+	else
+	{
+		_pace.Restart(std::chrono::steady_clock::now());
 	}
 	const auto frameEnd = std::chrono::steady_clock::now();
 	simulation.FrameEnded(std::chrono::duration<float, std::milli>(frameEnd - _frameStart).count());
@@ -1232,6 +1240,19 @@ public:
 		_lastTurn.reset();
 	}
 
+	/// A command of the scenario loaded a land before a turn. A new server cannot play the scenario again to that land,
+	/// so the snapshots go and the server makes no more.
+	void TurnsStartedAgain()
+	{
+		if (std::exchange(_ended, true))
+		{
+			return;
+		}
+		_writer->Flush();
+		_store.Clear();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The scenario loaded a land: the server removed its snapshots");
+	}
+
 	/// The game ended, so no server continues it: the snapshots go
 	void GameOver()
 	{
@@ -1615,7 +1636,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, const Play
 	}
 	lifetime.Listened();
 	world.SetNetwork([&host, role = network.get(), keeper, &lifetime, desyncs, appliedSpeed = std::optional<float> {},
-	                  appliedChanges = uint32_t {0}]() mutable {
+	                  appliedChanges = uint32_t {0}, appliedRestarts = uint32_t {0}]() mutable {
 		// After a restart, the world first does again the turns that the server sent. The server reads no socket until then.
 		if (host.Replaying())
 		{
@@ -1627,13 +1648,21 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, const Play
 		// restart the room starts again at the normal speed. A world file or a scenario of the editor sets the speed of
 		// the clock of its world, so the server gives the clock the speed of the room again after each change of the world.
 		// A fast room gives more turns than one in a frame, so the server then plays more turns in a frame.
-		if (const auto speed = host.RoomClock().speed; speed != appliedSpeed || host.WorldChanges() != appliedChanges)
+		// A land that a command of the scenario loaded sets the speed of the clock too.
+		const bool restarted = host.TurnRestarts() != appliedRestarts;
+		if (const auto speed = host.RoomClock().speed;
+		    speed != appliedSpeed || host.WorldChanges() != appliedChanges || restarted)
 		{
 			auto& clock = Locator::time::value();
 			clock.SetSpeed(online::room_clock::ClockSpeedOf(speed));
 			clock.SetMostTurnsInFrame(online::room_clock::ServerTurnsInFrame(speed, clock.GetFixedFrameTime()));
 			appliedSpeed = speed;
 			appliedChanges = host.WorldChanges();
+			appliedRestarts = host.TurnRestarts();
+		}
+		if (restarted && keeper != nullptr)
+		{
+			keeper->TurnsStartedAgain();
 		}
 		// No computer god of the server's world takes the slots that the lobby closed. The start gives them before the
 		// first turn, in which the humans join.

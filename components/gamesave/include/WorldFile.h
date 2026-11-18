@@ -66,6 +66,9 @@ inline constexpr Tag k_AltitudesTag {'L', 'A', 'L', 'T'};
 inline constexpr Tag k_CountriesTag {'L', 'C', 'N', 'T'};
 /// The commands of a single player game that wait for a turn at the save. Only a saved game of openblack keeps them.
 inline constexpr Tag k_WaitingCommandsTag {'C', 'M', 'D', 'S'};
+/// The channel that plays the music of the scripts. Only a world state keeps it: a saved game of the game itself keeps no
+/// channel, and a saved game of openblack does the same.
+inline constexpr Tag k_ScriptMusicChannelTag {'S', 'M', 'C', 'H'};
 
 struct Chunk
 {

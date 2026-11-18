@@ -64,6 +64,12 @@ struct StoryParts
 /// landscape is not there or does not read.
 [[nodiscard]] std::optional<StoryParts> ReadStoryParts(filesystem::FileSystemInterface& files);
 
+/// The height of the world for each altitude unit of the generator
+constexpr float k_MetresPerAltitude = 0.67f;
+
+/// The height of a lake's water in the world. The generator gives it in altitude units.
+[[nodiscard]] float LevelOf(const landgen::lakes::Lake& lake);
+
 /// The land data of a generated land: a block for each block of the map that is not all open sea, in order along z then
 /// x, and the land's countries and materials. surfaces holds the material of each surface.
 [[nodiscard]] LandData Build(const landgen::GeneratedLand& land, const StoryParts& parts);

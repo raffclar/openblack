@@ -41,6 +41,7 @@
 #include "Camera/CameraZoomer.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Systems/Implementations/AnimalSystemDetail.h"
 #include "ECS/VanillaCameraImport.h"
 #include "ECS/VanillaFootpathImport.h"
@@ -3072,6 +3073,154 @@ TEST(VanillaParticleImport, TheEffectOfASpellIsTakenOnlyForItsSpell)
 	EXPECT_TRUE(read.effect->state.info.enabled);
 }
 
+// Each atom of a fireball keeps what its rules keep, as openblack keeps it. The sounds of the atom do not play after a
+// load, so the import does not make them. A rule that lets out atoms along the path of the parent keeps its point.
+TEST(VanillaParticleImport, TheAtomsOfAFireballKeepWhatTheirRulesKeep)
+{
+	auto fake = GameAtTurn(5);
+	// 2: the system, 3: the manager of the spell 20, 4: the collection, 5: the atom, 6: its sprite, 7..12: the data of
+	// its rules, 13: its sound, 14: the data of the path rule, 15: the ball
+	fake.Record(VanillaType::ParticleSystem).Ref("systemManager", 3);
+	fake.Record(VanillaType::ParticleManager)
+	    .Value("managerAtomCount", uint32_t {1})
+	    .Ref("managerPlayer", 0)
+	    .Refs("managerRoots", {4})
+	    .Value("managerInfo", std::array<float, 15> {})
+	    .Ref("managerSpell", 20)
+	    .Value("managerType", uint32_t {43});
+	fake.Record(VanillaType::AtomCollection)
+	    .Refs("ruleData", {14})
+	    .Value("collectionGroup", uint32_t {0})
+	    .Value("collectionFlags", uint8_t {0})
+	    .Refs("collectionAtoms", {5})
+	    .Ref("collectionUnused", 0);
+	const std::array<float, 14> draw {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+	fake.Record(VanillaType::AtomCore)
+	    .Refs("atomCollections", {})
+	    .Refs("atomRuleData", {7, 8, 9, 10, 11, 12})
+	    .Refs("atomSounds", {13})
+	    .Value("atomBirth", 2.0f)
+	    .Value("atomRotation", std::array<float, 12> {})
+	    .Value("atomPrevious", draw)
+	    .Value("atomCurrent", draw)
+	    .Value("atomAnimation", std::array<uint32_t, 3> {})
+	    .Ref("atomDrawOffset", 0)
+	    .Ref("atomRender", 6);
+	fake.Record(VanillaType::SpriteParticle).Value("spriteCreator", uint32_t {3});
+	fake.Record(VanillaType::AtomDataFadeOutOnceConditionTrue)
+	    .Value("atomDataRule", uint32_t {11})
+	    .Value("fadeOutStarted", uint8_t {1})
+	    .Value("fadeOutAge", 0.5f)
+	    .Value("fadeOutAlpha", 200.0f)
+	    .Value("fadeOutScale", 1.25f);
+	fake.Record(VanillaType::AtomDataAttachFireBall)
+	    .Value("atomDataRule", uint32_t {12})
+	    .Value("fireBallNotMade", uint8_t {0})
+	    .Value("fireBallTurn", uint32_t {4})
+	    .Ref("fireBallObject", 15);
+	fake.Record(VanillaType::AtomDataRipple)
+	    .Value("atomDataRule", uint32_t {13})
+	    .Value("rippleLast", std::array<float, 3> {7.0f, 8.0f, 9.0f});
+	fake.Record(VanillaType::AtomDataAddSubCollections)
+	    .Value("atomDataRule", uint32_t {14})
+	    .Value("subCollectionsAdded", uint8_t {1});
+	fake.Record(VanillaType::AtomDataSideSpin)
+	    .Value("atomDataRule", uint32_t {15})
+	    .Value("sideSpin", -0.5f)
+	    .Value("sideSpinNotStarted", uint8_t {0});
+	fake.Record(VanillaType::AtomDataRemoveRuleAfterConditionTrue)
+	    .Value("atomDataRule", uint32_t {16})
+	    .Value("removeStarted", uint8_t {1})
+	    .Value("removeAge", 0.25f);
+	fake.Record(VanillaType::ParticleSound);
+	fake.Record(VanillaType::CollectionDataWillowWisp)
+	    .Value("dataRule", uint32_t {17})
+	    .Value("wispLast", std::array<float, 3> {1.0f, 2.0f, 3.0f})
+	    .Value("wispEmitted", 4.5f)
+	    .Value("wispMade", 4.0f)
+	    .Value("wispFirst", uint8_t {0});
+	fake.Record(VanillaType::MagicFireBall);
+	const auto world = fake.Make();
+
+	const auto read = particle_import::ReadSpellEffect(world, 2, 20, SameNumber);
+	ASSERT_TRUE(read.effect.has_value()) << read.why;
+	ASSERT_EQ(read.effect->state.roots.size(), 1U);
+	const auto& collection = read.effect->state.roots.front();
+	ASSERT_EQ(collection.pathEmitters.size(), 1U);
+	EXPECT_EQ(collection.pathEmitters.front().rule, 17);
+	EXPECT_EQ(collection.pathEmitters.front().last, glm::vec3(1.0f, 2.0f, 3.0f));
+	EXPECT_EQ(collection.pathEmitters.front().emitted, 4.5f);
+	EXPECT_EQ(collection.pathEmitters.front().made, 4.0f);
+	EXPECT_FALSE(collection.pathEmitters.front().first);
+	ASSERT_EQ(collection.atoms.size(), 1U);
+	const auto& rules = collection.atoms.front().ruleData;
+	ASSERT_EQ(rules.size(), 6U);
+	EXPECT_EQ(rules[0].rule, 11);
+	EXPECT_EQ(rules[0].className, "AR_FadeOutOnceConditionTrue");
+	EXPECT_TRUE(rules[0].data.started);
+	EXPECT_EQ(rules[0].data.a, glm::vec4(0.5f, 200.0f, 1.25f, 0.0f));
+	EXPECT_EQ(rules[1].className, "AttatchFireBallToAtom");
+	EXPECT_TRUE(rules[1].data.started);
+	EXPECT_EQ(rules[1].data.object, SameNumber(15));
+	// The point of the ring is on the map, across the land
+	EXPECT_EQ(rules[2].className, "UpdateRuleGravityWithFloor");
+	EXPECT_EQ(rules[2].data.a.x, 7.0f);
+	EXPECT_EQ(rules[2].data.a.y, 9.0f);
+	EXPECT_EQ(rules[3].className, "AddSubCollectionsToAtom");
+	EXPECT_TRUE(rules[3].data.started);
+	EXPECT_EQ(rules[4].className, "UR_SideSpin");
+	EXPECT_TRUE(rules[4].data.started);
+	EXPECT_EQ(rules[4].data.a.x, -0.5f);
+	// The file keeps the age of the atom, and openblack keeps the age of the effect: the import adds the birth
+	EXPECT_EQ(rules[5].className, "RemoveRuleAfterConditionTrue");
+	EXPECT_TRUE(rules[5].data.started);
+	EXPECT_EQ(rules[5].data.a.x, 2.25f);
+}
+
+// A rule that did not make the ball yet, or did not take the spin yet, starts again. Data of a kind that the import
+// does not know stops the import of the effect.
+TEST(VanillaParticleImport, ARuleThatDidNotStartStartsAgainAndUnknownDataStopsTheEffect)
+{
+	const auto make = [](VanillaType kind) {
+		auto fake = GameAtTurn(5);
+		fake.Record(VanillaType::ParticleSystem).Ref("systemManager", 3);
+		fake.Record(VanillaType::ParticleManager)
+		    .Refs("managerRoots", {4})
+		    .Value("managerInfo", std::array<float, 15> {})
+		    .Ref("managerSpell", 20);
+		fake.Record(VanillaType::AtomCollection).Refs("ruleData", {}).Refs("collectionAtoms", {5});
+		const std::array<float, 14> draw {};
+		fake.Record(VanillaType::AtomCore)
+		    .Refs("atomRuleData", {7})
+		    .Refs("atomSounds", {})
+		    .Value("atomRotation", std::array<float, 12> {})
+		    .Value("atomPrevious", draw)
+		    .Value("atomCurrent", draw)
+		    .Value("atomAnimation", std::array<uint32_t, 3> {})
+		    .Ref("atomRender", 6);
+		fake.Record(VanillaType::PointParticle);
+		fake.Record(kind)
+		    .Value("atomDataRule", uint32_t {3})
+		    .Value("fireBallNotMade", uint8_t {1})
+		    .Ref("fireBallObject", 0)
+		    .Value("sideSpinNotStarted", uint8_t {1});
+		return fake.Make();
+	};
+	for (const auto kind : {VanillaType::AtomDataAttachFireBall, VanillaType::AtomDataSideSpin})
+	{
+		const auto world = make(kind);
+		const auto read = particle_import::ReadSpellEffect(world, 2, 20, SameNumber);
+		ASSERT_TRUE(read.effect.has_value()) << read.why;
+		const auto& data = read.effect->state.roots.front().atoms.front().ruleData.front().data;
+		EXPECT_FALSE(data.started);
+		EXPECT_TRUE(data.object == entt::null);
+	}
+	const auto world = make(VanillaType::EmitterRuleData);
+	const auto read = particle_import::ReadSpellEffect(world, 2, 20, SameNumber);
+	EXPECT_FALSE(read.effect.has_value());
+	EXPECT_NE(read.why.find("data of a rule"), std::string::npos) << read.why;
+}
+
 TEST(VanillaParticleImport, SavedGamesOfLandOneKeepEveryValueOfTheirParticleContainers)
 {
 	Checked checked;
@@ -4926,14 +5075,14 @@ std::vector<uint8_t> SpellRecord(StreamStart start, uint32_t number, uint32_t sa
 	{
 		writer.Put(std::array<uint8_t, 12> {});
 	}
-	// The prayer power, the prayer power when last filled, the flag of a closed spell and three more words
+	// The prayer power, the prayer power when last filled, the flag of a closed spell, two more words and the flag that a
+	// person casts the spell
 	writer.Put(30.0f);
 	writer.Put(50.0f);
 	writer.Put(uint32_t {0});
-	for (int i = 0; i < 3; ++i)
-	{
-		writer.Put(uint32_t {7});
-	}
+	writer.Put(uint32_t {7});
+	writer.Put(uint32_t {7});
+	writer.Put(uint32_t {1});
 	// What the spell gives its particles: two points, the view, the movement of the hand, the power, a word and a flag
 	std::array<float, 15> info {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.0f, 0.0f, 0.75f, 0.0f, 0.0f};
 	std::array<uint8_t, 60> infoBytes {};
@@ -4998,6 +5147,7 @@ TEST(VanillaWorldImport, AHeldSpellReadsItsMagicTypeItsTimeAndItsPrayerPower)
 	EXPECT_EQ(spell->handMovement, (std::array {0.5f, 0.0f, 0.0f}));
 	EXPECT_EQ(spell->power, 0.75f);
 	EXPECT_TRUE(spell->casting);
+	EXPECT_TRUE(spell->humanCasting);
 	EXPECT_FALSE(spell->firstDone.has_value());
 	ASSERT_TRUE(spell->lastRipple.has_value());
 	EXPECT_EQ(*spell->lastRipple, 2.0f);
@@ -5299,4 +5449,461 @@ TEST(VanillaWorldImport, SavedGamesGiveEachHeldSpellOfACreatureItsValues)
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	std::cout << held << " creatures hold a spell\n";
+}
+
+// The object that cast a spell of the file gives the kind of its caster and the player of the spell
+TEST(VanillaWorldImport, TheObjectThatCastASpellGivesItsCasterAndItsPlayer)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::Game);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 7);
+	fake.Record(VanillaType::WorshipSpellIcon);
+	fake.Record(VanillaType::Creature);
+	fake.Record(VanillaType::Tree);
+	fake.Record(VanillaType::SpellShield)
+	    .Value<uint32_t>("spellMagicType", static_cast<uint32_t>(MagicType::Shield))
+	    .Ref("spellCreator", 2)
+	    .Ref("spellPlayer", 2);
+	const auto world = fake.Make();
+	using Kind = world_import::ImportedSpellCaster::Kind;
+	// The spell reads the player record of the spell
+	const auto read = world_import::ReadHeldSpell(world, world.Records()[6]);
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(read->creator, 2U);
+	EXPECT_EQ(read->player, 2U);
+
+	// The hand of a player, with a seed that no icon made
+	auto hand = world_import::CasterOfSpell(world, *read);
+	EXPECT_EQ(hand.kind, Kind::Hand);
+	EXPECT_EQ(hand.player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(hand.creator, 2U);
+
+	world_import::ImportedHeldSpell spell {.creator = 4, .player = 2};
+	const auto icon = world_import::CasterOfSpell(world, spell);
+	EXPECT_EQ(icon.kind, Kind::Icon);
+	EXPECT_EQ(icon.player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(icon.creator, 4U);
+	spell.creator = 5;
+	EXPECT_EQ(world_import::CasterOfSpell(world, spell).kind, Kind::Creature);
+	spell.creator = 6;
+	EXPECT_EQ(world_import::CasterOfSpell(world, spell).kind, Kind::Object);
+
+	// A script spell has no object, and a spell with no player record has the neutral player
+	spell = {.creator = 0, .player = 0};
+	const auto script = world_import::CasterOfSpell(world, spell);
+	EXPECT_EQ(script.kind, Kind::None);
+	EXPECT_EQ(script.player, PlayerNames::NEUTRAL);
+	EXPECT_EQ(script.creator, 0U);
+}
+
+// Each record of the spell family is a spell. The save type between food and wood and water is not.
+TEST(VanillaWorldImport, EachRecordOfTheSpellFamilyIsASpell)
+{
+	FakeWorld fake;
+	for (uint32_t type = 0x09; type <= 0x15; ++type)
+	{
+		fake.Record(static_cast<VanillaType>(type));
+	}
+	fake.Record(VanillaType::MagicShield);
+	fake.Record(VanillaType::MagicTeleport);
+	const auto world = fake.Make();
+	for (const auto& record : world.Records())
+	{
+		const bool spell = record.type >= 0x09 && record.type <= 0x15 && record.type != 0x0B;
+		EXPECT_EQ(world_import::IsSpellRecord(record), spell) << record.type;
+	}
+}
+
+// The import makes each kind of spell that no creature holds, but a spell that keeps only objects
+TEST(VanillaWorldImport, TheImportMakesEachKindOfSpell)
+{
+	const auto spellOf = [](VanillaType type, MagicType magicType) {
+		return world_import::ImportedHeldSpell {.saveType = static_cast<uint32_t>(type), .magicType = magicType};
+	};
+	for (const auto& [type, magicType] : std::array {
+	         std::pair {VanillaType::SpellStormAndTornado, MagicType::StormWindRain},
+	         std::pair {VanillaType::SpellStormAndTornado, MagicType::StormWindRainLightning},
+	         std::pair {VanillaType::SpellStormAndTornado, MagicType::Tornado},
+	         std::pair {VanillaType::SpellHeal, MagicType::Heal},
+	         std::pair {VanillaType::SpellHeal, MagicType::HealPowerUpOne},
+	         std::pair {VanillaType::SpellWater, MagicType::Water},
+	         std::pair {VanillaType::SpellResource, MagicType::Food},
+	         std::pair {VanillaType::SpellResource, MagicType::Wood},
+	         std::pair {VanillaType::Spell, MagicType::LightningBolt},
+	         std::pair {VanillaType::Spell, MagicType::LightningBoltPowerUpTwo},
+	         std::pair {VanillaType::Spell, MagicType::ExplosionOne},
+	         std::pair {VanillaType::SpellFlockFlying, MagicType::FlockFlying},
+	         std::pair {VanillaType::SpellFlockGround, MagicType::FlockGround},
+	         std::pair {VanillaType::SpellCreature, MagicType::CreatureSpellStrong},
+	         std::pair {VanillaType::SpellForest, MagicType::Forest},
+	         std::pair {VanillaType::SpellShield, MagicType::PhysicalShield},
+	         std::pair {VanillaType::SpellTeleport, MagicType::Teleport},
+	     })
+	{
+		EXPECT_TRUE(world_import::CanImportSpell(spellOf(type, magicType))) << static_cast<int>(magicType);
+	}
+	for (const auto magicType : {MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo})
+	{
+		EXPECT_TRUE(world_import::CanImportSpell(spellOf(VanillaType::Spell, magicType))) << static_cast<int>(magicType);
+	}
+	EXPECT_FALSE(world_import::CanImportSpell(spellOf(VanillaType::SpellWithObjects, MagicType::Food)));
+	EXPECT_FALSE(world_import::CanImportSpell(spellOf(VanillaType::SpellHeal, MagicType::None)));
+}
+
+// A fireball of the file keeps its fire, the atom that carries it, and the spell, the player and the strength of the
+// effect of the atom
+TEST(VanillaWorldImport, AFireballKeepsItsFireItsAtomAndTheSpellOfItsEffect)
+{
+	auto fake = GameAtTurn(40);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1);
+	// 3: the ball, 4: its fire, 5: the atom, 6: the data of the rule that carries the ball, 7: the collection, 8: the
+	// manager, 9: the spell, 10: the thing that heated the ball
+	fake.Record(VanillaType::MagicFireBall)
+	    .Position(300, 400)
+	    .Ref("fire", 4)
+	    .Ref("fireBallAtom", 5)
+	    .Value("fireBallRain", uint8_t {0});
+	fake.Record(VanillaType::FireEffect).Value("fireTemperature", 900.0f).Value("firePrevious", 950.0f).Ref("fireSource", 10);
+	fake.Record(VanillaType::AtomCore)
+	    .Refs("atomRuleData", {6})
+	    .Value("atomBaseScale", 2.0f)
+	    .Value("atomRuleScale", 1.5f)
+	    .Ref("atomCollection", 7);
+	fake.Record(VanillaType::AtomDataAttachFireBall)
+	    .Value("fireBallNotMade", uint8_t {0})
+	    .Value("fireBallTurn", uint32_t {39})
+	    .Ref("fireBallObject", 3);
+	fake.Record(VanillaType::AtomCollection).Ref("collectionManager", 8);
+	fake.Record(VanillaType::ParticleManager)
+	    .Ref("managerPlayer", 2)
+	    .Ref("managerSpell", 9)
+	    .Value("managerInfo", std::array<float, 15> {0.0f, 0.0f, 0.0f, 1.0f, 2.0f, 3.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+	                                                 0.75f, 0.0f, 0.0f});
+	fake.Record(VanillaType::Spell).Value("spellMagicType", static_cast<uint32_t>(MagicType::Fireball));
+	fake.Record(VanillaType::Creature);
+	const auto world = fake.Make();
+
+	EXPECT_FALSE(world_import::ReadFireBall(world, world.Records()[3]).has_value()) << "the fire is not a ball";
+	const auto ball = world_import::ReadFireBall(world, world.Records()[2]);
+	ASSERT_TRUE(ball.has_value());
+	EXPECT_EQ(ball->number, 3U);
+	EXPECT_EQ(ball->position.x, 300);
+	EXPECT_EQ(ball->position.z, 400);
+	EXPECT_EQ(ball->atom, 5U);
+	EXPECT_EQ(ball->spell, 9U);
+	EXPECT_EQ(ball->player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(ball->strength, 0.75f);
+	EXPECT_EQ(ball->radius, 3.0f);
+	EXPECT_FALSE(ball->affectedByRain);
+	EXPECT_EQ(ball->temperature, 900.0f);
+	EXPECT_EQ(ball->previous, 950.0f);
+	EXPECT_EQ(ball->source, 10U);
+	EXPECT_EQ(ball->lastTurn, 39U);
+}
+
+// A fireball whose atom is gone keeps its fire, and has no spell and no player
+TEST(VanillaWorldImport, AFireballWithNoAtomHasNoSpell)
+{
+	auto fake = GameAtTurn(40);
+	fake.Record(VanillaType::MagicFireBall).Position(1, 2).Ref("fire", 3).Ref("fireBallAtom", 0);
+	fake.Record(VanillaType::FireEffect).Value("fireTemperature", 500.0f).Value("firePrevious", 400.0f);
+	const auto world = fake.Make();
+	const auto ball = world_import::ReadFireBall(world, world.Records()[1]);
+	ASSERT_TRUE(ball.has_value());
+	EXPECT_EQ(ball->spell, 0U);
+	EXPECT_FALSE(ball->player.has_value());
+	EXPECT_FALSE(ball->lastTurn.has_value());
+	EXPECT_TRUE(ball->affectedByRain);
+	EXPECT_EQ(ball->temperature, 500.0f);
+	EXPECT_EQ(ball->previous, 400.0f);
+}
+
+// Each player record gives its list of teleport stones in the order of the file, the head first
+TEST(VanillaWorldImport, EachPlayerGivesItsStonesInTheOrderOfTheFile)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::Game);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0).Refs("teleports", {9, 5, 7});
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1).Refs("teleports", {});
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 2).Refs("teleports", {6});
+	const auto lists = world_import::ReadStoneLists(fake.Make());
+	ASSERT_EQ(lists.size(), 2U);
+	EXPECT_EQ(lists[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(lists[0].stones, (std::vector<uint32_t> {9, 5, 7}));
+	EXPECT_EQ(lists[1].player, PlayerNames::PLAYER_THREE);
+	EXPECT_EQ(lists[1].stones, (std::vector<uint32_t> {6}));
+}
+
+// A villager in the state of the shelter keeps the point that it looks at as the one value of the state
+TEST(VanillaWorldImport, AVillagerUnderAShieldGivesThePointThatItLooksAt)
+{
+	constexpr auto k_Shelter = static_cast<uint8_t>(VillagerStates::AmazedByMagicShieldReaction);
+	constexpr auto k_Walk = static_cast<uint8_t>(VillagerStates::MoveToPos);
+	EXPECT_TRUE(world_import::CanKeepStateValues(k_Shelter));
+	const auto pointOf = [](int32_t x, int32_t z) {
+		std::vector<uint8_t> bytes(2 * sizeof(int32_t));
+		std::memcpy(bytes.data(), &x, sizeof(x));
+		std::memcpy(bytes.data() + sizeof(x), &z, sizeof(z));
+		return std::vector {world_import::ImportedStateValue {.object = std::nullopt, .bytes = bytes}};
+	};
+	const auto top = pointOf(0x12345, -0x678);
+	const auto final = pointOf(0x22222, 0x33333);
+	EXPECT_EQ(world_import::ShieldLookPointOf({k_Shelter, 0}, top, {}), glm::ivec2(0x12345, -0x678));
+	// A villager that walks to its shelter keeps the point in its final state
+	EXPECT_EQ(world_import::ShieldLookPointOf({k_Walk, k_Shelter}, {}, final), glm::ivec2(0x22222, 0x33333));
+	// Another state, or a value of another size, gives no point
+	EXPECT_FALSE(world_import::ShieldLookPointOf({k_Walk, 0}, top, final).has_value());
+	const std::vector reference {world_import::ImportedStateValue {.object = 3U, .bytes = {}}};
+	EXPECT_FALSE(world_import::ShieldLookPointOf({k_Shelter, 0}, reference, {}).has_value());
+
+	// The record of a villager gives its point from its states
+	FakeWorld fake;
+	fake.Record(VanillaType::Villager)
+	    .Value("action", std::array<uint8_t, 6> {k_Shelter, 0, 0, 0, 0, 0})
+	    .Value("topStateValue", std::array<int32_t, 2> {500, 600});
+	fake.Record(VanillaType::Villager).Value("action", std::array<uint8_t, 6> {k_Walk, 0, 0, 0, 0, 0});
+	const auto world = fake.Make();
+	EXPECT_EQ(world_import::ShieldLookPointOf(world, world.Records()[0]), glm::ivec2(500, 600));
+	EXPECT_FALSE(world_import::ShieldLookPointOf(world, world.Records()[1]).has_value());
+}
+
+// Each spell of a saved game reads with its caster
+TEST(VanillaWorldImport, SavedGamesGiveEachSpellItsCaster)
+{
+	size_t spells = 0;
+	const auto files = ForEachSave([&spells](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto& record : world.Records())
+		{
+			if (!world_import::IsSpellRecord(record))
+			{
+				continue;
+			}
+			const auto spell = world_import::ReadHeldSpell(world, record);
+			ASSERT_TRUE(spell.has_value()) << path << " object " << record.number;
+			const auto caster = world_import::CasterOfSpell(world, *spell);
+			++spells;
+			std::cout << path << ": spell " << record.number << " of magic type " << static_cast<int>(spell->magicType)
+			          << " cast by object " << spell->creator << " of kind " << static_cast<int>(caster.kind) << " for player "
+			          << static_cast<int>(caster.player) << ", age " << spell->age << ", " << spell->objects.size()
+			          << " objects\n";
+		}
+		for (const auto& list : world_import::ReadStoneLists(world))
+		{
+			std::cout << path << ": player " << static_cast<int>(list.player) << " has " << list.stones.size() << " stones\n";
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << spells << " spells\n";
+}
+
+namespace
+{
+/// The number of the row of the table for the seed
+constexpr uint32_t SeedRow(SpellSeedType seed)
+{
+	return world_import::k_FirstSpellSeedRowNumber - static_cast<uint32_t>(seed);
+}
+} // namespace
+
+// A spell seed keeps its row, its power-up, its charge, what its last spell left, its flags, its icon and its spell. The
+// interface status of its hand gives its player.
+TEST(VanillaWorldImport, ASpellSeedReadsItsValues)
+{
+	FakeWorld fake;
+	// 1: the seed, 2: the player, 3: the interface, 4: the interface status
+	fake.Record(VanillaType::SpellSeed)
+	    .Position(5, 6)
+	    .Value<uint32_t>("seedPowerUp", 1)
+	    .Value<uint32_t>("seedInfo", SeedRow(SpellSeedType::Food))
+	    .Ref("seedIcon", 30)
+	    .Ref("seedCreator", 30)
+	    .Ref("seedSpell", 31)
+	    .Ref("seedStatus", 4)
+	    .Value<uint8_t>("seedLinkedByCast", 1)
+	    .Value<uint8_t>("seedLearnedFrom", 1)
+	    .Value<float>("seedChantStore", 120.0f)
+	    .Value<float>("seedStoredChants", 40.0f)
+	    .Value<float>("seedStoredAge", 2.5f)
+	    .Value<uint32_t>("seedStoredMaxObjects", 9)
+	    .Value<float>("seedPower", 0.75f)
+	    .Value<float>("seedMultiplier", 1.5f)
+	    .Value<uint8_t>("seedReady", 1)
+	    .Value<uint32_t>("seedTurnsInHand", 33)
+	    .Value<uint32_t>("seedLastCastType", static_cast<uint32_t>(MagicType::Food))
+	    .Value<uint8_t>("seedFromGlobe", 1);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1).Refs("interfaces", {3});
+	fake.Record(VanillaType::PlayerInterface);
+	fake.Record(VanillaType::PlayerInterfaceStatus).Ref("interface", 3);
+	const auto world = fake.Make();
+
+	const auto seed = world_import::ReadSpellSeed(world, world.Records().front());
+	ASSERT_TRUE(seed.has_value());
+	EXPECT_EQ(seed->number, 1U);
+	EXPECT_EQ(seed->position, (MapCoords {.x = 5, .z = 6, .altitude = 0.0f}));
+	EXPECT_EQ(seed->seedType, SpellSeedType::Food);
+	EXPECT_EQ(seed->powerUp, 1);
+	EXPECT_EQ(seed->player, std::optional(PlayerNames::PLAYER_TWO));
+	EXPECT_EQ(seed->icon, 30U);
+	EXPECT_EQ(seed->spell, 31U);
+	EXPECT_TRUE(seed->linkedByCast);
+	EXPECT_TRUE(seed->learnedFrom);
+	EXPECT_EQ(seed->chantStore, 120.0f);
+	EXPECT_EQ(seed->storedChants, 40.0f);
+	EXPECT_EQ(seed->storedAge, 2.5f);
+	EXPECT_EQ(seed->storedMaxObjects, 9);
+	EXPECT_EQ(seed->power, 0.75f);
+	EXPECT_EQ(seed->castMultiplier, 1.5f);
+	EXPECT_TRUE(seed->ready);
+	EXPECT_EQ(seed->turnsInHand, 33U);
+	EXPECT_EQ(seed->lastCastType, MagicType::Food);
+	EXPECT_TRUE(seed->fromGlobe);
+
+	// A record that is not a spell seed gives no seed
+	EXPECT_FALSE(world_import::ReadSpellSeed(world, world.Records()[1]).has_value());
+}
+
+// The plain miracle and no stored values are -1 in the file. A seed with no status has the player of the player record
+// that made it. A seed of no row of the table, and a last cast of no magic type of the tables, give nothing.
+TEST(VanillaWorldImport, ASpellSeedWithNoStatusHasThePlayerOfItsCreator)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::SpellSeed)
+	    .Position(1, 2)
+	    .Value<uint32_t>("seedPowerUp", 0xFFFFFFFFU)
+	    .Value<uint32_t>("seedInfo", SeedRow(SpellSeedType::Water))
+	    .Ref("seedCreator", 3)
+	    .Ref("seedStatus", 0)
+	    .Value<float>("seedStoredChants", -1.0f)
+	    .Value<uint32_t>("seedStoredMaxObjects", 0xFFFFFFFFU)
+	    .Value<uint32_t>("seedLastCastType", 999);
+	fake.Record(VanillaType::SpellSeed).Position(1, 2).Value<uint32_t>("seedInfo", 7);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0);
+	const auto world = fake.Make();
+
+	const auto seed = world_import::ReadSpellSeed(world, world.Records()[0]);
+	ASSERT_TRUE(seed.has_value());
+	EXPECT_EQ(seed->seedType, SpellSeedType::Water);
+	EXPECT_EQ(seed->powerUp, -1);
+	EXPECT_EQ(seed->player, std::optional(PlayerNames::PLAYER_ONE));
+	EXPECT_EQ(seed->icon, 0U);
+	EXPECT_EQ(seed->storedChants, -1.0f);
+	EXPECT_EQ(seed->storedMaxObjects, -1);
+	EXPECT_EQ(seed->lastCastType, MagicType::None);
+	EXPECT_FALSE(world_import::ReadSpellSeed(world, world.Records()[1]).has_value());
+}
+
+// The hand of each player keeps its seed with the other objects that it holds. A hand with no player is not in the list.
+TEST(VanillaWorldImport, EachHandGivesTheSeedThatItHolds)
+{
+	FakeWorld fake;
+	// 1: a seed, 2: a tree, 3: the player, 4: the interface, 5: the status of the hand, 6: a status with no player
+	fake.Record(VanillaType::SpellSeed).Position(1, 2).Value<uint32_t>("seedInfo", SeedRow(SpellSeedType::Wood));
+	fake.Record(VanillaType::Tree).Position(1, 2);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0).Refs("interfaces", {4});
+	fake.Record(VanillaType::PlayerInterface);
+	fake.Record(VanillaType::PlayerInterfaceStatus).Ref("interface", 4).Refs("handHeld", {2, 1});
+	fake.Record(VanillaType::PlayerInterfaceStatus).Ref("interface", 0).Refs("handHeld", {1});
+	const auto seeds = world_import::ReadHandSeeds(fake.Make());
+	ASSERT_EQ(seeds.size(), 1U);
+	EXPECT_EQ(seeds[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(seeds[0].seed, 1U);
+}
+
+// A spell keeps the seed in the hand that cast it
+TEST(VanillaWorldImport, ASpellReadsItsSeed)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::SpellResource)
+	    .Position(3, 4)
+	    .Value<uint32_t>("spellMagicType", static_cast<uint32_t>(MagicType::Wood))
+	    .Ref("spellSeed", 12);
+	const auto world = fake.Make();
+	const auto spell = world_import::ReadHeldSpell(world, world.Records().front());
+	ASSERT_TRUE(spell.has_value());
+	EXPECT_EQ(spell->seed, 12U);
+}
+
+// The seed takes the values of the file. A seed of an icon came from the worship, unless it came out of a globe. The
+// seed keeps its own player, worship site and spell.
+TEST(VanillaWorldImport, ASeedTakesTheValuesOfTheFile)
+{
+	const world_import::ImportedSpellSeed file {
+	    .seedType = SpellSeedType::LightningBolt,
+	    .powerUp = 2,
+	    .player = PlayerNames::PLAYER_TWO,
+	    .icon = 7,
+	    .spell = 8,
+	    .chantStore = 10.0f,
+	    .learnedFrom = true,
+	    .storedChants = 3.0f,
+	    .storedAge = 1.5f,
+	    .storedMaxObjects = 4,
+	    .castMultiplier = 2.0f,
+	    .power = 0.5f,
+	    .fromGlobe = false,
+	    .ready = true,
+	    .turnsInHand = 12,
+	    .lastCastType = MagicType::LightningBolt,
+	    .linkedByCast = true,
+	};
+	ecs::components::SpellSeed seed {.player = PlayerNames::PLAYER_ONE};
+	world_import::PutSeedValues(seed, file);
+	EXPECT_EQ(seed.seedType, SpellSeedType::LightningBolt);
+	EXPECT_EQ(seed.powerUp, 2);
+	EXPECT_EQ(seed.player, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(seed.chantStore, 10.0f);
+	EXPECT_TRUE(seed.learnedFrom);
+	EXPECT_EQ(seed.storedChants, 3.0f);
+	EXPECT_EQ(seed.storedAge, 1.5f);
+	EXPECT_EQ(seed.storedMaxObjects, 4);
+	EXPECT_EQ(seed.castMultiplier, 2.0f);
+	EXPECT_EQ(seed.power, 0.5f);
+	EXPECT_TRUE(seed.hasIcon);
+	EXPECT_EQ(seed.origin, magic::SeedOrigin::Worship);
+	EXPECT_TRUE(seed.ready);
+	EXPECT_EQ(seed.turnsInHand, 12U);
+	EXPECT_EQ(seed.lastCastType, MagicType::LightningBolt);
+	EXPECT_TRUE(seed.linkedByCast);
+	EXPECT_EQ(seed.spell, entt::entity {entt::null});
+
+	auto globe = file;
+	globe.fromGlobe = true;
+	world_import::PutSeedValues(seed, globe);
+	EXPECT_TRUE(seed.fromGlobe);
+	EXPECT_EQ(seed.origin, magic::SeedOrigin::Bubble);
+	auto noIcon = file;
+	noIcon.icon = 0;
+	world_import::PutSeedValues(seed, noIcon);
+	EXPECT_FALSE(seed.hasIcon);
+	EXPECT_EQ(seed.origin, magic::SeedOrigin::Bubble);
+}
+
+// Each spell seed of the saved games reads, and each seed in a hand is a seed that reads
+TEST(VanillaWorldImport, TheSpellSeedsOfTheSavedGamesRead)
+{
+	size_t seeds = 0;
+	size_t held = 0;
+	const auto files = ForEachSave([&seeds, &held](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto* record : world.OfType(VanillaType::SpellSeed))
+		{
+			++seeds;
+			EXPECT_TRUE(world_import::ReadSpellSeed(world, *record).has_value()) << path << " " << record->number;
+		}
+		for (const auto& hand : world_import::ReadHandSeeds(world))
+		{
+			++held;
+			const auto* record = world.Record(hand.seed);
+			ASSERT_NE(record, nullptr) << path;
+			EXPECT_TRUE(world_import::ReadSpellSeed(world, *record).has_value()) << path << " " << hand.seed;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	std::cout << seeds << " spell seeds and " << held << " seeds in a hand in the saves\n";
 }

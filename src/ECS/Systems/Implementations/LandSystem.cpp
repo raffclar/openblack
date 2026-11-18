@@ -1754,7 +1754,14 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		// turn in the frame follows the turn before it at once: the frame steps only draw, so none come between them.
 		// The tools that act by the turns act first, so that each computer of a network game does them before the same
 		// turn.
+		const auto turn = clock.GetTurn();
 		view.BeforeTurn();
+		// A command of a testbed scenario can load a land before the turn. The turns of the new land start again, and the
+		// source of the commands of a network game follows them.
+		if (const auto again = clock.GetTurn(); again != turn)
+		{
+			Locator::playerCommandSystem::value().TurnsStartAgain(turn, again);
+		}
 		simulation::PlayTurn(view);
 
 		_lastGameLoopTime = currentTime;

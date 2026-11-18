@@ -107,6 +107,12 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		return text.str();
 	});
 	out << ",\"rivers\":" << land.rivers.size() << ",\"lakes\":" << land.lakes;
+	out << ",\"highLakes\":";
+	WriteList(out, land.highLakes, [&land](const landgen::lakes::Lake& lake) {
+		const auto first = lake.corners.front();
+		return "[" + std::to_string(lake.level) + "," + std::to_string(lake.corners.size()) + "," +
+		       std::to_string(land.cells.XOf(first)) + "," + std::to_string(land.cells.ZOf(first)) + "]";
+	});
 	out << ",\"start\":[" << land.start.x << ',' << land.start.z << ',' << land.start.radius << ']';
 	out << ",\"towns\":" << (land.settlement.buildings.empty() ? 0 : 1);
 	out << ",\"mists\":";

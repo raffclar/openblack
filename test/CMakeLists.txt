@@ -259,6 +259,8 @@ openblack_setup_and_add_test(test_particle_plasma test_particle_plasma.cpp)
 target_link_libraries(test_particle_plasma PRIVATE psys)
 openblack_setup_and_add_test(test_map_coords test_map_coords.cpp)
 openblack_setup_and_add_test(test_land_normal test_land_normal.cpp)
+openblack_setup_and_add_test(test_lake_surface test_lake_surface.cpp)
+openblack_setup_and_add_test(test_lake_mirrors test_lake_mirrors.cpp)
 openblack_setup_and_add_test(test_temple_ground test_temple_ground.cpp)
 openblack_setup_and_add_test(test_picking test_picking.cpp)
 openblack_setup_and_add_test(test_tree_brightness test_tree_brightness.cpp)
@@ -1940,6 +1942,7 @@ openblack_setup_and_add_test(test_game_socket online/test_game_socket.cpp)
 openblack_setup_and_add_test(test_join_ticket online/test_join_ticket.cpp)
 openblack_setup_and_add_test(test_websocket_frames online/test_websocket_frames.cpp)
 openblack_setup_and_add_test(test_turn_playout online/test_turn_playout.cpp)
+openblack_setup_and_add_test(test_turn_pace online/test_turn_pace.cpp)
 openblack_setup_and_add_test(test_lockstep online/test_lockstep.cpp)
 if(MSVC)
   target_compile_options(test_lockstep PRIVATE /bigobj)
@@ -2005,6 +2008,9 @@ add_test(NAME test_ai_soak
 )
 add_test(NAME test_checksum_compare
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_checksum_compare.py
+)
+add_test(NAME test_sim_paths
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_sim_paths.py
 )
 openblack_setup_and_add_test(test_start_camera test_start_camera.cpp)
 openblack_setup_and_add_test(test_game_end test_game_end.cpp)
@@ -2682,6 +2688,8 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_landgen_shape landgen/test_landgen_shape.cpp)
 target_link_libraries(test_landgen_shape PRIVATE landgen)
+openblack_setup_and_add_test(test_landgen_lakes landgen/test_landgen_lakes.cpp)
+target_link_libraries(test_landgen_lakes PRIVATE landgen)
 openblack_setup_and_add_test(
   test_landgen_climate landgen/test_landgen_climate.cpp
 )
@@ -2735,3 +2743,4 @@ openblack_setup_and_add_test(test_kept_handles test_kept_handles.cpp)
 openblack_setup_and_add_test(test_town_belief_rule_equal test_town_belief_rule_equal.cpp)
 target_link_libraries(test_town_belief_rule_equal PRIVATE psys)
 openblack_setup_and_add_test(test_reaction_groups test_reaction_groups.cpp)
+openblack_setup_and_add_test(test_prey_search test_prey_search.cpp)

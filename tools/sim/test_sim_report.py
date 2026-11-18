@@ -131,6 +131,19 @@ class CompareTests(unittest.TestCase):
     def test_runs_with_no_turn_in_common_do_not_agree(self):
         self.assertFalse(sim_report.compare([record(100)], [record(200)])["same"])
 
+    def test_a_second_world_compares_with_the_second_world(self):
+        # A scenario that loads a land after the first turns of the testbed starts its turns again
+        first = [record(1, hash_value="t1"), record(2, hash_value="t2"), record(1, hash_value="l1"),
+                 record(2, hash_value="l2")]
+        second = [dict(item) for item in first]
+        self.assertEqual(sim_report.compare(first, second), {"same": True, "compared": 4, "turn": None})
+        self.assertEqual(sim_report.compare_synced(
+            [dict(item, synced={"hash": item["hash"]}) for item in first],
+            [dict(item, synced={"hash": item["hash"]}) for item in second])["compared"], 4)
+        second[3] = record(2, hash_value="other")
+        result = sim_report.compare(first, second)
+        self.assertEqual((result["turn"], result["world"]), (2, 1))
+
 
 def synced_record(turn, hash_value="s", local=9, drawn="d", parts=None):
     synced = {"hash": hash_value, "seed": 7, "draws": turn * 3}
