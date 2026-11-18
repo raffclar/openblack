@@ -3,13 +3,22 @@
 
 // The land's height under a point, worked out as the game does: across the triangle of its cell that the point is
 // in, by the cell's split, with a cell's corners of 3 or less at sea level when the cell starts at 4 or less. The
-// height map holds each cell corner's height in units in red and, in green, whether its cell is split the other way,
-// 16 bits each. On a land of the story, the height in units is the altitude. Needs s_heightmap and u_islandExtent.
+// height map holds two 16-bit values for each cell corner: its height in units, and whether its cell is split the
+// other way. Each value has two 8-bit channels with the low byte first (red and green, then blue and alpha), because
+// all back ends can read this format. On a land of the story, the height in units is the altitude. Needs s_heightmap
+// and u_islandExtent.
+
+// The two 16-bit values of a texel of a land texture, from its four 8-bit channels
+vec2 LandTexelValues(vec4 texel)
+{
+	vec4 bytes = floor(texel * 255.0f + 0.5f);
+	return bytes.xz + bytes.yw * 256.0f;
+}
 
 // A cell corner's height in units and its cell's split, by its place in the height map
 vec2 LandCorner(vec2 corner, vec2 texels)
 {
-	return floor(texture2DLod(s_heightmap, (corner + 0.5f) / texels, 0.0f).rg * 65535.0f + 0.5f);
+	return LandTexelValues(texture2DLod(s_heightmap, (corner + 0.5f) / texels, 0.0f));
 }
 
 float LandAltitude(vec2 world)

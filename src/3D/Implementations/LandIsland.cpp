@@ -44,6 +44,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/IndexBuffer.h"
+#include "Graphics/LandTexelFormat.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
@@ -384,7 +385,7 @@ void LandIsland::Build(const LandData& data)
 	{
 		// The height map is made empty and filled after, so it can be filled again when the land changes height
 		const auto heightMapData = CreateHeightMap();
-		_heightMap->Create(mapWidth, mapHeight, 1, graphics::TextureFormat::RG16, Wrapping::ClampEdge, Filter::Nearest,
+		_heightMap->Create(mapWidth, mapHeight, 1, graphics::k_LandTwoValueFormat, Wrapping::ClampEdge, Filter::Nearest,
 		                   nullptr);
 		_heightMap->Update(heightMapData.data(), static_cast<uint32_t>(heightMapData.size() * sizeof(uint16_t)));
 
@@ -407,7 +408,7 @@ void LandIsland::Build(const LandData& data)
 	}
 	else
 	{
-		_heightMap->Describe(mapWidth, mapHeight, 1, graphics::TextureFormat::RG16);
+		_heightMap->Describe(mapWidth, mapHeight, 1, graphics::k_LandTwoValueFormat);
 		_luminosityMap->Describe(mapWidth, mapHeight, 1, graphics::TextureFormat::R8);
 		_cellColourMap->Describe(mapWidth, mapHeight, 1, graphics::TextureFormat::RGBA8);
 	}

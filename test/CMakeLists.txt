@@ -201,6 +201,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_model_light graphics/test_model_light.cpp)
 openblack_setup_and_add_test(test_sun graphics/test_sun.cpp)
+openblack_setup_and_add_test(test_land_texel_format graphics/test_land_texel_format.cpp)
 openblack_setup_and_add_test(test_moon graphics/test_moon.cpp)
 openblack_setup_and_add_test(test_bone_budget graphics/test_bone_budget.cpp)
 openblack_setup_and_add_test(test_bone_palette graphics/test_bone_palette.cpp)
