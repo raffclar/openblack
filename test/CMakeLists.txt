@@ -2182,6 +2182,10 @@ if (NODE_EXECUTABLE)
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_audio_output_worklet.test.js
   )
+  add_test(NAME test_web_scripts_find_pointer
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_scripts_find_pointer.test.mjs
+  )
 endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
 openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
