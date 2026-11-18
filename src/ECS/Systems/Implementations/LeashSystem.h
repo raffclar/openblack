@@ -98,8 +98,9 @@ private:
 	bool PickWithoutTest(entt::entity creature, LeashType type);
 	/// Plays the next tie sound for the tie of the creature's leash to the thing
 	void PlayTieSound(entt::entity creature, entt::entity object);
-	/// The effects of the tied thing on the creature's mind: a town's desire flag and the need flag of a worship site
-	void TiedThingEffects(entt::entity creature, entt::entity object);
+	/// The effects of the tied thing on the creature's mind: a town's desire flag, a town centre (when the tie can give a
+	/// desire) and the need flag of a worship site
+	void TiedThingEffects(entt::entity creature, entt::entity object, bool townCentreDesire);
 	/// A computer god ties the leash of a creature that does not know the learning leash. No leash goes on.
 	void TieWithoutLeash(entt::entity creature, entt::entity object);
 	/// The hand ties the leash: a fight of the creature stops, and what it does stops as a failure

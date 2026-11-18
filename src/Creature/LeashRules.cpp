@@ -126,6 +126,11 @@ bool creature_leash::PlayerCanChangeType(bool niceSpellOn, bool nastySpellOn)
 	return !niceSpellOn && !nastySpellOn;
 }
 
+bool creature_leash::TieToTownCentreImpresses(LeashType chosen)
+{
+	return chosen != LeashType::Evil;
+}
+
 bool creature_leash::ImpressesTown(const TiedTown& town)
 {
 	if (town.leash == LeashType::Evil || town.impressing)

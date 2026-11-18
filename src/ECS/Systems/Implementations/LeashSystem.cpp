@@ -1136,7 +1136,7 @@ void LeashSystem::TieWithoutLeash(entt::entity creature, entt::entity object)
 	}
 	ForgetLocalGesturePath(registry.Get<const Creature>(creature).owner);
 	// No leash holds, so the creature learns no lesson from the leash
-	TiedThingEffects(creature, object);
+	TiedThingEffects(creature, object, true);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"),
 	                   "Creature {}'s leash does not hold on {}: the creature does not know the learning leash",
 	                   entt::to_integral(creature), entt::to_integral(object));
@@ -1168,7 +1168,7 @@ void LeashSystem::PlayTieSound(entt::entity creature, entt::entity object)
 	}
 }
 
-void LeashSystem::TiedThingEffects(entt::entity creature, entt::entity object)
+void LeashSystem::TiedThingEffects(entt::entity creature, entt::entity object, bool townCentreDesire)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = MindOf(registry, creature);
@@ -1182,6 +1182,19 @@ void LeashSystem::TiedThingEffects(entt::entity creature, entt::entity object)
 	if (flag != nullptr && tables != nullptr)
 	{
 		creature_town_compassion::TiedToFlag(mind->townCompassion, static_cast<uint32_t>(flag->desire), tables->townActions);
+	}
+	// Tied to a town centre on a leash that is not the aggression leash, the creature wants to impress above all for a
+	// short time. The leash that its player chose last counts, also when the leash does not hold.
+	if (townCentreDesire && Locator::creatureMindSystem::has_value())
+	{
+		const auto* abode = registry.TryGet<const Abode>(object);
+		const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+		if (abode != nullptr && abode->type == AbodeNumber::TownCentre && leashes != nullptr &&
+		    leash::TieToTownCentreImpresses(leashes->selected))
+		{
+			Locator::creatureMindSystem::value().MakeDesireDominant(creature, creature_desires::Desire::Impress,
+			                                                        leash::k_ImpressTownSeconds, false);
+		}
 	}
 	// Tied to a need flag of a worship site, the creature feeds the site when it completes its current work
 	if (SiteFlagFill(registry, object).has_value())
@@ -1248,7 +1261,7 @@ bool LeashSystem::Tie(entt::entity creature, entt::entity object, leash::TieSour
 		    .lessons = leash::LessonsFor(worn.type, isCreature),
 		});
 	}
-	TiedThingEffects(creature, object);
+	TiedThingEffects(creature, object, effects.townCentreDesire);
 	// The hand of the player stops what the creature does as a failure, even when the creature then takes no order
 	if (effects.failsAction)
 	{
