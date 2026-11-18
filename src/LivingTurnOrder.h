@@ -9,10 +9,13 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <algorithm>
+#include <optional>
 #include <span>
+#include <unordered_set>
 #include <vector>
 
 /// The order of the turn of the living. The game keeps all the creatures, villagers and animals in one list, and each new
@@ -39,18 +42,57 @@ struct Living
 	Kind kind;
 };
 
-/// Puts the list in the game's order: the last made first. Two with the same place (things from an old save that keep
-/// no place) go by their ids, the larger first.
+/// True when a comes before b in the game's order: the last made first. Two with the same place (things from an old
+/// save that keep no place) go by their ids, the larger first.
+template <typename Id>
+[[nodiscard]] bool ComesBefore(const Living<Id>& a, const Living<Id>& b)
+{
+	if (a.made != b.made)
+	{
+		return a.made > b.made;
+	}
+	return a.id > b.id;
+}
+
+/// Puts the list in the game's order (see ComesBefore)
 template <typename Id>
 void NewestFirst(std::vector<Living<Id>>& list)
 {
-	std::ranges::sort(list, [](const Living<Id>& a, const Living<Id>& b) {
-		if (a.made != b.made)
-		{
-			return a.made > b.made;
-		}
-		return a.id > b.id;
-	});
+	std::ranges::sort(list, ComesBefore<Id>);
+}
+
+/// The list in the game's order, kept from turn to turn, and the living things that changed since the list was put in
+/// order
+template <typename Id>
+struct Kept
+{
+	/// The resets of the world when the list was made. Other values mean that the list is old.
+	std::optional<uint32_t> resets;
+	/// The list must come again from a walk of all living things
+	bool rebuild {true};
+	std::vector<Living<Id>> list;
+	/// The things that came, went or changed their place since the list was put in order
+	std::unordered_set<Id> changed;
+};
+
+/// Puts the list in order again after a change to some of its things. The list goes out of order only at these things,
+/// so the result is the same as a sort of all the living things. live(id, out) adds to out what the thing is now: one
+/// entry for each kind that it is, none when it is not a living thing now.
+template <typename Id, typename Live>
+void Refresh(std::vector<Living<Id>>& list, const std::unordered_set<Id>& changed, Live&& live)
+{
+	if (changed.empty())
+	{
+		return;
+	}
+	std::erase_if(list, [&changed](const Living<Id>& living) { return changed.contains(living.id); });
+	const auto kept = static_cast<std::ptrdiff_t>(list.size());
+	for (const auto id : changed)
+	{
+		live(id, list);
+	}
+	std::sort(list.begin() + kept, list.end(), ComesBefore<Id>);
+	std::inplace_merge(list.begin(), list.begin() + kept, list.end(), ComesBefore<Id>);
 }
 
 /// Walks the list in its order. Each creature, villager and animal does its whole turn (turn) before the next one

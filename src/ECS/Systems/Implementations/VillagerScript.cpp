@@ -44,6 +44,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TownCensus.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/VillagerScriptRules.h"
@@ -242,6 +243,7 @@ void villager_script::SetAge(entt::entity villager, uint32_t age)
 	const auto& info = Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(*person, GVillagerInfo::Find)));
 	const auto setting = villager_age::SetAge(age, villager_age::AgeNow(*person), info.grownUpAge);
 	person->lifeStage = setting.child ? Villager::LifeStage::Child : Villager::LifeStage::Adult;
+	ecs::town_census::VillagerChanged(registry, villager);
 	if (setting.childModel.has_value())
 	{
 		// A grown villager made young wears its kind's child models at their three distances; a child made grown its
