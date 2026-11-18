@@ -106,6 +106,10 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_water
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_lake
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_lake
+#include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_sprite
 #include "ShaderIncluder.h"
@@ -212,7 +216,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 74> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 76> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -242,6 +246,8 @@ const std::array<bgfx::EmbeddedShader, 74> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_terrain), //
     BGFX_EMBEDDED_SHADER(vs_water),
     BGFX_EMBEDDED_SHADER(fs_water), //
+    BGFX_EMBEDDED_SHADER(vs_lake),  //
+    BGFX_EMBEDDED_SHADER(fs_lake),  //
     BGFX_EMBEDDED_SHADER(vs_sprite),
     BGFX_EMBEDDED_SHADER(fs_sprite), //
     BGFX_EMBEDDED_SHADER(vs_particle_instanced),
@@ -310,6 +316,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ObjectReflectiveLightmapInstanced", "vs_object_lightmap_instanced", "fs_object_reflective_lightmap"},
     ShaderDefinition {"Sky", "vs_object", "fs_sky"},
     ShaderDefinition {"Water", "vs_water", "fs_water"},
+    ShaderDefinition {"Lake", "vs_lake", "fs_lake"},
     ShaderDefinition {"Sprite", "vs_sprite", "fs_sprite"},
     ShaderDefinition {"ParticleInstanced", "vs_particle_instanced", "fs_particle"},
     ShaderDefinition {"ParticleChain", "vs_particle_chain", "fs_particle"},

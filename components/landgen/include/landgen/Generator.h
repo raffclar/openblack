@@ -25,6 +25,7 @@
 #include "landgen/Grid.h"
 #include "landgen/HeightCurve.h"
 #include "landgen/Hydrology.h"
+#include "landgen/Lakes.h"
 #include "landgen/Lighting.h"
 #include "landgen/Settlement.h"
 #include "landgen/Swamps.h"
@@ -75,6 +76,9 @@ struct Settings
 	terrain::ShelfSettings shelf;
 	hydrology::LakeSettings lakes;
 	hydrology::RiverSettings rivers;
+	/// The lakes above the sea, and the round hollows on the hills that hold some of them
+	lakes::Settings highLakes;
+	lakes::DigSettings hillHollows;
 	climate::Settings climate;
 	biomes::Thresholds thresholds;
 	features::Settings features;
@@ -134,6 +138,8 @@ struct GeneratedLand
 	std::vector<countries::Surface> materials;
 	std::vector<hydrology::River> rivers;
 	size_t lakes {0};
+	/// The lakes above the sea, each at its own level in altitude units
+	std::vector<lakes::Lake> highLakes;
 	std::vector<features::Feature> features;
 	/// The forests that hold the trees of the features
 	std::vector<features::Forest> forests;
@@ -159,8 +165,9 @@ struct GeneratedLand
 [[nodiscard]] GeneratedLand Generate(const Settings& settings);
 
 /// The cell of each corner, from the altitudes, the luminosity and the biomes. A cell's water and sound come from the
-/// four corners of the cell, as on the lands of the story.
+/// four corners of the cell, as on the lands of the story. A cell under a lake above the sea (lakeLevels, below 0 where no
+/// lake is) has water, and a cell on its shore is on the coast, both with the sound of still fresh water.
 [[nodiscard]] Grid<lnd::LNDCell> MakeCells(const Grid<uint8_t>& altitudes, const Grid<uint8_t>& luminosity,
                                            const Grid<biomes::Biome>& biomes, const Grid<uint8_t>& freshWater,
-                                           const Grid<uint8_t>& runningWater);
+                                           const Grid<uint8_t>& runningWater, const Grid<float>* lakeLevels = nullptr);
 } // namespace openblack::landgen

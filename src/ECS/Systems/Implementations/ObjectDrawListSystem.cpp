@@ -166,6 +166,16 @@ void ObjectDrawListSystem::Update(uint32_t turn, bool landDrawn)
 	// A block in view that starts or stops to show triangles makes the list again. With the land mirrored in the sea,
 	// a block's box reaches as far under the water as it stands over it.
 	const bool reflected = !Locator::config::has_value() || Locator::config::value().detail.landReflection;
+	// The lakes above the sea mirror the blocks at their own levels, so a block's box reaches twice as high as the
+	// highest lake
+	float mirrorTop = 0.0f;
+	if (const auto* lakes = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetLakeMap() : nullptr)
+	{
+		for (const auto& lake : lakes->GetLakes())
+		{
+			mirrorTop = std::max(mirrorTop, 2.0f * lake.level);
+		}
+	}
 	// The blocks show the triangles that the land draws in this frame: the same classification of the blocks as the
 	// land's draw
 	const graphics::land_detail::FrameDetail* detail =
@@ -174,6 +184,7 @@ void ObjectDrawListSystem::Update(uint32_t turn, bool landDrawn)
 	for (auto& block : _blocks)
 	{
 		block.block.reflected = reflected;
+		block.block.mirrorTop = mirrorTop;
 		block.inView = _blockViews.InView(_view->viewProjection, _view->nearPlane, block.block);
 		if (block.inView)
 		{

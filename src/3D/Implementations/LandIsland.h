@@ -76,6 +76,8 @@ private:
 	[[nodiscard]] std::vector<uint8_t> CreateCellColourMap() const;
 	std::vector<LandBlock> _landBlocks;
 	std::vector<lnd::LNDCountry> _countries;
+	/// The lakes above the sea of a generated land
+	land_lakes::LakeMap _lakes;
 	std::vector<uint16_t> _materialTypes;
 
 	/// One more than the index of each block of the map, [x * 32 + z], or 0 where there is no land
@@ -126,6 +128,7 @@ public:
 	[[nodiscard]] std::vector<LandBlock>& GetBlocks() override { return _landBlocks; }
 	[[nodiscard]] const std::vector<LandBlock>& GetBlocks() const override { return _landBlocks; }
 	[[nodiscard]] const std::vector<lnd::LNDCountry>& GetCountries() const override { return _countries; }
+	[[nodiscard]] const land_lakes::LakeMap* GetLakeMap() const override { return _lakes.Empty() ? nullptr : &_lakes; }
 	[[nodiscard]] std::span<const uint16_t> GetMaterialTypes() const override { return _materialTypes; }
 
 	[[nodiscard]] const graphics::Texture2D& GetHeightMap() const override { return *_heightMap; }

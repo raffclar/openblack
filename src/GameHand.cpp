@@ -1911,7 +1911,9 @@ hand_feel::Hover Game::HandHoverInputs(glm::vec3 eye) const
 	}
 	const bool holding = hand_feel::HoldReachesLand(held, offers);
 	const auto overSea =
-	    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
+	    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) -
+	                                       Locator::terrainSystem::value().GetWaterLevelAt(glm::xz(*_cursorLand)) <
+	                                   k_HandSeaAltitude;
 	return {
 	    .camera = eye,
 	    .land = _cursorLand,

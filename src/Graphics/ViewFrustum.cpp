@@ -26,7 +26,7 @@ Frustum FromViewProjection(const glm::mat4& viewProjection) noexcept
 		return glm::vec4(viewProjection[0][index], viewProjection[1][index], viewProjection[2][index],
 		                 viewProjection[3][index]);
 	};
-	Frustum frustum {.sides = {row(3) + row(0), row(3) - row(0), row(3) + row(1), row(3) - row(1)}};
+	Frustum frustum {.sides = {row(3) + row(0), row(3) - row(0), row(3) + row(1), row(3) - row(1), k_NoFloor}};
 	// Made unit length, so that a sphere's radius compares with a plane's distance
 	for (auto& side : frustum.sides)
 	{
@@ -36,6 +36,12 @@ Frustum FromViewProjection(const glm::mat4& viewProjection) noexcept
 			side /= length;
 		}
 	}
+	return frustum;
+}
+
+Frustum WithFloor(Frustum frustum, float height) noexcept
+{
+	frustum.sides.back() = glm::vec4(0.0f, 1.0f, 0.0f, -height);
 	return frustum;
 }
 

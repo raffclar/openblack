@@ -88,6 +88,7 @@ public:
 		ReflectionDrawVegetation,
 		ReflectionDrawSprites,
 		ReflectionDrawParticles,
+		LakeMirrorPass,
 		MainPass,
 		MainPassDrawSky,
 		MainPassDrawWater,
@@ -161,6 +162,7 @@ public:
 	    "Draw Vegetation",      //
 	    "Draw Sprites",         //
 	    "Draw Particles",       //
+	    "Lake Mirror Pass",     //
 	    "Main Pass",            //
 	    "Draw Sky",             //
 	    "Draw Water",           //

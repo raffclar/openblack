@@ -28,6 +28,9 @@ public:
 	/// Whether the map cell nearest to a point (its coordinates times a tenth, rounded to the nearest with halves to even)
 	/// is open sea: off the map, without a cell, or a cell whose land is at the sea's level
 	[[nodiscard]] virtual bool IsSeaCell(glm::vec2 xz) const = 0;
+	/// The height of the water's surface over a point: the sea level, 0, or the level of a lake above the sea of a
+	/// generated land
+	[[nodiscard]] virtual float WaterLevelAt(glm::vec2 /*xz*/) const { return 0.0f; }
 };
 
 } // namespace openblack::physics

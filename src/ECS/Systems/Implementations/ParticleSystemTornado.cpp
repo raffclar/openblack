@@ -99,9 +99,11 @@ bool GameParticleWorld::IsDryLand(glm::vec3 point) const
 		return false;
 	}
 	// Land is dry where its cell stands above the sea
-	const auto* cell =
-	    Locator::terrainSystem::value().FindCell(glm::u16vec2(glm::floor(glm::vec2(point.x, point.z) / k_CellSize)));
-	return cell != nullptr && cell->altitude >= k_LowestDryAltitude;
+	const auto& island = Locator::terrainSystem::value();
+	const auto coordinates = glm::u16vec2(glm::floor(glm::vec2(point.x, point.z) / k_CellSize));
+	const auto* cell = island.FindCell(coordinates);
+	// On a generated land, the ground under a lake above the sea is not dry either
+	return cell != nullptr && cell->altitude >= k_LowestDryAltitude && !island.IsUnderLake(coordinates);
 }
 
 std::vector<particles::TornadoCandidate> GameParticleWorld::TornadoCandidates(glm::vec3 foot, float reach) const

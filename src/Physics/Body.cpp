@@ -404,18 +404,23 @@ void Body::TouchGround(const Ground& ground)
 	// The game compares with the FPU here: a NaN makes each compare true. Thus a body with a place that is not a number
 	// counts as a body in the sea, with all of its points under the water.
 	using openblack::x87::LessOrUnordered;
-	const bool overSea = LessOrUnordered(ground.HeightAt(Xz(_centre)), k_SeaLevelTolerance) &&
-	                     LessOrUnordered(_centre.y, _radius) && !_points.empty() && ground.IsSeaCell(Xz(_points.front().world));
+	// The heights are from the water's surface: the sea level, 0, or the level of a lake above the sea of a generated
+	// land. On the sea, each height is the same as the height in the world.
+	const float waterLevel = ground.WaterLevelAt(Xz(_centre));
+	const float centreAbove = _centre.y - waterLevel;
+	const bool overSea = LessOrUnordered(ground.HeightAt(Xz(_centre)) - waterLevel, k_SeaLevelTolerance) &&
+	                     LessOrUnordered(centreAbove, _radius) && !_points.empty() &&
+	                     ground.IsSeaCell(Xz(_points.front().world));
 	if (overSea)
 	{
-		const auto submerged =
-		    std::ranges::count_if(_points, [](const Point& point) { return LessOrUnordered(point.world.y, 0.0f); });
+		const auto submerged = std::ranges::count_if(
+		    _points, [waterLevel](const Point& point) { return LessOrUnordered(point.world.y - waterLevel, 0.0f); });
 		if (submerged > 0)
 		{
 			inWater = true;
 			touched = true;
 			density += k_SoakPerStep;
-			const float share = std::min((_radius - _centre.y) / (_radius + _radius), 1.0f);
+			const float share = std::min((_radius - centreAbove) / (_radius + _radius), 1.0f);
 			const float drag = share * _speed * _drag * k_WaterDragFactor;
 			const glm::vec3 water(-drag * velocity.x, share * _mass * k_Gravity / density - drag * velocity.y,
 			                      -drag * velocity.z);
@@ -425,7 +430,7 @@ void Body::TouchGround(const Ground& ground)
 			{
 				point.contact = point.world;
 				point.depth = 0.0f;
-				if (LessOrUnordered(point.world.y, 0.0f))
+				if (LessOrUnordered(point.world.y - waterLevel, 0.0f))
 				{
 					_torque += glm::cross(point.world - _aheadCentre, turn);
 				}

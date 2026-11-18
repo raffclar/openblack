@@ -43,6 +43,7 @@ public:
 	[[nodiscard]] float HeightAt(glm::vec2 xz) const override;
 	[[nodiscard]] glm::vec3 NormalAt(glm::vec2 xz) const override;
 	[[nodiscard]] bool IsSeaCell(glm::vec2 xz) const override;
+	[[nodiscard]] float WaterLevelAt(glm::vec2 xz) const override;
 
 	/// The altitude of the cell a point is in (its coordinates rounded down to the cell), none off the map
 	[[nodiscard]] std::optional<uint8_t> CellAltitudeDown(glm::vec2 xz) const;
@@ -58,6 +59,9 @@ public:
 private:
 	[[nodiscard]] const lnd::LNDCell* CellAt(glm::ivec2 cell) const;
 	[[nodiscard]] std::optional<uint8_t> Altitude(glm::ivec2 cell) const;
+	/// How deep the water of a lake above the sea is over the corner of a cell, none where no lake is
+	[[nodiscard]] std::optional<float> LakeDepth(glm::ivec2 cell) const;
+	[[nodiscard]] glm::ivec2 NearestCell(glm::vec2 xz) const;
 
 	const LandIslandInterface& _land;
 };

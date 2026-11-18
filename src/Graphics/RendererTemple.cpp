@@ -263,6 +263,8 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetUniformValue("u_haze", &noHaze);
 	terrainShader->SetUniformValue("u_hazeColour", &noHaze);
 	terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
+	const glm::vec4 u_landClip {0.0f};
+	terrainShader->SetUniformValue("u_landClip", &u_landClip);
 	terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
 	const auto landTexels = LandTexelsUniform(island.GetBlockTextureSide());
 	terrainShader->SetUniformValue("u_landTexels", &landTexels);

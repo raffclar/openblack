@@ -198,8 +198,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	// A blob out of the view of the pass puts no pixel on the screen, so the function does not make it. Each foot is on
 	// the land, lifted, so the test uses a column from the lowest land to the highest land. The column is wider and taller
 	// than that by the largest distance from the point to a corner.
-	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
-	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto seenBy = SceneFrustum(desc);
 	const float highestLand =
 	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().HighestHeight() : view_frustum::k_HighestLand;
 	const auto seesColumn = [&seenBy, highestLand](const glm::vec3& centre, float reach, float lift) {

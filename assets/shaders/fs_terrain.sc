@@ -42,6 +42,8 @@ uniform vec4 u_coarsePage;
 // z: the small bump detail's strength
 // w: 1 to draw the land's textures alone, unlit and with no sea, as the temple's map is textured with
 uniform vec4 u_skyAndBump;
+// x: 1 to leave out the land under the height y, as a lake's mirror shows only the land over the lake's level
+uniform vec4 u_landClip;
 
 vec4 PaintedTexel(vec2 blockTexel, vec2 islandUv)
 {
@@ -161,6 +163,11 @@ vec4 CoarsePage(vec2 blockUv)
 
 void main()
 {
+	if (u_landClip.x > 0.5f && v_world.y < u_landClip.y)
+	{
+		discard;
+	}
+
 	// unpack uniforms
 	float skyType = u_skyAndBump.x;
 	float smallBumpMapStrength = u_skyAndBump.z;

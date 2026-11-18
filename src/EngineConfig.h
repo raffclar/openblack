@@ -19,6 +19,7 @@
 
 #include "Common/GameLanguage.h"
 #include "Creature/BonusCreatures.h"
+#include "Graphics/LakeMirrorOptions.h"
 #include "Visual/DetailLevel.h"
 #include "Visual/DisplayMode.h"
 #include "Visual/LandDetail.h"
@@ -177,6 +178,8 @@ struct EngineConfig
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// Developer switch: how the lakes above the sea of a generated land draw their mirrors
+	graphics::lake_mirrors::Options lakeMirrors;
 	/// Tools: log the times of the computer gods each time this many turns go by, never when 0
 	uint32_t aiTimesEvery {0};
 	/// Tools: log the time of each step of each turn that takes this many milliseconds or more, never when none

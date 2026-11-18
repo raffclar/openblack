@@ -45,6 +45,7 @@
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
+#include "Graphics/LakeMirrors.h"
 #include "Graphics/ObjectDrawWay.h"
 #include "Graphics/PaintedSkinStamp.h"
 #include "Graphics/PartialBuildCap.h"
@@ -385,6 +386,8 @@ private:
 	void DrawHandWaterGlow(const DrawSceneDesc& desc) const;
 	/// The sea's rows, ripple, period and colour for the camera
 	void SetSeaUniforms(const ShaderProgram& waterShader, const Camera& camera) const;
+	/// The sea's uniforms of this frame, as SetSeaUniforms gave them to the sea, for the lakes' water
+	void SetLakeUniforms(const ShaderProgram& lakeShader) const;
 	/// Bakes the shadows of the island's trees, rocks and buildings into its land (see LandShadowBake), and draws the trees'
 	/// moving shadows when they are asked for (see ObjectShadows)
 	void DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const;
@@ -551,6 +554,20 @@ private:
 	void DrawPassWater(const DrawSceneDesc& desc, const ScenePass& pass) const;
 	/// Draws the land in its own view, then the creature footprints on it
 	void DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) const;
+	/// Draws the water of the lakes above the sea of a generated land in the view itself, after the land
+	void DrawPassLakes(const DrawSceneDesc& desc) const;
+	/// Makes the mesh of the lakes' water again when the lakes change. False when the land has no lakes.
+	bool PrepareLakeMesh() const;
+	/// Draws the mirror of each level of the lakes' water in view, as the sea's reflection is drawn at the sea's level
+	void DrawLakeMirrors(const DrawSceneDesc& drawDesc) const;
+	/// Releases the lakes' mesh, the layers of their mirrors and the questions of their water
+	void ReleaseLakes() const;
+	/// The height of the water that a pass mirrors: a lake's level in its mirror, else the sea's level
+	[[nodiscard]] float MirrorLevelOf(RenderPass viewId) const;
+	/// The view of a pass that draws into a mirror, with the floor of a lake's mirror at the lake's level
+	[[nodiscard]] view_frustum::Frustum SceneFrustum(const DrawSceneDesc& desc) const;
+	/// The size in pixels of the view that a scene's pass draws: the rectangle of a lake's mirror, else its target
+	[[nodiscard]] glm::vec2 SceneTargetOf(const DrawSceneDesc& desc) const;
 	/// Draws the models: the entities, the vegetation, the lights of the temple and the sprites
 	void DrawPassModels(const DrawSceneDesc& desc, const ScenePass& pass) const;
 	/// Draws the solid models placed this frame of one step of the temple's room order. The threads that encode draws can
@@ -844,6 +861,30 @@ private:
 	mutable sea_rows::Ripple _seaRipple;
 	/// How far the sea's texture drifted with the ambient wind, moving on with the frames the sea is drawn in
 	mutable sea_rows::Drift _seaDrift;
+	/// The water surface of the lakes above the sea (see lake_surface), and the digest of the lakes that it is made from
+	mutable std::unique_ptr<Mesh> _lakeMesh;
+	/// The uniforms that SetSeaUniforms gave to the sea this frame: params, rows, mode, colour, camera and drift
+	mutable std::array<glm::vec4, 6> _seaUniforms {};
+	mutable uint64_t _lakeMeshDigest {0};
+	/// The water of each level of the lakes, in the order of the mesh's triangles
+	mutable std::vector<lake_mirrors::Level> _lakeLevels;
+	/// The mirrors of this frame, and the level and rectangle of each slot's mirror
+	mutable std::vector<lake_mirrors::Pass> _lakePasses;
+	mutable std::array<float, k_LakeMirrorSlots> _lakeMirrorLevels {};
+	mutable std::array<lake_mirrors::PixelRect, k_LakeMirrorSlots> _lakeMirrorRects {};
+	/// The slot of the mirror of each level this frame, or k_LakeMirrorSlots when the level has none
+	mutable std::vector<uint8_t> _lakeSlotOfLevel;
+	/// The blocks of the land in view of each slot's mirror
+	mutable std::array<std::vector<uint8_t>, k_LakeMirrorSlots> _lakeBlocksInView;
+	/// The layers of the target of the lakes' mirrors, each the size of the sea's reflection. The mirrors whose
+	/// rectangles do not overlap share a layer.
+	mutable std::vector<std::unique_ptr<FrameBuffer>> _lakeLayers;
+	/// The question to the drawing of each level's water: whether any of it showed. And whether none of it showed in the
+	/// last answer.
+	mutable std::vector<bgfx::OcclusionQueryHandle> _lakeQueries;
+	mutable std::vector<uint8_t> _lakeHidden;
+	/// The frames that drew the lakes' mirrors, for the mirrors that draw every second frame
+	mutable uint32_t _lakeMirrorFrames {0};
 	/// The land's luminosity of this frame and of the frame before, a copy of the shaded land (see land_shade) sized to
 	/// the land's. Each frame changes the other one and keeps the rows it changed: the next frame changes those too.
 	mutable std::array<std::unique_ptr<Texture2D>, 2> _landLuminosity;

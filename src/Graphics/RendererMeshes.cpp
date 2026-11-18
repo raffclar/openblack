@@ -624,15 +624,13 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (has(MeshUniform::SeaClip))
 			{
-				// The sea mirrors only what stands above it
-				const bool reflection = desc.viewId == RenderPass::Reflection ||
-				                        desc.viewId == RenderPass::ReflectionTranslucent ||
-				                        desc.viewId == RenderPass::ReflectionMirrored;
+				// The sea mirrors only what stands above it, and a lake's mirror only what stands above the lake
+				const bool reflection = IsMirrorView(desc.viewId);
 				// and a mesh cut by a plane shows nothing below it
 				float height = desc.cutBelow.value_or(0.0f);
 				if (reflection)
 				{
-					height = std::max(height, 0.0f);
+					height = std::max(height, MirrorLevelOf(desc.viewId));
 				}
 				// z: 1 to blend by each instance's alpha rather than dissolve it. w: 1 to multiply the texture's alpha by
 				// the instance's before the alpha test, as the changed materials do.

@@ -13,9 +13,17 @@
 
 #include <algorithm>
 
+#include "3D/LandIslandInterface.h"
 #include "ECS/Reflection/BinaryArchive.h"
+#include "Locator.h"
 
 using namespace openblack::ecs::systems;
+
+namespace
+{
+/// The rings on the water are made a little above the sea's level; the rings of rain lie higher, on the land
+constexpr float k_HighestRingOnWater = 1.0f;
+} // namespace
 
 void WaterRingSystem::SaveState(reflection::BinaryWriter& out) const
 {
@@ -36,7 +44,14 @@ bool WaterRingSystem::Add(const water_rings::Ring& ring)
 	{
 		return false;
 	}
-	_rings.push_back(ring);
+	// A ring on the water lies on the water's surface. On a lake above the sea of a generated land, that is the lake's
+	// level.
+	auto placed = ring;
+	if (placed.position.y < k_HighestRingOnWater && Locator::terrainSystem::has_value())
+	{
+		placed.position.y += Locator::terrainSystem::value().GetWaterLevelAt({placed.position.x, placed.position.z});
+	}
+	_rings.push_back(placed);
 	return true;
 }
 

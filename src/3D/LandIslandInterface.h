@@ -24,6 +24,7 @@
 #include <landgen/HeightCurve.h>
 
 #include "Extent.h"
+#include "LandLakes.h"
 #include "LandReuse.h"
 #include "MapReach.h"
 
@@ -104,6 +105,17 @@ public:
 	[[nodiscard]] virtual std::vector<LandBlock>& GetBlocks() = 0;
 	[[nodiscard]] virtual const std::vector<LandBlock>& GetBlocks() const = 0;
 	[[nodiscard]] virtual const std::vector<lnd::LNDCountry>& GetCountries() const = 0;
+	/// The lakes above the sea, which only a generated land has. Nothing on a land with none.
+	[[nodiscard]] virtual const land_lakes::LakeMap* GetLakeMap() const { return nullptr; }
+	/// The height of the water at a place: the level of a lake above the sea there, or else the sea level, 0. The
+	/// ground is under the water where it is lower than this.
+	[[nodiscard]] float GetWaterLevelAt(glm::vec2 position) const
+	{
+		const auto* lakes = GetLakeMap();
+		return lakes != nullptr ? lakes->WaterLevelAt(position) : land_lakes::k_SeaLevel;
+	}
+	/// Whether the corner of a cell is under the water of a lake above the sea. Always false on a land with no such lake.
+	[[nodiscard]] bool IsUnderLake(glm::u16vec2 coordinates) const;
 	/// The terrain type of each of the land's materials, which the countries blend by index: what the ground is
 	/// made of, for its sounds. Empty when no land is loaded.
 	[[nodiscard]] virtual std::span<const uint16_t> GetMaterialTypes() const { return {}; }

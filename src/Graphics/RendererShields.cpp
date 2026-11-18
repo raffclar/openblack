@@ -39,7 +39,7 @@ using namespace openblack::graphics;
 
 void Renderer::DrawShieldDomes(const DrawSceneDesc& desc) const
 {
-	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const bool reflection = IsMirrorScene(desc.viewId);
 	if ((desc.viewId != RenderPass::Main && !reflection) || !Locator::magicShieldSystem::has_value() ||
 	    !Locator::time::has_value())
 	{

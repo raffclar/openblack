@@ -158,6 +158,8 @@ struct Arguments
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// Developer switch: how the lakes above the sea draw their mirrors (see graphics::lake_mirrors::ParseOptions)
+	std::string lakeMirrors;
 	/// Tools: log the times of the computer gods each time this many turns go by, never when 0
 	uint32_t aiTimesEvery {0};
 	/// Tools: log the time of each step of each turn that takes this many milliseconds or more, never when none
