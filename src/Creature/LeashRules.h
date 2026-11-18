@@ -89,6 +89,9 @@ enum class TypeChangeBy : uint8_t
 constexpr float k_ForcedDesireSeconds = 36000.0f;
 /// How long a creature tied to a village it wants to impress holds its other desires down, in seconds
 constexpr float k_ImpressTownSeconds = 120.0f;
+/// Whether a tie to a town centre makes the creature want to impress above all for a while. This occurs when the leash
+/// that its player chose last is not the aggression leash. The leash does not have to hold.
+[[nodiscard]] bool TieToTownCentreImpresses(LeashType chosen);
 
 /// What a creature tied to a village's centre (or its totem) knows of the village
 struct TiedTown
@@ -274,23 +277,25 @@ struct TieEffects
 	bool failsAction;
 	/// The creature acts on the thing at once, as for an order on the thing
 	bool actsOnThing;
+	/// A tie to a town centre can make the creature want to impress above all for a while
+	bool townCentreDesire;
 };
 
 /// Only the hand of the player stops what the creature does and makes it act on the thing. A script or a computer god
-/// only ties the leash. A loaded game puts the tie back as it was, with no sound and no lesson.
+/// only ties the leash. A loaded game puts the tie back as it was, with no sound, no lesson and no new desire.
 [[nodiscard]] constexpr TieEffects EffectsOf(TieSource source)
 {
 	switch (source)
 	{
 	case TieSource::Hand:
-		return {.sound = true, .lessons = true, .failsAction = true, .actsOnThing = true};
+		return {.sound = true, .lessons = true, .failsAction = true, .actsOnThing = true, .townCentreDesire = true};
 	case TieSource::Script:
 	case TieSource::ComputerGod:
-		return {.sound = true, .lessons = true, .failsAction = false, .actsOnThing = false};
+		return {.sound = true, .lessons = true, .failsAction = false, .actsOnThing = false, .townCentreDesire = true};
 	case TieSource::LoadedGame:
 		break;
 	}
-	return {.sound = false, .lessons = false, .failsAction = false, .actsOnThing = false};
+	return {.sound = false, .lessons = false, .failsAction = false, .actsOnThing = false, .townCentreDesire = false};
 }
 
 /// The two leash-attach sounds play in turn, and the first sound plays first. A tie and the leash put back in the hand

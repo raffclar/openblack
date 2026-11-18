@@ -131,6 +131,11 @@ bool creature_leash::TypeChangeAllowed(bool known, TypeChangeBy by)
 	return known || by == TypeChangeBy::Spell;
 }
 
+bool creature_leash::TieToTownCentreImpresses(LeashType chosen)
+{
+	return chosen != LeashType::Evil;
+}
+
 bool creature_leash::ImpressesTown(const TiedTown& town)
 {
 	if (town.leash == LeashType::Evil || town.impressing)

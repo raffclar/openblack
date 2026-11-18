@@ -433,6 +433,21 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "leash.tied_town_centre_impress",
+	    .name = "Tied to a town centre on the learning leash",
+	    .facet = Facet::Leash,
+	    .description = "A tiger on the learning leash is tied to a town centre after one second, as by the hand. Five "
+	                   "seconds later, the leash goes back to the hand, so only the tie gives the desire.",
+	    .expected = "The rope runs from the town centre. From the tie, the strongest desire of the tiger is to impress, "
+	                "and its other desires are held down. 120 seconds after the tie, all its desires are free again.",
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, 40.0f}, {40.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {-40.0f, 30.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 0.5f), OnObject(Kind::TieLeash, 0, 0, 0.5f, false),
+	                 Act(Kind::UntieLeash, 0, 5.0f)},
+	});
+
 	// The camera looks down at 45 degrees on a very large oak from about 150 m, the pointer on its crown. A tiger is tied
 	// to the oak. The hand pulls the oak for a tenth of a second and lets go, so the oak stays drawn in the lean of the
 	// pull. Then the leash key unties the leash to the hand.
