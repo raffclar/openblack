@@ -7,6 +7,7 @@ defaults on each computer.
 """
 
 import os
+import shutil
 import sys
 
 IS_MAC = sys.platform == "darwin"
@@ -108,9 +109,14 @@ def switch_safe_command(command, cwd):
     path argument that holds a switch changes to a form with no switch. Arguments that are not paths, such as a switch
     that the caller gives on purpose, stay as they are.
 
+    A program name with no folder, such as "docker", changes to its full path on PATH: Windows does not look on PATH
+    for the executable that Popen gives apart.
+
     Returns (executable, arguments) for subprocess.Popen(arguments, executable=executable, cwd=cwd). Raises ValueError
     when a path holds a switch in every form."""
     executable = command[0]
+    if not os.path.dirname(executable):
+        executable = shutil.which(executable) or executable
     arguments = [os.path.basename(executable)]
     for argument in command[1:]:
         prefix, value = "", argument
