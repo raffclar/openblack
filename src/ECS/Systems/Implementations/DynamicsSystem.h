@@ -59,6 +59,7 @@ public:
 	void ProcessTurn() override;
 	void UpdateFrame(float turnFraction) override;
 	[[nodiscard]] std::span<const entt::entity> DrawnBodies() const override { return _drawnBodies; }
+	[[nodiscard]] std::optional<physics::Pose> DrawnPoseOf(entt::entity object, float turnFraction) const override;
 
 	PhysicsStarted InitialisePhysics(entt::entity object, const PhysicsStart& start) override;
 	PhysicsStarted StartPhysicsAsObject(entt::entity object, const PhysicsStart& start) override;

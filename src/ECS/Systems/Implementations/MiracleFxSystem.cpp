@@ -41,12 +41,14 @@
 #include "ECS/DrawnPlace.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -278,6 +280,8 @@ void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std:
 	const glm::vec3 centre = meshes.Contains(bubble) ? meshes.Handle(bubble)->GetBoundingBox().Center() : glm::vec3(0.0f);
 	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
 	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
+	const auto* dynamics = Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
+	const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 1.0f;
 
 	std::vector<entt::entity> globes;
 	registry.Each<OneOffSpellSeed, const Transform>(
@@ -300,9 +304,18 @@ void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std:
 		    }
 		    else
 		    {
-			    // A globe in a hand is drawn where the frame draws the hand, not where the turn put it
-			    const auto placed = ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
-			    globe.middle = placed.position + placed.rotation * (centre * transform.scale);
+			    // A globe that moves in the physics has its middle where its body is drawn, between the places of its last
+			    // two turns. A globe in a hand is drawn where the frame draws the hand, not where the turn put it.
+			    if (const auto body = dynamics != nullptr ? dynamics->DrawnPoseOf(entity, turnFraction) : std::nullopt;
+			        body.has_value())
+			    {
+				    globe.middle = body->origin + body->axes * centre;
+			    }
+			    else
+			    {
+				    const auto placed = ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+				    globe.middle = placed.position + placed.rotation * (centre * transform.scale);
+			    }
 			    facing = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
 			    drawnOrigin = globe.middle - facing * (centre * transform.scale);
 		    }
