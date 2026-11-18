@@ -226,6 +226,7 @@ TEST(GeneratedLand, TheTownIsTheLinesOfALandScript)
 	                                         "CREATE_TOWN_VILLAGER", "CREATE_CITADEL",  "CREATE_WORSHIP_SITE"};
 	EXPECT_EQ(names, expected);
 	EXPECT_NE(script.find(R"(CREATE_TOWN(0, "195.00,200.00", "PLAYER_ONE", 7, "NORSE"))"), std::string::npos);
+	EXPECT_NE(script.find(R"(SET_TOWN_BELIEF(0, "PLAYER_ONE", 1.000000))"), std::string::npos);
 	EXPECT_NE(script.find(R"(CREATE_ABODE(0, "195.00,222.50", "NORSE_ABODE_STORAGE_PIT", 20, 1000, 20000, 30000))"),
 	          std::string::npos);
 	EXPECT_NE(script.find(R"(CREATE_ABODE(0, "217.00,200.00", "NORSE_ABODE_C", 30, 1000, 0, 0))"), std::string::npos);
@@ -268,8 +269,9 @@ TEST(GeneratedLand, TheNeutralTownsComeAfterTheTemple)
 	const auto second = script.find(R"(CREATE_TOWN(1, "600.00,400.00", "NEUTRAL", 3, "JAPANESE"))");
 	ASSERT_NE(second, std::string::npos);
 	EXPECT_GT(second, worship);
-	EXPECT_NE(script.find(R"(SET_TOWN_BELIEF(1, "NEUTRAL", 1.000000))"), std::string::npos);
-	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "620.00,400.00", "JAPANESE_ABODE_STORAGE_PIT", 6, 1000, 20000, 30000))"),
+	// A neutral town has the start values of the neutral towns on the skirmish lands
+	EXPECT_NE(script.find(R"(SET_TOWN_BELIEF(1, "NEUTRAL", 0.500000))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "620.00,400.00", "JAPANESE_ABODE_STORAGE_PIT", 6, 1000, 500, 500))"),
 	          std::string::npos);
 	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "600.00,422.00", "JAPANESE_ABODE_WORKSHOP", 7, 1000, 0, 0))"), std::string::npos);
 	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "578.00,400.00", "JAPANESE_ABODE_GRAVEYARD", 8, 1000, 0, 0))"), std::string::npos);
