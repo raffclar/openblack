@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <tuple>
 
 #include "ResourcesInterface.h"

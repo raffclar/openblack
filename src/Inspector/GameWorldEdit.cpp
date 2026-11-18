@@ -244,9 +244,11 @@ void GameWorldEdit::Changed(entt::entity entity, std::string_view component)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.SetLayoutDirty();
-	// A field set by hand can give a villager or a building another town, or a town another number
+	// A field set by hand can give a villager or a building another town, a town another number, a living thing another
+	// place in the list of the living, or a living thing another reaction
 	registry.TownMembersChanged();
 	registry.TownsChanged();
+	registry.StoresWritten();
 	// A thing moved by hand goes into its new cells, unless something holds it or it flies
 	if (component == "Transform" && registry.Valid(entity) && !registry.AnyOf<InHand, HeldByCreature, InPhysics>(entity) &&
 	    Locator::entitiesMap::has_value())

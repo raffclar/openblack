@@ -11,6 +11,7 @@
 
 #include "ReactionSystem.h"
 
+#include <cassert>
 #include <cstring>
 
 #include <algorithm>
@@ -94,6 +95,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/PlayerTowns.h"
+#include "ECS/ReactionGroups.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScaffoldImpressionRules.h"
@@ -1336,6 +1338,7 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			if (registry.AllOf<Villager>(entity) && !villager_reaction::TakesUp(reaction.source.type))
 			{
 				state->left = state->reaction;
+				ecs::reaction_groups::Changed(registry, entity);
 				continue;
 			}
 			// A creature heeds the new one, but keeps what it reacts to rather than change to one it does not keep. It
@@ -1344,6 +1347,7 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			if (registry.AllOf<Creature>(entity) && !CreatureKeeps(registry, entity, reaction))
 			{
 				state->left = state->reaction;
+				ecs::reaction_groups::Changed(registry, entity);
 				Start(reaction, entity, *state, true);
 				continue;
 			}
@@ -1354,6 +1358,7 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 			if (!registry.AllOf<Creature>(entity))
 			{
 				state->left = state->reaction;
+				ecs::reaction_groups::Changed(registry, entity);
 			}
 			Start(reaction, entity, *state, true);
 		}
@@ -1431,6 +1436,7 @@ void ReactionSystem::LeaveForOtherReaction(entt::entity villager)
 	}
 	state->reaction = 0;
 	state->left = 0;
+	ecs::reaction_groups::Changed(registry, villager);
 	state->type = Reaction::None;
 }
 
@@ -1550,6 +1556,7 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 			state.startTurn = _turn;
 			state.joined = ++_joins;
 			state.left = 0;
+			ecs::reaction_groups::Changed(registry, living);
 			Impress(reaction, living, registry.Get<const Transform>(living).position);
 			return;
 		}
@@ -1589,6 +1596,7 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		state.startTurn = _turn;
 		state.joined = ++_joins;
 		state.left = 0;
+		ecs::reaction_groups::Changed(registry, living);
 		Impress(reaction, living, registry.Get<const Transform>(living).position);
 		return;
 	}
@@ -1606,6 +1614,7 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 		state.startTurn = _turn;
 		state.joined = ++_joins;
 		state.left = 0;
+		ecs::reaction_groups::Changed(registry, living);
 		Impress(reaction, living, registry.Get<const Transform>(living).position);
 	};
 	if (!registry.AllOf<Creature>(living))
@@ -1703,6 +1712,7 @@ void ReactionSystem::StartVillager(const Active& reaction, entt::entity living, 
 	state.startTurn = _turn;
 	state.joined = ++_joins;
 	state.left = 0;
+	ecs::reaction_groups::Changed(registry, living);
 	// A villager is impressed only by what it takes up the usual way: not joining a dance round the thing
 	const auto taken = villager_reactions::Start(living, reaction.source.type, state, wasReacting);
 	const auto before = *_heldBefore;
@@ -1716,6 +1726,7 @@ void ReactionSystem::StartVillager(const Active& reaction, entt::entity living, 
 		state.startTurn = keeps ? before.startTurn : state.startTurn;
 		state.joined = keeps ? before.joined : state.joined;
 		state.left = keeps ? before.left : 0;
+		ecs::reaction_groups::Changed(registry, living);
 	}
 	else if (taken == villager_reactions::Taken::Impressed)
 	{
@@ -1766,6 +1777,7 @@ void ReactionSystem::Stop(entt::entity living, LivingReaction& state, bool reset
 	}
 	state.reaction = 0;
 	state.left = 0;
+	ecs::reaction_groups::Changed(registry, living);
 	state.type = Reaction::None;
 }
 
@@ -1791,6 +1803,7 @@ void ReactionSystem::StopReacting(entt::entity living)
 	MemoryOf(registry, living, *state).Refresh(static_cast<uint32_t>(state->type), _turn);
 	state->reaction = 0;
 	state->left = 0;
+	ecs::reaction_groups::Changed(registry, living);
 	state->type = Reaction::None;
 }
 
@@ -1843,6 +1856,9 @@ void ReactionSystem::ProcessTurn()
 	{
 		return;
 	}
+	// The debug builds make sure each turn that the kept counts of the members of all reactions are the same as a walk
+	// gives
+	assert(ecs::reaction_groups::CountsMatchWalk(Locator::entitiesRegistry::value()));
 	for (auto& reaction : _reactions)
 	{
 		++reaction.age;
@@ -2372,6 +2388,7 @@ std::vector<uint32_t> ReactionSystem::Restore(std::span<const Restored> reaction
 				state = &registry.Assign<LivingReaction>(living);
 			}
 			state->reaction = reaction.id;
+			ecs::reaction_groups::Changed(registry, living);
 			state->type = reaction.source.type;
 			state->startTurn = turn;
 			state->joined = ++_joins;

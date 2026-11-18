@@ -21,10 +21,10 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
-#include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Graveyards.h"
+#include "ECS/ReactionGroups.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -89,14 +89,8 @@ uint8_t villager_mourning::Priority(entt::entity living, entt::entity dead, uint
 	const bool deadIsCreature = registry.Valid(dead) && registry.AllOf<Creature>(dead);
 	const auto* person = registry.TryGet<const Villager>(living);
 	const bool graveyard = person != nullptr && graveyards::HasWorkingGraveyard(person->town);
-	uint32_t reacting = 0;
 	// Only the group of the reaction counts: not a living thing that left it for a reaction that it did not take up
-	registry.Each<const LivingReaction>([&reacting, reaction](entt::entity, const LivingReaction& state) {
-		if (state.reaction == reaction && state.left != reaction)
-		{
-			++reacting;
-		}
-	});
+	const auto reacting = ecs::reaction_groups::MembersOf(registry, reaction);
 	return villager_death::DeathPriority(deadIsCreature, graveyard, living == dead, reacting, priority);
 }
 

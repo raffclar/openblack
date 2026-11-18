@@ -61,6 +61,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/TownCensus.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSites.h"
 #include "Hand/HandGrabRules.h"
@@ -407,24 +408,11 @@ struct DiscipleCount
 };
 DiscipleCount DisciplesOf(entt::entity town)
 {
-	DiscipleCount count;
-	auto& registry = Entities();
-	registry.Each<const Villager>([&](entt::entity villager, const Villager& who) {
-		if (who.town != town)
-		{
-			return;
-		}
-		if (who.lifeStage != Villager::LifeStage::Child)
-		{
-			++count.adults;
-		}
-		const auto work = ecs::villager_disciple::TypeOf(villager);
-		if (work != VillagerDisciple::None)
-		{
-			auto& disciples = count.disciples.at(static_cast<size_t>(work));
-			disciples = static_cast<uint8_t>(disciples + 1);
-		}
-	});
+	const auto kept = ecs::town_census::CountOf(Entities(), town);
+	DiscipleCount count {.adults = kept.adults};
+	// Each count of disciples is one byte, so that it starts again at zero after 255
+	std::ranges::transform(kept.disciples, count.disciples.begin(),
+	                       [](uint32_t disciples) { return static_cast<uint8_t>(disciples); });
 	return count;
 }
 

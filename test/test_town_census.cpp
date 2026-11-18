@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -251,4 +252,140 @@ TEST_F(VillagerLife, AnInvalidThingHasNoLife)
 	Entities().Destroy(villager);
 	EXPECT_FLOAT_EQ(world_objects::LifeOf(villager), 0.0f);
 	EXPECT_FLOAT_EQ(world_objects::ReduceLife(villager, 0.25f), 0.0f);
+}
+
+namespace
+{
+/// The count of a town as a walk of all villagers gives it
+town_census::TownCount WalkedCount(const Registry& registry, entt::entity town)
+{
+	town_census::TownCount count;
+	registry.Each<const Villager>([&](entt::entity entity, const Villager& villager) {
+		if (villager.town != town)
+		{
+			return;
+		}
+		++count.people;
+		if (villager.lifeStage != Villager::LifeStage::Child)
+		{
+			++count.adults;
+		}
+		if (const auto* disciple = registry.TryGet<const Disciple>(entity); disciple != nullptr)
+		{
+			++count.disciples.at(static_cast<size_t>(disciple->type));
+		}
+	});
+	return count;
+}
+
+entt::entity MakeCountedVillager(Registry& registry, entt::entity town, Villager::LifeStage stage)
+{
+	const auto villager = registry.Create();
+	auto& person = registry.Assign<Villager>(villager);
+	person.lifeStage = stage;
+	person.town = town;
+	registry.TownMembersChanged(villager);
+	return villager;
+}
+
+/// A reader of the count in the signal of a villager that goes, as the town reads it when its villager goes
+struct CountInSignal
+{
+	entt::entity town {entt::null};
+	std::vector<uint32_t> people;
+	std::vector<uint32_t> walked;
+	void Gone(entt::registry& /*unused*/, entt::entity /*unused*/)
+	{
+		const auto& registry = *registryOf;
+		people.push_back(town_census::CountOf(registry, town).people);
+		walked.push_back(WalkedCount(registry, town).people);
+	}
+	const Registry* registryOf {nullptr};
+};
+} // namespace
+
+TEST(TownCensus, TheCountsFollowJoinsGrowthDisciplesAndDeaths)
+{
+	Registry registry;
+	const auto first = MakeTown(registry, 1);
+	const auto second = MakeTown(registry, 2);
+	std::vector<entt::entity> people;
+	for (int i = 0; i < 6; ++i)
+	{
+		people.push_back(MakeCountedVillager(registry, i % 2 == 0 ? first : second,
+		                                     i < 3 ? Villager::LifeStage::Adult : Villager::LifeStage::Child));
+	}
+	EXPECT_EQ(town_census::CountOf(registry, first), WalkedCount(registry, first));
+	EXPECT_EQ(town_census::CountOf(registry, first).people, 3u);
+	EXPECT_EQ(town_census::CountOf(registry, first).adults, 2u);
+
+	// A villager goes to the other town, and a child grows up
+	registry.Get<Villager>(people[0]).town = second;
+	registry.TownMembersChanged(people[0]);
+	registry.Get<Villager>(people[4]).lifeStage = Villager::LifeStage::Adult;
+	town_census::VillagerChanged(registry, people[4]);
+	EXPECT_EQ(town_census::CountOf(registry, first), WalkedCount(registry, first));
+	EXPECT_EQ(town_census::CountOf(registry, second), WalkedCount(registry, second));
+	EXPECT_EQ(town_census::CountOf(registry, second).people, 4u);
+
+	// Villagers become disciples, change their work and stop it
+	registry.Assign<Disciple>(people[1], Disciple {.type = VillagerDisciple::Builder});
+	registry.Assign<Disciple>(people[3], Disciple {.type = VillagerDisciple::Builder});
+	registry.AssignOrReplace<Disciple>(people[3], Disciple {.type = VillagerDisciple::Breeder});
+	EXPECT_EQ(town_census::CountOf(registry, second).disciples.at(static_cast<size_t>(VillagerDisciple::Builder)), 1u);
+	EXPECT_EQ(town_census::CountOf(registry, second).disciples.at(static_cast<size_t>(VillagerDisciple::Breeder)), 1u);
+	registry.Remove<Disciple>(people[3]);
+	EXPECT_EQ(town_census::CountOf(registry, second), WalkedCount(registry, second));
+
+	// A disciple dies, and a villager with no town comes
+	registry.Destroy(people[1]);
+	MakeCountedVillager(registry, entt::null, Villager::LifeStage::Adult);
+	EXPECT_EQ(town_census::CountOf(registry, second), WalkedCount(registry, second));
+	EXPECT_EQ(town_census::CountOf(registry, entt::null).people, 1u);
+	EXPECT_TRUE(town_census::CountsMatchWalk(registry));
+
+	// A change that the code does not tell of by villager makes all counts come again from a walk
+	registry.Get<Villager>(people[2]).town = second;
+	registry.TownMembersChanged();
+	EXPECT_EQ(town_census::CountOf(registry, first), WalkedCount(registry, first));
+	EXPECT_TRUE(town_census::CountsMatchWalk(registry));
+}
+
+TEST(TownCensus, AVillagerThatGoesCountsUntilItsSignalEnds)
+{
+	Registry registry;
+	const auto town = MakeTown(registry, 3);
+	std::vector<entt::entity> people;
+	for (int i = 0; i < 4; ++i)
+	{
+		people.push_back(MakeCountedVillager(registry, town, Villager::LifeStage::Adult));
+	}
+	registry.Assign<Disciple>(people[2], Disciple {.type = VillagerDisciple::Farmer});
+	CountInSignal reader {.town = town, .registryOf = &registry};
+	registry.Underlying().on_destroy<Villager>().connect<&CountInSignal::Gone>(reader);
+	// A death wave: each read in a signal sees the villager that goes, as the walk does
+	for (const auto villager : people)
+	{
+		registry.Destroy(villager);
+	}
+	EXPECT_EQ(reader.people, reader.walked);
+	EXPECT_EQ(reader.people, (std::vector<uint32_t> {4, 3, 2, 1}));
+	EXPECT_EQ(town_census::CountOf(registry, town), town_census::TownCount {});
+	EXPECT_TRUE(town_census::CountsMatchWalk(registry));
+}
+
+TEST(TownCensus, TheCountsComeAgainAfterAReset)
+{
+	Registry registry;
+	auto town = MakeTown(registry, 4);
+	MakeCountedVillager(registry, town, Villager::LifeStage::Adult);
+	EXPECT_EQ(town_census::CountOf(registry, town).people, 1u);
+	registry.Reset();
+	town = MakeTown(registry, 4);
+	EXPECT_EQ(town_census::CountOf(registry, town).people, 0u);
+	MakeCountedVillager(registry, town, Villager::LifeStage::Child);
+	MakeCountedVillager(registry, town, Villager::LifeStage::Child);
+	EXPECT_EQ(town_census::CountOf(registry, town), WalkedCount(registry, town));
+	EXPECT_EQ(town_census::CountOf(registry, town).adults, 0u);
+	EXPECT_TRUE(town_census::CountsMatchWalk(registry));
 }

@@ -22,6 +22,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TownCensus.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerCheckRules.h"
 #include "ECS/WorldObjects.h"
@@ -118,6 +119,7 @@ void CheckChildGrownUp(LivingAction& action, uint32_t turn)
 	// Its home's and town's counts of children and adults follow from its life stage. Its model stays the child's
 	// until it changes at home.
 	person.lifeStage = Villager::LifeStage::Adult;
+	ecs::town_census::VillagerChanged(Entities(), villager);
 	const auto grownUpAge = villager_age::GrownUpAge(info.grownUpAge);
 	villager_age::SetBirthTurnForAge(person, grownUpAge);
 	SetScale(villager, GrownScaleFor(person, grownUpAge,

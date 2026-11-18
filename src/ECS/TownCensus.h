@@ -12,9 +12,11 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -65,10 +67,54 @@ struct Towns
 	std::unordered_map<uint32_t, entt::entity> byNumber;
 };
 
+/// The number of kinds of disciple work, with no work as the kind 0
+inline constexpr size_t k_DiscipleKinds = 13;
+
+/// The people of a town as a walk of all villagers counts them
+struct TownCount
+{
+	uint32_t people {0};
+	/// The people that are not children
+	uint32_t adults {0};
+	/// The disciples of each kind of work. The kind 0 (no work) stays at 0.
+	std::array<uint32_t, k_DiscipleKinds> disciples {};
+	bool operator==(const TownCount&) const = default;
+};
+
+/// What one villager adds to the count of its town
+struct CountedVillager
+{
+	entt::entity town {entt::null};
+	bool adult {false};
+	/// The kind of its disciple work, or 0 for none
+	uint8_t disciple {0};
+	bool operator==(const CountedVillager&) const = default;
+};
+
+/// The counts of the people of each town. The counts change with each villager that changes, so that a read does not
+/// walk all villagers.
+struct Counts
+{
+	/// The resets of the registry when the counts were made. Other values mean that the counts are old.
+	std::optional<uint32_t> resets;
+	/// The counts must come again from a walk of all villagers
+	bool recount {true};
+	std::unordered_map<entt::entity, TownCount> towns;
+	/// What each villager adds now to the count of its town
+	std::unordered_map<entt::entity, CountedVillager> villagers;
+	/// The villagers that changed since the last read
+	std::unordered_set<entt::entity> changed;
+	/// The villagers whose villager or disciple component goes. The store holds the component until the signal ends,
+	/// and the walk counts it until then, so these stay in this set until the store does not hold the component.
+	std::unordered_set<entt::entity> goingVillagers;
+	std::unordered_set<entt::entity> goingDisciples;
+};
+
 struct Caches
 {
 	Members members;
 	Towns towns;
+	Counts counts;
 };
 
 /// The villagers of a town, in the order of a walk of all villagers
@@ -81,5 +127,18 @@ struct Caches
 [[nodiscard]] entt::entity TownByNumber(const Registry& registry, uint32_t townNumber);
 /// The same for a number kept as a signed value: the town whose number reads as this value
 [[nodiscard]] entt::entity TownBySignedNumber(const Registry& registry, int32_t townNumber);
+
+/// The count of the people of a town, the same as a walk of all villagers gives
+[[nodiscard]] TownCount CountOf(const Registry& registry, entt::entity town);
+/// Tell the counts that the town, the life stage or the disciple work of a villager can be different now. The signals
+/// of the villager and disciple components do this too. A direct change to a field of a component must call this.
+void VillagerChanged(const Registry& registry, entt::entity villager);
+/// Tell the counts that the villager or disciple component of an entity goes now
+void VillagerGoing(const Registry& registry, entt::entity villager);
+void DiscipleGoing(const Registry& registry, entt::entity villager);
+/// Tell the counts to come again from a walk of all villagers at the next read
+void RecountVillagers(const Registry& registry);
+/// True when the counts of all towns are the same as a walk of all villagers gives. The debug builds test this.
+[[nodiscard]] bool CountsMatchWalk(const Registry& registry);
 
 } // namespace openblack::ecs::town_census
