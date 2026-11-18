@@ -136,6 +136,7 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_scriptParts = {};
 	_ownGodPlaysForClan = false;
 	_turns.clear();
+	_nextLands.clear();
 	_waitingCommands = 0;
 	_playout.Reset();
 	_turnsDone = 0;
@@ -403,6 +404,13 @@ void NetworkSession::CountWaitingCommands()
 	{
 		_waitingCommands += CommandsIn(turn);
 	}
+	for (const auto& land : _nextLands)
+	{
+		for (const auto& [number, turn] : land.turns)
+		{
+			_waitingCommands += CommandsIn(turn);
+		}
+	}
 }
 
 void NetworkSession::FinishWith(End end)
@@ -470,6 +478,7 @@ void NetworkSession::Text(std::string_view text)
 			_loaded = false;
 			_loadedSent = false;
 			_turns.clear();
+			_nextLands.clear();
 			// The commands of the old game go to no turn of the new game, also after a come back
 			_sent.DropKept();
 			_waitingCommands = 0;
@@ -549,6 +558,14 @@ void NetworkSession::Text(std::string_view text)
 		_stoppedAfter = stop->turn;
 		_log->Write(spdlog::level::info,
 		            fmt::format("The game server stopped the turns of the game after turn {}", stop->turn));
+	}
+	else if (const auto* again = std::get_if<game_socket::TurnsAgain>(&*frame))
+	{
+		// The turns and the checksums that come next are of the new land. This computer loads the land before the same turn.
+		_nextLands.push_back(NextLand {.after = again->after, .turn = again->turn});
+		_log->Write(spdlog::level::info,
+		            fmt::format("Before turn {}, the world of the game server loaded a land: its turns start again at turn {}",
+		                        again->after, again->turn));
 	}
 	else if (const auto* wait = std::get_if<game_socket::LoadWait>(&*frame))
 	{
@@ -1075,6 +1092,8 @@ void NetworkSession::Update()
 		{
 			// The server sends again the turns after the last turn that the world did
 			std::erase_if(_turns, [this](const auto& entry) { return entry.first >= _turnsDone; });
+			// The server knows no turn of the old land after it loaded a new land, so it sends its world
+			_nextLands.clear();
 			CountWaitingCommands();
 			_playout.Reset();
 			Open(true);
@@ -1281,6 +1300,12 @@ bool NetworkSession::HasTurn(uint32_t turn) const
 	{
 		return false;
 	}
+	// Before this turn, the world of the server loaded a land. The turn starts when the first turn of the new land is here.
+	if (!_nextLands.empty() && _turnsDone == _nextLands.front().after)
+	{
+		const auto& next = _nextLands.front();
+		return turn == next.after && next.turns.contains(next.turn);
+	}
 	return _turns.contains(turn) && _playout.Due(turn, _clock());
 }
 
@@ -1315,6 +1340,36 @@ std::vector<player_commands::Command> NetworkSession::TakeTurn(uint32_t turn)
 	return commands;
 }
 
+void NetworkSession::TurnsStartAgain(uint32_t after, uint32_t turn)
+{
+	if (_nextLands.empty() || _nextLands.front().after != after || _nextLands.front().turn != turn)
+	{
+		_log->Write(spdlog::level::warn,
+		            fmt::format("Before turn {}, the world loaded a land, but the world of the game server did not", after));
+		return;
+	}
+	auto next = std::move(_nextLands.front());
+	_nextLands.pop_front();
+	_turns = std::move(next.turns);
+	_serverChecksums = std::move(next.serverChecksums);
+	_localChecksums.clear();
+	_turnsDone = turn;
+	_playout.Reset();
+	for (const auto& [number, at] : next.arrivals)
+	{
+		_playout.Arrived(number, at);
+	}
+	CountWaitingCommands();
+	_log->Write(
+	    spdlog::level::info,
+	    fmt::format("Before turn {}, the world loaded the land of the game server: the turns go on from turn {}", after, turn));
+	// The server compares the checksums of this computer again after this report
+	if (_stream && _stream->IsOpen())
+	{
+		_stream->SendText(game_socket::ToJson(game_socket::Loaded {}));
+	}
+}
+
 void NetworkSession::Turn(const turn_codec::TurnBundle& turn)
 {
 	// The blocks of this player that the turn holds do not go again. A turn that the client had still tells this.
@@ -1326,23 +1381,33 @@ void NetworkSession::Turn(const turn_codec::TurnBundle& turn)
 	{
 		_sent.HeldInOfObserver(turn, *observer);
 	}
-	// While the world of the server comes, the session keeps the turns from the turn of that world. After a restart of the
-	// server, that turn can come before the turns that this computer did.
-	const auto first = _worldTurn.value_or(_turnsDone);
-	if (turn.turn < first || _turns.contains(turn.turn))
+	// After a game.turns_again frame, the turns are of the land that the server loaded last. While the world of the server
+	// comes, the session keeps the turns from the turn of that world. After a restart of the server, that turn can come
+	// before the turns that this computer did.
+	auto* next = _nextLands.empty() ? nullptr : &_nextLands.back();
+	auto& turns = next != nullptr ? next->turns : _turns;
+	const auto first = next != nullptr ? next->turn : _worldTurn.value_or(_turnsDone);
+	if (turn.turn < first || turns.contains(turn.turn))
 	{
 		return;
 	}
 	// A server that sends more turns than the client can keep breaks a limit: the client leaves the game
 	const auto commands = CommandsIn(turn);
-	if (turn.turn - first >= k_MostWaitingTurns || _turns.size() >= k_MostWaitingTurns ||
+	if (turn.turn - first >= k_MostWaitingTurns || turns.size() >= k_MostWaitingTurns ||
 	    _waitingCommands + commands > k_MostWaitingCommands)
 	{
 		BreaksLimit(fmt::format("turn {} goes over the turns that the client keeps", turn.turn));
 		return;
 	}
-	_playout.Arrived(turn.turn, _clock());
-	_turns.emplace(turn.turn, turn);
+	if (next != nullptr)
+	{
+		next->arrivals[turn.turn] = _clock();
+	}
+	else
+	{
+		_playout.Arrived(turn.turn, _clock());
+	}
+	turns.emplace(turn.turn, turn);
 	_waitingCommands += commands;
 }
 
@@ -1429,6 +1494,12 @@ void NetworkSession::LocalChecksum(uint32_t turn, uint64_t checksum)
 
 void NetworkSession::ServerChecksum(const turn_codec::TurnChecksum& checksum)
 {
+	// A checksum after a game.turns_again frame is of the new land: it waits until this computer loads that land
+	if (!_nextLands.empty())
+	{
+		_nextLands.back().serverChecksums[checksum.turn] = checksum.checksum;
+		return;
+	}
 	_serverChecksums[checksum.turn] = checksum.checksum;
 	Compare(checksum.turn);
 }

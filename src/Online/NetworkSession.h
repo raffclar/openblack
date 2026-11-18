@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -236,6 +237,9 @@ public:
 	void Send(const player_commands::Action& action) override;
 	[[nodiscard]] bool HasTurn(uint32_t turn) const override;
 	[[nodiscard]] std::vector<player_commands::Command> TakeTurn(uint32_t turn) override;
+	/// The world of this computer loaded a land before the turn after. The session continues with the turns of the new land
+	/// that the server sent after its game.turns_again frame.
+	void TurnsStartAgain(uint32_t after, uint32_t turn) override;
 	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
 	[[nodiscard]] std::span<const uint8_t> EditorMindFile(uint64_t hash) const override { return _mindFiles.Find(hash); }
@@ -417,6 +421,20 @@ private:
 
 	std::map<uint32_t, turn_codec::TurnBundle> _turns;
 	TurnPlayout _playout;
+	/// The turns of a land that the server loaded before a turn, while this computer still does the turns of the old land
+	struct NextLand
+	{
+		/// The turn of the old land before which the land loads
+		uint32_t after {0};
+		/// The first turn of the new land
+		uint32_t turn {0};
+		std::map<uint32_t, turn_codec::TurnBundle> turns;
+		/// The time of the arrival of each turn, for the input buffer
+		std::map<uint32_t, int64_t> arrivals;
+		std::map<uint32_t, uint64_t> serverChecksums;
+	};
+	/// The lands that the server loaded and that this computer did not load yet, in the order that they came
+	std::deque<NextLand> _nextLands;
 	uint32_t _turnsDone {0};
 	/// The commands of the player that did not go yet, because the socket was not open
 	std::vector<player_commands::Action> _waiting;

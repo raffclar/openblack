@@ -183,6 +183,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_BUILDS = sim_paths.DEFAULT_BUILDS
 DEFAULT_GAME_PATH = sim_paths.DEFAULT_GAME_PATH
 CHECKSUM_LINE = re.compile(r"turn (\d+) checksum ([0-9a-f]{16})")
+# A command of a testbed scenario loaded a land before a turn, and the turns of the new land start again: the line of the
+# server, and the line of a client when its own world loaded the land
+SERVER_LAND_AGAIN = re.compile(r"Before turn (\d+), the world of the server loaded a land: the turns start again at turn "
+                               r"(\d+)")
+CLIENT_LAND_AGAIN = re.compile(r"Before turn (\d+), the world loaded the land of the game server: the turns go on from "
+                               r"turn (\d+)")
 LISTEN_LINE = re.compile(r"The game server listens on [0-9.]+:(\d+)")
 SERVER_ID = "net-check-1"
 # The id of the lobby of a lobby game (--lobby-game). Each join ticket then names it.
@@ -587,13 +593,43 @@ def wait_for_line(log, text, process, limit=300):
 
 
 def server_checksums(log):
-    turns = {}
+    """The checksum of each turn of the server, by the turn of the game. After a land that a command of a scenario
+    loaded, the turns of the world start again; the turn of the game goes on from the turn before the land (see
+    game_turns_in_lines), so the turns of the two lands do not mix."""
     with open(log, encoding="utf-8", errors="replace") as file:
-        for line in file:
-            match = CHECKSUM_LINE.search(line)
-            if match:
-                turns[int(match.group(1))] = match.group(2)
+        return game_turns_in_lines(file, SERVER_LAND_AGAIN)
+
+
+def game_turns_in_lines(lines, land_again, pattern=CHECKSUM_LINE):
+    """The value of each line that matches the pattern, by the turn of the game. Each land_again line moves the turns of
+    the lines after it by the turns that the world did before the land: the new land's turn 1 follows the turn of the
+    old land before which the land loaded."""
+    turns, base = {}, 0
+    for line in lines:
+        again = land_again.search(line)
+        if again:
+            base += int(again.group(1)) - int(again.group(2))
+            continue
+        match = pattern.search(line)
+        if match:
+            turns[int(match.group(1)) + base] = match.group(2) if match.lastindex >= 2 else None
     return turns
+
+
+def client_land_bases(log):
+    """The turns that each land of a client starts after, in the order of the client's log"""
+    if log is None or not os.path.exists(log):
+        return []
+    with open(log, encoding="utf-8", errors="replace") as file:
+        return [int(match.group(1)) - int(match.group(2)) for line in file if (match := CLIENT_LAND_AGAIN.search(line))]
+
+
+def session_part_turns(log):
+    """The turns of the game at which the session of the client tells that its world parts"""
+    if not os.path.exists(log):
+        return []
+    with open(log, encoding="utf-8", errors="replace") as file:
+        return sorted(game_turns_in_lines(file, CLIENT_LAND_AGAIN, PARTS_AT))
 
 
 def deeds_by_turn(lines, until_turn=None):
@@ -681,10 +717,14 @@ def world_states_against_server(server_folder, client_folder, turns):
     return {"same": all(result["same"] for result in results), "turns": results}
 
 
-def record_checksums(record):
+def record_checksums(record, log=None):
+    """The synced checksum of each turn of a client's record, by the turn of the game. The record has no line of the
+    land: each time that the turn falls, the next land of the client's log (client.log beside the record) starts."""
     turns = {}
     if not os.path.exists(record):
         return turns
+    bases = client_land_bases(log if log is not None else os.path.join(os.path.dirname(record), "client.log"))
+    base, last = 0, None
     with open(record, encoding="utf-8") as file:
         for line in file:
             line = line.strip()
@@ -693,7 +733,11 @@ def record_checksums(record):
             value = json.loads(line)
             synced = value.get("synced")
             if isinstance(synced, dict) and "checksum" in synced and "turn" in value:
-                turns[int(value["turn"])] = synced["checksum"]
+                turn = int(value["turn"])
+                if last is not None and turn < last and bases:
+                    base += bases.pop(0)
+                last = turn
+                turns[turn + base] = synced["checksum"]
     return turns
 
 
@@ -4481,9 +4525,7 @@ def main():
         different = [turn for turn in compared if client_turns[turn] != server_turns[turn]]
         # The record keeps few turns of a client that catches up or resynchronises: the session of the client names the
         # turn at which its world parted too
-        session_parts = [int(match.group(1)) for line in lines_with(os.path.join(client_dir, "client.log"),
-                                                                    ["parts from the server's world at turn"])
-                         if (match := PARTS_AT.search(line))]
+        session_parts = session_part_turns(os.path.join(client_dir, "client.log"))
         different = sorted(set(different) | set(session_parts))
         parts = parted_parts(os.path.join(server_dir, "record.jsonl"), os.path.join(client_dir, "record.jsonl"),
                              different[0]) if different and options.hash_parts else None
