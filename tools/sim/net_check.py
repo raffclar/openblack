@@ -207,6 +207,9 @@ MOST_TURNS = 100000
 # The run of a long game: a turn takes 100 ms on the server and the clients follow, with the time to load
 SECONDS_PER_TURN = 0.1
 LOAD_SECONDS = 600
+# The time that the clients get to end after the server ended. A client that still runs then waits for turns that no
+# server sends, and only tries to join again.
+SERVER_GONE_SECONDS = 30
 DEFAULT_CHROME = os.environ.get("OB_CHROME", "C:/Program Files/Google/Chrome/Application/chrome.exe")
 DEFAULT_NODE = os.environ.get("OB_NODE", "node")
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -543,7 +546,10 @@ def start(command, cwd):
     """Starts a program with no console window of its own"""
     os.makedirs(cwd, exist_ok=True)
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    return subprocess.Popen(command, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+    # No path in the command line may start a switch of the original game
+    executable, arguments = sim_paths.switch_safe_command(command, cwd)
+    return subprocess.Popen(arguments, executable=executable, cwd=cwd, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, creationflags=flags)
 
 
 def stop(process):
@@ -3321,6 +3327,14 @@ def longest_of(record, keys):
     return longest
 
 
+def server_gone_since(running, gone_at, now):
+    """The time from which the server is gone: the first check that found its process stopped, or None while it runs.
+    A server that the script started again runs, so the time starts again."""
+    if running:
+        return None
+    return gone_at if gone_at is not None else now
+
+
 def run_limit_seconds(turns):
     """The time that a run may take: the turns at the pace of the server, the load of the land, and the clients' catch up"""
     return max(RUN_LIMIT_SECONDS, int(turns * SECONDS_PER_TURN * 1.5) + LOAD_SECONDS)
@@ -4287,6 +4301,7 @@ def main():
         restart_in_pause = options.restart_server_at is not None and options.editor_desync in ("time", "debugger")
         # The island cases stop the server only after the land change, so that the new server starts on the new land
         restart_after_island = options.editor_desync in ("island", "island-away")
+        server_gone_at = None
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (options.restart_server_at is not None and restarted_log is None and not restart_in_pause
                     and (not restart_after_island or lines_with(server_log, ["started the room again on the land"]))
@@ -4297,6 +4312,12 @@ def main():
             if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
                     and (web_process is None or web_process.poll() is not None)
                     and (web_folder is None or not options.web_remote or web_remote_done(web_folder))):
+                break
+            server_gone_at = server_gone_since(server.poll() is None, server_gone_at, time.monotonic())
+            if server_gone_at is not None and time.monotonic() - server_gone_at >= SERVER_GONE_SECONDS:
+                running = [index + 1 for index, client in enumerate(clients) if client.poll() is None]
+                print(f"the server ended, and clients {running} still ran after {SERVER_GONE_SECONDS} s: the script "
+                      "stops them")
                 break
             for number, (turns, index, text) in enumerate(chats):
                 if (number not in said and 0 <= index < len(clients) and clients[index].poll() is None and lines_with(

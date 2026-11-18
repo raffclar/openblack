@@ -75,8 +75,12 @@ def run(command, cwd, limit=RUN_LIMIT_SECONDS, output=None):
     os.makedirs(cwd, exist_ok=True)
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     sink = open(output, "wb") if output else subprocess.DEVNULL
+    executable, arguments = None, command
+    if os.path.basename(command[0]).startswith("openblack"):
+        # No path in the command line may start a switch of the original game
+        executable, arguments = sim_paths.switch_safe_command(command, cwd)
     try:
-        process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.DEVNULL, stdout=sink,
+        process = subprocess.Popen(arguments, executable=executable, cwd=cwd, stdin=subprocess.DEVNULL, stdout=sink,
                                    stderr=subprocess.STDOUT if output else subprocess.DEVNULL, creationflags=flags)
         try:
             return process.wait(timeout=limit)
