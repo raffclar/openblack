@@ -173,7 +173,10 @@ ws.onmessage = (event) => {
   } else if (m.method === 'Runtime.executionContextsCleared' && !m.sessionId) {
     contexts.clear();
   } else if (m.method === 'Log.entryAdded') {
-    record(`[log ${m.params.entry.level}] ${m.params.entry.text}`);
+    // The address of the entry (such as the file of a failed request) goes after the text, so that a check can tell
+    // which request failed
+    const where = m.params.entry.url ? ` <${m.params.entry.url}>` : '';
+    record(`[log ${m.params.entry.level}] ${m.params.entry.text}${where}`);
   }
 };
 await new Promise((resolve) => { ws.onopen = resolve; });
