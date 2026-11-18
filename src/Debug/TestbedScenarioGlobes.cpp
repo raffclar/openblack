@@ -355,7 +355,7 @@ void AddGlobes(std::vector<Scenario>& all)
 	});
 }
 
-void AddHand(std::vector<Scenario>& all)
+void AddGlobeInHand(std::vector<Scenario>& all)
 {
 	using Kind = Command::Kind;
 	all.push_back({
@@ -703,7 +703,7 @@ void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
 	AddRewardDispensers(all);
 	AddCreatureSpellDispensers(all);
 	AddGlobes(all);
-	AddHand(all);
+	AddGlobeInHand(all);
 	AddPiles(all);
 	AddScriptDeletes(all);
 	AddLandTwoGifts(all);
