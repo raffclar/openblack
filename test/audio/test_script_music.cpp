@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <memory>
@@ -349,4 +350,31 @@ TEST(ScriptMusicClock, TheSyncedChecksumTakesInTheValuesOfTheScriptsMusic)
 	EXPECT_EQ(openblack::synced_state::MixValues(7, lineOne), openblack::synced_state::MixValues(7, lineOne));
 	EXPECT_NE(openblack::synced_state::MixValues(7, lineOne), openblack::synced_state::MixValues(7, lineTwo));
 	EXPECT_EQ(openblack::synced_state::MixValues(7, {}), 7U);
+}
+
+// A save keeps the piece, whether it plays and the lyrics, but not its channel. Thus the synced values after the load
+// are the same as without the load only when no channel plays at the save.
+TEST(ScriptMusicClock, ALoadKeepsTheSyncedValuesOnlyWhenNoChannelPlays)
+{
+	const auto timing = Always(MakeTiming(k_Cues));
+	const auto loadedCopy = [](const ScriptMusic& saved) {
+		ScriptMusic loaded;
+		loaded.Restore(saved.GetType(), saved.IsStarted(), saved.GetLyrics());
+		return loaded;
+	};
+
+	ScriptMusic quiet;
+	EXPECT_EQ(loadedCopy(quiet).SyncedValues(), quiet.SyncedValues());
+
+	ScriptMusic playing;
+	playing.Start(k_Verse);
+	TurnsUntil(playing, timing, 300ms);
+	ASSERT_TRUE(playing.GetChannelTime().has_value());
+	const auto loaded = loadedCopy(playing);
+	const auto before = playing.SyncedValues();
+	const auto after = loaded.SyncedValues();
+	// The piece, whether it plays, the line and the word come back; the channel time does not
+	EXPECT_TRUE(std::equal(before.begin(), before.begin() + 4, after.begin()));
+	EXPECT_NE(before[4], -1);
+	EXPECT_EQ(after[4], -1);
 }

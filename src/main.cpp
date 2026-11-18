@@ -261,7 +261,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
 		("sim-no-hand-reports", "Tools: the player's computer sends no report of its hand and its view in its commands, in a network game and in a single player game. The reports carry the camera, which moves at each frame, so two runs with the same seed get the same commands only with this switch.")
 		("sim-checksums", "Tools: write the checksum of the synced world at the end of each turn to this file, as JSON lines (- for the standard output, as the web build needs). Two builds that play the same land, seed and commands must write the same lines.", cxxopts::value<std::string>())
-		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world, to find the part where two builds part.")
+		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world and the synced seed, draws, music and land, to find the part where two builds part.")
 		("sim-checksum-fields", "Tools: as --sim-checksum-parts, and the hash of each field of each component too.")
 		("sim-checksum-dump", "Tools: with --sim-checksums, write each field of each row of some components at one turn, as TURN:Component,Component (for example 7:CreatureMindState), to compare two builds value by value.", cxxopts::value<std::string>())
 		("sim-frame-guard", "Tools: log each frame step that changes the synced world, and the components that it changes. The synced world must change only in the game turns. The run is slower.")

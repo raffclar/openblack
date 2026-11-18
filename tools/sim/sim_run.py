@@ -414,12 +414,14 @@ def read_save(options, slot):
         return file.read()
 
 
-def load_partings(dialogue, computer_gods):
+def load_partings(dialogue, computer_gods, audio=None):
     """The rules of the original game by which a run that loads at this turn parts from the run with no load. An empty
     list: the runs must agree.
     - help_text: a help text shows and is not read yet. The load shows the kept texts again, and the newest text reads
       again from the load. A script that waits until the text is read goes on later (vanilla-bugs, Kept).
-    - computer_gods: a computer god plays. The load starts its mind again with only the parts that a saved game keeps."""
+    - computer_gods: a computer god plays. The load starts its mind again with only the parts that a saved game keeps.
+    - script_music: a channel plays the music of the scripts. The save keeps the piece but not its channel, so after
+      the load the piece gives no sound and never ends (vanilla-bugs 357, Kept). The checksum part "music" differs."""
     partings = []
     dialogue = dialogue or {}
     if dialogue.get("text") and dialogue.get("started") and not dialogue.get("text_read"):
@@ -427,6 +429,10 @@ def load_partings(dialogue, computer_gods):
                          "start_turn": dialogue.get("start_turn"), "end_turn": dialogue.get("end_turn")})
     if computer_gods:
         partings.append({"rule": "computer_gods", "gods": sorted(computer_gods)})
+    audio = audio or {}
+    if audio.get("script_music_ms") is not None:
+        partings.append({"rule": "script_music", "music": audio.get("script_music"),
+                         "channel_ms": audio.get("script_music_ms")})
     return partings
 
 
@@ -450,9 +456,18 @@ def computer_gods_on(game):
     return gods
 
 
+def script_music_at(game):
+    """The audio state with the music of the scripts, none when the game has no sound"""
+    try:
+        answer = game.call("audio.state")
+    except (RuntimeError, inspector.GameError):
+        return None
+    return answer if isinstance(answer, dict) else None
+
+
 def partings_at(game):
     """The load partings of the game at its turn now (see load_partings)"""
-    return load_partings(game.call("help.dialogue"), computer_gods_on(game))
+    return load_partings(game.call("help.dialogue"), computer_gods_on(game), script_music_at(game))
 
 
 def partings_of_run(options, name):

@@ -205,6 +205,16 @@ class LoadPartingTests(unittest.TestCase):
     def test_a_computer_god_that_plays_parts_the_runs(self):
         self.assertEqual(sim_run.load_partings({}, [6, 5]), [{"rule": "computer_gods", "gods": [5, 6]}])
 
+    def test_a_channel_of_the_scripts_music_parts_the_runs(self):
+        audio = {"script_music": "MUSIC_TYPE_SCRIPT_EPIC_03", "script_music_ms": 1300}
+        self.assertEqual(sim_run.load_partings({}, [], audio),
+                         [{"rule": "script_music", "music": "MUSIC_TYPE_SCRIPT_EPIC_03", "channel_ms": 1300}])
+
+    def test_no_channel_of_the_scripts_music_does_not_part_the_runs(self):
+        self.assertEqual(sim_run.load_partings({}, [], {"script_music": "MUSIC_TYPE_SCRIPT_EPIC_03",
+                                                          "script_music_ms": None}), [])
+        self.assertEqual(sim_run.load_partings({}, [], None), [])
+
 
 class FramesTests(unittest.TestCase):
     def test_each_item_gives_the_frame_time_and_the_draw_every(self):

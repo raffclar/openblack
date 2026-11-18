@@ -45,7 +45,8 @@ public:
 	{
 		uint32_t turn {0};
 		uint64_t checksum {0};
-		/// Tools: the hash of each part of the synced world (see synced_state::Hash), when the system keeps them
+		/// Tools: the hash of each part of the synced world (see synced_state::Hash), then the synced values that the
+		/// checksum also mixes ("synced seed", "synced draws", "music", "land"), when the system keeps them
 		std::vector<std::pair<std::string, uint64_t>> parts;
 		/// Tools: at the turn of a dump, each field of each row of the dumped components as "component entity field
 		/// bytes", the bytes in hexadecimal
