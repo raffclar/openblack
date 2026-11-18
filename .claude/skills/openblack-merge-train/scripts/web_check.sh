@@ -19,7 +19,7 @@ bash "$OB_WEB" build --worktree "$WT" --build-dir "$BUILD" --config Release >"$O
 echo "web build: $((SECONDS - t0)) s"
 t1=$SECONDS
 rm -rf "$OUT"
-"${OB_PYTHON:-python}" -I "$GATE" --web-page "$BUILD/bin/Release" --renderers webgpu --work "$OUT" </dev/null
+"${OB_PYTHON:-python}" -I "$GATE" --web-page "$BUILD/bin/Release" --renderers webgpu --land1-only --work "$OUT" </dev/null
 status=$?
 # The Chrome profile holds a copy of the game files (about 200 MB): the screenshots and the logs stay
 for profile in "$OUT"/*/chrome-profile; do [ -d "$profile" ] && rm -rf "$profile"; done
