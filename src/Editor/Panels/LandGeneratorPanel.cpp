@@ -71,8 +71,14 @@ void DrawChoices(generated_land::Choices& choices)
 }
 } // namespace
 
-void LandGeneratorPanel::Draw(EditorContext& context) noexcept
+void LandGeneratorPanel::Draw(EditorContext& context, developer_tools::LandGeneratorTab tab) noexcept
 {
+	if (tab == developer_tools::LandGeneratorTab::NoteOnly)
+	{
+		ImGui::TextWrapped("The land generator is not available in a network game. Each computer of the room must load "
+		                   "the same land, and the generator does not send its land to the other computers.");
+		return;
+	}
 	auto& session = context.system.GetLandGenerator();
 	const auto landPath = Locator::landSystem::value().GetLandPath().generic_string();
 	if (!land_generator::IsOn(session, landPath))

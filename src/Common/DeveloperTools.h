@@ -313,6 +313,46 @@ enum class LandMenuAct : uint8_t
 	return editorClaim ? LandMenuAct::AsksServer : LandMenuAct::Closed;
 }
 
+/// What the Land generator tab of the editor shows
+enum class LandGeneratorTab : uint8_t
+{
+	/// The tab does not show
+	Hidden,
+	/// The tab shows the generator. Its buttons load the generated lands on this computer.
+	Shown,
+	/// The tab shows only a note. The generator cannot load a land for all the computers of a network game.
+	NoteOnly,
+};
+
+/// The name of what the Land generator tab shows, for the log and the inspector
+[[nodiscard]] constexpr std::string_view NameOf(LandGeneratorTab tab) noexcept
+{
+	switch (tab)
+	{
+	case LandGeneratorTab::Hidden:
+		return "hidden";
+	case LandGeneratorTab::Shown:
+		return "shown";
+	case LandGeneratorTab::NoteOnly:
+		return "note only";
+	}
+	return "hidden";
+}
+
+/// What the Land generator tab of the editor shows (user, 2026-11-18: "Make it so staff users with editor access can
+/// also access the editor's land gen tab"). The rules are:
+/// - The tab shows to each player who can open the editor (see EditorRefusalOf), in every build. A player who cannot
+///   open the editor never sees the tab.
+/// - In a network game the tab shows only a note, because the generator does not load a land for the room.
+[[nodiscard]] constexpr LandGeneratorTab LandGeneratorTabOf(bool built, bool networkSessionLive, EditorRight right) noexcept
+{
+	if (EditorRefusalOf(built, networkSessionLive, right).has_value())
+	{
+		return LandGeneratorTab::Hidden;
+	}
+	return networkSessionLive ? LandGeneratorTab::NoteOnly : LandGeneratorTab::Shown;
+}
+
 /// An option of the command line that only developers and tools use
 struct DeveloperOption
 {
