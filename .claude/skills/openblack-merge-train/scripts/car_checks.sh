@@ -30,6 +30,9 @@ echo "--- full test program in one process, then shuffled (test order leaks)"; b
 (cd "$bd/test" && "$tp" > "$WT/car-full.log" 2>&1 && "$tp" --gtest_shuffle --gtest_random_seed=1 > "$WT/car-shuffle.log" 2>&1) || { grep -E "FAILED  \]|Assertion" "$WT/car-full.log" "$WT/car-shuffle.log" | head; echo "STOP: the full openblack_tests run (plain or shuffled) failed: a test leaks state into a later test"; exit 14; }
 echo "--- relwdi oracle and bit tests"; $OB test -C RelWithDebInfo -R "oracle|x87|sweep|bit" > car-reltest.log 2>&1; grep -m1 -E "tests passed, [0-9]+ tests failed" car-reltest.log; grep -q "100% tests passed" car-reltest.log || { echo "STOP: relwdi oracle/bit tests failed"; exit 12; }
 echo "--- net_check mpm_3p_1, 3 clients"; bash "$HERE/nc3_check.sh" "$WT" "$($OB dir)" > car-nc3.log 2>&1 </dev/null || { cat car-nc3.log; echo "STOP: mpm_3p_1 3-client net_check failed (a slot parted, a client resumed or an expect was missed)"; exit 15; }
+echo "--- web check (one Release web build, Land 1 on WebGPU in headless Chrome)"; WEB=$OB_BUILDS/prm-wtb$NAME-web
+bash "$HERE/web_check.sh" "$WT" "$WEB" "$P/carlogs/batch$NAME-web" > car-web.log 2>&1 </dev/null || { tail -25 car-web.log; echo "STOP: web check failed: the land did not draw or the console has a fault on WebGPU ($P/carlogs/batch$NAME-web, $WEB stays for a look)"; exit 18; }
+grep -E "^web (build|gate|check):" car-web.log; rm -rf "$WEB"
 if [ -n "$OB_EXTRA_CHECK" ]; then echo "--- extra check (train.extraCheck)"; extra_check report "$WT" "$NAME" || { echo "STOP: extra check failed"; exit 15; }; fi
 [ "$dw" = 0 ] && [ "$rw" = 0 ] || { echo "STOP: warnings"; exit 8; }
 count=$(echo "$tests" | sed -E 's/.*out of ([0-9]+).*/\1/')
@@ -66,8 +69,13 @@ sleep 5
 gh pr merge "$url" -R "$OB_GITHUB_REPO" --merge || { echo "STOP: merge failed ($url)"; exit 11; }
 git fetch -q $R && git merge --ff-only -q $R/$M
 # The game of the new main branch goes into the master store (ob-build store), so the next car's before and after
-# check takes it from there and does not build the old main branch again
-$OB store --worktree "$WT" --config RelWithDebInfo $R/$M > "$P/carlogs/batch$NAME-store.log" 2>&1 && echo "STORED $(git rev-parse --short=9 $R/$M) in the master store" || echo "note: the new $M is not in the master store (carlogs/batch$NAME-store.log)"
+# check takes it from there and does not build the old main branch again. The merge commit has the tree of the car but
+# its own build id, and the server refuses a client with another build id. So the car's worktree moves to the merge
+# commit and the game and the server build again first: only the build id compiles, then the two programs link.
+sl="$P/carlogs/batch$NAME-store.log"
+{ git -C "$WT" merge --ff-only -q $R/$M && $OB build --worktree "$WT" --config RelWithDebInfo openblack openblack-server &&
+  $OB store --worktree "$WT" --config RelWithDebInfo $R/$M && $OB store-check --config RelWithDebInfo $R/$M; } > "$sl" 2>&1 &&
+  echo "STORED $(git rev-parse --short=9 $R/$M) in the master store, with its own build id" || echo "note: the new $M is not in the master store ($sl)"
 echo "MERGED $N batch $NAME $url car $car ($count tests): ${IN[*]}"
 [ -n "$OB_LEAD_LOG" ] && echo "- MERGED $url (train $N, batch $NAME: ${IN[*]}; car $car $count/$count${flaky:+, flaky $flaky}; left out: ${OUT[*]:-none}), main ff'd $(git rev-parse --short=9 $R/$M)." >> "$OB_LEAD_LOG"
 [ ${#OUT[@]} -gt 0 ] && echo "LEFT OUT: ${OUT[*]}"

@@ -10,6 +10,7 @@
 
     python -I pre_deploy_gate.py [--tars E:/openblack/scratch/live-deploy-4/out] [--reference <folder>]
         [--save-reference <folder>] [--only web|server] [--renderers webgpu,webgl2]
+    python -I pre_deploy_gate.py --web-page <web build>/bin/Release --renderers webgpu --work <folder>
 
 It prints one line PASS or FAIL for each item and a last line with the verdict. The exit code is 0 only when every item
 passes. The gate never contacts the live site and changes nothing of a deploy.
@@ -24,6 +25,9 @@ The gate tests each screenshot for the land (lit pixels and land colours, and th
 screenshot of a reference build), the console of each run (no error, no WebGPU or WebGL validation message, no
 uncaught exception, no worker load error), and the frame time of the game: the page counts the frames of the game in a
 shared counter, and the gate keeps the time of each change of the counter for 10 seconds.
+
+With --web-page, the gate runs the web items only, on the page folder of a web build in place of the tar. The merge
+train runs it so on WebGPU for each car (scripts/web_check.sh of the skill openblack-merge-train).
 
 Server: it unpacks server-build.tar and starts the Linux openblack-server in a container of the image that the local act
 runs use (no download; Docker must already run). It reads the build id, then plays one network game of 300 turns with
@@ -110,8 +114,7 @@ def unpack(tar_path, folder):
     os.makedirs(folder)
     with tarfile.open(tar_path) as tar:
         tar.extractall(folder, filter="data")
-    version = os.path.join(folder, "version.txt")
-    return open(version, encoding="ascii").read().strip() if os.path.exists(version) else None
+    return page_version(folder)
 
 
 def land1_steps():
@@ -187,11 +190,24 @@ def check_console(label, run, serve_log_path, serve_from):
     item(f"{label}: every page file answered", not failed, ", ".join(failed[:5]) or "no failed request")
 
 
-def web_gate(tar, work, renderers, reference_dir, measures):
-    page = os.path.join(work, "page")
-    version = unpack(tar, page)
-    item("web: tar unpacks with version.txt", bool(version) and os.path.exists(os.path.join(page, "openblack.wasm")),
-         f"version {version}")
+def page_version(page):
+    """The commit in version.txt of a page folder, or None"""
+    version = os.path.join(page, "version.txt")
+    return open(version, encoding="ascii").read().strip() if os.path.exists(version) else None
+
+
+def web_gate(tar, work, renderers, reference_dir, measures, built_page=None):
+    """The web items. built_page is the page folder of a web build (the merge train's car); else the tar unpacks."""
+    if built_page:
+        page = built_page
+        version = page_version(page)
+        item("web: page folder has openblack.wasm and version.txt",
+             bool(version) and os.path.exists(os.path.join(page, "openblack.wasm")), f"{page}, version {version}")
+    else:
+        page = os.path.join(work, "page")
+        version = unpack(tar, page)
+        item("web: tar unpacks with version.txt", bool(version) and os.path.exists(os.path.join(page, "openblack.wasm")),
+             f"version {version}")
     if not version:
         return None
     port = free_port()
@@ -308,6 +324,8 @@ def main():
     parser.add_argument("--tars", default=DEFAULT_TARS, help="the folder of web-build.tar and server-build.tar")
     parser.add_argument("--work", help="the work folder (default: a new folder in E:/openblack/scratch/deploy-gate)")
     parser.add_argument("--only", choices=("web", "server"))
+    parser.add_argument("--web-page", help="the page folder of a web build (such as <build>/bin/Release) in place of "
+                                           "web-build.tar: the web items only, for the merge train's car")
     parser.add_argument("--renderers", default="webgpu,webgl2")
     parser.add_argument("--reference", help="the work folder of a gate run of the build that is live now")
     parser.add_argument("--save-reference", help="copy the screenshots and their measures to this folder")
@@ -318,12 +336,15 @@ def main():
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     work = os.path.abspath(options.work or os.path.join(DEFAULT_WORK, stamp))
     os.makedirs(work, exist_ok=True)
-    print(f"deploy gate: tars {options.tars}, work {work}", flush=True)
+    if options.web_page:
+        options.only = "web"
+    print(f"deploy gate: {'page ' + options.web_page if options.web_page else 'tars ' + options.tars}, work {work}",
+          flush=True)
     measures = {}
     web_version = server_version = None
     if options.only in (None, "web"):
         web_version = web_gate(os.path.join(options.tars, "web-build.tar"), work, options.renderers.split(","),
-                               options.reference, measures)
+                               options.reference, measures, options.web_page)
         with open(os.path.join(work, "measures.json"), "w", encoding="utf-8") as file:
             json.dump(measures, file)
     if options.only in (None, "server"):
