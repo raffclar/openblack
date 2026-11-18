@@ -11,17 +11,24 @@
 
 #include <utility>
 
+#include "Components/Abode.h"
 #include "Components/Animal.h"
 #include "Components/Flock.h"
 #include "Components/ScriptControl.h"
+#include "Components/SpellDispenser.h"
+#include "Components/Town.h"
+#include "Components/Villager.h"
+#include "KeptStores.h"
 #include "Locator.h"
 #include "ScriptFlocks.h"
 #include "Systems/RenderingSystemInterface.h"
+#include "TownCensus.h"
 
 namespace openblack::ecs
 {
 
 Registry::Registry()
+    : _townCaches(std::make_unique<town_census::Caches>())
 {
 	_registry.ctx().emplace<RegistryContext>();
 	// Each entity made is counted as it is made, however it is made
@@ -36,7 +43,19 @@ Registry::Registry()
 	_registry.storage<components::InScript>();
 	_registry.on_destroy<components::Animal>().connect<&Registry::LivingGone>(*this);
 	_registry.on_destroy<components::FlockMember>().connect<&Registry::LivingGone>(*this);
+	// The lists of the towns and their members are made again after a change to the things that they list
+	ConnectTownMember<components::Villager>();
+	ConnectTownMember<components::Abode>();
+	ConnectTownMember<components::SpellDispenser>();
+	_registry.on_construct<components::Town>().connect<&Registry::TownChanged>(*this);
+	_registry.on_update<components::Town>().connect<&Registry::TownChanged>(*this);
+	_registry.on_destroy<components::Town>().connect<&Registry::TownChanged>(*this);
+	// The stores that the rules of life and the walks test most exist from the start, and the registry keeps them
+	KeptStores::MakeStores(_registry);
+	_kept = std::make_unique<KeptStores>(*this);
 }
+
+Registry::~Registry() = default;
 
 Registry::Registry(Drawn drawn)
     : Registry()
@@ -86,6 +105,8 @@ void Registry::Reset()
 	_registry.ctx().emplace<RegistryContext>();
 	_entitiesMade = 0;
 	++_resets;
+	++_townMemberChanges;
+	++_townChanges;
 	++_entitiesGone;
 }
 

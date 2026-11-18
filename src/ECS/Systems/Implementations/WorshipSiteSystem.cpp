@@ -11,6 +11,8 @@
 
 #include "WorshipSiteSystem.h"
 
+#include <cassert>
+
 #include <algorithm>
 #include <array>
 #include <functional>
@@ -464,10 +466,24 @@ void WorshipSiteSystem::ProcessChants()
 {
 	auto& registry = _world->Entities();
 	const auto here = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-	// Every player in turn, the neutral player last, each site of their temple by its place round it
+	// Every player in turn, the neutral player last, each site of their temple by its place round it. One walk finds the
+	// temple of each player for the turn. A temple that comes, goes or changes its player in the turn makes a new search.
+	const auto temples = TemplesOfPlayers(ecs::game_players::Count());
+	const auto templeCount = std::pair(registry.Size<Temple>(), registry.Size<CitadelWorship>());
+	const auto templeOf = [&](PlayerNames player) {
+		const auto index = static_cast<size_t>(player);
+		const auto found = index < temples.size() ? temples[index] : static_cast<entt::entity>(entt::null);
+		const bool same = index < temples.size() &&
+		                  std::pair(registry.Size<Temple>(), registry.Size<CitadelWorship>()) == templeCount &&
+		                  (found == entt::null || (registry.Valid(found) && registry.AllOf<Temple, CitadelWorship>(found) &&
+		                                           registry.Get<const Temple>(found).owner == player));
+		const auto temple = same ? found : TempleOf(player);
+		assert(temple == TempleOf(player));
+		return temple;
+	};
 	for (const auto player : ecs::game_players::All())
 	{
-		const auto temple = TempleOf(player);
+		const auto temple = templeOf(player);
 		if (temple == entt::null)
 		{
 			continue;

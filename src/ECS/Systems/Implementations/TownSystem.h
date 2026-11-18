@@ -18,6 +18,7 @@
 #include "3D/MapCoords.h"
 #include "Common/FramePace.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/TownPlanning.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -124,5 +125,7 @@ private:
 	frame_pace::Pace _beliefPace;
 	/// The totem and the town of each centre, kept only while the symbols take their step in a frame
 	std::optional<town_centre_links::Links> _frameLinks;
+	/// The lists of the choice of what each town mends, kept from turn to turn for their memory
+	town_planning::MendLists _mendLists;
 };
 } // namespace openblack::ecs::systems

@@ -128,10 +128,13 @@ TEST(LandgenDump, WritesTheLandOfEachSeedWhenTheEnvironmentAsksForIt)
 		GTEST_SKIP() << "OPENBLACK_LANDGEN_DUMP_DIR is not set";
 	}
 	std::filesystem::create_directories(folder);
+	// The stands of trees in hundredths of the usual stands, for the tree benchmarks
+	const auto trees = EnvironmentOf("OPENBLACK_LANDGEN_TREES");
 	for (const auto seed :
 	     SeedsOf(EnvironmentOf("OPENBLACK_LANDGEN_SEEDS").empty() ? "1,7,42" : EnvironmentOf("OPENBLACK_LANDGEN_SEEDS")))
 	{
-		const auto land = landgen::Generate(generated_land::SettingsFor(seed));
+		const auto land = landgen::Generate(
+		    generated_land::SettingsOf({.seed = seed, .trees = trees.empty() ? 100 : static_cast<int32_t>(std::stoi(trees))}));
 		WriteLand(std::filesystem::path(folder) / ("seed" + std::to_string(seed) + ".json"), seed, land);
 	}
 }

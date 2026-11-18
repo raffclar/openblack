@@ -1220,6 +1220,7 @@ void Runner::UpdateVillagerWalks()
 			if (villager.town == entt::null || !registry.Valid(villager.town))
 			{
 				villager.town = registry.Context().towns.at(ScenarioTown(_middle));
+				registry.TownMembersChanged();
 			}
 			const auto site = MapPoint(_middle, *setup.worshipAt);
 			const glm::vec3 point {site.x, Locator::terrainSystem::value().GetHeightAt(site), site.y};
@@ -1237,6 +1238,7 @@ void Runner::UpdateVillagerWalks()
 			if (villager.town == entt::null || !registry.Valid(villager.town))
 			{
 				villager.town = registry.Context().towns.at(ScenarioTown(_middle));
+				registry.TownMembersChanged();
 			}
 			std::optional<entt::entity> nearest;
 			float best = std::numeric_limits<float>::max();

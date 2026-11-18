@@ -29,6 +29,14 @@ namespace openblack::portable_math
 
 [[nodiscard]] double Sin(double radians);
 [[nodiscard]] double Cos(double radians);
+/// The sine and the cosine of one angle
+struct SinAndCos
+{
+	double sin {0.0};
+	double cos {1.0};
+};
+/// The same bits as Sin and Cos of the angle. It reduces the angle to a quarter of the circle one time for the two.
+[[nodiscard]] SinAndCos SinCos(double radians);
 [[nodiscard]] double Tan(double radians);
 [[nodiscard]] double Atan(double value);
 /// The arctangent of y / x in the correct quarter of the circle
@@ -44,6 +52,14 @@ namespace openblack::portable_math
 /// The double result rounded to a float one time
 [[nodiscard]] float Sin(float radians);
 [[nodiscard]] float Cos(float radians);
+/// The sine and the cosine of one angle, each the double result rounded to a float one time
+struct SinAndCosF
+{
+	float sin {0.0f};
+	float cos {1.0f};
+};
+/// The same bits as Sin and Cos of the angle, with one reduction of the angle for the two
+[[nodiscard]] SinAndCosF SinCos(float radians);
 [[nodiscard]] float Tan(float radians);
 [[nodiscard]] float Atan(float value);
 [[nodiscard]] float Atan2(float y, float x);

@@ -225,6 +225,7 @@ void Runner::SpawnCrowdMember(size_t index)
 	{
 		Locator::townSystem::value().AddVillagerToAbode(abode, entity);
 		registry.Get<ecs::components::Villager>(entity).town = town->second;
+		registry.TownMembersChanged();
 	}
 }
 
