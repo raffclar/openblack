@@ -12,6 +12,7 @@
 #include <algorithm>
 
 #include "Locator.h"
+#include "WebThreadBudget.h"
 
 using namespace openblack;
 
@@ -23,11 +24,8 @@ WorkerPools::WorkerPools(std::optional<size_t> sharedThreads)
 std::optional<size_t> WorkerPools::SharedThreadCount()
 {
 #if defined(__EMSCRIPTEN__)
-	// The shared threads are a part of the workers that the page makes at the start (PTHREAD_POOL_SIZE in
-	// src/CMakeLists.txt). The other workers are for the game thread, the render thread, the load queue, the sound
-	// and the side threads.
-	constexpr size_t k_MostSharedThreads = 6;
-	return std::min(WorkerPool::DefaultThreadCount(), k_MostSharedThreads);
+	// The shared threads are a part of the workers that the page makes at the start (see Common/WebThreadBudget.h)
+	return std::min(WorkerPool::DefaultThreadCount(), web_threads::k_SharedWorkers);
 #else
 	return std::nullopt;
 #endif
@@ -48,5 +46,11 @@ std::unique_ptr<WorkerPool> openblack::MakeWorkerPool()
 	{
 		return Locator::workerPools::value().Make();
 	}
+#if defined(__EMSCRIPTEN__)
+	// In the browser, a pool with threads of its own would go past the workers of the page. With no service, the
+	// calling thread does all the jobs.
+	return std::make_unique<WorkerPool>(0);
+#else
 	return std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+#endif
 }

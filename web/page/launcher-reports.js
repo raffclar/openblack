@@ -27,6 +27,16 @@ const k_MostBreadcrumbs = 100;
 // A frame of the WebAssembly code in a stack of the browser: the address of the module, the index of the function and
 // the offset of the instruction in the module
 const k_WasmFramePattern = /^(.*?):wasm-function\[\d+\]:(0x[0-9a-fA-F]+)$/;
+// The message of the report when a new worker of a game thread could not load the program
+const k_ThreadLoadFailedText = 'A game thread could not start: its worker could not load the program from the site';
+
+/**
+ * Is the error of an error event of the page a worker that could not load the program? Such an error is the error event
+ * of the worker itself, with no message. An error of the game code has a message.
+ */
+function isThreadLoadFailure(error) {
+  return typeof Event !== 'undefined' && error instanceof Event && !error.message;
+}
 
 /** The text with each secret in it replaced by a mark, as the game does */
 function maskSecrets(text) {
@@ -366,6 +376,20 @@ class ErrorReports {
   }
 
   /**
+   * A new worker of a game thread could not load the program from the site, so the game cannot continue. This is not
+   * an error of the game code. Thus the report is a warning with a tag of its own. Only the first one goes.
+   */
+  threadLoadFailed() {
+    if (this.pageFailureSent || !this.running) {
+      return false;
+    }
+    this.pageFailureSent = true;
+    return this.send((Sentry) => Sentry.captureException(new Error(k_ThreadLoadFailedText), {
+      captureContext: { level: 'warning', tags: { failure: 'thread-load' } },
+    }));
+  }
+
+  /**
    * The name, the message and the stack of an error of a game thread. The error comes to the page next, with its
    * message only, and the report of the failure then has this stack.
    */
@@ -405,6 +429,7 @@ function loadSentryScript(document) {
 if (typeof module !== 'undefined') {
   module.exports = {
     ErrorReports, scrubEvent, applyIpChoice, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
-    wasmModuleInfo, wasmDebugImage, addWasmDebugImage, k_LogAttachmentName, k_RoleTagName,
+    wasmModuleInfo, wasmDebugImage, addWasmDebugImage, k_LogAttachmentName, k_RoleTagName, isThreadLoadFailure,
+    k_ThreadLoadFailedText,
   };
 }

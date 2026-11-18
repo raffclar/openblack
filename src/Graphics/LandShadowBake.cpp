@@ -27,6 +27,7 @@
 #include "Common/SameBits.h"
 #include "Common/SideThread.h"
 #include "Common/WorkerPool.h"
+#include "Common/WorkerPools.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Feature.h"
@@ -225,18 +226,6 @@ void CastShape(tree_shadows::Coverage& coverage, std::span<const glm::vec2> cast
 		}
 		shape_shadows::Fill(coverage, corners, allBothSides || shape[t].bothSides, side);
 	}
-}
-
-/// How many threads bake the blocks side by side, the calling thread included
-[[nodiscard]] size_t BakeThreadCount()
-{
-#if defined(__EMSCRIPTEN__)
-	// In the browser, each thread is a web worker. The page makes a small set of workers at the start, and each worker
-	// more than this set loads the program again. Thus the bake uses only as many threads as the worker pools do.
-	return WorkerPool::DefaultThreadCount() + 1;
-#else
-	return std::max(1u, std::thread::hardware_concurrency());
-#endif
 }
 
 } // namespace
@@ -804,53 +793,70 @@ std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job
 {
 	// The blocks are baked side by side, each on its own
 	std::vector<BlockShades> results(job.blocks.size());
-	const auto bake = [&job, &results](size_t first, size_t step) {
+	const auto bakeBlock = [&job, &results](size_t i, tree_shadows::Coverage& coverage) {
+		const auto& block = job.blocks[i];
+		coverage.fill(0);
+		for (const auto& caster : job.casters)
+		{
+			const bool takes = std::ranges::any_of(caster.cells, [&block](uint32_t index) {
+				return tree_shadows::TakesShadowFrom(block.position, CellOf(index));
+			});
+			if (!takes)
+			{
+				continue;
+			}
+			if (caster.shadow == LandShadow::Leaves)
+			{
+				CastLeaves(coverage, caster.transform, caster.leaves, block.corner, job.side);
+			}
+			else if (caster.cast && !caster.cast->empty() && caster.castHigh.x >= block.corner.x &&
+			         caster.castLow.x <= block.corner.x + tree_shadows::k_BlockSize &&
+			         caster.castHigh.y >= block.corner.y && caster.castLow.y <= block.corner.y + tree_shadows::k_BlockSize)
+			{
+				CastShape(coverage, *caster.cast, caster.shape, caster.shadow == LandShadow::ShapeBothSides, block.corner,
+				          job.side);
+			}
+		}
+		// The block's texels into the island's texture: x across it and z along its rows
+		auto& shades = results[i].shades;
+		const int side = job.side;
+		const bool lowResolution = side < tree_shadows::k_BlockTexels;
+		shades.resize(static_cast<size_t>(side) * static_cast<size_t>(side));
+		for (int x = 0; x < side; ++x)
+		{
+			for (int z = 0; z < side; ++z)
+			{
+				const auto covered = coverage[static_cast<size_t>(x * side + z)];
+				const int row = job.rowsFromFarEnd ? side - 1 - z : z;
+				shades[static_cast<size_t>(row * side + x)] =
+				    covered != 0 ? tree_shadows::Shade(covered, lowResolution) : 255;
+			}
+		}
+		results[i].position = block.position;
+		results[i].corner = block.corner;
+	};
+#if defined(__EMSCRIPTEN__)
+	// In the browser, the shared worker threads bake the blocks. A new thread would go past the workers that the page
+	// makes at the start. Each lane has its own coverage.
+	const auto pool = MakeWorkerPool();
+	std::vector<std::unique_ptr<tree_shadows::Coverage>> coverages(pool->GetLaneCount());
+	pool->ForEach(job.blocks.size(), [&bakeBlock, &coverages](size_t i, size_t lane) {
+		auto& coverage = coverages[lane];
+		if (coverage == nullptr)
+		{
+			coverage = std::make_unique<tree_shadows::Coverage>();
+		}
+		bakeBlock(i, *coverage);
+	});
+#else
+	const auto bake = [&job, &bakeBlock](size_t first, size_t step) {
 		auto coverage = std::make_unique<tree_shadows::Coverage>();
 		for (size_t i = first; i < job.blocks.size(); i += step)
 		{
-			const auto& block = job.blocks[i];
-			coverage->fill(0);
-			for (const auto& caster : job.casters)
-			{
-				const bool takes = std::ranges::any_of(caster.cells, [&block](uint32_t index) {
-					return tree_shadows::TakesShadowFrom(block.position, CellOf(index));
-				});
-				if (!takes)
-				{
-					continue;
-				}
-				if (caster.shadow == LandShadow::Leaves)
-				{
-					CastLeaves(*coverage, caster.transform, caster.leaves, block.corner, job.side);
-				}
-				else if (caster.cast && !caster.cast->empty() && caster.castHigh.x >= block.corner.x &&
-				         caster.castLow.x <= block.corner.x + tree_shadows::k_BlockSize &&
-				         caster.castHigh.y >= block.corner.y && caster.castLow.y <= block.corner.y + tree_shadows::k_BlockSize)
-				{
-					CastShape(*coverage, *caster.cast, caster.shape, caster.shadow == LandShadow::ShapeBothSides, block.corner,
-					          job.side);
-				}
-			}
-			// The block's texels into the island's texture: x across it and z along its rows
-			auto& shades = results[i].shades;
-			const int side = job.side;
-			const bool lowResolution = side < tree_shadows::k_BlockTexels;
-			shades.resize(static_cast<size_t>(side) * static_cast<size_t>(side));
-			for (int x = 0; x < side; ++x)
-			{
-				for (int z = 0; z < side; ++z)
-				{
-					const auto covered = (*coverage)[static_cast<size_t>(x * side + z)];
-					const int row = job.rowsFromFarEnd ? side - 1 - z : z;
-					shades[static_cast<size_t>(row * side + x)] =
-					    covered != 0 ? tree_shadows::Shade(covered, lowResolution) : 255;
-				}
-			}
-			results[i].position = block.position;
-			results[i].corner = block.corner;
+			bakeBlock(i, *coverage);
 		}
 	};
-	const auto workers = std::min(job.blocks.size(), BakeThreadCount());
+	const auto workers = std::min(job.blocks.size(), static_cast<size_t>(std::max(1u, std::thread::hardware_concurrency())));
 	{
 		std::vector<std::jthread> threads;
 		for (size_t w = 1; w < workers; ++w)
@@ -859,6 +865,7 @@ std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job
 		}
 		bake(0, workers);
 	}
+#endif
 	return results;
 }
 

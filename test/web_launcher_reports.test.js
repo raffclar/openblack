@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const {
   ErrorReports, scrubEvent, applyIpChoice, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
-  wasmModuleInfo, addWasmDebugImage, k_LogAttachmentName,
+  wasmModuleInfo, addWasmDebugImage, k_LogAttachmentName, isThreadLoadFailure, k_ThreadLoadFailedText,
 } = require('../web/page/launcher-reports.js');
 
 let count = 0;
@@ -235,6 +235,25 @@ check('only the first failure of the page goes, as a fatal exception', async () 
   const exceptions = sentry.calls.filter((call) => call[0] === 'exception');
   assert.equal(exceptions.length, 1);
   assert.equal(exceptions[0][2].captureContext.level, 'fatal');
+});
+check('a worker that could not load the program is a load failure, an error of the code is not', () => {
+  assert.equal(isThreadLoadFailure(new Event('error')), true);
+  assert.equal(isThreadLoadFailure(new Error('unreachable')), false);
+  assert.equal(isThreadLoadFailure(undefined), false);
+  assert.equal(isThreadLoadFailure('worker sent an error!'), false);
+});
+check('a load failure of a thread is one warning with a tag of its own, and no failure of the page follows', async () => {
+  const { reports, sentry } = makeReports();
+  reports.start(settings);
+  await settle();
+  assert.equal(reports.threadLoadFailed(), true);
+  assert.equal(reports.threadLoadFailed(), false);
+  assert.equal(reports.pageFailed('second', undefined), false);
+  const exceptions = sentry.calls.filter((call) => call[0] === 'exception');
+  assert.equal(exceptions.length, 1);
+  assert.equal(exceptions[0][1].message, k_ThreadLoadFailedText);
+  assert.equal(exceptions[0][2].captureContext.level, 'warning');
+  assert.equal(exceptions[0][2].captureContext.tags.failure, 'thread-load');
 });
 check('the failure of the page has the stack of the error of the game thread', async () => {
   const { reports, sentry } = makeReports();

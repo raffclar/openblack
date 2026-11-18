@@ -594,6 +594,21 @@ async function gameFailed(reason, error) {
   }
 }
 
+// A new worker of a game thread could not load the program from the site. The game code has no error, so the page keeps
+// no crash report. It tells the player to load the page again.
+function gameThreadNotLoaded() {
+  if (pageCrashKept) {
+    return;
+  }
+  pageCrashKept = true;
+  log(`The game stopped: ${k_ThreadLoadFailedText}`);
+  errorReports.threadLoadFailed();
+  showMessage('The game must load again',
+    'A game thread could not start, because the browser could not load the files of the game from the site. ' +
+    'The site possibly has a new version of the game, or the network stopped. Make sure that the network works, ' +
+    'then load the page again.', [], { stop: true });
+}
+
 async function keptCopy() {
   const root = await storageRoot();
   if (!root) {
@@ -1068,12 +1083,12 @@ async function start(online = false) {
   window.addEventListener('error', (event) => {
     // A game thread error comes as an error event, which has the message of the error. A worker that cannot load the
     // program gives an event with no message. This occurs when the game starts a new thread and the browser cannot get
-    // the files of the game, for example after the network stopped.
-    const loadFailed = event.error instanceof Event && !event.error.message;
-    const reason = loadFailed
-      ? 'A game thread could not start, because the browser could not load the files of the game. ' +
-        'Make sure that the network works, then load the page again.'
-      : (event.error && event.error.message) || event.message || String(event.error);
+    // the files of the game, for example after the network stopped or after a new version of the site.
+    if (isThreadLoadFailure(event.error)) {
+      gameThreadNotLoaded();
+      return;
+    }
+    const reason = (event.error && event.error.message) || event.message || String(event.error);
     if (!reason.includes('ResizeObserver')) {
       gameFailed(reason, event.error);
     }
