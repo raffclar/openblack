@@ -20,6 +20,8 @@
 #   ob-build store     [options] [commit]              (copies this folder's game and server into the master store)
 #   ob-build master    [options] [commit]              (prints the master store folder of a commit, default me/master,
 #                                                       and builds the game and server for it first when needed)
+#   ob-build store-check [options] [commit]            (checks that the stored build of a commit, default me/master,
+#                                                       has the build id of that commit)
 #   ob-build env       [options]                       (prints the tools and folders ob-build resolved)
 #   ob-build check     [options]                       (checks the build folder's vcpkg packages aren't mixed)
 #   ob-build install   [folder]                        (copies these scripts to C:/projects/obtools or the folder)
@@ -124,8 +126,9 @@ release_locks() {
 	for name in ${OB_HELD_LOCKS:-}; do unlock "$name"; done
 }
 on_exit() {
-	stop_sccache
+	# The locks go first: the build lock must never wait for a statistics call (see sccache_call)
 	release_locks
+	stop_sccache
 }
 trap on_exit EXIT
 
@@ -357,6 +360,13 @@ sccache_env() {
 	export SCCACHE_BASEDIRS="$WT;$OB_VCPKG_INSTALLED"
 }
 
+# Runs sccache with a time limit. A call to a server that is busy, stuck or shutting down never answers, and the client
+# waits for ever (two builds waited about 25 minutes at the end, with the build lock held). A call that runs out of time
+# gives no output and a failure status, as a missing server does. OB_SCCACHE_CALL_SECONDS changes the limit (20).
+sccache_call() {
+	/usr/bin/timeout -k 2 "${OB_SCCACHE_CALL_SECONDS:-20}" "$SCCACHE" "$@"
+}
+
 # True when the JSON statistics (on stdin) come from a server with exactly this folder's base directories
 server_is_ours() {
 	awk -v wt="$WT/" -v pkg="$OB_VCPKG_INSTALLED/" '
@@ -386,10 +396,10 @@ ensure_sccache() {
 		port=$((base + attempt))
 		export SCCACHE_SERVER_PORT=$port
 		# (asking for the statistics also starts a server with this environment when none answers on the port)
-		json=$("$SCCACHE" --show-stats --stats-format json 2>/dev/null) || json=""
+		json=$(sccache_call --show-stats --stats-format json 2>/dev/null) || json=""
 		if [ -z "$json" ]; then
-			"$SCCACHE" --start-server >/dev/null 2>&1
-			json=$("$SCCACHE" --show-stats --stats-format json 2>/dev/null) || json=""
+			sccache_call --start-server >/dev/null 2>&1
+			json=$(sccache_call --show-stats --stats-format json 2>/dev/null) || json=""
 		fi
 		if [ -n "$json" ] && printf '%s' "$json" | server_is_ours; then
 			OB_SERVER_PORT=$port
@@ -418,13 +428,13 @@ server_counts() {
 stop_sccache() {
 	[ -n "${OB_SERVER_PORT:-}" ] || return 0
 	local json now
-	json=$(SCCACHE_SERVER_PORT=$OB_SERVER_PORT "$SCCACHE" --show-stats --stats-format json 2>/dev/null) || json=""
+	json=$(SCCACHE_SERVER_PORT=$OB_SERVER_PORT sccache_call --show-stats --stats-format json 2>/dev/null) || json=""
 	if [ -n "$json" ] && [ -n "${OB_JOB_NOTE:-}" ]; then
 		now=$(printf '%s' "$json" | server_counts)
 		set -- ${OB_SERVER_START:-0 0} $now
 		[ $# = 4 ] && printf 'hits=%s misses=%s' $(($3 - $1)) $(($4 - $2)) >"$OB_JOB_NOTE" 2>/dev/null
 	fi
-	SCCACHE_SERVER_PORT=$OB_SERVER_PORT "$SCCACHE" --stop-server >/dev/null 2>&1
+	SCCACHE_SERVER_PORT=$OB_SERVER_PORT sccache_call --stop-server >/dev/null 2>&1
 	OB_SERVER_PORT=""
 }
 
@@ -695,8 +705,25 @@ source_tree() {
 OB_MASTER_STORE="$OB_BUILDS/master-bin"
 OB_MAIN_REPO=${OB_MAIN_REPO:-C:/projects/openblack}
 
+# The build ids in a game or server program (version+<12 hex digits of the commit>, the text that
+# CMakeModules/WriteBuildVersion.cmake compiles in), on one line. The server also has a sample id in its help text.
+build_ids() {
+	grep -aoE '[0-9]+\.[0-9]+\.[0-9]+\+[0-9a-f]{12}' "$1" 2>/dev/null | sort -u | tr '\n' ' '
+}
+
+# Succeeds when the game and the server in a folder both have the build id of exactly this commit. The server
+# refuses a client with another build id, so a stored build of a commit must have the build id of that commit, not
+# the id of a commit with the same tree (a merge-train car and its merge commit have the same tree).
+has_build_id() {
+	local folder=$1 commit file
+	commit=$(git -C "$WT" rev-parse "$2^{commit}" 2>/dev/null) || return 1
+	for file in openblack.exe openblack-server.exe; do
+		grep -aqE "[0-9]+\.[0-9]+\.[0-9]+\+${commit:0:12}" "$folder/$file" 2>/dev/null || return 1
+	done
+}
+
 # Copies the game and the server of this build folder into the store as <commit>, when the last full build of this
-# config came from exactly the tree of that commit
+# config came from exactly the tree of that commit and has the build id of that commit
 do_store() {
 	resolve_folders
 	local commit=${1:-HEAD} hash tree
@@ -705,15 +732,22 @@ do_store() {
 	[ "$(cat "$B/.ob-build-tree-$CONFIG" 2>/dev/null)" = "$tree" ] ||
 		die "the last full $CONFIG build in $B doesn't come from the tree of $hash (or the worktree has changes)"
 	local from="$B/bin/$CONFIG" dest="$OB_MASTER_STORE/$hash/$CONFIG"
-	if [ -f "$dest/openblack.exe" ]; then
-		note "$dest is already in the store"
-		echo "$dest"
-		return 0
-	fi
 	local file
 	for file in openblack.exe openblack-server.exe; do
 		[ -f "$from/$file" ] || die "no $from/$file"
 	done
+	has_build_id "$from" "$hash" ||
+		die "the build in $from has the build id $(build_ids "$from/openblack.exe")and not the id of $hash (the same tree, another commit): check out $hash in $WT and build openblack and openblack-server again"
+	if [ -f "$dest/openblack.exe" ]; then
+		if has_build_id "$dest" "$hash"; then
+			note "$dest is already in the store"
+			echo "$dest"
+			return 0
+		fi
+		# An older store kept the build of another commit with the same tree here: this build takes its place
+		note "$dest has another commit's build id: replacing it"
+		drop_stored "$dest"
+	fi
 	# A copy under a temporary name, then one rename: other ob-builds see all the files or none
 	local tmp="$dest.$$.tmp"
 	mkdir -p "$OB_MASTER_STORE/$hash" && rm -rf "$tmp" && mkdir "$tmp" || die "could not make $tmp"
@@ -735,6 +769,14 @@ do_store() {
 	echo "$dest"
 }
 
+# Takes a stored config folder out of the store. A rename first, so that other ob-builds no longer see it; a program
+# that still runs from it keeps the renamed folder until the next prune.
+drop_stored() {
+	local old="$1.$$.old"
+	mv "$1" "$old" 2>/dev/null || die "could not move $1 out of the store (a program runs from it?)"
+	rm -rf "$old" 2>/dev/null || note "$old stays until a program that runs from it stops"
+}
+
 # Keeps the OB_MASTER_KEEP (10) commits stored last
 prune_store() {
 	local keep=${OB_MASTER_KEEP:-10} old
@@ -753,6 +795,14 @@ do_master() {
 	local commit=${1:-me/master} hash dest
 	hash=$(git -C "$OB_MAIN_REPO" rev-parse --short=9 "$commit^{commit}" 2>/dev/null) || die "no commit $commit"
 	dest="$OB_MASTER_STORE/$hash/$CONFIG"
+	# A stored build with another commit's build id (an older store of a merge-train car under its merge commit) is
+	# built again: the server refuses a client with another build id
+	if [ -f "$dest/openblack.exe" ] && ! WT=$OB_MAIN_REPO has_build_id "$dest" "$hash"; then
+		note "master $hash ($CONFIG) in the store has another commit's build id: building it again"
+		lock "master-$hash-${CONFIG,,}" 7200 "the build of master $hash"
+		[ -f "$dest/openblack.exe" ] && ! WT=$OB_MAIN_REPO has_build_id "$dest" "$hash" && drop_stored "$dest"
+		unlock "master-$hash-${CONFIG,,}"
+	fi
 	if [ ! -f "$dest/openblack.exe" ]; then
 		# One build for each commit and config: a second ob-build master waits for the first one
 		lock "master-$hash-${CONFIG,,}" 7200 "the build of master $hash"
@@ -775,6 +825,21 @@ do_master() {
 	fi
 	touch "$OB_MASTER_STORE/$hash"
 	echo "$dest"
+}
+
+# Checks that the stored game and server of a commit (default me/master) have the build id of that commit. Prints
+# PASS or FAIL with the build ids it found; the exit code is 1 on FAIL or when the store does not have the commit.
+do_store_check() {
+	local commit=${1:-me/master} hash dest
+	hash=$(git -C "$OB_MAIN_REPO" rev-parse --short=9 "$commit^{commit}" 2>/dev/null) || die "no commit $commit"
+	dest="$OB_MASTER_STORE/$hash/$CONFIG"
+	[ -f "$dest/openblack.exe" ] || die "the store has no $CONFIG build of $hash"
+	if WT=$OB_MAIN_REPO has_build_id "$dest" "$hash"; then
+		echo "PASS $hash ($CONFIG): the stored game and server have the build id of $hash"
+		return 0
+	fi
+	echo "FAIL $hash ($CONFIG): the stored game has the build id $(build_ids "$dest/openblack.exe")and the server $(build_ids "$dest/openblack-server.exe")(not $hash)"
+	return 1
 }
 
 # A summary of ob-build-cpu.log for the last [hours] (24): the CPU time of each kind of build folder and command
@@ -929,6 +994,7 @@ main() {
 		;;
 	store) do_store "$@" ;;
 	master) do_master "$@" ;;
+	store-check) do_store_check "$@" ;;
 	env) do_env ;;
 	check)
 		resolve_folders

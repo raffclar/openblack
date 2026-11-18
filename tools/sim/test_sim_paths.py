@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sim_paths  # noqa: E402
@@ -48,6 +49,18 @@ class SwitchSafeCommandTest(unittest.TestCase):
             self.assertEqual(arguments[2], "game.log")
             self.assertEqual(arguments[3], "--profile-folder=profile")
             self.assertTrue(all(sim_paths.launch_switch_in(argument) is None for argument in arguments))
+
+    def test_a_program_name_with_no_folder_changes_to_its_path(self):
+        name = os.path.splitext(os.path.basename(sys.executable))[0]
+        with unittest.mock.patch.dict(os.environ, {"PATH": os.path.dirname(sys.executable)}):
+            executable, arguments = sim_paths.switch_safe_command([name, "--version"], os.getcwd())
+        self.assertTrue(os.path.isabs(executable))
+        self.assertTrue(os.path.exists(executable))
+        self.assertEqual(arguments, [os.path.basename(executable), "--version"])
+
+    def test_a_program_name_that_is_not_on_the_path_stays(self):
+        executable, _ = sim_paths.switch_safe_command(["no-such-program-ob", "--version"], os.getcwd())
+        self.assertEqual(executable, "no-such-program-ob")
 
     def test_arguments_that_are_not_paths_stay(self):
         _, arguments = sim_paths.switch_safe_command(["openblack", "-SKIRMISH", "--scenario", "a.b"], os.getcwd())

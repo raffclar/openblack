@@ -11,8 +11,10 @@
     python -I post_deploy_check.py --deploy-log <act-game-live-N.log> --since <deploy start, ISO UTC>
         [--tars E:/openblack/scratch/live-deploy-4/out] [--site https://bw.zanidrak.com] [--skip-browser]
 
-It prints one line PASS, FAIL or STOP for each item, then the rollback note. The exit code is 0 only when every item
-passes. STOP means that the item cannot run: the line says what the user must give.
+It prints one line PASS, FAIL or STOP for each item, then the rollback note and the summary. STOP means that the item
+cannot run: the line says what the user must give. A STOP item is not a fault: when no item fails, the summary says
+PASS with the number of STOP items, and the exit code is 0. When an item fails, the summary says FAIL and the exit code
+is 1.
 
 Items (each one request, or one browser visit):
 1. The deploy log: the installed web and server builds and the game build id are the builds of the tars.
@@ -274,12 +276,11 @@ def main():
     signed_in_items(options.site, sha, options.skip_browser, work)
     sentry_item(options.since)
     rollback_note(options.tars, sha)
-    bad = [row for row in results if row["state"] != "PASS"]
-    print(f"post-deploy check: {'PASS' if not bad else 'FAIL'}: {len(results) - len(bad)} of {len(results)} items pass"
-          + (f"; work folder {work}" if os.listdir(work) else ""), flush=True)
+    line, code = gate_checks.checklist_summary([row["state"] for row in results])
+    print(f"post-deploy check: {line}" + (f"; work folder {work}" if os.listdir(work) else ""), flush=True)
     if not os.listdir(work):
         os.rmdir(work)
-    return 0 if not bad else 1
+    return code
 
 
 if __name__ == "__main__":

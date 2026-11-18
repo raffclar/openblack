@@ -40,10 +40,11 @@ Scripts, in this skill's `scripts/` folder (call them by their full path from an
 | `run_queue.sh <queue file>` | Runs each line: `batch.sh`, or `car_finish.sh` for a `finish` line. Plain background command, once. |
 | `batch.sh <n> <batch> <short:branch>...` | Merges every branch of the line onto the main branch. test/CMakeLists.txt, docs tables, testbed and include-only conflicts are resolved automatically. A branch with other conflicts is LEFT OUT and the train stops. |
 | `car_finish.sh <n> <batch> <short:branch>...` | Finishes a hand-merged car in `<worktrees>/prm-wtb<batch>`. |
-| `car_checks.sh` | The checks, PR and merge that both of the scripts above use. Not called directly. |
+| `car_checks.sh` | The checks, PR and merge that both of the scripts above use. Not called directly. After the merge, it moves the car's worktree to the merge commit, builds the game and the server again (only the build id compiles, then two links) and stores them, so that the stored build of a commit has the build id of that commit (`ob-build store` refuses another id; `ob-build store-check` tells). |
 | `check_lost.sh` | Lists unmerged cars missing from both order files. Run before you choose the next work. The output must be empty. |
 | `prep_hand.sh`, `post_hand.sh` | Start and end a hand car, with vanilla-bugs row renumbering (`old:new`). |
 | `nc3_check.sh <worktree> <build dir>` | The 3-client net check of each car. |
+| `web_check.sh <worktree> <web build dir> <out>` | The web check of each car: one Release web build (`ob-web`), then the web part of the pre-deploy gate on WebGPU (Land 1 draws, no graphics device error in the console). FAIL stops the car (exit 18); the web build folder `prm-wtb<batch>-web` stays for a look, else it is deleted. About 7 to 10 minutes more for each car (a web build of about 4 minutes with a warm cache, then a gate run of 3 to 6 minutes). |
 | `uz_shots.py <ref exe> <new exe> <out dir>` | The pixel check of old against new master (needs `paths.gameData`). |
 | `resolve_*.py`, `union_conflicts.py`, `includes_only.py`, `fix_kind_names.py`, `hunk.py`, `sort_rows.py` | Conflict helpers. `hunk.py` resolves one conflict block by hand. |
 
@@ -109,8 +110,9 @@ main hash. Its steps:
    mpm_2p_1 net_check with no `--hash-parts` or `--hash-fields`, so the clients hash as the live clients do. Only
    this run finds a frame step that changes the synced world (Sentry OPENBLACK-N). The runs with the hash options
    hash in the turn and do not find it.
-5. Write one "Batch <n>" section in `merge-train_handover.md`. Remove the merge worktree, its build and the local
-   batch branch (keep the remote branches). No `rm -rf` on globs.
+5. Write one "Batch <n>" section in `merge-train_handover.md`. Remove the merge worktree, its build (also
+   `prm-wtb<batch>-web` and `prm-wtb<batch>-ship` if they stay) and the local batch branch (keep the remote branches).
+   No `rm -rf` on globs.
 
 ## Registry rows
 

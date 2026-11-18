@@ -90,6 +90,12 @@ class ServerTest(unittest.TestCase):
     def test_lockstep_passes(self):
         self.assertTrue(gate_checks.lockstep_check(self.SERVER, self.CLIENT, 300)[0])
 
+    def test_lockstep_passes_with_no_player_name(self):
+        server = self.SERVER.replace("slot 0 Player1: commands", "slot 0: commands")
+        self.assertTrue(gate_checks.lockstep_check(server, self.CLIENT, 300)[0])
+        server = server.replace("300 the same, first different none", "299 the same, first different 7")
+        self.assertFalse(gate_checks.lockstep_check(server, self.CLIENT, 300)[0])
+
     def test_lockstep_fails_on_a_part(self):
         server = self.SERVER.replace("300 the same, first different none, 0 resumes",
                                      "0 the same, first different 1, 3 resumes")
@@ -101,6 +107,14 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(gate_checks.build_id("openblack-server 0.1.0+9f73a40c4184 (build id 0.1.0+9f73a40c4184/codec36)"),
                          "0.1.0+9f73a40c4184/codec36")
         self.assertIsNone(gate_checks.build_id("no version"))
+
+    def test_checklist_summary(self):
+        self.assertEqual(gate_checks.checklist_summary(["PASS"] * 4 + ["STOP"] * 3),
+                         ("PASS: 4 of 7 items pass, 3 STOP", 0))
+        self.assertEqual(gate_checks.checklist_summary(["PASS", "PASS"]), ("PASS: 2 of 2 items pass", 0))
+        self.assertEqual(gate_checks.checklist_summary(["PASS", "FAIL", "STOP"]),
+                         ("FAIL: 1 of 3 items pass, 1 FAIL, 1 STOP", 1))
+        self.assertEqual(gate_checks.checklist_summary(["FAIL"]), ("FAIL: 0 of 1 items pass, 1 FAIL", 1))
 
 
 if __name__ == "__main__":
