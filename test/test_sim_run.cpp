@@ -116,6 +116,10 @@ TEST(SimRun, ThePacedRunWaitsForTheRestOfTheFrame)
 
 TEST(SimRun, FastAndUnpacedRunsDoNotWait)
 {
+	EXPECT_TRUE(Paces(Settings {.paceToWallClock = true}, 20ms));
+	EXPECT_FALSE(Paces(Settings {.paceToWallClock = true}, std::nullopt));
+	EXPECT_FALSE(Paces(Settings {.fast = true, .paceToWallClock = true}, 20ms));
+	EXPECT_FALSE(Paces(Settings {}, 20ms));
 	EXPECT_EQ(PaceWait(Settings {.fast = true, .paceToWallClock = true}, 20ms, 1ms), 0ms);
 	EXPECT_EQ(PaceWait(Settings {}, 20ms, 1ms), 0ms);
 }
