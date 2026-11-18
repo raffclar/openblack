@@ -16,8 +16,8 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
-#include <map>
 #include <numbers>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -33,6 +33,7 @@
 #include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
 #include "Animals/PredatorRules.h"
+#include "Animals/PreySearch.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -1866,12 +1867,26 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 {
 	auto& registry = EntityRegistry();
 	auto& hunt = *HuntOf(wolf);
-	// What lives in each map cell
-	std::map<std::pair<int32_t, int32_t>, std::vector<std::pair<entt::entity, flock_rules::PreyFacts>>> cells;
-	const auto add = [&](entt::entity entity, const Transform& transform, flock_rules::PreyFacts facts) {
-		const auto cell = map_coords::CellOf(Xz(transform.position));
+	// So many cells spiralling out from its own, and the first prey met there is its prey. Only the living in these cells
+	// can be its prey, so the search looks at no other living.
+	const animals::prey_search::SpiralOrder spiral(map_coords::CellOf(Metres(animal.move.position)),
+	                                               InfoOf(animal.type).farSightDistance);
+	struct Candidate
+	{
+		uint32_t rank;
+		entt::entity entity;
+		flock_rules::PreyFacts facts;
+	};
+	std::vector<Candidate> candidates;
+	const auto add = [&](entt::entity entity, const Transform& transform, const auto& factsOf) {
+		const auto rank = spiral.RankOf(map_coords::CellOf(Xz(transform.position)));
+		if (!rank.has_value())
+		{
+			return;
+		}
+		auto facts = factsOf();
 		facts.heightAboveLand = transform.position.y - Ground(Xz(transform.position));
-		cells[{cell.x, cell.y}].emplace_back(entity, facts);
+		candidates.push_back({.rank = *rank, .entity = entity, .facts = facts});
 	};
 	// What the hunter itself is
 	const bool hunterInScript = registry.AllOf<InScript>(wolf);
@@ -1897,56 +1912,51 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 	const auto eats = static_cast<uint32_t>(InfoOf(animal.type).needsFoodTypes);
 	const auto& villagerInfos = Locator::infoConstants::value().villager;
 	registry.Each<const Villager, const Transform>([&](entt::entity entity, const Villager& villager, const Transform& t) {
-		const auto& info = villagerInfos.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
-		const bool food = (eats & static_cast<uint32_t>(info.foodType)) != 0 && info.foodValue != 0.0f;
-		// A walking skeleton has no meat for it
-		add(entity, t,
-		    withCommonFacts(entity, {.isVillager = true,
-		                             .hasMeat = food,
-		                             .skeleton = registry.AllOf<WalkingSkeleton>(entity),
-		                             .helpless = OutOfTheHunt(entity)}));
+		add(entity, t, [&]() {
+			const auto& info = villagerInfos.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
+			const bool food = (eats & static_cast<uint32_t>(info.foodType)) != 0 && info.foodValue != 0.0f;
+			// A walking skeleton has no meat for it
+			return withCommonFacts(entity, {.isVillager = true,
+			                                .hasMeat = food,
+			                                .skeleton = registry.AllOf<WalkingSkeleton>(entity),
+			                                .helpless = OutOfTheHunt(entity)});
+		});
 	});
 	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& other, const Transform& t) {
 		if (entity != wolf)
 		{
-			const auto& otherInfo = InfoOf(other.type);
-			const bool food = (eats & static_cast<uint32_t>(otherInfo.foodType)) != 0 && otherInfo.foodValue != 0.0f;
-			// An animal that a script made a skeleton has no meat for it, as a villager skeleton
-			add(entity, t,
-			    withCommonFacts(entity, {.isOtherAnimal = other.type != animal.type,
-			                             .hasMeat = food,
-			                             .skeleton = registry.AllOf<WalkingSkeleton>(entity),
-			                             .helpless = OutOfTheHunt(entity)}));
+			add(entity, t, [&]() {
+				const auto& otherInfo = InfoOf(other.type);
+				const bool food = (eats & static_cast<uint32_t>(otherInfo.foodType)) != 0 && otherInfo.foodValue != 0.0f;
+				// An animal that a script made a skeleton has no meat for it, as a villager skeleton
+				return withCommonFacts(entity, {.isOtherAnimal = other.type != animal.type,
+				                                .hasMeat = food,
+				                                .skeleton = registry.AllOf<WalkingSkeleton>(entity),
+				                                .helpless = OutOfTheHunt(entity)});
+			});
 		}
 	});
-	// So many cells spiralling out from its own, and the first prey met there is its prey
-	auto cell = map_coords::CellOf(Metres(animal.move.position));
-	map_coords::Spiral spiral;
-	for (auto left = InfoOf(animal.type).farSightDistance; left > 0; --left)
+	// The cells in the order of the spiral; in a cell, the villagers first and then the animals, each in the order of
+	// their store
+	std::ranges::stable_sort(candidates, {}, &Candidate::rank);
+	for (auto& candidate : candidates)
 	{
-		if (const auto found = cells.find({cell.x, cell.y}); found != cells.end())
+		const auto entity = candidate.entity;
+		candidate.facts.onCorridor = IsHuntingTargetValid(wolf, animal, entity);
+		if (!flock_rules::IsPrey(candidate.facts))
 		{
-			for (auto [entity, facts] : found->second)
-			{
-				facts.onCorridor = IsHuntingTargetValid(wolf, animal, entity);
-				if (!flock_rules::IsPrey(facts))
-				{
-					continue;
-				}
-				// Once it remembers where it found prey, the game's mixed measure decides whether this one is near
-				// enough to take instead
-				const auto preyPoint = Xz(registry.Get<const Transform>(entity).position);
-				if (hunt.remembered.has_value() &&
-				    !flock_rules::CloserThanRemembered(animal.move.position, Fixed(preyPoint), Fixed(*hunt.remembered)))
-				{
-					continue;
-				}
-				hunt.remembered = preyPoint;
-				return entity;
-			}
+			continue;
 		}
-		const auto& step = spiral.Next();
-		cell += glm::ivec2(step.x, step.z);
+		// Once it remembers where it found prey, the game's mixed measure decides whether this one is near enough to
+		// take instead
+		const auto preyPoint = Xz(registry.Get<const Transform>(entity).position);
+		if (hunt.remembered.has_value() &&
+		    !flock_rules::CloserThanRemembered(animal.move.position, Fixed(preyPoint), Fixed(*hunt.remembered)))
+		{
+			continue;
+		}
+		hunt.remembered = preyPoint;
+		return entity;
 	}
 	return entt::null;
 }
