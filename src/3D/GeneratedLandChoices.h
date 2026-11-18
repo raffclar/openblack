@@ -47,6 +47,8 @@ struct Choices
 	int32_t massifs {-1};
 	/// The height in metres of the highest ground that the land can have. The lands of the story stop at 171 m.
 	int32_t topHeight {1250};
+	/// How many stands of trees the land has, in hundredths of the usual stands. Only for tests of the frame rate.
+	int32_t trees {100};
 
 	bool operator==(const Choices&) const = default;
 };

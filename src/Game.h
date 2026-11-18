@@ -28,6 +28,7 @@
 #include <glm/vec3.hpp>
 #include <spdlog/common.h>
 
+#include "3D/GeneratedLandChoices.h"
 #include "3D/HandAnimation.h"
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
@@ -151,8 +152,8 @@ struct Arguments
 	bool startTestbed {false};
 	/// Start on the network map for 32 gods rather than startLevel
 	bool startGodsRingMap {false};
-	/// Start on the land that the land generator makes from this seed rather than startLevel
-	std::optional<uint64_t> startGeneratedLand;
+	/// Start on the land that the land generator makes from these choices rather than startLevel
+	std::optional<generated_land::Choices> startGeneratedLand;
 	/// Log frame time statistics every so many frames, never when 0
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
@@ -629,7 +630,7 @@ private:
 	std::optional<std::filesystem::path> _challengePath;
 	bool _startTestbed {false};
 	bool _startGodsRingMap {false};
-	std::optional<uint64_t> _startGeneratedLand;
+	std::optional<generated_land::Choices> _startGeneratedLand;
 	std::optional<ScenarioRequest> _scenarioRequest;
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	std::optional<testbed_scenarios::checks::Report> _scenarioChecks;

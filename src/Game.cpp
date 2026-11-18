@@ -950,7 +950,7 @@ Game::RunStart Game::StartRun() noexcept
 	{
 		// A generated land is a developer tool for now, as the testbed is
 		if (!developer_tools::Allowed(developer_tools::Action::ScenarioLoad) ||
-		    !Locator::landSystem::value().LoadGeneratedLand({.seed = *_startGeneratedLand}))
+		    !Locator::landSystem::value().LoadGeneratedLand(*_startGeneratedLand))
 		{
 			return RunStart::Failed;
 		}

@@ -37,6 +37,7 @@
 #include <intrin.h>
 #endif
 
+#include "3D/GeneratedLandChoices.h"
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
@@ -276,7 +277,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	// The testbed and its scenarios are developer tools: a build without them has no such options
 	options.add_options("Developer")
 		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
-		("landgen", "Start on the land that the land generator makes from this seed, instead of a level: an island with mountains, rivers, lakes and biomes. The game folder must have the landscapes of the story.", cxxopts::value<uint64_t>())
+		("landgen", "Start on the land that the land generator makes from this seed, instead of a level: an island with mountains, rivers, lakes and biomes. The game folder must have the landscapes of the story. Choices can follow the seed as in the path of a generated land, such as 7;trees=4000 for 40 times the stands of trees.", cxxopts::value<std::string>())
 		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
 		("join-name", "With --join on the local network (no ticket), send this profile name to the game server in place of the name of a profile. The server refuses an empty name, a name with a control character and a name of more than 64 bytes.", cxxopts::value<std::string>())
 		("scenario-check", "With --scenario, run the scenario's checks of its own outcome, write their report to the console, and quit with the exit code 0 when they pass, 1 when one fails, 2 when the scenario states none. Tools and the merge train use this.")
@@ -698,7 +699,15 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.startTestbed = result.count("testbed") != 0;
 		if (result.count("landgen") != 0)
 		{
-			args.startGeneratedLand = result["landgen"].as<uint64_t>();
+			const auto text = result["landgen"].as<std::string>();
+			args.startGeneratedLand =
+			    openblack::generated_land::ChoicesOf(std::string(openblack::generated_land::k_PathPrefix) + text);
+			if (!args.startGeneratedLand.has_value())
+			{
+				std::cerr << "--landgen needs a seed, then choices such as 7;trees=4000, not " << text << std::endl;
+				returnCode = EXIT_FAILURE;
+				return false;
+			}
 		}
 #endif
 		args.startGodsRingMap = result.count("gods-ring-map") != 0;

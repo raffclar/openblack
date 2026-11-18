@@ -90,8 +90,13 @@ struct Look
 /// How many players a village believes in more than this one: those believed in more, or as much with a later number.
 /// The beliefs hold a place for each player of the game, and for no other player number.
 [[nodiscard]] int Rank(std::span<const float> beliefs, size_t player);
-/// The rank of each player, in the order of the beliefs: the same as Rank for each player, found with one sort
-[[nodiscard]] std::vector<int> Ranks(std::span<const float> beliefs);
+/// The most players that a village ranks: 32 gods, the god of the observers and the neutral player
+inline constexpr size_t k_MostPlayers = 34;
+/// The rank of each player, in the order of the beliefs. The places after the players of the game hold 0.
+using RankList = std::array<int, k_MostPlayers>;
+/// The rank of each player, in the order of the beliefs: the same as Rank for each player, found with one sort. It gives
+/// the ranks of the first k_MostPlayers players only.
+[[nodiscard]] RankList Ranks(std::span<const float> beliefs);
 
 /// How much the symbols' way round grows at this distance from the camera
 [[nodiscard]] float DistanceScale(const Params& params, float distance);

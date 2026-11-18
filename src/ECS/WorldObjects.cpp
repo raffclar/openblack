@@ -76,6 +76,7 @@
 #include "ECS/DrawnPlace.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
+#include "ECS/KeptStores.h"
 #include "ECS/MobileObjectClassRules.h"
 #include "ECS/MobileObjectRecord.h"
 #include "ECS/Registry.h"
@@ -107,6 +108,7 @@
 #include "ECS/ThingModel.h"
 #include "ECS/TownAggression.h"
 #include "ECS/TownAreaRules.h"
+#include "ECS/TownCensus.h"
 #include "ECS/TownPlanning.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -479,14 +481,7 @@ uint32_t FullAmountOf(const Pot& pile)
 /// The town an abode belongs to, none for none
 entt::entity TownOfAbode(const Abode& abode)
 {
-	entt::entity town = entt::null;
-	Locator::entitiesRegistry::value().Each<const Town>([&](entt::entity entity, const Town& candidate) {
-		if (candidate.id == abode.townId)
-		{
-			town = entity;
-		}
-	});
-	return town;
+	return town_census::TownByNumber(Locator::entitiesRegistry::value(), abode.townId);
 }
 
 /// The town that a building belongs to: the town of an abode or of a miracle dispenser, none for none
@@ -566,12 +561,27 @@ void ChangeHeld(entt::entity pile, magic::piles::HeldChange change)
 }
 } // namespace
 
+namespace
+{
+/// Whether the life of the thing is the life of a villager: a villager that has none of the kinds that come before
+/// a villager in the rules of life
+bool HasVillagerLife(const KeptStores::Life& kinds, entt::entity object)
+{
+	return kinds.AllOf<Villager>(object) && !kinds.AnyOf<CreatureNeeds, ResourcePile, Animal, ObjectLife>(object);
+}
+} // namespace
+
 float world_objects::LifeOf(entt::entity object)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
 	{
 		return 0.0f;
+	}
+	// Most of the things asked are villagers. Their life comes from the kept stores, with no search of the registry.
+	if (const auto& kinds = registry.Kept().life; HasVillagerLife(kinds, object))
+	{
+		return kinds.TryGet<Villager>(object)->life;
 	}
 	if (const auto* needs = registry.TryGet<const CreatureNeeds>(object))
 	{
@@ -761,6 +771,22 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	if (!registry.Valid(object))
 	{
 		return 0.0f;
+	}
+	// A villager with none of the kinds that the rules below test first loses life by the rule of a villager at once.
+	// The steps are the same as the steps of the rules below, in the same order.
+	if (const auto& kinds = registry.Kept().life;
+	    HasVillagerLife(kinds, object) && !kinds.AnyOf<VillageTotem, Abode, Field, BuildProgress, WorshipAltar>(object))
+	{
+		auto& villager = registry.Get<Villager>(object);
+		const float life = std::max(villager.life - damage, 0.0f);
+		const bool allowed =
+		    script::property_rules::CanSetLife(life, HeldDuringCutscene(object), kinds.AllOf<Indestructible>(object));
+		CountInjury(object, villager.life, life);
+		if (allowed)
+		{
+			villager.life = life;
+		}
+		return villager.life;
 	}
 	// A village totem gives the harm to its town centre, and then takes the life of its town centre
 	if (const auto* totem = registry.TryGet<const VillageTotem>(object); totem != nullptr && registry.Valid(totem->townCentre))
@@ -1499,15 +1525,9 @@ std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)
 	{
 		return std::nullopt;
 	}
-	const auto townOwner = [&registry](auto matches) -> std::optional<PlayerNames> {
-		std::optional<PlayerNames> owner;
-		registry.Each<const Town>([&](entt::entity entity, const Town& town) {
-			if (matches(entity, town))
-			{
-				owner = town.owner;
-			}
-		});
-		return owner;
+	// The player of the town with the number, as the last town of a walk with that number gives it
+	const auto townOwner = [&registry](entt::entity town) -> std::optional<PlayerNames> {
+		return town != entt::null ? std::optional(registry.Get<const Town>(town).owner) : std::nullopt;
 	};
 	if (const auto* creature = registry.TryGet<const Creature>(object))
 	{
@@ -1528,12 +1548,11 @@ std::optional<PlayerNames> world_objects::PlayerOf(entt::entity object)
 	}
 	if (const auto* field = registry.TryGet<const Field>(object))
 	{
-		return townOwner([field](entt::entity, const Town& town) { return static_cast<int>(town.id) == field->town; });
+		return townOwner(town_census::TownBySignedNumber(registry, field->town));
 	}
 	if (const auto* abode = registry.TryGet<const Abode>(object))
 	{
-		return townOwner([abode](entt::entity, const Town& town) { return town.id == abode->townId; })
-		    .value_or(PlayerNames::NEUTRAL);
+		return townOwner(town_census::TownByNumber(registry, abode->townId)).value_or(PlayerNames::NEUTRAL);
 	}
 	// A miracle dispenser is its town's player's, and a dispenser of no town is the neutral player's
 	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object))
