@@ -173,10 +173,21 @@ struct HashMemo
 	struct Layout;
 	struct Component
 	{
-		std::vector<uint8_t> bytes;
+		/// The bytes of the rows, one chunk after the other. The threads save a large component in parts, and each part
+		/// stays a chunk of its own, so that the memo copies no bytes.
+		std::vector<std::vector<uint8_t>> chunks;
 		std::vector<Row> rows;
 		/// The layout of the component in the last hash, kept while the parts that the hash leaves out stay the same
 		std::shared_ptr<const Layout> layout;
+		/// The memory for the next hash of the component, so that the threads get no new memory while they share the
+		/// work: the list of the live rows, the rows of the memo, and the bytes and the row ends of each part
+		std::vector<entt::entity> spareLiveRows;
+		std::vector<Row> spareRows;
+		std::vector<std::vector<uint8_t>> spareBytes;
+		std::vector<std::vector<size_t>> spareEnds;
+
+		/// The count of the bytes of the rows
+		[[nodiscard]] size_t Bytes() const { return rows.empty() ? 0 : rows.back().end; }
 	};
 	/// A part that the last hash left out, as HashLeaveOut, with names of its own
 	struct LeftOut
