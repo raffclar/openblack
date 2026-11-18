@@ -287,10 +287,16 @@ def server_gate(tar, work, given_bin, image):
                           "--land", NET_LAND, "--turns", str(NET_TURNS), "--game-path", GAME_FOLDER, "--out", out],
                          capture_output=True, text=True, timeout=1800, cwd=REPO,
                          env={**os.environ, "SENTRY_DSN": NO_REPORTS_DSN})
+    # The output of net_check.py stays in the work folder: it shows why a network game did not start
+    with open(os.path.join(out, "net_check.txt"), "w", encoding="utf-8") as file:
+        file.write(f"exit {net.returncode}\n{net.stdout}{net.stderr}")
     read = lambda path: (open(path, encoding="utf-8", errors="replace").read() if os.path.exists(path) else "")
     server_log = read(os.path.join(out, "server", "server.log"))
     listen = re.search(r"The game server listens on \S+ \(wss\)", server_log)
-    item("server: ready (listens with TLS)", bool(listen), listen.group(0) if listen else "no listen line in the log")
+    last = ([line for line in (net.stdout + net.stderr).splitlines() if line.strip()] or [""])[-1].strip()[:200]
+    item("server: ready (listens with TLS)", bool(listen),
+         listen.group(0) if listen else f"no listen line in the log; net_check.py exit {net.returncode}: {last} "
+                                        f"(see {os.path.join(out, 'net_check.txt')})")
     ok, detail = gate_checks.lockstep_check(server_log, read(os.path.join(out, "client1", "client.log")), NET_TURNS)
     item(f"server: one desktop client plays {NET_TURNS} turns in step", ok, f"{NET_LAND}; {detail}")
     shutil.rmtree(os.path.join(out, "bin"), ignore_errors=True)

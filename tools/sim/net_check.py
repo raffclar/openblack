@@ -548,14 +548,19 @@ def host_reports_summary(lobby, clients):
             "last_conditions": numbers[17] if len(numbers) > 17 else None}
 
 
-def start(command, cwd):
-    """Starts a program with no console window of its own"""
+def start(command, cwd, output=None):
+    """Starts a program with no console window of its own. With output, the stdout and the stderr of the program go
+    to that file."""
     os.makedirs(cwd, exist_ok=True)
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     # No path in the command line may start a switch of the original game
     executable, arguments = sim_paths.switch_safe_command(command, cwd)
-    return subprocess.Popen(arguments, executable=executable, cwd=cwd, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL, creationflags=flags)
+    if output is None:
+        return subprocess.Popen(arguments, executable=executable, cwd=cwd, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, creationflags=flags)
+    with open(output, "wb") as file:
+        return subprocess.Popen(arguments, executable=executable, cwd=cwd, stdout=file, stderr=subprocess.STDOUT,
+                                creationflags=flags)
 
 
 def stop(process):
@@ -4216,7 +4221,9 @@ def main():
             name = f"ob-net-check-{os.getpid()}"
             server_command = linux_server_command(server_command, options.server_linux, options.server_image, out,
                                                   options.game_path, name)
-            server = ContainerProcess(start(server_command, server_dir), name)
+            # The output of docker and of the server in the container: it shows why a container did not start
+            server = ContainerProcess(start(server_command, server_dir, os.path.join(server_dir, "container.log")),
+                                      name)
         else:
             server = start(server_command, server_dir)
         processes.append(server)
