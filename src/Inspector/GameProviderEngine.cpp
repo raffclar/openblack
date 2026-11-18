@@ -23,6 +23,7 @@
 #include "Common/GameRandom.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
+#include "Common/WorkerPools.h"
 #include "Creature/BonusCreatures.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
@@ -356,8 +357,9 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		                                    : Json(nullptr)},
 		                               {"personal_data", state.personalData}};
 	                  }));
-	provider->Add(Query("services", "Which of the engine's services are there, the game's random seeds, the game's path, the "
-	                                "debug windows' focus and the inspector's port"),
+	provider->Add(Query("services", "Which of the engine's services are there, the threads that the worker pools share, the "
+	                                "game's random seeds, the game's path, the debug windows' focus and the inspector's "
+	                                "port"),
 	              [](const QueryContext& /*context*/) {
 		              Json result = {
 		                  {"info_tables", Locator::infoConstants::has_value()},
@@ -368,6 +370,15 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		              {
 			              // The work that the turn gave to the main thread and that still waits
 			              result["main_thread_work_waits"] = Locator::mainThreadQueue::value().GetPendingCount();
+		              }
+		              if (Locator::workerPools::has_value())
+		              {
+			              // In the browser, all pools share one set of threads. On the desktop, each pool has its own.
+			              const auto& shared = Locator::workerPools::value().GetShared();
+			              result["worker_pools"] = {
+			                  {"shared", shared != nullptr},
+			                  {"shared_lanes", shared != nullptr ? Json(shared->GetLaneCount()) : Json(nullptr)},
+			              };
 		              }
 		              if (Locator::gameRandom::has_value())
 		              {

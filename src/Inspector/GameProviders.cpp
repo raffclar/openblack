@@ -89,6 +89,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"toolRunSystem", "engine.tool_run"},
     LocatorCoverage {"errorReports", "engine.error_reports"},
     LocatorCoverage {"mainThreadQueue", "engine.services"},
+    LocatorCoverage {"workerPools", "engine.services"},
     LocatorCoverage {"events", "engine.services"},
     LocatorCoverage {"windowing", "engine.frame"},
     LocatorCoverage {"debugGui", "engine.services"},
