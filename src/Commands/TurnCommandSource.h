@@ -38,6 +38,9 @@ public:
 	/// True when this computer is behind the turns of the server: the turn after this one is here too. The server itself,
 	/// which closes each turn when its world asks for it, is never behind.
 	[[nodiscard]] virtual bool IsBehind(uint32_t turn) const { return HasTurn(turn + 1); }
+	/// A command of a testbed scenario loaded a land before the turn after. The turns of the new land start again at turn.
+	/// Each computer of the network game loads the same land before the same turn, and the source follows the new turns.
+	virtual void TurnsStartAgain(uint32_t /*after*/, uint32_t /*turn*/) {}
 	/// The creature file that the player of the god sent to all the players before the start. It is empty when the
 	/// player has no creature. The server and each client have the same files, so each world makes the same creatures.
 	[[nodiscard]] virtual std::span<const uint8_t> StartCreatureFile(PlayerNames /*god*/) const { return {}; }

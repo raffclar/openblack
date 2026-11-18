@@ -460,6 +460,19 @@ struct Loaded
 {
 };
 
+/// Server to client: "game.turns_again". A command of a testbed scenario loaded a land on the server before a turn, and
+/// the turns of the new land start again at a lower number. Each computer loads the same land before the same turn. The
+/// turns and the checksums that come after this frame are of the new land.
+struct TurnsAgain
+{
+	/// The turn of the old land that the server did next when the land loaded
+	uint32_t after {0};
+	/// The first turn of the new land
+	uint32_t turn {0};
+
+	[[nodiscard]] bool operator==(const TurnsAgain&) const = default;
+};
+
 /// Server to client: "game.wait". In a lobby game, the turns of the game do not start until each god's player loaded the
 /// world (deviation 254). The server sends this frame each time the list of these players changes. The players who
 /// loaded can move the camera, but the world does not change. When the list is empty, the pause ended and the turns
@@ -714,7 +727,7 @@ using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, R
                            StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
                            SyncParts, Loaded, LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities,
                            SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime, EditorScriptFile, EditorWorld,
-                           EditorScenario, EditorLand, EditorRight, DebuggerRight>;
+                           EditorScenario, EditorLand, EditorRight, DebuggerRight, TurnsAgain>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

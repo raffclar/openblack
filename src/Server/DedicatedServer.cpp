@@ -1225,6 +1225,19 @@ public:
 		_lastTurn.reset();
 	}
 
+	/// A command of the scenario loaded a land before a turn. A new server cannot play the scenario again to that land,
+	/// so the snapshots go and the server makes no more.
+	void TurnsStartedAgain()
+	{
+		if (std::exchange(_ended, true))
+		{
+			return;
+		}
+		_writer->Flush();
+		_store.Clear();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The scenario loaded a land: the server removed its snapshots");
+	}
+
 	/// The game ended, so no server continues it: the snapshots go
 	void GameOver()
 	{
@@ -1607,7 +1620,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, const Play
 	}
 	lifetime.Listened();
 	world.SetNetwork([&host, role = network.get(), keeper, &lifetime, desyncs, appliedSpeed = std::optional<float> {},
-	                  appliedChanges = uint32_t {0}]() mutable {
+	                  appliedChanges = uint32_t {0}, appliedRestarts = uint32_t {0}]() mutable {
 		// After a restart, the world first does again the turns that the server sent. The server reads no socket until then.
 		if (host.Replaying())
 		{
@@ -1619,13 +1632,21 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, const Play
 		// restart the room starts again at the normal speed. A world file or a scenario of the editor sets the speed of
 		// the clock of its world, so the server gives the clock the speed of the room again after each change of the world.
 		// A fast room gives more turns than one in a frame, so the server then plays more turns in a frame.
-		if (const auto speed = host.RoomClock().speed; speed != appliedSpeed || host.WorldChanges() != appliedChanges)
+		// A land that a command of the scenario loaded sets the speed of the clock too.
+		const bool restarted = host.TurnRestarts() != appliedRestarts;
+		if (const auto speed = host.RoomClock().speed;
+		    speed != appliedSpeed || host.WorldChanges() != appliedChanges || restarted)
 		{
 			auto& clock = Locator::time::value();
 			clock.SetSpeed(online::room_clock::ClockSpeedOf(speed));
 			clock.SetMostTurnsInFrame(online::room_clock::ServerTurnsInFrame(speed, clock.GetFixedFrameTime()));
 			appliedSpeed = speed;
 			appliedChanges = host.WorldChanges();
+			appliedRestarts = host.TurnRestarts();
+		}
+		if (restarted && keeper != nullptr)
+		{
+			keeper->TurnsStartedAgain();
 		}
 		// No computer god of the server's world takes the slots that the lobby closed. The start gives them before the
 		// first turn, in which the humans join.

@@ -188,6 +188,17 @@ TEST(GameSocket, TheRequestOfTheClockGivesItsActAndTheSpeedOnlyForTheActSpeed)
 	EXPECT_EQ(std::get<EditorTime>(*Parse(R"({"type":"editor.time","act":"speed","speed":20})")).speed, 20.0f);
 }
 
+TEST(GameSocket, TheTurnsAgainFrameGivesTheTurnOfTheOldLandAndTheFirstTurnOfTheNewLand)
+{
+	const TurnsAgain again {.after = 10, .turn = 0};
+	EXPECT_EQ(ToJson(again), R"({"after":10,"turn":0,"type":"game.turns_again"})");
+	EXPECT_EQ(std::get<TurnsAgain>(*Parse(ToJson(again))), again);
+	// Both turns are needed
+	EXPECT_FALSE(Parse(R"({"type":"game.turns_again","after":10})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.turns_again","turn":0})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.turns_again","after":-1,"turn":0})").has_value());
+}
+
 TEST(GameSocket, TheClockOfTheRoomGivesThePauseTheSpeedTheActThePlayerAndTheTurn)
 {
 	const GameTime time {.paused = true, .speed = 2.5f, .act = TimeAct::Pause, .by = "alice", .turn = 120};

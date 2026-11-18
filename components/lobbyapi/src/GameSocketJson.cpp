@@ -47,6 +47,7 @@ constexpr std::string_view k_ObserverLeft = "observer.left";
 constexpr std::string_view k_SyncParts = "sync.parts";
 constexpr std::string_view k_Loaded = "game.loaded";
 constexpr std::string_view k_LoadWait = "game.wait";
+constexpr std::string_view k_TurnsAgain = "game.turns_again";
 constexpr std::string_view k_DataPrint = "data.print";
 constexpr std::string_view k_SyncFacts = "sync.facts";
 constexpr std::string_view k_SyncCapture = "sync.capture";
@@ -1164,6 +1165,16 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	{
 		return Loaded {};
 	}
+	if (type == k_TurnsAgain)
+	{
+		uint64_t after = 0;
+		uint64_t turn = 0;
+		if (!ReadUnsigned(object, "after", k_MostTurn, after) || !ReadUnsigned(object, "turn", k_MostTurn, turn))
+		{
+			return std::nullopt;
+		}
+		return TurnsAgain {.after = static_cast<uint32_t>(after), .turn = static_cast<uint32_t>(turn)};
+	}
 	if (type == k_LoadWait)
 	{
 		const auto* names = Member(object, "loading");
@@ -1577,6 +1588,10 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, Loaded>)
 		    {
 			    object = Json {{"type", k_Loaded}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, TurnsAgain>)
+		    {
+			    object = Json {{"type", k_TurnsAgain}, {"after", value.after}, {"turn", value.turn}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, LoadWait>)
 		    {

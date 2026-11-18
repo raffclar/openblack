@@ -88,6 +88,24 @@ struct FakeWorld
 	std::function<bool(uint8_t kind, uint64_t hash)> scriptFileHere;
 	/// For each act of the script tabs that uses a file, whether the computer had its file at the turn
 	std::vector<bool> scriptFilesAtTurn;
+	/// The world loads a new land before this turn, and its turns start again at 0, as a command of a testbed scenario does
+	std::optional<uint32_t> landBefore;
+	/// The lands that the world loaded before a turn
+	uint32_t lands {0};
+
+	/// Loads the new land when it is due before the turn. Gives true when the land loaded.
+	bool LoadLandBefore(uint32_t turn)
+	{
+		if (landBefore != turn)
+		{
+			return false;
+		}
+		landBefore.reset();
+		turns = 0;
+		hash = 7;
+		++lands;
+		return true;
+	}
 
 	uint64_t Play(uint32_t turn, const std::vector<Command>& commands)
 	{
@@ -247,6 +265,10 @@ struct Computer
 		}
 		while (session.HasTurn(world.turns))
 		{
+			if (const auto after = world.turns; world.LoadLandBefore(after))
+			{
+				session.TurnsStartAgain(after, world.turns);
+			}
 			const auto turn = world.turns;
 			const auto commands = session.TakeTurn(turn);
 			played.push_back(commands.size());
@@ -460,6 +482,10 @@ protected:
 		host->Update();
 		if (host->HasTurn(serverWorld.turns))
 		{
+			if (const auto after = serverWorld.turns; serverWorld.LoadLandBefore(after))
+			{
+				host->TurnsStartAgain(after, serverWorld.turns);
+			}
 			const auto turn = serverWorld.turns;
 			const auto commands = host->TakeTurn(turn);
 			serverWorld.mindFileHere = [this](uint64_t hash) { return !host->EditorMindFile(hash).empty(); };
@@ -667,6 +693,77 @@ TEST_F(LockstepTest, TheCommandsOfBothGodsComeInTheSameTurnsOnEveryComputer)
 	}
 	// The first turn names the humans of slots 0 and 1
 	EXPECT_EQ(commands, 2 + 600u / 7 + 1 + 2 * (600u / 11 + 1));
+}
+
+TEST_F(LockstepTest, AfterTheLandOfAScenarioLoadsEveryComputerFollowsTheTurnsOfTheNewLand)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 7);
+	ASSERT_TRUE(host->Started());
+	// Each world loads the new land before the same turn, as the command of a testbed scenario does
+	constexpr uint32_t k_LandBefore = 30;
+	serverWorld.landBefore = k_LandBefore;
+	alice.world.landBefore = k_LandBefore;
+	bob.world.landBefore = k_LandBefore;
+	const auto play = [&](int frames, bool bobReads) {
+		for (int i = 0; i < frames; ++i)
+		{
+			if (i % 5 == 0)
+			{
+				alice.session.Send(HandTap {.object = Entity(static_cast<uint32_t>(i))});
+				bob.session.Send(HandTake {.object = Entity(static_cast<uint32_t>(i))});
+			}
+			Frame(bobReads ? std::vector<Computer*> {&alice, &bob} : std::vector<Computer*> {&alice});
+		}
+	};
+	for (int i = 0; i < 100 && serverWorld.turns < k_LandBefore - 5; ++i)
+	{
+		play(1, true);
+	}
+	// Bob is late: the server and alice load the new land and do its first turns before bob does the last turns of the
+	// old land
+	for (int i = 0; i < 100 && (serverWorld.lands == 0 || serverWorld.turns < 5); ++i)
+	{
+		play(1, false);
+	}
+	EXPECT_EQ(serverWorld.lands, 1u);
+	EXPECT_EQ(alice.world.lands, 1u);
+	EXPECT_EQ(bob.world.lands, 0u);
+	play(200, true);
+	EXPECT_EQ(bob.world.lands, 1u);
+	// The worlds stay in step after the land: every computer does the turns of the new land
+	EXPECT_GE(serverWorld.turns, 190u);
+	EXPECT_GE(alice.world.turns + 3, serverWorld.turns);
+	EXPECT_GE(bob.world.turns + 3, serverWorld.turns);
+	// Each turn that both computers did has the same commands
+	const auto both = static_cast<std::ptrdiff_t>(std::min(alice.played.size(), bob.played.size()));
+	EXPECT_TRUE(std::equal(alice.played.begin(), alice.played.begin() + both, bob.played.begin()));
+	EXPECT_GT(alice.session.GetCompares().compared, 200u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_GT(bob.session.GetCompares().compared, 200u);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+	// The server compares no checksum of the old land with a checksum of the new land
+	const auto& seats = host->Seats();
+	EXPECT_GT(seats[1].compares.compared, 180u);
+	EXPECT_EQ(seats[0].compares.compared, seats[0].compares.same);
+	EXPECT_EQ(seats[1].compares.compared, seats[1].compares.same);
+	EXPECT_EQ(host->TurnRestarts(), 1u);
+}
+
+TEST_F(LockstepTest, AWorldThatLoadsALandThatTheServerDidNotLoadDoesNoMoreTurns)
+{
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 7);
+	ASSERT_TRUE(host->Started());
+	alice.world.landBefore = 20;
+	Frames({&alice}, 60);
+	EXPECT_EQ(alice.world.lands, 1u);
+	// The session has no turn of a new land: the world waits, and no checksum of the other world differs
+	EXPECT_LE(alice.world.turns, 1u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
 }
 
 TEST_F(LockstepTest, TheServerRefusesBadTicketsLateJoinersAndTheCommandsOfObservers)
