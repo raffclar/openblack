@@ -3072,6 +3072,154 @@ TEST(VanillaParticleImport, TheEffectOfASpellIsTakenOnlyForItsSpell)
 	EXPECT_TRUE(read.effect->state.info.enabled);
 }
 
+// Each atom of a fireball keeps what its rules keep, as openblack keeps it. The sounds of the atom do not play after a
+// load, so the import does not make them. A rule that lets out atoms along the path of the parent keeps its point.
+TEST(VanillaParticleImport, TheAtomsOfAFireballKeepWhatTheirRulesKeep)
+{
+	auto fake = GameAtTurn(5);
+	// 2: the system, 3: the manager of the spell 20, 4: the collection, 5: the atom, 6: its sprite, 7..12: the data of
+	// its rules, 13: its sound, 14: the data of the path rule, 15: the ball
+	fake.Record(VanillaType::ParticleSystem).Ref("systemManager", 3);
+	fake.Record(VanillaType::ParticleManager)
+	    .Value("managerAtomCount", uint32_t {1})
+	    .Ref("managerPlayer", 0)
+	    .Refs("managerRoots", {4})
+	    .Value("managerInfo", std::array<float, 15> {})
+	    .Ref("managerSpell", 20)
+	    .Value("managerType", uint32_t {43});
+	fake.Record(VanillaType::AtomCollection)
+	    .Refs("ruleData", {14})
+	    .Value("collectionGroup", uint32_t {0})
+	    .Value("collectionFlags", uint8_t {0})
+	    .Refs("collectionAtoms", {5})
+	    .Ref("collectionUnused", 0);
+	const std::array<float, 14> draw {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+	fake.Record(VanillaType::AtomCore)
+	    .Refs("atomCollections", {})
+	    .Refs("atomRuleData", {7, 8, 9, 10, 11, 12})
+	    .Refs("atomSounds", {13})
+	    .Value("atomBirth", 2.0f)
+	    .Value("atomRotation", std::array<float, 12> {})
+	    .Value("atomPrevious", draw)
+	    .Value("atomCurrent", draw)
+	    .Value("atomAnimation", std::array<uint32_t, 3> {})
+	    .Ref("atomDrawOffset", 0)
+	    .Ref("atomRender", 6);
+	fake.Record(VanillaType::SpriteParticle).Value("spriteCreator", uint32_t {3});
+	fake.Record(VanillaType::AtomDataFadeOutOnceConditionTrue)
+	    .Value("atomDataRule", uint32_t {11})
+	    .Value("fadeOutStarted", uint8_t {1})
+	    .Value("fadeOutAge", 0.5f)
+	    .Value("fadeOutAlpha", 200.0f)
+	    .Value("fadeOutScale", 1.25f);
+	fake.Record(VanillaType::AtomDataAttachFireBall)
+	    .Value("atomDataRule", uint32_t {12})
+	    .Value("fireBallNotMade", uint8_t {0})
+	    .Value("fireBallTurn", uint32_t {4})
+	    .Ref("fireBallObject", 15);
+	fake.Record(VanillaType::AtomDataRipple)
+	    .Value("atomDataRule", uint32_t {13})
+	    .Value("rippleLast", std::array<float, 3> {7.0f, 8.0f, 9.0f});
+	fake.Record(VanillaType::AtomDataAddSubCollections)
+	    .Value("atomDataRule", uint32_t {14})
+	    .Value("subCollectionsAdded", uint8_t {1});
+	fake.Record(VanillaType::AtomDataSideSpin)
+	    .Value("atomDataRule", uint32_t {15})
+	    .Value("sideSpin", -0.5f)
+	    .Value("sideSpinNotStarted", uint8_t {0});
+	fake.Record(VanillaType::AtomDataRemoveRuleAfterConditionTrue)
+	    .Value("atomDataRule", uint32_t {16})
+	    .Value("removeStarted", uint8_t {1})
+	    .Value("removeAge", 0.25f);
+	fake.Record(VanillaType::ParticleSound);
+	fake.Record(VanillaType::CollectionDataWillowWisp)
+	    .Value("dataRule", uint32_t {17})
+	    .Value("wispLast", std::array<float, 3> {1.0f, 2.0f, 3.0f})
+	    .Value("wispEmitted", 4.5f)
+	    .Value("wispMade", 4.0f)
+	    .Value("wispFirst", uint8_t {0});
+	fake.Record(VanillaType::MagicFireBall);
+	const auto world = fake.Make();
+
+	const auto read = particle_import::ReadSpellEffect(world, 2, 20, SameNumber);
+	ASSERT_TRUE(read.effect.has_value()) << read.why;
+	ASSERT_EQ(read.effect->state.roots.size(), 1U);
+	const auto& collection = read.effect->state.roots.front();
+	ASSERT_EQ(collection.pathEmitters.size(), 1U);
+	EXPECT_EQ(collection.pathEmitters.front().rule, 17);
+	EXPECT_EQ(collection.pathEmitters.front().last, glm::vec3(1.0f, 2.0f, 3.0f));
+	EXPECT_EQ(collection.pathEmitters.front().emitted, 4.5f);
+	EXPECT_EQ(collection.pathEmitters.front().made, 4.0f);
+	EXPECT_FALSE(collection.pathEmitters.front().first);
+	ASSERT_EQ(collection.atoms.size(), 1U);
+	const auto& rules = collection.atoms.front().ruleData;
+	ASSERT_EQ(rules.size(), 6U);
+	EXPECT_EQ(rules[0].rule, 11);
+	EXPECT_EQ(rules[0].className, "AR_FadeOutOnceConditionTrue");
+	EXPECT_TRUE(rules[0].data.started);
+	EXPECT_EQ(rules[0].data.a, glm::vec4(0.5f, 200.0f, 1.25f, 0.0f));
+	EXPECT_EQ(rules[1].className, "AttatchFireBallToAtom");
+	EXPECT_TRUE(rules[1].data.started);
+	EXPECT_EQ(rules[1].data.object, SameNumber(15));
+	// The point of the ring is on the map, across the land
+	EXPECT_EQ(rules[2].className, "UpdateRuleGravityWithFloor");
+	EXPECT_EQ(rules[2].data.a.x, 7.0f);
+	EXPECT_EQ(rules[2].data.a.y, 9.0f);
+	EXPECT_EQ(rules[3].className, "AddSubCollectionsToAtom");
+	EXPECT_TRUE(rules[3].data.started);
+	EXPECT_EQ(rules[4].className, "UR_SideSpin");
+	EXPECT_TRUE(rules[4].data.started);
+	EXPECT_EQ(rules[4].data.a.x, -0.5f);
+	// The file keeps the age of the atom, and openblack keeps the age of the effect: the import adds the birth
+	EXPECT_EQ(rules[5].className, "RemoveRuleAfterConditionTrue");
+	EXPECT_TRUE(rules[5].data.started);
+	EXPECT_EQ(rules[5].data.a.x, 2.25f);
+}
+
+// A rule that did not make the ball yet, or did not take the spin yet, starts again. Data of a kind that the import
+// does not know stops the import of the effect.
+TEST(VanillaParticleImport, ARuleThatDidNotStartStartsAgainAndUnknownDataStopsTheEffect)
+{
+	const auto make = [](VanillaType kind) {
+		auto fake = GameAtTurn(5);
+		fake.Record(VanillaType::ParticleSystem).Ref("systemManager", 3);
+		fake.Record(VanillaType::ParticleManager)
+		    .Refs("managerRoots", {4})
+		    .Value("managerInfo", std::array<float, 15> {})
+		    .Ref("managerSpell", 20);
+		fake.Record(VanillaType::AtomCollection).Refs("ruleData", {}).Refs("collectionAtoms", {5});
+		const std::array<float, 14> draw {};
+		fake.Record(VanillaType::AtomCore)
+		    .Refs("atomRuleData", {7})
+		    .Refs("atomSounds", {})
+		    .Value("atomRotation", std::array<float, 12> {})
+		    .Value("atomPrevious", draw)
+		    .Value("atomCurrent", draw)
+		    .Value("atomAnimation", std::array<uint32_t, 3> {})
+		    .Ref("atomRender", 6);
+		fake.Record(VanillaType::PointParticle);
+		fake.Record(kind)
+		    .Value("atomDataRule", uint32_t {3})
+		    .Value("fireBallNotMade", uint8_t {1})
+		    .Ref("fireBallObject", 0)
+		    .Value("sideSpinNotStarted", uint8_t {1});
+		return fake.Make();
+	};
+	for (const auto kind : {VanillaType::AtomDataAttachFireBall, VanillaType::AtomDataSideSpin})
+	{
+		const auto world = make(kind);
+		const auto read = particle_import::ReadSpellEffect(world, 2, 20, SameNumber);
+		ASSERT_TRUE(read.effect.has_value()) << read.why;
+		const auto& data = read.effect->state.roots.front().atoms.front().ruleData.front().data;
+		EXPECT_FALSE(data.started);
+		EXPECT_TRUE(data.object == entt::null);
+	}
+	const auto world = make(VanillaType::EmitterRuleData);
+	const auto read = particle_import::ReadSpellEffect(world, 2, 20, SameNumber);
+	EXPECT_FALSE(read.effect.has_value());
+	EXPECT_NE(read.why.find("data of a rule"), std::string::npos) << read.why;
+}
+
 TEST(VanillaParticleImport, SavedGamesOfLandOneKeepEveryValueOfTheirParticleContainers)
 {
 	Checked checked;
@@ -5366,8 +5514,8 @@ TEST(VanillaWorldImport, EachRecordOfTheSpellFamilyIsASpell)
 	}
 }
 
-// The import makes each kind of spell that no creature holds, but a fireball and a spell that keeps only objects
-TEST(VanillaWorldImport, TheImportMakesEachKindOfSpellButTheFireball)
+// The import makes each kind of spell that no creature holds, but a spell that keeps only objects
+TEST(VanillaWorldImport, TheImportMakesEachKindOfSpell)
 {
 	const auto spellOf = [](VanillaType type, MagicType magicType) {
 		return world_import::ImportedHeldSpell {.saveType = static_cast<uint32_t>(type), .magicType = magicType};
@@ -5396,10 +5544,78 @@ TEST(VanillaWorldImport, TheImportMakesEachKindOfSpellButTheFireball)
 	}
 	for (const auto magicType : {MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo})
 	{
-		EXPECT_FALSE(world_import::CanImportSpell(spellOf(VanillaType::Spell, magicType))) << static_cast<int>(magicType);
+		EXPECT_TRUE(world_import::CanImportSpell(spellOf(VanillaType::Spell, magicType))) << static_cast<int>(magicType);
 	}
 	EXPECT_FALSE(world_import::CanImportSpell(spellOf(VanillaType::SpellWithObjects, MagicType::Food)));
 	EXPECT_FALSE(world_import::CanImportSpell(spellOf(VanillaType::SpellHeal, MagicType::None)));
+}
+
+// A fireball of the file keeps its fire, the atom that carries it, and the spell, the player and the strength of the
+// effect of the atom
+TEST(VanillaWorldImport, AFireballKeepsItsFireItsAtomAndTheSpellOfItsEffect)
+{
+	auto fake = GameAtTurn(40);
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1);
+	// 3: the ball, 4: its fire, 5: the atom, 6: the data of the rule that carries the ball, 7: the collection, 8: the
+	// manager, 9: the spell, 10: the thing that heated the ball
+	fake.Record(VanillaType::MagicFireBall)
+	    .Position(300, 400)
+	    .Ref("fire", 4)
+	    .Ref("fireBallAtom", 5)
+	    .Value("fireBallRain", uint8_t {0});
+	fake.Record(VanillaType::FireEffect).Value("fireTemperature", 900.0f).Value("firePrevious", 950.0f).Ref("fireSource", 10);
+	fake.Record(VanillaType::AtomCore)
+	    .Refs("atomRuleData", {6})
+	    .Value("atomBaseScale", 2.0f)
+	    .Value("atomRuleScale", 1.5f)
+	    .Ref("atomCollection", 7);
+	fake.Record(VanillaType::AtomDataAttachFireBall)
+	    .Value("fireBallNotMade", uint8_t {0})
+	    .Value("fireBallTurn", uint32_t {39})
+	    .Ref("fireBallObject", 3);
+	fake.Record(VanillaType::AtomCollection).Ref("collectionManager", 8);
+	fake.Record(VanillaType::ParticleManager)
+	    .Ref("managerPlayer", 2)
+	    .Ref("managerSpell", 9)
+	    .Value("managerInfo", std::array<float, 15> {0.0f, 0.0f, 0.0f, 1.0f, 2.0f, 3.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+	                                                 0.75f, 0.0f, 0.0f});
+	fake.Record(VanillaType::Spell).Value("spellMagicType", static_cast<uint32_t>(MagicType::Fireball));
+	fake.Record(VanillaType::Creature);
+	const auto world = fake.Make();
+
+	EXPECT_FALSE(world_import::ReadFireBall(world, world.Records()[3]).has_value()) << "the fire is not a ball";
+	const auto ball = world_import::ReadFireBall(world, world.Records()[2]);
+	ASSERT_TRUE(ball.has_value());
+	EXPECT_EQ(ball->number, 3U);
+	EXPECT_EQ(ball->position.x, 300);
+	EXPECT_EQ(ball->position.z, 400);
+	EXPECT_EQ(ball->atom, 5U);
+	EXPECT_EQ(ball->spell, 9U);
+	EXPECT_EQ(ball->player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(ball->strength, 0.75f);
+	EXPECT_EQ(ball->radius, 3.0f);
+	EXPECT_FALSE(ball->affectedByRain);
+	EXPECT_EQ(ball->temperature, 900.0f);
+	EXPECT_EQ(ball->previous, 950.0f);
+	EXPECT_EQ(ball->source, 10U);
+	EXPECT_EQ(ball->lastTurn, 39U);
+}
+
+// A fireball whose atom is gone keeps its fire, and has no spell and no player
+TEST(VanillaWorldImport, AFireballWithNoAtomHasNoSpell)
+{
+	auto fake = GameAtTurn(40);
+	fake.Record(VanillaType::MagicFireBall).Position(1, 2).Ref("fire", 3).Ref("fireBallAtom", 0);
+	fake.Record(VanillaType::FireEffect).Value("fireTemperature", 500.0f).Value("firePrevious", 400.0f);
+	const auto world = fake.Make();
+	const auto ball = world_import::ReadFireBall(world, world.Records()[1]);
+	ASSERT_TRUE(ball.has_value());
+	EXPECT_EQ(ball->spell, 0U);
+	EXPECT_FALSE(ball->player.has_value());
+	EXPECT_FALSE(ball->lastTurn.has_value());
+	EXPECT_TRUE(ball->affectedByRain);
+	EXPECT_EQ(ball->temperature, 500.0f);
+	EXPECT_EQ(ball->previous, 400.0f);
 }
 
 // Each player record gives its list of teleport stones in the order of the file, the head first

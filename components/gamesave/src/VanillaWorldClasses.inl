@@ -1173,7 +1173,8 @@ void ReadSpell(WorldReader& r)
 	r.Ref("spellCreator");
 	r.Ref("spellPlayer");
 	r.Ref();
-	r.Ref();
+	// The seed in the hand that cast the spell, while the spell is linked to it
+	r.Ref("spellSeed");
 	// The magic type, the seconds that the spell ran and its size
 	r.Word("spellMagicType");
 	r.Float("spellAge");
@@ -1339,8 +1340,9 @@ void ReadMagicFood(WorldReader& r)
 void ReadMagicFireBall(WorldReader& r)
 {
 	ReadObject(r);
-	r.Ref();
-	r.Byte();
+	// The atom of the particles that carries the ball, and 1 when the rain cools the ball (not for a script's fireball)
+	r.Ref("fireBallAtom");
+	r.Byte("fireBallRain");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -1399,9 +1401,10 @@ void ReadFireEffect(WorldReader& r)
 	r.Byte();
 	r.Byte();
 	r.Byte();
-	r.Word();
-	r.Word();
-	r.Ref();
+	// The temperature now and at the end of the last turn, and the thing that heated the object
+	r.Float("fireTemperature");
+	r.Float("firePrevious");
+	r.Ref("fireSource");
 	r.Ref();
 	r.Ref();
 	r.Ref();
@@ -1821,7 +1824,8 @@ void ReadURPlasmaInf(WorldReader& r)
 // No save file of the tests has this type. This layout comes only from the game's save code.
 void ReadBaseAtomModifierData(WorldReader& r)
 {
-	r.Persistent();
+	// The rule that keeps the data, by its object in the particle file
+	r.Persistent("atomDataRuleFile", "atomDataRule");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -2104,19 +2108,21 @@ void ReadCollectionDataEmitterRuleLightningSprite(WorldReader& r)
 void ReadAtomDataARFadeOutOnceConditionTrue(WorldReader& r)
 {
 	ReadBaseAtomModifierData(r);
-	r.Byte();
-	r.Word();
-	r.Word();
-	r.Word();
+	// 1 when the fade started, then the age of the atom, its alpha and its scale at the start
+	r.Byte("fadeOutStarted");
+	r.Float("fadeOutAge");
+	r.Float("fadeOutAlpha");
+	r.Float("fadeOutScale");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
 void ReadAtomDataAttatchFireBallToAtom(WorldReader& r)
 {
 	ReadBaseAtomModifierData(r);
-	r.Byte();
-	r.Word();
-	r.Ref();
+	// 1 until the rule makes the ball, the last game turn that the ball was there, and the ball
+	r.Byte("fireBallNotMade");
+	r.Word("fireBallTurn");
+	r.Ref("fireBallObject");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -2137,7 +2143,8 @@ void ReadAtomDataRemoveSoundFromAtom(WorldReader& r)
 void ReadAtomDataRippleUpdateRuleGravityWithFloor(WorldReader& r)
 {
 	ReadBaseAtomModifierData(r);
-	r.Bytes(12);
+	// The point of the last ring on the water
+	r.Point("rippleLast");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -2169,7 +2176,8 @@ void ReadAtomDataURVapourEndEffect(WorldReader& r)
 void ReadAtomDataAddSubCollectionsToAtom(WorldReader& r)
 {
 	ReadBaseAtomModifierData(r);
-	r.Byte();
+	// 1 when the rule made the collections under the atom
+	r.Byte("subCollectionsAdded");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -2208,8 +2216,9 @@ void ReadAtomDataUROrientSpriteWithRandomAngle(WorldReader& r)
 void ReadAtomDataURSideSpin(WorldReader& r)
 {
 	ReadBaseAtomModifierData(r);
-	r.Word();
-	r.Byte();
+	// The spin, and 1 until the rule took the spin of the caster
+	r.Float("sideSpin");
+	r.Byte("sideSpinNotStarted");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -2224,8 +2233,9 @@ void ReadAtomDataURInitialSpin(WorldReader& r)
 void ReadAtomDataRemoveRuleAfterConditionTrue(WorldReader& r)
 {
 	ReadBaseAtomModifierData(r);
-	r.Byte();
-	r.Word();
+	// 1 when the condition held, and the age of the atom then
+	r.Byte("removeStarted");
+	r.Float("removeAge");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.
@@ -2257,10 +2267,12 @@ void ReadCollectionDataURAddDefensiveSphere(WorldReader& r)
 void ReadCollectionDataURWillowWisp(WorldReader& r)
 {
 	ReadBaseCollectionModifierData(r);
-	r.Bytes(12);
-	r.Word();
-	r.Word();
-	r.Byte();
+	// The last point of the parent, how much the rule let out in all, how many atoms that made, and 1 before the
+	// first step
+	r.Point("wispLast");
+	r.Float("wispEmitted");
+	r.Float("wispMade");
+	r.Byte("wispFirst");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

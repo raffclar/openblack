@@ -209,8 +209,11 @@ private:
 	/// its hands, which are the effects of particle containers of the file. The spells that the import makes go into the
 	/// numbers of the made things, and each creature spell of a creature of the file takes its spell.
 	void ImportVanillaHeldCasts(const gamesave::VanillaWorld& world, VanillaMade& made, const VanillaEffects& effects);
+	/// Each burning ball of a fireball of the file continues, before the import makes the effect of its spell, so that
+	/// the atom of the effect carries the ball again. The ball has the fire of the file.
+	void ImportVanillaFireBalls(const gamesave::VanillaWorld& world, VanillaMade& made);
 	/// Each spell of the file that no creature holds continues, with the things that it made. These are the spells of
-	/// every kind but the fireball, such as the storm, the heal or the flock that the hand cast. The object of the file
+	/// every kind, such as the fireball, the storm, the heal or the flock that the hand cast. The object of the file
 	/// that cast the spell decides who pays for it: the hand, an icon of a worship site, a creature or another object.
 	/// Then the stones of each player take the order of the list of the player in the file.
 	void ImportVanillaOtherCasts(const gamesave::VanillaWorld& world, VanillaMade& made);
