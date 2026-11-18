@@ -333,6 +333,9 @@ public:
 	/// A seed straight into the player's hand, fully charged and ready, as from a bubble, if the hand is free: the seed,
 	/// or none
 	virtual entt::entity GiveSeedToHand(PlayerNames player, SpellSeedType seed, int powerUp, float multiplier) = 0;
+	/// The hand of the player holds the seed of a saved game of the game. The seed keeps the values of the file, and
+	/// nothing sees a new seed. Return false when the player has no hand, the hand holds a seed, or the seed is not a seed.
+	virtual bool ImportHeldSeed(PlayerNames /*player*/, entt::entity /*seed*/) { return false; }
 	/// The seed of a one-shot miracle (a globe, or a miracle that a script puts into the hand) goes into the player's
 	/// hand, as GiveSeedToHand does. The best icon of the player for the seed makes it. Thus the seed can power up, and
 	/// it gives its prayer power back to the site of the icon. With no such icon, the seed has no icon. The seed, or none.

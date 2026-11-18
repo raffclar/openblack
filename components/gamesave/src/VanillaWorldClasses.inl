@@ -1363,26 +1363,32 @@ void ReadSpellSeedGraphic(WorldReader& r)
 void ReadSpellSeed(WorldReader& r)
 {
 	ReadObject(r);
-	r.Word();
-	r.Byte();
-	r.Word();
-	r.Ref();
-	r.Ref();
-	r.Ref();
-	r.Ref();
-	r.Byte();
-	r.Byte();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Byte();
-	r.Word();
-	r.Word();
-	r.Byte();
+	// The power-up level, -1 for the plain miracle, the flags and the row of the seed
+	r.Word("seedPowerUp");
+	r.Byte("seedFlags");
+	r.Word("seedInfo");
+	// The spell icon that made the seed, the object that made it, its spell and the interface status of its hand
+	r.Ref("seedIcon");
+	r.Ref("seedCreator");
+	r.Ref("seedSpell");
+	r.Ref("seedStatus");
+	// 1 when a cast linked the seed to its spell, and 1 when a creature looked at a spell of the seed
+	r.Byte("seedLinkedByCast");
+	r.Byte("seedLearnedFrom");
+	// The charge of the seed and its copy, then what the last spell had left when the hand let go of it
+	r.Float("seedChantStore");
+	r.Float("seedChantStoreCopy");
+	r.Float("seedStoredChants");
+	r.Float("seedStoredAge");
+	r.Word("seedStoredMaxObjects");
+	// The power of the particles, and the number that multiplies the prayer power and the time of the casts
+	r.Float("seedPower");
+	r.Float("seedMultiplier");
+	r.Byte("seedReady");
+	r.Word("seedTurnsInHand");
+	r.Word("seedLastCastType");
+	// 1 for a seed that came out of a one-shot globe
+	r.Byte("seedFromGlobe");
 }
 
 // No save file of the tests has this type. This layout comes only from the game's save code.

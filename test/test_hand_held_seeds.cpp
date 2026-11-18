@@ -659,3 +659,25 @@ TEST_F(ArmedOnThing, OnlyAReadyFireSeedArmsOnAFireball)
 	_magic->ReleaseAction();
 	EXPECT_TRUE(registry.Valid(ball));
 }
+
+// The hand of a player takes the seed of a saved game of the game. A hand that holds a seed, a player with no hand and
+// a thing that is not a seed take nothing.
+TEST_F(HandHeldSeeds, AHandTakesTheSeedOfASavedGame)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto seed = registry.Create();
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Food, .player = PlayerNames::PLAYER_TWO});
+	EXPECT_TRUE(_magic->ImportHeldSeed(PlayerNames::PLAYER_TWO, seed));
+	EXPECT_EQ(_magic->GetHeldSeedOf(PlayerNames::PLAYER_TWO), seed);
+	EXPECT_FALSE(_magic->GetHeldSeedOf(PlayerNames::PLAYER_ONE).has_value());
+
+	const auto other = registry.Create();
+	registry.Assign<SpellSeed>(other, SpellSeed {.seedType = SpellSeedType::Water, .player = PlayerNames::PLAYER_TWO});
+	EXPECT_FALSE(_magic->ImportHeldSeed(PlayerNames::PLAYER_TWO, other));
+	EXPECT_EQ(_magic->GetHeldSeedOf(PlayerNames::PLAYER_TWO), seed);
+	EXPECT_FALSE(_magic->ImportHeldSeed(PlayerNames::PLAYER_THREE, other));
+	EXPECT_FALSE(_magic->ImportHeldSeed(PlayerNames::PLAYER_ONE, registry.Create()));
+	EXPECT_FALSE(_magic->GetHeldSeedOf(PlayerNames::PLAYER_ONE).has_value());
+	EXPECT_TRUE(_magic->ImportHeldSeed(PlayerNames::PLAYER_ONE, other));
+	EXPECT_EQ(_magic->GetHeldSeed(), other);
+}

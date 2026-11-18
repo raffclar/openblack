@@ -39,6 +39,7 @@ struct VanillaRecord;
 namespace openblack::ecs::components
 {
 struct Dance;
+struct SpellSeed;
 struct WorshipIcon;
 } // namespace openblack::ecs::components
 
@@ -1028,6 +1029,8 @@ struct ImportedHeldSpell
 	/// The number of the object that cast the spell, and the number of the player record of the spell, 0 for none
 	uint32_t creator {0};
 	uint32_t player {0};
+	/// The number of the seed in the hand that cast the spell while the spell is linked to it, 0 for none
+	uint32_t seed {0};
 	/// The prayer power that is left, and the prayer power after the last fill
 	float chants {0.0f};
 	float initialChants {0.0f};
@@ -1188,6 +1191,55 @@ struct ImportedFireBall
 /// The fireball of the record. Nothing for a record that is not a fireball.
 [[nodiscard]] std::optional<ImportedFireBall> ReadFireBall(const gamesave::VanillaWorld& world,
                                                            const gamesave::VanillaRecord& record);
+
+/// A spell seed of the file: a miracle that a hand holds, or a seed out of the hand that is linked to its spell
+struct ImportedSpellSeed
+{
+	uint32_t number {0};
+	gamesave::MapCoords position {};
+	SpellSeedType seedType {SpellSeedType::None};
+	/// The power-up level, -1 for the plain miracle of the seed
+	int powerUp {-1};
+	/// The player of the hand of the seed. Nothing when the file gives no player.
+	std::optional<PlayerNames> player;
+	/// The numbers of the spell icon that made the seed and of the spell of the seed, 0 for none
+	uint32_t icon {0};
+	uint32_t spell {0};
+	float chantStore {0.0f};
+	/// A creature looked at a spell of the seed, so no creature learns from its spells again
+	bool learnedFrom {false};
+	/// What the last spell had left when the hand let go of it: negative chants for none
+	float storedChants {-1.0f};
+	float storedAge {0.0f};
+	int storedMaxObjects {-1};
+	float castMultiplier {1.0f};
+	float power {1.0f};
+	bool fromGlobe {false};
+	bool ready {false};
+	uint32_t turnsInHand {0};
+	MagicType lastCastType {MagicType::None};
+	bool linkedByCast {false};
+};
+
+/// The spell seed of the record. Nothing for a record that is not a spell seed, or for a seed with no row of the table.
+[[nodiscard]] std::optional<ImportedSpellSeed> ReadSpellSeed(const gamesave::VanillaWorld& world,
+                                                             const gamesave::VanillaRecord& record);
+
+/// The spell seed that the hand of a player holds in the file
+struct ImportedHandSeed
+{
+	PlayerNames player {PlayerNames::NEUTRAL};
+	/// The number of the spell seed
+	uint32_t seed {0};
+};
+
+/// The spell seeds that the hands of the file hold, one for each hand that holds a seed. A hand with no player is not
+/// in the list.
+[[nodiscard]] std::vector<ImportedHandSeed> ReadHandSeeds(const gamesave::VanillaWorld& world);
+
+/// The spell seed takes the values of the file. The player, the worship site and the spell are not values of the file,
+/// so the seed keeps its own.
+void PutSeedValues(components::SpellSeed& seed, const ImportedSpellSeed& file);
 
 /// The teleport stones of one player of the file, in the order of the list of the player. The first stone is the
 /// head of the list.

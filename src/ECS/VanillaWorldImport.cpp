@@ -26,6 +26,7 @@
 #include "DanceFile.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/VillagerWalkRules.h"
 #include "ECS/WallHugRules.h"
@@ -1095,6 +1096,7 @@ std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const 
 	    .position = PositionOf(world, record).value_or(gamesave::MapCoords {}),
 	    .creator = world.Ref(record, "spellCreator").value_or(0),
 	    .player = world.Ref(record, "spellPlayer").value_or(0),
+	    .seed = world.Ref(record, "spellSeed").value_or(0),
 	    .chants = world.Float(record, "spellChants").value_or(0.0f),
 	    .initialChants = world.Float(record, "spellInitialChants").value_or(0.0f),
 	    .closedDown = world.Word(record, "spellClosedDown").value_or(0) != 0,
@@ -1301,6 +1303,90 @@ std::optional<ImportedFireBall> ReadFireBall(const VanillaWorld& world, const Va
 		std::memcpy(&ball.strength, info.data() + k_PowerAt, sizeof(ball.strength));
 	}
 	return ball;
+}
+
+std::optional<ImportedSpellSeed> ReadSpellSeed(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto position = PositionOf(world, record);
+	const auto seedType = SpellSeedRowOf(world.Word(record, "seedInfo").value_or(0));
+	if (!record.Is(VanillaType::SpellSeed) || !position.has_value() || !seedType.has_value())
+	{
+		return std::nullopt;
+	}
+	// The interface status of the hand gives the player. A seed with no status has the player of the object that made it.
+	auto player = PlayerOfHand(world, world.Ref(record, "seedStatus").value_or(0));
+	if (!player.has_value())
+	{
+		player = PlayerOfRecord(world, world.Ref(record, "seedCreator").value_or(0));
+	}
+	const auto lastCast = world.Word(record, "seedLastCastType").value_or(0);
+	return ImportedSpellSeed {
+	    .number = record.number,
+	    .position = *position,
+	    .seedType = *seedType,
+	    .powerUp = std::bit_cast<int32_t>(world.Word(record, "seedPowerUp").value_or(std::bit_cast<uint32_t>(-1))),
+	    .player = player,
+	    .icon = world.Ref(record, "seedIcon").value_or(0),
+	    .spell = world.Ref(record, "seedSpell").value_or(0),
+	    .chantStore = world.Float(record, "seedChantStore").value_or(0.0f),
+	    .learnedFrom = world.Byte(record, "seedLearnedFrom").value_or(0) != 0,
+	    .storedChants = world.Float(record, "seedStoredChants").value_or(-1.0f),
+	    .storedAge = world.Float(record, "seedStoredAge").value_or(0.0f),
+	    .storedMaxObjects =
+	        std::bit_cast<int32_t>(world.Word(record, "seedStoredMaxObjects").value_or(std::bit_cast<uint32_t>(-1))),
+	    .castMultiplier = world.Float(record, "seedMultiplier").value_or(1.0f),
+	    .power = world.Float(record, "seedPower").value_or(1.0f),
+	    .fromGlobe = world.Byte(record, "seedFromGlobe").value_or(0) != 0,
+	    .ready = world.Byte(record, "seedReady").value_or(0) != 0,
+	    .turnsInHand = world.Word(record, "seedTurnsInHand").value_or(0),
+	    // A magic type that is not in the tables is no last cast
+	    .lastCastType = lastCast < magic::k_MagicTypeCount ? static_cast<MagicType>(lastCast) : MagicType::None,
+	    .linkedByCast = world.Byte(record, "seedLinkedByCast").value_or(0) != 0,
+	};
+}
+
+std::vector<ImportedHandSeed> ReadHandSeeds(const VanillaWorld& world)
+{
+	std::vector<ImportedHandSeed> seeds;
+	for (const auto* status : world.OfType(VanillaType::PlayerInterfaceStatus))
+	{
+		const auto player = PlayerOfHand(world, status->number);
+		if (!player.has_value())
+		{
+			continue;
+		}
+		// The hand keeps the seed with the other objects that it holds
+		for (const auto number : world.Refs(*status, "handHeld"))
+		{
+			if (RecordOf(world, number, VanillaType::SpellSeed) != nullptr)
+			{
+				seeds.push_back({.player = *player, .seed = number});
+				break;
+			}
+		}
+	}
+	return seeds;
+}
+
+void PutSeedValues(components::SpellSeed& seed, const ImportedSpellSeed& file)
+{
+	seed.seedType = file.seedType;
+	seed.powerUp = file.powerUp;
+	seed.chantStore = file.chantStore;
+	seed.learnedFrom = file.learnedFrom;
+	seed.storedChants = file.storedChants;
+	seed.storedAge = file.storedAge;
+	seed.storedMaxObjects = file.storedMaxObjects;
+	seed.castMultiplier = file.castMultiplier;
+	seed.power = file.power;
+	seed.fromGlobe = file.fromGlobe;
+	// Only a seed that a spell icon made can power up. A seed of an icon that is not from a globe came from the worship.
+	seed.hasIcon = file.icon != 0;
+	seed.origin = seed.hasIcon && !file.fromGlobe ? magic::SeedOrigin::Worship : magic::SeedOrigin::Bubble;
+	seed.ready = file.ready;
+	seed.turnsInHand = file.turnsInHand;
+	seed.lastCastType = file.lastCastType;
+	seed.linkedByCast = file.linkedByCast;
 }
 
 std::vector<ImportedStoneList> ReadStoneLists(const VanillaWorld& world)

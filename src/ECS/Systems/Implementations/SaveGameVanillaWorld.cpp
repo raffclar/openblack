@@ -28,6 +28,7 @@
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
+#include "ECS/Archetypes/SpellSeedArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/Utils.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
@@ -63,6 +64,7 @@
 #include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
@@ -113,6 +115,7 @@
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/ShieldRules.h"
+#include "Magic/SpellLifetime.h"
 #include "SaveGameSystem.h"
 #include "SaveGameVanillaPlaces.h"
 
@@ -2186,6 +2189,138 @@ void SaveGameSystem::ImportVanillaFireBalls(const gamesave::VanillaWorld& world,
 		SPDLOG_LOGGER_INFO(ImportLog(), "The fireball {} of the spell {} burns again at the temperature {}", ball->number,
 		                   ball->spell, ball->temperature);
 	}
+}
+
+void SaveGameSystem::ImportVanillaSeeds(const gamesave::VanillaWorld& world, VanillaMade& made)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto* record : world.OfType(gamesave::VanillaType::SpellSeed))
+	{
+		const auto file = world_import::ReadSpellSeed(world, *record);
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The spell seed {} of the file has no seed of the table", record->number);
+			continue;
+		}
+		if (!file->player.has_value())
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The spell seed {} of the file has no player, so it has the neutral player",
+			                   file->number);
+		}
+		const auto entity = ecs::archetypes::SpellSeedArchetype::Create(GroundPosition(file->position), file->seedType,
+		                                                                file->player.value_or(PlayerNames::NEUTRAL),
+		                                                                file->powerUp, file->castMultiplier);
+		if (entity == entt::null)
+		{
+			continue;
+		}
+		world_import::PutSeedValues(registry.Get<SpellSeed>(entity), *file);
+		made.emplace(file->number, entity);
+		SPDLOG_LOGGER_INFO(ImportLog(), "The spell seed {} of the file continues: seed {}, power-up {}, charge {}",
+		                   file->number, static_cast<int>(file->seedType), file->powerUp, file->chantStore);
+	}
+}
+
+void SaveGameSystem::ImportVanillaSeedLinks(const gamesave::VanillaWorld& world, const VanillaMade& made)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& info = Locator::infoConstants::value();
+	const auto spellOf = [&registry, &made](uint32_t number) {
+		const auto entity = EntityOf(made, number);
+		return entity != entt::null && registry.Valid(entity) && registry.AllOf<Spell>(entity) ? entity : entt::null;
+	};
+	// Each seed takes the worship site of the icon that made it, and its spell
+	for (const auto* record : world.OfType(gamesave::VanillaType::SpellSeed))
+	{
+		const auto file = world_import::ReadSpellSeed(world, *record);
+		const auto entity = file.has_value() ? EntityOf(made, file->number) : entt::null;
+		if (entity == entt::null)
+		{
+			continue;
+		}
+		auto& seed = registry.Get<SpellSeed>(entity);
+		if (file->icon != 0)
+		{
+			const auto icon = EntityOf(made, file->icon);
+			if (icon != entt::null && Locator::spellIconSystem::has_value())
+			{
+				seed.worshipSite = Locator::spellIconSystem::value().SiteOfIcon(icon);
+			}
+			if (seed.worshipSite == entt::null)
+			{
+				SPDLOG_LOGGER_WARN(ImportLog(), "The icon {} that made the spell seed {} has no worship site", file->icon,
+				                   file->number);
+			}
+		}
+		if (file->spell != 0)
+		{
+			seed.spell = spellOf(file->spell);
+			if (seed.spell == entt::null)
+			{
+				SPDLOG_LOGGER_WARN(ImportLog(), "The spell {} of the spell seed {} is not made", file->spell, file->number);
+			}
+		}
+	}
+	// Each spell of a seed takes its seed again. A spell of a seed that the hand holds while the spell runs, such as food,
+	// wood, water or the lightning, follows the hand.
+	for (const auto& record : world.Records())
+	{
+		if (!world_import::IsSpellRecord(record))
+		{
+			continue;
+		}
+		const auto file = world_import::ReadHeldSpell(world, record);
+		const auto entity = file.has_value() && file->seed != 0 ? spellOf(file->number) : entt::null;
+		if (entity == entt::null)
+		{
+			continue;
+		}
+		const auto seedEntity = EntityOf(made, file->seed);
+		const auto* seed = seedEntity != entt::null ? registry.TryGet<const SpellSeed>(seedEntity) : nullptr;
+		if (seed == nullptr)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The spell seed {} of the spell {} is not made", file->seed, file->number);
+			continue;
+		}
+		auto& spell = registry.Get<Spell>(entity);
+		spell.seed = seedEntity;
+		spell.castFromHand = magic::GetSpellSeedInfo(info, seed->seedType).castType == SpellCastType::SpellCastInHand;
+	}
+	// Each hand of the file takes its seed again
+	std::vector<entt::entity> held;
+	if (Locator::magicSystem::has_value())
+	{
+		auto& magicSystem = Locator::magicSystem::value();
+		for (const auto& hand : world_import::ReadHandSeeds(world))
+		{
+			const auto seed = EntityOf(made, hand.seed);
+			if (seed == entt::null || !magicSystem.ImportHeldSeed(hand.player, seed))
+			{
+				SPDLOG_LOGGER_WARN(ImportLog(), "The hand of player {} does not take the spell seed {} of the file",
+				                   static_cast<int>(hand.player), hand.seed);
+				continue;
+			}
+			held.push_back(seed);
+		}
+	}
+	// A seed out of the hand with its spell stays with the spell. The table of the seed tells if the seed follows it.
+	registry.Each<SpellSeed>([&held, &info](entt::entity entity, SpellSeed& seed) {
+		if (seed.spell == entt::null || std::ranges::find(held, entity) != held.end())
+		{
+			return;
+		}
+		const auto& seedInfo = magic::GetSpellSeedInfo(info, seed.seedType);
+		seed.followsSpell = magic::SeedAfterCastOf(seedInfo.isKeptInHand != 0, seedInfo.seedFollowsSpell != 0) ==
+		                    magic::SeedAfterCast::FollowsSpell;
+	});
 }
 
 void SaveGameSystem::ImportVanillaOtherCasts(const gamesave::VanillaWorld& world, VanillaMade& made)

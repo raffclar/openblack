@@ -1759,6 +1759,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	VanillaCircles circles;
 	VanillaFootpathWalks footpathWalks;
 	VanillaDances dances;
+	// The seeds of the file, which the icons of the worship sites keep
+	ImportVanillaSeeds(*read.world, made);
 	ImportVanillaTowns(*read.world, made, works, circles, footpathWalks, dances);
 	// The forests, the big forests and the trees of the file replace those of the land
 	ImportVanillaForests(*read.world, made);
@@ -1775,6 +1777,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	ImportVanillaDances(dances, made);
 	// The spells that the creatures of the file hold
 	ImportVanillaHeldCasts(*read.world, made, effects);
+	// The seeds take their icons and their spells, and the hands take their seeds
+	ImportVanillaSeedLinks(*read.world, made);
 	// The reactions of the file and their dances, when the things that they come from are made
 	ImportVanillaReactions(*read.world, made);
 	// The walkers take the circles of their walks when all the things of the file are made
