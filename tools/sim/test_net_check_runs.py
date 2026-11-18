@@ -231,6 +231,7 @@ class TurnsOfTwoLands(unittest.TestCase):
             self.assertEqual(net_check.session_part_turns(log), [14])
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
 class LinuxServerCommand(unittest.TestCase):
     def test_the_paths_and_the_listen_address_change_for_the_container(self):
         out, game, linux = os.path.abspath("E:/out"), os.path.abspath("C:/game"), os.path.abspath("E:/srv")
