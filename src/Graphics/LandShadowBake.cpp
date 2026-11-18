@@ -810,8 +810,8 @@ std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job
 				CastLeaves(coverage, caster.transform, caster.leaves, block.corner, job.side);
 			}
 			else if (caster.cast && !caster.cast->empty() && caster.castHigh.x >= block.corner.x &&
-			         caster.castLow.x <= block.corner.x + tree_shadows::k_BlockSize &&
-			         caster.castHigh.y >= block.corner.y && caster.castLow.y <= block.corner.y + tree_shadows::k_BlockSize)
+			         caster.castLow.x <= block.corner.x + tree_shadows::k_BlockSize && caster.castHigh.y >= block.corner.y &&
+			         caster.castLow.y <= block.corner.y + tree_shadows::k_BlockSize)
 			{
 				CastShape(coverage, *caster.cast, caster.shape, caster.shadow == LandShadow::ShapeBothSides, block.corner,
 				          job.side);
@@ -828,8 +828,7 @@ std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job
 			{
 				const auto covered = coverage[static_cast<size_t>(x * side + z)];
 				const int row = job.rowsFromFarEnd ? side - 1 - z : z;
-				shades[static_cast<size_t>(row * side + x)] =
-				    covered != 0 ? tree_shadows::Shade(covered, lowResolution) : 255;
+				shades[static_cast<size_t>(row * side + x)] = covered != 0 ? tree_shadows::Shade(covered, lowResolution) : 255;
 			}
 		}
 		results[i].position = block.position;

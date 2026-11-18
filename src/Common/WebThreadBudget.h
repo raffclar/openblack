@@ -60,8 +60,8 @@ inline constexpr std::array k_Parts {
 };
 
 /// The most threads that the game runs at one time in the browser
-inline constexpr size_t k_MostThreads =
-    std::accumulate(k_Parts.begin(), k_Parts.end(), size_t {0}, [](size_t sum, const Part& part) { return sum + part.threads; });
+inline constexpr size_t k_MostThreads = std::accumulate(k_Parts.begin(), k_Parts.end(), size_t {0},
+                                                        [](size_t sum, const Part& part) { return sum + part.threads; });
 
 #if defined(OPENBLACK_WEB_THREAD_POOL_SIZE)
 static_assert(k_MostThreads <= OPENBLACK_WEB_THREAD_POOL_SIZE,
