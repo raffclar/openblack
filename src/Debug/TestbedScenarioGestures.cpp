@@ -304,6 +304,31 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.potion_nasty_then_gesture_picker",
+	    .name = "The leash picker after the aggression potion",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger is taught all three leashes and is on the learning leash. Four seconds in, the nasty "
+	                   "creature spell (the aggression potion) is cast on it. While the spell holds, the leash gesture "
+	                   "and the heart are drawn. After the spell has worn off, the leash gesture and the heart are drawn, "
+	                   "then the leash gesture and the E.",
+	    .expected = "The spell puts the tiger on the aggression leash. The heart drawn while the spell holds changes "
+	                "nothing. After the spell, the heart changes the leash to the compassion leash, and the E then "
+	                "changes it to the learning leash.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Tiger()},
+	    .miracles = {{.type = MagicType::CreatureSpellAngry, .target = MiracleCast::Target::Creature, .delaySeconds = 4.0f}},
+	    .commands = {{.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 0.5f, .leash = LeashType::Evil},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 0.5f, .leash = LeashType::Good},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 0.5f, .leash = LeashType::Rope},
+	                 Draw(GestureType::SquareSpirial, 6.0f),
+	                 Draw(GestureType::Heart),
+	                 Draw(GestureType::SquareSpirial, 30.0f),
+	                 Draw(GestureType::Heart),
+	                 Draw(GestureType::SquareSpirial),
+	                 Draw(GestureType::EShape)},
+	});
+
+	all.push_back({
 	    .id = "interface.hint_row_in_temple",
 	    .name = "The gesture hints while the camera is in the temple",
 	    .facet = Facet::Interface,

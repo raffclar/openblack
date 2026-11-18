@@ -165,3 +165,14 @@ TEST(CreatureSpellMind, TakingTheOnlyDesireAwayWantsItNoMore)
 	ClearOnlyDesire(desires, cheat, true);
 	EXPECT_FLOAT_EQ(desires[Desire::Sadness].value, 0.5f);
 }
+
+TEST(CreatureSpellMind, AMoodThatWearsOffClearsItsCheatByTheLeashPickedLast)
+{
+	// A creature of no player always lets go
+	EXPECT_TRUE(MoodEndClearsCheat(false, LeashType::Evil));
+	EXPECT_TRUE(MoodEndClearsCheat(false, LeashType::Rope));
+	// A player's creature lets go only when the leash picked last is the learning leash, also with no leash on
+	EXPECT_TRUE(MoodEndClearsCheat(true, LeashType::Rope));
+	EXPECT_FALSE(MoodEndClearsCheat(true, LeashType::Evil));
+	EXPECT_FALSE(MoodEndClearsCheat(true, LeashType::Good));
+}

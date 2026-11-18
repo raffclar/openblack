@@ -99,6 +99,9 @@ public:
 	virtual bool Toggle(entt::entity creature) = 0;
 	/// Swaps the leash worn for another the creature knows, or picks the one to put on next
 	virtual bool ChangeType(entt::entity creature, LeashType type) = 0;
+	/// A nice or nasty spell changes the leash of the creature as it takes hold. The creature does not have to know the
+	/// leash that the spell gives.
+	virtual bool SpellChangesType(entt::entity creature, LeashType type) { return ChangeType(creature, type); }
 	/// The player picks a leash for their creature with a gesture or a key. The player cannot do this while a nice or
 	/// nasty spell is on the creature.
 	virtual bool PickType(PlayerNames player, LeashType type) = 0;

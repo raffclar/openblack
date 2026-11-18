@@ -822,4 +822,73 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	                 Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 6.0f)},
 	    .repeatFrom = 1,
 	});
+
+	all.push_back({
+	    .id = "leash.potion_nasty_then_pick",
+	    .name = "Pick the leash after the aggression potion",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes. L puts the learning leash on, and three seconds in the "
+	                   "nasty creature spell (the aggression potion) is cast on it. Six seconds in, V is pressed while "
+	                   "the spell holds. Once the spell has worn off, V is pressed twice and B once.",
+	    .expected = "As the spell takes hold the leash becomes the aggression leash, and the key pressed while it holds "
+	                "changes nothing. About 28 seconds after the cast the spell wears off and the leash stays the "
+	                "aggression leash. Then the keys change it again: V to the learning leash, V to the compassion "
+	                "leash, B back to the learning leash. The readout names each leash.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 30.0f})},
+	    .miracles = {{.type = MagicType::CreatureSpellAngry,
+	                  .target = MiracleCast::Target::Creature,
+	                  .handOffset = {0.0f, 30.0f},
+	                  .delaySeconds = 3.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Kind::LeashKey, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 6.0f, .value = 1},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 30.0f, .value = 1},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 1},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 2}},
+	});
+
+	auto learningOnly = Content(CreatureType::Tiger, {0.0f, 60.0f});
+	learningOnly.knownLeashes = std::vector {LeashType::Rope};
+	all.push_back({
+	    .id = "leash.potion_nasty_unknown_leash",
+	    .name = "The aggression potion on a creature that knows only the learning leash",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows only the learning leash. L puts it on, and three seconds in the nasty creature "
+	                   "spell is cast on it. After the spell has worn off, B is pressed.",
+	    .expected = "As the spell takes hold the leash becomes the aggression leash, although the tiger does not know "
+	                "it. The leash stays the aggression leash after the spell. Then B changes it to the learning leash, "
+	                "the only leash the tiger knows.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {learningOnly},
+	    .miracles = {{.type = MagicType::CreatureSpellAngry, .target = MiracleCast::Target::Creature, .delaySeconds = 3.0f}},
+	    .commands = {{.kind = Kind::LeashKey, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 36.0f, .value = 2}},
+	});
+
+	all.push_back({
+	    .id = "leash.potion_nasty_then_nice",
+	    .name = "The compassion potion while the aggression potion holds",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes. L puts the learning leash on. Three seconds in the nasty "
+	                   "creature spell is cast on it, and ten seconds in, while it holds, the nice creature spell. "
+	                   "Twenty seconds in, V is pressed. Once both spells have worn off, B is pressed twice.",
+	    .expected = "The nasty spell makes the leash the aggression leash and swings the tiger to evil, with steam. The "
+	                "nice spell cuts it short: it wears off over a second, then the nice spell takes hold two seconds "
+	                "later, makes the leash the compassion leash and swings the tiger to good, with hearts. The key "
+	                "pressed while it holds changes nothing. The nice spell wears off about 33 seconds after it was "
+	                "cast; the leash stays the compassion leash, and the tiger's alignment goes back to what it was "
+	                "before both spells. Then B changes the leash to the learning leash, and B again to the aggression "
+	                "leash.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 60.0f})},
+	    .miracles = {{.type = MagicType::CreatureSpellAngry, .target = MiracleCast::Target::Creature, .delaySeconds = 3.0f},
+	                 {.type = MagicType::CreatureSpellCompassion,
+	                  .target = MiracleCast::Target::Creature,
+	                  .delaySeconds = 10.0f}},
+	    .commands = {{.kind = Kind::LeashKey, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 19.0f, .value = 1},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 27.0f, .value = 2},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 2}},
+	});
 }
