@@ -54,6 +54,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
@@ -332,6 +333,18 @@ public:
 		    spdlog::get("game"), "Made creature {} \"{}\" of species {} for the computer god {} at {:.1f}, {:.1f}",
 		    entt::to_integral(creature), name, static_cast<int>(species), static_cast<int>(player), position.x, position.z);
 		return true;
+	}
+
+	void LeadNewCreature(PlayerNames player) override
+	{
+		if (!Locator::playerSystem::has_value() || !Locator::leashSystem::has_value())
+		{
+			return;
+		}
+		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(player); creature.has_value())
+		{
+			static_cast<void>(Locator::leashSystem::value().SetLeashable(*creature, true));
+		}
 	}
 
 	void LearnEveryLeash(PlayerNames player) override
