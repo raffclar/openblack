@@ -30,6 +30,7 @@
 
 #include "BenchmarkRecorder.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/ComputerStartAlignment.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "TestbedGameStageInterface.h"
 #include "TestbedScenarioRegistry.h"
@@ -329,6 +330,8 @@ private:
 	std::optional<std::optional<int64_t>> _pinnedDateBefore;
 	/// Whether the game was a skirmish before a scenario made it one
 	std::optional<bool> _skirmishBefore;
+	/// The start alignments of the computer gods before a scenario chose random alignments
+	std::optional<computer_player::StartAlignments> _startAlignmentsBefore;
 	/// Whether the world played as a network game before a scenario made it one
 	std::optional<bool> _networkGameBefore;
 	/// The players that the scenario put in the game, which go when it stops

@@ -542,6 +542,28 @@ void AddFoundation(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.creature_phial_pour",
+	    .name = "The hand pours a creature spell's phial onto the creature",
+	    .facet = Facet::Miracles,
+	    .description = "A strong phial pressed onto a creature by hand, the button held for eight seconds. The camera "
+	                   "looks at the creature from near.",
+	    .expected = "At the cast the hand goes to the head of the creature and stays there as the creature moves. For "
+	                "four seconds the hand rises by four tenths of the height of the creature and tips the phial by up "
+	                "to one radian, as the hand tips food from a food miracle. Then the phial leaves the hand and the "
+	                "hand is free again. The creature plays no animation of its own for the phial.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {20.0f, 30.0f, -14.0f}, .look = {-10.0f, 16.0f, 30.0f}},
+	    .creatures = {Subject(k_Spot, "drinker")},
+	    .miracles = {{.type = MagicType::CreatureSpellStrong,
+	                  .target = Target::Creature,
+	                  .creature = 0,
+	                  .handOffset = {0.0f, 25.0f},
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = 8.0f,
+	                  .byHand = true}},
+	});
+
+	all.push_back({
 	    .id = "miracles.creature_phial_in_hand",
 	    .name = "A creature spell's phial after its cast",
 	    .facet = Facet::Miracles,

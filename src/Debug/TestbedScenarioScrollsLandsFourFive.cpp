@@ -188,6 +188,25 @@ void testbed_scenarios::AddLandsFourFiveScrollScenarios(std::vector<Scenario>& a
 	    .commands = breederCommands,
 	});
 
+	// The same breeder with the set that a game starts with: the scenario does not change the set, so all five bonus
+	// creatures are on show unless the debug option takes them away
+	all.push_back({
+	    .id = "story.lfour_breeder_default",
+	    .name = "Story: the creature breeder of the fourth land offers all bonus creatures by default",
+	    .facet = Facet::Story,
+	    .description = "As story.lfour_breeder, but the set of bonus creatures is not changed, so all five are unlocked, "
+	                   "as a game starts. Eleven seconds in, the pointer at the middle of the screen clicks the scroll.",
+	    .expected = "On the click the breeder walks to his soap box and the camera glides to him. The Leopard, Horse, "
+	                "Mandrill, Gorilla and Rhino appear one after the other in sparkles, each with a scroll, and the "
+	                "breeder says \"Look. I have these wondrous Creatures you can choose from.\"",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = LookingFrom(k_Land4Middle, {k_Kennels.x, k_Kennels.z}, {-20.0f, 10.0f, 22.0f}, 5.0f),
+	    .creatures = {PlayersCreature(CreatureType::Tiger,
+	                                  FromMiddle(k_Land4Middle, k_ShowPlace.x + 10.0f, k_ShowPlace.z - 12.0f), 0.0f,
+	                                  "player's tiger")},
+	    .commands = breederCommands,
+	});
+
 	// The same breeder, played to the swap: the kennels' scroll, then the Leopard's scroll with the Tiger 25 metres
 	// away, then the Leopard itself
 	std::vector<Command> swapCommands {breederCommands.front()};

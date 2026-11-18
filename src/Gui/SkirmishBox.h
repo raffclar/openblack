@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <string>
 #include <utility>
@@ -20,6 +21,7 @@
 
 #include "Common/Zoomer.h"
 #include "Dialog.h"
+#include "SkirmishBoxRules.h"
 
 namespace openblack::gui
 {
@@ -37,6 +39,9 @@ class TextDatabase;
 /// Game an arrow at the bottom right. Start Game shows only while the player has picked a land. The box keeps the land
 /// that the player picked when it opens again. Escape does nothing. The box fades in over half a second and out over a
 /// fifth.
+///
+/// Under the list, three check boxes let the player start the computer gods 2, 3 and 4 and their creatures at a random
+/// alignment (deviation 280). The box keeps these choices when it opens again.
 class SkirmishBox
 {
 public:
@@ -51,7 +56,11 @@ public:
 
 	static constexpr DialogRect k_Box {.min = {10, 10}, .max = {790, 590}};
 	static constexpr DialogRect k_Title {.min = {40, 30}, .max = {760, 70}};
-	static constexpr DialogRect k_List {.min = {100, 110}, .max = {700, 490}};
+	/// The list ends above the check boxes of the alignments (deviation 280)
+	static constexpr DialogRect k_List {.min = {100, 110}, .max = {700, 470}};
+	/// The top of the check boxes of the alignments, and the left of each
+	static constexpr int k_AlignmentTop = 485;
+	static constexpr std::array<int, skirmish_box::k_AlignmentChoices> k_AlignmentLefts {130, 330, 530};
 	static constexpr glm::ivec2 k_BackPosition {30, 530};
 	static constexpr glm::ivec2 k_StartPosition {730, 530};
 	static constexpr int k_ArrowSize = 40;
@@ -95,6 +104,9 @@ public:
 	[[nodiscard]] const List& GetList() const noexcept { return *_list; }
 	[[nodiscard]] bool StartShows() const noexcept;
 
+	/// The god slots (from 0) whose computer god and its creature start at a random alignment
+	[[nodiscard]] std::vector<uint8_t> GetRandomAlignmentSlots() const;
+
 	/// The controls that act, for tools pressing them by name: the arrows and the lands of the list that show
 	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
 
@@ -106,6 +118,8 @@ private:
 	Dialog _dialog;
 	List* _list {nullptr};
 	BigButton* _start {nullptr};
+	/// The choices of the check boxes of the alignments, in the order of the box
+	std::array<bool, skirmish_box::k_AlignmentChoices> _randomAlignment {};
 	Answer _answer;
 	bool _active {false};
 	Zoomer _fade;

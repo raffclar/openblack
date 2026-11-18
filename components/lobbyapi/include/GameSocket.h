@@ -139,6 +139,9 @@ struct Start
 	/// The god slots that the lobby closed, from 0 ("closed_slots", optional). No human and no computer god plays such a
 	/// slot. Each other slot with no human gets a computer god at the start.
 	std::vector<uint8_t> closedSlots;
+	/// The god slots from 0 whose computer god and its creature start at a random alignment ("random_alignment_slots",
+	/// optional, deviation 280). The other computer gods start at the alignments that the game gives them.
+	std::vector<uint8_t> randomAlignmentSlots;
 };
 
 /// Server to client: "room.joined". The server accepted the ticket.

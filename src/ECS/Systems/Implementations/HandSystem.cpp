@@ -559,8 +559,8 @@ void HandSystem::ProcessTurn()
 			step((*hands)[static_cast<size_t>(Side::Left)]);
 		}
 	}
-	// No person reports the hand of each other god, so its input goes to the origin of the world. The gods take this
-	// step in the order of their player numbers.
+	// No person reports the hand of each other god, so its input goes to the place that its computer mind reported. The
+	// gods take this step in the order of their player numbers.
 	if (!Locator::playerSystem::has_value())
 	{
 		return;
@@ -581,7 +581,9 @@ void HandSystem::ProcessTurn()
 			continue;
 		}
 		auto* hand = registry.TryGet<HandStillness>(entity);
-		god_hand::InputTurn(hand != nullptr ? *hand : registry.Assign<HandStillness>(entity));
+		const auto* mind = registry.TryGet<const ComputerPlayer>(entity);
+		god_hand::InputTurn(hand != nullptr ? *hand : registry.Assign<HandStillness>(entity),
+		                    mind != nullptr ? mind->hand.reported : std::nullopt);
 	}
 }
 

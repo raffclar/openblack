@@ -216,6 +216,10 @@ std::vector<SlotView> LobbyRoom::Slots() const
 			case lobby_api::SlotKind::Computer:
 				view.holder = SlotHolder::Computer;
 				break;
+			case lobby_api::SlotKind::ComputerRandom:
+				view.holder = SlotHolder::Computer;
+				view.randomAlignment = true;
+				break;
 			case lobby_api::SlotKind::Closed:
 				view.holder = SlotHolder::Closed;
 				break;

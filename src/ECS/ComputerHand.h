@@ -128,6 +128,10 @@ struct HandAction
 	entt::entity castTarget {entt::null};
 	/// Where the camera of the god is. It goes to the hand after each turn of a step, and stays there between actions.
 	glm::vec3 camera {0.0f};
+	/// Where the god reports its hand. It goes to the hand after each turn of a step, together with the camera. The
+	/// input of each turn moves the hand of the god there. The share of the god's influence past the border measures
+	/// from there too. Before the first turn of a step, the god has no report.
+	std::optional<glm::vec3> reported;
 };
 
 /// The turns in each second of the game

@@ -32,6 +32,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
@@ -665,10 +666,12 @@ void InfluenceSystem::ProcessVirtualInfluence(PlayerNames player, uint32_t turn)
 		return;
 	}
 	// The hand of every god keeps a share of the god's influence past the border, also the hand of a god that no person
-	// plays. The share measures from the point that the god's hand reports picked. A god that no person plays sends no
-	// reports, so its share measures from the origin of the world.
+	// plays. A person's share measures from the point that the hand reports picked. The share of a god that no person
+	// plays measures from the hand that its computer mind reported.
+	const auto* mind = Locator::entitiesRegistry::value().TryGet<const ComputerPlayer>(*entity);
 	const auto hand =
-	    virtual_influence::TurnHandPoint(Locator::playerSystem::value().IsHumanPlayer(player), ReportedPickOf(player));
+	    virtual_influence::TurnHandPoint(Locator::playerSystem::value().IsHumanPlayer(player), ReportedPickOf(player),
+	                                     mind != nullptr ? mind->hand.reported : std::nullopt);
 	ProcessVirtualInfluence(*entity, player, hand, turn);
 }
 

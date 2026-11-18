@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/ComputerStartAlignment.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -101,6 +102,11 @@ public:
 	/// as it starts. None: each god keeps its built-in personality. The seed is not part of the saved world: every
 	/// computer of a network game sets it before its land loads.
 	virtual void SetAiSeed(std::optional<uint32_t> seed) = 0;
+	/// The start alignment of each computer god of the next skirmish or network game (deviation 280). The skirmish box
+	/// or the start of the network game sets them before the land loads, on every computer. The saved world does not
+	/// keep them: each mind starts one time on a land, and a mind that started does not start again after a load.
+	virtual void SetStartAlignments(const computer_player::StartAlignments& alignments) = 0;
+	[[nodiscard]] virtual const computer_player::StartAlignments& GetStartAlignments() const = 0;
 	/// Tools: log the time of the mind and the hand of each computer god each time this many turns go by (0 for never)
 	virtual void SetTimesReport(uint32_t /*everyTurns*/) {}
 };

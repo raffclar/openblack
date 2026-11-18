@@ -307,6 +307,17 @@ TEST(GameSocket, TheClosedSlotsGoInTheStartAndAreLeftOutWhenNone)
 	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"closed_slots":[-1]})").has_value());
 }
 
+TEST(GameSocket, TheRandomAlignmentSlotsGoInTheStartAndAreLeftOutWhenNone)
+{
+	Start start {.land = "Online Maps/mpm_2p_1.map", .testbed = false, .seed = 1, .turn = 0, .opening = {}};
+	EXPECT_EQ(ToJson(start).find("random_alignment_slots"), std::string::npos);
+	EXPECT_TRUE(RoundTrip(start).randomAlignmentSlots.empty());
+	start.randomAlignmentSlots = {1};
+	EXPECT_EQ(RoundTrip(start).randomAlignmentSlots, (std::vector<uint8_t> {1}));
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"random_alignment_slots":["1"]})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"random_alignment_slots":[32]})").has_value());
+}
+
 TEST(GameSocket, TheConditionsGoInTheStartAndAreLeftOutWhenNone)
 {
 	Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};

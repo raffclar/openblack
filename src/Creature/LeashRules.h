@@ -74,6 +74,17 @@ struct Lengths
 /// Whether the player can change the leash of their creature. The player cannot do this while a nice or nasty spell
 /// is on the creature. The nice and nasty spells themselves change the leash, and the player cannot change it back.
 [[nodiscard]] bool PlayerCanChangeType(bool niceSpellOn, bool nastySpellOn);
+/// What changes the leash of a creature
+enum class TypeChangeBy : uint8_t
+{
+	/// The player, a script or the game for the player
+	Player,
+	/// A nice or nasty spell as it takes hold
+	Spell,
+};
+/// Whether the leash can change to a type. Only a leash that the creature knows can be picked. A spell can give any
+/// leash.
+[[nodiscard]] bool TypeChangeAllowed(bool known, TypeChangeBy by);
 /// How long the leash's desire holds the creature's other desires (but its bodily needs) down, in seconds
 constexpr float k_ForcedDesireSeconds = 36000.0f;
 /// How long a creature tied to a village it wants to impress holds its other desires down, in seconds

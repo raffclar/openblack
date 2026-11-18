@@ -182,6 +182,36 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	         {.kind = Kind::ClickCreatureAt, .delaySeconds = 8.0f, .point = landOneShowPlace}},
 	});
 
+	// The first land's breeder with the set that a game starts with: the scenario does not change the set, so all
+	// five bonus creatures are on show unless the debug option takes them away
+	all.push_back({
+	    .id = "story.lone_breeder_default",
+	    .name = "Story: the creature breeder of the first land offers all bonus creatures by default",
+	    .facet = Facet::Story,
+	    .description = "The first land loads with its own scripts. The set of bonus creatures is not changed, so all five "
+	                   "are unlocked, as a game starts. The land's own launcher of the breeder runs. Eleven seconds in, "
+	                   "the kennels' scroll is clicked.",
+	    .expected = "The breeder walks to his soap box and the camera glides to him. The Leopard, Horse, Mandrill, "
+	                "Gorilla and Rhino appear one after the other in sparkles, each with a scroll, and the breeder says "
+	                "\"Look. I have these wondrous Creatures you can choose from.\" The Tiger is not offered, because it "
+	                "is the player's own species.",
+	    .environment = {.land = Land::Story, .storyLand = "Land1.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {landOneKennels.x - 20.0f, 30.0f, landOneKennels.y - 22.0f},
+	                .look = {landOneKennels.x, 10.0f, landOneKennels.y}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = landOneShowPlace + glm::vec2 {10.0f, -12.0f},
+	                   .phase = 3,
+	                   .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f}}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 0.5f,
+	                  .script = "RunCreatureBreederLand",
+	                  .scriptArguments = {{.kind = Argument::Kind::Number, .number = 1.0f}},
+	                  .scriptGlobals = runBreeder.scriptGlobals},
+	                 {.kind = Kind::ClickScroll, .delaySeconds = 11.0f, .point = landOneKennels}},
+	});
+
 	// The end of a cinema, as the films of the creature trainer end: the script sends the camera up and away, and gives
 	// the camera back before it arrives
 	const auto move = [](std::string_view native, glm::vec2 point, float height, float seconds, float delay) {

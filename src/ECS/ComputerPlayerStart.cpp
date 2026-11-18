@@ -9,10 +9,13 @@
 
 #include "ComputerPlayerStart.h"
 
+#include <charconv>
+
 #include <algorithm>
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <tuple>
 
 #include "Creature/CreatureMindFileBody.h"
@@ -136,7 +139,8 @@ StartFacts FactsOf(const World& world, PlayerNames player)
 }
 } // namespace
 
-void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state, std::optional<uint32_t> aiSeed)
+void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state, std::optional<uint32_t> aiSeed,
+           StartAlignment alignment)
 {
 	state.started = true;
 	if (aiSeed.has_value())
@@ -155,22 +159,75 @@ void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& st
 	// The creature that the player has now, also a creature made above, gets its size and its miracles
 	const auto facts = FactsOf(world, player);
 	const auto creature = world.Creature(player);
-	if (!creature.has_value())
-	{
-		return;
-	}
-	if (TakesSize(state, facts))
+	if (creature.has_value() && TakesSize(state, facts))
 	{
 		const auto localSize = world.ShownSize(*world.Creature(world.LocalPlayer()));
 		world.SetSize(*creature, SizeLike(localSize, world.GameFloatRand(k_MostAddedShare)));
 	}
-	if (LearnsMiracles(state, facts))
+	if (creature.has_value() && LearnsMiracles(state, facts))
 	{
 		for (const auto miracle : MiraclesToLearn(world.Miracles(player), facts.temple))
 		{
 			world.Teach(*creature, miracle);
 		}
 	}
+	// A random start alignment comes after all the steps of the game, so that the game takes its own random values first
+	if (!DrawsAlignment(alignment, facts))
+	{
+		return;
+	}
+	world.StartGodAt(player, AlignmentOfDraw(world.GameFloatRand(k_AlignmentDrawRange)));
+	if (creature.has_value())
+	{
+		world.StartCreatureAt(*creature, AlignmentOfDraw(world.GameFloatRand(k_AlignmentDrawRange)));
+	}
+}
+
+bool DrawsAlignment(StartAlignment alignment, const StartFacts& facts)
+{
+	return alignment == StartAlignment::Random && (facts.skirmish || facts.network);
+}
+
+float AlignmentOfDraw(float draw)
+{
+	return draw - 1.0f;
+}
+
+std::optional<std::vector<uint8_t>> ParseSlotList(std::string_view text)
+{
+	std::vector<uint8_t> slots;
+	if (text.empty())
+	{
+		return slots;
+	}
+	size_t from = 0;
+	while (true)
+	{
+		const auto comma = text.find(',', from);
+		const auto word = text.substr(from, comma == std::string_view::npos ? std::string_view::npos : comma - from);
+		size_t slot = 0;
+		const auto [end, error] = std::from_chars(word.data(), word.data() + word.size(), slot);
+		if (word.empty() || error != std::errc {} || end != word.data() + word.size() || slot >= player_slots::k_Slots)
+		{
+			return std::nullopt;
+		}
+		slots.push_back(static_cast<uint8_t>(slot));
+		if (comma == std::string_view::npos)
+		{
+			return slots;
+		}
+		from = comma + 1;
+	}
+}
+
+StartAlignments AlignmentsOfRandomSlots(std::span<const uint8_t> randomSlots) noexcept
+{
+	StartAlignments alignments {};
+	// The players of the slots, as for the closed slots
+	const auto random = ClosedPlayers(randomSlots);
+	std::ranges::transform(random, alignments.begin(),
+	                       [](bool each) { return each ? StartAlignment::Random : StartAlignment::Vanilla; });
+	return alignments;
 }
 
 bool SlotHasNoPlayer(bool human, bool computer, bool citadel)

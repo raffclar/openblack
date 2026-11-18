@@ -423,10 +423,12 @@ entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)
 	if (spell.castFromHand && spell.spellClass == magic::SpellClass::Resource)
 	{
 		magic::StartPour(_pour, magic::k_FoodWoodPour, _hand.handPosition);
+		_pourCreature = entt::null;
 	}
 	else if (spell.castFromHand && spell.spellClass == magic::SpellClass::Water)
 	{
 		magic::StartPour(_pour, magic::k_WaterPour, _hand.handPosition);
+		_pourCreature = entt::null;
 	}
 	return spellEntity;
 }

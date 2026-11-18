@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <optional>
 #include <span>
@@ -53,6 +54,17 @@ struct Land
 
 /// The lands of the list, in the order of the folder, from the names of the files that the folder holds
 [[nodiscard]] std::vector<Land> ListLands(std::span<const std::u16string> fileNames);
+
+/// The computer gods that the box gives a choice of start alignment (deviation 280): the gods of the slots 1, 2 and 3
+/// (from 0), which the lands of the playground folder switch on. Slot 0 is the god of the player.
+inline constexpr size_t k_AlignmentChoices = 3;
+inline constexpr size_t k_FirstComputerSlot = 1;
+
+/// The label of the check box of a computer god: "God 2: random alignment" for the slot 1 (from 0)
+[[nodiscard]] std::u16string RandomAlignmentLabel(size_t slot);
+
+/// The god slots (from 0) whose computer god starts at a random alignment, from the check boxes in the order of the box
+[[nodiscard]] std::vector<uint8_t> RandomAlignmentSlots(std::span<const bool, k_AlignmentChoices> checked);
 
 /// Start Game shows only while the player has picked a land of the list
 [[nodiscard]] constexpr bool StartShows(std::optional<size_t> selection, size_t lands) noexcept

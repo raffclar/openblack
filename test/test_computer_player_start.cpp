@@ -72,7 +72,18 @@ public:
 	float GameFloatRand(float most) override
 	{
 		mostsAsked.push_back(most);
+		if (!draws.empty())
+		{
+			const auto draw = draws.front();
+			draws.erase(draws.begin());
+			return draw;
+		}
 		return share;
+	}
+	void StartGodAt(PlayerNames player, float alignment) override { godAlignments.emplace_back(player, alignment); }
+	void StartCreatureAt(entt::entity creature, float alignment) override
+	{
+		creatureAlignments.emplace_back(creature, alignment);
 	}
 
 	void SetPersonality(PlayerNames player, std::string_view need, float weight) override
@@ -102,6 +113,10 @@ public:
 	std::vector<float> mostsAsked;
 	uint32_t roll {0};
 	float share {0.0f};
+	/// The values of the next float draws, in order. After them each draw gives the share.
+	std::vector<float> draws;
+	std::vector<std::pair<PlayerNames, float>> godAlignments;
+	std::vector<std::pair<entt::entity, float>> creatureAlignments;
 };
 
 constexpr auto k_Person = static_cast<entt::entity>(1);
@@ -647,4 +662,115 @@ TEST(ComputerPlayerAfterLand, TheEndOfALandKeepsTheMindButSwitchesItOff)
 	EXPECT_TRUE(cleared.hand.steps.empty());
 	EXPECT_EQ(cleared.hand.hand, glm::vec3(100.0f, 20.0f, 200.0f));
 	EXPECT_FLOAT_EQ(cleared.hand.speed, 400.0f);
+}
+
+TEST(ComputerPlayerStartAlignment, TheVanillaAlignmentDrawsNothingAndChangesNoAlignment)
+{
+	FakeWorld world;
+	world.creatures = {{PlayerNames::PLAYER_TWO, k_GodsCreature}};
+	world.sizes = {{k_GodsCreature, 1.0f}};
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind, std::nullopt, StartAlignment::Vanilla);
+	EXPECT_TRUE(world.mostsAsked.empty());
+	EXPECT_TRUE(world.godAlignments.empty());
+	EXPECT_TRUE(world.creatureAlignments.empty());
+}
+
+TEST(ComputerPlayerStartAlignment, ARandomAlignmentDrawsForTheGodThenForItsCreature)
+{
+	FakeWorld world;
+	world.creatures = {{PlayerNames::PLAYER_TWO, k_GodsCreature}};
+	world.sizes = {{k_GodsCreature, 1.0f}};
+	world.draws = {0.25f, 1.75f};
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind, std::nullopt, StartAlignment::Random);
+	EXPECT_EQ(world.mostsAsked, (std::vector<float> {k_AlignmentDrawRange, k_AlignmentDrawRange}));
+	ASSERT_EQ(world.godAlignments.size(), 1);
+	EXPECT_EQ(world.godAlignments[0].first, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(world.godAlignments[0].second, -0.75f);
+	ASSERT_EQ(world.creatureAlignments.size(), 1);
+	EXPECT_EQ(world.creatureAlignments[0].first, k_GodsCreature);
+	EXPECT_EQ(world.creatureAlignments[0].second, 0.75f);
+}
+
+TEST(ComputerPlayerStartAlignment, TheRandomAlignmentComesAfterTheDrawsOfTheGame)
+{
+	// The skirmish makes a creature and sizes it from the creature of the person before the alignments
+	FakeWorld world;
+	world.creatures = {{PlayerNames::PLAYER_ONE, k_Person}};
+	world.sizes = {{k_Person, 2.0f}};
+	world.temples = {{PlayerNames::PLAYER_TWO, true}};
+	world.pens = {{PlayerNames::PLAYER_TWO, glm::vec3(1.0f, 2.0f, 3.0f)}};
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind, std::nullopt, StartAlignment::Random);
+	EXPECT_EQ(world.rangesAsked, std::vector<uint32_t> {k_SpeciesChoices});
+	EXPECT_EQ(world.mostsAsked, (std::vector<float> {k_MostAddedShare, k_AlignmentDrawRange, k_AlignmentDrawRange}));
+	ASSERT_EQ(world.made.size(), 1);
+	ASSERT_EQ(world.creatureAlignments.size(), 1);
+	EXPECT_EQ(world.creatureAlignments[0].first, *world.Creature(PlayerNames::PLAYER_TWO));
+}
+
+TEST(ComputerPlayerStartAlignment, AGodWithNoCreatureDrawsOnlyItsOwnAlignment)
+{
+	FakeWorld world;
+	world.draws = {2.0f};
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind, std::nullopt, StartAlignment::Random);
+	EXPECT_EQ(world.mostsAsked, std::vector<float> {k_AlignmentDrawRange});
+	ASSERT_EQ(world.godAlignments.size(), 1);
+	EXPECT_EQ(world.godAlignments[0].second, 1.0f);
+	EXPECT_TRUE(world.creatureAlignments.empty());
+}
+
+TEST(ComputerPlayerStartAlignment, ALandOfTheStoryKeepsItsAlignmentsAndANetworkGameDraws)
+{
+	FakeWorld story;
+	story.skirmish = false;
+	auto mind = SwitchedOnLikeThePerson();
+	Start(story, PlayerNames::PLAYER_TWO, mind, std::nullopt, StartAlignment::Random);
+	EXPECT_TRUE(story.mostsAsked.empty());
+	EXPECT_TRUE(story.godAlignments.empty());
+
+	FakeWorld network;
+	network.skirmish = false;
+	network.network = true;
+	auto other = SwitchedOnLikeThePerson();
+	Start(network, PlayerNames::PLAYER_THREE, other, std::nullopt, StartAlignment::Random);
+	ASSERT_EQ(network.godAlignments.size(), 1);
+	EXPECT_EQ(network.godAlignments[0].first, PlayerNames::PLAYER_THREE);
+}
+
+TEST(ComputerPlayerStartAlignment, TheDrawLessOneGivesAnAlignmentFromEvilToGood)
+{
+	EXPECT_EQ(AlignmentOfDraw(0.0f), -1.0f);
+	EXPECT_EQ(AlignmentOfDraw(1.0f), 0.0f);
+	EXPECT_EQ(AlignmentOfDraw(k_AlignmentDrawRange), 1.0f);
+	EXPECT_FALSE(DrawsAlignment(StartAlignment::Vanilla, {.skirmish = true, .network = true}));
+	EXPECT_TRUE(DrawsAlignment(StartAlignment::Random, {.skirmish = true}));
+	EXPECT_TRUE(DrawsAlignment(StartAlignment::Random, {.network = true}));
+	EXPECT_FALSE(DrawsAlignment(StartAlignment::Random, {}));
+}
+
+TEST(ComputerPlayerStartAlignment, TheRandomSlotsNameTheirPlayers)
+{
+	const std::vector<uint8_t> slots {1, 3};
+	const auto alignments = AlignmentsOfRandomSlots(slots);
+	EXPECT_EQ(alignments.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), StartAlignment::Vanilla);
+	EXPECT_EQ(alignments.at(static_cast<size_t>(PlayerNames::PLAYER_TWO)), StartAlignment::Random);
+	EXPECT_EQ(alignments.at(static_cast<size_t>(PlayerNames::PLAYER_THREE)), StartAlignment::Vanilla);
+	EXPECT_EQ(alignments.at(static_cast<size_t>(PlayerNames::PLAYER_FOUR)), StartAlignment::Random);
+	EXPECT_EQ(std::ranges::count(alignments, StartAlignment::Random), 2);
+	EXPECT_EQ(std::ranges::count(AlignmentsOfRandomSlots({}), StartAlignment::Random), 0);
+}
+
+TEST(ComputerPlayerStartAlignment, TheSlotListOfTheToolsReads)
+{
+	EXPECT_EQ(ParseSlotList("1,2"), (std::optional(std::vector<uint8_t> {1, 2})));
+	EXPECT_EQ(ParseSlotList("0"), (std::optional(std::vector<uint8_t> {0})));
+	EXPECT_EQ(ParseSlotList(""), (std::optional(std::vector<uint8_t> {})));
+	EXPECT_FALSE(ParseSlotList("1,").has_value());
+	EXPECT_FALSE(ParseSlotList("a").has_value());
+	EXPECT_FALSE(ParseSlotList("-1").has_value());
+	EXPECT_FALSE(ParseSlotList("1 ").has_value());
+	EXPECT_FALSE(ParseSlotList(std::to_string(player_slots::k_Slots)).has_value());
 }

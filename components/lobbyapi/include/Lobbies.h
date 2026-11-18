@@ -50,7 +50,15 @@ enum class SlotKind : uint8_t
 	Computer,
 	/// Nobody plays the slot
 	Closed,
+	/// A computer god plays the slot at the start. The god and its creature start at a random alignment (deviation 280).
+	ComputerRandom,
 };
+
+/// A computer god plays a slot of this kind at the start
+[[nodiscard]] constexpr bool IsComputerKind(SlotKind kind) noexcept
+{
+	return kind == SlotKind::Computer || kind == SlotKind::ComputerRandom;
+}
 
 enum class LobbyVisibility : uint8_t
 {

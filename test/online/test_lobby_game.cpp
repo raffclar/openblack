@@ -285,6 +285,21 @@ TEST(LobbyGame, TheSlotKindsReadFromTheTextOfTheLobby)
 	EXPECT_TRUE(std::holds_alternative<std::string>(lobby_game::ParseSlotKinds(many)));
 }
 
+TEST(LobbyGame, AComputerSlotOfRandomAlignmentReadsAndGoesInTheStart)
+{
+	using lobby_api::SlotKind;
+	const auto kinds = lobby_game::ParseSlotKinds("open,computer_random,computer");
+	ASSERT_TRUE(std::holds_alternative<std::vector<SlotKind>>(kinds));
+	const auto& read = std::get<std::vector<SlotKind>>(kinds);
+	EXPECT_EQ(read, (std::vector<SlotKind> {SlotKind::Open, SlotKind::ComputerRandom, SlotKind::Computer}));
+	EXPECT_EQ(lobby_game::RandomAlignmentSlotsOf(read), (std::vector<uint8_t> {1}));
+	EXPECT_TRUE(lobby_game::ClosedSlotsOf(read).empty());
+	EXPECT_TRUE(lobby_api::IsComputerKind(SlotKind::ComputerRandom));
+	EXPECT_TRUE(lobby_api::IsComputerKind(SlotKind::Computer));
+	EXPECT_FALSE(lobby_api::IsComputerKind(SlotKind::Open));
+	EXPECT_EQ(lobby_api::SlotKindName(SlotKind::ComputerRandom), "computer_random");
+}
+
 TEST(LobbyGame, TheStartClosesOnlyTheClosedSlots)
 {
 	using lobby_api::SlotKind;

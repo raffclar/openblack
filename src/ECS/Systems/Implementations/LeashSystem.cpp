@@ -1037,9 +1037,19 @@ bool LeashSystem::TapCreature(PlayerNames player, entt::entity creature)
 
 bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 {
+	return SetType(creature, type, leash::TypeChangeBy::Player);
+}
+
+bool LeashSystem::SpellChangesType(entt::entity creature, LeashType type)
+{
+	return SetType(creature, type, leash::TypeChangeBy::Spell);
+}
+
+bool LeashSystem::SetType(entt::entity creature, LeashType type, leash::TypeChangeBy by)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* leashes = registry.TryGet<CreatureLeash>(creature);
-	if (leashes == nullptr || !Knows(creature, type))
+	if (leashes == nullptr || !leash::TypeChangeAllowed(Knows(creature, type), by))
 	{
 		return false;
 	}

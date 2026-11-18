@@ -37,9 +37,11 @@
 #include "Creature/CreatureFileLoad.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/Components/Alignment.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/HandStart.h"
 #include "ECS/Components/PlayerRelations.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -214,6 +216,47 @@ public:
 	{
 		// The weight goes to the node of the need in the decision tree of the god
 		Locator::computerPlayerSystem::value().SetPersonality(player, need, weight);
+	}
+
+	void StartGodAt(PlayerNames player, float alignment) override
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto entity = PlayerEntity(player);
+		// Only the alignment changes: a change still to come stays
+		if (auto* kept = registry.TryGet<ecs::components::Alignment>(entity); kept != nullptr)
+		{
+			kept->value = alignment;
+		}
+		else
+		{
+			registry.Assign<ecs::components::Alignment>(entity, alignment, 0.0f);
+		}
+		if (auto* statistics = registry.TryGet<ecs::components::PlayerStatistics>(entity); statistics != nullptr)
+		{
+			statistics->startAlignment = alignment;
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The computer god {} starts at the random alignment {}",
+		                   static_cast<int>(player), alignment);
+	}
+
+	void StartCreatureAt(entt::entity creature, float alignment) override
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		auto* body = registry.TryGet<ecs::components::Creature>(creature);
+		if (body == nullptr)
+		{
+			return;
+		}
+		// Its body takes its looks at once, as a script that sets the alignment of a creature does
+		body->alignment = alignment;
+		ecs::archetypes::CreatureArchetype::TakeLooks(registry, creature);
+		if (auto* statistics = registry.TryGet<ecs::components::PlayerStatistics>(PlayerEntity(body->owner));
+		    statistics != nullptr)
+		{
+			statistics->startCreatureAlignment = alignment;
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The creature of the computer god {} starts at the random alignment {}",
+		                   static_cast<int>(body->owner), alignment);
 	}
 };
 
@@ -695,7 +738,10 @@ bool ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint3
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The computer god {} starts with the personality of AI seed {}",
 			                   static_cast<int>(name), *_aiSeed);
 		}
-		computer_player::Start(*_world, name, *mind, _aiSeed);
+		const auto number = static_cast<size_t>(name);
+		const auto alignment =
+		    number < _startAlignments.size() ? _startAlignments.at(number) : computer_player::StartAlignment::Vanilla;
+		computer_player::Start(*_world, name, *mind, _aiSeed, alignment);
 		mind = registry.TryGet<ComputerPlayer>(entity);
 		if (mind == nullptr)
 		{

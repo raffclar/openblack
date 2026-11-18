@@ -480,8 +480,9 @@ TEST(LobbyScreenRules, TheHostActions)
 	LobbyRoom host(TestLobby(), k_Host);
 	EXPECT_TRUE(HostActionsOf(host, 0).empty());
 	EXPECT_EQ(HostActionsOf(host, 1), (std::vector {HostAction::Kick, HostAction::Ban, HostAction::MakeHost}));
-	EXPECT_EQ(HostActionsOf(host, 3), (std::vector {HostAction::Computer, HostAction::Closed}));
-	EXPECT_EQ(HostActionsOf(host, 5), (std::vector {HostAction::Open, HostAction::Computer}));
+	EXPECT_EQ(HostActionsOf(host, 3), (std::vector {HostAction::Computer, HostAction::ComputerRandom, HostAction::Closed}));
+	EXPECT_EQ(HostActionsOf(host, 4), (std::vector {HostAction::Open, HostAction::ComputerRandom, HostAction::Closed}));
+	EXPECT_EQ(HostActionsOf(host, 5), (std::vector {HostAction::Open, HostAction::Computer, HostAction::ComputerRandom}));
 	EXPECT_EQ(StartButtonOf(host), StartButton::Start);
 	EXPECT_TRUE(LeaveAsks(host));
 	// The other players have no host actions
@@ -500,6 +501,22 @@ TEST(LobbyScreenRules, TheHostActions)
 	ASSERT_EQ(kinds.size(), 6u);
 	EXPECT_EQ(kinds[3], lobby_api::SlotKind::Closed);
 	EXPECT_EQ(kinds[4], lobby_api::SlotKind::Computer);
+}
+
+TEST(LobbyScreenRules, AComputerSlotOfRandomAlignmentShowsItAndCanGoBackToTheVanillaAlignment)
+{
+	auto lobby = TestLobby();
+	lobby.slotKinds = SlotKindsAfter(lobby, 4, lobby_api::SlotKind::ComputerRandom);
+	LobbyRoom host(lobby, k_Host);
+	const SlotTexts texts {.god = u"God %d", .host = u" (HOST)", .current = u" (CURRENT)"};
+	const auto slots = host.Slots();
+	ASSERT_EQ(slots.size(), 6u);
+	EXPECT_EQ(slots[4].holder, SlotHolder::Computer);
+	EXPECT_TRUE(slots[4].randomAlignment);
+	EXPECT_FALSE(slots[3].randomAlignment);
+	EXPECT_EQ(Utf8(SlotLine(slots[4], texts)), "God 5: - Computer (random alignment) -");
+	EXPECT_EQ(HostActionsOf(host, 4), (std::vector {HostAction::Open, HostAction::Computer, HostAction::Closed}));
+	EXPECT_EQ(Utf8(std::u16string(HostActionText(HostAction::ComputerRandom))), "Computer (random alignment)");
 }
 
 TEST(LobbyScreenRules, TheCreateForm)

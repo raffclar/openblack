@@ -60,6 +60,7 @@ constexpr std::array k_SlotKindNames {
     std::pair {SlotKind::Open, std::string_view("open")},
     std::pair {SlotKind::Computer, std::string_view("computer")},
     std::pair {SlotKind::Closed, std::string_view("closed")},
+    std::pair {SlotKind::ComputerRandom, std::string_view("computer_random")},
 };
 constexpr std::array k_VisibilityNames {
     std::pair {LobbyVisibility::Public, std::string_view("public")},

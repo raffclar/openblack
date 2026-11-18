@@ -186,3 +186,31 @@ PourPose openblack::magic::PourPoseAt(const PourState& pour, float fraction)
 	        .tilt = between(pour.previous.tilt, pour.current.tilt),
 	        .pinned = pour.active ? pour.pinned : std::nullopt};
 }
+
+PourPose openblack::magic::PourPoseAt(const PourState& pour, float fraction, std::optional<glm::vec3> followedHead)
+{
+	auto pose = PourPoseAt(pour, fraction);
+	if (pour.active && followedHead.has_value())
+	{
+		pose.pinned = followedHead;
+	}
+	return pose;
+}
+
+bool openblack::magic::PoursPhial(const CreaturePourFacts& facts)
+{
+	return !facts.pouredBefore && facts.hasCreature && facts.hasSeed && facts.castOfThisComputer && facts.handHoldsSeed;
+}
+
+PourSettings openblack::magic::PhialPour(float creatureHeight)
+{
+	// The rise is the height times the share, as a float
+	constexpr float k_Seconds = 4.0f;
+	constexpr float k_RaiseShare = 0.4f;
+	constexpr float k_Tilt = 1.0f;
+	return {.totalTime = k_Seconds,
+	        .heightToRaise = creatureHeight * k_RaiseShare,
+	        .angleToRaise = k_Tilt,
+	        .loops = false,
+	        .clampHand = true};
+}

@@ -412,6 +412,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-limits", .takesValue = true},
     DeveloperOption {.name = "sim-all-computer-gods"},
     DeveloperOption {.name = "sim-ai-seed", .takesValue = true},
+    DeveloperOption {.name = "sim-random-alignment-slots", .takesValue = true},
     DeveloperOption {.name = "sim-world-seed", .takesValue = true},
     DeveloperOption {.name = "inspect-port", .takesValue = true},
     DeveloperOption {.name = "inspect-lock-input"},

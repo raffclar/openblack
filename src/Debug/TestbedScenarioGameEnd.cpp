@@ -121,6 +121,25 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::DestroyTemple, .delaySeconds = 40.0f, .value = 1}},
 	});
 	all.push_back({
+	    .id = "skirmish.random_alignment",
+	    .name = "Two computer gods and their creatures start a skirmish at random alignments",
+	    .facet = Facet::Multiplayer,
+	    .description = "A skirmish of three gods: the player and the computer gods of players two and three, each with a "
+	                   "temple. The skirmish box chose a random alignment for gods 2 and 3 (deviation 280).",
+	    .expected = "At the first turn of each computer god, the log says that the god and its creature start at a random "
+	                "alignment, each from -1 to 1. The temples of gods 2 and 3 and their creatures change to the looks of "
+	                "these alignments. The temple of the player keeps its alignment.",
+	    .environment = {.dispenserGrid = false,
+	                    .players = {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE},
+	                    .skirmish = true,
+	                    .randomAlignmentSlots = {1, 2}},
+	    .framing = k_Overview,
+	    .temples = {{.offset = k_OwnTemple},
+	                {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO},
+	                {.offset = k_ThirdTemple, .owner = PlayerNames::PLAYER_THREE}},
+	    .landScript = k_ThreeComputerGods,
+	});
+	all.push_back({
 	    .id = "game_end.god_out",
 	    .name = "The box that tells the player that another god is out",
 	    .facet = Facet::Multiplayer,

@@ -15,6 +15,7 @@
 #include <optional>
 
 #include "CreatureDesires.h"
+#include "Enums.h"
 
 // What the mood and need spells do to a creature's desires. As one starts, its desire is made fully dominant and most
 // of the others are held down for a long while, so the creature wants nothing else: the hunger, poo, tiredness and
@@ -66,6 +67,10 @@ void ClearOnlyDesire(creature_desires::Desires& desires, std::optional<Cheat>& c
 [[nodiscard]] bool StepCheat(creature_desires::Desires& desires, Cheat& cheat, float turnsPerSecond);
 /// Every desire held down is let go
 void ClearCheatDominance(creature_desires::Desires& desires);
+/// Whether a nice or nasty spell that wears off clears its cheat. The cheat of a creature of no player always clears.
+/// For a player's creature, it clears only when the leash that the player picked last is the learning leash. That leash
+/// can be off. A creature on the compassion or aggression leash keeps the cheat until its time is up.
+[[nodiscard]] bool MoodEndClearsCheat(bool hasPlayer, LeashType picked);
 /// The desire, if active, is wanted as much as it can be and every other desire as little as any can be, the species'
 /// floor; it is let go of first, active or not
 void MakeFullyDominantOverOthers(creature_desires::Desires& desires, creature_desires::Desire desire, float floor);

@@ -58,6 +58,15 @@ SkirmishBox::SkirmishBox(const TextDatabase& texts, const GameFont& font)
 		Hide();
 	};
 
+	// The check boxes of the alignments of the computer gods (deviation 280). The middle text size fits three in a row.
+	for (size_t index = 0; index < skirmish_box::k_AlignmentChoices; ++index)
+	{
+		auto& box = _dialog.Add<CheckBox>(font, glm::ivec2(k_AlignmentLefts.at(index), k_AlignmentTop), CheckBox::k_DefaultSize,
+		                                  skirmish_box::RandomAlignmentLabel(skirmish_box::k_FirstComputerSlot + index),
+		                                  LabelSide::Right, false, false);
+		box.onChange = [this, index](bool checked) { _randomAlignment.at(index) = checked; };
+	}
+
 	// The scroll bar shows only while the lands do not fit the box
 	_list = &_dialog.Add<List>(font, k_List, DialogPainter::k_BigTextSize, false, true, true);
 	_list->ShowScrollBarWhenNeeded();
@@ -101,6 +110,11 @@ void SkirmishBox::Select(std::optional<size_t> selection)
 	_list->SetSelection(selection.has_value() && *selection < _list->GetItems().size() ? selection : std::nullopt);
 	_list->ScrollToSelection();
 	FollowSelection();
+}
+
+std::vector<uint8_t> SkirmishBox::GetRandomAlignmentSlots() const
+{
+	return skirmish_box::RandomAlignmentSlots(_randomAlignment);
 }
 
 bool SkirmishBox::StartShows() const noexcept

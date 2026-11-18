@@ -224,6 +224,9 @@ struct Environment
 	/// The game is a skirmish while the scenario runs: a god with no temple is out, and the last god in wins. The runner
 	/// puts the testbed back when the scenario stops.
 	bool skirmish {false};
+	/// The god slots from 0 whose computer god and its creature start at a random alignment, as the skirmish box
+	/// chooses them (deviation 280). The runner puts the choices back when the scenario stops.
+	std::vector<uint8_t> randomAlignmentSlots;
 	/// The world plays as a network game while the scenario runs, so that a player with hands of its own is a person at
 	/// another computer. The runner puts the testbed back when the scenario stops.
 	bool networkGame {false};
@@ -300,6 +303,8 @@ struct CreatureSetup
 	/// Whether it is the one creature its owner can lead on the leash. When not given, a player's first creature is
 	/// and the others aren't.
 	std::optional<bool> leashable;
+	/// The leashes it knows. When not given, it knows every leash.
+	std::optional<std::vector<LeashType>> knownLeashes;
 	/// Its alignment, fatness and strength, the species' start when not given, and its size, 1 when not given: a
 	/// creature well grown, about 15 units tall, rather than as small as a new one starts
 	std::optional<float> alignment;

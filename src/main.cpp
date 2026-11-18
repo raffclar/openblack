@@ -49,6 +49,7 @@
 #include "Common/SystemLibraries.h"
 #include "Creature/BonusCreatures.h"
 #include "Debug/ScenarioPlayer.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "EngineConfig.h"
 #include "Game.h"
 #include "LaunchSwitches.h"
@@ -225,7 +226,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("no-stage-times", "Tools: do not time the profiler stages, also when --frame-stats, a benchmark, the run record or the profiler window reads them. A measured run then costs what a player's game costs. The frame times stay correct, and the stage times are zero.")
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
 		("parallel-draw-encode", "Developer: let worker threads encode some of the draws at the same time as the game's thread, in the same order and with the same picture. By default the game's thread encodes all draws.")
-		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
+		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, none, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. All by default.", cxxopts::value<std::string>())
 		("football-add-on", "Debug: turn on the switch of the free Soccer Add-On. Towns then build football pitches, and their villagers play football. Off by default, as on a normal install. It has no effect in a multiplayer game.")
 		("no-draw", "Tools: open the window but draw nothing on the graphics card, so that a long run that the inspector drives does not wait on a busy graphics card. Screenshots are black.")
 		("skip-logos", "Leave out the logo pictures at start-up, and the pre-intro film of a first run.")
@@ -270,6 +271,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-frame-guard-from", "Tools: the turn at which --sim-frame-guard starts to look (0 by default).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-all-computer-gods", "Tools: every god with a citadel is a computer god, also the god of this computer, and no human plays (the AI soak). The hand of this computer does nothing.")
 		("sim-ai-seed", "Tools: the seed of the personalities of the computer gods (the AI soak).", cxxopts::value<uint32_t>())
+		("sim-random-alignment-slots", "Tools: the god slots from 0 whose computer god and its creature start at a random alignment in a skirmish, as the skirmish box chooses them, such as 1,2.", cxxopts::value<std::string>())
 		("sim-world-seed", "Tools: start the synced seed of each map at this value, in place of the 0 of the game, so that a story land has another life for each value. Not for a network game.", cxxopts::value<uint32_t>())
 		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
 		("sim-trace-draws", "Tools: write each draw on the synced random seed to this file, with its turn and the place of its call in the source (tools/sim/draw_trace.py compares two files).", cxxopts::value<std::string>());
@@ -606,6 +608,17 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			if (result.count("sim-ai-seed") != 0)
 			{
 				simulation.soak.aiSeed = result["sim-ai-seed"].as<uint32_t>();
+			}
+			if (result.count("sim-random-alignment-slots") != 0)
+			{
+				auto slots = openblack::computer_player::ParseSlotList(result["sim-random-alignment-slots"].as<std::string>());
+				if (!slots.has_value())
+				{
+					std::cerr << "--sim-random-alignment-slots needs god slots from 0 with a comma between them" << std::endl;
+					returnCode = EXIT_FAILURE;
+					return false;
+				}
+				simulation.randomAlignmentSlots = std::move(*slots);
 			}
 			if (result.count("sim-world-seed") != 0)
 			{

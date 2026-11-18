@@ -615,7 +615,7 @@ std::u16string SlotLine(const online::lobby::SlotView& slot, const SlotTexts& te
 		line += u"- Open -";
 		break;
 	case SlotHolder::Computer:
-		line += u"- Computer -";
+		line += slot.randomAlignment ? u"- Computer (random alignment) -" : u"- Computer -";
 		break;
 	case SlotHolder::Closed:
 		line += u"- Closed -";
@@ -668,9 +668,14 @@ std::vector<HostAction> HostActionsOf(const online::lobby::LobbyRoom& room, int3
 	{
 		actions.push_back(HostAction::Open);
 	}
-	if (view.holder != SlotHolder::Computer)
+	if (view.holder != SlotHolder::Computer || view.randomAlignment)
 	{
 		actions.push_back(HostAction::Computer);
+	}
+	// A computer god can start at a random alignment (deviation 280)
+	if (view.holder != SlotHolder::Computer || !view.randomAlignment)
+	{
+		actions.push_back(HostAction::ComputerRandom);
 	}
 	if (view.holder != SlotHolder::Closed)
 	{
@@ -693,6 +698,8 @@ std::u16string_view HostActionText(HostAction action) noexcept
 		return u"Open";
 	case HostAction::Computer:
 		return u"Computer";
+	case HostAction::ComputerRandom:
+		return u"Computer (random alignment)";
 	case HostAction::Closed:
 		return u"Closed";
 	}
