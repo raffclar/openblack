@@ -86,6 +86,19 @@ pause of the editor, and the room must still be paused at the same turn with the
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
 
+With --rejoin-second-at TURN the script stops the second client once it compared TURN turns (a multiple of 100). After
+--rejoin-after seconds, before the server's --come-back-seconds end, it starts a new process of the same player in the
+folder client2-back, with a new god's ticket of the same account (the server refuses a ticket that it accepted before).
+The run passes only when the server takes the player back into its god, the server does not defeat the god, every turn
+of the new process is the same as the server's, its session does not part, and the server and the new process do the
+last turn. The summary has a "rejoin" block:
+
+    python tools/sim/net_check.py --land "Online Maps/mpm_2p_1.map" --turns 2000 --rejoin-second-at 500
+        --rejoin-after 5 --come-back-seconds 60
+
+A scenario game (--scenario) takes nobody after its start, because the state of the scenario is not in the world, so
+--rejoin-second-at does not go with --scenario.
+
 The live server keeps its profile from game to game and waits in its room. These options do the same before the game:
 --server-alignment gives the server's profile an alignment from an earlier game (--server-profile names a profile
 folder), --room-wait keeps the server alone in its room, and --leave-room-first lets one more client join the room and
@@ -554,6 +567,9 @@ def start(command, cwd):
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     # No path in the command line may start a switch of the original game
     executable, arguments = sim_paths.switch_safe_command(command, cwd)
+    if not os.path.dirname(executable):
+        # Windows does not look in PATH for a program name that the script gives apart (such as docker)
+        executable = shutil.which(executable) or executable
     return subprocess.Popen(arguments, executable=executable, cwd=cwd, stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL, creationflags=flags)
 
@@ -772,6 +788,82 @@ SESSION_COUNTS = re.compile(r"(?:Network game:|The network game ended \([^)]*\):
                             r"(\d+) the same")
 RESUMES = re.compile(r"Back in the game at turn")
 PARTS_AT = re.compile(r"parts from the server's world at turn (\d+)")
+# The options of a client that name a file or a folder of the client. A new process of the same player (--rejoin-second-at)
+# writes these into its own folder, so that the files of the first process stay.
+CLIENT_FILE_OPTIONS = {"-l": "client.log", "--sim-record": "record.jsonl", "--sim-trace-draws": "draws.tsv",
+                       "--sim-row-dump": "rows.txt", "--sim-world-states": WORLD_STATES_FOLDER}
+
+
+def rejoin_command(command, back_dir, ticket_path):
+    """The command of a new process of a client's player: the same command, with its log, its record and its other files
+    in back_dir, and the new ticket"""
+    again = list(command)
+    for index, value in enumerate(again[:-1]):
+        if value in CLIENT_FILE_OPTIONS:
+            again[index + 1] = os.path.join(back_dir, CLIENT_FILE_OPTIONS[value])
+        elif value == "--join-ticket-file":
+            again[index + 1] = ticket_path
+    return again
+
+
+def rejoin_option_problem(turn, after, come_back, turns, clients, stop_second, scenario):
+    """The problem of the options of --rejoin-second-at, or None"""
+    if clients < 2:
+        return "--rejoin-second-at needs a second client that plays a god (--clients 2 or more)"
+    if stop_second:
+        return "--rejoin-second-at does not go with --stop-second-after"
+    if scenario:
+        # The state of a scenario is not in the world, so the server refuses every join after the start
+        return "--rejoin-second-at does not go with --scenario: a scenario game takes nobody after its start"
+    if turn <= 0 or turn % 100 != 0 or turn >= turns:
+        # The client writes its count of the compared turns each 100 turns
+        return "--rejoin-second-at takes a multiple of 100 that is less than --turns"
+    if not 0 <= after < come_back:
+        return "--rejoin-after must be less than --come-back-seconds, so that the server does not defeat the god"
+    return None
+
+
+def rejoin_result(server_lines, server_turns, back_turns, back_lines, slot, last_turn):
+    """The result of a new process of the player of a god slot that comes back into the running game. server_lines and
+    back_lines are the lines of the server's log and of the new process's log. server_turns and back_turns are the
+    checksums by turn. The rejoin passes when the server takes the player back into the god and does not defeat it, the
+    new process compares turns after its world, each one is the same, its session does not part, and the server and the
+    new process both do last_turn. After last_turn the clients stop, and the server defeats the gods that did not come
+    back: only an away line or a defeat before the server did last_turn counts."""
+    server_lines, back_lines = list(server_lines), list(back_lines)
+    back_at = [int(match.group(1)) for line in server_lines
+               if (match := re.search(rf"The player of god {slot} comes back at turn (\d+)", line))]
+    defeated, away = [], []
+    server_turn = 0
+    for line in server_lines:
+        match = CHECKSUM_LINE.search(line)
+        if match:
+            server_turn = max(server_turn, int(match.group(1)))
+        elif server_turn < last_turn and f"The player of slot {slot} did not come back" in line:
+            defeated.append(line.strip())
+        elif server_turn < last_turn and f"The player of slot {slot} lost the connection" in line:
+            away.append(line.strip())
+    joined = [line.strip() for line in back_lines if "Joined the game server as" in line]
+    refused = [line.strip() for line in back_lines if "refuse" in line.lower()]
+    back_turn = back_at[-1] if back_at else None
+    compared = [turn for turn in sorted(back_turns) if back_turn is not None and turn > back_turn and turn in server_turns]
+    different = [turn for turn in compared if back_turns[turn] != server_turns[turn]]
+    parts = sorted(game_turns_in_lines(back_lines, CLIENT_LAND_AGAIN, PARTS_AT))
+    counts = None
+    for line in back_lines:
+        match = SESSION_COUNTS.search(line)
+        if match:
+            counts = (int(match.group(1)), int(match.group(2)))
+    last_back = max(back_turns, default=None)
+    last_server = max(server_turns, default=None)
+    reached = last_back is not None and last_server is not None and min(last_back, last_server) >= last_turn
+    passed = (back_turn is not None and not defeated and bool(joined) and bool(compared) and not different and not parts
+              and counts is not None and counts[0] == counts[1] and reached)
+    return {"passed": passed, "back_at_turn": back_turn, "away": away[-1:], "joined": joined[-1:], "refused": refused[:3],
+            "defeated": defeated[-1:], "compared": len(compared), "first_compared": compared[0] if compared else None,
+            "different": different[:20], "parts": parts[:20],
+            "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
+            "last_turn": last_back, "server_last_turn": last_server, "reached_last_turn": reached}
 
 
 # The compares with the server that one part on purpose (--part-second-at) makes different
@@ -3899,6 +3991,13 @@ def main():
                         help="CLIENT:ARGUMENT: one more argument for the client (from 1), such as 2:--frame-stats=600; "
                              "give the option more times for more arguments")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
+    parser.add_argument("--rejoin-second-at", type=int, metavar="TURN",
+                        help="stop the second client once it compared TURN turns (a multiple of 100), and start a new "
+                             "process of its player with a new ticket after --rejoin-after seconds; the new process must "
+                             "come back into the god and stay in step to the last turn")
+    parser.add_argument("--rejoin-after", type=float, default=5.0,
+                        help="with --rejoin-second-at, the seconds between the stop and the new process (less than "
+                             "--come-back-seconds)")
     parser.add_argument("--come-back-seconds", type=int,
                         help="the time that the server waits for a player who lost the connection (default 10 s; "
                              "with --editor-desync scenario-away, scenario-away-fast or body-away the default is "
@@ -4058,6 +4157,12 @@ def main():
         parser.error("--scenario does not go with --all-computer-gods, a web observer, --testbed or --gods-ring-map")
     if options.web_part_at is not None and not options.web_client:
         parser.error("--web-part-at needs --web-client")
+    if options.rejoin_second_at is not None:
+        problem = rejoin_option_problem(options.rejoin_second_at, options.rejoin_after, options.come_back_seconds,
+                                        options.turns, options.clients, options.stop_second_after is not None,
+                                        bool(options.scenario))
+        if problem:
+            parser.error(problem)
     if (options.web_god or options.web_chat or options.web_remote) and not options.web_client:
         parser.error("--web-god, --web-chat and --web-remote need --web-client")
     if options.web_chat and not options.web_god:
@@ -4095,6 +4200,11 @@ def main():
     server_dir = os.path.join(out, "server")
     server_log = os.path.join(server_dir, "server.log")
     client_dirs = [os.path.join(out, f"client{index + 1}") for index in range(desktop_clients)]
+    # The folder of the new process of the second client's player (--rejoin-second-at). The files of an older run must
+    # not count.
+    back_dir = os.path.join(out, "client2-back")
+    if options.rejoin_second_at is not None:
+        shutil.rmtree(back_dir, ignore_errors=True)
     web_dir = os.path.join(out, "web")
     leaver, leave_turn = (int(part) for part in options.leave.split(":")) if options.leave else (None, None)
     if options.box_back:
@@ -4239,6 +4349,9 @@ def main():
                 print(f"the server did not read the bans of the fake lobby; see {server_log}")
                 return 1
         clients = [None] * desktop_clients
+        # The command and the claims of the ticket of each client, for a new process of its player (--rejoin-second-at)
+        client_commands = {}
+        ticket_claims = {}
         gods_ring_file = os.path.join(out, "obm_32p_1.map")
         if options.gods_ring_map:
             # The lobby gives the map for 32 gods to each player before the start. The run has no lobby, so each client
@@ -4270,15 +4383,16 @@ def main():
                 print(f"the game did not start, so observer {index + 1} cannot join it; see {server_dir}")
                 return 1
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
-            ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
-                                 "observer" if is_observer else "god", 600,
-                                 editor=(options.editor_check or options.forest_camera or options.editor_right_change
-                                         or (bool(options.editor_desync) and options.editor_desync not in DEBUGGER_CASES))
-
-                                 and index == 0,
-                                 staff=options.editor_check and index == 1,
-                                 debugger=((options.editor_desync in DEBUGGER_CASES or options.debugger_right_change)
-                                           and index == 0) or options.editor_desync in ("island", "island-away"))
+            ticket_claims[index] = {
+                "account": 100 + index, "name": f"{'Observer' if is_observer else 'Player'}{index + 1}",
+                "role": "observer" if is_observer else "god", "lifetime": 600,
+                "editor": (options.editor_check or options.forest_camera or options.editor_right_change
+                           or (bool(options.editor_desync) and options.editor_desync not in DEBUGGER_CASES))
+                          and index == 0,
+                "staff": options.editor_check and index == 1,
+                "debugger": ((options.editor_desync in DEBUGGER_CASES or options.debugger_right_change)
+                             and index == 0) or options.editor_desync in ("island", "island-away")}
+            ticket = make_ticket(key, kid, **ticket_claims[index])
 
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
@@ -4345,6 +4459,7 @@ def main():
             if options.frame_guard:
                 command.append("--sim-frame-guard")
             command += [value.split(":", 1)[1] for value in options.client_arg if int(value.split(":", 1)[0]) == index + 1]
+            client_commands[index] = command
             clients[index] = start(command, client_dir)
             processes.append(clients[index])
             # The server gives the god slots in join order: client N must join before client N + 1 starts,
@@ -4379,6 +4494,9 @@ def main():
         restarted_log = None
         killed_at = None
         stopped_second = False
+        # The stop of the second client for --rejoin-second-at: the time, the server's turn, and the server's turn when
+        # the new process started
+        rejoin_stop = None
         holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
         held = {index for index in holds if index >= len(clients)}
         chats = [(int(turns), int(client) - 1, text) for turns, client, text in
@@ -4536,6 +4654,20 @@ def main():
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])
                 stopped_second = True
+            if (options.rejoin_second_at is not None and rejoin_stop is None and clients[1].poll() is None
+                    and lines_with(os.path.join(client_dirs[1], "client.log"),
+                                   [f"Network game: {options.rejoin_second_at} turns compared"])):
+                stop(clients[1])
+                rejoin_stop = {"time": time.monotonic(), "server_turn": max(server_checksums(server_log), default=0)}
+                print(f"client 2 stopped at server turn {rejoin_stop['server_turn']}")
+            if (rejoin_stop is not None and "back" not in rejoin_stop
+                    and time.monotonic() - rejoin_stop["time"] >= options.rejoin_after):
+                # The lobby gives the player a new ticket: the server refuses a ticket that it accepted before
+                back_ticket = ticket_file(back_dir, make_ticket(key, kid, **ticket_claims[1]))
+                clients[1] = start(rejoin_command(client_commands[1], back_dir, back_ticket), back_dir)
+                processes.append(clients[1])
+                rejoin_stop["back"] = max(server_checksums(server_log), default=0)
+                print(f"a new process of client 2 started at server turn {rejoin_stop['back']}")
             time.sleep(0.5)
         # A step of the hand ends soon after its client stops
         hand_steps.wait(30)
@@ -4621,7 +4753,12 @@ def main():
         client_stop = lines_with(os.path.join(client_dir, "client.log"), ["The turns of the network game stopped after turn"])
         client_stopped_after = (int(re.search(r"after turn (\d+)", client_stop[-1]).group(1)) if client_stop else None)
         left = index == leaver
-        if left:
+        # The first process of the second client's player, which the script stopped for --rejoin-second-at: it compared
+        # the turns up to its stop. The new process in client2-back plays to the end (the "rejoin" block).
+        stopped_for_rejoin = index == 1 and options.rejoin_second_at is not None
+        if stopped_for_rejoin:
+            expected = options.rejoin_second_at
+        elif left:
             # The client that left did the turns up to the turn that it left at, the same as the server, and stopped
             expected = leave_turn
             if not lines_with(os.path.join(client_dir, "client.log"), ["The player leaves the network game"]):
@@ -4635,7 +4772,7 @@ def main():
         # the last turn of each frame: its session counts every turn
         enough = counts is not None and counts[0] >= expected // 2 if is_observer else len(compared) >= expected // 2
         client_end = sim_report.game_end_in_file(os.path.join(client_dir, "client.log"))
-        if server_end and not left and not decided_after_run and client_end != server_end:
+        if server_end and not left and not stopped_for_rejoin and not decided_after_run and client_end != server_end:
             print(f"client {index + 1} tells another end of the game than the server: {client_end} against {server_end}")
             different = different + [-3]
         # The compares of the turns between the part on purpose and the world that the client went on from differ; they
@@ -4658,7 +4795,7 @@ def main():
             different = [turn for turn in different if turn < 0 or turn > max(back_worlds)]
         same = (not different and enough and counts is not None
                 and (counts[0] - counts[1] <= allowed_differing)
-                and (left or kicked_observer or counts[0] >= expected - 100 - away_gap) and bool(recovered or not parted_on_purpose))
+                and (left or kicked_observer or stopped_for_rejoin or counts[0] >= expected - 100 - away_gap) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         draws = None
         if options.trace_draws and os.path.exists(server_trace) and os.path.exists(os.path.join(client_dir, "draws.tsv")):
@@ -4686,6 +4823,23 @@ def main():
     # client's input that expects deeds of its hand (its "expect") fails the run when the hand of its slot did fewer:
     # the checksums are then the same only because the hand did nothing.
     # After a restart, the deeds of the server are in two logs (deviation 100)
+    if options.rejoin_second_at is not None:
+        with open(server_log, encoding="utf-8", errors="replace") as file:
+            server_lines = file.readlines()
+        back_log = os.path.join(back_dir, "client.log")
+        back_lines = []
+        if os.path.exists(back_log):
+            with open(back_log, encoding="utf-8", errors="replace") as file:
+                back_lines = file.readlines()
+        rejoin = rejoin_result(server_lines, server_turns, record_checksums(os.path.join(back_dir, "record.jsonl")),
+                               back_lines, 1, options.turns - 1)
+        rejoin["stopped_at_server_turn"] = (rejoin_stop or {}).get("server_turn")
+        rejoin["started_at_server_turn"] = (rejoin_stop or {}).get("back")
+        summary["rejoin"] = rejoin
+        print(f"rejoin: {json.dumps(rejoin)}")
+        if not rejoin["passed"]:
+            print(f"the new process of client 2 did not come back in step; see {back_dir} and {server_dir}")
+            all_same = False
     restarted_deeds_log = restarted_log if options.restart_server_at is not None else None
     server_deeds = server_deeds_in_logs(server_log, restarted_deeds_log)
     summary["hand_deeds"] = {str(slot): counts for slot, counts in sorted(server_deeds.items())}
@@ -4756,7 +4910,8 @@ def main():
             # A player who was away at a change of the land did the old land for longer than the server, and did not do
             # the turns of the new land before the world that it came back with: the counts of the deeds differ
             continue
-        steady = (stopped_after is None and options.stop_second_after is None and leaver is None
+        steady = (stopped_after is None and options.stop_second_after is None and options.rejoin_second_at is None
+                  and leaver is None
                   and options.part_second_at is None)
         if client_deeds != server_deeds_common and steady:
             print(f"client {index + 1} counts other deeds of the hands than the server: {client_deeds}")

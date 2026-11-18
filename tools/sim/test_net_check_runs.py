@@ -7,7 +7,8 @@
 #
 # openblack is licensed under the GNU General Public License version 3.
 # ******************************************************************************
-"""Tests of the compare of the server checksums of two net_check runs, and of the hand deeds of a restarted server"""
+"""Tests of the compare of the server checksums of two net_check runs, of the hand deeds of a restarted server, and
+of the check of a player who comes back with a new process (--rejoin-second-at)"""
 
 import json
 import os
@@ -253,6 +254,100 @@ class LinuxServerCommand(unittest.TestCase):
             if saved is not None:
                 os.environ["SENTRY_DSN"] = saved
         self.assertIn(f"SENTRY_DSN={net_check.NO_REPORTS_DSN}", result)
+
+
+def rejoin_server_lines(back_at=500, defeated=False):
+    lines = ["The player of slot 1 lost the connection; the god waits"]
+    if back_at is not None:
+        lines.append(f"The player of god 1 comes back at turn {back_at}")
+    if defeated:
+        lines.append("The player of slot 1 did not come back: the god is defeated")
+    return lines
+
+
+def rejoin_back_lines(compared=1499, same=1499, part_at=None):
+    lines = ["Joined the game server as god in slot 1", f"Network game: {compared} turns compared with the server, {same} the same"]
+    if part_at is not None:
+        lines.append(f"The world parts from the server's world at turn {part_at}")
+    return lines
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class Rejoin(unittest.TestCase):
+    def back_turns(self, first, last, changed=()):
+        return {turn: f"{turn:016x}" if turn not in changed else "ffffffffffffffff" for turn in range(first, last + 1)}
+
+    def test_a_new_process_in_step_to_the_last_turn_passes(self):
+        result = net_check.rejoin_result(rejoin_server_lines(), turns(1999), self.back_turns(501, 1999),
+                                         rejoin_back_lines(), 1, 1999)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["back_at_turn"], 500)
+        self.assertEqual(result["first_compared"], 501)
+        self.assertEqual(result["compared"], 1499)
+
+    def test_a_different_turn_after_the_rejoin_fails(self):
+        result = net_check.rejoin_result(rejoin_server_lines(), turns(1999), self.back_turns(501, 1999, changed=(800,)),
+                                         rejoin_back_lines(), 1, 1999)
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["different"], [800])
+
+    def test_a_god_that_the_server_defeated_fails(self):
+        result = net_check.rejoin_result(rejoin_server_lines(defeated=True), turns(1999), self.back_turns(501, 1999),
+                                         rejoin_back_lines(), 1, 1999)
+        self.assertFalse(result["passed"])
+        self.assertTrue(result["defeated"])
+
+    def test_the_defeat_after_the_last_turn_does_not_count(self):
+        lines = rejoin_server_lines() + [f"turn {turn} checksum {turn:016x}" for turn in range(1, 2004)]
+        lines += ["The player of slot 1 lost the connection; the god waits",
+                  "The player of slot 1 did not come back: the god is defeated"]
+        result = net_check.rejoin_result(lines, turns(2003), self.back_turns(501, 1999), rejoin_back_lines(), 1, 1999)
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["defeated"], [])
+        self.assertEqual(result["away"], ["The player of slot 1 lost the connection; the god waits"])
+
+    def test_a_player_that_the_server_did_not_take_back_fails(self):
+        result = net_check.rejoin_result(rejoin_server_lines(back_at=None), turns(1999), {},
+                                         ["The game server refused the join: replay"], 1, 1999)
+        self.assertFalse(result["passed"])
+        self.assertIsNone(result["back_at_turn"])
+        self.assertEqual(result["refused"], ["The game server refused the join: replay"])
+
+    def test_a_new_process_that_stops_before_the_last_turn_fails(self):
+        result = net_check.rejoin_result(rejoin_server_lines(), turns(1999), self.back_turns(501, 1200),
+                                         rejoin_back_lines(699, 699), 1, 1999)
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["reached_last_turn"])
+
+    def test_a_session_that_parts_fails(self):
+        result = net_check.rejoin_result(rejoin_server_lines(), turns(1999), self.back_turns(501, 1999),
+                                         rejoin_back_lines(part_at=900), 1, 1999)
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["parts"], [900])
+
+    def test_the_comes_back_line_of_another_slot_does_not_count(self):
+        lines = ["The player of god 0 comes back at turn 500"]
+        result = net_check.rejoin_result(lines, turns(1999), self.back_turns(501, 1999), rejoin_back_lines(), 1, 1999)
+        self.assertFalse(result["passed"])
+
+    def test_the_new_process_writes_its_files_into_its_own_folder(self):
+        command = ["openblack.exe", "-l", "a/client.log", "--sim-record", "a/record.jsonl", "--join-ticket-file",
+                   "a/join_ticket.txt", "--sim-trace-draws", "a/draws.tsv", "--sim-still-hand", "--background"]
+        again = net_check.rejoin_command(command, "b", "b/join_ticket.txt")
+        self.assertEqual(again, ["openblack.exe", "-l", os.path.join("b", "client.log"), "--sim-record",
+                                 os.path.join("b", "record.jsonl"), "--join-ticket-file", "b/join_ticket.txt",
+                                 "--sim-trace-draws", os.path.join("b", "draws.tsv"), "--sim-still-hand", "--background"])
+        self.assertEqual(command[2], "a/client.log")
+
+    def test_the_options_of_the_rejoin(self):
+        problem = net_check.rejoin_option_problem
+        self.assertIsNone(problem(500, 5, 10, 2000, 2, False, False))
+        self.assertIn("second client", problem(500, 5, 10, 2000, 1, False, False))
+        self.assertIn("--stop-second-after", problem(500, 5, 10, 2000, 2, True, False))
+        self.assertIn("--scenario", problem(500, 5, 10, 2000, 2, False, True))
+        self.assertIn("multiple of 100", problem(550, 5, 10, 2000, 2, False, False))
+        self.assertIn("multiple of 100", problem(2000, 5, 10, 2000, 2, False, False))
+        self.assertIn("--come-back-seconds", problem(500, 10, 10, 2000, 2, False, False))
 
 
 if __name__ == "__main__":
