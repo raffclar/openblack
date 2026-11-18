@@ -27,6 +27,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/WorldArchive.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Enums.h"
 
 namespace openblack::dance
@@ -72,6 +73,9 @@ struct ClockState
 	std::optional<std::mt19937> general;
 	/// How many numbers the synced seed gave, which the checksum of each turn has. A save of an older build has none.
 	std::optional<uint64_t> syncedDraws;
+	/// Where the turn timer and the frame clock were. A save of an older build has none, and its load puts the timer at
+	/// the time that the frames have drawn.
+	std::optional<systems::TimeSystemInterface::ClockPlace> place;
 };
 
 /// The bytes of the block of the clock

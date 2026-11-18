@@ -122,3 +122,31 @@ TEST(WorldSaveClock, ALoadPutsBackTheCountOfTheSyncedDraws)
 	ASSERT_TRUE(loaded->syncedDraws.has_value());
 	EXPECT_EQ(*loaded->syncedDraws, 15519u);
 }
+
+// A save keeps where the turn timer and the frame clock were, so that a load continues the clock at the same time
+TEST(WorldSaveClock, ALoadPutsBackThePlaceOfTheTimerAndTheFrameClock)
+{
+	auto saved = PlayedClock();
+	saved.place = {.remainderMs = saved.remainderMs,
+	               .timerMs = 62,
+	               .frameSampleMs = 42,
+	               .turnsAfterFrame = 1,
+	               .input = {.owed = 340'000, .taken = 41'999}};
+	const auto loaded = ecs::world_save::ReadClock(ecs::world_save::WriteClock(saved));
+	ASSERT_TRUE(loaded.has_value());
+	ASSERT_TRUE(loaded->place.has_value());
+	EXPECT_EQ(loaded->place->remainderMs, 42);
+	EXPECT_EQ(loaded->place->timerMs, 62);
+	EXPECT_EQ(loaded->place->frameSampleMs, 42);
+	EXPECT_EQ(loaded->place->turnsAfterFrame, 1u);
+	EXPECT_EQ(loaded->place->input.owed, 340'000);
+	EXPECT_EQ(loaded->place->input.taken, 41'999u);
+}
+
+// A clock of an older build has no place of the timer, and its load puts the timer at the time past the turn
+TEST(WorldSaveClock, AClockWithNoPlaceReadsBackWithNone)
+{
+	const auto loaded = ecs::world_save::ReadClock(ecs::world_save::WriteClock(PlayedClock()));
+	ASSERT_TRUE(loaded.has_value());
+	EXPECT_FALSE(loaded->place.has_value());
+}
