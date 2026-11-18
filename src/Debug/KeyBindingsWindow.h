@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <optional>
 
 #include <SDL_scancode.h>

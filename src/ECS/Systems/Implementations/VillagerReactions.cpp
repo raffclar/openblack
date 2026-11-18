@@ -50,6 +50,7 @@
 #include "ECS/Dances.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/PlayerColour.h"
+#include "ECS/ReactionGroups.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
@@ -612,6 +613,7 @@ void villager_reactions::LetGo(entt::entity villager)
 	else if (auto* state = registry.TryGet<LivingReaction>(villager))
 	{
 		state->reaction = 0;
+		ecs::reaction_groups::Changed(registry, villager);
 		state->type = Reaction::None;
 	}
 }

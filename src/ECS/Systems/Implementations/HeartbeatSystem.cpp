@@ -13,6 +13,7 @@
 
 #include <optional>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <glm/gtx/vec_swizzle.hpp>
@@ -35,6 +36,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/TownCensus.h"
 #include "Help/VillageVoices.h"
 #include "Locator.h"
 #include "Sound/GameSoundEffects.h"
@@ -59,13 +61,6 @@ struct TownSeen
 
 std::vector<TownSeen> SeeTowns(const ecs::Registry& registry)
 {
-	std::unordered_map<entt::entity, uint32_t> people;
-	registry.Each<const Villager>([&people](const Villager& villager) {
-		if (villager.town != entt::null)
-		{
-			++people[villager.town];
-		}
-	});
 	// The town list of each player in turn and the neutral list last, so that the first of two towns as near is the first
 	// met in these lists
 	std::vector<TownSeen> towns;
@@ -76,11 +71,10 @@ std::vector<TownSeen> SeeTowns(const ecs::Registry& registry)
 		{
 			continue;
 		}
-		const auto found = people.find(entity);
 		towns.push_back({.entity = entity,
 		                 .owner = registry.Get<const Town>(entity).owner,
 		                 .cell = map_coords::CellOf(transform->position),
-		                 .people = found != people.end() ? found->second : 0});
+		                 .people = ecs::town_census::CountOf(registry, entity).people});
 	}
 	return towns;
 }
@@ -203,7 +197,8 @@ void HeartbeatSystem::ProcessTurn(uint32_t turn)
 	if (measure)
 	{
 		towns = SeeTowns(registry);
-		registry.Each<const Villager>([&worldPopulation](const Villager& /*unused*/) { ++worldPopulation; });
+		const auto* villagers = std::as_const(registry.Underlying()).storage<Villager>();
+		worldPopulation = villagers != nullptr ? static_cast<uint32_t>(villagers->size()) : 0;
 		// The influence of the players that play and of the neutral player counts towards everyone's. A player that
 		// nobody plays does not count.
 		if (Locator::influenceSystem::has_value())

@@ -11,6 +11,7 @@
 
 #include <span>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -149,4 +150,50 @@ TEST(LivingTurnOrder, TwoCreaturesDrawTheirNumbersEachAtItsOwnPlace)
 		EXPECT_EQ(draws.at(i).first, owners.at(i));
 		EXPECT_EQ(draws.at(i).second, game_random::LHRand(100, expected));
 	}
+}
+
+TEST(LivingTurnOrder, AKeptListThatMovesOnlyTheChangedThingsIsTheSameAsASortOfAll)
+{
+	// The world: each id with its place, and whether it lives now. Two from an old save keep no place.
+	std::vector<Living> world;
+	for (uint32_t id = 1; id <= 40; ++id)
+	{
+		world.push_back({.id = id, .made = id % 7 == 0 ? 0 : id * 3, .kind = id % 5 == 0 ? Kind::Animal : Kind::Villager});
+	}
+	const auto sorted = [](std::vector<Living> list) {
+		living_turn::NewestFirst(list);
+		return list;
+	};
+	auto kept = sorted(world);
+	const auto live = [&world](uint32_t id, std::vector<Living>& out) {
+		for (const auto& living : world)
+		{
+			if (living.id == id)
+			{
+				out.push_back(living);
+			}
+		}
+	};
+	// Some die, some are born, one gets a new place, and one from an old save gets a place
+	std::unordered_set<uint32_t> changed;
+	std::erase_if(world, [](const Living& living) { return living.id == 4 || living.id == 21 || living.id == 33; });
+	changed.insert({4, 21, 33});
+	world.push_back({.id = 41, .made = 200, .kind = Kind::Villager});
+	world.push_back({.id = 42, .made = 201, .kind = Kind::Creature});
+	changed.insert({41, 42});
+	for (auto& living : world)
+	{
+		if (living.id == 10 || living.id == 14)
+		{
+			living.made = living.id == 10 ? 5 : 77;
+			changed.insert(living.id);
+		}
+	}
+	living_turn::Refresh(kept, changed, live);
+	const auto expected = sorted(world);
+	ASSERT_EQ(kept.size(), expected.size());
+	EXPECT_EQ(WalkOf(kept), WalkOf(expected));
+	// With nothing changed, the list stays
+	living_turn::Refresh(kept, {}, live);
+	EXPECT_EQ(WalkOf(kept), WalkOf(expected));
 }
