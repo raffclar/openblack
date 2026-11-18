@@ -45,6 +45,12 @@ public:
 	/// How far the music of a type carries (see audio::MusicPlayDistance). Without the music, or for a type with no bank,
 	/// it is 100. As for HasMusic, every computer of a network game and the server have the banks.
 	[[nodiscard]] virtual float PlayDistance(audio::MusicType type) const = 0;
+
+	/// Writes the channel that plays the piece. Only a world state keeps it, so that a computer that joins or resyncs
+	/// hears the piece at the same place as the server. A saved game does not keep it.
+	virtual void SaveChannel(reflection::BinaryWriter& out) const = 0;
+	/// Reads what SaveChannel wrote, after the section of the system read. Returns false when the bytes do not read.
+	virtual bool LoadChannel(reflection::BinaryReader& in) = 0;
 };
 
 } // namespace openblack::ecs::systems

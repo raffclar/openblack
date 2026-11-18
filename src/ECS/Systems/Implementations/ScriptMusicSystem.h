@@ -38,6 +38,9 @@ public:
 	void SaveState(reflection::BinaryWriter& out) const override;
 	/// A piece that played at the save gives no sound and never ends, because no channel plays it after the load
 	bool LoadState(reflection::BinaryReader& in) override;
+	void SaveChannel(reflection::BinaryWriter& out) const override;
+	/// A channel whose bank cannot play on this computer does not come back
+	bool LoadChannel(reflection::BinaryReader& in) override;
 
 private:
 	/// The times of a piece from the resource cache, none when its bank does not play

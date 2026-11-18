@@ -563,6 +563,17 @@ std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx
 	return chunks;
 }
 
+std::optional<gamesave::Chunk> world_save::ScriptMusicChannelChunk(const entt::meta_ctx& reflection)
+{
+	if (!Locator::scriptMusicSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	reflection::BinaryWriter out(reflection);
+	Locator::scriptMusicSystem::value().SaveChannel(out);
+	return gamesave::Chunk {.tag = gamesave::k_ScriptMusicChannelTag, .bytes = std::move(out.Bytes())};
+}
+
 bool world_save::HasWholeWorld(const gamesave::WorldFile& file)
 {
 	return gamesave::FindChunk(file, gamesave::k_EntitiesTag).has_value();
@@ -840,6 +851,18 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 	if (const auto systems = gamesave::FindChunk(file, gamesave::k_SystemsTag); systems.has_value())
 	{
 		read = LoadSystems(reflection, *systems) && read;
+	}
+	// A world state then gives the channel of the scripts' music, after the section of the music cleared it
+	if (const auto channel = gamesave::FindChunk(file, gamesave::k_ScriptMusicChannelTag);
+	    kind == LoadKind::WorldState && channel.has_value() && Locator::scriptMusicSystem::has_value())
+	{
+		const reflection::EntityRemap identity;
+		reflection::BinaryReader in(reflection, *channel, identity);
+		if (!Locator::scriptMusicSystem::value().LoadChannel(in) || in.Failed() || in.Remaining() != 0)
+		{
+			SPDLOG_LOGGER_WARN(Log(), "The channel of the script music in the world state does not read");
+			read = false;
+		}
 	}
 	// The help shows its kept texts again, and the temple gives back the dialogue it kept, as the game does once every
 	// part of a saved game has loaded
