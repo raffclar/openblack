@@ -27,7 +27,7 @@ TEST(GodHand, TheFirstInputMovesTheHandFromTheCitadelToTheOrigin)
 	const glm::vec3 citadel {1000.0f, 20.0f, 2000.0f};
 	god_hand::MindReport(hand, citadel);
 	EXPECT_EQ(hand.last, citadel);
-	god_hand::InputTurn(hand);
+	god_hand::InputTurn(hand, std::nullopt);
 	EXPECT_EQ(hand.last, glm::vec3(0.0f));
 	EXPECT_EQ(hand.stillTurns, 0u);
 	EXPECT_FLOAT_EQ(hand.velocity.x, -citadel.x * 10.0f * 0.6f);
@@ -40,29 +40,46 @@ TEST(GodHand, AHandThatStaysAtTheOriginIsStill)
 	HandStillness hand;
 	for (int turn = 0; turn < 3; ++turn)
 	{
-		god_hand::InputTurn(hand);
+		god_hand::InputTurn(hand, std::nullopt);
 	}
 	EXPECT_EQ(hand.last, glm::vec3(0.0f));
 	EXPECT_EQ(hand.stillTurns, 3u);
 	EXPECT_EQ(hand.velocity, glm::vec3(0.0f));
 }
 
-// In a turn with a step, the mind puts the hand where it was before the step. The next input moves it back to the
-// origin, so a hand that a mind keeps away from the origin is never still.
-TEST(GodHand, AHandThatTheMindKeepsAwayFromTheOriginIsNeverStill)
+// With no report of the mind, the input moves the hand back to the origin. So a hand that the mind puts away from the
+// origin before each step, with no report after the step, is never still.
+TEST(GodHand, AHandWithNoReportGoesBackToTheOriginAndIsNeverStill)
 {
 	HandStillness hand;
 	const glm::vec3 place {500.0f, 30.0f, 600.0f};
 	for (int turn = 0; turn < 5; ++turn)
 	{
-		god_hand::InputTurn(hand);
+		god_hand::InputTurn(hand, std::nullopt);
 		god_hand::MindReport(hand, place);
 		EXPECT_EQ(hand.last, place);
 	}
-	god_hand::InputTurn(hand);
+	god_hand::InputTurn(hand, std::nullopt);
 	EXPECT_EQ(hand.stillTurns, 0u);
 	EXPECT_EQ(hand.last, glm::vec3(0.0f));
 	EXPECT_LT(hand.velocity.x, 0.0f);
+}
+
+// The input moves the hand to the place that the mind reported after its last step. A hand that stays there is still.
+TEST(GodHand, TheInputMovesTheHandToTheReportOfTheMind)
+{
+	HandStillness hand;
+	const glm::vec3 place {500.0f, 30.0f, 600.0f};
+	god_hand::InputTurn(hand, place);
+	EXPECT_EQ(hand.last, place);
+	EXPECT_EQ(hand.stillTurns, 0u);
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		god_hand::MindReport(hand, place);
+		god_hand::InputTurn(hand, place);
+	}
+	EXPECT_EQ(hand.last, place);
+	EXPECT_EQ(hand.stillTurns, 3u);
 }
 
 // The report of the mind changes only the place. The stillness and the velocity change at the next input.
