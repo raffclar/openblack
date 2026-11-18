@@ -181,6 +181,7 @@ bool openblack::computer_hand::Process(HandAction& action, const World& world)
 	if (!Busy(action))
 	{
 		action.camera = action.hand;
+		action.reported = action.hand;
 		return true;
 	}
 	const auto& front = action.steps.front();
@@ -203,8 +204,10 @@ bool openblack::computer_hand::Process(HandAction& action, const World& world)
 	}
 	const auto step = action.steps.front();
 	const auto result = RunPart(action, world, step);
-	// The camera of the god follows the hand after each part, but not after the turn that puts a move in front
+	// The camera and the report of the god follow the hand after each part, but not after the turn that puts a move in
+	// front
 	action.camera = action.hand;
+	action.reported = action.hand;
 	switch (result)
 	{
 	case Result::Next:

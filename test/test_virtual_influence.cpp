@@ -242,23 +242,42 @@ TEST(VirtualInfluence, BackInInfluenceTheManaPathIsWorkedOutAfresh)
 	EXPECT_FALSE(ManaPathEnds(state, Inside({30.0f, 0.0f, 40.0f}, 7)));
 }
 
-// A person's hand measures from the point that its last report picked. A god that no person plays sends no reports, so
-// its hand measures from the origin of the world. Out there, far from its influence, its share is soon gone.
-TEST(VirtualInfluence, AGodThatNoPersonPlaysMeasuresFromTheOrigin)
+// A person's hand measures from the point that its last report picked. A god that no person plays measures from the
+// place of its hand that its computer mind reported. Before the first report, each hand measures from the origin.
+TEST(VirtualInfluence, AGodThatNoPersonPlaysMeasuresFromTheHandThatItsMindReported)
 {
 	constexpr glm::vec3 k_Pick {1200.0f, 30.0f, 900.0f};
-	static_assert(TurnHandPoint(true, k_Pick) == k_Pick);
-	static_assert(TurnHandPoint(true, std::nullopt) == glm::vec3(0.0f));
-	static_assert(TurnHandPoint(false, k_Pick) == glm::vec3(0.0f));
-	static_assert(TurnHandPoint(false, std::nullopt) == glm::vec3(0.0f));
+	constexpr glm::vec3 k_Mind {800.0f, 60.0f, 700.0f};
+	static_assert(TurnHandPoint(true, k_Pick, k_Mind) == k_Pick);
+	static_assert(TurnHandPoint(true, std::nullopt, k_Mind) == glm::vec3(0.0f));
+	static_assert(TurnHandPoint(false, k_Pick, k_Mind) == k_Mind);
+	static_assert(TurnHandPoint(false, k_Pick, std::nullopt) == glm::vec3(0.0f));
+	static_assert(TurnHandPoint(false, std::nullopt, std::nullopt) == glm::vec3(0.0f));
+}
+
+// A god whose hand stays in its own influence keeps its share and uses no chants. A god with no report yet measures from
+// the origin of the world: out there, far from its influence, its share is soon gone.
+TEST(VirtualInfluence, AGodInItsOwnInfluenceKeepsItsShareAndUsesNoChants)
+{
+	constexpr glm::vec3 k_Mind {800.0f, 60.0f, 700.0f};
 	State state;
-	for (uint32_t turn = 1; turn <= k_Settings.maxTurns && state.fraction > 0.0f; ++turn)
+	for (uint32_t turn = 1; turn <= k_Settings.maxTurns; ++turn)
 	{
-		ProcessTurn(state, Outside(TurnHandPoint(false, k_Pick), turn), k_Settings);
+		const auto inputs = Inside(TurnHandPoint(false, std::nullopt, k_Mind), turn);
+		EXPECT_FALSE(UsesChants(state, inputs.handShielded, inputs.handInInfluence));
+		ProcessTurn(state, inputs, k_Settings);
 		ASSERT_TRUE(state.turnHand.has_value());
-		EXPECT_EQ(*state.turnHand, glm::vec3(0.0f));
+		EXPECT_EQ(*state.turnHand, k_Mind);
 	}
-	EXPECT_EQ(state.fraction, 0.0f);
+	EXPECT_EQ(state.fraction, 1.0f);
+	State unreported;
+	for (uint32_t turn = 1; turn <= k_Settings.maxTurns && unreported.fraction > 0.0f; ++turn)
+	{
+		ProcessTurn(unreported, Outside(TurnHandPoint(false, std::nullopt, std::nullopt), turn), k_Settings);
+		ASSERT_TRUE(unreported.turnHand.has_value());
+		EXPECT_EQ(*unreported.turnHand, glm::vec3(0.0f));
+	}
+	EXPECT_EQ(unreported.fraction, 0.0f);
 }
 
 TEST(VirtualInfluence, OnlyATurnOutOfInfluenceUsesTheChantsOfTheWorshipSites)
