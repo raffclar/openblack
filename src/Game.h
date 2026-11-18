@@ -189,8 +189,8 @@ struct Arguments
 	bool noDraw {false};
 	/// Tools: the window never takes the focus, the front or the mouse, and stays in a window
 	bool background {false};
-	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
-	creature_swap::Unlocked unlockedBonusCreatures;
+	/// The Creature Breeder's bonus creatures taken as unlocked (all five by default; a debug option can change the set)
+	creature_swap::Unlocked unlockedBonusCreatures {creature_swap::k_DefaultUnlocked};
 	/// Debug: the switch of the free Soccer Add-On (off by default, as on a normal install)
 	bool footballAddOn {false};
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder

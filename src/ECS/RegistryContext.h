@@ -26,6 +26,7 @@
 #include "Components/Stream.h"
 #include "Components/Town.h"
 #include "Components/VillageLight.h"
+#include "Creature/BonusCreatures.h"
 #include "Creature/CreatureExplorationMap.h"
 #include "ECS/GameEndRules.h"
 #include "ECS/StatisticsRules.h"
@@ -119,9 +120,9 @@ struct RegistryContext
 	/// The statistics the game keeps once for everyone, which a new land starts again
 	statistics::GlobalFigures globalStatistics;
 	/// The bonus creatures that the scripts of a network game read, one bit for each (creature_swap::MaskOf). A network
-	/// game starts with none, as a normal install. Only the turn command of the debug menu changes the set, thus each
-	/// computer keeps the same set.
-	uint8_t networkBonusCreatures {0};
+	/// game starts with all five, as a game alone does. Only the turn command of the debug menu changes the set, thus
+	/// each computer keeps the same set.
+	uint8_t networkBonusCreatures {creature_swap::k_DefaultUnlockedMask};
 	/// The villagers that the Temple villagers debug window of each player made, so that the window can take them away.
 	/// In a network game each computer adds them at the turn of the act, thus the list is the same on each computer.
 	std::array<std::vector<entt::entity>, player_slots::k_PlayerNumbers> debugMadeVillagers {};
