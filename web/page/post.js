@@ -151,6 +151,27 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
     return loadWorker(worker);
   };
 
+  // The game must not run more threads than the workers that the page makes at the start (PTHREAD_POOL_SIZE). A
+  // thread past these workers gets a new worker, and the new worker loads the program from the site in the middle of
+  // play. The game log tells each new highest count of the threads that run at one time, and each new worker.
+  const poolWorkers = PThread.unusedWorkers.length + Object.keys(PThread.pthreads).length;
+  let mostThreads = 0;
+  const getNewWorker = PThread.getNewWorker;
+  PThread.getNewWorker = () => {
+    const pastPool = PThread.unusedWorkers.length === 0;
+    const worker = getNewWorker();
+    const threads = Object.keys(PThread.pthreads).length + 1;
+    const pageLog = (text) => (globalThis.openblackPageLog ? globalThis.openblackPageLog(text) : console.log(text));
+    if (threads > mostThreads) {
+      mostThreads = threads;
+      pageLog(`Game threads: ${threads} run at one time, the most so far (the page made ${poolWorkers} workers)`);
+    }
+    if (pastPool) {
+      pageLog(`Game threads: a thread got a new worker past the ${poolWorkers} workers of the page`);
+    }
+    return worker;
+  };
+
   // The sound output (see src/Audio/WebAudioOutput.cpp). A game thread mixes the sound into a ring in the memory of
   // the program, and an audio worklet plays the ring on the audio thread of the browser. The main thread only makes
   // the audio context and the worklet, so a busy main thread does not stop the sound. The context starts when the

@@ -25,7 +25,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/SideThread.h"
-#include "Common/WorkerPool.h"
+#include "Common/WorkerPools.h"
 #include "Common/X87Angle.h"
 #include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/MapCellResident.h"
@@ -118,7 +118,7 @@ WorkerPool& LandFootprints::Workers()
 {
 	if (!_workers)
 	{
-		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+		_workers = MakeWorkerPool();
 	}
 	return *_workers;
 }

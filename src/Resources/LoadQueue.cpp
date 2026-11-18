@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "Common/WebThreadBudget.h"
+
 using namespace openblack::resources;
 
 LoadQueue::LoadQueue(size_t threads)
@@ -41,9 +43,10 @@ size_t LoadQueue::DefaultThreadCount()
 	// the main thread when first wanted
 	return 0;
 #else
-	// The game's main thread and the renderer's keep two cores busy
+	// The game's main thread and the renderer's keep two cores busy. In the browser, the count is a part of the workers
+	// that the page makes at the start (see Common/WebThreadBudget.h).
 	constexpr size_t k_ReservedThreads = 2;
-	constexpr size_t k_MostThreads = 6;
+	constexpr size_t k_MostThreads = web_threads::k_LoadWorkers;
 	const size_t hardware = std::thread::hardware_concurrency();
 	return std::clamp<size_t>(hardware > k_ReservedThreads ? hardware - k_ReservedThreads : 1, 1, k_MostThreads);
 #endif

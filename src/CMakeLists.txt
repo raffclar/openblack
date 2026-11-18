@@ -763,8 +763,9 @@ else ()
     # browser after each frame (see src/Web/WebPlatform.cpp).
     #
     # The page makes the workers for the game threads at the start (PTHREAD_POOL_SIZE). When the game needs one thread
-    # more than this set, the page makes a new worker, and the new worker loads the program again. The game uses at most
-    # 25 threads at one time: the game thread, the render thread, the worker pools, the load queue and the shadow bake.
+    # more than this set, the page makes a new worker, and the new worker loads the program again from the site. Thus the
+    # page makes one worker for each thread that the game can run at one time. The list of these threads is in
+    # src/Common/WebThreadBudget.h, and the build stops when the list has more threads than the workers.
     #
     # The only part of the build that sends data over the network is the lobby client. It uses the fetch of the browser
     # (FETCH) for paths on the origin of the page only. There is no emrun and no file that the page loads before the
@@ -777,7 +778,7 @@ else ()
       -sWASMFS=1
       -sPROXY_TO_PTHREAD=1
       -sJSPI=1
-      -sPTHREAD_POOL_SIZE=25
+      -sPTHREAD_POOL_SIZE=${OPENBLACK_WEB_THREAD_POOL_SIZE}
       -sOFFSCREENCANVAS_SUPPORT=1
       -sMIN_WEBGL_VERSION=2
       -sMAX_WEBGL_VERSION=2

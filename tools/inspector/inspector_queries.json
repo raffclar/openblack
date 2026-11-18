@@ -1398,7 +1398,7 @@
   "query": "engine.error_reports"
  },
  {
-  "description": "Which of the engine's services are there, the game's random seeds, the game's path, the debug windows' focus and the inspector's port",
+  "description": "Which of the engine's services are there, the threads that the worker pools share, the game's random seeds, the game's path, the debug windows' focus and the inspector's port",
   "kind": "object",
   "parameters": [],
   "query": "engine.services"

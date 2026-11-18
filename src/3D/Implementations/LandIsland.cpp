@@ -39,7 +39,7 @@
 #include "3D/MapCoords.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/PortableRotations.h"
-#include "Common/WorkerPool.h"
+#include "Common/WorkerPools.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsDeviceInterface.h"
@@ -1069,11 +1069,11 @@ void LandIsland::PaintBlockTextures(const block_texture::Sources& sources)
 	std::vector<std::span<uint8_t>> paintedBytes(painted.size());
 	std::ranges::transform(painted, paintedBytes.begin(),
 	                       [](const auto* memory) { return Locator::graphicsDevice::value().Bytes(memory); });
-	WorkerPool painters(WorkerPool::DefaultThreadCount());
+	const auto painters = MakeWorkerPool();
 	block_texture::BuildBlocks(
 	    _landBlocks.size(),
 	    [this](size_t block) { return std::span<const lnd::LNDCell>(_landBlocks[block].GetLndBlock()->cells); }, sources,
-	    painters, [&paintedBytes](size_t block) { return paintedBytes[block]; });
+	    *painters, [&paintedBytes](size_t block) { return paintedBytes[block]; });
 	for (size_t block = 0; block < painted.size(); ++block)
 	{
 		_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), painted[block]);
