@@ -29,6 +29,7 @@ class EventManager;
 class LandIslandInterface;
 struct LandData;
 class MainThreadQueue;
+class WorkerPools;
 class OceanInterface;
 class Profiler;
 class GameRandomInterface;
@@ -390,6 +391,7 @@ struct Locator
 	using errorReports = entt::locator<error_reports::ErrorReportsInterface>;
 	/// The work that a game turn gives to the main thread: the graphics, the renderer and the audio
 	using mainThreadQueue = entt::locator<MainThreadQueue>;
+	using workerPools = entt::locator<WorkerPools>;
 	using events = entt::locator<EventManager>;
 	using windowing = entt::locator<windowing::WindowingInterface>;
 	using debugGui = entt::locator<debug::gui::DebugGuiInterface>;

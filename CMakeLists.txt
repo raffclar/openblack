@@ -173,6 +173,11 @@ set(OPENBLACK_SENTRY_DSN
 # compiler uses them only where the results stay the same.
 if (EMSCRIPTEN)
   add_compile_options(-msimd128)
+  # The count of the workers that the page makes at the start, one for each thread that the game can run at one time.
+  # The link gives it to PTHREAD_POOL_SIZE (src/CMakeLists.txt). The code checks it against the threads of the game
+  # (src/Common/WebThreadBudget.h).
+  set(OPENBLACK_WEB_THREAD_POOL_SIZE 40)
+  add_compile_definitions(OPENBLACK_WEB_THREAD_POOL_SIZE=${OPENBLACK_WEB_THREAD_POOL_SIZE})
 endif ()
 
 find_program(
