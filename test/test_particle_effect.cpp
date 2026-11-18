@@ -1422,6 +1422,42 @@ TEST_F(ParticleEffectTest, ASavedAtomOnAnObjectKeepsItsObjectAndItsShower)
 	EXPECT_EQ(showers, std::vector<entt::entity> {static_cast<entt::entity>(42)});
 }
 
+// What a rule kept for a saved atom goes to that rule of the effect: a rule that made its collections does not make
+// them again. Data for a rule of another class changes nothing.
+TEST_F(ParticleEffectTest, ASavedAtomKeepsWhatItsRulesKept)
+{
+	const auto file =
+	    Header() + Object("AddSubCollectionsToAtom", "Add", "PROPERTY Group INTEGER 0\nPROPERTY NextGroups ARRAY SIZE 1 1\n") +
+	    Object("CreateRuleAnAtom", "Sub",
+	           "PROPERTY Group INTEGER 1\nPROPERTY NextGroups ARRAY SIZE 0\nPROPERTY PCreator PERSIS_PNTR Point0\n") +
+	    Object("ParticlePointCreator", "Point0", "PROPERTY InitialScale FLOAT 1\n");
+	const auto savedWith = [](std::vector<RestoredRuleData> ruleData) {
+		RestoredEffect saved {.age = 1.0f, .atomCount = 1};
+		auto root = SavedCollection(0, {0});
+		auto atom = SavedAtom(RestoredLook::Point, std::nullopt, glm::vec3(0.0f));
+		atom.ruleData = std::move(ruleData);
+		root.atoms.push_back(std::move(atom));
+		saved.roots.push_back(std::move(root));
+		return saved;
+	};
+	AtomRuleData added;
+	added.started = true;
+
+	auto kept = Make(file);
+	ASSERT_TRUE(kept->Adopt(savedWith({{.rule = 0, .className = "AddSubCollectionsToAtom", .data = added}})));
+	kept->Step(k_Step);
+	EXPECT_EQ(kept->CollectionCount(), 1u) << "the rule made its collections before the save";
+
+	auto fresh = Make(file);
+	ASSERT_TRUE(fresh->Adopt(savedWith({})));
+	fresh->Step(k_Step);
+	EXPECT_EQ(fresh->CollectionCount(), 2u) << "the rule makes its collections at the first step";
+
+	auto wrong = Make(file);
+	EXPECT_FALSE(wrong->Adopt(savedWith({{.rule = 0, .className = "UR_SideSpin", .data = added}})));
+	EXPECT_FALSE(wrong->Adopt(savedWith({{.rule = 1, .className = "AddSubCollectionsToAtom", .data = added}})));
+}
+
 TEST(AtomRuleStore, EachRuleFindsItsOwnDataInTheOrderThatTheRulesCame)
 {
 	// The rules are only keys of the store. The test uses the addresses of plain values as the rules.

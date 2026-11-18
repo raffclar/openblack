@@ -1156,11 +1156,38 @@ struct ImportedSpellCaster
 [[nodiscard]] bool IsSpellRecord(const gamesave::VanillaRecord& record);
 
 /// The import makes this spell of the file when no creature holds it, such as a spell that the hand cast. These are
-/// the storm, the heal, water, food, wood, the lightning, the beam explosion, the flocks, the creature spells, the
-/// forest, the shields and the teleport. The import does not make a fireball, because it does not make the ball of the
-/// fireball. It also does not make a spell of the kind that keeps only a list of objects, because no magic type of the
-/// tables is of that kind.
+/// the fireball, the storm, the heal, water, food, wood, the lightning, the beam explosion, the flocks, the creature
+/// spells, the forest, the shields and the teleport. The import does not make a spell of the kind that keeps only a list
+/// of objects, because no magic type of the tables is of that kind.
 [[nodiscard]] bool CanImportSpell(const ImportedHeldSpell& spell);
+
+/// A fireball of the file: the burning ball that an atom of the effect of a fireball spell carries
+struct ImportedFireBall
+{
+	uint32_t number {0};
+	gamesave::MapCoords position {};
+	/// The numbers of the atom that carries the ball and of the spell of its effect, 0 for none
+	uint32_t atom {0};
+	uint32_t spell {0};
+	/// The player of the effect, nothing for none
+	std::optional<PlayerNames> player;
+	/// The strength of the miracle that the effect last had, and the size of the atom, which is the radius of the ball
+	float strength {1.0f};
+	float radius {1.0f};
+	/// The rain cools the ball. The rain does not cool the fireball of a script.
+	bool affectedByRain {true};
+	/// The fire of the ball: its temperature now and at the end of the last turn, and the number of the thing that
+	/// heated it
+	float temperature {0.0f};
+	float previous {0.0f};
+	uint32_t source {0};
+	/// The last game turn that the atom found the ball. Nothing when the atom keeps no data for the ball.
+	std::optional<uint32_t> lastTurn;
+};
+
+/// The fireball of the record. Nothing for a record that is not a fireball.
+[[nodiscard]] std::optional<ImportedFireBall> ReadFireBall(const gamesave::VanillaWorld& world,
+                                                           const gamesave::VanillaRecord& record);
 
 /// The teleport stones of one player of the file, in the order of the list of the player. The first stone is the
 /// head of the list.

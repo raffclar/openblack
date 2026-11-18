@@ -240,6 +240,19 @@ private:
 		}
 		for (const auto data : _world.Refs(*record, "ruleData"))
 		{
+			// A rule that lets out atoms along the path of the parent keeps the last point of the parent
+			if (const auto* path = data != 0 ? _world.Record(data) : nullptr;
+			    path != nullptr && path->Is(VanillaType::CollectionDataWillowWisp))
+			{
+				collection.pathEmitters.push_back({
+				    .rule = static_cast<int>(_world.Word(*path, "dataRule").value_or(0)),
+				    .last = PointOf(_world, *path, "wispLast"),
+				    .emitted = _world.Float(*path, "wispEmitted").value_or(0.0f),
+				    .made = _world.Float(*path, "wispMade").value_or(0.0f),
+				    .first = _world.Byte(*path, "wispFirst").value_or(1) != 0,
+				});
+				continue;
+			}
 			const auto* emitter = Expect(data, VanillaType::EmitterRuleData);
 			if (emitter == nullptr)
 			{
@@ -269,6 +282,69 @@ private:
 		return collection;
 	}
 
+	/// What a rule keeps for an atom that the effect made at the age birth. The import knows the kinds of data that the
+	/// rules of a fireball keep.
+	std::optional<particles::RestoredRuleData> RuleData(uint32_t number, float birth)
+	{
+		const auto* record = number != 0 ? _world.Record(number) : nullptr;
+		if (record == nullptr)
+		{
+			_why = "object " + std::to_string(number) + " is not the data of a rule";
+			return std::nullopt;
+		}
+		particles::RestoredRuleData rule {.rule = static_cast<int>(_world.Word(*record, "atomDataRule").value_or(0))};
+		auto& data = rule.data;
+		const auto byte = [this, record](std::string_view name, uint8_t otherwise) {
+			return _world.Byte(*record, name).value_or(otherwise);
+		};
+		const auto real = [this, record](std::string_view name) { return _world.Float(*record, name).value_or(0.0f); };
+		switch (static_cast<VanillaType>(record->type))
+		{
+		case VanillaType::AtomDataFadeOutOnceConditionTrue:
+			// The age of the atom, its alpha and its scale when the fade started
+			rule.className = "AR_FadeOutOnceConditionTrue";
+			data.started = byte("fadeOutStarted", 0) != 0;
+			data.a = glm::vec4(real("fadeOutAge"), real("fadeOutAlpha"), real("fadeOutScale"), 0.0f);
+			break;
+		case VanillaType::AtomDataAttachFireBall:
+		{
+			// The ball that the atom carries, which the import made before the effect
+			rule.className = "AttatchFireBallToAtom";
+			data.started = byte("fireBallNotMade", 1) == 0;
+			const auto ball = _world.Ref(*record, "fireBallObject").value_or(0);
+			data.object = ball != 0 ? _entityOf(ball) : entt::null;
+			break;
+		}
+		case VanillaType::AtomDataRipple:
+		{
+			// The point on the map of the last ring on the water
+			rule.className = "UpdateRuleGravityWithFloor";
+			const auto last = PointOf(_world, *record, "rippleLast");
+			data.a.x = last.x;
+			data.a.y = last.z;
+			break;
+		}
+		case VanillaType::AtomDataAddSubCollections:
+			rule.className = "AddSubCollectionsToAtom";
+			data.started = byte("subCollectionsAdded", 0) != 0;
+			break;
+		case VanillaType::AtomDataSideSpin:
+			rule.className = "UR_SideSpin";
+			data.started = byte("sideSpinNotStarted", 1) == 0;
+			data.a.x = real("sideSpin");
+			break;
+		case VanillaType::AtomDataRemoveRuleAfterConditionTrue:
+			// The file keeps the age of the atom when the condition held, and openblack keeps the age of the effect
+			rule.className = "RemoveRuleAfterConditionTrue";
+			data.started = byte("removeStarted", 0) != 0;
+			data.a.x = real("removeAge") + birth;
+			break;
+		default:
+			return Fail(*record, "the import does not know this data of a rule of an atom");
+		}
+		return rule;
+	}
+
 	std::optional<particles::RestoredAtom> Atom(uint32_t number, int depth)
 	{
 		const auto* record = Expect(number, VanillaType::AtomCore);
@@ -276,9 +352,14 @@ private:
 		{
 			return std::nullopt;
 		}
-		if (!_world.Refs(*record, "atomRuleData").empty() || !_world.Refs(*record, "atomSounds").empty())
+		// The game keeps the sounds of an atom through a load, but it does not play them again. The import does not make
+		// them, because a sound that does not play changes nothing.
+		for (const auto sound : _world.Refs(*record, "atomSounds"))
 		{
-			return Fail(*record, "the atom has rule data or sounds, which no save of the tests has");
+			if (Expect(sound, VanillaType::ParticleSound) == nullptr)
+			{
+				return std::nullopt;
+			}
 		}
 		if (_world.Ref(*record, "atomDrawOffset").value_or(0) != 0)
 		{
@@ -287,6 +368,15 @@ private:
 		particles::RestoredAtom atom;
 		atom.velocity = PointOf(_world, *record, "atomVelocity");
 		atom.birth = _world.Float(*record, "atomBirth").value_or(0.0f);
+		for (const auto dataNumber : _world.Refs(*record, "atomRuleData"))
+		{
+			auto data = RuleData(dataNumber, atom.birth);
+			if (!data.has_value())
+			{
+				return std::nullopt;
+			}
+			atom.ruleData.push_back(std::move(*data));
+		}
 		const auto rotation = _world.Raw(*record, "atomRotation");
 		const auto previous = _world.Raw(*record, "atomPrevious");
 		const auto current = _world.Raw(*record, "atomCurrent");

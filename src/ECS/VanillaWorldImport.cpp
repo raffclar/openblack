@@ -1248,13 +1248,59 @@ bool IsSpellRecord(const VanillaRecord& record)
 
 bool CanImportSpell(const ImportedHeldSpell& spell)
 {
-	const auto type = static_cast<VanillaType>(spell.saveType);
-	if (type == VanillaType::Spell)
+	return static_cast<VanillaType>(spell.saveType) != VanillaType::SpellWithObjects && spell.magicType != MagicType::None;
+}
+
+std::optional<ImportedFireBall> ReadFireBall(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto position = PositionOf(world, record);
+	if (!record.Is(VanillaType::MagicFireBall) || !position.has_value())
 	{
-		return spell.magicType != MagicType::Fireball && spell.magicType != MagicType::FireballPowerUpOne &&
-		       spell.magicType != MagicType::FireballPowerUpTwo;
+		return std::nullopt;
 	}
-	return type != VanillaType::SpellWithObjects && spell.magicType != MagicType::None;
+	ImportedFireBall ball {
+	    .number = record.number,
+	    .position = *position,
+	    .atom = world.Ref(record, "fireBallAtom").value_or(0),
+	    .affectedByRain = world.Byte(record, "fireBallRain").value_or(1) != 0,
+	};
+	if (const auto* fire = RecordOf(world, world.Ref(record, "fire").value_or(0), VanillaType::FireEffect))
+	{
+		ball.temperature = world.Float(*fire, "fireTemperature").value_or(0.0f);
+		ball.previous = world.Float(*fire, "firePrevious").value_or(ball.temperature);
+		ball.source = world.Ref(*fire, "fireSource").value_or(0);
+	}
+	// The atom gives the size of the ball and the last turn that it found the ball
+	const auto* atom = RecordOf(world, ball.atom, VanillaType::AtomCore);
+	if (atom == nullptr)
+	{
+		return ball;
+	}
+	ball.radius = world.Float(*atom, "atomBaseScale").value_or(1.0f) * world.Float(*atom, "atomRuleScale").value_or(1.0f);
+	for (const auto number : world.Refs(*atom, "atomRuleData"))
+	{
+		if (const auto* data = RecordOf(world, number, VanillaType::AtomDataAttachFireBall);
+		    data != nullptr && world.Ref(*data, "fireBallObject").value_or(0) == record.number)
+		{
+			ball.lastTurn = world.Word(*data, "fireBallTurn");
+		}
+	}
+	// The effect of the atom gives the spell, the player and the strength of the ball
+	const auto* collection = RecordOf(world, world.Ref(*atom, "atomCollection").value_or(0), VanillaType::AtomCollection);
+	const auto* manager = collection != nullptr ? RecordOf(world, world.Ref(*collection, "collectionManager").value_or(0),
+	                                                       VanillaType::ParticleManager)
+	                                            : nullptr;
+	if (manager == nullptr)
+	{
+		return ball;
+	}
+	ball.spell = world.Ref(*manager, "managerSpell").value_or(0);
+	ball.player = PlayerOfRecord(world, world.Ref(*manager, "managerPlayer").value_or(0));
+	if (const auto info = world.Raw(*manager, "managerInfo"); info.size() == k_ProcessInfoSize)
+	{
+		std::memcpy(&ball.strength, info.data() + k_PowerAt, sizeof(ball.strength));
+	}
+	return ball;
 }
 
 std::vector<ImportedStoneList> ReadStoneLists(const VanillaWorld& world)

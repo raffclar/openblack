@@ -29,6 +29,7 @@
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/BuildingSiteList.h"
 #include "ECS/BuildingSites.h"
@@ -48,6 +49,7 @@
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
@@ -83,6 +85,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -1825,7 +1828,7 @@ std::optional<vanilla_reaction_import::Initiator> ShieldInitiatorOf(const ecs::R
 
 /// The thing that the living react to, as the import made it. None when the import did not make it, or when another
 /// system keeps the reaction of the thing: a fire, a shield or the control of a missionary. The import makes none of
-/// these. The import makes each spell of the file but the fireball.
+/// these. The import makes each spell of the file.
 std::optional<vanilla_reaction_import::Initiator> InitiatorOf(const ecs::Registry& registry, entt::entity entity)
 {
 	if (entity == entt::null || !registry.Valid(entity) || registry.AnyOf<Fire, MagicShield, MissionaryControl>(entity))
@@ -2037,6 +2040,8 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& magicSystem = Locator::magicSystem::value();
+	// The balls go first, so that the effects of the spells carry them again
+	ImportVanillaFireBalls(world, made);
 	for (const auto& creature : _vanilla->creatures)
 	{
 		const auto entity = EntityOf(made, creature.number);
@@ -2128,6 +2133,58 @@ void SaveGameSystem::ImportVanillaHeldCasts(const gamesave::VanillaWorld& world,
 			}
 			++waiting;
 		}
+	}
+}
+
+void SaveGameSystem::ImportVanillaFireBalls(const gamesave::VanillaWorld& world, VanillaMade& made)
+{
+	if (!Locator::fireSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& info = Locator::infoConstants::value();
+	const auto data = world.GameData();
+	const uint32_t turn = data.has_value() ? data->gameTurn : 0;
+	for (const auto* record : world.OfType(gamesave::VanillaType::MagicFireBall))
+	{
+		const auto ball = world_import::ReadFireBall(world, *record);
+		if (!ball.has_value())
+		{
+			continue;
+		}
+		// The power-up of the spell gives the row of the ball. A ball with no spell uses the first row.
+		const auto* spellRecord = ball->spell != 0 ? world.Record(ball->spell) : nullptr;
+		const auto spell = spellRecord != nullptr ? world_import::ReadHeldSpell(world, *spellRecord) : std::nullopt;
+		const auto row =
+		    spell.has_value() ? magic::FireBallInfoRow(magic::GetPowerUpLevel(info, spell->magicType)) : size_t {0};
+		const auto entity = registry.Create();
+		ecs::archetypes::TakeThingMadePlace();
+		registry.Assign<Transform>(entity, GroundPosition(ball->position), glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<MagicFireBall>(entity, MagicFireBall {
+		                                           .strength = ball->strength,
+		                                           .radius = ball->radius,
+		                                           .infoRow = static_cast<uint8_t>(row),
+		                                           .affectedByRain = ball->affectedByRain,
+		                                           .player = ball->player.value_or(PlayerNames::NEUTRAL),
+		                                           .hasPlayer = ball->player.has_value(),
+		                                           .lastTurn = ball->lastTurn.value_or(turn),
+		                                       });
+		auto& fires = Locator::fireSystem::value();
+		fires.SetTemperature(entity, ball->temperature, EntityOf(made, ball->source));
+		auto* fire = registry.TryGet<Fire>(entity);
+		if (fire == nullptr)
+		{
+			// A ball that is not hotter than the air gets no fire, and a ball with no fire does not stay
+			SPDLOG_LOGGER_WARN(ImportLog(), "The fireball {} of the file has no fire, so the import does not make it",
+			                   ball->number);
+			registry.Destroy(entity);
+			continue;
+		}
+		fire->state.previous = ball->previous;
+		made.emplace(ball->number, entity);
+		SPDLOG_LOGGER_INFO(ImportLog(), "The fireball {} of the spell {} burns again at the temperature {}", ball->number,
+		                   ball->spell, ball->temperature);
 	}
 }
 

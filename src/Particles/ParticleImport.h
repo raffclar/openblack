@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -44,6 +45,15 @@ enum class RestoredLook : uint8_t
 
 struct RestoredCollection;
 
+/// What a rule keeps for one saved atom. The rule is the number of its object in the particle file, and the data must
+/// belong to a rule of the class that the save names.
+struct RestoredRuleData
+{
+	int rule {-1};
+	std::string className;
+	AtomRuleData data;
+};
+
 /// One saved atom
 struct RestoredAtom
 {
@@ -73,6 +83,8 @@ struct RestoredAtom
 	DrawState current;
 	/// The object that an atom kept on an object follows; none once the object has gone
 	entt::entity object {entt::null};
+	/// What the rules keep for the atom
+	std::vector<RestoredRuleData> ruleData;
 	/// The collections under the atom, the oldest first
 	std::vector<RestoredCollection> collections;
 };
@@ -82,6 +94,19 @@ struct RestoredEmitter
 {
 	int rule {-1};
 	maths::EmitterClock clock;
+};
+
+/// What a rule that lets out atoms along the path of the parent keeps for a collection
+struct RestoredPathEmitter
+{
+	int rule {-1};
+	/// The point of the parent at the last step
+	glm::vec3 last {0.0f};
+	/// How much the rule let out in all, and how many atoms that made
+	float emitted {0.0f};
+	float made {0.0f};
+	/// The rule did not do a step yet
+	bool first {true};
 };
 
 /// One saved collection
@@ -97,6 +122,7 @@ struct RestoredCollection
 	/// the collection go.
 	std::vector<int> rules;
 	std::vector<RestoredEmitter> emitters;
+	std::vector<RestoredPathEmitter> pathEmitters;
 	/// The atoms, the oldest first
 	std::vector<RestoredAtom> atoms;
 };

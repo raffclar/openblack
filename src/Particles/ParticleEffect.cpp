@@ -1561,6 +1561,23 @@ CollectionPtr Effect::AdoptCollection(const RestoredCollection& saved, Atom* par
 			return nullptr;
 		}
 	}
+	// A rule of the group by its object in the file, when the object has the class that the save names
+	const auto ruleOf = [&](int rule, std::string_view className) -> const Modifier* {
+		for (const auto* modifier : _groups.at(static_cast<size_t>(saved.group)))
+		{
+			if (const auto object = objectOf(modifier);
+			    object == rule && _file->objects[static_cast<size_t>(object)].className == className)
+			{
+				return modifier;
+			}
+		}
+		return nullptr;
+	};
+	if (!std::ranges::all_of(saved.pathEmitters,
+	                         [&](const RestoredPathEmitter& path) { return ruleOf(path.rule, "UR_WillowWisp") != nullptr; }))
+	{
+		return nullptr;
+	}
 	const Modifier* objectRule = nullptr;
 	for (const auto* modifier : _groups.at(static_cast<size_t>(saved.group)))
 	{
@@ -1571,6 +1588,14 @@ CollectionPtr Effect::AdoptCollection(const RestoredCollection& saved, Atom* par
 		    emitter != saved.emitters.end())
 		{
 			slot.emitter = emitter->clock;
+		}
+		if (const auto path = std::ranges::find(saved.pathEmitters, object, &RestoredPathEmitter::rule);
+		    path != saved.pathEmitters.end())
+		{
+			slot.state = glm::vec4(path->last, 0.0f);
+			slot.extra.x = path->emitted;
+			slot.extra.y = path->made;
+			slot.first = path->first;
 		}
 		if (object >= 0 && _file->objects[static_cast<size_t>(object)].className == "CreateRule_GameObjectRef")
 		{
@@ -1634,6 +1659,15 @@ CollectionPtr Effect::AdoptCollection(const RestoredCollection& saved, Atom* par
 		atom.steps = savedAtom.steps;
 		atom.drawn = savedAtom.steps > 0;
 		atom.drawOnFirstUpdate = savedAtom.drawOnFirstUpdate;
+		for (const auto& kept : savedAtom.ruleData)
+		{
+			const auto* rule = ruleOf(kept.rule, kept.className);
+			if (rule == nullptr)
+			{
+				return nullptr;
+			}
+			atom.data.insert_or_assign(rule, AtomRuleData(kept.data));
+		}
 		for (const auto& sub : savedAtom.collections)
 		{
 			auto child = AdoptCollection(sub, &atom);
