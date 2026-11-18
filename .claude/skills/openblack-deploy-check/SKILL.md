@@ -7,7 +7,7 @@ description: Use in every openblack deploy lane (web client and game server of b
 
 A deploy can pass every workflow check and still ship a broken game. Web 551d052b4 did: the land textures could not
 bind on WebGPU, every frame was black, and nothing crashed, so Sentry saw nothing (web-sp-black-1). This skill has two
-parts. Both print one line for each item and exit non-zero when an item does not pass.
+parts. Both print one line for each item and exit non-zero when an item fails.
 
 Scripts (in `scripts/` beside this file; run them from your own worktree of openblack, which gives
 `web/scripts/cdp-run.mjs` and `tools/sim/net_check.py`):
@@ -36,6 +36,9 @@ python -I .claude/skills/openblack-deploy-check/scripts/pre_deploy_gate.py \
   gate gives the server and the desktop client a closed local DSN (`SENTRY_DSN`), and the content policy of the
   local page blocks the browser reports. Never run a shipping server tar outside the gate without such a DSN: a
   local test on 2026-11-18 made the Sentry issue OPENBLACK-P ("Desync: GameStanding") that way.
+- The merge train runs the web items of the gate for each car on WebGPU, on the page folder of a web build in place of
+  the tar (`--web-page <web build>/bin/Release --renderers webgpu`, through `web_check.sh` of the skill
+  openblack-merge-train).
 - If the gate prints FAIL, STOP. Do not deploy, do not edit or skip an item, and report the gate output. The
   screenshots, `console.log` and `page-log.txt` of each run are in the work folder.
 
@@ -57,7 +60,7 @@ of its own (progress row "The deploy gate also starts a skirmish or a generated 
 | server: tar unpacks | `openblack-server`, `crashpad_handler` and `version.txt` are in the tar. |
 | server: starts in the Linux image | `openblack-server --version` runs in `catthehacker/ubuntu:act-24.04`, the image of the local act runs (`docker run --rm --pull=never`; the gate never downloads it). WSL Ubuntu 22.04 cannot run the server: its glibc is 2.35, and the server needs 2.38. |
 | server: build id and codec | The build id of the Linux server (such as `0.1.0+9f73a40c4184/codec36`) is the build id of the desktop build of the same commit (`ob-build master --config RelWithDebInfo <sha>`). |
-| (trap) | The store can keep a merge-train car's build under the merge commit (551d052b4 holds the build of `225585f9f`: the same files, another build id). The server refuses such a client, so the gate stops the server part with FAIL. Build a client of exactly the commit (a worktree at the commit, `ob-build build --config RelWithDebInfo`) and give `--client-bin <build>/bin/RelWithDebInfo`. |
+| (trap) | Stores made before deploy-tools-2 can keep a merge-train car's build under the merge commit (551d052b4 holds the build of `225585f9f`: the same files, another build id). The server refuses such a client, so the gate stops the server part with FAIL. Now `ob-build store` refuses a build with another commit's id, the train builds again at the merge commit before it stores, and `ob-build master` builds again a stored build with another id. `ob-build store-check --config RelWithDebInfo <sha>` tells if a stored build has the id of its commit. If you cannot wait for a build of the master store, build a client of exactly the commit (a worktree at the commit, `ob-build build --config RelWithDebInfo openblack openblack-server`) and give `--client-bin <build>/bin/RelWithDebInfo`. |
 | server: ready | The server log has its listen line (TLS on a port of 127.0.0.1). |
 | server: one desktop client plays 300 turns in step | `net_check.py --server-linux` on `Online Maps/mpm_2p_1.map`: the server compared 300 or more checksums, all the same, no resume, and the client agrees. |
 | pair | The web and the server tars are the same commit. |
@@ -76,7 +79,9 @@ python -I .claude/skills/openblack-deploy-check/scripts/post_deploy_check.py \
 ```
 
 One pass only: each item is one request or one browser visit. Never repeat it in a loop, and never use it as a load
-test. A STOP line is an item that cannot run; it says what the user must give.
+test. A STOP line is an item that cannot run; it says what the user must give. A STOP item is not a fault: when no item
+fails, the summary line says PASS with the number of STOP items (such as "PASS: 4 of 7 items pass, 3 STOP") and the
+exit code is 0. When an item fails, the summary says FAIL and the exit code is 1.
 
 | Item | What it does |
 |---|---|

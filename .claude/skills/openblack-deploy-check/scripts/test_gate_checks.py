@@ -108,6 +108,14 @@ class ServerTest(unittest.TestCase):
                          "0.1.0+9f73a40c4184/codec36")
         self.assertIsNone(gate_checks.build_id("no version"))
 
+    def test_checklist_summary(self):
+        self.assertEqual(gate_checks.checklist_summary(["PASS"] * 4 + ["STOP"] * 3),
+                         ("PASS: 4 of 7 items pass, 3 STOP", 0))
+        self.assertEqual(gate_checks.checklist_summary(["PASS", "PASS"]), ("PASS: 2 of 2 items pass", 0))
+        self.assertEqual(gate_checks.checklist_summary(["PASS", "FAIL", "STOP"]),
+                         ("FAIL: 1 of 3 items pass, 1 FAIL, 1 STOP", 1))
+        self.assertEqual(gate_checks.checklist_summary(["FAIL"]), ("FAIL: 0 of 1 items pass, 1 FAIL", 1))
+
 
 if __name__ == "__main__":
     try:
