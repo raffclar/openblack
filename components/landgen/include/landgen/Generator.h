@@ -83,6 +83,7 @@ struct Settings
 	swamps::Settings swamps;
 	lighting::Settings lighting;
 	settlement::Settings settlement;
+	settlement::SiteSettings sites;
 };
 
 /// A flat place for the player's temple and first town, in corners
@@ -144,7 +145,8 @@ struct GeneratedLand
 	/// The puffs of mist and smoke over the cursed places, then the puffs of the green mist over the swamps
 	std::vector<cursed::Mist> mists;
 	StartArea start {};
-	/// The player's temple and first town on the start area
+	/// The player's temple and first town on the start area, and the neutral towns. The paths between the towns start
+	/// from the centres of these towns.
 	settlement::Plan settlement;
 	std::vector<StageTime> times;
 	/// The height units of each altitude, and the height of each corner in units of 0.67 m. The altitude of a cell is its
@@ -153,9 +155,9 @@ struct GeneratedLand
 	Grid<uint16_t> heightUnits;
 };
 
-/// Makes a land: the base heights, the erosion, the lakes and rivers, the start area, the climate, the biomes, the light,
-/// the cells and countries, the features, the cursed places, the mist of the swamps, the forests, and the temple and town of
-/// the start
+/// Makes a land: the base heights, the erosion, the lakes and rivers, the start area and the places of the towns, the
+/// climate, the biomes, the light, the cells and countries, the features, the cursed places, the mist of the swamps, the
+/// forests, the temple and town of the start, and the neutral towns
 [[nodiscard]] GeneratedLand Generate(const Settings& settings);
 
 /// The cell of each corner, from the altitudes, the luminosity and the biomes. A cell's water and sound come from the

@@ -193,6 +193,34 @@ class GeneratedTargets(unittest.TestCase):
         self.assertEqual(bad, ["land_km2", "trees_per_km2"])
 
 
+class TownMeasures(unittest.TestCase):
+    def test_the_towns_of_an_island(self):
+        heights, land = square_island(side=100, edge=10, height=30.0)
+        towns = [{"x": 300.0, "z": 300.0, "tribe": "NORSE", "neutral": False, "buildings": 10, "houses": 6, "fields": 6,
+                  "villagers": 18},
+                 {"x": 600.0, "z": 300.0, "tribe": "CELTIC", "neutral": True, "buildings": 9, "houses": 5, "fields": 4,
+                  "villagers": 12},
+                 {"x": 600.0, "z": 700.0, "tribe": "CELTIC", "neutral": True, "buildings": 2, "houses": 2, "fields": 0,
+                  "villagers": 0}]
+        out = measure.town_measures(towns, heights, land, 0.64)
+        self.assertAlmostEqual(out["towns_per_km2"], 3 / 0.64)
+        self.assertEqual(out["town_tribes"], 2)
+        self.assertEqual(out["neutral_towns"], 2)
+        self.assertAlmostEqual(out["town_nn_min_m"], 300.0)
+        self.assertAlmostEqual(out["town_nn_median_m"], 300.0)
+        self.assertAlmostEqual(out["town_height_median_m"], 30.0)
+        # The first two towns are 21 corners from the sea and the third 20
+        self.assertAlmostEqual(out["town_sea_median_m"], 210.0)
+        # The hamlet of two buildings does not count for the size of a town
+        self.assertAlmostEqual(out["town_houses_median"], 5.5)
+        self.assertAlmostEqual(out["town_villagers_median"], 15.0)
+        self.assertAlmostEqual(out["town_fields_median"], 5.0)
+
+    def test_a_land_without_towns_has_no_town_numbers(self):
+        heights, land = square_island()
+        self.assertEqual(measure.town_measures([], heights, land, 1.0), {})
+
+
 class Dump(unittest.TestCase):
     def test_a_dump_gives_a_land(self):
         side = 4
@@ -207,6 +235,7 @@ class Dump(unittest.TestCase):
                                                  [0, 22, 900.0, 900.0, 0.0, 1.0, 1.0, 0],
                                                  [3, 74, 1000.0, 900.0, 0.0, 4.0, 4.0, 0, 0.0, 0.0, 0.0]],
                 "forests": [[1, 5.0, 5.0]], "footpaths": 0, "towns": 1,
+                "town_list": [[10.0, 20.0, 5, 0, 9, 6, 6, 17]],
                 "mists": [[1000.0, 900.0, 0.0, 0x6D505050, 0.58, 2.64], [5.0, 5.0, 0.0, 0x80808080, 1.0, 1.0]]}
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "seed1.json")
@@ -225,6 +254,8 @@ class Dump(unittest.TestCase):
         # The surfaces 0 and 3 are wet sand and grass, which are not wet ground
         self.assertFalse(model["wet"].any())
         self.assertEqual(len(model["mist_list"]), 2)
+        self.assertEqual(model["town_list"], [{"x": 10.0, "z": 20.0, "tribe": 5, "neutral": False, "buildings": 9,
+                                               "houses": 6, "fields": 6, "villagers": 17}])
 
 
 if __name__ == "__main__":

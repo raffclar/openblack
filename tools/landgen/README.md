@@ -68,3 +68,12 @@ trees on that wet ground for each square kilometre of it. `green_mists_per_km2` 
 the puffs of the dark green mist of Land 4 (colour 50632F) and their sheets (puffs 70 m or less apart) for each square
 kilometre of land. The cover of whole-swamp mist on generated lands (deviation 279) puts `green_mists_per_km2` far
 above the vanilla range on purpose.
+
+The town numbers: `towns` counts the towns with the player's towns, `neutral_towns` the towns of no player and
+`town_tribes` the tribes. `town_nn_median_m` and `town_nn_min_m` are the median and the least distance from a town to
+the nearest other town. `town_height_median_m` and `town_sea_median_m` are the medians of the height of the town
+centres and of their distance from the sea. `town_houses_median`, `town_villagers_median` and `town_fields_median` are
+the medians over the towns of five buildings or more (the lands of the story also have hamlets of one to three
+buildings). A dump town has 8 values: x, z, the tribe, 1 for a neutral town, the buildings, the houses, the fields and
+the people. `towns_per_km2` is free for a generated land: its towns keep the vanilla count and the vanilla distances,
+so a land larger than the lands of the story has fewer towns for each km2.

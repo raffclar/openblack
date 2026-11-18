@@ -211,6 +211,22 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_towns",
+	    .name = "The neutral towns of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly from the "
+	                   "start area to the towns round it, then from town to town.",
+	    .expected = "The land has six to eleven towns with the town of player one. Each other town is a neutral town on "
+	                "flat ground, 220 to 600 metres from the town nearest to it, and 70 to 270 metres from the sea. "
+	                "Each town has a town centre, a storage pit, a creche, five to seven houses with their people and "
+	                "a block of fields. Some towns also have a workshop or a graveyard. The land has four to six "
+	                "tribes. No tree grows on the ground of a town.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_trees",
 	    .name = "The stands of trees and the big forests of a generated land",
 	    .facet = Facet::Editor,

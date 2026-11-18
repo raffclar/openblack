@@ -103,11 +103,12 @@ static_assert(static_cast<int>(landgen::settlement::Tribe::Celtic) == static_cas
 static_assert(static_cast<int>(landgen::settlement::Tribe::Norse) == static_cast<int>(Tribe::NORSE));
 static_assert(static_cast<int>(landgen::settlement::Tribe::Tibetan) == static_cast<int>(Tribe::TIBETAN));
 
-/// The town of the land script
+/// The town of the player in the land script. The neutral towns have the numbers after it.
 constexpr int k_Town = 0;
-/// The belief of the town in player one at the start
+/// The belief of each town in its player at the start
 constexpr float k_TownBelief = 1.0f;
-/// The food and wood in the storage pit at the start, as the land script of Land 1 gives the player's first town
+/// The food and wood in the storage pit of each town at the start, as the land script of Land 1 gives the player's first
+/// town
 constexpr int k_StartFood = 20000;
 constexpr int k_StartWood = 30000;
 /// The full size of a building, in thousandths
@@ -135,6 +136,10 @@ std::string_view BuildingName(landgen::settlement::Building building)
 		return "E";
 	case Building::AbodeF:
 		return "F";
+	case Building::Workshop:
+		return "WORKSHOP";
+	case Building::Graveyard:
+		return "GRAVEYARD";
 	}
 	return "A";
 }
@@ -371,49 +376,58 @@ std::string_view generated_land::TribeName(landgen::settlement::Tribe tribe)
 std::string generated_land::SettlementScript(const landgen::settlement::Plan& plan)
 {
 	using landgen::settlement::Building;
-	const auto tribe = TribeName(plan.tribe);
 	std::string script;
 	const auto line = [&script](const std::string& text) {
 		script += text;
 		script += '\n';
 	};
-	line(fmt::format(R"(CREATE_TOWN({}, {}, "PLAYER_ONE", {}, "{}"))", k_Town, Place(plan.townX, plan.townZ),
-	                 static_cast<int>(plan.tribe), tribe));
-	line(fmt::format(R"(SET_TOWN_BELIEF({}, "PLAYER_ONE", {:.6f}))", k_Town, k_TownBelief));
-	for (const auto& field : plan.fields)
-	{
-		line(fmt::format("CREATE_NEW_TOWN_FIELD({}, {}, 0, 0.000000)", k_Town, Place(field.x, field.z)));
-	}
-	// The town centre comes after the other buildings, as on the lands of the story
-	for (const auto& placed : plan.buildings)
-	{
-		if (placed.building == Building::TownCentre)
+	// The lines of one town, as a land of the story gives them
+	const auto town = [&line](const landgen::settlement::Town& entry, int number, std::string_view player) {
+		const auto tribe = TribeName(entry.tribe);
+		line(fmt::format(R"(CREATE_TOWN({}, {}, "{}", {}, "{}"))", number, Place(entry.x, entry.z), player,
+		                 static_cast<int>(entry.tribe), tribe));
+		line(fmt::format(R"(SET_TOWN_BELIEF({}, "{}", {:.6f}))", number, player, k_TownBelief));
+		for (const auto& field : entry.fields)
 		{
-			continue;
+			line(fmt::format("CREATE_NEW_TOWN_FIELD({}, {}, 0, 0.000000)", number, Place(field.x, field.z)));
 		}
-		const bool store = placed.building == Building::StoragePit;
-		line(fmt::format(R"(CREATE_ABODE({}, {}, "{}_ABODE_{}", {}, {}, {}, {}))", k_Town, Place(placed.x, placed.z), tribe,
-		                 BuildingName(placed.building), placed.rotation, k_FullSize, store ? k_StartFood : 0,
-		                 store ? k_StartWood : 0));
-	}
-	for (const auto& placed : plan.buildings)
-	{
-		if (placed.building == Building::TownCentre)
+		// The town centre comes after the other buildings, as on the lands of the story
+		for (const auto& placed : entry.buildings)
 		{
-			line(fmt::format(R"(CREATE_TOWN_CENTRE({}, {}, "{}_ABODE_TOWN_CENTRE", {}, {}, 0))", k_Town,
-			                 Place(placed.x, placed.z), tribe, placed.rotation, k_FullSize));
+			if (placed.building == Building::TownCentre)
+			{
+				continue;
+			}
+			const bool store = placed.building == Building::StoragePit;
+			line(fmt::format(R"(CREATE_ABODE({}, {}, "{}_ABODE_{}", {}, {}, {}, {}))", number, Place(placed.x, placed.z), tribe,
+			                 BuildingName(placed.building), placed.rotation, k_FullSize, store ? k_StartFood : 0,
+			                 store ? k_StartWood : 0));
 		}
-	}
-	for (const auto& person : plan.villagers)
-	{
-		const std::string_view kind = person.kind == landgen::settlement::Villager::Forester ? "FORESTER" : "HOUSEWIFE";
-		line(fmt::format(R"(CREATE_TOWN_VILLAGER({}, {}, "{}_{}", {}))", k_Town, Place(person.x, person.z), tribe, kind,
-		                 person.age));
-	}
+		for (const auto& placed : entry.buildings)
+		{
+			if (placed.building == Building::TownCentre)
+			{
+				line(fmt::format(R"(CREATE_TOWN_CENTRE({}, {}, "{}_ABODE_TOWN_CENTRE", {}, {}, 0))", number,
+				                 Place(placed.x, placed.z), tribe, placed.rotation, k_FullSize));
+			}
+		}
+		for (const auto& person : entry.villagers)
+		{
+			const std::string_view kind = person.kind == landgen::settlement::Villager::Forester ? "FORESTER" : "HOUSEWIFE";
+			line(fmt::format(R"(CREATE_TOWN_VILLAGER({}, {}, "{}_{}", {}))", number, Place(person.x, person.z), tribe, kind,
+			                 person.age));
+		}
+	};
+	town(plan.town, k_Town, "PLAYER_ONE");
 	line(fmt::format(R"(CREATE_CITADEL({}, 0, "PLAYER_ONE", {}, {}))", Place(plan.citadelX, plan.citadelZ),
 	                 plan.citadelRotation, k_FullSize));
 	// The worship site goes to the place of its tribe round the temple, whatever place the line gives
-	line(fmt::format(R"(CREATE_WORSHIP_SITE({}, 0, "PLAYER_ONE", "{}", 0, {}))", Place(plan.citadelX, plan.citadelZ), tribe,
-	                 k_FullSize));
+	line(fmt::format(R"(CREATE_WORSHIP_SITE({}, 0, "PLAYER_ONE", "{}", 0, {}))", Place(plan.citadelX, plan.citadelZ),
+	                 TribeName(plan.town.tribe), k_FullSize));
+	// The neutral towns have no worship site at the start, as on the lands of the story
+	for (size_t i = 0; i < plan.neutral.size(); ++i)
+	{
+		town(plan.neutral[i], k_Town + 1 + static_cast<int>(i), "NEUTRAL");
+	}
 	return script;
 }

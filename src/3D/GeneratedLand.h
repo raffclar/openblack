@@ -71,8 +71,9 @@ struct StoryParts
 /// The name of a tribe of the plan, as a land script gives it
 [[nodiscard]] std::string_view TribeName(landgen::settlement::Tribe tribe);
 
-/// The lines of a land script that make the temple, the town, its people and its fields of a generated land, as a land of
-/// the story makes them. The town has the number 0 and belongs to player one. The lines use only kinds of the game.
+/// The lines of a land script that make the temple and the towns of a generated land, with their people and fields, as
+/// a land of the story makes them. The town of the start has the number 0 and belongs to player one. The neutral towns
+/// have the numbers after it. The lines use only kinds of the game.
 [[nodiscard]] std::string SettlementScript(const landgen::settlement::Plan& plan);
 
 /// The settings of the generator for the land of a seed, with each other choice at its first value

@@ -201,17 +201,17 @@ TEST(GeneratedLand, TheTownIsTheLinesOfALandScript)
 {
 	using landgen::settlement::Building;
 	landgen::settlement::Plan plan;
-	plan.tribe = landgen::settlement::Tribe::Norse;
+	plan.town.tribe = landgen::settlement::Tribe::Norse;
 	plan.citadelX = 100.0f;
 	plan.citadelZ = 200.0f;
 	plan.citadelRotation = 1234;
-	plan.townX = 195.0f;
-	plan.townZ = 200.0f;
-	plan.buildings = {{.building = Building::TownCentre, .x = 195.0f, .z = 200.0f, .rotation = 10},
-	                  {.building = Building::StoragePit, .x = 195.0f, .z = 222.5f, .rotation = 20},
-	                  {.building = Building::AbodeC, .x = 217.0f, .z = 200.0f, .rotation = 30}};
-	plan.villagers = {{.kind = landgen::settlement::Villager::Forester, .x = 218.0f, .z = 201.0f, .age = 30}};
-	plan.fields = {{.x = 245.0f, .z = 205.0f}};
+	plan.town.x = 195.0f;
+	plan.town.z = 200.0f;
+	plan.town.buildings = {{.building = Building::TownCentre, .x = 195.0f, .z = 200.0f, .rotation = 10},
+	                       {.building = Building::StoragePit, .x = 195.0f, .z = 222.5f, .rotation = 20},
+	                       {.building = Building::AbodeC, .x = 217.0f, .z = 200.0f, .rotation = 30}};
+	plan.town.villagers = {{.kind = landgen::settlement::Villager::Forester, .x = 218.0f, .z = 201.0f, .age = 30}};
+	plan.town.fields = {{.x = 245.0f, .z = 205.0f}};
 	const auto script = generated_land::SettlementScript(plan);
 	const auto read = lhscriptx::Script::Read(script);
 	ASSERT_FALSE(read.error.has_value()) << *read.error;
@@ -242,4 +242,39 @@ TEST(GeneratedLand, EachTribeHasItsNameOfTheGame)
 	EXPECT_EQ(generated_land::TribeName(landgen::settlement::Tribe::Aztec), "AZTEC");
 	EXPECT_EQ(generated_land::TribeName(landgen::settlement::Tribe::Egyptian), "EGYPTIAN");
 	EXPECT_EQ(generated_land::TribeName(landgen::settlement::Tribe::Tibetan), "TIBETAN");
+}
+
+TEST(GeneratedLand, TheNeutralTownsComeAfterTheTemple)
+{
+	using landgen::settlement::Building;
+	landgen::settlement::Plan plan;
+	plan.town.tribe = landgen::settlement::Tribe::Norse;
+	plan.town.x = 195.0f;
+	plan.town.z = 200.0f;
+	plan.town.buildings = {{.building = Building::TownCentre, .x = 195.0f, .z = 200.0f, .rotation = 10}};
+	landgen::settlement::Town neutral;
+	neutral.tribe = landgen::settlement::Tribe::Japanese;
+	neutral.x = 600.0f;
+	neutral.z = 400.0f;
+	neutral.buildings = {{.building = Building::TownCentre, .x = 600.0f, .z = 400.0f, .rotation = 5},
+	                     {.building = Building::StoragePit, .x = 620.0f, .z = 400.0f, .rotation = 6},
+	                     {.building = Building::Workshop, .x = 600.0f, .z = 422.0f, .rotation = 7},
+	                     {.building = Building::Graveyard, .x = 578.0f, .z = 400.0f, .rotation = 8}};
+	plan.neutral.push_back(neutral);
+	const auto script = generated_land::SettlementScript(plan);
+	const auto read = lhscriptx::Script::Read(script);
+	ASSERT_FALSE(read.error.has_value()) << *read.error;
+	const auto worship = script.find("CREATE_WORSHIP_SITE");
+	const auto second = script.find(R"(CREATE_TOWN(1, "600.00,400.00", "NEUTRAL", 3, "JAPANESE"))");
+	ASSERT_NE(second, std::string::npos);
+	EXPECT_GT(second, worship);
+	EXPECT_NE(script.find(R"(SET_TOWN_BELIEF(1, "NEUTRAL", 1.000000))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "620.00,400.00", "JAPANESE_ABODE_STORAGE_PIT", 6, 1000, 20000, 30000))"),
+	          std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "600.00,422.00", "JAPANESE_ABODE_WORKSHOP", 7, 1000, 0, 0))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "578.00,400.00", "JAPANESE_ABODE_GRAVEYARD", 8, 1000, 0, 0))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_TOWN_CENTRE(1, "600.00,400.00", "JAPANESE_ABODE_TOWN_CENTRE", 5, 1000, 0))"),
+	          std::string::npos);
+	// Only the player's town has a worship site
+	EXPECT_EQ(script.find("CREATE_WORSHIP_SITE", worship + 1), std::string::npos);
 }
