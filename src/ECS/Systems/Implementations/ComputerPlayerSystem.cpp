@@ -260,7 +260,7 @@ public:
 		return {debugString.data(), strnlen(debugString.data(), debugString.size())};
 	}
 
-	void MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) override
+	bool MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) override
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto home = ecs::creature_home::CitadelCreatureHomeOf(registry, player);
@@ -269,7 +269,7 @@ public:
 			SPDLOG_LOGGER_WARN(spdlog::get("game"),
 			                   "No creature made for the computer god {}: its citadel has no home on the land",
 			                   static_cast<int>(player));
-			return;
+			return false;
 		}
 		const auto position = map_coords::ToWorld(Locator::terrainSystem::value(), *home);
 		const auto creature = ecs::archetypes::CreatureArchetype::Create(
@@ -287,6 +287,19 @@ public:
 		SPDLOG_LOGGER_INFO(
 		    spdlog::get("game"), "Made creature {} \"{}\" of species {} for the computer god {} at {:.1f}, {:.1f}",
 		    entt::to_integral(creature), name, static_cast<int>(species), static_cast<int>(player), position.x, position.z);
+		return true;
+	}
+
+	void LearnEveryLeash(PlayerNames player) override
+	{
+		if (!Locator::playerSystem::has_value() || !Locator::creatureMindSystem::has_value())
+		{
+			return;
+		}
+		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(player); creature.has_value())
+		{
+			Locator::creatureMindSystem::value().LearnEveryLeash(*creature);
+		}
 	}
 
 	uint32_t GameRand(uint32_t range) override { return Locator::gameRandom::value().GameRand(range); }

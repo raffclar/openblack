@@ -316,10 +316,12 @@ public:
 		const auto name = debugNames.find(species);
 		return name != debugNames.end() ? name->second : std::string {};
 	}
-	void MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) override
+	bool MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) override
 	{
 		made.push_back({.player = player, .species = species, .name = std::string(name), .stage = stage});
+		return hasCreatureHome;
 	}
+	void LearnEveryLeash(PlayerNames player) override { leashesLearnt.push_back(player); }
 	uint32_t GameRand(uint32_t range) override
 	{
 		rangesAsked.push_back(range);
@@ -348,6 +350,8 @@ public:
 	std::vector<PlayerNames> players;
 	std::vector<PlayerNames> switchedOn;
 	std::vector<Made> made;
+	std::vector<PlayerNames> leashesLearnt;
+	bool hasCreatureHome {true};
 };
 
 } // namespace
@@ -451,6 +455,41 @@ TEST(ComputerPlayerStart, ASlotWithANewCreatureTakesTheRollsOfAnEmptySlot)
 	EXPECT_EQ(world.made[0].player, PlayerNames::PLAYER_FOUR);
 	EXPECT_EQ(world.made[0].name, "Tiger");
 	EXPECT_EQ(world.made[0].stage, k_SlotCreatureStage);
+}
+
+TEST(ComputerPlayerStart, TheNewCreatureOfASlotKnowsEveryLeash)
+{
+	FakeSlotWorld world;
+	FillSlot(world, PlayerNames::PLAYER_FOUR, true);
+	ASSERT_EQ(world.made.size(), 1);
+	EXPECT_EQ(world.leashesLearnt, (std::vector {PlayerNames::PLAYER_FOUR}));
+}
+
+TEST(ComputerPlayerStart, ASlotThatKeepsItsCreatureTeachesNoLeash)
+{
+	FakeSlotWorld world;
+	FillSlot(world, PlayerNames::PLAYER_FOUR, false);
+	EXPECT_TRUE(world.leashesLearnt.empty());
+}
+
+TEST(ComputerPlayerStart, NoLeashIsLearntWhenTheCitadelHasNoCreatureHome)
+{
+	FakeSlotWorld world;
+	world.hasCreatureHome = false;
+	FillSlot(world, PlayerNames::PLAYER_FOUR, true);
+	EXPECT_EQ(world.made.size(), 1);
+	EXPECT_TRUE(world.leashesLearnt.empty());
+}
+
+TEST(ComputerPlayerStart, ASlotWithAHumanOrAComputerPlayerTeachesNoLeash)
+{
+	FakeSlotWorld world;
+	world.citadels = {{PlayerNames::PLAYER_ONE, true}, {PlayerNames::PLAYER_TWO, true}, {PlayerNames::PLAYER_THREE, true}};
+	world.computers = {{PlayerNames::PLAYER_TWO, true}};
+	const std::vector gods {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE};
+	const std::vector humans {PlayerNames::PLAYER_ONE};
+	FillEmptySlots(world, gods, humans);
+	EXPECT_EQ(world.leashesLearnt, (std::vector {PlayerNames::PLAYER_THREE}));
 }
 
 TEST(ComputerPlayerStart, TheHumansWhoJoinGetTheirPlayersAndTheSlotsOfAWaitingLandFill)

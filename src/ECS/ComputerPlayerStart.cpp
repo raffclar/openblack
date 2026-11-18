@@ -240,7 +240,13 @@ void FillSlot(SlotWorld& world, PlayerNames god, bool makeCreature)
 	std::ignore = world.GameRand(k_SlotNameChoices);
 	const auto species = SpeciesFor(world.GameRand(k_SlotSpeciesChoices));
 	world.SwitchOn(god);
-	world.MakeSlotCreature(god, species, SlotCreatureName(world.SpeciesDebugName(species)), k_SlotCreatureStage);
+	if (!world.MakeSlotCreature(god, species, SlotCreatureName(world.SpeciesDebugName(species)), k_SlotCreatureStage))
+	{
+		return;
+	}
+	// The original game gives this creature no leash, so each tie of the computer god fails. openblack gives it every
+	// leash, as a creature that a land script makes from a mind file has (deviation 281).
+	world.LearnEveryLeash(god);
 }
 
 void HumansJoin(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans, bool landWaits)

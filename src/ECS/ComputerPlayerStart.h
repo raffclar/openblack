@@ -187,8 +187,12 @@ public:
 	virtual void SwitchOn(PlayerNames player) = 0;
 	/// The debug name of the species in the creature table, for example "Tiger creature"
 	[[nodiscard]] virtual std::string SpeciesDebugName(CreatureType species) const = 0;
-	/// Makes the creature of the player at the creature home of its citadel, gives it the name and grows it to the stage
-	virtual void MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) = 0;
+	/// Makes the creature of the player at the creature home of its citadel, gives it the name and grows it to the stage.
+	/// The result is false when the citadel has no creature home on the land, and the game makes no creature.
+	[[nodiscard]] virtual bool MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name,
+	                                            uint32_t stage) = 0;
+	/// The creature of the player knows every leash, as a creature that a land script makes from a mind file
+	virtual void LearnEveryLeash(PlayerNames player) = 0;
 	virtual uint32_t GameRand(uint32_t range) = 0;
 };
 
@@ -197,6 +201,7 @@ public:
 ///   sequence the same.
 /// - The game takes a random species. The creature gets the name of its species from the creature table.
 /// - The mind of the god switches on, and the game makes its creature fully grown at the creature home of its citadel.
+/// - The creature knows every leash, so that the god can tie it (deviation 281).
 void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans);
 
 /// The players of the god slots (from 0) of a network game, by player number. A slot after the last god slot of a
