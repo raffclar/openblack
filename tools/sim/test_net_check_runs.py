@@ -362,5 +362,54 @@ class Rejoin(unittest.TestCase):
         self.assertIn("--come-back-seconds", problem(500, 10, 10, 2000, 2, False, False))
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class SessionJudgement(unittest.TestCase):
+    """A client against the Linux server: no checksum line for each turn, so the session counts and the server's summary
+    of the slot are the compare"""
+
+    @staticmethod
+    def server_lines(slot0="2000 checksums compared, 2000 the same, first different none",
+                     slot1="2000 checksums compared, 2000 the same, first different none"):
+        return ["[game] [info] Slot 0: 1900 checksums compared, 1900 the same",
+                f"[game] [info] [DedicatedServer.cpp:2002] Network game: slot 0: commands [1x10 1x24], {slot0}, 0 resumes",
+                f"[game] [info] [DedicatedServer.cpp:2002] Network game: slot 1: commands [14x10 51x36], {slot1}, 1 resumes"]
+
+    def test_a_good_run_is_the_same(self):
+        for slot in (0, 1):
+            result = net_check.session_judgement(self.server_lines(), slot, (1999, 1999, 0), 1999)
+            self.assertTrue(result["ok"], result)
+
+    def test_the_summary_of_each_slot_is_read(self):
+        lines = self.server_lines(slot1="1912 checksums compared, 1912 the same, first different none")
+        self.assertEqual(net_check.server_slot_summaries(lines), {0: (2000, 2000, None), 1: (1912, 1912, None)})
+
+    def test_a_client_that_differs_is_not_the_same(self):
+        result = net_check.session_judgement(self.server_lines(), 0, (1999, 1990, 0), 1999)
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["session_same"])
+
+    def test_a_desync_in_the_summary_of_the_server_is_not_the_same(self):
+        lines = self.server_lines(slot1="2000 checksums compared, 1700 the same, first different 1234")
+        self.assertTrue(net_check.session_judgement(lines, 0, (1999, 1999, 0), 1999)["ok"])
+        result = net_check.session_judgement(lines, 1, (1999, 1999, 0), 1999)
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["server_same"])
+        self.assertEqual(result["server_slot"], (2000, 1700, "1234"))
+
+    def test_a_first_different_turn_with_all_the_same_is_not_the_same(self):
+        lines = self.server_lines(slot0="2000 checksums compared, 2000 the same, first different 55")
+        self.assertFalse(net_check.session_judgement(lines, 0, (1999, 1999, 0), 1999)["ok"])
+
+    def test_no_summary_or_no_counts_is_not_the_same(self):
+        self.assertFalse(net_check.session_judgement([], 0, (1999, 1999, 0), 1999)["ok"])
+        self.assertFalse(net_check.session_judgement(self.server_lines(), 0, None, 1999)["ok"])
+        self.assertFalse(net_check.session_judgement(self.server_lines(), 5, (1999, 1999, 0), 1999)["ok"])
+
+    def test_a_client_that_compared_few_turns_is_not_the_same(self):
+        result = net_check.session_judgement(self.server_lines(), 0, (300, 300, 0), 1999)
+        self.assertFalse(result["enough"])
+        self.assertFalse(result["ok"])
+
+
 if __name__ == "__main__":
     unittest.main()

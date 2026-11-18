@@ -933,6 +933,36 @@ def session_counts(log):
     return None if found is None else (found[0], found[1], resumes)
 
 
+# The server's summary of a slot when the network game ends: the turns that it compared with the checksums of the slot's
+# client, and the first turn that differs. The Linux server writes no line for each turn, so this is its only compare.
+SERVER_SLOT_SUMMARY = re.compile(r"Network game: slot (\d+): .*?(\d+) checksums compared, (\d+) the same, "
+                                 r"first different (\w+)")
+
+
+def server_slot_summaries(server_lines):
+    """The last summary of each slot in the server's log: slot -> (compared, the same, first different or None)"""
+    slots = {}
+    for line in server_lines:
+        match = SERVER_SLOT_SUMMARY.search(line)
+        if match:
+            first = None if match.group(4) == "none" else match.group(4)
+            slots[int(match.group(1))] = (int(match.group(2)), int(match.group(3)), first)
+    return slots
+
+
+def session_judgement(server_lines, slot, counts, expected):
+    """How a client is judged when the server wrote no checksum for each turn (the Linux server of --server-linux). The
+    client's session compares each turn with the server and writes its counts (counts is compared, the same, resumes, or
+    None). The server writes one summary for the slot. The client is the same when its session compared at least half of
+    the turns that it should do, with no turn different, and the server's summary for the slot says the same."""
+    summary = server_slot_summaries(server_lines).get(slot)
+    enough = counts is not None and counts[0] >= expected // 2
+    session_same = counts is not None and counts[0] == counts[1]
+    server_same = summary is not None and summary[0] > 0 and summary[0] == summary[1] and summary[2] is None
+    return {"enough": enough, "session_same": session_same, "server_slot": summary, "server_same": server_same,
+            "ok": enough and session_same and server_same}
+
+
 INSPECTOR_ADAPTER = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
 
 
@@ -4734,6 +4764,8 @@ def main():
     # The winner and the rank of each god, as the server tells them. Each client that plays to the end must tell the same.
     server_end = sim_report.game_end_in_file(server_log)
     summary["game_end"] = server_end
+    with open(server_log, encoding="utf-8", errors="replace") as file:
+        server_lines_all = file.readlines()
     for index, client_dir in enumerate(client_dirs):
         client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))
         compared = [turn for turn in sorted(client_turns) if turn in server_turns]
@@ -4781,6 +4813,12 @@ def main():
         # An observer that loaded the world of a running game catches up in frames of several turns, and the record keeps
         # the last turn of each frame: its session counts every turn
         enough = counts is not None and counts[0] >= expected // 2 if is_observer else len(compared) >= expected // 2
+        # With no checksum line for each turn in the server's log (the Linux server), the session counts and the server's
+        # summary of the slot are the compare
+        by_session = None
+        if not server_turns:
+            by_session = session_judgement(server_lines_all, index, counts, expected)
+            enough = by_session["enough"]
         client_end = sim_report.game_end_in_file(os.path.join(client_dir, "client.log"))
         if server_end and not left and not stopped_for_rejoin and not decided_after_run and client_end != server_end:
             print(f"client {index + 1} tells another end of the game than the server: {client_end} against {server_end}")
@@ -4806,6 +4844,8 @@ def main():
         same = (not different and enough and counts is not None
                 and (counts[0] - counts[1] <= allowed_differing)
                 and (left or kicked_observer or stopped_for_rejoin or counts[0] >= expected - 100 - away_gap) and bool(recovered or not parted_on_purpose))
+        if by_session is not None and not stopped_for_rejoin:
+            same = same and by_session["ok"]
         all_same = all_same and same
         draws = None
         if options.trace_draws and os.path.exists(server_trace) and os.path.exists(os.path.join(client_dir, "draws.tsv")):
@@ -4824,6 +4864,7 @@ def main():
             "recovered": recovered[-1:] if recovered else [],
             "gap_turns": gap[2] if gap else None, "gap_from": gap[0] if gap else None, "gap_back_at": gap[1] if gap else None,
             "away_gap_turns": away_gap,
+            "judged_by_session": by_session,
             "different": different[:20], "same": same, "parts_against_server": parts, "draws_against_server": draws,
             "rows_against_server": rows_against_server(server_dir, client_dir) if options.row_dump else None,
             "session": lines_with(os.path.join(client_dir, "client.log"),
