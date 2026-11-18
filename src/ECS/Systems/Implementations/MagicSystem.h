@@ -221,7 +221,7 @@ public:
 	void StopActionAtLockEnd() override;
 	[[nodiscard]] bool IsHandBusy() const override { return HeldOf(OwnPlayer()).has_value(); }
 	[[nodiscard]] bool IsHandBusyOf(PlayerNames player) const override { return HeldOf(player).has_value(); }
-	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override { return magic::PourPoseAt(_pour, fraction); }
+	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override;
 	[[nodiscard]] HandCastState GetHandCastState() const override;
 	[[nodiscard]] entt::entity GetPressThing() const override;
 	[[nodiscard]] std::optional<UseWait> GetUseWait() const override { return _useWait; }
@@ -341,9 +341,9 @@ private:
 	/// A turn of every creature's spells, and what each does to it
 	void ProcessCreatureSpells();
 	void ApplyCreatureSpell(entt::entity creature, const creature_spells::TurnEvent& event);
-	/// The hand pours the magic of a creature spell it cast onto the creature for a few seconds, rising and tipping, and
-	/// stops when the spell closes down
-	void StartHandGrain(const components::Spell& spell, entt::entity creature);
+	/// In the turn of a creature spell, the hand of this computer starts to pour the phial onto the head of the creature,
+	/// one time, while it holds the phial. The pour stops when the spell ends.
+	void PourPhialTurn(entt::entity entity, const components::Spell& spell);
 	void StopHandGrain(const components::Spell& spell);
 	/// The creature spells' own sounds stop once their creature has gone or the camera is beyond their reach
 	void KeepCreatureSpellSounds();
@@ -600,6 +600,10 @@ private:
 	entt::entity _holdLoop {entt::null};
 	/// The pour of food or wood lifting and tipping the hand
 	magic::PourState _pour;
+	/// The creature that the pour of a phial follows: the hand stays at its head. Null when the pour follows no creature.
+	entt::entity _pourCreature {entt::null};
+	/// The last creature spell that started the pour of its phial. Each spell starts it one time only.
+	entt::entity _pouredSpell {entt::null};
 	/// Each storm miracle's reaction of the people watching its rain put out a fire
 	std::unordered_map<entt::entity, uint32_t> _rainWatchers;
 	/// The circle drawn for a storm or shield, and the turn it was drawn

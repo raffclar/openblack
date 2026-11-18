@@ -331,6 +331,7 @@ bool MagicSystem::TakeSeedBack(PlayerNames player, entt::entity entity)
 	}
 	_input = {};
 	_pour = {};
+	_pourCreature = entt::null;
 	StartHandEffect(entity);
 	ShowHeldSeed();
 	if (Locator::miracleFxSystem::has_value())

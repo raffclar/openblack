@@ -171,5 +171,30 @@ void StopPour(PourState& pour);
 void StepPour(PourState& pour, float seconds);
 /// The pose to draw, a fraction of the way from the last turn to the next
 [[nodiscard]] PourPose PourPoseAt(const PourState& pour, float fraction);
+/// The pose to draw when the pour follows a creature. While the pour is active, the hand stays at the head of the
+/// creature as the frame draws it. When the creature has no head point, the hand stays where the pour began.
+[[nodiscard]] PourPose PourPoseAt(const PourState& pour, float fraction, std::optional<glm::vec3> followedHead);
+
+/// What the hand of this computer knows about a creature spell in a game turn, for the pour of its phial
+struct CreaturePourFacts
+{
+	/// The hand poured for this spell before
+	bool pouredBefore {false};
+	/// The spell has a creature as its target
+	bool hasCreature {false};
+	/// The spell has a seed, which is the phial
+	bool hasSeed {false};
+	/// The player of this computer cast the spell
+	bool castOfThisComputer {false};
+	/// The hand of this computer holds the seed of the spell
+	bool handHoldsSeed {false};
+};
+/// Whether the hand starts to pour the phial of a creature spell onto its creature in this turn. The hand pours one
+/// time for each spell, and only while it holds the phial.
+[[nodiscard]] bool PoursPhial(const CreaturePourFacts& facts);
+
+/// The pour of a creature spell: for four seconds the hand rises by four tenths of the height of the creature and
+/// tips by one radian, one time. The hand stays at the head of the creature.
+[[nodiscard]] PourSettings PhialPour(float creatureHeight);
 
 } // namespace openblack::magic

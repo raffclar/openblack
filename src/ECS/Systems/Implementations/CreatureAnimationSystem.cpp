@@ -2198,6 +2198,31 @@ void CreatureAnimationSystem::PlaceHandGlows(Registry& things, entt::entity crea
 	}
 }
 
+std::optional<glm::vec3> CreatureAnimationSystem::DrawnHeadOf(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.AllOf<Creature, Transform, CreatureAnimation>(creature))
+	{
+		return std::nullopt;
+	}
+	const auto& animation = registry.Get<const CreatureAnimation>(creature);
+	const auto& rigs = Locator::resources::value().GetCreatureRigs();
+	const auto rigId = creature::GetRigId(registry.Get<const Creature>(creature).species);
+	if (animation.boneMatrices.empty() || !rigs.Contains(rigId))
+	{
+		return std::nullopt;
+	}
+	const auto& points = rigs.Handle(rigId)->actionPoints;
+	if (!points.has_value() || points->head >= animation.boneMatrices.size())
+	{
+		return std::nullopt;
+	}
+	// The bones of the drawn frame, at the place where the frame draws the body
+	const auto drawn = DrawnTransform(registry.Get<const Transform>(creature), &animation);
+	const auto placement = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
+	return glm::vec3(creature::PosedBone(points->head, animation.boneMatrices, placement)[3]);
+}
+
 std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(const Registry& things, entt::entity creature)
 {
 	const auto* animation = things.TryGet<const CreatureAnimation>(creature);

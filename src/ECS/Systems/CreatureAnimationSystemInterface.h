@@ -101,6 +101,9 @@ public:
 	/// blended as the body is drawn; nothing when the creature has no such animation or bones, or hasn't been posed yet
 	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfBonesInAnimation(entt::entity creature, size_t animation,
 	                                                                        float timeMs, std::span<const uint32_t> bones) = 0;
+	/// Where the head bone of a creature is in the world, as the frame draws the body. Nothing when the creature has no
+	/// drawn pose or no head bone.
+	[[nodiscard]] virtual std::optional<glm::vec3> DrawnHeadOf(entt::entity /*creature*/) const { return std::nullopt; }
 	/// How long one of a creature's animations lasts, in milliseconds, if it has it
 	[[nodiscard]] virtual std::optional<float> AnimationDuration(entt::entity creature, size_t animation) = 0;
 	/// How far one of a creature's animations carries it, in its model's units and axes, if it has it

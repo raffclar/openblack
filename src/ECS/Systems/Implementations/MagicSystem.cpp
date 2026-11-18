@@ -587,6 +587,10 @@ bool MagicSystem::Process(entt::entity entity, Spell& spell)
 		return false;
 	}
 	magic::spells::ProcessTurn(*this, *after);
+	if (after->spellClass == magic::SpellClass::Creature)
+	{
+		PourPhialTurn(entity, *after);
+	}
 	// A forest miracle whose forest went from the land with its last tree lets go of it and closes down. Its seed then
 	// sinks under the land.
 	if (after->spellClass == magic::SpellClass::Forest && Locator::forestSystem::has_value())
@@ -753,7 +757,12 @@ void MagicSystem::ProcessTurn()
 	}
 	// A seed out of the hand shows over its miracle or not, as the miracles are after their turn
 	ShowSeedsWithSpellsTurn();
-	// The pour lifting and tipping the hand steps once the miracles have had their turn
+	// The pour that lifts and tips the hand steps after the turns of the miracles. When the creature of the pour is gone,
+	// the hand stays where the pour began.
+	if (_pourCreature != entt::null && !EntityRegistry().Valid(_pourCreature))
+	{
+		_pourCreature = entt::null;
+	}
 	magic::StepPour(_pour, k_TurnSeconds);
 }
 
@@ -864,6 +873,8 @@ void MagicSystem::Reset()
 	_actionDown = false;
 	_fireBallPress.reset();
 	_pour = {};
+	_pourCreature = entt::null;
+	_pouredSpell = entt::null;
 	_rainWatchers.clear();
 	_circle.reset();
 	_turn = 0;

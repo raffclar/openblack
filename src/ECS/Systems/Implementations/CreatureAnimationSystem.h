@@ -87,6 +87,7 @@ public:
 	                     std::span<const creature_hand_glow::SavedPower, creature_hand_glow::k_PlaceCount> powers) override;
 	void PlayCreedEvent(entt::entity creature, int32_t event) override;
 	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(const Registry& things, entt::entity creature) override;
+	[[nodiscard]] std::optional<glm::vec3> DrawnHeadOf(entt::entity creature) const override;
 	void AddAlignmentMotesOf(const Registry& copies, entt::entity copy) override;
 
 private:
