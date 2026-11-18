@@ -364,3 +364,11 @@ TEST(LeashRules, ANiceOrNastySpellStopsThePlayerChangingTheLeash)
 	EXPECT_FALSE(PlayerCanChangeType(false, true));
 	EXPECT_FALSE(PlayerCanChangeType(true, true));
 }
+
+TEST(LeashRules, ASpellGivesALeashThatTheCreatureDoesNotKnow)
+{
+	EXPECT_TRUE(TypeChangeAllowed(true, TypeChangeBy::Player));
+	EXPECT_FALSE(TypeChangeAllowed(false, TypeChangeBy::Player));
+	EXPECT_TRUE(TypeChangeAllowed(true, TypeChangeBy::Spell));
+	EXPECT_TRUE(TypeChangeAllowed(false, TypeChangeBy::Spell));
+}

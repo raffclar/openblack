@@ -108,3 +108,8 @@ void creature_spell_mind::MakeFullyDominantOverOthers(creature_desires::Desires&
 	desires[desire].suppressedTurns = 0;
 	creature_learning::MakeFullyDominant(desires, desire, floor);
 }
+
+bool creature_spell_mind::MoodEndClearsCheat(bool hasPlayer, LeashType picked)
+{
+	return !hasPlayer || picked == LeashType::Rope;
+}

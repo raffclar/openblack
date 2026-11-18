@@ -126,6 +126,11 @@ bool creature_leash::PlayerCanChangeType(bool niceSpellOn, bool nastySpellOn)
 	return !niceSpellOn && !nastySpellOn;
 }
 
+bool creature_leash::TypeChangeAllowed(bool known, TypeChangeBy by)
+{
+	return known || by == TypeChangeBy::Spell;
+}
+
 bool creature_leash::ImpressesTown(const TiedTown& town)
 {
 	if (town.leash == LeashType::Evil || town.impressing)

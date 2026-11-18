@@ -48,6 +48,7 @@ public:
 	void TakeOff(entt::entity creature) override;
 	bool Toggle(entt::entity creature) override;
 	bool ChangeType(entt::entity creature, LeashType type) override;
+	bool SpellChangesType(entt::entity creature, LeashType type) override;
 	bool TieTo(entt::entity creature, entt::entity object) override;
 	bool HandTie(entt::entity creature, entt::entity object) override;
 	bool RestoreTie(entt::entity creature, entt::entity object, uint32_t tiedTurn) override;
@@ -103,6 +104,8 @@ private:
 	void PickPost(PlayerNames owner, LeashType worn);
 	/// Whether the player can change the leash of the creature now: not while a nice or nasty spell is on it
 	[[nodiscard]] bool PlayerCanChangeType(entt::entity creature) const;
+	/// Changes the worn and the picked leash. A change by the player needs a leash that the creature knows.
+	bool SetType(entt::entity creature, LeashType type, creature_leash::TypeChangeBy by);
 	/// The creatures as the one-each assignment sees them
 	[[nodiscard]] std::vector<creature_leash::Claim> Claims() const;
 	/// The posts of each temple whose heart mesh has the three points to hang them at, once the temples are there

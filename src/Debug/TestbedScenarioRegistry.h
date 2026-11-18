@@ -303,6 +303,8 @@ struct CreatureSetup
 	/// Whether it is the one creature its owner can lead on the leash. When not given, a player's first creature is
 	/// and the others aren't.
 	std::optional<bool> leashable;
+	/// The leashes it knows. When not given, it knows every leash.
+	std::optional<std::vector<LeashType>> knownLeashes;
 	/// Its alignment, fatness and strength, the species' start when not given, and its size, 1 when not given: a
 	/// creature well grown, about 15 units tall, rather than as small as a new one starts
 	std::optional<float> alignment;

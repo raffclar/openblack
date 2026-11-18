@@ -32,6 +32,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -99,17 +100,17 @@ float DesireFloorOf(entt::entity entity)
 	return row < species.size() ? species.at(row).desireFloor : 0.0f;
 }
 
-/// The moods' cheat is cleared as they wear off: on a creature of no player at once, but on a player's creature only
-/// while it is on the learning leash, so that one led on the compassion or aggression leash keeps it until its time is up
+/// A mood that wears off clears its cheat by the rule of creature_spell_mind::MoodEndClearsCheat. The rule uses the leash
+/// that the player picked last, also when no leash is on the creature.
 void ClearCheat(entt::entity entity, CreatureSpells& component, creature_desires::Desires& desires)
 {
-	const auto* creature = EntityRegistry().TryGet<const Creature>(entity);
-	if (creature != nullptr && creature->owner != PlayerNames::NEUTRAL)
+	const auto& registry = EntityRegistry();
+	const auto* creature = registry.TryGet<const Creature>(entity);
+	const auto* leashes = registry.TryGet<const CreatureLeash>(entity);
+	const bool hasPlayer = creature != nullptr && creature->owner != PlayerNames::NEUTRAL;
+	if (!creature_spell_mind::MoodEndClearsCheat(hasPlayer, leashes != nullptr ? leashes->selected : LeashType::Rope))
 	{
-		if (!Locator::leashSystem::has_value() || Locator::leashSystem::value().TypeOf(entity) != LeashType::Rope)
-		{
-			return;
-		}
+		return;
 	}
 	if (component.cheat.has_value())
 	{
@@ -394,7 +395,7 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 		// Nice puts it on the compassion leash, nasty on the aggression leash, if it is on one
 		if ((event.spell == Spell::Nice || event.spell == Spell::Nasty) && leash != nullptr && leash->IsLeashed(entity))
 		{
-			leash->ChangeType(entity, event.spell == Spell::Nice ? LeashType::Good : LeashType::Evil);
+			leash->SpellChangesType(entity, event.spell == Spell::Nice ? LeashType::Good : LeashType::Evil);
 		}
 		// The spell's own sound starts on the creature as the spell takes hold, from the spells' bank: the growing
 		// creature's as it grows, the shrinking one's as it shrinks. It plays only as its sample allows, and never while
