@@ -306,6 +306,18 @@ class Rejoin(unittest.TestCase):
         self.assertEqual(result["defeated"], [])
         self.assertEqual(result["away"], ["The player of slot 1 lost the connection; the god waits"])
 
+    def test_with_no_checksums_of_the_server_the_session_counts_decide(self):
+        result = net_check.rejoin_result(rejoin_server_lines(594), {}, self.back_turns(595, 2000),
+                                         rejoin_back_lines(1400, 1400), 1, 1999)
+        self.assertTrue(result["passed"])
+        self.assertFalse(result["server_checksums"])
+        result = net_check.rejoin_result(rejoin_server_lines(594), {}, self.back_turns(595, 2000),
+                                         rejoin_back_lines(1400, 1399), 1, 1999)
+        self.assertFalse(result["passed"])
+        result = net_check.rejoin_result(rejoin_server_lines(594), {}, self.back_turns(595, 2000),
+                                         rejoin_back_lines(600, 600), 1, 1999)
+        self.assertFalse(result["passed"])
+
     def test_a_player_that_the_server_did_not_take_back_fails(self):
         result = net_check.rejoin_result(rejoin_server_lines(back_at=None), turns(1999), {},
                                          ["The game server refused the join: replay"], 1, 1999)

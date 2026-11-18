@@ -829,7 +829,9 @@ def rejoin_result(server_lines, server_turns, back_turns, back_lines, slot, last
     checksums by turn. The rejoin passes when the server takes the player back into the god and does not defeat it, the
     new process compares turns after its world, each one is the same, its session does not part, and the server and the
     new process both do last_turn. After last_turn the clients stop, and the server defeats the gods that did not come
-    back: only an away line or a defeat before the server did last_turn counts."""
+    back: only an away line or a defeat before the server did last_turn counts. A server with no checksum line of each
+    turn (the Linux server of --server-linux) leaves the compare to the session of the new process: it compares each
+    turn with the server, and its counts must cover the turns after its world."""
     server_lines, back_lines = list(server_lines), list(back_lines)
     back_at = [int(match.group(1)) for line in server_lines
                if (match := re.search(rf"The player of god {slot} comes back at turn (\d+)", line))]
@@ -856,14 +858,22 @@ def rejoin_result(server_lines, server_turns, back_turns, back_lines, slot, last
             counts = (int(match.group(1)), int(match.group(2)))
     last_back = max(back_turns, default=None)
     last_server = max(server_turns, default=None)
-    reached = last_back is not None and last_server is not None and min(last_back, last_server) >= last_turn
-    passed = (back_turn is not None and not defeated and bool(joined) and bool(compared) and not different and not parts
-              and counts is not None and counts[0] == counts[1] and reached)
+    if server_turns:
+        reached = last_back is not None and last_server is not None and min(last_back, last_server) >= last_turn
+        compared_enough = bool(compared)
+    else:
+        # The session writes its counts each 100 turns
+        reached = last_back is not None and last_back >= last_turn
+        compared_enough = (back_turn is not None and counts is not None
+                           and counts[0] >= last_turn - back_turn - 100 and counts[0] > 0)
+    passed = (back_turn is not None and not defeated and bool(joined) and compared_enough and not different
+              and not parts and counts is not None and counts[0] == counts[1] and reached)
     return {"passed": passed, "back_at_turn": back_turn, "away": away[-1:], "joined": joined[-1:], "refused": refused[:3],
             "defeated": defeated[-1:], "compared": len(compared), "first_compared": compared[0] if compared else None,
             "different": different[:20], "parts": parts[:20],
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
-            "last_turn": last_back, "server_last_turn": last_server, "reached_last_turn": reached}
+            "last_turn": last_back, "server_last_turn": last_server, "reached_last_turn": reached,
+            "server_checksums": bool(server_turns)}
 
 
 # The compares with the server that one part on purpose (--part-second-at) makes different
