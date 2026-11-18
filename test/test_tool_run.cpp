@@ -236,8 +236,13 @@ TEST(ToolRunSystem, TheGivesWriterGetsEachTurnAndCommand)
 		gives.Write(3, 0);
 		gives.Write(3, 2);
 		gives.Write(5, 1);
+		// A load of a land started the turn count again
+		gives.Write(3, 1, 1);
 	}
 	const auto read = command_log::ReadGivesFile(path);
-	EXPECT_EQ(read, (std::map<uint32_t, std::vector<size_t>> {{3, {0, 2}}, {5, {1}}}));
+	EXPECT_EQ(read, (std::vector<command_log::Give> {{.turn = 3, .command = 0},
+	                                                 {.turn = 3, .command = 2},
+	                                                 {.turn = 5, .command = 1},
+	                                                 {.turn = 3, .command = 1, .land = 1}}));
 	std::filesystem::remove_all(folder);
 }

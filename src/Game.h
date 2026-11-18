@@ -326,6 +326,7 @@ public:
 	bool AskStartQuestion(bool hasCreature) override;
 	[[nodiscard]] std::optional<std::filesystem::path> ChallengeFile() override;
 	void ShowLandMessage(const land_message::Message& message) override;
+	void ContinueAfterLoad() override;
 	/// The parts of the effects of a frame that the view of the player does
 	void UpdateAdvisors() override;
 	void UpdateSingAlong(bool inTemple) override;

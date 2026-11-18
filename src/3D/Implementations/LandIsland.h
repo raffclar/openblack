@@ -71,7 +71,7 @@ public:
 
 private:
 	void Build(const LandData& data);
-	[[nodiscard]] std::vector<uint8_t> CreateHeightMap() const;
+	[[nodiscard]] std::vector<uint16_t> CreateHeightMap() const;
 	[[nodiscard]] std::vector<uint8_t> CreateLuminosityMap() const;
 	[[nodiscard]] std::vector<uint8_t> CreateCellColourMap() const;
 	std::vector<LandBlock> _landBlocks;

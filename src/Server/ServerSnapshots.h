@@ -110,6 +110,10 @@ struct Room
 	/// The account of the join ticket of each observer of `watchers`, in the same order. A kick or a ban of the account
 	/// ends the session of the observer. A file of format 7 or older has no accounts.
 	std::vector<std::string> watcherAccounts;
+	/// The start of the game before the first change of its land, as the text of the frame. A server that continues the
+	/// game compares this start with its command line, and loads the land of `start` before the world. Empty when the land
+	/// of the room did not change. A file of format 8 or older has none.
+	std::string firstStart;
 
 	bool operator==(const Room&) const = default;
 };

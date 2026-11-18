@@ -991,6 +991,27 @@ struct ImportedFlockSpell
 	float lastSpawnHeight {0.0f};
 };
 
+/// The values that a forest spell of the file keeps
+struct ImportedForestSpell
+{
+	/// The spell planted its trees
+	bool planted {false};
+	/// The number of the forest of the land that holds the trees of the spell, 0 for none
+	uint32_t forest {0};
+	/// The most trees that the spell can make
+	int32_t mostTrees {-1};
+};
+
+/// The values that a shield spell of the file keeps
+struct ImportedShieldSpell
+{
+	/// The numbers of the influence rings that take away the influence of each other player under the shield
+	std::vector<uint32_t> rings;
+	/// The numbers of the reaction to the strikes on the shield and of the reaction to the shield, 0 for none
+	uint32_t struckReaction {0};
+	uint32_t reaction {0};
+};
+
 /// The values of a spell of the file that the import keeps for the spell that a creature holds. These are the values
 /// of every spell, and the values that some kinds of spell add.
 struct ImportedHeldSpell
@@ -1030,10 +1051,76 @@ struct ImportedHeldSpell
 	std::optional<uint32_t> target;
 	/// The flocks: the values of the flock spell
 	std::optional<ImportedFlockSpell> flock;
+	/// The numbers of the things that the spell made: the dome of a shield, the stone of a teleport, the animals of a
+	/// flock
+	std::vector<uint32_t> objects;
+	/// The forest: the values of the forest spell
+	std::optional<ImportedForestSpell> forest;
+	/// The shields: the values of the shield spell
+	std::optional<ImportedShieldSpell> shield;
 };
 
 /// The values of a spell of the file. Nothing for a record that is not a spell, or that has no magic type.
 [[nodiscard]] std::optional<ImportedHeldSpell> ReadHeldSpell(const gamesave::VanillaWorld& world,
                                                              const gamesave::VanillaRecord& record);
+
+/// The values that the dome of a physical shield of the file keeps
+struct ImportedDome
+{
+	/// The turn when the dome came up
+	uint32_t raisedTurn {0};
+	/// The size of the dome at its start and at its end, and its spin at its start and at its end
+	float startScale {0.0f};
+	float finalScale {0.0f};
+	float startSpin {0.0f};
+	float endSpin {0.0f};
+	/// The angle of the dome and the angle of its bob
+	float angle {0.0f};
+	float bob {0.0f};
+	/// The dome dies, and the seconds since it started to die
+	bool dying {false};
+	float dieTime {0.0f};
+	/// How opaque the dome is drawn, 0 to 255
+	uint8_t alpha {255};
+	/// The pose of the dome at this turn and at the turn before: the nine values of its turn, row by row, its point and
+	/// its size
+	std::array<float, 13> pose {};
+	std::array<float, 13> lastPose {};
+	/// The number of the particle system of the dome, 0 for none
+	uint32_t effect {0};
+};
+
+/// The thing that a shield spell of the file put on the land: the mark of a spiritual shield, or the dome of a physical
+/// shield
+struct ImportedShieldObject
+{
+	uint32_t number {0};
+	/// The number of the spell of the shield, 0 for none
+	uint32_t spell {0};
+	/// The point where it stands. The height of a dome is its height above the land.
+	gamesave::MapCoords position {};
+	/// The size that its solid shape has
+	float scale {1.0f};
+	/// A physical shield: the values of its dome
+	std::optional<ImportedDome> dome;
+};
+
+/// The thing that a shield spell of the file put on the land. Nothing for a record that is not such a thing.
+[[nodiscard]] std::optional<ImportedShieldObject> ReadShieldObject(const gamesave::VanillaWorld& world,
+                                                                   const gamesave::VanillaRecord& record);
+
+/// The stone that a teleport spell of the file put on the land
+struct ImportedTeleportStone
+{
+	uint32_t number {0};
+	gamesave::MapCoords position {};
+	/// The numbers of the spell of the stone and of the player record of the stone, 0 for none
+	uint32_t spell {0};
+	uint32_t player {0};
+};
+
+/// The stone that a teleport spell of the file put on the land. Nothing for a record that is not a stone.
+[[nodiscard]] std::optional<ImportedTeleportStone> ReadTeleportStone(const gamesave::VanillaWorld& world,
+                                                                     const gamesave::VanillaRecord& record);
 
 } // namespace openblack::ecs::vanilla_world_import

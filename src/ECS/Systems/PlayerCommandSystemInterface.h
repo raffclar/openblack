@@ -56,6 +56,11 @@ public:
 	[[nodiscard]] virtual PlayerNames GetSender() const = 0;
 	/// The number of commands that wait for the world, in the open block and in the sent blocks
 	[[nodiscard]] virtual size_t PendingCount() const = 0;
+	/// The commands of a single player game that wait for a turn, which a saved game keeps. None in a network game,
+	/// because its commands go to the source at once.
+	[[nodiscard]] virtual player_commands::WaitingCommands GetWaiting() const { return {}; }
+	/// A saved game loads: the commands that waited at the save wait again, in place of the commands of the queue
+	virtual void PutBackWaiting([[maybe_unused]] player_commands::WaitingCommands waiting) {}
 
 	/// A network game: the commands of this computer go to the source at once, and each turn does only the commands
 	/// that the source gives for it. None gives back the queue of a single player game. The source must live while it

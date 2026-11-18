@@ -990,7 +990,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 			{
 				const size_t corner = x * land_detail::k_CornersPerSide + z;
 				const size_t texel = 2 * land_detail::CornerTexel(i, x, z);
-				const std::array<uint8_t, 2> drawn = {altitudes.at(corner), alphas.at(corner)};
+				const std::array<uint16_t, 2> drawn = {altitudes.at(corner), alphas.at(corner)};
 				if (frame.corners.at(texel) != drawn[0] || frame.corners.at(texel + 1) != drawn[1])
 				{
 					frame.corners.at(texel) = drawn[0];
@@ -1002,7 +1002,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	}
 	if (changed)
 	{
-		corners.Update(frame.corners.data(), static_cast<uint32_t>(frame.corners.size()));
+		corners.Update(frame.corners.data(), static_cast<uint32_t>(frame.corners.size() * sizeof(uint16_t)));
 	}
 }
 
@@ -1014,8 +1014,8 @@ const Texture2D& Renderer::GetLandCorners() const
 		_landDetail.corners.assign(2 * land_detail::k_CornerTextureSide * land_detail::k_CornerTextureSide, 0);
 		_landDetail.cornersFrom.clear();
 		_landCorners = std::make_unique<Texture2D>("LandCorners");
-		_landCorners->CreateWithinFrame(k_Side, k_Side, 1, TextureFormat::RG8, Wrapping::ClampEdge, Filter::Nearest, nullptr);
-		_landCorners->Update(_landDetail.corners.data(), static_cast<uint32_t>(_landDetail.corners.size()));
+		_landCorners->CreateWithinFrame(k_Side, k_Side, 1, TextureFormat::RG16, Wrapping::ClampEdge, Filter::Nearest, nullptr);
+		_landCorners->Update(_landDetail.corners.data(), static_cast<uint32_t>(_landDetail.corners.size() * sizeof(uint16_t)));
 	}
 	return *_landCorners;
 }

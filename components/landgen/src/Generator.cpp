@@ -248,6 +248,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 {
 	GeneratedLand land;
 	StageClock clock(land.times);
+	land.heightCurve = HeightCurve::WithTop(settings.heightKnee, settings.topHeight);
 	const int side = settings.side;
 	const auto seed = settings.seed;
 
@@ -274,6 +275,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	terrain::LowerHighGround(heights, settings.massifs.lowlandKnee, settings.massifs.lowlandCeiling);
 	terrain::RaiseMassifs(heights, massifs, cliffs);
 	clock.Done("massifs");
+	terrain::RollGround(heights, seed, settings.roll);
+	clock.Done("rolling ground");
 
 	// The water: lakes first, then the rivers on the land that the lakes leave
 	const auto firstDrainage = hydrology::Drain(heights, terrain::k_SeaLevel);
@@ -333,11 +336,17 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                  StageSeed(seed, 35), settings.hillHollows);
 	clock.Done("hill hollows");
 
+	// The altitude byte of each corner is its height rounded. The height units come from the height before the rounding,
+	// through the curve, so that the high ground has no steps of many units.
 	Grid<uint8_t> altitudes(side, 0);
+	land.heightUnits = Grid<uint16_t>(side, 0);
 	for (size_t i = 0; i < heights.values.size(); ++i)
 	{
-		altitudes.values[i] =
-		    static_cast<uint8_t>(std::clamp(std::floor(heights.values[i] + 0.5f), 0.0f, terrain::k_HighestAltitude));
+		const float height = std::clamp(heights.values[i], 0.0f, terrain::k_HighestAltitude);
+		const auto altitude = static_cast<uint8_t>(std::floor(height + 0.5f));
+		altitudes.values[i] = altitude;
+		land.heightUnits.values[i] =
+		    height <= land.heightCurve.knee ? uint16_t {altitude} : land.heightCurve.WholeUnitsOf(height);
 	}
 	// The lakes above the sea, from the altitudes that the game draws: each basin holds water at its own level
 	Grid<float> drawn(side, 0.0f);
@@ -405,7 +414,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	clock.Done("biomes");
 
 	// What the landscape holds
-	const auto luminosity = lighting::Luminosity(altitudes, settings.lighting);
+	const auto luminosity = lighting::Luminosity(land.heightUnits, settings.lighting);
 	clock.Done("light");
 	Grid<uint8_t> freshWater(side, 0);
 	for (const auto& lake : basins.seaLakes)
@@ -452,6 +461,18 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	land.cursedPatches = std::move(cursed.patches);
 	land.mists = std::move(cursed.mists);
 	clock.Done("cursed places");
+	auto swampMist = swamps::Place({.biomes = land.biomes,
+	                                .heights = heights,
+	                                .seaDistance = seaDistance,
+	                                .keepClear = keepClear,
+	                                .clearings = clearings,
+	                                .townX = land.start.x,
+	                                .townZ = land.start.z,
+	                                .rivers = &rivers},
+	                               seed, settings.swamps);
+	land.swampSheets = std::move(swampMist.sheets);
+	land.mists.insert(land.mists.end(), swampMist.mists.begin(), swampMist.mists.end());
+	clock.Done("swamp mist");
 
 	// The temple and the town on the start area, then the forests nearest the town first
 	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);

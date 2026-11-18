@@ -53,6 +53,15 @@ struct ImportedFlock
 	float lastSpawnHeight {0.0f};
 };
 
+/// The values of a forest spell of a saved game of the game
+struct ImportedForestCast
+{
+	/// The spell planted its trees
+	bool planted {false};
+	/// The most trees that the spell can make
+	int mostTrees {-1};
+};
+
 /// The spell that a creature of a saved game of the game holds, with the values of the file that the import keeps
 struct ImportedCast
 {
@@ -76,6 +85,8 @@ struct ImportedCast
 	entt::entity target {entt::null};
 	/// The flocks: the values of the flock spell
 	std::optional<ImportedFlock> flock;
+	/// The forest: the values of the forest spell
+	std::optional<ImportedForestCast> forest;
 	/// The running state of the particle effect of the spell in the file. The effect continues from this state. With
 	/// no state, the effect starts from its start.
 	std::shared_ptr<const particles::RestoredEffect> effect;

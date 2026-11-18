@@ -55,13 +55,14 @@ std::optional<explore::CellLand> CellAt(glm::ivec2 cell)
 	{
 		return std::nullopt;
 	}
-	const auto* land = Locator::terrainSystem::value().FindCell({static_cast<uint16_t>(cell.x), static_cast<uint16_t>(cell.y)});
+	const auto& island = Locator::terrainSystem::value();
+	const auto* land = island.FindCell({static_cast<uint16_t>(cell.x), static_cast<uint16_t>(cell.y)});
 	if (land == nullptr)
 	{
 		return std::nullopt;
 	}
 	return explore::CellLand {
-	    .height = static_cast<float>(land->altitude) * LandIslandInterface::k_HeightUnit,
+	    .height = static_cast<float>(island.HeightUnitsOf(*land, cell.x, cell.y)) * LandIslandInterface::k_HeightUnit,
 	    .water = land->properties.hasWater != 0,
 	    .coast = land->properties.coastLine != 0,
 	};

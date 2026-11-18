@@ -50,6 +50,27 @@ void CommandQueue::Clear()
 	_sent.clear();
 }
 
+WaitingCommands CommandQueue::Waiting() const
+{
+	WaitingCommands waiting {.sent = {}, .open = _open};
+	waiting.sent.reserve(SentCount());
+	for (const auto& block : _sent)
+	{
+		waiting.sent.insert(waiting.sent.end(), block.begin(), block.end());
+	}
+	return waiting;
+}
+
+void CommandQueue::PutBack(WaitingCommands waiting)
+{
+	Clear();
+	if (!waiting.sent.empty())
+	{
+		_sent.push_back(std::move(waiting.sent));
+	}
+	_open = std::move(waiting.open);
+}
+
 size_t CommandQueue::SentCount() const
 {
 	return std::accumulate(_sent.begin(), _sent.end(), size_t {0},

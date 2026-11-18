@@ -86,6 +86,10 @@ public:
 	[[nodiscard]] virtual std::optional<std::filesystem::path> ChallengeFile() = 0;
 	/// The script of the land gives a command for the land information box
 	virtual void ShowLandMessage(const land_message::Message& /*message*/) {}
+	/// A world loaded, before the next report of the hand and the view of this computer. The view keeps the camera as the
+	/// drawn view, with its near plane and its distance from the fence. The reports continue from the hand and the view
+	/// that the loaded world keeps.
+	virtual void ContinueAfterLoad() {}
 };
 
 /// A view that does nothing, for a world with no player in front of it
@@ -181,6 +185,8 @@ public:
 	virtual void PutCameraAtStartPlace() = 0;
 	/// The map script of the land gives a command for the land information box. The view of the player shows it.
 	virtual void ShowLandMessage(const land_message::Message& message) = 0;
+	/// A world loaded: the view of this computer continues from it (LandViewInterface::ContinueAfterLoad)
+	virtual void ContinueViewAfterLoad() = 0;
 
 	/// Whether the script of a land is one of the playground lands, which the game plays as a skirmish
 	[[nodiscard]] virtual bool IsPlaygroundLand(const std::filesystem::path& path) const = 0;

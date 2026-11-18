@@ -28,9 +28,12 @@ puts_down, pours, uses), and a run whose hand did fewer than its input expects i
 The information box of a land whose script opens it (TwoGods) takes every press of the buttons until the player closes it.
 On such a land the check gives the game the input with the Escape key pressed just before its first event (--close-info-box).
 
-A testbed scenario can make the game load a saved world. The server keeps no saves and never loads, so it gets only the
-commands before the game's first load (commands.before_load.jsonl), and the turns are compared only up to the game's last
-turn before its first load (the summary gives that turn as compared_until_load_at_turn).
+A testbed scenario can make the game load a land. Each load starts the turn count again, and the commands file gives the
+land of each turn. The server gets all the commands, and it does the commands of each land of the game on its own land of
+the same count. A scenario that loads a generated land makes the server load it too: then the turns of each land are
+compared (the summary gives the count as lands_compared). The server keeps no saves and never loads a saved world. Then
+only the turns up to the game's last turn before its first load are compared (the summary gives that turn as
+compared_until_load_at_turn).
 
 Both play as the profile of a tool's run, in their own working folders. Both programs start with no console window of their
 own. The game starts with --background. The script stops only the
@@ -94,15 +97,43 @@ def wsl_path(path):
     return path
 
 
-def server_checksums(log):
-    """The checksum of each turn in the log of the server"""
-    turns = {}
+def split_by_land(turns):
+    """The (turn, value) pairs in order, as one dict of the turns for each land. A turn that is not more than the turn
+    before it starts the next land: a load starts the turn count again."""
+    lands = []
+    last = None
+    for turn, value in turns:
+        if last is None or turn <= last:
+            lands.append({})
+        last = turn
+        lands[-1][turn] = value
+    return lands
+
+
+def server_checksums_by_land(log):
+    """The checksum of each turn in the log of the server, one dict for each land that the server played"""
+    turns = []
     with open(log, encoding="utf-8", errors="replace") as file:
         for line in file:
             match = CHECKSUM_LINE.search(line)
             if match:
-                turns[int(match.group(1))] = match.group(2)
-    return turns
+                turns.append((int(match.group(1)), match.group(2)))
+    return split_by_land(turns)
+
+
+def game_checksums_by_land(record):
+    """The checksum of each turn in the run record of the game, one dict for each land that the game played"""
+    turns = []
+    with open(record, encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            value = json.loads(line)
+            synced = value.get("synced")
+            if isinstance(synced, dict) and "turn" in value and "checksum" in synced:
+                turns.append((int(value["turn"]), synced["checksum"]))
+    return split_by_land(turns)
 
 
 def records_before_first_load(record):
@@ -167,23 +198,6 @@ def turns_gone_back(path):
             if line:
                 turns.append(int(json.loads(line).get("turn", 0)))
     return [[before, after] for before, after in zip(turns, turns[1:]) if after <= before]
-
-
-def copy_before_first_load(source, target, lines_a_turn=1):
-    """Copies the lines of a commands file up to the first place where the turn goes back (the game's first load). The
-    server reads the commands of each turn from all the lines, so the commands of the turns played again after the load
-    would add to the commands of the first turns. The commands file has one line a turn. The file of the scenario's given
-    commands can have more lines for one turn (lines_a_turn 0): then only a smaller turn tells of the load."""
-    with open(source, encoding="utf-8") as file, open(target, "w", encoding="utf-8", newline="\n") as out:
-        last = None
-        for line in file:
-            if not line.strip():
-                continue
-            turn = int(json.loads(line).get("turn", 0))
-            if last is not None and (turn < last or (lines_a_turn == 1 and turn == last)):
-                break
-            last = turn
-            out.write(line.rstrip("\r\n") + "\n")
 
 
 def count_lines(path):
@@ -396,16 +410,6 @@ def main():
         played = game_checksums(record) if options.game_frames else {}
         if played and max(played) < options.turns:
             server_command[server_command.index("-n") + 1] = str(max(played))
-        # The server gets only the commands before the game's first load, and the scenario's commands given before it
-        if turns_gone_back(commands):
-            before_load = os.path.join(game_dir, "commands.before_load.jsonl")
-            copy_before_first_load(commands, before_load)
-            before_load_gives = os.path.join(game_dir, "commands.before_load.gives.jsonl")
-            if os.path.exists(gives):
-                copy_before_first_load(gives, before_load_gives, lines_a_turn=0)
-            elif os.path.exists(before_load_gives):
-                os.remove(before_load_gives)
-            server_command[server_command.index("--commands") + 1] = local(before_load)
         code, server_seconds = play_server()
         if code != 0:
             return 1
@@ -414,8 +418,16 @@ def main():
         if code != 0 or play_game() != 0:
             return 1
 
-    server = server_checksums(server_log)
-    game = game_checksums(record)
+    server_lands = server_checksums_by_land(server_log)
+    game_lands = game_checksums_by_land(record) if os.path.exists(record) else []
+    # A server that loaded the same lands as the game is compared on each land. Else only the first land is compared.
+    lands_compared = min(len(server_lands), len(game_lands)) if len(server_lands) > 1 else 1
+    server = server_lands[lands_compared - 1] if len(server_lands) >= lands_compared else {}
+    game = game_lands[lands_compared - 1] if len(game_lands) >= lands_compared else {}
+    earlier_different = []
+    for land in range(lands_compared - 1):
+        land_different, _ = compare(server_lands[land], game_lands[land], max(server_lands[land], default=0))
+        earlier_different += [f"land {land} turn {turn}" for turn in land_different]
     # A game that its frame limit stopped before its last turn is compared up to the last turn that it played
     compared_turns = options.turns
     ended_by_frames_at_turn = None
@@ -425,7 +437,7 @@ def main():
     # A game that loaded a saved world is compared up to its last turn before the first load: the server never loads
     game_loads = turns_gone_back(commands) if relay else []
     compared_until_load_at_turn = None
-    if game_loads and game and max(game) < compared_turns:
+    if game_loads and lands_compared == 1 and game and max(game) < compared_turns:
         compared_until_load_at_turn = max(game)
         compared_turns = compared_until_load_at_turn
     different, compared = compare(server, game, compared_turns)
@@ -440,12 +452,17 @@ def main():
         "different": different[:20],
         # The last turn up to which every checksum is the same
         "same_until": (different[0] - 1) if different else (compared[-1] if compared else 0),
-        "same": not different and len(compared) >= compared_turns,
+        "same": not different and not earlier_different and len(compared) >= compared_turns,
         "ended_by_frames_at_turn": ended_by_frames_at_turn,
         "game_loads": game_loads,
+        "lands_compared": lands_compared,
+        "different_earlier_lands": earlier_different[:20],
         "compared_until_load_at_turn": compared_until_load_at_turn,
     }
-    if game_loads:
+    if game_loads and lands_compared > 1:
+        print(f"the game and the server loaded a land (turn before and after): {game_loads}; the turns of "
+              f"{lands_compared} lands are compared")
+    elif game_loads:
         print(f"the game loaded a saved world (turn before and after): {game_loads}; the server does not, so the turns "
               f"up to {compared_turns} are compared")
     ignored = {name for name in options.ignore_parts.split(",") if name}

@@ -4604,6 +4604,195 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringAScenarioStartComesBackIntoTheScenar
 	EXPECT_EQ(seat.compares.compared, seat.compares.same);
 }
 
+TEST_F(LockstepTest, ALandOfTheEditorStartsTheRoomAgainOnTheLandForEveryComputer)
+{
+	MakeHost(2);
+	std::vector<server::LockstepHost::WorldChange> changes;
+	host->SetChangeWorld([this, &changes](const server::LockstepHost::WorldChange& change) {
+		changes.push_back(change);
+		serverWorld = FakeWorld {};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+	});
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 40);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.SendEditorLand("Land2.txt", false));
+	Frames({&alice, &bob}, 20);
+	ASSERT_EQ(changes.size(), 1u);
+	EXPECT_EQ(changes.front().kind, server::LockstepHost::WorldChange::Kind::Land);
+	EXPECT_EQ(changes.front().land, "Land2.txt");
+	EXPECT_FALSE(changes.front().testbed);
+	EXPECT_EQ(changes.front().seed, 1u);
+	EXPECT_EQ(changes.front().by, "alice");
+	EXPECT_EQ(host->WorldChanges(), 1u);
+	// Each computer started the game again on the land at the same turn, and does the turns in step with the server
+	for (auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->restarts, 1u);
+		const auto& start = computer->session.GetStart();
+		ASSERT_TRUE(start.has_value());
+		EXPECT_EQ(start->land, "Land2.txt");
+		EXPECT_FALSE(start->testbed);
+		EXPECT_FALSE(start->scenario.has_value());
+		EXPECT_EQ(start->turn, 0u);
+		EXPECT_EQ(computer->world.turns, serverWorld.turns);
+		EXPECT_EQ(computer->world.hash, serverWorld.hash);
+		EXPECT_EQ(computer->session.GetCompares().compared, computer->session.GetCompares().same);
+		EXPECT_TRUE(computer->desyncs.empty());
+	}
+	// The first turn of the new game gave each god its hands again
+	EXPECT_TRUE(alice.world.players.contains(PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(alice.world.players.contains(PlayerNames::PLAYER_TWO));
+	// The room keeps the new land, so a player who joins later loads it too
+	EXPECT_NE(host->RoomRecord().start.find("Land2.txt"), std::string::npos);
+	// The editor then loads the testbed for the room
+	ASSERT_TRUE(alice.session.SendEditorLand({}, true));
+	Frames({&alice, &bob}, 20);
+	ASSERT_EQ(changes.size(), 2u);
+	EXPECT_TRUE(changes.back().testbed);
+	EXPECT_TRUE(changes.back().land.empty());
+	for (auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->restarts, 2u);
+		EXPECT_TRUE(computer->session.GetStart()->testbed);
+		EXPECT_TRUE(computer->session.GetStart()->land.empty());
+		EXPECT_EQ(computer->world.hash, serverWorld.hash);
+	}
+	EXPECT_EQ(host->RefusedEditorValues(), 0u);
+}
+
+TEST_F(LockstepTest, TheServerTakesALandOnlyFromAPlayerWithTheEditorClaim)
+{
+	MakeHost(3);
+	uint32_t changes = 0;
+	host->SetChangeWorld([&changes](const server::LockstepHost::WorldChange& /*change*/) {
+		++changes;
+		return server::LockstepHost::WorldChanged {.turn = std::nullopt, .refusal = "the fake world does not change"};
+	});
+	host->SetLandRefusal([](std::string_view land) -> std::optional<std::string> {
+		return land == "Land2.txt" ? std::nullopt : std::optional<std::string>("the game has no such land");
+	});
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Computer carol(network, now, "god+debugger:carol");
+	Frames({&alice, &bob, &carol}, 10);
+	ASSERT_TRUE(host->Started());
+	// A player with no claim, and a player with only the debugger claim
+	ASSERT_TRUE(bob.session.SendEditorLand("Land2.txt", false));
+	ASSERT_TRUE(carol.session.SendEditorLand("Land2.txt", false));
+	Frames({&alice, &bob, &carol}, 4);
+	EXPECT_EQ(host->RefusedEditorCommands(), 2u);
+	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
+	EXPECT_GE(carol.session.TakeEditorRefusals(), 1u);
+	EXPECT_EQ(changes, 0u);
+	// The editor asks for a land that the game does not have, then for a land that the world of the server refuses
+	ASSERT_TRUE(alice.session.SendEditorLand("NoSuchLand.txt", false));
+	Frames({&alice, &bob, &carol}, 2);
+	EXPECT_EQ(changes, 0u);
+	ASSERT_TRUE(alice.session.SendEditorLand("Land2.txt", false));
+	Frames({&alice, &bob, &carol}, 4);
+	EXPECT_EQ(changes, 1u);
+	EXPECT_EQ(host->RefusedEditorValues(), 2u);
+	EXPECT_EQ(host->WorldChanges(), 0u);
+	EXPECT_EQ(alice.restarts, 0u);
+	EXPECT_EQ(bob.restarts, 0u);
+	// The session sends no request that names no land and no testbed, or both
+	EXPECT_FALSE(alice.session.SendEditorLand({}, false));
+	EXPECT_FALSE(alice.session.SendEditorLand("Land2.txt", true));
+}
+
+TEST_F(LockstepTest, APlayerWhoWasAwayDuringALandChangeLoadsTheNewLandAndThenTheWorldOfTheServer)
+{
+	MakeHost(2);
+	GiveWorldState();
+	host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
+		serverWorld = FakeWorld {};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+	});
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 40);
+	ASSERT_TRUE(host->Started());
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	bob.Frame();
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Reconnecting);
+	ASSERT_TRUE(alice.session.SendEditorLand("Land2.txt", false));
+	Frames({&alice}, 20);
+	ASSERT_EQ(alice.restarts, 1u);
+	EXPECT_TRUE(host->Seats()[1].missedWorldChange);
+	// The god of the away player gets its hands in the first turn of the new land too
+	EXPECT_TRUE(alice.world.players.contains(PlayerNames::PLAYER_TWO));
+	Frames({&alice, &bob}, 30);
+	// The client of bob got the start of the land, and then the world of the server
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.restarts, 1u);
+	EXPECT_EQ(bob.loads, 1u);
+	const auto& start = bob.session.GetStart();
+	ASSERT_TRUE(start.has_value());
+	EXPECT_EQ(start->land, "Land2.txt");
+	EXPECT_FALSE(start->scenario.has_value());
+	EXPECT_LE(bob.world.turns, serverWorld.turns);
+	EXPECT_GE(bob.world.turns + 2, serverWorld.turns);
+	EXPECT_EQ(bob.world.hash, serverWorld.hash);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+	EXPECT_TRUE(bob.desyncs.empty());
+	EXPECT_TRUE(alice.desyncs.empty());
+	const auto& seat = host->Seats()[1];
+	EXPECT_FALSE(seat.missedWorldChange);
+	EXPECT_EQ(seat.compares.compared, seat.compares.same);
+}
+
+// The snapshots of a room that changed its land keep the start of the command line. A server that continues the game
+// from such a snapshot sends the land of the room to a player who was away, before the world of the server.
+TEST_F(LockstepTest, ARestoredServerSendsTheLandOfTheRoomToAPlayerWhoWasAwayAtTheLandChange)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
+		serverWorld = FakeWorld {};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+	});
+	Computer alice(network, now, "god+editor:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 40);
+	ASSERT_TRUE(host->Started());
+	EXPECT_TRUE(host->RoomRecord().firstStart.empty());
+	network.Cut(bob.sockets->Ids().back());
+	Frames({&alice}, 1);
+	bob.Frame();
+	ASSERT_TRUE(alice.session.SendEditorLand("Land2.txt", false));
+	Frames({&alice}, 20);
+	ASSERT_EQ(alice.restarts, 1u);
+	ASSERT_EQ(bob.restarts, 0u);
+	const auto room = host->RoomRecord();
+	EXPECT_NE(room.start.find("Land2.txt"), std::string::npos);
+	EXPECT_NE(room.firstStart.find("Land1.txt"), std::string::npos);
+	EXPECT_EQ(room.firstStart.find("Land2.txt"), std::string::npos);
+	// The server stops before the player of bob comes back
+	RestartFrom(room, host->TurnsDone(), serverWorld, {&alice, &bob});
+	EXPECT_FALSE(host->Seats()[0].missedWorldChange);
+	EXPECT_TRUE(host->Seats()[1].missedWorldChange);
+	// The restored room keeps the start of the command line for the next snapshots
+	EXPECT_EQ(host->RoomRecord().firstStart, room.firstStart);
+	Frames({&alice, &bob}, 40);
+	ASSERT_EQ(alice.session.Resumes(), 1u);
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	// The player of alice was in the game at the change: the client did not load the land again
+	EXPECT_EQ(alice.restarts, 1u);
+	// The client of bob got the start of the land, and then the world of the server
+	EXPECT_EQ(bob.restarts, 1u);
+	EXPECT_EQ(bob.loads, 1u);
+	EXPECT_EQ(bob.world.hash, serverWorld.hash);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_TRUE(bob.desyncs.empty());
+	EXPECT_TRUE(alice.desyncs.empty());
+	EXPECT_FALSE(host->Seats()[1].missedWorldChange);
+}
+
 TEST(RoomClock, ThePlayerWithTheDebuggerClaimChangesOnlyTheSpeed)
 {
 	using game_socket::EditorTime;

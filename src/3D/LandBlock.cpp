@@ -22,7 +22,7 @@
 using namespace openblack;
 using namespace openblack::graphics;
 
-LandVertex openblack::MakeLandVertex(glm::vec2 cornerPosition, uint8_t altitude)
+LandVertex openblack::MakeLandVertex(glm::vec2 cornerPosition, uint16_t altitude)
 {
 	const auto height = static_cast<float>(altitude);
 	return {
@@ -86,12 +86,14 @@ void LandBlock::BuildVertexList(std::span<LandVertex> vertices, LandIslandInterf
 	// The land is coloured by its block texture (see block_texture) and lit by its luminosity of the frame: its vertices
 	// carry only where they are and their altitudes
 	const auto blockOffset = static_cast<glm::u16vec2>(GetBlockPosition() * 16);
-	std::array<uint8_t, land_detail::k_CornerCount> altitudes {};
+	std::array<uint16_t, land_detail::k_CornerCount> altitudes {};
 	for (size_t x = 0; x < land_detail::k_CornersPerSide; ++x)
 	{
 		for (size_t z = 0; z < land_detail::k_CornersPerSide; ++z)
 		{
-			altitudes.at(x * land_detail::k_CornersPerSide + z) = island.GetCell(blockOffset + glm::u16vec2(x, z)).altitude;
+			const auto corner = blockOffset + glm::u16vec2(x, z);
+			altitudes.at(x * land_detail::k_CornersPerSide + z) =
+			    island.HeightUnitsOf(island.GetCell(corner), corner.x, corner.y);
 		}
 	}
 	for (size_t x = 0; x < land_detail::k_CornersPerSide; ++x)

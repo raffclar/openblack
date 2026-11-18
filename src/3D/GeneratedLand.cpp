@@ -57,7 +57,7 @@ using generated_land::ChoiceRange;
 using generated_land::Choices;
 
 /// The ranges keep the land inside the limits of the map. Above the highest altitude, the crests of the land are flat.
-constexpr std::array<ChoiceRange, 12> k_ChoiceRanges {{
+constexpr std::array<ChoiceRange, 13> k_ChoiceRanges {{
     {"land", "land amount", &Choices::landAmount, -30, 30},
     {"ranges", "mountain ranges", &Choices::ranges, 0, 6},
     {"mountains", "mountain height", &Choices::mountainHeight, 100, 450},
@@ -69,7 +69,8 @@ constexpr std::array<ChoiceRange, 12> k_ChoiceRanges {{
     {"north", "north temperature", &Choices::northTemperature, 0, 100},
     {"south", "south temperature", &Choices::southTemperature, 0, 100},
     {"wind", "wind", &Choices::wind, -1, 7},
-    {"massifs", "mountain massifs", &Choices::massifs, -1, 8},
+    {"massifs", "mountain massifs", &Choices::massifs, -1, 20},
+    {"top", "highest ground (m)", &Choices::topHeight, 171, 2700},
 }};
 
 /// Reads a whole number that fills all of the text, or gives false
@@ -177,6 +178,7 @@ landgen::Settings generated_land::SettingsOf(const Choices& choices)
 	{
 		settings.wind = static_cast<landgen::climate::Wind>(clamped.wind);
 	}
+	settings.topHeight = static_cast<float>(clamped.topHeight);
 	if (clamped.massifs >= 0)
 	{
 		settings.massifs.countLow = clamped.massifs;
@@ -342,6 +344,11 @@ LandData generated_land::Build(const landgen::GeneratedLand& land, const StoryPa
 		}
 	}
 	data.countries = land.countries;
+	data.heightCurve = land.heightCurve;
+	if (!land.heightCurve.IsLinear() && land.heightUnits.side == landgen::k_MapCorners)
+	{
+		data.heightUnits = land.heightUnits.values;
+	}
 	for (const auto surface : land.materials)
 	{
 		data.materials.push_back(parts.surfaces.at(static_cast<size_t>(surface)));

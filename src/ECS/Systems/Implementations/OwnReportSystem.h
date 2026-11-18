@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include "ECS/Systems/OwnReportSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -27,6 +29,7 @@ class OwnReportSystem final: public OwnReportSystemInterface
 public:
 	void ReportHand(uint32_t worldCameraIcons) final;
 	void ReportHelp(const HelpInputs& inputs) final;
+	std::optional<player_commands::ViewReport> ContinueAfterLoad() final;
 
 	[[nodiscard]] const OwnReportState& GetState() const final { return _state; }
 
@@ -41,6 +44,8 @@ public:
 	void ForgetViewReport();
 	/// Sends the view report only when the view changed enough since the last report that went. Returns true when it went.
 	bool SendViewReport(const player_commands::ViewReport& report, PlayerCommandSystemInterface& commands);
+	/// The reports continue after a load at its turn, from the last view report that the loaded world keeps
+	void ContinueViewAfterLoad(uint32_t turn, const std::optional<player_commands::ViewReport>& lastView);
 	/// The help report is due once a turn, and only when the help is there. Returns true and keeps the turn when it is due.
 	bool TakeHelpTurn(uint32_t turn, bool helpThere);
 

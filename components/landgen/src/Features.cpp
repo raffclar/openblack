@@ -156,7 +156,21 @@ constexpr std::array<Choice, 6> k_ForestTrees {
 constexpr std::array<Choice, 5> k_JungleTrees {
     {{Tree::PalmB, 59}, {Tree::Palm, 17}, {Tree::BushB, 11}, {Tree::PalmA, 3}, {Tree::PalmC, 3}}};
 constexpr std::array<Choice, 4> k_DesertTrees {{{Tree::Olive, 5}, {Tree::BushB, 2}, {Tree::Cypress, 2}, {Tree::CypressA, 1}}};
-constexpr std::array<Choice, 4> k_SwampTrees {{{Tree::Bush, 62}, {Tree::Birch, 1}, {Tree::Cedar, 1}, {Tree::BushA, 1}}};
+// The swamps have the main kinds of the groups by the streams of the lands of the story: the groups whose trees stand
+// at a median of 30 m or nearer to a stream. The hedges of those groups stay with the towns.
+constexpr std::array<Choice, 13> k_SwampTrees {{{Tree::Bush, 37},
+                                                {Tree::OakA, 12},
+                                                {Tree::Oak, 10},
+                                                {Tree::Birch, 9},
+                                                {Tree::Olive, 6},
+                                                {Tree::ConiferA, 4},
+                                                {Tree::Beech, 4},
+                                                {Tree::PalmB, 4},
+                                                {Tree::PalmA, 3},
+                                                {Tree::Conifer, 3},
+                                                {Tree::PalmC, 2},
+                                                {Tree::BushB, 2},
+                                                {Tree::Palm, 1}}};
 constexpr std::array<Choice, 1> k_DeadTrees {{{Tree::Burnt, 1}}};
 constexpr std::array<Choice, 3> k_NordicTrees {{{Tree::ConiferA, 70}, {Tree::Conifer, 24}, {Tree::Pine, 22}}};
 constexpr std::array<Choice, 6> k_AlpineTrees {

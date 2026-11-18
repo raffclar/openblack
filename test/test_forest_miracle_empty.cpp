@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <tuple>
+#include <vector>
 
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
@@ -21,6 +22,7 @@
 #include "ECS/Components/ForestMember.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/MagicForest.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Registry.h"
@@ -151,4 +153,33 @@ TEST_F(ForestMiracleEmpty, ATreeOfAnotherForestDoesNotCount)
 	registry.Destroy(first);
 	registry.Destroy(second);
 	EXPECT_EQ(forests->ForestOf(k_Spell), MiracleForest::Gone);
+}
+
+// The forest of a saved game takes the magic trees of its forest of the land again, the grown trees first. A tree that
+// the spell did not plant stays out of it.
+TEST_F(ForestMiracleEmpty, AForestOfASavedGameTakesItsMagicTreesAgain)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto young = TreeIn(k_ForestId);
+	registry.Get<ForestMember>(second).growing = true;
+	registry.Remove<MagicForest>(record);
+	constexpr auto k_SavedSpell = entt::entity {901};
+	Spell miracle {.castPosition = glm::vec3(4.0f, 0.0f, 5.0f)};
+	miracle.caster.player = PlayerNames::PLAYER_TWO;
+	EXPECT_EQ(forests->RestoreForest(k_SavedSpell, miracle, land), 2U);
+	EXPECT_EQ(miracle.objectCount, 2U);
+	const auto made = registry.Get<const MagicTree>(first).forest;
+	ASSERT_TRUE(made != entt::null && made != record);
+	EXPECT_EQ(registry.Get<const MagicTree>(second).forest, made);
+	EXPECT_FALSE(registry.AllOf<MagicTree>(young));
+	const auto& forest = registry.Get<const MagicForest>(made);
+	EXPECT_EQ(forest.spell, k_SavedSpell);
+	EXPECT_EQ(forest.player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(forest.centre, glm::vec3(4.0f, 0.0f, 5.0f));
+	EXPECT_EQ(forest.landForest, land);
+	EXPECT_EQ(forest.trees, (std::vector<entt::entity> {first, second}));
+	EXPECT_EQ(forests->ForestOf(k_SavedSpell), MiracleForest::Standing);
+	// A spell with no forest of the land takes no trees
+	Spell other;
+	EXPECT_EQ(forests->RestoreForest(entt::entity {902}, other, entt::null), 0U);
 }

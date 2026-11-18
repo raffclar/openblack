@@ -86,7 +86,8 @@ inline constexpr float k_HighestLand = static_cast<float>(std::numeric_limits<ui
 /// The highest land height that the vertex shader can find under a model that goes with the land: under the box that
 /// the model matrix puts in the world, and under the model's origin. The shader finds a height from the four corners of
 /// its cell of 10 units. The function also reads the corners of one more cell on each side, because the shader rounds the
-/// place. `altitudeAt(corner)` gives the altitude of one of the 512 by 512 corners of the map.
+/// place. `altitudeAt(corner)` gives the height in units of one of the 512 by 512 corners of the map: the altitude on a
+/// land of the story.
 template <typename AltitudeAt>
 [[nodiscard]] float HighestLandUnder(const glm::mat4& model, glm::vec3 minima, glm::vec3 maxima, AltitudeAt&& altitudeAt)
 {
@@ -111,12 +112,12 @@ template <typename AltitudeAt>
 	};
 	const auto first = glm::max(cornerOf(low) - 1, glm::ivec2(0));
 	const auto last = glm::min(cornerOf(high) + 2, glm::ivec2(k_LastCorner));
-	uint8_t highest = 0;
+	uint16_t highest = 0;
 	for (int x = first.x; x <= last.x; ++x)
 	{
 		for (int z = first.y; z <= last.y; ++z)
 		{
-			highest = std::max(highest, static_cast<uint8_t>(altitudeAt(glm::ivec2(x, z))));
+			highest = std::max(highest, static_cast<uint16_t>(altitudeAt(glm::ivec2(x, z))));
 		}
 	}
 	return static_cast<float>(highest) * k_AltitudeUnit;

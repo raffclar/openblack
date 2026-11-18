@@ -1043,13 +1043,21 @@ void testbed_scenarios::Apply(std::span<const DesireOverride> overrides, creatur
 	}
 }
 
-std::vector<size_t> testbed_scenarios::GivesAt(const std::map<uint32_t, std::vector<size_t>>& gives, uint32_t turn,
-                                               size_t commands)
+std::vector<size_t> testbed_scenarios::GivesFollower::DueAt(uint32_t turn, size_t commands)
 {
+	const auto land = _lands.Note(turn);
 	std::vector<size_t> given;
-	if (const auto found = gives.find(turn); found != gives.end())
+	for (; _next < _gives.size(); ++_next)
 	{
-		std::ranges::copy_if(found->second, std::back_inserter(given), [commands](size_t place) { return place < commands; });
+		const auto& give = _gives[_next];
+		if (give.land > land || (give.land == land && give.turn > turn))
+		{
+			break;
+		}
+		if (give.land == land && give.turn == turn && give.command < commands)
+		{
+			given.push_back(give.command);
+		}
 	}
 	return given;
 }

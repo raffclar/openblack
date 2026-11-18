@@ -255,6 +255,21 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_swamp",
+	    .name = "The green mist over a swamp of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 1 and the game loads it. Fly about "
+	                   "800 metres to the west of the start area, to the swamp at about (2010, 1730).",
+	    .expected = "A sheet of dark green mist stands over the wet ground of a swamp: a group of four puffs, a pair "
+	                "of puffs and a line of five flat puffs, as on the fourth land of the story. Flat puffs of the same "
+	                "mist cover the rest of the swamp, about 60 metres apart, but not its edge. Bushes, oaks, birches "
+	                "and other trees of the stream banks of the story grow in the swamp.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_cliffs",
 	    .name = "The terraces, cliffs and shore of a generated land",
 	    .facet = Facet::Editor,
@@ -274,9 +289,9 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Turn the "
 	                   "camera from the start area to the mountains inland.",
-	    .expected = "Eight to eleven massifs stand inland. Each massif has a main peak and one or two lower peaks. Spurs "
-	                "go down from each summit with gullies between them, and bands of cliffs go round the slopes. The "
-	                "land away from the massifs stays below about 60 metres, so that its tops are not summits.",
+	    .expected = "Nine to thirteen massifs stand inland. Each massif has a main peak and one or two lower peaks. "
+	                "Spurs go down from each summit with gullies between them, and bands of cliffs go round the slopes. "
+	                "The ground between the massifs rolls in low steps with short faces.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
@@ -296,6 +311,20 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 9}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_high_mountains",
+	    .name = "The high mountains of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Fly the "
+	                   "camera from the start area to the highest summits and round them.",
+	    .expected = "The highest summits are about 980 to 1130 metres high, as high as the mountains of Snowdonia. Their "
+	                "slopes are steep, with snow on the high ground. The low land, the shore and the town are as on a "
+	                "land of the story. The land has no steps or gaps on the high slopes.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
 	});
 
 	all.push_back({

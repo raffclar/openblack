@@ -616,3 +616,20 @@ TEST(GameSocket, TheEditorWorldAndScenarioFramesGoBothWays)
 	EXPECT_FALSE(Parse(R"({"type":"editor.scenario","id":""})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"editor.scenario","id":")" + std::string(200, 'a') + R"("})").has_value());
 }
+
+TEST(GameSocket, TheEditorLandFrameNamesALandOrTheTestbed)
+{
+	const EditorLand land {.land = "Land2.txt", .testbed = false};
+	const auto parsedLand = Parse(ToJson(land));
+	ASSERT_TRUE(parsedLand.has_value());
+	ASSERT_TRUE(std::holds_alternative<EditorLand>(*parsedLand));
+	EXPECT_EQ(std::get<EditorLand>(*parsedLand), land);
+	const EditorLand testbed {.land = {}, .testbed = true};
+	const auto parsedTestbed = Parse(ToJson(testbed));
+	ASSERT_TRUE(parsedTestbed.has_value());
+	EXPECT_EQ(std::get<EditorLand>(*parsedTestbed), testbed);
+	// A frame with no land and no testbed, with both, or with a long name does not read
+	EXPECT_FALSE(Parse(R"({"type":"editor.land","land":""})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.land","land":"Land1.txt","testbed":true})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.land","land":")" + std::string(300, 'a') + R"("})").has_value());
+}

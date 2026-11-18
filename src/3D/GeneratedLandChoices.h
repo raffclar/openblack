@@ -45,6 +45,8 @@ struct Choices
 	int32_t wind {-1};
 	/// How many massifs the island has, or -1 when the seed picks the number
 	int32_t massifs {-1};
+	/// The height in metres of the highest ground that the land can have. The lands of the story stop at 171 m.
+	int32_t topHeight {1250};
 
 	bool operator==(const Choices&) const = default;
 };

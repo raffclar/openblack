@@ -172,21 +172,15 @@ TEST_F(CreatureHeldCastImport, TheCreatureHoldsTheSpellWithTheValuesOfTheFile)
 	EXPECT_FALSE(made.closedDown);
 }
 
-// The import makes no forest, shield or teleport, which keep their state in the things that they made. It makes the
-// heal and the storm, which keep their state in the spell.
-TEST_F(CreatureHeldCastImport, TheImportMakesNoSpellThatKeepsItsStateInItsThings)
+// The import makes the forest, the shields and the teleport, and the heal and the storm. The import of the world makes
+// the things of the forest, the shields and the teleport after the spell.
+TEST_F(CreatureHeldCastImport, TheImportMakesEveryKindOfSpell)
 {
-	for (const auto type : {MagicType::Forest, MagicType::Shield, MagicType::PhysicalShield, MagicType::Teleport})
-	{
-		auto cast = Water();
-		cast.type = type;
-		EXPECT_TRUE(_magic->ImportCreatureCast(_creature, cast) == entt::null) << static_cast<int>(type);
-		EXPECT_TRUE(_magic->CreatureCastOf(_creature) == entt::null) << static_cast<int>(type);
-	}
 	auto none = Water();
 	none.type = MagicType::None;
 	EXPECT_TRUE(_magic->ImportCreatureCast(_creature, none) == entt::null);
-	for (const auto type : {MagicType::Heal, MagicType::StormWindRain, MagicType::Tornado})
+	for (const auto type : {MagicType::Forest, MagicType::Shield, MagicType::PhysicalShield, MagicType::Teleport,
+	                        MagicType::Heal, MagicType::StormWindRain, MagicType::Tornado})
 	{
 		auto cast = Water();
 		cast.type = type;
@@ -197,6 +191,20 @@ TEST_F(CreatureHeldCastImport, TheImportMakesNoSpellThatKeepsItsStateInItsThings
 		EXPECT_EQ(SpellOf(spell).age, 3.25f);
 		EXPECT_EQ(_magic->CreatureCastOf(_creature), spell);
 	}
+}
+
+// A forest knows that it planted its trees and how many trees it can make, as the file says
+TEST_F(CreatureHeldCastImport, AForestKeepsItsPlantingAndItsMostTrees)
+{
+	auto cast = Water();
+	cast.type = MagicType::Forest;
+	cast.duration = -1.0f;
+	cast.lastRipple = std::nullopt;
+	cast.forest = magic::ImportedForestCast {.planted = true, .mostTrees = 6};
+	const auto spell = _magic->ImportCreatureCast(_creature, cast);
+	ASSERT_TRUE(spell != entt::null);
+	EXPECT_TRUE(SpellOf(spell).forestPlanted);
+	EXPECT_EQ(SpellOf(spell).maxObjectsToCreate, 6);
 }
 
 // A creature spell of the file acts on the creature that the file gives

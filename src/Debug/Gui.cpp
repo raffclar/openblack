@@ -51,6 +51,7 @@
 #include "Camera/Camera.h"
 #include "Challenges.h"
 #include "Common/DebugActRuns.h"
+#include "Common/DeveloperTools.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Console.h"
 #include "Creature/BonusCreatures.h"
@@ -88,6 +89,7 @@
 #include "MemoryUse.h"
 #include "MeshViewer.h"
 #include "Moon.h"
+#include "Online/NetworkLand.h"
 #include "Online/NetworkSession.h"
 #include "Online/RoomClock.h"
 #include "PathFinding.h"
@@ -157,6 +159,18 @@ protected:
 	void ProcessEventAlways([[maybe_unused]] const SDL_Event& event) noexcept override {}
 };
 #endif
+
+/// The Load Island menu in a network game: the game server starts the room again on the land, or on the testbed
+void AskServerForLand(const std::string& land, bool testbed) noexcept
+{
+	const bool sent = Locator::networkGame::has_value() && Locator::networkGame::value().SendEditorLand(land, testbed);
+	if (auto logger = spdlog::get("game"))
+	{
+		// The test tools find the words "The Load Island menu asks the game server"
+		SPDLOG_LOGGER_INFO(logger, "The Load Island menu asks the game server for {}: {}",
+		                   testbed ? std::string("the testbed") : land, sent ? "the request went" : "the request did not go");
+	}
+}
 } // namespace
 
 std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPass viewId) noexcept
@@ -355,7 +369,7 @@ bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 	ImGui::SetCurrentContext(_imgui);
 	// While a network game is live, no debug window takes an event, so that none changes the shared world. Only the editor
 	// of a player with the editor claim takes events, and it sends its edits as commands of the turns. The menu bar of a
-	// player with the debugger right also takes events. Its menus that change the world do not open in a network game.
+	// player with the debugger right also takes events. Its menus send their changes to the game server.
 	FollowNetworkSession();
 	// The editor key of a player with no editor right shows the refusal line to the player. With no account signed in
 	// outside a network game, the key does nothing.
@@ -940,8 +954,11 @@ bool Gui::ShowMenu() noexcept
 	{
 		auto& game = *Game::Instance();
 		// In a network game the World, Bonus Creatures and Game Speed menus send their changes as commands of the turns or
-		// as requests to the game server. A new land needs a new start of the room, thus Load Island does not open there.
-		if (ImGui::BeginMenu("Load Island", !_networkSessionLive))
+		// as requests to the game server. Load Island asks the game server to start the room again on the land, and opens
+		// only for a player with the editor claim.
+		const auto landAct = developer_tools::LandMenuActOf(_networkSessionLive, developer_tools::LocalPlayerHasEditorClaim());
+		const bool asksServer = landAct == developer_tools::LandMenuAct::AsksServer;
+		if (ImGui::BeginMenu("Load Island", landAct != developer_tools::LandMenuAct::Closed))
 		{
 			auto& resources = Locator::resources::value();
 			auto& levelsManager = resources.GetLevels();
@@ -963,11 +980,18 @@ bool Gui::ShowMenu() noexcept
 			std::sort(playgrounds.begin(), playgrounds.end(),
 			          [](const Level* level1, const Level* level2) { return level1->GetName() < level2->GetName(); });
 
-			auto menuItem = [&game](const auto& label, const std::filesystem::path& path, const std::string description,
-			                        bool validLevel) {
+			auto menuItem = [&game, asksServer](const auto& label, const std::filesystem::path& path,
+			                                    const std::string description, bool validLevel) {
 				if (ImGui::MenuItem(label.data(), nullptr, false, validLevel))
 				{
-					game.LoadFromLandMenu(path);
+					if (asksServer)
+					{
+						AskServerForLand(network_land::WireName(path), false);
+					}
+					else
+					{
+						game.LoadFromLandMenu(path);
+					}
 				}
 				if (!description.empty() && ImGui::IsItemHovered())
 				{
@@ -994,14 +1018,22 @@ bool Gui::ShowMenu() noexcept
 			ImGui::Separator();
 			if (ImGui::MenuItem("Creature Testbed"))
 			{
-				game.LoadTestbed();
+				if (asksServer)
+				{
+					AskServerForLand({}, true);
+				}
+				else
+				{
+					game.LoadTestbed();
+				}
 			}
 			if (ImGui::IsItemHovered())
 			{
 				ImGui::SetTooltip("A flat plane over the whole map with a lake north of the middle, for trying out how "
 				                  "creatures move, are animated, drink and wade, and what the water reflects");
 			}
-			if (ImGui::MenuItem("Map for 32 Gods"))
+			// The players get the map for 32 gods from the lobby before the start, so the room cannot change to it
+			if (ImGui::MenuItem("Map for 32 Gods", nullptr, false, !asksServer))
 			{
 				game.LoadGodsRingMap();
 			}

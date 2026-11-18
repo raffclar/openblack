@@ -285,8 +285,8 @@ const land_avoid::Map& LandAvoidOf(ecs::Registry& registry)
 		context.landAvoid = land_avoid::Build(
 		    LandIslandInterface::k_MapCellsPerSide,
 		    [&island](glm::ivec2 corner) {
-			    return island.FindBuiltAltitude({static_cast<uint16_t>(corner.x), static_cast<uint16_t>(corner.y)})
-			        .value_or(uint8_t {0});
+			    return island.FindBuiltHeightUnits({static_cast<uint16_t>(corner.x), static_cast<uint16_t>(corner.y)})
+			        .value_or(uint16_t {0});
 		    },
 		    [&find](glm::ivec2 cell) {
 			    const auto* found = find(cell);

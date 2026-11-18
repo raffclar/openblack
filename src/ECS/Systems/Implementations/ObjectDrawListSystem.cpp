@@ -245,21 +245,17 @@ bool ObjectDrawListSystem::Shows(LandBlock& block, const graphics::land_detail::
 	{
 		return false;
 	}
-	// A block that morphs draws its corners between their own altitudes and those of the coarser mesh
-	std::array<uint8_t, land_detail::k_CornerCount> altitudes {};
+	// The height in units of each corner as the land drew it last: its altitude on a land of the story. A block that
+	// morphs draws its corners between their own heights and those of the coarser mesh.
+	const auto& altitudes = blocks[block.landIndex].GetCornerAltitudes();
 	const bool morphs = classified && drawn.morph != land_detail::Morph::None;
-	if (morphs)
-	{
-		std::transform(cells, cells + land_detail::k_CornerCount, altitudes.begin(),
-		               [](const lnd::LNDCell& cell) { return cell.altitude; });
-	}
 	// The corners stand at the heights that the land draws them at: land at sea level is flat at height 0
 	const auto cornerAt = [&](uint16_t corner) {
 		const size_t x = corner / land_detail::k_CornersPerSide;
 		const size_t z = corner % land_detail::k_CornersPerSide;
-		const uint8_t altitude =
+		const uint16_t altitude =
 		    morphs ? land_detail::DrawnCornerAltitude(altitudes, x, z, drawn.morph, *detail, block.block.corner)
-		           : cells[corner].altitude;
+		           : altitudes.at(corner);
 		return glm::vec3(block.block.corner.x + static_cast<float>(x) * LandIslandInterface::k_CellSize,
 		                 LandIslandInterface::GetDrawnAltitude(altitude),
 		                 block.block.corner.y + static_cast<float>(z) * LandIslandInterface::k_CellSize);

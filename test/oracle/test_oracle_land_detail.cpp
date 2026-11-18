@@ -74,9 +74,9 @@ private:
 }
 
 /// The bytes of a row's corners, four a word from the column r0, the first in the low byte
-[[nodiscard]] std::array<uint8_t, k_CornerCount> Corners(const oracle::Table& table, size_t row, size_t first)
+[[nodiscard]] std::array<uint16_t, k_CornerCount> Corners(const oracle::Table& table, size_t row, size_t first)
 {
-	std::array<uint8_t, k_CornerCount> corners {};
+	std::array<uint16_t, k_CornerCount> corners {};
 	for (size_t i = 0; i < k_CornerCount; ++i)
 	{
 		corners.at(i) = static_cast<uint8_t>(table.Bits(row, first + i / 4) >> (8 * (i % 4)));
@@ -85,9 +85,9 @@ private:
 }
 
 /// The corner altitudes of a morph case, as the case script makes them from its seed
-[[nodiscard]] std::array<uint8_t, k_CornerCount> AltitudesOf(uint32_t seed)
+[[nodiscard]] std::array<uint16_t, k_CornerCount> AltitudesOf(uint32_t seed)
 {
-	std::array<uint8_t, k_CornerCount> altitudes {};
+	std::array<uint16_t, k_CornerCount> altitudes {};
 	for (uint32_t corner = 0; corner < k_CornerCount; ++corner)
 	{
 		const uint32_t value = seed * 2654435761u + corner * 40503u;
@@ -96,7 +96,7 @@ private:
 	return altitudes;
 }
 
-[[nodiscard]] std::string Show(const std::array<uint8_t, k_CornerCount>& ours, const std::array<uint8_t, k_CornerCount>& game)
+[[nodiscard]] std::string Show(const std::array<uint16_t, k_CornerCount>& ours, const std::array<uint16_t, k_CornerCount>& game)
 {
 	std::string text;
 	for (size_t i = 0; i < k_CornerCount; ++i)
@@ -219,7 +219,9 @@ TEST(OracleLandDetail, TheCrossFadeOfABlocksCoarseTextureIsTheGames)
 	{
 		const auto at = [&](size_t column) { return table->Float(row, c.at(column)); };
 		const GroundLine line {.along = {at(2), at(3)}, .point = {at(4), at(5)}};
-		const auto ours = CrossFadeCorners(line, at(6), at(7), {at(0), at(1)});
+		const auto alphas = CrossFadeCorners(line, at(6), at(7), {at(0), at(1)});
+		std::array<uint16_t, k_CornerCount> ours {};
+		std::ranges::copy(alphas, ours.begin());
 		const auto game = Corners(*table, row, c.at(8));
 		if (ours != game)
 		{

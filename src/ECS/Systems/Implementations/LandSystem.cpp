@@ -956,6 +956,9 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// The saved world takes the place of every entity that the land made, the hand and the sky included. The players
 	// that go with them are forgotten.
 	auto& registry = Locator::entitiesRegistry::value();
+	// The store of the ids starts again, so that it keeps only the saved entities and the places that they had at the
+	// save. The entities that the world makes after the load then get the ids that they got after the save.
+	registry.SetFreshIdsAtNextReset();
 	registry.Reset();
 	// The things that only the frames make go with the things of the land that they go with. The sky's clouds stay, as
 	// the land laid them out when it loaded: a save does not keep the clouds.
