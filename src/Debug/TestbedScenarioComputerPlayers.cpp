@@ -12,6 +12,8 @@
 #include <string_view>
 #include <vector>
 
+#include <glm/vec2.hpp>
+
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -23,6 +25,11 @@ namespace
 /// The line of the Island Wars land that makes an anti-influence of 20 m for player one, here 40 m north of the middle
 constexpr std::string_view k_AntiInfluenceRingScript = R"(CREATE_INFLUENCE_RING("0.0,40.0", 0, 20.000000, 202594004)
 )";
+
+/// The town centre of the scenario of the symbol of a computer god in an empty slot, from the middle
+constexpr glm::vec2 k_SlotTownCentre {0.0f, 40.0f};
+/// The belief of that town in each of the two players
+constexpr float k_SlotTownBelief = 1000.0f;
 
 } // namespace
 
@@ -77,6 +84,28 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Command::Kind::StartFight, .creature = 0, .delaySeconds = 1.0f, .value = 1},
 	                 {.kind = Command::Kind::FightView, .creature = 0, .delaySeconds = 7.0f}},
 	    .fillEmptySlots = true,
+	});
+
+	all.push_back({
+	    .id = "multiplayer.computer_slot_god_symbol",
+	    .name = "The symbol of belief of a computer god in an empty slot of a network game",
+	    .facet = Facet::Multiplayer,
+	    .description = "A temple of player two stands to the north, and no human or computer plays player two. As in a "
+	                   "network game, the land waits for its humans, and then player one joins. The empty slot of player "
+	                   "two then gets a computer god. A Norse town centre of the player's town believes in the player and "
+	                   "in player two. The camera is still, a little above the top of the totem.",
+	    .expected = "Two symbols show at the totem: the symbol of the player and the picture of the computer god of "
+	                "player two (a cross), in the colour of player two. Before the fix the town believed in player two, "
+	                "but the symbol of player two did not show.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_SlotTownCentre.x - 12.7f, 24.0f, k_SlotTownCentre.y - 27.2f},
+	                .look = {k_SlotTownCentre.x, 21.0f, k_SlotTownCentre.y}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_SlotTownCentre}},
+	    .temples = {{.offset = {0.0f, 140.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .townBeliefInPlayer = k_SlotTownBelief,
+	    .townBeliefInRival = k_SlotTownBelief,
+	    .humansJoinLater = true,
 	});
 
 	all.push_back({
