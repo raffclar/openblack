@@ -112,6 +112,9 @@ struct Request
 	Settings settings {};
 	/// Tools: the modes of the AI soak for the first land. A game that joins a game server takes them from the server.
 	developer_tools::SoakTools soak;
+	/// The god slots from 0 whose computer god and its creature start the first land at a random alignment, as the
+	/// skirmish box chooses them (deviation 280). A game that joins a game server takes them from the server.
+	std::vector<uint8_t> randomAlignmentSlots;
 	/// Tools: the synced seed that each map starts with, in place of the 0 of the game. A story land then has another
 	/// life for each value. None keeps the game's 0.
 	std::optional<uint32_t> worldSeed;

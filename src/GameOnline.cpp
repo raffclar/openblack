@@ -47,6 +47,7 @@
 #include "Creature/LeashOrders.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "ECS/Components/MagicShield.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
@@ -54,6 +55,7 @@
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
@@ -835,6 +837,12 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	lands.SetNewGameStart(_newGameStart);
 	// No god plays the slots that the lobby closed, as on the game server
 	lands.SetClosedSlots(start.closedSlots);
+	// The computer gods start at the alignments that the host chose, as on the game server (deviation 280)
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetStartAlignments(
+		    computer_player::AlignmentsOfRandomSlots(start.randomAlignmentSlots));
+	}
 	auto& clock = Locator::time::value();
 	const auto pinnedDate = clock.GetPinnedDate();
 	clock.RestartClock(pinnedDate);

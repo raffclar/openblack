@@ -215,6 +215,9 @@ public:
 		}
 	}
 	void SetAiSeed(std::optional<uint32_t> /*seed*/) override {}
+	void SetStartAlignments(const computer_player::StartAlignments& alignments) override { startAlignments = alignments; }
+	[[nodiscard]] const computer_player::StartAlignments& GetStartAlignments() const override { return startAlignments; }
+	computer_player::StartAlignments startAlignments {};
 	std::vector<std::vector<PlayerNames>> joins;
 	/// When set, each join keeps the count of spot visuals and of hands that the turn made before it
 	const FakeParticles* particles {nullptr};

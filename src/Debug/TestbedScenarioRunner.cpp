@@ -691,6 +691,11 @@ void Runner::Stop()
 		}
 	}
 	_skirmishBefore.reset();
+	if (_startAlignmentsBefore.has_value() && Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetStartAlignments(*_startAlignmentsBefore);
+	}
+	_startAlignmentsBefore.reset();
 	if (_networkGameBefore.has_value() && Locator::time::has_value())
 	{
 		Locator::time::value().SetNetworkGame(*_networkGameBefore);

@@ -193,6 +193,8 @@ struct SlotView
 	bool away {false};
 	/// The player of the slot has the map of the lobby. False while the player downloads it.
 	bool haveMap {true};
+	/// The computer god of the slot and its creature start at a random alignment (deviation 280)
+	bool randomAlignment {false};
 };
 
 /// The lobby room of the player

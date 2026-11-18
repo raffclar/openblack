@@ -52,6 +52,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -507,6 +508,12 @@ bool ServerWorld::StartLand()
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot start: {}", *refusal);
 		return false;
+	}
+	// The computer gods of these slots start at a random alignment, on the server and on each client (deviation 280)
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetStartAlignments(
+		    computer_player::AlignmentsOfRandomSlots(_settings.randomAlignmentSlots));
 	}
 	if (_settings.godsRingMap)
 	{
@@ -1404,6 +1411,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, const Play
 	    .gameId = settings.network.has_value() ? settings.network->gameId : std::string(),
 	    .conditions = {},
 	    .gods = {},
+	    .randomAlignmentSlots = settings.randomAlignmentSlots,
 	};
 	for (const auto& pick : world.ConditionPicks())
 	{
@@ -1632,6 +1640,9 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, const Play
 		if (host.Started() && Locator::computerPlayerSystem::has_value())
 		{
 			Locator::computerPlayerSystem::value().CloseSlots(host.ClosedSlots());
+			// The computer gods start at the alignments that the host chose, as on each client (deviation 280)
+			Locator::computerPlayerSystem::value().SetStartAlignments(
+			    computer_player::AlignmentsOfRandomSlots(host.RandomAlignmentSlots()));
 		}
 		if (role->HostReportDue())
 		{

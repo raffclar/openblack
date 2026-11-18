@@ -18,6 +18,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "ECS/ComputerPlayerStart.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -110,6 +112,13 @@ void Game::FollowSkirmishBox()
 	const auto path =
 	    Locator::filesystem::value().GetPath<filesystem::Path::Playgrounds>() / _skirmishLands.at(*answer.land).fileName;
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish box: the skirmish starts on {}", path.generic_string());
+	// The computer gods start at the alignments that the player chose in the box (deviation 280)
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		const auto slots = Locator::gameInterface::value().GetSkirmishBox().GetRandomAlignmentSlots();
+		Locator::computerPlayerSystem::value().SetStartAlignments(computer_player::AlignmentsOfRandomSlots(slots));
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish box: {} computer gods start at a random alignment", slots.size());
+	}
 	Locator::time::value().SetPlayerPause(false);
 	if (!LoadFromLandMenu(path))
 	{

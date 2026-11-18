@@ -495,11 +495,13 @@ void MultiplayerFrontEnd::DoHostAction(int32_t slot, screens::HostAction action)
 		break;
 	case screens::HostAction::Open:
 	case screens::HostAction::Computer:
+	case screens::HostAction::ComputerRandom:
 	case screens::HostAction::Closed:
 	{
-		const auto kind = action == screens::HostAction::Open       ? lobby_api::SlotKind::Open
-		                  : action == screens::HostAction::Computer ? lobby_api::SlotKind::Computer
-		                                                            : lobby_api::SlotKind::Closed;
+		const auto kind = action == screens::HostAction::Open             ? lobby_api::SlotKind::Open
+		                  : action == screens::HostAction::Computer       ? lobby_api::SlotKind::Computer
+		                  : action == screens::HostAction::ComputerRandom ? lobby_api::SlotKind::ComputerRandom
+		                                                                  : lobby_api::SlotKind::Closed;
 		lobby_api::LobbyChangeRequest change;
 		change.slotKinds = screens::SlotKindsAfter(room->Data(), slot, kind);
 		_services.lobbyRoom->Change(std::move(change), LobbyDoneCallback());

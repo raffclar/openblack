@@ -88,6 +88,10 @@ inline constexpr std::string_view k_EndedRefusal = "ended";
 /// The god slots that the kinds close, from 0. The start tells each computer that no god plays these slots.
 [[nodiscard]] std::vector<uint8_t> ClosedSlotsOf(std::span<const lobby_api::SlotKind> kinds);
 
+/// The god slots that the kinds give a computer god of random alignment, from 0. The start tells each computer these
+/// slots, so that the god and its creature start at a random alignment (deviation 280).
+[[nodiscard]] std::vector<uint8_t> RandomAlignmentSlotsOf(std::span<const lobby_api::SlotKind> kinds);
+
 /// The first god of the lobby whose slot is not an open slot of the kinds, or none. No player can take such a slot.
 [[nodiscard]] const lobby_members::Member* MemberInShutSlot(const Lobby& lobby,
                                                             std::span<const lobby_api::SlotKind> kinds) noexcept;

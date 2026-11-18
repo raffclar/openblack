@@ -2896,6 +2896,7 @@ void LockstepHost::ShutSlots()
 		case lobby_api::SlotKind::Open:
 			break;
 		case lobby_api::SlotKind::Computer:
+		case lobby_api::SlotKind::ComputerRandom:
 			_seats[slot].state = SeatState::Computer;
 			break;
 		case lobby_api::SlotKind::Closed:
@@ -2906,6 +2907,7 @@ void LockstepHost::ShutSlots()
 	if (!_settings.slotKinds.empty())
 	{
 		_settings.start.closedSlots = lobby_game::ClosedSlotsOf(_settings.slotKinds);
+		_settings.start.randomAlignmentSlots = lobby_game::RandomAlignmentSlotsOf(_settings.slotKinds);
 	}
 }
 

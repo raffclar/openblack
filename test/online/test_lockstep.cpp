@@ -2341,6 +2341,21 @@ TEST_F(LockstepTest, NoPlayerTakesAComputerSlotOrAClosedSlot)
 	EXPECT_EQ(host->Seats()[3].state, LockstepHost::SeatState::Closed);
 }
 
+// The lobby gave slot 1 to a computer god of random alignment: no player takes it, and the start names it
+TEST_F(LockstepTest, AComputerSlotOfRandomAlignmentGoesInTheStart)
+{
+	using lobby_api::SlotKind;
+	MakeKindsHost({SlotKind::Open, SlotKind::ComputerRandom}, {});
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Computer);
+	EXPECT_EQ(host->RandomAlignmentSlots(), (std::vector<uint8_t> {1}));
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 6);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.GetStart().has_value());
+	EXPECT_EQ(alice.session.GetStart()->randomAlignmentSlots, (std::vector<uint8_t> {1}));
+	EXPECT_TRUE(alice.session.GetStart()->closedSlots.empty());
+}
+
 // A list of kinds that is shorter than the room keeps the last slots open
 TEST_F(LockstepTest, TheSlotsAfterTheLastKindAreOpen)
 {

@@ -102,6 +102,7 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
@@ -109,6 +110,7 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
@@ -594,6 +596,15 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			_skirmishBefore = skirmish;
 		}
 		skirmish = true;
+	}
+	if (!environment.randomAlignmentSlots.empty() && Locator::computerPlayerSystem::has_value())
+	{
+		auto& minds = Locator::computerPlayerSystem::value();
+		if (!_startAlignmentsBefore.has_value())
+		{
+			_startAlignmentsBefore = minds.GetStartAlignments();
+		}
+		minds.SetStartAlignments(computer_player::AlignmentsOfRandomSlots(environment.randomAlignmentSlots));
 	}
 	if (environment.networkGame && Locator::time::has_value())
 	{
