@@ -57,6 +57,28 @@ public:
 	virtual void ResumeAtTurn(uint32_t turn, int32_t remainderMs) = 0;
 	/// The time past the last turn that the frames have drawn, in milliseconds
 	[[nodiscard]] virtual int32_t GetTurnRemainderMs() const = 0;
+
+	/// Where the turn timer and the frame clock are, from the start of the last turn played. A save keeps it, so that the
+	/// clock continues after a load as it does with no load.
+	struct ClockPlace
+	{
+		/// The time past the last turn that the frames have drawn
+		int32_t remainderMs = 0;
+		/// The time of the turn timer. A pause in a frame stops the timer after the frame clock moved on, so this time
+		/// can be after the time that the frames have drawn.
+		int32_t timerMs = 0;
+		/// The time of the turn timer at the last frame
+		int32_t frameSampleMs = 0;
+		/// The turns that started after the last frame clock, as in a save that a turn makes
+		uint32_t turnsAfterFrame = 0;
+		/// The clock of the steps of the input. The hand and the camera move by its steps.
+		input_steps::Clock::Place input;
+	};
+	/// Where the clock is now, for a save
+	[[nodiscard]] virtual ClockPlace GetClockPlace() const { return {.remainderMs = GetTurnRemainderMs()}; }
+	/// A saved game continues at the saved turn, with the timer and the frame clock where they were at the save. The
+	/// clock keeps its speed and whether it is paused.
+	virtual void ResumeAtPlace(uint32_t turn, const ClockPlace& place) { ResumeAtTurn(turn, place.remainderMs); }
 	/// Whether the game is to play a turn now
 	[[nodiscard]] virtual bool IsTurnDue() = 0;
 	/// The turn number goes up as a turn starts, unless the game is paused

@@ -208,16 +208,55 @@ void TimeSystem::ResumeAtTurn(uint32_t turn, int32_t remainderMs)
 	_turnFraction = static_cast<float>(_turnRemainderMs) * k_FractionPerMs;
 	// The timer stands at the start of the last turn played plus the time past it, so the next turn comes when the rest of
 	// its time has gone. The frame clock counts on from there.
+	PutTimerAt(LastTurnStartMs() + _turnRemainderMs);
+	_lastFrameSample = _timer.Milliseconds(Ticks());
+}
+
+TimeSystemInterface::ClockPlace TimeSystem::GetClockPlace() const
+{
+	const auto start = LastTurnStartMs();
+	return {
+	    .remainderMs = _turnRemainderMs,
+	    .timerMs = _timer.Milliseconds(Ticks()) - start,
+	    .frameSampleMs = _lastFrameSample - start,
+	    .turnsAfterFrame = _turn - std::min(_lastFrameTurn, _turn),
+	    .input = _inputClock.GetPlace(),
+	};
+}
+
+void TimeSystem::ResumeAtPlace(uint32_t turn, const ClockPlace& place)
+{
+	_turn = turn;
+	_turnsThisFrame = 0;
+	_lastFrameTurn = turn - std::min(place.turnsAfterFrame, turn);
+	_turnRemainderMs = std::clamp(place.remainderMs, 0, k_MaxRemainderMs);
+	_visualMs = _lastFrameTurn * k_TurnMs + static_cast<uint32_t>(_turnRemainderMs);
+	_frameGameMs = 0;
+	_turnFraction = static_cast<float>(_turnRemainderMs) * k_FractionPerMs;
+	// The timer and the frame clock stand where they stood at the save. Thus the next turn and the time of the next frame
+	// come as they come with no load.
+	const auto start = LastTurnStartMs();
+	PutTimerAt(start + std::max(place.timerMs, 0));
+	_lastFrameSample = start + place.frameSampleMs;
+	_inputClock.SetPlace(place.input);
+}
+
+int32_t TimeSystem::LastTurnStartMs() const
+{
+	return std::max(static_cast<int32_t>(_turn * k_TurnMs) - static_cast<int32_t>(k_TurnMs), 0);
+}
+
+void TimeSystem::PutTimerAt(int32_t elapsedMs)
+{
 	const auto now = Ticks();
 	const auto running = _timer.speed != 0.0f;
 	_timer.Stop(now);
 	_timer.base = now;
-	_timer.elapsed = std::max(static_cast<int32_t>(_turn * k_TurnMs) - static_cast<int32_t>(k_TurnMs), 0) + _turnRemainderMs;
+	_timer.elapsed = elapsedMs;
 	if (running)
 	{
 		_timer.Start(now);
 	}
-	_lastFrameSample = _timer.Milliseconds(now);
 }
 
 bool TimeSystem::IsTurnDue()

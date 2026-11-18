@@ -60,6 +60,8 @@ public:
 	void ResetTimerToTurn() override;
 	void ResumeAtTurn(uint32_t turn, int32_t remainderMs) override;
 	[[nodiscard]] int32_t GetTurnRemainderMs() const override { return _turnRemainderMs; }
+	[[nodiscard]] ClockPlace GetClockPlace() const override;
+	void ResumeAtPlace(uint32_t turn, const ClockPlace& place) override;
 	[[nodiscard]] bool IsTurnDue() override;
 	void StartTurn() override;
 	void UpdateFrame() override;
@@ -106,6 +108,10 @@ private:
 	[[nodiscard]] bool Stopped() const { return _paused || _held; }
 	/// Stops or starts the timer when a change of the pause or the hold changes whether the clock is stopped
 	void FollowStop(bool wasStopped);
+	/// The time of the timer at the start of the last turn played, as a load puts it back
+	[[nodiscard]] int32_t LastTurnStartMs() const;
+	/// Puts the timer at a time, from now. It keeps its speed, and it stays stopped if it was stopped.
+	void PutTimerAt(int32_t elapsedMs);
 
 	TickSource _ticks;
 	std::optional<std::chrono::microseconds> _fixedFrameTime;

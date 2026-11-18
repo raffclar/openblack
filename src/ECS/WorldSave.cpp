@@ -151,6 +151,7 @@ world_save::PendingChunk ClockChunk()
 		state.speed = time.GetSpeed();
 		state.paused = time.IsPaused();
 		state.remainderMs = time.GetTurnRemainderMs();
+		state.place = time.GetClockPlace();
 	}
 	if (Locator::gameRandom::has_value())
 	{
@@ -175,7 +176,14 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 	{
 		auto& time = Locator::time::value();
 		time.SetSpeed(state->speed);
-		time.ResumeAtTurn(turn, state->remainderMs);
+		if (state->place.has_value())
+		{
+			time.ResumeAtPlace(turn, *state->place);
+		}
+		else
+		{
+			time.ResumeAtTurn(turn, state->remainderMs);
+		}
 		time.SetPaused(state->paused);
 	}
 	if (Locator::gameRandom::has_value())
@@ -671,6 +679,14 @@ std::vector<uint8_t> world_save::WriteClock(const ClockState& state)
 	reflection::Save(out, streams);
 	reflection::Save(out, state.general.has_value() ? GeneratorText(*state.general) : std::string {});
 	reflection::Save(out, state.syncedDraws.value_or(0));
+	if (state.place.has_value())
+	{
+		reflection::Save(out, state.place->timerMs);
+		reflection::Save(out, state.place->frameSampleMs);
+		reflection::Save(out, state.place->turnsAfterFrame);
+		reflection::Save(out, state.place->input.owed);
+		reflection::Save(out, state.place->input.taken);
+	}
 	return std::move(out.Bytes());
 }
 
@@ -702,6 +718,17 @@ std::optional<world_save::ClockState> world_save::ReadClock(std::span<const uint
 		uint64_t draws = 0;
 		reflection::Load(in, draws);
 		state.syncedDraws = draws;
+	}
+	// Nor the place of the timer and the frame clock
+	if (in.Remaining() > 0)
+	{
+		auto& place = state.place.emplace();
+		place.remainderMs = state.remainderMs;
+		reflection::Load(in, place.timerMs);
+		reflection::Load(in, place.frameSampleMs);
+		reflection::Load(in, place.turnsAfterFrame);
+		reflection::Load(in, place.input.owed);
+		reflection::Load(in, place.input.taken);
 	}
 	if (in.Failed())
 	{

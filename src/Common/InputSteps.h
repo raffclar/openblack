@@ -62,6 +62,19 @@ public:
 	/// The clock starts again from nothing
 	void Restart();
 
+	/// What the clock owes and the count of the steps that it took, which a save keeps
+	struct Place
+	{
+		int64_t owed {0};
+		uint64_t taken {0};
+	};
+	[[nodiscard]] Place GetPlace() const { return {.owed = _owed, .taken = _taken}; }
+	void SetPlace(const Place& place)
+	{
+		_owed = place.owed;
+		_taken = place.taken;
+	}
+
 private:
 	/// The clock counts in sixtieths of a microsecond, so that a step is a whole number of 1000000 counts
 	static constexpr int64_t k_CountsPerStep = 1'000'000;
