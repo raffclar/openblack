@@ -855,15 +855,15 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	    .name = "The aggression potion on a creature that knows only the learning leash",
 	    .facet = Facet::Leash,
 	    .description = "Your tiger knows only the learning leash. L puts it on, and three seconds in the nasty creature "
-	                   "spell is cast on it. After the spell has worn off, B is pressed.",
+	                   "spell is cast on it. After the spell has worn off, V is pressed.",
 	    .expected = "As the spell takes hold the leash becomes the aggression leash, although the tiger does not know "
-	                "it. The leash stays the aggression leash after the spell. Then B changes it to the learning leash, "
+	                "it. The leash stays the aggression leash after the spell. Then V changes it to the learning leash, "
 	                "the only leash the tiger knows.",
 	    .framing = {.shot = Shot::Testbed},
 	    .creatures = {learningOnly},
 	    .miracles = {{.type = MagicType::CreatureSpellAngry, .target = MiracleCast::Target::Creature, .delaySeconds = 3.0f}},
 	    .commands = {{.kind = Kind::LeashKey, .delaySeconds = 1.0f, .value = 0},
-	                 {.kind = Kind::LeashKey, .delaySeconds = 36.0f, .value = 2}},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 36.0f, .value = 1}},
 	});
 
 	all.push_back({
