@@ -257,6 +257,53 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 	return cells;
 }
 
+namespace
+{
+/// Gives the cursed places their dark ground: two countries after the countries of the land, the dark scrub of the edge
+/// and the burnt rock of the middle. The water and the banks of the rivers keep their ground.
+void ScorchCursedGround(GeneratedLand& land, const Grid<uint8_t>& keepClear, uint64_t seed, const cursed::Settings& settings)
+{
+	// A cell holds the country in four bits
+	constexpr size_t k_MostCountries = 16;
+	const auto recipes = countries::CursedRecipes();
+	if (land.cursedPatches.empty() || land.countries.size() + recipes.size() > k_MostCountries)
+	{
+		return;
+	}
+	const auto edgeCountry = static_cast<uint8_t>(land.countries.size());
+	for (const auto& recipe : recipes)
+	{
+		land.countries.push_back(countries::MakeCountry(recipe, land.materials));
+	}
+	constexpr float k_MetresPerCorner = 10.0f;
+	const int side = land.cells.side;
+	for (const auto& patch : land.cursedPatches)
+	{
+		const int lowX = std::max(0, static_cast<int>(std::floor((patch.x - patch.radius) / k_MetresPerCorner)));
+		const int highX = std::min(side - 1, static_cast<int>(std::ceil((patch.x + patch.radius) / k_MetresPerCorner)));
+		const int lowZ = std::max(0, static_cast<int>(std::floor((patch.z - patch.radius) / k_MetresPerCorner)));
+		const int highZ = std::min(side - 1, static_cast<int>(std::ceil((patch.z + patch.radius) / k_MetresPerCorner)));
+		for (int x = lowX; x <= highX; ++x)
+		{
+			for (int z = lowZ; z <= highZ; ++z)
+			{
+				if (keepClear.At(x, z) != 0)
+				{
+					continue;
+				}
+				const auto scorch = cursed::ScorchAt(patch, static_cast<float>(x) * k_MetresPerCorner,
+				                                     static_cast<float>(z) * k_MetresPerCorner, seed, settings);
+				if (scorch != cursed::Scorch::None)
+				{
+					land.cells.At(x, z).properties.country =
+					    static_cast<uint8_t>(edgeCountry + (scorch == cursed::Scorch::Core ? 1u : 0u)) & 0xFu;
+				}
+			}
+		}
+	}
+}
+} // namespace
+
 GeneratedLand openblack::landgen::Generate(const Settings& settings)
 {
 	GeneratedLand land;
@@ -365,6 +412,11 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 		FlattenStartArea(heights, {.x = site.x, .z = site.z, .radius = townGround.flatRadius}, townGround);
 	}
 	clock.Done("town places");
+
+	// Few faces of the cliffs of the story are near vertical. This stage comes after all the stages that shape the
+	// ground, so that no wall of a massif, a terrace, a river or a hollow is steeper than the limit.
+	cliffs::LimitFaces(heights, land.heightCurve, terrain::k_SeaLevel, seed, settings.faces, riverCorners.values);
+	clock.Done("cliff faces");
 
 	// The altitude byte of each corner is its height rounded. The height units come from the height before the rounding,
 	// through the curve, so that the high ground has no steps of many units.
@@ -597,6 +649,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                            land.features, seed, settings.cursed);
 	land.cursedPatches = std::move(cursed.patches);
 	land.mists = std::move(cursed.mists);
+	ScorchCursedGround(land, keepClear, seed, settings.cursed);
 	clock.Done("cursed places");
 	auto swampMist = swamps::Place({.biomes = land.biomes,
 	                                .heights = heights,

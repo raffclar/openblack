@@ -549,6 +549,11 @@ bool IsBurnt(const features::Feature& feature)
 {
 	return feature.kind == features::Kind::Tree && feature.type == static_cast<uint8_t>(features::Tree::Burnt);
 }
+
+bool IsLyingDeadTree(const features::Feature& feature)
+{
+	return feature.kind == features::Kind::Static && feature.type == features::k_DeadTreeStatic;
+}
 } // namespace
 
 TEST(LandgenCursed, MostLandsHaveOnePlaceAndSomeHaveThree)
@@ -607,21 +612,24 @@ TEST(LandgenCursed, EachPlaceHasTheThingsOfTheStory)
 		uint32_t stacks = 0;
 		uint32_t craters = 0;
 		uint32_t burnt = 0;
+		uint32_t lying = 0;
 		for (const auto& patch : result.patches)
 		{
 			EXPECT_GE(patch.stacks, 1u);
 			EXPECT_LE(patch.stacks, 3u);
 			EXPECT_LE(patch.craters, 2u);
-			EXPECT_GE(patch.burntTrees, 10u);
-			EXPECT_LE(patch.burntTrees, 40u);
+			EXPECT_GE(patch.burntTrees + patch.deadTrees, 10u);
+			EXPECT_LE(patch.burntTrees + patch.deadTrees, 40u);
 			stacks += patch.stacks;
 			craters += patch.craters;
 			burnt += patch.burntTrees;
+			lying += patch.deadTrees;
 		}
 		// Three puffs for each stack and one puff of smoke for each crater
 		EXPECT_EQ(result.mists.size(), (stacks * 3) + craters);
 		EXPECT_EQ(std::ranges::count_if(placed, IsCrater), craters);
 		EXPECT_EQ(std::ranges::count_if(placed, IsBurnt), burnt);
+		EXPECT_EQ(std::ranges::count_if(placed, IsLyingDeadTree), lying);
 		for (const auto& mist : result.mists)
 		{
 			// The near black mist of the first land, the dark mist of the fourth and the grey smoke of the fifth
@@ -645,6 +653,116 @@ TEST(LandgenCursed, EachPlaceHasTheThingsOfTheStory)
 			EXPECT_EQ(boulders, patch.stack == cursed::Stack::Volcanic ? patch.stacks * 7 : 0);
 		}
 	}
+}
+
+TEST(LandgenCursed, TheBurntTreesKeepToTheMostOfTheStoryForTheArea)
+{
+	const cursed::Settings settings;
+	EXPECT_EQ(cursed::BurntBudget(2.06f, settings), 2u);
+	EXPECT_EQ(cursed::BurntBudget(12.0f, settings), 17u);
+	EXPECT_EQ(cursed::BurntBudget(-1.0f, settings), 0u);
+
+	const CursedLand land;
+	const auto ground = land.Ground();
+	// The land is 140 columns of 160 corners of 10 m
+	constexpr float k_LandKm2 = 2.24f;
+	for (uint64_t seed = 1; seed <= 12; ++seed)
+	{
+		std::vector<features::Feature> placed;
+		const auto result = cursed::Place(ground, placed, seed, settings);
+		EXPECT_LE(std::ranges::count_if(placed, IsBurnt), cursed::BurntBudget(k_LandKm2, settings));
+		for (const auto& patch : result.patches)
+		{
+			// The other dead trees of the place lie on the ground
+			EXPECT_GE(patch.burntTrees + patch.deadTrees, 10u);
+		}
+	}
+}
+
+TEST(LandgenCursed, APlaceWithNoRoomForAStackGivesTheLandItsFeaturesBack)
+{
+	// A sawtooth of steep slopes: each corner is 15 m above the corner before it, then the ground falls 60 m
+	CursedLand land;
+	for (int x = CursedLand::k_SeaColumns; x < CursedLand::k_Side; ++x)
+	{
+		for (int z = 0; z < CursedLand::k_Side; ++z)
+		{
+			land.heights.At(x, z) = 45.0f + (15.0f * static_cast<float>(x % 5));
+		}
+	}
+	const auto ground = land.Ground();
+	std::vector<features::Feature> rocks;
+	for (int x = 0; x < CursedLand::k_Side; ++x)
+	{
+		rocks.push_back({.kind = features::Kind::Static,
+		                 .type = features::k_PlainRockStatic,
+		                 .x = (static_cast<float>(x) * 10.0f) + 5.0f,
+		                 .z = 800.0f,
+		                 .angle = 0.0f,
+		                 .size = 0.5f,
+		                 .maxSize = 0.5f});
+	}
+	for (uint64_t seed = 1; seed <= 12; ++seed)
+	{
+		auto placed = rocks;
+		const auto result = cursed::Place(ground, placed, seed, {});
+		for (const auto& patch : result.patches)
+		{
+			EXPECT_GE(patch.stacks, 1u);
+			EXPECT_GE(patch.burntTrees + patch.deadTrees, 10u);
+		}
+		if (result.patches.empty())
+		{
+			EXPECT_TRUE(result.mists.empty());
+			ASSERT_EQ(placed.size(), rocks.size());
+			for (size_t i = 0; i < placed.size(); ++i)
+			{
+				EXPECT_EQ(placed[i].x, rocks[i].x);
+			}
+		}
+	}
+}
+
+TEST(LandgenCursed, TheDarkGroundHasABurntMiddleAndAnEdgeThatIsNotRound)
+{
+	const cursed::Settings settings;
+	const cursed::Patch patch {.x = 1000.0f,
+	                           .z = 1000.0f,
+	                           .radius = 100.0f,
+	                           .stack = cursed::Stack::Black,
+	                           .burntTrees = 0,
+	                           .deadTrees = 0,
+	                           .stacks = 1,
+	                           .craters = 0};
+	EXPECT_EQ(cursed::ScorchAt(patch, 1000.0f, 1000.0f, 3, settings), cursed::Scorch::Core);
+	EXPECT_EQ(cursed::ScorchAt(patch, 1000.0f, 1101.0f, 3, settings), cursed::Scorch::None);
+	EXPECT_EQ(cursed::ScorchAt(patch, 1000.0f, 1000.0f + 0.69f * 0.55f * 100.0f, 3, settings), cursed::Scorch::Core);
+	// Along a circle at 85% of the radius, some points are on the dark ground and some are not
+	int dark = 0;
+	int edge = 0;
+	constexpr int k_Points = 72;
+	for (int i = 0; i < k_Points; ++i)
+	{
+		const float turn = static_cast<float>(i) * 6.2831853f / static_cast<float>(k_Points);
+		const auto scorch =
+		    cursed::ScorchAt(patch, 1000.0f + (85.0f * std::cos(turn)), 1000.0f + (85.0f * std::sin(turn)), 3, settings);
+		dark += scorch != cursed::Scorch::None ? 1 : 0;
+		edge += scorch == cursed::Scorch::Edge ? 1 : 0;
+		EXPECT_NE(scorch, cursed::Scorch::Core);
+	}
+	EXPECT_GT(dark, 0);
+	EXPECT_LT(dark, k_Points);
+	EXPECT_EQ(edge, dark);
+}
+
+TEST(LandgenCursed, TheCountriesOfTheDarkGroundUseTheirOwnSurfaces)
+{
+	const auto recipes = countries::CursedRecipes();
+	const auto materials = countries::UsedSurfaces();
+	EXPECT_EQ(recipes[0].bands.front().surface, countries::Surface::DarkScrub);
+	EXPECT_EQ(recipes[1].bands.front().surface, countries::Surface::Charred);
+	EXPECT_NE(std::ranges::find(materials, countries::Surface::DarkScrub), materials.end());
+	EXPECT_NE(std::ranges::find(materials, countries::Surface::Charred), materials.end());
 }
 
 TEST(LandgenCursed, AStackOrACraterClearsTheFeaturesInItsWay)
@@ -834,8 +952,10 @@ TEST(LandgenGenerator, TheLandIsAnIslandWithEachPart)
 		EXPECT_EQ(land.cells.At(i, 0).altitude, 0);
 		EXPECT_EQ(land.cells.At(0, i).altitude, 0);
 	}
-	// A country for each biome, then the country of the paths
-	EXPECT_EQ(land.countries.size(), biomes::k_BiomeCount + 1);
+	// A country for each biome, then the country of the paths, then the two countries of the dark ground of the cursed
+	// places when the land has a place
+	EXPECT_EQ(land.countries.size(),
+	          biomes::k_BiomeCount + 1 + (land.cursedPatches.empty() ? 0 : countries::CursedRecipes().size()));
 	EXPECT_EQ(land.materials, countries::UsedSurfaces());
 	EXPECT_TRUE(std::ranges::any_of(land.cells.values, [](const auto& cell) { return cell.altitude > 100; }));
 	EXPECT_FALSE(land.features.empty());

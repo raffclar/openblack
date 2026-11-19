@@ -281,8 +281,9 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .description = "After a second, the land generator makes the land of seed 1 and the game loads it. Fly from the "
 	                   "start area to the high ground far from the town, where the cursed places are.",
 	    .expected = "One to three cursed places stand on high ground, far from the town. Each place has groups of "
-	                "burnt trees and one to three stacks of dark mist over a clump of boulders. Some places have one "
-	                "or two craters with a puff of grey smoke. The ground of a place is the ground of the land round it.",
+	                "burnt trees and dead trees that lie on the ground, and one to three stacks of dark mist over a "
+	                "clump of boulders. Some places have one or two craters with a puff of grey smoke. The ground of a "
+	                "place is dark: dark scrub at its edge, which is not round, and black rock at its middle.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1}},
@@ -310,8 +311,9 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Turn the "
 	                   "camera from the start area to the land round it and to the coast.",
 	    .expected = "Flat terraces stand at a few levels, with sharp cliffs between them. Some parts of the land are "
-	                "calm, with wide terraces, and other parts have many cliffs. Along the sea, flat shore steps of about "
-	                "40 metres go round the island, with a bank, a cliff or a long beach behind them.",
+	                "calm, with wide terraces, and other parts have many cliffs. No cliff face is a vertical wall and "
+	                "no thin spire stands on the mountains: the steepest faces are about 75 degrees. Along the sea, flat "
+	                "shore steps of about 40 metres go round the island, with a bank, a cliff or a long beach behind them.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},

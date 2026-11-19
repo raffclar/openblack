@@ -46,6 +46,10 @@ enum class Surface : uint8_t
 	Ice,
 	/// The bare earth of a path that people walk
 	TroddenEarth,
+	/// The dark scrub at the edge of a cursed place
+	DarkScrub,
+	/// The black burnt rock at the middle of a cursed place
+	Charred,
 
 	_Count
 };
@@ -72,6 +76,9 @@ struct Recipe
 /// The recipe of the country of the paths: trodden earth from the shore up, then rock and snow on the high ground
 [[nodiscard]] Recipe PathRecipe();
 
+/// The recipes of the two countries of the cursed places: the dark scrub of the edge, then the burnt rock of the middle
+[[nodiscard]] std::array<Recipe, 2> CursedRecipes();
+
 /// The country table of a recipe. Each entry names the materials by their index in materials, which holds a surface for
 /// each material of the land. An entry that blends two materials gives the first one the coefficient out of 255.
 [[nodiscard]] lnd::LNDCountry MakeCountry(const Recipe& recipe, std::span<const Surface> materials);
@@ -83,6 +90,6 @@ struct Recipe
 	return static_cast<uint32_t>(((((altitude - start) + 1) * 510) + length) / (2 * length));
 }
 
-/// The surfaces that the countries of all the biomes and the paths use, in the order of the surfaces
+/// The surfaces that the countries of all the biomes, the paths and the cursed places use, in the order of the surfaces
 [[nodiscard]] std::vector<Surface> UsedSurfaces();
 } // namespace openblack::landgen::countries

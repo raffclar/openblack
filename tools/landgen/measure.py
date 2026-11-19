@@ -20,6 +20,9 @@ from scipy import ndimage
 from scipy.spatial import ConvexHull, cKDTree
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import cliffs as cliff_numbers  # noqa: E402
+
 TARGETS = os.path.join(HERE, "vanilla_targets.json")
 HEIGHT_UNIT = 0.67
 CELL = 10.0
@@ -198,6 +201,7 @@ def terrain_measures(heights, land, sand, curve=None):
     out["sand_pct"] = float(beach.sum() * 100.0 / n)
     out["sand_sea_median_m"] = percentile(sea[beach], 50)
     out["sand_sea_p90_m"] = percentile(sea[beach], 90)
+    out.update(cliff_numbers.cliff_measures(heights, land, slope, sea, curve_metres(curve, 100)))
     return out
 
 

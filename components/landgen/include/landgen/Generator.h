@@ -18,6 +18,7 @@
 #include <LNDFile.h>
 
 #include "landgen/Biomes.h"
+#include "landgen/Cliffs.h"
 #include "landgen/Climate.h"
 #include "landgen/Countries.h"
 #include "landgen/Cursed.h"
@@ -78,6 +79,8 @@ struct Settings
 	terrain::TerraceSettings terraces;
 	terrain::MassifSettings massifs;
 	terrain::RollSettings roll;
+	/// The steepest faces of the cliffs
+	cliffs::FaceSettings faces;
 	terrain::ShelfSettings shelf;
 	hydrology::LakeSettings lakes;
 	hydrology::RiverSettings rivers;

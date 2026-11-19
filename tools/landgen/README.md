@@ -74,6 +74,14 @@ are one group) give them for each km2, and `lone_pillar_group_gap_median_m` is t
 nearest other group. Only three of the eight lands of the story have lone pillars and two have a fairy ring, so the
 lowest value of each of these numbers is 0. The four pillars on the summit of the third land count as one group.
 
+The cliff numbers come from `cliffs.py`. A cliff corner has a slope of 40 degrees or more, and a cliff band is a group of
+20 or more cliff corners that touch. `cliff_face_median_deg`, `cliff_face_p90_deg` and `cliff_over_60_pct` give the
+slope of the faces. `cliff_gorge_pct` is the share of the cliff corners that face another cliff across a valley of 80 m
+or less. `cliff_bands_per_km2`, `cliff_length_median_m`, `cliff_length_p90_m` and `cliff_width_median_m` give the size of
+the bands (the length along the main axis of a band), and `cliff_rise_p90_m` the rise of the high bands. Each band is on
+the coast (30% of it or more within 60 m of the sea), on a mountain side (its top at 100 m of the story or higher) or on
+a low terrace: `cliff_coast_pct`, `cliff_mountain_pct` and `cliff_terrace_pct` give the share of the cliff corners.
+
 `cursed_patches` counts the cursed places: the groups of burnt trees, craters and dark mists that are 150 m or less
 apart. A dark mist has no colour channel above 0x50 (the near black mist of Land 1, the dark mist of Land 4 and the grey
 smoke of the Land 5 craters). `dark_mists` counts the dark mists.
