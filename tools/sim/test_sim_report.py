@@ -57,6 +57,18 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(result["plans"], {"Eat": 3})
         self.assertIn("Verdict: **stable**", sim_report.markdown(result))
 
+    def test_the_processor_time_of_the_turns_shows_when_the_records_have_it(self):
+        records = [record(100), record(200), record(300)]
+        end = {"type": "end", "turn": 300, "wall_s": 2.0}
+        self.assertIsNone(sim_report.summary(None, records, end, [], 0)["turn_cpu_ms_start"])
+        self.assertNotIn("Turn processor time", sim_report.markdown(sim_report.summary(None, records, end, [], 0)))
+        for item, cpu in zip(records, (0.5, 0.5, 2.0)):
+            item["turn_cpu_ms"] = cpu
+        result = sim_report.summary(None, records, end, [], 0)
+        self.assertAlmostEqual(result["turn_cpu_ms_start"], 0.5)
+        self.assertAlmostEqual(result["turn_cpu_ms_end"], 2.0)
+        self.assertIn("Turn processor time 0.500 ms at the start, 2.000 ms at the end", sim_report.markdown(result))
+
     def test_flags_errors_and_crashes_are_problems(self):
         flag = {"kind": "growth", "what": "list:beliefs", "turn": 200, "detail": "grew"}
         records = [record(100), record(200, flags=[flag])]

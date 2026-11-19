@@ -175,25 +175,73 @@ TEST(SimChecks, AListAboveItsLimitFlags)
 
 TEST(SimChecks, ATurnTimeThatGoesUpFlags)
 {
-	TurnTimeTrend trend({.warmUp = 2, .window = 3, .factor = 1.5f, .leastRiseMs = 0.5f});
+	TurnTimeTrend trend({.warmUpTurns = 2, .window = 3, .factor = 1.5f, .leastRiseMs = 0.5f});
 	// The warm up, then the base
+	uint32_t turn = 0;
 	for (const auto ms : {9.0f, 9.0f, 2.0f, 2.0f, 2.0f})
 	{
-		EXPECT_FALSE(trend.Observe(ms, 0).has_value());
+		EXPECT_FALSE(trend.Observe(ms, turn++).has_value());
 	}
 	ASSERT_TRUE(trend.BaseMs().has_value());
 	EXPECT_FLOAT_EQ(*trend.BaseMs(), 2.0f);
-	EXPECT_FALSE(trend.Observe(2.1f, 1).has_value());
-	EXPECT_FALSE(trend.Observe(4.0f, 2).has_value());
-	const auto flag = trend.Observe(5.0f, 3);
+	EXPECT_FALSE(trend.Observe(2.1f, turn++).has_value());
+	EXPECT_FALSE(trend.Observe(4.0f, turn++).has_value());
+	const auto flag = trend.Observe(5.0f, turn++);
 	ASSERT_TRUE(flag.has_value());
 	EXPECT_EQ(flag->kind, FlagKind::TurnTime);
-	EXPECT_FALSE(trend.Observe(5.0f, 4).has_value());
+	EXPECT_FALSE(trend.Observe(5.0f, turn).has_value());
+}
+
+TEST(SimChecks, TheWarmUpCountsTurnsNotRecords)
+{
+	TurnTimeTrend trend({.warmUpTurns = 100, .window = 2, .factor = 1.5f, .leastRiseMs = 0.5f});
+	// A slow start of the land, with a record each turn and then a record each 20 turns
+	for (uint32_t turn = 0; turn < 100; ++turn)
+	{
+		EXPECT_FALSE(trend.Observe(turn >= 50 && turn < 85 ? 5.0f : 1.0f, turn).has_value());
+	}
+	EXPECT_FALSE(trend.BaseMs().has_value());
+	EXPECT_FALSE(trend.Observe(1.0f, 100).has_value());
+	EXPECT_FALSE(trend.Observe(1.0f, 120).has_value());
+	ASSERT_TRUE(trend.BaseMs().has_value());
+	EXPECT_FLOAT_EQ(*trend.BaseMs(), 1.0f);
+}
+
+TEST(SimChecks, FewSingleSlowTurnsDoNotFlag)
+{
+	TurnTimeTrend trend({.warmUpTurns = 0, .window = 5, .factor = 1.5f, .leastRiseMs = 0.5f});
+	for (int i = 0; i < 5; ++i)
+	{
+		EXPECT_FALSE(trend.Observe(2.0f, 0).has_value());
+	}
+	// Two slow turns in each window of five: the middle value stays low
+	for (int round = 0; round < 10; ++round)
+	{
+		for (const auto ms : {2.0f, 8.0f, 2.0f, 7.0f, 2.0f})
+		{
+			EXPECT_FALSE(trend.Observe(ms, 1).has_value());
+		}
+	}
+}
+
+TEST(SimChecks, ASustainedSlowDownFlagsWithSingleFastTurns)
+{
+	TurnTimeTrend trend({.warmUpTurns = 0, .window = 5, .factor = 1.5f, .leastRiseMs = 0.5f});
+	for (int i = 0; i < 5; ++i)
+	{
+		EXPECT_FALSE(trend.Observe(2.0f, 0).has_value());
+	}
+	bool flagged = false;
+	for (const auto ms : {6.0f, 2.0f, 6.0f, 6.0f, 6.0f, 2.0f, 6.0f})
+	{
+		flagged = flagged || trend.Observe(ms, 2).has_value();
+	}
+	EXPECT_TRUE(flagged);
 }
 
 TEST(SimChecks, ASmallRiseOfTheTurnTimeDoesNotFlag)
 {
-	TurnTimeTrend trend({.warmUp = 0, .window = 2, .factor = 1.5f, .leastRiseMs = 0.5f});
+	TurnTimeTrend trend({.warmUpTurns = 0, .window = 2, .factor = 1.5f, .leastRiseMs = 0.5f});
 	for (const auto ms : {0.1f, 0.1f, 0.3f, 0.3f, 0.3f})
 	{
 		EXPECT_FALSE(trend.Observe(ms, 0).has_value());

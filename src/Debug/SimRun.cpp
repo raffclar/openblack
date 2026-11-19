@@ -80,21 +80,28 @@ std::optional<std::chrono::microseconds> FrameTimeFromMs(double milliseconds)
 	return std::chrono::microseconds(std::llround(milliseconds * k_MicrosecondsPerMs));
 }
 
-void Timings::AddTurn(float ms)
+void Timings::AddTurn(float ms, std::optional<float> cpuMs)
 {
 	const auto turnMs = std::max(ms - recordSinceTurnMs, 0.0f);
 	recordSinceTurnMs = 0.0f;
 	++turns;
 	turnTotalMs += turnMs;
 	turnLongestMs = std::max(turnLongestMs, turnMs);
+	if (cpuMs.has_value())
+	{
+		++cpuTurns;
+		turnCpuTotalMs += std::max(*cpuMs - recordCpuSinceTurnMs, 0.0f);
+	}
+	recordCpuSinceTurnMs = 0.0f;
 }
 
-void Timings::AddRecord(float ms)
+void Timings::AddRecord(float ms, std::optional<float> cpuMs)
 {
 	++records;
 	recordTotalMs += ms;
 	recordLongestMs = std::max(recordLongestMs, ms);
 	recordSinceTurnMs += ms;
+	recordCpuSinceTurnMs += cpuMs.value_or(0.0f);
 }
 
 void Timings::AddFrame(float ms)
@@ -119,6 +126,15 @@ void Timings::AddStages(std::span<const float> ms)
 float Timings::TurnAverageMs() const
 {
 	return turns == 0 ? 0.0f : turnTotalMs / static_cast<float>(turns);
+}
+
+std::optional<float> Timings::TurnCpuAverageMs() const
+{
+	if (turns == 0 || cpuTurns != turns)
+	{
+		return std::nullopt;
+	}
+	return turnCpuTotalMs / static_cast<float>(turns);
 }
 
 float Timings::FrameAverageMs() const

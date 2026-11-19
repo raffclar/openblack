@@ -244,15 +244,25 @@ struct Timings
 	float recordLongestMs {0.0f};
 	/// The time of the records since the last turn time, which the next turn time does not include
 	float recordSinceTurnMs {0.0f};
+	/// The processor time of the thread that played the turns. Other load on the machine does not make it longer. It is
+	/// known only when each turn since the last record gave it.
+	uint32_t cpuTurns {0};
+	float turnCpuTotalMs {0.0f};
+	/// The processor time of the records since the last turn time
+	float recordCpuSinceTurnMs {0.0f};
 
-	/// Adds a turn time. The time of the records since the last turn time is not part of the turn.
-	void AddTurn(float ms);
-	/// Adds the time of the step that records the run, which is part of the next turn time
-	void AddRecord(float ms);
+	/// Adds a turn time, and the processor time of the turn when it is known. The time of the records since the last
+	/// turn time is not part of the turn.
+	void AddTurn(float ms, std::optional<float> cpuMs = std::nullopt);
+	/// Adds the time of the step that records the run, which is part of the next turn time, and its processor time when
+	/// it is known
+	void AddRecord(float ms, std::optional<float> cpuMs = std::nullopt);
 	void AddFrame(float ms);
 	/// Adds the time that each stage took in a frame, by the stage's number
 	void AddStages(std::span<const float> ms);
 	[[nodiscard]] float TurnAverageMs() const;
+	/// The average processor time of the turns, when each turn gave it
+	[[nodiscard]] std::optional<float> TurnCpuAverageMs() const;
 	[[nodiscard]] float FrameAverageMs() const;
 	[[nodiscard]] float RecordAverageMs() const;
 };
