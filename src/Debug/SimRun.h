@@ -194,7 +194,9 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 /// Whether the input of the tool that runs the game is complete: the scenario of the run gave all its commands, or the
 /// run plays from files and no event of a file of recorded input waits. A file of recorded input gives events by the
 /// frames. A file of commands gives commands only by the turns, which do not come while the temple holds the world.
-[[nodiscard]] bool ToolInputDone(bool scenarioGaveAll, bool playsFiles, bool recordedInputWaits);
+/// While a tool that steps the run holds it (paused between its steps, or in a step), the input is not complete: the
+/// tool can take the player out of the temple or load a game.
+[[nodiscard]] bool ToolInputDone(bool scenarioGaveAll, bool playsFiles, bool recordedInputWaits, bool toolHoldsRun);
 
 /// Whether a turn-limited run ends because the game is over. When the player loses the temple, the script of the game's
 /// end plays and then keeps the player in the save game room of the temple. The temple holds the world, and the only

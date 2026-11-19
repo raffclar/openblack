@@ -75,6 +75,7 @@ public:
 	void PauseOnLoad(bool pause) override;
 	[[nodiscard]] std::optional<std::string> ReplayOnLoad(const std::filesystem::path& path) override;
 	[[nodiscard]] bool InputWaits() const override;
+	[[nodiscard]] bool HoldsRun() const override;
 	void RecordInputOnLoad(const std::filesystem::path& path) override;
 	[[nodiscard]] std::optional<std::string> StartSimRecord(const std::filesystem::path& path, uint32_t every,
 	                                                        const std::optional<std::filesystem::path>& limits,

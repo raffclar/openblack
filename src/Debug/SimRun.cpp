@@ -40,9 +40,9 @@ bool EndsHeldInTemple(const Settings& settings, bool clockHeld, bool networkGame
 	return settings.untilTurn.has_value() && clockHeld && !networkGame && toolInputDone;
 }
 
-bool ToolInputDone(bool scenarioGaveAll, bool playsFiles, bool recordedInputWaits)
+bool ToolInputDone(bool scenarioGaveAll, bool playsFiles, bool recordedInputWaits, bool toolHoldsRun)
 {
-	return scenarioGaveAll || (playsFiles && !recordedInputWaits);
+	return !toolHoldsRun && (scenarioGaveAll || (playsFiles && !recordedInputWaits));
 }
 
 bool EndsAtGameOver(const Settings& settings, bool clockHeld, bool gameOver)

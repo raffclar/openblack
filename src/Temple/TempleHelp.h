@@ -18,6 +18,7 @@
 #include "3D/CreatureCaveTargets.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Help/DialogueText.h"
+#include "Temple/HeldDialogue.h"
 #include "Temple/ScrollFacts.h"
 
 /// What the temple asks of the scripts while the player is inside: the help scripts its rooms, scrolls and places
@@ -90,13 +91,6 @@ public:
 	virtual void RestoreText(const help::DialogueText::Held& held) = 0;
 	/// The box shows the texts it keeps again, and the newest starts its reading time again
 	virtual void ShowTextAgain() = 0;
-};
-
-/// The world's dialogue that the temple keeps while the player is inside
-struct HeldDialogue
-{
-	uint32_t owner {0};
-	help::DialogueText::Held text;
 };
 
 /// The player enters the temple. The help scripts stop and the advisors fly home. If a script that is not one of
