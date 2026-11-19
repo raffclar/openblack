@@ -247,9 +247,14 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 	                                                                           const Transform& transform, const Mesh& mesh,
 	                                                                           const Swayable& /*unused*/) {
 		// Only a bent tree or a tree near the camera can rustle, and only for those does its height matter: the others
-		// are passed over before it is looked up
+		// are passed over before it is looked up. In most frames no tree bends, and then the code does not search for a bend.
+		const bool near = TreeRustle::IsNearCamera(transform.position, camera);
+		if (!near && _bends.empty())
+		{
+			return;
+		}
 		const auto bend = _bends.find(entity);
-		if (bend == _bends.end() && !TreeRustle::IsNearCamera(transform.position, camera))
+		if (bend == _bends.end() && !near)
 		{
 			return;
 		}

@@ -132,6 +132,8 @@ private:
 		float widthShare {1.0f};
 	};
 	std::vector<PlacedTree> _placedTrees;
+	/// The trees that the draw of this frame looks at, when the land's draw list decides for most of them
+	std::vector<entt::entity> _treesToWalk;
 	/// What the instance buffers of the things and of the trees hold, so that only their changes are uploaded
 	graphics::instance_upload::Mirror<RenderContext::ObjectInstance> _uploadedInstances;
 	graphics::instance_upload::Mirror<RenderContext::TreeInstanceData> _uploadedTreeInstances;
