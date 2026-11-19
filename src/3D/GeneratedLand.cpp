@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <exception>
 #include <map>
+#include <optional>
 
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
@@ -131,6 +132,25 @@ constexpr TownStart k_PlayerStart {.belief = 1.0f, .food = 20000, .wood = 30000}
 constexpr TownStart k_NeutralStart {.belief = 0.5f, .food = 500, .wood = 500};
 /// The full size of a building, in thousandths
 constexpr int k_FullSize = 1000;
+
+/// The computer gods of a land with more than one player. Each value comes from the skirmish land with the same count of
+/// players: Two Gods, Three Gods or Four Gods.
+struct ComputerGods
+{
+	/// The species of the creature of each computer god, player two first
+	std::array<CreatureType, landgen::players::k_MostPlayers - 1> species;
+	/// The cap of the belief of a computer god in its own start town
+	float ownTownCap;
+};
+constexpr std::array<ComputerGods, landgen::players::k_MostPlayers - 1> k_ComputerGods {{
+    {.species = {CreatureType::Leopard}, .ownTownCap = 2.0f},
+    {.species = {CreatureType::Lion, CreatureType::Horse}, .ownTownCap = 1.0f},
+    {.species = {CreatureType::Horse, CreatureType::Tortoise, CreatureType::Zebra}, .ownTownCap = 1.0f},
+}};
+/// The cap of the belief of each computer god in each town other than its own start town
+constexpr float k_ComputerTownCap = 1.0f;
+/// The mind file of the creature of a computer god on the skirmish lands
+constexpr std::string_view k_ComputerMind = "ComputerControlledCreature";
 
 /// The end of the name of a kind of building, after the tribe
 std::string_view BuildingName(landgen::settlement::Building building)
@@ -420,10 +440,14 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 		script += text;
 		script += '\n';
 	};
+	const auto others = std::min(otherPlayers.size(), k_PlayerNames.size() - 1);
+	// On a land with more than one player, each other player is a computer god, as on the skirmish lands
+	const auto* gods = others > 0 ? &k_ComputerGods.at(others - 1) : nullptr;
 	// The lines of one town, as a land of the story gives them. The centre of a neutral town comes before its other
 	// buildings, as in many towns of the story: the centre goes up only where it has room, but a house always goes up.
-	const auto town = [&line](const landgen::settlement::Town& entry, int number, std::string_view player,
-	                          const TownStart& start, bool centreFirst) {
+	// The owner is the number of the player from 0, or no value for a neutral town.
+	const auto town = [&line, others, gods](const landgen::settlement::Town& entry, int number, std::string_view player,
+	                                        const TownStart& start, bool centreFirst, std::optional<size_t> owner) {
 		const auto tribe = TribeName(entry.tribe);
 		const auto centre = [&]() {
 			for (const auto& placed : entry.buildings)
@@ -437,6 +461,12 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 		};
 		line(fmt::format(R"(CREATE_TOWN({}, {}, "{}", {}, "{}"))", number, Place(entry.x, entry.z), player,
 		                 static_cast<int>(entry.tribe), tribe));
+		// Each town limits the belief in each computer god, as on the skirmish lands
+		for (size_t god = 1; god <= others; ++god)
+		{
+			const float cap = owner == god ? gods->ownTownCap : k_ComputerTownCap;
+			line(fmt::format(R"(SET_TOWN_BELIEF_CAP({}, "{}", {:.6f}))", number, k_PlayerNames.at(god), cap));
+		}
 		line(fmt::format(R"(SET_TOWN_BELIEF({}, "{}", {:.6f}))", number, player, start.belief));
 		for (const auto& field : entry.fields)
 		{
@@ -485,24 +515,33 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 	};
 	// The town, the temple and the worship site of a player. Each player gets the start values of player one, as on the
 	// skirmish lands.
-	const auto start = [&line, &town](const landgen::settlement::Plan& entry, int number, std::string_view player) {
-		town(entry.town, number, player, k_PlayerStart, number != k_Town);
+	const auto start = [&line, &town](const landgen::settlement::Plan& entry, size_t owner) {
+		const auto number = k_Town + static_cast<int>(owner);
+		const auto player = k_PlayerNames.at(owner);
+		town(entry.town, number, player, k_PlayerStart, number != k_Town, owner);
 		line(fmt::format(R"(CREATE_CITADEL({}, 0, "{}", {}, {}))", Place(entry.citadelX, entry.citadelZ), player,
 		                 entry.citadelRotation, k_FullSize));
 		// The worship site goes to the place of its tribe round the temple, whatever place the line gives
 		line(fmt::format(R"(CREATE_WORSHIP_SITE({}, 0, "{}", "{}", 0, {}))", Place(entry.citadelX, entry.citadelZ), player,
 		                 TribeName(entry.town.tribe), k_FullSize));
 	};
-	start(plan, k_Town, k_PlayerNames.front());
-	const auto others = std::min(otherPlayers.size(), k_PlayerNames.size() - 1);
+	start(plan, 0);
 	for (size_t i = 0; i < others; ++i)
 	{
-		start(otherPlayers[i], k_Town + 1 + static_cast<int>(i), k_PlayerNames.at(i + 1));
+		// The mind of the computer god starts, and the god gets its creature before its town, as on the skirmish lands.
+		// The creature starts at the place of its temple. Its size changes as the size of the creature of player one.
+		const auto& entry = otherPlayers[i];
+		const auto player = k_PlayerNames.at(i + 1);
+		line(fmt::format(R"(TOGGLE_COMPUTER_PLAYER("{}", 1))", player));
+		line(fmt::format(R"(CREATE_CREATURE_FROM_FILE("{}", {}, "{}", {}))", player, static_cast<int>(gods->species.at(i)),
+		                 k_ComputerMind, Place(entry.citadelX, entry.citadelZ)));
+		line(fmt::format(R"(SET_COMPUTER_PLAYER_CREATURE_LIKE("{}", "{}"))", player, k_PlayerNames.front()));
+		start(entry, i + 1);
 	}
 	// The neutral towns have no worship site at the start, as on the lands of the story
 	for (size_t i = 0; i < plan.neutral.size(); ++i)
 	{
-		town(plan.neutral[i], k_Town + 1 + static_cast<int>(others + i), "NEUTRAL", k_NeutralStart, true);
+		town(plan.neutral[i], k_Town + 1 + static_cast<int>(others + i), "NEUTRAL", k_NeutralStart, true, std::nullopt);
 	}
 	return script;
 }

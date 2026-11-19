@@ -395,3 +395,99 @@ TEST(GeneratedLand, EachPlayerGetsATownAndATempleBeforeTheNeutralTowns)
 	ASSERT_NE(neutralTown, std::string::npos);
 	EXPECT_GT(neutralTown, third);
 }
+
+namespace
+{
+/// The plan of a start with its temple at x and its town 95 m east of it
+landgen::settlement::Plan StartAt(float x)
+{
+	landgen::settlement::Plan plan;
+	plan.town.tribe = landgen::settlement::Tribe::Celtic;
+	plan.citadelX = x;
+	plan.citadelZ = 100.0f;
+	plan.town.x = x + 95.0f;
+	plan.town.z = 100.0f;
+	return plan;
+}
+
+/// The count of the lines of the script that start with the text
+size_t CountOf(const std::string& script, std::string_view start)
+{
+	size_t count = 0;
+	for (size_t at = script.find(start); at != std::string::npos; at = script.find(start, at + 1))
+	{
+		count += at == 0 || script[at - 1] == '\n' ? 1 : 0;
+	}
+	return count;
+}
+} // namespace
+
+TEST(GeneratedLand, ALandForOnePlayerHasNoComputerGod)
+{
+	auto plan = StartAt(100.0f);
+	plan.neutral.push_back(StartAt(2000.0f).town);
+	const auto script = generated_land::SettlementScript(plan);
+	EXPECT_EQ(CountOf(script, "TOGGLE_COMPUTER_PLAYER"), 0u);
+	EXPECT_EQ(CountOf(script, "CREATE_CREATURE_FROM_FILE"), 0u);
+	EXPECT_EQ(CountOf(script, "SET_COMPUTER_PLAYER_CREATURE_LIKE"), 0u);
+	EXPECT_EQ(CountOf(script, "SET_TOWN_BELIEF_CAP"), 0u);
+}
+
+TEST(GeneratedLand, EachOtherPlayerIsAComputerGodAsOnTheSkirmishLands)
+{
+	auto plan = StartAt(100.0f);
+	plan.neutral.push_back(StartAt(3000.0f).town);
+	const std::array others {StartAt(1000.0f)};
+	const auto script = generated_land::SettlementScript(plan, others);
+	const auto read = lhscriptx::Script::Read(script);
+	ASSERT_FALSE(read.error.has_value()) << *read.error;
+	// As on Two Gods: the god switches on, then it gets a leopard from the mind file of the computer creature and its
+	// creature grows like the creature of player one. Then its town comes.
+	const auto toggle = script.find(R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1))");
+	const auto creature =
+	    script.find(R"(CREATE_CREATURE_FROM_FILE("PLAYER_TWO", 3, "ComputerControlledCreature", "1000.00,100.00"))");
+	const auto like = script.find(R"(SET_COMPUTER_PLAYER_CREATURE_LIKE("PLAYER_TWO", "PLAYER_ONE"))");
+	const auto town = script.find(R"(CREATE_TOWN(1, "1095.00,100.00", "PLAYER_TWO", 0, "CELTIC"))");
+	ASSERT_NE(toggle, std::string::npos);
+	ASSERT_NE(creature, std::string::npos);
+	ASSERT_NE(like, std::string::npos);
+	ASSERT_NE(town, std::string::npos);
+	EXPECT_GT(toggle, script.find(R"(CREATE_WORSHIP_SITE("100.00,100.00", 0, "PLAYER_ONE")"));
+	EXPECT_LT(toggle, creature);
+	EXPECT_LT(creature, like);
+	EXPECT_LT(like, town);
+	// Each town limits the belief in player two to 1, but its own town to 2, as on Two Gods. Player one has no cap.
+	EXPECT_EQ(CountOf(script, "SET_TOWN_BELIEF_CAP"), 3u);
+	EXPECT_NE(script.find(R"(SET_TOWN_BELIEF_CAP(0, "PLAYER_TWO", 1.000000))"), std::string::npos);
+	EXPECT_NE(script.find(R"(SET_TOWN_BELIEF_CAP(1, "PLAYER_TWO", 2.000000))"), std::string::npos);
+	EXPECT_NE(script.find(R"(SET_TOWN_BELIEF_CAP(2, "PLAYER_TWO", 1.000000))"), std::string::npos);
+	EXPECT_EQ(script.find(R"(SET_TOWN_BELIEF_CAP(0, "PLAYER_ONE")"), std::string::npos);
+	// The cap comes just after the town, before its belief
+	EXPECT_LT(script.find(R"(SET_TOWN_BELIEF_CAP(1, )"), script.find(R"(SET_TOWN_BELIEF(1, )"));
+	EXPECT_GT(script.find(R"(SET_TOWN_BELIEF_CAP(1, )"), town);
+}
+
+TEST(GeneratedLand, TheComputerGodsTakeTheCreaturesOfTheSkirmishLandWithTheSameCountOfPlayers)
+{
+	const auto plan = StartAt(100.0f);
+	// Three Gods: a lion and a horse, a cap of 1 in each town
+	const std::array three {StartAt(1000.0f), StartAt(2000.0f)};
+	const auto threeScript = generated_land::SettlementScript(plan, three);
+	EXPECT_NE(threeScript.find(R"(CREATE_CREATURE_FROM_FILE("PLAYER_TWO", 5, "ComputerControlledCreature", "1000.00,100.00"))"),
+	          std::string::npos);
+	EXPECT_NE(
+	    threeScript.find(R"(CREATE_CREATURE_FROM_FILE("PLAYER_THREE", 6, "ComputerControlledCreature", "2000.00,100.00"))"),
+	    std::string::npos);
+	EXPECT_EQ(CountOf(threeScript, "SET_TOWN_BELIEF_CAP"), 6u);
+	EXPECT_EQ(threeScript.find("2.000000))"), std::string::npos);
+	// Four Gods: a horse, a tortoise and a zebra
+	const std::array four {StartAt(1000.0f), StartAt(2000.0f), StartAt(3000.0f)};
+	const auto fourScript = generated_land::SettlementScript(plan, four);
+	EXPECT_NE(fourScript.find(R"(CREATE_CREATURE_FROM_FILE("PLAYER_TWO", 6, )"), std::string::npos);
+	EXPECT_NE(fourScript.find(R"(CREATE_CREATURE_FROM_FILE("PLAYER_THREE", 7, )"), std::string::npos);
+	EXPECT_NE(fourScript.find(R"(CREATE_CREATURE_FROM_FILE("PLAYER_FOUR", 8, )"), std::string::npos);
+	EXPECT_EQ(CountOf(fourScript, "TOGGLE_COMPUTER_PLAYER"), 3u);
+	EXPECT_EQ(CountOf(fourScript, "SET_COMPUTER_PLAYER_CREATURE_LIKE"), 3u);
+	EXPECT_EQ(CountOf(fourScript, "SET_TOWN_BELIEF_CAP"), 12u);
+	EXPECT_NE(fourScript.find(R"(SET_TOWN_BELIEF_CAP(3, "PLAYER_FOUR", 1.000000))"), std::string::npos);
+}
