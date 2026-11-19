@@ -181,6 +181,9 @@ struct CreatureRig
 	std::optional<KissPoint> pukePoint;
 	/// The moment of the high and the low kiss animations when the lips meet, in milliseconds from their starts
 	std::optional<float> kissMs;
+	/// For each of the seven dance moves, how many times the length of one move of the dance its animation lasts. The
+	/// file of the species gives these numbers.
+	std::array<uint32_t, 7> danceMoveFactors {1, 1, 1, 1, 1, 1, 1};
 	/// The type of wound each of its twelve fight blows leaves, in the order of the blow animations, when its file gives
 	/// them
 	std::optional<std::array<int32_t, 12>> blowWoundTypes;

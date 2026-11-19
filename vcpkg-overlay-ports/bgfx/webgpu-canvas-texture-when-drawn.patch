@@ -1,0 +1,90 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index e0df14b..1f41669 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -2421,6 +2421,9 @@ WGPU_IMPORT
+ 			const uint32_t height = frameBuffer.m_height;
+ 
+ 			frameBuffer.m_needPresent = true;
++#if BX_PLATFORM_EMSCRIPTEN
++			frameBuffer.m_swapChain.acquire();
++#endif // BX_PLATFORM_EMSCRIPTEN
+ 
+ 			float proj[16];
+ 			bx::mtxOrtho(proj, 0.0f, (float)width, (float)height, 0.0f, 0.0f, 1000.0f, 0.0f, false);
+@@ -6294,15 +6297,26 @@ WGPU_IMPORT
+ 	}
+ 
+ 	// A browser canvas gives one texture for each task of the page. The texture is not valid after the task ends,
+-	// because the browser then shows it. Thus in the browser the swap chain gets the texture at the start of each
++	// because the browser then shows it. Thus in the browser the swap chain releases the texture at the start of each
+ 	// frame, and not after it presents the frame before.
++	void SwapChainWGPU::beginFrame()
++	{
++		wgpuRelease(m_textureView);
++		wgpuRelease(m_texture);
++		m_acquired = false;
++	}
++
++	// The swap chain gets the canvas texture only when a pass of the frame draws into the window. When the browser
++	// gets no texture in a task, the canvas keeps the last frame. A frame with no draw thus shows no black canvas.
+ 	void SwapChainWGPU::acquire()
+ 	{
+-		if (NULL == m_surface)
++		if (NULL == m_surface
++		||  m_acquired)
+ 		{
+ 			return;
+ 		}
+ 
++		m_acquired = true;
+ 		wgpuRelease(m_textureView);
+ 		wgpuRelease(m_texture);
+ 
+@@ -7515,7 +7529,7 @@ WGPU_IMPORT
+ #if BX_PLATFORM_EMSCRIPTEN
+ 		for (uint16_t ii = 0; ii < m_numWindows; ++ii)
+ 		{
+-			getFrameBuffer(m_windows[ii]).m_swapChain.acquire();
++			getFrameBuffer(m_windows[ii]).m_swapChain.beginFrame();
+ 		}
+ #endif // BX_PLATFORM_EMSCRIPTEN
+ 
+@@ -7813,6 +7827,9 @@ WGPU_IMPORT
+ 					if (isSwapChain)
+ 					{
+ 						fb.m_needPresent = true;
++#if BX_PLATFORM_EMSCRIPTEN
++						fb.m_swapChain.acquire();
++#endif // BX_PLATFORM_EMSCRIPTEN
+ 					}
+ 
+ 					WGPUTextureView depthStencilTextureView = isSwapChain
+diff --git a/bgfx/src/renderer_webgpu.h b/bgfx/src/renderer_webgpu.h
+index 16bb1e0..c7bd325 100644
+--- a/bgfx/src/renderer_webgpu.h
++++ b/bgfx/src/renderer_webgpu.h
+@@ -687,6 +687,7 @@ namespace wgpu {
+ 			, m_formatDepthStencil(uint8_t(TextureFormat::Count) )
+ 			, m_readable(false)
+ 			, m_needToRecreateSwapChain(false)
++			, m_acquired(false)
+ 		{
+ 			bx::memSet(&m_descPending, 0, sizeof(m_descPending) );
+ 		}
+@@ -699,6 +700,7 @@ namespace wgpu {
+ 
+ 		bool configure(const SwapChain& _desc);
+ 		WGPUTextureView createTextureView();
++		void beginFrame();
+ 		void acquire();
+ 		void present();
+ 
+@@ -718,6 +720,7 @@ namespace wgpu {
+ 		uint8_t m_formatDepthStencil;
+ 		bool m_readable;
+ 		bool m_needToRecreateSwapChain;
++		bool m_acquired;
+ 	};
+ 
+ 	struct FrameBufferWGPU

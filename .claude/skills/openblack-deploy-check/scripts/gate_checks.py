@@ -139,6 +139,18 @@ def lockstep_check(server_log, client_log, turns):
     return ok, detail
 
 
+# The game log line that shows that the click on OK answered the first question of Land 1
+QUESTION_ANSWERED = "The player answered the start-of-game question"
+
+
+def question_answered(page_log):
+    """(pass, detail): the game log of the page has the answer to the first question of Land 1"""
+    line = next((line for line in page_log.splitlines() if QUESTION_ANSWERED in line), None)
+    if line is None:
+        return False, "no answer in the game log: the click missed OK (see the shots question and past)"
+    return True, line.split("] ")[-1].strip()
+
+
 def build_id(version_output):
     """The build id in the output of --version, such as 0.1.0+9f73a40c4184/codec36, or None"""
     match = BUILD_ID.search(version_output)

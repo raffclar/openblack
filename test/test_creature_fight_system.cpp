@@ -1054,6 +1054,23 @@ TEST_F(CreatureFightSystemTest, ACreatureRefusesAFightWithOneTooBigOrTooSmall)
 	EXPECT_EQ(fights.StartFight(big, small), Start::Refused);
 }
 
+// A creature with almost no life cannot start a fight. A script's order starts the fight all the same, and the hurt
+// creature fights with less fight health. Thus the last fight of the story starts again after a lost bout.
+TEST_F(CreatureFightSystemTest, AScriptStartsAFightForACreatureTooHurtToStartOne)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hurt = MakeCreature(registry, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 0.0f});
+	const auto other = MakeCreature(registry, PlayerNames::PLAYER_TWO, {130.0f, 0.0f, 0.0f});
+	registry.AssignOrReplace<CreatureNeeds>(hurt).needs.life = 0.05f;
+	using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
+	EXPECT_EQ(fights.StartFight(hurt, other), Start::TooWeak);
+	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(hurt));
+	EXPECT_EQ(fights.StartForcedFight(hurt, other), Start::Started);
+	ASSERT_TRUE(registry.AllOf<CreatureFighting>(hurt));
+	EXPECT_FLOAT_EQ(registry.Get<const CreatureFighting>(hurt).fighter.health, fight::FightHealthAtStart(0.05f));
+	EXPECT_TRUE(registry.AllOf<CreatureFighting>(other));
+}
+
 // A creature that does a joint action with a third creature refuses a fight; its partner may still ask it
 TEST_F(CreatureFightSystemTest, ACreatureTakenUpWithAThirdCreatureRefusesAFight)
 {

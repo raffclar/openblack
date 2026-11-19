@@ -193,7 +193,7 @@ bool CreatureMindSystem::FightForScript(entt::entity creature, entt::entity oppo
 		return true;
 	}
 	// The other creature is asked first, and may refuse
-	[[maybe_unused]] const auto started = Locator::creatureFightSystem::value().StartFight(creature, opponent);
+	[[maybe_unused]] const auto started = Locator::creatureFightSystem::value().StartForcedFight(creature, opponent);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} picks a fight with creature {}: {}", entt::to_integral(creature),
 	                    entt::to_integral(opponent), static_cast<int>(started));
 	return true;

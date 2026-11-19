@@ -715,9 +715,10 @@ private:
 		return _heap.back().second;
 	}
 
-	std::array<value_type, k_InAtom> _inAtom {};
+	// The count and the list come before the data that the store keeps in the atom. Thus a search reads less memory.
 	std::vector<value_type> _heap;
 	size_t _size {0};
+	std::array<value_type, k_InAtom> _inAtom {};
 };
 
 /// The glowing shell an atom lays over the model of an object it is kept on (see volume_glow), as the rule set it this
@@ -804,45 +805,49 @@ struct Atom
 	/// Lets go of its sounds and of what it carries
 	~Atom();
 
+	// The fields that each step reads come first, and the fields that only some rules read come last. Thus a walk of the
+	// atoms reads fewer lines of memory from each atom.
 	Collection* collection {nullptr};
 	const Creator* creator {nullptr};
 	/// In its collection's frame: the world, or its parent's in a hierarchy
 	glm::vec3 position {0.0f};
 	glm::vec3 velocity {0.0f};
-	glm::mat3 rotation {1.0f};
 	/// The creator's scale, and the scale the rules set on top of it
 	float baseScale {1.0f};
 	float ruleScale {1.0f};
 	float stretch {1.0f};
 	std::array<uint8_t, 4> rgba {255, 255, 255, 255};
-	/// Light added after its texture, as a flash of lightning lights a cloud
-	std::array<uint8_t, 3> specular {0, 0, 0};
-	/// When it was made, in seconds of its effect's age
-	float birth {0.0f};
-	bool visible {true};
 	float frame {0.0f};
 	float frameRate {0.0f};
-	bool playAnim {false};
-	/// How strongly gravity pulls it
-	float gravity {1.0f};
-	/// Values its creator gives it for drawing, such as a mist's shape and where its animation starts
-	glm::vec2 creatorValue {0.0f};
+	glm::mat3 rotation {1.0f};
+	/// When it was made, in seconds of its effect's age
+	float birth {0.0f};
 	/// A number of its own in 0..255, drawn when it is made
 	uint32_t random {0};
 	/// The player it shows the symbol or colour of, when not its effect's player; -1 for its effect's
 	int player {-1};
-	/// Turned away by a shield, or cooled, so that it no longer acts on what it meets
-	bool deflected {false};
-	/// How much of its effect's draw offset it takes, as the start of a bolt from the hand keeps up with the hand between
-	/// steps while its forks stay where they were laid
-	float drawWeight {1.0f};
-	DrawState previous;
-	DrawState current;
+	bool playAnim {false};
 	/// It has been through a step's end, so it has somewhere to be drawn
 	bool drawn {false};
 	/// The steps it has been through, up to two. The game draws an atom from its second step on, or from its first when
 	/// the rule that made it asks.
 	uint8_t steps {0};
+	bool visible {true};
+	DrawState previous;
+	DrawState current;
+	CollectionList subCollections;
+	AtomRuleStore data;
+	/// Light added after its texture, as a flash of lightning lights a cloud
+	std::array<uint8_t, 3> specular {0, 0, 0};
+	/// How strongly gravity pulls it
+	float gravity {1.0f};
+	/// Values its creator gives it for drawing, such as a mist's shape and where its animation starts
+	glm::vec2 creatorValue {0.0f};
+	/// Turned away by a shield, or cooled, so that it no longer acts on what it meets
+	bool deflected {false};
+	/// How much of its effect's draw offset it takes, as the start of a bolt from the hand keeps up with the hand between
+	/// steps while its forks stay where they were laid
+	float drawWeight {1.0f};
 	bool drawOnFirstUpdate {false};
 	/// It uses the draw offset of its parent atom, the same one, as the rain cone keeps with its cloud
 	bool sharesParentOffset {false};
@@ -854,8 +859,6 @@ struct Atom
 	std::shared_ptr<const blast::MeshFragment> fragment;
 	/// The camera path that it takes its caster's camera along, when its creator places one
 	std::shared_ptr<CameraPathLink> cameraPath;
-	CollectionList subCollections;
-	AtomRuleStore data;
 	/// The sounds it keeps going, the newest first
 	std::vector<std::shared_ptr<ParticleSoundLink>> sounds;
 	/// A game object it carries, if any
@@ -946,6 +949,9 @@ public:
 	int ruleNumber {-1};
 	/// Let go when the effect closes down
 	bool removeOnCloseDown {false};
+	/// The rule acts only on the atoms, with ModifyAtom. Thus the step does not run it on a collection with no atoms, where
+	/// it does nothing.
+	bool onlyOnAtoms {false};
 	/// The name of the condition object that must hold for it to run, empty for always
 	std::string condition;
 

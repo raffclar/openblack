@@ -37,6 +37,11 @@ bool SystemSaysWheel()
 #endif
 }
 
+SystemMouse AskSystemMouse()
+{
+	return {.saysWheel = SystemSaysWheel(), .buttons = SystemMouseButtons()};
+}
+
 int PlayerMousePictureRow(bool wheelTurned)
 {
 	return MousePictureRow(SystemSaysWheel() || wheelTurned, SystemMouseButtons());

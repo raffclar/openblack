@@ -45,6 +45,7 @@
 #include "ECS/Systems/Implementations/ParticleRuleSystem.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Particles/ParticleTypes.h"
 #include "Resources/Resources.h"
 
 using namespace openblack;
@@ -593,4 +594,29 @@ TEST_F(ParticleSaveParts, AJoinerGivesTheNextSyncedEffectTheNumberOfTheServer)
 	ParticleRuleSystem joiner;
 	ASSERT_TRUE(Read(joiner, parts.synced));
 	EXPECT_EQ(joiner.Start("Local", {2.0f, 0.0f, 0.0f}, 1.0f, true), server.Start("Local", {2.0f, 0.0f, 0.0f}, 1.0f, true));
+}
+
+TEST_F(ParticleSaveParts, TheEffectInTheHandDrawsAsItsLastStepLeftIt)
+{
+	// The water in the hand and a plain effect of the same file
+	auto& files = static_cast<FakeFiles&>(Locator::filesystem::value());
+	const auto folder = files.GetPath<filesystem::Path::Data>() / "Spells" / "ZSpellFiles";
+	const auto text = EffectText(4);
+	files.files[folder / (std::string(particles::ParticleTypeFile(ParticleType::WaterInHand)) + ".txt")] =
+	    std::vector<uint8_t>(text.begin(), text.end());
+	ParticleRuleSystem rules;
+	constexpr auto k_None = ParticleRuleSystemInterface::k_NoEffect;
+	const auto inHand = rules.Serve({.type = ParticleType::WaterInHand, .synced = false, .drawnWithHand = true}, k_None);
+	const auto plain = rules.Serve({.type = ParticleType::WaterInHand, .synced = false}, k_None);
+	ASSERT_NE(inHand, k_None);
+	ASSERT_NE(plain, k_None);
+	std::map<ParticleRuleSystemInterface::EffectId, ParticleRuleSystemInterface::DrawnEffect> drawn;
+	rules.ForEachDrawn([&drawn](const ParticleRuleSystemInterface::DrawnEffect& effect) { drawn.emplace(effect.id, effect); });
+	// The effect in the hand draws at once after the hand with no blend between its last two steps. The other effect
+	// blends by the share of the turn.
+	ASSERT_EQ(drawn.count(inHand), 1u);
+	ASSERT_EQ(drawn.count(plain), 1u);
+	EXPECT_TRUE(drawn.at(inHand).atLastStep);
+	EXPECT_EQ(drawn.at(inHand).path, particles::draw::DrawPath::Immediate);
+	EXPECT_FALSE(drawn.at(plain).atLastStep);
 }

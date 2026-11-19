@@ -51,6 +51,7 @@ public:
 	void NoteLook() override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
+	StartResult StartForcedFight(entt::entity creature, entt::entity opponent) override;
 	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool agreed) override;
 	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
@@ -120,8 +121,15 @@ public:
 	void LoseFightHealth(entt::entity creature, float damage) override;
 
 private:
-	/// The start of a fight. When ask is false, the other creature agreed before and is not asked again.
-	StartResult Start(entt::entity creature, entt::entity opponent, bool ask);
+	/// The checks that the start of a fight makes
+	struct StartChecks
+	{
+		/// The other creature is asked. When false, it agreed before and is not asked again.
+		bool ask {true};
+		/// The first creature must be healthy enough to fight. A script order or a leash order does not make this check.
+		bool health {true};
+	};
+	StartResult Start(entt::entity creature, entt::entity opponent, StartChecks checks);
 	/// The turn's parts: the stages before and after the duel, the duel's moves, and the creatures knocked out
 	void ProcessStages();
 	void StageTurn(entt::entity creature);

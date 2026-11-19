@@ -8,12 +8,15 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdlib>
 
 #include <algorithm>
 #include <array>
 #include <numeric>
+#include <vector>
 
 #include <gtest/gtest.h>
+#include <landgen/Cliffs.h>
 #include <landgen/HeightCurve.h>
 #include <landgen/Hydrology.h>
 #include <landgen/Noise.h>
@@ -472,35 +475,91 @@ TEST(LandgenTerrain, TerraceFillsTheHollowsOfItsFloor)
 	}
 }
 
-TEST(LandgenTerrain, ShoreShelfMakesAFlatStripAndABank)
+namespace
+{
+/// Shore settings with one kind of coast everywhere. The noise is always between -5 and 5.
+terrain::ShelfSettings OneCoast(bool beach, bool cliff)
+{
+	return {
+	    .beachStart = beach ? -6.0f : 5.0f,
+	    .beachFull = beach ? -5.0f : 6.0f,
+	    .cliffStart = cliff ? 6.0f : -5.0f,
+	    .cliffFull = cliff ? 5.0f : -6.0f,
+	    .beachLow = 12.0f,
+	    .beachHigh = 12.0f,
+	    .beachBack = 6.0f,
+	    .duneRise = 4.0f,
+	    .bankLow = 10.0f,
+	    .bankHigh = 10.0f,
+	    .cliffRise = 28.0f,
+	    .cliffTopLow = 60.0f,
+	    .cliffTopHigh = 60.0f,
+	    .cliffDepth = 6.0f,
+	    .cliffBack = 3.0f,
+	};
+}
+} // namespace
+
+TEST(LandgenTerrain, ShoreShelfMakesTheShoreStepsAndABank)
 {
 	// Land at 100 from x = 2, a low strip of land at 4 along z = 10, and the sea at x = 0 and 1
 	auto heights = MakeGrid(30, [](int x, int z) {
 		if (x < 2)
 		{
-			return 0.0f;
+			return x == 1 ? 2.5f : 0.0f;
 		}
 		return z == 10 ? 4.0f : 100.0f;
 	});
-	const terrain::ShelfSettings settings {
-	    .widthLow = 3.0f,
-	    .widthHigh = 3.0f,
-	    .altitude = 3.6f,
-	    .rise = 0.25f,
-	    .bankLow = 10.0f,
-	    .bankHigh = 10.0f,
-	};
-	terrain::ShoreShelf(heights, 1, settings);
+	const auto widths = terrain::ShoreShelf(heights, nullptr, 1, OneCoast(false, false));
 	constexpr int k_Z = 20;
+	// The sea is at altitude 1 or lower
 	EXPECT_EQ(heights.At(0, k_Z), 0.0f);
-	// The strip is flat for three corners from the water, then the bank rises 10 for each corner
-	EXPECT_NEAR(heights.At(2, k_Z), 3.85f, 1e-4f);
-	EXPECT_NEAR(heights.At(4, k_Z), 4.35f, 1e-4f);
-	EXPECT_NEAR(heights.At(5, k_Z), 14.35f, 1e-4f);
-	EXPECT_NEAR(heights.At(10, k_Z), 64.35f, 1e-4f);
+	EXPECT_EQ(heights.At(1, k_Z), 1.0f);
+	// The shore steps of the lands of the story, then the bank rises 10 for each corner
+	EXPECT_NEAR(heights.At(2, k_Z), 2.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(3, k_Z), 3.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(4, k_Z), 3.2f, 1e-4f);
+	EXPECT_NEAR(heights.At(5, k_Z), 4.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(6, k_Z), 14.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(10, k_Z), 54.0f, 1e-4f);
 	EXPECT_EQ(heights.At(20, k_Z), 100.0f);
+	EXPECT_EQ(widths.At(10, k_Z), 4.0f);
 	// Ground lower than the bank does not change
 	EXPECT_EQ(heights.At(10, 10), 4.0f);
+}
+
+TEST(LandgenTerrain, ShoreShelfMakesALongBeachWithDunesBehindIt)
+{
+	auto heights = MakeGrid(30, [](int x, int) { return x < 2 ? 0.0f : 100.0f; });
+	const auto widths = terrain::ShoreShelf(heights, nullptr, 1, OneCoast(true, false));
+	constexpr int k_Z = 20;
+	EXPECT_NEAR(heights.At(5, k_Z), 4.0f, 1e-4f);
+	// The beach rises from the fourth step at 4 to its back at 6, twelve corners from the water
+	EXPECT_NEAR(heights.At(9, k_Z), 5.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(13, k_Z), 6.0f, 1e-4f);
+	// The dunes rise 4 for each corner
+	EXPECT_NEAR(heights.At(15, k_Z), 14.0f, 1e-4f);
+	EXPECT_EQ(widths.At(10, k_Z), 12.0f);
+}
+
+TEST(LandgenTerrain, ShoreShelfLiftsACliffButNotAtARiver)
+{
+	// Low land at 10 from x = 2, and a river along z = 20
+	auto heights = MakeGrid(40, [](int x, int) { return x < 2 ? 0.0f : 10.0f; });
+	const auto river = MakeGrid(40, [](int, int z) { return static_cast<float>(std::abs(z - 20)); });
+	const auto widths = terrain::ShoreShelf(heights, &river, 1, OneCoast(false, true));
+	constexpr int k_Z = 30;
+	EXPECT_NEAR(heights.At(5, k_Z), 4.0f, 1e-4f);
+	// The face rises 28 for each corner to the top at 60, which stays level for six corners and then falls 3 a corner
+	EXPECT_NEAR(heights.At(6, k_Z), 32.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(7, k_Z), 60.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(13, k_Z), 60.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(15, k_Z), 54.0f, 1e-4f);
+	// Far from the sea the fall of the top goes below the land, which does not change
+	EXPECT_EQ(heights.At(35, k_Z), 10.0f);
+	// The river cuts through the cliff
+	EXPECT_EQ(heights.At(10, 20), 10.0f);
+	EXPECT_EQ(widths.At(10, k_Z), 4.0f);
 }
 
 namespace
@@ -806,4 +865,83 @@ TEST(LandgenHeightCurve, TheTopStopsAtTheMostUnits)
 	const auto curve = HeightCurve::WithTop(60.0f, 10000.0f);
 	EXPECT_NEAR(curve.UnitsOf(255.0f), k_MostUnits, 0.5f);
 	EXPECT_EQ(curve.WholeUnitsOf(255.0f), static_cast<uint16_t>(k_MostUnits));
+}
+
+TEST(LandgenCliffs, TheLimitOfAFaceStaysBetweenTheSteepestOfTheStory)
+{
+	const cliffs::FaceSettings settings;
+	for (int i = 0; i <= 20; ++i)
+	{
+		const float rise = cliffs::SteepestRiseAt(5, static_cast<float>(i) / 20.0f, 0.3f, settings);
+		EXPECT_GE(rise, settings.steepestLow);
+		EXPECT_LE(rise, settings.steepestHigh);
+	}
+}
+
+TEST(LandgenCliffs, AWallBecomesAFaceAtTheLimitAndNoCornerGoesUp)
+{
+	// A wall of 200 altitude units between two flat terraces, on a land with the curve of the story
+	const auto before = MakeGrid(40, [](int x, int /*z*/) { return x < 20 ? 10.0f : 210.0f; });
+	auto heights = before;
+	const cliffs::FaceSettings settings {.steepestLow = 2.0f, .steepestHigh = 2.0f};
+	cliffs::LimitFaces(heights, HeightCurve {}, 3.0f, 1, settings);
+	// A rise of 2 m for each metre is 20 m for each corner, about 29.85 altitude units
+	constexpr float k_Rise = 20.0f / k_MetresPerUnit;
+	for (int x = 0; x < 40; ++x)
+	{
+		for (int z = 0; z < 40; ++z)
+		{
+			EXPECT_LE(heights.At(x, z), before.At(x, z));
+			if (x + 1 < 40)
+			{
+				EXPECT_LE(heights.At(x + 1, z) - heights.At(x, z), k_Rise + 0.01f);
+			}
+		}
+	}
+	// The low terrace does not change, and the top of the wall goes down
+	EXPECT_EQ(heights.At(19, 5), 10.0f);
+	EXPECT_NEAR(heights.At(20, 5), 10.0f + k_Rise, 0.01f);
+	EXPECT_EQ(heights.At(39, 5), 210.0f);
+}
+
+TEST(LandgenCliffs, TheSeaDoesNotChangeAndTheLandStaysAboveIt)
+{
+	const auto before = MakeGrid(20, [](int x, int /*z*/) { return x < 10 ? 0.0f : 200.0f; });
+	auto heights = before;
+	cliffs::LimitFaces(heights, HeightCurve::WithTop(73.0f, 1250.0f), 3.0f, 2, {});
+	for (int x = 0; x < 20; ++x)
+	{
+		for (int z = 0; z < 20; ++z)
+		{
+			if (x < 10)
+			{
+				EXPECT_EQ(heights.At(x, z), 0.0f);
+			}
+			else
+			{
+				EXPECT_GT(heights.At(x, z), 3.0f);
+			}
+		}
+	}
+}
+
+TEST(LandgenCliffs, ASpireStaysAsASteepPeak)
+{
+	// A spire of one corner, 150 altitude units above a plain at 20
+	auto heights = MakeGrid(41, [](int x, int z) { return x == 20 && z == 20 ? 170.0f : 20.0f; });
+	const cliffs::FaceSettings settings {.steepestLow = 2.0f, .steepestHigh = 2.0f};
+	cliffs::LimitFaces(heights, HeightCurve {}, 3.0f, 1, settings);
+	EXPECT_EQ(heights.At(20, 20), 170.0f);
+	// The ground round it is a cone of the limit of the summit: 20 m for each corner
+	constexpr float k_Rise = 20.0f / k_MetresPerUnit;
+	EXPECT_NEAR(heights.At(21, 20), 170.0f - k_Rise, 0.01f);
+	EXPECT_NEAR(heights.At(23, 20), 170.0f - (3.0f * k_Rise), 0.01f);
+	EXPECT_EQ(heights.At(40, 40), 20.0f);
+
+	// A fixed corner next to the spire does not go up
+	auto fixedHeights = MakeGrid(41, [](int x, int z) { return x == 20 && z == 20 ? 170.0f : 20.0f; });
+	std::vector<uint8_t> fixed(fixedHeights.values.size(), 0);
+	fixed[fixedHeights.Index(22, 20)] = 1;
+	cliffs::LimitFaces(fixedHeights, HeightCurve {}, 3.0f, 1, settings, fixed);
+	EXPECT_EQ(fixedHeights.At(22, 20), 20.0f);
 }

@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <algorithm>
 #include <array>
 #include <fstream>
 #include <string>
@@ -298,4 +299,26 @@ TEST(MorphFileWrite, ChangedTattooSitesAreWritten)
 	EXPECT_EQ(file.GetVariantAnimationSet(0).size(), 1u);
 	EXPECT_NE(file.GetVariantAnimation(0, 1), nullptr);
 	EXPECT_EQ(file.GetVariantAnimation(0, 0), nullptr);
+}
+
+TEST(MorphFileWrite, TheDanceMoveNumbersComeFromTheCreatureBlock)
+{
+	const auto original = MakeFile(19, 6);
+	openblack::test::TestTempFolder folder;
+	{
+		std::ofstream spec(folder.Path() / "ctrspec25.txt");
+		spec << k_Spec;
+	}
+	MorphFile file;
+	ASSERT_EQ(file.Open(original, folder.Path()), MorphResult::Success);
+	// The made up file puts a run of numbers, one after the other, in the seven places
+	const auto factors = file.GetDanceMoveFactors();
+	EXPECT_GT(factors.front(), 1000u);
+	for (size_t i = 1; i < factors.size(); ++i)
+	{
+		EXPECT_EQ(factors.at(i), factors.at(i - 1) + 1) << "move " << i;
+	}
+	// A file without the numbers gives 1 to all moves
+	const MorphFile empty;
+	EXPECT_TRUE(std::ranges::all_of(empty.GetDanceMoveFactors(), [](uint32_t factor) { return factor == 1; }));
 }

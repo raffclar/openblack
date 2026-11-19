@@ -54,6 +54,7 @@
 #include "ECS/Archetypes/CloudArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MistArchetype.h"
+#include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/StreamSegmentArchetype.h"
@@ -61,6 +62,7 @@
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Mobile.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/Stream.h"
@@ -70,6 +72,7 @@
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
+#include "ECS/MobileObjectRecord.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/RealWeatherLand.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -151,6 +154,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Help/HelpProfile.h"
 #include "Help/Spirits.h"
+#include "InfoConstants.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
 #include "LandLaidOutOrder.h"
@@ -519,6 +523,12 @@ static_assert(landgen::features::k_SpikyPillarFeature == static_cast<uint8_t>(Fe
 static_assert(landgen::features::k_SpikyPillarFeature + static_cast<uint8_t>(landgen::features::Stone::Limestone) ==
               static_cast<uint8_t>(FeatureInfo::SpikeyPilarLime));
 static_assert(landgen::cursed::k_CraterFeature == static_cast<uint8_t>(FeatureInfo::Crater));
+static_assert(landgen::formations::k_ChampiObject == static_cast<uint8_t>(MobileObjectInfo::Champi));
+static_assert(landgen::formations::k_MagicMushroomObject == static_cast<uint8_t>(MobileObjectInfo::MagicMushroom));
+static_assert(landgen::formations::k_ToadstoolObject == static_cast<uint8_t>(MobileObjectInfo::Toadstool));
+static_assert(landgen::formations::k_FatPillarLime == static_cast<uint8_t>(FeatureInfo::FatPilarLime));
+static_assert(landgen::formations::k_Pillar2Lime == static_cast<uint8_t>(FeatureInfo::Pilar2Lime));
+static_assert(landgen::formations::k_Pillar3Lime == static_cast<uint8_t>(FeatureInfo::Pilar3Lime));
 
 /// Puts the trees, rocks, mists and rivers of a generated land on the land, as the land script of a land of the story does
 void PlaceGeneratedThings(const landgen::GeneratedLand& land)
@@ -555,6 +565,14 @@ void PlaceGeneratedThings(const landgen::GeneratedLand& land)
 		else if (feature.kind == landgen::features::Kind::Feature)
 		{
 			archetypes::FeatureArchetype::Create(position, static_cast<FeatureInfo>(feature.type), feature.angle, feature.size);
+		}
+		else if (feature.kind == landgen::features::Kind::Mobile)
+		{
+			// A mushroom or a toadstool is a loose object of its row, as a loose object of a land script of the story is
+			const auto type = static_cast<MobileObjectInfo>(feature.type);
+			const auto kind = ecs::mobile_object_record::FromRow(Locator::infoConstants::value(), static_cast<int32_t>(type))
+			                      .value_or(components::MobileObject {.type = type});
+			archetypes::MobileObjectArchetype::Create(position, kind, feature.angle, feature.size);
 		}
 		else
 		{
@@ -637,7 +655,7 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 	try
 	{
 		lhscriptx::Script script;
-		script.Load(generated_land::SettlementScript(land.settlement));
+		script.Load(generated_land::SettlementScript(land.settlement, land.otherPlayers));
 	}
 	catch (const std::exception& e)
 	{
@@ -1013,8 +1031,9 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// Each load of a saved game starts a game. The world of a game server continues as the server has it.
 	if (use == SavedLandUse::SavedGame)
 	{
-		// The player is as good or evil as their profile keeps them, not as the save keeps them
-		if (land_change::RulesFor(land_change::Kind::SavedGame).alignmentFromProfile)
+		// The player is as good or evil as their profile keeps them, not as the save keeps them. A network game does not
+		// use the profile of this computer, so that each computer loads the same world.
+		if (land_change::LoadTakesProfileAlignment(Locator::time::value().IsNetworkGame()))
 		{
 			SetPlayerAlignmentFromProfile();
 		}

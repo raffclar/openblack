@@ -859,16 +859,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	const auto& fizzOrder = _renderContext.fizzOrder;
 	// The game draws a model that blends and is not sorted at its place in the list
 	_renderContext.atOnceInstances.clear();
-	_listPlaces.clear();
-	if (drawList != nullptr)
-	{
-		const auto list = drawList->GetList();
-		_listPlaces.reserve(list.size());
-		for (uint32_t place = 0; place < static_cast<uint32_t>(list.size()); ++place)
-		{
-			_listPlaces.try_emplace(list[place], place);
-		}
-	}
+	_listPlaces.Make(drawList != nullptr ? drawList->GetList() : std::span<const entt::entity> {});
 	// The things that only the frames make are in the first segment, before the things of the land. The gate stones that
 	// the cursor finds come after the things of the land.
 	std::vector<RenderContext::DrawnObject> drawnPicks;
@@ -2291,6 +2282,13 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 
 	// Each tree as it is drawn this frame, gathered first, then laid out by mesh and detail
 	_placedTrees.clear();
+	// The walk makes no component, so the stores of the components stay the same for all of it
+	const openblack::ecs::drawn_place::DrawnPlaces drawnPlaces(registry);
+	const openblack::ecs::object_detail::Stores detailStores(registry);
+	const openblack::ecs::systems::DrawnStores drawnStores(registry);
+	const openblack::ecs::ComponentLookups<PhysicsDrawPose, SnowLevel, ShownRoots, InPhysics, InHand, HeldByCreature,
+	                                       CarriedByTornado>
+	    stores(registry);
 	registry.Each<const Mesh, const Transform, const Tree, const Swayable>(
 	    [&](entt::entity entity, const Mesh& mesh, const Transform& transform, const Tree& /*unused*/,
 	        const Swayable& swayable) {
@@ -2300,12 +2298,12 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			    return;
 		    }
 		    // A tree in a creature's hand is drawn where the drawn hand is
-		    const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+		    const auto drawnPlace = drawnPlaces.Of(entity, transform);
 		    auto modelMatrix = PlacedMatrix(drawnPlace.position, drawnPlace.rotation, transform.scale);
 		    // A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
 		    // all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
 		    // vertices out to the horizon
-		    const auto placed = physics_draw::ModelMatrix(modelMatrix, registry.TryGet<const PhysicsDrawPose>(entity));
+		    const auto placed = physics_draw::ModelMatrix(modelMatrix, stores.TryGet<PhysicsDrawPose>(entity));
 		    if (!placed.has_value())
 		    {
 			    _placedTrees.push_back({.mesh = mesh.id,
@@ -2318,7 +2316,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    modelMatrix = *placed;
 
 		    // A tree left out of the land's draw list isn't drawn, as one too far off isn't
-		    if (drawList != nullptr && !drawList->Drawn(registry, entity))
+		    if (drawList != nullptr && !drawList->DrawnWith(registry, entity, drawnStores))
 		    {
 			    _placedTrees.push_back({.mesh = mesh.id,
 			                            .slots = &slots->second,
@@ -2335,12 +2333,11 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    // Drawn in less detail the further off it is, fading out, then not at all, unless something holds it
 		    auto group = Group::High;
 		    std::optional<uint8_t> fade;
-		    if (const auto& box = MeshBox(mesh.id);
-		        camera != nullptr && box.has_value() && object_detail::BandedNow(registry, entity))
+		    if (const auto& box = MeshBox(mesh.id); camera != nullptr && box.has_value() && detailStores.BandedNow(entity))
 		    {
 			    const auto choice = ChooseDetail(
-			        *box, object_detail::Importance(registry, entity), modelMatrix, transform.scale.x,
-			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *view, modelDetail);
+			        *box, detailStores.Importance(entity), modelMatrix, transform.scale.x,
+			        [&detailStores, entity] { return detailStores.Disappears(entity, false); }, *view, modelDetail);
 			    if (noteKept)
 			    {
 				    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, !choice.mesh.has_value());
@@ -2381,18 +2378,19 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			    burning.z = 1.0f - (static_cast<float>(*fade) / 255.0f);
 			    group = Group::Fading;
 		    }
-		    burning.w = static_cast<float>(openblack::ecs::snow_levels::LevelOf(registry, entity));
+		    const auto* snow = stores.TryGet<SnowLevel>(entity);
+		    burning.w = static_cast<float>(snow != nullptr ? snow->level : 0);
 		    // In its least detail a tree is a paper cut-out standing turned to the camera, which neither sways nor bends,
 		    // unless it moves in the physics. Otherwise out of the land it neither sways nor bends: it is drawn as it is held
 		    // or as the physics places it.
 		    glm::mat4 drawnMatrix;
-		    if (camera != nullptr && (group == Group::Low || group == Group::Fading) && !registry.AllOf<InPhysics>(entity))
+		    if (camera != nullptr && (group == Group::Low || group == Group::Fading) && !stores.AllOf<InPhysics>(entity))
 		    {
 			    drawnMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x, paperTurn);
 		    }
 		    else
 		    {
-			    const auto place = registry.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
+			    const auto place = stores.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
 			                           ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
 			                           : TreePlace::InTheLand;
 			    drawnMatrix = openblack::physics::objects::SwaysAndBends(place)
@@ -2415,7 +2413,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		                            .data = {.modelMatrix = drawnMatrix, .burning = burning},
 		                            .box = boxMatrix,
 		                            .entity = entity,
-		                            .held = registry.AllOf<InHand>(entity),
+		                            .held = stores.AllOf<InHand>(entity),
 		                            .widthShare = widthShare});
 	    });
 
@@ -2523,8 +2521,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 
 uint32_t RenderingSystem::ListPlace(entt::entity entity) const
 {
-	const auto found = _listPlaces.find(entity);
-	return found != _listPlaces.end() ? found->second : graphics::zsort::k_Unlisted;
+	return _listPlaces.Of(entity).value_or(graphics::zsort::k_Unlisted);
 }
 
 bool RenderingSystem::FizzesInList(const Registry& registry, const ObjectDrawListSystemInterface& drawList, entt::entity entity)

@@ -32,6 +32,8 @@ public:
 	std::optional<player_commands::ViewReport> ContinueAfterLoad() final;
 
 	[[nodiscard]] const OwnReportState& GetState() const final { return _state; }
+	void PinSystemMouse(std::optional<platform_mouse::SystemMouse> mouse) final { _pinnedMouse = mouse; }
+	[[nodiscard]] platform_mouse::SystemMouse GetSystemMouse() const final;
 
 	/// The rules that keep a report from going when it did not change. The reports above use them with the services of
 	/// the game.
@@ -53,6 +55,7 @@ private:
 	void ReportView(uint32_t worldCameraIcons);
 
 	OwnReportState _state;
+	std::optional<platform_mouse::SystemMouse> _pinnedMouse;
 };
 
 } // namespace openblack::ecs::systems

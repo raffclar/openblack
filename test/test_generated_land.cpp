@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -68,6 +69,25 @@ TEST(GeneratedLand, TheFirstChoicesGiveTheFirstSettingsOfTheGenerator)
 	EXPECT_EQ(settings.topHeight, first.topHeight);
 	EXPECT_EQ(settings.features.treeDensity, first.features.treeDensity);
 	EXPECT_EQ(settings.features.most, first.features.most);
+	EXPECT_FALSE(settings.landType.type.has_value());
+	EXPECT_FALSE(settings.landType.archipelago);
+}
+
+TEST(GeneratedLand, TheLandTypeNeedsTheArchipelagoChoiceForAnArchipelago)
+{
+	using landgen::landtypes::Type;
+	EXPECT_EQ(generated_land::SettingsOf({.seed = 3, .landType = 2}).landType.type, Type::Highlands);
+	EXPECT_EQ(generated_land::SettingsOf({.seed = 3, .landType = 0}).landType.type, Type::StoryIsland);
+	// Without the archipelago choice, the seed picks a type other than an archipelago
+	const auto without = generated_land::SettingsOf({.seed = 3, .landType = 4});
+	EXPECT_FALSE(without.landType.type.has_value());
+	EXPECT_FALSE(without.landType.archipelago);
+	const auto with = generated_land::SettingsOf({.seed = 3, .landType = 4, .archipelago = 1});
+	EXPECT_EQ(with.landType.type, Type::Archipelago);
+	EXPECT_TRUE(with.landType.archipelago);
+	EXPECT_EQ(generated_land::PathOf({.seed = 3, .landType = 1}), "landgen:3;type=1");
+	EXPECT_EQ(generated_land::ChoicesOf("landgen:3;type=3;archipelago=1"),
+	          (generated_land::Choices {.seed = 3, .landType = 3, .archipelago = 1}));
 }
 
 TEST(GeneratedLand, EachChoiceGoesToItsSettingOfTheGenerator)
@@ -279,4 +299,99 @@ TEST(GeneratedLand, TheNeutralTownsComeAfterTheTemple)
 	          std::string::npos);
 	// Only the player's town has a worship site
 	EXPECT_EQ(script.find("CREATE_WORSHIP_SITE", worship + 1), std::string::npos);
+}
+
+TEST(GeneratedLand, ANeutralTownHasItsPlannedBuildingsAndFishFarms)
+{
+	using landgen::settlement::Building;
+	landgen::settlement::Plan plan;
+	plan.town.tribe = landgen::settlement::Tribe::Norse;
+	plan.town.buildings = {{.building = Building::TownCentre, .x = 195.0f, .z = 200.0f, .rotation = 10}};
+	landgen::settlement::Town neutral;
+	neutral.tribe = landgen::settlement::Tribe::Celtic;
+	neutral.x = 600.0f;
+	neutral.z = 400.0f;
+	neutral.buildings = {{.building = Building::TownCentre, .x = 600.0f, .z = 400.0f, .rotation = 5},
+	                     {.building = Building::AbodeB, .x = 620.0f, .z = 400.0f, .rotation = 6},
+	                     {.building = Building::Wonder, .x = 578.0f, .z = 334.0f, .rotation = 7, .planned = true},
+	                     {.building = Building::StoragePit, .x = 600.0f, .z = 422.0f, .rotation = 8, .planned = true}};
+	neutral.fishFarms = {{.x = 505.0f, .z = 395.0f}, {.x = 505.0f, .z = 405.0f}};
+	plan.neutral.push_back(neutral);
+	const auto script = generated_land::SettlementScript(plan);
+	const auto read = lhscriptx::Script::Read(script);
+	ASSERT_FALSE(read.error.has_value()) << *read.error;
+	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "620.00,400.00", "CELTIC_ABODE_B", 6, 1000, 0, 0))"), std::string::npos);
+	// A planned building holds no food or wood, and it comes before the buildings that stand
+	const auto wonder = script.find(R"(CREATE_PLANNED_ABODE(1, "578.00,334.00", "CELTIC_ABODE_WONDER", 7, 1000, 0, 0))");
+	ASSERT_NE(wonder, std::string::npos);
+	EXPECT_LT(wonder, script.find("CELTIC_ABODE_B"));
+	// The centre of a neutral town comes first, so that it has room
+	EXPECT_LT(script.find(R"(CREATE_TOWN_CENTRE(1, "600.00,400.00", "CELTIC_ABODE_TOWN_CENTRE", 5, 1000, 0))"), wonder);
+	EXPECT_NE(script.find(R"(CREATE_PLANNED_ABODE(1, "600.00,422.00", "CELTIC_ABODE_STORAGE_PIT", 8, 1000, 0, 0))"),
+	          std::string::npos);
+	EXPECT_EQ(script.find(R"(CREATE_ABODE(1, "600.00,422.00")"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_TOWN_FISH_FARM(1, "505.00,395.00", 0))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_TOWN_FISH_FARM(1, "505.00,405.00", 0))"), std::string::npos);
+}
+
+TEST(GeneratedLand, ThePlayersChoiceGivesTheCountOfPlayers)
+{
+	EXPECT_EQ(generated_land::SettingsOf({.seed = 4}).players.count, 1u);
+	EXPECT_EQ(generated_land::SettingsOf({.seed = 4, .players = 3}).players.count, 3u);
+	// A land for one player keeps the path of before
+	EXPECT_EQ(generated_land::PathOf(generated_land::Choices {.seed = 4, .players = 1}), "landgen:4");
+	EXPECT_EQ(generated_land::PathOf(generated_land::Choices {.seed = 4, .players = 2}), "landgen:4;players=2");
+	EXPECT_EQ(generated_land::Clamped({.players = 9}).players, 4);
+	EXPECT_FALSE(generated_land::ChoicesOf("landgen:4;players=0").has_value());
+}
+
+TEST(GeneratedLand, EachPlayerGetsATownAndATempleBeforeTheNeutralTowns)
+{
+	using landgen::settlement::Building;
+	const auto planAt = [](float x, landgen::settlement::Tribe tribe) {
+		landgen::settlement::Plan plan;
+		plan.town.tribe = tribe;
+		plan.citadelX = x;
+		plan.citadelZ = 100.0f;
+		plan.citadelRotation = 50;
+		plan.town.x = x + 95.0f;
+		plan.town.z = 100.0f;
+		plan.town.buildings = {{.building = Building::TownCentre, .x = x + 95.0f, .z = 100.0f, .rotation = 1},
+		                       {.building = Building::StoragePit, .x = x + 95.0f, .z = 122.0f, .rotation = 2}};
+		return plan;
+	};
+	auto plan = planAt(100.0f, landgen::settlement::Tribe::Norse);
+	landgen::settlement::Town neutral;
+	neutral.tribe = landgen::settlement::Tribe::Greek;
+	neutral.x = 3000.0f;
+	neutral.z = 3000.0f;
+	neutral.buildings = {{.building = Building::TownCentre, .x = 3000.0f, .z = 3000.0f, .rotation = 3}};
+	plan.neutral.push_back(neutral);
+	const std::array others {planAt(1000.0f, landgen::settlement::Tribe::Celtic),
+	                         planAt(2000.0f, landgen::settlement::Tribe::Japanese)};
+	const auto script = generated_land::SettlementScript(plan, others);
+	const auto read = lhscriptx::Script::Read(script);
+	ASSERT_FALSE(read.error.has_value()) << *read.error;
+	// The towns of players two and three have the numbers after the town of player one, with the start values of player
+	// one, and each player has a temple and a worship site
+	EXPECT_NE(script.find(R"(CREATE_TOWN(1, "1095.00,100.00", "PLAYER_TWO", 0, "CELTIC"))"), std::string::npos);
+	EXPECT_NE(script.find(R"(SET_TOWN_BELIEF(1, "PLAYER_TWO", 1.000000))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "1095.00,122.00", "CELTIC_ABODE_STORAGE_PIT", 2, 1000, 20000, 30000))"),
+	          std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_CITADEL("1000.00,100.00", 0, "PLAYER_TWO", 50, 1000))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_WORSHIP_SITE("1000.00,100.00", 0, "PLAYER_TWO", "CELTIC", 0, 1000))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_TOWN(2, "2095.00,100.00", "PLAYER_THREE", 3, "JAPANESE"))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_CITADEL("2000.00,100.00", 0, "PLAYER_THREE", 50, 1000))"), std::string::npos);
+	// The town centre of another player comes before its other buildings, so that they leave room for it
+	const auto centreTwo = script.find(R"(CREATE_TOWN_CENTRE(1, "1095.00,100.00", "CELTIC_ABODE_TOWN_CENTRE", 1, 1000, 0))");
+	ASSERT_NE(centreTwo, std::string::npos);
+	EXPECT_LT(centreTwo, script.find(R"(CREATE_ABODE(1, "1095.00,122.00")"));
+	// The town centre of player one stays after its other buildings
+	EXPECT_GT(script.find(R"(CREATE_TOWN_CENTRE(0, )"), script.find(R"(CREATE_ABODE(0, )"));
+	// The neutral town comes last, with the next number
+	const auto third = script.find(R"(CREATE_WORSHIP_SITE("2000.00,100.00", 0, "PLAYER_THREE", "JAPANESE", 0, 1000))");
+	const auto neutralTown = script.find(R"(CREATE_TOWN(3, "3000.00,3000.00", "NEUTRAL", 6, "GREEK"))");
+	ASSERT_NE(third, std::string::npos);
+	ASSERT_NE(neutralTown, std::string::npos);
+	EXPECT_GT(neutralTown, third);
 }

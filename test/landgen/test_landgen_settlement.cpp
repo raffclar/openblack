@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <set>
 #include <vector>
 
@@ -68,6 +69,7 @@ Settings SmallSettings(uint64_t seed)
 	settings.thermal.passes = 10;
 	settings.rivers.sourceFlow = 150.0f;
 	settings.wind = climate::Wind::West;
+	settings.landType.type = landtypes::Type::BigIsland;
 	return settings;
 }
 } // namespace
@@ -478,31 +480,49 @@ TEST(LandgenTowns, EachOtherTribeOfTheLandHasATown)
 	EXPECT_EQ(settlement::TribesOfTowns(tribes, 2, 3).size(), 2u);
 }
 
-TEST(LandgenTowns, ANeutralTownHasTheBuildingsOfATownOfTheStart)
+TEST(LandgenTowns, ANeutralTownHasTheMixOfBuildingsOfTheTownsOfTheStory)
 {
 	const settlement::Settings settings;
-	size_t workshops = 0;
-	size_t graveyards = 0;
-	constexpr uint32_t k_Towns = 200;
+	const settlement::TownMix mix;
+	struct Count
+	{
+		size_t built {0};
+		size_t planned {0};
+	};
+	std::array<Count, 5> counts {};
+	constexpr std::array k_Kinds {Building::StoragePit, Building::Creche, Building::Workshop, Building::Graveyard,
+	                              Building::Wonder};
+	constexpr uint32_t k_Towns = 600;
 	for (uint32_t number = 0; number < k_Towns; ++number)
 	{
 		const auto town =
-		    settlement::MakeTown({.x = k_StartX, .z = k_StartZ}, settlement::Tribe::Aztec, Clear(), 7, number, settings);
+		    settlement::MakeTown({.x = k_StartX, .z = k_StartZ}, settlement::Tribe::Aztec, Clear(), 7, number, settings, mix);
 		EXPECT_EQ(town.tribe, settlement::Tribe::Aztec);
 		ASSERT_FALSE(town.buildings.empty());
 		EXPECT_EQ(town.buildings.front().building, Building::TownCentre);
+		EXPECT_FALSE(town.buildings.front().planned);
 		EXPECT_FLOAT_EQ(town.x, k_StartX * 10.0f);
 		EXPECT_FLOAT_EQ(town.z, k_StartZ * 10.0f);
-		Plan plan;
-		plan.town = town;
-		EXPECT_EQ(CountOf(plan, Building::StoragePit), 1u);
-		EXPECT_EQ(CountOf(plan, Building::Creche), 1u);
-		EXPECT_GE(HousesOf(plan), settings.fewestHouses);
-		EXPECT_LE(HousesOf(plan), settings.mostHouses);
+		size_t houses = 0;
+		for (const auto& placed : town.buildings)
+		{
+			const auto kind = std::ranges::find(k_Kinds, placed.building);
+			if (kind != k_Kinds.end())
+			{
+				auto& count = counts.at(static_cast<size_t>(kind - k_Kinds.begin()));
+				++(placed.planned ? count.planned : count.built);
+			}
+			if (std::ranges::find(settlement::k_AllHouses, placed.building) != settlement::k_AllHouses.end())
+			{
+				EXPECT_FALSE(placed.planned);
+				++houses;
+			}
+		}
+		EXPECT_GE(houses, settings.fewestHouses);
+		EXPECT_LE(houses, settings.mostHouses);
 		EXPECT_EQ(town.fields.size(), static_cast<size_t>(settings.fieldRows * settings.fieldColumns));
-		EXPECT_GE(town.villagers.size(), HousesOf(plan) * settings.fewestPeople);
-		workshops += CountOf(plan, Building::Workshop);
-		graveyards += CountOf(plan, Building::Graveyard);
+		EXPECT_GE(town.villagers.size(), houses * settings.fewestPeople);
+		EXPECT_LE(town.villagers.size(), houses * settings.mostPeople);
 		// The buildings do not touch
 		const float nearest = settings.buildingSpacing - (2.0f * settings.buildingShift);
 		for (size_t i = 0; i < town.buildings.size(); ++i)
@@ -514,9 +534,170 @@ TEST(LandgenTowns, ANeutralTownHasTheBuildingsOfATownOfTheStart)
 			}
 		}
 	}
-	// Near the shares of the towns of the story: 35 of 59 with a workshop and 31 of 59 with a graveyard
-	EXPECT_NEAR(static_cast<float>(workshops) / k_Towns, settings.workshopShare, 0.1f);
-	EXPECT_NEAR(static_cast<float>(graveyards) / k_Towns, settings.graveyardShare, 0.1f);
+	// Near the shares of the 60 towns of the story with five buildings or more
+	const std::array shares {mix.storagePit, mix.creche, mix.workshop, mix.graveyard, mix.wonder};
+	for (size_t i = 0; i < k_Kinds.size(); ++i)
+	{
+		EXPECT_NEAR(static_cast<float>(counts.at(i).built) / k_Towns, shares.at(i).built, 0.05f) << i;
+		EXPECT_NEAR(static_cast<float>(counts.at(i).planned) / k_Towns, shares.at(i).planned, 0.05f) << i;
+	}
+	// A town with fewer than 15 houses has no wonder that stands
+	EXPECT_EQ(counts.at(4).built, 0u);
+}
+
+TEST(LandgenTowns, TheHousesOfANeutralTownAreTheKindsOfItsTribe)
+{
+	const settlement::Settings settings;
+	const settlement::TownMix mix;
+	std::set<Building> indian;
+	std::set<Building> japanese;
+	for (uint32_t number = 0; number < 100; ++number)
+	{
+		for (const auto& [tribe, kinds] :
+		     {std::pair {settlement::Tribe::Indian, &indian}, std::pair {settlement::Tribe::Japanese, &japanese}})
+		{
+			for (const auto& placed :
+			     settlement::MakeTown({.x = k_StartX, .z = k_StartZ}, tribe, Clear(), 3, number, settings, mix).buildings)
+			{
+				if (std::ranges::find(settlement::k_AllHouses, placed.building) != settlement::k_AllHouses.end())
+				{
+					kinds->insert(placed.building);
+				}
+			}
+		}
+	}
+	// The Indian towns of the story have no house of kind B. The Japanese towns have all six kinds.
+	EXPECT_EQ(indian.size(), 5u);
+	EXPECT_FALSE(indian.contains(Building::AbodeB));
+	EXPECT_EQ(japanese.size(), 6u);
+}
+
+TEST(LandgenTowns, TheTownOfTheStartKeepsItsBuildings)
+{
+	// The town of the start always has a storage pit and a creche that stand, and no wonder
+	const settlement::Settings settings;
+	for (uint64_t seed = 1; seed <= 20; ++seed)
+	{
+		const auto plan = settlement::Make(k_StartX, k_StartZ, Clear(), seed, settings);
+		EXPECT_EQ(CountOf(plan, Building::StoragePit), 1u);
+		EXPECT_EQ(CountOf(plan, Building::Creche), 1u);
+		EXPECT_EQ(CountOf(plan, Building::Wonder), 0u);
+		EXPECT_EQ(CountOf(plan, Building::AbodeB), 0u);
+		EXPECT_TRUE(std::ranges::none_of(plan.town.buildings, [](const auto& placed) { return placed.planned; }));
+		EXPECT_TRUE(plan.town.fishFarms.empty());
+	}
+}
+
+namespace
+{
+/// A fake shore: the land rises 1 metre for each 10 metres from the sea at x = 0. The town centre is 150 m inland.
+struct FakeShore
+{
+	Grid<float> aboveSea {64, 0.0f};
+	Grid<float> sea {64, 0.0f};
+	settlement::Town town;
+
+	FakeShore()
+	{
+		for (int x = 0; x < 64; ++x)
+		{
+			for (int z = 0; z < 64; ++z)
+			{
+				aboveSea.At(x, z) = static_cast<float>(x - 10) * 0.25f;
+				sea.At(x, z) = static_cast<float>(std::max(x - 10, 0));
+			}
+		}
+		town.x = 250.0f;
+		town.z = 320.0f;
+	}
+};
+} // namespace
+
+TEST(LandgenTowns, AFishFarmIsOnLowFlatGroundOfTheShoreNearTheTown)
+{
+	const FakeShore shore;
+	const settlement::FarmSettings settings;
+	size_t towns = 0;
+	for (uint32_t number = 0; number < 100; ++number)
+	{
+		const auto farms =
+		    settlement::FishFarms(shore.town, shore.aboveSea, shore.sea, Grid<uint8_t> {64, 0}, {}, 5, number, settings);
+		if (farms.empty())
+		{
+			continue;
+		}
+		++towns;
+		EXPECT_GE(farms.size(), settings.fewest);
+		EXPECT_LE(farms.size(), 6u);
+		for (size_t i = 0; i < farms.size(); ++i)
+		{
+			const auto& farm = farms[i];
+			// The middle of a 10 metre square
+			EXPECT_FLOAT_EQ(std::fmod(farm.x, 10.0f), 5.0f);
+			EXPECT_FLOAT_EQ(std::fmod(farm.z, 10.0f), 5.0f);
+			const float distance = Distance(farm.x, farm.z, shore.town.x, shore.town.z);
+			EXPECT_GE(distance, settings.nearest);
+			EXPECT_LE(distance, settings.farthest);
+			// The ground under the farm is 0.7 to 2.7 m above the sea
+			const float height = ((farm.x / 10.0f) - 10.0f) * 0.25f;
+			EXPECT_GE(height, settings.lowest);
+			EXPECT_LE(height, settings.highest);
+			// Each farm touches a farm before it
+			if (i > 0)
+			{
+				const bool touches =
+				    std::any_of(farms.begin(), farms.begin() + static_cast<std::ptrdiff_t>(i),
+				                [&farm](const auto& other) { return Distance(farm.x, farm.z, other.x, other.z) < 14.2f; });
+				EXPECT_TRUE(touches);
+			}
+		}
+	}
+	// The town is 150 m from the sea: 8 of 20 towns of the story at 100 to 150 m have fish farms, and 4 of 15 at 150 to
+	// 200 m
+	EXPECT_GT(towns, 15u);
+	EXPECT_LT(towns, 55u);
+}
+
+TEST(LandgenTowns, AFishFarmKeepsOffClearGroundAndTakenSquares)
+{
+	const FakeShore shore;
+	const settlement::FarmSettings settings;
+	// The ground of the shore near the town is kept clear, except one strip at z = 32 to 34
+	Grid<uint8_t> keepClear {64, 1};
+	for (int x = 0; x < 64; ++x)
+	{
+		for (int z = 32; z <= 34; ++z)
+		{
+			keepClear.At(x, z) = 0;
+		}
+	}
+	const std::vector taken {settlement::Field {.x = 145.0f, .z = 325.0f}};
+	for (uint32_t number = 0; number < 100; ++number)
+	{
+		for (const auto& farm :
+		     settlement::FishFarms(shore.town, shore.aboveSea, shore.sea, keepClear, taken, 5, number, settings))
+		{
+			EXPECT_GE(farm.z, 320.0f);
+			EXPECT_LE(farm.z, 340.0f);
+			EXPECT_FALSE(farm.x == 145.0f && farm.z == 325.0f);
+		}
+	}
+}
+
+TEST(LandgenTowns, ATownFarFromTheShoreHasNoFishFarm)
+{
+	FakeShore shore;
+	// The whole land is 10 m above the sea
+	for (auto& height : shore.aboveSea.values)
+	{
+		height = 10.0f;
+	}
+	for (uint32_t number = 0; number < 50; ++number)
+	{
+		EXPECT_TRUE(settlement::FishFarms(shore.town, shore.aboveSea, shore.sea, Grid<uint8_t> {64, 0}, {}, 5, number,
+		                                  settlement::FarmSettings {})
+		                .empty());
+	}
 }
 
 TEST(LandgenTowns, TheTownOfTheStartIsWhereThePlanPutsIt)
@@ -589,6 +770,51 @@ TEST(LandgenTowns, TheHeightsOfTheTownsSpreadAsTheTownsOfTheStory)
 	EXPECT_LE(median, 50.2f);
 	EXPECT_LT(heights.front(), 27.5f);
 	EXPECT_GT(heights.back(), 75.0f);
+}
+
+TEST(LandgenTowns, TheTownsOfOneLandTakeEachTenthOfTheHeights)
+{
+	// Flat squares of 40 corners at heights from 6 m to 146 m in steps of 2 m
+	FakeLand land;
+	for (int x = 0; x < 513; ++x)
+	{
+		for (int z = 0; z < 513; ++z)
+		{
+			const int step = (((x / 40) * 29) + ((z / 40) * 11)) % 71;
+			land.heights.At(x, z) = (6.0f + (2.0f * static_cast<float>(step))) / 0.67f;
+		}
+	}
+	const settlement::SiteSettings settings;
+	const settlement::Site first {.x = 256.0f, .z = 256.0f};
+	for (uint64_t seed = 1; seed <= 30; ++seed)
+	{
+		const auto sites =
+		    settlement::FindSites(land.heights, HeightCurve {}, land.sea, land.rivers, first, {}, seed, settings);
+		if (sites.size() < 10)
+		{
+			continue;
+		}
+		// The ten first towns take a tenth each, so they stand in most of the tenths. A town takes a near tenth where the
+		// reach has no place of its own tenth.
+		std::set<size_t> tenths;
+		for (size_t i = 0; i < 10; ++i)
+		{
+			const float metres = land.heights.At(static_cast<int>(sites[i].x), static_cast<int>(sites[i].z)) * 0.67f;
+			const auto above = std::ranges::upper_bound(settings.heightTenths, metres);
+			tenths.insert(static_cast<size_t>(above - settings.heightTenths.begin()));
+		}
+		EXPECT_GE(tenths.size(), 7u) << seed;
+		// No town is farther from the towns before it than the farthest town of the story from its nearest town
+		for (size_t i = 0; i < sites.size(); ++i)
+		{
+			float before = Distance(sites[i].x, sites[i].z, first.x, first.z);
+			for (size_t j = 0; j < i; ++j)
+			{
+				before = std::min(before, Distance(sites[i].x, sites[i].z, sites[j].x, sites[j].z));
+			}
+			EXPECT_LE(before * 10.0f, settings.farthestNearest + 0.01f);
+		}
+	}
 }
 
 TEST(LandgenTowns, AStartFarFromTheGoodGroundStillHasTowns)

@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 
 #include <array>
 #include <bit>
@@ -46,6 +47,40 @@ template <typename Value>
 	const auto wordsA = std::bit_cast<Words>(a);
 	const auto wordsB = std::bit_cast<Words>(b);
 	return SameWords(wordsA, wordsB);
+}
+
+/// Whether two runs of values have the same bits. This compares the bits as 64-bit words. For a long run with few changes,
+/// this is faster than a test of each value.
+template <typename Value>
+[[nodiscard]] bool SameRun(std::span<const Value> a, std::span<const Value> b)
+{
+	static_assert(std::is_trivially_copyable_v<Value> && sizeof(Value) % sizeof(uint32_t) == 0);
+	if (a.size() != b.size())
+	{
+		return false;
+	}
+	const auto* bytesA = reinterpret_cast<const unsigned char*>(a.data());
+	const auto* bytesB = reinterpret_cast<const unsigned char*>(b.data());
+	const size_t bytes = a.size_bytes();
+	uint64_t difference = 0;
+	size_t at = 0;
+	for (; at + sizeof(uint64_t) <= bytes; at += sizeof(uint64_t))
+	{
+		uint64_t wordA = 0;
+		uint64_t wordB = 0;
+		std::memcpy(&wordA, bytesA + at, sizeof(uint64_t));
+		std::memcpy(&wordB, bytesB + at, sizeof(uint64_t));
+		difference |= wordA ^ wordB;
+	}
+	for (; at < bytes; at += sizeof(uint32_t))
+	{
+		uint32_t wordA = 0;
+		uint32_t wordB = 0;
+		std::memcpy(&wordA, bytesA + at, sizeof(uint32_t));
+		std::memcpy(&wordB, bytesB + at, sizeof(uint32_t));
+		difference |= wordA ^ wordB;
+	}
+	return difference == 0;
 }
 
 } // namespace openblack::same_bits

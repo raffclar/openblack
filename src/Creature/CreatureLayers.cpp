@@ -191,7 +191,13 @@ std::optional<ShareClip> creature_layers::ShareOf(const BodyAction& body, bool p
 	if (IsPlaying(body))
 	{
 		// The confused look of a walk that waits for its route is a part of the walk, which keeps the stand
-		return ShareClip {.animation = partOfMove ? animations::k_Stand : ShareAnimation(body), .timeMs = body.timeMs};
+		const auto animation = partOfMove ? animations::k_Stand : ShareAnimation(body);
+		// The animation of a dance move lasts as long as its move, also while the finish plays
+		const bool danceMove = body.kind == BodyAction::Kind::Dance && animation >= animations::k_FirstDanceMove &&
+		                       animation < animations::k_FirstDanceMove + animations::k_DanceMoveCount;
+		return ShareClip {.animation = animation,
+		                  .timeMs = body.timeMs,
+		                  .lengthMs = danceMove ? std::optional(DanceMoveLength(body)) : std::nullopt};
 	}
 	if (legsTimeMs.has_value())
 	{
@@ -296,13 +302,29 @@ std::optional<size_t> creature_layers::ChooseDanceMove(bool first, const std::fu
 	}
 }
 
+uint32_t creature_layers::DanceMoveFactor(const std::array<uint32_t, animations::k_DanceMoveCount>& factors, size_t move)
+{
+	if (move < animations::k_FirstDanceMove || move >= animations::k_FirstDanceMove + factors.size())
+	{
+		return 1;
+	}
+	return factors.at(move - animations::k_FirstDanceMove);
+}
+
+float creature_layers::DanceMoveLength(const BodyAction& body)
+{
+	// The game multiplies the whole numbers of the length and of the species
+	return static_cast<float>(static_cast<int64_t>(body.danceMoveMs) * body.danceMoveFactor);
+}
+
 float creature_layers::DanceMoveTime(const BodyAction& body, uint32_t duration)
 {
-	if (body.kind != BodyAction::Kind::Dance || body.phase != BodyAction::Phase::Loop || body.danceMoveMs <= 0.0f)
+	const auto length = DanceMoveLength(body);
+	if (body.kind != BodyAction::Kind::Dance || body.phase != BodyAction::Phase::Loop || length <= 0.0f)
 	{
 		return body.timeMs;
 	}
-	return body.timeMs * static_cast<float>(duration) / body.danceMoveMs;
+	return body.timeMs * static_cast<float>(duration) / length;
 }
 
 BodyAction creature_layers::Hurry(BodyAction body)
@@ -363,13 +385,15 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 
 	if (body.kind == BodyAction::Kind::Dance && body.phase == BodyAction::Phase::Loop)
 	{
-		// Each move lasts the same real time. At the end of a move, the next move starts with the time that is left over.
+		// Each move lasts the length of a move times the number of the species for the move, in real time. At the end of
+		// a move, the next move starts with the time that is left over.
 		if (!body.chooseDanceMove)
 		{
+			const auto moveLength = DanceMoveLength(body);
 			body.timeMs += realMilliseconds.value_or(milliseconds);
-			if (body.timeMs >= body.danceMoveMs)
+			if (body.timeMs >= moveLength)
 			{
-				body.timeMs = body.danceMoveMs > 0.0f ? body.timeMs - body.danceMoveMs : 0.0f;
+				body.timeMs = moveLength > 0.0f ? body.timeMs - moveLength : 0.0f;
 				body.chooseDanceMove = true;
 				body.firstDanceMove = false;
 			}

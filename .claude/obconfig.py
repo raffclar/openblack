@@ -39,6 +39,7 @@ SHELL_KEYS = {
     "OB_TRAIN": "paths.mergeTrain",
     "OB_LEAD_LOG": "paths.leadLog",
     "OB_GAME_DATA": "paths.gameData",
+    "OB_GATE_REFERENCE": "paths.gateReference",
     "OB_CLANG_FORMAT": "tools.clangFormat",
     "OB_BUILD_TOOL": "tools.obBuild",
     "OB_PYTHON": "tools.python",

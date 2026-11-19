@@ -31,6 +31,9 @@ namespace openblack::player_statistics
 /// alignment and their creature's alignment (nothing without a creature), and counts the towns on the land. On the next
 /// land of the same game, these stay at nothing, as the new land clears them.
 void GameStarts(ecs::Registry& registry);
+/// The start values that GameStarts notes, only for the players that have statistics: the alignments of each player and
+/// their creature, and the count of the towns. A save of a game writes these values, as the load of the save notes them.
+void NoteStarts(ecs::Registry& registry);
 
 /// What the game's systems count, each in the registry its players are in. A child is born to one of the player's people
 void CountBirth(ecs::Registry& registry, PlayerNames player);

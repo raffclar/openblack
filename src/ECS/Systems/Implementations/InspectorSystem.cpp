@@ -37,6 +37,7 @@
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
@@ -128,6 +129,11 @@ public:
 		if (Locator::time::has_value())
 		{
 			Locator::time::value().RestartClock(date);
+		}
+		// The mouse that the view report gives does not follow the system in a seeded run
+		if (Locator::ownReportSystem::has_value())
+		{
+			Locator::ownReportSystem::value().PinSystemMouse(platform_mouse::k_DeterministicRunMouse);
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector: seeded run, seed {}{}", seed,
 		                   date.has_value() ? ", date pinned" : ", wall clock");

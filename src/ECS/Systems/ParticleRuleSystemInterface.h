@@ -134,8 +134,10 @@ public:
 	}
 	/// Whether an effect that its thing draws shows in this frame: it shows only while the frame draws its thing
 	virtual void SetShown(EffectId /*id*/, bool /*shown*/) {}
-	/// An effect that its draw shows as its last step left it, with no blend from the step before. The seeds over the
-	/// icons of the worship sites and the hands of the village centres draw their effects in this way.
+	/// An effect that its draw shows as its last step left it, with no blend from the step before. These seeds draw their
+	/// effects in this way: the seeds over the icons of the worship sites and the hands of the village centres, the
+	/// globes, the seeds on the map and in the creature's room of the temple, and the seeds of the gesture hints. The
+	/// effect of the miracle in the hand also draws in this way.
 	virtual void SetDrawnAtLastStep(EffectId /*id*/) {}
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
 	/// when negative), staying where it was made, and ending when its owner object (if any) goes. Its random numbers are

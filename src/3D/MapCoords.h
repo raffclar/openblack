@@ -57,6 +57,15 @@ struct MapCoords
 
 	constexpr bool operator==(const MapCoords& other) const = default;
 
+	/// Gives the values that a saved game keeps to a visitor, in the order of the registered fields
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.x, self.z, self.altitude);
+	}
+	/// Each saved value is a number, a flag, or an option or a fixed list of these, thus a save writes them in one block
+	static constexpr bool k_SavesFlat = true;
+
 	/// x and z added as integers, wrapping, and the altitude too
 	constexpr MapCoords& operator+=(const MapCoords& other)
 	{

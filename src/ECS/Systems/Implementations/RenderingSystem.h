@@ -23,6 +23,7 @@
 #include "3D/AxisAlignedBoundingBox.h"
 #include "ECS/BoatLaunchRules.h"
 #include "Graphics/InstanceUpload.h"
+#include "Graphics/ListPlaces.h"
 #include "RenderingSystemCommon.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -150,7 +151,7 @@ private:
 	/// drawn at all: their other draws (a building's part built, a graveyard's graves) follow them
 	std::unordered_map<entt::entity, uint8_t> _fadingThings;
 	/// The place of each thing in the land's draw list as it was last made, the nearest blocks first
-	std::unordered_map<entt::entity, uint32_t> _listPlaces;
+	graphics::list_places::Places _listPlaces;
 	/// The place of a thing in the land's draw list, zsort::k_Unlisted for a thing not in it
 	[[nodiscard]] uint32_t ListPlace(entt::entity entity) const;
 	entt::sparse_set _goneThings;

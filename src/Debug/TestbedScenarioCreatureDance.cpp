@@ -135,7 +135,8 @@ void openblack::testbed_scenarios::AddCreatureDanceScenarios(std::vector<Scenari
 	                        "two rows on open ground. The player's tiger stands forty metres to the east. One second in, it "
 	                        "is told to practise its dance.",
 	                        "The tiger dances where it stands with a smile: the start of its dance, then dance moves chosen "
-	                        "at random, each one second long, for 20 seconds. Then it plays the finish of the dance."));
+	                        "at random, each eight seconds long and at the speed of its animation, for 20 seconds. Then it "
+	                        "plays the finish of the dance."));
 
 	// The dance around a thing and the dance outside the temple make no dance of their own: they start the creature's
 	// last dance, if it has one

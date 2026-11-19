@@ -78,9 +78,11 @@ constexpr float k_MetresPerAltitude = 0.67f;
 [[nodiscard]] std::string_view TribeName(landgen::settlement::Tribe tribe);
 
 /// The lines of a land script that make the temple and the towns of a generated land, with their people and fields, as
-/// a land of the story makes them. The town of the start has the number 0 and belongs to player one. The neutral towns
-/// have the numbers after it. The lines use only kinds of the game.
-[[nodiscard]] std::string SettlementScript(const landgen::settlement::Plan& plan);
+/// a land of the story makes them. The town of the start has the number 0 and belongs to player one. The start towns of
+/// the other players (`otherPlayers`, player two first) have the next numbers, and each player also gets its temple. The
+/// neutral towns have the numbers after them. The lines use only kinds of the game.
+[[nodiscard]] std::string SettlementScript(const landgen::settlement::Plan& plan,
+                                           std::span<const landgen::settlement::Plan> otherPlayers = {});
 
 /// The settings of the generator for the land of a seed, with each other choice at its first value
 [[nodiscard]] landgen::Settings SettingsFor(uint64_t seed);

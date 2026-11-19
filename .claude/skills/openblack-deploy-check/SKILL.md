@@ -38,7 +38,7 @@ python -I .claude/skills/openblack-deploy-check/scripts/pre_deploy_gate.py \
   local page blocks the browser reports. Never run a shipping server tar outside the gate without such a DSN: a
   local test on 2026-11-18 made the Sentry issue OPENBLACK-P ("Desync: GameStanding") that way.
 - The merge train runs the web items of the gate for each car on WebGPU, on the page folder of a web build in place of
-  the tar (`--web-page <web build>/bin/Release --renderers webgpu`, through `web_check.sh` of the skill
+  the tar (`--web-page <web build>/bin/Release --renderers webgpu --reference <the reference>`, through `web_check.sh` of the skill
   openblack-merge-train).
 - If the gate prints FAIL, STOP. Do not deploy, do not edit or skip an item, and report the gate output. The
   screenshots, `console.log` and `page-log.txt` of each run are in the work folder.
@@ -50,6 +50,7 @@ Items:
 | web: tar unpacks with version.txt | `openblack.wasm` and `version.txt` are in the tar. |
 | web: served with the live headers | The local server gives COOP, COEP, CORP, the content policy, nosniff and the MIME types of the site's Caddyfile. |
 | web `<renderer>` land1: game started | The page as a player gets it: the name box, the first question of Land 1 (shot `question`), then a click on OK and the start of the story 20 seconds later (shot `past`). |
+| `...`: OK answered the first question | The game log has the answer to the question ("The player answered the start-of-game question"). The gate finds OK by its black arrow in a screenshot: a build with the developer tools has a fifth answer and a taller box, so OK is lower there. Builds before web-gate-land1-1 do not write the line. |
 | `... <shot>`: land drew | At least 50 % of the pixels are lit and 5 % have land colours. With `--reference`, the colours are like the same shot of the live build (likeness 0.35 or more). |
 | `...`: console clean | No console error (the 404 of `developer-tools.txt` is normal), no WebGPU or WebGL validation message, no uncaught exception, no worker load error. |
 | `...`: every page file answered | The local server answered each request of the page (no 404 other than `developer-tools.txt`). |

@@ -23,6 +23,7 @@
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/SoundTagLife.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
 
@@ -500,7 +501,8 @@ TEST_F(SoundTags, AMovedSoundKeepsItsOffset)
 }
 
 // A saved game loads: the sounds of points and the sounds attached to objects do not come back, and an object's own
-// sound starts again on the next turn. The tag keeps its count of the turns.
+// sound starts again on the next turn. The tag keeps its count of the turns. The tag of an attached sound stays in the
+// world, silent, so that a save after the load keeps the same entities.
 TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -520,7 +522,8 @@ TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 
 	_tags.ForgetSavedSounds();
 	_tags.ForgetUnclaimedSounds();
-	EXPECT_FALSE(registry.Valid(attached));
+	ASSERT_TRUE(registry.Valid(attached));
+	EXPECT_TRUE(registry.Get<const ecs::components::SoundTag>(attached).silenced);
 	// The count of the turns is a part of the synced world, so the load keeps it
 	EXPECT_EQ(registry.Get<ecs::components::SoundTag>(lantern).turns, turns);
 	EXPECT_TRUE(_tags.PointSounds().empty());
@@ -530,10 +533,14 @@ TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	EXPECT_EQ(Audio().emitters.size(), before + 1);
 	EXPECT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter != entt::null);
+	EXPECT_TRUE(registry.Get<const ecs::components::SoundTag>(attached).emitter == entt::null);
+	// A detach removes the silent tag
+	_tags.DetachObjectSound(box, k_Sound);
+	EXPECT_FALSE(registry.Valid(attached));
 }
 
 // A load attaches a sound to an object again, as a creature's hum: the sound takes back the tag that it had, so that a
-// save after the load keeps the same entities. A sound that the load does not attach again loses its tag.
+// save after the load keeps the same entities. A sound that the load does not attach again keeps its tag, silent.
 TEST_F(SoundTags, ASoundThatALoadAttachesAgainTakesBackItsTag)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -548,7 +555,9 @@ TEST_F(SoundTags, ASoundThatALoadAttachesAgainTakesBackItsTag)
 	EXPECT_EQ(_tags.AttachObjectSound(creature, k_Sound, true), hum);
 	_tags.ForgetUnclaimedSounds();
 	EXPECT_TRUE(registry.Valid(hum));
-	EXPECT_FALSE(registry.Valid(knock));
+	ASSERT_TRUE(registry.Valid(knock));
+	EXPECT_TRUE(registry.Get<const ecs::components::SoundTag>(knock).silenced);
+	EXPECT_FALSE(registry.Get<const ecs::components::SoundTag>(hum).silenced);
 	// The tag starts again as a new tag does
 	const auto& tag = registry.Get<const ecs::components::SoundTag>(hum);
 	EXPECT_TRUE(tag.active);
@@ -640,4 +649,61 @@ TEST_F(SoundTags, AnEndedKeptPointSoundFinishesItsLoop)
 	_tags.EndPointSound(0);
 	_tags.EndPointSound(kept);
 	EXPECT_EQ(_tags.PointSounds().size(), 1u);
+}
+
+// An attached tag goes when its object is gone or has no position. The tag on its own object stays.
+TEST(SoundTagLife, AnAttachedTagGoesWithThePositionOfItsObject)
+{
+	ecs::Registry registry;
+	const auto object = registry.Create();
+	registry.Assign<ecs::components::Transform>(object, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	ecs::components::SoundTag tag {.sound = k_Sound, .offset = glm::vec3(0.0f), .active = true, .owner = object};
+	EXPECT_FALSE(ecs::AttachedSoundTagLost(registry, tag));
+	registry.Remove<ecs::components::Transform>(object);
+	EXPECT_TRUE(ecs::AttachedSoundTagLost(registry, tag));
+	registry.Destroy(object);
+	EXPECT_TRUE(ecs::AttachedSoundTagLost(registry, tag));
+	tag.owner = entt::null;
+	EXPECT_FALSE(ecs::AttachedSoundTagLost(registry, tag));
+}
+
+// A game server has no audio. Its turn removes the tags of gone objects, as the turn of a computer with audio does.
+TEST_F(SoundTags, AComputerWithNoAudioRemovesTheTagsOfAGoneObject)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	const auto carried = CreateObjectAt({30.0f, 0.0f, 0.0f});
+	const auto own = CreateObjectAt({40.0f, 0.0f, 0.0f});
+	registry.Assign<ecs::components::SoundTag>(own, k_Sound, glm::vec3(0.0f), true);
+	const auto hum = _tags.AttachObjectSound(creature, k_Sound, true);
+	const auto rattle = _tags.AttachObjectSound(carried, k_Sound, true);
+	Locator::sounds::reset();
+
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_TRUE(registry.Valid(hum));
+	EXPECT_EQ(registry.Get<ecs::components::SoundTag>(hum).turns, 1);
+
+	registry.Destroy(creature);
+	registry.Remove<ecs::components::Transform>(carried);
+	registry.Remove<ecs::components::Transform>(own);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_FALSE(registry.Valid(hum));
+	EXPECT_FALSE(registry.Valid(rattle));
+	EXPECT_TRUE(registry.AllOf<ecs::components::SoundTag>(own));
+	EXPECT_EQ(registry.Get<ecs::components::SoundTag>(own).turns, 2);
+	EXPECT_TRUE(Audio().emitters.empty());
+}
+
+// With no audio, a point's sound cannot play and goes. A kept sound stays until its end.
+TEST_F(SoundTags, AComputerWithNoAudioKeepsOnlyTheKeptPointSounds)
+{
+	Locator::sounds::reset();
+	_tags.CreatePointSound(k_Sound, glm::vec3(10.0f, 0.0f, 0.0f), true);
+	const auto kept = _tags.KeepPointSound(k_Sound, glm::vec3(10.0f, 0.0f, 0.0f));
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	const auto points = _tags.PointSounds();
+	ASSERT_EQ(points.size(), 1u);
+	EXPECT_EQ(points.front().kept, kept);
+	_tags.EndPointSound(kept);
+	EXPECT_TRUE(_tags.PointSounds().empty());
 }
