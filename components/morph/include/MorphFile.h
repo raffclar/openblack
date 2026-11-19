@@ -331,7 +331,8 @@ protected:
 	std::vector<uint8_t> _creaturePrefix;
 	/// The sound bank's name as stored, with whatever follows its end mark
 	std::array<char, 0x20> _soundBankRaw {};
-	/// The seven sizes (one in older files) between the sound bank's name and the fight blows
+	/// The seven numbers of the dance moves (one for all moves in older files) between the sound bank's name and the
+	/// fight blows
 	std::vector<uint32_t> _creatureSizes;
 	std::array<TattooSiteRaw, 8> _tattooRaw {};
 	/// Every number after the last field read, to the end of the file
@@ -400,6 +401,9 @@ public:
 	[[nodiscard]] const std::optional<CreatureEyes>& GetCreatureEyes() const noexcept { return _creatureEyes; }
 	[[nodiscard]] const std::optional<TattooSites>& GetTattooSites() const noexcept { return _tattooSites; }
 	[[nodiscard]] const std::optional<CreatureBlows>& GetCreatureBlows() const noexcept { return _creatureBlows; }
+	/// For each of the seven dance moves, how many times the length of one move of the dance its animation lasts. A file
+	/// with one number gives it to all moves, and a file without the numbers gives 1 to all moves.
+	[[nodiscard]] std::array<uint32_t, 7> GetDanceMoveFactors() const noexcept;
 	[[nodiscard]] const std::optional<CreatureActionPoints>& GetCreatureActionPoints() const noexcept
 	{
 		return _creatureActionPoints;
