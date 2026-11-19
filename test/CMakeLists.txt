@@ -738,6 +738,11 @@ if (Python3_Interpreter_FOUND)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/.claude/skills/openblack-deploy-check/scripts/test_gate_checks.py
   )
   set_tests_properties(test_deploy_gate_checks PROPERTIES SKIP_RETURN_CODE 77)
+  # The tool that adds the function names and the source lines to the stack of a crash report of the web game
+  add_test(
+    NAME test_web_crash_symbolize
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/crash/test_web_crash_symbolize.py
+  )
 endif ()
 # The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
 # parallel ctest they don't also crowd each other

@@ -652,6 +652,9 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 	View().ShowLoadingFrame();
 	PlaceGeneratedThings(land);
 	// The temple and the first town of the player come from the lines of a land script, as on a land of the story
+	// In a network game, the lines run as the map script of a network game. Thus they start no computer mind for a god
+	// that a human plays.
+	_runsNetworkMapScript = _humansFromSession;
 	try
 	{
 		lhscriptx::Script script;
@@ -662,6 +665,7 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the script of the town of generated land {}: {}", choices.seed,
 		                    e.what());
 	}
+	_runsNetworkMapScript = false;
 	// As on a land: the land is laid out. A generated land has no footpath file and no slots to fill.
 	LayOutLand(std::nullopt, std::nullopt);
 
