@@ -44,6 +44,9 @@
 #include <execinfo.h>
 #define OPENBLACK_HAS_EXECINFO 1
 #endif
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
 #endif
 
 namespace openblack::crash_handler
@@ -80,6 +83,10 @@ struct HandlerState
 	std::array<char, 1024> message {};
 	std::array<char, 512> detail {};
 	std::array<char, 512> file {};
+#ifdef __EMSCRIPTEN__
+	/// The stack text of the web browser at the crash. The frames of the report point into it.
+	std::array<char, 32 * 1024> webStack {};
+#endif
 	/// Gets each crash after the report and the log
 	std::atomic<ReportForwarder> forwarder {nullptr};
 };
@@ -347,6 +354,12 @@ std::span<const StackFrame> CaptureStack()
 	}
 	std::free(names);
 	return {state.frames.data(), static_cast<size_t>(std::max(count, 0))};
+#elif defined(__EMSCRIPTEN__)
+	// The web browser gives the stack as text only when the game asks for it, thus it costs nothing before a crash
+	auto& state = State();
+	emscripten_get_callstack(EM_LOG_JS_STACK, state.webStack.data(), static_cast<int>(state.webStack.size()));
+	const auto count = crash_report::ParseWebStack(state.webStack.data(), state.frames);
+	return {state.frames.data(), count};
 #else
 	return {};
 #endif
