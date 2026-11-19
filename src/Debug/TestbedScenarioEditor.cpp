@@ -308,11 +308,26 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Turn the "
 	                   "camera from the start area to the land round it and to the coast.",
 	    .expected = "Flat terraces stand at a few levels, with sharp cliffs between them. Some parts of the land are "
-	                "calm, with wide terraces, and other parts have many cliffs. Along the sea, a flat strip of 30 to "
-	                "45 metres goes round the island, with a bank or a cliff behind it.",
+	                "calm, with wide terraces, and other parts have many cliffs. Along the sea, flat shore steps of about "
+	                "40 metres go round the island, with a bank, a cliff or a long beach behind them.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_coast",
+	    .name = "The beaches, banks and sea cliffs of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly round "
+	                   "the coast of the island.",
+	    .expected = "The coast has three kinds of parts. On a beach, flat sand goes 250 to 450 metres from the water, "
+	                "with palms at its back and dunes behind it, and some beaches have groups of spiky pillars. On a "
+	                "bank, a flat strip of about 40 metres goes to a slope. On a sea cliff, a steep face rises 25 to 45 "
+	                "metres from the flat strip, also where the land behind is low, and rivers cut through the cliff.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
 	});
 
 	all.push_back({

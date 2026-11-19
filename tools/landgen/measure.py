@@ -116,7 +116,10 @@ def terrain_measures(heights, land, sand, curve=None):
     if n == 0:
         return out
     slope = slope_degrees(heights)
-    sea = ndimage.distance_transform_edt(land) * CELL
+    # The distance from the sea: the water at altitude 1 or lower. A lake above the sea on a generated land is not
+    # the sea.
+    open_sea = ~land & (heights <= 1.5 * HEIGHT_UNIT)
+    sea = ndimage.distance_transform_edt(~open_sea) * CELL
     h = heights[land]
     s = slope[land]
     out["land_km2"] = n * CELL * CELL / 1e6

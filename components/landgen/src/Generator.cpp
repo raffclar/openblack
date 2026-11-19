@@ -26,6 +26,9 @@ using biomes::Biome;
 namespace
 {
 constexpr uint8_t k_SeaLevelAltitude = 3;
+/// A corner at this altitude or lower holds water, and a corner one unit higher is on the coast line
+constexpr int k_WaterAltitude = 1;
+constexpr int k_CoastAltitude = 2;
 /// How far the noise that bends the rivers moves the land for the water, up or down, in altitude units
 constexpr float k_RiverBend = 3.0f;
 constexpr float k_MetresPerCorner = 10.0f;
@@ -210,14 +213,17 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 				sound = static_cast<uint8_t>(water);
 				cell.flags = k_OpenWaterFlag;
 			}
-			else if (high <= k_SeaLevelAltitude)
-			{
-				cell.properties.hasWater = 1;
-				sound = static_cast<uint8_t>(fresh ? Sound::StillFreshWater : Sound::Coastal);
-			}
 			else if (low <= k_SeaLevelAltitude)
 			{
-				cell.properties.coastLine = 1;
+				// As on the lands of the story, the altitude of the cell's own corner gives its water and its coast
+				if (a00 <= k_WaterAltitude)
+				{
+					cell.properties.hasWater = 1;
+				}
+				else if (a00 <= k_CoastAltitude)
+				{
+					cell.properties.coastLine = 1;
+				}
 				sound = static_cast<uint8_t>(fresh ? Sound::StillFreshWater : Sound::Coastal);
 			}
 			else if (const float lake =
@@ -316,9 +322,6 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                       .mountainTalus = settings.thermal.mountainTalus,
 	                       .rate = settings.thermal.rate},
 	                      cliffs.values);
-	terrain::ShoreShelf(heights, seed, settings.shelf);
-	clock.Done("shore");
-
 	Grid<uint8_t> riverCorners(side, 0);
 	for (const auto& river : land.rivers)
 	{
@@ -328,6 +331,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 		}
 	}
 	const auto riverDistance = climate::DistanceToWater(riverCorners);
+	const auto shoreWidths = terrain::ShoreShelf(heights, &riverDistance, seed, settings.shelf);
+	clock.Done("shore");
+
 	const auto sea = Mask(side, [&heights](size_t i) { return heights.values[i] <= terrain::k_SeaLevel; });
 	const StartSettings startSettings;
 	const auto startSea = climate::DistanceToWater(sea);
@@ -420,8 +426,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 			        .moisture = moisture.values[index],
 			        .slope = slopes.values[index],
 			        .seaDistance = seaDistance.values[index],
-			        .beachWidth =
+			        .beachWidth = std::max(
 			            4.0f + (8.0f * noise::SmoothStep(-0.4f, 0.4f, noise::Fractal(beachSeed, u * 10.0f, v * 10.0f, 2))),
+			            shoreWidths.values[index]),
 			        .wet = basins.wet.values[index] != 0 || lakeLevels.values[index] >= 0.0f,
 			        .blight = noise::Fractal(blightSeed, u * 6.0f, v * 6.0f, 3),
 			    },

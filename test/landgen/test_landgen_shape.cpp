@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdlib>
 
 #include <algorithm>
 #include <array>
@@ -472,35 +473,91 @@ TEST(LandgenTerrain, TerraceFillsTheHollowsOfItsFloor)
 	}
 }
 
-TEST(LandgenTerrain, ShoreShelfMakesAFlatStripAndABank)
+namespace
+{
+/// Shore settings with one kind of coast everywhere. The noise is always between -5 and 5.
+terrain::ShelfSettings OneCoast(bool beach, bool cliff)
+{
+	return {
+	    .beachStart = beach ? -6.0f : 5.0f,
+	    .beachFull = beach ? -5.0f : 6.0f,
+	    .cliffStart = cliff ? 6.0f : -5.0f,
+	    .cliffFull = cliff ? 5.0f : -6.0f,
+	    .beachLow = 12.0f,
+	    .beachHigh = 12.0f,
+	    .beachBack = 6.0f,
+	    .duneRise = 4.0f,
+	    .bankLow = 10.0f,
+	    .bankHigh = 10.0f,
+	    .cliffRise = 28.0f,
+	    .cliffTopLow = 60.0f,
+	    .cliffTopHigh = 60.0f,
+	    .cliffDepth = 6.0f,
+	    .cliffBack = 3.0f,
+	};
+}
+} // namespace
+
+TEST(LandgenTerrain, ShoreShelfMakesTheShoreStepsAndABank)
 {
 	// Land at 100 from x = 2, a low strip of land at 4 along z = 10, and the sea at x = 0 and 1
 	auto heights = MakeGrid(30, [](int x, int z) {
 		if (x < 2)
 		{
-			return 0.0f;
+			return x == 1 ? 2.5f : 0.0f;
 		}
 		return z == 10 ? 4.0f : 100.0f;
 	});
-	const terrain::ShelfSettings settings {
-	    .widthLow = 3.0f,
-	    .widthHigh = 3.0f,
-	    .altitude = 3.6f,
-	    .rise = 0.25f,
-	    .bankLow = 10.0f,
-	    .bankHigh = 10.0f,
-	};
-	terrain::ShoreShelf(heights, 1, settings);
+	const auto widths = terrain::ShoreShelf(heights, nullptr, 1, OneCoast(false, false));
 	constexpr int k_Z = 20;
+	// The sea is at altitude 1 or lower
 	EXPECT_EQ(heights.At(0, k_Z), 0.0f);
-	// The strip is flat for three corners from the water, then the bank rises 10 for each corner
-	EXPECT_NEAR(heights.At(2, k_Z), 3.85f, 1e-4f);
-	EXPECT_NEAR(heights.At(4, k_Z), 4.35f, 1e-4f);
-	EXPECT_NEAR(heights.At(5, k_Z), 14.35f, 1e-4f);
-	EXPECT_NEAR(heights.At(10, k_Z), 64.35f, 1e-4f);
+	EXPECT_EQ(heights.At(1, k_Z), 1.0f);
+	// The shore steps of the lands of the story, then the bank rises 10 for each corner
+	EXPECT_NEAR(heights.At(2, k_Z), 2.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(3, k_Z), 3.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(4, k_Z), 3.2f, 1e-4f);
+	EXPECT_NEAR(heights.At(5, k_Z), 4.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(6, k_Z), 14.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(10, k_Z), 54.0f, 1e-4f);
 	EXPECT_EQ(heights.At(20, k_Z), 100.0f);
+	EXPECT_EQ(widths.At(10, k_Z), 4.0f);
 	// Ground lower than the bank does not change
 	EXPECT_EQ(heights.At(10, 10), 4.0f);
+}
+
+TEST(LandgenTerrain, ShoreShelfMakesALongBeachWithDunesBehindIt)
+{
+	auto heights = MakeGrid(30, [](int x, int) { return x < 2 ? 0.0f : 100.0f; });
+	const auto widths = terrain::ShoreShelf(heights, nullptr, 1, OneCoast(true, false));
+	constexpr int k_Z = 20;
+	EXPECT_NEAR(heights.At(5, k_Z), 4.0f, 1e-4f);
+	// The beach rises from the fourth step at 4 to its back at 6, twelve corners from the water
+	EXPECT_NEAR(heights.At(9, k_Z), 5.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(13, k_Z), 6.0f, 1e-4f);
+	// The dunes rise 4 for each corner
+	EXPECT_NEAR(heights.At(15, k_Z), 14.0f, 1e-4f);
+	EXPECT_EQ(widths.At(10, k_Z), 12.0f);
+}
+
+TEST(LandgenTerrain, ShoreShelfLiftsACliffButNotAtARiver)
+{
+	// Low land at 10 from x = 2, and a river along z = 20
+	auto heights = MakeGrid(40, [](int x, int) { return x < 2 ? 0.0f : 10.0f; });
+	const auto river = MakeGrid(40, [](int, int z) { return static_cast<float>(std::abs(z - 20)); });
+	const auto widths = terrain::ShoreShelf(heights, &river, 1, OneCoast(false, true));
+	constexpr int k_Z = 30;
+	EXPECT_NEAR(heights.At(5, k_Z), 4.0f, 1e-4f);
+	// The face rises 28 for each corner to the top at 60, which stays level for six corners and then falls 3 a corner
+	EXPECT_NEAR(heights.At(6, k_Z), 32.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(7, k_Z), 60.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(13, k_Z), 60.0f, 1e-4f);
+	EXPECT_NEAR(heights.At(15, k_Z), 54.0f, 1e-4f);
+	// Far from the sea the fall of the top goes below the land, which does not change
+	EXPECT_EQ(heights.At(35, k_Z), 10.0f);
+	// The river cuts through the cliff
+	EXPECT_EQ(heights.At(10, 20), 10.0f);
+	EXPECT_EQ(widths.At(10, k_Z), 4.0f);
 }
 
 namespace
