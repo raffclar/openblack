@@ -88,4 +88,24 @@ constexpr float k_MetresPerAltitude = 0.67f;
 
 /// The settings of the generator for the land of a seed, with each other choice at its first value
 [[nodiscard]] landgen::Settings SettingsFor(uint64_t seed);
+
+/// How the players of a generated land start, as the players of the skirmish land with the same count of players
+struct PlayerStart
+{
+	/// In the first turn, the god of player one brings the creature that the profile keeps. Then the creatures of the
+	/// computer gods can take a size like the size of this creature.
+	bool profileCreatureBrought;
+	/// When the land is laid out, the god slots with no human get a computer god
+	bool slotsFilled;
+};
+
+/// How the players start on a generated land for a count of players:
+/// - A land for more than one player starts as a skirmish land starts: player one brings the creature of the profile.
+///   A land for one player has no skirmish land to copy, so it stays as before.
+/// - A network game brings the creatures of its players in its own way. It fills its slots with no human, as the
+///   skirmish lands do in a network game. A game that only computer gods play also fills its slots.
+[[nodiscard]] constexpr PlayerStart PlayerStartOf(int32_t players, bool networkGame, bool allComputerGods)
+{
+	return {.profileCreatureBrought = players > 1 && !networkGame, .slotsFilled = networkGame || allComputerGods};
+}
 } // namespace openblack::generated_land

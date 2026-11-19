@@ -491,3 +491,28 @@ TEST(GeneratedLand, TheComputerGodsTakeTheCreaturesOfTheSkirmishLandWithTheSameC
 	EXPECT_EQ(CountOf(fourScript, "SET_TOWN_BELIEF_CAP"), 12u);
 	EXPECT_NE(fourScript.find(R"(SET_TOWN_BELIEF_CAP(3, "PLAYER_FOUR", 1.000000))"), std::string::npos);
 }
+
+TEST(GeneratedLand, PlayerOneBringsTheProfileCreatureOnALandForMoreThanOnePlayer)
+{
+	// As on the skirmish lands, player one brings the creature that the profile keeps
+	for (const int32_t players : {2, 3, 4})
+	{
+		EXPECT_TRUE(generated_land::PlayerStartOf(players, false, false).profileCreatureBrought) << players;
+		EXPECT_FALSE(generated_land::PlayerStartOf(players, false, false).slotsFilled) << players;
+	}
+	// A land for one player has no skirmish land to copy, and stays as before
+	EXPECT_FALSE(generated_land::PlayerStartOf(1, false, false).profileCreatureBrought);
+	EXPECT_FALSE(generated_land::PlayerStartOf(1, false, false).slotsFilled);
+}
+
+TEST(GeneratedLand, ANetworkGameFillsTheSlotsWithNoHumanAndBringsNoProfileCreature)
+{
+	for (const int32_t players : {1, 2, 3, 4})
+	{
+		const auto network = generated_land::PlayerStartOf(players, true, false);
+		EXPECT_TRUE(network.slotsFilled) << players;
+		EXPECT_FALSE(network.profileCreatureBrought) << players;
+	}
+	// A game that only computer gods play fills its slots too
+	EXPECT_TRUE(generated_land::PlayerStartOf(2, false, true).slotsFilled);
+}
