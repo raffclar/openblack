@@ -375,6 +375,21 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_fairy_rings",
+	    .name = "The fairy rings and the lone pillars of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 64 and the game loads it. Fly to "
+	                   "the fairy rings on the gentle grass and to the lone pillars of rock.",
+	    .expected = "This land is like the first land of the story. Each of its six fairy rings has ten magic mushrooms "
+	                "and two Champi mushrooms round five small rocks, about 17 metres across. About forty groups of lone "
+	                "pillars of limestone stand alone or in pairs, 217 metres or more apart. On the land of seed 42, "
+	                "each fairy ring has six large magic mushrooms. A creature can eat a magic mushroom of a ring.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 64}},
+	});
+
+	all.push_back({
 	    .id = "editor.animals",
 	    .name = "Every animal of the palette",
 	    .facet = Facet::Editor,

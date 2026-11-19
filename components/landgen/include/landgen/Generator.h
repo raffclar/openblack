@@ -22,6 +22,7 @@
 #include "landgen/Countries.h"
 #include "landgen/Cursed.h"
 #include "landgen/Features.h"
+#include "landgen/Formations.h"
 #include "landgen/Grid.h"
 #include "landgen/HeightCurve.h"
 #include "landgen/Hydrology.h"
@@ -88,6 +89,7 @@ struct Settings
 	features::ForestSettings forests;
 	cursed::Settings cursed;
 	swamps::Settings swamps;
+	formations::Settings formations;
 	lighting::Settings lighting;
 	settlement::Settings settlement;
 	settlement::SiteSettings sites;
@@ -152,6 +154,8 @@ struct GeneratedLand
 	std::vector<cursed::Patch> cursedPatches;
 	/// The sheets of green mist over the swamps
 	std::vector<swamps::Sheet> swampSheets;
+	/// The fairy rings and the groups of lone pillars
+	formations::Result formations;
 	/// The puffs of mist and smoke over the cursed places, then the puffs of the green mist over the swamps
 	std::vector<cursed::Mist> mists;
 	StartArea start {};
@@ -171,7 +175,8 @@ struct GeneratedLand
 
 /// Makes a land: the base heights, the erosion, the lakes and rivers, the start area and the places of the towns, the
 /// climate, the biomes, the light, the cells and countries, the temple and town of the start, the neutral towns, the
-/// paths between them and their lanterns, the features, the cursed places, the mist of the swamps and the forests
+/// paths between them and their lanterns, the features, the cursed places, the mist of the swamps, the fairy rings and
+/// lone pillars, and the forests
 [[nodiscard]] GeneratedLand Generate(const Settings& settings);
 
 /// The cell of each corner, from the altitudes, the luminosity and the biomes. A cell's water and sound come from the

@@ -575,6 +575,23 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	land.swampSheets = std::move(swampMist.sheets);
 	land.mists.insert(land.mists.end(), swampMist.mists.begin(), swampMist.mists.end());
 	clock.Done("swamp mist");
+	// The fairy rings and the lone pillars keep out of the cursed places
+	std::vector<formations::Circle> cursedCircles;
+	for (const auto& patch : land.cursedPatches)
+	{
+		cursedCircles.push_back({.x = patch.x, .z = patch.z, .radius = patch.radius});
+	}
+	land.formations = formations::Place({.biomes = land.biomes,
+	                                     .heights = heights,
+	                                     .seaDistance = seaDistance,
+	                                     .keepClear = growClear,
+	                                     .clearings = clearings,
+	                                     .townX = land.start.x,
+	                                     .townZ = land.start.z,
+	                                     .rivers = &rivers,
+	                                     .towns = towns},
+	                                    land.heightCurve, land.features, cursedCircles, seed, settings.formations);
+	clock.Done("fairy rings and pillars");
 
 	// The forests, nearest the town of the start first
 	land.forests = features::GroupForests(land.features, land.settlement.town.x, land.settlement.town.z, settings.forests);

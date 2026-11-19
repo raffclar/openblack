@@ -66,6 +66,14 @@
    0,
    6
   ],
+  "fairy_rings": [
+   0,
+   1
+  ],
+  "fairy_rings_per_km2": [
+   0.0,
+   0.5845218611176057
+  ],
   "flat_pct": [
    23.014413269571616,
    39.775939154118916
@@ -113,6 +121,26 @@
   "lanterns": [
    0,
    48
+  ],
+  "lone_pillar_group_gap_median_m": [
+   139.01569787707413,
+   454.4603191209937
+  ],
+  "lone_pillar_groups_per_km2": [
+   0.0,
+   2.9103608847497093
+  ],
+  "lone_pillars": [
+   0,
+   7
+  ],
+  "lone_pillars_per_km2": [
+   0.0,
+   3.5071311667056344
+  ],
+  "magic_mushrooms": [
+   0,
+   36
   ],
   "main_island_pct": [
    98.80454048346344,

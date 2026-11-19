@@ -27,7 +27,8 @@ The game data folder is `C:/projects/black`. Set `OPENBLACK_GAME_DATA` to use an
      openblack_tests --openblack-test-source=landgen/test_landgen_dump.cpp
    ```
 
-   Add `OPENBLACK_LANDGEN_TREES=<hundredths>` for a land with more stands of trees, as `--landgen "7;trees=2600"`
+   Add `OPENBLACK_LANDGEN_FORMATIONS=0` for the same land with no fairy rings and no lone pillars (the land before
+   them). Add `OPENBLACK_LANDGEN_TREES=<hundredths>` for a land with more stands of trees, as `--landgen "7;trees=2600"`
    gives in the game (the tree benchmarks).
 
 2. Compare: `python -I tools/landgen/measure.py compare <folder>/seed1.json <folder>/seed7.json`.
@@ -64,6 +65,14 @@ generated land: its paths join the towns, and are longer and wind more than the 
 "LGX-4 yes"). `lanterns` counts the street and country lanterns, and `lantern_spacing_median_m` is the median distance
 from a lantern to the nearest lantern. A dump path is 1 when it has lanterns (else 0), then x and z in metres of each
 point. A dump lantern is 0 for a street lantern or 1 for a country lantern, then x and z in metres.
+
+The formation numbers: `magic_mushrooms` counts the magic mushrooms (loose object 18; a dump feature of kind 4 is a
+loose object) and `fairy_rings` the groups of six or more magic mushrooms 10 m or less apart that make a ring round their
+middle (`fairy_rings_per_km2` for each km2). `lone_pillars` counts the fat pillars, the pillars and the second and third
+pillars (not the spiky sea stacks), `lone_pillars_per_km2` and `lone_pillar_groups_per_km2` (pillars 50 m or less apart
+are one group) give them for each km2, and `lone_pillar_group_gap_median_m` is the median distance from a group to the
+nearest other group. Only three of the eight lands of the story have lone pillars and two have a fairy ring, so the
+lowest value of each of these numbers is 0. The four pillars on the summit of the third land count as one group.
 
 `cursed_patches` counts the cursed places: the groups of burnt trees, craters and dark mists that are 150 m or less
 apart. A dark mist has no colour channel above 0x50 (the near black mist of Land 1, the dark mist of Land 4 and the grey

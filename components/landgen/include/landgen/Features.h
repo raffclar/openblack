@@ -87,6 +87,9 @@ enum class Kind : uint8_t
 	/// A feature of the scenery, such as a pillar of rock; type is the game's number of the feature, and size and
 	/// maxSize are its scale
 	Feature,
+	/// A loose object of the land, such as a magic mushroom; type is the game's number of the loose object, and size and
+	/// maxSize are its scale
+	Mobile,
 };
 
 struct Feature

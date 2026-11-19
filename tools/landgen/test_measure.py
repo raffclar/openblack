@@ -131,6 +131,28 @@ class CursedMeasures(unittest.TestCase):
         self.assertFalse(measure.is_dark(0x7E50632F))
 
 
+class FormationMeasures(unittest.TestCase):
+    def test_a_ring_of_mushrooms_is_a_fairy_ring(self):
+        ring = [(100 + 7 * np.cos(a), 200 + 7 * np.sin(a)) for a in np.linspace(0, 2 * np.pi, 10, endpoint=False)]
+        clump = [(900 + 0.5 * k, 900 + 0.3 * k) for k in range(8)]
+        out = measure.formation_measures(ring + clump, [], 2.0)
+        self.assertEqual(out["magic_mushrooms"], 18)
+        self.assertEqual(out["fairy_rings"], 1)
+        self.assertAlmostEqual(out["fairy_rings_per_km2"], 0.5)
+        # Half a ring has a gap of 180 degrees
+        half = [p for p in ring if p[1] >= 200]
+        self.assertEqual(measure.formation_measures(half * 2, [], 2.0)["fairy_rings"], 0)
+
+    def test_the_groups_of_lone_pillars(self):
+        pillars = [(0, 0), (0, 11), (500, 0), (500, 300)]
+        out = measure.formation_measures([], pillars, 4.0)
+        self.assertEqual(out["lone_pillars"], 4)
+        self.assertAlmostEqual(out["lone_pillars_per_km2"], 1.0)
+        self.assertAlmostEqual(out["lone_pillar_groups_per_km2"], 0.75)
+        self.assertAlmostEqual(out["lone_pillar_group_gap_median_m"], 300.0)
+        self.assertEqual(measure.formation_measures([], [], 4.0)["lone_pillar_groups_per_km2"], 0.0)
+
+
 class SwampMeasures(unittest.TestCase):
     def test_the_wet_ground_and_its_trees(self):
         land = np.zeros((10, 10), dtype=bool)
@@ -254,7 +276,10 @@ class Dump(unittest.TestCase):
                                                  [1, 36, 7.0, 7.0, 0.0, 1.0, 1.0, 0, 0.2, -0.4, 0.3],
                                                  [3, 42, 8.0, 8.0, 0.0, 1.0, 1.0, 0, 0.0, 0.0, 0.0],
                                                  [0, 22, 900.0, 900.0, 0.0, 1.0, 1.0, 0],
-                                                 [3, 74, 1000.0, 900.0, 0.0, 4.0, 4.0, 0, 0.0, 0.0, 0.0]],
+                                                 [3, 74, 1000.0, 900.0, 0.0, 4.0, 4.0, 0, 0.0, 0.0, 0.0],
+                                                 [3, 30, 9.0, 9.0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0.0],
+                                                 [4, 18, 10.0, 10.0, 0.0, 1.2, 1.2, 0, 0.0, 0.0, 0.0],
+                                                 [4, 17, 11.0, 11.0, 0.0, 1.0, 1.0, 0, 0.0, 0.0, 0.0]],
                 "forests": [[1, 5.0, 5.0]], "footpaths": 1, "towns": 1,
                 "path_list": [[1, 0.0, 0.0, 30.0, 40.0]], "lanterns": [[0, 3.0, 4.0]],
                 "town_list": [[10.0, 20.0, 5, 0, 9, 6, 6, 17]],
@@ -268,7 +293,10 @@ class Dump(unittest.TestCase):
         self.assertEqual(model["trees"], [(5.0, 5.0, "Palm", True), (900.0, 900.0, "Burnt", False)])
         self.assertEqual(model["rocks"], [(7.0, 7.0)])
         self.assertEqual(model["rock_poses"], [(0.4, 0.3)])
-        self.assertEqual(model["pillars"], [(8.0, 8.0)])
+        self.assertEqual(model["pillars"], [(8.0, 8.0), (9.0, 9.0)])
+        self.assertEqual(model["lone_pillars"], [(9.0, 9.0)])
+        # A loose object is not a rock. Only the magic mushroom counts as a mushroom.
+        self.assertEqual(model["mushrooms"], [(10.0, 10.0)])
         self.assertTrue(model["sand"][1, 1])
         self.assertEqual(model["mists"], 2)
         self.assertEqual(model["dark_mists"], 1)
