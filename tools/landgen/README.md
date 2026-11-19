@@ -27,6 +27,11 @@ The game data folder is `C:/projects/black`. Set `OPENBLACK_GAME_DATA` to use an
      openblack_tests --openblack-test-source=landgen/test_landgen_dump.cpp
    ```
 
+   Add `OPENBLACK_LANDGEN_ROADS=0` for the same land with no bed under the paths (the land before the cut and the
+   fill), and `OPENBLACK_LANDGEN_PLAYERS=<count>` for a land for more than one player.
+   Add `OPENBLACK_LANDGEN_ROAD_VALUES="halfWidth=2;cutSlope=0.6"` to try other values of the bed under the paths
+   (`roads::Settings`: halfWidth, cutSlope, fillSlope, taper, fixedTaper, ringTaper, narrowSide, narrowEdge, deepest,
+   deepestBank, deepestCorner).
    Add `OPENBLACK_LANDGEN_FORMATIONS=0` for the same land with no fairy rings and no lone pillars (the land before
    them). Add `OPENBLACK_LANDGEN_TREES=<hundredths>` for a land with more stands of trees, as `--landgen "7;trees=2600"`
    gives in the game (the tree benchmarks).
@@ -64,7 +69,8 @@ give their length and their winding (the length over the straight distance betwe
 generated land: its paths join the towns, and are longer and wind more than the footpaths of the story (deviation 233,
 "LGX-4 yes"). `lanterns` counts the street and country lanterns, and `lantern_spacing_median_m` is the median distance
 from a lantern to the nearest lantern. A dump path is 1 when it has lanterns (else 0), then x and z in metres of each
-point. A dump lantern is 0 for a street lantern or 1 for a country lantern, then x and z in metres.
+point. A dump `town_clear` has, for each town in the order of `town_list`, x, z and the radius in metres of the circle
+round each building (15 m) and each field (12 m), where no path is drawn. A dump lantern is 0 for a street lantern or 1 for a country lantern, then x and z in metres.
 
 The ground numbers of the trees, the rocks and the cursed places (`tree_height_median_m`,
 `_p90_m`, `_max_m` and `_slope_p90_deg`, the same for `rock_` and `cursed_`) are the height in metres and the slope
@@ -107,3 +113,12 @@ the medians over the towns of five buildings or more (the lands of the story als
 buildings). A dump town has 8 values: x, z, the tribe, 1 for a neutral town, the buildings, the houses, the fields and
 the people. `towns_per_km2` is free for a generated land: its towns keep the vanilla count and the vanilla distances,
 so a land larger than the lands of the story has fewer towns for each km2.
+
+The lake shore numbers (generated lands only, from the `fresh` and `lake_level` lists of a newer dump): the lake water
+is the still fresh water at the sea level and the water of the high lakes at their own levels. `lake_edge_sand_pct`
+is the share of the dry cells next to the lake water whose main ground is sand (also wet sand), and
+`sea_edge_sand_pct` the same next to the sea. `lake_sand_width_median_m` and `lake_sand_width_p90_m` are the median
+and the 90th percentile of the distance from the water of the sand within 200 m that the lakes are nearer to than the
+sea (`sea_...` for the sea). `lake_strip_height_m` is the median height over the level of the nearest lake of the
+ground 10 to 40 m from the lake water, as `shore_strip_height_m` measures the sea shore. The lands of the story have
+no targets for these numbers: compare the lake numbers with the sea numbers of the same land.

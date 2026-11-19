@@ -969,6 +969,8 @@ openblack_setup_and_add_test(
   test_land_shadow_casters test_land_shadow_casters.cpp
 )
 openblack_setup_and_add_test(test_unfiled_trees test_unfiled_trees.cpp)
+openblack_setup_and_add_test(test_marked_trees test_marked_trees.cpp)
+openblack_setup_and_add_test(test_caster_blocks graphics/test_caster_blocks.cpp)
 openblack_setup_and_add_test(
   test_level_script_match test_level_script_match.cpp
 )
@@ -2710,6 +2712,8 @@ openblack_setup_and_add_test(test_landgen_shape landgen/test_landgen_shape.cpp)
 target_link_libraries(test_landgen_shape PRIVATE landgen)
 openblack_setup_and_add_test(test_landgen_lakes landgen/test_landgen_lakes.cpp)
 target_link_libraries(test_landgen_lakes PRIVATE landgen)
+openblack_setup_and_add_test(test_landgen_lakeshore landgen/test_landgen_lakeshore.cpp)
+target_link_libraries(test_landgen_lakeshore PRIVATE landgen)
 openblack_setup_and_add_test(
   test_landgen_climate landgen/test_landgen_climate.cpp
 )
@@ -2772,6 +2776,8 @@ openblack_setup_and_add_test(test_town_belief_rule_equal test_town_belief_rule_e
 target_link_libraries(test_town_belief_rule_equal PRIVATE psys)
 openblack_setup_and_add_test(test_reaction_groups test_reaction_groups.cpp)
 openblack_setup_and_add_test(test_prey_search test_prey_search.cpp)
+openblack_setup_and_add_test(test_landgen_roadbed landgen/test_landgen_roadbed.cpp)
+target_link_libraries(test_landgen_roadbed PRIVATE landgen)
 openblack_setup_and_add_test(test_leash_fight_order test_leash_fight_order.cpp)
 if(MSVC)
   target_compile_options(test_leash_fight_order PRIVATE /bigobj)

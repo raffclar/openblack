@@ -242,7 +242,13 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                   "path from the temple to the town of player one, then the paths from town to town.",
 	    .expected = "A path of bare brown earth goes from the temple to the town of player one. From there, paths go on "
 	                "to each neutral town. A path winds on easy ground, goes round the water and does not climb a "
-	                "cliff. It stops a short distance from each building and field. About one path in three has "
+	                "cliff. It stops a short distance from each building and field. On a hill, the path has a smooth "
+	                "and level bed, cut into the land or built up above it, with a bank on each side as a road has. "
+	                "On a side slope, the bed is a level shelf about 30 m wide. A low cliff or a steep side next to the "
+	                "path has a bank of 1 in 2 back to the land, as the cutting of a motorway. In a narrow valley, the "
+	                "bed cuts into the gentler side. A path that climbs a steep slope keeps its bends. At the foot of a "
+	                "high cliff, the brown earth stays below the cliff and does not cover its top. About one path in "
+	                "three has "
 	                "lanterns on its sides: street lanterns near the towns and the temple, and lanterns on fires "
 	                "farther out. At night the lanterns light the ground.",
 	    .environment = {.clockRuns = true},
@@ -255,19 +261,46 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .name = "The starts of two players on a generated land",
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 7 for two players and the game loads "
-	                   "it. Fly from the start of player one to the start of player two.",
+	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
+	                   "keeps. Fly from the start of player one to the start of player two.",
 	    .expected = "Each player has a temple and a town on a flat start area, as on the skirmish lands. The town of "
 	                "player two is 510 to 1080 metres from the town of player one. Each town has a town centre, a "
 	                "storage pit, a creche, five to seven houses with their people and a block of fields. The ground and "
 	                "the trees near the two starts are almost the same. The neutral towns are between the starts and "
-	                "round them. Player two is a computer god with a leopard at its temple, as on Two Gods.",
+	                "round them. Player two is a computer god with a leopard at its temple, as on Two Gods. In the first "
+	                "turn, player one brings the ape Matey to its temple. The leopard takes a size like the size of "
+	                "the ape.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,
 	                  .player = PlayerNames::PLAYER_TWO,
 	                  .delaySeconds = 1.0f,
 	                  .value = 7,
-	                  .object = k_BigIsland}},
+	                  .object = k_BigIsland,
+	                  .mindFile = "LethysCreature"}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_players_3",
+	    .name = "The starts of three players on a generated land",
+	    .facet = Facet::Editor,
+	    .description = "At the start, the land generator makes the land of seed 7 for three players and the game loads "
+	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
+	                   "keeps. In a network game, the land loads before the humans join. Fly from the start of player one "
+	                   "to the starts of the other players.",
+	    .expected = "Each of the three players has a temple and a town on a flat start area, as on the skirmish lands. "
+	                "Players two and three are computer gods with a lion and a horse at their temples, as on Three Gods. "
+	                "In the first turn, player one brings the ape Matey to its temple. The lion and the horse take a "
+	                "size like the size of the ape. In a network game for two humans, player one brings no creature, and "
+	                "player three also gets a computer god with a creature at its temple.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand,
+	                  .player = PlayerNames::PLAYER_THREE,
+	                  .delaySeconds = 0.0f,
+	                  .value = 7,
+	                  .object = k_BigIsland,
+	                  .mindFile = "LethysCreature"}},
 	});
 
 	all.push_back({
@@ -275,19 +308,23 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .name = "The starts of four players on a generated land",
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 7 for four players and the game loads "
-	                   "it. Fly from the start of player one to the starts of the other players.",
+	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
+	                   "keeps. Fly from the start of player one to the starts of the other players.",
 	    .expected = "Each of the four players has a temple and a town on a flat start area, as on the skirmish lands. The "
 	                "town of each player is 510 to 1080 metres from the nearest town of another player. The ground and "
 	                "the trees near the starts are almost the same. The neutral towns are between the starts and round "
 	                "them. Players two, three and four are computer gods with a horse, a tortoise and a zebra at their "
-	                "temples, as on Four Gods.",
+	                "temples, as on Four Gods. In the first turn, player one brings the ape Matey to its temple. The "
+	                "three creatures take a size like the size of the ape. A path joins the town of each player to the "
+	                "nearest town or temple, and a path joins each temple to its town.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,
 	                  .player = PlayerNames::PLAYER_FOUR,
 	                  .delaySeconds = 1.0f,
 	                  .value = 7,
-	                  .object = k_BigIsland}},
+	                  .object = k_BigIsland,
+	                  .mindFile = "LethysCreature"}},
 	});
 
 	all.push_back({
@@ -424,6 +461,22 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 9, .object = k_BigIsland}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_lake_shores",
+	    .name = "The sand round the lakes of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly the "
+	                   "camera to the lake on the hill at about (3080, 2380) and look at its shore, then at the sea "
+	                   "shore.",
+	    .expected = "Each lake has the same sand edge as the sea shore. Wet sand covers the shallow water and the ground "
+	                "just above the level of the lake. On gentle warm ground, a beach of dry sand goes 40 to 120 metres "
+	                "from the water, or as far as a beach of the sea goes there. A lake on a hill has its sand at its "
+	                "own level.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_BigIsland}},
 	});
 
 	all.push_back({

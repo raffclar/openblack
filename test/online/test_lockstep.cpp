@@ -92,6 +92,8 @@ struct FakeWorld
 	std::optional<uint32_t> landBefore;
 	/// The lands that the world loaded before a turn
 	uint32_t lands {0};
+	/// The joins of the gods that the world did, each with the count of the lands that the world loaded before it
+	std::vector<std::pair<uint32_t, PlayerNames>> joins;
 
 	/// Loads the new land when it is due before the turn. Gives true when the land loaded.
 	bool LoadLandBefore(uint32_t turn)
@@ -114,6 +116,10 @@ struct FakeWorld
 		for (const auto& command : commands)
 		{
 			players.insert(command.player);
+			if (std::holds_alternative<PlayerJoined>(command.action))
+			{
+				joins.emplace_back(lands, command.player);
+			}
 			if (const auto* tap = std::get_if<HandTap>(&command.action))
 			{
 				++taps[entt::to_integral(tap->object)];
@@ -750,6 +756,35 @@ TEST_F(LockstepTest, AfterTheLandOfAScenarioLoadsEveryComputerFollowsTheTurnsOfT
 	EXPECT_EQ(seats[0].compares.compared, seats[0].compares.same);
 	EXPECT_EQ(seats[1].compares.compared, seats[1].compares.same);
 	EXPECT_EQ(host->TurnRestarts(), 1u);
+}
+
+TEST_F(LockstepTest, TheFirstTurnOfALandThatAScenarioLoadsGivesTheJoinsOfTheGodsAgain)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 7);
+	ASSERT_TRUE(host->Started());
+	// Each world loads the new land before the same turn, after the humans joined on the first land
+	constexpr uint32_t k_LandBefore = 30;
+	serverWorld.landBefore = k_LandBefore;
+	alice.world.landBefore = k_LandBefore;
+	bob.world.landBefore = k_LandBefore;
+	for (int i = 0; i < 200 && (serverWorld.lands == 0 || serverWorld.turns < 10); ++i)
+	{
+		Frame({&alice, &bob});
+	}
+	ASSERT_EQ(serverWorld.lands, 1u);
+	// Each god joined on the first land and again in the first turn of the new land, on the server and on each client
+	const std::vector<std::pair<uint32_t, PlayerNames>> expected {{0u, PlayerNames::PLAYER_ONE},
+	                                                              {0u, PlayerNames::PLAYER_TWO},
+	                                                              {1u, PlayerNames::PLAYER_ONE},
+	                                                              {1u, PlayerNames::PLAYER_TWO}};
+	EXPECT_EQ(serverWorld.joins, expected);
+	EXPECT_EQ(alice.world.joins, expected);
+	EXPECT_EQ(bob.world.joins, expected);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
 }
 
 TEST_F(LockstepTest, AWorldThatLoadsALandThatTheServerDidNotLoadDoesNoMoreTurns)

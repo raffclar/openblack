@@ -49,6 +49,10 @@ constexpr std::array<Band, 4> k_Path {
 constexpr std::array<Band, 1> k_CursedEdge {{{0, Surface::DarkScrub}}};
 constexpr std::array<Band, 1> k_CursedCore {{{0, Surface::Charred}}};
 
+// The edges of the lakes above the sea: the wet sand of the sea bed, and the sand of the beaches
+constexpr std::array<Band, 1> k_LakeBed {{{0, Surface::WetSand}}};
+constexpr std::array<Band, 1> k_LakeBeach {{{0, Surface::Sand}}};
+
 constexpr uint8_t k_Blend = 24;
 
 uint32_t IndexOf(Surface surface, std::span<const Surface> materials)
@@ -85,6 +89,11 @@ Recipe countries::RecipeOf(Biome biome)
 		break;
 	}
 	return {.bands = k_Alpine, .blend = k_Blend};
+}
+
+std::array<Recipe, 2> countries::LakeShoreRecipes()
+{
+	return {{{.bands = k_LakeBed, .blend = k_Blend}, {.bands = k_LakeBeach, .blend = k_Blend}}};
 }
 
 Recipe countries::PathRecipe()
@@ -140,6 +149,13 @@ std::vector<Surface> countries::UsedSurfaces()
 	for (const auto& band : PathRecipe().bands)
 	{
 		used.at(static_cast<size_t>(band.surface)) = true;
+	}
+	for (const auto& recipe : LakeShoreRecipes())
+	{
+		for (const auto& band : recipe.bands)
+		{
+			used.at(static_cast<size_t>(band.surface)) = true;
+		}
 	}
 	for (const auto& recipe : CursedRecipes())
 	{

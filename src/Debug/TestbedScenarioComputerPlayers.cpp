@@ -109,6 +109,21 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "multiplayer.map_land_after_start",
+	    .name = "A land of a network game that loads after the humans joined",
+	    .facet = Facet::Multiplayer,
+	    .description = "After a second, the game loads the network land for three players in place of the testbed. In a "
+	                   "network game of two humans, every computer loads it before the same turn. Fly to the temple of "
+	                   "player three.",
+	    .expected = "In a network game, the empty slot of player three gets a computer god and a fully grown creature at "
+	                "its temple, on the server and on each client. Each human god has its hands on the new land. The "
+	                "players.list query shows player three as a computer god with a creature. Before the fix the slot "
+	                "stayed empty, because the humans joined only on the first land.",
+	    .environment = {.clockRuns = true, .dispenserGrid = false},
+	    .commands = {{.kind = Command::Kind::LoadMapLand, .delaySeconds = 1.0f, .land = "Online Maps/mpm_3p_1.map"}},
+	});
+
+	all.push_back({
 	    .id = "multiplayer.land_anti_influence_ring",
 	    .name = "An anti-influence ring that a land's script makes",
 	    .facet = Facet::Multiplayer,

@@ -178,6 +178,37 @@ bool InWater(float x, float z, const Grid<uint8_t>& water)
 	const int cz = Rounded(z);
 	return !water.Contains(cx, cz) || water.At(cx, cz) != 0;
 }
+
+/// The height of the land at a point in corners, between the four corners round it
+float HeightAt(const Grid<float>& metres, float x, float z)
+{
+	const int last = metres.side - 1;
+	x = std::clamp(x, 0.0f, static_cast<float>(last));
+	z = std::clamp(z, 0.0f, static_cast<float>(last));
+	const int x0 = std::min(static_cast<int>(std::floor(x)), last);
+	const int z0 = std::min(static_cast<int>(std::floor(z)), last);
+	const int x1 = std::min(x0 + 1, last);
+	const int z1 = std::min(z0 + 1, last);
+	const float fx = x - static_cast<float>(x0);
+	const float fz = z - static_cast<float>(z0);
+	const float near = metres.At(x0, z0) + ((metres.At(x1, z0) - metres.At(x0, z0)) * fx);
+	const float far = metres.At(x0, z1) + ((metres.At(x1, z1) - metres.At(x0, z1)) * fx);
+	return near + ((far - near) * fz);
+}
+
+/// The steepest rise over run of a step between two points, from the heights at the two ends and at the middle
+float SlopeOf(const Grid<float>& metres, Point a, Point b)
+{
+	const float run = std::sqrt(((b.x - a.x) * (b.x - a.x)) + ((b.z - a.z) * (b.z - a.z))) * k_MetresPerCorner;
+	if (run <= 0.0f)
+	{
+		return 0.0f;
+	}
+	const float start = HeightAt(metres, a.x, a.z);
+	const float middle = HeightAt(metres, (a.x + b.x) / 2.0f, (a.z + b.z) / 2.0f);
+	const float end = HeightAt(metres, b.x, b.z);
+	return std::max(std::fabs(middle - start), std::fabs(end - middle)) / (run / 2.0f);
+}
 } // namespace
 
 std::vector<Link> paths::ChainLinks(std::span<const Place> places)
@@ -230,6 +261,49 @@ std::vector<Point> paths::Smooth(std::span<const Point> points, int passes)
 	return smooth;
 }
 
+std::vector<Point> paths::Smooth(std::span<const Point> points, int passes, const Grid<float>& metres, float steepest)
+{
+	std::vector<Point> smooth(points.begin(), points.end());
+	if (smooth.size() < 3)
+	{
+		return smooth;
+	}
+	std::vector<Point> next = smooth;
+	const auto same = [](Point a, Point b) { return a.x == b.x && a.z == b.z; };
+	for (int pass = 0; pass < passes; ++pass)
+	{
+		for (size_t i = 1; i + 1 < smooth.size(); ++i)
+		{
+			next[i] = {.x = (smooth[i - 1].x + smooth[i].x + smooth[i + 1].x) / 3.0f,
+			           .z = (smooth[i - 1].z + smooth[i].z + smooth[i + 1].z) / 3.0f};
+		}
+		// A step that the pass makes too steep gets back the two points that it had before the pass. This can make the
+		// steps next to it too steep, so the check continues until no point changes. A point goes back once at most.
+		bool changed = true;
+		while (changed)
+		{
+			changed = false;
+			for (size_t i = 0; i + 1 < next.size(); ++i)
+			{
+				if (same(next[i], smooth[i]) && same(next[i + 1], smooth[i + 1]))
+				{
+					continue;
+				}
+				const float limit = std::max(steepest, SlopeOf(metres, smooth[i], smooth[i + 1]));
+				if (SlopeOf(metres, next[i], next[i + 1]) > limit)
+				{
+					next[i] = smooth[i];
+					next[i + 1] = smooth[i + 1];
+					changed = true;
+				}
+			}
+		}
+		smooth.swap(next);
+		next = smooth;
+	}
+	return smooth;
+}
+
 std::vector<Path> paths::Lay(const Ground& ground, std::span<const Place> places, std::span<const Link> links, uint64_t seed,
                              const Settings& settings)
 {
@@ -256,29 +330,44 @@ std::vector<Path> paths::Lay(const Ground& ground, std::span<const Place> places
 		{
 			laid.At(static_cast<int>(point.x), static_cast<int>(point.z)) = 1;
 		}
-		paths.push_back({.link = link, .points = Smooth(*way, settings.smoothPasses), .lit = lit});
+		paths.push_back(
+		    {.link = link, .points = Smooth(*way, settings.smoothPasses, costs.metres, settings.steepest), .lit = lit});
 	}
 	return paths;
 }
 
-Grid<uint8_t> paths::Draw(std::span<const Path> paths, const Grid<uint8_t>& water, std::span<const Clear> clear)
+namespace
+{
+Grid<uint8_t> DrawOn(std::span<const Path> paths, const Grid<uint8_t>& water, std::span<const Clear> clear,
+                     const Grid<float>* metres, float cliffSlope)
 {
 	Grid<uint8_t> drawn(water.side, 0);
-	const auto mark = [&](int x, int z) {
+	// A corner of the square is not covered when a cliff is between it and the corner at the point of the path
+	const auto level = [&](int x, int z, int ax, int az) {
+		if (metres == nullptr || !metres->Contains(x, z) || !metres->Contains(ax, az))
+		{
+			return true;
+		}
+		const auto dx = static_cast<float>(x - ax);
+		const auto dz = static_cast<float>(z - az);
+		const float rise = cliffSlope * k_MetresPerCorner * std::sqrt((dx * dx) + (dz * dz));
+		return std::fabs(metres->At(x, z) - metres->At(ax, az)) <= rise;
+	};
+	const auto mark = [&](int x, int z, int ax, int az) {
 		const auto fx = static_cast<float>(x);
 		const auto fz = static_cast<float>(z);
-		if (water.Contains(x, z) && water.At(x, z) == 0 && !InClear(fx, fz, clear))
+		if (water.Contains(x, z) && water.At(x, z) == 0 && !InClear(fx, fz, clear) && level(x, z, ax, az))
 		{
 			drawn.At(x, z) = 1;
 		}
 	};
 	// The path covers a square of four corners at each point. The cells between the corners are then all earth, and
 	// the path shows as a clear track with soft edges.
-	const auto cover = [&mark](int x, int z) {
-		mark(x, z);
-		mark(x + 1, z);
-		mark(x, z + 1);
-		mark(x + 1, z + 1);
+	const auto cover = [&mark](int x, int z, int ax, int az) {
+		mark(x, z, ax, az);
+		mark(x + 1, z, ax, az);
+		mark(x, z + 1, ax, az);
+		mark(x + 1, z + 1, ax, az);
 	};
 	for (const auto& path : paths)
 	{
@@ -293,10 +382,10 @@ Grid<uint8_t> paths::Draw(std::span<const Path> paths, const Grid<uint8_t>& wate
 				// A step along a diagonal also covers a corner along an axis, so that the line has no gaps
 				if (last->first != x && last->second != z)
 				{
-					cover(x, last->second);
+					cover(x, last->second, x, z);
 				}
 			}
-			cover(x, z);
+			cover(x, z, x, z);
 			last = {x, z};
 		};
 		for (size_t i = 0; i + 1 < path.points.size(); ++i)
@@ -317,6 +406,18 @@ Grid<uint8_t> paths::Draw(std::span<const Path> paths, const Grid<uint8_t>& wate
 		}
 	}
 	return drawn;
+}
+} // namespace
+
+Grid<uint8_t> paths::Draw(std::span<const Path> paths, const Grid<uint8_t>& water, std::span<const Clear> clear)
+{
+	return DrawOn(paths, water, clear, nullptr, 0.0f);
+}
+
+Grid<uint8_t> paths::Draw(std::span<const Path> paths, const Grid<uint8_t>& water, std::span<const Clear> clear,
+                          const Grid<float>& metres, float cliffSlope)
+{
+	return DrawOn(paths, water, clear, &metres, cliffSlope);
 }
 
 std::vector<Lantern> paths::PlaceLanterns(std::span<const Path> paths, std::span<const Place> places,

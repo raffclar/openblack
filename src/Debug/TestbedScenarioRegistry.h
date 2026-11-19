@@ -1357,8 +1357,12 @@ struct Command
 		/// The land generator makes the land of the seed (value) with each other choice at its first value, and the game
 		/// loads it in place of the testbed, as the switch of the land generator does. The player of the command is the
 		/// last player of the land: PLAYER_THREE gives a land for three players. An object other than 0 gives the type of
-		/// the land plus 1, and the seed picks the type for object 0. Needs no creature
+		/// the land plus 1, and the seed picks the type for object 0. A mind file (mindFile) of the creature mind folder
+		/// of the game takes the place of the creature that the profile keeps. Needs no creature
 		LoadGeneratedLand,
+		/// The game loads the land of the command in place of the land that is open, with its scripts from the start. In a
+		/// network game, every computer loads it before the same turn. Needs no creature
+		LoadMapLand,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1454,6 +1458,9 @@ struct Command
 	std::string_view script;
 	/// The name of a mind file in the creature mind folder of the game
 	std::string_view mindFile;
+	/// The land that the command loads, by its name in the game socket: a file of the Scripts folder, such as
+	/// "Playgrounds/ThreeGods.txt", or a land of a network game, such as "Online Maps/mpm_3p_1.map"
+	std::string_view land;
 	std::vector<ScriptArgument> scriptArguments;
 	std::vector<std::pair<std::string_view, ScriptArgument>> scriptGlobals;
 };

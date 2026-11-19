@@ -420,5 +420,26 @@ class StreamMeasures(unittest.TestCase):
         self.assertIn("streams", ranges)
 
 
+class LakeShoreMeasures(unittest.TestCase):
+    def test_the_sand_edge_of_a_lake_and_of_the_sea(self):
+        heights, land = square_island(side=80, edge=10, height=40.0)
+        water = ~land
+        # A lake at 38 m in the middle, with a ring of sand two cells wide round it
+        lake = np.zeros_like(land)
+        lake[35:45, 35:45] = True
+        water |= lake
+        heights[lake] = 37.0
+        level = np.where(lake, 38.0, 0.0)
+        sand = np.zeros_like(land)
+        sand[33:47, 33:47] = True
+        sand &= ~lake
+        out = measure.lake_shore_measures(heights, water, lake, level, sand)
+        self.assertAlmostEqual(out["lake_edge_sand_pct"], 100.0)
+        self.assertAlmostEqual(out["sea_edge_sand_pct"], 0.0)
+        self.assertLessEqual(out["lake_sand_width_p90_m"], 2 * 10.0 * 1.5)
+        self.assertAlmostEqual(out["lake_strip_height_m"], 2.0)
+        self.assertAlmostEqual(out["sea_strip_height_m"], 40.0)
+
+
 if __name__ == "__main__":
     unittest.main()

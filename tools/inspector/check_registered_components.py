@@ -34,6 +34,7 @@ REFLECTION = ROOT / "src" / "ECS" / "Reflection"
 NOT_COMPONENTS = {
     "LandShadowCasterChanges",
     "UnfiledTreeSet",
+    "MarkedTreeSet",
     "RegistryContext",
     "VillageLightFlames",
     "MapScriptGlobals",

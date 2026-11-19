@@ -31,6 +31,7 @@
 #include "landgen/LandTypes.h"
 #include "landgen/Lighting.h"
 #include "landgen/Paths.h"
+#include "landgen/RoadBed.h"
 #include "landgen/Players.h"
 #include "landgen/Settlement.h"
 #include "landgen/Streams.h"
@@ -61,6 +62,9 @@ enum class Sound : uint8_t
 constexpr uint8_t k_OpenWaterFlag = 0x02;
 /// The country of the corners under a path, after the countries of the biomes
 constexpr uint8_t k_PathCountry = static_cast<uint8_t>(biomes::k_BiomeCount);
+/// The countries of the edges of the lakes above the sea, after the country of the paths: the bed, then the beach
+constexpr uint8_t k_LakeBedCountry = k_PathCountry + 1;
+constexpr uint8_t k_LakeBeachCountry = k_PathCountry + 2;
 
 /// The ambient sound of the land of a biome
 [[nodiscard]] Sound SoundOf(biomes::Biome biome);
@@ -105,6 +109,8 @@ struct Settings
 	settlement::Settings settlement;
 	settlement::SiteSettings sites;
 	paths::Settings paths;
+	/// The bed of the paths, cut and filled into the land as the bed of a built road
+	roads::Settings roads;
 	settlement::TownMix mix;
 	settlement::FarmSettings farms;
 	/// The players of the land and the start areas of the other players

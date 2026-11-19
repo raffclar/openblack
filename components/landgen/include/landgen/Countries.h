@@ -79,6 +79,10 @@ struct Recipe
 /// The recipes of the two countries of the cursed places: the dark scrub of the edge, then the burnt rock of the middle
 [[nodiscard]] std::array<Recipe, 2> CursedRecipes();
 
+/// The recipes of the two countries of the edges of the lakes above the sea: the wet sand of the bed and the shore, then
+/// the sand of the beach. Each has one surface at all altitudes, because a lake can be at any height.
+[[nodiscard]] std::array<Recipe, 2> LakeShoreRecipes();
+
 /// The country table of a recipe. Each entry names the materials by their index in materials, which holds a surface for
 /// each material of the land. An entry that blends two materials gives the first one the coefficient out of 255.
 [[nodiscard]] lnd::LNDCountry MakeCountry(const Recipe& recipe, std::span<const Surface> materials);

@@ -137,6 +137,11 @@ struct Ground
 /// Smooths the bends of a way: each point moves to the mean of the points next to it. The two ends stay.
 [[nodiscard]] std::vector<Point> Smooth(std::span<const Point> points, int passes);
 
+/// Smooths the bends of a way as `Smooth` does, but keeps the climb of the way. Where a smoothed step is steeper than the
+/// steepest rise over run and steeper than the step before the pass, the two points of the step stay where they were.
+/// Thus a zigzag up a steep slope keeps its bends. The metres are the height of each corner.
+[[nodiscard]] std::vector<Point> Smooth(std::span<const Point> points, int passes, const Grid<float>& metres, float steepest);
+
 /// The path of each link between the places. The seed picks the wander of the paths and which paths have lanterns.
 [[nodiscard]] std::vector<Path> Lay(const Ground& ground, std::span<const Place> places, std::span<const Link> links,
                                     uint64_t seed, const Settings& settings);
@@ -144,6 +149,13 @@ struct Ground
 /// The corners that the paths cover: a band two corners wide, joined along the axes so that each path shows as one
 /// track. No corner is in the water or in a clear circle.
 [[nodiscard]] Grid<uint8_t> Draw(std::span<const Path> paths, const Grid<uint8_t>& water, std::span<const Clear> clear);
+
+/// The corners that the paths cover, as the other `Draw` gives them, but on the ground of the metres. A corner that is
+/// higher or lower than the corner at the point of the path by more than the rise of a cliff over the distance between
+/// them is not covered. Thus a path at the foot of a cliff does not cover the top of the cliff. The cliff slope is a rise
+/// over run.
+[[nodiscard]] Grid<uint8_t> Draw(std::span<const Path> paths, const Grid<uint8_t>& water, std::span<const Clear> clear,
+                                 const Grid<float>& metres, float cliffSlope);
 
 /// The lanterns along the lit paths. The places are the town centres and the temple, which make a lantern a street
 /// lantern when it is near them. No lantern stands in the water or in a clear circle.

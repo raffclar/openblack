@@ -2498,6 +2498,15 @@ void LockstepHost::ApplyWorldChange()
 
 game_socket::Start LockstepHost::StartRoomAgain(game_socket::Start start)
 {
+	JoinNewLand();
+	start.turn = _turnsDone;
+	start.gods = Gods();
+	Broadcast(start);
+	return start;
+}
+
+void LockstepHost::JoinNewLand()
+{
 	// The first turn gives each god with a player its hands again, and brings the god of the observers and each observer.
 	// A player who is away keeps a god too: the player comes back into the new game later.
 	_joining.clear();
@@ -2518,10 +2527,6 @@ game_socket::Start LockstepHost::StartRoomAgain(game_socket::Start start)
 			_observerArrivals.emplace_back(watcher.number, watcher.name);
 		}
 	}
-	start.turn = _turnsDone;
-	start.gods = Gods();
-	Broadcast(start);
-	return start;
 }
 
 void LockstepHost::RestoreEditorFiles(std::vector<snapshots::EditorFile> files)
@@ -3122,6 +3127,9 @@ void LockstepHost::TurnsStartAgain(uint32_t after, uint32_t turn)
 	{
 		watcher.missedWorldChange = !watcher.connection.has_value();
 	}
+	// The new land has no player of a human yet. Its first turn names the humans again, as the first turn of the game
+	// did, so that each god gets its hands and the slots with no human fill.
+	JoinNewLand();
 	// The frame goes before the first turn of the new land, so each client knows the turns that come after it
 	Broadcast(game_socket::TurnsAgain {.after = after, .turn = turn});
 }

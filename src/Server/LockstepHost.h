@@ -420,7 +420,8 @@ public:
 	[[nodiscard]] bool IsBehind(uint32_t /*turn*/) const override { return false; }
 	/// The world of the server loaded a land before the turn after, and its turns start again at turn. The turns and the
 	/// checksums of the old land are of no use. Every client gets a game.turns_again frame before the first turn of the
-	/// new land, and loads the same land before the same turn.
+	/// new land, and loads the same land before the same turn. The first turn of the new land gives the joins again, so
+	/// each god with a player gets its hands again and the slots with no human fill.
 	void TurnsStartAgain(uint32_t after, uint32_t turn) override;
 	/// The times that the turns started again because the world of the server loaded a land before a turn
 	[[nodiscard]] uint32_t TurnRestarts() const { return _turnRestarts; }
@@ -665,6 +666,10 @@ private:
 	/// The room starts again on the start of a change of the world: each god with a player gets its hands again at the
 	/// first turn, and each observer comes again. Gives the start that the server sent to the room.
 	game_socket::Start StartRoomAgain(game_socket::Start start);
+	/// The first turn of a new land names the humans of the game again: each god with a player gets its player and its
+	/// hands, and the slots with no human fill. A player who is away keeps a god too. The god of the observers and each
+	/// observer come again.
+	void JoinNewLand();
 	/// True when the player can change the world of the room. Else logs why, counts the refusal and tells the player.
 	[[nodiscard]] bool TakesWorldChange(ConnectionId connection, const Peer& peer, std::string_view what);
 	/// Refuses a change of the world that no computer can do, and tells the player who asked for it

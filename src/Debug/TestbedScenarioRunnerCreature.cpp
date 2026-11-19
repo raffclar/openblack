@@ -1108,6 +1108,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::TempleFreeCamera:
 	case Kind::InfiniteInfluenceCheat:
 	case Kind::LoadGeneratedLand:
+	case Kind::LoadMapLand:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:

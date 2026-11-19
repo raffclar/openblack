@@ -273,10 +273,10 @@ TEST(LandgenPaths, AGeneratedLandHasPathsDrawnBetweenItsTownsAndTheTemple)
 	const auto drawn =
 	    std::ranges::count_if(land.cells.values, [](const auto& cell) { return cell.properties.country == k_PathCountry; });
 	EXPECT_GT(drawn, 50);
-	// The country of the paths comes after the biomes, then the two countries of the dark ground of the cursed places when
-	// the land has a place
-	ASSERT_EQ(land.countries.size(),
-	          static_cast<size_t>(k_PathCountry) + 1 + (land.cursedPatches.empty() ? 0 : countries::CursedRecipes().size()));
+	// The country of the paths comes after the biomes, then the two countries of the edges of the lakes, then the two
+	// countries of the dark ground of the cursed places when the land has a place
+	ASSERT_EQ(land.countries.size(), static_cast<size_t>(k_PathCountry) + 1 + countries::LakeShoreRecipes().size() +
+	                                     (land.cursedPatches.empty() ? 0 : countries::CursedRecipes().size()));
 	for (const auto& cell : land.cells.values)
 	{
 		if (cell.properties.country == k_PathCountry)
@@ -294,4 +294,105 @@ TEST(LandgenPaths, AGeneratedLandHasPathsDrawnBetweenItsTownsAndTheTemple)
 			EXPECT_NE(land.cells.At(x, z).properties.country, k_PathCountry);
 		}
 	}
+}
+
+namespace
+{
+/// The rise over run of a step between two points on a land that rises evenly along z by the given metres a corner
+float StepSlope(Point a, Point b, float risePerCorner)
+{
+	const float run = std::sqrt(((b.x - a.x) * (b.x - a.x)) + ((b.z - a.z) * (b.z - a.z))) * 10.0f;
+	return run <= 0.0f ? 0.0f : std::fabs(b.z - a.z) * risePerCorner / run;
+}
+
+/// A way that zigzags up a slope along z: diagonal steps to x = 5 and back to x = 0, one corner up each step
+std::vector<Point> Switchbacks()
+{
+	std::vector<Point> way;
+	for (int z = 0; z <= 30; ++z)
+	{
+		const int leg = (z / 5) % 2;
+		const int along = z % 5;
+		way.push_back({.x = static_cast<float>(leg == 0 ? along : 5 - along), .z = static_cast<float>(z)});
+	}
+	return way;
+}
+} // namespace
+
+TEST(LandgenPaths, SmoothingKeepsTheClimbOfTheSwitchbacks)
+{
+	constexpr float k_Rise = 6.0f;
+	constexpr float k_Steepest = 0.45f;
+	Grid<float> metres(k_Side, 0.0f);
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			metres.At(x, z) = static_cast<float>(z) * k_Rise;
+		}
+	}
+	const auto way = Switchbacks();
+	const auto steepestOf = [&](const std::vector<Point>& points) {
+		float steepest = 0.0f;
+		for (size_t i = 0; i + 1 < points.size(); ++i)
+		{
+			steepest = std::max(steepest, StepSlope(points[i], points[i + 1], k_Rise));
+		}
+		return steepest;
+	};
+	// Each diagonal step of the way climbs 6 m over 14 m, and the plain smoothing makes the bends steeper than the limit
+	ASSERT_LE(steepestOf(way), k_Steepest);
+	ASSERT_GT(steepestOf(Smooth(way, 3)), k_Steepest);
+	const auto smooth = Smooth(way, 3, metres, k_Steepest);
+	EXPECT_LE(steepestOf(smooth), k_Steepest + 0.001f);
+	EXPECT_EQ(smooth.front().x, way.front().x);
+	EXPECT_EQ(smooth.back().z, way.back().z);
+}
+
+TEST(LandgenPaths, SmoothingOnFlatGroundIsThePlainSmoothing)
+{
+	const Grid<float> metres(k_Side, 15.0f);
+	const auto way = Switchbacks();
+	const auto plain = Smooth(way, 3);
+	const auto kept = Smooth(way, 3, metres, 0.7f);
+	ASSERT_EQ(plain.size(), kept.size());
+	for (size_t i = 0; i < plain.size(); ++i)
+	{
+		EXPECT_EQ(plain[i].x, kept[i].x);
+		EXPECT_EQ(plain[i].z, kept[i].z);
+	}
+}
+
+TEST(LandgenPaths, APathAtTheFootOfACliffDoesNotCoverTheTopOfTheCliff)
+{
+	FlatLand land;
+	Grid<float> metres(k_Side, 10.0f);
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 21; z < k_Side; ++z)
+		{
+			metres.At(x, z) = 90.0f;
+		}
+	}
+	Path path;
+	path.points = {{.x = 5.0f, .z = 20.0f}, {.x = 40.0f, .z = 20.0f}};
+	const auto plain = Draw(std::span(&path, 1), land.water, {});
+	const auto drawn = Draw(std::span(&path, 1), land.water, {}, metres, 0.8391f);
+	// The plain band covers the row of the cliff top next to the path, the band on the ground does not
+	EXPECT_NE(plain.At(20, 21), 0);
+	for (int x = 5; x <= 40; ++x)
+	{
+		EXPECT_NE(drawn.At(x, 20), 0) << x;
+		EXPECT_EQ(drawn.At(x, 21), 0) << x;
+	}
+	// On a slope that is not a cliff, the band is the plain band
+	Grid<float> slope(k_Side, 0.0f);
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			slope.At(x, z) = static_cast<float>(z) * 5.0f;
+		}
+	}
+	EXPECT_EQ(Draw(std::span(&path, 1), land.water, {}, slope, 0.8391f).values, plain.values);
 }
