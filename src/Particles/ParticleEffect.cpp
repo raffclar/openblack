@@ -583,6 +583,11 @@ void Effect::UpdateCollection(Collection& collection)
 			slot.attached = false;
 			continue;
 		}
+		// A rule that acts only on the atoms does nothing when there is no atom. Its condition only reads the effect.
+		if (slot.modifier->onlyOnAtoms && collection.atoms.empty())
+		{
+			continue;
+		}
 		if (!ConditionForSlot(*slot.modifier, collection))
 		{
 			continue;
@@ -595,7 +600,7 @@ void Effect::UpdateCollection(Collection& collection)
 	// By index: a rule may add a collection to an atom while they are walked, and it runs this step too
 	for (size_t a = 0; a < collection.atoms.size(); ++a)
 	{
-		prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections);
+		prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections, prefetch::Fields::Stepped);
 		auto& atom = collection.atoms[a];
 		for (size_t s = 0; s < atom->subCollections.size(); ++s)
 		{
@@ -613,7 +618,7 @@ void Effect::PostUpdate(Collection& collection, const glm::vec3& parentPosition,
 	_atomCount += collection.atoms.size();
 	for (size_t a = 0; a < collection.atoms.size(); ++a)
 	{
-		prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections);
+		prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections, prefetch::Fields::Stepped);
 		auto& atom = collection.atoms[a];
 		atom->previous = atom->current;
 		auto& draw = atom->current;

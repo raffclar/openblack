@@ -255,7 +255,7 @@ public:
 		const auto ranks = town_belief::Ranks(beliefs);
 		for (size_t a = 0; a < collection.atoms.size(); ++a)
 		{
-			prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections);
+			prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections, prefetch::Fields::Stepped);
 			auto& atom = collection.atoms[a];
 			const auto found = atom->data.find(this);
 			if (found == atom->data.end() || atom->player < 0 || static_cast<size_t>(atom->player) >= beliefs.size())
