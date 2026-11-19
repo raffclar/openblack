@@ -391,6 +391,9 @@ struct ComponentInfo
 	/// Only this computer has the component, as drawn state: the world save, the world parts that the server sends and
 	/// the hashes of the world leave it out. A component tells this with a constant k_LocalOnly that is true.
 	bool localOnly {false};
+	/// The hash of the component mixes the hash of each row, not the bytes of all the rows one after the other. Thus the
+	/// threads can mix the rows at the same time. A component tells this with a constant k_HashesByRows that is true.
+	bool hashesByRows {false};
 };
 
 /// Registers a component and its fields by name: Reflect<Transform>(context).Field<&Transform::position>("position")
@@ -403,6 +406,19 @@ template <typename Type>
 	if constexpr (requires { Type::k_LocalOnly; })
 	{
 		return Type::k_LocalOnly;
+	}
+	else
+	{
+		return false;
+	}
+}
+/// Whether the hash of a component mixes the hash of each row: it has a constant k_HashesByRows that is true
+template <typename Type>
+[[nodiscard]] constexpr bool HashesByRows()
+{
+	if constexpr (requires { Type::k_HashesByRows; })
+	{
+		return Type::k_HashesByRows;
 	}
 	else
 	{
@@ -424,6 +440,7 @@ public:
 	          .copy = nullptr,
 	          .valueAt = nullptr,
 	          .localOnly = detail::IsLocalOnly<Type>(),
+	          .hashesByRows = detail::HashesByRows<Type>(),
 	      })
 	{
 		if constexpr (std::is_copy_constructible_v<Type>)

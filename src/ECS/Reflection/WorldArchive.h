@@ -120,6 +120,7 @@ struct HashLeaveOut
 
 /// Makes the hashes of the parts of the world, with no save in memory of the whole world. The hash of a component does
 /// not include the parts in leaveOut. The hash of each component goes over its live rows in the order of the storage.
+/// For a component that hashes by rows, the hash mixes the hash of each row, in the same order.
 /// With byField, the hashes also keep each field of each component on its own. With a pool, the threads of the pool
 /// share the components, and the hashes are the same.
 /// Tools: gets the bytes that the hash takes of each field of a row (the field is "*" for a component that saves as one
@@ -166,7 +167,7 @@ struct HashMemo
 	{
 		/// The end of the row in the bytes of the component
 		size_t end {0};
-		/// The hash of the component after the row
+		/// The hash of the component after the row, or the hash of the row for a component that hashes by rows
 		uint64_t hash {0};
 	};
 	/// How the rows of a component save, and what the hash leaves out of them
@@ -180,11 +181,12 @@ struct HashMemo
 		/// The layout of the component in the last hash, kept while the parts that the hash leaves out stay the same
 		std::shared_ptr<const Layout> layout;
 		/// The memory for the next hash of the component, so that the threads get no new memory while they share the
-		/// work: the list of the live rows, the rows of the memo, and the bytes and the row ends of each part
+		/// work: the list of the live rows, the rows of the memo, and the bytes, the row ends and the row hashes of each part
 		std::vector<entt::entity> spareLiveRows;
 		std::vector<Row> spareRows;
 		std::vector<std::vector<uint8_t>> spareBytes;
 		std::vector<std::vector<size_t>> spareEnds;
+		std::vector<std::vector<uint64_t>> spareHashes;
 
 		/// The count of the bytes of the rows
 		[[nodiscard]] size_t Bytes() const { return rows.empty() ? 0 : rows.back().end; }

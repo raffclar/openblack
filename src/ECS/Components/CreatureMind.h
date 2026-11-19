@@ -44,6 +44,9 @@ struct CreatureMindState
 {
 	/// The last stage of growing up
 	static constexpr uint32_t k_FullyGrownUp = 13;
+	/// The rows of the minds are large. The world hash mixes the hash of each mind, so the threads mix the minds at the
+	/// same time.
+	static constexpr bool k_HashesByRows = true;
 
 	/// The desires, set up from the species' tables when the mind first thinks
 	std::optional<creature_desires::Desires> desires;

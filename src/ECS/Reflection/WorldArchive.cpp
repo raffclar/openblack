@@ -443,6 +443,8 @@ struct openblack::ecs::reflection::HashMemo::Layout
 	/// The steps need a row to find where each field is in the value. A layout that needs steps but found no row has
 	/// none yet.
 	bool planned {false};
+	/// The hash of the component mixes the hash of each row
+	bool byRows {false};
 
 	/// Whether the hash keeps a field of a row
 	[[nodiscard]] bool Keeps(size_t index, entt::entity row) const
@@ -508,6 +510,8 @@ struct RowLayout
 		                       [](const KeptField& field) { return std::string_view(field.info->name); });
 	}
 	layout->left = FindLeaveOut(leaveOut, component.name, names);
+	const ComponentInfo* registered = component.type.custom();
+	layout->byRows = registered != nullptr && registered->hashesByRows;
 	// A field that only the reflection can write needs the way of each field
 	const auto sameForEachRow =
 	    std::ranges::all_of(layout->left.fieldMarkers, [](const auto& markers) { return markers.empty(); });
@@ -629,14 +633,32 @@ struct SavedRows
 {
 	std::vector<uint8_t> bytes;
 	std::vector<size_t> ends;
+	/// The hash of each row, for a component that hashes by rows
+	std::vector<uint64_t> hashes;
 };
 
+/// The hash of the bytes of one row, for a component that hashes by rows
+[[nodiscard]] uint64_t RowHash(std::span<const uint8_t> bytes)
+{
+	auto hash = k_HashOffset;
+	MixBytes(hash, bytes);
+	return hash;
+}
+
+/// Mixes the hash of a row into the hash of a component that hashes by rows
+void MixRowHash(uint64_t& hash, uint64_t row)
+{
+	MixBytes(hash, std::span(reinterpret_cast<const uint8_t*>(&row), sizeof(row)));
+}
+
 /// Saves the rows of a component from one row to another, for a hash with no hash of each field, no visitor and no rows.
-/// The writer writes into the memory of the saved rows, so that a save gets no new memory when the rows fit.
+/// The writer writes into the memory of the saved rows, so that a save gets no new memory when the rows fit. For a
+/// component that hashes by rows, the thread that saves the rows also finds the hash of each row.
 void SaveRows(const ComponentStorage& component, const RowLayout& layout, size_t first, size_t last, BinaryWriter& out,
               SavedRows& saved)
 {
 	saved.ends.clear();
+	saved.hashes.clear();
 	saved.bytes.swap(out.Bytes());
 	out.Clear();
 	for (size_t index = first; index < last; ++index)
@@ -653,6 +675,10 @@ void SaveRows(const ComponentStorage& component, const RowLayout& layout, size_t
 		else
 		{
 			SaveRow(component, layout, row, layout.ValueOf(component, index), out, [](size_t, size_t) {});
+		}
+		if (layout.shape->byRows)
+		{
+			saved.hashes.push_back(RowHash(out.Written(saved.ends.empty() ? 0 : saved.ends.back())));
 		}
 		saved.ends.push_back(out.Size());
 	}
@@ -797,7 +823,9 @@ private:
 	result.fields.assign(byField ? std::max<size_t>(layout.shape->fields.size(), 1) : 0, k_HashOffset);
 	// With the memo, the bytes of all the rows of the component stay one after the other. While each row is the same as
 	// in the memo, the hash after the row comes from the memo. From the first row that changed, the hash mixes each row.
+	// For a component that hashes by rows, the memo keeps the hash of each row, and each row that did not change uses it.
 	const bool remembers = memo != nullptr && !byField && !visit && !keepRows;
+	const bool byRows = layout.shape->byRows;
 	std::vector<HashMemo::Row> remembered;
 	bool same = remembers;
 	std::optional<MemoBytes> memoBytes;
@@ -808,9 +836,35 @@ private:
 		remembered.reserve(layout.rows.size());
 		memoBytes.emplace(*memo);
 	}
-	// Mixes a row whose bytes are at a place among the bytes of all the rows
-	const auto mixRow = [&](std::span<const uint8_t> bytes, size_t rowStart) {
+	// Mixes a row whose bytes are at a place among the bytes of all the rows. The saved hash of the row, when there is
+	// one, comes from the thread that saved the row.
+	const auto mixRow = [&](std::span<const uint8_t> bytes, size_t rowStart, std::optional<uint64_t> savedHash) {
 		result.kept = true;
+		if (byRows)
+		{
+			const auto place = remembered.size();
+			const auto end = rowStart + bytes.size();
+			uint64_t rowHash = 0;
+			if (savedHash.has_value())
+			{
+				rowHash = *savedHash;
+			}
+			else if (remembers && place < memo->rows.size() && memo->rows[place].end == end &&
+			         (place == 0 ? 0 : memo->rows[place - 1].end) == rowStart && memoBytes->Has(bytes, rowStart))
+			{
+				rowHash = memo->rows[place].hash;
+			}
+			else
+			{
+				rowHash = RowHash(bytes);
+			}
+			MixRowHash(result.hash, rowHash);
+			if (remembers)
+			{
+				remembered.push_back({.end = end, .hash = rowHash});
+			}
+			return;
+		}
 		if (!remembers)
 		{
 			MixBytes(result.hash, bytes);
@@ -837,9 +891,11 @@ private:
 		{
 			const auto& part = parts[index];
 			size_t rowStart = 0;
-			for (const auto end : part.ends)
+			for (size_t row = 0; row < part.ends.size(); ++row)
 			{
-				mixRow(std::span<const uint8_t>(part.bytes).subspan(rowStart, end - rowStart), partStart + rowStart);
+				const auto end = part.ends[row];
+				mixRow(std::span<const uint8_t>(part.bytes).subspan(rowStart, end - rowStart), partStart + rowStart,
+				       byRows ? std::optional(part.hashes[row]) : std::nullopt);
 				rowStart = end;
 			}
 			partStart += part.bytes.size();
@@ -877,7 +933,7 @@ private:
 		if (layout.shape->bySteps && !byField && !visit && !keepRows)
 		{
 			SaveRowBySteps(layout, row, value, out);
-			mixRow(out.Written(rowStart), rowStart);
+			mixRow(out.Written(rowStart), rowStart, std::nullopt);
 			continue;
 		}
 		SaveRow(component, layout, row, value, out, [&](size_t field, size_t start) {
@@ -905,7 +961,7 @@ private:
 				      bytes);
 			}
 		});
-		mixRow(out.Written(rowStart), rowStart);
+		mixRow(out.Written(rowStart), rowStart, std::nullopt);
 	}
 	if (remembers)
 	{
@@ -1151,6 +1207,11 @@ openblack::ecs::reflection::HashWorld(const entt::registry& registry, const Regi
 						shared.rows.ends = std::move(kept->spareEnds.back());
 						kept->spareBytes.pop_back();
 						kept->spareEnds.pop_back();
+						if (!kept->spareHashes.empty())
+						{
+							shared.rows.hashes = std::move(kept->spareHashes.back());
+							kept->spareHashes.pop_back();
+						}
 					}
 				}
 			}
@@ -1206,6 +1267,7 @@ openblack::ecs::reflection::HashWorld(const entt::registry& registry, const Regi
 				{
 					kept->spareBytes.push_back(std::move(part.rows.bytes));
 					kept->spareEnds.push_back(std::move(part.rows.ends));
+					kept->spareHashes.push_back(std::move(part.rows.hashes));
 				}
 			}
 		}

@@ -134,6 +134,15 @@ struct FakeCounted
 	FakeCounter counter;
 };
 
+/// A component with large rows, of which the hash mixes the hash of each row
+struct FakeMind
+{
+	static constexpr bool k_HashesByRows = true;
+
+	uint32_t turn {0};
+	std::vector<uint32_t> values;
+};
+
 /// The same component in an older and a newer build: the newer build drops one field and adds another
 struct FakeOld
 {
@@ -172,6 +181,7 @@ void Register(entt::meta_ctx& context)
 	    .Property<&FakeCounter::Total, nullptr>("total")
 	    .Codec<&FakeCounter::Save, &FakeCounter::Load>();
 	Reflect<FakeCounted>(context).Field<&FakeCounted::counter>("counter");
+	Reflect<FakeMind>(context).Field<&FakeMind::turn>("turn").Field<&FakeMind::values>("values");
 }
 
 FakeWalker SampleWalker(entt::entity a, entt::entity b)
@@ -1523,6 +1533,94 @@ TEST(WorldArchive, TheMemoOfAComponentInPartsGivesTheSameHash)
 	expectSame();
 	registry.get<FakeWalker>(more[150]).name = "Bob";
 	expectSame();
+	expectSame();
+}
+
+// The hash of a component that hashes by rows mixes the hash of the saved bytes of each row, in the order of the storage.
+// The hash is the same with and without the threads and the memo, with many rows in parts and with few rows, and after
+// a change in one row.
+TEST(WorldArchive, TheHashOfAComponentByRowsMixesTheHashOfEachRow)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto add = [&registry](size_t count, size_t size) {
+		std::vector<entt::entity> made(count);
+		registry.create(made.begin(), made.end());
+		for (const auto entity : made)
+		{
+			auto& mind = registry.emplace<FakeMind>(entity);
+			mind.turn = entt::to_integral(entity);
+			mind.values.assign(size, entt::to_integral(entity) * 3U);
+		}
+		return made;
+	};
+	const auto expected = [&registry, &context]() {
+		constexpr uint64_t k_Offset = 14695981039346656037ull;
+		constexpr uint64_t k_Prime = 1099511628211ull;
+		const auto mix = [](uint64_t& hash, std::span<const uint8_t> bytes) {
+			for (const auto byte : bytes)
+			{
+				hash = (hash ^ byte) * k_Prime;
+			}
+		};
+		const auto& storage = registry.storage<FakeMind>();
+		uint64_t hash = k_Offset;
+		for (size_t place = 0; place < storage.size(); ++place)
+		{
+			const auto entity = storage.data()[place];
+			const auto& mind = storage.get(entity);
+			BinaryWriter row(context);
+			row.WriteRaw(entity);
+			Save(row, mind.turn);
+			Save(row, mind.values);
+			uint64_t rowHash = k_Offset;
+			mix(rowHash, row.Bytes());
+			mix(hash, std::span(reinterpret_cast<const uint8_t*>(&rowHash), sizeof(rowHash)));
+		}
+		return hash;
+	};
+	const auto componentHash = [](const WorldHashes& hashes) {
+		const auto found =
+		    std::ranges::find(hashes.components, std::string("FakeMind"), &std::pair<std::string, uint64_t>::first);
+		return found != hashes.components.end() ? found->second : 0;
+	};
+	// Each row has more bytes than a part, so the threads save and mix the rows in parts
+	auto made = add(40, 6000);
+	WorkerPool pool(3);
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto value = expected();
+		EXPECT_EQ(componentHash(HashWorld(registry, context)), value);
+		EXPECT_EQ(componentHash(HashWorld(registry, context, {}, true)), value);
+		EXPECT_EQ(componentHash(HashWorld(registry, context, {}, false, {}, &pool)), value);
+		EXPECT_EQ(componentHash(HashWorld(registry, context, {}, false, {}, nullptr, nullptr, &memo)), value);
+		EXPECT_EQ(componentHash(HashWorld(registry, context, {}, false, {}, &pool, nullptr, &memo)), value);
+	};
+	expectSame();
+	expectSame();
+	EXPECT_GT(memo.components.at("FakeMind").chunks.size(), 1u);
+	// A change in a row in the middle, then a row that gets longer
+	registry.get<FakeMind>(made[20]).turn = 99;
+	expectSame();
+	registry.get<FakeMind>(made[3]).values.push_back(7);
+	expectSame();
+	// Few small rows: one job hashes the component, and the memo keeps the hash of each row
+	for (size_t index = 6; index < made.size(); ++index)
+	{
+		registry.destroy(made[index]);
+	}
+	made.resize(6);
+	for (const auto entity : made)
+	{
+		registry.get<FakeMind>(entity).values.resize(4);
+	}
+	expectSame();
+	expectSame();
+	EXPECT_EQ(memo.components.at("FakeMind").chunks.size(), 1u);
+	registry.get<FakeMind>(made[2]).values[1] = 5;
+	expectSame();
+	registry.get<FakeMind>(made[0]).values.clear();
 	expectSame();
 }
 
