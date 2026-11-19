@@ -749,21 +749,24 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	CollectParticles();
 	DrawLandColourPass(drawDesc);
 	DrawSkyDomePass(drawDesc);
-	PaintLandFootprints(drawDesc);
 	UpdateLandLight();
 	UpdateLandDetail(drawDesc);
 	DrawObjectShadowPass(drawDesc);
-	// The passes above took the results of the side threads
-	if (_landFootprints)
-	{
-		_landFootprints->ForgetSearch();
-	}
+	// The pass above took the result of the side thread that tests the casters
 	if (_landShadowBake)
 	{
 		_landShadowBake->ForgetWatchedTest();
 	}
 	DrawTempleMapPass();
 	DrawGroundShadowPass(drawDesc);
+	// The footprints paint the blocks' textures after the shadow passes, thus the search on the side thread has more
+	// time. The graphics device changes the textures before it does the draws of the frame, thus each pass of the
+	// frame shows the new footprints. The passes below paint the snow of the blocks that the footprints painted again.
+	PaintLandFootprints(drawDesc);
+	if (_landFootprints)
+	{
+		_landFootprints->ForgetSearch();
+	}
 	// Reflection Pass
 	{
 		auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::ReflectionPass);

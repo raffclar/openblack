@@ -1152,6 +1152,21 @@ void LandIsland::SetBlockTexels(size_t block, std::span<const uint16_t> texels)
 	_coarseRepaints.blocks.push_back(block);
 }
 
+void LandIsland::SetBlockTexelsPart(size_t block, glm::ivec2 first, glm::ivec2 size, std::span<const uint16_t> texels)
+{
+	if (block >= _landBlocks.size() || _blockTextures == nullptr || size.x <= 0 || size.y <= 0 ||
+	    texels.size() < static_cast<size_t>(size.x) * static_cast<size_t>(size.y))
+	{
+		return;
+	}
+	// A block's texture has a row for each texel along x, so x is the texture's height and z its width
+	std::vector<uint8_t> rgba(static_cast<size_t>(size.x) * static_cast<size_t>(size.y) * 4);
+	block_texture::ToRgba(texels.first(static_cast<size_t>(size.x) * static_cast<size_t>(size.y)), rgba);
+	_blockTextures->UpdateLayerRegion(static_cast<uint16_t>(block), glm::u16vec2(first.y, first.x),
+	                                  glm::u16vec2(size.y, size.x), rgba.data(), static_cast<uint32_t>(rgba.size()));
+	_coarseRepaints.blocks.push_back(block);
+}
+
 void LandIsland::PaintBlocksTexels(std::span<const size_t> blocks, const PaintTexels& paint, WorkerPool& pool)
 {
 	if (_blockTextures == nullptr)

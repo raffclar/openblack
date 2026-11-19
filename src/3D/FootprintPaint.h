@@ -13,6 +13,7 @@
 
 #include <array>
 #include <span>
+#include <utility>
 
 #include <glm/vec2.hpp>
 
@@ -99,6 +100,32 @@ struct Placement
 	glm::vec2 origin {0.0f};
 };
 
+/// A part of a block's texture: its first and last row (along x) and its first and last column (along z)
+struct Region
+{
+	int firstRow {0};
+	int lastRow {-1};
+	int firstColumn {0};
+	int lastColumn {-1};
+
+	[[nodiscard]] bool Empty() const { return lastRow < firstRow || lastColumn < firstColumn; }
+	[[nodiscard]] bool operator==(const Region&) const = default;
+};
+
+/// All of a block's texture of the given side
+[[nodiscard]] Region WholeBlock(int side);
+
+/// The part of a block's texture that a footprint within the given bounds on the ground (the lowest and highest x and
+/// z) can paint. It holds the bounds with a unit more on each side, to whole texels, and one texel more. It is empty
+/// when the bounds are not over the block.
+[[nodiscard]] Region RegionOf(const std::pair<glm::vec2, glm::vec2>& bounds, glm::ivec2 blockIndex, int side);
+
+/// The smallest region that holds both regions. An empty region adds nothing.
+[[nodiscard]] Region Join(const Region& a, const Region& b);
+
+/// Whether two regions have a texel in common
+[[nodiscard]] bool Overlap(const Region& a, const Region& b);
+
 /// Paints a footprint into a block's texture. `block` holds side by side ARGB texels at 4 bits a channel, a row for each
 /// texel along x ([x * side + z]). The side is k_BlockTexels, or 128 at the low resolution of the lowest detail levels.
 /// The footprint's corners then go to the nearest texel of the smaller texture, and its picture stays the same.
@@ -106,6 +133,11 @@ struct Placement
 /// are not painted.
 void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Picture& picture,
                     std::span<const Triangle> triangles, const Placement& placement, Mix mix, int side = k_BlockTexels);
+
+/// Paints a footprint as the paint above does, but only into the texels of the region. Each texel in the region gets
+/// the same value as from a paint of the whole block. The texels outside the region do not change.
+void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Picture& picture,
+                    std::span<const Triangle> triangles, const Placement& placement, Mix mix, int side, const Region& region);
 } // namespace footprint_paint
 
 } // namespace openblack
