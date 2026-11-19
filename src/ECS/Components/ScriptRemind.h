@@ -15,6 +15,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptStateArguments.h"
 #include "Enums.h"
@@ -40,6 +41,14 @@ struct ScriptRemind
 	std::optional<ScriptAnimation> animation;
 	/// The clip a script forced in place of its state's own, to play again when it comes back to a clip state
 	int32_t clip {k_NoClip};
+};
+
+/// A walk order that a script gave to a villager in the air. The villager does the walk when it lands back in the
+/// script's hands. The hand, the water or a death removes the order.
+struct ScriptMoveOnLanding
+{
+	/// The point of the walk, with its height above the land
+	map_coords::MapCoords goal;
 };
 
 } // namespace openblack::ecs::components
