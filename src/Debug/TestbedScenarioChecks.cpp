@@ -110,6 +110,10 @@ std::string_view Name(Quantity quantity)
 		return "the creature wears a leash";
 	case Quantity::TempleScriptHasDialogue:
 		return "a script of the temple has the dialogue";
+	case Quantity::FootballPlayersWaiting:
+		return "football players that wait for the kick-off";
+	case Quantity::FootballBallFromCentre:
+		return "the distance from the football to the middle of the pitch";
 	}
 	return "";
 }

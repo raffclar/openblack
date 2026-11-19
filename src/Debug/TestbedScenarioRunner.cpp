@@ -75,6 +75,7 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
@@ -138,6 +139,7 @@
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
@@ -1585,6 +1587,36 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const temple_help::GameDialogue dialogue;
 		const auto owner = dialogue.GetOwner();
 		return owner != 0 && dialogue.IsTempleScript(owner) ? 1.0 : 0.0;
+	}
+	case checks::Quantity::FootballPlayersWaiting:
+	{
+		const auto object = ObjectAt(check.index);
+		const auto* pitch = object.has_value() ? registry.TryGet<const ecs::components::FootballPitch>(*object) : nullptr;
+		if (pitch == nullptr || !Locator::livingActionSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& living = Locator::livingActionSystem::value();
+		const auto waits = [&registry, &living](entt::entity player) {
+			const auto* action =
+			    registry.Valid(player) ? registry.TryGet<const ecs::components::LivingAction>(player) : nullptr;
+			return action != nullptr && living.VillagerGetFinalState(*action) == VillagerStates::FootballWaitForKickOff;
+		};
+		return static_cast<double>(std::ranges::count_if(pitch->home, waits) + std::ranges::count_if(pitch->away, waits));
+	}
+	case checks::Quantity::FootballBallFromCentre:
+	{
+		const auto object = ObjectAt(check.index);
+		const auto* pitch = object.has_value() ? registry.TryGet<const ecs::components::FootballPitch>(*object) : nullptr;
+		const auto* middle = object.has_value() ? registry.TryGet<const Transform>(*object) : nullptr;
+		const auto* ball =
+		    pitch != nullptr && registry.Valid(pitch->ball) ? registry.TryGet<const Transform>(pitch->ball) : nullptr;
+		if (middle == nullptr || ball == nullptr)
+		{
+			return std::nullopt;
+		}
+		return static_cast<double>(
+		    glm::distance(glm::vec2(ball->position.x, ball->position.z), glm::vec2(middle->position.x, middle->position.z)));
 	}
 	}
 	return std::nullopt;

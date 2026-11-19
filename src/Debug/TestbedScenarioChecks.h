@@ -106,6 +106,12 @@ enum class Quantity : uint8_t
 	CreatureLeashed,
 	/// 1 when a help script or a special script of the temple has the dialogue, else 0
 	TempleScriptHasDialogue,
+	/// How many players of the two teams on the football pitch that is the scenario's object at the index wait for the
+	/// kick-off
+	FootballPlayersWaiting,
+	/// The distance in metres on the ground from the ball of a football pitch to the middle of the pitch. The pitch is
+	/// the scenario's object at the index.
+	FootballBallFromCentre,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
