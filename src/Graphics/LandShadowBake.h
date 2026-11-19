@@ -26,12 +26,14 @@
 
 #include "ECS/Components/Transform.h"
 #include "ECS/LandShadowCasters.h"
+#include "Graphics/CasterBlocks.h"
 #include "Visual/TreeShadows.h"
 
 namespace openblack
 {
 class SideThread;
-}
+class WorkerPool;
+} // namespace openblack
 namespace openblack::ecs
 {
 class Registry;
@@ -238,6 +240,8 @@ private:
 	uint32_t _castersChanges {0};
 	/// The casters, in the order of their entities
 	std::vector<Baked> _baked;
+	/// The casters by the blocks that take their shadows
+	CasterBlocks _casterBlocks;
 	/// The things that can start to cast, the count of the casters' changes and the number of models when the bake last
 	/// looked at all the casters. While the count and the number stay the same, the bake looks again only at the casters
 	/// and the things that changed.
@@ -258,6 +262,8 @@ private:
 	/// The answer of the test of the watched things that runs on the side thread
 	std::optional<std::vector<WatchedChange>> _watchedAnswer;
 	bool _watchedTestStarted {false};
+	/// The lanes that share the test of the watched things when there are many casters
+	std::unique_ptr<WorkerPool> _testWorkers;
 	/// The last member, so that its thread stops before the other members go
 	std::unique_ptr<SideThread> _watchedTest;
 };

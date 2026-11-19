@@ -969,6 +969,8 @@ openblack_setup_and_add_test(
   test_land_shadow_casters test_land_shadow_casters.cpp
 )
 openblack_setup_and_add_test(test_unfiled_trees test_unfiled_trees.cpp)
+openblack_setup_and_add_test(test_marked_trees test_marked_trees.cpp)
+openblack_setup_and_add_test(test_caster_blocks graphics/test_caster_blocks.cpp)
 openblack_setup_and_add_test(
   test_level_script_match test_level_script_match.cpp
 )
