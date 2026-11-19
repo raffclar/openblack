@@ -1154,7 +1154,9 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::SoundTags:
 		// The objects' looping sounds start again where they stopped, within reach of where the game hears them from
-		Locator::soundTagSystem::value().ProcessTurn(Locator::sounds::value().GetListener().origin);
+		// A computer with no audio does only the synced part, and it has no place that hears the sounds
+		Locator::soundTagSystem::value().ProcessTurn(
+		    Locator::sounds::has_value() ? Locator::sounds::value().GetListener().origin : glm::vec3(0.0f));
 		break;
 	case Step::Ambience:
 		// The view does this step

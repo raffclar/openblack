@@ -23,6 +23,7 @@
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/SoundTagLife.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
 
@@ -648,4 +649,61 @@ TEST_F(SoundTags, AnEndedKeptPointSoundFinishesItsLoop)
 	_tags.EndPointSound(0);
 	_tags.EndPointSound(kept);
 	EXPECT_EQ(_tags.PointSounds().size(), 1u);
+}
+
+// An attached tag goes when its object is gone or has no position. The tag on its own object stays.
+TEST(SoundTagLife, AnAttachedTagGoesWithThePositionOfItsObject)
+{
+	ecs::Registry registry;
+	const auto object = registry.Create();
+	registry.Assign<ecs::components::Transform>(object, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	ecs::components::SoundTag tag {.sound = k_Sound, .offset = glm::vec3(0.0f), .active = true, .owner = object};
+	EXPECT_FALSE(ecs::AttachedSoundTagLost(registry, tag));
+	registry.Remove<ecs::components::Transform>(object);
+	EXPECT_TRUE(ecs::AttachedSoundTagLost(registry, tag));
+	registry.Destroy(object);
+	EXPECT_TRUE(ecs::AttachedSoundTagLost(registry, tag));
+	tag.owner = entt::null;
+	EXPECT_FALSE(ecs::AttachedSoundTagLost(registry, tag));
+}
+
+// A game server has no audio. Its turn removes the tags of gone objects, as the turn of a computer with audio does.
+TEST_F(SoundTags, AComputerWithNoAudioRemovesTheTagsOfAGoneObject)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	const auto carried = CreateObjectAt({30.0f, 0.0f, 0.0f});
+	const auto own = CreateObjectAt({40.0f, 0.0f, 0.0f});
+	registry.Assign<ecs::components::SoundTag>(own, k_Sound, glm::vec3(0.0f), true);
+	const auto hum = _tags.AttachObjectSound(creature, k_Sound, true);
+	const auto rattle = _tags.AttachObjectSound(carried, k_Sound, true);
+	Locator::sounds::reset();
+
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_TRUE(registry.Valid(hum));
+	EXPECT_EQ(registry.Get<ecs::components::SoundTag>(hum).turns, 1);
+
+	registry.Destroy(creature);
+	registry.Remove<ecs::components::Transform>(carried);
+	registry.Remove<ecs::components::Transform>(own);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_FALSE(registry.Valid(hum));
+	EXPECT_FALSE(registry.Valid(rattle));
+	EXPECT_TRUE(registry.AllOf<ecs::components::SoundTag>(own));
+	EXPECT_EQ(registry.Get<ecs::components::SoundTag>(own).turns, 2);
+	EXPECT_TRUE(Audio().emitters.empty());
+}
+
+// With no audio, a point's sound cannot play and goes. A kept sound stays until its end.
+TEST_F(SoundTags, AComputerWithNoAudioKeepsOnlyTheKeptPointSounds)
+{
+	Locator::sounds::reset();
+	_tags.CreatePointSound(k_Sound, glm::vec3(10.0f, 0.0f, 0.0f), true);
+	const auto kept = _tags.KeepPointSound(k_Sound, glm::vec3(10.0f, 0.0f, 0.0f));
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	const auto points = _tags.PointSounds();
+	ASSERT_EQ(points.size(), 1u);
+	EXPECT_EQ(points.front().kept, kept);
+	_tags.EndPointSound(kept);
+	EXPECT_TRUE(_tags.PointSounds().empty());
 }

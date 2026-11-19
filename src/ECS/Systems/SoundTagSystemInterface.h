@@ -26,7 +26,8 @@ public:
 	/// Once a game turn: every switched on object's tag whose sound isn't playing starts it again, if the camera is
 	/// within the sound's reach of it. A delayed point's sound plays once it has had time to reach the camera, if the
 	/// camera is within its reach, and a point's tag goes once its sound has finished. An attached tag whose object
-	/// is gone, or has no position, is removed as DetachObjectSound removes it.
+	/// is gone, or has no position, is removed as DetachObjectSound removes it. A computer with no audio also removes these
+	/// tags, so that its world stays the same as the world of the other computers.
 	virtual void ProcessTurn(const glm::vec3& camera) = 0;
 	/// Switches an object's tag on or off; off stops its sound at once
 	virtual void SetActive(entt::entity entity, bool active) = 0;

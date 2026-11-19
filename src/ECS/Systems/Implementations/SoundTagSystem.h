@@ -88,9 +88,9 @@ private:
 	/// One turn of a sound that KeepPointSound keeps: it starts again when it does not play, if it is heard and the
 	/// camera is within its reach
 	void ProcessKeptSound(PointSound& point, const glm::vec3& camera) const;
-	/// One turn of the tag of an object: its sound follows the object, or starts. True when the tag goes, because its
-	/// object is gone.
-	[[nodiscard]] bool ProcessObjectTag(entt::entity entity, components::SoundTag& tag, const glm::vec3& camera) const;
+	/// One turn of the sound of an object's tag: its sound follows the object, or starts. Only a computer with audio
+	/// does this part of the turn.
+	void ProcessObjectTag(entt::entity entity, components::SoundTag& tag, const glm::vec3& camera) const;
 	/// Puts the tags that came into the world with no call to this system (the tags of new objects and of a loaded
 	/// world) at the start of the list, and removes the tags that left it
 	void FindTags();
