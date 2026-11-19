@@ -1322,6 +1322,89 @@ void AddFourthLandArrival(std::vector<Scenario>& all)
 	                  .scriptGlobals = {{"FireMeteorWaveAggressive", {.number = 1.0f}}}}},
 	});
 }
+
+/// The sons of The Sea on the second land. The game's script of each son runs for three boys on the flat land. The hand
+/// takes each boy and puts him down at the same point under the hand, each after the one before.
+void AddTheSeaSons(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// The home of the sons, where each script sends its boy, from the middle of the map
+	static constexpr glm::vec2 k_Hut {0.0f, 40.0f};
+	const auto sons = [](float gapSeconds) {
+		std::vector<Command> commands;
+		for (size_t son = 0; son < 3; ++son)
+		{
+			commands.push_back({.kind = Kind::RunScript,
+			                    .delaySeconds = son == 0 ? 0.5f : 0.0f,
+			                    .script = "BaywatchSwimmingBoy",
+			                    .scriptArguments = {{.kind = Argument::Kind::Object, .index = son},
+			                                        {.kind = Argument::Kind::Marker, .point = k_Hut}},
+			                    .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}});
+		}
+		// The script of a boy waits up to four seconds before it plays his clip of swimming
+		for (size_t son = 0; son < 3; ++son)
+		{
+			commands.push_back({.kind = Kind::HandTake, .delaySeconds = son == 0 ? 6.0f : gapSeconds, .object = son});
+			commands.push_back({.kind = Kind::HandRelease, .delaySeconds = 0.5f});
+		}
+		return commands;
+	};
+	// The boys stand south of the point where the hand puts them down. The player's creature stands far away with its
+	// mind paused, so that it does not take a boy.
+	const std::vector<ObjectSetup> boys {
+	    {.type = VillagerInfo::CelticFarmerMale, .offset = {-4.0f, -10.0f}, .villagerAge = 11},
+	    {.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -10.0f}, .villagerAge = 11},
+	    {.type = VillagerInfo::CelticFarmerMale, .offset = {4.0f, -10.0f}, .villagerAge = 11},
+	};
+	const std::vector<CreatureSetup> creature {
+	    {.label = "player's tiger", .species = CreatureType::Tiger, .offset = {200.0f, -200.0f}, .pauseMind = true}};
+	const auto home = [](size_t son, std::string_view label) {
+		return checks::Check {.label = label,
+		                      .quantity = checks::Quantity::ObjectDistance,
+		                      .index = son,
+		                      .point = k_Hut,
+		                      .afterTurns = 50,
+		                      .byTurn = 1500,
+		                      .atMost = 5.0};
+	};
+
+	all.push_back({
+	    .id = "story.l2_sea_sons_apart",
+	    .name = "Story: the sons of The Sea put down one at a time walk home",
+	    .facet = Facet::Story,
+	    .description = "The game's script of a son of The Sea runs for three boys, with a home 40 metres north. The hand "
+	                   "takes each boy and puts him down at the same point under the hand, 20 seconds after the one before.",
+	    .expected = "Each boy plays his clip of joy and says his line, then walks home. All three boys come within 5 "
+	                "metres of their home.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -40.0f}, .look = {0.0f, 0.0f, 10.0f}},
+	    .creatures = creature,
+	    .objects = boys,
+	    .commands = sons(20.0f),
+	    .checks = {home(0, "the first boy walks home"), home(1, "the second boy walks home"),
+	               home(2, "the third boy walks home")},
+	});
+
+	all.push_back({
+	    .id = "story.l2_sea_sons_on_each_other",
+	    .name = "Story: the sons of The Sea put down on each other",
+	    .facet = Facet::Story,
+	    .description = "The game's script of a son of The Sea runs for three boys, with a home 40 metres north. The hand "
+	                   "takes each boy and puts him down at the same point under the hand, one second after the one "
+	                   "before. Each boy lands on the boys before him.",
+	    .expected = "The second and the third boy land on the first boy and knock him into the air. His script sends "
+	                "him home while he is in the air. He keeps the order and walks home when he lands (deviation row "
+	                "283, which fixes vanilla-bugs row 2418). The second and the third boy say their lines and walk home. "
+	                "All three boys come within 5 metres of their home.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -40.0f}, .look = {0.0f, 0.0f, 10.0f}},
+	    .creatures = creature,
+	    .objects = boys,
+	    .commands = sons(0.5f),
+	    .checks = {home(0, "the first boy, knocked into the air, walks home when he lands"),
+	               home(1, "the second boy walks home"), home(2, "the third boy walks home")},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddStory(std::vector<Scenario>& all)
@@ -1555,6 +1638,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddTreePuzzle(all);
 	AddMazePuzzles(all);
 	AddFourthLandArrival(all);
+	AddTheSeaSons(all);
 }
 
 void testbed_scenarios::AddExplorersBoat(std::vector<Scenario>& all)
