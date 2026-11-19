@@ -1405,6 +1405,125 @@ void AddTheSeaSons(std::vector<Scenario>& all)
 	               home(1, "the second boy walks home"), home(2, "the third boy walks home")},
 	});
 }
+
+/// The Slavers on the second land. The game's main script of the quest runs. The hand puts lions into the pen of the
+/// slavers, each time with the camera on the pen, and the slavers pay for the first two lions.
+void AddTheSlaversPen(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// The pen where the slavers take animals, a place far from it, and the hut of the villager who asks for help, on the
+	// map of the second land. The quest starts when the player clicks the scroll of the hut.
+	static constexpr glm::vec2 k_LandTwoMiddle {2240.0f, 2720.0f};
+	static constexpr glm::vec2 k_Pen = glm::vec2 {2276.1667f, 2001.518f} - k_LandTwoMiddle;
+	static constexpr glm::vec2 k_Away = glm::vec2 {2700.0f, 1500.0f} - k_LandTwoMiddle;
+	static constexpr glm::vec2 k_Hut = glm::vec2 {2182.6f, 2209.541f} - k_LandTwoMiddle;
+	const Command runQuest {.kind = Kind::RunScript,
+	                        .delaySeconds = 0.5f,
+	                        .script = "TheSlaversMain",
+	                        .scriptArguments = {{.kind = Argument::Kind::Town}},
+	                        .scriptGlobals = {{"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}}}};
+	const Command clickHut {.kind = Kind::ClickScroll, .delaySeconds = 3.0f, .point = k_Hut};
+	// The hand takes a lion and puts it down in the pen, with the camera on the pen. The introduction of the quest
+	// takes about 45 seconds, and the slavers then take about 20 seconds for each animal.
+	const auto drop = [](size_t lion, float delaySeconds) {
+		return std::vector<Command> {{.kind = Kind::CameraLooksAt, .delaySeconds = delaySeconds, .point = k_Pen},
+		                             {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = lion},
+		                             {.kind = Kind::HandRelease, .delaySeconds = 1.5f}};
+	};
+	const auto lions = [](size_t count) {
+		std::vector<ObjectSetup> objects;
+		for (size_t lion = 0; lion < count; ++lion)
+		{
+			objects.push_back({.type = AnimalInfo::Lion,
+			                   .offset = k_Pen + glm::vec2 {-40.0f + (static_cast<float>(lion) * 6.0f), 40.0f},
+			                   .living = true});
+		}
+		return objects;
+	};
+	const auto stolenCount = [](std::string_view label, uint32_t afterTurns, std::optional<uint32_t> byTurn, double least,
+	                            double most) {
+		return checks::Check {.label = label,
+		                      .quantity = checks::Quantity::ScriptLocal,
+		                      .kind = "TheSlaversMain",
+		                      .variable = "AnimalStolenCount",
+		                      .afterTurns = afterTurns,
+		                      .byTurn = byTurn,
+		                      .atLeast = least,
+		                      .atMost = most};
+	};
+
+	// The third lion goes into the pen while the camera looks away. It joins the flock of the circus before the slavers
+	// see it, and they refuse it when the camera comes back.
+	std::vector<Command> lookAway {runQuest, clickHut};
+	for (size_t lion = 0; lion < 3; ++lion)
+	{
+		const auto commands = drop(lion, lion == 0 ? 60.0f : 35.0f);
+		lookAway.insert(lookAway.end(), commands.begin(), commands.end());
+	}
+	// The camera looks away in the same frame as the hand lets go, so the slavers do not see the lion fall
+	lookAway.push_back({.kind = Kind::CameraLooksAt, .delaySeconds = 0.0f, .point = k_Away});
+	lookAway.push_back({.kind = Kind::CameraLooksAt, .delaySeconds = 40.0f, .point = k_Pen});
+	all.push_back({
+	    .id = "story.l2_slavers_refused_out_of_view",
+	    .name = "Story: the slavers refuse a lion that joined the circus out of view",
+	    .facet = Facet::Story,
+	    .description = "The second land of the story. The game's main script of The Slavers runs, and the "
+	                   "player clicks the scroll of the hut. After the introduction, the hand puts three lions into the pen of "
+	                   "the slavers, about 35 seconds apart, each time with the "
+	                   "camera on the pen. After the third lion the camera looks away from the pen for 40 seconds, and "
+	                   "then looks at the pen again.",
+	    .expected = "The slavers pay for the first two lions (line 1759) and the lions join the flock of the circus. "
+	                "The third lion lands while the camera looks away and joins the flock of the circus. When the camera "
+	                "looks at the pen again, the slavers refuse the lion (line 1779) and remove it. They do not say that "
+	                "an animal was stolen (no line 1761), and the count of stolen animals stays 0 (deviation row 284, "
+	                "which fixes vanilla-bugs row 2422).",
+	    .environment =
+	        {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Pen.x, 15.0f, k_Pen.y - 15.0f}, .look = {k_Pen.x, 0.0f, k_Pen.y}},
+	    .creatures = {{.label = "player's tiger", .species = CreatureType::Tiger, .offset = k_Away, .pauseMind = true}},
+	    .objects = lions(3),
+	    .commands = lookAway,
+	    .checks = {stolenCount("the quest counts no stolen animal before the third lion", 1300, std::nullopt, 0.0, 0.0),
+	               {.label = "the slavers remove the refused third lion and keep the two that they paid for",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 1900,
+	                .byTurn = 2600,
+	                .atLeast = 2.0,
+	                .atMost = 2.0},
+	               stolenCount("the refused lion does not count as stolen", 2700, std::nullopt, 0.0, 0.0)},
+	});
+
+	// The player's creature eats a lion that the slavers paid for. That is a theft.
+	std::vector<Command> theft {runQuest, clickHut};
+	const auto paid = drop(0, 60.0f);
+	theft.insert(theft.end(), paid.begin(), paid.end());
+	theft.push_back({.kind = Kind::PickUp, .creature = 0, .delaySeconds = 35.0f, .waitUntilFree = true, .object = 0});
+	theft.push_back({.kind = Kind::EatHeld, .creature = 0, .delaySeconds = 1.0f, .waitUntilFree = true});
+	all.push_back({
+	    .id = "story.l2_slavers_eaten_lion_stolen",
+	    .name = "Story: a circus lion that the creature eats counts as stolen",
+	    .facet = Facet::Story,
+	    .description = "The second land of the story. The game's main script of The Slavers runs, and the "
+	                   "player clicks the scroll of the hut. After the introduction, the hand puts a lion into the pen of the "
+	                   "slavers with the camera on the pen. The player's tiger "
+	                   "stands near the pen. When the slavers paid for the lion, the tiger takes the lion and eats it.",
+	    .expected = "The slavers pay for the lion (line 1759) and the lion joins the flock of the circus. The tiger eats "
+	                "the lion. The flock of the circus becomes smaller, and the slavers say that an animal was stolen "
+	                "(line 1761). The count of stolen animals becomes 1.",
+	    .environment =
+	        {.land = Land::Story, .storyLand = "Land2.txt", .dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Pen.x, 15.0f, k_Pen.y - 15.0f}, .look = {k_Pen.x, 0.0f, k_Pen.y}},
+	    .creatures = {{.label = "player's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = k_Pen + glm::vec2 {25.0f, 0.0f},
+	                   .needs = {.energy = 0.2f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	                   .pauseMind = true}},
+	    .objects = lions(1),
+	    .commands = theft,
+	    .checks = {stolenCount("the quest counts no stolen animal before the tiger eats", 900, std::nullopt, 0.0, 0.0),
+	               stolenCount("the eaten lion counts as stolen", 1000, 2000, 1.0, 1.0)},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddStory(std::vector<Scenario>& all)
@@ -1639,6 +1758,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddMazePuzzles(all);
 	AddFourthLandArrival(all);
 	AddTheSeaSons(all);
+	AddTheSlaversPen(all);
 }
 
 void testbed_scenarios::AddExplorersBoat(std::vector<Scenario>& all)

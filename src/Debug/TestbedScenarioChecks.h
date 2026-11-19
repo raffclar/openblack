@@ -99,6 +99,13 @@ enum class Quantity : uint8_t
 	/// 1 when the particles keep the sphere of a shield miracle around the point on the land, else 0. A sphere that the
 	/// particles keep is drawn, and it turns away the particles of other effects.
 	ShieldSphereAt,
+	/// The value of a local variable (variable) of the first task of a script (kind, by its name) that runs. None when
+	/// no task of the script runs.
+	ScriptLocal,
+	/// 1 when the scenario's creature at the index wears a leash, else 0
+	CreatureLeashed,
+	/// 1 when a help script or a special script of the temple has the dialogue, else 0
+	TempleScriptHasDialogue,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
@@ -110,8 +117,10 @@ struct Check
 	Quantity quantity {Quantity::CreaturesAlive};
 	/// The creature or object of the scenario, for the quantities of one thing
 	size_t index {0};
-	/// For Entities: the kind of thing
+	/// For Entities: the kind of thing. For ScriptLocal: the name of the script
 	std::string_view kind;
+	/// For ScriptLocal: the name of the local variable
+	std::string_view variable;
 	/// For CreatureDistance, ObjectDistance, FireNear, FootprintsNear and ShieldSphereAt: the point, from the middle of the
 	/// map, x east and y north in metres
 	glm::vec2 point {0.0f};

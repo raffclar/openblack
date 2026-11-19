@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include <LHVM.h>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -168,6 +169,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "Sound/GameMusic.h"
+#include "Temple/TempleHelpScripts.h"
 #include "TestbedDispenserGrid.h"
 #include "TestbedScenarioRunnerParts.h"
 #include "Visual/RendererRequestsInterface.h"
@@ -1538,6 +1540,51 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto point = MapPoint(_middle, check.point);
 		const float height = Locator::terrainSystem::value().GetHeightAt(point);
 		return Locator::effectRequestSystem::value().FindShield({point.x, height, point.y}, 0.0f) != nullptr ? 1.0 : 0.0;
+	}
+	case checks::Quantity::ScriptLocal:
+	{
+		if (!Locator::vm::has_value())
+		{
+			return std::nullopt;
+		}
+		for (const auto& [number, task] : Locator::vm::value().GetTasks())
+		{
+			if (task.name != check.kind)
+			{
+				continue;
+			}
+			const auto found =
+			    std::ranges::find_if(task.localVars, [&check](const auto& local) { return local.name == check.variable; });
+			if (found == task.localVars.end())
+			{
+				return std::nullopt;
+			}
+			switch (found->type)
+			{
+			case lhvm::DataType::Int:
+				return static_cast<double>(found->value.intVal);
+			case lhvm::DataType::Object:
+				return static_cast<double>(found->value.uintVal);
+			default:
+				return static_cast<double>(found->value.floatVal);
+			}
+		}
+		return std::nullopt;
+	}
+	case checks::Quantity::CreatureLeashed:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value() || !Locator::leashSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::leashSystem::value().IsLeashed(*creature) ? 1.0 : 0.0;
+	}
+	case checks::Quantity::TempleScriptHasDialogue:
+	{
+		const temple_help::GameDialogue dialogue;
+		const auto owner = dialogue.GetOwner();
+		return owner != 0 && dialogue.IsTempleScript(owner) ? 1.0 : 0.0;
 	}
 	}
 	return std::nullopt;

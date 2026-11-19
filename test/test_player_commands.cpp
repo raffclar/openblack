@@ -189,3 +189,33 @@ TEST(PlayerCommands, AHandCommandWaitsForTheBlockOfTheNextFrame)
 	frames.Frame(true, std::nullopt, std::nullopt);
 	EXPECT_EQ(frames.TurnOf(1), 3u);
 }
+
+TEST(PlayerCommands, ASaveKeepsTheWaitingCommandsButTheTempleLeashCommand)
+{
+	CommandQueue queue;
+	queue.Submit(PlayerNames::PLAYER_ONE, Feedback(1, 0.0f));
+	queue.Submit(PlayerNames::PLAYER_ONE, TempleLeashOff {});
+	queue.Send();
+	queue.Submit(PlayerNames::PLAYER_ONE, TempleLeashOff {});
+	queue.Submit(PlayerNames::PLAYER_ONE, Feedback(2, 0.0f));
+
+	const auto kept = KeptBySave(queue.Waiting());
+
+	// The command of the way into the temple is not in the save, so the leash stays on after the load
+	ASSERT_EQ(kept.sent.size(), 1u);
+	EXPECT_EQ(IdOf(kept.sent[0]), 1u);
+	ASSERT_EQ(kept.open.size(), 1u);
+	EXPECT_EQ(IdOf(kept.open[0]), 2u);
+	// The running game keeps the command, so the leash comes off at the turn after the player leaves
+	EXPECT_EQ(queue.SentCount(), 2u);
+	EXPECT_EQ(queue.OpenCount(), 2u);
+}
+
+TEST(PlayerCommands, ASaveWithOnlyTheTempleLeashCommandKeepsNoCommand)
+{
+	CommandQueue queue;
+	queue.Submit(PlayerNames::PLAYER_ONE, TempleLeashOff {});
+	queue.Send();
+
+	EXPECT_TRUE(KeptBySave(queue.Waiting()).Empty());
+}

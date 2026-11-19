@@ -536,7 +536,8 @@ void IdSize() // 040 ID_SIZE
 	auto& registry = Locator::entitiesRegistry::value();
 	if (container != entt::null && ecs::script_flocks::IsFlock(registry, container))
 	{
-		Pushf(static_cast<float>(ecs::script_flocks::Size(registry, container)));
+		// An animal that a merge of flocks put in a flock of a script does not count (deviation 284)
+		Pushf(static_cast<float>(ecs::script_flocks::ScriptSize(registry, container)));
 		return;
 	}
 	if (container != entt::null && registry.Valid(container) && registry.AllOf<ecs::components::Town>(container))

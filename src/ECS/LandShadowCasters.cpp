@@ -9,8 +9,12 @@
 
 #include "LandShadowCasters.h"
 
+#include <algorithm>
 #include <array>
+#include <tuple>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -50,20 +54,41 @@ using namespace components;
 namespace
 {
 
-/// The count of the changes to the land's shadow casters, kept with the registry
+/// The most changes that the registry keeps until the next take. More changes than this make the next take give none.
+constexpr size_t k_MostKeptChanges = size_t {1} << 14u;
+
+/// The count of the changes to the land's shadow casters, and the things that changed since the last take, kept with
+/// the registry
 struct LandShadowCasterChanges
 {
 	uint64_t version {0};
+	/// The things that changed, with repeats, in the order of the changes
+	std::vector<entt::entity> things;
+	/// More things changed than the registry keeps
+	bool tooMany {false};
 };
 
 /// Counts a change of a component of a thing that can cast: one with a mesh and a transform. When the registry tells
 /// this function, a new component is already there, and a component that goes is still there.
 void NoteCasterChange(entt::registry& registry, entt::entity entity)
 {
-	if (registry.all_of<Mesh, Transform>(entity))
+	if (!registry.all_of<Mesh, Transform>(entity))
 	{
-		++registry.ctx().get<LandShadowCasterChanges>().version;
+		return;
 	}
+	auto& changes = registry.ctx().get<LandShadowCasterChanges>();
+	++changes.version;
+	if (changes.tooMany || (!changes.things.empty() && changes.things.back() == entity))
+	{
+		return;
+	}
+	if (changes.things.size() >= k_MostKeptChanges)
+	{
+		changes.tooMany = true;
+		changes.things = {};
+		return;
+	}
+	changes.things.push_back(entity);
 }
 
 /// Every component that the land's shadows depend on: those that LandShadowOf reads, the kinds of things that the
@@ -216,6 +241,26 @@ uint64_t LandShadowCastersVersion(Registry& registry)
 		registry.OnDestroy<Component>().template connect<&NoteCasterChange>();
 	});
 	return 0;
+}
+
+std::optional<std::vector<entt::entity>> TakeLandShadowCasterChanges(Registry& registry)
+{
+	auto* changes = registry.Underlying().ctx().find<LandShadowCasterChanges>();
+	if (changes == nullptr)
+	{
+		// The registry starts to keep the changes now: the changes before are not known
+		std::ignore = LandShadowCastersVersion(registry);
+		return std::nullopt;
+	}
+	auto things = std::exchange(changes->things, {});
+	if (std::exchange(changes->tooMany, false))
+	{
+		return std::nullopt;
+	}
+	std::ranges::sort(things);
+	const auto [repeatsFirst, repeatsLast] = std::ranges::unique(things);
+	things.erase(repeatsFirst, repeatsLast);
+	return things;
 }
 
 } // namespace openblack::ecs

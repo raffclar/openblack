@@ -1039,8 +1039,11 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	const auto creaturesDone = std::chrono::steady_clock::now();
 	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
 	// The commands that wait for the next turn, as the reports that the player sent after the turn of the save. The load
-	// puts them back, so that the next turn does them as it does with no load.
-	if (const auto waiting = waiting_commands_file::Write(Locator::playerCommandSystem::value().GetWaiting()); !waiting.empty())
+	// puts them back, so that the next turn does them as it does with no load. The command of the way into the temple
+	// does not stay: after the load, the leash stays on.
+	if (const auto waiting =
+	        waiting_commands_file::Write(player_commands::KeptBySave(Locator::playerCommandSystem::value().GetWaiting()));
+	    !waiting.empty())
 	{
 		world.chunks.push_back({.tag = gamesave::k_WaitingCommandsTag, .bytes = waiting});
 	}

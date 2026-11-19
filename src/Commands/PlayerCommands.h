@@ -1423,6 +1423,12 @@ struct WaitingCommands
 	[[nodiscard]] bool Empty() const noexcept { return sent.empty() && open.empty(); }
 };
 
+/// The commands that wait which a saved game keeps: all but the command of the way into the temple. That command takes
+/// the leash off at the next turn. The original game's load removes the commands that wait, so after the load of a save
+/// made in the temple the leash stays on. The other commands stay in the save, so that the turns after a load are the
+/// same as the turns with no load.
+[[nodiscard]] WaitingCommands KeptBySave(WaitingCommands waiting);
+
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that
 /// the game and the tests use it both.
 class CommandQueue

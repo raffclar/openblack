@@ -145,6 +145,7 @@ void openblack::ecs::reflection::RegisterFields_Components_f(entt::meta_ctx& con
 	Reflect<components::FlockMember>(context)
 	    .Field<&components::FlockMember::flock>("flock")
 	    .Field<&components::FlockMember::order>("order");
+	Reflect<components::MergedIntoScriptFlock>(context).Field<&components::MergedIntoScriptFlock::flock>("flock");
 	Reflect<components::FlockSpell>(context)
 	    .Field<&components::FlockSpell::flock>("flock")
 	    .Field<&components::FlockSpell::created>("created")
