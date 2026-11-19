@@ -9,6 +9,7 @@
 
 // Testbed scenarios for the leashes of the creature.
 
+#include "3D/TempleRoom.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureFight.h"
@@ -905,5 +906,54 @@ void testbed_scenarios::AddLeash(std::vector<Scenario>& all)
 	                 {.kind = Kind::LeashKey, .delaySeconds = 19.0f, .value = 1},
 	                 {.kind = Kind::LeashKey, .delaySeconds = 27.0f, .value = 2},
 	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 2}},
+	});
+
+	// The way into the temple sends the command that takes the leash off. The world stands still in the temple, so the
+	// command waits for the turn after the player leaves.
+	all.push_back({
+	    .id = "leash.temple_entry_takes_off",
+	    .name = "The leash comes off after the player leaves the temple",
+	    .facet = Facet::Leash,
+	    .description = "The player puts the learning leash on their tiger and holds it. Then the player goes into the "
+	                   "temple's main room, and 8 seconds later leaves the temple.",
+	    .expected = "The leash stays on while the player is in the temple, because the world stands still there. At the "
+	                "first turn after the player leaves, the leash comes off the tiger.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 60.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f),
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 8.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
+	    .checks = {{.label = "the tiger wears the leash before the player goes in",
+	                .quantity = checks::Quantity::CreatureLeashed,
+	                .afterTurns = 15,
+	                .atLeast = 1.0},
+	               {.label = "the leash comes off after the player leaves",
+	                .quantity = checks::Quantity::CreatureLeashed,
+	                .afterTurns = 110,
+	                .byTurn = 400,
+	                .atMost = 0.0}},
+	});
+
+	// A save in the temple does not keep the command that takes the leash off, as the game's load removes the commands
+	// that wait
+	all.push_back({
+	    .id = "saves.temple_leash_after_load",
+	    .name = "Save and load in the temple: the leash stays on",
+	    .facet = Facet::Leash,
+	    .description = "The player puts the learning leash on their tiger and holds it. Then the player goes into the "
+	                   "temple's main room. 2 seconds later the game saves into slot 0, and a second after the save the "
+	                   "game loads slot 0.",
+	    .expected = "The load puts the player outside the temple. The tiger wears the leash after the load and continues "
+	                "to wear it: the command of the way into the temple is not in the save, as in the game.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 60.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f),
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 2.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 1.0f, .value = 0}},
+	    .checks = {{.label = "the tiger wears the leash after the load",
+	                .quantity = checks::Quantity::CreatureLeashed,
+	                .afterTurns = 90,
+	                .atLeast = 1.0}},
 	});
 }

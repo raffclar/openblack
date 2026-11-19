@@ -62,6 +62,35 @@ void testbed_scenarios::AddScriptTaskRelease(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
 	});
 
+	// The load keeps the help script of the temple that ran at the save. The world's turns run every kind of script, so
+	// the help continues outside the temple, where the way out would stop it.
+	all.push_back({
+	    .id = "saves.temple_help_after_load",
+	    .name = "Save and load in the temple while its help runs: the help continues outside",
+	    .facet = Facet::Story,
+	    .description = "The player has a temple, and goes into its main room and then into the save game room for the "
+	                   "first time. The room's help starts. 3 seconds later the game saves into slot 0, and a second "
+	                   "after the save the game loads slot 0.",
+	    .expected = "The load puts the player outside the temple. The help of the save game room keeps the dialogue and "
+	                "continues with its next lines outside, as in the game. The way out of the temple stops the help, "
+	                "but a load does not.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::SaveGame)},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 3.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 1.0f, .value = 0}},
+	    .checks = {{.label = "the help of the temple has the dialogue before the save",
+	                .quantity = checks::Quantity::TempleScriptHasDialogue,
+	                .afterTurns = 55,
+	                .atLeast = 1.0},
+	               {.label = "the help of the temple has the dialogue after the load, outside the temple",
+	                .quantity = checks::Quantity::TempleScriptHasDialogue,
+	                .afterTurns = 100,
+	                .atLeast = 1.0}},
+	});
+
 	all.push_back({
 	    .id = "interface.world_text_glyphs",
 	    .name = "The letters of the temple's signs, read from the font as the game reads them",

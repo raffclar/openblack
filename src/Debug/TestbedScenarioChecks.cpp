@@ -104,6 +104,10 @@ std::string_view Name(Quantity quantity)
 		return "footprints on the land near the point";
 	case Quantity::ShieldSphereAt:
 		return "a shield sphere around the point";
+	case Quantity::CreatureLeashed:
+		return "the creature wears a leash";
+	case Quantity::TempleScriptHasDialogue:
+		return "a script of the temple has the dialogue";
 	}
 	return "";
 }
