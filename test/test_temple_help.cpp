@@ -285,6 +285,21 @@ TEST(TempleHelp, TheDialogueTakenInsideIsNotGivenBack)
 	EXPECT_EQ(scripts.calls, (std::vector<std::string> {"show again"}));
 }
 
+// A load gives the kept dialogue back as the way out of the temple does: only when nobody has the dialogue. A save
+// writes the dialogue as the load gives it back.
+TEST(TempleHelp, ALoadGivesTheKeptDialogueBackOnlyWhenNobodyHasTheDialogue)
+{
+	const HeldDialogue held {.owner = 57, .text = {.texts = {5129, 5128}, .waitClick = true, .noClick = false}};
+	const auto back = ComesBack(held, false);
+	ASSERT_TRUE(back.has_value());
+	EXPECT_EQ(back->owner, 57u);
+	EXPECT_EQ(back->text.texts, held.text.texts);
+	EXPECT_TRUE(back->text.waitClick);
+	// The cinema bars or another task keep the dialogue, so the kept dialogue goes
+	EXPECT_FALSE(ComesBack(held, true).has_value());
+	EXPECT_FALSE(ComesBack(std::nullopt, false).has_value());
+}
+
 TEST(TempleRoomAccess, OnlyTheMainRoomIsOpenUntilItHasBeenDrawn)
 {
 	using temple::IsRoomAvailable;

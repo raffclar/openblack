@@ -696,6 +696,11 @@ bool InspectorSystem::InputWaits() const
 	return _replayOnLoad.has_value() || (_input != nullptr && _input->Timeline().Pending() != 0);
 }
 
+bool InspectorSystem::HoldsRun() const
+{
+	return _game != nullptr && _game->HoldsRun();
+}
+
 void InspectorSystem::PauseOnLoad(bool pause)
 {
 	_game->SetPauseOnLoad(pause);

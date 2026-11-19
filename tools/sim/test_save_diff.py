@@ -314,7 +314,7 @@ class SaveDiffTests(unittest.TestCase):
         self.assertEqual(save_diff.not_game_start(result), ["OBJS"])
 
 
-def creature_records(agenda_state=1, word08=0, health=b"\x00\x00\x80\x3f"):
+def creature_records(agenda_state=1, word08=0, health=b"\x00\x00\x80\x3f", in_temple=0):
     """A records block (OBJS) and its keys block (KEYS) with one creature that keeps a plan, and no leash. The plan's
     agenda has one step after its current step."""
     record = u32(save_diff.CREATURE_TYPE) + u32(0)
@@ -326,7 +326,7 @@ def creature_records(agenda_state=1, word08=0, health=b"\x00\x00\x80\x3f"):
     record += u32(0) + b"\x00" * 12 + u32(0) + b"\x00" * 12  # footpath, goal, target, step
     record += u32(0) * 2 + b"\x00" * 6 + u32(0) + u32(0) * 2 + b"\x00" + u32(0) * 2 + b"\x00\x00"
     record += u32(0) * 3 + u32(0) + b"\x00" * 4 + b"\x00" + u32(0) + b"\x00" + u32(0)  # living to its reactions
-    record += u32(33) + u32(0) + b"\x00\x01"                 # version, temple, index, owner
+    record += u32(33) + u32(in_temple) + b"\x00\x01"         # version, temple, index, owner
     record += (u32(0) * 5 + u32(0)) * save_diff.CREATURE_SPELLS + u32(0)  # spells, then no queued spell
     record += u32(1) + u32(0) * 2 + b"\x00\x00" + u32(0) * 5  # processing, sizes, vortex, fizzes, word
     record += u32(0) * 5 + b"\x00" * 12 + u32(0) * 2 + b"\x00" + u32(0) + b"\x00" * 12  # effects to home
@@ -343,6 +343,20 @@ def creature_records(agenda_state=1, word08=0, health=b"\x00\x00\x80\x3f"):
 
 
 class CreatureReloadTests(unittest.TestCase):
+    def test_a_save_in_the_temple_explains_only_its_word_of_the_records(self):
+        objects_a, keys = creature_records(in_temple=1)
+        objects_b, _ = creature_records(in_temple=0)
+        result = save_diff.compare_files(world([("OBJS", objects_a), ("KEYS", keys)]),
+                                         world([("OBJS", objects_b), ("KEYS", keys)]))
+        self.assertEqual(save_diff.differing_parts(result), ["OBJS:2:creature.savedInTemple"])
+        self.assertEqual(save_diff.not_saved_in_temple(result), [])
+        self.assertEqual(save_diff.not_game_start(result), ["OBJS"])
+        # Another field of the record that differs is not explained
+        objects_c, _ = creature_records(in_temple=0, health=struct.pack("<f", 0.5))
+        result = save_diff.compare_files(world([("OBJS", objects_a), ("KEYS", keys)]),
+                                         world([("OBJS", objects_c), ("KEYS", keys)]))
+        self.assertEqual(save_diff.not_saved_in_temple(result), ["OBJS"])
+
     def test_the_records_block_names_each_field(self):
         objects, keys = creature_records()
         names = [name for name, _ in save_diff.read_records(objects, keys)]

@@ -146,6 +146,7 @@ public:
 	void SetFreeCamera(bool on) override { _freeCamera = on; }
 	[[nodiscard]] bool IsFreeCameraOn() const override { return _freeCamera; }
 	void ShowHelpAfterLoad() override { BringBackDialogue(); }
+	[[nodiscard]] std::optional<temple_help::HeldDialogue> GetDialogueBackAtLoad() const override;
 	void WarmUpVisit(const std::function<void()>& draw) override;
 	/// A save keeps the dialogue that the temple keeps for the world while the player is inside: its owner, its last six
 	/// texts and the click waits of the newest

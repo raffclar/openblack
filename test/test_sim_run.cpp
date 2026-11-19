@@ -75,13 +75,16 @@ TEST(SimRun, ATurnLimitedRunEndsWhenTheTempleHoldsTheWorldAfterTheLastScenarioCo
 
 TEST(SimRun, TheInputOfTheToolIsDoneAfterItsScenarioOrItsFiles)
 {
-	EXPECT_TRUE(ToolInputDone(true, false, false));
+	EXPECT_TRUE(ToolInputDone(true, false, false, false));
 	// The run plays a file of commands or a file of recorded input, and no event of recorded input waits
-	EXPECT_TRUE(ToolInputDone(false, true, false));
+	EXPECT_TRUE(ToolInputDone(false, true, false, false));
 	// An event of the recorded input waits, and it can take the player out of the temple
-	EXPECT_FALSE(ToolInputDone(false, true, true));
+	EXPECT_FALSE(ToolInputDone(false, true, true, false));
 	// A run with no scenario and no recorded input can get input from a tool through the inspector
-	EXPECT_FALSE(ToolInputDone(false, false, false));
+	EXPECT_FALSE(ToolInputDone(false, false, false, false));
+	// A tool that steps the run holds it, and it can take the player out of the temple
+	EXPECT_FALSE(ToolInputDone(true, false, false, true));
+	EXPECT_FALSE(ToolInputDone(false, true, false, true));
 }
 
 TEST(SimRun, ATurnLimitedRunEndsWhenTheGameIsOverInTheTemple)
