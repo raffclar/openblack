@@ -66,6 +66,12 @@ public:
 	[[nodiscard]] virtual std::vector<BufferId> UnqueueProcessedBuffers(SourceId id) = 0;
 	/// Frames played into the oldest buffer queued on a source
 	[[nodiscard]] virtual uint32_t GetSampleOffset(SourceId id) const = 0;
+	/// The frames that a source played from the start of its queue. The count includes the buffers that the source
+	/// finished and that are still in its queue.
+	[[nodiscard]] virtual uint32_t GetQueueOffset(SourceId id) const { return GetSampleOffset(id); }
+	/// Remove the queue of a source, and give the source this buffer as its one buffer from this frame. A source that
+	/// plays continues from the frame, and a paused source stays paused at the frame.
+	virtual void PlayBufferFrom(SourceId /*sourceId*/, BufferId /*buffer*/, uint32_t /*frame*/) {}
 	/// The sound device works. It stops when the machine loses the device, and then the device plays no sound.
 	[[nodiscard]] virtual bool IsDeviceConnected() const { return true; }
 };

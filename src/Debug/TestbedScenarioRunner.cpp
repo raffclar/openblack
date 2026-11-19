@@ -274,6 +274,7 @@ void Runner::Start(const Scenario& scenario)
 	_objects.clear();
 	_birdFlocks.clear();
 	_scriptFlock = entt::null;
+	_bankSample = entt::null;
 	_keptByScript.clear();
 	_madeByNatives.clear();
 	_globes.clear();
@@ -952,7 +953,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::CreateReaction ||
 	    command.kind == Kind::GiveMagicTreesToStore || command.kind == Kind::HandCastAtPoint ||
 	    command.kind == Kind::HandGripTotem || command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
-	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
+	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::PlayBankSample ||
+	    command.kind == Kind::ReleaseBankSample || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ScriptBuildsWorshipSites ||
 	    command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown || command.kind == Kind::PlainKeyRepeat ||
 	    command.kind == Kind::PlainKeyUp || command.kind == Kind::ChargeIconWithSeedHeld ||

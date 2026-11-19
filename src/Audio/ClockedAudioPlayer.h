@@ -63,6 +63,8 @@ public:
 	[[nodiscard]] float GetProgress(size_t sizeInBytes, SourceId sourceId) const override;
 	[[nodiscard]] std::vector<BufferId> UnqueueProcessedBuffers(SourceId id) override;
 	[[nodiscard]] uint32_t GetSampleOffset(SourceId id) const override;
+	[[nodiscard]] uint32_t GetQueueOffset(SourceId id) const override;
+	void PlayBufferFrom(SourceId sourceId, BufferId buffer, uint32_t frame) override;
 
 private:
 	struct Buffer

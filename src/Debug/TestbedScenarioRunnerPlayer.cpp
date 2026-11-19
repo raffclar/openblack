@@ -669,6 +669,25 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		                   guidance::k_VoicePitch, command.ctrl ? ", placed" : ", heard everywhere",
 		                   started == entt::null ? ", not started" : "");
 	}
+	case Kind::PlayBankSample:
+	{
+		if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio())
+		{
+			return "no audio";
+		}
+		const auto sample = fmt::format("InGame.sad/{}", command.value);
+		_bankSample = Locator::sounds::value().StartSoundEffect(resources::HashIdentifier(sample), {});
+		return fmt::format("{} asked for, heard everywhere{}", sample, _bankSample == entt::null ? ", not started" : "");
+	}
+	case Kind::ReleaseBankSample:
+	{
+		if (!Locator::sounds::has_value() || _bankSample == entt::null || !Locator::sounds::value().EmitterExists(_bankSample))
+		{
+			return "no sample plays";
+		}
+		Locator::sounds::value().ReleaseEmitterLoop(_bankSample);
+		return "the loop of the sample is released";
+	}
 	case Kind::FillSiteIcons:
 	{
 		if (!Locator::infoConstants::has_value())

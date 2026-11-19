@@ -150,6 +150,7 @@ void openblack::ecs::reflection::RegisterFields_Components_a(entt::meta_ctx& con
 	    .Field<&components::AudioEmitter::distanceScale>("distanceScale")
 	    .Field<&components::AudioEmitter::headerSet>("headerSet")
 	    .Field<&components::AudioEmitter::loop>("loop")
+	    .RunField<&components::AudioEmitter::loopCount>("loopCount")
 	    .Field<&components::AudioEmitter::state>("state")
 	    .Field<&components::AudioEmitter::music>("music")
 	    .Field<&components::AudioEmitter::owner>("owner")

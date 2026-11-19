@@ -1000,6 +1000,8 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::AttachObjectScriptSound:
 	case Kind::SayLine:
 	case Kind::PlayGuidanceVoice:
+	case Kind::PlayBankSample:
+	case Kind::ReleaseBankSample:
 	case Kind::ScriptRelease:
 	case Kind::FillSiteIcons:
 	case Kind::BuildWorshipSites:
