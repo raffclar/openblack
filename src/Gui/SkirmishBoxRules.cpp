@@ -103,23 +103,3 @@ std::vector<skirmish_box::Land> skirmish_box::ListLands(std::span<const std::u16
 	std::ranges::stable_sort(lands, [](const Land& a, const Land& b) { return FolderOrderLess(a.fileName, b.fileName); });
 	return lands;
 }
-
-std::u16string skirmish_box::RandomAlignmentLabel(size_t slot)
-{
-	// The gods count from 1 in the text, as the rooms of a network game count them
-	const auto number = std::to_string(slot + 1);
-	return u"God " + std::u16string(number.begin(), number.end()) + u": random alignment";
-}
-
-std::vector<uint8_t> skirmish_box::RandomAlignmentSlots(std::span<const bool, k_AlignmentChoices> checked)
-{
-	std::vector<uint8_t> slots;
-	for (size_t index = 0; index < checked.size(); ++index)
-	{
-		if (checked[index])
-		{
-			slots.push_back(static_cast<uint8_t>(k_FirstComputerSlot + index));
-		}
-	}
-	return slots;
-}
