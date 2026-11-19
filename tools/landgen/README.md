@@ -27,7 +27,8 @@ The game data folder is `C:/projects/black`. Set `OPENBLACK_GAME_DATA` to use an
      openblack_tests --openblack-test-source=landgen/test_landgen_dump.cpp
    ```
 
-   Add `OPENBLACK_LANDGEN_TREES=<hundredths>` for a land with more stands of trees, as `--landgen "7;trees=2600"`
+   Add `OPENBLACK_LANDGEN_FORMATIONS=0` for the same land with no fairy rings and no lone pillars (the land before
+   them). Add `OPENBLACK_LANDGEN_TREES=<hundredths>` for a land with more stands of trees, as `--landgen "7;trees=2600"`
    gives in the game (the tree benchmarks).
 
 2. Compare: `python -I tools/landgen/measure.py compare <folder>/seed1.json <folder>/seed7.json`.
@@ -57,6 +58,14 @@ their height above the land (median and 90th percentile). `pillars` counts the p
 the median distance from a big forest to the nearest tree. A dump mist has 6 values: x, z, the height above the land, the
 colour (0xAARRGGBB), the size and the edge shrink. The generator dump has no footpaths yet, so this number is zero for
 it.
+
+The formation numbers: `magic_mushrooms` counts the magic mushrooms (loose object 18; a dump feature of kind 4 is a
+loose object) and `fairy_rings` the groups of six or more magic mushrooms 10 m or less apart that make a ring round their
+middle (`fairy_rings_per_km2` for each km2). `lone_pillars` counts the fat pillars, the pillars and the second and third
+pillars (not the spiky sea stacks), `lone_pillars_per_km2` and `lone_pillar_groups_per_km2` (pillars 50 m or less apart
+are one group) give them for each km2, and `lone_pillar_group_gap_median_m` is the median distance from a group to the
+nearest other group. Only three of the eight lands of the story have lone pillars and two have a fairy ring, so the
+lowest value of each of these numbers is 0. The four pillars on the summit of the third land count as one group.
 
 `cursed_patches` counts the cursed places: the groups of burnt trees, craters and dark mists that are 150 m or less
 apart. A dark mist has no colour channel above 0x50 (the near black mist of Land 1, the dark mist of Land 4 and the grey

@@ -32,7 +32,8 @@ HEIGHT_TARGETS = ("height_max_m", "height_median_m")
 # A generated land can also be larger than the lands of the story (1.1 to 3.9 km2): the user allowed it on 2026-11-17
 # ("LGX-1: allow lands over 4 km2", deviation 233). The area and the totals that grow with the area do not bind a
 # generated land. The numbers for each km2 and the shape numbers stay the targets. The land stays one island.
-AREA_TOTALS = ("land_km2", "coast_km", "trees", "rocks", "rock_clumps", "big_forests", "towns_per_km2")
+AREA_TOTALS = ("land_km2", "coast_km", "trees", "rocks", "rock_clumps", "big_forests", "towns_per_km2", "pillars",
+               "lone_pillars", "magic_mushrooms", "fairy_rings")
 # The towns of a generated land keep the vanilla count and the vanilla distances between towns, so the towns for each km2
 # of a land larger than the lands of the story are fewer: towns_per_km2 is free for a generated land.
 # A town with fewer buildings than this is a hamlet of the story (1 to 3 buildings). The size of a town (houses, people,
@@ -49,6 +50,15 @@ BIG_FOREST_FEATURE = 2
 # A generated feature of kind 3 is a feature of the scenery. The game's numbers 23 to 26 and 29 to 44 are the pillars.
 FEATURE_FEATURE = 3
 PILLAR_FEATURES = set(range(23, 27)) | set(range(29, 45))
+# The fat pillars, the pillars and the second and third pillars (23 to 26 and 29 to 40) are the lone pillars. The spiky
+# pillars (41 to 44) are the sea stacks.
+LONE_PILLAR_FEATURES = set(range(23, 27)) | set(range(29, 41))
+# A generated feature of kind 4 is a loose object. Loose object 18 is the magic mushroom.
+MOBILE_FEATURE = 4
+MAGIC_MUSHROOM_OBJECT = 18
+# The magic mushrooms of one group are 10 m or less apart. The groups of lone pillars are 50 m or less apart.
+MUSHROOM_LINK = 10.0
+PILLAR_GROUP_LINK = 50.0
 # The game's number of the crater feature, the burnt tree and the link of the things of one cursed place in metres. A
 # dark mist has no colour channel above DARK_CHANNEL: the near black, dark and grey smoke mists of the story.
 CRATER_FEATURE = 74
@@ -241,6 +251,44 @@ def rock_measures(points, area_km2, poses=None, trees=None):
     return out
 
 
+def is_ring(points):
+    """Whether a group of points (an array (n, 2) in metres) is a ring: 6 points or more, all at nearly the same distance
+    from their middle, which is more than 3 m, with no gap round the middle of 126 degrees or more."""
+    if len(points) < 6:
+        return False
+    middle = points.mean(0)
+    radius = np.hypot(*(points - middle).T)
+    angles = np.sort(np.arctan2(points[:, 1] - middle[1], points[:, 0] - middle[0]))
+    gaps = np.diff(np.concatenate([angles, [angles[0] + 2 * np.pi]]))
+    return bool(radius.mean() > 3.0 and radius.std() / radius.mean() < 0.25 and gaps.max() < 2.2)
+
+
+def formation_measures(mushrooms, lone_pillars, area_km2):
+    """The numbers of the magic mushrooms, the fairy rings and the lone pillars. Each is a list of (x, z) in metres."""
+    per_km2 = (lambda n: n / area_km2) if area_km2 else (lambda n: float("nan"))
+    out = {"magic_mushrooms": len(mushrooms), "lone_pillars": len(lone_pillars),
+           "lone_pillars_per_km2": per_km2(len(lone_pillars))}
+    rings = 0
+    if mushrooms:
+        pts = np.asarray(mushrooms, dtype=float)
+        group = groups_of(pts, MUSHROOM_LINK)
+        rings = sum(1 for g in set(group.tolist()) if is_ring(pts[group == g]))
+    out["fairy_rings"] = rings
+    out["fairy_rings_per_km2"] = per_km2(rings)
+    if lone_pillars:
+        pts = np.asarray(lone_pillars, dtype=float)
+        group = groups_of(pts, PILLAR_GROUP_LINK)
+        ids = sorted(set(group.tolist()))
+        out["lone_pillar_groups_per_km2"] = per_km2(len(ids))
+        if len(ids) >= 2:
+            middles = np.array([pts[group == g].mean(0) for g in ids])
+            dist, _ = cKDTree(middles).query(middles, 2)
+            out["lone_pillar_group_gap_median_m"] = float(np.median(dist[:, 1]))
+    else:
+        out["lone_pillar_groups_per_km2"] = 0.0
+    return out
+
+
 def big_forest_measures(points, trees, area_km2):
     """The numbers of the big forests. points is a list of (x, z) in metres, trees the list of the trees."""
     n = len(points)
@@ -331,6 +379,7 @@ def measure_land(land):
     out.update(tree_measures([(t[0], t[1]) for t in trees], [t[2] for t in trees], [t[3] for t in trees], area))
     out.update(rock_measures(land["rocks"], area, land.get("rock_poses"), [(t[0], t[1]) for t in trees]))
     out["pillars"] = len(land.get("pillars", []))
+    out.update(formation_measures(land.get("mushrooms", []), land.get("lone_pillars", []), area))
     for key in ("forests", "footpaths", "mists", "towns"):
         out[key] = land[key]
     out.update(town_measures(land.get("town_list", []), land["heights"], land["land"], area))
@@ -377,6 +426,7 @@ def load_dump(path):
     sand = sand_mask(country, alt, tables, surface_of, SURFACE_SAND)
     wet = sand_mask(country, alt, tables, surface_of, SURFACE_WET)
     trees, rocks, rock_poses, pillars, big_forests, cursed = [], [], [], [], [], []
+    mushrooms, lone_pillars = [], []
     for feature in d["features"]:
         kind, typ, x, z, _angle, _size, _max, forest = feature[:8]
         # Newer dumps add the two angles of the lean and the height above the land of each static
@@ -390,8 +440,13 @@ def load_dump(path):
         elif kind == FEATURE_FEATURE:
             if typ in PILLAR_FEATURES:
                 pillars.append((x, z))
+                if typ in LONE_PILLAR_FEATURES:
+                    lone_pillars.append((x, z))
             elif typ == CRATER_FEATURE:
                 cursed.append((x, z))
+        elif kind == MOBILE_FEATURE:
+            if typ == MAGIC_MUSHROOM_OBJECT:
+                mushrooms.append((x, z))
         elif typ != DEAD_TREE_STATIC:
             rocks.append((x, z))
             rock_poses.append((max(abs(x_angle), abs(z_angle)), altitude))
@@ -401,6 +456,7 @@ def load_dump(path):
     return {"name": os.path.splitext(os.path.basename(path))[0],
             "heights": units * HEIGHT_UNIT, "curve": None if plain else curve, "land": land,
             "sand": sand, "trees": trees, "rocks": rocks, "rock_poses": rock_poses, "pillars": pillars,
+            "lone_pillars": lone_pillars, "mushrooms": mushrooms,
             "big_forests": big_forests, "forests": len(d["forests"]),
             "footpaths": d["footpaths"],
             "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark),
@@ -449,6 +505,9 @@ def vanilla_models():
         rocks = [o["pos"] for o in rock_objs]
         rock_poses = [(o["tilt"], o["voff"]) for o in rock_objs]
         pillars = [o["pos"] for o in objs if o["cls"] == "feature" and "pilar" in o["kind"].lower()]
+        lone_pillars = [o["pos"] for o in objs if o["cls"] == "feature" and "pilar" in o["kind"].lower() and
+                        "spikey" not in o["kind"].lower()]
+        mushrooms = [o["pos"] for o in objs if o["cls"] == "mobile" and o["kind"] == "MagicMushroom"]
         mists = sum(1 for o in objs if o["cls"] == "mist")
         dark = [o["pos"] for o in objs if o["cls"] == "mist" and is_dark(o.get("colour", 0xFFFFFFFF))]
         cursed = [o["pos"] for o in objs if (o["cls"] == "tree" and o["kind"] == BURNT) or (
@@ -460,6 +519,7 @@ def vanilla_models():
         town_list = vanilla_towns(f"{analyze.BLACK}/{script}", objs, towns)
         yield {"town_list": town_list, "name": name, "heights": land.H, "land": land.land, "sand": sand, "trees": trees, "rocks": rocks,
                "rock_poses": rock_poses, "pillars": pillars,
+               "lone_pillars": lone_pillars, "mushrooms": mushrooms,
                "big_forests": big_forests,
                "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns),
                "cursed_things": cursed, "dark_mists": len(dark), "wet": wet, "mist_list": mist_list}

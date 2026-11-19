@@ -159,8 +159,15 @@ TEST(LandgenDump, WritesTheLandOfEachSeedWhenTheEnvironmentAsksForIt)
 	for (const auto seed :
 	     SeedsOf(EnvironmentOf("OPENBLACK_LANDGEN_SEEDS").empty() ? "1,7,42" : EnvironmentOf("OPENBLACK_LANDGEN_SEEDS")))
 	{
-		const auto land = landgen::Generate(
-		    generated_land::SettingsOf({.seed = seed, .trees = trees.empty() ? 100 : static_cast<int32_t>(std::stoi(trees))}));
+		auto settings =
+		    generated_land::SettingsOf({.seed = seed, .trees = trees.empty() ? 100 : static_cast<int32_t>(std::stoi(trees))});
+		// A land with no fairy rings and no lone pillars, for a comparison with the land before them
+		if (EnvironmentOf("OPENBLACK_LANDGEN_FORMATIONS") == "0")
+		{
+			settings.formations.ringsPerKm2 = 0.0f;
+			settings.formations.pillarGroupsPerKm2 = 0.0f;
+		}
+		const auto land = landgen::Generate(settings);
 		WriteLand(std::filesystem::path(folder) / ("seed" + std::to_string(seed) + ".json"), seed, land);
 	}
 }
