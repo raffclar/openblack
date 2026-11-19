@@ -1027,3 +1027,27 @@ TEST(LandgenGenerator, EveryBlockHasTheSameDiagonals)
 		}
 	}
 }
+
+TEST(LandgenGenerator, NoTreeOrRockStandsOnTheWetSandOfALake)
+{
+	int beds = 0;
+	for (const uint64_t seed : {77u, 78u, 79u, 80u})
+	{
+		const auto land = Generate(SmallSettings(seed));
+		const auto onBed = [&land](float metresX, float metresZ) {
+			const int x = static_cast<int>(std::floor((metresX / 10.0f) + 0.5f));
+			const int z = static_cast<int>(std::floor((metresZ / 10.0f) + 0.5f));
+			return land.cells.Contains(x, z) && land.cells.At(x, z).properties.country == k_LakeBedCountry;
+		};
+		beds += static_cast<int>(std::ranges::count_if(
+		    land.cells.values, [](const auto& cell) { return cell.properties.country == k_LakeBedCountry; }));
+		for (const auto& feature : land.features)
+		{
+			if (feature.kind != features::Kind::BigForest)
+			{
+				EXPECT_FALSE(onBed(feature.x, feature.z)) << seed << " " << feature.x << " " << feature.z;
+			}
+		}
+	}
+	ASSERT_GT(beds, 0);
+}
