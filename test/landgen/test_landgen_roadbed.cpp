@@ -20,6 +20,7 @@
 
 using namespace openblack::landgen;
 using openblack::landgen::roads::BedOf;
+using openblack::landgen::roads::CutThinWalls;
 using openblack::landgen::roads::Grade;
 using openblack::landgen::roads::Ground;
 using openblack::landgen::roads::Profile;
@@ -265,6 +266,55 @@ TEST(LandgenRoadBed, APathAtTheFootOfACliffDoesNotCutTheCliff)
 	EXPECT_EQ(graded.values, land.metres.values);
 }
 
+TEST(LandgenRoadBed, TheLandOfAThinHumpIsCutAndAWideHillStays)
+{
+	const roads::Settings settings;
+	// Flat land at 100 m with a hump of 3 samples (15 m) at 140 m and a hill of 20 samples (100 m) at 110 m
+	std::vector<float> land(60, 100.0f);
+	for (size_t i = 10; i < 13; ++i)
+	{
+		land[i] = 140.0f;
+	}
+	for (size_t i = 30; i < 50; ++i)
+	{
+		land[i] = 110.0f;
+	}
+	const std::vector<uint8_t> fixed(land.size(), 0);
+	const auto cut = CutThinWalls(land, fixed, settings);
+	// The cut goes no deeper than the deepest cut of a wall
+	EXPECT_FLOAT_EQ(cut[11], 140.0f - settings.deepestWallCut);
+	EXPECT_FLOAT_EQ(cut[5], 100.0f);
+	EXPECT_FLOAT_EQ(cut[40], 110.0f);
+	// A fixed sample keeps its land
+	auto ring = fixed;
+	ring[11] = roads::k_Ring;
+	EXPECT_FLOAT_EQ(CutThinWalls(land, ring, settings)[11], 140.0f);
+}
+
+TEST(LandgenRoadBed, ThePathCutsThroughAThinWallOfRockAndDoesNotFillTheLandNearIt)
+{
+	const roads::Settings settings;
+	SideSlope land(0.0f);
+	const int middle = k_Side / 2;
+	// A wall of rock two corners thick and 15 m high across the path
+	for (int z = 0; z < k_Side; ++z)
+	{
+		land.metres.At(20, z) = 115.0f;
+		land.metres.At(21, z) = 115.0f;
+	}
+	const auto path = StraightPath();
+	const auto ground = land.GroundOf();
+	const auto graded = Grade(BedOf(std::span(&path, 1), ground, settings), ground, settings);
+	// The bed goes through the wall at the height of the land on each side
+	EXPECT_NEAR(graded.At(20, middle), 100.0f, 0.5f);
+	EXPECT_NEAR(graded.At(21, middle), 100.0f, 0.5f);
+	// No corner is filled above the land
+	for (size_t i = 0; i < graded.values.size(); ++i)
+	{
+		EXPECT_LE(graded.values[i], land.metres.values[i] + 0.01f);
+	}
+}
+
 TEST(LandgenRoadBed, FixedCornersAndTheLowestHeightStayAsTheyAre)
 {
 	const roads::Settings settings;
@@ -320,7 +370,9 @@ TEST(LandgenRoadBed, AGeneratedLandCutsAndFillsTheBedsOfItsPathsAndMakesNoNewCli
 	ASSERT_EQ(graded.cells.values.size(), flat.cells.values.size());
 	const int side = graded.cells.side;
 
-	// Each change is near a path, and no water changes
+	// Each change is near a path, and no water changes. On steep ground the change tapers slowly, so it can go 24 corners
+	// from the path.
+	constexpr int k_Near = 24;
 	Grid<uint8_t> nearPath(side, 0);
 	for (const auto& path : graded.paths)
 	{
@@ -328,9 +380,9 @@ TEST(LandgenRoadBed, AGeneratedLandCutsAndFillsTheBedsOfItsPathsAndMakesNoNewCli
 		{
 			const int px = static_cast<int>(point.x);
 			const int pz = static_cast<int>(point.z);
-			for (int x = px - 16; x <= px + 16; ++x)
+			for (int x = px - k_Near; x <= px + k_Near; ++x)
 			{
-				for (int z = pz - 16; z <= pz + 16; ++z)
+				for (int z = pz - k_Near; z <= pz + k_Near; ++z)
 				{
 					if (nearPath.Contains(x, z))
 					{
@@ -370,6 +422,59 @@ TEST(LandgenRoadBed, AGeneratedLandCutsAndFillsTheBedsOfItsPathsAndMakesNoNewCli
 	}
 	EXPECT_GT(changed, 100u);
 	EXPECT_EQ(newCliffs, 0u);
+}
+
+TEST(LandgenRoadBed, ABedBesideAShoreIsLevel)
+{
+	const roads::Settings settings;
+	SideSlope land(0.5f);
+	const int middle = k_Side / 2;
+	// The water of a lake starts two corners from the middle of the path, on the low side
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 0; z <= middle - 2; ++z)
+		{
+			land.fixed.At(x, z) = roads::k_Fixed;
+		}
+	}
+	const auto path = StraightPath();
+	const auto ground = land.GroundOf();
+	const auto bed = BedOf(std::span(&path, 1), ground, settings);
+	const auto graded = Grade(bed, ground, settings);
+	for (int x = 12; x < k_Side - 12; ++x)
+	{
+		ASSERT_NE(bed.covered.At(x, middle - 1), 0);
+		EXPECT_FLOAT_EQ(graded.At(x, middle - 1), bed.height.At(x, middle - 1));
+		EXPECT_NEAR(graded.At(x, middle - 1), graded.At(x, middle), 0.01f);
+		EXPECT_EQ(graded.At(x, middle - 2), land.metres.At(x, middle - 2));
+	}
+}
+
+TEST(LandgenRoadBed, ASecondPathKeepsTheBedOfTheFirstPathWhereTheyMeet)
+{
+	const roads::Settings settings;
+	SideSlope land(0.1f);
+	const int middle = k_Side / 2;
+	// The second path climbs the slope and meets the first path at its middle
+	paths::Path second {.link = {.from = 1, .to = 2}, .points = {}};
+	for (int z = 4; z <= middle; ++z)
+	{
+		second.points.push_back({.x = static_cast<float>(middle) - 0.5f, .z = static_cast<float>(z) - 0.5f});
+	}
+	const std::array<paths::Path, 1> first {StraightPath()};
+	const std::array<paths::Path, 2> both {StraightPath(), second};
+	const auto ground = land.GroundOf();
+	const auto alone = BedOf(first, ground, settings);
+	const auto joined = BedOf(both, ground, settings);
+	for (size_t i = 0; i < alone.covered.values.size(); ++i)
+	{
+		if (alone.covered.values[i] != 0)
+		{
+			EXPECT_EQ(joined.height.values[i], alone.height.values[i]);
+		}
+	}
+	// The second bed comes to the first bed with no step
+	EXPECT_NEAR(joined.height.At(middle, middle - 3), alone.height.At(middle, middle - 1), 0.2f * k_Corner * 2.0f + 0.01f);
 }
 
 TEST(LandgenRoadBed, TheBedLeavesARingWithTheGradeOfTheBed)

@@ -262,6 +262,69 @@ TEST(LandgenPaths, TheSameSeedLaysTheSamePaths)
 	}
 }
 
+namespace
+{
+/// Flat ground with a wall of water across all of it at x 32, so no way goes from one half to the other
+FlatLand DividedLand()
+{
+	FlatLand land;
+	for (int z = 0; z < k_Side; ++z)
+	{
+		land.water.At(32, z) = 1;
+	}
+	return land;
+}
+
+bool HasPath(const std::vector<Path>& laid, uint32_t a, uint32_t b)
+{
+	return std::ranges::any_of(laid, [a, b](const Path& path) {
+		return (path.link.from == a && path.link.to == b) || (path.link.from == b && path.link.to == a);
+	});
+}
+} // namespace
+
+TEST(LandgenPaths, APlaceThatTheWaterDividesFromItsLinkJoinsTheNearestPlaceBeforeItOnItsSide)
+{
+	const auto land = DividedLand();
+	// Place 3 is nearest to place 2 on the other side of the water. Places 0 and 1 are on its side.
+	const std::array<Place, 4> places {{{60.0f, 4.0f}, {60.0f, 20.0f}, {10.0f, 40.0f}, {36.0f, 44.0f}}};
+	const auto links = ChainLinks(places);
+	ASSERT_EQ(links[2].from, 2u);
+	ASSERT_EQ(links[2].to, 3u);
+	const auto laid = Lay(land.GroundOf(), places, links, 1, Straight());
+	ASSERT_EQ(laid.size(), 2u);
+	EXPECT_TRUE(HasPath(laid, 0, 1));
+	EXPECT_TRUE(HasPath(laid, 1, 3));
+	EXPECT_EQ(laid[1].link.from, 1u);
+	EXPECT_EQ(laid[1].link.to, 3u);
+	EXPECT_FALSE(Touches(laid[1].points, land.water));
+	// The path goes from the place of its link to the end of its link
+	EXPECT_FLOAT_EQ(laid[1].points.front().x, 60.0f);
+	EXPECT_FLOAT_EQ(laid[1].points.back().x, 36.0f);
+}
+
+TEST(LandgenPaths, APlaceWithNoPlaceBeforeItOnItsSideJoinsTheNearestPlaceAfterIt)
+{
+	const auto land = DividedLand();
+	// Places 1 and 2 are on the other side of the water from place 0, and each link from them goes to place 0
+	const std::array<Place, 3> places {{{20.0f, 30.0f}, {56.0f, 56.0f}, {40.0f, 8.0f}}};
+	const auto links = ChainLinks(places);
+	ASSERT_EQ(links[0].from, 0u);
+	ASSERT_EQ(links[1].from, 0u);
+	const auto laid = Lay(land.GroundOf(), places, links, 1, Straight());
+	// One path joins the two places on the far side. The second link finds that path and gets no second path.
+	ASSERT_EQ(laid.size(), 1u);
+	EXPECT_EQ(laid[0].link.from, 2u);
+	EXPECT_EQ(laid[0].link.to, 1u);
+}
+
+TEST(LandgenPaths, APlaceAloneOnItsSideGetsNoPath)
+{
+	const auto land = DividedLand();
+	const std::array<Place, 2> places {{{10.0f, 10.0f}, {50.0f, 10.0f}}};
+	EXPECT_TRUE(Lay(land.GroundOf(), places, ChainLinks(places), 1, Straight()).empty());
+}
+
 TEST(LandgenPaths, AGeneratedLandHasPathsDrawnBetweenItsTownsAndTheTemple)
 {
 	openblack::landgen::Settings settings;

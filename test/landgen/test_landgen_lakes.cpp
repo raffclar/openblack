@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 
 #include <gtest/gtest.h>
 #include <landgen/Hydrology.h>
@@ -210,4 +211,73 @@ TEST(LandgenLakes, ALargeDeepHighBasinKeepsItsHollow)
 	// A small basin fills with ground and stays wet
 	EXPECT_GT(small.At(32, 32), 39.0f);
 	EXPECT_EQ(smallBasins.wet.At(32, 32), 1);
+}
+
+namespace
+{
+/// Makes a wide basin with a flat floor: the ground in the square from `low` to `high` on both axes goes down to `floor`
+void FlatFloor(Grid<float>& heights, int low, int high, float floor)
+{
+	for (int x = low; x <= high; ++x)
+	{
+		for (int z = low; z <= high; ++z)
+		{
+			heights.At(x, z) = floor;
+		}
+	}
+}
+
+/// True when the lake covers no corner in the circle
+bool KeepsOut(const lakes::Lake& lake, const Grid<float>& heights, const lakes::Keep& keep)
+{
+	return std::ranges::none_of(lake.corners, [&](uint32_t corner) {
+		const float dx = static_cast<float>(heights.XOf(corner)) - keep.x;
+		const float dz = static_cast<float>(heights.ZOf(corner)) - keep.z;
+		return (dx * dx) + (dz * dz) <= keep.radius * keep.radius;
+	});
+}
+} // namespace
+
+TEST(LandgenLakes, ATownOnTheFloorOfABasinStaysDryAndTheLakeGoesDownIntoTheDeepPart)
+{
+	// A basin with a flat floor 4 under the hill, and a deep bowl at one side of the floor. The town is on the floor.
+	auto heights = Plateau(40.0f);
+	FlatFloor(heights, 10, 54, 36.0f);
+	Bowl(heights, 44.0f, 32.0f, 8.0f, 6.0f);
+	const lakes::Settings settings;
+	const lakes::Keep town {.x = 20.0f, .z = 32.0f, .radius = 6.0f};
+
+	auto wet = heights;
+	const auto withoutTown = lakes::Find(wet, k_SeaLevel, settings);
+	ASSERT_EQ(withoutTown.size(), 1u);
+	EXPECT_FALSE(KeepsOut(withoutTown[0], wet, town));
+
+	const std::array dry {town};
+	const auto found = lakes::Find(heights, k_SeaLevel, settings, dry);
+	ASSERT_EQ(found.size(), 1u);
+	EXPECT_NEAR(found[0].level, 36.0f - settings.shoreReach - settings.freeboard, k_FlatRiseError);
+	EXPECT_TRUE(KeepsOut(found[0], heights, town));
+	EXPECT_TRUE(Holds(found[0], heights, 44, 32));
+}
+
+TEST(LandgenLakes, ATownInTheMiddleOfASmallBowlLeavesTheBowlDry)
+{
+	auto heights = Plateau(40.0f);
+	Bowl(heights, 32.0f, 32.0f, 8.0f, 5.0f);
+	const std::array dry {lakes::Keep {.x = 32.0f, .z = 32.0f, .radius = 6.0f}};
+	EXPECT_TRUE(lakes::Find(heights, k_SeaLevel, {}, dry).empty());
+}
+
+TEST(LandgenLakes, ATownFarFromALakeDoesNotChangeTheLake)
+{
+	auto heights = Plateau(40.0f);
+	Bowl(heights, 20.0f, 32.0f, 8.0f, 5.0f);
+	auto without = heights;
+	const auto expected = lakes::Find(without, k_SeaLevel, {});
+	const std::array dry {lakes::Keep {.x = 50.0f, .z = 32.0f, .radius = 6.0f}};
+	const auto found = lakes::Find(heights, k_SeaLevel, {}, dry);
+	ASSERT_EQ(found.size(), expected.size());
+	ASSERT_EQ(found.size(), 1u);
+	EXPECT_EQ(found[0].level, expected[0].level);
+	EXPECT_EQ(found[0].corners, expected[0].corners);
 }

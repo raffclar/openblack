@@ -229,3 +229,15 @@ TEST(TestbedScenarioChecks, TheClockNeverCountsATurnAndItsTimeTwice)
 	clock.Advance(101, false, 1.0f);
 	EXPECT_EQ(clock.Elapsed(101), 1u);
 }
+
+TEST(TestbedScenarioChecks, TheClockContinuesWhenANewLandStartsTheTurnsAgain)
+{
+	Clock clock;
+	clock.Start(100);
+	clock.Advance(130, false, 0.0f);
+	// The new land starts its turns from 0. The 30 turns before stay in the count.
+	clock.Advance(0, false, 0.0f);
+	EXPECT_EQ(clock.Elapsed(0), 30u);
+	clock.Advance(5, false, 0.0f);
+	EXPECT_EQ(clock.Elapsed(5), 35u);
+}

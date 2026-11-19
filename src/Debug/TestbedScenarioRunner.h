@@ -349,6 +349,9 @@ private:
 	std::vector<entt::entity> _creatures;
 	/// The creatures that the scenario's filled slots got, in the order of their ids
 	std::vector<entt::entity> _slotCreatures;
+	/// A command loaded a land of its own, such as a generated land. The creatures of the testbed went with the testbed,
+	/// and the creature 0 of a command or a check is the creature of player one.
+	bool _onLoadedLand {false};
 	/// The game turn at which the scenario started, and which of its computer actions the tool forced
 	uint32_t _startTurn {0};
 	std::vector<bool> _computerActionsDone;

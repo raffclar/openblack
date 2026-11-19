@@ -106,7 +106,7 @@ std::optional<player_commands::ViewReport> OwnReportSystem::ContinueAfterLoad()
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ecs::components::ReportedHand>(hand) : nullptr;
-	// The reports that waited at the save for the next turn are the last reports that the player sent
+	// The reports that wait for the first turn after the load are the last reports that the player sent
 	const auto& commands = Locator::playerCommandSystem::value();
 	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
 	const auto origin = session != nullptr ? std::optional(session->Origin()) : std::nullopt;

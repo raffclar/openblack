@@ -74,6 +74,11 @@ struct Settings
 	/// Where the bed moves away from a steep side, its edge on that side is this distance from the middle of the path, in
 	/// corners. The drawn path then stays on the bed.
 	float narrowEdge {0.75f};
+	/// A hump of the land along a path that is narrower than this width in metres, such as a thin wall of rock, does not
+	/// lift the bed. The bed cuts through the hump, as a short cutting does.
+	float thinWall {40.0f};
+	/// The bed cuts no more than this depth in metres through a thin hump
+	float deepestWallCut {20.0f};
 	/// The slope of a cliff: the rise over the run of 40 degrees, as the measure of the lands has it. Where the bed or a
 	/// bank makes a corner as steep as a cliff that was not a cliff before, the change at that corner and the corners next
 	/// to it becomes less, until no new cliff stays.
@@ -101,6 +106,11 @@ struct Ground
 /// to the land at each fixed sample and at the two ends. From a sample in a ring (`k_Ring`) the bed comes back with no
 /// more than the ring grade, and from the other fixed samples with no more than the fixed grade.
 [[nodiscard]] std::vector<float> Profile(std::span<const float> land, std::span<const uint8_t> fixed, const Settings& settings);
+
+/// The land along a path with each hump that is narrower than the thin wall width cut down, in metres. The cut goes no
+/// deeper than the deepest wall cut. The fixed samples keep their land.
+[[nodiscard]] std::vector<float> CutThinWalls(std::span<const float> land, std::span<const uint8_t> fixed,
+                                              const Settings& settings);
 
 /// The height of the level bed under the paths, in metres. The corners that no bed covers have no value.
 struct Bed

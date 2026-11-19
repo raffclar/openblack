@@ -19,9 +19,9 @@
 #include "Commands/PlayerCommands.h"
 #include "Commands/TurnCodec.h"
 
-/// The bytes of the commands of a single player game that wait for a turn, which a saved game keeps. The bytes are a
-/// turn of the network layout with one block for each command. The number of each block tells the part of the queue
-/// of the command.
+/// The bytes of the commands of a single player game that wait for a turn, which a save of an older build keeps. The
+/// load does not use these commands. The bytes are a turn of the network layout with one block for each command. The
+/// number of each block tells the part of the queue of the command.
 namespace openblack::waiting_commands_file
 {
 
