@@ -210,15 +210,26 @@ private:
 	struct WatchedStores;
 	/// The watched things that changed what their shadows depend on since the last look at the casters: the casters
 	/// and the things that can start to cast. It reads only the given stores, thus a side thread can do the test while
-	/// the game's thread adds stores to the registry.
-	[[nodiscard]] std::vector<WatchedChange> FindWatchedChanges(const WatchedStores& stores) const;
+	/// the game's thread adds stores to the registry. When casters can be gone, a watched thing that lost its transform,
+	/// its mesh or its map cells changed.
+	[[nodiscard]] std::vector<WatchedChange> FindWatchedChanges(const WatchedStores& stores, bool castersCanBeGone) const;
 	/// Waits for the test that StartWatchedTest started, and gives its answer. No test: no answer.
 	[[nodiscard]] std::optional<std::vector<WatchedChange>> TakeWatchedTest();
 	/// Looks at all the things that can cast, after a caster came or went, and marks the blocks whose shadows changed
 	void LookAtAllCasters(Casters casters);
-	/// Looks again only at the watched things that changed, while no caster came or went, and marks the blocks whose
-	/// shadows changed. It gives the same casters as a look at all of them.
-	void UpdateChanged(std::span<const WatchedChange> changes, Casters casters);
+	/// Looks again only at the things that changed, and marks the blocks whose shadows changed. The things are in the
+	/// order of their entities, each one time: the watched things that changed, the things that got or lost a component
+	/// that their shadows depend on, and the casters whose models became ready or went. It gives the same casters as a
+	/// look at all of them.
+	void UpdateChanged(std::span<const entt::entity> changed, Casters casters);
+	/// The kept caster of the entity, none if it is not a caster
+	[[nodiscard]] Baked* FindBaked(entt::entity entity);
+	/// Keeps a new caster
+	void AddBaked(Baked&& baked);
+	/// Forgets a kept caster
+	void RemoveBaked(entt::entity entity);
+	/// Finds the kept casters again after a change of their order
+	void FindBakedPlaces();
 	/// A caster as it is now
 	[[nodiscard]] static Baked BakedOf(const land_shadow_bake::Caster& caster, const ecs::Registry& registry);
 	/// A thing that can start to cast, as it is now
@@ -238,13 +249,14 @@ private:
 	bool _rowsFromFarEnd {false};
 	Casters _casters {};
 	uint32_t _castersChanges {0};
-	/// The casters, in the order of their entities
+	/// The casters, in no order. The places of the casters, by the index of their entities, find each one.
 	std::vector<Baked> _baked;
+	std::vector<uint32_t> _bakedPlaces;
 	/// The casters by the blocks that take their shadows
 	CasterBlocks _casterBlocks;
 	/// The things that can start to cast, the count of the casters' changes and the number of models when the bake last
-	/// looked at all the casters. While the count and the number stay the same, the bake looks again only at the casters
-	/// and the things that changed.
+	/// looked at the casters. The bake then looks again only at the things that changed: the watched things, the things
+	/// that the registry gives as changed, and the casters of the models that became ready or went.
 	std::vector<Watched> _mayCast;
 	std::optional<uint64_t> _castersVersion;
 	size_t _meshCount {0};

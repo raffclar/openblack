@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <tuple>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Abode.h"
@@ -36,6 +39,7 @@ using openblack::ecs::LandShadowCastersVersion;
 using openblack::ecs::LandShadowChangesInPlace;
 using openblack::ecs::LandShadowOf;
 using openblack::ecs::Registry;
+using openblack::ecs::TakeLandShadowCasterChanges;
 namespace components = openblack::ecs::components;
 
 namespace
@@ -262,4 +266,67 @@ TEST(LandShadowCasters, AThingWithNoLandShadowCastsNothing)
 	registry.Assign<components::NoLandShadow>(ring);
 	EXPECT_EQ(LandShadowOf(registry, ring), LandShadow::None);
 	EXPECT_GT(LandShadowCastersVersion(registry), version);
+}
+
+TEST(LandShadowCasters, ATakeGivesEachThingThatCameOrWentOneTime)
+{
+	Registry registry;
+	// The first take gives none: the registry starts to keep the changes then
+	EXPECT_FALSE(TakeLandShadowCasterChanges(registry).has_value());
+	const auto tree = registry.Create();
+	registry.Assign<components::Mesh>(tree);
+	registry.Assign<components::Transform>(tree);
+	registry.Assign<components::Tree>(tree);
+	const auto rock = registry.Create();
+	registry.Assign<components::Mesh>(rock);
+	registry.Assign<components::Transform>(rock);
+	registry.Assign<components::Feature>(rock);
+	registry.Assign<components::MapCellResident>(tree);
+	auto taken = TakeLandShadowCasterChanges(registry);
+	ASSERT_TRUE(taken.has_value());
+	const std::vector<entt::entity> both = tree < rock ? std::vector {tree, rock} : std::vector {rock, tree};
+	EXPECT_EQ(*taken, both);
+	// The take empties the list
+	taken = TakeLandShadowCasterChanges(registry);
+	ASSERT_TRUE(taken.has_value());
+	EXPECT_TRUE(taken->empty());
+	registry.Destroy(rock);
+	taken = TakeLandShadowCasterChanges(registry);
+	ASSERT_TRUE(taken.has_value());
+	EXPECT_EQ(*taken, std::vector {rock});
+}
+
+TEST(LandShadowCasters, ATakeGivesNoThingsThatCannotCast)
+{
+	Registry registry;
+	std::ignore = TakeLandShadowCasterChanges(registry);
+	// An effect has a transform and no mesh
+	const auto effect = registry.Create();
+	registry.Assign<components::Transform>(effect);
+	registry.Assign<components::Feature>(effect);
+	const auto taken = TakeLandShadowCasterChanges(registry);
+	ASSERT_TRUE(taken.has_value());
+	EXPECT_TRUE(taken->empty());
+}
+
+TEST(LandShadowCasters, ATakeGivesNoneAfterTooManyChanges)
+{
+	Registry registry;
+	std::ignore = TakeLandShadowCasterChanges(registry);
+	// An emptied registry loses each of its things
+	for (int i = 0; i < 20000; ++i)
+	{
+		const auto thing = registry.Create();
+		registry.Assign<components::Mesh>(thing);
+		registry.Assign<components::Transform>(thing);
+	}
+	registry.Reset();
+	EXPECT_FALSE(TakeLandShadowCasterChanges(registry).has_value());
+	// The next take gives the changes after the last take again
+	const auto tree = registry.Create();
+	registry.Assign<components::Mesh>(tree);
+	registry.Assign<components::Transform>(tree);
+	const auto taken = TakeLandShadowCasterChanges(registry);
+	ASSERT_TRUE(taken.has_value());
+	EXPECT_EQ(*taken, std::vector {tree});
 }
