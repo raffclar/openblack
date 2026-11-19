@@ -89,6 +89,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/WalkPath.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DrawnPlace.h"
@@ -114,6 +115,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TreeRoots.h"
+#include "ECS/UnfiledTrees.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/VillagerHeldObject.h"
 #include "ECS/WorldObjects.h"
@@ -407,6 +409,55 @@ entt::entity DrawnHand()
 		return entt::null;
 	}
 	return openblack::Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+}
+/// Finds the trees that the draw of a frame looks at, in the order of a walk of every tree. The land's draw list leaves
+/// out every tree on the map's cells that it does not hold, so the draw looks only at the trees that the list holds and
+/// at the trees that the list does not decide: those not in the cells, those drawn on their own, and the parts of other
+/// things. It gives false when the draw must look at every tree: with no list or no view to decide by, and when the
+/// moving tree shadows cast every tree.
+template <typename TreeView>
+bool GatherTreesToWalk(const TreeView& trees, const openblack::ecs::systems::ObjectDrawListSystemInterface* drawList,
+                       std::vector<entt::entity>& walked)
+{
+	using namespace openblack::ecs::components;
+	walked.clear();
+	if (drawList == nullptr || !drawList->GetView().has_value() ||
+	    (openblack::Locator::config::has_value() && openblack::Locator::config::value().dynamicTreeShadows))
+	{
+		return false;
+	}
+	auto& registry = openblack::Locator::entitiesRegistry::value();
+	const auto add = [&trees, &walked](entt::entity entity) {
+		if (trees.contains(entity))
+		{
+			walked.push_back(entity);
+		}
+	};
+	std::ranges::for_each(drawList->GetList(), add);
+	std::ranges::for_each(openblack::ecs::UnfiledTrees(registry), add);
+	for (const auto entity : registry.Underlying().view<const Tree, const HighDetail>())
+	{
+		add(entity);
+	}
+	for (const auto entity : registry.Underlying().view<const Tree, const Temple>())
+	{
+		add(entity);
+	}
+	for (const auto entity : registry.Underlying().view<const Tree, const WalkPath>())
+	{
+		add(entity);
+	}
+	registry.Each<const VillageTotem>([&add](const VillageTotem& totem) {
+		add(totem.icon);
+		add(totem.ghost);
+		add(totem.ghostIcon);
+	});
+	// A walk of the view goes along its first store from its last place to its first
+	const auto* first = trees.handle();
+	std::ranges::sort(walked, std::ranges::greater {}, [first](entt::entity entity) { return first->index(entity); });
+	const auto [repeatsFirst, repeatsLast] = std::ranges::unique(walked);
+	walked.erase(repeatsFirst, repeatsLast);
+	return true;
 }
 } // namespace
 
@@ -2289,133 +2340,145 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	const openblack::ecs::ComponentLookups<PhysicsDrawPose, SnowLevel, ShownRoots, InPhysics, InHand, HeldByCreature,
 	                                       CarriedByTornado>
 	    stores(registry);
-	registry.Each<const Mesh, const Transform, const Tree, const Swayable>(
-	    [&](entt::entity entity, const Mesh& mesh, const Transform& transform, const Tree& /*unused*/,
-	        const Swayable& swayable) {
-		    const auto slots = _treeSlots.find(mesh.id);
-		    if (slots == _treeSlots.end())
-		    {
-			    return;
-		    }
-		    // A tree in a creature's hand is drawn where the drawn hand is
-		    const auto drawnPlace = drawnPlaces.Of(entity, transform);
-		    auto modelMatrix = PlacedMatrix(drawnPlace.position, drawnPlace.rotation, transform.scale);
-		    // A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
-		    // all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
-		    // vertices out to the horizon
-		    const auto placed = physics_draw::ModelMatrix(modelMatrix, stores.TryGet<PhysicsDrawPose>(entity));
-		    if (!placed.has_value())
-		    {
-			    _placedTrees.push_back({.mesh = mesh.id,
-			                            .slots = &slots->second,
-			                            .group = Group::Gone,
-			                            .data = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)},
-			                            .box = glm::mat4(0.0f)});
-			    return;
-		    }
-		    modelMatrix = *placed;
+	const auto placeTree = [&](entt::entity entity, const Mesh& mesh, const Transform& transform, const Swayable& swayable) {
+		const auto slots = _treeSlots.find(mesh.id);
+		if (slots == _treeSlots.end())
+		{
+			return;
+		}
+		// A tree in a creature's hand is drawn where the drawn hand is
+		const auto drawnPlace = drawnPlaces.Of(entity, transform);
+		auto modelMatrix = PlacedMatrix(drawnPlace.position, drawnPlace.rotation, transform.scale);
+		// A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
+		// all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
+		// vertices out to the horizon
+		const auto placed = physics_draw::ModelMatrix(modelMatrix, stores.TryGet<PhysicsDrawPose>(entity));
+		if (!placed.has_value())
+		{
+			_placedTrees.push_back({.mesh = mesh.id,
+			                        .slots = &slots->second,
+			                        .group = Group::Gone,
+			                        .data = {.modelMatrix = glm::mat4(0.0f), .burning = glm::vec4(0.0f)},
+			                        .box = glm::mat4(0.0f)});
+			return;
+		}
+		modelMatrix = *placed;
 
-		    // A tree left out of the land's draw list isn't drawn, as one too far off isn't
-		    if (drawList != nullptr && !drawList->DrawnWith(registry, entity, drawnStores))
-		    {
-			    _placedTrees.push_back({.mesh = mesh.id,
-			                            .slots = &slots->second,
-			                            .group = Group::Gone,
-			                            .data = {.modelMatrix = modelMatrix, .burning = glm::vec4(0.0f)},
-			                            .box = glm::mat4(0.0f)});
-			    return;
-		    }
+		// A tree left out of the land's draw list isn't drawn, as one too far off isn't
+		if (drawList != nullptr && !drawList->DrawnWith(registry, entity, drawnStores))
+		{
+			_placedTrees.push_back({.mesh = mesh.id,
+			                        .slots = &slots->second,
+			                        .group = Group::Gone,
+			                        .data = {.modelMatrix = modelMatrix, .burning = glm::vec4(0.0f)},
+			                        .box = glm::mat4(0.0f)});
+			return;
+		}
 
-		    // On a frame that draws all of the land's draw list, note whether a listed tree stays drawn while the camera
-		    // stands still
-		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->Listed(entity);
+		// On a frame that draws all of the land's draw list, note whether a listed tree stays drawn while the camera
+		// stands still
+		const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->Listed(entity);
 
-		    // Drawn in less detail the further off it is, fading out, then not at all, unless something holds it
-		    auto group = Group::High;
-		    std::optional<uint8_t> fade;
-		    if (const auto& box = MeshBox(mesh.id); camera != nullptr && box.has_value() && detailStores.BandedNow(entity))
-		    {
-			    const auto choice = ChooseDetail(
-			        *box, detailStores.Importance(entity), modelMatrix, transform.scale.x,
-			        [&detailStores, entity] { return detailStores.Disappears(entity, false); }, *view, modelDetail);
-			    if (noteKept)
-			    {
-				    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, !choice.mesh.has_value());
-			    }
-			    if (!choice.mesh.has_value())
-			    {
-				    // Too far off to be drawn: kept only for what the land keeps of it
-				    _placedTrees.push_back({.mesh = mesh.id,
-				                            .slots = &slots->second,
-				                            .group = Group::Gone,
-				                            .data = {.modelMatrix = modelMatrix, .burning = glm::vec4(0.0f)},
-				                            .box = glm::mat4(0.0f)});
-				    return;
-			    }
-			    group = static_cast<Group>(*choice.mesh);
-			    fade = choice.alpha;
-		    }
-		    else if (noteKept)
-		    {
-			    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, false);
-		    }
+		// Drawn in less detail the further off it is, fading out, then not at all, unless something holds it
+		auto group = Group::High;
+		std::optional<uint8_t> fade;
+		if (const auto& box = MeshBox(mesh.id); camera != nullptr && box.has_value() && detailStores.BandedNow(entity))
+		{
+			const auto choice = ChooseDetail(
+			    *box, detailStores.Importance(entity), modelMatrix, transform.scale.x,
+			    [&detailStores, entity] { return detailStores.Disappears(entity, false); }, *view, modelDetail);
+			if (noteKept)
+			{
+				NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, !choice.mesh.has_value());
+			}
+			if (!choice.mesh.has_value())
+			{
+				// Too far off to be drawn: kept only for what the land keeps of it
+				_placedTrees.push_back({.mesh = mesh.id,
+				                        .slots = &slots->second,
+				                        .group = Group::Gone,
+				                        .data = {.modelMatrix = modelMatrix, .burning = glm::vec4(0.0f)},
+				                        .box = glm::mat4(0.0f)});
+				return;
+			}
+			group = static_cast<Group>(*choice.mesh);
+			fade = choice.alpha;
+		}
+		else if (noteKept)
+		{
+			NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, false);
+		}
 
-		    // A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
-		    // keeping its height
-		    glm::vec4 burning(0.0f);
-		    float widthShare = 1.0f;
-		    if (Locator::fireSystem::has_value())
-		    {
-			    if (const auto look = Locator::fireSystem::value().GetBurningTreeLook(entity))
-			    {
-				    burning = {static_cast<float>(look->grey) / 256.0f, look->alphaReference / 255.0f, 0.0f, 0.0f};
-				    modelMatrix = glm::scale(modelMatrix, glm::vec3(look->scale, 1.0f, look->scale));
-				    widthShare = look->scale;
-			    }
-		    }
-		    if (fade.has_value())
-		    {
-			    burning.z = 1.0f - (static_cast<float>(*fade) / 255.0f);
-			    group = Group::Fading;
-		    }
-		    const auto* snow = stores.TryGet<SnowLevel>(entity);
-		    burning.w = static_cast<float>(snow != nullptr ? snow->level : 0);
-		    // In its least detail a tree is a paper cut-out standing turned to the camera, which neither sways nor bends,
-		    // unless it moves in the physics. Otherwise out of the land it neither sways nor bends: it is drawn as it is held
-		    // or as the physics places it.
-		    glm::mat4 drawnMatrix;
-		    if (camera != nullptr && (group == Group::Low || group == Group::Fading) && !stores.AllOf<InPhysics>(entity))
-		    {
-			    drawnMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x, paperTurn);
-		    }
-		    else
-		    {
-			    const auto place = stores.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
-			                           ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
-			                           : TreePlace::InTheLand;
-			    drawnMatrix = openblack::physics::objects::SwaysAndBends(place)
-			                      ? vegetation.GetTreeMatrix(entity, modelMatrix, drawnPlace.position, transform.scale.y,
-			                                                 swayable.swaySlot)
-			                      : modelMatrix;
-		    }
-		    _renderContext.drawnObjects.push_back({.entity = entity, .model = drawnMatrix});
-		    glm::mat4 boxMatrix(0.0f);
-		    if (drawBoundingBox && meshes.Contains(mesh.id))
-		    {
-			    const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
-			    boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
-		    }
-		    _placedTrees.push_back({.mesh = mesh.id,
-		                            .slots = &slots->second,
-		                            .group = group,
-		                            .segment = _renderContext.fizzOrder.SegmentOf(entity),
-		                            .listPlace = ListPlace(entity),
-		                            .data = {.modelMatrix = drawnMatrix, .burning = burning},
-		                            .box = boxMatrix,
-		                            .entity = entity,
-		                            .held = stores.AllOf<InHand>(entity),
-		                            .widthShare = widthShare});
-	    });
+		// A tree with a fire on it is drawn darker, its foliage thinning as it burns, and narrows away at the last,
+		// keeping its height
+		glm::vec4 burning(0.0f);
+		float widthShare = 1.0f;
+		if (Locator::fireSystem::has_value())
+		{
+			if (const auto look = Locator::fireSystem::value().GetBurningTreeLook(entity))
+			{
+				burning = {static_cast<float>(look->grey) / 256.0f, look->alphaReference / 255.0f, 0.0f, 0.0f};
+				modelMatrix = glm::scale(modelMatrix, glm::vec3(look->scale, 1.0f, look->scale));
+				widthShare = look->scale;
+			}
+		}
+		if (fade.has_value())
+		{
+			burning.z = 1.0f - (static_cast<float>(*fade) / 255.0f);
+			group = Group::Fading;
+		}
+		const auto* snow = stores.TryGet<SnowLevel>(entity);
+		burning.w = static_cast<float>(snow != nullptr ? snow->level : 0);
+		// In its least detail a tree is a paper cut-out standing turned to the camera, which neither sways nor bends,
+		// unless it moves in the physics. Otherwise out of the land it neither sways nor bends: it is drawn as it is held
+		// or as the physics places it.
+		glm::mat4 drawnMatrix;
+		if (camera != nullptr && (group == Group::Low || group == Group::Fading) && !stores.AllOf<InPhysics>(entity))
+		{
+			drawnMatrix = graphics::mesh_detail::PaperMatrix(glm::vec3(modelMatrix[3]), transform.scale.x, paperTurn);
+		}
+		else
+		{
+			const auto place = stores.AnyOf<ShownRoots, InPhysics, InHand, HeldByCreature, CarriedByTornado>(entity)
+			                       ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
+			                       : TreePlace::InTheLand;
+			drawnMatrix =
+			    openblack::physics::objects::SwaysAndBends(place)
+			        ? vegetation.GetTreeMatrix(entity, modelMatrix, drawnPlace.position, transform.scale.y, swayable.swaySlot)
+			        : modelMatrix;
+		}
+		_renderContext.drawnObjects.push_back({.entity = entity, .model = drawnMatrix});
+		glm::mat4 boxMatrix(0.0f);
+		if (drawBoundingBox && meshes.Contains(mesh.id))
+		{
+			const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
+			boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
+		}
+		_placedTrees.push_back({.mesh = mesh.id,
+		                        .slots = &slots->second,
+		                        .group = group,
+		                        .segment = _renderContext.fizzOrder.SegmentOf(entity),
+		                        .listPlace = ListPlace(entity),
+		                        .data = {.modelMatrix = drawnMatrix, .burning = burning},
+		                        .box = boxMatrix,
+		                        .entity = entity,
+		                        .held = stores.AllOf<InHand>(entity),
+		                        .widthShare = widthShare});
+	};
+	const auto trees = registry.Underlying().view<const Mesh, const Transform, const Tree, const Swayable>();
+	if (GatherTreesToWalk(trees, drawList, _treesToWalk))
+	{
+		for (const auto entity : _treesToWalk)
+		{
+			const auto& [mesh, transform, swayable] = trees.get<const Mesh, const Transform, const Swayable>(entity);
+			placeTree(entity, mesh, transform, swayable);
+		}
+	}
+	else
+	{
+		trees.each([&placeTree](entt::entity entity, const Mesh& mesh, const Transform& transform, const Tree& /*unused*/,
+		                        const Swayable& swayable) { placeTree(entity, mesh, transform, swayable); });
+	}
 
 	// Laid out within each mesh's instances by detail, each run drawn in its own: counted by mesh and detail first, then
 	// each tree put in its place. The solid trees of each later segment of the land's draw list have runs of their own,
