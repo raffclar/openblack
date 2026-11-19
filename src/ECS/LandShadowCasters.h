@@ -13,6 +13,8 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
+#include <vector>
 
 #include <entt/entity/fwd.hpp>
 
@@ -70,5 +72,10 @@ private:
 /// depends on. While the count stays the same, the things that can cast into the land stay the same, and the shadow of
 /// each can change only with its transform, its mesh, its map cells, or (see LandShadowChangesInPlace) its state.
 [[nodiscard]] uint64_t LandShadowCastersVersion(Registry& registry);
+
+/// The things that LandShadowCastersVersion counted since the last take, each one time, in the order of their entities.
+/// It gives none when the registry did not keep all of them: then look at every thing that can cast. The first take
+/// gives none, because the registry starts to keep the changes then.
+[[nodiscard]] std::optional<std::vector<entt::entity>> TakeLandShadowCasterChanges(Registry& registry);
 
 } // namespace openblack::ecs
