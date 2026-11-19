@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include <glm/common.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/FootprintPaint.h"
@@ -469,4 +470,165 @@ TEST(FootprintPaint, AtTheLowResolutionTheCornersGoToTheSmallerTexture)
 	                                {.origin = {0.0f, 155.0f}}, footprint_paint::Mix::Colour, k_LowSide);
 	EXPECT_NE(edge[k_LowSide - 1], 0xF000);
 	EXPECT_EQ(edge[static_cast<size_t>(k_LowSide)], 0xF000);
+}
+
+namespace
+{
+/// The lowest and highest x and z of the triangles' corners on the ground, as the land's rules find them
+std::pair<glm::vec2, glm::vec2> BoundsOf(std::span<const footprint_paint::Triangle> triangles,
+                                         const footprint_paint::Placement& placement)
+{
+	glm::vec2 low {0.0f};
+	glm::vec2 high {0.0f};
+	bool first = true;
+	for (const auto& triangle : triangles)
+	{
+		for (const auto& corner : triangle.corners)
+		{
+			const glm::vec2 ground {placement.xFromZ * corner.y + placement.xFromX * corner.x + placement.origin.x,
+			                        placement.zFromZ * corner.y + placement.zFromX * corner.x + placement.origin.y};
+			low = first ? ground : glm::min(low, ground);
+			high = first ? ground : glm::max(high, ground);
+			first = false;
+		}
+	}
+	return {low, high};
+}
+
+struct Print
+{
+	std::vector<footprint_paint::Triangle> triangles;
+	footprint_paint::Placement placement;
+	footprint_paint::Mix mix {footprint_paint::Mix::Colour};
+};
+
+Print RandomPrint(std::mt19937& random)
+{
+	std::uniform_real_distribution<float> place(-20.0f, 180.0f);
+	std::uniform_real_distribution<float> turn(-1.5f, 1.5f);
+	std::uniform_real_distribution<float> texel(-2.0f, 34.0f);
+	Print print;
+	print.triangles.resize(1 + (random() % 4));
+	for (auto& triangle : print.triangles)
+	{
+		for (size_t i = 0; i < 3; ++i)
+		{
+			triangle.corners.at(i) = glm::vec2(turn(random) * 8.0f, turn(random) * 8.0f);
+			triangle.texels.at(i) = glm::vec2(texel(random), texel(random));
+		}
+	}
+	print.placement = {.xFromX = turn(random),
+	                   .xFromZ = turn(random),
+	                   .zFromX = turn(random),
+	                   .zFromZ = turn(random),
+	                   .origin = glm::vec2(place(random), place(random))};
+	print.mix = random() % 5 == 0 ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour;
+	return print;
+}
+} // namespace
+
+TEST(FootprintPaint, ARegionHoldsTheBoundsAndAUnitMoreOnEachSide)
+{
+	// Bounds from 16 to 32 units along x and z, with a unit more on each side, are texels 24 to 52.8. One texel more
+	// on each side gives 23 to 54.
+	const auto region = footprint_paint::RegionOf({glm::vec2(16.0f, 16.0f), glm::vec2(32.0f, 32.0f)}, {0, 0}, k_Side);
+	EXPECT_EQ(region, (footprint_paint::Region {.firstRow = 23, .lastRow = 54, .firstColumn = 23, .lastColumn = 54}));
+	// The next block along x takes the same bounds less 160 units: they are not over it
+	EXPECT_TRUE(footprint_paint::RegionOf({glm::vec2(16.0f, 16.0f), glm::vec2(32.0f, 32.0f)}, {1, 0}, k_Side).Empty());
+	// Bounds over the edge of the block keep only the block's texels
+	const auto edge = footprint_paint::RegionOf({glm::vec2(150.0f, -5.0f), glm::vec2(170.0f, 5.0f)}, {0, 0}, k_Side);
+	EXPECT_EQ(edge.lastRow, k_Side - 1);
+	EXPECT_EQ(edge.firstColumn, 0);
+}
+
+TEST(FootprintPaint, AJoinHoldsBothRegionsAndAnEmptyRegionAddsNothing)
+{
+	const footprint_paint::Region a {.firstRow = 1, .lastRow = 4, .firstColumn = 10, .lastColumn = 12};
+	const footprint_paint::Region b {.firstRow = 6, .lastRow = 8, .firstColumn = 2, .lastColumn = 3};
+	EXPECT_EQ(footprint_paint::Join(a, b),
+	          (footprint_paint::Region {.firstRow = 1, .lastRow = 8, .firstColumn = 2, .lastColumn = 12}));
+	EXPECT_EQ(footprint_paint::Join(a, {}), a);
+	EXPECT_EQ(footprint_paint::Join({}, b), b);
+	EXPECT_FALSE(footprint_paint::Overlap(a, b));
+	EXPECT_TRUE(footprint_paint::Overlap(a, footprint_paint::Join(a, b)));
+	EXPECT_FALSE(footprint_paint::Overlap(a, {}));
+}
+
+TEST(FootprintPaint, APaintOfThePartsOfTheChangedPrintsGivesTheTexelsOfAWholePaint)
+{
+	std::mt19937 random(7);
+	std::uniform_int_distribution<int> colour(0, 0xFFFF);
+	std::vector<uint16_t> picture(32 * 32);
+	for (auto& value : picture)
+	{
+		value = static_cast<uint16_t>(colour(random));
+	}
+	const footprint_paint::Picture shape {.width = 32, .height = 32, .texels = picture};
+	for (const int side : {k_Side, 128})
+	{
+		for (int round = 0; round < 60; ++round)
+		{
+			const glm::ivec2 blockIndex {round % 2, (round / 2) % 2};
+			std::vector<uint16_t> own(static_cast<size_t>(side) * static_cast<size_t>(side));
+			for (auto& value : own)
+			{
+				value = static_cast<uint16_t>(colour(random));
+			}
+			std::vector<Print> prints(40);
+			for (auto& print : prints)
+			{
+				print = RandomPrint(random);
+				print.placement.origin += glm::vec2(blockIndex) * footprint_paint::k_BlockUnits;
+			}
+			const auto paintAll = [&](const std::vector<Print>& all) {
+				auto texels = own;
+				for (const auto& print : all)
+				{
+					footprint_paint::PaintFootprint(texels, blockIndex, shape, print.triangles, print.placement, print.mix,
+					                                side);
+				}
+				return texels;
+			};
+			const auto before = paintAll(prints);
+			// Some prints move or come off, and a new print comes last
+			auto now = prints;
+			footprint_paint::Region part;
+			for (int change = 0; change < 3; ++change)
+			{
+				const auto index = static_cast<size_t>(random() % now.size());
+				part = footprint_paint::Join(
+				    part, footprint_paint::RegionOf(BoundsOf(now[index].triangles, now[index].placement), blockIndex, side));
+				if (change == 1)
+				{
+					now.erase(now.begin() + static_cast<std::ptrdiff_t>(index));
+					continue;
+				}
+				now[index].placement.origin += glm::vec2(1.3f, -0.7f);
+				part = footprint_paint::Join(
+				    part, footprint_paint::RegionOf(BoundsOf(now[index].triangles, now[index].placement), blockIndex, side));
+			}
+			now.push_back(RandomPrint(random));
+			now.back().placement.origin += glm::vec2(blockIndex) * footprint_paint::k_BlockUnits;
+			part = footprint_paint::Join(
+			    part, footprint_paint::RegionOf(BoundsOf(now.back().triangles, now.back().placement), blockIndex, side));
+			const auto whole = paintAll(now);
+
+			// The part takes the block's own texels, then each print in the part, in order
+			auto painted = before;
+			for (int row = part.firstRow; row <= part.lastRow; ++row)
+			{
+				for (int column = part.firstColumn; column <= part.lastColumn; ++column)
+				{
+					const auto texel = static_cast<size_t>(row * side + column);
+					painted[texel] = own[texel];
+				}
+			}
+			for (const auto& print : now)
+			{
+				footprint_paint::PaintFootprint(painted, blockIndex, shape, print.triangles, print.placement, print.mix, side,
+				                                part);
+			}
+			ASSERT_EQ(painted, whole) << "side " << side << " round " << round;
+		}
+	}
 }

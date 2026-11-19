@@ -32,7 +32,6 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Stream.h"
-#include "ECS/EntityStorage.h"
 #include "ECS/LandFootprintRules.h"
 #include "ECS/Map.h"
 #include "ECS/PlacedTurn.h"
@@ -90,8 +89,6 @@ void Paint(std::span<uint16_t> texels, glm::ivec2 block, const L3DMesh::Footprin
 constexpr size_t k_LeastBlocksToShare = 2;
 /// The fewest things in each share of the search for the changed things
 constexpr size_t k_LeastThingsToShare = 4096;
-/// The version that an entity storage gives for an entity number that it does not hold
-constexpr auto k_NoVersion = entt::entt_traits<entt::entity>::to_version(entt::tombstone);
 } // namespace
 
 /// The registry keeps its component stores in a list that grows when the registry gets the first component of a kind.
@@ -165,6 +162,7 @@ const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
 void LandFootprints::Reset(size_t blockCount)
 {
 	_known.clear();
+	_looks.clear();
 	_rivers.clear();
 	_riverPoints.clear();
 	_groundPrints.clear();
@@ -172,6 +170,10 @@ void LandFootprints::Reset(size_t blockCount)
 	_footprints.clear();
 	_lastFootprint.reset();
 	_dirty.clear();
+	_wholeDirty.clear();
+	_dirtyParts.clear();
+	_changedThings.clear();
+	_blockThings.assign(blockCount, {});
 	_ownTexels.clear();
 	_painted.assign(blockCount, false);
 	_blockAt.clear();
@@ -193,9 +195,71 @@ void LandFootprints::MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock)
 			if (found != _blockAt.end())
 			{
 				_dirty.insert(found->second);
+				_wholeDirty.insert(found->second);
 			}
 		}
 	}
+}
+
+void LandFootprints::MarkThing(entt::entity entity, const Known& known)
+{
+	_changedThings.push_back(entity);
+	for (int x = known.lowBlock.x; x <= known.highBlock.x; ++x)
+	{
+		for (int z = known.lowBlock.y; z <= known.highBlock.y; ++z)
+		{
+			const auto found = _blockAt.find(std::pair(x, z));
+			if (found != _blockAt.end())
+			{
+				_dirty.insert(found->second);
+				auto& part = _dirtyParts[found->second];
+				part = footprint_paint::Join(part, footprint_paint::RegionOf(known.bounds, {x, z}, _side));
+			}
+		}
+	}
+}
+
+void LandFootprints::Learn(entt::entity entity, const KnownLook& look, Known&& known)
+{
+	const auto index = static_cast<size_t>(entt::to_entity(entity));
+	if (index >= _looks.size())
+	{
+		_looks.resize(index + 1);
+	}
+	_looks[index] = look;
+	_looks[index].entity = entity;
+	_known.emplace(entity, std::move(known));
+}
+
+void LandFootprints::Forget(entt::entity entity)
+{
+	const auto index = static_cast<size_t>(entt::to_entity(entity));
+	if (index < _looks.size() && _looks[index].entity == entity)
+	{
+		_looks[index].entity = entt::null;
+	}
+	_known.erase(entity);
+}
+
+const LandFootprints::KnownLook* LandFootprints::LookOf(entt::entity entity) const
+{
+	const auto index = static_cast<size_t>(entt::to_entity(entity));
+	return index < _looks.size() && _looks[index].entity == entity ? &_looks[index] : nullptr;
+}
+
+bool LandFootprints::SameLook(const KnownLook& look, entt::id_type mesh, const std::vector<uint32_t>& cells,
+                              const Transform& transform) const
+{
+	if (look.mesh != mesh || look.cellCount != cells.size() || !SameTransform(look.transform, transform))
+	{
+		return false;
+	}
+	// Most things stand in one cell. Only a thing in more cells reads all of its known cells.
+	if (cells.empty())
+	{
+		return true;
+	}
+	return look.firstCell == cells.front() && (cells.size() == 1 || _known.get(look.entity).cells == cells);
 }
 
 size_t LandFootprints::Shares(size_t count)
@@ -243,10 +307,9 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 	{
 		for (const auto entity : gone)
 		{
-			const auto& known = _known.get(entity);
-			MarkBlocks(known.lowBlock, known.highBlock);
+			MarkThing(entity, _known.get(entity));
+			Forget(entity);
 		}
-		_known.erase(gone.begin(), gone.end());
 	}
 
 	// Only a thing filed in the map's cells counts: the game paints a footprint when its thing goes into the cells, and
@@ -257,36 +320,41 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 		const auto* footprint = FootprintOf(mesh.id);
 		// The registry can give the number of a removed thing to a new thing. The removed thing is not on the map now,
 		// so its blocks must get their footprints again.
-		if (const auto older = ecs::entity_storage::TakeOlder(_known, entity))
+		const auto index = static_cast<size_t>(entt::to_entity(entity));
+		if (const auto held = index < _looks.size() ? _looks[index].entity : entt::entity {entt::null};
+		    held != entt::null && held != entity)
 		{
-			MarkBlocks(older->lowBlock, older->highBlock);
+			MarkThing(held, _known.get(held));
+			Forget(held);
 		}
 		if (_known.contains(entity))
 		{
-			auto& known = _known.get(entity);
-			if (footprint != nullptr && known.mesh == mesh.id && known.cells == resident.cells &&
-			    SameTransform(known.transform, transform))
+			auto& known = _looks[index];
+			if (footprint != nullptr && SameLook(known, mesh.id, resident.cells, transform))
 			{
 				known.seen = search;
 				return;
 			}
-			MarkBlocks(known.lowBlock, known.highBlock);
-			_known.erase(entity);
+			MarkThing(entity, _known.get(entity));
+			Forget(entity);
 		}
 		if (footprint == nullptr)
 		{
 			return;
 		}
 		const auto placement = PlacementFor(stores.turns, entity, transform);
-		const auto [lowBlock, highBlock] = BlocksOf(land_footprints::GroundBounds(footprint->triangles, placement));
-		MarkBlocks(lowBlock, highBlock);
-		_known.emplace(entity, Known {.mesh = mesh.id,
-		                              .cells = resident.cells,
-		                              .transform = transform,
-		                              .placement = placement,
-		                              .lowBlock = lowBlock,
-		                              .highBlock = highBlock,
-		                              .seen = search});
+		const auto bounds = land_footprints::GroundBounds(footprint->triangles, placement);
+		const auto [lowBlock, highBlock] = BlocksOf(bounds);
+		Known known {
+		    .cells = resident.cells, .placement = placement, .bounds = bounds, .lowBlock = lowBlock, .highBlock = highBlock};
+		MarkThing(entity, known);
+		Learn(entity,
+		      KnownLook {.seen = search,
+		                 .mesh = mesh.id,
+		                 .cellCount = static_cast<uint32_t>(resident.cells.size()),
+		                 .firstCell = resident.cells.empty() ? 0u : resident.cells.front(),
+		                 .transform = transform},
+		      std::move(known));
 	};
 	// Most things keep the footprint they had, or have none. The lanes of the pool find these things first, each lane in
 	// its own share of the things, and change nothing but the marks of the known things that they see. This thread then
@@ -316,13 +384,15 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 				slot = {mesh.id, _footprints.find(mesh.id)};
 			}
 			const auto footprint = slot.second;
-			const auto held = _known.current(entity);
-			if (footprint == _footprints.cend() || (held != k_NoVersion && held != entt::to_version(entity)))
+			const auto index = static_cast<size_t>(entt::to_entity(entity));
+			auto* known = index < _looks.size() ? &_looks[index] : nullptr;
+			const auto held = known != nullptr ? known->entity : entt::entity {entt::null};
+			if (footprint == _footprints.cend() || (held != entt::null && held != entity))
 			{
 				left.push_back(entity);
 				continue;
 			}
-			if (held == k_NoVersion)
+			if (held == entt::null)
 			{
 				// Not known: a thing whose model has no footprint stays so
 				if (footprint->second.footprint != nullptr)
@@ -331,11 +401,9 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 				}
 				continue;
 			}
-			auto& known = _known.get(entity);
-			if (footprint->second.footprint != nullptr && known.mesh == mesh.id && known.cells == resident.cells &&
-			    SameTransform(known.transform, transform))
+			if (footprint->second.footprint != nullptr && SameLook(*known, mesh.id, resident.cells, transform))
 			{
-				known.seen = search;
+				known->seen = search;
 				continue;
 			}
 			left.push_back(entity);
@@ -357,7 +425,7 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 		for (auto it = knownEntities.begin() + static_cast<std::ptrdiff_t>(from);
 		     it != knownEntities.begin() + static_cast<std::ptrdiff_t>(to); ++it)
 		{
-			if (_known.get(*it).seen != search)
+			if (_looks[entt::to_entity(*it)].seen != search)
 			{
 				found[share].push_back(*it);
 			}
@@ -369,10 +437,9 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 	{
 		for (const auto entity : unseen)
 		{
-			const auto& known = _known.get(entity);
-			MarkBlocks(known.lowBlock, known.highBlock);
+			MarkThing(entity, _known.get(entity));
+			Forget(entity);
 		}
-		_known.erase(unseen.begin(), unseen.end());
 	}
 }
 
@@ -519,9 +586,9 @@ void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, const Thi
 	{
 		const auto& transform = *stores.turns.TryGet<const Transform>(entity);
 		const auto* footprint = FoundFootprintOf(stores.things.TryGet<const MeshComponent>(entity)->id);
-		const auto* known = _known.contains(entity) ? &_known.get(entity) : nullptr;
-		const auto placement = known != nullptr && SameTransform(known->transform, transform)
-		                           ? known->placement
+		const auto* look = LookOf(entity);
+		const auto placement = look != nullptr && SameTransform(look->transform, transform)
+		                           ? _known.get(entity).placement
 		                           : PlacementFor(stores.turns, entity, transform);
 		Paint(texels, position, *footprint, placement, footprint_paint::Mix::Colour, side);
 	}
@@ -529,6 +596,74 @@ void LandFootprints::PaintBlock(size_t block, const BlockPaint& paint, const Thi
 	{
 		Paint(texels, position, *print->footprint, print->placement,
 		      print->channel ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour, side);
+	}
+}
+
+std::optional<footprint_paint::Region> LandFootprints::PartToPaint(size_t block, const BlockPaint& paint) const
+{
+	if (_wholeDirty.contains(block) || !_painted.at(block) || (paint.things.empty() && paint.loose.empty()))
+	{
+		return std::nullopt;
+	}
+	const auto own = _ownTexels.find(block);
+	const auto part = _dirtyParts.find(block);
+	if (own == _ownTexels.end() || own->second.empty() || part == _dirtyParts.end() || part->second.Empty() ||
+	    part->second == footprint_paint::WholeBlock(_side))
+	{
+		return std::nullopt;
+	}
+	// Outside the part, each texel keeps its paint only when the other things paint it in the same order as before
+	if (block >= _blockThings.size() || !land_footprints::SameOrderBesides(_blockThings[block], paint.things, _changedThings))
+	{
+		return std::nullopt;
+	}
+	return part->second;
+}
+
+void LandFootprints::PaintBlockPart(size_t block, const BlockPaint& paint, const ThingStores& stores,
+                                    const footprint_paint::Region& part, std::span<uint16_t> texels) const
+{
+	const auto position = Locator::terrainSystem::value().GetBlocks().at(block).GetBlockPosition();
+	const auto side = static_cast<size_t>(_side);
+	const auto& own = _ownTexels.at(block);
+	for (int row = part.firstRow; row <= part.lastRow; ++row)
+	{
+		const auto first = static_cast<size_t>(row) * side + static_cast<size_t>(part.firstColumn);
+		const auto count = static_cast<size_t>(part.lastColumn - part.firstColumn + 1);
+		std::copy_n(own.begin() + static_cast<std::ptrdiff_t>(first), count,
+		            texels.begin() + static_cast<std::ptrdiff_t>(first));
+	}
+	const auto paintPart = [&](const L3DMesh::Footprint& footprint, const footprint_paint::Placement& placement,
+	                           footprint_paint::Mix mix) {
+		const footprint_paint::Picture picture {
+		    .width = footprint.width, .height = footprint.height, .texels = footprint.texels};
+		footprint_paint::PaintFootprint(texels, position, picture, footprint.triangles, placement, mix, _side, part);
+	};
+	for (const auto entity : paint.things)
+	{
+		const auto& transform = *stores.turns.TryGet<const Transform>(entity);
+		const auto* footprint = FoundFootprintOf(stores.things.TryGet<const MeshComponent>(entity)->id);
+		const auto* look = LookOf(entity);
+		if (look != nullptr && SameTransform(look->transform, transform))
+		{
+			const auto& known = _known.get(entity);
+			// A footprint that paints no texel of the part changes nothing there
+			if (!footprint_paint::Overlap(footprint_paint::RegionOf(known.bounds, position, _side), part))
+			{
+				continue;
+			}
+			paintPart(*footprint, known.placement, footprint_paint::Mix::Colour);
+			continue;
+		}
+		paintPart(*footprint, PlacementFor(stores.turns, entity, transform), footprint_paint::Mix::Colour);
+	}
+	for (const auto* print : paint.loose)
+	{
+		if (footprint_paint::Overlap(footprint_paint::RegionOf(print->bounds, position, _side), part))
+		{
+			paintPart(*print->footprint, print->placement,
+			          print->channel ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour);
+		}
 	}
 }
 
@@ -540,6 +675,7 @@ void LandFootprints::PaintAgain()
 		if (_painted[block])
 		{
 			_dirty.insert(block);
+			_wholeDirty.insert(block);
 		}
 	}
 }
@@ -610,6 +746,12 @@ bool LandFootprints::TakeLandChanges()
 	{
 		Reset(blockCount);
 	}
+	// With a texture of another side, each block that is painted next paints all of its texture
+	if (const int side = island.GetBlockTextureSide(); side != _side)
+	{
+		_side = side;
+		_blockThings.assign(blockCount, {});
+	}
 	for (const auto& [block, cells] : repainted)
 	{
 		// The block's own texture that is kept takes the cells painted again. It is then as a new paint of the whole block,
@@ -623,6 +765,7 @@ bool LandFootprints::TakeLandChanges()
 			_ownTexels.erase(block);
 		}
 		_dirty.insert(block);
+		_wholeDirty.insert(block);
 	}
 	return true;
 }
@@ -636,8 +779,12 @@ void LandFootprints::PaintChanges(const ThingStores& stores)
 	std::vector<size_t> blocks;
 	std::ranges::copy_if(_dirty, std::back_inserter(blocks), [blockCount](size_t block) { return block < blockCount; });
 	_dirty.clear();
+	std::ranges::sort(_changedThings);
 	if (blocks.empty())
 	{
+		_wholeDirty.clear();
+		_dirtyParts.clear();
+		_changedThings.clear();
 		return;
 	}
 	_repainted.insert(_repainted.end(), blocks.begin(), blocks.end());
@@ -665,24 +812,48 @@ void LandFootprints::PaintChanges(const ThingStores& stores)
 		Workers().ForEach(blocks.size(), findOne);
 	}
 
+	// A block whose changed things paint only a part of it paints only that part again. The other blocks paint all of
+	// their textures again.
 	std::vector<size_t> painted;
 	std::vector<const BlockPaint*> paintOf;
+	std::vector<size_t> partBlocks;
+	std::vector<const BlockPaint*> partPaintOf;
+	std::vector<footprint_paint::Region> parts;
 	for (size_t i = 0; i < blocks.size(); ++i)
 	{
 		if (toPaint[i] == 0)
 		{
 			continue;
 		}
-		painted.push_back(blocks[i]);
-		paintOf.push_back(&paints[i]);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "Land footprints: block {} painted with {} things and {} loose prints",
 		                    blocks[i], paints[i].things.size(), paints[i].loose.size());
-		_painted.at(blocks[i]) = !paints[i].things.empty() || !paints[i].loose.empty();
+		if (const auto part = PartToPaint(blocks[i], paints[i]))
+		{
+			partBlocks.push_back(blocks[i]);
+			partPaintOf.push_back(&paints[i]);
+			parts.push_back(*part);
+		}
+		else
+		{
+			painted.push_back(blocks[i]);
+			paintOf.push_back(&paints[i]);
+		}
+	}
+	_wholeDirty.clear();
+	_dirtyParts.clear();
+	_changedThings.clear();
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		if (toPaint[i] != 0)
+		{
+			_painted.at(blocks[i]) = !paints[i].things.empty() || !paints[i].loose.empty();
+			_blockThings.at(blocks[i]) = paints[i].things;
+		}
 	}
 	// Then the paint of each block, which goes straight to the block's texture
+	const auto side = static_cast<size_t>(island.GetBlockTextureSide());
 	if (painted.size() < k_LeastBlocksToShare)
 	{
-		const auto side = static_cast<size_t>(island.GetBlockTextureSide());
 		_texels.resize(side * side);
 		for (size_t i = 0; i < painted.size(); ++i)
 		{
@@ -698,6 +869,46 @@ void LandFootprints::PaintChanges(const ThingStores& stores)
 			    PaintBlock(painted[i], *paintOf[i], stores, texels);
 		    },
 		    Workers());
+	}
+	// The parts of the blocks: each lane paints into texels of its own, and this thread gives the parts to the land
+	if (!partBlocks.empty())
+	{
+		auto& workers = Workers();
+		_laneTexels.resize(std::max(_laneTexels.size(), workers.GetLaneCount()));
+		for (auto& texels : _laneTexels)
+		{
+			texels.resize(side * side);
+		}
+		std::vector<std::vector<uint16_t>> partTexels(partBlocks.size());
+		const auto paintPart = [&](size_t i, size_t lane) {
+			auto& texels = _laneTexels.at(lane);
+			const auto& part = parts[i];
+			PaintBlockPart(partBlocks[i], *partPaintOf[i], stores, part, texels);
+			const auto columns = static_cast<size_t>(part.lastColumn - part.firstColumn + 1);
+			auto& out = partTexels[i];
+			out.resize(static_cast<size_t>(part.lastRow - part.firstRow + 1) * columns);
+			for (int row = part.firstRow; row <= part.lastRow; ++row)
+			{
+				const auto first = static_cast<size_t>(row) * side + static_cast<size_t>(part.firstColumn);
+				std::copy_n(texels.begin() + static_cast<std::ptrdiff_t>(first), columns,
+				            out.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(row - part.firstRow) * columns));
+			}
+		};
+		if (partBlocks.size() < k_LeastBlocksToShare)
+		{
+			paintPart(0, 0);
+		}
+		else
+		{
+			workers.ForEach(partBlocks.size(), paintPart);
+		}
+		for (size_t i = 0; i < partBlocks.size(); ++i)
+		{
+			const auto& part = parts[i];
+			island.SetBlockTexelsPart(partBlocks[i], {part.firstRow, part.firstColumn},
+			                          {part.lastRow - part.firstRow + 1, part.lastColumn - part.firstColumn + 1},
+			                          partTexels[i]);
+		}
 	}
 }
 

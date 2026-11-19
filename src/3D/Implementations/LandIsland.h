@@ -143,6 +143,7 @@ public:
 	}
 	void PaintBlockTexels(size_t block, std::span<uint16_t> texels) const override;
 	void SetBlockTexels(size_t block, std::span<const uint16_t> texels) override;
+	void SetBlockTexelsPart(size_t block, glm::ivec2 first, glm::ivec2 size, std::span<const uint16_t> texels) override;
 	void PaintBlocksTexels(std::span<const size_t> blocks, const PaintTexels& paint, WorkerPool& pool) override;
 	[[nodiscard]] std::vector<RepaintedBlock> TakeRepaintedBlocks() override;
 	[[nodiscard]] CoarseRepaints TakeCoarseRepaints() override { return std::exchange(_coarseRepaints, {}); }
