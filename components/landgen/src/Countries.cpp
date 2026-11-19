@@ -20,7 +20,9 @@ namespace
 {
 // The sea bed and the coast: wet sand under the water, then dry sand
 constexpr std::array<Band, 2> k_Sea {{{0, Surface::WetSand}, {8, Surface::Sand}}};
-constexpr std::array<Band, 4> k_Beach {{{0, Surface::WetSand}, {6, Surface::Sand}, {34, Surface::Grass}, {120, Surface::Rock}}};
+// The beaches: dry sand from the water up, as the sand country of the beaches of Land 1. The noise of the land lifts
+// the altitude of the country for each texel, so the sand goes high above the beach and its dunes.
+constexpr std::array<Band, 3> k_Beach {{{0, Surface::Sand}, {80, Surface::Grass}, {150, Surface::Rock}}};
 constexpr std::array<Band, 4> k_Grassland {
     {{0, Surface::WetSand}, {8, Surface::Grass}, {115, Surface::Rock}, {185, Surface::Snow}}};
 constexpr std::array<Band, 5> k_TemperateForest {

@@ -421,9 +421,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 			        .moisture = moisture.values[index],
 			        .slope = slopes.values[index],
 			        .seaDistance = seaDistance.values[index],
-			        .beachWidth = 4.0f +
-			                      (8.0f * noise::SmoothStep(-0.4f, 0.4f, noise::Fractal(beachSeed, u * 10.0f, v * 10.0f, 2))) +
-			                      shoreWidths.values[index] - static_cast<float>(terrain::k_ShoreSteps.size()),
+			        .beachWidth = std::max(
+			            4.0f + (8.0f * noise::SmoothStep(-0.4f, 0.4f, noise::Fractal(beachSeed, u * 10.0f, v * 10.0f, 2))),
+			            shoreWidths.values[index]),
 			        .wet = basins.wet.values[index] != 0 || lakeLevels.values[index] >= 0.0f,
 			        .blight = noise::Fractal(blightSeed, u * 6.0f, v * 6.0f, 3),
 			    },
