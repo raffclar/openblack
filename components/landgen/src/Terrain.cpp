@@ -139,6 +139,58 @@ std::vector<BrushPoint> MakeBrush(int radius)
 	}
 	return brush;
 }
+
+/// The seeds of the noise that makes the outline of an island
+struct OutlineSeeds
+{
+	uint64_t warpU;
+	uint64_t warpV;
+	uint64_t outline;
+};
+
+/// A point of the map on the outline of one island
+struct IslandPoint
+{
+	/// Above 0 on the land of the island. Its change for each metre is the same on islands of all sizes.
+	float land;
+	/// The point on the usual island, after the warp
+	float wu;
+	float wv;
+	/// The point on the map, after the warp
+	float hu;
+	float hv;
+};
+
+/// The outline of an island at a point of the map. Without an island, the outline is the usual island in the middle of
+/// the map. Each island of a list has its own noise, at the scale of its size.
+IslandPoint OnIsland(const terrain::Outline* island, size_t index, float u, float v, const OutlineSeeds& seeds,
+                     float landAmount)
+{
+	float iu = u;
+	float iv = v;
+	float offset = 0.0f;
+	float size = 1.0f;
+	if (island != nullptr)
+	{
+		size = island->size;
+		iu = 0.5f + ((u - island->centreU) / size);
+		iv = 0.5f + ((v - island->centreV) / size);
+		offset = static_cast<float>(index) * 7.31f;
+	}
+	// The warp bends the outline and the ranges, so that no line is straight
+	const float wu = iu + (0.1f * noise::Fractal(seeds.warpU, (iu * 3.0f) + offset, iv * 3.0f, 4));
+	const float wv = iv + (0.1f * noise::Fractal(seeds.warpV, (iu * 3.0f) + 5.2f + offset, (iv * 3.0f) + 1.3f, 4));
+	const float du = wu - 0.5f;
+	const float dv = wv - 0.5f;
+	const float radius = std::sqrt((du * du) + (dv * dv)) * 2.0f;
+	const float land =
+	    0.62f + landAmount - (radius * 0.75f) + (0.35f * noise::Fractal(seeds.outline, (wu * 2.2f) + offset, wv * 2.2f, 5));
+	if (island == nullptr)
+	{
+		return {.land = land, .wu = wu, .wv = wv, .hu = wu, .hv = wv};
+	}
+	return {.land = land * size, .wu = wu, .wv = wv, .hu = u + ((wu - iu) * size), .hv = v + ((wv - iv) * size)};
+}
 } // namespace
 
 Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& settings)
@@ -156,9 +208,7 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 		    .height = random.NextRange(0.75f, 1.0f),
 		});
 	}
-	const auto warpU = StageSeed(seed, 2);
-	const auto warpV = StageSeed(seed, 3);
-	const auto outline = StageSeed(seed, 4);
+	const OutlineSeeds seeds {.warpU = StageSeed(seed, 2), .warpV = StageSeed(seed, 3), .outline = StageSeed(seed, 4)};
 	const auto hills = StageSeed(seed, 5);
 	const auto crests = StageSeed(seed, 6);
 
@@ -171,14 +221,20 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 		{
 			const float u = static_cast<float>(x) / last;
 			const float v = static_cast<float>(z) / last;
-			// The warp bends the outline and the ranges, so that no line is straight
-			const float wu = u + (0.1f * noise::Fractal(warpU, u * 3.0f, v * 3.0f, 4));
-			const float wv = v + (0.1f * noise::Fractal(warpV, (u * 3.0f) + 5.2f, (v * 3.0f) + 1.3f, 4));
-			const float du = wu - 0.5f;
-			const float dv = wv - 0.5f;
-			const float radius = std::sqrt((du * du) + (dv * dv)) * 2.0f;
-			float land =
-			    0.62f + settings.landAmount - (radius * 0.75f) + (0.35f * noise::Fractal(outline, wu * 2.2f, wv * 2.2f, 5));
+			// The point takes the shape of the island whose land is highest there
+			auto point = settings.islands.empty() ? OnIsland(nullptr, 0, u, v, seeds, settings.landAmount)
+			                                      : OnIsland(&settings.islands.front(), 0, u, v, seeds, settings.landAmount);
+			for (size_t i = 1; i < settings.islands.size(); ++i)
+			{
+				const auto other = OnIsland(&settings.islands[i], i, u, v, seeds, settings.landAmount);
+				if (other.land > point.land)
+				{
+					point = other;
+				}
+			}
+			const float wu = point.wu;
+			const float wv = point.wv;
+			float land = point.land;
 
 			// Near the edges of the map the land goes under the sea
 			const int toEdge = std::min({x, z, side - 1 - x, side - 1 - z});
@@ -194,7 +250,7 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 			else
 			{
 				height = (settings.plainHeight * noise::SmoothStep(0.0f, settings.plainRise, land)) + 0.5f;
-				height += settings.hillHeight * noise::Fractal(hills, wu * 9.0f, wv * 9.0f, 4) *
+				height += settings.hillHeight * noise::Fractal(hills, point.hu * 9.0f, point.hv * 9.0f, 4) *
 				          noise::SmoothStep(0.03f, 0.25f, land);
 			}
 			float mountain = 0.0f;
@@ -202,7 +258,7 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 			{
 				mountain = std::max(mountain, RangeProfile(range, wu, wv));
 			}
-			const float crest = 0.35f + (0.65f * noise::Ridged(crests, wu * 7.0f, wv * 7.0f, 5));
+			const float crest = 0.35f + (0.65f * noise::Ridged(crests, point.hu * 7.0f, point.hv * 7.0f, 5));
 			height += settings.mountainHeight * mountain * crest * noise::SmoothStep(0.0f, 0.15f, land);
 			heights.At(x, z) = height;
 		}
@@ -238,7 +294,7 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 				const float dx = static_cast<float>(x) - cx;
 				const float dz = static_cast<float>(z) - cz;
 				// The noise bends the shore of the hollow, so that it is not round
-				const float bend = 0.75f + (0.5f * noise::Fractal(outline, static_cast<float>(x) / last * 24.0f,
+				const float bend = 0.75f + (0.5f * noise::Fractal(seeds.outline, static_cast<float>(x) / last * 24.0f,
 				                                                  static_cast<float>(z) / last * 24.0f, 2));
 				const float edge = noise::SmoothStep(0.45f, 1.0f, std::sqrt((dx * dx) + (dz * dz)) / (radius * bend));
 				auto& height = heights.At(x, z);

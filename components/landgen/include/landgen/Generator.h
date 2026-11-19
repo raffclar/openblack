@@ -28,6 +28,7 @@
 #include "landgen/HeightCurve.h"
 #include "landgen/Hydrology.h"
 #include "landgen/Lakes.h"
+#include "landgen/LandTypes.h"
 #include "landgen/Lighting.h"
 #include "landgen/Paths.h"
 #include "landgen/Players.h"
@@ -68,6 +69,8 @@ struct Settings
 {
 	uint64_t seed {1};
 	int side {k_MapCorners};
+	/// The type of the land, which changes the shape settings below before the generator uses them
+	landtypes::Settings landType;
 	/// The direction of the wind. Without it, the seed picks the direction.
 	std::optional<climate::Wind> wind;
 	/// The height in metres of the highest altitude, and the altitude above which each altitude unit adds more height.
@@ -148,6 +151,8 @@ struct StageTime
 /// A land from the generator: what a landscape holds, and the things on it
 struct GeneratedLand
 {
+	/// The type of the land, from the settings or from the seed
+	landtypes::Type type {landtypes::Type::BigIsland};
 	/// The cell of each corner of the map, as a landscape keeps them: altitude, luminosity, country and water
 	Grid<lnd::LNDCell> cells;
 	Grid<biomes::Biome> biomes;
@@ -189,10 +194,10 @@ struct GeneratedLand
 	Grid<uint16_t> heightUnits;
 };
 
-/// Makes a land: the base heights, the erosion, the lakes and rivers, the start area and the places of the towns, the
-/// climate, the biomes, the light, the cells and countries, the temple and town of the start, the neutral towns, the
-/// paths between them and their lanterns, the features, the cursed places, the mist of the swamps, the fairy rings and
-/// lone pillars, and the forests
+/// Makes a land: the type of the land, the base heights, the erosion, the lakes and rivers, the start area and the places of
+/// the towns, the climate, the biomes, the light, the cells and countries, the temple and town of the start, the neutral
+/// towns, the paths between them and their lanterns, the features, the cursed places, the mist of the swamps, the fairy
+/// rings and lone pillars, and the forests
 [[nodiscard]] GeneratedLand Generate(const Settings& settings);
 
 /// The cell of each corner, from the altitudes, the luminosity and the biomes. A cell's water and sound come from the

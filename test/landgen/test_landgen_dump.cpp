@@ -68,7 +68,7 @@ void WriteList(std::ofstream& out, const Container& values, Value&& value)
 void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::GeneratedLand& land)
 {
 	std::ofstream out(path);
-	out << "{\"seed\":" << seed << ",\"side\":" << land.cells.side;
+	out << "{\"seed\":" << seed << ",\"type\":" << static_cast<int>(land.type) << ",\"side\":" << land.cells.side;
 	out << ",\"altitude\":";
 	WriteList(out, land.cells.values, [](const lnd::LNDCell& cell) { return static_cast<int>(cell.altitude); });
 	out << ",\"metres\":[";
@@ -216,12 +216,16 @@ TEST(LandgenDump, WritesTheLandOfEachSeedWhenTheEnvironmentAsksForIt)
 	// The stands of trees in hundredths of the usual stands, for the tree benchmarks
 	const auto trees = EnvironmentOf("OPENBLACK_LANDGEN_TREES");
 	const auto players = EnvironmentOf("OPENBLACK_LANDGEN_PLAYERS");
+	// The type of the land in the order of landgen::landtypes::Type. Without it, the seed picks the type.
+	const auto type = EnvironmentOf("OPENBLACK_LANDGEN_TYPE");
 	for (const auto seed :
 	     SeedsOf(EnvironmentOf("OPENBLACK_LANDGEN_SEEDS").empty() ? "1,7,42" : EnvironmentOf("OPENBLACK_LANDGEN_SEEDS")))
 	{
 		auto settings = generated_land::SettingsOf({.seed = seed,
 		                                            .trees = trees.empty() ? 100 : static_cast<int32_t>(std::stoi(trees)),
-		                                            .players = players.empty() ? 1 : static_cast<int32_t>(std::stoi(players))});
+		                                            .players = players.empty() ? 1 : static_cast<int32_t>(std::stoi(players)),
+		                                            .landType = type.empty() ? -1 : static_cast<int32_t>(std::stoi(type)),
+		                                            .archipelago = type.empty() ? 0 : 1});
 		// A land with no fairy rings and no lone pillars, for a comparison with the land before them
 		if (EnvironmentOf("OPENBLACK_LANDGEN_FORMATIONS") == "0")
 		{

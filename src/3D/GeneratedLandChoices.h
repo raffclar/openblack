@@ -51,9 +51,17 @@ struct Choices
 	int32_t trees {100};
 	/// How many players the land has, from 1 to 4. Each player gets a temple and a town, as on the skirmish lands.
 	int32_t players {1};
+	/// The type of the land, in the order of landgen::landtypes::Type, or -1 when the seed picks the type
+	int32_t landType {-1};
+	/// 1 lets the land be an archipelago: the seed can pick it, and the archipelago type makes it. With 0, the seed picks
+	/// another type. The archipelago is an option that is off by default, so the first value is 0.
+	int32_t archipelago {0};
 
 	bool operator==(const Choices&) const = default;
 };
+
+/// The land type of an archipelago, which needs the archipelago choice
+constexpr int32_t k_ArchipelagoType = 4;
 
 /// The range of a choice, the name that the path of the land gives it, and the name that the editor shows
 struct ChoiceRange

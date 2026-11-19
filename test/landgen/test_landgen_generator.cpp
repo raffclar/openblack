@@ -41,6 +41,8 @@ Settings SmallSettings(uint64_t seed)
 	settings.rivers.sourceFlow = 150.0f;
 	settings.features.most = 100000;
 	settings.wind = climate::Wind::West;
+	// The big island is the shape that the land had before the types of land
+	settings.landType.type = landtypes::Type::BigIsland;
 	return settings;
 }
 
