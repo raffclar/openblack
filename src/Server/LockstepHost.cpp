@@ -2109,7 +2109,9 @@ void LockstepHost::StartCreature(ConnectionId connection, const Peer& peer, cons
 	}
 	_startCreatures[*peer.seat] = file;
 	_startAlignments[*peer.seat] = creature.alignment;
-	Broadcast(game_socket::StartCreature {.slot = *peer.seat, .file = std::move(file), .alignment = creature.alignment});
+	// The symbol of the god's player goes to each player as it came. The server's world has no view, so it keeps none.
+	Broadcast(game_socket::StartCreature {
+	    .slot = *peer.seat, .file = std::move(file), .alignment = creature.alignment, .symbol = creature.symbol});
 	if (_awaited.empty())
 	{
 		StartGame();

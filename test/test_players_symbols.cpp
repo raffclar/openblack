@@ -278,3 +278,45 @@ TEST(PlayersSymbols, ALaterGodGetsItsProfileSymbolInTheWiderSheet)
 	EXPECT_EQ(half.alpha[halfTexel], 0x55);
 	EXPECT_EQ(half.alpha[halfTexel - 1], 9);
 }
+
+// A picture goes to the other players with four bits a grey, the first grey of two in the low bits
+TEST(PlayersSymbols, APictureGoesToTheOtherPlayersWithFourBitsAGrey)
+{
+	std::vector<uint8_t> greys(static_cast<size_t>(k_SquareSide) * k_SquareSide, 0);
+	greys[0] = 0xF3;
+	greys[1] = 0x2C;
+	greys[2] = 0x80;
+	const auto sent = PackPicture(greys);
+	ASSERT_EQ(sent.size(), k_SentPictureBytes);
+	EXPECT_EQ(sent[0], 0x2F);
+	EXPECT_EQ(sent[1], 0x08);
+	const auto back = UnpackPicture(sent);
+	ASSERT_TRUE(back.has_value());
+	ASSERT_EQ(back->size(), greys.size());
+	// Each grey of four bits fills the eight bits
+	EXPECT_EQ((*back)[0], 0xFF);
+	EXPECT_EQ((*back)[1], 0x22);
+	EXPECT_EQ((*back)[2], 0x88);
+	EXPECT_EQ((*back)[3], 0x00);
+	// A picture or bytes of another size give nothing
+	EXPECT_TRUE(PackPicture(std::vector<uint8_t>(10)).empty());
+	EXPECT_FALSE(UnpackPicture(std::vector<uint8_t>(k_SentPictureBytes - 1)).has_value());
+}
+
+// Another human of a network game shows its own picture that came with its symbol, else the design of the symbol
+TEST(PlayersSymbols, AnotherHumanShowsTheSymbolThatCameFromItsProfile)
+{
+	auto players = NumberedSheet(100);
+	const auto designs = NumberedSheet(0);
+	PutSentSymbol(players, designs, 9, {}, 2);
+	EXPECT_EQ(players.alpha[TexelOf(2, 0, 0)], 9);
+	EXPECT_EQ(players.colours[TexelOf(2, 63, 63) * 3], 9);
+	std::vector<uint8_t> sent(k_SentPictureBytes, 0);
+	sent[0] = 0x0A;
+	PutSentSymbol(players, designs, 9, sent, 3);
+	EXPECT_EQ(players.alpha[TexelOf(3, 0, 0)], 0xAA);
+	EXPECT_EQ(players.alpha[TexelOf(3, 1, 0)], 0);
+	// The other squares keep what the file has
+	EXPECT_EQ(players.alpha[TexelOf(1, 0, 0)], 101);
+	EXPECT_EQ(players.alpha[TexelOf(4, 0, 0)], 104);
+}

@@ -35,6 +35,7 @@
 #include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -42,6 +43,7 @@
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Online/NetworkSession.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
 #include "Visual/TexelDepth.h"
@@ -256,6 +258,18 @@ void MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 	// A game with more player numbers than the squares of the file has a square for each player number
 	auto wide = players_symbols::Widen(std::move(file), players_symbols::SquaresInARowFor(ecs::game_players::Count()));
 	auto players = players_symbols::MakeSheet(std::move(wide), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
+	// In a network game, the square of each other human gets the symbol that came from the profile of that player
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	for (const auto player : ecs::game_players::Gods())
+	{
+		const bool computer = Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(player);
+		const auto sent =
+		    session != nullptr && !computer && player != localPlayer ? session->StartSymbol(player) : std::nullopt;
+		if (sent.has_value() && sent->design.has_value())
+		{
+			players_symbols::PutSentSymbol(players, designs, *sent->design, sent->picture, static_cast<uint32_t>(player));
+		}
+	}
 	// The lowest detail levels keep the sheet at half its size: each symbol takes every second texel of its full one
 	const bool halve = Locator::config::value().detail.lowResTextures;
 	if (halve)

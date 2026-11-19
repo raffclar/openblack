@@ -109,6 +109,26 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "multiplayer.other_human_symbol",
+	    .name = "The symbol of belief of another human of a network game",
+	    .facet = Facet::Multiplayer,
+	    .description = "Play it in a network game of two humans, with a different symbol in the profile of each human. "
+	                   "A temple of player two stands to the north. A Norse town centre of the player's town believes in "
+	                   "player one and in player two. The camera is still, a little above the top of the totem.",
+	    .expected = "On each computer, two symbols show at the totem: the symbol of the profile of each human, in the colour "
+	                "of its god. The own picture of a human for its symbol shows in place of the design. Before the fix "
+	                "each computer showed only the symbol of its own player.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_SlotTownCentre.x - 12.7f, 24.0f, k_SlotTownCentre.y - 27.2f},
+	                .look = {k_SlotTownCentre.x, 21.0f, k_SlotTownCentre.y}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_SlotTownCentre}},
+	    .temples = {{.offset = {0.0f, 140.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .townBeliefInPlayer = k_SlotTownBelief,
+	    .townBeliefInRival = k_SlotTownBelief,
+	});
+
+	all.push_back({
 	    .id = "multiplayer.map_land_after_start",
 	    .name = "A land of a network game that loads after the humans joined",
 	    .facet = Facet::Multiplayer,
