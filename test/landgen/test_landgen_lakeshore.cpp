@@ -166,3 +166,69 @@ TEST(LandgenLakeShore, AlpineGroundHasNoBeach)
 	EXPECT_EQ(shores.shore.At(21, 17), Shore::Bed);
 	EXPECT_EQ(shores.shore.At(26, 17), Shore::Land);
 }
+
+TEST(LandgenLakeShore, NoLakeGivesNoShoreSteps)
+{
+	Fake fake(60.0f);
+	const auto lowered = lakeshore::ShoreSteps(fake.altitudes, {}, {}, {});
+	EXPECT_TRUE(lowered.empty());
+	EXPECT_FLOAT_EQ(fake.altitudes.At(10, 10), 60.0f);
+}
+
+TEST(LandgenLakeShore, AWallRoundALakeGetsTheShoreStepsOfTheSea)
+{
+	// A lake at 59.75 with its shore at 60, in a wall 30 altitudes over the shore
+	Fake fake(90.0f);
+	std::vector<lakes::Lake> lakes {SquareLake(fake, 15, 20, 59.75f)};
+	const auto lowered = lakeshore::ShoreSteps(fake.altitudes, lakes, {}, {.freeboard = 0.25f, .rise = 28.0f});
+	EXPECT_FALSE(lowered.empty());
+	// The first three corners are at the shore, the fourth is one altitude over it
+	EXPECT_FLOAT_EQ(fake.altitudes.At(21, 17), 60.0f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(22, 17), 60.0f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(23, 17), 60.2f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(24, 17), 61.0f);
+	// Behind the steps the wall rises by the rise of the settings for each corner, to the old ground
+	EXPECT_FLOAT_EQ(fake.altitudes.At(25, 17), 89.0f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(26, 17), 90.0f);
+	// The corners of the lake do not change
+	EXPECT_FLOAT_EQ(fake.altitudes.At(17, 17), 58.75f);
+}
+
+TEST(LandgenLakeShore, TheShoreStepsDoNotLiftLowGround)
+{
+	Fake fake(60.0f);
+	std::vector<lakes::Lake> lakes {SquareLake(fake, 15, 20, 59.75f)};
+	fake.altitudes.At(23, 17) = 60.1f;
+	const auto lowered = lakeshore::ShoreSteps(fake.altitudes, lakes, {}, {});
+	EXPECT_TRUE(lowered.empty());
+	EXPECT_FLOAT_EQ(fake.altitudes.At(23, 17), 60.1f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(24, 17), 60.0f);
+}
+
+TEST(LandgenLakeShore, TheShoreStepsOfALowLakeDoNotCutTheRimOfAHighLake)
+{
+	// A low lake and a high lake on a high ridge, with three corners between them on the diagonal
+	Fake fake(80.0f);
+	std::vector<lakes::Lake> lakes {SquareLake(fake, 5, 10, 39.75f), SquareLake(fake, 14, 19, 69.75f)};
+	const auto lowered = lakeshore::ShoreSteps(fake.altitudes, lakes, {}, {});
+	EXPECT_FALSE(lowered.empty());
+	// The corners near the high lake keep at least its shore
+	EXPECT_FLOAT_EQ(fake.altitudes.At(12, 12), 70.0f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(13, 13), 70.0f);
+	// The other corners get the shore steps of the low lake
+	EXPECT_FLOAT_EQ(fake.altitudes.At(11, 11), 40.0f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(7, 2), 40.2f);
+}
+
+TEST(LandgenLakeShore, TheShoreStepsKeepTheGroundOfThePlacesToKeep)
+{
+	Fake fake(90.0f);
+	std::vector<lakes::Lake> lakes {SquareLake(fake, 15, 20, 59.75f)};
+	const std::vector<lakes::Keep> keep {{.x = 23.0f, .z = 17.0f, .radius = 1.0f}};
+	const auto lowered = lakeshore::ShoreSteps(fake.altitudes, lakes, keep, {});
+	EXPECT_FALSE(lowered.empty());
+	EXPECT_FLOAT_EQ(fake.altitudes.At(23, 17), 90.0f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(22, 17), 90.0f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(21, 17), 60.0f);
+	EXPECT_FLOAT_EQ(fake.altitudes.At(23, 15), 60.2f);
+}

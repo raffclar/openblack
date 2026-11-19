@@ -523,7 +523,8 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .expected = "Each lake has the same sand edge as the sea shore. Wet sand covers the shallow water and the ground "
 	                "just above the level of the lake. On gentle warm ground, a beach of dry sand goes 40 to 120 metres "
 	                "from the water, or as far as a beach of the sea goes there. A lake on a hill has its sand at its "
-	                "own level.",
+	                "own level. A steep side of a lake has a flat band of sand at the water, as the shore steps of the "
+	                "sea.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_BigIsland}},

@@ -135,9 +135,10 @@ def curve_metres(curve, metres):
     return float(np.interp(metres / HEIGHT_UNIT, np.arange(len(curve)), curve))
 
 
-def terrain_measures(heights, land, sand, curve=None):
+def terrain_measures(heights, land, sand, curve=None, lake_water=None):
     """The numbers of the ground. heights is in metres, land and sand are masks of the same shape. curve is the metres
-    of each altitude of a land that can be higher than the lands of the story, or None."""
+    of each altitude of a land that can be higher than the lands of the story, or None. lake_water is the mask of the
+    water of the lakes of a generated land, or None: the sand numbers of the sea then leave out the lake sand."""
     n = int(land.sum())
     out = {}
     if n == 0:
@@ -206,9 +207,30 @@ def terrain_measures(heights, land, sand, curve=None):
     out["cliff_near_sea_pct"] = float((cliff_all & (sea <= 60)).sum() * 100.0 / max(int(cliff_all.sum()), 1))
     beach = land & sand
     out["sand_pct"] = float(beach.sum() * 100.0 / n)
-    out["sand_sea_median_m"] = percentile(sea[beach], 50)
-    out["sand_sea_p90_m"] = percentile(sea[beach], 90)
+    if lake_water is not None and lake_water.any():
+        out.update(lake_sand_measures(land, sand, open_sea, lake_water, n))
+    else:
+        out["sand_sea_median_m"] = percentile(sea[beach], 50)
+        out["sand_sea_p90_m"] = percentile(sea[beach], 90)
     out.update(cliff_numbers.cliff_measures(heights, land, slope, sea, curve_metres(curve, 100)))
+    return out
+
+
+def lake_sand_measures(land, sand, open_sea, lake_water, n):
+    """The sand numbers of the sea and of the lakes of a generated land. The sea numbers measure only the sand that the
+    sea is nearer to than a lake. The lake numbers measure the other sand, with its distance from the lake water. n is
+    the count of the land corners."""
+    out = {}
+    to_sea = ndimage.distance_transform_edt(~(open_sea & ~lake_water)) * CELL
+    to_lake = ndimage.distance_transform_edt(~lake_water) * CELL
+    beach = land & sand
+    by_sea = beach & (to_sea <= to_lake)
+    by_lake = beach & ~by_sea
+    out["sand_sea_median_m"] = percentile(to_sea[by_sea], 50)
+    out["sand_sea_p90_m"] = percentile(to_sea[by_sea], 90)
+    out["sand_lake_pct"] = float(by_lake.sum() * 100.0 / n)
+    out["sand_lake_median_m"] = percentile(to_lake[by_lake], 50)
+    out["sand_lake_p90_m"] = percentile(to_lake[by_lake], 90)
     return out
 
 
@@ -564,7 +586,7 @@ def lake_shore_measures(heights, water, lake_water, lake_level_m, sand):
 def measure_land(land):
     """All numbers of a land. land is a dict with heights, land, sand, trees (a list of (x, z, kind, in_forest)), rocks
     (a list of (x, z)), forests, footpaths, mists and towns."""
-    out = terrain_measures(land["heights"], land["land"], land["sand"], land.get("curve"))
+    out = terrain_measures(land["heights"], land["land"], land["sand"], land.get("curve"), land.get("lake_water"))
     area = out.get("land_km2", 0.0)
     trees = land["trees"]
     out.update(tree_measures([(t[0], t[1]) for t in trees], [t[2] for t in trees], [t[3] for t in trees], area))
