@@ -308,6 +308,10 @@ std::string Runner::HandTakeNear(const Command& command)
 	    [&closer](entt::entity entity, const ecs::components::Scaffold&, const ecs::components::Transform& transform) {
 		    closer(entity, transform);
 	    });
+	registry.Each<const ecs::components::MobileStatic, const ecs::components::Transform>(
+	    [&closer](entt::entity entity, const ecs::components::MobileStatic&, const ecs::components::Transform& transform) {
+		    closer(entity, transform);
+	    });
 	if (nearest == entt::null)
 	{
 		return "no mobile object near the point";

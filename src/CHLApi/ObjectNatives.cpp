@@ -991,21 +991,20 @@ static void DeleteNow(entt::entity object)
 	{
 		ecs::script_flocks::Destroy(registry, object);
 	}
-	else
+	else if (const auto* spell = registry.TryGet<const ecs::components::Spell>(object);
+	         spell != nullptr && Locator::magicSystem::has_value())
 	{
 		// A shield miracle takes its shield with it at once
-		if (const auto* spell = registry.TryGet<const ecs::components::Spell>(object);
-		    spell != nullptr && spell->spellClass == magic::SpellClass::Shield)
+		if (spell->spellClass == magic::SpellClass::Shield && Locator::magicShieldSystem::has_value())
 		{
-			if (Locator::magicShieldSystem::has_value())
-			{
-				Locator::magicShieldSystem::value().RemoveWithSpell(object);
-			}
-			if (Locator::magicSystem::has_value())
-			{
-				Locator::magicSystem::value().CloseDown(object);
-			}
+			Locator::magicShieldSystem::value().RemoveWithSpell(object);
 		}
+		// A miracle goes at once with its effect. The effect does not die away.
+		Locator::magicSystem::value().DeleteSpell(object);
+		ecs::world_objects::Remove(object);
+	}
+	else
+	{
 		ecs::world_objects::Remove(object);
 	}
 }
