@@ -62,6 +62,11 @@ using CellList = std::function<std::span<const entt::entity>(glm::ivec2 cell)>;
 [[nodiscard]] std::pair<glm::vec2, glm::vec2> GroundBounds(std::span<const footprint_paint::Triangle> triangles,
                                                            const footprint_paint::Placement& placement);
 
+/// Whether two lists of the things that paint a block hold the other things in the same order, when the changed things
+/// are not counted. `changed` is in order of the entities' values.
+[[nodiscard]] bool SameOrderBesides(std::span<const entt::entity> before, std::span<const entt::entity> now,
+                                    std::span<const entt::entity> changed);
+
 /// Whether the bounds of a river's footprint reach a block whose lowest corner is `blockCorner`, as the game tests it.
 /// A footprint that only touches the block's edge reaches it too.
 [[nodiscard]] bool ReachesBlock(const std::pair<glm::vec2, glm::vec2>& bounds, glm::vec2 blockCorner);

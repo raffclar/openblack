@@ -44,6 +44,8 @@ void SetScriptState(entt::entity villager, VillagerStates state);
 /// A script sends the villager to a point, where it stands waiting for the script; one already there waits at once. The
 /// walk keeps the height of the point above the land.
 void MoveTo(entt::entity villager, const map_coords::MapCoords& goal);
+/// Removes the walk order that waited for the villager to land, and gives it; none when no order waited
+[[nodiscard]] std::optional<map_coords::MapCoords> TakeMoveOnLanding(entt::entity villager);
 /// The clip the villager plays when a script puts it in the playing state, and how many times
 void SetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays);
 /// The place a script gives the villager for its script states, on the ground

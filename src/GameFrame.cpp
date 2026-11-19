@@ -55,6 +55,7 @@
 #include "Common/SideThread.h"
 #include "Creature/CreatureFightHud.h"
 #include "Debug/FrameStatsLog.h"
+#include "Debug/ThreadCpuTime.h"
 #include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/ChallengePictures.h"
 #include "ECS/Components/Animal.h"
@@ -436,8 +437,10 @@ bool Game::StartTurnsBesideDraw()
 	loop.turnsElsewhere.emplace(queue);
 	loop.turnThread->Start(
 	    [this, &loop] {
+		    const auto cpuStart = debug::ThreadCpuMilliseconds();
 		    Locator::landSystem::value().PlayTurnSteps(*this);
 		    loop.turnsEnd = std::chrono::steady_clock::now();
+		    loop.turnsCpuMs = debug::CpuMillisecondsBetween(cpuStart, debug::ThreadCpuMilliseconds());
 	    },
 	    [&queue] { queue.Wake(); });
 	return true;
@@ -459,7 +462,7 @@ void Game::FinishTurnsBesideDraw()
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The turns beside the draw stopped: {}", e.what());
 		std::abort();
 	}
-	Locator::landSystem::value().FinishTurns(loop.turnBefore, loop.turnsStart, loop.turnsEnd);
+	Locator::landSystem::value().FinishTurns(loop.turnBefore, loop.turnsStart, loop.turnsEnd, loop.turnsCpuMs);
 	// The scopes of the turns go into this frame's entry of the profiler
 	Locator::profiler::value().MergeThreads();
 }

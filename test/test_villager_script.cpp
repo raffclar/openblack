@@ -116,6 +116,18 @@ TEST(VillagerScriptRules, AScriptTakesADrowningVillagerButItsNativesDoNot)
 	EXPECT_FALSE(rules::CanBeDirected(true, true, false));
 }
 
+TEST(VillagerScriptRules, OnlyAFlyingVillagerInTheScriptsHandsKeepsAWalkOrder)
+{
+	// A son of The Sea knocked into the air keeps the walk home that his script gives him
+	EXPECT_TRUE(rules::KeepsMoveUntilLanding(true, true, false, false));
+	// A villager that no script controls, or that is not in the physics, does not keep it
+	EXPECT_FALSE(rules::KeepsMoveUntilLanding(false, true, false, false));
+	EXPECT_FALSE(rules::KeepsMoveUntilLanding(true, false, false, false));
+	// A villager in a hand or in a tornado does not keep it, and a dead one does not keep it
+	EXPECT_FALSE(rules::KeepsMoveUntilLanding(true, true, true, false));
+	EXPECT_FALSE(rules::KeepsMoveUntilLanding(true, true, false, true));
+}
+
 TEST(VillagerScriptRules, ScriptLetsGoOnlyForItsOwnStates)
 {
 	constexpr rules::StateRules k_Plain {.isScriptState = false, .isScriptInterruptable = false};

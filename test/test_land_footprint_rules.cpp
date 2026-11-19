@@ -251,3 +251,21 @@ TEST(LandFootprintRules, AGroundPrintSameAsAnOlderOneIsNotMade)
 	};
 	EXPECT_EQ(land_footprints::GroundPrintOrder(things), (std::vector<size_t> {2, 0}));
 }
+
+TEST(LandFootprintRules, TheOrderOfTheThingsThatDidNotChangeIsCompared)
+{
+	const auto e = [](uint32_t value) { return static_cast<entt::entity>(value); };
+	const std::vector<entt::entity> before {e(1), e(2), e(3), e(4)};
+	const std::vector<entt::entity> none;
+	// The same things in the same order
+	EXPECT_TRUE(land_footprints::SameOrderBesides(before, before, none));
+	// A changed thing that went, came or moved in the list is not counted
+	const std::vector<entt::entity> changed {e(2), e(9)};
+	EXPECT_TRUE(land_footprints::SameOrderBesides(before, {{e(1), e(3), e(4)}}, changed));
+	EXPECT_TRUE(land_footprints::SameOrderBesides(before, {{e(1), e(3), e(9), e(4), e(2)}}, changed));
+	// Two things that did not change and swapped their places
+	EXPECT_FALSE(land_footprints::SameOrderBesides(before, {{e(1), e(2), e(4), e(3)}}, changed));
+	// A thing that did not change and went from the list, or came into it
+	EXPECT_FALSE(land_footprints::SameOrderBesides(before, {{e(1), e(2), e(3)}}, changed));
+	EXPECT_FALSE(land_footprints::SameOrderBesides(before, {{e(1), e(2), e(3), e(4), e(5)}}, changed));
+}

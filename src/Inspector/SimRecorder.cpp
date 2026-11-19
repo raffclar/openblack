@@ -879,6 +879,7 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 	    {"wall_s", std::chrono::duration<double>(std::chrono::steady_clock::now() - _started).count()},
 	    {"turn_ms", timings.TurnAverageMs()},
 	    {"turn_ms_max", timings.turnLongestMs},
+	    {"turn_cpu_ms", timings.TurnCpuAverageMs().has_value() ? Json(*timings.TurnCpuAverageMs()) : Json(nullptr)},
 	    {"turns", timings.turns},
 	    {"record_ms", timings.RecordAverageMs()},
 	    {"record_ms_max", timings.recordLongestMs},
@@ -903,8 +904,11 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 	}
 	if (track && timings.turns > 0)
 	{
-		if (auto flag = _turnTime.Observe(timings.TurnAverageMs(), turn); flag.has_value())
+		// The processor time of the turns, when the system gives it: other load on the machine does not make it longer
+		const auto cpuMs = timings.TurnCpuAverageMs();
+		if (auto flag = _turnTime.Observe(cpuMs.value_or(timings.TurnAverageMs()), turn); flag.has_value())
 		{
+			flag->what = cpuMs.has_value() ? "turn_cpu_ms" : "turn_ms";
 			flags.push_back(std::move(*flag));
 		}
 	}

@@ -118,6 +118,29 @@ footprint_paint::Placement RiverStretch(const glm::vec3& from, const glm::vec3& 
 	};
 }
 
+bool SameOrderBesides(std::span<const entt::entity> before, std::span<const entt::entity> now,
+                      std::span<const entt::entity> changed)
+{
+	const auto unchanged = [changed](entt::entity entity) { return !std::ranges::binary_search(changed, entity); };
+	auto first = before.begin();
+	auto second = now.begin();
+	while (true)
+	{
+		first = std::find_if(first, before.end(), unchanged);
+		second = std::find_if(second, now.end(), unchanged);
+		if (first == before.end() || second == now.end())
+		{
+			return first == before.end() && second == now.end();
+		}
+		if (*first != *second)
+		{
+			return false;
+		}
+		++first;
+		++second;
+	}
+}
+
 std::pair<glm::vec2, glm::vec2> GroundBounds(std::span<const footprint_paint::Triangle> triangles,
                                              const footprint_paint::Placement& placement)
 {

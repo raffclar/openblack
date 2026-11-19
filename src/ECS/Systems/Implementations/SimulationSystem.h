@@ -12,6 +12,7 @@
 #include <chrono>
 #include <utility>
 
+#include "Debug/ThreadCpuTime.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -26,7 +27,7 @@ class SimulationSystem final: public SimulationSystemInterface
 public:
 	[[nodiscard]] const sim_run::Settings& GetSettings() const override { return _settings; }
 	void SetSettings(const sim_run::Settings& settings) override { _settings = settings; }
-	void TurnPlayed(float ms) override { _timings.AddTurn(ms); }
+	void TurnPlayed(float ms, std::optional<float> cpuMs) override { _timings.AddTurn(ms, cpuMs); }
 	void SetTurnEndWatcher(TurnEndWatcher watcher) override { _turnEnd = std::move(watcher); }
 	void TurnEnded(uint32_t turn) override
 	{
@@ -34,8 +35,11 @@ public:
 		{
 			// The run record gives the time of its own step apart from the time of the turn
 			const auto start = std::chrono::steady_clock::now();
+			const auto cpuStart = debug::ThreadCpuMilliseconds();
 			_turnEnd(turn);
-			_timings.AddRecord(std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count());
+			const auto cpuEnd = debug::ThreadCpuMilliseconds();
+			_timings.AddRecord(std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count(),
+			                   debug::CpuMillisecondsBetween(cpuStart, cpuEnd));
 		}
 	}
 	void FrameEnded(float ms) override { _timings.AddFrame(ms); }
