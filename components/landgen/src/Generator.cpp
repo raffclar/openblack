@@ -17,6 +17,7 @@
 #include <optional>
 #include <utility>
 
+#include "landgen/LakeShore.h"
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
 
@@ -512,6 +513,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	Grid<Biome> biomes(side, Biome::Sea);
 	const auto beachSeed = StageSeed(seed, 31);
 	const auto blightSeed = StageSeed(seed, 32);
+	Grid<float> beachWidths(side, 0.0f);
 	for (int x = 0; x < side; ++x)
 	{
 		for (int z = 0; z < side; ++z)
@@ -519,6 +521,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 			const float u = static_cast<float>(x) / last;
 			const float v = static_cast<float>(z) / last;
 			const auto index = heights.Index(x, z);
+			beachWidths.values[index] =
+			    std::max(4.0f + (8.0f * noise::SmoothStep(-0.4f, 0.4f, noise::Fractal(beachSeed, u * 10.0f, v * 10.0f, 2))),
+			             shoreWidths.values[index]);
 			biomes.At(x, z) = biomes::Classify(
 			    {
 			        .altitude = static_cast<float>(altitudes.values[index]),
@@ -526,13 +531,22 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 			        .moisture = moisture.values[index],
 			        .slope = slopes.values[index],
 			        .seaDistance = seaDistance.values[index],
-			        .beachWidth = std::max(
-			            4.0f + (8.0f * noise::SmoothStep(-0.4f, 0.4f, noise::Fractal(beachSeed, u * 10.0f, v * 10.0f, 2))),
-			            shoreWidths.values[index]),
+			        .beachWidth = beachWidths.values[index],
 			        .wet = basins.wet.values[index] != 0 || lakeLevels.values[index] >= 0.0f,
 			        .blight = noise::Fractal(blightSeed, u * 6.0f, v * 6.0f, 3),
 			    },
 			    settings.thresholds);
+		}
+	}
+	// The lakes above the sea get the same beaches as the sea, with the heights from the level of each lake
+	const lakeshore::Shores lakeShores =
+	    lakeshore::Find({.altitudes = drawn, .slopes = slopes, .temperature = temperature, .beachWidths = beachWidths},
+	                    land.highLakes, settings.thresholds);
+	for (size_t i = 0; i < biomes.values.size(); ++i)
+	{
+		if (lakeShores.shore.values[i] == lakeshore::Shore::Beach && lakeShores.distance.values[i] < seaDistance.values[i])
+		{
+			biomes.values[i] = Biome::Beach;
 		}
 	}
 	land.biomes = biomes::Smooth(biomes, 2);
@@ -557,6 +571,24 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		land.countries.push_back(countries::MakeCountry(countries::RecipeOf(static_cast<Biome>(biome)), land.materials));
 	}
 	land.countries.push_back(countries::MakeCountry(countries::PathRecipe(), land.materials));
+	// The edges of the lakes above the sea: wet sand on the bed and the shore, and sand on the beaches that the lakes are
+	// nearer than the sea. These countries have one surface at all altitudes, because a lake can be at any height.
+	for (const auto& recipe : countries::LakeShoreRecipes())
+	{
+		land.countries.push_back(countries::MakeCountry(recipe, land.materials));
+	}
+	for (size_t i = 0; i < land.cells.values.size(); ++i)
+	{
+		auto& properties = land.cells.values[i].properties;
+		if (lakeShores.shore.values[i] == lakeshore::Shore::Bed)
+		{
+			properties.country = k_LakeBedCountry;
+		}
+		else if (land.biomes.values[i] == Biome::Beach && lakeShores.distance.values[i] < seaDistance.values[i])
+		{
+			properties.country = k_LakeBeachCountry;
+		}
+	}
 	clock.Done("cells and countries");
 
 	// Nothing grows in the water, on the rivers or on their banks

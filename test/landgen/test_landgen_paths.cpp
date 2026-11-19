@@ -273,10 +273,10 @@ TEST(LandgenPaths, AGeneratedLandHasPathsDrawnBetweenItsTownsAndTheTemple)
 	const auto drawn =
 	    std::ranges::count_if(land.cells.values, [](const auto& cell) { return cell.properties.country == k_PathCountry; });
 	EXPECT_GT(drawn, 50);
-	// The country of the paths comes after the biomes, then the two countries of the dark ground of the cursed places when
-	// the land has a place
-	ASSERT_EQ(land.countries.size(),
-	          static_cast<size_t>(k_PathCountry) + 1 + (land.cursedPatches.empty() ? 0 : countries::CursedRecipes().size()));
+	// The country of the paths comes after the biomes, then the two countries of the edges of the lakes, then the two
+	// countries of the dark ground of the cursed places when the land has a place
+	ASSERT_EQ(land.countries.size(), static_cast<size_t>(k_PathCountry) + 1 + countries::LakeShoreRecipes().size() +
+	                                     (land.cursedPatches.empty() ? 0 : countries::CursedRecipes().size()));
 	for (const auto& cell : land.cells.values)
 	{
 		if (cell.properties.country == k_PathCountry)

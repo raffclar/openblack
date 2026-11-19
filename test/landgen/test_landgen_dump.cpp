@@ -19,6 +19,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <landgen/Generator.h>
@@ -81,6 +82,19 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 	WriteList(out, land.heightUnits.values, [](uint16_t units) { return static_cast<int>(units); });
 	out << ",\"water\":";
 	WriteList(out, land.cells.values, [](const lnd::LNDCell& cell) { return static_cast<int>(cell.properties.hasWater); });
+	// The cells with the sound of still fresh water, and the level of the high lake at each corner (-1 where none is)
+	out << ",\"fresh\":";
+	WriteList(out, land.cells.values, [](const lnd::LNDCell& cell) { return ((cell.flags >> 2) & 0xF) == 2 ? 1 : 0; });
+	std::vector<float> lakeLevels(land.cells.values.size(), -1.0f);
+	for (const auto& lake : land.highLakes)
+	{
+		for (const auto corner : lake.corners)
+		{
+			lakeLevels[corner] = lake.level;
+		}
+	}
+	out << ",\"lake_level\":";
+	WriteList(out, lakeLevels, [](float level) { return level; });
 	out << ",\"country\":";
 	WriteList(out, land.cells.values, [](const lnd::LNDCell& cell) { return static_cast<int>(cell.properties.country); });
 	out << ",\"countries\":[";

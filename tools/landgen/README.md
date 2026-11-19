@@ -107,3 +107,12 @@ the medians over the towns of five buildings or more (the lands of the story als
 buildings). A dump town has 8 values: x, z, the tribe, 1 for a neutral town, the buildings, the houses, the fields and
 the people. `towns_per_km2` is free for a generated land: its towns keep the vanilla count and the vanilla distances,
 so a land larger than the lands of the story has fewer towns for each km2.
+
+The lake shore numbers (generated lands only, from the `fresh` and `lake_level` lists of a newer dump): the lake water
+is the still fresh water at the sea level and the water of the high lakes at their own levels. `lake_edge_sand_pct`
+is the share of the dry cells next to the lake water whose main ground is sand (also wet sand), and
+`sea_edge_sand_pct` the same next to the sea. `lake_sand_width_median_m` and `lake_sand_width_p90_m` are the median
+and the 90th percentile of the distance from the water of the sand within 200 m that the lakes are nearer to than the
+sea (`sea_...` for the sea). `lake_strip_height_m` is the median height over the level of the nearest lake of the
+ground 10 to 40 m from the lake water, as `shore_strip_height_m` measures the sea shore. The lands of the story have
+no targets for these numbers: compare the lake numbers with the sea numbers of the same land.

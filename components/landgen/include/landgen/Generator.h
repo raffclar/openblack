@@ -61,6 +61,9 @@ enum class Sound : uint8_t
 constexpr uint8_t k_OpenWaterFlag = 0x02;
 /// The country of the corners under a path, after the countries of the biomes
 constexpr uint8_t k_PathCountry = static_cast<uint8_t>(biomes::k_BiomeCount);
+/// The countries of the edges of the lakes above the sea, after the country of the paths: the bed, then the beach
+constexpr uint8_t k_LakeBedCountry = k_PathCountry + 1;
+constexpr uint8_t k_LakeBeachCountry = k_PathCountry + 2;
 
 /// The ambient sound of the land of a biome
 [[nodiscard]] Sound SoundOf(biomes::Biome biome);
