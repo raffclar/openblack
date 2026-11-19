@@ -1921,6 +1921,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_instance_upload graphics/test_instance_upload.cpp
 )
+openblack_setup_and_add_test(
+  test_list_places graphics/test_list_places.cpp
+)
 openblack_setup_and_add_test(test_hand_reports test_hand_reports.cpp)
 openblack_setup_and_add_test(test_magic_pile_height test_magic_pile_height.cpp)
 openblack_setup_and_add_test(test_build_version test_build_version.cpp)

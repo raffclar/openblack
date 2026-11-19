@@ -35,6 +35,8 @@ struct Run
 constexpr uint32_t k_JoinGap = 64;
 /// More runs than this go up as one run, from the first changed instance to the last
 constexpr size_t k_MaxRuns = 16;
+/// The test compares the instances in blocks of this many first. It compares each instance only in a block that changed.
+constexpr uint32_t k_TestBlock = 8;
 
 /// The runs of instances that differ between now and the last upload. When the counts differ, or nothing was uploaded,
 /// all of now is one run.
@@ -47,19 +49,27 @@ template <typename Instance>
 		return count == 0 ? std::vector<Run> {} : std::vector<Run> {{.first = 0, .count = count}};
 	}
 	std::vector<Run> runs;
-	for (uint32_t i = 0; i < count; ++i)
+	for (uint32_t block = 0; block < count; block += k_TestBlock)
 	{
-		if (same_bits::SameBits(now[i], uploaded[i]))
+		const auto end = std::min(count, block + k_TestBlock);
+		if (same_bits::SameRun(now.subspan(block, end - block), uploaded.subspan(block, end - block)))
 		{
 			continue;
 		}
-		if (!runs.empty() && i - (runs.back().first + runs.back().count) < k_JoinGap)
+		for (uint32_t i = block; i < end; ++i)
 		{
-			runs.back().count = i + 1 - runs.back().first;
-		}
-		else
-		{
-			runs.push_back({.first = i, .count = 1});
+			if (same_bits::SameBits(now[i], uploaded[i]))
+			{
+				continue;
+			}
+			if (!runs.empty() && i - (runs.back().first + runs.back().count) < k_JoinGap)
+			{
+				runs.back().count = i + 1 - runs.back().first;
+			}
+			else
+			{
+				runs.push_back({.first = i, .count = 1});
+			}
 		}
 	}
 	if (runs.size() > k_MaxRuns)
