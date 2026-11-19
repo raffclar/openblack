@@ -11,11 +11,16 @@ include(
 # platform.
 set(OPENBLACK_WEB_FLAGS "-DEMSCRIPTEN=1")
 # All threads share one memory, so all code must compile with thread support. Exceptions use the WebAssembly exception
-# instructions.
-string(APPEND OPENBLACK_WEB_FLAGS " -pthread -fwasm-exceptions")
+# instructions of the standard (try_table), not the old instructions (try), which browsers mark as deprecated. Chrome
+# 137, Firefox 131 and Safari 18.4 or later have them. The setting must be the same in each compile and in the link.
+string(APPEND OPENBLACK_WEB_FLAGS
+       " -pthread -fwasm-exceptions -sWASM_LEGACY_EXCEPTIONS=0"
+)
 # The web build has threads, which bx turns off for every Emscripten build. bgfx needs them for its locks.
 string(APPEND OPENBLACK_WEB_FLAGS " -DBX_CONFIG_SUPPORTS_THREADING=1")
 
 string(APPEND CMAKE_C_FLAGS_INIT " ${OPENBLACK_WEB_FLAGS}")
 string(APPEND CMAKE_CXX_FLAGS_INIT " ${OPENBLACK_WEB_FLAGS}")
-string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " -pthread -fwasm-exceptions")
+string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT
+       " -pthread -fwasm-exceptions -sWASM_LEGACY_EXCEPTIONS=0"
+)

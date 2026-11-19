@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <typeinfo>
@@ -213,4 +214,86 @@ TEST(CrashReport, FindsTheCrashDialogsSwitch)
 	std::array<char*, 2> without {const_cast<char*>("openblack"), const_cast<char*>("--crash")};
 	EXPECT_TRUE(openblack::crash_handler::WantsCrashDialogs(withSwitch));
 	EXPECT_FALSE(openblack::crash_handler::WantsCrashDialogs(without));
+}
+
+TEST(CrashReport, ReadsAWebFrameOfChromeWithAName)
+{
+	const auto frame = crash_report::ParseWebStackLine(
+	    "    at openblack.wasm.main (http://127.0.0.1:8080/openblack.wasm:wasm-function[26]:0x9f3)");
+	ASSERT_TRUE(frame.has_value());
+	EXPECT_EQ(frame->address, 0x9f3);
+	EXPECT_EQ(frame->module, "openblack.wasm");
+	EXPECT_EQ(frame->symbol, "main");
+}
+
+TEST(CrashReport, ReadsAWebFrameWithANameThatHasSpacesAndBrackets)
+{
+	const auto frame = crash_report::ParseWebStackLine(
+	    "    at openblack::Game::Run(int, char**) (https://example.test/play/openblack.wasm:wasm-function[1234]:0x1a2B3c)");
+	ASSERT_TRUE(frame.has_value());
+	EXPECT_EQ(frame->address, 0x1a2b3c);
+	EXPECT_EQ(frame->module, "openblack.wasm");
+	EXPECT_EQ(frame->symbol, "openblack::Game::Run(int, char**)");
+}
+
+TEST(CrashReport, ReadsAWebFrameWithNoNameAsTheFunctionIndex)
+{
+	const auto chrome = crash_report::ParseWebStackLine("    at http://127.0.0.1:8080/openblack.wasm:wasm-function[77]:0x10");
+	ASSERT_TRUE(chrome.has_value());
+	EXPECT_EQ(chrome->address, 0x10);
+	EXPECT_EQ(chrome->module, "openblack.wasm");
+	EXPECT_EQ(chrome->symbol, "wasm-function[77]");
+
+	const auto chromeModule = crash_report::ParseWebStackLine("    at wasm://wasm/0a1b2c3d:wasm-function[5]:0x20");
+	ASSERT_TRUE(chromeModule.has_value());
+	EXPECT_EQ(chromeModule->address, 0x20);
+	EXPECT_EQ(chromeModule->module, "0a1b2c3d");
+	EXPECT_EQ(chromeModule->symbol, "wasm-function[5]");
+}
+
+TEST(CrashReport, ReadsAWebFrameOfFirefox)
+{
+	const auto named = crash_report::ParseWebStackLine("$main@http://127.0.0.1:8080/openblack.wasm:wasm-function[26]:0x9f3");
+	ASSERT_TRUE(named.has_value());
+	EXPECT_EQ(named->address, 0x9f3);
+	EXPECT_EQ(named->module, "openblack.wasm");
+	EXPECT_EQ(named->symbol, "main");
+
+	const auto unnamed = crash_report::ParseWebStackLine("@http://127.0.0.1:8080/openblack.wasm:wasm-function[3]:0xff");
+	ASSERT_TRUE(unnamed.has_value());
+	EXPECT_EQ(unnamed->address, 0xff);
+	EXPECT_EQ(unnamed->symbol, "wasm-function[3]");
+}
+
+TEST(CrashReport, GivesNoWebFrameForJavaScriptOrBrokenLines)
+{
+	EXPECT_FALSE(crash_report::ParseWebStackLine("Error").has_value());
+	EXPECT_FALSE(crash_report::ParseWebStackLine("    at getCallstack (http://127.0.0.1:8080/openblack.js:10:5)").has_value());
+	EXPECT_FALSE(crash_report::ParseWebStackLine("    at x (http://h/openblack.wasm:wasm-function[]:0x10)").has_value());
+	EXPECT_FALSE(crash_report::ParseWebStackLine("    at x (http://h/openblack.wasm:wasm-function[2]:0x)").has_value());
+	EXPECT_FALSE(crash_report::ParseWebStackLine("    at x (http://h/openblack.wasm:wasm-function[2]").has_value());
+}
+
+TEST(CrashReport, ReadsTheWebFramesOfAWholeStackFromTheTop)
+{
+	const std::string text = "Error\r\n"
+	                         "    at getCallstack (http://h/openblack.js:10:5)\r\n"
+	                         "    at http://h/openblack.wasm:wasm-function[9]:0x100\r\n"
+	                         "    at http://h/openblack.wasm:wasm-function[8]:0x200\n"
+	                         "    at invokeEntryPoint (http://h/openblack.js:20:7)\n"
+	                         "    at http://h/openblack.wasm:wasm-function[7]:0x300";
+	std::array<StackFrame, 2> frames {};
+	ASSERT_EQ(crash_report::ParseWebStack(text, frames), 2);
+	EXPECT_EQ(frames[0].address, 0x100);
+	EXPECT_EQ(frames[0].symbol, "wasm-function[9]");
+	EXPECT_EQ(frames[1].address, 0x200);
+
+	std::array<StackFrame, 8> all {};
+	ASSERT_EQ(crash_report::ParseWebStack(text, all), 3);
+	EXPECT_EQ(all[2].address, 0x300);
+
+	std::string report;
+	crash_report::FormatReport({.kind = CrashKind::UncaughtException}, std::span(all).first(3), report);
+	EXPECT_NE(report.find("  #0  0x0000000000000100 openblack.wasm!wasm-function[9]\n"), std::string::npos) << report;
+	EXPECT_EQ(report.find("(not available)"), std::string::npos) << report;
 }

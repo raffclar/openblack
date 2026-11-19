@@ -99,6 +99,17 @@ struct CrashInfo
 /// games crashing in the same second don't overwrite each other); the report adds ".txt" and the minidump ".dmp"
 [[nodiscard]] std::string ReportBaseName(const std::tm& time, uint32_t processId);
 
+/// Reads one frame of WebAssembly code from a line of the stack text that a web browser gives. Chrome writes
+/// "at name (url:wasm-function[12]:0x3f4)", and Firefox writes "name@url:wasm-function[12]:0x3f4". The address is the
+/// byte offset in the WebAssembly file. The debug file of the build changes this offset to a function and a source
+/// line. The module is the last part of the url. The symbol is the name of the function, or "wasm-function[12]" when
+/// the file has no names. The frame points into the line. A line of JavaScript code gives no frame.
+[[nodiscard]] std::optional<StackFrame> ParseWebStackLine(std::string_view line);
+
+/// Reads the frames of WebAssembly code from the whole stack text of a web browser into out, from the top of the
+/// stack. It gives the number of frames that it wrote. The frames point into the text.
+[[nodiscard]] size_t ParseWebStack(std::string_view text, std::span<StackFrame> out);
+
 /// The frames left after dropping the crash handler's own frames from the top of a stack it captured itself
 [[nodiscard]] std::span<const StackFrame> DropHandlerFrames(std::span<const StackFrame> frames);
 

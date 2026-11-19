@@ -9,6 +9,7 @@
 
 #include "CrashReport.h"
 
+#include <charconv>
 #include <cstdlib>
 
 #include <algorithm>
@@ -147,6 +148,103 @@ std::string ReportBaseName(const std::tm& time, uint32_t processId)
 {
 	return fmt::format("openblack-crash-{:04}{:02}{:02}-{:02}{:02}{:02}-{}", time.tm_year + 1900, time.tm_mon + 1, time.tm_mday,
 	                   time.tm_hour, time.tm_min, time.tm_sec, processId);
+}
+
+std::optional<StackFrame> ParseWebStackLine(std::string_view line)
+{
+	constexpr std::string_view k_FunctionMark = "wasm-function[";
+	constexpr std::string_view k_OffsetMark = "]:0x";
+	const auto mark = line.find(k_FunctionMark);
+	if (mark == std::string_view::npos)
+	{
+		return std::nullopt;
+	}
+	const auto close = line.find(k_OffsetMark, mark);
+	if (close == std::string_view::npos)
+	{
+		return std::nullopt;
+	}
+	const auto indexText = line.substr(mark + k_FunctionMark.size(), close - mark - k_FunctionMark.size());
+	if (indexText.empty() || !std::ranges::all_of(indexText, [](char c) { return c >= '0' && c <= '9'; }))
+	{
+		return std::nullopt;
+	}
+	const auto offsetStart = close + k_OffsetMark.size();
+	const auto offsetEnd = line.find_first_not_of("0123456789abcdefABCDEF", offsetStart);
+	const auto offsetText = line.substr(offsetStart, offsetEnd == std::string_view::npos ? offsetEnd : offsetEnd - offsetStart);
+	uint64_t offset = 0;
+	const auto [end, error] = std::from_chars(offsetText.data(), offsetText.data() + offsetText.size(), offset, 16);
+	if (error != std::errc {} || offsetText.empty())
+	{
+		return std::nullopt;
+	}
+
+	StackFrame frame {.address = offset};
+	frame.symbol = line.substr(mark, close + 1 - mark);
+
+	// The url of the file comes before the mark, after the name of the function
+	auto head = line.substr(0, mark);
+	if (head.ends_with(':'))
+	{
+		head.remove_suffix(1);
+	}
+	const auto urlStart = head.find_last_of("(@ ");
+	const auto url = urlStart == std::string_view::npos ? head : head.substr(urlStart + 1);
+	const auto lastSlash = url.find_last_of('/');
+	frame.module = lastSlash == std::string_view::npos ? url : url.substr(lastSlash + 1);
+
+	// Chrome puts the name between "at " and " (", and Firefox puts it before "@"
+	std::string_view name;
+	auto text = head.substr(0, urlStart == std::string_view::npos ? 0 : urlStart);
+	const auto first = text.find_first_not_of(" \t");
+	text = first == std::string_view::npos ? std::string_view {} : text.substr(first);
+	if (urlStart != std::string_view::npos && head[urlStart] == '(' && text.starts_with("at "))
+	{
+		name = text.substr(3);
+		while (name.ends_with(' '))
+		{
+			name.remove_suffix(1);
+		}
+	}
+	else if (urlStart != std::string_view::npos && head[urlStart] == '@')
+	{
+		name = text;
+	}
+	// Some browsers put the name of the module before the name of the function, for example "openblack.wasm.main"
+	constexpr std::string_view k_ModuleMark = ".wasm.";
+	if (const auto moduleMark = name.find(k_ModuleMark); moduleMark != std::string_view::npos)
+	{
+		name = name.substr(moduleMark + k_ModuleMark.size());
+	}
+	if (name.starts_with('$'))
+	{
+		name.remove_prefix(1);
+	}
+	if (!name.empty())
+	{
+		frame.symbol = name;
+	}
+	return frame;
+}
+
+size_t ParseWebStack(std::string_view text, std::span<StackFrame> out)
+{
+	size_t count = 0;
+	while (!text.empty() && count < out.size())
+	{
+		const auto end = text.find('\n');
+		auto line = text.substr(0, end);
+		text = end == std::string_view::npos ? std::string_view {} : text.substr(end + 1);
+		if (line.ends_with('\r'))
+		{
+			line.remove_suffix(1);
+		}
+		if (auto frame = ParseWebStackLine(line))
+		{
+			out[count++] = *frame;
+		}
+	}
+	return count;
 }
 
 std::span<const StackFrame> DropHandlerFrames(std::span<const StackFrame> frames)
