@@ -33,7 +33,7 @@ HEIGHT_TARGETS = ("height_max_m", "height_median_m")
 # ("LGX-1: allow lands over 4 km2", deviation 233). The area and the totals that grow with the area do not bind a
 # generated land. The numbers for each km2 and the shape numbers stay the targets. The land stays one island.
 AREA_TOTALS = ("land_km2", "coast_km", "trees", "rocks", "rock_clumps", "big_forests", "towns_per_km2", "pillars",
-               "lone_pillars", "magic_mushrooms", "fairy_rings")
+               "lone_pillars", "magic_mushrooms", "fairy_rings", "mushroom_clumps", "toadstools")
 # The towns of a generated land keep the vanilla count and the vanilla distances between towns, so the towns for each km2
 # of a land larger than the lands of the story are fewer: towns_per_km2 is free for a generated land.
 # A town with fewer buildings than this is a hamlet of the story (1 to 3 buildings). The size of a town (houses, people,
@@ -53,9 +53,15 @@ PILLAR_FEATURES = set(range(23, 27)) | set(range(29, 45))
 # The fat pillars, the pillars and the second and third pillars (23 to 26 and 29 to 40) are the lone pillars. The spiky
 # pillars (41 to 44) are the sea stacks.
 LONE_PILLAR_FEATURES = set(range(23, 27)) | set(range(29, 41))
-# A generated feature of kind 4 is a loose object. Loose object 18 is the magic mushroom.
+# A generated feature of kind 4 is a loose object. Loose objects 17, 18 and 19 are the Champi mushroom, the magic
+# mushroom and the toadstool.
 MOBILE_FEATURE = 4
+CHAMPI_OBJECT = 17
 MAGIC_MUSHROOM_OBJECT = 18
+TOADSTOOL_OBJECT = 19
+SMALL_MUSHROOMS = {CHAMPI_OBJECT: "Champi", MAGIC_MUSHROOM_OBJECT: "MagicMushroom", TOADSTOOL_OBJECT: "Toadstool"}
+# The mushrooms and toadstools of one clump are 25 m or less apart
+CLUMP_LINK = 25.0
 # The magic mushrooms of one group are 10 m or less apart. The groups of lone pillars are 50 m or less apart.
 MUSHROOM_LINK = 10.0
 PILLAR_GROUP_LINK = 50.0
@@ -289,6 +295,47 @@ def formation_measures(mushrooms, lone_pillars, area_km2):
     return out
 
 
+def clump_measures(things, area_km2):
+    """The numbers of the clumps of small mushrooms. things is a list of (x, z, kind) in metres, with the kind Champi,
+    MagicMushroom or Toadstool. A clump is a group of things that are CLUMP_LINK metres or less apart and that is not a
+    fairy ring."""
+    per_km2 = (lambda n: n / area_km2) if area_km2 else (lambda n: float("nan"))
+    toadstools = sum(1 for t in things if t[2] == "Toadstool")
+    out = {"toadstools": toadstools, "toadstools_per_km2": per_km2(toadstools), "mushroom_clumps": 0,
+           "mushroom_clumps_per_km2": 0.0}
+    if not things:
+        return out
+    pts = np.asarray([(t[0], t[1]) for t in things], dtype=float)
+    group = groups_of(pts, CLUMP_LINK)
+    sizes = []
+    for g in set(group.tolist()):
+        member = pts[group == g]
+        if not is_ring(member):
+            sizes.append(len(member))
+    out["mushroom_clumps"] = len(sizes)
+    out["mushroom_clumps_per_km2"] = per_km2(len(sizes))
+    if sizes:
+        out["mushroom_clump_size_max"] = max(sizes)
+    return out
+
+
+def ground_measures(heights, points, prefix):
+    """The ground under a list of things, (x, z) in metres: the median, the 90th percentile and the highest height in
+    metres of the corner nearest each thing, and the 90th percentile of the slope there in degrees. heights is in metres
+    as the game draws the land."""
+    if len(points) == 0:
+        return {}
+    slope = slope_degrees(heights)
+    side_x, side_z = heights.shape
+    pts = np.asarray([(p[0], p[1]) for p in points], dtype=float)
+    i = np.clip(np.rint(pts[:, 0] / CELL).astype(int), 0, side_x - 1)
+    j = np.clip(np.rint(pts[:, 1] / CELL).astype(int), 0, side_z - 1)
+    h = heights[i, j]
+    s = slope[i, j]
+    return {f"{prefix}_height_median_m": percentile(h, 50), f"{prefix}_height_p90_m": percentile(h, 90),
+            f"{prefix}_height_max_m": float(h.max()), f"{prefix}_slope_p90_deg": percentile(s, 90)}
+
+
 def big_forest_measures(points, trees, area_km2):
     """The numbers of the big forests. points is a list of (x, z) in metres, trees the list of the trees."""
     n = len(points)
@@ -380,6 +427,10 @@ def measure_land(land):
     out.update(rock_measures(land["rocks"], area, land.get("rock_poses"), [(t[0], t[1]) for t in trees]))
     out["pillars"] = len(land.get("pillars", []))
     out.update(formation_measures(land.get("mushrooms", []), land.get("lone_pillars", []), area))
+    out.update(clump_measures(land.get("small_mushrooms", []), area))
+    out.update(ground_measures(land["heights"], [(t[0], t[1]) for t in trees if t[2] != BURNT], "tree"))
+    out.update(ground_measures(land["heights"], land["rocks"], "rock"))
+    out.update(ground_measures(land["heights"], land.get("cursed_things", []), "cursed"))
     for key in ("forests", "footpaths", "mists", "towns"):
         out[key] = land[key]
     out.update(town_measures(land.get("town_list", []), land["heights"], land["land"], area))
@@ -426,7 +477,7 @@ def load_dump(path):
     sand = sand_mask(country, alt, tables, surface_of, SURFACE_SAND)
     wet = sand_mask(country, alt, tables, surface_of, SURFACE_WET)
     trees, rocks, rock_poses, pillars, big_forests, cursed = [], [], [], [], [], []
-    mushrooms, lone_pillars = [], []
+    mushrooms, lone_pillars, small_mushrooms = [], [], []
     for feature in d["features"]:
         kind, typ, x, z, _angle, _size, _max, forest = feature[:8]
         # Newer dumps add the two angles of the lean and the height above the land of each static
@@ -447,6 +498,8 @@ def load_dump(path):
         elif kind == MOBILE_FEATURE:
             if typ == MAGIC_MUSHROOM_OBJECT:
                 mushrooms.append((x, z))
+            if typ in SMALL_MUSHROOMS:
+                small_mushrooms.append((x, z, SMALL_MUSHROOMS[typ]))
         elif typ != DEAD_TREE_STATIC:
             rocks.append((x, z))
             rock_poses.append((max(abs(x_angle), abs(z_angle)), altitude))
@@ -456,7 +509,7 @@ def load_dump(path):
     return {"name": os.path.splitext(os.path.basename(path))[0],
             "heights": units * HEIGHT_UNIT, "curve": None if plain else curve, "land": land,
             "sand": sand, "trees": trees, "rocks": rocks, "rock_poses": rock_poses, "pillars": pillars,
-            "lone_pillars": lone_pillars, "mushrooms": mushrooms,
+            "lone_pillars": lone_pillars, "mushrooms": mushrooms, "small_mushrooms": small_mushrooms,
             "big_forests": big_forests, "forests": len(d["forests"]),
             "footpaths": d["footpaths"],
             "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark),
@@ -508,6 +561,8 @@ def vanilla_models():
         lone_pillars = [o["pos"] for o in objs if o["cls"] == "feature" and "pilar" in o["kind"].lower() and
                         "spikey" not in o["kind"].lower()]
         mushrooms = [o["pos"] for o in objs if o["cls"] == "mobile" and o["kind"] == "MagicMushroom"]
+        small_mushrooms = [(o["pos"][0], o["pos"][1], o["kind"]) for o in objs if o["cls"] == "mobile" and
+                           o["kind"] in SMALL_MUSHROOMS.values()]
         mists = sum(1 for o in objs if o["cls"] == "mist")
         dark = [o["pos"] for o in objs if o["cls"] == "mist" and is_dark(o.get("colour", 0xFFFFFFFF))]
         cursed = [o["pos"] for o in objs if (o["cls"] == "tree" and o["kind"] == BURNT) or (
@@ -519,7 +574,7 @@ def vanilla_models():
         town_list = vanilla_towns(f"{analyze.BLACK}/{script}", objs, towns)
         yield {"town_list": town_list, "name": name, "heights": land.H, "land": land.land, "sand": sand, "trees": trees, "rocks": rocks,
                "rock_poses": rock_poses, "pillars": pillars,
-               "lone_pillars": lone_pillars, "mushrooms": mushrooms,
+               "lone_pillars": lone_pillars, "mushrooms": mushrooms, "small_mushrooms": small_mushrooms,
                "big_forests": big_forests,
                "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns),
                "cursed_things": cursed, "dark_mists": len(dark), "wet": wet, "mist_list": mist_list}

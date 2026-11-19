@@ -152,6 +152,27 @@ class FormationMeasures(unittest.TestCase):
         self.assertAlmostEqual(out["lone_pillar_group_gap_median_m"], 300.0)
         self.assertEqual(measure.formation_measures([], [], 4.0)["lone_pillar_groups_per_km2"], 0.0)
 
+    def test_the_clumps_of_mushrooms_and_the_toadstools(self):
+        ring = [(100 + 7 * np.cos(a), 200 + 7 * np.sin(a), "MagicMushroom")
+                for a in np.linspace(0, 2 * np.pi, 10, endpoint=False)]
+        clump = [(900 + 0.5 * k, 900, "MagicMushroom") for k in range(4)] + [(905, 900, "Toadstool")]
+        pair = [(1500, 100, "Toadstool"), (1501, 100, "Toadstool")]
+        out = measure.clump_measures(ring + clump + pair, 2.0)
+        self.assertEqual(out["mushroom_clumps"], 2)
+        self.assertAlmostEqual(out["mushroom_clumps_per_km2"], 1.0)
+        self.assertEqual(out["mushroom_clump_size_max"], 5)
+        self.assertEqual(out["toadstools"], 3)
+        self.assertEqual(measure.clump_measures([], 2.0)["mushroom_clumps"], 0)
+
+    def test_the_ground_under_the_things(self):
+        # A ramp that rises 1 m for each 10 m along x
+        heights = np.tile(np.arange(50, dtype=float)[:, None], (1, 50))
+        out = measure.ground_measures(heights, [(100, 100), (200, 100), (300, 250)], "tree")
+        self.assertAlmostEqual(out["tree_height_median_m"], 20.0)
+        self.assertAlmostEqual(out["tree_height_max_m"], 30.0)
+        self.assertAlmostEqual(out["tree_slope_p90_deg"], np.degrees(np.arctan(0.1)), places=3)
+        self.assertEqual(measure.ground_measures(heights, [], "rock"), {})
+
 
 class SwampMeasures(unittest.TestCase):
     def test_the_wet_ground_and_its_trees(self):

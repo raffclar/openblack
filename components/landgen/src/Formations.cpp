@@ -158,11 +158,139 @@ constexpr float k_PillarGap = 217.0f;
 /// story is 2 m from it.
 constexpr float k_PillarTreeClearing = 2.0f;
 
+/// A mushroom or a toadstool of a clump of the story, at a distance in metres from the middle of the clump. The turn
+/// and the scale are the values of the land script.
+struct StampMushroom
+{
+	float dx;
+	float dz;
+	uint8_t type;
+	float angle;
+	float scale;
+};
+
+constexpr auto k_Toadstool = k_ToadstoolObject;
+
+// The clumps of mushrooms and toadstools of the first land of the story, apart from its fairy ring
+constexpr std::array<StampMushroom, 5> k_FirstLandFive {{
+    {1.31f, -2.14f, k_Mushroom, 5.421f, 0.577f},
+    {0.42f, 1.05f, k_Mushroom, 0.523f, 1.508f},
+    {-0.14f, -0.02f, k_Mushroom, 1.220f, 1.095f},
+    {-3.51f, 2.09f, k_Mushroom, 0.870f, 1.095f},
+    {1.90f, -0.99f, k_Mushroom, 5.326f, 1.508f},
+}};
+constexpr std::array<StampMushroom, 1> k_FirstLandOne {{{0.0f, 0.0f, k_Mushroom, 0.0f, 1.0f}}};
+constexpr std::array<StampMushroom, 2> k_FirstLandToadstools {{
+    {-0.22f, -0.27f, k_Toadstool, 3.177f, 0.165f},
+    {0.21f, 0.27f, k_Toadstool, 3.815f, 0.165f},
+}};
+constexpr std::array<StampMushroom, 2> k_FirstLandToadstoolPair {{
+    {0.51f, -0.22f, k_Toadstool, 0.574f, 0.372f},
+    {-0.51f, 0.22f, k_Toadstool, 1.690f, 0.163f},
+}};
+// Twenty small magic mushrooms in three tight groups, and five toadstools, round a field of rocks
+constexpr std::array<StampMushroom, 25> k_FirstLandTwentyFive {{
+    {-14.96f, 9.62f, k_Mushroom, 4.486f, 0.460f},  {-14.46f, 8.84f, k_Mushroom, 0.014f, 0.488f},
+    {-14.63f, 9.60f, k_Mushroom, 6.190f, 0.697f},  {-13.91f, 8.40f, k_Mushroom, 2.615f, 0.662f},
+    {-14.11f, 9.91f, k_Mushroom, 5.170f, 0.685f},  {-9.45f, 3.46f, k_Toadstool, 1.922f, 0.386f},
+    {-10.27f, 4.14f, k_Toadstool, 3.111f, 0.261f}, {-13.22f, 9.05f, k_Mushroom, 5.960f, 0.458f},
+    {-13.57f, 10.07f, k_Mushroom, 2.940f, 0.662f}, {4.98f, 8.20f, k_Mushroom, 5.092f, 0.712f},
+    {4.25f, 7.09f, k_Mushroom, 5.585f, 0.652f},    {3.78f, 7.54f, k_Mushroom, 3.552f, 0.648f},
+    {4.37f, 7.70f, k_Mushroom, 3.661f, 0.680f},    {4.62f, 6.92f, k_Mushroom, 1.245f, 0.351f},
+    {3.99f, 8.50f, k_Mushroom, 0.398f, 0.356f},    {4.57f, 8.38f, k_Mushroom, 1.419f, 0.374f},
+    {7.69f, -18.10f, k_Mushroom, 2.680f, 0.381f},  {6.60f, -17.91f, k_Mushroom, 3.101f, 0.564f},
+    {7.37f, -17.49f, k_Mushroom, 5.875f, 0.600f},  {6.72f, -18.41f, k_Mushroom, 1.567f, 0.586f},
+    {6.27f, -17.08f, k_Mushroom, 0.888f, 0.358f},  {6.19f, -18.37f, k_Mushroom, 4.664f, 0.351f},
+    {14.00f, -0.67f, k_Toadstool, 0.638f, 0.266f}, {16.29f, -10.48f, k_Toadstool, 3.095f, 0.268f},
+    {16.77f, -9.02f, k_Toadstool, 2.884f, 0.388f},
+}};
+// The clumps of the third land of the story, apart from its fairy ring
+constexpr std::array<StampMushroom, 2> k_ThirdLandChampiPair {{
+    {-0.27f, -0.63f, k_Champi, 0.349f, 0.939f},
+    {0.27f, 0.63f, k_Champi, 0.0f, 1.179f},
+}};
+constexpr std::array<StampMushroom, 3> k_ThirdLandToadstools {{
+    {0.50f, 1.32f, k_Toadstool, -0.628f, 0.518f},
+    {-1.67f, 0.29f, k_Toadstool, -0.628f, 0.279f},
+    {1.18f, -1.62f, k_Toadstool, 0.0f, 1.0f},
+}};
+constexpr std::array<StampMushroom, 7> k_ThirdLandSeven {{
+    {1.39f, -0.53f, k_Mushroom, 0.143f, 1.074f},
+    {2.45f, -0.57f, k_Mushroom, 5.585f, 1.054f},
+    {3.24f, -0.89f, k_Mushroom, 4.526f, 1.952f},
+    {-1.86f, -5.66f, k_Mushroom, 0.488f, 2.019f},
+    {-2.66f, 1.99f, k_Mushroom, 5.460f, 2.615f},
+    {-1.68f, 3.57f, k_Mushroom, 3.213f, 1.993f},
+    {-0.91f, 2.08f, k_Mushroom, 0.312f, 1.483f},
+}};
+constexpr std::array<StampMushroom, 5> k_ThirdLandChampiFive {{
+    {-1.13f, -0.20f, k_Champi, 0.0f, 1.761f},
+    {1.55f, -3.13f, k_Champi, 0.0f, 2.401f},
+    {-7.33f, 9.77f, k_Champi, 0.0f, 1.697f},
+    {3.79f, -1.68f, k_Champi, 0.0f, 1.817f},
+    {3.14f, -4.75f, k_Champi, 0.0f, 1.595f},
+}};
+constexpr std::array<StampMushroom, 3> k_ThirdLandLargeToadstools {{
+    {-10.88f, -1.86f, k_Toadstool, 0.0f, 1.039f},
+    {4.15f, -1.21f, k_Toadstool, 0.0f, 0.842f},
+    {6.72f, 3.07f, k_Toadstool, 0.0f, 0.912f},
+}};
+// The clumps of the fifth land of the story
+constexpr std::array<StampMushroom, 12> k_FifthLandTwelve {{
+    {1.16f, -1.52f, k_Mushroom, 4.322f, 0.648f},
+    {3.63f, 3.47f, k_Mushroom, 3.947f, 0.458f},
+    {2.25f, 2.61f, k_Mushroom, 4.859f, 0.465f},
+    {1.19f, 3.41f, k_Mushroom, 3.217f, 0.476f},
+    {0.88f, 2.88f, k_Mushroom, 0.476f, 0.490f},
+    {-0.82f, -1.00f, k_Mushroom, 5.407f, 0.966f},
+    {0.58f, -2.56f, k_Mushroom, 4.091f, 0.986f},
+    {-0.08f, -1.97f, k_Mushroom, 5.602f, 0.967f},
+    {-1.18f, -1.84f, k_Mushroom, 5.171f, 0.998f},
+    {-1.26f, -2.51f, k_Mushroom, 5.664f, 1.019f},
+    {-2.90f, -0.58f, k_Mushroom, 0.512f, 0.990f},
+    {-3.47f, -0.35f, k_Mushroom, 5.763f, 0.998f},
+}};
+constexpr std::array<StampMushroom, 5> k_FifthLandFive {{
+    {-2.77f, 3.16f, k_Mushroom, -1.534f, 0.398f},
+    {-2.58f, 2.47f, k_Mushroom, -1.674f, 0.578f},
+    {-2.95f, 2.78f, k_Mushroom, 0.418f, 0.759f},
+    {3.66f, -4.18f, k_Mushroom, 0.418f, 0.398f},
+    {4.62f, -4.24f, k_Mushroom, 0.0f, 0.458f},
+}};
+constexpr std::array<std::span<const StampMushroom>, 12> k_Clumps {{
+    k_FirstLandFive,
+    k_FirstLandOne,
+    k_FirstLandToadstools,
+    k_FirstLandToadstoolPair,
+    k_FirstLandTwentyFive,
+    k_ThirdLandChampiPair,
+    k_ThirdLandToadstools,
+    k_ThirdLandSeven,
+    k_ThirdLandChampiFive,
+    k_ThirdLandLargeToadstools,
+    k_FifthLandTwelve,
+    k_FifthLandFive,
+}};
+
+/// The ground of the clumps of the story. The middle of each clump is between the heights in metres and this far from
+/// the sea, and each of its things is on ground of this slope or less (40 degrees, as the rise for each metre).
+constexpr float k_ClumpSteepest = 0.8391f;
+constexpr float k_ClumpLowest = 2.0f;
+constexpr float k_ClumpHighest = 117.2f;
+constexpr float k_ClumpNearestSea = 22.0f;
+/// The nearest two clumps of the story are 60 m apart. A clump and a fairy ring or a group of pillars are 47 m or more
+/// apart.
+constexpr float k_ClumpGap = 60.0f;
+constexpr float k_ClumpFormationGap = 47.0f;
+/// A mushroom of the story is 0.4 m or more from the nearest tree or rock. A clump removes the trees and rocks nearer
+/// than this to its things.
+constexpr float k_ClumpClearing = 0.4f;
+
 /// A big forest keeps a circle of this radius clear at scale 1, in metres
 constexpr float k_BigForestClearing = 33.0f;
 
-/// A land of the story: its fairy rings and its groups of lone pillars for each square kilometre, its ring, and the
-/// first of its groups of k_PillarGroups and their number
+/// A land of the story: its fairy rings, its groups of lone pillars and its clumps for each square kilometre, its ring,
+/// the first of its groups of k_PillarGroups and their number, and the first of its clumps of k_Clumps and their number
 struct StoryLand
 {
 	float rings;
@@ -170,20 +298,25 @@ struct StoryLand
 	Ring ring;
 	size_t firstGroup;
 	size_t groups;
+	float clumpDensity;
+	size_t firstClump;
+	size_t clumps;
 };
 
-// The five lands of the story, then the lands of two, three and four gods. The first land has one ring and six groups
-// of pillars on 2.06 km2, the second land two groups on 2.65 km2, and the third land one ring and one group on 1.71 km2.
-// A land with no ring of its own takes the ring of the first land when the settings give it rings.
+// The five lands of the story, then the lands of two, three and four gods. The first land has one ring, six groups of
+// pillars and five clumps on 2.06 km2, the second land two groups on 2.65 km2, the third land one ring, one group and
+// five clumps on 1.71 km2, and the fifth land two clumps on 3.90 km2. A land with no ring of its own takes the ring of
+// the first land when the settings give it rings. A land with no clumps of its own takes the clumps of the first land
+// when the settings give it clumps.
 constexpr std::array<StoryLand, 8> k_StoryLands {{
-    {1.0f / 2.0616f, 6.0f / 2.0616f, Ring::First, 0, 6},
-    {0.0f, 2.0f / 2.6517f, Ring::First, 6, 2},
-    {1.0f / 1.7108f, 1.0f / 1.7108f, Ring::Third, 8, 1},
-    {0.0f, 0.0f, Ring::First, 0, 0},
-    {0.0f, 0.0f, Ring::First, 0, 0},
-    {0.0f, 0.0f, Ring::First, 0, 0},
-    {0.0f, 0.0f, Ring::First, 0, 0},
-    {0.0f, 0.0f, Ring::First, 0, 0},
+    {1.0f / 2.0616f, 6.0f / 2.0616f, Ring::First, 0, 6, 5.0f / 2.0616f, 0, 5},
+    {0.0f, 2.0f / 2.6517f, Ring::First, 6, 2, 0.0f, 0, 5},
+    {1.0f / 1.7108f, 1.0f / 1.7108f, Ring::Third, 8, 1, 5.0f / 1.7108f, 5, 5},
+    {0.0f, 0.0f, Ring::First, 0, 0, 0.0f, 0, 5},
+    {0.0f, 0.0f, Ring::First, 0, 0, 2.0f / 3.8989f, 10, 2},
+    {0.0f, 0.0f, Ring::First, 0, 0, 0.0f, 0, 5},
+    {0.0f, 0.0f, Ring::First, 0, 0, 0.0f, 0, 5},
+    {0.0f, 0.0f, Ring::First, 0, 0, 0.0f, 0, 5},
 }};
 
 /// The random numbers of a point of a grid, from the seed of the stage and the place of the point only
@@ -265,10 +398,8 @@ std::vector<Candidate> CandidatesOf(int side, float spacing, uint64_t stageSeed)
 class Site
 {
 public:
-	Site(const features::Ground& ground, const HeightCurve& curve, std::span<const Feature> placed,
-	     std::span<const Circle> avoid)
+	Site(const features::Ground& ground, std::span<const Feature> placed, std::span<const Circle> avoid)
 	    : _ground(ground)
-	    , _curve(curve)
 	{
 		_keepOut.assign(avoid.begin(), avoid.end());
 		for (const auto& feature : placed)
@@ -296,22 +427,8 @@ public:
 		{
 			return std::nullopt;
 		}
-		// The height and the slope are in the metres of the land that the game draws: above the knee of the curve, the
-		// altitudes of the generator stand for more metres
-		auto spot = features::SpotAt(_ground, cx, cz);
-		const int i = std::clamp(static_cast<int>(cx + 0.5f), 0, side - 1);
-		const int j = std::clamp(static_cast<int>(cz + 0.5f), 0, side - 1);
-		spot.height = MetresAt(i, j);
-		const int left = std::max(i - 1, 0);
-		const int right = std::min(i + 1, side - 1);
-		const int down = std::max(j - 1, 0);
-		const int up = std::min(j + 1, side - 1);
-		const float dx =
-		    (MetresAt(right, j) - MetresAt(left, j)) / (static_cast<float>(std::max(right - left, 1)) * k_MetresPerCorner);
-		const float dz =
-		    (MetresAt(i, up) - MetresAt(i, down)) / (static_cast<float>(std::max(up - down, 1)) * k_MetresPerCorner);
-		spot.slope = std::sqrt((dx * dx) + (dz * dz));
-		return spot;
+		// The height and the slope are in the metres of the land that the game draws: the curve of the ground gives them
+		return features::SpotAt(_ground, cx, cz);
 	}
 
 	/// Whether a circle in metres is clear of the circles to keep out of
@@ -323,10 +440,7 @@ public:
 	}
 
 private:
-	[[nodiscard]] float MetresAt(int i, int j) const { return _curve.MetresOf(_ground.heights.At(i, j)); }
-
 	const features::Ground& _ground;
-	const HeightCurve& _curve;
 	std::vector<Circle> _keepOut;
 };
 
@@ -425,13 +539,55 @@ bool PlacePillars(const Site& site, const PillarGroup& group, float x, float z, 
 	}
 	return true;
 }
+/// Tries to put a clump of mushrooms with its middle at a place in metres. Gives true when the clump fits.
+bool PlaceClump(const Site& site, std::span<const StampMushroom> clump, float x, float z, float cosine, float sine,
+                std::vector<Feature>& placed)
+{
+	const auto middle = site.SpotAt(x, z, RingIn);
+	if (!middle || middle->height < k_ClumpLowest || middle->height > k_ClumpHighest || middle->sea < k_ClumpNearestSea)
+	{
+		return false;
+	}
+	std::vector<std::pair<float, float>> places;
+	for (const auto& thing : clump)
+	{
+		const float tx = x + (thing.dx * cosine) - (thing.dz * sine);
+		const float tz = z + (thing.dx * sine) + (thing.dz * cosine);
+		const auto spot = site.SpotAt(tx, tz, RingIn);
+		if (!spot || spot->slope > k_ClumpSteepest || !site.Clear(tx, tz, k_ClumpClearing))
+		{
+			return false;
+		}
+		places.emplace_back(tx, tz);
+	}
+	std::erase_if(placed, [&places](const Feature& feature) {
+		return feature.kind != Kind::BigForest && std::ranges::any_of(places, [&feature](const std::pair<float, float>& place) {
+			       return Distance(feature.x, feature.z, place.first, place.second) < k_ClumpClearing;
+		       });
+	});
+	for (size_t k = 0; k < places.size(); ++k)
+	{
+		const auto& thing = clump[k];
+		placed.push_back({.kind = Kind::Mobile,
+		                  .type = thing.type,
+		                  .x = places[k].first,
+		                  .z = places[k].second,
+		                  .angle = thing.angle,
+		                  .size = thing.scale,
+		                  .maxSize = thing.scale});
+	}
+	return true;
+}
 } // namespace
 
 Density formations::DensityOf(float unit)
 {
 	const auto count = static_cast<float>(k_StoryLands.size());
 	const auto index = static_cast<uint8_t>(std::clamp(std::floor(unit * count), 0.0f, count - 1.0f));
-	return {.land = index, .rings = k_StoryLands[index].rings, .pillarGroups = k_StoryLands[index].pillarGroups};
+	return {.land = index,
+	        .rings = k_StoryLands[index].rings,
+	        .pillarGroups = k_StoryLands[index].pillarGroups,
+	        .clumps = k_StoryLands[index].clumpDensity};
 }
 
 uint32_t formations::CountFor(float perKm2, float km2, float unit)
@@ -447,8 +603,8 @@ float formations::LandKm2(const features::Ground& ground)
 	return static_cast<float>(land) * k_MetresPerCorner * k_MetresPerCorner / k_SquareMetresPerKm2;
 }
 
-Result formations::Place(const features::Ground& ground, const HeightCurve& curve, std::vector<Feature>& placed,
-                         std::span<const Circle> avoid, uint64_t seed, const Settings& settings)
+Result formations::Place(const features::Ground& ground, std::vector<Feature>& placed, std::span<const Circle> avoid,
+                         uint64_t seed, const Settings& settings)
 {
 	Result result;
 	const float km2 = LandKm2(ground);
@@ -459,7 +615,9 @@ Result formations::Place(const features::Ground& ground, const HeightCurve& curv
 	// A land of the story with no lone pillars has no groups to copy
 	const auto groups =
 	    story.groups == 0 ? 0u : CountFor(settings.pillarGroupsPerKm2.value_or(story.pillarGroups), km2, counts.NextUnit());
-	const Site site(ground, curve, placed, avoid);
+	// The count of the clumps comes after the other counts, so that the rings and the pillars of a seed stay the same
+	const auto clumps = CountFor(settings.clumpsPerKm2.value_or(story.clumpDensity), km2, counts.NextUnit());
+	const Site site(ground, placed, avoid);
 	const int side = ground.biomes.side;
 
 	const auto ringSeed = StageSeed(seed, 91);
@@ -501,6 +659,27 @@ Result formations::Place(const features::Ground& ground, const HeightCurve& curv
 			continue;
 		}
 		result.pillarGroups.push_back({.x = x, .z = z, .stamp = static_cast<uint8_t>(stamp)});
+	}
+
+	const auto clumpSeed = StageSeed(seed, 120);
+	for (const auto& candidate : CandidatesOf(side, settings.spacing, clumpSeed))
+	{
+		if (result.clumps.size() >= clumps)
+		{
+			break;
+		}
+		auto random = RandomAt(clumpSeed, candidate.i, candidate.j);
+		random.Next();
+		const float x = (static_cast<float>(candidate.i) + random.NextUnit()) * settings.spacing * k_MetresPerCorner;
+		const float z = (static_cast<float>(candidate.j) + random.NextUnit()) * settings.spacing * k_MetresPerCorner;
+		const auto stamp = story.firstClump + random.NextBelow(static_cast<uint32_t>(story.clumps));
+		const auto [cosine, sine] = Direction(random);
+		if (NearAny(result.rings, x, z, k_ClumpFormationGap) || NearAny(result.pillarGroups, x, z, k_ClumpFormationGap) ||
+		    NearAny(result.clumps, x, z, k_ClumpGap) || !PlaceClump(site, k_Clumps[stamp], x, z, cosine, sine, placed))
+		{
+			continue;
+		}
+		result.clumps.push_back({.x = x, .z = z, .stamp = static_cast<uint8_t>(stamp)});
 	}
 	return result;
 }

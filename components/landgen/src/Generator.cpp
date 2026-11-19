@@ -468,7 +468,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                 .townX = land.start.x,
 	                                 .townZ = land.start.z,
 	                                 .rivers = &rivers,
-	                                 .towns = towns},
+	                                 .towns = towns,
+	                                 .curve = land.heightCurve},
 	                                seed, settings.features);
 	clock.Done("features");
 	auto cursed = cursed::Place({.biomes = land.biomes,
@@ -479,7 +480,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                             .townX = land.start.x,
 	                             .townZ = land.start.z,
 	                             .rivers = &rivers,
-	                             .towns = towns},
+	                             .towns = towns,
+	                             .curve = land.heightCurve},
 	                            land.features, seed, settings.cursed);
 	land.cursedPatches = std::move(cursed.patches);
 	land.mists = std::move(cursed.mists);
@@ -492,7 +494,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                .townX = land.start.x,
 	                                .townZ = land.start.z,
 	                                .rivers = &rivers,
-	                                .towns = towns},
+	                                .towns = towns,
+	                                .curve = land.heightCurve},
 	                               seed, settings.swamps);
 	land.swampSheets = std::move(swampMist.sheets);
 	land.mists.insert(land.mists.end(), swampMist.mists.begin(), swampMist.mists.end());
@@ -511,8 +514,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                     .townX = land.start.x,
 	                                     .townZ = land.start.z,
 	                                     .rivers = &rivers,
-	                                     .towns = towns},
-	                                    land.heightCurve, land.features, cursedCircles, seed, settings.formations);
+	                                     .towns = towns,
+	                                     .curve = land.heightCurve},
+	                                    land.features, cursedCircles, seed, settings.formations);
 	clock.Done("fairy rings and pillars");
 
 	// The temple and the town on the start area, the neutral towns, then the forests nearest the town of the start first

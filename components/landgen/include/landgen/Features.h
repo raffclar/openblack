@@ -16,6 +16,7 @@
 
 #include "landgen/Biomes.h"
 #include "landgen/Grid.h"
+#include "landgen/HeightCurve.h"
 
 /// The things on the land: trees, bushes and rocks of the kinds that the lands of the story use
 namespace openblack::landgen::features
@@ -161,6 +162,9 @@ struct Ground
 	/// The middles of the other towns of the land, in corners. The distance to the town is the distance to the nearest
 	/// town.
 	std::span<const Clearing> towns {};
+	/// The curve that gives the metres of each altitude, as the game draws the land. The heights and the slopes of the
+	/// rules are in these metres, so that no rule of the lands of the story applies to a high mountain as to a hill.
+	HeightCurve curve {};
 };
 
 /// The ground at one point, in the units of the lands of the story

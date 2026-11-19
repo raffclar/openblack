@@ -359,6 +359,21 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_mushroom_clumps",
+	    .name = "The clumps of mushrooms and toadstools of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Fly to "
+	                   "the small clumps of magic mushrooms, Champi mushrooms and toadstools on the grass and the heather.",
+	    .expected = "This land is like the third land of the story. Each clump is a copy of a clump of that land: seven "
+	                "magic mushrooms, two or five Champi mushrooms, or three toadstools. The clumps are 60 metres or more "
+	                "apart. On the land of seed 64, a clump has twenty small magic mushrooms and five toadstools. No tree "
+	                "grows on the high sides of the mountains.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
+	});
+
+	all.push_back({
 	    .id = "editor.animals",
 	    .name = "Every animal of the palette",
 	    .facet = Facet::Editor,

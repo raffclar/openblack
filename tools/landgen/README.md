@@ -48,7 +48,7 @@ distances in metres. A generated land can be higher than the lands of the story 
 deviation 233): its dump has the height of each corner in units of 0.67 m ("units") and the metres of each altitude
 ("metres"). For such a land, the height targets and the thresholds of `above_100m_pct` and `peaks_60m` are the vanilla
 altitudes put through the curve. The slope, cliff, flat and summit-count numbers keep the vanilla ranges. The area and
-the totals that grow with the area (`land_km2`, `coast_km`, `trees`, `rocks`, `rock_clumps`, `big_forests`) show as
+the totals that grow with the area (`land_km2`, `coast_km`, `trees`, `rocks`, `rock_clumps`, `big_forests`, `mushroom_clumps`, `toadstools`) show as
 `free` for a generated land: the user allowed lands over 4 km2 on 2026-11-17. A group of trees links trees that are 15 m or less apart. A clump of rocks links rocks that are
 20 m or less apart. The rock numbers also give the clumps on each square kilometre, the median distance to the
 nearest rock and to the nearest tree, the lean of the rocks (the larger of the two horizontal angles, in degrees) and
@@ -57,7 +57,11 @@ their height above the land (median and 90th percentile). `pillars` counts the p
 (older dumps have the first 8). The big forest numbers count the big forests, the median distance to the nearest big forest and
 the median distance from a big forest to the nearest tree. A dump mist has 6 values: x, z, the height above the land, the
 colour (0xAARRGGBB), the size and the edge shrink. The generator dump has no footpaths yet, so this number is zero for
-it.
+it. The ground numbers of the trees, the rocks and the cursed places (`tree_height_median_m`,
+`_p90_m`, `_max_m` and `_slope_p90_deg`, the same for `rock_` and `cursed_`) are the height in metres and the slope
+of the corner nearest each thing, as the game draws the land. The burnt trees count as cursed things, not as trees.
+A clump of mushrooms links the magic mushrooms, Champi mushrooms and toadstools that are 25 m or less apart, and is
+not a fairy ring: `mushroom_clumps(_per_km2)`, `mushroom_clump_size_max` and `toadstools(_per_km2)`.
 
 The formation numbers: `magic_mushrooms` counts the magic mushrooms (loose object 18; a dump feature of kind 4 is a
 loose object) and `fairy_rings` the groups of six or more magic mushrooms 10 m or less apart that make a ring round their

@@ -53,7 +53,8 @@ struct FlatLand
 		}
 	}
 
-	[[nodiscard]] features::Ground Ground() const
+	/// The ground on a curve of heights. Without a curve, the curve of the lands of the story.
+	[[nodiscard]] features::Ground Ground(HeightCurve curve = {}) const
 	{
 		return {.biomes = biomes,
 		        .heights = heights,
@@ -61,7 +62,8 @@ struct FlatLand
 		        .keepClear = keepClear,
 		        .clearings = {},
 		        .townX = 20.0f,
-		        .townZ = 20.0f};
+		        .townZ = 20.0f,
+		        .curve = curve};
 	}
 };
 
@@ -70,20 +72,22 @@ float Distance(float ax, float az, float bx, float bz)
 	return std::hypot(ax - bx, az - bz);
 }
 
-/// The curve of the lands of the story: one height unit for each altitude unit
-const HeightCurve k_Linear {};
-
-/// Many rings of a land of the story and no pillars, or many groups of its pillars and no rings
+/// Many rings of a land of the story and no pillars or clumps, many groups of its pillars and nothing more, or many of its
+/// clumps and nothing more
 constexpr formations::Settings ManyRings(uint8_t land)
 {
-	return {.land = land, .ringsPerKm2 = 1.0f, .pillarGroupsPerKm2 = 0.0f};
+	return {.land = land, .ringsPerKm2 = 1.0f, .pillarGroupsPerKm2 = 0.0f, .clumpsPerKm2 = 0.0f};
 }
 constexpr formations::Settings ManyPillars(uint8_t land)
 {
-	return {.land = land, .ringsPerKm2 = 0.0f, .pillarGroupsPerKm2 = 1.5f};
+	return {.land = land, .ringsPerKm2 = 0.0f, .pillarGroupsPerKm2 = 1.5f, .clumpsPerKm2 = 0.0f};
 }
-/// The first land of the story: both a ring and groups of pillars
-constexpr formations::Settings k_Both {.land = 0, .ringsPerKm2 = 1.0f, .pillarGroupsPerKm2 = 1.5f};
+constexpr formations::Settings ManyClumps(uint8_t land)
+{
+	return {.land = land, .ringsPerKm2 = 0.0f, .pillarGroupsPerKm2 = 0.0f, .clumpsPerKm2 = 3.0f};
+}
+/// The first land of the story: a ring, groups of pillars and clumps
+constexpr formations::Settings k_Both {.land = 0, .ringsPerKm2 = 1.0f, .pillarGroupsPerKm2 = 1.5f, .clumpsPerKm2 = 3.0f};
 constexpr formations::Settings k_ManyRings = ManyRings(0);
 constexpr formations::Settings k_ManyPillars = ManyPillars(0);
 
@@ -128,6 +132,83 @@ TEST(LandgenFormations, EachDensityIsTheDensityOfALandOfTheStory)
 		EXPECT_EQ(formations::DensityOf(unit).rings, 0.0f);
 		EXPECT_EQ(formations::DensityOf(unit).pillarGroups, 0.0f);
 	}
+	// Five clumps on the first and the third lands, and two clumps on the 3.90 km2 of the fifth land
+	EXPECT_NEAR(formations::DensityOf(0.0f).clumps, 2.425f, 0.001f);
+	EXPECT_NEAR(formations::DensityOf(0.3f).clumps, 2.923f, 0.001f);
+	EXPECT_NEAR(formations::DensityOf(0.5f).clumps, 0.513f, 0.001f);
+	for (const float unit : {0.2f, 0.4f, 0.7f, 0.8f, 0.99f})
+	{
+		EXPECT_EQ(formations::DensityOf(unit).clumps, 0.0f);
+	}
+}
+
+TEST(LandgenFormations, EachClumpIsACopyOfAClumpOfItsLandOfTheStory)
+{
+	const FlatLand land;
+	// The first land has the clumps 0 to 4, the third land 5 to 9 and the fifth land 10 and 11
+	struct Story
+	{
+		uint8_t land;
+		uint8_t first;
+		uint8_t last;
+	};
+	for (const auto story : {Story {0, 0, 4}, Story {2, 5, 9}, Story {4, 10, 11}})
+	{
+		size_t toadstools = 0;
+		for (uint64_t seed = 1; seed <= 4; ++seed)
+		{
+			std::vector<Feature> placed;
+			const auto result = formations::Place(land.Ground(), placed, {}, seed, ManyClumps(story.land));
+			ASSERT_FALSE(result.clumps.empty()) << seed;
+			EXPECT_TRUE(result.rings.empty());
+			EXPECT_TRUE(result.pillarGroups.empty());
+			for (const auto& clump : result.clumps)
+			{
+				EXPECT_GE(clump.stamp, story.first);
+				EXPECT_LE(clump.stamp, story.last);
+				// The widest clump of the story has its things 21 m or less from its middle
+				const auto things = Near(placed, clump.x, clump.z, 22.0f);
+				ASSERT_FALSE(things.empty());
+				for (const auto* thing : things)
+				{
+					EXPECT_EQ(thing->kind, Kind::Mobile);
+					EXPECT_GE(thing->type, formations::k_ChampiObject);
+					EXPECT_LE(thing->type, formations::k_ToadstoolObject);
+					toadstools += thing->type == formations::k_ToadstoolObject ? 1 : 0;
+				}
+			}
+		}
+		// The fifth land has magic mushrooms only, and the other two lands have toadstools too
+		if (story.land == 4)
+		{
+			EXPECT_EQ(toadstools, 0u);
+		}
+		else
+		{
+			EXPECT_GT(toadstools, 0u);
+		}
+	}
+}
+
+TEST(LandgenFormations, ClumpsKeepTheirGapAndALandWithNoClumpsHasNone)
+{
+	const FlatLand land;
+	for (uint64_t seed = 1; seed <= 3; ++seed)
+	{
+		std::vector<Feature> placed;
+		const auto clumps = formations::Place(land.Ground(), placed, {}, seed, ManyClumps(0)).clumps;
+		ASSERT_GT(clumps.size(), 5u);
+		for (size_t a = 0; a < clumps.size(); ++a)
+		{
+			for (size_t b = a + 1; b < clumps.size(); ++b)
+			{
+				EXPECT_GE(Distance(clumps[a].x, clumps[a].z, clumps[b].x, clumps[b].z), 60.0f);
+			}
+		}
+		std::vector<Feature> none;
+		const formations::Settings second {.land = 1, .ringsPerKm2 = 0.0f, .pillarGroupsPerKm2 = 0.0f};
+		EXPECT_TRUE(formations::Place(land.Ground(), none, {}, seed, second).clumps.empty());
+	}
 }
 
 TEST(LandgenFormations, TheAreaCountsTheCornersOutOfTheSea)
@@ -144,7 +225,7 @@ TEST(LandgenFormations, EachRingIsACopyOfTheRingOfItsLandOfTheStory)
 		std::vector<Feature> placed;
 		// The odd seeds take the first land, and the even seeds the third land
 		const uint8_t story = seed % 2 == 1 ? 0 : 2;
-		const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, seed, ManyRings(story));
+		const auto result = formations::Place(land.Ground(), placed, {}, seed, ManyRings(story));
 		ASSERT_FALSE(result.rings.empty()) << seed;
 		EXPECT_TRUE(result.pillarGroups.empty());
 		for (const auto& ring : result.rings)
@@ -198,7 +279,7 @@ TEST(LandgenFormations, RingsAndGroupsOfPillarsKeepTheirGaps)
 	for (uint64_t seed = 1; seed <= 6; ++seed)
 	{
 		std::vector<Feature> placed;
-		const auto rings = formations::Place(land.Ground(), k_Linear, placed, {}, seed, k_ManyRings).rings;
+		const auto rings = formations::Place(land.Ground(), placed, {}, seed, k_ManyRings).rings;
 		for (size_t a = 0; a < rings.size(); ++a)
 		{
 			for (size_t b = a + 1; b < rings.size(); ++b)
@@ -207,7 +288,7 @@ TEST(LandgenFormations, RingsAndGroupsOfPillarsKeepTheirGaps)
 			}
 		}
 		placed.clear();
-		const auto groups = formations::Place(land.Ground(), k_Linear, placed, {}, seed, k_ManyPillars).pillarGroups;
+		const auto groups = formations::Place(land.Ground(), placed, {}, seed, k_ManyPillars).pillarGroups;
 		EXPECT_GE(groups.size(), 3u);
 		for (size_t a = 0; a < groups.size(); ++a)
 		{
@@ -226,7 +307,7 @@ TEST(LandgenFormations, TheLonePillarsAreThePillarsOfLimestoneOfTheStory)
 	{
 		std::vector<Feature> placed;
 		const auto story = static_cast<uint8_t>(seed % 3);
-		const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, seed, ManyPillars(story));
+		const auto result = formations::Place(land.Ground(), placed, {}, seed, ManyPillars(story));
 		// The first land has groups 0 to 5, the second land groups 6 and 7, and the third land group 8
 		for (const auto& group : result.pillarGroups)
 		{
@@ -269,7 +350,7 @@ TEST(LandgenFormations, ARingRemovesTheTreesAndRocksUnderIt)
 			                  .maxSize = 1.0f});
 		}
 	}
-	const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, 5, k_ManyRings);
+	const auto result = formations::Place(land.Ground(), placed, {}, 5, k_ManyRings);
 	ASSERT_FALSE(result.rings.empty());
 	for (const auto& ring : result.rings)
 	{
@@ -288,7 +369,7 @@ TEST(LandgenFormations, ALandOfTheStoryWithNoPillarsGivesNoPillars)
 	std::vector<Feature> placed;
 	for (uint8_t story = 3; story < 8; ++story)
 	{
-		const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, 4, ManyPillars(story));
+		const auto result = formations::Place(land.Ground(), placed, {}, 4, ManyPillars(story));
 		EXPECT_TRUE(result.pillarGroups.empty());
 	}
 	EXPECT_TRUE(placed.empty());
@@ -306,7 +387,7 @@ TEST(LandgenFormations, NoRingOnSteepGround)
 		}
 	}
 	std::vector<Feature> placed;
-	const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, 2, k_Both);
+	const auto result = formations::Place(land.Ground(), placed, {}, 2, k_Both);
 	EXPECT_TRUE(result.rings.empty());
 	EXPECT_FALSE(result.pillarGroups.empty());
 }
@@ -317,13 +398,13 @@ TEST(LandgenFormations, NothingOnHighGroundOrInTheCirclesToAvoid)
 	// 150 m is higher than every ring and lone pillar of the story
 	std::ranges::replace(land.heights.values, 60.0f, 224.0f);
 	std::vector<Feature> placed;
-	auto result = formations::Place(land.Ground(), k_Linear, placed, {}, 3, k_Both);
+	auto result = formations::Place(land.Ground(), placed, {}, 3, k_Both);
 	EXPECT_TRUE(result.rings.empty());
 	EXPECT_TRUE(result.pillarGroups.empty());
 
 	const FlatLand flat;
 	const std::vector<formations::Circle> avoid {{.x = 1000.0f, .z = 1000.0f, .radius = 2000.0f}};
-	result = formations::Place(flat.Ground(), k_Linear, placed, avoid, 3, k_Both);
+	result = formations::Place(flat.Ground(), placed, avoid, 3, k_Both);
 	EXPECT_TRUE(result.rings.empty());
 	EXPECT_TRUE(result.pillarGroups.empty());
 	EXPECT_TRUE(placed.empty());
@@ -337,9 +418,10 @@ TEST(LandgenFormations, TheHeightsAreTheMetresOfTheCurve)
 	// they are more than 150 m: higher than every ring and lone pillar of the story.
 	const auto high = HeightCurve::WithTop(30.0f, 1250.0f);
 	ASSERT_GT(high.MetresOf(60.0f), 150.0f);
-	const auto result = formations::Place(land.Ground(), high, placed, {}, 3, k_Both);
+	const auto result = formations::Place(land.Ground(high), placed, {}, 3, k_Both);
 	EXPECT_TRUE(result.rings.empty());
 	EXPECT_TRUE(result.pillarGroups.empty());
+	EXPECT_TRUE(result.clumps.empty());
 }
 
 TEST(LandgenFormations, TheSameSeedGivesTheSameFormations)
@@ -347,8 +429,8 @@ TEST(LandgenFormations, TheSameSeedGivesTheSameFormations)
 	const FlatLand land;
 	std::vector<Feature> first;
 	std::vector<Feature> second;
-	const auto a = formations::Place(land.Ground(), k_Linear, first, {}, 11, k_Both);
-	const auto b = formations::Place(land.Ground(), k_Linear, second, {}, 11, k_Both);
+	const auto a = formations::Place(land.Ground(), first, {}, 11, k_Both);
+	const auto b = formations::Place(land.Ground(), second, {}, 11, k_Both);
 	ASSERT_EQ(first.size(), second.size());
 	ASSERT_EQ(a.rings.size(), b.rings.size());
 	ASSERT_EQ(a.pillarGroups.size(), b.pillarGroups.size());
