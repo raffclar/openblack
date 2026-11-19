@@ -275,7 +275,6 @@ void ScorchCursedGround(GeneratedLand& land, const Grid<uint8_t>& keepClear, uin
 	{
 		land.countries.push_back(countries::MakeCountry(recipe, land.materials));
 	}
-	constexpr float k_MetresPerCorner = 10.0f;
 	const int side = land.cells.side;
 	for (const auto& patch : land.cursedPatches)
 	{
