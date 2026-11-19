@@ -98,6 +98,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
@@ -137,6 +138,7 @@
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/LocalPlayer.h"
+#include "Input/MouseWheel.h"
 #include "LHScriptX/Script.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
@@ -831,11 +833,15 @@ bool Game::Initialize() noexcept
 	Locator::landSystem::value().SetNewGameStart(_newGameStart);
 	// A game that joins a game server gets the humans of its land from the network session
 	Locator::landSystem::value().SetHumansFromSession(_networkJoin.has_value());
-	// A deterministic run: every random number from the seed, the date pinned
+	// A deterministic run: every random number from the seed, the date and the mouse that the view report gives pinned
 	if (_seed.has_value())
 	{
 		Locator::rng::value().SetRunSeed(*_seed);
 		Locator::time::value().RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
+		if (Locator::ownReportSystem::has_value())
+		{
+			Locator::ownReportSystem::value().PinSystemMouse(platform_mouse::k_DeterministicRunMouse);
+		}
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Seeded run: seed {}, date pinned", *_seed);
 	}
 	// A simulation run: each frame takes a fixed game time from the first, so that the run plays the same turns at any

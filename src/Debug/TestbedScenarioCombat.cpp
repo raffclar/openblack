@@ -1808,4 +1808,37 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 		                .atLeast = 1.0}},
 		});
 	}
+
+	{
+		// A leash order forces the fight, so a creature with almost no life starts it too. Only the creature's own plan
+		// tests the life.
+		auto weak = red(PlayerNames::PLAYER_ONE, 0.6f, 0.0f);
+		weak.needs.life = 0.05f;
+		// The duel starts at about turn 134. If the order starts no fight, the duel starts later, at about turn 195.
+		constexpr uint32_t k_AfterTieTurns = 30;
+		constexpr uint32_t k_FightStartsByTurn = 160;
+		all.push_back({
+		    .id = "combat.leash_fight_with_little_life",
+		    .name = "A leash order starts a fight for a creature with almost no life",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger of the player has almost no life. It gets the aggression leash, and the leash "
+		                   "is tied to the blue tiger.",
+		    .expected = "The two tigers start their fight and go to their duel. The red tiger has less fight health than "
+		                "the blue tiger.",
+		    .framing = ringside,
+		    .creatures = {weak, blue(PlayerNames::PLAYER_TWO, 0.6f, 0.0f)},
+		    .commands = {Leash(0, LeashType::Evil, 1.0f), Fight(Kind::TieLeashToCreature, 0, 1, 2.0f)},
+		    .checks = {{.label = "the red tiger fights its duel",
+		                .quantity = checks::Quantity::CreatureInDuel,
+		                .afterTurns = k_AfterTieTurns,
+		                .byTurn = k_FightStartsByTurn,
+		                .atLeast = 1.0},
+		               {.label = "the blue tiger fights its duel",
+		                .quantity = checks::Quantity::CreatureInDuel,
+		                .index = 1,
+		                .afterTurns = k_AfterTieTurns,
+		                .byTurn = k_FightStartsByTurn,
+		                .atLeast = 1.0}},
+		});
+	}
 }

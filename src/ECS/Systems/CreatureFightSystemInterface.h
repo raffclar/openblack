@@ -82,9 +82,9 @@ public:
 	/// creature is made to fight: nothing it wants stops the fight. The second creature obeys the first until the fight
 	/// is over.
 	virtual StartResult StartFight(entt::entity creature, entt::entity opponent) = 0;
-	/// A fight that a script orders. It starts as StartFight starts it, but the first creature does not have to be
-	/// healthy: a hurt creature starts the fight with less fight health.
-	virtual StartResult StartScriptFight(entt::entity creature, entt::entity opponent)
+	/// A fight that a script or a leash order forces. It starts as StartFight starts it, but the first creature does
+	/// not have to be healthy: a hurt creature starts the fight with less fight health.
+	virtual StartResult StartForcedFight(entt::entity creature, entt::entity opponent)
 	{
 		return StartFight(creature, opponent);
 	}

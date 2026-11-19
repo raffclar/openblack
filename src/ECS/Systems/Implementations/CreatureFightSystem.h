@@ -51,7 +51,7 @@ public:
 	void NoteLook() override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
-	StartResult StartScriptFight(entt::entity creature, entt::entity opponent) override;
+	StartResult StartForcedFight(entt::entity creature, entt::entity opponent) override;
 	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool agreed) override;
 	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
@@ -126,7 +126,7 @@ private:
 	{
 		/// The other creature is asked. When false, it agreed before and is not asked again.
 		bool ask {true};
-		/// The first creature must be healthy enough to fight. A script's order does not make this check.
+		/// The first creature must be healthy enough to fight. A script order or a leash order does not make this check.
 		bool health {true};
 	};
 	StartResult Start(entt::entity creature, entt::entity opponent, StartChecks checks);

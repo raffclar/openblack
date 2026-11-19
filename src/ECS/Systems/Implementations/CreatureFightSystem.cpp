@@ -530,9 +530,10 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	return Start(creature, opponent, {});
 }
 
-CreatureFightSystemInterface::StartResult CreatureFightSystem::StartScriptFight(entt::entity creature, entt::entity opponent)
+CreatureFightSystemInterface::StartResult CreatureFightSystem::StartForcedFight(entt::entity creature, entt::entity opponent)
 {
-	// The fight that a script orders has no test of the health. A hurt creature fights with less fight health.
+	// A fight that a script or a leash order forces has no test of the health. A hurt creature fights with less fight
+	// health.
 	return Start(creature, opponent, {.health = false});
 }
 
