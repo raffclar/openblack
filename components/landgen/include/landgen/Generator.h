@@ -28,6 +28,7 @@
 #include "landgen/Lakes.h"
 #include "landgen/Lighting.h"
 #include "landgen/Paths.h"
+#include "landgen/RoadBed.h"
 #include "landgen/Settlement.h"
 #include "landgen/Swamps.h"
 #include "landgen/Terrain.h"
@@ -92,6 +93,8 @@ struct Settings
 	settlement::Settings settlement;
 	settlement::SiteSettings sites;
 	paths::Settings paths;
+	/// The bed of the paths, cut and filled into the land as the bed of a built road
+	roads::Settings roads;
 };
 
 /// A flat place for the player's temple and first town, in corners
