@@ -77,6 +77,23 @@ class WebJoinPlan(unittest.TestCase):
         arguments = net_check.web_join_plan(self.options([]), "wss://127.0.0.1:5000/game/x", "ticket", 600)["arguments"]
         self.assertNotIn("--sim-trace-draws", arguments)
 
+    def test_the_web_god_of_a_story_land_keeps_the_gods_with_no_temple(self):
+        for kind in ({"land": "Land1.txt"}, {"land": "Online Maps/mpm_2p_1.map", "testbed": True}):
+            options = argparse.Namespace(frame_ms=20.0, web_chat=[], **kind)
+            arguments = net_check.web_join_plan(options, "wss://127.0.0.1:5000/game/x", "t", 600)["arguments"]
+            self.assertIn("--sim-gods-need-no-temple", arguments)
+
+    def test_the_web_god_of_a_network_map_has_the_rule_of_the_temple(self):
+        for kind in ({"land": "Online Maps/mpm_2p_1.map"}, {"land": "Land1.txt", "gods_ring_map": True}):
+            options = argparse.Namespace(frame_ms=20.0, web_chat=[], **kind)
+            arguments = net_check.web_join_plan(options, "wss://127.0.0.1:5000/game/x", "t", 600)["arguments"]
+            self.assertNotIn("--sim-gods-need-no-temple", arguments)
+
+    def test_the_web_god_loses_its_temple_at_the_turn_of_the_desktop_gods(self):
+        options = argparse.Namespace(frame_ms=20.0, web_chat=[], land="Online Maps/mpm_2p_1.map", temple_loss="1:300")
+        arguments = net_check.web_join_plan(options, "wss://127.0.0.1:5000/game/x", "t", 600)["arguments"]
+        self.assertEqual(arguments[arguments.index("--sim-temple-loss") + 1], "1:300")
+
     def test_the_path_of_the_join_is_on_the_origin_of_the_page(self):
         self.assertEqual(net_check.web_join_path("wss://127.0.0.1:5000/game/net-check-1"), "/game/net-check-1")
 
