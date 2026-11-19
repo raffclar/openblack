@@ -27,6 +27,7 @@
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
@@ -118,7 +119,7 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	        }));
 	provider->Add(
 	    Query("dialogue", "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the "
-	                      "dialogue and the line being said"),
+	                      "dialogue, the task that has the cinema bars in, and the line being said"),
 	    Serve<Locator::helpTextSystem>(
 	        "the dialogue", [](const ecs::systems::HelpTextSystemInterface& help, const QueryContext& /*c*/) -> Json {
 		        // A computer that shows nothing plays no voices: no speaker and no line
@@ -132,6 +133,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		                     {"owner", Locator::dialogueControlSystem::has_value()
 		                                   ? Json(Locator::dialogueControlSystem::value().GetOwner())
 		                                   : Json(nullptr)},
+		                     {"bars_owner", Locator::cinematicDirectorSystem::has_value()
+		                                        ? Json(Locator::cinematicDirectorSystem::value().GetWideScreenOwner())
+		                                        : Json(nullptr)},
 		                     {"speech_banks", Locator::helpSpeechSystem::has_value()
 		                                          ? Json(Locator::helpSpeechSystem::value().GetTable().GetBankCount(
 		                                                audio::SpeechBank::HelpSprites))

@@ -2360,14 +2360,10 @@ void TempleInterior::CloseForNewLand()
 void TempleInterior::SaveState(ecs::reflection::BinaryWriter& out) const
 {
 	using ecs::reflection::Save;
-	Save(out, _heldDialogue.has_value());
-	if (_heldDialogue.has_value())
-	{
-		Save(out, _heldDialogue->owner);
-		Save(out, _heldDialogue->text.texts);
-		Save(out, _heldDialogue->text.waitClick);
-		Save(out, _heldDialogue->text.noClick);
-	}
+	// A load gives the kept dialogue back to its owner, or drops it. Thus the save keeps no dialogue for the temple. The
+	// sections of the dialogue and of the help text keep it as the load gives it back, so that a save at once after the
+	// load has the same bytes.
+	Save(out, false);
 	// Then whether the rooms are open, and what the map in the main room's pool shows
 	temple::RoomSave rooms {.roomsOpened = _roomsOpened};
 	for (size_t i = 0; i < rooms.shown.size(); ++i)
@@ -2416,6 +2412,12 @@ bool TempleInterior::LoadState(ecs::reflection::BinaryReader& in)
 		_toggles.SetShown(static_cast<TempleToggles::Display>(i), shown.at(i));
 	}
 	return true;
+}
+
+std::optional<temple_help::HeldDialogue> TempleInterior::GetDialogueBackAtLoad() const
+{
+	const temple_help::GameDialogue dialogue {};
+	return temple_help::ComesBack(_heldDialogue, dialogue.IsControlled());
 }
 
 void TempleInterior::BringBackDialogue()

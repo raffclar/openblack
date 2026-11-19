@@ -29,6 +29,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "Sound/SoundDecoder.h"
 #include "Sound/SoundRequestInterface.h"
+#include "Temple/HeldDialogue.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -144,6 +145,16 @@ void HelpTextSystem::SaveState(reflection::BinaryWriter& out) const
 		// The save keeps the text as the load makes it, so that a save at once after a load has the same bytes.
 		auto saved = *_dialogue;
 		saved.EmptyBox();
+		// The temple's kept dialogue goes back to its owner at a load. The owner takes the dialogue, which clears the
+		// texts, and the kept texts come back.
+		if (Locator::temple::has_value())
+		{
+			if (const auto back = Locator::temple::value().GetDialogueBackAtLoad(); back.has_value())
+			{
+				saved.ClearAllText();
+				saved.Restore(back->text);
+			}
+		}
 		saved.ShowAgain();
 		reflection::Save(out, saved);
 	}
