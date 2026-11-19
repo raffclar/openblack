@@ -177,28 +177,46 @@ std::vector<float> roads::Profile(std::span<const float> land, std::span<const u
 		bed = Mean(bed, radius);
 	}
 
-	// The bed comes back to the land at each fixed sample and at the ends, with a grade of no more than the fixed grade
-	const auto isFixed = [&](size_t i) { return i == 0 || i + 1 == count || (i < fixed.size() && fixed[i] != 0); };
-	const float rise = settings.fixedGrade * settings.step;
+	// The bed comes back to the land at each fixed sample and at the ends. Its grade from a ring is no more than the ring
+	// grade, and from the other fixed samples and the ends no more than the fixed grade.
+	const auto kindOf = [&](size_t i) -> uint8_t {
+		if (i < fixed.size() && fixed[i] == k_Ring)
+		{
+			return k_Ring;
+		}
+		return i == 0 || i + 1 == count || (i < fixed.size() && fixed[i] != 0) ? k_Fixed : 0;
+	};
+	const auto isFixed = [&](size_t i) { return kindOf(i) != 0; };
 	std::vector<float> lower(count, -k_Infinity);
 	std::vector<float> upper(count, k_Infinity);
-	for (size_t i = 0; i < count; ++i)
+	for (const auto& [kind, grade] : {std::pair {k_Fixed, settings.fixedGrade}, std::pair {k_Ring, settings.ringGrade}})
 	{
-		if (isFixed(i))
+		const float rise = grade * settings.step;
+		std::vector<float> low(count, -k_Infinity);
+		std::vector<float> high(count, k_Infinity);
+		for (size_t i = 0; i < count; ++i)
 		{
-			lower[i] = land[i];
-			upper[i] = land[i];
+			if (kindOf(i) == kind)
+			{
+				low[i] = land[i];
+				high[i] = land[i];
+			}
+			if (i > 0)
+			{
+				low[i] = std::max(low[i], low[i - 1] - rise);
+				high[i] = std::min(high[i], high[i - 1] + rise);
+			}
 		}
-		if (i > 0)
+		for (size_t i = count - 1; i-- > 0;)
 		{
-			lower[i] = std::max(lower[i], lower[i - 1] - rise);
-			upper[i] = std::min(upper[i], upper[i - 1] + rise);
+			low[i] = std::max(low[i], low[i + 1] - rise);
+			high[i] = std::min(high[i], high[i + 1] + rise);
 		}
-	}
-	for (size_t i = count - 1; i-- > 0;)
-	{
-		lower[i] = std::max(lower[i], lower[i + 1] - rise);
-		upper[i] = std::min(upper[i], upper[i + 1] + rise);
+		for (size_t i = 0; i < count; ++i)
+		{
+			lower[i] = std::max(lower[i], low[i]);
+			upper[i] = std::min(upper[i], high[i]);
+		}
 	}
 	for (size_t i = 0; i < count; ++i)
 	{
@@ -258,7 +276,14 @@ Bed roads::BedOf(std::span<const paths::Path> paths, const Ground& ground, const
 			}
 			const int x = Rounded(samples[i].x);
 			const int z = Rounded(samples[i].z);
-			fixed[i] = !ground.fixed.Contains(x, z) || ground.fixed.At(x, z) != 0 ? 1 : 0;
+			fixed[i] = !ground.fixed.Contains(x, z) ? k_Fixed : ground.fixed.At(x, z);
+			// Where the path shares the way of a path before it, it keeps the bed of that path and joins it with the
+			// grade of a ring. Thus two paths on one way make one bed, with no steps between their profiles.
+			if (fixed[i] == 0 && bed.covered.At(x, z) != 0)
+			{
+				land[i] = bed.height.At(x, z);
+				fixed[i] = k_Ring;
+			}
 		}
 		const auto profile = Profile(land, fixed, settings);
 		for (size_t i = 0; i < samples.size(); ++i)
@@ -294,11 +319,12 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 {
 	const int side = ground.metres.side;
 	// For each corner: the lowest and the highest height that the banks of the bed let it have, the largest change from
-	// the land that the bed lets it have, and the distance to the nearest fixed corner
+	// the land that the bed lets it have, and the distance to the nearest fixed corner and to the nearest ring
 	Grid<float> lowest(side, -k_Infinity);
 	Grid<float> highest(side, k_Infinity);
 	Grid<float> change(side, 0.0f);
 	Grid<float> toFixed(side, k_Infinity);
+	Grid<float> toRing(side, k_Infinity);
 	for (size_t i = 0; i < bed.covered.values.size(); ++i)
 	{
 		if (bed.covered.values[i] != 0)
@@ -307,13 +333,18 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 			highest.values[i] = bed.height.values[i];
 			change.values[i] = std::fabs(bed.height.values[i] - ground.metres.values[i]);
 		}
-		if (ground.fixed.values[i] != 0)
+		if (ground.fixed.values[i] == k_Ring)
+		{
+			toRing.values[i] = 0.0f;
+		}
+		else if (ground.fixed.values[i] != 0)
 		{
 			toFixed.values[i] = 0.0f;
 		}
 	}
 	const float bankRise = settings.bankSlope * k_MetresPerCorner;
 	const float taperRise = settings.taper * k_MetresPerCorner;
+	const float ringRise = settings.ringTaper * k_MetresPerCorner;
 	ChamferPasses(side, [&](int x, int z, int nx, int nz, float length) {
 		if (!ground.metres.Contains(nx, nz))
 		{
@@ -325,6 +356,7 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 		highest.values[here] = std::min(highest.values[here], highest.values[there] + (bankRise * length));
 		change.values[here] = std::max(change.values[here], change.values[there] - (taperRise * length));
 		toFixed.values[here] = std::min(toFixed.values[here], toFixed.values[there] + length);
+		toRing.values[here] = std::min(toRing.values[here], toRing.values[there] + length);
 	});
 
 	Grid<float> graded = ground.metres;
@@ -349,7 +381,7 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 		{
 			target = std::clamp(land, lowest.values[i], highest.values[i]);
 		}
-		const float most = std::min(change.values[i], taperRise * toFixed.values[i]);
+		const float most = std::min({change.values[i], taperRise * toFixed.values[i], ringRise * toRing.values[i]});
 		float height = std::clamp(target, land - most, land + most);
 		height = std::max(height, std::min(land, ground.lowest.values[i]));
 		graded.values[i] = height;

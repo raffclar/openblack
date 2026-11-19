@@ -231,6 +231,16 @@ TEST(LandgenPlayers, AGeneratedLandForTwoPlayersHasAStartForEachPlayer)
 		EXPECT_GE(Distance(plan.town.x, plan.town.z, land.settlement.town.x, land.settlement.town.z),
 		          settings.players.nearestRival);
 	}
+	// A path joins the town of the other player to the land, and a path joins its temple to its town
+	const auto endsAt = [&](float x, float z) {
+		return std::ranges::any_of(land.paths, [&](const paths::Path& path) {
+			const auto& end = path.points.back();
+			return !path.points.empty() && Distance(end.x, end.z, x / k_MetresPerCorner, z / k_MetresPerCorner) <= 1.0f;
+		});
+	};
+	const auto& other = land.otherPlayers.front();
+	EXPECT_TRUE(endsAt(other.town.x, other.town.z));
+	EXPECT_TRUE(endsAt(other.citadelX, other.citadelZ));
 	// No tree stands on the flat ground of a start
 	for (const auto& start : land.otherStarts)
 	{

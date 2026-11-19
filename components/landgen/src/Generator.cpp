@@ -606,9 +606,16 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		places.push_back({.x = town.x / k_MetresPerCorner, .z = town.z / k_MetresPerCorner});
 		clearTown(town);
 	}
+	// The town of each other player joins the nearest place before it, and its temple then joins the nearest place, its town
+	for (const auto& other : land.otherPlayers)
+	{
+		places.push_back({.x = other.town.x / k_MetresPerCorner, .z = other.town.z / k_MetresPerCorner});
+		places.push_back({.x = other.citadelX / k_MetresPerCorner, .z = other.citadelZ / k_MetresPerCorner});
+		pathClear.push_back({.x = places.back().x, .z = places.back().z, .radius = k_TempleClearRadius});
+		clearTown(other.town);
+	}
 	const paths::Ground pathGround {.heights = heights, .curve = land.heightCurve, .water = pathWater, .rivers = rivers};
 	land.paths = paths::Lay(pathGround, places, paths::ChainLinks(places), seed, settings.paths);
-	const auto drawnPaths = paths::Draw(land.paths, pathWater, pathClear);
 	land.lanterns = paths::PlaceLanterns(land.paths, places, pathWater, pathClear, seed, settings.paths);
 	clock.Done("paths");
 
@@ -620,7 +627,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	for (size_t i = 0; i < heights.values.size(); ++i)
 	{
 		roadMetres.values[i] = land.heightCurve.MetresOf(heights.values[i]);
-		roadFixed.values[i] = pathWater.values[i] != 0 || riverDistance.values[i] <= 2.0f ? 1 : 0;
+		roadFixed.values[i] = pathWater.values[i] != 0 || riverDistance.values[i] <= 2.0f ? roads::k_Fixed : 0;
 	}
 	for (const auto& circle : pathClear)
 	{
@@ -633,9 +640,10 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 			{
 				const float dx = static_cast<float>(x) - circle.x;
 				const float dz = static_cast<float>(z) - circle.z;
-				if (roadFixed.Contains(x, z) && (dx * dx) + (dz * dz) < circle.radius * circle.radius)
+				if (roadFixed.Contains(x, z) && roadFixed.At(x, z) == 0 &&
+				    (dx * dx) + (dz * dz) < circle.radius * circle.radius)
 				{
-					roadFixed.At(x, z) = 1;
+					roadFixed.At(x, z) = roads::k_Ring;
 				}
 			}
 		}
@@ -676,6 +684,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		land.heightUnits.values[i] =
 		    height <= land.heightCurve.knee ? uint16_t {altitude} : land.heightCurve.WholeUnitsOf(height);
 	}
+	// The paths are drawn on the new ground. A corner that a cliff divides from the path, such as the top of a cliff
+	// next to a path at its foot, keeps its country.
+	const auto drawnPaths = paths::Draw(land.paths, pathWater, pathClear, graded, settings.roads.cliffSlope);
 	clock.Done("road beds");
 
 	// What the landscape holds

@@ -38,8 +38,14 @@ struct Settings
 	/// The bed is never more than this distance above or below the land at the middle of the path, in metres. Where the
 	/// land climbs faster than the grade limit for a long distance, the bed then follows the land at this distance.
 	float deepest {10.0f};
-	/// The grade from a place where the bed must stay at the land, such as a river or the ground of a building
+	/// The grade from a place where the bed must stay at the land, such as a river
 	float fixedGrade {0.3f};
+	/// The grade from the edge of a ring round a building, a field or the temple. It is the largest grade of the bed,
+	/// so that the bed of a path that leaves a town on a slope starts its own grade at the edge of the ring.
+	float ringGrade {0.2f};
+	/// Near a ring, the change to the land becomes less by this rise over run: a short blend as steep as the bank. Near
+	/// the other fixed corners, the change becomes less by the taper.
+	float ringTaper {0.5f};
 	/// The half width of the level bed, in corners from the middle of the path
 	float halfWidth {1.2f};
 	/// A corner near the middle of the path that is farther than this distance above or below the bed, in metres, is not
@@ -57,12 +63,17 @@ struct Settings
 	float cliffSlope {0.8391f};
 };
 
+/// The values of a fixed corner or sample
+constexpr uint8_t k_Fixed = 1;
+constexpr uint8_t k_Ring = 2;
+
 /// The land that the bed changes, in metres
 struct Ground
 {
 	/// The height of each corner in metres
 	const Grid<float>& metres;
-	/// Not 0 where the land must stay as it is: the sea, the lakes, the rivers, the buildings, the fields and the temple
+	/// Not 0 where the land must stay as it is: the sea, the lakes and the rivers (`k_Fixed`), and the rings round the
+	/// buildings, the fields and the temple (`k_Ring`)
 	const Grid<uint8_t>& fixed;
 	/// The bed and the banks do not cut a corner below this height in metres. A corner that is already lower keeps its
 	/// height. The generator uses it to keep the sea and the lakes in their shores.
@@ -70,7 +81,8 @@ struct Ground
 };
 
 /// The profile of the bed along a path, from the height of the land at samples a step apart, in metres. The bed keeps
-/// to the land at each fixed sample and at the two ends.
+/// to the land at each fixed sample and at the two ends. From a sample in a ring (`k_Ring`) the bed comes back with no
+/// more than the ring grade, and from the other fixed samples with no more than the fixed grade.
 [[nodiscard]] std::vector<float> Profile(std::span<const float> land, std::span<const uint8_t> fixed, const Settings& settings);
 
 /// The height of the level bed under the paths, in metres. The corners that no bed covers have no value.
@@ -82,7 +94,8 @@ struct Bed
 
 /// The bed of each path: its profile, and each corner near the middle of the path at the height of the nearest sample.
 /// The height of the land at a sample is the median of the corners near it, so that a path beside a cliff keeps to the
-/// side of the cliff that has more of the path.
+/// side of the cliff that has more of the path. Where a path shares the way of a path before it, it keeps the bed of
+/// that path, so that two paths on one way have one bed.
 [[nodiscard]] Bed BedOf(std::span<const paths::Path> paths, const Ground& ground, const Settings& settings);
 
 /// The land with the bed cut and filled into it, and with the banks that join the bed to the land, in metres

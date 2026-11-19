@@ -175,6 +175,35 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		out << ',' << town(entry, 1);
 	}
 	out << ']';
+	// The circles of each town where no path is drawn, in the order of the town list: x, z and the radius in metres of
+	// each building (15 m) and each field (12 m)
+	const auto clear = [](const landgen::settlement::Town& entry) {
+		std::ostringstream text;
+		text << '[';
+		bool first = true;
+		for (const auto& building : entry.buildings)
+		{
+			text << (first ? "" : ",") << building.x << ',' << building.z << ",15";
+			first = false;
+		}
+		for (const auto& field : entry.fields)
+		{
+			text << (first ? "" : ",") << field.x << ',' << field.z << ",12";
+			first = false;
+		}
+		text << ']';
+		return text.str();
+	};
+	out << ",\"town_clear\":[" << clear(land.settlement.town);
+	for (const auto& other : land.otherPlayers)
+	{
+		out << ',' << clear(other.town);
+	}
+	for (const auto& entry : land.settlement.neutral)
+	{
+		out << ',' << clear(entry);
+	}
+	out << ']';
 	out << ",\"mists\":";
 	WriteList(out, land.mists, [](const landgen::cursed::Mist& mist) {
 		std::ostringstream text;
@@ -226,6 +255,11 @@ TEST(LandgenDump, WritesTheLandOfEachSeedWhenTheEnvironmentAsksForIt)
 		                                            .players = players.empty() ? 1 : static_cast<int32_t>(std::stoi(players)),
 		                                            .landType = type.empty() ? -1 : static_cast<int32_t>(std::stoi(type)),
 		                                            .archipelago = type.empty() ? 0 : 1});
+		// A land with no bed under the paths, for a comparison with the land before the cut and the fill
+		if (EnvironmentOf("OPENBLACK_LANDGEN_ROADS") == "0")
+		{
+			settings.roads.grade = false;
+		}
 		// A land with no fairy rings and no lone pillars, for a comparison with the land before them
 		if (EnvironmentOf("OPENBLACK_LANDGEN_FORMATIONS") == "0")
 		{

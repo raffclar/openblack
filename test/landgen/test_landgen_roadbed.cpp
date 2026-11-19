@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -369,4 +370,58 @@ TEST(LandgenRoadBed, AGeneratedLandCutsAndFillsTheBedsOfItsPathsAndMakesNoNewCli
 	}
 	EXPECT_GT(changed, 100u);
 	EXPECT_EQ(newCliffs, 0u);
+}
+
+TEST(LandgenRoadBed, TheBedLeavesARingWithTheGradeOfTheBed)
+{
+	const roads::Settings settings;
+	std::vector<float> land(100, 10.0f);
+	std::vector<uint8_t> fixed(100, 0);
+	// The ring of a town on flat ground, then a climb of 2 in 5 away from the town to a flat top
+	for (size_t i = 0; i < land.size(); ++i)
+	{
+		fixed[i] = i < 20 ? roads::k_Ring : 0;
+		const auto climb = static_cast<float>(std::clamp<size_t>(i, 19, 60) - 19);
+		land[i] = 10.0f + (0.4f * settings.step * climb);
+	}
+	const auto bed = Profile(land, fixed, settings);
+	EXPECT_EQ(bed[19], land[19]);
+	// For the first 40 m out of the ring, no step of the bed is steeper than the grade of the bed
+	const std::vector<float> first(bed.begin() + 19, bed.begin() + 28);
+	EXPECT_LE(SteepestOf(first, settings.step), settings.ringGrade + 0.001f);
+	// A fixed sample of another kind lets the bed come back more steeply
+	auto river = fixed;
+	std::ranges::replace(river, roads::k_Ring, roads::k_Fixed);
+	const auto other = Profile(land, river, settings);
+	const std::vector<float> otherFirst(other.begin() + 19, other.begin() + 28);
+	EXPECT_GT(SteepestOf(otherFirst, settings.step), settings.ringGrade + 0.01f);
+}
+
+TEST(LandgenRoadBed, TheChangeNextToARingIsAShortBlend)
+{
+	// A climb of 1 in 2 along the path, from the ring of a town at the low end to a flat top
+	Grid<float> metres(k_Side, 0.0f);
+	Grid<uint8_t> fixed(k_Side, 0);
+	const Grid<float> lowest(k_Side, -1000.0f);
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			metres.At(x, z) = 0.5f * k_Corner * static_cast<float>(std::min(x, 22));
+			fixed.At(x, z) = x <= 10 ? roads::k_Ring : 0;
+		}
+	}
+	const Ground ground {.metres = metres, .fixed = fixed, .lowest = lowest};
+	const std::array<paths::Path, 1> paths {StraightPath()};
+	roads::Settings settings;
+	const auto graded = Grade(BedOf(paths, ground, settings), ground, settings);
+	const int middle = k_Side / 2;
+	// Two corners from the ring, the cut is deeper than the taper lets it be, and no deeper than the ring taper
+	const float cut = metres.At(12, middle) - graded.At(12, middle);
+	EXPECT_GT(cut, (settings.taper * k_Corner * 2.0f) + 0.5f);
+	EXPECT_LE(cut, (settings.ringTaper * k_Corner * 2.0f) + 0.001f);
+	EXPECT_EQ(graded.At(10, middle), metres.At(10, middle));
+	settings.ringTaper = settings.taper;
+	const auto tapered = Grade(BedOf(paths, ground, settings), ground, settings);
+	EXPECT_LE(metres.At(12, middle) - tapered.At(12, middle), (settings.taper * k_Corner * 2.0f) + 0.001f);
 }
