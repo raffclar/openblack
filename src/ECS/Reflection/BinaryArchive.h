@@ -199,6 +199,19 @@ public:
 	/// call to the writer.
 	[[nodiscard]] std::span<uint8_t> Extend(size_t count) { return {Grow(count), count}; }
 
+	/// Removes the last bytes written, for a caller that wrote fewer bytes than the place that Extend gave it
+	void Trim(size_t count)
+	{
+		if (_open)
+		{
+			_size -= count;
+		}
+		else
+		{
+			_bytes.resize(_bytes.size() - count);
+		}
+	}
+
 	/// Puts a length of 32 bits that a later call to EndLength fills. Returns where the length is.
 	[[nodiscard]] size_t BeginLength()
 	{
@@ -626,6 +639,196 @@ template <typename Container>
 	return entries;
 }
 
+/// A value that a save writes as one block of a known count of bytes: a number, a flag, an enumeration, an option or a
+/// fixed list of such values, or a type that gives such values to a visitor and says that it saves flat. The bytes are
+/// the same bytes that SaveValue writes for each value, one after the other.
+template <typename Type>
+[[nodiscard]] constexpr bool SavesFlat()
+{
+	if constexpr (std::is_same_v<Type, bool> || std::is_arithmetic_v<Type> || std::is_enum_v<Type>)
+	{
+		return true;
+	}
+	else if constexpr (k_IsOptional<Type> || k_IsStdArray<Type>)
+	{
+		return SavesFlat<typename Type::value_type>();
+	}
+	else if constexpr (k_IsVisited<Type> && requires { Type::k_SavesFlat; })
+	{
+		return Type::k_SavesFlat;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+/// The most bytes that a save writes for a value of a type that saves flat: the count when each option holds a value
+template <typename Type>
+[[nodiscard]] size_t MostFlatSize()
+{
+	if constexpr (std::is_same_v<Type, bool>)
+	{
+		return 1;
+	}
+	else if constexpr (k_IsBuildSized<Type>)
+	{
+		return sizeof(uint64_t);
+	}
+	else if constexpr (std::is_arithmetic_v<Type> || std::is_enum_v<Type>)
+	{
+		return sizeof(Type);
+	}
+	else if constexpr (k_IsOptional<Type>)
+	{
+		return 1 + MostFlatSize<typename Type::value_type>();
+	}
+	else if constexpr (k_IsStdArray<Type>)
+	{
+		return sizeof(uint32_t) + (std::tuple_size_v<Type> * MostFlatSize<typename Type::value_type>());
+	}
+	else
+	{
+		// The count comes from the types of the values only. A value with the start values gives the types.
+		static const size_t most = [] {
+			size_t size = 0;
+			const Type probe {};
+			Type::VisitSaved(probe, [&size](const auto&... fields) {
+				static_assert((SavesFlat<std::remove_cvref_t<decltype(fields)>>() && ...),
+				              "A type that saves flat must give only values that save flat");
+				size = (MostFlatSize<std::remove_cvref_t<decltype(fields)>>() + ... + size_t {0});
+			});
+			return size;
+		}();
+		return most;
+	}
+}
+
+/// Copies a value to a place
+template <typename Value>
+[[nodiscard]] uint8_t* FlatPut(uint8_t* at, const Value& value)
+{
+	std::memcpy(at, &value, sizeof(Value));
+	return at + sizeof(Value);
+}
+
+/// Writes the bytes of a value that saves flat at a place, and returns the place after them
+template <typename Type>
+[[nodiscard]] uint8_t* FlatWrite(uint8_t* at, const Type& value)
+{
+	if constexpr (std::is_same_v<Type, bool>)
+	{
+		*at = static_cast<uint8_t>(value ? 1 : 0);
+		return at + 1;
+	}
+	else if constexpr (k_IsBuildSized<Type>)
+	{
+		return FlatPut(at, static_cast<std::conditional_t<std::is_signed_v<Type>, int64_t, uint64_t>>(value));
+	}
+	else if constexpr (std::is_arithmetic_v<Type> || std::is_enum_v<Type>)
+	{
+		return FlatPut(at, value);
+	}
+	else if constexpr (k_IsOptional<Type>)
+	{
+		*at = static_cast<uint8_t>(value.has_value() ? 1 : 0);
+		return value.has_value() ? FlatWrite(at + 1, *value) : at + 1;
+	}
+	else if constexpr (k_IsStdArray<Type>)
+	{
+		at = FlatPut(at, static_cast<uint32_t>(value.size()));
+		for (const auto& element : value)
+		{
+			at = FlatWrite(at, element);
+		}
+		return at;
+	}
+	else
+	{
+		Type::VisitSaved(value, [&at](const auto&... fields) { ((at = FlatWrite(at, fields)), ...); });
+		return at;
+	}
+}
+
+/// A value whose save is quicker as one block than through the general way: an option, a fixed list or a visited type
+/// that saves flat. A number, an option of plain bits and a list of plain bits already go as one block.
+template <typename Type>
+inline constexpr bool k_SavesAsOneBlock =
+    SavesFlat<Type>() && (k_IsVisited<Type> || (k_IsOptional<Type> && !k_IsPlainOption<Type>) ||
+                          (k_IsStdArray<Type> && !k_IsPlainList<Type> && !k_IsEnumList<Type>));
+
+/// A vector or a deque of values that save flat
+template <typename Type>
+[[nodiscard]] constexpr bool IsFlatSequence()
+{
+	if constexpr (k_IsSequence<Type>)
+	{
+		return SavesFlat<typename Type::value_type>();
+	}
+	else
+	{
+		return false;
+	}
+}
+
+/// A map that keeps its keys in order, whose keys and values save flat
+template <typename Type>
+[[nodiscard]] constexpr bool IsFlatMapInKeyOrder()
+{
+	if constexpr (k_IsMap<Type> && k_KeepsKeyOrder<Type>)
+	{
+		return SavesFlat<typename Type::key_type>() && SavesFlat<typename Type::mapped_type>();
+	}
+	else
+	{
+		return false;
+	}
+}
+
+/// Writes a list of values that save flat as one block: the count, then each value
+template <typename Range>
+void SaveFlatList(BinaryWriter& out, const Range& values)
+{
+	using Element = std::remove_cvref_t<decltype(*std::begin(values))>;
+	// The writer asks for the most bytes that the values can need, and gives back the bytes that they did not use
+	const auto most = sizeof(uint32_t) + (std::size(values) * MostFlatSize<Element>());
+	auto* const start = out.Extend(most).data();
+	auto* at = FlatPut(start, static_cast<uint32_t>(std::size(values)));
+	for (const auto& element : values)
+	{
+		at = FlatWrite(at, element);
+	}
+	out.Trim(most - static_cast<size_t>(at - start));
+}
+
+/// Writes the entries of a map, in a given order, whose keys and values save flat, as one block: the count, then each
+/// key and its value
+template <typename Entries>
+void SaveFlatMap(BinaryWriter& out, size_t count, const Entries& entries)
+{
+	using Entry = std::remove_cvref_t<decltype(*std::begin(entries))>;
+	const auto most =
+	    sizeof(uint32_t) +
+	    (count * (MostFlatSize<std::remove_cv_t<typename Entry::first_type>>() + MostFlatSize<typename Entry::second_type>()));
+	auto* const start = out.Extend(most).data();
+	auto* at = FlatPut(start, static_cast<uint32_t>(count));
+	for (const auto& entry : entries)
+	{
+		at = FlatWrite(FlatWrite(at, entry.first), entry.second);
+	}
+	out.Trim(most - static_cast<size_t>(at - start));
+}
+
+/// Writes a value that saves flat as one block
+template <typename Type>
+void SaveFlat(BinaryWriter& out, const Type& value)
+{
+	const auto most = MostFlatSize<Type>();
+	auto* const start = out.Extend(most).data();
+	const auto* const end = FlatWrite(start, value);
+	out.Trim(most - static_cast<size_t>(end - start));
+}
+
 } // namespace detail
 
 template <typename Type>
@@ -651,7 +854,12 @@ template <typename Type>
 void detail::SaveValue(BinaryWriter& out, const Type& value)
 {
 	static_assert(!detail::k_IsRunHandle<Type>, "A save must not keep a pointer or a graphics handle: keep a stable key");
-	if constexpr (std::is_same_v<Type, bool>)
+	if constexpr (detail::k_SavesAsOneBlock<Type>)
+	{
+		// The same bytes as each value in it, in one block
+		detail::SaveFlat(out, value);
+	}
+	else if constexpr (std::is_same_v<Type, bool>)
 	{
 		out.WriteRaw(static_cast<uint8_t>(value ? 1 : 0));
 	}
@@ -763,6 +971,11 @@ void detail::SaveValue(BinaryWriter& out, const Type& value)
 			SaveValue(out, element);
 		}
 	}
+	else if constexpr (detail::IsFlatSequence<Type>())
+	{
+		// The same bytes as the count and each value, in one block
+		detail::SaveFlatList(out, value);
+	}
 	else if constexpr (detail::k_IsSequence<Type>)
 	{
 		out.WriteSize(value.size());
@@ -783,6 +996,11 @@ void detail::SaveValue(BinaryWriter& out, const Type& value)
 			}
 			out.WriteRaw(byte);
 		}
+	}
+	else if constexpr (detail::IsFlatMapInKeyOrder<Type>())
+	{
+		// The same bytes as the count and each key and value, in one block
+		detail::SaveFlatMap(out, value.size(), value);
 	}
 	else if constexpr (detail::k_IsMap<Type> && detail::k_KeepsKeyOrder<Type>)
 	{

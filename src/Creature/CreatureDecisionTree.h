@@ -121,6 +121,15 @@ struct Belief
 	void Set(Attribute attribute, uint32_t value) { values.at(static_cast<size_t>(attribute)) = value; }
 
 	bool operator==(const Belief& other) const = default;
+
+	/// Gives the values that a saved game keeps to a visitor, in the order of the registered fields
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.type, self.values, self.x, self.z);
+	}
+	/// Each saved value is a number, a flag, or an option or a fixed list of these, thus a save writes them in one block
+	static constexpr bool k_SavesFlat = true;
 };
 /// A belief from the values listed in its kind's order, as mind files keep them
 [[nodiscard]] Belief FromSlots(uint32_t type, std::span<const uint32_t> slots);

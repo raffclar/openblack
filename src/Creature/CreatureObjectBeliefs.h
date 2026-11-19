@@ -73,6 +73,16 @@ struct Belief
 	std::optional<creature_tree::Belief> attributes;
 	/// The game turn on which seeing the thing last stirred the creature's desire sources
 	uint32_t sourcesTurn {0};
+
+	/// Gives the values that a saved game keeps to a visitor, in the order of the registered fields
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.thing, self.kind, self.place, self.inspected, self.partOf, self.order, self.blockedTurn, self.attributes,
+		      self.sourcesTurn);
+	}
+	/// Each saved value is a number, a flag, or an option or a fixed list of these, thus a save writes them in one block
+	static constexpr bool k_SavesFlat = true;
 };
 
 /// Whether the belief about a thing of a kind takes in the thing again each time the creature comes across it. A belief
@@ -109,6 +119,15 @@ struct BeliefPlace
 {
 	uint32_t kind {0};
 	size_t slot {0};
+
+	/// Gives the values that a saved game keeps to a visitor, in the order of the registered fields
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.kind, self.slot);
+	}
+	/// Each saved value is a number, a flag, or an option or a fixed list of these, thus a save writes them in one block
+	static constexpr bool k_SavesFlat = true;
 };
 
 /// The places of one kind of belief
@@ -120,6 +139,13 @@ struct BeliefPool
 	/// The place the next belief replaces once all are taken: the first place taken, moving on to the next place when
 	/// the belief there is forgotten; none while nothing is held
 	std::optional<size_t> oldest;
+
+	/// Gives the values that a saved game keeps to a visitor, in the order of the registered fields
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.slots, self.used, self.oldest);
+	}
 };
 
 /// Everything that a store of beliefs holds, for a saved world
@@ -130,6 +156,13 @@ struct StoreContents
 	/// this order, thus the index keeps it and the save does not sort it.
 	std::map<entt::entity, BeliefPlace> index;
 	uint64_t made {0};
+
+	/// Gives the values that a saved game keeps to a visitor, in the order of the registered fields
+	template <typename Self, typename Visitor>
+	static void VisitSaved(Self& self, Visitor&& visit)
+	{
+		visit(self.pools, self.index, self.made);
+	}
 };
 
 /// Finds the place of the belief about a thing fast. It is an open table: each thing goes in the first free entry at or
