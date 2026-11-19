@@ -1302,6 +1302,8 @@ void TempleInterior::UpdateCaveTrophies(float gameSeconds)
 			if (place.holderEffect != ecs::systems::ParticleRuleSystemInterface::k_NoEffect)
 			{
 				particles->SetInTemple(place.holderEffect);
+				// The seed draws its effect as the last frame step left it, with no blend
+				particles->SetDrawnAtLastStep(place.holderEffect);
 				particles->SetPlayer(place.holderEffect, static_cast<int>(Locator::handSystem::has_value()
 				                                                              ? Locator::handSystem::value().GetOwnPlayer()
 				                                                              : PlayerNames::PLAYER_ONE));
@@ -1442,6 +1444,8 @@ public:
 		}
 		_particles->SetInTemple(effect);
 		_particles->SetPlayer(effect, static_cast<int>(player));
+		// The seed of a miracle on the map draws its effect as the last frame step left it, with no blend
+		_particles->SetDrawnAtLastStep(effect);
 		return effect;
 	}
 

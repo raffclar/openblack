@@ -1335,9 +1335,11 @@ EffectHandle ParticleRuleSystem::Serve(const EffectRequest& request, EffectHandl
 	{
 		started->effect->SetProcessInfo(*request.processInfo);
 	}
+	// The effect in the hand draws at once after the hand, as its last step left it, with no blend from the step before
 	if (request.drawnWithHand)
 	{
 		started->path = particles::draw::DrawPath::Immediate;
+		started->atLastStep = true;
 	}
 	if (request.hidden)
 	{
