@@ -9,8 +9,10 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -81,7 +83,8 @@ private:
 		/// The lowest and highest block, along x and z, that the footprint reaches
 		glm::ivec2 lowBlock {0};
 		glm::ivec2 highBlock {0};
-		bool seen {false};
+		/// The number of the last search that saw it in the map's cells
+		uint32_t seen {0};
 	};
 	/// A print that no thing in the map's cells gives: the print of a thing that shows only as a print, or a stretch of
 	/// a river. A channel lowers the land's alpha; every other print mixes its colour into the land.
@@ -128,6 +131,11 @@ private:
 	void PaintBlock(size_t block, const BlockPaint& paint, const ThingStores& stores, std::span<uint16_t> texels);
 	/// The threads that share the work of many blocks, made the first time that many blocks change at once
 	[[nodiscard]] WorkerPool& Workers();
+	/// How many shares of the given count of things the lanes of the pool take
+	[[nodiscard]] size_t Shares(size_t count);
+	/// Does the job for each share of the given count of things, on the lanes of the pool. Each share gets its number
+	/// and its first and last place, after its last thing.
+	void ForShares(size_t count, const std::function<void(size_t share, size_t from, size_t to)>& job);
 	void Reset(size_t blockCount);
 
 	/// The footprint of each model that the search found, with the model. The game can make a model again with the same
@@ -163,6 +171,8 @@ private:
 	/// The texels of a block that this thread paints alone, kept to use their memory again
 	std::vector<uint16_t> _texels;
 	std::unique_ptr<WorkerPool> _workers;
+	/// The count of the searches for the changed things
+	uint32_t _searches {0};
 	/// The state of the search that StartSearch started
 	enum class Search : uint8_t
 	{

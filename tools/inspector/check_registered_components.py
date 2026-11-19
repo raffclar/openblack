@@ -33,6 +33,7 @@ REFLECTION = ROOT / "src" / "ECS" / "Reflection"
 # the services that the locator holds (its Emplace takes the same word)
 NOT_COMPONENTS = {
     "LandShadowCasterChanges",
+    "UnfiledTreeSet",
     "RegistryContext",
     "VillageLightFlames",
     "MapScriptGlobals",
