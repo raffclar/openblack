@@ -50,18 +50,26 @@ public:
 	/// A registry of every class the game runs; the creators of models and light maps find them through the resources
 	[[nodiscard]] static ParticleClassRegistry WithAllClasses(CreatorResourcesInterface* resources = nullptr);
 
+	/// True when the class uses the collection step of the base rule. That step only runs ModifyAtom on each atom.
+	template <class T>
+	static constexpr bool k_OnlyOnAtoms =
+	    std::is_same_v<decltype(&T::ModifyCollection), bool (Modifier::*)(Effect&, Collection&, Collection::Slot&) const>;
+
 	/// The usual factory: T(object), or T() for a class without properties
 	template <class T>
 	static std::unique_ptr<Modifier> Make(const psys::ParticleObject& object)
 	{
+		std::unique_ptr<Modifier> rule;
 		if constexpr (std::is_constructible_v<T, const psys::ParticleObject&>)
 		{
-			return std::make_unique<T>(object);
+			rule = std::make_unique<T>(object);
 		}
 		else
 		{
-			return std::make_unique<T>();
+			rule = std::make_unique<T>();
 		}
+		rule->onlyOnAtoms = k_OnlyOnAtoms<T>;
+		return rule;
 	}
 
 private:

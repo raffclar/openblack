@@ -39,6 +39,7 @@
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleImport.h"
 #include "Particles/ParticleObjectEffects.h"
+#include "Particles/ParticlePrefetch.h"
 #include "Particles/ParticleSprites.h"
 
 using namespace openblack;
@@ -1532,6 +1533,76 @@ private:
 	[[nodiscard]] bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
 };
 } // namespace
+
+namespace
+{
+/// A rule that acts only on each atom
+class EachAtomRule final: public Modifier
+{
+public:
+	bool ModifyAtom(Effect& /*effect*/, Atom& /*atom*/, Collection::Slot& /*slot*/) const override { return true; }
+};
+/// A rule that acts on the whole collection
+class WholeCollectionRule final: public Modifier
+{
+public:
+	bool ModifyCollection(Effect& /*effect*/, Collection& /*collection*/, Collection::Slot& /*slot*/) const override
+	{
+		return true;
+	}
+};
+} // namespace
+
+TEST(ParticleClassRegistry, TheFactoryMarksTheRulesThatActOnlyOnTheAtoms)
+{
+	static_assert(ParticleClassRegistry::k_OnlyOnAtoms<EachAtomRule>);
+	static_assert(!ParticleClassRegistry::k_OnlyOnAtoms<WholeCollectionRule>);
+	const psys::ParticleObject object;
+	EXPECT_TRUE(ParticleClassRegistry::Make<EachAtomRule>(object)->onlyOnAtoms);
+	EXPECT_FALSE(ParticleClassRegistry::Make<WholeCollectionRule>(object)->onlyOnAtoms);
+	// A rule that is not made by the factory runs on each collection, as before
+	EXPECT_FALSE(EachAtomRule().onlyOnAtoms);
+}
+
+TEST(ParticlePrefetch, TheFieldsThatEachStepReadsAreAtTheStartOfTheAtom)
+{
+	const Atom atom;
+	const auto* start = reinterpret_cast<const char*>(&atom);
+	const auto stepped = prefetch::BytesOf(atom, prefetch::Fields::Stepped);
+	EXPECT_EQ(prefetch::BytesOf(atom, prefetch::Fields::All), sizeof(Atom));
+	EXPECT_LT(stepped, sizeof(Atom));
+	// Each field that the step of the effect or of the symbols of belief reads lies in the bytes that the walk asks for
+	const auto inside = [start, stepped](const auto& field) {
+		const auto* begin = reinterpret_cast<const char*>(&field);
+		return begin >= start && begin + sizeof(field) <= start + stepped;
+	};
+	EXPECT_TRUE(inside(atom.collection));
+	EXPECT_TRUE(inside(atom.creator));
+	EXPECT_TRUE(inside(atom.position));
+	EXPECT_TRUE(inside(atom.velocity));
+	EXPECT_TRUE(inside(atom.rotation));
+	EXPECT_TRUE(inside(atom.baseScale));
+	EXPECT_TRUE(inside(atom.ruleScale));
+	EXPECT_TRUE(inside(atom.stretch));
+	EXPECT_TRUE(inside(atom.rgba));
+	EXPECT_TRUE(inside(atom.frame));
+	EXPECT_TRUE(inside(atom.frameRate));
+	EXPECT_TRUE(inside(atom.birth));
+	EXPECT_TRUE(inside(atom.random));
+	EXPECT_TRUE(inside(atom.player));
+	EXPECT_TRUE(inside(atom.playAnim));
+	EXPECT_TRUE(inside(atom.drawn));
+	EXPECT_TRUE(inside(atom.steps));
+	EXPECT_TRUE(inside(atom.previous));
+	EXPECT_TRUE(inside(atom.current));
+	EXPECT_TRUE(inside(atom.subCollections));
+	EXPECT_TRUE(inside(atom.data));
+	// The fields that only some rules and the draw read come after them
+	EXPECT_FALSE(inside(atom.sounds));
+	EXPECT_FALSE(inside(atom.shower));
+	EXPECT_FALSE(inside(atom.objectGlow));
+	EXPECT_FALSE(inside(atom.handOffset));
+}
 
 TEST(ParticleStore, AnAtomAndItsListsGoBackToTheStoreThatTheyCameFrom)
 {
