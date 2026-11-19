@@ -445,6 +445,9 @@ def summary(start, records, end, log_lines=None, exit_code=None):
         "turn_ms_start": average(record["turn_ms"] for record in timed[:share]),
         "turn_ms_end": average(record["turn_ms"] for record in timed[-share:]),
         "turn_ms_longest": max((record.get("turn_ms_max", 0) for record in timed), default=None),
+        # The processor time of the turns: other load on the machine does not make it longer
+        "turn_cpu_ms_start": average(record.get("turn_cpu_ms") for record in timed[:share]),
+        "turn_cpu_ms_end": average(record.get("turn_cpu_ms") for record in timed[-share:]),
         "frame_ms_average": average(record.get("frame_ms") for record in timed),
         "frame_ms_longest": max((record.get("frame_ms_max", 0) for record in timed), default=None),
         "memory_mb_start": memory[0] if memory else None,
@@ -642,6 +645,11 @@ def markdown(result, title="Simulation run"):
         f"- Turn time {number(result['turn_ms_start'], 3)} ms at the start, {number(result['turn_ms_end'], 3)} ms at "
         f"the end, longest {number(result['turn_ms_longest'], 2)} ms; frame average "
         f"{number(result['frame_ms_average'], 3)} ms, longest {number(result['frame_ms_longest'], 2)} ms",
+    ]
+    if result.get("turn_cpu_ms_start") is not None:
+        lines.append(f"- Turn processor time {number(result['turn_cpu_ms_start'], 3)} ms at the start, "
+                     f"{number(result['turn_cpu_ms_end'], 3)} ms at the end")
+    lines += [
         f"- Memory {number(result['memory_mb_start'], 0)} MB to {number(result['memory_mb_end'], 0)} MB (highest "
         f"{number(result['memory_mb_highest'], 0)}); entities {result['entities_start']} to {result['entities_end']}",
     ]

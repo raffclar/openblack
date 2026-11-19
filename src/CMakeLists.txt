@@ -103,7 +103,7 @@ list(FILTER OPENBLACK_CLIENT_SOURCES INCLUDE REGEX
 )
 set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Audio/(MpegAudioDecoder|WavAudioDecoder|AudioDecoderInterface)"
-    "Debug/(SimRun|SimChecks|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TestbedLobbySessions|TownMiracleRules|TownMiracles|TestbedScenarioRunner|NoScenarioPlayer|ScenarioPlayer|DebugGuiInterface|FightAutopilotInterface|TestbedGameStageInterface|TestbedHandSweep|StateHashWatch)"
+    "Debug/(SimRun|SimChecks|ThreadCpuTime|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TestbedLobbySessions|TownMiracleRules|TownMiracles|TestbedScenarioRunner|NoScenarioPlayer|ScenarioPlayer|DebugGuiInterface|FightAutopilotInterface|TestbedGameStageInterface|TestbedHandSweep|StateHashWatch)"
     "Debug/TestbedScenario[A-Z][A-Za-z]*"
     "Editor/(EditorActions|EditorContext|EditorMath|EditorEntities|EditorNetworkEdits|EditorCreatureEdits|EditorCreatureActs|EditorPalette|EditorSelection|EditorOutline|EditorHistory|EditorPaths|EditorLandEdits|EditorMindLoads|EditorScriptActs|EditorScriptFiles|LandBrush|LandGenerator|LandGeneratorSession|LandSave)"
     "Editor/Scripts/(Decompiler|ScriptModel|LandScriptStepper)"

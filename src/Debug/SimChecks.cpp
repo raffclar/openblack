@@ -14,8 +14,8 @@
 
 #include <algorithm>
 #include <array>
-#include <numeric>
 #include <utility>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -25,13 +25,22 @@ namespace openblack::sim_checks
 namespace
 {
 
-float Average(const auto& values)
+// The middle value, so that a few single slow turns do not move it
+float Median(const auto& values)
 {
 	if (values.empty())
 	{
 		return 0.0f;
 	}
-	return std::accumulate(values.begin(), values.end(), 0.0f) / static_cast<float>(values.size());
+	std::vector<float> sorted(values.begin(), values.end());
+	const auto middle = sorted.begin() + static_cast<std::ptrdiff_t>(sorted.size() / 2);
+	std::nth_element(sorted.begin(), middle, sorted.end());
+	if (sorted.size() % 2 == 1)
+	{
+		return *middle;
+	}
+	const auto lower = *std::max_element(sorted.begin(), middle);
+	return (lower + *middle) / 2.0f;
 }
 
 bool ContainsAssert(std::string_view message)
@@ -215,8 +224,7 @@ TurnTimeTrend::TurnTimeTrend(TrendRule rule)
 
 std::optional<Flag> TurnTimeTrend::Observe(float turnMs, uint32_t turn)
 {
-	++_seen;
-	if (_seen <= _rule.warmUp)
+	if (turn < _rule.warmUpTurns)
 	{
 		return std::nullopt;
 	}
@@ -225,7 +233,7 @@ std::optional<Flag> TurnTimeTrend::Observe(float turnMs, uint32_t turn)
 		_baseSamples.push_back(turnMs);
 		if (_baseSamples.size() >= _rule.window)
 		{
-			_base = Average(_baseSamples);
+			_base = Median(_baseSamples);
 		}
 		return std::nullopt;
 	}
@@ -238,7 +246,7 @@ std::optional<Flag> TurnTimeTrend::Observe(float turnMs, uint32_t turn)
 	{
 		return std::nullopt;
 	}
-	const auto recent = Average(_recent);
+	const auto recent = Median(_recent);
 	const bool risen = recent > *_base * _rule.factor && recent - *_base > _rule.leastRiseMs;
 	if (!risen)
 	{
@@ -254,7 +262,8 @@ std::optional<Flag> TurnTimeTrend::Observe(float turnMs, uint32_t turn)
 	    .kind = FlagKind::TurnTime,
 	    .what = "turn_ms",
 	    .turn = turn,
-	    .detail = fmt::format("the average turn took {:.3f} ms, against {:.3f} ms at the start", recent, *_base),
+	    .detail =
+	        fmt::format("the middle turn time of the window was {:.3f} ms, against {:.3f} ms at the start", recent, *_base),
 	};
 }
 
