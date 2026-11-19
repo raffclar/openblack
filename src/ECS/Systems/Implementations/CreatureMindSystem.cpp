@@ -677,7 +677,9 @@ static std::optional<float> BodyShareOf(entt::entity creature, const CreatureAni
 		return std::nullopt;
 	}
 	// The time and the duration are whole milliseconds, so the float divide gives the same share as the game
-	const auto duration = Locator::creatureAnimationSystem::value().AnimationDuration(creature, share->animation);
+	const auto duration = share->lengthMs.has_value()
+	                          ? share->lengthMs
+	                          : Locator::creatureAnimationSystem::value().AnimationDuration(creature, share->animation);
 	if (!duration.has_value() || !(*duration > 0.0f))
 	{
 		return std::nullopt;

@@ -471,6 +471,7 @@ void PoseBody(AnimationStores& stores, skeletal_animation::KeyframeTurns& turns,
 		const auto move = creature_layers::ChooseDanceMove(animation.body.firstDanceMove, random,
 		                                                   [&](size_t index) { return animationOf(index) != nullptr; });
 		animation.body.animations[1] = move.value_or(creature_layers::animations::k_Stand);
+		animation.body.danceMoveFactor = creature_layers::DanceMoveFactor(rig.danceMoveFactors, animation.body.animations[1]);
 		animation.body.chooseDanceMove = false;
 	}
 	const auto advanceFace = [&](const creature_layers::FaceLayer& face) {

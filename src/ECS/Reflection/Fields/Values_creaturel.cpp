@@ -41,6 +41,7 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturel(entt::meta_ctx&
 	    .Field<&openblack::creature_layers::BodyAction::kiss>("kiss")
 	    .Field<&openblack::creature_layers::BodyAction::realTime>("realTime")
 	    .Field<&openblack::creature_layers::BodyAction::danceMoveMs>("danceMoveMs")
+	    .Field<&openblack::creature_layers::BodyAction::danceMoveFactor>("danceMoveFactor")
 	    .Field<&openblack::creature_layers::BodyAction::blendedWith>("blendedWith")
 	    .Field<&openblack::creature_layers::BodyAction::blendWeight>("blendWeight")
 	    .Field<&openblack::creature_layers::BodyAction::chooseDanceMove>("chooseDanceMove")

@@ -421,6 +421,21 @@ void MorphFile::ReadCreatureBlock(std::istream& stream) noexcept
 	_creatureTail.assign(_creatureRest.end() - static_cast<std::ptrdiff_t>(keep), _creatureRest.end());
 }
 
+std::array<uint32_t, 7> MorphFile::GetDanceMoveFactors() const noexcept
+{
+	std::array<uint32_t, 7> factors {};
+	factors.fill(1);
+	if (_creatureSizes.size() == 1)
+	{
+		factors.fill(_creatureSizes.front());
+	}
+	else if (_creatureSizes.size() == factors.size())
+	{
+		std::ranges::copy(_creatureSizes, factors.begin());
+	}
+	return factors;
+}
+
 void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
 {
 	// Each field below came in at a version, and the tattoo sites at version 15
@@ -429,7 +444,8 @@ void MorphFile::ReadTattooSites(std::istream& stream, uint32_t version) noexcept
 	{
 		return;
 	}
-	// The sound bank's name, then seven sizes, then a pair or triple of numbers for each of the twelve fight blows
+	// The sound bank's name, then the seven numbers of the dance moves, then a pair or triple of numbers for each of the twelve
+	// fight blows
 	if (version > 18)
 	{
 		stream.read(_soundBankRaw.data(), _soundBankRaw.size());

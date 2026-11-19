@@ -82,6 +82,12 @@ public:
 	/// creature is made to fight: nothing it wants stops the fight. The second creature obeys the first until the fight
 	/// is over.
 	virtual StartResult StartFight(entt::entity creature, entt::entity opponent) = 0;
+	/// A fight that a script orders. It starts as StartFight starts it, but the first creature does not have to be
+	/// healthy: a hurt creature starts the fight with less fight health.
+	virtual StartResult StartScriptFight(entt::entity creature, entt::entity opponent)
+	{
+		return StartFight(creature, opponent);
+	}
 	/// A fight that the first creature's own plan starts. That creature can give up the fight for a plan it wants much
 	/// more. When the other creature agreed on an earlier turn of the same step, it is not asked again: its answer stays.
 	virtual StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool /*agreed*/)

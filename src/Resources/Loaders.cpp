@@ -947,6 +947,7 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	{
 		rig->kissMs = static_cast<float>(points->kissTime);
 	}
+	rig->danceMoveFactors = file.GetDanceMoveFactors();
 
 	// The eyes, the hair, the point that kisses and the point that sick comes out of sit on triangles of the meshes
 	const auto& eyes = file.GetCreatureEyes();
