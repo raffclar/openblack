@@ -25,6 +25,12 @@ using namespace openblack::testbed_scenarios;
 
 namespace
 {
+/// The object of a command that loads a generated land: the type of the land plus 1
+constexpr size_t k_StoryIsland = 1;
+constexpr size_t k_BigIsland = 2;
+constexpr size_t k_Highlands = 3;
+constexpr size_t k_Valleys = 4;
+constexpr size_t k_Archipelago = 5;
 
 /// The player flies the camera in the temple's main room and then in its save game room, with the editor's cheat of
 /// the free camera on or off. The same presses go to the game in both scenarios.
@@ -207,7 +213,7 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "groups near the town are forests: the foresters go to them for wood.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -217,13 +223,15 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly from the "
 	                   "start area to the towns round it, then from town to town.",
 	    .expected = "The land has six to eleven towns with the town of player one. Each other town is a neutral town on "
-	                "flat ground, 220 to 600 metres from the town nearest to it, and 70 to 270 metres from the sea. "
-	                "Each town has a town centre, a storage pit, a creche, five to seven houses with their people and "
-	                "a block of fields. Some towns also have a workshop or a graveyard. The land has four to six "
-	                "tribes. No tree grows on the ground of a town.",
+	                "flat ground, 220 to 840 metres from the town nearest to it, and 70 to 270 metres from the sea. "
+	                "The towns stand at many heights, low and high. Each town has a town centre, five to seven houses "
+	                "with their people and a block of fields. Most towns have a storage pit and a creche. Some towns "
+	                "also have a workshop, a graveyard or the plan of a wonder. The houses are the kinds of the tribe "
+	                "of the town. A town near the sea can have two to six fish farms on the low shore. The land has "
+	                "four to six tribes. No tree grows on the ground of a town or on a fish farm.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -239,7 +247,46 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "farther out. At night the lanterns light the ground.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_BigIsland}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_players_2",
+	    .name = "The starts of two players on a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 for two players and the game loads "
+	                   "it. Fly from the start of player one to the start of player two.",
+	    .expected = "Each player has a temple and a town on a flat start area, as on the skirmish lands. The town of "
+	                "player two is 510 to 1080 metres from the town of player one. Each town has a town centre, a "
+	                "storage pit, a creche, five to seven houses with their people and a block of fields. The ground and "
+	                "the trees near the two starts are almost the same. The neutral towns are between the starts and "
+	                "round them.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .value = 7,
+	                  .object = k_BigIsland}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_players_4",
+	    .name = "The starts of four players on a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 for four players and the game loads "
+	                   "it. Fly from the start of player one to the starts of the other players.",
+	    .expected = "Each of the four players has a temple and a town on a flat start area, as on the skirmish lands. The "
+	                "town of each player is 510 to 1080 metres from the nearest town of another player. The ground and "
+	                "the trees near the starts are almost the same. The neutral towns are between the starts and round "
+	                "them.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand,
+	                  .player = PlayerNames::PLAYER_FOUR,
+	                  .delaySeconds = 1.0f,
+	                  .value = 7,
+	                  .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -254,7 +301,7 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "conifer grows below 10 metres. Big forests stand alone in the woods, with open ground round them.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -269,7 +316,7 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "grass. Groups of three to seven spiky pillars stand on the beaches.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42, .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -279,11 +326,12 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .description = "After a second, the land generator makes the land of seed 1 and the game loads it. Fly from the "
 	                   "start area to the high ground far from the town, where the cursed places are.",
 	    .expected = "One to three cursed places stand on high ground, far from the town. Each place has groups of "
-	                "burnt trees and one to three stacks of dark mist over a clump of boulders. Some places have one "
-	                "or two craters with a puff of grey smoke. The ground of a place is the ground of the land round it.",
+	                "burnt trees and dead trees that lie on the ground, and one to three stacks of dark mist over a "
+	                "clump of boulders. Some places have one or two craters with a puff of grey smoke. The ground of a "
+	                "place is dark: dark scrub at its edge, which is not round, and black rock at its middle.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1, .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -298,7 +346,7 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "and other trees of the stream banks of the story grow in the swamp.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1, .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -308,11 +356,27 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Turn the "
 	                   "camera from the start area to the land round it and to the coast.",
 	    .expected = "Flat terraces stand at a few levels, with sharp cliffs between them. Some parts of the land are "
-	                "calm, with wide terraces, and other parts have many cliffs. Along the sea, a flat strip of 30 to "
-	                "45 metres goes round the island, with a bank or a cliff behind it.",
+	                "calm, with wide terraces, and other parts have many cliffs. No cliff face is a vertical wall and "
+	                "no thin spire stands on the mountains: the steepest faces are about 75 degrees. Along the sea, flat "
+	                "shore steps of about 40 metres go round the island, with a bank, a cliff or a long beach behind them.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42, .object = k_BigIsland}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_coast",
+	    .name = "The beaches, banks and sea cliffs of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly round "
+	                   "the coast of the island.",
+	    .expected = "The coast has three kinds of parts. On a beach, flat sand goes 250 to 450 metres from the water, "
+	                "with palms at its back and dunes behind it, and some beaches have groups of spiky pillars. On a "
+	                "bank, a flat strip of about 40 metres goes to a slope. On a sea cliff, a steep face rises 25 to 45 "
+	                "metres from the flat strip, also where the land behind is low, and rivers cut through the cliff.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -326,7 +390,23 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "The ground between the massifs rolls in low steps with short faces.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_BigIsland}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_streams",
+	    .name = "The streams of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 1 and the game loads it. Fly the "
+	                   "camera about 500 metres from the start area to the stream at about (4340, 3270), and follow it "
+	                   "down to the sea.",
+	    .expected = "The land has streams as the lands of the story do: thin streams of water that start on the hills "
+	                "and run down to the sea or into another stream. Each stream is about 30 to 640 metres long, with "
+	                "its bed in the land. Stands of trees grow on parts of the banks, near the water. Cedars grow by "
+	                "the streams of the jungle and the beach.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1, .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -342,7 +422,7 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "have one surface at one level.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 9}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 9, .object = k_BigIsland}},
 	});
 
 	all.push_back({
@@ -356,7 +436,93 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "land of the story. The land has no steps or gaps on the high slopes.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
-	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42, .object = k_BigIsland}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_story_island",
+	    .name = "A generated land of the size of a land of the story",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 as an island of the size of a land "
+	                   "of the story, and the game loads it. Fly round the island from the start area.",
+	    .expected = "The land is one island of 2 to 4 square kilometres, about 2 kilometres across, with open sea round "
+	                "it. Its mountains are lower than those of the big island, but steep, with terraces and cliffs. The "
+	                "start area, the temple, the town of the start, the neutral towns and the shore are as on the big "
+	                "island.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_StoryIsland}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_highlands",
+	    .name = "A generated land of highlands",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 as highlands, and the game loads it. "
+	                   "Fly from the start area to the coast and inland.",
+	    .expected = "The land is one island of 3 to 5 square kilometres. The ground rises soon after the shore to high "
+	                "plains with terraces and cliffs. The plains are higher than on the other types of land. The towns "
+	                "stand on flat ground.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_Highlands}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_valleys",
+	    .name = "A generated land of valleys",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 as a land of valleys, and the game "
+	                   "loads it. Fly along the mountain ranges.",
+	    .expected = "The land is one island of 3 to 5 square kilometres. Two or three long mountain ranges cross it, "
+	                "with valleys between them. The towns stand on flat ground in the valleys and near the coast.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_Valleys}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_archipelago",
+	    .name = "A generated archipelago",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 as an archipelago, and the game "
+	                   "loads it. Fly from island to island. The archipelago waits on the user: without its choice, the "
+	                   "seed does not make one.",
+	    .expected = "The land is three to five islands with sea between them, each of 0.5 to 2 square kilometres. The "
+	                "start area and its town are on one island. Neutral towns stand on the islands that are near enough.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_Archipelago}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_fairy_rings",
+	    .name = "The fairy rings and the lone pillars of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 64 and the game loads it. Fly to "
+	                   "the fairy rings on the gentle grass and to the lone pillars of rock.",
+	    .expected = "This land is like the first land of the story. Each of its six fairy rings has ten magic mushrooms "
+	                "and two Champi mushrooms round five small rocks, about 17 metres across. About forty groups of lone "
+	                "pillars of limestone stand alone or in pairs, 217 metres or more apart. On the land of seed 42, "
+	                "each fairy ring has six large magic mushrooms. A creature can eat a magic mushroom of a ring.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 64, .object = k_BigIsland}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_mushroom_clumps",
+	    .name = "The clumps of mushrooms and toadstools of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 42 and the game loads it. Fly to "
+	                   "the small clumps of magic mushrooms, Champi mushrooms and toadstools on the grass and the heather.",
+	    .expected = "This land is like the third land of the story. Each clump is a copy of a clump of that land: seven "
+	                "magic mushrooms, two or five Champi mushrooms, or three toadstools. The clumps are 60 metres or more "
+	                "apart. On the land of seed 64, a clump has twenty small magic mushrooms and five toadstools. No tree "
+	                "grows on the high sides of the mountains.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 42, .object = k_BigIsland}},
 	});
 
 	all.push_back({
