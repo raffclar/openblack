@@ -255,12 +255,14 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		{
 			Locator::ownReportSystem::value().ReportHand(_cameraIcons);
 		}
-		Locator::ownReportSystem::value().ReportHelp({
-		    .frontEndBoxShows = [this] { return FrontEndBoxShows(); },
-		    .worldCameraView = &Game::HelpWorldCameraView,
-		});
+		// During a silence of the game server no report of the help and no dialogue click goes. The next report after the
+		// silence tells the changes.
 		if (!_serverSilent)
 		{
+			Locator::ownReportSystem::value().ReportHelp({
+			    .frontEndBoxShows = [this] { return FrontEndBoxShows(); },
+			    .worldCameraView = &Game::HelpWorldCameraView,
+			});
 			SendDialogueClick();
 		}
 		Locator::playerCommandSystem::value().SendOpenBlock();

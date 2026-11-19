@@ -621,6 +621,44 @@ SILENCE_START = "No message from the server for"
 SILENCE_END = "The silence of the server ended after"
 
 
+def pause_shots(pid, folder, until, after_seconds=3.0):
+    """During a pause of the server: the pointer of a client moves between two points, and the client takes a screenshot
+    and the state of its camera and its pointer about five times each second, until a time after the pause. One open
+    connection to the inspector makes the pictures quick. Gives the samples."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(INSPECTOR_ADAPTER)))
+    import openblack_inspector_mcp as adapter
+    session = adapter.Session(adapter.DEFAULT_PORT, 30.0)
+    session.pinned = {"pid": pid}
+
+    def call(query, request):
+        try:
+            answer = session.send(adapter.call_request(query, json.dumps(request)))
+        except ConnectionError:
+            return None
+        return answer.get("result") if answer.get("ok") else None
+
+    os.makedirs(folder, exist_ok=True)
+    samples = []
+    points = ([500, 400], [780, 620])
+    index = 0
+    started = time.monotonic()
+    try:
+        while time.monotonic() < until() + after_seconds:
+            call("input.pointer", {"params": {"screen": points[(index // 3) % 2]}})
+            path = os.path.abspath(os.path.join(folder, f"shot_{index:03d}.png"))
+            call("screenshot.take", {"params": {"path": path}})
+            pointer = call("input.state", {}) or {}
+            samples.append({"index": index, "seconds": round(time.monotonic() - started, 2), "shot": path,
+                            "pointer": pointer.get("pointer"), "pick": (pointer.get("pick") or {}).get("land")})
+            index += 1
+            time.sleep(0.1)
+    finally:
+        session.close()
+    with open(os.path.join(folder, "samples.json"), "w", encoding="utf-8") as file:
+        json.dump(samples, file, indent=2)
+    return samples
+
+
 def silence_lines(log):
     """The starts and the ends of the silences of the server in the log of a client: [{"after_ms", "commands"}] for each
     end, and the count of the starts"""
@@ -629,7 +667,8 @@ def silence_lines(log):
         found = re.search(r"ended after (\d+) ms \((\d+) commands", line)
         if found:
             ends.append({"after_ms": int(found.group(1)), "commands": int(found.group(2))})
-    return {"starts": len(lines_with(log, [SILENCE_START])), "ends": ends,
+    starts = [line for line in lines_with(log, [SILENCE_START]) if "on an open socket" not in line]
+    return {"starts": len(starts), "ends": ends,
             "limit": len(lines_with(log, ["on an open socket: the client tries to come back"]))}
 
 
@@ -4104,6 +4143,9 @@ def main():
                         help="the server loses this percent of the packets of the game socket; a lost packet comes after "
                              "the time that TCP takes to send it again (--test-net-loss)")
     parser.add_argument("--net-seed", type=int, help="the seed of the losses of --net-loss")
+    parser.add_argument("--pause-shots", metavar="FOLDER",
+                        help="with a --pause of the server: the first client moves its pointer and takes a screenshot "
+                             "each half second during the pause and 3 s after it (needs the inspector of the client)")
     parser.add_argument("--rejoin-second-at", type=int, metavar="TURN",
                         help="stop the second client once it compared TURN turns (a multiple of 100), and start a new "
                              "process of its player with a new ticket after --rejoin-after seconds; the new process must "
@@ -4568,6 +4610,7 @@ def main():
             chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
             chatting = chatting or any(value.split(":", 1)[1] == str(index + 1) for value in options.tattoo_menu)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
+                    or (options.pause_shots and index == 0)
                     or options.give == index + 1 or any(leash["client"] == index for leash in leashes)
                     or options.editor_check or options.forest_camera or options.editor_desync):
                 command += ["--inspect-port", "0"]
@@ -4681,6 +4724,12 @@ def main():
                     if suspend_process(target.pid, True):
                         pause["at"] = time.monotonic()
                         pause["until"] = pause["at"] + pause["seconds"]
+                        if options.pause_shots and pause["who"] == "server" and clients:
+                            shooter = threading.Thread(target=pause_shots, args=(
+                                clients[0].pid, os.path.join(options.pause_shots, f"pause_{pause['turn']}"),
+                                lambda pause=pause: pause["until"]), daemon=True)
+                            shooter.start()
+                            pause["shooter"] = shooter
                         print(f"paused {pause['who']} (process {target.pid}) after turn {pause['turn']} for "
                               f"{pause['seconds']} s")
                     else:
