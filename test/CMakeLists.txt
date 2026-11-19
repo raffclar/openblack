@@ -2710,6 +2710,8 @@ openblack_setup_and_add_test(test_landgen_shape landgen/test_landgen_shape.cpp)
 target_link_libraries(test_landgen_shape PRIVATE landgen)
 openblack_setup_and_add_test(test_landgen_lakes landgen/test_landgen_lakes.cpp)
 target_link_libraries(test_landgen_lakes PRIVATE landgen)
+openblack_setup_and_add_test(test_landgen_lakeshore landgen/test_landgen_lakeshore.cpp)
+target_link_libraries(test_landgen_lakeshore PRIVATE landgen)
 openblack_setup_and_add_test(
   test_landgen_climate landgen/test_landgen_climate.cpp
 )

@@ -457,6 +457,22 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_lake_shores",
+	    .name = "The sand round the lakes of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly the "
+	                   "camera to the lake on the hill at about (3080, 2380) and look at its shore, then at the sea "
+	                   "shore.",
+	    .expected = "Each lake has the same sand edge as the sea shore. Wet sand covers the shallow water and the ground "
+	                "just above the level of the lake. On gentle warm ground, a beach of dry sand goes 40 to 120 metres "
+	                "from the water, or as far as a beach of the sea goes there. A lake on a hill has its sand at its "
+	                "own level.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7, .object = k_BigIsland}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_high_mountains",
 	    .name = "The high mountains of a generated land",
 	    .facet = Facet::Editor,

@@ -532,6 +532,35 @@ def path_measures(paths, lanterns):
     return out
 
 
+def lake_shore_measures(heights, water, lake_water, lake_level_m, sand):
+    """The numbers of the sand edge of the lakes, next to the same numbers of the sea shore. water is the mask of the
+    cells with water, lake_water the mask of the water of the lakes (a part of water), lake_level_m the level of the
+    lake in metres at each cell of lake_water, sand the mask of the sand. Heights and levels are in metres."""
+    out = {}
+    sea_water = water & ~lake_water
+    land = ~water
+    ring = np.ones((3, 3), dtype=bool)
+    to_lake, nearest = ndimage.distance_transform_edt(~lake_water, return_indices=True)
+    to_lake = to_lake * CELL
+    to_sea = ndimage.distance_transform_edt(~sea_water) * CELL
+    level = lake_level_m[nearest[0], nearest[1]]
+    for name, own, distance, other in (("lake", lake_water, to_lake, to_sea), ("sea", sea_water, to_sea, to_lake)):
+        if not own.any():
+            continue
+        edge = land & ndimage.binary_dilation(own, structure=ring)
+        out[f"{name}_edge_cells"] = int(edge.sum())
+        out[f"{name}_edge_sand_pct"] = float(sand[edge].mean() * 100) if edge.any() else float("nan")
+        # The sand that this water is the nearest water to, within 200 m
+        near = land & sand & (distance <= other) & (distance <= 200)
+        out[f"{name}_sand_width_median_m"] = percentile(distance[near], 50)
+        out[f"{name}_sand_width_p90_m"] = percentile(distance[near], 90)
+        # The strip from 10 to 40 m, as the shore strip of the sea, over the level of its water
+        strip = land & (distance > 9.9) & (distance <= 40) & (distance <= other)
+        above = heights[strip] - (level[strip] if name == "lake" else 0.0)
+        out[f"{name}_strip_height_m"] = percentile(above, 50)
+    return out
+
+
 def measure_land(land):
     """All numbers of a land. land is a dict with heights, land, sand, trees (a list of (x, z, kind, in_forest)), rocks
     (a list of (x, z)), forests, footpaths, mists and towns."""
@@ -554,6 +583,9 @@ def measure_land(land):
     out.update(path_measures(land.get("path_list", []), land.get("lantern_list", [])))
     out.update(stream_measures(land.get("streams", []), land["heights"], land["land"], [(t[0], t[1]) for t in trees],
                                area))
+    if "lake_water" in land:
+        out.update(lake_shore_measures(land["heights"], land["water"], land["lake_water"], land["lake_level_m"],
+                                       land["sand"]))
     if "wet" in land:
         out.update(swamp_measures(land["wet"], land["land"], [(t[0], t[1]) for t in trees], land.get("mist_list", [])))
     kinds = {}
@@ -624,7 +656,19 @@ def load_dump(path):
     # A mist of a newer dump is x, z, height, colour, size and edge shrink
     dark = [(m[0], m[1]) for m in d["mists"] if len(m) >= 4 and is_dark(int(m[3]))]
     cursed += dark
-    return {"name": os.path.splitext(os.path.basename(path))[0],
+    # A newer dump marks the water of the lakes: the still fresh water at the sea level, and the high lakes at their
+    # own levels
+    lake_water = np.zeros_like(land)
+    lake_level_m = np.zeros(alt.shape, dtype=float)
+    if "fresh" in d and "lake_level" in d:
+        fresh = np.array(d["fresh"], dtype=int).reshape(side, side) != 0
+        level = np.array(d["lake_level"], dtype=float).reshape(side, side)
+        high = level >= 0
+        metres = curve if curve is not None else np.arange(256) * HEIGHT_UNIT
+        lake_level_m = np.where(high, np.interp(level, np.arange(256), metres), 0.0)
+        lake_water = (water != 0) & (fresh | high)
+    extra = {"water": water != 0, "lake_water": lake_water, "lake_level_m": lake_level_m} if lake_water.any() else {}
+    return {**extra, "name": os.path.splitext(os.path.basename(path))[0],
             "heights": units * HEIGHT_UNIT, "curve": None if plain else curve, "land": land,
             "sand": sand, "trees": trees, "rocks": rocks, "rock_poses": rock_poses, "pillars": pillars,
             "lone_pillars": lone_pillars, "mushrooms": mushrooms, "small_mushrooms": small_mushrooms,

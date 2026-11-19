@@ -25,7 +25,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0xFF356787728F9A1Eull;
+constexpr uint64_t k_SmallLandHash = 0xF3710F33710A79EDull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)
@@ -998,10 +998,10 @@ TEST(LandgenGenerator, TheLandIsAnIslandWithEachPart)
 		EXPECT_EQ(land.cells.At(i, 0).altitude, 0);
 		EXPECT_EQ(land.cells.At(0, i).altitude, 0);
 	}
-	// A country for each biome, then the country of the paths, then the two countries of the dark ground of the cursed
-	// places when the land has a place
-	EXPECT_EQ(land.countries.size(),
-	          biomes::k_BiomeCount + 1 + (land.cursedPatches.empty() ? 0 : countries::CursedRecipes().size()));
+	// A country for each biome, then the country of the paths, the two countries of the edges of the lakes, then the two
+	// countries of the dark ground of the cursed places when the land has a place
+	EXPECT_EQ(land.countries.size(), biomes::k_BiomeCount + 1 + countries::LakeShoreRecipes().size() +
+	                                     (land.cursedPatches.empty() ? 0 : countries::CursedRecipes().size()));
 	EXPECT_EQ(land.materials, countries::UsedSurfaces());
 	EXPECT_TRUE(std::ranges::any_of(land.cells.values, [](const auto& cell) { return cell.altitude > 100; }));
 	EXPECT_FALSE(land.features.empty());
