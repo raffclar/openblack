@@ -207,10 +207,26 @@ void Resize(entt::entity entity, float scale)
 	}
 }
 
+/// The trees of each forest, by its number, in the order of a walk of the trees with a forest and a place
+using TreesByForest = std::unordered_map<uint32_t, std::vector<entt::entity>>;
+
+/// Puts each tree of a forest into the list of its forest, in the order of the walk that ListedTrees does
+TreesByForest SortTreesByForest(const ecs::Registry& registry)
+{
+	TreesByForest trees;
+	registry.Each<const Tree, const ForestMember, const Transform>(
+	    [&trees](entt::entity tree, const Tree& /*unused*/, const ForestMember& member, const Transform& /*unused*/) {
+		    trees[member.forest].push_back(tree);
+	    });
+	return trees;
+}
+
 /// A forest's growing or grown trees, the nearest its place first and, of those as near, the one listed first. The
-/// distances go from the map position of each tree to the map position of the forest.
+/// distances go from the map position of each tree to the map position of the forest. With the trees of each forest,
+/// the search looks only at the trees of this forest. These lists must be in the order of the walk, and no tree can
+/// join the forest or go after they were made.
 std::vector<entt::entity> ListedTrees(const ecs::Registry& registry, uint32_t forest, bool growing,
-                                      const map_coords::MapCoords& centre)
+                                      const map_coords::MapCoords& centre, const TreesByForest* byForest = nullptr)
 {
 	struct Listed
 	{
@@ -219,15 +235,31 @@ std::vector<entt::entity> ListedTrees(const ecs::Registry& registry, uint32_t fo
 		entt::entity tree;
 	};
 	std::vector<Listed> trees;
-	registry.Each<const Tree, const ForestMember, const Transform>(
-	    [&](entt::entity tree, const Tree& /*unused*/, const ForestMember& member, const Transform& /*unused*/) {
-		    if (member.forest == forest && member.growing == growing)
-		    {
-			    trees.push_back({.distance = gutils::GetDistanceInMetres(ecs::thing_map_place::Of(registry, tree), centre),
-			                     .listed = member.listed,
-			                     .tree = tree});
-		    }
-	    });
+	const auto look = [&](entt::entity tree, const ForestMember& member) {
+		if (member.forest == forest && member.growing == growing)
+		{
+			trees.push_back({.distance = gutils::GetDistanceInMetres(ecs::thing_map_place::Of(registry, tree), centre),
+			                 .listed = member.listed,
+			                 .tree = tree});
+		}
+	};
+	if (byForest != nullptr)
+	{
+		if (const auto found = byForest->find(forest); found != byForest->end())
+		{
+			for (const auto tree : found->second)
+			{
+				look(tree, registry.Get<const ForestMember>(tree));
+			}
+		}
+	}
+	else
+	{
+		registry.Each<const Tree, const ForestMember, const Transform>(
+		    [&look](entt::entity tree, const Tree& /*unused*/, const ForestMember& member, const Transform& /*unused*/) {
+			    look(tree, member);
+		    });
+	}
 	std::ranges::sort(trees, [](const Listed& a, const Listed& b) {
 		return a.distance != b.distance ? a.distance < b.distance : a.listed < b.listed;
 	});
@@ -745,6 +777,9 @@ void ForestSystem::GrowForests()
 		}
 	});
 
+	// Each forest looks only at its own trees below. The trees that it plants join it after it looked at them.
+	const auto byForest = SortTreesByForest(registry);
+
 	// The newest forest first
 	std::vector<std::pair<uint32_t, entt::entity>> forests;
 	registry.Each<const ForestTurns>(
@@ -777,7 +812,7 @@ void ForestSystem::GrowForests()
 		// Its growing trees grow, the nearest its place first; a tree that leaves them is listed among the grown ones
 		if (trees.anyGrowing)
 		{
-			for (const auto tree : ListedTrees(registry, turns.id, true, centre))
+			for (const auto tree : ListedTrees(registry, turns.id, true, centre, &byForest))
 			{
 				auto& kind = registry.Get<Tree>(tree);
 				auto& transform = registry.Get<Transform>(tree);
@@ -811,7 +846,7 @@ void ForestSystem::GrowForests()
 		{
 			continue;
 		}
-		const auto grown = ListedTrees(registry, turns.id, false, centre);
+		const auto grown = ListedTrees(registry, turns.id, false, centre, &byForest);
 		const auto pick = random.GameRand(forest_growth::ParentDraws(grown.size()));
 		if (pick < grown.size())
 		{

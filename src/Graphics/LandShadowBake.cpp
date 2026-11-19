@@ -9,6 +9,8 @@
 
 #include "LandShadowBake.h"
 
+#include <cassert>
+
 #include <algorithm>
 #include <chrono>
 #include <iterator>
@@ -187,48 +189,8 @@ void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted
 	    });
 }
 
-/// The blocks of a bake, by their index along x and z, as a grid that tells at once whether a block is among them
-class BlockGrid
-{
-public:
-	explicit BlockGrid(std::span<const glm::ivec2> blocks)
-	{
-		if (blocks.empty())
-		{
-			return;
-		}
-		_low = blocks.front();
-		auto high = blocks.front();
-		for (const auto block : blocks)
-		{
-			_low = glm::min(_low, block);
-			high = glm::max(high, block);
-		}
-		_size = high - _low + 1;
-		_in.assign(static_cast<size_t>(_size.x) * static_cast<size_t>(_size.y), false);
-		for (const auto block : blocks)
-		{
-			_in[Index(block)] = true;
-		}
-	}
-
-	[[nodiscard]] bool Contains(glm::ivec2 block) const
-	{
-		const auto place = block - _low;
-		return place.x >= 0 && place.y >= 0 && place.x < _size.x && place.y < _size.y && _in[Index(block)];
-	}
-
-private:
-	[[nodiscard]] size_t Index(glm::ivec2 block) const
-	{
-		const auto place = block - _low;
-		return (static_cast<size_t>(place.x) * static_cast<size_t>(_size.y)) + static_cast<size_t>(place.y);
-	}
-
-	glm::ivec2 _low {0};
-	glm::ivec2 _size {0};
-	std::vector<bool> _in;
-};
+/// The fewest casters for each lane of the pool that shares the test of the watched things
+constexpr size_t k_LeastCastersToShare = 4096;
 
 glm::ivec2 CellOf(uint32_t index)
 {
@@ -317,6 +279,7 @@ void LandShadowBake::Reset()
 	_texture.reset();
 	_texels = {0, 0};
 	_baked.clear();
+	_casterBlocks.Clear();
 	_newlyBaked.clear();
 	_bakingBlocks.clear();
 	_mayCast.clear();
@@ -586,31 +549,12 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	baking.reserve(job.blocks.size());
 	std::ranges::transform(job.blocks, std::back_inserter(baking), &BakeBlock::position);
 	std::ranges::sort(baking, [](glm::ivec2 a, glm::ivec2 b) { return a.x != b.x ? a.x < b.x : a.y < b.y; });
-	const BlockGrid bakingGrid(baking);
-	const auto castsIntoBaking = [&bakingGrid](const Baked& caster) {
-		return std::ranges::any_of(caster.cells, [&bakingGrid](uint32_t index) {
-			const auto cell = CellOf(index);
-			const auto alongX = tree_shadows::BlocksTakingShadowFrom(cell.x);
-			const auto alongZ = tree_shadows::BlocksTakingShadowFrom(cell.y);
-			for (int x = alongX.x; x <= alongX.y; ++x)
-			{
-				for (int z = alongZ.x; z <= alongZ.y; ++z)
-				{
-					if (bakingGrid.Contains({x, z}))
-					{
-						return true;
-					}
-				}
-			}
-			return false;
-		});
-	};
-	for (auto& kept : _baked)
+	// Only the casters whose shadows fall into the blocks to bake go into the job, in the order of the casters
+	for (const auto entity : _casterBlocks.CastingInto(baking))
 	{
-		if (!castsIntoBaking(kept))
-		{
-			continue;
-		}
+		const auto found = std::ranges::lower_bound(_baked, entity, {}, &Baked::entity);
+		assert(found != _baked.end() && found->entity == entity);
+		auto& kept = *found;
 		const auto shadow = static_cast<LandShadow>(kept.from.shadow);
 		auto& baked = job.casters.emplace_back(BakeCaster {
 		    .shadow = shadow,
@@ -688,6 +632,8 @@ void LandShadowBake::Rebake(Baked& kept, Baked&& now)
 	{
 		MarkBlocksOf(kept.cells);
 		MarkBlocksOf(now.cells);
+		_casterBlocks.Remove(kept.entity, kept.cells);
+		_casterBlocks.Add(kept.entity, now.cells);
 		kept.from = now.from;
 		kept.cells = std::move(now.cells);
 		kept.cast.reset();
@@ -751,6 +697,7 @@ void LandShadowBake::LookAtAllCasters(Casters casters)
 		{
 			// It casts no more
 			MarkBlocksOf(kept->cells);
+			_casterBlocks.Remove(kept->entity, kept->cells);
 		}
 		auto now = BakedOf(caster, registry);
 		if (kept != _baked.end() && kept->entity == caster.entity)
@@ -761,11 +708,13 @@ void LandShadowBake::LookAtAllCasters(Casters casters)
 			continue;
 		}
 		MarkBlocksOf(now.cells);
+		_casterBlocks.Add(now.entity, now.cells);
 		next.push_back(std::move(now));
 	}
 	for (; kept != _baked.end(); ++kept)
 	{
 		MarkBlocksOf(kept->cells);
+		_casterBlocks.Remove(kept->entity, kept->cells);
 	}
 	_baked = std::move(next);
 
@@ -806,6 +755,7 @@ void LandShadowBake::UpdateChanged(std::span<const WatchedChange> changes, Caste
 			else
 			{
 				MarkBlocksOf(now.cells);
+				_casterBlocks.Add(now.entity, now.cells);
 				_baked.insert(kept, std::move(now));
 			}
 		}
@@ -813,6 +763,7 @@ void LandShadowBake::UpdateChanged(std::span<const WatchedChange> changes, Caste
 		{
 			// It casts no more
 			MarkBlocksOf(kept->cells);
+			_casterBlocks.Remove(kept->entity, kept->cells);
 			_baked.erase(kept);
 		}
 		std::erase_if(_mayCast, [entity](const Watched& thing) { return thing.entity == entity; });
@@ -835,17 +786,40 @@ std::vector<LandShadowBake::WatchedChange> LandShadowBake::FindWatchedChanges(co
 		return changes;
 	}
 	const auto& shadows = stores.shadows;
-	for (size_t i = 0; i < _baked.size(); ++i)
-	{
-		const auto& caster = _baked[i];
-		const bool changed =
-		    (caster.shadowChangesInPlace && static_cast<uint32_t>(shadows.Of(caster.entity)) != caster.from.shadow) ||
-		    !same_bits::SameBits(transforms->get(caster.entity), caster.transform) ||
-		    meshes->get(caster.entity).id != caster.from.mesh ||
-		    (caster.filed && !same_bits::SameWords(residents->get(caster.entity).cells, caster.cells));
-		if (changed)
+	const auto findChangedCasters = [&](size_t from, size_t to, std::vector<WatchedChange>& found) {
+		for (size_t i = from; i < to; ++i)
 		{
-			changes.push_back({.caster = true, .index = i});
+			const auto& caster = _baked[i];
+			const bool changed =
+			    (caster.shadowChangesInPlace && static_cast<uint32_t>(shadows.Of(caster.entity)) != caster.from.shadow) ||
+			    !same_bits::SameBits(transforms->get(caster.entity), caster.transform) ||
+			    meshes->get(caster.entity).id != caster.from.mesh ||
+			    (caster.filed && !same_bits::SameWords(residents->get(caster.entity).cells, caster.cells));
+			if (changed)
+			{
+				found.push_back({.caster = true, .index = i});
+			}
+		}
+	};
+	// The lanes of the pool share many casters. Each share keeps its changes, and the changes then follow the order of
+	// the casters, as the changes of one walk do.
+	const size_t shares = _testWorkers != nullptr
+	                          ? std::clamp<size_t>(_baked.size() / k_LeastCastersToShare, 1, _testWorkers->GetLaneCount())
+	                          : 1;
+	if (shares == 1)
+	{
+		findChangedCasters(0, _baked.size(), changes);
+	}
+	else
+	{
+		std::vector<std::vector<WatchedChange>> found(shares);
+		const auto count = _baked.size();
+		_testWorkers->ForEach(shares, [&](size_t share, size_t /*lane*/) {
+			findChangedCasters(count * share / shares, count * (share + 1) / shares, found[share]);
+		});
+		for (const auto& share : found)
+		{
+			changes.insert(changes.end(), share.begin(), share.end());
 		}
 	}
 	for (size_t i = 0; i < _mayCast.size(); ++i)
@@ -880,6 +854,10 @@ void LandShadowBake::StartWatchedTest()
 	if (_watchedTest == nullptr)
 	{
 		_watchedTest = std::make_unique<SideThread>();
+	}
+	if (_testWorkers == nullptr)
+	{
+		_testWorkers = MakeWorkerPool();
 	}
 	_watchedTestStarted = true;
 	// The side thread reads only the stores that this thread finds now

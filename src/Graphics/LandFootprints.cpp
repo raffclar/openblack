@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <initializer_list>
 #include <iterator>
 #include <span>
@@ -295,8 +296,11 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 	const size_t count = first != nullptr ? first->size() : 0;
 	const auto quick = [&](size_t share, size_t from, size_t to) {
 		auto& left = found[share];
-		// Things of one model often come one after the other
-		auto footprint = _footprints.end();
+		// The things of a few models often come mixed, as the trees of a wood do. Each share keeps the models that it
+		// found last, so that it searches the found footprints less often.
+		constexpr size_t k_KeptModels = 8;
+		std::array<std::pair<entt::id_type, decltype(_footprints)::const_iterator>, k_KeptModels> kept;
+		kept.fill({entt::id_type {0}, _footprints.cend()});
 		for (auto it = first->begin() + static_cast<std::ptrdiff_t>(from);
 		     it != first->begin() + static_cast<std::ptrdiff_t>(to); ++it)
 		{
@@ -306,12 +310,14 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 				continue;
 			}
 			const auto& [resident, mesh, transform] = filed.get(entity);
-			if (footprint == _footprints.end() || footprint->first != mesh.id)
+			auto& slot = kept.at(mesh.id % k_KeptModels);
+			if (slot.second == _footprints.cend() || slot.first != mesh.id)
 			{
-				footprint = _footprints.find(mesh.id);
+				slot = {mesh.id, _footprints.find(mesh.id)};
 			}
+			const auto footprint = slot.second;
 			const auto held = _known.current(entity);
-			if (footprint == _footprints.end() || (held != k_NoVersion && held != entt::to_version(entity)))
+			if (footprint == _footprints.cend() || (held != k_NoVersion && held != entt::to_version(entity)))
 			{
 				left.push_back(entity);
 				continue;

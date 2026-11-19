@@ -17,6 +17,7 @@
 #include <chrono>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -33,6 +34,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/Map.h"
+#include "ECS/MarkedTrees.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
@@ -40,6 +42,7 @@
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TreeRustle.h"
+#include "ECS/UnfiledTrees.h"
 #include "Graphics/MeshDetail.h"
 #include "Locator.h"
 #include "Nature/TreeBend.h"
@@ -61,6 +64,63 @@ constexpr float k_FieldLean = 1.75f;
 
 // A bent tree leans away from the bend point by up to this many radians
 constexpr float k_MaxBend = 0.47123894f;
+
+// The side of a map cell in metres
+constexpr float k_CellMetres = 10.0f;
+
+/// Finds the trees that can rustle in this frame, in the order of a walk of the view: the bent trees, the trees that are
+/// not in the map's cells, and the trees filed in the cells round the camera. The search adds one more cell on each side,
+/// so that it also finds a tree at the edge of its cell. It gives false with no map. The caller must then walk every
+/// tree.
+template <typename TreeView>
+bool GatherRustleTrees(openblack::ecs::Registry& registry, const TreeView& trees, const glm::vec3& camera,
+                       const std::unordered_map<entt::entity, openblack::nature::tree_bend::Bend>& bends,
+                       std::vector<entt::entity>& gathered)
+{
+	using openblack::ecs::MapInterface;
+	gathered.clear();
+	if (!openblack::Locator::entitiesMap::has_value() || trees.handle() == nullptr)
+	{
+		return false;
+	}
+	const auto& map = openblack::Locator::entitiesMap::value();
+	const auto add = [&trees, &gathered](entt::entity entity) {
+		if (trees.contains(entity))
+		{
+			gathered.push_back(entity);
+		}
+	};
+	for (const auto& [entity, bend] : bends)
+	{
+		add(entity);
+	}
+	std::ranges::for_each(openblack::ecs::UnfiledTrees(registry), add);
+	const auto cellOf = [](float metres, int last) {
+		return std::clamp(static_cast<int>(std::floor(metres / k_CellMetres)), -1, last + 1);
+	};
+	const auto reach = TreeRustle::k_CameraReach;
+	const int lastX = MapInterface::k_GridSize.x - 1;
+	const int lastZ = MapInterface::k_GridSize.y - 1;
+	const int lowX = std::max(cellOf(camera.x - reach, lastX) - 1, 0);
+	const int highX = std::min(cellOf(camera.x + reach, lastX) + 1, lastX);
+	const int lowZ = std::max(cellOf(camera.z - reach, lastZ) - 1, 0);
+	const int highZ = std::min(cellOf(camera.z + reach, lastZ) + 1, lastZ);
+	for (int x = lowX; x <= highX; ++x)
+	{
+		for (int z = lowZ; z <= highZ; ++z)
+		{
+			const MapInterface::CellId cell(x, z);
+			std::ranges::for_each(map.GetFiledFixedInGridCell(cell), add);
+			std::ranges::for_each(map.GetFiledMobileInGridCell(cell), add);
+		}
+	}
+	// A walk of the view goes along its first store from its last place to its first
+	const auto* first = trees.handle();
+	std::ranges::sort(gathered, std::ranges::greater {}, [first](entt::entity entity) { return first->index(entity); });
+	const auto [repeatsFirst, repeatsLast] = std::ranges::unique(gathered);
+	gathered.erase(repeatsFirst, repeatsLast);
+	return true;
+}
 } // namespace
 
 void VegetationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
@@ -92,6 +152,7 @@ void VegetationSystem::Mark(const nature::tree_bend::Source& source, std::option
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& map = Locator::entitiesMap::value();
+	auto& marked = ecs::MarkedTrees(registry);
 	const auto cells = nature::tree_bend::CellsMarkedBy(source.position);
 	for (int x = cells.first.x; x <= cells.last.x; ++x)
 	{
@@ -106,6 +167,10 @@ void VegetationSystem::Mark(const nature::tree_bend::Source& source, std::option
 				if (auto* tree = registry.TryGet<Tree>(entity))
 				{
 					tree->bendSlot = written;
+					if (!marked.contains(entity))
+					{
+						marked.push(entity);
+					}
 				}
 			}
 		}
@@ -190,34 +255,48 @@ void VegetationSystem::UpdateBendPoints(bool handShown)
 		}
 	}
 
-	// Each marked tree reads the point in its slot. It loses its mark when the point is above it or out of its reach
+	// Each marked tree reads the point in its slot. It loses its mark when the point is above it or out of its reach. Only
+	// the trees in the set of marked trees can have a slot, thus the frame does not look at the other trees.
 	_bends.clear();
 	std::unordered_map<entt::id_type, float> meshHeights;
-	registry.Each<Tree, const Transform, const Mesh>([&](entt::entity entity, Tree& tree, const Transform& transform,
-	                                                     const Mesh& mesh) {
-		if (tree.bendSlot == nature::tree_bend::k_NoSlot)
+	auto& marked = ecs::MarkedTrees(registry);
+	std::vector<entt::entity> unmarked;
+	for (const auto entity : marked)
+	{
+		auto* tree = registry.TryGet<Tree>(entity);
+		const auto* transform = registry.TryGet<const Transform>(entity);
+		const auto* mesh = registry.TryGet<const Mesh>(entity);
+		if (tree == nullptr || tree->bendSlot == nature::tree_bend::k_NoSlot)
 		{
-			return;
+			unmarked.push_back(entity);
+			continue;
 		}
-		const auto [found, inserted] = meshHeights.try_emplace(mesh.id, 0.0f);
-		if (inserted && meshes.Contains(mesh.id))
+		if (transform == nullptr || mesh == nullptr)
 		{
-			found->second = meshes.Handle(mesh.id)->GetBoundingBox().Size().y;
+			// A tree with no place or model keeps its slot, as it stays out of the walk of the trees
+			continue;
+		}
+		const auto [found, inserted] = meshHeights.try_emplace(mesh->id, 0.0f);
+		if (inserted && meshes.Contains(mesh->id))
+		{
+			found->second = meshes.Handle(mesh->id)->GetBoundingBox().Size().y;
 		}
 		const auto bend =
-		    nature::tree_bend::ReadBend(_bendTable.At(tree.bendSlot), transform.position, transform.scale.y * found->second);
+		    nature::tree_bend::ReadBend(_bendTable.At(tree->bendSlot), transform->position, transform->scale.y * found->second);
 		if (!bend.has_value())
 		{
-			tree.bendSlot = nature::tree_bend::k_NoSlot;
-			return;
+			tree->bendSlot = nature::tree_bend::k_NoSlot;
+			unmarked.push_back(entity);
+			continue;
 		}
 		_bends.emplace(entity, *bend);
-	});
+	}
+	marked.remove(unmarked.begin(), unmarked.end());
 }
 
 void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 {
-	const auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = Locator::entitiesRegistry::value();
 	auto& meshes = Locator::resources::value().GetMeshes();
 	auto& audio = Locator::sounds::value();
 	auto& rng = Locator::rng::value();
@@ -243,9 +322,7 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 		return found->second;
 	};
 
-	registry.Each<const Tree, const Transform, const Mesh, const Swayable>([&](entt::entity entity, const Tree& /*unused*/,
-	                                                                           const Transform& transform, const Mesh& mesh,
-	                                                                           const Swayable& /*unused*/) {
+	const auto rustle = [&](entt::entity entity, const Transform& transform, const Mesh& mesh) {
 		// Only a bent tree or a tree near the camera can rustle, and only for those does its height matter: the others
 		// are passed over before it is looked up. In most frames no tree bends, and then the code does not search for a bend.
 		const bool near = TreeRustle::IsNearCamera(transform.position, camera);
@@ -273,7 +350,21 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 			    audio.PlayAnimEffect(bank, TreeRustle::IdleKeys().ToArray(), entity, transform.position, conditions);
 			audio.SetEmitterFollows(idle.emitter, audio::Follows::Owner);
 		}
-	});
+	};
+
+	// A walk of every tree finds the same trees as the search below, but costs much time with many trees
+	const auto trees = registry.Underlying().view<const Tree, const Transform, const Mesh, const Swayable>();
+	if (!GatherRustleTrees(registry, trees, camera, _bends, _rustleTrees))
+	{
+		trees.each([&rustle](entt::entity entity, const Tree& /*unused*/, const Transform& transform, const Mesh& mesh,
+		                     const Swayable& /*unused*/) { rustle(entity, transform, mesh); });
+		return;
+	}
+	for (const auto entity : _rustleTrees)
+	{
+		const auto& [transform, mesh] = trees.get<const Transform, const Mesh>(entity);
+		rustle(entity, transform, mesh);
+	}
 }
 
 glm::mat4 VegetationSystem::GetTreeMatrix(entt::entity tree, const glm::mat4& model, const glm::vec3& position, float scale,

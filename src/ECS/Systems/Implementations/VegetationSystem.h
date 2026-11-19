@@ -13,6 +13,7 @@
 #include <chrono>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 #include "ECS/Systems/VegetationInterface.h"
 #include "Nature/TreeBend.h"
@@ -62,5 +63,7 @@ private:
 	nature::tree_bend::BendTable _bendTable;
 	/// How far each tree bends this frame
 	std::unordered_map<entt::entity, nature::tree_bend::Bend> _bends;
+	/// The trees that can rustle in this frame, kept to use their memory again
+	std::vector<entt::entity> _rustleTrees;
 };
 } // namespace openblack::ecs::systems
