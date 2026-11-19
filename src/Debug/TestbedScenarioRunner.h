@@ -360,6 +360,8 @@ private:
 	std::vector<entt::entity> _birdFlocks;
 	/// The script flock of the scenario's villagers and animals, after a command gave it
 	entt::entity _scriptFlock {entt::null};
+	/// The emitter of the sample that the last PlayBankSample command started
+	entt::entity _bankSample {entt::null};
 	/// The objects and creatures that the scenario keeps as script variables keep them
 	std::vector<entt::entity> _keptByScript;
 	/// The objects that the native calls of the scenario gave back, in order

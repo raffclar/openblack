@@ -137,3 +137,37 @@ TEST(ClockedAudioPlayer, AGoneSourceHasStopped)
 	player.DeleteSource(source);
 	EXPECT_EQ(player.GetStatus(source), AudioStatus::Stopped);
 }
+
+TEST(ClockedAudioPlayer, TheQueueOffsetCountsTheFinishedBuffersOfTheQueue)
+{
+	FakeClock clock;
+	ClockedAudioPlayer player([&clock] { return clock.now; });
+	const auto source = player.CreateSource(1.0f, false);
+	player.QueueBuffer(source, player.CreateBuffer(ChannelLayout::Mono, OneSecond(), 1000));
+	player.QueueBuffer(source, player.CreateBuffer(ChannelLayout::Mono, OneSecond(), 1000));
+	player.StartSource(source);
+	clock.now += 1300;
+	EXPECT_EQ(player.GetQueueOffset(source), 1300u);
+}
+
+TEST(ClockedAudioPlayer, ABufferFromAFrameTakesThePlaceOfTheQueue)
+{
+	FakeClock clock;
+	ClockedAudioPlayer player([&clock] { return clock.now; });
+	const auto source = player.CreateSource(1.0f, false);
+	const auto part = player.CreateBuffer(ChannelLayout::Mono, OneSecond(), 1000);
+	for (int i = 0; i < 4; ++i)
+	{
+		player.QueueBuffer(source, part);
+	}
+	player.StartSource(source);
+	clock.now += 1300;
+	const auto whole = player.CreateBuffer(ChannelLayout::Mono, OneSecond(), 1000);
+	player.PlayBufferFrom(source, whole, 300);
+	EXPECT_EQ(player.GetQueueOffset(source), 300u);
+	EXPECT_EQ(player.GetStatus(source), AudioStatus::Playing);
+	clock.now += 699;
+	EXPECT_EQ(player.GetStatus(source), AudioStatus::Playing);
+	clock.now += 1;
+	EXPECT_EQ(player.GetStatus(source), AudioStatus::Stopped);
+}

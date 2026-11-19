@@ -1696,4 +1696,20 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                  .byHand = true}},
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
 	});
+
+	// The village bell plays its loop region six times. The game releases its loop in the second pass of the region.
+	constexpr size_t k_VillageBellSample = 30;
+	all.push_back({
+	    .id = "audio.released_loop_region",
+	    .name = "A released sound with a loop region plays to the end of its sample",
+	    .facet = Facet::Audio,
+	    .description = "After a second, the village bell starts. Its bank header loops the first half of the sample five "
+	                   "more times. Two seconds later, the game releases the loop of the bell.",
+	    .expected = "The bell rings two times. Then the second half of the sample plays one time, and the bell stops. "
+	                "The bell plays for approximately four seconds, not nine seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::PlayBankSample, .delaySeconds = 1.0f, .value = k_VillageBellSample},
+	                 {.kind = Kind::ReleaseBankSample, .delaySeconds = 2.0f}},
+	});
 }

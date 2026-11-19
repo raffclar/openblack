@@ -52,6 +52,9 @@ struct AudioEmitter
 	/// changes of the volume or the playback rate do nothing when the header set them.
 	uint32_t headerSet {0};
 	audio::PlayType loop = audio::PlayType::Once;
+	/// The loop count that the sound started with: the passes of the loop region after the first pass, or -1 to loop
+	/// until a stop or a release. The source of this run plays the sound by this count, so a save does not keep it.
+	int32_t loopCount {0};
 	audio::AudioStatus state = audio::AudioStatus::Initial;
 	/// Follows the music volume rather than the effect volume
 	bool music = false;

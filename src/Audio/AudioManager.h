@@ -168,6 +168,9 @@ private:
 	void BindVoice(size_t slot, const Sound& sound, entt::entity emitter, Handle atmos);
 	/// Frees the voice of what stopped
 	void ReleaseVoice(size_t slot);
+	/// Removes the passes that wait in the queue of a released emitter, so that the emitter plays from where it is to
+	/// the end of its sample
+	void PlayReleasedQueueToEnd(const ecs::components::AudioEmitter& component);
 	/// The voice of an emitter, empty when the emitter has no voice
 	[[nodiscard]] std::optional<size_t> VoiceOf(entt::entity emitter) const;
 	/// The key of an owner in the voice pool
