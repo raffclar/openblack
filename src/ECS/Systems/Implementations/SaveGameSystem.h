@@ -130,8 +130,6 @@ private:
 	/// Loads the whole world of a slot: the saved land, its entities, its clock and its scripts
 	bool LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game,
 	                    ecs::world_save::LoadKind kind = ecs::world_save::LoadKind::SavedGame);
-	/// The commands that waited at the save for the next turn wait again
-	static void PutBackWaitingCommands(const gamesave::WorldFile& world);
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);

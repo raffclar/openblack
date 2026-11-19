@@ -61,12 +61,9 @@ WaitingCommands CommandQueue::Waiting() const
 	return waiting;
 }
 
-WaitingCommands openblack::player_commands::KeptBySave(WaitingCommands waiting)
+WaitingCommands openblack::player_commands::KeptByLoad(WaitingCommands before)
 {
-	const auto entersTemple = [](const Command& command) { return std::holds_alternative<TempleLeashOff>(command.action); };
-	std::erase_if(waiting.sent, entersTemple);
-	std::erase_if(waiting.open, entersTemple);
-	return waiting;
+	return WaitingCommands {.sent = std::move(before.open), .open = {}};
 }
 
 void CommandQueue::PutBack(WaitingCommands waiting)

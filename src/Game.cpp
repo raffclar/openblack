@@ -1378,7 +1378,7 @@ bool Game::RunFrame() noexcept
 			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
 		}
 		// A quick load that a command of the turns asked for loads after the draw of the frame, as the game does. The load
-		// forgets the commands of the old world.
+		// keeps only the open block of the commands of the old world.
 		if (Locator::saveGameSystem::has_value())
 		{
 			std::ignore = Locator::saveGameSystem::value().LoadAskedSlot();

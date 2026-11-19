@@ -78,9 +78,9 @@ struct LoadedReports
 	return loaded;
 }
 
-/// The reports that the player sent in the pass of the turn of the save wait for the next turn, and the saved game keeps
-/// them. They are the last reports of the player, in place of the values of the loaded world. A hand report among them
-/// also starts the wait after a send.
+/// The reports that the player sent before the load and that wait for the first turn after the load. The load keeps
+/// only the open block of the game before the load. These reports are the last reports of the player, in place of the
+/// values of the loaded world. A hand report among them also starts the wait after a send.
 [[nodiscard]] inline LoadedReports WithWaiting(LoadedReports loaded, std::span<const player_commands::Command> sent,
                                                PlayerNames player, uint8_t waitAfterSend)
 {
