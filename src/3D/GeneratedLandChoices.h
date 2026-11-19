@@ -49,6 +49,8 @@ struct Choices
 	int32_t topHeight {1250};
 	/// How many stands of trees the land has, in hundredths of the usual stands. Only for tests of the frame rate.
 	int32_t trees {100};
+	/// How many players the land has, from 1 to 4. Each player gets a temple and a town, as on the skirmish lands.
+	int32_t players {1};
 
 	bool operator==(const Choices&) const = default;
 };

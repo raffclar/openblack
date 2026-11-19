@@ -128,7 +128,16 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		       std::to_string(land.cells.XOf(first)) + "," + std::to_string(land.cells.ZOf(first)) + "]";
 	});
 	out << ",\"start\":[" << land.start.x << ',' << land.start.z << ',' << land.start.radius << ']';
-	out << ",\"towns\":" << (land.settlement.town.buildings.empty() ? 0 : 1) + land.settlement.neutral.size();
+	// Each start of a player: the temple and the town centre, x and z in metres, player one first
+	out << ",\"starts\":[[" << land.settlement.citadelX << ',' << land.settlement.citadelZ << ',' << land.settlement.town.x
+	    << ',' << land.settlement.town.z << ']';
+	for (const auto& other : land.otherPlayers)
+	{
+		out << ",[" << other.citadelX << ',' << other.citadelZ << ',' << other.town.x << ',' << other.town.z << ']';
+	}
+	out << ']';
+	out << ",\"towns\":"
+	    << (land.settlement.town.buildings.empty() ? 0 : 1) + land.otherPlayers.size() + land.settlement.neutral.size();
 	// Each town: x and z in metres, the tribe, 1 for a neutral town, the buildings, the houses, the fields, the people,
 	// the fish farms, the wonders, the creches, the storage pits and the kinds of house. Planned buildings count too.
 	const auto isHouse = [](landgen::settlement::Building building) {
@@ -157,6 +166,10 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		return text.str();
 	};
 	out << ",\"town_list\":[" << town(land.settlement.town, 0);
+	for (const auto& other : land.otherPlayers)
+	{
+		out << ',' << town(other.town, 0);
+	}
 	for (const auto& entry : land.settlement.neutral)
 	{
 		out << ',' << town(entry, 1);
@@ -202,11 +215,13 @@ TEST(LandgenDump, WritesTheLandOfEachSeedWhenTheEnvironmentAsksForIt)
 	std::filesystem::create_directories(folder);
 	// The stands of trees in hundredths of the usual stands, for the tree benchmarks
 	const auto trees = EnvironmentOf("OPENBLACK_LANDGEN_TREES");
+	const auto players = EnvironmentOf("OPENBLACK_LANDGEN_PLAYERS");
 	for (const auto seed :
 	     SeedsOf(EnvironmentOf("OPENBLACK_LANDGEN_SEEDS").empty() ? "1,7,42" : EnvironmentOf("OPENBLACK_LANDGEN_SEEDS")))
 	{
-		auto settings =
-		    generated_land::SettingsOf({.seed = seed, .trees = trees.empty() ? 100 : static_cast<int32_t>(std::stoi(trees))});
+		auto settings = generated_land::SettingsOf({.seed = seed,
+		                                            .trees = trees.empty() ? 100 : static_cast<int32_t>(std::stoi(trees)),
+		                                            .players = players.empty() ? 1 : static_cast<int32_t>(std::stoi(players))});
 		// A land with no fairy rings and no lone pillars, for a comparison with the land before them
 		if (EnvironmentOf("OPENBLACK_LANDGEN_FORMATIONS") == "0")
 		{

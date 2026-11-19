@@ -30,6 +30,7 @@
 #include "landgen/Lakes.h"
 #include "landgen/Lighting.h"
 #include "landgen/Paths.h"
+#include "landgen/Players.h"
 #include "landgen/Settlement.h"
 #include "landgen/Streams.h"
 #include "landgen/Swamps.h"
@@ -103,6 +104,8 @@ struct Settings
 	paths::Settings paths;
 	settlement::TownMix mix;
 	settlement::FarmSettings farms;
+	/// The players of the land and the start areas of the other players
+	players::Settings players;
 };
 
 /// A flat place for the player's temple and first town, in corners
@@ -175,6 +178,10 @@ struct GeneratedLand
 	/// some of them
 	std::vector<paths::Path> paths;
 	std::vector<paths::Lantern> lanterns;
+	/// The start areas of players two and up, and the temple and first town of each of them. The plans have no neutral
+	/// towns.
+	std::vector<StartArea> otherStarts;
+	std::vector<settlement::Plan> otherPlayers;
 	std::vector<StageTime> times;
 	/// The height units of each altitude, and the height of each corner in units of 0.67 m. The altitude of a cell is its
 	/// height in units on a land of the story, and the rounded altitude of the curve on a generated land.
