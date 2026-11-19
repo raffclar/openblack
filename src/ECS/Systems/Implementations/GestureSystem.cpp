@@ -1085,6 +1085,8 @@ void GestureSystem::StepHints(float seconds, bool wordsShowing)
 				if (effect != ParticleRuleSystemInterface::k_NoEffect)
 				{
 					particles->SetDrawnAlone(effect);
+					// The hint draws the effect as its last frame step left it, with no blend
+					particles->SetDrawnAtLastStep(effect);
 					particles->SetPlayer(effect, static_cast<int>(Locator::handSystem::has_value()
 					                                                  ? Locator::handSystem::value().GetOwnPlayer()
 					                                                  : PlayerNames::PLAYER_ONE));

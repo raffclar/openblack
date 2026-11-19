@@ -11,6 +11,7 @@ The dumps come from the test program: see README.md.
 """
 import argparse
 import json
+import math
 import os
 import sys
 
@@ -33,6 +34,10 @@ HEIGHT_TARGETS = ("height_max_m", "height_median_m")
 # ("LGX-1: allow lands over 4 km2", deviation 233). The area and the totals that grow with the area do not bind a
 # generated land. The numbers for each km2 and the shape numbers stay the targets. The land stays one island.
 AREA_TOTALS = ("land_km2", "coast_km", "trees", "rocks", "rock_clumps", "big_forests", "towns_per_km2")
+# The paths of a generated land join the towns and the temple, and are longer and wind more than the footpaths of the
+# story (the user allowed it on 2026-11-18: "LGX-4 yes", deviation 233). Their lengths and winding do not bind a
+# generated land. The lanterns keep the vanilla count and spacing.
+PATH_FREE = ("path_length_median_m", "path_length_max_m", "path_winding_median", "path_winding_p90")
 # The towns of a generated land keep the vanilla count and the vanilla distances between towns, so the towns for each km2
 # of a land larger than the lands of the story are fewer: towns_per_km2 is free for a generated land.
 # A town with fewer buildings than this is a hamlet of the story (1 to 3 buildings). The size of a town (houses, people,
@@ -322,6 +327,32 @@ def town_measures(towns, heights, land_mask, area_km2):
     return out
 
 
+def path_measures(paths, lanterns):
+    """The numbers of the paths and the lanterns. paths is a list of lists of (x, z) in metres. lanterns is a list of
+    (x, z) in metres."""
+    lengths, winding = [], []
+    for p in paths:
+        if len(p) < 2:
+            continue
+        length = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(p, p[1:]))
+        straight = math.hypot(p[-1][0] - p[0][0], p[-1][1] - p[0][1])
+        lengths.append(length)
+        if straight > 1.0:
+            winding.append(length / straight)
+    out = {"lanterns": len(lanterns)}
+    if lengths:
+        out["path_length_median_m"] = float(np.median(lengths))
+        out["path_length_max_m"] = float(max(lengths))
+    if winding:
+        out["path_winding_median"] = float(np.median(winding))
+        out["path_winding_p90"] = percentile(winding, 90)
+    if len(lanterns) > 1:
+        points = np.array(lanterns, dtype=float)
+        nearest = cKDTree(points).query(points, k=2)[0][:, 1]
+        out["lantern_spacing_median_m"] = float(np.median(nearest))
+    return out
+
+
 def measure_land(land):
     """All numbers of a land. land is a dict with heights, land, sand, trees (a list of (x, z, kind, in_forest)), rocks
     (a list of (x, z)), forests, footpaths, mists and towns."""
@@ -336,6 +367,7 @@ def measure_land(land):
     out.update(town_measures(land.get("town_list", []), land["heights"], land["land"], area))
     out.update(big_forest_measures(land.get("big_forests", []), land.get("trees", []), area))
     out.update(cursed_measures(land.get("cursed_things", []), land.get("dark_mists", 0)))
+    out.update(path_measures(land.get("path_list", []), land.get("lantern_list", [])))
     if "wet" in land:
         out.update(swamp_measures(land["wet"], land["land"], [(t[0], t[1]) for t in trees], land.get("mist_list", [])))
     kinds = {}
@@ -403,6 +435,8 @@ def load_dump(path):
             "sand": sand, "trees": trees, "rocks": rocks, "rock_poses": rock_poses, "pillars": pillars,
             "big_forests": big_forests, "forests": len(d["forests"]),
             "footpaths": d["footpaths"],
+            "path_list": [list(zip(p[1::2], p[2::2])) for p in d.get("path_list", [])],
+            "lantern_list": [(m[1], m[2]) for m in d.get("lanterns", [])],
             "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark),
             "town_list": [{"x": t[0], "z": t[1], "tribe": t[2], "neutral": t[3] != 0, "buildings": t[4], "houses": t[5],
                            "fields": t[6], "villagers": t[7]} for t in d.get("town_list", [])],
@@ -458,11 +492,14 @@ def vanilla_models():
         wet = land.land & np.isin(land.mtype, GROUND_WET)
         mist_list = [(o["pos"][0], o["pos"][1], o.get("colour", 0)) for o in objs if o["cls"] == "mist"]
         town_list = vanilla_towns(f"{analyze.BLACK}/{script}", objs, towns)
+        path_list = [[(c[0], c[1]) for _, c, _f in nodes] for _, nodes, _walk, _slot in paths]
+        lantern_list = [o["pos"] for o in objs if o["cls"] == "misc" and o["kind"] == "STREET_LANTERN"]
         yield {"town_list": town_list, "name": name, "heights": land.H, "land": land.land, "sand": sand, "trees": trees, "rocks": rocks,
                "rock_poses": rock_poses, "pillars": pillars,
                "big_forests": big_forests,
                "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns),
-               "cursed_things": cursed, "dark_mists": len(dark), "wet": wet, "mist_list": mist_list}
+               "cursed_things": cursed, "dark_mists": len(dark), "wet": wet, "mist_list": mist_list,
+               "path_list": path_list, "lantern_list": lantern_list}
 
 
 def ranges_of(measures):
@@ -512,7 +549,7 @@ def compare_lines(measures, targets, curve=None, generated=False):
         low, high = targets["ranges"][key]
         if key in HEIGHT_TARGETS:
             low, high = curve_metres(curve, low), curve_metres(curve, high)
-        status = "free" if generated and key in AREA_TOTALS else status_of(value, (low, high))
+        status = "free" if generated and (key in AREA_TOTALS or key in PATH_FREE) else status_of(value, (low, high))
         if status == "OUT":
             bad.append(key)
         lines.append(f"| {key} | {value:.1f} | {low:.1f} | {high:.1f} | {status} |")

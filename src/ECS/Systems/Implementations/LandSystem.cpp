@@ -57,6 +57,7 @@
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/StreamSegmentArchetype.h"
+#include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Mesh.h"
@@ -561,6 +562,14 @@ void PlaceGeneratedThings(const landgen::GeneratedLand& land)
 			archetypes::MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(feature.type), feature.altitude,
 			                                          feature.xAngle, feature.angle, feature.zAngle, feature.size);
 		}
+	}
+
+	// Each lantern beside a path is a street lantern or a country lantern, as a land script of the story makes it
+	for (const auto& lantern : land.lanterns)
+	{
+		const auto kind = lantern.kind == landgen::paths::LanternKind::Street ? MobileStaticInfo::StreetLantern
+		                                                                      : MobileStaticInfo::CountryLantern;
+		archetypes::StreetLanternArchetype::Create(onLand(lantern.x, lantern.z), kind);
 	}
 
 	// Each puff of mist or smoke of a cursed place is a mist of the land, as a land script makes it

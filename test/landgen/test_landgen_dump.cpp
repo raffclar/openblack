@@ -142,7 +142,26 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		     << mist.edgeShrink << ']';
 		return text.str();
 	});
-	out << ",\"footpaths\":0}\n";
+	// Each path: 1 when it has lanterns, then x and z in metres of each of its points
+	out << ",\"footpaths\":" << land.paths.size() << ",\"path_list\":";
+	WriteList(out, land.paths, [](const landgen::paths::Path& path) {
+		std::ostringstream text;
+		text << '[' << (path.lit ? 1 : 0);
+		for (const auto& point : path.points)
+		{
+			text << ',' << point.x * 10.0f << ',' << point.z * 10.0f;
+		}
+		text << ']';
+		return text.str();
+	});
+	// Each lantern: 0 for a street lantern or 1 for a country lantern, then x and z in metres
+	out << ",\"lanterns\":";
+	WriteList(out, land.lanterns, [](const landgen::paths::Lantern& lantern) {
+		std::ostringstream text;
+		text << '[' << static_cast<int>(lantern.kind) << ',' << lantern.x << ',' << lantern.z << ']';
+		return text.str();
+	});
+	out << "}\n";
 }
 } // namespace
 

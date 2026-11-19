@@ -193,6 +193,27 @@ class GeneratedTargets(unittest.TestCase):
         self.assertEqual(bad, ["land_km2", "trees_per_km2"])
 
 
+class PathMeasures(unittest.TestCase):
+    def test_the_length_and_winding_of_paths_and_the_lantern_spacing(self):
+        paths = [[(0.0, 0.0), (30.0, 40.0), (60.0, 0.0)], [(0.0, 0.0), (100.0, 0.0)]]
+        lanterns = [(0.0, 0.0), (50.0, 0.0), (130.0, 0.0)]
+        m = measure.path_measures(paths, lanterns)
+        self.assertAlmostEqual(m["path_length_median_m"], 100.0)
+        self.assertAlmostEqual(m["path_length_max_m"], 100.0)
+        self.assertAlmostEqual(m["path_winding_median"], (100.0 / 60.0 + 1.0) / 2.0)
+        self.assertEqual(m["lanterns"], 3)
+        self.assertAlmostEqual(m["lantern_spacing_median_m"], 50.0)
+
+    def test_no_paths_and_no_lanterns(self):
+        self.assertEqual(measure.path_measures([], []), {"lanterns": 0})
+
+    def test_the_paths_do_not_bind_a_generated_land(self):
+        targets = {"ranges": {"path_winding_median": [1.04, 1.11], "lanterns": [0.0, 48.0]}, "tree_kinds": {}}
+        m = {"name": "x", "land_km2": 2.0, "path_winding_median": 1.3, "lanterns": 60, "tree_kind_counts": {}}
+        _lines, bad = measure.compare_lines(m, targets, generated=True)
+        self.assertEqual(bad, ["lanterns"])
+
+
 class TownMeasures(unittest.TestCase):
     def test_the_towns_of_an_island(self):
         heights, land = square_island(side=100, edge=10, height=30.0)
@@ -234,7 +255,8 @@ class Dump(unittest.TestCase):
                                                  [3, 42, 8.0, 8.0, 0.0, 1.0, 1.0, 0, 0.0, 0.0, 0.0],
                                                  [0, 22, 900.0, 900.0, 0.0, 1.0, 1.0, 0],
                                                  [3, 74, 1000.0, 900.0, 0.0, 4.0, 4.0, 0, 0.0, 0.0, 0.0]],
-                "forests": [[1, 5.0, 5.0]], "footpaths": 0, "towns": 1,
+                "forests": [[1, 5.0, 5.0]], "footpaths": 1, "towns": 1,
+                "path_list": [[1, 0.0, 0.0, 30.0, 40.0]], "lanterns": [[0, 3.0, 4.0]],
                 "town_list": [[10.0, 20.0, 5, 0, 9, 6, 6, 17]],
                 "mists": [[1000.0, 900.0, 0.0, 0x6D505050, 0.58, 2.64], [5.0, 5.0, 0.0, 0x80808080, 1.0, 1.0]]}
         with tempfile.TemporaryDirectory() as folder:
@@ -256,6 +278,8 @@ class Dump(unittest.TestCase):
         self.assertEqual(len(model["mist_list"]), 2)
         self.assertEqual(model["town_list"], [{"x": 10.0, "z": 20.0, "tribe": 5, "neutral": False, "buildings": 9,
                                                "houses": 6, "fields": 6, "villagers": 17}])
+        self.assertEqual(model["path_list"], [[(0.0, 0.0), (30.0, 40.0)]])
+        self.assertEqual(model["lantern_list"], [(3.0, 4.0)])
 
 
 if __name__ == "__main__":

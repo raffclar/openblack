@@ -28,6 +28,11 @@ namespace
 constexpr uint8_t k_SeaLevelAltitude = 3;
 /// How far the noise that bends the rivers moves the land for the water, up or down, in altitude units
 constexpr float k_RiverBend = 3.0f;
+constexpr float k_MetresPerCorner = 10.0f;
+/// No path is drawn and no lantern stands this near the temple, a building or a field, in corners
+constexpr float k_TempleClearRadius = 5.0f;
+constexpr float k_BuildingClearRadius = 1.5f;
+constexpr float k_FieldClearRadius = 1.2f;
 
 class StageClock
 {
@@ -444,6 +449,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	{
 		land.countries.push_back(countries::MakeCountry(countries::RecipeOf(static_cast<Biome>(biome)), land.materials));
 	}
+	land.countries.push_back(countries::MakeCountry(countries::PathRecipe(), land.materials));
 	clock.Done("cells and countries");
 
 	// Nothing grows in the water, on the rivers or on their banks
@@ -451,6 +457,71 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 		return altitudes.values[i] <= k_SeaLevelAltitude + 1 || riverDistance.values[i] <= 1.5f || lakeLevels.values[i] >= 0.0f;
 	});
 	const auto rivers = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 1.5f; });
+
+	// The temple and the town on the start area, and the neutral towns
+	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);
+	const auto tribes = settlement::TribesOf(land.settlement.town.tribe, seed, settings.sites);
+	const auto townTribes = settlement::TribesOfTowns(tribes, sites.size(), seed);
+	for (size_t i = 0; i < sites.size(); ++i)
+	{
+		land.settlement.neutral.push_back(
+		    settlement::MakeTown(sites[i], townTribes[i], keepClear, seed, static_cast<uint32_t>(i), settings.settlement));
+	}
+	clock.Done("towns");
+
+	// The paths from the temple to the town of the start, and on from town to town. They are drawn on the ground with the
+	// country of the paths, and no tree or rock stands on them or on their lanterns.
+	const auto pathWater =
+	    Mask(side, [&](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude + 1 || lakeLevels.values[i] >= 0.0f; });
+	std::vector<paths::Place> places {
+	    {.x = land.settlement.citadelX / k_MetresPerCorner, .z = land.settlement.citadelZ / k_MetresPerCorner},
+	    {.x = land.settlement.town.x / k_MetresPerCorner, .z = land.settlement.town.z / k_MetresPerCorner}};
+	std::vector<paths::Clear> pathClear {{.x = places.front().x, .z = places.front().z, .radius = k_TempleClearRadius}};
+	const auto clearTown = [&pathClear](const settlement::Town& town) {
+		for (const auto& building : town.buildings)
+		{
+			pathClear.push_back(
+			    {.x = building.x / k_MetresPerCorner, .z = building.z / k_MetresPerCorner, .radius = k_BuildingClearRadius});
+		}
+		for (const auto& field : town.fields)
+		{
+			pathClear.push_back(
+			    {.x = field.x / k_MetresPerCorner, .z = field.z / k_MetresPerCorner, .radius = k_FieldClearRadius});
+		}
+	};
+	clearTown(land.settlement.town);
+	for (const auto& town : land.settlement.neutral)
+	{
+		places.push_back({.x = town.x / k_MetresPerCorner, .z = town.z / k_MetresPerCorner});
+		clearTown(town);
+	}
+	const paths::Ground pathGround {.heights = heights, .curve = land.heightCurve, .water = pathWater, .rivers = rivers};
+	land.paths = paths::Lay(pathGround, places, paths::ChainLinks(places), seed, settings.paths);
+	const auto drawnPaths = paths::Draw(land.paths, pathWater, pathClear);
+	land.lanterns = paths::PlaceLanterns(land.paths, places, pathWater, pathClear, seed, settings.paths);
+	auto growClear = keepClear;
+	for (size_t i = 0; i < drawnPaths.values.size(); ++i)
+	{
+		auto& cell = land.cells.values[i];
+		if (drawnPaths.values[i] != 0)
+		{
+			growClear.values[i] = 1;
+			if (cell.properties.hasWater == 0 && cell.properties.coastLine == 0)
+			{
+				cell.properties.country = k_PathCountry;
+			}
+		}
+	}
+	for (const auto& lantern : land.lanterns)
+	{
+		const int x = static_cast<int>(std::floor((lantern.x / k_MetresPerCorner) + 0.5f));
+		const int z = static_cast<int>(std::floor((lantern.z / k_MetresPerCorner) + 0.5f));
+		if (growClear.Contains(x, z))
+		{
+			growClear.At(x, z) = 1;
+		}
+	}
+	clock.Done("paths");
 	// Nothing grows on the ground of the towns
 	std::vector<features::Clearing> clearings {
 	    features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
@@ -463,7 +534,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	land.features = features::Place({.biomes = land.biomes,
 	                                 .heights = heights,
 	                                 .seaDistance = seaDistance,
-	                                 .keepClear = keepClear,
+	                                 .keepClear = growClear,
 	                                 .clearings = clearings,
 	                                 .townX = land.start.x,
 	                                 .townZ = land.start.z,
@@ -474,7 +545,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	auto cursed = cursed::Place({.biomes = land.biomes,
 	                             .heights = heights,
 	                             .seaDistance = seaDistance,
-	                             .keepClear = keepClear,
+	                             .keepClear = growClear,
 	                             .clearings = clearings,
 	                             .townX = land.start.x,
 	                             .townZ = land.start.z,
@@ -498,16 +569,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	land.mists.insert(land.mists.end(), swampMist.mists.begin(), swampMist.mists.end());
 	clock.Done("swamp mist");
 
-	// The temple and the town on the start area, the neutral towns, then the forests nearest the town of the start first
-	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);
-	const auto tribes = settlement::TribesOf(land.settlement.town.tribe, seed, settings.sites);
-	const auto townTribes = settlement::TribesOfTowns(tribes, sites.size(), seed);
-	for (size_t i = 0; i < sites.size(); ++i)
-	{
-		land.settlement.neutral.push_back(
-		    settlement::MakeTown(sites[i], townTribes[i], keepClear, seed, static_cast<uint32_t>(i), settings.settlement));
-	}
+	// The forests, nearest the town of the start first
 	land.forests = features::GroupForests(land.features, land.settlement.town.x, land.settlement.town.z, settings.forests);
-	clock.Done("towns and forests");
+	clock.Done("forests");
 	return land;
 }

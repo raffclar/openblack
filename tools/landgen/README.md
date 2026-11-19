@@ -55,8 +55,15 @@ their height above the land (median and 90th percentile). `pillars` counts the p
 11 values: kind, type, x, z, angle, size, largest size, forest, the two lean angles and the height above the land
 (older dumps have the first 8). The big forest numbers count the big forests, the median distance to the nearest big forest and
 the median distance from a big forest to the nearest tree. A dump mist has 6 values: x, z, the height above the land, the
-colour (0xAARRGGBB), the size and the edge shrink. The generator dump has no footpaths yet, so this number is zero for
-it.
+colour (0xAARRGGBB), the size and the edge shrink.
+
+The path numbers: `footpaths` counts the footpaths of a land of the story, and the paths between the towns and the
+temple of a generated land. `path_length_median_m`, `path_length_max_m`, `path_winding_median` and `path_winding_p90`
+give their length and their winding (the length over the straight distance between the ends). They are `free` for a
+generated land: its paths join the towns, and are longer and wind more than the footpaths of the story (deviation 233,
+"LGX-4 yes"). `lanterns` counts the street and country lanterns, and `lantern_spacing_median_m` is the median distance
+from a lantern to the nearest lantern. A dump path is 1 when it has lanterns (else 0), then x and z in metres of each
+point. A dump lantern is 0 for a street lantern or 1 for a country lantern, then x and z in metres.
 
 `cursed_patches` counts the cursed places: the groups of burnt trees, craters and dark mists that are 150 m or less
 apart. A dark mist has no colour channel above 0x50 (the near black mist of Land 1, the dark mist of Land 4 and the grey

@@ -51,6 +51,7 @@ constexpr std::array<generated_land::MaterialSource, landgen::countries::k_Surfa
     {"Land2.lnd", 5},  // snow
     {"Land2.lnd", 3},  // snowy mountain tops
     {"Land2.lnd", 0},  // solid ice
+    {"Land1.lnd", 7},  // hard earth, the trodden earth of the paths (Land 4 has the same texture as pavement)
 }};
 
 using generated_land::ChoiceRange;

@@ -44,6 +44,8 @@ enum class Surface : uint8_t
 	Snow,
 	SnowyTops,
 	Ice,
+	/// The bare earth of a path that people walk
+	TroddenEarth,
 
 	_Count
 };
@@ -67,6 +69,9 @@ struct Recipe
 /// The recipe of the country of each biome
 [[nodiscard]] Recipe RecipeOf(biomes::Biome biome);
 
+/// The recipe of the country of the paths: trodden earth from the shore up, then rock and snow on the high ground
+[[nodiscard]] Recipe PathRecipe();
+
 /// The country table of a recipe. Each entry names the materials by their index in materials, which holds a surface for
 /// each material of the land. An entry that blends two materials gives the first one the coefficient out of 255.
 [[nodiscard]] lnd::LNDCountry MakeCountry(const Recipe& recipe, std::span<const Surface> materials);
@@ -78,6 +83,6 @@ struct Recipe
 	return static_cast<uint32_t>(((((altitude - start) + 1) * 510) + length) / (2 * length));
 }
 
-/// The surfaces that the countries of all the biomes use, in the order of the surfaces
+/// The surfaces that the countries of all the biomes and the paths use, in the order of the surfaces
 [[nodiscard]] std::vector<Surface> UsedSurfaces();
 } // namespace openblack::landgen::countries
