@@ -570,6 +570,25 @@ TEST(TestbedScenarios, TheBothButtonsScenariosCheckThatTheHoldStartsAndEnds)
 	}
 }
 
+TEST(TestbedScenarios, TheShieldFallScenarioChecksThatTheSphereGoes)
+{
+	// The scenario checks that the sphere of the spiritual shield is up first, and that no sphere stays after the hand
+	// takes the three stones off their spots
+	const auto* scenario = Find("story.l5_spiritual_shield_falls");
+	ASSERT_NE(scenario, nullptr);
+	ASSERT_EQ(scenario->checks.size(), 2u);
+	const auto& up = scenario->checks.at(0);
+	const auto& gone = scenario->checks.at(1);
+	EXPECT_EQ(up.quantity, checks::Quantity::ShieldSphereAt);
+	EXPECT_EQ(gone.quantity, checks::Quantity::ShieldSphereAt);
+	EXPECT_EQ(up.atLeast, 1.0);
+	EXPECT_EQ(gone.atMost, 0.0);
+	ASSERT_TRUE(up.byTurn.has_value());
+	EXPECT_LT(*up.byTurn, gone.afterTurns);
+	EXPECT_EQ(std::ranges::count(scenario->commands, Command::Kind::HandTakeNear, &Command::kind), 3);
+	EXPECT_FALSE(checks::Name(checks::Quantity::ShieldSphereAt).empty());
+}
+
 TEST(TestbedScenarios, TheFrontEndHandScenariosCheckTheTooltipAndThePick)
 {
 	// Each scenario checks its quantity first one way and then the other way

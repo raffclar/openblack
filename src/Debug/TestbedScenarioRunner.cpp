@@ -117,6 +117,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -1527,6 +1528,16 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 			    near += model && model->GetGroundFootprint() != nullptr ? 1 : 0;
 		    });
 		return static_cast<double>(near);
+	}
+	case checks::Quantity::ShieldSphereAt:
+	{
+		if (!Locator::effectRequestSystem::has_value() || !Locator::terrainSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto point = MapPoint(_middle, check.point);
+		const float height = Locator::terrainSystem::value().GetHeightAt(point);
+		return Locator::effectRequestSystem::value().FindShield({point.x, height, point.y}, 0.0f) != nullptr ? 1.0 : 0.0;
 	}
 	}
 	return std::nullopt;

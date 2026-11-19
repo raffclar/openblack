@@ -232,6 +232,9 @@ public:
 	                                  const particles::ProcessInfo& info) = 0;
 	/// The miracle stops: its effect dies away and it goes once that has gone
 	virtual void CloseDown(entt::entity spell) = 0;
+	/// The miracle goes at once, as a script deletes it: its effects go at once, its reactions stop and its seed goes
+	/// with it
+	virtual void DeleteSpell([[maybe_unused]] entt::entity spell) {}
 	/// A creature casts a miracle at an object, as its casting pose's loop begins: as big as the object, its effect
 	/// flowing from the creature's hands, paid for with the creature's body, cast at the object's feet or on the object
 	/// as the miracle's seed is. Whether it could: not when the creature is too tired to pay for it, nor when the

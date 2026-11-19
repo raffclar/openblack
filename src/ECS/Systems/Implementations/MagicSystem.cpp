@@ -417,6 +417,16 @@ void MagicSystem::CloseDown(entt::entity entity)
 	}
 }
 
+void MagicSystem::DeleteSpell(entt::entity entity)
+{
+	if (FindSpell(entity) == nullptr)
+	{
+		return;
+	}
+	CloseDown(entity);
+	Delete(entity);
+}
+
 bool MagicSystem::CanCastAt(MagicType type, PlayerNames player, glm::vec3 point)
 {
 	return Locator::infoConstants::has_value() && magic::spells::CanCastAt(*this, type, player, point, _ignoreInfluence);

@@ -125,7 +125,7 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .name = "Two computer gods and their creatures start a skirmish at random alignments",
 	    .facet = Facet::Multiplayer,
 	    .description = "A skirmish of three gods: the player and the computer gods of players two and three, each with a "
-	                   "temple. The skirmish box chose a random alignment for gods 2 and 3 (deviation 280).",
+	                   "temple. The tool switch chose a random alignment for gods 2 and 3 (deviation 280).",
 	    .expected = "At the first turn of each computer god, the log says that the god and its creature start at a random "
 	                "alignment, each from -1 to 1. The temples of gods 2 and 3 and their creatures change to the looks of "
 	                "these alignments. The temple of the player keeps its alignment.",

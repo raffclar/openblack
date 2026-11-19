@@ -1306,9 +1306,9 @@ struct Command
 		/// The player clicks the creature nearest a point (point, from the middle of the map), as the Action button
 		/// pressed and let go on the creature does. A script that waits for a click on it goes on. Needs no creature
 		ClickCreatureAt,
-		/// The player's hand takes the mobile object or the scaffold nearest a point (point, from the middle of the map,
-		/// within 10 metres) at once, as if picked up from where it lies, such as a pile of dung that a script made.
-		/// Needs no creature
+		/// The player's hand takes the mobile object, the mobile static or the scaffold nearest a point (point, from the
+		/// middle of the map, within 10 metres) at once, as if picked up from where it lies, such as a pile of dung that a
+		/// script made. Needs no creature
 		HandTakeNear,
 		/// The player's hand taps the scaffold nearest a point (point, from the middle of the map, within 10 metres), as a
 		/// short press of the Action button on it does: one scaffold breaks off it. Needs no creature

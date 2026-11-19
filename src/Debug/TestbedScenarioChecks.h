@@ -96,6 +96,9 @@ enum class Quantity : uint8_t
 	/// How many things within the radius of the point paint a footprint into the land: things in the map's cells with a
 	/// model that has a footprint for the ground
 	FootprintsNear,
+	/// 1 when the particles keep the sphere of a shield miracle around the point on the land, else 0. A sphere that the
+	/// particles keep is drawn, and it turns away the particles of other effects.
+	ShieldSphereAt,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
@@ -109,8 +112,8 @@ struct Check
 	size_t index {0};
 	/// For Entities: the kind of thing
 	std::string_view kind;
-	/// For CreatureDistance, ObjectDistance, FireNear and FootprintsNear: the point, from the middle of the map, x east and y
-	/// north in metres
+	/// For CreatureDistance, ObjectDistance, FireNear, FootprintsNear and ShieldSphereAt: the point, from the middle of the
+	/// map, x east and y north in metres
 	glm::vec2 point {0.0f};
 	/// For FireNear and FootprintsNear: the radius in metres
 	float radius {0.0f};
