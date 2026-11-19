@@ -527,10 +527,17 @@ float ForwardExtentOf(const ecs::Registry& registry, entt::entity creature)
 
 CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::entity creature, entt::entity opponent)
 {
-	return Start(creature, opponent, true);
+	return Start(creature, opponent, {});
 }
 
-CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entity creature, entt::entity opponent, bool ask)
+CreatureFightSystemInterface::StartResult CreatureFightSystem::StartScriptFight(entt::entity creature, entt::entity opponent)
+{
+	// The fight that a script orders has no test of the health. A hurt creature fights with less fight health.
+	return Start(creature, opponent, {.health = false});
+}
+
+CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entity creature, entt::entity opponent,
+                                                                     StartChecks checks)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto ready = [&registry](entt::entity entity) {
@@ -554,13 +561,13 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entit
 	{
 		return StartResult::Busy;
 	}
-	if (!fight::HealthyEnoughToFight(LifeOf(registry, creature)))
+	if (checks.health && !fight::HealthyEnoughToFight(LifeOf(registry, creature)))
 	{
 		return StartResult::TooWeak;
 	}
 	// Every fight starts by asking the other creature, which may refuse. The other creature is asked one time only: a
 	// fight that waits for a move to finish keeps the answer.
-	if (ask)
+	if (checks.ask)
 	{
 		const bool dead =
 		    Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsLyingDead(opponent);
@@ -1065,7 +1072,7 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartPlannedFight
 	const bool angry = mind != nullptr && mind->planner.current.has_value() &&
 	                   mind->planner.current->desire == creature_desires::Desire::Anger;
 	_startReason = angry ? "anger" : "plan";
-	const auto result = Start(creature, opponent, !agreed);
+	const auto result = Start(creature, opponent, {.ask = !agreed});
 	_startReason = "request";
 	return result;
 }

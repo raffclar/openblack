@@ -1758,4 +1758,60 @@ void testbed_scenarios::AddCombat(std::vector<Scenario>& all)
 		    .repeatFrom = 0,
 		});
 	}
+
+	{
+		// After a lost bout of the last fight of the story, the creature of the player has almost no life. The script of
+		// the fight orders both creatures to fight when the creature comes back near the arena.
+		auto weak = red(PlayerNames::PLAYER_ONE, 0.6f, 0.0f);
+		weak.needs.life = 0.05f;
+		const auto order = [](size_t creature, size_t other, float delay) {
+			constexpr float k_FightAction = 21.0f;
+			return Command {.kind = Kind::CallNative,
+			                .delaySeconds = delay,
+			                .script = "CREATURE_DO_ACTION",
+			                .scriptArguments = {{.kind = ScriptArgument::Kind::Creature, .index = creature, .kept = true},
+			                                    {.kind = ScriptArgument::Kind::Integer, .number = k_FightAction},
+			                                    {.kind = ScriptArgument::Kind::Creature, .index = other, .kept = true},
+			                                    {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}};
+		};
+		// The orders of the script come at about 9 seconds
+		constexpr uint32_t k_AfterOrdersTurns = 100;
+		constexpr uint32_t k_FightStartsByTurn = 300;
+		all.push_back({
+		    .id = "combat.script_fight_after_lost_bout",
+		    .name = "A script starts a fight for a creature with almost no life",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger of the player has almost no life, as after a lost bout of the last fight of the "
+		                   "story. It gets the learning leash. The next leash key changes the leash, and a leash order "
+		                   "sends the tiger to the south. Then a script orders the blue tiger and the red tiger to fight "
+		                   "each other, as the script of the last fight does.",
+		    .expected = "The leash changes, and the red tiger walks to the point of the order. Then the two tigers start "
+		                "their fight and go to their duel. The red tiger has less fight health than the blue tiger.",
+		    .framing = ringside,
+		    .creatures = {weak, blue(PlayerNames::PLAYER_TWO, 0.6f, 0.0f)},
+		    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+		                 Leash(0, LeashType::Rope, 0.5f),
+		                 {.kind = Kind::LeashKey, .creature = 0, .delaySeconds = 1.0f, .value = 2},
+		                 Go(Kind::LeashOrderAt, 0, {-25.0f, 25.0f}, 1.0f, false),
+		                 order(1, 0, 6.0f),
+		                 order(0, 1, 0.0f)},
+		    .checks = {{.label = "the leash order moved the red tiger",
+		                .quantity = checks::Quantity::CreatureDistance,
+		                .point = {-25.0f, 25.0f},
+		                .afterTurns = 30,
+		                .byTurn = k_AfterOrdersTurns,
+		                .atMost = 4.0},
+		               {.label = "the red tiger fights its duel",
+		                .quantity = checks::Quantity::CreatureInDuel,
+		                .afterTurns = k_AfterOrdersTurns,
+		                .byTurn = k_FightStartsByTurn,
+		                .atLeast = 1.0},
+		               {.label = "the blue tiger fights its duel",
+		                .quantity = checks::Quantity::CreatureInDuel,
+		                .index = 1,
+		                .afterTurns = k_AfterOrdersTurns,
+		                .byTurn = k_FightStartsByTurn,
+		                .atLeast = 1.0}},
+		});
+	}
 }
