@@ -27,6 +27,8 @@ The game data folder is `C:/projects/black`. Set `OPENBLACK_GAME_DATA` to use an
      openblack_tests --openblack-test-source=landgen/test_landgen_dump.cpp
    ```
 
+   Add `OPENBLACK_LANDGEN_ROADS=0` for the same land with no bed under the paths (the land before the cut and the
+   fill), and `OPENBLACK_LANDGEN_PLAYERS=<count>` for a land for more than one player.
    Add `OPENBLACK_LANDGEN_FORMATIONS=0` for the same land with no fairy rings and no lone pillars (the land before
    them). Add `OPENBLACK_LANDGEN_TREES=<hundredths>` for a land with more stands of trees, as `--landgen "7;trees=2600"`
    gives in the game (the tree benchmarks).
@@ -64,7 +66,8 @@ give their length and their winding (the length over the straight distance betwe
 generated land: its paths join the towns, and are longer and wind more than the footpaths of the story (deviation 233,
 "LGX-4 yes"). `lanterns` counts the street and country lanterns, and `lantern_spacing_median_m` is the median distance
 from a lantern to the nearest lantern. A dump path is 1 when it has lanterns (else 0), then x and z in metres of each
-point. A dump lantern is 0 for a street lantern or 1 for a country lantern, then x and z in metres.
+point. A dump `town_clear` has, for each town in the order of `town_list`, x, z and the radius in metres of the circle
+round each building (15 m) and each field (12 m), where no path is drawn. A dump lantern is 0 for a street lantern or 1 for a country lantern, then x and z in metres.
 
 The ground numbers of the trees, the rocks and the cursed places (`tree_height_median_m`,
 `_p90_m`, `_max_m` and `_slope_p90_deg`, the same for `rock_` and `cursed_`) are the height in metres and the slope

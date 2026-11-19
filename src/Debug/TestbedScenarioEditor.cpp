@@ -244,7 +244,8 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "to each neutral town. A path winds on easy ground, goes round the water and does not climb a "
 	                "cliff. It stops a short distance from each building and field. On a hill, the path has a smooth "
 	                "and level bed, cut into the land or built up above it, with a bank on each side as a road has. "
-	                "About one path in three has "
+	                "A path that climbs a steep slope keeps its bends. At the foot of a cliff, the brown earth stays "
+	                "below the cliff and does not cover its top. About one path in three has "
 	                "lanterns on its sides: street lanterns near the towns and the temple, and lanterns on fires "
 	                "farther out. At night the lanterns light the ground.",
 	    .environment = {.clockRuns = true},
@@ -281,7 +282,8 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .expected = "Each of the four players has a temple and a town on a flat start area, as on the skirmish lands. The "
 	                "town of each player is 510 to 1080 metres from the nearest town of another player. The ground and "
 	                "the trees near the starts are almost the same. The neutral towns are between the starts and round "
-	                "them.",
+	                "them. A path joins the town of each player to the nearest town or temple, and a path joins each "
+	                "temple to its town.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,
