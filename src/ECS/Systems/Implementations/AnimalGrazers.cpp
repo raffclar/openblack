@@ -26,6 +26,7 @@
 #include "ECS/FixedKinds.h"
 #include "ECS/Map.h"
 #include "ECS/ScriptFlockRules.h"
+#include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
@@ -580,9 +581,15 @@ void AnimalSystem::MergeNearbyHerd(entt::entity entity, Animal& animal)
 				const auto joining = gone.members;
 				keeper.most =
 				    grazers::MergedMost(keeper.most, gone.most, static_cast<uint32_t>(joining.size()), info.maxFlockSize);
+				const bool keeperScripted = keepMine ? mineScripted : theirsScripted;
 				for (const auto member : joining)
 				{
 					JoinFlock(member, keeperEntity);
+					// The script did not put the animal in its flock, so the size that the script reads does not count it
+					if (keeperScripted)
+					{
+						ecs::script_flocks::MarkMergedIn(registry, member, keeperEntity);
+					}
 				}
 				return;
 			}

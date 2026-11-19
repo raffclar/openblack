@@ -80,4 +80,13 @@ struct FlockMember
 	uint8_t order {0};
 };
 
+/// An animal that a merge of two flocks put into a flock that a script controls. The script did not put the animal in
+/// that flock, so the size of the flock that the scripts read does not count it. A script that puts it in the flock
+/// removes this mark.
+struct MergedIntoScriptFlock
+{
+	/// The flock that the merge put the animal in. The mark has no effect on a different flock.
+	entt::entity flock {entt::null};
+};
+
 } // namespace openblack::ecs::components

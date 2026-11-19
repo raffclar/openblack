@@ -475,3 +475,53 @@ TEST(TownAnimals, TheNewestFlockOfTheTownComesFirstAndOnlyItsAnimalsCount)
 	EXPECT_EQ(script_flocks::TownAnimals(registry, town), (std::vector {newCow, newPig, oldSheep}));
 	EXPECT_TRUE(script_flocks::TownAnimals(registry, registry.Create()).empty());
 }
+
+TEST(ScriptFlocks, TheSizeThatAScriptReadsDoesNotCountAnAnimalThatAMergePutIn)
+{
+	Registry registry;
+	const auto circus = script_flocks::Create(registry, Metres(0, 0));
+	const auto paid = Living(registry, 1, 1);
+	const auto merged = Living(registry, 2, 2);
+	script_flocks::AddLiving(registry, circus, paid);
+	script_flocks::AddLiving(registry, circus, merged);
+	script_flocks::MarkMergedIn(registry, merged, circus);
+	EXPECT_EQ(script_flocks::Size(registry, circus), 2u);
+	EXPECT_EQ(script_flocks::ScriptSize(registry, circus), 1u);
+	// The removal of the merged animal does not make the size that the script reads smaller
+	script_flocks::Remove(registry, merged, false);
+	registry.Destroy(merged);
+	EXPECT_EQ(script_flocks::ScriptSize(registry, circus), 1u);
+	// The removal of an animal that the script put in makes it smaller
+	script_flocks::Remove(registry, paid, false);
+	EXPECT_EQ(script_flocks::ScriptSize(registry, circus), 0u);
+}
+
+TEST(ScriptFlocks, AnAnimalThatAScriptPutsInAfterAMergeCounts)
+{
+	Registry registry;
+	const auto circus = script_flocks::Create(registry, Metres(0, 0));
+	const auto animal = Living(registry, 1, 1);
+	const auto leader = Living(registry, 2, 2);
+	script_flocks::AddLiving(registry, circus, animal);
+	script_flocks::AddLiving(registry, circus, leader);
+	script_flocks::MarkMergedIn(registry, animal, circus);
+	script_flocks::MarkMergedIn(registry, leader, circus);
+	EXPECT_EQ(script_flocks::ScriptSize(registry, circus), 0u);
+	EXPECT_TRUE(script_flocks::AddLiving(registry, circus, animal));
+	EXPECT_FALSE(registry.AllOf<components::MergedIntoScriptFlock>(animal));
+	script_flocks::AddLeader(registry, circus, leader);
+	EXPECT_FALSE(registry.AllOf<components::MergedIntoScriptFlock>(leader));
+	EXPECT_EQ(script_flocks::ScriptSize(registry, circus), 2u);
+}
+
+TEST(ScriptFlocks, AMarkForADifferentFlockHasNoEffect)
+{
+	Registry registry;
+	const auto first = script_flocks::Create(registry, Metres(0, 0));
+	const auto second = script_flocks::Create(registry, Metres(0, 0));
+	const auto animal = Living(registry, 1, 1);
+	script_flocks::MarkMergedIn(registry, animal, first);
+	// A move into a different flock by a merge keeps the old mark, and the old mark does not change the new flock
+	registry.Get<components::Flock>(second).members.push_back(animal);
+	EXPECT_EQ(script_flocks::ScriptSize(registry, second), 1u);
+}

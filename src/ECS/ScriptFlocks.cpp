@@ -140,6 +140,28 @@ std::size_t script_flocks::Size(const Registry& registry, entt::entity flock)
 	return IsFlock(registry, flock) ? registry.Get<const Flock>(flock).members.size() : 0;
 }
 
+std::size_t script_flocks::ScriptSize(const Registry& registry, entt::entity flock)
+{
+	if (!IsFlock(registry, flock))
+	{
+		return 0;
+	}
+	const auto& members = registry.Get<const Flock>(flock).members;
+	const auto merged = std::ranges::count_if(members, [&registry, flock](entt::entity member) {
+		const auto* mark = registry.Valid(member) ? registry.TryGet<const MergedIntoScriptFlock>(member) : nullptr;
+		return mark != nullptr && mark->flock == flock;
+	});
+	return members.size() - static_cast<std::size_t>(merged);
+}
+
+void script_flocks::MarkMergedIn(Registry& registry, entt::entity living, entt::entity flock)
+{
+	if (registry.Valid(living))
+	{
+		registry.AssignOrReplace<MergedIntoScriptFlock>(living, MergedIntoScriptFlock {.flock = flock});
+	}
+}
+
 entt::entity script_flocks::Leader(const Registry& registry, entt::entity flock)
 {
 	if (!IsFlock(registry, flock))
@@ -159,6 +181,11 @@ bool script_flocks::AddLiving(Registry& registry, entt::entity flock, entt::enti
 		{
 			data.shepherd = entt::null;
 		}
+	}
+	// A living that joins by this way counts in the flock, also when a merge put it there before
+	if (registry.Valid(living))
+	{
+		registry.Remove<MergedIntoScriptFlock>(living);
 	}
 	// It leaves whatever flock it was in, this one too, and a flock left empty goes
 	Remove(registry, living, true);
@@ -183,6 +210,11 @@ void script_flocks::AddLeader(Registry& registry, entt::entity flock, entt::enti
 	if (!IsFlock(registry, flock))
 	{
 		return;
+	}
+	// A living that becomes the leader counts in the flock, also when a merge put it there before
+	if (registry.Valid(living))
+	{
+		registry.Remove<MergedIntoScriptFlock>(living);
 	}
 	const auto leader = Leader(registry, flock);
 	if (leader == living)
