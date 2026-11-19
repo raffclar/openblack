@@ -17,6 +17,7 @@
 #include <thread>
 #include <tuple>
 #include <utility>
+#include <variant>
 
 #include <glm/mat3x3.hpp>
 
@@ -76,7 +77,7 @@ struct LandShadowBake::WatchedStores
 	ecs::LandShadowLookup shadows;
 };
 
-namespace
+namespace land_shadow_bake
 {
 
 /// A thing casting its shadow into the land, standing in the map's cells
@@ -107,10 +108,65 @@ struct MayCast
 	const Transform* transform;
 };
 
-/// Gathers the casters of one kind of thing. A thing has to be in the map's cells to cast (one carried by the hand
-/// casts none), except a worship site and its altar, which stand at the temple without being filed in them. A thing
-/// that can start to cast without a change of its components goes into the second list: one whose shadow is none or
-/// not wanted now but can change in place, and a worship site or altar off the map, which can move onto it.
+} // namespace land_shadow_bake
+
+namespace
+{
+
+using land_shadow_bake::Caster;
+using land_shadow_bake::MayCast;
+
+/// What one thing of a kind that can cast is now: a caster, a thing that may cast, or neither
+using Sorted = std::variant<std::monostate, Caster, MayCast>;
+
+/// Sorts one thing of a kind that can cast. A thing has to be in the map's cells to cast (one carried by the hand casts
+/// none), except a worship site and its altar, which stand at the temple without being filed in them. A thing that can
+/// start to cast without a change of its components may cast: one whose shadow is none or not wanted now but can change
+/// in place, and a worship site or altar off the map, which can move onto it.
+[[nodiscard]] Sorted SortThing(const ecs::Registry& registry, const ecs::LandShadowLookup& shadows,
+                               LandShadowBake::Casters wanted, entt::entity entity)
+{
+	const auto& mesh = registry.Get<const MeshComponent>(entity);
+	const auto& transform = registry.Get<const Transform>(entity);
+	const auto shadow = shadows.Of(entity);
+	const bool leaves = shadow == LandShadow::Leaves;
+	if (shadow == LandShadow::None || (leaves ? !wanted.leaves : !wanted.shapes))
+	{
+		if (ecs::LandShadowChangesInPlace(registry, entity))
+		{
+			return MayCast {
+			    .entity = entity, .shadow = shadow, .shadowChangesInPlace = true, .mesh = nullptr, .transform = nullptr};
+		}
+		return std::monostate {};
+	}
+	const auto* resident = registry.TryGet<const MapCellResident>(entity);
+	uint32_t cellUnder = 0;
+	if (resident == nullptr)
+	{
+		if (!registry.AnyOf<ecs::components::WorshipSite, ecs::components::WorshipAltar>(entity))
+		{
+			return std::monostate {};
+		}
+		const auto cell = map_coords::CellOf(transform.position);
+		if (static_cast<uint32_t>(cell.x) >= map_coords::k_MapCells || static_cast<uint32_t>(cell.y) >= map_coords::k_MapCells)
+		{
+			return MayCast {.entity = entity,
+			                .shadow = shadow,
+			                .shadowChangesInPlace = ecs::LandShadowChangesInPlace(registry, entity),
+			                .mesh = &mesh,
+			                .transform = &transform};
+		}
+		cellUnder = static_cast<uint32_t>(cell.x) * map_coords::k_MapCells + static_cast<uint32_t>(cell.y);
+	}
+	return Caster {.entity = entity,
+	               .shadow = shadow,
+	               .mesh = &mesh,
+	               .transform = &transform,
+	               .resident = resident,
+	               .cellUnder = cellUnder};
+}
+
+/// Gathers the casters of one kind of thing, and the things of the kind that may cast (see SortThing)
 template <typename Kind>
 void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted, std::vector<Caster>& casters,
                    std::vector<MayCast>& mayCast)
@@ -119,51 +175,60 @@ void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted
 	registry.Each<const Kind, const MeshComponent, const Transform>(
 	    // Kinds without data aren't passed in
 	    [&](entt::entity entity, const auto&... /*unused*/) {
-		    const auto& mesh = registry.Get<const MeshComponent>(entity);
-		    const auto& transform = registry.Get<const Transform>(entity);
-		    const auto shadow = shadows.Of(entity);
-		    const bool leaves = shadow == LandShadow::Leaves;
-		    if (shadow == LandShadow::None || (leaves ? !wanted.leaves : !wanted.shapes))
+		    const auto sorted = SortThing(registry, shadows, wanted, entity);
+		    if (const auto* caster = std::get_if<Caster>(&sorted))
 		    {
-			    if (ecs::LandShadowChangesInPlace(registry, entity))
-			    {
-				    mayCast.push_back({.entity = entity,
-				                       .shadow = shadow,
-				                       .shadowChangesInPlace = true,
-				                       .mesh = nullptr,
-				                       .transform = nullptr});
-			    }
-			    return;
+			    casters.push_back(*caster);
 		    }
-		    const auto* resident = registry.TryGet<const MapCellResident>(entity);
-		    uint32_t cellUnder = 0;
-		    if (resident == nullptr)
+		    else if (const auto* thing = std::get_if<MayCast>(&sorted))
 		    {
-			    if (!registry.AnyOf<ecs::components::WorshipSite, ecs::components::WorshipAltar>(entity))
-			    {
-				    return;
-			    }
-			    const auto cell = map_coords::CellOf(transform.position);
-			    if (static_cast<uint32_t>(cell.x) >= map_coords::k_MapCells ||
-			        static_cast<uint32_t>(cell.y) >= map_coords::k_MapCells)
-			    {
-				    mayCast.push_back({.entity = entity,
-				                       .shadow = shadow,
-				                       .shadowChangesInPlace = ecs::LandShadowChangesInPlace(registry, entity),
-				                       .mesh = &mesh,
-				                       .transform = &transform});
-				    return;
-			    }
-			    cellUnder = static_cast<uint32_t>(cell.x) * map_coords::k_MapCells + static_cast<uint32_t>(cell.y);
+			    mayCast.push_back(*thing);
 		    }
-		    casters.push_back({.entity = entity,
-		                       .shadow = shadow,
-		                       .mesh = &mesh,
-		                       .transform = &transform,
-		                       .resident = resident,
-		                       .cellUnder = cellUnder});
 	    });
 }
+
+/// The blocks of a bake, by their index along x and z, as a grid that tells at once whether a block is among them
+class BlockGrid
+{
+public:
+	explicit BlockGrid(std::span<const glm::ivec2> blocks)
+	{
+		if (blocks.empty())
+		{
+			return;
+		}
+		_low = blocks.front();
+		auto high = blocks.front();
+		for (const auto block : blocks)
+		{
+			_low = glm::min(_low, block);
+			high = glm::max(high, block);
+		}
+		_size = high - _low + 1;
+		_in.assign(static_cast<size_t>(_size.x) * static_cast<size_t>(_size.y), false);
+		for (const auto block : blocks)
+		{
+			_in[Index(block)] = true;
+		}
+	}
+
+	[[nodiscard]] bool Contains(glm::ivec2 block) const
+	{
+		const auto place = block - _low;
+		return place.x >= 0 && place.y >= 0 && place.x < _size.x && place.y < _size.y && _in[Index(block)];
+	}
+
+private:
+	[[nodiscard]] size_t Index(glm::ivec2 block) const
+	{
+		const auto place = block - _low;
+		return (static_cast<size_t>(place.x) * static_cast<size_t>(_size.y)) + static_cast<size_t>(place.y);
+	}
+
+	glm::ivec2 _low {0};
+	glm::ivec2 _size {0};
+	std::vector<bool> _in;
+};
 
 glm::ivec2 CellOf(uint32_t index)
 {
@@ -254,7 +319,7 @@ void LandShadowBake::Reset()
 	_baked.clear();
 	_newlyBaked.clear();
 	_bakingBlocks.clear();
-	_watched.clear();
+	_mayCast.clear();
 	_castersVersion.reset();
 	_leaves.clear();
 	_shapes.clear();
@@ -412,7 +477,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 {
 	// The answer of the test that started before this update, when there is one. Nothing changed the world or the
 	// watched things after the test started.
-	const auto testedAhead = TakeWatchedTest();
+	auto testedAhead = TakeWatchedTest();
 	if (!Locator::terrainSystem::has_value() || !Locator::entitiesRegistry::has_value())
 	{
 		return;
@@ -437,6 +502,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 			++_castersChanges;
 		}
 		Reset();
+		testedAhead.reset();
 		_texels = texels;
 		_side = side;
 		_extentMin = extent.minimum;
@@ -452,120 +518,26 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 
 	ApplyFinishedBake();
 
-	// While no thing that can cast changed, and no block waits for its bake, there is nothing to bake
+	// While no caster came or went, only the watched things that changed can change what is baked. While none of them
+	// changed and no block waits for its bake, there is nothing to bake.
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto castersVersion = ecs::LandShadowCastersVersion(Locator::entitiesRegistry::value());
 	const auto meshCount = Locator::resources::value().GetMeshes().Size();
-	if (!_bakeAll && _dirty.empty() && _castersVersion == castersVersion && _meshCount == meshCount &&
-	    (testedAhead.has_value() ? *testedAhead : WatchedUnchanged(WatchedStores(registry))))
+	if (!_bakeAll && _castersVersion == castersVersion && _meshCount == meshCount)
 	{
-		return;
-	}
-
-	std::vector<Caster> found;
-	std::vector<MayCast> mayCast;
-	if (casters.leaves)
-	{
-		GatherCasters<ecs::components::Tree>(registry, casters, found, mayCast);
-		GatherCasters<ecs::components::BigForest>(registry, casters, found, mayCast);
-	}
-	if (casters.shapes)
-	{
-		using namespace ecs::components;
-		GatherCasters<Abode>(registry, casters, found, mayCast);
-		GatherCasters<Temple>(registry, casters, found, mayCast);
-		GatherCasters<WorshipSite>(registry, casters, found, mayCast);
-		GatherCasters<WorshipAltar>(registry, casters, found, mayCast);
-		GatherCasters<WorshipIcon>(registry, casters, found, mayCast);
-		GatherCasters<SpellDispenser>(registry, casters, found, mayCast);
-		GatherCasters<Feature>(registry, casters, found, mayCast);
-		GatherCasters<MobileStatic>(registry, casters, found, mayCast);
-		GatherCasters<TeleportStone>(registry, casters, found, mayCast);
-		GatherCasters<MobileObject>(registry, casters, found, mayCast);
-		GatherCasters<Ball>(registry, casters, found, mayCast);
-		GatherCasters<RewardOnLand>(registry, casters, found, mayCast);
-	}
-	// A thing of more than one kind is gathered once
-	std::ranges::sort(found, {}, &Caster::entity);
-	const auto [repeatsFirst, repeatsLast] = std::ranges::unique(found, {}, &Caster::entity);
-	found.erase(repeatsFirst, repeatsLast);
-	const auto& meshes = Locator::resources::value().GetMeshes();
-
-	// What changed since the last bake: every block that took or takes the changed thing's shadow is baked again
-	for (auto& [entity, baked] : _baked)
-	{
-		baked.seen = false;
-	}
-	for (const auto& caster : found)
-	{
-		const BakedFrom from {
-		    .shadow = static_cast<uint32_t>(caster.shadow),
-		    .mesh = caster.mesh->id,
-		    .meshReady = meshes.Contains(caster.mesh->id) ? 1u : 0u,
-		    .position = caster.transform->position,
-		    .rotation = caster.transform->rotation,
-		    .scale = caster.transform->scale,
-		};
-		const auto cells = caster.Cells();
-		auto previous = _baked.find(caster.entity);
-		if (previous == _baked.end())
+		const auto changes = testedAhead.has_value() ? std::move(*testedAhead) : FindWatchedChanges(WatchedStores(registry));
+		if (changes.empty() && _dirty.empty())
 		{
-			MarkBlocksOf(cells);
-			_baked.emplace(caster.entity,
-			               Baked {.from = from, .cells = std::vector<uint32_t>(cells.begin(), cells.end()), .seen = true});
-			continue;
+			return;
 		}
-		previous->second.seen = true;
-		// A change of any bit, or of a cell, bakes again the blocks of the old and the new place
-		if (!same_bits::SameBits(previous->second.from, from) || !same_bits::SameWords(previous->second.cells, cells))
-		{
-			MarkBlocksOf(previous->second.cells);
-			MarkBlocksOf(cells);
-			previous->second.from = from;
-			previous->second.cells.assign(cells.begin(), cells.end());
-			previous->second.cast.reset();
-		}
+		UpdateChanged(changes, casters);
 	}
-	for (auto it = _baked.begin(); it != _baked.end();)
+	else
 	{
-		if (!it->second.seen)
-		{
-			MarkBlocksOf(it->second.cells);
-			it = _baked.erase(it);
-		}
-		else
-		{
-			++it;
-		}
+		LookAtAllCasters(casters);
+		_castersVersion = castersVersion;
+		_meshCount = meshCount;
 	}
-
-	// What the next frames check before they look at the casters again
-	_watched.clear();
-	_watched.reserve(found.size() + mayCast.size());
-	std::ranges::transform(found, std::back_inserter(_watched), [this, &registry](const Caster& caster) {
-		return Watched {
-		    .entity = caster.entity,
-		    .shadow = caster.shadow,
-		    .shadowChangesInPlace = ecs::LandShadowChangesInPlace(registry, caster.entity),
-		    .watchesPlace = true,
-		    .transform = *caster.transform,
-		    .mesh = caster.mesh->id,
-		    .cells = caster.resident != nullptr ? &_baked.at(caster.entity).cells : nullptr,
-		};
-	});
-	std::ranges::transform(mayCast, std::back_inserter(_watched), [](const MayCast& thing) {
-		return Watched {
-		    .entity = thing.entity,
-		    .shadow = thing.shadow,
-		    .shadowChangesInPlace = thing.shadowChangesInPlace,
-		    .watchesPlace = thing.transform != nullptr,
-		    .transform = thing.transform != nullptr ? *thing.transform : Transform {},
-		    .mesh = thing.mesh != nullptr ? thing.mesh->id : entt::id_type {0},
-		    .cells = nullptr,
-		};
-	});
-	_castersVersion = castersVersion;
-	_meshCount = meshCount;
 
 	// A bake on the other threads that is still running holds back the next one: the blocks changed since then wait
 	if (_bake.valid())
@@ -614,8 +586,9 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	baking.reserve(job.blocks.size());
 	std::ranges::transform(job.blocks, std::back_inserter(baking), &BakeBlock::position);
 	std::ranges::sort(baking, [](glm::ivec2 a, glm::ivec2 b) { return a.x != b.x ? a.x < b.x : a.y < b.y; });
-	const auto castsIntoBaking = [&baking](const Caster& caster) {
-		return std::ranges::any_of(caster.Cells(), [&baking](uint32_t index) {
+	const BlockGrid bakingGrid(baking);
+	const auto castsIntoBaking = [&bakingGrid](const Baked& caster) {
+		return std::ranges::any_of(caster.cells, [&bakingGrid](uint32_t index) {
 			const auto cell = CellOf(index);
 			const auto alongX = tree_shadows::BlocksTakingShadowFrom(cell.x);
 			const auto alongZ = tree_shadows::BlocksTakingShadowFrom(cell.y);
@@ -623,9 +596,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 			{
 				for (int z = alongZ.x; z <= alongZ.y; ++z)
 				{
-					if (std::ranges::binary_search(baking, glm::ivec2(x, z), [](glm::ivec2 a, glm::ivec2 b) {
-						    return a.x != b.x ? a.x < b.x : a.y < b.y;
-					    }))
+					if (bakingGrid.Contains({x, z}))
 					{
 						return true;
 					}
@@ -634,28 +605,27 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 			return false;
 		});
 	};
-	for (const auto& caster : found)
+	for (auto& kept : _baked)
 	{
-		if (!castsIntoBaking(caster))
+		if (!castsIntoBaking(kept))
 		{
 			continue;
 		}
-		const auto cells = caster.Cells();
+		const auto shadow = static_cast<LandShadow>(kept.from.shadow);
 		auto& baked = job.casters.emplace_back(BakeCaster {
-		    .shadow = caster.shadow,
-		    .cells = std::vector<uint32_t>(cells.begin(), cells.end()),
-		    .transform = *caster.transform,
+		    .shadow = shadow,
+		    .cells = kept.cells,
+		    .transform = kept.transform,
 		});
-		if (caster.shadow == LandShadow::Leaves)
+		if (shadow == LandShadow::Leaves)
 		{
-			baked.leaves = LeavesOf(caster.mesh->id);
+			baked.leaves = LeavesOf(kept.from.mesh);
 			continue;
 		}
-		baked.shape = ShapeOf(caster.mesh->id);
-		auto& kept = _baked.at(caster.entity);
+		baked.shape = ShapeOf(kept.from.mesh);
 		if (!kept.cast && !baked.shape.empty())
 		{
-			const auto& transform = *caster.transform;
+			const auto& transform = kept.transform;
 			const auto placing = PlacingOf(transform);
 			const glm::vec2 origin {transform.position.x, transform.position.z};
 			auto cast = std::make_shared<std::vector<glm::vec2>>();
@@ -689,31 +659,207 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	_bake = std::async(std::launch::async, [job = std::move(job)] { return Bake(job); });
 }
 
-bool LandShadowBake::WatchedUnchanged(const WatchedStores& stores) const
+LandShadowBake::Baked LandShadowBake::BakedOf(const land_shadow_bake::Caster& caster, const ecs::Registry& registry)
 {
+	const auto cells = caster.Cells();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	return Baked {
+	    .entity = caster.entity,
+	    .from =
+	        {
+	            .shadow = static_cast<uint32_t>(caster.shadow),
+	            .mesh = caster.mesh->id,
+	            .meshReady = meshes.Contains(caster.mesh->id) ? 1u : 0u,
+	            .position = caster.transform->position,
+	            .rotation = caster.transform->rotation,
+	            .scale = caster.transform->scale,
+	        },
+	    .cells = std::vector<uint32_t>(cells.begin(), cells.end()),
+	    .transform = *caster.transform,
+	    .filed = caster.resident != nullptr,
+	    .shadowChangesInPlace = ecs::LandShadowChangesInPlace(registry, caster.entity),
+	};
+}
+
+void LandShadowBake::Rebake(Baked& kept, Baked&& now)
+{
+	// A change of any bit, or of a cell, bakes again the blocks of the old and the new place
+	if (!same_bits::SameBits(kept.from, now.from) || !same_bits::SameWords(kept.cells, now.cells))
+	{
+		MarkBlocksOf(kept.cells);
+		MarkBlocksOf(now.cells);
+		kept.from = now.from;
+		kept.cells = std::move(now.cells);
+		kept.cast.reset();
+	}
+	kept.transform = now.transform;
+	kept.filed = now.filed;
+	kept.shadowChangesInPlace = now.shadowChangesInPlace;
+}
+
+LandShadowBake::Watched LandShadowBake::WatchedOf(const land_shadow_bake::MayCast& thing)
+{
+	return Watched {
+	    .entity = thing.entity,
+	    .shadow = thing.shadow,
+	    .shadowChangesInPlace = thing.shadowChangesInPlace,
+	    .watchesPlace = thing.transform != nullptr,
+	    .transform = thing.transform != nullptr ? *thing.transform : Transform {},
+	    .mesh = thing.mesh != nullptr ? thing.mesh->id : entt::id_type {0},
+	};
+}
+
+void LandShadowBake::LookAtAllCasters(Casters casters)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<Caster> found;
+	std::vector<MayCast> mayCast;
+	if (casters.leaves)
+	{
+		GatherCasters<ecs::components::Tree>(registry, casters, found, mayCast);
+		GatherCasters<ecs::components::BigForest>(registry, casters, found, mayCast);
+	}
+	if (casters.shapes)
+	{
+		using namespace ecs::components;
+		GatherCasters<Abode>(registry, casters, found, mayCast);
+		GatherCasters<Temple>(registry, casters, found, mayCast);
+		GatherCasters<WorshipSite>(registry, casters, found, mayCast);
+		GatherCasters<WorshipAltar>(registry, casters, found, mayCast);
+		GatherCasters<WorshipIcon>(registry, casters, found, mayCast);
+		GatherCasters<SpellDispenser>(registry, casters, found, mayCast);
+		GatherCasters<Feature>(registry, casters, found, mayCast);
+		GatherCasters<MobileStatic>(registry, casters, found, mayCast);
+		GatherCasters<TeleportStone>(registry, casters, found, mayCast);
+		GatherCasters<MobileObject>(registry, casters, found, mayCast);
+		GatherCasters<Ball>(registry, casters, found, mayCast);
+		GatherCasters<RewardOnLand>(registry, casters, found, mayCast);
+	}
+	// A thing of more than one kind is gathered once
+	std::ranges::sort(found, {}, &Caster::entity);
+	const auto [repeatsFirst, repeatsLast] = std::ranges::unique(found, {}, &Caster::entity);
+	found.erase(repeatsFirst, repeatsLast);
+
+	// What changed since the last bake: every block that took or takes the changed thing's shadow is baked again. The
+	// kept casters and the found casters are both in the order of their entities.
+	std::vector<Baked> next;
+	next.reserve(found.size());
+	auto kept = _baked.begin();
+	for (const auto& caster : found)
+	{
+		for (; kept != _baked.end() && kept->entity < caster.entity; ++kept)
+		{
+			// It casts no more
+			MarkBlocksOf(kept->cells);
+		}
+		auto now = BakedOf(caster, registry);
+		if (kept != _baked.end() && kept->entity == caster.entity)
+		{
+			Rebake(*kept, std::move(now));
+			next.push_back(std::move(*kept));
+			++kept;
+			continue;
+		}
+		MarkBlocksOf(now.cells);
+		next.push_back(std::move(now));
+	}
+	for (; kept != _baked.end(); ++kept)
+	{
+		MarkBlocksOf(kept->cells);
+	}
+	_baked = std::move(next);
+
+	// The other things that the next frames check before they look at all the casters again
+	_mayCast.clear();
+	_mayCast.reserve(mayCast.size());
+	std::ranges::transform(mayCast, std::back_inserter(_mayCast), &WatchedOf);
+}
+
+void LandShadowBake::UpdateChanged(std::span<const WatchedChange> changes, Casters casters)
+{
+	// The things that changed, each one time. Their places in the lists change below.
+	std::vector<entt::entity> changed;
+	changed.reserve(changes.size());
+	std::ranges::transform(changes, std::back_inserter(changed), [this](const WatchedChange& change) {
+		return change.caster ? _baked.at(change.index).entity : _mayCast.at(change.index).entity;
+	});
+	std::ranges::sort(changed);
+	const auto [repeatsFirst, repeatsLast] = std::ranges::unique(changed);
+	changed.erase(repeatsFirst, repeatsLast);
+
+	// No caster came or went, thus a look at all the casters sorts each other thing as before. Each changed thing is
+	// sorted again as that look sorts it.
+	const auto& registry = Locator::entitiesRegistry::value();
+	const ecs::LandShadowLookup shadows(registry);
+	for (const auto entity : changed)
+	{
+		const auto sorted = SortThing(registry, shadows, casters, entity);
+		const auto kept = std::ranges::lower_bound(_baked, entity, {}, &Baked::entity);
+		const bool wasCaster = kept != _baked.end() && kept->entity == entity;
+		if (const auto* caster = std::get_if<Caster>(&sorted))
+		{
+			auto now = BakedOf(*caster, registry);
+			if (wasCaster)
+			{
+				Rebake(*kept, std::move(now));
+			}
+			else
+			{
+				MarkBlocksOf(now.cells);
+				_baked.insert(kept, std::move(now));
+			}
+		}
+		else if (wasCaster)
+		{
+			// It casts no more
+			MarkBlocksOf(kept->cells);
+			_baked.erase(kept);
+		}
+		std::erase_if(_mayCast, [entity](const Watched& thing) { return thing.entity == entity; });
+		if (const auto* thing = std::get_if<MayCast>(&sorted))
+		{
+			_mayCast.push_back(WatchedOf(*thing));
+		}
+	}
+}
+
+std::vector<LandShadowBake::WatchedChange> LandShadowBake::FindWatchedChanges(const WatchedStores& stores) const
+{
+	std::vector<WatchedChange> changes;
 	const auto* transforms = stores.transforms;
 	const auto* meshes = stores.meshes;
 	const auto* residents = stores.residents;
 	if (transforms == nullptr || meshes == nullptr || residents == nullptr)
 	{
-		return _watched.empty();
+		// With no store, no watched thing is there
+		return changes;
 	}
 	const auto& shadows = stores.shadows;
-	return std::ranges::all_of(_watched, [&shadows, transforms, meshes, residents](const Watched& thing) {
-		if (thing.shadowChangesInPlace && shadows.Of(thing.entity) != thing.shadow)
+	for (size_t i = 0; i < _baked.size(); ++i)
+	{
+		const auto& caster = _baked[i];
+		const bool changed =
+		    (caster.shadowChangesInPlace && static_cast<uint32_t>(shadows.Of(caster.entity)) != caster.from.shadow) ||
+		    !same_bits::SameBits(transforms->get(caster.entity), caster.transform) ||
+		    meshes->get(caster.entity).id != caster.from.mesh ||
+		    (caster.filed && !same_bits::SameWords(residents->get(caster.entity).cells, caster.cells));
+		if (changed)
 		{
-			return false;
+			changes.push_back({.caster = true, .index = i});
 		}
-		if (!thing.watchesPlace)
+	}
+	for (size_t i = 0; i < _mayCast.size(); ++i)
+	{
+		const auto& thing = _mayCast[i];
+		const bool changed = (thing.shadowChangesInPlace && shadows.Of(thing.entity) != thing.shadow) ||
+		                     (thing.watchesPlace && (!same_bits::SameBits(transforms->get(thing.entity), thing.transform) ||
+		                                             meshes->get(thing.entity).id != thing.mesh));
+		if (changed)
 		{
-			return true;
+			changes.push_back({.caster = false, .index = i});
 		}
-		if (!same_bits::SameBits(transforms->get(thing.entity), thing.transform) || meshes->get(thing.entity).id != thing.mesh)
-		{
-			return false;
-		}
-		return thing.cells == nullptr || same_bits::SameWords(residents->get(thing.entity).cells, *thing.cells);
-	});
+	}
+	return changes;
 }
 
 void LandShadowBake::StartWatchedTest()
@@ -726,7 +872,7 @@ void LandShadowBake::StartWatchedTest()
 	// The update tests the watched things only while no caster came or went, as the watched things are then all there.
 	// The test does not start in other cases.
 	auto& registry = Locator::entitiesRegistry::value();
-	if (_bakeAll || !_dirty.empty() || _castersVersion != ecs::LandShadowCastersVersion(registry) ||
+	if (_bakeAll || _castersVersion != ecs::LandShadowCastersVersion(registry) ||
 	    _meshCount != Locator::resources::value().GetMeshes().Size())
 	{
 		return;
@@ -737,7 +883,8 @@ void LandShadowBake::StartWatchedTest()
 	}
 	_watchedTestStarted = true;
 	// The side thread reads only the stores that this thread finds now
-	_watchedTest->Start([this, stores = WatchedStores(std::as_const(registry))] { _watchedAnswer = WatchedUnchanged(stores); });
+	_watchedTest->Start(
+	    [this, stores = WatchedStores(std::as_const(registry))] { _watchedAnswer = FindWatchedChanges(stores); });
 }
 
 void LandShadowBake::ForgetWatchedTest()
@@ -745,7 +892,7 @@ void LandShadowBake::ForgetWatchedTest()
 	std::ignore = TakeWatchedTest();
 }
 
-std::optional<bool> LandShadowBake::TakeWatchedTest()
+std::optional<std::vector<LandShadowBake::WatchedChange>> LandShadowBake::TakeWatchedTest()
 {
 	if (!std::exchange(_watchedTestStarted, false))
 	{

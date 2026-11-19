@@ -32,9 +32,19 @@ namespace openblack
 {
 class SideThread;
 }
+namespace openblack::ecs
+{
+class Registry;
+}
 
 namespace openblack::graphics
 {
+
+namespace land_shadow_bake
+{
+struct Caster;
+struct MayCast;
+} // namespace land_shadow_bake
 
 class Texture2D;
 
@@ -112,12 +122,18 @@ private:
 		glm::vec3 scale;
 	};
 
-	/// What a caster's shadow was last baked from, to tell when it changes
+	/// A caster, and what its shadow was last baked from, to tell when it changes
 	struct Baked
 	{
+		entt::entity entity;
 		BakedFrom from;
+		/// The map cells it was filed in, or the cell under a thing that is never filed
 		std::vector<uint32_t> cells;
-		bool seen;
+		ecs::components::Transform transform;
+		/// Its cells are the map cells it was filed in, which the test of the watched things compares
+		bool filed;
+		/// Its shadow can change while its components stay the same, which the test of the watched things checks
+		bool shadowChangesInPlace;
 		/// A solid thing's triangles flattened where they fall in the world, kept until it changes, and the corners of
 		/// the land they fall within, along x and z
 		std::shared_ptr<const std::vector<glm::vec2>> cast;
@@ -125,8 +141,8 @@ private:
 		glm::vec2 castHigh {0.0f};
 	};
 
-	/// A thing that the last full look at the casters found, and what its shadow depends on that can change while its
-	/// components stay the same
+	/// A thing that casts no shadow now, but that can start to cast while its components stay the same, and what its
+	/// shadow depends on
 	struct Watched
 	{
 		entt::entity entity;
@@ -137,8 +153,13 @@ private:
 		bool watchesPlace;
 		ecs::components::Transform transform;
 		entt::id_type mesh;
-		/// The map cells it was filed in, as kept for its bake, or none for a thing that is never filed
-		const std::vector<uint32_t>* cells;
+	};
+	/// A watched thing that changed: a caster by its place in the casters, or else a thing by its place in the things that
+	/// can start to cast
+	struct WatchedChange
+	{
+		bool caster;
+		size_t index;
 	};
 
 	/// A copy of a caster, as it was when its bake started
@@ -185,11 +206,23 @@ private:
 
 	/// The component stores that the test of the watched things reads
 	struct WatchedStores;
-	/// Whether no watched thing changed what its shadow depends on since the last full look at the casters. It reads
-	/// only the given stores, thus a side thread can do the test while the game's thread adds stores to the registry.
-	[[nodiscard]] bool WatchedUnchanged(const WatchedStores& stores) const;
+	/// The watched things that changed what their shadows depend on since the last look at the casters: the casters
+	/// and the things that can start to cast. It reads only the given stores, thus a side thread can do the test while
+	/// the game's thread adds stores to the registry.
+	[[nodiscard]] std::vector<WatchedChange> FindWatchedChanges(const WatchedStores& stores) const;
 	/// Waits for the test that StartWatchedTest started, and gives its answer. No test: no answer.
-	[[nodiscard]] std::optional<bool> TakeWatchedTest();
+	[[nodiscard]] std::optional<std::vector<WatchedChange>> TakeWatchedTest();
+	/// Looks at all the things that can cast, after a caster came or went, and marks the blocks whose shadows changed
+	void LookAtAllCasters(Casters casters);
+	/// Looks again only at the watched things that changed, while no caster came or went, and marks the blocks whose
+	/// shadows changed. It gives the same casters as a look at all of them.
+	void UpdateChanged(std::span<const WatchedChange> changes, Casters casters);
+	/// A caster as it is now
+	[[nodiscard]] static Baked BakedOf(const land_shadow_bake::Caster& caster, const ecs::Registry& registry);
+	/// A thing that can start to cast, as it is now
+	[[nodiscard]] static Watched WatchedOf(const land_shadow_bake::MayCast& thing);
+	/// Keeps a caster as it is now, and marks the blocks of its old and its new place when its shadow changed
+	void Rebake(Baked& kept, Baked&& now);
 	void MarkBlocksOf(std::span<const uint32_t> cells);
 	/// The triangles of a model that cast its shadow, found once
 	std::span<const LeafTriangle> LeavesOf(entt::id_type meshId);
@@ -203,10 +236,12 @@ private:
 	bool _rowsFromFarEnd {false};
 	Casters _casters {};
 	uint32_t _castersChanges {0};
-	std::unordered_map<entt::entity, Baked> _baked;
-	/// The things that the last full look at the casters found, the count of the casters' changes and the number of
-	/// models then. While all stay the same, the bake does not look at the casters again.
-	std::vector<Watched> _watched;
+	/// The casters, in the order of their entities
+	std::vector<Baked> _baked;
+	/// The things that can start to cast, the count of the casters' changes and the number of models when the bake last
+	/// looked at all the casters. While the count and the number stay the same, the bake looks again only at the casters
+	/// and the things that changed.
+	std::vector<Watched> _mayCast;
 	std::optional<uint64_t> _castersVersion;
 	size_t _meshCount {0};
 	std::unordered_map<entt::id_type, std::vector<LeafTriangle>> _leaves;
@@ -221,7 +256,7 @@ private:
 	/// The bake that runs on other threads
 	std::future<std::vector<BlockShades>> _bake;
 	/// The answer of the test of the watched things that runs on the side thread
-	std::optional<bool> _watchedAnswer;
+	std::optional<std::vector<WatchedChange>> _watchedAnswer;
 	bool _watchedTestStarted {false};
 	/// The last member, so that its thread stops before the other members go
 	std::unique_ptr<SideThread> _watchedTest;

@@ -87,6 +87,10 @@ void Paint(std::span<uint16_t> texels, glm::ivec2 block, const L3DMesh::Footprin
 }
 /// With fewer blocks to paint than this, this thread paints them all
 constexpr size_t k_LeastBlocksToShare = 2;
+/// The fewest things in each share of the search for the changed things
+constexpr size_t k_LeastThingsToShare = 4096;
+/// The version that an entity storage gives for an entity number that it does not hold
+constexpr auto k_NoVersion = entt::entt_traits<entt::entity>::to_version(entt::tombstone);
 } // namespace
 
 /// The registry keeps its component stores in a list that grows when the registry gets the first component of a kind.
@@ -193,71 +197,177 @@ void LandFootprints::MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock)
 	}
 }
 
+size_t LandFootprints::Shares(size_t count)
+{
+	return std::max<size_t>(1, std::min(count / k_LeastThingsToShare, Workers().GetLaneCount()));
+}
+
+void LandFootprints::ForShares(size_t count, const std::function<void(size_t share, size_t from, size_t to)>& job)
+{
+	const size_t shares = Shares(count);
+	if (shares == 1)
+	{
+		job(0, 0, count);
+		return;
+	}
+	Workers().ForEach(shares, [&job, count, shares](size_t share, size_t /*lane*/) {
+		job(share, count * share / shares, count * (share + 1) / shares);
+	});
+}
+
 void LandFootprints::FindChangedThings(const ThingStores& stores)
 {
 	const auto& registry = *stores.registry;
+	// Each search marks the known things that it sees with a number of its own, so that no search clears the marks first
+	const auto search = ++_searches;
+	const entt::sparse_set& knownEntities = _known;
+
 	// A thing that went while the land was not drawn, as in the temple of a network game where the world goes on, can
-	// leave its number to a new thing. The footprint of the thing that went comes off first.
-	std::vector<entt::entity> gone;
-	for (const auto [entity, known] : _known.each())
-	{
-		known.seen = false;
-		if (!registry.Valid(entity))
+	// leave its number to a new thing. The footprint of the thing that went comes off first. The lanes of the pool find
+	// these things, each lane in its own share of the known things.
+	std::vector<std::vector<entt::entity>> found;
+	const auto findGone = [&](size_t share, size_t from, size_t to) {
+		for (auto it = knownEntities.begin() + static_cast<std::ptrdiff_t>(from);
+		     it != knownEntities.begin() + static_cast<std::ptrdiff_t>(to); ++it)
 		{
-			MarkBlocks(known.lowBlock, known.highBlock);
-			gone.push_back(entity);
+			if (!registry.Valid(*it))
+			{
+				found[share].push_back(*it);
+			}
 		}
+	};
+	found.assign(Shares(knownEntities.size()), {});
+	ForShares(knownEntities.size(), findGone);
+	for (const auto& gone : found)
+	{
+		for (const auto entity : gone)
+		{
+			const auto& known = _known.get(entity);
+			MarkBlocks(known.lowBlock, known.highBlock);
+		}
+		_known.erase(gone.begin(), gone.end());
 	}
-	_known.erase(gone.begin(), gone.end());
+
 	// Only a thing filed in the map's cells counts: the game paints a footprint when its thing goes into the cells, and
 	// paints it no more once the thing comes out of them. A known thing that is not in the cells now is not seen, and the
-	// loop after this one removes it.
-	stores.filed.each(
-	    [&](entt::entity entity, const MapCellResident& resident, const MeshComponent& mesh, const Transform& transform) {
-		    const auto* footprint = FootprintOf(mesh.id);
-		    // The registry can give the number of a removed thing to a new thing. The removed thing is not on the map now,
-		    // so its blocks must get their footprints again.
-		    if (const auto older = ecs::entity_storage::TakeOlder(_known, entity))
-		    {
-			    MarkBlocks(older->lowBlock, older->highBlock);
-		    }
-		    if (_known.contains(entity))
-		    {
-			    auto& known = _known.get(entity);
-			    if (footprint != nullptr && known.mesh == mesh.id && known.cells == resident.cells &&
-			        SameTransform(known.transform, transform))
-			    {
-				    known.seen = true;
-				    return;
-			    }
-			    MarkBlocks(known.lowBlock, known.highBlock);
-			    _known.erase(entity);
-		    }
-		    if (footprint == nullptr)
-		    {
-			    return;
-		    }
-		    const auto placement = PlacementFor(stores.turns, entity, transform);
-		    const auto [lowBlock, highBlock] = BlocksOf(land_footprints::GroundBounds(footprint->triangles, placement));
-		    MarkBlocks(lowBlock, highBlock);
-		    _known.emplace(entity, Known {.mesh = mesh.id,
-		                                  .cells = resident.cells,
-		                                  .transform = transform,
-		                                  .placement = placement,
-		                                  .lowBlock = lowBlock,
-		                                  .highBlock = highBlock,
-		                                  .seen = true});
-	    });
-	std::vector<entt::entity> unseen;
-	for (const auto [entity, known] : _known.each())
-	{
-		if (!known.seen)
+	// last step removes it.
+	const auto look = [&](entt::entity entity, const MapCellResident& resident, const MeshComponent& mesh,
+	                      const Transform& transform) {
+		const auto* footprint = FootprintOf(mesh.id);
+		// The registry can give the number of a removed thing to a new thing. The removed thing is not on the map now,
+		// so its blocks must get their footprints again.
+		if (const auto older = ecs::entity_storage::TakeOlder(_known, entity))
 		{
+			MarkBlocks(older->lowBlock, older->highBlock);
+		}
+		if (_known.contains(entity))
+		{
+			auto& known = _known.get(entity);
+			if (footprint != nullptr && known.mesh == mesh.id && known.cells == resident.cells &&
+			    SameTransform(known.transform, transform))
+			{
+				known.seen = search;
+				return;
+			}
 			MarkBlocks(known.lowBlock, known.highBlock);
-			unseen.push_back(entity);
+			_known.erase(entity);
+		}
+		if (footprint == nullptr)
+		{
+			return;
+		}
+		const auto placement = PlacementFor(stores.turns, entity, transform);
+		const auto [lowBlock, highBlock] = BlocksOf(land_footprints::GroundBounds(footprint->triangles, placement));
+		MarkBlocks(lowBlock, highBlock);
+		_known.emplace(entity, Known {.mesh = mesh.id,
+		                              .cells = resident.cells,
+		                              .transform = transform,
+		                              .placement = placement,
+		                              .lowBlock = lowBlock,
+		                              .highBlock = highBlock,
+		                              .seen = search});
+	};
+	// Most things keep the footprint they had, or have none. The lanes of the pool find these things first, each lane in
+	// its own share of the things, and change nothing but the marks of the known things that they see. This thread then
+	// looks at the other things in the order of the walk, as a walk of all the things would.
+	const auto& filed = stores.filed;
+	const auto* first = filed.handle();
+	const size_t count = first != nullptr ? first->size() : 0;
+	const auto quick = [&](size_t share, size_t from, size_t to) {
+		auto& left = found[share];
+		// Things of one model often come one after the other
+		auto footprint = _footprints.end();
+		for (auto it = first->begin() + static_cast<std::ptrdiff_t>(from);
+		     it != first->begin() + static_cast<std::ptrdiff_t>(to); ++it)
+		{
+			const auto entity = *it;
+			if (!filed.contains(entity))
+			{
+				continue;
+			}
+			const auto& [resident, mesh, transform] = filed.get(entity);
+			if (footprint == _footprints.end() || footprint->first != mesh.id)
+			{
+				footprint = _footprints.find(mesh.id);
+			}
+			const auto held = _known.current(entity);
+			if (footprint == _footprints.end() || (held != k_NoVersion && held != entt::to_version(entity)))
+			{
+				left.push_back(entity);
+				continue;
+			}
+			if (held == k_NoVersion)
+			{
+				// Not known: a thing whose model has no footprint stays so
+				if (footprint->second.footprint != nullptr)
+				{
+					left.push_back(entity);
+				}
+				continue;
+			}
+			auto& known = _known.get(entity);
+			if (footprint->second.footprint != nullptr && known.mesh == mesh.id && known.cells == resident.cells &&
+			    SameTransform(known.transform, transform))
+			{
+				known.seen = search;
+				continue;
+			}
+			left.push_back(entity);
+		}
+	};
+	found.assign(Shares(count), {});
+	ForShares(count, quick);
+	for (const auto& left : found)
+	{
+		for (const auto entity : left)
+		{
+			const auto& [resident, mesh, transform] = filed.get(entity);
+			look(entity, resident, mesh, transform);
 		}
 	}
-	_known.erase(unseen.begin(), unseen.end());
+
+	// The lanes of the pool find the known things that this search did not see, as above. These things come off.
+	const auto findUnseen = [&](size_t share, size_t from, size_t to) {
+		for (auto it = knownEntities.begin() + static_cast<std::ptrdiff_t>(from);
+		     it != knownEntities.begin() + static_cast<std::ptrdiff_t>(to); ++it)
+		{
+			if (_known.get(*it).seen != search)
+			{
+				found[share].push_back(*it);
+			}
+		}
+	};
+	found.assign(Shares(knownEntities.size()), {});
+	ForShares(knownEntities.size(), findUnseen);
+	for (const auto& unseen : found)
+	{
+		for (const auto entity : unseen)
+		{
+			const auto& known = _known.get(entity);
+			MarkBlocks(known.lowBlock, known.highBlock);
+		}
+		_known.erase(unseen.begin(), unseen.end());
+	}
 }
 
 void LandFootprints::FindChangedRivers()
