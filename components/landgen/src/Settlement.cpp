@@ -119,6 +119,9 @@ struct Wanted
 	bool planned;
 };
 
+/// The count of the buildings before the houses: the storage pit and the creche
+constexpr size_t k_FixedBuildings = 2;
+
 /// Adds the town centre with a random turn
 void AddCentre(Town& town, Random& random)
 {
@@ -218,14 +221,17 @@ void Lay(Town& town, Axis along, const Grid<uint8_t>& keepClear, Random& random,
 	const Axis across {.x = -along.z, .z = along.x};
 	AddCentre(town, random);
 
-	// The storage pit and the creche, then the houses, each at a slot that the seed picks
-	std::vector<Wanted> buildings {{.building = Building::StoragePit, .planned = false},
-	                               {.building = Building::Creche, .planned = false}};
+	// The storage pit and the creche, then the houses, each at a slot that the seed picks. The storage pit and the
+	// creche use no random numbers, thus the count of houses comes first. The vector gets its full size before the
+	// fill, because GCC 13 gives a false overflow warning when the vector grows.
 	const auto houses = Between(random, settings.fewestHouses, settings.mostHouses);
+	std::vector<Wanted> buildings(k_FixedBuildings + houses);
+	buildings[0] = {.building = Building::StoragePit, .planned = false};
+	buildings[1] = {.building = Building::Creche, .planned = false};
 	for (uint32_t i = 0; i < houses; ++i)
 	{
-		buildings.push_back(
-		    {.building = k_Houses.at(random.NextBelow(static_cast<uint32_t>(k_Houses.size()))), .planned = false});
+		buildings[k_FixedBuildings + i] = {.building = k_Houses.at(random.NextBelow(static_cast<uint32_t>(k_Houses.size()))),
+		                                   .planned = false};
 	}
 	AddInSlots(town, buildings, along, across, keepClear, random, settings);
 	AddPeople(town, random, settings);
@@ -298,22 +304,28 @@ void LayNeutral(Town& town, Axis along, const Grid<uint8_t>& keepClear, Random& 
 	const Axis across {.x = -along.z, .z = along.x};
 	AddCentre(town, random);
 
-	std::vector<Wanted> buildings;
+	// The town can have a storage pit and a creche. The vector gets its full size before the fill, because GCC 13
+	// gives a false overflow warning when the vector grows.
+	std::array<Wanted, k_FixedBuildings> fixed {};
+	size_t fixedCount = 0;
 	for (const auto& [building, share] :
 	     std::array {std::pair {Building::StoragePit, mix.storagePit}, std::pair {Building::Creche, mix.creche}})
 	{
 		if (const auto planned = Draw(random, share); planned.has_value())
 		{
-			buildings.push_back({.building = building, .planned = *planned});
+			fixed.at(fixedCount) = {.building = building, .planned = *planned};
+			++fixedCount;
 		}
 	}
 	// The kinds of house of the tribe, with the weights of the towns of the story of the tribe
 	const auto tribe = static_cast<size_t>(std::ranges::find(k_Tribes, town.tribe) - k_Tribes.begin());
 	const auto& weights = mix.houseWeights.at(std::min(tribe, mix.houseWeights.size() - 1));
 	const auto houses = Between(random, settings.fewestHouses, settings.mostHouses);
+	std::vector<Wanted> buildings(fixedCount + houses);
+	std::ranges::copy_n(fixed.begin(), static_cast<std::ptrdiff_t>(fixedCount), buildings.begin());
 	for (uint32_t i = 0; i < houses; ++i)
 	{
-		buildings.push_back({.building = k_AllHouses.at(Weighted(random, weights)), .planned = false});
+		buildings[fixedCount + i] = {.building = k_AllHouses.at(Weighted(random, weights)), .planned = false};
 	}
 	AddInSlots(town, buildings, along, across, keepClear, random, settings);
 	AddPeople(town, random, settings);
