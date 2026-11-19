@@ -88,7 +88,7 @@ public:
 	void PlayTurns(simulation::TurnViewInterface& view) override;
 	void PlayTurnSteps(simulation::TurnViewInterface& view) override;
 	void FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
-	                 std::optional<std::chrono::steady_clock::time_point> end) override;
+	                 std::optional<std::chrono::steady_clock::time_point> end, std::optional<float> cpuMs) override;
 	[[nodiscard]] std::chrono::steady_clock::duration GetTurnDeltaTime() const override { return _turnDeltaTime; }
 	void KeepAlignmentInProfile() override;
 	[[nodiscard]] lhscriptx::ScriptLineValues& GetScriptLineValues() override { return _scriptLineValues; }

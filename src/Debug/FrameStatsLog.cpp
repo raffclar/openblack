@@ -20,8 +20,9 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "ThreadCpuTime.h"
+
 #ifdef _WIN32
-#include <intrin.h>
 #include <windows.h>
 // psapi.h needs windows.h first
 #include <psapi.h>
@@ -33,41 +34,6 @@
 
 namespace
 {
-
-#ifdef _WIN32
-/// The processor's time stamp counter ticks in a millisecond, measured over two milliseconds
-double TicksPerMillisecond()
-{
-	const auto start = std::chrono::steady_clock::now();
-	const auto first = __rdtsc();
-	while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(2))
-	{
-	}
-	const auto last = __rdtsc();
-	const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-	return static_cast<double>(last - first) / elapsed;
-}
-#endif
-
-/// The time that this thread was on a processor since it started, in milliseconds. A frame that takes much more time
-/// than this waited: for the renderer, or for the system, which gave the processor to other programs.
-/// The time that the game thread was on a processor. A web browser does not give this time: its thread clock is the
-/// wall clock, which also counts the wait for the display frame.
-std::optional<double> ThreadCpuMilliseconds()
-{
-#if defined(__EMSCRIPTEN__)
-	return std::nullopt;
-#elif defined(_WIN32)
-	static const double k_TicksPerMillisecond = TicksPerMillisecond();
-	ULONG64 cycles = 0;
-	QueryThreadCycleTime(GetCurrentThread(), &cycles);
-	return static_cast<double>(cycles) / k_TicksPerMillisecond;
-#else
-	timespec time {};
-	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time);
-	return static_cast<double>(time.tv_sec) * 1000.0 + static_cast<double>(time.tv_nsec) / 1.0e6;
-#endif
-}
 
 /// How much memory the process holds, in megabytes: in physical memory, and of its own (private) where the system
 /// tells it

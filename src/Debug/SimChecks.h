@@ -144,12 +144,15 @@ private:
 	std::map<std::string, Series, std::less<>> _series;
 };
 
-/// When the turn time goes up: after some records to warm up, the average of a window of records is the base. A
-/// later window whose average is a number of times the base, and more than the base by an amount, gives a flag.
+/// When the turn time goes up for a sustained time: after the turns of the warm up, the middle value of a window of
+/// records is the base. The first turns of a land do more work for a short time as the land starts, so they are not
+/// part of the base. A later window whose middle value is a number of times the base, and more than the base by an
+/// amount, gives a flag. The middle value means that a few single slow turns, as on a busy machine, do not flag; more
+/// than half of the window must be slow.
 struct TrendRule
 {
-	size_t warmUp {5};
-	size_t window {10};
+	uint32_t warmUpTurns {100};
+	size_t window {21};
 	float factor {1.5f};
 	float leastRiseMs {0.5f};
 };
@@ -167,7 +170,6 @@ public:
 
 private:
 	TrendRule _rule;
-	size_t _seen {0};
 	std::vector<float> _baseSamples;
 	std::optional<float> _base;
 	std::deque<float> _recent;

@@ -10,11 +10,13 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "Debug/SimRun.h"
+#include "Debug/ThreadCpuTime.h"
 
 using namespace openblack::sim_run;
 using namespace std::chrono_literals;
@@ -157,6 +159,57 @@ TEST(SimRun, TheTurnTimeDoesNotIncludeTheRecordTime)
 	EXPECT_FLOAT_EQ(timings.recordLongestMs, 2.0f);
 	EXPECT_FLOAT_EQ(timings.RecordAverageMs(), 3.5f / 3.0f);
 	EXPECT_FLOAT_EQ(timings.recordSinceTurnMs, 0.0f);
+}
+
+TEST(SimRun, TimingsGiveTheProcessorTimeOfTheTurnsWithoutTheRecords)
+{
+	Timings timings;
+	EXPECT_FALSE(timings.TurnCpuAverageMs().has_value());
+	// The record step of a turn ends before the time of the turn comes
+	timings.AddRecord(2.0f, 1.5f);
+	timings.AddTurn(9.0f, 4.5f);
+	timings.AddTurn(3.0f, 2.5f);
+	ASSERT_TRUE(timings.TurnCpuAverageMs().has_value());
+	EXPECT_FLOAT_EQ(*timings.TurnCpuAverageMs(), 2.75f);
+	EXPECT_FLOAT_EQ(timings.TurnAverageMs(), 5.0f);
+	EXPECT_FLOAT_EQ(timings.recordCpuSinceTurnMs, 0.0f);
+}
+
+TEST(SimRun, TheProcessorTimeIsUnknownWhenATurnDidNotGiveIt)
+{
+	Timings timings;
+	timings.AddTurn(2.0f, 1.0f);
+	timings.AddTurn(2.0f);
+	EXPECT_FALSE(timings.TurnCpuAverageMs().has_value());
+	EXPECT_FLOAT_EQ(timings.TurnAverageMs(), 2.0f);
+}
+
+TEST(SimRun, TheProcessorTimeOfATurnIsNotLessThanZero)
+{
+	Timings timings;
+	timings.AddRecord(1.0f, 3.0f);
+	timings.AddTurn(4.0f, 2.0f);
+	ASSERT_TRUE(timings.TurnCpuAverageMs().has_value());
+	EXPECT_FLOAT_EQ(*timings.TurnCpuAverageMs(), 0.0f);
+}
+
+TEST(SimRun, TheProcessorTimeBetweenTwoReadingsNeedsBoth)
+{
+	using openblack::debug::CpuMillisecondsBetween;
+	EXPECT_FALSE(CpuMillisecondsBetween(std::nullopt, 2.0).has_value());
+	EXPECT_FALSE(CpuMillisecondsBetween(2.0, std::nullopt).has_value());
+	ASSERT_TRUE(CpuMillisecondsBetween(2.0, 5.5).has_value());
+	EXPECT_FLOAT_EQ(*CpuMillisecondsBetween(2.0, 5.5), 3.5f);
+}
+
+TEST(SimRun, AThreadThatWaitsUsesLittleProcessorTime)
+{
+	const auto start = openblack::debug::ThreadCpuMilliseconds();
+	std::this_thread::sleep_for(50ms);
+	const auto took = openblack::debug::CpuMillisecondsBetween(start, openblack::debug::ThreadCpuMilliseconds());
+	ASSERT_TRUE(took.has_value());
+	EXPECT_GE(*took, 0.0f);
+	EXPECT_LT(*took, 25.0f);
 }
 
 TEST(SimRun, TimingsAddTheStagesOfEachFrame)

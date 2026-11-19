@@ -50,6 +50,7 @@
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/TestbedDispenserGrid.h"
 #endif
+#include "Debug/ThreadCpuTime.h"
 #include "ECS/Archetypes/BigForestArchetype.h"
 #include "ECS/Archetypes/CloudArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
@@ -1811,8 +1812,9 @@ void LandSystem::PlayTurns(simulation::TurnViewInterface& view)
 	auto gameLogic = profiler.BeginScoped(Profiler::Stage::GameLogic);
 	const auto turnBefore = Locator::time::value().GetTurn();
 	const auto logicStart = std::chrono::steady_clock::now();
+	const auto cpuStart = debug::ThreadCpuMilliseconds();
 	PlayDueTurns(view);
-	FinishTurns(turnBefore, logicStart, std::nullopt);
+	FinishTurns(turnBefore, logicStart, std::nullopt, debug::CpuMillisecondsBetween(cpuStart, debug::ThreadCpuMilliseconds()));
 }
 
 void LandSystem::PlayTurnSteps(simulation::TurnViewInterface& view)
@@ -1835,7 +1837,7 @@ void LandSystem::PlayDueTurns(simulation::TurnViewInterface& view)
 }
 
 void LandSystem::FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
-                             std::optional<std::chrono::steady_clock::time_point> end)
+                             std::optional<std::chrono::steady_clock::time_point> end, std::optional<float> cpuMs)
 {
 	// The main thread does the work that the turns gave it. Turns on the main thread do their work at once, so then no
 	// work waits here.
@@ -1847,7 +1849,7 @@ void LandSystem::FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::tim
 	if (Locator::time::value().GetTurn() != turnBefore)
 	{
 		Locator::simulation::value().TurnPlayed(
-		    std::chrono::duration<float, std::milli>(end.value_or(std::chrono::steady_clock::now()) - start).count());
+		    std::chrono::duration<float, std::milli>(end.value_or(std::chrono::steady_clock::now()) - start).count(), cpuMs);
 	}
 }
 
