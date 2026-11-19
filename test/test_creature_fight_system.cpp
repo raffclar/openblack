@@ -1065,7 +1065,7 @@ TEST_F(CreatureFightSystemTest, AScriptStartsAFightForACreatureTooHurtToStartOne
 	using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
 	EXPECT_EQ(fights.StartFight(hurt, other), Start::TooWeak);
 	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(hurt));
-	EXPECT_EQ(fights.StartScriptFight(hurt, other), Start::Started);
+	EXPECT_EQ(fights.StartForcedFight(hurt, other), Start::Started);
 	ASSERT_TRUE(registry.AllOf<CreatureFighting>(hurt));
 	EXPECT_FLOAT_EQ(registry.Get<const CreatureFighting>(hurt).fighter.health, fight::FightHealthAtStart(0.05f));
 	EXPECT_TRUE(registry.AllOf<CreatureFighting>(other));
