@@ -62,6 +62,7 @@
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
@@ -486,6 +487,12 @@ void Game::EndGame(game_session::End end)
 	                   : end == game_session::End::Skirmish ? "the skirmish box shows"
 	                                                        : "the game continues as the profile picked");
 	SaveAsGameEnds(end, false);
+	// The skirmish ends, and the land stays under the skirmish box. The player's creature goes to the profile's files now,
+	// as the game writes it when it clears the land after the skirmish.
+	if (end == game_session::End::Skirmish && Locator::creatureCarryOverSystem::has_value())
+	{
+		Locator::creatureCarryOverSystem::value().EndGame();
+	}
 	// The next game has no previous profile until the Players page opens again
 	if (Locator::gameInterface::has_value())
 	{

@@ -17,6 +17,8 @@
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFight.h"
 #include "Input/PlatformKeys.h"
+#include "ScriptHeaders/ScriptEnums.h"
+#include "TestbedGameStageInterface.h"
 #include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -262,7 +264,8 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 7 for two players and the game loads "
 	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
-	                   "keeps. Fly from the start of player one to the start of player two.",
+	                   "keeps. The land plays as a skirmish, and the profile keeps the ape in its file. "
+	                   "Fly from the start of player one to the start of player two.",
 	    .expected = "Each player has a temple and a town on a flat start area, as on the skirmish lands. The town of "
 	                "player two is 510 to 1080 metres from the town of player one. Each town has a town centre, a "
 	                "storage pit, a creche, five to seven houses with their people and a block of fields. The ground and "
@@ -286,7 +289,8 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .facet = Facet::Editor,
 	    .description = "At the start, the land generator makes the land of seed 7 for three players and the game loads "
 	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
-	                   "keeps. In a network game, the land loads before the humans join. Fly from the start of player one "
+	                   "keeps. The land plays as a skirmish, and the profile keeps the ape in its file. "
+	                   "In a network game, the land loads before the humans join. Fly from the start of player one "
 	                   "to the starts of the other players.",
 	    .expected = "Each of the three players has a temple and a town on a flat start area, as on the skirmish lands. "
 	                "Players two and three are computer gods with a lion and a horse at their temples, as on Three Gods. "
@@ -309,7 +313,8 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 7 for four players and the game loads "
 	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
-	                   "keeps. Fly from the start of player one to the starts of the other players.",
+	                   "keeps. The land plays as a skirmish, and the profile keeps the ape in its file. "
+	                   "Fly from the start of player one to the starts of the other players.",
 	    .expected = "Each of the four players has a temple and a town on a flat start area, as on the skirmish lands. The "
 	                "town of each player is 510 to 1080 metres from the nearest town of another player. The ground and "
 	                "the trees near the starts are almost the same. The neutral towns are between the starts and round "
@@ -325,6 +330,51 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                  .value = 7,
 	                  .object = k_BigIsland,
 	                  .mindFile = "LethysCreature"}},
+	});
+
+	// A generated land for two players plays by the rules of a skirmish, and the profile keeps what its creature learnt.
+	// The world stops when the skirmish is decided, so the last check reads the file at each frame until it holds.
+	all.push_back({
+	    .id = "editor.generated_skirmish_end",
+	    .name = "The end of a skirmish on a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 for two players and the game loads "
+	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
+	                   "keeps, and the profile keeps the ape in its file. At 3 seconds the ape learns the miracle of "
+	                   "water. At 5 seconds the temple of player two starts its destruction. At 40 seconds the player "
+	                   "presses Leave Game in the end box. Start the game with --profile-folder on a folder of your own "
+	                   "that has a profile and no creature file. The mind file knows no miracle.",
+	    .expected = "In the first turn, player one brings the ape Matey to its temple. When the temple of player two goes, "
+	                "player two is out and the skirmish is decided. The end box says \"Congratulations! You've won the "
+	                "game!\" with Leave Game. After Leave Game, the game writes the ape to the creature file of the "
+	                "profile, and the skirmish box shows over the land. The file knows the miracle of water.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands =
+	        {{.kind = Kind::LoadGeneratedLand,
+	          .player = PlayerNames::PLAYER_TWO,
+	          .delaySeconds = 1.0f,
+	          .value = 7,
+	          .object = k_BigIsland,
+	          .mindFile = "LethysCreature"},
+	         {.kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 2.0f, .value = static_cast<size_t>(MagicType::Water)},
+	         {.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 1},
+	         {.kind = Kind::EndBox, .delaySeconds = 35.0f, .value = k_EndBoxLeave}},
+	    .checks = {{.label = "the land plays by the rules of a skirmish",
+	                .quantity = checks::Quantity::SkirmishRules,
+	                .afterTurns = 30,
+	                .atLeast = 1.0},
+	               {.label = "the skirmish is decided when the temple of player two goes",
+	                .quantity = checks::Quantity::GameDecided,
+	                .afterTurns = 50,
+	                .byTurn = 380,
+	                .atLeast = 1.0},
+	               {.label = "after Leave Game, the creature file of the profile knows the miracle of water",
+	                .quantity = checks::Quantity::ProfileCreatureKnowsMiracle,
+	                .index = static_cast<size_t>(MagicType::Water),
+	                .afterTurns = 100,
+	                .byTurn = 1000,
+	                .atLeast = 1.0}},
 	});
 
 	all.push_back({

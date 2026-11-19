@@ -578,8 +578,10 @@ void Runner::GiveCreatureCommand(const Command& command)
 	{
 		return;
 	}
-	const auto& setup = _scenario->creatures[command.creature];
-	const auto who = setup.label.empty() ? fmt::format("creature {}", command.creature) : std::string(setup.label);
+	// A creature of a filled slot or of a land that a command loaded has no setup in the scenario
+	const auto label =
+	    command.creature < _scenario->creatures.size() ? _scenario->creatures[command.creature].label : std::string_view {};
+	const auto who = label.empty() ? fmt::format("creature {}", command.creature) : std::string(label);
 	// Lying out cold, it does nothing it is told until it comes round
 	if (const auto* needs = Locator::entitiesRegistry::value().TryGet<const CreatureNeeds>(*entity);
 	    needs != nullptr && needs->rest == CreatureNeeds::Rest::Unconscious && command.kind != Kind::BringRound)

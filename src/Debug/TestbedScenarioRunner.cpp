@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <LHVM.h>
+#include <MindFile.h>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -108,6 +109,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -271,6 +273,7 @@ void Runner::Start(const Scenario& scenario)
 	_timeline = {};
 	_creatures.clear();
 	_slotCreatures.clear();
+	_onLoadedLand = false;
 	_objects.clear();
 	_birdFlocks.clear();
 	_scriptFlock = entt::null;
@@ -830,6 +833,22 @@ void Runner::Stop()
 
 std::optional<entt::entity> Runner::CreatureAt(size_t index) const
 {
+	// On a land that a command loaded, the creature 0 is the creature of player one
+	if (_onLoadedLand)
+	{
+		if (index != 0 || !Locator::entitiesRegistry::has_value())
+		{
+			return std::nullopt;
+		}
+		std::optional<entt::entity> own;
+		Locator::entitiesRegistry::value().Each<const Creature>([&own](entt::entity entity, const Creature& creature) {
+			if (creature.owner == PlayerNames::PLAYER_ONE && (!own.has_value() || entity < *own))
+			{
+				own = entity;
+			}
+		});
+		return own;
+	}
 	// After the creatures of the scenario come the creatures of the filled slots
 	const auto total = _creatures.size() + _slotCreatures.size();
 	if (index >= total || !Locator::entitiesRegistry::has_value())
@@ -1540,6 +1559,31 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto point = MapPoint(_middle, check.point);
 		const float height = Locator::terrainSystem::value().GetHeightAt(point);
 		return Locator::effectRequestSystem::value().FindShield({point.x, height, point.y}, 0.0f) != nullptr ? 1.0 : 0.0;
+	}
+	case checks::Quantity::SkirmishRules:
+		return registry.Context().skirmish ? 1.0 : 0.0;
+	case checks::Quantity::GameDecided:
+		return registry.Context().gameEnd.decided ? 1.0 : 0.0;
+	case checks::Quantity::ProfileCreatureKnowsMiracle:
+	{
+		if (!Locator::creatureCarryOverSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		// The check reads the file on the disk, after the writes that the game started before
+		const auto path = Locator::creatureCarryOverSystem::value().ProfileMind();
+		std::error_code error;
+		if (!path.has_value() || !std::filesystem::exists(*path, error))
+		{
+			return std::nullopt;
+		}
+		creaturemind::MindFileData file;
+		if (creaturemind::ReadFile(*path, file, creaturemind::MindNames::FromVersion21) != creaturemind::MindResult::Success)
+		{
+			return std::nullopt;
+		}
+		const auto& miracles = file.known.at(1);
+		return std::ranges::any_of(miracles, [&check](const auto& known) { return known.id == check.index; }) ? 1.0 : 0.0;
 	}
 	case checks::Quantity::ScriptLocal:
 	{

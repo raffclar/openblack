@@ -444,7 +444,10 @@ bool Runner::GiveStoryCommand(const Command& command)
 			auto mind = std::make_shared<creaturemind::MindFileData>();
 			if (creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success)
 			{
-				Locator::creatureCarryOverSystem::value().Keep(std::move(mind));
+				// The game is played as the profile picked now, so that the start of a skirmish keeps the mind file
+				auto& carryOver = Locator::creatureCarryOverSystem::value();
+				carryOver.StartGame();
+				carryOver.Keep(std::move(mind));
 			}
 		}
 		const bool loaded = Locator::landSystem::has_value() &&
@@ -452,6 +455,13 @@ bool Runner::GiveStoryCommand(const Command& command)
 		                                                                    .players = players,
 		                                                                    .landType = landType,
 		                                                                    .archipelago = archipelago ? 1 : 0});
+		// The creatures of the testbed went with it. The commands and the checks name the creature of player one.
+		if (loaded)
+		{
+			_creatures.clear();
+			_slotCreatures.clear();
+			_onLoadedLand = true;
+		}
 		Log(fmt::format("{:.1f}s: generated land {}: {}", _seconds, command.value, loaded ? "loaded" : "not loaded"));
 		return true;
 	}

@@ -637,7 +637,12 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 		Locator::vm::value().StopAllTasks();
 	}
 	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
-	PrepareNewLand(land_change::Kind::Testbed);
+	// A land for more than one player plays as a skirmish. A network game fills the slots with no human, as on a
+	// skirmish land.
+	const auto playerStart = generated_land::PlayerStartOf(
+	    choices.players, Locator::time::value().IsNetworkGame() || _humansFromSession, _allComputerGods);
+	PrepareNewLand(playerStart.change);
+	Locator::entitiesRegistry::value().Context().skirmish = playerStart.skirmish;
 	_landPath = generated_land::PathOf(choices);
 	// The generator makes the land, so it has no landscape file
 	_landscapePath.clear();
@@ -667,12 +672,14 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 		                    e.what());
 	}
 	_runsNetworkMapScript = false;
-	// As on a land: the land is laid out. A generated land has no footpath file. A network game fills the slots with no
-	// human, as on a skirmish land.
-	const auto playerStart = generated_land::PlayerStartOf(
-	    choices.players, Locator::time::value().IsNetworkGame() || _humansFromSession, _allComputerGods);
+	// As on a land: the land is laid out. A generated land has no footpath file.
 	LayOutLand(std::nullopt, playerStart.slotsFilled ? std::optional<std::span<const PlayerNames>>(computer_player::k_SlotGods)
 	                                                 : std::nullopt);
+	// A new game starts the player as good or evil as their profile last kept them, once the land is set up
+	if (land_change::RulesFor(playerStart.change).alignmentFromProfile)
+	{
+		StartPlayerAtProfileAlignment();
+	}
 
 	// The camera looks down over the start area from the south
 	constexpr float k_MetresPerCorner = 10.0f;
@@ -698,13 +705,9 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 	}
 	View().EndLoadingScreen();
 
-	StartNewLand(land_change::Kind::Testbed);
-	// A land for more than one player starts as a skirmish starts: in the first turn the god of the player brings the
-	// creature that the profile keeps. The computer gods start after it.
-	if (playerStart.profileCreatureBrought)
-	{
-		Locator::playerCommandSystem::value().SetPlayersCreatureDue(true);
-	}
+	// A skirmish starts: in the first turn the god of the player brings the creature that the profile keeps. The computer
+	// gods start after it.
+	StartNewLand(playerStart.change);
 	return true;
 }
 
