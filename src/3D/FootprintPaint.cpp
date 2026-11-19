@@ -168,15 +168,21 @@ void WalkEdge(Spans& spans, Corner start, Corner end)
 }
 
 /// Fills each row that the edges reached, from its low column to its high column, both ends too. The picture's
-/// coordinates step evenly from those at the low end to those at the high end. The columns outside the block are not
-/// painted. Each row is empty again after. Only the rows from the first to the last that an edge reached can be used.
-void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, Mix mix)
+/// coordinates step evenly from those at the low end to those at the high end. Only the texels in the region are
+/// painted, and the region is in the block. Each row is empty again after. Only the rows from the first to the last
+/// that an edge reached can be used.
+void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, Mix mix, const Region& region)
 {
 	for (int row = spans.first; row <= spans.last; ++row)
 	{
 		auto& span = spans.rows.at(static_cast<size_t>(row));
 		if (!span.used)
 		{
+			continue;
+		}
+		if (row < region.firstRow || row > region.lastRow)
+		{
+			span.used = false;
 			continue;
 		}
 		float du = 0.0f;
@@ -190,10 +196,12 @@ void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, 
 		}
 		float u = span.uLow;
 		float v = span.vLow;
-		const int last = std::min(span.high, spans.side - 1);
+		// The coordinates step from the low end also where the region starts after it, so that each texel gets the
+		// same coordinates as in a paint of the whole block
+		const int last = std::min(span.high, region.lastColumn);
 		for (int column = span.low; column <= last; ++column)
 		{
-			if (column >= 0)
+			if (column >= region.firstColumn)
 			{
 				const int texelU = std::clamp(Nearest(u), 0, picture.width - 1);
 				const int texelV = std::clamp(Nearest(v), 0, picture.height - 1);
@@ -211,12 +219,72 @@ void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, 
 }
 } // namespace
 
+Region WholeBlock(int side)
+{
+	return {.firstRow = 0, .lastRow = side - 1, .firstColumn = 0, .lastColumn = side - 1};
+}
+
+Region RegionOf(const std::pair<glm::vec2, glm::vec2>& bounds, glm::ivec2 blockIndex, int side)
+{
+	const float rowStart = static_cast<float>(blockIndex.x) * k_BlockUnits;
+	const float columnStart = static_cast<float>(blockIndex.y) * k_BlockUnits;
+	const auto texels = static_cast<float>(side);
+	// A corner goes to the nearest texel, thus a unit more on each side holds every texel that the footprint paints
+	const auto texelOf = [texels](float ground, float start) { return ((ground - start) * texels) * k_UnitPerBlock; };
+	const int firstRow = static_cast<int>(std::floor(texelOf(bounds.first.x - 1.0f, rowStart))) - 1;
+	const int lastRow = static_cast<int>(std::ceil(texelOf(bounds.second.x + 1.0f, rowStart))) + 1;
+	const int firstColumn = static_cast<int>(std::floor(texelOf(bounds.first.y - 1.0f, columnStart))) - 1;
+	const int lastColumn = static_cast<int>(std::ceil(texelOf(bounds.second.y + 1.0f, columnStart))) + 1;
+	const Region region {.firstRow = std::max(firstRow, 0),
+	                     .lastRow = std::min(lastRow, side - 1),
+	                     .firstColumn = std::max(firstColumn, 0),
+	                     .lastColumn = std::min(lastColumn, side - 1)};
+	return region.Empty() ? Region {} : region;
+}
+
+Region Join(const Region& a, const Region& b)
+{
+	if (a.Empty())
+	{
+		return b;
+	}
+	if (b.Empty())
+	{
+		return a;
+	}
+	return {.firstRow = std::min(a.firstRow, b.firstRow),
+	        .lastRow = std::max(a.lastRow, b.lastRow),
+	        .firstColumn = std::min(a.firstColumn, b.firstColumn),
+	        .lastColumn = std::max(a.lastColumn, b.lastColumn)};
+}
+
+bool Overlap(const Region& a, const Region& b)
+{
+	return !a.Empty() && !b.Empty() && a.firstRow <= b.lastRow && b.firstRow <= a.lastRow && a.firstColumn <= b.lastColumn &&
+	       b.firstColumn <= a.lastColumn;
+}
+
 void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Picture& picture,
                     std::span<const Triangle> triangles, const Placement& placement, Mix mix, int side)
+{
+	PaintFootprint(block, blockIndex, picture, triangles, placement, mix, side, WholeBlock(side));
+}
+
+void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Picture& picture,
+                    std::span<const Triangle> triangles, const Placement& placement, Mix mix, int side, const Region& region)
 {
 	if (side <= 0 || side > k_BlockTexels || block.size() < static_cast<size_t>(side) * static_cast<size_t>(side) ||
 	    picture.width <= 0 || picture.height <= 0 ||
 	    picture.texels.size() < static_cast<size_t>(picture.width) * static_cast<size_t>(picture.height))
+	{
+		return;
+	}
+	// The region is kept in the block
+	const Region inBlock {.firstRow = std::max(region.firstRow, 0),
+	                      .lastRow = std::min(region.lastRow, side - 1),
+	                      .firstColumn = std::max(region.firstColumn, 0),
+	                      .lastColumn = std::min(region.lastColumn, side - 1)};
+	if (inBlock.Empty())
 	{
 		return;
 	}
@@ -245,7 +313,7 @@ void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Pict
 		WalkEdge(spans, corners[0], corners[1]);
 		WalkEdge(spans, corners[1], corners[2]);
 		WalkEdge(spans, corners[2], corners[0]);
-		FillSpans(spans, block, picture, mix);
+		FillSpans(spans, block, picture, mix, inBlock);
 	}
 }
 

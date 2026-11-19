@@ -42,6 +42,8 @@ struct Game::FrameLoop
 	uint32_t turnBefore {0};
 	std::chrono::steady_clock::time_point turnsStart;
 	std::chrono::steady_clock::time_point turnsEnd;
+	/// The processor time of the thread of the turns while they played, when the system gives it
+	std::optional<float> turnsCpuMs;
 	/// The clock of the next frame moved on already, and its turns played beside the draw of this frame
 	bool turnsPlayedBeside {false};
 	/// The clock of the machine for the statistics of this frame, read before the clock of the next frame moved on

@@ -75,16 +75,27 @@ private:
 	/// A thing with a footprint, as it was the last time
 	struct Known
 	{
-		entt::id_type mesh {0};
 		/// The map's cells it is filed in
 		std::vector<uint32_t> cells;
-		ecs::components::Transform transform {};
 		footprint_paint::Placement placement {};
+		/// The lowest and highest x and z of the footprint on the ground
+		std::pair<glm::vec2, glm::vec2> bounds {};
 		/// The lowest and highest block, along x and z, that the footprint reaches
 		glm::ivec2 lowBlock {0};
 		glm::ivec2 highBlock {0};
+	};
+	/// The part of a known thing that the search compares each frame. The search keeps it by the number of the entity,
+	/// thus it reads one small row for each thing. A number with no known thing holds the null entity.
+	struct KnownLook
+	{
+		entt::entity entity {entt::null};
 		/// The number of the last search that saw it in the map's cells
 		uint32_t seen {0};
+		entt::id_type mesh {0};
+		/// The count of the map's cells it is filed in, and the first of them
+		uint32_t cellCount {0};
+		uint32_t firstCell {0};
+		ecs::components::Transform transform {};
 	};
 	/// A print that no thing in the map's cells gives: the print of a thing that shows only as a print, or a stretch of
 	/// a river. A channel lowers the land's alpha; every other print mixes its colour into the land.
@@ -122,8 +133,27 @@ private:
 	void FindChangedRivers();
 	/// Finds whether the prints of the things that show only as prints changed, and the blocks that take them
 	void FindChangedGroundPrints();
-	/// Adds the blocks within the bounds of a footprint to the blocks to paint again
+	/// Adds the blocks within the bounds of a footprint to the blocks to paint again in full
 	void MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock);
+	/// Adds the blocks under a known thing's footprint to the blocks to paint again, with the part of each block that
+	/// the footprint can paint
+	void MarkThing(entt::entity entity, const Known& known);
+	/// The part of a block to paint again, none when all of the block must be painted again. Only the changed things
+	/// can change the texels of a part: the other things, the loose prints and the block's own texture stay the same.
+	[[nodiscard]] std::optional<footprint_paint::Region> PartToPaint(size_t block, const BlockPaint& paint) const;
+	/// Paints a part of the block's own texture with its footprints into the same part of texels, as PaintBlock paints
+	/// all of it. It changes only that part of texels.
+	void PaintBlockPart(size_t block, const BlockPaint& paint, const ThingStores& stores, const footprint_paint::Region& part,
+	                    std::span<uint16_t> texels) const;
+	/// Keeps a thing as known, with what the search compares of it
+	void Learn(entt::entity entity, const KnownLook& look, Known&& known);
+	/// Removes a known thing
+	void Forget(entt::entity entity);
+	/// The compared part of a known thing, none for a thing that is not known
+	[[nodiscard]] const KnownLook* LookOf(entt::entity entity) const;
+	/// Whether a known thing has the same model, cells and transform as when it was seen last. It changes nothing.
+	[[nodiscard]] bool SameLook(const KnownLook& look, entt::id_type mesh, const std::vector<uint32_t>& cells,
+	                            const ecs::components::Transform& transform) const;
 	/// The things and loose prints that paint a block. It changes nothing.
 	[[nodiscard]] BlockPaint FindBlockPaint(size_t block, const ThingStores& stores) const;
 	/// Paints the block's own texture with its footprints into texels. It changes only the block's own texture that is
@@ -150,6 +180,8 @@ private:
 	/// The known things by their entities. A look-up by an entity costs little, as the walk of the things does it for each
 	/// thing in each frame.
 	entt::storage<Known> _known;
+	/// The compared part of each known thing, by the number of its entity
+	std::vector<KnownLook> _looks;
 	/// The last model that FootprintOf found, as things of one model often come one after the other
 	std::optional<std::pair<entt::id_type, const L3DMesh::Footprint*>> _lastFootprint;
 	std::vector<LoosePrint> _rivers;
@@ -166,6 +198,18 @@ private:
 	/// Whether each block holds footprints now
 	std::vector<bool> _painted;
 	std::set<size_t> _dirty;
+	/// The blocks of _dirty that must be painted again in full
+	std::set<size_t> _wholeDirty;
+	/// The part of each block of _dirty that the changed things can paint
+	std::unordered_map<size_t, footprint_paint::Region> _dirtyParts;
+	/// The things that changed since the last paint, in order of the entities' values after the search
+	std::vector<entt::entity> _changedThings;
+	/// The things that painted each block the last time, in the order that they painted it
+	std::vector<std::vector<entt::entity>> _blockThings;
+	/// The texels along a side of each block's texture
+	int _side {footprint_paint::k_BlockTexels};
+	/// The texels of each lane that paints a part of a block
+	std::vector<std::vector<uint16_t>> _laneTexels;
 	/// The own texture of each block that holds footprints, with no footprints, as the land paints it
 	std::unordered_map<size_t, std::vector<uint16_t>> _ownTexels;
 	/// The texels of a block that this thread paints alone, kept to use their memory again

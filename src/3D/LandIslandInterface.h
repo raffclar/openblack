@@ -141,6 +141,13 @@ public:
 	virtual void PaintBlockTexels(size_t /*block*/, std::span<uint16_t> /*texels*/) const {}
 	/// Puts ARGB texels at 4 bits a channel in place of a block's texture, for example with its footprints painted in
 	virtual void SetBlockTexels(size_t /*block*/, std::span<const uint16_t> /*texels*/) {}
+	/// Puts ARGB texels at 4 bits a channel in place of a part of a block's texture, as SetBlockTexels does for all of it.
+	/// The part starts at a row (along x) and a column (along z), and holds a row of `size.y` texels for each of its
+	/// `size.x` rows.
+	virtual void SetBlockTexelsPart(size_t /*block*/, glm::ivec2 /*first*/, glm::ivec2 /*size*/,
+	                                std::span<const uint16_t> /*texels*/)
+	{
+	}
 	/// Paints the texels of the block at an index of the blocks, GetBlockTextureSide on each side. The lanes of a pool
 	/// call it at the same time for different indices.
 	using PaintTexels = std::function<void(size_t index, std::span<uint16_t> texels)>;
