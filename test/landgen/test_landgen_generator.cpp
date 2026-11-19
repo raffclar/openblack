@@ -25,7 +25,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0xD7AC3D10F76243DCull;
+constexpr uint64_t k_SmallLandHash = 0x339FB659174CD281ull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)

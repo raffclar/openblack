@@ -108,6 +108,18 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		return text.str();
 	});
 	out << ",\"rivers\":" << land.rivers.size() << ",\"lakes\":" << land.lakes;
+	// Each stream: its points in metres, from the source down
+	out << ",\"streams\":";
+	WriteList(out, land.rivers, [](const landgen::hydrology::River& river) {
+		std::ostringstream text;
+		text << '[';
+		for (size_t i = 0; i < river.points.size(); ++i)
+		{
+			text << (i == 0 ? "" : ",") << '[' << river.points[i].x * 10.0f << ',' << river.points[i].z * 10.0f << ']';
+		}
+		text << ']';
+		return text.str();
+	});
 	out << ",\"highLakes\":";
 	WriteList(out, land.highLakes, [&land](const landgen::lakes::Lake& lake) {
 		const auto first = lake.corners.front();
