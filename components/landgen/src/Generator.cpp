@@ -451,8 +451,22 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		firstTowns.push_back(settlement::TownOfStart(start.x, start.z, playerSeeds[player], settings.settlement));
 		startAreas.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
 	}
-	const auto sites =
-	    settlement::FindSites(heights, land.heightCurve, startSea, riverDistance, firstTowns, startAreas, seed, settings.sites);
+	// The lakes that the ground holds now. No town goes into one of them.
+	Grid<float> roundedNow(side, 0.0f);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		roundedNow.values[i] = std::floor(std::clamp(heights.values[i], 0.0f, terrain::k_HighestAltitude) + 0.5f);
+	}
+	Grid<uint8_t> lakesNow(side, 0);
+	for (const auto& lake : lakes::Find(roundedNow, static_cast<float>(k_SeaLevelAltitude), settings.highLakes))
+	{
+		for (const auto corner : lake.corners)
+		{
+			lakesNow.values[corner] = 1;
+		}
+	}
+	const auto sites = settlement::FindSites(heights, land.heightCurve, startSea, riverDistance, firstTowns, startAreas, seed,
+	                                         settings.sites, &lakesNow);
 	const StartSettings townGround {.flatRadius = settings.sites.flatRadius, .blendRadius = settings.sites.blendRadius};
 	for (const auto& site : sites)
 	{
@@ -483,7 +497,21 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	{
 		drawn.values[i] = static_cast<float>(altitudes.values[i]);
 	}
-	land.highLakes = lakes::Find(drawn, static_cast<float>(k_SeaLevelAltitude), settings.highLakes);
+	// No lake covers the flat ground of a start or a town, so that each town stays dry and its paths reach it
+	std::vector<lakes::Keep> dryGround;
+	for (const auto& start : starts)
+	{
+		dryGround.push_back({.x = start.x, .z = start.z, .radius = startSettings.flatRadius});
+	}
+	for (const auto& town : firstTowns)
+	{
+		dryGround.push_back({.x = town.x, .z = town.z, .radius = settings.sites.flatRadius});
+	}
+	for (const auto& site : sites)
+	{
+		dryGround.push_back({.x = site.x, .z = site.z, .radius = settings.sites.flatRadius});
+	}
+	land.highLakes = lakes::Find(drawn, static_cast<float>(k_SeaLevelAltitude), settings.highLakes, dryGround);
 	Grid<float> lakeLevels(side, -1.0f);
 	for (size_t i = 0; i < drawn.values.size(); ++i)
 	{

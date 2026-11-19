@@ -446,7 +446,8 @@ std::vector<Site> settlement::FindSites(const Grid<float>& heights, const Height
 
 std::vector<Site> settlement::FindSites(const Grid<float>& heights, const HeightCurve& curve, const Grid<float>& seaDistance,
                                         const Grid<float>& riverDistance, std::span<const Site> firsts,
-                                        std::span<const Area> keepOut, uint64_t seed, const SiteSettings& settings)
+                                        std::span<const Area> keepOut, uint64_t seed, const SiteSettings& settings,
+                                        const Grid<uint8_t>* lakes)
 {
 	const int side = heights.side;
 	const auto reach = static_cast<int>(settings.blendRadius);
@@ -495,6 +496,7 @@ std::vector<Site> settlement::FindSites(const Grid<float>& heights, const Height
 			// The town gets the height that the generator gives to its flat ground: the mean height in the flat circle
 			float sum = 0.0f;
 			int count = 0;
+			bool wet = false;
 			for (int dx = -flat; dx <= flat; ++dx)
 			{
 				for (int dz = -flat; dz <= flat; ++dz)
@@ -503,8 +505,13 @@ std::vector<Site> settlement::FindSites(const Grid<float>& heights, const Height
 					{
 						sum += heights.At(x + dx, z + dz);
 						++count;
+						wet = wet || (lakes != nullptr && lakes->At(x + dx, z + dz) != 0);
 					}
 				}
+			}
+			if (wet)
+			{
+				continue;
 			}
 			const float level = curve.MetresOf(sum / static_cast<float>(count));
 			if (level < lowest || level > highest)

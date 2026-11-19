@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <set>
+#include <span>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -426,6 +427,53 @@ TEST(LandgenTowns, NoTownMakesTheGroundOfTheStartFlat)
 		for (const auto& site : sites)
 		{
 			EXPECT_GE(Distance(site.x, site.z, keepOut[0].x, keepOut[0].z), keepOut[0].radius + settings.blendRadius);
+		}
+	}
+}
+
+TEST(LandgenTowns, NoTownStandsInALake)
+{
+	const FakeLand land;
+	const settlement::SiteSettings settings;
+	const settlement::Site first {.x = 256.0f, .z = 256.0f};
+	const std::span<const settlement::Site> firsts(&first, 1);
+	for (uint64_t seed = 1; seed <= 10; ++seed)
+	{
+		// A lake covers the ground round each town that the land gets without lakes
+		const auto dry = settlement::FindSites(land.heights, HeightCurve {}, land.sea, land.rivers, firsts, {}, seed, settings);
+		ASSERT_FALSE(dry.empty());
+		Grid<uint8_t> lakes(land.heights.side, 0);
+		const auto lakeRadius = static_cast<int>(settings.flatRadius);
+		for (size_t i = 0; i < dry.size(); ++i)
+		{
+			const auto cx = static_cast<int>(dry[i].x);
+			const auto cz = static_cast<int>(dry[i].z);
+			for (int dx = -lakeRadius; dx <= lakeRadius; ++dx)
+			{
+				for (int dz = -lakeRadius; dz <= lakeRadius; ++dz)
+				{
+					lakes.At(cx + dx, cz + dz) = 1;
+				}
+			}
+		}
+		const auto sites =
+		    settlement::FindSites(land.heights, HeightCurve {}, land.sea, land.rivers, firsts, {}, seed, settings, &lakes);
+		ASSERT_FALSE(sites.empty());
+		const auto flat = static_cast<int>(settings.flatRadius);
+		for (size_t i = 0; i < sites.size(); ++i)
+		{
+			const auto cx = static_cast<int>(sites[i].x);
+			const auto cz = static_cast<int>(sites[i].z);
+			for (int dx = -flat; dx <= flat; ++dx)
+			{
+				for (int dz = -flat; dz <= flat; ++dz)
+				{
+					if ((dx * dx) + (dz * dz) <= flat * flat)
+					{
+						EXPECT_EQ(lakes.At(cx + dx, cz + dz), 0) << "seed " << seed << " town " << i;
+					}
+				}
+			}
 		}
 	}
 }
