@@ -45,6 +45,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Reflection/WorldArchive.h"
@@ -261,6 +262,18 @@ std::optional<CreatureMindState::ActionUnderway> CurrentAction(const CreatureMin
 
 /// A stage of the profiler that takes less time than this each turn is left out of the record
 constexpr float k_LeastStageMs = 0.005f;
+
+/// The glow and spark sprites that the highlights of the world hold now. Each highlight holds one glow, and a gold scroll
+/// also holds one sprite for each of its sparks. A sprite that no highlight holds is not in this count.
+size_t HeldHighlightSprites(const ecs::Registry& registry)
+{
+	size_t held = 0;
+	const auto valid = [&registry](entt::entity sprite) { return sprite != entt::null && registry.Valid(sprite); };
+	registry.Each<const ScriptHighlight>([&held, &valid](entt::entity /*unused*/, const ScriptHighlight& highlight) {
+		held += (valid(highlight.glow) ? 1 : 0) + static_cast<size_t>(std::ranges::count_if(highlight.sparkSprites, valid));
+	});
+	return held;
+}
 
 } // namespace
 
@@ -932,7 +945,18 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 		}
 		if (track)
 		{
-			const auto limit = type == entt::type_id<LivingReaction>() ? std::optional(livings) : std::nullopt;
+			std::optional<size_t> limit;
+			if (type == entt::type_id<LivingReaction>())
+			{
+				limit = livings;
+			}
+			else if (type == entt::type_id<ScriptHighlightGlow>())
+			{
+				// The glow and spark sprites come and go with their highlights. Their count grows when a script puts up
+				// a new highlight or a gold scroll starts its sparks, but it is not more than the sprites that the
+				// highlights hold. Sprites that no highlight holds are above this limit, thus they can flag.
+				limit = HeldHighlightSprites(*registry);
+			}
 			if (auto flag = _growth.Observe("count:" + std::string(name), storage.size(), turn, limit); flag.has_value())
 			{
 				flags.push_back(std::move(*flag));
