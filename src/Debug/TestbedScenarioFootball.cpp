@@ -36,6 +36,15 @@ constexpr uint32_t k_KickOffWaitTurns = 300;
 constexpr uint32_t k_KickOffByTurn = 600;
 /// A match with too few players sends them home after 180 seconds. A turn after that time, the players still wait.
 constexpr uint32_t k_PastSendHomeTurns = 2000;
+/// The two teams of five
+constexpr double k_Players = 10.0;
+/// The players come in the first seven seconds, and they wait for the kick-off for at least 30 seconds
+constexpr uint32_t k_AllWaitByTurn = 300;
+/// The players kick the ball away from the centre spot within two minutes of the kick-off
+constexpr uint32_t k_BallMovesByTurn = 1800;
+constexpr double k_BallMovedMetres = 3.0;
+/// The ball stays on the centre spot while no match plays
+constexpr double k_BallStillMetres = 0.5;
 
 /// The pitch and fourteen villagers of the town in front of it, and the commands that bring them to the pitch one after
 /// the other
@@ -108,7 +117,24 @@ void testbed_scenarios::AddFootballScenarios(std::vector<Scenario>& all)
 	                .index = k_PitchObject,
 	                .afterTurns = k_KickOffWaitTurns,
 	                .byTurn = k_KickOffByTurn,
-	                .atLeast = 1.0}},
+	                .atLeast = 1.0},
+	               {.label = "the ten players wait for the kick-off",
+	                .quantity = checks::Quantity::FootballPlayersWaiting,
+	                .index = k_PitchObject,
+	                .byTurn = k_AllWaitByTurn,
+	                .atLeast = k_Players},
+	               {.label = "no player waits for the kick-off when the match plays",
+	                .quantity = checks::Quantity::FootballPlayersWaiting,
+	                .index = k_PitchObject,
+	                .afterTurns = k_KickOffWaitTurns,
+	                .byTurn = k_KickOffByTurn,
+	                .atMost = 0.0},
+	               {.label = "the players kick the ball away from the centre spot",
+	                .quantity = checks::Quantity::FootballBallFromCentre,
+	                .index = k_PitchObject,
+	                .afterTurns = k_KickOffWaitTurns,
+	                .byTurn = k_BallMovesByTurn,
+	                .atLeast = k_BallMovedMetres}},
 	});
 	auto [offObjects, offCommands] = MatchScene();
 	all.push_back({
@@ -119,11 +145,12 @@ void testbed_scenarios::AddFootballScenarios(std::vector<Scenario>& all)
 	                   "A Celtic football pitch of the player's town stands built, as a land's script can make one. "
 	                   "Fourteen grown villagers of the town come to it one after the other, as in the football match "
 	                   "scenario.",
-	    .expected = "As in the game, the pitch still takes the villagers that relax: the first is the referee, ten "
-	                "walk to places near the centre spot, and three watch at the side. Then nothing more happens. The "
-	                "match does not start, the ball does not go on the centre spot, and the players are not sent home "
-	                "after three minutes. They stay in the state of waiting for the kick-off for ever (vanilla bugs "
-	                "list).",
+	    .expected =
+	        "As in the game, the pitch still takes the villagers that relax: the first is the referee, ten "
+	        "walk to places near the centre spot, and three watch at the side. Then nothing more happens. The "
+	        "match does not start, the ball stays on the centre spot and does not move, and the players are not sent home "
+	        "after three minutes. They stay in the state of waiting for the kick-off for ever (vanilla bugs "
+	        "list).",
 	    .environment = {.dispenserGrid = false, .football = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Pitch, glm::vec2 {0.0f, 10.0f}}, .distance = 0.5f},
 	    .objects = std::move(offObjects),
@@ -132,7 +159,17 @@ void testbed_scenarios::AddFootballScenarios(std::vector<Scenario>& all)
 	                .quantity = checks::Quantity::FootballMatchState,
 	                .index = k_PitchObject,
 	                .afterTurns = k_PastSendHomeTurns,
-	                .atMost = 0.0}},
+	                .atMost = 0.0},
+	               {.label = "the ten players still wait for the kick-off",
+	                .quantity = checks::Quantity::FootballPlayersWaiting,
+	                .index = k_PitchObject,
+	                .afterTurns = k_PastSendHomeTurns,
+	                .atLeast = k_Players},
+	               {.label = "the ball does not move from the centre spot",
+	                .quantity = checks::Quantity::FootballBallFromCentre,
+	                .index = k_PitchObject,
+	                .afterTurns = k_PastSendHomeTurns,
+	                .atMost = k_BallStillMetres}},
 	});
 	std::vector<ObjectSetup> site {{.type = AbodeInfo::CelticFootballPitch, .offset = k_Pitch, .built = 0.3f},
 	                               {.type = AbodeInfo::CelticTownCentre, .offset = {-30.0f, -15.0f}},
