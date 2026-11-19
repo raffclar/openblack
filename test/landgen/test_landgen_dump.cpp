@@ -299,7 +299,11 @@ TEST(LandgenDump, WritesTheLandOfEachSeedWhenTheEnvironmentAsksForIt)
 			                                                            {"narrowEdge", &settings.roads.narrowEdge},
 			                                                            {"deepest", &settings.roads.deepest},
 			                                                            {"deepestBank", &settings.roads.deepestBank},
-			                                                            {"deepestCorner", &settings.roads.deepestCorner}})
+			                                                            {"deepestCorner", &settings.roads.deepestCorner},
+			                                                            {"thinWall", &settings.roads.thinWall},
+			                                                            {"deepestWallCut", &settings.roads.deepestWallCut},
+			                                                            {"ringGrade", &settings.roads.ringGrade},
+			                                                            {"fixedGrade", &settings.roads.fixedGrade}})
 			{
 				if (name == key)
 				{

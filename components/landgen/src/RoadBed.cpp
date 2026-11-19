@@ -88,6 +88,37 @@ float HeightAt(const Grid<float>& metres, float x, float z)
 	return near + ((far - near) * fz);
 }
 
+/// The height of the bed at a point in corners: the mean of the covered corners round the point, each with the weight of
+/// its nearness. Where no corner round the point is covered, the height of the nearest corner.
+float BedHeightAt(const Bed& bed, float x, float z)
+{
+	const int x0 = static_cast<int>(std::floor(x));
+	const int z0 = static_cast<int>(std::floor(z));
+	float sum = 0.0f;
+	float weights = 0.0f;
+	for (int dx = 0; dx <= 1; ++dx)
+	{
+		for (int dz = 0; dz <= 1; ++dz)
+		{
+			const int cx = x0 + dx;
+			const int cz = z0 + dz;
+			if (!bed.covered.Contains(cx, cz) || bed.covered.At(cx, cz) == 0)
+			{
+				continue;
+			}
+			const float weight =
+			    (1.0f - std::fabs(x - static_cast<float>(cx))) * (1.0f - std::fabs(z - static_cast<float>(cz)));
+			sum += weight * bed.height.At(cx, cz);
+			weights += weight;
+		}
+	}
+	if (weights <= 0.0f)
+	{
+		return bed.height.At(Rounded(x), Rounded(z));
+	}
+	return sum / weights;
+}
+
 /// The middle of a drawn path, which covers the corner of each point and the corners after it on each axis
 constexpr float k_DrawnMiddle = 0.5f;
 
@@ -236,6 +267,40 @@ std::vector<float> roads::Profile(std::span<const float> land, std::span<const u
 	return bed;
 }
 
+std::vector<float> roads::CutThinWalls(std::span<const float> land, std::span<const uint8_t> fixed, const Settings& settings)
+{
+	const auto count = static_cast<int>(land.size());
+	const int radius = std::max(0, Rounded(settings.thinWall / (2.0f * settings.step)));
+	if (count == 0 || radius == 0)
+	{
+		return {land.begin(), land.end()};
+	}
+	// The lowest land near each sample, then the highest of these values near each sample. A hump that is narrower than
+	// the window has no sample where the window is all on the hump, so the hump goes. A wider hill stays.
+	const auto near = [count, radius](int i) { return std::pair {std::max(0, i - radius), std::min(count - 1, i + radius)}; };
+	std::vector<float> lowest(land.size());
+	for (int i = 0; i < count; ++i)
+	{
+		const auto [first, last] = near(i);
+		lowest[static_cast<size_t>(i)] =
+		    *std::ranges::min_element(land.subspan(static_cast<size_t>(first), static_cast<size_t>(last - first + 1)));
+	}
+	std::vector<float> cut(land.begin(), land.end());
+	for (int i = 0; i < count; ++i)
+	{
+		const auto at = static_cast<size_t>(i);
+		if (at < fixed.size() && fixed[at] != 0)
+		{
+			continue;
+		}
+		const auto [first, last] = near(i);
+		const float opened = *std::ranges::max_element(
+		    std::span(lowest).subspan(static_cast<size_t>(first), static_cast<size_t>(last - first + 1)));
+		cut[at] = std::max(opened, land[at] - settings.deepestWallCut);
+	}
+	return cut;
+}
+
 Bed roads::BedOf(std::span<const paths::Path> paths, const Ground& ground, const Settings& settings)
 {
 	const int side = ground.metres.side;
@@ -248,6 +313,8 @@ Bed roads::BedOf(std::span<const paths::Path> paths, const Ground& ground, const
 	for (const auto& path : paths)
 	{
 		const auto samples = SamplesOf(path.points, settings.step / k_MetresPerCorner);
+		// The corners of the beds of the paths before this path keep their height
+		const auto earlier = bed.covered;
 		std::vector<float> land(samples.size());
 		std::vector<uint8_t> fixed(samples.size());
 		std::vector<float> near;
@@ -285,11 +352,12 @@ Bed roads::BedOf(std::span<const paths::Path> paths, const Ground& ground, const
 			// grade of a ring. Thus two paths on one way make one bed, with no steps between their profiles.
 			if (fixed[i] == 0 && bed.covered.At(x, z) != 0)
 			{
-				land[i] = bed.height.At(x, z);
+				land[i] = BedHeightAt(bed, samples[i].x, samples[i].z);
 				fixed[i] = k_Ring;
 			}
 		}
-		const auto profile = Profile(land, fixed, settings);
+		const auto cut = CutThinWalls(land, fixed, settings);
+		const auto profile = Profile(cut, fixed, settings);
 		for (size_t i = 0; i < samples.size(); ++i)
 		{
 			// The direction across the path, from the samples before and after this sample
@@ -362,7 +430,10 @@ Bed roads::BedOf(std::span<const paths::Path> paths, const Ground& ground, const
 						continue;
 					}
 					const float distance = (along * along) + ((across - centre) * (across - centre));
-					if (distance < nearest.At(x, z) && std::fabs(profile[i] - ground.metres.At(x, z)) <= settings.deepestCorner)
+					// Where the bed cuts through a thin wall, the corners of the wall are part of the bed
+					const float deepest = settings.deepestCorner + (land[i] - cut[i]);
+					if (earlier.At(x, z) == 0 && distance < nearest.At(x, z) &&
+					    std::fabs(profile[i] - ground.metres.At(x, z)) <= deepest)
 					{
 						nearest.At(x, z) = distance;
 						bed.height.At(x, z) = profile[i];
@@ -564,15 +635,18 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 		{
 			target = std::clamp(land, lowest.values[i], highest.values[i]);
 		}
-		const float most = std::min({change.values[i], fromFixed.values[i], fromRing.values[i]});
+		// The bed itself is level up to the shores and the rivers. Only the banks become less near them.
+		const float most = bed.covered.values[i] != 0 ? std::min(change.values[i], fromRing.values[i])
+		                                              : std::min({change.values[i], fromFixed.values[i], fromRing.values[i]});
 		float height = std::clamp(target, land - most, land + most);
 		height = std::max(height, std::min(land, ground.lowest.values[i]));
 		graded.values[i] = height;
 	}
 
 	// The bed and the banks make no new cliff. The change at a new cliff and next to it becomes half as large in each
-	// pass. The first passes change only the banks, so that the bed stays level where it can. The last pass puts the land
-	// back at each new cliff that stays.
+	// pass. The first passes change only the banks, so that the bed stays level where it can. After the last of these
+	// passes, each pass puts the land back at each new cliff that stays and next to it. The land that comes back can make a
+	// new cliff next to it, so these passes continue until no new cliff stays.
 	constexpr int k_CliffPasses = 12;
 	constexpr int k_BedPasses = 4;
 	std::vector<size_t> changed;
@@ -584,7 +658,7 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 		}
 	}
 	std::vector<size_t> cliffs;
-	for (int pass = 0; pass <= k_CliffPasses; ++pass)
+	for (int pass = 0;; ++pass)
 	{
 		cliffs.clear();
 		for (const auto i : changed)
@@ -599,10 +673,14 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 				{
 					continue;
 				}
-				// The game rounds the heights, so the check keeps a margin on each side of the cliff slope
+				// The game rounds the heights, so the check keeps a margin on each side of the cliff slope. A corner that
+				// was in the margin can become a cliff when the game rounds its new heights. The passes that put the land
+				// back thus also give such a corner its old slope.
 				const float now = SlopeAt(graded, x, z);
 				const float was = SlopeAt(ground.metres, x, z);
-				if (now >= settings.cliffSlope - k_CliffMargin && was < settings.cliffSlope + k_CliffMargin && now > was)
+				const bool inMargin = pass >= k_CliffPasses && was >= settings.cliffSlope - k_CliffMargin;
+				if (now >= settings.cliffSlope - k_CliffMargin && was < settings.cliffSlope + k_CliffMargin &&
+				    (now > was || (inMargin && now != was)))
 				{
 					cliffs.push_back(graded.Index(x, z));
 				}
@@ -630,7 +708,7 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 				}
 				const float land = ground.metres.At(x, z);
 				auto& height = graded.At(x, z);
-				height = pass == k_CliffPasses ? land : land + ((height - land) / 2.0f);
+				height = pass >= k_CliffPasses ? land : land + ((height - land) / 2.0f);
 			}
 		}
 	}
