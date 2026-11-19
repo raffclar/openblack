@@ -112,12 +112,10 @@ void Game::FollowSkirmishBox()
 	const auto path =
 	    Locator::filesystem::value().GetPath<filesystem::Path::Playgrounds>() / _skirmishLands.at(*answer.land).fileName;
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish box: the skirmish starts on {}", path.generic_string());
-	// The computer gods start at the alignments that the player chose in the box (deviation 280)
+	// The computer gods of a skirmish start at the vanilla alignment, even after a network game chose others
 	if (Locator::computerPlayerSystem::has_value())
 	{
-		const auto slots = Locator::gameInterface::value().GetSkirmishBox().GetRandomAlignmentSlots();
-		Locator::computerPlayerSystem::value().SetStartAlignments(computer_player::AlignmentsOfRandomSlots(slots));
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish box: {} computer gods start at a random alignment", slots.size());
+		Locator::computerPlayerSystem::value().SetStartAlignments({});
 	}
 	Locator::time::value().SetPlayerPause(false);
 	if (!LoadFromLandMenu(path))

@@ -848,7 +848,7 @@ bool Game::Initialize() noexcept
 			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The simulation run cannot start: {}", *refusal);
 			return false;
 		}
-		// The computer gods of these slots start at a random alignment, as the skirmish box chooses them (deviation 280)
+		// The computer gods of these slots start at a random alignment, for a tool run (deviation 280)
 		if (!_simulation->randomAlignmentSlots.empty() && Locator::computerPlayerSystem::has_value())
 		{
 			Locator::computerPlayerSystem::value().SetStartAlignments(
