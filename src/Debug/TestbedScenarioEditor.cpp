@@ -278,18 +278,20 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .id = "editor.generated_players_3",
 	    .name = "The starts of three players on a generated land",
 	    .facet = Facet::Editor,
-	    .description = "After a second, the land generator makes the land of seed 7 for three players and the game loads "
+	    .description = "At the start, the land generator makes the land of seed 7 for three players and the game loads "
 	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
-	                   "keeps. Fly from the start of player one to the starts of the other players.",
+	                   "keeps. In a network game, the land loads before the humans join. Fly from the start of player one "
+	                   "to the starts of the other players.",
 	    .expected = "Each of the three players has a temple and a town on a flat start area, as on the skirmish lands. "
 	                "Players two and three are computer gods with a lion and a horse at their temples, as on Three Gods. "
 	                "In the first turn, player one brings the ape Matey to its temple. The lion and the horse take a "
-	                "size like the size of the ape.",
+	                "size like the size of the ape. In a network game for two humans, player one brings no creature, and "
+	                "player three also gets a computer god with a creature at its temple.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,
 	                  .player = PlayerNames::PLAYER_THREE,
-	                  .delaySeconds = 1.0f,
+	                  .delaySeconds = 0.0f,
 	                  .value = 7,
 	                  .object = k_BigIsland,
 	                  .mindFile = "LethysCreature"}},
