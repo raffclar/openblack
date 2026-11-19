@@ -85,7 +85,8 @@ public:
 	[[nodiscard]] virtual bool VillagerCanBeDirected(entt::entity villager) const = 0;
 	/// A script puts the villager straight into a state
 	virtual void VillagerSetScriptState(entt::entity villager, VillagerStates state) const = 0;
-	/// A script sends the villager to a point, where it waits for the script. The walk keeps the height of the point.
+	/// A script sends the villager to a point, where it waits for the script. The walk keeps the height of the point. A
+	/// villager that flies in the script's hands walks when it lands.
 	virtual void VillagerScriptMoveTo(entt::entity villager, const map_coords::MapCoords& goal) const = 0;
 	/// The clip a script asks the villager to play in the playing state, and how many times
 	virtual void VillagerSetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays) const = 0;

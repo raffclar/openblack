@@ -123,6 +123,14 @@ struct ScriptClipStep
 	return CanTakeScriptState(onLand, dead) && !drowning;
 }
 
+/// Whether a walk order that a script gives to a villager in the air waits until the villager lands. Only a live
+/// villager that a script controls and that flies in the physics keeps the order. A villager in a hand or in a
+/// tornado does not keep it. The game loses every such order (deviation row 283).
+[[nodiscard]] constexpr bool KeepsMoveUntilLanding(bool scriptControlled, bool inPhysics, bool heldOrCarried, bool dead)
+{
+	return scriptControlled && inPhysics && !heldOrCarried && !dead;
+}
+
 /// Whether a villager put into a state by a script carries on with the walk it was on: only the walking states walk.
 /// Put into any other, the villager stops where it is, as its new state takes no steps.
 [[nodiscard]] constexpr bool KeepsWalking(VillagerStates state)

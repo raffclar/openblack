@@ -117,6 +117,7 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::ScriptRemind::arguments>("arguments")
 	    .Field<&components::ScriptRemind::animation>("animation")
 	    .Field<&components::ScriptRemind::clip>("clip");
+	Reflect<components::ScriptMoveOnLanding>(context).Field<&components::ScriptMoveOnLanding::goal>("goal");
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
 	Reflect<components::ScriptStateArguments>(context)
 	    .Field<&components::ScriptStateArguments::place>("place")

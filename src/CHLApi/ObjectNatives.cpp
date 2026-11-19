@@ -922,13 +922,10 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 	}
 	if (IsDirectableVillager(object))
 	{
-		// One in a hand, in the air or drowning stays where it is. The goal keeps the height of the script's point above
-		// the land, so a point with no height gives a goal below the land.
-		auto& living = Locator::livingActionSystem::value();
-		if (living.VillagerCanBeDirected(object))
-		{
-			living.VillagerScriptMoveTo(object, map_coords::FromWorld(Locator::terrainSystem::value(), position));
-		}
+		// One in a hand or drowning stays where it is. One that flies in the script's hands walks when it lands. The goal
+		// keeps the height of the script's point above the land, so a point with no height gives a goal below the land.
+		Locator::livingActionSystem::value().VillagerScriptMoveTo(
+		    object, map_coords::FromWorld(Locator::terrainSystem::value(), position));
 		return;
 	}
 	if (Locator::entitiesRegistry::value().AllOf<ecs::components::Animal>(object))
