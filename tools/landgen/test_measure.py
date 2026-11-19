@@ -131,6 +131,49 @@ class CursedMeasures(unittest.TestCase):
         self.assertFalse(measure.is_dark(0x7E50632F))
 
 
+class FormationMeasures(unittest.TestCase):
+    def test_a_ring_of_mushrooms_is_a_fairy_ring(self):
+        ring = [(100 + 7 * np.cos(a), 200 + 7 * np.sin(a)) for a in np.linspace(0, 2 * np.pi, 10, endpoint=False)]
+        clump = [(900 + 0.5 * k, 900 + 0.3 * k) for k in range(8)]
+        out = measure.formation_measures(ring + clump, [], 2.0)
+        self.assertEqual(out["magic_mushrooms"], 18)
+        self.assertEqual(out["fairy_rings"], 1)
+        self.assertAlmostEqual(out["fairy_rings_per_km2"], 0.5)
+        # Half a ring has a gap of 180 degrees
+        half = [p for p in ring if p[1] >= 200]
+        self.assertEqual(measure.formation_measures(half * 2, [], 2.0)["fairy_rings"], 0)
+
+    def test_the_groups_of_lone_pillars(self):
+        pillars = [(0, 0), (0, 11), (500, 0), (500, 300)]
+        out = measure.formation_measures([], pillars, 4.0)
+        self.assertEqual(out["lone_pillars"], 4)
+        self.assertAlmostEqual(out["lone_pillars_per_km2"], 1.0)
+        self.assertAlmostEqual(out["lone_pillar_groups_per_km2"], 0.75)
+        self.assertAlmostEqual(out["lone_pillar_group_gap_median_m"], 300.0)
+        self.assertEqual(measure.formation_measures([], [], 4.0)["lone_pillar_groups_per_km2"], 0.0)
+
+    def test_the_clumps_of_mushrooms_and_the_toadstools(self):
+        ring = [(100 + 7 * np.cos(a), 200 + 7 * np.sin(a), "MagicMushroom")
+                for a in np.linspace(0, 2 * np.pi, 10, endpoint=False)]
+        clump = [(900 + 0.5 * k, 900, "MagicMushroom") for k in range(4)] + [(905, 900, "Toadstool")]
+        pair = [(1500, 100, "Toadstool"), (1501, 100, "Toadstool")]
+        out = measure.clump_measures(ring + clump + pair, 2.0)
+        self.assertEqual(out["mushroom_clumps"], 2)
+        self.assertAlmostEqual(out["mushroom_clumps_per_km2"], 1.0)
+        self.assertEqual(out["mushroom_clump_size_max"], 5)
+        self.assertEqual(out["toadstools"], 3)
+        self.assertEqual(measure.clump_measures([], 2.0)["mushroom_clumps"], 0)
+
+    def test_the_ground_under_the_things(self):
+        # A ramp that rises 1 m for each 10 m along x
+        heights = np.tile(np.arange(50, dtype=float)[:, None], (1, 50))
+        out = measure.ground_measures(heights, [(100, 100), (200, 100), (300, 250)], "tree")
+        self.assertAlmostEqual(out["tree_height_median_m"], 20.0)
+        self.assertAlmostEqual(out["tree_height_max_m"], 30.0)
+        self.assertAlmostEqual(out["tree_slope_p90_deg"], np.degrees(np.arctan(0.1)), places=3)
+        self.assertEqual(measure.ground_measures(heights, [], "rock"), {})
+
+
 class SwampMeasures(unittest.TestCase):
     def test_the_wet_ground_and_its_trees(self):
         land = np.zeros((10, 10), dtype=bool)
@@ -167,6 +210,36 @@ class Comparison(unittest.TestCase):
         ranges = measure.ranges_of([{"a": 3, "b": 1.0}, {"a": 7, "b": float("nan")}])
         self.assertEqual(ranges["a"], [3, 7])
         self.assertEqual(ranges["b"], [1.0, 1.0])
+
+
+class CliffMeasures(unittest.TestCase):
+    def test_a_gorge_between_two_terraces(self):
+        """Two plateaus at 60 m with a gorge of four corners between them: two cliff walls face each other."""
+        side = 80
+        heights = np.zeros((side, side))
+        land = np.zeros((side, side), dtype=bool)
+        land[10:70, 10:70] = True
+        heights[10:70, 10:70] = 60.0
+        # The gorge runs along the rows, at the columns 38 to 41, down to 2 m
+        heights[10:70, 38:42] = 2.0
+        out = measure.terrain_measures(heights, land, np.zeros_like(land))
+        self.assertGreater(out["cliff_gorge_pct"], 50.0)
+        self.assertGreater(out["cliff_face_median_deg"], 60.0)
+        # Each wall is about 600 m long
+        self.assertGreater(out["cliff_length_median_m"], 500.0)
+        self.assertAlmostEqual(out["cliff_terrace_pct"] + out["cliff_coast_pct"] + out["cliff_mountain_pct"], 100.0)
+
+    def test_a_single_wall_is_no_gorge(self):
+        """A step from 2 m to 60 m across the island: one cliff with no wall that faces it."""
+        side = 80
+        heights = np.zeros((side, side))
+        land = np.zeros((side, side), dtype=bool)
+        land[10:70, 10:70] = True
+        heights[10:70, 10:40] = 2.0
+        heights[10:70, 40:70] = 60.0
+        out = measure.terrain_measures(heights, land, np.zeros_like(land))
+        self.assertEqual(out["cliff_gorge_pct"], 0.0)
+        self.assertEqual(out["cliff_mountain_pct"], 0.0)
 
 
 class GeneratedTargets(unittest.TestCase):
@@ -237,6 +310,26 @@ class TownMeasures(unittest.TestCase):
         self.assertAlmostEqual(out["town_villagers_median"], 15.0)
         self.assertAlmostEqual(out["town_fields_median"], 5.0)
 
+    def test_the_shares_of_the_buildings_of_the_towns(self):
+        heights, land = square_island(side=100, edge=10, height=30.0)
+        base = {"tribe": "NORSE", "neutral": True, "buildings": 9, "houses": 6, "fields": 6, "villagers": 12}
+        towns = [dict(base, x=300.0, z=300.0, fish_farms=3, wonder=1, creche=1, storage_pit=1, house_kinds=5),
+                 dict(base, x=600.0, z=300.0, fish_farms=0, wonder=0, creche=1, storage_pit=0, house_kinds=3)]
+        out = measure.town_measures(towns, heights, land, 0.64)
+        self.assertAlmostEqual(out["town_fish_farm_pct"], 50.0)
+        self.assertAlmostEqual(out["town_wonder_pct"], 50.0)
+        self.assertAlmostEqual(out["town_creche_pct"], 100.0)
+        self.assertAlmostEqual(out["town_storage_pit_pct"], 50.0)
+        self.assertAlmostEqual(out["town_house_kinds_median"], 4.0)
+        # An older dump without these values gives no shares
+        self.assertNotIn("town_fish_farm_pct", measure.town_measures([dict(base, x=0.0, z=0.0)], heights, land, 0.64))
+
+    def test_a_generated_town_reads_the_new_values(self):
+        town = measure.generated_town([1.0, 2.0, 3, 1, 9, 6, 6, 12, 2, 0, 1, 1, 4])
+        self.assertEqual(town["fish_farms"], 2)
+        self.assertEqual(town["house_kinds"], 4)
+        self.assertNotIn("fish_farms", measure.generated_town([1.0, 2.0, 3, 1, 9, 6, 6, 12]))
+
     def test_a_land_without_towns_has_no_town_numbers(self):
         heights, land = square_island()
         self.assertEqual(measure.town_measures([], heights, land, 1.0), {})
@@ -254,7 +347,10 @@ class Dump(unittest.TestCase):
                                                  [1, 36, 7.0, 7.0, 0.0, 1.0, 1.0, 0, 0.2, -0.4, 0.3],
                                                  [3, 42, 8.0, 8.0, 0.0, 1.0, 1.0, 0, 0.0, 0.0, 0.0],
                                                  [0, 22, 900.0, 900.0, 0.0, 1.0, 1.0, 0],
-                                                 [3, 74, 1000.0, 900.0, 0.0, 4.0, 4.0, 0, 0.0, 0.0, 0.0]],
+                                                 [3, 74, 1000.0, 900.0, 0.0, 4.0, 4.0, 0, 0.0, 0.0, 0.0],
+                                                 [3, 30, 9.0, 9.0, 0.0, 0.5, 0.5, 0, 0.0, 0.0, 0.0],
+                                                 [4, 18, 10.0, 10.0, 0.0, 1.2, 1.2, 0, 0.0, 0.0, 0.0],
+                                                 [4, 17, 11.0, 11.0, 0.0, 1.0, 1.0, 0, 0.0, 0.0, 0.0]],
                 "forests": [[1, 5.0, 5.0]], "footpaths": 1, "towns": 1,
                 "path_list": [[1, 0.0, 0.0, 30.0, 40.0]], "lanterns": [[0, 3.0, 4.0]],
                 "town_list": [[10.0, 20.0, 5, 0, 9, 6, 6, 17]],
@@ -268,7 +364,10 @@ class Dump(unittest.TestCase):
         self.assertEqual(model["trees"], [(5.0, 5.0, "Palm", True), (900.0, 900.0, "Burnt", False)])
         self.assertEqual(model["rocks"], [(7.0, 7.0)])
         self.assertEqual(model["rock_poses"], [(0.4, 0.3)])
-        self.assertEqual(model["pillars"], [(8.0, 8.0)])
+        self.assertEqual(model["pillars"], [(8.0, 8.0), (9.0, 9.0)])
+        self.assertEqual(model["lone_pillars"], [(9.0, 9.0)])
+        # A loose object is not a rock. Only the magic mushroom counts as a mushroom.
+        self.assertEqual(model["mushrooms"], [(10.0, 10.0)])
         self.assertTrue(model["sand"][1, 1])
         self.assertEqual(model["mists"], 2)
         self.assertEqual(model["dark_mists"], 1)
@@ -280,6 +379,45 @@ class Dump(unittest.TestCase):
                                                "houses": 6, "fields": 6, "villagers": 17}])
         self.assertEqual(model["path_list"], [[(0.0, 0.0), (30.0, 40.0)]])
         self.assertEqual(model["lantern_list"], [(3.0, 4.0)])
+
+
+class StreamMeasures(unittest.TestCase):
+    def test_a_stream_down_a_slope_to_the_sea(self):
+        # A land that rises 1 m for each 10 m from the sea at the west edge
+        heights = np.tile(np.arange(60, dtype=float)[:, None], (1, 60)) - 10.0
+        land = heights > 0
+        heights = np.maximum(heights, 0.0)
+        stream = [(x * 10.0, 300.0) for x in range(40, 9, -1)]
+        out = measure.stream_measures([stream], heights, land, [], 1.0)
+        self.assertEqual(out["streams"], 1)
+        self.assertAlmostEqual(out["stream_length_median_m"], 300.0)
+        self.assertAlmostEqual(out["stream_spacing_median_m"], 10.0)
+        self.assertAlmostEqual(out["stream_source_median_m"], 30.0)
+        self.assertAlmostEqual(out["stream_drop_median_m"], 30.0)
+        self.assertAlmostEqual(out["stream_slope_median_pct"], 10.0)
+        self.assertAlmostEqual(out["stream_reach_pct"], 100.0)
+
+    def test_a_stream_that_ends_on_dry_ground_does_not_reach(self):
+        heights, land = square_island()
+        out = measure.stream_measures([[(300.0, 300.0), (310.0, 300.0)]], heights, land, [], 1.0)
+        self.assertAlmostEqual(out["stream_reach_pct"], 0.0)
+
+    def test_the_trees_on_the_banks(self):
+        heights, land = square_island()
+        stream = [(x * 10.0, 300.0) for x in range(15, 46)]
+        # Ten trees by the stream and ten far away
+        trees = [(200.0 + i * 20.0, 305.0) for i in range(10)] + [(150.0 + i * 20.0, 150.0) for i in range(10)]
+        out = measure.stream_measures([stream], heights, land, trees, 0.16)
+        self.assertGreater(out["stream_bank_tree_ratio"], 5.0)
+
+    def test_no_streams_give_no_numbers(self):
+        heights, land = square_island()
+        self.assertEqual(measure.stream_measures([], heights, land, [], 1.0), {})
+
+    def test_the_reach_is_not_a_target(self):
+        ranges = measure.ranges_of([{"stream_reach_pct": 50.0, "streams": 2}])
+        self.assertNotIn("stream_reach_pct", ranges)
+        self.assertIn("streams", ranges)
 
 
 if __name__ == "__main__":

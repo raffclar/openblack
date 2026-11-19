@@ -426,8 +426,16 @@ bool Runner::GiveStoryCommand(const Command& command)
 	}
 	if (command.kind == Kind::LoadGeneratedLand)
 	{
+		// The player of the command is the last player of the land
+		const auto players = static_cast<int32_t>(command.player) + 1;
+		// The object gives the type of the land plus 1, and the seed picks the type for object 0
+		const auto landType = static_cast<int32_t>(command.object) - 1;
+		const bool archipelago = landType == generated_land::k_ArchipelagoType;
 		const bool loaded = Locator::landSystem::has_value() &&
-		                    Locator::landSystem::value().LoadGeneratedLand({.seed = static_cast<uint64_t>(command.value)});
+		                    Locator::landSystem::value().LoadGeneratedLand({.seed = static_cast<uint64_t>(command.value),
+		                                                                    .players = players,
+		                                                                    .landType = landType,
+		                                                                    .archipelago = archipelago ? 1 : 0});
 		Log(fmt::format("{:.1f}s: generated land {}: {}", _seconds, command.value, loaded ? "loaded" : "not loaded"));
 		return true;
 	}

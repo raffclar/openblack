@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "landgen/Noise.h"
 #include "landgen/Random.h"
 
 using namespace openblack::landgen;
@@ -126,9 +127,12 @@ struct StampTree
 	float scale;
 };
 constexpr std::array<StampTree, 3> k_BurntGroup {{{0.0f, 0.0f, 1.716f}, {9.55f, 0.0f, 1.0f}, {26.07f, 41.02f, 1.095f}}};
-/// The fewest and the most burnt trees of a place
-constexpr uint32_t k_FewestBurnt = 10;
-constexpr uint32_t k_MostBurnt = 40;
+/// The fewest and the most dead trees of a place: burnt trees that stand, and dead trees that lie on the ground
+constexpr uint32_t k_FewestDead = 10;
+constexpr uint32_t k_MostDead = 40;
+/// The scale of a dead tree that lies on the ground, as the dead trees of the dead woods
+constexpr float k_LyingSmallest = 0.8f;
+constexpr float k_LyingLargest = 1.05f;
 /// The steepest ground of a burnt tree of the story, as the rise for each metre
 constexpr float k_BurntSteepest = 0.7590f;
 /// No burnt tree stands nearer than this to another feature, in metres
@@ -383,10 +387,19 @@ bool PlaceCrater(const features::Ground& ground, const Patch& patch, const std::
 	return false;
 }
 
-/// The groups of burnt trees of a place, outside its stacks and craters. Gives the number of trees.
-uint32_t PlaceBurntTrees(const features::Ground& ground, const Patch& patch, uint32_t target, Random& random,
-                         std::span<const Circle> circles, std::vector<Feature>& placed)
+/// The dead trees that a place got
+struct DeadCount
 {
+	uint32_t burnt;
+	uint32_t lying;
+};
+
+/// The groups of dead trees of a place, outside its stacks and craters. The first trees are burnt trees that stand, up to
+/// the burnt trees that the land has left. The other trees are dead trees that lie on the ground.
+DeadCount PlaceDeadTrees(const features::Ground& ground, const Patch& patch, uint32_t target, uint32_t burntLeft,
+                         Random& random, std::span<const Circle> circles, std::vector<Feature>& placed)
+{
+	DeadCount count {.burnt = 0, .lying = 0};
 	uint32_t grown = 0;
 	const auto groups = (target + static_cast<uint32_t>(k_BurntGroup.size()) - 1) / static_cast<uint32_t>(k_BurntGroup.size());
 	for (uint32_t attempt = 0; attempt < groups * 3 && grown < target; ++attempt)
@@ -419,17 +432,33 @@ uint32_t PlaceBurntTrees(const features::Ground& ground, const Patch& patch, uin
 			{
 				continue;
 			}
-			placed.push_back({.kind = Kind::Tree,
-			                  .type = static_cast<uint8_t>(features::Tree::Burnt),
-			                  .x = tx,
-			                  .z = tz,
-			                  .angle = angle,
-			                  .size = tree.scale,
-			                  .maxSize = tree.scale});
+			if (count.burnt < burntLeft)
+			{
+				placed.push_back({.kind = Kind::Tree,
+				                  .type = static_cast<uint8_t>(features::Tree::Burnt),
+				                  .x = tx,
+				                  .z = tz,
+				                  .angle = angle,
+				                  .size = tree.scale,
+				                  .maxSize = tree.scale});
+				++count.burnt;
+			}
+			else
+			{
+				const float size = random.NextRange(k_LyingSmallest, k_LyingLargest);
+				placed.push_back({.kind = Kind::Static,
+				                  .type = features::k_DeadTreeStatic,
+				                  .x = tx,
+				                  .z = tz,
+				                  .angle = angle,
+				                  .size = size,
+				                  .maxSize = size});
+				++count.lying;
+			}
 			++grown;
 		}
 	}
-	return grown;
+	return count;
 }
 
 /// A candidate middle of a place, with its random key
@@ -440,6 +469,30 @@ struct Candidate
 	int j;
 };
 } // namespace
+
+uint32_t cursed::BurntBudget(float landKm2, const Settings& settings)
+{
+	return static_cast<uint32_t>(std::floor(std::max(landKm2, 0.0f) * settings.burntPerKm2));
+}
+
+Scorch cursed::ScorchAt(const Patch& patch, float x, float z, uint64_t seed, const Settings& settings)
+{
+	const float distance = Distance(x, z, patch.x, patch.z);
+	if (distance >= patch.radius)
+	{
+		return Scorch::None;
+	}
+	// The noise has waves of about 60 m, so that the edge has bays and points
+	constexpr float k_EdgeWave = 60.0f;
+	const float wave = noise::Fractal(StageSeed(seed, 101), x / k_EdgeWave, z / k_EdgeWave, 2);
+	const float inner = std::clamp(settings.scorchInner, 0.0f, 1.0f);
+	const float edge = patch.radius * (inner + ((1.0f - inner) * noise::SmoothStep(-0.6f, 0.6f, wave)));
+	if (distance >= edge)
+	{
+		return Scorch::None;
+	}
+	return distance < edge * settings.scorchCore ? Scorch::Core : Scorch::Edge;
+}
 
 uint32_t cursed::PatchCount(float unit, const Settings& settings)
 {
@@ -486,6 +539,15 @@ Result cursed::Place(const features::Ground& ground, std::vector<Feature>& place
 			bigForests.push_back({.x = feature.x, .z = feature.z, .radius = k_BigForestClearing * feature.size});
 		}
 	}
+	// The land is each corner out of the sea
+	const auto landCorners = std::ranges::count_if(ground.seaDistance.values, [](float sea) { return sea > 0.0f; });
+	constexpr float k_SquareKilometresPerCorner = k_MetresPerCorner * k_MetresPerCorner / 1.0e6f;
+	// The burnt trees of the dead woods count against the budget too
+	const auto grownBurnt = static_cast<uint32_t>(std::ranges::count_if(placed, [](const Feature& feature) {
+		return feature.kind == Kind::Tree && feature.type == static_cast<uint8_t>(features::Tree::Burnt);
+	}));
+	const auto budget = BurntBudget(static_cast<float>(landCorners) * k_SquareKilometresPerCorner, settings);
+	uint32_t burntLeft = budget > grownBurnt ? budget - grownBurnt : 0;
 	const float townX = ground.townX * k_MetresPerCorner;
 	const float townZ = ground.townZ * k_MetresPerCorner;
 	for (const auto& candidate : candidates)
@@ -534,11 +596,16 @@ Result cursed::Place(const features::Ground& ground, std::vector<Feature>& place
 		             .radius = radius,
 		             .stack = parts.NextBelow(2) == 0 ? Stack::Black : Stack::Volcanic,
 		             .burntTrees = 0,
+		             .deadTrees = 0,
 		             .stacks = 0,
 		             .craters = 0};
 		const auto stacks = 1 + parts.NextBelow(k_MostStacks);
 		const auto craters = parts.NextBelow(k_MostCraters + 1);
-		const auto burnt = k_FewestBurnt + parts.NextBelow(k_MostBurnt - k_FewestBurnt + 1);
+		const auto dead = k_FewestDead + parts.NextBelow(k_MostDead - k_FewestDead + 1);
+		// A place that has no room for a stack or for the fewest dead trees goes away, and the land gets its features
+		// back
+		const auto kept = placed;
+		const auto mistCount = result.mists.size();
 		std::vector<Circle> circles;
 		for (uint32_t k = 0; k < stacks; ++k)
 		{
@@ -556,7 +623,16 @@ Result cursed::Place(const features::Ground& ground, std::vector<Feature>& place
 				previous = circles.back();
 			}
 		}
-		patch.burntTrees = PlaceBurntTrees(ground, patch, burnt, parts, circles, placed);
+		const auto trees = PlaceDeadTrees(ground, patch, dead, burntLeft, parts, circles, placed);
+		if (patch.stacks == 0 || trees.burnt + trees.lying < k_FewestDead)
+		{
+			placed = kept;
+			result.mists.resize(mistCount);
+			continue;
+		}
+		patch.burntTrees = trees.burnt;
+		patch.deadTrees = trees.lying;
+		burntLeft -= trees.burnt;
 		result.patches.push_back(patch);
 	}
 	return result;

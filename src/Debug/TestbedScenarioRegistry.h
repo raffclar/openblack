@@ -1355,7 +1355,9 @@ struct Command
 		/// the Cheats tab does. Needs no creature
 		InfiniteInfluenceCheat,
 		/// The land generator makes the land of the seed (value) with each other choice at its first value, and the game
-		/// loads it in place of the testbed, as the switch of the land generator does. Needs no creature
+		/// loads it in place of the testbed, as the switch of the land generator does. The player of the command is the
+		/// last player of the land: PLAYER_THREE gives a land for three players. An object other than 0 gives the type of
+		/// the land plus 1, and the seed picks the type for object 0. Needs no creature
 		LoadGeneratedLand,
 	};
 	Kind kind {Kind::Stop};

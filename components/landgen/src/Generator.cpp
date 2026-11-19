@@ -26,6 +26,11 @@ using biomes::Biome;
 namespace
 {
 constexpr uint8_t k_SeaLevelAltitude = 3;
+/// A corner at this altitude or lower holds water, and a corner one unit higher is on the coast line
+constexpr int k_WaterAltitude = 1;
+constexpr int k_CoastAltitude = 2;
+/// The distance along each axis in metres from the middle of a fish farm to a tree or a rock that the fish farm removes
+constexpr float k_FarmClearance = 7.5f;
 /// How far the noise that bends the rivers moves the land for the water, up or down, in altitude units
 constexpr float k_RiverBend = 3.0f;
 constexpr float k_MetresPerCorner = 10.0f;
@@ -210,14 +215,17 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 				sound = static_cast<uint8_t>(water);
 				cell.flags = k_OpenWaterFlag;
 			}
-			else if (high <= k_SeaLevelAltitude)
-			{
-				cell.properties.hasWater = 1;
-				sound = static_cast<uint8_t>(fresh ? Sound::StillFreshWater : Sound::Coastal);
-			}
 			else if (low <= k_SeaLevelAltitude)
 			{
-				cell.properties.coastLine = 1;
+				// As on the lands of the story, the altitude of the cell's own corner gives its water and its coast
+				if (a00 <= k_WaterAltitude)
+				{
+					cell.properties.hasWater = 1;
+				}
+				else if (a00 <= k_CoastAltitude)
+				{
+					cell.properties.coastLine = 1;
+				}
 				sound = static_cast<uint8_t>(fresh ? Sound::StillFreshWater : Sound::Coastal);
 			}
 			else if (const float lake =
@@ -249,10 +257,60 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 	return cells;
 }
 
-GeneratedLand openblack::landgen::Generate(const Settings& settings)
+namespace
+{
+/// Gives the cursed places their dark ground: two countries after the countries of the land, the dark scrub of the edge
+/// and the burnt rock of the middle. The water and the banks of the rivers keep their ground.
+void ScorchCursedGround(GeneratedLand& land, const Grid<uint8_t>& keepClear, uint64_t seed, const cursed::Settings& settings)
+{
+	// A cell holds the country in four bits
+	constexpr size_t k_MostCountries = 16;
+	const auto recipes = countries::CursedRecipes();
+	if (land.cursedPatches.empty() || land.countries.size() + recipes.size() > k_MostCountries)
+	{
+		return;
+	}
+	const auto edgeCountry = static_cast<uint8_t>(land.countries.size());
+	for (const auto& recipe : recipes)
+	{
+		land.countries.push_back(countries::MakeCountry(recipe, land.materials));
+	}
+	const int side = land.cells.side;
+	for (const auto& patch : land.cursedPatches)
+	{
+		const int lowX = std::max(0, static_cast<int>(std::floor((patch.x - patch.radius) / k_MetresPerCorner)));
+		const int highX = std::min(side - 1, static_cast<int>(std::ceil((patch.x + patch.radius) / k_MetresPerCorner)));
+		const int lowZ = std::max(0, static_cast<int>(std::floor((patch.z - patch.radius) / k_MetresPerCorner)));
+		const int highZ = std::min(side - 1, static_cast<int>(std::ceil((patch.z + patch.radius) / k_MetresPerCorner)));
+		for (int x = lowX; x <= highX; ++x)
+		{
+			for (int z = lowZ; z <= highZ; ++z)
+			{
+				if (keepClear.At(x, z) != 0)
+				{
+					continue;
+				}
+				const auto scorch = cursed::ScorchAt(patch, static_cast<float>(x) * k_MetresPerCorner,
+				                                     static_cast<float>(z) * k_MetresPerCorner, seed, settings);
+				if (scorch != cursed::Scorch::None)
+				{
+					land.cells.At(x, z).properties.country =
+					    static_cast<uint8_t>(edgeCountry + (scorch == cursed::Scorch::Core ? 1u : 0u)) & 0xFu;
+				}
+			}
+		}
+	}
+}
+} // namespace
+
+GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 {
 	GeneratedLand land;
 	StageClock clock(land.times);
+	// The type of the land changes the settings of its shape and climate
+	land.type = landtypes::Pick(chosen.seed, chosen.landType);
+	auto settings = chosen;
+	landtypes::Apply(land.type, settings.seed, settings.base, settings.massifs, settings.climate, settings.topHeight);
 	land.heightCurve = HeightCurve::WithTop(settings.heightKnee, settings.topHeight);
 	const int side = settings.side;
 	const auto seed = settings.seed;
@@ -307,7 +365,11 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	}
 	const auto drainage = hydrology::Drain(bent, terrain::k_SeaLevel);
 	const auto flow = hydrology::Accumulate(drainage, Grid<float>(side, 1.0f));
-	land.rivers = hydrology::TraceRivers(drainage, flow, settings.rivers);
+	// The streams start at springs on the hills and on the rivers, as many for the area as the lands of the story have
+	const auto traced = hydrology::TraceRivers(drainage, flow, settings.rivers);
+	const auto streamWater = Mask(side, [&heights](size_t i) { return heights.values[i] <= terrain::k_SeaLevel; });
+	const auto landCorners = static_cast<size_t>(std::ranges::count(streamWater.values, uint8_t {0}));
+	land.rivers = streams::Choose(traced, drainage.receivers, heights, streamWater, landCorners, seed, settings.streams);
 	hydrology::CarveRivers(heights, land.rivers, flow, settings.rivers);
 	clock.Done("rivers");
 	terrain::ErodeThermal(heights,
@@ -316,9 +378,6 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                       .mountainTalus = settings.thermal.mountainTalus,
 	                       .rate = settings.thermal.rate},
 	                      cliffs.values);
-	terrain::ShoreShelf(heights, seed, settings.shelf);
-	clock.Done("shore");
-
 	Grid<uint8_t> riverCorners(side, 0);
 	for (const auto& river : land.rivers)
 	{
@@ -328,31 +387,78 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 		}
 	}
 	const auto riverDistance = climate::DistanceToWater(riverCorners);
+	const auto shoreWidths = terrain::ShoreShelf(heights, &riverDistance, seed, settings.shelf);
+	clock.Done("shore");
+
 	const auto sea = Mask(side, [&heights](size_t i) { return heights.values[i] <= terrain::k_SeaLevel; });
 	const StartSettings startSettings;
 	const auto startSea = climate::DistanceToWater(sea);
 	land.start = FindStartArea(heights, startSea, riverDistance, startSettings);
 	FlattenStartArea(heights, land.start, startSettings);
+	// The other players of a land for more than one player. The town of each player is on its start area.
+	const auto playerCount = std::min(settings.players.count, players::k_MostPlayers);
+	std::vector<uint64_t> playerSeeds {seed};
+	std::vector<players::Start> townOffsets;
+	for (uint32_t player = 0; player < playerCount; ++player)
+	{
+		if (player > 0)
+		{
+			playerSeeds.push_back(players::SeedOfPlayer(seed, player));
+		}
+		const auto town = settlement::TownOfStart(0.0f, 0.0f, playerSeeds.back(), settings.settlement);
+		townOffsets.push_back({.x = town.x, .z = town.z});
+	}
+	for (const auto& other :
+	     players::FindStarts(heights, startSea, riverDistance, {.x = land.start.x, .z = land.start.z}, townOffsets,
+	                         {.lowest = startSettings.lowest,
+	                          .highest = startSettings.highest,
+	                          .nearestSea = startSettings.nearestSea,
+	                          .farthestSea = startSettings.farthestSea,
+	                          .riverDistance = startSettings.riverDistance,
+	                          .flatRadius = startSettings.flatRadius},
+	                         settings.players))
+	{
+		land.otherStarts.push_back({.x = other.x, .z = other.z, .radius = startSettings.flatRadius});
+		FlattenStartArea(heights, land.otherStarts.back(), startSettings);
+	}
+	// Each start area of a player, player one first
+	std::vector<StartArea> starts {land.start};
+	starts.insert(starts.end(), land.otherStarts.begin(), land.otherStarts.end());
 	clock.Done("start area");
 
 	// The lakes on the hills: round hollows dug into high flat ground, away from the sea, the rivers and the start
 	const auto awayFromHollows =
 	    Mask(side, [&](size_t i) { return heights.values[i] <= terrain::k_SeaLevel || riverCorners.values[i] != 0; });
-	lakes::DigHollows(heights, awayFromHollows, {{.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}},
-	                  StageSeed(seed, 35), settings.hillHollows);
+	std::vector<lakes::Keep> keepStarts;
+	for (const auto& start : starts)
+	{
+		keepStarts.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
+	}
+	lakes::DigHollows(heights, awayFromHollows, keepStarts, StageSeed(seed, 35), settings.hillHollows);
 	clock.Done("hill hollows");
 
 	// The neutral towns stand on flat ground, as the towns of the story do, so the ground of each town becomes flat
-	const auto firstTown = settlement::TownOfStart(land.start.x, land.start.z, seed, settings.settlement);
-	const std::array startArea {settlement::Area {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
+	std::vector<settlement::Site> firstTowns;
+	std::vector<settlement::Area> startAreas;
+	for (size_t player = 0; player < starts.size(); ++player)
+	{
+		const auto& start = starts[player];
+		firstTowns.push_back(settlement::TownOfStart(start.x, start.z, playerSeeds[player], settings.settlement));
+		startAreas.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
+	}
 	const auto sites =
-	    settlement::FindSites(heights, land.heightCurve, startSea, riverDistance, firstTown, startArea, seed, settings.sites);
+	    settlement::FindSites(heights, land.heightCurve, startSea, riverDistance, firstTowns, startAreas, seed, settings.sites);
 	const StartSettings townGround {.flatRadius = settings.sites.flatRadius, .blendRadius = settings.sites.blendRadius};
 	for (const auto& site : sites)
 	{
 		FlattenStartArea(heights, {.x = site.x, .z = site.z, .radius = townGround.flatRadius}, townGround);
 	}
 	clock.Done("town places");
+
+	// Few faces of the cliffs of the story are near vertical. This stage comes after all the stages that shape the
+	// ground, so that no wall of a massif, a terrace, a river or a hollow is steeper than the limit.
+	cliffs::LimitFaces(heights, land.heightCurve, terrain::k_SeaLevel, seed, settings.faces, riverCorners.values);
+	clock.Done("cliff faces");
 
 	// The altitude byte of each corner is its height rounded. The height units come from the height before the rounding,
 	// through the curve, so that the high ground has no steps of many units.
@@ -420,8 +526,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 			        .moisture = moisture.values[index],
 			        .slope = slopes.values[index],
 			        .seaDistance = seaDistance.values[index],
-			        .beachWidth =
+			        .beachWidth = std::max(
 			            4.0f + (8.0f * noise::SmoothStep(-0.4f, 0.4f, noise::Fractal(beachSeed, u * 10.0f, v * 10.0f, 2))),
+			            shoreWidths.values[index]),
 			        .wet = basins.wet.values[index] != 0 || lakeLevels.values[index] >= 0.0f,
 			        .blight = noise::Fractal(blightSeed, u * 6.0f, v * 6.0f, 3),
 			    },
@@ -460,12 +567,33 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 
 	// The temple and the town on the start area, and the neutral towns
 	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);
+	for (size_t player = 1; player < starts.size(); ++player)
+	{
+		land.otherPlayers.push_back(
+		    settlement::Make(starts[player].x, starts[player].z, keepClear, playerSeeds[player], settings.settlement));
+	}
 	const auto tribes = settlement::TribesOf(land.settlement.town.tribe, seed, settings.sites);
 	const auto townTribes = settlement::TribesOfTowns(tribes, sites.size(), seed);
+	// The heights above the sea in metres, for the fish farms on the shore
+	const float seaMetres = land.heightCurve.MetresOf(terrain::k_SeaLevel);
+	Grid<float> aboveSea(side, 0.0f);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		aboveSea.values[i] = land.heightCurve.MetresOf(heights.values[i]) - seaMetres;
+	}
+	// A fish farm stands on dry ground of the shore, also on the lowest ground just above the sea, but not on a river or a
+	// lake
+	const auto farmClear = Mask(side, [&](size_t i) {
+		return altitudes.values[i] <= k_SeaLevelAltitude || riverDistance.values[i] <= 1.5f || lakeLevels.values[i] >= 0.0f;
+	});
+	std::vector<settlement::Field> fishFarms;
 	for (size_t i = 0; i < sites.size(); ++i)
 	{
-		land.settlement.neutral.push_back(
-		    settlement::MakeTown(sites[i], townTribes[i], keepClear, seed, static_cast<uint32_t>(i), settings.settlement));
+		const auto number = static_cast<uint32_t>(i);
+		auto town = settlement::MakeTown(sites[i], townTribes[i], keepClear, seed, number, settings.settlement, settings.mix);
+		town.fishFarms = settlement::FishFarms(town, aboveSea, seaDistance, farmClear, fishFarms, seed, number, settings.farms);
+		fishFarms.insert(fishFarms.end(), town.fishFarms.begin(), town.fishFarms.end());
+		land.settlement.neutral.push_back(std::move(town));
 	}
 	clock.Done("towns");
 
@@ -523,14 +651,27 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	}
 	clock.Done("paths");
 	// Nothing grows on the ground of the towns
-	std::vector<features::Clearing> clearings {
-	    features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
+	std::vector<features::Clearing> clearings;
+	for (const auto& start : starts)
+	{
+		clearings.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
+	}
+	// The town of each other player also keeps clear ground round it, so that a big forest does not stand in it
+	for (size_t player = 1; player < firstTowns.size(); ++player)
+	{
+		clearings.push_back({.x = firstTowns[player].x, .z = firstTowns[player].z, .radius = startSettings.blendRadius});
+	}
 	std::vector<features::Clearing> towns;
 	for (const auto& site : sites)
 	{
 		towns.push_back({.x = site.x, .z = site.z, .radius = settings.sites.blendRadius});
 	}
 	clearings.insert(clearings.end(), towns.begin(), towns.end());
+	// The trees grow near the start of each other player as they grow near the start of player one
+	for (const auto& other : land.otherStarts)
+	{
+		towns.push_back({.x = other.x, .z = other.z, .radius = startSettings.blendRadius});
+	}
 	land.features = features::Place({.biomes = land.biomes,
 	                                 .heights = heights,
 	                                 .seaDistance = seaDistance,
@@ -539,8 +680,48 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                 .townX = land.start.x,
 	                                 .townZ = land.start.z,
 	                                 .rivers = &rivers,
-	                                 .towns = towns},
+	                                 .towns = towns,
+	                                 .curve = land.heightCurve},
 	                                seed, settings.features);
+	// The trees on the banks of the streams, which stand nearer the water than the other trees. No bank tree stands on a
+	// path or a lantern.
+	const auto bankClear = Mask(side, [&](size_t i) {
+		const bool onPath = drawnPaths.values[i] != 0 || (growClear.values[i] != 0 && keepClear.values[i] == 0);
+		return altitudes.values[i] <= k_SeaLevelAltitude + 1 || lakeLevels.values[i] >= 0.0f || onPath;
+	});
+	const auto bankTrees = streams::PlaceBankTrees({.biomes = land.biomes,
+	                                                .heights = heights,
+	                                                .seaDistance = seaDistance,
+	                                                .keepClear = bankClear,
+	                                                .clearings = clearings,
+	                                                .townX = land.start.x,
+	                                                .townZ = land.start.z,
+	                                                .rivers = &rivers,
+	                                                .towns = towns,
+	                                                .curve = land.heightCurve},
+	                                               land.rivers, seed, settings.banks);
+	land.features.insert(land.features.end(), bankTrees.begin(), bankTrees.end());
+	// Each player gets woods near its town that are almost as large as the woods of the other players
+	if (!land.otherStarts.empty())
+	{
+		std::vector<players::Start> startTowns;
+		for (const auto& town : firstTowns)
+		{
+			startTowns.push_back({.x = town.x, .z = town.z});
+		}
+		players::EvenTheWoods(land.features,
+		                      {.biomes = land.biomes,
+		                       .heights = heights,
+		                       .seaDistance = seaDistance,
+		                       .keepClear = growClear,
+		                       .clearings = clearings,
+		                       .townX = land.start.x,
+		                       .townZ = land.start.z,
+		                       .rivers = &rivers,
+		                       .towns = towns,
+		                       .curve = land.heightCurve},
+		                      startTowns, settings.players);
+	}
 	clock.Done("features");
 	auto cursed = cursed::Place({.biomes = land.biomes,
 	                             .heights = heights,
@@ -550,10 +731,12 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                             .townX = land.start.x,
 	                             .townZ = land.start.z,
 	                             .rivers = &rivers,
-	                             .towns = towns},
+	                             .towns = towns,
+	                             .curve = land.heightCurve},
 	                            land.features, seed, settings.cursed);
 	land.cursedPatches = std::move(cursed.patches);
 	land.mists = std::move(cursed.mists);
+	ScorchCursedGround(land, keepClear, seed, settings.cursed);
 	clock.Done("cursed places");
 	auto swampMist = swamps::Place({.biomes = land.biomes,
 	                                .heights = heights,
@@ -563,12 +746,37 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                .townX = land.start.x,
 	                                .townZ = land.start.z,
 	                                .rivers = &rivers,
-	                                .towns = towns},
+	                                .towns = towns,
+	                                .curve = land.heightCurve},
 	                               seed, settings.swamps);
 	land.swampSheets = std::move(swampMist.sheets);
 	land.mists.insert(land.mists.end(), swampMist.mists.begin(), swampMist.mists.end());
 	clock.Done("swamp mist");
+	// The fairy rings and the lone pillars keep out of the cursed places
+	std::vector<formations::Circle> cursedCircles;
+	for (const auto& patch : land.cursedPatches)
+	{
+		cursedCircles.push_back({.x = patch.x, .z = patch.z, .radius = patch.radius});
+	}
+	land.formations = formations::Place({.biomes = land.biomes,
+	                                     .heights = heights,
+	                                     .seaDistance = seaDistance,
+	                                     .keepClear = growClear,
+	                                     .clearings = clearings,
+	                                     .townX = land.start.x,
+	                                     .townZ = land.start.z,
+	                                     .rivers = &rivers,
+	                                     .towns = towns,
+	                                     .curve = land.heightCurve},
+	                                    land.features, cursedCircles, seed, settings.formations);
+	clock.Done("fairy rings and pillars");
 
+	// No tree or rock stands on a fish farm
+	std::erase_if(land.features, [&fishFarms](const features::Feature& feature) {
+		return std::ranges::any_of(fishFarms, [&feature](const settlement::Field& farm) {
+			return std::fabs(feature.x - farm.x) < k_FarmClearance && std::fabs(feature.z - farm.z) < k_FarmClearance;
+		});
+	});
 	// The forests, nearest the town of the start first
 	land.forests = features::GroupForests(land.features, land.settlement.town.x, land.settlement.town.z, settings.forests);
 	clock.Done("forests");

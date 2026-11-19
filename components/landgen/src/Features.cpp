@@ -372,8 +372,9 @@ std::optional<Tree> PickTree(std::span<const Choice> trees, Random& random, Weig
 	return std::nullopt;
 }
 
-/// The largest difference of altitude between a corner and the four corners next to it
-float SlopeAt(const Grid<float>& heights, int x, int z)
+/// The largest difference of height between a corner and the four corners next to it, in height units of 0.67 m. On the
+/// lands of the story, one height unit is one altitude unit.
+float SlopeAt(const Grid<float>& heights, const HeightCurve& curve, int x, int z)
 {
 	float steepest = 0.0f;
 	for (size_t i = 0; i < 4; ++i)
@@ -382,15 +383,15 @@ float SlopeAt(const Grid<float>& heights, int x, int z)
 		const int nz = z + k_Neighbours[i].dz;
 		if (heights.Contains(nx, nz))
 		{
-			steepest = std::max(steepest, std::fabs(heights.At(x, z) - heights.At(nx, nz)));
+			steepest = std::max(steepest, std::fabs(curve.UnitsOf(heights.At(x, z)) - curve.UnitsOf(heights.At(nx, nz))));
 		}
 	}
 	return steepest;
 }
 
 /// The slope of the ground at a corner as the rise for each metre, from the differences across the corner. The measure
-/// of the lands of the story uses the same differences.
-float GradientAt(const Grid<float>& heights, int x, int z)
+/// of the lands of the story uses the same differences. The rise is in the metres of the curve.
+float GradientAt(const Grid<float>& heights, const HeightCurve& curve, int x, int z)
 {
 	const int side = heights.side;
 	const int left = std::max(x - 1, 0);
@@ -399,8 +400,13 @@ float GradientAt(const Grid<float>& heights, int x, int z)
 	const int up = std::min(z + 1, side - 1);
 	const float metresX = static_cast<float>(std::max(right - left, 1)) * k_MetresPerCorner;
 	const float metresZ = static_cast<float>(std::max(up - down, 1)) * k_MetresPerCorner;
-	const float dx = (heights.At(right, z) - heights.At(left, z)) * k_MetresPerAltitude / metresX;
-	const float dz = (heights.At(x, up) - heights.At(x, down)) * k_MetresPerAltitude / metresZ;
+	// On the curve of the lands of the story, the difference of the altitudes gives the same numbers as before the curve
+	const auto rise = [&heights, &curve](int ax, int az, int bx, int bz) {
+		return curve.IsLinear() ? (heights.At(ax, az) - heights.At(bx, bz)) * k_MetresPerAltitude
+		                        : curve.MetresOf(heights.At(ax, az)) - curve.MetresOf(heights.At(bx, bz));
+	};
+	const float dx = rise(right, z, left, z) / metresX;
+	const float dz = rise(x, up, x, down) / metresZ;
 	return std::sqrt((dx * dx) + (dz * dz));
 }
 
@@ -638,7 +644,7 @@ constexpr float k_RockWoodsFactor = 15.0f;
 /// No two rocks of the story lie nearer than this, in metres, and no rock lies nearer to a tree than the second value
 constexpr float k_RockGap = 1.2f;
 constexpr float k_RockTreeGap = 1.0f;
-/// No dead tree lies on a slope steeper than this, in altitude units for each corner
+/// No dead tree lies on a slope steeper than this, in height units of 0.67 m for each corner
 constexpr float k_DeadTreeSlope = 16.0f;
 /// The rise for each metre at the slopes of 10 and 20 degrees, and the height of the high ground in metres
 constexpr float k_TenDegrees = 0.1763f;
@@ -790,8 +796,8 @@ public:
 		{
 			town = std::min(town, townDistance(other.x, other.z));
 		}
-		return {.height = _ground.heights.At(cx, cz) * k_MetresPerAltitude,
-		        .slope = GradientAt(_ground.heights, cx, cz),
+		return {.height = _ground.curve.MetresOf(_ground.heights.At(cx, cz)),
+		        .slope = GradientAt(_ground.heights, _ground.curve, cx, cz),
 		        .sea = _ground.seaDistance.At(cx, cz) * k_MetresPerCorner,
 		        .town = town};
 	}
@@ -802,10 +808,11 @@ public:
 		return _ground.biomes.At(cx, cz);
 	}
 
+	/// The largest difference of height to a corner next to the place, in height units of 0.67 m
 	[[nodiscard]] float SlopeUnitsAt(float x, float z) const
 	{
 		const auto [cx, cz] = CornerOf(x, z);
-		return SlopeAt(_ground.heights, cx, cz);
+		return SlopeAt(_ground.heights, _ground.curve, cx, cz);
 	}
 
 	/// A big forest keeps the trees and the rocks out of a circle round it, in corners
