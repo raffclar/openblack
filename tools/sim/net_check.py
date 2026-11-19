@@ -3753,6 +3753,13 @@ def web_join_plan(options, join_url, ticket, turns):
                  "--sim-still-hand", "--sim-checksums", "-", "--join", web_join_path(join_url), "--join-ticket", ticket]
     if getattr(options, "web_part_at", None) is not None:
         arguments += ["--join-part-at", str(options.web_part_at)]
+    # The web god uses the same rules for the end of the game as the desktop gods. Without the same switches, it parts
+    # from the server at the first turn of a story land or the testbed.
+    if getattr(options, "temple_loss", None):
+        arguments += ["--sim-temple-loss", options.temple_loss]
+    arguments += sim_report.gods_need_no_temple_args(False, land=getattr(options, "land", "Land1.txt"),
+                                                     testbed=getattr(options, "testbed", False),
+                                                     gods_ring_map=getattr(options, "gods_ring_map", False))
     if getattr(options, "trace_draws", False):
         # The web build has no file that a tool can read: the draw lines go with the checksum lines
         arguments += ["--sim-trace-draws", "-"]
