@@ -490,6 +490,25 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 			heights.values[i] = drawn.values[i];
 		}
 	}
+	// Each lake gets the shore steps of the sea, so that a steep rim has a flat shore for the sand. The flat ground of
+	// the start areas and of the towns does not change.
+	std::vector<lakes::Keep> flatGround = keepStarts;
+	for (const auto& site : sites)
+	{
+		flatGround.push_back({.x = site.x, .z = site.z, .radius = settings.sites.blendRadius});
+	}
+	const auto stepped = lakeshore::ShoreSteps(drawn, land.highLakes, flatGround,
+	                                           {.freeboard = settings.highLakes.freeboard, .rise = settings.shelf.cliffRise});
+	for (const auto corner : stepped)
+	{
+		const float height = std::clamp(drawn.values[corner], 0.0f, terrain::k_HighestAltitude);
+		const auto altitude = static_cast<uint8_t>(std::floor(height + 0.5f));
+		heights.values[corner] = height;
+		altitudes.values[corner] = altitude;
+		land.heightUnits.values[corner] =
+		    height <= land.heightCurve.knee ? uint16_t {altitude} : land.heightCurve.WholeUnitsOf(height);
+		drawn.values[corner] = static_cast<float>(altitude);
+	}
 	for (const auto& lake : land.highLakes)
 	{
 		for (const auto corner : lake.corners)
@@ -659,7 +678,16 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	land.paths = paths::Lay(pathGround, places, paths::ChainLinks(places), seed, settings.paths);
 	const auto drawnPaths = paths::Draw(land.paths, pathWater, pathClear);
 	land.lanterns = paths::PlaceLanterns(land.paths, places, pathWater, pathClear, seed, settings.paths);
+	// No tree or rock stands on the wet sand of a lake, as on the wet sand of the sea shore
+	const auto lakeBeds = Mask(side, [&lakeShores](size_t i) { return lakeShores.shore.values[i] == lakeshore::Shore::Bed; });
 	auto growClear = keepClear;
+	for (size_t i = 0; i < growClear.values.size(); ++i)
+	{
+		if (lakeBeds.values[i] != 0)
+		{
+			growClear.values[i] = 1;
+		}
+	}
 	for (size_t i = 0; i < drawnPaths.values.size(); ++i)
 	{
 		auto& cell = land.cells.values[i];
@@ -716,10 +744,11 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	                                 .curve = land.heightCurve},
 	                                seed, settings.features);
 	// The trees on the banks of the streams, which stand nearer the water than the other trees. No bank tree stands on a
-	// path or a lantern.
+	// path, a lantern or the wet sand of a lake.
 	const auto bankClear = Mask(side, [&](size_t i) {
 		const bool onPath = drawnPaths.values[i] != 0 || (growClear.values[i] != 0 && keepClear.values[i] == 0);
-		return altitudes.values[i] <= k_SeaLevelAltitude + 1 || lakeLevels.values[i] >= 0.0f || onPath;
+		return altitudes.values[i] <= k_SeaLevelAltitude + 1 || lakeLevels.values[i] >= 0.0f || lakeBeds.values[i] != 0 ||
+		       onPath;
 	});
 	const auto bankTrees = streams::PlaceBankTrees({.biomes = land.biomes,
 	                                                .heights = heights,

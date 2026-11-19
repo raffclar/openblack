@@ -116,3 +116,8 @@ and the 90th percentile of the distance from the water of the sand within 200 m 
 sea (`sea_...` for the sea). `lake_strip_height_m` is the median height over the level of the nearest lake of the
 ground 10 to 40 m from the lake water, as `shore_strip_height_m` measures the sea shore. The lands of the story have
 no targets for these numbers: compare the lake numbers with the sea numbers of the same land.
+
+On a generated land with lakes, `sand_sea_median_m` and `sand_sea_p90_m` measure only the sand that the sea is nearer
+to than the lake water, with the distance from the sea. The other sand is lake sand: `sand_lake_pct` is its share of
+the land, and `sand_lake_median_m` and `sand_lake_p90_m` give its distance from the lake water. The lands of the story
+have no lakes in the dump, so their sea numbers do not change.

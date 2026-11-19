@@ -25,7 +25,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0xF3710F33710A79EDull;
+constexpr uint64_t k_SmallLandHash = 0xA8FC6A77B0566218ull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)
@@ -1026,4 +1026,28 @@ TEST(LandgenGenerator, EveryBlockHasTheSameDiagonals)
 			ASSERT_EQ(land.cells.At(x, z).properties.split, land.cells.At(x, z + k_Block).properties.split);
 		}
 	}
+}
+
+TEST(LandgenGenerator, NoTreeOrRockStandsOnTheWetSandOfALake)
+{
+	int beds = 0;
+	for (const uint64_t seed : {77u, 78u, 79u, 80u})
+	{
+		const auto land = Generate(SmallSettings(seed));
+		const auto onBed = [&land](float metresX, float metresZ) {
+			const int x = static_cast<int>(std::floor((metresX / 10.0f) + 0.5f));
+			const int z = static_cast<int>(std::floor((metresZ / 10.0f) + 0.5f));
+			return land.cells.Contains(x, z) && land.cells.At(x, z).properties.country == k_LakeBedCountry;
+		};
+		beds += static_cast<int>(std::ranges::count_if(
+		    land.cells.values, [](const auto& cell) { return cell.properties.country == k_LakeBedCountry; }));
+		for (const auto& feature : land.features)
+		{
+			if (feature.kind != features::Kind::BigForest)
+			{
+				EXPECT_FALSE(onBed(feature.x, feature.z)) << seed << " " << feature.x << " " << feature.z;
+			}
+		}
+	}
+	ASSERT_GT(beds, 0);
 }

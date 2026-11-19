@@ -440,6 +440,26 @@ class LakeShoreMeasures(unittest.TestCase):
         self.assertAlmostEqual(out["lake_strip_height_m"], 2.0)
         self.assertAlmostEqual(out["sea_strip_height_m"], 40.0)
 
+    def test_the_sand_of_the_sea_leaves_out_the_sand_of_the_lakes(self):
+        heights, land = square_island(side=80, edge=10, height=40.0)
+        # A beach one cell wide along the sea, and a ring of sand two cells wide round a lake in the middle
+        lake = np.zeros_like(land)
+        lake[35:45, 35:45] = True
+        land &= ~lake
+        heights[lake] = 37.0
+        sand = np.zeros_like(land)
+        sand[10:70, 10] = True
+        sand[33:47, 33:47] = True
+        sand &= ~lake
+        without = measure.terrain_measures(heights, land, sand)
+        out = measure.terrain_measures(heights, land, sand, lake_water=lake)
+        # Without the lake mask, the sand of the lake is sand far from the sea
+        self.assertGreater(without["sand_sea_p90_m"], 200.0)
+        self.assertAlmostEqual(out["sand_sea_median_m"], 10.0)
+        self.assertAlmostEqual(out["sand_sea_p90_m"], 10.0)
+        self.assertGreater(out["sand_lake_pct"], 0.0)
+        self.assertLessEqual(out["sand_lake_p90_m"], 2 * 10.0 * 1.5)
+
 
 if __name__ == "__main__":
     unittest.main()
