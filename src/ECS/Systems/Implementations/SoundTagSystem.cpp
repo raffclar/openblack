@@ -27,6 +27,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/SoundPoint.h"
+#include "ECS/SoundTagLife.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -195,23 +196,18 @@ void SoundTagSystem::ProcessKeptSound(PointSound& point, const glm::vec3& camera
 	}
 }
 
-bool SoundTagSystem::ProcessObjectTag(entt::entity entity, SoundTag& tag, const glm::vec3& camera) const
+void SoundTagSystem::ProcessObjectTag(entt::entity entity, SoundTag& tag, const glm::vec3& camera) const
 {
 	auto& audio = Locator::sounds::value();
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& sounds = Locator::resources::value().GetSounds();
-	++tag.turns;
-	// An attached tag sounds from its object. When the object is gone or has no position, the tag goes.
+	// An attached tag sounds from its object. The synced step of the turn removed the tags of objects that are gone.
 	const auto source = tag.owner != entt::null ? tag.owner : entity;
 	const auto* transform = registry.Valid(source) ? registry.TryGet<const Transform>(source) : nullptr;
-	if (tag.owner != entt::null && transform == nullptr)
-	{
-		return true;
-	}
 	// A tag that a load silenced keeps its place in the world, but its sound does not play
 	if (transform == nullptr || tag.silenced || !sounds.Contains(tag.sound))
 	{
-		return false;
+		return;
 	}
 	const auto position = SoundPoint(registry, source, *transform) + tag.offset;
 	const auto reach = sounds.Handle(tag.sound)->maxDistance;
@@ -220,11 +216,11 @@ bool SoundTagSystem::ProcessObjectTag(entt::entity entity, SoundTag& tag, const 
 	if (tag.active && IsPlaying(tag))
 	{
 		audio.SetEmitterPosition(tag.emitter, position);
-		return false;
+		return;
 	}
 	if (!tag.active || !WithinReach(reach, position, camera) || !Heard(tag.sound))
 	{
-		return false;
+		return;
 	}
 	StopSound(tag);
 	// Each tag is the owner of its own sound, so the sounds of two tags never take the voice of the other
@@ -236,7 +232,6 @@ bool SoundTagSystem::ProcessObjectTag(entt::entity entity, SoundTag& tag, const 
 		audio.SetEmitterFollows(tag.emitter, audio::Follows::Place);
 		audio.PlayEmitter(tag.emitter);
 	}
-	return false;
 }
 
 void SoundTagSystem::FindTags()
@@ -274,25 +269,34 @@ void SoundTagSystem::FindTags()
 
 void SoundTagSystem::ProcessTurn(const glm::vec3& camera)
 {
-	if (!Locator::sounds::has_value())
-	{
-		return;
-	}
 	FindTags();
 	auto& registry = Locator::entitiesRegistry::value();
+	// The synced step and the sounds are two parts. A computer with no audio, such as a game server, does only the
+	// synced step, and its world stays the same as the world of the other computers.
+	const bool audible = Locator::sounds::has_value() && Locator::resources::has_value();
 	// One list, the newest tag first, as the game keeps the tags of objects and the sounds at points together
 	for (auto entry = _tags.begin(); entry != _tags.end();)
 	{
 		bool gone = false;
 		if (entry->point.has_value())
 		{
-			gone = ProcessPointSound(*entry->point, camera);
+			// The sounds at points are not in the world. With no audio, a sound that only plays one time goes.
+			gone = audible ? ProcessPointSound(*entry->point, camera) : entry->point->kept == 0;
 		}
-		else if (auto& tag = registry.Get<SoundTag>(entry->tag); ProcessObjectTag(entry->tag, tag, camera))
+		else
 		{
-			LetGo(tag);
-			registry.Destroy(entry->tag);
-			gone = true;
+			auto& tag = registry.Get<SoundTag>(entry->tag);
+			++tag.turns;
+			if (ecs::AttachedSoundTagLost(registry, tag))
+			{
+				LetGo(tag);
+				registry.Destroy(entry->tag);
+				gone = true;
+			}
+			else if (audible)
+			{
+				ProcessObjectTag(entry->tag, tag, camera);
+			}
 		}
 		entry = gone ? _tags.erase(entry) : std::next(entry);
 	}
