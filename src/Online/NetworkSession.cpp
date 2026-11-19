@@ -168,6 +168,8 @@ void NetworkSession::Open(bool resume)
 	_stream = std::make_unique<TurnStream>(_sockets, [this] { return static_cast<uint64_t>(_clock()); });
 	_state = resume ? State::Reconnecting : State::Connecting;
 	_connectAt = _clock();
+	// The log of a socket that closes before it opened must not give the time of the last socket
+	_openedAt = 0;
 	++_attempts;
 	_log->Info(fmt::format("The game socket opens to {} for a {} (attempt {})", _settings.request.url,
 	                       resume ? "resume" : "join", _attempts));
