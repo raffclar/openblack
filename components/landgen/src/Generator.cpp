@@ -620,7 +620,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                 .townX = land.start.x,
 	                                 .townZ = land.start.z,
 	                                 .rivers = &rivers,
-	                                 .towns = towns},
+	                                 .towns = towns,
+	                                 .curve = land.heightCurve},
 	                                seed, settings.features);
 	// The trees on the banks of the streams, which stand nearer the water than the other trees
 	const auto bankClear =
@@ -633,7 +634,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                                .townX = land.start.x,
 	                                                .townZ = land.start.z,
 	                                                .rivers = &rivers,
-	                                                .towns = towns},
+	                                                .towns = towns,
+	                                                .curve = land.heightCurve},
 	                                               land.rivers, seed, settings.banks);
 	land.features.insert(land.features.end(), bankTrees.begin(), bankTrees.end());
 	clock.Done("features");
@@ -645,7 +647,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                             .townX = land.start.x,
 	                             .townZ = land.start.z,
 	                             .rivers = &rivers,
-	                             .towns = towns},
+	                             .towns = towns,
+	                             .curve = land.heightCurve},
 	                            land.features, seed, settings.cursed);
 	land.cursedPatches = std::move(cursed.patches);
 	land.mists = std::move(cursed.mists);
@@ -659,7 +662,8 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                .townX = land.start.x,
 	                                .townZ = land.start.z,
 	                                .rivers = &rivers,
-	                                .towns = towns},
+	                                .towns = towns,
+	                                .curve = land.heightCurve},
 	                               seed, settings.swamps);
 	land.swampSheets = std::move(swampMist.sheets);
 	land.mists.insert(land.mists.end(), swampMist.mists.begin(), swampMist.mists.end());
@@ -678,8 +682,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                     .townX = land.start.x,
 	                                     .townZ = land.start.z,
 	                                     .rivers = &rivers,
-	                                     .towns = towns},
-	                                    land.heightCurve, land.features, cursedCircles, seed, settings.formations);
+	                                     .towns = towns,
+	                                     .curve = land.heightCurve},
+	                                    land.features, cursedCircles, seed, settings.formations);
 	clock.Done("fairy rings and pillars");
 
 	// No tree or rock stands on a fish farm

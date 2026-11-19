@@ -74,7 +74,7 @@ constexpr float k_FarTown = -1000.0f;
 
 /// The features of a land of one biome at one altitude, far from the sea and the town
 std::vector<features::Feature> PlaceOn(Biome biome, float altitude, uint64_t seed, const features::Settings& settings = {},
-                                       int side = 64)
+                                       int side = 64, HeightCurve curve = {})
 {
 	const Grid<Biome> biomes(side, biome);
 	const Grid<float> heights(side, altitude);
@@ -86,7 +86,8 @@ std::vector<features::Feature> PlaceOn(Biome biome, float altitude, uint64_t see
 	                        .keepClear = keepClear,
 	                        .clearings = {},
 	                        .townX = k_FarTown,
-	                        .townZ = k_FarTown},
+	                        .townZ = k_FarTown,
+	                        .curve = curve},
 	                       seed, settings);
 }
 
@@ -133,6 +134,49 @@ TEST(LandgenFeatures, NothingStandsInTheWaterOrInAClearing)
 		EXPECT_NE(static_cast<int>(x + 0.5f), 40);
 	}
 	EXPECT_EQ(placed.size(), features::Place(ground, 5, {}).size());
+}
+
+TEST(LandgenFeatures, TheRulesUseTheMetresOfTheHeightCurve)
+{
+	// 60 altitude units are 40 m on the curve of the story. On a curve with its knee at 30 units and the top at 1250 m,
+	// they are more than 150 m: higher than every tree of the story.
+	const auto high = HeightCurve::WithTop(30.0f, 1250.0f);
+	ASSERT_GT(high.MetresOf(60.0f), 150.0f);
+	EXPECT_TRUE(std::ranges::any_of(PlaceOn(Biome::TemperateForest, 60.0f, 3, {}, 128), IsTree));
+	EXPECT_FALSE(std::ranges::any_of(PlaceOn(Biome::TemperateForest, 60.0f, 3, {}, 128, high), IsTree));
+
+	// A ramp that rises one altitude unit for each corner along x, from 40 to 103 units
+	const Grid<Biome> biomes(64, Biome::Grassland);
+	Grid<float> heights(64, 0.0f);
+	for (int x = 0; x < 64; ++x)
+	{
+		for (int z = 0; z < 64; ++z)
+		{
+			heights.At(x, z) = 40.0f + static_cast<float>(x);
+		}
+	}
+	const Grid<float> sea(64, 40.0f);
+	const auto keepClear = Clear(64);
+	const auto spotOn = [&](const HeightCurve& curve, float x) {
+		return features::SpotAt({.biomes = biomes,
+		                         .heights = heights,
+		                         .seaDistance = sea,
+		                         .keepClear = keepClear,
+		                         .clearings = {},
+		                         .townX = k_FarTown,
+		                         .townZ = k_FarTown,
+		                         .curve = curve},
+		                        x, 32.0f);
+	};
+	// Below the knee, the curve of the story and the high curve give the same ground
+	const auto story = spotOn({}, 2.0f);
+	EXPECT_NEAR(story.height, 42.0f * 0.67f, 1e-3f);
+	EXPECT_NEAR(story.slope, 0.067f, 1e-4f);
+	// Above the knee, the height and the slope are the metres that the game draws
+	const auto drawn = spotOn(high, 40.0f);
+	EXPECT_NEAR(drawn.height, high.MetresOf(80.0f), 1e-2f);
+	EXPECT_NEAR(drawn.slope, (high.MetresOf(81.0f) - high.MetresOf(79.0f)) / 20.0f, 1e-3f);
+	EXPECT_GT(drawn.slope, spotOn({}, 40.0f).slope * 5.0f);
 }
 
 TEST(LandgenFeatures, TheSameSeedPlacesTheSameFeatures)
