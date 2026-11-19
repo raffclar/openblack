@@ -12,6 +12,8 @@
 #include "SentryErrorReports.h"
 
 #include <array>
+#include <chrono>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -25,9 +27,11 @@
 #include <sentry.h>
 #include <spdlog/spdlog.h>
 
+#include "BufferedLogSink.h"
 #include "CrashHandler.h"
 #include "DesyncReports.h"
 #include "ErrorReportsRules.h"
+#include "ReportRedaction.h"
 
 namespace openblack::error_reports
 {
@@ -167,7 +171,18 @@ void NamePlayers(sentry_value_t event, const std::vector<ReportedPlayer>& player
 
 SentryErrorReports::SentryErrorReports(SentrySettings settings)
     : _settings(std::move(settings))
+    , _names(std::make_shared<ReportNames>(_settings.homeFolder, k_Windows))
 {
+	if (!_settings.attachment.has_value())
+	{
+		return;
+	}
+	// The sink writes the copy of the log on its own thread each second, as the sink of the log file does
+	_reportLog = ReportLogPath(*_settings.attachment);
+	auto writer = std::make_shared<ReportLogWriter>(ReportLogFile(*_reportLog), _names);
+	_reportSink = std::make_shared<logging::BufferedLogSink>(
+	    [writer](const spdlog::memory_buf_t& bytes) { writer->Write(std::string_view(bytes.data(), bytes.size())); },
+	    std::chrono::seconds(1));
 }
 
 SentryErrorReports::~SentryErrorReports()
@@ -183,8 +198,17 @@ void SentryErrorReports::SetEnabled(bool enabled)
 
 void SentryErrorReports::SetAccountConsent(std::optional<AccountConsent> consent)
 {
+	if (consent.has_value())
+	{
+		HideName(consent->name);
+	}
 	_account = std::move(consent);
 	Apply();
+}
+
+void SentryErrorReports::HideName(std::string_view name)
+{
+	_names->Add(name);
 }
 
 void SentryErrorReports::Apply()
@@ -221,7 +245,7 @@ void SentryErrorReports::SendDesync(const DesyncReport& report)
 	{
 		return;
 	}
-	const auto fields = DesyncEventFieldsOf(report);
+	const auto fields = HideNamesInFields(DesyncEventFieldsOf(report), *_names);
 	const auto level = fields.level == "info" ? SENTRY_LEVEL_INFO : SENTRY_LEVEL_WARNING;
 	auto event = sentry_value_new_message_event(level, "desync", fields.message.c_str());
 	auto fingerprint = sentry_value_new_list();
@@ -259,33 +283,34 @@ void SentryErrorReports::SendDesync(const DesyncReport& report)
 	++_desyncEvents;
 }
 
-void SentryErrorReports::SendEvent(const FailureEvent& fields)
+void SentryErrorReports::SendEvent(const FailureEvent& event)
 {
 	if (!_running)
 	{
 		return;
 	}
+	const auto fields = HideNamesInFields(event, *_names);
 	const auto level = fields.level == "info" ? SENTRY_LEVEL_INFO : SENTRY_LEVEL_WARNING;
-	auto event = sentry_value_new_message_event(level, "game", fields.message.c_str());
+	auto value = sentry_value_new_message_event(level, "game", fields.message.c_str());
 	auto fingerprint = sentry_value_new_list();
 	for (const auto& part : fields.fingerprint)
 	{
 		sentry_value_append(fingerprint, sentry_value_new_string(part.c_str()));
 	}
-	sentry_value_set_by_key(event, "fingerprint", fingerprint);
+	sentry_value_set_by_key(value, "fingerprint", fingerprint);
 	auto tags = sentry_value_new_object();
-	for (const auto& [key, value] : fields.tags)
+	for (const auto& [key, text] : fields.tags)
 	{
-		sentry_value_set_by_key(tags, key.c_str(), sentry_value_new_string(value.c_str()));
+		sentry_value_set_by_key(tags, key.c_str(), sentry_value_new_string(text.c_str()));
 	}
-	sentry_value_set_by_key(event, "tags", tags);
+	sentry_value_set_by_key(value, "tags", tags);
 	auto extra = sentry_value_new_object();
-	for (const auto& [key, value] : fields.extras)
+	for (const auto& [key, text] : fields.extras)
 	{
-		sentry_value_set_by_key(extra, key.c_str(), sentry_value_new_string(value.c_str()));
+		sentry_value_set_by_key(extra, key.c_str(), sentry_value_new_string(text.c_str()));
 	}
-	sentry_value_set_by_key(event, "extra", extra);
-	sentry_capture_event(event);
+	sentry_value_set_by_key(value, "extra", extra);
+	sentry_capture_event(value);
 }
 
 void SentryErrorReports::Start()
@@ -309,13 +334,13 @@ void SentryErrorReports::Start()
 	}
 #ifdef _WIN32
 	sentry_options_set_database_pathw(options, _settings.databaseFolder.wstring().c_str());
-	if (const auto log = LogAttachmentFor(_settings.attachment, _attachLog); log.has_value())
+	if (const auto log = LogAttachmentFor(_reportLog, _attachLog); log.has_value())
 	{
 		sentry_options_add_attachmentw(options, log->wstring().c_str());
 	}
 #else
 	sentry_options_set_database_path(options, _settings.databaseFolder.string().c_str());
-	if (const auto log = LogAttachmentFor(_settings.attachment, _attachLog); log.has_value())
+	if (const auto log = LogAttachmentFor(_reportLog, _attachLog); log.has_value())
 	{
 		sentry_options_add_attachment(options, log->string().c_str());
 	}

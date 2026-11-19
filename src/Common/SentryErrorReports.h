@@ -10,11 +10,13 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 
 #include "ErrorReportsInterface.h"
+#include "ReportRedaction.h"
 #include "SentryBuildDsn.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -32,7 +34,8 @@ struct SentrySettings
 	std::string release;
 	std::string environment;
 	Role role {Role::Client};
-	/// The log file that a report attaches when it has personal data (LogAttachmentFor)
+	/// The log file of the program. A report with personal data (LogAttachmentFor) attaches the copy of this log that
+	/// has no names (ReportLogPath).
 	std::optional<std::filesystem::path> attachment;
 	/// The folder of the reports that wait to go
 	std::filesystem::path databaseFolder;
@@ -42,7 +45,8 @@ struct SentrySettings
 
 /// The reports to Sentry through sentry-native, with the crashpad backend. The crashpad handler process gets the
 /// crashes. The crash handler of the game also gives each crash that crashpad does not see. The reports have no save
-/// file. They have no user and no IP address, unless the lobby account gave the choice Full.
+/// file. They have no user and no IP address, unless the lobby account gave the choice Full. The log that a report
+/// attaches is a copy of the log file with the names of the players and the email addresses hidden.
 class SentryErrorReports final: public ErrorReportsInterface
 {
 public:
@@ -59,6 +63,8 @@ public:
 	void SetAccountConsent(std::optional<AccountConsent> consent) override;
 	void SendDesync(const DesyncReport& report) override;
 	void SendEvent(const FailureEvent& event) override;
+	void HideName(std::string_view name) override;
+	[[nodiscard]] std::shared_ptr<spdlog::sinks::sink> ReportLogSink() const override { return _reportSink; }
 	[[nodiscard]] ErrorReportsState GetState() const override
 	{
 		return {.hasDestination = HasDestination(),
@@ -92,6 +98,12 @@ private:
 	/// The id of the account that the reports name now, or empty
 	std::string _namedAccount;
 	uint32_t _desyncEvents {0};
+	/// The names that the reports hide
+	std::shared_ptr<ReportNames> _names;
+	/// The copy of the log with the names hidden, which the reports attach. None when there is no log file.
+	std::optional<std::filesystem::path> _reportLog;
+	/// The sink that writes the copy of the log
+	std::shared_ptr<spdlog::sinks::sink> _reportSink;
 };
 
 } // namespace openblack::error_reports
