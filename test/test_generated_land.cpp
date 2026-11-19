@@ -305,6 +305,8 @@ TEST(GeneratedLand, ANeutralTownHasItsPlannedBuildingsAndFishFarms)
 	const auto wonder = script.find(R"(CREATE_PLANNED_ABODE(1, "578.00,334.00", "CELTIC_ABODE_WONDER", 7, 1000, 0, 0))");
 	ASSERT_NE(wonder, std::string::npos);
 	EXPECT_LT(wonder, script.find("CELTIC_ABODE_B"));
+	// The centre of a neutral town comes first, so that it has room
+	EXPECT_LT(script.find(R"(CREATE_TOWN_CENTRE(1, "600.00,400.00", "CELTIC_ABODE_TOWN_CENTRE", 5, 1000, 0))"), wonder);
 	EXPECT_NE(script.find(R"(CREATE_PLANNED_ABODE(1, "600.00,422.00", "CELTIC_ABODE_STORAGE_PIT", 8, 1000, 0, 0))"),
 	          std::string::npos);
 	EXPECT_EQ(script.find(R"(CREATE_ABODE(1, "600.00,422.00")"), std::string::npos);
