@@ -94,6 +94,8 @@ struct Settings
 	settlement::Settings settlement;
 	settlement::SiteSettings sites;
 	paths::Settings paths;
+	settlement::TownMix mix;
+	settlement::FarmSettings farms;
 };
 
 /// A flat place for the player's temple and first town, in corners

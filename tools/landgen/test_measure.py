@@ -259,6 +259,26 @@ class TownMeasures(unittest.TestCase):
         self.assertAlmostEqual(out["town_villagers_median"], 15.0)
         self.assertAlmostEqual(out["town_fields_median"], 5.0)
 
+    def test_the_shares_of_the_buildings_of_the_towns(self):
+        heights, land = square_island(side=100, edge=10, height=30.0)
+        base = {"tribe": "NORSE", "neutral": True, "buildings": 9, "houses": 6, "fields": 6, "villagers": 12}
+        towns = [dict(base, x=300.0, z=300.0, fish_farms=3, wonder=1, creche=1, storage_pit=1, house_kinds=5),
+                 dict(base, x=600.0, z=300.0, fish_farms=0, wonder=0, creche=1, storage_pit=0, house_kinds=3)]
+        out = measure.town_measures(towns, heights, land, 0.64)
+        self.assertAlmostEqual(out["town_fish_farm_pct"], 50.0)
+        self.assertAlmostEqual(out["town_wonder_pct"], 50.0)
+        self.assertAlmostEqual(out["town_creche_pct"], 100.0)
+        self.assertAlmostEqual(out["town_storage_pit_pct"], 50.0)
+        self.assertAlmostEqual(out["town_house_kinds_median"], 4.0)
+        # An older dump without these values gives no shares
+        self.assertNotIn("town_fish_farm_pct", measure.town_measures([dict(base, x=0.0, z=0.0)], heights, land, 0.64))
+
+    def test_a_generated_town_reads_the_new_values(self):
+        town = measure.generated_town([1.0, 2.0, 3, 1, 9, 6, 6, 12, 2, 0, 1, 1, 4])
+        self.assertEqual(town["fish_farms"], 2)
+        self.assertEqual(town["house_kinds"], 4)
+        self.assertNotIn("fish_farms", measure.generated_town([1.0, 2.0, 3, 1, 9, 6, 6, 12]))
+
     def test_a_land_without_towns_has_no_town_numbers(self):
         heights, land = square_island()
         self.assertEqual(measure.town_measures([], heights, land, 1.0), {})

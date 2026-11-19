@@ -147,6 +147,10 @@ std::string_view BuildingName(landgen::settlement::Building building)
 		return "WORKSHOP";
 	case Building::Graveyard:
 		return "GRAVEYARD";
+	case Building::Wonder:
+		return "WONDER";
+	case Building::AbodeB:
+		return "B";
 	}
 	return "A";
 }
@@ -398,10 +402,21 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 		script += text;
 		script += '\n';
 	};
-	// The lines of one town, as a land of the story gives them
+	// The lines of one town, as a land of the story gives them. The centre of a neutral town comes before its other
+	// buildings, as in many towns of the story: the centre goes up only where it has room, but a house always goes up.
 	const auto town = [&line](const landgen::settlement::Town& entry, int number, std::string_view player,
-	                          const TownStart& start) {
+	                          const TownStart& start, bool centreFirst) {
 		const auto tribe = TribeName(entry.tribe);
+		const auto centre = [&]() {
+			for (const auto& placed : entry.buildings)
+			{
+				if (placed.building == Building::TownCentre)
+				{
+					line(fmt::format(R"(CREATE_TOWN_CENTRE({}, {}, "{}_ABODE_TOWN_CENTRE", {}, {}, 0))", number,
+					                 Place(placed.x, placed.z), tribe, placed.rotation, k_FullSize));
+				}
+			}
+		};
 		line(fmt::format(R"(CREATE_TOWN({}, {}, "{}", {}, "{}"))", number, Place(entry.x, entry.z), player,
 		                 static_cast<int>(entry.tribe), tribe));
 		line(fmt::format(R"(SET_TOWN_BELIEF({}, "{}", {:.6f}))", number, player, start.belief));
@@ -409,10 +424,23 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 		{
 			line(fmt::format("CREATE_NEW_TOWN_FIELD({}, {}, 0, 0.000000)", number, Place(field.x, field.z)));
 		}
-		// The town centre comes after the other buildings, as on the lands of the story
+		if (centreFirst)
+		{
+			centre();
+		}
+		// The planned buildings come before the buildings that stand, as on the lands of the story. They hold no food or
+		// wood.
 		for (const auto& placed : entry.buildings)
 		{
-			if (placed.building == Building::TownCentre)
+			if (placed.planned)
+			{
+				line(fmt::format(R"(CREATE_PLANNED_ABODE({}, {}, "{}_ABODE_{}", {}, {}, 0, 0))", number,
+				                 Place(placed.x, placed.z), tribe, BuildingName(placed.building), placed.rotation, k_FullSize));
+			}
+		}
+		for (const auto& placed : entry.buildings)
+		{
+			if (placed.building == Building::TownCentre || placed.planned)
 			{
 				continue;
 			}
@@ -421,13 +449,10 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 			                 BuildingName(placed.building), placed.rotation, k_FullSize, store ? start.food : 0,
 			                 store ? start.wood : 0));
 		}
-		for (const auto& placed : entry.buildings)
+		// The centre of the town of the start comes after its other buildings
+		if (!centreFirst)
 		{
-			if (placed.building == Building::TownCentre)
-			{
-				line(fmt::format(R"(CREATE_TOWN_CENTRE({}, {}, "{}_ABODE_TOWN_CENTRE", {}, {}, 0))", number,
-				                 Place(placed.x, placed.z), tribe, placed.rotation, k_FullSize));
-			}
+			centre();
 		}
 		for (const auto& person : entry.villagers)
 		{
@@ -435,8 +460,12 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 			line(fmt::format(R"(CREATE_TOWN_VILLAGER({}, {}, "{}_{}", {}))", number, Place(person.x, person.z), tribe, kind,
 			                 person.age));
 		}
+		for (const auto& farm : entry.fishFarms)
+		{
+			line(fmt::format("CREATE_TOWN_FISH_FARM({}, {}, 0)", number, Place(farm.x, farm.z)));
+		}
 	};
-	town(plan.town, k_Town, "PLAYER_ONE", k_PlayerStart);
+	town(plan.town, k_Town, "PLAYER_ONE", k_PlayerStart, false);
 	line(fmt::format(R"(CREATE_CITADEL({}, 0, "PLAYER_ONE", {}, {}))", Place(plan.citadelX, plan.citadelZ),
 	                 plan.citadelRotation, k_FullSize));
 	// The worship site goes to the place of its tribe round the temple, whatever place the line gives
@@ -445,7 +474,7 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 	// The neutral towns have no worship site at the start, as on the lands of the story
 	for (size_t i = 0; i < plan.neutral.size(); ++i)
 	{
-		town(plan.neutral[i], k_Town + 1 + static_cast<int>(i), "NEUTRAL", k_NeutralStart);
+		town(plan.neutral[i], k_Town + 1 + static_cast<int>(i), "NEUTRAL", k_NeutralStart, true);
 	}
 	return script;
 }

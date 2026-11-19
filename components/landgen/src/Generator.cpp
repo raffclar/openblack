@@ -29,6 +29,8 @@ constexpr uint8_t k_SeaLevelAltitude = 3;
 /// A corner at this altitude or lower holds water, and a corner one unit higher is on the coast line
 constexpr int k_WaterAltitude = 1;
 constexpr int k_CoastAltitude = 2;
+/// The distance along each axis in metres from the middle of a fish farm to a tree or a rock that the fish farm removes
+constexpr float k_FarmClearance = 7.5f;
 /// How far the noise that bends the rivers moves the land for the water, up or down, in altitude units
 constexpr float k_RiverBend = 3.0f;
 constexpr float k_MetresPerCorner = 10.0f;
@@ -469,10 +471,26 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);
 	const auto tribes = settlement::TribesOf(land.settlement.town.tribe, seed, settings.sites);
 	const auto townTribes = settlement::TribesOfTowns(tribes, sites.size(), seed);
+	// The heights above the sea in metres, for the fish farms on the shore
+	const float seaMetres = land.heightCurve.MetresOf(terrain::k_SeaLevel);
+	Grid<float> aboveSea(side, 0.0f);
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		aboveSea.values[i] = land.heightCurve.MetresOf(heights.values[i]) - seaMetres;
+	}
+	// A fish farm stands on dry ground of the shore, also on the lowest ground just above the sea, but not on a river or a
+	// lake
+	const auto farmClear = Mask(side, [&](size_t i) {
+		return altitudes.values[i] <= k_SeaLevelAltitude || riverDistance.values[i] <= 1.5f || lakeLevels.values[i] >= 0.0f;
+	});
+	std::vector<settlement::Field> fishFarms;
 	for (size_t i = 0; i < sites.size(); ++i)
 	{
-		land.settlement.neutral.push_back(
-		    settlement::MakeTown(sites[i], townTribes[i], keepClear, seed, static_cast<uint32_t>(i), settings.settlement));
+		const auto number = static_cast<uint32_t>(i);
+		auto town = settlement::MakeTown(sites[i], townTribes[i], keepClear, seed, number, settings.settlement, settings.mix);
+		town.fishFarms = settlement::FishFarms(town, aboveSea, seaDistance, farmClear, fishFarms, seed, number, settings.farms);
+		fishFarms.insert(fishFarms.end(), town.fishFarms.begin(), town.fishFarms.end());
+		land.settlement.neutral.push_back(std::move(town));
 	}
 	clock.Done("towns");
 
@@ -593,6 +611,12 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                    land.heightCurve, land.features, cursedCircles, seed, settings.formations);
 	clock.Done("fairy rings and pillars");
 
+	// No tree or rock stands on a fish farm
+	std::erase_if(land.features, [&fishFarms](const features::Feature& feature) {
+		return std::ranges::any_of(fishFarms, [&feature](const settlement::Field& farm) {
+			return std::fabs(feature.x - farm.x) < k_FarmClearance && std::fabs(feature.z - farm.z) < k_FarmClearance;
+		});
+	});
 	// The forests, nearest the town of the start first
 	land.forests = features::GroupForests(land.features, land.settlement.town.x, land.settlement.town.z, settings.forests);
 	clock.Done("forests");

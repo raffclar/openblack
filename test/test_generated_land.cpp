@@ -280,3 +280,36 @@ TEST(GeneratedLand, TheNeutralTownsComeAfterTheTemple)
 	// Only the player's town has a worship site
 	EXPECT_EQ(script.find("CREATE_WORSHIP_SITE", worship + 1), std::string::npos);
 }
+
+TEST(GeneratedLand, ANeutralTownHasItsPlannedBuildingsAndFishFarms)
+{
+	using landgen::settlement::Building;
+	landgen::settlement::Plan plan;
+	plan.town.tribe = landgen::settlement::Tribe::Norse;
+	plan.town.buildings = {{.building = Building::TownCentre, .x = 195.0f, .z = 200.0f, .rotation = 10}};
+	landgen::settlement::Town neutral;
+	neutral.tribe = landgen::settlement::Tribe::Celtic;
+	neutral.x = 600.0f;
+	neutral.z = 400.0f;
+	neutral.buildings = {{.building = Building::TownCentre, .x = 600.0f, .z = 400.0f, .rotation = 5},
+	                     {.building = Building::AbodeB, .x = 620.0f, .z = 400.0f, .rotation = 6},
+	                     {.building = Building::Wonder, .x = 578.0f, .z = 334.0f, .rotation = 7, .planned = true},
+	                     {.building = Building::StoragePit, .x = 600.0f, .z = 422.0f, .rotation = 8, .planned = true}};
+	neutral.fishFarms = {{.x = 505.0f, .z = 395.0f}, {.x = 505.0f, .z = 405.0f}};
+	plan.neutral.push_back(neutral);
+	const auto script = generated_land::SettlementScript(plan);
+	const auto read = lhscriptx::Script::Read(script);
+	ASSERT_FALSE(read.error.has_value()) << *read.error;
+	EXPECT_NE(script.find(R"(CREATE_ABODE(1, "620.00,400.00", "CELTIC_ABODE_B", 6, 1000, 0, 0))"), std::string::npos);
+	// A planned building holds no food or wood, and it comes before the buildings that stand
+	const auto wonder = script.find(R"(CREATE_PLANNED_ABODE(1, "578.00,334.00", "CELTIC_ABODE_WONDER", 7, 1000, 0, 0))");
+	ASSERT_NE(wonder, std::string::npos);
+	EXPECT_LT(wonder, script.find("CELTIC_ABODE_B"));
+	// The centre of a neutral town comes first, so that it has room
+	EXPECT_LT(script.find(R"(CREATE_TOWN_CENTRE(1, "600.00,400.00", "CELTIC_ABODE_TOWN_CENTRE", 5, 1000, 0))"), wonder);
+	EXPECT_NE(script.find(R"(CREATE_PLANNED_ABODE(1, "600.00,422.00", "CELTIC_ABODE_STORAGE_PIT", 8, 1000, 0, 0))"),
+	          std::string::npos);
+	EXPECT_EQ(script.find(R"(CREATE_ABODE(1, "600.00,422.00")"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_TOWN_FISH_FARM(1, "505.00,395.00", 0))"), std::string::npos);
+	EXPECT_NE(script.find(R"(CREATE_TOWN_FISH_FARM(1, "505.00,405.00", 0))"), std::string::npos);
+}

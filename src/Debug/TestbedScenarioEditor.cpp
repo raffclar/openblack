@@ -217,10 +217,12 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly from the "
 	                   "start area to the towns round it, then from town to town.",
 	    .expected = "The land has six to eleven towns with the town of player one. Each other town is a neutral town on "
-	                "flat ground, 220 to 600 metres from the town nearest to it, and 70 to 270 metres from the sea. "
-	                "Each town has a town centre, a storage pit, a creche, five to seven houses with their people and "
-	                "a block of fields. Some towns also have a workshop or a graveyard. The land has four to six "
-	                "tribes. No tree grows on the ground of a town.",
+	                "flat ground, 220 to 840 metres from the town nearest to it, and 70 to 270 metres from the sea. "
+	                "The towns stand at many heights, low and high. Each town has a town centre, five to seven houses "
+	                "with their people and a block of fields. Most towns have a storage pit and a creche. Some towns "
+	                "also have a workshop, a graveyard or the plan of a wonder. The houses are the kinds of the tribe "
+	                "of the town. A town near the sea can have two to six fish farms on the low shore. The land has "
+	                "four to six tribes. No tree grows on the ground of a town or on a fish farm.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},

@@ -375,6 +375,13 @@ def town_measures(towns, heights, land_mask, area_km2):
         out["town_houses_median"] = float(np.median([t["houses"] for t in large]))
         out["town_villagers_median"] = float(np.median([t["villagers"] for t in large]))
         out["town_fields_median"] = float(np.median([t["fields"] for t in large]))
+        # The share of the towns that have each kind of building, built or planned, and the kinds of house of a town
+        for key, name in (("fish_farms", "town_fish_farm_pct"), ("wonder", "town_wonder_pct"),
+                          ("creche", "town_creche_pct"), ("storage_pit", "town_storage_pit_pct")):
+            if all(key in t for t in large):
+                out[name] = 100.0 * sum(1 for t in large if t[key] > 0) / len(large)
+        if all("house_kinds" in t for t in large):
+            out["town_house_kinds_median"] = float(np.median([t["house_kinds"] for t in large]))
     return out
 
 
@@ -497,9 +504,17 @@ def load_dump(path):
             "path_list": [list(zip(p[1::2], p[2::2])) for p in d.get("path_list", [])],
             "lantern_list": [(m[1], m[2]) for m in d.get("lanterns", [])],
             "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark),
-            "town_list": [{"x": t[0], "z": t[1], "tribe": t[2], "neutral": t[3] != 0, "buildings": t[4], "houses": t[5],
-                           "fields": t[6], "villagers": t[7]} for t in d.get("town_list", [])],
+            "town_list": [generated_town(t) for t in d.get("town_list", [])],
             "wet": wet, "mist_list": [(m[0], m[1], m[3]) for m in d["mists"] if len(m) >= 4]}
+
+
+def generated_town(t):
+    """A town of the dump. An older dump has only the first 8 values."""
+    town = {"x": t[0], "z": t[1], "tribe": t[2], "neutral": t[3] != 0, "buildings": t[4], "houses": t[5],
+            "fields": t[6], "villagers": t[7]}
+    if len(t) >= 13:
+        town.update({"fish_farms": t[8], "wonder": t[9], "creche": t[10], "storage_pit": t[11], "house_kinds": t[12]})
+    return town
 
 
 def vanilla_towns(script, objs, towns):
@@ -524,9 +539,13 @@ def vanilla_towns(script, objs, towns):
         built = [o for o in objs if o["cls"] in ("abode", "planned") and o.get("town") == t]
         houses = sum(1 for o in built if len(o["kind"].split("_ABODE_")[-1]) == 1)
         fields = sum(1 for o in objs if o["cls"] == "field" and o.get("town") == t)
+        farms = sum(1 for o in objs if o["cls"] == "fishfarm" and o.get("town") == t)
+        kinds = [o["kind"].split("_ABODE_")[-1] for o in built]
         x, z = towns[t]["pos"]
         out.append({"x": x, "z": z, "tribe": towns[t]["tribe"], "neutral": towns[t]["player"] == "NEUTRAL",
-                    "buildings": len(built), "houses": houses, "fields": fields, "villagers": people[t]})
+                    "buildings": len(built), "houses": houses, "fields": fields, "villagers": people[t],
+                    "fish_farms": farms, "wonder": kinds.count("WONDER"), "creche": kinds.count("CRECHE"),
+                    "storage_pit": kinds.count("STORAGE_PIT"), "house_kinds": len({k for k in kinds if len(k) == 1})})
     return out
 
 
