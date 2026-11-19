@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <optional>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -21,6 +22,7 @@
 #include "Commands/PlayerCommands.h"
 #include "ECS/Systems/Implementations/OwnReportSystem.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "Input/MouseWheel.h"
 
 using namespace openblack;
 
@@ -127,4 +129,25 @@ TEST(OwnReports, TheCameraTurnCountsForTheGameTurn)
 	EXPECT_TRUE(reports.StepCameraTurned(3, false));
 	EXPECT_FALSE(reports.StepCameraTurned(4, false));
 	EXPECT_EQ(reports.GetState().cameraTurnTurn, 4U);
+}
+
+// A seeded run pins the mouse of the view report: the report gives the same wheel and buttons, whatever the system
+// says. Without the pin, the report gives what the system says.
+TEST(OwnReports, APinnedMouseDoesNotFollowTheSystem)
+{
+	ecs::systems::OwnReportSystem reports;
+	EXPECT_EQ(reports.GetSystemMouse(), platform_mouse::AskSystemMouse());
+	reports.PinSystemMouse(platform_mouse::k_DeterministicRunMouse);
+	EXPECT_EQ(reports.GetSystemMouse(), platform_mouse::k_DeterministicRunMouse);
+	reports.PinSystemMouse(std::nullopt);
+	EXPECT_EQ(reports.GetSystemMouse(), platform_mouse::AskSystemMouse());
+}
+
+// The pinned mouse of a seeded run is the mouse that the systems with no query give: a wheel and 3 buttons
+TEST(OwnReports, TheSeededRunMouseIsTheMouseOfOtherSystems)
+{
+	EXPECT_EQ(platform_mouse::k_DeterministicRunMouse.saysWheel,
+	          platform_mouse::SystemSaysWheelFor(platform_mouse::System::Other, false));
+	EXPECT_EQ(platform_mouse::k_DeterministicRunMouse.buttons,
+	          platform_mouse::SystemMouseButtonsFor(platform_mouse::System::Other, 0));
 }

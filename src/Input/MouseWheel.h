@@ -49,6 +49,23 @@ constexpr uint32_t k_OtherSystemMouseButtons = 3;
 /// How many buttons the mouse has, on the system that the game runs on
 [[nodiscard]] uint32_t SystemMouseButtons();
 
+/// What the system says of the mouse: if it has a wheel, and how many buttons it has
+struct SystemMouse
+{
+	bool saysWheel {false};
+	uint32_t buttons {0};
+
+	[[nodiscard]] constexpr bool operator==(const SystemMouse&) const noexcept = default;
+};
+
+/// What a deterministic run (a run with a seed) reports of the mouse on every computer: what the systems with no query
+/// give. The query of Windows can change while the game runs, for example when the screen of the computer starts again,
+/// and two runs with the same seed must report the same input.
+constexpr SystemMouse k_DeterministicRunMouse {.saysWheel = true, .buttons = k_OtherSystemMouseButtons};
+
+/// What the system that the game runs on says of the mouse now
+[[nodiscard]] SystemMouse AskSystemMouse();
+
 /// The rows of the mice picture, data/textures/mousehelp.raw: a mouse with two buttons, a mouse with more buttons, and a
 /// mouse with a wheel
 constexpr int k_TwoButtonMouseRow = 0;

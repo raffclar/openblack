@@ -16,6 +16,7 @@
 
 #include "Commands/PlayerCommands.h"
 #include "Help/HelpProfile.h"
+#include "Input/MouseWheel.h"
 
 namespace openblack::ecs::systems
 {
@@ -61,6 +62,11 @@ public:
 	/// next turn. They continue from the hand and the view that the loaded world keeps of this computer's player. Gives
 	/// the last view report that they continue from, none before the first view report.
 	virtual std::optional<player_commands::ViewReport> ContinueAfterLoad() = 0;
+
+	/// A deterministic run keeps the mouse that the view report gives at one value, none to ask the system each time
+	virtual void PinSystemMouse(std::optional<platform_mouse::SystemMouse> mouse) = 0;
+	/// The mouse that the view report gives: the pinned mouse, else what the system says now
+	[[nodiscard]] virtual platform_mouse::SystemMouse GetSystemMouse() const = 0;
 
 	[[nodiscard]] virtual const OwnReportState& GetState() const = 0;
 };

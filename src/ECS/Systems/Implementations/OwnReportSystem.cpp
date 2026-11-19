@@ -50,6 +50,11 @@
 using namespace openblack;
 using namespace openblack::ecs::systems;
 
+platform_mouse::SystemMouse OwnReportSystem::GetSystemMouse() const
+{
+	return _pinnedMouse.has_value() ? *_pinnedMouse : platform_mouse::AskSystemMouse();
+}
+
 bool OwnReportSystem::StepLandGrip(bool dragging, bool moveHeld)
 {
 	_state.landGrip = input::land_grip::GripsLand(dragging, _state.landGrip, moveHeld);
@@ -196,6 +201,7 @@ void OwnReportSystem::ReportView(uint32_t worldCameraIcons)
 	const bool gripsLand = StepLandGrip(cues.dragging, moveHeld);
 	// The turn of the camera counts for the whole game turn, so that the scripts see it at all frame rates
 	const bool cameraTurned = StepCameraTurned(Locator::time::value().GetTurn(), cues.controlsTurned);
+	const auto mouse = GetSystemMouse();
 	player_commands::ViewReport report {
 	    .eye = pose.eye,
 	    .focus = pose.focus,
@@ -210,15 +216,14 @@ void OwnReportSystem::ReportView(uint32_t worldCameraIcons)
 	    .cameraArrived = false,
 	    .gripsLand = gripsLand,
 	    .otherButton = bothButtons,
-	    .mouseWheel = script::lesson_natives::MouseHasWheel(platform_mouse::SystemSaysWheel(),
-	                                                        Locator::gameActionSystem::has_value() &&
-	                                                            Locator::gameActionSystem::value().WheelTurned()),
+	    .mouseWheel = script::lesson_natives::MouseHasWheel(
+	        mouse.saysWheel, Locator::gameActionSystem::has_value() && Locator::gameActionSystem::value().WheelTurned()),
 	    .cameraTurned = cameraTurned,
 	    // The icons that the last draw kept, or the world camera's own when the draw did not run
 	    .cameraIcons = static_cast<uint16_t>(
 	        (Locator::gameInterface::has_value() ? Locator::gameInterface::value().GetDrawnCameraIcons() : std::nullopt)
 	            .value_or(worldCameraIcons)),
-	    .mouseButtons = platform_mouse::SystemMouseButtons(),
+	    .mouseButtons = mouse.buttons,
 	};
 	// The keys held, by the game's number of each key
 	if (Locator::gameActionSystem::has_value())
