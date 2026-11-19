@@ -168,6 +168,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "Sound/GameMusic.h"
+#include "Temple/TempleHelpScripts.h"
 #include "TestbedDispenserGrid.h"
 #include "TestbedScenarioRunnerParts.h"
 #include "Visual/RendererRequestsInterface.h"
@@ -1538,6 +1539,21 @@ std::optional<double> Runner::ReadCheck(const checks::Check& check) const
 		const auto point = MapPoint(_middle, check.point);
 		const float height = Locator::terrainSystem::value().GetHeightAt(point);
 		return Locator::effectRequestSystem::value().FindShield({point.x, height, point.y}, 0.0f) != nullptr ? 1.0 : 0.0;
+	}
+	case checks::Quantity::CreatureLeashed:
+	{
+		const auto creature = CreatureAt(creatureIndex());
+		if (!creature.has_value() || !Locator::leashSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		return Locator::leashSystem::value().IsLeashed(*creature) ? 1.0 : 0.0;
+	}
+	case checks::Quantity::TempleScriptHasDialogue:
+	{
+		const temple_help::GameDialogue dialogue;
+		const auto owner = dialogue.GetOwner();
+		return owner != 0 && dialogue.IsTempleScript(owner) ? 1.0 : 0.0;
 	}
 	}
 	return std::nullopt;

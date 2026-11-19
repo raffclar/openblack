@@ -99,6 +99,10 @@ enum class Quantity : uint8_t
 	/// 1 when the particles keep the sphere of a shield miracle around the point on the land, else 0. A sphere that the
 	/// particles keep is drawn, and it turns away the particles of other effects.
 	ShieldSphereAt,
+	/// 1 when the scenario's creature at the index wears a leash, else 0
+	CreatureLeashed,
+	/// 1 when a help script or a special script of the temple has the dialogue, else 0
+	TempleScriptHasDialogue,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
