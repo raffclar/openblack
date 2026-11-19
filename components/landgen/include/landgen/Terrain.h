@@ -25,8 +25,20 @@ constexpr float k_HighestAltitude = 255.0f;
 /// The highest altitude that the game draws at sea level
 constexpr float k_SeaLevel = 3.0f;
 
+/// The outline of one island: its middle as a part of the map, and its size as a part of the usual island
+struct Outline
+{
+	float centreU {0.5f};
+	float centreV {0.5f};
+	float size {1.0f};
+};
+
 struct BaseSettings
 {
+	/// The islands of the land. With no island in the list, the land is one island of the usual size in the middle of
+	/// the map. The coast and the mountain ranges of a smaller island have the same shape at a smaller scale. The hills
+	/// and the slope from the coast to the plains keep their size in metres.
+	std::vector<Outline> islands;
 	/// The corners next to each edge of the map that stay under the sea, so that the land is an island
 	int seaMargin {40};
 	/// How many mountain ranges cross the island

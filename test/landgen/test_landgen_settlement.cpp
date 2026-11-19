@@ -68,6 +68,7 @@ Settings SmallSettings(uint64_t seed)
 	settings.thermal.passes = 10;
 	settings.rivers.sourceFlow = 150.0f;
 	settings.wind = climate::Wind::West;
+	settings.landType.type = landtypes::Type::BigIsland;
 	return settings;
 }
 } // namespace

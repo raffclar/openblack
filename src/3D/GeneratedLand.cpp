@@ -57,7 +57,7 @@ using generated_land::ChoiceRange;
 using generated_land::Choices;
 
 /// The ranges keep the land inside the limits of the map. Above the highest altitude, the crests of the land are flat.
-constexpr std::array<ChoiceRange, 14> k_ChoiceRanges {{
+constexpr std::array<ChoiceRange, 16> k_ChoiceRanges {{
     {"land", "land amount", &Choices::landAmount, -30, 30},
     {"ranges", "mountain ranges", &Choices::ranges, 0, 6},
     {"mountains", "mountain height", &Choices::mountainHeight, 100, 450},
@@ -72,6 +72,8 @@ constexpr std::array<ChoiceRange, 14> k_ChoiceRanges {{
     {"massifs", "mountain massifs", &Choices::massifs, -1, 20},
     {"top", "highest ground (m)", &Choices::topHeight, 171, 2700},
     {"trees", "tree stands (percent)", &Choices::trees, 100, 10000},
+    {"type", "land type (-1 seed)", &Choices::landType, -1, static_cast<int32_t>(landgen::landtypes::k_TypeCount) - 1},
+    {"archipelago", "archipelago (1 on)", &Choices::archipelago, 0, 1},
 }};
 
 /// Reads a whole number that fills all of the text, or gives false
@@ -97,6 +99,8 @@ bool AllOpenSea(const landgen::Grid<lnd::LNDCell>& cells, int blockX, int blockZ
 	}
 	return true;
 }
+
+static_assert(generated_land::k_ArchipelagoType == static_cast<int32_t>(landgen::landtypes::Type::Archipelago));
 
 // The plan gives the game's numbers of the tribes
 static_assert(static_cast<int>(landgen::settlement::Tribe::Celtic) == static_cast<int>(Tribe::CELTIC));
@@ -195,6 +199,11 @@ landgen::Settings generated_land::SettingsOf(const Choices& choices)
 	{
 		settings.massifs.countLow = clamped.massifs;
 		settings.massifs.countHigh = clamped.massifs;
+	}
+	settings.landType.archipelago = clamped.archipelago != 0;
+	if (clamped.landType >= 0 && (clamped.landType != generated_land::k_ArchipelagoType || settings.landType.archipelago))
+	{
+		settings.landType.type = static_cast<landgen::landtypes::Type>(clamped.landType);
 	}
 	// More stands of trees also let the land keep more features
 	const float density = static_cast<float>(clamped.trees) / k_Hundredths;

@@ -68,6 +68,25 @@ TEST(GeneratedLand, TheFirstChoicesGiveTheFirstSettingsOfTheGenerator)
 	EXPECT_EQ(settings.topHeight, first.topHeight);
 	EXPECT_EQ(settings.features.treeDensity, first.features.treeDensity);
 	EXPECT_EQ(settings.features.most, first.features.most);
+	EXPECT_FALSE(settings.landType.type.has_value());
+	EXPECT_FALSE(settings.landType.archipelago);
+}
+
+TEST(GeneratedLand, TheLandTypeNeedsTheArchipelagoChoiceForAnArchipelago)
+{
+	using landgen::landtypes::Type;
+	EXPECT_EQ(generated_land::SettingsOf({.seed = 3, .landType = 2}).landType.type, Type::Highlands);
+	EXPECT_EQ(generated_land::SettingsOf({.seed = 3, .landType = 0}).landType.type, Type::StoryIsland);
+	// Without the archipelago choice, the seed picks a type other than an archipelago
+	const auto without = generated_land::SettingsOf({.seed = 3, .landType = 4});
+	EXPECT_FALSE(without.landType.type.has_value());
+	EXPECT_FALSE(without.landType.archipelago);
+	const auto with = generated_land::SettingsOf({.seed = 3, .landType = 4, .archipelago = 1});
+	EXPECT_EQ(with.landType.type, Type::Archipelago);
+	EXPECT_TRUE(with.landType.archipelago);
+	EXPECT_EQ(generated_land::PathOf({.seed = 3, .landType = 1}), "landgen:3;type=1");
+	EXPECT_EQ(generated_land::ChoicesOf("landgen:3;type=3;archipelago=1"),
+	          (generated_land::Choices {.seed = 3, .landType = 3, .archipelago = 1}));
 }
 
 TEST(GeneratedLand, EachChoiceGoesToItsSettingOfTheGenerator)

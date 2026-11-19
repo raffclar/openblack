@@ -244,10 +244,14 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 	return cells;
 }
 
-GeneratedLand openblack::landgen::Generate(const Settings& settings)
+GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 {
 	GeneratedLand land;
 	StageClock clock(land.times);
+	// The type of the land changes the settings of its shape and climate
+	land.type = landtypes::Pick(chosen.seed, chosen.landType);
+	auto settings = chosen;
+	landtypes::Apply(land.type, settings.seed, settings.base, settings.massifs, settings.climate, settings.topHeight);
 	land.heightCurve = HeightCurve::WithTop(settings.heightKnee, settings.topHeight);
 	const int side = settings.side;
 	const auto seed = settings.seed;
