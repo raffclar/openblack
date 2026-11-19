@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <span>
 #include <vector>
 
@@ -262,24 +263,54 @@ struct RollSettings
 /// ground. The shore and the sea do not change. A flood from the sea then fills the pits that the noise makes.
 void RollGround(Grid<float>& heights, uint64_t seed, const RollSettings& settings);
 
+/// The altitudes of the first corners from the water, at distances 1 to 4, as on all the lands of the story. The game
+/// draws the first three at the sea level, and the fourth is the first ground above the water.
+constexpr std::array<float, 4> k_ShoreSteps {2.0f, 3.0f, 3.2f, 4.0f};
+
 struct ShelfSettings
 {
-	/// The width of the flat strip along the sea in corners, from the lowest to the highest that the noise gives
-	float widthLow {3.0f};
-	float widthHigh {4.5f};
-	/// The altitude of the strip at the water, and how much it rises for each corner from the water
-	float altitude {3.6f};
-	float rise {0.25f};
+	/// The sea next to the land is this high or lower, so that each corner of the sea holds water
+	float seaFloor {1.0f};
+	/// The waves across the map of the noise that divides the coast into beaches, banks and cliffs
+	float sectorFrequency {7.0f};
+	/// The coast is a beach where the noise is above the start, and all beach above the full value
+	float beachStart {0.17f};
+	float beachFull {0.27f};
+	/// The coast is a cliff where the noise is below the start, and all cliff below the full value
+	float cliffStart {0.15f};
+	float cliffFull {-0.05f};
+	/// The width of a beach in corners from the water, from the lowest to the highest that the noise gives
+	float beachLow {25.0f};
+	float beachHigh {45.0f};
+	/// The altitude of the back of a beach. The front of the beach is at the fourth shore step.
+	float beachBack {6.0f};
+	/// The rise of the dunes behind a beach, in altitude units for each corner
+	float duneRise {4.0f};
 	/// The rise of the bank behind the strip, in altitude units for each corner, from the lowest to the highest that the
 	/// noise gives. 10 is about 34 degrees and 22 is about 56 degrees.
 	float bankLow {10.0f};
 	float bankHigh {22.0f};
 	float frequency {9.0f};
+	/// The cliffs: the rise of the face for each corner, and the altitude of the top, from the lowest to the highest
+	/// that the noise gives
+	float cliffRise {28.0f};
+	float cliffTopLow {40.0f};
+	float cliffTopHigh {70.0f};
+	/// The top of a cliff stays level for this many corners, then falls by the back slope for each corner
+	float cliffDepth {6.0f};
+	float cliffBack {3.0f};
+	/// A cliff does not rise within the first distance of a river, and rises fully from the second distance, in corners
+	float riverStart {2.0f};
+	float riverFull {8.0f};
 };
 
-/// Makes the flat strip along the sea, with a bank or a cliff behind it, as on the lands of the story. The ground near
-/// the water goes down to the strip and to the bank, and lower ground does not change.
-void ShoreShelf(Grid<float>& heights, uint64_t seed, const ShelfSettings& settings);
+/// Makes the coast as on the lands of the story: the sea, the shore steps, then a beach, a bank or a cliff. The noise
+/// divides the coast into sectors. A beach is a long flat strip of low ground with dunes behind it. A cliff rises
+/// steeply from the shore steps, also where the land behind is low, but not at the rivers. On a bank, the ground near
+/// the water goes down to the strip. The result is the width of the flat strip at each corner, in corners from the
+/// water. riverDistance can be null.
+[[nodiscard]] Grid<float> ShoreShelf(Grid<float>& heights, const Grid<float>* riverDistance, uint64_t seed,
+                                     const ShelfSettings& settings);
 
 /// The largest difference of height to the next corner along an axis, at each corner
 [[nodiscard]] Grid<float> Slopes(const Grid<float>& heights);

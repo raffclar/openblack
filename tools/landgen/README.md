@@ -42,7 +42,7 @@ beyond that.
 
 ## What the numbers are
 
-Heights are in metres (the altitude times 0.67), slopes in degrees from the corner gradient with cells of 10 m, and
+The distance from the sea starts at the water of altitude 1 or lower, so that a lake above the sea on a generated land does not count as the sea for the coast numbers. Heights are in metres (the altitude times 0.67), slopes in degrees from the corner gradient with cells of 10 m, and
 distances in metres. A generated land can be higher than the lands of the story (the user allowed it on 2026-11-17,
 deviation 233): its dump has the height of each corner in units of 0.67 m ("units") and the metres of each altitude
 ("metres"). For such a land, the height targets and the thresholds of `above_100m_pct` and `peaks_60m` are the vanilla

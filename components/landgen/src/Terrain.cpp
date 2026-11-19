@@ -1055,18 +1055,50 @@ void terrain::RollGround(Grid<float>& heights, uint64_t seed, const RollSettings
 	FillPits(heights, moved);
 }
 
-void terrain::ShoreShelf(Grid<float>& heights, uint64_t seed, const ShelfSettings& settings)
+namespace
+{
+/// The altitude of the shore steps at a distance from the water in corners, along the line between two steps
+float ShoreStepAt(float distance)
+{
+	const auto& steps = terrain::k_ShoreSteps;
+	if (distance <= 1.0f)
+	{
+		return steps.front();
+	}
+	if (distance >= static_cast<float>(steps.size()))
+	{
+		return steps.back();
+	}
+	const auto step = static_cast<size_t>(distance);
+	const float along = distance - static_cast<float>(step);
+	return steps.at(step - 1) + ((steps.at(step) - steps.at(step - 1)) * along);
+}
+
+/// The value at a part of the way from the first value to the second
+constexpr float ShoreMix(float from, float to, float part)
+{
+	return from + ((to - from) * part);
+}
+} // namespace
+
+Grid<float> terrain::ShoreShelf(Grid<float>& heights, const Grid<float>* riverDistance, uint64_t seed,
+                                const ShelfSettings& settings)
 {
 	const int side = heights.side;
 	const float last = static_cast<float>(std::max(side - 1, 1));
+	const auto stepCount = static_cast<float>(k_ShoreSteps.size());
+	const float front = k_ShoreSteps.back();
 	Grid<uint8_t> sea(side, 0);
 	for (size_t i = 0; i < heights.values.size(); ++i)
 	{
 		sea.values[i] = heights.values[i] <= k_SeaLevel ? 1 : 0;
 	}
 	const auto distance = climate::DistanceToWater(sea);
-	const auto widthSeed = StageSeed(seed, 14);
+	Grid<float> widths(side, stepCount);
 	const auto bankSeed = StageSeed(seed, 15);
+	const auto sectorSeed = StageSeed(seed, 60);
+	const auto beachSeed = StageSeed(seed, 61);
+	const auto topSeed = StageSeed(seed, 62);
 	for (int x = 0; x < side; ++x)
 	{
 		for (int z = 0; z < side; ++z)
@@ -1075,20 +1107,55 @@ void terrain::ShoreShelf(Grid<float>& heights, uint64_t seed, const ShelfSetting
 			auto& height = heights.values[index];
 			if (height <= k_SeaLevel)
 			{
+				height = std::min(height, settings.seaFloor);
 				continue;
 			}
-			const float u = static_cast<float>(x) / last * settings.frequency;
-			const float v = static_cast<float>(z) / last * settings.frequency;
-			const float width = settings.widthLow + ((settings.widthHigh - settings.widthLow) *
-			                                         noise::SmoothStep(-0.5f, 0.5f, noise::Fractal(widthSeed, u, v, 2)));
-			const float bank = settings.bankLow + ((settings.bankHigh - settings.bankLow) *
-			                                       noise::SmoothStep(-0.5f, 0.5f, noise::Fractal(bankSeed, u, v, 2)));
+			const float u = static_cast<float>(x) / last;
+			const float v = static_cast<float>(z) / last;
+			const float sector = noise::Fractal(sectorSeed, u * settings.sectorFrequency, v * settings.sectorFrequency, 2);
+			const float beach = noise::SmoothStep(settings.beachStart, settings.beachFull, sector);
+			const float cliff = 1.0f - noise::SmoothStep(settings.cliffFull, settings.cliffStart, sector);
+			const float bank = ShoreMix(
+			    settings.bankLow, settings.bankHigh,
+			    noise::SmoothStep(-0.5f, 0.5f, noise::Fractal(bankSeed, u * settings.frequency, v * settings.frequency, 2)));
+			const float beachWidth = ShoreMix(
+			    settings.beachLow, settings.beachHigh,
+			    noise::SmoothStep(-0.5f, 0.5f, noise::Fractal(beachSeed, u * settings.frequency, v * settings.frequency, 2)));
+			const float width = ShoreMix(stepCount, beachWidth, beach);
+			widths.values[index] = width;
+			const float back = ShoreMix(front, settings.beachBack, beach);
+			const float rise = ShoreMix(ShoreMix(bank, settings.duneRise, beach), settings.cliffRise, cliff);
+
+			// The highest that the ground can be: the shore steps, the flat strip, then the bank, dunes or cliff
 			const float away = distance.values[index];
-			const float strip = settings.altitude + (settings.rise * std::min(away, width));
-			const float highest = strip + (bank * std::max(away - width, 0.0f));
-			height = std::max(std::min(height, highest), k_SeaLevel + 0.01f);
+			float highest = ShoreStepAt(away);
+			if (away > stepCount)
+			{
+				highest = away <= width ? ShoreMix(front, back, (away - stepCount) / (width - stepCount))
+				                        : back + (rise * (away - width));
+			}
+
+			// A cliff lifts the ground behind the strip to its top, also where the land is low
+			if (cliff > 0.0f && away > width)
+			{
+				const float top = ShoreMix(
+				    settings.cliffTopLow, settings.cliffTopHigh,
+				    noise::SmoothStep(-0.5f, 0.5f, noise::Fractal(topSeed, u * settings.frequency, v * settings.frequency, 2)));
+				const float faceEnd = width + (std::max(top - back, 0.0f) / settings.cliffRise);
+				const float lift = away <= faceEnd + settings.cliffDepth
+				                       ? std::min(back + (settings.cliffRise * (away - width)), top)
+				                       : top - (settings.cliffBack * (away - faceEnd - settings.cliffDepth));
+				const float river = riverDistance != nullptr ? noise::SmoothStep(settings.riverStart, settings.riverFull,
+				                                                                 riverDistance->values[index])
+				                                             : 1.0f;
+				height += cliff * river * std::max(lift - height, 0.0f);
+			}
+			// Land near the water is never lower than the shore steps, so that no land is at the sea level
+			const float lowest = ShoreStepAt(away);
+			height = std::max(std::min(height, highest), lowest);
 		}
 	}
+	return widths;
 }
 
 Grid<float> terrain::Slopes(const Grid<float>& heights)
