@@ -227,6 +227,22 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_paths",
+	    .name = "The winding paths and the lanterns of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Follow the "
+	                   "path from the temple to the town of player one, then the paths from town to town.",
+	    .expected = "A path of bare brown earth goes from the temple to the town of player one. From there, paths go on "
+	                "to each neutral town. A path winds on easy ground, goes round the water and does not climb a "
+	                "cliff. It stops a short distance from each building and field. About one path in three has "
+	                "lanterns on its sides: street lanterns near the towns and the temple, and lanterns on fires "
+	                "farther out. At night the lanterns light the ground.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 7}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_trees",
 	    .name = "The stands of trees and the big forests of a generated land",
 	    .facet = Facet::Editor,
