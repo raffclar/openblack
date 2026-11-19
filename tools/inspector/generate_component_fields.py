@@ -56,8 +56,9 @@ SKIPPED = {
 RUN_ONLY = {
     # The sounds of a saved game do not come back: a load removes each emitter
     "AudioEmitter": {"sourceId"},
-    # An entity of the audio of the run, and a count that the game starts again when a load makes the tags new
-    "SoundTag": {"emitter", "turns"},
+    # An entity of the audio of the run, and a count that the game starts again when a load makes the tags new. The
+    # silence of an attached sound that a load did not attach again is of this run only.
+    "SoundTag": {"emitter", "turns", "silenced"},
     # The ring of light is made again after a load
     "CreatureArena": {"ring"},
     # The game does not save the mark of a town that a scaffold founded: a load gives the town its base reach again
