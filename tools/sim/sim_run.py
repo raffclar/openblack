@@ -495,6 +495,58 @@ def save_and_load(game, options):
     return first, read_save(options, AGAIN_SLOT)
 
 
+# The frames that the player's way into the temple may take, and the frames after it for the room's own start
+TEMPLE_ENTRY_FRAMES = 600
+TEMPLE_SETTLE_FRAMES = 30
+
+
+MAIN_ROOM = 3
+
+
+def enter_temple(game, room):
+    """Takes the player into the temple at the room and holds the game there once the player is in the room. The other
+    rooms open on the first visit to the main room, so the player goes through the main room first."""
+    for step in ([MAIN_ROOM] if room == MAIN_ROOM else [MAIN_ROOM, room]):
+        game.call("temple.enter", {"room": step})
+        for _ in range(TEMPLE_ENTRY_FRAMES):
+            if not game.step_frames(1):
+                raise RuntimeError("the game ended on the way into the temple")
+            interior = game.call("temple.interior")
+            if interior.get("active") and interior.get("room") == step and interior.get("transition_room") is None:
+                break
+        else:
+            raise RuntimeError(f"the player did not go into temple room {step}")
+        game.step_frames(TEMPLE_SETTLE_FRAMES)
+
+
+# The most frames to wait in the temple for its help to let go of the dialogue
+TEMPLE_HELP_FRAMES = 6000
+
+
+def wait_temple_help(game):
+    """Steps the game in the temple until no script has the dialogue or the cinema bars. Then the temple's help scripts
+    have said their texts, and a load and the way out of the temple have the same scripts: the way out stops the help
+    scripts, and a load keeps the scripts that the save kept."""
+    for _ in range(0, TEMPLE_HELP_FRAMES, 20):
+        dialogue = game.call("help.dialogue")
+        if not dialogue.get("owner") and not dialogue.get("bars_owner"):
+            return
+        if not game.step_frames(20):
+            raise RuntimeError("the game ended in the temple")
+    raise RuntimeError("the temple's help did not let go of the dialogue")
+
+
+def leave_temple(game):
+    """Takes the player out of the temple and holds the game once the player is outside"""
+    game.call("temple.leave")
+    for _ in range(TEMPLE_ENTRY_FRAMES):
+        if not game.call("temple.interior").get("active"):
+            return
+        if not game.step_frames(1):
+            raise RuntimeError("the game ended on the way out of the temple")
+    raise RuntimeError("the player did not leave the temple")
+
+
 def drive_to(game, until_turn, at_turns, action):
     """Steps the game to each turn of the list and calls the action there, then lets it run to its end"""
     game.wait_ready()
@@ -529,7 +581,15 @@ def run_once(options, name, fast, until_turn, load_at=None, load=True):
             game.connect()
 
             def load_there(turn):
+                in_temple = getattr(options, "in_temple", None)
+                if in_temple is not None:
+                    enter_temple(game, in_temple)
+                    if getattr(options, "temple_quiet", False):
+                        wait_temple_help(game)
                 if not load:
+                    # The run with no load leaves the temple, as a load does
+                    if in_temple is not None:
+                        leave_temple(game)
                     return {"turn": turn, "did": "stop"}
                 partings = partings_at(game)
                 first, again = save_and_load(game, options)
@@ -740,13 +800,21 @@ def command_roundtrip(options):
     game = Game(exe, game_arguments(options, record, log, until_turn, True, True), options.out)
 
     def check(turn):
+        if options.in_temple is not None:
+            enter_temple(game, options.in_temple)
+            if options.temple_quiet:
+                wait_temple_help(game)
         first, again = save_and_load(game, options)
         for slot, data in ((FIRST_SLOT, first), (AGAIN_SLOT, again)):
             with open(os.path.join(options.out, f"turn{turn}-slot{slot}.obsav"), "wb") as file:
                 file.write(data)
         result = save_diff.compare_files(first, again)
         print(f"turn {turn}: " + save_diff.text_report(result), end="", flush=True)
-        return {"turn": turn, "same": not result, "differs": result}
+        # A save in the temple keeps the word "saved in the temple" of the creature records, as the game does
+        left = save_diff.not_saved_in_temple(result) if options.in_temple is not None else save_diff.differing_parts(result)
+        if result and not left:
+            print(f"turn {turn}: only the word 'saved in the temple' of the creature records differs", flush=True)
+        return {"turn": turn, "same": not left, "bytes_same": not result, "unexplained": left, "differs": result}
 
     code = None
     results = []
@@ -810,6 +878,13 @@ def parse(argv):
                          help="repeat: runs 2 and on save at this turn and load that save at once, then go on")
         sub.add_argument("--at", default="0,500,2000",
                          help="roundtrip: the turns to save, load and save again at, as '0,500,2000'")
+        sub.add_argument("--in-temple", type=int,
+                         help="roundtrip and repeat --load-at: the player goes into the temple at this room (3 the "
+                              "main room, 6 the save game room) before each save; the repeat's run with no load "
+                              "leaves the temple there")
+        sub.add_argument("--temple-quiet", action="store_true",
+                         help="with --in-temple: wait in the temple until no script has the dialogue or the cinema "
+                              "bars, then save")
         sub.add_argument("--all-computer-gods", action="store_true",
                          help="every god with a citadel is a computer god, also the god of this computer (the AI soak)")
         sub.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods (the AI soak)")

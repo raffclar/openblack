@@ -2045,6 +2045,26 @@
   "query": "temple.villagers"
  },
  {
+  "description": "The player goes into the temple at a room after the frame that the game draws now, as the testbed scenarios do. In the temple, the player goes to the room. A room that is not open gives an error. The answer tells if the player was in the temple before the call",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The room: 0 challenge, 1 creature cave, 2 credits, 3 main (if not given), 4 multiplayer, 5 options, 6 save game",
+    "name": "room",
+    "type": "integer"
+   }
+  ],
+  "query": "temple.enter",
+  "writes": true
+ },
+ {
+  "description": "The player leaves the temple as the key to leave does. The answer tells if the player was in the temple before the call",
+  "kind": "object",
+  "parameters": [],
+  "query": "temple.leave",
+  "writes": true
+ },
+ {
   "description": "The words of the pause and the speed: which words show (paused, slower, faster or none), their fade made smooth, and the turn of their letters",
   "kind": "object",
   "parameters": [],
@@ -3396,7 +3416,7 @@
   "query": "help.advisors"
  },
  {
-  "description": "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the dialogue and the line being said",
+  "description": "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the dialogue, the task that has the cinema bars in, and the line being said",
   "kind": "object",
   "parameters": [],
   "query": "help.dialogue"

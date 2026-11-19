@@ -11,7 +11,10 @@
 
 #include "DialogueControlSystem.h"
 
+#include "3D/TempleInteriorInterface.h"
 #include "ECS/Reflection/BinaryArchive.h"
+#include "Locator.h"
+#include "Temple/HeldDialogue.h"
 
 using namespace openblack::ecs::systems;
 
@@ -19,7 +22,16 @@ void DialogueControlSystem::SaveState(reflection::BinaryWriter& out) const
 {
 	// The owner of the dialogue is a value of this computer's help. In a network game only the help scripts of each
 	// computer take the dialogue, so the owner is a presentation part.
-	reflection::SavePresentation(out, _owner);
+	// The temple's kept dialogue goes back to its owner at a load. The save keeps the owner that the load gives.
+	auto owner = _owner;
+	if (Locator::temple::has_value())
+	{
+		if (const auto back = Locator::temple::value().GetDialogueBackAtLoad(); back.has_value())
+		{
+			owner = back->owner;
+		}
+	}
+	reflection::SavePresentation(out, owner);
 }
 
 bool DialogueControlSystem::LoadState(reflection::BinaryReader& in)

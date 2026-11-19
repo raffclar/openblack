@@ -246,6 +246,55 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 		                               {"in_temple", survey.inside.active},
 		                               {"inside", std::move(inside)}});
 	    });
+	auto enter = Query("enter",
+	                   "The player goes into the temple at a room after the frame that the game draws now, as the "
+	                   "testbed scenarios do. In the temple, the player goes to the room. A room that is not open gives "
+	                   "an error. The answer tells if the player was in the temple before the call",
+	                   {{.name = "room",
+	                     .type = "integer",
+	                     .description = "The room: 0 challenge, 1 creature cave, 2 credits, 3 main (if not given), 4 "
+	                                    "multiplayer, 5 options, 6 save game",
+	                     .required = false}});
+	enter.writes = true;
+	provider->Add(std::move(enter), [](const QueryContext& context) {
+		const int room = context.params.value("room", static_cast<int>(TempleRoom::Main));
+		if (!Locator::temple::has_value() || room < 0 || room >= static_cast<int>(TempleRoom::Unknown))
+		{
+			return QueryResult::Error("temple.enter needs a temple and a room from 0 to 6");
+		}
+		auto& temple = Locator::temple::value();
+		const bool wasInside = temple.Active();
+		// The player cannot go into a room that the story did not open yet
+		if (!temple.IsRoomAvailable(static_cast<TempleRoom>(room)))
+		{
+			return QueryResult::Error("the temple room is not open yet");
+		}
+		if (wasInside)
+		{
+			temple.GoToRoom(static_cast<TempleRoom>(room));
+		}
+		else
+		{
+			temple.ActivateAfterFrame(static_cast<TempleRoom>(room));
+		}
+		return QueryResult::Value({{"was_inside", wasInside}, {"room", room}});
+	});
+	auto leave = Query("leave", "The player leaves the temple as the key to leave does. The answer tells if the player "
+	                            "was in the temple before the call");
+	leave.writes = true;
+	provider->Add(std::move(leave), [](const QueryContext& /*c*/) {
+		if (!Locator::temple::has_value())
+		{
+			return QueryResult::Error("temple.leave needs a temple");
+		}
+		auto& temple = Locator::temple::value();
+		const bool wasInside = temple.Active();
+		if (wasInside)
+		{
+			temple.Deactivate();
+		}
+		return QueryResult::Value({{"was_inside", wasInside}});
+	});
 	return provider;
 }
 
