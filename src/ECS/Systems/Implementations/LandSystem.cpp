@@ -666,8 +666,12 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 		                    e.what());
 	}
 	_runsNetworkMapScript = false;
-	// As on a land: the land is laid out. A generated land has no footpath file and no slots to fill.
-	LayOutLand(std::nullopt, std::nullopt);
+	// As on a land: the land is laid out. A generated land has no footpath file. A network game fills the slots with no
+	// human, as on a skirmish land.
+	const auto playerStart = generated_land::PlayerStartOf(
+	    choices.players, Locator::time::value().IsNetworkGame() || _humansFromSession, _allComputerGods);
+	LayOutLand(std::nullopt, playerStart.slotsFilled ? std::optional<std::span<const PlayerNames>>(computer_player::k_SlotGods)
+	                                                 : std::nullopt);
 
 	// The camera looks down over the start area from the south
 	constexpr float k_MetresPerCorner = 10.0f;
@@ -694,6 +698,12 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 	View().EndLoadingScreen();
 
 	StartNewLand(land_change::Kind::Testbed);
+	// A land for more than one player starts as a skirmish starts: in the first turn the god of the player brings the
+	// creature that the profile keeps. The computer gods start after it.
+	if (playerStart.profileCreatureBrought)
+	{
+		Locator::playerCommandSystem::value().SetPlayersCreatureDue(true);
+	}
 	return true;
 }
 

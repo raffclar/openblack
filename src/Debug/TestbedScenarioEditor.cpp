@@ -255,19 +255,46 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .name = "The starts of two players on a generated land",
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 7 for two players and the game loads "
-	                   "it. Fly from the start of player one to the start of player two.",
+	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
+	                   "keeps. Fly from the start of player one to the start of player two.",
 	    .expected = "Each player has a temple and a town on a flat start area, as on the skirmish lands. The town of "
 	                "player two is 510 to 1080 metres from the town of player one. Each town has a town centre, a "
 	                "storage pit, a creche, five to seven houses with their people and a block of fields. The ground and "
 	                "the trees near the two starts are almost the same. The neutral towns are between the starts and "
-	                "round them. Player two is a computer god with a leopard at its temple, as on Two Gods.",
+	                "round them. Player two is a computer god with a leopard at its temple, as on Two Gods. In the first "
+	                "turn, player one brings the ape Matey to its temple. The leopard takes a size like the size of "
+	                "the ape.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,
 	                  .player = PlayerNames::PLAYER_TWO,
 	                  .delaySeconds = 1.0f,
 	                  .value = 7,
-	                  .object = k_BigIsland}},
+	                  .object = k_BigIsland,
+	                  .mindFile = "LethysCreature"}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_players_3",
+	    .name = "The starts of three players on a generated land",
+	    .facet = Facet::Editor,
+	    .description = "At the start, the land generator makes the land of seed 7 for three players and the game loads "
+	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
+	                   "keeps. In a network game, the land loads before the humans join. Fly from the start of player one "
+	                   "to the starts of the other players.",
+	    .expected = "Each of the three players has a temple and a town on a flat start area, as on the skirmish lands. "
+	                "Players two and three are computer gods with a lion and a horse at their temples, as on Three Gods. "
+	                "In the first turn, player one brings the ape Matey to its temple. The lion and the horse take a "
+	                "size like the size of the ape. In a network game for two humans, player one brings no creature, and "
+	                "player three also gets a computer god with a creature at its temple.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand,
+	                  .player = PlayerNames::PLAYER_THREE,
+	                  .delaySeconds = 0.0f,
+	                  .value = 7,
+	                  .object = k_BigIsland,
+	                  .mindFile = "LethysCreature"}},
 	});
 
 	all.push_back({
@@ -275,19 +302,22 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .name = "The starts of four players on a generated land",
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 7 for four players and the game loads "
-	                   "it. Fly from the start of player one to the starts of the other players.",
+	                   "it. The mind file LethysCreature of the game takes the place of the creature that the profile "
+	                   "keeps. Fly from the start of player one to the starts of the other players.",
 	    .expected = "Each of the four players has a temple and a town on a flat start area, as on the skirmish lands. The "
 	                "town of each player is 510 to 1080 metres from the nearest town of another player. The ground and "
 	                "the trees near the starts are almost the same. The neutral towns are between the starts and round "
 	                "them. Players two, three and four are computer gods with a horse, a tortoise and a zebra at their "
-	                "temples, as on Four Gods.",
+	                "temples, as on Four Gods. In the first turn, player one brings the ape Matey to its temple. The "
+	                "three creatures take a size like the size of the ape.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,
 	                  .player = PlayerNames::PLAYER_FOUR,
 	                  .delaySeconds = 1.0f,
 	                  .value = 7,
-	                  .object = k_BigIsland}},
+	                  .object = k_BigIsland,
+	                  .mindFile = "LethysCreature"}},
 	});
 
 	all.push_back({

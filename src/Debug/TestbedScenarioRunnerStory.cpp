@@ -15,9 +15,11 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <memory>
 #include <string>
 #include <string_view>
 
+#include <MindFile.h>
 #include <fmt/format.h>
 
 #include "3D/FlatLand.h"
@@ -74,6 +76,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
@@ -100,6 +103,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/WorldObjects.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Gui/GameTexts.h"
 #include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
@@ -431,6 +435,17 @@ bool Runner::GiveStoryCommand(const Command& command)
 		// The object gives the type of the land plus 1, and the seed picks the type for object 0
 		const auto landType = static_cast<int32_t>(command.object) - 1;
 		const bool archipelago = landType == generated_land::k_ArchipelagoType;
+		// The game's own mind file takes the place of the creature that the profile keeps
+		if (!command.mindFile.empty() && Locator::creatureCarryOverSystem::has_value())
+		{
+			const auto path =
+			    Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
+			auto mind = std::make_shared<creaturemind::MindFileData>();
+			if (creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success)
+			{
+				Locator::creatureCarryOverSystem::value().Keep(std::move(mind));
+			}
+		}
 		const bool loaded = Locator::landSystem::has_value() &&
 		                    Locator::landSystem::value().LoadGeneratedLand({.seed = static_cast<uint64_t>(command.value),
 		                                                                    .players = players,
