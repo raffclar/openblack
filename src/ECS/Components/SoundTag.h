@@ -47,6 +47,9 @@ struct SoundTag
 	/// True when the sound loops until it is released. False when each start plays the sound one time, and the next
 	/// turn starts it again when it is finished.
 	bool loops {true};
+	/// True when the load of a saved game did not attach this sound again. The tag stays in the world, but its sound
+	/// does not play in this run, as the game keeps no sound in its saves. A save does not keep it.
+	bool silenced {false};
 };
 
 } // namespace openblack::ecs::components

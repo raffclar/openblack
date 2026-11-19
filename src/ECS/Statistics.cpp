@@ -149,14 +149,29 @@ float BeliefIn(PlayerNames name)
 
 void player_statistics::GameStarts(ecs::Registry& registry)
 {
-	registry.Each<const Player>([&registry](entt::entity entity, const Player& player) {
-		auto* kept = registry.TryGet<PlayerStatistics>(entity);
-		auto& statistics = kept != nullptr ? *kept : registry.Assign<PlayerStatistics>(entity);
-		const auto* alignment = registry.TryGet<const Alignment>(entity);
-		statistics.startAlignment = alignment != nullptr ? alignment->value : 0.0f;
-		const auto* creature = CreatureOf(player.name);
-		statistics.startCreatureAlignment = creature != nullptr ? creature->alignment : 0.0f;
+	std::vector<entt::entity> missing;
+	registry.Each<const Player>([&registry, &missing](entt::entity entity, const Player&) {
+		if (!registry.AllOf<PlayerStatistics>(entity))
+		{
+			missing.push_back(entity);
+		}
 	});
+	for (const auto entity : missing)
+	{
+		registry.Assign<PlayerStatistics>(entity);
+	}
+	NoteStarts(registry);
+}
+
+void player_statistics::NoteStarts(ecs::Registry& registry)
+{
+	registry.Each<const Player, PlayerStatistics>(
+	    [&registry](entt::entity entity, const Player& player, PlayerStatistics& statistics) {
+		    const auto* alignment = registry.TryGet<const Alignment>(entity);
+		    statistics.startAlignment = alignment != nullptr ? alignment->value : 0.0f;
+		    const auto* creature = CreatureOf(player.name);
+		    statistics.startCreatureAlignment = creature != nullptr ? creature->alignment : 0.0f;
+	    });
 	uint32_t towns = 0;
 	registry.Each<const Town>([&towns](const Town&) { ++towns; });
 	registry.Context().globalStatistics.townsAtStart = towns;

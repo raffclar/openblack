@@ -35,6 +35,11 @@ namespace openblack::dance
 struct DanceFile;
 }
 
+namespace openblack::ecs
+{
+class Registry;
+}
+
 /// The whole world of a saved game in openblack's own layout (deviation 83): the entities and their components, the
 /// values that the registry keeps beside them, the game clock, the streams of random numbers, the camera, and the
 /// scripts with the table of the objects that they hold
@@ -83,13 +88,10 @@ struct ClockState
 /// The clock that the bytes keep. Nothing when the bytes do not read. A save of an older build has no general stream.
 [[nodiscard]] std::optional<ClockState> ReadClock(std::span<const uint8_t> bytes);
 
-/// The blocks of the whole world, from the services of the game
-[[nodiscard]] std::vector<PendingChunk> SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary);
-
 /// Whether the file keeps the whole world, or only the creatures of an older save
 [[nodiscard]] bool HasWholeWorld(const gamesave::WorldFile& file);
 
-/// What a load of the whole world is for
+/// What a save or a load of the whole world is for
 enum class LoadKind : uint8_t
 {
 	/// A saved game: the load forgets what the game keeps in no save, such as the sounds that played
@@ -98,6 +100,12 @@ enum class LoadKind : uint8_t
 	/// Only the parts that show the world on one computer, such as the emitters of the sounds, start again.
 	WorldState,
 };
+
+/// The blocks of the whole world, from the services of the game. A saved game writes the values that its load gives
+/// back (see SavedGameForm), so that a save at once after the load has the same bytes. A world state writes the world
+/// exactly.
+[[nodiscard]] std::vector<PendingChunk> SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary,
+                                                  LoadKind kind = LoadKind::SavedGame);
 
 /// Whether a load puts the camera where the file keeps it. A saved game does. A world state does not: it is the world
 /// that all computers share, and the camera is of this computer only. Thus the camera stays where the player has it
@@ -126,6 +134,37 @@ LoadEntities(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, 
 /// holds it refused. The rooms of the temple go, because the temple makes them when the player goes into it. A footpath
 /// that the game still looks for starts its search again.
 void ForgetUnsavedState(entt::registry& registry);
+
+/// The values of the components that ForgetUnsavedState starts again. The entities stay.
+/// - The creature wants again the actions that the area that holds it refused.
+/// - A footpath that the game still looks for starts its search again from its two ends.
+/// - The mind of each computer god starts again with the parts that a saved game keeps.
+void ForgetUnsavedValues(entt::registry& registry);
+
+/// While it exists, the world has the values that the load of a saved game gives back. When it goes, the world gets
+/// its own values again. A save of a game writes the world in this form, so that a save at once after the load has the
+/// same bytes. The game does not see the change, because the save makes the form and removes it on the same call.
+/// - The values that ForgetUnsavedValues starts again.
+/// - When the creed powers come back one by one at the load: the glows of each creature, made again from their saved
+///   powers, with no glow placed and no motion.
+/// - The statistics of the players note the start of the game again (player_statistics::NoteStarts).
+class SavedGameForm
+{
+public:
+	SavedGameForm(Registry& registry, bool creedPowersComeBack);
+	~SavedGameForm();
+	SavedGameForm(const SavedGameForm&) = delete;
+	SavedGameForm& operator=(const SavedGameForm&) = delete;
+	SavedGameForm(SavedGameForm&&) = delete;
+	SavedGameForm& operator=(SavedGameForm&&) = delete;
+
+private:
+	/// The values of the world before the form
+	struct Kept;
+
+	Registry& _registry;
+	std::unique_ptr<Kept> _kept;
+};
 
 /// Removes the sky's clouds that a save from an older version keeps as things of the land. The clouds are now things of
 /// the drawn registry, and the land lays them out when it loads.

@@ -208,7 +208,8 @@ bool SoundTagSystem::ProcessObjectTag(entt::entity entity, SoundTag& tag, const 
 	{
 		return true;
 	}
-	if (transform == nullptr || !sounds.Contains(tag.sound))
+	// A tag that a load silenced keeps its place in the world, but its sound does not play
+	if (transform == nullptr || tag.silenced || !sounds.Contains(tag.sound))
 	{
 		return false;
 	}
@@ -468,10 +469,11 @@ void SoundTagSystem::ForgetSavedSounds()
 
 void SoundTagSystem::ForgetUnclaimedSounds()
 {
+	// The tags stay, so that the loaded world keeps the entities of the save
 	auto& registry = Locator::entitiesRegistry::value();
 	for (const auto entity : _unclaimed)
 	{
-		registry.Destroy(entity);
+		registry.Get<SoundTag>(entity).silenced = true;
 	}
 	_unclaimed.clear();
 }
