@@ -204,6 +204,11 @@ struct SiteSettings
 [[nodiscard]] std::vector<Site> FindSites(const Grid<float>& heights, const HeightCurve& curve, const Grid<float>& seaDistance,
                                           const Grid<float>& riverDistance, Site first, std::span<const Area> keepOut,
                                           uint64_t seed, const SiteSettings& settings);
+/// The places for the neutral towns of a land for more than one player. The towns of the players at `firsts` start the
+/// chain. The land gets the neutral towns of a land for one player.
+[[nodiscard]] std::vector<Site> FindSites(const Grid<float>& heights, const HeightCurve& curve, const Grid<float>& seaDistance,
+                                          const Grid<float>& riverDistance, std::span<const Site> firsts,
+                                          std::span<const Area> keepOut, uint64_t seed, const SiteSettings& settings);
 
 /// The tribe of each neutral town: each other tribe of the land once, then tribes of the land that the seed picks
 [[nodiscard]] std::vector<Tribe> TribesOfTowns(std::span<const Tribe> landTribes, size_t towns, uint64_t seed);

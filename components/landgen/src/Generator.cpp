@@ -328,20 +328,59 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	const auto startSea = climate::DistanceToWater(sea);
 	land.start = FindStartArea(heights, startSea, riverDistance, startSettings);
 	FlattenStartArea(heights, land.start, startSettings);
+	// The other players of a land for more than one player. The town of each player is on its start area.
+	const auto playerCount = std::min(settings.players.count, players::k_MostPlayers);
+	std::vector<uint64_t> playerSeeds {seed};
+	std::vector<players::Start> townOffsets;
+	for (uint32_t player = 0; player < playerCount; ++player)
+	{
+		if (player > 0)
+		{
+			playerSeeds.push_back(players::SeedOfPlayer(seed, player));
+		}
+		const auto town = settlement::TownOfStart(0.0f, 0.0f, playerSeeds.back(), settings.settlement);
+		townOffsets.push_back({.x = town.x, .z = town.z});
+	}
+	for (const auto& other :
+	     players::FindStarts(heights, startSea, riverDistance, {.x = land.start.x, .z = land.start.z}, townOffsets,
+	                         {.lowest = startSettings.lowest,
+	                          .highest = startSettings.highest,
+	                          .nearestSea = startSettings.nearestSea,
+	                          .farthestSea = startSettings.farthestSea,
+	                          .riverDistance = startSettings.riverDistance,
+	                          .flatRadius = startSettings.flatRadius},
+	                         settings.players))
+	{
+		land.otherStarts.push_back({.x = other.x, .z = other.z, .radius = startSettings.flatRadius});
+		FlattenStartArea(heights, land.otherStarts.back(), startSettings);
+	}
+	// Each start area of a player, player one first
+	std::vector<StartArea> starts {land.start};
+	starts.insert(starts.end(), land.otherStarts.begin(), land.otherStarts.end());
 	clock.Done("start area");
 
 	// The lakes on the hills: round hollows dug into high flat ground, away from the sea, the rivers and the start
 	const auto awayFromHollows =
 	    Mask(side, [&](size_t i) { return heights.values[i] <= terrain::k_SeaLevel || riverCorners.values[i] != 0; });
-	lakes::DigHollows(heights, awayFromHollows, {{.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}},
-	                  StageSeed(seed, 35), settings.hillHollows);
+	std::vector<lakes::Keep> keepStarts;
+	for (const auto& start : starts)
+	{
+		keepStarts.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
+	}
+	lakes::DigHollows(heights, awayFromHollows, keepStarts, StageSeed(seed, 35), settings.hillHollows);
 	clock.Done("hill hollows");
 
 	// The neutral towns stand on flat ground, as the towns of the story do, so the ground of each town becomes flat
-	const auto firstTown = settlement::TownOfStart(land.start.x, land.start.z, seed, settings.settlement);
-	const std::array startArea {settlement::Area {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
+	std::vector<settlement::Site> firstTowns;
+	std::vector<settlement::Area> startAreas;
+	for (size_t player = 0; player < starts.size(); ++player)
+	{
+		const auto& start = starts[player];
+		firstTowns.push_back(settlement::TownOfStart(start.x, start.z, playerSeeds[player], settings.settlement));
+		startAreas.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
+	}
 	const auto sites =
-	    settlement::FindSites(heights, land.heightCurve, startSea, riverDistance, firstTown, startArea, seed, settings.sites);
+	    settlement::FindSites(heights, land.heightCurve, startSea, riverDistance, firstTowns, startAreas, seed, settings.sites);
 	const StartSettings townGround {.flatRadius = settings.sites.flatRadius, .blendRadius = settings.sites.blendRadius};
 	for (const auto& site : sites)
 	{
@@ -452,14 +491,27 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	});
 	const auto rivers = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 1.5f; });
 	// Nothing grows on the ground of the towns
-	std::vector<features::Clearing> clearings {
-	    features::Clearing {.x = land.start.x, .z = land.start.z, .radius = startSettings.blendRadius}};
+	std::vector<features::Clearing> clearings;
+	for (const auto& start : starts)
+	{
+		clearings.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
+	}
+	// The town of each other player also keeps clear ground round it, so that a big forest does not stand in it
+	for (size_t player = 1; player < firstTowns.size(); ++player)
+	{
+		clearings.push_back({.x = firstTowns[player].x, .z = firstTowns[player].z, .radius = startSettings.blendRadius});
+	}
 	std::vector<features::Clearing> towns;
 	for (const auto& site : sites)
 	{
 		towns.push_back({.x = site.x, .z = site.z, .radius = settings.sites.blendRadius});
 	}
 	clearings.insert(clearings.end(), towns.begin(), towns.end());
+	// The trees grow near the start of each other player as they grow near the start of player one
+	for (const auto& other : land.otherStarts)
+	{
+		towns.push_back({.x = other.x, .z = other.z, .radius = startSettings.blendRadius});
+	}
 	land.features = features::Place({.biomes = land.biomes,
 	                                 .heights = heights,
 	                                 .seaDistance = seaDistance,
@@ -470,6 +522,26 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                 .rivers = &rivers,
 	                                 .towns = towns},
 	                                seed, settings.features);
+	// Each player gets woods near its town that are almost as large as the woods of the other players
+	if (!land.otherStarts.empty())
+	{
+		std::vector<players::Start> startTowns;
+		for (const auto& town : firstTowns)
+		{
+			startTowns.push_back({.x = town.x, .z = town.z});
+		}
+		players::EvenTheWoods(land.features,
+		                      {.biomes = land.biomes,
+		                       .heights = heights,
+		                       .seaDistance = seaDistance,
+		                       .keepClear = keepClear,
+		                       .clearings = clearings,
+		                       .townX = land.start.x,
+		                       .townZ = land.start.z,
+		                       .rivers = &rivers,
+		                       .towns = towns},
+		                      startTowns, settings.players);
+	}
 	clock.Done("features");
 	auto cursed = cursed::Place({.biomes = land.biomes,
 	                             .heights = heights,
@@ -500,6 +572,11 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 
 	// The temple and the town on the start area, the neutral towns, then the forests nearest the town of the start first
 	land.settlement = settlement::Make(land.start.x, land.start.z, keepClear, seed, settings.settlement);
+	for (size_t player = 1; player < starts.size(); ++player)
+	{
+		land.otherPlayers.push_back(
+		    settlement::Make(starts[player].x, starts[player].z, keepClear, playerSeeds[player], settings.settlement));
+	}
 	const auto tribes = settlement::TribesOf(land.settlement.town.tribe, seed, settings.sites);
 	const auto townTribes = settlement::TribesOfTowns(tribes, sites.size(), seed);
 	for (size_t i = 0; i < sites.size(); ++i)

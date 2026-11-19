@@ -330,6 +330,13 @@ std::vector<Site> settlement::FindSites(const Grid<float>& heights, const Height
                                         const Grid<float>& riverDistance, Site first, std::span<const Area> keepOut,
                                         uint64_t seed, const SiteSettings& settings)
 {
+	return FindSites(heights, curve, seaDistance, riverDistance, std::span<const Site>(&first, 1), keepOut, seed, settings);
+}
+
+std::vector<Site> settlement::FindSites(const Grid<float>& heights, const HeightCurve& curve, const Grid<float>& seaDistance,
+                                        const Grid<float>& riverDistance, std::span<const Site> firsts,
+                                        std::span<const Area> keepOut, uint64_t seed, const SiteSettings& settings)
+{
 	const int side = heights.side;
 	const auto reach = static_cast<int>(settings.blendRadius);
 	const auto flat = static_cast<int>(settings.flatRadius);
@@ -379,9 +386,11 @@ std::vector<Site> settlement::FindSites(const Grid<float>& heights, const Height
 	}
 
 	Random random(StageSeed(seed, 51));
+	// The towns of the other players come in addition to the neutral towns
 	const auto towns = std::min(settings.townCounts.at(random.NextBelow(static_cast<uint32_t>(settings.townCounts.size()))),
-	                            settings.mostNeutral + 1);
-	std::vector<Site> placed {first};
+	                            settings.mostNeutral + 1) +
+	                   (firsts.size() - 1);
+	std::vector<Site> placed(firsts.begin(), firsts.end());
 	constexpr int k_Tenths = 10;
 	const float nearest = settings.nearestTown / k_MetresPerCorner;
 	const float farthest = settings.farthestTown / k_MetresPerCorner;
@@ -441,5 +450,5 @@ std::vector<Site> settlement::FindSites(const Grid<float>& heights, const Height
 		candidates.erase(candidates.begin() + static_cast<std::ptrdiff_t>(pick));
 		candidateHeights.erase(candidateHeights.begin() + static_cast<std::ptrdiff_t>(pick));
 	}
-	return {placed.begin() + 1, placed.end()};
+	return {placed.begin() + static_cast<std::ptrdiff_t>(firsts.size()), placed.end()};
 }

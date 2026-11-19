@@ -227,6 +227,37 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_players_2",
+	    .name = "The starts of two players on a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 for two players and the game loads "
+	                   "it. Fly from the start of player one to the start of player two.",
+	    .expected = "Each player has a temple and a town on a flat start area, as on the skirmish lands. The town of "
+	                "player two is 510 to 1080 metres from the town of player one. Each town has a town centre, a "
+	                "storage pit, a creche, five to seven houses with their people and a block of fields. The ground and "
+	                "the trees near the two starts are almost the same. The neutral towns are between the starts and "
+	                "round them.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .player = PlayerNames::PLAYER_TWO, .delaySeconds = 1.0f, .value = 7}},
+	});
+
+	all.push_back({
+	    .id = "editor.generated_players_4",
+	    .name = "The starts of four players on a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 7 for four players and the game loads "
+	                   "it. Fly from the start of player one to the starts of the other players.",
+	    .expected = "Each of the four players has a temple and a town on a flat start area, as on the skirmish lands. The "
+	                "town of each player is 510 to 1080 metres from the nearest town of another player. The ground and "
+	                "the trees near the starts are almost the same. The neutral towns are between the starts and round "
+	                "them.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .player = PlayerNames::PLAYER_FOUR, .delaySeconds = 1.0f, .value = 7}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_trees",
 	    .name = "The stands of trees and the big forests of a generated land",
 	    .facet = Facet::Editor,

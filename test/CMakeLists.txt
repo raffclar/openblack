@@ -2751,6 +2751,8 @@ openblack_setup_and_add_test(
   test_landgen_settlement landgen/test_landgen_settlement.cpp
 )
 target_link_libraries(test_landgen_settlement PRIVATE landgen)
+openblack_setup_and_add_test(test_landgen_players landgen/test_landgen_players.cpp)
+target_link_libraries(test_landgen_players PRIVATE landgen)
 openblack_setup_and_add_test(test_page_runs test_page_runs.cpp)
 openblack_setup_and_add_test(test_loaded_reports hand/test_loaded_reports.cpp)
 openblack_setup_and_add_test(test_kept_handles test_kept_handles.cpp)

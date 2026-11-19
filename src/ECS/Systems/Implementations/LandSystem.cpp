@@ -628,7 +628,7 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 	try
 	{
 		lhscriptx::Script script;
-		script.Load(generated_land::SettlementScript(land.settlement));
+		script.Load(generated_land::SettlementScript(land.settlement, land.otherPlayers));
 	}
 	catch (const std::exception& e)
 	{
