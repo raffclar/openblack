@@ -30,6 +30,8 @@ struct Candidate
 	std::vector<uint32_t> seeds;
 	std::vector<uint32_t> water;
 	std::vector<uint32_t> region;
+	/// A lake that a dry circle made too small or too shallow. Its basin stays dry.
+	bool dry {false};
 };
 
 /// The part of the line from a corner of a lake to a corner outside it that the lake's water covers. This agrees with
@@ -67,6 +69,10 @@ void FillCandidate(Candidate& lake, const Grid<float>& heights, const Settings& 
 {
 	lake.water.clear();
 	lake.region.clear();
+	if (lake.dry)
+	{
+		return;
+	}
 	std::vector<uint32_t> stack;
 	for (const auto seed : lake.seeds)
 	{
@@ -113,6 +119,62 @@ void FillCandidate(Candidate& lake, const Grid<float>& heights, const Settings& 
 	std::ranges::sort(lake.region);
 }
 
+/// Lowers the level of a lake until its water and its shore cover no corner in a dry circle. A corner of the shore is
+/// less than shoreReach above the level, so the level goes to shoreReach and the freeboard under the lowest such corner.
+/// When the lower lake has fewer corners than a lake needs, or is not deep enough, the lake becomes dry.
+void KeepDry(Candidate& lake, const Grid<float>& heights, std::span<const Keep> dry, const Settings& settings,
+             std::vector<int32_t>& mark, int32_t& stamp)
+{
+	if (dry.empty() || lake.dry)
+	{
+		return;
+	}
+	const auto inDry = [&](uint32_t corner) {
+		const auto x = static_cast<float>(heights.XOf(corner));
+		const auto z = static_cast<float>(heights.ZOf(corner));
+		return std::ranges::any_of(dry, [x, z](const Keep& keep) {
+			const float dx = x - keep.x;
+			const float dz = z - keep.z;
+			return (dx * dx) + (dz * dz) <= keep.radius * keep.radius;
+		});
+	};
+	bool lowered = false;
+	for (bool again = true; again;)
+	{
+		again = false;
+		float cap = lake.level;
+		for (const auto corner : lake.region)
+		{
+			if (inDry(corner))
+			{
+				cap = std::min(cap, heights.values[corner] - settings.shoreReach - settings.freeboard);
+			}
+		}
+		if (cap < lake.level)
+		{
+			lake.level = cap;
+			FillCandidate(lake, heights, settings, mark, stamp++);
+			lowered = true;
+			again = true;
+		}
+	}
+	if (!lowered)
+	{
+		return;
+	}
+	float lowest = std::numeric_limits<float>::max();
+	for (const auto corner : lake.water)
+	{
+		lowest = std::min(lowest, heights.values[corner]);
+	}
+	if (static_cast<int>(lake.water.size()) < settings.minCorners || lake.level - lowest < settings.minDeepest)
+	{
+		lake.dry = true;
+		lake.water.clear();
+		lake.region.clear();
+	}
+}
+
 size_t Root(std::vector<size_t>& parents, size_t index)
 {
 	while (parents[index] != index)
@@ -124,7 +186,7 @@ size_t Root(std::vector<size_t>& parents, size_t index)
 }
 } // namespace
 
-std::vector<Lake> lakes::Find(Grid<float>& heights, float seaLevel, const Settings& settings)
+std::vector<Lake> lakes::Find(Grid<float>& heights, float seaLevel, const Settings& settings, std::span<const Keep> dry)
 {
 	const auto count = heights.values.size();
 	const auto drainage = hydrology::Drain(heights, seaLevel);
@@ -143,7 +205,7 @@ std::vector<Lake> lakes::Find(Grid<float>& heights, float seaLevel, const Settin
 		{
 			continue;
 		}
-		Candidate candidate {.level = 0.0f, .seeds = {}, .water = {}, .region = {}};
+		Candidate candidate {.level = 0.0f, .seeds = {}, .water = {}, .region = {}, .dry = false};
 		float spill = drainage.filled.values[start];
 		float lowest = heights.values[start];
 		stack.assign(1, static_cast<uint32_t>(start));
@@ -183,6 +245,7 @@ std::vector<Lake> lakes::Find(Grid<float>& heights, float seaLevel, const Settin
 		for (auto& candidate : candidates)
 		{
 			FillCandidate(candidate, heights, settings, mark, stamp++);
+			KeepDry(candidate, heights, dry, settings, mark, stamp);
 		}
 		std::vector<size_t> parents(candidates.size());
 		std::iota(parents.begin(), parents.end(), size_t {0});
@@ -246,7 +309,8 @@ std::vector<Lake> lakes::Find(Grid<float>& heights, float seaLevel, const Settin
 			if (slot[root] < 0)
 			{
 				slot[root] = static_cast<int32_t>(merged.size());
-				merged.push_back({.level = candidates[i].level, .seeds = {}, .water = {}, .region = {}});
+				merged.push_back(
+				    {.level = candidates[i].level, .seeds = {}, .water = {}, .region = {}, .dry = candidates[i].dry});
 			}
 			auto& target = merged[static_cast<size_t>(slot[root])];
 			target.level = std::min(target.level, candidates[i].level);
