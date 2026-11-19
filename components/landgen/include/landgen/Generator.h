@@ -30,6 +30,7 @@
 #include "landgen/Lighting.h"
 #include "landgen/Paths.h"
 #include "landgen/Settlement.h"
+#include "landgen/Streams.h"
 #include "landgen/Swamps.h"
 #include "landgen/Terrain.h"
 
@@ -80,6 +81,9 @@ struct Settings
 	terrain::ShelfSettings shelf;
 	hydrology::LakeSettings lakes;
 	hydrology::RiverSettings rivers;
+	/// The streams that the land keeps from its rivers, and the trees on their banks
+	streams::Settings streams;
+	streams::BankSettings banks;
 	/// The lakes above the sea, and the round hollows on the hills that hold some of them
 	lakes::Settings highLakes;
 	lakes::DigSettings hillHollows;

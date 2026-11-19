@@ -347,6 +347,22 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "editor.generated_streams",
+	    .name = "The streams of a generated land",
+	    .facet = Facet::Editor,
+	    .description = "After a second, the land generator makes the land of seed 1 and the game loads it. Fly the "
+	                   "camera about 500 metres from the start area to the stream at about (4340, 3270), and follow it "
+	                   "down to the sea.",
+	    .expected = "The land has streams as the lands of the story do: thin streams of water that start on the hills "
+	                "and run down to the sea or into another stream. Each stream is about 30 to 640 metres long, with "
+	                "its bed in the land. Stands of trees grow on parts of the banks, near the water. Cedars grow by "
+	                "the streams of the jungle and the beach.",
+	    .environment = {.clockRuns = true},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
+	    .commands = {{.kind = Kind::LoadGeneratedLand, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "editor.generated_high_lakes",
 	    .name = "The lakes on the hills of a generated land",
 	    .facet = Facet::Editor,

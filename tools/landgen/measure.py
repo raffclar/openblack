@@ -26,15 +26,15 @@ CELL = 10.0
 # The heights of a generated land can go higher than the lands of the story: the user allowed it on 2026-11-17 ("For
 # custom lands via land gen, allow a much greater height"; "Allow for true mountains (snowdonia for example)", deviation
 # 233). Such a land has a height field (the "units" of the dump, 0.67 m each) and a curve that gives the metres of each
-# altitude. All its heights come from the field. Its height numbers use the heights of the story put through that curve: the targets of height_max_m
-# and height_median_m, and the thresholds of above_100m_pct and peaks_60m, are the vanilla altitudes in the metres of
+# altitude. All its heights come from the field. Its height numbers use the heights of the story put through that curve: the targets of height_max_m,
+# height_median_m and stream_source_median_m, and the thresholds of above_100m_pct and peaks_60m, are the vanilla altitudes in the metres of
 # the curve. The slope, cliff, flat and summit-count numbers keep the vanilla ranges, as the shape of the land.
-HEIGHT_TARGETS = ("height_max_m", "height_median_m")
+HEIGHT_TARGETS = ("height_max_m", "height_median_m", "stream_source_median_m")
 # A generated land can also be larger than the lands of the story (1.1 to 3.9 km2): the user allowed it on 2026-11-17
 # ("LGX-1: allow lands over 4 km2", deviation 233). The area and the totals that grow with the area do not bind a
 # generated land. The numbers for each km2 and the shape numbers stay the targets. The land stays one island.
 AREA_TOTALS = ("land_km2", "coast_km", "trees", "rocks", "rock_clumps", "big_forests", "towns_per_km2", "pillars",
-               "lone_pillars", "magic_mushrooms", "fairy_rings")
+               "lone_pillars", "magic_mushrooms", "fairy_rings", "streams")
 # The paths of a generated land join the towns and the temple, and are longer and wind more than the footpaths of the
 # story (the user allowed it on 2026-11-18: "LGX-4 yes", deviation 233). Their lengths and winding do not bind a
 # generated land. The lanterns keep the vanilla count and spacing.
@@ -79,6 +79,13 @@ GROUND_WET = (3, 4, 10, 16, 19, 21)
 # The colour of the green mist of the swamps, without its alpha. The puffs of one sheet are 70 m or less apart.
 GREEN_MIST = 0x50632F
 SHEET_LINK = 70.0
+# A stream reaches the water when its low end is this near the sea, a lake or another stream, in metres. The bank of a
+# stream is the ground this near the stream.
+STREAM_REACH = 20.0
+STREAM_BANK = 10.0
+# The numbers that the tool prints but that are not vanilla targets. On the lands of the story, some streams end on dry
+# ground. Each stream of a generated land reaches the sea, a lake or another stream (the user, 2026-11-19).
+NOT_TARGETS = ("stream_reach_pct",)
 
 
 def percentile(values, p):
@@ -349,6 +356,68 @@ def swamp_measures(wet, land_mask, trees, mists):
     return out
 
 
+def stream_measures(streams, heights, land_mask, trees, area_km2):
+    """The numbers of the streams. streams is a list of streams, each a list of (x, z) points in metres; heights are the
+    metres of each corner and trees a list of (x, z) in metres. A land with no streams has no stream numbers."""
+    streams = [s for s in streams if len(s) >= 2]
+    if not streams:
+        return {}
+    side = heights.shape[0]
+
+    def corner(p):
+        return (min(max(int(round(p[0] / CELL)), 0), side - 1), min(max(int(round(p[1] / CELL)), 0), heights.shape[1] - 1))
+
+    def height(p):
+        return float(heights[corner(p)])
+
+    lengths, spacings, sources, drops, slopes, windings, reach = [], [], [], [], [], [], 0
+    # The water: the corners that are not land, and the points of the streams 5 m apart
+    sea = ndimage.distance_transform_edt(land_mask) * CELL
+    dense = []
+    for k, s in enumerate(streams):
+        for (x0, z0), (x1, z1) in zip(s, s[1:]):
+            n = max(1, int(np.hypot(x1 - x0, z1 - z0) / 5.0))
+            dense += [(k, x0 + (x1 - x0) * t / n, z0 + (z1 - z0) * t / n) for t in range(n)]
+        dense.append((k, s[-1][0], s[-1][1]))
+    dense = np.array(dense)
+    for k, s in enumerate(streams):
+        steps = [float(np.hypot(b[0] - a[0], b[1] - a[1])) for a, b in zip(s, s[1:])]
+        length = sum(steps)
+        lengths.append(length)
+        spacings += steps
+        # The source is the higher end: the lands of the story give some streams from the mouth up
+        top, low = (s[0], s[-1]) if height(s[0]) >= height(s[-1]) else (s[-1], s[0])
+        sources.append(height(top))
+        drop = height(top) - height(low)
+        drops.append(drop)
+        slopes.append(drop / length * 100.0 if length else 0.0)
+        straight = float(np.hypot(s[-1][0] - s[0][0], s[-1][1] - s[0][1]))
+        windings.append(length / straight if straight else 1.0)
+        others = dense[dense[:, 0] != k][:, 1:]
+        # The low end, or the last point of a stream that the generator gives from its source down
+        ends = (low, s[-1])
+        joins = len(others) and min(cKDTree(others).query(end)[0] for end in ends) <= STREAM_REACH
+        reach += bool(min(sea[corner(end)] for end in ends) <= STREAM_REACH or joins)
+    out = {"streams": len(streams),
+           "streams_per_km2": len(streams) / area_km2 if area_km2 else float("nan"),
+           "stream_length_median_m": float(np.median(lengths)), "stream_length_max_m": float(max(lengths)),
+           "stream_spacing_median_m": float(np.median(spacings)),
+           "stream_source_median_m": float(np.median(sources)), "stream_drop_median_m": float(np.median(drops)),
+           "stream_slope_median_pct": float(np.median(slopes)), "stream_winding_median": float(np.median(windings)),
+           "stream_reach_pct": reach * 100.0 / len(streams)}
+    # The trees on the banks for each hectare, against the trees for each hectare of all the land
+    if trees:
+        tree = cKDTree(dense[:, 1:])
+        ii, jj = np.nonzero(land_mask)
+        bank = tree.query(np.stack([ii, jj], 1) * CELL)[0] <= STREAM_BANK
+        near = tree.query(np.array(trees, dtype=float).reshape(-1, 2))[0] <= STREAM_BANK
+        bank_ha = bank.sum() * CELL * CELL / 1e4
+        land_ha = land_mask.sum() * CELL * CELL / 1e4
+        if bank_ha and land_ha:
+            out["stream_bank_tree_ratio"] = (near.sum() / bank_ha) / (len(trees) / land_ha)
+    return out
+
+
 def town_measures(towns, heights, land_mask, area_km2):
     """The numbers of the towns. towns is a list of dicts with x, z (metres), tribe, neutral, buildings, houses, fields
     and villagers."""
@@ -427,6 +496,8 @@ def measure_land(land):
     out.update(big_forest_measures(land.get("big_forests", []), land.get("trees", []), area))
     out.update(cursed_measures(land.get("cursed_things", []), land.get("dark_mists", 0)))
     out.update(path_measures(land.get("path_list", []), land.get("lantern_list", [])))
+    out.update(stream_measures(land.get("streams", []), land["heights"], land["land"], [(t[0], t[1]) for t in trees],
+                               area))
     if "wet" in land:
         out.update(swamp_measures(land["wet"], land["land"], [(t[0], t[1]) for t in trees], land.get("mist_list", [])))
     kinds = {}
@@ -505,7 +576,9 @@ def load_dump(path):
             "lantern_list": [(m[1], m[2]) for m in d.get("lanterns", [])],
             "mists": len(d["mists"]), "towns": d["towns"], "cursed_things": cursed, "dark_mists": len(dark),
             "town_list": [generated_town(t) for t in d.get("town_list", [])],
-            "wet": wet, "mist_list": [(m[0], m[1], m[3]) for m in d["mists"] if len(m) >= 4]}
+            "wet": wet, "mist_list": [(m[0], m[1], m[3]) for m in d["mists"] if len(m) >= 4],
+            # A newer dump gives the points of each stream in metres
+            "streams": d["streams"] if isinstance(d.get("streams"), list) else []}
 
 
 def generated_town(t):
@@ -554,7 +627,7 @@ def vanilla_models():
     sys.path.insert(0, HERE)
     import analyze
     for name, lnd, script, fot in analyze.LANDS:
-        land, objs, towns, _streams, forests, (_links, paths) = analyze.measure(name, lnd, script, fot)
+        land, objs, towns, streams, forests, (_links, paths) = analyze.measure(name, lnd, script, fot)
         trees = [(o["pos"][0], o["pos"][1], o["kind"], o["forest"] not in (-1, 0)) for o in objs if o["cls"] == "tree"]
         rock_objs = [o for o in objs if o["cls"] == "static" and (
             "rock" in o["kind"].lower() or o["kind"].startswith("Boulder"))]
@@ -581,13 +654,13 @@ def vanilla_models():
                "big_forests": big_forests,
                "forests": len(forests), "footpaths": len(paths), "mists": mists, "towns": len(towns),
                "cursed_things": cursed, "dark_mists": len(dark), "wet": wet, "mist_list": mist_list,
-               "path_list": path_list, "lantern_list": lantern_list}
+               "path_list": path_list, "lantern_list": lantern_list, "streams": [s for s in streams.values()]}
 
 
 def ranges_of(measures):
     """The lowest and highest value of each number over a list of measure dictionaries."""
     out = {}
-    keys = {k for m in measures for k, v in m.items() if isinstance(v, (int, float))}
+    keys = {k for m in measures for k, v in m.items() if isinstance(v, (int, float)) and k not in NOT_TARGETS}
     for key in keys:
         values = [m[key] for m in measures if isinstance(m.get(key), (int, float)) and m[key] == m[key]]
         if values:

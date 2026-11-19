@@ -50,6 +50,8 @@ def read_lnd(path):
     country = np.full((513, 513), -1, np.int32)
     flags = np.zeros((513, 513), np.int32)
     lum = np.zeros((513, 513), np.int32)
+    # the ambient sound of each cell: bits 2 to 5 of the last byte of the cell
+    sound = np.zeros((513, 513), np.int32)
     for cells, bx, bz in blocks:
         # cells[x][z] (cellIndex = x * 17 + z)
         x0, z0 = bx * 16, bz * 16
@@ -58,7 +60,8 @@ def read_lnd(path):
         country[x0:x0 + 17, z0:z0 + 17] = props & 0xF
         flags[x0:x0 + 17, z0:z0 + 17] = props >> 4
         lum[x0:x0 + 17, z0:z0 + 17] = cells[:, :, 3]
-    return dict(alt=alt, country=country, flags=flags, lum=lum, countries=countries, materials=materials,
+        sound[x0:x0 + 17, z0:z0 + 17] = (cells[:, :, 7].astype(np.int32) >> 2) & 0xF
+    return dict(alt=alt, country=country, flags=flags, lum=lum, sound=sound, countries=countries, materials=materials,
                 blocks=len(blocks))
 
 

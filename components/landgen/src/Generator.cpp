@@ -315,7 +315,11 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	}
 	const auto drainage = hydrology::Drain(bent, terrain::k_SeaLevel);
 	const auto flow = hydrology::Accumulate(drainage, Grid<float>(side, 1.0f));
-	land.rivers = hydrology::TraceRivers(drainage, flow, settings.rivers);
+	// The streams start at springs on the hills and on the rivers, as many for the area as the lands of the story have
+	const auto traced = hydrology::TraceRivers(drainage, flow, settings.rivers);
+	const auto streamWater = Mask(side, [&heights](size_t i) { return heights.values[i] <= terrain::k_SeaLevel; });
+	const auto landCorners = static_cast<size_t>(std::ranges::count(streamWater.values, uint8_t {0}));
+	land.rivers = streams::Choose(traced, drainage.receivers, heights, streamWater, landCorners, seed, settings.streams);
 	hydrology::CarveRivers(heights, land.rivers, flow, settings.rivers);
 	clock.Done("rivers");
 	terrain::ErodeThermal(heights,
@@ -566,6 +570,20 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                 .rivers = &rivers,
 	                                 .towns = towns},
 	                                seed, settings.features);
+	// The trees on the banks of the streams, which stand nearer the water than the other trees
+	const auto bankClear =
+	    Mask(side, [&](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude + 1 || lakeLevels.values[i] >= 0.0f; });
+	const auto bankTrees = streams::PlaceBankTrees({.biomes = land.biomes,
+	                                                .heights = heights,
+	                                                .seaDistance = seaDistance,
+	                                                .keepClear = bankClear,
+	                                                .clearings = clearings,
+	                                                .townX = land.start.x,
+	                                                .townZ = land.start.z,
+	                                                .rivers = &rivers,
+	                                                .towns = towns},
+	                                               land.rivers, seed, settings.banks);
+	land.features.insert(land.features.end(), bankTrees.begin(), bankTrees.end());
 	clock.Done("features");
 	auto cursed = cursed::Place({.biomes = land.biomes,
 	                             .heights = heights,

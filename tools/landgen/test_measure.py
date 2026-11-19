@@ -330,5 +330,44 @@ class Dump(unittest.TestCase):
         self.assertEqual(model["lantern_list"], [(3.0, 4.0)])
 
 
+class StreamMeasures(unittest.TestCase):
+    def test_a_stream_down_a_slope_to_the_sea(self):
+        # A land that rises 1 m for each 10 m from the sea at the west edge
+        heights = np.tile(np.arange(60, dtype=float)[:, None], (1, 60)) - 10.0
+        land = heights > 0
+        heights = np.maximum(heights, 0.0)
+        stream = [(x * 10.0, 300.0) for x in range(40, 9, -1)]
+        out = measure.stream_measures([stream], heights, land, [], 1.0)
+        self.assertEqual(out["streams"], 1)
+        self.assertAlmostEqual(out["stream_length_median_m"], 300.0)
+        self.assertAlmostEqual(out["stream_spacing_median_m"], 10.0)
+        self.assertAlmostEqual(out["stream_source_median_m"], 30.0)
+        self.assertAlmostEqual(out["stream_drop_median_m"], 30.0)
+        self.assertAlmostEqual(out["stream_slope_median_pct"], 10.0)
+        self.assertAlmostEqual(out["stream_reach_pct"], 100.0)
+
+    def test_a_stream_that_ends_on_dry_ground_does_not_reach(self):
+        heights, land = square_island()
+        out = measure.stream_measures([[(300.0, 300.0), (310.0, 300.0)]], heights, land, [], 1.0)
+        self.assertAlmostEqual(out["stream_reach_pct"], 0.0)
+
+    def test_the_trees_on_the_banks(self):
+        heights, land = square_island()
+        stream = [(x * 10.0, 300.0) for x in range(15, 46)]
+        # Ten trees by the stream and ten far away
+        trees = [(200.0 + i * 20.0, 305.0) for i in range(10)] + [(150.0 + i * 20.0, 150.0) for i in range(10)]
+        out = measure.stream_measures([stream], heights, land, trees, 0.16)
+        self.assertGreater(out["stream_bank_tree_ratio"], 5.0)
+
+    def test_no_streams_give_no_numbers(self):
+        heights, land = square_island()
+        self.assertEqual(measure.stream_measures([], heights, land, [], 1.0), {})
+
+    def test_the_reach_is_not_a_target(self):
+        ranges = measure.ranges_of([{"stream_reach_pct": 50.0, "streams": 2}])
+        self.assertNotIn("stream_reach_pct", ranges)
+        self.assertIn("streams", ranges)
+
+
 if __name__ == "__main__":
     unittest.main()
