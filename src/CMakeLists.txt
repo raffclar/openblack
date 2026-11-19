@@ -775,6 +775,7 @@ else ()
       PRIVATE
       -pthread
       -fwasm-exceptions
+      -sWASM_LEGACY_EXCEPTIONS=0
       -sWASMFS=1
       -sPROXY_TO_PTHREAD=1
       -sJSPI=1
