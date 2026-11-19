@@ -12,8 +12,10 @@
 #include <algorithm>
 #include <array>
 #include <numeric>
+#include <vector>
 
 #include <gtest/gtest.h>
+#include <landgen/Cliffs.h>
 #include <landgen/HeightCurve.h>
 #include <landgen/Hydrology.h>
 #include <landgen/Noise.h>
@@ -806,4 +808,83 @@ TEST(LandgenHeightCurve, TheTopStopsAtTheMostUnits)
 	const auto curve = HeightCurve::WithTop(60.0f, 10000.0f);
 	EXPECT_NEAR(curve.UnitsOf(255.0f), k_MostUnits, 0.5f);
 	EXPECT_EQ(curve.WholeUnitsOf(255.0f), static_cast<uint16_t>(k_MostUnits));
+}
+
+TEST(LandgenCliffs, TheLimitOfAFaceStaysBetweenTheSteepestOfTheStory)
+{
+	const cliffs::FaceSettings settings;
+	for (int i = 0; i <= 20; ++i)
+	{
+		const float rise = cliffs::SteepestRiseAt(5, static_cast<float>(i) / 20.0f, 0.3f, settings);
+		EXPECT_GE(rise, settings.steepestLow);
+		EXPECT_LE(rise, settings.steepestHigh);
+	}
+}
+
+TEST(LandgenCliffs, AWallBecomesAFaceAtTheLimitAndNoCornerGoesUp)
+{
+	// A wall of 200 altitude units between two flat terraces, on a land with the curve of the story
+	const auto before = MakeGrid(40, [](int x, int /*z*/) { return x < 20 ? 10.0f : 210.0f; });
+	auto heights = before;
+	const cliffs::FaceSettings settings {.steepestLow = 2.0f, .steepestHigh = 2.0f};
+	cliffs::LimitFaces(heights, HeightCurve {}, 3.0f, 1, settings);
+	// A rise of 2 m for each metre is 20 m for each corner, about 29.85 altitude units
+	constexpr float k_Rise = 20.0f / k_MetresPerUnit;
+	for (int x = 0; x < 40; ++x)
+	{
+		for (int z = 0; z < 40; ++z)
+		{
+			EXPECT_LE(heights.At(x, z), before.At(x, z));
+			if (x + 1 < 40)
+			{
+				EXPECT_LE(heights.At(x + 1, z) - heights.At(x, z), k_Rise + 0.01f);
+			}
+		}
+	}
+	// The low terrace does not change, and the top of the wall goes down
+	EXPECT_EQ(heights.At(19, 5), 10.0f);
+	EXPECT_NEAR(heights.At(20, 5), 10.0f + k_Rise, 0.01f);
+	EXPECT_EQ(heights.At(39, 5), 210.0f);
+}
+
+TEST(LandgenCliffs, TheSeaDoesNotChangeAndTheLandStaysAboveIt)
+{
+	const auto before = MakeGrid(20, [](int x, int /*z*/) { return x < 10 ? 0.0f : 200.0f; });
+	auto heights = before;
+	cliffs::LimitFaces(heights, HeightCurve::WithTop(73.0f, 1250.0f), 3.0f, 2, {});
+	for (int x = 0; x < 20; ++x)
+	{
+		for (int z = 0; z < 20; ++z)
+		{
+			if (x < 10)
+			{
+				EXPECT_EQ(heights.At(x, z), 0.0f);
+			}
+			else
+			{
+				EXPECT_GT(heights.At(x, z), 3.0f);
+			}
+		}
+	}
+}
+
+TEST(LandgenCliffs, ASpireStaysAsASteepPeak)
+{
+	// A spire of one corner, 150 altitude units above a plain at 20
+	auto heights = MakeGrid(41, [](int x, int z) { return x == 20 && z == 20 ? 170.0f : 20.0f; });
+	const cliffs::FaceSettings settings {.steepestLow = 2.0f, .steepestHigh = 2.0f};
+	cliffs::LimitFaces(heights, HeightCurve {}, 3.0f, 1, settings);
+	EXPECT_EQ(heights.At(20, 20), 170.0f);
+	// The ground round it is a cone of the limit of the summit: 20 m for each corner
+	constexpr float k_Rise = 20.0f / k_MetresPerUnit;
+	EXPECT_NEAR(heights.At(21, 20), 170.0f - k_Rise, 0.01f);
+	EXPECT_NEAR(heights.At(23, 20), 170.0f - (3.0f * k_Rise), 0.01f);
+	EXPECT_EQ(heights.At(40, 40), 20.0f);
+
+	// A fixed corner next to the spire does not go up
+	auto fixedHeights = MakeGrid(41, [](int x, int z) { return x == 20 && z == 20 ? 170.0f : 20.0f; });
+	std::vector<uint8_t> fixed(fixedHeights.values.size(), 0);
+	fixed[fixedHeights.Index(22, 20)] = 1;
+	cliffs::LimitFaces(fixedHeights, HeightCurve {}, 3.0f, 1, settings, fixed);
+	EXPECT_EQ(fixedHeights.At(22, 20), 20.0f);
 }

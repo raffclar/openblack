@@ -169,6 +169,36 @@ class Comparison(unittest.TestCase):
         self.assertEqual(ranges["b"], [1.0, 1.0])
 
 
+class CliffMeasures(unittest.TestCase):
+    def test_a_gorge_between_two_terraces(self):
+        """Two plateaus at 60 m with a gorge of four corners between them: two cliff walls face each other."""
+        side = 80
+        heights = np.zeros((side, side))
+        land = np.zeros((side, side), dtype=bool)
+        land[10:70, 10:70] = True
+        heights[10:70, 10:70] = 60.0
+        # The gorge runs along the rows, at the columns 38 to 41, down to 2 m
+        heights[10:70, 38:42] = 2.0
+        out = measure.terrain_measures(heights, land, np.zeros_like(land))
+        self.assertGreater(out["cliff_gorge_pct"], 50.0)
+        self.assertGreater(out["cliff_face_median_deg"], 60.0)
+        # Each wall is about 600 m long
+        self.assertGreater(out["cliff_length_median_m"], 500.0)
+        self.assertAlmostEqual(out["cliff_terrace_pct"] + out["cliff_coast_pct"] + out["cliff_mountain_pct"], 100.0)
+
+    def test_a_single_wall_is_no_gorge(self):
+        """A step from 2 m to 60 m across the island: one cliff with no wall that faces it."""
+        side = 80
+        heights = np.zeros((side, side))
+        land = np.zeros((side, side), dtype=bool)
+        land[10:70, 10:70] = True
+        heights[10:70, 10:40] = 2.0
+        heights[10:70, 40:70] = 60.0
+        out = measure.terrain_measures(heights, land, np.zeros_like(land))
+        self.assertEqual(out["cliff_gorge_pct"], 0.0)
+        self.assertEqual(out["cliff_mountain_pct"], 0.0)
+
+
 class GeneratedTargets(unittest.TestCase):
     def test_the_height_curve_moves_the_height_targets(self):
         curve = np.arange(256) * measure.HEIGHT_UNIT

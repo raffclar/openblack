@@ -39,6 +39,10 @@ constexpr std::array<Band, 4> k_NordicWastes {
 constexpr std::array<Band, 4> k_Alpine {
     {{0, Surface::Grass}, {125, Surface::Rock}, {175, Surface::Snow}, {225, Surface::SnowyTops}}};
 
+// The cursed places: the darkest ground of the fourth land of the story. The places stand below the snow.
+constexpr std::array<Band, 1> k_CursedEdge {{{0, Surface::DarkScrub}}};
+constexpr std::array<Band, 1> k_CursedCore {{{0, Surface::Charred}}};
+
 constexpr uint8_t k_Blend = 24;
 
 uint32_t IndexOf(Surface surface, std::span<const Surface> materials)
@@ -77,6 +81,11 @@ Recipe countries::RecipeOf(Biome biome)
 	return {.bands = k_Alpine, .blend = k_Blend};
 }
 
+std::array<Recipe, 2> countries::CursedRecipes()
+{
+	return {{{.bands = k_CursedEdge, .blend = k_Blend}, {.bands = k_CursedCore, .blend = k_Blend}}};
+}
+
 openblack::lnd::LNDCountry countries::MakeCountry(const Recipe& recipe, std::span<const Surface> materials)
 {
 	lnd::LNDCountry country {};
@@ -113,6 +122,13 @@ std::vector<Surface> countries::UsedSurfaces()
 	for (size_t biome = 0; biome < biomes::k_BiomeCount; ++biome)
 	{
 		for (const auto& band : RecipeOf(static_cast<Biome>(biome)).bands)
+		{
+			used.at(static_cast<size_t>(band.surface)) = true;
+		}
+	}
+	for (const auto& recipe : CursedRecipes())
+	{
+		for (const auto& band : recipe.bands)
 		{
 			used.at(static_cast<size_t>(band.surface)) = true;
 		}
