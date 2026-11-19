@@ -15,6 +15,7 @@
 #include <functional>
 #include <limits>
 #include <queue>
+#include <tuple>
 
 #include "landgen/Noise.h"
 #include "landgen/Random.h"
@@ -161,6 +162,71 @@ std::optional<std::vector<Point>> Search(const Ground& ground, const Costs& cost
 	}
 	std::ranges::reverse(way);
 	return way;
+}
+
+/// The parts of the land that the ways can join. Each corner out of the water gets the number of its part, from 1. Two
+/// corners have the same number when a way can go from one to the other with no step into the water or up a cliff. The
+/// corners in the water get 0.
+Grid<uint32_t> PartsOf(const Ground& ground, const Costs& costs, const Settings& settings)
+{
+	const auto& grid = ground.heights;
+	Grid<uint32_t> parts(grid.side, 0);
+	uint32_t count = 0;
+	std::vector<size_t> next;
+	for (size_t first = 0; first < parts.values.size(); ++first)
+	{
+		if (parts.values[first] != 0 || ground.water.values[first] != 0)
+		{
+			continue;
+		}
+		++count;
+		parts.values[first] = count;
+		next.assign(1, first);
+		while (!next.empty())
+		{
+			const auto here = next.back();
+			next.pop_back();
+			const int x = grid.XOf(here);
+			const int z = grid.ZOf(here);
+			for (size_t n = 0; n < k_Neighbours.size(); ++n)
+			{
+				const int nx = x + k_Neighbours[n].dx;
+				const int nz = z + k_Neighbours[n].dz;
+				if (!grid.Contains(nx, nz))
+				{
+					continue;
+				}
+				const auto there = grid.Index(nx, nz);
+				if (parts.values[there] != 0 || ground.water.values[there] != 0)
+				{
+					continue;
+				}
+				const float run = k_NeighbourDistances[n] * k_MetresPerCorner;
+				if (std::abs(costs.metres.values[there] - costs.metres.values[here]) / run > settings.steepest)
+				{
+					continue;
+				}
+				parts.values[there] = count;
+				next.push_back(there);
+			}
+		}
+	}
+	return parts;
+}
+
+/// The part of the land at a place, or 0 when the place is in the water
+uint32_t PartAt(const Grid<uint32_t>& parts, const Place& place)
+{
+	const int x = std::clamp(Rounded(place.x), 0, parts.side - 1);
+	const int z = std::clamp(Rounded(place.z), 0, parts.side - 1);
+	return parts.At(x, z);
+}
+
+/// A link of the list joins the two places, in either direction
+bool Joins(std::span<const Link> links, uint32_t a, uint32_t b)
+{
+	return std::ranges::any_of(
+	    links, [a, b](const Link& link) { return (link.from == a && link.to == b) || (link.from == b && link.to == a); });
 }
 
 bool InClear(float x, float z, std::span<const Clear> clear)
@@ -311,6 +377,39 @@ std::vector<Path> paths::Lay(const Ground& ground, std::span<const Place> places
 	Grid<uint8_t> laid(ground.heights.side, 0);
 	Random random(StageSeed(seed, 81));
 	std::vector<Path> paths;
+	std::vector<Link> joined;
+	// The parts of the land, found only when a link has no way
+	std::optional<Grid<uint32_t>> parts;
+	// The other places on the part of the land of the end of a link, nearest first: first the places before the end, then
+	// the places after it. A place that a path already joins to the end is not in the list.
+	const auto othersOnPart = [&](const Link& link) {
+		if (!parts.has_value())
+		{
+			parts = PartsOf(ground, costs, settings);
+		}
+		const auto& end = places[link.to];
+		const auto part = PartAt(*parts, end);
+		// Each other place: 1 when it comes after the end, its distance squared to the end, and its index
+		std::vector<std::tuple<bool, float, uint32_t>> others;
+		for (uint32_t i = 0; i < places.size(); ++i)
+		{
+			if (part == 0 || i == link.to || i == link.from || Joins(joined, i, link.to) || PartAt(*parts, places[i]) != part)
+			{
+				continue;
+			}
+			const float dx = places[i].x - end.x;
+			const float dz = places[i].z - end.z;
+			others.emplace_back(i > link.to, (dx * dx) + (dz * dz), i);
+		}
+		std::ranges::sort(others);
+		std::vector<uint32_t> order;
+		order.reserve(others.size());
+		for (const auto& other : others)
+		{
+			order.push_back(std::get<2>(other));
+		}
+		return order;
+	};
 	for (const auto& link : links)
 	{
 		// Each link takes a random number, so that a link without a way does not change the lanterns of the others
@@ -319,19 +418,43 @@ std::vector<Path> paths::Lay(const Ground& ground, std::span<const Place> places
 		{
 			continue;
 		}
-		const auto& from = places[link.from];
-		const auto& to = places[link.to];
-		const auto way = Search(ground, costs, laid, {.x = from.x, .z = from.z}, {.x = to.x, .z = to.z}, settings);
+		// A link that an earlier path joins already, in either direction, gets no second path
+		if (Joins(joined, link.from, link.to))
+		{
+			continue;
+		}
+		const auto search = [&](uint32_t start) {
+			const auto& from = places[start];
+			const auto& to = places[link.to];
+			return Search(ground, costs, laid, {.x = from.x, .z = from.z}, {.x = to.x, .z = to.z}, settings);
+		};
+		auto found = link;
+		auto way = search(link.from);
+		if (!way.has_value())
+		{
+			// Water or cliffs divide the two places. The path then goes to the nearest place before it on the same part of
+			// the land, or to the nearest place after it when no place before it is on that part.
+			for (const auto other : othersOnPart(link))
+			{
+				way = search(other);
+				if (way.has_value())
+				{
+					found.from = other;
+					break;
+				}
+			}
+		}
 		if (!way.has_value())
 		{
 			continue;
 		}
+		joined.push_back(found);
 		for (const auto& point : *way)
 		{
 			laid.At(static_cast<int>(point.x), static_cast<int>(point.z)) = 1;
 		}
 		paths.push_back(
-		    {.link = link, .points = Smooth(*way, settings.smoothPasses, costs.metres, settings.steepest), .lit = lit});
+		    {.link = found, .points = Smooth(*way, settings.smoothPasses, costs.metres, settings.steepest), .lit = lit});
 	}
 	return paths;
 }

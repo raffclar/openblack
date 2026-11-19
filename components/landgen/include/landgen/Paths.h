@@ -143,6 +143,10 @@ struct Ground
 [[nodiscard]] std::vector<Point> Smooth(std::span<const Point> points, int passes, const Grid<float>& metres, float steepest);
 
 /// The path of each link between the places. The seed picks the wander of the paths and which paths have lanterns.
+/// Where water or cliffs divide the two places of a link, the path goes to the end of the link from another place on the
+/// same part of the land as the end. This is the nearest place before the end, or the nearest place after the end when
+/// no place before it is on that part. The `link` of the path is the link that it uses. A link whose two places a path
+/// joins already gets no second path.
 [[nodiscard]] std::vector<Path> Lay(const Ground& ground, std::span<const Place> places, std::span<const Link> links,
                                     uint64_t seed, const Settings& settings);
 
