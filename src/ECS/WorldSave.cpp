@@ -49,6 +49,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/WalkPath.h"
@@ -57,6 +58,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/Statistics.h"
 #include "ECS/SyncedState.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
@@ -261,6 +263,12 @@ void ForgetTempleRooms(entt::registry& registry)
 {
 	const auto rooms = registry.view<const components::TempleInteriorPart>();
 	registry.destroy(rooms.begin(), rooms.end());
+}
+
+/// Whether the load of a saved game gives the creatures their creed powers again one by one
+bool CreedPowersComeBack()
+{
+	return Locator::soundTagSystem::has_value() && Locator::creatureAnimationSystem::has_value();
 }
 
 /// The sounds that played at the save do not come back, as the game keeps no sound in its saves. The objects' own sounds
@@ -500,10 +508,18 @@ std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt
 	return sections;
 }
 
-std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary)
+std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary,
+                                                            LoadKind kind)
 {
 	std::vector<PendingChunk> chunks;
-	const auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	// A saved game keeps the entities and the context of the registry with the values that its load gives back. The
+	// world gets its own values again after the copy of these blocks.
+	std::optional<SavedGameForm> form;
+	if (kind == LoadKind::SavedGame)
+	{
+		form.emplace(registry, CreedPowersComeBack());
+	}
 	// The time that each block takes on the game's thread
 	auto last = std::chrono::steady_clock::now();
 	std::string times;
@@ -527,6 +543,7 @@ std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx
 		       return bytes;
 	       }});
 	timed(ready(gamesave::k_ContextTag, reflection::SaveValue(reflection, registry.Context(), &summary.context)));
+	form.reset();
 	timed(ClockChunk());
 	if (Locator::camera::has_value())
 	{
@@ -765,17 +782,101 @@ OutsideCamera world_save::CameraToSave(const std::optional<OutsideCamera>& outsi
 
 void world_save::ForgetUnsavedState(entt::registry& registry)
 {
+	ForgetUnsavedValues(registry);
+	// A save from inside the temple has the rooms of the temple, so the load removes them
+	ForgetTempleRooms(registry);
+}
+
+void world_save::ForgetUnsavedValues(entt::registry& registry)
+{
 	registry.view<components::CreatureMindState>().each([](components::CreatureMindState& mind) {
 		mind.leftAreaActions.clear();
 		mind.agendaRefused = false;
 	});
 	// A footpath that the game still looks for starts its search again from its two ends, as the game loads it
 	registry.view<components::FootpathFinder>().each([](components::FootpathFinder& finder) { finder.plan.reset(); });
-	// A save from inside the temple has the rooms of the temple, so the load removes them
-	ForgetTempleRooms(registry);
 	// The mind of each computer god starts again. It keeps only the parts that a saved game keeps.
 	registry.view<components::ComputerPlayer>().each(
 	    [](components::ComputerPlayer& player) { computer_player::StartAgainAfterLoad(player); });
+}
+
+struct world_save::SavedGameForm::Kept
+{
+	template <typename Component>
+	using Rows = std::vector<std::pair<entt::entity, Component>>;
+
+	Rows<components::ComputerPlayer> computerPlayers;
+	Rows<components::CreatureMindState> minds;
+	Rows<components::FootpathFinder> footpaths;
+	Rows<components::CreatureHandGlows> glows;
+	Rows<components::PlayerStatistics> statistics;
+	uint32_t townsAtStart {0};
+
+	/// Keeps a copy of each row of the component
+	template <typename Component>
+	static Rows<Component> Copy(const entt::registry& registry)
+	{
+		Rows<Component> rows;
+		for (auto&& [entity, value] : registry.view<const Component>().each())
+		{
+			rows.emplace_back(entity, value);
+		}
+		return rows;
+	}
+
+	/// Gives each row its kept value again
+	template <typename Component>
+	static void PutBack(entt::registry& registry, Rows<Component>& rows)
+	{
+		for (auto& [entity, value] : rows)
+		{
+			registry.get<Component>(entity) = std::move(value);
+		}
+	}
+};
+
+world_save::SavedGameForm::SavedGameForm(Registry& registry, bool creedPowersComeBack)
+    : _registry(registry)
+    , _kept(std::make_unique<Kept>())
+{
+	auto& world = registry.Underlying();
+	_kept->computerPlayers = Kept::Copy<components::ComputerPlayer>(world);
+	_kept->minds = Kept::Copy<components::CreatureMindState>(world);
+	_kept->footpaths = Kept::Copy<components::FootpathFinder>(world);
+	_kept->statistics = Kept::Copy<components::PlayerStatistics>(world);
+	_kept->townsAtStart = registry.Context().globalStatistics.townsAtStart;
+	ForgetUnsavedValues(world);
+	// The load gives each creature its saved creed powers again, with no glow placed yet
+	if (creedPowersComeBack)
+	{
+		_kept->glows = Kept::Copy<components::CreatureHandGlows>(world);
+		for (auto&& [entity, creature, glows] : world.view<const components::Creature, components::CreatureHandGlows>().each())
+		{
+			using creature_hand_glow::k_PlaceCount;
+			std::array<creature_hand_glow::SavedPower, k_PlaceCount> powers {};
+			for (size_t place = 0; place < k_PlaceCount; ++place)
+			{
+				powers.at(place) = creature_hand_glow::SavedPowerOf(glows.glows, static_cast<creature_hand_glow::Place>(place));
+			}
+			glows.glows = {};
+			std::ignore = creature_hand_glow::LoadCreedPowers(glows.glows, powers);
+			glows.placed = {};
+			glows.motion = {};
+		}
+	}
+	// Each load of a saved game starts a game, and the statistics note its start
+	player_statistics::NoteStarts(registry);
+}
+
+world_save::SavedGameForm::~SavedGameForm()
+{
+	auto& world = _registry.Underlying();
+	Kept::PutBack(world, _kept->computerPlayers);
+	Kept::PutBack(world, _kept->minds);
+	Kept::PutBack(world, _kept->footpaths);
+	Kept::PutBack(world, _kept->glows);
+	Kept::PutBack(world, _kept->statistics);
+	_registry.Context().globalStatistics.townsAtStart = _kept->townsAtStart;
 }
 
 void world_save::RemoveSavedSkyClouds(entt::registry& registry)

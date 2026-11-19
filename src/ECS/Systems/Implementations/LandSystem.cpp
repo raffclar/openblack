@@ -1004,8 +1004,9 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// Each load of a saved game starts a game. The world of a game server continues as the server has it.
 	if (use == SavedLandUse::SavedGame)
 	{
-		// The player is as good or evil as their profile keeps them, not as the save keeps them
-		if (land_change::RulesFor(land_change::Kind::SavedGame).alignmentFromProfile)
+		// The player is as good or evil as their profile keeps them, not as the save keeps them. A network game does not
+		// use the profile of this computer, so that each computer loads the same world.
+		if (land_change::LoadTakesProfileAlignment(Locator::time::value().IsNetworkGame()))
 		{
 			SetPlayerAlignmentFromProfile();
 		}
