@@ -146,6 +146,10 @@ std::string_view BuildingName(landgen::settlement::Building building)
 		return "WORKSHOP";
 	case Building::Graveyard:
 		return "GRAVEYARD";
+	case Building::Wonder:
+		return "WONDER";
+	case Building::AbodeB:
+		return "B";
 	}
 	return "A";
 }
@@ -408,10 +412,19 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 		{
 			line(fmt::format("CREATE_NEW_TOWN_FIELD({}, {}, 0, 0.000000)", number, Place(field.x, field.z)));
 		}
+		// The planned buildings come first, as on the lands of the story. They hold no food or wood.
+		for (const auto& placed : entry.buildings)
+		{
+			if (placed.planned)
+			{
+				line(fmt::format(R"(CREATE_PLANNED_ABODE({}, {}, "{}_ABODE_{}", {}, {}, 0, 0))", number,
+				                 Place(placed.x, placed.z), tribe, BuildingName(placed.building), placed.rotation, k_FullSize));
+			}
+		}
 		// The town centre comes after the other buildings, as on the lands of the story
 		for (const auto& placed : entry.buildings)
 		{
-			if (placed.building == Building::TownCentre)
+			if (placed.building == Building::TownCentre || placed.planned)
 			{
 				continue;
 			}
@@ -433,6 +446,10 @@ std::string generated_land::SettlementScript(const landgen::settlement::Plan& pl
 			const std::string_view kind = person.kind == landgen::settlement::Villager::Forester ? "FORESTER" : "HOUSEWIFE";
 			line(fmt::format(R"(CREATE_TOWN_VILLAGER({}, {}, "{}_{}", {}))", number, Place(person.x, person.z), tribe, kind,
 			                 person.age));
+		}
+		for (const auto& farm : entry.fishFarms)
+		{
+			line(fmt::format("CREATE_TOWN_FISH_FARM({}, {}, 0)", number, Place(farm.x, farm.z)));
 		}
 	};
 	town(plan.town, k_Town, "PLAYER_ONE", k_PlayerStart);

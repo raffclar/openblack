@@ -88,6 +88,8 @@ struct Settings
 	lighting::Settings lighting;
 	settlement::Settings settlement;
 	settlement::SiteSettings sites;
+	settlement::TownMix mix;
+	settlement::FarmSettings farms;
 };
 
 /// A flat place for the player's temple and first town, in corners

@@ -218,13 +218,25 @@
    21.13037893384714,
    62.43008079552517
   ],
+  "town_creche_pct": [
+   33.333333333333336,
+   100.0
+  ],
   "town_fields_median": [
    2.0,
    9.5
   ],
+  "town_fish_farm_pct": [
+   23.076923076923077,
+   57.142857142857146
+  ],
   "town_height_median_m": [
    27.47,
    50.25
+  ],
+  "town_house_kinds_median": [
+   4.0,
+   6.0
   ],
   "town_houses_median": [
    7.0,
@@ -242,6 +254,10 @@
    107.01960906212442,
    261.2868555023026
   ],
+  "town_storage_pit_pct": [
+   0.0,
+   100.0
+  ],
   "town_tribes": [
    4,
    6
@@ -249,6 +265,10 @@
   "town_villagers_median": [
    11.0,
    36.0
+  ],
+  "town_wonder_pct": [
+   0.0,
+   100.0
   ],
   "towns": [
    6,

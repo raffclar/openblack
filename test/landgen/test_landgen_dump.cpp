@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <string>
 
@@ -116,17 +117,31 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 	});
 	out << ",\"start\":[" << land.start.x << ',' << land.start.z << ',' << land.start.radius << ']';
 	out << ",\"towns\":" << (land.settlement.town.buildings.empty() ? 0 : 1) + land.settlement.neutral.size();
-	// Each town: x and z in metres, the tribe, 1 for a neutral town, the buildings, the houses, the fields and the people
-	const auto houses = [](const landgen::settlement::Town& town) {
-		return std::ranges::count_if(town.buildings, [](const auto& placed) {
-			return std::ranges::find(landgen::settlement::k_Houses, placed.building) != landgen::settlement::k_Houses.end();
-		});
+	// Each town: x and z in metres, the tribe, 1 for a neutral town, the buildings, the houses, the fields, the people,
+	// the fish farms, the wonders, the creches, the storage pits and the kinds of house. Planned buildings count too.
+	const auto isHouse = [](landgen::settlement::Building building) {
+		return std::ranges::find(landgen::settlement::k_AllHouses, building) != landgen::settlement::k_AllHouses.end();
 	};
-	const auto town = [&houses](const landgen::settlement::Town& entry, int neutral) {
+	const auto countOf = [](const landgen::settlement::Town& town, landgen::settlement::Building building) {
+		return std::ranges::count_if(town.buildings, [building](const auto& placed) { return placed.building == building; });
+	};
+	const auto town = [&isHouse, &countOf](const landgen::settlement::Town& entry, int neutral) {
+		using landgen::settlement::Building;
+		std::set<Building> kinds;
+		for (const auto& placed : entry.buildings)
+		{
+			if (isHouse(placed.building))
+			{
+				kinds.insert(placed.building);
+			}
+		}
+		const auto houses =
+		    std::ranges::count_if(entry.buildings, [&isHouse](const auto& placed) { return isHouse(placed.building); });
 		std::ostringstream text;
 		text << '[' << entry.x << ',' << entry.z << ',' << static_cast<int>(entry.tribe) << ',' << neutral << ','
-		     << entry.buildings.size() << ',' << houses(entry) << ',' << entry.fields.size() << ',' << entry.villagers.size()
-		     << ']';
+		     << entry.buildings.size() << ',' << houses << ',' << entry.fields.size() << ',' << entry.villagers.size() << ','
+		     << entry.fishFarms.size() << ',' << countOf(entry, Building::Wonder) << ',' << countOf(entry, Building::Creche)
+		     << ',' << countOf(entry, Building::StoragePit) << ',' << kinds.size() << ']';
 		return text.str();
 	};
 	out << ",\"town_list\":[" << town(land.settlement.town, 0);
