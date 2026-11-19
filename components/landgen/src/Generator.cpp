@@ -683,9 +683,12 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	                                 .towns = towns,
 	                                 .curve = land.heightCurve},
 	                                seed, settings.features);
-	// The trees on the banks of the streams, which stand nearer the water than the other trees
-	const auto bankClear =
-	    Mask(side, [&](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude + 1 || lakeLevels.values[i] >= 0.0f; });
+	// The trees on the banks of the streams, which stand nearer the water than the other trees. No bank tree stands on a
+	// path or a lantern.
+	const auto bankClear = Mask(side, [&](size_t i) {
+		const bool onPath = drawnPaths.values[i] != 0 || (growClear.values[i] != 0 && keepClear.values[i] == 0);
+		return altitudes.values[i] <= k_SeaLevelAltitude + 1 || lakeLevels.values[i] >= 0.0f || onPath;
+	});
 	const auto bankTrees = streams::PlaceBankTrees({.biomes = land.biomes,
 	                                                .heights = heights,
 	                                                .seaDistance = seaDistance,
