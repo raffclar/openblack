@@ -139,6 +139,13 @@ struct Rules
 	return skirmish && !networkGame;
 }
 
+/// Whether the player takes the alignment that the profile of this computer keeps when a saved game loads. A network
+/// game does not use the profile of one computer, so that each computer loads the same world.
+[[nodiscard]] constexpr bool LoadTakesProfileAlignment(bool networkGame)
+{
+	return RulesFor(Kind::SavedGame).alignmentFromProfile && !networkGame;
+}
+
 /// How a land picked from the land menu is loaded: a playground land starts a skirmish, a new game on it; any other land
 /// is loaded with the challenge's scripts started again, the game going on
 [[nodiscard]] constexpr Kind FromLandMenu(bool playgroundLand)

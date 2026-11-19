@@ -339,3 +339,22 @@ TEST(PlayerStatistics, AGameStartNotesTheAlignmentsAndCountsTheTowns)
 	EXPECT_FLOAT_EQ(registry.Get<const ecs::components::PlayerStatistics>(two).startAlignment, 0.0f);
 	EXPECT_EQ(registry.Context().globalStatistics.townsAtStart, 3u);
 }
+
+// A save notes the start values again as its load does, but gives no statistics to a player that has none
+TEST(PlayerStatistics, TheNoteOfTheStartGivesNoStatisticsToAPlayerWithNone)
+{
+	ecs::Registry registry;
+	const auto one = registry.Create();
+	registry.Assign<ecs::components::Player>(one, ecs::components::Player {.name = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::PlayerStatistics>(one);
+	registry.Assign<ecs::components::Alignment>(one, ecs::components::Alignment {.value = -0.3f, .pending = 0.0f});
+	const auto two = registry.Create();
+	registry.Assign<ecs::components::Player>(two, ecs::components::Player {.name = PlayerNames::PLAYER_TWO});
+	registry.Assign<ecs::components::Town>(registry.Create());
+
+	player_statistics::NoteStarts(registry);
+
+	EXPECT_FLOAT_EQ(registry.Get<const ecs::components::PlayerStatistics>(one).startAlignment, -0.3f);
+	EXPECT_FALSE(registry.AllOf<ecs::components::PlayerStatistics>(two));
+	EXPECT_EQ(registry.Context().globalStatistics.townsAtStart, 1u);
+}

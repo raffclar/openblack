@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <memory>
+#include <tuple>
 #include <vector>
 
 #include <DanceFile.h>
@@ -15,16 +16,24 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Archetypes/CloudArchetype.h"
+#include "ECS/Components/Alignment.h"
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/ComputerPlayer.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
+#include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Footpath.h"
+#include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerMind.h"
 #include "ECS/Registry.h"
+#include "ECS/RegistryContext.h"
 #include "ECS/WorldSave.h"
 
 using namespace openblack;
@@ -219,4 +228,82 @@ TEST(WorldSaveForget, ALoadTakesTheHeightsOfTheBlowsFromTheMesh)
 	// A save from this version gives the same heights
 	ecs::world_save::TakeBlowHeightsFromTheMesh(registry);
 	EXPECT_EQ(reaches[0].height, 12.25f);
+}
+
+// A save of a game writes the values that the load of the save gives back, so that a save at once after the load has
+// the same bytes. When the save is done, the world has its own values again.
+TEST(WorldSaveForget, ASaveHasTheValuesThatItsLoadGivesBack)
+{
+	ecs::Registry registry;
+	const auto god = registry.Create();
+	registry.Assign<ecs::components::Player>(god, ecs::components::Player {.name = PlayerNames::PLAYER_TWO});
+	registry.Assign<ecs::components::Alignment>(god, ecs::components::Alignment {.value = 0.25f, .pending = 0.0f});
+	auto& statistics = registry.Assign<ecs::components::PlayerStatistics>(god);
+	statistics.startAlignment = -0.5f;
+	auto& player = registry.Assign<ComputerPlayer>(god);
+	player.creatureLike = PlayerNames::PLAYER_ONE;
+	player.mind = computer_mind::MakeMind();
+	player.mind.nodes.at(3).weight = 0.5f;
+	player.mind.nodes.at(3).lastPerformed = 700;
+	player.hand.locked = true;
+	for (int i = 0; i < 2; ++i)
+	{
+		registry.Assign<ecs::components::Town>(registry.Create());
+	}
+	registry.Context().globalStatistics.townsAtStart = 7;
+
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature);
+	auto& mind = registry.Assign<CreatureMindState>(creature);
+	mind.leftAreaActions = std::vector<bool> {true, false};
+	mind.agendaRefused = true;
+	auto& glows = registry.Assign<ecs::components::CreatureHandGlows>(creature);
+	creature_hand_glow::Set(glows.glows, creature_hand_glow::Place::LeftHand, 1.5f, 2.0f);
+	glows.placed.at(0) = ecs::components::CreatureHandGlows::Placed {.zoom = 3.0f};
+	glows.motion.at(0).turn = 1.25f;
+	const auto path = registry.Create();
+	registry.Assign<ecs::components::FootpathFinder>(path).plan.emplace();
+
+	// The world as the load gives it back
+	entt::registry loaded;
+	const auto loadedGod = loaded.create(god);
+	loaded.emplace<ComputerPlayer>(loadedGod, player);
+	const auto loadedCreature = loaded.create(creature);
+	loaded.emplace<CreatureMindState>(loadedCreature, mind);
+	ecs::world_save::ForgetUnsavedValues(loaded);
+
+	const auto before =
+	    std::make_tuple(player.mind.nodes.at(3).lastPerformed, mind.leftAreaActions, glows.placed.at(0).has_value());
+	{
+		const ecs::world_save::SavedGameForm form(registry, true);
+		const auto& saved = registry.Get<const ComputerPlayer>(god);
+		const auto& expected = loaded.get<const ComputerPlayer>(loadedGod);
+		EXPECT_EQ(saved.mind.nodes.size(), expected.mind.nodes.size());
+		EXPECT_EQ(saved.mind.nodes.at(3).lastPerformed, expected.mind.nodes.at(3).lastPerformed);
+		EXPECT_EQ(saved.mind.nodes.at(3).weight, 0.5f);
+		EXPECT_FALSE(saved.creatureLike.has_value());
+		EXPECT_FALSE(saved.hand.locked);
+		EXPECT_TRUE(registry.Get<const CreatureMindState>(creature).leftAreaActions.empty());
+		EXPECT_FALSE(registry.Get<const CreatureMindState>(creature).agendaRefused);
+		EXPECT_FALSE(registry.Get<const ecs::components::FootpathFinder>(path).plan.has_value());
+		// The creed powers come back one by one, with no glow placed yet
+		const auto& savedGlows = registry.Get<const ecs::components::CreatureHandGlows>(creature);
+		EXPECT_TRUE(creature_hand_glow::AnyActive(savedGlows.glows));
+		EXPECT_FALSE(savedGlows.placed.at(0).has_value());
+		EXPECT_EQ(savedGlows.motion.at(0).turn, 0.0f);
+		// The statistics note the start of the game again
+		EXPECT_EQ(registry.Get<const ecs::components::PlayerStatistics>(god).startAlignment, 0.25f);
+		EXPECT_EQ(registry.Context().globalStatistics.townsAtStart, 2u);
+	}
+	EXPECT_EQ(std::make_tuple(registry.Get<const ComputerPlayer>(god).mind.nodes.at(3).lastPerformed,
+	                          registry.Get<const CreatureMindState>(creature).leftAreaActions,
+	                          registry.Get<const ecs::components::CreatureHandGlows>(creature).placed.at(0).has_value()),
+	          before);
+	EXPECT_TRUE(registry.Get<const ComputerPlayer>(god).creatureLike.has_value());
+	EXPECT_TRUE(registry.Get<const ComputerPlayer>(god).hand.locked);
+	EXPECT_TRUE(registry.Get<const CreatureMindState>(creature).agendaRefused);
+	EXPECT_EQ(registry.Get<const ecs::components::CreatureHandGlows>(creature).motion.at(0).turn, 1.25f);
+	EXPECT_EQ(registry.Get<const ecs::components::PlayerStatistics>(god).startAlignment, -0.5f);
+	EXPECT_EQ(registry.Context().globalStatistics.townsAtStart, 7u);
+	EXPECT_TRUE(registry.Get<const ecs::components::FootpathFinder>(path).plan.has_value());
 }

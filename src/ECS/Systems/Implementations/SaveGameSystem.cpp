@@ -1426,8 +1426,8 @@ std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 	// Then the whole world in openblack's own layout. The game thread takes what each block needs now, as for a save. The
 	// function makes the bytes of the blocks and of the file later.
 	ecs::world_save::SaveSummary summary;
-	auto whole =
-	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
+	auto whole = std::make_shared<std::vector<ecs::world_save::PendingChunk>>(
+	    ecs::world_save::SaveWorld(Reflection(), summary, ecs::world_save::LoadKind::WorldState));
 	// The land as it is now, which another computer must have to go on with the same world
 	auto lastChunks = std::make_shared<std::vector<gamesave::Chunk>>(ChangedLandChunks());
 	// The channel of the scripts' music, so that the other computer hears the piece at the same place. A saved game does

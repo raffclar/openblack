@@ -49,10 +49,12 @@ public:
 	virtual void DetachObjectSound(entt::entity entity, entt::id_type sound) = 0;
 	/// A saved game has loaded. The sounds of points and the sounds attached to objects do not come back. An object's
 	/// own tag stays, with no sound playing, so that the next game turn starts its sound again. The load can attach a
-	/// sound to an object again: it then gets the tag that the sound had before the load. The other tags of attached
-	/// sounds go when the load calls ForgetUnclaimedSounds.
+	/// sound to an object again: it then gets the tag that the sound had before the load. The load silences the other
+	/// tags of attached sounds when it calls ForgetUnclaimedSounds.
 	virtual void ForgetSavedSounds() {}
-	/// The tags of attached sounds that the load did not attach again go
+	/// The tags of attached sounds that the load did not attach again stay in the world, but their sounds do not play
+	/// again. A detach removes them as it removes the other tags. Thus a save at once after the load keeps the same
+	/// entities.
 	virtual void ForgetUnclaimedSounds() {}
 };
 

@@ -500,7 +500,8 @@ TEST_F(SoundTags, AMovedSoundKeepsItsOffset)
 }
 
 // A saved game loads: the sounds of points and the sounds attached to objects do not come back, and an object's own
-// sound starts again on the next turn. The tag keeps its count of the turns.
+// sound starts again on the next turn. The tag keeps its count of the turns. The tag of an attached sound stays in the
+// world, silent, so that a save after the load keeps the same entities.
 TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -520,7 +521,8 @@ TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 
 	_tags.ForgetSavedSounds();
 	_tags.ForgetUnclaimedSounds();
-	EXPECT_FALSE(registry.Valid(attached));
+	ASSERT_TRUE(registry.Valid(attached));
+	EXPECT_TRUE(registry.Get<const ecs::components::SoundTag>(attached).silenced);
 	// The count of the turns is a part of the synced world, so the load keeps it
 	EXPECT_EQ(registry.Get<ecs::components::SoundTag>(lantern).turns, turns);
 	EXPECT_TRUE(_tags.PointSounds().empty());
@@ -530,10 +532,14 @@ TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	EXPECT_EQ(Audio().emitters.size(), before + 1);
 	EXPECT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter != entt::null);
+	EXPECT_TRUE(registry.Get<const ecs::components::SoundTag>(attached).emitter == entt::null);
+	// A detach removes the silent tag
+	_tags.DetachObjectSound(box, k_Sound);
+	EXPECT_FALSE(registry.Valid(attached));
 }
 
 // A load attaches a sound to an object again, as a creature's hum: the sound takes back the tag that it had, so that a
-// save after the load keeps the same entities. A sound that the load does not attach again loses its tag.
+// save after the load keeps the same entities. A sound that the load does not attach again keeps its tag, silent.
 TEST_F(SoundTags, ASoundThatALoadAttachesAgainTakesBackItsTag)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -548,7 +554,9 @@ TEST_F(SoundTags, ASoundThatALoadAttachesAgainTakesBackItsTag)
 	EXPECT_EQ(_tags.AttachObjectSound(creature, k_Sound, true), hum);
 	_tags.ForgetUnclaimedSounds();
 	EXPECT_TRUE(registry.Valid(hum));
-	EXPECT_FALSE(registry.Valid(knock));
+	ASSERT_TRUE(registry.Valid(knock));
+	EXPECT_TRUE(registry.Get<const ecs::components::SoundTag>(knock).silenced);
+	EXPECT_FALSE(registry.Get<const ecs::components::SoundTag>(hum).silenced);
 	// The tag starts again as a new tag does
 	const auto& tag = registry.Get<const ecs::components::SoundTag>(hum);
 	EXPECT_TRUE(tag.active);

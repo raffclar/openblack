@@ -173,3 +173,11 @@ TEST(LandChange, ALoadedSkirmishTriesToBringTheCreatureOfTheProfileAgain)
 	EXPECT_FALSE(LoadBringsProfileCreature(true, true));
 	EXPECT_FALSE(LoadBringsProfileCreature(false, true));
 }
+
+// The load of a saved game gives the player the alignment of the profile, as the game does. A network game does not use
+// the profile of one computer, so that each computer loads the same world.
+TEST(LandChange, OnlyALoadOutOfANetworkGameTakesTheAlignmentOfTheProfile)
+{
+	EXPECT_TRUE(LoadTakesProfileAlignment(false));
+	EXPECT_FALSE(LoadTakesProfileAlignment(true));
+}
