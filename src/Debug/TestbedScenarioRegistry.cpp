@@ -257,6 +257,8 @@ std::string_view CommandProblem(const Command& command, std::span<const ObjectSe
 		return object != nullptr && !std::holds_alternative<FeatureInfo>(object->type) ? "" : "knocks down no thing or tree";
 	case Kind::TieLeash:
 		return object != nullptr ? "" : "ties the leash to nothing";
+	case Kind::LoadMapLand:
+		return command.land.empty() ? "loads no land" : "";
 	case Kind::JoinFootball:
 		return object != nullptr && std::holds_alternative<VillagerInfo>(object->type) ? ""
 		                                                                               : "sends no villager to the football";
@@ -329,7 +331,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle ||
 	       kind == Kind::JoinFootball || kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint ||
 	       kind == Kind::TempleFreeCamera || kind == Kind::InfiniteInfluenceCheat || kind == Kind::LoadGeneratedLand ||
-	       IsPointerCommand(kind);
+	       kind == Kind::LoadMapLand || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -357,7 +359,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 248> k_Names {
+	constexpr std::array<std::string_view, 249> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -606,6 +608,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "free camera in the temple",
 	    "the cheat of infinite influence",
 	    "load a generated land",
+	    "load a land",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
