@@ -260,7 +260,7 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "player two is 510 to 1080 metres from the town of player one. Each town has a town centre, a "
 	                "storage pit, a creche, five to seven houses with their people and a block of fields. The ground and "
 	                "the trees near the two starts are almost the same. The neutral towns are between the starts and "
-	                "round them.",
+	                "round them. Player two is a computer god with a leopard at its temple, as on Two Gods.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,
@@ -279,7 +279,8 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .expected = "Each of the four players has a temple and a town on a flat start area, as on the skirmish lands. The "
 	                "town of each player is 510 to 1080 metres from the nearest town of another player. The ground and "
 	                "the trees near the starts are almost the same. The neutral towns are between the starts and round "
-	                "them.",
+	                "them. Players two, three and four are computer gods with a horse, a tortoise and a zebra at their "
+	                "temples, as on Four Gods.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,
