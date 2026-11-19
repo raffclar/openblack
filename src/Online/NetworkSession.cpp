@@ -155,6 +155,9 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_attempts = 0;
 	_partedTurn.reset();
 	_pingsWarned = false;
+	_heardAt.reset();
+	_silence = {};
+	_commandsInSilence = 0;
 	Open(false);
 }
 
@@ -1063,12 +1066,14 @@ void NetworkSession::ComeBack(bool resync)
 
 void NetworkSession::Update()
 {
+	const auto now = _clock();
+	// The watch reads the socket before a drop of the socket, and can drop a silent socket in this update
+	WatchSilence(now);
 	if (std::exchange(_dropStream, false) && _stream)
 	{
 		_stream->Close();
 		_stream.reset();
 	}
-	const auto now = _clock();
 	if (_state == State::Connecting && !_stream && _joinRetryAt.has_value())
 	{
 		if (now >= *_joinRetryAt)
@@ -1112,6 +1117,52 @@ void NetworkSession::Update()
 		_nextPing = now + k_PingMicroseconds;
 	}
 	LogHealth(now);
+}
+
+bool NetworkSession::WaitsForTurns() const
+{
+	const bool plays = _state == State::Playing || (_state == State::Reconnecting && _start.has_value());
+	const bool paused = _roomClock.has_value() && _roomClock->paused;
+	return plays && !paused && !_loadWait.has_value() && !_stoppedAfter.has_value();
+}
+
+void NetworkSession::WatchSilence(int64_t now)
+{
+	if (_stream && _stream->LastReceived().has_value())
+	{
+		const auto received = static_cast<int64_t>(*_stream->LastReceived());
+		_heardAt = _heardAt.has_value() ? std::max(*_heardAt, received) : received;
+	}
+	const auto speed = _roomClock.has_value() ? _roomClock->speed : 1.0f;
+	const auto silenceBefore = _silence.Shown();
+	if (_silence.Update({.now = now, .waits = WaitsForTurns(), .heardAt = _heardAt, .speed = speed}))
+	{
+		if (_silence.Shown().has_value())
+		{
+			_commandsInSilence = 0;
+			_log->Write(spdlog::level::warn, fmt::format("No message from the server for {} ms: the hand and the camera stop",
+			                                             _silence.Silence() / 1'000));
+		}
+		else
+		{
+			_log->Write(spdlog::level::info,
+			            fmt::format("The silence of the server ended after {} ms ({} commands of the player in it)",
+			                        silenceBefore.value_or(0) / 1'000, _commandsInSilence));
+		}
+	}
+	// A socket that stays open but gives nothing for a long time is dead, for example after the network of the server
+	// went away with no close. The client then tries to come back, as after a loss.
+	if (_state == State::Playing && _stream && _stream->IsOpen())
+	{
+		const auto from = _heardAt.has_value() ? std::max(*_heardAt, _openedAt) : _openedAt;
+		if (now - from > server_silence::k_LimitMicroseconds)
+		{
+			_log->Write(spdlog::level::warn,
+			            fmt::format("No message from the server for {} s on an open socket: the client tries to come back",
+			                        server_silence::k_LimitMicroseconds / 1'000'000));
+			ComeBack(false);
+		}
+	}
 }
 
 void NetworkSession::LogHealth(int64_t now)
@@ -1256,6 +1307,10 @@ std::optional<NetworkSession::LoadWaitView> NetworkSession::LoadWait() const
 
 void NetworkSession::Send(const player_commands::Action& action)
 {
+	if (_silence.Shown().has_value())
+	{
+		++_commandsInSilence;
+	}
 	// While the turns wait for the loads, the world does not change: the session sends only what an observer sends (the
 	// reports of the hand and the camera, and the chat)
 	if (_loadWait.has_value() && !player_commands::ObserverSends(action))

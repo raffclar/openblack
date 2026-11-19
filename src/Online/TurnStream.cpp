@@ -42,6 +42,7 @@ void TurnStream::Open(WebSocketRequest request, TurnStreamHandlers handlers)
 	                                                 },
 	                                             .text =
 	                                                 [this](std::string_view text) {
+		                                                 _lastReceived = _clock();
 		                                                 if (_handlers.text)
 		                                                 {
 			                                                 _handlers.text(text);

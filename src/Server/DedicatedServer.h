@@ -28,6 +28,7 @@
 #include "Server/DesyncBundle.h"
 #include "Server/GameLifetime.h"
 #include "Server/LobbyGame.h"
+#include "Server/NetworkFaults.h"
 #include "Server/ServerSnapshots.h"
 #include "Simulation/WorldStart.h"
 #include "Story/NewGameChoice.h"
@@ -81,6 +82,9 @@ struct NetworkSettings
 	uint32_t allGoneSeconds {10};
 	/// Tests: the server lets through the commands of the test tools (player_commands::CreatureFightCheat)
 	bool testCommands {false};
+	/// Tests: the delay and the losses of the network between the server and its clients (--test-net-delay-ms,
+	/// --test-net-loss). None in a normal game.
+	NetworkFaults testFaults;
 	/// The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room
 	/// every 5 seconds, so that the lobby lists the server and gives tickets for it.
 	std::string lobbyApi;

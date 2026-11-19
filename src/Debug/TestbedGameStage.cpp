@@ -18,6 +18,7 @@
 #include <SDL_keycode.h>
 #include <fmt/format.h>
 
+#include "Common/MachineClock.h"
 #include "Debug/TestbedMultiplayer.h"
 #include "Debug/TestbedPingServer.h"
 #include "Debug/TestbedScenarioRegistry.h"
@@ -260,6 +261,11 @@ std::string TestbedGameStage::OpenEndBox(size_t value)
 	{
 		Locator::gameInterface::value().ShowConnectionLost();
 		return "the box that tells that the connection is lost opens";
+	}
+	if (value == k_EndBoxServerSilence)
+	{
+		Locator::gameInterface::value().StageServerSilence(machine_clock::Ticks());
+		return "the red text of a silence of the game server shows and counts up";
 	}
 	if (value >= 4)
 	{

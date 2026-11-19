@@ -98,6 +98,7 @@
 #include "Input/WindowPointer.h"
 #include "Locator.h"
 #include "Online/NetworkSession.h"
+#include "Online/ServerSilence.h"
 #include "Resources/Rereads.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
@@ -2105,7 +2106,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_canvas.SetOrigin(incoming_message_strip::Origin(resolution));
 		_incomingMessages->Draw(_painter, _gatheringText.get());
 		_canvas.SetOrigin(glm::vec2(0.0f));
-		DrawPingLine(resolution, menuOpen, cinemaBars.in);
+		DrawServerSilence(resolution, DrawPingLine(resolution, menuOpen, cinemaBars.in), milliseconds);
 		_storyHistoryBox->Draw(_painter);
 		if (_resyncShown)
 		{
@@ -3301,7 +3302,7 @@ void GameInterface::DrawStatBar(const creature_panel::Rect& bar, float fill, glm
 	quad(top, {top.x + inset, bottomRight.y}, {black, clear, clear, black});
 }
 
-void GameInterface::DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool cinemaBars)
+bool GameInterface::DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool cinemaBars)
 {
 	const bool shows = ping_display::LineShows({
 	    .hasText = _pingLine.has_value(),
@@ -3314,7 +3315,7 @@ void GameInterface::DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool ci
 	});
 	if (!shows)
 	{
-		return;
+		return false;
 	}
 	_canvas.SetOrigin(ping_display::Origin(resolution));
 	_painter.SetAlpha(ping_display::k_Alpha);
@@ -3325,6 +3326,37 @@ void GameInterface::DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool ci
 	_painter.DrawText(corner, width, DialogPainter::Justify::Left, *_pingLine, ping_display::k_TextSize,
 	                  DialogPainter::k_FocusColour);
 	_painter.SetAlpha(1.0f);
+	_canvas.SetOrigin(glm::vec2(0.0f));
+	return true;
+}
+
+void GameInterface::DrawServerSilence(glm::u16vec2 resolution, bool pingShown, uint32_t milliseconds)
+{
+	// A scenario of the testbed can show a silence that counts up, when no network game shows one
+	if (!_serverSilenceText.has_value() && _stagedSilenceFrom.has_value())
+	{
+		const auto since = milliseconds >= *_stagedSilenceFrom ? milliseconds - *_stagedSilenceFrom : 0u;
+		const auto text = online::server_silence::Text(static_cast<int64_t>(since) * 1'000);
+		DrawSilenceText(resolution, pingShown, text);
+		return;
+	}
+	if (_serverSilenceText.has_value())
+	{
+		DrawSilenceText(resolution, pingShown, *_serverSilenceText);
+	}
+}
+
+void GameInterface::DrawSilenceText(glm::u16vec2 resolution, bool pingShown, std::u16string_view text)
+{
+	// The text has the place and the look of the ping line, but it is red and it shows also over a box or a panel. It goes
+	// one line lower when the ping line shows.
+	constexpr glm::vec4 k_Red {1.0f, 0.0f, 0.0f, 1.0f};
+	_canvas.SetOrigin(ping_display::Origin(resolution));
+	const auto corner = ping_display::TextCorner() + glm::ivec2(0, pingShown ? ping_display::k_LineHeight : 0);
+	const auto width = DialogPainter::k_Size.x - corner.x;
+	_painter.DrawText(corner + ping_display::k_ShadowOffset, width, DialogPainter::Justify::Left, text,
+	                  ping_display::k_TextSize, DialogPainter::k_ShadowColour);
+	_painter.DrawText(corner, width, DialogPainter::Justify::Left, text, ping_display::k_TextSize, k_Red);
 	_canvas.SetOrigin(glm::vec2(0.0f));
 }
 

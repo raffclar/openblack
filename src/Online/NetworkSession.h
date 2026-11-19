@@ -35,6 +35,7 @@
 #include "Online/GameOrigin.h"
 #include "Online/ResyncRule.h"
 #include "Online/SentBlocks.h"
+#include "Online/ServerSilence.h"
 #include "Online/TurnPlayout.h"
 #include "Online/TurnStream.h"
 #include "Online/WebSocketInterface.h"
@@ -321,6 +322,14 @@ public:
 	/// True from a resume with the server's world until the world loaded it
 	[[nodiscard]] bool WaitsForWorld() const { return _worldTurn.has_value(); }
 
+	/// The microseconds since the last message from the server, while the client waits for the turns and the silence is
+	/// long enough to show. None in other cases. The game then stops the hand and the camera, and shows the seconds.
+	[[nodiscard]] std::optional<int64_t> ServerSilence() const { return _silence.Shown(); }
+	/// The time of the last message of any kind from the server, by the clock of the session. None before the first.
+	[[nodiscard]] std::optional<int64_t> HeardAt() const { return _heardAt; }
+	/// True while the client waits for the turns of the server: the game plays or the client tries to come back, and the
+	/// server did not pause the clock of the room, wait for the loads or stop the turns
+	[[nodiscard]] bool WaitsForTurns() const;
 	/// The time between pings
 	static constexpr int64_t k_PingMicroseconds = 1'000'000;
 	/// The time between the lines of the health of the connection in the log, while the game plays
@@ -507,6 +516,13 @@ private:
 	std::optional<uint32_t> _partedTurn;
 	int64_t _nextHealthLog {0};
 	bool _pingsWarned {false};
+	/// The time of the last message from the server. A new socket keeps it, so the silence counts across a loss.
+	std::optional<int64_t> _heardAt;
+	server_silence::Watch _silence;
+	/// The commands of the player that came while the silence showed, for the log
+	uint32_t _commandsInSilence {0};
+	/// Once a frame: the time of the last message, the watch of the silence and its lines in the log
+	void WatchSilence(int64_t now);
 	std::optional<uint32_t> _stoppedAfter;
 	/// The server started the game again, and the game did not load the land of the new start yet
 	bool _restarted {false};

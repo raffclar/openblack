@@ -209,7 +209,11 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		UpdateInput();
 		break;
 	case Step::KeyCommands:
-		Locator::gameKeysSystem::value().SubmitKeyCommands();
+		// During a silence of the game server no key sends a command
+		if (!_serverSilent)
+		{
+			Locator::gameKeysSystem::value().SubmitKeyCommands();
+		}
 		break;
 	case Step::ScreenMarks:
 		UpdateScreenMarks();
@@ -245,8 +249,9 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 			std::ignore = Locator::handPressSystem::value().TakeDialogueClick();
 			break;
 		}
-		// A tool's run can keep the camera out of the commands, so that two runs give the same commands
-		if (!_simulation.has_value() || !_simulation->settings.noHandReports)
+		// A tool's run can keep the camera out of the commands, so that two runs give the same commands. During a silence
+		// of the game server the hand and the camera do not move, so no report of them goes.
+		if ((!_simulation.has_value() || !_simulation->settings.noHandReports) && !_serverSilent)
 		{
 			Locator::ownReportSystem::value().ReportHand(_cameraIcons);
 		}
@@ -254,7 +259,10 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		    .frontEndBoxShows = [this] { return FrontEndBoxShows(); },
 		    .worldCameraView = &Game::HelpWorldCameraView,
 		});
-		SendDialogueClick();
+		if (!_serverSilent)
+		{
+			SendDialogueClick();
+		}
 		Locator::playerCommandSystem::value().SendOpenBlock();
 		break;
 	case Step::FrameTime:
@@ -293,7 +301,8 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::CameraMouse:
 		// The camera reads the movement of the mouse and of the hand of this frame as it moves, after the turns
 		// The first step of the input reads its part of the mouse. A frame with no step keeps the mouse for the next step.
-		if (const auto& steps = Locator::time::value().GetInputSteps(); steps.count > 0)
+		// During a silence of the game server the camera does not read the mouse.
+		if (const auto& steps = Locator::time::value().GetInputSteps(); steps.count > 0 && !_serverSilent)
 		{
 			// The world's camera behind the temple reads the mouse too
 			auto* world = world_camera::BehindTemple();
