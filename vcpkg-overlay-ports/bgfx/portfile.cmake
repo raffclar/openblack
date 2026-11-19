@@ -19,6 +19,9 @@ vcpkg_download_distfile(
 # - webgpu-emscripten-renderer-on: turn the renderer on for Emscripten (bgfx turns it off there by default).
 # - webgpu-canvas-texture-each-frame: in the browser, get the canvas texture at the start of each frame. The browser
 #   gives one texture for each task, and the texture is not valid after the task.
+# - webgpu-canvas-texture-when-drawn: in the browser, the frame gets the canvas texture only when a pass draws into
+#   the window. A frame with no draw into the window gets no texture, thus the browser keeps the last frame on the
+#   canvas. Before, such a frame (as the frames that only make resources during a load) showed a black canvas.
 # - webgpu-yield-in-read-loops: in the browser, a texture or buffer read gives control back to the browser while it
 #   waits, because the map completes only then. The program must link with JSPI or Asyncify.
 # - webgpu-unset-samplers: a sampler of the shader that the draw does not set gets a 1x1 black texture and a default
@@ -102,6 +105,7 @@ vcpkg_extract_source_archive(
     vulkan-one-pipeline-cache.patch
     webgpu-emscripten-renderer-on.patch
     webgpu-canvas-texture-each-frame.patch
+    webgpu-canvas-texture-when-drawn.patch
     webgpu-yield-in-read-loops.patch
     webgpu-unset-samplers.patch
     webgpu-missing-vertex-inputs.patch
