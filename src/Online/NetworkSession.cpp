@@ -773,9 +773,12 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 			// The god starts the game at the alignment of the player's profile
 			const auto alignment = _settings.readAlignment ? _settings.readAlignment() : 0.0f;
 			_ownGodPlaysForClan = _settings.readPlaysForClan && _settings.readPlaysForClan();
-			_log->Write(spdlog::level::info, fmt::format("This computer sends a creature file of {} bytes and the alignment {}",
-			                                             file.size(), alignment));
 			auto symbol = _settings.readSymbol ? _settings.readSymbol() : game_socket::StartSymbol {};
+			_log->Write(
+			    spdlog::level::info,
+			    fmt::format("This computer sends a creature file of {} bytes and the alignment {}, symbol {}, picture {} bytes",
+			                file.size(), alignment, symbol.design.has_value() ? static_cast<int>(*symbol.design) : -1,
+			                symbol.picture.size()));
 			_stream->SendText(game_socket::ToJson(game_socket::StartCreature {
 			    .slot = std::nullopt, .file = std::move(file), .alignment = alignment, .symbol = std::move(symbol)}));
 		}

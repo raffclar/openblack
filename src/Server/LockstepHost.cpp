@@ -2097,8 +2097,11 @@ void LockstepHost::StartCreature(ConnectionId connection, const Peer& peer, cons
 	_awaited.erase(connection);
 	// Each player gets the creature file and the alignment of each god at once. The server keeps them in memory for its own
 	// world.
-	Log(spdlog::level::info, fmt::format("The god of slot {} sends a creature file of {} bytes and the alignment {}",
-	                                     *peer.seat, creature.file.size(), creature.alignment));
+	Log(spdlog::level::info,
+	    fmt::format("The god of slot {} sends a creature file of {} bytes and the alignment {}, symbol {}, picture {} bytes",
+	                *peer.seat, creature.file.size(), creature.alignment,
+	                creature.symbol.design.has_value() ? static_cast<int>(*creature.symbol.design) : -1,
+	                creature.symbol.picture.size()));
 	auto file = creature.file;
 	// No computer brings a creature from a file that does not read, so the server sends no file in its place
 	if (_settings.relaysCreature && !_settings.relaysCreature(file))

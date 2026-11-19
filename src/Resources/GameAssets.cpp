@@ -253,13 +253,17 @@ void MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 			ownPicture = std::span<const uint8_t>(*picture);
 		}
 	}
-	const auto localPlayer =
-	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	// In a network game the player of this computer is the god of its slot. The sheet can come again in the turn that
+	// the humans join, before the hands know the god of this computer.
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const auto ownGod = session != nullptr ? session->OwnGod() : std::nullopt;
+	const auto localPlayer = ownGod.has_value()                 ? *ownGod
+	                         : Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+	                                                            : PlayerNames::PLAYER_ONE;
 	// A game with more player numbers than the squares of the file has a square for each player number
 	auto wide = players_symbols::Widen(std::move(file), players_symbols::SquaresInARowFor(ecs::game_players::Count()));
 	auto players = players_symbols::MakeSheet(std::move(wide), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
 	// In a network game, the square of each other human gets the symbol that came from the profile of that player
-	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
 	for (const auto player : ecs::game_players::Gods())
 	{
 		const bool computer = Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(player);
