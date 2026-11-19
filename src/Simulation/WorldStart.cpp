@@ -198,8 +198,17 @@ void StartLogs(const std::string& logFile, const LogLevels& levels)
 			// that a thread that logs a line does not wait for the disk.
 			fileLog = true;
 			auto fileSink = logging::BufferedLogSink::ToFile(logFile, std::chrono::seconds(1));
-			createLogger = [fileSink](const std::string& name) {
-				auto logger = std::make_shared<spdlog::logger>(name, fileSink);
+			std::vector<spdlog::sink_ptr> sinks {fileSink};
+			// The error reports attach a copy of the log with the names of the players hidden. Their sink writes it.
+			if (Locator::errorReports::has_value())
+			{
+				if (auto reportSink = Locator::errorReports::value().ReportLogSink(); reportSink != nullptr)
+				{
+					sinks.push_back(std::move(reportSink));
+				}
+			}
+			createLogger = [sinks](const std::string& name) {
+				auto logger = std::make_shared<spdlog::logger>(name, sinks.begin(), sinks.end());
 				spdlog::register_logger(logger);
 				return logger;
 			};
