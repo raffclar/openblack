@@ -174,14 +174,15 @@ namespace openblack::ecs::systems
 namespace
 {
 
-#if defined(OPENBLACK_DEVELOPER_TOOLS)
-/// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
+/// How far the influence of the player of the testbed or of a generated land reaches from its middle
 constexpr float k_TestbedInfluenceRadius = 400.0f;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+/// The prayer power that the worship of the player of the testbed has stored
 constexpr float k_TestbedPrayer = 1.0e6f;
+#endif
 /// The camera over the start area of a generated land: this high above it and this far to the south
 constexpr float k_GeneratedCameraHeight = 220.0f;
 constexpr float k_GeneratedCameraBack = 320.0f;
-#endif
 /// How many times longer a turn takes than at the normal speed, at the normal speed
 constexpr float k_NormalTurnDurationMultiplier = 1.0f;
 
@@ -502,7 +503,7 @@ bool LandSystem::LoadTestbed()
 }
 #endif
 
-#if defined(OPENBLACK_DEVELOPER_TOOLS)
+// The editor makes generated lands in every build, for each player who can open the editor
 namespace
 {
 // The generator gives the game's numbers of the kinds of tree and rock
@@ -664,13 +665,6 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 	StartNewLand(land_change::Kind::Testbed);
 	return true;
 }
-#else
-bool LandSystem::LoadGeneratedLand(const generated_land::Choices& /*choices*/)
-{
-	// The generated lands are a developer tool for now: a build for players has none
-	return false;
-}
-#endif
 
 bool LandSystem::LoadGodsRingMap()
 {

@@ -2898,7 +2898,7 @@
   "writes": true
  },
  {
-  "description": "Does an act of the Land generator tab of the editor, as its buttons do. start saves the game into an empty slot of the player and loads a land from the seed (a random seed when none is given). generate loads a land from the seed and the choices. exit loads the save from before the generator. state gives the state only. Each answer gives whether the generator is on, the slot of its save, the choices and the path of the open land. A network game refuses the acts.",
+  "description": "Does an act of the Land generator tab of the editor, as its buttons do. start saves the game into an empty slot of the player and loads a land from the seed (a random seed when none is given). generate loads a land from the seed and the choices. exit loads the save from before the generator. state gives the state only. Each answer gives whether the generator is on, the slot of its save, the choices, the path of the open land, and what the tab shows (hidden, shown or note only). A player who cannot open the editor and a network game refuse the acts.",
   "kind": "object",
   "parameters": [
    {

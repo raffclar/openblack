@@ -1638,8 +1638,8 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	    "Does an act of the Land generator tab of the editor, as its buttons do. start saves the game into an empty slot of "
 	    "the player and loads a land from the seed (a random seed when none is given). generate loads a land from the seed "
 	    "and the choices. exit loads the save from before the generator. state gives the state only. Each answer gives "
-	    "whether the generator is on, the slot of its save, the choices and the path of the open land. A network game "
-	    "refuses the acts.",
+	    "whether the generator is on, the slot of its save, the choices, the path of the open land, and what the tab shows "
+	    "(hidden, shown or note only). A player who cannot open the editor and a network game refuse the acts.",
 	    {{.name = "act", .type = "string", .description = "start, generate, exit or state", .required = true},
 	     {.name = "seed", .type = "integer", .description = "start and generate: the seed of the land", .required = false},
 	     {.name = "choices",
@@ -1703,6 +1703,7 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 		                           {"seed", session.choices.seed},
 		                           {"choices", choices},
 		                           {"land", landPath},
+		                           {"tab", std::string(developer_tools::NameOf(developer_tools::CurrentLandGeneratorTab()))},
 		                           {"status", session.status}});
 	});
 	auto debugAct = Query(

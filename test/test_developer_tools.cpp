@@ -248,6 +248,44 @@ TEST(DeveloperTools, InANetworkGameOnlyTheEditorClaimOpensTheLoadIslandMenu)
 	EXPECT_EQ(LandMenuActOf(true, false), LandMenuAct::Closed);
 }
 
+TEST(DeveloperTools, AStaffPlayerSeesTheLandGeneratorTabInEveryBuild)
+{
+	for (const bool built : {false, true})
+	{
+		// A game alone shows the whole tab to an account with the editor right
+		EXPECT_EQ(LandGeneratorTabOf(built, false, EditorRight::Granted), LandGeneratorTab::Shown);
+		// In a network game the editor claim shows only the note, and with no claim the tab never shows
+		EXPECT_EQ(LandGeneratorTabOf(built, true, EditorRight::Granted), LandGeneratorTab::NoteOnly);
+		EXPECT_EQ(LandGeneratorTabOf(built, true, EditorRight::Refused), LandGeneratorTab::Hidden);
+		EXPECT_EQ(LandGeneratorTabOf(built, true, EditorRight::Unknown), LandGeneratorTab::Hidden);
+	}
+	// A build that players get never shows the tab to an account without the editor right, or with no account
+	EXPECT_EQ(LandGeneratorTabOf(false, false, EditorRight::Refused), LandGeneratorTab::Hidden);
+	EXPECT_EQ(LandGeneratorTabOf(false, false, EditorRight::Unknown), LandGeneratorTab::Hidden);
+	// A developer build outside a network game always shows the tab, as before
+	EXPECT_EQ(LandGeneratorTabOf(true, false, EditorRight::Refused), LandGeneratorTab::Shown);
+	EXPECT_EQ(LandGeneratorTabOf(true, false, EditorRight::Unknown), LandGeneratorTab::Shown);
+}
+
+TEST(DeveloperTools, TheLandGeneratorTabShowsOnlyWhereTheEditorOpens)
+{
+	for (const bool built : {false, true})
+	{
+		for (const bool live : {false, true})
+		{
+			for (const auto right : {EditorRight::Unknown, EditorRight::Granted, EditorRight::Refused})
+			{
+				const bool hidden = LandGeneratorTabOf(built, live, right) == LandGeneratorTab::Hidden;
+				EXPECT_EQ(hidden, EditorRefusalOf(built, live, right).has_value());
+			}
+		}
+	}
+	for (const auto tab : {LandGeneratorTab::Hidden, LandGeneratorTab::Shown, LandGeneratorTab::NoteOnly})
+	{
+		EXPECT_FALSE(NameOf(tab).empty());
+	}
+}
+
 TEST(DeveloperTools, TheMenuBarShowsOnlyInTheFullModeWhileTheGameMenuIsOpen)
 {
 	EXPECT_TRUE(ShowsMenuBar(GuiMode::Full, true, true));
