@@ -2854,8 +2854,9 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 				}
 				break;
 			}
+			// The order forces the fight. A creature with very little life starts it too, with less fight health.
 			if (Locator::creatureFightSystem::has_value() &&
-			    Locator::creatureFightSystem::value().StartFight(creature, object) ==
+			    Locator::creatureFightSystem::value().StartForcedFight(creature, object) ==
 			        CreatureFightSystemInterface::StartResult::Started)
 			{
 				desire = Desire::Anger;
