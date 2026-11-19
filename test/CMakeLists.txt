@@ -2776,6 +2776,8 @@ openblack_setup_and_add_test(test_town_belief_rule_equal test_town_belief_rule_e
 target_link_libraries(test_town_belief_rule_equal PRIVATE psys)
 openblack_setup_and_add_test(test_reaction_groups test_reaction_groups.cpp)
 openblack_setup_and_add_test(test_prey_search test_prey_search.cpp)
+openblack_setup_and_add_test(test_landgen_roadbed landgen/test_landgen_roadbed.cpp)
+target_link_libraries(test_landgen_roadbed PRIVATE landgen)
 openblack_setup_and_add_test(test_leash_fight_order test_leash_fight_order.cpp)
 if(MSVC)
   target_compile_options(test_leash_fight_order PRIVATE /bigobj)

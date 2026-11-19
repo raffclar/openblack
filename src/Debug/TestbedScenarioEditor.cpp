@@ -242,7 +242,13 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                   "path from the temple to the town of player one, then the paths from town to town.",
 	    .expected = "A path of bare brown earth goes from the temple to the town of player one. From there, paths go on "
 	                "to each neutral town. A path winds on easy ground, goes round the water and does not climb a "
-	                "cliff. It stops a short distance from each building and field. About one path in three has "
+	                "cliff. It stops a short distance from each building and field. On a hill, the path has a smooth "
+	                "and level bed, cut into the land or built up above it, with a bank on each side as a road has. "
+	                "On a side slope, the bed is a level shelf about 30 m wide. A low cliff or a steep side next to the "
+	                "path has a bank of 1 in 2 back to the land, as the cutting of a motorway. In a narrow valley, the "
+	                "bed cuts into the gentler side. A path that climbs a steep slope keeps its bends. At the foot of a "
+	                "high cliff, the brown earth stays below the cliff and does not cover its top. About one path in "
+	                "three has "
 	                "lanterns on its sides: street lanterns near the towns and the temple, and lanterns on fires "
 	                "farther out. At night the lanterns light the ground.",
 	    .environment = {.clockRuns = true},
@@ -309,7 +315,8 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "the trees near the starts are almost the same. The neutral towns are between the starts and round "
 	                "them. Players two, three and four are computer gods with a horse, a tortoise and a zebra at their "
 	                "temples, as on Four Gods. In the first turn, player one brings the ape Matey to its temple. The "
-	                "three creatures take a size like the size of the ape.",
+	                "three creatures take a size like the size of the ape. A path joins the town of each player to the "
+	                "nearest town or temple, and a path joins each temple to its town.",
 	    .environment = {.clockRuns = true},
 	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 30.0f}, {40.0f, -30.0f}}},
 	    .commands = {{.kind = Kind::LoadGeneratedLand,

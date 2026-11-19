@@ -39,6 +39,10 @@ constexpr float k_MetresPerCorner = 10.0f;
 constexpr float k_TempleClearRadius = 5.0f;
 constexpr float k_BuildingClearRadius = 1.5f;
 constexpr float k_FieldClearRadius = 1.2f;
+/// The bed of a path and its banks keep this many altitude units above the sea, and above a lake that is this many
+/// corners away or nearer
+constexpr float k_ShoreRise = 1.5f;
+constexpr float k_LakeShoreReach = 3.0f;
 
 class StageClock
 {
@@ -552,45 +556,6 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	land.biomes = biomes::Smooth(biomes, 2);
 	clock.Done("biomes");
 
-	// What the landscape holds
-	const auto luminosity = lighting::Luminosity(land.heightUnits, settings.lighting);
-	clock.Done("light");
-	Grid<uint8_t> freshWater(side, 0);
-	for (const auto& lake : basins.seaLakes)
-	{
-		for (const auto corner : lake)
-		{
-			freshWater.values[corner] = 1;
-		}
-	}
-	const auto runningWater = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 2.0f; });
-	land.cells = MakeCells(altitudes, luminosity, land.biomes, freshWater, runningWater, &lakeLevels);
-	land.materials = countries::UsedSurfaces();
-	for (size_t biome = 0; biome < biomes::k_BiomeCount; ++biome)
-	{
-		land.countries.push_back(countries::MakeCountry(countries::RecipeOf(static_cast<Biome>(biome)), land.materials));
-	}
-	land.countries.push_back(countries::MakeCountry(countries::PathRecipe(), land.materials));
-	// The edges of the lakes above the sea: wet sand on the bed and the shore, and sand on the beaches that the lakes are
-	// nearer than the sea. These countries have one surface at all altitudes, because a lake can be at any height.
-	for (const auto& recipe : countries::LakeShoreRecipes())
-	{
-		land.countries.push_back(countries::MakeCountry(recipe, land.materials));
-	}
-	for (size_t i = 0; i < land.cells.values.size(); ++i)
-	{
-		auto& properties = land.cells.values[i].properties;
-		if (lakeShores.shore.values[i] == lakeshore::Shore::Bed)
-		{
-			properties.country = k_LakeBedCountry;
-		}
-		else if (land.biomes.values[i] == Biome::Beach && lakeShores.distance.values[i] < seaDistance.values[i])
-		{
-			properties.country = k_LakeBeachCountry;
-		}
-	}
-	clock.Done("cells and countries");
-
 	// Nothing grows in the water, on the rivers or on their banks
 	const auto keepClear = Mask(side, [&](size_t i) {
 		return altitudes.values[i] <= k_SeaLevelAltitude + 1 || riverDistance.values[i] <= 1.5f || lakeLevels.values[i] >= 0.0f;
@@ -655,10 +620,127 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		places.push_back({.x = town.x / k_MetresPerCorner, .z = town.z / k_MetresPerCorner});
 		clearTown(town);
 	}
+	// The town of each other player joins the nearest place before it, and its temple then joins the nearest place, its town
+	for (const auto& other : land.otherPlayers)
+	{
+		places.push_back({.x = other.town.x / k_MetresPerCorner, .z = other.town.z / k_MetresPerCorner});
+		places.push_back({.x = other.citadelX / k_MetresPerCorner, .z = other.citadelZ / k_MetresPerCorner});
+		pathClear.push_back({.x = places.back().x, .z = places.back().z, .radius = k_TempleClearRadius});
+		clearTown(other.town);
+	}
 	const paths::Ground pathGround {.heights = heights, .curve = land.heightCurve, .water = pathWater, .rivers = rivers};
 	land.paths = paths::Lay(pathGround, places, paths::ChainLinks(places), seed, settings.paths);
-	const auto drawnPaths = paths::Draw(land.paths, pathWater, pathClear);
 	land.lanterns = paths::PlaceLanterns(land.paths, places, pathWater, pathClear, seed, settings.paths);
+	clock.Done("paths");
+
+	// The bed of each path, cut and filled into the land as a built road, with a bank on each side. The bed and the banks
+	// do not change the water, the rivers, the buildings, the fields or the temple, and do not cut a shore.
+	Grid<uint8_t> roadFixed(side, 0);
+	Grid<float> roadMetres(side, 0.0f);
+	Grid<float> roadLowest(side, land.heightCurve.MetresOf(static_cast<float>(k_SeaLevelAltitude) + k_ShoreRise));
+	for (size_t i = 0; i < heights.values.size(); ++i)
+	{
+		roadMetres.values[i] = land.heightCurve.MetresOf(heights.values[i]);
+		roadFixed.values[i] = pathWater.values[i] != 0 || riverDistance.values[i] <= 2.0f ? roads::k_Fixed : 0;
+	}
+	for (const auto& circle : pathClear)
+	{
+		const int cx = static_cast<int>(std::floor(circle.x));
+		const int cz = static_cast<int>(std::floor(circle.z));
+		const int reach = static_cast<int>(std::ceil(circle.radius)) + 1;
+		for (int x = cx - reach; x <= cx + reach; ++x)
+		{
+			for (int z = cz - reach; z <= cz + reach; ++z)
+			{
+				const float dx = static_cast<float>(x) - circle.x;
+				const float dz = static_cast<float>(z) - circle.z;
+				if (roadFixed.Contains(x, z) && roadFixed.At(x, z) == 0 &&
+				    (dx * dx) + (dz * dz) < circle.radius * circle.radius)
+				{
+					roadFixed.At(x, z) = roads::k_Ring;
+				}
+			}
+		}
+	}
+	for (const auto& lake : land.highLakes)
+	{
+		for (const auto corner : lake.corners)
+		{
+			// The corners near a lake keep above the level of the lake
+			const int lx = heights.XOf(corner);
+			const int lz = heights.ZOf(corner);
+			const int reach = static_cast<int>(k_LakeShoreReach);
+			for (int x = std::max(0, lx - reach); x <= std::min(side - 1, lx + reach); ++x)
+			{
+				for (int z = std::max(0, lz - reach); z <= std::min(side - 1, lz + reach); ++z)
+				{
+					auto& lowest = roadLowest.At(x, z);
+					lowest = std::max(lowest, land.heightCurve.MetresOf(lake.level + k_ShoreRise));
+				}
+			}
+		}
+	}
+	const roads::Ground roadGround {.metres = roadMetres, .fixed = roadFixed, .lowest = roadLowest};
+	const auto graded = settings.roads.grade
+	                        ? roads::Grade(roads::BedOf(land.paths, roadGround, settings.roads), roadGround, settings.roads)
+	                        : roadMetres;
+	for (size_t i = 0; i < graded.values.size(); ++i)
+	{
+		if (graded.values[i] == roadMetres.values[i])
+		{
+			continue;
+		}
+		const float height =
+		    std::clamp(land.heightCurve.AltitudeOf(graded.values[i] / k_MetresPerUnit), 0.0f, terrain::k_HighestAltitude);
+		heights.values[i] = height;
+		const auto altitude = static_cast<uint8_t>(std::floor(height + 0.5f));
+		altitudes.values[i] = altitude;
+		land.heightUnits.values[i] =
+		    height <= land.heightCurve.knee ? uint16_t {altitude} : land.heightCurve.WholeUnitsOf(height);
+	}
+	// The paths are drawn on the new ground. A corner that a cliff divides from the path, such as the top of a cliff
+	// next to a path at its foot, keeps its country.
+	const auto drawnPaths = paths::Draw(land.paths, pathWater, pathClear, graded, settings.roads.cliffSlope);
+	clock.Done("road beds");
+
+	// What the landscape holds
+	const auto luminosity = lighting::Luminosity(land.heightUnits, settings.lighting);
+	clock.Done("light");
+	Grid<uint8_t> freshWater(side, 0);
+	for (const auto& lake : basins.seaLakes)
+	{
+		for (const auto corner : lake)
+		{
+			freshWater.values[corner] = 1;
+		}
+	}
+	const auto runningWater = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 2.0f; });
+	land.cells = MakeCells(altitudes, luminosity, land.biomes, freshWater, runningWater, &lakeLevels);
+	land.materials = countries::UsedSurfaces();
+	for (size_t biome = 0; biome < biomes::k_BiomeCount; ++biome)
+	{
+		land.countries.push_back(countries::MakeCountry(countries::RecipeOf(static_cast<Biome>(biome)), land.materials));
+	}
+	land.countries.push_back(countries::MakeCountry(countries::PathRecipe(), land.materials));
+	// The edges of the lakes above the sea: wet sand on the bed and the shore, and sand on the beaches that the lakes are
+	// nearer than the sea. These countries have one surface at all altitudes, because a lake can be at any height.
+	for (const auto& recipe : countries::LakeShoreRecipes())
+	{
+		land.countries.push_back(countries::MakeCountry(recipe, land.materials));
+	}
+	for (size_t i = 0; i < land.cells.values.size(); ++i)
+	{
+		auto& properties = land.cells.values[i].properties;
+		if (lakeShores.shore.values[i] == lakeshore::Shore::Bed)
+		{
+			properties.country = k_LakeBedCountry;
+		}
+		else if (land.biomes.values[i] == Biome::Beach && lakeShores.distance.values[i] < seaDistance.values[i])
+		{
+			properties.country = k_LakeBeachCountry;
+		}
+	}
+	clock.Done("cells and countries");
 	auto growClear = keepClear;
 	for (size_t i = 0; i < drawnPaths.values.size(); ++i)
 	{
@@ -681,7 +763,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 			growClear.At(x, z) = 1;
 		}
 	}
-	clock.Done("paths");
+	clock.Done("path country");
 	// Nothing grows on the ground of the towns
 	std::vector<features::Clearing> clearings;
 	for (const auto& start : starts)

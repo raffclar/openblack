@@ -16,9 +16,11 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <set>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -189,6 +191,35 @@ void WriteLand(const std::filesystem::path& path, uint64_t seed, const landgen::
 		out << ',' << town(entry, 1);
 	}
 	out << ']';
+	// The circles of each town where no path is drawn, in the order of the town list: x, z and the radius in metres of
+	// each building (15 m) and each field (12 m)
+	const auto clear = [](const landgen::settlement::Town& entry) {
+		std::ostringstream text;
+		text << '[';
+		bool first = true;
+		for (const auto& building : entry.buildings)
+		{
+			text << (first ? "" : ",") << building.x << ',' << building.z << ",15";
+			first = false;
+		}
+		for (const auto& field : entry.fields)
+		{
+			text << (first ? "" : ",") << field.x << ',' << field.z << ",12";
+			first = false;
+		}
+		text << ']';
+		return text.str();
+	};
+	out << ",\"town_clear\":[" << clear(land.settlement.town);
+	for (const auto& other : land.otherPlayers)
+	{
+		out << ',' << clear(other.town);
+	}
+	for (const auto& entry : land.settlement.neutral)
+	{
+		out << ',' << clear(entry);
+	}
+	out << ']';
 	out << ",\"mists\":";
 	WriteList(out, land.mists, [](const landgen::cursed::Mist& mist) {
 		std::ostringstream text;
@@ -240,6 +271,42 @@ TEST(LandgenDump, WritesTheLandOfEachSeedWhenTheEnvironmentAsksForIt)
 		                                            .players = players.empty() ? 1 : static_cast<int32_t>(std::stoi(players)),
 		                                            .landType = type.empty() ? -1 : static_cast<int32_t>(std::stoi(type)),
 		                                            .archipelago = type.empty() ? 0 : 1});
+		// A land with no bed under the paths, for a comparison with the land before the cut and the fill
+		if (EnvironmentOf("OPENBLACK_LANDGEN_ROADS") == "0")
+		{
+			settings.roads.grade = false;
+		}
+		// Other values for the bed of the paths, for a comparison of the values: "name=value;name=value"
+		std::stringstream roads(EnvironmentOf("OPENBLACK_LANDGEN_ROAD_VALUES"));
+		std::string pair;
+		while (std::getline(roads, pair, ';'))
+		{
+			const auto equals = pair.find('=');
+			if (equals == std::string::npos)
+			{
+				continue;
+			}
+			const auto name = pair.substr(0, equals);
+			const float value = std::stof(pair.substr(equals + 1));
+			for (auto& [key, field] :
+			     std::initializer_list<std::pair<const char*, float*>> {{"halfWidth", &settings.roads.halfWidth},
+			                                                            {"cutSlope", &settings.roads.cutSlope},
+			                                                            {"fillSlope", &settings.roads.fillSlope},
+			                                                            {"taper", &settings.roads.taper},
+			                                                            {"fixedTaper", &settings.roads.fixedTaper},
+			                                                            {"ringTaper", &settings.roads.ringTaper},
+			                                                            {"narrowSide", &settings.roads.narrowSide},
+			                                                            {"narrowEdge", &settings.roads.narrowEdge},
+			                                                            {"deepest", &settings.roads.deepest},
+			                                                            {"deepestBank", &settings.roads.deepestBank},
+			                                                            {"deepestCorner", &settings.roads.deepestCorner}})
+			{
+				if (name == key)
+				{
+					*field = value;
+				}
+			}
+		}
 		// A land with no fairy rings and no lone pillars, for a comparison with the land before them
 		if (EnvironmentOf("OPENBLACK_LANDGEN_FORMATIONS") == "0")
 		{
