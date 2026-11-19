@@ -512,7 +512,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& settings)
 	                                     .townZ = land.start.z,
 	                                     .rivers = &rivers,
 	                                     .towns = towns},
-	                                    land.features, cursedCircles, seed, settings.formations);
+	                                    land.heightCurve, land.features, cursedCircles, seed, settings.formations);
 	clock.Done("fairy rings and pillars");
 
 	// The temple and the town on the start area, the neutral towns, then the forests nearest the town of the start first

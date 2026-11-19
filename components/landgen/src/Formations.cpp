@@ -265,8 +265,10 @@ std::vector<Candidate> CandidatesOf(int side, float spacing, uint64_t stageSeed)
 class Site
 {
 public:
-	Site(const features::Ground& ground, std::span<const Feature> placed, std::span<const Circle> avoid)
+	Site(const features::Ground& ground, const HeightCurve& curve, std::span<const Feature> placed,
+	     std::span<const Circle> avoid)
 	    : _ground(ground)
+	    , _curve(curve)
 	{
 		_keepOut.assign(avoid.begin(), avoid.end());
 		for (const auto& feature : placed)
@@ -294,7 +296,22 @@ public:
 		{
 			return std::nullopt;
 		}
-		return features::SpotAt(_ground, cx, cz);
+		// The height and the slope are in the metres of the land that the game draws: above the knee of the curve, the
+		// altitudes of the generator stand for more metres
+		auto spot = features::SpotAt(_ground, cx, cz);
+		const int i = std::clamp(static_cast<int>(cx + 0.5f), 0, side - 1);
+		const int j = std::clamp(static_cast<int>(cz + 0.5f), 0, side - 1);
+		spot.height = MetresAt(i, j);
+		const int left = std::max(i - 1, 0);
+		const int right = std::min(i + 1, side - 1);
+		const int down = std::max(j - 1, 0);
+		const int up = std::min(j + 1, side - 1);
+		const float dx =
+		    (MetresAt(right, j) - MetresAt(left, j)) / (static_cast<float>(std::max(right - left, 1)) * k_MetresPerCorner);
+		const float dz =
+		    (MetresAt(i, up) - MetresAt(i, down)) / (static_cast<float>(std::max(up - down, 1)) * k_MetresPerCorner);
+		spot.slope = std::sqrt((dx * dx) + (dz * dz));
+		return spot;
 	}
 
 	/// Whether a circle in metres is clear of the circles to keep out of
@@ -306,7 +323,10 @@ public:
 	}
 
 private:
+	[[nodiscard]] float MetresAt(int i, int j) const { return _curve.MetresOf(_ground.heights.At(i, j)); }
+
 	const features::Ground& _ground;
+	const HeightCurve& _curve;
 	std::vector<Circle> _keepOut;
 };
 
@@ -427,8 +447,8 @@ float formations::LandKm2(const features::Ground& ground)
 	return static_cast<float>(land) * k_MetresPerCorner * k_MetresPerCorner / k_SquareMetresPerKm2;
 }
 
-Result formations::Place(const features::Ground& ground, std::vector<Feature>& placed, std::span<const Circle> avoid,
-                         uint64_t seed, const Settings& settings)
+Result formations::Place(const features::Ground& ground, const HeightCurve& curve, std::vector<Feature>& placed,
+                         std::span<const Circle> avoid, uint64_t seed, const Settings& settings)
 {
 	Result result;
 	const float km2 = LandKm2(ground);
@@ -439,7 +459,7 @@ Result formations::Place(const features::Ground& ground, std::vector<Feature>& p
 	// A land of the story with no lone pillars has no groups to copy
 	const auto groups =
 	    story.groups == 0 ? 0u : CountFor(settings.pillarGroupsPerKm2.value_or(story.pillarGroups), km2, counts.NextUnit());
-	const Site site(ground, placed, avoid);
+	const Site site(ground, curve, placed, avoid);
 	const int side = ground.biomes.side;
 
 	const auto ringSeed = StageSeed(seed, 91);

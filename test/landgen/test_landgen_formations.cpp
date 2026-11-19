@@ -70,6 +70,9 @@ float Distance(float ax, float az, float bx, float bz)
 	return std::hypot(ax - bx, az - bz);
 }
 
+/// The curve of the lands of the story: one height unit for each altitude unit
+const HeightCurve k_Linear {};
+
 /// Many rings of a land of the story and no pillars, or many groups of its pillars and no rings
 constexpr formations::Settings ManyRings(uint8_t land)
 {
@@ -141,7 +144,7 @@ TEST(LandgenFormations, EachRingIsACopyOfTheRingOfItsLandOfTheStory)
 		std::vector<Feature> placed;
 		// The odd seeds take the first land, and the even seeds the third land
 		const uint8_t story = seed % 2 == 1 ? 0 : 2;
-		const auto result = formations::Place(land.Ground(), placed, {}, seed, ManyRings(story));
+		const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, seed, ManyRings(story));
 		ASSERT_FALSE(result.rings.empty()) << seed;
 		EXPECT_TRUE(result.pillarGroups.empty());
 		for (const auto& ring : result.rings)
@@ -195,7 +198,7 @@ TEST(LandgenFormations, RingsAndGroupsOfPillarsKeepTheirGaps)
 	for (uint64_t seed = 1; seed <= 6; ++seed)
 	{
 		std::vector<Feature> placed;
-		const auto rings = formations::Place(land.Ground(), placed, {}, seed, k_ManyRings).rings;
+		const auto rings = formations::Place(land.Ground(), k_Linear, placed, {}, seed, k_ManyRings).rings;
 		for (size_t a = 0; a < rings.size(); ++a)
 		{
 			for (size_t b = a + 1; b < rings.size(); ++b)
@@ -204,7 +207,7 @@ TEST(LandgenFormations, RingsAndGroupsOfPillarsKeepTheirGaps)
 			}
 		}
 		placed.clear();
-		const auto groups = formations::Place(land.Ground(), placed, {}, seed, k_ManyPillars).pillarGroups;
+		const auto groups = formations::Place(land.Ground(), k_Linear, placed, {}, seed, k_ManyPillars).pillarGroups;
 		EXPECT_GE(groups.size(), 3u);
 		for (size_t a = 0; a < groups.size(); ++a)
 		{
@@ -223,7 +226,7 @@ TEST(LandgenFormations, TheLonePillarsAreThePillarsOfLimestoneOfTheStory)
 	{
 		std::vector<Feature> placed;
 		const auto story = static_cast<uint8_t>(seed % 3);
-		const auto result = formations::Place(land.Ground(), placed, {}, seed, ManyPillars(story));
+		const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, seed, ManyPillars(story));
 		// The first land has groups 0 to 5, the second land groups 6 and 7, and the third land group 8
 		for (const auto& group : result.pillarGroups)
 		{
@@ -266,7 +269,7 @@ TEST(LandgenFormations, ARingRemovesTheTreesAndRocksUnderIt)
 			                  .maxSize = 1.0f});
 		}
 	}
-	const auto result = formations::Place(land.Ground(), placed, {}, 5, k_ManyRings);
+	const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, 5, k_ManyRings);
 	ASSERT_FALSE(result.rings.empty());
 	for (const auto& ring : result.rings)
 	{
@@ -285,7 +288,7 @@ TEST(LandgenFormations, ALandOfTheStoryWithNoPillarsGivesNoPillars)
 	std::vector<Feature> placed;
 	for (uint8_t story = 3; story < 8; ++story)
 	{
-		const auto result = formations::Place(land.Ground(), placed, {}, 4, ManyPillars(story));
+		const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, 4, ManyPillars(story));
 		EXPECT_TRUE(result.pillarGroups.empty());
 	}
 	EXPECT_TRUE(placed.empty());
@@ -303,7 +306,7 @@ TEST(LandgenFormations, NoRingOnSteepGround)
 		}
 	}
 	std::vector<Feature> placed;
-	const auto result = formations::Place(land.Ground(), placed, {}, 2, k_Both);
+	const auto result = formations::Place(land.Ground(), k_Linear, placed, {}, 2, k_Both);
 	EXPECT_TRUE(result.rings.empty());
 	EXPECT_FALSE(result.pillarGroups.empty());
 }
@@ -314,16 +317,29 @@ TEST(LandgenFormations, NothingOnHighGroundOrInTheCirclesToAvoid)
 	// 150 m is higher than every ring and lone pillar of the story
 	std::ranges::replace(land.heights.values, 60.0f, 224.0f);
 	std::vector<Feature> placed;
-	auto result = formations::Place(land.Ground(), placed, {}, 3, k_Both);
+	auto result = formations::Place(land.Ground(), k_Linear, placed, {}, 3, k_Both);
 	EXPECT_TRUE(result.rings.empty());
 	EXPECT_TRUE(result.pillarGroups.empty());
 
 	const FlatLand flat;
 	const std::vector<formations::Circle> avoid {{.x = 1000.0f, .z = 1000.0f, .radius = 2000.0f}};
-	result = formations::Place(flat.Ground(), placed, avoid, 3, k_Both);
+	result = formations::Place(flat.Ground(), k_Linear, placed, avoid, 3, k_Both);
 	EXPECT_TRUE(result.rings.empty());
 	EXPECT_TRUE(result.pillarGroups.empty());
 	EXPECT_TRUE(placed.empty());
+}
+
+TEST(LandgenFormations, TheHeightsAreTheMetresOfTheCurve)
+{
+	const FlatLand land;
+	std::vector<Feature> placed;
+	// 60 altitude units are 40 m on the curve of the story. On a curve with its knee at 30 units and the top at 1250 m,
+	// they are more than 150 m: higher than every ring and lone pillar of the story.
+	const auto high = HeightCurve::WithTop(30.0f, 1250.0f);
+	ASSERT_GT(high.MetresOf(60.0f), 150.0f);
+	const auto result = formations::Place(land.Ground(), high, placed, {}, 3, k_Both);
+	EXPECT_TRUE(result.rings.empty());
+	EXPECT_TRUE(result.pillarGroups.empty());
 }
 
 TEST(LandgenFormations, TheSameSeedGivesTheSameFormations)
@@ -331,8 +347,8 @@ TEST(LandgenFormations, TheSameSeedGivesTheSameFormations)
 	const FlatLand land;
 	std::vector<Feature> first;
 	std::vector<Feature> second;
-	const auto a = formations::Place(land.Ground(), first, {}, 11, k_Both);
-	const auto b = formations::Place(land.Ground(), second, {}, 11, k_Both);
+	const auto a = formations::Place(land.Ground(), k_Linear, first, {}, 11, k_Both);
+	const auto b = formations::Place(land.Ground(), k_Linear, second, {}, 11, k_Both);
 	ASSERT_EQ(first.size(), second.size());
 	ASSERT_EQ(a.rings.size(), b.rings.size());
 	ASSERT_EQ(a.pillarGroups.size(), b.pillarGroups.size());

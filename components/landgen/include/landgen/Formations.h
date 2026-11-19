@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "landgen/Features.h"
+#include "landgen/HeightCurve.h"
 
 /// The fairy rings of magic mushrooms and the groups of lone pillars of rock, as the lands of the story have them
 namespace openblack::landgen::formations
@@ -107,6 +108,8 @@ struct Result
 ///
 /// A formation keeps away from the other formations, the big forests and the circles to avoid. A fairy ring removes the
 /// trees and rocks under it, and a pillar removes the trees next to it. The same seed gives the same formations.
-[[nodiscard]] Result Place(const features::Ground& ground, std::vector<features::Feature>& placed,
+/// The heights and slopes of the rules are in the metres that the game draws: the curve gives the metres of each
+/// altitude of the ground.
+[[nodiscard]] Result Place(const features::Ground& ground, const HeightCurve& curve, std::vector<features::Feature>& placed,
                            std::span<const Circle> avoid, uint64_t seed, const Settings& settings);
 } // namespace openblack::landgen::formations
