@@ -24,6 +24,8 @@ constexpr float k_MetresPerCorner = 10.0f;
 constexpr float k_Infinity = std::numeric_limits<float>::infinity();
 /// The largest change of a slope that the rounding of the heights to whole height units can make
 constexpr float k_CliffMargin = 0.05f;
+/// The least rise over run by which the change from the land becomes less away from the bed, so that each change stops
+constexpr float k_LeastTaper = 0.03f;
 
 int Rounded(float value)
 {
@@ -241,6 +243,8 @@ Bed roads::BedOf(std::span<const paths::Path> paths, const Ground& ground, const
 	Grid<float> nearest(side, k_Infinity);
 	const float reach = settings.halfWidth;
 	const int box = static_cast<int>(std::ceil(reach));
+	const float widest = (2.0f * reach) - settings.narrowEdge;
+	const int wideBox = static_cast<int>(std::ceil(widest));
 	for (const auto& path : paths)
 	{
 		const auto samples = SamplesOf(path.points, settings.step / k_MetresPerCorner);
@@ -288,11 +292,62 @@ Bed roads::BedOf(std::span<const paths::Path> paths, const Ground& ground, const
 		const auto profile = Profile(land, fixed, settings);
 		for (size_t i = 0; i < samples.size(); ++i)
 		{
+			// The direction across the path, from the samples before and after this sample
+			const auto& before = samples[i > 0 ? i - 1 : i];
+			const auto& after = samples[i + 1 < samples.size() ? i + 1 : i];
+			float ax = after.x - before.x;
+			float az = after.z - before.z;
+			const float length = std::sqrt((ax * ax) + (az * az));
+			if (length <= 0.0f)
+			{
+				ax = 1.0f;
+				az = 0.0f;
+			}
+			else
+			{
+				ax /= length;
+				az /= length;
+			}
+			const float nx = -az;
+			const float nz = ax;
+
+			// The bed is level from the low edge to the high edge across the path. In a valley where one side is too steep
+			// for a bank, the bed moves away from that side and cuts into the other side. The bed also moves away from a
+			// side that rises or falls as steeply as a cliff.
+			float low = -reach;
+			float high = reach;
+			const float middle = HeightAt(ground.metres, samples[i].x, samples[i].z);
+			const auto riseOf = [&](float direction) {
+				constexpr float k_Run = 2.0f;
+				const float far =
+				    HeightAt(ground.metres, samples[i].x + (nx * direction * k_Run), samples[i].z + (nz * direction * k_Run));
+				return (far - middle) / (k_Run * k_MetresPerCorner);
+			};
+			const float risePlus = riseOf(1.0f);
+			const float riseMinus = riseOf(-1.0f);
+			const auto tooSteep = [&](float rise, float other) {
+				if (std::fabs(rise) >= settings.cliffSlope)
+				{
+					return std::fabs(rise) > std::fabs(other);
+				}
+				return rise >= settings.narrowSide && rise > other && other >= 0.0f;
+			};
+			if (tooSteep(risePlus, riseMinus))
+			{
+				low = -widest;
+				high = settings.narrowEdge;
+			}
+			else if (tooSteep(riseMinus, risePlus))
+			{
+				low = -settings.narrowEdge;
+				high = widest;
+			}
+			const float centre = (low + high) / 2.0f;
 			const int cx = Rounded(samples[i].x);
 			const int cz = Rounded(samples[i].z);
-			for (int x = cx - box; x <= cx + box; ++x)
+			for (int x = cx - wideBox; x <= cx + wideBox; ++x)
 			{
-				for (int z = cz - box; z <= cz + box; ++z)
+				for (int z = cz - wideBox; z <= cz + wideBox; ++z)
 				{
 					if (!ground.fixed.Contains(x, z) || ground.fixed.At(x, z) != 0)
 					{
@@ -300,9 +355,14 @@ Bed roads::BedOf(std::span<const paths::Path> paths, const Ground& ground, const
 					}
 					const float dx = static_cast<float>(x) - samples[i].x;
 					const float dz = static_cast<float>(z) - samples[i].z;
-					const float distance = (dx * dx) + (dz * dz);
-					if (distance <= reach * reach && distance < nearest.At(x, z) &&
-					    std::fabs(profile[i] - ground.metres.At(x, z)) <= settings.deepestCorner)
+					const float along = (dx * ax) + (dz * az);
+					const float across = (dx * nx) + (dz * nz);
+					if (across < low || across > high || std::fabs(along) > reach)
+					{
+						continue;
+					}
+					const float distance = (along * along) + ((across - centre) * (across - centre));
+					if (distance < nearest.At(x, z) && std::fabs(profile[i] - ground.metres.At(x, z)) <= settings.deepestCorner)
 					{
 						nearest.At(x, z) = distance;
 						bed.height.At(x, z) = profile[i];
@@ -319,32 +379,35 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 {
 	const int side = ground.metres.side;
 	// For each corner: the lowest and the highest height that the banks of the bed let it have, the largest change from
-	// the land that the bed lets it have, and the distance to the nearest fixed corner and to the nearest ring
+	// the land that the bed lets it have, and the largest change that the nearest fixed corner and the nearest ring let it
+	// have
 	Grid<float> lowest(side, -k_Infinity);
 	Grid<float> highest(side, k_Infinity);
 	Grid<float> change(side, 0.0f);
-	Grid<float> toFixed(side, k_Infinity);
-	Grid<float> toRing(side, k_Infinity);
+	Grid<float> fromFixed(side, k_Infinity);
+	Grid<float> fromRing(side, k_Infinity);
+	Grid<float> toBed(side, k_Infinity);
 	for (size_t i = 0; i < bed.covered.values.size(); ++i)
 	{
 		if (bed.covered.values[i] != 0)
 		{
+			toBed.values[i] = 0.0f;
 			lowest.values[i] = bed.height.values[i];
 			highest.values[i] = bed.height.values[i];
 			change.values[i] = std::fabs(bed.height.values[i] - ground.metres.values[i]);
 		}
 		if (ground.fixed.values[i] == k_Ring)
 		{
-			toRing.values[i] = 0.0f;
+			fromRing.values[i] = 0.0f;
 		}
 		else if (ground.fixed.values[i] != 0)
 		{
-			toFixed.values[i] = 0.0f;
+			fromFixed.values[i] = 0.0f;
 		}
 	}
-	const float bankRise = settings.bankSlope * k_MetresPerCorner;
+	const float cutRise = settings.cutSlope * k_MetresPerCorner;
+	const float fillRise = settings.fillSlope * k_MetresPerCorner;
 	const float taperRise = settings.taper * k_MetresPerCorner;
-	const float ringRise = settings.ringTaper * k_MetresPerCorner;
 	ChamferPasses(side, [&](int x, int z, int nx, int nz, float length) {
 		if (!ground.metres.Contains(nx, nz))
 		{
@@ -352,12 +415,132 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 		}
 		const auto here = ground.metres.Index(x, z);
 		const auto there = ground.metres.Index(nx, nz);
-		lowest.values[here] = std::max(lowest.values[here], lowest.values[there] - (bankRise * length));
-		highest.values[here] = std::min(highest.values[here], highest.values[there] + (bankRise * length));
-		change.values[here] = std::max(change.values[here], change.values[there] - (taperRise * length));
-		toFixed.values[here] = std::min(toFixed.values[here], toFixed.values[there] + length);
-		toRing.values[here] = std::min(toRing.values[here], toRing.values[there] + length);
+		lowest.values[here] = std::max(lowest.values[here], lowest.values[there] - (fillRise * length));
+		highest.values[here] = std::min(highest.values[here], highest.values[there] + (cutRise * length));
+		toBed.values[here] = std::min(toBed.values[here], toBed.values[there] + length);
 	});
+
+	// A steep side next to the bed that is not too high, such as a low cliff or the side of a small hill, gets a bank of
+	// the fixed slope back to where the bank meets the land. A corner gets the full bank when the bank meets the land
+	// within the reach of the deepest bank and the cut or the fill at the corner is no more than the deepest bank.
+	const float reachOfBank = settings.deepestBank / std::min(cutRise, fillRise);
+	Grid<float> toMetCut(side, k_Infinity);
+	Grid<float> toMetFill(side, k_Infinity);
+	for (size_t i = 0; i < toBed.values.size(); ++i)
+	{
+		if (bed.covered.values[i] != 0 || toBed.values[i] > 2.0f * reachOfBank)
+		{
+			continue;
+		}
+		const float land = ground.metres.values[i];
+		const float bedCut = highest.values[i] - (cutRise * toBed.values[i]);
+		const float bedFill = lowest.values[i] + (fillRise * toBed.values[i]);
+		if (land <= highest.values[i] && land >= bedCut)
+		{
+			toMetCut.values[i] = 0.0f;
+		}
+		if (land >= lowest.values[i] && land <= bedFill)
+		{
+			toMetFill.values[i] = 0.0f;
+		}
+	}
+	// A bank also starts where the land between the bed and the bank meets a steep side, such as the foot of a cliff
+	Grid<float> bankHigh(side, k_Infinity);
+	Grid<float> bankLow(side, -k_Infinity);
+	for (size_t i = 0; i < toBed.values.size(); ++i)
+	{
+		if (toMetCut.values[i] == 0.0f)
+		{
+			bankHigh.values[i] = ground.metres.values[i];
+		}
+		if (toMetFill.values[i] == 0.0f)
+		{
+			bankLow.values[i] = ground.metres.values[i];
+		}
+	}
+	ChamferPasses(side, [&](int x, int z, int nx, int nz, float length) {
+		if (!ground.metres.Contains(nx, nz))
+		{
+			return;
+		}
+		const auto here = ground.metres.Index(x, z);
+		const auto there = ground.metres.Index(nx, nz);
+		toMetCut.values[here] = std::min(toMetCut.values[here], toMetCut.values[there] + length);
+		toMetFill.values[here] = std::min(toMetFill.values[here], toMetFill.values[there] + length);
+		bankHigh.values[here] = std::min(bankHigh.values[here], bankHigh.values[there] + (cutRise * length));
+		bankLow.values[here] = std::max(bankLow.values[here], bankLow.values[there] - (fillRise * length));
+	});
+	for (size_t i = 0; i < toBed.values.size(); ++i)
+	{
+		if (bed.covered.values[i] == 0)
+		{
+			highest.values[i] = std::min(highest.values[i], bankHigh.values[i]);
+			lowest.values[i] = std::max(lowest.values[i], bankLow.values[i]);
+		}
+	}
+	for (size_t i = 0; i < change.values.size(); ++i)
+	{
+		if (bed.covered.values[i] != 0 || ground.fixed.values[i] != 0 || toBed.values[i] > reachOfBank)
+		{
+			continue;
+		}
+		const float land = ground.metres.values[i];
+		const float cut = land - highest.values[i];
+		const float fill = lowest.values[i] - land;
+		if (cut > 0.0f && cut <= settings.deepestBank && toMetCut.values[i] <= reachOfBank)
+		{
+			change.values[i] = std::max(change.values[i], cut);
+		}
+		else if (fill > 0.0f && fill <= settings.deepestBank && toMetFill.values[i] <= reachOfBank)
+		{
+			change.values[i] = std::max(change.values[i], fill);
+		}
+	}
+
+	// The change from the land becomes less away from the bed. Where the land is less steep than the bank, it becomes
+	// less by the slope of the bank minus the slope of the land, so that the bank keeps its fixed slope until it meets
+	// the land. Where the land is steeper, it becomes less by the taper, or by less where the taper makes a cliff.
+	const float steepestFace = settings.cliffSlope - (2.0f * k_CliffMargin);
+	// The largest taper at a corner that keeps the new ground less steep than a cliff, where the land is not a cliff
+	const auto taperOf = [&](float slope, float taper) {
+		return slope < settings.cliffSlope ? std::clamp(steepestFace - slope, k_LeastTaper, taper) : taper;
+	};
+	Grid<float> rate(side, taperRise);
+	Grid<float> fixedRate(side, 0.0f);
+	Grid<float> ringRate(side, 0.0f);
+	for (size_t i = 0; i < rate.values.size(); ++i)
+	{
+		const float land = ground.metres.values[i];
+		float bank = 0.0f;
+		if (land > highest.values[i])
+		{
+			bank = settings.cutSlope;
+		}
+		else if (land < lowest.values[i])
+		{
+			bank = settings.fillSlope;
+		}
+		const float slope = SlopeAt(ground.metres, rate.XOf(i), rate.ZOf(i));
+		rate.values[i] = std::max(taperOf(slope, settings.taper), bank - slope) * k_MetresPerCorner;
+		fixedRate.values[i] = taperOf(slope, settings.fixedTaper) * k_MetresPerCorner;
+		ringRate.values[i] = taperOf(slope, settings.ringTaper) * k_MetresPerCorner;
+	}
+	constexpr int k_ChangePasses = 2;
+	for (int pass = 0; pass < k_ChangePasses; ++pass)
+	{
+		ChamferPasses(side, [&](int x, int z, int nx, int nz, float length) {
+			if (!ground.metres.Contains(nx, nz))
+			{
+				return;
+			}
+			const auto here = ground.metres.Index(x, z);
+			const auto there = ground.metres.Index(nx, nz);
+			change.values[here] = std::max(change.values[here], change.values[there] - (rate.values[here] * length));
+			fromFixed.values[here] =
+			    std::min(fromFixed.values[here], fromFixed.values[there] + (fixedRate.values[here] * length));
+			fromRing.values[here] = std::min(fromRing.values[here], fromRing.values[there] + (ringRate.values[here] * length));
+		});
+	}
 
 	Grid<float> graded = ground.metres;
 	for (size_t i = 0; i < graded.values.size(); ++i)
@@ -381,15 +564,17 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 		{
 			target = std::clamp(land, lowest.values[i], highest.values[i]);
 		}
-		const float most = std::min({change.values[i], taperRise * toFixed.values[i], ringRise * toRing.values[i]});
+		const float most = std::min({change.values[i], fromFixed.values[i], fromRing.values[i]});
 		float height = std::clamp(target, land - most, land + most);
 		height = std::max(height, std::min(land, ground.lowest.values[i]));
 		graded.values[i] = height;
 	}
 
-	// The bed and the banks make no new cliff. The change at a new cliff and at the changed corners next to it becomes
-	// half as large in each pass. The last pass puts the land back at each new cliff that stays.
-	constexpr int k_CliffPasses = 8;
+	// The bed and the banks make no new cliff. The change at a new cliff and next to it becomes half as large in each
+	// pass. The first passes change only the banks, so that the bed stays level where it can. The last pass puts the land
+	// back at each new cliff that stays.
+	constexpr int k_CliffPasses = 12;
+	constexpr int k_BedPasses = 4;
 	std::vector<size_t> changed;
 	for (size_t i = 0; i < graded.values.size(); ++i)
 	{
@@ -436,6 +621,10 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 				const int x = cx + step.dx;
 				const int z = cz + step.dz;
 				if (!graded.Contains(x, z))
+				{
+					continue;
+				}
+				if (pass < k_BedPasses && bed.covered.At(x, z) != 0)
 				{
 					continue;
 				}

@@ -244,8 +244,11 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	                "to each neutral town. A path winds on easy ground, goes round the water and does not climb a "
 	                "cliff. It stops a short distance from each building and field. On a hill, the path has a smooth "
 	                "and level bed, cut into the land or built up above it, with a bank on each side as a road has. "
-	                "A path that climbs a steep slope keeps its bends. At the foot of a cliff, the brown earth stays "
-	                "below the cliff and does not cover its top. About one path in three has "
+	                "On a side slope, the bed is a level shelf about 30 m wide. A low cliff or a steep side next to the "
+	                "path has a bank of 1 in 2 back to the land, as the cutting of a motorway. In a narrow valley, the "
+	                "bed cuts into the gentler side. A path that climbs a steep slope keeps its bends. At the foot of a "
+	                "high cliff, the brown earth stays below the cliff and does not cover its top. About one path in "
+	                "three has "
 	                "lanterns on its sides: street lanterns near the towns and the temple, and lanterns on fires "
 	                "farther out. At night the lanterns light the ground.",
 	    .environment = {.clockRuns = true},

@@ -16,9 +16,11 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <set>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include <gtest/gtest.h>
 #include <landgen/Generator.h>
@@ -259,6 +261,37 @@ TEST(LandgenDump, WritesTheLandOfEachSeedWhenTheEnvironmentAsksForIt)
 		if (EnvironmentOf("OPENBLACK_LANDGEN_ROADS") == "0")
 		{
 			settings.roads.grade = false;
+		}
+		// Other values for the bed of the paths, for a comparison of the values: "name=value;name=value"
+		std::stringstream roads(EnvironmentOf("OPENBLACK_LANDGEN_ROAD_VALUES"));
+		std::string pair;
+		while (std::getline(roads, pair, ';'))
+		{
+			const auto equals = pair.find('=');
+			if (equals == std::string::npos)
+			{
+				continue;
+			}
+			const auto name = pair.substr(0, equals);
+			const float value = std::stof(pair.substr(equals + 1));
+			for (auto& [key, field] :
+			     std::initializer_list<std::pair<const char*, float*>> {{"halfWidth", &settings.roads.halfWidth},
+			                                                            {"cutSlope", &settings.roads.cutSlope},
+			                                                            {"fillSlope", &settings.roads.fillSlope},
+			                                                            {"taper", &settings.roads.taper},
+			                                                            {"fixedTaper", &settings.roads.fixedTaper},
+			                                                            {"ringTaper", &settings.roads.ringTaper},
+			                                                            {"narrowSide", &settings.roads.narrowSide},
+			                                                            {"narrowEdge", &settings.roads.narrowEdge},
+			                                                            {"deepest", &settings.roads.deepest},
+			                                                            {"deepestBank", &settings.roads.deepestBank},
+			                                                            {"deepestCorner", &settings.roads.deepestCorner}})
+			{
+				if (name == key)
+				{
+					*field = value;
+				}
+			}
 		}
 		// A land with no fairy rings and no lone pillars, for a comparison with the land before them
 		if (EnvironmentOf("OPENBLACK_LANDGEN_FORMATIONS") == "0")

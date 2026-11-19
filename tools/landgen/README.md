@@ -29,6 +29,9 @@ The game data folder is `C:/projects/black`. Set `OPENBLACK_GAME_DATA` to use an
 
    Add `OPENBLACK_LANDGEN_ROADS=0` for the same land with no bed under the paths (the land before the cut and the
    fill), and `OPENBLACK_LANDGEN_PLAYERS=<count>` for a land for more than one player.
+   Add `OPENBLACK_LANDGEN_ROAD_VALUES="halfWidth=2;cutSlope=0.6"` to try other values of the bed under the paths
+   (`roads::Settings`: halfWidth, cutSlope, fillSlope, taper, fixedTaper, ringTaper, narrowSide, narrowEdge, deepest,
+   deepestBank, deepestCorner).
    Add `OPENBLACK_LANDGEN_FORMATIONS=0` for the same land with no fairy rings and no lone pillars (the land before
    them). Add `OPENBLACK_LANDGEN_TREES=<hundredths>` for a land with more stands of trees, as `--landgen "7;trees=2600"`
    gives in the game (the tree benchmarks).

@@ -204,8 +204,8 @@ TEST(LandgenRoadBed, TheBedIsLevelAcrossThePathAndTheBanksHaveTheFixedSlope)
 	// The bank cuts into the land on the high side and fills on the low side, at the slope of the bank
 	EXPECT_LT(graded.At(x, middle + 2), land.metres.At(x, middle + 2));
 	EXPECT_GT(graded.At(x, middle - 2), land.metres.At(x, middle - 2));
-	EXPECT_NEAR(graded.At(x, middle + 2) - graded.At(x, middle + 1), settings.bankSlope * k_Corner, 0.01f);
-	EXPECT_NEAR(graded.At(x, middle - 1) - graded.At(x, middle - 2), settings.bankSlope * k_Corner, 0.01f);
+	EXPECT_NEAR(graded.At(x, middle + 2) - graded.At(x, middle + 1), settings.cutSlope * k_Corner, 0.01f);
+	EXPECT_NEAR(graded.At(x, middle - 1) - graded.At(x, middle - 2), settings.cutSlope * k_Corner, 0.01f);
 	// The bank meets the land, and the land beyond it does not change
 	for (int z = 0; z < k_Side; ++z)
 	{
@@ -214,7 +214,7 @@ TEST(LandgenRoadBed, TheBedIsLevelAcrossThePathAndTheBanksHaveTheFixedSlope)
 			EXPECT_EQ(graded.At(x, z), land.metres.At(x, z)) << z;
 		}
 	}
-	EXPECT_LE(SteepestCornerOf(graded), settings.bankSlope + 0.001f);
+	EXPECT_LE(SteepestCornerOf(graded), settings.cutSlope + 0.001f);
 }
 
 TEST(LandgenRoadBed, ABankOnASteepSideHasNoVerticalStepAndStopsAtTheWidestBank)
@@ -424,4 +424,127 @@ TEST(LandgenRoadBed, TheChangeNextToARingIsAShortBlend)
 	settings.ringTaper = settings.taper;
 	const auto tapered = Grade(BedOf(paths, ground, settings), ground, settings);
 	EXPECT_LE(metres.At(12, middle) - tapered.At(12, middle), (settings.taper * k_Corner * 2.0f) + 0.001f);
+}
+
+TEST(LandgenRoadBed, TheBedIsLevelOverTheFullWidthOfAPathOnTheCornerLines)
+{
+	const roads::Settings settings;
+	const SideSlope land(0.25f);
+	// A generated path has its points on the corners. Its drawn middle is then half a corner from the corners.
+	paths::Path path {.link = {.from = 0, .to = 1}, .points = {}};
+	const int middle = k_Side / 2;
+	for (int x = 2; x < k_Side - 2; ++x)
+	{
+		path.points.push_back({.x = static_cast<float>(x), .z = static_cast<float>(middle)});
+	}
+	const auto ground = land.GroundOf();
+	const auto bed = BedOf(std::span(&path, 1), ground, settings);
+	const auto graded = Grade(bed, ground, settings);
+	const int x = k_Side / 2;
+	// Four corners across the path are level: the two corners of the drawn path and one more corner on each side
+	for (int z = middle - 1; z <= middle + 2; ++z)
+	{
+		EXPECT_NE(bed.covered.At(x, z), 0) << z;
+		EXPECT_NEAR(graded.At(x, z), graded.At(x, middle), 0.01f) << z;
+	}
+	// The banks have the fixed slope next to the bed
+	EXPECT_NEAR(graded.At(x, middle + 3) - graded.At(x, middle + 2), settings.cutSlope * k_Corner, 0.01f);
+	EXPECT_NEAR(graded.At(x, middle - 1) - graded.At(x, middle - 2), settings.fillSlope * k_Corner, 0.01f);
+}
+
+TEST(LandgenRoadBed, InAValleyTheBedMovesAwayFromTheSteepSide)
+{
+	roads::Settings settings;
+	const int middle = k_Side / 2;
+	// A valley: a gentle side at 1 in 10 and a steep side at 7 in 10, which is too steep for the bank
+	Grid<float> metres(k_Side, 0.0f);
+	const Grid<uint8_t> fixed(k_Side, 0);
+	const Grid<float> lowest(k_Side, -1000.0f);
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			const float run = static_cast<float>(z - middle) * k_Corner;
+			metres.At(x, z) = 100.0f + (z < middle ? -0.1f * run : 0.7f * run);
+		}
+	}
+	const Ground ground {.metres = metres, .fixed = fixed, .lowest = lowest};
+	const auto path = StraightPath();
+	const auto bed = BedOf(std::span(&path, 1), ground, settings);
+	const auto graded = Grade(bed, ground, settings);
+	const int x = k_Side / 2;
+	// The bed covers the gentle side and is level there. The steep side keeps nearly its height.
+	EXPECT_EQ(bed.covered.At(x, middle + 1), 0);
+	EXPECT_NE(bed.covered.At(x, middle - 2), 0);
+	EXPECT_NEAR(graded.At(x, middle - 2), graded.At(x, middle), 0.01f);
+	EXPECT_NEAR(graded.At(x, middle - 1), graded.At(x, middle), 0.01f);
+	EXPECT_LE(std::fabs(graded.At(x, middle + 1) - metres.At(x, middle + 1)), 1.5f);
+
+	// When the bed does not move, it cuts deeply into the steep side
+	settings.narrowSide = 10.0f;
+	settings.cliffSlope = 10.0f;
+	const auto still = BedOf(std::span(&path, 1), ground, settings);
+	EXPECT_NE(still.covered.At(x, middle + 1), 0);
+	EXPECT_GT(metres.At(x, middle + 1) - Grade(still, ground, settings).At(x, middle + 1), 4.0f);
+}
+
+TEST(LandgenRoadBed, TheBanksOnASideSteeperThanTheBankMakeNoNewCliff)
+{
+	const roads::Settings settings;
+	// The land is steeper than the bank, but less steep than a cliff
+	const SideSlope land(0.6f);
+	const auto path = StraightPath();
+	const auto ground = land.GroundOf();
+	const auto graded = Grade(BedOf(std::span(&path, 1), ground, settings), ground, settings);
+	const int middle = k_Side / 2;
+	const int x = k_Side / 2;
+	EXPECT_NEAR(graded.At(x, middle + 1), graded.At(x, middle), 0.01f);
+	EXPECT_NEAR(graded.At(x, middle - 1), graded.At(x, middle), 0.01f);
+	// The cut and the fill go on until they meet the land
+	EXPECT_LT(graded.At(x, middle + 3), land.metres.At(x, middle + 3));
+	EXPECT_GT(graded.At(x, middle - 3), land.metres.At(x, middle - 3));
+	EXPECT_EQ(graded.At(x, 2), land.metres.At(x, 2));
+	EXPECT_EQ(graded.At(x, k_Side - 3), land.metres.At(x, k_Side - 3));
+	// No slope between two corners next to each other is as steep as a cliff
+	EXPECT_LT(SteepestCornerOf(graded), settings.cliffSlope);
+}
+
+TEST(LandgenRoadBed, ALowCliffNextToThePathGetsABankOfTheFixedSlope)
+{
+	const roads::Settings settings;
+	SideSlope land(0.0f);
+	const int middle = k_Side / 2;
+	// A cliff of 15 m starts two rows from the middle of the path, with flat ground on its top
+	for (int x = 0; x < k_Side; ++x)
+	{
+		for (int z = middle + 2; z < k_Side; ++z)
+		{
+			land.metres.At(x, z) = 115.0f;
+		}
+	}
+	const auto path = StraightPath();
+	const auto ground = land.GroundOf();
+	const auto graded = Grade(BedOf(std::span(&path, 1), ground, settings), ground, settings);
+	const int x = k_Side / 2;
+	// The bank rises from the foot of the cliff with the fixed slope until it meets the top of the cliff
+	EXPECT_NEAR(graded.At(x, middle + 1), 100.0f, 0.01f);
+	for (int z = middle + 2; z <= middle + 4; ++z)
+	{
+		EXPECT_NEAR(graded.At(x, z) - graded.At(x, z - 1), settings.cutSlope * k_Corner, 0.01f) << z;
+	}
+	EXPECT_EQ(graded.At(x, middle + 5), 115.0f);
+	EXPECT_LE(SteepestCornerOf(graded), settings.cutSlope + 0.001f);
+
+	// A cliff higher than the deepest bank keeps its face
+	SideSlope high(0.0f);
+	for (int gx = 0; gx < k_Side; ++gx)
+	{
+		for (int z = middle + 2; z < k_Side; ++z)
+		{
+			high.metres.At(gx, z) = 160.0f;
+		}
+	}
+	const auto highGround = high.GroundOf();
+	const auto kept = Grade(BedOf(std::span(&path, 1), highGround, settings), highGround, settings);
+	EXPECT_EQ(kept.At(x, middle + 3), 160.0f);
 }
