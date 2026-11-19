@@ -3521,6 +3521,16 @@ def run_limit_seconds(turns):
     return max(RUN_LIMIT_SECONDS, int(turns * SECONDS_PER_TURN * 1.5) + LOAD_SECONDS)
 
 
+# A web build with the developer tools has this file beside its page. Only then does the page give the game the
+# arguments of "args" (web/page/launcher.js).
+WEB_DEVELOPER_TOOLS_FILE = "developer-tools.txt"
+
+
+def web_page_takes_arguments(page):
+    """True when the page in the folder takes the arguments of the game, as a web build with the developer tools does"""
+    return os.path.isfile(os.path.join(page, WEB_DEVELOPER_TOOLS_FILE))
+
+
 def web_page_of(options):
     """The folder of the web page of this tree"""
     return options.web_page or os.path.join(DEFAULT_BUILDS, os.path.basename(worktree_root()) + "-web", "bin", "Release")
@@ -4192,8 +4202,9 @@ def main():
     waited_observers = options.observers + (1 if options.web_client else 0)
     if options.all_computer_gods and waited_observers == 0:
         parser.error("--all-computer-gods needs --observers or --web-client: the clients watch the game")
-    if not options.all_computer_gods and options.clients == 0:
-        parser.error("a room with no human god needs --all-computer-gods")
+    if not options.all_computer_gods and options.clients == 0 and not (options.web_client and options.web_god):
+        # The web god can be the only human god, as a player of the site who plays against computer gods
+        parser.error("a room with no human god needs --all-computer-gods or --web-god")
     if options.scenario and (options.all_computer_gods or (options.web_client and not options.web_god)
                              or options.testbed or options.gods_ring_map):
         # The state of a scenario is not in the world, so nobody can join its game as it turns: the room of computer gods
@@ -4218,6 +4229,10 @@ def main():
     if options.web_client and not options.web_remote and not os.path.isfile(
             os.path.join(web_page_of(options), "openblack.wasm")):
         parser.error(f"--web-client needs the web build: no openblack.wasm in {web_page_of(options)}")
+    if options.web_client and not options.web_remote and not web_page_takes_arguments(web_page_of(options)):
+        # The page of a shipping build ignores "args": the web client never joins, and the run waits for nothing
+        parser.error(f"--web-client needs a web build with the developer tools: no {WEB_DEVELOPER_TOOLS_FILE} in "
+                     f"{web_page_of(options)} (the page of a shipping tar ignores the arguments of the game)")
     desktop_clients = options.clients + options.observers
     if options.part_second_at is not None and not 1 <= options.part_client <= desktop_clients:
         parser.error(f"--part-client takes a client from 1 to {desktop_clients}")
