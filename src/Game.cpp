@@ -529,7 +529,9 @@ bool Game::Update() noexcept
 	            sim_run::ToolInputDone(_scenarioGaveAll && _scenarioGaveAll(),
 	                                   _simulation.has_value() &&
 	                                       (_simulation->inputPath.has_value() || _simulation->playCommandsPath.has_value()),
-	                                   Locator::inspector::has_value() && Locator::inspector::value().InputWaits())))
+	                                   Locator::inspector::has_value() && Locator::inspector::value().InputWaits(),
+	                                   _simulation.has_value() && _simulation->startPaused && Locator::inspector::has_value() &&
+	                                       Locator::inspector::value().HoldsRun())))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
 		                   "The temple holds the world after the last input of the tool: the simulation run ends at turn {}",

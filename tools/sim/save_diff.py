@@ -723,6 +723,27 @@ def not_game_start_or_creature_reload(result):
     return not_explained(result, joined(GAME_START, CREATURE_RELOAD))
 
 
+# A saved game made in the temple writes 1 in the word "saved in the temple" of each creature record, as the game does.
+# The game reads the word at a load and does not use it, and the load puts the player outside the temple. So the save
+# after the load writes 0. The running checksum of the records changes with the word, so the record after the creature
+# has another checksum. Each other field of a record that changes shows by its own name.
+SAVED_IN_TEMPLE = {
+    "values": {},
+    "rows": {},
+    "order": set(),
+    "context_bytes": 0,
+    "sounds": False,
+    "clock": set(),
+    "records": {"creature.savedInTemple", "leash.thing.checksum", "creature.thing.checksum"},
+}
+
+
+def not_saved_in_temple(result):
+    """The parts of a comparison of a save made in the temple with the save after its load that the word "saved in the
+    temple" of the creature records does not explain"""
+    return not_explained(result, SAVED_IN_TEMPLE)
+
+
 # A load of a world state ends the visit of this computer's player to the temple: the temple, its help text and its
 # dialogue close. These sections differ only when the player was in the temple at the save.
 TEMPLE_VISIT_SECTIONS = {"temple", "helpText", "dialogueControl"}

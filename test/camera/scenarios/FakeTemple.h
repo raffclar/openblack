@@ -21,6 +21,7 @@
 #include <3D/OrientedText.h>
 #include <3D/TempleInteriorInterface.h>
 #include <3D/TempleSubMeshTexture.h>
+#include <Temple/HeldDialogue.h>
 #include <Temple/TemplePeople.h>
 
 /// A temple with no rooms. The test tells if the player is inside and gives the camera of the world behind the temple.
@@ -128,6 +129,10 @@ public:
 	void LeaveMultiplayerFrontEnd() override {}
 	[[nodiscard]] bool IsMultiplayerFrontEnd() const override { return {}; }
 	void ShowHelpAfterLoad() override {}
+	[[nodiscard]] std::optional<openblack::temple_help::HeldDialogue> GetDialogueBackAtLoad() const override
+	{
+		return std::nullopt;
+	}
 	void WarmUpVisit(const std::function<void()>& /*draw*/) override {}
 	void SetFreeCamera(bool /*on*/) override {}
 	[[nodiscard]] bool IsFreeCameraOn() const override { return {}; }

@@ -179,10 +179,10 @@ std::optional<HeldDialogue> PutAwayDialogue(Scripts& scripts, Dialogue& dialogue
 
 void BringBackDialogue(Dialogue& dialogue, std::optional<HeldDialogue>& held)
 {
-	if (held.has_value() && !dialogue.IsControlled())
+	if (const auto back = ComesBack(held, dialogue.IsControlled()); back.has_value())
 	{
-		dialogue.GiveTo(held->owner);
-		dialogue.RestoreText(held->text);
+		dialogue.GiveTo(back->owner);
+		dialogue.RestoreText(back->text);
 	}
 	held.reset();
 	dialogue.ShowTextAgain();
