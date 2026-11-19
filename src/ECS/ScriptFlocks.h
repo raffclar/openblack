@@ -38,6 +38,10 @@ void Destroy(Registry& registry, entt::entity flock);
 /// The flock a living is in, or none
 [[nodiscard]] entt::entity FlockOf(const Registry& registry, entt::entity living);
 [[nodiscard]] std::size_t Size(const Registry& registry, entt::entity flock);
+/// The size of a flock that the scripts read. It does not count an animal that a merge of flocks put in the flock.
+[[nodiscard]] std::size_t ScriptSize(const Registry& registry, entt::entity flock);
+/// Mark an animal that a merge of flocks put into a flock that a script controls
+void MarkMergedIn(Registry& registry, entt::entity living, entt::entity flock);
 /// Its leader, the last in its line, or none for an empty flock
 [[nodiscard]] entt::entity Leader(const Registry& registry, entt::entity flock);
 
