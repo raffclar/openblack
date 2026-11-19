@@ -32,6 +32,8 @@ namespace openblack::testbed_scenarios
 inline constexpr size_t k_EndBoxPlayerLeft = 1000;
 /// The value of the EndBox command that opens the box that tells that the connection to the network game is lost
 inline constexpr size_t k_EndBoxConnectionLost = 1001;
+/// The value of the EndBox command that presses Leave Game in the open end box
+inline constexpr size_t k_EndBoxLeave = 1002;
 
 /// The parts of the game that a scenario stages and that only the game on the player's computer has: the menu and the
 /// boxes of the interface, the chat controls, the mouse, the logo effect and the requests to join, to continue and to

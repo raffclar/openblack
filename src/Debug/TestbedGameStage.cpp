@@ -261,6 +261,23 @@ std::string TestbedGameStage::OpenEndBox(size_t value)
 		Locator::gameInterface::value().ShowConnectionLost();
 		return "the box that tells that the connection is lost opens";
 	}
+	if (value == k_EndBoxLeave)
+	{
+		// A click on the button of the end box, in the space of the dialog
+		auto& interface = Locator::gameInterface::value();
+		auto& box = interface.GetEndGameBox();
+		const auto leave = interface.GetTexts().Get("HELP_TEXT_DIALOG_LEAVE_GAME");
+		const auto controls = box.GetNamedControls();
+		const auto button = std::ranges::find_if(controls, [leave](const auto& control) { return control.name == leave; });
+		if (button == controls.end())
+		{
+			return "the end box shows no Leave Game";
+		}
+		const auto middle = (button->rect.min + button->rect.max) / 2;
+		box.MouseDown(middle);
+		box.MouseUp(middle);
+		return "Leave Game is pressed";
+	}
 	if (value >= 4)
 	{
 		const auto notches = static_cast<int>(value) - 3;

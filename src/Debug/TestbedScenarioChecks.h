@@ -99,6 +99,13 @@ enum class Quantity : uint8_t
 	/// 1 when the particles keep the sphere of a shield miracle around the point on the land, else 0. A sphere that the
 	/// particles keep is drawn, and it turns away the particles of other effects.
 	ShieldSphereAt,
+	/// 1 when the land plays by the rules of a skirmish, else 0
+	SkirmishRules,
+	/// 1 when the end of the skirmish or of the network game is decided, else 0
+	GameDecided,
+	/// 1 when the creature file of the profile on the disk knows the miracle (index, by its magic type), else 0. None
+	/// when the profile has no creature file.
+	ProfileCreatureKnowsMiracle,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its
@@ -194,7 +201,8 @@ class Clock
 public:
 	/// Begins a scenario at the world's turn
 	void Start(uint32_t worldTurn);
-	/// Takes one frame. templeHoldsWorld is true while the player is in the temple of a game alone.
+	/// Takes one frame. templeHoldsWorld is true while the player is in the temple of a game alone. When the world's
+	/// turns start again from 0, as a new land loads, the count continues.
 	void Advance(uint32_t worldTurn, bool templeHoldsWorld, float seconds);
 	/// The turns since the start: the world's turns and the turns of the time that the temple held the world
 	[[nodiscard]] uint32_t Elapsed(uint32_t worldTurn) const;

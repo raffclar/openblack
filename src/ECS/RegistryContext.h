@@ -67,8 +67,8 @@ struct RegistryContext
 	std::array<bool, player_slots::k_PlayerNumbers> templeEntrancesTakeCursor {};
 	/// The game is over: the local player's temple is being destroyed
 	bool gameOver {false};
-	/// A skirmish: a playground land played rather than the story's. Losing a temple doesn't end it. openblack plays no
-	/// online games, which would be the same.
+	/// A skirmish: a playground land, a land of a network game or a generated land for more than one player. The loss of
+	/// a temple does not end it.
 	bool skirmish {false};
 	/// The land of a network game waits for the humans of the network session. At the turn that they join, each slot with
 	/// no player gets a computer god.

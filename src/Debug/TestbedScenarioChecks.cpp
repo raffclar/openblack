@@ -104,6 +104,12 @@ std::string_view Name(Quantity quantity)
 		return "footprints on the land near the point";
 	case Quantity::ShieldSphereAt:
 		return "a shield sphere around the point";
+	case Quantity::SkirmishRules:
+		return "the rules of a skirmish";
+	case Quantity::GameDecided:
+		return "the end of the game is decided";
+	case Quantity::ProfileCreatureKnowsMiracle:
+		return "the creature file of the profile knows the miracle";
 	}
 	return "";
 }
@@ -175,6 +181,12 @@ void Clock::Start(uint32_t worldTurn)
 
 void Clock::Advance(uint32_t worldTurn, bool templeHoldsWorld, float seconds)
 {
+	// A land that a command loads starts the world's turns again from 0. The count of the scenario continues from the
+	// turns that went before. The count uses the wrap of unsigned numbers.
+	if (worldTurn < _lastTurn)
+	{
+		_startTurn = worldTurn - (_lastTurn - _startTurn);
+	}
 	// A turn is a tenth of a second. Time counts only in a frame with no world turn, so that no time counts twice.
 	if (templeHoldsWorld && worldTurn == _lastTurn && seconds > 0.0f)
 	{

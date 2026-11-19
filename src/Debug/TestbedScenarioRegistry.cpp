@@ -847,10 +847,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 			problems.emplace_back("a throw of no such object, or from no such place");
 		}
 	}
+	// After a command loads a generated land, the creature 0 of the commands is the creature of player one
+	bool onLoadedLand = false;
 	for (size_t i = 0; i < scenario.commands.size(); ++i)
 	{
 		const auto& command = scenario.commands.at(i);
 		const auto what = fmt::format("command {} ({})", i, Name(command.kind));
+		onLoadedLand = onLoadedLand || command.kind == Kind::LoadGeneratedLand;
 		// An object set alight (value 1 or 2) needs no creature, but the object must be there
 		const bool objectAlight = command.kind == Kind::SetAlight && (command.value == 1 || command.value == 2);
 		const bool siteAlight = command.kind == Kind::SetAlight && command.value == 3;
@@ -862,7 +865,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		{
 			problems.push_back(fmt::format("{}: no temple for a worship site", what));
 		}
-		if (!NeedsNoCreature(command.kind) && !objectAlight && !siteAlight && command.creature >= creatures)
+		const auto commandCreatures = onLoadedLand ? size_t {1} : creatures;
+		if (!NeedsNoCreature(command.kind) && !objectAlight && !siteAlight && command.creature >= commandCreatures)
 		{
 			problems.push_back(fmt::format("{}: no such creature", what));
 		}

@@ -492,17 +492,30 @@ TEST(GeneratedLand, TheComputerGodsTakeTheCreaturesOfTheSkirmishLandWithTheSameC
 	EXPECT_NE(fourScript.find(R"(SET_TOWN_BELIEF_CAP(3, "PLAYER_FOUR", 1.000000))"), std::string::npos);
 }
 
-TEST(GeneratedLand, PlayerOneBringsTheProfileCreatureOnALandForMoreThanOnePlayer)
+TEST(GeneratedLand, ALandForMoreThanOnePlayerIsASkirmish)
 {
-	// As on the skirmish lands, player one brings the creature that the profile keeps
+	// As on the skirmish lands, the land plays by the rules of a skirmish, and player one brings the creature that the
+	// profile keeps. The land keeps the creature in the profile.
 	for (const int32_t players : {2, 3, 4})
 	{
-		EXPECT_TRUE(generated_land::PlayerStartOf(players, false, false).profileCreatureBrought) << players;
-		EXPECT_FALSE(generated_land::PlayerStartOf(players, false, false).slotsFilled) << players;
+		const auto start = generated_land::PlayerStartOf(players, false, false);
+		EXPECT_EQ(start.change, land_change::Kind::Skirmish) << players;
+		EXPECT_TRUE(start.skirmish) << players;
+		EXPECT_TRUE(land_change::RulesFor(start.change).profileCreatureBrought) << players;
+		EXPECT_TRUE(land_change::RulesFor(start.change).alignmentFromProfile) << players;
+		EXPECT_TRUE(land_change::RulesFor(start.change).gameStarts) << players;
+		EXPECT_FALSE(start.slotsFilled) << players;
 	}
+}
+
+TEST(GeneratedLand, ALandForOnePlayerStaysAsTheTestbed)
+{
 	// A land for one player has no skirmish land to copy, and stays as before
-	EXPECT_FALSE(generated_land::PlayerStartOf(1, false, false).profileCreatureBrought);
-	EXPECT_FALSE(generated_land::PlayerStartOf(1, false, false).slotsFilled);
+	const auto start = generated_land::PlayerStartOf(1, false, false);
+	EXPECT_EQ(start.change, land_change::Kind::Testbed);
+	EXPECT_FALSE(start.skirmish);
+	EXPECT_FALSE(land_change::RulesFor(start.change).profileCreatureBrought);
+	EXPECT_FALSE(start.slotsFilled);
 }
 
 TEST(GeneratedLand, ANetworkGameFillsTheSlotsWithNoHumanAndBringsNoProfileCreature)
@@ -511,8 +524,12 @@ TEST(GeneratedLand, ANetworkGameFillsTheSlotsWithNoHumanAndBringsNoProfileCreatu
 	{
 		const auto network = generated_land::PlayerStartOf(players, true, false);
 		EXPECT_TRUE(network.slotsFilled) << players;
-		EXPECT_FALSE(network.profileCreatureBrought) << players;
+		EXPECT_FALSE(land_change::RulesFor(network.change).profileCreatureBrought) << players;
 	}
+	// A land for more than one player starts a new game, as a land of a network game does, and plays as a skirmish
+	EXPECT_EQ(generated_land::PlayerStartOf(2, true, false).change, land_change::Kind::NewGame);
+	EXPECT_TRUE(generated_land::PlayerStartOf(2, true, false).skirmish);
+	EXPECT_EQ(generated_land::PlayerStartOf(1, true, false).change, land_change::Kind::Testbed);
 	// A game that only computer gods play fills its slots too
 	EXPECT_TRUE(generated_land::PlayerStartOf(2, false, true).slotsFilled);
 }
