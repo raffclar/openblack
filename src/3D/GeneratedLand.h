@@ -79,8 +79,10 @@ constexpr float k_MetresPerAltitude = 0.67f;
 
 /// The lines of a land script that make the temple and the towns of a generated land, with their people and fields, as
 /// a land of the story makes them. The town of the start has the number 0 and belongs to player one. The start towns of
-/// the other players (`otherPlayers`, player two first) have the next numbers, and each player also gets its temple. The
-/// neutral towns have the numbers after them. The lines use only kinds of the game.
+/// the other players (`otherPlayers`, player two first) have the next numbers, and each player also gets its temple. Each
+/// other player is a computer god with a creature, and each town limits the belief in each computer god, with the values
+/// of the skirmish land that has the same count of players. The neutral towns have the numbers after them. The lines use
+/// only kinds of the game.
 [[nodiscard]] std::string SettlementScript(const landgen::settlement::Plan& plan,
                                            std::span<const landgen::settlement::Plan> otherPlayers = {});
 
