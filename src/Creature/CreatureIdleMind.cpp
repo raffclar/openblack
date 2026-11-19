@@ -1178,7 +1178,8 @@ void GiveUpAgenda(IdleMind& mind)
 	mind.eyesToClear = true;
 }
 
-/// Waiting for the dancers to stand still: with no dance there is nothing to wait for
+/// The wait until the dancers stand still. With no dance, the creature does not wait. The wait has no time limit, as in
+/// the game. A dancer that walks round a tree for ever keeps the creature here until it faints.
 void WaitForDancers(IdleMind& mind, const Senses& senses)
 {
 	if (!senses.dance.has_value() || !senses.dance->exists)

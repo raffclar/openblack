@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "Common/DeveloperTools.h"
 #include "Editor/EditorContext.h"
 
 namespace openblack::editor
@@ -16,11 +17,11 @@ namespace openblack::editor
 
 /// The tab of the land generator. Before the generator starts, the tab has the button that starts it. While the
 /// generator is on, the tab shows the seed of the land, the main choices of the generator, the button that makes a
-/// land from them, and the button that stops the generator.
+/// land from them, and the button that stops the generator. In a network game, the tab shows only a note.
 class LandGeneratorPanel
 {
 public:
-	void Draw(EditorContext& context) noexcept;
+	void Draw(EditorContext& context, developer_tools::LandGeneratorTab tab) noexcept;
 };
 
 } // namespace openblack::editor

@@ -341,6 +341,14 @@ class LeashCheckOfTheWebGod(unittest.TestCase):
         arguments = net_check.web_join_plan(options, "wss://127.0.0.1:5000/game/x", "t", 600)["arguments"]
         self.assertEqual(arguments[arguments.index("--join-creature") + 1], "/game/Scripts/CreatureMind/C1.erc")
 
+    def test_only_a_page_with_the_developer_tools_takes_the_arguments_of_the_game(self):
+        with tempfile.TemporaryDirectory() as page:
+            # The page of a shipping tar ignores "args", so its web god never joins
+            self.assertFalse(net_check.web_page_takes_arguments(page))
+            with open(os.path.join(page, net_check.WEB_DEVELOPER_TOOLS_FILE), "w", encoding="utf-8"):
+                pass
+            self.assertTrue(net_check.web_page_takes_arguments(page))
+
 
 if __name__ == "__main__":
     unittest.main()

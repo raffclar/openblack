@@ -174,6 +174,40 @@ TEST(WallHugRules, AWalkerLeavesTheCircleOnlyNearerItsGoalAndWithTheGoalAhead)
 	EXPECT_FALSE(LeavesCircle(at(-11.0f), goal, {3277, 3277}, entry, false));
 }
 
+TEST(WallHugRules, AVillagerThatRunsRoundATreeTrunkWithAStepLongerThanTheTrunkGoesRoundForEver)
+{
+	// A villager runs to a creature's dance at 13.1 metres a second, round a pine tree with a trunk of 0.3 m. The
+	// start is a turn from a long life: its place, its game angle, its goal and its leave distance.
+	const int32_t speed = WholeSpeed(13.1f);
+	ASSERT_EQ(speed, 8585);
+	const glm::ivec2 goal {11998976, 17042654};
+	constexpr uint32_t k_Entry = 3854;
+	glm::ivec2 position {11854952, 17189262};
+	uint16_t angle = 1629;
+	// Each turn it turns by its step over the radius, which is more than half a turn
+	const uint16_t turn = OrbitTurn(speed, k_TreeTrunkRadius);
+	EXPECT_GT(turn, 1024);
+	// The next two turns are the same as in the life
+	const std::array<glm::ivec2, 2> life {glm::ivec2 {11846390, 17189761}, glm::ivec2 {11849744, 17197653}};
+	for (const auto& expected : life)
+	{
+		angle = static_cast<uint16_t>((angle + turn) & 0x7FF);
+		position += StepAlong(angle, speed);
+		EXPECT_EQ(position, expected);
+	}
+	// It goes round a loop of about 1.5 m across and never comes nearer its goal than when it started round, so it never
+	// leaves
+	constexpr float k_EntryMetres = static_cast<float>(k_Entry) / 128.0f;
+	for (int i = 0; i < 20000; ++i)
+	{
+		angle = static_cast<uint16_t>((angle + turn) & 0x7FF);
+		const auto step = StepAlong(angle, speed);
+		position += step;
+		ASSERT_FALSE(LeavesCircle(position, goal, step, k_Entry, false)) << "turn " << i;
+		ASSERT_GE(MetresDistanceSq(position, goal), k_EntryMetres * k_EntryMetres) << "turn " << i;
+	}
+}
+
 TEST(WallHugRules, AWalkerRoundACircleNotesANewLeaveDistanceWhenItsGoalMoves)
 {
 	const auto at = [](float x) { return ToWhole(k_Middle + glm::vec2(x, 0.0f)); };

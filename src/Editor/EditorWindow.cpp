@@ -1348,12 +1348,13 @@ void EditorWindow::DrawBottom(EditorContext& context) noexcept
 		_landTools.Draw(context);
 		ImGui::EndTabItem();
 	}
-	// The generator is a developer tool. The land of a network game must be the same on each computer, so a network game
-	// does not show the generator.
-	if (developer_tools::k_Built && !InNetworkGame() &&
+	// Each player who can open the editor sees the generator, in every build. The land of a network game must be the
+	// same on each computer, so in a network game the tab shows only a note.
+	if (const auto landGenerator = developer_tools::CurrentLandGeneratorTab();
+	    landGenerator != developer_tools::LandGeneratorTab::Hidden &&
 	    ImGui::BeginTabItem("Land generator", nullptr, flags(BottomTab::LandGenerator)))
 	{
-		_landGenerator.Draw(context);
+		_landGenerator.Draw(context, landGenerator);
 		ImGui::EndTabItem();
 	}
 	if (ImGui::BeginTabItem("Cheats", nullptr, flags(BottomTab::Cheats)))

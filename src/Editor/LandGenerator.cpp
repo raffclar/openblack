@@ -25,6 +25,23 @@
 using namespace openblack;
 using namespace openblack::editor;
 
+namespace
+{
+/// Whether the generator can load a land on this computer now. Only a player who can open the editor uses it, and
+/// never in a network game (see developer_tools::LandGeneratorTabOf).
+[[nodiscard]] bool LoadsHere()
+{
+	const auto tab = developer_tools::CurrentLandGeneratorTab();
+	if (tab != developer_tools::LandGeneratorTab::Shown)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game refuses the land generator: the tab is {}",
+		                   developer_tools::NameOf(tab));
+		return false;
+	}
+	return true;
+}
+} // namespace
+
 std::optional<uint32_t> land_generator::FreeSlot(std::span<const uint32_t> usedSlots)
 {
 	for (uint32_t slot = 0; slot <= gamesave::k_LastPlayerSlot; ++slot)
@@ -51,8 +68,7 @@ uint64_t land_generator::RandomSeed()
 
 bool land_generator::Start(Session& session, uint64_t seed)
 {
-	if (!developer_tools::Allowed(developer_tools::Action::ScenarioLoad) || !Locator::saveGameSystem::has_value() ||
-	    !Locator::landSystem::has_value())
+	if (!LoadsHere() || !Locator::saveGameSystem::has_value() || !Locator::landSystem::has_value())
 	{
 		session.status = "The land generator is not available in this game";
 		return false;
@@ -83,7 +99,7 @@ bool land_generator::Start(Session& session, uint64_t seed)
 
 bool land_generator::Generate(Session& session)
 {
-	if (!developer_tools::Allowed(developer_tools::Action::ScenarioLoad) || !Locator::landSystem::has_value())
+	if (!LoadsHere() || !Locator::landSystem::has_value())
 	{
 		session.status = "The land generator is not available in this game";
 		return false;

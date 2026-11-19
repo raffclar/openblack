@@ -152,6 +152,11 @@ void ShowEditorRefusal()
 	}
 }
 
+LandGeneratorTab CurrentLandGeneratorTab()
+{
+	return LandGeneratorTabOf(BuiltRule(), NetworkSessionLive(), LocalEditorRight());
+}
+
 GuiMode CurrentGuiMode()
 {
 	return GuiModeOf(BuiltRule(), NetworkSessionLive(), LocalEditorRight(), LocalDebuggerRight());

@@ -44,6 +44,10 @@ void ShowEditorRefusal();
 /// What the debug windows show now (see GuiModeOf)
 [[nodiscard]] GuiMode CurrentGuiMode();
 
+/// What the Land generator tab of the editor shows now (see LandGeneratorTabOf). It does not log, thus the game can
+/// call it in each frame.
+[[nodiscard]] LandGeneratorTab CurrentLandGeneratorTab();
+
 /// Whether the editor can open now (see EditorRefusalOf). The log tells each refusal. When the join ticket or the
 /// signed-in account does not have the editor right, the player sees the refusal line. Thus call it only for an event.
 [[nodiscard]] bool EditorAllowed();
