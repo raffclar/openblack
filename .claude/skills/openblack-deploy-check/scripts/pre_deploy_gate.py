@@ -18,7 +18,7 @@ passes. The gate never contacts the live site and changes nothing of a deploy.
 Web: it unpacks web-build.tar into the work folder and serves it on 127.0.0.1 with the headers of the live site
 (gate_serve.py). For each renderer (WebGPU, then WebGL 2 forced with the page parameter "renderer"), headless Chrome
 (web/scripts/cdp-run.mjs) starts the page as a player gets it: the new player's name box, the first question of Land 1,
-then a click on its OK button and the land after it. The page of a shipping build takes no developer arguments and
+then a click on its OK button (found by its arrow in a screenshot), the answer in the game log and the land after it. The page of a shipping build takes no developer arguments and
 ignores the -SKIRMISH switch, and a shipping game has no --landgen (a developer option). So the run then starts a
 skirmish as a player does: Continue on the advisors' lines, Escape for the main menu, Start Skirmish Game, a land of
 the skirmish box and Start Game (--land1-only leaves this part out).
@@ -83,9 +83,11 @@ READ_FRAMES = (
     " + ' max ' + d[d.length - 1].toFixed(2); })()")
 FRAME_LINE = re.compile(r"frames (\d+) avg ([\d.]+) p95 ([\d.]+) max ([\d.]+)")
 # The places of the first question of Land 1 on the page (CSS pixels of a 1280x1024 window): the page clicks the sea
-# below the box to lock the pointer, then moves the game pointer onto the OK button and presses it.
+# below the box to lock the pointer, then moves the game pointer onto the OK button and presses it. The gate finds the
+# OK button by the black arrow at its left in a screenshot. A build with the developer tools has a fifth answer, and
+# its box is one radio step taller, so the button is lower than in the builds that players get (deviation row 31).
 LOCK_CLICK = (640, 960)
-QUESTION_OK = (405, 707)
+QUESTION_OK_ARROW = {"low": [0, 0, 0], "high": [24, 24, 24], "box": [350, 600, 396, 800], "minCount": 200}
 # The skirmish path of a player: the Continue button of the advisors' lines on Land 1, the empty band below the main
 # menu (a click there takes the pointer again), the Start Skirmish Game button of the main menu, the second land of the
 # skirmish box ("Death Comes To Those That Wait" with the game folder of this computer; the first land is the
@@ -146,11 +148,12 @@ def land1_steps():
         {"at": 10.3, "do": "mouse", "type": "mousePressed", "x": LOCK_CLICK[0], "y": LOCK_CLICK[1], "button": "left"},
         {"at": 10.4, "do": "mouse", "type": "mouseReleased", "x": LOCK_CLICK[0], "y": LOCK_CLICK[1], "button": "left"},
         {"at": 11, "do": "wait-log", "text": "The page locked the pointer", "seconds": 60},
-        {"at": 12, "do": "pointer-to", "x": QUESTION_OK[0], "y": QUESTION_OK[1]},
+        {"at": 12, "do": "pointer-to-colour", **QUESTION_OK_ARROW},
         {"at": 13, "do": "wait-frames", "count": 3, "seconds": 60},
         {"at": 14, "do": "synth-button", "type": "mousedown", "button": 0},
         {"at": 14.1, "do": "wait-frames", "count": 3, "seconds": 60},
         {"at": 14.5, "do": "synth-button", "type": "mouseup", "button": 0},
+        {"at": 15, "do": "wait-log", "text": gate_checks.QUESTION_ANSWERED, "seconds": 20},
         {"at": 30, "do": "shot", "name": "past"},
         {"at": 31, "do": "eval", "expression": SAMPLE_FRAMES},
         {"at": 42, "do": "eval", "expression": READ_FRAMES},
@@ -288,6 +291,7 @@ def web_gate(tar, work, renderers, reference_dir, measures, built_page=None, ski
             started = "Load startup: first frame" in run["log"]
             item(f"{label}: game started", started and run["exit"] == 0,
                  f"cdp-run exit {run['exit']}" + ("" if started else ", no first frame in the game log"))
+            item(f"{label}: OK answered the first question", *gate_checks.question_answered(run["log"]))
             check_pictures(label, run, ["question", "past"], reference_dir, measures)
             check_console(label, run, serve_log, serve_from)
             frames = FRAME_LINE.findall(run["console"])
