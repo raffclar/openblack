@@ -319,6 +319,9 @@ void Game::HandleInterfaceAction()
 	{
 		Locator::tutorialSkipSystem::value().Set(new_game_choice::SkipFor(*answer));
 		Locator::time::value().SetPlayerPause(false);
+		// The pre-deploy gate looks for this line: it shows that the click on OK started the story
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player answered the start-of-game question: answer {}",
+		                   static_cast<int>(*answer));
 	}
 
 	// The edits on the Players page are kept with the profile played, before anything its buttons do

@@ -13,6 +13,7 @@
     "looks": "../openblack-work/looks",
     "screenshots": "../openblack-work/screenshots",
     "leadLog": "../openblack-work/handovers/lead_agent_queue_log.md",
+    "gateReference": "",
     "laneRules": "",
     "workSources": [
       "../openblack-work/handovers/backlog"

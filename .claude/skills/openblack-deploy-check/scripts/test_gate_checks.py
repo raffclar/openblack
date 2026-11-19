@@ -108,6 +108,16 @@ class ServerTest(unittest.TestCase):
                          "0.1.0+9f73a40c4184/codec36")
         self.assertIsNone(gate_checks.build_id("no version"))
 
+    def test_question_answered(self):
+        log = ("[2026-11-19 03:43:00.446] [game] [info] [GameActionMap.cpp:487] The page locked the pointer\n"
+               "[2026-11-19 03:43:02.101] [game] [info] [GameMenus.cpp:323] The player answered the start-of-game "
+               "question: answer 0\n")
+        self.assertEqual(gate_checks.question_answered(log),
+                         (True, "The player answered the start-of-game question: answer 0"))
+        # The game stayed on the question: the click missed OK
+        self.assertFalse(gate_checks.question_answered(log.splitlines()[0])[0])
+        self.assertFalse(gate_checks.question_answered("")[0])
+
     def test_checklist_summary(self):
         self.assertEqual(gate_checks.checklist_summary(["PASS"] * 4 + ["STOP"] * 3),
                          ("PASS: 4 of 7 items pass, 3 STOP", 0))

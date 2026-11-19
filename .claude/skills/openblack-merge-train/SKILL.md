@@ -24,6 +24,7 @@ worktree finds the file in the main checkout. The values the train uses:
 | `paths.mergeTrain` | The train's working files (below). Not in the repository. |
 | `paths.worktrees`, `paths.builds` | Where cars put their worktrees (`prm-wtb<batch>`) and the ship builds. |
 | `paths.leadLog` | Each merged car appends one line here. |
+| `paths.gateReference` | The gate pictures of the live web build, for the web check of each car (default `E:/openblack/deploy-gate/reference`). |
 | `tools.obBuild` | The build tool. Default: `tools/build/ob-build` in the main checkout. |
 | `tools.clangFormat` | clang-format for the automatic conflict fixes. |
 | `commit.trainTrailer` | The trailer of the train's commits. |
@@ -44,7 +45,7 @@ Scripts, in this skill's `scripts/` folder (call them by their full path from an
 | `check_lost.sh` | Lists unmerged cars missing from both order files. Run before you choose the next work. The output must be empty. |
 | `prep_hand.sh`, `post_hand.sh` | Start and end a hand car, with vanilla-bugs row renumbering (`old:new`). |
 | `nc3_check.sh <worktree> <build dir>` | The 3-client net check of each car. |
-| `web_check.sh <worktree> <web build dir> <out>` | The web check of each car: one Release web build (`ob-web`), then the web part of the pre-deploy gate on WebGPU (Land 1 draws, no graphics device error in the console). FAIL stops the car (exit 18); the web build folder `prm-wtb<batch>-web` stays for a look, else it is deleted. About 7 to 10 minutes more for each car (a web build of about 4 minutes with a warm cache, then a gate run of 3 to 6 minutes). |
+| `web_check.sh <worktree> <web build dir> <out>` | The web check of each car: one Release web build (`ob-web`), then the web part of the pre-deploy gate on WebGPU with the gate reference (`paths.gateReference`, default `E:/openblack/deploy-gate/reference`): OK answers the first question, Land 1 draws with colours like the live build, no graphics device error in the console. FAIL stops the car (exit 18); the web build folder `prm-wtb<batch>-web` stays for a look, else it is deleted. About 7 to 10 minutes more for each car (a web build of about 4 minutes with a warm cache, then a gate run of 3 to 6 minutes). |
 | `uz_shots.py <ref exe> <new exe> <out dir>` | The pixel check of old against new master (needs `paths.gameData`). |
 | `resolve_*.py`, `union_conflicts.py`, `includes_only.py`, `fix_kind_names.py`, `hunk.py`, `sort_rows.py` | Conflict helpers. `hunk.py` resolves one conflict block by hand. |
 
