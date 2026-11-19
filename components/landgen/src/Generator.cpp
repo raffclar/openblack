@@ -73,6 +73,17 @@ Grid<uint8_t> Mask(int side, auto&& test)
 	}
 	return mask;
 }
+
+/// The height units that the game draws at each corner, from the heights through the curve
+Grid<float> MakeDrawnUnits(const Grid<float>& heights, const HeightCurve& curve)
+{
+	Grid<float> units(heights.side, 0.0f);
+	for (size_t i = 0; i < units.values.size(); ++i)
+	{
+		units.values[i] = curve.UnitsOf(std::clamp(heights.values[i], 0.0f, terrain::k_HighestAltitude));
+	}
+	return units;
+}
 } // namespace
 
 Sound openblack::landgen::SoundOf(Biome biome)
@@ -182,7 +193,7 @@ void openblack::landgen::FlattenStartArea(Grid<float>& heights, const StartArea&
 
 Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>& altitudes, const Grid<uint8_t>& luminosity,
                                                             const Grid<Biome>& biomes, const Grid<uint8_t>& freshWater,
-                                                            const Grid<uint8_t>& runningWater, const Grid<float>* lakeLevels)
+                                                            const Grid<float>* lakeLevels)
 {
 	const int side = altitudes.side;
 	Grid<openblack::lnd::LNDCell> cells(side, openblack::lnd::LNDCell {});
@@ -247,10 +258,6 @@ Grid<openblack::lnd::LNDCell> openblack::landgen::MakeCells(const Grid<uint8_t>&
 					cell.properties.coastLine = 1;
 				}
 				sound = static_cast<uint8_t>(Sound::StillFreshWater);
-			}
-			else if (runningWater.At(x, z) != 0)
-			{
-				sound = static_cast<uint8_t>(Sound::RunningWater);
 			}
 			else
 			{
@@ -528,6 +535,10 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	const auto seaNow = Mask(side, [&altitudes](size_t i) { return altitudes.values[i] <= k_SeaLevelAltitude; });
 	const auto water = Mask(side, [&](size_t i) { return seaNow.values[i] != 0 || riverCorners.values[i] != 0; });
 	const auto temperature = climate::Temperature(heights, seed, climateSettings);
+	// The height units that the game draws, which the rules of the trees use. The mountains and the cold of the biomes
+	// come from them, so that the alpine and nordic stands start on ground where their kinds of tree grow.
+	const auto drawnUnits = MakeDrawnUnits(heights, land.heightCurve);
+	const auto drawnTemperature = climate::Temperature(drawnUnits, seed, climateSettings);
 	const auto moisture = climate::Moisture(heights, water, seed, climateSettings);
 	const auto seaDistance = climate::DistanceToWater(seaNow);
 	const auto slopes = terrain::Slopes(heights);
@@ -550,7 +561,9 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 			biomes.At(x, z) = biomes::Classify(
 			    {
 			        .altitude = static_cast<float>(altitudes.values[index]),
+			        .drawnAltitude = drawnUnits.values[index],
 			        .temperature = temperature.values[index],
+			        .drawnTemperature = drawnTemperature.values[index],
 			        .moisture = moisture.values[index],
 			        .slope = slopes.values[index],
 			        .seaDistance = seaDistance.values[index],
@@ -733,8 +746,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 			freshWater.values[corner] = 1;
 		}
 	}
-	const auto runningWater = Mask(side, [&riverDistance](size_t i) { return riverDistance.values[i] <= 2.0f; });
-	land.cells = MakeCells(altitudes, luminosity, land.biomes, freshWater, runningWater, &lakeLevels);
+	land.cells = MakeCells(altitudes, luminosity, land.biomes, freshWater, &lakeLevels);
 	land.materials = countries::UsedSurfaces();
 	for (size_t biome = 0; biome < biomes::k_BiomeCount; ++biome)
 	{

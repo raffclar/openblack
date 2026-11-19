@@ -370,7 +370,9 @@ TEST(LandgenRoadBed, AGeneratedLandCutsAndFillsTheBedsOfItsPathsAndMakesNoNewCli
 	ASSERT_EQ(graded.cells.values.size(), flat.cells.values.size());
 	const int side = graded.cells.side;
 
-	// Each change is near a path, and no water changes
+	// Each change is near a path, and no water changes. On steep land the taper of a bank can reach about 21 corners
+	// from the path.
+	constexpr int k_Reach = 24;
 	Grid<uint8_t> nearPath(side, 0);
 	for (const auto& path : graded.paths)
 	{
@@ -378,9 +380,9 @@ TEST(LandgenRoadBed, AGeneratedLandCutsAndFillsTheBedsOfItsPathsAndMakesNoNewCli
 		{
 			const int px = static_cast<int>(point.x);
 			const int pz = static_cast<int>(point.z);
-			for (int x = px - 16; x <= px + 16; ++x)
+			for (int x = px - k_Reach; x <= px + k_Reach; ++x)
 			{
-				for (int z = pz - 16; z <= pz + 16; ++z)
+				for (int z = pz - k_Reach; z <= pz + k_Reach; ++z)
 				{
 					if (nearPath.Contains(x, z))
 					{

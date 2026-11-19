@@ -408,7 +408,7 @@ void testbed_scenarios::AddEditor(std::vector<Scenario>& all)
 	    .facet = Facet::Editor,
 	    .description = "After a second, the land generator makes the land of seed 7 and the game loads it. Fly round "
 	                   "the coast of the island.",
-	    .expected = "The coast has three kinds of parts. On a beach, flat sand goes 250 to 450 metres from the water, "
+	    .expected = "The coast has three kinds of parts. On a beach, flat sand goes 60 to 125 metres from the water, "
 	                "with palms at its back and dunes behind it, and some beaches have groups of spiky pillars. On a "
 	                "bank, a flat strip of about 40 metres goes to a slope. On a sea cliff, a steep face rises 25 to 45 "
 	                "metres from the flat strip, also where the land behind is low, and rivers cut through the cliff.",

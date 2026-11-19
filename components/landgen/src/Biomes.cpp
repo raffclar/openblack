@@ -21,11 +21,11 @@ Biome biomes::Classify(const Conditions& c, const Thresholds& t)
 	{
 		return Biome::Sea;
 	}
-	if (c.altitude >= t.alpineAltitude)
+	if (c.drawnAltitude >= t.alpineAltitude)
 	{
 		return Biome::Alpine;
 	}
-	if (c.temperature < t.nordicTemperature)
+	if (c.drawnTemperature < t.nordicTemperature)
 	{
 		return Biome::NordicWastes;
 	}

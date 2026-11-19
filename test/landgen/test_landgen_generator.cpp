@@ -25,7 +25,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0xD7AB56432930CE44ull;
+constexpr uint64_t k_SmallLandHash = 0xC21DFFD151269E11ull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)
@@ -494,6 +494,90 @@ TEST(LandgenFeatures, TheRingOfRocksStandsOnFlatGrass)
 	EXPECT_TRUE(found);
 }
 
+namespace
+{
+/// A fake land: the sea, low grass, then a high plateau above the tree line
+struct TreeLineLand
+{
+	static constexpr int k_Side = 96;
+	Grid<Biome> biomes {k_Side, Biome::Grassland};
+	Grid<float> heights {k_Side, 20.0f};
+	Grid<float> sea {k_Side, 40.0f};
+
+	TreeLineLand()
+	{
+		for (int z = 0; z < k_Side; ++z)
+		{
+			for (int x = 0; x < k_Side; ++x)
+			{
+				if (x < 8)
+				{
+					biomes.At(x, z) = Biome::Sea;
+					heights.At(x, z) = 0.0f;
+				}
+				else if (x >= 52)
+				{
+					// 167.5 m on the curve of the lands of the story
+					heights.At(x, z) = 250.0f;
+				}
+				sea.At(x, z) = static_cast<float>(std::max(x - 7, 0));
+			}
+		}
+	}
+};
+} // namespace
+
+TEST(LandgenFeatures, TheStandFillLeavesOutTheHighAndTheSteepGround)
+{
+	const TreeLineLand land;
+	const auto keepClear = Clear(TreeLineLand::k_Side);
+	const auto fill = features::StandFill({.biomes = land.biomes,
+	                                       .heights = land.heights,
+	                                       .seaDistance = land.sea,
+	                                       .keepClear = keepClear,
+	                                       .clearings = {},
+	                                       .townX = k_FarTown,
+	                                       .townZ = k_FarTown});
+	// The land is the columns 8 to 95. The low grass is the columns 8 to 51, but the slope at 51 is too steep.
+	EXPECT_FLOAT_EQ(fill.at(static_cast<size_t>(Biome::Grassland)), 88.0f / 43.0f);
+	// A biome that has no ground keeps its stands
+	EXPECT_FLOAT_EQ(fill.at(static_cast<size_t>(Biome::Desert)), 1.0f);
+}
+
+TEST(LandgenFeatures, MoreStandsStartWhenPartOfTheLandIsAboveTheTreeLine)
+{
+	const TreeLineLand land;
+	const auto keepClear = Clear(TreeLineLand::k_Side);
+	const auto trees = [&](bool fill) {
+		features::Settings settings;
+		settings.fillGrowableGround = fill;
+		size_t count = 0;
+		for (uint64_t seed = 1; seed <= 4; ++seed)
+		{
+			const auto placed = features::Place({.biomes = land.biomes,
+			                                     .heights = land.heights,
+			                                     .seaDistance = land.sea,
+			                                     .keepClear = keepClear,
+			                                     .clearings = {},
+			                                     .townX = k_FarTown,
+			                                     .townZ = k_FarTown},
+			                                    seed, settings);
+			for (const auto& feature : placed)
+			{
+				if (feature.kind == features::Kind::Tree)
+				{
+					// No tree grows on the plateau
+					EXPECT_LT(feature.x / 10.0f, 52.5f);
+					++count;
+				}
+			}
+		}
+		return count;
+	};
+	// Half of the land holds no tree, so the low grass gets about twice the stands
+	EXPECT_GT(trees(true), trees(false) * 4 / 3);
+}
+
 TEST(LandgenFeatures, SpikyPillarsStandInGroupsOnTheBeach)
 {
 	constexpr int k_Side = 96;
@@ -913,7 +997,7 @@ TEST(LandgenGenerator, CellsTakeTheirWaterAndSoundFromTheirCorners)
 	}
 	const Grid<uint8_t> light(6, 200);
 	const Grid<Biome> biomes(6, Biome::Grassland);
-	const auto cells = MakeCells(altitudes, light, biomes, Clear(6), Clear(6));
+	const auto cells = MakeCells(altitudes, light, biomes, Clear(6));
 	EXPECT_EQ(cells.At(0, 2).flags, static_cast<uint8_t>(k_OpenWaterFlag | (static_cast<uint8_t>(Sound::Sea) << 2u)));
 	EXPECT_EQ(cells.At(0, 2).properties.hasWater, 1);
 	EXPECT_EQ(cells.At(1, 2).properties.hasWater, 1);
@@ -944,6 +1028,17 @@ TEST(LandgenGenerator, TheStartAreaIsFlat)
 	{
 		EXPECT_FLOAT_EQ(heights.At(cx + d, cz), heights.At(cx, cz));
 	}
+}
+
+TEST(LandgenGenerator, NoCellHasTheSoundOfRunningWater)
+{
+	// As on the lands of the story, the cells by the streams have the sound of the land round them
+	const auto land = Generate(SmallSettings(77));
+	ASSERT_FALSE(land.rivers.empty());
+	const auto running = static_cast<uint8_t>(Sound::RunningWater);
+	const auto count = std::ranges::count_if(
+	    land.cells.values, [running](const openblack::lnd::LNDCell& cell) { return ((cell.flags >> 2u) & 0xFu) == running; });
+	EXPECT_EQ(count, 0);
 }
 
 TEST(LandgenGenerator, TheSameSeedGivesTheSameLand)

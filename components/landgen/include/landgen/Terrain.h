@@ -291,9 +291,11 @@ struct ShelfSettings
 	/// The coast is a cliff where the noise is below the start, and all cliff below the full value
 	float cliffStart {0.15f};
 	float cliffFull {-0.05f};
-	/// The width of a beach in corners from the water, from the lowest to the highest that the noise gives
-	float beachLow {25.0f};
-	float beachHigh {45.0f};
+	/// The width of a beach in corners from the water, from the lowest to the highest that the noise gives. The widest
+	/// is the widest sand of the lands of the story (the 90th percentile of the distance of the sand from the sea is
+	/// 60 to 125 m).
+	float beachLow {6.0f};
+	float beachHigh {12.5f};
 	/// The altitude of the back of a beach. The front of the beach is at the fourth shore step.
 	float beachBack {6.0f};
 	/// The rise of the dunes behind a beach, in altitude units for each corner
