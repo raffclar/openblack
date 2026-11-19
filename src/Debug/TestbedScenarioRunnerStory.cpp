@@ -100,6 +100,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/WorldObjects.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Gui/GameTexts.h"
 #include "Help/Spirits.h"
 #include "Input/GameActionMapInterface.h"
@@ -108,6 +109,7 @@
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Magic/TownBelief.h"
+#include "Online/NetworkLand.h"
 #include "PlayerSlots.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "TestbedScenarioRunner.h"
@@ -437,6 +439,16 @@ bool Runner::GiveStoryCommand(const Command& command)
 		                                                                    .landType = landType,
 		                                                                    .archipelago = archipelago ? 1 : 0});
 		Log(fmt::format("{:.1f}s: generated land {}: {}", _seconds, command.value, loaded ? "loaded" : "not loaded"));
+		return true;
+	}
+	if (command.kind == Kind::LoadMapLand)
+	{
+		// The land loads as the story land of a scenario loads, with its scripts from the start
+		const auto& fileSystem = Locator::filesystem::value();
+		const auto path = network_land::PathOf(command.land, fileSystem.GetPath<filesystem::Path::Scripts>());
+		const bool loaded = path.has_value() && Locator::landSystem::has_value() &&
+		                    Locator::landSystem::value().LoadMapWithFreshScripts(*path, land_change::Kind::NewGame);
+		Log(fmt::format("{:.1f}s: land {}: {}", _seconds, command.land, loaded ? "loaded" : "not loaded"));
 		return true;
 	}
 	if (command.kind == Kind::ZoomToTempleCaveTarget)
