@@ -115,8 +115,29 @@ void BrowserErrorReports::SetEnabled(bool enabled)
 
 void BrowserErrorReports::SetAccountConsent(std::optional<AccountConsent> consent)
 {
+	if (consent.has_value())
+	{
+		HideName(consent->name);
+	}
 	_account = std::move(consent);
 	Apply();
+}
+
+void BrowserErrorReports::HideName(std::string_view name)
+{
+	// Only a new name goes to the page, because the call waits for the main thread of the browser
+	if (!_hiddenNames.Add(name))
+	{
+		return;
+	}
+	const std::string text(name);
+	// clang-format off
+	MAIN_THREAD_EM_ASM({
+		if (globalThis.openblackErrorReports) {
+			globalThis.openblackErrorReports.hideName(UTF8ToString($0));
+		}
+	}, text.c_str());
+	// clang-format on
 }
 
 void BrowserErrorReports::Apply()

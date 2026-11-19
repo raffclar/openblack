@@ -8,6 +8,8 @@
 // attachment. The reports have no page parameters and no secrets: the page removes them before a report goes. They
 // have no user and no IP address, unless the lobby account of the player gave the choice "full" on the site. Then the
 // game gives the page the id and the name of the account (setUser), and Sentry takes the IP address of the report.
+// The game log and the texts of a report have no names of players and no email addresses: the game gives the page each
+// name that it knows (hideName), and the page replaces the names and the addresses with a mark (hideNames).
 //
 // The frames of the WebAssembly code in a report have the offset of each instruction in the module. The page gives the
 // build id of the module with each report, so that Sentry finds the debug file of the build and shows the function
@@ -27,6 +29,11 @@ const k_MostBreadcrumbs = 100;
 // A frame of the WebAssembly code in a stack of the browser: the address of the module, the index of the function and
 // the offset of the instruction in the module
 const k_WasmFramePattern = /^(.*?):wasm-function\[\d+\]:(0x[0-9a-fA-F]+)$/;
+// The texts that the reports show in place of a name of a player and an email address, as the game does
+const k_HiddenNameText = '<name>';
+const k_HiddenEmailText = '<email>';
+// The shortest name that the reports hide. A shorter name would hide too much of the log.
+const k_ShortestHiddenName = 2;
 // The message of the report when a new worker of a game thread could not load the program
 const k_ThreadLoadFailedText = 'A game thread could not start: its worker could not load the program from the site';
 
@@ -44,6 +51,47 @@ function maskSecrets(text) {
     .replace(/v4\.(public|local)\.[A-Za-z0-9_\-.=+/]+/g, '<hidden>')
     .replace(/Bearer [A-Za-z0-9_\-.=+/]+/g, '<hidden>')
     .replace(/(\w*(?:ticket|password|token|session|secret)\w*"?\s*[=:]\s*"?)([^"\s,;&]+)/gi, '$1<hidden>');
+}
+
+/** The text with each email address replaced by a mark, as the game does */
+function hideEmails(text) {
+  return String(text).replace(/[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]{2,}/g, k_HiddenEmailText);
+}
+
+/** Can the reports hide the name? A name with only digits would hide the turns and the other numbers of the log. */
+function isHiddenName(name) {
+  const text = String(name || '');
+  return text.length >= k_ShortestHiddenName && !/^\d+$/.test(text);
+}
+
+/**
+ * The text with each email address and each name of the list replaced by a mark, as the game does. A name has no
+ * difference for upper case, and it matches only as a full word.
+ */
+function hideNames(text, names) {
+  const hidden = hideEmails(text);
+  const list = [...new Set((names || []).filter(isHiddenName).map(String))].sort((a, b) => b.length - a.length);
+  if (list.length === 0) {
+    return hidden;
+  }
+  const words = list.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  return hidden.replace(new RegExp(`(?<![\\p{L}\\p{N}_])(?:${words})(?![\\p{L}\\p{N}_])`, 'giu'), k_HiddenNameText);
+}
+
+/** Replace each text value in the object (and in its objects and lists) with the text with the names hidden */
+function hideNameValues(value, names) {
+  if (typeof value === 'string') {
+    return hideNames(value, names);
+  }
+  if (Array.isArray(value)) {
+    return value.map((each) => hideNameValues(each, names));
+  }
+  if (value && typeof value === 'object') {
+    for (const key of Object.keys(value)) {
+      value[key] = hideNameValues(value[key], names);
+    }
+  }
+  return value;
 }
 
 /** The address with no query and no fragment: the page parameters can hold developer files and arguments */
@@ -199,7 +247,7 @@ function addWasmDebugImage(event, buildId) {
  * The options of the Sentry SDK. The SDK uses only the integrations in the list: the page reports the errors itself,
  * and makes its own breadcrumbs. The SDK makes no traces and no replays.
  */
-function sentryOptions(Sentry, settings, logText, user = () => undefined, buildId = () => undefined) {
+function sentryOptions(Sentry, settings, logText, user = () => undefined, buildId = () => undefined, names = () => []) {
   return {
     dsn: settings.dsn,
     release: settings.release,
@@ -211,12 +259,20 @@ function sentryOptions(Sentry, settings, logText, user = () => undefined, buildI
     defaultIntegrations: false,
     integrations: [Sentry.dedupeIntegration(), Sentry.linkedErrorsIntegration(), Sentry.httpContextIntegration()],
     initialScope: { tags: { [k_RoleTagName]: settings.role } },
+    // The log and the texts of the event have no names of players and no email addresses (hideNames)
     beforeSend: (event, hint) => {
+      const hidden = names();
       if (hint) {
         hint.attachments = [...(hint.attachments || []),
-          { filename: k_LogAttachmentName, data: maskSecrets(logText()), contentType: 'text/plain' }];
+          { filename: k_LogAttachmentName, data: hideNames(maskSecrets(logText()), hidden), contentType: 'text/plain' }];
       }
-      return scrubEvent(addWasmDebugImage(event, buildId()), user());
+      const scrubbed = scrubEvent(addWasmDebugImage(event, buildId()), user());
+      for (const part of ['message', 'logentry', 'exception', 'extra', 'tags', 'breadcrumbs']) {
+        if (scrubbed[part] !== undefined) {
+          scrubbed[part] = hideNameValues(scrubbed[part], hidden);
+        }
+      }
+      return scrubbed;
     },
   };
 }
@@ -265,6 +321,15 @@ class ErrorReports {
     this.environment = undefined;
     // The id and the name of the account with the choice "full", or undefined: the reports then have no user
     this.user = undefined;
+    // The names of the players that the game gave: the reports hide them (hideNames)
+    this.names = new Set();
+  }
+
+  /** Hide the name of a player, an account or a profile in the log and the texts of the next reports */
+  hideName(name) {
+    if (isHiddenName(name)) {
+      this.names.add(String(name));
+    }
   }
 
   /** The user of the next reports ({ id, username }), or undefined for reports with no personal data */
@@ -290,7 +355,8 @@ class ErrorReports {
         }
         this.sentry = Sentry;
         const environment = this.environment || settings.environment;
-        Sentry.init(sentryOptions(Sentry, { ...settings, environment }, this.logText, () => this.user, this.buildId));
+        Sentry.init(sentryOptions(Sentry, { ...settings, environment }, this.logText, () => this.user, this.buildId,
+          () => [...this.names]));
         const client = Sentry.getClient && Sentry.getClient();
         if (client && client.on) {
           client.on('beforeEnvelope', (envelope) => applyIpChoice(envelope, this.user));
@@ -430,6 +496,6 @@ if (typeof module !== 'undefined') {
   module.exports = {
     ErrorReports, scrubEvent, applyIpChoice, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
     wasmModuleInfo, wasmDebugImage, addWasmDebugImage, k_LogAttachmentName, k_RoleTagName, isThreadLoadFailure,
-    k_ThreadLoadFailedText,
+    k_ThreadLoadFailedText, hideEmails, hideNames, k_HiddenNameText, k_HiddenEmailText,
   };
 }

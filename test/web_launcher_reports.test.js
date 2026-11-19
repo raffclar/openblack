@@ -4,7 +4,8 @@
 const assert = require('node:assert/strict');
 const {
   ErrorReports, scrubEvent, applyIpChoice, sentryOptions, crashError, desyncEvent, maskSecrets, addressWithoutParameters,
-  wasmModuleInfo, addWasmDebugImage, k_LogAttachmentName, isThreadLoadFailure, k_ThreadLoadFailedText,
+  wasmModuleInfo, addWasmDebugImage, k_LogAttachmentName, isThreadLoadFailure, k_ThreadLoadFailedText, hideEmails,
+  hideNames,
 } = require('../web/page/launcher-reports.js');
 
 let count = 0;
@@ -345,6 +346,38 @@ check('the options of the SDK add the debug image and remove the personal data',
   assert.equal(event.user, undefined);
   assert.equal(event.debug_meta.images[0].code_file, 'https://example.org/openblack.wasm');
   assert.equal(event.exception.values[0].stacktrace.frames[0].instruction_addr, '0x10');
+});
+
+check('the email addresses get a mark, and other texts with an "@" stay the same', () => {
+  assert.equal(hideEmails('Mail bob.smith+tag@example.co.uk now.'), 'Mail <email> now.');
+  assert.equal(hideEmails('turn 5 @ 3, a@b, @home'), 'turn 5 @ 3, a@b, @home');
+});
+check('a name matches as a full word with no difference for upper case', () => {
+  assert.equal(hideNames('slot 1 (Player2), PLAYER2 left, player2x stays', ['Player2']),
+    'slot 1 (<name>), <name> left, player2x stays');
+  assert.equal(hideNames('Bob Smith and Bob joined', ['Bob', 'Bob Smith']), '<name> and <name> joined');
+  // The characters of a name are not a pattern
+  assert.equal(hideNames('a.b axb joined', ['a.b']), '<name> axb joined');
+});
+check('the names of digits and short names stay, so the log keeps its turns and keys', () => {
+  const line = 'Desync report: key Animal of game 4f2a at turn 1200';
+  assert.equal(hideNames(line, ['1200', 'A', '']), line);
+});
+check('the log and the texts of each event have no names that the game gave and no email addresses', async () => {
+  const { reports, sentry } = makeReports();
+  reports.logText = () => 'slot 1 (Mira) joined, mail mira@mail.example\npassword=hunter2';
+  reports.start(settings);
+  await settle();
+  const options = sentry.calls.find((call) => call[0] === 'init')[1];
+  reports.hideName('Mira');
+  reports.hideName('7');
+  const hint = {};
+  const event = options.beforeSend({ message: 'Mira left', tags: { who: 'MIRA' }, extra: { turn: '7' } }, hint);
+  assert.equal(hint.attachments[0].data, 'slot 1 (<name>) joined, mail <email>\npassword=<hidden>');
+  assert.equal(event.message, '<name> left');
+  assert.equal(event.tags.who, '<name>');
+  assert.equal(event.extra.turn, '7');
+  reports.stop();
 });
 
 (async () => {

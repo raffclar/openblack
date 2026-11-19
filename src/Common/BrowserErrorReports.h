@@ -12,8 +12,10 @@
 #include <cstdint>
 
 #include <string>
+#include <string_view>
 
 #include "ErrorReportsInterface.h"
+#include "ReportRedaction.h"
 #include "SentryBuildDsn.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -38,7 +40,8 @@ struct BrowserReportSettings
 };
 
 /// The reports to Sentry of the web game, through the Sentry browser SDK of the page (web/page/launcher-reports.js).
-/// The page attaches the game log to each report, and it removes the personal data first. The crash handler of the game
+/// The page attaches the game log to each report, and it removes the personal data first. The page also hides the names
+/// that the game gives (HideName) and the email addresses. The crash handler of the game
 /// gives each crash to the page, with the stack of the thread of the crash. The page itself reports the traps and the
 /// aborts of the WebAssembly code.
 class BrowserErrorReports final: public ErrorReportsInterface
@@ -57,6 +60,8 @@ public:
 	void SetAccountConsent(std::optional<AccountConsent> consent) override;
 	void SendDesync(const DesyncReport& report) override;
 	void SendEvent(const FailureEvent& event) override;
+	/// Gives the name to the page, which hides it in the log and the texts of each report
+	void HideName(std::string_view name) override;
 	[[nodiscard]] ErrorReportsState GetState() const override
 	{
 		return {.hasDestination = HasDestination(),
@@ -86,6 +91,8 @@ private:
 	/// The id of the account that the reports name now, or empty
 	std::string _namedAccount;
 	uint32_t _desyncEvents {0};
+	/// The names that the page has already
+	NameRedactor _hiddenNames;
 };
 
 } // namespace openblack::error_reports

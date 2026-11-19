@@ -11,10 +11,17 @@
 
 #include <cstdint>
 
+#include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+
+namespace spdlog::sinks
+{
+class sink;
+} // namespace spdlog::sinks
 
 namespace openblack::error_reports
 {
@@ -121,6 +128,12 @@ public:
 	virtual void SendDesync(const DesyncReport& report) = 0;
 	/// Sends an event of a failure that the game found. Nothing when the service does not send reports.
 	virtual void SendEvent(const FailureEvent& event) = 0;
+	/// Keeps the name of a player, an account or a profile out of the log that the reports attach and out of the texts
+	/// of the events. The name stays hidden until the program ends.
+	virtual void HideName(std::string_view name) = 0;
+	/// The sink that writes the log that the reports attach, with the names hidden. The loggers of the program write to
+	/// it and to the log file. Nothing when the reports attach no log.
+	[[nodiscard]] virtual std::shared_ptr<spdlog::sinks::sink> ReportLogSink() const { return nullptr; }
 };
 
 } // namespace openblack::error_reports

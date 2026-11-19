@@ -129,6 +129,64 @@ using namespace openblack;
 namespace
 {
 
+/// Gives the error reports each name of a player that the game knows: the lobby account, the members of the lobby room,
+/// the players of the network game and the profiles. The reports hide these names in the log that they attach. The
+/// service keeps each name only once, thus the same names each frame cost little.
+void FollowReportNames()
+{
+	if (!Locator::errorReports::has_value())
+	{
+		return;
+	}
+	auto& reports = Locator::errorReports::value();
+	if (Locator::lobbyClient::has_value())
+	{
+		if (const auto account = Locator::lobbyClient::value().GetAccount(); account.has_value())
+		{
+			reports.HideName(account->name);
+		}
+	}
+	if (Locator::lobbyRoom::has_value())
+	{
+		if (const auto* room = Locator::lobbyRoom::value().Room(); room != nullptr)
+		{
+			reports.HideName(room->Data().host.name);
+			for (const auto& member : room->Data().members)
+			{
+				reports.HideName(member.account.name);
+			}
+		}
+	}
+	if (Locator::networkGame::has_value())
+	{
+		if (const auto* session = Locator::networkGame::value().Session(); session != nullptr)
+		{
+			if (const auto& start = session->GetStart(); start.has_value())
+			{
+				for (const auto& name : start->names)
+				{
+					reports.HideName(name);
+				}
+				for (const auto& god : start->gods)
+				{
+					reports.HideName(god.name);
+				}
+			}
+		}
+	}
+	if (Locator::playerProfileSystem::has_value())
+	{
+		// The profile of the developer tools has a fixed name, which names no person
+		for (const auto& profile : Locator::playerProfileSystem::value().GetProfiles().profiles)
+		{
+			if (profile.name != player_profiles::k_DeveloperName)
+			{
+				reports.HideName(profile.name);
+			}
+		}
+	}
+}
+
 /// The error reports follow the choice of the lobby account (deviation 261). The box "Send Crash Reports" shows the
 /// choice and the profile keeps it. With no account or no choice, the box of the profile decides alone.
 void FollowAccountErrorReports()
@@ -187,6 +245,7 @@ void Game::UpdateOnline()
 		Locator::lobbyClient::value().Update();
 	}
 	FollowAccountErrorReports();
+	FollowReportNames();
 	if (Locator::lobbyRoom::has_value())
 	{
 		Locator::lobbyRoom::value().Update();
