@@ -39,6 +39,10 @@ constexpr std::array<Band, 4> k_NordicWastes {
 constexpr std::array<Band, 4> k_Alpine {
     {{0, Surface::Grass}, {125, Surface::Rock}, {175, Surface::Snow}, {225, Surface::SnowyTops}}};
 
+// The paths: trodden earth from the shore up. A path keeps to low and easy ground, but the high ground has rock and snow.
+constexpr std::array<Band, 4> k_Path {
+    {{0, Surface::WetSand}, {8, Surface::TroddenEarth}, {130, Surface::Rock}, {185, Surface::Snow}}};
+
 constexpr uint8_t k_Blend = 24;
 
 uint32_t IndexOf(Surface surface, std::span<const Surface> materials)
@@ -75,6 +79,11 @@ Recipe countries::RecipeOf(Biome biome)
 		break;
 	}
 	return {.bands = k_Alpine, .blend = k_Blend};
+}
+
+Recipe countries::PathRecipe()
+{
+	return {.bands = k_Path, .blend = k_Blend};
 }
 
 openblack::lnd::LNDCountry countries::MakeCountry(const Recipe& recipe, std::span<const Surface> materials)
@@ -116,6 +125,10 @@ std::vector<Surface> countries::UsedSurfaces()
 		{
 			used.at(static_cast<size_t>(band.surface)) = true;
 		}
+	}
+	for (const auto& band : PathRecipe().bands)
+	{
+		used.at(static_cast<size_t>(band.surface)) = true;
 	}
 	std::vector<Surface> surfaces;
 	for (size_t surface = 0; surface < k_SurfaceCount; ++surface)

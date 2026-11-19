@@ -25,7 +25,7 @@ using biomes::Biome;
 namespace
 {
 /// The hash of the cells of the small land of seed 77
-constexpr uint64_t k_SmallLandHash = 0xD7AC3D10F76243DCull;
+constexpr uint64_t k_SmallLandHash = 0x0A97A7480516F3D3ull;
 
 /// A small land that generates quickly
 Settings SmallSettings(uint64_t seed)
@@ -834,7 +834,8 @@ TEST(LandgenGenerator, TheLandIsAnIslandWithEachPart)
 		EXPECT_EQ(land.cells.At(i, 0).altitude, 0);
 		EXPECT_EQ(land.cells.At(0, i).altitude, 0);
 	}
-	EXPECT_EQ(land.countries.size(), biomes::k_BiomeCount);
+	// A country for each biome, then the country of the paths
+	EXPECT_EQ(land.countries.size(), biomes::k_BiomeCount + 1);
 	EXPECT_EQ(land.materials, countries::UsedSurfaces());
 	EXPECT_TRUE(std::ranges::any_of(land.cells.values, [](const auto& cell) { return cell.altitude > 100; }));
 	EXPECT_FALSE(land.features.empty());

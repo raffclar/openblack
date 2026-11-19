@@ -27,6 +27,7 @@
 #include "landgen/Hydrology.h"
 #include "landgen/Lakes.h"
 #include "landgen/Lighting.h"
+#include "landgen/Paths.h"
 #include "landgen/Settlement.h"
 #include "landgen/Swamps.h"
 #include "landgen/Terrain.h"
@@ -53,6 +54,8 @@ enum class Sound : uint8_t
 };
 /// The flag of a cell of open water, which shows the sea rather than land
 constexpr uint8_t k_OpenWaterFlag = 0x02;
+/// The country of the corners under a path, after the countries of the biomes
+constexpr uint8_t k_PathCountry = static_cast<uint8_t>(biomes::k_BiomeCount);
 
 /// The ambient sound of the land of a biome
 [[nodiscard]] Sound SoundOf(biomes::Biome biome);
@@ -88,6 +91,7 @@ struct Settings
 	lighting::Settings lighting;
 	settlement::Settings settlement;
 	settlement::SiteSettings sites;
+	paths::Settings paths;
 };
 
 /// A flat place for the player's temple and first town, in corners
@@ -154,6 +158,10 @@ struct GeneratedLand
 	/// The player's temple and first town on the start area, and the neutral towns. The paths between the towns start
 	/// from the centres of these towns.
 	settlement::Plan settlement;
+	/// The paths between the temple and the towns, in the order that the generator laid them, and the lanterns along
+	/// some of them
+	std::vector<paths::Path> paths;
+	std::vector<paths::Lantern> lanterns;
 	std::vector<StageTime> times;
 	/// The height units of each altitude, and the height of each corner in units of 0.67 m. The altitude of a cell is its
 	/// height in units on a land of the story, and the rounded altitude of the curve on a generated land.
@@ -162,8 +170,8 @@ struct GeneratedLand
 };
 
 /// Makes a land: the base heights, the erosion, the lakes and rivers, the start area and the places of the towns, the
-/// climate, the biomes, the light, the cells and countries, the features, the cursed places, the mist of the swamps, the
-/// forests, the temple and town of the start, and the neutral towns
+/// climate, the biomes, the light, the cells and countries, the temple and town of the start, the neutral towns, the
+/// paths between them and their lanterns, the features, the cursed places, the mist of the swamps and the forests
 [[nodiscard]] GeneratedLand Generate(const Settings& settings);
 
 /// The cell of each corner, from the altitudes, the luminosity and the biomes. A cell's water and sound come from the
