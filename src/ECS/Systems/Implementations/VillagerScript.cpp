@@ -34,6 +34,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptAnimation.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/Transform.h"
@@ -158,10 +159,24 @@ void villager_script::SetScriptState(entt::entity villager, VillagerStates state
 void villager_script::MoveTo(entt::entity villager, const map_coords::MapCoords& goal)
 {
 	auto& registry = Entities();
-	if (!CanBeDirected(villager) || !registry.AllOf<WallHug, Transform>(villager))
+	if (!CanBeDirected(villager))
+	{
+		// A villager that flies in the script's hands keeps the order and walks when it lands
+		const auto standing = StandingOf(villager);
+		if (standing.has_value() &&
+		    rules::KeepsMoveUntilLanding(registry.AllOf<ScriptControlled>(villager), registry.AllOf<InPhysics>(villager),
+		                                 registry.AnyOf<InHand, CarriedByTornado>(villager), standing->dead))
+		{
+			registry.AssignOrReplace<ScriptMoveOnLanding>(villager, ScriptMoveOnLanding {.goal = goal});
+		}
+		return;
+	}
+	if (!registry.AllOf<WallHug, Transform>(villager))
 	{
 		return;
 	}
+	// A new order replaces an order that waited for the landing
+	registry.Remove<ScriptMoveOnLanding>(villager);
 	// Already within a turn's step of the goal: it waits there for the script
 	const auto here = glm::xz(registry.Get<const Transform>(villager).position);
 	if (rules::WithinAStepOfGoalPlace(here, glm::ivec2(goal.x, goal.z), registry.Get<const WallHug>(villager).speed))
@@ -176,6 +191,19 @@ void villager_script::MoveTo(entt::entity villager, const map_coords::MapCoords&
 		// A script's walk goes straight to the point, through anything in the way: buildings, gates, rocks
 		villager_home::SetupMobileMoveTo(action, goal, villager_home::WalkWay::StraightThrough);
 	}
+}
+
+std::optional<map_coords::MapCoords> villager_script::TakeMoveOnLanding(entt::entity villager)
+{
+	auto& registry = Entities();
+	const auto* order = registry.TryGet<const ScriptMoveOnLanding>(villager);
+	if (order == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto goal = order->goal;
+	registry.Remove<ScriptMoveOnLanding>(villager);
+	return goal;
 }
 
 void villager_script::SetScriptAnimation(entt::entity villager, AnimId clip, uint32_t plays)

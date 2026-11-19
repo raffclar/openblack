@@ -14,6 +14,7 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Disciple.h"
@@ -53,6 +54,7 @@
 #include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerReactions.h"
+#include "VillagerScript.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -216,6 +218,8 @@ bool villager_physics::IntoHand(entt::entity villager)
 	}
 	villager_memory::StorePreviousState(*action);
 	villager_disciple::PickedUp(villager);
+	// A walk order that waited for the landing is lost when the hand takes the villager
+	static_cast<void>(villager_script::TakeMoveOnLanding(villager));
 	SetTopState(*action, VillagerStates::InHand);
 	return TopState(*action) == VillagerStates::InHand;
 }
@@ -229,6 +233,8 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 	{
 		return;
 	}
+	// A walk order that a script gave in the air applies only to a villager that lands alive in the script's hands
+	const auto order = villager_script::TakeMoveOnLanding(villager);
 	const auto player = entry != nullptr ? entry->player : std::nullopt;
 	auto pose = living::LandingPose::None;
 	if (entry != nullptr && entry->body != nullptr)
@@ -317,6 +323,11 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 	    registry.AllOf<ScriptControlled>(villager) || (row != nullptr && row->resumesAfterLanding != 0))
 	{
 		SetTopState(*action, previous);
+	}
+	// The villager does the walk that its script gave it in the air (deviation row 283)
+	if (order.has_value() && registry.AllOf<ScriptControlled>(villager))
+	{
+		villager_script::MoveTo(villager, *order);
 	}
 }
 

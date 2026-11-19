@@ -1393,22 +1393,16 @@ void AddTheSeaSons(std::vector<Scenario>& all)
 	                   "takes each boy and puts him down at the same point under the hand, one second after the one "
 	                   "before. Each boy lands on the boys before him.",
 	    .expected = "The second and the third boy land on the first boy and knock him into the air. His script sends "
-	                "him home while he is in the air, and he does not go, as in the original game (vanilla-bugs row "
-	                "2418). He lands, waits at the place where the hand put him for ever, and his script does not send "
-	                "him again. The second and the third boy say their lines and walk home.",
+	                "him home while he is in the air. He keeps the order and walks home when he lands (deviation row "
+	                "283, which fixes vanilla-bugs row 2418). The second and the third boy say their lines and walk home. "
+	                "All three boys come within 5 metres of their home.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -40.0f}, .look = {0.0f, 0.0f, 10.0f}},
 	    .creatures = creature,
 	    .objects = boys,
 	    .commands = sons(0.5f),
-	    .checks = {{.label = "the first boy, knocked into the air, stays where the hand put him",
-	                .quantity = checks::Quantity::ObjectDistance,
-	                .index = 0,
-	                .point = k_Hut,
-	                .afterTurns = 1500,
-	                .atLeast = 25.0},
-	               home(1, "the second boy walks home"),
-	               home(2, "the third boy walks home")},
+	    .checks = {home(0, "the first boy, knocked into the air, walks home when he lands"),
+	               home(1, "the second boy walks home"), home(2, "the third boy walks home")},
 	});
 }
 } // namespace
