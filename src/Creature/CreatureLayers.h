@@ -158,8 +158,11 @@ struct BodyAction
 	bool kiss {false};
 	/// The body plays at the pace of real time, whatever the size of the creature
 	bool realTime {false};
-	/// Each move of a dance lasts this many milliseconds of real time, whatever the size of the creature
+	/// The length of one move of the dance, in milliseconds of real time, whatever the size of the creature. A move
+	/// lasts this length times the number of the species for the move.
 	float danceMoveMs {0.0f};
+	/// The number of the species for the move that plays now or played last
+	uint32_t danceMoveFactor {1};
 	/// An action played once as a blend: its animation, blended keyframe by keyframe towards this animation by the
 	/// weight, as a kiss blends its low and its high kiss
 	std::optional<size_t> blendedWith;
@@ -190,6 +193,9 @@ struct ShareClip
 {
 	size_t animation;
 	float timeMs;
+	/// The length to divide the time by when it is not the length of the animation. A dance move has the length of its
+	/// move.
+	std::optional<float> lengthMs {};
 };
 /// What the hand reads to know how far the body is through its action. None when the body does no action.
 /// - An action of the body gives its time over the animation that the game keeps for it. The confused look of a walk
@@ -218,6 +224,11 @@ struct ShareClip
 /// the species does not have the move, the body chooses again. None when the species has none of the moves.
 [[nodiscard]] std::optional<size_t> ChooseDanceMove(bool first, const std::function<uint32_t(uint32_t)>& random,
                                                     const std::function<bool(size_t)>& hasAnimation);
+/// The number of the species for a dance move: how many times the length of one move of the dance the move lasts.
+/// Other animations have the number 1.
+[[nodiscard]] uint32_t DanceMoveFactor(const std::array<uint32_t, animations::k_DanceMoveCount>& factors, size_t move);
+/// How long the move of a dance that plays now or played last lasts, in milliseconds
+[[nodiscard]] float DanceMoveLength(const BodyAction& body);
 /// The time in the animation of a dance move to show, for the time that the move has played. The animation stretches
 /// to fill the length of the move.
 [[nodiscard]] float DanceMoveTime(const BodyAction& body, uint32_t duration);

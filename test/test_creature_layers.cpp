@@ -706,6 +706,69 @@ TEST(CreatureLayers, EachDanceMoveLastsItsRealTimeAndTheLeftOverTimeCarries)
 	EXPECT_FLOAT_EQ(creature_layers::DanceMoveTime(body, 2000U), 1000.0f);
 }
 
+TEST(CreatureLayers, ADanceMoveLastsTheLengthOfAMoveTimesTheNumberOfTheSpecies)
+{
+	using creature_layers::BodyAction;
+	// A tiger: each move animation lasts 8000 milliseconds, and the species gives the number 8 to each move
+	BodyAction body {.kind = BodyAction::Kind::Dance,
+	                 .phase = BodyAction::Phase::Loop,
+	                 .animations = {145, 147, 146},
+	                 .timeMs = 0.0f,
+	                 .danceMoveMs = 1000.0f,
+	                 .danceMoveFactor = 8};
+	EXPECT_FLOAT_EQ(creature_layers::DanceMoveLength(body), 8000.0f);
+	// Turns of 100 milliseconds: the move does not end after one length of a move, but after eight
+	for (int turn = 0; turn < 79; ++turn)
+	{
+		body = creature_layers::AdvanceBody(body, 100.0f, 8000U, 100.0f);
+		ASSERT_FALSE(body.chooseDanceMove) << "turn " << turn;
+	}
+	// The animation plays at its own speed
+	EXPECT_FLOAT_EQ(creature_layers::DanceMoveTime(body, 8000U), 7900.0f);
+	body = creature_layers::AdvanceBody(body, 100.0f, 8000U, 100.0f);
+	EXPECT_TRUE(body.chooseDanceMove);
+	EXPECT_FLOAT_EQ(body.timeMs, 0.0f);
+	// A move of a village dance, 800 milliseconds a length, lasts 6400 milliseconds
+	body.danceMoveMs = 800.0f;
+	body.chooseDanceMove = false;
+	body.timeMs = 3200.0f;
+	EXPECT_FLOAT_EQ(creature_layers::DanceMoveTime(body, 8000U), 4000.0f);
+}
+
+TEST(CreatureLayers, TheNumberOfADanceMoveComesFromItsPlaceAndOtherAnimationsHaveOne)
+{
+	const std::array<uint32_t, creature_layers::animations::k_DanceMoveCount> factors {8, 4, 4, 8, 8, 3, 2};
+	EXPECT_EQ(creature_layers::DanceMoveFactor(factors, 147), 8u);
+	EXPECT_EQ(creature_layers::DanceMoveFactor(factors, 148), 4u);
+	EXPECT_EQ(creature_layers::DanceMoveFactor(factors, 153), 2u);
+	EXPECT_EQ(creature_layers::DanceMoveFactor(factors, 154), 1u);
+	EXPECT_EQ(creature_layers::DanceMoveFactor(factors, creature_layers::animations::k_Stand), 1u);
+}
+
+TEST(CreatureLayers, TheHandReadsADanceMoveOverTheLengthOfTheMove)
+{
+	using creature_layers::BodyAction;
+	BodyAction body {.kind = BodyAction::Kind::Dance,
+	                 .phase = BodyAction::Phase::Loop,
+	                 .animations = {145, 148, 146},
+	                 .timeMs = 400.0f,
+	                 .danceMoveMs = 800.0f,
+	                 .danceMoveFactor = 4};
+	auto share = creature_layers::ShareOf(body, false, std::nullopt);
+	ASSERT_TRUE(share.has_value());
+	EXPECT_EQ(share->animation, 148u);
+	EXPECT_EQ(share->lengthMs, std::optional(3200.0f));
+	// The finish keeps the last move and its length
+	body = creature_layers::EndDance(body);
+	share = creature_layers::ShareOf(body, false, std::nullopt);
+	ASSERT_TRUE(share.has_value());
+	EXPECT_EQ(share->lengthMs, std::optional(3200.0f));
+	// The start keeps the stand and its own length
+	share = creature_layers::ShareOf(*creature_layers::PlayDance({}, 800.0f), false, std::nullopt);
+	ASSERT_TRUE(share.has_value());
+	EXPECT_FALSE(share->lengthMs.has_value());
+}
+
 TEST(CreatureLayers, AStopOfTheDancePlaysTheFinishAtOnceOrAfterTheStart)
 {
 	using creature_layers::BodyAction;
