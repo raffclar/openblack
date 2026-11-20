@@ -15,6 +15,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -66,7 +67,8 @@ public:
 
 	/// With no config, the game has no lobby, and each call fails with NotConfigured. With no site, the game cannot get a
 	/// session from the sign-in of the lobby site. The names sink gets the names of the players in the rankings of
-	/// players, in the clan pages and in the player pages. When the sink is empty, nothing gets these names.
+	/// players, in the clan pages and in the player pages, and the names in the chat channels, the presence events and the
+	/// players of the servers in the list. When the sink is empty, nothing gets these names.
 	LobbyClientSystem(std::optional<LobbyClientConfig> config, online::HttpClientInterface& http,
 	                  std::unique_ptr<online::PushChannelInterface> push, std::unique_ptr<online::TokenStoreInterface> tokens,
 	                  Clock clock, std::unique_ptr<online::SiteSessionInterface> site = nullptr, NameSink names = {});
@@ -189,6 +191,11 @@ private:
 
 	/// Gives the name to the names sink, when the system has a sink
 	void GiveName(std::string_view name) const;
+	/// Gives the names of the players of the servers to the names sink
+	void GiveServerNames(std::span<const lobby_api::ServerEntry> servers) const;
+	/// Gives the names that a push event carries to the names sink: the senders of chat lines, the people that join or
+	/// leave a channel, the members and history of a subscribed channel, and the players of a changed server
+	void GiveEventNames(const lobby_api::PushEvent& event) const;
 
 	void OpenPush();
 	void HandlePush(std::string_view text);

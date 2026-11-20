@@ -1778,7 +1778,6 @@ TEST_F(FrontEndTest, TheNamesOfTheSeatsGoToTheServiceThatHidesNames)
 	frontEnd->SetLobbyKind(LobbyKind::Lan);
 	frontEnd->Next();
 	frontEnd->Update();
-	EXPECT_TRUE(hidden.empty());
 	frontEnd->SelectGame(0);
 	frontEnd->Join(u"");
 	sockets.Accept(sockets.order.back());
@@ -1793,6 +1792,29 @@ TEST_F(FrontEndTest, TheNamesOfTheSeatsGoToTheServiceThatHidesNames)
 	lan.servers[0].players.push_back(Player(0, "Dan", "god"));
 	frontEnd->Update();
 	EXPECT_NE(std::ranges::find(hidden, "Dan"), hidden.end());
+}
+
+TEST_F(FrontEndTest, ThePlayersOfTheOtherLanGamesInTheListGoToTheServiceThatHidesNames)
+{
+	Make(true);
+	lan.servers = {Server("l1", "LAN game", 1, 32), Server("l2", "Other game", 1, 32)};
+	lan.servers[0].players = {Player(0, "Bob", "god")};
+	lan.servers[1].players = {Player(0, "Eve", "god"), Player(0, "Fay", "observer")};
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Lan);
+	frontEnd->Next();
+	ASSERT_EQ(frontEnd->GetBox(), Box::GameList);
+	frontEnd->Update();
+	for (const auto* name : {"Bob", "Eve", "Fay"})
+	{
+		EXPECT_NE(std::ranges::find(hidden, name), hidden.end()) << name;
+	}
+
+	// A game that appears later goes to the service too
+	lan.servers.push_back(Server("l3", "Third game", 1, 32));
+	lan.servers[2].players = {Player(0, "Gus", "god")};
+	frontEnd->Update();
+	EXPECT_NE(std::ranges::find(hidden, "Gus"), hidden.end());
 }
 
 TEST_F(FrontEndTest, TheNamesOfTheSeatsOfAnInternetRoomGoToTheService)
