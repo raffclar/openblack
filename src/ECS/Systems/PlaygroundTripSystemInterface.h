@@ -43,9 +43,9 @@ public:
 	/// The second part: every script stops, the Playground's land loads with no loading screen, every player's influence
 	/// covers the whole land, and the lessons start. Returns whether the land loaded.
 	virtual bool Travel() = 0;
-	/// The player leaves the Playground: the interface is normal, the influence goes back to its usual reach, no lesson
-	/// runs, and the game in the slot of the save on exit loads. Returns whether it loaded.
-	virtual bool Leave() = 0;
+	/// The player leaves the Playground: the interface is normal, the influence goes back to its usual reach, and no
+	/// lesson runs. The game asks for the load of the slot of the save on exit, which runs after the draw of the frame.
+	virtual void Leave() = 0;
 };
 
 } // namespace openblack::ecs::systems

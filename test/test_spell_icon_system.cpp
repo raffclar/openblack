@@ -140,7 +140,7 @@ public:
 	void EndTurn() override {}
 	bool SaveBeforeTrip() override { return false; }
 	bool Travel() override { return false; }
-	bool Leave() override { return false; }
+	void Leave() override {}
 
 private:
 	bool _everywhere;

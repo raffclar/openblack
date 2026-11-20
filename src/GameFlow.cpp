@@ -462,11 +462,8 @@ void Game::FollowPlaygroundTrip()
 		_boxesStayForTrip = false;
 		return;
 	}
-	// The saved game loads with its own pause. With no saved game, the game stays paused.
-	if (!trip.Leave())
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "No saved game loaded as the player left the Gods' Playground");
-	}
+	// The saved game loads after the draw of the frame, with its own pause. With no saved game, the game stays paused.
+	trip.Leave();
 }
 
 PlayerNames Game::LocalGodForGameEnd() const
