@@ -46,6 +46,10 @@ SHELL_KEYS = {
     "OB_TRAILER": "commit.trailer",
     "OB_TRAIN_TRAILER": "commit.trainTrailer",
     "OB_EXTRA_CHECK": "train.extraCheck",
+    "OB_LINUX_GCC": "train.linuxGccServer",
+    "OB_LINUX_GCC_DISTRO": "train.linuxGccDistro",
+    "OB_LINUX_GCC_DIR": "train.linuxGccDir",
+    "OB_LINUX_GCC_JOBS": "train.linuxGccJobs",
 }
 
 

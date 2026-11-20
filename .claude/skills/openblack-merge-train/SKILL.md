@@ -29,6 +29,7 @@ worktree finds the file in the main checkout. The values the train uses:
 | `tools.clangFormat` | clang-format for the automatic conflict fixes. |
 | `commit.trainTrailer` | The trailer of the train's commits. |
 | `train.extraCheck` | Optional. A script that checks the car on another machine: called with `start <worktree> <batch>` before the build, and `report <worktree> <batch>` after it. A failed report stops the car. |
+| `train.linuxGccServer` | `true` or `false` (default `false`). When true, each car builds openblack-server on Linux GCC 13 in WSL (`scripts/linux_gcc_server.sh`: preset `ninja-multi-vcpkg-shipping`, Release, the component `-Werror`, the repository overlay ports) after the ship build, and stops with exit 19 on a compile error. Also `train.linuxGccDistro` (WSL distribution, empty = default), `train.linuxGccDir` (warm cache in the WSL file system, default `/root/openblack-gcc`: src, vcpkg clone, build tree, vcpkg binary cache) and `train.linuxGccJobs` (ninja jobs, empty = all). |
 
 Run `python .claude/obconfig.py shell` to see the values the scripts get.
 
