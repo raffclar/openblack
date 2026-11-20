@@ -457,6 +457,35 @@ TEST(GatheringBoxSystem, TheBoxGetsTheKeptFriendsAndTheProfileKeepsTheChanges)
 	EXPECT_EQ(written.size(), 1u);
 }
 
+TEST(GatheringBoxSystem, TheNamesOfTheFriendsAndOfThePingServerGoToTheService)
+{
+	using chat::people::FriendRecord;
+	std::vector<std::u16string> hidden;
+	ServerLog log;
+	List people;
+	ecs::systems::GatheringBoxSystem::Services services;
+	services.ownUser = []() { return std::optional<UserId>(k_Own); };
+	services.readFriends = []() { return std::vector<FriendRecord> {{.user = k_Ann, .name = u"Ann"}}; };
+	services.writeFriends = [](std::span<const FriendRecord> /*friends*/) {};
+	services.hideName = [&hidden](std::u16string_view name) { hidden.emplace_back(name); };
+	ecs::systems::GatheringBoxSystem system(std::move(services));
+	std::optional<std::vector<FriendRecord>> changed;
+	system.SetBox({.people = [&people]() { return &people; },
+	               .takeChangedFriends = [&changed]() { return std::exchange(changed, std::nullopt); },
+	               .setFriends = [](std::span<const FriendRecord> /*friends*/) {}});
+	system.SetPingServer(std::make_unique<FakePingServer>(log));
+
+	// The kept friends go to the service before the box shows them
+	EXPECT_EQ(hidden, std::vector<std::u16string> {u"Ann"});
+
+	// A friend that the player adds, a person that is here, and the sender of a line go to the service
+	changed = std::vector<FriendRecord> {{.user = k_Bob, .name = u"Bob"}};
+	log.messages.emplace_back(online::PingServerInterface::Here {.user = k_Cid, .name = u"Cid"});
+	log.messages.emplace_back(online::PingServerInterface::Line {.user = k_Ann, .name = u"Dee", .text = u"Hello"});
+	system.Update(1000);
+	EXPECT_EQ(hidden, (std::vector<std::u16string> {u"Ann", u"Bob", u"Cid", u"Dee"}));
+}
+
 TEST(GatheringBoxSystem, TheFriendButtonNeedsAConnectionAndNumberedPlayers)
 {
 	Fixture fixture;

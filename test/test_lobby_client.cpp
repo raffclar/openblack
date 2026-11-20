@@ -259,7 +259,8 @@ protected:
 			};
 		}
 		_client = std::make_unique<LobbyClientSystem>(
-		    config, _http, std::move(push), std::make_unique<FakeTokens>(_kept), [this]() { return _now; }, std::move(site));
+		    config, _http, std::move(push), std::make_unique<FakeTokens>(_kept), [this]() { return _now; }, std::move(site),
+		    [this](std::string_view name) { _names.emplace_back(name); });
 	}
 
 	/// Logs in and opens the push channel
@@ -278,6 +279,8 @@ protected:
 	/// 2026-10-22T10:00:00Z
 	std::chrono::system_clock::time_point _now {std::chrono::seconds {1792663200}};
 	std::unique_ptr<LobbyClientSystem> _client;
+	/// The names that the client gave to its names sink
+	std::vector<std::string> _names;
 };
 
 } // namespace
@@ -725,6 +728,28 @@ TEST_F(LobbyClientTest, ClansRankingAndPlayerUseTheirPaths)
 	_client->GetPlayer(4, [](auto&& /*result*/) {});
 	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/players/4");
 	_http.Answer(200, R"({"id":4,"name":"x"})");
+}
+
+TEST_F(LobbyClientTest, ThePlayersOfTheRankingsAndThePagesGoToTheNamesSink)
+{
+	Make();
+	LogIn();
+	_names.clear();
+	_client->GetPlayerRanking({}, [](auto&& /*result*/) {});
+	_http.Answer(200, R"({"players":[{"position":1,"account":{"id":5,"name":"Ann"},"points":3,"games_ranked":1},)"
+	                  R"({"position":2,"account":{"id":6,"name":"Bob"},"points":2,"games_ranked":1}],"count":2})");
+	_client->GetClan(3, [](auto&& /*result*/) {});
+	_http.Answer(200, R"({"id":3,"name":"The Clan","leader":"Cid"})");
+	_client->GetPlayer(4, [](auto&& /*result*/) {});
+	_http.Answer(200, R"({"id":4,"name":"Dee"})");
+	EXPECT_EQ(_names, (std::vector<std::string> {"Ann", "Bob", "Cid", "Dee"}));
+
+	// A clan ranking names clans, not players. An answer that does not read gives no names.
+	_client->GetClanRanking({}, [](auto&& /*result*/) {});
+	_http.Answer(200, R"({"clans":[{"position":1,"id":3,"name":"The Clan","points":5}],"count":1})");
+	_client->GetPlayer(4, [](auto&& /*result*/) {});
+	_http.Answer(200, "not json");
+	EXPECT_EQ(_names.size(), 4u);
 }
 
 TEST_F(LobbyClientTest, PlayerDetailLinesSendTheVersionOfTheGame)

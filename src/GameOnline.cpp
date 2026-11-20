@@ -131,7 +131,9 @@ namespace
 
 /// Gives the error reports each name of a player that the game knows: the lobby account, the members of the lobby room,
 /// the players of the network game and the profiles. The reports hide these names in the log that they attach. The
-/// service keeps each name only once, thus the same names each frame cost little.
+/// service keeps each name only once, thus the same names each frame cost little. The names that come only in an
+/// answer go to the reports where they come: the lobby client (rankings, clan and player pages), the gathering box
+/// (friends and people of the ping server) and the multiplayer front end (the seats of a room).
 void FollowReportNames()
 {
 	if (!Locator::errorReports::has_value())
@@ -405,6 +407,14 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 		        if (Locator::errorReports::has_value())
 		        {
 			        Locator::errorReports::value().SendEvent(event);
+		        }
+	        },
+	    // The error reports hide the names of the players in the seats of a room
+	    .hideName =
+	        [](std::string_view name) {
+		        if (Locator::errorReports::has_value())
+		        {
+			        Locator::errorReports::value().HideName(name);
 		        }
 	        },
 	};
