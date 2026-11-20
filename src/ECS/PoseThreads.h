@@ -11,6 +11,7 @@
 
 #include <cstddef>
 
+#include <algorithm>
 #include <memory>
 
 #include "Common/WorkerPool.h"
@@ -28,14 +29,31 @@ namespace openblack::ecs::pose_threads
 	return MakeWorkerPool();
 }
 
-/// Does the job one time for each index. The pool is made at the first call.
+/// The runs of indices that each lane gets for one call. A thread takes a run, not one index, so that the threads share
+/// fewer counters.
+inline constexpr size_t k_RunsPerLane = 4;
+
+/// Does the job one time for each index. The pool is made at the first call. Each thread does a run of indices in order.
 inline void ForEach(std::unique_ptr<WorkerPool>& pool, size_t count, const WorkerPool::Job& job)
 {
 	if (pool == nullptr)
 	{
 		pool = MakePool();
 	}
-	pool->ForEach(count, job);
+	if (count == 0)
+	{
+		return;
+	}
+	const size_t runs = std::min(count, pool->GetLaneCount() * k_RunsPerLane);
+	const size_t length = (count + runs - 1) / runs;
+	const size_t used = (count + length - 1) / length;
+	pool->ForEach(used, [&job, count, length](size_t run, size_t lane) {
+		const size_t end = std::min(count, (run + 1) * length);
+		for (size_t index = run * length; index < end; ++index)
+		{
+			job(index, lane);
+		}
+	});
 }
 
 } // namespace openblack::ecs::pose_threads
