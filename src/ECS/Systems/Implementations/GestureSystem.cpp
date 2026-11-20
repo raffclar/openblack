@@ -546,6 +546,13 @@ void GestureSystem::Step(const Frame& frame, bool samples, std::optional<glm::ve
 		}
 	}
 
+	// After the places, a ready fire seed in the hand takes the fireball under the hand into it. The send
+	// wipes the path.
+	if (Locator::magicSystem::has_value())
+	{
+		Locator::magicSystem::value().TakeInFireBallUnderHand();
+	}
+
 	// After the places, the interface looks at the path. A move of the camera wipes the path that the hand draws, but
 	// not while the camera shakes. The fight view that shows a fight in its arena, and the camera that follows the
 	// creature, let the player draw while they move.
