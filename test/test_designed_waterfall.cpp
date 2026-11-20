@@ -108,13 +108,13 @@ TEST(DesignedWaterfall, TheSprayIsAWideSlowRingAtTheFoot)
 TEST(DesignedWaterfall, TheThirdLandGetsItsModelAndSoundOnItsFirstFrame)
 {
 	waterfall::Presence presence;
-	auto changes = waterfall::Arrive(presence, 3, false);
+	auto changes = waterfall::Arrive(presence, 3, {});
 	EXPECT_TRUE(changes.makeModel);
 	EXPECT_TRUE(changes.makeSound);
 	EXPECT_FALSE(changes.removeModel);
 	EXPECT_FALSE(changes.removeSound);
 
-	changes = waterfall::Arrive(presence, 3, true);
+	changes = waterfall::Arrive(presence, 3, {.model = true});
 	EXPECT_FALSE(changes.makeModel);
 	EXPECT_FALSE(changes.makeSound);
 }
@@ -122,25 +122,27 @@ TEST(DesignedWaterfall, TheThirdLandGetsItsModelAndSoundOnItsFirstFrame)
 TEST(DesignedWaterfall, OtherLandsHaveNone)
 {
 	waterfall::Presence presence;
-	auto changes = waterfall::Arrive(presence, 1, false);
+	auto changes = waterfall::Arrive(presence, 1, {});
 	EXPECT_FALSE(changes.makeModel);
 	EXPECT_FALSE(changes.makeSound);
 	EXPECT_FALSE(changes.removeModel);
 
-	static_cast<void>(waterfall::Arrive(presence, 3, false));
-	changes = waterfall::Arrive(presence, 4, true);
+	static_cast<void>(waterfall::Arrive(presence, 3, {}));
+	changes = waterfall::Arrive(presence, 5, {.model = true});
 	EXPECT_TRUE(changes.removeModel);
 	EXPECT_TRUE(changes.removeSound);
+	EXPECT_FALSE(changes.removeDinosaur);
 	EXPECT_FALSE(changes.makeModel);
+	EXPECT_FALSE(changes.makeDinosaur);
 }
 
 TEST(DesignedWaterfall, TheSameLandAfterAClearKeepsTheModelWithNoSound)
 {
 	waterfall::Presence presence;
-	static_cast<void>(waterfall::Arrive(presence, 3, false));
+	static_cast<void>(waterfall::Arrive(presence, 3, {}));
 	waterfall::LandCleared(presence);
 	// The frames lost the model with the land: it comes back, but the sound does not
-	auto changes = waterfall::Arrive(presence, 3, false);
+	auto changes = waterfall::Arrive(presence, 3, {});
 	EXPECT_TRUE(changes.makeModel);
 	EXPECT_FALSE(changes.makeSound);
 	EXPECT_FALSE(changes.removeSound);
@@ -148,11 +150,97 @@ TEST(DesignedWaterfall, TheSameLandAfterAClearKeepsTheModelWithNoSound)
 
 	// A change of land and back gives the sound again
 	waterfall::LandCleared(presence);
-	changes = waterfall::Arrive(presence, 2, true);
+	changes = waterfall::Arrive(presence, 2, {.model = true});
 	EXPECT_TRUE(changes.removeModel);
 	EXPECT_FALSE(changes.removeSound);
 	waterfall::LandCleared(presence);
-	changes = waterfall::Arrive(presence, 3, false);
+	changes = waterfall::Arrive(presence, 3, {});
 	EXPECT_TRUE(changes.makeModel);
 	EXPECT_TRUE(changes.makeSound);
+}
+
+TEST(DesignedWaterfall, TheFourthLandNumbersAreTheGames)
+{
+	EXPECT_EQ(waterfall::k_SceneryLand, 4);
+	EXPECT_EQ(waterfall::k_Ark.modelFile, "arche.l3d");
+	EXPECT_EQ(std::bit_cast<uint32_t>(waterfall::k_Ark.x), 0x455D2000u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(waterfall::k_Ark.z), 0x45051000u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(waterfall::k_Ark.turn), 0x410F9097u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(waterfall::k_Ark.scale), 0x3F8CCCCDu);
+	EXPECT_EQ(waterfall::k_Dinosaur.modelFile, "dinosaur.l3d");
+	EXPECT_EQ(std::bit_cast<uint32_t>(waterfall::k_Dinosaur.x), 0x45282000u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(waterfall::k_Dinosaur.z), 0x4521E000u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(waterfall::k_Dinosaur.turn), 0x3FC8F5C3u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(waterfall::k_Dinosaur.scale), 0x3F800000u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(waterfall::k_SceneryImportance), 0x41200000u);
+}
+
+TEST(DesignedWaterfall, OnlyTheThirdAndFourthLandsHaveAModelInTheWaterfallsPlace)
+{
+	EXPECT_EQ(waterfall::ModelFileOf(3), waterfall::k_ModelFile);
+	EXPECT_EQ(waterfall::ModelFileOf(4), waterfall::k_Ark.modelFile);
+	EXPECT_FALSE(waterfall::ModelFileOf(1).has_value());
+	EXPECT_FALSE(waterfall::ModelFileOf(2).has_value());
+	EXPECT_FALSE(waterfall::ModelFileOf(5).has_value());
+}
+
+TEST(DesignedWaterfall, TheFourthLandGetsTheArkWithItsSoundAndTheDinosaurWithItsPrint)
+{
+	waterfall::Presence presence;
+	auto changes = waterfall::Arrive(presence, 4, {});
+	EXPECT_TRUE(changes.makeModel);
+	EXPECT_TRUE(changes.makeSound);
+	EXPECT_TRUE(changes.makeDinosaur);
+	EXPECT_TRUE(changes.makePrint);
+	EXPECT_FALSE(changes.removeModel);
+	EXPECT_FALSE(changes.removeDinosaur);
+
+	// The next frames change nothing
+	changes = waterfall::Arrive(presence, 4, {.model = true, .dinosaur = true});
+	EXPECT_FALSE(changes.makeModel);
+	EXPECT_FALSE(changes.makeSound);
+	EXPECT_FALSE(changes.makeDinosaur);
+	EXPECT_FALSE(changes.makePrint);
+
+	// The third land does not get the dinosaur
+	presence = {};
+	changes = waterfall::Arrive(presence, 3, {});
+	EXPECT_FALSE(changes.makeDinosaur);
+}
+
+TEST(DesignedWaterfall, TheSameFourthLandAfterAClearHasNoSoundAndNoPrint)
+{
+	waterfall::Presence presence;
+	static_cast<void>(waterfall::Arrive(presence, 4, {}));
+	waterfall::LandCleared(presence);
+	EXPECT_FALSE(presence.sound);
+	EXPECT_FALSE(presence.print);
+	// The frames lost the models with the land: they come back, but the sound and the print do not
+	auto changes = waterfall::Arrive(presence, 4, {});
+	EXPECT_TRUE(changes.makeModel);
+	EXPECT_FALSE(changes.makeSound);
+	EXPECT_TRUE(changes.makeDinosaur);
+	EXPECT_FALSE(changes.makePrint);
+	EXPECT_FALSE(changes.removeDinosaur);
+}
+
+TEST(DesignedWaterfall, AnotherLandRemovesTheArkAndTheDinosaur)
+{
+	waterfall::Presence presence;
+	static_cast<void>(waterfall::Arrive(presence, 4, {}));
+	auto changes = waterfall::Arrive(presence, 3, {.model = true, .dinosaur = true});
+	EXPECT_TRUE(changes.removeModel);
+	EXPECT_TRUE(changes.removeSound);
+	EXPECT_TRUE(changes.removeDinosaur);
+	// The third land then makes its waterfall in the same place among the models
+	EXPECT_TRUE(changes.makeModel);
+	EXPECT_TRUE(changes.makeSound);
+	EXPECT_FALSE(changes.makeDinosaur);
+
+	// A change back to the fourth land gives the sound and the print again
+	changes = waterfall::Arrive(presence, 4, {.model = true});
+	EXPECT_TRUE(changes.makeModel);
+	EXPECT_TRUE(changes.makeSound);
+	EXPECT_TRUE(changes.makeDinosaur);
+	EXPECT_TRUE(changes.makePrint);
 }

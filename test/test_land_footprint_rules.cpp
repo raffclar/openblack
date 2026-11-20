@@ -269,3 +269,33 @@ TEST(LandFootprintRules, TheOrderOfTheThingsThatDidNotChangeIsCompared)
 	EXPECT_FALSE(land_footprints::SameOrderBesides(before, {{e(1), e(2), e(3)}}, changed));
 	EXPECT_FALSE(land_footprints::SameOrderBesides(before, {{e(1), e(2), e(3), e(4), e(5)}}, changed));
 }
+
+TEST(LandFootprintRules, ATurnedGroundPrintLiesAtItsPlaceWithItsTurn)
+{
+	// A quarter turn with a scale of 2: the print's x goes along the land's z
+	const glm::mat3 scaledTurn {glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(-2.0f, 0.0f, 0.0f)};
+	const land_footprints::GroundPrintThing print {
+	    .mesh = 7, .position = {2690.0f, 31.5f, 2590.0f}, .made = 0, .scaledTurn = scaledTurn};
+	const auto placement = land_footprints::GroundPrintPlacement(print);
+	EXPECT_EQ(placement.xFromX, 0.0f);
+	EXPECT_EQ(placement.xFromZ, -2.0f);
+	EXPECT_EQ(placement.zFromX, 2.0f);
+	EXPECT_EQ(placement.zFromZ, 0.0f);
+	EXPECT_EQ(placement.origin, glm::vec2(2690.0f, 2590.0f));
+
+	// With no turn, it lies as the print of a thing that a script made
+	const land_footprints::GroundPrintThing plain {.mesh = 7, .position = {1.0001f, -20.7f, 2.5f}, .made = 0};
+	EXPECT_EQ(land_footprints::GroundPrintPlacement(plain), land_footprints::GroundPrintPlacement(plain.position));
+}
+
+TEST(LandFootprintRules, AGroundPrintWithAnotherTurnIsAnotherPrint)
+{
+	using Thing = land_footprints::GroundPrintThing;
+	const glm::mat3 turned {glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f)};
+	const std::vector<Thing> things {
+	    {.mesh = 1, .position = {100.0f, 0.0f, 100.0f}, .made = 0, .scaledTurn = turned},
+	    {.mesh = 1, .position = {100.0f, 0.0f, 100.0f}, .made = 1, .scaledTurn = glm::mat3(1.0f)},
+	    {.mesh = 1, .position = {100.0f, 0.0f, 100.0f}, .made = 2, .scaledTurn = turned},
+	};
+	EXPECT_EQ(land_footprints::GroundPrintOrder(things), (std::vector<size_t> {1, 0}));
+}

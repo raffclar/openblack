@@ -174,7 +174,7 @@ void openblack::InitializePresentation()
 	// The rings on the water, the drops and the dust, and the numbers that float up. The turns ask for them, but they
 	// keep only what this computer shows, so the turns make no change when they are not there.
 	Locator::waterRingSystem::emplace<WaterRingSystem>();
-	// The waterfall of the third land, which only the frames make
+	// The waterfall of the third land and the ark and the dinosaur of the fourth land, which only the frames make
 	Locator::designedWaterfallSystem::emplace<DesignedWaterfallSystem>();
 	Locator::liquidParticleSystem::emplace<LiquidParticleSystem>();
 	Locator::floatingNumberSystem::emplace<FloatingNumberSystem>();

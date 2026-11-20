@@ -27,29 +27,56 @@ constexpr uint8_t k_SprayCell = 0x30;
 constexpr uint32_t k_SprayAlpha = 0x80u;
 } // namespace
 
-Changes Arrive(Presence& presence, int32_t land, bool modelShown)
+std::optional<std::string_view> ModelFileOf(int32_t land)
+{
+	if (land == k_Land)
+	{
+		return k_ModelFile;
+	}
+	if (land == k_SceneryLand)
+	{
+		return k_Ark.modelFile;
+	}
+	return std::nullopt;
+}
+
+Changes Arrive(Presence& presence, int32_t land, Shown shown)
 {
 	Changes changes;
 	if (presence.land != land)
 	{
 		changes.removeModel = presence.model;
 		changes.removeSound = presence.sound;
-		presence = {.land = land, .model = false, .sound = false};
+		changes.removeDinosaur = presence.dinosaur;
+		presence = {.land = land};
 	}
-	if (land != k_Land)
+	if (ModelFileOf(land).has_value())
 	{
-		return changes;
+		if (!presence.model)
+		{
+			changes.makeModel = true;
+			changes.makeSound = true;
+			presence.model = true;
+			presence.sound = true;
+		}
+		else if (!shown.model)
+		{
+			changes.makeModel = true;
+		}
 	}
-	if (!presence.model)
+	if (land == k_SceneryLand)
 	{
-		changes.makeModel = true;
-		changes.makeSound = true;
-		presence.model = true;
-		presence.sound = true;
-	}
-	else if (!modelShown)
-	{
-		changes.makeModel = true;
+		if (!presence.dinosaur)
+		{
+			changes.makeDinosaur = true;
+			changes.makePrint = true;
+			presence.dinosaur = true;
+			presence.print = true;
+		}
+		else if (!shown.dinosaur)
+		{
+			changes.makeDinosaur = true;
+		}
 	}
 	return changes;
 }
@@ -57,6 +84,7 @@ Changes Arrive(Presence& presence, int32_t land, bool modelShown)
 void LandCleared(Presence& presence)
 {
 	presence.sound = false;
+	presence.print = false;
 }
 
 float Slide(float slide, int32_t milliseconds)
