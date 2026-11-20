@@ -122,6 +122,7 @@ void MultiplayerFrontEnd::Update()
 	if (_services.lan != nullptr && _flow.kind == LobbyKind::Lan && (_flow.box == Box::GameList || inLanRoom))
 	{
 		_services.lan->Poll();
+		HideLanGameNames();
 		if (inLanRoom)
 		{
 			FollowLanRoom();
@@ -752,6 +753,10 @@ void MultiplayerFrontEnd::FollowLanChat()
 	const auto ownPlace = FindChatName(names, _settings.profileName);
 	for (const auto& line : lines)
 	{
+		if (_services.hideName)
+		{
+			_services.hideName(line.from);
+		}
 		const auto from = ToUtf16(line.from);
 		const auto text = ClampChat(ToUtf16(line.text));
 		const auto place = FindChatName(names, from);
@@ -1393,6 +1398,19 @@ void MultiplayerFrontEnd::HideSeatNames() const
 	if (_services.hideName)
 	{
 		std::ranges::for_each(_seats, [this](const Seat& seat) { _services.hideName(seat.account.name); });
+	}
+}
+
+void MultiplayerFrontEnd::HideLanGameNames() const
+{
+	if (_services.hideName && _services.lan != nullptr)
+	{
+		for (const auto& game : _services.lan->GetServers())
+		{
+			std::ranges::for_each(game.players, [this](const lobby_api::RoomPlayer& player) {
+				_services.hideName(player.account.name);
+			});
+		}
 	}
 }
 

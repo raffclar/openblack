@@ -244,6 +244,60 @@ void LobbyClientSystem::GiveName(std::string_view name) const
 	}
 }
 
+void LobbyClientSystem::GiveServerNames(std::span<const lobby_api::ServerEntry> servers) const
+{
+	for (const auto& server : servers)
+	{
+		for (const auto& player : server.players)
+		{
+			GiveName(player.account.name);
+		}
+	}
+}
+
+void LobbyClientSystem::GiveEventNames(const lobby_api::PushEvent& event) const
+{
+	if (!_names)
+	{
+		return;
+	}
+	if (event.type == lobby_api::events::k_ChatLine)
+	{
+		if (const auto line = lobby_api::ParseChatLine(event.data); line.has_value())
+		{
+			GiveName(line->from.name);
+		}
+	}
+	else if (event.type == lobby_api::events::k_ChatJoined || event.type == lobby_api::events::k_ChatLeft)
+	{
+		if (const auto presence = lobby_api::ParseChatPresence(event.data); presence.has_value())
+		{
+			GiveName(presence->account.name);
+		}
+	}
+	else if (event.type == lobby_api::events::k_Subscribed)
+	{
+		if (const auto subscribed = lobby_api::ParseChannelSubscribed(event.data); subscribed.has_value())
+		{
+			for (const auto& member : subscribed->members)
+			{
+				GiveName(member.name);
+			}
+			for (const auto& line : subscribed->history)
+			{
+				GiveName(line.from.name);
+			}
+		}
+	}
+	else if (event.type == lobby_api::events::k_ServersChanged)
+	{
+		if (const auto change = lobby_api::ParseServerChange(event.type, event.data); change.has_value())
+		{
+			GiveServerNames(std::span(&change->server, 1));
+		}
+	}
+}
+
 LobbyClientSystem::~LobbyClientSystem()
 {
 	_push->Close();
@@ -970,6 +1024,7 @@ void LobbyClientSystem::GetServers(LobbyCallback<lobby_api::ServerList> callback
 			return;
 		}
 		_servers = list->servers;
+		GiveServerNames(_servers);
 		if (const auto tag = response.Header("etag"); tag.has_value())
 		{
 			_serversTag = std::string(*tag);
@@ -1719,6 +1774,7 @@ void LobbyClientSystem::HandlePush(std::string_view text)
 			}
 		}
 	}
+	GiveEventNames(*event);
 	// The listeners get the events and the control frames. They can add or remove listeners, so they run from a copy.
 	const auto listeners = _listeners;
 	for (const auto& [id, listener] : listeners)
