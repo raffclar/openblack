@@ -267,7 +267,10 @@ int main(int argc, char* argv[])
 		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
 		("random-alignment-slots", "The god slots from 0 whose computer god and its creature start at a random alignment in a skirmish or a network game, such as 1,2. Each client takes them from the start. The computer_random slots of --slot-kinds replace them.", cxxopts::value<std::string>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
-		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.");
+		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.")
+		("test-net-delay-ms", "Tests: each message of the game socket takes this many milliseconds, in each direction. Never in a normal game.", cxxopts::value<uint32_t>())
+		("test-net-loss", "Tests: this percent of the packets of the game socket are lost. The socket is TCP, so a lost packet comes after the time that TCP takes to send it again, and the messages after it wait. Never in a normal game.", cxxopts::value<uint32_t>())
+		("test-net-seed", "Tests: the seed of the draws of --test-net-loss.", cxxopts::value<uint32_t>()->default_value("1"));
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	options.add_options("Developer")
 		("row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world of a client parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
@@ -591,6 +594,15 @@ int main(int argc, char* argv[])
 			network.comeBackSeconds = result["come-back-seconds"].as<uint32_t>();
 			network.allGoneSeconds = result["all-gone-seconds"].as<uint32_t>();
 			network.testCommands = result.count("test-commands") != 0;
+			if (result.count("test-net-delay-ms") != 0)
+			{
+				network.testFaults.delayMilliseconds = result["test-net-delay-ms"].as<uint32_t>();
+			}
+			if (result.count("test-net-loss") != 0)
+			{
+				network.testFaults.lossPercent = std::min(result["test-net-loss"].as<uint32_t>(), 100u);
+			}
+			network.testFaults.seed = result["test-net-seed"].as<uint32_t>();
 			if (result.count("lobby-api") != 0)
 			{
 				network.lobbyApi = result["lobby-api"].as<std::string>();

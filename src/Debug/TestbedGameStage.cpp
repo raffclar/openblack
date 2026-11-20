@@ -18,6 +18,7 @@
 #include <SDL_keycode.h>
 #include <fmt/format.h>
 
+#include "Common/MachineClock.h"
 #include "Debug/TestbedMultiplayer.h"
 #include "Debug/TestbedPingServer.h"
 #include "Debug/TestbedScenarioRegistry.h"
@@ -277,6 +278,11 @@ std::string TestbedGameStage::OpenEndBox(size_t value)
 		box.MouseDown(middle);
 		box.MouseUp(middle);
 		return "Leave Game is pressed";
+	}
+	if (value == k_EndBoxServerSilence)
+	{
+		Locator::gameInterface::value().StageServerSilence(machine_clock::Ticks());
+		return "the red text of a silence of the game server shows and counts up";
 	}
 	if (value >= 4)
 	{

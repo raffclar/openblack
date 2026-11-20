@@ -411,5 +411,26 @@ class SessionJudgement(unittest.TestCase):
         self.assertFalse(result["ok"])
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class ServerSilences(unittest.TestCase):
+    def test_the_pauses_name_the_server_or_a_client(self):
+        pauses = net_check.parse_pauses(["server:200:5", "2:300:20.5"])
+        self.assertEqual([(p["who"], p["turn"], p["seconds"]) for p in pauses], [("server", 200, 5.0), ("2", 300, 20.5)])
+        with self.assertRaises(ValueError):
+            net_check.parse_pauses(["web:200:5"])
+
+    def test_the_silences_of_a_client_log(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log = os.path.join(folder, "client.log")
+            with open(log, "w", encoding="utf-8") as file:
+                file.write("[w] net: No message from the server for 409 ms: the hand and the camera stop\n"
+                           "[w] net: No message from the server for 50 s on an open socket: the client tries to come back\n"
+                           "[i] net: The silence of the server ended after 30044 ms (0 commands of the player in it)\n")
+            seen = net_check.silence_lines(log)
+        self.assertEqual(seen["starts"], 1)
+        self.assertEqual(seen["limit"], 1)
+        self.assertEqual(seen["ends"], [{"after_ms": 30044, "commands": 0}])
+
+
 if __name__ == "__main__":
     unittest.main()

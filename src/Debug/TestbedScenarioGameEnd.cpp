@@ -204,6 +204,22 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = k_EndBoxConnectionLost}},
 	});
 	all.push_back({
+	    .id = "game_end.server_silence",
+	    .name = "The red text of a silence of the game server",
+	    .facet = Facet::Multiplayer,
+	    .description = "A skirmish of two gods: the player and the computer god of player two, each with a temple. One "
+	                   "second in, the red text shows that a network game shows when no message came from the game "
+	                   "server for more than 0.4 seconds. The text counts up from 0.0s.",
+	    .expected = "Red text with a black shadow at the top left of the screen shows the seconds with one decimal and "
+	                "the letter s, for example \"3.4s\". The number goes up by one tenth each tenth of a second. In a "
+	                "network game the hand and the camera also stop until a message comes.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .skirmish = true},
+	    .framing = k_Overview,
+	    .temples = {{.offset = k_OwnTemple}, {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO}},
+	    .landScript = k_TwoComputerGods,
+	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = k_EndBoxServerSilence}},
+	});
+	all.push_back({
 	    .id = "game_end.conditions",
 	    .name = "The Multiplayer tab of the end box",
 	    .facet = Facet::Multiplayer,

@@ -53,9 +53,9 @@ struct Thresholds
 {
 	/// The highest altitude that the game draws at the sea level
 	float seaLevel {3.0f};
-	/// The land at and above this altitude is alpine
+	/// The land at and above this drawn height, in height units, is alpine
 	float alpineAltitude {135.0f};
-	/// The land below this temperature is the nordic wastes
+	/// The land below this temperature of the drawn height is the nordic wastes
 	float nordicTemperature {0.24f};
 	/// A beach is lower than this altitude, gentler than this slope and warmer than this temperature
 	float beachAltitude {16.0f};
@@ -82,7 +82,13 @@ struct Thresholds
 struct Conditions
 {
 	float altitude;
+	/// The height in height units that the game draws, which the rules of the trees also use. On the lands of the story,
+	/// it is the altitude.
+	float drawnAltitude;
 	float temperature;
+	/// The temperature that the drawn height gives. The cold and the mountains come from the drawn height, so that the
+	/// nordic and alpine trees stand on ground where they can grow.
+	float drawnTemperature;
 	float moisture;
 	/// The largest difference of altitude to the next corner
 	float slope;
@@ -96,7 +102,7 @@ struct Conditions
 };
 
 /// The biome of a corner, by the first rule that the conditions meet: the sea, the mountains, the cold, the coast, the
-/// wet land, the hot land and then the temperate land
+/// wet land, the hot land and then the temperate land. The mountains and the cold use the drawn height.
 [[nodiscard]] Biome Classify(const Conditions& conditions, const Thresholds& thresholds);
 
 /// Gives each corner the biome that most of the corners round it have, so that small patches go

@@ -586,6 +586,92 @@ def stop(process):
         process.wait()
 
 
+def suspend_process(pid, suspend):
+    """Stops all the threads of a process that the script started, or lets them go again, by its own process id. A
+    stopped server answers nothing while its sockets stay open, as a server whose network went with no close."""
+    if os.name == "nt":
+        import ctypes
+        process_suspend_resume = 0x0800
+        handle = ctypes.windll.kernel32.OpenProcess(process_suspend_resume, False, pid)
+        if not handle:
+            return False
+        try:
+            call = ctypes.windll.ntdll.NtSuspendProcess if suspend else ctypes.windll.ntdll.NtResumeProcess
+            return call(handle) == 0
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    import signal
+    os.kill(pid, signal.SIGSTOP if suspend else signal.SIGCONT)
+    return True
+
+
+def parse_pauses(texts):
+    """The pauses of --pause: (who, turn, seconds), where who is "server" or a client number from 1"""
+    pauses = []
+    for text in texts:
+        who, turn, seconds = text.split(":")
+        if who != "server" and not who.isdigit():
+            raise ValueError(f"--pause {text}: give server or a client number from 1")
+        pauses.append({"who": who, "turn": int(turn), "seconds": float(seconds), "at": None, "until": None,
+                       "done": False})
+    return pauses
+
+
+SILENCE_START = "No message from the server for"
+SILENCE_END = "The silence of the server ended after"
+
+
+def pause_shots(pid, folder, until, after_seconds=3.0):
+    """During a pause of the server: the pointer of a client moves between two points, and the client takes a screenshot
+    and the state of its camera and its pointer about five times each second, until a time after the pause. One open
+    connection to the inspector makes the pictures quick. Gives the samples."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(INSPECTOR_ADAPTER)))
+    import openblack_inspector_mcp as adapter
+    session = adapter.Session(adapter.DEFAULT_PORT, 30.0)
+    session.pinned = {"pid": pid}
+
+    def call(query, request):
+        try:
+            answer = session.send(adapter.call_request(query, json.dumps(request)))
+        except ConnectionError:
+            return None
+        return answer.get("result") if answer.get("ok") else None
+
+    os.makedirs(folder, exist_ok=True)
+    samples = []
+    points = ([500, 400], [780, 620])
+    index = 0
+    started = time.monotonic()
+    try:
+        while time.monotonic() < until() + after_seconds:
+            call("input.pointer", {"params": {"screen": points[(index // 3) % 2]}})
+            path = os.path.abspath(os.path.join(folder, f"shot_{index:03d}.png"))
+            call("screenshot.take", {"params": {"path": path}})
+            pointer = call("input.state", {}) or {}
+            samples.append({"index": index, "seconds": round(time.monotonic() - started, 2), "shot": path,
+                            "pointer": pointer.get("pointer"), "pick": (pointer.get("pick") or {}).get("land")})
+            index += 1
+            time.sleep(0.1)
+    finally:
+        session.close()
+    with open(os.path.join(folder, "samples.json"), "w", encoding="utf-8") as file:
+        json.dump(samples, file, indent=2)
+    return samples
+
+
+def silence_lines(log):
+    """The starts and the ends of the silences of the server in the log of a client: [{"after_ms", "commands"}] for each
+    end, and the count of the starts"""
+    ends = []
+    for line in lines_with(log, [SILENCE_END]):
+        found = re.search(r"ended after (\d+) ms \((\d+) commands", line)
+        if found:
+            ends.append({"after_ms": int(found.group(1)), "commands": int(found.group(2))})
+    starts = [line for line in lines_with(log, [SILENCE_START]) if "on an open socket" not in line]
+    return {"starts": len(starts), "ends": ends,
+            "limit": len(lines_with(log, ["on an open socket: the client tries to come back"]))}
+
+
 def wait_for_port(log, process, limit=180):
     end = time.monotonic() + limit
     while time.monotonic() < end:
@@ -4067,6 +4153,20 @@ def main():
     parser.add_argument("--test-end-differs", action="store_true",
                         help="a check of this script: add a line to the end of the game that the server tells, so that each "
                              "client that tells its end must say not the same (a stopped client tells none and is not judged)")
+    parser.add_argument("--pause", action="append", default=[], metavar="WHO:TURN:SECONDS",
+                        help="stop all the threads of a process (server, or a client number from 1) once the server did "
+                             "TURN turns, and let it go after SECONDS: a server or a client that stops with its sockets "
+                             "open. Each client must show the silence of a stopped server and end it, and stay in step")
+    parser.add_argument("--net-delay-ms", type=int,
+                        help="the server delays each message of the game socket by this many ms in each direction "
+                             "(--test-net-delay-ms)")
+    parser.add_argument("--net-loss", type=int,
+                        help="the server loses this percent of the packets of the game socket; a lost packet comes after "
+                             "the time that TCP takes to send it again (--test-net-loss)")
+    parser.add_argument("--net-seed", type=int, help="the seed of the losses of --net-loss")
+    parser.add_argument("--pause-shots", metavar="FOLDER",
+                        help="with a --pause of the server: the first client moves its pointer and takes a screenshot "
+                             "each half second during the pause and 3 s after it (needs the inspector of the client)")
     parser.add_argument("--rejoin-second-at", type=int, metavar="TURN",
                         help="stop the second client once it compared TURN turns (a multiple of 100), and start a new "
                              "process of its player with a new ticket after --rejoin-after seconds; the new process must "
@@ -4328,6 +4428,13 @@ def main():
         server_command += ["--frame-ms", str(options.server_frame_ms)]
     if options.snapshot_every is not None:
         server_command += ["--snapshot-every", str(options.snapshot_every)]
+    if options.net_delay_ms is not None:
+        server_command += ["--test-net-delay-ms", str(options.net_delay_ms)]
+    if options.net_loss is not None:
+        server_command += ["--test-net-loss", str(options.net_loss)]
+    if options.net_seed is not None:
+        server_command += ["--test-net-seed", str(options.net_seed)]
+    pauses = parse_pauses(options.pause)
     # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
     land_kind = {"land": options.land, "testbed": options.testbed, "gods_ring_map": options.gods_ring_map}
     server_command += sim_report.gods_need_no_temple_args(True, **land_kind)
@@ -4524,6 +4631,7 @@ def main():
             chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
             chatting = chatting or any(value.split(":", 1)[1] == str(index + 1) for value in options.tattoo_menu)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
+                    or (options.pause_shots and index == 0)
                     or options.give == index + 1 or any(leash["client"] == index for leash in leashes)
                     or options.editor_check or options.forest_camera or options.editor_desync):
                 command += ["--inspect-port", "0"]
@@ -4620,7 +4728,39 @@ def main():
         # The island cases stop the server only after the land change, so that the new server starts on the new land
         restart_after_island = options.editor_desync in ("island", "island-away")
         server_gone_at = None
-        while time.monotonic() - started < run_limit_seconds(options.turns):
+        # A pause or a slow network makes the run longer
+        extra_seconds = sum(int(pause["seconds"]) + 5 for pause in pauses)
+        if options.net_loss or options.net_delay_ms:
+            extra_seconds += run_limit_seconds(options.turns)
+        while time.monotonic() - started < run_limit_seconds(options.turns) + extra_seconds:
+            for pause in pauses:
+                if pause["done"]:
+                    continue
+                target = server if pause["who"] == "server" else (
+                    clients[int(pause["who"]) - 1] if 0 < int(pause["who"]) <= len(clients) else None)
+                if target is None or target.poll() is not None:
+                    pause["done"] = True
+                    continue
+                if pause["at"] is None and max(server_checksums(server_log), default=0) >= pause["turn"]:
+                    if suspend_process(target.pid, True):
+                        pause["at"] = time.monotonic()
+                        pause["until"] = pause["at"] + pause["seconds"]
+                        if options.pause_shots and pause["who"] == "server" and clients:
+                            shooter = threading.Thread(target=pause_shots, args=(
+                                clients[0].pid, os.path.join(options.pause_shots, f"pause_{pause['turn']}"),
+                                lambda pause=pause: pause["until"]), daemon=True)
+                            shooter.start()
+                            pause["shooter"] = shooter
+                        print(f"paused {pause['who']} (process {target.pid}) after turn {pause['turn']} for "
+                              f"{pause['seconds']} s")
+                    else:
+                        print(f"could not pause {pause['who']} (process {target.pid})")
+                        pause["done"] = True
+                elif pause["at"] is not None and time.monotonic() >= pause["until"]:
+                    suspend_process(target.pid, False)
+                    pause["done"] = True
+                    pause["resumed"] = time.monotonic()
+                    print(f"{pause['who']} goes on after {pause['resumed'] - pause['at']:.1f} s")
             if (options.restart_server_at is not None and restarted_log is None and not restart_in_pause
                     and (not restart_after_island or lines_with(server_log, ["started the room again on the land"]))
                     and max(server_checksums(server_log), default=0) >= options.restart_server_at):
@@ -5215,6 +5355,31 @@ def main():
         if options.editor_desync in ("island", "island-away") and not restart["land"]:
             print(f"the restarted server did not load the land of the room: {json.dumps(restart)}")
             all_same = False
+    if pauses or options.net_loss or options.net_delay_ms:
+        summary["pauses"] = [{"who": pause["who"], "turn": pause["turn"], "seconds": pause["seconds"],
+                              "paused": pause["at"] is not None,
+                              "held_seconds": round(pause["resumed"] - pause["at"], 1)
+                              if pause.get("resumed") and pause["at"] is not None else None} for pause in pauses]
+        summary["net_faults"] = {"delay_ms": options.net_delay_ms, "loss": options.net_loss,
+                                 "server": lines_with(server_log, ["Tests: each message of the game socket"])}
+        summary["silences"] = {str(index + 1): silence_lines(os.path.join(client_dir, "client.log"))
+                               for index, client_dir in enumerate(client_dirs)}
+        for pause in pauses:
+            if pause["who"] != "server":
+                continue
+            if pause["at"] is None:
+                print(f"the server was not paused at turn {pause['turn']}")
+                all_same = False
+                continue
+            # Each client shows the silence of the stopped server, ends it, and sends no command in it
+            for client, seen in summary["silences"].items():
+                long_ends = [end for end in seen["ends"] if end["after_ms"] >= (pause["seconds"] - 1.5) * 1000]
+                if not long_ends:
+                    print(f"client {client} did not show and end a silence of {pause['seconds']} s: {seen}")
+                    all_same = False
+                elif any(end["commands"] != 0 for end in long_ends):
+                    print(f"client {client} sent commands in the silence: {seen}")
+                    all_same = False
     summary["same"] = all_same
     with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)

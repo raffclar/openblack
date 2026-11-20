@@ -118,6 +118,7 @@
 #include "Locator.h"
 #include "Magic/TownBelief.h"
 #include "Online/NetworkSession.h"
+#include "Online/ServerSilence.h"
 #include "Particles/LiquidParticles.h"
 #include "Profiler.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
@@ -231,7 +232,30 @@ void Game::UpdateInput()
 		// the hand's buttons wait.
 		auto& handPress = Locator::handPressSystem::value();
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		// After a silence of the game server, the hand gets the releases of its buttons that came in the silence
+		if (!_serverSilent)
+		{
+			for (const auto& release : std::exchange(_heldHandReleases, {}))
+			{
+				handPress.Press(release, {.inTemple = inTemple, .playGrabSound = [this] { PlayHandGrabSound(); }});
+			}
+		}
 		actions.TakeHandEvents([this, &handPress, inTemple](const SDL_Event& event, bool movesPointer) {
+			using online::server_silence::HandEvent;
+			const auto kind = event.type == SDL_MOUSEBUTTONDOWN ? HandEvent::Press
+			                  : event.type == SDL_MOUSEBUTTONUP ? HandEvent::Release
+			                  : event.type == SDL_MOUSEMOTION   ? HandEvent::Move
+			                                                    : HandEvent::Other;
+			switch (online::server_silence::Admit(kind, _serverSilent))
+			{
+			case online::server_silence::Admission::Pass:
+				break;
+			case online::server_silence::Admission::Hold:
+				_heldHandReleases.push_back(event);
+				return;
+			case online::server_silence::Admission::Drop:
+				return;
+			}
 			handPress.Press(event, {.inTemple = inTemple, .playGrabSound = [this] { PlayHandGrabSound(); }});
 			if (movesPointer)
 			{
@@ -250,6 +274,11 @@ void Game::UpdateInput()
 		// The hand is put under the pointer every frame, moving or not: until the mouse first moves, under the pointer
 		// the game keeps, so from a land's first frame it is where the cursor is, or the top left corner while the
 		// cursor has never been over the window
+		// During a silence of the game server the hand stays where it is, and the keys do not move the camera
+		if (_serverSilent)
+		{
+			return;
+		}
 		handPress.FramePointer(actions.IsPointerKnown() ? std::optional(actions.GetPointerPosition()) : std::nullopt);
 		auto& keys = Locator::gameKeysSystem::value();
 		keys.UpdateTempleRoomKeys();
@@ -302,7 +331,8 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	// From the end of the frame that goes into the temple or that opens a box of the front end, the player's camera of the
 	// world takes no controls of the player
 	world_camera::EndFrameControls(FrontEndBoxShows());
-	if (!CameraReadsKeys())
+	// During a silence of the game server the keys do not move the camera
+	if (!CameraReadsKeys() || _serverSilent)
 	{
 		return;
 	}

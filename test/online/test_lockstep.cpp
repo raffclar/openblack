@@ -4200,6 +4200,40 @@ TEST(HostileGameServer, TurnsFarAheadEndTheGame)
 	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::ServerLimit);
 }
 
+// The game socket is TCP, so the turns come in order and once. After a resume the server sends again turns that the
+// client can have, and a fault of a server could send a turn twice or early: the client does each turn once and in order.
+TEST(HostileGameServer, TurnsThatComeTwiceOrOutOfOrderTurnOnceAndInOrder)
+{
+	LoopbackSockets network;
+	HostileServer server(network);
+	int64_t now = 0;
+	Computer alice(network, now, "god:alice");
+	Exchange(network, alice);
+	const game_socket::Start start {.land = "Land1.txt", .seed = 1};
+	server.Text(
+	    game_socket::Joined {.role = game_socket::Role::God, .slot = 0, .session = "s", .name = "alice", .start = start});
+	server.Text(start);
+	Exchange(network, alice);
+	ASSERT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	server.Binary(turn_codec::TurnBundle {.turn = 2, .blocks = {}});
+	server.Binary(turn_codec::TurnBundle {.turn = 0, .blocks = {}});
+	Exchange(network, alice);
+	// Turn 1 did not come, so the world waits after turn 0
+	EXPECT_EQ(alice.world.turns, 1u);
+	server.Binary(turn_codec::TurnBundle {.turn = 0, .blocks = {}});
+	server.Binary(turn_codec::TurnBundle {.turn = 2, .blocks = {}});
+	server.Binary(turn_codec::TurnBundle {.turn = 1, .blocks = {}});
+	server.Binary(turn_codec::TurnBundle {.turn = 1, .blocks = {}});
+	for (int frame = 0; frame < 10; ++frame)
+	{
+		now += 100'000;
+		Exchange(network, alice, 1);
+	}
+	EXPECT_EQ(alice.world.turns, 3u);
+	EXPECT_EQ(alice.session.TurnsDone(), 3u);
+	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::None);
+}
+
 // A changed server sends a world state larger than the client keeps
 TEST(HostileGameServer, AWorldStateLargerThanTheLimitEndsTheGame)
 {
@@ -4275,6 +4309,92 @@ TEST_F(LockstepTest, AClientThatCannotComeBackInTimeShowsTheBoxOfTheLostConnecti
 	EXPECT_EQ(alice.session.GetEnd(), NetworkSession::End::Lost);
 	EXPECT_EQ(told, 1);
 	EXPECT_GT(toldAt - lostAt, 5LL * 60 * 1'000'000);
+}
+
+TEST_F(LockstepTest, AServerThatStopsShowsTheSilenceAfterFourTurnsAndTheNextMessageEndsIt)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 60);
+	ASSERT_TRUE(host->Started());
+	ASSERT_TRUE(alice.session.WaitsForTurns());
+	EXPECT_FALSE(alice.session.ServerSilence().has_value());
+
+	// The server stops: the clients go on, but no message comes
+	const auto pause = [&](int frames) {
+		for (int frame = 0; frame < frames; ++frame)
+		{
+			now += k_Turn;
+			alice.Frame();
+			bob.Frame();
+		}
+	};
+	pause(4);
+	EXPECT_FALSE(alice.session.ServerSilence().has_value());
+	pause(1);
+	ASSERT_TRUE(alice.session.ServerSilence().has_value());
+	EXPECT_EQ(*alice.session.ServerSilence(), 5 * k_Turn);
+	pause(295);
+	ASSERT_TRUE(bob.session.ServerSilence().has_value());
+	EXPECT_EQ(*bob.session.ServerSilence(), 300 * k_Turn);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+
+	// The server goes on: the first message ends the silence, and the worlds stay in step
+	Frame({&alice, &bob});
+	EXPECT_FALSE(alice.session.ServerSilence().has_value());
+	EXPECT_FALSE(bob.session.ServerSilence().has_value());
+	Frames({&alice, &bob}, 100);
+	EXPECT_FALSE(alice.session.ServerSilence().has_value());
+	EXPECT_EQ(alice.session.Resumes(), 0u);
+	EXPECT_GT(alice.session.GetCompares().compared, 100u);
+	EXPECT_FALSE(alice.session.GetCompares().firstDifferent.has_value());
+	EXPECT_FALSE(bob.session.GetCompares().firstDifferent.has_value());
+	EXPECT_EQ(alice.world.hash, bob.world.hash);
+}
+
+TEST_F(LockstepTest, AnOpenSocketWithNoMessageForFiftySecondsMakesTheClientComeBack)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 60);
+	ASSERT_TRUE(host->Started());
+
+	// Only Alice's socket gives nothing, and it stays open, as when the network of the server goes with no close
+	for (int frame = 0; frame < 500; ++frame)
+	{
+		now += k_Turn;
+		alice.Frame();
+	}
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	now += k_Turn;
+	alice.Frame();
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Reconnecting);
+	ASSERT_TRUE(alice.session.ServerSilence().has_value());
+
+	// The network comes back: the client comes back into its god, and the silence ends
+	Frames({&alice, &bob}, 200);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(alice.session.Resumes(), 1u);
+	EXPECT_FALSE(alice.session.ServerSilence().has_value());
+	EXPECT_FALSE(alice.session.GetCompares().firstDifferent.has_value());
+	EXPECT_EQ(alice.world.turns, bob.world.turns);
+	EXPECT_EQ(alice.world.hash, bob.world.hash);
+}
+
+TEST_F(LockstepTest, NoSilenceShowsBeforeTheStartOrAfterTheTurnsStop)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	// Alone in the room, the client waits for the start and not for turns
+	for (int frame = 0; frame < 50; ++frame)
+	{
+		now += k_Turn;
+		alice.Frame();
+	}
+	EXPECT_FALSE(alice.session.WaitsForTurns());
+	EXPECT_FALSE(alice.session.ServerSilence().has_value());
 }
 
 namespace

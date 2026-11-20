@@ -267,6 +267,13 @@ public:
 	/// A lobby game waits for the players that still load the world: the lines show at the top of the screen, under the
 	/// place of "Resynchronising...". No lines when the game does not wait.
 	void ShowLoadWait(std::vector<std::u16string> lines) { _loadWaitLines = std::move(lines); }
+	/// No message came from the game server for a short time: red text at the top left shows the seconds of the silence,
+	/// such as "24.3s". None when there is no silence.
+	void ShowServerSilence(std::optional<std::u16string> text) { _serverSilenceText = std::move(text); }
+	[[nodiscard]] const std::optional<std::u16string>& GetServerSilence() const { return _serverSilenceText; }
+	/// Tests: the text of a silence shows and counts up from this time of the draw, in milliseconds, while no network game
+	/// shows a silence. None stops it.
+	void StageServerSilence(std::optional<uint32_t> fromMilliseconds) { _stagedSilenceFrom = fromMilliseconds; }
 	/// The world stayed out of step with the server's after the last try: the box asks "Warning. The game may not be
 	/// synchronised on your machine. Continue?" with a Yes and a No
 	void AskOutOfSync();
@@ -495,7 +502,11 @@ private:
 	/// The fight's panel, at the top left of the screen
 	void DrawFightPanel(glm::u16vec2 resolution);
 	/// The player's own ping in the top left corner of the screen
-	void DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool cinemaBars);
+	/// Gives true when the ping line shows
+	bool DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool cinemaBars);
+	/// The red text of the silence of the game server, at the top left, under the ping line when it shows
+	void DrawServerSilence(glm::u16vec2 resolution, bool pingShown, uint32_t milliseconds);
+	void DrawSilenceText(glm::u16vec2 resolution, bool pingShown, std::u16string_view text);
 	/// A bar of the creature's panels in screen pixels: its framed box, its fill from its left (or its middle, with a line
 	/// there) brightening towards where it ends, and shadows inside its frame
 	void DrawStatBar(const creature_panel::Rect& bar, float fill, glm::u8vec3 colour, bool fromMiddle);
@@ -631,6 +642,8 @@ private:
 	std::unique_ptr<EndGameBox> _endGameBox;
 	bool _resyncShown {false};
 	std::vector<std::u16string> _loadWaitLines;
+	std::optional<std::u16string> _serverSilenceText;
+	std::optional<uint32_t> _stagedSilenceFrom;
 	/// The out-of-sync box is up and waits for its answer
 	bool _outOfSyncAsked {false};
 	bool _connectionLostShown {false};

@@ -802,6 +802,8 @@ public:
 		        .town = town};
 	}
 
+	[[nodiscard]] const Ground& GroundOf() const { return _ground; }
+
 	[[nodiscard]] Biome BiomeAt(float x, float z) const
 	{
 		const auto [cx, cz] = CornerOf(x, z);
@@ -966,6 +968,14 @@ void PlaceStand(const Placement& placement, float x, float z, Tree main, uint32_
 void PlaceStands(const Placement& placement, uint64_t seed, const Settings& settings, PointSquares& trees,
                  std::vector<Feature>& placed)
 {
+	// A stand starts only where its kind can grow, so the chance of a stand in a biome goes up by the part of the biome
+	// where none of its kinds can grow
+	std::array<float, biomes::k_BiomeCount> fill {};
+	fill.fill(1.0f);
+	if (settings.fillGrowableGround)
+	{
+		fill = StandFill(placement.GroundOf());
+	}
 	const auto standSeed = StageSeed(seed, 43);
 	const float last = static_cast<float>(placement.Side() - 1);
 	// A higher density puts the points closer together. Each point keeps the chance of a stand of the usual spacing, so
@@ -988,7 +998,7 @@ void PlaceStands(const Placement& placement, uint64_t seed, const Settings& sett
 				continue;
 			}
 			const auto planting = PlantingOf(placement.BiomeAt(x, z));
-			float chance = planting.stands * squareKm;
+			float chance = planting.stands * squareKm * fill.at(static_cast<size_t>(placement.BiomeAt(x, z)));
 			if (planting.woods)
 			{
 				chance *= WoodsAt(seed, x, z, last);
@@ -1391,6 +1401,43 @@ void PlaceSeaStacks(const Placement& placement, uint64_t seed, const Settings& s
 	}
 }
 } // namespace
+
+std::array<float, biomes::k_BiomeCount> features::StandFill(const Ground& ground)
+{
+	std::array<size_t, biomes::k_BiomeCount> corners {};
+	std::array<size_t, biomes::k_BiomeCount> growable {};
+	const auto grows = [](Tree tree, float height, float slope) {
+		const auto* rule = RuleOf(tree);
+		return rule != nullptr && height >= rule->lowest && height <= rule->highest && slope <= rule->steepest;
+	};
+	const Placement placement(ground);
+	for (int x = 0; x < ground.heights.side; ++x)
+	{
+		for (int z = 0; z < ground.heights.side; ++z)
+		{
+			if (!placement.Free(static_cast<float>(x), static_cast<float>(z)))
+			{
+				continue;
+			}
+			const auto biome = ground.biomes.At(x, z);
+			const auto index = static_cast<size_t>(biome);
+			++corners.at(index);
+			const float height = ground.curve.MetresOf(ground.heights.At(x, z));
+			const float slope = GradientAt(ground.heights, ground.curve, x, z);
+			if (std::ranges::any_of(PlantingOf(biome).mains,
+			                        [&](const Choice& choice) { return grows(choice.tree, height, slope); }))
+			{
+				++growable.at(index);
+			}
+		}
+	}
+	std::array<float, biomes::k_BiomeCount> fill {};
+	for (size_t i = 0; i < fill.size(); ++i)
+	{
+		fill.at(i) = growable.at(i) == 0 ? 1.0f : static_cast<float>(corners.at(i)) / static_cast<float>(growable.at(i));
+	}
+	return fill;
+}
 
 bool features::IsFree(const Ground& ground, float x, float z)
 {

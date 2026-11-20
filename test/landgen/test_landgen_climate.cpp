@@ -41,7 +41,9 @@ Grid<T> MakeGrid(int side, Function value)
 biomes::Conditions Temperate()
 {
 	return {.altitude = 40.0f,
+	        .drawnAltitude = 40.0f,
 	        .temperature = 0.5f,
+	        .drawnTemperature = 0.5f,
 	        .moisture = 0.4f,
 	        .slope = 2.0f,
 	        .seaDistance = 50.0f,
@@ -106,9 +108,11 @@ TEST(LandgenBiomes, EachRuleGivesItsBiome)
 	EXPECT_EQ(biomes::Classify(c, thresholds), Biome::Sea);
 	c = Temperate();
 	c.altitude = 200.0f;
+	c.drawnAltitude = 200.0f;
 	EXPECT_EQ(biomes::Classify(c, thresholds), Biome::Alpine);
 	c = Temperate();
 	c.temperature = 0.1f;
+	c.drawnTemperature = 0.1f;
 	EXPECT_EQ(biomes::Classify(c, thresholds), Biome::NordicWastes);
 	c = Temperate();
 	c.altitude = 8.0f;
@@ -131,6 +135,30 @@ TEST(LandgenBiomes, EachRuleGivesItsBiome)
 	c = Temperate();
 	c.moisture = 0.6f;
 	EXPECT_EQ(biomes::Classify(c, thresholds), Biome::TemperateForest);
+}
+
+TEST(LandgenBiomes, TheMountainsAndTheColdComeFromTheDrawnHeight)
+{
+	const biomes::Thresholds thresholds;
+	// A low altitude byte that the game draws high, as above the knee of the height curve of a generated land
+	auto c = Temperate();
+	c.altitude = 80.0f;
+	c.drawnAltitude = 140.0f;
+	EXPECT_EQ(biomes::Classify(c, thresholds), Biome::Alpine);
+	// A high altitude byte that the game draws low is not alpine
+	c = Temperate();
+	c.altitude = 200.0f;
+	c.drawnAltitude = 100.0f;
+	EXPECT_EQ(biomes::Classify(c, thresholds), Biome::Grassland);
+	// The cold of the drawn height makes the nordic wastes, not the temperature of the altitude byte
+	c = Temperate();
+	c.temperature = 0.5f;
+	c.drawnTemperature = 0.1f;
+	EXPECT_EQ(biomes::Classify(c, thresholds), Biome::NordicWastes);
+	c = Temperate();
+	c.temperature = 0.1f;
+	c.drawnTemperature = 0.5f;
+	EXPECT_EQ(biomes::Classify(c, thresholds), Biome::Grassland);
 }
 
 TEST(LandgenBiomes, SmoothRemovesASingleCornerButKeepsTheSeaAndTheMountains)

@@ -34,6 +34,9 @@ inline constexpr size_t k_EndBoxPlayerLeft = 1000;
 inline constexpr size_t k_EndBoxConnectionLost = 1001;
 /// The value of the EndBox command that presses Leave Game in the open end box
 inline constexpr size_t k_EndBoxLeave = 1002;
+/// The value of the EndBox command that shows the red text of a silence of the game server, which counts up from the
+/// command
+inline constexpr size_t k_EndBoxServerSilence = 1003;
 
 /// The parts of the game that a scenario stages and that only the game on the player's computer has: the menu and the
 /// boxes of the interface, the chat controls, the mouse, the logo effect and the requests to join, to continue and to

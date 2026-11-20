@@ -36,6 +36,7 @@
 #include "Common/ErrorReportsRules.h"
 #include "Game.h"
 #include "Online/GameBuildId.h"
+#include "Online/ServerSilence.h"
 #include "Sound/ClipSounds.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
@@ -263,8 +264,13 @@ void Game::UpdateOnline()
 		auto& network = Locator::networkGame::value();
 		network.Update();
 		const auto* session = network.Session();
+		// No message from the server for a short time: the hand and the camera stop, and the seconds show at the top left
+		const auto silence = session != nullptr && network.InGame() ? session->ServerSilence() : std::nullopt;
+		_serverSilent = silence.has_value();
 		if (Locator::gameInterface::has_value())
 		{
+			Locator::gameInterface::value().ShowServerSilence(
+			    silence.has_value() ? std::optional(online::server_silence::Text(*silence)) : std::nullopt);
 			// The words "Resynchronising..." show while the world resynchronises (user decision MI-4)
 			Locator::gameInterface::value().ShowResync(session != nullptr && network.InGame() && session->ShowsResync());
 			// The turns of a lobby game wait for the players that still load the world. The camera stays free.
