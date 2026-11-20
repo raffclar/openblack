@@ -1114,6 +1114,12 @@ struct Command
 		/// everywhere, or with ctrl from the point (from the middle of the map) on the land, heard as far as radius with
 		/// the distances of a placed guidance voice. Needs no creature.
 		PlayGuidanceVoice,
+		/// A sample of the in-game bank (value), heard everywhere, with the play settings of its bank header. Needs no
+		/// creature.
+		PlayBankSample,
+		/// The game releases the loop of the sample that the last PlayBankSample started, as a stop that finishes the
+		/// last loop does. Needs no creature.
+		ReleaseBankSample,
 		/// The creature stops at once where it is, as a new body action or a placement stops it. The Stop command stops
 		/// it as the game stops a walk.
 		StopAtOnce,

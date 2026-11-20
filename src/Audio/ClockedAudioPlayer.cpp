@@ -226,6 +226,45 @@ uint32_t ClockedAudioPlayer::GetSampleOffset(SourceId id) const
 	return static_cast<uint32_t>(source->offsetMs * static_cast<double>(found->second.sampleRate) / k_MillisecondsPerSecond);
 }
 
+uint32_t ClockedAudioPlayer::GetQueueOffset(SourceId id) const
+{
+	auto* source = Find(id);
+	if (source == nullptr)
+	{
+		return 0;
+	}
+	Advance(*source);
+	// Each buffer of the queue gives its frames at its own rate
+	auto left = source->offsetMs;
+	double frames = 0.0;
+	for (const auto bufferId : source->queue)
+	{
+		const auto found = _buffers.find(bufferId);
+		if (left <= 0.0 || found == _buffers.end())
+		{
+			break;
+		}
+		const auto played = std::min(left, found->second.Milliseconds());
+		frames += played * static_cast<double>(found->second.sampleRate) / k_MillisecondsPerSecond;
+		left -= played;
+	}
+	return static_cast<uint32_t>(std::lround(frames));
+}
+
+void ClockedAudioPlayer::PlayBufferFrom(SourceId sourceId, BufferId buffer, uint32_t frame)
+{
+	auto* source = Find(sourceId);
+	if (source == nullptr)
+	{
+		return;
+	}
+	Advance(*source);
+	source->queue.assign(1, buffer);
+	const auto found = _buffers.find(buffer);
+	const auto rate = found == _buffers.end() ? 1 : std::max(found->second.sampleRate, 1);
+	source->offsetMs = static_cast<double>(frame) * k_MillisecondsPerSecond / static_cast<double>(rate);
+}
+
 void ClockedAudioPlayer::Advance(Source& source) const
 {
 	const auto now = _clock();

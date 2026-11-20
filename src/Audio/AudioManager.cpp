@@ -582,6 +582,7 @@ entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<gl
 	                                          .distanceScale = start.distanceScale,
 	                                          .headerSet = start.headerSet,
 	                                          .loop = start.loopCount < 0 ? PlayType::Repeat : PlayType::Once,
+	                                          .loopCount = start.loopCount,
 	                                          .state = AudioStatus::Initial,
 	                                          .music = false,
 	                                          .owner = owner,
@@ -814,6 +815,7 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	                                          .distanceScale = start.distanceScale,
 	                                          .headerSet = start.headerSet,
 	                                          .loop = start.loopCount < 0 ? PlayType::Repeat : PlayType::Once,
+	                                          .loopCount = start.loopCount,
 	                                          .state = AudioStatus::Initial,
 	                                          .music = false,
 	                                          .owner = options.owner,
@@ -859,6 +861,35 @@ void AudioManager::ReleaseEmitterLoop(entt::entity emitter)
 	                    DescribeEmitter(emitter, component), LogTurn());
 	_audioPlayer->SetLooping(component.sourceId, false);
 	component.loop = PlayType::Once;
+	PlayReleasedQueueToEnd(component);
+}
+
+void AudioManager::PlayReleasedQueueToEnd(const AudioEmitter& component)
+{
+	// A release sets the loop count to 0. The voice then plays from where it is to the end of the sample, and the
+	// passes that wait in its queue do not play.
+	const auto status = _audioPlayer->GetStatus(component.sourceId);
+	auto& sounds = Locator::resources::value().GetSounds();
+	if ((status != AudioStatus::Playing && status != AudioStatus::Paused) || !sounds.Contains(component.soundId))
+	{
+		return;
+	}
+	const auto sound = sounds.Handle(component.soundId);
+	if (sound->bufferId == 0)
+	{
+		return;
+	}
+	const auto region = LoopRegionOf(sound->loopStart, sound->loopEnd, sound->frames);
+	const auto feed = SampleFeedOf(component.loopCount, region, sound->frames);
+	const auto played = _audioPlayer->GetQueueOffset(component.sourceId);
+	const auto frame = ReleasedFrameOf(feed, region, sound->frames, played);
+	if (!frame)
+	{
+		return;
+	}
+	_audioPlayer->PlayBufferFrom(component.sourceId, sound->bufferId, static_cast<uint32_t>(*frame));
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Sound {} released after {} frames of its queue: plays frames {} to {}",
+	                    sound->name, played, *frame, sound->frames);
 }
 
 bool AudioManager::IsEmitterLooping(entt::entity emitter)

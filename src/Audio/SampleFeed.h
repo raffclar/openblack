@@ -125,4 +125,50 @@ struct SampleFeed
 	return feed;
 }
 
+/// The frame of the sample that a voice continues from when the game releases its loop, after the voice played this
+/// many frames of its queue. The sound library then plays from where the voice is to the end of the sample, with no
+/// more passes of the region.
+///
+/// The value is empty when the voice does not need a change:
+/// - The voice holds the sample as one buffer. The mixer plays on to the end when the source stops its loop.
+/// - The rest of the queue already plays from where the voice is to the end of the sample.
+/// - The voice played all of its queue.
+[[nodiscard]] constexpr std::optional<int32_t> ReleasedFrameOf(const SampleFeed& feed, std::optional<LoopRegion> region,
+                                                               int32_t frames, int64_t playedFrames)
+{
+	if (feed.attached || playedFrames < 0)
+	{
+		return std::nullopt;
+	}
+	// A sample with no region loops over all of its frames
+	const auto loop = region.value_or(LoopRegion {.first = 0, .end = frames});
+	int64_t queueFrames = 0;
+	std::optional<int32_t> frame;
+	for (const auto& queued : feed.queue)
+	{
+		const auto part = FramesOf(queued.part, loop, frames);
+		const int64_t length = part.end - part.first;
+		if (length <= 0 || queued.copies <= 0)
+		{
+			continue;
+		}
+		const auto partEnd = queueFrames + length * queued.copies;
+		if (!frame && playedFrames < partEnd)
+		{
+			frame = part.first + static_cast<int32_t>((playedFrames - queueFrames) % length);
+		}
+		queueFrames = partEnd;
+	}
+	if (!frame)
+	{
+		return std::nullopt;
+	}
+	// The voice changes only when the rest of its queue is not the rest of the sample
+	if (queueFrames - playedFrames == static_cast<int64_t>(frames) - *frame)
+	{
+		return std::nullopt;
+	}
+	return frame;
+}
+
 } // namespace openblack::audio

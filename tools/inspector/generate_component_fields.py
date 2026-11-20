@@ -54,8 +54,9 @@ SKIPPED = {
 # Fields that mean something only in the run that set them, such as a handle of the audio device. The inspector reads
 # them, but a save does not keep them. Keep a stable key in a field that a save keeps.
 RUN_ONLY = {
-    # The sounds of a saved game do not come back: a load removes each emitter
-    "AudioEmitter": {"sourceId"},
+    # The sounds of a saved game do not come back: a load removes each emitter. The loop count tells how the source of
+    # the run plays the sound.
+    "AudioEmitter": {"sourceId", "loopCount"},
     # An entity of the audio of the run, and a count that the game starts again when a load makes the tags new. The
     # silence of an attached sound that a load did not attach again is of this run only.
     "SoundTag": {"emitter", "turns", "silenced"},

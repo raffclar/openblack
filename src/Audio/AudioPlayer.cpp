@@ -396,6 +396,25 @@ uint32_t AudioPlayer::GetSampleOffset(SourceId id) const
 	return static_cast<uint32_t>(std::max(offset, 0));
 }
 
+void AudioPlayer::PlayBufferFrom(SourceId sourceId, BufferId buffer, uint32_t frame)
+{
+	ALint state = AL_STOPPED;
+	alCheckCall(alGetSourcei(sourceId, AL_SOURCE_STATE, &state));
+	// A source can change its buffers only when it is stopped. The next play starts at the offset that the stopped
+	// source keeps.
+	alCheckCall(alSourceStop(sourceId));
+	alCheckCall(alSourcei(sourceId, AL_BUFFER, static_cast<ALint>(buffer)));
+	alCheckCall(alSourcei(sourceId, AL_SAMPLE_OFFSET, static_cast<ALint>(frame)));
+	if (state == AL_PLAYING || state == AL_PAUSED)
+	{
+		alCheckCall(alSourcePlay(sourceId));
+	}
+	if (state == AL_PAUSED)
+	{
+		alCheckCall(alSourcePause(sourceId));
+	}
+}
+
 bool AudioPlayer::IsDeviceConnected() const
 {
 	// A device that cannot tell of a loss stays connected
