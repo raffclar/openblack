@@ -79,8 +79,11 @@ Set each look's `status` to `approved` or `rejected` and `answer` to the user's 
 A testbed scenario can state its own outcome as `checks` (see `src/Debug/TestbedScenarioChecks.h`). Use them when a
 scenario shows a thing that you can also measure, such as a creature that gets to a point. They do not replace the look.
 
-- Command line: `openblack --scenario ID --scenario-check --background -n 4000` writes one line for each check and the
-  verdict, then ends. The exit code is 0 when all checks pass, 1 when one fails, and 2 when the scenario has no checks.
+- Command line: `openblack --scenario ID --scenario-check --background --seed 1 --sim-frame-ms 20 -n 30000` writes one
+  line for each check and the verdict, then ends. Some checks need a long run: a creature that walks to a point and a
+  story land that has a creature are not decided at `-n 4000`. The exit code is 0 when all checks pass, 1 when one
+  fails, and 2 when the scenario has no checks or a check is not decided at the frame limit (verdict `waiting`). Exit
+  code 2 at the frame limit does not mean that the scenario has no checks: read the report, then use a higher `-n`.
 - Inspector: `game.scenario_checks` (tool `game_scenario_checks`) gives the verdict of the last scenario while the game
   runs: `passed`, `failed` or `waiting`.
 - The merge train and the lanes can run the scenarios that have checks, and fail the car on exit code 1.
