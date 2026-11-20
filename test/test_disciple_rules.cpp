@@ -278,14 +278,17 @@ TEST(DiscipleRules, OnlyAVillagerMadeToMoveHouseNeedsARandomNumberForItsLine)
 	}
 }
 
+namespace
+{
 /// The symbol's height on the screen, in pixels, through the camera's view on a screen of that size
-static float SymbolPixelsOnScreen(float distance, int32_t width, int32_t height)
+float SymbolPixelsOnScreen(float distance, int32_t width, int32_t height)
 {
 	constexpr float k_Lens = 70.0f * std::numbers::pi_v<float> / 180.0f;
 	const float aspect = static_cast<float>(width) / static_cast<float>(height);
 	const float halfView = distance * std::tan(camera_lens::VerticalFieldOfView(k_Lens, aspect) * 0.5f);
 	return SymbolSize(distance, width, height) / halfView * (static_cast<float>(height) * 0.5f);
 }
+} // namespace
 
 TEST(DiscipleRules, TheSymbolIsTheGamesSizeOnItsDefaultScreen)
 {

@@ -352,10 +352,12 @@ void SetWidescreen() // 032 SET_WIDESCREEN
 	}
 }
 
+namespace
+{
 /// A thing a script tells to face a point turns to it: a villager or another living thing at once, with its walk; a
 /// creature is left to its own turning; anything else that stands on the land is turned at once about the upright,
 /// keeping any lean it has
-static void FacePoint(entt::entity object, glm::vec3 point)
+void FacePoint(entt::entity object, glm::vec3 point)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (IsDirectableVillager(object))
@@ -392,6 +394,7 @@ static void FacePoint(entt::entity object, glm::vec3 point)
 	angles.y = angle;
 	TurnPlacedThing(object, angles, false);
 }
+} // namespace
 
 void SetFocus() // 034 SET_FOCUS
 {

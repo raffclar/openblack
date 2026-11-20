@@ -334,7 +334,10 @@ void CreatureSetAgendaPriority() // 072 CREATURE_SET_AGENDA_PRIORITY
 	}
 }
 
-static void ChangeScriptCreatureDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change);
+namespace
+{
+void ChangeScriptCreatureDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change);
+} // namespace
 
 void CreatureTurnOffAllDesires() // 073 CREATURE_TURN_OFF_ALL_DESIRES
 {
@@ -448,8 +451,10 @@ void InCreatureHand() // 076 IN_CREATURE_HAND
 	Pushb(script::property_rules::InCreatureHand(thing, inHand.value_or(entt::null), eating));
 }
 
+namespace
+{
 /// Changes the desires of the creature a script names, telling the script when it names no creature
-static void ChangeScriptCreatureDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change)
+void ChangeScriptCreatureDesires(entt::entity creature, const std::function<void(creature_desires::Desires&)>& change)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (creature == entt::null || !registry.Valid(creature))
@@ -469,7 +474,7 @@ static void ChangeScriptCreatureDesires(entt::entity creature, const std::functi
 }
 
 /// A desire as a script numbers it, if there is one of that number
-static std::optional<creature_desires::Desire> ScriptDesire(int32_t desire)
+std::optional<creature_desires::Desire> ScriptDesire(int32_t desire)
 {
 	if (desire < 0 || desire >= static_cast<int32_t>(creature_desires::k_DesireCount))
 	{
@@ -477,6 +482,7 @@ static std::optional<creature_desires::Desire> ScriptDesire(int32_t desire)
 	}
 	return static_cast<creature_desires::Desire>(desire);
 }
+} // namespace
 
 void CreatureSetDesireValue() // 077 CREATURE_SET_DESIRE_VALUE
 {
@@ -579,9 +585,11 @@ void CreatureSetPlayer() // 083 CREATURE_SET_PLAYER
 	MakePlayersCreature(object);
 }
 
+namespace
+{
 /// The creature of a native that reads or clears a count of actions. The game tells of a thing that is not a creature,
 /// then uses it and fails. openblack does nothing with such a thing.
-static ecs::components::Creature* CreatureForCount(entt::entity thing)
+ecs::components::Creature* CreatureForCount(entt::entity thing)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (thing == entt::null || !registry.Valid(thing))
@@ -596,6 +604,7 @@ static ecs::components::Creature* CreatureForCount(entt::entity thing)
 	}
 	return creature;
 }
+} // namespace
 
 void CreatureInitialiseNumTimesPerformedAction() // 085 CREATURE_INITIALISE_NUM_TIMES_PERFORMED_ACTION
 {
@@ -927,14 +936,17 @@ std::optional<entt::entity> FightCreature(const char* native, entt::entity thing
 	return thing;
 }
 
+namespace
+{
 /// The fight transcript keeps what a script read of the fight state of a creature, when there is a transcript
-static void NoteFightRead(std::optional<entt::entity> creature, std::string_view native, double answer)
+void NoteFightRead(std::optional<entt::entity> creature, std::string_view native, double answer)
 {
 	if (creature.has_value() && Locator::fightTranscript::has_value())
 	{
 		Locator::fightTranscript::value().ScriptRead(*creature, native, answer);
 	}
 }
+} // namespace
 
 void IsFighting() // 229 IS_FIGHTING
 {
