@@ -240,7 +240,7 @@ private:
 	[[nodiscard]] std::optional<entt::entity> ScriptFlock();
 	[[nodiscard]] std::string StopScript(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
-	std::string HandTakeFireBall();
+	std::string HandTakeFireBall(const Command& command);
 	std::string HandTapObject(size_t index);
 	std::string ChargeIconWithSeedHeld(const Command& command);
 	std::string TakeIconSeed(const Command& command);
@@ -248,6 +248,9 @@ private:
 	std::string TapStoneHand(const Command& command);
 	/// Once the hand is over the fireball, it taps it, or presses the action button with a seed in it
 	void FinishTakingFireBall();
+	/// A press on a fireball: the pointer goes onto a ball in the middle of the screen, the Action button goes down in the
+	/// next frame, before the cursor picks the ball, and lets go some seconds later
+	void PressOnFireBallUnderPointer(float seconds);
 	/// Draws a gesture through the gesture recogniser, across the middle of the screen
 	std::string DrawGesture(GestureType gesture, glm::vec2 offset = {0.0f, 0.0f});
 	/// Once a drawn gesture is finished, logs what was recognised
@@ -340,6 +343,25 @@ private:
 	std::optional<int> _fireBallTakeFrames;
 	/// The fireball the hand goes over to tap
 	entt::entity _fireBallTaken {entt::null};
+	/// The press that waits for a fireball in the middle of the screen
+	struct FireBallPress
+	{
+		enum class Step : uint8_t
+		{
+			/// No fireball is in the middle of the screen
+			Wait,
+			/// The pointer went onto the ball
+			Moved,
+			/// The Action button went down
+			Pressed,
+			/// The log has the state of the seed after the press
+			Held,
+		};
+		/// The seconds that the button stays down after the press
+		float holdSeconds {0.0f};
+		Step step {Step::Wait};
+	};
+	std::optional<FireBallPress> _fireBallPress;
 	/// When the miracles' positions are next logged, for a scenario that logs them
 	float _nextMiracleLog {0.0f};
 	Timeline _timeline;

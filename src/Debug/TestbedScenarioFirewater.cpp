@@ -246,8 +246,8 @@ void AddFireballCatching(std::vector<Scenario>& all)
 	                   "of the screen. The pointer goes on the ball, and the Action button stays down for two seconds. "
 	                   "Then the button lets go.",
 	    .expected = "When the ball comes under the pointer, the ready seed takes it in at once, also before the press, "
-	                "and stays in the hand. A press that arms the seed on the ball first takes the ball in at the let "
-	                "go. If the ball bursts before the let go, the seed takes nothing in.",
+	                "and stays in the hand. A press that arms the seed on the ball first also takes the ball in at "
+	                "once, and the let go casts nothing.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -20.0f}, .look = {0.0f, 8.0f, 10.0f}},
 	    .miracles = {{.type = MagicType::Fireball,
@@ -261,6 +261,34 @@ void AddFireballCatching(std::vector<Scenario>& all)
 	                 {.kind = Command::Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.5f, 0.55f}},
 	                 {.kind = Command::Kind::PointerPress, .delaySeconds = 1.3f, .value = 3},
 	                 {.kind = Command::Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	// The hand holds a fire seed. A fireball rises slowly in the middle of the screen. The pointer goes onto the ball, and
+	// the Action button goes down before the cursor picks the ball. Thus the press arms the seed on the ball before the
+	// gesture step sees the ball.
+	all.push_back({
+	    .id = "hand.fire_seed_pressed_on_fireball",
+	    .name = "A fire seed pressed on a fireball",
+	    .facet = Facet::Hand,
+	    .description = "The hand holds a fire seed. Another player throws a fireball straight up, slowly, in the middle "
+	                   "of the screen. The pointer waits at the side. When the ball comes near the middle of the screen, the "
+	                   "pointer goes onto it, and the Action button goes down in the next frame. The button lets go two "
+	                   "seconds later.",
+	    .expected = "The press arms the seed on the ball, and the gesture step of the same frame takes the ball in: the "
+	                "ball goes, and the seed stays in the hand, a twentieth stronger. The hum of the hand starts at the "
+	                "press and continues after the let go, as in the original game. The let go casts nothing.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -20.0f}, .look = {0.0f, 8.0f, 10.0f}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {0.0f, 10.0f},
+	                  .handOffset = {0.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 7.0f, 0.0f},
+	                  .delaySeconds = 2.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Command::Kind::HoldSeed, .delaySeconds = 0.5f, .value = static_cast<size_t>(SpellSeedType::Fire)},
+	                 {.kind = Command::Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.2f, 0.55f}},
+	                 {.kind = Command::Kind::HandTakeFireBall, .delaySeconds = 1.0f, .value = 1, .amount = 2.0f}},
 	});
 
 	// The hand holds a fire seed. A fireball rises slowly through the pointer. No button goes down.

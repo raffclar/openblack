@@ -271,6 +271,7 @@ void Runner::Start(const Scenario& scenario)
 	_seconds = 0.0f;
 	_lastNativeResult.reset();
 	_fireBallTakeFrames.reset();
+	_fireBallPress.reset();
 	_nextMiracleLog = 0.0f;
 	_timeline = {};
 	_creatures.clear();
@@ -1224,6 +1225,7 @@ void Runner::Update(float seconds)
 	UpdateComputerActions();
 	WatchGesture();
 	FinishTakingFireBall();
+	PressOnFireBallUnderPointer(seconds);
 	ApplyStates();
 	UpdatePointer(seconds);
 	UpdateDemoPing();
