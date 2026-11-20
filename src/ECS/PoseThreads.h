@@ -33,16 +33,28 @@ namespace openblack::ecs::pose_threads
 /// fewer counters.
 inline constexpr size_t k_RunsPerLane = 4;
 
-/// Does the job one time for each index. The pool is made at the first call. Each thread does a run of indices in order.
-inline void ForEach(std::unique_ptr<WorkerPool>& pool, size_t count, const WorkerPool::Job& job)
+/// The most jobs of one walk that the calling thread does alone. Below these counts, the time to wake the threads is
+/// more than the work that they take, on the desktop and in the browser. The jobs of each walk have a different size,
+/// so each walk has its own count.
+inline constexpr size_t k_AnimalPosesOnCaller = 192;
+inline constexpr size_t k_VillagerClipsOnCaller = 512;
+inline constexpr size_t k_VillagerPosesOnCaller = 128;
+
+/// Does the job one time for each index. When the count is at most onCaller, the calling thread does all the jobs in
+/// order as lane 0. Otherwise the pool is made at the first such call, and each thread does a run of indices in order.
+inline void ForEach(std::unique_ptr<WorkerPool>& pool, size_t count, size_t onCaller, const WorkerPool::Job& job)
 {
+	if (count <= onCaller)
+	{
+		for (size_t index = 0; index < count; ++index)
+		{
+			job(index, 0);
+		}
+		return;
+	}
 	if (pool == nullptr)
 	{
 		pool = MakePool();
-	}
-	if (count == 0)
-	{
-		return;
 	}
 	const size_t runs = std::min(count, pool->GetLaneCount() * k_RunsPerLane);
 	const size_t length = (count + runs - 1) / runs;
