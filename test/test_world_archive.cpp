@@ -287,7 +287,7 @@ TEST(WorldArchive, AMapInKeyOrderGivesTheSameBytesAsAHashMap)
 	EXPECT_EQ(c.Bytes(), d.Bytes());
 
 	// A map in another order of its keys still sorts them
-	std::map<entt::entity, uint32_t, std::greater<>> reversed(ordered.begin(), ordered.end());
+	const std::map<entt::entity, uint32_t, std::greater<>> reversed(ordered.begin(), ordered.end());
 	BinaryWriter e(context);
 	Save(e, reversed);
 	EXPECT_EQ(a.Bytes(), e.Bytes());
@@ -637,8 +637,8 @@ TEST(WorldArchive, SharedValuesOfRegisteredTypesComeBackAsValues)
 	entt::meta_ctx context;
 	Register(context);
 	Reflect<Holder>(context, ValueOnly {}).Field<&Holder::spot>("spot").Field<&Holder::none>("none");
-	Holder holder {.spot = std::make_shared<const FakeSpot>(FakeSpot {.position = {1.0f, 2.0f, 3.0f}, .heat = 4.0f}),
-	               .none = nullptr};
+	const Holder holder {.spot = std::make_shared<const FakeSpot>(FakeSpot {.position = {1.0f, 2.0f, 3.0f}, .heat = 4.0f}),
+	                     .none = nullptr};
 	BinaryWriter out(context);
 	Save(out, holder);
 	EXPECT_TRUE(out.Unsaved().empty());
@@ -1699,7 +1699,7 @@ TEST(WorldArchive, AWriterNamesAValueThatItCannotKeepAlsoByThePlanOfItsType)
 
 TEST(WorldArchive, TheBytesOfAWriterAreTheBytesWrittenUpToNow)
 {
-	entt::meta_ctx context;
+	const entt::meta_ctx context;
 	BinaryWriter out(context);
 	out.WriteRaw(uint32_t {7});
 	EXPECT_EQ(out.Size(), 4u);
@@ -1730,7 +1730,7 @@ TEST(WorldArchive, TheBytesOfAWriterAreTheBytesWrittenUpToNow)
 
 TEST(WorldArchive, AListOfEnumerationsIsTheBytesOfEachValueInTurn)
 {
-	entt::meta_ctx context;
+	const entt::meta_ctx context;
 	const std::vector<entt::entity> entities {entt::entity {1}, entt::null, entt::entity {300}};
 	const std::array<PlayerNames, 2> players {PlayerNames::PLAYER_TWO, PlayerNames::NEUTRAL};
 	BinaryWriter lists(context);
@@ -1753,7 +1753,7 @@ TEST(WorldArchive, AListOfEnumerationsIsTheBytesOfEachValueInTurn)
 
 TEST(WorldArchive, AListOfFlagsAndAListOfListsAreTheBytesOfEachValueInTurn)
 {
-	entt::meta_ctx context;
+	const entt::meta_ctx context;
 	const std::vector<bool> flags {true, false, false, true, true};
 	const std::vector<std::vector<uint32_t>> lists {{}, {7, 8}, {}, {0xFFFFFFFFu}};
 	BinaryWriter blocks(context);
@@ -1919,7 +1919,7 @@ TEST(WorldArchive, APlanWritesFieldsThatTouchInMemoryAsOneBlock)
 
 TEST(WorldArchive, AnOptionOfAPlainValueGivesTheFlagAndThenTheValue)
 {
-	entt::meta_ctx context;
+	const entt::meta_ctx context;
 	BinaryWriter out(context);
 	Save(out, std::optional<uint32_t>(0x11223344u));
 	Save(out, std::optional<uint32_t> {});

@@ -242,6 +242,7 @@ creature_mind::Random InTurn(std::vector<uint32_t> values)
 std::vector<Step::Kind> KindsOf(const std::vector<Step>& agenda)
 {
 	std::vector<Step::Kind> kinds;
+	kinds.reserve(agenda.size());
 	for (const auto& step : agenda)
 	{
 		kinds.push_back(step.kind);
@@ -481,11 +482,11 @@ TEST(CreatureJointActions, SeeingAnObject)
 
 TEST(CreatureJointActions, TheOtherJointActionsHaveNoCondition)
 {
-	creature_plan_actions::Situation situation;
-	for (const auto action : {"KissFriend", "TalkToFriend", "TellFriendAJoke", "DanceWithFriend", "ArgueWithFriend",
-	                          "MopeAboutWithFriend", "ShowOffToFriend", "GetAttentionFromFriend", "TellCreatureToSodOff",
-	                          "ExamineOtherCreatureWithFriend", "SitOnTopOfHillWithFriend", "EatFromFieldWithFriend",
-	                          "PlayThrowingGameWithFriend", "GiveFriendToy", "ShowFriendCitadel"})
+	const creature_plan_actions::Situation situation;
+	for (const auto* const action : {"KissFriend", "TalkToFriend", "TellFriendAJoke", "DanceWithFriend", "ArgueWithFriend",
+	                                 "MopeAboutWithFriend", "ShowOffToFriend", "GetAttentionFromFriend", "TellCreatureToSodOff",
+	                                 "ExamineOtherCreatureWithFriend", "SitOnTopOfHillWithFriend", "EatFromFieldWithFriend",
+	                                 "PlayThrowingGameWithFriend", "GiveFriendToy", "ShowFriendCitadel"})
 	{
 		const auto* executor = creature_plan_actions::For(action);
 		ASSERT_NE(executor, nullptr) << action;
@@ -655,7 +656,7 @@ TEST(CreatureJointActions, ACreatureNeverHasBuiltItsHome)
 	EXPECT_FALSE(creature_mind::HasBuiltHome(0));
 	EXPECT_FALSE(creature_mind::HasBuiltHome(6));
 	EXPECT_TRUE(creature_mind::HasBuiltHome(7));
-	creature_plan_actions::Situation situation;
+	const creature_plan_actions::Situation situation;
 	const auto* executor = creature_plan_actions::For("ShowFriendHome");
 	ASSERT_NE(executor, nullptr);
 	EXPECT_FALSE(creature_plan_actions::Possible(*executor, situation));
@@ -769,8 +770,8 @@ TEST(CreatureJointActions, ShowingAnotherCreatureHowNiceItIs)
 
 TEST(CreatureJointActions, TheMiraclesShownToAFriendAreCasts)
 {
-	for (const auto action : {"ShowFriendSpellFireball", "ShowFriendSpellLightningBolt", "ShowFriendSpellLightningStorm",
-	                          "ShowFriendSpellMagicFood", "ShowFriendSpellMagicWood"})
+	for (const auto* const action : {"ShowFriendSpellFireball", "ShowFriendSpellLightningBolt", "ShowFriendSpellLightningStorm",
+	                                 "ShowFriendSpellMagicFood", "ShowFriendSpellMagicWood"})
 	{
 		const auto* executor = creature_plan_actions::For(action);
 		ASSERT_NE(executor, nullptr) << action;

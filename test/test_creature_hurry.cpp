@@ -19,7 +19,6 @@
 #include "Creature/LeashOrders.h"
 
 using namespace openblack;
-using creature_layers::BodyAction;
 
 namespace
 {

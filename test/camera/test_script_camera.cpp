@@ -117,7 +117,7 @@ TEST(ScriptCamera, TheCameraIsDrawnAboveTheLand)
 
 TEST(ScriptCamera, ItGlidesWhereItIsSentAndArrives)
 {
-	Camera camera;
+	const Camera camera;
 	// Well within the world
 	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
 	EXPECT_TRUE(model.Arrived());
@@ -292,7 +292,7 @@ TEST(ScriptCamera, ItFollowsAThingAtOnceWithNoGlideUntilSentElsewhere)
 	model.FollowAndLookAt({.id = 7, .lookup = thing}, 3.0f, true);
 	model.SetFollowSettings(3.0f, 0.0f, 0.0f, false);
 	at += glm::vec3(4.0f, 0.0f, 0.0f);
-	Camera camera;
+	const Camera camera;
 	const auto update = model.Update(std::chrono::milliseconds(16), camera);
 	ASSERT_TRUE(update.has_value());
 	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), at), 0.0f, 1e-4f);
@@ -324,7 +324,7 @@ TEST(ScriptCamera, ItIsAboutTheThingItLooksAtElseTheOneItFollows)
 	EXPECT_EQ(model.GetFocusedThing(), 3u);
 	// Once the followed thing is gone, about nothing
 	followedThere = false;
-	Camera camera;
+	const Camera camera;
 	static_cast<void>(model.Update(std::chrono::milliseconds(16), camera));
 	EXPECT_FALSE(model.GetFocusedThing().has_value());
 }
@@ -345,7 +345,7 @@ TEST(ScriptCamera, AFollowedFlockIsFollowedFromTheNearestDistanceWithNoTurn)
 	ScriptCameraModel model({990.0f, 20.0f, 990.0f}, {1000.0f, 5.0f, 1000.0f}, FlatLand);
 	const auto flock = script_camera::FollowedFlock({1000.0f, 5.0f, 1000.0f}, 2.0f);
 	model.Follow({.id = 9, .lookup = [flock]() { return std::optional(flock); }}, true);
-	Camera camera;
+	const Camera camera;
 	ASSERT_TRUE(model.Update(std::chrono::milliseconds(16), camera).has_value());
 	EXPECT_NEAR(glm::distance(model.GetTargetFocus(), flock.point), 0.0f, 1e-4f);
 	// The flock gives no height, so the distance is held at the nearest
@@ -357,7 +357,7 @@ TEST(ScriptCamera, AFollowedFlockIsFollowedFromTheNearestDistanceWithNoTurn)
 
 TEST(ScriptCamera, ATrackPutsTheCameraWhereItsWaysHaveGotToAtTheFramesTime)
 {
-	Camera camera;
+	const Camera camera;
 	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
 	const auto track = StraightTrack();
 	model.RunTrack(track);
@@ -403,7 +403,7 @@ TEST(ScriptCamera, ATrackPutsTheCameraWhereItsWaysHaveGotToAtTheFramesTime)
 
 TEST(ScriptCamera, PutFromOutsideItStopsThereAtOnce)
 {
-	Camera camera;
+	const Camera camera;
 	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
 	model.MoveOrigin({2500.0f, 50.0f, 2900.0f}, 5.0f);
 	model.MoveFocus({2600.0f, 0.0f, 2900.0f}, 5.0f);
@@ -419,7 +419,7 @@ TEST(ScriptCamera, PutFromOutsideItStopsThereAtOnce)
 
 TEST(ScriptCamera, PutFromOutsideItsTrackContinues)
 {
-	Camera camera;
+	const Camera camera;
 	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
 	const auto track = StraightTrack();
 	model.RunTrack(track);
@@ -565,7 +565,7 @@ TEST(ScriptCamera, TheTwoThingCameraOnAFlockAndAThingAddsOnlyTheHeightOfTheThing
 
 TEST(ScriptCamera, ATwoThingCameraTakesOverUntilLetGoOrAThingIsGone)
 {
-	Camera camera;
+	const Camera camera;
 	ScriptCameraModel model({2500.0f, 50.0f, 2500.0f}, {2600.0f, 0.0f, 2500.0f}, FlatLand);
 	bool secondThere = true;
 	const auto subject = [](uint32_t id, glm::vec3 at, const bool* there) {
@@ -616,7 +616,7 @@ TEST(ScriptCamera, ATwoThingCameraTakesOverUntilLetGoOrAThingIsGone)
 
 TEST(ScriptCamera, ATrackHoldsUnderATwoThingCamera)
 {
-	Camera camera;
+	const Camera camera;
 	ScriptCameraModel model({2400.0f, 60.0f, 2500.0f}, {2400.0f, 10.0f, 2550.0f}, FlatLand);
 	model.RunTrack(StraightTrack());
 	const auto thing = [](glm::vec3 at) {

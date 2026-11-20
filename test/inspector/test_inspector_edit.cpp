@@ -232,7 +232,7 @@ TEST_F(InspectorEdit, AddsAndRemovesComponents)
 
 	const auto removed = Ask(R"({"query": "edit.remove_component", "params": {"id": )" + Id() + R"(, "component": "Tree"}})");
 	EXPECT_FALSE(_registry.AllOf<Tree>(_villager));
-	const auto names = removed["components"];
+	const auto& names = removed["components"];
 	EXPECT_EQ(std::find(names.begin(), names.end(), Json("Tree")), names.end());
 	EXPECT_NE(std::find(names.begin(), names.end(), Json("Villager")), names.end());
 	EXPECT_FALSE(Refusal(R"({"query": "edit.add", "params": {"id": )" + Id() + R"(, "component": "NoSuchThing"}})").empty());

@@ -822,6 +822,7 @@ TEST(LandgenCursed, APlaceWithNoRoomForAStackGivesTheLandItsFeaturesBack)
 	}
 	const auto ground = land.Ground();
 	std::vector<features::Feature> rocks;
+	rocks.reserve(CursedLand::k_Side);
 	for (int x = 0; x < CursedLand::k_Side; ++x)
 	{
 		rocks.push_back({.kind = features::Kind::Static,
@@ -967,6 +968,7 @@ TEST(LandgenCursed, TheSameSeedGivesTheSamePlaces)
 TEST(LandgenCursed, BurntTreesStayInNoForest)
 {
 	std::vector<features::Feature> placed;
+	placed.reserve(20);
 	for (int i = 0; i < 20; ++i)
 	{
 		placed.push_back({.kind = features::Kind::Tree,

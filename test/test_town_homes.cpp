@@ -36,7 +36,6 @@ using namespace openblack;
 using namespace openblack::ecs;
 using namespace openblack::ecs::components;
 using town_homes::AbodeRoom;
-using town_homes::Occupancy;
 
 namespace
 {

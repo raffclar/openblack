@@ -53,7 +53,7 @@ TEST(WaterRings, AgesAtItsRateInWholeMilliseconds)
 
 TEST(WaterRings, AFlatSquareTurnedAboutItsMiddle)
 {
-	water_rings::Ring ring {.position = {5.0f, 0.2f, 5.0f}, .age = 700, .growth = 1.0f, .angle = 0.7f, .aspect = 2.0f};
+	const water_rings::Ring ring {.position = {5.0f, 0.2f, 5.0f}, .age = 700, .growth = 1.0f, .angle = 0.7f, .aspect = 2.0f};
 	const auto corners = water_rings::Corners(ring);
 	for (const auto& corner : corners)
 	{
@@ -68,7 +68,7 @@ TEST(WaterRings, AFlatSquareTurnedAboutItsMiddle)
 TEST(WaterRings, ItsWidthLiesAlongItsAngle)
 {
 	// Turned a quarter from +x towards +z, half as deep as wide
-	water_rings::Ring ring {.age = 700, .growth = 4.0f, .angle = 1.5707964f, .aspect = 0.5f};
+	const water_rings::Ring ring {.age = 700, .growth = 4.0f, .angle = 1.5707964f, .aspect = 0.5f};
 	const auto corners = water_rings::Corners(ring);
 	// From the first corner to the second runs along +z, its width; from the second to the third runs across it, -x
 	EXPECT_NEAR(corners[1].z - corners[0].z, 8.0f, 1e-5f);

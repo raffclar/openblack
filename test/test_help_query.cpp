@@ -168,7 +168,7 @@ TEST(HelpQuery, LeashTextsAreTheirToolTips)
 	EXPECT_EQ(LeashTexts(86).first, 0xEC9u);
 	EXPECT_EQ(LeashTexts(87).last, 0xECAu);
 	// A leash's answer is said as it is, not as a set
-	help_query::Thing leash {.texts = LeashTexts(87)};
+	const help_query::Thing leash {.texts = LeashTexts(87)};
 	const auto answer = About(leash);
 	ASSERT_TRUE(std::holds_alternative<SayTexts>(answer));
 	EXPECT_EQ(std::get<SayTexts>(answer).texts.first, 0xECAu);

@@ -266,7 +266,7 @@ TEST(RealWeatherRules, ChangesSetAddAndSubtract)
 TEST(RealWeatherRules, TheTemperatureIsRealAndTheVisibilityGivesWayToThePreset)
 {
 	const auto presets = real_weather::ParsePresets(FileOf({PresetBytes(4).Change(k_Overcast, 0, 30.0f)}));
-	const auto applied = real_weather::ApplyPreset(&presets[0], WeatherInfo {.temperature = 1, .overcast = 9}, -4, 60,
+	const auto applied = real_weather::ApplyPreset(presets.data(), WeatherInfo {.temperature = 1, .overcast = 9}, -4, 60,
 	                                               real_weather::PresetStorm({}));
 	EXPECT_EQ(applied.background.temperature, -4);
 	EXPECT_EQ(applied.background.overcast, 30);
@@ -285,8 +285,8 @@ TEST(RealWeatherRules, EachChangeStartsFromTheResultOfTheChangeBeforeIt)
 	const auto presets = real_weather::ParsePresets(FileOf({
 	    PresetBytes(6).Change(k_Overcast, 0, 20.0f).Change(k_SnowCover, 1, 5.0f).Change(k_Snowfall, 2, 15.0f),
 	}));
-	const auto applied =
-	    real_weather::ApplyPreset(&presets[0], WeatherInfo {.snow = 50, .snowCover = 50}, 0, 0, real_weather::PresetStorm({}));
+	const auto applied = real_weather::ApplyPreset(presets.data(), WeatherInfo {.snow = 50, .snowCover = 50}, 0, 0,
+	                                               real_weather::PresetStorm({}));
 	EXPECT_EQ(applied.background.overcast, 20);
 	EXPECT_EQ(applied.background.snowCover, 25);
 	EXPECT_EQ(applied.background.snow, 10);
@@ -301,7 +301,7 @@ TEST(RealWeatherRules, TheStormsNumberOfCloudsComesFirst)
 	const auto presets = real_weather::ParsePresets(FileOf({
 	    PresetBytes(6, true).Change(k_CloudCount, 0, 4.0f).Change(k_Overcast, 1, 10.0f).Change(k_Rain, 0, 50.0f),
 	}));
-	const auto applied = real_weather::ApplyPreset(&presets[0], {}, 15, 80, real_weather::PresetStorm({}));
+	const auto applied = real_weather::ApplyPreset(presets.data(), {}, 15, 80, real_weather::PresetStorm({}));
 	EXPECT_EQ(applied.background.overcast, 14);
 	ASSERT_TRUE(applied.storm.has_value());
 	EXPECT_EQ(applied.storm->cloudCount, 4);
@@ -317,7 +317,7 @@ TEST(RealWeatherRules, ValuesStopAtOneHundredFromTheirLowByte)
 	        .Change(k_Snowfall, 0, 99.9f)
 	        .Change(k_CloudShade, 0, 1.5f),
 	}));
-	const auto applied = real_weather::ApplyPreset(&presets[0], {}, 0, 0, real_weather::PresetStorm({}));
+	const auto applied = real_weather::ApplyPreset(presets.data(), {}, 0, 0, real_weather::PresetStorm({}));
 	EXPECT_EQ(applied.background.overcast, 100);
 	// 300 is 44 in its low byte
 	EXPECT_EQ(applied.background.snowCover, 44);
@@ -338,7 +338,7 @@ TEST(RealWeatherRules, TheStormStandsOverTheMiddleWithTheNewBackgroundWeather)
 	        .Change(k_Overcast, 1, 0.0f),
 	}));
 	const glm::vec3 centre {100.0f, 0.0f, 200.0f};
-	const auto applied = real_weather::ApplyPreset(&presets[0], {}, 9, 50, real_weather::PresetStorm(centre));
+	const auto applied = real_weather::ApplyPreset(presets.data(), {}, 9, 50, real_weather::PresetStorm(centre));
 	ASSERT_TRUE(applied.storm.has_value());
 	const auto& storm = *applied.storm;
 	EXPECT_EQ(storm.position, centre);

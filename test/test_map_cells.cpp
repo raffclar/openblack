@@ -111,7 +111,7 @@ TEST(MapCells, TakingOneOutKeepsTheOthersInOrderAndMovingPutsItInFront)
 
 TEST(MapCells, CellsOffTheMapHaveNoIndex)
 {
-	CellLists lists(8);
+	const CellLists lists(8);
 	EXPECT_FALSE(lists.IndexOf({-1, 0}).has_value());
 	EXPECT_FALSE(lists.IndexOf({0, 8}).has_value());
 }

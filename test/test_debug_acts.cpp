@@ -94,7 +94,7 @@ struct FakeWorld final: WorldTarget
 	}
 	void SetBonusUnlocked(size_t bonus, bool unlocked) override
 	{
-		calls.push_back("bonus " + std::to_string(bonus) + " " + std::to_string(unlocked));
+		calls.push_back("bonus " + std::to_string(bonus) + " " + std::to_string(static_cast<int>(unlocked)));
 	}
 };
 

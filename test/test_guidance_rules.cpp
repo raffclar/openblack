@@ -21,7 +21,7 @@ using namespace openblack::guidance;
 TEST(GuidanceRules, FirstLandKindsAreTheGamesOwn)
 {
 	// On the first land only these of the advisors' remarks may be heard
-	for (size_t kind = static_cast<size_t>(Kind::OurTownAttacked); kind <= static_cast<size_t>(Kind::DestroyBuilding); ++kind)
+	for (auto kind = static_cast<size_t>(Kind::OurTownAttacked); kind <= static_cast<size_t>(Kind::DestroyBuilding); ++kind)
 	{
 		const auto k = static_cast<Kind>(kind);
 		const bool expected = k == Kind::AttackingTown || k == Kind::CreatureFight || k == Kind::GoodBeingEvil ||

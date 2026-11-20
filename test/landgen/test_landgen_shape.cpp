@@ -204,8 +204,8 @@ TEST(LandgenHydrology, DrainFillsAPitToItsSpill)
 		{
 			return 0.0f;
 		}
-		const float dx = static_cast<float>(x - 8);
-		const float dz = static_cast<float>(z - 8);
+		const auto dx = static_cast<float>(x - 8);
+		const auto dz = static_cast<float>(z - 8);
 		if ((dx * dx) + (dz * dz) < 9.0f)
 		{
 			return 5.0f;
@@ -263,8 +263,8 @@ TEST(LandgenHydrology, AccumulateAddsTheRainOfTheCornersAbove)
 TEST(LandgenHydrology, ALowBasinBecomesALakeAtTheSeaLevel)
 {
 	auto heights = MakeGrid(24, [](int x, int z) {
-		const float dx = static_cast<float>(x - 12);
-		const float dz = static_cast<float>(z - 12);
+		const auto dx = static_cast<float>(x - 12);
+		const auto dz = static_cast<float>(z - 12);
 		if ((dx * dx) + (dz * dz) < 16.0f)
 		{
 			return -2.0f;
@@ -285,8 +285,8 @@ TEST(LandgenHydrology, AShallowHighBasinFillsWithWetGround)
 {
 	// A deep, large basin keeps its hollow for a lake at its own level (see test_landgen_lakes); a shallow one fills
 	auto heights = MakeGrid(24, [](int x, int z) {
-		const float dx = static_cast<float>(x - 12);
-		const float dz = static_cast<float>(z - 12);
+		const auto dx = static_cast<float>(x - 12);
+		const auto dz = static_cast<float>(z - 12);
 		if ((dx * dx) + (dz * dz) < 16.0f)
 		{
 			return 58.5f;

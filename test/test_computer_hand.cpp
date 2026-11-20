@@ -67,7 +67,7 @@ TEST(ComputerHand, EachKindOfStepThatTheGameAddsIsMade)
 
 TEST(ComputerHand, KindsOfThisPartThatAreNotMadeEndTheActionBadly)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	for (size_t kind = 0; kind < static_cast<size_t>(StepKind::_Count); ++kind)
 	{
 		const auto step = static_cast<StepKind>(kind);
@@ -105,7 +105,7 @@ TEST(ComputerHand, StepGetsTheMoveThatBringsTheHandToIt)
 
 TEST(ComputerHand, MapPositionFollowsTheHandEachTurn)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	HandAction action;
 	EXPECT_EQ(action.coords.x, 0x00808000);
 	action.hand = {100.0f, 0.0f, 200.0f};

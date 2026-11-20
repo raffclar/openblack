@@ -371,7 +371,7 @@ TEST(CoarseEdges, EachCellHasOneTexel)
 {
 	for (const auto samples : {62, 30})
 	{
-		PassCells pass(samples);
+		const PassCells pass(samples);
 		std::set<std::pair<int, int>> texels;
 		for (const auto cell : pass.RingCells())
 		{

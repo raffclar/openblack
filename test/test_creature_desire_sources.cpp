@@ -138,7 +138,7 @@ TEST(CreatureDesireSources, LonelinessAndLackOfInteractionCountWholeSeconds)
 	EXPECT_EQ(TurnsForSource(1.0f, k_LonelySeconds, 10), 600u);
 	EXPECT_EQ(TurnsForSource(0.5f, k_UninterestedSeconds, 10), 600u);
 
-	Attention attention {.turnsIgnored = 300, .turnsSinceInteraction = 1200};
+	const Attention attention {.turnsIgnored = 300, .turnsSinceInteraction = 1200};
 	const auto state = StateWith(nullptr, &attention);
 	EXPECT_FLOAT_EQ(*Read(types::k_Loneliness, state), 0.5f);
 	EXPECT_FLOAT_EQ(*Read(types::k_LackOfInteraction, state), 1.0f);

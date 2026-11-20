@@ -210,8 +210,8 @@ TEST(CreatureLocomotion, TheSpinBlendMultipliesTheTurnByTheShareOfAQuarterTurn)
 {
 	// The game makes the turn positive, then multiplies by its float of 2 / pi, after it takes away a quarter turn
 	// beyond a quarter turn. It does not divide by a quarter turn.
-	constexpr float k_Share = std::bit_cast<float>(0x3F22F983u);
-	constexpr float k_Quarter = std::bit_cast<float>(0x3FC90FDBu);
+	constexpr auto k_Share = std::bit_cast<float>(0x3F22F983u);
+	constexpr auto k_Quarter = std::bit_cast<float>(0x3FC90FDBu);
 	for (const float angle : {0.0f, -0.3f, 0.3f, 1.2f, -1.5707963f, 1.5707964f, 2.5f, -3.1415927f, 3.1415927f})
 	{
 		const auto pair = SpinPairFor(animations::k_RightSpin, angle);

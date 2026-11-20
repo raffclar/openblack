@@ -118,7 +118,7 @@ TEST(ScriptFind, TheReachEdgeIsWorkedInFloat)
 
 TEST(ScriptFind, CellsLookedAtXByXThenZ)
 {
-	FakeCells cells;
+	const FakeCells cells;
 	const auto found = script_find::FindNearest(map_coords::FromMetres({20.5f, 20.5f}), 1.0f, cells.Lookup());
 	EXPECT_TRUE(found == entt::null);
 	const std::vector<glm::ivec2> expected {{1, 1}, {1, 2}, {2, 1}, {2, 2}};
@@ -127,7 +127,7 @@ TEST(ScriptFind, CellsLookedAtXByXThenZ)
 
 TEST(ScriptFind, CellsOffTheMapPassedOver)
 {
-	FakeCells cells;
+	const FakeCells cells;
 	const auto found = script_find::FindNearest(map_coords::FromMetres({0.5f, 0.5f}), 1.0f, cells.Lookup());
 	EXPECT_TRUE(found == entt::null);
 	const std::vector<glm::ivec2> expected {{0, 0}};

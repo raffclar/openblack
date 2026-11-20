@@ -95,7 +95,7 @@ TEST(FlockMiracleRules, TheJitterGoesThroughMetresAndBackToMapUnits)
 	EXPECT_EQ(flock::Jitter({0x10000, 0}, 0.2f, 0.0f), glm::ivec2(66191, -655));
 	// The code subtracts the jitter from the random number first. If it adds the random number first, the result is one
 	// unit less.
-	const float random = std::bit_cast<float>(0x3DF222EEU);
+	const auto random = std::bit_cast<float>(0x3DF222EEU);
 	EXPECT_EQ(flock::Jitter({15351972, 0}, random, 0.1f).x, 15352091);
 }
 

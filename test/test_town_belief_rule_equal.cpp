@@ -143,6 +143,7 @@ std::vector<glm::vec4> Drawn(const Effect& effect)
 	Effect::DrawWalk walk;
 	effect.Walk(1.0f, walk);
 	std::vector<glm::vec4> drawn;
+	drawn.reserve(walk.atoms.size());
 	for (const auto& atom : walk.atoms)
 	{
 		drawn.emplace_back(atom.position, atom.scale);

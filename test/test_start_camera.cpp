@@ -15,7 +15,6 @@
 
 using openblack::land_change::Kind;
 using openblack::map_coords::MapCoords;
-using openblack::start_camera::LandStart;
 using openblack::start_camera::StartsAtTemple;
 
 TEST(StartCamera, ANewGameWithNoPlaceFromTheScriptStartsAtTheTemple)

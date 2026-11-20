@@ -227,7 +227,7 @@ TEST(SpiritScreen, SideClingsHoldOnToTheRealScreensSides)
 		// "cling across 1.0 down 0.5" and "across 0.0 down 0.4"
 		c.control.SpiritCling(k_Good, 1.0f, 0.5f);
 		c.control.SpiritCling(k_Evil, 0.0f, 0.4f);
-		const float unit = static_cast<float>(screen.HoverUnit());
+		const auto unit = static_cast<float>(screen.HoverUnit());
 		const auto& good = c.control.Dude(0);
 		const auto& evil = c.control.Dude(1);
 		EXPECT_EQ(good.ClingEdge(), Edge::Right);

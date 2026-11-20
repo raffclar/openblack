@@ -44,7 +44,7 @@ TEST(StormFade, AStormFadesOutAtTheEndOfItsLife)
 TEST(StormFade, TheFadeMultipliesBeforeItDivides)
 {
 	// The share of the fade times the strength gives 0x3BE56041 and 0x41460001
-	const float age = std::bit_cast<float>(0x3DCCCCCDu);
+	const auto age = std::bit_cast<float>(0x3DCCCCCDu);
 	EXPECT_EQ(std::bit_cast<uint32_t>(storm_fade::Fade(age, 100.0f, 10.0f, 0.7f, 300.0f).strength), 0x3BE56042u);
 	EXPECT_EQ(std::bit_cast<uint32_t>(storm_fade::Fade(0.75f, 100.0f, 10.0f, 1.0f, 165.0f).innerRadius), 0x41460000u);
 	EXPECT_EQ(std::bit_cast<uint32_t>(storm_fade::Fade(99.25f, 100.0f, 10.0f, 1.0f, 165.0f).innerRadius), 0x41460000u);

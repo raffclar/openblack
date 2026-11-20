@@ -234,7 +234,7 @@ TEST(HelpWithoutSound, AFixedFrameTimeTimesALineByTheLengthOfItsSample)
 
 TEST(HelpWithoutSound, ALostDeviceLeavesTheSoundInstalled)
 {
-	LostDeviceFixture f;
+	const LostDeviceFixture f;
 	EXPECT_FALSE(f.audio.IsDeviceLost());
 	*f.connected = false;
 	EXPECT_TRUE(f.audio.IsDeviceLost());

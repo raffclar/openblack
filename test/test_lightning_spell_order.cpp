@@ -61,8 +61,8 @@ TEST(LightningSpellOrder, AForkJointsScaleMultipliesTheChangeByTheJointThenByThe
 TEST(LightningSpellOrder, TheStrikeConeMakesTheWayUnitByTheInverseOfItsLength)
 {
 	// The heading's cosine and sine and the half angle's cosine, each kept as a float
-	const float cosHeading = static_cast<float>(std::cos(static_cast<double>(0.9f)));
-	const float sinHeading = static_cast<float>(std::sin(static_cast<double>(0.9f)));
+	const auto cosHeading = static_cast<float>(std::cos(static_cast<double>(0.9f)));
+	const auto sinHeading = static_cast<float>(std::sin(static_cast<double>(0.9f)));
 	const float cosHalf = FromBits(0x3F534932u);
 	EXPECT_TRUE(maths::InStrikeCone({100.0f, 0.0f, 200.0f}, cosHeading, sinHeading, cosHalf, {131.25f, 0.0f, 240.5f}));
 	EXPECT_FALSE(

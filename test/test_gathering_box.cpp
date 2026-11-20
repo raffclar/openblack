@@ -302,7 +302,7 @@ TEST(GatheringBoxRules, HostReportStartsWithTheMembersOfTheFirstTwoTeams)
 
 TEST(GatheringBoxSystem, NothingWithNoPingServer)
 {
-	Fixture fixture;
+	const Fixture fixture;
 	fixture.system->SetPingServer(nullptr);
 	fixture.system->Update(1000);
 	EXPECT_FALSE(fixture.system->HasPingServer());
@@ -598,7 +598,7 @@ TEST(GatheringBoxRules, AnnouncementsKeep15Lines)
 
 TEST(GatheringBoxSystem, AStaffLineGoesToTheServerWithTheNameOfTheCodeOrOfThePlayer)
 {
-	Fixture fixture;
+	const Fixture fixture;
 	fixture.system->SendStaffCode(u"Hello");
 	fixture.system->SendStaffCode(u"!SGRBHello all");
 	fixture.system->SendStaffCode(u"!SGRBNBoss#Listen");
@@ -610,7 +610,7 @@ TEST(GatheringBoxSystem, AStaffLineGoesToTheServerWithTheNameOfTheCodeOrOfThePla
 
 TEST(GatheringBoxSystem, AnnouncementsGoLastLineFirstFromTheStaffNumbers)
 {
-	Fixture fixture;
+	const Fixture fixture;
 	fixture.system->SendStaffCode(u"!SGRBONBoss#New maps");
 	using Lines = std::vector<std::pair<UserId, std::u16string>>;
 	EXPECT_EQ(fixture.log.announcements, (Lines {{k_AdminUser + 1, u"maps"}, {k_AdminUser, u"New "}}));

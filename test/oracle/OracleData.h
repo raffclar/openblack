@@ -42,7 +42,7 @@ namespace openblack::oracle
 {
 	// NOLINTNEXTLINE(concurrency-mt-unsafe): read only, and no other thread changes the environment
 	const char* const folder = std::getenv("OPENBLACK_ORACLE_DATA");
-	if (folder != nullptr && std::string_view(folder).size() > 0)
+	if (folder != nullptr && !std::string_view(folder).empty())
 	{
 		return std::filesystem::path(folder);
 	}

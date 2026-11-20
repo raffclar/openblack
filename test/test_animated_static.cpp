@@ -106,7 +106,7 @@ TEST(AnimatedStaticRules, StonesFillTheSlotsInOrderAndCountByTheirCarving)
 	EXPECT_FALSE(AddGateStone(stones, MeshId::ObjectGateTotemApe));
 	EXPECT_EQ(GateStoneValue(stones), 7u);
 	// A model that isn't a carved stone is worth nothing
-	GateStones blank {MeshId::ObjectGateTotemBlank};
+	const GateStones blank {MeshId::ObjectGateTotemBlank};
 	EXPECT_EQ(GateStoneValue(blank), 0u);
 }
 

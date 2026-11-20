@@ -225,7 +225,7 @@ TEST(LandLightTable, TheTimeColumnIsTheSkyFromDayTimesSixThenTimesTwoAndAHalf)
 	const LandLightPalette palette(bytes);
 	// The sky a little before dusk, as the game counts it: (2 - 0.990625) x 6 x 2.5 is column 15 and 35 of 256. Times
 	// 15 at once, it would be 36 of 256.
-	const float skyType = std::bit_cast<float>(0x3F7D999Au);
+	const auto skyType = std::bit_cast<float>(0x3F7D999Au);
 	EXPECT_EQ(LandLightTable::GetLandColour(palette, skyType, 0.0f, 0.0f), 0x222222u);
 	// At night the column is 0, midnight, and by day 30, noon
 	EXPECT_EQ(LandLightTable::GetLandColour(palette, 2.0f, 0.0f, 0.0f), 0x000000u);

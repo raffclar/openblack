@@ -89,12 +89,12 @@ TEST(OracleComputerForestWood, TreeForTheTownAsTheGameChoosesIt)
 			const map_coords::MapCoords tree {.x = static_cast<int32_t>(table->Bits(row, *c.x)),
 			                                  .z = static_cast<int32_t>(table->Bits(row, *c.z)),
 			                                  .altitude = 0.0f};
-			SeenWood seen {.forest = kind == k_Forest,
-			               .grownTrees = grown,
-			               .treeWood = kind == k_Forest ? table->Float(row, *c.wood) : 0.0f,
-			               .kindWood = kind == k_LoneTree ? table->Bits(row, *c.wood) : 0U,
-			               .pull = kind == k_Forest ? table->Float(row, *pull) : 0.0f,
-			               .distanceToEdge = gutils::GetDistanceInMetres(tree, reported) - table->Float(row, *c.radius)};
+			const SeenWood seen {.forest = kind == k_Forest,
+			                     .grownTrees = grown,
+			                     .treeWood = kind == k_Forest ? table->Float(row, *c.wood) : 0.0f,
+			                     .kindWood = kind == k_LoneTree ? table->Bits(row, *c.wood) : 0U,
+			                     .pull = kind == k_Forest ? table->Float(row, *pull) : 0.0f,
+			                     .distanceToEdge = gutils::GetDistanceInMetres(tree, reported) - table->Float(row, *c.radius)};
 			wishes.push_back(SeenWoodWish(seen, influencePower));
 			indices.push_back(i);
 			places.push_back(tree);

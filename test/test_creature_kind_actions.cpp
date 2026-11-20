@@ -248,7 +248,7 @@ TEST(CreatureKindActions, ThrowingAToyAtAThing)
 
 TEST(CreatureKindActions, HurlingAndThrowingToImpressNeedSomethingToThrow)
 {
-	for (const auto name : {"Hurl", "ThrowToImpress"})
+	for (const auto* const name : {"Hurl", "ThrowToImpress"})
 	{
 		const auto* hurl = plan_actions::For(name);
 		ASSERT_NE(hurl, nullptr);

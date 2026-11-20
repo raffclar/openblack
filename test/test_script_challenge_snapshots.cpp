@@ -187,7 +187,7 @@ TEST(ScriptChallengeSnapshots, ANativeTakingAnyNumberOfValuesLeavesTheTasksStack
 	using lhvm::Opcode;
 	lhvm::LHVM vm;
 	// A native taking any number of values, as a challenge's update does
-	std::vector<lhvm::NativeFunction> natives {
+	const std::vector<lhvm::NativeFunction> natives {
 	    lhvm::NativeFunction(nullptr, 0, 0, "NONE"),
 	    lhvm::NativeFunction(
 	        [&vm]() {

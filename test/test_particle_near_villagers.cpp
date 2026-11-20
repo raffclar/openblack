@@ -79,10 +79,10 @@ TEST(ParticleNearVillagers, TheConditionIsTrueOnlyInTheMapCellOfAVillager)
 	const auto shared = std::make_shared<const psys::ParticleFile>(std::move(*file));
 	const auto* object = shared->Find("EventConditionAtomNearVillagers0");
 	ASSERT_NE(object, nullptr);
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
+	const ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
 	FakeWorld world;
 	FakeRandom random;
-	maths::ValueNoise noise;
+	const maths::ValueNoise noise;
 	const Effect effect(shared, EffectServices {classes, world, random, noise}, glm::vec3(0.0f), 1.0f, false);
 	const auto* condition = classes.FindAtomCondition("EventConditionAtomNearVillagers");
 	ASSERT_NE(condition, nullptr);

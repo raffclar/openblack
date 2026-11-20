@@ -22,7 +22,6 @@ using namespace openblack::creature_tree_view;
 using creature_tree::Attribute;
 using creature_tree::Belief;
 using creature_tree::Episode;
-using creature_tree::Node;
 using creature_tree::Tree;
 
 namespace

@@ -235,7 +235,7 @@ TEST(EditorLandEdits, AFootpathTakesItsHeightsFromTheLandAndLeadsFromItsBuilding
 {
 	using namespace ecs::components;
 	ecs::Registry registry;
-	FakeLand land(30, 7, 1);
+	const FakeLand land(30, 7, 1);
 	const auto home = StandingAt(registry, {20.0f, 7.0f, 20.0f});
 	registry.Assign<Abode>(home);
 	const auto tree = StandingAt(registry, {90.0f, 7.0f, 20.0f});

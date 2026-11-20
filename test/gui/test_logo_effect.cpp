@@ -70,6 +70,7 @@ TEST(CrtQsort, SortsAndKeepsTheLibraryOrderOfEqualItems)
 	EXPECT_EQ(few[2].tag, 1);
 
 	std::vector<Item> many;
+	many.reserve(1000);
 	for (int i = 0; i < 1000; ++i)
 	{
 		many.push_back({(i * 7919) % 101, i});

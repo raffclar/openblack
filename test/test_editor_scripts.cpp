@@ -451,7 +451,7 @@ TEST_F(DebuggerTest, TheDebuggerStateComesBackAfterALoadOfTheRunningState)
 
 TEST_F(DebuggerTest, TheDebuggerStateDropsTheEntriesOfTasksThatAreNotThere)
 {
-	lhvm::LHVM::DebuggerState state {
+	const lhvm::LHVM::DebuggerState state {
 	    .breakpoints = {2}, .heldTasks = {{_task, 0}, {_task + 7, 0}}, .resumeFrom = {{_task + 7, 1}}};
 	_vm.SetDebuggerState(state);
 	const auto kept = _vm.GetDebuggerState();

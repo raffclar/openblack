@@ -55,11 +55,11 @@ TEST(BonePalette, BonesComeBackAsTheyWent)
 
 	for (uint32_t i = 0; i < first.size(); ++i)
 	{
-		EXPECT_EQ(bone_palette::BoneAt(texels, i), first.at(i)) << i;
+		EXPECT_EQ(bone_palette::BoneAt(texels, i), first.at(i)) << (i != 0u);
 	}
 	for (uint32_t i = 0; i < second.size(); ++i)
 	{
-		EXPECT_EQ(bone_palette::BoneAt(texels, static_cast<uint32_t>(first.size()) + i), second.at(i)) << i;
+		EXPECT_EQ(bone_palette::BoneAt(texels, static_cast<uint32_t>(first.size()) + i), second.at(i)) << (i != 0u);
 	}
 }
 
@@ -74,7 +74,7 @@ TEST(BonePalette, ABonePlacesAVertexAsItsMatrixDoes)
 	const auto expected = bone * vertex;
 	for (int i = 0; i < 4; ++i)
 	{
-		EXPECT_NEAR(placed[i], expected[i], 1e-5f) << i;
+		EXPECT_NEAR(placed[i], expected[i], 1e-5f) << (i != 0);
 	}
 }
 

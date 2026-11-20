@@ -773,7 +773,7 @@ TEST(CreatureLayers, TheHandReadsADanceMoveOverTheLengthOfTheMove)
 TEST(CreatureLayers, AStopOfTheDancePlaysTheFinishAtOnceOrAfterTheStart)
 {
 	using creature_layers::BodyAction;
-	BodyAction moving {.kind = BodyAction::Kind::Dance, .phase = BodyAction::Phase::Loop, .animations = {145, 150, 146}};
+	const BodyAction moving {.kind = BodyAction::Kind::Dance, .phase = BodyAction::Phase::Loop, .animations = {145, 150, 146}};
 	const auto stopped = creature_layers::EndDance(moving);
 	EXPECT_EQ(creature_layers::CurrentAnimation(stopped), creature_layers::animations::k_DanceFinish);
 	EXPECT_FALSE(creature_layers::IsDancing(stopped));
@@ -785,7 +785,7 @@ TEST(CreatureLayers, AStopOfTheDancePlaysTheFinishAtOnceOrAfterTheStart)
 	EXPECT_EQ(after.phase, BodyAction::Phase::End);
 	EXPECT_FALSE(after.chooseDanceMove);
 	// A static pose does not stop for a stop of the dance
-	BodyAction sitting {.kind = BodyAction::Kind::Sequence, .phase = BodyAction::Phase::Loop, .animations = {37, 38, 39}};
+	const BodyAction sitting {.kind = BodyAction::Kind::Sequence, .phase = BodyAction::Phase::Loop, .animations = {37, 38, 39}};
 	EXPECT_FALSE(creature_layers::EndDance(sitting).endWanted);
 }
 

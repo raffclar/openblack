@@ -35,7 +35,6 @@
 
 using namespace openblack;
 using namespace openblack::creature_obstacles;
-using openblack::creature_route::Circle;
 
 namespace
 {

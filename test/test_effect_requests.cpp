@@ -371,7 +371,7 @@ TEST(EffectRequests, TheWorldFindsAShieldOnlyOnAComputerThatShowsTheEffects)
 {
 	FakeServer server;
 	server.shield = std::make_shared<particles::ShieldSphere>();
-	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	const EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
 	EXPECT_EQ(effects.FindShield(glm::vec3(0.0f), 1.0f), server.shield);
 
 	EffectRequestSystem unshown([]() -> EffectServerInterface* { return nullptr; });

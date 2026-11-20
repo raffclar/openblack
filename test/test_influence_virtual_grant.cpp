@@ -285,7 +285,7 @@ TEST(InfluenceOnRange, TheLastPartIsAFifthAsADouble)
 	// A fifth as a double and as a float give different products at this distance
 	const float outer = (0.2f + 0.4f) * 100.0f;
 	const float part = 1.0f - (79.0f - outer) / (100.0f - outer);
-	const float expected = static_cast<float>(static_cast<double>(part) * 0.2);
+	const auto expected = static_cast<float>(static_cast<double>(part) * 0.2);
 	EXPECT_NE(expected, part * 0.2f);
 	EXPECT_EQ(influence::OnRange(79.0f, 100.0f, 0.4f, 0.2f, 0.2f), expected);
 }

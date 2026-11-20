@@ -68,7 +68,7 @@ TEST(VirtualInfluence, OutsideItWanesWithDistanceAndTime)
 	ProcessTurn(state, Outside(near, 11), k_Settings);
 	const float distance =
 	    gutils::GetDistanceInMetres(map_coords::FromMetres({100.0f, 100.0f}), map_coords::FromMetres({100.0f, 105.0f}));
-	float expected = 1.0f - Loss(distance, 1, 0.0f, 0.0f);
+	const float expected = 1.0f - Loss(distance, 1, 0.0f, 0.0f);
 	EXPECT_FLOAT_EQ(state.fraction, expected);
 	EXPECT_GT(state.fraction, 0.9f);
 	// Further and longer out it goes faster, and what is under a tenth is gone at once
@@ -117,7 +117,7 @@ TEST(VirtualInfluence, AShieldTakesItAllAndAScriptCanTurnItOff)
 
 TEST(VirtualInfluence, TheHumPlaysOutsideWhileTheLastPlaceInIsStillIn)
 {
-	State state {.anchor = glm::vec3(0.0f), .fraction = 0.8f};
+	const State state {.anchor = glm::vec3(0.0f), .fraction = 0.8f};
 	EXPECT_TRUE(HumPlays(state, false, false, false, true));
 	// Not inside, nor under a shield, nor once the last place in has fallen out of influence
 	EXPECT_FALSE(HumPlays(state, false, true, false, true));

@@ -27,7 +27,7 @@ namespace
 /// The same float, or both zero of either sign
 bool Same(float ours, uint32_t game)
 {
-	const float gameValue = std::bit_cast<float>(game);
+	const auto gameValue = std::bit_cast<float>(game);
 	return std::bit_cast<uint32_t>(ours) == game || (ours == 0.0f && gameValue == 0.0f);
 }
 

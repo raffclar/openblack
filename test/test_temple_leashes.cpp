@@ -165,7 +165,7 @@ TEST(TempleLeashes, TheCarriedLeashSitsRoundTheWrist)
 	EXPECT_NEAR(carried.position.y, 20.0f + shift.y, k_Tolerance);
 	EXPECT_NEAR(carried.position.z, 30.0f + shift.z, k_Tolerance);
 	// Unturned, it is shifted up the hand a quarter of its size and a twentieth across
-	glm::mat4 still(turn);
+	const glm::mat4 still(turn);
 	const auto plain = CarriedAt(still, handScale);
 	EXPECT_NEAR(plain.position.x, 0.05f * size, k_Tolerance);
 	EXPECT_NEAR(plain.position.y, 0.25f * size, k_Tolerance);

@@ -106,7 +106,7 @@ public:
 	{
 		return triangles;
 	}
-	[[nodiscard]] glm::mat4 PlacementOf(entt::entity /*object*/) const override { return glm::mat4(1.0f); }
+	[[nodiscard]] glm::mat4 PlacementOf(entt::entity /*object*/) const override { return {1.0f}; }
 	[[nodiscard]] std::vector<physics::temple_heart::Town> HeartTowns(PlayerNames /*owner*/) override { return towns; }
 	[[nodiscard]] GameRandomInterface* Random() override { return random; }
 	float RandomShare(float /*spread*/) override { return share; }

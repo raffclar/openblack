@@ -217,7 +217,7 @@ std::vector<Action> EachCommand()
 	                  .speed = 1.5f,
 	                  .emotion = 3},
 	    DebugWorld {.act = DebugWorld::Act::PlayerAlignment, .player = 1, .index = 0, .value = -0.5f},
-	    DebugConsoleLine {.text = "CREATE_TOWN(1, \"1000,1000\", \"Celtic\")"},
+	    DebugConsoleLine {.text = R"(CREATE_TOWN(1, "1000,1000", "Celtic"))"},
 	    DebugMagic {.act = DebugMagic::Act::CastOnCreature,
 	                .magic = 7,
 	                .position = {1.0f, 2.0f, 3.0f},

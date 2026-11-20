@@ -226,7 +226,7 @@ TEST_F(GameSoundRequestsTest, TheOwnedEmittersGoToThePlaceOfTheirOwner)
 // The distance to the listener comes from the audio's own listener. With no audio manager, there is no distance.
 TEST_F(GameSoundRequestsTest, TheListenerDistanceComesFromTheAudiosListener)
 {
-	GameSoundRequests requests;
+	const GameSoundRequests requests;
 	EXPECT_FALSE(requests.ListenerDistance(glm::vec3(1.0f)).has_value());
 	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
 	audio.SetListenerOverride(Listener {.origin = glm::vec3(1.0f, 2.0f, 3.0f)});

@@ -151,7 +151,7 @@ TEST(HelpReports, TheRandomNumbersOfTheHelpComeFromTheirOwnSeed)
 	HelpMessageSystem help;
 	// The draws are those of the game's generator on a seed that starts as the game's seeds start
 	uint32_t seed = game_random::k_InitialSeed;
-	for (int32_t n : {7, 100, 1, 15})
+	for (const int32_t n : {7, 100, 1, 15})
 	{
 		EXPECT_EQ(help.HelpRand(n), game_random::LHRand(static_cast<uint32_t>(n), seed));
 	}

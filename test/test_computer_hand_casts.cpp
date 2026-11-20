@@ -24,7 +24,7 @@ using namespace openblack::computer_hand;
 
 TEST(ComputerHandCasts, KindsOfThisPartThatAreNotMadeEndTheActionBadly)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	for (size_t kind = 0; kind < static_cast<size_t>(StepKind::_Count); ++kind)
 	{
 		const auto step = static_cast<StepKind>(kind);
@@ -42,7 +42,7 @@ TEST(ComputerHandCasts, KindsOfThisPartThatAreNotMadeEndTheActionBadly)
 
 TEST(ComputerHand, ChantStopsWhenTheWorshippersCannotStart)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	HandAction action;
 	Add(action, StepKind::MakeWorshippersChantForSpellNoWait,
 	    {Argument {.number = static_cast<int32_t>(MagicType::Food)}, Argument {.object = k_Icon}});
@@ -174,7 +174,7 @@ TEST(ComputerHand, GestureWithNoShapeTakesOneTurn)
 
 TEST(ComputerHandCasts, StepThatEndsTheMiracleDoesNothing)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	HandAction action;
 	action.moveFirst = false;
 	Add(action, StepKind::CloseDownCurrentSpell, {});

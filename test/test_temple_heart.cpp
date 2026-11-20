@@ -158,6 +158,7 @@ TEST(TempleHeartDamage, TheSoundsGoRoundFromSample206)
 {
 	uint32_t counter = 0;
 	std::vector<uint32_t> samples;
+	samples.reserve(7);
 	for (int i = 0; i < 7; ++i)
 	{
 		samples.push_back(NextDamageSample(counter));

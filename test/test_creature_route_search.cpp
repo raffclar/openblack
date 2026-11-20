@@ -214,14 +214,14 @@ TEST(CreatureRouteSearch, GoingRoundACircleStopsWhereItRunsIntoAnother)
 TEST(CreatureRouteSearch, NothingInTheWayIsAStraightLine)
 {
 	auto obstacles = Empty({1000.0f, 1000.0f});
-	Search search(obstacles, {.point = {1000.0f, 1000.0f}},
-	              {.point = {1100.0f, 1000.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
+	const Search search(obstacles, {.point = {1000.0f, 1000.0f}},
+	                    {.point = {1100.0f, 1000.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
 	ASSERT_EQ(search.GetStatus(), Search::Status::Found);
 	ASSERT_EQ(search.GetBest().size(), 1u);
 	EXPECT_EQ(search.GetBest().front().to, glm::vec2(1100.0f, 1000.0f));
 	// Arriving short of it, the line stops short
-	Search shortOf(obstacles, {.point = {1000.0f, 1000.0f}},
-	               {.point = {1100.0f, 1000.0f}, .stopShort = 10.0f, .arriveWithin = 11.0f, .mostCost = 5200.0f});
+	const Search shortOf(obstacles, {.point = {1000.0f, 1000.0f}},
+	                     {.point = {1100.0f, 1000.0f}, .stopShort = 10.0f, .arriveWithin = 11.0f, .mostCost = 5200.0f});
 	ASSERT_EQ(shortOf.GetStatus(), Search::Status::Found);
 	EXPECT_NEAR(shortOf.GetBest().front().to.x, 1090.0f - 0.005f, k_Tolerance);
 }
@@ -285,8 +285,8 @@ TEST(CreatureRouteSearch, AGoalItCantReachIsGivenUp)
 	// Inside a circle met already, with an arrival ring no wider than the circle: given up at once
 	auto obstacles = Empty({1000.0f, 1000.0f});
 	obstacles.Add(1u, {1101.0f, 1000.0f}, 8.0f);
-	Search inside(obstacles, {.point = {1000.0f, 1000.0f}},
-	              {.point = {1100.0f, 1000.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
+	const Search inside(obstacles, {.point = {1000.0f, 1000.0f}},
+	                    {.point = {1100.0f, 1000.0f}, .arriveWithin = 1.0f, .mostCost = 5200.0f});
 	EXPECT_EQ(inside.GetStatus(), Search::Status::Enclosed);
 	// A ring reaching out of it is reached outside it
 	Search ring(obstacles, {.point = {1000.0f, 1000.0f}},

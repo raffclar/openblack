@@ -85,6 +85,7 @@ public:
 	[[nodiscard]] std::vector<QueryDescription> Describe() const override
 	{
 		std::vector<QueryDescription> queries;
+		queries.reserve(40);
 		for (int i = 0; i < 40; ++i)
 		{
 			queries.push_back({.name = "query" + std::to_string(i),
@@ -253,7 +254,8 @@ TEST(InspectorQuery, SizeCapTruncatesAndMovesTheCursor)
 TEST(InspectorQuery, LargeObjectsSayWhichFieldsAreLarge)
 {
 	// An entity with one large component: the sizes say which field of which component to ask for
-	Json entity = {{"id", 1}, {"data", {{"Small", {{"x", 1}}}, {"Large", {{"cache", std::string(5000, 'x')}, {"state", 2}}}}}};
+	const Json entity = {{"id", 1},
+	                     {"data", {{"Small", {{"x", 1}}}, {"Large", {{"cache", std::string(5000, 'x')}, {"state", 2}}}}}};
 	QueryOptions options;
 	options.maxBytes = 1000;
 	const auto result = ShapeObject(entity, options);
@@ -268,7 +270,7 @@ TEST(InspectorQuery, LargeObjectsSayWhichFieldsAreLarge)
 
 TEST(InspectorQuery, LargeObjectsListTheirKeys)
 {
-	Json big = {{"a", std::string(5000, 'x')}, {"b", 1}};
+	const Json big = {{"a", std::string(5000, 'x')}, {"b", 1}};
 	QueryOptions options;
 	options.maxBytes = 1000;
 	const auto result = ShapeObject(big, options);

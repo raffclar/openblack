@@ -51,7 +51,7 @@ struct Land
 		grab.object = thing;
 	}
 
-	std::optional<entt::entity> Shown(std::optional<entt::entity> underPointer = std::nullopt) const
+	[[nodiscard]] std::optional<entt::entity> Shown(std::optional<entt::entity> underPointer = std::nullopt) const
 	{
 		return disciple_symbol::Shown(land, own, underPointer);
 	}

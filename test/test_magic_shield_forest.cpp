@@ -384,7 +384,7 @@ TEST(ForestRules, EighteenTreesSpiralOutFromTwoToEleven)
 	const auto second = forest::SpiralOffset(2, 18);
 	const float a1 = std::atan2(first.y, first.x);
 	const float a2 = std::atan2(second.y, second.x);
-	float step = std::fmod(a2 - a1 + (4.0f * std::numbers::pi_v<float>), 2.0f * std::numbers::pi_v<float>);
+	const float step = std::fmod(a2 - a1 + (4.0f * std::numbers::pi_v<float>), 2.0f * std::numbers::pi_v<float>);
 	EXPECT_NEAR(step * 180.0f / std::numbers::pi_v<float>, 138.46f, 0.05f);
 	// One tree goes in the middle's ring at its start
 	EXPECT_NEAR(glm::length(forest::SpiralOffset(0, 1)), 2.0f, k_Epsilon);

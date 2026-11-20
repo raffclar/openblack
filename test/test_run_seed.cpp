@@ -33,6 +33,7 @@ constexpr auto k_Streams = static_cast<size_t>(RandomStream::Count);
 std::vector<uint32_t> Draws(std::mt19937& generator, int count = 8)
 {
 	std::vector<uint32_t> draws;
+	draws.reserve(count);
 	for (int i = 0; i < count; ++i)
 	{
 		draws.push_back(generator());
@@ -43,6 +44,7 @@ std::vector<uint32_t> Draws(std::mt19937& generator, int count = 8)
 std::vector<int> GeneralDraws(RandomNumberManagerInterface& rng, int count = 8)
 {
 	std::vector<int> draws;
+	draws.reserve(count);
 	for (int i = 0; i < count; ++i)
 	{
 		draws.push_back(rng.NextValue(0, 1'000'000));

@@ -284,7 +284,7 @@ std::vector<std::vector<glm::vec3>> RibbonsEndingAt(ParticleClassRegistry& class
 {
 	auto file = psys::ParticleFile::Parse(PlasmaFile("0.5"));
 	EXPECT_TRUE(file.has_value());
-	maths::ValueNoise noise;
+	const maths::ValueNoise noise;
 	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)), EffectServices {classes, world, random, noise},
 	              commands.front().start, 1.0f, false);
 	// Beams asked for in the same step are begun newest first, so each is asked for in a step of its own

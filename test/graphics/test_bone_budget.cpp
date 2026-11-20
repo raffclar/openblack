@@ -67,7 +67,7 @@ TEST(BoneBudget, EveryBudgetHoldsTheBonesItIsChosenFor)
 {
 	for (std::size_t bones = 0; bones <= bone_budget::k_All; ++bones)
 	{
-		EXPECT_GE(bone_budget::Bones(bone_budget::For(bones)), bones) << bones;
+		EXPECT_GE(bone_budget::Bones(bone_budget::For(bones)), bones) << (bones != 0u);
 	}
 }
 

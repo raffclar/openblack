@@ -220,7 +220,7 @@ TEST(SavedSystemState, ALoadedGameHasCalmBackgroundWeather)
 
 TEST(SavedSystemState, AFireListWithNoFireComesBack)
 {
-	FireSystem saved;
+	const FireSystem saved;
 	FireSystem loaded;
 	LoadInto(loaded, StateOf(saved));
 }
@@ -321,7 +321,7 @@ TEST(SavedSystemState, TheStoryHistoryComesBack)
 	EXPECT_EQ(loaded.Back(1)->number, 2.5f);
 
 	// The help's texts with no dialogue started give the same bytes after a load
-	HelpTextSystem texts;
+	const HelpTextSystem texts;
 	HelpTextSystem loadedTexts;
 	LoadInto(loadedTexts, StateOf(texts));
 	EXPECT_FALSE(loadedTexts.KeepsSelectPress());
@@ -655,7 +655,7 @@ TEST(SavedSystemState, BookmarksSavedBeforeTheTownKeyComeBack)
 
 TEST(SavedSystemState, BookmarksWithNoGoBackViewAndNoFollowComeBack)
 {
-	CameraBookmarkSystem saved;
+	const CameraBookmarkSystem saved;
 	CameraBookmarkSystem bookmarks;
 	LoadInto(bookmarks, StateOf(saved));
 	EXPECT_FALSE(bookmarks.GetFollowed().has_value());

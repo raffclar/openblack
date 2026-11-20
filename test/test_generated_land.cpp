@@ -236,6 +236,7 @@ TEST(GeneratedLand, TheTownIsTheLinesOfALandScript)
 	const auto read = lhscriptx::Script::Read(script);
 	ASSERT_FALSE(read.error.has_value()) << *read.error;
 	std::vector<std::string> names;
+	names.reserve(read.commands.size());
 	for (const auto& command : read.commands)
 	{
 		names.push_back(command.name);

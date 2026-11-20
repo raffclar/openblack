@@ -744,8 +744,8 @@ TEST(LobbyList, TheEventsChangeTheList)
 {
 	LobbyListModel list;
 	list.Replace({.lobbies = {Summary("a", 1, 2, lobby_api::LobbyState::Open, 1)}});
-	const auto summary = R"({"id":"b","name":"B","host":{"id":1,"name":"h"},"map":{"file":"m"},"gods":1,)"
-	                     R"("god_slots":2,"state":"open"})";
+	const auto* const summary = R"({"id":"b","name":"B","host":{"id":1,"name":"h"},"map":{"file":"m"},"gods":1,)"
+	                            R"("god_slots":2,"state":"open"})";
 	EXPECT_TRUE(list.Apply(Event("lobbies.changed", fmt::format(R"({{"lobby":{}}})", summary))));
 	EXPECT_EQ(list.Entries().size(), 2u);
 	EXPECT_TRUE(list.Apply(Event("lobbies.removed", R"({"id":"a"})")));
@@ -1342,7 +1342,7 @@ TEST(LobbyNotices, AKickOrABanOfThePlayerFlashes)
 
 TEST(LobbyNotices, TwoLobbiesGiveNoNotice)
 {
-	NoticeSnapshot before {.lobbyId = "l1"};
+	const NoticeSnapshot before {.lobbyId = "l1"};
 	NoticeSnapshot after {.lobbyId = "l2", .phase = RoomPhase::Countdown, .joins = 3};
 	EXPECT_FALSE(NoticeBetween(before, after).Any());
 	after.lobbyId = "l1";

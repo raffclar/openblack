@@ -161,11 +161,11 @@ TEST(DiscipleRules, OwnWorshipSiteMakesWorshippers)
 
 TEST(DiscipleRules, BreedersByOneOfTheOtherSex)
 {
-	NearFacts woman {.kind = NearKind::Villager,
-	                 .owner = k_Me,
-	                 .villagerFunctional = true,
-	                 .villagerSexuallyActive = true,
-	                 .villagerMale = false};
+	const NearFacts woman {.kind = NearKind::Villager,
+	                       .owner = k_Me,
+	                       .villagerFunctional = true,
+	                       .villagerSexuallyActive = true,
+	                       .villagerMale = false};
 	EXPECT_EQ(Offered(woman, MyAdult()), Breeder);
 	auto man = woman;
 	man.villagerMale = true;

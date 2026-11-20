@@ -132,6 +132,7 @@ TEST(ReconnectBackoff, TheWaitDoublesToTheMostAndAnOpenResetsIt)
 {
 	online::ReconnectBackoff backoff {1s, 60s};
 	std::vector<std::chrono::milliseconds> waits;
+	waits.reserve(8);
 	for (int i = 0; i < 8; ++i)
 	{
 		waits.push_back(backoff.Next());

@@ -60,7 +60,7 @@ TEST(CreatureCameraTurn, WithoutAPlayerTheStepTakesTwoTurnsAndDoesNotTurn)
 {
 	Phase phase {Phase::Start};
 	FakeBody body;
-	camera_turn::View view {.bodyBusy = true};
+	const camera_turn::View view {.bodyBusy = true};
 	EXPECT_EQ(Outcome::Running, StepWith(phase, view, body));
 	EXPECT_EQ(phase, Phase::Check);
 	EXPECT_EQ(Outcome::Done, StepWith(phase, view, body));
@@ -106,7 +106,7 @@ TEST(CreatureCameraTurn, ACameraRightAboveNeedsNoTurn)
 {
 	Phase phase {Phase::Start};
 	FakeBody body {.free = false};
-	camera_turn::View view {.camera = glm::vec2(1000.05f, 1000.05f), .creature = glm::vec2(1000.0f, 1000.0f)};
+	const camera_turn::View view {.camera = glm::vec2(1000.05f, 1000.05f), .creature = glm::vec2(1000.0f, 1000.0f)};
 	EXPECT_EQ(Outcome::Running, StepWith(phase, view, body));
 	EXPECT_EQ(phase, Phase::Check);
 	EXPECT_EQ(Outcome::Done, StepWith(phase, view, body));

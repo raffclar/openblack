@@ -187,8 +187,8 @@ TEST(DustPuff, FifteenSpritesFlyUpAndOutGrowingAndFadingOverASecondAndAHalf)
 TEST(DustPuff, ItsSpeedAddsTheSquaresOfTheWayOutFromZToX)
 {
 	// Each sprite draws its place (z, y, x), its roll, then its way out (z, x); the way up is its size
-	const float outZ = std::bit_cast<float>(0xBEBC8B87u);
-	const float outX = std::bit_cast<float>(0x3F4C8084u);
+	const auto outZ = std::bit_cast<float>(0xBEBC8B87u);
+	const auto outX = std::bit_cast<float>(0x3F4C8084u);
 	int draw = 0;
 	const auto puff = dust_puff::Make({0.0f, 0.0f, 0.0f}, 1.0f, [&draw, outZ, outX](float, float) {
 		const int which = draw++ % 6;

@@ -152,7 +152,7 @@ TEST(ForceField, MovesOntoOtherPointsKeepingStrengths)
 	EXPECT_EQ(sheet.Points(), 2u);
 	EXPECT_FLOAT_EQ(sheet.Strengths()[1], 0.5f);
 	// No more points than it has room for
-	std::vector<glm::vec3> many(300, glm::vec3(0.0f));
+	const std::vector<glm::vec3> many(300, glm::vec3(0.0f));
 	sheet.SetPoints(many);
 	EXPECT_EQ(sheet.Points(), 256u);
 }

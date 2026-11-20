@@ -96,7 +96,7 @@ protected:
 	}
 
 	/// A tree that the miracle planted
-	entt::entity MagicTreeIn(uint32_t forest) const
+	[[nodiscard]] entt::entity MagicTreeIn(uint32_t forest) const
 	{
 		const auto tree = TreeIn(forest);
 		Locator::entitiesRegistry::value().Assign<MagicTree>(tree, MagicTree {.forest = record});

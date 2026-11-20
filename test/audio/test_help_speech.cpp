@@ -28,10 +28,10 @@ std::array<std::vector<SpeechBankSample>, 3> Banks()
 {
 	return {{
 	    // Villagers
-	    {{.sample = 1, .file = "C:\\Dialogue\\Characters\\help_text_family_01.wav", .sound = 101},
-	     {.sample = 2, .file = "C:\\Dialogue\\Characters\\HELP_TEXT_BOTH_01.wav", .sound = 102}},
+	    {{.sample = 1, .file = R"(C:\Dialogue\Characters\help_text_family_01.wav)", .sound = 101},
+	     {.sample = 2, .file = R"(C:\Dialogue\Characters\HELP_TEXT_BOTH_01.wav)", .sound = 102}},
 	    // HelpSprites
-	    {{.sample = 1, .file = "C:\\Dialogue\\HelpSprites\\HELP_TEXT_BOTH_01.wav", .sound = 201},
+	    {{.sample = 1, .file = R"(C:\Dialogue\HelpSprites\HELP_TEXT_BOTH_01.wav)", .sound = 201},
 	     {.sample = 7, .file = "C:/Dialogue/HelpSprites/HELP_TEXT_ADVISOR_01.wav", .sound = 207}},
 	    // Guidance
 	    {{.sample = 3, .file = "HELP_TEXT_AWE_01.wav", .sound = 303}},

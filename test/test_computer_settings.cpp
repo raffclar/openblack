@@ -272,7 +272,7 @@ TEST(ComputerSettingsSystem, AChangeIsWrittenAndReadAtTheNextStart)
 		system.Keep({.detailLevel = 2, .maxDetailLevel = 5, .effectsVolume = 0.5f, .musicVolume = 0.75f});
 		EXPECT_EQ(system.GetSettings().detailLevel, 2);
 	}
-	ecs::systems::ComputerSettingsSystem next(file);
+	const ecs::systems::ComputerSettingsSystem next(file);
 	EXPECT_EQ(next.GetSettings(),
 	          (Settings {.detailLevel = 2, .maxDetailLevel = 5, .effectsVolume = 0.5f, .musicVolume = 0.75f, .width = 1024}));
 	EXPECT_NE(ReadText(file).find("\"note\": 1"), std::string::npos);

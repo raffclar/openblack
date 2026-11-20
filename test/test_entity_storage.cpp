@@ -32,7 +32,7 @@ struct GivenAgain
 
 TEST(EntityStorage, TheRegistryGivesTheNumberOfADestroyedEntityAgainWithANewVersion)
 {
-	GivenAgain given;
+	const GivenAgain given;
 	ASSERT_EQ(entt::to_entity(given.newer), entt::to_entity(given.older));
 	ASSERT_NE(entt::to_version(given.newer), entt::to_version(given.older));
 
@@ -46,7 +46,7 @@ TEST(EntityStorage, TheRegistryGivesTheNumberOfADestroyedEntityAgainWithANewVers
 
 TEST(EntityStorage, TakeOlderRemovesTheRowOfTheOlderVersionAndGivesItsValue)
 {
-	GivenAgain given;
+	const GivenAgain given;
 	entt::storage<int> storage;
 	storage.emplace(given.older, 7);
 

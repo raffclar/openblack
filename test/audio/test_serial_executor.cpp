@@ -92,7 +92,8 @@ TEST(SerialExecutor, SubmitsFromManyThreadsLoseNoJob)
 	{
 		SerialExecutor executor;
 		std::vector<std::thread> threads;
-		std::vector<std::shared_future<void>> futures;
+		const std::vector<std::shared_future<void>> futures;
+		threads.reserve(4);
 		for (int t = 0; t < 4; ++t)
 		{
 			threads.emplace_back([&] {

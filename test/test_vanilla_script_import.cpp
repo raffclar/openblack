@@ -94,20 +94,7 @@ private:
 /// A script file with a global, a main stack and one task that each hold values
 lhvm::LHVMFile ScriptFile(std::vector<lhvm::VMVar> globals, lhvm::VMStack stack, lhvm::VMTask task)
 {
-	return {lhvm::LHVMVersion::BlackAndWhite,
-	        {"a", "b"},
-	        {},
-	        {},
-	        {},
-	        {},
-	        stack,
-	        std::move(globals),
-	        {std::move(task)},
-	        7,
-	        3,
-	        9,
-	        4,
-	        1000};
+	return {lhvm::LHVMVersion::BlackAndWhite, {"a", "b"}, {}, {}, {}, {}, stack, globals, {std::move(task)}, 7, 3, 9, 4, 1000};
 }
 
 lhvm::VMStack StackOf(std::vector<std::pair<lhvm::DataType, uint32_t>> values)
@@ -320,7 +307,7 @@ TEST(VanillaScriptImport, SavedGamesOfLandOneHaveTheirScriptObjectsInTheTable)
 		EXPECT_GT(values.objects, 0U) << entry.path();
 		std::cout << entry.path().generic_string() << ": " << imported.kept << " objects, " << imported.gone << " gone, "
 		          << scripts.GetTasks().size() << " tasks, " << values.objects << " object values, " << values.lost
-		          << " with no object" << std::endl;
+		          << " with no object" << '\n';
 		++files;
 	}
 	// The scripts of Land 1 hold markers, timers, highlights, influences and flocks

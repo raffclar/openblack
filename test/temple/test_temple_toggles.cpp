@@ -57,7 +57,7 @@ struct Toggles
 
 TEST(TempleToggles, ShowEverythingAtFirst)
 {
-	Toggles t;
+	const Toggles t;
 	for (const auto display :
 	     {Display::Temples, Display::Creatures, Display::MiracleActivity, Display::Influence, Display::Challenges})
 	{
@@ -108,7 +108,7 @@ TEST(TempleToggles, StayAsTheyAreLetGoOfElsewhere)
 
 TEST(TempleToggles, SayWhatTheyShowWhenHovered)
 {
-	Toggles t;
+	const Toggles t;
 	const auto toggles = t.toggles.GetControls();
 	const std::array scrolls = {TempleScrolls::Control {.subMesh = k_Scroll, .focused = false}};
 	TempleToolTip toolTip = k_FirstTempleToolTip;

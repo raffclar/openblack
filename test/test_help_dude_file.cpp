@@ -309,7 +309,7 @@ TEST(HelpDudeFile, GameFiles)
 	};
 	const std::array<Expected, 2> expected {{
 	    {"markgood.hd", 97, "DATA\\Yogi_Mesh.l3d", 65, 6.0266666f, 0.02552f, 0.47333333f},
-	    {"markevil.hd", 73, "C:\\dev\\TESTBED\\DATA\\Demon_Mesh.l3d", 66, 5.64f, 0.026826667f, 0.0f},
+	    {"markevil.hd", 73, R"(C:\dev\TESTBED\DATA\Demon_Mesh.l3d)", 66, 5.64f, 0.026826667f, 0.0f},
 	}};
 	for (const auto& e : expected)
 	{

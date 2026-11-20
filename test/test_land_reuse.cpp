@@ -130,7 +130,7 @@ TEST(LandReuse, TheSeparatorsOfThePathsDoNotCount)
 {
 	auto lands = SameLandOfAFile();
 	lands.openLand = "Online Maps\\mpm_2p_1.map";
-	lands.openLandscape = "Data\\Landscape\\MP\\mpm_2p_1.lnd";
+	lands.openLandscape = R"(Data\Landscape\MP\mpm_2p_1.lnd)";
 	EXPECT_TRUE(land_reuse::KeepsLand(lands));
 }
 

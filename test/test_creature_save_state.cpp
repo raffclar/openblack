@@ -162,9 +162,9 @@ TEST(CreatureSaveState, ASaveKeepsTheValuesOfTheGamesFileThatOpenblackDidNotChan
 
 TEST(CreatureSaveState, TheLeashOfTheGamesFileKeepsItsHolder)
 {
-	gamesave::LeashStatusObject loaded {
+	const gamesave::LeashStatusObject loaded {
 	    .thing = {}, .leash = {.on = 0, .type = 2, .length = 24.31f, .holder = gamesave::RefTo(gamesave::NumberKey(1841))}};
-	gamesave::LeashStatusObject baseline {.thing = {}, .leash = {.on = 0, .type = 2}};
+	const gamesave::LeashStatusObject baseline {.thing = {}, .leash = {.on = 0, .type = 2}};
 	auto now = baseline;
 	EXPECT_EQ(MergeLeashOnto(loaded, baseline, now), loaded);
 	now.leash.on = 1;

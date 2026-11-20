@@ -399,6 +399,7 @@ TEST(InspectorInput, RequestsWaitBehindInputStillToCome)
 		rig.Frame();
 	}
 	std::vector<std::pair<uint64_t, InputEvent::Kind>> made;
+	made.reserve(rig.target.made.size());
 	for (const auto& each : rig.target.made)
 	{
 		made.emplace_back(each.frame, each.event.kind);
