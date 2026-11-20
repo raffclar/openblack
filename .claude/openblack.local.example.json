@@ -34,7 +34,11 @@
     "trainTrailer": "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
   },
   "train": {
-    "extraCheck": ""
+    "extraCheck": "",
+    "linuxGccServer": false,
+    "linuxGccDistro": "",
+    "linuxGccDir": "/root/openblack-gcc",
+    "linuxGccJobs": ""
   },
   "slots": {
     "local": 4
