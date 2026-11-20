@@ -180,6 +180,20 @@ TEST(PoseThreads, EachJobRunsOneTimeAndThePoolIsKept)
 	}
 }
 
+TEST(PoseThreads, EachIndexRunsOneTimeForAnyCount)
+{
+	std::unique_ptr<openblack::WorkerPool> pool;
+	for (const size_t count : {1, 2, 7, 27, 28, 29, 1001})
+	{
+		std::vector<std::atomic<int>> runs(count);
+		openblack::ecs::pose_threads::ForEach(pool, count, [&](size_t index, size_t /*lane*/) { ++runs.at(index); });
+		for (const auto& run : runs)
+		{
+			EXPECT_EQ(run, 1) << "count " << count;
+		}
+	}
+}
+
 TEST(PoseThreads, NoJobsIsFine)
 {
 	std::unique_ptr<openblack::WorkerPool> pool;

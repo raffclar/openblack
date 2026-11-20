@@ -11,37 +11,49 @@
 
 #include <cstddef>
 
+#include <algorithm>
 #include <memory>
 
 #include "Common/WorkerPool.h"
+#include "Common/WorkerPools.h"
 
 /// The threads that pose the animals and the villagers of a frame. Each job poses one thing and writes only the parts
 /// of that thing that the checksum does not include.
 namespace openblack::ecs::pose_threads
 {
 
-#if defined(__EMSCRIPTEN__)
-/// The web page has a fixed set of threads, and the threads of a new pool would go past it. On the web, the main thread
-/// does all the jobs.
-inline constexpr bool k_OnThreads = false;
-#else
-inline constexpr bool k_OnThreads = true;
-#endif
-
-/// A pool for the jobs of the posing walks: with threads where the platform lets the pool have them, else with none
+/// A pool for the jobs of the posing walks. In the browser, the pool uses the threads that all pools share, so the
+/// posing walks make no new thread.
 [[nodiscard]] inline std::unique_ptr<WorkerPool> MakePool()
 {
-	return std::make_unique<WorkerPool>(k_OnThreads ? WorkerPool::DefaultThreadCount() : 0);
+	return MakeWorkerPool();
 }
 
-/// Does the job one time for each index. The pool is made at the first call.
+/// The runs of indices that each lane gets for one call. A thread takes a run, not one index, so that the threads share
+/// fewer counters.
+inline constexpr size_t k_RunsPerLane = 4;
+
+/// Does the job one time for each index. The pool is made at the first call. Each thread does a run of indices in order.
 inline void ForEach(std::unique_ptr<WorkerPool>& pool, size_t count, const WorkerPool::Job& job)
 {
 	if (pool == nullptr)
 	{
 		pool = MakePool();
 	}
-	pool->ForEach(count, job);
+	if (count == 0)
+	{
+		return;
+	}
+	const size_t runs = std::min(count, pool->GetLaneCount() * k_RunsPerLane);
+	const size_t length = (count + runs - 1) / runs;
+	const size_t used = (count + length - 1) / length;
+	pool->ForEach(used, [&job, count, length](size_t run, size_t lane) {
+		const size_t end = std::min(count, (run + 1) * length);
+		for (size_t index = run * length; index < end; ++index)
+		{
+			job(index, lane);
+		}
+	});
 }
 
 } // namespace openblack::ecs::pose_threads
