@@ -13,6 +13,7 @@
 #include <array>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -26,6 +27,11 @@
 // The villagers' shader as the game embeds it, compiled for Vulkan, and the one for meshes without bones
 #include "generated/shaders/spirv/vs_object_palette_instanced.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_static_instanced.sc.bin.h"
+// The shaders of a creature's body: with the bones uploaded with each draw, and with the bones read from a texture
+#include "generated/shaders/spirv/vs_object_morph_environment_instanced.sc.bin.h"
+#include "generated/shaders/spirv/vs_object_morph_environment_posed_instanced.sc.bin.h"
+#include "generated/shaders/spirv/vs_object_morph_instanced.sc.bin.h"
+#include "generated/shaders/spirv/vs_object_morph_posed_instanced.sc.bin.h"
 
 using namespace openblack::graphics;
 
@@ -116,4 +122,30 @@ TEST(BonePalette, TheShaderReadsItsBonesFromThePaletteAlone)
 	const auto found = std::ranges::find(*samplers, std::string("s_bonePalette"), &shader_samplers::Sampler::name);
 	ASSERT_NE(found, samplers->end());
 	EXPECT_EQ(found->stage, 2);
+}
+
+TEST(BonePalette, ACreatureBodyReadsItsBonesFromTheTexture)
+{
+	// The bones of a creature are 48 to 76 matrices. The shader that reads them from the texture uploads none of them
+	// with each draw: it declares only the model matrix.
+	constexpr uint32_t k_MatrixBytes = 64;
+	constexpr uint32_t k_FewestCreatureBones = 48;
+	const std::array<std::pair<std::span<const uint8_t>, std::span<const uint8_t>>, 2> shaders {{
+	    {vs_object_morph_instanced_spv, vs_object_morph_posed_instanced_spv},
+	    {vs_object_morph_environment_instanced_spv, vs_object_morph_environment_posed_instanced_spv},
+	}};
+	for (const auto& [uploaded, textured] : shaders)
+	{
+		const auto withBones = shader_samplers::ReadSpirvUniformBufferSize(uploaded);
+		const auto withoutBones = shader_samplers::ReadSpirvUniformBufferSize(textured);
+		ASSERT_TRUE(withBones.has_value());
+		ASSERT_TRUE(withoutBones.has_value());
+		EXPECT_LE(*withoutBones + (k_FewestCreatureBones * k_MatrixBytes), *withBones);
+		// The bones are read at the stage of the height map, which the blend sources of the body leave free
+		const auto samplers = shader_samplers::ReadSpirvSamplers(textured);
+		ASSERT_TRUE(samplers.has_value());
+		const auto found = std::ranges::find(*samplers, std::string("s_bones"), &shader_samplers::Sampler::name);
+		ASSERT_NE(found, samplers->end());
+		EXPECT_EQ(found->stage, 1);
+	}
 }
