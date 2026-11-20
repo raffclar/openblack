@@ -410,7 +410,8 @@ bool Game::StartTurnsBesideDraw()
 	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
 	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
 	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
-	// A quick load or a load from the save room waits for the end of this frame. The next turns play in the world that
+	// A quick load, a load from the save room or the load as the player leaves the Playground waits for the end of this
+	// frame. The next turns play in the world that
 	// it loads.
 	const bool loadAsked = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().LoadAsked();
 	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || loadAsked || _closeAsked)
