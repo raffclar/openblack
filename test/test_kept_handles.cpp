@@ -169,10 +169,10 @@ TEST(PoseThreads, EachJobRunsOneTimeAndThePoolIsKept)
 {
 	std::unique_ptr<openblack::WorkerPool> pool;
 	std::vector<std::atomic<int>> runs(500);
-	openblack::ecs::pose_threads::ForEach(pool, runs.size(), [&](size_t index, size_t /*lane*/) { ++runs[index]; });
+	openblack::ecs::pose_threads::ForEach(pool, runs.size(), 0, [&](size_t index, size_t /*lane*/) { ++runs[index]; });
 	ASSERT_NE(pool, nullptr);
 	const auto* first = pool.get();
-	openblack::ecs::pose_threads::ForEach(pool, runs.size(), [&](size_t index, size_t /*lane*/) { ++runs[index]; });
+	openblack::ecs::pose_threads::ForEach(pool, runs.size(), 0, [&](size_t index, size_t /*lane*/) { ++runs[index]; });
 	EXPECT_EQ(pool.get(), first);
 	for (const auto& run : runs)
 	{
@@ -186,7 +186,7 @@ TEST(PoseThreads, EachIndexRunsOneTimeForAnyCount)
 	for (const size_t count : {1, 2, 7, 27, 28, 29, 1001})
 	{
 		std::vector<std::atomic<int>> runs(count);
-		openblack::ecs::pose_threads::ForEach(pool, count, [&](size_t index, size_t /*lane*/) { ++runs.at(index); });
+		openblack::ecs::pose_threads::ForEach(pool, count, 0, [&](size_t index, size_t /*lane*/) { ++runs.at(index); });
 		for (const auto& run : runs)
 		{
 			EXPECT_EQ(run, 1) << "count " << count;
@@ -197,5 +197,29 @@ TEST(PoseThreads, EachIndexRunsOneTimeForAnyCount)
 TEST(PoseThreads, NoJobsIsFine)
 {
 	std::unique_ptr<openblack::WorkerPool> pool;
-	openblack::ecs::pose_threads::ForEach(pool, 0, [](size_t /*index*/, size_t /*lane*/) { FAIL(); });
+	openblack::ecs::pose_threads::ForEach(pool, 0, 0, [](size_t /*index*/, size_t /*lane*/) { FAIL(); });
+}
+
+TEST(PoseThreads, AFewJobsRunInOrderOnTheCallerWithNoPool)
+{
+	std::unique_ptr<openblack::WorkerPool> pool;
+	std::vector<size_t> order;
+	openblack::ecs::pose_threads::ForEach(pool, 5, 5, [&](size_t index, size_t lane) {
+		EXPECT_EQ(lane, 0);
+		order.push_back(index);
+	});
+	EXPECT_EQ(pool, nullptr);
+	EXPECT_EQ(order, (std::vector<size_t> {0, 1, 2, 3, 4}));
+}
+
+TEST(PoseThreads, MoreJobsThanTheCallerLimitUseThePool)
+{
+	std::unique_ptr<openblack::WorkerPool> pool;
+	std::vector<std::atomic<int>> runs(6);
+	openblack::ecs::pose_threads::ForEach(pool, runs.size(), 5, [&](size_t index, size_t /*lane*/) { ++runs.at(index); });
+	EXPECT_NE(pool, nullptr);
+	for (const auto& run : runs)
+	{
+		EXPECT_EQ(run, 1);
+	}
 }

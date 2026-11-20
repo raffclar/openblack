@@ -264,7 +264,7 @@ void LivingActionSystem::UpdatePoses(std::chrono::milliseconds frameGameTime, fl
 			ecs::villager_draw::StepClipBlend(pose.clipBlend, pose.clip, pose.place, elapsed);
 		}
 	};
-	ecs::pose_threads::ForEach(_poseWorkers, _clipJobs.size(), playOne);
+	ecs::pose_threads::ForEach(_poseWorkers, _clipJobs.size(), ecs::pose_threads::k_VillagerClipsOnCaller, playOne);
 
 	// Last the main thread plays the sounds on the frames that the clips passed, in the order of the walk. One world plays
 	// the sounds of all the villagers in this frame.
@@ -353,7 +353,7 @@ void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
 			job.posed = PoseFromClip(pose, *job.clip, model);
 		}
 	};
-	ecs::pose_threads::ForEach(_poseWorkers, _viewJobs.size(), poseOne);
+	ecs::pose_threads::ForEach(_poseWorkers, _viewJobs.size(), ecs::pose_threads::k_VillagerPosesOnCaller, poseOne);
 
 	// Last the main thread loads the clips that were not loaded, and mixes in the old clips of the villagers in high
 	// detail that just changed clip, in the order of the walk
