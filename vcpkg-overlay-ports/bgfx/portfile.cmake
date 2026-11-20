@@ -69,11 +69,15 @@ vcpkg_download_distfile(
 #   program link when it makes them. The driver links in the background, and the first draw with a program reads
 #   the link result. Thus the browser links the programs in parallel while the game loads its resources.
 #   Without the extension, the renderer links as before.
-# A change to the Vulkan renderer:
+# Changes to the Vulkan renderer:
 # - vulkan-one-pipeline-cache: the renderer reads the application's kept pipeline cache one time, when it starts, and
 #   makes all pipelines in that one cache. It gives the cache back one time, when it stops. Before, each new pipeline
 #   read all of the kept cache, gave all of it back and merged it, which took 10 to 30 ms for each pipeline with a
 #   cache of 30 MB and stopped the frame.
+# - vulkan-descriptor-pools-each-kick: each new command buffer resets the descriptor pools of its frame in flight.
+#   Before, only the start of a frame reset them. A kick for occlusion results, a screenshot or a readback also
+#   moves to the next frame in flight. With three such kicks in each frame, the draws always used the pools that
+#   no frame reset. These pools became full, and the driver then stopped the program with a memory fault.
 # A change to the Direct3D 12 renderer only:
 # - d3d12-upload-pages: buffer and texture updates of 1 MB or less copy from mapped 4 MB upload pages that the
 #   command queue keeps. A full page is used again when the queue fence shows that the GPU is done with it.
@@ -127,6 +131,7 @@ vcpkg_extract_source_archive(
     webgpu-uniform-reuse.patch
     webgpu-lose-device.patch
     depth-ties-submit-order.patch
+    vulkan-descriptor-pools-each-kick.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx

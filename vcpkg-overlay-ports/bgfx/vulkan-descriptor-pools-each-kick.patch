@@ -1,0 +1,46 @@
+diff --git a/bgfx/src/renderer_vk.cpp b/bgfx/src/renderer_vk.cpp
+index b5bb668..78077f2 100644
+--- a/bgfx/src/renderer_vk.cpp
++++ b/bgfx/src/renderer_vk.cpp
+@@ -5673,10 +5673,26 @@ VK_IMPORT_DEVICE
+ 			}
+ 		}
+ 
++		void resetDescriptorPools()
++		{
++			// Only the command buffer of a frame in flight uses the descriptor sets of that frame. The fence of that
++			// command buffer is now signaled, thus its descriptor pools are free. Each kick moves to the next frame in
++			// flight, also a kick for occlusion results, a screenshot or a readback. Thus a reset only at the start of
++			// submit can skip the pools that the next draws use, and these pools then become full.
++			const uint32_t frame = m_cmd.m_currentFrameInFlight;
++			for (uint32_t ii = 0; ii < m_numDescriptorPools[frame]; ++ii)
++			{
++				vkResetDescriptorPool(m_device, m_descriptorPool[frame][ii], 0);
++			}
++			m_descriptorPoolIdx = 0;
++			m_descriptorSetMap.clear();
++		}
++
+ 		void kick(bool _finishAll = false)
+ 		{
+ 			m_cmd.kick(_finishAll);
+ 			VK_CHECK(m_cmd.alloc(&m_commandBuffer) );
++			resetDescriptorPools();
+ 			m_cmd.finish(_finishAll);
+ 		}
+ 
+@@ -11460,14 +11476,6 @@ VK_DESTROY
+ 		const uint64_t f6 = BGFX_STATE_BLEND_FACTOR<<12;
+ 		const uint64_t f7 = BGFX_STATE_BLEND_INV_FACTOR<<12;
+ 
+-		const uint32_t descriptorFrame = m_cmd.m_currentFrameInFlight;
+-		for (uint32_t ii = 0; ii < m_numDescriptorPools[descriptorFrame]; ++ii)
+-		{
+-			vkResetDescriptorPool(m_device, m_descriptorPool[descriptorFrame][ii], 0);
+-		}
+-		m_descriptorPoolIdx = 0;
+-		m_descriptorSetMap.clear();
+-
+ 		ChunkedScratchBufferVK& uniformScratchBuffer = m_uniformScratchBuffer;
+ 		uniformScratchBuffer.begin();
+ 
