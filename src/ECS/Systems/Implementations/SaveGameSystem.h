@@ -72,6 +72,7 @@ public:
 	bool DoQuickSave() override;
 	void DoQuickLoad() override;
 	[[nodiscard]] bool LoadAsked() const override { return _askedLoad.has_value(); }
+	void AskLoad(uint32_t slot) override;
 	bool LoadAskedSlot() override;
 	void NewLand() override;
 	[[nodiscard]] bool AnyPictureWaiting() const override;

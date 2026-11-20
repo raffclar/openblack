@@ -234,6 +234,7 @@ struct Computer
 		    },
 		    .readCreature = [this] { return this->creature; },
 		    .readAlignment = [alignment] { return alignment; },
+		    .readSymbol = [this] { return this->symbol; },
 		    .localParts = [this](uint32_t turn) { return parts ? parts(turn) : online::PartHashes {}; },
 		    .origin = online::GameOrigin::Lan,
 		    .testLoadDelayMicroseconds = loadDelayMicroseconds,
@@ -294,6 +295,8 @@ struct Computer
 
 	std::optional<std::vector<uint8_t>> landFile;
 	std::vector<uint8_t> creature;
+	/// The symbol of the player's profile, which goes with the creature
+	game_socket::StartSymbol symbol;
 	std::string askedLand;
 	std::unique_ptr<LoopbackSockets::Client> sockets;
 	/// The parts of the world of this computer at a turn, for the log of a part. None by default.
@@ -2140,6 +2143,26 @@ TEST_F(LockstepTest, TheGodsSendTheirCreaturesToAllPlayersBeforeTheStart)
 	EXPECT_EQ(bob.session.OwnGod(), PlayerNames::PLAYER_TWO);
 	EXPECT_FALSE(watcher.session.OwnGod().has_value());
 	EXPECT_FALSE(host->OwnGod().has_value());
+}
+
+// The server sends the symbol of each god's player to all players. It is for the view only, so the server keeps none.
+TEST_F(LockstepTest, TheGodsSendTheSymbolsOfTheirPlayersToAllPlayers)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice", k_LandFile, {'A'});
+	Computer bob(network, now, "god:bob", k_LandFile, {});
+	Computer watcher(network, now, "observer:watcher", std::nullopt, {});
+	const std::vector<uint8_t> picture(game_socket::k_SymbolPictureBytes, 0x3C);
+	alice.symbol = {.design = 4, .picture = picture};
+	bob.symbol = {.design = 11, .picture = {}};
+	Frames({&alice, &bob, &watcher}, 8);
+	ASSERT_TRUE(host->Started());
+	for (const auto* computer : {&alice, &bob, &watcher})
+	{
+		EXPECT_EQ(computer->session.StartSymbol(PlayerNames::PLAYER_ONE), alice.symbol);
+		EXPECT_EQ(computer->session.StartSymbol(PlayerNames::PLAYER_TWO), bob.symbol);
+		EXPECT_FALSE(computer->session.StartSymbol(PlayerNames::PLAYER_THREE).has_value());
+	}
 }
 
 TEST_F(LockstepTest, AGodWithoutTheLandStopsTheStartAndIsNotReady)

@@ -134,10 +134,12 @@ public:
 	virtual bool DoQuickSave() = 0;
 	/// The command of the quick load, at its turn: the game loads the quick save slot after the draw of the frame
 	virtual void DoQuickLoad() = 0;
-	/// Whether a command asked for a load that waits for the end of the frame
+	/// The Yes of the save room to a load: the game loads the slot after the draw of the frame, as the quick load does
+	virtual void AskLoad(uint32_t slot) = 0;
+	/// Whether a command or the save room asked for a load that waits for the end of the frame
 	[[nodiscard]] virtual bool LoadAsked() const = 0;
-	/// At the end of the frame, after its draw: the game loads the slot that a command asked for. Returns whether it
-	/// loaded.
+	/// At the end of the frame, after its draw: the game loads the slot that a command or the save room asked for.
+	/// Returns whether it loaded.
 	virtual bool LoadAskedSlot() = 0;
 	/// A new land starts: the turns go from zero again, so the turn of the last autosave does too
 	virtual void NewLand() = 0;

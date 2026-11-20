@@ -2166,7 +2166,12 @@ void SaveGameSystem::DoQuickLoad()
 	}
 	// The rest of the turn and the draw of the frame use the world that the player has now. The game loads the slot
 	// at the end of the frame.
-	_askedLoad = gamesave::k_QuickSaveSlot;
+	AskLoad(gamesave::k_QuickSaveSlot);
+}
+
+void SaveGameSystem::AskLoad(uint32_t slot)
+{
+	_askedLoad = slot;
 }
 
 bool SaveGameSystem::LoadAskedSlot()

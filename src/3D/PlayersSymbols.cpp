@@ -154,6 +154,44 @@ void openblack::players_symbols::PutProfileSymbol(Sheet& players, const Sheet& d
 	CopyDesign(players, designs, symbol, player);
 }
 
+std::vector<uint8_t> openblack::players_symbols::PackPicture(std::span<const uint8_t> greys)
+{
+	if (greys.size() != k_SentPictureBytes * 2)
+	{
+		return {};
+	}
+	std::vector<uint8_t> sent(k_SentPictureBytes);
+	for (size_t i = 0; i < sent.size(); ++i)
+	{
+		sent[i] = static_cast<uint8_t>((greys[i * 2 + 1] & 0xF0) | (greys[i * 2] >> 4));
+	}
+	return sent;
+}
+
+std::optional<std::vector<uint8_t>> openblack::players_symbols::UnpackPicture(std::span<const uint8_t> sent)
+{
+	if (sent.size() != k_SentPictureBytes)
+	{
+		return std::nullopt;
+	}
+	constexpr uint8_t k_FillEightBits = 0x11;
+	std::vector<uint8_t> greys(sent.size() * 2);
+	for (size_t i = 0; i < sent.size(); ++i)
+	{
+		greys[i * 2] = static_cast<uint8_t>((sent[i] & 0x0F) * k_FillEightBits);
+		greys[i * 2 + 1] = static_cast<uint8_t>((sent[i] >> 4) * k_FillEightBits);
+	}
+	return greys;
+}
+
+void openblack::players_symbols::PutSentSymbol(Sheet& players, const Sheet& designs, uint32_t design,
+                                               std::span<const uint8_t> sentPicture, uint32_t player)
+{
+	const auto picture = UnpackPicture(sentPicture);
+	PutProfileSymbol(players, designs, design, player,
+	                 picture.has_value() ? std::optional<std::span<const uint8_t>>(*picture) : std::nullopt);
+}
+
 std::optional<uint32_t> openblack::players_symbols::ChosenSymbol(std::optional<int> profileSymbol,
                                                                  std::optional<uint32_t> symbolInPlace)
 {

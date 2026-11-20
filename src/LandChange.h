@@ -45,6 +45,19 @@ enum class Advisors
 	Afresh,
 };
 
+/// What becomes of the commands that the players made on the last land and that wait for a turn
+enum class Commands
+{
+	/// Every command goes. The new land keeps none.
+	Removed,
+	/// The game continues in the same session. The blocks that went before the change go. The open block stays open and
+	/// goes after the turns of the frame, so that the first turn of the new land does its commands.
+	OpenBlockStays,
+	/// The game starts a new session. The blocks that went before the change go. The open block goes at once, so that
+	/// the first turn of the new land does its commands.
+	OpenBlockSent,
+};
+
 struct Rules
 {
 	Advisors advisors;
@@ -69,6 +82,8 @@ struct Rules
 	/// In the first turn, the god of the player brings the creature that the player's profile keeps, to the creature home
 	/// of its temple. A network game brings the creatures of its players in its own way.
 	bool profileCreatureBrought;
+	/// What becomes of the commands that wait for a turn. The load of a saved game keeps its commands in its own way.
+	Commands commands;
 };
 
 [[nodiscard]] constexpr Rules RulesFor(Kind kind)
@@ -84,7 +99,8 @@ struct Rules
 		        .gameStarts = false,
 		        .helpTextsKept = true,
 		        .gameClockRunsOn = true,
-		        .profileCreatureBrought = false};
+		        .profileCreatureBrought = false,
+		        .commands = Commands::OpenBlockStays};
 	case Kind::FreshScripts:
 		return {.advisors = Advisors::SentHome,
 		        .scriptScreenKept = false,
@@ -94,7 +110,8 @@ struct Rules
 		        .gameStarts = false,
 		        .helpTextsKept = false,
 		        .gameClockRunsOn = false,
-		        .profileCreatureBrought = false};
+		        .profileCreatureBrought = false,
+		        .commands = Commands::OpenBlockSent};
 	case Kind::NewGame:
 	case Kind::Skirmish:
 		return {.advisors = Advisors::Afresh,
@@ -105,7 +122,8 @@ struct Rules
 		        .gameStarts = true,
 		        .helpTextsKept = false,
 		        .gameClockRunsOn = false,
-		        .profileCreatureBrought = kind == Kind::Skirmish};
+		        .profileCreatureBrought = kind == Kind::Skirmish,
+		        .commands = Commands::OpenBlockSent};
 	case Kind::SavedGame:
 		return {.advisors = Advisors::Afresh,
 		        .scriptScreenKept = false,
@@ -115,7 +133,8 @@ struct Rules
 		        .gameStarts = true,
 		        .helpTextsKept = false,
 		        .gameClockRunsOn = false,
-		        .profileCreatureBrought = false};
+		        .profileCreatureBrought = false,
+		        .commands = Commands::Removed};
 	case Kind::Testbed:
 		break;
 	}
@@ -127,7 +146,8 @@ struct Rules
 	        .gameStarts = false,
 	        .helpTextsKept = false,
 	        .gameClockRunsOn = false,
-	        .profileCreatureBrought = false};
+	        .profileCreatureBrought = false,
+	        .commands = Commands::Removed};
 }
 
 /// Whether the god of the player brings the creature that the profile keeps, in the first turn after a saved game

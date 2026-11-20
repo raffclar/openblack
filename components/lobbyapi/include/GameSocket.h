@@ -262,6 +262,23 @@ struct StartTransfer
 /// The largest creature file that a start.creature frame holds
 inline constexpr size_t k_MostCreatureFileBytes = 512 * 1024;
 
+/// The designs that a player can choose as the symbol of the profile
+inline constexpr uint8_t k_SymbolDesigns = 16;
+/// The bytes of the player's own picture for the symbol: 64 by 64 greys of four bits, two in a byte, the first grey of
+/// the two in the low four bits
+inline constexpr size_t k_SymbolPictureBytes = 64 * 64 / 2;
+
+/// The symbol of the profile of a god's player, which each computer shows for that god on the village centres
+struct StartSymbol
+{
+	/// The design of the symbol. None when the player has no profile.
+	std::optional<uint8_t> design;
+	/// The player's own picture for the design, of k_SymbolPictureBytes. Empty when the player has no picture for it.
+	std::vector<uint8_t> picture;
+
+	bool operator==(const StartSymbol&) const = default;
+};
+
 /// "start.creature". Client to server: the creature file of the player's god, empty when the player has no creature.
 /// Server to client: the creature file of the god of a slot.
 struct StartCreature
@@ -271,6 +288,8 @@ struct StartCreature
 	std::vector<uint8_t> file;
 	/// The alignment that the god starts the game at: the alignment of its player's profile, from -1 (evil) to 1 (good)
 	float alignment {0.0f};
+	/// The symbol of the profile of the god's player. A frame without it gives no symbol.
+	StartSymbol symbol {};
 };
 
 /// The largest mind file of the creature tools of the editor that an editor.mind_file frame holds. This is a limit of the

@@ -22,7 +22,8 @@
 /// villages' belief. The sheet has a square of 64 by 64 texels for each player, four squares in a row, the first
 /// player's square at the top left. At the start of a land, the square of the player of this computer gets the symbol
 /// that the player's profile has. The player's own picture for that symbol takes the place of the symbol. The square
-/// of each computer player gets the picture of its god. The other squares stay as the sheet's file has them. A network game
+/// of each computer player gets the picture of its god. In a network game, the square of each other human player gets the
+/// symbol that came from the profile of that player. The other squares stay as the sheet's file has them. A network game
 /// with more player numbers than the squares of the file has a wider sheet: eight squares in a row, with the square of each
 /// player number.
 namespace openblack::players_symbols
@@ -85,6 +86,23 @@ void PutProfileSymbol(Sheet& players, const Sheet& designs, uint32_t symbol, uin
 /// The symbol of the player of this computer: the symbol that a test puts in place of the profile's, else the profile's
 /// symbol. There is no symbol without a profile.
 [[nodiscard]] std::optional<uint32_t> ChosenSymbol(std::optional<int> profileSymbol, std::optional<uint32_t> symbolInPlace);
+
+/// The bytes of a picture of 64 by 64 greys that goes to the other players of a network game: four bits a grey, two greys
+/// in a byte, the first grey of the two in the low four bits
+constexpr size_t k_SentPictureBytes = static_cast<size_t>(k_SquareSide) * k_SquareSide / 2;
+
+/// The picture of 64 by 64 greys, a row at a time from the top, as it goes to the other players: the top four bits of
+/// each grey. A picture of a different size gives no bytes.
+[[nodiscard]] std::vector<uint8_t> PackPicture(std::span<const uint8_t> greys);
+
+/// The picture of 64 by 64 greys that another player sent. Each grey of four bits fills the eight bits, so 15 is white.
+/// Bytes of a different size give no picture.
+[[nodiscard]] std::optional<std::vector<uint8_t>> UnpackPicture(std::span<const uint8_t> sent);
+
+/// Gives another human player of a network game the symbol of that player's profile: the player's own picture that came
+/// with it, else the design of the symbol
+void PutSentSymbol(Sheet& players, const Sheet& designs, uint32_t design, std::span<const uint8_t> sentPicture,
+                   uint32_t player);
 
 /// The sheet that the world shows from the start of a game, a new game or a load: the sheet of the file, with the chosen
 /// symbol in the square of the player of this computer. A save keeps no part of the sheet, so a load makes it again.

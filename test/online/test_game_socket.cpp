@@ -13,6 +13,7 @@
 #include <initializer_list>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -421,6 +422,32 @@ TEST(GameSocket, TheAlignmentOfTheStartReadsBackAsTheSameFloat)
 	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":-1.0001})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":"0.5"})").has_value());
 	EXPECT_TRUE(Parse(R"({"type":"start.creature","file":"","alignment":-1})").has_value());
+}
+
+// The symbol of the profile goes with the creature file, with the player's own picture when there is one
+TEST(GameSocket, TheSymbolOfTheStartReadsBack)
+{
+	const std::vector<uint8_t> picture(k_SymbolPictureBytes, 0x5A);
+	const auto drawn =
+	    RoundTrip(StartCreature {.slot = 3, .file = {1}, .alignment = 0.0f, .symbol = {.design = 15, .picture = picture}});
+	EXPECT_EQ(drawn.symbol.design, 15);
+	EXPECT_EQ(drawn.symbol.picture, picture);
+	const auto design = RoundTrip(StartCreature {.slot = 3, .file = {}, .alignment = 0.0f, .symbol = {.design = 0}});
+	EXPECT_EQ(design.symbol.design, 0);
+	EXPECT_TRUE(design.symbol.picture.empty());
+	// A frame of an earlier build has no symbol
+	const auto none = Parse(R"({"type":"start.creature","file":""})");
+	ASSERT_TRUE(none.has_value());
+	EXPECT_EQ(std::get<StartCreature>(*none).symbol, StartSymbol {});
+	// A design after the last, a picture of another size, or a picture with no design does not read
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","symbol":16})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","symbol":2,"symbol_picture":"AAAA"})").has_value());
+	auto noDesign =
+	    ToJson(StartCreature {.slot = 3, .file = {}, .alignment = 0.0f, .symbol = {.design = 1, .picture = picture}});
+	const auto at = noDesign.find("\"symbol\":1,");
+	ASSERT_NE(at, std::string::npos);
+	noDesign.erase(at, std::string_view("\"symbol\":1,").size());
+	EXPECT_FALSE(Parse(noDesign).has_value());
 }
 
 TEST(GameSocket, ACreatureFileThatIsTooLargeDoesNotRead)

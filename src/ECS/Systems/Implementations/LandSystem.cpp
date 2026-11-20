@@ -1323,9 +1323,23 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 		Locator::chatSystem::value().Reset();
 	}
 	Locator::handDemoSystem::value().Reset();
-	// The commands that the players made on the old land do nothing on the new land, and no creature of a skirmish is due
-	Locator::playerCommandSystem::value().Reset();
-	Locator::playerCommandSystem::value().SetPlayersCreatureDue(false);
+	// The blocks of commands that went before the change do nothing on the new land. The open block can stay for the
+	// first turn of the new land, as in the game. No creature of a skirmish is due.
+	auto& commands = Locator::playerCommandSystem::value();
+	const auto waiting = commands.GetWaiting();
+	commands.Reset();
+	switch (rules.commands)
+	{
+	case land_change::Commands::Removed:
+		break;
+	case land_change::Commands::OpenBlockStays:
+		commands.PutBackWaiting(player_commands::KeptByLandChange(waiting));
+		break;
+	case land_change::Commands::OpenBlockSent:
+		commands.PutBackWaiting(player_commands::KeptByLoad(waiting));
+		break;
+	}
+	commands.SetPlayersCreatureDue(false);
 	Locator::creatureFightSystem::value().Reset();
 	// The new land's temples get their own leash posts
 	if (Locator::leashSystem::has_value())

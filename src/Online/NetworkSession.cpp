@@ -129,6 +129,7 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_roomChat.clear();
 	_startCreatures.clear();
 	_startAlignments.clear();
+	_startSymbols.clear();
 	_mindFiles.Clear();
 	_restarted = false;
 	_landOfRestartDue = false;
@@ -758,6 +759,7 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 	{
 		_startCreatures.clear();
 		_startAlignments.clear();
+		_startSymbols.clear();
 		// An observer has no god, so it has no creature to send
 		if (_joined.has_value() && _joined->role == game_socket::Role::God)
 		{
@@ -771,10 +773,14 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 			// The god starts the game at the alignment of the player's profile
 			const auto alignment = _settings.readAlignment ? _settings.readAlignment() : 0.0f;
 			_ownGodPlaysForClan = _settings.readPlaysForClan && _settings.readPlaysForClan();
-			_log->Write(spdlog::level::info, fmt::format("This computer sends a creature file of {} bytes and the alignment {}",
-			                                             file.size(), alignment));
-			_stream->SendText(game_socket::ToJson(
-			    game_socket::StartCreature {.slot = std::nullopt, .file = std::move(file), .alignment = alignment}));
+			auto symbol = _settings.readSymbol ? _settings.readSymbol() : game_socket::StartSymbol {};
+			_log->Write(
+			    spdlog::level::info,
+			    fmt::format("This computer sends a creature file of {} bytes and the alignment {}, symbol {}, picture {} bytes",
+			                file.size(), alignment, symbol.design.has_value() ? static_cast<int>(*symbol.design) : -1,
+			                symbol.picture.size()));
+			_stream->SendText(game_socket::ToJson(game_socket::StartCreature {
+			    .slot = std::nullopt, .file = std::move(file), .alignment = alignment, .symbol = std::move(symbol)}));
 		}
 		_startEvents.push_back(StartEvent::Transfer);
 	}
@@ -784,6 +790,10 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 		{
 			_startCreatures[*creature->slot] = creature->file;
 			_startAlignments[*creature->slot] = creature->alignment;
+			if (creature->symbol.design.has_value())
+			{
+				_startSymbols[*creature->slot] = creature->symbol;
+			}
 		}
 	}
 	else if (std::holds_alternative<game_socket::StartCancel>(frame))
@@ -791,6 +801,7 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 		_log->Write(spdlog::level::info, "A player does not have the land: the start stops");
 		_startCreatures.clear();
 		_startAlignments.clear();
+		_startSymbols.clear();
 		_startEvents.push_back(StartEvent::Cancelled);
 	}
 	else if (std::holds_alternative<game_socket::StartStop>(frame))
@@ -798,6 +809,7 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 		_log->Write(spdlog::level::info, "A player left during the start: the start stops");
 		_startCreatures.clear();
 		_startAlignments.clear();
+		_startSymbols.clear();
 		_startEvents.push_back(StartEvent::Stopped);
 	}
 }
@@ -814,6 +826,13 @@ std::optional<float> NetworkSession::StartAlignment(PlayerNames god) const
 	const auto slot = SlotKey(god);
 	const auto alignment = slot.has_value() ? _startAlignments.find(*slot) : _startAlignments.end();
 	return alignment != _startAlignments.end() ? std::optional<float>(alignment->second) : std::nullopt;
+}
+
+std::optional<game_socket::StartSymbol> NetworkSession::StartSymbol(PlayerNames god) const
+{
+	const auto slot = SlotKey(god);
+	const auto symbol = slot.has_value() ? _startSymbols.find(*slot) : _startSymbols.end();
+	return symbol != _startSymbols.end() ? std::optional(symbol->second) : std::nullopt;
 }
 
 std::optional<uint8_t> NetworkSession::OwnObserver() const
