@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <span>
 #include <vector>
 
@@ -132,6 +133,9 @@ struct Settings
 	/// How many more stands of trees the land has than the generator usually gives, for tests of the frame rate. At 1,
 	/// the land has the usual stands. The stands keep their kinds, sizes and spreads.
 	float treeDensity {1.0f};
+	/// The stands of a biome start more often on its ground where its kinds of tree can grow (under their tree line and
+	/// not too steep), so that the whole biome keeps the stands for each square kilometre that it gives
+	bool fillGrowableGround {true};
 };
 
 /// A place that features keep away from, such as the start area: in corners
@@ -190,6 +194,10 @@ struct Spot
 /// the height, the slope, the distance from the sea and the distance from a town where almost all trees of the kind
 /// stand.
 [[nodiscard]] bool Suits(Tree tree, const Spot& spot);
+
+/// For each biome, how many times more often a stand starts: the free ground of the biome divided by its free ground
+/// where the height and the slope let one of its main kinds grow. The value is 1 where no main kind can grow.
+[[nodiscard]] std::array<float, biomes::k_BiomeCount> StandFill(const Ground& ground);
 
 /// The number of trees of a stand, from a random number from 0 to below 1. The sizes have the spread of the groups of
 /// trees on the lands of the story. A jungle has the larger groups of the palm island of the story.
