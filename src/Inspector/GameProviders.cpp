@@ -439,7 +439,11 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return std::nullopt;
 		    }
 		    const auto& waterfall = Locator::designedWaterfallSystem::value();
-		    return WaterfallInfo {.model = waterfall.HasModel(), .slide = waterfall.GetSlide(), .sound = waterfall.GetSound()};
+		    return WaterfallInfo {.model = waterfall.HasModel(),
+		                          .dinosaur = waterfall.HasDinosaur(),
+		                          .dinosaurPrint = waterfall.HasDinosaurPrint(),
+		                          .slide = waterfall.GetSlide(),
+		                          .sound = waterfall.GetSound()};
 	    },
 	}));
 

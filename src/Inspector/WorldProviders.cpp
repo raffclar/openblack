@@ -286,9 +286,10 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
 	    {.name = "waterfall",
-	     .description = "The waterfall of the third land: whether its model is on the land, the slide of its water (-1 "
-	                    "to 0) and the number of its sound (null when it is silent). Null on a computer that does not "
-	                    "draw the land",
+	     .description = "The waterfall of the third land or the ark of the fourth land: whether its model is on the land, "
+	                    "the slide of the waterfall's water (-1 to 0) and the number of its sound (null when it is "
+	                    "silent). Also whether the dinosaur of the fourth land and its print are on the land. Null on a "
+	                    "computer that does not draw the land",
 	     .parameters = {},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
@@ -368,6 +369,8 @@ QueryResult ParticlesProvider::Run(std::string_view query, const QueryContext& c
 		}
 		return QueryResult::Value(Json {
 		    {"model", waterfall->model},
+		    {"dinosaur", waterfall->dinosaur},
+		    {"dinosaur_print", waterfall->dinosaurPrint},
 		    {"slide", waterfall->slide},
 		    {"sound", waterfall->sound.has_value() ? Json(*waterfall->sound) : Json(nullptr)},
 		});

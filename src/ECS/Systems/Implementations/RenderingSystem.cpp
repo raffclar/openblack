@@ -612,14 +612,15 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	    },
 	    entt::exclude<Tree>);
 	// The things that only the frames make, as the stones on a plinth, are drawn as the things of the land of their model
-	// are. Each one that can fade has room among those fading out too.
+	// are. Each one that can fade has room among those fading out too. One that goes with the land, as the dinosaur of the
+	// fourth land, has the shape of the land under it.
 	if (Locator::drawnRegistry::has_value())
 	{
 		const auto& drawn = Locator::drawnRegistry::value();
 		drawn.Each<const Mesh, const Transform>(
 		    [&drawn, &prepMesh, &fadingCounts, &instanceCount](entt::entity entity, const Mesh& mesh,
 		                                                       const Transform& /*unused*/) {
-			    prepMesh(drawn, entity, mesh.id, mesh, false);
+			    prepMesh(drawn, entity, mesh.id, mesh, drawn.AllOf<MorphWithTerrain>(entity));
 			    if (openblack::ecs::object_detail::Banded(drawn, entity))
 			    {
 				    ++fadingCounts[mesh.id];
