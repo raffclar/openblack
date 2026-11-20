@@ -14,6 +14,14 @@
 namespace openblack
 {
 
+/// Whether the game shows the new player's name box before the first land, when no player has a profile. The box
+/// shows only in a window. A start with a developer's answer to the start-of-game question (--skip-opening) does not
+/// show it. The game then makes the profile of a player who gives no name, and the run plays all of its frames.
+[[nodiscard]] constexpr bool ShowsNewPlayerBox(bool hasWindow, bool developerOpening) noexcept
+{
+	return hasWindow && !developerOpening;
+}
+
 /// Counts the frames of a box that the game shows before the first land, such as the new player's name box. A run
 /// with a number of frames (-n) stops in the box after that number of frames. A tool run thus ends also when nobody
 /// answers the box.

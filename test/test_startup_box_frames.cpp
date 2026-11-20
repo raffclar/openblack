@@ -37,3 +37,12 @@ TEST(StartupBoxFrames, ALimitOfOneShowsOneFrame)
 	EXPECT_FALSE(frames.Step());
 	EXPECT_TRUE(frames.Step());
 }
+
+TEST(StartupBoxFrames, TheNameBoxShowsOnlyInAWindowWithNoDeveloperOpening)
+{
+	using openblack::ShowsNewPlayerBox;
+	EXPECT_TRUE(ShowsNewPlayerBox(true, false));
+	EXPECT_FALSE(ShowsNewPlayerBox(true, true));
+	EXPECT_FALSE(ShowsNewPlayerBox(false, false));
+	EXPECT_FALSE(ShowsNewPlayerBox(false, true));
+}
