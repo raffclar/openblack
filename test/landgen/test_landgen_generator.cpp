@@ -133,6 +133,7 @@ TEST(LandgenFeatures, NothingStandsInTheWaterOrInAClearing)
 		const float z = feature.z / 10.0f;
 		EXPECT_GE(x, 15.5f);
 		EXPECT_GE(std::hypot(x - 50.0f, z - 50.0f), 6.0f);
+		// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 		EXPECT_NE(static_cast<int>(x + 0.5f), 40);
 	}
 	EXPECT_EQ(placed.size(), features::Place(ground, 5, {}).size());

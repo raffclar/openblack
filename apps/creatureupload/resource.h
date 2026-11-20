@@ -10,6 +10,7 @@
 #pragma once
 
 // The dialog and its controls have the numbers of the dialog of the game's upload tool
+// NOLINTBEGIN(modernize-macro-to-enum): The resource compiler reads these macros.
 #define IDD_CREATUREUPLOAD 102
 #define IDC_DO_UPLOAD 1000
 #define IDC_LOGINNAME 1002
@@ -23,3 +24,4 @@
 #define IDC_STATIC_LOGINPASSWORD 1011
 // The icon of the game's upload tool
 #define IDI_GAME_TOOL 128
+// NOLINTEND(modernize-macro-to-enum)

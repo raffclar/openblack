@@ -117,6 +117,7 @@ glm::vec3 TargetRelativePosition(glm::vec3 from, glm::vec3 to, float distance, f
 
 bool CanSetLife(float life, bool heldDuringCutscene, bool indestructible)
 {
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	return !((heldDuringCutscene || indestructible) && life <= k_LowestProtectedLife);
 }
 

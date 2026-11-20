@@ -115,6 +115,7 @@ inline constexpr double k_HalfTurn = static_cast<double>(3.1415927f);
 /// when the angle is not a number.
 [[nodiscard]] inline glm::mat3 GameUprightTurn(float yAngle)
 {
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(yAngle < 0.0f || yAngle > 0.0f))
 	{
 		return {1.0f};
@@ -137,6 +138,7 @@ inline constexpr double k_HalfTurn = static_cast<double>(3.1415927f);
 /// when the angle is not a number.
 [[nodiscard]] inline glm::mat3 GameUprightTurnScaled(float yAngle, float scale)
 {
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(yAngle < 0.0f || yAngle > 0.0f))
 	{
 		return {scale};

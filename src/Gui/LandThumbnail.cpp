@@ -43,7 +43,9 @@ void Mark(Texels& texels, const onlinemap::ThumbnailPlace& place, int32_t radius
 		auto angle = k_FullTurn;
 		do
 		{
+			// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 			const auto row = static_cast<int32_t>((x87::Mul(x87::Cos(angle), r) + y) + 0.5f);
+			// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 			const auto column = static_cast<int32_t>((x87::Mul(x87::Sin(angle), r) + x) + 0.5f);
 			angle -= k_RingStep;
 			const auto index = (row << 8) + column;

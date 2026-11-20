@@ -192,6 +192,7 @@ TEST(LandgenSettlement, NothingGoesOnGroundThatTheLandKeepsClear)
 	}
 	const auto plan = settlement::Make(k_StartX, k_StartZ, keepClear, 9, settings);
 	const auto free = [&keepClear](float x, float z) {
+		// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 		return keepClear.At(static_cast<int>((x / 10.0f) + 0.5f), static_cast<int>((z / 10.0f) + 0.5f)) == 0;
 	};
 	for (const auto& placed : plan.town.buildings)

@@ -73,6 +73,7 @@ std::chrono::microseconds PaceWait(const Settings& settings, std::optional<std::
 std::optional<std::chrono::microseconds> FrameTimeFromMs(double milliseconds)
 {
 	constexpr double k_MicrosecondsPerMs = 1000.0;
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(milliseconds >= 1.0 && milliseconds <= static_cast<double>(k_LongestFrameMs)))
 	{
 		return std::nullopt;

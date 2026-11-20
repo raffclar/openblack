@@ -55,6 +55,7 @@ void SetFirstBone(glm::mat4& model, uint32_t bone) noexcept
 
 uint32_t FirstBone(const glm::mat4& model) noexcept
 {
+	// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 	return static_cast<uint32_t>(model[0][3] + 0.5f);
 }
 

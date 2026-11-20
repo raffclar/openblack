@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+// NOLINTNEXTLINE(modernize-macro-to-enum): The headers test this macro with ifdef.
 #define LOCATOR_IMPLEMENTATIONS 1
 
 #include "VillagerFood.h"
@@ -315,6 +316,7 @@ bool villager_food::ChangeStateToFindFoodToEat(LivingAction& action)
 	{
 		in.pitFood = stores.GetResource(*pit, ResourceType::Food);
 	}
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	else if (!(in.homeFood.has_value() && in.required <= *in.homeFood) && in.required != 0)
 	{
 		// Without a working pit its town leaves food at its temporary pile, which is made if missing

@@ -57,6 +57,7 @@ public:
 	}
 	bool ModifyAtom(Effect& effect, Atom& /*atom*/, Collection::Slot& /*slot*/) const override
 	{
+		// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 		return !(effect.Closing() && effect.GetAge() - effect.GetCloseAge() > delay);
 	}
 	float delay;
@@ -97,6 +98,7 @@ public:
 	}
 	bool ModifyAtom(Effect& effect, Atom& atom, Collection::Slot& /*slot*/) const override
 	{
+		// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 		return !(static_cast<int>(atom.collection->atoms.size()) > minAtoms &&
 		         effect.Random(1.0f) < effect.GetDt() * frequency);
 	}

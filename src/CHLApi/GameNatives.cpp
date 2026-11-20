@@ -1192,6 +1192,7 @@ void SaveGameInSlot() // 439 SAVE_GAME_IN_SLOT
 		return;
 	}
 	Locator::saveGameSystem::value().InstantSave(static_cast<uint32_t>(static_cast<int32_t>(number)));
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 }
 
 void CanSkipTutorial() // 460 CAN_SKIP_TUTORIAL

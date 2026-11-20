@@ -178,6 +178,7 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 		const bool realPixels =
 		    AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE;
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The window opens on a monitor of {} DPI ({}% scale). Real pixels: {}", dpi,
+		                   // NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 		                   static_cast<int>(dpi * 100.0f / 96.0f + 0.5f), realPixels);
 	}
 #endif

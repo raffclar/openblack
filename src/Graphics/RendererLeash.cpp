@@ -69,6 +69,7 @@ const bgfx::VertexLayout& Layout()
 /// White, or black for the shadow, at an opacity
 uint32_t Abgr(float alpha, bool black)
 {
+	// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 	const auto a = static_cast<uint32_t>(std::clamp(alpha, 0.0f, 1.0f) * 255.0f + 0.5f);
 	return (a << 24u) | (black ? 0u : 0xFFFFFFu);
 }
