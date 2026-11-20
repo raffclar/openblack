@@ -10,7 +10,7 @@
 // The hand that holds a seed: the effect and the hum of the seed, and the rules that tell where the seed can
 // go.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <optional>

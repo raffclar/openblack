@@ -12,7 +12,7 @@
 // shares a sheet; the ribbons as one buffer of corners the vertex shader moves to face the camera; the models and mists
 // through the passes the rest of the world's use. Their light maps light the land's colours.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 #include <cstring>

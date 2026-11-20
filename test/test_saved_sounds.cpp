@@ -10,7 +10,7 @@
 // A saved game keeps no sound. After a load the sounds that played at the save do not come back, and the help box is
 // made again from the texts it kept, with the reading time of the newest text started again.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstddef>
 #include <cstdint>

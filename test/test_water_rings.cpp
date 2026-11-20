@@ -16,7 +16,7 @@
 
 #include "3D/WaterRings.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 
 using namespace openblack;

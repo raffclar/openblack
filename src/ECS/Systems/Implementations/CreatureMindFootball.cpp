@@ -9,7 +9,7 @@
 
 // The world's side of the football actions of a creature
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "CreatureMindFootball.h"
 

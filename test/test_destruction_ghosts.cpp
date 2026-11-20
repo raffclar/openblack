@@ -11,7 +11,7 @@
 
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/DestructionGhostRules.h"
 #include "ECS/Systems/Implementations/ExplosionSystem.h"

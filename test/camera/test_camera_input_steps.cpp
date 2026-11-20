@@ -26,7 +26,7 @@
 #include <spdlog/spdlog.h>
 
 // The test makes its own locator
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include <Audio/AudioManagerNoOp.h>
 #include <Camera/Camera.h>
 #include <Camera/CameraModel.h>

@@ -10,7 +10,7 @@
 // The spell dispensers and the one-shot seeds: how a dispenser is made, charged and set, and how it makes its
 // globe.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <chrono>
 #include <limits>

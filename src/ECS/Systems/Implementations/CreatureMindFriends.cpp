@@ -11,7 +11,7 @@
 // its mind stand still or go free; the joint action stops for both when either creature stops what it does. Also the
 // attention that one creature gives another as it sees it.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <limits>

@@ -9,7 +9,7 @@
 
 // How the local player's creature reacts when a custom music track starts
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <vector>
 

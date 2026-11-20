@@ -10,7 +10,7 @@
 // How a creature chooses a plan: the desire to act on, the activity and the thing to act on, and the agenda of the
 // plan
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

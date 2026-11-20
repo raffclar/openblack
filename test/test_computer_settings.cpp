@@ -19,7 +19,7 @@
 #include <ComputerSettings.h>
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "Common/PlayerProfiles.h"
 #include "ECS/Systems/Implementations/ComputerSettingsSystem.h"

@@ -10,7 +10,7 @@
 // The running state that each system keeps beside the entities goes into a saved world and comes back the same: a save,
 // a load into a new system and a save again give the same bytes.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstddef>
 #include <cstdint>

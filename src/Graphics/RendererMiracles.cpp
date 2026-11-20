@@ -11,7 +11,7 @@
 // behind it with its glint running, the miracle spinning inside it, and the rings round an extreme one; and the bands
 // flying onto the hand that holds a miracle and the bracelets it wears.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstring>
 

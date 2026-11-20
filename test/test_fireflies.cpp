@@ -36,7 +36,7 @@
 #include "Nature/Fireflies.h"
 #include "Nature/FireflyWorld.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/FireflySystem.h"
 
 using namespace openblack;

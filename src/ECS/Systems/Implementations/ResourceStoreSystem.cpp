@@ -13,7 +13,7 @@
 // resource from it lately and less again when the town isn't theirs. Taking from a store counts against the town's
 // owner and is remembered of the taker.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "ResourceStoreSystem.h"
 

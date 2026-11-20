@@ -24,7 +24,7 @@
 #include "Scenery/ObjectDrawList.h"
 
 // Enable this define because we use a custom locator
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
 
 using namespace openblack;

@@ -10,7 +10,7 @@
 // How a creature chooses what to act on for a desire: the activity, the things it knows of that suit the desire, and
 // what each choice is worth
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

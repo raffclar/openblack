@@ -33,7 +33,7 @@
 #include "Enums.h"
 #include "Resources/ResourceManager.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 
 using namespace openblack;

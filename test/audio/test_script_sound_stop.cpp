@@ -10,7 +10,7 @@
 // A script that stops a sound stops only the copy that a script started. A script's sound has its sample number as
 // its owner, so a copy of the same sample that the game plays continues.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstddef>
 #include <cstdint>

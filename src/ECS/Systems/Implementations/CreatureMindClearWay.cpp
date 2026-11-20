@@ -10,7 +10,7 @@
 // What a creature does when it has no way to where it goes: it refuses and gives up, or it clears a thing out of its way
 // and walks on. Also the end of a run away, which sees to the desire only when the creature is far enough away.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <string_view>
 #include <vector>

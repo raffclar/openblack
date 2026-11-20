@@ -9,7 +9,7 @@
 
 // Plans that the creature does not choose itself: plans that a script, a gift or an event forces on it
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

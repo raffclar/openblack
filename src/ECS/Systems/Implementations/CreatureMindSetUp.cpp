@@ -10,7 +10,7 @@
 // How a mind starts: the game's tables of the mind, a new mind, and a mind that the game loads from a file or saves
 // to a file
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

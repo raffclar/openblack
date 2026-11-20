@@ -10,7 +10,7 @@
 // How a creature learns from what it sees: it copies the deeds of its player, and it learns the skills of villagers
 // and the miracles that it sees
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

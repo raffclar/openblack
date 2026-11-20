@@ -11,7 +11,7 @@
 // no device, and help::DialogueText with the game's clock and texts faked by the test. Without a device, no text has a
 // voice, so each text waits for its reading time and the help never stops on a voice that does not play.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstddef>
 #include <cstdint>

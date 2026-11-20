@@ -11,7 +11,7 @@
 // front of its head. Each turn, the point moves along the shape, and a glowing chain follows its hand. At the end of the
 // shape, the arm holds still for some turns, then the point ends. A step of an agenda or a move of a dance starts it.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>

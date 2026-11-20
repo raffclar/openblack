@@ -11,7 +11,7 @@
 // its pieces fly from the building and go when their time is up, big pieces at rest go back into it as rubble, a rock's
 // blow is heard or breaks by its momentum, and the harm is put down to the right player.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstddef>
 

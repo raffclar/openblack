@@ -9,7 +9,7 @@
 
 // What a creature believes about a thing, and how useful it finds the thing for a desire
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

@@ -12,7 +12,7 @@
 // says, its model (for the seeds that show one) sits in the hand and the effect shows, centred in the fingers. A tribe's
 // power behind a miracle it casts is announced.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <string>
 

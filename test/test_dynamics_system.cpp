@@ -10,7 +10,7 @@
 // The physics as a system, in a world of its own: things thrown onto a flat piece of land fly, come to rest, go back
 // into the map's cells and leave the physics, and a body at rest wakes again only while something moving comes near.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdint>
 

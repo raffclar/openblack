@@ -18,7 +18,7 @@
 
 #include "Common/RandomNumberManager.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include <Common/RandomNumberManagerProduction.h>
 #include <Common/RandomNumberManagerTesting.h>
 #include <ECS/Systems/Implementations/TimeSystem.h>

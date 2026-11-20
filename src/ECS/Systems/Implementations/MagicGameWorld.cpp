@@ -10,7 +10,7 @@
 // The game world as the miracle rules see it: the land, the objects on it, and what an effect does to each
 // object.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <numbers>

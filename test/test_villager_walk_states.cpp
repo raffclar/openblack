@@ -47,7 +47,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "ECS/MapProduction.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"

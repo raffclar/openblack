@@ -12,7 +12,7 @@
 // more sighting, and the creature shows its embarrassment once it chooses what to do next, and may be sad about it too.
 // A miracle it can't cast, too tired or at something it can't be cast at, leaves it frustrated: hungry above all else.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

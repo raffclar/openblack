@@ -17,7 +17,7 @@
 
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "Commands/PlayerCommands.h"
 #include "ECS/ChatRules.h"

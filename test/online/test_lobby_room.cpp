@@ -28,7 +28,7 @@
 #include "Online/LobbyRoom.h"
 
 // Enable this define because the test makes the system itself
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/LobbyRoomSystem.h"
 
 using namespace openblack;

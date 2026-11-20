@@ -10,7 +10,7 @@
 // The services of the game on the player's computer: the window, the graphics device, the renderer, the audio device,
 // the systems that only show the world and the drawing of the world. The dedicated server does not link this file.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <memory>
 #include <stdexcept>

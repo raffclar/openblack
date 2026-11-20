@@ -17,7 +17,7 @@
 #include <glm/mat4x4.hpp>
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "Creature/TemplePen.h"
 #include "ECS/Components/Creature.h"

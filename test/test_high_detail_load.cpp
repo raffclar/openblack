@@ -21,7 +21,7 @@
 #include "ECS/Registry.h"
 #include "Locator.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "ECS/Systems/Implementations/HighDetailSystem.h"
 #include "Resources/Resources.h"

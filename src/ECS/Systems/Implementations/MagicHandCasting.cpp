@@ -10,7 +10,7 @@
 // The casts from the hand: how a cast is made, sent as a command and done on each computer, and what follows
 // it.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <optional>
 #include <utility>

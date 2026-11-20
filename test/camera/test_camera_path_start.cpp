@@ -26,7 +26,7 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include <3D/CameraPath.h>
 #include <Audio/AudioManagerNoOp.h>
 #include <Camera/Camera.h>

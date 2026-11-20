@@ -15,7 +15,7 @@
 #include <entt/core/hashed_string.hpp>
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "Particles/LiquidParticles.h"
 #include "Particles/ParticleDrawFrame.h"

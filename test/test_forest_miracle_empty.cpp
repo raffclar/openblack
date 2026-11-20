@@ -29,7 +29,7 @@
 #include "Locator.h"
 #include "Magic/ForestRules.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/ForestSystem.h"
 
 using namespace openblack;

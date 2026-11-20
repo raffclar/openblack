@@ -9,7 +9,7 @@
 
 // Who holds a seed, and how a hand gets a seed: from a worship site's icon, from a summon or from a globe.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <optional>
 

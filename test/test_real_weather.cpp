@@ -26,7 +26,7 @@
 #include "ECS/Systems/RealWeatherSystemInterface.h"
 
 // Enable this define because the test makes the system itself
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/RealWeatherSystem.h"
 
 using namespace openblack;

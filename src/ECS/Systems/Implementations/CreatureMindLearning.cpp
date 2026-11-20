@@ -10,7 +10,7 @@
 // How a creature learns from the feedback of its player: a stroke or a slap teaches it what it did, and each turn it
 // keeps the actions that it did in mind for the feedback to come
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

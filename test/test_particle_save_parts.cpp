@@ -10,7 +10,7 @@
 // The save keeps the particles in two parts: the synced effects, and the effects of this computer. Each part loads
 // alone, and a save from before the split still loads. The synced part keeps no value that comes from the listener.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdint>
 #include <cstring>

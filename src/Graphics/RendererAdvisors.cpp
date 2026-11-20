@@ -8,7 +8,7 @@
  *******************************************************************************/
 
 // The renderer is one of the locator's implementations
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 #include <cstring>

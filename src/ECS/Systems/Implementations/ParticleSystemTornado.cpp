@@ -11,7 +11,7 @@
 // what it reaches, picks up and catches, which the tornado system does, and the things a vortex draws in, which the vortex
 // system takes and throws back out
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <LNDFile.h>
 #include <glm/common.hpp>

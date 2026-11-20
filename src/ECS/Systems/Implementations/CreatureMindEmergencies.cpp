@@ -10,7 +10,7 @@
 // The emergencies that a creature looks at each turn before it decides what to do: low life, a fire on its body, and a
 // fire in the nearest town
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <iterator>

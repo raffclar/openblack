@@ -9,7 +9,7 @@
 
 // What the objects of a miracle in the world do for the miracle, and the data for the debug window.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <optional>
 

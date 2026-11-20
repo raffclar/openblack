@@ -9,7 +9,7 @@
 
 // How a creature learns from what the hand of its player shows it or gives it
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

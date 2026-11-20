@@ -10,7 +10,7 @@
 // What a creature wants: how the desires of a species start, how their sources and values change each turn, and how
 // an action that a creature does satisfies a desire
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 #include <cstring>

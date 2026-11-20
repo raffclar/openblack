@@ -18,7 +18,7 @@
 #include "ECS/Registry.h"
 
 // Enable this define because the test makes the system with its own registry
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/DebugCheatSystem.h"
 
 using namespace openblack;
