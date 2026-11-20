@@ -203,7 +203,7 @@ public:
 	}
 
 	explicit Explosion(const ParticleObject& object)
-	    : rules({
+	    : _rules({
 	          .maxObjectsToDelete = object.Int("MaxObjectsToDelete", 20),
 	          .maxObjectsToExplode = object.Int("MaxObjectsToExplode", 20),
 	          .maxDistance = object.Float("MaxDistance", 100.0f),
@@ -243,12 +243,12 @@ public:
 			}
 			return true;
 		}
-		if (objects != nullptr && !state.beamStarted && age > rules.beamDelay)
+		if (objects != nullptr && !state.beamStarted && age > _rules.beamDelay)
 		{
 			state.beamStarted = true;
 			state.beam = objects->StartSpotVisual(SpotVisualType::BeamExplosionFx, centre, 1.0f, k_BeamTurns);
 		}
-		if (!state.started && age > rules.initialDelay)
+		if (!state.started && age > _rules.initialDelay)
 		{
 			state.started = true;
 			Start(effect, state, centre, objects);
@@ -261,7 +261,7 @@ public:
 		{
 			return true;
 		}
-		if (blast::SendsEvents(age, rules))
+		if (blast::SendsEvents(age, _rules))
 		{
 			effect.SendSpellEvent({.type = SpellEventInfo::Type::Point,
 			                       .position = centre,
@@ -270,7 +270,7 @@ public:
 			                       .checkShields = false,
 			                       .target = entt::null});
 		}
-		if (objects != nullptr && !state.smoked && age > rules.smokeDelay)
+		if (objects != nullptr && !state.smoked && age > _rules.smokeDelay)
 		{
 			state.smoked = true;
 			const auto type = objects->IsDryLand(centre) ? SpotVisualType::Smoke : SpotVisualType::Steam;
@@ -323,7 +323,7 @@ private:
 			}
 		}
 		const float tribalPower = sink != nullptr ? sink->TribalPower() : 1.0f;
-		state.wave = objects->FixedObjectsNear(centre, blast::WaveRange(rules.maxDistance, tribalPower));
+		state.wave = objects->FixedObjectsNear(centre, blast::WaveRange(_rules.maxDistance, tribalPower));
 		state.front = 0.0f;
 		const auto origin = blast::FragmentOrigin(centre);
 		for (int i = 0; i < k_Rocks; ++i)
@@ -337,14 +337,14 @@ private:
 			const float yaw = effect.Random(0.0f, k_TwoPi);
 			const auto transform = glm::scale(
 			    portable_math::Rotate(glm::translate(glm::mat4(1.0f), at), yaw, glm::vec3(0.0f, 1.0f, 0.0f)), glm::vec3(scale));
-			objects->ExplodeMesh(resources::HashIdentifier(blast::k_RockMesh), transform, origin, rules.blastSpeed);
+			objects->ExplodeMesh(resources::HashIdentifier(blast::k_RockMesh), transform, origin, _rules.blastSpeed);
 		}
 	}
 
 	/// The wave spreads; of the objects it has reached, the first that it may destroy shatters and goes
 	void Wave(Effect& effect, ExplosionState& state, const glm::vec3& centre, ObjectEffectsInterface& objects) const
 	{
-		state.front += rules.spreadSpeed * effect.GetDt();
+		state.front += _rules.spreadSpeed * effect.GetDt();
 		std::erase_if(state.wave, [&objects](WaveTarget& target) {
 			const auto still = objects.Available(target.object);
 			if (still.has_value())
@@ -353,7 +353,7 @@ private:
 			}
 			return !still.has_value();
 		});
-		if (state.exploded >= rules.maxObjectsToExplode && state.removed >= rules.maxObjectsToDelete)
+		if (state.exploded >= _rules.maxObjectsToExplode && state.removed >= _rules.maxObjectsToDelete)
 		{
 			state.wave.clear();
 			return;
@@ -391,12 +391,12 @@ private:
 				continue;
 			}
 			// The one object this step
-			if (!objects.IsCreature(target.object) && state.exploded < rules.maxObjectsToExplode)
+			if (!objects.IsCreature(target.object) && state.exploded < _rules.maxObjectsToExplode)
 			{
 				++state.exploded;
-				objects.ExplodeObject(target.object, blast::FragmentOrigin(centre), rules.blastSpeed);
+				objects.ExplodeObject(target.object, blast::FragmentOrigin(centre), _rules.blastSpeed);
 			}
-			if (state.removed < rules.maxObjectsToDelete)
+			if (state.removed < _rules.maxObjectsToDelete)
 			{
 				++state.removed;
 				objects.DestroyByBeam(target.object);
@@ -405,7 +405,7 @@ private:
 		}
 	}
 
-	blast::ExplosionRules rules;
+	blast::ExplosionRules _rules;
 };
 
 /// The pieces the objects break into: each waiting model breaks into chains of a few joined triangles, each a piece

@@ -487,14 +487,14 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 
 		// clang-format off
 		// The land and its small bump detail come premultiplied over the sea
-		constexpr auto defaultState = 0u
+		constexpr auto k_DefaultState = 0u
 			| BGFX_STATE_WRITE_MASK
 			| BGFX_STATE_DEPTH_TEST_GREATER
 			| BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA)
 			| BGFX_STATE_MSAA
 		;
 
-		constexpr auto discard = 0u
+		constexpr auto k_Discard = 0u
 			| BGFX_DISCARD_INSTANCE_DATA
 			| BGFX_DISCARD_INDEX_BUFFER
 			| BGFX_DISCARD_TRANSFORM
@@ -646,8 +646,8 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			groundShadowBlockUniform.Set(&u_groundShadowBlock);
 			block.BindVertices();
 			triangles.page->Bind(triangles.count, triangles.first);
-			bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
-			terrainShader->Submit(static_cast<bgfx::ViewId>(landViewId), blockDepth(block), discard);
+			bgfx::setState(k_DefaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
+			terrainShader->Submit(static_cast<bgfx::ViewId>(landViewId), blockDepth(block), k_Discard);
 		};
 		if (!blocks.empty())
 		{

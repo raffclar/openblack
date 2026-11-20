@@ -123,53 +123,53 @@ public:
 	}
 
 	explicit Tornado(const ParticleObject& object)
-	    : topHeight(object.Float("TopHeight", 100.0f))
-	    , fadeOutTime(object.Float("FadeOutTime", 3.0f))
-	    , fadeInTime(object.Float("FadeInTime", 8.0f))
-	    , meshSpin(object.Float("MeshThetaDot", 6.0f))
-	    , topMoveFrequency(object.Float("TopMoveFreq", 0.25f))
-	    , topMoveAmplitude(object.Float("TopMoveAmp", 30.0f))
-	    , delayBeforeMove(object.Float("DelayBeforeMove", 5.0f))
-	    , damping(object.Float("Damping", 0.1f))
-	    , velocityField(object.Bool("ShowVelocityField", true))
-	    , groupFlying(object.Int("GroupFlying", -1))
-	    , groupDebris(object.Int("GroupDebris", -1))
-	    , groupMesh(object.Int("GroupMesh", -1))
-	    , groupOnCloseDown(object.Int("GroupToMoveToOnCloseDown", -1))
-	    , groupOnceDone(object.Int("GroupToMoveToOnceDone", -1))
-	    , puffs(object.Int("NumAtomsToCreate", 0))
-	    , creator(object.String("PCreator"))
-	    , puffCreator(object.String("SpriteCreator"))
-	    , debrisCreator(object.String("DebrisSpriteCreator"))
-	    , debrisRate(object.Float("DebrisEmitRate", 10.0f))
-	    , debrisHeight(object.Float("DebrisHeight", 10.0f))
-	    , debrisRadius(object.Float("DebrisRadius", 10.0f))
-	    , debrisSpeed(object.Float("DebrisSpeed", 20.0f))
-	    , debrisSpread(object.Float("DebrisSpreadAngle", 1.03673f))
-	    , pretendRate(object.Float("PretendEmitRate", 2.0f))
-	    , pretendGravity(object.Float("PretendGravity", 10.0f))
-	    , pretendBlend(object.Float("PretendBlendTime", 4.0f))
-	    , pretendRadius(object.Float("PretendRadius", 10.0f))
-	    , pretendSpeed(object.Float("PretendSpeed", 100.0f))
-	    , pretendSpread(object.Float("PretendSpreadAngle", 1.03673f))
-	    , pretendSmall(object.String("PretendObjectCreatorSmall"))
-	    , pretendMedium(object.String("PretendObjectCreatorMedium"))
-	    , pretendLarge(object.String("PretendObjectCreatorLarge"))
-	    , resourceLeast(object.Float("ResourceAmountRemoveMin", 150.0f))
-	    , resourceMost(object.Float("ResourceAmountRemoveMax", 650.0f))
-	    , scaleProvider(object.String("TornadoScaleFloatProvider"))
-	    , sound({.action = object.Sound("SoundTornado")})
+	    : _topHeight(object.Float("TopHeight", 100.0f))
+	    , _fadeOutTime(object.Float("FadeOutTime", 3.0f))
+	    , _fadeInTime(object.Float("FadeInTime", 8.0f))
+	    , _meshSpin(object.Float("MeshThetaDot", 6.0f))
+	    , _topMoveFrequency(object.Float("TopMoveFreq", 0.25f))
+	    , _topMoveAmplitude(object.Float("TopMoveAmp", 30.0f))
+	    , _delayBeforeMove(object.Float("DelayBeforeMove", 5.0f))
+	    , _damping(object.Float("Damping", 0.1f))
+	    , _velocityField(object.Bool("ShowVelocityField", true))
+	    , _groupFlying(object.Int("GroupFlying", -1))
+	    , _groupDebris(object.Int("GroupDebris", -1))
+	    , _groupMesh(object.Int("GroupMesh", -1))
+	    , _groupOnCloseDown(object.Int("GroupToMoveToOnCloseDown", -1))
+	    , _groupOnceDone(object.Int("GroupToMoveToOnceDone", -1))
+	    , _puffs(object.Int("NumAtomsToCreate", 0))
+	    , _creator(object.String("PCreator"))
+	    , _puffCreator(object.String("SpriteCreator"))
+	    , _debrisCreator(object.String("DebrisSpriteCreator"))
+	    , _debrisRate(object.Float("DebrisEmitRate", 10.0f))
+	    , _debrisHeight(object.Float("DebrisHeight", 10.0f))
+	    , _debrisRadius(object.Float("DebrisRadius", 10.0f))
+	    , _debrisSpeed(object.Float("DebrisSpeed", 20.0f))
+	    , _debrisSpread(object.Float("DebrisSpreadAngle", 1.03673f))
+	    , _pretendRate(object.Float("PretendEmitRate", 2.0f))
+	    , _pretendGravity(object.Float("PretendGravity", 10.0f))
+	    , _pretendBlend(object.Float("PretendBlendTime", 4.0f))
+	    , _pretendRadius(object.Float("PretendRadius", 10.0f))
+	    , _pretendSpeed(object.Float("PretendSpeed", 100.0f))
+	    , _pretendSpread(object.Float("PretendSpreadAngle", 1.03673f))
+	    , _pretendSmall(object.String("PretendObjectCreatorSmall"))
+	    , _pretendMedium(object.String("PretendObjectCreatorMedium"))
+	    , _pretendLarge(object.String("PretendObjectCreatorLarge"))
+	    , _resourceLeast(object.Float("ResourceAmountRemoveMin", 150.0f))
+	    , _resourceMost(object.Float("ResourceAmountRemoveMax", 650.0f))
+	    , _scaleProvider(object.String("TornadoScaleFloatProvider"))
+	    , _sound({.action = object.Sound("SoundTornado")})
 	{
-		funnel.baseRadius = object.Float("BaseRadius", funnel.baseRadius);
-		funnel.topRadius = object.Float("TopRadius", funnel.topRadius);
-		funnel.baseScale = object.Float("BaseScale", funnel.baseScale);
-		funnel.topScale = object.Float("TopScale", funnel.topScale);
-		funnel.baseSpin = object.Float("BaseThetaDot", funnel.baseSpin);
-		funnel.topSpin = object.Float("TopThetaDot", funnel.topSpin);
-		funnel.spinBias = object.Float("ThetaBias", funnel.spinBias);
-		funnel.bend = object.Float("FunnelBendParameter", funnel.bend);
-		funnel.wiggleCount = object.Int("WiggleCount", funnel.wiggleCount);
-		funnel.wiggleAmplitude = object.Float("WiggleAmplitude", funnel.wiggleAmplitude);
+		_funnel.baseRadius = object.Float("BaseRadius", _funnel.baseRadius);
+		_funnel.topRadius = object.Float("TopRadius", _funnel.topRadius);
+		_funnel.baseScale = object.Float("BaseScale", _funnel.baseScale);
+		_funnel.topScale = object.Float("TopScale", _funnel.topScale);
+		_funnel.baseSpin = object.Float("BaseThetaDot", _funnel.baseSpin);
+		_funnel.topSpin = object.Float("TopThetaDot", _funnel.topSpin);
+		_funnel.spinBias = object.Float("ThetaBias", _funnel.spinBias);
+		_funnel.bend = object.Float("FunnelBendParameter", _funnel.bend);
+		_funnel.wiggleCount = object.Int("WiggleCount", _funnel.wiggleCount);
+		_funnel.wiggleAmplitude = object.Float("WiggleAmplitude", _funnel.wiggleAmplitude);
 	}
 
 	[[nodiscard]] bool Creates() const override { return true; }
@@ -181,21 +181,21 @@ public:
 			slot.data = TornadoState {};
 		}
 		auto& state = *std::any_cast<TornadoState>(&slot.data);
-		tornado::Funnel shape = funnel;
+		tornado::Funnel shape = _funnel;
 		// Its size from the storm's, 1 without one
-		shape.scale = scaleProvider.empty() ? 1.0f : effect.FloatProvider(scaleProvider, 1.0f);
+		shape.scale = _scaleProvider.empty() ? 1.0f : effect.FloatProvider(_scaleProvider, 1.0f);
 		UpdateFootAndTop(effect, collection, state, shape);
 		if (state.first)
 		{
-			const auto* rootCreator = effect.FindCreator(creator);
+			const auto* rootCreator = effect.FindCreator(_creator);
 			if (rootCreator == nullptr)
 			{
 				return true;
 			}
 			// The tornado's own atom carries the flying things, the dust and the shells, and its roar
-			const std::vector<int> groups {groupFlying, groupDebris, groupMesh};
+			const std::vector<int> groups {_groupFlying, _groupDebris, _groupMesh};
 			auto& root = effect.NewAtom(collection, rootCreator, groups);
-			StartAtomSound(effect, root, sound);
+			StartAtomSound(effect, root, _sound);
 			root.position = state.base;
 		}
 		if (collection.parent != nullptr)
@@ -209,15 +209,15 @@ public:
 			for (const auto& subCollection : root.subCollections)
 			{
 				auto& sub = *subCollection;
-				if (sub.group == groupFlying)
+				if (sub.group == _groupFlying)
 				{
 					UpdateFlying(effect, collection, sub, state, shape);
 				}
-				else if (sub.group == groupMesh)
+				else if (sub.group == _groupMesh)
 				{
 					UpdateMesh(effect, sub, state, shape);
 				}
-				else if (sub.group == groupDebris)
+				else if (sub.group == _groupDebris)
 				{
 					UpdateDebris(effect, sub, state, shape);
 				}
@@ -233,9 +233,9 @@ private:
 	void UpdateFootAndTop(Effect& effect, const Collection& collection, TornadoState& state, const tornado::Funnel& shape) const
 	{
 		state.closing = state.closing || effect.Closing();
-		state.closeFade = state.closing ? tornado::CloseFade(effect.GetAge() - effect.GetCloseAge(), fadeOutTime) : 1.0f;
+		state.closeFade = state.closing ? tornado::CloseFade(effect.GetAge() - effect.GetCloseAge(), _fadeOutTime) : 1.0f;
 		const float age = effect.CollectionAge(collection);
-		state.alpha = tornado::FadeAlpha(age, fadeInTime, state.closeFade);
+		state.alpha = tornado::FadeAlpha(age, _fadeInTime, state.closeFade);
 		if (state.first)
 		{
 			state.top = effect.GetOrigin();
@@ -243,21 +243,21 @@ private:
 		}
 		const auto oldBase = state.base;
 		const auto oldTop = state.top;
-		if (age >= delayBeforeMove && collection.parent != nullptr)
+		if (age >= _delayBeforeMove && collection.parent != nullptr)
 		{
 			state.top = effect.GlobalPosition(*collection.parent);
 		}
 		state.base = state.top;
 		const auto& noise = effect.Services().noise;
-		const auto times = tornado::FootWanderTimes(age, topMoveFrequency);
+		const auto times = tornado::FootWanderTimes(age, _topMoveFrequency);
 		const auto wander = tornado::FootWander(noise.Smooth(times.a), noise.Smooth(times.b), noise.Smooth(times.c),
-		                                        noise.Smooth(times.d), topMoveAmplitude, shape.scale);
+		                                        noise.Smooth(times.d), _topMoveAmplitude, shape.scale);
 		state.base.x += wander.x;
 		state.base.z += wander.y;
 		auto& world = effect.Services().world;
 		state.base.y = world.LandHeight({state.base.x, state.base.z});
 		effect.SetOrigin(state.base);
-		state.top.y = shape.scale * topHeight + state.base.y;
+		state.top.y = shape.scale * _topHeight + state.base.y;
 		const float dt = effect.GetDt();
 		if (state.first || !(dt > 0.0f))
 		{
@@ -325,14 +325,14 @@ private:
 			{
 				if (state.closing)
 				{
-					leaving.emplace_back(&atom, groupOnCloseDown);
+					leaving.emplace_back(&atom, _groupOnCloseDown);
 					continue;
 				}
 				data.target = std::clamp(data.target + dt * k_TargetRise, 0.0f, 1.0f);
 				Write(atom, data);
 				if (h > k_FlingShare && h > k_FlingShareHigh)
 				{
-					leaving.emplace_back(&atom, groupOnceDone);
+					leaving.emplace_back(&atom, _groupOnceDone);
 					continue;
 				}
 			}
@@ -374,7 +374,7 @@ private:
 		const float spin = tornado::SpinRate(shape, h, data.orbitFactor);
 		const float pulled = tornado::RadialRate(wall, distance, dt) * dt + distance;
 		const float riseSpeed = tornado::RiseSpeed(atom.position.y, state.base.y, state.top.y, data.target,
-		                                           data.type == Flying::Carried ? rise : pretendRise);
+		                                           data.type == Flying::Carried ? _rise : _pretendRise);
 		const float angle = openblack::portable_math::Atan2(offset.z, offset.x) + tornado::SpinOutside(spin, wall, pulled) * dt;
 		const auto axisVelocity = state.baseVelocity + (state.topVelocity - state.baseVelocity) * h;
 		const float invDt = 1.0f / dt;
@@ -386,18 +386,18 @@ private:
 		if (data.type == Flying::Pretend)
 		{
 			// Thrown up by gravity at first, then more and more by the funnel
-			const glm::vec3 gravity {0.0f, -pretendGravity, 0.0f};
+			const glm::vec3 gravity {0.0f, -_pretendGravity, 0.0f};
 			const auto toOrbit = (wanted - atom.velocity) * invDt;
-			const float blend = pretendBlend > 0.0f ? std::clamp(effect.AtomAge(atom) / pretendBlend, 0.0f, 1.0f) : 1.0f;
+			const float blend = _pretendBlend > 0.0f ? std::clamp(effect.AtomAge(atom) / _pretendBlend, 0.0f, 1.0f) : 1.0f;
 			atom.velocity += (gravity + (toOrbit - gravity) * blend) * dt;
 		}
-		else if (velocityField)
+		else if (_velocityField)
 		{
 			atom.velocity = wanted;
 		}
 		else
 		{
-			atom.velocity += (wanted - atom.velocity) * damping * dt;
+			atom.velocity += (wanted - atom.velocity) * _damping * dt;
 		}
 		atom.position += atom.velocity * dt;
 	}
@@ -405,17 +405,17 @@ private:
 	/// Puffs of cloud up the wall at the start, from the top down
 	void MakePuffs(Effect& effect, Collection& flying, const TornadoState& state, const tornado::Funnel& shape) const
 	{
-		const auto* puff = effect.FindCreator(puffCreator);
-		if (puff == nullptr || puffs <= 0)
+		const auto* puff = effect.FindCreator(_puffCreator);
+		if (puff == nullptr || _puffs <= 0)
 		{
 			return;
 		}
-		for (int k = 0; k < puffs; ++k)
+		for (int k = 0; k < _puffs; ++k)
 		{
 			auto& atom = effect.NewAtom(flying, puff, {});
 			FlyingData data {.type = Flying::Puff};
 			data.orbitFactor = effect.Random(1.0f) + k_OrbitBase;
-			data.target = static_cast<float>(puffs - k) / static_cast<float>(puffs);
+			data.target = static_cast<float>(_puffs - k) / static_cast<float>(_puffs);
 			Write(atom, data);
 			const auto axis = tornado::AxisCentre(shape, state.base, state.top, data.target);
 			const float angle = effect.Random(k_TwoPi);
@@ -428,15 +428,15 @@ private:
 	/// Bushes and chickens thrown up from the foot while it is on dry land
 	void EmitPretend(Effect& effect, Collection& flying, TornadoState& state, const tornado::Funnel& shape) const
 	{
-		const auto* small = effect.FindCreator(pretendSmall);
-		const auto* medium = effect.FindCreator(pretendMedium);
-		const auto* large = effect.FindCreator(pretendLarge);
+		const auto* small = effect.FindCreator(_pretendSmall);
+		const auto* medium = effect.FindCreator(_pretendMedium);
+		const auto* large = effect.FindCreator(_pretendLarge);
 		if (small == nullptr || medium == nullptr || large == nullptr || state.closing || state.alpha <= k_PretendAlpha)
 		{
 			return;
 		}
 		auto& world = effect.Services().world;
-		const float rate = world.IsDryLand(state.base) ? shape.scale * pretendRate : 0.0f;
+		const float rate = world.IsDryLand(state.base) ? shape.scale * _pretendRate : 0.0f;
 		state.pretendDue += rate * effect.GetDt();
 		while (state.pretendMade < state.pretendDue)
 		{
@@ -444,17 +444,17 @@ private:
 			const float pick = effect.Random(1.0f);
 			const auto* chosen = pick < k_SmallShare ? small : (pick < k_MediumShare ? medium : large);
 			auto& atom = effect.NewAtom(flying, chosen, {});
-			const float z = effect.Random(-pretendRadius, pretendRadius);
-			const float x = effect.Random(-pretendRadius, pretendRadius);
+			const float z = effect.Random(-_pretendRadius, _pretendRadius);
+			const float x = effect.Random(-_pretendRadius, _pretendRadius);
 			if (shape.scale < 1.0f)
 			{
 				atom.baseScale *= shape.scale;
 			}
 			atom.position = {x * shape.scale + state.base.x, state.base.y, z * shape.scale + state.base.z};
-			const float fromVertical = effect.Random(pretendSpread);
+			const float fromVertical = effect.Random(_pretendSpread);
 			const float heading = effect.Random(k_TwoPi);
 			const float share = effect.Random(k_LeastLaunch, k_MostLaunch);
-			atom.velocity = tornado::Launch(fromVertical, heading, share, pretendSpeed, shape.scale, state.baseVelocity);
+			atom.velocity = tornado::Launch(fromVertical, heading, share, _pretendSpeed, shape.scale, state.baseVelocity);
 			const float orbitFactor = effect.Random(1.0f) + k_OrbitBase;
 			Write(atom, {.type = Flying::Pretend, .target = 1.0f, .orbitFactor = orbitFactor});
 		}
@@ -467,7 +467,7 @@ private:
 	            const tornado::Funnel& shape) const
 	{
 		auto& world = effect.Services().world;
-		if (effect.CollectionAge(tornado) < fadeInTime || state.closing || world.GameTurn() % k_SearchEvery != 0)
+		if (effect.CollectionAge(tornado) < _fadeInTime || state.closing || world.GameTurn() % k_SearchEvery != 0)
 		{
 			return;
 		}
@@ -475,7 +475,7 @@ private:
 		const auto takePot = [&](entt::entity pile) {
 			// So much of it, rounded to the nearest, a half to the even number
 			const auto amount =
-			    static_cast<uint32_t>(std::nearbyint(tornado::PileTake(shape.scale, resourceLeast, resourceMost)));
+			    static_cast<uint32_t>(std::nearbyint(tornado::PileTake(shape.scale, _resourceLeast, _resourceMost)));
 			const float size = tornado::PotScale(shape.scale, effect.Random(k_PotSizeLeast, k_PotSizeMost));
 			const auto pot = world.TakeFromPile(pile, amount, size);
 			return pot != entt::null && Lift(effect, flying, pot);
@@ -545,7 +545,7 @@ private:
 	void UpdateMesh(Effect& effect, Collection& mesh, const TornadoState& state, const tornado::Funnel& shape) const
 	{
 		mesh.alpha = state.alpha;
-		const float spin = meshSpin * shape.spinMultiplier;
+		const float spin = _meshSpin * shape.spinMultiplier;
 		float index = 0.0f;
 		for (auto& atom : mesh.atoms)
 		{
@@ -559,13 +559,13 @@ private:
 	/// Dust thrown up round the foot, the colour of the land there, no more than so many at once
 	void UpdateDebris(Effect& effect, Collection& debris, TornadoState& state, const tornado::Funnel& shape) const
 	{
-		const auto* dust = effect.FindCreator(debrisCreator);
+		const auto* dust = effect.FindCreator(_debrisCreator);
 		if (dust == nullptr)
 		{
 			return;
 		}
 		debris.alpha = state.alpha;
-		state.debrisDue += effect.GetDt() * debrisRate;
+		state.debrisDue += effect.GetDt() * _debrisRate;
 		if (state.closing)
 		{
 			return;
@@ -584,57 +584,57 @@ private:
 				const auto shade = static_cast<uint32_t>(land[static_cast<glm::length_t>(c)]);
 				atom.rgba.at(c) = static_cast<uint8_t>((static_cast<uint32_t>(atom.rgba.at(c)) * shade) >> 8u);
 			}
-			const float z = effect.Random(-debrisRadius, debrisRadius);
-			const float y = effect.Random(debrisHeight);
-			const float x = effect.Random(-debrisRadius, debrisRadius);
+			const float z = effect.Random(-_debrisRadius, _debrisRadius);
+			const float y = effect.Random(_debrisHeight);
+			const float x = effect.Random(-_debrisRadius, _debrisRadius);
 			atom.position = {x * shape.scale + state.base.x, shape.scale * y + state.base.y, shape.scale * z + state.base.z};
 			atom.baseScale *= shape.scale;
-			const float fromVertical = effect.Random(debrisSpread);
+			const float fromVertical = effect.Random(_debrisSpread);
 			const float heading = effect.Random(k_TwoPi);
 			const float share = effect.Random(k_LeastLaunch, k_MostLaunch);
-			atom.velocity = tornado::Launch(fromVertical, heading, share, debrisSpeed, shape.scale, state.baseVelocity);
+			atom.velocity = tornado::Launch(fromVertical, heading, share, _debrisSpeed, shape.scale, state.baseVelocity);
 		}
 	}
 
-	tornado::Funnel funnel;
-	float topHeight;
-	float fadeOutTime;
-	float fadeInTime;
-	float meshSpin;
-	float pretendRise {0.3f};
-	float rise {0.1f};
-	float topMoveFrequency;
-	float topMoveAmplitude;
-	float delayBeforeMove;
-	float damping;
-	bool velocityField;
-	int groupFlying;
-	int groupDebris;
-	int groupMesh;
-	int groupOnCloseDown;
-	int groupOnceDone;
-	int puffs;
-	std::string creator;
-	std::string puffCreator;
-	std::string debrisCreator;
-	float debrisRate;
-	float debrisHeight;
-	float debrisRadius;
-	float debrisSpeed;
-	float debrisSpread;
-	float pretendRate;
-	float pretendGravity;
-	float pretendBlend;
-	float pretendRadius;
-	float pretendSpeed;
-	float pretendSpread;
-	std::string pretendSmall;
-	std::string pretendMedium;
-	std::string pretendLarge;
-	float resourceLeast;
-	float resourceMost;
-	std::string scaleProvider;
-	ParticleSound sound;
+	tornado::Funnel _funnel;
+	float _topHeight;
+	float _fadeOutTime;
+	float _fadeInTime;
+	float _meshSpin;
+	float _pretendRise {0.3f};
+	float _rise {0.1f};
+	float _topMoveFrequency;
+	float _topMoveAmplitude;
+	float _delayBeforeMove;
+	float _damping;
+	bool _velocityField;
+	int _groupFlying;
+	int _groupDebris;
+	int _groupMesh;
+	int _groupOnCloseDown;
+	int _groupOnceDone;
+	int _puffs;
+	std::string _creator;
+	std::string _puffCreator;
+	std::string _debrisCreator;
+	float _debrisRate;
+	float _debrisHeight;
+	float _debrisRadius;
+	float _debrisSpeed;
+	float _debrisSpread;
+	float _pretendRate;
+	float _pretendGravity;
+	float _pretendBlend;
+	float _pretendRadius;
+	float _pretendSpeed;
+	float _pretendSpread;
+	std::string _pretendSmall;
+	std::string _pretendMedium;
+	std::string _pretendLarge;
+	float _resourceLeast;
+	float _resourceMost;
+	std::string _scaleProvider;
+	ParticleSound _sound;
 };
 } // namespace
 

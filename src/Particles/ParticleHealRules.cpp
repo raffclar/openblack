@@ -69,16 +69,16 @@ class HealSpellChakra final: public Modifier
 {
 public:
 	explicit HealSpellChakra(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , scaleToObject(object.Bool("ScalePropObjectSize", false))
-	    , takeCentre(object.Bool("TakeCentrePos", false))
-	    , soundHeal({.action = object.Sound("SoundHeal")})
-	    , maxAlpha(object.Float("MaxAlpha", 255.0f))
-	    , ageMaxAlpha(object.Float("AtomAgeMaxAlpha", 1.0f))
-	    , ageZeroAlpha(object.Float("AtomAgeZeroAlpha", 3.0f))
-	    , glow(static_cast<float>(object.Int("SpecularColorR", 0)), static_cast<float>(object.Int("SpecularColorG", 0)),
-	           static_cast<float>(object.Int("SpecularColorB", 0)))
+	    : _creator(object.String("PCreator"))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _scaleToObject(object.Bool("ScalePropObjectSize", false))
+	    , _takeCentre(object.Bool("TakeCentrePos", false))
+	    , _soundHeal({.action = object.Sound("SoundHeal")})
+	    , _maxAlpha(object.Float("MaxAlpha", 255.0f))
+	    , _ageMaxAlpha(object.Float("AtomAgeMaxAlpha", 1.0f))
+	    , _ageZeroAlpha(object.Float("AtomAgeZeroAlpha", 3.0f))
+	    , _glow(static_cast<float>(object.Int("SpecularColorR", 0)), static_cast<float>(object.Int("SpecularColorG", 0)),
+	            static_cast<float>(object.Int("SpecularColorB", 0)))
 	{
 	}
 	[[nodiscard]] bool KeepsAlive() const override { return true; }
@@ -98,7 +98,7 @@ public:
 		auto& world = effect.Services().world;
 		for (auto target = effect.TakeTarget(); target.has_value(); target = effect.TakeTarget())
 		{
-			const auto info = world.Target(*target, takeCentre);
+			const auto info = world.Target(*target, _takeCentre);
 			if (!info.has_value() || world.IsTargetClaimed(*target))
 			{
 				continue;
@@ -109,7 +109,7 @@ public:
 			                       .strength = 1.0f,
 			                       .checkShields = false,
 			                       .target = *target});
-			auto& atom = effect.NewAtom(collection, effect.FindCreator(creator), nextGroups);
+			auto& atom = effect.NewAtom(collection, effect.FindCreator(_creator), _nextGroups);
 			auto& data = atom.data[this];
 			data.object = *target;
 			atom.position = info->position;
@@ -136,14 +136,14 @@ public:
 			if (&atom == newest && !data.started && effect.AtomAge(atom) > 0.0f)
 			{
 				data.started = true;
-				StartAtomSound(effect, atom, soundHeal);
+				StartAtomSound(effect, atom, _soundHeal);
 			}
 			bool done = false;
-			const auto info = data.object != entt::null ? world.Target(data.object, takeCentre) : std::nullopt;
+			const auto info = data.object != entt::null ? world.Target(data.object, _takeCentre) : std::nullopt;
 			if (info.has_value() && !world.IsTargetHeld(data.object))
 			{
 				atom.position = info->position;
-				if (scaleToObject)
+				if (_scaleToObject)
 				{
 					atom.ruleScale = info->radius;
 				}
@@ -178,11 +178,11 @@ private:
 		{
 			return effect.AtomAge(chakra) > 0.0f;
 		}
-		const float t = maths::ChakraFade(effect.CollectionAge(burst), ageMaxAlpha, ageZeroAlpha);
-		const auto alpha = maths::TruncateToByte(t * maxAlpha);
-		effect.Services().world.SetTargetGlow(data.object,
-		                                      glm::u8vec3(maths::TruncateToByte(glow.r * t), maths::TruncateToByte(glow.g * t),
-		                                                  maths::TruncateToByte(glow.b * t)));
+		const float t = maths::ChakraFade(effect.CollectionAge(burst), _ageMaxAlpha, _ageZeroAlpha);
+		const auto alpha = maths::TruncateToByte(t * _maxAlpha);
+		effect.Services().world.SetTargetGlow(data.object, glm::u8vec3(maths::TruncateToByte(_glow.r * t),
+		                                                               maths::TruncateToByte(_glow.g * t),
+		                                                               maths::TruncateToByte(_glow.b * t)));
 		for (auto& spark : burst.atoms)
 		{
 			spark->rgba[3] = alpha;
@@ -190,15 +190,15 @@ private:
 		return false;
 	}
 
-	std::string creator;
-	std::vector<int> nextGroups;
-	bool scaleToObject;
-	bool takeCentre;
-	ParticleSound soundHeal;
-	float maxAlpha;
-	float ageMaxAlpha;
-	float ageZeroAlpha;
-	glm::vec3 glow;
+	std::string _creator;
+	std::vector<int> _nextGroups;
+	bool _scaleToObject;
+	bool _takeCentre;
+	ParticleSound _soundHeal;
+	float _maxAlpha;
+	float _ageMaxAlpha;
+	float _ageZeroAlpha;
+	glm::vec3 _glow;
 };
 
 /// Once its collection is old enough, a number of atoms fly out of the spawn point all at once in random directions,
@@ -208,48 +208,48 @@ class CreateRuleFusedSphericalExplode final: public Modifier
 {
 public:
 	explicit CreateRuleFusedSphericalExplode(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , count(object.Int("NumAtoms", 100))
-	    , minSpeed(object.String("MinSpeed"))
-	    , maxSpeed(object.String("MaxSpeed"))
-	    , fuseTime(object.Float("FuseTime", 1.0f))
-	    , scaleYSpeed(object.Float("ScaleYSpeed", 1.0f))
-	    , hemisphere(object.Bool("OnlyHemisphere", false))
-	    , disableParent(object.Bool("DisableParent", true))
-	    , sound({.action = object.Sound("SoundExplode")})
+	    : _creator(object.String("PCreator"))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _count(object.Int("NumAtoms", 100))
+	    , _minSpeed(object.String("MinSpeed"))
+	    , _maxSpeed(object.String("MaxSpeed"))
+	    , _fuseTime(object.Float("FuseTime", 1.0f))
+	    , _scaleYSpeed(object.Float("ScaleYSpeed", 1.0f))
+	    , _hemisphere(object.Bool("OnlyHemisphere", false))
+	    , _disableParent(object.Bool("DisableParent", true))
+	    , _sound({.action = object.Sound("SoundExplode")})
 	{
 	}
 	[[nodiscard]] bool Creates() const override { return true; }
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& /*slot*/) const override
 	{
-		const auto* atomCreator = effect.FindCreator(creator);
-		if (atomCreator == nullptr || minSpeed.empty() || maxSpeed.empty())
+		const auto* atomCreator = effect.FindCreator(_creator);
+		if (atomCreator == nullptr || _minSpeed.empty() || _maxSpeed.empty())
 		{
 			return false;
 		}
-		if (effect.CollectionAge(collection) < fuseTime)
+		if (effect.CollectionAge(collection) < _fuseTime)
 		{
 			return true;
 		}
-		const float low = effect.FloatProvider(minSpeed, 0.0f);
-		const float speed = effect.Random(effect.FloatProvider(maxSpeed, 0.0f) - low) + low;
-		for (int i = 0; i < count; ++i)
+		const float low = effect.FloatProvider(_minSpeed, 0.0f);
+		const float speed = effect.Random(effect.FloatProvider(_maxSpeed, 0.0f) - low) + low;
+		for (int i = 0; i < _count; ++i)
 		{
-			auto& atom = effect.NewAtom(collection, atomCreator, nextGroups);
+			auto& atom = effect.NewAtom(collection, atomCreator, _nextGroups);
 			glm::vec3 direction(0.0f);
 			while (x87::Dot<x87::SumOrder::Zxy>(direction, direction) == 0.0f)
 			{
 				direction = effect.RandomInBall();
 			}
-			atom.velocity = maths::BurstVelocity(direction, speed, scaleYSpeed, hemisphere);
+			atom.velocity = maths::BurstVelocity(direction, speed, _scaleYSpeed, _hemisphere);
 			if (i == 0)
 			{
-				StartAtomSound(effect, atom, sound);
+				StartAtomSound(effect, atom, _sound);
 			}
 		}
-		if (disableParent && collection.parent != nullptr)
+		if (_disableParent && collection.parent != nullptr)
 		{
 			collection.parent->visible = false;
 		}
@@ -257,16 +257,16 @@ public:
 	}
 
 private:
-	std::string creator;
-	std::vector<int> nextGroups;
-	int count;
-	std::string minSpeed;
-	std::string maxSpeed;
-	float fuseTime;
-	float scaleYSpeed;
-	bool hemisphere;
-	bool disableParent;
-	ParticleSound sound;
+	std::string _creator;
+	std::vector<int> _nextGroups;
+	int _count;
+	std::string _minSpeed;
+	std::string _maxSpeed;
+	float _fuseTime;
+	float _scaleYSpeed;
+	bool _hemisphere;
+	bool _disableParent;
+	ParticleSound _sound;
 };
 
 /// While the miracle is in the hand its chakras swing through the parent's point, out and back, the odd ones the other
@@ -275,13 +275,13 @@ class HealInHand final: public Modifier
 {
 public:
 	explicit HealInHand(const ParticleObject& object)
-	    : wiggle(object.Float("WiggleFreq", 1.0f))
+	    : _wiggle(object.Float("WiggleFreq", 1.0f))
 	{
 	}
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& /*slot*/) const override
 	{
 		const glm::vec3 parent = collection.parent != nullptr ? collection.parent->position : effect.GetOrigin();
-		const float swing = x87::RoundToFloat(x87::Sin(effect.CollectionAge(collection) * wiggle * k_TwoPi));
+		const float swing = x87::RoundToFloat(x87::Sin(effect.CollectionAge(collection) * _wiggle * k_TwoPi));
 		bool odd = false;
 		// In the game's order, the newest first
 		for (auto it = collection.atoms.rbegin(); it != collection.atoms.rend(); ++it)
@@ -293,7 +293,7 @@ public:
 	}
 
 private:
-	float wiggle;
+	float _wiggle;
 };
 } // namespace
 

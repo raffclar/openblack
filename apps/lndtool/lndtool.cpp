@@ -254,29 +254,29 @@ int PrintMaterials(openblack::lnd::LNDFile& lnd)
 		std::printf("material #%u:\n", k++);
 		std::printf("type: #%u:\n", material.type);
 		std::printf("data:\n");
-		constexpr uint16_t subsample = 8;
-		constexpr uint16_t magnitude = (subsample * subsample) / 8;
-		for (uint16_t y = 0; y < openblack::lnd::LNDMaterial::k_Height / subsample; ++y)
+		constexpr uint16_t k_Subsample = 8;
+		constexpr uint16_t k_Magnitude = (k_Subsample * k_Subsample) / 8;
+		for (uint16_t y = 0; y < openblack::lnd::LNDMaterial::k_Height / k_Subsample; ++y)
 		{
-			for (uint16_t x = 0; x < openblack::lnd::LNDMaterial::k_Width / subsample; ++x)
+			for (uint16_t x = 0; x < openblack::lnd::LNDMaterial::k_Width / k_Subsample; ++x)
 			{
 				uint32_t red = 0;
 				uint32_t green = 0;
 				uint32_t blue = 0;
-				for (uint16_t j = 0; j < subsample; ++j)
+				for (uint16_t j = 0; j < k_Subsample; ++j)
 				{
-					for (uint16_t i = 0; i < subsample; ++i)
+					for (uint16_t i = 0; i < k_Subsample; ++i)
 					{
-						const auto& color =
-						    material.texels.at(x * subsample + i + (y * subsample + j) * openblack::lnd::LNDMaterial::k_Width);
+						const auto& color = material.texels.at(x * k_Subsample + i +
+						                                       (y * k_Subsample + j) * openblack::lnd::LNDMaterial::k_Width);
 						red += color.r;
 						green += color.g;
 						blue += color.b;
 					}
 				}
-				red /= magnitude;
-				green /= magnitude;
-				blue /= magnitude;
+				red /= k_Magnitude;
+				green /= k_Magnitude;
+				blue /= k_Magnitude;
 				std::printf("\x1b[48;2;%u;%u;%um  \x1b[0m", static_cast<uint8_t>(red), static_cast<uint8_t>(green),
 				            static_cast<uint8_t>(blue));
 			}
@@ -292,43 +292,43 @@ int PrintExtra(openblack::lnd::LNDFile& lnd)
 {
 	const auto& extra = lnd.GetExtra();
 
-	constexpr uint16_t subsample = 8;
-	constexpr uint16_t magnitude = (subsample * subsample);
+	constexpr uint16_t k_Subsample = 8;
+	constexpr uint16_t k_Magnitude = (k_Subsample * k_Subsample);
 	std::printf("noise:\n");
-	for (uint16_t y = 0; y < openblack::lnd::LNDBumpMap::k_Height / subsample; ++y)
+	for (uint16_t y = 0; y < openblack::lnd::LNDBumpMap::k_Height / k_Subsample; ++y)
 	{
-		for (uint16_t x = 0; x < openblack::lnd::LNDBumpMap::k_Width / subsample; ++x)
+		for (uint16_t x = 0; x < openblack::lnd::LNDBumpMap::k_Width / k_Subsample; ++x)
 		{
 			uint32_t color = 0;
-			for (uint16_t j = 0; j < subsample; ++j)
+			for (uint16_t j = 0; j < k_Subsample; ++j)
 			{
-				for (uint16_t i = 0; i < subsample; ++i)
+				for (uint16_t i = 0; i < k_Subsample; ++i)
 				{
-					color +=
-					    extra.noise.texels.at(x * subsample + i + (y * subsample + j) * openblack::lnd::LNDBumpMap::k_Width);
+					color += extra.noise.texels.at(x * k_Subsample + i +
+					                               (y * k_Subsample + j) * openblack::lnd::LNDBumpMap::k_Width);
 				}
 			}
-			color /= magnitude;
+			color /= k_Magnitude;
 			std::printf("\x1b[48;2;%u;%u;%um  \x1b[0m", static_cast<uint8_t>(color), static_cast<uint8_t>(color),
 			            static_cast<uint8_t>(color));
 		}
 		std::printf("\n");
 	}
 	std::printf("bump:\n");
-	for (uint16_t y = 0; y < openblack::lnd::LNDBumpMap::k_Height / subsample; ++y)
+	for (uint16_t y = 0; y < openblack::lnd::LNDBumpMap::k_Height / k_Subsample; ++y)
 	{
-		for (uint16_t x = 0; x < openblack::lnd::LNDBumpMap::k_Width / subsample; ++x)
+		for (uint16_t x = 0; x < openblack::lnd::LNDBumpMap::k_Width / k_Subsample; ++x)
 		{
 			uint32_t color = 0;
-			for (uint16_t j = 0; j < subsample; ++j)
+			for (uint16_t j = 0; j < k_Subsample; ++j)
 			{
-				for (uint16_t i = 0; i < subsample; ++i)
+				for (uint16_t i = 0; i < k_Subsample; ++i)
 				{
 					color +=
-					    extra.bump.texels.at(x * subsample + i + (y * subsample + j) * openblack::lnd::LNDBumpMap::k_Width);
+					    extra.bump.texels.at(x * k_Subsample + i + (y * k_Subsample + j) * openblack::lnd::LNDBumpMap::k_Width);
 				}
 			}
-			color /= magnitude;
+			color /= k_Magnitude;
 			std::printf("\x1b[48;2;%u;%u;%um  \x1b[0m", static_cast<uint8_t>(color), static_cast<uint8_t>(color),
 			            static_cast<uint8_t>(color));
 		}

@@ -30,11 +30,11 @@ class FollowTargets final: public Modifier
 {
 public:
 	explicit FollowTargets(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , sound({.action = object.Sound("SoundCreate")})
-	    , soundOneOnly(object.Bool("SoundOneOnly", true))
-	    , removeAtomWhenTargetDies(object.Bool("RemoveAtomWhenTargetDies", false))
+	    : _creator(object.String("PCreator"))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _sound({.action = object.Sound("SoundCreate")})
+	    , _soundOneOnly(object.Bool("SoundOneOnly", true))
+	    , _removeAtomWhenTargetDies(object.Bool("RemoveAtomWhenTargetDies", false))
 	{
 	}
 
@@ -49,15 +49,15 @@ public:
 		{
 			if (const auto info = world.Target(*target, false); info.has_value())
 			{
-				auto& atom = effect.NewAtom(collection, effect.FindCreator(creator), nextGroups);
+				auto& atom = effect.NewAtom(collection, effect.FindCreator(_creator), _nextGroups);
 				atom.data[this].object = *target;
 				atom.position = effect.GlobalToLocal(collection, info->position);
 				// Its trail is as big as its animal
 				atom.ruleScale = info->scale;
 				// The call is heard once, for the first atom, unless the file asks for one each
-				if (!soundOneOnly || collection.atoms.size() == 1)
+				if (!_soundOneOnly || collection.atoms.size() == 1)
 				{
-					StartAtomSound(effect, atom, sound);
+					StartAtomSound(effect, atom, _sound);
 				}
 			}
 		}
@@ -72,7 +72,7 @@ public:
 			{
 				// Its animal gone, the atom stays where it was
 				found->second.object = entt::null;
-				return removeAtomWhenTargetDies;
+				return _removeAtomWhenTargetDies;
 			}
 			// Only the position follows the animal: the speed of the atom does not change
 			atom->position = effect.GlobalToLocal(collection, info->position);
@@ -82,11 +82,11 @@ public:
 	}
 
 private:
-	std::string creator;
-	std::vector<int> nextGroups;
-	ParticleSound sound;
-	bool soundOneOnly;
-	bool removeAtomWhenTargetDies;
+	std::string _creator;
+	std::vector<int> _nextGroups;
+	ParticleSound _sound;
+	bool _soundOneOnly;
+	bool _removeAtomWhenTargetDies;
 };
 } // namespace
 

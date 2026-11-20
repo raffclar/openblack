@@ -29,12 +29,12 @@ std::filesystem::path FileSystemInterface::FixPath(const std::filesystem::path& 
 {
 	std::string result = path.generic_string();
 
-	constexpr std::array<std::string_view, 3> caseFixTable = {
+	constexpr std::array<std::string_view, 3> k_CaseFixTable = {
 	    "\\Data\\",
 	    "\\Landscape\\",
 	    "\\Multi_Player\\",
 	};
-	for (const auto& pattern : caseFixTable)
+	for (const auto& pattern : k_CaseFixTable)
 	{
 		auto foundIter = std::search(result.cbegin(), result.cend(), pattern.cbegin(), pattern.cend(),
 		                             [](char left, char right) { return std::toupper(left) == std::toupper(right); });

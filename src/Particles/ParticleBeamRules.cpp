@@ -38,21 +38,21 @@ class SimpleBeam final: public Modifier
 public:
 	// The game leaves the joints and the minimum height unset when a file doesn't give them; every file does
 	explicit SimpleBeam(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , beamGroup(object.Int("BeamGroup", -1))
-	    , joints(std::max(0, object.Int("MaxJointsPerFork", 1)))
+	    : _creator(object.String("PCreator"))
+	    , _beamGroup(object.Int("BeamGroup", -1))
+	    , _joints(std::max(0, object.Int("MaxJointsPerFork", 1)))
 	    // A curve needs two key points; the files give six
-	    , keyPoints(std::max(2, object.Int("NumSplinePoints", 5)))
-	    , beams(std::max(0, object.Int("NumBeams", 3)))
-	    , wiggle({
+	    , _keyPoints(std::max(2, object.Int("NumSplinePoints", 5)))
+	    , _beams(std::max(0, object.Int("NumBeams", 3)))
+	    , _wiggle({
 	          .frequency = object.Float("WiggleFreq", 4.0f),
 	          .speed = object.Float("WiggleSpeed", 1.0f),
 	          .amount = object.Float("RandomFrac", 0.1f),
 	          .minHeight = object.Float("MinHeight", std::numeric_limits<float>::lowest()),
 	      })
-	    , speedV(object.Float("SpeedV", 1.0f))
-	    , forkScaleMin(object.Float("ForkScaleMin", 1.0f))
-	    , forkScaleMax(object.Float("ForkScaleMax", 1.0f))
+	    , _speedV(object.Float("SpeedV", 1.0f))
+	    , _forkScaleMin(object.Float("ForkScaleMin", 1.0f))
+	    , _forkScaleMax(object.Float("ForkScaleMax", 1.0f))
 	{
 	}
 
@@ -88,7 +88,7 @@ private:
 	/// A new atom for the next target, objects before points, carrying its beams and their joints
 	void Begin(Effect& effect, Collection& collection, const glm::vec3& origin) const
 	{
-		const std::vector<int> groups(static_cast<size_t>(beams), beamGroup);
+		const std::vector<int> groups(static_cast<size_t>(_beams), _beamGroup);
 		// The atom itself is never drawn: it only carries the beams
 		auto& atom = effect.NewAtom(collection, nullptr, groups);
 		atom.position = origin;
@@ -103,16 +103,16 @@ private:
 		{
 			data.a = glm::vec4(*position, 0.0f);
 		}
-		const auto* jointCreator = effect.FindCreator(creator);
+		const auto* jointCreator = effect.FindCreator(_creator);
 		const bool chain = jointCreator != nullptr && jointCreator->kind == Creator::Kind::Chain;
 		// The newest beam first, as the game keeps its lists
 		for (auto& beam : std::ranges::reverse_view(atom.subCollections))
 		{
 			if (chain)
 			{
-				beam->textureSpeed = speedV;
+				beam->textureSpeed = _speedV;
 			}
-			for (int i = 0; i < joints; ++i)
+			for (int i = 0; i < _joints; ++i)
 			{
 				effect.NewAtom(*beam, jointCreator, {});
 			}
@@ -151,8 +151,8 @@ private:
 			auto& beam = *atom.subCollections[s];
 			const auto number = static_cast<int>(count - 1 - s);
 			const auto keys =
-			    maths::BeamKeyPoints(origin, target, keyPoints, wiggle, effect.CollectionAge(beam), number, noise, land);
-			const auto laid = maths::BeamJoints(keys, beam.atoms.size(), magnitude * forkScaleMin, magnitude * forkScaleMax);
+			    maths::BeamKeyPoints(origin, target, _keyPoints, _wiggle, effect.CollectionAge(beam), number, noise, land);
+			const auto laid = maths::BeamJoints(keys, beam.atoms.size(), magnitude * _forkScaleMin, magnitude * _forkScaleMax);
 			const auto n = std::min(laid.size(), beam.atoms.size());
 			for (size_t j = 0; j < n; ++j)
 			{
@@ -163,16 +163,16 @@ private:
 		}
 	}
 
-	std::string creator;
-	int beamGroup;
-	int joints;
-	int keyPoints;
-	int beams;
-	maths::BeamWiggle wiggle;
+	std::string _creator;
+	int _beamGroup;
+	int _joints;
+	int _keyPoints;
+	int _beams;
+	maths::BeamWiggle _wiggle;
 	/// How fast a chain's texture slides along it, in sheet heights a second
-	float speedV;
-	float forkScaleMin;
-	float forkScaleMax;
+	float _speedV;
+	float _forkScaleMin;
+	float _forkScaleMax;
 };
 } // namespace
 

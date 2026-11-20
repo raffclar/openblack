@@ -191,36 +191,36 @@ public:
 	}
 
 	explicit CloudGather(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , numAtoms(object.Int("NumAtoms", 10))
-	    , timeToForm(std::max(object.Float("TimeToForm", 8.0f), 0.001f))
-	    , maxAngularSpeed(object.Float("MaxAngularSpeed", 0.2f))
-	    , lightningGroup(object.Int("LightningGroup", -1))
-	    , specLife(object.Float("SpecLife", 0.5f))
-	    , lightningLife(object.Float("LightningLife", 0.2f))
-	    , lightningDelay(object.Float("LightningDelay", 8.0f))
-	    , switchLife(object.Float("SwitchLife", 3.0f))
-	    , heightVary(object.Float("HeightVaryAmount", 4.0f))
-	    , ratioMaxCollection(object.Float("CloudRatioMaxCollection", 1.0f))
-	    , radiusInitialScale(object.Float("CollectionRadiusInitialScale", 2.0f))
-	    , tornadoGroup(object.Int("TornadoGroup", 10))
-	    , wind({.minSpeed = object.Float("WindMinSpeed", 40.0f),
-	            .maxSpeed = object.Float("WindMaxSpeed", 100.0f),
-	            .magnitudeForMinSpeed = object.Float("MagnitudeForWindMinSpeed", 20.0f),
-	            .magnitudeForMaxSpeed = object.Float("MagnitudeForWindMaxSpeed", 100.0f)})
-	    , shades({.maxColour = object.Int("MaxColor", 120),
-	              .minColour = object.Int("MinColor", 90),
-	              .minAlpha = object.Int("MinAlpha", 0),
-	              .maxAlpha = object.Int("MaxAlpha", 180),
-	              .minScale = object.Float("MinScaleFactor", 0.0f),
-	              .maxScale = object.Float("MaxScaleFactor", 1.0f),
-	              .maxRatio = object.Float("MaxCloudRatio", 10.0f),
-	              .minRatio = object.Float("MinCloudRatio", 1.0f),
-	              .fractionToMaxSize = object.Float("FracToMaxSize", 0.413717f)})
-	    , radiusProvider(object.String("RadiusFloatProvider"))
-	    , scaleProvider(object.String("ScaleFloatProvider"))
-	    , heightProvider(object.String("CloudHeight"))
-	    , thunder({.action = object.Sound("SoundLightning"), .size = 2, .travelsAtSoundSpeed = true, .onLand = true})
+	    : _creator(object.String("PCreator"))
+	    , _numAtoms(object.Int("NumAtoms", 10))
+	    , _timeToForm(std::max(object.Float("TimeToForm", 8.0f), 0.001f))
+	    , _maxAngularSpeed(object.Float("MaxAngularSpeed", 0.2f))
+	    , _lightningGroup(object.Int("LightningGroup", -1))
+	    , _specLife(object.Float("SpecLife", 0.5f))
+	    , _lightningLife(object.Float("LightningLife", 0.2f))
+	    , _lightningDelay(object.Float("LightningDelay", 8.0f))
+	    , _switchLife(object.Float("SwitchLife", 3.0f))
+	    , _heightVary(object.Float("HeightVaryAmount", 4.0f))
+	    , _ratioMaxCollection(object.Float("CloudRatioMaxCollection", 1.0f))
+	    , _radiusInitialScale(object.Float("CollectionRadiusInitialScale", 2.0f))
+	    , _tornadoGroup(object.Int("TornadoGroup", 10))
+	    , _wind({.minSpeed = object.Float("WindMinSpeed", 40.0f),
+	             .maxSpeed = object.Float("WindMaxSpeed", 100.0f),
+	             .magnitudeForMinSpeed = object.Float("MagnitudeForWindMinSpeed", 20.0f),
+	             .magnitudeForMaxSpeed = object.Float("MagnitudeForWindMaxSpeed", 100.0f)})
+	    , _shades({.maxColour = object.Int("MaxColor", 120),
+	               .minColour = object.Int("MinColor", 90),
+	               .minAlpha = object.Int("MinAlpha", 0),
+	               .maxAlpha = object.Int("MaxAlpha", 180),
+	               .minScale = object.Float("MinScaleFactor", 0.0f),
+	               .maxScale = object.Float("MaxScaleFactor", 1.0f),
+	               .maxRatio = object.Float("MaxCloudRatio", 10.0f),
+	               .minRatio = object.Float("MinCloudRatio", 1.0f),
+	               .fractionToMaxSize = object.Float("FracToMaxSize", 0.413717f)})
+	    , _radiusProvider(object.String("RadiusFloatProvider"))
+	    , _scaleProvider(object.String("ScaleFloatProvider"))
+	    , _heightProvider(object.String("CloudHeight"))
+	    , _thunder({.action = object.Sound("SoundLightning"), .size = 2, .travelsAtSoundSpeed = true, .onLand = true})
 	{
 	}
 
@@ -228,9 +228,9 @@ public:
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
-		const float radius = effect.FloatProvider(radiusProvider, k_Missing);
-		const float scale = effect.FloatProvider(scaleProvider, k_Missing);
-		const float cloudHeight = effect.FloatProvider(heightProvider, k_Missing);
+		const float radius = effect.FloatProvider(_radiusProvider, k_Missing);
+		const float scale = effect.FloatProvider(_scaleProvider, k_Missing);
+		const float cloudHeight = effect.FloatProvider(_heightProvider, k_Missing);
 		// It needs all three of its sizes
 		if (std::isnan(radius) || std::isnan(scale) || std::isnan(cloudHeight))
 		{
@@ -258,27 +258,27 @@ public:
 		Births(effect, collection, gathering, radius);
 		EndStrike(collection, gathering, collectionAge);
 
-		const float ratioScale = storm::GatherScale(ratioMaxCollection, collectionAge);
-		const float radiusScale = storm::GatherScale(radiusInitialScale, collectionAge);
+		const float ratioScale = storm::GatherScale(_ratioMaxCollection, collectionAge);
+		const float radiusScale = storm::GatherScale(_radiusInitialScale, collectionAge);
 		std::vector<Atom*> striking;
 		for (auto& cloud : collection.atoms)
 		{
 			auto& data = cloud->data[this];
-			if (effect.AtomAge(*cloud) > timeToForm)
+			if (effect.AtomAge(*cloud) > _timeToForm)
 			{
 				// It has lived its life: it is born again somewhere else
 				Rebirth(effect, *cloud, data, radius);
 			}
 			auto own = ReadCloud(data);
-			const float life = effect.AtomAge(*cloud) / timeToForm;
+			const float life = effect.AtomAge(*cloud) / _timeToForm;
 			if (life > k_StrikingShare)
 			{
 				striking.push_back(cloud.get());
 			}
-			own.angle += storm::CloudAngularSpeed(life, maxAngularSpeed, gathering.direction) * effect.GetDt();
+			own.angle += storm::CloudAngularSpeed(life, _maxAngularSpeed, gathering.direction) * effect.GetDt();
 			own.angle = std::fmod(own.angle, k_TwoPi);
 			const float distance = storm::CloudDistance(life, own.radius, collectionAge, own.angle, radiusScale);
-			const auto look = storm::LookOf(life, scale, ratioScale, shades);
+			const auto look = storm::LookOf(life, scale, ratioScale, _shades);
 			cloud->rgba = {look.grey, look.grey, look.grey, look.alpha};
 			cloud->ruleScale = look.scale;
 			cloud->stretch = look.ratio;
@@ -290,13 +290,13 @@ public:
 			if (own.lit)
 			{
 				const float lit = effect.AtomAge(*cloud) - own.litAge;
-				if (lit > specLife)
+				if (lit > _specLife)
 				{
 					own.lit = false;
 				}
 				else
 				{
-					const auto light = storm::FlashLight(lit, specLife);
+					const auto light = storm::FlashLight(lit, _specLife);
 					cloud->specular = {light.r, light.g, light.b};
 				}
 			}
@@ -335,20 +335,20 @@ private:
 			gathering.ownsStorm = true;
 			if (level == k_TornadoLevel)
 			{
-				const std::array groups {tornadoGroup};
+				const std::array groups {_tornadoGroup};
 				effect.AddSubCollections(*collection.parent, groups);
 			}
 		}
-		gathering.rate = static_cast<float>(numAtoms) / timeToForm;
+		gathering.rate = static_cast<float>(_numAtoms) / _timeToForm;
 		gathering.direction = effect.Random(1.0f) < 0.5f ? -1.0f : 1.0f;
-		gathering.nextStrike = effect.Random(0.5f, 1.0f) * switchLife + lightningDelay;
+		gathering.nextStrike = effect.Random(0.5f, 1.0f) * _switchLife + _lightningDelay;
 	}
 
 	void Births(Effect& effect, Collection& collection, Gathering& gathering, float radius) const
 	{
 		gathering.due += effect.GetDt() * gathering.rate;
-		const auto* cloudCreator = effect.FindCreator(creator);
-		while (static_cast<float>(gathering.made) < gathering.due && static_cast<int>(collection.atoms.size()) < numAtoms)
+		const auto* cloudCreator = effect.FindCreator(_creator);
+		while (static_cast<float>(gathering.made) < gathering.due && static_cast<int>(collection.atoms.size()) < _numAtoms)
 		{
 			++gathering.made;
 			auto& cloud = effect.NewAtom(collection, cloudCreator, {});
@@ -362,7 +362,7 @@ private:
 		cloud.birth = effect.GetAge();
 		WriteCloud(data, {.radius = storm::NewCloudRadius(effect.Random(0.7f, 1.0f), radius),
 		                  .angle = effect.Random(k_TwoPi),
-		                  .heightVary = effect.Random(heightVary),
+		                  .heightVary = effect.Random(_heightVary),
 		                  .lit = false,
 		                  .litAge = 0.0f});
 		cloud.specular = {0, 0, 0};
@@ -404,7 +404,7 @@ private:
 		}
 		const auto* sink = effect.GetSink();
 		const std::optional<float> tribal = sink != nullptr ? std::optional(sink->TribalPower()) : std::nullopt;
-		gathering.nextStrike = collectionAge + storm::NextStrikeWait(effect.Random(0.5f, 1.0f), switchLife, tribal);
+		gathering.nextStrike = collectionAge + storm::NextStrikeWait(effect.Random(0.5f, 1.0f), _switchLife, tribal);
 		auto& cloud = *striking.at(static_cast<size_t>(effect.Rand(static_cast<int32_t>(striking.size()))));
 		if (gathering.boltCloud != nullptr)
 		{
@@ -420,18 +420,18 @@ private:
 			gathering.bolt = bolt.get();
 			cloud.subCollections.push_back(std::move(bolt));
 		}
-		else if (lightningGroup >= 0)
+		else if (_lightningGroup >= 0)
 		{
-			const std::array groups {lightningGroup};
+			const std::array groups {_lightningGroup};
 			effect.AddSubCollections(cloud, groups);
 			gathering.bolt = cloud.subCollections.back().get();
 		}
 		StopAllAtomSounds(cloud);
-		auto sound = thunder;
+		auto sound = _thunder;
 		sound.size = storm::ThunderSize(effect.Random(1.0f));
 		StartAtomSound(effect, cloud, sound);
 		gathering.boltCloud = &cloud;
-		gathering.strikeEnds = collectionAge + effect.Random(0.5f, 1.0f) * lightningLife;
+		gathering.strikeEnds = collectionAge + effect.Random(0.5f, 1.0f) * _lightningLife;
 		auto& data = cloud.data[this];
 		auto own = ReadCloud(data);
 		own.lit = true;
@@ -462,9 +462,9 @@ private:
 		const auto& info = effect.GetProcessInfo();
 		const auto heading = Heading(effect);
 		const auto* sink = effect.GetSink();
-		const auto windBytes = storm::WindBytes(heading, effect.GetMagnitude(), info.power, wind);
+		const auto windBytes = storm::WindBytes(heading, effect.GetMagnitude(), info.power, _wind);
 		const auto rain = storm::RainByte(true, sink != nullptr ? sink->RainAmount() : std::nullopt, info.power);
-		const auto id = world.AddRainStorm(storm::RainStormFor(middle, radius, cloudHeight, timeToForm, windBytes, rain));
+		const auto id = world.AddRainStorm(storm::RainStormFor(middle, radius, cloudHeight, _timeToForm, windBytes, rain));
 		if (id != 0)
 		{
 			gathering.storm = std::make_shared<RainStormLease>(world, id);
@@ -475,25 +475,25 @@ private:
 		}
 	}
 
-	std::string creator;
-	int numAtoms;
-	float timeToForm;
-	float maxAngularSpeed;
-	int lightningGroup;
-	float specLife;
-	float lightningLife;
-	float lightningDelay;
-	float switchLife;
-	float heightVary;
-	float ratioMaxCollection;
-	float radiusInitialScale;
-	int tornadoGroup;
-	storm::StormWind wind;
-	storm::CloudShades shades;
-	std::string radiusProvider;
-	std::string scaleProvider;
-	std::string heightProvider;
-	ParticleSound thunder;
+	std::string _creator;
+	int _numAtoms;
+	float _timeToForm;
+	float _maxAngularSpeed;
+	int _lightningGroup;
+	float _specLife;
+	float _lightningLife;
+	float _lightningDelay;
+	float _switchLife;
+	float _heightVary;
+	float _ratioMaxCollection;
+	float _radiusInitialScale;
+	int _tornadoGroup;
+	storm::StormWind _wind;
+	storm::CloudShades _shades;
+	std::string _radiusProvider;
+	std::string _scaleProvider;
+	std::string _heightProvider;
+	ParticleSound _thunder;
 };
 
 /// The storm's cores drift with the wind once it has formed, over hill and dale alike, and the miracle with them
@@ -501,9 +501,9 @@ class CloudMover final: public Modifier
 {
 public:
 	explicit CloudMover(const ParticleObject& object)
-	    : delay(object.Float("DelayBeforeMove", 5.0f))
-	    , damping(object.Float("WindDamping", 0.06f))
-	    , magnification(object.Float("WindMagnification", 30.0f))
+	    : _delay(object.Float("DelayBeforeMove", 5.0f))
+	    , _damping(object.Float("WindDamping", 0.06f))
+	    , _magnification(object.Float("WindMagnification", 30.0f))
 	{
 	}
 
@@ -517,7 +517,7 @@ public:
 				core->position = effect.GetOrigin();
 			}
 		}
-		if (effect.GetAge() < delay)
+		if (effect.GetAge() < _delay)
 		{
 			return true;
 		}
@@ -528,7 +528,7 @@ public:
 			const auto before = core->position;
 			// A storm a script casts feels no wind, so it stays where it was put
 			const auto wind = storm::DriftWind(world.SmoothWindAt(before), effect.IsScriptCasting());
-			core->velocity = storm::DriftVelocity(core->velocity, wind, magnification, damping, dt);
+			core->velocity = storm::DriftVelocity(core->velocity, wind, _magnification, _damping, dt);
 			core->position = before + (core->velocity * dt);
 			if (auto* sink = effect.GetSink())
 			{
@@ -544,9 +544,9 @@ public:
 	}
 
 private:
-	float delay;
-	float damping;
-	float magnification;
+	float _delay;
+	float _damping;
+	float _magnification;
 };
 
 /// What the swirl keeps between steps: where it is heading and how wide it is
@@ -580,23 +580,23 @@ public:
 	}
 
 	explicit StormCast(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , count(object.Int("NumAtoms", 30))
-	    , params({.maxRadius = object.Float("MaxRadius", 1.1f),
-	              .minRadius = object.Float("MinRadius", 0.2f),
-	              .thetaDotMinRadius = object.Float("ThetaDotMinRadius", 4.0f),
-	              .thetaDotMaxRadius = object.Float("ThetaDotMaxRadius", 0.6f),
-	              .radiusDot = object.Float("RadiusDot", 0.5f),
-	              .dispersalAge = object.Float("DispersalAge", 2.4f),
-	              .fadeOutTime = object.Float("FadeOutTime", 2.0f),
-	              .accelerationStart = object.Float("AccnStartTime", 1.0f),
-	              .accelerationEnd = object.Float("AccnEndTime", 3.0f)})
-	    , initHeight(object.Float("InitHeight", 0.06f))
-	    , thetaDotSpread(object.Float("ThetaDotSpread", 0.7f))
-	    , scaleSpread(object.Float("InitScaleSpread", 0.3f))
-	    , radiusSpread(object.Float("InitRadiusSpread", 0.85f))
-	    , maxSpeed(object.Float("MaxSpeed", 20.0f))
+	    : _creator(object.String("PCreator"))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _count(object.Int("NumAtoms", 30))
+	    , _params({.maxRadius = object.Float("MaxRadius", 1.1f),
+	               .minRadius = object.Float("MinRadius", 0.2f),
+	               .thetaDotMinRadius = object.Float("ThetaDotMinRadius", 4.0f),
+	               .thetaDotMaxRadius = object.Float("ThetaDotMaxRadius", 0.6f),
+	               .radiusDot = object.Float("RadiusDot", 0.5f),
+	               .dispersalAge = object.Float("DispersalAge", 2.4f),
+	               .fadeOutTime = object.Float("FadeOutTime", 2.0f),
+	               .accelerationStart = object.Float("AccnStartTime", 1.0f),
+	               .accelerationEnd = object.Float("AccnEndTime", 3.0f)})
+	    , _initHeight(object.Float("InitHeight", 0.06f))
+	    , _thetaDotSpread(object.Float("ThetaDotSpread", 0.7f))
+	    , _scaleSpread(object.Float("InitScaleSpread", 0.3f))
+	    , _radiusSpread(object.Float("InitRadiusSpread", 0.85f))
+	    , _maxSpeed(object.Float("MaxSpeed", 20.0f))
 	{
 	}
 
@@ -622,16 +622,16 @@ public:
 			Start(effect, collection, swirl, *parent);
 		}
 		const float age = effect.CollectionAge(collection);
-		parent->position += swirl.velocity * dt * storm::SwirlAcceleration(age, params);
-		swirl.radius = storm::SwirlRadius(swirl.radius, age, dt, params);
-		const auto alpha = storm::SwirlAlpha(age, params);
+		parent->position += swirl.velocity * dt * storm::SwirlAcceleration(age, _params);
+		swirl.radius = storm::SwirlRadius(swirl.radius, age, dt, _params);
+		const auto alpha = storm::SwirlAlpha(age, _params);
 		if (!alpha.has_value())
 		{
 			collection.atoms.clear();
 			return true;
 		}
 		collection.alpha = *alpha;
-		const float turning = storm::SwirlTurning(swirl.radius, params);
+		const float turning = storm::SwirlTurning(swirl.radius, _params);
 		const auto& world = effect.Services().world;
 		for (auto& atom : collection.atoms)
 		{
@@ -640,7 +640,7 @@ public:
 			const float out = data.a.z * swirl.radius;
 			auto global = effect.LocalToGlobal(collection, {openblack::portable_math::Cos(data.a.x) * out, 0.0f,
 			                                                openblack::portable_math::Sin(data.a.x) * out});
-			global.y = world.LandHeight({global.x, global.z}) + effect.GetMagnitude() * initHeight;
+			global.y = world.LandHeight({global.x, global.z}) + effect.GetMagnitude() * _initHeight;
 			atom->position = effect.GlobalToLocal(collection, global);
 		}
 		return true;
@@ -649,33 +649,33 @@ public:
 private:
 	void Start(Effect& effect, Collection& collection, Swirl& swirl, Atom& parent) const
 	{
-		swirl.radius = params.maxRadius;
+		swirl.radius = _params.maxRadius;
 		// It heads the way it was cast at its top speed
-		swirl.velocity = storm::SwirlVelocity(Heading(effect), maxSpeed);
-		const auto* spriteCreator = effect.FindCreator(creator);
-		for (int i = 0; i < count; ++i)
+		swirl.velocity = storm::SwirlVelocity(Heading(effect), _maxSpeed);
+		const auto* spriteCreator = effect.FindCreator(_creator);
+		for (int i = 0; i < _count; ++i)
 		{
-			auto& atom = effect.NewAtom(collection, spriteCreator, nextGroups);
-			atom.baseScale *= effect.Random(1.0f - scaleSpread, 1.0f + scaleSpread);
+			auto& atom = effect.NewAtom(collection, spriteCreator, _nextGroups);
+			atom.baseScale *= effect.Random(1.0f - _scaleSpread, 1.0f + _scaleSpread);
 			auto& data = atom.data[this];
 			// Where round it is, how fast it turns, and how far out
 			data.a.x = effect.Random(k_TwoPi);
-			data.a.y = effect.Random(-thetaDotSpread, thetaDotSpread) + 1.0f;
-			data.a.z = effect.Random(1.0f - radiusSpread, 1.0f);
+			data.a.y = effect.Random(-_thetaDotSpread, _thetaDotSpread) + 1.0f;
+			data.a.z = effect.Random(1.0f - _radiusSpread, 1.0f);
 		}
 		// The swirl is as wide as the storm
 		parent.ruleScale = effect.GetMagnitude();
 	}
 
-	std::string creator;
-	std::vector<int> nextGroups;
-	int count;
-	storm::SwirlParams params;
-	float initHeight;
-	float thetaDotSpread;
-	float scaleSpread;
-	float radiusSpread;
-	float maxSpeed;
+	std::string _creator;
+	std::vector<int> _nextGroups;
+	int _count;
+	storm::SwirlParams _params;
+	float _initHeight;
+	float _thetaDotSpread;
+	float _scaleSpread;
+	float _radiusSpread;
+	float _maxSpeed;
 };
 
 /// Flashes of lightning about the storm held in the hand: sprites made now and then, each lighting the cloud they come
@@ -684,15 +684,15 @@ class LightningSprite final: public Modifier
 {
 public:
 	explicit LightningSprite(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , limits({
+	    : _creator(object.String("PCreator"))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _limits({
 	          .frequency = object.Float("EmissionFreq", 0.001f),
 	          .maxAlive = object.Int("MaxAtoms", -1),
 	          .maxTotal = object.Int("MaxTotalAtomsToEmit", -1),
 	          .randomise = object.Bool("Randomise", true),
 	      })
-	    , flashLife(object.Float("SpecLife", 0.5f))
+	    , _flashLife(object.Float("SpecLife", 0.5f))
 	{
 	}
 
@@ -700,27 +700,27 @@ public:
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
-		const auto* spriteCreator = effect.FindCreator(creator);
+		const auto* spriteCreator = effect.FindCreator(_creator);
 		if (spriteCreator == nullptr)
 		{
 			return true;
 		}
 		const float age = effect.CollectionAge(collection);
-		if (storm::ShouldFlash(slot.emitter, limits, age, effect.GetDt(), static_cast<int>(collection.atoms.size()),
+		if (storm::ShouldFlash(slot.emitter, _limits, age, effect.GetDt(), static_cast<int>(collection.atoms.size()),
 		                       [&effect] { return effect.Random(0.75f); }))
 		{
 			// state.x: flashing, state.y: since when
 			slot.state.x = 1.0f;
 			slot.state.y = age;
-			effect.NewAtom(collection, spriteCreator, nextGroups);
+			effect.NewAtom(collection, spriteCreator, _nextGroups);
 		}
 		if (slot.state.x != 0.0f && collection.parent != nullptr)
 		{
 			const float lit = age - slot.state.y;
 			glm::u8vec3 light(0);
-			if (lit <= flashLife)
+			if (lit <= _flashLife)
 			{
-				light = storm::FlashLight(lit, flashLife);
+				light = storm::FlashLight(lit, _flashLife);
 			}
 			else
 			{
@@ -732,10 +732,10 @@ public:
 	}
 
 private:
-	std::string creator;
-	std::vector<int> nextGroups;
-	maths::EmitterLimits limits;
-	float flashLife;
+	std::string _creator;
+	std::vector<int> _nextGroups;
+	maths::EmitterLimits _limits;
+	float _flashLife;
 };
 } // namespace
 

@@ -54,21 +54,21 @@ class BeliefSpriteRule final: public Modifier
 {
 public:
 	explicit BeliefSpriteRule(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , riseSpeed(object.Float("RiseSpeed", 12.0f))
-	    , maxWiggle(object.Float("MaxWiggleOffset", 2.0f))
-	    , ageAtMaxOffset(object.Float("AgeAtMaxOffset", 0.5f))
-	    , noiseFrequency(object.Float("NoiseFreq", 2.0f))
-	    , scaleMax(object.Float("ScaleMax", 1.0f))
-	    , scaleMin(object.Float("ScaleMin", 0.0f))
-	    , scaleFrequency(object.Float("ScaleFreq", 12.0f))
-	    , fadeTimeStart(object.Float("FadeTimeStart", 1.5f))
-	    , fadeTimeEnd(object.Float("FadeTimeEnd", 2.5f))
-	    , alphaMin(object.Int("AlphaMin", 20))
-	    , alphaMax(object.Int("AlphaMax", 150))
-	    , valueAlphaMin(object.Int("ValueAlphaMin", 10))
-	    , valueAlphaMax(object.Int("ValueAlphaMax", 100))
-	    , sound({.action = object.Sound("SoundOfBelief")})
+	    : _creator(object.String("PCreator"))
+	    , _riseSpeed(object.Float("RiseSpeed", 12.0f))
+	    , _maxWiggle(object.Float("MaxWiggleOffset", 2.0f))
+	    , _ageAtMaxOffset(object.Float("AgeAtMaxOffset", 0.5f))
+	    , _noiseFrequency(object.Float("NoiseFreq", 2.0f))
+	    , _scaleMax(object.Float("ScaleMax", 1.0f))
+	    , _scaleMin(object.Float("ScaleMin", 0.0f))
+	    , _scaleFrequency(object.Float("ScaleFreq", 12.0f))
+	    , _fadeTimeStart(object.Float("FadeTimeStart", 1.5f))
+	    , _fadeTimeEnd(object.Float("FadeTimeEnd", 2.5f))
+	    , _alphaMin(object.Int("AlphaMin", 20))
+	    , _alphaMax(object.Int("AlphaMax", 150))
+	    , _valueAlphaMin(object.Int("ValueAlphaMin", 10))
+	    , _valueAlphaMax(object.Int("ValueAlphaMax", 100))
+	    , _sound({.action = object.Sound("SoundOfBelief")})
 	{
 	}
 
@@ -76,7 +76,7 @@ public:
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& /*slot*/) const override
 	{
-		const auto* spriteCreator = effect.FindCreator(creator);
+		const auto* spriteCreator = effect.FindCreator(_creator);
 		if (spriteCreator == nullptr)
 		{
 			return true;
@@ -88,17 +88,17 @@ public:
 			auto& data = atom.data[this];
 			data.a = glm::vec4(sprite->position, 0.0f);
 			// The more belief, the more opaque it starts
-			const float share = std::clamp(static_cast<float>(sprite->amount - valueAlphaMin) /
-			                                   static_cast<float>(valueAlphaMax - valueAlphaMin),
+			const float share = std::clamp(static_cast<float>(sprite->amount - _valueAlphaMin) /
+			                                   static_cast<float>(_valueAlphaMax - _valueAlphaMin),
 			                               0.0f, 1.0f);
-			data.b.x = std::round(static_cast<float>(alphaMax - alphaMin) * share + static_cast<float>(alphaMin));
+			data.b.x = std::round(static_cast<float>(_alphaMax - _alphaMin) * share + static_cast<float>(_alphaMin));
 			atom.position = sprite->position;
 			atom.rgba = {static_cast<uint8_t>(sprite->colour >> 16u), static_cast<uint8_t>(sprite->colour >> 8u),
 			             static_cast<uint8_t>(sprite->colour), atom.rgba[3]};
 			atom.ruleScale = 1.0f;
-			if (sprite->amount > valueAlphaMin)
+			if (sprite->amount > _valueAlphaMin)
 			{
-				StartAtomSound(effect, atom, sound);
+				StartAtomSound(effect, atom, _sound);
 			}
 		}
 		const auto& noise = effect.Services().noise;
@@ -114,24 +114,25 @@ public:
 			const auto& data = found->second;
 			const float age = effect.AtomAge(atom);
 			const auto id = static_cast<float>(atom.random);
-			const float along = age * noiseFrequency;
+			const float along = age * _noiseFrequency;
 			const float wiggleX = noise.Smooth(id + along * 2.0f) * 0.5f + noise.Smooth(id + along);
 			const float wiggleZ = noise.Smooth(id * 0.3f + along * 2.0f) * 0.5f + noise.Smooth(id * 0.3f + along);
-			const float ramp = std::clamp(age / ageAtMaxOffset, 0.0f, 1.0f);
-			const float rise = (static_cast<float>(atom.random % k_RiseSteps) * k_RiseStep + 1.0f) * riseSpeed;
+			const float ramp = std::clamp(age / _ageAtMaxOffset, 0.0f, 1.0f);
+			const float rise = (static_cast<float>(atom.random % k_RiseSteps) * k_RiseStep + 1.0f) * _riseSpeed;
 			const glm::vec3 start(data.a);
-			atom.position = {start.x + ramp * maxWiggle * wiggleX, start.y + rise * age, start.z + ramp * maxWiggle * wiggleZ};
+			atom.position = {start.x + ramp * _maxWiggle * wiggleX, start.y + rise * age,
+			                 start.z + ramp * _maxWiggle * wiggleZ};
 			// Faded out between the fade's start and end
 			float fade = 0.0f;
-			if (age > fadeTimeStart)
+			if (age > _fadeTimeStart)
 			{
-				fade = std::clamp((age - fadeTimeStart) / (fadeTimeEnd - fadeTimeStart), 0.0f, 1.0f);
+				fade = std::clamp((age - _fadeTimeStart) / (_fadeTimeEnd - _fadeTimeStart), 0.0f, 1.0f);
 			}
 			atom.rgba[3] = static_cast<uint8_t>(std::round(data.b.x - data.b.x * fade));
 			const float pulse =
-			    openblack::portable_math::Sin(id * k_PulsePhase + (id * k_PulsePace + 1.0f) * age * scaleFrequency);
-			atom.ruleScale = (pulse * 0.5f + 1.0f) * (scaleMax - scaleMin) + scaleMin;
-			if (age > fadeTimeEnd + k_GoneAfterFading)
+			    openblack::portable_math::Sin(id * k_PulsePhase + (id * k_PulsePace + 1.0f) * age * _scaleFrequency);
+			atom.ruleScale = (pulse * 0.5f + 1.0f) * (_scaleMax - _scaleMin) + _scaleMin;
+			if (age > _fadeTimeEnd + k_GoneAfterFading)
 			{
 				collection.atoms.erase(collection.atoms.begin() + static_cast<std::ptrdiff_t>(i));
 				continue;
@@ -142,21 +143,21 @@ public:
 	}
 
 private:
-	std::string creator;
-	float riseSpeed;
-	float maxWiggle;
-	float ageAtMaxOffset;
-	float noiseFrequency;
-	float scaleMax;
-	float scaleMin;
-	float scaleFrequency;
-	float fadeTimeStart;
-	float fadeTimeEnd;
-	int alphaMin;
-	int alphaMax;
-	int valueAlphaMin;
-	int valueAlphaMax;
-	ParticleSound sound;
+	std::string _creator;
+	float _riseSpeed;
+	float _maxWiggle;
+	float _ageAtMaxOffset;
+	float _noiseFrequency;
+	float _scaleMax;
+	float _scaleMin;
+	float _scaleFrequency;
+	float _fadeTimeStart;
+	float _fadeTimeEnd;
+	int _alphaMin;
+	int _alphaMax;
+	int _valueAlphaMin;
+	int _valueAlphaMax;
+	ParticleSound _sound;
 };
 /// A village's symbols are drawn this many times their size before the belief scales them
 constexpr float k_SymbolBaseScale = 1.5f;
@@ -206,17 +207,17 @@ public:
 	              "The ranks of the symbols hold a place for each player number");
 
 	explicit TownCentreBeliefRule(const ParticleObject& object)
-	    : params(ReadParams(object))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , sparkGroup(object.Int("GroupFightSparkle", -1))
+	    : _params(ReadParams(object))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _sparkGroup(object.Int("GroupFightSparkle", -1))
 	{
-		symbol.kind = Creator::Kind::Symbol;
-		symbol.className = "UR_TownCentreBelief";
+		_symbol.kind = Creator::Kind::Symbol;
+		_symbol.className = "UR_TownCentreBelief";
 	}
 
 	[[nodiscard]] bool Creates() const override { return true; }
 	/// The symbols keep their creator through a save and a load, so that the load draws them again
-	[[nodiscard]] const Creator* OwnCreator() const override { return &symbol; }
+	[[nodiscard]] const Creator* OwnCreator() const override { return &_symbol; }
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
@@ -232,7 +233,7 @@ public:
 			// Each god of the game has a symbol, a god after the seventh too (deviation 166)
 			for (const auto player : world.PlayersInGame())
 			{
-				auto& atom = effect.NewAtom(collection, &symbol, nextGroups);
+				auto& atom = effect.NewAtom(collection, &_symbol, _nextGroups);
 				atom.baseScale = k_SymbolBaseScale;
 				atom.player = player;
 				auto& data = atom.data[this];
@@ -246,9 +247,9 @@ public:
 		{
 			return true;
 		}
-		const glm::vec3 base = belief->totemTop + glm::vec3(0.0f, params.heightAt1, 0.0f);
+		const glm::vec3 base = belief->totemTop + glm::vec3(0.0f, _params.heightAt1, 0.0f);
 		const float distanceScale =
-		    town_belief::DistanceScale(params, x87::Distance<x87::SumOrder::Xzy>(world.CameraPosition(), base));
+		    town_belief::DistanceScale(_params, x87::Distance<x87::SumOrder::Xzy>(world.CameraPosition(), base));
 		// All the symbols use one random function, the beliefs of the village and the rank of each player
 		const std::function<float(float, float)> random = [&effect](float min, float max) { return effect.Random(min, max); };
 		const auto beliefs = belief->OfPlayers();
@@ -271,17 +272,17 @@ public:
 			                           .fightLength = data.b.z};
 			const auto player = static_cast<size_t>(atom->player);
 			const auto look =
-			    town_belief::Step(state, params, beliefs[player], ranks[player], effect.GetDt(), distanceScale, random);
+			    town_belief::Step(state, _params, beliefs[player], ranks[player], effect.GetDt(), distanceScale, random);
 			data.a = {state.around, state.tilt, state.sway, 0.0f};
 			data.b = {state.untilFight, state.intoFight, state.fightLength, 0.0f};
 			atom->position = base + look.offset;
 			atom->ruleScale = look.scale;
 			for (auto& sparks : atom->subCollections)
 			{
-				if (sparks->group == sparkGroup)
+				if (sparks->group == _sparkGroup)
 				{
 					sparks->alpha = static_cast<float>(town_belief::SparkAlpha(look.fight));
-					sparks->emitting = town_belief::Sparking(params, look.fight);
+					sparks->emitting = town_belief::Sparking(_params, look.fight);
 				}
 			}
 		}
@@ -289,10 +290,10 @@ public:
 	}
 
 private:
-	town_belief::Params params;
-	std::vector<int> nextGroups;
-	int sparkGroup;
-	SymbolCreator symbol;
+	town_belief::Params _params;
+	std::vector<int> _nextGroups;
+	int _sparkGroup;
+	SymbolCreator _symbol;
 };
 } // namespace
 

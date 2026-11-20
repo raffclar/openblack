@@ -50,9 +50,9 @@ public:
 	}
 
 	explicit ManaPath(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , settings({
+	    : _creator(object.String("PCreator"))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _settings({
 	          .speed = object.Float("GlowPosSpeed", 0.2f),
 	          .timeToTravel = object.Float("TimeToTravel", 2.0f),
 	          .noiseFrequency = object.Float("NoiseFrequency", 1.0f),
@@ -70,7 +70,7 @@ public:
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& /*slot*/) const override
 	{
 		// Without a creator for its atoms it does nothing at all
-		const auto* spriteCreator = effect.FindCreator(creator);
+		const auto* spriteCreator = effect.FindCreator(_creator);
 		if (spriteCreator == nullptr)
 		{
 			return true;
@@ -106,12 +106,12 @@ public:
 private:
 	void LetOut(Effect& effect, Collection& collection, const Creator& spriteCreator, const mana_path::Spark& spark) const
 	{
-		auto& atom = effect.NewAtom(collection, &spriteCreator, nextGroups);
+		auto& atom = effect.NewAtom(collection, &spriteCreator, _nextGroups);
 		// Drawn in the order the game draws them: the frequency's, the size's, then where along the noise it starts
 		const float frequency = effect.Random(0.8f);
 		const float amplitude = effect.Random(0.8f);
 		const float phase = effect.Random(1.0f);
-		const auto path = mana_path::MakePath(spark.from, spark.to, settings,
+		const auto path = mana_path::MakePath(spark.from, spark.to, _settings,
 		                                      {.frequency = frequency, .amplitude = amplitude, .phase = phase});
 		// The spark's colour, the creator's opacity
 		atom.rgba = {static_cast<uint8_t>((spark.rgb >> 16u) & 0xFFu), static_cast<uint8_t>((spark.rgb >> 8u) & 0xFFu),
@@ -130,19 +130,19 @@ private:
 	void Move(Effect& effect, Atom& atom, AtomRuleData& data) const
 	{
 		const auto& path = *std::static_pointer_cast<const mana_path::Path>(data.held);
-		const float progress = mana_path::Progress(path, settings, effect.AtomAge(atom));
+		const float progress = mana_path::Progress(path, _settings, effect.AtomAge(atom));
 		data.a.x = progress;
 		const float along = std::clamp(progress, 0.0f, 1.0f);
-		const auto point = mana_path::PointOnPath(path, settings, progress);
+		const auto point = mana_path::PointOnPath(path, _settings, progress);
 		const float noise = effect.Services().noise.Smooth(mana_path::WeaveNoiseAt(path, along));
 		const auto woven = mana_path::Woven(path, point, along, noise);
 		const auto ground = mana_path::GroundPoint(woven);
-		atom.position = {woven.x, effect.Services().world.LandHeight(ground) + settings.height, woven.y};
+		atom.position = {woven.x, effect.Services().world.LandHeight(ground) + _settings.height, woven.y};
 	}
 
-	std::string creator;
-	std::vector<int> nextGroups;
-	mana_path::Settings settings;
+	std::string _creator;
+	std::vector<int> _nextGroups;
+	mana_path::Settings _settings;
 };
 } // namespace
 
