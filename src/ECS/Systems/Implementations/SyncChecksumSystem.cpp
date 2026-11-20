@@ -188,7 +188,7 @@ void SyncChecksumSystem::FinishHash()
 	synced_state::Hash hash;
 	if (std::exchange(_besideStarted, false))
 	{
-		_side->Wait();
+		_side->WaitOrRun();
 		hash = std::move(*std::exchange(_besideHash, std::nullopt));
 	}
 	else

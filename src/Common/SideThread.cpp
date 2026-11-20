@@ -49,9 +49,25 @@ bool SideThread::Done() const noexcept
 
 void SideThread::Wait()
 {
+	TakeEnd(false);
+}
+
+void SideThread::WaitOrRun()
+{
+	TakeEnd(true);
+}
+
+void SideThread::TakeEnd(bool runHere)
+{
 	std::exception_ptr error;
 	{
 		std::unique_lock lock(_mutex);
+		// The side thread can start late when other threads use all the processors. Then the calling thread does the
+		// work that waits, because the work is usually shorter than this delay.
+		if (runHere && _work)
+		{
+			Run(lock);
+		}
 		_changed.wait(lock, [this] { return Done(); });
 		error = std::exchange(_error, nullptr);
 	}
@@ -77,28 +93,33 @@ void SideThread::Loop(const std::stop_token& stop)
 			// The stop came, and no work waits
 			return;
 		}
-		auto work = std::exchange(_work, nullptr);
-		auto ended = std::exchange(_ended, nullptr);
+		Run(lock);
+	}
+}
+
+void SideThread::Run(std::unique_lock<std::mutex>& lock)
+{
+	auto work = std::exchange(_work, nullptr);
+	auto ended = std::exchange(_ended, nullptr);
+	lock.unlock();
+	std::exception_ptr error;
+	try
+	{
+		work();
+	}
+	catch (...)
+	{
+		error = std::current_exception();
+	}
+	lock.lock();
+	_error = error;
+	_done.store(true, std::memory_order_release);
+	_changed.notify_all();
+	if (ended)
+	{
+		// Without the lock, because `ended` may wake a thread that then calls Wait
 		lock.unlock();
-		std::exception_ptr error;
-		try
-		{
-			work();
-		}
-		catch (...)
-		{
-			error = std::current_exception();
-		}
+		ended();
 		lock.lock();
-		_error = error;
-		_done.store(true, std::memory_order_release);
-		_changed.notify_all();
-		if (ended)
-		{
-			// Without the lock, because `ended` may wake a thread that then calls Wait
-			lock.unlock();
-			ended();
-			lock.lock();
-		}
 	}
 }
