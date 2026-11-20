@@ -9,9 +9,11 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -50,6 +52,32 @@ namespace openblack::ecs::climate_rules
 
 /// The speed of the storms of a climate from the most wind of its season
 [[nodiscard]] float StormSpeed(float mostWind);
+
+/// Walks the list of the storms of a climate in the order of the game, the newest first, and returns true when the
+/// walk removed the last storm of the list. A storm that is not alive goes off the list. After a removal the walk
+/// starts again at the second storm of the list. Thus the first storm does not get its turn when the removed storm was
+/// first, and the storms between the first one and the removed one get a second turn.
+template <typename Storm, typename Alive, typename Visit>
+bool WalkClimateStorms(std::vector<Storm>& storms, Alive&& alive, Visit&& visit)
+{
+	std::size_t index = 0;
+	while (index < storms.size())
+	{
+		if (!alive(storms[index]))
+		{
+			storms.erase(storms.begin() + static_cast<std::ptrdiff_t>(index));
+			if (storms.empty())
+			{
+				return true;
+			}
+			index = 1;
+			continue;
+		}
+		visit(storms[index]);
+		++index;
+	}
+	return false;
+}
 
 /// The day of the year after each month ends, as the game counts its months: September, October and November have 30
 /// days each, so the year has 364 days in its months

@@ -796,18 +796,13 @@ void WeatherSystem::ProcessClimate(entt::entity entity, bool newDay)
 		ProcessTemperature(climate);
 	}
 
-	for (auto iter = climate.storms.begin(); iter != climate.storms.end();)
-	{
-		auto* storm = registry.Valid(*iter) ? registry.TryGet<Storm>(*iter) : nullptr;
-		if (storm == nullptr || storm->dead)
-		{
-			iter = climate.storms.erase(iter);
-			if (climate.storms.empty())
-			{
-				climate.raining = false;
-			}
-			continue;
-		}
+	// A storm that ended goes off the list, and the game then starts the walk again at the second storm of the list
+	const auto alive = [&registry](entt::entity entity) {
+		const auto* storm = registry.Valid(entity) ? registry.TryGet<Storm>(entity) : nullptr;
+		return storm != nullptr && !storm->dead;
+	};
+	const auto visit = [&](entt::entity entity) {
+		auto* storm = &registry.Get<Storm>(entity);
 
 		// Storms drift with the wind where they are, which includes their own
 		const auto wind = GetWeather(storm->position);
@@ -842,7 +837,10 @@ void WeatherSystem::ProcessClimate(entt::entity entity, bool newDay)
 				storm->age = clearing;
 			}
 		}
-		++iter;
+	};
+	if (climate_rules::WalkClimateStorms(climate.storms, alive, visit))
+	{
+		climate.raining = false;
 	}
 
 	if (newDay && _climateSystemEnabled)
@@ -1231,16 +1229,15 @@ bool WeatherSystem::ChangeWeatherThing(entt::entity thing, const std::function<v
 	{
 		return false;
 	}
+	// A storm that ended in this turn stays with the weather thing until the weather things take their turn. A change
+	// before then goes to the storm that ended, and the storm does not come back.
 	auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<Storm>(weatherThing->storm) : nullptr;
-	if (storm == nullptr || storm->dead)
+	if (storm == nullptr)
 	{
-		// Its storm has ended: it comes back, new, as it last was
+		// The weather thing has no storm: a new storm comes from the settings of the last storm. It stands still at
+		// the place of the last storm, at the speed of a new weather thing.
 		const auto stormEntity = registry.Create();
-		storm = &registry.Assign<Storm>(stormEntity, weatherThing->lastStorm);
-		storm->age = 0.0f;
-		storm->dead = false;
-		storm->deadTurns = 0;
-		storm->flash = {};
+		storm = &registry.Assign<Storm>(stormEntity, script_weather::StormFromSettings(weatherThing->lastStorm));
 		storm->serial = _nextStormSerial++;
 		weatherThing->storm = stormEntity;
 	}

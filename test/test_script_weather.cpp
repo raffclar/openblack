@@ -317,3 +317,47 @@ TEST(ScriptWeather, AStormEndsWhereTheLastWeatherTurnPutIt)
 	EXPECT_TRUE(weather::InKillArea(storm.currentPosition, storm.outerRadius, {}, 220.0f));
 	EXPECT_FALSE(weather::InKillArea(storm.position, storm.outerRadius, {}, 220.0f));
 }
+
+// A weather thing that lost its storm gets a new storm from the settings of the last storm. The new storm stands still
+// at the place of the last storm, at the speed of a new weather thing, and starts its life again.
+TEST(ScriptWeather, ANewStormOfAWeatherThingStandsStillWhereTheLastStormWas)
+{
+	Storm last {};
+	last.position = {100.0f, 0.0f, 200.0f};
+	last.destination = {900.0f, 0.0f, 900.0f};
+	last.speed = 10.0f;
+	last.arrived = false;
+	last.innerRadius = 120.0f;
+	last.outerRadius = 330.0f;
+	last.lastsFor = 60.0f;
+	last.fadeTime = 5.0f;
+	last.strength = 0.8f;
+	last.cloudCount = 12;
+	last.age = 60.0f;
+	last.currentStrength = 0.8f;
+	last.thunderWait = {2.0f, 4.0f};
+	last.thunderTimer = 1.5f;
+	last.dead = true;
+	last.deadTurns = 2;
+	last.effect.rain = 40;
+
+	const auto storm = weather::StormFromSettings(last);
+	EXPECT_EQ(storm.position, last.position);
+	EXPECT_EQ(storm.destination, last.position);
+	EXPECT_EQ(storm.currentPosition, last.position);
+	EXPECT_EQ(storm.speed, 1.0f);
+	EXPECT_TRUE(storm.arrived);
+	EXPECT_EQ(storm.innerRadius, 120.0f);
+	EXPECT_EQ(storm.outerRadius, 330.0f);
+	EXPECT_EQ(storm.lastsFor, 60.0f);
+	EXPECT_EQ(storm.fadeTime, 5.0f);
+	EXPECT_EQ(storm.strength, 0.8f);
+	EXPECT_EQ(storm.cloudCount, 12);
+	EXPECT_EQ(storm.effect.rain, 40);
+	EXPECT_EQ(storm.thunderWait, last.thunderWait);
+	EXPECT_EQ(storm.age, 0.0f);
+	EXPECT_EQ(storm.currentStrength, 0.0f);
+	EXPECT_EQ(storm.thunderTimer, 0.0f);
+	EXPECT_FALSE(storm.dead);
+	EXPECT_EQ(storm.deadTurns, 0);
+}
