@@ -450,6 +450,9 @@ public:
 	[[nodiscard]] virtual std::optional<UseWait> GetUseWait() const { return std::nullopt; }
 	/// The frame after the let go of the button ends the wait
 	virtual void EndUseWaitAfterLetGo() {}
+	/// Each gesture step of the hand of this computer: a ready fire seed in the hand takes the fireball under the hand
+	/// into it with no press of a button. The interface then waits for the let go of the Action button.
+	virtual void TakeInFireBallUnderHand() {}
 	/// The miracle seed in the hand of this computer
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeed() const = 0;
 	/// The miracle seed in the hand of a player. The turns read this, because it is the same on every computer.
