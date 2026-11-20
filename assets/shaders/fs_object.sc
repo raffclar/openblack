@@ -39,14 +39,14 @@ uniform vec4 u_keepBelow;
 // the static one fizzing out of sight is drawn through, which slides across its skin by u_creatureSpellLook.xy
 SAMPLER2D(s_iceEnvironment, 10);
 // The ice's alpha, which weighs how much of it is added. Every stage is taken by one shader or another: it goes at the
-// environment map's, which no creature's shader samples, and environment-mapped meshes, which are never frozen, have it at
-// the height map's, which their vertex shader doesn't sample
+// environment map's, which no creature's shader samples. Environment-mapped meshes never fizz, thus they have no static
+// and keep the ice's alpha at the static's stage. The vertex shader of a creature's body reads its bones at stage 1.
 #ifdef USE_ENVIRONMENT
-SAMPLER2D(s_iceEnvironmentAlpha, 1);
+SAMPLER2D(s_iceEnvironmentAlpha, 15);
 #else
 SAMPLER2D(s_iceEnvironmentAlpha, 5);
-#endif // USE_ENVIRONMENT
 SAMPLER2D(s_staticAlpha, 15);
+#endif // USE_ENVIRONMENT
 // A creature fizzing out of sight is drawn twice. z 1: its depth alone, wherever the static's alpha is at least w; z 2:
 // its body, blended at w, over just that depth. z 3: frozen, the ice alone over all of its mesh, with w the ice's alpha.
 // z 0 for anything else, with w the ice's alpha on a piece of a creature drawn on its own.
@@ -75,6 +75,7 @@ void main()
 		gl_FragColor = vec4(IceSheen(v_position.xyz), u_creatureSpellLook.w);
 		return;
 	}
+#ifndef USE_ENVIRONMENT
 	// Fizzing, its depth goes down only where the static over its skin is strong enough, whatever its own texture
 	if (u_creatureSpellLook.z > 0.5f && u_creatureSpellLook.z < 1.5f)
 	{
@@ -86,6 +87,7 @@ void main()
 		gl_FragColor = vec4_splat(0.0f);
 		return;
 	}
+#endif // USE_ENVIRONMENT
 
 	float alphaThreshold = u_skyAlphaThreshold.y;
 

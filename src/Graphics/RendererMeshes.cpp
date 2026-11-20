@@ -407,11 +407,13 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 		return;
 	}
 
-	// The game turns a submesh with a joint about its pivot by its matrix of the table, before the mesh's own matrix
+	// The game turns a submesh with a joint about its pivot by its matrix of the table, before the mesh's own matrix. A
+	// mesh with bones from a texture has no matrix of its own.
 	const auto* modelMatrices = desc.modelMatrices;
 	glm::mat4 jointModel;
-	if (const auto& joint = subMesh.GetJoint();
-	    joint.has_value() && joint->index < desc.joints.size() && modelMatrices != nullptr && desc.matrixCount == 1)
+	if (const auto& joint = subMesh.GetJoint(); joint.has_value() && joint->index < desc.joints.size() &&
+	                                            modelMatrices != nullptr && desc.matrixCount == 1 &&
+	                                            desc.boneTexture == nullptr)
 	{
 		jointModel = *modelMatrices * glm::translate(glm::mat4(1.0f), joint->pivot) * desc.joints[joint->index] *
 		             glm::translate(glm::mat4(1.0f), -joint->pivot);
@@ -542,7 +544,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (desc.boneTexture != nullptr)
 			{
 				program->SetUniformValue(to, "u_bones", &desc.bones);
-				program->SetTextureSampler(to, "s_bones", 2, *desc.boneTexture);
+				// A creature's body reads the bones at a stage of its own
+				program->SetTextureSampler(to, "s_bones", program->SamplerStage("s_bones").value_or(2), *desc.boneTexture);
 			}
 			if (has(MeshUniform::DepthBias))
 			{
@@ -1208,12 +1211,12 @@ std::optional<InstanceHolder> HolderOf(const ecs::systems::RenderContext& contex
 }
 } // namespace openblack::graphics::detail
 
-void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
+void Renderer::UploadPosedBones(const DrawSceneDesc& drawDesc) const
 {
 	// The bones' texture is this many texels wide: 256 matrices a row
 	constexpr uint32_t k_BoneTextureWidth = 1024;
 	_animalBoneGroups.clear();
-	_animalBones.clear();
+	_posedBones.clear();
 	const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	struct Drawn
@@ -1252,15 +1255,15 @@ void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 		{
 			continue;
 		}
-		const auto first = static_cast<uint32_t>(_animalBones.size());
+		const auto first = static_cast<uint32_t>(_posedBones.size());
 		const auto bones = static_cast<uint32_t>(rest.size());
-		_animalBones.resize(_animalBones.size() + (static_cast<size_t>(bones) * animals.size()));
+		_posedBones.resize(_posedBones.size() + (static_cast<size_t>(bones) * animals.size()));
 		for (const auto& drawn : animals)
 		{
 			// Each in its place among the model's instances, in the pose its clip gives it, or its model's own
 			const auto& posed = drawn.pose->bones.size() == rest.size() ? drawn.pose->bones : rest;
 			const auto place = first + ((drawn.instance - placers->second.offset) * bones);
-			std::ranges::copy(posed, _animalBones.begin() + place);
+			std::ranges::copy(posed, _posedBones.begin() + place);
 		}
 		_animalBoneGroups.emplace(meshId,
 		                          AnimalBoneGroup {.firstMatrix = first,
@@ -1268,29 +1271,46 @@ void Renderer::UploadAnimalBones(const DrawSceneDesc& drawDesc) const
 		                                           .brightestLand = light == ecs::components::AnimalLight::BrightestLand,
 		                                           .landWhereItStands = light == ecs::components::AnimalLight::Land});
 	}
-	if (_animalBones.empty())
+	// The creatures follow the animals, each with its own bones
+	for (auto& drawn : _drawnCreatures)
+	{
+		drawn.firstBone.reset();
+		if (!drawn.bones.empty())
+		{
+			drawn.firstBone = static_cast<uint32_t>(_posedBones.size());
+			_posedBones.insert(_posedBones.end(), drawn.bones.begin(), drawn.bones.end());
+		}
+	}
+	// A warm-up draws the creatures' bodies with bones from the texture, at no size. Thus the texture must exist.
+	if (_warmingUp && _posedBones.empty())
+	{
+		_posedBones.emplace_back(1.0f);
+	}
+	if (_posedBones.empty())
 	{
 		return;
 	}
-	// A texture tall enough for every matrix, grown by doubling as the animals grow in number
-	const auto texels = static_cast<uint32_t>(_animalBones.size()) * 4;
+	// A texture tall enough for every matrix, grown by doubling as the posed models grow in number
+	const auto texels = static_cast<uint32_t>(_posedBones.size()) * 4;
 	const auto rows = (texels + k_BoneTextureWidth - 1) / k_BoneTextureWidth;
-	if (!_animalBoneTexture || _animalBoneTexture->GetResolution().y < rows)
+	if (!_posedBoneTexture || _posedBoneTexture->GetResolution().y < rows)
 	{
 		uint32_t height = 1;
 		while (height < rows)
 		{
 			height *= 2;
 		}
-		_animalBoneTexture = std::make_unique<Texture2D>("Animal Bones");
-		_animalBoneTexture->CreateWithinFrame(static_cast<uint16_t>(k_BoneTextureWidth), static_cast<uint16_t>(height), 1,
-		                                      TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest, nullptr);
+		_posedBoneTexture = std::make_unique<Texture2D>("Posed Bones");
+		_posedBoneTexture->CreateWithinFrame(static_cast<uint16_t>(k_BoneTextureWidth), static_cast<uint16_t>(height), 1,
+		                                     TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest, nullptr);
 		// Each frame gives all the matrices, thus the graphics device keeps no copy
-		_animalBoneTexture->SetTexelsGivenAgain();
+		_posedBoneTexture->SetTexelsGivenAgain();
 	}
-	const auto resolution = _animalBoneTexture->GetResolution();
-	_animalBones.resize(static_cast<size_t>(resolution.x) * resolution.y / 4);
-	_animalBoneTexture->Update(_animalBones.data(), static_cast<uint32_t>(_animalBones.size() * sizeof(glm::mat4)));
+	// Only the rows that hold matrices are sent, the last one filled out
+	_posedBones.resize(static_cast<size_t>(rows) * k_BoneTextureWidth / 4, glm::mat4(0.0f));
+	bgfx::updateTexture2D(toBgfx(_posedBoneTexture->GetNativeHandle()), 0, 0, 0, 0, static_cast<uint16_t>(k_BoneTextureWidth),
+	                      static_cast<uint16_t>(rows),
+	                      bgfx::copy(_posedBones.data(), static_cast<uint32_t>(_posedBones.size() * sizeof(glm::mat4))));
 }
 
 namespace
