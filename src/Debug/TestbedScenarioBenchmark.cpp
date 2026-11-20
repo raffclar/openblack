@@ -42,23 +42,23 @@ void AddCrowd(std::vector<Scenario>& all, Crowd::Kind kind, size_t count, std::s
 	});
 }
 
-/// A benchmark of 100 creatures that live their usual lives among towns, the most creatures a frame must hold at 100
-/// frames a second
-void AddCreaturesAtWork(std::vector<Scenario>& all)
+/// A benchmark of creatures of the count that live their usual lives among towns. The one of 100 creatures is the most
+/// creatures a frame must hold at 100 frames a second. The smaller counts show the count where a frame goes past 10 ms.
+void AddCreaturesAtWork(std::vector<Scenario>& all, size_t count, std::string_view id, std::string_view name)
 {
 	all.push_back({
-	    .id = "benchmark.creatures_at_work",
-	    .name = "100 creatures among towns",
+	    .id = id,
+	    .name = name,
 	    .facet = Facet::Benchmark,
-	    .description = "100 creatures of every species and of four players, spread evenly round four towns of 50 "
-	                   "villagers each, clear of the homes and the lake, the same way every run. Nothing holds them: they "
-	                   "eat, play, rest, look at the villagers and the buildings, walk and fight as in the game.",
+	    .description = "Creatures of every species and of four players, spread evenly round four towns of 50 villagers "
+	                   "each, clear of the homes and the lake, the same way every run. Nothing holds them: they eat, play, "
+	                   "rest, look at the villagers and the buildings, walk and fight as in the game.",
 	    .expected = "The towns spawn first, then the creatures, a batch a frame. Then the frames are measured once they "
 	                "have settled. Every frame must be under 10 ms on the processor.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Testbed},
 	    .crowd = Crowd {.kind = Crowd::Kind::Creatures,
-	                    .count = 100,
+	                    .count = count,
 	                    .seed = k_BenchmarkSeed,
 	                    .perFrame = 100,
 	                    .villagers = 4 * k_VillagersPerTown},
@@ -69,13 +69,23 @@ void AddCreaturesAtWork(std::vector<Scenario>& all)
 void testbed_scenarios::AddBenchmark(std::vector<Scenario>& all)
 {
 	// Steps close enough together that a cost growing faster than the crowd shows between them
+	AddCrowd(all, Crowd::Kind::Creatures, 1, "benchmark.creatures_1", "1 active creature");
+	AddCrowd(all, Crowd::Kind::Creatures, 4, "benchmark.creatures_4", "4 active creatures");
+	AddCrowd(all, Crowd::Kind::Creatures, 8, "benchmark.creatures_8", "8 active creatures");
 	AddCrowd(all, Crowd::Kind::Creatures, 10, "benchmark.creatures_10", "10 active creatures");
+	AddCrowd(all, Crowd::Kind::Creatures, 16, "benchmark.creatures_16", "16 active creatures");
 	AddCrowd(all, Crowd::Kind::Creatures, 25, "benchmark.creatures_25", "25 active creatures");
+	AddCrowd(all, Crowd::Kind::Creatures, 32, "benchmark.creatures_32", "32 active creatures");
 	AddCrowd(all, Crowd::Kind::Creatures, 50, "benchmark.creatures_50", "50 active creatures");
+	AddCrowd(all, Crowd::Kind::Creatures, 64, "benchmark.creatures_64", "64 active creatures");
 	AddCrowd(all, Crowd::Kind::Creatures, 100, "benchmark.creatures_100", "100 active creatures");
 	AddCrowd(all, Crowd::Kind::Villagers, 100, "benchmark.villagers_100", "100 active villagers");
 	AddCrowd(all, Crowd::Kind::Villagers, 250, "benchmark.villagers_250", "250 active villagers");
 	AddCrowd(all, Crowd::Kind::Villagers, 500, "benchmark.villagers_500", "500 active villagers");
 	AddCrowd(all, Crowd::Kind::Villagers, 1'000, "benchmark.villagers_1000", "1,000 active villagers");
-	AddCreaturesAtWork(all);
+	AddCreaturesAtWork(all, 100, "benchmark.creatures_at_work", "100 creatures among towns");
+	AddCreaturesAtWork(all, 8, "benchmark.town_creatures_8", "8 creatures among towns");
+	AddCreaturesAtWork(all, 16, "benchmark.town_creatures_16", "16 creatures among towns");
+	AddCreaturesAtWork(all, 32, "benchmark.town_creatures_32", "32 creatures among towns");
+	AddCreaturesAtWork(all, 64, "benchmark.town_creatures_64", "64 creatures among towns");
 }
