@@ -18,12 +18,9 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-namespace openblack
-{
-
 /// What the cursor can be over in the creature's room, which the room's camera finds each frame by where on the screen
 /// a point of each is, and what clicking it zooms the camera to
-namespace CreatureCaveTargets
+namespace openblack::CreatureCaveTargets
 {
 
 enum class Target : uint8_t
@@ -68,6 +65,4 @@ constexpr float k_ReachScreenHeight = 600.0f;
 [[nodiscard]] std::optional<Target> TargetAt(const std::array<std::optional<glm::vec2>, k_Count>& places, glm::vec2 mouse,
                                              float screenHeight = k_ReachScreenHeight);
 
-} // namespace CreatureCaveTargets
-
-} // namespace openblack
+} // namespace openblack::CreatureCaveTargets

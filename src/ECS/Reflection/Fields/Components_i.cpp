@@ -19,8 +19,6 @@
 #include "ECS/Components/IntroHand.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_i(entt::meta_ctx& context);

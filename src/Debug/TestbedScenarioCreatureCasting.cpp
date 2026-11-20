@@ -524,7 +524,7 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	CreatureSetup wild = Caster({-120.0f, 0.0f}, "wild caster");
 	wild.owner = PlayerNames::NEUTRAL;
 	constexpr auto k_Itchy = static_cast<size_t>(MagicType::CreatureSpellItchy);
-	std::vector<Command> paces {
+	const std::vector<Command> paces {
 	    {.kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.5f, .value = k_Itchy},
 	    {.kind = Kind::KnowMiracle, .creature = 1, .delaySeconds = 0.0f, .value = k_Itchy},
 	    RunTo(0, {-120.0f, 30.0f}, false),

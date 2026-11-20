@@ -544,7 +544,7 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			                                 coarsePages != nullptr ? *coarsePages : island.GetBlockTextures());
 			SetObjectShadowUniforms(*terrainShader);
 			terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
-			terrainShader->SetUniformValue("u_haze", &_haze[0]);
+			terrainShader->SetUniformValue("u_haze", _haze.data());
 			terrainShader->SetUniformValue("u_hazeColour", &_haze[1]);
 			terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
 			terrainShader->SetUniformValue("u_landClip", &u_landClip);
@@ -1031,7 +1031,7 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 	{
 		const RenderContext::InstancedDrawDesc placers {0, 1, false};
 		const auto loaded = [&meshManager](entt::id_type id) { return meshManager.Contains(id); };
-		for (int32_t type = static_cast<int32_t>(CreatureType::Cow); type < static_cast<int32_t>(CreatureType::_COUNT); ++type)
+		for (auto type = static_cast<int32_t>(CreatureType::Cow); type < static_cast<int32_t>(CreatureType::_COUNT); ++type)
 		{
 			const auto ids = creature_morph::MeshesOf(static_cast<CreatureType>(type), creature_morph::Morph {}, loaded);
 			if (!meshManager.Contains(ids.base))
@@ -1310,7 +1310,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 			{
 				continue;
 			}
-			RenderContext::InstancedDrawDesc placers {soul.instance, 1, false};
+			const RenderContext::InstancedDrawDesc placers {soul.instance, 1, false};
 			const EntityPose soulPose {.bones = soul.bones, .morphTargets = nullptr};
 			// A soul is a model that moves by its bones, so its sort uses the key of a placed model
 			submitDesc.sortDepth =
@@ -2730,7 +2730,7 @@ void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass)
 				    const auto* alpha = found->alpha;
 				    // A sprite that moves between the turns is drawn at its drawn place
 				    const auto placed = drawnPlaces.Of(entity, transform);
-				    glm::mat4 modelMatrix = glm::mat4(1.0f);
+				    auto modelMatrix = glm::mat4(1.0f);
 				    modelMatrix = glm::translate(modelMatrix, placed.position);
 				    modelMatrix *= glm::mat4(placed.rotation);
 				    modelMatrix = glm::scale(modelMatrix, placed.scale);

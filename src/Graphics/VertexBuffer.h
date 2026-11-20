@@ -130,9 +130,9 @@ public:
 
 private:
 	std::string _name;
-	uint32_t _vertexCount;
+	uint32_t _vertexCount {0};
 	const VertexDecl _vertexDecl;
-	uint32_t _strideBytes;
+	uint32_t _strideBytes {0};
 	std::vector<uint32_t> _vertexDeclOffsets;
 	VertexBufferHandle _handle;
 	DynamicVertexBufferHandle _dynamicHandle;

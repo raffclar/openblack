@@ -19,14 +19,14 @@ using namespace openblack;
 
 bool RandomNumberManagerTesting::SetSeed(int seed)
 {
-	std::lock_guard<std::mutex> safeLock(_generatorLock);
+	const std::lock_guard<std::mutex> safeLock(_generatorLock);
 	_generator.seed(seed);
 	return true;
 }
 
 void RandomNumberManagerTesting::SetRunSeed(uint32_t seed)
 {
-	std::lock_guard<std::mutex> safeLock(_generatorLock);
+	const std::lock_guard<std::mutex> safeLock(_generatorLock);
 	_runSeed = seed;
 	_generator.seed(run_seed::StreamSeed(seed, RandomStream::General));
 	for (size_t i = 0; i < _streams.size(); ++i)

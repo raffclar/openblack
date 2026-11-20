@@ -44,7 +44,7 @@ public:
 		Done,
 	};
 
-	virtual ~TeleportSystemInterface() = default;
+	~TeleportSystemInterface() override = default;
 
 	/// A new stone of a miracle at a point on the land, at the head of its player's stones; none if one may not go there
 	virtual entt::entity CreateStone(glm::vec3 point, PlayerNames player, entt::entity spell) = 0;

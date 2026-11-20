@@ -666,7 +666,7 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 		}
 		const auto placement = land_colour_stamps::Place(corner);
 		const auto origin = glm::vec2(placement.cell) - firstCell;
-		constexpr float k_LastCell = static_cast<float>(LandIslandInterface::k_MapCellsPerSide - 1);
+		constexpr auto k_LastCell = static_cast<float>(LandIslandInterface::k_MapCellsPerSide - 1);
 		const auto from = glm::max(origin, -firstCell);
 		const auto to = glm::min(origin + static_cast<float>(side - 1), k_LastCell - firstCell);
 		if (glm::any(glm::greaterThanEqual(from, to)))

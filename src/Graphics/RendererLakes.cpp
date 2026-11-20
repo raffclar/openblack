@@ -332,7 +332,7 @@ glm::vec2 Renderer::SceneTargetOf(const DrawSceneDesc& desc) const
 
 void Renderer::SetLakeUniforms(const ShaderProgram& lakeShader) const
 {
-	lakeShader.SetUniformValue("u_seaParams", &_seaUniforms[0]);
+	lakeShader.SetUniformValue("u_seaParams", _seaUniforms.data());
 	lakeShader.SetUniformValue("u_seaRows", &_seaUniforms[1]);
 	lakeShader.SetUniformValue("u_seaMode", &_seaUniforms[2]);
 	lakeShader.SetUniformValue("u_seaColour", &_seaUniforms[3]);

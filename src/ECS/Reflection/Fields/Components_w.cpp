@@ -22,8 +22,6 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_w(entt::meta_ctx& context);

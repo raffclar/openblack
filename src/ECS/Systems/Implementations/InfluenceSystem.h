@@ -36,10 +36,10 @@ public:
 
 	void ProcessTurn(uint32_t turn) override;
 	void ProcessVirtualInfluence(PlayerNames player, uint32_t turn) override;
-	void StartTownInfluence(entt::entity town) override;
-	void AddBuildingInfluence(entt::entity town, entt::entity building) override;
-	void FinishTownInfluence(entt::entity town) override;
-	void MarkTownInfluence(entt::entity town) override;
+	void StartTownInfluence(entt::entity entity) override;
+	void AddBuildingInfluence(entt::entity entity, entt::entity building) override;
+	void FinishTownInfluence(entt::entity entity) override;
+	void MarkTownInfluence(entt::entity entity) override;
 	void BordersChanged() override { _bordersDirty = true; }
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	void ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime) override;

@@ -369,7 +369,7 @@ villager_forester::WoodPlan villager_forester::DecideHowToGetWood(entt::entity v
 	auto& registry = Entities();
 	const auto& person = VillagerOf(villager);
 	const auto& info = InfoOf(person);
-	const float reach = static_cast<float>(Locator::infoConstants::value().town.maxDistanceForTownForest);
+	const auto reach = static_cast<float>(Locator::infoConstants::value().town.maxDistanceForTownForest);
 	const auto here = PositionOf(villager);
 	const auto store = StoreOf(villager, person);
 	// The town's own forests first, else any forest with trees near enough

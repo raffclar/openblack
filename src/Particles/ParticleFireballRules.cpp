@@ -703,7 +703,7 @@ public:
 		}
 		const int n = static_cast<int>(collection.atoms.size());
 		const float half = 0.5f * static_cast<float>(n - 1) * static_cast<float>(n - 1);
-		const float span = static_cast<float>(history.count - 1);
+		const auto span = static_cast<float>(history.count - 1);
 		for (int k = 0; k < n; ++k)
 		{
 			auto& atom = *collection.atoms[static_cast<size_t>(k)];

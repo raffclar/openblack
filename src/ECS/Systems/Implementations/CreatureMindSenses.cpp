@@ -154,8 +154,6 @@ using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 
-using creature_desires::Desire;
-
 namespace openblack::ecs::systems::mind_detail
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();

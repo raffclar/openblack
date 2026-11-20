@@ -699,7 +699,7 @@ void SetCameraZone() // 142 SET_CAMERA_ZONE
 	// The world camera is kept inside the file's fence and under its height limits from now on
 	if (!Locator::cameraZoneSystem::value().SetZones(fileName))
 	{
-		ScriptMessage(fmt::format("Couldn't load zone file-.\\Data\\Zones\\{}", fileName));
+		ScriptMessage(fmt::format(R"(Couldn't load zone file-.\Data\Zones\{})", fileName));
 	}
 }
 

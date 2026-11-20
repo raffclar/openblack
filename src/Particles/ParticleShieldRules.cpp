@@ -219,7 +219,7 @@ public:
 
 	void LayArc(Effect& effect, const Atom& spark, Collection& arc) const
 	{
-		const auto found = spark.data.find(this);
+		const auto* const found = spark.data.find(this);
 		if (radius.empty() || arc.atoms.empty() || found == spark.data.end())
 		{
 			return;

@@ -69,7 +69,7 @@ public:
 		}
 		for (auto& atom : collection.atoms)
 		{
-			const auto found = atom->data.find(this);
+			auto* const found = atom->data.find(this);
 			if (found == atom->data.end() || found->second.object == entt::null)
 			{
 				continue;
@@ -89,7 +89,7 @@ public:
 	/// The object an atom of the rule is kept on, none for any other atom or once it has gone
 	[[nodiscard]] entt::entity ObjectOf(const Atom& atom) const
 	{
-		const auto found = atom.data.find(this);
+		const auto* const found = atom.data.find(this);
 		return found != atom.data.end() ? found->second.object : entt::null;
 	}
 

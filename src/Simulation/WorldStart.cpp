@@ -473,7 +473,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		for (size_t i = 0; i < animations.size(); ++i)
 		{
 			const auto clip = animationManager.Handle(resources::HashIdentifier(i));
-			packNames.emplace_back(clip ? std::string_view(clip->GetName().c_str()) : std::string_view {});
+			packNames.emplace_back(clip ? std::string_view(clip->GetName()) : std::string_view {});
 		}
 		resources.GetClipSounds().Handle(audio::clip_sounds::k_TableId.value())->Attach(packNames);
 	}
@@ -762,23 +762,22 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 			    audioManager.CreateSoundGroup(groupName);
 			    const bool decodeAhead = std::ranges::find(k_DecodedAheadBanks, groupName) != k_DecodedAheadBanks.end();
 			    const bool held = k_HoldsSpeciesVoiceBanks && creature_audio::IsSpeciesVoiceBank(groupName);
-			    for (size_t i = 0; i < audioHeaders.size(); i++)
+			    for (const auto& audioHeader : audioHeaders)
 			    {
-				    soundName = std::filesystem::path(audioHeaders[i].name.data());
+				    soundName = std::filesystem::path(audioHeader.name.data());
 				    // Banks have gaps between their samples, which are skipped without skipping the samples after them
-				    if (audioHeaders[i].size == 0)
+				    if (audioHeader.size == 0)
 				    {
 					    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Empty sound buffer found for {}/{}. Skipping", groupName,
-					                        audioHeaders[i].id);
+					                        audioHeader.id);
 					    continue;
 				    }
 
-				    const auto stringId = fmt::format("{}/{}", groupName, audioHeaders[i].id);
+				    const auto stringId = fmt::format("{}/{}", groupName, audioHeader.id);
 				    const entt::id_type id = entt::hashed_string(stringId.c_str());
-				    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Registering sound {}: {}", stringId,
-				                        audioHeaders[i].name.data());
-				    soundManager.RegisterLoad(id, audioHeaders[i].size, resources::SoundLoader::FromBankFileTag {}, f,
-				                              waveData->offset, audioHeaders[i], decodeAhead);
+				    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Registering sound {}: {}", stringId, audioHeader.name.data());
+				    soundManager.RegisterLoad(id, audioHeader.size, resources::SoundLoader::FromBankFileTag {}, f,
+				                              waveData->offset, audioHeader, decodeAhead);
 				    if (held)
 				    {
 					    soundManager.Hold(id);

@@ -67,7 +67,7 @@ Calendar MakeCalendar()
 	const float secondsPerTurn = k_SecondsInDay / turnsPerDay;
 	const double turn = secondsPerTurn;
 	const double day = k_SecondsInDay;
-	const double secondsPerYear = static_cast<double>(k_SecondsInDay * k_DaysInYear);
+	const auto secondsPerYear = static_cast<double>(k_SecondsInDay * k_DaysInYear);
 	static_assert(k_StartMonth > 1);
 	double start = static_cast<double>(k_StartYear) * secondsPerYear / turn;
 	start = (static_cast<double>(k_MonthEnds[k_StartMonth - 2]) * day / turn) + start;

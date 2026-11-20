@@ -100,6 +100,6 @@ struct TurnContext
 
 /// A dance's turn: it ends once what it is danced about has gone; it starts once it has dancers, stops when its time is
 /// up to start again on its next turn, and while dancing does its key frames and its clock goes on
-void ProcessTurn(Registry& registry, entt::entity dance, const TurnContext& context);
+void ProcessTurn(Registry& registry, entt::entity entity, const TurnContext& context);
 
 } // namespace openblack::ecs::dances

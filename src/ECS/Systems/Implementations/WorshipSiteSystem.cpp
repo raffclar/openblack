@@ -320,7 +320,7 @@ bool WorshipSiteSystem::TownMayHaveSite(entt::entity town) const
 void WorshipSiteSystem::RemoveSites(entt::entity temple)
 {
 	auto& registry = _world->Entities();
-	auto* worship = registry.Valid(temple) ? registry.TryGet<const CitadelWorship>(temple) : nullptr;
+	const auto* worship = registry.Valid(temple) ? registry.TryGet<const CitadelWorship>(temple) : nullptr;
 	if (worship == nullptr)
 	{
 		return;
@@ -886,7 +886,7 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 entt::entity WorshipSiteSystem::MakeLoaded(entt::entity temple, Tribe tribe, uint8_t place)
 {
 	auto& registry = _world->Entities();
-	auto* worship = registry.Valid(temple) ? registry.TryGet<const CitadelWorship>(temple) : nullptr;
+	const auto* worship = registry.Valid(temple) ? registry.TryGet<const CitadelWorship>(temple) : nullptr;
 	if (worship == nullptr || place >= ws::k_Places || worship->sites.at(place) != entt::null)
 	{
 		return entt::null;

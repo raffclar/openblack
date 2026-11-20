@@ -219,7 +219,7 @@ public:
 		bool pointValid {false};
 	};
 
-	virtual ~MagicSystemInterface() = default;
+	~MagicSystemInterface() override = default;
 
 	// Casting
 

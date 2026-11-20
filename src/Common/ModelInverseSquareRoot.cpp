@@ -21,7 +21,7 @@ float openblack::gutils::ModelInverseSquareRoot(float value)
 		std::array<uint8_t, 128> table {};
 		for (uint32_t i = 0; i < table.size(); ++i)
 		{
-			const float x = std::bit_cast<float>((i | 0x1F80u) << 17);
+			const auto x = std::bit_cast<float>((i | 0x1F80u) << 17);
 			const float y = 1.0f / std::sqrt(x);
 			table.at(i) = static_cast<uint8_t>((std::bit_cast<uint32_t>(y) + 0x2000u) >> 15);
 		}
@@ -32,7 +32,7 @@ float openblack::gutils::ModelInverseSquareRoot(float value)
 	const uint32_t exponent = ((bits >> 23) & 0xFFu) << 22;
 	const uint32_t guess =
 	    ((0x5F000000u - exponent) & 0xFF800000u) | (static_cast<uint32_t>(k_Table.at((bits >> 17) & 0x7Fu)) << 15);
-	const float y = std::bit_cast<float>(guess);
+	const auto y = std::bit_cast<float>(guess);
 	float r = value * y;
 	r = r * y;
 	r = 3.0f - r;

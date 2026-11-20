@@ -71,12 +71,12 @@ Shape Spiral()
 	constexpr double k_Scale = 3276.0;
 	Shape shape {};
 	float angle = 0.0f;
-	for (size_t k = 0; k < shape.size(); ++k)
+	for (auto& k : shape)
 	{
 		// The sine and the cosine stay wide until the multiply by the angle
 		const float cosine = x87::Mul(x87::Cos(angle), angle);
 		const float sine = x87::Mul(x87::Sin(angle), angle);
-		shape[k] = {Truncate(x87::Mul(cosine, k_Scale)), Truncate(x87::Mul(sine, k_Scale))};
+		k = {Truncate(x87::Mul(cosine, k_Scale)), Truncate(x87::Mul(sine, k_Scale))};
 		angle = x87::Add(angle, k_Step);
 		if (!x87::Less(angle, k_End))
 		{

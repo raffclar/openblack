@@ -53,6 +53,6 @@ struct Parts
 
 /// The script and the land of the bytes of a map's file. Nothing when the bytes are not a ".map" file, or its
 /// landscape does not read.
-[[nodiscard]] std::optional<Parts> Read(std::span<const uint8_t> file);
+[[nodiscard]] std::optional<Parts> Read(std::span<const uint8_t> bytes);
 
 } // namespace openblack::gods_ring_map_file

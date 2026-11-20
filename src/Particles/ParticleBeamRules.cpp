@@ -72,7 +72,7 @@ public:
 		}
 		for (auto& atom : collection.atoms)
 		{
-			const auto found = atom->data.find(this);
+			auto* const found = atom->data.find(this);
 			if (found == atom->data.end())
 			{
 				continue;

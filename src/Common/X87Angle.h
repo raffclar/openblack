@@ -117,7 +117,7 @@ inline constexpr double k_HalfTurn = static_cast<double>(3.1415927f);
 {
 	if (!(yAngle < 0.0f || yAngle > 0.0f))
 	{
-		return glm::mat3(1.0f);
+		return {1.0f};
 	}
 	const double c = Cos(yAngle);
 	const double s = Sin(yAngle);
@@ -139,7 +139,7 @@ inline constexpr double k_HalfTurn = static_cast<double>(3.1415927f);
 {
 	if (!(yAngle < 0.0f || yAngle > 0.0f))
 	{
-		return glm::mat3(scale);
+		return {scale};
 	}
 	const double c = Cos(yAngle);
 	const double s = Sin(yAngle);

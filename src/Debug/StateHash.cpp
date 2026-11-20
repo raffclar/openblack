@@ -115,7 +115,7 @@ void StateHash::Draw() noexcept
 	if (ImGui::InputTextWithHint("##paste", "Paste a line from another run", _pasteLine.data(), _pasteLine.size(),
 	                             ImGuiInputTextFlags_EnterReturnsTrue))
 	{
-		if (auto parsed = state_hash::FromLine(_pasteLine.c_str()); parsed.has_value())
+		if (auto parsed = state_hash::FromLine(_pasteLine); parsed.has_value())
 		{
 			_pinned = std::move(parsed);
 		}

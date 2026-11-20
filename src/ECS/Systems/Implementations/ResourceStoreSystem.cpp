@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <ranges>
 #include <utility>
 #include <vector>
 
@@ -773,9 +774,9 @@ uint32_t ResourceStoreSystem::TakeFromPit(entt::entity store, ResourceType type,
 	else if (type == ResourceType::Wood)
 	{
 		// The last of its wood piles first
-		for (auto pile = pit->woodPiles.rbegin(); pile != pit->woodPiles.rend(); ++pile)
+		for (auto& woodPile : std::ranges::reverse_view(pit->woodPiles))
 		{
-			takeFrom(*pile);
+			takeFrom(woodPile);
 		}
 	}
 	if (taken != 0)

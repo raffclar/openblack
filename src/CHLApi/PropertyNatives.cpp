@@ -152,7 +152,6 @@ namespace openblack::chlapi
 
 using namespace openblack::ecs::archetypes;
 using openblack::Locator;
-using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::Transform;
 
 /// A creature given a state plays what the script last gave it to play

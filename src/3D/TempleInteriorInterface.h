@@ -117,7 +117,7 @@ struct OutsideCamera
 class TempleInteriorInterface: public ecs::systems::SavedStateInterface
 {
 public:
-	virtual ~TempleInteriorInterface() = default;
+	~TempleInteriorInterface() override = default;
 
 	[[nodiscard]] virtual bool Active() const = 0;
 	/// The camera of the world, which continues behind the temple while the player is inside. A save keeps this camera.

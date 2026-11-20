@@ -30,7 +30,7 @@ void openblack::EmplaceRenderer(std::unique_ptr<graphics::RendererInterface> ren
 		return;
 	}
 	// The two services own the renderer together. The renderer stops when the last of the two lets it go.
-	std::shared_ptr<graphics::RendererInterface> owner = std::move(renderer);
+	const std::shared_ptr<graphics::RendererInterface> owner = std::move(renderer);
 	Locator::rendererInterface::reset(owner.get(), [owner](graphics::RendererInterface* /*renderer*/) {});
 	Locator::rendererRequests::reset(owner.get(), [owner](graphics::RendererRequestsInterface* /*renderer*/) {});
 }

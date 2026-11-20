@@ -50,7 +50,6 @@
 using namespace openblack;
 using namespace openblack::ecs::components;
 namespace villager_creature_dance = openblack::ecs::villager_creature_dance;
-using openblack::map_coords::MapCoords;
 
 namespace
 {

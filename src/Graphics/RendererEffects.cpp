@@ -409,7 +409,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 				s_landColour.Set(8, GetLandColour());
 				u_islandExtent.Set(&islandExtent);
 				u_landLightUniform.Set(&u_landLight);
-				u_haze.Set(hazed ? &_haze[0] : &noHaze);
+				u_haze.Set(hazed ? _haze.data() : &noHaze);
 				u_hazeColour.Set(&_haze[1]);
 				u_modelLight.Set(mist.shrinksEdgeOn ? &skyLight : &_modelLight);
 				u_mistUniform.Set(&u_mist);

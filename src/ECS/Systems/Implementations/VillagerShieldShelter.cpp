@@ -39,10 +39,7 @@
 using namespace openblack;
 using namespace openblack::ecs::components;
 namespace villager_shield = openblack::ecs::villager_shield;
-namespace villager_animate = openblack::ecs::villager_animate;
-namespace villager_clips = openblack::ecs::villager_clips;
 namespace shield = openblack::magic::shield;
-namespace villager_build = openblack::ecs::villager_build;
 
 namespace
 {

@@ -70,7 +70,7 @@ void VideoViewer::OpenFilm(const std::filesystem::path& path)
 		{
 			return;
 		}
-		std::shared_ptr<const bink::BinkFile> file = it->second.handle();
+		const std::shared_ptr<const bink::BinkFile> file = it->second.handle();
 		_reader = bink::FrameReader::Create(file);
 	}
 	catch (const std::exception&)

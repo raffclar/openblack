@@ -408,7 +408,7 @@ bool openblack::inspector::TypeArguments(std::vector<ScriptValue>& values,
 		case ScriptValue::Type::String:
 			if (value.type != ScriptValue::Type::String)
 			{
-				return refuse("a text: \"...\" or {\"string\": \"...\"}");
+				return refuse(R"(a text: "..." or {"string": "..."})");
 			}
 			break;
 		}
@@ -601,7 +601,7 @@ void openblack::inspector::AddScriptControls(FunctionProvider& provider, ScriptT
 			    if (const auto untyped = std::ranges::find_if(*values, &IsUntypedNumber); untyped != values->end())
 			    {
 				    return QueryResult::Error("argument " + std::to_string(std::distance(values->begin(), untyped) + 1) +
-				                              ": with raw, a number says its type: {\"int\": n} or {\"float\": x}");
+				                              R"(: with raw, a number says its type: {"int": n} or {"float": x})");
 			    }
 			    return Called(scripts, *native, *values);
 		    }

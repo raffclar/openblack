@@ -46,7 +46,7 @@ uint32_t Log2(uint32_t value)
 
 uint16_t fight_watch::PlaceAngle(uint32_t index)
 {
-	constexpr uint32_t k_Circle = static_cast<uint32_t>(gutils::k_GameAngleCircle);
+	constexpr auto k_Circle = static_cast<uint32_t>(gutils::k_GameAngleCircle);
 	// Each pair of places is half a turn apart; the pairs halve the gaps left between those before them
 	const uint32_t pair = index >> 1u;
 	uint32_t numerator = 0;

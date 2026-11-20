@@ -53,8 +53,8 @@ public:
 	[[nodiscard]] bool IsAvailable(entt::entity living, Reaction type) const override;
 	void ProcessTurn() override;
 	void StartTurn() override;
-	void EndReactionIfOver(entt::entity living) override;
-	void BelieveInTown(entt::entity town) override;
+	void EndReactionIfOver(entt::entity entity) override;
+	void BelieveInTown(entt::entity entity) override;
 	void TownGainsTurn(uint32_t turn) override;
 	[[nodiscard]] std::optional<float> TakeGainShown(PlayerNames player) override;
 	[[nodiscard]] uint32_t CurrentTurn() const override { return _turn; }

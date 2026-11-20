@@ -103,7 +103,7 @@ void CreatureSpawner::DrawLearning(entt::entity entity) noexcept
 	            static_cast<double>(mind->attitudeToPlayer));
 	if (learnt.file != nullptr)
 	{
-		ImGui::Text("From a version %u mind file saved as \"%s\" by \"%s\"", learnt.file->version,
+		ImGui::Text(R"(From a version %u mind file saved as "%s" by "%s")", learnt.file->version,
 		            learnt.file->SavedAsText().c_str(), Narrow(learnt.file->ProfileText()).c_str());
 	}
 

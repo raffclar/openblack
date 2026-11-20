@@ -57,7 +57,6 @@
 using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
-namespace world_objects = openblack::ecs::world_objects;
 
 namespace
 {

@@ -62,7 +62,7 @@ void KeyBindingsWindow::Draw() noexcept
 
 	for (const auto& [first, second] : FindConflicts(bindings))
 	{
-		ImGui::TextColored({1.0f, 0.4f, 0.4f, 1.0f}, "\"%s\" and \"%s\" share a binding", bindings[first].name.data(),
+		ImGui::TextColored({1.0f, 0.4f, 0.4f, 1.0f}, R"("%s" and "%s" share a binding)", bindings[first].name.data(),
 		                   bindings[second].name.data());
 	}
 	if (_rebinding.has_value())

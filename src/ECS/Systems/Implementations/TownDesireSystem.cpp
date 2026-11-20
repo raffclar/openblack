@@ -62,8 +62,6 @@ using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 namespace town_desire = openblack::ecs::town_desire;
 namespace construction = openblack::ecs::construction;
-namespace town_desire_flags = openblack::ecs::town_desire_flags;
-namespace villager_home = openblack::ecs::villager_home;
 
 namespace
 {

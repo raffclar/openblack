@@ -205,7 +205,7 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 	// The moon's provider, with the sky's own state beside it
 	auto provider = std::make_unique<FunctionProvider>("sky");
 	auto* moon = sky.release();
-	std::shared_ptr<ProviderInterface> shared(moon);
+	const std::shared_ptr<ProviderInterface> shared(moon);
 	for (const auto& description : shared->Describe())
 	{
 		provider->Add(description,

@@ -290,6 +290,7 @@ void AddReactions(std::vector<Scenario>& all)
 	std::vector<ObjectSetup> believers;
 	constexpr std::array k_Villagers {VillagerInfo::CelticFarmerMale, VillagerInfo::CelticForesterMale,
 	                                  VillagerInfo::CelticHousewifeFemale};
+	believers.reserve(9);
 	for (int i = 0; i < 9; ++i)
 	{
 		// The villagers believe through a town: one that the neutral player holds from the start, so that no change of

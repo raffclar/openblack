@@ -63,7 +63,7 @@ public:
 		size_t firemen;
 	};
 
-	virtual ~FireSystemInterface() = default;
+	~FireSystemInterface() override = default;
 
 	/// Once a game turn, oldest fire last: each burns, cools, hurts its object and heats what is round it. A fire made
 	/// this turn after the burn point waits for the next; one made during the walk is newer still and waits too.

@@ -99,7 +99,7 @@ bool workshop::CanTapToBreak(const TapFacts& facts)
 float workshop::BreakAngle(uint32_t quarterTurns, float yAngle)
 {
 	// A quarter turn, the float of pi / 2
-	constexpr float k_QuarterTurn = std::bit_cast<float>(0x3FC90FDBu);
+	constexpr auto k_QuarterTurn = std::bit_cast<float>(0x3FC90FDBu);
 	const float turn = static_cast<float>(quarterTurns) * k_QuarterTurn;
 	return yAngle + turn;
 }
@@ -121,7 +121,7 @@ std::optional<AbodeNumber> workshop::ScriptBuildingOf(int32_t number)
 float workshop::WoodWant(uint32_t wood, uint32_t scaffoldWood)
 {
 	// 0.0001 as the game keeps it
-	constexpr float k_Small = std::bit_cast<float>(0x38D1B717u);
+	constexpr auto k_Small = std::bit_cast<float>(0x38D1B717u);
 	const float share = (static_cast<float>(wood) + k_Small) / (static_cast<float>(scaffoldWood) + k_Small);
 	return 1.0f - std::min(share, 1.0f);
 }

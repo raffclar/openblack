@@ -25,8 +25,6 @@
 #include "ECS/Components/DrinkingWater.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_d(entt::meta_ctx& context);

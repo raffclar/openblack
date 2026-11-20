@@ -116,7 +116,7 @@ template <typename InfluenceOf>
 class InfluenceSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~InfluenceSystemInterface() = default;
+	~InfluenceSystemInterface() override = default;
 
 	/// As a new land opens: no border yet
 	virtual void Reset() = 0;

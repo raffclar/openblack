@@ -541,7 +541,7 @@ private:
 			{
 				continue;
 			}
-			curl_socket_t socket = CURL_SOCKET_BAD;
+			auto socket = CURL_SOCKET_BAD;
 			if (curl_easy_getinfo(link->easy.get(), CURLINFO_ACTIVESOCKET, &socket) != CURLE_OK || socket == CURL_SOCKET_BAD)
 			{
 				continue;

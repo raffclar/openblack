@@ -115,6 +115,7 @@ std::string RefusalToRemove(const ecs::Registry& registry, entt::entity entity, 
 std::vector<std::string> GameWorldEdit::Kinds() const
 {
 	std::vector<std::string> kinds;
+	kinds.reserve(k_Kinds.size());
 	for (const auto& [name, kind] : k_Kinds)
 	{
 		kinds.emplace_back(name);

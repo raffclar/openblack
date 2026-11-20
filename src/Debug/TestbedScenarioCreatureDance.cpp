@@ -33,6 +33,7 @@ std::vector<openblack::testbed_scenarios::ObjectSetup> TownScene()
 {
 	using namespace openblack::testbed_scenarios;
 	std::vector<ObjectSetup> objects;
+	objects.reserve(k_Huts.size());
 	for (const auto hut : k_Huts)
 	{
 		objects.push_back({.type = AbodeInfo::CelticHut, .offset = hut, .yawDegrees = 90.0f});

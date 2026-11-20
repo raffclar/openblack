@@ -258,6 +258,7 @@ void SpellIconSystem::RemoveSiteIconUnlessOffered(entt::entity town, SpellSeedTy
 		return;
 	}
 	std::vector<std::vector<SpellSeedType>> offered;
+	offered.reserve(worship->towns.size());
 	for (const auto other : worship->towns)
 	{
 		offered.push_back(SeedsOfTown(other));

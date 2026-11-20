@@ -415,7 +415,7 @@ std::span<const StackFrame> CaptureStack()
 
 #ifdef _WIN32
 	CONTEXT capturedContext {};
-	const CONTEXT* threadContext = static_cast<const CONTEXT*>(context);
+	const auto* threadContext = static_cast<const CONTEXT*>(context);
 	auto* exception = static_cast<EXCEPTION_POINTERS*>(exceptionPointers);
 	EXCEPTION_RECORD record {};
 	EXCEPTION_POINTERS selfPointers {};

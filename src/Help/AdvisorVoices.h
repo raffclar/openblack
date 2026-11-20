@@ -99,7 +99,7 @@ public:
 	void Update();
 	/// The advisor's line starts if its delay is over; the advisors' update asks this for each advisor at its point in
 	/// the frame, before Update
-	void UpdateSaySentence(int advisor);
+	void UpdateSaySentence(int index);
 
 	/// The speaker is waiting to start or still saying its line. A line that has finished is stopped.
 	[[nodiscard]] bool IsTalking(int advisor);

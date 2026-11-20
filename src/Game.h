@@ -300,7 +300,7 @@ public:
 	static constexpr float k_HandHoldTime = 0.4f;
 
 	explicit Game(Arguments&& args) noexcept;
-	virtual ~Game() noexcept;
+	~Game() noexcept override;
 
 	bool ProcessEvents(const SDL_Event& event) noexcept;
 	/// The steps of the game turn that the view of the player does: the sounds, the music, the tooltips and the help

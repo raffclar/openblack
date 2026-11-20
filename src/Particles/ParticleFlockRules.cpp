@@ -62,7 +62,7 @@ public:
 			}
 		}
 		std::erase_if(collection.atoms, [&](const AtomPtr& atom) {
-			const auto found = atom->data.find(this);
+			auto* const found = atom->data.find(this);
 			if (found == atom->data.end() || found->second.object == entt::null)
 			{
 				return false;

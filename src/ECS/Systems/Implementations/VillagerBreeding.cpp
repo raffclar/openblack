@@ -80,7 +80,6 @@ using namespace openblack::ecs::components;
 namespace villager_breeding = openblack::ecs::villager_breeding;
 namespace villager_home = openblack::ecs::villager_home;
 namespace villager_footpath = openblack::ecs::villager_footpath;
-namespace villager_age = openblack::ecs::villager_age;
 namespace villager_food = openblack::ecs::villager_food;
 namespace world_objects = openblack::ecs::world_objects;
 namespace creche = openblack::creche;

@@ -118,7 +118,7 @@ void LandScriptStepper::ToggleBreakpoint(size_t index)
 	{
 		return;
 	}
-	if (!_breakpoints.erase(index))
+	if (_breakpoints.erase(index) == 0u)
 	{
 		_breakpoints.insert(index);
 	}

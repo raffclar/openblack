@@ -71,7 +71,7 @@ struct LoadedAnimal
 class AnimalSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~AnimalSystemInterface() = default;
+	~AnimalSystemInterface() override = default;
 
 	/// A turn of every animal: BeginTurn, AnimalTurn for each animal, then EndTurn
 	virtual void ProcessTurn() = 0;

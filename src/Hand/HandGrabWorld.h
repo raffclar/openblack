@@ -70,7 +70,6 @@ public:
 		std::optional<PlayerNames> _before;
 	};
 
-public:
 	virtual ~HandGrabWorldInterface() = default;
 
 	/// The things, and the hand's own state, which is kept on the hand

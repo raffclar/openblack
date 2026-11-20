@@ -427,7 +427,7 @@ void CreatureMindSystem::CopyPlayersDeed(entt::entity creature, CreatureMindStat
 				}
 			}
 			const auto whole = WholeOfForcedPlan(creature, mind, desire, object.value_or(creature));
-			creature_plan_actions::Situation situation;
+			const creature_plan_actions::Situation situation;
 			const bool adopted = Adopt(creature, mind,
 			                           {.desire = desire,
 			                            .action = action,
@@ -713,7 +713,7 @@ void CreatureMindSystem::WatchVillagerSkill(entt::entity creature, CreatureMindS
 	float toGoal = 0.0f;
 	if (const auto* walk = registry.TryGet<const WallHug>(villager); walk != nullptr)
 	{
-		toGoal = gutils::GetDistanceInMetres(glm::vec2(glm::xz(registry.Get<const Transform>(villager).position)),
+		toGoal = gutils::GetDistanceInMetres(static_cast<glm::vec2>(glm::xz(registry.Get<const Transform>(villager).position)),
 		                                     wall_hug::ToPoint(walk->goalPlace));
 	}
 	const auto state = creature_watching::StateToLearnFrom({

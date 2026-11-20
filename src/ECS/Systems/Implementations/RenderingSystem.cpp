@@ -148,7 +148,6 @@
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
-namespace object_detail = openblack::ecs::object_detail;
 using openblack::physics::objects::TreePlace;
 
 namespace
@@ -2484,7 +2483,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	// each tree put in its place. The solid trees of each later segment of the land's draw list have runs of their own,
 	// after the first five groups.
 	constexpr size_t k_Groups = static_cast<size_t>(Group::Gone) + 1;
-	constexpr size_t k_SolidGroups = static_cast<size_t>(Group::Fading);
+	constexpr auto k_SolidGroups = static_cast<size_t>(Group::Fading);
 	const auto groupOf = [](const PlacedTree& tree) {
 		const auto group = static_cast<size_t>(tree.group);
 		if (tree.segment == 0 || group >= k_SolidGroups)

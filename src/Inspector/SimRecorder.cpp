@@ -1273,7 +1273,7 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		const auto fields = reflection::ComponentToJson(_context, type, storage.value(*entity), reflection::RunFields::Leave);
 		const auto text = Dump(fields);
 		Mix(stateHash, text.data(), text.size());
-		Walk(fields, std::string(reflection::ShortTypeName(type)), turn, flags, lists);
+		Walk(fields, (reflection::ShortTypeName(type)), turn, flags, lists);
 	}
 	if (track)
 	{

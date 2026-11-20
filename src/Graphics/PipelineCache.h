@@ -52,7 +52,7 @@ public:
 	/// The size of the kept cache for the pipeline, or 0 when there is none
 	[[nodiscard]] uint32_t ReadSize(uint64_t id) const;
 	/// Copies the kept cache for the pipeline into data. False when the size is not the size of the kept cache.
-	bool Read(uint64_t id, std::span<std::byte> data) const;
+	[[nodiscard]] bool Read(uint64_t id, std::span<std::byte> data) const;
 	/// Keeps the driver's cache for the pipeline
 	void Write(uint64_t id, std::span<const std::byte> data);
 

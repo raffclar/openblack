@@ -74,7 +74,6 @@ using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using openblack::creature::CreatureRig;
 namespace fight = openblack::creature_fight;
-namespace posed_model = openblack::ecs::posed_model;
 using namespace openblack::ecs::systems::fight_detail;
 
 namespace

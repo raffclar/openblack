@@ -308,7 +308,7 @@ void HighDetailSystem::LeaveSwimmingRings(uint32_t frameGameMs)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	// The ring turns by a random angle up to a full turn, from the random numbers of the C library
-	constexpr float k_FullTurn = std::bit_cast<float>(0x40C90FDBu);
+	constexpr auto k_FullTurn = std::bit_cast<float>(0x40C90FDBu);
 	const auto angle = [] { return Locator::gameRandom::value().CrtRandom(0.0f, k_FullTurn); };
 	registry.Each<const HighDetail, const VillagerPose, const Mesh>(
 	    [&](entt::entity, const HighDetail&, const VillagerPose& pose, const Mesh& mesh) {

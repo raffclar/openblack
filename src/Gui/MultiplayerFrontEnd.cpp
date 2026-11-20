@@ -1057,7 +1057,7 @@ void MultiplayerFrontEnd::Join(std::u16string password)
 	{
 		return;
 	}
-	const auto server = games[*_selectedGame];
+	const auto& server = games[*_selectedGame];
 	_busy = true;
 	++_generation;
 	if (_flow.kind == LobbyKind::Lan)

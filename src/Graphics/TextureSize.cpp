@@ -111,7 +111,7 @@ TextureSize CalculateTextureSize(uint16_t width, uint16_t height, uint16_t layer
 	                                          ((texelsX + block.blockWidth - 1) / block.blockWidth) * block.blockWidth);
 	const uint32_t sideY = std::max<uint32_t>(block.blockHeight * block.minBlocksY,
 	                                          ((texelsY + block.blockHeight - 1) / block.blockHeight) * block.blockHeight);
-	const uint64_t layerBytes = uint64_t(sideX / block.blockWidth) * (sideY / block.blockHeight) * block.blockSize;
+	const uint64_t layerBytes = static_cast<uint64_t>(sideX / block.blockWidth) * (sideY / block.blockHeight) * block.blockSize;
 	return {.width = static_cast<uint16_t>(texelsX),
 	        .height = static_cast<uint16_t>(texelsY),
 	        .layers = layers,

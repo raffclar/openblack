@@ -280,6 +280,7 @@ std::vector<MultiplayerFrontEnd::SessionMap> MultiplayerFrontEnd::GetSessionMaps
 {
 	std::vector<SessionMap> maps;
 	// The maps of the service first: the custom maps, which the players download
+	maps.reserve(_lobbyMaps.size());
 	for (const auto& map : _lobbyMaps)
 	{
 		maps.push_back({.name = ToUtf16(map.name),

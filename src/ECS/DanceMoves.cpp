@@ -286,7 +286,7 @@ bool dance_moves::ApplyAction(Dance& dance, std::size_t index, uint32_t type, co
 void dance_moves::StartMove(DanceGroup& group, const DanceMove& move, int32_t now, float rate)
 {
 	group.move = move;
-	const int32_t end = static_cast<int32_t>(move.end);
+	const auto end = static_cast<int32_t>(move.end);
 	const int32_t left = end - now;
 	const float perTurn = left > 0 ? Div(rate, static_cast<float>(left)) : 0.0f;
 	if (end <= now)

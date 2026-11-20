@@ -458,7 +458,7 @@ inspector::QueryResult InspectorSystem::SendToStartupBox(const inspector::Reques
 		    key != nullptr && device.ScancodeFromName(key->name) == SDL_SCANCODE_UNKNOWN)
 		{
 			return inspector::QueryResult::Error("no key " + key->name +
-			                                     "; keys go by SDL's names, as \"Return\", \"Backspace\" or \"A\"");
+			                                     R"(; keys go by SDL's names, as "Return", "Backspace" or "A")");
 		}
 	}
 	// The SDL event queue takes events from any thread. The box reads them in its own loop.

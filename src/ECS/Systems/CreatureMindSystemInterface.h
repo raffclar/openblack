@@ -50,7 +50,7 @@ class ObjectDrawListSystemInterface;
 class CreatureMindSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~CreatureMindSystemInterface() = default;
+	~CreatureMindSystemInterface() override = default;
 
 	virtual void ProcessTurn() = 0;
 	/// Once a game turn after ProcessTurn: each creature plans two of its desires and changes what it does for a plan

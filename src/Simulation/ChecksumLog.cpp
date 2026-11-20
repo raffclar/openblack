@@ -20,7 +20,7 @@ namespace openblack::checksum_log
 namespace
 {
 constexpr std::string_view k_TurnKey = "\"turn\":";
-constexpr std::string_view k_ChecksumKey = "\"checksum\":\"";
+constexpr std::string_view k_ChecksumKey = R"("checksum":")";
 constexpr size_t k_ChecksumDigits = 16;
 } // namespace
 
@@ -33,7 +33,7 @@ std::string LineOf(uint32_t turn, uint64_t checksum, const std::vector<std::pair
 		line += ",\"parts\":{";
 		for (size_t i = 0; i < parts.size(); ++i)
 		{
-			line += fmt::format("{}\"{}\":\"{:016x}\"", i == 0 ? "" : ",", parts[i].first, parts[i].second);
+			line += fmt::format(R"({}"{}":"{:016x}")", i == 0 ? "" : ",", parts[i].first, parts[i].second);
 		}
 		line += "}";
 	}
@@ -93,7 +93,7 @@ void Writer::WriteDump(uint32_t turn, const std::vector<std::string>& rows)
 {
 	for (const auto& row : rows)
 	{
-		WriteLine(fmt::format("{{\"dump_turn\":{},\"row\":\"{}\"}}", turn, row));
+		WriteLine(fmt::format(R"({{"dump_turn":{},"row":"{}"}})", turn, row));
 	}
 }
 

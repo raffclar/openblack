@@ -167,7 +167,7 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 			rope->SetTextureSampler("s_landColour", 8, GetLandColour());
 			rope->SetUniformValue("u_islandExtent", &islandExtent);
 			rope->SetUniformValue("u_landLight", &u_landLight);
-			rope->SetUniformValue("u_haze", &_haze[0]);
+			rope->SetUniformValue("u_haze", _haze.data());
 			rope->SetUniformValue("u_hazeColour", &_haze[1]);
 			bgfx::setVertexBuffer(0, &vertices);
 			bgfx::setIndexBuffer(&indices);

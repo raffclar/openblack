@@ -596,7 +596,6 @@ void CreatureMindSystem::SendReleaseFeedback(entt::entity creature, float feedba
 
 void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 {
-	namespace sources = creature_desires::sources;
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.TryGet<CreatureMindState>(creature);
 	if (mind == nullptr)

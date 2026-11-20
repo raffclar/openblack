@@ -21,7 +21,6 @@ namespace openblack::ecs::vanilla_footpath_import
 namespace
 {
 
-using gamesave::VanillaRecord;
 using gamesave::VanillaType;
 using gamesave::VanillaWorld;
 

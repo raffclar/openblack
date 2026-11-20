@@ -154,7 +154,6 @@
 using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
-namespace animations = openblack::creature_layers::animations;
 
 namespace
 {

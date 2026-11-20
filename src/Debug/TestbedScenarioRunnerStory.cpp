@@ -738,7 +738,7 @@ std::string Runner::GiveAdvisorCommand(const Command& command) const
 	auto& control = Locator::advisorSystem::value().GetController();
 	// The scripts name the good advisor 1 and the evil one 2
 	const int32_t type = command.value == 0 ? 1 : 2;
-	const auto who = command.value == 0 ? "the good advisor" : "the evil advisor";
+	const auto* const who = command.value == 0 ? "the good advisor" : "the evil advisor";
 	using Action = Command::AdvisorAction;
 	switch (command.advisor)
 	{

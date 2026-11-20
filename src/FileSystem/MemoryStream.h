@@ -32,11 +32,11 @@ public:
 
 	std::string GetLine() override;
 
-	bool IsEndOfFile() const override;
+	[[nodiscard]] bool IsEndOfFile() const override;
 
 protected:
 	std::vector<uint8_t> _data;
-	std::size_t _position;
+	std::size_t _position {0};
 };
 
 } // namespace openblack::filesystem

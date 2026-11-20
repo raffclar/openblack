@@ -740,7 +740,7 @@ bool LandSystem::LoadGodsRingMapFile(std::span<const uint8_t> file)
 	// The game builds this land too, so it has no landscape file
 	_landscapePath.clear();
 	View().ShowLoadingFrame();
-	InitializeLevel(std::move(parts->land));
+	InitializeLevel(parts->land);
 	SetUpLandscape();
 	View().ShowLoadingFrame();
 
@@ -1528,7 +1528,7 @@ void LandSystem::LoadLandscape(const std::filesystem::path& path)
 			throw std::runtime_error("Could not read the landscape of " + _landPath.generic_string() + ": " +
 			                         std::string(lnd::ResultToStr(result)));
 		}
-		LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
+		const LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
 		_landscapePath = path;
 		InitializeLevel(LandData::FromLnd(lnd));
 		SetUpLandscape();
@@ -1542,7 +1542,7 @@ void LandSystem::LoadLandscape(const std::filesystem::path& path)
 	{
 		throw std::runtime_error("Could not find landscape " + path.generic_string());
 	}
-	LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
+	const LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
 	_landscapePath = path;
 	InitializeLevel(fixedName);
 	SetUpLandscape();

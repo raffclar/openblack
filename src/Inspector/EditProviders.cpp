@@ -294,7 +294,7 @@ QueryResult EditProvider::Create(ecs::Registry& registry, const Json& params)
 	}
 	if (!type.has_value() || *type < 0 || static_cast<size_t>(*type) >= _world.TypeNames(*kind).size())
 	{
-		return QueryResult::Error("no such type of " + *kind + "; ask edit.kinds {\"kind\": \"" + *kind + "\"}");
+		return QueryResult::Error("no such type of " + *kind + R"(; ask edit.kinds {"kind": ")" + *kind + "\"}");
 	}
 	const auto position = ReadPosition(Member(params, "position"), _world);
 	if (!position.has_value())
@@ -484,7 +484,7 @@ QueryResult EditProvider::Destroy(ecs::Registry& registry, const Json& params)
 		}
 		else if (*text != "remove")
 		{
-			return QueryResult::Error("how must be \"remove\" or \"effect\"");
+			return QueryResult::Error(R"(how must be "remove" or "effect")");
 		}
 	}
 	const auto before = Summary(registry, *entity);

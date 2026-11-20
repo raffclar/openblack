@@ -26,8 +26,6 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_v(entt::meta_ctx& context);

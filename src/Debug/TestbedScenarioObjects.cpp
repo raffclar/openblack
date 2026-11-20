@@ -879,8 +879,8 @@ void testbed_scenarios::AddObjects(std::vector<Scenario>& all)
 		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StealObjectAndTakeToCitadel"}},
 		});
 		// The six practice globes of the guide's food lesson, made on the land in one place by the script
-		std::vector<DispenserSetup> lessonGlobes(6,
-		                                         {.type = MagicType::Food, .offset = {0.0f, -k_Reach}, .bubbleHeight = 0.0f});
+		const std::vector<DispenserSetup> lessonGlobes(
+		    6, {.type = MagicType::Food, .offset = {0.0f, -k_Reach}, .bubbleHeight = 0.0f});
 		auto lessonTiger = Content(CreatureType::Tiger, {0.0f, 0.0f});
 		lessonTiger.pauseMind = false;
 		lessonTiger.phase = 9;

@@ -186,6 +186,7 @@ void AddBuildingBreak(std::vector<Scenario>& all)
 	std::vector<ObjectSetup> objects;
 	std::vector<ThrowSetup> throws;
 	constexpr std::array<float, 3> k_Huts {-20.0f, 0.0f, 20.0f};
+	objects.reserve(k_Huts.size());
 	for (const float x : k_Huts)
 	{
 		objects.push_back({.type = AbodeInfo::CelticHut, .offset = k_Field + glm::vec2 {x, 10.0f}});

@@ -127,8 +127,6 @@ public:
 	    , fadeOutTime(object.Float("FadeOutTime", 3.0f))
 	    , fadeInTime(object.Float("FadeInTime", 8.0f))
 	    , meshSpin(object.Float("MeshThetaDot", 6.0f))
-	    , pretendRise(0.3f)
-	    , rise(0.1f)
 	    , topMoveFrequency(object.Float("TopMoveFreq", 0.25f))
 	    , topMoveAmplitude(object.Float("TopMoveAmp", 30.0f))
 	    , delayBeforeMove(object.Float("DelayBeforeMove", 5.0f))
@@ -208,9 +206,9 @@ public:
 		{
 			auto& root = *collection.atoms.front();
 			root.position = state.base;
-			for (size_t s = 0; s < root.subCollections.size(); ++s)
+			for (const auto& subCollection : root.subCollections)
 			{
-				auto& sub = *root.subCollections[s];
+				auto& sub = *subCollection;
 				if (sub.group == groupFlying)
 				{
 					UpdateFlying(effect, collection, sub, state, shape);
@@ -286,7 +284,7 @@ private:
 	/// What it keeps for a flying atom: a puff until told otherwise
 	[[nodiscard]] FlyingData Read(const Atom& atom) const
 	{
-		const auto found = atom.data.find(this);
+		const auto* const found = atom.data.find(this);
 		if (found == atom.data.end() || !found->second.started)
 		{
 			return {};
@@ -603,8 +601,8 @@ private:
 	float fadeOutTime;
 	float fadeInTime;
 	float meshSpin;
-	float pretendRise;
-	float rise;
+	float pretendRise {0.3f};
+	float rise {0.1f};
 	float topMoveFrequency;
 	float topMoveAmplitude;
 	float delayBeforeMove;

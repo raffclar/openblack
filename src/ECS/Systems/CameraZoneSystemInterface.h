@@ -32,7 +32,7 @@ namespace openblack::ecs::systems
 class CameraZoneSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~CameraZoneSystemInterface() = default;
+	~CameraZoneSystemInterface() override = default;
 
 	/// A script sets the zones from one of the files under Data/Zones: those it set before go, and the file's are kept
 	/// to, its fence and exclusions switched on. Whether the file could be read; when it can't, the land has none.

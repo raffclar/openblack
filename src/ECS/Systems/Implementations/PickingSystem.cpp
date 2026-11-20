@@ -716,7 +716,7 @@ void PickingSystem::AddFireBalls()
 		    .ball = true,
 		});
 		_candidateEntities.push_back(entity);
-		_candidateModels.push_back(glm::mat4(1.0f));
+		_candidateModels.emplace_back(1.0f);
 		_candidateMeshes.push_back(0);
 	});
 }

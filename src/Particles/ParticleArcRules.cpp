@@ -122,7 +122,7 @@ public:
 		for (size_t i = 0; i < collection.atoms.size();)
 		{
 			auto& atom = *collection.atoms[i];
-			const auto found = atom.data.find(this);
+			auto* const found = atom.data.find(this);
 			if (found == atom.data.end())
 			{
 				++i;

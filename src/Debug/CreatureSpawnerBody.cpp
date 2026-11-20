@@ -35,7 +35,6 @@
 using namespace openblack;
 using namespace openblack::debug::gui;
 using openblack::ecs::components::Creature;
-using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::CreatureMorph;
 using openblack::ecs::components::CreatureNeeds;
 using openblack::ecs::components::Transform;

@@ -160,7 +160,7 @@ public:
 class DynamicsSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~DynamicsSystemInterface() = default;
+	~DynamicsSystemInterface() override = default;
 
 	// The objects' physics. Defaults leave a world without it, as the tests' stand-ins are.
 

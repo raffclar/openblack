@@ -124,7 +124,7 @@ bool building_site::ShouldFetchWood(const ShouldFetchInputs& in)
 	{
 		return in.woodAtSite == 0;
 	}
-	float total = static_cast<float>(in.woodAtSite);
+	auto total = static_cast<float>(in.woodAtSite);
 	for (const auto wood : in.workersWood)
 	{
 		total = total + static_cast<float>(wood);

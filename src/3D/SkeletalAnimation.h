@@ -296,5 +296,5 @@ void PosesFromBoneMatrices(std::span<const glm::mat4> matrices, std::span<const 
 void ComposeBoneMatrices(std::span<const Pose> poses, std::span<const uint32_t> parents, std::vector<glm::mat4>& matrices);
 
 /// An animation of a .cbn or .hbn file
-[[nodiscard]] Animation FromMorph(const morph::Animation& animation);
+[[nodiscard]] Animation FromMorph(const morph::Animation& source);
 } // namespace openblack::skeletal_animation

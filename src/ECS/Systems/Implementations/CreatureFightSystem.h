@@ -44,7 +44,7 @@ public:
 	void FightTurn(entt::entity creature) override;
 	void BloodTurn(entt::entity creature) override;
 	void MovesTurn(entt::entity creature) override;
-	void StaminaTurn(entt::entity creature) override;
+	void StaminaTurn(entt::entity entity) override;
 	void Reset() override;
 	void PrepareLand() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
@@ -132,12 +132,12 @@ private:
 	StartResult Start(entt::entity creature, entt::entity opponent, StartChecks checks);
 	/// The turn's parts: the stages before and after the duel, the duel's moves, and the creatures knocked out
 	void ProcessStages();
-	void StageTurn(entt::entity creature);
+	void StageTurn(entt::entity entity);
 	/// A fighter's animation, its move in the duel, its blow and its pose for the turn
-	void StepMoves(entt::entity creature);
+	void StepMoves(entt::entity entity);
 	/// A fighter's turn in the duel: it faces its opponent, keeps in the arena, moves apart from its opponent and
 	/// chooses or makes its next move
-	void DuelTurn(entt::entity creature);
+	void DuelTurn(entt::entity entity);
 	/// The action that moved on in a fighter's turn, and where its animation was before it moved on
 	struct ActionStep
 	{
@@ -149,9 +149,9 @@ private:
 	/// queue starts at once. An action first
 	/// moves the creature as far as its animation's root moves in the turn. Other states go to their next state when the
 	/// animation ends. Returns the action that moved on, if one did.
-	std::optional<ActionStep> StepAnimation(entt::entity creature);
+	std::optional<ActionStep> StepAnimation(entt::entity entity);
 	void ProcessKnockedOut();
-	void KnockedOutTurn(entt::entity creature);
+	void KnockedOutTurn(entt::entity entity);
 	/// Makes the move at the front of a fighter's queue, if it can
 	void CheckQueue(entt::entity creature);
 	/// A blow at a band: struck, or a step taken towards where it would land
@@ -160,7 +160,7 @@ private:
 	void AttemptBlow(entt::entity creature, creature_fight::Band band, float speed);
 	/// A fighter's blow in its turn: tested along its swing in the turn, then the two bodies move apart when they overlap.
 	/// Only a blow that moved on in the fighter's step of the turn is tested.
-	void BlowTurn(entt::entity creature, std::optional<ActionStep> step);
+	void BlowTurn(entt::entity entity, std::optional<ActionStep> step);
 	/// A blow tested from where its animation was at the last turn: it marks its swing and, where it meets the
 	/// opponent's body, lands there
 	void TestBlow(entt::entity creature, int32_t fromMs);
@@ -241,7 +241,7 @@ private:
 	/// The transcript of the fights, when the inspector keeps one. A record for each state that a fighter is in at the end
 	/// of a frame or a game turn, when it is new.
 	void NoteActions();
-	void NoteAction(entt::entity creature);
+	void NoteAction(entt::entity entity);
 	void NoteStage(entt::entity creature, components::CreatureFighting::Stage from, components::CreatureFighting::Stage to);
 	/// The fight of the creature is over, for a reason
 	void NoteFightOver(entt::entity creature, std::string_view reason);

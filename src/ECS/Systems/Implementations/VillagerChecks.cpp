@@ -39,7 +39,6 @@ using namespace openblack::ecs::components;
 namespace rules = openblack::ecs::villager_check_rules;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_age = openblack::ecs::villager_age;
-namespace world_objects = openblack::ecs::world_objects;
 
 namespace
 {

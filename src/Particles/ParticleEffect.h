@@ -677,7 +677,7 @@ public:
 	/// The data of the rule. A rule with no data gets new data.
 	AtomRuleData& operator[](const Modifier* modifier)
 	{
-		if (const auto found = find(modifier); found != end())
+		if (auto* const found = find(modifier); found != end())
 		{
 			return found->second;
 		}
@@ -686,7 +686,7 @@ public:
 	/// Gives this data to the rule, in place of the data that it had
 	void insert_or_assign(const Modifier* modifier, AtomRuleData&& data)
 	{
-		if (const auto found = find(modifier); found != end())
+		if (auto* const found = find(modifier); found != end())
 		{
 			found->second = std::move(data);
 			return;

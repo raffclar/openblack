@@ -486,7 +486,7 @@ Advanced creature_route::Advance(Route& route, float distance)
 glm::vec2 creature_route::EndAhead(Route& route, float ahead)
 {
 	// A little more than the stop distance must be left of the leg, else the leg keeps its end
-	constexpr float k_LeftOver = std::bit_cast<float>(0x3C23D70Au);
+	constexpr auto k_LeftOver = std::bit_cast<float>(0x3C23D70Au);
 	if (route.Finished())
 	{
 		return route.End();

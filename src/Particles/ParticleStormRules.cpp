@@ -37,7 +37,6 @@
 
 using namespace openblack::particles;
 using openblack::psys::ParticleObject;
-namespace x87 = openblack::x87;
 
 namespace
 {

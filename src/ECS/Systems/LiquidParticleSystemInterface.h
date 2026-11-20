@@ -48,7 +48,7 @@ namespace openblack::ecs::systems
 class LiquidParticleSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~LiquidParticleSystemInterface() = default;
+	~LiquidParticleSystemInterface() override = default;
 	/// Adds a particle at a point with a speed, a full size, a colour (0xAARRGGBB) and a kind. The pool adds nothing when
 	/// it is full.
 	virtual void Add(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb, liquid_particles::Kind kind) = 0;

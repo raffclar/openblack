@@ -793,7 +793,7 @@ public:
 			StartAtomSound(effect, atom, thunder);
 		}
 		std::erase_if(collection.atoms, [&](const AtomPtr& atom) {
-			const auto life = atom->data.find(this);
+			auto* const life = atom->data.find(this);
 			return life != atom->data.end() && effect.AtomAge(*atom) > life->second.a.x;
 		});
 		return true;

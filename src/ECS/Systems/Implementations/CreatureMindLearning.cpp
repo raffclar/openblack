@@ -509,7 +509,7 @@ void CreatureMindSystem::RememberAction(entt::entity creature, CreatureMindState
 		return;
 	}
 	auto& learnt = *mind.learnt;
-	const auto forgotten = creature_learning::Remember(learnt.contexts, std::move(context));
+	const auto forgotten = creature_learning::Remember(learnt.contexts, context);
 	if (!forgotten.has_value() || tables == nullptr)
 	{
 		return;

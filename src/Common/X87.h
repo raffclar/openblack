@@ -68,7 +68,7 @@ namespace detail
 	{
 		return static_cast<float>(value);
 	}
-	const volatile float narrowed = static_cast<float>(value);
+	const volatile auto narrowed = static_cast<float>(value);
 	return narrowed;
 }
 

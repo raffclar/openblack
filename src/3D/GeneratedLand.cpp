@@ -23,7 +23,6 @@
 #include "FileSystem/FileSystemInterface.h"
 
 using namespace openblack;
-using landgen::countries::Surface;
 
 namespace
 {

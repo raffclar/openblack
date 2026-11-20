@@ -90,7 +90,7 @@ public:
 		for (size_t i = collection.atoms.size(); i-- > 0;)
 		{
 			auto& atom = *collection.atoms[i];
-			const auto found = atom.data.find(this);
+			auto* const found = atom.data.find(this);
 			if (found == atom.data.end() || found->second.held == nullptr)
 			{
 				continue;

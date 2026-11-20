@@ -47,7 +47,7 @@ public:
 		}
 	};
 
-	virtual ~HelpMessageSystemInterface() = default;
+	~HelpMessageSystemInterface() override = default;
 
 	/// Starts the script with the texts from the first to the last, unless the first is past the last or a story script
 	/// holds the dialogue. The town's need's text and value go before them for the town needs' script. True when it

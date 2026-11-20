@@ -40,7 +40,7 @@ bool WalkPathSystem::Start(entt::entity thing, int32_t number, bool forward, flo
 	}
 	auto walk = camera_track::StartWalk(*track, forward, from, to);
 	Locator::entitiesRegistry::value().AssignOrReplace<WalkPath>(
-	    thing, WalkPath {.number = number, .track = std::move(track), .walk = std::move(walk)});
+	    thing, WalkPath {.number = number, .track = std::move(track), .walk = walk});
 	return true;
 }
 

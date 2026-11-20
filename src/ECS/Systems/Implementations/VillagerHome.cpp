@@ -85,24 +85,18 @@
 
 using namespace openblack;
 using namespace openblack::ecs::components;
-namespace components = openblack::ecs::components;
 namespace villager_home = openblack::ecs::villager_home;
 namespace routine = openblack::ecs::villager_routine;
-namespace villager_flock = openblack::ecs::villager_flock;
 namespace needs = openblack::ecs::villager_needs;
 namespace villager_age = openblack::ecs::villager_age;
 namespace world_objects = openblack::ecs::world_objects;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_build = openblack::ecs::villager_build;
-namespace villager_footpath = openblack::ecs::villager_footpath;
 namespace villager_forester = openblack::ecs::villager_forester;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
-namespace villager_disciple = openblack::ecs::villager_disciple;
 namespace villager_food = openblack::ecs::villager_food;
-namespace villager_checks = openblack::ecs::villager_checks;
 namespace villager_worship = openblack::ecs::villager_worship;
 namespace wall_hug = openblack::ecs::wall_hug;
-namespace walk_arrival = openblack::ecs::walk_arrival;
 using ClearAreaFilter = openblack::ecs::systems::TownSystemInterface::ClearAreaFilter;
 
 namespace

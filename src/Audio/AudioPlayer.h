@@ -34,7 +34,7 @@ public:
 	BufferId CreateBuffer(ChannelLayout layout, const std::vector<int16_t>& buffer, int sampleRate) override;
 	void QueueBuffer(SourceId sourceId, BufferId buffer) override;
 	void AttachBuffer(SourceId sourceId, BufferId buffer) override;
-	void SetLoopPoints(BufferId buffer, int32_t first, int32_t end) override;
+	void SetLoopPoints(BufferId id, int32_t first, int32_t end) override;
 	void DeleteBuffer(BufferId id) override;
 	void DeleteSource(SourceId id) override;
 	void UpdateSource(SourceId id, glm::vec3 pos, float volume, bool loop) override;

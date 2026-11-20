@@ -37,7 +37,7 @@ entt::entity MobileStaticArchetype::Create(const glm::vec3& position, MobileStat
 
 	const auto& info = Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(type));
 
-	glm::vec3 offset(0.0f, altitude, 0.0f);
+	const glm::vec3 offset(0.0f, altitude, 0.0f);
 
 	registry.Assign<Transform>(entity, position + offset, x87::GameTurnMatrix(xAngleRadians, yAngleRadians, zAngleRadians),
 	                           glm::vec3(scale));

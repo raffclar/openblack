@@ -59,10 +59,10 @@ public:
 	void PlanTurn() override;
 	void LearnTurn() override;
 	void BeginTurn() override;
-	void MindTurn(entt::entity creature) override;
-	void DesiresTurn(entt::entity creature) override;
+	void MindTurn(entt::entity entity) override;
+	void DesiresTurn(entt::entity entity) override;
 	void PlanCreatureTurn(entt::entity creature) override;
-	void AgendaTurn(entt::entity creature) override;
+	void AgendaTurn(entt::entity entity) override;
 	void LearnCreatureTurn(entt::entity creature) override;
 
 	void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) override;
@@ -133,7 +133,7 @@ public:
 	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;
 	creature_mind::HandsCheck CheckHandsBeforeAction(entt::entity creature) override;
 	[[nodiscard]] bool SeemsFriendly(entt::entity creature, entt::entity other) override;
-	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
+	bool ForceActivity(entt::entity creature, const ForcedActivity& forced) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
 	void ReactToNastyMagic(entt::entity creature, const glm::vec3& point, std::optional<size_t> learn) override;
 	void CastOnLeashAfterReaction(entt::entity creature, size_t miracle) override;

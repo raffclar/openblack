@@ -128,7 +128,7 @@ public:
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
 	void ShowInterfaceCreatures(interface_creatures::Request request) noexcept final;
 	void ShowMenuCreature(interface_creatures::MenuCreature creature) noexcept final;
-	void DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& creature) const final;
+	void DrawFilmCreature(const DrawSceneDesc& desc, const interface_creatures::FilmCreature& shown) const final;
 	void Frame() noexcept final;
 	void RequestScreenshot(const std::filesystem::path& filepath) noexcept final;
 	[[nodiscard]] std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept final;
@@ -251,7 +251,7 @@ private:
 	/// A particle's mist, in the translucent pass at a place among what blends
 	void DrawParticleMist(const DrawSceneDesc& desc, const particles::draw::MistDraw& mist, uint32_t depth) const;
 	/// A particle's model, in the translucent pass at a place among what blends
-	void DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw::MeshDraw& mesh, uint32_t depth) const;
+	void DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw::MeshDraw& draw, uint32_t depth) const;
 	/// The one-shot globes, the miracles in them and the rings round the extreme ones, in the main and reflected views
 	void DrawGlobes(const DrawSceneDesc& desc) const;
 	/// The miracles' seeds spinning above the village centres' stone hands and the worship sites' icons, with a ring round

@@ -811,8 +811,8 @@ void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc, uint32_t handDept
 	// The hand's root, where the bands go round it, and the camera's frame they fly from
 	const glm::mat4 root = pose->bones.empty() ? pose->model : pose->bones[0];
 	const auto& camera = *desc.camera;
-	glm::mat4 cameraFrame {glm::vec4(camera.GetRight(), 0.0f), glm::vec4(camera.GetUp(), 0.0f),
-	                       glm::vec4(camera.GetForward(), 0.0f), glm::vec4(camera.GetOrigin(), 1.0f)};
+	const glm::mat4 cameraFrame {glm::vec4(camera.GetRight(), 0.0f), glm::vec4(camera.GetUp(), 0.0f),
+	                             glm::vec4(camera.GetForward(), 0.0f), glm::vec4(camera.GetOrigin(), 1.0f)};
 	const auto atCamera = cameraFrame * visuals::BandAtCamera(camera.GetNearClip());
 	const auto colour = ColourOf(OwnColour());
 	const auto ring = meshes.Handle(OneOffSpellSeed::k_RingMeshId.value());

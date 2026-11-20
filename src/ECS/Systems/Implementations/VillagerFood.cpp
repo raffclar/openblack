@@ -70,10 +70,7 @@ namespace rules = openblack::ecs::villager_food_rules;
 namespace needs = openblack::ecs::villager_needs;
 namespace villager_home = openblack::ecs::villager_home;
 namespace villager_build = openblack::ecs::villager_build;
-namespace villager_footpath = openblack::ecs::villager_footpath;
-namespace villager_fire = openblack::ecs::villager_fire;
 namespace world_objects = openblack::ecs::world_objects;
-namespace construction = openblack::ecs::construction;
 
 namespace
 {

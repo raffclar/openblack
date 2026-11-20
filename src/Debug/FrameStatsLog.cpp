@@ -276,6 +276,7 @@ void FrameStatsLog::Report()
 	if (_views)
 	{
 		std::vector<std::pair<double, std::string>> views;
+		views.reserve(_viewTotals.size());
 		for (const auto& [name, total] : _viewTotals)
 		{
 			views.emplace_back(total / count, name);
