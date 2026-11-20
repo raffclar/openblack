@@ -16,6 +16,9 @@ echo "--- ship build (developer tools OFF): openblack and openblack-server"; SHI
 OB_CMAKE_ARGS="-DOPENBLACK_DEVELOPER_TOOLS=OFF" $OB configure --fresh --build-dir "$SHIP" > car-ship-cfg.log 2>&1 || { tail -20 car-ship-cfg.log; echo "STOP: ship configure"; exit 17; }
 OB_CMAKE_ARGS="-DOPENBLACK_DEVELOPER_TOOLS=OFF" $OB build --build-dir "$SHIP" openblack openblack-server > car-ship.log 2>&1 || { grep -E "error|warning" car-ship.log | head; echo "STOP: ship build (developer tools OFF)"; exit 17; }
 echo "ship warnings: $(warnings car-ship.log)"
+echo "--- linux gcc 13 server build (WSL; train.linuxGccServer, off by default)"
+bash "$HERE/linux_gcc_server.sh" "$WT" > car-gcc.log 2>&1 </dev/null || { tail -30 car-gcc.log; echo "STOP: openblack-server does not build on Linux GCC 13 (car-gcc.log)"; exit 19; }
+grep -E "^gcc: (skipped|openblack-server builds|[0-9]+ after)" car-gcc.log
 echo "--- test"; $OB test > car-test.log 2>&1
 tests=$(grep -m1 -E 'tests passed, [0-9]+ tests failed out of [0-9]+' car-test.log); echo "$tests"
 flaky=""
