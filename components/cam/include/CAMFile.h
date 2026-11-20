@@ -70,7 +70,7 @@ public:
 	/// Write cam file to path on the filesystem
 	void Write(const std::filesystem::path& filepath);
 
-	[[nodiscard]] std::string GetFilename() const noexcept { return _filename.string(); }
+	[[nodiscard]] std::string GetFilename() const { return _filename.string(); }
 	[[nodiscard]] const CAMHeader& GetHeader() const noexcept { return _header; }
 
 	[[nodiscard]] uint32_t GetDuration() const noexcept { return _header.durationMilliseconds; }

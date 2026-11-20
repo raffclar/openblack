@@ -656,7 +656,7 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 		return true;
 	}
 
-	std::cerr << options.help() << std::endl;
+	std::cerr << options.help() << '\n';
 	returnCode = EXIT_FAILURE;
 	return false;
 }

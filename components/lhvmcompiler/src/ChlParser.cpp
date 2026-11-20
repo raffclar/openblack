@@ -487,7 +487,7 @@ StmtPtr Parser::ParseSnapshot()
 	const bool update = Accept("update");
 	Advance();
 	const bool details = update && Accept("details");
-	const auto native = details ? "UPDATE_SNAPSHOT_PICTURE" : update ? "UPDATE_SNAPSHOT" : "SNAPSHOT";
+	const auto* const native = details ? "UPDATE_SNAPSHOT_PICTURE" : update ? "UPDATE_SNAPSHOT" : "SNAPSHOT";
 	auto stmt = NewStmt(StmtKind::Expression, location);
 	std::vector<ExprPtr> args;
 	const auto fail = [&]() {
@@ -527,7 +527,7 @@ StmtPtr Parser::ParseSnapshot()
 		args.push_back(position);
 		args.push_back(focus);
 	}
-	for (const auto word : {"success", "alignment"})
+	for (const auto* const word : {"success", "alignment"})
 	{
 		if (!Expect(word))
 		{
@@ -594,7 +594,7 @@ StmtPtr Parser::ParseSnapshot()
 	if (!id)
 	{
 		Error(location,
-		      fmt::format("unknown challenge \"CHALLENGE_{}\": name the challenge with \"challenge NAME\"", _challenge));
+		      fmt::format(R"(unknown challenge "CHALLENGE_{}": name the challenge with "challenge NAME")", _challenge));
 		return fail();
 	}
 	args.push_back(MakeNumber(*id, ValueType::Int, "CHALLENGE_" + _challenge, location));

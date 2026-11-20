@@ -246,18 +246,20 @@ DecompiledScript DecompileScript(const ProgramView& program, size_t scriptIndex,
 		}
 		labels.insert(wanted.begin(), wanted.end());
 	}
-	for (const auto label : structurer->WantedLabels())
+	// The loop runs at least once, so the structurer is always there
+	Structurer& built = structurer.value();
+	for (const auto label : built.WantedLabels())
 	{
-		if (!structurer->EmittedLabels().contains(label))
+		if (!built.EmittedLabels().contains(label))
 		{
-			structurer->Diagnose(DiagnosticSeverity::Error, label, "A goto target has no label");
+			built.Diagnose(DiagnosticSeverity::Error, label, "A goto target has no label");
 		}
 	}
 	detail::Simplify(script.locals);
 	detail::Simplify(script.body);
 	detail::Simplify(script.handlers);
 
-	result.diagnostics = std::move(structurer->Diagnostics());
+	result.diagnostics = std::move(built.Diagnostics());
 	detail::ChlWriter writer(natives, options.constants, result.diagnostics);
 	writer.WriteScript(script, options.challenge, options.standalone);
 	result.leadingChallenge = writer.LeadingChallenge();
@@ -334,9 +336,9 @@ DecompiledScript DecompileScript(const ProgramView& program, size_t scriptIndex,
 	}
 
 	result.gotoCount = writer.GotoCount();
-	result.fallbackCount = writer.FallbackCount() + structurer->FallbackCount();
+	result.fallbackCount = writer.FallbackCount() + built.FallbackCount();
 	result.nativeCallCount = writer.NativeCallCount();
-	result.unsupportedCount = structurer->UnsupportedCount();
+	result.unsupportedCount = built.UnsupportedCount();
 	result.ast = std::make_shared<const Script>(std::move(script));
 	return result;
 }

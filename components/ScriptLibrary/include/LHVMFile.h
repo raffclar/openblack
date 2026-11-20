@@ -87,7 +87,7 @@ public:
 	/// Write the program (globals, code, autostart scripts, scripts and data) and, for a saved game, the running state
 	/// (stacks, variable values, tasks and clocks) in the layout the game's script saves use. False when the file can't be
 	/// written.
-	bool Write(const std::filesystem::path& filepath) const;
+	[[nodiscard]] bool Write(const std::filesystem::path& filepath) const;
 	void Write(std::ostream& stream) const;
 
 	/// Where each part of the running state starts in the bytes that Write gives, counted from the start of the file

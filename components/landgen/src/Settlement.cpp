@@ -70,8 +70,10 @@ bool IsFree(const Grid<uint8_t>& keepClear, float x, float z)
 	{
 		return true;
 	}
+	// NOLINTBEGIN(bugprone-incorrect-roundings): A change gives a different land.
 	const auto cx = std::clamp(static_cast<int>((x / k_MetresPerCorner) + 0.5f), 0, side - 1);
 	const auto cz = std::clamp(static_cast<int>((z / k_MetresPerCorner) + 0.5f), 0, side - 1);
+	// NOLINTEND(bugprone-incorrect-roundings)
 	return keepClear.At(cx, cz) == 0;
 }
 
@@ -650,8 +652,10 @@ std::vector<Field> settlement::FishFarms(const Town& town, const Grid<float>& ab
 		return farms;
 	}
 	Random random(StageSeed(StageSeed(seed, 55), number));
+	// NOLINTBEGIN(bugprone-incorrect-roundings): A change gives a different land.
 	const auto centreX = std::clamp(static_cast<int>((town.x / k_MetresPerCorner) + 0.5f), 0, side - 1);
 	const auto centreZ = std::clamp(static_cast<int>((town.z / k_MetresPerCorner) + 0.5f), 0, side - 1);
+	// NOLINTEND(bugprone-incorrect-roundings)
 	const float sea = seaDistance.At(centreX, centreZ) * k_MetresPerCorner;
 	const auto band = static_cast<size_t>(std::ranges::find_if(settings.seaBands, [sea](float upper) { return sea < upper; }) -
 	                                      settings.seaBands.begin());

@@ -87,7 +87,7 @@ struct Stage
 /// The dialog template of a module, with no WS_VISIBLE style, so that the dialog does not show when it opens
 std::vector<uint8_t> HiddenTemplate(HMODULE module)
 {
-	const auto resource = FindResourceW(module, MAKEINTRESOURCEW(IDD_CREATUREUPLOAD), MAKEINTRESOURCEW(5));
+	auto* const resource = FindResourceW(module, MAKEINTRESOURCEW(IDD_CREATUREUPLOAD), MAKEINTRESOURCEW(5));
 	if (resource == nullptr)
 	{
 		return {};
@@ -137,10 +137,10 @@ bool WritePicture(HWND window, const std::filesystem::path& file)
 	info.bmiHeader.biBitCount = 32;
 	info.bmiHeader.biCompression = BI_RGB;
 	void* bits = nullptr;
-	const auto screen = GetDC(nullptr);
-	const auto memory = CreateCompatibleDC(screen);
-	const auto bitmap = CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
-	const auto old = SelectObject(memory, bitmap);
+	auto* const screen = GetDC(nullptr);
+	auto* const memory = CreateCompatibleDC(screen);
+	auto* const bitmap = CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+	auto* const old = SelectObject(memory, bitmap);
 	// The full content includes the frame that the desktop window manager draws
 	constexpr UINT k_RenderFullContent = 2;
 	const bool printed = PrintWindow(window, memory, k_RenderFullContent) != 0;
@@ -233,7 +233,7 @@ int WriteStages(const std::vector<uint8_t>& dialogTemplate, const Opening& openi
 	{
 		return 0;
 	}
-	const auto window =
+	auto* const window =
 	    CreateDialogIndirectParamW(GetModuleHandleW(nullptr), reinterpret_cast<LPCDLGTEMPLATEW>(dialogTemplate.data()), nullptr,
 	                               &OpeningProc, reinterpret_cast<LPARAM>(&opening));
 	if (window == nullptr)

@@ -98,7 +98,7 @@ std::optional<std::filesystem::path> InstalledGamePath()
 std::string ReadSecretLine()
 {
 #if defined(_WIN32)
-	const auto input = GetStdHandle(STD_INPUT_HANDLE);
+	auto* const input = GetStdHandle(STD_INPUT_HANDLE);
 	DWORD mode = 0;
 	const bool console = GetConsoleMode(input, &mode) != 0;
 	if (console)

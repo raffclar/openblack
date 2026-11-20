@@ -326,6 +326,7 @@ bool ReadTimeSpeed(const Json& object, float& out)
 		return false;
 	}
 	const auto value = member->get<double>();
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(value >= k_LeastTimeSpeed && value <= k_MostTimeSpeed))
 	{
 		return false;
@@ -364,6 +365,7 @@ bool ReadAlignment(const Json& object, std::string_view key, float& out)
 		return false;
 	}
 	const auto value = member->get<double>();
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(value >= -1.0 && value <= 1.0))
 	{
 		return false;

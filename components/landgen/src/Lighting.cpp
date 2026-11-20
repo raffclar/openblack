@@ -76,7 +76,7 @@ Grid<uint8_t> lighting::Luminosity(const Grid<uint16_t>& altitudes, const Settin
 			const float own = Metres(altitudes, x, z);
 			for (int step = 1; step <= settings.shadowReach; ++step)
 			{
-				const float distance = static_cast<float>(step);
+				const auto distance = static_cast<float>(step);
 				const float sx = static_cast<float>(x) + (towardsX * distance);
 				const float sz = static_cast<float>(z) + (towardsZ * distance);
 				if (sx < 0.0f || sz < 0.0f)

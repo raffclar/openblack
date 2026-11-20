@@ -78,6 +78,7 @@ Drainage hydrology::Drain(const Grid<float>& heights, float seaLevel)
 			done[next] = 1;
 			auto& filled = drainage.filled.values[next];
 			// Ground at or below the sea level that the sea reaches stays as it is: it is the sea
+			// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 			if (!(filled <= seaLevel && entry.height <= seaLevel))
 			{
 				filled = std::max(filled, entry.height + k_FlatRise);

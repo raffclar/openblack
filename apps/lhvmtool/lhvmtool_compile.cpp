@@ -29,7 +29,7 @@ namespace
 
 std::optional<std::string> ReadText(const std::filesystem::path& path)
 {
-	std::ifstream stream(path, std::ios::binary);
+	const std::ifstream stream(path, std::ios::binary);
 	if (!stream)
 	{
 		return std::nullopt;

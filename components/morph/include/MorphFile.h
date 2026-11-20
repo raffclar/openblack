@@ -364,7 +364,7 @@ public:
 	/// of the animations and, in a creature file, the creature block. Laid out one block after the next, with no gap.
 	[[nodiscard]] std::vector<uint8_t> Write() const;
 	/// Writes the file to a path; ErrCantOpen when it cannot be written
-	MorphResult Write(const std::filesystem::path& filepath) const;
+	[[nodiscard]] MorphResult Write(const std::filesystem::path& filepath) const;
 
 	[[nodiscard]] const MorphHeader& GetHeader() const noexcept { return _header; }
 	[[nodiscard]] const AnimationSpecs& GetAnimationSpecs() const noexcept { return _animationSpecs; }

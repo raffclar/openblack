@@ -40,7 +40,7 @@ struct Settings
 
 /// The luminosity of each corner from the heights in units of 0.67 m. The game draws the land below the sea level at
 /// height 0, so the light does too. A corner that the land hides from the sun is in shadow, at half its luminosity.
-[[nodiscard]] Grid<uint8_t> Luminosity(const Grid<uint16_t>& units, const Settings& settings);
+[[nodiscard]] Grid<uint8_t> Luminosity(const Grid<uint16_t>& altitudes, const Settings& settings);
 /// The same from altitudes of one byte, as on the lands of the story
 [[nodiscard]] Grid<uint8_t> Luminosity(const Grid<uint8_t>& altitudes, const Settings& settings);
 } // namespace openblack::landgen::lighting

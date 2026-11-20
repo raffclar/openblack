@@ -31,7 +31,6 @@ namespace
 using json_read::Dump;
 using json_read::Json;
 using json_read::Member;
-using json_read::ParseObject;
 using json_read::ParseWith;
 using json_read::ReadAccountRef;
 using json_read::ReadArray;

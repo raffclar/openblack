@@ -442,6 +442,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	const auto awayFromHollows =
 	    Mask(side, [&](size_t i) { return heights.values[i] <= terrain::k_SeaLevel || riverCorners.values[i] != 0; });
 	std::vector<lakes::Keep> keepStarts;
+	keepStarts.reserve(starts.size());
 	for (const auto& start : starts)
 	{
 		keepStarts.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
@@ -506,6 +507,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	}
 	// No lake covers the flat ground of a start or a town, so that each town stays dry and its paths reach it
 	std::vector<lakes::Keep> dryGround;
+	dryGround.reserve(starts.size());
 	for (const auto& start : starts)
 	{
 		dryGround.push_back({.x = start.x, .z = start.z, .radius = startSettings.flatRadius});
@@ -834,6 +836,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	clock.Done("path country");
 	// Nothing grows on the ground of the towns
 	std::vector<features::Clearing> clearings;
+	clearings.reserve(starts.size());
 	for (const auto& start : starts)
 	{
 		clearings.push_back({.x = start.x, .z = start.z, .radius = startSettings.blendRadius});
@@ -844,6 +847,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 		clearings.push_back({.x = firstTowns[player].x, .z = firstTowns[player].z, .radius = startSettings.blendRadius});
 	}
 	std::vector<features::Clearing> towns;
+	towns.reserve(sites.size());
 	for (const auto& site : sites)
 	{
 		towns.push_back({.x = site.x, .z = site.z, .radius = settings.sites.blendRadius});
@@ -888,6 +892,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	if (!land.otherStarts.empty())
 	{
 		std::vector<players::Start> startTowns;
+		startTowns.reserve(firstTowns.size());
 		for (const auto& town : firstTowns)
 		{
 			startTowns.push_back({.x = town.x, .z = town.z});
@@ -937,6 +942,7 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	clock.Done("swamp mist");
 	// The fairy rings and the lone pillars keep out of the cursed places
 	std::vector<formations::Circle> cursedCircles;
+	cursedCircles.reserve(land.cursedPatches.size());
 	for (const auto& patch : land.cursedPatches)
 	{
 		cursedCircles.push_back({.x = patch.x, .z = patch.z, .radius = patch.radius});

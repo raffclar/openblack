@@ -471,8 +471,8 @@ public:
 	[[nodiscard]] const std::vector<L3DLightmap>& GetLightmaps() const noexcept { return _lightmaps; }
 	[[nodiscard]] const std::optional<L3DEBone>& GetEBone() const noexcept { return _eBone; }
 	[[nodiscard]] const std::vector<L3DNewEffectPoint>& GetNewEffectPoints() const noexcept { return _newEffectPoints; }
-	void SetUv2Data(std::vector<uint8_t>& uv2Data) noexcept { _uv2Data = uv2Data; }
-	void SetNameData(std::string& nameData) noexcept { _nameData = nameData; }
+	void SetUv2Data(std::vector<uint8_t>& uv2Data) { _uv2Data = uv2Data; }
+	void SetNameData(std::string& nameData) { _nameData = nameData; }
 	[[nodiscard]] const std::string& GetNameData() const noexcept { return _nameData; }
 	[[nodiscard]] const std::vector<L3DSubmeshName>& GetSubmeshNames() const noexcept { return _submeshNames; }
 	[[nodiscard]] const std::span<L3DPrimitiveHeader>& GetPrimitiveSpan(uint32_t submeshIndex) const noexcept
