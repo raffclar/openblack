@@ -1429,6 +1429,11 @@ struct WaitingCommands
 /// in the temple keeps the leash on.
 [[nodiscard]] WaitingCommands KeptByLoad(WaitingCommands before);
 
+/// The commands that wait after a change of land in the same session, from the commands that wait before the change. As
+/// in the original game, the change removes the blocks that went and wait for a turn. The open block stays open and goes
+/// after the turns of the frame, so that the first turn of the new land does its commands.
+[[nodiscard]] WaitingCommands KeptByLandChange(WaitingCommands before);
+
 /// The commands that the players made and that the world did not see yet. The queue keeps no other game state, so that
 /// the game and the tests use it both.
 class CommandQueue

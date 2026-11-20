@@ -673,9 +673,11 @@ void TempleInterior::UpdateSaveGameRoom()
 		{
 			_scrolls->Rewrite(TempleScrolls::Content::SaveGame, ScrollFacts());
 		}
+		// The rest of the frame and its draw use the world that the player has now. The game loads the slot at the end
+		// of the frame, as for the quick load.
 		if (Locator::saveGameSystem::has_value())
 		{
-			Locator::saveGameSystem::value().Load(question.slot);
+			Locator::saveGameSystem::value().AskLoad(question.slot);
 		}
 		return;
 	case Click::AskDelete:

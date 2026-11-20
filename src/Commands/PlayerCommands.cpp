@@ -66,6 +66,11 @@ WaitingCommands openblack::player_commands::KeptByLoad(WaitingCommands before)
 	return WaitingCommands {.sent = std::move(before.open), .open = {}};
 }
 
+WaitingCommands openblack::player_commands::KeptByLandChange(WaitingCommands before)
+{
+	return WaitingCommands {.sent = {}, .open = std::move(before.open)};
+}
+
 void CommandQueue::PutBack(WaitingCommands waiting)
 {
 	Clear();
