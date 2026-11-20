@@ -214,9 +214,11 @@ bool disciple::CallsFollowers(VillagerDisciple type, Decision from)
 	return from == Decision::WhatToDo && KindOf(type).leadsFollowers;
 }
 
-VillagerDisciple disciple::AtPickUp(VillagerDisciple current)
+VillagerDisciple disciple::AtPickUp(VillagerDisciple current, VillagerDisciple following)
 {
-	return current == Missionary ? None : current;
+	// The game keeps one work for a disciple and for a follower
+	const auto work = current != None ? current : following;
+	return work == Missionary ? None : work;
 }
 
 bool disciple::EndsInHandReaction(bool putDownAsDisciple, bool landingPlayed)
