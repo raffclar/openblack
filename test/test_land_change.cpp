@@ -181,3 +181,16 @@ TEST(LandChange, OnlyALoadOutOfANetworkGameTakesTheAlignmentOfTheProfile)
 	EXPECT_TRUE(LoadTakesProfileAlignment(false));
 	EXPECT_FALSE(LoadTakesProfileAlignment(true));
 }
+
+TEST(LandChange, OnlyTheOpenBlockOfTheCommandsStaysForTheNewLand)
+{
+	// The story continues in the same session, so the open block goes after the turns of the frame
+	EXPECT_EQ(RulesFor(Kind::Story).commands, Commands::OpenBlockStays);
+	// The land menu, a new game and a skirmish start a new session, which sends the open block at once
+	EXPECT_EQ(RulesFor(Kind::FreshScripts).commands, Commands::OpenBlockSent);
+	EXPECT_EQ(RulesFor(Kind::NewGame).commands, Commands::OpenBlockSent);
+	EXPECT_EQ(RulesFor(Kind::Skirmish).commands, Commands::OpenBlockSent);
+	// The load of a saved game keeps its commands in its own way. Nothing comes onto the testbed.
+	EXPECT_EQ(RulesFor(Kind::SavedGame).commands, Commands::Removed);
+	EXPECT_EQ(RulesFor(Kind::Testbed).commands, Commands::Removed);
+}

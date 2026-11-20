@@ -217,3 +217,32 @@ TEST(PlayerCommands, ALoadWithNoOpenBlockKeepsNoCommand)
 
 	EXPECT_TRUE(KeptByLoad(queue.Waiting()).Empty());
 }
+
+TEST(PlayerCommands, AChangeOfLandRemovesTheSentBlocksAndKeepsTheOpenBlockOpen)
+{
+	CommandQueue queue;
+	queue.Submit(PlayerNames::PLAYER_ONE, Feedback(1, 0.0f));
+	queue.Send();
+	queue.Submit(PlayerNames::PLAYER_ONE, Feedback(2, 0.0f));
+	queue.Submit(PlayerNames::PLAYER_ONE, Feedback(3, 0.0f));
+
+	queue.PutBack(KeptByLandChange(queue.Waiting()));
+
+	// The open block goes after the turns of the frame, so that the first turn of the new land does its commands
+	EXPECT_EQ(queue.SentCount(), 0u);
+	EXPECT_EQ(queue.OpenCount(), 2u);
+	queue.Send();
+	const auto first = queue.TakeSent();
+	ASSERT_EQ(first.size(), 2u);
+	EXPECT_EQ(IdOf(first[0]), 2u);
+	EXPECT_EQ(IdOf(first[1]), 3u);
+}
+
+TEST(PlayerCommands, AChangeOfLandWithNoOpenBlockKeepsNoCommand)
+{
+	CommandQueue queue;
+	queue.Submit(PlayerNames::PLAYER_ONE, Feedback(1, 0.0f));
+	queue.Send();
+
+	EXPECT_TRUE(KeptByLandChange(queue.Waiting()).Empty());
+}
