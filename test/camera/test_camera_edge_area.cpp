@@ -281,6 +281,7 @@ TEST(EdgeArea, TheRingRunsStraightAcrossTheMiddleOfAWideScreen)
 		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
 		const auto area = EdgeAreaOf(screen, false);
 		const auto endRadius = 0.45f * static_cast<float>(screen.y);
+		// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 		const glm::ivec2 bottom {screen.x / 2, static_cast<int>(static_cast<float>(screen.y) * 0.5f + endRadius + 0.5f)};
 		// Over the strip the cursor only goes up or down onto the straight part
 		const auto down = EdgeRotate({screen.x / 2 + 100, screen.y - 1}, bottom, area);
