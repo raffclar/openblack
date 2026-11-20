@@ -173,7 +173,8 @@ public:
 	template <typename... Args>
 	bool RegisterLoad(entt::id_type identifier, size_t bytes, Args... args)
 	{
-		return Register(identifier, [... args = std::move(args)] { return ResourceLoader {}(args...); }, bytes);
+		return Register(
+		    identifier, [... args = std::move(args)] { return ResourceLoader {}(args...); }, bytes);
 	}
 
 	template <typename T, typename... Args>

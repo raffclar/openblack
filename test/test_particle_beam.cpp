@@ -181,8 +181,8 @@ TEST(BeamMaths, KeyPointsKeepAboveTheLand)
 	const maths::BeamWiggle wiggle {.frequency = 3.0f, .speed = 1.0f, .amount = 1.0f, .minHeight = 2.0f};
 	const auto hill = [](glm::vec2 /*xz*/) { return 5.0f; };
 	// Pushed as far down as the noise goes, the points between would be under the hill
-	const auto keys =
-	    maths::BeamKeyPoints({0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 30.0f}, 4, wiggle, 0.0f, 0, [](float) { return -1.0f; }, hill);
+	const auto keys = maths::BeamKeyPoints(
+	    {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 30.0f}, 4, wiggle, 0.0f, 0, [](float) { return -1.0f; }, hill);
 	ASSERT_EQ(keys.size(), 4u);
 	EXPECT_FLOAT_EQ(keys[1].y, 7.0f);
 	EXPECT_FLOAT_EQ(keys[2].y, 7.0f);

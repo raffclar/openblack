@@ -685,7 +685,8 @@ TEST(CreatureLayers, ALaterDanceMoveComesFromTheFirstFiveAndTheBodyChoosesAgainF
 	    [](size_t index) { return index != 151; });
 	EXPECT_EQ(asked, 5U);
 	EXPECT_EQ(move, std::optional<size_t> {148});
-	EXPECT_FALSE(creature_layers::ChooseDanceMove(false, [](uint32_t) { return 0U; }, [](size_t) { return false; }));
+	EXPECT_FALSE(creature_layers::ChooseDanceMove(
+	    false, [](uint32_t) { return 0U; }, [](size_t) { return false; }));
 }
 
 TEST(CreatureLayers, EachDanceMoveLastsItsRealTimeAndTheLeftOverTimeCarries)

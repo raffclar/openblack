@@ -203,13 +203,13 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                "with what it does. The log shows that the leash does not hold, because the tiger does not know the "
 	                "learning leash. The original game does the same in a network game.",
 	    .framing = BothTowns(),
-	    .creatures = {[] {
-		                  auto tiger =
-		                      CreatureOf("player two's", CreatureType::Tiger, PlayerNames::PLAYER_TWO, {40.0f, -40.0f});
-		                  tiger.knowsNoLeash = true;
-		                  return tiger;
-	                  }(),
-	                  CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {140.0f, 0.0f})},
+	    .creatures =
+	        {[] {
+		         auto tiger = CreatureOf("player two's", CreatureType::Tiger, PlayerNames::PLAYER_TWO, {40.0f, -40.0f});
+		         tiger.knowsNoLeash = true;
+		         return tiger;
+	         }(),
+	         CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {140.0f, 0.0f})},
 	    .landScript = k_WarScript,
 	    .computerActions = {{.afterTurns = k_Wait,
 	                         .node = "AttackCreatureWithCreature",

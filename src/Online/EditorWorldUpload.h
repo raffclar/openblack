@@ -10,10 +10,10 @@
 #pragma once
 
 #include <cstdint>
-#include <optional>
-#include <string>
 
+#include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 #include <GameSocket.h>

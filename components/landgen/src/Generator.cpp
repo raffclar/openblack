@@ -423,11 +423,11 @@ GeneratedLand openblack::landgen::Generate(const Settings& chosen)
 	for (const auto& other :
 	     players::FindStarts(heights, startSea, riverDistance, {.x = land.start.x, .z = land.start.z}, townOffsets,
 	                         {.lowest = startSettings.lowest,
-	                          .highest = startSettings.highest,
-	                          .nearestSea = startSettings.nearestSea,
-	                          .farthestSea = startSettings.farthestSea,
-	                          .riverDistance = startSettings.riverDistance,
-	                          .flatRadius = startSettings.flatRadius},
+	                         .highest = startSettings.highest,
+	                         .nearestSea = startSettings.nearestSea,
+	                         .farthestSea = startSettings.farthestSea,
+	                         .riverDistance = startSettings.riverDistance,
+	                         .flatRadius = startSettings.flatRadius},
 	                         settings.players))
 	{
 		land.otherStarts.push_back({.x = other.x, .z = other.z, .radius = startSettings.flatRadius});

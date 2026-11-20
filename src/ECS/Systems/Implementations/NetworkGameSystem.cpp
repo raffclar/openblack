@@ -297,95 +297,91 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		};
 	}
 	_session->Join(online::NetworkSessionSettings {
-	    .request = {.url = join.url, .headers = {}, .subprotocols = {}, .serverKey = join.serverKey},
-	    .ticket = std::move(join.ticket),
-	    .gamePassword = std::move(join.gamePassword),
-	    .name = std::move(join.name),
-	    // A game server of another build refuses the join (deviation 248)
-	    .build = join.testBuildId.value_or(online::build_id::Own()),
-	    .map = {},
-	    .readLand = [](std::string_view land) -> std::optional<std::vector<uint8_t>> {
-		    // The land of the start is a file in the Scripts folder of the game on this computer, or a map file that the
-		    // player got from the lobby, or a map file in the "Online Maps" folder of the game
-		    const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
-		    return online::ReadStartLand(land, store, Locator::filesystem::value());
-	    },
-	    .readCreature = std::move(readCreature),
-	    .readAlignment =
-	        []() {
-		        // The clan creature goes with the alignment that the lobby kept with it
-		        if (const auto clan = ClanStart(); clan.has_value())
-		        {
-			        return clan->alignment;
-		        }
-		        // The god starts the game at the alignment that the player's profile kept from earlier games
-		        const auto profile = Locator::playerProfileSystem::has_value()
-		                                 ? Locator::playerProfileSystem::value().GetCurrentProfile()
-		                                 : std::nullopt;
-		        return profile_alignment::Sent(profile.has_value() ? profile->alignment : 0.0);
-	        },
-	    .readSymbol =
-	        []() {
-		        // The symbol of the player's profile goes to the other players, with the player's own picture for it
-		        const auto profile = Locator::playerProfileSystem::has_value()
-		                                 ? Locator::playerProfileSystem::value().GetCurrentProfile()
-		                                 : std::nullopt;
-		        return SentSymbol(profile.has_value() ? std::optional(profile->symbol) : std::nullopt);
-	        },
-	    .readPlaysForClan = [this]() { return _playsForClan; },
+		.request = {.url = join.url, .headers = {}, .subprotocols = {}, .serverKey = join.serverKey},
+		.ticket = std::move(join.ticket), .gamePassword = std::move(join.gamePassword), .name = std::move(join.name),
+		// A game server of another build refuses the join (deviation 248)
+		    .build = join.testBuildId.value_or(online::build_id::Own()), .map = {},
+		.readLand = [](std::string_view land) -> std::optional<std::vector<uint8_t>> {
+			// The land of the start is a file in the Scripts folder of the game on this computer, or a map file that the
+			// player got from the lobby, or a map file in the "Online Maps" folder of the game
+			const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
+			return online::ReadStartLand(land, store, Locator::filesystem::value());
+		},
+		.readCreature = std::move(readCreature),
+		.readAlignment =
+		    []() {
+			    // The clan creature goes with the alignment that the lobby kept with it
+			    if (const auto clan = ClanStart(); clan.has_value())
+			    {
+				    return clan->alignment;
+			    }
+			    // The god starts the game at the alignment that the player's profile kept from earlier games
+			    const auto profile = Locator::playerProfileSystem::has_value()
+			                             ? Locator::playerProfileSystem::value().GetCurrentProfile()
+			                             : std::nullopt;
+			    return profile_alignment::Sent(profile.has_value() ? profile->alignment : 0.0);
+		    },
+		.readSymbol =
+		    []() {
+			    // The symbol of the player's profile goes to the other players, with the player's own picture for it
+			    const auto profile = Locator::playerProfileSystem::has_value()
+			                             ? Locator::playerProfileSystem::value().GetCurrentProfile()
+			                             : std::nullopt;
+			    return SentSymbol(profile.has_value() ? std::optional(profile->symbol) : std::nullopt);
+		    },
+		.readPlaysForClan = [this]() { return _playsForClan; },
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
-	    .parts =
-	        [](uint32_t turn) {
-		        // The row dump of the tools writes the rows of the turn, when it started
-		        Locator::syncChecksumSystem::value().DumpPart(turn, "parts from the server", 0);
-	        },
+		.parts =
+		    [](uint32_t turn) {
+			    // The row dump of the tools writes the rows of the turn, when it started
+			    Locator::syncChecksumSystem::value().DumpPart(turn, "parts from the server", 0);
+		    },
 #else
 	    .parts = {},
 #endif
-	    .localParts =
-	        [](uint32_t turn) {
-		        return Locator::syncChecksumSystem::has_value() ? Locator::syncChecksumSystem::value().PartsOfTurn(turn)
-		                                                        : online::PartHashes {};
-	        },
-	    .origin = join.origin,
-	    .testLoadDelayMicroseconds = static_cast<int64_t>(join.testLoadDelaySeconds.value_or(0)) * 1'000'000,
-	    .desynced =
-	        [this](uint32_t turn, uint64_t local, uint64_t server) {
-		        if (_desyncs)
-		        {
-			        _desyncs->Detected(0, {.turn = turn, .ownChecksum = local, .otherChecksum = server, .slot = std::nullopt},
-			                           Microseconds() / 1000);
-		        }
-	        },
-	    .partedParts =
-	        [this](std::span<const std::string> parts) {
-		        if (_desyncs)
-		        {
-			        _desyncs->Parted(0, parts, Microseconds() / 1000);
-		        }
-	        },
-	    .printData =
-	        [this](std::span<const std::string> files) {
-		        // The print of the files that the server's world read, from the game's folder of this computer
-		        auto& fileSystem = Locator::filesystem::value();
-		        const auto hints = online::game_data::HintsOfGameFolder(fileSystem);
-		        game_socket::DataPrint print {.files = {}, .patch = hints.patch, .language = hints.language};
-		        for (const auto& file : online::game_data::PrintFiles(fileSystem, files, &_printCache))
-		        {
-			        print.files.push_back({.path = file.path, .present = file.present, .size = file.size, .hash = file.hash});
-		        }
-		        return print;
-	        },
-	    .entities =
-	        [](std::span<const std::string> parts) {
-		        return Locator::syncChecksumSystem::has_value() ? Locator::syncChecksumSystem::value().EntitiesOfParts(parts)
-		                                                        : std::vector<synced_state::PartEntities> {};
-	        },
-	    .saveWorld =
-	        []() {
-		        return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState()
-		                                                    : std::vector<uint8_t> {};
-	        },
+		.localParts =
+		    [](uint32_t turn) {
+			    return Locator::syncChecksumSystem::has_value() ? Locator::syncChecksumSystem::value().PartsOfTurn(turn)
+			                                                    : online::PartHashes {};
+		    },
+		.origin = join.origin,
+		.testLoadDelayMicroseconds = static_cast<int64_t>(join.testLoadDelaySeconds.value_or(0)) * 1'000'000,
+		.desynced =
+		    [this](uint32_t turn, uint64_t local, uint64_t server) {
+			    if (_desyncs)
+			    {
+				    _desyncs->Detected(0, {.turn = turn, .ownChecksum = local, .otherChecksum = server, .slot = std::nullopt},
+				                       Microseconds() / 1000);
+			    }
+		    },
+		.partedParts =
+		    [this](std::span<const std::string> parts) {
+			    if (_desyncs)
+			    {
+				    _desyncs->Parted(0, parts, Microseconds() / 1000);
+			    }
+		    },
+		.printData =
+		    [this](std::span<const std::string> files) {
+			    // The print of the files that the server's world read, from the game's folder of this computer
+			    auto& fileSystem = Locator::filesystem::value();
+			    const auto hints = online::game_data::HintsOfGameFolder(fileSystem);
+			    game_socket::DataPrint print {.files = {}, .patch = hints.patch, .language = hints.language};
+			    for (const auto& file : online::game_data::PrintFiles(fileSystem, files, &_printCache))
+			    {
+				    print.files.push_back({.path = file.path, .present = file.present, .size = file.size, .hash = file.hash});
+			    }
+			    return print;
+		    },
+		.entities =
+		    [](std::span<const std::string> parts) {
+			    return Locator::syncChecksumSystem::has_value() ? Locator::syncChecksumSystem::value().EntitiesOfParts(parts)
+			                                                    : std::vector<synced_state::PartEntities> {};
+		    },
+		.saveWorld = []() {
+			return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState()
+			                                            : std::vector<uint8_t> {};
+		},
 	});
 	return true;
 }

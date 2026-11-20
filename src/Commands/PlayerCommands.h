@@ -1333,16 +1333,18 @@ struct DebugVillagerPath
 };
 
 /// What a command does
-using Action = std::variant<
-    LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap, HandReport,
-    HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove, FightCharge,
-    CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest, MiracleRepeat, HandCast,
-    HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff,
-    GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop,
-    DialogueClick, PuzzleTap, FishScare, ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit,
-    DebugCheat, EditorCreatureEdit, EditorCreatureAct, DebugLandSkip, EditorVillagerEdit, EditorCreatureSpawn, EditorLandStroke,
-    EditorPath, EditorRemake, EditorMindLoad, EditorScript, EditorLandScript, EditorScriptProgram, DebugAdvisor, DebugWorld,
-    DebugConsoleLine, DebugMagic, DebugTownMiracle, DebugWeather, DebugSky, DebugPhysics, DebugParticle, DebugTempleVillager, DebugVillagerPath>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
+                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
+                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
+                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick, PuzzleTap, FishScare,
+                 ObserversJoined, ObserversLeft, ObserverIn, ObserverOut, HandLockRelease, EditorEdit, DebugCheat,
+                 EditorCreatureEdit, EditorCreatureAct, DebugLandSkip, EditorVillagerEdit, EditorCreatureSpawn,
+                 EditorLandStroke, EditorPath, EditorRemake, EditorMindLoad, EditorScript, EditorLandScript,
+                 EditorScriptProgram, DebugAdvisor, DebugWorld, DebugConsoleLine, DebugMagic, DebugTownMiracle, DebugWeather,
+                 DebugSky, DebugPhysics, DebugParticle, DebugTempleVillager, DebugVillagerPath>;
 
 /// A command and the player that sent it
 struct Command

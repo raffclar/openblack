@@ -164,28 +164,28 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		                           {"same", loaded && first == again},
 		                           {"bytes", {first.size(), again.size()}}});
 	});
-	provider->Add(Query("vanilla_check",
-	                    "After a load of a slot of the game itself: each creature of the game's file, and whether the record "
-	                    "that a save writes for it now has the same bytes as the file's record",
-	                    {}, ResultKind::List),
-	              [](const QueryContext& /*c*/) {
-		              if (!Locator::saveGameSystem::has_value())
-		              {
-			              return QueryResult::Error("there are no saved games without a game");
-		              }
-		              Json items = Json::array();
-		              for (const auto& check : Locator::saveGameSystem::value().CheckVanillaRecords())
-		              {
-			              Json item {
-			                  {"number", check.number}, {"entity", check.entity}, {"same", check.same}, {"size", check.size}};
-			              if (check.firstDifference.has_value())
-			              {
-				              item["firstDifference"] = *check.firstDifference;
-			              }
-			              items.push_back(std::move(item));
-		              }
-		              return QueryResult::Value(std::move(items));
-	              });
+	provider->Add(
+	    Query("vanilla_check",
+	          "After a load of a slot of the game itself: each creature of the game's file, and whether the record "
+	          "that a save writes for it now has the same bytes as the file's record",
+	          {}, ResultKind::List),
+	    [](const QueryContext& /*c*/) {
+		    if (!Locator::saveGameSystem::has_value())
+		    {
+			    return QueryResult::Error("there are no saved games without a game");
+		    }
+		    Json items = Json::array();
+		    for (const auto& check : Locator::saveGameSystem::value().CheckVanillaRecords())
+		    {
+			    Json item {{"number", check.number}, {"entity", check.entity}, {"same", check.same}, {"size", check.size}};
+			    if (check.firstDifference.has_value())
+			    {
+				    item["firstDifference"] = *check.firstDifference;
+			    }
+			    items.push_back(std::move(item));
+		    }
+		    return QueryResult::Value(std::move(items));
+	    });
 	return provider;
 }
 

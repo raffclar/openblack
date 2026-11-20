@@ -68,7 +68,7 @@ struct ChoiceRange
 {
 	std::string_view key;
 	std::string_view label;
-	int32_t Choices::* member;
+	int32_t Choices::*member;
 	int32_t lowest;
 	int32_t highest;
 };

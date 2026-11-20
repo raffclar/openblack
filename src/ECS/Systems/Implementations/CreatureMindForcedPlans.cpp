@@ -296,7 +296,8 @@ void CreatureMindSystem::BecomeHigh(entt::entity creature)
 		const auto place = ClearAreaFor(registry, creature, position, creature_mind::k_HighSeatRadii * radius, false);
 		return place.has_value() ? std::optional(creature_mind::HighSeat {.place = *place, .radius = radius}) : std::nullopt;
 	};
-	auto agenda = creature_mind::BecomeHigh(findSeat, [this](uint32_t range) { return Random(range); }, _random.GameFloat());
+	auto agenda = creature_mind::BecomeHigh(
+	    findSeat, [this](uint32_t range) { return Random(range); }, _random.GameFloat());
 	static_cast<void>(ForcePlan(creature, {.desire = Desire::GetHigh,
 	                                       .action = "GetHigh",
 	                                       .object = creature,

@@ -189,10 +189,11 @@ TEST(ChallengePictures, ARecordsPictureComesBackOnceTheScreenIsRead)
 	pictures::Collect(registry,
 	                  {.take =
 	                       [&asked](const std::string& wanted) {
-		                       return wanted == asked
-		                                  ? std::optional(TakeOf(Screen(
-		                                        640, 480, [](uint32_t, uint32_t) { return std::array<uint8_t, 3> {1, 2, 3}; })))
-		                                  : std::nullopt;
+		                       return wanted == asked ? std::optional(TakeOf(Screen(640, 480,
+		                                                                            [](uint32_t, uint32_t) {
+			                                                                            return std::array<uint8_t, 3> {1, 2, 3};
+		                                                                            })))
+		                                              : std::nullopt;
 	                       },
 	                   .failed = {}},
 	                  {});

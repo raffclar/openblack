@@ -7,10 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
 #include <bit>
-#include <cmath>
 
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
@@ -27,6 +27,5 @@ TEST(HandThrowSpeed, AddsTheSquaresFromZToX)
 	const float zyx = std::sqrt(((hand.z * hand.z) + (hand.y * hand.y)) + (hand.x * hand.x));
 	const float xyz = std::sqrt(((hand.x * hand.x) + (hand.y * hand.y)) + (hand.z * hand.z));
 	ASSERT_NE(std::bit_cast<uint32_t>(zyx), std::bit_cast<uint32_t>(xyz));
-	EXPECT_EQ(std::bit_cast<uint32_t>(maths::HandThrow(hand).speed),
-	          std::bit_cast<uint32_t>(maths::ThrowSpeedFromHand(zyx)));
+	EXPECT_EQ(std::bit_cast<uint32_t>(maths::HandThrow(hand).speed), std::bit_cast<uint32_t>(maths::ThrowSpeedFromHand(zyx)));
 }

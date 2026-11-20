@@ -318,8 +318,11 @@ TEST(CreatureKindActions, BeingHighWithoutSittingDown)
 
 TEST(CreatureKindActions, BeingHighSittingDownWhereItIsClear)
 {
-	const auto agenda = BecomeHigh([]() { return std::optional(HighSeat {.place = {5.0f, 6.0f}, .radius = 3.0f}); },
-	                               KindActionsFirst, [](float most) { return most; });
+	const auto agenda = BecomeHigh(
+	    []() {
+		    return std::optional(HighSeat {.place = {5.0f, 6.0f}, .radius = 3.0f});
+	    },
+	    KindActionsFirst, [](float most) { return most; });
 	ASSERT_EQ(agenda.size(), 18);
 	EXPECT_EQ(agenda[5].animation, creature_layers::animations::k_Happy);
 	EXPECT_EQ(agenda[8].animation, k_HighDazedAgain);

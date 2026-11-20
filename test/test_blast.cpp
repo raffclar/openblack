@@ -238,7 +238,10 @@ TEST(DustPuff, ABodysGreySmokeDriftsOffFaintlyOverThreeSeconds)
 	EXPECT_TRUE(dust_puff::Advance(puff, 1.49f));
 	EXPECT_FALSE(dust_puff::Advance(puff, 0.02f));
 	// A colour given takes the place of its kind's
-	EXPECT_EQ(dust_puff::Make({}, 1.0f, [](float a, float) { return a; }, dust_puff::Kind::Smoke, 0x112233u).colour, 0x112233u);
+	EXPECT_EQ(dust_puff::Make(
+	              {}, 1.0f, [](float a, float) { return a; }, dust_puff::Kind::Smoke, 0x112233u)
+	              .colour,
+	          0x112233u);
 	EXPECT_EQ(dust_puff::Make({}, 1.0f, [](float a, float) { return a; }).colour, dust_puff::k_Colour);
 }
 

@@ -56,17 +56,17 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                           {"blocks", land.GetBlocks().size()},
 		                           {"countries", land.GetCountries().size()}};
 	              }));
-	provider->Add(Query("height", "The land's height and normal under a point", {PositionParameter()}),
-	              Serve<Locator::terrainSystem>("the land", [](const LandIslandInterface& land, const QueryContext& context) {
-		              const auto position = PositionParam(context.params);
-		              if (!position.has_value())
-		              {
-			              return QueryResult::Error("position must be [x, z] or [x, y, z]");
-		              }
-		              const glm::vec2 point(position->x, position->z);
-		              return QueryResult::Value(
-		                  {{"height", land.GetHeightAt(point)}, {"normal", Point(land.GetNormalAt(point))}});
-	              }));
+	provider->Add(
+	    Query("height", "The land's height and normal under a point", {PositionParameter()}),
+	    Serve<Locator::terrainSystem>("the land", [](const LandIslandInterface& land, const QueryContext& context) {
+		    const auto position = PositionParam(context.params);
+		    if (!position.has_value())
+		    {
+			    return QueryResult::Error("position must be [x, z] or [x, y, z]");
+		    }
+		    const glm::vec2 point(position->x, position->z);
+		    return QueryResult::Value({{"height", land.GetHeightAt(point)}, {"normal", Point(land.GetNormalAt(point))}});
+	    }));
 	provider->Add(Query("ocean", "The sea's textures"),
 	              Serve<Locator::oceanSystem>("the sea", [](const OceanInterface& ocean, const QueryContext& /*c*/) {
 		              return Json {{"texture", ocean.GetTexture()}};

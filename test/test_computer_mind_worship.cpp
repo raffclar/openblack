@@ -109,7 +109,8 @@ TEST(ComputerMindWorshipRules, DiscipleThatATownWants)
 	EXPECT_FLOAT_EQ(breeder->value, 1.0f);
 	EXPECT_EQ(asked, 0);
 	// With none found it wants the forester, as much as the free villager found is good
-	const auto halfForester = TownDiscipleWant(disciples, 20, 0.0f, desires, [] { return 0.0f; }, [] { return 0.5f; });
+	const auto halfForester = TownDiscipleWant(
+	    disciples, 20, 0.0f, desires, [] { return 0.0f; }, [] { return 0.5f; });
 	ASSERT_TRUE(halfForester.has_value());
 	EXPECT_EQ(halfForester->work, VillagerDisciple::Forester);
 	const auto whole = MostWantedDisciple(disciples, 20, 0.0f, desires);

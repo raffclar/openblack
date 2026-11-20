@@ -1407,9 +1407,8 @@ void MultiplayerFrontEnd::HideLanGameNames() const
 	{
 		for (const auto& game : _services.lan->GetServers())
 		{
-			std::ranges::for_each(game.players, [this](const lobby_api::RoomPlayer& player) {
-				_services.hideName(player.account.name);
-			});
+			std::ranges::for_each(game.players,
+			                      [this](const lobby_api::RoomPlayer& player) { _services.hideName(player.account.name); });
 		}
 	}
 }

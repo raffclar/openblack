@@ -253,8 +253,7 @@ TEST(InspectorQuery, SizeCapTruncatesAndMovesTheCursor)
 TEST(InspectorQuery, LargeObjectsSayWhichFieldsAreLarge)
 {
 	// An entity with one large component: the sizes say which field of which component to ask for
-	Json entity = {{"id", 1},
-	               {"data", {{"Small", {{"x", 1}}}, {"Large", {{"cache", std::string(5000, 'x')}, {"state", 2}}}}}};
+	Json entity = {{"id", 1}, {"data", {{"Small", {{"x", 1}}}, {"Large", {{"cache", std::string(5000, 'x')}, {"state", 2}}}}}};
 	QueryOptions options;
 	options.maxBytes = 1000;
 	const auto result = ShapeObject(entity, options);

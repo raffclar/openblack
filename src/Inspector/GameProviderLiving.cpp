@@ -806,9 +806,10 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	                    "The count of the things of the world made since the land was loaded: the place in the order of "
 	                    "the next thing made",
 	                    {}, ResultKind::Object),
-	              Serve<Locator::thingsMadeSystem>("thingsMadeSystem",
-	                                               [](const ecs::systems::ThingsMadeSystemInterface& count,
-	                                                  const QueryContext& /*c*/) { return Json {{"made", count.Made()}}; }));
+	              Serve<Locator::thingsMadeSystem>(
+	                  "thingsMadeSystem", [](const ecs::systems::ThingsMadeSystemInterface& count, const QueryContext& /*c*/) {
+		                  return Json {{"made", count.Made()}};
+	                  }));
 	provider->Add(
 	    Query("sound_tags",
 	          "The sounds tagged to things: sound, whether active, its emitter, the object it is attached to, whether it loops",

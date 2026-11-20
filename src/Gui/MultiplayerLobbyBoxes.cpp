@@ -228,7 +228,7 @@ void MultiplayerBoxes::BuildLobbyList(Dialog& dialog)
 
 	// The filters
 	const auto& filter = _frontEnd->GetListFilter();
-	const auto addFilter = [this, &dialog](int x, std::u16string label, bool checked, bool online::lobby::ListFilter::* field) {
+	const auto addFilter = [this, &dialog](int x, std::u16string label, bool checked, bool online::lobby::ListFilter::*field) {
 		auto& box =
 		    dialog.Add<CheckBox>(_font, glm::ivec2 {x, 412}, k_TickSize, std::move(label), LabelSide::Right, checked, false);
 		box.onChange = [this, field](bool on) {

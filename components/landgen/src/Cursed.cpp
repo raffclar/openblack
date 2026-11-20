@@ -570,12 +570,10 @@ Result cursed::Place(const features::Ground& ground, std::vector<Feature>& place
 		const float metresZ = z * k_MetresPerCorner;
 		if (spot.height < settings.lowest || spot.height > settings.highest || spot.sea < settings.nearestSea ||
 		    Distance(metresX, metresZ, townX, townZ) < settings.nearestTown + radius ||
-		    std::ranges::any_of(
-		        ground.towns,
-		        [&](const features::Clearing& town) {
-			        return Distance(metresX, metresZ, town.x * k_MetresPerCorner, town.z * k_MetresPerCorner) <
-			               settings.nearestTown + radius;
-		        }))
+		    std::ranges::any_of(ground.towns, [&](const features::Clearing& town) {
+			    return Distance(metresX, metresZ, town.x * k_MetresPerCorner, town.z * k_MetresPerCorner) <
+			           settings.nearestTown + radius;
+		    }))
 		{
 			continue;
 		}
