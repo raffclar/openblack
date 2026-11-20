@@ -24,7 +24,7 @@ export VCPKG_ROOT=$SRC/vcpkg VCPKG_DEFAULT_BINARY_CACHE=$DIR/vcpkg-binary
 export VCPKG_BINARY_SOURCES="clear;files,$DIR/vcpkg-binary,readwrite" VCPKG_DISABLE_METRICS=1
 cd "$SRC" || exit 1
 cmake --preset "$PRESET" -DCMAKE_MAKE_PROGRAM="$(command -v ninja)" > "$DIR/configure.log" 2>&1 || { note "STOP: configure"; grep -E "error|Error" "$DIR/configure.log" | head -20; tail -5 "$DIR/configure.log"; exit 1; }
-cmake --build --preset "$PRESET-release" --target openblack-server ${JOBS:+--parallel "$JOBS"} -- -k 0 > "$DIR/build.log" 2>&1
+cmake --build --preset "$PRESET-release" --target openblack-server ${JOBS:+--parallel "$JOBS"} > "$DIR/build.log" 2>&1
 rc=$?
 w=$(grep -cE ': warning:' "$DIR/build.log")
 if [ $rc != 0 ]; then
