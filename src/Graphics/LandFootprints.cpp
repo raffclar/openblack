@@ -685,8 +685,8 @@ void LandFootprints::Update()
 	switch (std::exchange(_search, Search::None))
 	{
 	case Search::Started:
-		// The search found the changed things on the side thread
-		_searchThread->Wait();
+		// The side thread finds the changed things. When it did not start yet, this thread does the search.
+		_searchThread->WaitOrRun();
 		break;
 	case Search::NoLand:
 		return;
@@ -723,7 +723,7 @@ void LandFootprints::ForgetSearch()
 {
 	if (std::exchange(_search, Search::None) == Search::Started)
 	{
-		_searchThread->Wait();
+		_searchThread->WaitOrRun();
 	}
 }
 

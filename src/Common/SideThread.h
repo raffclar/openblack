@@ -40,11 +40,18 @@ public:
 	[[nodiscard]] bool Done() const noexcept;
 	/// Waits until the work given last ends. An exception of the work comes out here.
 	void Wait();
+	/// As Wait, but when the thread did not start the work yet, the calling thread does it. Use it for short work that
+	/// can run on any thread. Then the caller does not wait when the thread starts late.
+	void WaitOrRun();
 	/// The thread that does the work
 	[[nodiscard]] std::thread::id GetId() const noexcept;
 
 private:
 	void Loop(const std::stop_token& stop);
+	/// Waits until the work ends. With runHere, the calling thread does the work when the thread did not start it.
+	void TakeEnd(bool runHere);
+	/// Does the work that waits, on the calling thread. The lock is locked before and after the call.
+	void Run(std::unique_lock<std::mutex>& lock);
 
 	mutable std::mutex _mutex;
 	std::condition_variable_any _changed;

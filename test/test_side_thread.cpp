@@ -86,3 +86,64 @@ TEST(SideThread, WaitsForItsWorkBeforeItStops)
 	}
 	EXPECT_TRUE(done);
 }
+
+TEST(SideThread, WaitOrRunDoesEachPieceOfWorkOnceAndCallsEachEndOnce)
+{
+	// The work runs on the side thread or on the caller, as the system wakes the thread, but always once
+	SideThread thread;
+	constexpr int k_Count = 2000;
+	std::atomic<int> works {0};
+	std::atomic<int> ends {0};
+	for (int i = 0; i < k_Count; ++i)
+	{
+		thread.Start([&works] { ++works; }, [&ends] { ++ends; });
+		thread.WaitOrRun();
+		EXPECT_TRUE(thread.Done());
+		EXPECT_EQ(works, i + 1);
+	}
+	// The side thread can call the last end after WaitOrRun returns
+	while (ends < k_Count)
+	{
+		std::this_thread::yield();
+	}
+	EXPECT_EQ(works, k_Count);
+	EXPECT_EQ(ends, k_Count);
+}
+
+TEST(SideThread, WaitOrRunDoesTheWorkOnOneOfTheTwoThreads)
+{
+	SideThread thread;
+	std::thread::id worker;
+	thread.Start([&worker] { worker = std::this_thread::get_id(); });
+	thread.WaitOrRun();
+	EXPECT_TRUE(worker == thread.GetId() || worker == std::this_thread::get_id());
+}
+
+TEST(SideThread, WaitOrRunWaitsForWorkThatTheThreadStarted)
+{
+	SideThread thread;
+	std::atomic<bool> started {false};
+	std::atomic<bool> done {false};
+	thread.Start([&] {
+		started = true;
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		done = true;
+	});
+	while (!started)
+	{
+		std::this_thread::yield();
+	}
+	thread.WaitOrRun();
+	EXPECT_TRUE(done);
+}
+
+TEST(SideThread, WaitOrRunGivesTheExceptionOfTheWork)
+{
+	SideThread thread;
+	thread.Start([] { throw std::runtime_error("the work failed"); });
+	EXPECT_THROW(thread.WaitOrRun(), std::runtime_error);
+	bool done = false;
+	thread.Start([&done] { done = true; });
+	EXPECT_NO_THROW(thread.WaitOrRun());
+	EXPECT_TRUE(done);
+}
