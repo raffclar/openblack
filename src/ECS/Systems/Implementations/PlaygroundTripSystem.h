@@ -30,7 +30,7 @@ public:
 
 	bool SaveBeforeTrip() final;
 	bool Travel() final;
-	bool Leave() final;
+	void Leave() final;
 
 	void SaveState(reflection::BinaryWriter& out) const final;
 	bool LoadState(reflection::BinaryReader& in) final;

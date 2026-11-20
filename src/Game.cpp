@@ -1377,8 +1377,9 @@ bool Game::RunFrame() noexcept
 			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
 		}
-		// A quick load that a command of the turns asked for, or a load from the save room, loads after the draw of the
-		// frame, as the game does. The load keeps only the open block of the commands of the old world.
+		// A quick load that a command of the turns asked for, a load from the save room, or the load as the player leaves
+		// the Gods' Playground, loads after the draw of the frame, as the game does. The load keeps only the open block of the
+		// commands of the old world.
 		if (Locator::saveGameSystem::has_value())
 		{
 			std::ignore = Locator::saveGameSystem::value().LoadAskedSlot();

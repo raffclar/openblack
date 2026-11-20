@@ -2466,6 +2466,7 @@ target_link_libraries(test_lhvm_save_in_native PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_object_light_sheet test_object_light_sheet.cpp)
 target_link_libraries(test_object_light_sheet PRIVATE psys)
 openblack_setup_and_add_test(test_playground_trip story/test_playground_trip.cpp)
+openblack_setup_and_add_test(test_playground_trip_leave story/test_playground_trip_leave.cpp)
 if (OPENBLACK_DEVELOPER_TOOLS)
   openblack_setup_and_add_test(
     test_testbed_scenario_checks test_testbed_scenario_checks.cpp

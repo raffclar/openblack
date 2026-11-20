@@ -191,14 +191,18 @@ bool PlaygroundTripSystem::Travel()
 	return true;
 }
 
-bool PlaygroundTripSystem::Leave()
+void PlaygroundTripSystem::Leave()
 {
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player leaves the Gods' Playground");
 	std::ignore = chlapi::CHLApi::ApplyInterfaceLevel(k_NormalInterface);
 	_influenceEverywhere = false;
 	playground_trip::Leave(_lessons);
-	// With no saved game in the slot, nothing loads and the game stays paused
-	return Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().Load(gamesave::k_ExitSlot);
+	// The frame of the Yes finishes on the Playground, and the saved game loads after its draw. With no saved game in
+	// the slot, nothing loads and the game stays paused.
+	if (Locator::saveGameSystem::has_value())
+	{
+		Locator::saveGameSystem::value().AskLoad(gamesave::k_ExitSlot);
+	}
 }
 
 void PlaygroundTripSystem::SaveState(reflection::BinaryWriter& out) const
