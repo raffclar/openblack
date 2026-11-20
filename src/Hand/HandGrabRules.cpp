@@ -454,7 +454,7 @@ bool hand_grab::LandsOnRelease(const Landing& landing)
 
 LandedOutcome hand_grab::OutcomeOfLanding(const LandedThing& thing)
 {
-	if (!thing.living && !thing.fence && !(thing.tree && !thing.burning && thing.onLand))
+	if (!thing.living && !thing.fence && (!thing.tree || thing.burning || !thing.onLand))
 	{
 		return LandedOutcome::Settles;
 	}

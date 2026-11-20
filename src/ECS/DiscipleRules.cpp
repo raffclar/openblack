@@ -195,7 +195,7 @@ Choice disciple::ChooseWhileHeld(std::span<const NearFacts> ordered, const HeldF
 		{
 			continue;
 		}
-		if (refused && !(offered == Worship && held.child))
+		if (refused && (offered != Worship || !held.child))
 		{
 			continue;
 		}

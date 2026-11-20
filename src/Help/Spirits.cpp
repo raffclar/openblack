@@ -1940,7 +1940,7 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 	}
 	if (_state != dude_state::k_Cling)
 	{
-		const bool stable = !(_state == dude_state::k_Hover && (_activeFlags & 2) == 0);
+		const bool stable = _state != dude_state::k_Hover || (_activeFlags & 2) != 0;
 		UpdateBasePose(stable, dt * _face[11], sfx);
 	}
 	// 11. the face

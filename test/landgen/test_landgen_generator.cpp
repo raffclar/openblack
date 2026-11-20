@@ -471,7 +471,7 @@ TEST(LandgenFeatures, TheRingOfRocksStandsOnFlatGrass)
 			return IsRock(feature) && feature.type == features::k_PlainRockStatic;
 		});
 		if (plain.size() != 8 ||
-		    std::ranges::any_of(placed, [](const auto& feature) { return IsRock(feature) && feature.type == 37; }) == false)
+		    !std::ranges::any_of(placed, [](const auto& feature) { return IsRock(feature) && feature.type == 37; }))
 		{
 			continue;
 		}

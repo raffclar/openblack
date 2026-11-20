@@ -1063,7 +1063,7 @@ uint32_t Structurer::ParseIf(SequenceState& state, ExprPtr cond, uint32_t jumpIp
 	{
 		std::vector<uint32_t> elseTrailing;
 		auto elseBody = ParseSequence(target, chainEnd, elseTrailing);
-		if (elseBody.size() == 1 && elseBody.front()->kind == StmtKind::If && !elseBody.front()->ips.empty() == false)
+		if (elseBody.size() == 1 && elseBody.front()->kind == StmtKind::If && elseBody.front()->ips.empty())
 		{
 			// else { if ... } is an else-if chain
 			auto& inner = *elseBody.front();

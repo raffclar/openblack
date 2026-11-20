@@ -366,7 +366,7 @@ bool ObjectDrawListSystem::DrawnWith(const Registry& registry, entt::entity enti
 		return Drawn(registry, entity);
 	}
 	const auto* resident = stores.Resident(entity);
-	if (!(_view.has_value() && resident != nullptr && !resident->cells.empty() && !stores.DrawnOnItsOwn(entity)))
+	if (!_view.has_value() || resident == nullptr || resident->cells.empty() || stores.DrawnOnItsOwn(entity))
 	{
 		return true;
 	}

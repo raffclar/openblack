@@ -277,7 +277,7 @@ StmtPtr Parser::TryPropertyAssignment()
 {
 	const auto& token = Current();
 	const bool name = token.kind == TokenKind::Identifier && !IsVariable(token.text) && !IsKeyword(token.text);
-	if (!(name || (token.kind == TokenKind::Number && token.integer)) || !At(_pos + 1).Is("of"))
+	if ((!name && (token.kind != TokenKind::Number || !token.integer)) || !At(_pos + 1).Is("of"))
 	{
 		return nullptr;
 	}
@@ -1073,8 +1073,8 @@ void Parser::ParseScript(ParsedFile& file)
 	{
 		Error(Current().location, fmt::format("expected 'end script {}', not {}", script.name, Describe(Current())));
 		// Resynchronise at the next script
-		while (!AtEnd() && !(Current().Is("begin") && At(_pos + 1).kind == TokenKind::Identifier &&
-		                     (At(_pos + 1).Is("script") || At(_pos + 1).Is("help") || At(_pos + 2).Is("script"))))
+		while (!AtEnd() && (!Current().Is("begin") || At(_pos + 1).kind != TokenKind::Identifier ||
+		                    (!At(_pos + 1).Is("script") && !At(_pos + 1).Is("help") && !At(_pos + 2).Is("script"))))
 		{
 			Advance();
 		}

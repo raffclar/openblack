@@ -750,7 +750,7 @@ bool CreatureMindSystem::CastGivenGlobe(entt::entity creature, CreatureMindState
 		// thing that it holds, which is the globe.
 		const bool notHeld = tables->actions[*action].notOnWhatItHolds;
 		const auto found =
-		    BelievedThingsToActOn(creature, mind, desire, [&](entt::entity thing) { return !(notHeld && thing == globe); });
+		    BelievedThingsToActOn(creature, mind, desire, [&](entt::entity thing) { return !notHeld || thing != globe; });
 		float best = 0.0f;
 		for (const auto& thing : found)
 		{

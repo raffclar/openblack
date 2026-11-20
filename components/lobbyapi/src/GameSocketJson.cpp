@@ -127,7 +127,7 @@ bool ReadUnsigned(const Json& object, std::string_view key, uint64_t most, uint6
 	{
 		return !required;
 	}
-	if (!member->is_number_unsigned() && !(member->is_number_integer() && member->get<int64_t>() >= 0))
+	if (!member->is_number_unsigned() && (!member->is_number_integer() || member->get<int64_t>() < 0))
 	{
 		return false;
 	}

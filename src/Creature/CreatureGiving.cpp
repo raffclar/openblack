@@ -107,7 +107,7 @@ Choice creature_giving::ChooseUse(const GiftFacts& facts)
 	{
 		const auto score = candidate.weighed.desire * candidate.weighed.usefulness;
 		strongest = std::max(strongest, candidate.weighed.desire);
-		if (score > best && !(candidate.use == Use::Eat && facts.cantEatKind))
+		if (score > best && (candidate.use != Use::Eat || !facts.cantEatKind))
 		{
 			best = score;
 			chosen = candidate.use;

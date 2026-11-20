@@ -1869,7 +1869,7 @@ Commands TurnOfThought(IdleMind& mind, const Senses& senses, const Random& rando
 		    (step.kind == Step::Kind::Move && (step.movement.kind == Movement::Kind::TurnToFaceCamera ||
 		                                       step.movement.kind == Movement::Kind::TurnToFaceGiverCamera));
 		const bool walkOnTheWay =
-		    StartsOnTheWay(step) && senses.onlyMoves && !(handsChecked && senses.hands == HandsState::Busy);
+		    StartsOnTheWay(step) && senses.onlyMoves && (!handsChecked || senses.hands != HandsState::Busy);
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
 		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && !teleportStep && !startsAtOnce && !walkOnTheWay &&
 		    bodyBusy)

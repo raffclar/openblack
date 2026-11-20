@@ -163,7 +163,7 @@ uint8_t workshop::FirstFreePlace(const std::array<components::Workshop::Place, 3
 bool workshop::KeepsScaffold(uint32_t putDownTurn, uint32_t turn, uint32_t keepTurns, bool scriptBuilding)
 {
 	const uint32_t lain = putDownTurn == 0 ? 0 : turn - putDownTurn;
-	return !(keepTurns <= lain && !scriptBuilding);
+	return keepTurns > lain || scriptBuilding;
 }
 
 void workshop::StartsWorkingInTown(std::vector<entt::entity>& townWorkshops, entt::entity workshop)

@@ -159,7 +159,7 @@ bool creature_leash::FreeOfHome(float distanceFromHome, bool playerHasTemple)
 
 bool creature_leash::IsConfined(float radius, bool leashed, bool leashWorks)
 {
-	return radius > 0.0f && !(leashed && !leashWorks);
+	return radius > 0.0f && (!leashed || leashWorks);
 }
 
 bool creature_leash::RefusesWalk(const AgendaArea& area, glm::vec2 destination)

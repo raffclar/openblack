@@ -166,7 +166,7 @@ TEST(CreatureLocomotion, RunsAwayToTheFirstClearCellOfTheSpiral)
 {
 	auto land = OpenLand();
 	// The aimed cell is not clear; the spiral's first step goes one cell back along x
-	land.cellClear = [](int32_t x, int32_t z) { return !(x == 105 && z == 100); };
+	land.cellClear = [](int32_t x, int32_t z) { return x != 105 || z != 100; };
 	EXPECT_EQ(RunAwayPoint(k_InCell, {950.0f, 1000.0f}, 10, 40.0f, land), glm::vec3(1040.0f, 7.0f, 1000.0f));
 	// With no clear cell it stays where it is, at its own height above the ground
 	land.cellClear = [](int32_t, int32_t) { return false; };
