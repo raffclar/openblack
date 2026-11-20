@@ -998,7 +998,7 @@ std::optional<std::vector<LandShadowBake::WatchedChange>> LandShadowBake::TakeWa
 	{
 		return std::nullopt;
 	}
-	_watchedTest->Wait();
+	_watchedTest->WaitOrRun();
 	return std::exchange(_watchedAnswer, std::nullopt);
 }
 
