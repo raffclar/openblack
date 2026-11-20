@@ -1013,10 +1013,16 @@ TEST(TestbedDispenserGrid, StaysUnlessAScenarioAsksForNoneOrStandsOnIt)
 
 TEST(TestbedScenarios, BenchmarksMeasureCrowdsOfEachSize)
 {
-	const std::array<std::pair<const char*, size_t>, 8> benchmarks {{
+	const std::array<std::pair<const char*, size_t>, 14> benchmarks {{
+	    {"benchmark.creatures_1", 1},
+	    {"benchmark.creatures_4", 4},
+	    {"benchmark.creatures_8", 8},
 	    {"benchmark.creatures_10", 10},
+	    {"benchmark.creatures_16", 16},
 	    {"benchmark.creatures_25", 25},
+	    {"benchmark.creatures_32", 32},
 	    {"benchmark.creatures_50", 50},
+	    {"benchmark.creatures_64", 64},
 	    {"benchmark.creatures_100", 100},
 	    {"benchmark.villagers_100", 100},
 	    {"benchmark.villagers_250", 250},
@@ -1053,8 +1059,8 @@ TEST(TestbedScenarios, BenchmarksMeasureCrowdsOfEachSize)
 			EXPECT_LE(scenario.crowd->count, scenario.crowd->kind == Crowd::Kind::Creatures ? 100u : 1'000u) << scenario.id;
 		}
 	}
-	// The creatures among towns too
-	EXPECT_EQ(crowds, benchmarks.size() + 1);
+	// The creatures among towns too: 100, and 8, 16, 32 and 64
+	EXPECT_EQ(crowds, benchmarks.size() + 5);
 	// Only benchmarks have crowds
 	for (const auto& scenario : All())
 	{
@@ -1074,6 +1080,20 @@ TEST(TestbedScenarios, TheCreaturesAtWorkLiveAmongTowns)
 	EXPECT_TRUE(Problems(*scenario).empty());
 	// No digit in its id, so that tools that name files after it take it
 	EXPECT_FALSE(std::ranges::any_of(scenario->id, [](char c) { return c >= '0' && c <= '9'; }));
+	// The smaller crowds among towns are the same but for their count
+	for (const auto& [id, count] : std::array<std::pair<const char*, size_t>, 4> {{{"benchmark.town_creatures_8", 8},
+	                                                                               {"benchmark.town_creatures_16", 16},
+	                                                                               {"benchmark.town_creatures_32", 32},
+	                                                                               {"benchmark.town_creatures_64", 64}}})
+	{
+		const auto* smaller = Find(id);
+		ASSERT_NE(smaller, nullptr) << id;
+		ASSERT_TRUE(smaller->crowd.has_value()) << id;
+		EXPECT_EQ(smaller->crowd->count, count);
+		EXPECT_EQ(smaller->crowd->villagers, scenario->crowd->villagers);
+		EXPECT_EQ(smaller->crowd->seed, scenario->crowd->seed);
+		EXPECT_TRUE(Problems(*smaller).empty()) << id;
+	}
 }
 
 TEST(TestbedScenarios, CrowdsAreChecked)

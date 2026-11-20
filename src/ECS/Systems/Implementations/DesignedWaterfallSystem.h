@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 
 #include "3D/DesignedWaterfall.h"
@@ -29,21 +30,34 @@ public:
 	void UpdateFrame(int32_t landNumber, std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
 	                 bool landDrawn) override;
 	[[nodiscard]] bool HasModel() const override { return ModelShown(); }
+	[[nodiscard]] bool HasDinosaur() const override { return DinosaurShown(); }
+	[[nodiscard]] bool HasDinosaurPrint() const override;
 	[[nodiscard]] float GetSlide() const override { return _slide; }
 	[[nodiscard]] std::optional<uint32_t> GetSound() const override;
 
 private:
 	/// Whether the model is a thing of the drawn registry now: the drawn registry loses its things as the land clears
 	[[nodiscard]] bool ModelShown() const;
-	void MakeModel();
+	[[nodiscard]] bool DinosaurShown() const;
+	/// Makes the waterfall on the third land, or the ark on the fourth land
+	void MakeModel(int32_t landNumber);
 	void RemoveModel();
-	void MakeSound();
+	/// Makes the dinosaur, with its print on the land when `print` is true
+	void MakeDinosaur(bool print);
+	void RemoveDinosaur();
+	void MakeSound(int32_t landNumber);
 	void RemoveSound();
-	/// The model shows the snow where it stands and the slide of its water
+	/// The waterfall shows the snow where it stands and the slide of its water
 	void ShowModel() const;
+	/// The ark and the dinosaur show the snow where they stand
+	void ShowScenery() const;
 
 	designed_waterfall::Presence _presence;
+	/// The waterfall or the ark, and its model
 	entt::entity _model {entt::null};
+	entt::id_type _modelMesh {0};
+	entt::entity _dinosaur {entt::null};
+	entt::id_type _dinosaurMesh {0};
 	uint32_t _sound {0};
 	/// The water's slide and the clock of the spray. The game keeps both from one land to the next.
 	float _slide {0.0f};

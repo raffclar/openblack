@@ -74,20 +74,23 @@ footprint_paint::Placement GroundPrintPlacement(const glm::vec3& position)
 	return {.origin = {map_coords::Quantise(position.x), map_coords::Quantise(position.z)}};
 }
 
+footprint_paint::Placement GroundPrintPlacement(const GroundPrintThing& print)
+{
+	return print.scaledTurn.has_value() ? PlacementOf(print.position, *print.scaledTurn) : GroundPrintPlacement(print.position);
+}
+
 std::vector<size_t> GroundPrintOrder(std::span<const GroundPrintThing> prints)
 {
 	std::vector<size_t> byAge(prints.size());
 	std::iota(byAge.begin(), byAge.end(), size_t {0});
 	std::ranges::stable_sort(byAge, {}, [&prints](size_t index) { return prints[index].made; });
-	// The game keeps the first print of a model at a place; a later print that is the same is not made
+	// The game keeps the first print of a model at a place with a turn; a later print that is the same is not made
 	std::vector<size_t> kept;
 	for (const auto index : byAge)
 	{
 		const auto& print = prints[index];
 		const auto same = [&](size_t other) {
-			const auto a = GroundPrintPlacement(prints[other].position);
-			const auto b = GroundPrintPlacement(print.position);
-			return prints[other].mesh == print.mesh && a.origin == b.origin;
+			return prints[other].mesh == print.mesh && GroundPrintPlacement(prints[other]) == GroundPrintPlacement(print);
 		};
 		if (std::ranges::none_of(kept, same))
 		{

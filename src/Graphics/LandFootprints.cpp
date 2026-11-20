@@ -32,6 +32,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Stream.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/LandFootprintRules.h"
 #include "ECS/Map.h"
 #include "ECS/PlacedTurn.h"
@@ -503,9 +504,23 @@ void LandFootprints::FindChangedGroundPrints()
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	std::vector<land_footprints::GroundPrintThing> things;
+	// The prints that only the frames make, as the print of the dinosaur of the fourth land, lie with the turn and the
+	// scale of their model. The frames make them on the first frame that draws the land, thus they are older than the
+	// prints that the scripts make.
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().Each<const GroundPrint, const MeshComponent, const Transform>(
+		    [&things](const GroundPrint& /*unused*/, const MeshComponent& mesh, const Transform& transform) {
+			    auto scaledTurn = transform.rotation;
+			    scaledTurn[0] *= transform.scale.x;
+			    scaledTurn[1] *= transform.scale.y;
+			    scaledTurn[2] *= transform.scale.z;
+			    things.push_back({.mesh = mesh.id, .position = transform.position, .made = 0, .scaledTurn = scaledTurn});
+		    });
+	}
 	registry.Each<const GroundPrint, const MeshComponent, const Transform>(
 	    [&things](const GroundPrint& print, const MeshComponent& mesh, const Transform& transform) {
-		    things.push_back({.mesh = mesh.id, .position = transform.position, .made = print.made});
+		    things.push_back({.mesh = mesh.id, .position = transform.position, .made = print.made + 1});
 	    });
 	// The same things in the same order paint the same prints
 	std::ranges::sort(things, {}, &land_footprints::GroundPrintThing::made);
@@ -527,7 +542,7 @@ void LandFootprints::FindChangedGroundPrints()
 		{
 			continue;
 		}
-		const auto placement = land_footprints::GroundPrintPlacement(things[index].position);
+		const auto placement = land_footprints::GroundPrintPlacement(things[index]);
 		const auto bounds = land_footprints::GroundBounds(footprint->triangles, placement);
 		_groundPrints.push_back({.footprint = footprint, .placement = placement, .bounds = bounds, .channel = false});
 		const auto [lowBlock, highBlock] = BlocksOf(bounds);

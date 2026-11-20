@@ -363,6 +363,37 @@ void MagicSystem::EndUseWaitAfterLetGo()
 	}
 }
 
+void MagicSystem::TakeInFireBallUnderHand()
+{
+	const ActingAs acting(*this, OwnPlayer());
+	// The seed must be a fire seed that no press armed or locked. A press keeps its own thing.
+	if (!Held().has_value() || !EntityRegistry().Valid(*Held()) || !Locator::infoConstants::has_value() ||
+	    _input.state != magic::CastInput::State::Idle)
+	{
+		return;
+	}
+	if (EntityRegistry().Get<const SpellSeed>(*Held()).seedType != SpellSeedType::Fire)
+	{
+		return;
+	}
+	// The seed can take the fireball under the hand into it: the seed is ready and no script made a highlight of the
+	// fireball. The player's influence has no effect.
+	const auto picked = PickedUnderHand();
+	if (!picked.has_value() || !EntityRegistry().AllOf<MagicFireBall>(*picked) || !IsHeldSeedTarget(*picked))
+	{
+		return;
+	}
+	// The hand sends the use of the seed on the ball at once. While the hand waits for its last send, it sends
+	// nothing. In both cases the interface waits for the let go of the Action button, and keeps no thing.
+	_pressThing = *picked;
+	SendCast(magic::CastTarget::Object);
+	_pressThing = entt::null;
+	if (!_useWait.has_value())
+	{
+		_useWait = UseWait {};
+	}
+}
+
 void MagicSystem::UnlockHeldMiracle()
 {
 	auto& registry = EntityRegistry();

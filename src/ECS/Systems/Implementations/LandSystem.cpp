@@ -1503,7 +1503,8 @@ void LandSystem::StartNewLand(land_change::Kind change)
 	{
 		Locator::scriptMusicSystem::value().Reset();
 	}
-	// The things of the last land went, and the sound of the third land's waterfall with them
+	// The things of the last land went, and the sound of the waterfall or the ark with them. The new land has no print of
+	// the dinosaur.
 	if (Locator::designedWaterfallSystem::has_value())
 	{
 		Locator::designedWaterfallSystem::value().Reset();

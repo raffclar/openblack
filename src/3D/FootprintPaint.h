@@ -95,6 +95,8 @@ struct Placement
 	float zFromX {0.0f};
 	float zFromZ {1.0f};
 	glm::vec2 origin {0.0f};
+
+	bool operator==(const Placement&) const = default;
 };
 
 /// A part of a block's texture: its first and last row (along x) and its first and last column (along z)
