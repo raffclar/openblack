@@ -12,16 +12,21 @@
 #include "DesignedWaterfallSystem.h"
 
 #include <string>
+#include <string_view>
 
 #include <glm/vec2.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
 #include "3D/LandLightFrame.h"
 #include "3D/SnowCover.h"
 #include "Common/X87Angle.h"
 #include "ECS/Components/DrawImportance.h"
+#include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/MorphWithTerrain.h"
+#include "ECS/Components/NeverFades.h"
 #include "ECS/Components/SlidingTexture.h"
 #include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/Transform.h"
@@ -43,20 +48,20 @@ using namespace openblack::ecs::components;
 namespace
 {
 /// The model's id in the mesh cache, loaded from the misc folder the first time it is needed
-std::optional<entt::id_type> LoadModel()
+std::optional<entt::id_type> LoadModel(std::string_view file)
 {
 	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto id = resources::HashIdentifier("misc/" + std::string(designed_waterfall::k_ModelFile));
+	const auto id = resources::HashIdentifier("misc/" + std::string(file));
 	auto& meshes = Locator::resources::value().GetMeshes();
 	if (meshes.Contains(id))
 	{
 		return id;
 	}
 	auto& fileSystem = Locator::filesystem::value();
-	const auto path = fileSystem.GetPath<filesystem::Path::Misc>() / designed_waterfall::k_ModelFile;
+	const auto path = fileSystem.GetPath<filesystem::Path::Misc>() / file;
 	if (!fileSystem.Exists(path))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Model {} not found", path.generic_string());
@@ -64,6 +69,61 @@ std::optional<entt::id_type> LoadModel()
 	}
 	meshes.Load(id, resources::L3DLoader::FromDiskTag {}, path);
 	return id;
+}
+
+/// The place of a model of the fourth land: on the land under its place
+glm::vec3 PlaceOf(const designed_waterfall::Scenery& scenery)
+{
+	const float ground = Locator::terrainSystem::has_value()
+	                         ? Locator::terrainSystem::value().GetHeightAt(glm::vec2(scenery.x, scenery.z))
+	                         : 0.0f;
+	return {scenery.x, ground, scenery.z};
+}
+
+/// Whether the drawn registry has the model that the system made. The drawn registry loses its things as the land
+/// clears, and a new thing can then get the same entity, thus the model must also be the same.
+bool Shown(entt::entity entity, entt::id_type mesh)
+{
+	if (!Locator::drawnRegistry::has_value() || entity == entt::null)
+	{
+		return false;
+	}
+	const auto& drawn = Locator::drawnRegistry::value();
+	const auto* shown = drawn.Valid(entity) ? drawn.TryGet<const Mesh>(entity) : nullptr;
+	return shown != nullptr && shown->id == mesh;
+}
+
+/// Makes a model of the fourth land in the drawn registry. The model goes onto the shape of the land: each point of it
+/// moves up by how much higher the land is under the point than under the origin of the model. It never fades out
+/// with the distance.
+entt::entity MakeScenery(const designed_waterfall::Scenery& scenery, entt::id_type mesh, bool print)
+{
+	auto& drawn = Locator::drawnRegistry::value();
+	const auto entity = drawn.Create();
+	drawn.Assign<Transform>(entity, PlaceOf(scenery), x87::GameUprightTurn(scenery.turn), glm::vec3(scenery.scale));
+	drawn.Assign<Mesh>(entity, mesh, static_cast<int8_t>(0), static_cast<int8_t>(-1));
+	drawn.Assign<DrawImportance>(entity, DrawImportance {.importance = designed_waterfall::k_SceneryImportance});
+	drawn.Assign<NeverFades>(entity);
+	drawn.Assign<MorphWithTerrain>(entity);
+	drawn.Assign<SnowLevel>(entity);
+	if (print)
+	{
+		drawn.Assign<GroundPrint>(entity);
+	}
+	drawn.SetDirty();
+	return entity;
+}
+
+/// The model shows the snow where it stands at once, with no slow change
+void ShowSnow(entt::entity entity, glm::vec3 place)
+{
+	if (!Locator::snowSystem::has_value())
+	{
+		return;
+	}
+	const float depth = Locator::snowSystem::value().GetDepth(glm::vec2(place.x, place.z));
+	Locator::drawnRegistry::value().Get<SnowLevel>(entity).level =
+	    snow_cover::ObjectLevel(depth, snow_cover::k_ObjectRate, snow_cover::k_ObjectRate);
 }
 } // namespace
 
@@ -83,7 +143,8 @@ void DesignedWaterfallSystem::UpdateFrame(int32_t landNumber, std::chrono::milli
 	{
 		return;
 	}
-	const auto changes = designed_waterfall::Arrive(_presence, landNumber, ModelShown());
+	const auto changes =
+	    designed_waterfall::Arrive(_presence, landNumber, {.model = ModelShown(), .dinosaur = DinosaurShown()});
 	if (changes.removeModel)
 	{
 		RemoveModel();
@@ -92,13 +153,26 @@ void DesignedWaterfallSystem::UpdateFrame(int32_t landNumber, std::chrono::milli
 	{
 		RemoveSound();
 	}
+	if (changes.removeDinosaur)
+	{
+		RemoveDinosaur();
+	}
 	if (changes.makeModel)
 	{
-		MakeModel();
+		MakeModel(landNumber);
 	}
 	if (changes.makeSound)
 	{
-		MakeSound();
+		MakeSound(landNumber);
+	}
+	if (changes.makeDinosaur)
+	{
+		MakeDinosaur(changes.makePrint);
+	}
+	if (landNumber == designed_waterfall::k_SceneryLand)
+	{
+		ShowScenery();
+		return;
 	}
 	if (landNumber != designed_waterfall::k_Land)
 	{
@@ -122,22 +196,35 @@ std::optional<uint32_t> DesignedWaterfallSystem::GetSound() const
 	return _sound != 0 ? std::optional(_sound) : std::nullopt;
 }
 
-bool DesignedWaterfallSystem::ModelShown() const
+bool DesignedWaterfallSystem::HasDinosaurPrint() const
 {
-	if (!Locator::drawnRegistry::has_value() || _model == entt::null)
-	{
-		return false;
-	}
-	const auto& drawn = Locator::drawnRegistry::value();
-	return drawn.Valid(_model) && drawn.AllOf<SlidingTexture>(_model);
+	return DinosaurShown() && Locator::drawnRegistry::value().AllOf<GroundPrint>(_dinosaur);
 }
 
-void DesignedWaterfallSystem::MakeModel()
+bool DesignedWaterfallSystem::ModelShown() const
+{
+	return Shown(_model, _modelMesh);
+}
+
+bool DesignedWaterfallSystem::DinosaurShown() const
+{
+	return Shown(_dinosaur, _dinosaurMesh);
+}
+
+void DesignedWaterfallSystem::MakeModel(int32_t landNumber)
 {
 	_model = entt::null;
-	const auto model = LoadModel();
+	_modelMesh = 0;
+	const auto file = designed_waterfall::ModelFileOf(landNumber);
+	const auto model = file.has_value() ? LoadModel(*file) : std::nullopt;
 	if (!model.has_value() || !Locator::drawnRegistry::has_value())
 	{
+		return;
+	}
+	_modelMesh = *model;
+	if (landNumber == designed_waterfall::k_SceneryLand)
+	{
+		_model = MakeScenery(designed_waterfall::k_Ark, *model, false);
 		return;
 	}
 	auto& drawn = Locator::drawnRegistry::value();
@@ -160,15 +247,44 @@ void DesignedWaterfallSystem::RemoveModel()
 		drawn.SetDirty();
 	}
 	_model = entt::null;
+	_modelMesh = 0;
 }
 
-void DesignedWaterfallSystem::MakeSound()
+void DesignedWaterfallSystem::MakeDinosaur(bool print)
 {
-	if (Locator::soundTagSystem::has_value())
+	_dinosaur = entt::null;
+	_dinosaurMesh = 0;
+	const auto model = LoadModel(designed_waterfall::k_Dinosaur.modelFile);
+	if (!model.has_value() || !Locator::drawnRegistry::has_value())
 	{
-		_sound = Locator::soundTagSystem::value().KeepPointSound(static_cast<entt::id_type>(audio::SoundId::G_WaterFlow),
-		                                                         designed_waterfall::k_Position);
+		return;
 	}
+	_dinosaurMesh = *model;
+	_dinosaur = MakeScenery(designed_waterfall::k_Dinosaur, *model, print);
+}
+
+void DesignedWaterfallSystem::RemoveDinosaur()
+{
+	if (DinosaurShown())
+	{
+		auto& drawn = Locator::drawnRegistry::value();
+		drawn.Destroy(_dinosaur);
+		drawn.SetDirty();
+	}
+	_dinosaur = entt::null;
+	_dinosaurMesh = 0;
+}
+
+void DesignedWaterfallSystem::MakeSound(int32_t landNumber)
+{
+	if (!Locator::soundTagSystem::has_value())
+	{
+		return;
+	}
+	// The sound of the ark comes from its place on the land
+	const auto place =
+	    landNumber == designed_waterfall::k_SceneryLand ? PlaceOf(designed_waterfall::k_Ark) : designed_waterfall::k_Position;
+	_sound = Locator::soundTagSystem::value().KeepPointSound(static_cast<entt::id_type>(audio::SoundId::G_WaterFlow), place);
 }
 
 void DesignedWaterfallSystem::RemoveSound()
@@ -182,17 +298,21 @@ void DesignedWaterfallSystem::RemoveSound()
 
 void DesignedWaterfallSystem::ShowModel() const
 {
-	if (!ModelShown())
+	if (!ModelShown() || !Locator::drawnRegistry::value().AllOf<SlidingTexture>(_model))
 	{
 		return;
 	}
-	auto& drawn = Locator::drawnRegistry::value();
-	drawn.Get<SlidingTexture>(_model).offset = glm::vec2(0.0f, _slide);
-	// It shows the snow where it stands at once, with no slow change
-	if (Locator::snowSystem::has_value())
+	Locator::drawnRegistry::value().Get<SlidingTexture>(_model).offset = glm::vec2(0.0f, _slide);
+	ShowSnow(_model, designed_waterfall::k_Position);
+}
+
+void DesignedWaterfallSystem::ShowScenery() const
+{
+	for (const auto entity : {ModelShown() ? _model : entt::null, DinosaurShown() ? _dinosaur : entt::null})
 	{
-		const float depth = Locator::snowSystem::value().GetDepth(
-		    glm::vec2(designed_waterfall::k_Position.x, designed_waterfall::k_Position.z));
-		drawn.Get<SnowLevel>(_model).level = snow_cover::ObjectLevel(depth, snow_cover::k_ObjectRate, snow_cover::k_ObjectRate);
+		if (entity != entt::null)
+		{
+			ShowSnow(entity, Locator::drawnRegistry::value().Get<Transform>(entity).position);
+		}
 	}
 }

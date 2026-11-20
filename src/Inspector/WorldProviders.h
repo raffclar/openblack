@@ -84,11 +84,15 @@ using ParticleEffectInfo = ecs::systems::ParticleRuleSystemInterface::EffectInfo
 /// and how many of the running effects have a number that the simulation gave
 [[nodiscard]] Json RequestSummary(std::optional<ecs::systems::EffectHandle> next, std::span<const ParticleEffectInfo> effects);
 
-/// The waterfall of the third land as the frames show it
+/// The waterfall of the third land, or the ark and the dinosaur of the fourth land, as the frames show them
 struct WaterfallInfo
 {
-	/// The model is on the land
+	/// The waterfall or the ark is on the land
 	bool model {false};
+	/// The dinosaur is on the land
+	bool dinosaur {false};
+	/// The dinosaur makes its print on the land
+	bool dinosaurPrint {false};
 	/// How far the water's texture has slid down it
 	float slide {0.0f};
 	/// The number of its sound, none when it is silent
@@ -119,7 +123,7 @@ struct ParticleSources
 ///   particles.belief                         the symbols of belief that rose last, the newest first
 ///   particles.requests                       the effects that the turns and the scripts asked for
 ///   particles.drawn                          what the last frame of the draw of the effects drew
-///   particles.waterfall                      the waterfall of the third land: its model, slide and sound
+///   particles.waterfall                      the waterfall (land 3) or the ark and dinosaur (land 4)
 class ParticlesProvider final: public ProviderInterface
 {
 public:

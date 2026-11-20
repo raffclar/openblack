@@ -229,6 +229,7 @@ public:
 	[[nodiscard]] entt::entity GetPressThing() const override;
 	[[nodiscard]] std::optional<UseWait> GetUseWait() const override { return _useWait; }
 	void EndUseWaitAfterLetGo() override;
+	void TakeInFireBallUnderHand() override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return HeldOf(OwnPlayer()); }
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeedOf(PlayerNames player) const override { return HeldOf(player); }
 	/// The nearest fireball the ray passes through that the hand may hold now, if any

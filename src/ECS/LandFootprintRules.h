@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -92,6 +93,9 @@ struct GroundPrintThing
 	glm::vec3 position {0.0f};
 	/// The order in which the prints were made
 	uint32_t made {0};
+	/// The turn of the print with its scale in it, in the form of x87::GameUprightTurn. A print with no turn lies at the
+	/// place of the thing on the map.
+	std::optional<glm::mat3> scaledTurn;
 
 	bool operator==(const GroundPrintThing&) const = default;
 };
@@ -100,8 +104,11 @@ struct GroundPrintThing
 /// place go through the map's fixed point first, as the game keeps them.
 [[nodiscard]] footprint_paint::Placement GroundPrintPlacement(const glm::vec3& position);
 
+/// Where the print of a thing lies: at its place with its turn, or as GroundPrintPlacement when it has no turn
+[[nodiscard]] footprint_paint::Placement GroundPrintPlacement(const GroundPrintThing& print);
+
 /// The prints of the things in the order that the game paints them, as indices into `prints`. The newest print comes
-/// first. The game does not make a print that has the model and the place of an older print.
+/// first. The game does not make a print that has the model, the place and the turn of an older print.
 [[nodiscard]] std::vector<size_t> GroundPrintOrder(std::span<const GroundPrintThing> prints);
 
 /// The rivers' footprints in the order that the game paints them, from the number of points of each river in the order

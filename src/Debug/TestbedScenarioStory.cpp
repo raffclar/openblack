@@ -591,6 +591,28 @@ void AddThirdLandWaterfall(std::vector<Scenario>& all)
 	});
 }
 
+/// The ark and the dinosaur skeleton of the fourth land, which the draw of the land makes with no script
+void AddFourthLandArkAndDinosaur(std::vector<Scenario>& all)
+{
+	// The places of the dinosaur and the ark, from the middle of the map
+	constexpr glm::vec2 k_Dinosaur = glm::vec2(2690.0f, 2590.0f) - flat_land::k_MapMiddle;
+	constexpr glm::vec2 k_Ark = glm::vec2(3538.0f, 2129.0f) - flat_land::k_MapMiddle;
+	all.push_back({
+	    .id = "story.l4_ark_dinosaur",
+	    .name = "Story: the ark and the dinosaur skeleton of the fourth land",
+	    .facet = Facet::Story,
+	    .description = "The fourth land loads with its own scripts and sky. The camera looks north from above at the "
+	                   "dinosaur skeleton on the high ground and the ark to the east. No script makes them: the draw of "
+	                   "the land makes them on its first frame.",
+	    .expected = "The dinosaur lies on the land with its print on the ground under it. The ark stands to the east and "
+	                "the sound of water that flows comes from it. Both follow the shape of the land under them, with no "
+	                "gap and no part in the land. Neither fades out when the camera moves far away.",
+	    .environment = {.land = Land::Story, .storyLand = "Land4.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {{k_Dinosaur.x - 40.0f, k_Dinosaur.y - 40.0f}, {k_Ark.x + 40.0f, k_Ark.y + 40.0f}}},
+	});
+}
+
 /// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the
 /// Norse town, the creche and the piper's cave made there. The scenario clicks the creche, and the round starts.
 void AddPiedPiperRound(std::vector<Scenario>& all)
@@ -1751,6 +1773,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	AddThirdLandPrison(all);
 	AddThirdLandThrowBloke(all);
 	AddThirdLandWaterfall(all);
+	AddFourthLandArkAndDinosaur(all);
 	AddSingingStones(all);
 	AddLandHaze(all);
 	AddBeachTemplePuzzle(all);
