@@ -382,6 +382,8 @@ private:
 	void SetSeats(std::vector<multiplayer::Seat> seats);
 	/// Gives the names of the seats to the service that hides names
 	void HideSeatNames() const;
+	/// Gives the names of the players of the other LAN games in the list to the service that hides names
+	void HideLanGameNames() const;
 	/// The names of the room's players, in the order of the roster
 	[[nodiscard]] std::vector<std::u16string> SeatNames() const;
 	/// On the local network, the search gives the players of the room: the room follows its server's answers

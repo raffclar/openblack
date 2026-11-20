@@ -3658,6 +3658,17 @@ def leash_key_presses(leash):
     return [(leash["turn"], "L", 0.0), (off_turn, "L", 0.0)]
 
 
+def end_judged(server_end, client_end, *, left, stopped_for_rejoin, decided_after_run, stopped_by_script):
+    """What the check says of the end of the game of one client: None when the end is not judged, "same" or
+    "different". A client that the script stopped cannot tell the end of the game, so its empty end is unknown, not
+    different. An end that such a client did tell is still compared, and a real mismatch fails."""
+    if not server_end or left or stopped_for_rejoin or decided_after_run:
+        return None
+    if stopped_by_script and not client_end:
+        return None
+    return "same" if client_end == server_end else "different"
+
+
 def decided_after_the_run(decided_at_turn, turns):
     """Whether the game was decided only after the last turn that the clients play. Then the clients stop at their own
     last turn, before the stop of the turns of the game."""
@@ -4053,6 +4064,9 @@ def main():
                         help="CLIENT:ARGUMENT: one more argument for the client (from 1), such as 2:--frame-stats=600; "
                              "give the option more times for more arguments")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
+    parser.add_argument("--test-end-differs", action="store_true",
+                        help="a check of this script: add a line to the end of the game that the server tells, so that each "
+                             "client that tells its end must say not the same (a stopped client tells none and is not judged)")
     parser.add_argument("--rejoin-second-at", type=int, metavar="TURN",
                         help="stop the second client once it compared TURN turns (a multiple of 100), and start a new "
                              "process of its player with a new ticket after --rejoin-after seconds; the new process must "
@@ -4792,6 +4806,9 @@ def main():
     summary["decided_after_run"] = decided_after_run
     # The winner and the rank of each god, as the server tells them. Each client that plays to the end must tell the same.
     server_end = sim_report.game_end_in_file(server_log)
+    if options.test_end_differs and server_end:
+        # A check of this script: the end of the server gets a line that no client tells, so a client that plays to the end must fail
+        server_end = server_end + ["Turn 0: test difference of the end of the game"]
     summary["game_end"] = server_end
     with open(server_log, encoding="utf-8", errors="replace") as file:
         server_lines_all = file.readlines()
@@ -4824,6 +4841,9 @@ def main():
         client_stop = lines_with(os.path.join(client_dir, "client.log"), ["The turns of the network game stopped after turn"])
         client_stopped_after = (int(re.search(r"after turn (\d+)", client_stop[-1]).group(1)) if client_stop else None)
         left = index == leaver
+        # The second client that the script stopped (--stop-second-after) did the turns up to its stop, and it never tells the
+        # stop of the turns or the end of the game of the server
+        stopped_by_script = index == 1 and stopped_second and options.stop_second_after is not None
         # The first process of the second client's player, which the script stopped for --rejoin-second-at: it compared
         # the turns up to its stop. The new process in client2-back plays to the end (the "rejoin" block).
         stopped_for_rejoin = index == 1 and options.rejoin_second_at is not None
@@ -4834,7 +4854,7 @@ def main():
             expected = leave_turn
             if not lines_with(os.path.join(client_dir, "client.log"), ["The player leaves the network game"]):
                 different = different + [-2]
-        elif stopped_after is not None and not decided_after_run:
+        elif stopped_after is not None and not decided_after_run and not stopped_by_script:
             # The client did every turn up to the last turn of the game, and none after it
             expected = stopped_after
             if client_stopped_after != stopped_after or max(client_turns, default=0) > stopped_after:
@@ -4849,7 +4869,10 @@ def main():
             by_session = session_judgement(server_lines_all, index, counts, expected)
             enough = by_session["enough"]
         client_end = sim_report.game_end_in_file(os.path.join(client_dir, "client.log"))
-        if server_end and not left and not stopped_for_rejoin and not decided_after_run and client_end != server_end:
+        end_verdict = end_judged(server_end, client_end, left=left, stopped_for_rejoin=stopped_for_rejoin,
+                                 decided_after_run=decided_after_run,
+                                 stopped_by_script=stopped_by_script)
+        if end_verdict == "different":
             print(f"client {index + 1} tells another end of the game than the server: {client_end} against {server_end}")
             different = different + [-3]
         # The compares of the turns between the part on purpose and the world that the client went on from differ; they
@@ -4887,6 +4910,7 @@ def main():
             "max_record_ms": max_record_ms(os.path.join(client_dir, "record.jsonl")),
             "last_compared": compared[-1] if compared else None,
             "stopped_after": client_stopped_after, "game_end": client_end,
+            "game_end_verdict": end_verdict or "not judged",
             "end_box": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The end box opens", "The end box asks", "leaves the network game"])[-3:],
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,

@@ -752,6 +752,30 @@ TEST_F(LobbyClientTest, ThePlayersOfTheRankingsAndThePagesGoToTheNamesSink)
 	EXPECT_EQ(_names.size(), 4u);
 }
 
+TEST_F(LobbyClientTest, TheNamesOfTheChatAndOfThePresenceEventsGoToTheNamesSink)
+{
+	Make();
+	LogIn();
+	_names.clear();
+	_push->Deliver(R"({"seq":1,"type":"chat.line","time":"2026-10-22T10:00:01Z","data":{"channel":"lobby",)"
+	               R"("from":{"id":5,"name":"Ann"},"text":"hello"}})");
+	_push->Deliver(R"({"seq":2,"type":"chat.joined","time":"2026-10-22T10:00:02Z","data":{"channel":"lobby",)"
+	               R"("account":{"id":6,"name":"Bob"}}})");
+	_push->Deliver(R"({"seq":3,"type":"chat.left","time":"2026-10-22T10:00:03Z","data":{"channel":"lobby",)"
+	               R"("account":{"id":7,"name":"Cid"}}})");
+	EXPECT_EQ(_names, (std::vector<std::string> {"Ann", "Bob", "Cid"}));
+
+	// The members and the history of a subscribed channel, and the players of a changed server
+	_push->Deliver(R"({"type":"subscribed","data":{"channel":"lobby","members":[{"account":{"id":8,"name":"Dee"},)"
+	               R"("status":"online"}],"history":[{"seq":1,"time":"2026-10-22T10:00:00Z","from":{"id":9,"name":"Eli"},"text":"hi"}]}})");
+	EXPECT_NE(std::ranges::find(_names, "Dee"), _names.end());
+	EXPECT_NE(std::ranges::find(_names, "Eli"), _names.end());
+	auto server = ServerJson("s1", 1);
+	server.replace(server.find(R"("players":[])"), 12, R"("players":[{"account":{"id":10,"name":"Flo"},"role":"god"}])");
+	_push->Deliver(R"({"seq":4,"type":"servers.changed","time":"2026-10-22T10:00:04Z","data":{"server":)" + server + "}}");
+	EXPECT_NE(std::ranges::find(_names, "Flo"), _names.end());
+}
+
 TEST_F(LobbyClientTest, PlayerDetailLinesSendTheVersionOfTheGame)
 {
 	Make();
