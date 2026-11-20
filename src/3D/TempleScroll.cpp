@@ -245,7 +245,8 @@ void TempleScrollText::Add(std::u16string_view source)
 
 	// Lines 230 texels across or wider break at the last space or hidden character before that far through them, by
 	// the number of characters, or there if there is none
-	std::u16string line(text);
+	// NOLINTNEXTLINE(readability-redundant-string-cstr): The text can hold a null character, and the copy stops there.
+	std::u16string line(text.c_str());
 	uint32_t width = 0;
 	do
 	{

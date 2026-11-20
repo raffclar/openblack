@@ -473,7 +473,8 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		for (size_t i = 0; i < animations.size(); ++i)
 		{
 			const auto clip = animationManager.Handle(resources::HashIdentifier(i));
-			packNames.emplace_back(clip ? std::string_view(clip->GetName()) : std::string_view {});
+			// NOLINTNEXTLINE(readability-redundant-string-cstr): The name can hold a null character, and the view stops there.
+			packNames.emplace_back(clip ? std::string_view(clip->GetName().c_str()) : std::string_view {});
 		}
 		resources.GetClipSounds().Handle(audio::clip_sounds::k_TableId.value())->Attach(packNames);
 	}
