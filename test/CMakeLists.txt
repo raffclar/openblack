@@ -2352,6 +2352,9 @@ openblack_setup_and_add_test(test_vanilla_world test_vanilla_world.cpp)
 add_test(NAME test_net_check_web
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_web.py
 )
+add_test(NAME test_net_check_end
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_end.py
+)
 add_test(NAME test_net_check_hold
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_hold.py
 )
