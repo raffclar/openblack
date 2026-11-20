@@ -59,6 +59,9 @@ public:
 	/// Whether a kind of guidance may be heard now, drawing its wait (the help level, the first land and the wait since
 	/// it was last heard)
 	virtual bool PlayNow(guidance::Kind kind) = 0;
+	/// A kind of guidance counts as heard in this turn. Each sound that the guidance plays does this, also a sound that
+	/// it cannot find.
+	virtual void MarkHeard([[maybe_unused]] guidance::Kind kind) {}
 	/// The same for an advisors' remark: the wait of any remark first, then its own kind's
 	virtual bool RemarkNow(guidance::Kind kind) = 0;
 	/// An advisors' remark of a kind, said when RemarkNow lets it: one of the kind's texts, picked at random

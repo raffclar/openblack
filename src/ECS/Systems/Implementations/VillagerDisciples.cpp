@@ -68,6 +68,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -820,7 +821,7 @@ void villager_disciple::PickedUp(entt::entity villager)
 {
 	const auto* disciple = Entities().TryGet<const Disciple>(villager);
 	Entities().AssignOrReplace<DiscipleHeld>(
-	    villager, DiscipleHeld {.atPickUp = disciple::AtPickUp(TypeOf(villager)),
+	    villager, DiscipleHeld {.atPickUp = disciple::AtPickUp(TypeOf(villager), FollowerTypeOf(villager)),
 	                            .tradeTown = disciple != nullptr ? disciple->tradeTown : entt::null});
 }
 
@@ -860,19 +861,30 @@ void villager_disciple::PutDown(entt::entity villager, std::optional<PlayerNames
 	{
 		return;
 	}
-	const float alignment = Locator::alignmentSystem::value().GetPlayerAlignment(*player);
-	const auto sample = disciple::MadeSample(TypeOf(villager), alignment, Locator::gameRandom::value().LocalFloatRand(1.0f));
-	if (!sample.has_value())
+	// The line waits for the wait of its guidance kind. At most one line plays in a turn.
+	auto* advisors = Locator::guidanceSystem::has_value() ? &Locator::guidanceSystem::value() : nullptr;
+	if (advisors != nullptr && !advisors->PlayNow(guidance::Kind::NewDiscipleSound))
 	{
 		return;
 	}
-	const auto sound = Locator::helpSpeechSystem::value().GetTable().FindSound(audio::SpeechBank::Guidance, *sample);
+	const auto type = TypeOf(villager);
+	const float alignment = Locator::alignmentSystem::value().GetPlayerAlignment(*player);
+	const float chance = disciple::MadeSampleNeedsChance(type) ? Locator::gameRandom::value().LocalFloatRand(1.0f) : 0.0f;
+	const auto sample = disciple::MadeSample(type, alignment, chance);
+	const auto sound = sample.has_value()
+	                       ? Locator::helpSpeechSystem::value().GetTable().FindSound(audio::SpeechBank::Guidance, *sample)
+	                       : std::nullopt;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("ai"), "Villager #{}: made a disciple, guidance line {} ({})", entt::to_integral(villager),
-	                    *sample, sound.has_value() ? "found" : "missing");
+	                    sample.value_or(0), sound.has_value() ? "found" : "missing");
 	if (sound.has_value() && Locator::resources::value().GetSounds().Contains(*sound))
 	{
 		Locator::sounds::value().StartSoundEffect(
 		    *sound, {.pitchPercent = k_MadePitch, .volume = k_MadeVolume, .voicePlayType = pack::AudioBankLoop::Once});
+	}
+	// The kind counts as heard also for a kind with no line, such as a worshipper
+	if (advisors != nullptr)
+	{
+		advisors->MarkHeard(guidance::Kind::NewDiscipleSound);
 	}
 }
 
