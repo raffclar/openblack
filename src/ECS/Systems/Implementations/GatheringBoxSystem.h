@@ -47,6 +47,9 @@ public:
 		std::function<std::vector<chat::people::FriendRecord>()> readFriends;
 		/// The profile of the player keeps these friends
 		std::function<void(std::span<const chat::people::FriendRecord> friends)> writeFriends;
+		/// Gets the name of each friend and of each person that the ping server tells, for example to keep the names out
+		/// of the error reports
+		std::function<void(std::u16string_view name)> hideName;
 	};
 
 	explicit GatheringBoxSystem(Services services);
@@ -66,6 +69,9 @@ private:
 	void Receive(const online::PingServerInterface::Message& message);
 	void Changed();
 	void UpdateFriends();
+	/// Gives the names of the friends to the service that hides names
+	void HideNames(std::span<const chat::people::FriendRecord> friends) const;
+	void HideName(std::u16string_view name) const;
 
 	[[nodiscard]] chat::people::List* People() const;
 

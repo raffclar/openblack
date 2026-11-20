@@ -31,7 +31,21 @@ void GatheringBoxSystem::SetBox(Box box)
 	if (_box.setFriends && _services.readFriends)
 	{
 		const auto friends = _services.readFriends();
+		HideNames(friends);
 		_box.setFriends(friends);
+	}
+}
+
+void GatheringBoxSystem::HideNames(std::span<const chat::people::FriendRecord> friends) const
+{
+	std::ranges::for_each(friends, [this](const auto& record) { HideName(record.name); });
+}
+
+void GatheringBoxSystem::HideName(std::u16string_view name) const
+{
+	if (_services.hideName)
+	{
+		_services.hideName(name);
 	}
 }
 
@@ -41,6 +55,7 @@ void GatheringBoxSystem::UpdateFriends()
 	{
 		if (const auto friends = _box.takeChangedFriends(); friends.has_value())
 		{
+			HideNames(*friends);
 			_services.writeFriends(*friends);
 		}
 	}
@@ -119,6 +134,7 @@ void GatheringBoxSystem::Receive(const online::PingServerInterface::Message& mes
 		    }
 		    else if constexpr (std::is_same_v<T, online::PingServerInterface::Here>)
 		    {
+			    HideName(value.name);
 			    if (people != nullptr && SeePerson(*people, value.name, value.user, own, _onlineTime) && _box.open)
 			    {
 				    _box.open();
@@ -127,6 +143,7 @@ void GatheringBoxSystem::Receive(const online::PingServerInterface::Message& mes
 		    }
 		    else
 		    {
+			    HideName(value.name);
 			    const auto text = ClippedLine(value.text);
 			    const bool plain = _services.plainChat && _services.plainChat();
 			    if (auto question = question::Parse(value.name, text, value.user, plain); question.has_value())

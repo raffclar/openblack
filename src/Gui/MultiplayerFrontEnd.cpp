@@ -1165,6 +1165,7 @@ void MultiplayerFrontEnd::TakeHostPicks(const std::optional<game_socket::Start>&
 void MultiplayerFrontEnd::UpdateRoom()
 {
 	_seats = Seats(_room->players);
+	HideSeatNames();
 	_shownSeat.reset();
 	_pickedName.reset();
 	// The lines of a player who left the room go. The game asks again when that player comes back.
@@ -1387,9 +1388,18 @@ std::optional<size_t> MultiplayerFrontEnd::GetServerLand() const
 	return _room.has_value() ? FindLand(_maps, _room->land) : std::nullopt;
 }
 
+void MultiplayerFrontEnd::HideSeatNames() const
+{
+	if (_services.hideName)
+	{
+		std::ranges::for_each(_seats, [this](const Seat& seat) { _services.hideName(seat.account.name); });
+	}
+}
+
 void MultiplayerFrontEnd::SetSeats(std::vector<Seat> seats)
 {
 	_seats = std::move(seats);
+	HideSeatNames();
 	// The pick stays on its player when the list changes, and goes when the player left the room
 	const auto found = _pickedName.has_value()
 	                       ? std::ranges::find(_seats, *_pickedName, [](const Seat& s) { return s.account.name; })

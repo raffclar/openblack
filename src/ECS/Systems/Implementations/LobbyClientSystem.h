@@ -61,12 +61,15 @@ class LobbyClientSystem final: public LobbyClientSystemInterface
 public:
 	/// The clock of the computer. The lobby gives the end of each token as a time of the calendar.
 	using Clock = std::function<std::chrono::system_clock::time_point()>;
+	/// Gets the name of a player from an answer of the lobby, for example to keep the name out of the error reports
+	using NameSink = std::function<void(std::string_view name)>;
 
 	/// With no config, the game has no lobby, and each call fails with NotConfigured. With no site, the game cannot get a
-	/// session from the sign-in of the lobby site.
+	/// session from the sign-in of the lobby site. The names sink gets the names of the players in the rankings of
+	/// players, in the clan pages and in the player pages. When the sink is empty, nothing gets these names.
 	LobbyClientSystem(std::optional<LobbyClientConfig> config, online::HttpClientInterface& http,
 	                  std::unique_ptr<online::PushChannelInterface> push, std::unique_ptr<online::TokenStoreInterface> tokens,
-	                  Clock clock, std::unique_ptr<online::SiteSessionInterface> site = nullptr);
+	                  Clock clock, std::unique_ptr<online::SiteSessionInterface> site = nullptr, NameSink names = {});
 	~LobbyClientSystem() override;
 	LobbyClientSystem(const LobbyClientSystem&) = delete;
 	LobbyClientSystem& operator=(const LobbyClientSystem&) = delete;
@@ -184,6 +187,9 @@ private:
 	void CallFor(online::HttpMethod method, std::string path, LobbyCallback<Value> callback, Parser parse, bool large = false,
 	             size_t mostBytes = 0);
 
+	/// Gives the name to the names sink, when the system has a sink
+	void GiveName(std::string_view name) const;
+
 	void OpenPush();
 	void HandlePush(std::string_view text);
 	void HandleControl(const lobby_api::PushEvent& frame);
@@ -195,6 +201,7 @@ private:
 	std::unique_ptr<online::TokenStoreInterface> _tokens;
 	Clock _clock;
 	std::unique_ptr<online::SiteSessionInterface> _site;
+	NameSink _names;
 
 	LobbySessionState _state {LobbySessionState::LoggedOut};
 	/// The session came from the sign-in of the site. It has no refresh token: the site gives each new access token.
