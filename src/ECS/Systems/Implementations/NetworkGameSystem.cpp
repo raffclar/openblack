@@ -28,6 +28,7 @@
 #include <emscripten/heap.h>
 #endif
 
+#include "3D/PlayersSymbols.h"
 #include "Commands/TurnCodec.h"
 #include "Common/BuildVersion.h"
 #include "Common/GameRandom.h"
@@ -42,6 +43,7 @@
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
+#include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
@@ -62,6 +64,26 @@ std::optional<ClanStartCreature> ClanStart()
 {
 	return openblack::Locator::clanCreatureSystem::has_value() ? openblack::Locator::clanCreatureSystem::value().StartCreature()
 	                                                           : std::nullopt;
+}
+
+/// The symbol of the profile that goes to the other players: its design, and the player's own picture for it when the
+/// player has one. No symbol without a profile.
+openblack::game_socket::StartSymbol SentSymbol(std::optional<int> profileSymbol)
+{
+	using openblack::Locator;
+	if (!profileSymbol.has_value() || *profileSymbol < 0 || *profileSymbol >= openblack::game_socket::k_SymbolDesigns)
+	{
+		return {};
+	}
+	openblack::game_socket::StartSymbol sent {.design = static_cast<uint8_t>(*profileSymbol), .picture = {}};
+	if (Locator::tattooEditorSystem::has_value())
+	{
+		if (const auto& picture = Locator::tattooEditorSystem::value().GetPictures().at(*sent.design); picture.has_value())
+		{
+			sent.picture = openblack::players_symbols::PackPicture(*picture);
+		}
+	}
+	return sent;
 }
 } // namespace
 
@@ -301,6 +323,14 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		                                 ? Locator::playerProfileSystem::value().GetCurrentProfile()
 		                                 : std::nullopt;
 		        return profile_alignment::Sent(profile.has_value() ? profile->alignment : 0.0);
+	        },
+	    .readSymbol =
+	        []() {
+		        // The symbol of the player's profile goes to the other players, with the player's own picture for it
+		        const auto profile = Locator::playerProfileSystem::has_value()
+		                                 ? Locator::playerProfileSystem::value().GetCurrentProfile()
+		                                 : std::nullopt;
+		        return SentSymbol(profile.has_value() ? std::optional(profile->symbol) : std::nullopt);
 	        },
 	    .readPlaysForClan = [this]() { return _playsForClan; },
 #if defined(OPENBLACK_DEVELOPER_TOOLS)

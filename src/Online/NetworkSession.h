@@ -71,6 +71,9 @@ struct NetworkSessionSettings
 	/// Reads the alignment of the player's profile, which goes to the other players with the creature file. With no
 	/// reader, the player sends an alignment of 0.
 	std::function<float()> readAlignment;
+	/// Reads the symbol of the player's profile, which goes to the other players with the creature file. With no reader,
+	/// the player sends no symbol.
+	std::function<game_socket::StartSymbol()> readSymbol;
 	/// Reads whether the god of the player plays for a clan, as the start begins. With no reader, the god plays for no
 	/// clan.
 	std::function<bool()> readPlaysForClan;
@@ -242,6 +245,9 @@ public:
 	void TurnsStartAgain(uint32_t after, uint32_t turn) override;
 	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
 	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
+	/// The symbol of the profile of the god's player, which the server sent before the start. None for a god that sent
+	/// no symbol, and for a god with no human.
+	[[nodiscard]] std::optional<game_socket::StartSymbol> StartSymbol(PlayerNames god) const;
 	[[nodiscard]] std::span<const uint8_t> EditorMindFile(uint64_t hash) const override { return _mindFiles.Find(hash); }
 	[[nodiscard]] std::span<const uint8_t> EditorScriptFile(uint8_t kind, uint64_t hash) const override
 	{
@@ -408,6 +414,7 @@ private:
 	void SendLoaded();
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	std::map<uint8_t, float> _startAlignments;
+	std::map<uint8_t, game_socket::StartSymbol> _startSymbols;
 	/// The mind files of the editor that the server sent during this game. A resume keeps them; a new join clears them.
 	editor::mind_loads::MindFileStore _mindFiles;
 	/// The files of the script tabs of the editor that the server sent during this game, and the parts of the file that

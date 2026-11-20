@@ -593,6 +593,7 @@ public:
 		    .readLand = {},
 		    .readCreature = {},
 		    .readAlignment = {},
+		    .readSymbol = {},
 		    .readPlaysForClan = {},
 		    .parts = {},
 		    .origin = join.origin,

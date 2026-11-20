@@ -1174,6 +1174,35 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		{
 			return std::nullopt;
 		}
+		// A frame from a game of an earlier build has no symbol
+		if (const auto* design = Member(object, "symbol"); design != nullptr && !design->is_null())
+		{
+			uint64_t value = 0;
+			if (!ReadUnsigned(object, "symbol", k_SymbolDesigns - 1, value))
+			{
+				return std::nullopt;
+			}
+			creature.symbol.design = static_cast<uint8_t>(value);
+		}
+		std::string picture;
+		if (!ReadString(object, "symbol_picture", picture, false))
+		{
+			return std::nullopt;
+		}
+		if (picture.size() > (k_SymbolPictureBytes + 2) / 3 * 4)
+		{
+			return std::nullopt;
+		}
+		if (!picture.empty())
+		{
+			auto greys = join_ticket::DecodeBase64Url(picture);
+			// A picture has its full size, and only a symbol has a picture
+			if (!greys.has_value() || greys->size() != k_SymbolPictureBytes || !creature.symbol.design.has_value())
+			{
+				return std::nullopt;
+			}
+			creature.symbol.picture = std::move(*greys);
+		}
 		return creature;
 	}
 	if (type == k_StopRequest)
@@ -1625,6 +1654,14 @@ std::string ToJson(const Frame& frame)
 			    if (value.slot.has_value())
 			    {
 				    object["slot"] = *value.slot;
+			    }
+			    if (value.symbol.design.has_value())
+			    {
+				    object["symbol"] = *value.symbol.design;
+				    if (!value.symbol.picture.empty())
+				    {
+					    object["symbol_picture"] = join_ticket::EncodeBase64Url(value.symbol.picture);
+				    }
 			    }
 		    }
 		    return Dump(object);
