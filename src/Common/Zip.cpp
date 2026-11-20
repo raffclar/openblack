@@ -82,6 +82,8 @@ std::vector<uint8_t> openblack::zip::Inflate(const std::vector<uint8_t>& deflate
 	case Z_MEM_ERROR:
 		inflateEnd(&strm);
 		throw std::runtime_error(fmt::format("Failed to inflate: {}", GetZlibError(returnStatus)));
+	default:
+		break;
 	}
 
 	inflateEnd(&strm);
