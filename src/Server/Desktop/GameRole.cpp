@@ -47,6 +47,7 @@
 #include "Server/LobbyHostReport.h"
 #include "Server/LobbyResults.h"
 #include "Server/LobbyStatus.h"
+#include "Server/NetworkFaults.h"
 #include "Server/TicketCheck.h"
 
 namespace openblack::server
@@ -93,6 +94,8 @@ bool IsAddress(std::string_view text)
 struct GameRole::Parts
 {
 	SocketWebSocketServer sockets;
+	/// Tests: the faults of the network between the server and its clients, around the real sockets
+	std::unique_ptr<FaultyWebSocketServer> faultySockets;
 	TicketCheck tickets {std::string(), ed25519::Verify};
 	std::unique_ptr<online::CurlHttpClient> http;
 	std::unique_ptr<LockstepHost> host;
@@ -480,8 +483,16 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		    });
 	}
 
+	if (settings.testFaults.Any())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"),
+		                   "Tests: each message of the game socket takes {} ms, and {}% of the packets are lost and sent "
+		                   "again (seed {})",
+		                   settings.testFaults.delayMilliseconds, settings.testFaults.lossPercent, settings.testFaults.seed);
+	}
+	parts.faultySockets = std::make_unique<FaultyWebSocketServer>(parts.sockets, settings.testFaults, SteadyMicroseconds);
 	parts.host = std::make_unique<LockstepHost>(
-	    parts.sockets, std::move(check), SteadyMicroseconds, MakeSecret,
+	    *parts.faultySockets, std::move(check), SteadyMicroseconds, MakeSecret,
 	    HostSettings {
 	        .start = std::move(start),
 	        .landChecksum = landChecksum,
@@ -517,7 +528,14 @@ void GameRole::Update()
 	{
 		parts.http->Poll();
 	}
-	parts.sockets.Poll();
+	if (parts.faultySockets)
+	{
+		parts.faultySockets->Poll();
+	}
+	else
+	{
+		parts.sockets.Poll();
+	}
 	if (parts.host)
 	{
 		parts.host->Update();

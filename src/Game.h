@@ -667,6 +667,11 @@ private:
 	/// The box that tells that the connection to the network game is lost: it shows once for each network session
 	online::ConnectionLostNotice _connectionLost;
 	bool _leaveNetworkGame {false};
+	/// No message came from the game server for a short time while the world waits for its turns: the hand, the camera
+	/// and the inputs that send commands stop (online::server_silence)
+	bool _serverSilent {false};
+	/// The releases of the buttons of the hand during the silence. The hand gets them when the silence ends.
+	std::vector<SDL_Event> _heldHandReleases;
 	/// What the end boxes of this computer keep between turns
 	end_game_box::State _endGameBoxState;
 	/// Tests: the player pressed Back in the land information box at the turn that the command line gives

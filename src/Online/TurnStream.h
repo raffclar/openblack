@@ -78,7 +78,7 @@ public:
 	/// The pings since the last ping that the server answered: each ping goes each second, thus this is about the seconds
 	/// with no answer
 	[[nodiscard]] uint32_t UnansweredPings() const { return _nextPing - _answeredPings; }
-	/// The time of the last binary frame from the server, by the clock of the stream. None before the first frame.
+	/// The time of the last text or binary frame from the server, by the clock of the stream. None before the first frame.
 	[[nodiscard]] std::optional<uint64_t> LastReceived() const { return _lastReceived; }
 
 private:
