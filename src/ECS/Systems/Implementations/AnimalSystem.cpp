@@ -2930,7 +2930,7 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 			}
 		}
 	};
-	ecs::pose_threads::ForEach(_poseWorkers, _poseJobs.size(), poseOne);
+	ecs::pose_threads::ForEach(_poseWorkers, _poseJobs.size(), ecs::pose_threads::k_AnimalPosesOnCaller, poseOne);
 
 	// Last the main thread plays the sounds on the frames that the clips passed, in the order of the walk. One world plays
 	// the sounds of all the animals in this frame.

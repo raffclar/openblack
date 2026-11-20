@@ -574,6 +574,8 @@ private:
 	/// A first start: the new player's box asks for the player's name before the first land loads. False when the
 	/// window was closed meanwhile
 	bool AskForNewPlayer();
+	/// Gives the current profile of the new player to the game interface and to its page of players
+	void ShowNewPlayerProfile();
 	/// The -SKIRMISH switch: the skirmish box asks for the land before the first land loads. Gives the land picked, or
 	/// nothing when the player went back or closed the window.
 	std::optional<std::filesystem::path> AskForSkirmishLand();

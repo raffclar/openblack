@@ -115,11 +115,16 @@ bool Game::AskForNewPlayer()
 	{
 		return true;
 	}
-	if (!Locator::gameInterface::has_value() || !Locator::windowing::has_value() ||
-	    Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
+	const bool hasWindow = Locator::gameInterface::has_value() && Locator::windowing::has_value() &&
+	                       Locator::config::value().graphicsBackend != GraphicsBackend::Noop;
+	if (!ShowsNewPlayerBox(hasWindow, _newGameStart.has_value()))
 	{
-		// With no box to ask in, the player gets the profile the game makes for one who gives no name: the account's
+		// With no box to ask in, or with a developer's start, the player gets the profile of one who gives no name
 		profiles.CreateProfile(u"", 0);
+		if (hasWindow)
+		{
+			ShowNewPlayerProfile();
+		}
 		return !_quitRequested;
 	}
 	// Tools wait while the player is asked
@@ -176,13 +181,19 @@ bool Game::AskForNewPlayer()
 		});
 	}
 	SDL_StopTextInput();
-	if (const auto profile = profiles.GetCurrentProfile(); profile.has_value())
+	ShowNewPlayerProfile();
+	return !_quitRequested;
+}
+
+void Game::ShowNewPlayerProfile()
+{
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (profile.has_value() && Locator::gameInterface::has_value())
 	{
 		Locator::gameInterface::value().SetPlayerProfile(gui::ToUtf16(profile->name), gui::ToUtf16(profile->creatureName),
 		                                                 profile->symbol, profile->settings);
 		RefreshPlayersPage();
 	}
-	return !_quitRequested;
 }
 
 std::optional<std::filesystem::path> Game::AskForSkirmishLand()

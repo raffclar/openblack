@@ -213,6 +213,15 @@ TEST(DiscipleRules, MissionariesPickedUpStopPreaching)
 	EXPECT_EQ(AtPickUp(Farmer), Farmer);
 }
 
+TEST(DiscipleRules, AFollowerPickedUpBeforeItStartsHasTheWorkThatItFollows)
+{
+	EXPECT_EQ(AtPickUp(None, Builder), Builder);
+	EXPECT_EQ(AtPickUp(None, Missionary), None);
+	// After it started the work, a follower has no work
+	EXPECT_EQ(AtPickUp(None, None), None);
+	EXPECT_EQ(AtPickUp(Farmer, None), Farmer);
+}
+
 // A disciple that the hand put down keeps its villager-in-hand reaction until its landing clip has played. Another
 // villager ends the reaction in each turn of its landing.
 TEST(DiscipleRules, ADisciplePutDownEndsItsInHandReactionAfterItsLanding)
@@ -258,6 +267,15 @@ TEST(DiscipleRules, SymbolsAndSamples)
 	EXPECT_EQ(MadeSample(ChangeHouse, -0.9f, 0.2f), 16u);
 	EXPECT_EQ(MadeSample(ChangeHouse, -0.9f, 0.7f), 15u);
 	EXPECT_FALSE(MadeSample(Worship, 0.0f, 0.0f).has_value());
+}
+
+TEST(DiscipleRules, OnlyAVillagerMadeToMoveHouseNeedsARandomNumberForItsLine)
+{
+	EXPECT_TRUE(MadeSampleNeedsChance(ChangeHouse));
+	for (const auto type : {Farmer, Forester, Fisherman, Builder, Breeder, Missionary, Craftsman, Trader, Worship})
+	{
+		EXPECT_FALSE(MadeSampleNeedsChance(type));
+	}
 }
 
 /// The symbol's height on the screen, in pixels, through the camera's view on a screen of that size

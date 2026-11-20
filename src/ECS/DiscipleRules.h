@@ -138,8 +138,10 @@ struct Choice
 	return !inCreaturesHand;
 }
 
-/// The work a villager is taken to have had as it is picked up: a missionary picked up has given up preaching
-[[nodiscard]] VillagerDisciple AtPickUp(VillagerDisciple current);
+/// The work a villager is taken to have had as it is picked up: a missionary picked up has given up preaching. A
+/// villager that follows a disciple, and did not start the work yet, has the work that it follows. If nothing offers it
+/// other work in the hand, it becomes a disciple of that work.
+[[nodiscard]] VillagerDisciple AtPickUp(VillagerDisciple current, VillagerDisciple following = VillagerDisciple::None);
 
 /// Whether a villager that comes down out of the physics keeps the mark of the player's hand. It keeps the mark when it
 /// had no body, or when the hand put it down on the land. A villager that flew loses the mark, so it does not set about
@@ -200,6 +202,12 @@ enum class Decision : uint8_t
 /// The guidance bank's sample that says a disciple was made, none for a kind with nothing to say. A villager made to
 /// move house is said one of two ways, at random by `chance` (0 to 1), and an evil player's way differs.
 [[nodiscard]] std::optional<uint32_t> MadeSample(VillagerDisciple type, float playerAlignment, float chance);
+/// Whether the sample of a kind needs the random `chance`. Only a villager made to move house needs it, so the game
+/// draws no number for the other kinds.
+[[nodiscard]] constexpr bool MadeSampleNeedsChance(VillagerDisciple type)
+{
+	return type == VillagerDisciple::ChangeHouse;
+}
 
 /// How making a disciple moves its player's alignment, before the player's alignment damps it: good when its town wants
 /// what it does more than the good threshold, evil when less than the evil one, nothing between or for a kind serving no

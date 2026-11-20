@@ -31,6 +31,7 @@ public:
 
 	void ProcessTurn() override;
 	bool PlayNow(guidance::Kind kind) override;
+	void MarkHeard(guidance::Kind kind) override;
 	bool RemarkNow(guidance::Kind kind) override;
 	void RemarkIfNow(guidance::Kind kind) override;
 	void TownAttacked(entt::entity town, PlayerNames attacker, entt::entity creature) override;

@@ -349,6 +349,14 @@ bool GuidanceSystem::PlayNow(guidance::Kind kind)
 	return guidance::MayPlay(rule, level, firstLand, wait, since);
 }
 
+void GuidanceSystem::MarkHeard(guidance::Kind kind)
+{
+	if (auto* heard = Heard(); heard != nullptr)
+	{
+		heard->lastTurn.at(static_cast<size_t>(kind)) = Turn();
+	}
+}
+
 bool GuidanceSystem::RemarkNow(guidance::Kind kind)
 {
 	return PlayNow(guidance::Kind::AnyRemark) && PlayNow(kind);
