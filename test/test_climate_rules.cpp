@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include <bit>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -148,4 +149,56 @@ TEST(ClimateRulesTest, DayOfMonthCountsFromTheEndOfTheLastMonth)
 	// After the end of the last month the day counts from that end
 	EXPECT_EQ(climate_rules::DayOfMonth(364.5f), 0.5f);
 	EXPECT_EQ(climate_rules::DayOfMonth(365.0f), 1.0f);
+}
+
+namespace
+{
+// Walks a list of storms where the negative numbers are storms that ended, and gives the storms that got a turn
+std::vector<int> WalkStorms(std::vector<int>& storms, bool& lastGone)
+{
+	std::vector<int> visited;
+	lastGone = climate_rules::WalkClimateStorms(
+	    storms, [](int storm) { return storm > 0; }, [&visited](int storm) { visited.push_back(storm); });
+	return visited;
+}
+} // namespace
+
+TEST(ClimateRulesTest, AClimateGivesEachLiveStormOneTurnWhenNoStormEnded)
+{
+	std::vector<int> storms = {1, 2, 3};
+	bool lastGone = true;
+	EXPECT_EQ(WalkStorms(storms, lastGone), (std::vector<int> {1, 2, 3}));
+	EXPECT_FALSE(lastGone);
+}
+
+TEST(ClimateRulesTest, AStormThatEndedFirstMakesTheNextStormLoseItsTurn)
+{
+	std::vector<int> storms = {-1, 2, 3};
+	bool lastGone = true;
+	EXPECT_EQ(WalkStorms(storms, lastGone), (std::vector<int> {3}));
+	EXPECT_EQ(storms, (std::vector<int> {2, 3}));
+	EXPECT_FALSE(lastGone);
+}
+
+TEST(ClimateRulesTest, TheStormsBeforeAStormThatEndedGetASecondTurnButTheFirst)
+{
+	std::vector<int> storms = {1, 2, -3, 4};
+	bool lastGone = true;
+	EXPECT_EQ(WalkStorms(storms, lastGone), (std::vector<int> {1, 2, 2, 4}));
+	EXPECT_EQ(storms, (std::vector<int> {1, 2, 4}));
+	EXPECT_FALSE(lastGone);
+}
+
+TEST(ClimateRulesTest, TheLastStormThatEndsStopsTheRain)
+{
+	std::vector<int> storms = {-1};
+	bool lastGone = false;
+	EXPECT_TRUE(WalkStorms(storms, lastGone).empty());
+	EXPECT_TRUE(storms.empty());
+	EXPECT_TRUE(lastGone);
+
+	// A list with only the first storm after a removal gives that storm no turn
+	storms = {-1, 2};
+	EXPECT_TRUE(WalkStorms(storms, lastGone).empty());
+	EXPECT_FALSE(lastGone);
 }

@@ -246,6 +246,33 @@ void script_weather::EndStorm(components::Storm& storm)
 	storm.dead = true;
 }
 
+components::Storm script_weather::StormFromSettings(const components::Storm& last)
+{
+	return {
+	    .position = last.position,
+	    .destination = last.position,
+	    .speed = 1.0f,
+	    .arrived = true,
+	    .innerRadius = last.innerRadius,
+	    .outerRadius = last.outerRadius,
+	    .fadeTime = last.fadeTime,
+	    .lastsFor = last.lastsFor,
+	    .strength = last.strength,
+	    .cloudHeight = last.cloudHeight,
+	    .cloudCount = last.cloudCount,
+	    .cloudShade = last.cloudShade,
+	    .rainSpeed = last.rainSpeed,
+	    .age = 0.0f,
+	    .currentPosition = last.position,
+	    .currentInnerRadius = 0.0f,
+	    .currentStrength = 0.0f,
+	    .effect = last.effect,
+	    .thunderWait = last.thunderWait,
+	    .boltWait = last.boltWait,
+	    .climate = entt::null,
+	};
+}
+
 script_weather::ThingAfterTurn script_weather::AfterTurn(bool stormLives, bool heldByScript)
 {
 	if (stormLives)

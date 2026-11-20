@@ -43,6 +43,10 @@ void SetInnerOuter(components::Storm& storm, float inner, float outer);
 /// A weather thing that goes ends its storm at once. The storm is dead from this turn, and it goes after its dead turns.
 /// A storm that is already dead does not change.
 void EndStorm(components::Storm& storm);
+/// A new storm for a weather thing from the settings of its last storm: the place, the size, the time, the clouds, the
+/// rain, the lightning and the weather. The new storm starts its life at the place of the last storm, stands still
+/// there at a speed of 1, and has no lightning wait yet.
+[[nodiscard]] components::Storm StormFromSettings(const components::Storm& last);
 
 /// The waits to its next flash and next fork, drawn afresh whenever a script changes the storm: the fork first, then the
 /// flash, each from its least up to its most
