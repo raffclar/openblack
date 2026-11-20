@@ -393,6 +393,16 @@ namespace openblack
 namespace
 {
 
+/// Gives the name of a player to the error reports, which keep it out of the log that they attach. Nothing when the
+/// program has no error reports.
+void HideNameInReports(std::string_view name)
+{
+	if (Locator::errorReports::has_value())
+	{
+		Locator::errorReports::value().HideName(name);
+	}
+}
+
 /// The lobby of the config, if the game has one
 std::optional<LobbyClientConfig> LobbyConfig()
 {
@@ -498,10 +508,12 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	    []() { return std::chrono::system_clock::now(); },
 #if defined(__EMSCRIPTEN__)
 	    // The browser game logs in as the account that is signed in on the site of the page
-	    std::make_unique<web::PageSiteSession>());
+	    std::make_unique<web::PageSiteSession>(),
 #else
-	    nullptr);
+	    nullptr,
 #endif
+	    // The error reports hide the names of the players that the rankings and the pages of the lobby give
+	    HideNameInReports);
 	Locator::lobbyRoom::emplace<LobbyRoomSystem>(
 	    Locator::lobbyClient::value(), online::build_id::Own(),
 	    []() {
@@ -726,6 +738,8 @@ void EmplaceGatheringBox(bool developer)
 			                                                      {bytes, text.size()});
 		}
 	};
+	// The error reports hide the names of the friends and of the people that the ping server tells
+	services.hideName = [](std::u16string_view name) { HideNameInReports(gui::ToUtf8(name)); };
 	services.showLine = [](std::u16string_view name, std::u16string_view text) {
 		if (Locator::chatSystem::has_value())
 		{

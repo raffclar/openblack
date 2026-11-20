@@ -369,6 +369,8 @@ struct FrontEndTest: public ::testing::Test
 	/// The notices of the lobby room that the front end gave
 	std::vector<online::lobby::LobbyNotice> notices;
 	std::vector<error_reports::FailureEvent> reports;
+	/// The names that the front end gave to the service that hides names
+	std::vector<std::string> hidden;
 
 	/// The front end goes first, because it still uses the fake lobby sessions when it closes
 	void TearDown() override { frontEnd.reset(); }
@@ -389,6 +391,7 @@ struct FrontEndTest: public ::testing::Test
 		    .nowMs = clock,
 		    .notice = [this](const online::lobby::LobbyNotice& notice) { notices.push_back(notice); },
 		    .report = [this](const error_reports::FailureEvent& event) { reports.push_back(event); },
+		    .hideName = [this](std::string_view name) { hidden.emplace_back(name); },
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
@@ -1764,6 +1767,42 @@ TEST_F(FrontEndTest, TheChatPickFollowsItsPlayerAndGoesWithThePlayer)
 	lan.servers[0].players = {Player(0, "Alice", "god")};
 	frontEnd->Update();
 	EXPECT_EQ(frontEnd->GetShownSeat(), std::nullopt);
+}
+
+TEST_F(FrontEndTest, TheNamesOfTheSeatsGoToTheServiceThatHidesNames)
+{
+	Make(true);
+	lan.servers = {Server("l1", "LAN game", 1, 32)};
+	lan.servers[0].players = {Player(0, "Bob", "god"), Player(0, "Eve", "observer"), Player(0, "Alice", "god")};
+	frontEnd->Next();
+	frontEnd->SetLobbyKind(LobbyKind::Lan);
+	frontEnd->Next();
+	frontEnd->Update();
+	EXPECT_TRUE(hidden.empty());
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	sockets.Accept(sockets.order.back());
+	Step();
+	ServerJoins();
+	ASSERT_EQ(frontEnd->GetBox(), Box::Room);
+	EXPECT_NE(std::ranges::find(hidden, "Bob"), hidden.end());
+	EXPECT_NE(std::ranges::find(hidden, "Eve"), hidden.end());
+	EXPECT_NE(std::ranges::find(hidden, "Alice"), hidden.end());
+
+	// A player that comes into the LAN room goes to the service too
+	lan.servers[0].players.push_back(Player(0, "Dan", "god"));
+	frontEnd->Update();
+	EXPECT_NE(std::ranges::find(hidden, "Dan"), hidden.end());
+}
+
+TEST_F(FrontEndTest, TheNamesOfTheSeatsOfAnInternetRoomGoToTheService)
+{
+	ToRoom();
+	ASSERT_FALSE(frontEnd->GetSeats().empty());
+	for (const auto& seat : frontEnd->GetSeats())
+	{
+		EXPECT_NE(std::ranges::find(hidden, seat.account.name), hidden.end());
+	}
 }
 
 TEST(MultiplayerRules, AChatLineNeedsACharacterAboveTheSpace)

@@ -95,6 +95,9 @@ public:
 		/// Sends an event of a failure to the error reports, for example a map download that failed. When this function
 		/// is empty, the front end sends no events.
 		std::function<void(const error_reports::FailureEvent& event)> report;
+		/// Gets the name of each player of the room, on the LAN and on the internet, for example to keep the names out
+		/// of the error reports. When this function is empty, nothing gets the names.
+		std::function<void(std::string_view name)> hideName;
 	};
 
 	struct Settings
@@ -377,6 +380,8 @@ private:
 	void FollowSelectedGame();
 	/// Changes the places of the room's players and keeps the pick on its player
 	void SetSeats(std::vector<multiplayer::Seat> seats);
+	/// Gives the names of the seats to the service that hides names
+	void HideSeatNames() const;
 	/// The names of the room's players, in the order of the roster
 	[[nodiscard]] std::vector<std::u16string> SeatNames() const;
 	/// On the local network, the search gives the players of the room: the room follows its server's answers

@@ -225,14 +225,23 @@ LobbyError LobbyErrorOf(const online::HttpResponse& response)
 LobbyClientSystem::LobbyClientSystem(std::optional<LobbyClientConfig> config, online::HttpClientInterface& http,
                                      std::unique_ptr<online::PushChannelInterface> push,
                                      std::unique_ptr<online::TokenStoreInterface> tokens, Clock clock,
-                                     std::unique_ptr<online::SiteSessionInterface> site)
+                                     std::unique_ptr<online::SiteSessionInterface> site, NameSink names)
     : _config(std::move(config))
     , _http(http)
     , _push(std::move(push))
     , _tokens(std::move(tokens))
     , _clock(std::move(clock))
     , _site(std::move(site))
+    , _names(std::move(names))
 {
+}
+
+void LobbyClientSystem::GiveName(std::string_view name) const
+{
+	if (_names)
+	{
+		_names(name);
+	}
 }
 
 LobbyClientSystem::~LobbyClientSystem()
@@ -1141,8 +1150,16 @@ void LobbyClientSystem::GetMyClans(LobbyCallback<lobby_api::ClanList> callback)
 
 void LobbyClientSystem::GetClan(int64_t clanId, LobbyCallback<lobby_api::ClanDetails> callback)
 {
+	// The page of a clan names its leader
 	CallFor<lobby_api::ClanDetails>(HttpMethod::Get, fmt::format("/clans/{}", clanId), std::move(callback),
-	                                [](const HttpResponse& response) { return lobby_api::ParseClanDetails(TextOf(response)); });
+	                                [this](const HttpResponse& response) {
+		                                auto clan = lobby_api::ParseClanDetails(TextOf(response));
+		                                if (clan.has_value())
+		                                {
+			                                GiveName(clan->leader);
+		                                }
+		                                return clan;
+	                                });
 }
 
 void LobbyClientSystem::GetClanLogo(int64_t clanId, LobbyCallback<std::vector<uint8_t>> callback)
@@ -1297,7 +1314,14 @@ void LobbyClientSystem::GetPlayerRanking(lobby_api::RankingQuery query, LobbyCal
 {
 	CallFor<lobby_api::RankingPage>(
 	    HttpMethod::Get, fmt::format("/rankings/players?limit={}&offset={}", query.limit, query.offset), std::move(callback),
-	    [](const HttpResponse& response) { return lobby_api::ParsePlayerRanking(TextOf(response)); });
+	    [this](const HttpResponse& response) {
+		    auto page = lobby_api::ParsePlayerRanking(TextOf(response));
+		    if (page.has_value())
+		    {
+			    std::ranges::for_each(page->entries, [this](const auto& entry) { GiveName(entry.name); });
+		    }
+		    return page;
+	    });
 }
 
 void LobbyClientSystem::GetClanRanking(lobby_api::RankingQuery query, LobbyCallback<lobby_api::RankingPage> callback)
@@ -1309,9 +1333,15 @@ void LobbyClientSystem::GetClanRanking(lobby_api::RankingQuery query, LobbyCallb
 
 void LobbyClientSystem::GetPlayer(int64_t playerId, LobbyCallback<lobby_api::PlayerDetails> callback)
 {
-	CallFor<lobby_api::PlayerDetails>(
-	    HttpMethod::Get, fmt::format("/players/{}", playerId), std::move(callback),
-	    [](const HttpResponse& response) { return lobby_api::ParsePlayerDetails(TextOf(response)); });
+	CallFor<lobby_api::PlayerDetails>(HttpMethod::Get, fmt::format("/players/{}", playerId), std::move(callback),
+	                                  [this](const HttpResponse& response) {
+		                                  auto player = lobby_api::ParsePlayerDetails(TextOf(response));
+		                                  if (player.has_value())
+		                                  {
+			                                  GiveName(player->name);
+		                                  }
+		                                  return player;
+	                                  });
 }
 
 void LobbyClientSystem::GetPlayerDetailLines(int64_t playerId, std::string version,
