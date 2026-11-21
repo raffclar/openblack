@@ -362,12 +362,31 @@ TEST(Startup, OnlyEscapeAndClicksSkipTheLogoStills)
 	keys.KeyUp();
 	EXPECT_FALSE(keys.EscapeDown());
 	// A click stays until the keys are reset
-	keys.Click();
+	keys.Click(1);
 	keys.KeyUp();
 	EXPECT_TRUE(keys.SkipsLogo());
 	EXPECT_FALSE(keys.EscapeDown());
 	keys.Reset();
 	EXPECT_FALSE(keys.SkipsLogo());
+}
+
+TEST(Startup, TheSecondPressOfADoubleClickDoesNotSkipAStill)
+{
+	StartupKeys keys;
+	LogoStill first;
+	first.Frame(100, keys);
+	// The first press starts the fade out and resets the keys
+	keys.Click(1);
+	first.Frame(100, keys);
+	EXPECT_FALSE(first.Ended());
+	// The second press comes as a double click: the still fades out as usual
+	keys.Click(StartupKeys::k_DoubleClick);
+	EXPECT_FALSE(keys.SkipsLogo());
+	first.Frame(100, keys);
+	EXPECT_FALSE(first.Ended());
+	// A third press is a click again
+	keys.Click(3);
+	EXPECT_TRUE(keys.SkipsLogo());
 }
 
 TEST(Startup, AClickDuringTheFadeOutSkipsTheNextStillToo)
@@ -376,12 +395,12 @@ TEST(Startup, AClickDuringTheFadeOutSkipsTheNextStillToo)
 	LogoStill first;
 	first.Frame(100, keys);
 	// A click while it fades in starts the fade out and resets the keys
-	keys.Click();
+	keys.Click(1);
 	first.Frame(100, keys);
 	EXPECT_FALSE(keys.SkipsLogo());
 	EXPECT_FALSE(first.Ended());
 	// A click while it fades out ends it, and the click stays
-	keys.Click();
+	keys.Click(1);
 	first.Frame(100, keys);
 	EXPECT_TRUE(first.Ended());
 	EXPECT_TRUE(keys.SkipsLogo());

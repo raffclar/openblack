@@ -519,6 +519,11 @@ void Game::StartNextGameWhenSaved()
 		                                                 profile->symbol, profile->settings);
 		RefreshPlayersPage();
 	}
+	// Each game sets the rule again: the player cannot skip a film when no player profile exists
+	if (Locator::videoSystem::has_value())
+	{
+		Locator::videoSystem::value().SetNoSkip(profiles.GetProfileCount() == 0);
+	}
 	switch (game_session::NextStart(end).value_or(game_session::Start::NewGame))
 	{
 	case game_session::Start::Continue:

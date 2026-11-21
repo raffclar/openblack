@@ -58,12 +58,22 @@ private:
 class StartupKeys
 {
 public:
+	/// The count of clicks of the second press of a double click
+	static constexpr uint8_t k_DoubleClick = 2;
+
 	/// A key goes down, also when it repeats
 	void KeyDown(bool escape) noexcept { _escapeDown = escape; }
 	/// Any key goes up: no key is down after it
 	void KeyUp() noexcept { _escapeDown = false; }
-	/// The left or the right mouse button goes down
-	void Click() noexcept { _clicked = true; }
+	/// The left or the right mouse button goes down. `clicks` is the count of the window's events: 2 is the second
+	/// press of a double click. The game gets that press as a double click, which does not skip a still.
+	void Click(uint8_t clicks) noexcept
+	{
+		if (clicks != k_DoubleClick)
+		{
+			_clicked = true;
+		}
+	}
 	/// The game forgets the keys and the clicks
 	void Reset() noexcept
 	{
