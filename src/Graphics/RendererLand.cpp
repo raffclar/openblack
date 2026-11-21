@@ -83,6 +83,7 @@
 #include "Graphics/Moon.h"
 #include "Graphics/ObjectShadows.h"
 #include "Graphics/RendererDetail.h"
+#include "Graphics/ScreenGlow.h"
 #include "Graphics/SeaRows.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Sun.h"
@@ -789,6 +790,7 @@ TextureHandle Renderer::UpdateLandLight() const
 		// Each frame fills the texture before it draws, thus the device keeps no copy after a restore
 		bgfx::setDeviceRestoreByApplication(toBgfx(*_landLightTexture));
 	}
+	_screenGlowStrength = 0;
 	const auto* dome =
 	    Locator::skySystem::has_value()
 	        ? Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome())
@@ -817,6 +819,7 @@ TextureHandle Renderer::UpdateLandLight() const
 		    .landColour = _landLightTable->GetLandColour(),
 		    .skyType = skyType,
 		});
+		_screenGlowStrength = graphics::screen_glow::Strength(sky_dome::Darkness(sky), detail.weather);
 		const auto& texels = _landLightTable->GetTexels();
 		bgfx::updateTexture2D(toBgfx(*_landLightTexture), 0, 0, 0, 0, LandLightTable::k_Size, 1,
 		                      bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));

@@ -223,6 +223,7 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 		bgfx::setViewFrameBuffer(static_cast<bgfx::ViewId>(pass), frameBuffer);
 	}
 	_redirected = true;
+	_redirectedTo = fromBgfx(frameBuffer);
 	bgfx::TextureRegion to;
 	to.init(readBack);
 	bgfx::TextureRegion from;
@@ -253,6 +254,7 @@ void OffscreenScreenshots::FrameEnded(uint32_t frame, ScreenshotFailures& failur
 			bgfx::setViewFrameBuffer(static_cast<bgfx::ViewId>(pass), BGFX_INVALID_HANDLE);
 		}
 		_redirected = false;
+		_redirectedTo.reset();
 	}
 	std::erase_if(_captures, [frame, &failures, &pictures](Capture& capture) {
 		if (frame < capture.readyAt)

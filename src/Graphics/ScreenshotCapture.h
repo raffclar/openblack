@@ -178,6 +178,8 @@ public:
 	/// picture whose pixels are back, or makes it when the game asked for it in memory. It records each picture that
 	/// it cannot write.
 	void FrameEnded(uint32_t frame, ScreenshotFailures& failures, ScreenPictures& pictures);
+	/// The target that the window's passes draw into this frame instead of the window, if a picture asked for one
+	[[nodiscard]] std::optional<FrameBufferHandle> RedirectedTo() const { return _redirectedTo; }
 
 private:
 	struct Capture
@@ -195,6 +197,8 @@ private:
 	std::vector<Capture> _captures;
 	/// Whether the window's passes draw aside this frame
 	bool _redirected {false};
+	/// The target that they draw into
+	std::optional<FrameBufferHandle> _redirectedTo;
 };
 
 } // namespace openblack::graphics
