@@ -118,7 +118,7 @@ StartupInput PollStartupInput(startup::StartupKeys* keys)
 		else if (event.type == SDL_MOUSEBUTTONDOWN && keys != nullptr &&
 		         (event.button.button == SDL_BUTTON_LEFT || event.button.button == SDL_BUTTON_RIGHT))
 		{
-			keys->Click();
+			keys->Click(event.button.clicks);
 		}
 	}
 	const auto buttons = SDL_GetMouseState(nullptr, nullptr);
