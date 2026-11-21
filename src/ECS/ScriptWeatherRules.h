@@ -48,6 +48,19 @@ void EndStorm(components::Storm& storm);
 /// there at a speed of 1, and has no lightning wait yet.
 [[nodiscard]] components::Storm StormFromSettings(const components::Storm& last);
 
+/// A new storm for a miracle: full strength, no clouds and no lightning of its own, a life that does not end, and rain
+/// that falls at a speed of 1. The game makes it at the origin of the world before the miracle puts it under its clouds.
+/// Like each new storm, it moves at a speed of 1 towards the point where it was made. Thus it always moves a little
+/// towards the origin of the world.
+[[nodiscard]] components::Storm StormOfAMiracle(float innerRadius, float outerRadius, float fadeSeconds, float cloudHeight,
+                                                const components::WeatherInfo& effect);
+/// The miracle puts its storm at a new point. Only the point that the storm moves from changes. The present place of
+/// the storm and its destination stay until the next step of the storm.
+void MoveStormOfAMiracle(components::Storm& storm, glm::vec3 centre);
+/// The travel of a storm in a step of this many seconds: from its point towards its destination at its speed, on the
+/// ground plane. When it is a thousandth of a unit or less from the destination, it arrives.
+void TravelStorm(components::Storm& storm, float seconds);
+
 /// The waits to its next flash and next fork, drawn afresh whenever a script changes the storm: the fork first, then the
 /// flash, each from its least up to its most
 template <typename GameFloatRand>
