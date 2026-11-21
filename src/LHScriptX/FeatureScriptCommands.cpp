@@ -1262,10 +1262,10 @@ void FeatureScriptCommands::CreateNewFeature(glm::vec3 position, const std::stri
 	LastObject() = FeatureArchetype::Create(position, info, rotation * 0.001f, scale * 0.001f);
 }
 
-void FeatureScriptCommands::SetInteractDesire(float)
+void FeatureScriptCommands::SetInteractDesire(float desire)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The value goes to the interest of each villager in the food and the wood that it sees
+	Locator::entitiesRegistry::value().Context().mapScriptGlobals.interactDesire = desire;
 }
 
 void FeatureScriptCommands::ToggleComputerPlayer(const std::string& affiliation, int32_t toggle)

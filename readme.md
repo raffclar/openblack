@@ -151,6 +151,25 @@ grammar.
 You can also join the [Discord for development discussion]((https://discord.gg/5QTexBU))
 if you are unsure of anything.
 
+### Git hooks
+The repository has a pre-commit hook. It checks the staged lines of C++ files in `src`, `apps`, `components` and
+`test` with clang-format 17. This is the version that the format check uses. The hook does not check lines that you
+did not change. If a line does not match, the commit stops and the hook prints the command that fixes it.
+
+To install the hook, run `sh tools/githooks/install.sh`. On Windows PowerShell, run the script with Git Bash:
+`& "C:\Program Files\Git\bin\sh.exe" tools/githooks/install.sh`. The script puts the hook in the common git
+folder, so it applies to all worktrees of the repository. If a different hook is already there, the script saves it
+as `pre-commit.bak`.
+
+The hook looks for clang-format 17 in this order:
+
+1. The environment variable `OB_CLANG_FORMAT_DIR`. It names the folder that holds `clang-format` and `git-clang-format`.
+2. The git setting `openblack.clangFormatDir` (`git config --global openblack.clangFormatDir <folder>`).
+3. The value `tools.clangFormat17Dir` in `.claude/openblack.local.json`.
+4. `clang-format-17` or `clang-format` on `PATH`.
+
+To get clang-format 17, run `python -m pip install --target <folder> clang-format==17.0.6`.
+
 # Extracting asset files from original game
 
 As mentioned before, the original game assets are required in order to run

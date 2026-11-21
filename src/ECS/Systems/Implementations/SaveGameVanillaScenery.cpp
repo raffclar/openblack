@@ -486,6 +486,8 @@ void SaveGameSystem::ImportVanillaGameValues(const gamesave::VanillaWorld& world
 	if (const auto data = world.GameData(); data.has_value())
 	{
 		registry.Context().thingsMade = data->thingsMade;
+		// The land's script can add a value to the interest of each villager in food and wood. The file keeps it.
+		registry.Context().mapScriptGlobals.interactDesire = data->interactDesire;
 	}
 	// The clock of day and night: the hour that shows, the cycle, and whether it runs
 	if (const auto cycle = world_import::ReadDayCycle(world); cycle.has_value() && Locator::skyClockSystem::has_value())
