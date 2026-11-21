@@ -204,6 +204,8 @@ struct VanillaGameData
 	/// The number of objects that the game made before the save
 	uint32_t thingsMade {0};
 	uint32_t worldPopulation {0};
+	/// The value that the land's script adds to the interest of each villager in food and wood
+	float interactDesire {0.0f};
 	/// All 8 values, also the values that openblack does not use
 	std::array<uint32_t, 8> words {};
 };

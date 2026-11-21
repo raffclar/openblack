@@ -48,6 +48,8 @@ FRAME_MEMORY = re.compile(r"Frame stats #(\d+) memory: process (\d+) MB(?: \((\d
                           r"render targets (-?[\d.]+) MB, graphics card (-?[\d.]+) MB of (-?[\d.]+) MB")
 FRAME_BUFFERS = re.compile(r"Frame stats #(\d+) buffers: vertex (\d+) of \d+, index (\d+) of \d+, shared vertex (\d+) of "
                            r"\d+, shared index (\d+) of \d+")
+# A line of the game log that names its turn, such as the deeds of the hands
+LOG_TURN = re.compile(r" at turn (\d+)")
 
 
 class GameError(Exception):
@@ -186,6 +188,7 @@ class LogTail:
         self.offset = 0
         self.graphics = {}
         self.lines = []
+        self.turn = None
 
     def poll(self, keep=None):
         try:
@@ -214,6 +217,8 @@ class LogTail:
                     "dynamic_vertex_buffers": int(match.group(4)),
                     "dynamic_index_buffers": int(match.group(5)),
                 })
+            if (match := LOG_TURN.search(line)) is not None:
+                self.turn = int(match.group(1))
             if keep is not None and keep.search(line):
                 found.append(line)
         return found
@@ -298,6 +303,8 @@ class Run:
         record.update(self.tail.graphics)
         if self.inspector is not None:
             record.update(game_sample(self.inspector))
+        elif self.tail.turn is not None:
+            record["turn"] = self.tail.turn
         if extra:
             record.update(extra)
         self.samples.write(json.dumps(record) + "\n")
@@ -494,7 +501,9 @@ def server(args):
     turns = int(args.game_hours * 3600 * TURNS_A_SECOND)
     command = [str(Path(args.exe).resolve()), "-g", args.game_path, "--fast", "--seed", str(args.seed),
                "-n", str(turns), "--frame-ms", "100", "-l", str(out.resolve() / "game.log"), "--snapshot-every", "0",
-               "--profile-folder", str(out.resolve() / "profile"), "--inspect-port", "0"]
+               "--profile-folder", str(out.resolve() / "profile")]
+    if not args.no_inspector:
+        command += ["--inspect-port", "0"]
     command += ["--gods-ring-map", "--all-computer-gods"] if args.gods_ring_map else ["-s", args.land]
     if args.gods_ring_map and args.ai_seed is not None:
         command += ["--ai-seed", str(args.ai_seed)]
@@ -502,11 +511,14 @@ def server(args):
     run = Run(args, command, out)
     try:
         run.start(cwd=Path(args.exe).resolve().parent)
-        try:
-            run.wait_inspector(timeout=300)
-        except GameError as error:
-            run.log(f"no inspector on the server ({error}); samples from outside only")
-            run.inspector = None
+        if args.no_inspector:
+            run.log("no inspector: the turns come from the lines of the game log")
+        else:
+            try:
+                run.wait_inspector(timeout=300)
+            except GameError as error:
+                run.log(f"no inspector on the server ({error}); samples from outside only")
+                run.inspector = None
         next_sample = time.monotonic()
         next_turn = 0
         dumps = sorted(int(t) for t in args.dump_turns.split(",")) if args.dump_turns else []
@@ -515,6 +527,9 @@ def server(args):
             if run.inspector is not None:
                 state = run.inspector.call("game.state", timeout=30)
                 turn = (state.get("result") or {}).get("turn") if state.get("ok") else None
+            else:
+                run.tail.poll()
+                turn = run.tail.turn
             if time.monotonic() >= next_sample or (turn is not None and turn >= next_turn):
                 run.sample("minute")
                 next_sample = time.monotonic() + args.every
@@ -656,6 +671,9 @@ def main():
     sub.choices["server"].add_argument("--dump-turns", help="Turns at which a server built with the leak tracer writes "
                                        "its live heap (see heap_dump), as 5000,15000")
     sub.choices["server"].add_argument("--stop-after-dumps", action="store_true")
+    sub.choices["server"].add_argument("--no-inspector", action="store_true",
+                                       help="Start the server with no inspector, so that it keeps no transcripts and "
+                                            "no logs for the inspector's tools. The turns come from the game log.")
     args = parser.parse_args()
     return {"skirmish": skirmish, "land": land, "server": server, "steps": steps}[args.mode](args)
 

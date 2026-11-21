@@ -743,7 +743,7 @@ uint32_t villager_forester::ReactToWoodPriority(entt::entity villager, entt::ent
 	    .distanceModifier =
 	        gutils::GetDistanceModifier(gutils::GetDistanceInMetres(PositionOf(villager), PositionOf(wood)), reach),
 	    .townTrigger = townInfo.desireTriggersVillagerAction,
-	    .interactDesire = 0.0f,
+	    .interactDesire = registry.Context().mapScriptGlobals.interactDesire,
 	});
 	return interested ? priority : 0;
 }

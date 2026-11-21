@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
 #include <array>
@@ -16,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/SkyDome.h"
+#include "Graphics/SkyDomeTarget.h"
 
 using namespace openblack;
 using sky_dome::Rows;
@@ -281,4 +283,47 @@ TEST(SkyDome, StandsRoundTheMiddleOfTheMapAtFiveTimesItsSize)
 	EXPECT_FLOAT_EQ(top.z, 2560.0f);
 	const auto side = placement * glm::vec4(-18578.9f, 0.0f, 0.0f, 1.0f);
 	EXPECT_FLOAT_EQ(side.x, 2560.0f - (5.0f * 18578.9f));
+}
+
+namespace
+{
+/// The 8-bit value of the screen for a point between two texels of 5-bit levels, filtered from a target of `bits`
+int FilteredLevel(uint32_t lower, uint32_t upper, double share, uint32_t bits)
+{
+	using graphics::sky_dome_target::StoredLevel;
+	const auto top = static_cast<double>((1U << bits) - 1U);
+	const double mixed = (StoredLevel(lower, bits) * (1.0 - share)) + (StoredLevel(upper, bits) * share);
+	return static_cast<int>(std::floor(((mixed / top) * 255.0) + 0.5));
+}
+} // namespace
+
+TEST(SkyDomeTarget, TenBitsKeepEachFilteredStepOfTheFiveBitPictures)
+{
+	namespace target = graphics::sky_dome_target;
+	EXPECT_EQ(target::Format(true), graphics::TextureFormat::RGB10A2);
+	EXPECT_EQ(target::Format(false), graphics::TextureFormat::RGBA8);
+	EXPECT_EQ(target::ChannelBits(target::Format(true)), 10U);
+	EXPECT_EQ(target::StoredLevel(31, 10), 1023U);
+	EXPECT_EQ(target::StoredLevel(16, 8), 132U);
+
+	// The filter between each two levels at each 256th of a texel gives the value of an exact 5-bit texture with 10 bits.
+	// With 8 bits some of these values are one step off.
+	int tenBitsOff = 0;
+	int eightBitsOff = 0;
+	for (uint32_t lower = 0; lower < 32; ++lower)
+	{
+		for (uint32_t upper = 0; upper < 32; ++upper)
+		{
+			for (int step = 0; step <= 256; ++step)
+			{
+				const double share = step / 256.0;
+				const double exact = ((lower * (1.0 - share)) + (upper * share)) / 31.0;
+				const auto expected = static_cast<int>(std::floor((exact * 255.0) + 0.5));
+				tenBitsOff += FilteredLevel(lower, upper, share, 10) != expected ? 1 : 0;
+				eightBitsOff += FilteredLevel(lower, upper, share, 8) != expected ? 1 : 0;
+			}
+		}
+	}
+	EXPECT_EQ(tenBitsOff, 0);
+	EXPECT_GT(eightBitsOff, 0);
 }

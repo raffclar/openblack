@@ -107,7 +107,8 @@ public:
 	/// A town of the player here has few adults left: the advisors warn of it when the town has people and is near the
 	/// point under the cursor
 	virtual void LowOnPeople(entt::entity town) = 0;
-	/// A villager of a town found food and the town measured its food shortage. When the shortage is high enough (see
+	/// A town calculated its food desire, with this food shortage: each turn, when food goes in or out of its store, and
+	/// when one of its villagers finds food. When the shortage is high enough (see
 	/// guidance::WarnsLowOnFood) and the town is of the player here, the advisors can warn of low food. The town must
 	/// have people and a working storage pit, and it must be near the point under the cursor.
 	virtual void LowOnFood([[maybe_unused]] entt::entity town, [[maybe_unused]] float shortage) {}
