@@ -31,6 +31,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Debug/ComputerActions.h"
+#include "Debug/TestbedScenarioDeathWave.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
@@ -54,6 +55,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureFromFile.h"
@@ -286,6 +288,29 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		ecs::world_objects::Remove(*object);
 		return "removed";
+	}
+	case Kind::KillVillagers:
+	{
+		// The villagers that can die now: alive, in a town, and not in the air. The order of the entity numbers is the
+		// same on every computer of a network game.
+		auto& registry = Locator::entitiesRegistry::value();
+		std::vector<entt::entity> living;
+		registry.Each<const ecs::components::Villager>(
+		    [&living](entt::entity villager, const ecs::components::Villager& person) {
+			    if (person.town != entt::null)
+			    {
+				    living.push_back(villager);
+			    }
+		    },
+		    entt::exclude<ecs::components::VillagerDeath, ecs::components::InPhysics>);
+		std::ranges::sort(living, {}, [](entt::entity villager) { return entt::to_integral(villager); });
+		size_t killed = 0;
+		for (const auto place : death_wave::SpreadPicks(living.size(), command.value))
+		{
+			ecs::world_objects::DestroyedByEffect(living[place], {.killer = std::nullopt, .weight = 0.0f});
+			killed += registry.AllOf<ecs::components::VillagerDeath>(living[place]) ? 1 : 0;
+		}
+		return fmt::format("{} of {} villagers killed", killed, living.size());
 	}
 	case Kind::GiveMagicTreesToStore:
 	{

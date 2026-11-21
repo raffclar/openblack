@@ -1113,6 +1113,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::InfiniteInfluenceCheat:
 	case Kind::LoadGeneratedLand:
 	case Kind::LoadMapLand:
+	case Kind::KillVillagers:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:
