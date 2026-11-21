@@ -1372,6 +1372,9 @@ struct Command
 		/// The game loads the land of the command in place of the land that is open, with its scripts from the start. In a
 		/// network game, every computer loads it before the same turn. Needs no creature
 		LoadMapLand,
+		/// An effect kills this many (value) living villagers of the towns at once, as a fire kills them. The villagers
+		/// that die spread evenly over all of them, in the order of their entity numbers. Needs no creature
+		KillVillagers,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

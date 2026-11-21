@@ -989,7 +989,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::ObserverCamera || command.kind == Kind::OwnGod || command.kind == Kind::BringCreature ||
 	    command.kind == Kind::ComputerPersonality || command.kind == Kind::ComputerUntaughtSends ||
 	    command.kind == Kind::HandCastOnDispenser || command.kind == Kind::HandCastOnCreature ||
-	    command.kind == Kind::CloseHeldMiracle || command.kind == Kind::JoinFootball)
+	    command.kind == Kind::CloseHeldMiracle || command.kind == Kind::JoinFootball || command.kind == Kind::KillVillagers)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
