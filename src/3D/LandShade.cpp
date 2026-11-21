@@ -15,6 +15,7 @@
 #include <bit>
 
 #include "3D/VillageLights.h"
+#include "Common/IntegerSteps.h"
 
 namespace openblack::land_shade
 {
@@ -53,7 +54,7 @@ glm::ivec2 BlockOf(int32_t x, int32_t z)
 }
 size_t CellIn(int32_t x, int32_t z)
 {
-	return static_cast<size_t>(((x & 0xF) * k_BlockSide) + (z & 0xF));
+	return ToIndex(((x & 0xF) * k_BlockSide) + (z & 0xF));
 }
 
 /// A light sets a cell to its level when the cell is above the warm levels, or when the level is brighter
@@ -79,7 +80,7 @@ void ShadedLand::Lay(std::span<const LaidBlock> blocks)
 		{
 			continue;
 		}
-		_slots.at(static_cast<size_t>((block.at.x * k_BlocksPerSide) + block.at.y)) = static_cast<int16_t>(_places.size());
+		_slots.at(ToIndex((block.at.x * k_BlocksPerSide) + block.at.y)) = static_cast<int16_t>(_places.size());
 		_places.push_back(block.at);
 		_laid.push_back(block.luminosity);
 		_shaded.push_back(block.luminosity);
@@ -105,7 +106,7 @@ int32_t ShadedLand::SlotOf(glm::ivec2 block) const
 	{
 		return -1;
 	}
-	return _slots[static_cast<size_t>((block.x * k_BlocksPerSide) + block.y)];
+	return _slots[ToIndex((block.x * k_BlocksPerSide) + block.y)];
 }
 
 void ShadedLand::SetInView(glm::ivec2 block, bool inView)
@@ -276,7 +277,7 @@ void CastShadow(ShadedLand& land, const Shadow& shadow)
 					    Bilinear(shadow.image, row + static_cast<size_t>(origin.y + z - place.cell.y), side, weight);
 					auto value = 255u - (((255u - blend) * alpha) / 255u);
 					value = std::max<uint32_t>(value, k_DarkestShadow);
-					auto& cell = cells[static_cast<size_t>((x * k_BlockSide) + z)];
+					auto& cell = cells[ToIndex((x * k_BlockSide) + z)];
 					if (value < cell)
 					{
 						cell = static_cast<uint8_t>(value);
@@ -380,7 +381,7 @@ void CastLight(ShadedLand& land, const Light& light, uint8_t fullLightGreen)
 			{
 				if (auto* before = land.Change(BlockOf(x, z - 1)); before != nullptr)
 				{
-					LightCell((*before)[static_cast<size_t>(((x & 0xF) * k_BlockSide) + k_BlockStep)], level);
+					LightCell((*before)[ToIndex(((x & 0xF) * k_BlockSide) + k_BlockStep)], level);
 					if ((x & 0xF) == 0 && x >= 1)
 					{
 						if (auto* corner = land.Change(BlockOf(x - 1, z - 1)); corner != nullptr)
@@ -394,7 +395,7 @@ void CastLight(ShadedLand& land, const Light& light, uint8_t fullLightGreen)
 			{
 				if (auto* before = land.Change(BlockOf(x - 1, z)); before != nullptr)
 				{
-					LightCell((*before)[static_cast<size_t>((k_BlockStep * k_BlockSide) + (z & 0xF))], level);
+					LightCell((*before)[ToIndex((k_BlockStep * k_BlockSide) + (z & 0xF))], level);
 				}
 			}
 		}

@@ -15,6 +15,7 @@
 
 #include <fmt/format.h>
 
+#include "Common/IntegerSteps.h"
 #include "ECS/PlayerColour.h"
 #include "Online/OnlineMapLand.h"
 #include "PingDisplay.h"
@@ -652,7 +653,7 @@ std::optional<LogoOpacities> DecodeClanLogo(std::span<const uint8_t> bmp)
 				green = bmp[at + 1];
 				red = bmp[at + 2];
 			}
-			logo.at(static_cast<size_t>((y * k_LogoSize) + x)) = static_cast<uint8_t>(NearestGrey(red, green, blue) >> 4u);
+			logo.at(ToIndex((y * k_LogoSize) + x)) = static_cast<uint8_t>(NearestGrey(red, green, blue) >> 4u);
 		}
 	}
 	return logo;

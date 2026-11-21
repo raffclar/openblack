@@ -15,6 +15,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 #include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
@@ -265,7 +266,7 @@ void surface::Sway(const Mesh& still, const Shape& shape, float maxTwist, float 
 		const float inwardSquared = inward * inward;
 		for (int step = 0; step < numU; ++step)
 		{
-			const auto index = static_cast<size_t>(ring * numU + step);
+			const auto index = ToIndex(ring * numU + step);
 			if (index >= out.vertices.size())
 			{
 				return;

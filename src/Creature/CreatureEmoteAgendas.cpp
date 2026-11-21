@@ -15,6 +15,7 @@
 
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureLayers.h"
 
 using namespace openblack;
@@ -297,7 +298,7 @@ bool creature_emote::PlayerNearbyAndFrightening(std::optional<float> handDistanc
 
 bool creature_emote::DoneWithin(uint32_t turnsSinceDone, uint32_t turnsPerSecond, float seconds)
 {
-	return turnsSinceDone != 0 && static_cast<float>(turnsSinceDone / turnsPerSecond) < seconds;
+	return turnsSinceDone != 0 && static_cast<float>(WholeQuotient(turnsSinceDone, turnsPerSecond)) < seconds;
 }
 
 bool creature_emote::ShowedOffRecently(uint32_t lastShowOffTurn, uint32_t turn)

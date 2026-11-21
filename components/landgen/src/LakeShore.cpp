@@ -142,7 +142,11 @@ struct LakeDistance
 	int depth;
 	std::vector<float> distance;
 
-	[[nodiscard]] float At(int x, int z) const { return distance[static_cast<size_t>((x - x0) * depth + (z - z0))]; }
+	[[nodiscard]] float At(int x, int z) const
+	{
+		const int index = (x - x0) * depth + (z - z0);
+		return distance[static_cast<size_t>(index)];
+	}
 };
 
 LakeDistance DistanceOf(const Grid<float>& heights, const lakes::Lake& lake, int reach)
@@ -164,8 +168,12 @@ LakeDistance DistanceOf(const Grid<float>& heights, const lakes::Lake& lake, int
 	LakeDistance box {.x0 = std::max(lowX - reach, 0), .z0 = std::max(lowZ - reach, 0), .width = 0, .depth = 0, .distance = {}};
 	box.width = std::min(highX + reach, side - 1) - box.x0 + 1;
 	box.depth = std::min(highZ + reach, side - 1) - box.z0 + 1;
-	box.distance.assign(static_cast<size_t>(box.width * box.depth), k_Far);
-	const auto local = [&box](int x, int z) -> float& { return box.distance[static_cast<size_t>(x * box.depth + z)]; };
+	const int cells = box.width * box.depth;
+	box.distance.assign(static_cast<size_t>(cells), k_Far);
+	const auto local = [&box](int x, int z) -> float& {
+		const int index = x * box.depth + z;
+		return box.distance[static_cast<size_t>(index)];
+	};
 	for (const auto corner : lake.corners)
 	{
 		if (heights.values[corner] <= lake.level)

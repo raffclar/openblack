@@ -21,6 +21,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/StormClouds.h"
 #include "3D/VillageLights.h"
+#include "Common/IntegerSteps.h"
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Transform.h"
@@ -369,7 +370,7 @@ void LandShadeSystem::UpdateMap(std::span<const glm::ivec2> changed)
 						continue;
 					}
 					_map[(static_cast<size_t>(v) * _mapSize.x) + static_cast<size_t>(u)] =
-					    (*cells)[static_cast<size_t>((x * land_shade::k_BlockSide) + z)];
+					    (*cells)[ToIndex((x * land_shade::k_BlockSide) + z)];
 				}
 			}
 			first = std::min(first, std::max(origin.y, 0));

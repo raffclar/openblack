@@ -15,6 +15,7 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "ECS/PlayerColour.h"
 #include "Gui/VillagerLabels.h"
 
@@ -80,7 +81,7 @@ void TempleMap::Build(const FindCell& findCell, std::vector<OrientedTextVertex>&
 	{
 		for (int32_t x = 0; x < k_Vertices; ++x)
 		{
-			const auto index = static_cast<size_t>(x + (z * k_Vertices));
+			const auto index = ToIndex(x + (z * k_Vertices));
 			auto& vertex = vertices.at(index);
 			const glm::ivec2 cell(x * k_CellsPerVertex, z * k_CellsPerVertex);
 			const auto* land = x / 2 < k_Blocks && z / 2 < k_Blocks ? findCell(glm::u16vec2(cell)) : nullptr;
@@ -106,9 +107,7 @@ void TempleMap::Build(const FindCell& findCell, std::vector<OrientedTextVertex>&
 			{
 				continue;
 			}
-			const auto at = [&vertices](int32_t vx, int32_t vz) {
-				return vertices.at(static_cast<size_t>(vx + (vz * k_Vertices)));
-			};
+			const auto at = [&vertices](int32_t vx, int32_t vz) { return vertices.at(ToIndex(vx + (vz * k_Vertices))); };
 			triangles.insert(triangles.end(), {at(x + 1, z + 1), at(x, z), at(x, z + 1)});
 			triangles.insert(triangles.end(), {at(x, z), at(x + 1, z + 1), at(x + 1, z)});
 		}
@@ -125,7 +124,7 @@ glm::vec3 TempleMap::ToMap(glm::vec2 world) const
 		{
 			return 0.0f;
 		}
-		return static_cast<float>(_altitudes.at(static_cast<size_t>(x + (z * k_Vertices))));
+		return static_cast<float>(_altitudes.at(ToIndex(x + (z * k_Vertices))));
 	};
 	const auto fraction = u - glm::vec2(vertex);
 	const float near =

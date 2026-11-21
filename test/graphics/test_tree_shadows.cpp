@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Graphics/LandShadowBake.h"
 #include "Visual/TreeShadows.h"
 
@@ -41,7 +42,7 @@ int RowCount(const tree_shadows::Coverage& coverage, int x)
 	int count = 0;
 	for (int z = 0; z < tree_shadows::k_BlockTexels; ++z)
 	{
-		count += coverage[static_cast<size_t>(x * tree_shadows::k_BlockTexels + z)] != 0 ? 1 : 0;
+		count += coverage[openblack::ToIndex(x * tree_shadows::k_BlockTexels + z)] != 0 ? 1 : 0;
 	}
 	return count;
 }

@@ -15,6 +15,7 @@
 #include <algorithm>
 
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 
@@ -47,13 +48,13 @@ float Normalise(glm::vec3& v)
 size_t maths::StrikeSearchCells(float radius)
 {
 	const auto across = CellsAcross(radius);
-	return static_cast<size_t>(4 * across * across);
+	return ToIndex(4 * across * across);
 }
 
 size_t maths::CloudSearchCells(float radius)
 {
 	const auto across = CellsAcross(radius);
-	return static_cast<size_t>(across * across);
+	return ToIndex(across * across);
 }
 
 size_t maths::ForkCount(size_t targets)

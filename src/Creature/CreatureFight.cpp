@@ -17,6 +17,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/ModelInverseSquareRoot.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
@@ -1027,7 +1028,7 @@ bool creature_fight::OwnTestEnds(State state, float animationMs, int32_t testMs,
 bool creature_fight::IsBlocking(State state, float timeMs, float startBlockDurationMs)
 {
 	// The half of the whole milliseconds, cut down to a whole millisecond
-	const auto half = static_cast<float>(static_cast<int32_t>(startBlockDurationMs) / 2);
+	const auto half = static_cast<float>(WholeQuotient(static_cast<int32_t>(startBlockDurationMs), 2));
 	switch (state)
 	{
 	case State::Block:

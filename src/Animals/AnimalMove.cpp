@@ -18,6 +18,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/IntegerSteps.h"
 
 using namespace openblack;
 
@@ -242,7 +243,7 @@ bool animals::OverLandAllTheWay(glm::vec2 bird, glm::vec2 point, const std::func
 	// A metre value on the middle of its 16 m square, truncated, and divided by the square towards nothing
 	const auto middle = [](float metres) {
 		const auto whole = static_cast<int32_t>(metres);
-		return static_cast<float>((whole / 16 * 16) + 8);
+		return static_cast<float>((WholeQuotient(whole, 16) * 16) + 8);
 	};
 	const glm::vec2 from(middle(point.x), middle(point.y));
 	const glm::vec2 to(middle(bird.x), middle(bird.y));

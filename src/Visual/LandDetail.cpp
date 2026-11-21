@@ -16,6 +16,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/NearestWhole.h"
 
 namespace openblack::graphics::land_detail
@@ -527,7 +528,7 @@ FrameDetail ClassifyFrame(const FrameInputs& inputs, std::span<const BlockPlace>
 	const auto onGrid = [](glm::ivec2 at) {
 		return at.x >= 0 && at.x < k_BlocksPerSide && at.y >= 0 && at.y < k_BlocksPerSide;
 	};
-	const auto gridIndex = [](glm::ivec2 at) { return static_cast<size_t>(at.x * k_BlocksPerSide + at.y); };
+	const auto gridIndex = [](glm::ivec2 at) { return ToIndex(at.x * k_BlocksPerSide + at.y); };
 
 	frame.blocks.resize(blocks.size());
 	for (size_t i = 0; i < blocks.size(); ++i)

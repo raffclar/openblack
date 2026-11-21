@@ -15,6 +15,7 @@
 
 #include <OnlineMapThumbnail.h>
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 namespace openblack::gui::land_thumbnail
@@ -115,7 +116,7 @@ Picture Paint(const onlinemap::ThumbnailFile& file, std::span<const uint32_t, 8>
 		for (int32_t x = 0; x < side; ++x)
 		{
 			const auto at = static_cast<size_t>((y * side) + x) * 3;
-			picture.texels[static_cast<size_t>((y * k_TextureSide) + x)] =
+			picture.texels[ToIndex((y * k_TextureSide) + x)] =
 			    TexelOf(static_cast<uint8_t>(file.picture[at]), static_cast<uint8_t>(file.picture[at + 1]),
 			            static_cast<uint8_t>(file.picture[at + 2]));
 		}
@@ -154,15 +155,14 @@ Texels LogoSheet(std::span<const uint8_t> logo)
 	{
 		for (int32_t x = 0; x < k_LogoCellSide; ++x)
 		{
-			const auto at = static_cast<size_t>((y * k_LogoCellSide) + x);
+			const auto at = ToIndex((y * k_LogoCellSide) + x);
 			if (at >= logo.size())
 			{
 				continue;
 			}
 			// White, with the logo's opacity as the alpha
 			const auto alpha = static_cast<uint16_t>(logo[at] & 0xFu);
-			sheet[static_cast<size_t>(((cellY + y) * k_TextureSide) + cellX + x)] =
-			    static_cast<uint16_t>((alpha << 12) | 0xFFFu);
+			sheet[ToIndex(((cellY + y) * k_TextureSide) + cellX + x)] = static_cast<uint16_t>((alpha << 12) | 0xFFFu);
 		}
 	}
 	return sheet;
@@ -171,7 +171,7 @@ Texels LogoSheet(std::span<const uint8_t> logo)
 float LogoAlpha(float boxAlpha) noexcept
 {
 	const auto alpha = std::clamp(static_cast<int32_t>(boxAlpha * 255.0f), 0, 255);
-	return static_cast<float>(alpha / 4) / 255.0f;
+	return static_cast<float>(WholeQuotient(alpha, 4)) / 255.0f;
 }
 
 } // namespace openblack::gui::land_thumbnail

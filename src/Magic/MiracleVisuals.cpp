@@ -19,6 +19,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/ModelInverseSquareRoot.h"
 #include "Common/PortableRotations.h"
 #include "Magic/DispenserRules.h"
@@ -126,7 +127,7 @@ glm::vec2 visuals::GlintUvOffset(float frame)
 {
 	const int cell = static_cast<int>(frame) % k_GlintCells;
 	return {static_cast<float>(cell % k_GlintCellsPerRow) * k_GlintCellSize,
-	        static_cast<float>(cell / k_GlintCellsPerRow) * k_GlintCellSize};
+	        static_cast<float>(WholeQuotient(cell, k_GlintCellsPerRow)) * k_GlintCellSize};
 }
 
 int visuals::RingCount(int powerUp)
@@ -201,7 +202,7 @@ glm::vec2 visuals::PhialUvOffset(float frame)
 {
 	const int cell = static_cast<int>(frame) % k_PhialCells;
 	return {static_cast<float>(cell % k_PhialCellsPerRow) * k_PhialCellSize,
-	        static_cast<float>(cell / k_PhialCellsPerRow) * k_PhialCellSize};
+	        static_cast<float>(WholeQuotient(cell, k_PhialCellsPerRow)) * k_PhialCellSize};
 }
 
 float visuals::PhialPulseSpeed(int receiveType)
@@ -496,7 +497,7 @@ glm::vec2 visuals::GlowUvOffset(float frame)
 	const int cell = static_cast<int>(std::nearbyint(frame)) % k_GlowCells;
 	constexpr int k_CellsPerRow = 8;
 	return {static_cast<float>(cell % k_CellsPerRow) * k_GlowCellSize,
-	        static_cast<float>(cell / k_CellsPerRow) * k_GlowCellSize};
+	        static_cast<float>(WholeQuotient(cell, k_CellsPerRow)) * k_GlowCellSize};
 }
 
 std::optional<int> visuals::PowerUpVoiceSample(int powerUp)

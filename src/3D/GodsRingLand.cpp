@@ -17,6 +17,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 
 namespace
@@ -89,12 +91,12 @@ public:
 		{
 			for (int z = 0; z < k_Side; ++z)
 			{
-				_altitudes[static_cast<size_t>((x * k_Side) + z)] = gods_ring_land::Altitude(x, z);
+				_altitudes[ToIndex((x * k_Side) + z)] = gods_ring_land::Altitude(x, z);
 			}
 		}
 	}
 
-	[[nodiscard]] uint8_t At(int x, int z) const { return _altitudes[static_cast<size_t>((x * k_Side) + z)]; }
+	[[nodiscard]] uint8_t At(int x, int z) const { return _altitudes[ToIndex((x * k_Side) + z)]; }
 
 	[[nodiscard]] flat_land::CellKind KindOf(int x, int z) const
 	{
@@ -160,7 +162,7 @@ LandData gods_ring_land::Build()
 				{
 					const auto mapX = (x * k_CellsPerBlock) + cx;
 					const auto mapZ = (z * k_CellsPerBlock) + cz;
-					block.cells.at(static_cast<size_t>((cx * k_BlockCornersPerSide) + cz)) =
+					block.cells.at(ToIndex((cx * k_BlockCornersPerSide) + cz)) =
 					    CellOf(corners.At(mapX, mapZ), corners.KindOf(mapX, mapZ));
 				}
 			}
@@ -169,8 +171,7 @@ LandData gods_ring_land::Build()
 			block.mapZ = static_cast<float>(z) * k_BlockSize;
 			block.blockX = static_cast<uint32_t>(x);
 			block.blockZ = static_cast<uint32_t>(z);
-			data.blockIndexLookup.at(static_cast<size_t>(x * LandData::k_BlocksPerSide + z)) =
-			    static_cast<uint16_t>(block.index);
+			data.blockIndexLookup.at(ToIndex(x * LandData::k_BlocksPerSide + z)) = static_cast<uint16_t>(block.index);
 		}
 	}
 

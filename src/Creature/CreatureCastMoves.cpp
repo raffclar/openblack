@@ -23,6 +23,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreaturePlayerAttention.h"
@@ -147,7 +148,7 @@ std::optional<glm::vec2> creature_cast_moves::FindClearArea(glm::vec2 point, flo
 	{
 		for (int32_t x = 0; x < k_ClearAreaCells; ++x)
 		{
-			open.at(static_cast<size_t>(x + z * k_ClearAreaCells)) = clear(originX + x, originZ + z);
+			open.at(ToIndex(x + z * k_ClearAreaCells)) = clear(originX + x, originZ + z);
 		}
 	}
 	// A square of cells as wide as the area, rounded up to whole cells
@@ -170,7 +171,7 @@ std::optional<glm::vec2> creature_cast_moves::FindClearArea(glm::vec2 point, flo
 			{
 				for (int32_t j = 0; j < cells && fits; ++j)
 				{
-					fits = !inDisc(i, j) || open.at(static_cast<size_t>(a + i + (b + j) * k_ClearAreaCells));
+					fits = !inDisc(i, j) || open.at(ToIndex(a + i + (b + j) * k_ClearAreaCells));
 				}
 			}
 			if (!fits)

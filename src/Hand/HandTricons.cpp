@@ -16,6 +16,7 @@
 
 #include <glm/gtc/constants.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/PortableMath.h"
 
 namespace openblack::hand_tricons
@@ -291,7 +292,8 @@ std::array<std::optional<Sprite>, k_IconCount> Sprites(glm::vec2 centre, float h
 		}
 		const int frame = k_FirstFrame + static_cast<int>(i);
 		const auto cellMin =
-		    glm::vec2(static_cast<float>(frame % k_AtlasColumns), static_cast<float>(frame / k_AtlasColumns)) * k_Cell;
+		    glm::vec2(static_cast<float>(frame % k_AtlasColumns), static_cast<float>(WholeQuotient(frame, k_AtlasColumns))) *
+		    k_Cell;
 		const float angle = i == 1 ? rotateAngle : 0.0f;
 		const float cosine = portable_math::Cos(angle);
 		const float sine = portable_math::Sin(angle);
@@ -380,7 +382,7 @@ DemoMouse LayoutDemoMouse(glm::ivec2 centre, bool labelOnLeft, float labelWidth,
 	mouse.mouseGlow = {1.0f, 1.0f, 1.0f, static_cast<float>(k_GlowAlpha) / 255.0f};
 	mouse.labelGlowMin = {labelX, std::trunc(top + pad)};
 	mouse.labelGlowMax = {std::trunc(labelX + labelWidth), std::trunc(top + size - pad)};
-	mouse.labelGlow = {1.0f, 0.0f, 0.0f, static_cast<float>(k_GlowAlpha / 3) / 255.0f};
+	mouse.labelGlow = {1.0f, 0.0f, 0.0f, static_cast<float>(WholeQuotient(k_GlowAlpha, 3)) / 255.0f};
 	mouse.labelAt = {labelX, top + pad};
 	mouse.labelSize = static_cast<float>(labelSize);
 	mouse.labelColour = {1.0f, 0.0f, 0.0f, 1.0f};

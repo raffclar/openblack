@@ -19,6 +19,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/MachineClock.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Graphics/RendererInterface.h"
@@ -696,7 +697,7 @@ void StatisticsBox::DrawRow(const DialogPainter& painter, const List::ItemPlace&
 		const auto parts = BarParts(row);
 		const auto left = static_cast<float>(bar.min.x + 2);
 		const auto width = static_cast<float>(bar.Width() - 4);
-		const auto middle = static_cast<float>((bar.min.y + bar.max.y) / 2);
+		const auto middle = static_cast<float>(WholeQuotient(bar.min.y + bar.max.y, 2));
 		auto start = left;
 		for (size_t i = 0; i < parts.size(); ++i)
 		{

@@ -27,6 +27,7 @@
 #include "3D/SkyDome.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Commands/PlayerCommands.h"
+#include "Common/IntegerSteps.h"
 #include "Common/PortableMath.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDecisionTree.h"
@@ -109,7 +110,7 @@ std::string GiveOwnTattooPicture(size_t design)
 		{
 			const auto distance = static_cast<int>(
 			    std::sqrt(static_cast<float>(((x - k_Middle) * (x - k_Middle)) + ((y - k_Middle) * (y - k_Middle)))));
-			const auto index = static_cast<size_t>((y * static_cast<int>(creature_tattoo::k_DesignSize)) + x);
+			const auto index = ToIndex((y * static_cast<int>(creature_tattoo::k_DesignSize)) + x);
 			rings.at(index) = distance < k_Middle && (distance / 6) % 2 == 0 ? uint8_t {255} : uint8_t {0};
 		}
 	}

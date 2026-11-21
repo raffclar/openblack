@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <string>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 using namespace openblack::creature_panel;
 
@@ -161,7 +163,7 @@ std::u16string creature_panel::FormatValue(Row row, const Values& values, const 
 float creature_panel::LabelColumnWidth(std::span<const float> labelWidths, float size)
 {
 	const auto widest = labelWidths.empty() ? 0.0f : *std::ranges::max_element(labelWidths);
-	return widest + static_cast<float>(static_cast<int>(size) / 2);
+	return widest + static_cast<float>(WholeQuotient(static_cast<int>(size), 2));
 }
 
 int creature_panel::RowPitch(glm::u16vec2 resolution)
@@ -178,18 +180,19 @@ Layout creature_panel::Compute(glm::u16vec2 resolution, bool withReward, float l
 	const int size = RowPitch(resolution);
 	Layout layout;
 	layout.size = static_cast<float>(size);
-	layout.textSize = static_cast<float>(size / 2);
+	layout.textSize = static_cast<float>(WholeQuotient(size, 2));
 	const int x0 = width / k_BoxInsets;
 	const int x1 = (width / k_BoxWidths) + x0;
 	// With the reward a quarter of the way down; following a creature near the top, three quarters as high
 	const int y0 = withReward ? screenHeight / 4 : screenHeight / k_BoxInsets;
 	const float heightShare = withReward ? 1.0f : 0.75f;
-	const int y1 = static_cast<int>((static_cast<float>(screenHeight / 3) * heightShare) + static_cast<float>(y0));
+	const int y1 =
+	    static_cast<int>((static_cast<float>(WholeQuotient(screenHeight, 3)) * heightShare) + static_cast<float>(y0));
 	layout.box = {.min = {static_cast<float>(x0), static_cast<float>(y0)},
 	              .max = {static_cast<float>(x1), static_cast<float>(y1)}};
 
 	layout.rowCount = withReward ? k_RowCount : k_RowCount - 1;
-	const auto gap = static_cast<float>(size / 4);
+	const auto gap = static_cast<float>(WholeQuotient(size, 4));
 	const auto left = static_cast<float>(static_cast<int>(static_cast<float>(x0) + labelColumnWidth));
 	const auto right = static_cast<float>(static_cast<int>(left + labelColumnWidth));
 	for (size_t i = 0; i < layout.rowCount; ++i)

@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::help::click_cue
 {
 
@@ -107,7 +109,7 @@ std::optional<Cue> Layout(int screenWidth, int top, int bottom, float share, flo
 	cue.iconGlowColour = {1.0f, 1.0f, 1.0f, static_cast<float>(glowAlpha) / 255.0f};
 	cue.labelGlow = {{static_cast<float>(labelX), std::trunc(yF + pad)},
 	                 {std::trunc(static_cast<float>(labelX) + labelWidth), std::trunc(yF + static_cast<float>(size) - pad)}};
-	cue.labelGlowColour = {1.0f, 1.0f, 0.0f, static_cast<float>(glowAlpha / 3) / 255.0f};
+	cue.labelGlowColour = {1.0f, 1.0f, 0.0f, static_cast<float>(WholeQuotient(glowAlpha, 3)) / 255.0f};
 	cue.labelAt = {static_cast<float>(labelX), yF + pad};
 	cue.labelSize = static_cast<float>(labelSize);
 	cue.labelColour = {1.0f, 1.0f, 0.0f, alphaF};

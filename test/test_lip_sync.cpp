@@ -19,6 +19,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Sound/LipSync.h"
 
 using namespace openblack::audio::lip_sync;
@@ -76,12 +77,12 @@ TEST(LipSync, FftFindsACosine)
 	std::vector<float> data(2 * n, 0.0f);
 	for (int i = 0; i < n; ++i)
 	{
-		data[static_cast<size_t>(2 * i)] = static_cast<float>(std::cos(2.0 * std::numbers::pi * bin * i / n));
+		data[openblack::ToIndex(2 * i)] = static_cast<float>(std::cos(2.0 * std::numbers::pi * bin * i / n));
 	}
 	Fft(data, n, true);
 	for (int i = 0; i < n; ++i)
 	{
-		const float magnitude = std::hypot(data[static_cast<size_t>(2 * i)], data[static_cast<size_t>(2 * i + 1)]);
+		const float magnitude = std::hypot(data[openblack::ToIndex(2 * i)], data[openblack::ToIndex(2 * i + 1)]);
 		const float expected = (i == bin || i == n - bin) ? n / 2.0f : 0.0f;
 		EXPECT_NEAR(magnitude, expected, 1e-3f) << "bin " << i;
 	}

@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Common/IntegerSteps.h"
+
 namespace rules = openblack::ecs::relaxation_rules;
 
 namespace
@@ -35,7 +37,7 @@ float rules::FootballDesire(uint32_t age, const FootballGame& game, uint32_t now
 	}
 	// Whole rest periods only: under one gives a share of nothing
 	const uint32_t since = std::min(now - game.lastGameTurn, k_FootballRestTurns);
-	const auto periods = static_cast<float>(since / k_FootballRestTurns);
+	const auto periods = static_cast<float>(openblack::WholeQuotient(since, k_FootballRestTurns));
 	return gameFloatRand ? gameFloatRand(periods) : 0.0f;
 }
 

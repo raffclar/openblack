@@ -15,6 +15,7 @@
 
 #include "3D/CreatureCaveTargets.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -174,7 +175,8 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 		std::vector<Command> calls;
 		for (size_t i = 0; i < k_Crowd; ++i)
 		{
-			const auto offset = glm::vec2(static_cast<float>(i % 5) * 14.0f - 28.0f, static_cast<float>(i / 5) * 14.0f - 21.0f);
+			const auto offset =
+			    glm::vec2(static_cast<float>(i % 5) * 14.0f - 28.0f, static_cast<float>(WholeQuotient(i, 5)) * 14.0f - 21.0f);
 			auto setup = Content(i % 2 == 0 ? CreatureType::Tiger : CreatureType::Cow, offset, 180.0f);
 			setup.pauseMind = true;
 			crowd.push_back(std::move(setup));

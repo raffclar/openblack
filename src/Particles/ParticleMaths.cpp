@@ -19,6 +19,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/IntegerSteps.h"
 #include "Common/PortableRotations.h"
 #include "Common/X87.h"
 #include "Common/X87Matrix.h"
@@ -210,7 +211,7 @@ maths::UvRect maths::SpriteCellUv(int cell, int cellsPerRow)
 	const auto n = static_cast<uint32_t>(std::max(1, cellsPerRow));
 	const auto c = static_cast<uint32_t>(cell) & k_SpriteCellMask;
 	const float size = 1.0f / static_cast<float>(n);
-	return {.corner = {static_cast<float>(c % n) * size, static_cast<float>(c / n) * size}, .size = {size, size}};
+	return {.corner = {static_cast<float>(c % n) * size, static_cast<float>(WholeQuotient(c, n)) * size}, .size = {size, size}};
 }
 
 glm::mat3 maths::AngleY(float a)

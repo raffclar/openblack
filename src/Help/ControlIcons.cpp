@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::help::control_icons
 {
 
@@ -266,7 +268,7 @@ MouseCell CellFor(MouseClick click, int row, uint32_t tickMs)
 		break;
 	}
 	const auto column = static_cast<float>(cell % 4);
-	const auto cellRow = static_cast<float>(cell / 4);
+	const auto cellRow = static_cast<float>(WholeQuotient(cell, 4));
 	MouseCell out;
 	out.uvMin = {(mirrored ? column + 1.0f : column) * k_Cell, cellRow * k_Cell};
 	out.uvMax = {(mirrored ? column : column + 1.0f) * k_Cell, (cellRow + 1.0f) * k_Cell};
@@ -298,7 +300,7 @@ float KeyTextSize(int size)
 
 float KeyCapWidth(int size, float textWidth)
 {
-	const float width = textWidth + static_cast<float>((size * 2) / 3);
+	const float width = textWidth + static_cast<float>(WholeQuotient(size * 2, 3));
 	return std::max(width, static_cast<float>(size));
 }
 
@@ -338,7 +340,7 @@ KeyCap LayoutKeyCap(const Placed& placed)
 		cap.slices.at(i) = ToBox(x.at(i), y0, x.at(i + 1), y1);
 		cap.uvs.at(i) = {{k_KeyU.at(i), k_KeyVTop}, {k_KeyU.at(i + 1), k_KeyVBottom}};
 	}
-	cap.textAt = {static_cast<float>(x0 + (height / 5)), static_cast<float>(y0 + (height / 7))};
+	cap.textAt = {static_cast<float>(x0 + (WholeQuotient(height, 5))), static_cast<float>(y0 + (WholeQuotient(height, 7)))};
 	cap.textSize = KeyTextSize(height);
 	cap.textColour = {0.0f, 0.0f, 0.0f, placed.alpha};
 	return cap;

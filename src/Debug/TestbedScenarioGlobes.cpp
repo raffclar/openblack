@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "3D/TempleRoom.h"
+#include "Common/IntegerSteps.h"
 #include "TestbedScenarioBuilders.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -169,7 +170,7 @@ std::vector<DispenserSetup> CreatureSpellDispensers()
 	{
 		const int place = type - k_First;
 		const auto column = static_cast<float>(place % k_PerRow) - static_cast<float>(k_PerRow - 1) * 0.5f;
-		const auto row = static_cast<float>(place / k_PerRow);
+		const auto row = static_cast<float>(WholeQuotient(place, k_PerRow));
 		dispensers.push_back(
 		    {.type = static_cast<MagicType>(type), .offset = {column * k_Spacing, k_FirstRow + row * k_Spacing}});
 	}

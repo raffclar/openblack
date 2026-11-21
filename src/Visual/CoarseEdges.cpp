@@ -16,6 +16,8 @@
 #include <ranges>
 #include <utility>
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::graphics::coarse_edges
 {
 
@@ -184,7 +186,7 @@ Levels CornerCellAfter(const FramePaints& paints, int32_t samples, glm::ivec2 bl
 		members.at(m) = PaintAt(paints, lowest + index);
 		cells.at(m) = members.at(m).paintedBefore ? kept(lowest + index, cellOf(index)) : Levels {0};
 	}
-	const auto own = static_cast<size_t>((ownIndex.x * 2) + ownIndex.y);
+	const auto own = ToIndex((ownIndex.x * 2) + ownIndex.y);
 	if (std::ranges::all_of(members, [](const FramePaint& member) { return member.rank == 0; }))
 	{
 		return kept(block, cell);

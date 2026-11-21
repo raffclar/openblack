@@ -15,6 +15,7 @@
 
 #include <glm/common.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "TempleLight.h"
 
 using namespace openblack;
@@ -35,7 +36,7 @@ constexpr float k_StepShare = 1.0f / static_cast<float>(TempleFog::k_Steps);
 glm::vec3 Towards(glm::vec3 from, glm::vec3 to, int32_t step)
 {
 	// A quarter of the step is the share, of 256, the colour moves by
-	const auto share = static_cast<float>(step / 4);
+	const auto share = static_cast<float>(WholeQuotient(step, 4));
 	return from + glm::floor((to - from) * share / 256.0f);
 }
 } // namespace

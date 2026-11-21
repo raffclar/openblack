@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <iterator>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 using namespace openblack::ecs;
 
@@ -142,7 +144,7 @@ MagicType reward::MagicAtLevel(const std::array<MagicType, 4>& magicTypes, const
 	{
 		return MagicType::None;
 	}
-	const auto index = static_cast<size_t>(level + 1);
+	const auto index = ToIndex(level + 1);
 	if (index < magicTypes.size())
 	{
 		return magicTypes.at(index);

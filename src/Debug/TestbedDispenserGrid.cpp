@@ -11,6 +11,7 @@
 
 #include <glm/common.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Registry.h"
@@ -33,7 +34,7 @@ std::vector<glm::vec2> testbed_dispensers::GridOffsets(size_t count)
 	for (size_t i = 0; i < count; ++i)
 	{
 		const auto column = static_cast<float>(i % k_GridColumns);
-		const auto row = static_cast<float>(i / k_GridColumns);
+		const auto row = static_cast<float>(WholeQuotient(i, k_GridColumns));
 		offsets.emplace_back(k_GridOrigin + glm::vec2(column, row) * k_GridSpacing);
 	}
 	return offsets;

@@ -16,6 +16,8 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::help::tip_bubble
 {
 
@@ -356,7 +358,7 @@ void AddGesture(std::vector<GestureIcon>& out, int gesture, float top, float siz
 	    .sheet = gesture / k_GestureCells,
 	    .min = {middle - (size * 0.5f), top},
 	    .max = {middle + (size * 0.5f), top + size},
-	    .uvMin = {static_cast<float>(cell % 4) * k_GestureCell, static_cast<float>(cell / 4) * k_GestureCell},
+	    .uvMin = {static_cast<float>(cell % 4) * k_GestureCell, static_cast<float>(WholeQuotient(cell, 4)) * k_GestureCell},
 	    .uvMax = {},
 	    .colour = colour,
 	    .shadow = shadow,

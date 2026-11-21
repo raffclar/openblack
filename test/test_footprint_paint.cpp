@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/FootprintPaint.h"
+#include "Common/IntegerSteps.h"
 
 namespace footprint_paint = openblack::footprint_paint;
 
@@ -37,7 +38,7 @@ std::vector<uint16_t> BlackBlock()
 
 uint16_t At(const std::vector<uint16_t>& block, int row, int column)
 {
-	return block[static_cast<size_t>(row * k_Side + column)];
+	return block[openblack::ToIndex(row * k_Side + column)];
 }
 
 /// A square of 10 units (16 texels) a side from the origin, as two triangles that share the diagonal from (0, 0) to
@@ -140,7 +141,7 @@ TEST(FootprintPaint, EachLandTexelTakesTheNearestPictureTexelKeptInsideThePictur
 	{
 		for (int u = 0; u < 4; ++u)
 		{
-			picture[static_cast<size_t>(v * 4 + u)] = static_cast<uint16_t>(0xF000 | (u + 1));
+			picture[openblack::ToIndex(v * 4 + u)] = static_cast<uint16_t>(0xF000 | (u + 1));
 		}
 	}
 	auto block = BlackBlock();
@@ -359,8 +360,8 @@ void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, 
 			{
 				const int texelU = std::clamp(Nearest(u), 0, picture.width - 1);
 				const int texelV = std::clamp(Nearest(v), 0, picture.height - 1);
-				const auto texel = picture.texels[static_cast<size_t>((picture.width * texelV) + texelU)];
-				auto& land = block[static_cast<size_t>((row * k_BlockTexels) + column)];
+				const auto texel = picture.texels[openblack::ToIndex((picture.width * texelV) + texelU)];
+				auto& land = block[openblack::ToIndex((row * k_BlockTexels) + column)];
 				land = mix == Mix::Colour ? Paint(land, texel) : LowerAlpha(land, texel);
 			}
 			u = u + du;
@@ -619,7 +620,7 @@ TEST(FootprintPaint, APaintOfThePartsOfTheChangedPrintsGivesTheTexelsOfAWholePai
 			{
 				for (int column = part.firstColumn; column <= part.lastColumn; ++column)
 				{
-					const auto texel = static_cast<size_t>(row * side + column);
+					const auto texel = openblack::ToIndex(row * side + column);
 					painted[texel] = own[texel];
 				}
 			}

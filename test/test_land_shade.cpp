@@ -28,6 +28,7 @@
 #include "ECS/Registry.h"
 
 #define LOCATOR_IMPLEMENTATIONS 1
+#include "Common/IntegerSteps.h"
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 
 using namespace openblack;
@@ -48,7 +49,7 @@ land_shade::LaidBlock Block(glm::ivec2 at, uint8_t luminosity = k_Laid)
 
 uint8_t CellOf(const land_shade::ShadedLand& land, glm::ivec2 block, int32_t x, int32_t z)
 {
-	return land.Find(block)->at(static_cast<size_t>((x * land_shade::k_BlockSide) + z));
+	return land.Find(block)->at(ToIndex((x * land_shade::k_BlockSide) + z));
 }
 
 /// A camera looking straight down on the first 300 units of x: the first two blocks along x are in view

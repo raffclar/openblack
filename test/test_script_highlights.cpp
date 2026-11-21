@@ -34,6 +34,7 @@
 #include "Resources/ResourceManager.h"
 
 #define LOCATOR_IMPLEMENTATIONS 1
+#include "Common/IntegerSteps.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 
 using namespace openblack;
@@ -134,7 +135,8 @@ public:
 	[[nodiscard]] std::optional<Sprite> SparkLook(uint32_t picture) const override
 	{
 		return Sprite {.texture = {},
-		               .uvMin = glm::vec2(static_cast<float>(picture % 8), static_cast<float>(picture / 8)) * 0.125f,
+		               .uvMin =
+		                   glm::vec2(static_cast<float>(picture % 8), static_cast<float>(WholeQuotient(picture, 8))) * 0.125f,
 		               .uvExtent = glm::vec2(0.125f),
 		               .tint = glm::vec4(1.0f)};
 	}

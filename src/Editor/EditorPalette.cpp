@@ -17,6 +17,7 @@
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
 #include "Animals/HunterRules.h"
+#include "Common/IntegerSteps.h"
 
 namespace openblack::editor
 {
@@ -139,7 +140,7 @@ std::vector<glm::vec2> GridLayout(size_t count, float spacing)
 	for (size_t i = 0; i < count; ++i)
 	{
 		const auto column = static_cast<float>(i % columns);
-		const auto row = static_cast<float>(i / columns);
+		const auto row = static_cast<float>(WholeQuotient(i, columns));
 		// North is +z on the land, so the first row is the far one
 		points.emplace_back((column * spacing) - halfWidth, halfDepth - (row * spacing));
 	}

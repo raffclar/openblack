@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "Camera/CameraDrag.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 using namespace openblack::camera_drag;
@@ -60,8 +61,11 @@ GameStep GameEdgeTurn(glm::ivec2 cursor, glm::ivec2 previous, glm::ivec2 screen,
 		cursor.y = static_cast<int>((y * picture + height + 1.0f) * 0.5f);
 	}
 	// The game keeps both arctangents of the whole pixel offsets wide and rounds their difference one time
-	const auto before = openblack::x87::Atan2(previous.x - screen.x / 2, previous.y - screen.y / 2);
-	auto angle = openblack::x87::Sub(openblack::x87::Atan2(cursor.x - screen.x / 2, cursor.y - screen.y / 2), before);
+	const auto before = openblack::x87::Atan2(previous.x - openblack::WholeQuotient(screen.x, 2),
+	                                          previous.y - openblack::WholeQuotient(screen.y, 2));
+	auto angle = openblack::x87::Sub(openblack::x87::Atan2(cursor.x - openblack::WholeQuotient(screen.x, 2),
+	                                                       cursor.y - openblack::WholeQuotient(screen.y, 2)),
+	                                 before);
 	if (angle > glm::pi<float>())
 	{
 		angle -= glm::two_pi<float>();
@@ -100,7 +104,7 @@ glm::ivec2 RingPixel(const EdgeArea& area, float place)
 	const auto side = std::abs(across) < 0.5f ? 0.0f : (across > 0.0f ? 1.0f : -1.0f);
 	return glm::ivec2(glm::round(
 	    glm::vec2(static_cast<float>(area.screen.x) * 0.5f + across + side * static_cast<float>(area.Folded()) * 0.5f,
-	              static_cast<float>(area.screen.y / 2) + down)));
+	              static_cast<float>(openblack::WholeQuotient(area.screen.y, 2)) + down)));
 }
 
 /// The camera's turn, in degrees, for each pixel the mouse moves from a place on the ring

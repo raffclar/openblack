@@ -17,6 +17,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/matrix.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/PortableRotations.h"
 #include "Common/X87.h"
 
@@ -170,8 +171,8 @@ glm::vec4 openblack::creature_fight::marks::FrameUv(uint32_t frame)
 {
 	constexpr float k_Cell = 1.0f / static_cast<float>(k_FramesPerRow);
 	const auto cell = frame % k_FrameCount;
-	return {static_cast<float>(cell % k_FramesPerRow) * k_Cell, static_cast<float>(cell / k_FramesPerRow) * k_Cell, k_Cell,
-	        k_Cell};
+	return {static_cast<float>(cell % k_FramesPerRow) * k_Cell,
+	        static_cast<float>(WholeQuotient(cell, k_FramesPerRow)) * k_Cell, k_Cell, k_Cell};
 }
 
 glm::vec3 openblack::creature_fight::marks::ToLocal(const glm::mat4& frame, const glm::vec3& point)

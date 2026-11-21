@@ -20,6 +20,7 @@
 #include <OnlineMapThumbnail.h>
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Gui/LandThumbnail.h"
 
 using namespace openblack;
@@ -81,7 +82,7 @@ constexpr std::array<uint32_t, 8> k_Colours = {0xFFFF4646u, 0xFF47FF54u, 0xFFE34
 
 uint16_t At(const Picture& picture, int32_t x, int32_t y)
 {
-	return picture.texels.at(static_cast<size_t>((y * k_TextureSide) + x));
+	return picture.texels.at(ToIndex((y * k_TextureSide) + x));
 }
 } // namespace
 
@@ -166,7 +167,7 @@ TEST(LandThumbnail, TheLogoIsWhiteInItsCell)
 	const auto sheet = LogoSheet(logo);
 	ASSERT_EQ(sheet.size(), static_cast<size_t>(k_TextureSide * k_TextureSide));
 	// Cell 5 is the second cell of the second row
-	const auto first = static_cast<size_t>((64 * k_TextureSide) + 64);
+	const auto first = ToIndex((64 * k_TextureSide) + 64);
 	EXPECT_EQ(sheet[first], 0xFFFF);
 	EXPECT_EQ(sheet[first + 1], 0x8FFF);
 	EXPECT_EQ(sheet[first + 2], 0x0FFF);

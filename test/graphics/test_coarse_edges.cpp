@@ -19,6 +19,8 @@
 #include <Visual/CoarseEdges.h>
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack::graphics::coarse_edges;
 
 namespace
@@ -96,7 +98,7 @@ public:
 	/// The texel of a block's slot at a cell (z, x)
 	[[nodiscard]] Levels CellOf(glm::ivec2 block, Cell cell) const
 	{
-		return _slots.at(PlaceOf(block)).at(static_cast<size_t>(((cell.y + 1) * _side) + cell.x + 1));
+		return _slots.at(PlaceOf(block)).at(openblack::ToIndex(((cell.y + 1) * _side) + cell.x + 1));
 	}
 
 	/// Whether each edge texel of every painted slot holds the value of the texel next to it inside
@@ -108,7 +110,7 @@ public:
 			for (int32_t i = 0; i < _side; ++i)
 			{
 				const auto& s = slot;
-				const auto at = [&](int32_t row, int32_t column) { return s.at(static_cast<size_t>((row * _side) + column)); };
+				const auto at = [&](int32_t row, int32_t column) { return s.at(openblack::ToIndex((row * _side) + column)); };
 				if (at(i, 0) != at(i, 1) || at(i, last) != at(i, last - 1) || at(0, i) != at(1, i) ||
 				    at(last, i) != at(last - 1, i))
 				{
@@ -129,7 +131,7 @@ private:
 		return slot;
 	}
 	Slot* Painted(glm::ivec2 block) { return IsPainted(block) ? &_slots.at(PlaceOf(block)) : nullptr; }
-	Levels& At(Slot& slot, int32_t row, int32_t column) const { return slot.at(static_cast<size_t>((row * _side) + column)); }
+	Levels& At(Slot& slot, int32_t row, int32_t column) const { return slot.at(openblack::ToIndex((row * _side) + column)); }
 
 	int32_t _samples;
 	int32_t _side;

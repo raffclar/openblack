@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "3D/FlatLand.h"
+#include "Common/IntegerSteps.h"
 #include "Common/PortableMath.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -73,8 +74,8 @@ void AddIdleField(std::vector<Scenario>& all)
 	for (size_t i = 0; i < 40; ++i)
 	{
 		auto object = k_Kinds.at(i % k_Kinds.size());
-		object.offset =
-		    k_Field + glm::vec2 {(static_cast<float>(i % 8) - 3.5f) * 9.0f, (static_cast<float>(i / 8) - 2.0f) * 9.0f};
+		object.offset = k_Field + glm::vec2 {(static_cast<float>(i % 8) - 3.5f) * 9.0f,
+		                                     (static_cast<float>(WholeQuotient(i, 8)) - 2.0f) * 9.0f};
 		objects.push_back(object);
 	}
 	all.push_back({

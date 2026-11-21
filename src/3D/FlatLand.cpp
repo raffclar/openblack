@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 
 namespace
@@ -61,7 +63,7 @@ lnd::LNDMaterial flat_land::CheckerMaterial()
 		for (int z = 0; z < lnd::LNDMaterial::k_Height; ++z)
 		{
 			const auto colour = MaterialColour(x, z);
-			auto& texel = material.texels.at(static_cast<size_t>(x * lnd::LNDMaterial::k_Height + z));
+			auto& texel = material.texels.at(ToIndex(x * lnd::LNDMaterial::k_Height + z));
 			texel.b = colour.b;
 			texel.g = colour.g;
 			texel.r = colour.r;
@@ -144,7 +146,7 @@ LandData flat_land::Build()
 				{
 					const auto mapX = (x * k_CellsPerBlock) + cx;
 					const auto mapZ = (z * k_CellsPerBlock) + cz;
-					block.cells.at(static_cast<size_t>((cx * k_BlockCornersPerSide) + cz)) = CellAt(mapX, mapZ);
+					block.cells.at(ToIndex((cx * k_BlockCornersPerSide) + cz)) = CellAt(mapX, mapZ);
 				}
 			}
 			block.index = static_cast<uint32_t>(data.blocks.size());
@@ -152,8 +154,7 @@ LandData flat_land::Build()
 			block.mapZ = static_cast<float>(z) * k_BlockSize;
 			block.blockX = static_cast<uint32_t>(x);
 			block.blockZ = static_cast<uint32_t>(z);
-			data.blockIndexLookup.at(static_cast<size_t>(x * LandData::k_BlocksPerSide + z)) =
-			    static_cast<uint16_t>(block.index);
+			data.blockIndexLookup.at(ToIndex(x * LandData::k_BlocksPerSide + z)) = static_cast<uint16_t>(block.index);
 		}
 	}
 
