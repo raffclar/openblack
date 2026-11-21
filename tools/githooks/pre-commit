@@ -1,0 +1,101 @@
+#!/bin/sh
+# openblack pre-commit check: the staged hunks of C++ files must match clang-format 17,
+# the same version as the format check of the repository (.github/workflows/format-check.yml).
+# Only the changed lines are checked (git clang-format), not the whole file.
+# Install it with tools/githooks/install.sh. It goes in the common git folder, so it applies to every worktree.
+#
+# Find clang-format 17 in this order (the first folder or program that is version 17 wins):
+#   1. the environment variable OB_CLANG_FORMAT_DIR (a folder);
+#   2. the git setting openblack.clangFormatDir (a folder), set with: git config --global openblack.clangFormatDir <folder>;
+#   3. the value tools.clangFormat17Dir in .claude/openblack.local.json (a folder);
+#   4. clang-format-17 on PATH;
+#   5. clang-format on PATH.
+#
+# Skip it once: not allowed for openblack work (no --no-verify).
+
+top=$(git rev-parse --show-toplevel) || exit 1
+cd "$top" || exit 1
+
+# Print the clang-format program in a folder, if the folder has one.
+cf_in_dir() {
+	[ -n "$1" ] || return 1
+	for name in clang-format.exe clang-format; do
+		if [ -f "$1/$name" ]; then
+			printf '%s\n' "$1/$name"
+			return 0
+		fi
+	done
+	return 1
+}
+
+# Succeed if the program is clang-format version 17.
+is_v17() {
+	"$1" --version 2>/dev/null | grep -q -E 'version 17\.'
+}
+
+config_dir=
+if [ -f .claude/obconfig.py ]; then
+	config_dir=$(python .claude/obconfig.py get tools.clangFormat17Dir 2>/dev/null || python3 .claude/obconfig.py get tools.clangFormat17Dir 2>/dev/null)
+fi
+
+CF=
+for candidate in \
+	"$(cf_in_dir "$OB_CLANG_FORMAT_DIR")" \
+	"$(cf_in_dir "$(git config --get openblack.clangFormatDir)")" \
+	"$(cf_in_dir "$config_dir")" \
+	"$(command -v clang-format-17)" \
+	"$(command -v clang-format)"; do
+	if [ -n "$candidate" ] && is_v17 "$candidate"; then
+		CF=$candidate
+		break
+	fi
+done
+
+# git-clang-format sits beside clang-format, or else on PATH.
+GCF=
+if [ -n "$CF" ]; then
+	cf_dir=$(dirname "$CF")
+	for name in git-clang-format-17 git-clang-format; do
+		if [ -f "$cf_dir/$name" ]; then
+			GCF=$cf_dir/$name
+			break
+		fi
+	done
+	[ -z "$GCF" ] && GCF=$(command -v git-clang-format-17 || command -v git-clang-format)
+fi
+
+if [ -z "$CF" ] || [ -z "$GCF" ]; then
+	echo "pre-commit: clang-format 17 with git-clang-format is not found." >&2
+	echo "pre-commit: install it with: python -m pip install --target <folder> clang-format==17.0.6" >&2
+	echo "pre-commit: then give the folder that holds clang-format and git-clang-format to the hook with one of:" >&2
+	echo "pre-commit:   the environment variable OB_CLANG_FORMAT_DIR" >&2
+	echo "pre-commit:   git config --global openblack.clangFormatDir <folder>" >&2
+	echo "pre-commit:   the value tools.clangFormat17Dir in .claude/openblack.local.json" >&2
+	echo "pre-commit: or put clang-format-17 on PATH." >&2
+	exit 1
+fi
+
+# The staged C++ files in the folders that the format check covers, minus .clang-format-ignore.
+files=$(git diff --cached --name-only --diff-filter=ACMR -- src apps components test |
+	grep -E '\.(c|cc|cpp|cxx|h|hh|hpp|hxx|inl)$')
+if [ -f .clang-format-ignore ] && [ -n "$files" ]; then
+	files=$(printf '%s\n' "$files" | grep -v -x -F -f .clang-format-ignore)
+fi
+[ -z "$files" ] && exit 0
+
+# shellcheck disable=SC2086
+out=$(python "$GCF" --binary "$CF" --staged --diff --quiet -- $files 2>&1)
+status=$?
+if [ $status -ne 0 ] && [ -n "$out" ] && ! printf '%s' "$out" | grep -q -E '^(diff --git|---|\+\+\+|@@)'; then
+	echo "pre-commit: git clang-format failed:" >&2
+	printf '%s\n' "$out" >&2
+	exit 1
+fi
+if [ -n "$out" ] && printf '%s' "$out" | grep -q '^@@'; then
+	echo "pre-commit: the staged changes do not match clang-format 17:" >&2
+	printf '%s\n' "$out" >&2
+	echo "" >&2
+	echo "pre-commit: fix them with: python \"$GCF\" --binary \"$CF\" --staged  (then git add the files again)" >&2
+	exit 1
+fi
+exit 0
