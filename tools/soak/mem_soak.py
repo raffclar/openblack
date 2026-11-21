@@ -509,6 +509,7 @@ def server(args):
             run.inspector = None
         next_sample = time.monotonic()
         next_turn = 0
+        dumps = sorted(int(t) for t in args.dump_turns.split(",")) if args.dump_turns else []
         while run.alive():
             turn = None
             if run.inspector is not None:
@@ -518,6 +519,13 @@ def server(args):
                 run.sample("minute")
                 next_sample = time.monotonic() + args.every
                 next_turn = (turn or 0) + args.every_turns
+            if dumps and turn is not None and turn >= dumps[0]:
+                run.log(f"heap dump at turn {turn}")
+                heap_dump(run)
+                dumps.pop(0)
+                if not dumps and args.stop_after_dumps:
+                    run.log("the last heap dump is written; stopping the server")
+                    break
             time.sleep(1)
         run.log(f"server ended with code {run.process.returncode}")
         return 0 if run.process.returncode == 0 else 1
@@ -645,6 +653,9 @@ def main():
     st.add_argument("--steps", nargs="+", required=True)
     for name in ("land", "server"):
         sub.choices[name].add_argument("--game-hours", type=float, default=2.0)
+    sub.choices["server"].add_argument("--dump-turns", help="Turns at which a server built with the leak tracer writes "
+                                       "its live heap (see heap_dump), as 5000,15000")
+    sub.choices["server"].add_argument("--stop-after-dumps", action="store_true")
     args = parser.parse_args()
     return {"skirmish": skirmish, "land": land, "server": server, "steps": steps}[args.mode](args)
 
