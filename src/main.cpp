@@ -463,11 +463,12 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			                             RRF_RT_REG_SZ, nullptr, nullptr, &dataLen);
 			if (status == ERROR_SUCCESS)
 			{
-				char* path = new char[dataLen];
+				// The string owns the buffer, so that nothing stays allocated after the read
+				std::string path(dataLen, '\0');
 				status = RegGetValue(HKEY_CURRENT_USER, "SOFTWARE\\Lionhead Studios Ltd\\Black & White", "GameDir",
-				                     RRF_RT_REG_SZ, nullptr, path, &dataLen);
-
-				args.gamePath = std::string(path);
+				                     RRF_RT_REG_SZ, nullptr, path.data(), &dataLen);
+				path.resize(status == ERROR_SUCCESS ? std::char_traits<char>::length(path.c_str()) : 0);
+				args.gamePath = std::move(path);
 			}
 			else
 #endif

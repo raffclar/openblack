@@ -15,7 +15,9 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Field.h"
 #include "ECS/Components/ListPlace.h"
+#include "ECS/FieldOrder.h"
 #include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 
@@ -99,4 +101,26 @@ TEST(ListOrder, TheThingAfterOneThatLeavesLosesItsTurn)
 	// The oldest leaves while it is the cursor: no cursor, and the next turn goes to the newest
 	EXPECT_FALSE(
 	    list_order::CursorAfterLeave(std::span<const uint32_t>(before), std::optional<uint32_t> {10}, 10u).has_value());
+}
+
+// The fields of a town come newest first, also after a field goes and the store moves its last field into the gap
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ListOrder, TheFieldsOfATownComeNewestFirstAfterAFieldGoes)
+{
+	Registry registry;
+	std::vector<entt::entity> made;
+	for (int i = 0; i < 5; ++i)
+	{
+		const auto entity = registry.Create();
+		registry.Assign<components::Field>(entity, components::Field {.town = i % 2});
+		list_order::Join(registry, entity);
+		made.push_back(entity);
+	}
+	EXPECT_EQ(field_order::FieldsOfTown(registry, 0), (std::vector {made[4], made[2], made[0]}));
+	EXPECT_EQ(field_order::FieldsOfTown(registry, 1), (std::vector {made[3], made[1]}));
+
+	registry.Destroy(made[0]);
+	EXPECT_EQ(field_order::FieldsOfTown(registry, 0), (std::vector {made[4], made[2]}));
+	EXPECT_EQ(field_order::AllFields(registry), (std::vector {made[4], made[3], made[2], made[1]}));
+	EXPECT_TRUE(field_order::FieldsOfTown(registry, 7).empty());
 }

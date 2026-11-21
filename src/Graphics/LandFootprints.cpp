@@ -17,6 +17,7 @@
 #include <iterator>
 #include <span>
 #include <utility>
+#include <vector>
 
 #include <glm/common.hpp>
 #include <spdlog/spdlog.h>
@@ -148,10 +149,13 @@ const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
 	FoundFootprint kept;
 	if (meshes.Contains(mesh))
 	{
-		kept.mesh = meshes.Handle(mesh);
-		if (kept.mesh)
+		if (const auto model = meshes.Handle(mesh); model)
 		{
-			kept.footprint = kept.mesh->GetGroundFootprint();
+			if (const auto* own = model->GetGroundFootprint(); own != nullptr)
+			{
+				kept.copy = std::make_unique<const L3DMesh::Footprint>(*own);
+				kept.footprint = kept.copy.get();
+			}
 		}
 	}
 	const auto* footprint = kept.footprint;
@@ -756,8 +760,18 @@ bool LandFootprints::TakeLandChanges()
 	}
 	const auto blockCount = island.GetBlocks().size();
 	const auto repainted = island.TakeRepaintedBlocks();
-	// A new land paints each of its blocks
-	if (_painted.size() != blockCount || repainted.size() == blockCount)
+	// A new land paints each of its blocks whole. Other repaints can come in the same list, such as the height changes
+	// of the land's script before the first frame. Without the reset, the kept models of the last land stay alive.
+	std::vector<size_t> wholeBlocks;
+	wholeBlocks.reserve(repainted.size());
+	for (const auto& paint : repainted)
+	{
+		if (!paint.cells.has_value())
+		{
+			wholeBlocks.push_back(paint.block);
+		}
+	}
+	if (_painted.size() != blockCount || footprint_paint::PaintsEveryBlock(wholeBlocks, blockCount))
 	{
 		Reset(blockCount);
 	}

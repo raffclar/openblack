@@ -21,6 +21,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/FieldOrder.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
@@ -96,9 +97,8 @@ bool IsRaining(const glm::vec3& position)
 void FieldSystem::ProcessTurn(uint32_t turn)
 {
 	auto& registry = Entities();
-	std::vector<entt::entity> fields;
-	registry.Each<const Field>([&fields](entt::entity entity, const Field&) { fields.push_back(entity); });
-	for (const auto field : fields)
+	// The pass takes the fields in the order of the game's list, the newest first
+	for (const auto field : ecs::field_order::AllFields(registry))
 	{
 		// The pass over all fields ages each field as the pass of a town ages its buildings
 		if (auto* abode = registry.TryGet<Abode>(field))
@@ -175,11 +175,15 @@ std::optional<FieldSystemInterface::FieldChoice> FieldSystem::BestFieldFor(entt:
 	// The newest of equals wins, as fields are weighed newest first
 	std::optional<FieldChoice> best;
 	float bestScore = 0.0f;
-	Entities().Each<const Field, const Transform>([&](entt::entity entity, const Field& field, const Transform& at) {
-		if (field.town != static_cast<int>(record->id))
+	auto& registry = Entities();
+	for (const auto entity : ecs::field_order::FieldsOfTown(registry, static_cast<int>(record->id)))
+	{
+		const auto* at = registry.TryGet<const Transform>(entity);
+		if (at == nullptr)
 		{
-			return;
+			continue;
 		}
+		const auto& field = registry.Get<const Field>(entity);
 		const auto& type = types.at(static_cast<size_t>(field.type));
 		const float desire = ecs::villager_work::DesireToBeFarmed({.timesSown = field.crop.timesSown,
 		                                                           .timesToSow = type.timesToSow,
@@ -189,13 +193,13 @@ std::optional<FieldSystemInterface::FieldChoice> FieldSystem::BestFieldFor(entt:
 		                                                           .farmers = static_cast<uint32_t>(field.farmers.size()),
 		                                                           .maxFarmers = type.maxFarmerInFarm});
 		const float score =
-		    gutils::GetDistanceModifier(gutils::GetDistanceInMetres(glm::xz(at.position), here), k_FieldReach) * desire;
+		    gutils::GetDistanceModifier(gutils::GetDistanceInMetres(glm::xz(at->position), here), k_FieldReach) * desire;
 		if (score > bestScore)
 		{
 			bestScore = score;
 			best = FieldChoice {.field = entity, .score = score};
 		}
-	});
+	}
 	return best;
 }
 

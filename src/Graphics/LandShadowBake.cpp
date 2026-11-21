@@ -423,6 +423,9 @@ std::span<const LandShadowBake::ShapeTriangle> LandShadowBake::ShapeOf(entt::id_
 	{
 		return {};
 	}
+	// The shapes of models that the cache does not hold now go first. A land makes models of its own, such as the meshes
+	// of its temples, and the next land makes others, so the old shapes would stay for the whole run.
+	std::erase_if(_shapes, [&meshes](const auto& kept) { return !meshes.Contains(kept.first); });
 	auto& shape = _shapes[meshId];
 	// Every triangle of every detail, not the physics' own parts nor the parts shown only in some states. The parts moved
 	// by bones are left out: their triangles aren't kept apart from the drawn model.

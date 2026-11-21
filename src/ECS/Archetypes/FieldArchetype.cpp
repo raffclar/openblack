@@ -16,6 +16,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Swayable.h"
 #include "ECS/Components/Town.h"
+#include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "InfoConstants.h"
@@ -53,6 +54,8 @@ entt::entity FieldArchetype::Create(int townId, const glm::vec3& position, Field
 	// A new field is bare: the town's farmers sow it
 	registry.Assign<Field>(entity, townId, type, field_crop::Crop {},
 	                       Locator::gameRandom::value().GameRand(field_crop::k_TurnsPerGrowth), field_crop::Settle {});
+	// The new field goes to the front of the list of fields
+	ecs::list_order::Join(registry, entity);
 	GiveSway(registry, entity);
 
 	return entity;
@@ -69,6 +72,7 @@ entt::entity FieldArchetype::CreateLoaded(int townId, const glm::vec3& position,
 		return entity;
 	}
 	registry.Assign<Field>(entity, townId, type, crop, growthTurn, field_crop::Settle {});
+	ecs::list_order::Join(registry, entity);
 	GiveSway(registry, entity);
 	return entity;
 }

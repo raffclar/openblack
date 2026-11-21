@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <utility>
+#include <vector>
 
 #include "Common/NearestWhole.h"
 
@@ -315,6 +316,25 @@ void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Pict
 		WalkEdge(spans, corners[2], corners[0]);
 		FillSpans(spans, block, picture, mix, inBlock);
 	}
+}
+
+bool PaintsEveryBlock(std::span<const size_t> wholeBlocks, size_t blockCount)
+{
+	if (blockCount == 0 || wholeBlocks.size() < blockCount)
+	{
+		return false;
+	}
+	std::vector<bool> painted(blockCount, false);
+	size_t count = 0;
+	for (const auto block : wholeBlocks)
+	{
+		if (block < blockCount && !painted[block])
+		{
+			painted[block] = true;
+			++count;
+		}
+	}
+	return count == blockCount;
 }
 
 } // namespace openblack::footprint_paint

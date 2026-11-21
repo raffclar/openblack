@@ -125,6 +125,11 @@ struct Region
 /// Whether two regions have a texel in common
 [[nodiscard]] bool Overlap(const Region& a, const Region& b);
 
+/// Whether the blocks that the land painted again whole are all the blocks of the land, as on a new land. The list can
+/// name a block more than one time, and other repaints can come with the paint of a new land, such as the height
+/// changes that the land's script makes before the first frame.
+[[nodiscard]] bool PaintsEveryBlock(std::span<const size_t> wholeBlocks, size_t blockCount);
+
 /// Paints a footprint into a block's texture. `block` holds side by side ARGB texels at 4 bits a channel, a row for each
 /// texel along x ([x * side + z]). The side is k_BlockTexels, or 128 at the low resolution of the lowest detail levels.
 /// The footprint's corners then go to the nearest texel of the smaller texture, and its picture stays the same.

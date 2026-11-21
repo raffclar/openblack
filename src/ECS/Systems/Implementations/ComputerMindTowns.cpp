@@ -33,6 +33,7 @@
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerMind.h"
 #include "ECS/ComputerMindRules.h"
+#include "ECS/FieldOrder.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -138,26 +139,29 @@ float FoodFromField(RuleContext& context, computer_mind::Mind& mind, uint16_t no
 	const auto& types = Locator::infoConstants::value().fieldType;
 	std::vector<entt::entity> fields;
 	std::vector<float> wishes;
+	// A town keeps its newest field first
+	const auto all = ecs::field_order::AllFields(registry);
 	for (const auto town : TownsOf(context.player))
 	{
 		const auto number = static_cast<int>(registry.Get<const Town>(town).id);
-		// A town keeps its newest field first
-		registry.Each<const Field>([&](entt::entity entity, const Field& field) {
+		for (const auto entity : all)
+		{
+			const auto& field = registry.Get<const Field>(entity);
 			if (field.town != number)
 			{
-				return;
+				continue;
 			}
 			const auto coords = CoordsOfThing(entity);
 			if (!coords.has_value())
 			{
-				return;
+				continue;
 			}
 			const auto& type = types.at(static_cast<size_t>(field.type));
 			fields.push_back(entity);
 			wishes.push_back(computer_mind_rules::FieldWish(field.crop.food, type.totalFoodInField,
 			                                                gutils::GetDistanceInMetres(context.state.hand.coords, *coords),
 			                                                PlacePull(context, *coords)));
-		});
+		}
 	}
 	const auto best = computer_mind_rules::MostWantedField(wishes);
 	if (!best.has_value())
