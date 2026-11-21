@@ -94,6 +94,7 @@
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DesignedWaterfallSystemInterface.h"
@@ -1389,6 +1390,11 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	if (Locator::handGrabSystem::has_value())
 	{
 		Locator::handGrabSystem::value().Reset();
+	}
+	// Nor the logs of the animations of its creatures, which the next land's creatures do not continue
+	if (Locator::creatureAnimationLog::has_value())
+	{
+		Locator::creatureAnimationLog::value().Clear();
 	}
 	// Nor the meshes made for its temples. A saved game keeps them, because the save can bring the same temples again.
 	if (change != land_change::Kind::SavedGame && Locator::templeExteriorSystem::has_value())
