@@ -336,7 +336,7 @@ struct SeenTree
 
 /// A forest gives its centre tree, and a lone tree gives itself. None for a miracle seed, a forest with no grown trees,
 /// and a tree that a script controls.
-std::optional<SeenTree> TreeOfSeen(const RuleContext& context, entt::entity thing, const map_coords::MapCoords& hand)
+std::optional<SeenTree> TreeOfSeen(RuleContext& context, entt::entity thing, const map_coords::MapCoords& hand)
 {
 	auto& registry = Entities();
 	if (!registry.Valid(thing))
@@ -348,12 +348,12 @@ std::optional<SeenTree> TreeOfSeen(const RuleContext& context, entt::entity thin
 	if (registry.AllOf<LandForest>(thing))
 	{
 		// A forest with no grown trees gives nothing, also when it has growing trees
-		const auto grown = static_cast<uint32_t>(forests.TreesOf(thing, false).size());
+		const auto grown = static_cast<uint32_t>(forests.ListedTreesOf(thing, false, *context.forestTrees).size());
 		if (grown == 0)
 		{
 			return std::nullopt;
 		}
-		seen.tree = forests.CentreTreeOf(thing).value_or(entt::null);
+		seen.tree = forests.ListedCentreTreeOf(thing, *context.forestTrees).value_or(entt::null);
 		seen.wood = {.forest = true, .grownTrees = grown};
 	}
 	else if (registry.AllOf<Tree>(thing))
@@ -387,6 +387,20 @@ float WoodFromForest(RuleContext& context, computer_mind::Mind& mind, uint16_t n
 	}
 	const float power = Locator::influenceSystem::value().InfluencePower(context.player);
 	const auto hand = ReportedHandCoords(context.player);
+	// The trees do not change while the god works out its needs, so the god lists the trees of the forests that it saw
+	// one time
+	if (!context.forestTrees.has_value())
+	{
+		std::vector<entt::entity> seenForests;
+		for (const auto& seen : context.state.seen)
+		{
+			if (Entities().Valid(seen.thing) && Entities().AllOf<LandForest>(seen.thing))
+			{
+				seenForests.push_back(seen.thing);
+			}
+		}
+		context.forestTrees = Locator::forestSystem::value().ListTreesOfForests(seenForests);
+	}
 	std::vector<entt::entity> trees;
 	std::vector<float> wishes;
 	for (const auto& seen : context.state.seen)

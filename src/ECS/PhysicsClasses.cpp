@@ -94,6 +94,57 @@ bool HeavyStatic(MobileStaticInfo type)
 	       type == MobileStaticInfo::SingingStone_1;
 }
 
+/// The statics that the physics keeps as plain objects that never fly: the lanterns, the singing stone's base and the
+/// bonfire
+bool StaysStatic(MobileStaticInfo type)
+{
+	return type == MobileStaticInfo::StreetLantern || type == MobileStaticInfo::CountryLantern ||
+	       type == MobileStaticInfo::SingingStoneBase || type == MobileStaticInfo::Bonfire;
+}
+
+/// What the table row of a static that can fly gives its physics
+struct StaticMaterial
+{
+	MobileStaticInfo mobileType {MobileStaticInfo::None};
+	bool toy {false};
+	bool fence {false};
+	bool rockLike {false};
+	MaterialRow row {MaterialRow::DefaultMovable};
+};
+
+StaticMaterial MaterialOfStatic(MobileStaticInfo type, const InfoConstants& info)
+{
+	const auto* row = Row<GMobileStaticInfo>(info.mobileStatic, type);
+	const auto mesh = row != nullptr ? row->meshId : MeshId::Dummy;
+	StaticMaterial material {
+	    .mobileType = row != nullptr ? row->mobileType : MobileStaticInfo::None,
+	    .toy = physics_classes::IsToyModel(mesh),
+	    .fence = physics_classes::IsFenceModel(mesh),
+	};
+	material.rockLike = HeavyStatic(type) || material.mobileType == MobileStaticInfo::Rock;
+	// The heavy statics and rocks first, then fences, then toys each of their own material (an unknown toy is as heavy
+	// as a rock)
+	if (material.rockLike)
+	{
+		material.row = MaterialRow::Rock;
+	}
+	else if (material.fence)
+	{
+		material.row = MaterialRow::Fence;
+	}
+	else if (material.toy)
+	{
+		material.row = ToyRow(mesh).value_or(MaterialRow::Rock);
+	}
+	return material;
+}
+
+/// The materials that break the abodes that they hit
+bool MaterialDestroysAbodes(MaterialRow row)
+{
+	return row == MaterialRow::Rock || row == MaterialRow::BowlingBall;
+}
+
 physics_classes::ClassFacts MobileStaticFacts(MobileStaticInfo type, const InfoConstants& info,
                                               const physics_classes::ClassInputs& inputs)
 {
@@ -112,31 +163,13 @@ physics_classes::ClassFacts MobileStaticFacts(MobileStaticInfo type, const InfoC
 	{
 		return {.body = physics_classes::BodyKind::Model, .row = MaterialRow::DefaultUnmovable};
 	}
+	const auto material = MaterialOfStatic(type, info);
 	physics_classes::ClassFacts facts {
-	    .body = physics_classes::BodyKind::Model, .row = MaterialRow::DefaultMovable, .canBecomePhysicsObject = true};
-	const auto* row = Row<GMobileStaticInfo>(info.mobileStatic, type);
-	const auto mobileType = row != nullptr ? row->mobileType : MobileStaticInfo::None;
-	const auto mesh = row != nullptr ? row->meshId : MeshId::Dummy;
-	const bool toy = physics_classes::IsToyModel(mesh);
-	const bool fence = physics_classes::IsFenceModel(mesh);
-	const bool rockLike = HeavyStatic(type) || mobileType == MobileStaticInfo::Rock;
-	// The heavy statics and rocks first, then fences, then toys each of their own material (an unknown toy is as heavy
-	// as a rock)
-	if (rockLike)
-	{
-		facts.row = MaterialRow::Rock;
-	}
-	else if (fence)
-	{
-		facts.row = MaterialRow::Fence;
-	}
-	else if (toy)
-	{
-		facts.row = ToyRow(mesh).value_or(MaterialRow::Rock);
-	}
+	    .body = physics_classes::BodyKind::Model, .row = material.row, .canBecomePhysicsObject = true};
 	// Toys, rocks and their like, fences and idols are always hit; anything else as a building is
-	facts.interacts = toy || rockLike || fence || mobileType == MobileStaticInfo::Idol || StandingBuilding(inputs);
-	facts.physicallyDestroysAbodes = facts.row == MaterialRow::Rock || facts.row == MaterialRow::BowlingBall;
+	facts.interacts = material.toy || material.rockLike || material.fence || material.mobileType == MobileStaticInfo::Idol ||
+	                  StandingBuilding(inputs);
+	facts.physicallyDestroysAbodes = MaterialDestroysAbodes(facts.row);
 	return facts;
 }
 
@@ -448,6 +481,19 @@ MobileObjectInfo physics_classes::MobileObjectPhysicsRow(MobileObjectInfo row, M
 		return kind;
 	}
 	return row;
+}
+
+bool physics_classes::PhysicallyDestroysAbodes(const Registry& registry, entt::entity entity, const InfoConstants& info)
+{
+	// Of the kinds that Classify looks at, only a static that can fly can break abodes. The kinds that Classify looks at
+	// before the statics are never statics to it.
+	if (registry.AnyOf<Reward, BuildingPiece, Creature, Villager, Animal, Tree, DeadTree, Pot, OneOffSpellSeed, Scaffold>(
+	        entity))
+	{
+		return false;
+	}
+	const auto* still = registry.TryGet<const MobileStatic>(entity);
+	return still != nullptr && !StaysStatic(still->type) && MaterialDestroysAbodes(MaterialOfStatic(still->type, info).row);
 }
 
 physics_classes::ClassFacts physics_classes::Classify(const Registry& registry, entt::entity entity, const InfoConstants& info,

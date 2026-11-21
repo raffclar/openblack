@@ -148,8 +148,8 @@ bool GameMindWorld::Perform(computer_mind::Mind& mind, uint16_t node)
 {
 	const auto rule = RuleOf(mind, node).perform;
 	const bool started = rule != nullptr && rule(_context, mind, node);
-	// The start of an action can change the world, so the searches ask for the influence again
-	_context.searchCells.clear();
+	// The start of an action can change the world, so the searches look again
+	_context.ForgetSearches();
 	[[maybe_unused]] const auto leaf = mind.nodes[node].bestLeaf.value_or(node);
 	[[maybe_unused]] const auto above = mind.nodes[node].parent.value_or(0);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Computer god {} action {} under {} leaf {} ({:.3f}) started {}",
@@ -175,8 +175,8 @@ bool GameMindWorld::StepAction()
 	const auto hand = _state.hand.hand;
 	ReportGodHand(hand);
 	const bool ended = computer_hand::Process(_state.hand, _hand);
-	// The step can change the world, so the searches ask for the influence again
-	_context.searchCells.clear();
+	// The step can change the world, so the searches look again
+	_context.ForgetSearches();
 	computer_world::ReportHand(_player, hand, _state.hand.camera);
 	if (_timeHand)
 	{
