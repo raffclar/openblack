@@ -19,9 +19,11 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/DiscipleRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/TownCensus.h"
 #include "ECS/VillagerAge.h"
@@ -30,6 +32,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerBreeding.h"
+#include "VillagerDisciples.h"
 #include "VillagerFire.h"
 #include "VillagerFood.h"
 #include "VillagerHome.h"
@@ -57,6 +60,27 @@ const GVillagerInfo& InfoOf(const Villager& villager)
 {
 	const auto& infos = Locator::infoConstants::value().villager;
 	return infos.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
+}
+
+/// In a turn when the checks do not look at its needs, a disciple that waits for work decides again at once when the
+/// wants of its town change
+void DecideAgainAfterWait(LivingAction& action, entt::entity villager)
+{
+	const auto type = ecs::villager_disciple::TypeOf(villager);
+	if (type == VillagerDisciple::None)
+	{
+		return;
+	}
+	auto& living = Locator::livingActionSystem::value();
+	const auto town = Entities().Get<const Villager>(villager).town;
+	const bool changed = town != entt::null && Entities().Valid(town) && Locator::townSystem::has_value() &&
+	                     Locator::townSystem::value().DesiresChanged(town);
+	if (openblack::disciple::DecidesAgainAfterWait({.type = type,
+	                                                .finalState = living.VillagerGetState(action, LivingAction::Index::Final),
+	                                                .townWantsChanged = changed}))
+	{
+		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::DecideWhatToDo, false);
+	}
 }
 
 /// It may die of old age; whether it did
@@ -155,7 +179,7 @@ void ecs::villager_checks::CheckEveryTime(LivingAction& action)
 	const auto& row = StateInfo(states.checks);
 	if (row.doesChecks == 0)
 	{
-		// TODO(villager-hunger-health): a working disciple waiting for work decides afresh when its town has some for it
+		DecideAgainAfterWait(action, villager);
 		return;
 	}
 	if (world_objects::LifeOf(villager) == 0.0f)
@@ -173,6 +197,7 @@ void ecs::villager_checks::CheckEveryTime(LivingAction& action)
 	const auto since = turn - person.lastCheckTurn;
 	if (!rules::ChecksDue(since, info.processChecksEvery))
 	{
+		DecideAgainAfterWait(action, villager);
 		return;
 	}
 	if (rules::OldAgeDue(turn, entt::to_integral(entt::to_entity(villager)), since) && CheckDeathFromOldAge(villager))
