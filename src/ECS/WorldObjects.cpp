@@ -972,9 +972,10 @@ bool world_objects::CanBeDestroyedBySpell(entt::entity object, entt::entity spel
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto can = [&registry, object, spell] {
-		// Nor anything a script made indestructible
-		if (!registry.Valid(object) ||
-		    registry.AnyOf<Creature, Field, Temple, TeleportStone, OneOffSpellSeed, Indestructible, WorshipIcon>(object))
+		// Nor anything a script made indestructible. A vortex and a town's desire flag take no effect, so no miracle
+		// destroys them. This keeps the volcano's mouth on Land 5.
+		if (!registry.Valid(object) || registry.AnyOf<Creature, Field, Temple, TeleportStone, OneOffSpellSeed, Indestructible,
+		                                              WorshipIcon, Vortex, TownDesireFlag>(object))
 		{
 			return false;
 		}

@@ -46,6 +46,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
@@ -297,6 +298,7 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	    {"villagers", registry.Size<ecs::components::Villager>()},
 	    {"abodes", registry.Size<ecs::components::Abode>()},
 	    {"towns", registry.Size<ecs::components::Town>()},
+	    {"vortices", registry.Size<ecs::components::Vortex>()},
 	};
 }
 
