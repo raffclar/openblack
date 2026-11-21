@@ -946,20 +946,78 @@ TEST(KeyframeTurns, NewContentsAtThePlaceOfAMarkedAnimationGetNewTurns)
 	EXPECT_EQ(std::memcmp(&marked, &madeMarked, sizeof(madeMarked)), 0);
 }
 
-TEST(KeyframeTurns, TrimRemovesTheTurnsOnlyAboveTheLimit)
+namespace
+{
+/// Calls Trim for one window of the store
+void TrimOneWindow(skeletal_animation::KeyframeTurns& turns)
+{
+	for (uint32_t i = 0; i < skeletal_animation::KeyframeTurns::k_TrimsAWindow; ++i)
+	{
+		turns.Trim();
+	}
+}
+} // namespace
+
+TEST(KeyframeTurns, TrimRemovesNothingBeforeTheEndOfAWindow)
 {
 	const TurnsFixture fixture(3);
-	std::vector<Animation> copies(skeletal_animation::KeyframeTurns::k_MostAnimations + 1, fixture.animation);
+	const Animation first = fixture.animation;
+	const Animation second = fixture.animation;
 	skeletal_animation::KeyframeTurns turns;
-	for (size_t i = 0; i + 1 < copies.size(); ++i)
+	static_cast<void>(turns.Of(first, 0, false));
+	TrimOneWindow(turns);
+	// The second window starts. The store did not use the first animation in it, but the window does not end.
+	static_cast<void>(turns.Of(second, 0, false));
+	for (uint32_t i = 0; i + 1 < skeletal_animation::KeyframeTurns::k_TrimsAWindow; ++i)
 	{
-		static_cast<void>(turns.Of(copies[i], 0, false));
+		turns.Trim();
 	}
+	EXPECT_EQ(turns.Size(), 2u);
 	turns.Trim();
-	EXPECT_EQ(turns.Size(), skeletal_animation::KeyframeTurns::k_MostAnimations);
-	static_cast<void>(turns.Of(copies.back(), 0, false));
-	turns.Trim();
+	EXPECT_EQ(turns.Size(), 1u);
+}
+
+TEST(KeyframeTurns, TrimKeepsOnlyTheTurnsThatTheStoreUsedInTheWindow)
+{
+	const TurnsFixture fixture(3);
+	std::vector<Animation> copies(20, fixture.animation);
+	skeletal_animation::KeyframeTurns turns;
+	for (const auto& animation : copies)
+	{
+		static_cast<void>(turns.Of(animation, 0, false));
+	}
+	TrimOneWindow(turns);
+	ASSERT_EQ(turns.Size(), copies.size());
+	// In the next window the game plays only the first five copies
+	for (size_t i = 0; i < 5; ++i)
+	{
+		static_cast<void>(turns.Of(copies[i], 1, false));
+	}
+	TrimOneWindow(turns);
+	EXPECT_EQ(turns.Size(), 5u);
+	// A window with no use removes all the turns
+	TrimOneWindow(turns);
 	EXPECT_EQ(turns.Size(), 0u);
+}
+
+TEST(KeyframeTurns, AKeptAnimationGivesTheBitsOfANewTurnAfterARemoval)
+{
+	const TurnsFixture fixture(3);
+	std::vector<Animation> copies(3, fixture.animation);
+	skeletal_animation::KeyframeTurns turns;
+	for (const auto& animation : copies)
+	{
+		static_cast<void>(turns.Of(animation, 2, false));
+	}
+	TrimOneWindow(turns);
+	// Only the last copy has a use in the second window, so the removal moves it to the first place
+	static_cast<void>(turns.Of(copies.back(), 2, false));
+	TrimOneWindow(turns);
+	ASSERT_EQ(turns.Size(), 1u);
+	const auto kept = turns.Of(copies.back(), 2, false)[0];
+	const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[2].eulerAngles[0]);
+	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
+	EXPECT_EQ(turns.Size(), 1u);
 }
 
 TEST(KeyframeTurns, CallsForTwoAnimationsInTurnGiveTheTurnsOfEach)
@@ -1012,15 +1070,17 @@ TEST(KeyframeTurns, CallsForManyAnimationsGiveTheTurnsOfEach)
 TEST(KeyframeTurns, TheStoreGivesTheTurnsAfterTrimRemovesThem)
 {
 	const TurnsFixture fixture(9);
-	std::vector<Animation> copies(skeletal_animation::KeyframeTurns::k_MostAnimations + 1, fixture.animation);
+	std::vector<Animation> copies(5, fixture.animation);
 	skeletal_animation::KeyframeTurns turns;
 	for (const auto& copy : copies)
 	{
 		static_cast<void>(turns.Of(copy, 0, false));
 	}
-	turns.Trim();
+	// A window with no use removes the turns
+	TrimOneWindow(turns);
+	TrimOneWindow(turns);
 	ASSERT_EQ(turns.Size(), 0u);
-	// The last animation before the trim gets its turns again
+	// The last copy gets its turns again
 	const auto kept = turns.Of(copies.back(), 3, false)[1];
 	const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[3].eulerAngles[1]);
 	EXPECT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0);
