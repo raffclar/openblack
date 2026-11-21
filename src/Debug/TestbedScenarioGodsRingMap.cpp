@@ -8,8 +8,8 @@
  *******************************************************************************/
 
 // The scenarios of the network map for 32 gods: the whole ring of citadels from high above, the village of the first
-// slot from near, and the symbols of belief of the gods after the seventh. The map loads in place of the testbed, with
-// its own land and its own things.
+// slot from near, the symbols of belief of the gods after the seventh, and a wave of deaths. The map loads in place of the
+// testbed, with its own land and its own things.
 
 #include <vector>
 
@@ -60,6 +60,29 @@ void testbed_scenarios::AddGodsRingMapScenarios(std::vector<Scenario>& all)
 	                "fish farms, its flock and its forest. No building of a town stands on a building of a village.",
 	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {225.0f, 450.0f, -2290.0f}, .look = {150.0f, 0.0f, -1550.0f}},
+	});
+
+	// A wave of deaths: every 30 seconds, 50 villagers die in each of 4 turns, spread over all the towns
+	constexpr size_t k_DeathsInATurn = 50;
+	constexpr float k_SecondsBetweenWaves = 30.0f;
+	constexpr float k_TurnSeconds = 0.1f;
+	const Command firstDeaths {
+	    .kind = Command::Kind::KillVillagers, .delaySeconds = k_SecondsBetweenWaves, .value = k_DeathsInATurn};
+	const Command nextDeaths {.kind = Command::Kind::KillVillagers, .delaySeconds = k_TurnSeconds, .value = k_DeathsInATurn};
+	all.push_back({
+	    .id = "multiplayer.gods_ring_death_wave",
+	    .name = "A wave of deaths on the map for 32 gods",
+	    .facet = Facet::Multiplayer,
+	    .description = "The network map for 32 gods loads on this computer alone. Every 30 seconds, an effect kills 50 "
+	                   "villagers in each of 4 turns, as a fire kills them. The villagers that die spread evenly over "
+	                   "all the towns. Use it to measure the cost of the turns of a wave of deaths.",
+	    .expected = "Every 30 seconds, 200 villagers fall dead over all the towns and villages in 4 turns. Their towns "
+	                "count fewer people, and the bodies lie until they go. No turn of a wave is much slower than the "
+	                "other turns.",
+	    .environment = {.land = Land::GodsRingMap, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 300.0f, -2350.0f}, .look = {0.0f, 0.0f, -1850.0f}},
+	    .commands = {firstDeaths, nextDeaths, nextDeaths, nextDeaths},
+	    .repeatFrom = 0,
 	});
 
 	// A town centre on the island, clear of the villages of the slots and of the towns between them

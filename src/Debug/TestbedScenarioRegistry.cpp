@@ -332,7 +332,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle || kind == Kind::JoinFootball ||
 	       kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint || kind == Kind::TempleFreeCamera ||
 	       kind == Kind::InfiniteInfluenceCheat || kind == Kind::LoadGeneratedLand || kind == Kind::LoadMapLand ||
-	       IsPointerCommand(kind);
+	       kind == Kind::KillVillagers || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -360,7 +360,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 251> k_Names {
+	constexpr std::array<std::string_view, 252> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -612,6 +612,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "the cheat of infinite influence",
 	    "load a generated land",
 	    "load a land",
+	    "kill villagers",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

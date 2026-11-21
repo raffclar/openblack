@@ -14,6 +14,7 @@
 #include <iterator>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <string>
 #include <string_view>
@@ -1066,6 +1067,24 @@ TEST(TestbedScenarios, BenchmarksMeasureCrowdsOfEachSize)
 	{
 		EXPECT_EQ(scenario.crowd.has_value(), scenario.facet == Facet::Benchmark) << scenario.id;
 	}
+}
+
+TEST(TestbedScenarios, TheDeathWaveKillsVillagersInTurnsThatFollowAndGoesRound)
+{
+	const auto* scenario = Find("multiplayer.gods_ring_death_wave");
+	ASSERT_NE(scenario, nullptr);
+	EXPECT_EQ(scenario->environment.land, Land::GodsRingMap);
+	EXPECT_TRUE(Problems(*scenario).empty());
+	ASSERT_FALSE(scenario->commands.empty());
+	EXPECT_TRUE(std::ranges::all_of(scenario->commands, [](const Command& command) {
+		return command.kind == Command::Kind::KillVillagers && command.value > 0 && NeedsNoCreature(command.kind);
+	}));
+	// After a long wait, the deaths of one wave come one turn after the other, and the waves go round
+	EXPECT_GE(scenario->commands.front().delaySeconds, 10.0f);
+	EXPECT_TRUE(std::ranges::all_of(scenario->commands | std::views::drop(1),
+	                                [](const Command& command) { return command.delaySeconds <= 0.1f; }));
+	EXPECT_EQ(scenario->repeatFrom, std::optional<size_t> {0});
+	EXPECT_EQ(Name(Command::Kind::KillVillagers), "kill villagers");
 }
 
 TEST(TestbedScenarios, TheCreaturesAtWorkLiveAmongTowns)
