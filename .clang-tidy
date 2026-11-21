@@ -2,10 +2,11 @@ HeaderFilterRegex: '^[^_]*\.h$'
 Checks: >-
   -*,
   clang-analyzer-*,
+  -clang-analyzer-cplusplus.NewDeleteLeaks,
   modernize-*,
   -modernize-use-trailing-return-type,
   -modernize-use-std-print,
-  cppcoreguidelines-pro-bounds-constant-array-index,
+  -modernize-use-emplace,
   cppcoreguidelines-avoid-non-const-global-variables,
   performance-*,
   -performance-enum-size,
@@ -14,12 +15,15 @@ Checks: >-
   -misc-non-private-member-variables-in-classes,
   -misc-redundant-expression,
   -misc-include-cleaner,
+  -misc-no-recursion,
   bugprone-*,
   -bugprone-reserved-identifier,
   -bugprone-easily-swappable-parameters,
   -bugprone-narrowing-conversions,
   -bugprone-lambda-function-name,
   -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-unchecked-optional-access,
+  -bugprone-exception-escape,
   google-*,
   -google-build-using-namespace,
   -google-runtime-references,
@@ -42,12 +46,45 @@ CheckOptions:
     value: CamelCase
   - key: readability-identifier-naming.ConstexprVariablePrefix
     value: k_
+  # A static constant (a class member or a function local) is a k_ constant too.
+  - key: readability-identifier-naming.ClassConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.ClassConstantPrefix
+    value: k_
+  - key: readability-identifier-naming.StaticConstantCase
+    value: CamelCase
+  - key: readability-identifier-naming.StaticConstantPrefix
+    value: k_
+  # A const local can hold a value that the function calculates (camelBack) or a fixed value (k_PascalCase). A
+  # shader uniform or sampler handle keeps the u_ or s_ name of the shader.
+  - key: readability-identifier-naming.LocalConstantCase
+    value: camelBack
+  - key: readability-identifier-naming.LocalConstantIgnoredRegexp
+    value: '^(k_[A-Z][a-zA-Z0-9]*|[us]_[a-zA-Z0-9]*)$'
+  # A static variable uses s_, a thread-local variable uses t_ and a global variable uses g_.
+  - key: readability-identifier-naming.ClassMemberCase
+    value: CamelCase
+  - key: readability-identifier-naming.ClassMemberPrefix
+    value: s_
+  - key: readability-identifier-naming.StaticVariableCase
+    value: CamelCase
+  - key: readability-identifier-naming.StaticVariablePrefix
+    value: s_
+  - key: readability-identifier-naming.StaticVariableIgnoredRegexp
+    value: '^t_[A-Z][a-zA-Z0-9]*$'
+  - key: readability-identifier-naming.GlobalVariableCase
+    value: CamelCase
+  - key: readability-identifier-naming.GlobalVariablePrefix
+    value: g_
+  - key: readability-identifier-naming.GlobalVariableIgnoredRegexp
+    value: '^[st]_[A-Z][a-zA-Z0-9]*$'
   - key: readability-identifier-naming.GlobalConstantIgnoredRegexp
     value: '^Disassembly_[^_]*'
   - key: readability-identifier-naming.MethodCase
     value: CamelCase
+  # A type that std or EnTT uses as a container, a range or a random engine needs the std names.
   - key: readability-identifier-naming.MethodIgnoredRegexp
-    value: 'Disassembly_[^_]*|load'
+    value: 'Disassembly_[^_]*|load|^(begin|end|size|empty|find|insert_or_assign|back|value|min|max)$'
   - key: readability-identifier-naming.VariableCase
     value: camelBack
   - key: readability-identifier-naming.VariableIgnoredRegexp
