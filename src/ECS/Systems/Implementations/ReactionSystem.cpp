@@ -662,6 +662,26 @@ const GObjectInfo* ImpressingInfoOf(const ecs::Registry& registry, entt::entity 
 	return row < rows.size() ? &rows.at(row) : nullptr;
 }
 
+/// The value of the preaching of a missionary, from the row of its villager at this time. The villager can change its
+/// tribe after the preaching starts. A preaching with no villager has the value 0.
+float PreachingValueOf(const ecs::Registry& registry, entt::entity control)
+{
+	const auto* preaching =
+	    control != entt::null && registry.Valid(control) ? registry.TryGet<const MissionaryControl>(control) : nullptr;
+	if (preaching == nullptr || !registry.Valid(preaching->villager) || !Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const auto* villager = registry.TryGet<const Villager>(preaching->villager);
+	if (villager == nullptr)
+	{
+		return 0.0f;
+	}
+	const auto& rows = Locator::infoConstants::value().villager;
+	const auto row = static_cast<size_t>(RowOf(*villager, GVillagerInfo::Find));
+	return row < rows.size() ? rows.at(row).missionaryImpressiveValue : 0.0f;
+}
+
 bool BelievesWithoutReacting(const ecs::Registry& registry, entt::entity entity, Reaction type)
 {
 	if (!registry.AllOf<Villager>(entity))
@@ -2158,6 +2178,16 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 			                                     .maxDistance = info->maxReactionDistance,
 			                                     .boredom = boredom,
 			                                     .artefact = artefact});
+		}
+		// The preaching of a missionary has its own order of products, and no artefact or power changes it
+		if (source.balance == Balance::Missionaries)
+		{
+			return magic::MissionaryImpressiveValue({.landBalance = GetLandBalance(source.balance),
+			                                         .impressiveValue = PreachingValueOf(registry, source.initiator),
+			                                         .reactionMultiplier = multiplier(town),
+			                                         .distance = distance,
+			                                         .maxDistance = info->maxReactionDistance,
+			                                         .boredom = boredom});
 		}
 		return artefact * magic::ImpressiveValue({.landBalance = GetLandBalance(source.balance),
 		                                          .impressiveValue = source.impressiveValue,

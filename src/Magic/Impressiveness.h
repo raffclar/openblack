@@ -47,6 +47,10 @@ struct ImpressionInputs
 /// How much a miracle impresses one watcher
 [[nodiscard]] float ImpressiveValue(const ImpressionInputs& inputs);
 
+/// How much the preaching of a missionary impresses one watcher. The power has no effect. The order of the products is
+/// not the order for a miracle.
+[[nodiscard]] float MissionaryImpressiveValue(const ImpressionInputs& inputs);
+
 /// What goes into how much a thing in the world impresses one watcher, as a scaffold does
 struct ObjectImpressionInputs
 {
