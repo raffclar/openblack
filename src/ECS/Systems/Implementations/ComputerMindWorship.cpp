@@ -471,7 +471,7 @@ bool StateTakesNewWork(entt::entity villager)
 
 /// How good the villager is as a free builder for the god: none when it is not free. A better villager than the best
 /// so far becomes the best, but the best keeps only how near the hand the villager is.
-bool BetterFreeBuilder(const RuleContext& context, entt::entity villager, float& best)
+bool BetterFreeBuilder(RuleContext& context, entt::entity villager, float& best)
 {
 	auto& registry = Entities();
 	if (!IsA<Villager>(villager) || !ecs::systems::villager_reactions::FreeForNewTask(villager) || IsChild(villager) ||

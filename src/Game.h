@@ -236,6 +236,9 @@ struct Arguments
 	/// For developers: the turns of the next frame play on another thread beside the end of the draw of this frame
 	/// (deviation row 153). Off by default.
 	bool turnBesideDraw {false};
+	/// For developers: the count of the threads that share the work of a computer god beside the turn's own thread.
+	/// None gives the threads of the platform; 0 makes the turn's thread do all the work.
+	std::optional<uint32_t> mindThreads;
 	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
 	std::optional<uint16_t> inspectPort;
 	/// The fight autopilot to start with the inspector, and the folder for the files of the fight transcript
@@ -973,6 +976,7 @@ private:
 	TurnApiCheck _turnApiCheck {};
 	/// The turns of the next frame play beside the draw of this frame (deviation row 153)
 	bool _turnBesideDraw {false};
+	std::optional<uint32_t> _mindThreads;
 	/// The inspector gave its answers before this frame, while the tool held the game, so the frame does not ask it again
 	bool _inspectorServedEarly {false};
 	/// The requested screenshot leaves the debug windows out

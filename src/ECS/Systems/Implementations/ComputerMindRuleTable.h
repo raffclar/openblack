@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -24,6 +25,7 @@
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerMind.h"
 #include "ECS/ComputerMindDomains.h"
+#include "ECS/ComputerMindRules.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "Enums.h"
 
@@ -37,13 +39,58 @@
 namespace openblack::ecs::systems::computer_world
 {
 
+/// The facts of a thing that the thing searches share. The world does not change while the god works out its needs, so
+/// a search finds each fact of a thing one time.
+struct ThingFacts
+{
+	/// True when a search found the position of the thing
+	bool placed {false};
+	/// The map position of the thing, none when the thing has no position in the world
+	std::optional<map_coords::MapCoords> coords;
+	/// The player can throw the thing, when a search found it
+	std::optional<bool> throwable;
+	/// The thing knocks down buildings when it flies, when a search found it
+	std::optional<bool> destroysAbodes;
+};
+
 /// A search for the best thing near a place, and the thing that it found
 struct KnownSearch
 {
 	map_coords::MapCoords centre;
 	float radius {0.0f};
-	float (*score)(entt::entity thing) {nullptr};
+	std::optional<float> (*score)(entt::entity thing, ThingFacts& facts, bool measure) {nullptr};
 	entt::entity found {entt::null};
+};
+
+/// The key of a map position in a table. Equal positions have equal x and z, so the key uses only these.
+struct PlaceHash
+{
+	[[nodiscard]] size_t operator()(const map_coords::MapCoords& place) const noexcept
+	{
+		return std::hash<uint64_t> {}((static_cast<uint64_t>(static_cast<uint32_t>(place.x)) << 32u) |
+		                              static_cast<uint32_t>(place.z));
+	}
+};
+
+/// The town of one owner that the god wants most, and how much it wants it
+struct WantedTown
+{
+	PlayerNames owner;
+	/// The entity of the owner whose power the god compares with its own
+	entt::entity ownerEntity {entt::null};
+	/// The place of the hand and the requests of the god for each miracle when the god found the town. The wish for a
+	/// town reads them.
+	map_coords::MapCoords hand;
+	std::array<uint32_t, computer_mind::k_MagicTypes> requested {};
+	float worth {0.0f};
+	entt::entity town {entt::null};
+};
+
+/// The circles of the influence of the god and the reach of its influence past their edges
+struct PullCircles
+{
+	std::vector<computer_mind_rules::InfluenceCircle> circles;
+	float reach {0.0f};
 };
 
 /// What a rule works with: the god, its mind and hand, and the hand's parts in the game's world
@@ -68,6 +115,17 @@ struct RuleContext
 	/// The towns of each player in the order that the player got them. The god makes the lists at the first question
 	/// about the towns since the world last changed.
 	std::optional<std::unordered_map<PlayerNames, std::vector<entt::entity>>> towns {};
+	/// The facts of the things of each cell that the thing searches looked at, by cell, in the order of the things of
+	/// the cell
+	std::unordered_map<uint32_t, std::vector<ThingFacts>> cellFacts {};
+	/// The towns that the god wants most, one for each owner and set of miracle requests
+	std::vector<WantedTown> wantedTowns {};
+	/// The count of the villagers near each place that the god looked at for an impressive miracle, by place
+	std::unordered_map<uint64_t, uint32_t> villagersNear {};
+	/// The circles of the god's influence for the pull of a place, made at the first question
+	std::optional<PullCircles> pullCircles {};
+	/// The pull of each place that the god asked about, by place
+	std::unordered_map<map_coords::MapCoords, float, PlaceHash> pulls {};
 
 	/// Forget what the searches found, because the world can change after this
 	void ForgetSearches()
@@ -77,6 +135,11 @@ struct RuleContext
 		forestTrees.reset();
 		townIcons.reset();
 		towns.reset();
+		cellFacts.clear();
+		wantedTowns.clear();
+		villagersNear.clear();
+		pullCircles.reset();
+		pulls.clear();
 	}
 };
 

@@ -211,17 +211,41 @@ glm::vec3 PlaceForHand(const RuleContext& context, const map_coords::MapCoords& 
 
 // --- Choosing a town ---
 
-/// The miracles of the town as the god sees them
-std::vector<computer_mind_rules::TownMiracleFacts> TownMiraclesFor(RuleContext& context, entt::entity town)
+/// The god puts the miracle icons in lists by town, and the towns in lists by player, if it has not done so since the
+/// world last changed. The icons and the towns do not change while the god works out its needs.
+void KnowTowns(RuleContext& context)
 {
-	auto& registry = Entities();
-	// The icons do not change while the god works out its needs, so the god puts the icons in lists by town one time
+	const auto& registry = std::as_const(Entities());
 	if (!context.townIcons.has_value())
 	{
 		auto& byTown = context.townIcons.emplace();
 		registry.Each<const TownCentreIcon>(
 		    [&byTown](entt::entity entity, const TownCentreIcon& icon) { byTown[icon.town].push_back(entity); });
 	}
+	if (!context.towns.has_value())
+	{
+		std::unordered_map<PlayerNames, std::vector<std::pair<uint32_t, entt::entity>>> gained;
+		registry.Each<const Town>(
+		    [&gained](entt::entity entity, const Town& town) { gained[town.owner].emplace_back(town.gained, entity); });
+		auto& byOwner = context.towns.emplace();
+		for (auto& [owner, towns] : gained)
+		{
+			byOwner.emplace(owner, InGainedOrder(std::move(towns)));
+		}
+	}
+}
+
+/// The towns of the player, as TownsOf gives them. Call KnowTowns before this.
+std::span<const entt::entity> KnownTownsIn(const RuleContext& context, PlayerNames player)
+{
+	const auto found = context.towns->find(player);
+	return found != context.towns->end() ? std::span<const entt::entity>(found->second) : std::span<const entt::entity> {};
+}
+
+/// The miracles of the town as the god sees them. Call KnowTowns before this. This only reads the world.
+std::vector<computer_mind_rules::TownMiracleFacts> TownMiraclesFor(const RuleContext& context, entt::entity town)
+{
+	const auto& registry = std::as_const(Entities());
 	std::vector<computer_mind_rules::TownMiracleFacts> facts;
 	const auto found = context.townIcons->find(town);
 	if (found == context.townIcons->end())
@@ -243,8 +267,8 @@ std::vector<computer_mind_rules::TownMiracleFacts> TownMiraclesFor(RuleContext& 
 	return facts;
 }
 
-/// How much the god wants to win the town of the owner
-float TownWorthFor(RuleContext& context, entt::entity town, PlayerNames owner, entt::entity ownerEntity, float godPeople)
+/// How much the god wants to win the town of the owner. Call KnowTowns before this. This only reads the world.
+float TownWorthFor(const RuleContext& context, entt::entity town, PlayerNames owner, entt::entity ownerEntity, float godPeople)
 {
 	const float wish = computer_mind_rules::TownMiracleWish(TownMiraclesFor(context, town));
 	const float share = computer_mind_rules::TownPeopleShare(PeopleOf(town), godPeople, wish);
@@ -255,41 +279,23 @@ float TownWorthFor(RuleContext& context, entt::entity town, PlayerNames owner, e
 	const float near = computer_mind_rules::TownNearness(distance);
 	const auto belief = BeliefOf(town);
 	const auto god = static_cast<size_t>(context.player);
-	const auto townOwner = static_cast<size_t>(Entities().Get<const Town>(town).owner);
+	const auto townOwner = static_cast<size_t>(std::as_const(Entities()).Get<const Town>(town).owner);
 	const float rival = computer_mind_rules::RivalBelief(belief, god, townOwner);
 	const float hold = computer_mind_rules::TownHold(rival, townOwner == god);
 	return computer_mind_rules::TownWorth(share, wish, hold, cut, near);
 }
 
-/// The towns of the player, as TownsOf gives them. The towns do not change while the god works out its needs, so the god
-/// puts the towns of all the players in order one time.
-std::span<const entt::entity> KnownTownsOf(RuleContext& context, PlayerNames player)
-{
-	if (!context.towns.has_value())
-	{
-		std::unordered_map<PlayerNames, std::vector<std::pair<uint32_t, entt::entity>>> gained;
-		Entities().Each<const Town>(
-		    [&gained](entt::entity entity, const Town& town) { gained[town.owner].emplace_back(town.gained, entity); });
-		auto& byOwner = context.towns.emplace();
-		for (auto& [owner, towns] : gained)
-		{
-			byOwner.emplace(owner, InGainedOrder(std::move(towns)));
-		}
-	}
-	const auto found = context.towns->find(player);
-	return found != context.towns->end() ? std::span<const entt::entity>(found->second) : std::span<const entt::entity> {};
-}
-
-/// The town of the owner that the god wants most, and how much it wants it, not more than 1
-std::pair<float, entt::entity> MostWantedTownOf(RuleContext& context, PlayerNames owner, entt::entity ownerEntity)
+/// The town of the owner that the god wants most, and how much it wants it, not more than 1. Call KnowTowns before
+/// this. This only reads the world.
+std::pair<float, entt::entity> WantedTownIn(const RuleContext& context, PlayerNames owner, entt::entity ownerEntity)
 {
 	uint32_t people = 0;
-	for (const auto town : KnownTownsOf(context, context.player))
+	for (const auto town : KnownTownsIn(context, context.player))
 	{
 		people += PeopleOf(town);
 	}
 	const float godPeople = computer_mind_rules::PeopleCount(people);
-	const auto towns = KnownTownsOf(context, owner);
+	const auto towns = KnownTownsIn(context, owner);
 	std::vector<float> worths;
 	worths.reserve(towns.size());
 	for (const auto town : towns)
@@ -304,12 +310,53 @@ std::pair<float, entt::entity> MostWantedTownOf(RuleContext& context, PlayerName
 	return {computer_mind_rules::CappedWorth(worths[*best]), towns[*best]};
 }
 
+/// The town of the owner that the god found before with the same owner entity, hand and miracle requests, or none
+const WantedTown* KnownWantedTown(const RuleContext& context, PlayerNames owner, entt::entity ownerEntity)
+{
+	const auto& requested = context.state.mind.castRequested;
+	const auto& hand = context.state.hand.coords;
+	const auto found =
+	    std::ranges::find_if(context.wantedTowns, [owner, ownerEntity, &hand, &requested](const WantedTown& wanted) {
+		    return wanted.owner == owner && wanted.ownerEntity == ownerEntity && wanted.hand == hand &&
+		           wanted.requested == requested;
+	    });
+	return found != context.wantedTowns.end() ? &*found : nullptr;
+}
+
+/// The god keeps the town of the owner that it wants most, with the facts that the worth of the town read
+void KeepWantedTown(RuleContext& context, PlayerNames owner, entt::entity ownerEntity, std::pair<float, entt::entity> wanted)
+{
+	context.wantedTowns.push_back({.owner = owner,
+	                               .ownerEntity = ownerEntity,
+	                               .hand = context.state.hand.coords,
+	                               .requested = context.state.mind.castRequested,
+	                               .worth = wanted.first,
+	                               .town = wanted.second});
+}
+
+/// The town of the owner that the god wants most, and how much it wants it, not more than 1. The god asks for the same
+/// owner more than one time while it works out its needs, so it keeps each answer.
+std::pair<float, entt::entity> MostWantedTownOf(RuleContext& context, PlayerNames owner, entt::entity ownerEntity)
+{
+	if (const auto* known = KnownWantedTown(context, owner, ownerEntity))
+	{
+		return {known->worth, known->town};
+	}
+	KnowTowns(context);
+	const auto wanted = WantedTownIn(context, owner, ownerEntity);
+	KeepWantedTown(context, owner, ownerEntity, wanted);
+	return wanted;
+}
+
+/// The least count of owners whose towns the threads share
+constexpr size_t k_OwnersOnCaller = 4;
+
 /// The town of all the players and the neutral player that the god most wants to win is the node's object. The god
 /// does not look at its own towns or at the towns of a player that keeps it as an ally.
 float ExpandInfluence(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 {
-	float best = 0.0f;
-	entt::entity chosen = entt::null;
+	// The owners whose towns the god looks at, in the order of the players
+	std::vector<std::pair<PlayerNames, entt::entity>> owners;
 	for (const auto name : ecs::game_players::All())
 	{
 		if (name == context.player)
@@ -322,7 +369,37 @@ float ExpandInfluence(RuleContext& context, computer_mind::Mind& mind, uint16_t 
 		{
 			continue;
 		}
-		const auto [worth, town] = MostWantedTownOf(context, name, entity);
+		owners.emplace_back(name, entity);
+	}
+	// The threads find the towns of the owners that the god did not look at before. The town of each owner is the same
+	// as when the god asks for that owner alone.
+	KnowTowns(context);
+	std::vector<std::pair<float, entt::entity>> wanted(owners.size(), {0.0f, entt::null});
+	std::vector<size_t> unknown;
+	for (size_t index = 0; index < owners.size(); ++index)
+	{
+		if (const auto* known = KnownWantedTown(context, owners[index].first, owners[index].second))
+		{
+			wanted[index] = {known->worth, known->town};
+		}
+		else
+		{
+			unknown.push_back(index);
+		}
+	}
+	ForEachOnThreads(unknown.size(), k_OwnersOnCaller, [&context, &owners, &wanted, &unknown](size_t job) {
+		const auto index = unknown[job];
+		wanted[index] = WantedTownIn(context, owners[index].first, owners[index].second);
+	});
+	for (const auto index : unknown)
+	{
+		KeepWantedTown(context, owners[index].first, owners[index].second, wanted[index]);
+	}
+
+	float best = 0.0f;
+	entt::entity chosen = entt::null;
+	for (const auto& [worth, town] : wanted)
+	{
 		if (town != entt::null && worth > best)
 		{
 			best = worth;
@@ -593,7 +670,7 @@ bool CastToImpress(RuleContext& context, computer_mind::Mind& mind, uint16_t nod
 computer_mind_rules::ThrowKind ThrowKindOf(entt::entity thing)
 {
 	using computer_mind_rules::ThrowKind;
-	auto& registry = Entities();
+	const auto& registry = std::as_const(Entities());
 	if (registry.AllOf<Tree>(thing))
 	{
 		return ThrowKind::Always;
@@ -655,7 +732,7 @@ float ThrowToImpress(RuleContext& context, computer_mind::Mind& mind, uint16_t n
 	const float boredom = FlyingBoredomOf(town);
 	const auto& hand = context.state.hand.coords;
 	map_coords::MapCoords place {};
-	auto spot = TownImpressPlace(town, hand);
+	auto spot = TownImpressPlace(context, town, hand);
 	float value = spot.has_value() ? spot->value : 0.0f;
 	if (spot.has_value())
 	{
@@ -664,7 +741,7 @@ float ThrowToImpress(RuleContext& context, computer_mind::Mind& mind, uint16_t n
 	if (value < 1.0f)
 	{
 		// Short of a full value, the god looks at the places again
-		spot = TownImpressPlace(town, hand);
+		spot = TownImpressPlace(context, town, hand);
 		value = spot.has_value() ? spot->value : 0.0f;
 		if (spot.has_value())
 		{
@@ -763,30 +840,58 @@ float computer_world::CreatureToTown(RuleContext& context, computer_mind::Mind& 
 namespace
 {
 
-/// The search of BestThingNear, with no known result
+/// The things of one cell of a search, as a run of the list of the things of the search
+struct SearchCell
+{
+	uint32_t key {0};
+	map_coords::MapCoords centre;
+	size_t first {0};
+	size_t end {0};
+};
+
+/// One thing of a cell of a search
+struct SeenThing
+{
+	entt::entity thing {entt::null};
+	/// The facts that the searches know of the thing in this cell
+	ThingFacts* facts {nullptr};
+	float distance {0.0f};
+	/// The score of the thing, none when the calling thread must find it
+	std::optional<float> score;
+};
+
+/// The least count of things of a search that the threads share. Below it the calling thread does all the scores,
+/// because the time to wake the threads is more than the work.
+constexpr size_t k_SearchThingsOnCaller = 48;
+
+/// Finds the position, the distance and the score of the thing, and adds to the facts of the thing. This only reads the
+/// world. Without measure, it does not measure the model of the thing.
+void SeeThing(SeenThing& seen, const map_coords::MapCoords& centre, ThingScore score, bool measure)
+{
+	auto& facts = *seen.facts;
+	if (!facts.placed)
+	{
+		facts.coords = CoordsOfThing(seen.thing);
+		facts.placed = true;
+	}
+	if (facts.coords.has_value())
+	{
+		seen.distance = gutils::GetDistanceInMetres(centre, *facts.coords);
+		seen.score = score(seen.thing, facts, measure);
+	}
+}
+
+/// The search of BestThingNear, with no known result.
+///
+/// The calling thread lists the things of the cells in the order of the search. The threads find the scores of the
+/// things. Then the calling thread keeps the best thing of each cell in the same order as one thread does.
 entt::entity SearchThingNear(RuleContext& context, const map_coords::MapCoords& centre, float radius, ThingScore score)
 {
 	const auto& map = Locator::entitiesMap::value();
 	const auto xs = computer_mind_rules::SearchCells(centre.x, radius);
 	const auto zs = computer_mind_rules::SearchCells(centre.z, radius);
-	float best = 0.0f;
-	entt::entity found = entt::null;
-	const auto look = [&centre, radius, score](std::span<const entt::entity> things, float& cellBest, entt::entity& cellFound) {
-		for (const auto thing : things)
-		{
-			const auto coords = CoordsOfThing(thing);
-			if (!coords.has_value())
-			{
-				continue;
-			}
-			const float distance = gutils::GetDistanceInMetres(centre, *coords);
-			if (const auto kept = computer_mind_rules::SearchKeeps(score(thing), distance, radius, cellBest))
-			{
-				cellBest = *kept;
-				cellFound = thing;
-			}
-		}
-	};
+	std::vector<SearchCell> cells;
+	std::vector<SeenThing> seen;
 	for (int32_t x = xs.first; x <= xs.last; ++x)
 	{
 		for (int32_t z = zs.first; z <= zs.last; ++z)
@@ -809,32 +914,80 @@ entt::entity SearchThingNear(RuleContext& context, const map_coords::MapCoords& 
 				continue;
 			}
 			const auto key = (static_cast<uint32_t>(x) << 16u) | static_cast<uint32_t>(z);
-			auto known = context.searchCells.find(key);
-			if (known != context.searchCells.end() && !known->second)
+			if (const auto known = context.searchCells.find(key); known != context.searchCells.end() && !known->second)
 			{
 				continue;
 			}
-			// The search looks at the things of the cell as if the cell were in the influence. When it keeps none of them,
-			// the cell changes nothing whatever its influence, so the search does not ask for it. A question about
-			// influence and the scores of the things change nothing in the world.
-			float cellBest = best;
-			entt::entity cellFound = entt::null;
-			look(fixed, cellBest, cellFound);
-			look(mobile, cellBest, cellFound);
-			if (cellFound == entt::null)
+			// The things of a cell do not change while the god works out its needs, so the facts of a cell keep the
+			// order of its things. In each cell the things that stay put come first.
+			auto& facts = context.cellFacts[key];
+			if (facts.size() != fixed.size() + mobile.size())
+			{
+				facts.assign(fixed.size() + mobile.size(), ThingFacts {});
+			}
+			const size_t first = seen.size();
+			size_t slot = 0;
+			for (const auto things : {fixed, mobile})
+			{
+				for (const auto thing : things)
+				{
+					seen.push_back({.thing = thing, .facts = &facts[slot]});
+					++slot;
+				}
+			}
+			cells.push_back({.key = key, .centre = cell, .first = first, .end = seen.size()});
+		}
+	}
+
+	// The threads only read the world, and each writes only the facts of its own things. They do not measure the
+	// models of the things: the calling thread does that after them.
+	ForEachOnThreads(seen.size(), k_SearchThingsOnCaller,
+	                 [&seen, &centre, score](size_t index) { SeeThing(seen[index], centre, score, false); });
+	for (auto& each : seen)
+	{
+		if (each.facts->coords.has_value() && !each.score.has_value())
+		{
+			each.score = score(each.thing, *each.facts, true);
+		}
+	}
+
+	float best = 0.0f;
+	entt::entity found = entt::null;
+	for (const auto& cell : cells)
+	{
+		// The search looks at the things of the cell as if the cell were in the influence. When it keeps none of them,
+		// the cell changes nothing whatever its influence, so the search does not ask for it. A question about influence
+		// and the scores of the things change nothing in the world.
+		float cellBest = best;
+		entt::entity cellFound = entt::null;
+		for (size_t index = cell.first; index < cell.end; ++index)
+		{
+			const auto& each = seen[index];
+			if (!each.facts->coords.has_value())
 			{
 				continue;
 			}
-			if (known == context.searchCells.end())
+			if (const auto kept = computer_mind_rules::SearchKeeps(*each.score, each.distance, radius, cellBest))
 			{
-				known = context.searchCells.emplace(key, ecs::ally_influence::InfluenceWithAllies(context.player, cell) > 0.0f)
-				            .first;
+				cellBest = *kept;
+				cellFound = each.thing;
 			}
-			if (known->second)
-			{
-				best = cellBest;
-				found = cellFound;
-			}
+		}
+		if (cellFound == entt::null)
+		{
+			continue;
+		}
+		auto known = context.searchCells.find(cell.key);
+		if (known == context.searchCells.end())
+		{
+			known = context.searchCells
+			            .emplace(cell.key, ecs::ally_influence::InfluenceWithAllies(context.player, cell.centre) > 0.0f)
+			            .first;
+		}
+		if (known->second)
+		{
+			best = cellBest;
+			found = cellFound;
 		}
 	}
 	return found;
@@ -864,30 +1017,55 @@ entt::entity computer_world::BestThingNear(RuleContext& context, const map_coord
 
 bool computer_world::CanPlayerThrow(entt::entity thing)
 {
-	auto& registry = Entities();
-	const auto kind = ThrowKindOf(thing);
-	// Only a thing like a rock needs its radius, so the check does not measure the other things
-	const float radius = kind == computer_mind_rules::ThrowKind::RockLike ? object_measures::TwoDRadius(registry, thing) : 0.0f;
-	const auto* pot = registry.TryGet<const Pot>(thing);
-	return computer_mind_rules::CanBeThrownByPlayer(kind, radius, pot != nullptr ? pot->amount : 0);
+	ThingFacts facts;
+	[[maybe_unused]] const bool known = KnowThrowable(thing, facts, true);
+	return *facts.throwable;
 }
 
-float computer_world::PullPastEdge(const RuleContext& context, const map_coords::MapCoords& edge,
-                                   const map_coords::MapCoords& target)
+bool computer_world::KnowThrowable(entt::entity thing, ThingFacts& facts, bool measure)
+{
+	if (facts.throwable.has_value())
+	{
+		return true;
+	}
+	const auto& registry = std::as_const(Entities());
+	const auto kind = ThrowKindOf(thing);
+	// Only a thing like a rock needs its radius, so the check does not measure the other things
+	if (kind == computer_mind_rules::ThrowKind::RockLike && !measure)
+	{
+		return false;
+	}
+	const float radius = kind == computer_mind_rules::ThrowKind::RockLike ? object_measures::TwoDRadius(registry, thing) : 0.0f;
+	const auto* pot = registry.TryGet<const Pot>(thing);
+	facts.throwable = computer_mind_rules::CanBeThrownByPlayer(kind, radius, pot != nullptr ? pot->amount : 0);
+	return true;
+}
+
+bool computer_world::KnowDestroysAbodes(entt::entity thing, ThingFacts& facts)
+{
+	if (!facts.destroysAbodes.has_value())
+	{
+		facts.destroysAbodes =
+		    Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().PhysicallyDestroysAbodes(thing);
+	}
+	return *facts.destroysAbodes;
+}
+
+float computer_world::PullPastEdge(RuleContext& context, const map_coords::MapCoords& edge, const map_coords::MapCoords& target)
 {
 	const float angle = gutils::Get3DAngleFromXZ(target, edge);
 	const float step = context.state.speed * computer_mind_rules::k_ThrowPullSteps;
 	return PlacePull(context, target + gutils::GetPosFromAngle(angle, step));
 }
 
-float computer_world::ThrowScoreOf(entt::entity thing)
+std::optional<float> computer_world::ThrowScoreOf(entt::entity thing, ThingFacts& facts, bool measure)
 {
-	auto& registry = Entities();
-	if (!CanPlayerThrow(thing))
+	const auto& registry = std::as_const(Entities());
+	if (!KnowThrowable(thing, facts, measure))
 	{
-		return 0.0f;
+		return std::nullopt;
 	}
-	if (Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().PhysicallyDestroysAbodes(thing))
+	if (!*facts.throwable || KnowDestroysAbodes(thing, facts))
 	{
 		return 0.0f;
 	}

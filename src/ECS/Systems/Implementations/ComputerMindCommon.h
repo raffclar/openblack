@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <array>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -75,7 +78,10 @@ void ReportHand(PlayerNames player, glm::vec3 hand, glm::vec3 camera);
 [[nodiscard]] bool TakeUp(RuleContext& context, entt::entity thing);
 
 /// How much the god wants a place: all inside its influence
-[[nodiscard]] float PlacePull(const RuleContext& context, const map_coords::MapCoords& place);
+[[nodiscard]] float PlacePull(RuleContext& context, const map_coords::MapCoords& place);
+/// Does the job one time for each index, on the threads of the mind (see MindWorkSystemInterface). When the count is at
+/// most onCaller, or the game has no such threads, the calling thread does the jobs in the order of the indices.
+void ForEachOnThreads(size_t count, size_t onCaller, const std::function<void(size_t index)>& job);
 /// The share of the miracle's charge that the god can have, with its icon. The request counts one more time.
 float ChargeLevel(RuleContext& context, MagicType type, entt::entity& icon);
 /// The hand goes to the icon, or makes the miracle's gesture when it is far, before the worshippers chant

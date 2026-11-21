@@ -56,6 +56,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownAreaRules.h"
 #include "Locator.h"
+#include "PlayerSlots.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -213,11 +214,27 @@ std::vector<PlayerNames> InfluentialPlayers()
 	return players;
 }
 
-/// Whether the player has the most influence at the place
+/// Whether the player has the most influence at the place. The rule asks for the influence of the player first. When it
+/// asks for the other players, one pass over the sources gives the influence of all players, with the same values.
 bool MostInfluentialAt(const map_coords::MapCoords& place, PlayerNames player, std::span<const PlayerNames> players)
 {
-	return influence_rules::IsMostInfluentialPlayer(player, players, [&place](PlayerNames each) {
-		return Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().PlayerInfluence(each, place) : 0.0f;
+	if (!Locator::influenceSystem::has_value())
+	{
+		return influence_rules::IsMostInfluentialPlayer(player, players, [](PlayerNames /*each*/) { return 0.0f; });
+	}
+	const auto& influence = Locator::influenceSystem::value();
+	std::optional<std::array<float, player_slots::k_PlayerNumbers>> all;
+	return influence_rules::IsMostInfluentialPlayer(player, players, [&influence, &place, &all, player](PlayerNames each) {
+		if (each == player && !all.has_value())
+		{
+			return influence.PlayerInfluence(each, place);
+		}
+		if (!all.has_value())
+		{
+			all = influence.PlayerInfluences(place);
+		}
+		const auto index = static_cast<size_t>(each);
+		return index < all->size() ? all->at(index) : influence.PlayerInfluence(each, place);
 	});
 }
 

@@ -55,7 +55,8 @@ struct ImpressSpot
 };
 /// The best place of the town to impress its people, as seen from the hand. None when the people want to sleep or the
 /// town has no place.
-[[nodiscard]] std::optional<ImpressSpot> TownImpressPlace(entt::entity town, const map_coords::MapCoords& hand);
+[[nodiscard]] std::optional<ImpressSpot> TownImpressPlace(RuleContext& context, entt::entity town,
+                                                          const map_coords::MapCoords& hand);
 /// The place itself when it is in the god's influence, else the nearest point on the edge of the citadel's or a town's
 /// circle. None when the god has no circle.
 [[nodiscard]] std::optional<map_coords::MapCoords> InfluenceEdgeOf(const RuleContext& context,

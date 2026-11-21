@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 
 #include "3D/MapCoords.h"
@@ -26,6 +28,7 @@ namespace openblack::ecs::systems::computer_world
 {
 
 struct RuleContext;
+struct ThingFacts;
 
 /// The town of the player above the node that the god most wants to win is the node's object. How much the god wants
 /// it, not more than 1.
@@ -34,8 +37,10 @@ float TakeOverTown(RuleContext& context, computer_mind::Mind& mind, uint16_t nod
 /// node.
 float CreatureToTown(RuleContext& context, computer_mind::Mind& mind, uint16_t node);
 
-/// The score of a thing for a search. 0 or less skips the thing.
-using ThingScore = float (*)(entt::entity thing);
+/// The score of a thing for a search. 0 or less skips the thing. The facts hold what the searches know of the thing,
+/// and the score adds the facts that it finds. Without measure, the score does not measure the model of the thing and
+/// gives none when it needs the model.
+using ThingScore = std::optional<float> (*)(entt::entity thing, ThingFacts& facts, bool measure);
 /// The thing in the cells around the place, in the influence of the god and its allies, whose score against its
 /// distance is the best. Cells go along x, then along z, and in each cell the things that stay put come first. None
 /// when no thing scores.
@@ -44,12 +49,16 @@ using ThingScore = float (*)(entt::entity thing);
 /// The player can throw the thing: a loose thing, a standing tree, a pile that holds something, or a rock, a bonfire or
 /// a dead tree that is not too wide
 [[nodiscard]] bool CanPlayerThrow(entt::entity thing);
+/// Puts in the facts whether the player can throw the thing (see CanPlayerThrow). False when this needs the measure of
+/// the thing's model and measure is false.
+[[nodiscard]] bool KnowThrowable(entt::entity thing, ThingFacts& facts, bool measure);
+/// Puts in the facts whether the thing knocks down buildings when it flies, and gives it
+bool KnowDestroysAbodes(entt::entity thing, ThingFacts& facts);
 /// The pull of a point two hand speeds past the target, toward the edge of the influence
-[[nodiscard]] float PullPastEdge(const RuleContext& context, const map_coords::MapCoords& edge,
-                                 const map_coords::MapCoords& target);
+[[nodiscard]] float PullPastEdge(RuleContext& context, const map_coords::MapCoords& edge, const map_coords::MapCoords& target);
 /// How much the thing impresses when the god throws it. 0 for a thing the god cannot throw or that knocks down
 /// buildings.
-[[nodiscard]] float ThrowScoreOf(entt::entity thing);
+[[nodiscard]] std::optional<float> ThrowScoreOf(entt::entity thing, ThingFacts& facts, bool measure);
 
 /// The share of the miracles of the kind that the creature casts in fights and knows. 1 when there are none of them.
 [[nodiscard]] float KnownFightMiracleShare(entt::entity creature, CreatureDesires kind);

@@ -15,6 +15,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <glm/vec3.hpp>
@@ -367,16 +368,20 @@ bool AttackCreatureWithCreature(RuleContext& context, computer_mind::Mind& mind,
 }
 
 /// The score of a thing that the god can throw at a creature
-float RockScoreOf(entt::entity thing)
+std::optional<float> RockScoreOf(entt::entity thing, ThingFacts& found, bool measure)
 {
 	// The score uses the weight only of a thing that the player can throw and that is a tree or breaks buildings. Thus
 	// the search finds each fact only when the score needs it. A standing tree never breaks buildings.
+	if (!KnowThrowable(thing, found, measure))
+	{
+		return std::nullopt;
+	}
 	const auto* dynamics = Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
-	computer_mind_rules::RockFacts facts {.throwable = CanPlayerThrow(thing)};
+	computer_mind_rules::RockFacts facts {.throwable = *found.throwable};
 	if (facts.throwable)
 	{
-		facts.tree = Entities().AllOf<Tree>(thing);
-		facts.destroysBuildings = !facts.tree && dynamics != nullptr && dynamics->PhysicallyDestroysAbodes(thing);
+		facts.tree = std::as_const(Entities()).AllOf<Tree>(thing);
+		facts.destroysBuildings = !facts.tree && KnowDestroysAbodes(thing, found);
 		if (facts.tree || facts.destroysBuildings)
 		{
 			facts.weight = dynamics != nullptr ? dynamics->WeightOf(thing) : 0.0f;

@@ -95,6 +95,7 @@
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LoadFinishSystemInterface.h"
 #include "ECS/Systems/LoadingScreenSystemInterface.h"
+#include "ECS/Systems/MindWorkSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
@@ -325,6 +326,7 @@ Game::Game(Arguments&& args) noexcept
     , _deviceLossFrame(args.deviceLossFrame)
     , _turnApiCheck(args.turnApiCheck)
     , _turnBesideDraw(args.turnBesideDraw)
+    , _mindThreads(args.mindThreads)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	// The screens of the start and of the loads, and the timers of the start
@@ -830,6 +832,10 @@ bool Game::Initialize() noexcept
 		return false;
 	}
 	Locator::loadingScreenSystem::value().StartupStep("game services and shaders");
+	if (_mindThreads.has_value())
+	{
+		Locator::mindWorkSystem::value().SetThreads(*_mindThreads);
+	}
 	// The game is the view of the land's loads
 	Locator::landSystem::value().SetView(this);
 	Locator::landSystem::value().SetNewGameStart(_newGameStart);

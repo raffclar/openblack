@@ -298,6 +298,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sentry-test-error", "Developers: after the start, throw an exception with the message \"Sentry test error\" and the time, to test the error reports. The player's option for the reports must be on.")
 		("sentry-test-trap", "Developers: after the start, stop the game with a trap of the processor (in the web game, a trap of the WebAssembly code), to test the crash reports. The player's option for the reports must be on.")
 		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
+		("mind-threads", "Developers: the count of the threads that share the work of a computer god beside the turn's own thread. 0 makes the turn's thread do all the work. The results are the same for each count.", cxxopts::value<uint32_t>())
 		("turn-beside-draw", "Developers: the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later.");
 #endif
 	options.add_options("Developer")
@@ -677,6 +678,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 		}
 		args.turnBesideDraw = result.count("turn-beside-draw") != 0;
+		if (result.count("mind-threads") != 0)
+		{
+			args.mindThreads = result["mind-threads"].as<uint32_t>();
+		}
 #endif
 		if (result.count("screenshot-frame") != 0)
 		{

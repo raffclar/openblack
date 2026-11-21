@@ -148,6 +148,7 @@
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
+#include "ECS/Systems/Implementations/MindWorkSystem.h"
 #include "ECS/Systems/Implementations/MiracleFxSystem.h"
 #include "ECS/Systems/Implementations/MistSystem.h"
 #include "ECS/Systems/Implementations/MusicMoodSystem.h"
@@ -319,6 +320,7 @@ using openblack::ecs::systems::LobbyClientSystemInterface;
 using openblack::ecs::systems::LobbyRoomSystem;
 using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
+using openblack::ecs::systems::MindWorkSystem;
 using openblack::ecs::systems::MiracleFxSystem;
 using openblack::ecs::systems::MistSystem;
 using openblack::ecs::systems::MusicMoodSystem;
@@ -803,6 +805,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::computerPlayerSystem::emplace<ComputerPlayerSystem>();
+	Locator::mindWorkSystem::emplace<MindWorkSystem>();
 	Locator::time::emplace<TimeSystem>();
 	Locator::simulation::emplace<ecs::systems::SimulationSystem>();
 	Locator::vegetation::emplace<VegetationSystem>();
@@ -1151,6 +1154,7 @@ void openblack::ShutDownServices()
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
 	Locator::computerPlayerSystem::reset();
+	Locator::mindWorkSystem::reset();
 	Locator::pickingSystem::reset();
 	Locator::editorSystem::reset();
 	Locator::cameraBookmarkSystem::reset();

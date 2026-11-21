@@ -245,12 +245,18 @@ entt::entity TownCentreOf(entt::entity town)
 	return entt::null;
 }
 
-/// The villagers in the first cells of a spiral out from the place
-uint32_t VillagersNear(const map_coords::MapCoords& place)
+/// The villagers in the first cells of a spiral out from the place. The villagers do not move while the god works out
+/// its needs, so the god counts them one time for each place.
+uint32_t VillagersNear(RuleContext& context, const map_coords::MapCoords& place)
 {
 	if (!Locator::entitiesMap::has_value())
 	{
 		return 0;
+	}
+	const auto key = (static_cast<uint64_t>(static_cast<uint32_t>(place.x)) << 32u) | static_cast<uint32_t>(place.z);
+	if (const auto known = context.villagersNear.find(key); known != context.villagersNear.end())
+	{
+		return known->second;
 	}
 	auto& registry = Entities();
 	uint32_t count = 0;
@@ -270,6 +276,7 @@ uint32_t VillagersNear(const map_coords::MapCoords& place)
 		}
 		map_coords::AddCells(coords, spiral.Next());
 	}
+	context.villagersNear.emplace(key, count);
 	return count;
 }
 
@@ -281,7 +288,7 @@ struct ImpressPlace
 };
 
 /// The best place of the town for an impressive miracle. None when the people want to sleep.
-std::optional<ImpressPlace> ImpressPlaceOf(entt::entity town, const map_coords::MapCoords& hand)
+std::optional<ImpressPlace> ImpressPlaceOf(RuleContext& context, entt::entity town, const map_coords::MapCoords& hand)
 {
 	if (!Locator::townDesireSystem::has_value() || !Locator::townSystem::has_value())
 	{
@@ -320,7 +327,7 @@ std::optional<ImpressPlace> ImpressPlaceOf(entt::entity town, const map_coords::
 	for (const auto& place : places)
 	{
 		values.push_back(
-		    computer_mind_rules::ImpressPlaceValue(VillagersNear(place), gutils::GetDistanceInMetres(hand, place)));
+		    computer_mind_rules::ImpressPlaceValue(VillagersNear(context, place), gutils::GetDistanceInMetres(hand, place)));
 	}
 	const auto best = computer_mind_rules::BestImpressPlace(values);
 	if (!best.has_value())
@@ -653,12 +660,12 @@ float computer_world::ImpressiveSpell(RuleContext& context, computer_mind::Mind&
 	}
 	entt::entity icon = entt::null;
 	const float best = BestSpellOfKind(context, SpellKind::Impressive, CoordsOfThing(town), icon);
-	auto place = ImpressPlaceOf(town, context.state.hand.coords);
+	auto place = ImpressPlaceOf(context, town, context.state.hand.coords);
 	float value = place.has_value() ? place->value : 0.0f;
 	// Short of a full value the god looks at the places again
 	if (value < 1.0f)
 	{
-		place = ImpressPlaceOf(town, context.state.hand.coords);
+		place = ImpressPlaceOf(context, town, context.state.hand.coords);
 		value = place.has_value() ? place->value : 0.0f;
 	}
 	else
@@ -677,10 +684,10 @@ float computer_world::ImpressiveSpell(RuleContext& context, computer_mind::Mind&
 	return value * best;
 }
 
-std::optional<computer_world::ImpressSpot> computer_world::TownImpressPlace(entt::entity town,
+std::optional<computer_world::ImpressSpot> computer_world::TownImpressPlace(RuleContext& context, entt::entity town,
                                                                             const map_coords::MapCoords& hand)
 {
-	const auto place = ImpressPlaceOf(town, hand);
+	const auto place = ImpressPlaceOf(context, town, hand);
 	if (!place.has_value())
 	{
 		return std::nullopt;

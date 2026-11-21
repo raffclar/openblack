@@ -135,7 +135,7 @@ uint32_t ValueOf(entt::entity scaffold)
 /// The scaffold of the god's workshops that is best for the god to use, other than `excluded`. The god looks at each
 /// workshop of each of its towns, and at each scaffold of the workshop, the newest first. A scaffold on a building site,
 /// in a hand or in the physics does not count. A scaffold must be strictly better than the best so far.
-entt::entity BestScaffoldToUse(const RuleContext& context, entt::entity excluded)
+entt::entity BestScaffoldToUse(RuleContext& context, entt::entity excluded)
 {
 	auto& registry = Entities();
 	const float power =

@@ -37,6 +37,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MindWorkSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
@@ -298,48 +299,73 @@ entt::entity computer_world::TownNumbered(int number)
 	return found;
 }
 
-float computer_world::PlacePull(const RuleContext& context, const map_coords::MapCoords& place)
+float computer_world::PlacePull(RuleContext& context, const map_coords::MapCoords& place)
 {
 	if (!Locator::influenceSystem::has_value() || !Locator::infoConstants::has_value())
 	{
 		return 0.0f;
 	}
-	const auto& influence = Locator::influenceSystem::value();
-	// Inside its own influence, or the influence that an ally lends, the place pulls fully
-	if (ecs::ally_influence::InfluenceWithAllies(context.player, place) > 0.0f)
+	// The influence does not change while the god works out its needs, so a place pulls the same each time
+	if (const auto known = context.pulls.find(place); known != context.pulls.end())
 	{
-		return 1.0f;
+		return known->second;
 	}
-	// Outside the influence the place pulls less the further it is from the nearest edge of the citadel's or a town's
-	// circle
-	std::vector<computer_mind_rules::InfluenceCircle> circles;
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		if (const auto centre = CoordsOfThing(Locator::worshipSiteSystem::value().TempleOf(context.player)))
+	const float pull = [&context, &place]() {
+		const auto& influence = Locator::influenceSystem::value();
+		// Inside its own influence, or the influence that an ally lends, the place pulls fully
+		if (ecs::ally_influence::InfluenceWithAllies(context.player, place) > 0.0f)
 		{
-			circles.push_back({.centre = *centre, .radius = influence.CitadelReachOf(context.player)});
+			return 1.0f;
 		}
-	}
-	for (const auto town : TownsOf(context.player))
-	{
-		const auto centre = CoordsOfThing(town);
-		const auto* reach = Entities().TryGet<const TownInfluence>(town);
-		if (centre.has_value() && reach != nullptr)
+		// Outside the influence the place pulls less the further it is from the nearest edge of the citadel's or a
+		// town's circle. The circles do not change while the god works out its needs, so the god finds them one time.
+		if (!context.pullCircles.has_value())
 		{
-			circles.push_back({.centre = *centre, .radius = reach->radius});
+			auto& found = context.pullCircles.emplace();
+			if (Locator::worshipSiteSystem::has_value())
+			{
+				if (const auto centre = CoordsOfThing(Locator::worshipSiteSystem::value().TempleOf(context.player)))
+				{
+					found.circles.push_back({.centre = *centre, .radius = influence.CitadelReachOf(context.player)});
+				}
+			}
+			for (const auto town : TownsOf(context.player))
+			{
+				const auto centre = CoordsOfThing(town);
+				const auto* reach = Entities().TryGet<const TownInfluence>(town);
+				if (centre.has_value() && reach != nullptr)
+				{
+					found.circles.push_back({.centre = *centre, .radius = reach->radius});
+				}
+			}
+			const auto& citadel = Locator::infoConstants::value().citadel;
+			found.reach = virtual_influence::MaximumDistance(influence.InfluencePower(context.player),
+			                                                 {.maxDistance = citadel.virtualInfluenceMaxDistance,
+			                                                  .maxTurns = citadel.virtualInfluenceMaxGameTicks,
+			                                                  .chantsToDouble = citadel.virtualInfluenceChantsToDouble});
 		}
-	}
-	const auto edge = computer_mind_rules::NearestInfluenceEdge(place, circles);
-	if (!edge.has_value())
+		const auto edge = computer_mind_rules::NearestInfluenceEdge(place, context.pullCircles->circles);
+		if (!edge.has_value())
+		{
+			return 0.0f;
+		}
+		return computer_mind_rules::OutsidePlacePull(gutils::GetDistanceInMetres(place, *edge), context.pullCircles->reach);
+	}();
+	context.pulls.emplace(place, pull);
+	return pull;
+}
+
+void computer_world::ForEachOnThreads(size_t count, size_t onCaller, const std::function<void(size_t index)>& job)
+{
+	if (Locator::mindWorkSystem::has_value())
 	{
-		return 0.0f;
+		Locator::mindWorkSystem::value().ForEach(count, onCaller, job);
+		return;
 	}
-	const auto& citadel = Locator::infoConstants::value().citadel;
-	const float reach = virtual_influence::MaximumDistance(influence.InfluencePower(context.player),
-	                                                       {.maxDistance = citadel.virtualInfluenceMaxDistance,
-	                                                        .maxTurns = citadel.virtualInfluenceMaxGameTicks,
-	                                                        .chantsToDouble = citadel.virtualInfluenceChantsToDouble});
-	return computer_mind_rules::OutsidePlacePull(gutils::GetDistanceInMetres(place, *edge), reach);
+	for (size_t index = 0; index < count; ++index)
+	{
+		job(index);
+	}
 }
 
 float computer_world::ChargeLevel(RuleContext& context, MagicType type, entt::entity& icon)

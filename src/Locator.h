@@ -149,6 +149,7 @@ class AbodeSoundSystemInterface;
 class VillageTotemSystemInterface;
 class SpellIconSystemInterface;
 class ArtefactSystemInterface;
+class MindWorkSystemInterface;
 class HeartbeatSystemInterface;
 class GameEndSystemInterface;
 class FieldSystemInterface;
@@ -482,6 +483,7 @@ struct Locator
 	using villageTotemSystem = entt::locator<ecs::systems::VillageTotemSystemInterface>;
 	using spellIconSystem = entt::locator<ecs::systems::SpellIconSystemInterface>;
 	using artefactSystem = entt::locator<ecs::systems::ArtefactSystemInterface>;
+	using mindWorkSystem = entt::locator<ecs::systems::MindWorkSystemInterface>;
 	using heartbeatSystem = entt::locator<ecs::systems::HeartbeatSystemInterface>;
 	using gameEndSystem = entt::locator<ecs::systems::GameEndSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
