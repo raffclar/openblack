@@ -36,6 +36,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/ComputerHand.h"
+#include "ECS/FieldOrder.h"
 #include "ECS/Map.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
@@ -307,16 +308,13 @@ std::optional<ImpressPlace> ImpressPlaceOf(entt::entity town, const map_coords::
 		places.push_back(*centre);
 	}
 	const auto number = static_cast<int>(Entities().Get<const Town>(town).id);
-	Entities().Each<const Field>([&places, number](entt::entity entity, const Field& field) {
-		if (field.town != number)
-		{
-			return;
-		}
-		if (const auto coords = CoordsOfThing(entity))
+	for (const auto field : ecs::field_order::FieldsOfTown(Entities(), number))
+	{
+		if (const auto coords = CoordsOfThing(field))
 		{
 			places.push_back(*coords);
 		}
-	});
+	}
 	std::vector<float> values;
 	values.reserve(places.size());
 	for (const auto& place : places)
