@@ -1221,10 +1221,9 @@ std::string Runner::GiveCreatureModeCommand(entt::entity creature, const Command
 		return following();
 	case Kind::DoubleClick:
 	{
-		// Two presses of the left button on the creature, a fifth of a second apart
-		const auto now = static_cast<uint32_t>(_seconds * 1000.0f) + 1;
-		mode.Press({.milliseconds = now, .creature = creature});
-		mode.Press({.milliseconds = now + 200, .creature = creature});
+		// Two presses of the left button on the creature: a plain press, then the second press of a double click
+		mode.Press({.doublePress = false, .creature = creature});
+		mode.Press({.doublePress = true, .creature = creature});
 		return following();
 	}
 	case Kind::CameraKeys:

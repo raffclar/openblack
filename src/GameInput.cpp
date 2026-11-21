@@ -228,6 +228,8 @@ void Game::UpdateInput()
 				continue;
 			}
 			actions.PointPlayerEvent(e);
+			// The presses get the count of clicks of the game's double click rule
+			actions.PairClicks(e);
 			Locator::events::value().Create<SDL_Event>(e);
 		}
 		// The hand gets the frame's mouse events after all of them came. While Alt is held, the presses and the let goes of

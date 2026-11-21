@@ -69,8 +69,8 @@ public:
 	bool OrderAt(PlayerNames player, const glm::vec3& place) override;
 	bool OrderOn(PlayerNames player, entt::entity object) override;
 	[[nodiscard]] std::optional<glm::vec3> OrderTarget(entt::entity creature) const override;
-	bool PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-	                 uint32_t milliseconds, bool mayTie) override;
+	bool PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool doublePress,
+	                 bool mayTie) override;
 	bool TapThing(PlayerNames player, entt::entity object) override;
 	[[nodiscard]] bool TakesTap(PlayerNames player, entt::entity object) const override;
 	[[nodiscard]] std::optional<float> RopeUnderCursor(PlayerNames player, const RopeFrame& frame) override;
@@ -163,7 +163,6 @@ private:
 	creature_leash::AttachSoundTurns _handSounds;
 	std::optional<Refused> _lastRefusal;
 	/// Tells the Action button's double taps from single ones
-	creature_leash_orders::DoubleTaps _doubleTaps;
 	/// The last press of the Action button was the second of a double tap
 	bool _lastPressDouble {false};
 	/// What the local player's hand does about the rope of their tied leash

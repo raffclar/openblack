@@ -127,7 +127,7 @@ struct FakeWorld final: public HandPressWorld
 	void LetGoOfRope(PlayerNames /*player*/, std::optional<glm::vec3> /*place*/) final { calls.emplace_back("LetGoOfRope"); }
 	void LeashTapThing(PlayerNames /*player*/, entt::entity /*thing*/) final { calls.emplace_back("LeashTapThing"); }
 	bool LeashPressAction(PlayerNames /*player*/, const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/,
-	                      glm::vec2 /*cursor*/, uint32_t /*nowMs*/, bool mayTie) final
+	                      bool /*doublePress*/, bool mayTie) final
 	{
 		calls.emplace_back("LeashPressAction");
 		leashMayTie = mayTie;

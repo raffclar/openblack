@@ -27,6 +27,7 @@
 #include "GameActionMapInterface.h"
 #include "HandButtonMessages.h"
 #include "Help/MouseMoves.h"
+#include "MouseClicks.h"
 #include "MouseMotion.h"
 #include "PlatformKeys.h"
 #include "PointerSpeed.h"
@@ -89,6 +90,8 @@ public:
 	[[nodiscard]] bool IsPlayerInputBlocked() const final { return _lock.Locked(); }
 	[[nodiscard]] bool AdmitEvent(const SDL_Event& event) final;
 	void PointPlayerEvent(SDL_Event& event) final;
+	void PairClicks(SDL_Event& event) final;
+	[[nodiscard]] uint32_t PlainHeldButtons() const final { return _clicks.HeldButtons(); }
 	[[nodiscard]] float GetPointerScale() const final;
 	void SetPointerSpeedMultiplier(float multiplier) final { _pointerSpeedMultiplier = multiplier; }
 	[[nodiscard]] float GetPointerSpeedMultiplier() const final { return _pointerSpeedMultiplier; }
@@ -197,6 +200,8 @@ private:
 	uint64_t _waitedMousePresses {0};
 	/// The rule that holds the messages of the hand's buttons while Alt is held
 	hand_messages::HandButtonMessages _handMessages;
+	/// Which presses of the mouse buttons are double clicks, with the time and the box of this system
+	mouse_clicks::Clicks _clicks {mouse_clicks::SystemSettings()};
 	/// A mouse event of this frame for the hand
 	struct KeptHandEvent
 	{

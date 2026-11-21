@@ -48,6 +48,8 @@
 #include "Gui/LogoEffect.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
+#include "Input/GameActionMapInterface.h"
+#include "Input/InputDeviceInterface.h"
 #include "Input/WindowPointer.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
@@ -89,6 +91,15 @@ struct StartupInput
 	bool quit {false};
 };
 
+/// Whether a plain press holds the left or the right mouse button. The second press of a double click does not hold
+/// its button, so the game does not wait for it.
+bool MouseButtonHeld()
+{
+	const uint32_t buttons = Locator::gameActionSystem::has_value() ? Locator::gameActionSystem::value().PlainHeldButtons()
+	                                                                : input::Device().Mouse().buttons;
+	return (buttons & (SDL_BUTTON(SDL_BUTTON_LEFT) | SDL_BUTTON(SDL_BUTTON_RIGHT))) != 0;
+}
+
 /// Takes the window's events, which the game's own handlers don't see during these screens. `keys` gets the keys and
 /// the clicks that the logo stills and the pre-intro read
 StartupInput PollStartupInput(startup::StartupKeys* keys)
@@ -121,8 +132,7 @@ StartupInput PollStartupInput(startup::StartupKeys* keys)
 			keys->Click();
 		}
 	}
-	const auto buttons = SDL_GetMouseState(nullptr, nullptr);
-	input.mouse = (buttons & (SDL_BUTTON(SDL_BUTTON_LEFT) | SDL_BUTTON(SDL_BUTTON_RIGHT))) != 0;
+	input.mouse = MouseButtonHeld();
 	return input;
 }
 
@@ -186,8 +196,7 @@ LogoInput TakeLogoInput(const LoadingScreenHooks& hooks)
 			input.wheel += notches * k_WheelNotch;
 		}
 	}
-	const auto buttons = SDL_GetMouseState(nullptr, nullptr);
-	input.startup.mouse = (buttons & (SDL_BUTTON(SDL_BUTTON_LEFT) | SDL_BUTTON(SDL_BUTTON_RIGHT))) != 0;
+	input.startup.mouse = MouseButtonHeld();
 	if (input.startup.quit)
 	{
 		hooks.requestQuit();

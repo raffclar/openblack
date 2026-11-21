@@ -1848,7 +1848,6 @@ void LeashSystem::Reset()
 {
 	_postsPlaced = false;
 	_lastRefusal.reset();
-	_doubleTaps = {};
 	_lastPressDouble = false;
 	_ropeHand = leash_snap::Hand::Away;
 }
@@ -2455,11 +2454,10 @@ void LeashSystem::DoOrder(PlayerNames player, const player_commands::LeashOrder&
 	}
 }
 
-bool LeashSystem::PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-                              uint32_t milliseconds, bool mayTie)
+bool LeashSystem::PressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool doublePress,
+                              bool mayTie)
 {
-	// Each press counts for the next double tap, also a press that the fight takes
-	_lastPressDouble = _doubleTaps.OnPress(milliseconds, cursor) && mayTie;
+	_lastPressDouble = doublePress && mayTie;
 	if (!_lastPressDouble)
 	{
 		return false;

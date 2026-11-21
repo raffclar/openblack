@@ -26,6 +26,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "Input/DeveloperKeys.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/MouseClicks.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
@@ -481,7 +482,7 @@ void Console::ProcessEventOpen(const SDL_Event& event) noexcept
 	default:
 		break;
 	case SDL_MOUSEBUTTONDOWN:
-		if (event.button.clicks == 2 && !io.WantCaptureMouse)
+		if (input::mouse_clicks::IsDoublePress(event.button.clicks) && !io.WantCaptureMouse)
 		{
 			_insertHandPosition = true;
 		}

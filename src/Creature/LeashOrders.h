@@ -81,25 +81,6 @@ struct Tapped
 /// can be taken only once is taken as usual instead.
 [[nodiscard]] Tap OnDoubleTap(const Leash& leash, const Tapped& tapped);
 
-/// The Windows double click the game takes: a second press within half a second, within a small box of the first
-constexpr uint32_t k_DoubleTapMilliseconds = 500;
-constexpr float k_DoubleTapSlop = 2.0f;
-/// Tells double taps from the presses of the Action button
-class DoubleTaps
-{
-public:
-	/// Whether this press, when and where on the screen, is the second of a double tap
-	[[nodiscard]] bool OnPress(uint32_t milliseconds, glm::vec2 screen);
-
-private:
-	struct Press
-	{
-		uint32_t milliseconds;
-		glm::vec2 screen;
-	};
-	std::optional<Press> _last;
-};
-
 /// The hand's tooltips for the leash, by their place among the game's tooltips. Each shows the Action button's mouse.
 constexpr uint32_t k_FocusCreatureTip = 47;
 constexpr uint32_t k_DetachLeashTip = 48;
