@@ -11,18 +11,22 @@
 
 #include <cmath>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <string_view>
 
 #include <SASFile.h>
+#include <spdlog/spdlog.h>
 
 #include "3D/L3DAnim.h"
 #include "3D/TempleInteriorInterface.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/SoundGround.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -66,6 +70,16 @@ public:
 	[[nodiscard]] bool InsideTemple() const override
 	{
 		return Locator::temple::has_value() && Locator::temple::value().Active();
+	}
+
+	[[nodiscard]] bool ScriptCutScene() const override
+	{
+		if (!Locator::cinematicDirectorSystem::has_value())
+		{
+			return false;
+		}
+		const auto& director = Locator::cinematicDirectorSystem::value();
+		return director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
 	}
 
 	[[nodiscard]] float LifeOf(entt::entity object) const override { return world_objects::LifeOf(object); }
@@ -142,7 +156,7 @@ void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, C
 	}
 	const auto passed = held ? clip_sounds::AllOf(sounds->sounds, clip.duration)
 	                         : clip_sounds::Passed(sounds->sounds, place, played, clip.duration, clip.looping);
-	if (passed.empty())
+	if (std::ranges::all_of(passed, [](const auto& stretch) { return stretch.empty(); }))
 	{
 		return;
 	}
@@ -155,43 +169,56 @@ void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, C
 	                                      villager != nullptr && villager->sex == Villager::Sex::FEMALE);
 	const auto surface = creature_audio::SurfaceKey(world.GroundAt(position));
 	const bool insideTemple = world.InsideTemple();
-	for (const auto index : passed)
+	const bool inScript = registry.AllOf<InScript>(entity);
+	const bool scriptCutScene = world.ScriptCutScene();
+	// A sound that stops the rest of the clip stops only the rest of its stretch. The next stretch plays its sounds.
+	for (const auto& stretch : passed)
 	{
-		const auto& sound = sounds->sounds[index];
-		const auto route = clip_sounds::RouteOf({
-		    .soundType = sounds->soundType,
-		    .action = sound.action,
-		    .mode = sound.mode,
-		    .clip = static_cast<uint32_t>(clipId),
-		    .isVillager = villager != nullptr,
-		    .alive = world.LifeOf(entity) > 0.0f,
-		    .turnsInState = action != nullptr ? action->turnsSinceStateChange : uint16_t {0},
-		    .insideTemple = insideTemple,
-		});
-		if (route.outcome == clip_sounds::Outcome::Stop)
+		for (const auto index : stretch)
 		{
-			return;
-		}
-		if (route.outcome == clip_sounds::Outcome::Skip)
-		{
-			continue;
-		}
-		const audio::AnimEffectKeys keys {.size = size,
-		                                  .alignment = k_ClipSoundAlignment,
-		                                  .object = static_cast<audio::SoundObject>(sounds->soundType),
-		                                  .surface = surface,
-		                                  .action = static_cast<audio::SoundAction>(sound.action)};
-		// The home's banter belongs to the home, which a homeless villager hasn't, and is heard as far off as the
-		// villager is
-		const auto owner = route.fromHome ? villager->abode : entity;
-		const auto bank = route.bank == clip_sounds::Bank::Banter ? k_BanterBank : k_EditorBank;
-		if (route.end.has_value())
-		{
-			world.EndSound(bank, keys.ToArray(), owner, position, *route.end);
-		}
-		else
-		{
-			world.PlaySound(bank, keys.ToArray(), owner, position, route.bySampleRules);
+			const auto& sound = sounds->sounds[index];
+			const auto route = clip_sounds::RouteOf({
+			    .soundType = sounds->soundType,
+			    .action = sound.action,
+			    .mode = sound.mode,
+			    .clip = static_cast<uint32_t>(clipId),
+			    .isVillager = villager != nullptr,
+			    .alive = world.LifeOf(entity) > 0.0f,
+			    .turnsInState = action != nullptr ? action->turnsSinceStateChange : uint16_t {0},
+			    .insideTemple = insideTemple,
+			    .inScript = inScript,
+			    .scriptCutScene = scriptCutScene,
+			});
+			if (route.outcome == clip_sounds::Outcome::Stop)
+			{
+				if (const auto logger = spdlog::get("audio"))
+				{
+					SPDLOG_LOGGER_DEBUG(logger, "Clip {} of entity {}: action {} stops the rest of its stretch",
+					                    static_cast<uint32_t>(clipId), entt::to_integral(entity), sound.action);
+				}
+				break;
+			}
+			if (route.outcome == clip_sounds::Outcome::Skip)
+			{
+				continue;
+			}
+			const audio::AnimEffectKeys keys {.size = size,
+			                                  .alignment = k_ClipSoundAlignment,
+			                                  .object = static_cast<audio::SoundObject>(sounds->soundType),
+			                                  .surface = surface,
+			                                  .action = static_cast<audio::SoundAction>(sound.action)};
+			// The home's banter belongs to the home, which a homeless villager hasn't, and is heard as far off as the
+			// villager is
+			const auto owner = route.fromHome ? villager->abode : entity;
+			const auto bank = route.bank == clip_sounds::Bank::Banter ? k_BanterBank : k_EditorBank;
+			if (route.end.has_value())
+			{
+				world.EndSound(bank, keys.ToArray(), owner, position, *route.end);
+			}
+			else
+			{
+				world.PlaySound(bank, keys.ToArray(), owner, position, route.bySampleRules);
+			}
 		}
 	}
 }

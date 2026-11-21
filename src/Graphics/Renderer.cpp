@@ -70,6 +70,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -85,6 +86,8 @@
 #include "Graphics/PipelineCache.h"
 #include "Graphics/Primitive.h"
 #include "Graphics/RendererDetail.h"
+#include "Graphics/ScreenGlow.h"
+#include "Graphics/ScreenGlowPass.h"
 #include "Graphics/ScreenshotCapture.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/WarmUpViews.h"
@@ -415,6 +418,7 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
     , _bgfxCallback(std::move(bgfxCallback))
     , _bgfxReset(bgfxReset)
     , _offscreenShots(std::make_unique<OffscreenScreenshots>())
+    , _screenGlow(std::make_unique<ScreenGlowPass>())
     , _workers(MakeWorkerPool())
 {
 	_shaderManager->LoadShaders();
@@ -456,6 +460,7 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 Renderer::~Renderer() noexcept
 {
 	_offscreenShots.reset();
+	_screenGlow.reset();
 	_creatureSkins.clear();
 	_roomCreatureSkins.clear();
 	_drawnCreatureSkins.clear();
@@ -811,6 +816,14 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	}
 	// The colours of the last hair for the next frame. A warm-up makes the target that keeps them.
 	KeepCreatureHairLight();
+	// The good sky's glow goes over the frames that draw the land, not over the temple's inside
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (!_warmingUp && !inTemple && drawDesc.viewId == RenderPass::Main)
+	{
+		const auto frameRealTime =
+		    Locator::time::has_value() ? Locator::time::value().GetFrameRealTime() : std::chrono::milliseconds {0};
+		_screenGlow->Want(_screenGlowStrength, frameRealTime);
+	}
 }
 
 uint32_t Renderer::GetPipelinesMade() const noexcept
@@ -900,6 +913,9 @@ void Renderer::Frame() noexcept
 #if defined(__EMSCRIPTEN__)
 	web::BeforeFrame();
 #endif
+	// The good sky's glow over the frame is the last draw of the frame before the debug windows and the pointer
+	_screenGlow->Submit(*_shaderManager, static_cast<glm::u16vec2>(detail::SceneTarget(nullptr)),
+	                    _offscreenShots->RedirectedTo());
 	// Advance to next frame. Process submitted rendering primitives.
 	const auto frame = bgfx::frame();
 	// The game thread's encoder starts each frame at submit order 0
@@ -920,6 +936,7 @@ void Renderer::Frame() noexcept
 	}
 	_shaderManager->FrameEnded();
 	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->pictures);
+	_screenGlow->FrameEnded();
 #if defined(__EMSCRIPTEN__)
 	// In the browser, a recovery that does not succeed stops the game with a message on the page. The graphics library
 	// draws with the noop renderer while it waits for a new device.
@@ -947,6 +964,7 @@ void Renderer::Frame() noexcept
 		                   bgfx::getDeviceRestoreCount(), kept.Total(), kept.buffers, kept.dynamicBuffers, kept.shaders,
 		                   kept.textures, kept.textureChanges);
 		_skyDomeLost = true;
+		_screenGlow->Lost();
 		_templeMapVisit.reset();
 		// The next frame keeps the colours of the last hair again
 		if (std::holds_alternative<creature_hair_light::Kept>(_hairLightCarried))

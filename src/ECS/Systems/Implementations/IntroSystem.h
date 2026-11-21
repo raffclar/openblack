@@ -52,7 +52,8 @@ private:
 	bool AdvanceHand(uint32_t milliseconds);
 	/// The hand posed at its clip's time
 	void PoseHand();
-	/// Where the hand holds the boy now, kept from the last frame it held him
+	/// Where the hand holds the boy, from the pose of the hand in this frame. The game keeps the last grip after the hand
+	/// lets go.
 	void UpdateGrip();
 	/// Those following the hand drawn in its grip, or where they stand again
 	void PlaceFollowers();

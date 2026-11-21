@@ -212,6 +212,53 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	                 {.kind = Kind::ClickScroll, .delaySeconds = 11.0f, .point = landOneKennels}},
 	});
 
+	// The opening's hand sets the boy down on the beach of the first land, as the land's script does it after the boy is
+	// lifted out of the sea. The places and the camera are the script's.
+	const auto boyOnBeach = onLandOne(1494.895f, 2092.996f);
+	const auto setDownCamera = onLandOne(1501.389f, 2092.844f);
+	const auto setDownLook = onLandOne(1480.0f, 2082.0f);
+	all.push_back({
+	    .id = "story.l1_intro_hand_sets_boy_down",
+	    .name = "Story: the opening's hand carries the boy from the sea and sets him down on the beach",
+	    .facet = Facet::Story,
+	    .description = "The first land loads with its own scripts. A boy stands on the beach where the land's script puts "
+	                   "the son of the opening. The cinema bars come in, and the boy gets the high detail and the order to "
+	                   "follow the opening's hand. The hand comes from the sea with its clip of the set-down. After 1.8 "
+	                   "seconds the hand lets the boy go.",
+	    .expected = "The hand flies in from the sea to the beach. The boy hangs from its fingers all the time, with his "
+	                "head at the tips of the fingers, also when the hand moves fast. No gap shows between the hand and "
+	                "the boy. When the hand lets go, the boy stands at his place on the beach, on the sand.",
+	    .environment = {.land = Land::Story, .storyLand = "Land1.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {setDownCamera.x, 2.4f, setDownCamera.y},
+	                .look = {setDownLook.x, 2.0f, setDownLook.y}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = boyOnBeach, .villagerAge = 9}},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = Argument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "THING_JC_SPECIAL",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 7.0f},
+	                                      {.kind = Argument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "PLAY_JC_SPECIAL",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 4.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "PLAY_JC_SPECIAL",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 5.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.8f,
+	                  .script = "PLAY_JC_SPECIAL",
+	                  .scriptArguments = {{.kind = Argument::Kind::Integer, .number = 5.0f}}}},
+	});
+
 	// The end of a cinema, as the films of the creature trainer end: the script sends the camera up and away, and gives
 	// the camera back before it arrives
 	const auto move = [](std::string_view native, glm::vec2 point, float height, float seconds, float delay) {

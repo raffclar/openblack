@@ -248,6 +248,25 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "sky.good_sky_screen_glow",
+	    .name = "A good sky adds a soft glow over the screen",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at noon under a clear sky. The player is fully good, and the camera looks over "
+	                   "the land and the trees towards the sky. After 20 seconds the player becomes fully evil, and the sky "
+	                   "turns to the evil sky.",
+	    .expected = "With the weather option of the default detail level, a soft glow covers the whole screen, the "
+	                "interface too. It comes in over about a second and follows the picture slowly: move the camera, and the "
+	                "glow of the last view fades into the glow of the new view. The glow is a little blue. As the sky turns "
+	                "to evil, the glow goes. A neutral or evil sky has no glow.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 30.0f, 100.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 45.0f}},
+	                {.type = TreeInfo::Conifer, .offset = {-55.0f, 60.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-30.0f, 70.0f}}},
+	    .commands = {{.kind = Command::Kind::SetAlignment, .delaySeconds = 20.0f, .alignment = -1.0f}},
+	});
+
+	all.push_back({
 	    .id = "sky.low_detail_dome_tint",
 	    .name = "At Low detail the sky darkens towards night",
 	    .facet = Facet::Sky,

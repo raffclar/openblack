@@ -190,6 +190,10 @@ enum class RenderPass : uint8_t
 	/// The colours of the last hair that the frame drew, kept in a target for the next frame: a body with the
 	/// environment map lights its hair with them
 	HairLight,
+	/// One step of the points of the good sky's glow towards the frame as the screen shows it, at most 60 times a second
+	ScreenGlowStep,
+	/// The frame with the good sky's glow added, copied into the window. The debug windows and the pointer go over it.
+	ScreenGlow,
 	ImGui,
 	/// The game's pointer, over the debug windows too
 	Cursor,
@@ -323,6 +327,8 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Interface Creatures Pass",        //
     "World Body Colours Pass",         //
     "Hair Light Pass",                 //
+    "Screen Glow Step Pass",           //
+    "Screen Glow Pass",                //
     "ImGui Pass",                      //
     "Cursor Pass",                     //
     "Mesh Viewer Pass",                //
