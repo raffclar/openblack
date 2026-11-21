@@ -526,8 +526,49 @@ TEST(SavedSystemState, WhatTheCameraLetsThePlayerDoComesBack)
 	EXPECT_EQ(loaded.Get().features, 0x15u);
 	EXPECT_FLOAT_EQ(loaded.Get().autoPitch, 0.25f);
 	EXPECT_FLOAT_EQ(loaded.Get().autoPitchHeight, 80.0f);
-	// The game keeps no more of it
+	// With no level from a script, the load sets the normal level, which gives the normal reach of the hand
 	EXPECT_FLOAT_EQ(loaded.Get().handReach, camera_help::CameraHelp {}.handReach);
+	EXPECT_FALSE(loaded.Get().interfaceLevel.has_value());
+}
+
+TEST(SavedSystemState, TheLoadSetsTheSavedInterfaceLevelAgainAndKeepsTheSavedFeatures)
+{
+	CameraHelpSystem saved;
+	ASSERT_TRUE(saved.Get().SetInterfaceLevel(1));
+	saved.Get().features = 0x15;
+	saved.Get().autoPitch = 0.25f;
+	saved.Get().autoPitchHeight = 80.0f;
+	CameraHelpSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	ASSERT_TRUE(loaded.Get().interfaceLevel.has_value());
+	EXPECT_EQ(*loaded.Get().interfaceLevel, 1);
+	// The keys and the reach of the hand come from the level
+	EXPECT_TRUE(loaded.Get().cameraKeys);
+	EXPECT_FALSE(loaded.Get().placeKeys);
+	EXPECT_FLOAT_EQ(loaded.Get().handReach, 75.0f);
+	// The saved features and the saved pitch replace those of the level
+	EXPECT_EQ(loaded.Get().features, 0x15u);
+	EXPECT_FLOAT_EQ(loaded.Get().autoPitch, 0.25f);
+	EXPECT_FLOAT_EQ(loaded.Get().autoPitchHeight, 80.0f);
+}
+
+TEST(SavedSystemState, ASaveWithNoInterfaceLevelSetsTheNormalLevel)
+{
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, 0x15u);
+	reflection::Save(out, 0.25f);
+	reflection::Save(out, 80.0f);
+	const auto bytes = out.Bytes();
+	CameraHelpSystem loaded;
+	ASSERT_TRUE(loaded.Get().SetInterfaceLevel(1));
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), bytes, identity);
+	ASSERT_TRUE(loaded.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_FALSE(loaded.Get().interfaceLevel.has_value());
+	EXPECT_TRUE(loaded.Get().placeKeys);
+	EXPECT_FLOAT_EQ(loaded.Get().handReach, camera_help::CameraHelp {}.handReach);
+	EXPECT_EQ(loaded.Get().features, 0x15u);
 }
 
 TEST(SavedSystemState, TheCameraZonesComeBack)
