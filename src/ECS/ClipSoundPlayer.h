@@ -62,6 +62,8 @@ public:
 	[[nodiscard]] virtual std::optional<creature_audio::Ground> GroundAt(const glm::vec3& position) const = 0;
 	/// Whether the player is inside the temple
 	[[nodiscard]] virtual bool InsideTemple() const = 0;
+	/// Whether a script holds the widescreen bars for its cut scene
+	[[nodiscard]] virtual bool ScriptCutScene() const = 0;
 	[[nodiscard]] virtual float LifeOf(entt::entity object) const = 0;
 	/// A sound of a bank, as an animation's sound effect is played, belonging to an owner at a place; by the sample
 	/// rules, only when the sample picked may be heard now

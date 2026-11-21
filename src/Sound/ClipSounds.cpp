@@ -59,6 +59,11 @@ clip_sounds::SoundRoute clip_sounds::RouteOf(const SoundSource& source)
 	{
 		return {.outcome = Outcome::Stop};
 	}
+	// In a script's cut scene, the normal footstep of a villager that no script holds stops the rest of the clip
+	if (source.action == k_FootstepAction && source.isVillager && !source.inScript && source.scriptCutScene)
+	{
+		return {.outcome = Outcome::Stop};
+	}
 	SoundRoute route {.outcome = Outcome::Play};
 	if (source.action >= k_HomeBanter && source.action <= k_LastBanter)
 	{
@@ -77,8 +82,6 @@ clip_sounds::SoundRoute clip_sounds::RouteOf(const SoundSource& source)
 		return {.outcome = Outcome::Skip};
 	}
 	// Sounds played the ordinary way are not heard inside the temple, and otherwise only as their samples allow
-	// TODO(audio): a villager's first-kind sound outside a script silences the rest of its clip while a script holds the
-	// widescreen bars
 	if (source.mode == 0 && source.insideTemple)
 	{
 		return {.outcome = Outcome::Skip};
@@ -91,17 +94,18 @@ clip_sounds::SoundRoute clip_sounds::RouteOf(const SoundSource& source)
 	return route;
 }
 
-std::vector<size_t> clip_sounds::Passed(std::span<const sas::FrameSound> sounds, uint32_t place, uint32_t played,
-                                        uint32_t duration, bool looping)
+clip_sounds::Stretches clip_sounds::Passed(std::span<const sas::FrameSound> sounds, uint32_t place, uint32_t played,
+                                           uint32_t duration, bool looping)
 {
-	std::vector<size_t> passed;
+	Stretches passed;
 	const auto between = [&sounds, &passed](uint32_t from, uint32_t to) {
+		auto& stretch = passed.emplace_back();
 		for (size_t i = 0; i < sounds.size(); ++i)
 		{
 			if (sounds[i].time >= 0 && static_cast<uint32_t>(sounds[i].time) >= from &&
 			    static_cast<uint32_t>(sounds[i].time) < to)
 			{
-				passed.push_back(i);
+				stretch.push_back(i);
 			}
 		}
 	};
@@ -116,7 +120,7 @@ std::vector<size_t> clip_sounds::Passed(std::span<const sas::FrameSound> sounds,
 	return passed;
 }
 
-std::vector<size_t> clip_sounds::AllOf(std::span<const sas::FrameSound> sounds, uint32_t duration)
+clip_sounds::Stretches clip_sounds::AllOf(std::span<const sas::FrameSound> sounds, uint32_t duration)
 {
 	// The stretch from the start to the end, with no end to come round
 	return Passed(sounds, 0, duration, 0, false);

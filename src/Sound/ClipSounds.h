@@ -97,24 +97,32 @@ struct SoundSource
 	uint16_t turnsInState {0};
 	/// The player's view is inside the temple
 	bool insideTemple {false};
+	/// A script holds the thing
+	bool inScript {false};
+	/// A script holds the widescreen bars for its cut scene
+	bool scriptCutScene {false};
 };
 
 /// How one of a clip's sounds is played: a person's sounds only while it is alive; the banter from the villagers' bank,
 /// the first of it from a villager's home; a thrown person's scream only early in its flight; anything else from the
-/// editor's bank; and sounds played the ordinary way not while the player is inside the temple, and otherwise only as
+/// editor's bank; a villager's normal footstep in a script's cut scene stops the rest of the clip when no script holds
+/// the villager; and sounds played the ordinary way not while the player is inside the temple, and otherwise only as
 /// their samples allow
 [[nodiscard]] SoundRoute RouteOf(const SoundSource& source);
+
+/// The sounds a clip passes, one list for each stretch that it plays. Each list gives the sounds by their place in the
+/// clip's list, in that order. A sound that stops the rest of the clip stops only the rest of its stretch.
+using Stretches = std::vector<std::vector<size_t>>;
 
 /// Which of a clip's sounds play as it plays on from a place by so many milliseconds: those whose time is in the
 /// stretch played. Playing past the clip's end plays to its end, then a looping clip plays on from its start to where
 /// it comes round to, and a clip played once plays all its sounds again from the start (its callers stop playing a clip
-/// that has finished). The sounds are given by their place in the list, once for each time they play.
-[[nodiscard]] std::vector<size_t> Passed(std::span<const sas::FrameSound> sounds, uint32_t place, uint32_t played,
-                                         uint32_t duration, bool looping);
+/// that has finished). A clip that comes round gives two stretches, one to its end and one from its start.
+[[nodiscard]] Stretches Passed(std::span<const sas::FrameSound> sounds, uint32_t place, uint32_t played, uint32_t duration,
+                               bool looping);
 /// All the sounds a clip of so many milliseconds plays from its start to its end, as one played once and held at its
 /// end plays them again
-[[nodiscard]] std::vector<size_t> AllOf(std::span<const sas::FrameSound> sounds, uint32_t duration);
-
+[[nodiscard]] Stretches AllOf(std::span<const sas::FrameSound> sounds, uint32_t duration);
 /// The size a clip's sound is played for: the people's clips by the person (a man large, a woman medium, a child or
 /// anything else small); any other kind of thing's clips medium
 [[nodiscard]] SoundSize SizeOf(int32_t soundType, bool isVillager, bool child, bool woman);
@@ -128,6 +136,8 @@ inline constexpr int32_t k_PeopleSounds = 1;
 /// home
 inline constexpr int32_t k_HomeBanter = 0x92;
 inline constexpr int32_t k_LastBanter = 0x94;
+/// The action of a normal footstep
+inline constexpr int32_t k_FootstepAction = 4;
 /// A person's thrown clip screams only so many turns into its flight, the thrown-in-a-vortex clip fewer
 inline constexpr uint16_t k_ThrownSoundTurns = 15;
 inline constexpr uint16_t k_ThrownVortexSoundTurns = 10;

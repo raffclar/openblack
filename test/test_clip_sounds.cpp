@@ -49,13 +49,16 @@ TEST(ClipSounds, ThePlayedStretchPassesItsSounds)
 {
 	const std::vector<sas::FrameSound> sounds {
 	    {.time = 0, .action = 4, .mode = 0}, {.time = 485, .action = 4, .mode = 0}, {.time = 937, .action = 4, .mode = 0}};
+	using List = std::vector<size_t>;
 	// From the place up to but not including where it plays to
-	EXPECT_EQ(Passed(sounds, 400, 100, 1500, true), (std::vector<size_t> {1}));
-	EXPECT_TRUE(Passed(sounds, 486, 100, 1500, true).empty());
-	// A looping clip comes round and plays from its start
-	EXPECT_EQ(Passed(sounds, 1400, 200, 1500, true), (std::vector<size_t> {0}));
+	EXPECT_EQ(Passed(sounds, 400, 100, 1500, true), (Stretches {List {1}}));
+	EXPECT_EQ(Passed(sounds, 486, 100, 1500, true), (Stretches {List {}}));
+	// A looping clip comes round and plays from its start, in a second stretch
+	EXPECT_EQ(Passed(sounds, 1400, 200, 1500, true), (Stretches {List {}, List {0}}));
 	// A clip played once that reaches its end plays all its sounds again
-	EXPECT_EQ(Passed(sounds, 900, 700, 1500, false), (std::vector<size_t> {2, 0, 1, 2}));
+	EXPECT_EQ(Passed(sounds, 900, 700, 1500, false), (Stretches {List {2}, List {0, 1, 2}}));
+	// A clip held at its end plays all its sounds in one stretch
+	EXPECT_EQ(AllOf(sounds, 1500), (Stretches {List {0, 1, 2}}));
 }
 
 TEST(ClipSounds, APersonsSizeIsByTheirSexAndAge)
@@ -98,6 +101,16 @@ TEST(ClipSounds, ASoundsRouteFollowsTheGamesRules)
 	EXPECT_EQ(home.bank, Bank::Banter);
 	EXPECT_TRUE(home.fromHome);
 	EXPECT_FALSE(RouteOf({.soundType = k_PeopleSounds, .action = k_LastBanter, .isVillager = true}).fromHome);
+	// In a script's cut scene, a villager's normal footstep stops the rest of the clip, unless a script holds the villager
+	EXPECT_EQ(RouteOf({.soundType = 1, .action = k_FootstepAction, .isVillager = true, .scriptCutScene = true}).outcome,
+	          Outcome::Stop);
+	EXPECT_EQ(
+	    RouteOf({.soundType = 1, .action = k_FootstepAction, .isVillager = true, .inScript = true, .scriptCutScene = true})
+	        .outcome,
+	    Outcome::Play);
+	EXPECT_EQ(RouteOf({.soundType = 3, .action = k_FootstepAction, .isVillager = false, .scriptCutScene = true}).outcome,
+	          Outcome::Play);
+	EXPECT_EQ(RouteOf({.soundType = 1, .action = k_FootstepAction, .isVillager = true}).outcome, Outcome::Play);
 	// A thrown person screams only early in its flight
 	EXPECT_EQ(RouteOf({.soundType = 1, .clip = k_ThrownClip, .isVillager = true, .turnsInState = 14}).outcome, Outcome::Play);
 	EXPECT_EQ(RouteOf({.soundType = 1, .clip = k_ThrownClip, .isVillager = true, .turnsInState = 15}).outcome, Outcome::Skip);
