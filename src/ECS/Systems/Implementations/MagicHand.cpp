@@ -138,12 +138,13 @@ void MagicSystem::StopHandEffect(SpellSeed& seed)
 void MagicSystem::StartHoldLoop()
 {
 	StopHoldLoop();
-	if (Locator::sounds::has_value() && Held().has_value())
+	// The hum belongs to the hand, not to the seed. It can continue after the seed leaves the hand.
+	if (Locator::sounds::has_value())
 	{
 		_holdLoop = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
 		                                        {.position = _hand.handPosition,
 		                                         .playType = audio::PlayType::Repeat,
-		                                         .owner = *Held(),
+		                                         .owner = Held().value_or(entt::entity {entt::null}),
 		                                         .voiceOwner = audio::VoiceOwner::OwnSound,
 		                                         .follows = audio::Follows::Place});
 	}
@@ -162,10 +163,14 @@ void MagicSystem::StopHoldLoop()
 void MagicSystem::LetGoOfSeed(bool destroy)
 {
 	auto& registry = EntityRegistry();
-	// Only the hand of this computer has a hum, a pour, an input and the effects of the hand
+	// Only the hand of this computer has a hum, a pour, an input and the effects of the hand. The hum stops only when the
+	// seed is armed. The hum that continues after a use on a fireball also continues after the seed leaves the hand.
 	if (ActsOnOwnHand())
 	{
-		StopHoldLoop();
+		if (_input.state == magic::CastInput::State::Armed)
+		{
+			StopHoldLoop();
+		}
 		magic::StopPour(_pour);
 		_input = {};
 		if (Held().has_value() && Locator::miracleFxSystem::has_value())

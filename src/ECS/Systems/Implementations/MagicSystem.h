@@ -602,7 +602,8 @@ private:
 		uint32_t pressTurn {0};
 	};
 	std::optional<FireBallPress> _fireBallPress;
-	/// The hum of an armed seed
+	/// The hum that the press of an armed seed starts. After a use of the armed seed on a fireball, it continues until
+	/// the next let go of an armed seed.
 	entt::entity _holdLoop {entt::null};
 	/// The pour of food or wood lifting and tipping the hand
 	magic::PourState _pour;

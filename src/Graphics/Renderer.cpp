@@ -460,7 +460,7 @@ Renderer::~Renderer() noexcept
 	_roomCreatureSkins.clear();
 	_drawnCreatureSkins.clear();
 	_spareCreatureSkins.clear();
-	_animalBoneTexture.reset();
+	_posedBoneTexture.reset();
 	_handSkins.clear();
 	_handSkinTextures.clear();
 	_particleLightMaps.clear();
@@ -727,7 +727,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		}
 	}
 	UploadHandSkins();
-	UploadAnimalBones(drawDesc);
+	UploadPosedBones(drawDesc);
 	// The workers make the moving shadows on the land while the passes below draw
 	StartGroundShadows(drawDesc);
 	{

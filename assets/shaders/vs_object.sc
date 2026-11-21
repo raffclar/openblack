@@ -102,8 +102,14 @@ mat4 PaletteBone(uint bone)
 // Many posed models of one mesh drawn at once, each with its own bones: every bone's matrix is four texels of a row, its
 // columns in turn. x: the first matrix of the draw, y: the bones of each instance, zw: the texture's width and height.
 // Each instance gives its place in the draw in its first column's w, which an affine model matrix keeps at 0.
+// A creature's body gives y 0: it is one instance, and its bones start at x.
 uniform vec4 u_bones;
-SAMPLER2D(s_bones, 2);
+// The stage of the bones. The blend sources of a creature's body use stage 2, thus the shader of the body gives a
+// different stage.
+#ifndef BONE_TEXTURE_STAGE
+#define BONE_TEXTURE_STAGE 2
+#endif // BONE_TEXTURE_STAGE
+SAMPLER2D(s_bones, BONE_TEXTURE_STAGE);
 
 vec4 BoneColumn(float texel)
 {
@@ -201,7 +207,10 @@ void main()
 		                       u_morphWeights.y * (texture2DLod(s_blendThinFat, partnerUv, 0.0f).xyz - partnerBase.xyz) +
 		                       u_morphWeights.z * (texture2DLod(s_blendWeakStrong, partnerUv, 0.0f).xyz - partnerBase.xyz);
 		uint partnerBone = uint(max(0.0f, partnerBase.w + 0.5f));
-#ifdef USE_INSTANCING
+#ifdef USE_BONE_TEXTURE
+		mat4 partnerMatrix = BoneMatrix(u_bones.x + (i_data0.w * u_bones.y) + float(partnerBone));
+		vec4 partnerWorld = InstanceMul(model, mul(partnerMatrix, vec4(partnerPosition, 1.0f)));
+#elif defined(USE_INSTANCING)
 		vec4 partnerWorld = InstanceMul(model, mul(u_model[partnerBone], vec4(partnerPosition, 1.0f)));
 #else
 		vec4 partnerWorld = mul(u_model[partnerBone], vec4(partnerPosition, 1.0f));

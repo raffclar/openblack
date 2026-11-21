@@ -451,7 +451,8 @@ public:
 	/// The frame after the let go of the button ends the wait
 	virtual void EndUseWaitAfterLetGo() {}
 	/// Each gesture step of the hand of this computer: a ready fire seed in the hand takes the fireball under the hand
-	/// into it with no press of a button. The interface then waits for the let go of the Action button.
+	/// into it with no press of a button. A fire seed that a press armed on a fireball takes that fireball. The interface
+	/// then waits for the let go of the Action button.
 	virtual void TakeInFireBallUnderHand() {}
 	/// The miracle seed in the hand of this computer
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeed() const = 0;

@@ -366,9 +366,9 @@ void MagicSystem::EndUseWaitAfterLetGo()
 void MagicSystem::TakeInFireBallUnderHand()
 {
 	const ActingAs acting(*this, OwnPlayer());
-	// The seed must be a fire seed that no press armed or locked. A press keeps its own thing.
+	// The seed must be a fire seed that no miracle in the hand locked
 	if (!Held().has_value() || !EntityRegistry().Valid(*Held()) || !Locator::infoConstants::has_value() ||
-	    _input.state != magic::CastInput::State::Idle)
+	    _input.state == magic::CastInput::State::Locked)
 	{
 		return;
 	}
@@ -376,21 +376,26 @@ void MagicSystem::TakeInFireBallUnderHand()
 	{
 		return;
 	}
-	// The seed can take the fireball under the hand into it: the seed is ready and no script made a highlight of the
-	// fireball. The player's influence has no effect.
-	const auto picked = PickedUnderHand();
-	if (!picked.has_value() || !EntityRegistry().AllOf<MagicFireBall>(*picked) || !IsHeldSeedTarget(*picked))
+	// With no press, the thing is the fireball under the hand. A press that armed the seed keeps its own thing.
+	const bool armed = _input.state == magic::CastInput::State::Armed;
+	const auto thing = armed ? std::optional<entt::entity> {GetPressThing()} : PickedUnderHand();
+	// The seed can take the fireball into it: the seed is ready and no script made a highlight of the fireball. The
+	// player's influence has no effect.
+	if (!thing.has_value() || !EntityRegistry().Valid(*thing) || !EntityRegistry().AllOf<MagicFireBall>(*thing) ||
+	    !IsHeldSeedTarget(*thing))
 	{
 		return;
 	}
 	// The hand sends the use of the seed on the ball at once. While the hand waits for its last send, it sends
-	// nothing. In both cases the interface waits for the let go of the Action button, and keeps no thing.
-	_pressThing = *picked;
-	SendCast(magic::CastTarget::Object);
+	// nothing. In both cases the interface waits for the let go of the Action button. The wait after a press keeps the
+	// ball of the press, and the hum of the press continues.
+	const auto actions = armed ? magic::UseArmedSeedOnThing(_input) : magic::CastActions {.cast = magic::CastTarget::Object};
+	_pressThing = *thing;
+	Do(actions);
 	_pressThing = entt::null;
 	if (!_useWait.has_value())
 	{
-		_useWait = UseWait {};
+		_useWait = UseWait {.kept = armed ? *thing : entt::entity {entt::null}};
 	}
 }
 

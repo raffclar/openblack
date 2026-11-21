@@ -717,8 +717,9 @@ private:
 	void UploadHandSkins() const;
 	/// Every animal's bones as posed this frame, in one texture, so that all the animals of a model, a flock's birds, are
 	/// drawn at once, each instance finding its own bones by its place among them. A model some of whose animals fade is
-	/// drawn an animal at a time as before.
-	void UploadAnimalBones(const DrawSceneDesc& drawDesc) const;
+	/// drawn an animal at a time as before. The bones of every creature drawn this frame follow them. Thus a creature's
+	/// draws upload no bones, and every creature in view is drawn on every backend.
+	void UploadPosedBones(const DrawSceneDesc& drawDesc) const;
 	/// What the hand's base mesh is pulled towards for its player's alignment, none while it shows the base
 	[[nodiscard]] std::optional<L3DMeshSubmitDesc::MorphTargets> HandMorphTargets() const;
 
@@ -1012,8 +1013,8 @@ private:
 	};
 	mutable std::unordered_map<entt::id_type, AnimalBoneGroup> _animalBoneGroups;
 	/// The bones' matrices, four texels each, a row of the texture after another
-	mutable std::vector<glm::mat4> _animalBones;
-	mutable std::unique_ptr<Texture2D> _animalBoneTexture;
+	mutable std::vector<glm::mat4> _posedBones;
+	mutable std::unique_ptr<Texture2D> _posedBoneTexture;
 	/// Whether running out of textures for the creatures' skins has been logged
 	mutable bool _warnedOutOfSkins {false};
 	/// The hand's skins as blended for its player's alignment, one texture each, and the blending they hold
@@ -1030,6 +1031,10 @@ private:
 		/// it is lit from. The copy is a thing of the temple's rooms.
 		entt::entity posedBy {entt::null};
 		std::optional<glm::vec3> light;
+		/// The bones of its pose, or those of its mesh when it has no pose of its own
+		std::span<const glm::mat4> bones {};
+		/// Where its bones start in the texture of the posed bones
+		std::optional<uint32_t> firstBone {};
 	};
 	mutable std::vector<DrawnCreature> _drawnCreatures;
 	/// A usual hair draw of the frame: the place of its creature, the camera that draws it and how much of the land's
@@ -1078,13 +1083,9 @@ private:
 	mutable std::optional<interface_creatures::MenuCreature> _menuCreature;
 	mutable std::optional<DynamicVertexBufferHandle> _menuCreatureInstance;
 	mutable std::optional<DynamicVertexBufferHandle> _filmCreatureInstance;
-	mutable bool _warnedCreatureCap {false};
-	/// Found by trial in a debug build, whose backends check the uploads: Vulkan overflowed with 65 creatures drawn and
-	/// Direct3D 12 with 850, and both held with 50 and 600
-	static constexpr size_t k_MaxCreaturesDrawnVulkan = 40;
-	static constexpr size_t k_MaxCreaturesDrawnDirect3D12 = 500;
 	void SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const;
-	[[nodiscard]] static size_t MaxCreaturesDrawn();
+	/// Where the bones start in the texture of the posed bones, when they are the bones of a creature drawn this frame
+	[[nodiscard]] std::optional<uint32_t> FirstBoneOf(std::span<const glm::mat4> bones) const;
 	/// Sampled by the primitives without a skin, as Direct3D's texture stages read white with no texture set
 	std::optional<TextureHandle> _whiteTexture;
 	/// A texel that the renderer reads back to make a frame wait for the GPU; none if the backend cannot read textures
