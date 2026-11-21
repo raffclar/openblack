@@ -384,49 +384,26 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	// The same town with much wood in its pit, so that the advisors do not warn of low wood before the other remarks
 	auto stockedTown = hungryTown;
 	stockedTown.at(1).storedWood = 5000;
-	// A bigger town wants more food, so that the first load that a villager picks up leaves its shortage high
-	auto crowdedTown = stockedTown;
-	constexpr int k_CrowdRows = 3;
-	constexpr int k_CrowdColumns = 5;
-	for (int row = 0; row < k_CrowdRows; ++row)
-	{
-		for (int column = 0; column < k_CrowdColumns; ++column)
-		{
-			crowdedTown.push_back(
-			    {.type = (row + column) % 2 == 0 ? VillagerInfo::CelticFarmerMale : VillagerInfo::CelticHousewifeFemale,
-			     .offset = k_HungryHut +
-			               glm::vec2(-6.0f + 3.0f * static_cast<float>(column), -12.0f - 3.0f * static_cast<float>(row)),
-			     .joinTown = true});
-		}
-	}
+	// The same town with much food and no wood in its pit, so that the advisors do not warn of low food
+	auto fedTown = hungryTown;
+	fedTown.at(1).storedFood = 5000;
 	all.push_back({
 	    .id = "advisors.low_on_food",
 	    .name = "The advisors warn that a town is low on food",
 	    .facet = Facet::Advisors,
-	    .description =
-	        "On the second land, a Celtic hut, a storage pit with wood and no food and eighteen villagers of the player's "
-	        "town in the middle of the view, with the cursor on them. The town believes 5 in the player. "
-	        "Every kind of the advisors' guidance is taken as heard long ago. The player casts the food "
-	        "miracle near the town for three seconds.",
-	    .expected = "At the 50th turn the advisors say that the villagers are unhappy. Then the villagers go to the "
-	                "new pile of food. When the first one picks up food, the town measures that "
-	                "it has almost no food. An advisor flies in and says one of the first remarks on low food, with its "
-	                "text in the dialogue box. No second remark follows soon. On the first land no remark comes.",
+	    .description = "On the second land, a Celtic hut, a storage pit with wood and no food and three villagers of the "
+	                   "player's town in the middle of the view, with the cursor on them. The town believes 5 in the "
+	                   "player. Every kind of the advisors' guidance is taken as heard long ago.",
+	    .expected = "At the next turn the town calculates its food desire: it has no food. An advisor flies in and says "
+	                "one of the remarks on low food, with its text in the dialogue box. The next remark comes only after "
+	                "the wait between two remarks. On the first land no remark comes.",
 	    .environment =
 	        {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f), .landNumber = 2, .players = {PlayerNames::PLAYER_TWO}},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_HungryHut - glm::vec2 {35.0f}, k_HungryHut + glm::vec2 {35.0f}},
 	                .distance = 0.75f},
-	    .objects = crowdedTown,
-	    .miracles = {{.type = MagicType::Food,
-	                  .point = k_HungryFood,
-	                  .handOffset = k_HungryFood,
-	                  .handHeight = 20.0f,
-	                  .delaySeconds = 2.0f,
-	                  .holdSeconds = 3.0f}},
-	    // The remark on the unhappy villagers comes first, at the 50th turn. Then the scenario ends the waits again.
-	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
-	                 {.kind = Kind::EndGuidanceWaits, .delaySeconds = 11.0f}},
+	    .objects = stockedTown,
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
 	    .townBeliefInPlayer = 5.0f,
 	});
 	all.push_back({
@@ -437,9 +414,10 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	        "On the second land, a Celtic hut, a storage pit with wood and no food and three villagers of the player's town "
 	        "in the middle of the view, with the cursor on them. The town believes 5 in the player. Every kind "
 	        "of the advisors' guidance is taken as heard long ago.",
-	    .expected = "At the next fiftieth turn the town measures how unhappy its villagers are: it has no food. An "
-	                "advisor flies in and says one of the remarks on unhappy villagers, with its text in the dialogue "
-	                "box. No second remark follows soon. On the first land no remark comes.",
+	    .expected = "At the next turn an advisor warns of low food. Every fiftieth turn the town measures how unhappy its "
+	                "villagers are: it has no food. After the wait between two remarks, at a fiftieth turn, an advisor "
+	                "flies in and says one of the remarks on unhappy villagers, with its text in the dialogue box. On "
+	                "the first land no remark comes.",
 	    .environment =
 	        {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f), .landNumber = 2, .players = {PlayerNames::PLAYER_TWO}},
 	    .framing = {.shot = Shot::Overview,
@@ -453,7 +431,7 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .id = "advisors.low_on_wood",
 	    .name = "The advisors warn that a town is low on wood",
 	    .facet = Facet::Advisors,
-	    .description = "On the second land, a Celtic hut, a storage pit with no wood and three villagers of the "
+	    .description = "On the second land, a Celtic hut, a storage pit with much food and no wood and three villagers of the "
 	                   "player's town in the middle of the view, with the cursor on them. The town believes 5 in the "
 	                   "player. Every kind of the advisors' guidance is taken as heard long ago.",
 	    .expected = "At the next turn the town works out its wood desire: it has no wood. An advisor flies in and says "
@@ -464,7 +442,7 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_HungryHut - glm::vec2 {35.0f}, k_HungryHut + glm::vec2 {35.0f}},
 	                .distance = 0.75f},
-	    .objects = hungryTown,
+	    .objects = fedTown,
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
 	    .townBeliefInPlayer = 5.0f,
 	});

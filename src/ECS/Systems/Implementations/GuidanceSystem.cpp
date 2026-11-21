@@ -716,12 +716,11 @@ void GuidanceSystem::LowOnPeople(entt::entity town)
 
 void GuidanceSystem::LowOnFood(entt::entity town, float shortage)
 {
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town {}: food shortage {:.3f} when a villager found food",
-	                    entt::to_integral(town), shortage);
 	if (!guidance::WarnsLowOnFood(shortage) || !Locator::entitiesRegistry::has_value())
 	{
 		return;
 	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town {}: food shortage {:.3f}", entt::to_integral(town), shortage);
 	// Only a town of the player here draws the wait of the warning
 	if (!OwnTown(town) || !RemarkNow(guidance::Kind::LowOnFood) || !TownNeedCanBeWarned(town))
 	{

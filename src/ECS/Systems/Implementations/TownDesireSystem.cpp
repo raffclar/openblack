@@ -300,11 +300,14 @@ void TownDesireSystem::ProcessTown(entt::entity entity)
 	    .farmerMaxFood = farmer.maxFoodCarried,
 	    .farmerMaxWood = farmer.maxWoodCarried,
 	};
-	// The wood desire reads only the desires of the turn before, so its shortage before the turn is the shortage that the
-	// turn measures. A high shortage can make the advisors warn of low wood.
+	// The turn calculates the food desire first and then the wood desire. The food desire reads only the food and the
+	// people of the town. The wood desire reads only the desires of the turn before. So the shortages before the turn
+	// are the shortages that the turn measures. A high shortage can make the advisors warn of low food or low wood.
+	const float foodShortage = town_desire::DesireForFood(context);
 	const float woodShortage = town_desire::WoodShortage(context);
 	if (Locator::guidanceSystem::has_value())
 	{
+		Locator::guidanceSystem::value().LowOnFood(entity, foodShortage);
 		Locator::guidanceSystem::value().LowOnWood(entity, woodShortage);
 	}
 	// Every 50 turns the unhappiness of the villagers can make the advisors say so
@@ -374,7 +377,11 @@ float TownDesireSystem::RecomputeDesire(entt::entity town, TownDesireInfo desire
 	    .farmerMaxFood = farmer.maxFoodCarried,
 	    .farmerMaxWood = farmer.maxWoodCarried,
 	};
-	// The wood desire works out the shortage of wood each time, and a high shortage can make the advisors warn of it
+	// Each calculation of the food or wood desire measures the shortage. A high shortage can make the advisors warn of it.
+	if (desire == TownDesireInfo::ForFood && Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().LowOnFood(town, town_desire::DesireForFood(context));
+	}
 	if (desire == TownDesireInfo::ForWood && Locator::guidanceSystem::has_value())
 	{
 		Locator::guidanceSystem::value().LowOnWood(town, town_desire::WoodShortage(context));
@@ -392,7 +399,6 @@ float TownDesireSystem::FoodShortage(entt::entity town) const
 	{
 		return 0.0f;
 	}
-	// TODO(villager-hunger-health): a town of the player's running this low (0.95 or more) shows the low-on-food help
 	const auto& info = Locator::infoConstants::value();
 	const auto& farmer = info.villager.at(10);
 	const auto inputs = GatherInputs(town, *data, *tribe);
