@@ -53,45 +53,6 @@ public:
 		const auto unbindableAccumulator = GetAnyAccumulateActions<UnbindableActionMap>(actions...);
 		return GetBindable(bindableAccumulator) || GetUnbindable(unbindableAccumulator);
 	}
-
-	template <typename... Args>
-	    requires(... && (std::is_same_v<Args, BindableActionMap> || std::is_same_v<Args, UnbindableActionMap>))
-	[[nodiscard]] bool GetChangedAny(Args... actions) const
-	{
-		const auto bindableAccumulator = GetAnyAccumulateActions<BindableActionMap>(actions...);
-		const auto unbindableAccumulator = GetAnyAccumulateActions<UnbindableActionMap>(actions...);
-		return GetBindableChanged(bindableAccumulator) || GetUnbindableChanged(unbindableAccumulator);
-	}
-
-	template <typename... Args>
-	    requires(... && (std::is_same_v<Args, BindableActionMap> || std::is_same_v<Args, UnbindableActionMap>))
-	[[nodiscard]] bool GetRepeatAny(Args... actions) const
-	{
-		const auto bindableAccumulator = GetAnyAccumulateActions<BindableActionMap>(actions...);
-		const auto unbindableAccumulator = GetAnyAccumulateActions<UnbindableActionMap>(actions...);
-		return GetBindableRepeat(bindableAccumulator) || GetUnbindableRepeat(unbindableAccumulator);
-	}
-
-	template <typename... Args>
-	    requires(... && (std::is_same_v<Args, BindableActionMap> || std::is_same_v<Args, UnbindableActionMap>))
-	[[nodiscard]] bool GetAll(Args... actions) const
-	{
-		return (Get(actions) && ...);
-	}
-
-	template <typename... Args>
-	    requires(... && (std::is_same_v<Args, BindableActionMap> || std::is_same_v<Args, UnbindableActionMap>))
-	[[nodiscard]] bool GetChangedAll(Args... actions) const
-	{
-		return (GetChanged(actions) && ...);
-	}
-
-	template <typename... Args>
-	    requires(... && (std::is_same_v<Args, BindableActionMap> || std::is_same_v<Args, UnbindableActionMap>))
-	[[nodiscard]] bool GetRepeatAll(Args... actions) const
-	{
-		return (GetRepeat(actions) && ...);
-	}
 	// clang-format on
 
 	[[nodiscard]] bool Get(ActionMap action) const
