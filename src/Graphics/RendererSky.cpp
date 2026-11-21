@@ -45,6 +45,7 @@
 #include "Graphics/SeaRows.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShadowTexture.h"
+#include "Graphics/SkyDomeTarget.h"
 #include "Graphics/Sun.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -435,7 +436,11 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	const glm::u16vec2 size {domeRows, static_cast<uint16_t>(domeRows * k_Alignments)};
 	if (!_skyDomeFrameBuffer || _skyDomeRows != domeRows)
 	{
-		_skyDomeFrameBuffer = std::make_unique<FrameBuffer>("SkyDome", size.x, size.y, graphics::TextureFormat::RGBA8,
+		// The target keeps each 5-bit level of the dome, thus the filtered sky has the values of a filtered 5-bit texture
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index): bgfx has caps for every texture format
+		const bool tenBitsDraw =
+		    (bgfx::getCaps()->formats[toBgfx(TextureFormat::RGB10A2)] & BGFX_CAPS_FORMAT_TEXTURE_FRAMEBUFFER) != 0;
+		_skyDomeFrameBuffer = std::make_unique<FrameBuffer>("SkyDome", size.x, size.y, sky_dome_target::Format(tenBitsDraw),
 		                                                    std::nullopt, 1, Wrapping::ClampEdge);
 		_skyDomeRows = domeRows;
 		_skyDomePicture = {};
