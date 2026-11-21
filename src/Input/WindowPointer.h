@@ -22,8 +22,9 @@ namespace openblack::input
 ///   pointer, and SDL does not know its place.
 [[nodiscard]] glm::ivec2 WindowPointer();
 
-/// Give the place of the pointer of the game to a mouse event of a screen that takes the events itself. This is
-/// necessary on the web only, where the game moves its own pointer. On the desktop the call does nothing.
+/// Prepare a mouse event of a screen that takes the events itself, as the game reads it:
+/// - on the web, the event gets the place of the pointer of the game, because the game moves its own pointer
+/// - a press or a letting go gets the count of clicks of the double click rule of the game (see PairClicks)
 void PointWindowEvent(SDL_Event& event);
 
 } // namespace openblack::input

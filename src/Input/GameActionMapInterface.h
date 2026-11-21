@@ -198,6 +198,13 @@ public:
 	/// at the screen's pointer speed, so the same mouse movement sweeps the same share of the view as on the game's
 	/// 800x600 screen. Called for each admitted event before the game sees it
 	virtual void PointPlayerEvent([[maybe_unused]] SDL_Event& event) {}
+	/// Gives each press and each letting go of a mouse button the count of clicks that the game gets from Windows: 2 for
+	/// the second press of a double click, else 1 (see mouse_clicks::Clicks). Call it for each event from the window's
+	/// queue, after PointPlayerEvent and before the game reads the event.
+	virtual void PairClicks([[maybe_unused]] SDL_Event& event) {}
+	/// The mouse buttons that plain presses hold, as a mask of SDL_BUTTON values. The second press of a double click does
+	/// not hold its button.
+	[[nodiscard]] virtual uint32_t PlainHeldButtons() const { return 0; }
 	/// How many pixels the player's pointer moves for each pixel the mouse would move the system's cursor: the screen's
 	/// pointer speed while the window has the mouse, else 1
 	[[nodiscard]] virtual float GetPointerScale() const { return 1.0f; }

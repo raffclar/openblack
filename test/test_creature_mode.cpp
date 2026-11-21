@@ -328,30 +328,13 @@ TEST(CreatureMode, CreatureKeyLocksOntoYourCreatureAndLetsGo)
 	EXPECT_EQ(creature_mode::OnCreatureKey(theirs, std::nullopt), KeyAction::None);
 }
 
-TEST(CreatureMode, DoubleClickIsTwoQuickPressesOnTheSameCreature)
+TEST(CreatureMode, TheSecondPressOfADoubleClickLocksOntoTheCreatureUnderTheHand)
 {
 	const auto creature = static_cast<entt::entity>(3);
-	const auto other = static_cast<entt::entity>(5);
-	creature_mode::DoubleClicks clicks;
-	EXPECT_FALSE(clicks.OnPress({.milliseconds = 1000, .screen = {100.0f, 100.0f}, .creature = creature}).has_value());
-	EXPECT_EQ(clicks.OnPress({.milliseconds = 1300, .screen = {101.0f, 99.0f}, .creature = creature}), creature);
-	// A third quick press starts again
-	EXPECT_FALSE(clicks.OnPress({.milliseconds = 1400, .screen = {101.0f, 99.0f}, .creature = creature}).has_value());
-
-	// Too slow
-	creature_mode::DoubleClicks slow;
-	EXPECT_FALSE(slow.OnPress({.milliseconds = 0, .creature = creature}).has_value());
-	EXPECT_FALSE(slow.OnPress({.milliseconds = 501, .creature = creature}).has_value());
-	// The mouse moved off the first press
-	creature_mode::DoubleClicks moved;
-	EXPECT_FALSE(moved.OnPress({.milliseconds = 0, .screen = {0.0f, 0.0f}, .creature = creature}).has_value());
-	EXPECT_FALSE(moved.OnPress({.milliseconds = 100, .screen = {5.0f, 0.0f}, .creature = creature}).has_value());
-	// Another creature, or the land
-	creature_mode::DoubleClicks others;
-	EXPECT_FALSE(others.OnPress({.milliseconds = 0, .creature = creature}).has_value());
-	EXPECT_FALSE(others.OnPress({.milliseconds = 100, .creature = other}).has_value());
-	EXPECT_FALSE(others.OnPress({.milliseconds = 200}).has_value());
-	EXPECT_FALSE(others.OnPress({.milliseconds = 300}).has_value());
+	EXPECT_EQ(creature_mode::DoubleClickedCreature({.doublePress = true, .creature = creature}), creature);
+	// A plain press, or a double click on the land, locks onto nothing
+	EXPECT_FALSE(creature_mode::DoubleClickedCreature({.doublePress = false, .creature = creature}).has_value());
+	EXPECT_FALSE(creature_mode::DoubleClickedCreature({.doublePress = true}).has_value());
 }
 
 TEST(CreatureMode, PassesOutWhenAStatusReachesAHundredPercent)

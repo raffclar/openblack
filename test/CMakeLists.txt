@@ -865,6 +865,7 @@ openblack_setup_and_add_test(
 target_link_libraries(test_script_challenge_snapshots PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_hand_tricons hand/test_hand_tricons.cpp)
 openblack_setup_and_add_test(test_double_click input/test_double_click.cpp)
+openblack_setup_and_add_test(test_mouse_clicks input/test_mouse_clicks.cpp)
 openblack_setup_and_add_test(test_force_field camera/test_force_field.cpp)
 openblack_setup_and_add_test(test_intro_rules test_intro_rules.cpp)
 openblack_setup_and_add_test(test_boat_launch_rules test_boat_launch_rules.cpp)

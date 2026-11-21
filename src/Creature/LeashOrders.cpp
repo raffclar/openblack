@@ -104,25 +104,6 @@ Tap creature_leash_orders::OnDoubleTap(const Leash& leash, const Tapped& tapped)
 	return tapped.leashTarget ? Tap::Tie : Tap::Nothing;
 }
 
-bool DoubleTaps::OnPress(uint32_t milliseconds, glm::vec2 screen)
-{
-	const auto last = std::exchange(_last, Press {.milliseconds = milliseconds, .screen = screen});
-	if (!last.has_value())
-	{
-		return false;
-	}
-	const bool quick = milliseconds - last->milliseconds <= k_DoubleTapMilliseconds;
-	const bool still =
-	    std::abs(screen.x - last->screen.x) <= k_DoubleTapSlop && std::abs(screen.y - last->screen.y) <= k_DoubleTapSlop;
-	if (quick && still)
-	{
-		// A third press starts afresh
-		_last.reset();
-		return true;
-	}
-	return false;
-}
-
 std::optional<uint32_t> creature_leash_orders::ToolTipFor(const Leash& leash, const Hovered& hovered)
 {
 	if (!leash.worn)

@@ -78,7 +78,6 @@ private:
 	bool _leaving {false};
 	/// Whether the hand gripped the land last frame, so that only a fresh grip counts
 	bool _wasGripping {false};
-	creature_mode::DoubleClicks _doubleClicks;
 	/// The keys the testbed holds down
 	struct HeldKeys
 	{
