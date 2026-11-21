@@ -11,6 +11,7 @@
 // keeps its place beside the camera, for trying its phases and its path through the night with the moon debug window;
 // a storm's forked bolts coming down round the camera; and the sea drifting with the wind of the real-world weather
 
+#include <tuple>
 #include <vector>
 
 #include "TestbedScenarioBuilders.h"
@@ -260,4 +261,22 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .framing = k_LookingEast,
 	    .objects = TreesToTheEast(),
 	});
+
+	// The dome at four fixed hours, for a good and for an evil sky, with the same camera
+	for (const auto& [id, name, alignment] : {std::tuple {"sky.dome_hours_good", "The good sky dome at four hours", 1.0f},
+	                                          std::tuple {"sky.dome_hours_evil", "The evil sky dome at four hours", -1.0f}})
+	{
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Sky,
+		    .description = "The clock stands at dawn (06:00) under a clear sky, and the camera looks up at the sky. "
+		                   "Every 8 seconds the clock jumps: to noon, to dusk (16:45), then to midnight.",
+		    .expected = "At each hour the dome shows the blend of its pictures for that hour. The bands and the blocks "
+		                "of colour are the steps of the 5-bit pictures. The renderer adds no other step.",
+		    .environment = {.hour = 6.0f, .clockRuns = false, .dispenserGrid = false, .playerAlignment = alignment},
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 90.0f, 100.0f}},
+		    .commands = {AtHour(12.0f, 8.0f), AtHour(16.75f, 8.0f), AtHour(0.0f, 8.0f)},
+		});
+	}
 }
