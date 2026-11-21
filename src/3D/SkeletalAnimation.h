@@ -164,13 +164,14 @@ public:
 	/// turns of the angles that play left to right. The span stays valid until the next call for the same animation
 	/// with another count of frames, or until Trim removes the store.
 	[[nodiscard]] std::span<const Matrix> Of(const Animation& animation, size_t frame, bool mirrored);
-	/// Removes all the turns when the store keeps more animations than its limit. Call it only when no span from Of is
-	/// in use.
+	/// Counts the calls. At the end of each window of k_TrimsAWindow calls, it removes the turns of the animations that
+	/// no call of Of used in that window. Thus the turns of a blend or a copy that the game deleted do not stay in the
+	/// store. Call it only when no span from Of is in use.
 	void Trim();
 	[[nodiscard]] size_t Size() const { return _animations.size(); }
 
-	/// The most animations that the store keeps after Trim
-	static constexpr size_t k_MostAnimations = 4096;
+	/// The calls of Trim in one window
+	static constexpr uint32_t k_TrimsAWindow = 4096;
 
 private:
 	struct FrameTurns
@@ -188,8 +189,13 @@ private:
 		/// The address of the animation that has this place
 		const Animation* animation {nullptr};
 		std::vector<FrameTurns> frames;
+		/// The window in which a call of Of last used these turns
+		uint32_t used {0};
 	};
 	std::vector<AnimationTurns> _animations;
+	/// The number of the window now, and the calls of Trim in it
+	uint32_t _window {0};
+	uint32_t _trims {0};
 	/// The place of each address. The store looks here only for an animation that does not know its place.
 	std::unordered_map<const Animation*, uint32_t> _placeOf;
 };

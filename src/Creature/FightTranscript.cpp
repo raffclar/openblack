@@ -172,6 +172,20 @@ Fight* Recorder::FindMutable(uint32_t fight)
 	return found != _fights.end() ? &*found : nullptr;
 }
 
+std::optional<Fight> Recorder::RemoveOldestEnded(size_t kept)
+{
+	const auto isEnded = [](const Fight& fight) { return fight.ended.has_value(); };
+	if (static_cast<size_t>(std::ranges::count_if(_fights, isEnded)) <= kept)
+	{
+		return std::nullopt;
+	}
+	const auto oldest = std::ranges::find_if(_fights, isEnded);
+	auto removed = std::move(*oldest);
+	_fights.erase(oldest);
+	std::erase_if(_lastFight, [&removed](const auto& pair) { return pair.second == removed.id; });
+	return removed;
+}
+
 void Recorder::Clear()
 {
 	_fights.clear();

@@ -39,7 +39,10 @@ fight_transcript::Stamp FightTranscriptSystem::Now() const
 uint32_t FightTranscriptSystem::Begin(entt::entity first, entt::entity second, fight_transcript::Fields fields)
 {
 	const auto id = _recorder.Begin(entt::to_integral(first), entt::to_integral(second), Now(), std::move(fields));
-	Write(id);
+	if (const auto* fight = _recorder.Find(id); fight != nullptr)
+	{
+		Write(*fight);
+	}
 	return id;
 }
 
@@ -53,7 +56,10 @@ std::optional<uint64_t> FightTranscriptSystem::Note(entt::entity creature, std::
 	const auto index = _recorder.Add(entt::to_integral(creature), kind, Now(), std::move(fields), cause);
 	if (index.has_value())
 	{
-		Write(*_recorder.FightOf(entt::to_integral(creature)));
+		if (const auto* fight = _recorder.Find(*_recorder.FightOf(entt::to_integral(creature))); fight != nullptr)
+		{
+			Write(*fight);
+		}
 	}
 	return index;
 }
@@ -68,6 +74,19 @@ void FightTranscriptSystem::End(entt::entity creature)
 	if (const auto fight = _recorder.FightOf(entt::to_integral(creature)); fight.has_value())
 	{
 		_recorder.End(*fight, Now());
+		Trim();
+	}
+}
+
+void FightTranscriptSystem::Trim()
+{
+	while (auto removed = _recorder.RemoveOldestEnded())
+	{
+		Write(*removed);
+		_files.erase(removed->id);
+		// The reads of a fight are ordered by its number first
+		_reads.erase(_reads.lower_bound(std::tuple(removed->id, 0u, std::string())),
+		             _reads.lower_bound(std::tuple(removed->id + 1, 0u, std::string())));
 	}
 }
 
@@ -126,23 +145,21 @@ void FightTranscriptSystem::SetOutputFolder(std::optional<std::filesystem::path>
 	}
 }
 
-void FightTranscriptSystem::Write(uint32_t fight)
+void FightTranscriptSystem::Write(const fight_transcript::Fight& fight)
 {
-	if (!_folder.has_value())
+	if (!_folder.has_value() || fight.entries.empty())
 	{
 		return;
 	}
-	const auto* found = _recorder.Find(fight);
-	if (found == nullptr || found->entries.empty())
-	{
-		return;
-	}
-	auto file = _files.find(fight);
+	auto file = _files.find(fight.id);
 	if (file == _files.end())
 	{
-		const auto path = *_folder / std::format("fight-{}.jsonl", fight);
-		file = _files.emplace(fight, std::ofstream(path, std::ios::app)).first;
+		const auto path = *_folder / std::format("fight-{}.jsonl", fight.id);
+		file = _files.emplace(fight.id, FightFile {.stream = std::ofstream(path, std::ios::app), .written = 0}).first;
 	}
-	file->second << fight_transcript::ToJsonLine(*found, found->entries.back()) << '\n';
-	file->second.flush();
+	for (; file->second.written < fight.entries.size(); ++file->second.written)
+	{
+		file->second.stream << fight_transcript::ToJsonLine(fight, fight.entries[file->second.written]) << '\n';
+	}
+	file->second.stream.flush();
 }
