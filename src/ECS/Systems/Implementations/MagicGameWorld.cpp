@@ -122,19 +122,6 @@ void SetLife(entt::entity entity, float life)
 	magic_living::SetLife(entity, life);
 }
 
-/// Calls the function with every living thing (creatures, villagers and animals) and where it stands
-template <typename F>
-void EachLiving(F&& function)
-{
-	const auto& registry = EntityRegistry();
-	registry.Each<const Creature, const Transform>(
-	    [&](entt::entity entity, const Creature&, const Transform& transform) { function(entity, transform.position); });
-	registry.Each<const Villager, const Transform>(
-	    [&](entt::entity entity, const Villager&, const Transform& transform) { function(entity, transform.position); });
-	registry.Each<const Animal, const Transform>(
-	    [&](entt::entity entity, const Animal&, const Transform& transform) { function(entity, transform.position); });
-}
-
 /// The alignment kind of what isn't living, by what it is
 AlignmentType AlignmentKindOf(entt::entity entity)
 {

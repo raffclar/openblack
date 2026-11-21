@@ -163,7 +163,6 @@ public:
 	[[nodiscard]] std::optional<DesyncReport> Finish(DesyncRunBudget& budget);
 
 	[[nodiscard]] const std::string& Game() const noexcept { return _game; }
-	[[nodiscard]] uint32_t DesyncsInGame() const noexcept { return _desyncs; }
 	[[nodiscard]] uint32_t EventsSent() const noexcept { return _eventsSent; }
 	/// The count of the desyncs of a key, 0 for a key that did not come
 	[[nodiscard]] uint32_t CountOf(std::string_view key) const;
