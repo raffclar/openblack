@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <optional>
@@ -28,6 +29,9 @@ namespace openblack::fight_transcript
 
 /// Change this number when a kind or a field changes its name or its meaning
 inline constexpr uint32_t k_Version = 1;
+
+/// The most fights that have ended which the transcript keeps. A fight that has not ended is always kept.
+inline constexpr size_t k_EndedFightsKept = 64;
 
 using Value = std::variant<bool, int64_t, double, std::string>;
 
@@ -107,6 +111,9 @@ public:
 	[[nodiscard]] std::optional<uint64_t> LastOf(uint32_t creature, std::string_view kind) const;
 	[[nodiscard]] std::span<const Fight> Fights() const { return _fights; }
 	[[nodiscard]] const Fight* Find(uint32_t fight) const;
+	/// Removes the oldest fight that has ended when more than "kept" fights that have ended are held. It gives the fight
+	/// that it removes, or none when nothing is removed. Fights that have not ended are never removed.
+	std::optional<Fight> RemoveOldestEnded(size_t kept = k_EndedFightsKept);
 	/// Removes all fights. The numbers of new fights continue from the last number.
 	void Clear();
 

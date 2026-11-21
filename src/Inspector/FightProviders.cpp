@@ -10,6 +10,7 @@
 #include "FightProviders.h"
 
 #include <algorithm>
+#include <format>
 #include <ranges>
 #include <set>
 #include <string>
@@ -110,7 +111,9 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeFightTranscriptProv
 {
 	auto provider = std::make_unique<FunctionProvider>("fights");
 	provider->Add(Query("transcripts",
-	                    "The creature fights that the transcript recorded: for each, its number, the two creatures, when it "
+	                    "The creature fights that the transcript keeps (every fight that goes on and the last 64 that ended; "
+	                    "an older fight "
+	                    "is in the folder, when there is one): for each, its number, the two creatures, when it "
 	                    "started and ended, and its number of records; with the version of the records and the folder "
 	                    "that the files go to"),
 	              [](const QueryContext& /*context*/) {
@@ -158,7 +161,13 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeFightTranscriptProv
 		    const auto* fight = recorder.Find(number);
 		    if (fight == nullptr)
 		    {
-			    return QueryResult::Error("no fight " + std::to_string(number) + "; ask fights.transcripts for them");
+			    // The transcript keeps the last fights that ended. An older fight is only in the folder, when there is one.
+			    const auto folder = Locator::fightTranscript::value().GetOutputFolder();
+			    return QueryResult::Error(
+			        "no fight " + std::to_string(number) + "; ask fights.transcripts for them" +
+			        (folder.has_value()
+			             ? "; an older fight is in " + (*folder / std::format("fight-{}.jsonl", number)).generic_string()
+			             : ""));
 		    }
 		    const auto from = Param<uint64_t>(context.params, "from").value_or(0);
 		    const auto limit =

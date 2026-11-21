@@ -9,14 +9,21 @@
 
 #include <cstdint>
 
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <sstream>
 #include <string>
 
+#include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
 
 #include "Creature/FightTranscript.h"
+#define LOCATOR_IMPLEMENTATIONS 1
+#include "ECS/Systems/Implementations/FightTranscriptSystem.h"
 
 using namespace openblack::fight_transcript;
+using openblack::ecs::systems::FightTranscriptSystem;
 
 namespace
 {
@@ -142,4 +149,142 @@ TEST(FightTranscript, ANumberThatIsNotFiniteIsWrittenAsNull)
 	const auto* found = recorder.Find(fight);
 	const std::string nullChange = R"("cause":0,"fields":{"change":null})";
 	EXPECT_NE(ToJsonLine(*found, found->entries.at(*index)).find(nullChange), std::string::npos);
+}
+
+TEST(FightTranscript, TheLastEndedFightsAreKeptAndTheOldestEndedFightGoesFirst)
+{
+	Recorder recorder;
+	const auto first = recorder.Begin(1, 2, At(1), {});
+	const auto second = recorder.Begin(3, 4, At(2), {});
+	const auto third = recorder.Begin(5, 6, At(3), {});
+	recorder.End(second, At(4));
+	recorder.End(third, At(5));
+	EXPECT_FALSE(recorder.RemoveOldestEnded(2).has_value());
+	recorder.End(first, At(6));
+	const auto removed = recorder.RemoveOldestEnded(2);
+	ASSERT_TRUE(removed.has_value());
+	EXPECT_EQ(removed->id, first);
+	EXPECT_EQ(recorder.Fights().size(), 2u);
+	EXPECT_EQ(recorder.Find(first), nullptr);
+	EXPECT_FALSE(recorder.FightOf(1).has_value());
+	EXPECT_NE(recorder.Find(second), nullptr);
+	EXPECT_NE(recorder.Find(third), nullptr);
+}
+
+TEST(FightTranscript, AFightThatHasNotEndedIsNeverRemoved)
+{
+	Recorder recorder;
+	const auto going = recorder.Begin(1, 2, At(1), {});
+	for (uint32_t i = 0; i < 5; ++i)
+	{
+		recorder.End(recorder.Begin(10 + i, 20 + i, At(2 + i), {}), At(10 + i));
+	}
+	while (recorder.RemoveOldestEnded(1).has_value())
+	{
+	}
+	EXPECT_EQ(recorder.Fights().size(), 2u);
+	EXPECT_NE(recorder.Find(going), nullptr);
+	EXPECT_FALSE(recorder.Find(going)->ended.has_value());
+}
+
+TEST(FightTranscript, TheLimitIsSixtyFourEndedFights)
+{
+	EXPECT_EQ(k_EndedFightsKept, 64u);
+}
+
+namespace
+{
+class FightTranscriptFolderTest: public testing::Test
+{
+protected:
+	void SetUp() override
+	{
+		_folder = std::filesystem::temp_directory_path() / "openblack-fight-transcript-limit-test";
+		std::filesystem::remove_all(_folder);
+	}
+	void TearDown() override { std::filesystem::remove_all(_folder); }
+
+	[[nodiscard]] std::string ReadFight(uint32_t fight) const
+	{
+		std::ifstream file(_folder / ("fight-" + std::to_string(fight) + ".jsonl"));
+		std::stringstream text;
+		text << file.rdbuf();
+		return text.str();
+	}
+
+	std::filesystem::path _folder;
+};
+} // namespace
+
+TEST_F(FightTranscriptFolderTest, TheSystemKeepsTheLastSixtyFourEndedFights)
+{
+	FightTranscriptSystem transcript;
+	const auto first = entt::entity {1};
+	const auto firstFight = transcript.Begin(first, entt::entity {2}, {});
+	transcript.End(first);
+	for (uint32_t i = 0; i < k_EndedFightsKept; ++i)
+	{
+		const auto creature = entt::entity {100 + i};
+		transcript.Begin(creature, entt::entity {500 + i}, {});
+		transcript.End(creature);
+	}
+	// One fight beyond the limit has gone: the first
+	EXPECT_EQ(transcript.GetRecorder().Fights().size(), k_EndedFightsKept);
+	EXPECT_EQ(transcript.GetRecorder().Find(firstFight), nullptr);
+	EXPECT_FALSE(transcript.LastOf(first, "fight_start").has_value());
+}
+
+TEST_F(FightTranscriptFolderTest, ARemovedFightIsInTheFolderWithAllItsRecords)
+{
+	FightTranscriptSystem transcript;
+	const auto first = entt::entity {1};
+	const auto firstFight = transcript.Begin(first, entt::entity {2}, {{"reason", "script"}});
+	// The folder is set after the fight began: the records before it still go to the file
+	transcript.SetOutputFolder(_folder);
+	transcript.Note(first, "blow", {{"damage", 3}}, 0);
+	transcript.Note(first, "fight_over", {{"reason", "faint"}}, std::nullopt);
+	transcript.End(first);
+	for (uint32_t i = 0; i < k_EndedFightsKept; ++i)
+	{
+		const auto creature = entt::entity {100 + i};
+		transcript.Begin(creature, entt::entity {500 + i}, {});
+		transcript.End(creature);
+	}
+	ASSERT_EQ(transcript.GetRecorder().Find(firstFight), nullptr);
+
+	const auto text = ReadFight(firstFight);
+	std::istringstream lines(text);
+	std::string line;
+	size_t count = 0;
+	while (std::getline(lines, line))
+	{
+		++count;
+	}
+	EXPECT_EQ(count, 3u);
+	EXPECT_NE(text.find("\"kind\":\"fight_start\""), std::string::npos);
+	EXPECT_NE(text.find("\"kind\":\"blow\""), std::string::npos);
+	EXPECT_NE(text.find("\"kind\":\"fight_over\""), std::string::npos);
+}
+
+TEST_F(FightTranscriptFolderTest, ARecordIsWrittenOnceWhenTheFightIsRemoved)
+{
+	FightTranscriptSystem transcript;
+	transcript.SetOutputFolder(_folder);
+	const auto first = entt::entity {1};
+	const auto firstFight = transcript.Begin(first, entt::entity {2}, {});
+	transcript.Note(first, "blow", {{"damage", 3}}, 0);
+	transcript.End(first);
+	for (uint32_t i = 0; i < k_EndedFightsKept; ++i)
+	{
+		const auto creature = entt::entity {100 + i};
+		transcript.Begin(creature, entt::entity {500 + i}, {});
+		transcript.End(creature);
+	}
+	const auto text = ReadFight(firstFight);
+	size_t lines = 0;
+	for (const auto c : text)
+	{
+		lines += c == '\n' ? 1 : 0;
+	}
+	EXPECT_EQ(lines, 2u);
 }
