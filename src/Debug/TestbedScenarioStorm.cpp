@@ -62,9 +62,10 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	                "darkening the land. The land under them darkens and rain falls in streaks over the village, coming in "
 	                "over four seconds, with the rain and wind of the weather heard; the fields grow at their wet rate and "
 	                "the burning trees go out sooner. After five seconds the storm drifts north the way it was thrown, the "
-	                "rain with it, no slower over slopes than over flat land. There is no lightning. When its 40 seconds are "
-	                "up the rain stops at once and the clouds "
-	                "fade over three seconds.",
+	                "rain with it, no slower over slopes than over flat land. There is no lightning. The seed comes from a "
+	                "bubble, so no worship tops the storm up: its charge of 5000 pays 45 a turn, and about 11 seconds "
+	                "after the cast it runs out, well before its 40 seconds. Then the rain stops at once and the clouds "
+	                "fade.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, 20.0f}, {60.0f, 140.0f}}, .distance = 1.8f},
 	    .objects = Village(),
