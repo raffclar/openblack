@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRoute.h"
@@ -70,7 +71,7 @@ bool ClearCell(int32_t x, int32_t z)
 creature_route::WalkableLand TestLand()
 {
 	std::vector<Ground> cells;
-	cells.reserve(static_cast<size_t>(k_Cells * k_Cells));
+	cells.reserve(ToIndex(k_Cells * k_Cells));
 	for (int32_t z = 0; z < k_Cells; ++z)
 	{
 		for (int32_t x = 0; x < k_Cells; ++x)

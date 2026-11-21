@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::temple_destruction
 {
 
@@ -62,14 +64,14 @@ uint8_t HeartAlpha(float clock)
 
 int32_t TurnsFor(uint32_t millisecondsPerTurn, float seconds)
 {
-	return static_cast<int32_t>(static_cast<float>(1000u / millisecondsPerTurn) * seconds);
+	return static_cast<int32_t>(static_cast<float>(WholeQuotient(1000u, millisecondsPerTurn)) * seconds);
 }
 
 int32_t SmokeTurns(uint32_t millisecondsPerTurn, float share)
 {
 	// The share and the scale come together first, then the turns in a second multiply them
 	const float seconds = (share + k_SmokeShareFrom) * k_SmokeSecondsScale;
-	return static_cast<int32_t>(static_cast<float>(1000u / millisecondsPerTurn) * seconds);
+	return static_cast<int32_t>(static_cast<float>(WholeQuotient(1000u, millisecondsPerTurn)) * seconds);
 }
 
 } // namespace openblack::temple_destruction

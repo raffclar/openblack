@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "Common/IntegerSteps.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -40,7 +41,7 @@ std::vector<openblack::testbed_scenarios::ObjectSetup> TownScene()
 	}
 	for (size_t i = 0; i < k_People; ++i)
 	{
-		const auto row = static_cast<float>(i / 5);
+		const auto row = static_cast<float>(WholeQuotient(i, 5));
 		const auto column = static_cast<float>(i % 5);
 		objects.push_back({.type = i % 2 == 0 ? VillagerInfo::CelticFarmerMale : VillagerInfo::CelticHousewifeFemale,
 		                   .offset = k_FirstPerson + glm::vec2(column * k_PersonSpacing, row * k_PersonSpacing),

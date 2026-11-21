@@ -11,6 +11,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -196,7 +197,7 @@ float computer_mind_rules::KnownMiracleShare(uint32_t miracles, uint32_t unknown
 	{
 		return 1.0f;
 	}
-	const float share = 1.0f - static_cast<float>(unknown / miracles);
+	const float share = 1.0f - static_cast<float>(WholeQuotient(unknown, miracles));
 	if (share < 0.0f)
 	{
 		return 0.0f;

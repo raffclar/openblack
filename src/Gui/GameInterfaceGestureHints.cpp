@@ -11,6 +11,7 @@
 
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Common/IntegerSteps.h"
 #include "ECS/Components/Player.h"
 #include "ECS/GamePlayers.h"
 #include "ECS/PlayerColour.h"
@@ -60,7 +61,7 @@ void GameInterface::DrawGestureHints(glm::u16vec2 resolution)
 	const auto pictureColour = Colour(hints::PictureColour(playerRgb, row.alpha));
 	constexpr float k_DotCell = 1.0f / static_cast<float>(hints::k_DotSheetSide);
 	const glm::vec2 dotUv {static_cast<float>(hints::k_DotPicture % hints::k_DotSheetSide) * k_DotCell,
-	                       static_cast<float>(hints::k_DotPicture / hints::k_DotSheetSide) * k_DotCell};
+	                       static_cast<float>(WholeQuotient(hints::k_DotPicture, hints::k_DotSheetSide)) * k_DotCell};
 	constexpr float k_GestureCell = 1.0f / static_cast<float>(hints::k_GestureSheetSide);
 
 	for (size_t slot = 0; slot < row.hints.size(); ++slot)
@@ -80,7 +81,7 @@ void GameInterface::DrawGestureHints(glm::u16vec2 resolution)
 		{
 			const auto centre = hints::PixelOf(square, glm::vec2(0.5f));
 			const glm::vec2 uv {static_cast<float>(cell % hints::k_GestureSheetSide) * k_GestureCell,
-			                    static_cast<float>(cell / hints::k_GestureSheetSide) * k_GestureCell};
+			                    static_cast<float>(WholeQuotient(cell, hints::k_GestureSheetSide)) * k_GestureCell};
 			_canvas.SetBlend(Canvas::Blend::Alpha);
 			_canvas.DrawQuad(centre - (pictureSide * 0.5f), centre + (pictureSide * 0.5f), uv, uv + k_GestureCell,
 			                 pictureColour, _gestureSheets.at(sheet).get());

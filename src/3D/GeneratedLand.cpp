@@ -19,6 +19,7 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/IntegerSteps.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
 
@@ -387,7 +388,7 @@ LandData generated_land::Build(const landgen::GeneratedLand& land, const StoryPa
 			{
 				for (int cz = 0; cz < k_BlockCornersPerSide; ++cz)
 				{
-					block.cells.at(static_cast<size_t>((cx * k_BlockCornersPerSide) + cz)) =
+					block.cells.at(ToIndex((cx * k_BlockCornersPerSide) + cz)) =
 					    land.cells.At((x * k_CellsPerBlock) + cx, (z * k_CellsPerBlock) + cz);
 				}
 			}
@@ -396,8 +397,7 @@ LandData generated_land::Build(const landgen::GeneratedLand& land, const StoryPa
 			block.mapZ = static_cast<float>(z) * k_BlockSize;
 			block.blockX = static_cast<uint32_t>(x);
 			block.blockZ = static_cast<uint32_t>(z);
-			data.blockIndexLookup.at(static_cast<size_t>(x * LandData::k_BlocksPerSide + z)) =
-			    static_cast<uint16_t>(block.index);
+			data.blockIndexLookup.at(ToIndex(x * LandData::k_BlocksPerSide + z)) = static_cast<uint16_t>(block.index);
 		}
 	}
 	data.countries = land.countries;

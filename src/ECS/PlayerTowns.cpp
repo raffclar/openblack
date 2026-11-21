@@ -72,13 +72,14 @@ struct OrderEntry
 void SortedTowns(const Registry& registry, const std::function<void(std::span<const OrderEntry>)>& use)
 {
 	const auto count = registry.Size<const components::Town>();
-	std::array<OrderEntry, player_towns::k_InlineTowns> inline_ {};
+	std::array<OrderEntry, player_towns::k_InlineTowns> inlineEntries {};
 	std::vector<OrderEntry> onHeap;
-	if (count > inline_.size())
+	if (count > inlineEntries.size())
 	{
 		onHeap.resize(count);
 	}
-	const std::span<OrderEntry> all = count > inline_.size() ? std::span<OrderEntry>(onHeap) : std::span<OrderEntry>(inline_);
+	const std::span<OrderEntry> all =
+	    count > inlineEntries.size() ? std::span<OrderEntry>(onHeap) : std::span<OrderEntry>(inlineEntries);
 	size_t walked = 0;
 	registry.Each<const components::Town>([&](entt::entity entity, const components::Town& town) {
 		all[walked] = {.owner = town.owner, .gained = town.gained, .walked = static_cast<uint32_t>(walked), .town = entity};

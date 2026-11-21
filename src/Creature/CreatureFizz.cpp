@@ -9,6 +9,8 @@
 
 #include "CreatureFizz.h"
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::creature_fizz
 {
 
@@ -79,7 +81,7 @@ uint16_t TurnsOf(float seconds, uint32_t turnMilliseconds)
 		return 0;
 	}
 	// The game rounds the product to a float one time. Then it drops the fraction.
-	const auto turnsPerSecond = static_cast<float>(1000 / turnMilliseconds);
+	const auto turnsPerSecond = static_cast<float>(WholeQuotient(1000, turnMilliseconds));
 	return static_cast<uint16_t>(static_cast<int32_t>(seconds * turnsPerSecond));
 }
 

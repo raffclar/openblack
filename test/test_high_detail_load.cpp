@@ -69,7 +69,7 @@ protected:
 		return thing;
 	}
 
-	HighDetailSystem highDetail;
+	HighDetailSystem _highDetail;
 };
 
 } // namespace
@@ -80,7 +80,7 @@ TEST_F(HighDetailLoadTest, ALoadKeepsTheOrdersTheGripAndTheEyesOfAThingInHighDet
 	Locator::resources::value().GetMeshes().Register(k_DetailedModel, [] { return std::shared_ptr<graphics::L3DMesh> {}; });
 	const auto thing = LoadedVillager();
 
-	highDetail.RemakeModelsAfterLoad();
+	_highDetail.RemakeModelsAfterLoad();
 
 	const auto& registry = Locator::entitiesRegistry::value();
 	EXPECT_EQ(registry.Get<Mesh>(thing).id, k_DetailedModel);
@@ -97,7 +97,7 @@ TEST_F(HighDetailLoadTest, AThingWhoseDetailedModelDoesNotLoadWearsItsUsualModel
 {
 	const auto thing = LoadedVillager();
 
-	highDetail.RemakeModelsAfterLoad();
+	_highDetail.RemakeModelsAfterLoad();
 
 	const auto& registry = Locator::entitiesRegistry::value();
 	EXPECT_EQ(registry.Get<Mesh>(thing).id, k_UsualModel);

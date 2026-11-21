@@ -37,6 +37,7 @@
 #include "3D/LandNormal.h"
 #include "3D/LandReuse.h"
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/PortableRotations.h"
 #include "Common/WorkerPools.h"
@@ -335,7 +336,7 @@ void LandIsland::Build(const LandData& data)
 			{
 				for (int z = 0; z <= static_cast<int>(k_CellCount); ++z)
 				{
-					const auto& cell = lndBlocks[i].cells.at(static_cast<size_t>(x * 17 + z));
+					const auto& cell = lndBlocks[i].cells.at(ToIndex(x * 17 + z));
 					highest = std::max(highest, HeightUnitsOf(cell, first.x + x, first.y + z));
 				}
 			}
@@ -678,7 +679,7 @@ void LandIsland::SetCellCountry(glm::u16vec2 coordinates, uint8_t country)
 
 bool LandIsland::SetBlockCellCountry(size_t block, int x, int z, uint8_t country)
 {
-	if (!_landBlocks.at(block).SetCellCountry(static_cast<size_t>(x * 17 + z), country))
+	if (!_landBlocks.at(block).SetCellCountry(ToIndex(x * 17 + z), country))
 	{
 		return false;
 	}
@@ -702,7 +703,7 @@ void LandIsland::MakeDigest()
 		{
 			for (int z = 0; z < static_cast<int>(k_CellCount); ++z)
 			{
-				const auto& cell = cells.at(static_cast<size_t>(x * 17 + z));
+				const auto& cell = cells.at(ToIndex(x * 17 + z));
 				_digest ^= land_reuse::CornerDigest(static_cast<uint16_t>(first.x + x), static_cast<uint16_t>(first.y + z),
 				                                    cell.altitude, static_cast<uint8_t>(cell.properties.country));
 			}
@@ -736,7 +737,7 @@ void LandIsland::SetCorner(glm::u16vec2 coordinates, const std::function<bool(si
 		{
 			return;
 		}
-		const auto blockIndex = _blockIndexLookup.at(static_cast<size_t>(blockX * 32 + blockZ));
+		const auto blockIndex = _blockIndexLookup.at(ToIndex(blockX * 32 + blockZ));
 		if (blockIndex == 0)
 		{
 			return;
@@ -772,7 +773,7 @@ void LandIsland::SetCorner(glm::u16vec2 coordinates, const std::function<bool(si
 
 bool LandIsland::SetBlockCellAltitude(size_t block, int x, int z, uint8_t altitude)
 {
-	if (!_landBlocks.at(block).SetCellAltitude(static_cast<size_t>(x * 17 + z), altitude))
+	if (!_landBlocks.at(block).SetCellAltitude(ToIndex(x * 17 + z), altitude))
 	{
 		return false;
 	}
@@ -1017,7 +1018,7 @@ std::vector<uint8_t> LandIsland::CreateLuminosityMap() const
 			{
 				const auto offset = glm::u16vec2(x, y);
 				const auto cellPos = mapPos * static_cast<int>(k_CellCount) + static_cast<glm::ivec2>(offset);
-				data.at(static_cast<size_t>(cellPos.y * resolution.x + cellPos.x)) = GetCell(blockOffset + offset).luminosity;
+				data.at(ToIndex(cellPos.y * resolution.x + cellPos.x)) = GetCell(blockOffset + offset).luminosity;
 			}
 		}
 	}

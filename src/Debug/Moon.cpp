@@ -23,6 +23,7 @@
 #include "3D/SkyFrame.h"
 #include "Common/DebugActRuns.h"
 #include "Common/DebugMagicWeatherActRuns.h"
+#include "Common/IntegerSteps.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Registry.h"
@@ -116,7 +117,7 @@ void DrawPhasePicture(double fraction)
 	// Filled as thin strips between the limb and the terminator, which keeps each piece convex
 	for (int i = 0; i < k_Steps; ++i)
 	{
-		const std::array<ImVec2, 4> strip {points.at(static_cast<size_t>(i)), points.at(static_cast<size_t>(i + 1)),
+		const std::array<ImVec2, 4> strip {points.at(static_cast<size_t>(i)), points.at(ToIndex(i + 1)),
 		                                   points.at(static_cast<size_t>((2 * k_Steps) - i)),
 		                                   points.at(static_cast<size_t>((2 * k_Steps) + 1 - i))};
 		drawList->AddConvexPolyFilled(strip.data(), static_cast<int>(strip.size()), IM_COL32(235, 232, 210, 255));

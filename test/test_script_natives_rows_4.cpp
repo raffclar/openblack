@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "Camera/ScriptCameraModel.h"
+#include "Common/IntegerSteps.h"
 #include "ScriptHeaders/ScriptTimers.h"
 
 using namespace openblack;
@@ -99,7 +100,7 @@ TEST(ScriptCountdownTimer, ATimerOfNoTurnsWrapsAndRunsOn)
 		timer.ProcessTurn();
 		EXPECT_TRUE(timer.IsRunning());
 		EXPECT_EQ(timer.GetTurnsLeft(), 0xFFFFFFFFu);
-		EXPECT_EQ(timer.GetSecondsLeft(), static_cast<float>(0xFFFFFFFFu / 10u));
+		EXPECT_EQ(timer.GetSecondsLeft(), static_cast<float>(WholeQuotient(0xFFFFFFFFu, 10u)));
 	}
 }
 

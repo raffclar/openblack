@@ -23,10 +23,10 @@ class SetCameraPos: public ::testing::Test
 protected:
 	void SetUp() override
 	{
-		static const auto mockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
+		static const auto k_MockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
 		auto args = openblack::Arguments {
 		    .graphicsBackend = openblack::GraphicsBackend::Noop,
-		    .gamePath = mockGamePath.string(),
+		    .gamePath = k_MockGamePath.string(),
 		    .logFile = "stdout",
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::warn);

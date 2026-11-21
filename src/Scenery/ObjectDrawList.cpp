@@ -20,6 +20,8 @@
 #include <glm/geometric.hpp>
 #include <glm/vec4.hpp>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 using namespace openblack::object_draw_list;
 
@@ -115,7 +117,7 @@ bool object_draw_list::BlockViewMemo::InView(const glm::mat4& viewProjection, fl
 		++_tests;
 		return BlockInView(viewProjection, nearPlane, block);
 	}
-	auto& answer = _answers.at(static_cast<size_t>(x * k_BlocksPerSide + z));
+	auto& answer = _answers.at(ToIndex(x * k_BlocksPerSide + z));
 	if (answer.camera != _camera || std::bit_cast<uint64_t>(answer.corner) != std::bit_cast<uint64_t>(block.corner) ||
 	    answer.highestAltitude != block.highestAltitude || answer.reflected != block.reflected ||
 	    std::bit_cast<uint32_t>(answer.mirrorTop) != std::bit_cast<uint32_t>(block.mirrorTop))

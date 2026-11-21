@@ -17,6 +17,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureRoute.h"
 
 using namespace openblack;
@@ -216,7 +217,7 @@ TEST(CreatureRoute, EachCornerOfTheLandIsReadOneTime)
 	std::vector<int> reads(static_cast<size_t>(k_Corners * k_Corners), 0);
 	const auto land = WalkableLand::Build(
 	    [&reads](int32_t x, int32_t z) {
-		    ++reads.at(static_cast<size_t>((z * k_Corners) + x));
+		    ++reads.at(ToIndex((z * k_Corners) + x));
 		    return 5.0f;
 	    },
 	    Dry);

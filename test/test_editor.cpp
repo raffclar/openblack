@@ -262,8 +262,8 @@ TEST(EditorPalette, MakesNamesReadable)
 	EXPECT_EQ(names.at(2), "Pillar");
 
 	// A prefix that would leave a name empty is kept
-	const std::array<std::string_view, 2> short_ {"TREE_", "TREE_OAK"};
-	EXPECT_EQ(CommonWordPrefix(short_), 0u);
+	const std::array<std::string_view, 2> shortWords {"TREE_", "TREE_OAK"};
+	EXPECT_EQ(CommonWordPrefix(shortWords), 0u);
 	const std::array<std::string_view, 1> single {"TREE_OAK"};
 	EXPECT_EQ(CommonWordPrefix(single), 0u);
 }

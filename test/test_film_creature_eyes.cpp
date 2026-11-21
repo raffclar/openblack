@@ -140,19 +140,19 @@ protected:
 		Locator::resources::value().GetFilmCameraPaths().Register(entt::hashed_string {"film/fall"}.value(),
 		                                                          [] { return std::make_shared<FilmCameraPath>(); });
 		Locator::gameRandom::emplace<ZeroRandom>();
-		animations = &static_cast<StepLog&>(Locator::creatureAnimationSystem::emplace<StepLog>());
+		_animations = &static_cast<StepLog&>(Locator::creatureAnimationSystem::emplace<StepLog>());
 		auto& players = static_cast<OnePlayer&>(Locator::playerSystem::emplace<OnePlayer>());
 		auto& land = Locator::entitiesRegistry::value();
 		players.creature = land.Create();
 		land.Assign<Creature>(players.creature);
 		land.Assign<Mesh>(players.creature, Mesh {.id = 0, .submeshId = 0, .bbSubmeshId = 0});
 		land.Assign<CreatureMorph>(players.creature);
-		film.Start();
-		animations->steps.clear();
+		_film.Start();
+		_animations->steps.clear();
 	}
 	void TearDown() override
 	{
-		film.End();
+		_film.End();
 		Locator::playerSystem::reset();
 		Locator::creatureAnimationSystem::reset();
 		Locator::gameRandom::reset();
@@ -161,36 +161,36 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	FilmCreatureSystem film;
-	StepLog* animations {nullptr};
-	std::chrono::steady_clock::time_point now;
+	FilmCreatureSystem _film;
+	StepLog* _animations {nullptr};
+	std::chrono::steady_clock::time_point _now;
 };
 
 } // namespace
 
 TEST_F(FilmCreatureEyesTest, TheEyesMoveOnEachShownFrameAlsoWhenTheFilmTimeStands)
 {
-	ASSERT_TRUE(film.IsRunning());
+	ASSERT_TRUE(_film.IsRunning());
 	// The film time moves: the copy takes its pose, and then its eyes move. The next two frames show the same film
 	// time, so the copy keeps its pose, but its eyes move on each frame.
-	film.Update(1000, now);
-	film.Update(1000, now + std::chrono::milliseconds(10));
-	film.Update(1000, now + std::chrono::milliseconds(20));
-	film.Update(1040, now + std::chrono::milliseconds(30));
+	_film.Update(1000, _now);
+	_film.Update(1000, _now + std::chrono::milliseconds(10));
+	_film.Update(1000, _now + std::chrono::milliseconds(20));
+	_film.Update(1040, _now + std::chrono::milliseconds(30));
 	const std::vector<std::string> expected {
 	    "pose " + std::to_string(1000 - film_creature::Clock {}.lastMs), "eyes", "eyes", "eyes", "pose 40", "eyes"};
-	EXPECT_EQ(animations->steps, expected);
+	EXPECT_EQ(_animations->steps, expected);
 }
 
 TEST_F(FilmCreatureEyesTest, TheEyesStandWhileTheFilmHidesTheCopy)
 {
-	ASSERT_TRUE(film.IsRunning());
+	ASSERT_TRUE(_film.IsRunning());
 	// The film hides the copy: it takes its poses, but its eyes do not move until the film shows it again
-	film.Update(film_creature::k_HiddenFromMs, now);
-	film.Update(film_creature::k_HiddenFromMs, now + std::chrono::milliseconds(10));
-	film.Update(film_creature::k_HiddenToMs + 1, now + std::chrono::milliseconds(20));
+	_film.Update(film_creature::k_HiddenFromMs, _now);
+	_film.Update(film_creature::k_HiddenFromMs, _now + std::chrono::milliseconds(10));
+	_film.Update(film_creature::k_HiddenToMs + 1, _now + std::chrono::milliseconds(20));
 	const std::vector<std::string> expected {
 	    "pose " + std::to_string(film_creature::k_HiddenFromMs - film_creature::Clock {}.lastMs),
 	    "pose " + std::to_string(film_creature::k_HiddenToMs + 1 - film_creature::k_HiddenFromMs), "eyes"};
-	EXPECT_EQ(animations->steps, expected);
+	EXPECT_EQ(_animations->steps, expected);
 }

@@ -72,21 +72,21 @@ class CreatureRemovalTest: public ::testing::Test
 protected:
 	entt::entity AddPlayer(PlayerNames name)
 	{
-		const auto player = registry.Create();
-		registry.Assign<Player>(player, Player {.name = name});
-		registry.Assign<PlayerCreatures>(player);
+		const auto player = _registry.Create();
+		_registry.Assign<Player>(player, Player {.name = name});
+		_registry.Assign<PlayerCreatures>(player);
 		return player;
 	}
 
 	entt::entity AddCreature(entt::entity player, PlayerNames owner)
 	{
-		const auto creature = registry.Create();
-		registry.Assign<Creature>(creature, Creature {.owner = owner});
-		registry.Get<PlayerCreatures>(player).acquired.push_back(creature);
+		const auto creature = _registry.Create();
+		_registry.Assign<Creature>(creature, Creature {.owner = owner});
+		_registry.Get<PlayerCreatures>(player).acquired.push_back(creature);
 		return creature;
 	}
 
-	Registry registry;
+	Registry _registry;
 };
 
 } // namespace
@@ -95,16 +95,16 @@ TEST_F(CreatureRemovalTest, GoesThroughEveryStepInTheGamesOrder)
 {
 	const auto player = AddPlayer(PlayerNames::PLAYER_ONE);
 	const auto creature = AddCreature(player, PlayerNames::PLAYER_ONE);
-	FakeWorld world(registry);
+	FakeWorld world(_registry);
 
-	const auto removed = creature_removal::Remove(registry, creature, world);
+	const auto removed = creature_removal::Remove(_registry, creature, world);
 
 	ASSERT_TRUE(removed.has_value());
 	const std::vector<std::string> expected {"keep",      "hand",    "fight", "leash", "effects",
 	                                         "reactions", "actions", "view",  "world"};
 	EXPECT_EQ(world.steps, expected);
-	EXPECT_FALSE(registry.Valid(creature));
-	EXPECT_TRUE(registry.Get<PlayerCreatures>(player).acquired.empty());
+	EXPECT_FALSE(_registry.Valid(creature));
+	EXPECT_TRUE(_registry.Get<PlayerCreatures>(player).acquired.empty());
 	EXPECT_TRUE(removed->wasPrimary);
 	EXPECT_FALSE(removed->newPrimary.has_value());
 	EXPECT_TRUE(world.claimed.empty());
@@ -116,15 +116,15 @@ TEST_F(CreatureRemovalTest, TheNextCreatureGotBecomesThePrimaryOneAndMayTakeTheL
 	const auto first = AddCreature(player, PlayerNames::PLAYER_ONE);
 	const auto second = AddCreature(player, PlayerNames::PLAYER_ONE);
 	const auto third = AddCreature(player, PlayerNames::PLAYER_ONE);
-	FakeWorld world(registry);
+	FakeWorld world(_registry);
 
-	const auto removed = creature_removal::Remove(registry, first, world);
+	const auto removed = creature_removal::Remove(_registry, first, world);
 
 	ASSERT_TRUE(removed.has_value());
 	EXPECT_TRUE(removed->wasPrimary);
 	EXPECT_EQ(removed->newPrimary, second);
 	EXPECT_EQ(world.claimed, std::vector<entt::entity> {second});
-	EXPECT_EQ(registry.Get<PlayerCreatures>(player).acquired, (std::vector<entt::entity> {second, third}));
+	EXPECT_EQ(_registry.Get<PlayerCreatures>(player).acquired, (std::vector<entt::entity> {second, third}));
 }
 
 TEST_F(CreatureRemovalTest, RemovingALaterCreatureKeepsThePrimaryOneAndItsLeash)
@@ -132,9 +132,9 @@ TEST_F(CreatureRemovalTest, RemovingALaterCreatureKeepsThePrimaryOneAndItsLeash)
 	const auto player = AddPlayer(PlayerNames::PLAYER_ONE);
 	const auto first = AddCreature(player, PlayerNames::PLAYER_ONE);
 	const auto second = AddCreature(player, PlayerNames::PLAYER_ONE);
-	FakeWorld world(registry);
+	FakeWorld world(_registry);
 
-	const auto removed = creature_removal::Remove(registry, second, world);
+	const auto removed = creature_removal::Remove(_registry, second, world);
 
 	ASSERT_TRUE(removed.has_value());
 	EXPECT_FALSE(removed->wasPrimary);
@@ -148,13 +148,13 @@ TEST_F(CreatureRemovalTest, OnlyItsOwnersListDecidesTheNewPrimary)
 	const auto two = AddPlayer(PlayerNames::PLAYER_TWO);
 	const auto mine = AddCreature(one, PlayerNames::PLAYER_ONE);
 	const auto theirs = AddCreature(two, PlayerNames::PLAYER_TWO);
-	FakeWorld world(registry);
+	FakeWorld world(_registry);
 
-	const auto removed = creature_removal::Remove(registry, mine, world);
+	const auto removed = creature_removal::Remove(_registry, mine, world);
 
 	ASSERT_TRUE(removed.has_value());
 	EXPECT_FALSE(removed->newPrimary.has_value());
-	EXPECT_EQ(registry.Get<PlayerCreatures>(two).acquired, std::vector<entt::entity> {theirs});
+	EXPECT_EQ(_registry.Get<PlayerCreatures>(two).acquired, std::vector<entt::entity> {theirs});
 }
 
 TEST_F(CreatureRemovalTest, WhatPointsAtItLetsGo)
@@ -163,36 +163,36 @@ TEST_F(CreatureRemovalTest, WhatPointsAtItLetsGo)
 	const auto creature = AddCreature(player, PlayerNames::PLAYER_ONE);
 	const auto other = AddCreature(player, PlayerNames::PLAYER_ONE);
 
-	const auto marker = registry.Create();
-	registry.Assign<LeashMarker>(marker, LeashMarker {.creature = creature});
-	const auto otherMarker = registry.Create();
-	registry.Assign<LeashMarker>(otherMarker, LeashMarker {.creature = other});
-	const auto carried = registry.Create();
-	registry.Assign<HeldByCreature>(carried, HeldByCreature {.creature = creature});
-	auto& following = registry.Assign<CreatureLocomotion>(other);
+	const auto marker = _registry.Create();
+	_registry.Assign<LeashMarker>(marker, LeashMarker {.creature = creature});
+	const auto otherMarker = _registry.Create();
+	_registry.Assign<LeashMarker>(otherMarker, LeashMarker {.creature = other});
+	const auto carried = _registry.Create();
+	_registry.Assign<HeldByCreature>(carried, HeldByCreature {.creature = creature});
+	auto& following = _registry.Assign<CreatureLocomotion>(other);
 	following.following = creature;
-	const auto hand = registry.Create();
-	registry.Assign<HandOnCreature>(hand, HandOnCreature {.creature = creature});
-	FakeWorld world(registry);
+	const auto hand = _registry.Create();
+	_registry.Assign<HandOnCreature>(hand, HandOnCreature {.creature = creature});
+	FakeWorld world(_registry);
 
-	const auto removed = creature_removal::Remove(registry, creature, world);
+	const auto removed = creature_removal::Remove(_registry, creature, world);
 
 	ASSERT_TRUE(removed.has_value());
 	EXPECT_EQ(removed->referencesCleared, 4u);
-	EXPECT_FALSE(registry.Valid(marker));
-	EXPECT_TRUE(registry.Valid(otherMarker));
-	EXPECT_FALSE(registry.AllOf<HeldByCreature>(carried));
-	EXPECT_TRUE(registry.Valid(carried));
-	EXPECT_FALSE(registry.Get<CreatureLocomotion>(other).following.has_value());
-	EXPECT_FALSE(registry.AllOf<HandOnCreature>(hand));
+	EXPECT_FALSE(_registry.Valid(marker));
+	EXPECT_TRUE(_registry.Valid(otherMarker));
+	EXPECT_FALSE(_registry.AllOf<HeldByCreature>(carried));
+	EXPECT_TRUE(_registry.Valid(carried));
+	EXPECT_FALSE(_registry.Get<CreatureLocomotion>(other).following.has_value());
+	EXPECT_FALSE(_registry.AllOf<HandOnCreature>(hand));
 }
 
 TEST_F(CreatureRemovalTest, SomethingThatIsntACreatureIsLeftAlone)
 {
-	const auto thing = registry.Create();
-	FakeWorld world(registry);
+	const auto thing = _registry.Create();
+	FakeWorld world(_registry);
 
-	EXPECT_FALSE(creature_removal::Remove(registry, thing, world).has_value());
+	EXPECT_FALSE(creature_removal::Remove(_registry, thing, world).has_value());
 	EXPECT_TRUE(world.steps.empty());
-	EXPECT_TRUE(registry.Valid(thing));
+	EXPECT_TRUE(_registry.Valid(thing));
 }

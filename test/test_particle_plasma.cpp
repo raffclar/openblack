@@ -156,13 +156,13 @@ protected:
 		auto file = psys::ParticleFile::Parse(PlasmaFile());
 		EXPECT_TRUE(file.has_value());
 		return std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                EffectServices {classes, world, random, noise}, origin, 1.0f, false);
+		                                EffectServices {_classes, _world, _random, _noise}, origin, 1.0f, false);
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
 };
 } // namespace
 
@@ -337,10 +337,10 @@ TEST_F(ParticlePlasmaTest, TheNewestBeamTakesTheFirstNudges)
 
 	// Without any nudge, the bent beam asked for last and first; and how many fractions the whole run draws
 	ScriptedRandom plainLast;
-	const auto unbentLast = RibbonsEndingAt(classes, world, plainLast, {point, beam}, end);
+	const auto unbentLast = RibbonsEndingAt(_classes, _world, plainLast, {point, beam}, end);
 	ASSERT_EQ(unbentLast.size(), 2u);
 	ScriptedRandom plainFirst;
-	const auto unbentFirst = RibbonsEndingAt(classes, world, plainFirst, {beam, point}, end);
+	const auto unbentFirst = RibbonsEndingAt(_classes, _world, plainFirst, {beam, point}, end);
 	ASSERT_EQ(unbentFirst.size(), 2u);
 	ASSERT_EQ(plainLast.Fractions(), plainFirst.Fractions());
 	// Each beam's two ribbons draw a start and an end nudge of three fractions each, last of all in each step
@@ -351,13 +351,13 @@ TEST_F(ParticlePlasmaTest, TheNewestBeamTakesTheFirstNudges)
 	// In the last step the first beam laid takes the marked nudges: the newest, so the beam asked for last
 	ScriptedRandom newest;
 	newest.Mark(laying, laying + k_PerBeam);
-	const auto bent = RibbonsEndingAt(classes, world, newest, {point, beam}, end);
+	const auto bent = RibbonsEndingAt(_classes, _world, newest, {point, beam}, end);
 	ASSERT_EQ(bent.size(), 2u);
 	EXPECT_GT(Furthest(bent, unbentLast), 0.1f);
 
 	ScriptedRandom oldest;
 	oldest.Mark(laying, laying + k_PerBeam);
-	const auto straight = RibbonsEndingAt(classes, world, oldest, {beam, point}, end);
+	const auto straight = RibbonsEndingAt(_classes, _world, oldest, {beam, point}, end);
 	ASSERT_EQ(straight.size(), 2u);
 	EXPECT_LT(Furthest(straight, unbentFirst), 1e-3f);
 }

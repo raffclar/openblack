@@ -26,6 +26,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "Common/SideThread.h"
 #include "Common/WorkerPools.h"
 #include "Common/X87Angle.h"
@@ -648,7 +649,7 @@ void LandFootprints::PaintBlockPart(size_t block, const BlockPaint& paint, const
 	for (int row = part.firstRow; row <= part.lastRow; ++row)
 	{
 		const auto first = static_cast<size_t>(row) * side + static_cast<size_t>(part.firstColumn);
-		const auto count = static_cast<size_t>(part.lastColumn - part.firstColumn + 1);
+		const auto count = ToIndex(part.lastColumn - part.firstColumn + 1);
 		std::copy_n(own.begin() + static_cast<std::ptrdiff_t>(first), count,
 		            texels.begin() + static_cast<std::ptrdiff_t>(first));
 	}
@@ -913,7 +914,7 @@ void LandFootprints::PaintChanges(const ThingStores& stores)
 			auto& texels = _laneTexels.at(lane);
 			const auto& part = parts[i];
 			PaintBlockPart(partBlocks[i], *partPaintOf[i], stores, part, texels);
-			const auto columns = static_cast<size_t>(part.lastColumn - part.firstColumn + 1);
+			const auto columns = ToIndex(part.lastColumn - part.firstColumn + 1);
 			auto& out = partTexels[i];
 			out.resize(static_cast<size_t>(part.lastRow - part.firstRow + 1) * columns);
 			for (int row = part.firstRow; row <= part.lastRow; ++row)

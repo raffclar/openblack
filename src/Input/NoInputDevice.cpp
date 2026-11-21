@@ -371,6 +371,6 @@ InputDeviceInterface& openblack::input::Device()
 		return Locator::inputDevice::value();
 	}
 	// The window system keeps one keyboard for the whole program, also before it starts. Thus one device serves all.
-	static NoInputDevice none;
-	return none;
+	static NoInputDevice s_None;
+	return s_None;
 }

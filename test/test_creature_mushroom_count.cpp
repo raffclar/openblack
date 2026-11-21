@@ -55,9 +55,9 @@ protected:
 	{
 		auto& registry = Locator::entitiesRegistry::emplace<Registry>();
 		auto& players = static_cast<OnePlayer&>(Locator::playerSystem::emplace<OnePlayer>());
-		creature = registry.Create();
-		registry.Assign<Creature>(creature);
-		players.creature = creature;
+		_creature = registry.Create();
+		registry.Assign<Creature>(_creature);
+		players.creature = _creature;
 	}
 	void TearDown() override
 	{
@@ -65,7 +65,7 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	entt::entity creature {entt::null};
+	entt::entity _creature {entt::null};
 };
 
 } // namespace
@@ -75,7 +75,7 @@ protected:
 TEST_F(CreatureMushroomCountTest, TheStatisticsShowTheCountOfTheCreature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Get<Creature>(creature).magicMushroomsEaten = 205;
+	registry.Get<Creature>(_creature).magicMushroomsEaten = 205;
 
 	EXPECT_EQ(player_statistics::CreatureTalliesOf(PlayerNames::PLAYER_ONE).mushroomsEaten, 205u);
 }
@@ -84,11 +84,11 @@ TEST_F(CreatureMushroomCountTest, TheStatisticsShowTheCountOfTheCreature)
 TEST_F(CreatureMushroomCountTest, TheStatisticsFollowTheCountAfterItChanges)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Assign<CreatureTallies>(creature).poos = 3;
-	registry.Get<Creature>(creature).magicMushroomsEaten = 7;
+	registry.Assign<CreatureTallies>(_creature).poos = 3;
+	registry.Get<Creature>(_creature).magicMushroomsEaten = 7;
 	EXPECT_EQ(player_statistics::CreatureTalliesOf(PlayerNames::PLAYER_ONE).mushroomsEaten, 7u);
 
-	registry.Get<Creature>(creature).magicMushroomsEaten = 100;
+	registry.Get<Creature>(_creature).magicMushroomsEaten = 100;
 	const auto tallies = player_statistics::CreatureTalliesOf(PlayerNames::PLAYER_ONE);
 	EXPECT_EQ(tallies.mushroomsEaten, 100u);
 	EXPECT_EQ(tallies.poos, 3u);

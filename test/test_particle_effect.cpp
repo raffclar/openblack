@@ -220,13 +220,13 @@ protected:
 		auto file = psys::ParticleFile::Parse(text);
 		EXPECT_TRUE(file.has_value()) << text;
 		return std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                EffectServices {classes, world, random, noise}, origin, magnitude, false);
+		                                EffectServices {_classes, _world, _random, _noise}, origin, magnitude, false);
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
 };
 } // namespace
 
@@ -371,8 +371,8 @@ TEST_F(ParticleEffectTest, ThePiecesOfABrokenModelStartWhiteAndOnlyTheirAlphaFad
 	FakeFragments fragments(blast::BreakIntoPieces(primitives));
 	FakeObjectEffects objects;
 	objects.records.push_back({.mesh = 5, .origin = {0.0f, -5.0f, 0.0f}, .speed = 10.0f});
-	world.objects = &objects;
-	world.fragments = &fragments;
+	_world.objects = &objects;
+	_world.fragments = &fragments;
 	// The rules of the game's effect for a broken model: no rule changes the colour of a piece
 	auto effect = Make(
 	    Header() +
@@ -397,7 +397,7 @@ TEST_F(ParticleEffectTest, ThePiecesOfABrokenModelStartWhiteAndOnlyTheirAlphaFad
 TEST_F(ParticleEffectTest, TheRubbleOfABlastTakesItsYawFromTheEffectsNumbersBeforeTheRocks)
 {
 	FakeObjectEffects objects;
-	world.objects = &objects;
+	_world.objects = &objects;
 	auto effect =
 	    Make(Header() + Object("UR_Explosion", "UR_Explosion0",
 	                           "PROPERTY Group INTEGER 0\nPROPERTY InitialDelay FLOAT 0\nPROPERTY BeamDelay FLOAT 100\n"
@@ -494,7 +494,7 @@ TEST_F(ParticleEffectTest, ConditionsGateRules)
 
 TEST_F(ParticleEffectTest, LandingTellsTheMiracle)
 {
-	world.landHeight = 5.0f;
+	_world.landHeight = 5.0f;
 	auto effect = Make(Header() + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
 	                   Object("CreateRuleAnAtom", "Create0",
 	                          "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Sprite0\nPROPERTY OffsetY FLOAT 8\n") +
@@ -549,7 +549,7 @@ TEST_F(ParticleEffectTest, SpritesTakeThePlayersColour)
 	ASSERT_EQ(atoms.size(), 1u);
 	EXPECT_EQ(atoms[0].rgb, (std::array<uint8_t, 3> {254, 0, 0}));
 	// And its creation's sound was asked for
-	EXPECT_EQ(world.sounds, (std::vector<std::string> {"SOUND_POP"}));
+	EXPECT_EQ(_world.sounds, (std::vector<std::string> {"SOUND_POP"}));
 }
 
 TEST_F(ParticleEffectTest, AnAtomTakesItsCreatorsSpecularColourApartFromItsColour)
@@ -680,7 +680,7 @@ TEST_F(ParticleEffectTest, AHealChakraFollowsEachTargetAndLightsIt)
 {
 	constexpr auto k_Villager = static_cast<entt::entity>(5);
 	constexpr auto k_Gone = static_cast<entt::entity>(6);
-	world.targets = {{k_Villager, {10.0f, 0.0f, 20.0f}}};
+	_world.targets = {{k_Villager, {10.0f, 0.0f, 20.0f}}};
 	FakeSpell spell;
 	auto effect = Make(
 	    Header() + Object("ParticlePointCreator", "Point0", "") + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
@@ -696,7 +696,7 @@ TEST_F(ParticleEffectTest, AHealChakraFollowsEachTargetAndLightsIt)
 	effect->AddTarget(k_Villager);
 	effect->Step(k_Step);
 	// The one still there is chakraed and healed, at its centre and its size
-	EXPECT_TRUE(world.claimed.contains(k_Villager));
+	EXPECT_TRUE(_world.claimed.contains(k_Villager));
 	ASSERT_EQ(spell.events.size(), 2u);
 	EXPECT_EQ(spell.events[1].type, SpellEventInfo::Type::Object);
 	EXPECT_EQ(spell.events[1].target, k_Villager);
@@ -706,19 +706,19 @@ TEST_F(ParticleEffectTest, AHealChakraFollowsEachTargetAndLightsIt)
 		effect->Step(k_Step);
 	}
 	// Rising to full at half a second of the burst, lighting its target
-	ASSERT_TRUE(world.glows.contains(k_Villager));
-	EXPECT_GT(world.glows[k_Villager].r, 80);
+	ASSERT_TRUE(_world.glows.contains(k_Villager));
+	EXPECT_GT(_world.glows[k_Villager].r, 80);
 	// It moves with its target
-	world.targets[0].second = {30.0f, 0.0f, 20.0f};
+	_world.targets[0].second = {30.0f, 0.0f, 20.0f};
 	effect->Step(k_Step);
 	std::vector<Effect::DrawAtom> sparks;
 	effect->Collect(1.0f, sparks);
 	ASSERT_EQ(sparks.size(), 4u);
 	// Gone: the chakra ends, lets the target go, and the effect waits for more
-	world.targets.clear();
+	_world.targets.clear();
 	effect->Step(k_Step);
-	EXPECT_FALSE(world.claimed.contains(k_Villager));
-	EXPECT_EQ(world.glows[k_Villager], glm::u8vec3(0));
+	EXPECT_FALSE(_world.claimed.contains(k_Villager));
+	EXPECT_EQ(_world.glows[k_Villager], glm::u8vec3(0));
 	EXPECT_FALSE(effect->Finished());
 	effect->CloseDown();
 	for (int i = 0; i < 3; ++i)
@@ -730,7 +730,7 @@ TEST_F(ParticleEffectTest, AHealChakraFollowsEachTargetAndLightsIt)
 TEST_F(ParticleEffectTest, AHealChakraLetsItsTargetGoWhenItsEffectGoes)
 {
 	constexpr auto k_Villager = static_cast<entt::entity>(5);
-	world.targets = {{k_Villager, {10.0f, 0.0f, 20.0f}}};
+	_world.targets = {{k_Villager, {10.0f, 0.0f, 20.0f}}};
 	FakeSpell spell;
 	auto effect =
 	    Make(Header() + Object("ParticlePointCreator", "Point0", "") + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
@@ -746,12 +746,12 @@ TEST_F(ParticleEffectTest, AHealChakraLetsItsTargetGoWhenItsEffectGoes)
 	{
 		effect->Step(k_Step);
 	}
-	ASSERT_TRUE(world.claimed.contains(k_Villager));
-	ASSERT_GT(world.glows[k_Villager].r, 0);
+	ASSERT_TRUE(_world.claimed.contains(k_Villager));
+	ASSERT_GT(_world.glows[k_Villager].r, 0);
 	// The miracle ends while the chakra still lights its target: the target is free for the next heal, and dark
 	effect.reset();
-	EXPECT_FALSE(world.claimed.contains(k_Villager));
-	EXPECT_EQ(world.glows[k_Villager], glm::u8vec3(0));
+	EXPECT_FALSE(_world.claimed.contains(k_Villager));
+	EXPECT_EQ(_world.glows[k_Villager], glm::u8vec3(0));
 	// So the next heal takes it again
 	auto next = Make(Header() + Object("ParticlePointCreator", "Point0", "") +
 	                 Object("UR_HealSpellChakra", "Heal0", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Point0\n"));
@@ -892,7 +892,7 @@ TEST_F(ParticleEffectTest, RandomNumbersAreDrawnOnlyInASteps)
 {
 	auto effect = Make(Header());
 	EXPECT_FLOAT_EQ(effect->Random(10.0f), 0.0f);
-	EXPECT_EQ(random.GetParticleStream(), ParticleRandomStream::None);
+	EXPECT_EQ(_random.GetParticleStream(), ParticleRandomStream::None);
 }
 
 TEST_F(ParticleEffectTest, RunsEveryFileOfTheGame)
@@ -1108,7 +1108,7 @@ TEST_F(ParticleEffectTest, AGustyWindPushesAnAtomAcrossTheGroundOnly)
 		                           std::string(simulate ? "1" : "0") + "\n"),
 		            {3.0f, 0.0f, 7.0f});
 	};
-	const auto noiseHere = noise.Wind(glm::vec3(3.0f, 10.0f, 7.0f) * 0.37f);
+	const auto noiseHere = _noise.Wind(glm::vec3(3.0f, 10.0f, 7.0f) * 0.37f);
 	ASSERT_TRUE(noiseHere.x != 0.0f || noiseHere.y != 0.0f);
 	auto pushed = make(false);
 	auto drawnTowards = make(true);

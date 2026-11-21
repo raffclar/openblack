@@ -14,6 +14,7 @@
 #include <array>
 #include <span>
 
+#include "Common/IntegerSteps.h"
 #include "Enums.h"
 #include "ScriptHeaders/ScriptEnums.h"
 
@@ -61,7 +62,7 @@ inline constexpr float k_SolvedTreeFireSpeed = 1.0f;
 /// The spot's place in the list of spots: the rows across first
 [[nodiscard]] constexpr size_t SpotIndex(int32_t across, int32_t along) noexcept
 {
-	return static_cast<size_t>(across * k_Side + along);
+	return ToIndex(across * k_Side + along);
 }
 
 /// Whether a spot is on the grid

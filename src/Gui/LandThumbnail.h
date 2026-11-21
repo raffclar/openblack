@@ -20,6 +20,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "DialogRect.h"
 
 namespace openblack::onlinemap
@@ -94,7 +95,7 @@ inline constexpr int32_t k_LogoCellSide = 64;
 [[nodiscard]] constexpr std::array<glm::vec2, 2> LogoCellUv() noexcept
 {
 	constexpr float k_Cell = 0.25f;
-	const auto min = glm::vec2(static_cast<float>(k_LogoCell & 3), static_cast<float>(k_LogoCell / 4)) * k_Cell;
+	const auto min = glm::vec2(static_cast<float>(k_LogoCell & 3), static_cast<float>(WholeQuotient(k_LogoCell, 4))) * k_Cell;
 	return {min, min + k_Cell};
 }
 

@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/TempleInteriorInterface.h"
+#include "Common/IntegerSteps.h"
 #include "Common/PortableRotations.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/MistDome.h"
@@ -79,7 +80,7 @@ float Random(float min, float max)
 /// The cell of a frame of an 8 by 8 texture
 glm::vec2 Cell(uint32_t frame)
 {
-	return {static_cast<float>(frame % 8) * k_Cell, static_cast<float>(frame / 8) * k_Cell};
+	return {static_cast<float>(frame % 8) * k_Cell, static_cast<float>(WholeQuotient(frame, 8)) * k_Cell};
 }
 
 /// The dome of data/landscape/mist.l3d, with its corners' places in the texture's first cell

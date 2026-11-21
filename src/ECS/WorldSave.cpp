@@ -464,12 +464,12 @@ void LogWorldReport(const reflection::WorldSaveReport& report)
 	SPDLOG_LOGGER_INFO(Log(), "The saved world keeps {} entities with {} components", report.entities, report.components);
 	// A component with no registration is not in the save, so a load loses it: tell of each name once as an error. The
 	// writer's thread calls this, so the names that were told of are kept under a lock.
-	static std::mutex toldMutex;
-	static synced_state::UnregisteredReporter told;
+	static std::mutex s_ToldMutex;
+	static synced_state::UnregisteredReporter s_Told;
 	std::vector<std::string> fresh;
 	{
-		const std::lock_guard lock(toldMutex);
-		fresh = told.Fresh(report.unregisteredComponents);
+		const std::lock_guard lock(s_ToldMutex);
+		fresh = s_Told.Fresh(report.unregisteredComponents);
 	}
 	if (!fresh.empty())
 	{

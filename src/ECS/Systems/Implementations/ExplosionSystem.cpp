@@ -54,7 +54,7 @@ float LocalRandom(float a, float b)
 /// The dust's sprites: the smoke sheet, eight cells a row, blended over what is behind
 const particles::Creator& DustCreator()
 {
-	static const particles::Creator creator = [] {
+	static const particles::Creator k_Creator = [] {
 		particles::Creator dust;
 		dust.kind = particles::Creator::Kind::Sprite;
 		dust.className = "Dust";
@@ -64,7 +64,7 @@ const particles::Creator& DustCreator()
 		dust.additive = false;
 		return dust;
 	}();
-	return creator;
+	return k_Creator;
 }
 /// Half the size of a model's box, in its own units
 glm::vec3 MeshHalfSize(MeshId mesh)

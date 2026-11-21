@@ -53,44 +53,44 @@ protected:
 		return entity;
 	}
 
-	CreatureObjectActionSystem hands;
+	CreatureObjectActionSystem _hands;
 };
 } // namespace
 
 TEST_F(CreatureCatchKindsTest, AFlyingBuildingPieceIsCaughtButNeverPickedUp)
 {
 	const auto piece = Make(BuildingPiece {});
-	const auto kind = hands.KindOf(piece);
+	const auto kind = _hands.KindOf(piece);
 	EXPECT_EQ(kind.thing, Thing::BuildingPiece);
 	EXPECT_EQ(kind.rule, KindRule::Never);
-	EXPECT_TRUE(hands.CanBeCaught(piece));
+	EXPECT_TRUE(_hands.CanBeCaught(piece));
 }
 
 TEST_F(CreatureCatchKindsTest, AFlyingRewardChestIsCaught)
 {
 	const auto chest = Make(Reward {});
-	const auto kind = hands.KindOf(chest);
+	const auto kind = _hands.KindOf(chest);
 	EXPECT_EQ(kind.thing, Thing::Reward);
 	EXPECT_EQ(kind.rule, KindRule::Whole);
-	EXPECT_TRUE(hands.CanBeCaught(chest));
+	EXPECT_TRUE(_hands.CanBeCaught(chest));
 }
 
 TEST_F(CreatureCatchKindsTest, AFlyingScaffoldIsCaughtWhetherOrNotAHandCanTakeIt)
 {
 	const auto scaffold = Make(Scaffold {});
-	const auto kind = hands.KindOf(scaffold);
+	const auto kind = _hands.KindOf(scaffold);
 	EXPECT_EQ(kind.thing, Thing::Scaffold);
 	EXPECT_EQ(kind.rule, KindRule::Scaffold);
 	// With no workshops to ask, no hand can take it
 	EXPECT_FALSE(kind.handCanTake);
-	EXPECT_TRUE(hands.CanBeCaught(scaffold));
+	EXPECT_TRUE(_hands.CanBeCaught(scaffold));
 }
 
 TEST_F(CreatureCatchKindsTest, ALanternIsNeverCaught)
 {
 	const auto lantern = Make(StreetLantern {.country = false});
-	EXPECT_FALSE(hands.KindOf(lantern).canBePickedUp);
-	EXPECT_FALSE(hands.CanBeCaught(lantern));
+	EXPECT_FALSE(_hands.KindOf(lantern).canBePickedUp);
+	EXPECT_FALSE(_hands.CanBeCaught(lantern));
 }
 
 // The player's hand may not take a covered ring of the beach temple puzzle, but a creature's hands may. They refuse a
@@ -101,20 +101,20 @@ TEST_F(CreatureCatchKindsTest, ACreatureRefusesARingOfTheBeachTemplePuzzleOnlyWh
 	const auto ring = Make(MobileObject {.type = MobileObjectInfo::None});
 	registry.Assign<HanoiBlock>(ring);
 	registry.Assign<CannotBePickedUp>(ring);
-	EXPECT_EQ(hands.KindOf(ring).thing, Thing::MobileObject);
-	EXPECT_TRUE(hands.CanBeCaught(ring));
+	EXPECT_EQ(_hands.KindOf(ring).thing, Thing::MobileObject);
+	EXPECT_TRUE(_hands.CanBeCaught(ring));
 
 	registry.Get<HanoiBlock>(ring).fixed = true;
-	EXPECT_FALSE(hands.CanBeCaught(ring));
+	EXPECT_FALSE(_hands.CanBeCaught(ring));
 }
 
 TEST_F(CreatureCatchKindsTest, AThingThatCannotBePickedUpIsNotCaught)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto thing = Make(MobileObject {.type = MobileObjectInfo::None});
-	EXPECT_TRUE(hands.CanBeCaught(thing));
+	EXPECT_TRUE(_hands.CanBeCaught(thing));
 	registry.Assign<CannotBePickedUp>(thing);
-	EXPECT_FALSE(hands.CanBeCaught(thing));
+	EXPECT_FALSE(_hands.CanBeCaught(thing));
 }
 
 TEST_F(CreatureCatchKindsTest, ARingInACreaturesHandIsWhereItsTransformPutsItForThePuzzle)

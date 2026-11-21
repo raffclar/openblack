@@ -17,6 +17,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 using namespace openblack::graphics;
@@ -167,7 +168,7 @@ glm::vec3 moon::GlowColour(const glm::vec3& moonColour)
 	// The game divides the whole steps of each channel, and drops the remainder
 	const auto steps = [](float channel, int divisor) {
 		constexpr float k_Steps = 255.0f;
-		return static_cast<float>(static_cast<int>(std::lround(channel * k_Steps)) / divisor) / k_Steps;
+		return static_cast<float>(WholeQuotient(static_cast<int>(std::lround(channel * k_Steps)), divisor)) / k_Steps;
 	};
 	return {steps(moonColour.r, 6), steps(moonColour.g, 5), steps(moonColour.b, 4)};
 }

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 namespace openblack::camera_push_scroll
@@ -51,7 +52,7 @@ constexpr float k_MillisecondSeconds = 0.001f;
 /// The cube of a place's share of the screen from its middle
 [[nodiscard]] float CubedShare(int place, int last)
 {
-	const float share = static_cast<float>(place - last / 2) / static_cast<float>(last);
+	const float share = static_cast<float>(place - WholeQuotient(last, 2)) / static_cast<float>(last);
 	return share * share * share;
 }
 } // namespace

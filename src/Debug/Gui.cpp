@@ -1256,7 +1256,7 @@ bool Gui::ShowMenu() noexcept
 void Gui::RenderArrow(const std::string& name, const ImVec2& pos, const ImVec2& size) const noexcept
 {
 	// clang-format off
-	static const auto boxOverlayFlags =
+	static const auto k_BoxOverlayFlags =
 		0u
 		| ImGuiWindowFlags_NoMove
 		| ImGuiWindowFlags_AlwaysAutoResize
@@ -1272,7 +1272,7 @@ void Gui::RenderArrow(const std::string& name, const ImVec2& pos, const ImVec2& 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 	ImGui::SetNextWindowBgAlpha(0.0f);
 	ImGui::SetNextWindowSize(size);
-	if (ImGui::Begin((name + " Frame").c_str(), nullptr, boxOverlayFlags))
+	if (ImGui::Begin((name + " Frame").c_str(), nullptr, k_BoxOverlayFlags))
 	{
 		const auto strId = name + " Arrow";
 		ImGuiWindow* window = ImGui::GetCurrentWindow();
@@ -1686,7 +1686,7 @@ void Gui::ShowInputLockNotice() const noexcept
 void Gui::ShowCameraPositionOverlay() noexcept
 {
 	// clang-format off
-	static const auto cameraPositionOverlayFlags =
+	static const auto k_CameraPositionOverlayFlags =
 		0u
 		| ImGuiWindowFlags_NoMove
 		| ImGuiWindowFlags_NoDecoration
@@ -1703,7 +1703,7 @@ void Gui::ShowCameraPositionOverlay() noexcept
 
 	if (Locator::config::value().viewDetailOverlay)
 	{
-		if (ImGui::Begin("Game Details Overlay", nullptr, cameraPositionOverlayFlags))
+		if (ImGui::Begin("Game Details Overlay", nullptr, k_CameraPositionOverlayFlags))
 		{
 			const auto& camera = Locator::camera::value();
 			const auto camOrigin = camera.GetOrigin();

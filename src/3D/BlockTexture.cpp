@@ -20,6 +20,7 @@
 
 #include <LNDFile.h>
 
+#include "Common/IntegerSteps.h"
 #include "Common/WorkerPool.h"
 
 using namespace openblack;
@@ -78,7 +79,7 @@ ConeWeights block_texture::ComputeConeWeights()
 				}
 				++scaled.at(largest);
 			}
-			std::ranges::transform(scaled, weights.at(static_cast<size_t>((i * k_TexelsPerCell) + j)).begin(),
+			std::ranges::transform(scaled, weights.at(ToIndex((i * k_TexelsPerCell) + j)).begin(),
 			                       [](int w) { return static_cast<uint8_t>(w); });
 		}
 	}
@@ -200,7 +201,7 @@ void block_texture::PutCellTexels(std::span<const uint16_t> part, glm::ivec2 fir
 	for (int x = 0; x < rows; ++x)
 	{
 		const auto row = part.subspan(static_cast<size_t>(x) * columns, static_cast<size_t>(columns));
-		const auto at = static_cast<size_t>(((firstCell.x * k_TexelsPerCell + x) * k_Side) + (firstCell.y * k_TexelsPerCell));
+		const auto at = ToIndex(((firstCell.x * k_TexelsPerCell + x) * k_Side) + (firstCell.y * k_TexelsPerCell));
 		std::ranges::copy(row, block.begin() + static_cast<std::ptrdiff_t>(at));
 	}
 }
@@ -251,10 +252,9 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 	const auto step = k_TexelsPerCell / perCell;
 	const auto rows = cellCount.x * perCell;
 	const auto columns = cellCount.y * perCell;
-	if (cells.size() < static_cast<size_t>(k_CellsPerSide * k_CellsPerSide) || cellCount.x <= 0 || cellCount.y <= 0 ||
-	    firstCell.x < 0 || firstCell.y < 0 || firstCell.x + cellCount.x > k_BlockCells ||
-	    firstCell.y + cellCount.y > k_BlockCells || texels.size() < static_cast<size_t>(rows) * columns ||
-	    sources.countries.empty())
+	if (cells.size() < ToIndex(k_CellsPerSide * k_CellsPerSide) || cellCount.x <= 0 || cellCount.y <= 0 || firstCell.x < 0 ||
+	    firstCell.y < 0 || firstCell.x + cellCount.x > k_BlockCells || firstCell.y + cellCount.y > k_BlockCells ||
+	    texels.size() < static_cast<size_t>(rows) * columns || sources.countries.empty())
 	{
 		return;
 	}
@@ -269,7 +269,7 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 	{
 		for (int cellZ = firstCell.y; cellZ < firstCell.y + cellCount.y; ++cellZ)
 		{
-			const auto cellIndex = static_cast<size_t>((cellX * k_CellsPerSide) + cellZ);
+			const auto cellIndex = ToIndex((cellX * k_CellsPerSide) + cellZ);
 			const auto& cell = cells[cellIndex];
 			if ((cell.flags & k_OpenSeaFlag) != 0)
 			{
@@ -290,11 +290,11 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 				for (int j = 0; j < k_TexelsPerCell; j += step)
 				{
 					const int z = (cellZ * k_TexelsPerCell) + j;
-					const auto& weights = coneWeights[static_cast<size_t>((i * k_TexelsPerCell) + j)];
+					const auto& weights = coneWeights[ToIndex((i * k_TexelsPerCell) + j)];
 					const int32_t h =
 					    (static_cast<int32_t>(weights[0]) * altitudes[0]) + (static_cast<int32_t>(weights[1]) * altitudes[1]) +
 					    (static_cast<int32_t>(weights[2]) * altitudes[2]) + (static_cast<int32_t>(weights[3]) * altitudes[3]);
-					const auto index = static_cast<size_t>((x * k_Side) + z);
+					const auto index = ToIndex((x * k_Side) + z);
 					const uint8_t noise = index < sources.noise.size() ? sources.noise[index] : uint8_t {0};
 					const uint8_t bump = index < sources.bump.size() ? sources.bump[index] : uint8_t {0x80};
 
@@ -315,7 +315,7 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 
 					const auto row = ((cellX - firstCell.x) * perCell) + (i / step);
 					const auto column = ((cellZ - firstCell.y) * perCell) + (j / step);
-					texels[static_cast<size_t>((row * columns) + column)] = texel;
+					texels[ToIndex((row * columns) + column)] = texel;
 				}
 			}
 		}

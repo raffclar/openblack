@@ -18,6 +18,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/IntegerSteps.h"
 #include "Common/PortableMath.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureDance.h"
@@ -884,13 +885,13 @@ std::optional<creature_face::Request> creature_mind::PullFace(IdleMind& mind, cr
 
 bool creature_mind::KeepsWatchingFlying(uint32_t turns, uint32_t turnsPerSecond, float limit, bool flying)
 {
-	return flying && static_cast<float>(turns / turnsPerSecond) < limit;
+	return flying && static_cast<float>(WholeQuotient(turns, turnsPerSecond)) < limit;
 }
 
 bool creature_mind::WatchedHandEnough(uint32_t turns, uint32_t limitTurns, uint32_t turnsPerSecond)
 {
-	const auto limit = std::min(static_cast<float>(limitTurns / turnsPerSecond), k_LongestHandWatchSeconds);
-	return static_cast<float>(turns / turnsPerSecond) > limit;
+	const auto limit = std::min(static_cast<float>(WholeQuotient(limitTurns, turnsPerSecond)), k_LongestHandWatchSeconds);
+	return static_cast<float>(WholeQuotient(turns, turnsPerSecond)) > limit;
 }
 
 namespace
@@ -943,7 +944,8 @@ void FollowWatching(IdleMind& mind, const Step& step, const Senses& senses, cons
 	}
 	++mind.watchTurns;
 	const auto& followed = senses.followed;
-	if (followed.has_value() && followed->interesting && static_cast<float>(mind.watchTurns / turnsPerSecond) <= step.seconds)
+	if (followed.has_value() && followed->interesting &&
+	    static_cast<float>(WholeQuotient(mind.watchTurns, turnsPerSecond)) <= step.seconds)
 	{
 		// Too far, it walks up to the villager
 		if (followed->distance > step.movement.maxDistance && !senses.moving)

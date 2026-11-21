@@ -32,53 +32,53 @@ class MiracleEffectReach: public ::testing::Test
 protected:
 	entt::entity Made(glm::vec3 position = {100.0f, 3.0f, 200.0f})
 	{
-		const auto entity = registry.Create();
-		registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		const auto entity = _registry.Create();
+		_registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 		return entity;
 	}
 
-	ecs::Registry registry;
+	ecs::Registry _registry;
 };
 } // namespace
 
 TEST_F(MiracleEffectReach, AFieldAndAFishFarmReachFiveMetres)
 {
 	const auto field = Made();
-	registry.Assign<Field>(field);
+	_registry.Assign<Field>(field);
 	const auto farm = Made();
-	registry.Assign<FishFarm>(farm);
-	EXPECT_FLOAT_EQ(object_measures::FireRadius(registry, field), 5.0f);
-	EXPECT_FLOAT_EQ(object_measures::FireRadius(registry, farm), 5.0f);
-	EXPECT_EQ(object_measures::FireMiddle(registry, field), glm::vec2(100.0f, 200.0f));
+	_registry.Assign<FishFarm>(farm);
+	EXPECT_FLOAT_EQ(object_measures::FireRadius(_registry, field), 5.0f);
+	EXPECT_FLOAT_EQ(object_measures::FireRadius(_registry, farm), 5.0f);
+	EXPECT_EQ(object_measures::FireMiddle(_registry, field), glm::vec2(100.0f, 200.0f));
 }
 
 TEST_F(MiracleEffectReach, AWorshipSiteReachesFourteenMetresFromItsMiddle)
 {
 	const auto site = Made();
-	auto& transform = registry.Get<Transform>(site);
+	auto& transform = _registry.Get<Transform>(site);
 	transform.rotation = glm::mat3(glm::rotate(glm::mat4(1.0f), 0.7f, glm::vec3(0.0f, 1.0f, 0.0f)));
 	transform.scale = glm::vec3(1.5f);
-	registry.Assign<WorshipSite>(site);
-	EXPECT_FLOAT_EQ(object_measures::FireRadius(registry, site), 14.0f);
-	EXPECT_EQ(object_measures::FireMiddle(registry, site),
+	_registry.Assign<WorshipSite>(site);
+	EXPECT_FLOAT_EQ(object_measures::FireRadius(_registry, site), 14.0f);
+	EXPECT_EQ(object_measures::FireMiddle(_registry, site),
 	          ecs::worship_site::CentreOnLand(transform.position, transform.rotation, transform.scale.x));
 }
 
 TEST_F(MiracleEffectReach, ADeadTreeWithoutAModelReachesNothingFromWhereItLies)
 {
 	const auto tree = Made();
-	registry.Assign<DeadTree>(tree);
-	EXPECT_FLOAT_EQ(object_measures::FireRadius(registry, tree), 0.0f);
-	EXPECT_FLOAT_EQ(object_measures::Height(registry, tree), 0.0f);
-	EXPECT_EQ(object_measures::FireMiddle(registry, tree), glm::vec2(100.0f, 200.0f));
+	_registry.Assign<DeadTree>(tree);
+	EXPECT_FLOAT_EQ(object_measures::FireRadius(_registry, tree), 0.0f);
+	EXPECT_FLOAT_EQ(object_measures::Height(_registry, tree), 0.0f);
+	EXPECT_EQ(object_measures::FireMiddle(_registry, tree), glm::vec2(100.0f, 200.0f));
 }
 
 TEST_F(MiracleEffectReach, AThingWithoutAModelHasNoSize)
 {
 	const auto thing = Made();
-	EXPECT_FLOAT_EQ(object_measures::FireRadius(registry, thing), 0.0f);
-	EXPECT_FLOAT_EQ(object_measures::Height(registry, thing), 0.0f);
-	EXPECT_EQ(object_measures::FireMiddle(registry, thing), glm::vec2(100.0f, 200.0f));
+	EXPECT_FLOAT_EQ(object_measures::FireRadius(_registry, thing), 0.0f);
+	EXPECT_FLOAT_EQ(object_measures::Height(_registry, thing), 0.0f);
+	EXPECT_EQ(object_measures::FireMiddle(_registry, thing), glm::vec2(100.0f, 200.0f));
 }
 
 TEST_F(MiracleEffectReach, APointOfAModelIsScaledTurnedAndMovedAcrossTheLand)

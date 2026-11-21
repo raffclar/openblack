@@ -117,20 +117,20 @@ protected:
 	void SetUp() override
 	{
 		Locator::entitiesRegistry::emplace<Registry>();
-		legs = &static_cast<LegsThatGetNowhere&>(Locator::creatureLocomotionSystem::emplace<LegsThatGetNowhere>());
+		_legs = &static_cast<LegsThatGetNowhere&>(Locator::creatureLocomotionSystem::emplace<LegsThatGetNowhere>());
 		Locator::creatureAnimationSystem::emplace<NoAnimations>();
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = registry.Create();
-		thing = registry.Create();
-		registry.Assign<Creature>(creature);
+		_creature = registry.Create();
+		_thing = registry.Create();
+		registry.Assign<Creature>(_creature);
 		registry.Assign<Transform>(
-		    creature,
+		    _creature,
 		    Transform {.position = glm::vec3(10.0f, 0.0f, 20.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
-		registry.Assign<CreatureAnimation>(creature);
-		registry.Assign<CreatureObjectAction>(creature, CreatureObjectAction {.kind = Kind::PickUp,
-		                                                                      .phase = CreatureObjectAction::Phase::Approach,
-		                                                                      .status = Status::Running,
-		                                                                      .target = thing});
+		registry.Assign<CreatureAnimation>(_creature);
+		registry.Assign<CreatureObjectAction>(_creature, CreatureObjectAction {.kind = Kind::PickUp,
+		                                                                       .phase = CreatureObjectAction::Phase::Approach,
+		                                                                       .status = Status::Running,
+		                                                                       .target = _thing});
 	}
 	void TearDown() override
 	{
@@ -139,10 +139,10 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	CreatureObjectActionSystem hands;
-	LegsThatGetNowhere* legs {nullptr};
-	entt::entity creature {entt::null};
-	entt::entity thing {entt::null};
+	CreatureObjectActionSystem _hands;
+	LegsThatGetNowhere* _legs {nullptr};
+	entt::entity _creature {entt::null};
+	entt::entity _thing {entt::null};
 };
 } // namespace
 
@@ -153,10 +153,10 @@ TEST_F(CreatureApproachWalkTest, AWalkThatGetsNowhereContinuesPastFiftyTurns)
 	constexpr uint32_t k_Turns = 1000;
 	for (uint32_t turn = 0; turn < k_Turns; ++turn)
 	{
-		hands.CreatureTurn(creature);
-		const auto& action = Locator::entitiesRegistry::value().Get<const CreatureObjectAction>(creature);
+		_hands.CreatureTurn(_creature);
+		const auto& action = Locator::entitiesRegistry::value().Get<const CreatureObjectAction>(_creature);
 		ASSERT_EQ(action.status, Status::Running) << turn;
 		ASSERT_EQ(action.phase, CreatureObjectAction::Phase::Approach) << turn;
 	}
-	EXPECT_EQ(legs->stops, 0u);
+	EXPECT_EQ(_legs->stops, 0u);
 }

@@ -49,8 +49,8 @@ TEST(WindowFit, AWindowAsTallAsTheScreenIsMadeSmallerKeepingItsShape)
 
 TEST(WindowFit, AWindowTooWideIsMadeNarrower)
 {
-	constexpr DesktopRect usable {.position = {0, 0}, .size = {1920, 1040}};
-	const auto fitted = FitWindow({.position = {0, 31}, .size = {3440, 1440}}, k_Frame, usable);
+	constexpr DesktopRect k_Usable {.position = {0, 0}, .size = {1920, 1040}};
+	const auto fitted = FitWindow({.position = {0, 31}, .size = {3440, 1440}}, k_Frame, k_Usable);
 	ASSERT_TRUE(fitted.has_value());
 	EXPECT_EQ(fitted->size.x, 1920 - 16);
 	EXPECT_LE(fitted->size.y, 1040 - 39);
@@ -59,8 +59,8 @@ TEST(WindowFit, AWindowTooWideIsMadeNarrower)
 TEST(WindowFit, ADesktopNotStartingAtZeroIsRespected)
 {
 	// A second screen to the left of the main one, with its taskbar along the top
-	constexpr DesktopRect usable {.position = {-1920, 40}, .size = {1920, 1040}};
-	const auto fitted = FitWindow({.position = {-1920, 0}, .size = {1280, 720}}, k_Frame, usable);
+	constexpr DesktopRect k_Usable {.position = {-1920, 40}, .size = {1920, 1040}};
+	const auto fitted = FitWindow({.position = {-1920, 0}, .size = {1280, 720}}, k_Frame, k_Usable);
 	ASSERT_TRUE(fitted.has_value());
 	EXPECT_GE(fitted->position.y - k_Frame.top, 40);
 	EXPECT_GE(fitted->position.x - k_Frame.left, -1920);

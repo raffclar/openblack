@@ -48,13 +48,13 @@ std::mt19937& RandomNumberManagerProduction::Generator()
 		std::mt19937 generator;
 		std::optional<uint32_t> seeding;
 	};
-	thread_local Seeded tGenerator;
-	if (tGenerator.seeding != _seeding)
+	thread_local Seeded t_Generator;
+	if (t_Generator.seeding != _seeding)
 	{
-		tGenerator.generator.seed(run_seed::StreamSeed(_runSeed, RandomStream::General));
-		tGenerator.seeding = _seeding;
+		t_Generator.generator.seed(run_seed::StreamSeed(_runSeed, RandomStream::General));
+		t_Generator.seeding = _seeding;
 	}
-	return tGenerator.generator;
+	return t_Generator.generator;
 }
 
 std::optional<std::reference_wrapper<std::mutex>> RandomNumberManagerProduction::LockAccess()

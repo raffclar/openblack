@@ -93,8 +93,8 @@ struct HandlerState
 
 HandlerState& State()
 {
-	static HandlerState state;
-	return state;
+	static HandlerState s_State;
+	return s_State;
 }
 
 /// Set by the first thread to crash; any other thread that crashes meanwhile waits for it to finish and exit

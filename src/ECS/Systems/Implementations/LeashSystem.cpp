@@ -34,6 +34,7 @@
 #include "Camera/CameraBookmarks.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/IntegerSteps.h"
 #include "Common/PortableRotations.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDevelopment.h"
@@ -1585,9 +1586,9 @@ void LeashSystem::ShowPosts(bool handShown)
 			sprite.tint = look.tint;
 			sprite.additive = look.additive;
 			const auto picture = temple_leashes::GlowPicture(post.look);
-			sprite.uvMin =
-			    glm::vec2(static_cast<float>(picture % k_SmokeCellsPerRow), static_cast<float>(picture / k_SmokeCellsPerRow)) /
-			    k_SmokeCellsPerSide;
+			sprite.uvMin = glm::vec2(static_cast<float>(picture % k_SmokeCellsPerRow),
+			                         static_cast<float>(WholeQuotient(picture, k_SmokeCellsPerRow))) /
+			               k_SmokeCellsPerSide;
 		}
 	});
 }

@@ -10,6 +10,7 @@
 // The testbed's scenarios of the beam explosion at each of its levels, on land and on the water, of fire spreading, of
 // the water putting it out and growing trees, and of fireballs setting a building alight
 
+#include "Common/IntegerSteps.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -403,8 +404,9 @@ void AddFire(std::vector<Scenario>& all)
 	cows.reserve(6);
 	for (int i = 0; i < 6; ++i)
 	{
-		cows.push_back({.type = AnimalInfo::Cow,
-		                .offset = {static_cast<float>(i % 3) * 3.0f - 3.0f, 40.0f + static_cast<float>(i / 3) * 3.0f}});
+		cows.push_back(
+		    {.type = AnimalInfo::Cow,
+		     .offset = {static_cast<float>(i % 3) * 3.0f - 3.0f, 40.0f + static_cast<float>(WholeQuotient(i, 3)) * 3.0f}});
 	}
 	all.push_back({
 	    .id = "animals.fireball_cows",

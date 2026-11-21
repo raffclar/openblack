@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/FlatLand.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureRoute.h"
 
 using namespace openblack;
@@ -52,7 +53,7 @@ TEST(FlatLand, CoversEveryBlockOfTheMap)
 	{
 		for (int z = 0; z < 32; ++z)
 		{
-			const auto index = land.blockIndexLookup.at(static_cast<size_t>(x * 32 + z));
+			const auto index = land.blockIndexLookup.at(ToIndex(x * 32 + z));
 			ASSERT_GT(index, 0);
 			const auto& block = land.blocks.at(index - 1u);
 			EXPECT_EQ(block.index, index);
@@ -79,7 +80,7 @@ TEST(FlatLand, AwayFromTheLakeEveryCellIsFlatDryLand)
 				{
 					continue;
 				}
-				const auto& cell = block.cells.at(static_cast<size_t>(x * 17 + z));
+				const auto& cell = block.cells.at(ToIndex(x * 17 + z));
 				// Plain ground but in the patches of sand and snow
 				const auto country = flat_land::k_SandPatch.Contains(mapX, mapZ)   ? flat_land::k_SandPatch.country
 				                     : flat_land::k_SnowPatch.Contains(mapX, mapZ) ? flat_land::k_SnowPatch.country
@@ -235,7 +236,7 @@ TEST(FlatLand, BlocksCarryTheLakeAcrossTheirEdges)
 				{
 					continue;
 				}
-				const auto& cell = block.cells.at(static_cast<size_t>(x * 17 + z));
+				const auto& cell = block.cells.at(ToIndex(x * 17 + z));
 				const auto expected = flat_land::CellAt(mapX, mapZ);
 				ASSERT_EQ(cell.altitude, expected.altitude) << mapX << ", " << mapZ;
 				ASSERT_EQ(cell.flags, expected.flags) << mapX << ", " << mapZ;

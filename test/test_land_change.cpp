@@ -16,27 +16,27 @@ using namespace openblack::land_change;
 
 TEST(LandChange, TheStoryKeepsEverythingThatIsNotTheLands)
 {
-	constexpr auto rules = RulesFor(Kind::Story);
-	EXPECT_EQ(rules.advisors, Advisors::CarryOn);
-	EXPECT_TRUE(rules.scriptScreenKept);
-	EXPECT_TRUE(rules.heartbeatsCarried);
-	EXPECT_TRUE(rules.playersCarried);
-	EXPECT_FALSE(rules.alignmentFromProfile);
-	EXPECT_TRUE(rules.helpTextsKept);
-	EXPECT_TRUE(rules.gameClockRunsOn);
+	constexpr auto k_Rules = RulesFor(Kind::Story);
+	EXPECT_EQ(k_Rules.advisors, Advisors::CarryOn);
+	EXPECT_TRUE(k_Rules.scriptScreenKept);
+	EXPECT_TRUE(k_Rules.heartbeatsCarried);
+	EXPECT_TRUE(k_Rules.playersCarried);
+	EXPECT_FALSE(k_Rules.alignmentFromProfile);
+	EXPECT_TRUE(k_Rules.helpTextsKept);
+	EXPECT_TRUE(k_Rules.gameClockRunsOn);
 }
 
 TEST(LandChange, TheLandMenuStartsTheScriptsAgainButKeepsThePlayers)
 {
-	constexpr auto rules = RulesFor(Kind::FreshScripts);
-	EXPECT_EQ(rules.advisors, Advisors::SentHome);
-	EXPECT_FALSE(rules.scriptScreenKept);
-	EXPECT_TRUE(rules.heartbeatsCarried);
-	EXPECT_TRUE(rules.playersCarried);
-	EXPECT_FALSE(rules.alignmentFromProfile);
-	EXPECT_FALSE(rules.helpTextsKept);
+	constexpr auto k_Rules = RulesFor(Kind::FreshScripts);
+	EXPECT_EQ(k_Rules.advisors, Advisors::SentHome);
+	EXPECT_FALSE(k_Rules.scriptScreenKept);
+	EXPECT_TRUE(k_Rules.heartbeatsCarried);
+	EXPECT_TRUE(k_Rules.playersCarried);
+	EXPECT_FALSE(k_Rules.alignmentFromProfile);
+	EXPECT_FALSE(k_Rules.helpTextsKept);
 	// The land menu's challenges start as a new game does, the clock with them
-	EXPECT_FALSE(rules.gameClockRunsOn);
+	EXPECT_FALSE(k_Rules.gameClockRunsOn);
 }
 
 TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)

@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureRouteSearch.h"
@@ -124,7 +125,7 @@ TEST(FootpathPlanning, NoCircleIsLeftOutForAWalkerThatIsNotThere)
 TEST(FootpathPlanning, LandWaterIsGoneRoundOnlyWhenAsked)
 {
 	std::vector<route::Ground> cells(static_cast<size_t>(route::k_CellsPerSide * route::k_CellsPerSide), route::Ground::Open);
-	cells.at(static_cast<size_t>(20 * route::k_CellsPerSide + 20)) = route::Ground::Water;
+	cells.at(ToIndex(20 * route::k_CellsPerSide + 20)) = route::Ground::Water;
 	const auto land = route::WalkableLand::OfCells(cells);
 	route::Obstacles creature;
 	creature.ResetWithoutWalker(0.0f);
@@ -141,8 +142,8 @@ TEST(FootpathPlanning, LandWaterIsGoneRoundOnlyWhenAsked)
 TEST(FootpathPlanning, ACellKnowsTheBlockedCellsNextToIt)
 {
 	std::vector<route::Ground> cells(static_cast<size_t>(route::k_CellsPerSide * route::k_CellsPerSide), route::Ground::Open);
-	cells.at(static_cast<size_t>(20 * route::k_CellsPerSide + 20)) = route::Ground::Blocked;
-	cells.at(static_cast<size_t>(40 * route::k_CellsPerSide + 40)) = route::Ground::Water;
+	cells.at(ToIndex(20 * route::k_CellsPerSide + 20)) = route::Ground::Blocked;
+	cells.at(ToIndex(40 * route::k_CellsPerSide + 40)) = route::Ground::Water;
 	cells.at(0) = route::Ground::Blocked;
 	const auto land = route::WalkableLand::OfCells(cells);
 	for (int32_t z = 19; z <= 21; ++z)
@@ -169,7 +170,7 @@ TEST(FootpathPlanning, ACellKnowsTheBlockedCellsNextToIt)
 TEST(FootpathPlanning, OnlyACellNextToABlockedCellAddsCircles)
 {
 	std::vector<route::Ground> cells(static_cast<size_t>(route::k_CellsPerSide * route::k_CellsPerSide), route::Ground::Open);
-	cells.at(static_cast<size_t>(20 * route::k_CellsPerSide + 20)) = route::Ground::Blocked;
+	cells.at(ToIndex(20 * route::k_CellsPerSide + 20)) = route::Ground::Blocked;
 	const auto land = route::WalkableLand::OfCells(cells);
 	route::Obstacles far;
 	far.ResetWithoutWalker(0.0f);

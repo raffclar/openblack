@@ -43,8 +43,8 @@ TEST(CinemaHides, FloatingNumbersHiddenWheneverTheBarsAreIn)
 
 TEST(CinemaHides, AnOwnerWithoutBarsHidesNothing)
 {
-	constexpr cinema_hides::Bars stale {.in = false, .heldByScript = true};
-	EXPECT_TRUE(cinema_hides::ShowsCreaturePanel(stale));
-	EXPECT_TRUE(cinema_hides::ShowsToolTip(stale));
-	EXPECT_TRUE(cinema_hides::ShowsFloatingNumbers(stale));
+	constexpr cinema_hides::Bars k_Stale {.in = false, .heldByScript = true};
+	EXPECT_TRUE(cinema_hides::ShowsCreaturePanel(k_Stale));
+	EXPECT_TRUE(cinema_hides::ShowsToolTip(k_Stale));
+	EXPECT_TRUE(cinema_hides::ShowsFloatingNumbers(k_Stale));
 }

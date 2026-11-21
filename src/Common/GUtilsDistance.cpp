@@ -38,7 +38,7 @@ float SigmoidClamp(float value)
 
 const std::array<uint32_t, 1024>& gutils::InvSqrtTable()
 {
-	static const auto s_table = [] {
+	static const auto k_Table = [] {
 		std::array<uint32_t, 1024> table {};
 		for (uint32_t i = 0; i < table.size(); ++i)
 		{
@@ -49,7 +49,7 @@ const std::array<uint32_t, 1024>& gutils::InvSqrtTable()
 		}
 		return table;
 	}();
-	return s_table;
+	return k_Table;
 }
 
 float gutils::InvSqrt(float value)

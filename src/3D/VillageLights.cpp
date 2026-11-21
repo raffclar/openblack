@@ -11,6 +11,8 @@
 
 #include <bit>
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::village_lights
 {
 
@@ -114,7 +116,7 @@ uint8_t FlameCell(int32_t step, size_t flame, int32_t start)
 
 glm::vec2 SpriteCellUv(uint8_t cell)
 {
-	return glm::vec2(static_cast<float>(cell % 8u), static_cast<float>(cell / 8u)) * k_SpriteCell;
+	return glm::vec2(static_cast<float>(cell % 8u), static_cast<float>(WholeQuotient(cell, 8u))) * k_SpriteCell;
 }
 
 int32_t Threshold(uint8_t fullLightGreen)

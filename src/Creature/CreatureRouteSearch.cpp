@@ -17,6 +17,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 using namespace openblack::creature_route;
 
@@ -113,8 +115,8 @@ void Obstacles::Reset(glm::vec2 walker, float margin, Gatherer gatherer)
 	_gatherer = std::move(gatherer);
 	_blockGatherer = {};
 	_obstacles.clear();
-	_blocks.assign(static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide), {});
-	_gathered.assign(static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide), false);
+	_blocks.assign(ToIndex(k_BlocksPerSide * k_BlocksPerSide), {});
+	_gathered.assign(ToIndex(k_BlocksPerSide * k_BlocksPerSide), false);
 	_filings = 0;
 }
 
@@ -133,14 +135,14 @@ void Obstacles::Clear()
 {
 	_margin = 0.0f;
 	_obstacles.clear();
-	_blocks.assign(static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide), {});
-	_gathered.assign(static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide), false);
+	_blocks.assign(ToIndex(k_BlocksPerSide * k_BlocksPerSide), {});
+	_gathered.assign(ToIndex(k_BlocksPerSide * k_BlocksPerSide), false);
 	_filings = 0;
 }
 
 size_t Obstacles::BlockIndex(int32_t x, int32_t z) const
 {
-	return static_cast<size_t>((z * k_BlocksPerSide) + x);
+	return ToIndex((z * k_BlocksPerSide) + x);
 }
 
 bool Obstacles::Add(std::optional<uint32_t> thing, glm::vec2 centre, float radius)

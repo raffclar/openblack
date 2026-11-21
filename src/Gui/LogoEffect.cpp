@@ -19,6 +19,7 @@
 #include <glm/vector_relational.hpp>
 
 #include "Common/CrtQsort.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 namespace openblack::logo_effect
@@ -568,7 +569,7 @@ TextPlace TradeMarkPlace(Screen screen)
 	constexpr int32_t k_SizeDivisor = 70;
 	return {.position = {static_cast<float>(static_cast<int32_t>(x87::Mul(screen.width, k_TradeMarkLeft))),
 	                     static_cast<float>(static_cast<int32_t>(x87::Mul(screen.height, k_TradeMarkTop)))},
-	        .size = static_cast<float>(screen.width / k_SizeDivisor)};
+	        .size = static_cast<float>(WholeQuotient(screen.width, k_SizeDivisor))};
 }
 
 SponsorBoxes SponsorPlaces(Screen screen)

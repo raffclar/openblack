@@ -13,6 +13,7 @@
 #include <glm/vec4.hpp>
 
 #include "3D/CreatureBody.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/LeashOrders.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Sprite.h"
@@ -47,7 +48,8 @@ std::optional<std::pair<entt::entity, entt::entity>> LeashMarkerArchetype::Creat
 	}
 	const auto make = [&](uint8_t cell) {
 		const auto entity = registry.Create();
-		const glm::vec2 uv {static_cast<float>(cell % 8) / k_CellsPerSide, static_cast<float>(cell / 8) / k_CellsPerSide};
+		const glm::vec2 uv {static_cast<float>(cell % 8) / k_CellsPerSide,
+		                    static_cast<float>(WholeQuotient(cell, 8)) / k_CellsPerSide};
 		registry.Assign<Sprite>(entity, Sprite {.texture = k_SheetId.value(),
 		                                        .uvMin = uv,
 		                                        .uvExtent = glm::vec2(1.0f / k_CellsPerSide),

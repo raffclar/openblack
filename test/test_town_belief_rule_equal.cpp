@@ -119,12 +119,12 @@ template <typename T>
 
 const entt::meta_ctx& Context()
 {
-	static const auto context = []() {
+	static const auto k_Context = []() {
 		auto made = std::make_unique<entt::meta_ctx>();
 		reflection::RegisterComponents(*made);
 		return made;
 	}();
-	return *context;
+	return *k_Context;
 }
 
 /// The bytes of a save of the effect: each value of each symbol and of its sparks
@@ -186,18 +186,18 @@ protected:
 		run.random.SetSeeds({.synced = seed, .local = seed * 3u + 1u});
 		run.effect =
 		    std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                             EffectServices {classes, run.world, run.random, noise}, glm::vec3(0.0f), 1.0f, false);
+		                             EffectServices {_classes, run.world, run.random, _noise}, glm::vec3(0.0f), 1.0f, false);
 		run.effect->SetPlayer(0);
 		run.effect->AddTarget(k_Centre);
 	}
 
-	ParticleClassRegistry classes {[] {
+	ParticleClassRegistry _classes {[] {
 		auto registry = ParticleClassRegistry::WithAllClasses();
 		registry.AddModifier("UR_TownCentreBeliefReference",
 		                     ParticleClassRegistry::Make<town_belief_reference::TownCentreBeliefRule>);
 		return registry;
 	}()};
-	maths::ValueNoise noise;
+	maths::ValueNoise _noise;
 };
 } // namespace
 

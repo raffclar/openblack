@@ -16,6 +16,7 @@
 
 #include <glm/gtc/constants.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 namespace openblack::camera_drag
@@ -59,7 +60,7 @@ constexpr float k_TwoButtonTurnShare = 0.025f;
 /// half height, so that the same place on two screens of different shapes has the same value
 float RingPlace(glm::vec2 point, glm::ivec2 screenSize, int viewHeight)
 {
-	const auto x = (point.x - static_cast<float>(screenSize.x / 2)) / (static_cast<float>(screenSize.x) * 0.5f);
+	const auto x = (point.x - static_cast<float>(WholeQuotient(screenSize.x, 2))) / (static_cast<float>(screenSize.x) * 0.5f);
 	const auto y = (point.y - static_cast<float>(screenSize.y >> 1)) / (static_cast<float>(viewHeight) * 0.5f);
 	return std::atan2(y, x);
 }
@@ -239,7 +240,7 @@ Sweep SweepAlongRing(glm::vec2 from, glm::vec2 to, const EdgeArea& area)
 {
 	if (area.Folded() <= 0)
 	{
-		const auto halfWidth = static_cast<float>(area.screen.x / 2);
+		const auto halfWidth = static_cast<float>(WholeQuotient(area.screen.x, 2));
 		const auto halfHeight = static_cast<float>(area.screen.y >> 1);
 		// The game keeps both arctangents wide and rounds their difference one time
 		auto angle =

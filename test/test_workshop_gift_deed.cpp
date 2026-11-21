@@ -94,12 +94,12 @@ protected:
 			spdlog::create<spdlog::sinks::null_sink_st>("game");
 		}
 		Locator::entitiesRegistry::emplace<Registry>();
-		minds = &static_cast<SeeingMinds&>(Locator::creatureMindSystem::emplace<SeeingMinds>());
+		_minds = &static_cast<SeeingMinds&>(Locator::creatureMindSystem::emplace<SeeingMinds>());
 		auto& registry = Locator::entitiesRegistry::value();
-		workshop = registry.Create();
-		registry.Assign<Workshop>(workshop);
+		_workshop = registry.Create();
+		registry.Assign<Workshop>(_workshop);
 		registry.Assign<Transform>(
-		    workshop,
+		    _workshop,
 		    Transform {.position = glm::vec3(10.0f, 0.0f, 20.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
 		const auto player = registry.Create();
 		registry.Assign<Player>(player, Player {.name = PlayerNames::PLAYER_ONE, .handTookFrom = PlayerNames::PLAYER_ONE});
@@ -110,9 +110,9 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	ResourceStoreSystem stores;
-	SeeingMinds* minds {nullptr};
-	entt::entity workshop {entt::null};
+	ResourceStoreSystem _stores;
+	SeeingMinds* _minds {nullptr};
+	entt::entity _workshop {entt::null};
 };
 } // namespace
 
@@ -121,17 +121,17 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(WorkshopGiftDeedTest, WoodGivenToAWorkshopIsTheDeedOfWoodInTheWorkshop)
 {
-	stores.ReportGift(workshop, ResourceType::Wood, PlayerNames::PLAYER_ONE);
-	ASSERT_EQ(minds->deeds.size(), 1u);
-	EXPECT_EQ(minds->deeds[0].deed, creature_deeds::k_PutWoodInWorkshop);
-	EXPECT_EQ(minds->deeds[0].object, std::optional(workshop));
-	EXPECT_EQ(minds->deeds[0].player, std::optional(PlayerNames::PLAYER_ONE));
+	_stores.ReportGift(_workshop, ResourceType::Wood, PlayerNames::PLAYER_ONE);
+	ASSERT_EQ(_minds->deeds.size(), 1u);
+	EXPECT_EQ(_minds->deeds[0].deed, creature_deeds::k_PutWoodInWorkshop);
+	EXPECT_EQ(_minds->deeds[0].object, std::optional(_workshop));
+	EXPECT_EQ(_minds->deeds[0].player, std::optional(PlayerNames::PLAYER_ONE));
 }
 
 // Food given to a workshop is no deed
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(WorkshopGiftDeedTest, FoodGivenToAWorkshopIsNoDeed)
 {
-	stores.ReportGift(workshop, ResourceType::Food, PlayerNames::PLAYER_ONE);
-	EXPECT_TRUE(minds->deeds.empty());
+	_stores.ReportGift(_workshop, ResourceType::Food, PlayerNames::PLAYER_ONE);
+	EXPECT_TRUE(_minds->deeds.empty());
 }

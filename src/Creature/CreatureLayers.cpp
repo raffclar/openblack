@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureKiss.h"
 
 using namespace openblack;
@@ -353,7 +354,7 @@ bool creature_layers::ReachesActionMoment(const BodyAction& body, float millisec
 		       body.timeMs + step > moment;
 	}
 	milliseconds = HurriedStep(milliseconds, body.hurried);
-	const auto moment = static_cast<float>(duration.value_or(0) / 2);
+	const auto moment = static_cast<float>(WholeQuotient(duration.value_or(0), 2));
 	return body.timeMs <= moment && body.timeMs + milliseconds > moment;
 }
 
@@ -485,8 +486,9 @@ FaceLayer creature_layers::AdvanceFace(FaceLayer face, float milliseconds, std::
 	if (face.current.has_value())
 	{
 		// The face relaxes by a quarter of the whole milliseconds, and the remainder has no effect
-		face.timeMs -= face.wanted.has_value() ? milliseconds
-		                                       : static_cast<float>(static_cast<int32_t>(milliseconds) / k_FaceRelaxSlowing);
+		face.timeMs -= face.wanted.has_value()
+		                   ? milliseconds
+		                   : static_cast<float>(WholeQuotient(static_cast<int32_t>(milliseconds), k_FaceRelaxSlowing));
 		if (face.timeMs <= 0.0f)
 		{
 			face.timeMs = 0.0f;

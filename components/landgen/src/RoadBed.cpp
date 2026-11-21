@@ -282,8 +282,9 @@ std::vector<float> roads::CutThinWalls(std::span<const float> land, std::span<co
 	for (int i = 0; i < count; ++i)
 	{
 		const auto [first, last] = near(i);
+		const int length = last - first + 1;
 		lowest[static_cast<size_t>(i)] =
-		    *std::ranges::min_element(land.subspan(static_cast<size_t>(first), static_cast<size_t>(last - first + 1)));
+		    *std::ranges::min_element(land.subspan(static_cast<size_t>(first), static_cast<size_t>(length)));
 	}
 	std::vector<float> cut(land.begin(), land.end());
 	for (int i = 0; i < count; ++i)
@@ -294,8 +295,9 @@ std::vector<float> roads::CutThinWalls(std::span<const float> land, std::span<co
 			continue;
 		}
 		const auto [first, last] = near(i);
-		const float opened = *std::ranges::max_element(
-		    std::span(lowest).subspan(static_cast<size_t>(first), static_cast<size_t>(last - first + 1)));
+		const int length = last - first + 1;
+		const float opened =
+		    *std::ranges::max_element(std::span(lowest).subspan(static_cast<size_t>(first), static_cast<size_t>(length)));
 		cut[at] = std::max(opened, land[at] - settings.deepestWallCut);
 	}
 	return cut;

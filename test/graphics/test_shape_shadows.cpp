@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Graphics/ShapeShadows.h"
 
 namespace shape_shadows = openblack::graphics::shape_shadows;
@@ -29,7 +30,7 @@ shape_shadows::Sample At(float column, float row)
 
 uint8_t TexelAt(const tree_shadows::Coverage& coverage, int x, int z)
 {
-	return coverage[static_cast<size_t>(x * tree_shadows::k_BlockTexels + z)];
+	return coverage[openblack::ToIndex(x * tree_shadows::k_BlockTexels + z)];
 }
 
 int CoveredTexels(const tree_shadows::Coverage& coverage)

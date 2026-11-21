@@ -19,6 +19,7 @@
 #include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureLandTilt.h"
 #include "OracleData.h"
 
@@ -110,7 +111,7 @@ TEST(OracleCreatureLandTilt, PlacesTheBodyAsTheGameDoes)
 		{
 			for (int part = 0; part < 3; ++part)
 			{
-				const auto expected = table->Bits(row, columns->placed.at(static_cast<size_t>((axis * 3) + part)));
+				const auto expected = table->Bits(row, columns->placed.at(ToIndex((axis * 3) + part)));
 				const auto ours = std::bit_cast<uint32_t>(placed[axis][part]);
 				// The game's zeros may carry a sign that no reader can see
 				const bool zeros = ((expected | ours) & 0x7FFFFFFFu) == 0;

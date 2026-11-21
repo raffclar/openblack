@@ -12,6 +12,8 @@
 #include <Temple/ScrollPictures.h>
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 namespace pictures = temple::scroll_pictures;
 using Kind = temple::scroll_pictures::WorldPicture::Kind;
@@ -91,7 +93,7 @@ TEST(ScrollPictures, AGestureIsCutToTheTexturesTop)
 	pictures::Place(out, Line(Kind::Gesture, 5, 34.0f), Project, AllShown, 1.0f);
 	ASSERT_EQ(out.gestures.size(), 2);
 	EXPECT_FLOAT_EQ(out.gestures[1].icon.min.y, 40.0f);
-	EXPECT_FLOAT_EQ(out.gestures[1].icon.uvMin.y - static_cast<float>(5 / 4) * 0.25f, 0.25f * 0.25f);
+	EXPECT_FLOAT_EQ(out.gestures[1].icon.uvMin.y - static_cast<float>(WholeQuotient(5, 4)) * 0.25f, 0.25f * 0.25f);
 }
 
 TEST(ScrollPictures, OnlyTheGamesGesturesArePictured)

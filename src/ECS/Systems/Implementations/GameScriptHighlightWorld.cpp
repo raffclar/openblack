@@ -21,6 +21,7 @@
 #include "3D/LandIslandInterface.h"
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
+#include "Common/IntegerSteps.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Firefly.h"
@@ -271,7 +272,7 @@ std::optional<Sprite> GameScriptHighlightWorld::GlowLook() const
 	// One picture of the sheet's 8 by 8, white, added to what is behind it by its alpha
 	constexpr float k_Cell = 1.0f / static_cast<float>(rules::k_GlowSheetPictures);
 	const auto column = static_cast<float>(rules::k_GlowPicture % rules::k_GlowSheetPictures);
-	const auto row = static_cast<float>(rules::k_GlowPicture / rules::k_GlowSheetPictures);
+	const auto row = static_cast<float>(WholeQuotient(rules::k_GlowPicture, rules::k_GlowSheetPictures));
 	return Sprite {
 	    .texture = k_Sheet.value(),
 	    .uvMin = glm::vec2(column, row) * k_Cell,
@@ -297,7 +298,7 @@ std::optional<Sprite> GameScriptHighlightWorld::SparkLook(uint32_t picture) cons
 	// One picture of the sheet's 8 by 8, white, added to what is behind it by its alpha
 	constexpr float k_Cell = 1.0f / static_cast<float>(rules::k_SparkSheetPictures);
 	const auto column = static_cast<float>(picture % rules::k_SparkSheetPictures);
-	const auto row = static_cast<float>(picture / rules::k_SparkSheetPictures);
+	const auto row = static_cast<float>(WholeQuotient(picture, rules::k_SparkSheetPictures));
 	return Sprite {
 	    .texture = k_SparkSheet.value(),
 	    .uvMin = glm::vec2(column, row) * k_Cell,

@@ -544,13 +544,13 @@ public:
 	void RequestJoinOnline() noexcept { _joinOnlineAsked = true; }
 	/// The size of the villagers' names display, 0 to 1
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
-	static Game* Instance() { return sInstance; }
+	static Game* Instance() { return s_Instance; }
 
 	/// The situation that Escape in play finds now, with these modifier keys held
 	[[nodiscard]] escape_key::Situation EscapeSituation(uint16_t keyModifiers) const;
 
 private:
-	static Game* sInstance;
+	static Game* s_Instance;
 
 	/// What the game shows as it starts, before it loads the rest. The loading screen system shows the screens with the
 	/// choices of the command line.

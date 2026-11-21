@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "Common/IntegerSteps.h"
 #include "Common/PortableMath.h"
 
 namespace openblack::water_rings
@@ -92,7 +93,7 @@ std::array<glm::vec3, 4> Corners(const Ring& ring)
 std::array<glm::vec2, 4> CellUvs(uint8_t cell)
 {
 	const auto index = static_cast<uint8_t>(cell & 0x3Fu);
-	const glm::vec2 corner {static_cast<float>(index % 8u) * k_Cell, static_cast<float>(index / 8u) * k_Cell};
+	const glm::vec2 corner {static_cast<float>(index % 8u) * k_Cell, static_cast<float>(WholeQuotient(index, 8u)) * k_Cell};
 	return {corner, corner + glm::vec2(k_Cell, 0.0f), corner + glm::vec2(k_Cell), corner + glm::vec2(0.0f, k_Cell)};
 }
 

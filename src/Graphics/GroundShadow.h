@@ -96,12 +96,12 @@ struct GroundShadow
 		{
 			std::array<uint64_t, k_SampleColumns / 64> words {};
 
-			[[nodiscard]] bool test(size_t column) const { return ((words.at(column / 64) >> (column % 64)) & 1U) != 0; }
-			[[nodiscard]] size_t count() const;
+			[[nodiscard]] bool Test(size_t column) const { return ((words.at(column / 64) >> (column % 64)) & 1U) != 0; }
+			[[nodiscard]] size_t Count() const;
 			/// Covers the samples from `from` up to but not including `to`
 			void Fill(uint32_t from, uint32_t to);
 			/// Covers every sample
-			void set() { words.fill(~uint64_t {0}); }
+			void Set() { words.fill(~uint64_t {0}); }
 		};
 		std::array<Row, k_SampleRows> rows {};
 		std::array<int32_t, k_SampleRows> starts {};

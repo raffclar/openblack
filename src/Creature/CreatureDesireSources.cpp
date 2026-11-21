@@ -15,6 +15,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87Vector.h"
 
 using namespace openblack;
@@ -105,7 +106,7 @@ float creature_desire_sources::CountSource(uint32_t turns, uint32_t seconds, uin
 	{
 		return 0.0f;
 	}
-	const auto wholeSeconds = static_cast<float>(turns / turnsPerSecond);
+	const auto wholeSeconds = static_cast<float>(WholeQuotient(turns, turnsPerSecond));
 	return Clamp01(wholeSeconds * (1.0f / static_cast<float>(seconds)));
 }
 
@@ -201,7 +202,7 @@ std::optional<float> creature_desire_sources::Read(uint32_t type, const State& s
 		                                      : std::nullopt;
 	case types::k_GetHigh:
 	case types::k_MentalIllness:
-		return static_cast<float>(state.mushroomsEaten / k_MushroomsPerStep);
+		return static_cast<float>(WholeQuotient(state.mushroomsEaten, k_MushroomsPerStep));
 	default:
 		return std::nullopt;
 	}

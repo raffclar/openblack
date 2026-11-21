@@ -16,17 +16,17 @@ using namespace openblack::graphics;
 namespace
 {
 /// The pacer the calling thread's uploads go through, if any: only loading threads have one
-thread_local UploadPacer* t_pacer = nullptr;
+thread_local UploadPacer* t_Pacer = nullptr;
 } // namespace
 
 UploadPacer::Scope::Scope(UploadPacer& pacer)
 {
-	t_pacer = &pacer;
+	t_Pacer = &pacer;
 }
 
 UploadPacer::Scope::~Scope()
 {
-	t_pacer = nullptr;
+	t_Pacer = nullptr;
 }
 
 UploadPacer::Hurry::Hurry(UploadPacer& pacer)
@@ -47,9 +47,9 @@ UploadPacer::Hurry::~Hurry()
 
 void UploadPacer::Pace(size_t bytes)
 {
-	if (t_pacer != nullptr)
+	if (t_Pacer != nullptr)
 	{
-		t_pacer->Take(bytes);
+		t_Pacer->Take(bytes);
 	}
 }
 

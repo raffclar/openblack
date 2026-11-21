@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/LandShade.h"
+#include "Common/IntegerSteps.h"
 #include "OracleData.h"
 
 using namespace openblack;
@@ -60,7 +61,7 @@ std::vector<land_shade::LaidBlock> Laid()
 		{
 			for (int32_t j = 0; j < land_shade::k_BlockSide; ++j)
 			{
-				one.luminosity.at(static_cast<size_t>((i * land_shade::k_BlockSide) + j)) =
+				one.luminosity.at(ToIndex((i * land_shade::k_BlockSide) + j)) =
 				    Luminosity((block.x * land_shade::k_BlockStep) + i, (block.y * land_shade::k_BlockStep) + j);
 			}
 		}

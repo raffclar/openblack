@@ -29,7 +29,7 @@ constexpr int64_t k_Date = 1767225600;
 /// A palette whose moon row is 0x336699 at every time of day and alignment, everything else black
 const LandLightPalette& FakePalette()
 {
-	static const LandLightPalette palette = []() {
+	static const LandLightPalette k_Palette = []() {
 		constexpr size_t k_MoonRow = 5;
 		std::vector<uint8_t> bytes(LandLightPalette::k_Side * LandLightPalette::k_Side * 4, 0);
 		for (size_t column = 0; column < LandLightPalette::k_Side; ++column)
@@ -42,7 +42,7 @@ const LandLightPalette& FakePalette()
 		}
 		return LandLightPalette(bytes);
 	}();
-	return palette;
+	return k_Palette;
 }
 
 /// A frame with the land's light palette and the given overcast, or without the palette for none

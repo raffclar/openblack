@@ -22,6 +22,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/IntegerSteps.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Field.h"
@@ -221,7 +222,7 @@ std::optional<Sprite> GameFireflyWorld::Look() const
 	// One picture of the sheet's 8 by 8, white, added to what is behind it by its alpha
 	constexpr float k_Cell = 1.0f / static_cast<float>(fireflies::k_SheetPictures);
 	const auto column = static_cast<float>(fireflies::k_SpritePicture % fireflies::k_SheetPictures);
-	const auto row = static_cast<float>(fireflies::k_SpritePicture / fireflies::k_SheetPictures);
+	const auto row = static_cast<float>(WholeQuotient(fireflies::k_SpritePicture, fireflies::k_SheetPictures));
 	return Sprite {
 	    .texture = k_Sheet.value(),
 	    .uvMin = glm::vec2(column, row) * k_Cell,

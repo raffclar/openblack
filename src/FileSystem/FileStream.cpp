@@ -109,9 +109,9 @@ Stream& FileStream::Write(const uint8_t* buffer, std::size_t length)
 
 std::string FileStream::GetLine()
 {
-	const int MAX_LINE_LENGTH = 1024;
-	char buffer[MAX_LINE_LENGTH];
-	if (fgets(buffer, MAX_LINE_LENGTH, _file) != nullptr)
+	constexpr int k_MaxLineLength = 1024;
+	char buffer[k_MaxLineLength];
+	if (fgets(buffer, k_MaxLineLength, _file) != nullptr)
 	{
 		// fgets() includes the newline character in the output,
 		// so we remove it if it's there

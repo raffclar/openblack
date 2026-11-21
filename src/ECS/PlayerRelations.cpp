@@ -15,6 +15,7 @@
 #include <bit>
 
 #include "Common/GUtilsDistance.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 namespace openblack::player_relations
@@ -120,7 +121,7 @@ float DesireToAttack(const AttackSide& god, const AttackSide& rival, float neare
 
 	// The difference of alignment counts in whole quarters of a whole number, so it is 0 for alignments from -1 to 1
 	const auto difference = std::abs(static_cast<int32_t>(god.alignment - rival.alignment));
-	const auto alignment = static_cast<float>(difference / 4);
+	const auto alignment = static_cast<float>(WholeQuotient(difference, 4));
 
 	const float proximity = 1.0f - nearestAbode * k_AbodeShare;
 

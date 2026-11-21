@@ -21,6 +21,7 @@
 
 #include "Blast/CameraShake.h"
 #include "Blast/DustPuff.h"
+#include "Common/IntegerSteps.h"
 #include "Graphics/ModelLight.h"
 #include "Particles/ParticleBlast.h"
 #include "Particles/ParticleObjectEffects.h"
@@ -88,7 +89,7 @@ TEST(Blast, AModelBreaksIntoChainsOfAtMostSixteenJoinedTriangles)
 	std::vector<glm::vec2> uvs;
 	for (int i = 0; i < 22; ++i)
 	{
-		positions.emplace_back(static_cast<float>(i / 2), static_cast<float>(i % 2), 0.0f);
+		positions.emplace_back(static_cast<float>(WholeQuotient(i, 2)), static_cast<float>(i % 2), 0.0f);
 		uvs.emplace_back(0.0f);
 	}
 	positions.emplace_back(100.0f, 0.0f, 0.0f);

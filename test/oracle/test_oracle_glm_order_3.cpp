@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "Common/Zoomer.h"
@@ -39,7 +40,7 @@ std::array<float, 12> RowsOf(const glm::mat4& matrix)
 	{
 		for (int column = 0; column < 3; ++column)
 		{
-			rows.at(static_cast<size_t>((row * 3) + column)) = matrix[row][column];
+			rows.at(ToIndex((row * 3) + column)) = matrix[row][column];
 		}
 	}
 	return rows;

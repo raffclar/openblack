@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "Common/IntegerSteps.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -57,7 +58,7 @@ std::pair<std::vector<ObjectSetup>, std::vector<Command>> MatchScene()
 	for (size_t i = 0; i < k_Villagers; ++i)
 	{
 		const auto column = static_cast<float>(i % 7);
-		const auto row = static_cast<float>(i / 7);
+		const auto row = static_cast<float>(WholeQuotient(i, 7));
 		objects.push_back({.type = k_Kinds.at(i % k_Kinds.size()),
 		                   .offset = glm::vec2 {-18.0f + column * 6.0f, 10.0f + row * 5.0f},
 		                   .joinTown = true});

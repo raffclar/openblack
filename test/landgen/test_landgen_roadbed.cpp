@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "landgen/Generator.h"
 #include "landgen/RoadBed.h"
 
@@ -67,7 +68,7 @@ struct SideSlope
 		{
 			for (int z = 0; z < k_Side; ++z)
 			{
-				metres.At(x, z) = 100.0f + (slope * k_Corner * static_cast<float>(z - (k_Side / 2)));
+				metres.At(x, z) = 100.0f + (slope * k_Corner * static_cast<float>(z - (openblack::WholeQuotient(k_Side, 2))));
 			}
 		}
 	}
@@ -81,7 +82,8 @@ paths::Path StraightPath()
 	paths::Path path {.link = {.from = 0, .to = 1}, .points = {}};
 	for (int x = 2; x < k_Side - 2; ++x)
 	{
-		path.points.push_back({.x = static_cast<float>(x) - 0.5f, .z = static_cast<float>(k_Side / 2) - 0.5f});
+		path.points.push_back(
+		    {.x = static_cast<float>(x) - 0.5f, .z = static_cast<float>(openblack::WholeQuotient(k_Side, 2)) - 0.5f});
 	}
 	return path;
 }

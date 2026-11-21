@@ -22,6 +22,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/MachineClock.h"
 #include "DialogKeyRules.h"
 #include "GameFont.h"
@@ -887,7 +888,7 @@ void ColourPicker::Draw(const DialogPainter& painter, bool hovered, bool /*focus
 	if (_kind == Kind::Brightness)
 	{
 		const auto top = static_cast<float>(rect.min.y);
-		const auto middle = static_cast<float>((rect.min.y + rect.max.y) / 2);
+		const auto middle = static_cast<float>(WholeQuotient(rect.min.y + rect.max.y, 2));
 		const auto bottom = static_cast<float>(rect.max.y);
 		// Fading in from see-through black at the top
 		const auto black = glm::vec4(0.0f);

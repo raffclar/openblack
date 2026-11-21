@@ -145,7 +145,7 @@ public:
 	bool SpellEvent(const particles::SpellEventInfo& /*event*/) override { return false; }
 	[[nodiscard]] int PowerUpLevel() const override { return -1; }
 };
-NoMiracle g_noMiracle;
+NoMiracle g_NoMiracle;
 } // namespace
 
 entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float altitude)
@@ -195,7 +195,7 @@ void VortexSystem::StartEffects(Vortex& vortex)
 		    .position = vortex.centre,
 		    .synced = true,
 		    .direction = glm::vec3(0.0f),
-		    .sink = &g_noMiracle,
+		    .sink = &g_NoMiracle,
 		});
 		if (!effects.IsRunning(vortex.objectMoverEffect))
 		{
@@ -215,7 +215,7 @@ void VortexSystem::StartEffects(Vortex& vortex)
 		if (ownerSteps)
 		{
 			request.direction = glm::vec3(0.0f);
-			request.sink = &g_noMiracle;
+			request.sink = &g_NoMiracle;
 		}
 		return effects.StartHere(request);
 	};
@@ -925,7 +925,7 @@ entt::entity VortexSystem::Restore(const RestoredVortex& saved)
 		    .position = vortex.centre,
 		    .synced = true,
 		    .direction = glm::vec3(0.0f),
-		    .sink = &g_noMiracle,
+		    .sink = &g_NoMiracle,
 		    .restored = saved.mover,
 		});
 		if (!effects.IsRunning(vortex.objectMoverEffect))

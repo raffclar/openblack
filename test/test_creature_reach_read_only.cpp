@@ -88,22 +88,22 @@ protected:
 	{
 		Locator::entitiesRegistry::emplace<Registry>();
 		Locator::resources::emplace<resources::Resources>();
-		animations = &static_cast<FingerEndsAtOnePoint&>(Locator::creatureAnimationSystem::emplace<FingerEndsAtOnePoint>());
+		_animations = &static_cast<FingerEndsAtOnePoint&>(Locator::creatureAnimationSystem::emplace<FingerEndsAtOnePoint>());
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = registry.Create();
-		registry.Assign<Creature>(creature);
-		registry.Assign<Transform>(creature, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-		registry.Assign<CreatureAnimation>(creature);
-		const auto species = registry.Get<const Creature>(creature).species;
+		_creature = registry.Create();
+		registry.Assign<Creature>(_creature);
+		registry.Assign<Transform>(_creature, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<CreatureAnimation>(_creature);
+		const auto species = registry.Get<const Creature>(_creature).species;
 		Locator::resources::value().GetCreatureRigs().Register(creature::GetRigId(species), [] {
 			auto rig = std::make_shared<creature::CreatureRig>();
 			rig->actionPoints.emplace();
 			rig->actionPoints->pickUpMs = 100.0f;
 			return rig;
 		});
-		thing = registry.Create();
-		registry.Assign<Transform>(thing, glm::vec3(5.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-		registry.Assign<MobileObject>(thing, MobileObject {.type = MobileObjectInfo::None});
+		_thing = registry.Create();
+		registry.Assign<Transform>(_thing, glm::vec3(5.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<MobileObject>(_thing, MobileObject {.type = MobileObjectInfo::None});
 	}
 	void TearDown() override
 	{
@@ -112,12 +112,12 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	[[nodiscard]] bool Kept() const { return Locator::entitiesRegistry::value().AllOf<PickUpReach>(creature); }
+	[[nodiscard]] bool Kept() const { return Locator::entitiesRegistry::value().AllOf<PickUpReach>(_creature); }
 
-	CreatureObjectActionSystem hands;
-	FingerEndsAtOnePoint* animations {nullptr};
-	entt::entity creature {entt::null};
-	entt::entity thing {entt::null};
+	CreatureObjectActionSystem _hands;
+	FingerEndsAtOnePoint* _animations {nullptr};
+	entt::entity _creature {entt::null};
+	entt::entity _thing {entt::null};
 };
 } // namespace
 
@@ -126,13 +126,13 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureReachReadOnlyTest, TheGiveTestMeasuresTheReachAndDoesNotKeepIt)
 {
-	EXPECT_TRUE(hands.CanTakeFromHand(creature, thing));
-	EXPECT_GT(animations->measures, 0u);
+	EXPECT_TRUE(_hands.CanTakeFromHand(_creature, _thing));
+	EXPECT_GT(_animations->measures, 0u);
 	EXPECT_FALSE(Kept());
 	// The next frame measures again, because nothing kept the measure
-	const auto first = animations->measures;
-	EXPECT_TRUE(hands.CanTakeFromHand(creature, thing));
-	EXPECT_EQ(animations->measures, 2 * first);
+	const auto first = _animations->measures;
+	EXPECT_TRUE(_hands.CanTakeFromHand(_creature, _thing));
+	EXPECT_EQ(_animations->measures, 2 * first);
 	EXPECT_FALSE(Kept());
 }
 
@@ -141,13 +141,13 @@ TEST_F(CreatureReachReadOnlyTest, TheGiveTestMeasuresTheReachAndDoesNotKeepIt)
 TEST_F(CreatureReachReadOnlyTest, ATurnKeepsTheReachAndTheGiveTestUsesIt)
 {
 	// The thing is in no cells of the map, so the creature may not pick it up from the land, but the test keeps the reach
-	EXPECT_FALSE(hands.CanPickUp(creature, thing));
+	EXPECT_FALSE(_hands.CanPickUp(_creature, _thing));
 	ASSERT_TRUE(Kept());
-	const auto kept = Locator::entitiesRegistry::value().Get<const PickUpReach>(creature).points;
-	const auto measures = animations->measures;
-	EXPECT_TRUE(hands.CanTakeFromHand(creature, thing));
-	EXPECT_EQ(animations->measures, measures);
-	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const PickUpReach>(creature).points, kept);
+	const auto kept = Locator::entitiesRegistry::value().Get<const PickUpReach>(_creature).points;
+	const auto measures = _animations->measures;
+	EXPECT_TRUE(_hands.CanTakeFromHand(_creature, _thing));
+	EXPECT_EQ(_animations->measures, measures);
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const PickUpReach>(_creature).points, kept);
 }
 
 // The give test gives the same answer whether a turn kept the reach or not, for a reach that lifts the thing and for one
@@ -157,12 +157,12 @@ TEST_F(CreatureReachReadOnlyTest, TheGiveTestAnswersTheSameWithOrWithoutAKeptRea
 {
 	for (const auto& point : {glm::vec3(0.0f, 0.0f, -1000.0f), glm::vec3(0.0f)})
 	{
-		animations->point = point;
-		Locator::entitiesRegistry::value().Remove<PickUpReach>(creature);
-		const bool notKept = hands.CanTakeFromHand(creature, thing);
+		_animations->point = point;
+		Locator::entitiesRegistry::value().Remove<PickUpReach>(_creature);
+		const bool notKept = _hands.CanTakeFromHand(_creature, _thing);
 		ASSERT_FALSE(Kept());
-		static_cast<void>(hands.CanPickUp(creature, thing));
+		static_cast<void>(_hands.CanPickUp(_creature, _thing));
 		ASSERT_TRUE(Kept());
-		EXPECT_EQ(hands.CanTakeFromHand(creature, thing), notKept) << point.z;
+		EXPECT_EQ(_hands.CanTakeFromHand(_creature, _thing), notKept) << point.z;
 	}
 }

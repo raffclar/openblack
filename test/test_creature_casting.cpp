@@ -704,7 +704,7 @@ TEST(CreatureCastAgenda, TheOneShotActionsCastByTheKindOfTheirMiracle)
 		Build build;
 		OneShotKind kind;
 	};
-	constexpr std::array expected {
+	constexpr std::array k_Expected {
 	    Expected {"CastOneOffSpellInHandAggressive", Target::Anything, Target::None, Build::CastOneShotInHand,
 	              OneShotKind::Aggressive},
 	    Expected {"CastOneOffSpellInHandCompassiona", Target::Anything, Target::None, Build::CastOneShotInHand,
@@ -718,7 +718,7 @@ TEST(CreatureCastAgenda, TheOneShotActionsCastByTheKindOfTheirMiracle)
 	    Expected {"PickUpAndCastOneOffSpellPlayful", Target::Creature, Target::OneShotPlayful, Build::PickUpAndCastOneShot,
 	              OneShotKind::Playful},
 	};
-	for (const auto& row : expected)
+	for (const auto& row : k_Expected)
 	{
 		const auto* executor = plan_actions::For(row.action);
 		ASSERT_NE(executor, nullptr) << row.action;

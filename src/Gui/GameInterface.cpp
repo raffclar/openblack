@@ -37,6 +37,7 @@
 #include "Camera/ScriptCameraModel.h"
 #include "Common/FixedFormat.h"
 #include "Common/GameRandom.h"
+#include "Common/IntegerSteps.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/ChatRules.h"
@@ -2283,7 +2284,7 @@ void GameInterface::DrawGlow(glm::vec2 min, glm::vec2 max, glm::vec4 colour)
 	{
 		return;
 	}
-	const auto corner = static_cast<float>((static_cast<int>(max.y) - static_cast<int>(min.y)) / 4);
+	const auto corner = static_cast<float>(WholeQuotient(static_cast<int>(max.y) - static_cast<int>(min.y), 4));
 	const std::array x = {min.x - corner, min.x + corner, max.x - corner, max.x + corner};
 	const std::array y = {min.y - corner, min.y + corner, max.y - corner, max.y + corner};
 	const Canvas::CornersScope boxDraw(_canvas, screen_pixels::Corners::BoxDraw);
@@ -3210,7 +3211,7 @@ void GameInterface::DrawCreaturePanel(glm::u16vec2 resolution)
 	const auto& values = *_creaturePanel;
 	const bool withReward = values.reward.has_value();
 	const int rowPitch = creature_panel::RowPitch(resolution);
-	const auto textSize = static_cast<float>(rowPitch / 2);
+	const auto textSize = static_cast<float>(WholeQuotient(rowPitch, 2));
 
 	// The labels' column is as wide as the widest label
 	std::array<std::u16string_view, creature_panel::k_RowCount> labels {};
@@ -3415,7 +3416,7 @@ void GameInterface::DrawCaption(glm::u16vec2 resolution)
 	for (const auto& line : _caption->lines)
 	{
 		const auto width = static_cast<int32_t>(_font.GetWidth(line, size));
-		const auto x = static_cast<float>((static_cast<int32_t>(resolution.x) - width) / 2);
+		const auto x = static_cast<float>(WholeQuotient(static_cast<int32_t>(resolution.x) - width, 2));
 		_painter.DrawString({x, top}, line, size, glm::vec4(0.0f, 0.0f, 0.0f, alpha), scale > 1.0f);
 		_painter.DrawString({x + shadow, top + shadow}, line, size, glm::vec4(1.0f, 1.0f, 0.0f, alpha), scale > 1.0f);
 		top += size;
