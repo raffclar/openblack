@@ -28,15 +28,14 @@ glm::ivec2 openblack::input::WindowPointer()
 
 void openblack::input::PointWindowEvent(SDL_Event& event)
 {
+	if (!Locator::gameActionSystem::has_value())
+	{
+		return;
+	}
+	auto& actions = Locator::gameActionSystem::value();
 	if constexpr (k_Platform == Platform::Web)
 	{
-		if (Locator::gameActionSystem::has_value())
-		{
-			Locator::gameActionSystem::value().PointPlayerEvent(event);
-		}
+		actions.PointPlayerEvent(event);
 	}
-	else
-	{
-		static_cast<void>(event);
-	}
+	actions.PairClicks(event);
 }

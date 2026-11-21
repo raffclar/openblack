@@ -94,6 +94,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
+#include "Input/MouseClicks.h"
 #include "Input/MouseWheel.h"
 #include "Input/WindowPointer.h"
 #include "Locator.h"
@@ -1747,7 +1748,7 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 		if (event.button.button == SDL_BUTTON_LEFT)
 		{
 			// A double click goes to the row picked before this press changes the row picked
-			if (event.button.clicks >= 2)
+			if (input::mouse_clicks::IsDoublePress(event.button.clicks))
 			{
 				_menu->DoubleClick(_painter.ToDialog({event.button.x, event.button.y}));
 			}

@@ -35,26 +35,6 @@ KeyAction OnCreatureKey(std::optional<entt::entity> following, std::optional<ent
 	return following == yours ? KeyAction::Leave : KeyAction::Enter;
 }
 
-std::optional<entt::entity> DoubleClicks::OnPress(const Press& press)
-{
-	const auto last = _last;
-	_last = press;
-	if (!last.has_value() || !press.creature.has_value() || last->creature != press.creature)
-	{
-		return std::nullopt;
-	}
-	const bool quick = press.milliseconds - last->milliseconds <= k_DoubleClickMilliseconds;
-	const bool still = std::abs(press.screen.x - last->screen.x) <= k_DoubleClickSlop &&
-	                   std::abs(press.screen.y - last->screen.y) <= k_DoubleClickSlop;
-	if (!quick || !still)
-	{
-		return std::nullopt;
-	}
-	// A third quick press starts a new double click rather than making another
-	_last.reset();
-	return press.creature;
-}
-
 std::optional<creature_physiology::Faint> PassOutFrom(const creature_panel::Values& values)
 {
 	using creature_physiology::Faint;

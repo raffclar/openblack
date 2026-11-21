@@ -646,6 +646,28 @@ void GameActionMap::PointPlayerEvent(SDL_Event& event)
 	}
 }
 
+void GameActionMap::PairClicks(SDL_Event& event)
+{
+	if (event.type == SDL_MOUSEBUTTONUP)
+	{
+		event.button.clicks = _clicks.Up(event.button.button);
+		return;
+	}
+	if (event.type != SDL_MOUSEBUTTONDOWN)
+	{
+		return;
+	}
+	// A tool tells the count of clicks that it wants. The window system's own count does not follow the game's rule:
+	// it continues to count after two, and its time and box are not those of Windows.
+	if (IsInjected(event))
+	{
+		event.button.clicks = _clicks.ToolDown(event.button.button, event.button.clicks);
+		return;
+	}
+	event.button.clicks = _clicks.Down(
+	    {.button = event.button.button, .milliseconds = event.button.timestamp, .position = {event.button.x, event.button.y}});
+}
+
 float GameActionMap::GetPointerScale() const
 {
 	if (!_pointerScaled || !Locator::windowing::has_value())
@@ -869,7 +891,7 @@ void GameActionMap::Frame()
 			SDL_Event letGo {};
 			letGo.type = SDL_MOUSEBUTTONUP;
 			letGo.button.button = button;
-			letGo.button.clicks = 1;
+			letGo.button.clicks = mouse_clicks::k_PlainPress;
 			ProcessEvent(letGo);
 		}
 	}
@@ -1093,9 +1115,9 @@ void GameActionMap::TakeHandEvents(const std::function<void(const SDL_Event&, bo
 		                                 : std::nullopt;
 		         button.has_value())
 		{
-			const auto kind = event.type == SDL_MOUSEBUTTONUP ? Input::Kind::LetGo
-			                  : event.button.clicks == 2      ? Input::Kind::DoublePress
-			                                                  : Input::Kind::Press;
+			const auto kind = event.type == SDL_MOUSEBUTTONUP                    ? Input::Kind::LetGo
+			                  : mouse_clicks::IsDoublePress(event.button.clicks) ? Input::Kind::DoublePress
+			                                                                     : Input::Kind::Press;
 			inputs.push_back({.kind = kind, .button = *button});
 		}
 	}
@@ -1149,7 +1171,7 @@ void GameActionMap::TakeHandEvents(const std::function<void(const SDL_Event&, bo
 		event.button.timestamp = Device().Ticks();
 		event.button.button = message.button == Button::Action ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
 		event.button.state = message.message == Message::Up ? SDL_RELEASED : SDL_PRESSED;
-		event.button.clicks = message.message == Message::Double ? 2 : 1;
+		event.button.clicks = message.message == Message::Double ? mouse_clicks::k_DoublePress : mouse_clicks::k_PlainPress;
 		event.button.x = _handPointer.x;
 		event.button.y = _handPointer.y;
 		hand(event, false);
@@ -1230,7 +1252,8 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	// The second press of a double click with the left button marks the double click, and presses none of the button's
 	// actions again. The mark outlasts the press: it stays, through the button's letting go, until the camera takes it.
 	// The second press holds the button until its release, which sends a release message.
-	else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks == 2)
+	else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
+	         mouse_clicks::IsDoublePress(event.button.clicks))
 	{
 		_doubleClickThisFrame = true;
 		_doubleClickHeld = true;

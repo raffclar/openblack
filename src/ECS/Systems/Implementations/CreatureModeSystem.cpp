@@ -216,7 +216,7 @@ void CreatureModeSystem::PressCreatureKey()
 
 bool CreatureModeSystem::Press(const creature_mode::Press& press)
 {
-	const auto creature = _doubleClicks.OnPress(press);
+	const auto creature = creature_mode::DoubleClickedCreature(press);
 	return creature.has_value() && Enter(*creature, creature_follow::StartDistance::KeepWhenClose);
 }
 

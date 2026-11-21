@@ -38,6 +38,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "GameDetail.h"
 #include "Hand/HandVisibility.h"
+#include "Input/MouseClicks.h"
 #include "Input/SelectPress.h"
 #include "Locator.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
@@ -65,7 +66,7 @@ namespace
 		{
 			return Event::SelectLetGo;
 		}
-		return event.button.clicks >= 2 ? Event::SelectDoublePress : Event::SelectPress;
+		return input::mouse_clicks::IsDoublePress(event.button.clicks) ? Event::SelectDoublePress : Event::SelectPress;
 	}
 	if (event.button.button == SDL_BUTTON_RIGHT && down)
 	{
@@ -204,10 +205,10 @@ public:
 		Locator::leashSystem::value().LetGoOfRope(player, place);
 	}
 	void LeashTapThing(PlayerNames player, entt::entity thing) final { Locator::leashSystem::value().TapThing(player, thing); }
-	bool LeashPressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-	                      uint32_t nowMs, bool mayTie) final
+	bool LeashPressAction(PlayerNames player, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool doublePress,
+	                      bool mayTie) final
 	{
-		return Locator::leashSystem::value().PressAction(player, rayOrigin, rayDirection, cursor, nowMs, mayTie);
+		return Locator::leashSystem::value().PressAction(player, rayOrigin, rayDirection, doublePress, mayTie);
 	}
 	bool PressRope(PlayerNames player) final { return Locator::leashSystem::value().PressRope(player); }
 	[[nodiscard]] std::optional<entt::entity> PlayersCreature(PlayerNames player) const final
@@ -434,16 +435,16 @@ void HandPressSystem::ActionPress(const SDL_Event& event, bool inTemple, bool ha
 	{
 		_actionPressTaken = _world->GrabPress(_world->Ticks(), _world->Turn());
 	}
-	// With an empty hand and the leash held, a quick second press near the first is a double tap, which ties the leash
-	// to the thing under the cursor or unties it, before anything else takes it. While the camera shows the duel, the
+	// With an empty hand and the leash held, the second press of a double click is a double tap. It ties the leash to the
+	// thing under the cursor or unties it, before anything else takes it. While the camera shows the duel, the
 	// fight takes the double tap as two presses, and the leash does not tie.
 	if (!_actionPressTaken && !handHoldsThing && !_world->MagicHandBusy())
 	{
 		glm::vec3 rayOrigin;
 		glm::vec3 rayDirection;
 		_world->Ray(cursor, rayOrigin, rayDirection);
-		_actionPressTaken =
-		    _world->LeashPressAction(_world->Player(), rayOrigin, rayDirection, cursor, _world->Ticks(), !fightTakesPress);
+		_actionPressTaken = _world->LeashPressAction(_world->Player(), rayOrigin, rayDirection,
+		                                             input::mouse_clicks::IsDoublePress(event.button.clicks), !fightTakesPress);
 	}
 	// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
 	if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !_world->MagicHandBusy() && _world->TipBubbleUnderHand())
@@ -565,7 +566,7 @@ void HandPressSystem::MovePress(const SDL_Event& event, bool inTemple, bool hand
 	_world->Ray(cursor, rayOrigin, rayDirection);
 	// The second press of a double click on a creature, anyone's, locks the camera onto it
 	const bool doubleClicked = _world->CreatureModePress(
-	    {.milliseconds = event.button.timestamp, .screen = cursor, .creature = _world->CreatureUnderCursor()});
+	    {.doublePress = input::mouse_clicks::IsDoublePress(event.button.clicks), .creature = _world->CreatureUnderCursor()});
 	// While the player's creature duels, the Move button makes a move at once in place of those queued
 	if (!doubleClicked &&
 	    _world->FightPress(rayOrigin, rayDirection, creature_fight::Button::Move, _world->Ticks(), _world->Turn()))

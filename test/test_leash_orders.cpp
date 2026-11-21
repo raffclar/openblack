@@ -78,19 +78,6 @@ TEST(LeashOrders, ADoubleTapTiesAndUnties)
 	EXPECT_EQ(OnDoubleTap({}, {.object = k_Tree}), Tap::Normal);
 }
 
-TEST(LeashOrders, DoubleTapsAreQuickAndStill)
-{
-	DoubleTaps taps;
-	EXPECT_FALSE(taps.OnPress(1000, {10.0f, 10.0f}));
-	EXPECT_TRUE(taps.OnPress(1500, {12.0f, 8.0f}));
-	// A third press starts again
-	EXPECT_FALSE(taps.OnPress(1600, {12.0f, 8.0f}));
-	// Too slow
-	EXPECT_FALSE(taps.OnPress(2101, {12.0f, 8.0f}));
-	// Moved too far
-	EXPECT_FALSE(taps.OnPress(2200, {15.0f, 8.0f}));
-}
-
 TEST(LeashOrders, TheLeashToolTips)
 {
 	EXPECT_EQ(ToolTipFor(Held(), {}), k_FocusCreatureTip);

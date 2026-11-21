@@ -49,29 +49,19 @@ enum class KeyAction : uint8_t
 };
 [[nodiscard]] KeyAction OnCreatureKey(std::optional<entt::entity> following, std::optional<entt::entity> yours);
 
-/// The Windows double click the game takes: a second press within half a second, within a small box of the first
-constexpr uint32_t k_DoubleClickMilliseconds = 500;
-constexpr float k_DoubleClickSlop = 2.0f;
-
-/// A press of the left button: when, where on the screen, and the creature under the hand if any
+/// A press of the left button: whether it is the second press of a double click (see input::mouse_clicks), and the
+/// creature under the hand if any
 struct Press
 {
-	uint32_t milliseconds {0};
-	glm::vec2 screen {0.0f};
+	bool doublePress {false};
 	std::optional<entt::entity> creature;
 };
 
-/// Tells double clicks on creatures from the presses of the left button: the second of two quick presses on the same
-/// creature, without the mouse moving off the first, is a double click on it
-class DoubleClicks
+/// The creature that a press locks onto: the creature under the hand at the second press of a double click
+[[nodiscard]] constexpr std::optional<entt::entity> DoubleClickedCreature(const Press& press) noexcept
 {
-public:
-	/// The creature double clicked on by this press, if it makes one
-	[[nodiscard]] std::optional<entt::entity> OnPress(const Press& press);
-
-private:
-	std::optional<Press> _last;
-};
+	return press.doublePress ? press.creature : std::nullopt;
+}
 
 /// Whether a creature's status at 100% has it pass out, as the panel shows it: 100% damage is no life left, 100%
 /// hunger no energy left and 100% tiredness exhaustion. It agrees with the body's own fainting.
