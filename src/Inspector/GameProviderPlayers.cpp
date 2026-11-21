@@ -636,6 +636,7 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                                 {"leash_picker_open", gestures.IsLeashPickerOpen()},
 		                                 {"circle_seconds_left", gestures.GetCircleSecondsLeft()},
 		                                 {"asked_power_up", static_cast<uint32_t>(gestures.GetAskedPowerUp())},
+		                                 {"kept_gesture", static_cast<uint32_t>(gestures.GetKeptGesture())},
 		                                 {"events_queue", Locator::gestureEvents::has_value()}};
 		                  // The row of hints at the bottom right: each hinted gesture and its leash, and the row's fade
 		                  Json hints = Json::array();

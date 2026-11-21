@@ -256,13 +256,33 @@ enum class SelectionStep : uint8_t
 [[nodiscard]] bool ChainFollows(const std::optional<HandContext::Seed>& seed, bool seedTurnedOnLand);
 /// Whether the help counts a cast of the miracle in the hand as a cast with a power-up. The miracle must be ready, not
 /// cast and from an icon, and the hand must have asked for a power-up. A miracle that a gesture sizes must have that
-/// gesture as the last gesture drawn.
-[[nodiscard]] bool CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture);
+/// gesture as the gesture that the hand keeps for the cast.
+[[nodiscard]] bool CountsPoweredUpCast(const HandContext::Seed& seed, GestureType keptGesture);
 /// Whether the cast of a miracle passes the check of the gesture that sizes it. A miracle that no gesture sizes always
 /// passes. Another miracle passes when the gesture kept for the cast is its sizing gesture.
 [[nodiscard]] constexpr bool PassesSizingCheck(GestureType sizingGesture, GestureType keptGesture)
 {
 	return sizingGesture == GestureType::None || keptGesture == sizingGesture;
+}
+/// The gesture that the hand keeps for the check of a cast, after the hand recognises a gesture and does its purpose.
+/// The kept gesture has no time limit. Only these changes occur:
+/// - The circle and a power-up gesture become the kept gesture.
+/// - The scribbles of a seed, of the selection and of the leash picker clear it.
+/// - The spiral that opens the selection, a gesture of the selection, the R, the leash gesture and a leash pick clear it.
+/// - The other gestures do not change it: the scribbles of the empty hand and of a thing, the fight gestures and the
+///   square wave.
+[[nodiscard]] GestureType KeptAfter(Purpose purpose, GestureType gesture, GestureType kept);
+/// The gesture that the hand keeps when it casts the seed in it at the land, before the check: the gesture of the
+/// circle while the hand remembers the circle, else none
+[[nodiscard]] constexpr GestureType KeptForLandCast(bool circleRemembered, GestureType circleGesture)
+{
+	return circleRemembered ? circleGesture : GestureType::None;
+}
+/// The gesture that the hand keeps after a cast that passed its check. A cast with a power-up asked for keeps the
+/// power-up asked for. Another cast does not change the kept gesture.
+[[nodiscard]] constexpr GestureType KeptAfterCast(GestureType kept, bool poweredUp, GestureType askedPowerUp)
+{
+	return poweredUp ? askedPowerUp : kept;
 }
 /// The power-up gestures that the hand offers for the seed in it when it starts its power-ups: the gesture of each level
 /// that the seed has and that is offered. A level is offered when the player may cast its miracle and the icon of the
