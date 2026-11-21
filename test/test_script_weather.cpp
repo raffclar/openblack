@@ -361,3 +361,66 @@ TEST(ScriptWeather, ANewStormOfAWeatherThingStandsStillWhereTheLastStormWas)
 	EXPECT_FALSE(storm.dead);
 	EXPECT_EQ(storm.deadTurns, 0);
 }
+
+TEST(ScriptWeather, AStormOfAMiracleRainsAtTheSpeedOfOneAndHasNoCloudsOfItsOwn)
+{
+	const openblack::ecs::components::WeatherInfo effect {.temperature = 20, .rain = 100, .overcast = 80};
+	const auto storm = weather::StormOfAMiracle(60.0f, 150.0f, 4.0f, 90.0f, effect);
+	// It is made at the origin of the world, and it moves towards that point
+	EXPECT_EQ(storm.position, glm::vec3(0.0f));
+	EXPECT_EQ(storm.destination, glm::vec3(0.0f));
+	EXPECT_EQ(storm.currentPosition, glm::vec3(0.0f));
+	EXPECT_EQ(storm.speed, 1.0f);
+	EXPECT_TRUE(storm.arrived);
+	EXPECT_EQ(storm.rainSpeed, 1.0f);
+	EXPECT_EQ(storm.cloudCount, 0);
+	EXPECT_EQ(storm.strength, 1.0f);
+	EXPECT_EQ(storm.currentStrength, 0.0f);
+	EXPECT_EQ(storm.lastsFor, 1e9f);
+	EXPECT_EQ(storm.fadeTime, 4.0f);
+	EXPECT_EQ(storm.cloudHeight, 90.0f);
+	EXPECT_EQ(storm.innerRadius, 60.0f);
+	EXPECT_EQ(storm.outerRadius, 150.0f);
+	EXPECT_EQ(storm.thunderWait.y, 0.0f);
+	EXPECT_EQ(storm.boltWait.y, 0.0f);
+	EXPECT_EQ(storm.effect.rain, 100);
+}
+
+TEST(ScriptWeather, AStormOfAMiracleStaysATenthOfAUnitFromItsMiracleTowardsTheOriginOfTheWorld)
+{
+	auto storm = weather::StormOfAMiracle(60.0f, 150.0f, 4.0f, 90.0f, {});
+	// The miracle moves its storm. The present place stays until the step of the storm.
+	weather::MoveStormOfAMiracle(storm, {10.0f, 5.0f, 0.0f});
+	EXPECT_EQ(storm.currentPosition, glm::vec3(0.0f));
+	EXPECT_EQ(storm.destination, glm::vec3(0.0f));
+
+	// One step of a turn at a speed of 1 goes a tenth of a unit towards the origin
+	weather::TravelStorm(storm, 0.1f);
+	EXPECT_FLOAT_EQ(storm.currentPosition.x, 9.9f);
+	EXPECT_EQ(storm.currentPosition.y, 5.0f);
+	EXPECT_EQ(storm.currentPosition.z, 0.0f);
+	EXPECT_EQ(storm.position, storm.currentPosition);
+	EXPECT_FALSE(storm.arrived);
+
+	// The miracle moves it again before the next step, so the storm never gets far from the miracle
+	weather::MoveStormOfAMiracle(storm, {10.0f, 5.0f, 0.0f});
+	weather::TravelStorm(storm, 0.1f);
+	EXPECT_FLOAT_EQ(storm.currentPosition.x, 9.9f);
+
+	// Near the origin, it arrives there
+	weather::MoveStormOfAMiracle(storm, {0.0005f, 0.0f, 0.0f});
+	weather::TravelStorm(storm, 0.1f);
+	EXPECT_EQ(storm.currentPosition, glm::vec3(0.0f));
+	EXPECT_TRUE(storm.arrived);
+}
+
+TEST(ScriptWeather, AStormWithNoSpeedStaysAtItsPoint)
+{
+	Storm storm {};
+	storm.position = {3.0f, 0.0f, 4.0f};
+	storm.destination = {30.0f, 0.0f, 40.0f};
+	storm.speed = 0.0f;
+	weather::TravelStorm(storm, 0.1f);
+	EXPECT_EQ(storm.currentPosition, storm.position);
+	EXPECT_EQ(storm.position, glm::vec3(3.0f, 0.0f, 4.0f));
+}

@@ -26,6 +26,15 @@ namespace
 constexpr float k_PercentOfWhole = 100.0f;
 /// A storm the wind blows moves this much of the wind's bytes a turn
 constexpr float k_WindDrift = 0.01f;
+/// Each new storm moves at this speed towards its destination
+constexpr float k_NewStormSpeed = 1.0f;
+/// The clouds and the rain of a storm that nothing else sets
+constexpr float k_DefaultCloudShade = 0.5f;
+constexpr float k_DefaultRainSpeed = 1.0f;
+/// A miracle's storm lives until its miracle takes it away
+constexpr float k_MiracleStormLife = 1e9f;
+/// A storm this near its destination arrives
+constexpr float k_ArrivalDistance = 0.001f;
 
 int8_t WholeByte(float value)
 {
@@ -272,6 +281,62 @@ components::Storm script_weather::StormFromSettings(const components::Storm& las
 	    .boltWait = last.boltWait,
 	    .climate = entt::null,
 	};
+}
+
+components::Storm script_weather::StormOfAMiracle(float innerRadius, float outerRadius, float fadeSeconds, float cloudHeight,
+                                                  const components::WeatherInfo& effect)
+{
+	return {
+	    .position = glm::vec3(0.0f),
+	    .destination = glm::vec3(0.0f),
+	    .speed = k_NewStormSpeed,
+	    .arrived = true,
+	    .innerRadius = innerRadius,
+	    .outerRadius = outerRadius,
+	    .fadeTime = fadeSeconds,
+	    .lastsFor = k_MiracleStormLife,
+	    .strength = 1.0f,
+	    .cloudHeight = cloudHeight,
+	    // The particles of the miracle are its clouds. Thus its storm has no clouds of its own.
+	    .cloudCount = 0,
+	    .cloudShade = k_DefaultCloudShade,
+	    .rainSpeed = k_DefaultRainSpeed,
+	    .age = 0.0f,
+	    .currentPosition = glm::vec3(0.0f),
+	    .currentInnerRadius = 0.0f,
+	    .currentStrength = 0.0f,
+	    .effect = effect,
+	    .climate = entt::null,
+	};
+}
+
+void script_weather::MoveStormOfAMiracle(components::Storm& storm, glm::vec3 centre)
+{
+	storm.position = centre;
+}
+
+void script_weather::TravelStorm(components::Storm& storm, float seconds)
+{
+	storm.currentPosition = storm.position;
+	if (storm.speed == 0.0f)
+	{
+		return;
+	}
+	const auto toDestination = storm.destination - storm.currentPosition;
+	const auto distance = std::sqrt((toDestination.z * toDestination.z) + (toDestination.x * toDestination.x));
+	if (!(distance > k_ArrivalDistance))
+	{
+		storm.currentPosition = storm.destination;
+		storm.position = storm.destination;
+		storm.arrived = true;
+		return;
+	}
+	const auto travel = seconds * storm.speed;
+	const auto step = travel < distance ? travel / distance : 1.0f;
+	storm.currentPosition.x += toDestination.x * step;
+	storm.currentPosition.z += toDestination.z * step;
+	storm.position = storm.currentPosition;
+	storm.arrived = false;
 }
 
 script_weather::ThingAfterTurn script_weather::AfterTurn(bool stormLives, bool heldByScript)

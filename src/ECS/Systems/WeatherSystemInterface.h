@@ -46,8 +46,8 @@ struct ForcedStorm
 	int32_t cloudCount {8};
 };
 
-/// A storm a miracle lays over the land around a point. It comes in over its fading time, then stays at full strength,
-/// standing still, until the miracle moves it or takes it away; it has no lightning of its own.
+/// A storm a miracle lays over the land around a point. It comes in over its fading time, then stays at full strength
+/// until the miracle takes it away. It has no lightning of its own. Each step, the miracle moves it under its clouds.
 struct MiracleStorm
 {
 	glm::vec3 centre {0.0f};

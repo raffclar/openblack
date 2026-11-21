@@ -103,10 +103,7 @@ constexpr int k_StormPlacementTries = 20;
 constexpr float k_TurnDuration = 0.1f;
 /// How far from the camera a storm forced over the island strikes, along x and z: within the thunder's full volume
 constexpr float k_StrikeNearCamera = 300.0f;
-constexpr float k_ArrivalDistance = 0.001f;
 constexpr float k_EffectScale = 256.0f;
-/// A miracle's storm lives until its miracle takes it away
-constexpr float k_MiracleStormLife = 1e9f;
 
 int8_t ClampByte(int32_t value)
 {
@@ -714,26 +711,7 @@ bool WeatherSystem::StepStorm(Storm& storm)
 	storm.currentStrength = faded.strength;
 	storm.currentInnerRadius = faded.innerRadius;
 
-	storm.currentPosition = storm.position;
-	if (storm.speed != 0.0f)
-	{
-		const auto toDestination = storm.destination - storm.currentPosition;
-		const auto distance = std::sqrt((toDestination.x * toDestination.x) + (toDestination.z * toDestination.z));
-		if (distance <= k_ArrivalDistance)
-		{
-			storm.currentPosition = storm.destination;
-			storm.position = storm.destination;
-			storm.arrived = true;
-		}
-		else
-		{
-			const auto step = k_TurnDuration * storm.speed < distance ? k_TurnDuration * storm.speed / distance : 1.0f;
-			storm.currentPosition.x += toDestination.x * step;
-			storm.currentPosition.z += toDestination.z * step;
-			storm.position = storm.currentPosition;
-			storm.arrived = false;
-		}
-	}
+	script_weather::TravelStorm(storm, k_TurnDuration);
 
 	// Once faded in, it flashes now and then, at waits drawn from the game's numbers
 	if (storm.fadeTime < storm.age)
@@ -1122,24 +1100,12 @@ entt::entity WeatherSystem::AddMiracleStorm(const MiracleStorm& miracle)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
-	auto& storm = registry.Assign<Storm>(entity);
-	storm.position = miracle.centre;
-	storm.destination = miracle.centre;
-	storm.currentPosition = miracle.centre;
-	storm.speed = 0.0f;
-	storm.arrived = true;
-	storm.innerRadius = miracle.innerRadius;
-	storm.outerRadius = miracle.outerRadius;
-	storm.fadeTime = std::max(miracle.fadeSeconds, k_TurnDuration);
 	// It lasts as long as its miracle, which takes it away
-	storm.lastsFor = k_MiracleStormLife;
-	storm.strength = 1.0f;
-	storm.cloudHeight = miracle.cloudHeight;
-	// The miracle's own clouds are its particles: its storm gathers none of its own
-	storm.cloudCount = 0;
-	storm.rainSpeed = registry.Get<const Climate>(GetGlobalClimate()).stormSpeed;
-	storm.effect = miracle.effect;
-	storm.climate = entt::null;
+	auto& storm = registry.Assign<Storm>(entity, script_weather::StormOfAMiracle(miracle.innerRadius, miracle.outerRadius,
+	                                                                             std::max(miracle.fadeSeconds, k_TurnDuration),
+	                                                                             miracle.cloudHeight, miracle.effect));
+	// The miracle puts it under its clouds in the same step
+	script_weather::MoveStormOfAMiracle(storm, miracle.centre);
 	storm.serial = _nextStormSerial++;
 	return entity;
 }
@@ -1152,9 +1118,8 @@ bool WeatherSystem::MoveMiracleStorm(entt::entity entity, glm::vec3 centre)
 	{
 		return false;
 	}
-	storm->position = centre;
-	storm->destination = centre;
-	storm->currentPosition = centre;
+	// The storm goes from the new point at its next step
+	script_weather::MoveStormOfAMiracle(*storm, centre);
 	return true;
 }
 
