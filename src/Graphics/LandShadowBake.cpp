@@ -28,6 +28,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "Common/SameBits.h"
 #include "Common/SideThread.h"
 #include "Common/WorkerPool.h"
@@ -1076,9 +1077,9 @@ std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job
 		{
 			for (int z = 0; z < side; ++z)
 			{
-				const auto covered = coverage[static_cast<size_t>(x * side + z)];
+				const auto covered = coverage[ToIndex(x * side + z)];
 				const int row = job.rowsFromFarEnd ? side - 1 - z : z;
-				shades[static_cast<size_t>(row * side + x)] = covered != 0 ? tree_shadows::Shade(covered, lowResolution) : 255;
+				shades[ToIndex(row * side + x)] = covered != 0 ? tree_shadows::Shade(covered, lowResolution) : 255;
 			}
 		}
 		results[i].position = block.position;

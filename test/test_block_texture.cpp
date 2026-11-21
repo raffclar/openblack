@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/BlockTexture.h"
+#include "Common/IntegerSteps.h"
 #include "Common/WorkerPool.h"
 
 namespace block_texture = openblack::block_texture;
@@ -252,7 +253,7 @@ std::vector<uint16_t> PaintTexelByTexel(std::span<const LNDCell> cells, const bl
 	{
 		for (int z = firstCell.y * k_Per; z < (firstCell.y * k_Per) + columns; ++z)
 		{
-			const auto cellIndex = static_cast<size_t>(((x / k_Per) * block_texture::k_CellsPerSide) + (z / k_Per));
+			const auto cellIndex = openblack::ToIndex(((x / k_Per) * block_texture::k_CellsPerSide) + (z / k_Per));
 			if ((cells[cellIndex].flags & 0x02) != 0)
 			{
 				continue;
@@ -260,13 +261,13 @@ std::vector<uint16_t> PaintTexelByTexel(std::span<const LNDCell> cells, const bl
 			const std::array corners = {&cells[cellIndex], &cells[cellIndex + 1],
 			                            &cells[cellIndex + block_texture::k_CellsPerSide + 1],
 			                            &cells[cellIndex + block_texture::k_CellsPerSide]};
-			const auto& weights = weightsOf.at(static_cast<size_t>(((x % k_Per) * k_Per) + (z % k_Per)));
+			const auto& weights = weightsOf.at(openblack::ToIndex(((x % k_Per) * k_Per) + (z % k_Per)));
 			int32_t h = 0;
 			for (size_t k = 0; k < corners.size(); ++k)
 			{
 				h += static_cast<int32_t>(weights.at(k)) * corners.at(k)->altitude;
 			}
-			const auto index = static_cast<size_t>((x * block_texture::k_Side) + z);
+			const auto index = openblack::ToIndex((x * block_texture::k_Side) + z);
 			std::array<uint16_t, 4> painted {};
 			for (size_t k = 0; k < corners.size(); ++k)
 			{
@@ -275,7 +276,7 @@ std::vector<uint16_t> PaintTexelByTexel(std::span<const LNDCell> cells, const bl
 			}
 			const bool one = std::ranges::all_of(
 			    corners, [&corners](const LNDCell* c) { return c->properties.country == corners[0]->properties.country; });
-			texels[static_cast<size_t>(((x - (firstCell.x * k_Per)) * columns) + (z - (firstCell.y * k_Per)))] =
+			texels[openblack::ToIndex(((x - (firstCell.x * k_Per)) * columns) + (z - (firstCell.y * k_Per)))] =
 			    one ? painted[0] : block_texture::BlendCorners(painted, weights);
 		}
 	}
@@ -400,7 +401,7 @@ TEST(BlockTexture, PutCellTexelsMakesAKeptBlockAsANewPaintOfIt)
 	// 10.
 	for (const int x : {7, 8})
 	{
-		cells[static_cast<size_t>((x * block_texture::k_CellsPerSide) + 10)].altitude = 40;
+		cells[openblack::ToIndex((x * block_texture::k_CellsPerSide) + 10)].altitude = 40;
 	}
 	const glm::ivec2 first {6, 9};
 	const glm::ivec2 count {3, 2};

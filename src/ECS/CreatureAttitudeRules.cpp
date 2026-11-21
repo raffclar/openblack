@@ -18,6 +18,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/IntegerSteps.h"
 
 using namespace openblack;
 namespace creature_attitude = openblack::ecs::creature_attitude;
@@ -145,7 +146,7 @@ bool creature_attitude::Turn(Feeling& feeling, std::optional<Attitude> shown, ui
 	}
 	if (feeling.attitude != Attitude::Indifferent && turnsPerSecond != 0)
 	{
-		const auto seconds = static_cast<float>((turn - feeling.shownTurn) / turnsPerSecond);
+		const auto seconds = static_cast<float>(WholeQuotient(turn - feeling.shownTurn, turnsPerSecond));
 		if (seconds > LapseSeconds(feeling.attitude))
 		{
 			feeling.attitude = Attitude::Indifferent;

@@ -164,8 +164,8 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 		const auto mesh = meshManager.Handle(meshId);
 		submitDesc.instanceDesc =
 		    std::make_unique<graphics::InstanceDesc>(renderCtx.treeInstanceUniformBuffer, placers.offset, placers.count);
-		const static auto identity = glm::mat4(1.0f);
-		submitDesc.modelMatrices = &identity;
+		const static auto k_Identity = glm::mat4(1.0f);
+		submitDesc.modelMatrices = &k_Identity;
 		submitDesc.matrixCount = 1;
 		if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
 		{

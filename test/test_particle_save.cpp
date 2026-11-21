@@ -47,12 +47,12 @@ constexpr float k_Step = 0.1f;
 
 const entt::meta_ctx& Context()
 {
-	static const auto context = []() {
+	static const auto k_Context = []() {
 		auto made = std::make_unique<entt::meta_ctx>();
 		reflection::RegisterComponents(*made);
 		return made;
 	}();
-	return *context;
+	return *k_Context;
 }
 
 /// Flat land, shields that the world finds, things to strike
@@ -183,7 +183,7 @@ protected:
 		auto file = psys::ParticleFile::Parse(text);
 		EXPECT_TRUE(file.has_value()) << text;
 		auto effect = std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                       EffectServices {classes, world, random, noise}, origin, 1.0f, false);
+		                                       EffectServices {_classes, _world, _random, _noise}, origin, 1.0f, false);
 		effect->SetPlayer(0);
 		return effect;
 	}
@@ -238,16 +238,16 @@ protected:
 	/// Steps the saved effect and the loaded one from the same random numbers, and checks that they draw the same
 	void ExpectSameSteps(Effect& saved, Effect& loaded, int steps)
 	{
-		const auto seeds = random.GetSeeds();
-		const auto stream = random.GetParticleStream();
+		const auto seeds = _random.GetSeeds();
+		const auto stream = _random.GetParticleStream();
 		std::vector<std::vector<float>> before;
 		for (int i = 0; i < steps; ++i)
 		{
 			saved.Step(k_Step);
 			before.push_back(Drawn(saved));
 		}
-		random.SetSeeds(seeds);
-		random.SetParticleStream(stream);
+		_random.SetSeeds(seeds);
+		_random.SetParticleStream(stream);
 		for (int i = 0; i < steps; ++i)
 		{
 			loaded.Step(k_Step);
@@ -255,11 +255,11 @@ protected:
 		}
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
-	FakeSpell spell;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
+	FakeSpell _spell;
 };
 } // namespace
 
@@ -303,7 +303,7 @@ TEST_F(ParticleSaveTest, AFireballInFlightComesBackWithItsTrailAndFliesOn)
 	           "PROPERTY Group INTEGER 1\nPROPERTY PCreator PERSIS_PNTR Ball\nPROPERTY NumAtoms INTEGER 4\n") +
 	    Object("EventAlways", "Event", "PROPERTY Group INTEGER 0\n");
 	auto saved = Make(text);
-	saved->SetSink(&spell);
+	saved->SetSink(&_spell);
 	saved->SetDirection({0.0f, 0.0f, 30.0f});
 	saved->SetProcessInfo({.handPosition = {0.0f, 5.0f, 0.0f}});
 	for (int i = 0; i < 6; ++i)
@@ -321,13 +321,13 @@ TEST_F(ParticleSaveTest, AFireballInFlightComesBackWithItsTrailAndFliesOn)
 	EXPECT_EQ(loaded->GetDirection(), saved->GetDirection());
 	EXPECT_EQ(loaded->GetProcessInfo().handPosition, saved->GetProcessInfo().handPosition);
 	EXPECT_EQ(Save(*loaded).effects, bytes.effects);
-	spell.events.clear();
+	_spell.events.clear();
 	ExpectSameSteps(*saved, *loaded, 20);
 	// Each says where the ball is on every step, as before the load
-	ASSERT_EQ(loadedSpell.events.size(), spell.events.size());
-	for (size_t i = 0; i < spell.events.size(); ++i)
+	ASSERT_EQ(loadedSpell.events.size(), _spell.events.size());
+	for (size_t i = 0; i < _spell.events.size(); ++i)
 	{
-		EXPECT_EQ(loadedSpell.events[i].position, spell.events[i].position);
+		EXPECT_EQ(loadedSpell.events[i].position, _spell.events[i].position);
 	}
 }
 
@@ -337,12 +337,12 @@ TEST_F(ParticleSaveTest, AShieldComesBackAsTheShieldOfTheLoadedEffectWithWhereIt
 	    Header() +
 	    Object("UR_AddDefensiveSphere", "Sphere", "PROPERTY Group INTEGER 0\nPROPERTY SphereRadius PERSIS_PNTR Radius\n") +
 	    Object("ConstFloatProvider", "Radius", "PROPERTY ConstValue FLOAT 10\n");
-	spell.self = static_cast<entt::entity>(5);
+	_spell.self = static_cast<entt::entity>(5);
 	auto saved = Make(text, {0.0f, 0.0f, 30.0f});
-	saved->SetSink(&spell);
+	saved->SetSink(&_spell);
 	saved->Step(k_Step);
-	ASSERT_EQ(world.shields.size(), 1u);
-	const auto shield = world.shields.front().lock();
+	ASSERT_EQ(_world.shields.size(), 1u);
+	const auto shield = _world.shields.front().lock();
 	shield->impacts.emplace_back(0.0f, 0.0f, 20.0f);
 	const auto bytes = Save(*saved);
 	auto loaded = Make(text);
@@ -352,7 +352,7 @@ TEST_F(ParticleSaveTest, AShieldComesBackAsTheShieldOfTheLoadedEffectWithWhereIt
 	EXPECT_EQ(back.owner, loaded.get());
 	EXPECT_EQ(back.centre, shield->centre);
 	EXPECT_EQ(back.radius, 10.0f);
-	EXPECT_EQ(back.spell, spell.self);
+	EXPECT_EQ(back.spell, _spell.self);
 	EXPECT_EQ(back.impacts, shield->impacts);
 	// The effect holds the same shield as the table: a second save gives the same bytes
 	const auto again = Save(*loaded);
@@ -362,7 +362,7 @@ TEST_F(ParticleSaveTest, AShieldComesBackAsTheShieldOfTheLoadedEffectWithWhereIt
 
 TEST_F(ParticleSaveTest, ABoltComesBackWithItsTargetsAndStrikesOnAsBefore)
 {
-	world.candidates = {{.object = static_cast<entt::entity>(1), .position = {0.0f, 0.0f, 20.0f}, .height = 10.0f}};
+	_world.candidates = {{.object = static_cast<entt::entity>(1), .position = {0.0f, 0.0f, 20.0f}, .height = 10.0f}};
 	const auto text = Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
 	                  Object("UR_Lightning", "Bolt",
 	                         "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
@@ -371,7 +371,7 @@ TEST_F(ParticleSaveTest, ABoltComesBackWithItsTargetsAndStrikesOnAsBefore)
 	const particles::ProcessInfo info {
 	    .handPosition = {0.0f, 15.0f, 0.0f}, .cameraForward = {0.0f, 0.0f, 1.0f}, .enabled = true};
 	auto saved = Make(text);
-	saved->SetSink(&spell);
+	saved->SetSink(&_spell);
 	saved->SetProcessInfo(info);
 	for (int i = 0; i < 5; ++i)
 	{
@@ -397,7 +397,7 @@ TEST_F(ParticleSaveTest, AGatheringOfCloudsComesBackAndGathersOnAsBefore)
 	                         "PROPERTY ScaleFloatProvider PERSIS_PNTR Size\nPROPERTY CloudHeight PERSIS_PNTR Size\n") +
 	                  Object("ConstFloatProvider", "Size", "PROPERTY ConstValue FLOAT 30\n");
 	auto saved = Make(text, {50.0f, 0.0f, 50.0f});
-	saved->SetSink(&spell);
+	saved->SetSink(&_spell);
 	saved->SetProcessInfo({.cameraForward = {0.0f, 0.0f, 1.0f}, .power = 1.0f});
 	for (int i = 0; i < 8; ++i)
 	{
@@ -407,7 +407,7 @@ TEST_F(ParticleSaveTest, AGatheringOfCloudsComesBackAndGathersOnAsBefore)
 	const auto bytes = Save(*saved);
 	auto loaded = Make(text);
 	Load(bytes, *loaded);
-	loaded->RestoreSink(&spell);
+	loaded->RestoreSink(&_spell);
 	EXPECT_EQ(Save(*loaded).effects, bytes.effects);
 	ExpectSameSteps(*saved, *loaded, 15);
 }
@@ -530,12 +530,12 @@ std::vector<int> SymbolsDrawn(const Effect& effect)
 
 TEST_F(ParticleSaveTest, TheSymbolsOfBeliefOverATotemComeBackDrawnForTheSamePlayers)
 {
-	world.townCentre = static_cast<entt::entity>(7);
-	world.centreBelief = {.totemTop = {10.0f, 20.0f, 30.0f}, .beliefs = {300.0f, 0.0f, 100.0f}};
-	world.players = {0, 2};
+	_world.townCentre = static_cast<entt::entity>(7);
+	_world.centreBelief = {.totemTop = {10.0f, 20.0f, 30.0f}, .beliefs = {300.0f, 0.0f, 100.0f}};
+	_world.players = {0, 2};
 	const auto text = TownBeliefEffect();
 	auto saved = Make(text);
-	saved->AddTarget(world.townCentre);
+	saved->AddTarget(_world.townCentre);
 	for (int i = 0; i < 4; ++i)
 	{
 		saved->Step(k_Step);
@@ -552,12 +552,12 @@ TEST_F(ParticleSaveTest, TheSymbolsOfBeliefOverATotemComeBackDrawnForTheSamePlay
 
 TEST_F(ParticleSaveTest, TheSymbolsOfBeliefInASaveThatKeptNoCreatorForThemAreDrawnAgain)
 {
-	world.townCentre = static_cast<entt::entity>(7);
-	world.centreBelief = {.totemTop = {10.0f, 20.0f, 30.0f}, .beliefs = {300.0f}};
-	world.players = {0};
+	_world.townCentre = static_cast<entt::entity>(7);
+	_world.centreBelief = {.totemTop = {10.0f, 20.0f, 30.0f}, .beliefs = {300.0f}};
+	_world.players = {0};
 	const auto text = TownBeliefEffect();
 	auto saved = Make(text);
-	saved->AddTarget(world.townCentre);
+	saved->AddTarget(_world.townCentre);
 	for (int i = 0; i < 4; ++i)
 	{
 		saved->Step(k_Step);

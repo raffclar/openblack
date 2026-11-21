@@ -238,19 +238,19 @@ protected:
 		auto file = psys::ParticleFile::Parse(std::string(k_ArtefactGlow));
 		EXPECT_TRUE(file.has_value());
 		return std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                EffectServices {classes, world, random, noise}, glm::vec3(0.0f), 1.0f, false);
+		                                EffectServices {_classes, _world, _random, _noise}, glm::vec3(0.0f), 1.0f, false);
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	GlowWorld world;
-	GlowRandom random;
-	maths::ValueNoise noise;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	GlowWorld _world;
+	GlowRandom _random;
+	maths::ValueNoise _noise;
 };
 
 TEST_F(VolumeGlowEffectTest, AnArtefactsShellIsKeptOnItInItsOwnersColourAndDrawnWhereItStands)
 {
 	const auto rock = static_cast<entt::entity>(7);
-	world.objects[rock] = {10.0f, 2.0f, 20.0f};
+	_world.objects[rock] = {10.0f, 2.0f, 20.0f};
 	auto effect = Make();
 	EXPECT_TRUE(effect->UnportedClasses().empty());
 	effect->SetPlayer(0);
@@ -276,7 +276,7 @@ TEST_F(VolumeGlowEffectTest, AnArtefactsShellIsKeptOnItInItsOwnersColourAndDrawn
 
 	draw::Frame frame;
 	draw::Sources sources;
-	sources.objectPosition = [this](entt::entity object) { return world.ObjectPosition(object); };
+	sources.objectPosition = [this](entt::entity object) { return _world.ObjectPosition(object); };
 	draw::AddEffect(frame, walk, draw::DrawPath::Sorted, glm::vec3(0.0f), 0, sources);
 	ASSERT_EQ(frame.shells.size(), 1u);
 	ASSERT_EQ(frame.items.size(), 1u);
@@ -288,7 +288,7 @@ TEST_F(VolumeGlowEffectTest, AnArtefactsShellIsKeptOnItInItsOwnersColourAndDrawn
 	EXPECT_EQ(frame.shells[0].uvOffset, glm::vec2(0.0f));
 
 	// The object gone, its shell goes with it
-	world.objects.clear();
+	_world.objects.clear();
 	effect->Step(k_Step);
 	EXPECT_EQ(effect->AtomCount(), 0u);
 }
@@ -296,7 +296,7 @@ TEST_F(VolumeGlowEffectTest, AnArtefactsShellIsKeptOnItInItsOwnersColourAndDrawn
 TEST_F(VolumeGlowEffectTest, AWeakerEffectReachesLessAndATargetThatIsntThereMakesNoShell)
 {
 	const auto rock = static_cast<entt::entity>(7);
-	world.objects[rock] = {0.0f, 0.0f, 0.0f};
+	_world.objects[rock] = {0.0f, 0.0f, 0.0f};
 	auto effect = Make();
 	auto info = effect->GetProcessInfo();
 	info.power = 0.5f;
@@ -317,8 +317,8 @@ TEST_F(VolumeGlowEffectTest, AWeakerEffectReachesLessAndATargetThatIsntThereMake
 TEST_F(VolumeGlowEffectTest, TheShellsTextureSlidesByTheGamesTimeAndStandsStillWhilePaused)
 {
 	const auto rock = static_cast<entt::entity>(7);
-	world.objects[rock] = {0.0f, 0.0f, 0.0f};
-	world.gameMilliseconds = 10000;
+	_world.objects[rock] = {0.0f, 0.0f, 0.0f};
+	_world.gameMilliseconds = 10000;
 	auto effect = Make();
 	effect->AddTarget(rock);
 	for (int i = 0; i < 3; ++i)

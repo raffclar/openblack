@@ -34,7 +34,7 @@ float EdgeFormula(uint32_t climb)
 
 const std::array<float, k_EdgeEntries>& EdgeTable()
 {
-	static const auto table = [] {
+	static const auto k_Table = [] {
 		std::array<float, k_EdgeEntries> t {};
 		for (uint32_t i = 0; i < k_EdgeEntries; ++i)
 		{
@@ -42,12 +42,12 @@ const std::array<float, k_EdgeEntries>& EdgeTable()
 		}
 		return t;
 	}();
-	return table;
+	return k_Table;
 }
 
 const std::array<float, k_LengthEntries>& LengthTable()
 {
-	static const auto table = [] {
+	static const auto k_Table = [] {
 		std::array<float, k_LengthEntries> t {};
 		t[0] = 1.0f;
 		for (uint32_t j = 1; j < k_LengthEntries; ++j)
@@ -56,7 +56,7 @@ const std::array<float, k_LengthEntries>& LengthTable()
 		}
 		return t;
 	}();
-	return table;
+	return k_Table;
 }
 } // namespace
 

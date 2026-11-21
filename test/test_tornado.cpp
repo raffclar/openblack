@@ -292,9 +292,9 @@ protected:
 		auto file = psys::ParticleFile::Parse(TornadoFile());
 		EXPECT_TRUE(file.has_value());
 		auto effect = std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                       EffectServices {classes, world, random, noise}, glm::vec3(100.0f, 0.0f, 100.0f),
-		                                       40.0f, false);
-		effect->SetSink(&spell);
+		                                       EffectServices {_classes, _world, _random, _noise},
+		                                       glm::vec3(100.0f, 0.0f, 100.0f), 40.0f, false);
+		effect->SetSink(&_spell);
 		return effect;
 	}
 
@@ -303,24 +303,24 @@ protected:
 		for (int i = 0; i < steps; ++i)
 		{
 			effect.Step(k_Step);
-			++world.turn;
+			++_world.turn;
 		}
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
-	FakeSpell spell;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
+	FakeSpell _spell;
 };
 
 TEST_F(TornadoRuleTest, ItStandsOnTheLandRoaringAndStrikesItsFootEveryStep)
 {
 	auto effect = Make();
 	Run(*effect, 10);
-	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Point), 10u);
-	ASSERT_EQ(world.sounds.size(), 1u);
-	EXPECT_EQ(world.sounds.front()->sound.action.sound, "SOUND_SPELL_TORNADO");
+	EXPECT_EQ(_spell.Count(SpellEventInfo::Type::Point), 10u);
+	ASSERT_EQ(_world.sounds.size(), 1u);
+	EXPECT_EQ(_world.sounds.front()->sound.action.sound, "SOUND_SPELL_TORNADO");
 	// The foot wanders near where it was cast, on the land
 	const auto foot = effect->GetOrigin();
 	EXPECT_FLOAT_EQ(foot.y, 0.0f);
@@ -333,32 +333,32 @@ TEST_F(TornadoRuleTest, ItStandsOnTheLandRoaringAndStrikesItsFootEveryStep)
 	EXPECT_EQ(dust.front().rgb[2], 0);
 	// Closed down, it stops striking
 	effect->CloseDown();
-	const auto struck = spell.Count(SpellEventInfo::Type::Point);
+	const auto struck = _spell.Count(SpellEventInfo::Type::Point);
 	Run(*effect, 5);
-	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Point), struck);
+	EXPECT_EQ(_spell.Count(SpellEventInfo::Type::Point), struck);
 }
 
 TEST_F(TornadoRuleTest, OnceFadedInItPicksUpWhatItReachesEveryThirdTurnAndFlingsItWhenClosed)
 {
 	const auto villager = static_cast<entt::entity>(7);
 	const auto creature = static_cast<entt::entity>(8);
-	world.candidates = {
+	_world.candidates = {
 	    {.object = creature, .kind = TornadoCandidate::Kind::Creature, .position = {100.0f, 0.0f, 100.0f}, .radius = 9.0f},
 	    {.object = villager, .kind = TornadoCandidate::Kind::Liftable, .position = {101.0f, 0.0f, 100.0f}, .radius = 0.5f},
 	};
 	auto effect = Make();
 	// Not before it has faded in
 	Run(*effect, 79);
-	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Capture), 0u);
+	EXPECT_EQ(_spell.Count(SpellEventInfo::Type::Capture), 0u);
 	Run(*effect, 6);
-	ASSERT_GE(spell.Count(SpellEventInfo::Type::Capture), 1u);
+	ASSERT_GE(_spell.Count(SpellEventInfo::Type::Capture), 1u);
 	// Reached as far as the funnel's radii times the tribal power
-	EXPECT_NEAR(world.lastReach, (4.38053f + 36.7624f) * 2.0f, k_Epsilon);
+	EXPECT_NEAR(_world.lastReach, (4.38053f + 36.7624f) * 2.0f, k_Epsilon);
 	// The creature is caught, the villager carried
-	EXPECT_FALSE(world.caught.empty());
-	EXPECT_EQ(world.caught.front(), creature);
-	ASSERT_FALSE(world.carried.empty());
-	const auto carried = world.carried.front();
+	EXPECT_FALSE(_world.caught.empty());
+	EXPECT_EQ(_world.caught.front(), creature);
+	ASSERT_FALSE(_world.carried.empty());
+	const auto carried = _world.carried.front();
 	EXPECT_EQ(carried->object, villager);
 	ASSERT_NE(carried->atom, nullptr);
 	// Closing down flings it: the particle lives on in the flung group
@@ -372,81 +372,81 @@ TEST_F(TornadoRuleTest, OnceFadedInItPicksUpWhatItReachesEveryThirdTurnAndFlings
 TEST_F(TornadoRuleTest, APileGivesUpAPotOfWhatItHolds)
 {
 	const auto pile = static_cast<entt::entity>(5);
-	world.pot = static_cast<entt::entity>(6);
-	world.candidates = {
+	_world.pot = static_cast<entt::entity>(6);
+	_world.candidates = {
 	    {.object = pile, .kind = TornadoCandidate::Kind::Pile, .position = {100.0f, 0.0f, 100.0f}, .radius = 3.0f}};
 	auto effect = Make();
 	Run(*effect, 85);
-	ASSERT_FALSE(world.taken.empty());
+	ASSERT_FALSE(_world.taken.empty());
 	// Without a size for it, the tornado is of size 1 and takes the most
-	EXPECT_EQ(world.taken.front(), 650u);
-	ASSERT_FALSE(world.carried.empty());
-	EXPECT_EQ(world.carried.front()->object, world.pot);
+	EXPECT_EQ(_world.taken.front(), 650u);
+	ASSERT_FALSE(_world.carried.empty());
+	EXPECT_EQ(_world.carried.front()->object, _world.pot);
 	// Taken up as it is made, without asking the miracle
-	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Capture), 0u);
+	EXPECT_EQ(_spell.Count(SpellEventInfo::Type::Capture), 0u);
 }
 
 TEST_F(TornadoRuleTest, AHandDroppedPileThatFitsIsLiftedWhole)
 {
 	const auto pile = static_cast<entt::entity>(5);
-	world.pot = static_cast<entt::entity>(6);
-	world.candidates = {{.object = pile,
-	                     .kind = TornadoCandidate::Kind::Liftable,
-	                     .position = {100.0f, 0.0f, 100.0f},
-	                     .radius = 0.5f,
-	                     .pile = true}};
+	_world.pot = static_cast<entt::entity>(6);
+	_world.candidates = {{.object = pile,
+	                      .kind = TornadoCandidate::Kind::Liftable,
+	                      .position = {100.0f, 0.0f, 100.0f},
+	                      .radius = 0.5f,
+	                      .pile = true}};
 	auto effect = Make();
 	Run(*effect, 85);
-	ASSERT_FALSE(world.carried.empty());
-	EXPECT_EQ(world.carried.front()->object, pile);
-	EXPECT_TRUE(world.taken.empty());
+	ASSERT_FALSE(_world.carried.empty());
+	EXPECT_EQ(_world.carried.front()->object, pile);
+	EXPECT_TRUE(_world.taken.empty());
 }
 
 TEST_F(TornadoRuleTest, AHandDroppedPileTooBigForTheFunnelGivesUpAPot)
 {
 	const auto pile = static_cast<entt::entity>(5);
-	world.pot = static_cast<entt::entity>(6);
-	world.candidates = {{.object = pile,
-	                     .kind = TornadoCandidate::Kind::Liftable,
-	                     .position = {100.0f, 0.0f, 100.0f},
-	                     .radius = 1000.0f,
-	                     .pile = true}};
+	_world.pot = static_cast<entt::entity>(6);
+	_world.candidates = {{.object = pile,
+	                      .kind = TornadoCandidate::Kind::Liftable,
+	                      .position = {100.0f, 0.0f, 100.0f},
+	                      .radius = 1000.0f,
+	                      .pile = true}};
 	auto effect = Make();
 	Run(*effect, 85);
-	ASSERT_FALSE(world.taken.empty());
-	EXPECT_EQ(world.taken.front(), 650u);
-	ASSERT_FALSE(world.carried.empty());
-	EXPECT_EQ(world.carried.front()->object, world.pot);
+	ASSERT_FALSE(_world.taken.empty());
+	EXPECT_EQ(_world.taken.front(), 650u);
+	ASSERT_FALSE(_world.carried.empty());
+	EXPECT_EQ(_world.carried.front()->object, _world.pot);
 }
 
 TEST_F(TornadoRuleTest, AThingAScriptHoldsInPlaceIsNeverLifted)
 {
 	const auto rock = static_cast<entt::entity>(5);
-	world.candidates = {{.object = rock,
-	                     .kind = TornadoCandidate::Kind::Liftable,
-	                     .position = {100.0f, 0.0f, 100.0f},
-	                     .radius = 0.5f,
-	                     .immovable = true}};
+	_world.candidates = {{.object = rock,
+	                      .kind = TornadoCandidate::Kind::Liftable,
+	                      .position = {100.0f, 0.0f, 100.0f},
+	                      .radius = 0.5f,
+	                      .immovable = true}};
 	auto effect = Make();
 	Run(*effect, 85);
-	EXPECT_TRUE(world.carried.empty());
-	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Capture), 0u);
+	EXPECT_TRUE(_world.carried.empty());
+	EXPECT_EQ(_spell.Count(SpellEventInfo::Type::Capture), 0u);
 }
 
 TEST_F(TornadoRuleTest, AHandDroppedPileAScriptHoldsInPlaceGivesUpAPotThoughItFits)
 {
 	const auto pile = static_cast<entt::entity>(5);
-	world.pot = static_cast<entt::entity>(6);
-	world.candidates = {{.object = pile,
-	                     .kind = TornadoCandidate::Kind::Liftable,
-	                     .position = {100.0f, 0.0f, 100.0f},
-	                     .radius = 0.5f,
-	                     .pile = true,
-	                     .immovable = true}};
+	_world.pot = static_cast<entt::entity>(6);
+	_world.candidates = {{.object = pile,
+	                      .kind = TornadoCandidate::Kind::Liftable,
+	                      .position = {100.0f, 0.0f, 100.0f},
+	                      .radius = 0.5f,
+	                      .pile = true,
+	                      .immovable = true}};
 	auto effect = Make();
 	Run(*effect, 85);
-	ASSERT_FALSE(world.taken.empty());
-	ASSERT_FALSE(world.carried.empty());
-	EXPECT_EQ(world.carried.front()->object, world.pot);
+	ASSERT_FALSE(_world.taken.empty());
+	ASSERT_FALSE(_world.carried.empty());
+	EXPECT_EQ(_world.carried.front()->object, _world.pot);
 }
 } // namespace

@@ -464,8 +464,8 @@ struct FireCreators
 
 const FireCreators& Creators()
 {
-	static const FireCreators creators;
-	return creators;
+	static const FireCreators k_Creators;
+	return k_Creators;
 }
 
 std::array<uint8_t, 3> Rgb(uint32_t colour)
@@ -504,8 +504,8 @@ std::optional<entt::id_type> FireLightMap()
 
 const particles::maths::ValueNoise& Noise()
 {
-	static const particles::maths::ValueNoise noise;
-	return noise;
+	static const particles::maths::ValueNoise k_Noise;
+	return k_Noise;
 }
 } // namespace
 

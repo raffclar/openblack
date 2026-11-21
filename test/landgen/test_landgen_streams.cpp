@@ -18,6 +18,7 @@
 #include <landgen/Streams.h>
 
 #include "3D/GeneratedLand.h"
+#include "Common/IntegerSteps.h"
 
 using namespace openblack::landgen;
 using biomes::Biome;
@@ -59,7 +60,7 @@ std::vector<int32_t> TowardsTheSea()
 	{
 		for (int z = 0; z < k_Side; ++z)
 		{
-			receivers[static_cast<size_t>((x * k_Side) + z)] = ((x - 1) * k_Side) + z;
+			receivers[openblack::ToIndex((x * k_Side) + z)] = ((x - 1) * k_Side) + z;
 		}
 	}
 	return receivers;
@@ -241,7 +242,8 @@ TEST(LandgenStreams, TheBankTreesStandNearTheStreamOnAPartOfItsLength)
 	River river = Line(50, 90, 10);
 	for (const auto corner : river.corners)
 	{
-		river.points.push_back({.x = static_cast<float>(corner / k_Side), .z = static_cast<float>(corner % k_Side)});
+		river.points.push_back(
+		    {.x = static_cast<float>(openblack::WholeQuotient(corner, k_Side)), .z = static_cast<float>(corner % k_Side)});
 	}
 	const std::vector<River> rivers {river};
 	size_t total = 0;
@@ -276,7 +278,8 @@ TEST(LandgenStreams, NoBankTreeStandsInAClearing)
 	River river = Line(50, 90, 10);
 	for (const auto corner : river.corners)
 	{
-		river.points.push_back({.x = static_cast<float>(corner / k_Side), .z = static_cast<float>(corner % k_Side)});
+		river.points.push_back(
+		    {.x = static_cast<float>(openblack::WholeQuotient(corner, k_Side)), .z = static_cast<float>(corner % k_Side)});
 	}
 	const std::vector<River> rivers {river};
 	EXPECT_TRUE(streams::PlaceBankTrees(land.Ground(), rivers, 5, {}).empty());

@@ -80,12 +80,12 @@ namespace
 
 const entt::meta_ctx& Context()
 {
-	static const auto context = []() {
+	static const auto k_Context = []() {
 		auto made = std::make_unique<entt::meta_ctx>();
 		reflection::RegisterComponents(*made);
 		return made;
 	}();
-	return *context;
+	return *k_Context;
 }
 
 std::vector<uint8_t> StateOf(const SavedStateInterface& system)

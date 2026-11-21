@@ -13,6 +13,8 @@
 
 #include <optional>
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::physics::temple_heart
 {
 
@@ -67,7 +69,7 @@ uint32_t BeamInterval(uint32_t millisecondsPerTurn)
 {
 	// Turns a second as a whole number, times two, cut down to a whole number
 	constexpr double k_Seconds = 2.0;
-	return static_cast<uint32_t>(static_cast<double>(1000u / millisecondsPerTurn) * k_Seconds);
+	return static_cast<uint32_t>(static_cast<double>(WholeQuotient(1000u, millisecondsPerTurn)) * k_Seconds);
 }
 
 std::optional<float> DamageEffectLife(float life)
@@ -95,7 +97,7 @@ float DamageWait(float life)
 uint32_t DamageInterval(uint32_t millisecondsPerTurn, float life)
 {
 	// Whole turns a second times the wait, rounded to single precision before it is cut down to whole turns
-	const float turns = static_cast<float>(1000u / millisecondsPerTurn) * DamageWait(life);
+	const float turns = static_cast<float>(WholeQuotient(1000u, millisecondsPerTurn)) * DamageWait(life);
 	return static_cast<uint32_t>(turns);
 }
 

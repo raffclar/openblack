@@ -16,6 +16,8 @@
 
 #include <MindBody.h>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 using namespace openblack::creature_tattoo;
 
@@ -294,7 +296,7 @@ void creature_tattoo::Paint(std::span<uint16_t> skin, uint32_t side, const Desig
 	}
 	// A tattoo that runs over an edge is not painted. The game compares the place in float with half the extent cut to
 	// a whole number.
-	const auto half = static_cast<float>(extent / 2);
+	const auto half = static_cast<float>(WholeQuotient(extent, 2));
 	const auto edge = static_cast<float>(side);
 	if (u - half < 0.0f || edge <= half + u || v - half < 0.0f || edge <= half + v)
 	{
@@ -315,7 +317,7 @@ void creature_tattoo::Paint(std::span<uint16_t> skin, uint32_t side, const Desig
 		{
 			const auto from = row + static_cast<uint32_t>(maskX);
 			maskX += step;
-			const auto index = static_cast<size_t>(((top + y) * width) + left + x);
+			const auto index = ToIndex(((top + y) * width) + left + x);
 			// A sum at the end of a row reads the first texel of the next row. A texel after the mask stays as it is.
 			if (index >= skin.size() || from >= mask.levels.size())
 			{

@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -57,7 +58,7 @@ std::vector<temple_ground::CornerAltitude> temple_ground::Levelled(glm::ivec2 ce
 	// The game reads the centre altitude one time, before it changes a corner
 	const auto centreAltitude = altitudeAt(centre);
 	std::vector<CornerAltitude> corners;
-	corners.reserve(static_cast<size_t>((2 * k_Reach + 1) * (2 * k_Reach + 1)));
+	corners.reserve(ToIndex((2 * k_Reach + 1) * (2 * k_Reach + 1)));
 	for (int x = centre.x - k_Reach; x <= centre.x + k_Reach; ++x)
 	{
 		for (int z = centre.y - k_Reach; z <= centre.y + k_Reach; ++z)

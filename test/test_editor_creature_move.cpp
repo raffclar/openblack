@@ -70,11 +70,11 @@ protected:
 	void SetUp() override
 	{
 		Locator::entitiesRegistry::emplace<Registry>();
-		legs = &static_cast<PlacedLegs&>(Locator::creatureLocomotionSystem::emplace<PlacedLegs>());
+		_legs = &static_cast<PlacedLegs&>(Locator::creatureLocomotionSystem::emplace<PlacedLegs>());
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = registry.Create();
-		registry.Assign<Transform>(creature, glm::vec3(10.0f, 2.0f, 20.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-		registry.Assign<CreatureLocomotion>(creature);
+		_creature = registry.Create();
+		registry.Assign<Transform>(_creature, glm::vec3(10.0f, 2.0f, 20.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<CreatureLocomotion>(_creature);
 	}
 	void TearDown() override
 	{
@@ -82,8 +82,8 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	PlacedLegs* legs {nullptr};
-	entt::entity creature {entt::null};
+	PlacedLegs* _legs {nullptr};
+	entt::entity _creature {entt::null};
 };
 } // namespace
 
@@ -92,13 +92,13 @@ protected:
 TEST_F(EditorCreatureMove, MovesACreatureAsTheGameDoesWithoutAWalk)
 {
 	const glm::vec3 to {40.0f, 3.0f, 60.0f};
-	editor::MoveTo(creature, to);
+	editor::MoveTo(_creature, to);
 
-	ASSERT_EQ(legs->placed.size(), 1);
-	EXPECT_EQ(legs->placed.front().first, creature);
-	EXPECT_EQ(legs->placed.front().second, to);
-	EXPECT_TRUE(legs->stopped.empty());
-	EXPECT_EQ(Locator::entitiesRegistry::value().Get<Transform>(creature).position, to);
+	ASSERT_EQ(_legs->placed.size(), 1);
+	EXPECT_EQ(_legs->placed.front().first, _creature);
+	EXPECT_EQ(_legs->placed.front().second, to);
+	EXPECT_TRUE(_legs->stopped.empty());
+	EXPECT_EQ(Locator::entitiesRegistry::value().Get<Transform>(_creature).position, to);
 }
 
 TEST_F(EditorCreatureMove, AnAnimalContinuesFromWhereItIsPut)

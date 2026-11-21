@@ -16,6 +16,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/IntegerSteps.h"
 #include "Common/PortableMath.h"
 
 namespace openblack::fish_shoal
@@ -217,7 +218,8 @@ std::array<glm::vec2, 4> AtlasCorners(uint32_t frame)
 {
 	constexpr float k_Cell = 1.0f / static_cast<float>(k_AtlasColumns);
 	const glm::vec2 origin =
-	    glm::vec2(static_cast<float>(frame % k_AtlasColumns), static_cast<float>(frame / k_AtlasColumns)) * k_Cell;
+	    glm::vec2(static_cast<float>(frame % k_AtlasColumns), static_cast<float>(WholeQuotient(frame, k_AtlasColumns))) *
+	    k_Cell;
 	return {
 	    origin,
 	    origin + glm::vec2(k_Cell, 0.0f),

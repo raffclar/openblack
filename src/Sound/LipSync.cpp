@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 namespace openblack::audio::lip_sync
@@ -130,7 +131,7 @@ Levels UpdateKey(const Settings& settings, Key& key, float dt, float time, std::
 	const auto rate = static_cast<float>(sampleRate);
 	const auto centre = static_cast<int>((settings.offsetMs * 0.001f + dt + time) * rate);
 	const int start = std::min(std::max(centre - window / 2, 0), frames - window);
-	if (start < 0 || static_cast<size_t>(start + window) > samples.size())
+	if (start < 0 || ToIndex(start + window) > samples.size())
 	{
 		// Too short a recording for the window: the game would read before it
 		return levels;

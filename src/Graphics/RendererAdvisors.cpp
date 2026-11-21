@@ -28,6 +28,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Common/IntegerSteps.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -97,7 +98,8 @@ void AddSprite(const AdvisorSystem::Sprite& sprite, const glm::vec3& right, cons
 	    glm::vec2(sprite.halfWidth, -sprite.halfHeight), glm::vec2(-sprite.halfWidth, -sprite.halfHeight)};
 	constexpr std::array<glm::vec2, 4> k_CornerUv {glm::vec2(0.0f, 0.0f), glm::vec2(0.125f, 0.0f), glm::vec2(0.125f, 0.125f),
 	                                               glm::vec2(0.0f, 0.125f)};
-	const glm::vec2 cell(static_cast<float>(sprite.cell % 8) * 0.125f, static_cast<float>(sprite.cell / 8) * 0.125f);
+	const glm::vec2 cell(static_cast<float>(sprite.cell % 8) * 0.125f,
+	                     static_cast<float>(WholeQuotient(sprite.cell, 8)) * 0.125f);
 	std::array<QuadVertex, 4> quad {};
 	for (size_t i = 0; i < quad.size(); ++i)
 	{

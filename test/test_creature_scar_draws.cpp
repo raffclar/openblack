@@ -64,11 +64,11 @@ protected:
 	void SetUp() override
 	{
 		Locator::entitiesRegistry::emplace<Registry>();
-		random = &static_cast<RecordedGameRandom&>(Locator::gameRandom::emplace<RecordedGameRandom>());
+		_random = &static_cast<RecordedGameRandom&>(Locator::gameRandom::emplace<RecordedGameRandom>());
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = registry.Create();
-		registry.Assign<Creature>(creature, Creature {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Cow});
-		registry.Assign<Transform>(creature, Transform {.position = {100.0f, 0.0f, 100.0f}});
+		_creature = registry.Create();
+		registry.Assign<Creature>(_creature, Creature {.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Cow});
+		registry.Assign<Transform>(_creature, Transform {.position = {100.0f, 0.0f, 100.0f}});
 	}
 
 	void TearDown() override
@@ -77,8 +77,8 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	RecordedGameRandom* random {nullptr};
-	entt::entity creature {entt::null};
+	RecordedGameRandom* _random {nullptr};
+	entt::entity _creature {entt::null};
 };
 
 } // namespace
@@ -90,9 +90,9 @@ TEST_F(CreatureScarDraws, ACrushDrawsTheCutWithNoPoseAndMarksNothing)
 	magic::EffectValues values;
 	values[magic::EffectKind::Crush] = 0.5f;
 	const magic::EffectSource source {.player = PlayerNames::PLAYER_TWO, .point = glm::vec3 {150.0f, 0.0f, 100.0f}};
-	EXPECT_FALSE(systems::magic_living::TakesEffectItsOwnWay(creature, values, source));
-	EXPECT_EQ(random->draws, (std::vector<float> {5.0f}));
-	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<CreatureMarks>(creature));
+	EXPECT_FALSE(systems::magic_living::TakesEffectItsOwnWay(_creature, values, source));
+	EXPECT_EQ(_random->draws, (std::vector<float> {5.0f}));
+	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<CreatureMarks>(_creature));
 }
 
 // A burn draws its kind and its chance, then the place it comes from, with no pose too
@@ -103,12 +103,12 @@ TEST_F(CreatureScarDraws, ABurnDrawsItsKindChanceAndPlaceWithNoPose)
 	values[magic::EffectKind::Burn] = 0.5f;
 	values[magic::EffectKind::Crush] = 0.25f;
 	const magic::EffectSource source {.player = PlayerNames::PLAYER_TWO};
-	EXPECT_FALSE(systems::magic_living::TakesEffectItsOwnWay(creature, values, source));
-	ASSERT_GE(random->draws.size(), 5U);
-	EXPECT_EQ(random->draws[0], 3.0f);
-	EXPECT_GT(random->draws[1], 0.0f);
-	EXPECT_LT(random->draws[2], 0.0f);
-	EXPECT_LT(random->draws[3], 0.0f);
-	EXPECT_LT(random->draws[4], 0.0f);
-	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<CreatureMarks>(creature));
+	EXPECT_FALSE(systems::magic_living::TakesEffectItsOwnWay(_creature, values, source));
+	ASSERT_GE(_random->draws.size(), 5U);
+	EXPECT_EQ(_random->draws[0], 3.0f);
+	EXPECT_GT(_random->draws[1], 0.0f);
+	EXPECT_LT(_random->draws[2], 0.0f);
+	EXPECT_LT(_random->draws[3], 0.0f);
+	EXPECT_LT(_random->draws[4], 0.0f);
+	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<CreatureMarks>(_creature));
 }

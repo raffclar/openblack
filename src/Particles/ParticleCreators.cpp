@@ -17,6 +17,7 @@
 #include <ParticleFile.h>
 
 #include "Common/GameRandom.h"
+#include "Common/IntegerSteps.h"
 #include "ParticleClassRegistry.h"
 
 using namespace openblack;
@@ -188,7 +189,7 @@ glm::vec2 MeshCreator::UvOffset(int frame) const
 		const auto columns = static_cast<uint32_t>(std::max(1, static_cast<int>(k_SheetTexels) / textureWidth));
 		const auto f = static_cast<uint32_t>(frame);
 		return {static_cast<float>(textureWidth) / k_SheetTexels * static_cast<float>(f % columns),
-		        static_cast<float>(textureHeight) / k_SheetTexels * static_cast<float>(f / columns)};
+		        static_cast<float>(textureHeight) / k_SheetTexels * static_cast<float>(WholeQuotient(f, columns))};
 	}
 	// A slide moves one cell over the whole run of frames
 	const float run = static_cast<float>(FramesPerAtom()) * k_SheetTexels;

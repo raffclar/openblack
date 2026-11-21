@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "ECS/HanoiRules.h"
 #include "Enums.h"
 #include "ScriptHeaders/ScriptEnums.h"
@@ -157,7 +158,7 @@ struct Fence
 /// The slot of a fence in its list
 [[nodiscard]] constexpr size_t SlotOf(const Fence& fence) noexcept
 {
-	return static_cast<size_t>((fence.across * 9) + fence.along);
+	return ToIndex((fence.across * 9) + fence.along);
 }
 /// Where a fence stands, in grid steps
 [[nodiscard]] GridStep FenceStep(const Fence& fence) noexcept;

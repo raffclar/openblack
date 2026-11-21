@@ -394,9 +394,9 @@ protected:
 		auto file = psys::ParticleFile::Parse(StormFile());
 		EXPECT_TRUE(file.has_value());
 		auto effect = std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                       EffectServices {classes, world, random, noise}, origin, magnitude, false);
+		                                       EffectServices {_classes, _world, _random, _noise}, _origin, magnitude, false);
 		effect->SetProcessInfo({.cameraForward = direction});
-		effect->SetSink(&spell);
+		effect->SetSink(&_spell);
 		return effect;
 	}
 	void Run(Effect& effect, float seconds)
@@ -409,12 +409,12 @@ protected:
 	}
 	[[nodiscard]] size_t Clouds(const Effect& effect) const { return effect.AtomCount() - 5; }
 
-	glm::vec3 origin {100.0f, 5.0f, 200.0f};
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
-	FakeStorm spell;
+	glm::vec3 _origin {100.0f, 5.0f, 200.0f};
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
+	FakeStorm _spell;
 };
 } // namespace
 
@@ -433,7 +433,7 @@ TEST_F(StormRulesTest, FiveCoresGatherTenCloudsEachAtACloudAndAHalfOfTheirRadius
 	{
 		// 60 above the land, plus a little for each cloud
 		EXPECT_GE(mist.position.y, 5.0f + 60.0f - k_Epsilon);
-		EXPECT_LT(glm::distance(glm::vec2(mist.position.x, mist.position.z), glm::vec2(origin.x, origin.z)),
+		EXPECT_LT(glm::distance(glm::vec2(mist.position.x, mist.position.z), glm::vec2(_origin.x, _origin.z)),
 		          1.7f * 48.0f * 1.3f * 2.0f);
 	}
 }
@@ -442,8 +442,8 @@ TEST_F(StormRulesTest, OnlyTheFirstCoresCloudsLayTheRainStormAndItGoesAtCloseDow
 {
 	auto effect = Make(40.0f, {1.0f, 0.0f, 0.0f});
 	Run(*effect, 1.0f);
-	ASSERT_EQ(world.storms.size(), 1u);
-	const auto& rain = world.storms.front();
+	ASSERT_EQ(_world.storms.size(), 1u);
+	const auto& rain = _world.storms.front();
 	EXPECT_FLOAT_EQ(rain.innerRadius, 60.0f);
 	EXPECT_FLOAT_EQ(rain.outerRadius, 120.0f);
 	EXPECT_EQ(rain.rain, 100);
@@ -452,40 +452,40 @@ TEST_F(StormRulesTest, OnlyTheFirstCoresCloudsLayTheRainStormAndItGoesAtCloseDow
 	EXPECT_EQ(rain.windZ, 0);
 	effect->CloseDown();
 	effect->Step(k_Step);
-	EXPECT_FALSE(world.alive.front());
+	EXPECT_FALSE(_world.alive.front());
 }
 
 TEST_F(StormRulesTest, ThePlainStormNeverStrikesThePoweredUpOneDoes)
 {
 	auto plain = Make(40.0f);
 	Run(*plain, 20.0f);
-	EXPECT_TRUE(world.sounds.empty());
-	spell.level = 0;
+	EXPECT_TRUE(_world.sounds.empty());
+	_spell.level = 0;
 	auto powered = Make(40.0f);
 	Run(*powered, 9.4f);
-	EXPECT_TRUE(world.sounds.empty());
+	EXPECT_TRUE(_world.sounds.empty());
 	Run(*powered, 3.0f);
-	ASSERT_FALSE(world.sounds.empty());
-	EXPECT_EQ(world.sounds.front()->sound.action.sound, "SOUND_SPELL_LIGHTNING");
-	EXPECT_TRUE(world.sounds.front()->sound.travelsAtSoundSpeed);
+	ASSERT_FALSE(_world.sounds.empty());
+	EXPECT_EQ(_world.sounds.front()->sound.action.sound, "SOUND_SPELL_LIGHTNING");
+	EXPECT_TRUE(_world.sounds.front()->sound.travelsAtSoundSpeed);
 	// Thunder comes from the land under its cloud, not from the cloud
-	EXPECT_TRUE(world.sounds.front()->sound.onLand);
-	EXPECT_FLOAT_EQ(world.sounds.front()->position.y, 5.0f);
+	EXPECT_TRUE(_world.sounds.front()->sound.onLand);
+	EXPECT_FLOAT_EQ(_world.sounds.front()->position.y, 5.0f);
 }
 
 TEST_F(StormRulesTest, AStormAScriptEndsIsLaidAgainAtTheNextStep)
 {
 	auto effect = Make(40.0f, {1.0f, 0.0f, 0.0f});
 	Run(*effect, 1.0f);
-	ASSERT_EQ(world.storms.size(), 1u);
-	world.ended.insert(1);
+	ASSERT_EQ(_world.storms.size(), 1u);
+	_world.ended.insert(1);
 	effect->Step(k_Step);
-	EXPECT_EQ(world.storms.size(), 1u);
+	EXPECT_EQ(_world.storms.size(), 1u);
 	effect->Step(k_Step);
-	ASSERT_EQ(world.storms.size(), 2u);
-	EXPECT_TRUE(world.alive.back());
+	ASSERT_EQ(_world.storms.size(), 2u);
+	EXPECT_TRUE(_world.alive.back());
 	// Fading in again over half the clouds' forming time
-	EXPECT_FLOAT_EQ(world.storms.back().fadeInSeconds, world.storms.front().fadeInSeconds);
+	EXPECT_FLOAT_EQ(_world.storms.back().fadeInSeconds, _world.storms.front().fadeInSeconds);
 }
 
 TEST_F(StormRulesTest, CastLookingStraightDownTheStormHeadsAlongX)
@@ -494,9 +494,9 @@ TEST_F(StormRulesTest, CastLookingStraightDownTheStormHeadsAlongX)
 	// speed
 	auto effect = Make(40.0f, {0.0f, -1.0f, 0.0f});
 	Run(*effect, 1.0f);
-	ASSERT_EQ(world.storms.size(), 1u);
-	EXPECT_EQ(world.storms.front().windX, 55);
-	EXPECT_EQ(world.storms.front().windZ, 0);
+	ASSERT_EQ(_world.storms.size(), 1u);
+	EXPECT_EQ(_world.storms.front().windX, 55);
+	EXPECT_EQ(_world.storms.front().windZ, 0);
 }
 
 TEST_F(StormRulesTest, InTheHandFlashesOfLightningLightTheCloudTheyComeFrom)
@@ -539,8 +539,8 @@ ENDCLASS
 )";
 	auto file = psys::ParticleFile::Parse(text);
 	ASSERT_TRUE(file.has_value());
-	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)), EffectServices {classes, world, random, noise},
-	              origin, 1.0f, false);
+	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)),
+	              EffectServices {_classes, _world, _random, _noise}, _origin, 1.0f, false);
 	const auto cloudLight = [&effect] {
 		std::vector<Effect::DrawAtom> sprites;
 		effect.Collect(1.0f, sprites);
@@ -563,15 +563,15 @@ ENDCLASS
 
 TEST_F(StormRulesTest, AfterFiveSecondsTheStormDriftsWithTheWindAndTakesTheMiracleWithIt)
 {
-	world.wind = {10.0f, 0.0f, 0.0f};
+	_world.wind = {10.0f, 0.0f, 0.0f};
 	auto effect = Make(40.0f);
 	Run(*effect, 4.9f);
-	EXPECT_FALSE(spell.moved.has_value());
+	EXPECT_FALSE(_spell.moved.has_value());
 	Run(*effect, 10.0f);
-	ASSERT_TRUE(spell.moved.has_value());
-	EXPECT_GT(spell.moved->x, origin.x + 1.0f);
-	EXPECT_NEAR(spell.moved->z, origin.z, k_Epsilon);
-	EXPECT_NEAR(world.storms.front().centre.x, spell.moved->x, 2.0f);
+	ASSERT_TRUE(_spell.moved.has_value());
+	EXPECT_GT(_spell.moved->x, _origin.x + 1.0f);
+	EXPECT_NEAR(_spell.moved->z, _origin.z, k_Epsilon);
+	EXPECT_NEAR(_world.storms.front().centre.x, _spell.moved->x, 2.0f);
 }
 
 TEST(StormMiracle, SwirlVelocityAddsTheSquaresFromZToX)

@@ -206,17 +206,17 @@ protected:
 		auto file = psys::ParticleFile::Parse(text);
 		EXPECT_TRUE(file.has_value()) << text;
 		auto effect = std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                       EffectServices {classes, world, random, noise}, origin, 1.0f, false);
-		effect->SetSink(&spell);
+		                                       EffectServices {_classes, _world, _random, _noise}, origin, 1.0f, false);
+		effect->SetSink(&_spell);
 		effect->SetPlayer(0);
 		return effect;
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
-	FakeSpell spell;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
+	FakeSpell _spell;
 };
 } // namespace
 
@@ -364,7 +364,7 @@ TEST_F(ParticleMiracleTest, AFireballIsThrownFromTheHandFliesBouncesAndSaysWhere
 		landed = landed || atoms[0].position.y < k_Epsilon;
 	}
 	EXPECT_TRUE(landed);
-	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Point), 62u);
+	EXPECT_EQ(_spell.Count(SpellEventInfo::Type::Point), 62u);
 }
 
 TEST_F(ParticleMiracleTest, AFireballBouncesOffAShieldItIsNotLetThrough)
@@ -379,10 +379,10 @@ TEST_F(ParticleMiracleTest, AFireballBouncesOffAShieldItIsNotLetThrough)
 	                                            Object("ConstFloatProvider", "Radius", "PROPERTY ConstValue FLOAT 10\n"));
 	ASSERT_TRUE(shieldFile.has_value());
 	Effect shield(std::make_shared<const psys::ParticleFile>(std::move(*shieldFile)),
-	              EffectServices {classes, world, random, noise}, {0.0f, 0.0f, 30.0f}, 1.0f, false);
+	              EffectServices {_classes, _world, _random, _noise}, {0.0f, 0.0f, 30.0f}, 1.0f, false);
 	shield.SetSink(&shieldSpell);
 	shield.Step(k_Step);
-	ASSERT_EQ(world.shields.size(), 1u);
+	ASSERT_EQ(_world.shields.size(), 1u);
 	EXPECT_FALSE(shield.Finished());
 
 	// Thrown flat, straight at it: the hand moves down by the lift every hand's throw has, so the ball leaves level
@@ -407,19 +407,19 @@ TEST_F(ParticleMiracleTest, AFireballBouncesOffAShieldItIsNotLetThrough)
 		}
 	}
 	// It struck the shield, which sparked, and never got inside it
-	ASSERT_GE(spell.Count(SpellEventInfo::Type::HitSpell), 1u);
-	const auto hit = std::ranges::find(spell.events, SpellEventInfo::Type::HitSpell, &SpellEventInfo::type);
+	ASSERT_GE(_spell.Count(SpellEventInfo::Type::HitSpell), 1u);
+	const auto hit = std::ranges::find(_spell.events, SpellEventInfo::Type::HitSpell, &SpellEventInfo::type);
 	EXPECT_EQ(hit->target, shieldSpell.self);
 	EXPECT_LT(furthest, 30.0f - 10.0f + 1.0f);
-	EXPECT_FALSE(world.shields.front().lock()->impacts.empty());
+	EXPECT_FALSE(_world.shields.front().lock()->impacts.empty());
 }
 
 TEST_F(ParticleMiracleTest, ABoltStrikesWhatIsInFrontOfTheHandAndNotWhatIsBehind)
 {
 	const auto ahead = static_cast<entt::entity>(1);
 	const auto behind = static_cast<entt::entity>(2);
-	world.candidates = {{.object = ahead, .position = {0.0f, 0.0f, 20.0f}, .height = 10.0f},
-	                    {.object = behind, .position = {0.0f, 0.0f, -20.0f}, .height = 10.0f}};
+	_world.candidates = {{.object = ahead, .position = {0.0f, 0.0f, 20.0f}, .height = 10.0f},
+	                     {.object = behind, .position = {0.0f, 0.0f, -20.0f}, .height = 10.0f}};
 	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
 	                 Object("UR_Lightning", "Bolt",
 	                        "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
@@ -430,8 +430,8 @@ TEST_F(ParticleMiracleTest, ABoltStrikesWhatIsInFrontOfTheHandAndNotWhatIsBehind
 	{
 		bolt->Step(k_Step);
 	}
-	ASSERT_GE(spell.Count(SpellEventInfo::Type::Landed), 1u);
-	for (const auto& event : spell.events)
+	ASSERT_GE(_spell.Count(SpellEventInfo::Type::Landed), 1u);
+	for (const auto& event : _spell.events)
 	{
 		if (event.type == SpellEventInfo::Type::Landed)
 		{
@@ -452,8 +452,8 @@ TEST_F(ParticleMiracleTest, ALookStraightDownTurnsTheConeToTheXAxis)
 {
 	const auto alongX = static_cast<entt::entity>(1);
 	const auto alongMinusZ = static_cast<entt::entity>(2);
-	world.candidates = {{.object = alongX, .position = {20.0f, 0.0f, 0.0f}, .height = 10.0f},
-	                    {.object = alongMinusZ, .position = {0.0f, 0.0f, -20.0f}, .height = 10.0f}};
+	_world.candidates = {{.object = alongX, .position = {20.0f, 0.0f, 0.0f}, .height = 10.0f},
+	                     {.object = alongMinusZ, .position = {0.0f, 0.0f, -20.0f}, .height = 10.0f}};
 	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
 	                 Object("UR_Lightning", "Bolt",
 	                        "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
@@ -470,13 +470,13 @@ TEST_F(ParticleMiracleTest, ALookStraightDownTurnsTheConeToTheXAxis)
 	{
 		bolt->Step(k_Step);
 	}
-	spell.events.clear();
+	_spell.events.clear();
 	for (int step = 0; step < 15; ++step)
 	{
 		bolt->Step(k_Step);
 	}
-	ASSERT_GE(spell.Count(SpellEventInfo::Type::Landed), 1u);
-	for (const auto& event : spell.events)
+	ASSERT_GE(_spell.Count(SpellEventInfo::Type::Landed), 1u);
+	for (const auto& event : _spell.events)
 	{
 		if (event.type == SpellEventInfo::Type::Landed)
 		{
@@ -488,7 +488,7 @@ TEST_F(ParticleMiracleTest, ALookStraightDownTurnsTheConeToTheXAxis)
 
 TEST_F(ParticleMiracleTest, ACreatureInTheConeTakesEveryFork)
 {
-	world.candidates = {
+	_world.candidates = {
 	    {.object = static_cast<entt::entity>(1), .position = {-3.0f, 0.0f, 20.0f}, .height = 2.0f},
 	    {.object = static_cast<entt::entity>(2), .position = {3.0f, 0.0f, 25.0f}, .height = 10.0f, .drawsBolt = true}};
 	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
@@ -501,8 +501,8 @@ TEST_F(ParticleMiracleTest, ACreatureInTheConeTakesEveryFork)
 	{
 		bolt->Step(k_Step);
 	}
-	ASSERT_GE(spell.Count(SpellEventInfo::Type::Landed), 1u);
-	for (const auto& event : spell.events)
+	ASSERT_GE(_spell.Count(SpellEventInfo::Type::Landed), 1u);
+	for (const auto& event : _spell.events)
 	{
 		if (event.type == SpellEventInfo::Type::Landed)
 		{
@@ -517,12 +517,12 @@ TEST_F(ParticleMiracleTest, ABoltFromACloudStrikesWhatIsWithinItsRadiusInItsCell
 {
 	const auto villager = static_cast<entt::entity>(1);
 	const auto creature = static_cast<entt::entity>(2);
-	world.candidates = {{.object = villager, .position = {50.0f, 0.0f, 50.0f}},
-	                    {.object = creature, .position = {45.0f, 0.0f, 52.0f}, .drawsBolt = true},
-	                    // In the cells searched but beyond the radius
-	                    {.object = static_cast<entt::entity>(3), .position = {41.0f, 0.0f, 41.0f}},
-	                    // Within the radius, but in a cell only a bolt from a hand searches
-	                    {.object = static_cast<entt::entity>(4), .position = {65.0f, 0.0f, 55.0f}}};
+	_world.candidates = {{.object = villager, .position = {50.0f, 0.0f, 50.0f}},
+	                     {.object = creature, .position = {45.0f, 0.0f, 52.0f}, .drawsBolt = true},
+	                     // In the cells searched but beyond the radius
+	                     {.object = static_cast<entt::entity>(3), .position = {41.0f, 0.0f, 41.0f}},
+	                     // Within the radius, but in a cell only a bolt from a hand searches
+	                     {.object = static_cast<entt::entity>(4), .position = {65.0f, 0.0f, 55.0f}}};
 	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
 	                     Object("UR_Lightning", "Bolt",
 	                            "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
@@ -534,9 +534,9 @@ TEST_F(ParticleMiracleTest, ABoltFromACloudStrikesWhatIsWithinItsRadiusInItsCell
 	{
 		bolt->Step(k_Step);
 	}
-	ASSERT_GE(spell.Count(SpellEventInfo::Type::Landed), 1u);
+	ASSERT_GE(_spell.Count(SpellEventInfo::Type::Landed), 1u);
 	size_t onVillager = 0;
-	for (const auto& event : spell.events)
+	for (const auto& event : _spell.events)
 	{
 		if (event.type == SpellEventInfo::Type::Landed)
 		{
@@ -554,8 +554,8 @@ TEST_F(ParticleMiracleTest, ABoltGivenTargetsStrikesWhereTheyStandWithinItsRadiu
 {
 	const auto near = static_cast<entt::entity>(1);
 	const auto far = static_cast<entt::entity>(2);
-	world.candidates = {{.object = near, .position = {60.0f, 3.0f, 60.0f}, .height = 10.0f},
-	                    {.object = far, .position = {100.0f, 0.0f, 100.0f}, .height = 10.0f}};
+	_world.candidates = {{.object = near, .position = {60.0f, 3.0f, 60.0f}, .height = 10.0f},
+	                     {.object = far, .position = {100.0f, 0.0f, 100.0f}, .height = 10.0f}};
 	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
 	                     Object("UR_Lightning", "Bolt",
 	                            "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
@@ -570,8 +570,8 @@ TEST_F(ParticleMiracleTest, ABoltGivenTargetsStrikesWhereTheyStandWithinItsRadiu
 	{
 		bolt->Step(k_Step);
 	}
-	ASSERT_GE(spell.Count(SpellEventInfo::Type::Landed), 1u);
-	for (const auto& event : spell.events)
+	ASSERT_GE(_spell.Count(SpellEventInfo::Type::Landed), 1u);
+	for (const auto& event : _spell.events)
 	{
 		if (event.type == SpellEventInfo::Type::Landed)
 		{
@@ -581,13 +581,13 @@ TEST_F(ParticleMiracleTest, ABoltGivenTargetsStrikesWhereTheyStandWithinItsRadiu
 			EXPECT_NEAR(event.position.z, 60.0f, k_Epsilon);
 		}
 	}
-	EXPECT_TRUE(world.arcsQueued.empty());
+	EXPECT_TRUE(_world.arcsQueued.empty());
 }
 
 TEST_F(ParticleMiracleTest, ArcsCrawlOverWhatABoltStrikesAgainAfterEachSearch)
 {
 	const auto tree = static_cast<entt::entity>(1);
-	world.candidates = {{.object = tree, .position = {0.0f, 0.0f, 20.0f}, .height = 10.0f, .arcs = true}};
+	_world.candidates = {{.object = tree, .position = {0.0f, 0.0f, 20.0f}, .height = 10.0f, .arcs = true}};
 	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
 	                 Object("UR_Lightning", "Bolt",
 	                        "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
@@ -599,20 +599,20 @@ TEST_F(ParticleMiracleTest, ArcsCrawlOverWhatABoltStrikesAgainAfterEachSearch)
 	{
 		bolt->Step(k_Step);
 	}
-	EXPECT_TRUE(world.arcsQueued.empty());
+	EXPECT_TRUE(_world.arcsQueued.empty());
 	// Struck every step, it is queued once for each search, about every second
 	for (int step = 2; step < 32; ++step)
 	{
 		bolt->Step(k_Step);
 	}
-	EXPECT_GE(world.arcsQueued.size(), 2u);
-	EXPECT_LE(world.arcsQueued.size(), 3u);
-	EXPECT_TRUE(std::ranges::all_of(world.arcsQueued, [&](entt::entity object) { return object == tree; }));
+	EXPECT_GE(_world.arcsQueued.size(), 2u);
+	EXPECT_LE(_world.arcsQueued.size(), 3u);
+	EXPECT_TRUE(std::ranges::all_of(_world.arcsQueued, [&](entt::entity object) { return object == tree; }));
 }
 
 TEST_F(ParticleMiracleTest, ABoltWithNoMiracleBehindItStrikesWhatIsThereThroughTheWorld)
 {
-	world.candidates = {{.object = static_cast<entt::entity>(1), .position = {50.0f, 0.0f, 50.0f}, .height = 4.0f}};
+	_world.candidates = {{.object = static_cast<entt::entity>(1), .position = {50.0f, 0.0f, 50.0f}, .height = 4.0f}};
 	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
 	                     Object("UR_Lightning", "Bolt",
 	                            "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
@@ -626,9 +626,9 @@ TEST_F(ParticleMiracleTest, ABoltWithNoMiracleBehindItStrikesWhatIsThereThroughT
 	{
 		bolt->Step(k_Step);
 	}
-	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Landed), 0u);
-	ASSERT_FALSE(world.strikesWithoutMiracle.empty());
-	for (const auto& point : world.strikesWithoutMiracle)
+	EXPECT_EQ(_spell.Count(SpellEventInfo::Type::Landed), 0u);
+	ASSERT_FALSE(_world.strikesWithoutMiracle.empty());
+	for (const auto& point : _world.strikesWithoutMiracle)
 	{
 		EXPECT_NEAR(point.x, 50.0f, k_Epsilon);
 		EXPECT_NEAR(point.z, 50.0f, k_Epsilon);
@@ -637,7 +637,7 @@ TEST_F(ParticleMiracleTest, ABoltWithNoMiracleBehindItStrikesWhatIsThereThroughT
 
 TEST_F(ParticleMiracleTest, ABoltThatIsNoLongerCastStrikesNothing)
 {
-	world.candidates = {{.object = static_cast<entt::entity>(1), .position = {0.0f, 0.0f, 20.0f}, .height = 10.0f}};
+	_world.candidates = {{.object = static_cast<entt::entity>(1), .position = {0.0f, 0.0f, 20.0f}, .height = 10.0f}};
 	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
 	                 Object("UR_Lightning", "Bolt",
 	                        "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
@@ -647,7 +647,7 @@ TEST_F(ParticleMiracleTest, ABoltThatIsNoLongerCastStrikesNothing)
 	{
 		bolt->Step(k_Step);
 	}
-	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Landed), 0u);
+	EXPECT_EQ(_spell.Count(SpellEventInfo::Type::Landed), 0u);
 }
 
 TEST_F(ParticleMiracleTest, TheMiracleInTheHandFollowsTheHand)
@@ -686,13 +686,13 @@ TEST_F(ParticleMiracleTest, TheSpeedOfTheMiracleInTheHandIsItsMoveTimesOneDivide
 
 TEST_F(ParticleMiracleTest, AFlockAtomGoesWhereItsAnimalIsAndKeepsItsSpeed)
 {
-	world.candidates = {{.object = static_cast<entt::entity>(1), .position = {5.0f, 0.0f, 0.0f}, .height = 2.0f}};
+	_world.candidates = {{.object = static_cast<entt::entity>(1), .position = {5.0f, 0.0f, 0.0f}, .height = 2.0f}};
 	auto effect = Make(Header() + Object("ParticleSpriteCreator", "Glow", k_Point) +
 	                   Object("UR_FollowTargets", "Follow", "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Glow\n") +
 	                   Object("UR_UpdatePosnFromVelocity", "Move", "PROPERTY Group INTEGER 0\n"));
 	effect->AddTarget(static_cast<entt::entity>(1));
 	effect->Step(k_Step);
-	world.candidates[0].position = {8.0f, 0.0f, 0.0f};
+	_world.candidates[0].position = {8.0f, 0.0f, 0.0f};
 	effect->Step(k_Step);
 	// The atom does not get the animal's move as a speed, so it stays on the animal
 	std::vector<Effect::DrawAtom> atoms;
@@ -748,23 +748,23 @@ TEST_F(ParticleMiracleTest, AnAtomsSoundIsLetGoWhenTheAtomGoes)
 	                          "SOFTRELEASE 0 USESURFACE 0\n") +
 	                   Object("RemoveRuleOldAgeOnly", "Old", "PROPERTY Group INTEGER 0\nPROPERTY DieAge FLOAT 0.35\n"));
 	effect->Step(k_Step);
-	ASSERT_EQ(world.sounds.size(), 1u);
-	EXPECT_EQ(world.sounds[0]->sound.action.sound, "SOUND_SPELL_HEAL");
-	EXPECT_NE(world.sounds[0]->atom, nullptr);
+	ASSERT_EQ(_world.sounds.size(), 1u);
+	EXPECT_EQ(_world.sounds[0]->sound.action.sound, "SOUND_SPELL_HEAL");
+	EXPECT_NE(_world.sounds[0]->atom, nullptr);
 	// Started once, kept while the atom lives
 	effect->Step(k_Step);
-	EXPECT_EQ(world.sounds.size(), 1u);
+	EXPECT_EQ(_world.sounds.size(), 1u);
 	for (int step = 0; step < 5; ++step)
 	{
 		effect->Step(k_Step);
 	}
-	EXPECT_EQ(world.sounds[0]->atom, nullptr);
+	EXPECT_EQ(_world.sounds[0]->atom, nullptr);
 }
 
 TEST_F(ParticleMiracleTest, SparklesComeOffTheModelOfTheObjectTheEffectIsGiven)
 {
 	const auto pile = static_cast<entt::entity>(7);
-	world.objects[pile] = {10.0f, 0.0f, 20.0f};
+	_world.objects[pile] = {10.0f, 0.0f, 20.0f};
 	auto effect =
 	    Make(Header() + Object("ParticleSpriteCreator", "Grain", k_Point) +
 	         Object("CreateRule_GameObjectRef", "Anchor", "PROPERTY Group INTEGER 0\nPROPERTY NextGroups ARRAY SIZE 1 1\n") +
@@ -789,7 +789,7 @@ TEST_F(ParticleMiracleTest, SparklesComeOffTheModelOfTheObjectTheEffectIsGiven)
 	}
 	// Once the object goes the anchor stays where it was, and points at it on the ground are not above the land: the
 	// sparkles die out and no more come
-	world.objects.clear();
+	_world.objects.clear();
 	for (int i = 0; i < 25; ++i)
 	{
 		effect->Step(k_Step);
@@ -830,11 +830,11 @@ TEST_F(ParticleMiracleTest, EachStormBoltComesDownWhereItWasLetDownWithThunderHe
 	EXPECT_EQ(bolts->AtomCount(), 2u);
 	// Each with its bolt's group under it, beside the group they are in
 	EXPECT_EQ(bolts->CollectionCount(), 3u);
-	ASSERT_EQ(world.sounds.size(), 2u);
+	ASSERT_EQ(_world.sounds.size(), 2u);
 	// The last let down comes first; each thunders from the land under its cloud
-	EXPECT_EQ(world.sounds[0]->position, glm::vec3(-30.0f, 0.0f, 5.0f));
-	EXPECT_EQ(world.sounds[1]->position, glm::vec3(10.0f, 0.0f, 20.0f));
-	for (const auto& sound : world.sounds)
+	EXPECT_EQ(_world.sounds[0]->position, glm::vec3(-30.0f, 0.0f, 5.0f));
+	EXPECT_EQ(_world.sounds[1]->position, glm::vec3(10.0f, 0.0f, 20.0f));
+	for (const auto& sound : _world.sounds)
 	{
 		EXPECT_EQ(sound->sound.action.sound, "SOUND_SPELL_LIGHTNING");
 		EXPECT_TRUE(sound->sound.travelsAtSoundSpeed);

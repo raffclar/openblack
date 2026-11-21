@@ -17,6 +17,7 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Hand/HandGrabRules.h"
 #include "Particles/SurfaceOfRevolution.h"
 
@@ -119,7 +120,7 @@ TEST(GlmOrder6, TheLightOfALitParticleMesh)
 		{
 			for (int k = 0; k < 3; ++k)
 			{
-				matrix[i][k] = std::bit_cast<float>(c.matrix.at(static_cast<size_t>(3 * i + k)));
+				matrix[i][k] = std::bit_cast<float>(c.matrix.at(ToIndex(3 * i + k)));
 			}
 		}
 		const auto towards = particles::surface::TowardsLight(matrix, Vec(c.light));

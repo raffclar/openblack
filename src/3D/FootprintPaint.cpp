@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "Common/IntegerSteps.h"
 #include "Common/NearestWhole.h"
 
 namespace openblack::footprint_paint
@@ -206,8 +207,8 @@ void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, 
 			{
 				const int texelU = std::clamp(Nearest(u), 0, picture.width - 1);
 				const int texelV = std::clamp(Nearest(v), 0, picture.height - 1);
-				const auto texel = picture.texels[static_cast<size_t>((picture.width * texelV) + texelU)];
-				auto& land = block[static_cast<size_t>((row * spans.side) + column)];
+				const auto texel = picture.texels[ToIndex((picture.width * texelV) + texelU)];
+				auto& land = block[ToIndex((row * spans.side) + column)];
 				land = mix == Mix::Colour ? Paint(land, texel) : LowerAlpha(land, texel);
 			}
 			u = u + du;

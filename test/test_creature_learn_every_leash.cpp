@@ -51,11 +51,11 @@ protected:
 		Locator::infoConstants::emplace(*_info);
 		Locator::entitiesRegistry::emplace<Registry>();
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = registry.Create();
-		registry.Assign<Creature>(creature);
-		registry.Assign<CreatureMindState>(creature);
-		registry.Assign<CreatureLeash>(creature);
-		minds.StartMind(creature);
+		_creature = registry.Create();
+		registry.Assign<Creature>(_creature);
+		registry.Assign<CreatureMindState>(_creature);
+		registry.Assign<CreatureLeash>(_creature);
+		_minds.StartMind(_creature);
 	}
 	void TearDown() override
 	{
@@ -66,7 +66,7 @@ protected:
 	/// A mind file of the creature's own mind, at a stage of growing up, that knows no leash
 	std::shared_ptr<const creaturemind::MindFileData> MindAtStage(int32_t stage)
 	{
-		auto file = minds.SaveMind(creature);
+		auto file = _minds.SaveMind(_creature);
 		EXPECT_TRUE(file.has_value());
 		auto made = std::make_shared<creaturemind::MindFileData>(file.value_or(creaturemind::MindFileData {}));
 		made->developmentPhase = stage;
@@ -75,8 +75,8 @@ protected:
 	}
 
 	std::unique_ptr<InfoConstants> _info;
-	CreatureMindSystem minds;
-	entt::entity creature {entt::null};
+	CreatureMindSystem _minds;
+	entt::entity _creature {entt::null};
 };
 
 } // namespace
@@ -85,15 +85,15 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureLearnEveryLeash, EachLeashWordOfTheMindBecomesOne)
 {
-	minds.TakeUpMindFile(creature, MindAtStage(5));
+	_minds.TakeUpMindFile(_creature, MindAtStage(5));
 	auto& registry = Locator::entitiesRegistry::value();
-	ASSERT_TRUE(registry.Get<const CreatureMindState>(creature).learnt.has_value());
-	EXPECT_EQ(registry.Get<const CreatureMindState>(creature).learnt->leashWords, (std::array<uint32_t, 4> {0, 0, 0, 0}));
-	EXPECT_TRUE(registry.Get<const CreatureLeash>(creature).known.none());
+	ASSERT_TRUE(registry.Get<const CreatureMindState>(_creature).learnt.has_value());
+	EXPECT_EQ(registry.Get<const CreatureMindState>(_creature).learnt->leashWords, (std::array<uint32_t, 4> {0, 0, 0, 0}));
+	EXPECT_TRUE(registry.Get<const CreatureLeash>(_creature).known.none());
 
-	minds.LearnEveryLeash(creature);
-	EXPECT_EQ(registry.Get<const CreatureMindState>(creature).learnt->leashWords, (std::array<uint32_t, 4> {1, 1, 1, 1}));
-	EXPECT_TRUE(registry.Get<const CreatureLeash>(creature).known.all());
+	_minds.LearnEveryLeash(_creature);
+	EXPECT_EQ(registry.Get<const CreatureMindState>(_creature).learnt->leashWords, (std::array<uint32_t, 4> {1, 1, 1, 1}));
+	EXPECT_TRUE(registry.Get<const CreatureLeash>(_creature).known.all());
 }
 
 // A later mind file, such as a swap, gives its own stage and leashes. The creature does not grow up or learn the leashes
@@ -101,14 +101,14 @@ TEST_F(CreatureLearnEveryLeash, EachLeashWordOfTheMindBecomesOne)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureLearnEveryLeash, ALaterMindFileKeepsItsOwnStageAndLeashes)
 {
-	minds.TakeUpMindFile(creature, MindAtStage(13));
-	minds.LearnEveryLeash(creature);
+	_minds.TakeUpMindFile(_creature, MindAtStage(13));
+	_minds.LearnEveryLeash(_creature);
 
-	minds.TakeUpMindFile(creature, MindAtStage(3));
+	_minds.TakeUpMindFile(_creature, MindAtStage(3));
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto& mind = registry.Get<const CreatureMindState>(creature);
+	const auto& mind = registry.Get<const CreatureMindState>(_creature);
 	EXPECT_EQ(mind.developmentPhase, 3u);
 	ASSERT_TRUE(mind.learnt.has_value());
 	EXPECT_EQ(mind.learnt->leashWords, (std::array<uint32_t, 4> {0, 0, 0, 0}));
-	EXPECT_TRUE(registry.Get<const CreatureLeash>(creature).known.none());
+	EXPECT_TRUE(registry.Get<const CreatureLeash>(_creature).known.none());
 }

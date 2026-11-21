@@ -27,6 +27,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRouteSearch.h"
 #include "ECS/BuildingSites.h"
@@ -349,7 +350,7 @@ private:
 	[[nodiscard]] static route::Obstacles::BlockGatherer BlockGatherer(std::shared_ptr<Gathered> gathered)
 	{
 		return [gathered = std::move(gathered)](glm::ivec2 block, route::Obstacles& into) {
-			const auto index = static_cast<size_t>((block.y * route::Obstacles::k_BlocksPerSide) + block.x);
+			const auto index = ToIndex((block.y * route::Obstacles::k_BlocksPerSide) + block.x);
 			if (gathered->keep && gathered->blocks[index].has_value())
 			{
 				gathered->blocks[index]->AddTo(into);

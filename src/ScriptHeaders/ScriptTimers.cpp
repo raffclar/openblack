@@ -9,6 +9,7 @@
 
 #include "ScriptTimers.h"
 
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 namespace openblack::script::timers
@@ -95,7 +96,7 @@ void CountdownTimer::Reset()
 
 float CountdownTimer::GetSecondsLeft() const
 {
-	return static_cast<float>(_turnsLeft / static_cast<uint32_t>(k_TurnsPerSecond));
+	return static_cast<float>(WholeQuotient(_turnsLeft, static_cast<uint32_t>(k_TurnsPerSecond)));
 }
 
 } // namespace openblack::script::timers

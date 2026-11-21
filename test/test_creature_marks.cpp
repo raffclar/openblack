@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureSkin.h"
 
@@ -140,7 +141,7 @@ TEST(CreatureMarks, WoundsAreCentredAndCutAtTheEdges)
 	std::vector<uint16_t> skin(k_SkinTexels, 0x0000);
 	const auto art = FakeArt({0xFF, 0xFF, 0xFF}, 255, {0xFF, 0xFF, 0xFF}, 255);
 	PaintWound(skin, 256, art, {.u = 4, .v = 100, .skin = 0, .age = 0, .type = 3, .column = 1});
-	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 256) + x)); };
+	const auto at = [&skin](int x, int y) { return skin.at(ToIndex((y * 256) + x)); };
 	// 32 texels square about its place, the part off the left edge left out
 	EXPECT_EQ(at(0, 84), 0xFFFF);
 	EXPECT_EQ(at(19, 115), 0xFFFF);
@@ -176,7 +177,7 @@ TEST(CreatureMarks, OnAHalfSizeSkinAWoundIsAtHalfItsPlaceAndTakesTheSecondTexelO
 		}
 	}
 	PaintWound(skin, 128, art, {.u = 101, .v = 41, .skin = 0, .age = 0, .type = 3, .column = 1});
-	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 128) + x)); };
+	const auto at = [&skin](int x, int y) { return skin.at(ToIndex((y * 128) + x)); };
 	// 16 texels square about (50, 20), every one from an odd texel of the picture
 	EXPECT_EQ(at(42, 12), 0xFFFF);
 	EXPECT_EQ(at(57, 27), 0xFFFF);
@@ -251,7 +252,7 @@ TEST(CreatureMarks, SkinsArePaintedTattoosThenWoundsThenBlood)
 	std::vector<uint16_t> out(k_SkinTexels);
 	Compose(out, base, variant, 255,
 	        {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = art.get(), .masks = &masks});
-	const auto at = [&out](int x, int y) { return out.at(static_cast<size_t>((y * 256) + x)); };
+	const auto at = [&out](int x, int y) { return out.at(ToIndex((y * 256) + x)); };
 	// The variant at full weight, white; a white tattoo over the middle; a black wound over that; blood on top
 	EXPECT_EQ(at(5, 5), 0x0FFF);
 	EXPECT_EQ(at(100, 100), 0xFFFF);
@@ -294,7 +295,7 @@ TEST(CreatureMarks, AHalfSizeSkinIsPaintedAtHalfThePlacesAndSizes)
 	std::vector<uint16_t> out(k_HalfTexels);
 	Compose(out, base, variant, 255,
 	        {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = art.get(), .masks = &masks});
-	const auto at = [&out](int x, int y) { return out.at(static_cast<size_t>((y * 128) + x)); };
+	const auto at = [&out](int x, int y) { return out.at(ToIndex((y * 128) + x)); };
 	// The tattoo is 32 texels square about (64, 64), the wound 16 texels square, the blood one texel at the middle
 	EXPECT_EQ(at(48, 48), 0xFFFF);
 	EXPECT_EQ(at(47, 64), 0x0FFF);
@@ -337,7 +338,7 @@ TEST(CreatureMarks, EachSlotPaintsWithItsMaskAndALaterSlotPaintsOver)
 	std::vector<uint16_t> out(k_SkinTexels);
 	Compose(out, base, {}, 0,
 	        {.skinIndex = 0, .tattoos = tattoos, .sites = sites, .marks = marks, .art = art.get(), .masks = &masks});
-	const auto at = [&out](int x, int y) { return out.at(static_cast<size_t>((y * 256) + x)); };
+	const auto at = [&out](int x, int y) { return out.at(ToIndex((y * 256) + x)); };
 	EXPECT_EQ(at(100, 128), 0xFF00);
 	// Where they overlap, the later slot shows
 	EXPECT_EQ(at(130, 128), 0xF00F);

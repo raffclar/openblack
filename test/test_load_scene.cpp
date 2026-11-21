@@ -41,22 +41,22 @@ public:
 protected:
 	void SetUp() override
 	{
-		static const auto mock_game_path = std::filesystem::path(TEST_BINARY_DIR) / "mock";
+		static const auto k_MockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
 		auto args = openblack::Arguments {
 		    .graphicsBackend = openblack::GraphicsBackend::Noop,
-		    .gamePath = mock_game_path.string(),
+		    .gamePath = k_MockGamePath.string(),
 		    .numFramesToSimulate = 0,
 		    .logFile = "stdout",
 		    .background = true,
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::debug);
-		args.profileFolder = profileFolder_.Path();
-		game_ = std::make_unique<openblack::Game>(std::move(args));
-		ASSERT_TRUE(game_->Initialize());
+		args.profileFolder = _profileFolder.Path();
+		_game = std::make_unique<openblack::Game>(std::move(args));
+		ASSERT_TRUE(_game->Initialize());
 	}
-	void TearDown() override { game_.reset(); }
-	const openblack::test::TestTempFolder profileFolder_;
-	std::unique_ptr<openblack::Game> game_;
+	void TearDown() override { _game.reset(); }
+	const openblack::test::TestTempFolder _profileFolder;
+	std::unique_ptr<openblack::Game> _game;
 };
 
 TEST_F(LoadScene, minimal)

@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 
 namespace
@@ -113,7 +115,8 @@ glm::vec4 film_effects::SheetCell(int32_t frame)
 {
 	constexpr int32_t k_Columns = 8;
 	constexpr float k_Size = 1.0f / 8.0f;
-	return {static_cast<float>(frame % k_Columns) * k_Size, static_cast<float>(frame / k_Columns) * k_Size, k_Size, k_Size};
+	return {static_cast<float>(frame % k_Columns) * k_Size, static_cast<float>(WholeQuotient(frame, k_Columns)) * k_Size,
+	        k_Size, k_Size};
 }
 
 std::array<film_effects::Ray, film_effects::k_RayCount>

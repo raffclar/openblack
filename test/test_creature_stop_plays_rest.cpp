@@ -62,23 +62,23 @@ class CreatureCarriedTest: public ::testing::Test
 protected:
 	void SetUp() override
 	{
-		creature = registry.Create();
-		thing = registry.Create();
-		registry.Assign<CreatureHeldObject>(creature, CreatureHeldObject {.object = thing});
-		registry.Assign<HeldByCreature>(thing, HeldByCreature {.creature = creature});
+		_creature = _registry.Create();
+		_thing = _registry.Create();
+		_registry.Assign<CreatureHeldObject>(_creature, CreatureHeldObject {.object = _thing});
+		_registry.Assign<HeldByCreature>(_thing, HeldByCreature {.creature = _creature});
 	}
 
 	void Act(actions::Kind kind, actions::Status status, bool released)
 	{
-		auto& action = registry.Assign<CreatureObjectAction>(creature);
+		auto& action = _registry.Assign<CreatureObjectAction>(_creature);
 		action.kind = kind;
 		action.status = status;
 		action.eventDone = released;
 	}
 
-	Registry registry;
-	entt::entity creature {entt::null};
-	entt::entity thing {entt::null};
+	Registry _registry;
+	entt::entity _creature {entt::null};
+	entt::entity _thing {entt::null};
 };
 } // namespace
 
@@ -99,11 +99,11 @@ TEST(CreatureCarriedRules, APreparedThrowCarriesNothing)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureCarriedTest, TheCreatureCarriesWhatItsHandHolds)
 {
-	EXPECT_EQ(creature_carried::CarriedBy(registry, creature), thing);
-	EXPECT_EQ(creature_carried::CarrierOf(registry, thing), creature);
-	EXPECT_TRUE(creature_carried::Carries(registry, creature, thing));
+	EXPECT_EQ(creature_carried::CarriedBy(_registry, _creature), _thing);
+	EXPECT_EQ(creature_carried::CarrierOf(_registry, _thing), _creature);
+	EXPECT_TRUE(creature_carried::Carries(_registry, _creature, _thing));
 	Act(actions::Kind::Keep, actions::Status::Running, false);
-	EXPECT_EQ(creature_carried::CarriedBy(registry, creature), thing);
+	EXPECT_EQ(creature_carried::CarriedBy(_registry, _creature), _thing);
 }
 
 // The hand keeps the thing until the release, but the creature and the thing see no carry
@@ -111,33 +111,33 @@ TEST_F(CreatureCarriedTest, TheCreatureCarriesWhatItsHandHolds)
 TEST_F(CreatureCarriedTest, APreparedThrowCarriesNothingUntilTheRelease)
 {
 	Act(actions::Kind::Throw, actions::Status::Running, false);
-	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
-	EXPECT_FALSE(creature_carried::CarrierOf(registry, thing).has_value());
-	EXPECT_FALSE(creature_carried::Carries(registry, creature, thing));
-	registry.Get<CreatureObjectAction>(creature).eventDone = true;
-	EXPECT_EQ(creature_carried::CarriedBy(registry, creature), thing);
+	EXPECT_FALSE(creature_carried::CarriedBy(_registry, _creature).has_value());
+	EXPECT_FALSE(creature_carried::CarrierOf(_registry, _thing).has_value());
+	EXPECT_FALSE(creature_carried::Carries(_registry, _creature, _thing));
+	_registry.Get<CreatureObjectAction>(_creature).eventDone = true;
+	EXPECT_EQ(creature_carried::CarriedBy(_registry, _creature), _thing);
 }
 
 // The script test "in creature hand" reads the hand. It sees the thing also while the creature prepares a throw.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureCarriedTest, TheHandHoldsTheThingWhileTheCreaturePreparesAThrow)
 {
-	EXPECT_EQ(creature_carried::InHandOf(registry, creature), thing);
+	EXPECT_EQ(creature_carried::InHandOf(_registry, _creature), _thing);
 	Act(actions::Kind::Throw, actions::Status::Running, false);
-	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
-	EXPECT_EQ(creature_carried::InHandOf(registry, creature), thing);
-	registry.Remove<CreatureHeldObject>(creature);
-	EXPECT_FALSE(creature_carried::InHandOf(registry, creature).has_value());
+	EXPECT_FALSE(creature_carried::CarriedBy(_registry, _creature).has_value());
+	EXPECT_EQ(creature_carried::InHandOf(_registry, _creature), _thing);
+	_registry.Remove<CreatureHeldObject>(_creature);
+	EXPECT_FALSE(creature_carried::InHandOf(_registry, _creature).has_value());
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureCarriedTest, AnEmptyHandCarriesNothing)
 {
-	registry.Remove<CreatureHeldObject>(creature);
-	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
-	EXPECT_FALSE(creature_carried::CarrierOf(registry, thing).has_value());
-	const auto other = registry.Create();
-	EXPECT_FALSE(creature_carried::CarrierOf(registry, other).has_value());
+	_registry.Remove<CreatureHeldObject>(_creature);
+	EXPECT_FALSE(creature_carried::CarriedBy(_registry, _creature).has_value());
+	EXPECT_FALSE(creature_carried::CarrierOf(_registry, _thing).has_value());
+	const auto other = _registry.Create();
+	EXPECT_FALSE(creature_carried::CarrierOf(_registry, other).has_value());
 }
 
 // At each turn of the creature, the thing that it carries takes the place of the creature, not the place of its hand.
@@ -146,15 +146,15 @@ TEST_F(CreatureCarriedTest, AnEmptyHandCarriesNothing)
 TEST_F(CreatureCarriedTest, TheCarriedThingTakesThePlaceOfTheCreature)
 {
 	const glm::mat3 turned {0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f};
-	registry.Assign<Transform>(creature, glm::vec3(1234.5f, 17.25f, 2345.75f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Transform>(thing, glm::vec3(1200.0f, 20.0f, 2300.0f), turned, glm::vec3(0.5f));
-	creature_carried::FollowCarrier(registry, creature);
-	const auto& at = registry.Get<const Transform>(thing);
+	_registry.Assign<Transform>(_creature, glm::vec3(1234.5f, 17.25f, 2345.75f), glm::mat3(1.0f), glm::vec3(1.0f));
+	_registry.Assign<Transform>(_thing, glm::vec3(1200.0f, 20.0f, 2300.0f), turned, glm::vec3(0.5f));
+	creature_carried::FollowCarrier(_registry, _creature);
+	const auto& at = _registry.Get<const Transform>(_thing);
 	EXPECT_EQ(at.position, glm::vec3(1234.5f, 17.25f, 2345.75f));
 	EXPECT_EQ(at.rotation, turned);
 	EXPECT_EQ(at.scale, glm::vec3(0.5f));
-	const auto place = thing_map_place::Of(registry, thing);
-	const auto carrierPlace = thing_map_place::Of(registry, creature);
+	const auto place = thing_map_place::Of(_registry, _thing);
+	const auto carrierPlace = thing_map_place::Of(_registry, _creature);
 	EXPECT_EQ(place.x, carrierPlace.x);
 	EXPECT_EQ(place.z, carrierPlace.z);
 }
@@ -165,15 +165,15 @@ TEST_F(CreatureCarriedTest, TheCarriedThingTakesThePlaceOfTheCreature)
 TEST_F(CreatureCarriedTest, AThingThatTheCreatureDoesNotCarryStaysWhereItIs)
 {
 	const glm::vec3 where {1200.0f, 20.0f, 2300.0f};
-	registry.Assign<Transform>(creature, glm::vec3(1234.5f, 17.25f, 2345.75f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Transform>(thing, where, glm::mat3(1.0f), glm::vec3(1.0f));
+	_registry.Assign<Transform>(_creature, glm::vec3(1234.5f, 17.25f, 2345.75f), glm::mat3(1.0f), glm::vec3(1.0f));
+	_registry.Assign<Transform>(_thing, where, glm::mat3(1.0f), glm::vec3(1.0f));
 	Act(actions::Kind::Throw, actions::Status::Running, false);
-	creature_carried::FollowCarrier(registry, creature);
-	EXPECT_EQ(registry.Get<const Transform>(thing).position, where);
-	registry.Remove<CreatureObjectAction>(creature);
-	registry.Remove<CreatureHeldObject>(creature);
-	creature_carried::FollowCarrier(registry, creature);
-	EXPECT_EQ(registry.Get<const Transform>(thing).position, where);
+	creature_carried::FollowCarrier(_registry, _creature);
+	EXPECT_EQ(_registry.Get<const Transform>(_thing).position, where);
+	_registry.Remove<CreatureObjectAction>(_creature);
+	_registry.Remove<CreatureHeldObject>(_creature);
+	creature_carried::FollowCarrier(_registry, _creature);
+	EXPECT_EQ(_registry.Get<const Transform>(_thing).position, where);
 }
 
 // A throw that ended before the hand let go leaves the thing in the hand. The creature does not carry it, also when the
@@ -182,18 +182,18 @@ TEST_F(CreatureCarriedTest, AThingThatTheCreatureDoesNotCarryStaysWhereItIs)
 TEST_F(CreatureCarriedTest, AThrowThatEndedBeforeTheReleaseLeavesTheThingInTheHandButNotCarried)
 {
 	const glm::vec3 where {1200.0f, 20.0f, 2300.0f};
-	registry.Assign<Transform>(creature, glm::vec3(1234.5f, 17.25f, 2345.75f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Transform>(thing, where, glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Get<CreatureHeldObject>(creature).carried = false;
-	EXPECT_EQ(creature_carried::InHandOf(registry, creature), thing);
-	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
-	EXPECT_FALSE(creature_carried::CarrierOf(registry, thing).has_value());
+	_registry.Assign<Transform>(_creature, glm::vec3(1234.5f, 17.25f, 2345.75f), glm::mat3(1.0f), glm::vec3(1.0f));
+	_registry.Assign<Transform>(_thing, where, glm::mat3(1.0f), glm::vec3(1.0f));
+	_registry.Get<CreatureHeldObject>(_creature).carried = false;
+	EXPECT_EQ(creature_carried::InHandOf(_registry, _creature), _thing);
+	EXPECT_FALSE(creature_carried::CarriedBy(_registry, _creature).has_value());
+	EXPECT_FALSE(creature_carried::CarrierOf(_registry, _thing).has_value());
 	Act(actions::Kind::Throw, actions::Status::Done, false);
-	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
-	registry.Remove<CreatureObjectAction>(creature);
-	EXPECT_FALSE(creature_carried::CarriedBy(registry, creature).has_value());
-	creature_carried::FollowCarrier(registry, creature);
-	EXPECT_EQ(registry.Get<const Transform>(thing).position, where);
+	EXPECT_FALSE(creature_carried::CarriedBy(_registry, _creature).has_value());
+	_registry.Remove<CreatureObjectAction>(_creature);
+	EXPECT_FALSE(creature_carried::CarriedBy(_registry, _creature).has_value());
+	creature_carried::FollowCarrier(_registry, _creature);
+	EXPECT_EQ(_registry.Get<const Transform>(_thing).position, where);
 }
 
 // The body ends the throw when the time and the step get to the length of the flat throw, before the step that lets

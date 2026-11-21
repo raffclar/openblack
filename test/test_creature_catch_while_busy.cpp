@@ -99,12 +99,12 @@ protected:
 		_info = std::make_unique<InfoConstants>();
 		Locator::infoConstants::emplace(*_info);
 		Locator::entitiesRegistry::emplace<Registry>();
-		hands = &static_cast<PointingHands&>(Locator::creatureObjectActionSystem::emplace<PointingHands>());
+		_hands = &static_cast<PointingHands&>(Locator::creatureObjectActionSystem::emplace<PointingHands>());
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = registry.Create();
-		thing = registry.Create();
-		registry.Assign<CreatureMindState>(creature);
-		registry.Assign<CreatureAnimation>(creature);
+		_creature = registry.Create();
+		_thing = registry.Create();
+		registry.Assign<CreatureMindState>(_creature);
+		registry.Assign<CreatureAnimation>(_creature);
 	}
 	void TearDown() override
 	{
@@ -119,10 +119,10 @@ protected:
 	}
 
 	std::unique_ptr<InfoConstants> _info;
-	CreatureMindSystem minds;
-	PointingHands* hands {nullptr};
-	entt::entity creature {entt::null};
-	entt::entity thing {entt::null};
+	CreatureMindSystem _minds;
+	PointingHands* _hands {nullptr};
+	entt::entity _creature {entt::null};
+	entt::entity _thing {entt::null};
 };
 } // namespace
 
@@ -130,35 +130,35 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureCatchWhileBusyTest, TheCatchEndsAPoint)
 {
-	minds.ForceCatch(creature, thing);
-	EXPECT_EQ(hands->pointsEnded, (std::vector<entt::entity> {creature}));
+	_minds.ForceCatch(_creature, _thing);
+	EXPECT_EQ(_hands->pointsEnded, (std::vector<entt::entity> {_creature}));
 	// The point plays its end: the hands do not stop at once
-	EXPECT_TRUE(hands->cancelled.empty());
+	EXPECT_TRUE(_hands->cancelled.empty());
 }
 
 // The catch stops a dance, which then plays its finish
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureCatchWhileBusyTest, TheCatchEndsADance)
 {
-	auto& body = BodyOf(creature);
+	auto& body = BodyOf(_creature);
 	body.kind = creature_layers::BodyAction::Kind::Dance;
 	body.phase = creature_layers::BodyAction::Phase::Loop;
 	const auto ended = creature_layers::EndDance(body);
 	ASSERT_NE(ended.phase, body.phase);
-	minds.ForceCatch(creature, thing);
-	EXPECT_EQ(BodyOf(creature).phase, ended.phase);
+	_minds.ForceCatch(_creature, _thing);
+	EXPECT_EQ(BodyOf(_creature).phase, ended.phase);
 }
 
 // An action that the body plays once is not cut short: the catch waits for its end
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureCatchWhileBusyTest, TheCatchLetsAnActionPlayOn)
 {
-	auto& body = BodyOf(creature);
+	auto& body = BodyOf(_creature);
 	body.kind = creature_layers::BodyAction::Kind::Once;
 	body.animations = {7, 0, 0};
 	body.timeMs = 250.0f;
-	minds.ForceCatch(creature, thing);
-	EXPECT_EQ(BodyOf(creature).kind, creature_layers::BodyAction::Kind::Once);
-	EXPECT_FLOAT_EQ(BodyOf(creature).timeMs, 250.0f);
-	EXPECT_TRUE(creature_layers::IsPlaying(BodyOf(creature)));
+	_minds.ForceCatch(_creature, _thing);
+	EXPECT_EQ(BodyOf(_creature).kind, creature_layers::BodyAction::Kind::Once);
+	EXPECT_FLOAT_EQ(BodyOf(_creature).timeMs, 250.0f);
+	EXPECT_TRUE(creature_layers::IsPlaying(BodyOf(_creature)));
 }

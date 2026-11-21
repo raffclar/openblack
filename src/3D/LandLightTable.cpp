@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "Common/IntegerSteps.h"
+
 using namespace openblack;
 
 namespace
@@ -153,7 +155,8 @@ void LandLightTable::Build(const LandLightPalette& palette, float skyType, float
 		const uint32_t g = (land >> 8) & 0xFFu;
 		const uint32_t b = land & 0xFFu;
 		auto k = static_cast<int32_t>(std::min(255u, (r + 4 * g + 3 * b) / 8 + 8));
-		_haze.colour = glm::vec3(static_cast<float>(r / 3), static_cast<float>(g / 3), static_cast<float>(b / 3));
+		_haze.colour = glm::vec3(static_cast<float>(WholeQuotient(r, 3)), static_cast<float>(WholeQuotient(g, 3)),
+		                         static_cast<float>(WholeQuotient(b, 3)));
 		// 0 by day and at night, 1 at dusk
 		const float dusk = skyType > 1.0f ? 2.0f - skyType : skyType;
 		const float duskSquared = dusk * dusk;

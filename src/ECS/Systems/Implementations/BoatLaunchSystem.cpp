@@ -172,7 +172,7 @@ float LandHeight(glm::vec2 xz)
 /// The wake's sprites: the smoke sheet, eight cells a row, lying on the sea, blended over what is behind
 const particles::Creator& WakeCreator()
 {
-	static const particles::Creator creator = [] {
+	static const particles::Creator k_Creator = [] {
 		particles::Creator wake;
 		wake.kind = particles::Creator::Kind::Sprite;
 		wake.className = "BoatWake";
@@ -183,7 +183,7 @@ const particles::Creator& WakeCreator()
 		wake.additive = false;
 		return wake;
 	}();
-	return creator;
+	return k_Creator;
 }
 } // namespace
 

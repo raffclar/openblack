@@ -182,12 +182,12 @@ TEST(GroundShadow, ATriangleCoversTheSamplesBetweenItsEdgesRowByRow)
 	const std::array<glm::vec2, 3> corners {glm::vec2(0.0f, 0.0f), glm::vec2(8.0f, 4.0f), glm::vec2(0.0f, 4.0f)};
 	ASSERT_TRUE(GroundShadow::Counted(corners) || GroundShadow::Counted({corners[0], corners[2], corners[1]}));
 	GroundShadow::Cover(coverage, corners, true, false);
-	EXPECT_EQ(coverage.rows[0].count(), 0); // the slanted edge starts at x 0 on row 0
-	EXPECT_EQ(coverage.rows[1].count(), 2);
-	EXPECT_EQ(coverage.rows[3].count(), 6);
-	EXPECT_TRUE(coverage.rows[3].test(0));
-	EXPECT_FALSE(coverage.rows[3].test(6));
-	EXPECT_EQ(coverage.rows[4].count(), 0); // the bottom row is not drawn
+	EXPECT_EQ(coverage.rows[0].Count(), 0); // the slanted edge starts at x 0 on row 0
+	EXPECT_EQ(coverage.rows[1].Count(), 2);
+	EXPECT_EQ(coverage.rows[3].Count(), 6);
+	EXPECT_TRUE(coverage.rows[3].Test(0));
+	EXPECT_FALSE(coverage.rows[3].Test(6));
+	EXPECT_EQ(coverage.rows[4].Count(), 0); // the bottom row is not drawn
 }
 
 TEST(GroundShadow, AOneSidedTriangleCountsOnlyFacingOneWay)
@@ -198,11 +198,11 @@ TEST(GroundShadow, AOneSidedTriangleCountsOnlyFacingOneWay)
 	GroundShadow::Cover(one, corners, false, false);
 	GroundShadow::Coverage other;
 	GroundShadow::Cover(other, turned, false, false);
-	EXPECT_NE(one.rows[3].count(), other.rows[3].count());
+	EXPECT_NE(one.rows[3].Count(), other.rows[3].Count());
 	// Drawn from both sides, both count the same
 	GroundShadow::Coverage both;
 	GroundShadow::Cover(both, turned, true, false);
-	EXPECT_EQ(both.rows[3].count(), 6);
+	EXPECT_EQ(both.rows[3].Count(), 6);
 }
 
 TEST(GroundShadow, TheHandCoversOnlyTheSecondRowOfEachPair)
@@ -211,8 +211,8 @@ TEST(GroundShadow, TheHandCoversOnlyTheSecondRowOfEachPair)
 	const std::array<glm::vec2, 3> square {glm::vec2(4.0f, 2.0f), glm::vec2(8.0f, 4.0f), glm::vec2(4.0f, 4.0f)};
 	GroundShadow::Cover(coverage, square, true, true);
 	GroundShadow::Cover(coverage, {glm::vec2(4.0f, 2.0f), glm::vec2(8.0f, 2.0f), glm::vec2(8.0f, 4.0f)}, true, true);
-	EXPECT_EQ(coverage.rows[2].count(), 0);
-	EXPECT_EQ(coverage.rows[3].count(), 4);
+	EXPECT_EQ(coverage.rows[2].Count(), 0);
+	EXPECT_EQ(coverage.rows[3].Count(), 4);
 	// So a texel it fully covers reaches 4 of 15 levels, what it holds 8
 	EXPECT_EQ(GroundShadow::Levels(coverage, 255)[(1 * GroundShadow::k_Texels) + 1], 4);
 	GroundShadow::Cover(coverage, square, true, false);
@@ -227,7 +227,7 @@ TEST(GroundShadow, TheTexturesRingStaysClear)
 	GroundShadow::Coverage coverage;
 	for (auto& row : coverage.rows)
 	{
-		row.set();
+		row.Set();
 	}
 	const auto levels = GroundShadow::Levels(coverage, 255);
 	EXPECT_EQ(levels[0], 0);

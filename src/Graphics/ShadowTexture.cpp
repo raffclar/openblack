@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::graphics::shadow_texture
 {
 
@@ -76,7 +78,7 @@ void Edge(Canvas& canvas, const Corner& from, const Corner& to)
 	auto v = Fixed(start.v);
 	for (int32_t i = 0; i < rows; ++i)
 	{
-		crossings.at(static_cast<size_t>(start.row + i)) = {.column = column >> 16, .u = u, .v = v};
+		crossings.at(ToIndex(start.row + i)) = {.column = column >> 16, .u = u, .v = v};
 		column += columnStep;
 		u += uStep;
 		v += vStep;

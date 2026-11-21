@@ -211,10 +211,10 @@ protected:
 			_sceneScript = std::string(std::istreambuf_iterator<char> {ifs}, {});
 		}
 
-		static const auto mockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
+		static const auto k_MockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
 		auto args = openblack::Arguments {
 		    .graphicsBackend = openblack::GraphicsBackend::Noop,
-		    .gamePath = mockGamePath.string(),
+		    .gamePath = k_MockGamePath.string(),
 		    .logFile = "stdout",
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::warn);
@@ -492,10 +492,10 @@ protected:
 
 	void Load(const std::string& mapFile)
 	{
-		static const auto mockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
+		static const auto k_MockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
 		auto args = openblack::Arguments {
 		    .graphicsBackend = openblack::GraphicsBackend::Noop,
-		    .gamePath = mockGamePath.string(),
+		    .gamePath = k_MockGamePath.string(),
 		    .logFile = "stdout",
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::warn);

@@ -229,9 +229,9 @@ TEST(SetupMessage, TheOpacitiesAreWholeStepsCutDown)
 
 TEST(DialogPainter, TheEdgeLinesAreTheEdgeColourTimesTheBoxColourIn256ths)
 {
-	constexpr auto white = glm::u8vec3(255);
-	EXPECT_EQ(DialogPainter::EdgeLineColour(white, white), glm::u8vec3(254));
-	EXPECT_EQ(DialogPainter::EdgeLineColour({255, 128, 0}, white), glm::u8vec3(254, 127, 0));
-	EXPECT_EQ(DialogPainter::EdgeLineColour({0, 0, 0}, white), glm::u8vec3(0));
-	EXPECT_EQ(DialogPainter::EdgeLineColour(white, {128, 64, 1}), glm::u8vec3(127, 63, 0));
+	constexpr auto k_White = glm::u8vec3(255);
+	EXPECT_EQ(DialogPainter::EdgeLineColour(k_White, k_White), glm::u8vec3(254));
+	EXPECT_EQ(DialogPainter::EdgeLineColour({255, 128, 0}, k_White), glm::u8vec3(254, 127, 0));
+	EXPECT_EQ(DialogPainter::EdgeLineColour({0, 0, 0}, k_White), glm::u8vec3(0));
+	EXPECT_EQ(DialogPainter::EdgeLineColour(k_White, {128, 64, 1}), glm::u8vec3(127, 63, 0));
 }

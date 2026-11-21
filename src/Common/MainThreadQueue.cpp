@@ -31,7 +31,7 @@ struct ThreadPart
 	uint32_t work {0};
 };
 
-thread_local ThreadPart t_part;
+thread_local ThreadPart t_Part;
 
 } // namespace
 
@@ -59,15 +59,15 @@ MainThreadQueue::Deferral::~Deferral()
 }
 
 MainThreadQueue::TurnScope::TurnScope(MainThreadQueue& queue)
-    : _previous(std::exchange(t_part.turn, &queue))
-    , _previousStep(std::exchange(t_part.turnStep, std::nullopt))
+    : _previous(std::exchange(t_Part.turn, &queue))
+    , _previousStep(std::exchange(t_Part.turnStep, std::nullopt))
 {
 }
 
 MainThreadQueue::TurnScope::~TurnScope()
 {
-	t_part.turn = _previous;
-	t_part.turnStep = _previousStep;
+	t_Part.turn = _previous;
+	t_Part.turnStep = _previousStep;
 }
 
 MainThreadQueue::TurnElsewhere::TurnElsewhere(MainThreadQueue& queue)
@@ -84,12 +84,12 @@ MainThreadQueue::TurnElsewhere::~TurnElsewhere()
 
 MainThreadQueue::WorkScope::WorkScope()
 {
-	++t_part.work;
+	++t_Part.work;
 }
 
 MainThreadQueue::WorkScope::~WorkScope()
 {
-	--t_part.work;
+	--t_Part.work;
 }
 
 bool MainThreadQueue::IsMainThread() const noexcept
@@ -104,17 +104,17 @@ bool MainThreadQueue::RunsAtOnce() const noexcept
 		return _deferrals == 0;
 	}
 	// Another thread that does no turn of this queue keeps its direct calls, as before the queue
-	return t_part.turn != this;
+	return t_Part.turn != this;
 }
 
 bool MainThreadQueue::InTurnCode() const noexcept
 {
-	return t_part.turn == this && t_part.work == 0;
+	return t_Part.turn == this && t_Part.work == 0;
 }
 
 bool MainThreadQueue::InTurn() const noexcept
 {
-	return t_part.turn == this;
+	return t_Part.turn == this;
 }
 
 bool MainThreadQueue::TurnRunsElsewhere() const noexcept
@@ -124,9 +124,9 @@ bool MainThreadQueue::TurnRunsElsewhere() const noexcept
 
 void MainThreadQueue::SetTurnStep(std::optional<uint32_t> step) noexcept
 {
-	if (t_part.turn == this)
+	if (t_Part.turn == this)
 	{
-		t_part.turnStep = step;
+		t_Part.turnStep = step;
 	}
 }
 
@@ -255,13 +255,13 @@ void MainThreadQueue::CheckDirect([[maybe_unused]] MainThreadApi api, [[maybe_un
                                   [[maybe_unused]] std::source_location where) noexcept
 {
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
-	auto* queue = t_part.turn;
+	auto* queue = t_Part.turn;
 	// The turn uses a service that it holds directly
-	if (queue == nullptr || t_part.work != 0 || HeldByTurn(api) || queue->GetCheck() == TurnApiCheck::Off)
+	if (queue == nullptr || t_Part.work != 0 || HeldByTurn(api) || queue->GetCheck() == TurnApiCheck::Off)
 	{
 		return;
 	}
-	queue->Record(api, what, where, t_part.turnStep);
+	queue->Record(api, what, where, t_Part.turnStep);
 #endif
 }
 

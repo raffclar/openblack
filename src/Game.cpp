@@ -282,7 +282,7 @@ bool InNetworkGame()
 
 const std::string k_WindowTitle = "openblack";
 
-Game* Game::sInstance = nullptr;
+Game* Game::s_Instance = nullptr;
 
 Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
@@ -343,7 +343,7 @@ Game::Game(Arguments&& args) noexcept
 	});
 	// The log of each part of the game
 	simulation::StartLogs(args.logFile, args.logLevels);
-	sInstance = this;
+	s_Instance = this;
 	// The logs and tools of a tool's run read the request of the run, which the game keeps
 	InitializeToolRun(_simulation, args.fightAutopilot, args.fightTranscriptFolder);
 	for (const auto& ignored : args.ignoredDeveloperOptions)
@@ -468,9 +468,9 @@ Game::~Game() noexcept
 	ReportTurnApiCheck();
 	ShutDownServices();
 	// A later caller of Instance must not get this game once it is gone
-	if (sInstance == this)
+	if (s_Instance == this)
 	{
-		sInstance = nullptr;
+		s_Instance = nullptr;
 	}
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
@@ -478,9 +478,9 @@ Game::~Game() noexcept
 	Locator::loadingScreenSystem::reset();
 	Locator::loadFinishSystem::reset();
 	// A later game, or a test, must not find this one through the static pointer
-	if (sInstance == this)
+	if (s_Instance == this)
 	{
-		sInstance = nullptr;
+		s_Instance = nullptr;
 	}
 }
 

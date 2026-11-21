@@ -13,6 +13,7 @@
 #include <array>
 #include <vector>
 
+#include "Common/IntegerSteps.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -192,10 +193,10 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	{
 		for (int column = 0; column < k_Columns; ++column)
 		{
-			flocks.push_back(
-			    {.kind = k_Kinds.at(static_cast<size_t>((row + column) % k_Columns)),
-			     .offset = {static_cast<float>(column - (k_Columns / 2)) * 90.0f, 40.0f + (static_cast<float>(row) * 90.0f)},
-			     .count = 20});
+			flocks.push_back({.kind = k_Kinds.at(static_cast<size_t>((row + column) % k_Columns)),
+			                  .offset = {static_cast<float>(column - (WholeQuotient(k_Columns, 2))) * 90.0f,
+			                             40.0f + (static_cast<float>(row) * 90.0f)},
+			                  .count = 20});
 		}
 	}
 	all.push_back({
@@ -220,7 +221,7 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	for (int kind = 0; kind < k_KindCount; ++kind)
 	{
 		const auto column = static_cast<float>(kind % k_PerRow) - (static_cast<float>(k_PerRow - 1) * 0.5f);
-		const auto row = static_cast<float>(kind / k_PerRow);
+		const auto row = static_cast<float>(WholeQuotient(kind, k_PerRow));
 		animals.push_back({.type = static_cast<AnimalInfo>(kind),
 		                   .offset = {column * k_Spacing, 30.0f + (row * 12.0f)},
 		                   .scriptControlled = true});

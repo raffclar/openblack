@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <bit>
 
+#include "Common/IntegerSteps.h"
+
 namespace openblack::graphics::tree_shadows
 {
 
@@ -143,7 +145,7 @@ AlphaMask MaskOf(std::span<const uint16_t> texels, uint32_t width, uint32_t heig
 		for (int column = 0; column < k_MaskSide; ++column)
 		{
 			const auto x = static_cast<uint32_t>(static_cast<float>(column) * acrossStep);
-			mask[static_cast<size_t>(row * k_MaskSide + column)] = static_cast<uint8_t>((texels[y * width + x] >> 8) & 0xF0);
+			mask[ToIndex(row * k_MaskSide + column)] = static_cast<uint8_t>((texels[y * width + x] >> 8) & 0xF0);
 		}
 	}
 	return mask;
@@ -225,7 +227,7 @@ AlphaMask MaskOfCompressed(std::span<const uint8_t> blocks, uint32_t width, uint
 		for (int column = 0; column < k_MaskSide; ++column)
 		{
 			const auto x = static_cast<uint32_t>(static_cast<float>(column) * acrossStep);
-			mask[static_cast<size_t>(row * k_MaskSide + column)] = static_cast<uint8_t>(alphaAt(x, y) << 4);
+			mask[ToIndex(row * k_MaskSide + column)] = static_cast<uint8_t>(alphaAt(x, y) << 4);
 		}
 	}
 	return mask;
@@ -285,7 +287,7 @@ void Fill(Coverage& coverage, const std::array<Corner, 3>& corners, const AlphaM
 			if (z >= 0)
 			{
 				const auto place = Place(uv.y) * k_MaskSide + Place(uv.x);
-				coverage[static_cast<size_t>(x * side + z)] |= mask[static_cast<size_t>(place)];
+				coverage[ToIndex(x * side + z)] |= mask[static_cast<size_t>(place)];
 			}
 			uv += step;
 		}

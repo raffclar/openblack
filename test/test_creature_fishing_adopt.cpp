@@ -93,12 +93,12 @@ protected:
 		registry.Assign<FishFarm>(farm);
 		registry.Assign<Transform>(farm, glm::vec3(100.0f, 0.0f, 100.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 		Locator::fishFarmSystem::emplace<OneFishFarm>(farm);
-		creature = registry.Create();
-		registry.Assign<Creature>(creature);
-		registry.Assign<Transform>(creature, glm::vec3(50.0f, 0.0f, 50.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-		registry.Assign<CreatureAnimation>(creature);
-		registry.Assign<CreatureMindState>(creature);
-		minds.StartMind(creature);
+		_creature = registry.Create();
+		registry.Assign<Creature>(_creature);
+		registry.Assign<Transform>(_creature, glm::vec3(50.0f, 0.0f, 50.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<CreatureAnimation>(_creature);
+		registry.Assign<CreatureMindState>(_creature);
+		_minds.StartMind(_creature);
 	}
 	void TearDown() override
 	{
@@ -108,8 +108,8 @@ protected:
 	}
 
 	std::unique_ptr<InfoConstants> _info;
-	CreatureMindSystem minds;
-	entt::entity creature {entt::null};
+	CreatureMindSystem _minds;
+	entt::entity _creature {entt::null};
 };
 
 } // namespace
@@ -119,18 +119,18 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureFishingAdopt, AFishingPlanStartsInATurnThatPlansNoFishing)
 {
-	auto& mind = Locator::entitiesRegistry::value().Get<CreatureMindState>(creature);
+	auto& mind = Locator::entitiesRegistry::value().Get<CreatureMindState>(_creature);
 	ASSERT_TRUE(mind.desires.has_value());
 	mind.planner.round.fill(false);
 	mind.planner.best.at(static_cast<size_t>(creature_desires::Desire::Hunger)) = creature_planner::Plan {
 	    .desire = creature_desires::Desire::Hunger,
 	    .action = 0,
-	    .object = entt::to_integral(creature),
+	    .object = entt::to_integral(_creature),
 	    .priority = 2.0f,
 	};
 	mind.turn = mind.plannedTurn + 1;
 
-	minds.PlanCreatureTurn(creature);
+	_minds.PlanCreatureTurn(_creature);
 
 	ASSERT_TRUE(mind.planner.current.has_value());
 	EXPECT_EQ(mind.planner.current->action, 0u);

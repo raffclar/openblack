@@ -53,32 +53,32 @@ protected:
 			spdlog::create<spdlog::sinks::null_sink_st>("game");
 		}
 		Locator::entitiesRegistry::emplace<Registry>();
-		info = std::make_unique<InfoConstants>();
-		auto& wood = info->pot.at(static_cast<size_t>(PotInfo::MagicWood));
+		_info = std::make_unique<InfoConstants>();
+		auto& wood = _info->pot.at(static_cast<size_t>(PotInfo::MagicWood));
 		wood.resourceType = ResourceType::Wood;
 		wood.potType = PotType::PileWood;
 		wood.maxAmountInPot = 1000;
-		Locator::infoConstants::emplace(*info);
+		Locator::infoConstants::emplace(*_info);
 
 		auto& registry = Locator::entitiesRegistry::value();
-		town = registry.Create();
-		registry.Assign<Town>(town, Town {.id = k_TownId});
-		registry.Assign<TownResourceTally>(town).woodAtSites = 500.0f;
+		_town = registry.Create();
+		registry.Assign<Town>(_town, Town {.id = k_TownId});
+		registry.Assign<TownResourceTally>(_town).woodAtSites = 500.0f;
 
-		temple = registry.Create();
-		registry.Assign<Temple>(temple, Temple {.owner = PlayerNames::PLAYER_ONE, .town = static_cast<int32_t>(k_TownId)});
-		auto& templeSites = registry.Assign<BuildingSites>(temple);
-		templeSites.sites.push_back(BuildingSite {.town = town, .takesBroughtWood = true});
-		templePiles = {Pile(glm::vec3(0.0f, 0.0f, 0.0f), 100), Pile(glm::vec3(30.0f, 0.0f, 0.0f), 100)};
-		templeSites.sites.front().piles.at(0) = templePiles.at(0);
-		templeSites.sites.front().piles.at(1) = templePiles.at(1);
+		_temple = registry.Create();
+		registry.Assign<Temple>(_temple, Temple {.owner = PlayerNames::PLAYER_ONE, .town = static_cast<int32_t>(k_TownId)});
+		auto& templeSites = registry.Assign<BuildingSites>(_temple);
+		templeSites.sites.push_back(BuildingSite {.town = _town, .takesBroughtWood = true});
+		_templePiles = {Pile(glm::vec3(0.0f, 0.0f, 0.0f), 100), Pile(glm::vec3(30.0f, 0.0f, 0.0f), 100)};
+		templeSites.sites.front().piles.at(0) = _templePiles.at(0);
+		templeSites.sites.front().piles.at(1) = _templePiles.at(1);
 
-		abode = registry.Create();
-		registry.Assign<Abode>(abode, Abode {.type = AbodeNumber {}, .townId = k_TownId, .foodAmount = 0, .woodAmount = 0});
-		auto& abodeSites = registry.Assign<BuildingSites>(abode);
-		abodeSites.sites.push_back(BuildingSite {.town = town, .takesBroughtWood = true});
-		abodePile = Pile(glm::vec3(80.0f, 0.0f, 0.0f), 100);
-		abodeSites.sites.front().piles.at(0) = abodePile;
+		_abode = registry.Create();
+		registry.Assign<Abode>(_abode, Abode {.type = AbodeNumber {}, .townId = k_TownId, .foodAmount = 0, .woodAmount = 0});
+		auto& abodeSites = registry.Assign<BuildingSites>(_abode);
+		abodeSites.sites.push_back(BuildingSite {.town = _town, .takesBroughtWood = true});
+		_abodePile = Pile(glm::vec3(80.0f, 0.0f, 0.0f), 100);
+		abodeSites.sites.front().piles.at(0) = _abodePile;
 	}
 	void TearDown() override
 	{
@@ -102,16 +102,16 @@ protected:
 	}
 	[[nodiscard]] float WoodAtSites() const
 	{
-		return Locator::entitiesRegistry::value().Get<const TownResourceTally>(town).woodAtSites;
+		return Locator::entitiesRegistry::value().Get<const TownResourceTally>(_town).woodAtSites;
 	}
 
-	std::unique_ptr<InfoConstants> info;
-	ResourceStoreSystem stores;
-	entt::entity town {entt::null};
-	entt::entity temple {entt::null};
-	entt::entity abode {entt::null};
-	std::array<entt::entity, 2> templePiles {entt::null, entt::null};
-	entt::entity abodePile {entt::null};
+	std::unique_ptr<InfoConstants> _info;
+	ResourceStoreSystem _stores;
+	entt::entity _town {entt::null};
+	entt::entity _temple {entt::null};
+	entt::entity _abode {entt::null};
+	std::array<entt::entity, 2> _templePiles {entt::null, entt::null};
+	entt::entity _abodePile {entt::null};
 };
 } // namespace
 
@@ -120,11 +120,11 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(SitePileTakeTest, AHandEmptiesATempleSitePileThatStaysAndTheTownCountsLess)
 {
-	const auto pile = templePiles.at(1);
-	EXPECT_EQ(stores.TakeFromPile(pile, ResourceType::Wood, 150, PlayerNames::PLAYER_ONE, glm::vec3(29.0f, 0.0f, 0.0f)), 100u);
+	const auto pile = _templePiles.at(1);
+	EXPECT_EQ(_stores.TakeFromPile(pile, ResourceType::Wood, 150, PlayerNames::PLAYER_ONE, glm::vec3(29.0f, 0.0f, 0.0f)), 100u);
 	ASSERT_TRUE(Exists(pile));
 	EXPECT_EQ(Holds(pile), 0u);
-	EXPECT_EQ(Holds(templePiles.at(0)), 100u);
+	EXPECT_EQ(Holds(_templePiles.at(0)), 100u);
 	EXPECT_FLOAT_EQ(WoodAtSites(), 400.0f);
 }
 
@@ -134,10 +134,10 @@ TEST_F(SitePileTakeTest, AHandEmptiesATempleSitePileThatStaysAndTheTownCountsLes
 TEST_F(SitePileTakeTest, AHandTakesFromTheTempleSitePileNearestItsPoint)
 {
 	EXPECT_EQ(
-	    stores.TakeFromPile(templePiles.at(0), ResourceType::Wood, 40, PlayerNames::PLAYER_ONE, glm::vec3(25.0f, 0.0f, 0.0f)),
+	    _stores.TakeFromPile(_templePiles.at(0), ResourceType::Wood, 40, PlayerNames::PLAYER_ONE, glm::vec3(25.0f, 0.0f, 0.0f)),
 	    40u);
-	EXPECT_EQ(Holds(templePiles.at(0)), 100u);
-	EXPECT_EQ(Holds(templePiles.at(1)), 60u);
+	EXPECT_EQ(Holds(_templePiles.at(0)), 100u);
+	EXPECT_EQ(Holds(_templePiles.at(1)), 60u);
 	EXPECT_FLOAT_EQ(WoodAtSites(), 460.0f);
 }
 
@@ -146,9 +146,9 @@ TEST_F(SitePileTakeTest, AHandTakesFromTheTempleSitePileNearestItsPoint)
 TEST_F(SitePileTakeTest, AHandTakesNoFoodFromATempleSite)
 {
 	EXPECT_EQ(
-	    stores.TakeFromPile(templePiles.at(0), ResourceType::Food, 40, PlayerNames::PLAYER_ONE, glm::vec3(0.0f, 0.0f, 0.0f)),
+	    _stores.TakeFromPile(_templePiles.at(0), ResourceType::Food, 40, PlayerNames::PLAYER_ONE, glm::vec3(0.0f, 0.0f, 0.0f)),
 	    0u);
-	EXPECT_EQ(Holds(templePiles.at(0)), 100u);
+	EXPECT_EQ(Holds(_templePiles.at(0)), 100u);
 	EXPECT_FLOAT_EQ(WoodAtSites(), 500.0f);
 }
 
@@ -156,9 +156,9 @@ TEST_F(SitePileTakeTest, AHandTakesNoFoodFromATempleSite)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(SitePileTakeTest, WithNoHandATempleSiteGivesFromItsPilesInTurn)
 {
-	EXPECT_EQ(stores.RemoveResource(templePiles.at(1), ResourceType::Wood, 150), 150u);
-	EXPECT_EQ(Holds(templePiles.at(0)), 0u);
-	EXPECT_EQ(Holds(templePiles.at(1)), 50u);
+	EXPECT_EQ(_stores.RemoveResource(_templePiles.at(1), ResourceType::Wood, 150), 150u);
+	EXPECT_EQ(Holds(_templePiles.at(0)), 0u);
+	EXPECT_EQ(Holds(_templePiles.at(1)), 50u);
 	EXPECT_FLOAT_EQ(WoodAtSites(), 500.0f);
 }
 
@@ -167,9 +167,9 @@ TEST_F(SitePileTakeTest, WithNoHandATempleSiteGivesFromItsPilesInTurn)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(SitePileTakeTest, AHandEmptiesTheSitePileOfAnAbodeThatStays)
 {
-	EXPECT_EQ(stores.TakeFromPile(abodePile, ResourceType::Wood, 300, PlayerNames::PLAYER_ONE, glm::vec3(0.0f)), 100u);
-	ASSERT_TRUE(Exists(abodePile));
-	EXPECT_EQ(Holds(abodePile), 0u);
+	EXPECT_EQ(_stores.TakeFromPile(_abodePile, ResourceType::Wood, 300, PlayerNames::PLAYER_ONE, glm::vec3(0.0f)), 100u);
+	ASSERT_TRUE(Exists(_abodePile));
+	EXPECT_EQ(Holds(_abodePile), 0u);
 	EXPECT_FLOAT_EQ(WoodAtSites(), 400.0f);
 }
 
@@ -178,6 +178,6 @@ TEST_F(SitePileTakeTest, AHandEmptiesTheSitePileOfAnAbodeThatStays)
 TEST_F(SitePileTakeTest, ALonePileGoesWhenTheHandEmptiesIt)
 {
 	const auto pile = Pile(glm::vec3(200.0f, 0.0f, 0.0f), 30);
-	EXPECT_EQ(stores.TakeFromPile(pile, ResourceType::Wood, 50, PlayerNames::PLAYER_ONE, glm::vec3(200.0f, 0.0f, 0.0f)), 30u);
+	EXPECT_EQ(_stores.TakeFromPile(pile, ResourceType::Wood, 50, PlayerNames::PLAYER_ONE, glm::vec3(200.0f, 0.0f, 0.0f)), 30u);
 	EXPECT_FALSE(Exists(pile));
 }

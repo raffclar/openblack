@@ -22,6 +22,7 @@
 #include <glm/vec2.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -100,7 +101,7 @@ void WalkableLand::FindNear()
 	{
 		for (int32_t x = 0; x < k_CellsPerSide; ++x)
 		{
-			const auto bit = bitOf(_cells[static_cast<size_t>((z * k_CellsPerSide) + x)]);
+			const auto bit = bitOf(_cells[ToIndex((z * k_CellsPerSide) + x)]);
 			if (bit == 0)
 			{
 				continue;
@@ -110,7 +111,7 @@ void WalkableLand::FindNear()
 			{
 				for (auto nx = std::max(x - 1, 0); nx <= std::min(x + 1, k_CellsPerSide - 1); ++nx)
 				{
-					_near[static_cast<size_t>((nz * k_CellsPerSide) + nx)] |= bit;
+					_near[ToIndex((nz * k_CellsPerSide) + nx)] |= bit;
 				}
 			}
 		}
@@ -123,14 +124,14 @@ bool WalkableLand::HasBlockedNear(int32_t x, int32_t z, bool countWater) const
 	{
 		return false;
 	}
-	const auto near = _near[static_cast<size_t>((z * k_CellsPerSide) + x)];
+	const auto near = _near[ToIndex((z * k_CellsPerSide) + x)];
 	return (near & (countWater ? (k_NearBlocked | k_NearWater) : k_NearBlocked)) != 0;
 }
 
 WalkableLand WalkableLand::Build(const CornerHeight& height, const CellWater& water)
 {
 	WalkableLand land;
-	const auto index = [](int32_t x, int32_t z) { return static_cast<size_t>((z * k_CellsPerSide) + x); };
+	const auto index = [](int32_t x, int32_t z) { return ToIndex((z * k_CellsPerSide) + x); };
 	// Each corner is read one time, the last row and column too. A cell reads its four corners from here.
 	constexpr int32_t k_CornersPerSide = k_CellsPerSide + 1;
 	std::vector<float> heights(static_cast<size_t>(k_CornersPerSide * k_CornersPerSide));
@@ -138,12 +139,10 @@ WalkableLand WalkableLand::Build(const CornerHeight& height, const CellWater& wa
 	{
 		for (int32_t x = 0; x < k_CornersPerSide; ++x)
 		{
-			heights[static_cast<size_t>((z * k_CornersPerSide) + x)] = height(x, z);
+			heights[ToIndex((z * k_CornersPerSide) + x)] = height(x, z);
 		}
 	}
-	const auto cornerHeight = [&heights](int32_t x, int32_t z) {
-		return heights[static_cast<size_t>((z * k_CornersPerSide) + x)];
-	};
+	const auto cornerHeight = [&heights](int32_t x, int32_t z) { return heights[ToIndex((z * k_CornersPerSide) + x)]; };
 	// The walk over the land starts at the last cell of the last run of walkable cells in a row that a blocked cell ends
 	std::array<int32_t, 2> seed {0, 0};
 	for (int32_t z = 0; z < k_CellsPerSide; ++z)
@@ -232,7 +231,7 @@ Ground WalkableLand::At(int32_t x, int32_t z) const
 	{
 		return Ground::Blocked;
 	}
-	return _cells[static_cast<size_t>((z * k_CellsPerSide) + x)];
+	return _cells[ToIndex((z * k_CellsPerSide) + x)];
 }
 
 Ground WalkableLand::AtPoint(glm::vec2 point) const

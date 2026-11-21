@@ -82,8 +82,8 @@ lobby_api::Lobby TestLobby()
 
 lobby_api::PushEvent Event(std::string_view type, std::string data)
 {
-	static int64_t seq = 0;
-	return {.seq = ++seq, .type = std::string(type), .time = "2026-11-12T10:00:00Z", .data = std::move(data)};
+	static int64_t s_Seq = 0;
+	return {.seq = ++s_Seq, .type = std::string(type), .time = "2026-11-12T10:00:00Z", .data = std::move(data)};
 }
 
 std::string Account(const lobby_api::AccountRef& account)

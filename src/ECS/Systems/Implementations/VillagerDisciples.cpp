@@ -28,6 +28,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureDeeds.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
@@ -795,7 +796,7 @@ entt::entity MakeMark(ecs::Registry& registry, entt::entity villager, bool symbo
 
 glm::vec2 CellUv(uint32_t cell)
 {
-	return {static_cast<float>(cell % 8) / k_SheetCells, static_cast<float>(cell / 8) / k_SheetCells};
+	return {static_cast<float>(cell % 8) / k_SheetCells, static_cast<float>(WholeQuotient(cell, 8)) / k_SheetCells};
 }
 } // namespace
 

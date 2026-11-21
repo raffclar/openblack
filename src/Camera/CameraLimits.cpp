@@ -18,6 +18,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "Camera/ScriptCameraModel.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 
@@ -191,7 +192,7 @@ GroundPush camera_limits::PushOffTheGround(const Ground& ground, std::span<const
 		// The game keeps the cosine and the sine of the ring's angle as floats
 		const float ringCos = x87::RoundToFloat(x87::Cos(ringAngle));
 		const float ringSin = x87::RoundToFloat(x87::Sin(ringAngle));
-		const int count = k_RingPoints.at(static_cast<size_t>(ring + 2));
+		const int count = k_RingPoints.at(ToIndex(ring + 2));
 		for (int i = 0; i < count; ++i)
 		{
 			const float angle = static_cast<float>(i) * glm::two_pi<float>() / static_cast<float>(count);

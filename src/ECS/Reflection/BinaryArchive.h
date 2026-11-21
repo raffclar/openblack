@@ -690,7 +690,7 @@ template <typename Type>
 	else
 	{
 		// The count comes from the types of the values only. A value with the start values gives the types.
-		static const size_t most = [] {
+		static const size_t k_Most = [] {
 			size_t size = 0;
 			const Type probe {};
 			Type::VisitSaved(probe, [&size](const auto&... fields) {
@@ -700,7 +700,7 @@ template <typename Type>
 			});
 			return size;
 		}();
-		return most;
+		return k_Most;
 	}
 }
 

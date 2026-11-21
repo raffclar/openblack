@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/LandAvoid.h"
+#include "Common/IntegerSteps.h"
 
 using namespace openblack;
 using namespace openblack::land_avoid;
@@ -78,7 +79,7 @@ TEST(LandAvoid, EachCornerOfTheMapIsReadOneTime)
 	std::vector<int> reads(static_cast<size_t>(k_Side * k_Side), 0);
 	const auto altitude = [&reads](glm::ivec2 corner) -> uint8_t {
 		EXPECT_TRUE(corner.x >= 0 && corner.y >= 0 && corner.x < k_Side && corner.y < k_Side);
-		++reads.at(static_cast<size_t>((corner.y * k_Side) + corner.x));
+		++reads.at(ToIndex((corner.y * k_Side) + corner.x));
 		return 10;
 	};
 	const auto map = Build(k_Side, altitude, [](glm::ivec2) { return false; });

@@ -21,6 +21,7 @@
 
 #include <HelpDudeFile.h>
 
+#include "Common/IntegerSteps.h"
 #include "Common/ModelInverseSquareRoot.h"
 
 namespace openblack::help::spirits
@@ -2204,8 +2205,8 @@ void AdvisorSpirit::UpdateLookTarget(float dt, bool engaged, bool partnerOut, bo
 	const int32_t halfW = frame.screen.HalfWidth();
 	const int32_t halfH = frame.screen.HalfHeight();
 	// the mouse in hover space by integer division: -1, 0 or 1 per axis (sic)
-	const float mx = static_cast<float>((frame.mouse.x - halfW) / halfW) - _hoverX.GetValue();
-	const float my = static_cast<float>((frame.mouse.y - halfH) / halfH) - _hoverY.GetValue();
+	const float mx = static_cast<float>(WholeQuotient(frame.mouse.x - halfW, halfW)) - _hoverX.GetValue();
+	const float my = static_cast<float>(WholeQuotient(frame.mouse.y - halfH, halfH)) - _hoverY.GetValue();
 	const float distance = std::sqrt(my * my + mx * mx);
 
 	int32_t mode = _tagLookMode;

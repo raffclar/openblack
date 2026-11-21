@@ -2384,33 +2384,33 @@ TEST(VanillaWorldImport, TheWoodPileOfAWorkshopComesOnce)
 
 TEST(VanillaWorldImport, TheFlagsOfAScaffoldGiveEachValue)
 {
-	constexpr auto none = world_import::ScaffoldFlagsOf(0);
-	EXPECT_FALSE(none.grows);
-	EXPECT_FALSE(none.looked);
-	EXPECT_EQ(none.noOfferTurns, 0U);
-	EXPECT_EQ(none.place, 0U);
-	EXPECT_FALSE(none.foundsTown);
-	EXPECT_FALSE(none.fixedAngle);
-	EXPECT_FALSE(none.gentle);
-	EXPECT_FALSE(none.destroysThingsInWay);
+	constexpr auto k_None = world_import::ScaffoldFlagsOf(0);
+	EXPECT_FALSE(k_None.grows);
+	EXPECT_FALSE(k_None.looked);
+	EXPECT_EQ(k_None.noOfferTurns, 0U);
+	EXPECT_EQ(k_None.place, 0U);
+	EXPECT_FALSE(k_None.foundsTown);
+	EXPECT_FALSE(k_None.fixedAngle);
+	EXPECT_FALSE(k_None.gentle);
+	EXPECT_FALSE(k_None.destroysThingsInWay);
 	// The phantom grows, 9 turns with no offer, the place 2, a fixed angle and the destroy flag
-	constexpr auto some = world_import::ScaffoldFlagsOf(0x0001 | (9 << 2) | (2 << 6) | 0x0200 | 0x0800);
-	EXPECT_TRUE(some.grows);
-	EXPECT_FALSE(some.looked);
-	EXPECT_EQ(some.noOfferTurns, 9U);
-	EXPECT_EQ(some.place, 2U);
-	EXPECT_FALSE(some.foundsTown);
-	EXPECT_TRUE(some.fixedAngle);
-	EXPECT_FALSE(some.gentle);
-	EXPECT_TRUE(some.destroysThingsInWay);
+	constexpr auto k_Some = world_import::ScaffoldFlagsOf(0x0001 | (9 << 2) | (2 << 6) | 0x0200 | 0x0800);
+	EXPECT_TRUE(k_Some.grows);
+	EXPECT_FALSE(k_Some.looked);
+	EXPECT_EQ(k_Some.noOfferTurns, 9U);
+	EXPECT_EQ(k_Some.place, 2U);
+	EXPECT_FALSE(k_Some.foundsTown);
+	EXPECT_TRUE(k_Some.fixedAngle);
+	EXPECT_FALSE(k_Some.gentle);
+	EXPECT_TRUE(k_Some.destroysThingsInWay);
 	// It looked for an offer, the place 1, it founds a town and the hand let it go gently
-	constexpr auto other = world_import::ScaffoldFlagsOf(0x0002 | (1 << 6) | 0x0100 | 0x0400);
-	EXPECT_FALSE(other.grows);
-	EXPECT_TRUE(other.looked);
-	EXPECT_EQ(other.place, 1U);
-	EXPECT_TRUE(other.foundsTown);
-	EXPECT_TRUE(other.gentle);
-	EXPECT_FALSE(other.destroysThingsInWay);
+	constexpr auto k_Other = world_import::ScaffoldFlagsOf(0x0002 | (1 << 6) | 0x0100 | 0x0400);
+	EXPECT_FALSE(k_Other.grows);
+	EXPECT_TRUE(k_Other.looked);
+	EXPECT_EQ(k_Other.place, 1U);
+	EXPECT_TRUE(k_Other.foundsTown);
+	EXPECT_TRUE(k_Other.gentle);
+	EXPECT_FALSE(k_Other.destroysThingsInWay);
 	EXPECT_EQ(world_import::k_ScaffoldPutDownTurnAfterLoad, 1U);
 }
 

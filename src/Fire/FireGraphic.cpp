@@ -13,6 +13,7 @@
 
 #include <algorithm>
 
+#include "Common/IntegerSteps.h"
 #include "FireModel.h"
 
 using namespace openblack;
@@ -93,7 +94,7 @@ void UpdateFlames(Graphic& graphic, const Inputs& inputs, float seconds, const S
 		}
 		if ((inputs.flags & k_JustIgnited) != 0)
 		{
-			graphic.flameAccumulator += static_cast<float>((graphic.maxFlames + 1) / 2);
+			graphic.flameAccumulator += static_cast<float>(WholeQuotient(graphic.maxFlames + 1, 2));
 		}
 	}
 	while (static_cast<float>(graphic.flameCount) < graphic.flameAccumulator)

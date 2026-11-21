@@ -1815,8 +1815,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		}
 		else
 		{
-			const static auto identity = glm::mat4(1.0f);
-			sd.modelMatrices = &identity;
+			const static auto k_Identity = glm::mat4(1.0f);
+			sd.modelMatrices = &k_Identity;
 			sd.matrixCount = 1;
 		}
 		sd.isSky = false;
@@ -1867,8 +1867,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			sd.program = objectProgramFor(sd.matrixCount, sd.morphWithTerrain);
 			if (pose->bonePalette)
 			{
-				const static auto identity = glm::mat4(1.0f);
-				sd.modelMatrices = &identity;
+				const static auto k_Identity = glm::mat4(1.0f);
+				sd.modelMatrices = &k_Identity;
 				sd.matrixCount = 1;
 				sd.program = objectShaderPaletteInstanced;
 				sd.lightmapProgram = nullptr;
@@ -1882,8 +1882,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			// A creature's body reads its bones from the texture of the posed bones, where they start
 			if (pose->morphTargets != nullptr && pose->firstBone.has_value() && _posedBoneTexture)
 			{
-				const static auto identity = glm::mat4(1.0f);
-				sd.modelMatrices = &identity;
+				const static auto k_Identity = glm::mat4(1.0f);
+				sd.modelMatrices = &k_Identity;
 				sd.matrixCount = 1;
 				sd.program = objectShaderMorphPosedInstanced;
 				const auto size = _posedBoneTexture->GetResolution();
@@ -1902,8 +1902,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		{
 			sd.landLightScale = CreatureLandLightScale(desc.viewId);
 			sd.program = objectShaderPosedInstanced;
-			const static auto identity = glm::mat4(1.0f);
-			sd.modelMatrices = &identity;
+			const static auto k_Identity = glm::mat4(1.0f);
+			sd.modelMatrices = &k_Identity;
 			sd.matrixCount = 1;
 			const auto size = _posedBoneTexture->GetResolution();
 			sd.boneTexture = _posedBoneTexture.get();
@@ -2531,8 +2531,8 @@ void Renderer::DrawPassVegetation(const DrawSceneDesc& desc, const ScenePass& pa
 			auto mesh = meshManager.Handle(run.mesh);
 			submitDesc.instanceDesc =
 			    std::make_unique<graphics::InstanceDesc>(renderCtx.treeInstanceUniformBuffer, run.first, run.count);
-			const static auto identity = glm::mat4(1.0f);
-			submitDesc.modelMatrices = &identity;
+			const static auto k_Identity = glm::mat4(1.0f);
+			submitDesc.modelMatrices = &k_Identity;
 			submitDesc.matrixCount = 1;
 			submitDesc.isSky = false;
 			submitDesc.morphWithTerrain = false;

@@ -170,7 +170,7 @@ bool ReadParts(const Json& object, std::vector<std::pair<std::string, uint64_t>>
 			}
 			else if (c >= 'a' && c <= 'f')
 			{
-				digit = static_cast<uint64_t>(c - 'a' + 10);
+				digit = static_cast<uint64_t>(c - 'a') + 10U;
 			}
 			else
 			{
@@ -227,7 +227,7 @@ bool ParseHex(std::string_view hex, uint64_t& out)
 		}
 		else if (c >= 'a' && c <= 'f')
 		{
-			digit = static_cast<uint64_t>(c - 'a' + 10);
+			digit = static_cast<uint64_t>(c - 'a') + 10U;
 		}
 		else
 		{

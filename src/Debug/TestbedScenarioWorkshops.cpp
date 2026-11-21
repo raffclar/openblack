@@ -10,6 +10,7 @@
 // Testbed scenarios for the workshops and the scaffolds.
 
 #include "3D/FlatLand.h"
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureIdleMind.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "TestbedScenarioBuilders.h"
@@ -936,10 +937,10 @@ void testbed_scenarios::AddWorkshopScenarios(std::vector<Scenario>& all)
 	constexpr size_t k_GrownUps = 45;
 	for (size_t i = 0; i < k_GrownUps; ++i)
 	{
-		homeTown.push_back(
-		    {.type = i % 2 == 0 ? VillagerInfo::NorseHousewifeFemale : VillagerInfo::NorseFarmerMale,
-		     .offset = onLandTwo(3226.0f + static_cast<float>(i % 6) * 2.0f, 3405.0f + static_cast<float>(i / 6) * 2.0f),
-		     .landTown = k_HomeTown});
+		homeTown.push_back({.type = i % 2 == 0 ? VillagerInfo::NorseHousewifeFemale : VillagerInfo::NorseFarmerMale,
+		                    .offset = onLandTwo(3226.0f + static_cast<float>(i % 6) * 2.0f,
+		                                        3405.0f + static_cast<float>(WholeQuotient(i, 6)) * 2.0f),
+		                    .landTown = k_HomeTown});
 	}
 	all.push_back({
 	    .id = "story.workshop_homeless_cap",

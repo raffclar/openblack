@@ -20,6 +20,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureExplorationAgendas.h"
 #include "Creature/CreatureExplorationMap.h"
@@ -363,7 +364,7 @@ TEST(CreatureExploration, TheMapReadsEachCellOfTheLandOneTime)
 		    return FakeCell(cell);
 	    },
 	    FakeTowns {}.At());
-	constexpr auto k_Cells = static_cast<size_t>(k_RegionsPerSide * k_CellsPerRegion);
+	constexpr auto k_Cells = ToIndex(k_RegionsPerSide * k_CellsPerRegion);
 	EXPECT_EQ(reads.size(), k_Cells * k_Cells);
 	EXPECT_TRUE(std::ranges::all_of(reads, [](const auto& read) { return read.second == 1; }));
 	// The kept cells give the same kinds as the land: the high region is a hill and the east edge of the land is coast

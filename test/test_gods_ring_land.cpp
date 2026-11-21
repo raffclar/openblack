@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/GodsRingLand.h"
+#include "Common/IntegerSteps.h"
 
 using namespace openblack;
 using namespace openblack::gods_ring_land;
@@ -110,7 +111,7 @@ TEST(GodsRingLand, TheBuildHasTheCellsOfCellAtAndEachBlockWithLand)
 					land = KindOf((x * k_Cells) + cx, (z * k_Cells) + cz) != flat_land::CellKind::OpenWater;
 				}
 			}
-			const auto index = data.blockIndexLookup.at(static_cast<size_t>((x * LandData::k_BlocksPerSide) + z));
+			const auto index = data.blockIndexLookup.at(ToIndex((x * LandData::k_BlocksPerSide) + z));
 			EXPECT_EQ(index != 0, land) << "block " << x << " " << z;
 			if (index == 0)
 			{
@@ -123,7 +124,7 @@ TEST(GodsRingLand, TheBuildHasTheCellsOfCellAtAndEachBlockWithLand)
 				for (int cz = 0; cz < k_Corners; ++cz)
 				{
 					const auto expected = CellAt((x * k_Cells) + cx, (z * k_Cells) + cz);
-					const auto& cell = block.cells.at(static_cast<size_t>((cx * k_Corners) + cz));
+					const auto& cell = block.cells.at(ToIndex((cx * k_Corners) + cz));
 					ASSERT_EQ(std::memcmp(&cell, &expected, sizeof(cell)), 0) << "block " << x << " " << z;
 				}
 			}

@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "ClickCue.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 #include "ControlIcons.h"
 #include "TextSplitter.h"
@@ -147,7 +148,7 @@ void DialogueText::StartReadingTime(std::u16string_view text)
 	// Each step rounded to a float
 	float seconds = static_cast<float>(turns * static_cast<int32_t>(_settings.msPerTurn)) * 0.001f;
 	seconds *= factor;
-	const auto turnsPerSecond = static_cast<float>(1000 / _settings.msPerTurn);
+	const auto turnsPerSecond = static_cast<float>(WholeQuotient(1000, _settings.msPerTurn));
 	_endTurn = turn + static_cast<uint32_t>(static_cast<int32_t>(turnsPerSecond * seconds));
 	const int32_t now = NowMs();
 	_startMs = now;

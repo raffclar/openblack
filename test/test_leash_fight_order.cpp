@@ -106,12 +106,12 @@ protected:
 		Locator::resources::emplace<resources::Resources>();
 		Locator::creatureFightSystem::emplace<StartingFights>();
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = MakeCreature(registry, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 100.0f});
-		other = MakeCreature(registry, PlayerNames::PLAYER_TWO, {104.0f, 0.0f, 100.0f});
-		registry.Assign<components::CreatureLeash>(creature).selected = LeashType::Evil;
+		_creature = MakeCreature(registry, PlayerNames::PLAYER_ONE, {100.0f, 0.0f, 100.0f});
+		_other = MakeCreature(registry, PlayerNames::PLAYER_TWO, {104.0f, 0.0f, 100.0f});
+		registry.Assign<components::CreatureLeash>(_creature).selected = LeashType::Evil;
 		// A creature must know the learning leash before it can wear any leash
-		leashes.SetKnown(creature, LeashType::Rope, true);
-		leashes.SetKnown(creature, LeashType::Evil, true);
+		_leashes.SetKnown(_creature, LeashType::Rope, true);
+		_leashes.SetKnown(_creature, LeashType::Evil, true);
 	}
 	void TearDown() override
 	{
@@ -133,9 +133,9 @@ protected:
 		return static_cast<StartingFights&>(Locator::creatureFightSystem::value());
 	}
 
-	LeashSystem leashes;
-	entt::entity creature {entt::null};
-	entt::entity other {entt::null};
+	LeashSystem _leashes;
+	entt::entity _creature {entt::null};
+	entt::entity _other {entt::null};
 };
 } // namespace
 
@@ -143,18 +143,18 @@ protected:
 // creature's own plan tests the life.
 TEST_F(LeashFightOrder, ALeashOrderOnACreatureStartsAFightAlsoWithLittleLife)
 {
-	Locator::entitiesRegistry::value().Assign<components::CreatureNeeds>(creature).needs.life = 0.05f;
-	ASSERT_TRUE(leashes.HandTie(creature, other));
+	Locator::entitiesRegistry::value().Assign<components::CreatureNeeds>(_creature).needs.life = 0.05f;
+	ASSERT_TRUE(_leashes.HandTie(_creature, _other));
 	EXPECT_TRUE(Fights().plain.empty());
 	ASSERT_EQ(Fights().forced.size(), 1U);
-	EXPECT_EQ(Fights().forced.front(), std::pair(creature, other));
+	EXPECT_EQ(Fights().forced.front(), std::pair(_creature, _other));
 }
 
 // A creature with no life left takes no leash order, so no fight starts
 TEST_F(LeashFightOrder, ACreatureWithNoLifeTakesNoLeashOrderToFight)
 {
-	Locator::entitiesRegistry::value().Assign<components::CreatureNeeds>(creature).needs.life = 0.0f;
-	ASSERT_TRUE(leashes.HandTie(creature, other));
+	Locator::entitiesRegistry::value().Assign<components::CreatureNeeds>(_creature).needs.life = 0.0f;
+	ASSERT_TRUE(_leashes.HandTie(_creature, _other));
 	EXPECT_TRUE(Fights().plain.empty());
 	EXPECT_TRUE(Fights().forced.empty());
 }

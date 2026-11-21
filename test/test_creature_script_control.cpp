@@ -241,12 +241,12 @@ protected:
 			spdlog::create<spdlog::sinks::null_sink_st>("game");
 		}
 		Locator::entitiesRegistry::emplace<Registry>();
-		hands = &static_cast<WalkingHands&>(Locator::creatureObjectActionSystem::emplace<WalkingHands>());
-		legs = &static_cast<StoppingLegs&>(Locator::creatureLocomotionSystem::emplace<StoppingLegs>());
+		_hands = &static_cast<WalkingHands&>(Locator::creatureObjectActionSystem::emplace<WalkingHands>());
+		_legs = &static_cast<StoppingLegs&>(Locator::creatureLocomotionSystem::emplace<StoppingLegs>());
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = registry.Create();
-		registry.Assign<CreatureMindState>(creature);
-		registry.Assign<CreatureAnimation>(creature);
+		_creature = registry.Create();
+		registry.Assign<CreatureMindState>(_creature);
+		registry.Assign<CreatureAnimation>(_creature);
 	}
 	void TearDown() override
 	{
@@ -255,10 +255,10 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	CreatureMindSystem minds;
-	WalkingHands* hands {nullptr};
-	StoppingLegs* legs {nullptr};
-	entt::entity creature {entt::null};
+	CreatureMindSystem _minds;
+	WalkingHands* _hands {nullptr};
+	StoppingLegs* _legs {nullptr};
+	entt::entity _creature {entt::null};
 };
 } // namespace
 
@@ -267,42 +267,42 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureScriptControlTest, AScriptStopsTheWalkOfTheHandsToTheirThing)
 {
-	ASSERT_TRUE(minds.CarryOutForScript(creature, creature_mind::FaceForScript({10.0f, 0.0f, 10.0f})));
-	EXPECT_EQ(hands->cancelled, (std::vector<entt::entity> {creature}));
-	EXPECT_EQ(legs->stopped, (std::vector<entt::entity> {creature}));
-	EXPECT_TRUE(Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+	ASSERT_TRUE(_minds.CarryOutForScript(_creature, creature_mind::FaceForScript({10.0f, 0.0f, 10.0f})));
+	EXPECT_EQ(_hands->cancelled, (std::vector<entt::entity> {_creature}));
+	EXPECT_EQ(_legs->stopped, (std::vector<entt::entity> {_creature}));
+	EXPECT_TRUE(Locator::entitiesRegistry::value().AllOf<ScriptControlled>(_creature));
 }
 
 // Hands that do nothing have nothing to stop
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureScriptControlTest, AScriptLeavesIdleHandsAlone)
 {
-	hands->state = CreatureObjectActionSystemInterface::State::Idle;
-	ASSERT_TRUE(minds.CarryOutForScript(creature, creature_mind::FaceForScript({10.0f, 0.0f, 10.0f})));
-	EXPECT_TRUE(hands->cancelled.empty());
+	_hands->state = CreatureObjectActionSystemInterface::State::Idle;
+	ASSERT_TRUE(_minds.CarryOutForScript(_creature, creature_mind::FaceForScript({10.0f, 0.0f, 10.0f})));
+	EXPECT_TRUE(_hands->cancelled.empty());
 }
 
 // A let-go that plays its clip continues to its moment when a script takes the creature
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureScriptControlTest, AScriptLeavesALetGoToPlayOn)
 {
-	hands->playsOn = true;
-	ASSERT_TRUE(minds.CarryOutForScript(creature, creature_mind::FaceForScript({10.0f, 0.0f, 10.0f})));
-	EXPECT_TRUE(hands->cancelled.empty());
-	EXPECT_TRUE(Locator::entitiesRegistry::value().AllOf<ScriptControlled>(creature));
+	_hands->playsOn = true;
+	ASSERT_TRUE(_minds.CarryOutForScript(_creature, creature_mind::FaceForScript({10.0f, 0.0f, 10.0f})));
+	EXPECT_TRUE(_hands->cancelled.empty());
+	EXPECT_TRUE(Locator::entitiesRegistry::value().AllOf<ScriptControlled>(_creature));
 }
 
 // The hand lets go of a stroked or slapped creature. The walk of the hands stops, but a let-go continues to its moment.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureScriptControlTest, FeedbackStopsTheHandsButNotALetGo)
 {
-	minds.ReceiveFeedback(creature, 0.0f);
-	EXPECT_EQ(hands->cancelled, (std::vector<entt::entity> {creature}));
-	hands->cancelled.clear();
-	hands->state = CreatureObjectActionSystemInterface::State::Busy;
-	hands->playsOn = true;
-	minds.ReceiveFeedback(creature, 0.0f);
-	EXPECT_TRUE(hands->cancelled.empty());
+	_minds.ReceiveFeedback(_creature, 0.0f);
+	EXPECT_EQ(_hands->cancelled, (std::vector<entt::entity> {_creature}));
+	_hands->cancelled.clear();
+	_hands->state = CreatureObjectActionSystemInterface::State::Busy;
+	_hands->playsOn = true;
+	_minds.ReceiveFeedback(_creature, 0.0f);
+	EXPECT_TRUE(_hands->cancelled.empty());
 }
 
 // A script that lets go of the creature and a gift that the hand calls off make the creature give up its action. A fight that
@@ -312,19 +312,19 @@ TEST_F(CreatureScriptControlTest, AGiveUpOfTheActionCallsOffTheFightOfTheCreatur
 {
 	auto& fights = static_cast<CalledOffFights&>(Locator::creatureFightSystem::emplace<CalledOffFights>());
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& mind = registry.Get<CreatureMindState>(creature);
+	auto& mind = registry.Get<CreatureMindState>(_creature);
 	mind.idle.agenda.resize(2);
 	// With no fight, only the action stops
-	minds.GiveUpAction(creature);
+	_minds.GiveUpAction(_creature);
 	EXPECT_TRUE(fights.calledOffForPlan.empty());
 	EXPECT_EQ(mind.idle.step, mind.idle.agenda.size());
-	registry.Assign<CreatureFighting>(creature);
+	registry.Assign<CreatureFighting>(_creature);
 	mind.idle.step = 0;
-	minds.GiveUpAction(creature);
+	_minds.GiveUpAction(_creature);
 	// The give-up also ends the fight of the body again after a fight that is over
-	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {creature}));
+	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {_creature}));
 	EXPECT_TRUE(fights.calledOff.empty());
-	EXPECT_EQ(registry.Get<const CreatureMindState>(creature).idle.step, 2u);
+	EXPECT_EQ(registry.Get<const CreatureMindState>(_creature).idle.step, 2u);
 	Locator::creatureFightSystem::reset();
 }
 
@@ -337,32 +337,32 @@ TEST_F(CreatureScriptControlTest, AStopAndGiveUpStopsTheWalkTheHandsAndTheJointA
 	auto& fights = static_cast<CalledOffFights&>(Locator::creatureFightSystem::emplace<CalledOffFights>());
 	auto& magic = static_cast<CastReleasingMagic&>(Locator::magicSystem::emplace<CastReleasingMagic>());
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Assign<CreatureFighting>(creature);
-	auto& eyes = registry.Assign<CreatureEyes>(creature);
+	registry.Assign<CreatureFighting>(_creature);
+	auto& eyes = registry.Assign<CreatureEyes>(_creature);
 	eyes.mode = creature_eyes::Mode::Wide;
 	const auto partner = registry.Create();
 	registry.Assign<CreatureMindState>(partner);
-	registry.Assign<CreaturePartner>(creature, CreaturePartner {.partner = partner});
-	registry.Assign<CreaturePartner>(partner, CreaturePartner {.partner = creature});
-	auto& mind = registry.Get<CreatureMindState>(creature);
+	registry.Assign<CreaturePartner>(_creature, CreaturePartner {.partner = partner});
+	registry.Assign<CreaturePartner>(partner, CreaturePartner {.partner = _creature});
+	auto& mind = registry.Get<CreatureMindState>(_creature);
 	mind.idle.agenda.resize(2);
 	mind.planActive = true;
 	mind.planForced = true;
 
-	minds.StopAndGiveUpAction(creature);
+	_minds.StopAndGiveUpAction(_creature);
 
-	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {creature}));
+	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {_creature}));
 	EXPECT_TRUE(fights.calledOff.empty());
-	EXPECT_EQ(legs->stopped, (std::vector<entt::entity> {creature}));
-	EXPECT_EQ(hands->cancelled, (std::vector<entt::entity> {creature}));
+	EXPECT_EQ(_legs->stopped, (std::vector<entt::entity> {_creature}));
+	EXPECT_EQ(_hands->cancelled, (std::vector<entt::entity> {_creature}));
 	// The partner also fails, so it lets go of its miracle after the creature
-	EXPECT_EQ(magic.released, (std::vector<entt::entity> {creature, partner}));
+	EXPECT_EQ(magic.released, (std::vector<entt::entity> {_creature, partner}));
 	EXPECT_EQ(eyes.mode, creature_eyes::Mode::Calm);
-	const auto& stopped = registry.Get<const CreatureMindState>(creature);
+	const auto& stopped = registry.Get<const CreatureMindState>(_creature);
 	EXPECT_TRUE(stopped.idle.agenda.empty());
 	EXPECT_FALSE(stopped.planActive);
 	EXPECT_FALSE(stopped.planForced);
-	EXPECT_FALSE(registry.AllOf<CreaturePartner>(creature));
+	EXPECT_FALSE(registry.AllOf<CreaturePartner>(_creature));
 	EXPECT_FALSE(registry.AllOf<CreaturePartner>(partner));
 	Locator::magicSystem::reset();
 	Locator::creatureFightSystem::reset();
@@ -372,9 +372,9 @@ TEST_F(CreatureScriptControlTest, AStopAndGiveUpStopsTheWalkTheHandsAndTheJointA
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureScriptControlTest, AGiveUpLeavesTheWalkAndTheHands)
 {
-	minds.GiveUpAction(creature);
-	EXPECT_TRUE(legs->stopped.empty());
-	EXPECT_TRUE(hands->cancelled.empty());
+	_minds.GiveUpAction(_creature);
+	EXPECT_TRUE(_legs->stopped.empty());
+	EXPECT_TRUE(_hands->cancelled.empty());
 }
 
 // The feedback of the player stops the fight of the creature, and its body ends the fight again after a fight that is
@@ -384,9 +384,9 @@ TEST_F(CreatureScriptControlTest, FeedbackEndsTheFightOfTheBodyAgain)
 {
 	auto& fights = static_cast<CalledOffFights&>(Locator::creatureFightSystem::emplace<CalledOffFights>());
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Assign<CreatureFighting>(creature);
-	minds.ReceiveFeedback(creature, 0.0f);
-	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {creature}));
+	registry.Assign<CreatureFighting>(_creature);
+	_minds.ReceiveFeedback(_creature, 0.0f);
+	EXPECT_EQ(fights.calledOffForPlan, (std::vector<entt::entity> {_creature}));
 	EXPECT_TRUE(fights.calledOff.empty());
 	Locator::creatureFightSystem::reset();
 }
@@ -398,16 +398,16 @@ TEST_F(CreatureScriptControlTest, FeedbackLetsGoOfTheMiracleAndCalmsTheEyes)
 {
 	auto& magic = static_cast<CastReleasingMagic&>(Locator::magicSystem::emplace<CastReleasingMagic>());
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& eyes = registry.Assign<CreatureEyes>(creature);
+	auto& eyes = registry.Assign<CreatureEyes>(_creature);
 	eyes.mode = creature_eyes::Mode::Wide;
 	eyes.blink.intervalMs = 1;
-	minds.ReceiveFeedback(creature, 0.0f);
-	EXPECT_EQ(magic.released, (std::vector<entt::entity> {creature}));
+	_minds.ReceiveFeedback(_creature, 0.0f);
+	EXPECT_EQ(magic.released, (std::vector<entt::entity> {_creature}));
 	EXPECT_EQ(eyes.mode, creature_eyes::Mode::Calm);
 	EXPECT_EQ(eyes.blink.intervalMs, creature_eyes::k_BlinkIntervalMs);
 	eyes.mode = creature_eyes::Mode::Wide;
-	minds.ReceiveFeedback(creature, -0.5f);
-	EXPECT_EQ(magic.released, (std::vector<entt::entity> {creature, creature}));
+	_minds.ReceiveFeedback(_creature, -0.5f);
+	EXPECT_EQ(magic.released, (std::vector<entt::entity> {_creature, _creature}));
 	EXPECT_EQ(eyes.mode, creature_eyes::Mode::Calm);
 	Locator::magicSystem::reset();
 }

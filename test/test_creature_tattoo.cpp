@@ -18,6 +18,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Common/IntegerSteps.h"
 #include "Creature/CreatureTattoo.h"
 #include "Creature/TattooPictures.h"
 
@@ -138,7 +139,7 @@ TEST(CreatureTattoo, TattoosSpanTheirSizeOfTheLargestMask)
 	// Half size: drawn from the 32 texel mask at twice its size, 32 texels across, centred on 100, 120
 	const Site site {.enabled = true, .u = 100, .v = 120, .skin = 0, .size = 0.5f, .mirror = false, .rotation = 0};
 	Paint(skin, k_SkinSize, Solid(15), {0xFF, 0xFF, 0xFF}, site);
-	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 256) + x)); };
+	const auto at = [&skin](int x, int y) { return skin.at(ToIndex((y * 256) + x)); };
 	EXPECT_EQ(at(84, 104), 0xFFFF);
 	EXPECT_EQ(at(115, 135), 0xFFFF);
 	EXPECT_EQ(at(83, 104), 0x0000);
@@ -153,7 +154,7 @@ TEST(CreatureTattoo, OnAHalfSizeSkinTattoosAreAtHalfThePlaceAndHalfTheSize)
 	// first texel is at 42.5 and 52.5 cut to whole numbers.
 	const Site site {.enabled = true, .u = 101, .v = 121, .skin = 0, .size = 0.5f, .mirror = false, .rotation = 0};
 	Paint(skin, k_LowDetailSkinSize, Solid(15), {0xFF, 0xFF, 0xFF}, site);
-	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 128) + x)); };
+	const auto at = [&skin](int x, int y) { return skin.at(ToIndex((y * 128) + x)); };
 	EXPECT_EQ(at(42, 52), 0xFFFF);
 	EXPECT_EQ(at(57, 67), 0xFFFF);
 	EXPECT_EQ(at(41, 52), 0x0000);
@@ -183,7 +184,7 @@ TEST(CreatureTattoo, TattoosStepAlongTheMaskBySumsInFloat)
 	// a little under 12, so the tenth texel takes column 11, not 12.
 	const Site site {.enabled = true, .u = 128, .v = 128, .skin = 0, .size = 0.75f, .mirror = false, .rotation = 0};
 	Paint(skin, k_SkinSize, design, {0xFF, 0xFF, 0xFF}, site);
-	const auto at = [&skin](int x, int y) { return skin.at(static_cast<size_t>((y * 256) + x)); };
+	const auto at = [&skin](int x, int y) { return skin.at(ToIndex((y * 256) + x)); };
 	EXPECT_EQ(at(104 + 9, 128), 0xFBBB);
 	EXPECT_EQ(at(104 + 3, 128), 0xF444);
 	EXPECT_EQ(at(104 + 12, 128), 0xFFFF);

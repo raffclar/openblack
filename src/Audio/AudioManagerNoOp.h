@@ -60,8 +60,8 @@ public:
 	[[nodiscard]] const MusicPlayer* GetMusic() const override { return nullptr; }
 	const Sound& GetSound([[maybe_unused]] entt::id_type id) override
 	{
-		static const Sound result {};
-		return result;
+		static const Sound k_Result {};
+		return k_Result;
 	}
 	void PlaySound([[maybe_unused]] entt::id_type id, [[maybe_unused]] PlayType type) override {}
 	void AddAnimEffects([[maybe_unused]] const std::string& bankName, [[maybe_unused]] AnimEffectTable table) override {}
@@ -116,19 +116,19 @@ public:
 	void AddMusicEntry([[maybe_unused]] const std::string& name) override {}
 	[[nodiscard]] const std::vector<std::string>& GetMusicTracks() const override
 	{
-		static const std::vector<std::string> result;
-		return result;
+		static const std::vector<std::string> k_Result;
+		return k_Result;
 	}
 	void AddToSoundGroup([[maybe_unused]] const std::string& name, [[maybe_unused]] entt::id_type id) override {}
 	const SoundGroup& GetSoundGroup([[maybe_unused]] const std::string& name) override
 	{
-		static const SoundGroup result;
-		return result;
+		static const SoundGroup k_Result;
+		return k_Result;
 	}
 	const std::map<std::string, SoundGroup>& GetSoundGroups() override
 	{
-		static const std::map<std::string, SoundGroup> result;
-		return result;
+		static const std::map<std::string, SoundGroup> k_Result;
+		return k_Result;
 	}
 	uint32_t AtmosRegisterBank([[maybe_unused]] const std::string& bankName,
 	                           [[maybe_unused]] const std::vector<pack::AudioBankSampleHeader>& headers,

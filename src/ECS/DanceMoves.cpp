@@ -16,6 +16,7 @@
 
 #include "3D/AllMeshes.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/IntegerSteps.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -255,7 +256,7 @@ bool dance_moves::ApplyAction(Dance& dance, std::size_t index, uint32_t type, co
 			return false;
 		}
 		const auto count = static_cast<uint32_t>(other->dancers.size());
-		group->rotation = count > 0 ? static_cast<float>(2048u / (count * 2u)) : 0.0f;
+		group->rotation = count > 0 ? static_cast<float>(WholeQuotient(2048u, count * 2u)) : 0.0f;
 		return false;
 	}
 	case 18:

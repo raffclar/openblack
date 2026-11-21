@@ -23,6 +23,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "Common/IntegerSteps.h"
+
 /// The cells round the edges of the blocks' coarse textures.
 ///
 /// The game samples a block's coarse texture from the block's painted texture each time that it paints the block. The
@@ -65,7 +67,7 @@ using Levels = glm::u8vec4;
 /// The index of a place of the map, x * 32 + z
 [[nodiscard]] constexpr size_t PlaceOf(glm::ivec2 block)
 {
-	return static_cast<size_t>((block.x * k_BlocksPerSide) + block.y);
+	return ToIndex((block.x * k_BlocksPerSide) + block.y);
 }
 
 /// A request for a paint of a block: the block's index in the land's blocks, and the middle of the block on the ground

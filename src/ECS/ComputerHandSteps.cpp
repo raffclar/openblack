@@ -14,6 +14,7 @@
 #include <cstdint>
 
 #include "3D/MapCoords.h"
+#include "Common/IntegerSteps.h"
 
 using namespace openblack;
 using namespace openblack::computer_hand;
@@ -96,5 +97,5 @@ void openblack::computer_hand::steps::KeepHandOver(HandAction& action, const Wor
 
 float openblack::computer_hand::steps::WholeSeconds(uint32_t turns)
 {
-	return static_cast<float>(turns / k_TurnsPerSecond);
+	return static_cast<float>(WholeQuotient(turns, k_TurnsPerSecond));
 }

@@ -52,7 +52,7 @@ constexpr uint32_t k_Black = 0x000000FFU;
 
 const bgfx::VertexLayout& Layout()
 {
-	static const auto layout = [] {
+	static const auto k_Layout = [] {
 		bgfx::VertexLayout made;
 		made.begin()
 		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
@@ -61,7 +61,7 @@ const bgfx::VertexLayout& Layout()
 		    .end();
 		return made;
 	}();
-	return layout;
+	return k_Layout;
 }
 
 /// The camera's view: the world turned into the camera's axes, its forward axis the depth
