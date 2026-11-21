@@ -41,14 +41,22 @@ public:
 
 private:
 	[[nodiscard]] fight_transcript::Stamp Now() const;
-	/// Writes the last record of a fight to its file, when there is a folder
-	void Write(uint32_t fight);
+	/// Writes the records of a fight that are not in its file yet, when there is a folder
+	void Write(const fight_transcript::Fight& fight);
+	/// Removes the oldest fights that ended, beyond the number that is kept, after it writes them to their files
+	void Trim();
 
 	fight_transcript::Recorder _recorder;
 	uint64_t _frame {0};
 	double _gameMs {0.0};
 	std::optional<std::filesystem::path> _folder;
-	std::map<uint32_t, std::ofstream> _files;
+	/// The file of a fight, and the number of its records that are in the file
+	struct FightFile
+	{
+		std::ofstream stream;
+		size_t written {0};
+	};
+	std::map<uint32_t, FightFile> _files;
 	/// The last answer of each native for each creature in each fight, and the number of identical reads since it was kept
 	struct LastRead
 	{
