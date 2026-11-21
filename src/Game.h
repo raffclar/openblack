@@ -523,6 +523,9 @@ public:
 	void SetScenarioEnd(std::function<void()> end) { _scenarioEnd = std::move(end); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
+	/// True when the game steps deterministically and this frame started while a turn waited between two players to
+	/// continue. The frame gets no time, and its steps before the turns wait (deviation row 288).
+	[[nodiscard]] bool IsFrameWithoutTime() const { return _frameWithoutTime; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
 	/// without the developer tools, and a live network game, refuse it: then the result is false.
 	bool RequestScenario(ScenarioRequest request);
@@ -640,6 +643,8 @@ private:
 	bool _startGodsRingMap {false};
 	std::optional<generated_land::Choices> _startGeneratedLand;
 	std::optional<ScenarioRequest> _scenarioRequest;
+	/// The frame started while a turn waited, in a game that steps deterministically
+	bool _frameWithoutTime {false};
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	std::optional<testbed_scenarios::checks::Report> _scenarioChecks;
 #endif

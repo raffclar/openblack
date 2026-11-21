@@ -608,7 +608,12 @@ void Game::StartFrame(FrameState& frame)
 
 	Locator::debugGui::value().SetScale(config.guiScale);
 	// The clock of this frame moved on at the end of the last frame, when this frame's turns played beside its draw
-	if (_frameLoop == nullptr || !_frameLoop->turnsPlayedBeside)
+	// A game that steps deterministically gives no time to a frame in which a turn waits between two players to continue.
+	// Thus the frames after the turn get the same times as the frames of a turn that does not wait (deviation row 288).
+	const bool stepWaits = Locator::time::value().GetFixedFrameTime().has_value() && Locator::landSystem::has_value() &&
+	                       Locator::landSystem::value().IsTurnSplit();
+	_frameWithoutTime = stepWaits;
+	if ((_frameLoop == nullptr || !_frameLoop->turnsPlayedBeside) && !stepWaits)
 	{
 		Locator::time::value().Update();
 	}

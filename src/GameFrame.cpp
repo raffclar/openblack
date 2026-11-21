@@ -202,7 +202,16 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	}
 	// While a turn waits between two players to continue, the frame draws the world as the turn left it. The steps that
 	// move the world between turns wait for the end of the turn (deviation row 288).
-	if (game_frame::WaitsForWholeTurn(step) && Locator::landSystem::has_value() && Locator::landSystem::value().IsTurnSplit())
+	const bool turnWaits = Locator::landSystem::has_value() && Locator::landSystem::value().IsTurnSplit();
+	if (turnWaits && game_frame::WaitsForWholeTurn(step))
+	{
+		return true;
+	}
+	// A game that steps deterministically does the steps of one frame for each turn that waits. The steps before the
+	// turns wait in each frame that started with a turn that waited, and the steps after the turns wait until the turn
+	// ends.
+	if (Locator::time::value().GetFixedFrameTime().has_value() && game_frame::WaitsForWholeStepTurn(step) &&
+	    (step < Step::Turns ? _frameWithoutTime : turnWaits))
 	{
 		return true;
 	}
@@ -433,7 +442,9 @@ bool Game::StartTurnsBesideDraw()
 	// frame. The next turns play in the world that
 	// it loads.
 	const bool loadAsked = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().LoadAsked();
-	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || loadAsked || _closeAsked)
+	// A turn that waits between two players to continue ends in the next frame, in its turns step (deviation row 288)
+	const bool turnWaits = Locator::landSystem::has_value() && Locator::landSystem::value().IsTurnSplit();
+	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || loadAsked || _closeAsked || turnWaits)
 	{
 		return false;
 	}
