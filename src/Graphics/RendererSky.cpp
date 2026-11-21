@@ -33,9 +33,11 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
+#include "Graphics/BlueNoise.h"
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/FrameBuffer.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/HandLight.h"
@@ -399,6 +401,23 @@ void Renderer::AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHan
 	bgfx::setState(BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA);
 	const auto* program = _shaderManager->GetShader("DebugLine");
 	bgfx::submit(static_cast<bgfx::ViewId>(TranslucentView(RenderPass::Main)), toBgfx(program->GetRawHandle()), query);
+}
+
+void Renderer::SetSkyDither(const ShaderProgram& program, bool dither) const
+{
+	if (!_skyDither)
+	{
+		constexpr auto k_Side = static_cast<uint16_t>(blue_noise::k_Side);
+		const auto bytes = blue_noise::Bytes(blue_noise::Ranks(k_Side));
+		_skyDither = std::make_unique<Texture2D>("SkyDither");
+		_skyDither->CreateWithinFrame(k_Side, k_Side, 1, TextureFormat::R8, Wrapping::Repeat, Filter::Nearest,
+		                              Locator::graphicsDevice::value().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+	}
+	// The dither is less than one step of 8 bits: from -0.5 to 0.5 of a step
+	constexpr float k_Steps = 1.0f;
+	const glm::vec4 u_skyDither {static_cast<float>(blue_noise::k_Side), dither ? k_Steps : 0.0f, 0.0f, 0.0f};
+	program.SetTextureSampler("s_dither", 1, *_skyDither);
+	program.SetUniformValue("u_skyDither", &u_skyDither);
 }
 
 void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const

@@ -375,11 +375,17 @@ void Renderer::DrawPassSky(const DrawSceneDesc& desc, const ScenePass& pass) con
 {
 	auto& profiler = Locator::profiler::value();
 	const auto skyViewId = pass.skyViewId;
-	const auto* skyShader = _shaderManager->GetShader("Sky");
+	// The dome of the debug menu's sky pack has more than 8 bits for each channel. Its program adds a dither before the
+	// screen cuts the colour. The game's own pictures keep their program with no dither.
+	const auto* skyShader = _shaderManager->GetShader(_skyDomeFromPack ? "SkyPack" : "Sky");
 	auto section = profiler.BeginScoped(IsMirrorScene(desc.viewId) ? Profiler::Stage::ReflectionDrawSky
 	                                                               : Profiler::Stage::MainPassDrawSky);
 	if (desc.drawSky && _skyDomeFrameBuffer)
 	{
+		if (_skyDomeFromPack)
+		{
+			SetSkyDither(*skyShader, !IsMirrorScene(desc.viewId));
+		}
 		const auto modelMatrix = sky_dome::Placement();
 		// The value of the land that the sky shows, from 0, good, to 2, evil, mixes two of the alignments' domes
 		const auto alignments = sky_dome::AlignmentPair(Locator::alignmentSystem::value().GetSkyLand());
