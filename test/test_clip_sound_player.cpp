@@ -21,6 +21,7 @@
 
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "Sound/AnimEffectKeys.h"
@@ -65,6 +66,7 @@ public:
 		return creature_audio::Ground {.water = false, .materialSurface = k_Grass};
 	}
 	[[nodiscard]] bool InsideTemple() const override { return insideTemple; }
+	[[nodiscard]] bool ScriptCutScene() const override { return scriptCutScene; }
 	[[nodiscard]] float LifeOf(entt::entity /*object*/) const override { return life; }
 	void PlaySound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& /*position*/,
 	               bool bySampleRules) override
@@ -98,6 +100,7 @@ public:
 	Registry registry;
 	std::map<AnimId, sas::ClipSounds> clips;
 	bool insideTemple {false};
+	bool scriptCutScene {false};
 	float life {1.0f};
 	entt::entity home {entt::null};
 	std::vector<Played> played;
@@ -184,6 +187,45 @@ TEST(ClipSoundPlayer, ADeadPersonsClipIsQuiet)
 	f.world.life = 0.0f;
 	f.Play(k_Walk, 50, 300);
 	EXPECT_TRUE(f.world.played.empty());
+}
+
+TEST(ClipSoundPlayer, InACutSceneAVillagersNormalFootstepStopsTheRestOfItsClip)
+{
+	Fixture f;
+	// A normal footstep, then a sigh
+	f.world.clips[k_Walk].sounds = {{.time = 100, .action = clip_sounds::k_FootstepAction, .mode = 0},
+	                                {.time = 300, .action = k_Sigh, .mode = 0}};
+	f.world.scriptCutScene = true;
+	f.Play(k_Walk, 50, 300);
+	EXPECT_TRUE(f.world.played.empty());
+	// A villager that a script holds keeps its sounds in the cut scene
+	f.world.registry.Assign<InScript>(f.villager);
+	f.Play(k_Walk, 50, 300);
+	EXPECT_EQ(f.world.played.size(), 2U);
+}
+
+TEST(ClipSoundPlayer, AStopEndsOnlyTheStretchBeforeTheClipComesRound)
+{
+	Fixture f;
+	// A sigh, then a normal footstep, then a sigh. The clip comes round from 900 to 300.
+	f.world.clips[k_Walk].sounds = {{.time = 50, .action = k_Sigh, .mode = 0},
+	                                {.time = 950, .action = clip_sounds::k_FootstepAction, .mode = 0},
+	                                {.time = 970, .action = k_Sigh, .mode = 0}};
+	f.world.scriptCutScene = true;
+	f.Play(k_Walk, 900, 400, {.duration = 1000, .looping = true});
+	// The footstep stops the sigh at 970, but the stretch from the start plays the sigh at 50
+	ASSERT_EQ(f.world.played.size(), 1U);
+	EXPECT_EQ(f.world.played[0].keys, Keys(audio::SoundSize::Medium, k_Sigh));
+}
+
+TEST(ClipSoundPlayer, OutsideACutSceneAVillagersNormalFootstepPlays)
+{
+	Fixture f;
+	f.world.clips[k_Walk].sounds = {{.time = 100, .action = clip_sounds::k_FootstepAction, .mode = 0},
+	                                {.time = 300, .action = k_Sigh, .mode = 0}};
+	f.Play(k_Walk, 50, 300);
+	ASSERT_EQ(f.world.played.size(), 2U);
+	EXPECT_EQ(f.world.played[0].keys, Keys(audio::SoundSize::Medium, clip_sounds::k_FootstepAction));
 }
 
 TEST(ClipSoundPlayer, InsideTheTempleOnlySoundsNotPlayedTheOrdinaryWayAreHeard)
