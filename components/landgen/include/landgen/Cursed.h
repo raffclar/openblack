@@ -115,6 +115,7 @@ struct Result
 ///   more burnt trees than the budget for its area. The other dead trees lie on the ground.
 /// - Each stack of dark mist stands over the boulders of its land of the story, at the same places round the stack.
 /// - Each crater has a puff of grey smoke at its middle, as the craters of the fifth land of the story have.
+/// - Each crater is indestructible, as the script of the fifth land of the story makes its craters.
 ///
 /// A place must hold one stack or more and the fewest dead trees, or the land gets no place there. A feature of the land
 /// that is in the way of a stack or a crater goes away. The same seed gives the same places.

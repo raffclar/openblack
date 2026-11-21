@@ -113,6 +113,9 @@ struct Feature
 	float xAngle {0.0f};
 	float zAngle {0.0f};
 	float altitude {0.0f};
+	/// No miracle, fire or blow destroys it, as when a script makes it indestructible. The script of the fifth land of the
+	/// story does this to its craters.
+	bool indestructible {false};
 };
 
 struct Settings
