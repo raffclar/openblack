@@ -102,6 +102,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
+#include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
@@ -1395,6 +1396,12 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	if (Locator::creatureAnimationLog::has_value())
 	{
 		Locator::creatureAnimationLog::value().Clear();
+	}
+	// Nor the transcripts of the fights of its creatures (the inspector's record). A fight that a folder keeps stays in
+	// its file.
+	if (Locator::fightTranscript::has_value())
+	{
+		Locator::fightTranscript::value().Clear();
 	}
 	// Nor the meshes made for its temples. A saved game keeps them, because the save can bring the same temples again.
 	if (change != land_change::Kind::SavedGame && Locator::templeExteriorSystem::has_value())
