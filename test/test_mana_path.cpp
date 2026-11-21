@@ -114,13 +114,13 @@ protected:
 		auto file = psys::ParticleFile::Parse(ManaPathFile());
 		EXPECT_TRUE(file.has_value());
 		return std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                EffectServices {classes, world, random, noise}, glm::vec3(0.0f), 1.0f, false);
+		                                EffectServices {_classes, _world, _random, _noise}, glm::vec3(0.0f), 1.0f, false);
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
 };
 } // namespace
 

@@ -166,14 +166,14 @@ protected:
 		auto file = psys::ParticleFile::Parse(HealRing(radius));
 		EXPECT_TRUE(file.has_value());
 		return std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                EffectServices {classes, world, random, noise}, glm::vec3(100.0f, 50.0f, 200.0f),
+		                                EffectServices {_classes, _world, _random, _noise}, glm::vec3(100.0f, 50.0f, 200.0f),
 		                                magnitude, false);
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	SheetWorld world;
-	SheetRandom random;
-	maths::ValueNoise noise;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	SheetWorld _world;
+	SheetRandom _random;
+	maths::ValueNoise _noise;
 };
 
 TEST_F(ObjectLightSheetTest, ItsAtomsAreMadeOnceEachWithARingOnTheLandAsWideAsTheMagnitudeGives)
@@ -188,7 +188,7 @@ TEST_F(ObjectLightSheetTest, ItsAtomsAreMadeOnceEachWithARingOnTheLandAsWideAsTh
 		effect->Step(k_Step);
 	}
 	EXPECT_EQ(effect->AtomCount(), 3u);
-	const auto sheets = world.Live();
+	const auto sheets = _world.Live();
 	ASSERT_EQ(sheets.size(), 3u);
 	const float radius = 13.5f * 1.11062f;
 	for (const auto& sheet : sheets)
@@ -214,17 +214,17 @@ TEST_F(ObjectLightSheetTest, TheRingIsThePlayersColourAsDimAsItsAtomIsClear)
 	auto effect = Make();
 	effect->SetPlayer(0);
 	effect->Step(k_Step);
-	auto sheets = world.Live();
+	auto sheets = _world.Live();
 	ASSERT_EQ(sheets.size(), 3u);
 	for (const auto& sheet : sheets)
 	{
 		EXPECT_EQ(sheet->Rgb(), 0x1D0808u);
 	}
 	// An effect with no player gives grey
-	world.sheets.clear();
+	_world.sheets.clear();
 	auto grey = Make();
 	grey->Step(k_Step);
-	sheets = world.Live();
+	sheets = _world.Live();
 	ASSERT_EQ(sheets.size(), 3u);
 	EXPECT_EQ(sheets.front()->Rgb(), 0x0D0D0Du);
 	// The ring follows its atom's alpha at each step, and keeps the colour its atom was made with
@@ -237,7 +237,7 @@ TEST_F(ObjectLightSheetTest, WithoutAFloatValueTheRingTakesTheDefaultRadius)
 {
 	auto effect = Make("NULL_STRING", 13.5f);
 	effect->Step(k_Step);
-	const auto sheets = world.Live();
+	const auto sheets = _world.Live();
 	ASSERT_EQ(sheets.size(), 3u);
 	std::vector<LightSheet::Vertex> vertices;
 	std::vector<uint32_t> triangles;
@@ -250,21 +250,21 @@ TEST_F(ObjectLightSheetTest, TheRingsGoWithTheirAtomsAfterTheEffectClosesDown)
 {
 	auto effect = Make();
 	effect->Step(k_Step);
-	EXPECT_EQ(world.Live().size(), 3u);
+	EXPECT_EQ(_world.Live().size(), 3u);
 	effect->CloseDown();
 	// The atoms stay for the delay after the close down, then go with their rings
 	for (int i = 0; i < 10; ++i)
 	{
 		effect->Step(k_Step);
 	}
-	EXPECT_EQ(world.Live().size(), 3u);
+	EXPECT_EQ(_world.Live().size(), 3u);
 	for (int i = 0; i < 20; ++i)
 	{
 		effect->Step(k_Step);
 	}
 	EXPECT_EQ(effect->AtomCount(), 0u);
-	EXPECT_TRUE(world.Live().empty());
+	EXPECT_TRUE(_world.Live().empty());
 	effect.reset();
-	EXPECT_TRUE(world.Live().empty());
+	EXPECT_TRUE(_world.Live().empty());
 }
 } // namespace

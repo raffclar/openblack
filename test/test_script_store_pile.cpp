@@ -50,16 +50,16 @@ protected:
 			spdlog::create<spdlog::sinks::null_sink_st>("game");
 		}
 		Locator::entitiesRegistry::emplace<Registry>();
-		info = std::make_unique<InfoConstants>();
-		auto& wood = info->pot.at(static_cast<size_t>(PotInfo::MagicWood));
+		_info = std::make_unique<InfoConstants>();
+		auto& wood = _info->pot.at(static_cast<size_t>(PotInfo::MagicWood));
 		wood.resourceType = ResourceType::Wood;
 		wood.potType = PotType::PileWood;
 		wood.maxAmountInPot = 1000;
-		auto& food = info->pot.at(static_cast<size_t>(PotInfo::MagicFood));
+		auto& food = _info->pot.at(static_cast<size_t>(PotInfo::MagicFood));
 		food.resourceType = ResourceType::Food;
 		food.potType = PotType::PileFood;
 		food.maxAmountInPot = 1000;
-		Locator::infoConstants::emplace(*info);
+		Locator::infoConstants::emplace(*_info);
 	}
 	void TearDown() override
 	{
@@ -67,8 +67,8 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	std::unique_ptr<InfoConstants> info;
-	ResourceStoreSystem stores;
+	std::unique_ptr<InfoConstants> _info;
+	ResourceStoreSystem _stores;
 };
 } // namespace
 
@@ -76,7 +76,7 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(ScriptStorePileTest, AStoreOfWoodIsANewPileOfNobodysOnTheLand)
 {
-	const auto pile = stores.MakePile(ResourceType::Wood, glm::vec3(5.0f, 9.0f, 7.0f), 1);
+	const auto pile = _stores.MakePile(ResourceType::Wood, glm::vec3(5.0f, 9.0f, 7.0f), 1);
 	ASSERT_NE(pile, entt::entity {entt::null});
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& pot = registry.Get<const Pot>(pile);
@@ -98,7 +98,7 @@ TEST_F(ScriptStorePileTest, AStoreOfWoodIsANewPileOfNobodysOnTheLand)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(ScriptStorePileTest, AStoreOfFoodIsANewPileOfFood)
 {
-	const auto pile = stores.MakePile(ResourceType::Food, glm::vec3(5.0f, 0.0f, 7.0f), 1);
+	const auto pile = _stores.MakePile(ResourceType::Food, glm::vec3(5.0f, 0.0f, 7.0f), 1);
 	ASSERT_NE(pile, entt::entity {entt::null});
 	const auto& registry = Locator::entitiesRegistry::value();
 	EXPECT_EQ(registry.Get<const Pot>(pile).type, PotInfo::MagicFood);
@@ -109,8 +109,8 @@ TEST_F(ScriptStorePileTest, AStoreOfFoodIsANewPileOfFood)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(ScriptStorePileTest, TheNewPileDoesNotGoIntoAPileNearIt)
 {
-	const auto first = stores.MakePile(ResourceType::Wood, glm::vec3(5.0f, 0.0f, 7.0f), 1);
-	const auto second = stores.MakePile(ResourceType::Wood, glm::vec3(5.0f, 0.0f, 7.0f), 1);
+	const auto first = _stores.MakePile(ResourceType::Wood, glm::vec3(5.0f, 0.0f, 7.0f), 1);
+	const auto second = _stores.MakePile(ResourceType::Wood, glm::vec3(5.0f, 0.0f, 7.0f), 1);
 	ASSERT_NE(first, entt::entity {entt::null});
 	ASSERT_NE(second, entt::entity {entt::null});
 	EXPECT_NE(first, second);
@@ -123,8 +123,8 @@ TEST_F(ScriptStorePileTest, TheNewPileDoesNotGoIntoAPileNearIt)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(ScriptStorePileTest, NoOtherResourceMakesAPile)
 {
-	EXPECT_EQ(stores.MakePile(ResourceType::None, glm::vec3(5.0f, 0.0f, 7.0f), 1), entt::entity {entt::null});
-	EXPECT_EQ(stores.MakePile(ResourceType::Wood, glm::vec3(5.0f, 0.0f, 7.0f), 0), entt::entity {entt::null});
+	EXPECT_EQ(_stores.MakePile(ResourceType::None, glm::vec3(5.0f, 0.0f, 7.0f), 1), entt::entity {entt::null});
+	EXPECT_EQ(_stores.MakePile(ResourceType::Wood, glm::vec3(5.0f, 0.0f, 7.0f), 0), entt::entity {entt::null});
 }
 
 namespace
@@ -162,9 +162,9 @@ protected:
 		ScriptStorePileTest::SetUp();
 		Locator::fishFarmSystem::emplace<FakeFishFarms>();
 		auto& registry = Locator::entitiesRegistry::value();
-		farm = registry.Create();
-		registry.Assign<Transform>(farm);
-		registry.Assign<FishFarm>(farm).fish = 300.0f;
+		_farm = registry.Create();
+		registry.Assign<Transform>(_farm);
+		registry.Assign<FishFarm>(_farm).fish = 300.0f;
 	}
 	void TearDown() override
 	{
@@ -172,9 +172,9 @@ protected:
 		ScriptStorePileTest::TearDown();
 	}
 
-	[[nodiscard]] float Fish() const { return Locator::entitiesRegistry::value().Get<const FishFarm>(farm).fish; }
+	[[nodiscard]] float Fish() const { return Locator::entitiesRegistry::value().Get<const FishFarm>(_farm).fish; }
 
-	entt::entity farm {entt::null};
+	entt::entity _farm {entt::null};
 };
 } // namespace
 
@@ -183,12 +183,12 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(StoreFishFarmTest, FoodTakenFromAFishFarmComesOutOfItsFish)
 {
-	EXPECT_EQ(stores.RemoveResource(farm, ResourceType::Food, 120), 120u);
+	EXPECT_EQ(_stores.RemoveResource(_farm, ResourceType::Food, 120), 120u);
 	EXPECT_FLOAT_EQ(Fish(), 180.0f);
-	EXPECT_EQ(stores.RemoveResource(farm, ResourceType::Food, 180), 180u);
+	EXPECT_EQ(_stores.RemoveResource(_farm, ResourceType::Food, 180), 180u);
 	EXPECT_FLOAT_EQ(Fish(), 0.0f);
-	Locator::entitiesRegistry::value().Get<FishFarm>(farm).fish = 50.5f;
-	EXPECT_EQ(stores.RemoveResource(farm, ResourceType::Food, 60), 50u);
+	Locator::entitiesRegistry::value().Get<FishFarm>(_farm).fish = 50.5f;
+	EXPECT_EQ(_stores.RemoveResource(_farm, ResourceType::Food, 60), 50u);
 	EXPECT_FLOAT_EQ(Fish(), 0.0f);
 }
 
@@ -196,7 +196,7 @@ TEST_F(StoreFishFarmTest, FoodTakenFromAFishFarmComesOutOfItsFish)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(StoreFishFarmTest, AFishFarmGivesNoWoodAndSaysItHoldsNothing)
 {
-	EXPECT_EQ(stores.RemoveResource(farm, ResourceType::Wood, 120), 0u);
+	EXPECT_EQ(_stores.RemoveResource(_farm, ResourceType::Wood, 120), 0u);
 	EXPECT_FLOAT_EQ(Fish(), 300.0f);
-	EXPECT_EQ(stores.GetResource(farm, ResourceType::Food), 0u);
+	EXPECT_EQ(_stores.GetResource(_farm, ResourceType::Food), 0u);
 }

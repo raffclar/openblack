@@ -108,13 +108,13 @@ protected:
 		auto file = psys::ParticleFile::Parse(text);
 		EXPECT_TRUE(file.has_value()) << text;
 		return std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                EffectServices {classes, world, random, noise}, origin, magnitude, false);
+		                                EffectServices {_classes, _world, _random, _noise}, origin, magnitude, false);
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
 };
 } // namespace
 
@@ -293,10 +293,10 @@ TEST_F(ParticleBeamTest, TheBeamsFollowTheOriginAndAMovingObject)
 {
 	auto effect = Make(BeamFile(), {0.0f, 20.0f, 0.0f}, 2.0f);
 	const auto object = static_cast<entt::entity>(7);
-	world.targets.emplace_back(object, glm::vec3(0.0f, 0.0f, 40.0f));
+	_world.targets.emplace_back(object, glm::vec3(0.0f, 0.0f, 40.0f));
 	effect->AddTarget(object);
 	effect->Step(k_Step);
-	world.targets[0].second = glm::vec3(5.0f, 0.0f, 40.0f);
+	_world.targets[0].second = glm::vec3(5.0f, 0.0f, 40.0f);
 	effect->SetOrigin({1.0f, 20.0f, 0.0f});
 	effect->Step(k_Step);
 	effect->Step(k_Step);
@@ -309,7 +309,7 @@ TEST_F(ParticleBeamTest, TheBeamsFollowTheOriginAndAMovingObject)
 	EXPECT_NEAR(glm::distance(walk.joints[chain.firstJoint + 19].position, glm::vec3(1.0f, 20.0f, 0.0f)), 0.0f, 1e-3f);
 	EXPECT_NEAR(walk.joints[chain.firstJoint].scale, 0.2f, k_Epsilon);
 	// Once the object has gone the beams keep to where it last was
-	world.targets.clear();
+	_world.targets.clear();
 	effect->Step(k_Step);
 	effect->Step(k_Step);
 	walk.Clear();
@@ -334,7 +334,7 @@ TEST_F(ParticleBeamTest, NoBeamsAreMadeOnceClosingDown)
 
 TEST_F(ParticleBeamTest, BeamsKeepAboveTheLandBetweenTheirEnds)
 {
-	world.landHeight = 50.0f;
+	_world.landHeight = 50.0f;
 	auto effect = Make(BeamFile(2.0f), {0.0f, 20.0f, 0.0f});
 	effect->AddTargetPosition({0.0f, 20.0f, 30.0f});
 	effect->Step(k_Step);

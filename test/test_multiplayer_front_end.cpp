@@ -525,17 +525,17 @@ TEST(MultiplayerRules, FormatTextFillsTheCodesInOrder)
 TEST(MultiplayerRules, TheConditionsPageOfAPlayerWhoIsNotTheHost)
 {
 	// With a land: the list of the game's conditions, the time limit and View Chat
-	constexpr auto withLand = ConditionsPageOf(true);
-	EXPECT_FALSE(withLand.selectMap);
-	EXPECT_TRUE(withLand.conditions);
-	EXPECT_TRUE(withLand.timeLimit);
-	EXPECT_TRUE(withLand.viewChat);
+	constexpr auto k_WithLand = ConditionsPageOf(true);
+	EXPECT_FALSE(k_WithLand.selectMap);
+	EXPECT_TRUE(k_WithLand.conditions);
+	EXPECT_TRUE(k_WithLand.timeLimit);
+	EXPECT_TRUE(k_WithLand.viewChat);
 	// With no land: only "Please select a map first."
-	constexpr auto noLand = ConditionsPageOf(false);
-	EXPECT_TRUE(noLand.selectMap);
-	EXPECT_FALSE(noLand.conditions);
-	EXPECT_FALSE(noLand.timeLimit);
-	EXPECT_FALSE(noLand.viewChat);
+	constexpr auto k_NoLand = ConditionsPageOf(false);
+	EXPECT_TRUE(k_NoLand.selectMap);
+	EXPECT_FALSE(k_NoLand.conditions);
+	EXPECT_FALSE(k_NoLand.timeLimit);
+	EXPECT_FALSE(k_NoLand.viewChat);
 }
 
 TEST(MultiplayerRules, GameLinesShowTheStatesOfAGame)

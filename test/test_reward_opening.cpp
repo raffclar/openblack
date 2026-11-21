@@ -33,12 +33,12 @@ class FakeWorld final: public reward::OpeningWorld
 public:
 	void Pour(ResourceType type, uint32_t amount, PlayerNames player) override
 	{
-		events.push_back(fmt("pour", static_cast<int>(type), amount));
+		events.push_back(Fmt("pour", static_cast<int>(type), amount));
 		pourPlayers.push_back(player);
 	}
 	[[nodiscard]] bool HasTown() const override { return town; }
 	void GiveTownBelief(float belief) override { events.push_back("belief " + std::to_string(static_cast<int>(belief))); }
-	void MakeObject(MobileStaticInfo object) override { events.push_back(fmt("object", static_cast<int>(object), 0)); }
+	void MakeObject(MobileStaticInfo object) override { events.push_back(Fmt("object", static_cast<int>(object), 0)); }
 	void MakeScaffold() override { events.emplace_back("scaffold"); }
 	void FindTownForMiracle() override
 	{
@@ -65,17 +65,17 @@ public:
 		    {GestureType::Spiral, GestureType::Circle, GestureType::None}, level);
 	}
 	[[nodiscard]] bool PlayerMay(MagicType type) const override { return may.contains(type); }
-	void PlayerLearns(MagicType type) override { events.push_back(fmt("player learns", static_cast<int>(type), 0)); }
+	void PlayerLearns(MagicType type) override { events.push_back(Fmt("player learns", static_cast<int>(type), 0)); }
 	bool TownLearns(MagicType type) override
 	{
-		events.push_back(fmt("town learns", static_cast<int>(type), 0));
+		events.push_back(Fmt("town learns", static_cast<int>(type), 0));
 		return townLearnsNew;
 	}
-	void ShowTownSeed(SpellSeedType seed) override { events.push_back(fmt("town seed", static_cast<int>(seed), 0)); }
-	void OneShotGlobe(SpellSeedType seed) override { events.push_back(fmt("globe", static_cast<int>(seed), 0)); }
-	void ShowGesture(MagicType type) override { events.push_back(fmt("gesture", static_cast<int>(type), 0)); }
+	void ShowTownSeed(SpellSeedType seed) override { events.push_back(Fmt("town seed", static_cast<int>(seed), 0)); }
+	void OneShotGlobe(SpellSeedType seed) override { events.push_back(Fmt("globe", static_cast<int>(seed), 0)); }
+	void ShowGesture(MagicType type) override { events.push_back(Fmt("gesture", static_cast<int>(type), 0)); }
 
-	static std::string fmt(const char* what, int a, uint32_t b)
+	static std::string Fmt(const char* what, int a, uint32_t b)
 	{
 		return std::string(what) + " " + std::to_string(a) + (b != 0 ? " " + std::to_string(b) : "");
 	}
@@ -93,7 +93,7 @@ public:
 
 std::string Globe(SpellSeedType seed)
 {
-	return FakeWorld::fmt("globe", static_cast<int>(seed), 0);
+	return FakeWorld::Fmt("globe", static_cast<int>(seed), 0);
 }
 } // namespace
 
@@ -140,7 +140,7 @@ TEST(RewardOpening, AnObjectOrAScaffoldIsMadeAtTheChest)
 	FakeWorld world;
 	reward::Open({.object = MobileStaticInfo::ToyBall}, PlayerNames::PLAYER_ONE, world);
 	reward::Open({.scaffold = true}, PlayerNames::PLAYER_ONE, world);
-	EXPECT_EQ(world.events, (std::vector<std::string> {FakeWorld::fmt("object", static_cast<int>(MobileStaticInfo::ToyBall), 0),
+	EXPECT_EQ(world.events, (std::vector<std::string> {FakeWorld::Fmt("object", static_cast<int>(MobileStaticInfo::ToyBall), 0),
 	                                                   "scaffold"}));
 }
 
@@ -156,8 +156,8 @@ TEST(RewardOpening, ATownLearnsASeedThePlayerCantCastAndShowsIt)
 	FakeWorld world;
 	world.town = true;
 	reward::Open({.seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
-	EXPECT_EQ(world.events, (std::vector<std::string> {FakeWorld::fmt("town learns", static_cast<int>(MagicType::Fireball), 0),
-	                                                   FakeWorld::fmt("town seed", static_cast<int>(k_Fireball), 0)}));
+	EXPECT_EQ(world.events, (std::vector<std::string> {FakeWorld::Fmt("town learns", static_cast<int>(MagicType::Fireball), 0),
+	                                                   FakeWorld::Fmt("town seed", static_cast<int>(k_Fireball), 0)}));
 
 	// A town that knew it already gives a globe instead
 	world.events.clear();
@@ -172,8 +172,8 @@ TEST(RewardOpening, ASeedThePlayerCastsGivesTheFirstPowerUpLackedWithItsGesture)
 	world.may = {MagicType::Fireball};
 	reward::Open({.seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events,
-	          (std::vector<std::string> {FakeWorld::fmt("player learns", static_cast<int>(MagicType::FireballPowerUpOne), 0),
-	                                     FakeWorld::fmt("gesture", static_cast<int>(MagicType::FireballPowerUpOne), 0)}));
+	          (std::vector<std::string> {FakeWorld::Fmt("player learns", static_cast<int>(MagicType::FireballPowerUpOne), 0),
+	                                     FakeWorld::Fmt("gesture", static_cast<int>(MagicType::FireballPowerUpOne), 0)}));
 
 	// With a town, the town learns the power-up
 	world.events.clear();
@@ -181,8 +181,8 @@ TEST(RewardOpening, ASeedThePlayerCastsGivesTheFirstPowerUpLackedWithItsGesture)
 	world.may = {MagicType::Fireball, MagicType::FireballPowerUpOne};
 	reward::Open({.seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events,
-	          (std::vector<std::string> {FakeWorld::fmt("town learns", static_cast<int>(MagicType::FireballPowerUpTwo), 0),
-	                                     FakeWorld::fmt("gesture", static_cast<int>(MagicType::FireballPowerUpTwo), 0)}));
+	          (std::vector<std::string> {FakeWorld::Fmt("town learns", static_cast<int>(MagicType::FireballPowerUpTwo), 0),
+	                                     FakeWorld::Fmt("gesture", static_cast<int>(MagicType::FireballPowerUpTwo), 0)}));
 }
 
 TEST(RewardOpening, WithEveryPowerUpTheSeedIsAGlobe)
@@ -200,8 +200,8 @@ TEST(RewardOpening, ThreePowerUpsReadOnIntoTheGestures)
 	world.may = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado, MagicType::Shield};
 	reward::Open({.seed = k_Storm}, PlayerNames::PLAYER_ONE, world);
 	const auto misread = static_cast<MagicType>(GestureType::Spiral);
-	EXPECT_EQ(world.events, (std::vector<std::string> {FakeWorld::fmt("player learns", static_cast<int>(misread), 0),
-	                                                   FakeWorld::fmt("gesture", static_cast<int>(misread), 0)}));
+	EXPECT_EQ(world.events, (std::vector<std::string> {FakeWorld::Fmt("player learns", static_cast<int>(misread), 0),
+	                                                   FakeWorld::Fmt("gesture", static_cast<int>(misread), 0)}));
 }
 
 TEST(RewardOpening, APowerUpWithNoSeedOnlyShowsItsGesture)
@@ -209,7 +209,7 @@ TEST(RewardOpening, APowerUpWithNoSeedOnlyShowsItsGesture)
 	FakeWorld world;
 	reward::Open({.powerUp = MagicType::HealPowerUpOne}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events,
-	          std::vector<std::string> {FakeWorld::fmt("gesture", static_cast<int>(MagicType::HealPowerUpOne), 0)});
+	          std::vector<std::string> {FakeWorld::Fmt("gesture", static_cast<int>(MagicType::HealPowerUpOne), 0)});
 }
 
 TEST(RewardOpening, TheNextMiracleChestFindsATownAndGivesTheNextMiracle)
@@ -219,8 +219,8 @@ TEST(RewardOpening, TheNextMiracleChestFindsATownAndGivesTheNextMiracle)
 	world.next = MagicType::StormWindRain;
 	reward::Open({.nextMiracle = true}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events, (std::vector<std::string> {
-	                            "find town", FakeWorld::fmt("town learns", static_cast<int>(MagicType::StormWindRain), 0),
-	                            FakeWorld::fmt("town seed", static_cast<int>(k_Storm), 0)}));
+	                            "find town", FakeWorld::Fmt("town learns", static_cast<int>(MagicType::StormWindRain), 0),
+	                            FakeWorld::Fmt("town seed", static_cast<int>(k_Storm), 0)}));
 
 	// With nothing left to learn, a random one as a globe
 	FakeWorld done;

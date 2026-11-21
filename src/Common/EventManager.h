@@ -36,11 +36,11 @@ private:
 	class _EventFamily
 	{
 	private:
-		inline static std::atomic<int> identifier = 0;
+		inline static std::atomic<int> s_Identifier = 0;
 
 	public:
 		template <typename... T>
-		inline static const int k_Type = identifier++;
+		inline static const int k_Type = s_Identifier++;
 	};
 	mutable std::unordered_map<int, std::unique_ptr<IEventQueue>> _queues {};
 	template <typename Event>

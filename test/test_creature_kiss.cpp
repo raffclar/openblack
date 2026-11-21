@@ -44,10 +44,10 @@ TEST(CreatureKiss, ShorterUsesItsHighKiss)
 
 TEST(CreatureKiss, NoKissWhenTheShorterIsTooShort)
 {
-	constexpr KissPoints tiny {.high = {0.0f, 8.0f, -1.0f}, .low = {0.0f, 2.0f, -1.0f}};
-	EXPECT_FALSE(creature_kiss::HighWeight(k_Tall, tiny).has_value());
-	EXPECT_FALSE(creature_kiss::HighWeight(tiny, k_Tall).has_value());
-	EXPECT_FLOAT_EQ(creature_kiss::KissingDistance(k_Tall, tiny), 0.0f);
+	constexpr KissPoints k_Tiny {.high = {0.0f, 8.0f, -1.0f}, .low = {0.0f, 2.0f, -1.0f}};
+	EXPECT_FALSE(creature_kiss::HighWeight(k_Tall, k_Tiny).has_value());
+	EXPECT_FALSE(creature_kiss::HighWeight(k_Tiny, k_Tall).has_value());
+	EXPECT_FLOAT_EQ(creature_kiss::KissingDistance(k_Tall, k_Tiny), 0.0f);
 }
 
 TEST(CreatureKiss, KissingDistanceIsHowFarTheLipsAreInFront)

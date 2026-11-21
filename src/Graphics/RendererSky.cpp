@@ -363,7 +363,7 @@ void Renderer::AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHan
 		glm::vec4 colour;
 	};
 	// The corners' layout never changes, so it is made once
-	static const auto layout = [] {
+	static const auto k_Layout = [] {
 		bgfx::VertexLayout made;
 		made.begin()
 		    .add(bgfx::Attrib::Position, 4, bgfx::AttribType::Float)
@@ -371,7 +371,7 @@ void Renderer::AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHan
 		    .end();
 		return made;
 	}();
-	if (bgfx::getAvailTransientVertexBuffer(6, layout) < 6)
+	if (bgfx::getAvailTransientVertexBuffer(6, k_Layout) < 6)
 	{
 		return;
 	}
@@ -384,7 +384,7 @@ void Renderer::AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHan
 	const auto c = at(bottomRight);
 	const auto d = at({topLeft.x, bottomRight.y});
 	bgfx::TransientVertexBuffer buffer;
-	bgfx::allocTransientVertexBuffer(&buffer, 6, layout);
+	bgfx::allocTransientVertexBuffer(&buffer, 6, k_Layout);
 	auto* corners = reinterpret_cast<Corner*>(buffer.data);
 	const glm::vec4 colour(1.0f);
 	corners[0] = {a, colour};

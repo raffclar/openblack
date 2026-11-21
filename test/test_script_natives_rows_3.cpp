@@ -250,25 +250,25 @@ TEST_F(ScriptNativesRows3, ABuildingInATownByKindAndBuiltShare)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto town = registry.Create();
 	auto& data = registry.Assign<ecs::components::Town>(town);
-	const auto MakeAbode = [&](AbodeNumber number, float built) {
+	const auto makeAbode = [&](AbodeNumber number, float built) {
 		const auto abode = registry.Create();
 		registry.Assign<ecs::components::Abode>(abode).type = number;
 		registry.Assign<ecs::components::BuildProgress>(abode).built = built;
 		data.abodes.push_back(abode);
 		return abode;
 	};
-	const auto first = MakeAbode(AbodeNumber::A, 1.0f);
-	const auto half = MakeAbode(AbodeNumber::B, 0.5f);
-	const auto Find = [&](AbodeNumber number, float minBuilt, bool excluding) {
+	const auto first = makeAbode(AbodeNumber::A, 1.0f);
+	const auto half = makeAbode(AbodeNumber::B, 0.5f);
+	const auto find = [&](AbodeNumber number, float minBuilt, bool excluding) {
 		return Call(k_CallBuildingInTown,
 		            {Int(static_cast<int32_t>(number)), Object(town), Float(minBuilt), Bool(excluding)})[0]
 		    .first.uintVal;
 	};
-	EXPECT_EQ(Find(AbodeNumber::B, 0.5f, true), static_cast<uint32_t>(half));
-	EXPECT_EQ(Find(AbodeNumber::B, 0.75f, true), 0u);
-	EXPECT_EQ(Find(AbodeNumber::B, 0.75f, false), static_cast<uint32_t>(first));
+	EXPECT_EQ(find(AbodeNumber::B, 0.5f, true), static_cast<uint32_t>(half));
+	EXPECT_EQ(find(AbodeNumber::B, 0.75f, true), 0u);
+	EXPECT_EQ(find(AbodeNumber::B, 0.75f, false), static_cast<uint32_t>(first));
 	registry.Assign<ecs::components::InScript>(half);
-	EXPECT_EQ(Find(AbodeNumber::B, 0.5f, true), 0u);
+	EXPECT_EQ(find(AbodeNumber::B, 0.5f, true), 0u);
 }
 
 TEST_F(ScriptNativesRows3, TheBeliefScaleOfATown)
@@ -319,13 +319,13 @@ TEST_F(ScriptNativesRows3, AnAnimalThatAScriptMakesASkeletonKeepsTheMark)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto animal = Animal(0.0f, 0.0f, 100);
-	const auto IsSkeleton = [](entt::entity thing) { return Call(k_IsSkeleton, {Object(thing)})[0].first.intVal != 0; };
-	EXPECT_FALSE(IsSkeleton(animal));
+	const auto isSkeleton = [](entt::entity thing) { return Call(k_IsSkeleton, {Object(thing)})[0].first.intVal != 0; };
+	EXPECT_FALSE(isSkeleton(animal));
 	EXPECT_TRUE(Call(k_SetSkeleton, {Bool(true), Object(animal)}).empty());
 	EXPECT_TRUE(registry.AllOf<ecs::components::WalkingSkeleton>(animal));
-	EXPECT_TRUE(IsSkeleton(animal));
+	EXPECT_TRUE(isSkeleton(animal));
 	EXPECT_TRUE(Call(k_SetSkeleton, {Bool(false), Object(animal)}).empty());
-	EXPECT_FALSE(IsSkeleton(animal));
+	EXPECT_FALSE(isSkeleton(animal));
 	// A thing that does not live gets no mark
 	const auto stone = registry.Create();
 	registry.Assign<ecs::components::Transform>(stone);

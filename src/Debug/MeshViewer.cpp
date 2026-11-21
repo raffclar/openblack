@@ -106,7 +106,7 @@ void MeshViewer::Draw() noexcept
 
 	auto mesh = meshes.Handle(_selectedMesh);
 
-	static std::array<char, 0x400> bitfieldTitle;
+	static std::array<char, 0x400> s_BitfieldTitle;
 	{
 		int32_t offset = 0;
 		int32_t newLines = 1;
@@ -114,7 +114,7 @@ void MeshViewer::Draw() noexcept
 		{
 			if ((mesh->GetFlags() & flag) != 0)
 			{
-				auto writen = std::snprintf(bitfieldTitle.data() + offset, bitfieldTitle.size() - offset, "%s%s%s",
+				auto writen = std::snprintf(s_BitfieldTitle.data() + offset, s_BitfieldTitle.size() - offset, "%s%s%s",
 				                            offset != 0 ? "|" : "", offset > newLines * 100 ? "\n" : "", name.data());
 				while (offset > newLines * 100)
 				{
@@ -130,7 +130,7 @@ void MeshViewer::Draw() noexcept
 	std::snprintf(meshFlagStr.data(), meshFlagStr.size(), "Mesh flag=0x%X", mesh->GetFlags());
 	if (ImGui::TreeNodeEx(meshFlagStr.data()))
 	{
-		ImGui::Text("%s", bitfieldTitle.data());
+		ImGui::Text("%s", s_BitfieldTitle.data());
 		ImGui::TreePop();
 	}
 
@@ -315,8 +315,8 @@ void MeshViewer::Update() noexcept
 	_frameBuffer->Bind(k_ViewId);
 	// TODO(bwrsandman): The setting of viewport and clearing should probably be
 	// done in framebuffer bind
-	static const uint32_t clearColor = 0x274659ff;
-	bgfx::setViewClear(static_cast<bgfx::ViewId>(k_ViewId), BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, clearColor, 1.0f, 0);
+	static const uint32_t k_ClearColor = 0x274659ff;
+	bgfx::setViewClear(static_cast<bgfx::ViewId>(k_ViewId), BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, k_ClearColor, 1.0f, 0);
 	uint16_t width;
 	uint16_t height;
 	_frameBuffer->GetSize(width, height);

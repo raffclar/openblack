@@ -119,17 +119,17 @@ protected:
 		std::ranges::copy(k_Take, _info->creatureAction.at(1).name.begin());
 		Locator::infoConstants::emplace(*_info);
 		Locator::entitiesRegistry::emplace<Registry>();
-		fights = &static_cast<RecordedFights&>(Locator::creatureFightSystem::emplace<RecordedFights>());
+		_fights = &static_cast<RecordedFights&>(Locator::creatureFightSystem::emplace<RecordedFights>());
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = registry.Create();
-		registry.Assign<Creature>(creature, Creature {.owner = PlayerNames::PLAYER_ONE});
+		_creature = registry.Create();
+		registry.Assign<Creature>(_creature, Creature {.owner = PlayerNames::PLAYER_ONE});
 		registry.Assign<Transform>(
-		    creature,
+		    _creature,
 		    Transform {.position = glm::vec3(100.0f, 0.0f, 100.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
-		registry.Assign<CreatureMindState>(creature);
-		registry.Assign<CreatureAnimation>(creature);
-		registry.Assign<CreatureFighting>(creature);
-		minds.StartMind(creature);
+		registry.Assign<CreatureMindState>(_creature);
+		registry.Assign<CreatureAnimation>(_creature);
+		registry.Assign<CreatureFighting>(_creature);
+		_minds.StartMind(_creature);
 	}
 	void TearDown() override
 	{
@@ -139,9 +139,9 @@ protected:
 	}
 
 	std::unique_ptr<InfoConstants> _info;
-	CreatureMindSystem minds;
-	RecordedFights* fights {nullptr};
-	entt::entity creature {entt::null};
+	CreatureMindSystem _minds;
+	RecordedFights* _fights {nullptr};
+	entt::entity _creature {entt::null};
 };
 } // namespace
 
@@ -149,28 +149,29 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, ADeedThatTheCreatureCopiesStopsItsFightForThePlan)
 {
-	ASSERT_TRUE(Locator::entitiesRegistry::value().Get<CreatureMindState>(creature).learnt.has_value());
-	minds.PlayerDid(0, glm::vec3(100.0f, 0.0f, 100.0f), std::nullopt, std::nullopt);
-	EXPECT_EQ(fights->calledOffForPlan, (std::vector<entt::entity> {creature}));
-	EXPECT_TRUE(fights->calledOff.empty());
+	ASSERT_TRUE(Locator::entitiesRegistry::value().Get<CreatureMindState>(_creature).learnt.has_value());
+	_minds.PlayerDid(0, glm::vec3(100.0f, 0.0f, 100.0f), std::nullopt, std::nullopt);
+	EXPECT_EQ(_fights->calledOffForPlan, (std::vector<entt::entity> {_creature}));
+	EXPECT_TRUE(_fights->calledOff.empty());
 }
 
 // A forced activity that ends the fight of the body again stops the fight for the plan
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, AReactionStopsTheFightForThePlan)
 {
-	static_cast<void>(minds.ForceActivity(creature, {.actionObject = creature, .forced = false, .fightBodyEndsAgain = true}));
-	EXPECT_EQ(fights->calledOffForPlan, (std::vector<entt::entity> {creature}));
-	EXPECT_TRUE(fights->calledOff.empty());
+	static_cast<void>(
+	    _minds.ForceActivity(_creature, {.actionObject = _creature, .forced = false, .fightBodyEndsAgain = true}));
+	EXPECT_EQ(_fights->calledOffForPlan, (std::vector<entt::entity> {_creature}));
+	EXPECT_TRUE(_fights->calledOff.empty());
 }
 
 // The other forced activities keep the plain call-off
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, TheOtherForcedActivitiesKeepThePlainCallOff)
 {
-	static_cast<void>(minds.ForceActivity(creature, {.actionObject = creature}));
-	EXPECT_EQ(fights->calledOff, (std::vector<entt::entity> {creature}));
-	EXPECT_TRUE(fights->calledOffForPlan.empty());
+	static_cast<void>(_minds.ForceActivity(_creature, {.actionObject = _creature}));
+	EXPECT_EQ(_fights->calledOff, (std::vector<entt::entity> {_creature}));
+	EXPECT_TRUE(_fights->calledOffForPlan.empty());
 }
 
 // A forced activity takes the place of a faint, as when the creature sees a villager do a skill that it does not know:
@@ -178,33 +179,34 @@ TEST_F(CreatureForcedStopFightTest, TheOtherForcedActivitiesKeepThePlainCallOff)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, AForcedActivityGetsTheCreatureUpFromItsFaint)
 {
-	static_cast<void>(minds.ForceActivity(creature, {.actionObject = creature, .forced = false, .fightBodyEndsAgain = true}));
-	EXPECT_EQ(fights->gotUpForPlan, (std::vector<entt::entity> {creature}));
+	static_cast<void>(
+	    _minds.ForceActivity(_creature, {.actionObject = _creature, .forced = false, .fightBodyEndsAgain = true}));
+	EXPECT_EQ(_fights->gotUpForPlan, (std::vector<entt::entity> {_creature}));
 }
 
 // A plan forced by hand, such as the puke, also takes the place of a faint
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, AForcedPlanGetsTheCreatureUpFromItsFaint)
 {
-	static_cast<void>(minds.Puke(creature));
-	EXPECT_EQ(fights->gotUpForPlan, (std::vector<entt::entity> {creature}));
+	static_cast<void>(_minds.Puke(_creature));
+	EXPECT_EQ(_fights->gotUpForPlan, (std::vector<entt::entity> {_creature}));
 }
 
 // The puke, the order of a computer god and the take of a gift from the hand also end the fight of the body again
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, ThePukeStopsTheFightForThePlan)
 {
-	static_cast<void>(minds.Puke(creature));
-	EXPECT_EQ(fights->calledOffForPlan, (std::vector<entt::entity> {creature}));
-	EXPECT_TRUE(fights->calledOff.empty());
+	static_cast<void>(_minds.Puke(_creature));
+	EXPECT_EQ(_fights->calledOffForPlan, (std::vector<entt::entity> {_creature}));
+	EXPECT_TRUE(_fights->calledOff.empty());
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, TheOrderOfAComputerGodStopsTheFightForThePlan)
 {
-	static_cast<void>(minds.ObeyGodOrder(creature, 0, entt::null));
-	EXPECT_EQ(fights->calledOffForPlan, (std::vector<entt::entity> {creature}));
-	EXPECT_TRUE(fights->calledOff.empty());
+	static_cast<void>(_minds.ObeyGodOrder(_creature, 0, entt::null));
+	EXPECT_EQ(_fights->calledOffForPlan, (std::vector<entt::entity> {_creature}));
+	EXPECT_TRUE(_fights->calledOff.empty());
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
@@ -212,32 +214,32 @@ TEST_F(CreatureForcedStopFightTest, TheTakeOfAGiftStopsTheFightForThePlan)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto gift = registry.Create();
-	static_cast<void>(minds.TakeFromHand(creature, gift, true, PlayerNames::PLAYER_ONE));
-	EXPECT_EQ(fights->calledOffForPlan, (std::vector<entt::entity> {creature}));
-	EXPECT_TRUE(fights->calledOff.empty());
+	static_cast<void>(_minds.TakeFromHand(_creature, gift, true, PlayerNames::PLAYER_ONE));
+	EXPECT_EQ(_fights->calledOffForPlan, (std::vector<entt::entity> {_creature}));
+	EXPECT_TRUE(_fights->calledOff.empty());
 }
 
 // The mind file keeps the fight health that the last fight left, also below 0, and a load gives it back
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, TheMindFileKeepsTheFightHealthOfTheCreature)
 {
-	fights->health = -0.25f;
-	const auto saved = minds.SaveMind(creature);
+	_fights->health = -0.25f;
+	const auto saved = _minds.SaveMind(_creature);
 	ASSERT_TRUE(saved.has_value());
 	EXPECT_EQ(saved->fightHealth, std::optional<float>(-0.25f));
-	fights->health = 1.0f;
-	minds.LoadMind(creature, std::make_shared<const creaturemind::MindFileData>(*saved));
-	EXPECT_EQ(fights->healthsSet, (std::vector<float> {-0.25f}));
+	_fights->health = 1.0f;
+	_minds.LoadMind(_creature, std::make_shared<const creaturemind::MindFileData>(*saved));
+	EXPECT_EQ(_fights->healthsSet, (std::vector<float> {-0.25f}));
 }
 
 // A load of a file with the fight health that the creature has changes nothing
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, ALoadWithTheSameFightHealthSetsNothing)
 {
-	const auto saved = minds.SaveMind(creature);
+	const auto saved = _minds.SaveMind(_creature);
 	ASSERT_TRUE(saved.has_value());
-	minds.LoadMind(creature, std::make_shared<const creaturemind::MindFileData>(*saved));
-	EXPECT_TRUE(fights->healthsSet.empty());
+	_minds.LoadMind(_creature, std::make_shared<const creaturemind::MindFileData>(*saved));
+	EXPECT_TRUE(_fights->healthsSet.empty());
 }
 
 // A stroke or a slap that reaches the mind stops what the creature does, and that also ends a faint: a knocked-out
@@ -245,7 +247,7 @@ TEST_F(CreatureForcedStopFightTest, ALoadWithTheSameFightHealthSetsNothing)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureForcedStopFightTest, FeedbackGetsTheCreatureUpFromItsFaint)
 {
-	minds.ReceiveFeedback(creature, -1.0f);
-	ASSERT_FALSE(fights->gotUpForPlan.empty());
-	EXPECT_EQ(fights->gotUpForPlan.front(), creature);
+	_minds.ReceiveFeedback(_creature, -1.0f);
+	ASSERT_FALSE(_fights->gotUpForPlan.empty());
+	EXPECT_EQ(_fights->gotUpForPlan.front(), _creature);
 }

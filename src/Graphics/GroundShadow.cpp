@@ -260,7 +260,7 @@ inline void Edge(GroundShadow::Coverage& coverage, int32_t& first, int32_t& last
 }
 } // namespace
 
-size_t GroundShadow::Coverage::Row::count() const
+size_t GroundShadow::Coverage::Row::Count() const
 {
 	size_t covered = 0;
 	for (const auto word : words)

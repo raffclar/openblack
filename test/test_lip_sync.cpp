@@ -59,11 +59,11 @@ size_t Largest(const std::array<float, 3>& w)
 
 TEST(LipSync, FftOfAnImpulseIsFlat)
 {
-	constexpr int n = 16;
-	std::vector<float> data(2 * n, 0.0f);
+	constexpr int k_N = 16;
+	std::vector<float> data(2 * k_N, 0.0f);
 	data[0] = 1.0f;
-	Fft(data, n, true);
-	for (int i = 0; i < n; ++i)
+	Fft(data, k_N, true);
+	for (int i = 0; i < k_N; ++i)
 	{
 		EXPECT_FLOAT_EQ(data[static_cast<size_t>(2 * i)], 1.0f);
 		EXPECT_NEAR(data[static_cast<size_t>(2 * i + 1)], 0.0f, 1e-6f);
@@ -72,18 +72,18 @@ TEST(LipSync, FftOfAnImpulseIsFlat)
 
 TEST(LipSync, FftFindsACosine)
 {
-	constexpr int n = 64;
-	constexpr int bin = 5;
-	std::vector<float> data(2 * n, 0.0f);
-	for (int i = 0; i < n; ++i)
+	constexpr int k_N = 64;
+	constexpr int k_Bin = 5;
+	std::vector<float> data(2 * k_N, 0.0f);
+	for (int i = 0; i < k_N; ++i)
 	{
-		data[openblack::ToIndex(2 * i)] = static_cast<float>(std::cos(2.0 * std::numbers::pi * bin * i / n));
+		data[openblack::ToIndex(2 * i)] = static_cast<float>(std::cos(2.0 * std::numbers::pi * k_Bin * i / k_N));
 	}
-	Fft(data, n, true);
-	for (int i = 0; i < n; ++i)
+	Fft(data, k_N, true);
+	for (int i = 0; i < k_N; ++i)
 	{
 		const float magnitude = std::hypot(data[openblack::ToIndex(2 * i)], data[openblack::ToIndex(2 * i + 1)]);
-		const float expected = (i == bin || i == n - bin) ? n / 2.0f : 0.0f;
+		const float expected = (i == k_Bin || i == k_N - k_Bin) ? k_N / 2.0f : 0.0f;
 		EXPECT_NEAR(magnitude, expected, 1e-3f) << "bin " << i;
 	}
 }

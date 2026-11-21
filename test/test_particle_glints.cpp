@@ -100,8 +100,8 @@ protected:
 		auto file = psys::ParticleFile::Parse(FreezeOnHolder());
 		EXPECT_TRUE(file.has_value());
 		auto effect = std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                       EffectServices {classes, world, random, noise}, glm::vec3(10.0f, 5.0f, 10.0f),
-		                                       1.0f, false);
+		                                       EffectServices {_classes, _world, _random, _noise},
+		                                       glm::vec3(10.0f, 5.0f, 10.0f), 1.0f, false);
 		effect->AddTarget(k_Seed);
 		return effect;
 	}
@@ -113,10 +113,10 @@ protected:
 		return atoms;
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
 };
 } // namespace
 
@@ -134,7 +134,7 @@ TEST_F(ParticleGlints, NoMoreThanTheMostOnThePointsOfTheModelAtAFixedAlpha)
 			EXPECT_EQ(glint.rgb[0], 180);
 			// On one of the points; drawn at the seed's scale times its pulsing growth and shrinking
 			const bool onAPoint = std::ranges::any_of(
-			    world.points, [&](const glm::vec3& point) { return glm::distance(point, glint.position) < 1e-4f; });
+			    _world.points, [&](const glm::vec3& point) { return glm::distance(point, glint.position) < 1e-4f; });
 			EXPECT_TRUE(onAPoint);
 			EXPECT_LE(glint.age, 0.9f + 1e-4f);
 			EXPECT_LE(glint.scale, 3.0f * 1.5f + 1e-4f);
@@ -151,7 +151,7 @@ TEST_F(ParticleGlints, TheyGoWithTheirObject)
 		effect->Step(0.1f);
 	}
 	EXPECT_FALSE(Glints(*effect).empty());
-	world.gone = true;
+	_world.gone = true;
 	effect->Step(0.1f);
 	EXPECT_TRUE(Glints(*effect).empty());
 }

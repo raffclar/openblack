@@ -57,23 +57,23 @@ protected:
 		}
 		Locator::entitiesRegistry::emplace<ecs::Registry>();
 		auto& registry = Locator::entitiesRegistry::value();
-		land = Thing();
-		registry.Assign<LandForest>(land, LandForest {.id = k_ForestId});
-		record = Thing();
-		first = MagicTreeIn(k_ForestId);
-		second = MagicTreeIn(k_ForestId);
-		registry.Assign<MagicForest>(record, MagicForest {.spell = k_Spell,
-		                                                  .player = PlayerNames::PLAYER_ONE,
-		                                                  .centre = glm::vec3(0.0f),
-		                                                  .trees = {first, second},
-		                                                  .landForest = land,
-		                                                  .gone = false});
-		forests = std::make_unique<ecs::systems::ForestSystem>();
+		_land = Thing();
+		registry.Assign<LandForest>(_land, LandForest {.id = k_ForestId});
+		_record = Thing();
+		_first = MagicTreeIn(k_ForestId);
+		_second = MagicTreeIn(k_ForestId);
+		registry.Assign<MagicForest>(_record, MagicForest {.spell = k_Spell,
+		                                                   .player = PlayerNames::PLAYER_ONE,
+		                                                   .centre = glm::vec3(0.0f),
+		                                                   .trees = {_first, _second},
+		                                                   .landForest = _land,
+		                                                   .gone = false});
+		_forests = std::make_unique<ecs::systems::ForestSystem>();
 	}
 
 	void TearDown() override
 	{
-		forests.reset();
+		_forests.reset();
 		Locator::entitiesRegistry::reset();
 	}
 
@@ -99,60 +99,60 @@ protected:
 	[[nodiscard]] entt::entity MagicTreeIn(uint32_t forest) const
 	{
 		const auto tree = TreeIn(forest);
-		Locator::entitiesRegistry::value().Assign<MagicTree>(tree, MagicTree {.forest = record});
+		Locator::entitiesRegistry::value().Assign<MagicTree>(tree, MagicTree {.forest = _record});
 		return tree;
 	}
 
-	entt::entity land {entt::null};
-	entt::entity record {entt::null};
-	entt::entity first {entt::null};
-	entt::entity second {entt::null};
-	std::unique_ptr<ecs::systems::ForestSystem> forests;
+	entt::entity _land {entt::null};
+	entt::entity _record {entt::null};
+	entt::entity _first {entt::null};
+	entt::entity _second {entt::null};
+	std::unique_ptr<ecs::systems::ForestSystem> _forests;
 };
 } // namespace
 
 TEST_F(ForestMiracleEmpty, TheForestStaysWhileATreeIsLeft)
 {
-	Locator::entitiesRegistry::value().Destroy(first);
-	EXPECT_EQ(forests->ForestOf(k_Spell), MiracleForest::Standing);
+	Locator::entitiesRegistry::value().Destroy(_first);
+	EXPECT_EQ(_forests->ForestOf(k_Spell), MiracleForest::Standing);
 }
 
 TEST_F(ForestMiracleEmpty, TheForestGoesWithItsLastMagicTree)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Destroy(first);
-	registry.Destroy(second);
-	EXPECT_EQ(forests->ForestOf(k_Spell), MiracleForest::Gone);
+	registry.Destroy(_first);
+	registry.Destroy(_second);
+	EXPECT_EQ(_forests->ForestOf(k_Spell), MiracleForest::Gone);
 
 	// At its turn the miracle lets go of the forest: the record and the forest of the land go
-	forests->LetGoOfGoneForest(k_Spell);
-	EXPECT_EQ(forests->ForestOf(k_Spell), MiracleForest::None);
-	EXPECT_FALSE(registry.Valid(record));
-	EXPECT_FALSE(registry.Valid(land));
-	EXPECT_FALSE(forests->TallestTreeOf(k_Spell).has_value());
+	_forests->LetGoOfGoneForest(k_Spell);
+	EXPECT_EQ(_forests->ForestOf(k_Spell), MiracleForest::None);
+	EXPECT_FALSE(registry.Valid(_record));
+	EXPECT_FALSE(registry.Valid(_land));
+	EXPECT_FALSE(_forests->TallestTreeOf(k_Spell).has_value());
 }
 
 TEST_F(ForestMiracleEmpty, ATreeThatSpreadIntoTheForestKeepsIt)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto young = TreeIn(k_ForestId);
-	registry.Destroy(first);
-	registry.Destroy(second);
-	EXPECT_EQ(forests->ForestOf(k_Spell), MiracleForest::Standing);
+	registry.Destroy(_first);
+	registry.Destroy(_second);
+	EXPECT_EQ(_forests->ForestOf(k_Spell), MiracleForest::Standing);
 
 	// The young tree is not the miracle's: when it goes last, the forest stays on the land, empty
 	registry.Destroy(young);
-	EXPECT_EQ(forests->ForestOf(k_Spell), MiracleForest::Standing);
-	EXPECT_TRUE(registry.Valid(land));
+	EXPECT_EQ(_forests->ForestOf(k_Spell), MiracleForest::Standing);
+	EXPECT_TRUE(registry.Valid(_land));
 }
 
 TEST_F(ForestMiracleEmpty, ATreeOfAnotherForestDoesNotCount)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::ignore = TreeIn(k_OtherForestId);
-	registry.Destroy(first);
-	registry.Destroy(second);
-	EXPECT_EQ(forests->ForestOf(k_Spell), MiracleForest::Gone);
+	registry.Destroy(_first);
+	registry.Destroy(_second);
+	EXPECT_EQ(_forests->ForestOf(k_Spell), MiracleForest::Gone);
 }
 
 // The forest of a saved game takes the magic trees of its forest of the land again, the grown trees first. A tree that
@@ -161,25 +161,25 @@ TEST_F(ForestMiracleEmpty, AForestOfASavedGameTakesItsMagicTreesAgain)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto young = TreeIn(k_ForestId);
-	registry.Get<ForestMember>(second).growing = true;
-	registry.Remove<MagicForest>(record);
+	registry.Get<ForestMember>(_second).growing = true;
+	registry.Remove<MagicForest>(_record);
 	constexpr auto k_SavedSpell = entt::entity {901};
 	Spell miracle {.castPosition = glm::vec3(4.0f, 0.0f, 5.0f)};
 	miracle.caster.player = PlayerNames::PLAYER_TWO;
-	EXPECT_EQ(forests->RestoreForest(k_SavedSpell, miracle, land), 2U);
+	EXPECT_EQ(_forests->RestoreForest(k_SavedSpell, miracle, _land), 2U);
 	EXPECT_EQ(miracle.objectCount, 2U);
-	const auto made = registry.Get<const MagicTree>(first).forest;
-	ASSERT_TRUE(made != entt::null && made != record);
-	EXPECT_EQ(registry.Get<const MagicTree>(second).forest, made);
+	const auto made = registry.Get<const MagicTree>(_first).forest;
+	ASSERT_TRUE(made != entt::null && made != _record);
+	EXPECT_EQ(registry.Get<const MagicTree>(_second).forest, made);
 	EXPECT_FALSE(registry.AllOf<MagicTree>(young));
 	const auto& forest = registry.Get<const MagicForest>(made);
 	EXPECT_EQ(forest.spell, k_SavedSpell);
 	EXPECT_EQ(forest.player, PlayerNames::PLAYER_TWO);
 	EXPECT_EQ(forest.centre, glm::vec3(4.0f, 0.0f, 5.0f));
-	EXPECT_EQ(forest.landForest, land);
-	EXPECT_EQ(forest.trees, (std::vector<entt::entity> {first, second}));
-	EXPECT_EQ(forests->ForestOf(k_SavedSpell), MiracleForest::Standing);
+	EXPECT_EQ(forest.landForest, _land);
+	EXPECT_EQ(forest.trees, (std::vector<entt::entity> {_first, _second}));
+	EXPECT_EQ(_forests->ForestOf(k_SavedSpell), MiracleForest::Standing);
 	// A spell with no forest of the land takes no trees
 	Spell other;
-	EXPECT_EQ(forests->RestoreForest(entt::entity {902}, other, entt::null), 0U);
+	EXPECT_EQ(_forests->RestoreForest(entt::entity {902}, other, entt::null), 0U);
 }

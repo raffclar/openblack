@@ -89,9 +89,9 @@ protected:
 		Locator::entitiesRegistry::emplace<Registry>();
 		Locator::creatureFightSystem::emplace<FakeFights>();
 		auto& registry = Locator::entitiesRegistry::value();
-		creature = registry.Create();
-		registry.Assign<components::Transform>(creature, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-		registry.Assign<components::Creature>(creature);
+		_creature = registry.Create();
+		registry.Assign<components::Transform>(_creature, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<components::Creature>(_creature);
 	}
 	void TearDown() override
 	{
@@ -100,27 +100,27 @@ protected:
 	}
 	[[nodiscard]] static FakeFights& Fights() { return static_cast<FakeFights&>(Locator::creatureFightSystem::value()); }
 
-	TornadoSystem tornado;
-	entt::entity creature {entt::null};
+	TornadoSystem _tornado;
+	entt::entity _creature {entt::null};
 };
 } // namespace
 
 TEST_F(TornadoCreature, ACreatureCaughtFaintsHelplessAndNotTwiceWhileOutCold)
 {
-	tornado.CatchCreature(creature);
+	_tornado.CatchCreature(_creature);
 	ASSERT_EQ(Fights().fainted.size(), 1u);
-	EXPECT_EQ(Fights().fainted.front(), creature);
+	EXPECT_EQ(Fights().fainted.front(), _creature);
 	// Not as the loser of a fight
 	EXPECT_TRUE(Fights().knockedOut.empty());
 	// Caught again while it lies out cold, nothing more happens
-	tornado.CatchCreature(creature);
+	_tornado.CatchCreature(_creature);
 	EXPECT_EQ(Fights().fainted.size(), 1u);
 }
 
 TEST_F(TornadoCreature, OnceRecoveredItCanBeCaughtAgain)
 {
-	tornado.CatchCreature(creature);
-	Fights().Resurrect(creature);
-	tornado.CatchCreature(creature);
+	_tornado.CatchCreature(_creature);
+	Fights().Resurrect(_creature);
+	_tornado.CatchCreature(_creature);
 	EXPECT_EQ(Fights().fainted.size(), 2u);
 }

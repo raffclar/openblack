@@ -26,9 +26,9 @@ TEST(StartRules, TheLandChecksumAddsTheBytesAndThePlacesOfTheLineFeeds)
 	const std::vector<uint8_t> file = {'A', '\n'};
 	EXPECT_EQ(LandChecksum(file), (uint64_t {699} << 32) | 76u);
 	// Only the low 6 bits of a line feed's place count: a line feed at place 64 adds 0
-	std::vector<uint8_t> long_(65, 0);
-	long_[64] = '\n';
-	EXPECT_EQ(LandChecksum(long_), (uint64_t {93} << 32) | 10u);
+	std::vector<uint8_t> longLand(65, 0);
+	longLand[64] = '\n';
+	EXPECT_EQ(LandChecksum(longLand), (uint64_t {93} << 32) | 10u);
 	// A byte divided by 3 rounds down
 	const std::vector<uint8_t> high = {255};
 	EXPECT_EQ(LandChecksum(high), (uint64_t {255 * 9 + 85} << 32) | 255u);

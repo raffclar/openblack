@@ -40,7 +40,7 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 
 	// Extract gl types from decl
 	_vertexDeclOffsets.reserve(_vertexDecl.size());
-	static const std::array<std::array<uint32_t, 4>, 3> strides = {
+	static const std::array<std::array<uint32_t, 4>, 3> k_Strides = {
 	    std::array<uint32_t, 4> {4, 4, 4, 4},   // Uint8
 	    std::array<uint32_t, 4> {4, 4, 8, 8},   // Int16
 	    std::array<uint32_t, 4> {4, 8, 12, 16}, // Float
@@ -49,7 +49,7 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 	for (const auto& d : _vertexDecl)
 	{
 		_vertexDeclOffsets.push_back(_strideBytes);
-		_strideBytes += strides.at(static_cast<size_t>(d.type)).at(d.num - 1);
+		_strideBytes += k_Strides.at(static_cast<size_t>(d.type)).at(d.num - 1);
 	}
 
 	const auto* bgfxMem = static_cast<const DeviceMemory*>(mem);

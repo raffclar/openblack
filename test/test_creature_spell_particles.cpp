@@ -156,11 +156,12 @@ class CreatureSpellParticles: public ::testing::Test
 protected:
 	std::unique_ptr<Effect> Make(const std::string& body)
 	{
-		auto file = psys::ParticleFile::Parse(header + body);
+		auto file = psys::ParticleFile::Parse(_header + body);
 		EXPECT_TRUE(file.has_value());
-		auto effect = std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                       EffectServices {classes, world, random, noise}, world.body.origin, 1.0f, false);
-		effect->SetSink(&spell);
+		auto effect =
+		    std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
+		                             EffectServices {_classes, _world, _random, _noise}, _world.body.origin, 1.0f, false);
+		effect->SetSink(&_spell);
 		effect->SetPlayer(0);
 		ProcessInfo info;
 		info.handPosition = k_Hand;
@@ -178,12 +179,12 @@ protected:
 	}
 
 	static constexpr glm::vec3 k_Hand {60.0f, 40.0f, 60.0f};
-	std::string header {Header()};
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
-	FakeSpell spell;
+	std::string _header {Header()};
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
+	FakeSpell _spell;
 };
 } // namespace
 
@@ -258,30 +259,30 @@ TEST_F(CreatureSpellParticles, AnAtomStartsAtTheCreaturesFeetAndHumsWithTheCasti
 {
 	auto effect = Make(First("0") + k_Point);
 	effect->Step(k_Step);
-	ASSERT_EQ(world.sounds.size(), 2u);
-	EXPECT_EQ(world.sounds[0]->sound.action.sound, "SOUND_SPELL_CREATURE_WHISPS");
-	EXPECT_EQ(world.sounds[1]->sound.action.sound, "SOUND_SPELL_CREATURE_SPELL_CAST");
+	ASSERT_EQ(_world.sounds.size(), 2u);
+	EXPECT_EQ(_world.sounds[0]->sound.action.sound, "SOUND_SPELL_CREATURE_WHISPS");
+	EXPECT_EQ(_world.sounds[1]->sound.action.sound, "SOUND_SPELL_CREATURE_SPELL_CAST");
 	ASSERT_EQ(effect->AtomCount(), 1u);
-	const float start = world.sounds[0]->atom->position.x;
+	const float start = _world.sounds[0]->atom->position.x;
 	// The atom does not move with the creature
-	world.body.origin = {110.0f, 0.0f, 100.0f};
+	_world.body.origin = {110.0f, 0.0f, 100.0f};
 	effect->Step(k_Step);
 	ASSERT_EQ(effect->AtomCount(), 1u);
-	EXPECT_EQ(world.sounds[0]->atom->position.x, start);
+	EXPECT_EQ(_world.sounds[0]->atom->position.x, start);
 }
 
 TEST_F(CreatureSpellParticles, ACreaturesCastSoundsCastByACreatureAndAScriptsMakesNone)
 {
-	spell.creatureCasting = true;
+	_spell.creatureCasting = true;
 	auto byCreature = Make(First("0"));
 	byCreature->Step(k_Step);
-	ASSERT_EQ(world.sounds.size(), 2u);
-	EXPECT_EQ(world.sounds[1]->sound.action.sound, "SOUND_SPELL_CREATURE_SPELL_CAST_BY_OTHER_CREATURE");
-	world.sounds.clear();
-	spell.scriptCasting = true;
+	ASSERT_EQ(_world.sounds.size(), 2u);
+	EXPECT_EQ(_world.sounds[1]->sound.action.sound, "SOUND_SPELL_CREATURE_SPELL_CAST_BY_OTHER_CREATURE");
+	_world.sounds.clear();
+	_spell.scriptCasting = true;
 	auto byScript = Make(First("0"));
 	byScript->Step(k_Step);
-	EXPECT_EQ(world.sounds.size(), 1u);
+	EXPECT_EQ(_world.sounds.size(), 1u);
 }
 
 TEST_F(CreatureSpellParticles, WispsComeAfterASecondOneByOneFromTheHand)
@@ -310,7 +311,7 @@ TEST_F(CreatureSpellParticles, WispsNeedACreatureSpellThatIsNotAnAntiSpell)
 {
 	for (const int kind : {-1, 16})
 	{
-		spell.kind = kind;
+		_spell.kind = kind;
 		auto effect = Make(First("1 1") + k_Wisps + k_Point);
 		for (int i = 0; i < 40; ++i)
 		{
@@ -322,8 +323,8 @@ TEST_F(CreatureSpellParticles, WispsNeedACreatureSpellThatIsNotAnAntiSpell)
 
 TEST_F(CreatureSpellParticles, AnInvisibleCreaturesWispsFadeWithIt)
 {
-	spell.kind = 7;
-	world.body.invisible = 0.5f;
+	_spell.kind = 7;
+	_world.body.invisible = 0.5f;
 	auto effect = Make(First("1 1") + k_Wisps + k_Point);
 	for (int i = 0; i < 15; ++i)
 	{
@@ -365,7 +366,7 @@ TEST_F(CreatureSpellParticles, TheFliesWaitAtTheHandThenCircleTheHead)
 // the spaces. In an effect whose groups form a hierarchy, the flies are drawn away from the hand, moved by the parent.
 TEST_F(CreatureSpellParticles, TheFliesTakeTheirPlaceAsTheirPositionInTheEffect)
 {
-	header = Header("1 0 0 0 0 0");
+	_header = Header("1 0 0 0 0 0");
 	const auto itch = Object("UR_CreatureSpellItch", "Itch",
 	                         "PROPERTY Group INTEGER 4\nPROPERTY NumAtoms INTEGER 1\nPROPERTY PCreator PERSIS_PNTR Point\n"
 	                         "PROPERTY PauseBeforeGotoCreature FLOAT 5\n");
@@ -374,7 +375,7 @@ TEST_F(CreatureSpellParticles, TheFliesTakeTheirPlaceAsTheirPositionInTheEffect)
 	effect->Step(k_Step);
 	const auto atoms = Atoms(*effect, Creator::Kind::Sprite);
 	ASSERT_EQ(atoms.size(), 1u);
-	EXPECT_NEAR(glm::distance(atoms[0].position, k_Hand + world.body.origin), 0.0f, k_Epsilon);
+	EXPECT_NEAR(glm::distance(atoms[0].position, k_Hand + _world.body.origin), 0.0f, k_Epsilon);
 }
 
 TEST_F(CreatureSpellParticles, HeartsRiseFromAllOverANiceCreatureFourASecond)
@@ -425,7 +426,7 @@ TEST_F(CreatureSpellParticles, HeartsAndSteamLetGoOnceTheCreatureHasGone)
 	           "PROPERTY MaxAtoms INTEGER 20\nPROPERTY MinHeight FLOAT 1\nPROPERTY PCreator PERSIS_PNTR Point\n");
 	for (const auto& rule : {hearts, steam})
 	{
-		world.gone = false;
+		_world.gone = false;
 		auto effect = Make(First("1 4") + rule + k_Point);
 		for (int i = 0; i < 10; ++i)
 		{
@@ -433,7 +434,7 @@ TEST_F(CreatureSpellParticles, HeartsAndSteamLetGoOnceTheCreatureHasGone)
 		}
 		const auto made = effect->AtomCount();
 		ASSERT_GT(made, 1u);
-		world.gone = true;
+		_world.gone = true;
 		for (int i = 0; i < 60; ++i)
 		{
 			effect->Step(k_Step);
@@ -463,7 +464,7 @@ TEST(CreatureRigPose, EffectsReadTheBonesOfTheLastTurn)
 // The creature is far from the hill, so only that reading lifts the steam onto the hill.
 TEST_F(CreatureSpellParticles, TheSteamTestsTheLandAtItsPositionInTheEffect)
 {
-	header = Header("1 0 0 0 0 0");
+	_header = Header("1 0 0 0 0 0");
 	const auto steam =
 	    Object("UR_CreatureSpellFreeze", "Steam",
 	           "PROPERTY DieAge FLOAT 5\nPROPERTY Group INTEGER 4\nPROPERTY InitSpeed FLOAT 1\n"

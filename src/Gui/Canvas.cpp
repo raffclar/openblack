@@ -46,7 +46,7 @@ uint32_t ToAbgr(glm::vec4 colour)
 
 bgfx::VertexLayout& GetLayout()
 {
-	static bgfx::VertexLayout layout = [] {
+	static bgfx::VertexLayout s_Layout = [] {
 		bgfx::VertexLayout result;
 		result.begin()
 		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
@@ -55,7 +55,7 @@ bgfx::VertexLayout& GetLayout()
 		    .end();
 		return result;
 	}();
-	return layout;
+	return s_Layout;
 }
 
 /// The state of a canvas's draws that blend in a way and test the depth in a way. They never write the depth.

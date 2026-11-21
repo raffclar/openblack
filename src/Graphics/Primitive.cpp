@@ -29,7 +29,7 @@ std::unique_ptr<Mesh> Primitive::CreatePlane()
 		glm::vec2 pos;
 	};
 
-	static const std::array<Vertex, 6> vertices = {
+	static const std::array<Vertex, 6> k_Vertices = {
 	    Vertex {glm::vec2 {-1.0f, -1.0f}}, Vertex {glm::vec2 {1.0f, 1.0f}},  Vertex {glm::vec2 {-1.0f, 1.0f}},
 
 	    Vertex {glm::vec2 {-1.0f, -1.0f}}, Vertex {glm::vec2 {1.0f, -1.0f}}, Vertex {glm::vec2 {1.0f, 1.0f}},
@@ -39,14 +39,14 @@ std::unique_ptr<Mesh> Primitive::CreatePlane()
 	decl.reserve(2);
 	decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
 
-	const auto* mem = bgfx::makeRef(vertices.data(), static_cast<uint32_t>(vertices.size() * sizeof(vertices[0])));
+	const auto* mem = bgfx::makeRef(k_Vertices.data(), static_cast<uint32_t>(k_Vertices.size() * sizeof(k_Vertices[0])));
 	auto* vertexBuffer = new VertexBuffer("Plane", mem, decl);
 	bgfx::frame();
 	auto mesh = std::make_unique<Mesh>(vertexBuffer, nullptr);
 	bgfx::frame();
 	// The mesh gives its fixed data again after a restore of the graphics device, thus the device keeps no copy
-	const auto* first = reinterpret_cast<const uint8_t*>(vertices.data());
-	mesh->KeepContentsForRestore(std::vector<uint8_t>(first, first + (vertices.size() * sizeof(vertices[0]))));
+	const auto* first = reinterpret_cast<const uint8_t*>(k_Vertices.data());
+	mesh->KeepContentsForRestore(std::vector<uint8_t>(first, first + (k_Vertices.size() * sizeof(k_Vertices[0]))));
 
 	return mesh;
 }

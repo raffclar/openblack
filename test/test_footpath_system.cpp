@@ -275,22 +275,22 @@ protected:
 	void SetUp() override
 	{
 		auto made = std::make_unique<FakeWorld>();
-		world = made.get();
-		system = std::make_unique<FootpathSystem>(std::move(made));
-		world->system = system.get();
-		town = world->registry.Create();
-		world->registry.Assign<Town>(town);
-		world->registry.Assign<Transform>(town, k_PitPosition, glm::mat3(1.0f), glm::vec3(1.0f));
-		pit = MakeAbode(k_PitPosition);
-		world->pits[town] = pit;
-		world->SyncMap();
+		_world = made.get();
+		_system = std::make_unique<FootpathSystem>(std::move(made));
+		_world->system = _system.get();
+		_town = _world->registry.Create();
+		_world->registry.Assign<Town>(_town);
+		_world->registry.Assign<Transform>(_town, k_PitPosition, glm::mat3(1.0f), glm::vec3(1.0f));
+		_pit = MakeAbode(k_PitPosition);
+		_world->pits[_town] = _pit;
+		_world->SyncMap();
 	}
 
 	entt::entity MakeAbode(glm::vec3 position)
 	{
-		const auto abode = world->Make(position);
-		world->registry.Assign<Abode>(abode);
-		world->towns[abode] = town;
+		const auto abode = _world->Make(position);
+		_world->registry.Assign<Abode>(abode);
+		_world->towns[abode] = _town;
 		return abode;
 	}
 
@@ -298,7 +298,7 @@ protected:
 	[[nodiscard]] std::vector<entt::entity> PathsOf(entt::entity thing) const
 	{
 		std::vector<entt::entity> paths;
-		if (const auto* link = world->registry.TryGet<const FootpathLink>(thing))
+		if (const auto* link = _world->registry.TryGet<const FootpathLink>(thing))
 		{
 			std::ranges::transform(link->footpaths, std::back_inserter(paths),
 			                       [](Footpath::Id id) { return static_cast<entt::entity>(id); });
@@ -309,7 +309,7 @@ protected:
 	[[nodiscard]] std::vector<glm::ivec2> PlacesOf(entt::entity footpath) const
 	{
 		std::vector<glm::ivec2> places;
-		std::ranges::transform(world->registry.Get<const Footpath>(footpath).nodes, std::back_inserter(places),
+		std::ranges::transform(_world->registry.Get<const Footpath>(footpath).nodes, std::back_inserter(places),
 		                       &Footpath::Node::place);
 		return places;
 	}
@@ -317,64 +317,64 @@ protected:
 	[[nodiscard]] size_t CountOfPaths() const
 	{
 		size_t count = 0;
-		world->registry.Each<const Footpath>([&count](entt::entity, const Footpath&) { ++count; });
+		_world->registry.Each<const Footpath>([&count](entt::entity, const Footpath&) { ++count; });
 		return count;
 	}
 
 	[[nodiscard]] size_t CountOfFinders() const
 	{
 		size_t count = 0;
-		world->registry.Each<const FootpathFinder>([&count](entt::entity, const FootpathFinder&) { ++count; });
+		_world->registry.Each<const FootpathFinder>([&count](entt::entity, const FootpathFinder&) { ++count; });
 		return count;
 	}
 
 	/// No node that walkers use stands inside the circle
 	[[nodiscard]] bool WalkedNodesClearOf(entt::entity footpath, glm::vec3 centre, float radius) const
 	{
-		const auto& nodes = world->registry.Get<const Footpath>(footpath).nodes;
+		const auto& nodes = _world->registry.Get<const Footpath>(footpath).nodes;
 		return std::ranges::all_of(nodes, [centre, radius](const Footpath::Node& node) {
 			return node.hidden || node.marker || glm::length(planning::ToPoint(node.place) - glm::xz(centre)) >= radius;
 		});
 	}
 
-	FakeWorld* world {nullptr};
-	std::unique_ptr<FootpathSystem> system;
-	entt::entity town {entt::null};
-	entt::entity pit {entt::null};
+	FakeWorld* _world {nullptr};
+	std::unique_ptr<FootpathSystem> _system;
+	entt::entity _town {entt::null};
+	entt::entity _pit {entt::null};
 };
 
 TEST_F(FootpathSystemTest, AWorkingBuildingGetsAPathFromThePitRoundWhatCameBeforeIt)
 {
-	const auto rock = world->Make(k_RockPosition, k_RockRadius);
+	const auto rock = _world->Make(k_RockPosition, k_RockRadius);
 	const auto house = MakeAbode(k_HousePosition);
-	system->BuildingWorking(house);
+	_system->BuildingWorking(house);
 
 	// The map synced before the path was planned, so the rock is filed and the path goes round it
-	EXPECT_TRUE(world->filed.contains(rock));
+	EXPECT_TRUE(_world->filed.contains(rock));
 	const auto paths = PathsOf(house);
 	ASSERT_EQ(paths.size(), 1U);
-	EXPECT_EQ(PathsOf(pit), paths);
+	EXPECT_EQ(PathsOf(_pit), paths);
 	const auto places = PlacesOf(paths.front());
 	ASSERT_EQ(places.size(), 3U);
-	EXPECT_EQ(places.front(), world->ArrivePlace(pit));
-	EXPECT_EQ(places.back(), world->ArrivePlace(house));
+	EXPECT_EQ(places.front(), _world->ArrivePlace(_pit));
+	EXPECT_EQ(places.back(), _world->ArrivePlace(house));
 	EXPECT_TRUE(WalkedNodesClearOf(paths.front(), k_RockPosition, k_RockRadius));
 	// The rock's change came before the path, so the path is not sent round it again: one search only
-	EXPECT_EQ(world->searches, 1);
-	EXPECT_TRUE(world->registry.Context().footpathObstacleChanges.empty());
-	EXPECT_TRUE(std::ranges::none_of(world->registry.Get<const Footpath>(paths.front()).nodes,
+	EXPECT_EQ(_world->searches, 1);
+	EXPECT_TRUE(_world->registry.Context().footpathObstacleChanges.empty());
+	EXPECT_TRUE(std::ranges::none_of(_world->registry.Get<const Footpath>(paths.front()).nodes,
 	                                 [](const Footpath::Node& node) { return node.hidden || node.marker; }));
 }
 
 TEST_F(FootpathSystemTest, ThePathEndsAndTheMarkerOfAThingHaveTheHeightsOfTheirPlaces)
 {
 	const auto house = MakeAbode(k_HousePosition);
-	world->arriveAltitudes[pit] = 0.25f;
-	world->arriveAltitudes[house] = 0.75f;
-	system->BuildingWorking(house);
+	_world->arriveAltitudes[_pit] = 0.25f;
+	_world->arriveAltitudes[house] = 0.75f;
+	_system->BuildingWorking(house);
 	const auto path = PathsOf(house).front();
 	{
-		const auto& nodes = world->registry.Get<const Footpath>(path).nodes;
+		const auto& nodes = _world->registry.Get<const Footpath>(path).nodes;
 		ASSERT_EQ(nodes.size(), 2U);
 		EXPECT_EQ(nodes.front().altitude, 0.25f);
 		EXPECT_EQ(nodes.back().altitude, 0.75f);
@@ -383,11 +383,11 @@ TEST_F(FootpathSystemTest, ThePathEndsAndTheMarkerOfAThingHaveTheHeightsOfTheirP
 	}
 
 	// A thing below the land put on the path: the marker at its place has its height, the route's nodes the height 0
-	const auto rock = world->Make(k_RockPosition, k_RockRadius);
-	world->arriveAltitudes[rock] = -0.5f;
-	world->SyncMap();
-	system->ProcessObstacleChanges();
-	const auto& nodes = world->registry.Get<const Footpath>(path).nodes;
+	const auto rock = _world->Make(k_RockPosition, k_RockRadius);
+	_world->arriveAltitudes[rock] = -0.5f;
+	_world->SyncMap();
+	_system->ProcessObstacleChanges();
+	const auto& nodes = _world->registry.Get<const Footpath>(path).nodes;
 	ASSERT_GT(nodes.size(), 2U);
 	EXPECT_EQ(std::ranges::count_if(nodes, &Footpath::Node::marker), 1);
 	EXPECT_EQ(nodes.front().altitude, 0.25f);
@@ -400,43 +400,43 @@ TEST_F(FootpathSystemTest, ThePathEndsAndTheMarkerOfAThingHaveTheHeightsOfTheirP
 
 TEST_F(FootpathSystemTest, AMiracleDispenserOfATownGetsAPathFromThePitAsAnAbodeDoes)
 {
-	const auto dispenser = world->Make(k_HousePosition);
-	world->registry.Assign<SpellDispenser>(dispenser);
-	world->towns[dispenser] = town;
-	system->BuildingWorking(dispenser);
+	const auto dispenser = _world->Make(k_HousePosition);
+	_world->registry.Assign<SpellDispenser>(dispenser);
+	_world->towns[dispenser] = _town;
+	_system->BuildingWorking(dispenser);
 
 	const auto paths = PathsOf(dispenser);
 	ASSERT_EQ(paths.size(), 1U);
-	EXPECT_EQ(PathsOf(pit), paths);
+	EXPECT_EQ(PathsOf(_pit), paths);
 	const auto places = PlacesOf(paths.front());
-	EXPECT_EQ(places.front(), world->ArrivePlace(pit));
-	EXPECT_EQ(places.back(), world->ArrivePlace(dispenser));
+	EXPECT_EQ(places.front(), _world->ArrivePlace(_pit));
+	EXPECT_EQ(places.back(), _world->ArrivePlace(dispenser));
 
 	// A thing that is neither an abode nor a dispenser gets no path
-	const auto rock = world->Make(k_RockPosition, k_RockRadius);
-	world->towns[rock] = town;
-	system->BuildingWorking(rock);
+	const auto rock = _world->Make(k_RockPosition, k_RockRadius);
+	_world->towns[rock] = _town;
+	_system->BuildingWorking(rock);
 	EXPECT_TRUE(PathsOf(rock).empty());
 }
 
 TEST_F(FootpathSystemTest, NoPathAtTheFirstTurnForThePitItselfOrWithoutABuiltPit)
 {
 	const auto house = MakeAbode(k_HousePosition);
-	world->turn = 0;
-	system->BuildingWorking(house);
+	_world->turn = 0;
+	_system->BuildingWorking(house);
 	EXPECT_TRUE(PathsOf(house).empty());
 
-	world->turn = 1;
-	system->BuildingWorking(pit);
-	EXPECT_TRUE(PathsOf(pit).empty());
+	_world->turn = 1;
+	_system->BuildingWorking(_pit);
+	EXPECT_TRUE(PathsOf(_pit).empty());
 
-	world->unbuilt.insert(pit);
-	system->BuildingWorking(house);
+	_world->unbuilt.insert(_pit);
+	_system->BuildingWorking(house);
 	EXPECT_TRUE(PathsOf(house).empty());
 
-	world->unbuilt.clear();
-	world->findsWay = false;
-	system->BuildingWorking(house);
+	_world->unbuilt.clear();
+	_world->findsWay = false;
+	_system->BuildingWorking(house);
 	EXPECT_TRUE(PathsOf(house).empty());
 	EXPECT_EQ(CountOfPaths(), 0U);
 }
@@ -444,90 +444,90 @@ TEST_F(FootpathSystemTest, NoPathAtTheFirstTurnForThePitItselfOrWithoutABuiltPit
 TEST_F(FootpathSystemTest, AThingPutOnAPathSendsItRoundWhenTheChangesAreProcessed)
 {
 	const auto house = MakeAbode(k_HousePosition);
-	system->BuildingWorking(house);
+	_system->BuildingWorking(house);
 	const auto path = PathsOf(house).front();
 	const auto straight = PlacesOf(path);
 	ASSERT_EQ(straight.size(), 2U);
 
-	world->Make(k_RockPosition, k_RockRadius);
-	world->SyncMap();
+	_world->Make(k_RockPosition, k_RockRadius);
+	_world->SyncMap();
 	// The change waits for the next process, as the turn does it after the step that made the thing
 	EXPECT_EQ(PlacesOf(path), straight);
-	EXPECT_EQ(world->registry.Context().footpathObstacleChanges.size(), 1U);
+	EXPECT_EQ(_world->registry.Context().footpathObstacleChanges.size(), 1U);
 
-	system->ProcessObstacleChanges();
+	_system->ProcessObstacleChanges();
 	EXPECT_NE(PlacesOf(path), straight);
 	EXPECT_TRUE(WalkedNodesClearOf(path, k_RockPosition, k_RockRadius));
 	EXPECT_EQ(PlacesOf(path).front(), straight.front());
 	EXPECT_EQ(PlacesOf(path).back(), straight.back());
-	EXPECT_TRUE(world->registry.Context().footpathObstacleChanges.empty());
+	EXPECT_TRUE(_world->registry.Context().footpathObstacleChanges.empty());
 }
 
 TEST_F(FootpathSystemTest, AThingTakenOffThePathBringsItBack)
 {
 	const auto house = MakeAbode(k_HousePosition);
-	system->BuildingWorking(house);
+	_system->BuildingWorking(house);
 	const auto path = PathsOf(house).front();
 	const auto straight = PlacesOf(path);
 
-	const auto rock = world->Make(k_RockPosition, k_RockRadius);
-	world->SyncMap();
-	system->ProcessObstacleChanges();
+	const auto rock = _world->Make(k_RockPosition, k_RockRadius);
+	_world->SyncMap();
+	_system->ProcessObstacleChanges();
 	ASSERT_NE(PlacesOf(path), straight);
 
-	world->TakeOut(rock);
-	system->ProcessObstacleChanges();
+	_world->TakeOut(rock);
+	_system->ProcessObstacleChanges();
 	EXPECT_EQ(PlacesOf(path), straight);
-	EXPECT_TRUE(world->registry.Context().footpathObstacles.empty());
+	EXPECT_TRUE(_world->registry.Context().footpathObstacles.empty());
 }
 
 TEST_F(FootpathSystemTest, AThingThePathsGoThroughChangesNoPath)
 {
 	const auto house = MakeAbode(k_HousePosition);
-	system->BuildingWorking(house);
+	_system->BuildingWorking(house);
 	const auto path = PathsOf(house).front();
 	const auto straight = PlacesOf(path);
 
-	const auto bush = world->Make(k_RockPosition);
-	world->SyncMap();
-	EXPECT_TRUE(world->registry.Context().footpathObstacleChanges.empty());
-	world->TakeOut(bush);
-	EXPECT_TRUE(world->registry.Context().footpathObstacleChanges.empty());
-	system->ProcessObstacleChanges();
+	const auto bush = _world->Make(k_RockPosition);
+	_world->SyncMap();
+	EXPECT_TRUE(_world->registry.Context().footpathObstacleChanges.empty());
+	_world->TakeOut(bush);
+	EXPECT_TRUE(_world->registry.Context().footpathObstacleChanges.empty());
+	_system->ProcessObstacleChanges();
 	EXPECT_EQ(PlacesOf(path), straight);
 }
 
 TEST_F(FootpathSystemTest, AThingFarFromThePathLeavesItAsItIs)
 {
 	const auto house = MakeAbode(k_HousePosition);
-	system->BuildingWorking(house);
+	_system->BuildingWorking(house);
 	const auto path = PathsOf(house).front();
 	const auto straight = PlacesOf(path);
-	const int searchesBefore = world->searches;
+	const int searchesBefore = _world->searches;
 
-	world->Make(k_RockPosition + glm::vec3(0.0f, 0.0f, 200.0f), k_RockRadius);
-	world->SyncMap();
-	system->ProcessObstacleChanges();
+	_world->Make(k_RockPosition + glm::vec3(0.0f, 0.0f, 200.0f), k_RockRadius);
+	_world->SyncMap();
+	_system->ProcessObstacleChanges();
 	EXPECT_EQ(PlacesOf(path), straight);
-	EXPECT_EQ(world->searches, searchesBefore);
+	EXPECT_EQ(_world->searches, searchesBefore);
 }
 
 TEST_F(FootpathSystemTest, AWalkerOnAChangedStretchFindsItsWayOnTheNewNodes)
 {
 	const auto house = MakeAbode(k_HousePosition);
-	system->BuildingWorking(house);
+	_system->BuildingWorking(house);
 	const auto path = PathsOf(house).front();
 
 	// A villager walks from the pit to the house, heading for the last node
-	const auto villager = world->registry.Create();
-	world->registry.Assign<LivingAction>(villager, VillagerStates::MoveOnPath, static_cast<uint16_t>(0));
-	world->registry.Assign<FootpathWalk>(villager, path, false, std::optional<uint32_t>(1), entt::null);
+	const auto villager = _world->registry.Create();
+	_world->registry.Assign<LivingAction>(villager, VillagerStates::MoveOnPath, static_cast<uint16_t>(0));
+	_world->registry.Assign<FootpathWalk>(villager, path, false, std::optional<uint32_t>(1), entt::null);
 
-	world->Make(k_RockPosition, k_RockRadius);
-	world->SyncMap();
-	system->ProcessObstacleChanges();
+	_world->Make(k_RockPosition, k_RockRadius);
+	_world->SyncMap();
+	_system->ProcessObstacleChanges();
 
-	const auto& walk = world->registry.Get<const FootpathWalk>(villager);
+	const auto& walk = _world->registry.Get<const FootpathWalk>(villager);
 	const auto places = PlacesOf(path);
 	ASSERT_TRUE(walk.node.has_value());
 	ASSERT_LT(*walk.node, places.size());
@@ -538,55 +538,55 @@ TEST_F(FootpathSystemTest, AWalkerOnAChangedStretchFindsItsWayOnTheNewNodes)
 
 TEST_F(FootpathSystemTest, ATownJoiningASiteFindsItsPathOverTurnsAndLaysItTheTurnAfter)
 {
-	const auto site = world->Make(k_HousePosition);
-	world->SyncMap();
-	world->stepsToFind = planning::k_StepsPerTurn * 2 + 5;
-	system->TownJoinedSite(site, town);
+	const auto site = _world->Make(k_HousePosition);
+	_world->SyncMap();
+	_world->stepsToFind = planning::k_StepsPerTurn * 2 + 5;
+	_system->TownJoinedSite(site, _town);
 
 	ASSERT_EQ(CountOfPaths(), 1U);
 	EXPECT_TRUE(PathsOf(site).empty());
-	EXPECT_TRUE(PathsOf(pit).empty());
+	EXPECT_TRUE(PathsOf(_pit).empty());
 	// Three turns to find the way, then it is laid on the fourth
 	for (int i = 0; i < 3; ++i)
 	{
-		system->ProcessTurn();
+		_system->ProcessTurn();
 		EXPECT_TRUE(PathsOf(site).empty()) << "turn " << i;
 	}
-	system->ProcessTurn();
+	_system->ProcessTurn();
 	const auto paths = PathsOf(site);
 	ASSERT_EQ(paths.size(), 1U);
-	EXPECT_EQ(PathsOf(pit), paths);
-	EXPECT_EQ(PlacesOf(paths.front()).front(), world->ArrivePlace(pit));
-	EXPECT_EQ(PlacesOf(paths.front()).back(), world->ArrivePlace(site));
+	EXPECT_EQ(PathsOf(_pit), paths);
+	EXPECT_EQ(PlacesOf(paths.front()).front(), _world->ArrivePlace(_pit));
+	EXPECT_EQ(PlacesOf(paths.front()).back(), _world->ArrivePlace(site));
 	EXPECT_TRUE(CountOfFinders() == 0);
 
 	// A town that joins again finds the site's path already from its pit
-	system->TownJoinedSite(site, town);
+	_system->TownJoinedSite(site, _town);
 	EXPECT_TRUE(CountOfFinders() == 0);
 	EXPECT_EQ(CountOfPaths(), 1U);
 }
 
 TEST_F(FootpathSystemTest, AFinderWhoseEndGoesOrThatFindsNoWayTakesItsPathAway)
 {
-	const auto site = world->Make(k_HousePosition);
-	world->SyncMap();
-	world->stepsToFind = planning::k_StepsPerTurn * 3;
-	system->TownJoinedSite(site, town);
-	system->ProcessTurn();
-	world->registry.Destroy(site);
-	system->ProcessTurn();
+	const auto site = _world->Make(k_HousePosition);
+	_world->SyncMap();
+	_world->stepsToFind = planning::k_StepsPerTurn * 3;
+	_system->TownJoinedSite(site, _town);
+	_system->ProcessTurn();
+	_world->registry.Destroy(site);
+	_system->ProcessTurn();
 	EXPECT_EQ(CountOfPaths(), 0U);
 	EXPECT_TRUE(CountOfFinders() == 0);
 
-	const auto other = world->Make(k_HousePosition);
-	world->SyncMap();
-	world->findsWay = false;
-	world->stepsToFind = 1;
-	system->TownJoinedSite(other, town);
+	const auto other = _world->Make(k_HousePosition);
+	_world->SyncMap();
+	_world->findsWay = false;
+	_world->stepsToFind = 1;
+	_system->TownJoinedSite(other, _town);
 	// The turn that the search fails keeps the path; the next turn takes it away
-	system->ProcessTurn();
+	_system->ProcessTurn();
 	EXPECT_EQ(CountOfPaths(), 1U);
-	system->ProcessTurn();
+	_system->ProcessTurn();
 	EXPECT_EQ(CountOfPaths(), 0U);
 	EXPECT_TRUE(PathsOf(other).empty());
 }
@@ -594,31 +594,31 @@ TEST_F(FootpathSystemTest, AFinderWhoseEndGoesOrThatFindsNoWayTakesItsPathAway)
 TEST_F(FootpathSystemTest, OnlyADanceAwayFromSitesAndTemplesGetsAPathFromTheNearestTown)
 {
 	const auto makeDance = [this](DanceInfo type) {
-		const auto dance = world->registry.Create();
-		auto& data = world->registry.Assign<Dance>(dance);
+		const auto dance = _world->registry.Create();
+		auto& data = _world->registry.Assign<Dance>(dance);
 		data.type = type;
 		data.place = {
 		    .x = map_coords::ToFixed(k_HousePosition.x), .z = map_coords::ToFixed(k_HousePosition.z), .altitude = 0.0f};
-		world->arrive[dance] = wall_hug::ToWhole(glm::xz(k_HousePosition));
+		_world->arrive[dance] = wall_hug::ToWhole(glm::xz(k_HousePosition));
 		return dance;
 	};
 	const auto worship = makeDance(DanceInfo::Worship);
-	system->DanceMade(worship, town);
+	_system->DanceMade(worship, _town);
 	const auto temple = makeDance(DanceInfo::CitadelDance_1);
-	system->DanceMade(temple, town);
+	_system->DanceMade(temple, _town);
 	EXPECT_EQ(CountOfPaths(), 0U);
 
 	const auto dance = makeDance(DanceInfo::DanceTownCelebration);
-	system->DanceMade(dance, entt::null);
+	_system->DanceMade(dance, entt::null);
 	const auto paths = PathsOf(dance);
 	ASSERT_EQ(paths.size(), 1U);
-	EXPECT_EQ(PathsOf(pit), paths);
+	EXPECT_EQ(PathsOf(_pit), paths);
 	// The path runs from the dance to the pit
-	EXPECT_EQ(PlacesOf(paths.front()).front(), world->ArrivePlace(dance));
-	EXPECT_EQ(PlacesOf(paths.front()).back(), world->ArrivePlace(pit));
+	EXPECT_EQ(PlacesOf(paths.front()).front(), _world->ArrivePlace(dance));
+	EXPECT_EQ(PlacesOf(paths.front()).back(), _world->ArrivePlace(_pit));
 	// A dance has no body, so it keeps its paths where they end
-	const auto& link = world->registry.Get<const FootpathLink>(dance);
-	EXPECT_FLOAT_EQ(link.position.x, planning::ToPoint(world->ArrivePlace(dance)).x);
+	const auto& link = _world->registry.Get<const FootpathLink>(dance);
+	EXPECT_FLOAT_EQ(link.position.x, planning::ToPoint(_world->ArrivePlace(dance)).x);
 }
 
 } // namespace
@@ -628,18 +628,18 @@ TEST_F(FootpathSystemTest, OnlyADanceAwayFromSitesAndTemplesGetsAPathFromTheNear
 TEST_F(FootpathSystemTest, ALoadedGamePutsItsPathsAndSendsNoPathRoundTheThingsThatItMade)
 {
 	const auto house = MakeAbode(k_HousePosition);
-	system->BuildingWorking(house);
-	const auto site = world->Make(glm::vec3 {100.0f, 0.0f, 140.0f});
-	world->SyncMap();
-	world->stepsToFind = planning::k_StepsPerTurn * 3;
-	system->TownJoinedSite(site, town);
+	_system->BuildingWorking(house);
+	const auto site = _world->Make(glm::vec3 {100.0f, 0.0f, 140.0f});
+	_world->SyncMap();
+	_world->stepsToFind = planning::k_StepsPerTurn * 3;
+	_system->TownJoinedSite(site, _town);
 	ASSERT_EQ(CountOfFinders(), 1U);
-	const auto villager = world->registry.Create();
-	world->registry.Assign<LivingAction>(villager, VillagerStates::MoveOnPath, static_cast<uint16_t>(0));
-	world->registry.Assign<FootpathWalk>(villager, PathsOf(house).front(), false, std::optional<uint32_t>(1), entt::null);
+	const auto villager = _world->registry.Create();
+	_world->registry.Assign<LivingAction>(villager, VillagerStates::MoveOnPath, static_cast<uint16_t>(0));
+	_world->registry.Assign<FootpathWalk>(villager, PathsOf(house).front(), false, std::optional<uint32_t>(1), entt::null);
 
 	// The load makes a rock on the line between the pit and the house, which waits to go onto the map
-	world->Make(k_RockPosition, k_RockRadius);
+	_world->Make(k_RockPosition, k_RockRadius);
 	const auto pitPlace = wall_hug::ToWhole(glm::xz(k_PitPosition));
 	const auto housePlace = wall_hug::ToWhole(glm::xz(k_HousePosition));
 	Footpath file {.walkable = true};
@@ -649,30 +649,30 @@ TEST_F(FootpathSystemTest, ALoadedGamePutsItsPathsAndSendsNoPathRoundTheThingsTh
 	Footpath unwalked {.walkable = false};
 	unwalked.nodes.push_back({.position = k_HousePosition, .place = housePlace, .marker = true});
 	const std::array loaded {file, unwalked};
-	const auto made = system->PutLoadedFootpaths(loaded);
+	const auto made = _system->PutLoadedFootpaths(loaded);
 
 	ASSERT_EQ(made.size(), 2U);
 	EXPECT_EQ(CountOfPaths(), 2U);
 	EXPECT_EQ(CountOfFinders(), 0U);
 	EXPECT_TRUE(PathsOf(house).empty());
-	EXPECT_TRUE(PathsOf(pit).empty());
-	EXPECT_FALSE(world->registry.AllOf<FootpathWalk>(villager));
+	EXPECT_TRUE(PathsOf(_pit).empty());
+	EXPECT_FALSE(_world->registry.AllOf<FootpathWalk>(villager));
 	// The rock is on the map, and no change waits for the paths
-	EXPECT_TRUE(world->registry.Context().footpathObstacleChanges.empty());
-	EXPECT_EQ(world->registry.Context().footpathObstacles.size(), 1U);
-	const auto& first = world->registry.Get<const Footpath>(made[0]);
+	EXPECT_TRUE(_world->registry.Context().footpathObstacleChanges.empty());
+	EXPECT_EQ(_world->registry.Context().footpathObstacles.size(), 1U);
+	const auto& first = _world->registry.Get<const Footpath>(made[0]);
 	EXPECT_TRUE(first.walkable);
 	ASSERT_EQ(first.nodes.size(), 3U);
 	EXPECT_EQ(PlacesOf(made[0]), (std::vector<glm::ivec2> {pitPlace, file.nodes[1].place, housePlace}));
 	EXPECT_TRUE(first.nodes[1].hidden);
 	EXPECT_TRUE(first.nodes[2].planned);
 	EXPECT_EQ(first.nodes[2].position, k_HousePosition);
-	const auto& second = world->registry.Get<const Footpath>(made[1]);
+	const auto& second = _world->registry.Get<const Footpath>(made[1]);
 	EXPECT_FALSE(second.walkable);
 	ASSERT_EQ(second.nodes.size(), 1U);
 	EXPECT_TRUE(second.nodes[0].marker);
 
 	// A later turn leaves the loaded paths as the file gave them
-	system->ProcessTurn();
+	_system->ProcessTurn();
 	EXPECT_EQ(PlacesOf(made[0]), (std::vector<glm::ivec2> {pitPlace, file.nodes[1].place, housePlace}));
 }

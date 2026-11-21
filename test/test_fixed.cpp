@@ -32,10 +32,10 @@ class TestFixed: public ::testing::Test
 protected:
 	void SetUp() override
 	{
-		static const auto mockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
+		static const auto k_MockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
 		auto args = Arguments {
 		    .graphicsBackend = openblack::GraphicsBackend::Noop,
-		    .gamePath = mockGamePath.string(),
+		    .gamePath = k_MockGamePath.string(),
 		    .numFramesToSimulate = 0,
 		    .logFile = "stdout",
 		    .background = true,

@@ -325,7 +325,7 @@ int PrintPrimitiveHeaders(openblack::l3d::L3DFile& l3d)
 	for (const auto& header : primitiveHeaders)
 	{
 		std::printf("primitive #%u\n", ++i);
-		static const std::array<const char*, static_cast<uint32_t>(openblack::l3d::L3DMaterial::Type::_Count)> typeMap = {{
+		static const std::array<const char*, static_cast<uint32_t>(openblack::l3d::L3DMaterial::Type::_Count)> k_TypeMap = {{
 		    "Smooth",
 		    "SmoothAlpha",
 		    "Textured",
@@ -352,7 +352,7 @@ int PrintPrimitiveHeaders(openblack::l3d::L3DFile& l3d)
 		}
 		else
 		{
-			std::printf("material's type: %s (0x%08X)\n", typeMap.at(static_cast<uint32_t>(header.material.type)),
+			std::printf("material's type: %s (0x%08X)\n", k_TypeMap.at(static_cast<uint32_t>(header.material.type)),
 			            static_cast<uint32_t>(header.material.type));
 		}
 		std::printf("material's alpha cut out threshold: 0x%02X (%f)\n", header.material.alphaCutoutThreshold,

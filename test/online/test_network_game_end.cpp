@@ -91,14 +91,14 @@ protected:
 
 	static FakeHands& Hands() { return static_cast<FakeHands&>(Locator::handSystem::value()); }
 
-	test_fakes::FakeWebSocketClient sockets;
+	test_fakes::FakeWebSocketClient _sockets;
 };
 
 } // namespace
 
 TEST_F(NetworkGameEnd, AfterTheNetworkGameThePlayerOfThisComputerIsTheFirstPlayerAgain)
 {
-	ecs::systems::NetworkGameSystem network(sockets, {}, [] { return std::vector<uint8_t> {}; });
+	ecs::systems::NetworkGameSystem network(_sockets, {}, [] { return std::vector<uint8_t> {}; });
 	ASSERT_TRUE(network.Join(Join()));
 	Locator::time::value().SetNetworkGame(true);
 	// The network game gave this computer the god of the second slot
@@ -112,7 +112,7 @@ TEST_F(NetworkGameEnd, AfterTheNetworkGameThePlayerOfThisComputerIsTheFirstPlaye
 
 TEST_F(NetworkGameEnd, AnObserverIsTheFirstPlayerAgainAfterTheNetworkGame)
 {
-	ecs::systems::NetworkGameSystem network(sockets, {}, [] { return std::vector<uint8_t> {}; });
+	ecs::systems::NetworkGameSystem network(_sockets, {}, [] { return std::vector<uint8_t> {}; });
 	ASSERT_TRUE(network.Join(Join()));
 	// An observer has no god of its own in the network game
 	Hands().ClearOwnPlayer();

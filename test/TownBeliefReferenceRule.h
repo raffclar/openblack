@@ -184,17 +184,17 @@ public:
 	}
 
 	explicit TownCentreBeliefRule(const ParticleObject& object)
-	    : params(ReadParams(object))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , sparkGroup(object.Int("GroupFightSparkle", -1))
+	    : _params(ReadParams(object))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _sparkGroup(object.Int("GroupFightSparkle", -1))
 	{
-		symbol.kind = Creator::Kind::Symbol;
-		symbol.className = "UR_TownCentreBelief";
+		_symbol.kind = Creator::Kind::Symbol;
+		_symbol.className = "UR_TownCentreBelief";
 	}
 
 	[[nodiscard]] bool Creates() const override { return true; }
 	/// The symbols keep their creator through a save and a load, so that the load draws them again
-	[[nodiscard]] const Creator* OwnCreator() const override { return &symbol; }
+	[[nodiscard]] const Creator* OwnCreator() const override { return &_symbol; }
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
@@ -209,7 +209,7 @@ public:
 			slot.data = *centre;
 			for (const auto player : world.PlayersInGame())
 			{
-				auto& atom = effect.NewAtom(collection, &symbol, nextGroups);
+				auto& atom = effect.NewAtom(collection, &_symbol, _nextGroups);
 				atom.baseScale = k_SymbolBaseScale;
 				atom.player = player;
 				auto& data = atom.data[this];
@@ -223,9 +223,9 @@ public:
 		{
 			return true;
 		}
-		const glm::vec3 base = belief->totemTop + glm::vec3(0.0f, params.heightAt1, 0.0f);
+		const glm::vec3 base = belief->totemTop + glm::vec3(0.0f, _params.heightAt1, 0.0f);
 		const float distanceScale =
-		    town_belief::DistanceScale(params, x87::Distance<x87::SumOrder::Xzy>(world.CameraPosition(), base));
+		    town_belief::DistanceScale(_params, x87::Distance<x87::SumOrder::Xzy>(world.CameraPosition(), base));
 		const auto random = [&effect](float min, float max) { return effect.Random(min, max); };
 		// The village's beliefs and the rank of each player are the same for each symbol
 		const auto beliefs = belief->OfPlayers();
@@ -247,17 +247,17 @@ public:
 			                           .intoFight = data.b.y,
 			                           .fightLength = data.b.z};
 			const auto player = static_cast<size_t>(atom->player);
-			const auto look = StepBefore(state, params, beliefs[player], ranks[player], effect.GetDt(), distanceScale, random);
+			const auto look = StepBefore(state, _params, beliefs[player], ranks[player], effect.GetDt(), distanceScale, random);
 			data.a = {state.around, state.tilt, state.sway, 0.0f};
 			data.b = {state.untilFight, state.intoFight, state.fightLength, 0.0f};
 			atom->position = base + look.offset;
 			atom->ruleScale = look.scale;
 			for (auto& sparks : atom->subCollections)
 			{
-				if (sparks->group == sparkGroup)
+				if (sparks->group == _sparkGroup)
 				{
 					sparks->alpha = static_cast<float>(town_belief::SparkAlpha(look.fight));
-					sparks->emitting = town_belief::Sparking(params, look.fight);
+					sparks->emitting = town_belief::Sparking(_params, look.fight);
 				}
 			}
 		}
@@ -265,9 +265,9 @@ public:
 	}
 
 private:
-	town_belief::Params params;
-	std::vector<int> nextGroups;
-	int sparkGroup;
-	SymbolCreator symbol;
+	town_belief::Params _params;
+	std::vector<int> _nextGroups;
+	int _sparkGroup;
+	SymbolCreator _symbol;
 };
 } // namespace openblack::particles::town_belief_reference

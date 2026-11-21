@@ -304,11 +304,11 @@ TEST(CameraDrag, TheEdgeTurnKeepsItsDirection)
 
 TEST(CameraDrag, TiltingByTheSameShareOfTheScreenTiltsAsMuchAtEveryResolution)
 {
-	constexpr float fov = 1.2217305f;
+	constexpr float k_Fov = 1.2217305f;
 	for (const auto screen : k_Resolutions)
 	{
 		SCOPED_TRACE(testing::Message() << screen.x << "x" << screen.y);
-		EXPECT_NEAR(PitchStep(screen.y / 10, screen.y, fov), 0.233333f * fov, 0.002f);
+		EXPECT_NEAR(PitchStep(screen.y / 10, screen.y, k_Fov), 0.233333f * k_Fov, 0.002f);
 	}
 }
 

@@ -47,47 +47,51 @@ class TownHomesTest: public ::testing::Test
 protected:
 	TownHomesTest()
 	{
-		town = registry.Create();
-		registry.Assign<Town>(town, Town {.id = k_TownId});
-		registry.Context().towns[k_TownId] = town;
+		_town = _registry.Create();
+		_registry.Assign<Town>(_town, Town {.id = k_TownId});
+		_registry.Context().towns[k_TownId] = _town;
 	}
 
 	entt::entity MakeAbode(glm::vec3 position, AbodeRoom room)
 	{
-		const auto abode = registry.Create();
-		registry.Assign<Abode>(abode, Abode {.townId = k_TownId});
-		registry.Assign<Transform>(abode, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		const auto abode = _registry.Create();
+		_registry.Assign<Abode>(abode, Abode {.townId = k_TownId});
+		_registry.Assign<Transform>(abode, position, glm::mat3(1.0f), glm::vec3(1.0f));
 		// The newest building first, as the town keeps them
-		auto& abodes = registry.Get<Town>(town).abodes;
+		auto& abodes = _registry.Get<Town>(_town).abodes;
 		abodes.insert(abodes.begin(), abode);
-		rooms[abode] = room;
+		_rooms[abode] = room;
 		return abode;
 	}
 
 	entt::entity MakeVillager(glm::vec3 position, Villager::Sex sex, Villager::LifeStage stage = Villager::LifeStage::Adult)
 	{
-		const auto villager = registry.Create();
-		registry.Assign<Villager>(villager, Villager {.lifeStage = stage, .sex = sex, .town = entt::null, .abode = entt::null});
-		registry.Assign<Transform>(villager, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		const auto villager = _registry.Create();
+		_registry.Assign<Villager>(villager,
+		                           Villager {.lifeStage = stage, .sex = sex, .town = entt::null, .abode = entt::null});
+		_registry.Assign<Transform>(villager, position, glm::mat3(1.0f), glm::vec3(1.0f));
 		return villager;
 	}
 
 	[[nodiscard]] town_homes::Homes Rooms()
 	{
 		return {.room = [this](entt::entity abode) -> std::optional<AbodeRoom> {
-			        const auto found = rooms.find(abode);
-			        return found == rooms.end() ? std::nullopt : std::optional<AbodeRoom>(found->second);
+			        const auto found = _rooms.find(abode);
+			        return found == _rooms.end() ? std::nullopt : std::optional<AbodeRoom>(found->second);
 		        },
-		        .leaving = [this](entt::entity villager) { left.push_back(villager); }};
+		        .leaving = [this](entt::entity villager) { _left.push_back(villager); }};
 	}
 
-	[[nodiscard]] const std::vector<entt::entity>& Homeless() const { return registry.Get<const Town>(town).homelessVillagers; }
+	[[nodiscard]] const std::vector<entt::entity>& Homeless() const
+	{
+		return _registry.Get<const Town>(_town).homelessVillagers;
+	}
 
-	Registry registry;
-	entt::entity town {entt::null};
-	std::map<entt::entity, AbodeRoom> rooms;
+	Registry _registry;
+	entt::entity _town {entt::null};
+	std::map<entt::entity, AbodeRoom> _rooms;
 	/// Who was about to leave a home, in turn
-	std::vector<entt::entity> left;
+	std::vector<entt::entity> _left;
 };
 } // namespace
 
@@ -130,18 +134,18 @@ TEST_F(TownHomesTest, ANewcomerMovesIntoTheBestFunctionalBuildingTheFirstOfEqual
 	const auto newer = MakeAbode(here, {.maxAdults = 4, .maxChildren = 2, .functional = true});
 	const auto villager = MakeVillager(here, Villager::Sex::MALE);
 
-	EXPECT_TRUE(town_homes::AddVillagerToTown(registry, Rooms(), town, villager));
+	EXPECT_TRUE(town_homes::AddVillagerToTown(_registry, Rooms(), _town, villager));
 	// The two equal: the newer, first in the town's list
-	EXPECT_EQ(registry.Get<Villager>(villager).abode, newer);
-	EXPECT_EQ(registry.Get<Villager>(villager).town, town);
-	EXPECT_EQ(registry.Get<Abode>(newer).inhabitants, std::vector<entt::entity> {villager});
+	EXPECT_EQ(_registry.Get<Villager>(villager).abode, newer);
+	EXPECT_EQ(_registry.Get<Villager>(villager).town, _town);
+	EXPECT_EQ(_registry.Get<Abode>(newer).inhabitants, std::vector<entt::entity> {villager});
 	EXPECT_TRUE(Homeless().empty());
 
 	// The next man prefers the older, which has no man in it yet
 	const auto second = MakeVillager(here, Villager::Sex::MALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, second);
-	EXPECT_EQ(registry.Get<Villager>(second).abode, older);
-	EXPECT_TRUE(registry.Get<Abode>(broken).inhabitants.empty());
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, second);
+	EXPECT_EQ(_registry.Get<Villager>(second).abode, older);
+	EXPECT_TRUE(_registry.Get<Abode>(broken).inhabitants.empty());
 }
 
 TEST_F(TownHomesTest, AStoreBuildingIsInItsTownAndAWorshipSiteIsInNoTown)
@@ -149,10 +153,10 @@ TEST_F(TownHomesTest, AStoreBuildingIsInItsTownAndAWorshipSiteIsInNoTown)
 	// A pot that a tornado takes from a pile is in the town of the building that keeps the pile. A worship site keeps a
 	// list of the towns that worship at it, but it is in no town itself.
 	const auto store = MakeAbode(glm::vec3(0.0f), AbodeRoom {});
-	EXPECT_EQ(town_homes::TownOfAbode(registry, store), town);
-	const auto site = registry.Create();
-	registry.Assign<WorshipSite>(site, WorshipSite {.towns = {town}});
-	EXPECT_EQ(town_homes::TownOfAbode(registry, site), entt::entity {entt::null});
+	EXPECT_EQ(town_homes::TownOfAbode(_registry, store), _town);
+	const auto site = _registry.Create();
+	_registry.Assign<WorshipSite>(site, WorshipSite {.towns = {_town}});
+	EXPECT_EQ(town_homes::TownOfAbode(_registry, site), entt::entity {entt::null});
 }
 
 TEST_F(TownHomesTest, WithNoRoomTheNewcomerIsHomelessTheNewestFirst)
@@ -163,26 +167,26 @@ TEST_F(TownHomesTest, WithNoRoomTheNewcomerIsHomelessTheNewestFirst)
 	const auto second = MakeVillager(here, Villager::Sex::FEMALE);
 	const auto third = MakeVillager(here, Villager::Sex::MALE);
 	const auto child = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, first);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, second);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, third);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, child);
-	EXPECT_NE(registry.Get<Villager>(first).abode, entt::entity {entt::null});
-	EXPECT_EQ(registry.Get<Villager>(second).abode, entt::entity {entt::null});
-	EXPECT_EQ(registry.Get<Villager>(second).town, town);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, first);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, second);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, third);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, child);
+	EXPECT_NE(_registry.Get<Villager>(first).abode, entt::entity {entt::null});
+	EXPECT_EQ(_registry.Get<Villager>(second).abode, entt::entity {entt::null});
+	EXPECT_EQ(_registry.Get<Villager>(second).town, _town);
 	EXPECT_EQ(Homeless(), (std::vector<entt::entity> {child, third, second}));
 	// Joining again changes nothing
-	EXPECT_FALSE(town_homes::MakeHomeless(registry, Rooms(), second));
+	EXPECT_FALSE(town_homes::MakeHomeless(_registry, Rooms(), second));
 	EXPECT_EQ(Homeless().size(), 3u);
 }
 
 TEST_F(TownHomesTest, NobodyJoinsATownNobodyCanLiveIn)
 {
-	registry.Get<Town>(town).uninhabitable = true;
+	_registry.Get<Town>(_town).uninhabitable = true;
 	MakeAbode(glm::vec3(0.0f), {.maxAdults = 4, .functional = true});
 	const auto villager = MakeVillager(glm::vec3(0.0f), Villager::Sex::MALE);
-	EXPECT_FALSE(town_homes::AddVillagerToTown(registry, Rooms(), town, villager));
-	EXPECT_EQ(registry.Get<Villager>(villager).town, entt::entity {entt::null});
+	EXPECT_FALSE(town_homes::AddVillagerToTown(_registry, Rooms(), _town, villager));
+	EXPECT_EQ(_registry.Get<Villager>(villager).town, entt::entity {entt::null});
 	EXPECT_TRUE(Homeless().empty());
 }
 
@@ -190,28 +194,28 @@ TEST_F(TownHomesTest, AHomelessVillagerMovingInLeavesTheHomelessAndOneMadeHomele
 {
 	const glm::vec3 here(0.0f);
 	const auto villager = MakeVillager(here, Villager::Sex::MALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, villager);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, villager);
 	ASSERT_EQ(Homeless(), std::vector<entt::entity> {villager});
 
 	const auto abode = MakeAbode(here, {.maxAdults = 2, .functional = true});
-	ASSERT_EQ(town_homes::FindAbodeWithSpace(registry, Rooms(), town, villager, 0.0f), abode);
-	town_homes::AddVillagerToAbode(registry, Rooms(), abode, villager);
+	ASSERT_EQ(town_homes::FindAbodeWithSpace(_registry, Rooms(), _town, villager, 0.0f), abode);
+	town_homes::AddVillagerToAbode(_registry, Rooms(), abode, villager);
 	EXPECT_TRUE(Homeless().empty());
-	EXPECT_EQ(registry.Get<Villager>(villager).abode, abode);
+	EXPECT_EQ(_registry.Get<Villager>(villager).abode, abode);
 
 	// Newest first in the building too
 	const auto other = MakeVillager(here, Villager::Sex::FEMALE);
-	town_homes::AddVillagerToAbode(registry, Rooms(), abode, other);
-	EXPECT_EQ(registry.Get<Abode>(abode).inhabitants, (std::vector<entt::entity> {other, villager}));
-	EXPECT_EQ(registry.Get<Villager>(other).town, town);
+	town_homes::AddVillagerToAbode(_registry, Rooms(), abode, other);
+	EXPECT_EQ(_registry.Get<Abode>(abode).inhabitants, (std::vector<entt::entity> {other, villager}));
+	EXPECT_EQ(_registry.Get<Villager>(other).town, _town);
 
 	// Leaving its home, it is told first
-	left.clear();
-	EXPECT_TRUE(town_homes::MakeHomeless(registry, Rooms(), villager));
-	EXPECT_EQ(left, std::vector<entt::entity> {villager});
-	EXPECT_EQ(registry.Get<Villager>(villager).abode, entt::entity {entt::null});
-	EXPECT_EQ(registry.Get<Villager>(villager).town, town);
-	EXPECT_EQ(registry.Get<Abode>(abode).inhabitants, std::vector<entt::entity> {other});
+	_left.clear();
+	EXPECT_TRUE(town_homes::MakeHomeless(_registry, Rooms(), villager));
+	EXPECT_EQ(_left, std::vector<entt::entity> {villager});
+	EXPECT_EQ(_registry.Get<Villager>(villager).abode, entt::entity {entt::null});
+	EXPECT_EQ(_registry.Get<Villager>(villager).town, _town);
+	EXPECT_EQ(_registry.Get<Abode>(abode).inhabitants, std::vector<entt::entity> {other});
 	EXPECT_EQ(Homeless(), std::vector<entt::entity> {villager});
 }
 
@@ -225,23 +229,23 @@ protected:
 
 	TwoTownsTest()
 	{
-		other = registry.Create();
-		registry.Assign<Town>(other, Town {.id = k_OtherId});
-		registry.Context().towns[k_OtherId] = other;
+		_other = _registry.Create();
+		_registry.Assign<Town>(_other, Town {.id = k_OtherId});
+		_registry.Context().towns[k_OtherId] = _other;
 	}
 
 	entt::entity MakeOtherAbode(glm::vec3 position, AbodeRoom room, AbodeNumber type = AbodeNumber::A)
 	{
-		const auto abode = registry.Create();
-		registry.Assign<Abode>(abode, Abode {.type = type, .townId = k_OtherId});
-		registry.Assign<Transform>(abode, position, glm::mat3(1.0f), glm::vec3(1.0f));
-		auto& abodes = registry.Get<Town>(other).abodes;
+		const auto abode = _registry.Create();
+		_registry.Assign<Abode>(abode, Abode {.type = type, .townId = k_OtherId});
+		_registry.Assign<Transform>(abode, position, glm::mat3(1.0f), glm::vec3(1.0f));
+		auto& abodes = _registry.Get<Town>(_other).abodes;
 		abodes.insert(abodes.begin(), abode);
-		rooms[abode] = room;
+		_rooms[abode] = room;
 		return abode;
 	}
 
-	entt::entity other {entt::null};
+	entt::entity _other {entt::null};
 };
 
 constexpr AbodeRoom k_Hut {.maxAdults = 4, .maxChildren = 2, .functional = true, .built = true, .tooCrowded = 0.75f};
@@ -254,9 +258,9 @@ TEST_F(TownHomesTest, AVillagerThatTheTownMakesHomelessTellsTheTownForItsWorship
 	std::vector<entt::entity> told;
 	auto homes = Rooms();
 	homes.joinedTown = [&told](entt::entity joined) { told.push_back(joined); };
-	ASSERT_TRUE(town_homes::AddVillagerToTown(registry, homes, town, villager));
+	ASSERT_TRUE(town_homes::AddVillagerToTown(_registry, homes, _town, villager));
 	EXPECT_EQ(Homeless(), std::vector<entt::entity> {villager});
-	EXPECT_EQ(told, std::vector<entt::entity> {town});
+	EXPECT_EQ(told, std::vector<entt::entity> {_town});
 }
 
 TEST_F(TownHomesTest, AVillagerThatTheTownFindsAHomeForDoesNotTellTheTown)
@@ -267,8 +271,8 @@ TEST_F(TownHomesTest, AVillagerThatTheTownFindsAHomeForDoesNotTellTheTown)
 	std::vector<entt::entity> told;
 	auto homes = Rooms();
 	homes.joinedTown = [&told](entt::entity joined) { told.push_back(joined); };
-	ASSERT_TRUE(town_homes::AddVillagerToTown(registry, homes, town, villager));
-	EXPECT_EQ(registry.Get<Villager>(villager).abode, hut);
+	ASSERT_TRUE(town_homes::AddVillagerToTown(_registry, homes, _town, villager));
+	EXPECT_EQ(_registry.Get<Villager>(villager).abode, hut);
 	EXPECT_TRUE(told.empty());
 }
 
@@ -281,25 +285,25 @@ TEST_F(TownHomesTest, AVillagerThatMovesIntoABuildingOfANewTownTellsTheTown)
 	std::vector<entt::entity> told;
 	auto homes = Rooms();
 	homes.joinedTown = [&told](entt::entity joined) { told.push_back(joined); };
-	town_homes::AddVillagerToAbode(registry, homes, hut, villager);
-	EXPECT_EQ(registry.Get<Villager>(villager).town, town);
-	EXPECT_EQ(told, std::vector<entt::entity> {town});
+	town_homes::AddVillagerToAbode(_registry, homes, hut, villager);
+	EXPECT_EQ(_registry.Get<Villager>(villager).town, _town);
+	EXPECT_EQ(told, std::vector<entt::entity> {_town});
 
 	// A villager that moves into another building of its own town does not join the town again
 	const auto second = MakeAbode(here, k_Hut);
 	told.clear();
-	town_homes::AddVillagerToAbode(registry, homes, second, villager);
+	town_homes::AddVillagerToAbode(_registry, homes, second, villager);
 	EXPECT_TRUE(told.empty());
 }
 
 TEST_F(TownHomesTest, NobodyTellsATownNobodyCanLiveIn)
 {
-	registry.Get<Town>(town).uninhabitable = true;
+	_registry.Get<Town>(_town).uninhabitable = true;
 	const auto villager = MakeVillager(glm::vec3(0.0f), Villager::Sex::MALE);
 	std::vector<entt::entity> told;
 	auto homes = Rooms();
 	homes.joinedTown = [&told](entt::entity joined) { told.push_back(joined); };
-	EXPECT_FALSE(town_homes::AddVillagerToTown(registry, homes, town, villager));
+	EXPECT_FALSE(town_homes::AddVillagerToTown(_registry, homes, _town, villager));
 	EXPECT_TRUE(told.empty());
 }
 
@@ -313,48 +317,48 @@ TEST_F(TownHomesTest, TheFirstAdultManAndWomanToMoveInAreTheCoupleUntilOneDies)
 	const auto woman = MakeVillager(here, Villager::Sex::FEMALE);
 	for (const auto villager : {boy, man, second, woman})
 	{
-		town_homes::AddVillagerToTown(registry, Rooms(), town, villager);
-		ASSERT_EQ(registry.Get<Villager>(villager).abode, abode);
+		town_homes::AddVillagerToTown(_registry, Rooms(), _town, villager);
+		ASSERT_EQ(_registry.Get<Villager>(villager).abode, abode);
 	}
 	// A child is no part of it, and the second man comes too late
-	EXPECT_EQ(registry.Get<Abode>(abode).couple, (std::array {man, woman}));
-	EXPECT_EQ(town_homes::SpouseOf(registry, abode, man), woman);
-	EXPECT_EQ(town_homes::SpouseOf(registry, abode, woman), man);
-	EXPECT_EQ(town_homes::SpouseOf(registry, abode, second), entt::entity {entt::null});
-	EXPECT_EQ(town_homes::SpouseOf(registry, abode, boy), entt::entity {entt::null});
-	const auto household = town_homes::HouseholdOf(registry, abode);
+	EXPECT_EQ(_registry.Get<Abode>(abode).couple, (std::array {man, woman}));
+	EXPECT_EQ(town_homes::SpouseOf(_registry, abode, man), woman);
+	EXPECT_EQ(town_homes::SpouseOf(_registry, abode, woman), man);
+	EXPECT_EQ(town_homes::SpouseOf(_registry, abode, second), entt::entity {entt::null});
+	EXPECT_EQ(town_homes::SpouseOf(_registry, abode, boy), entt::entity {entt::null});
+	const auto household = town_homes::HouseholdOf(_registry, abode);
 	EXPECT_EQ(household.adults, 3u);
 	EXPECT_EQ(household.adultMen, 2u);
 	EXPECT_EQ(household.children, 1u);
 
 	// Moving out alive he keeps his place: no newcomer takes it
-	town_homes::MakeHomeless(registry, Rooms(), man);
+	town_homes::MakeHomeless(_registry, Rooms(), man);
 	const auto third = MakeVillager(here, Villager::Sex::MALE);
-	town_homes::AddVillagerToAbode(registry, Rooms(), abode, third);
-	EXPECT_EQ(registry.Get<Abode>(abode).couple, (std::array {man, woman}));
+	town_homes::AddVillagerToAbode(_registry, Rooms(), abode, third);
+	EXPECT_EQ(_registry.Get<Abode>(abode).couple, (std::array {man, woman}));
 
 	// Her death ends it, and she leaves her home and town without a word to her
-	left.clear();
-	town_homes::RemoveDeadVillager(registry, woman);
-	EXPECT_EQ(registry.Get<Abode>(abode).couple, (std::array {entt::entity {entt::null}, entt::entity {entt::null}}));
-	EXPECT_EQ(registry.Get<Villager>(woman).abode, entt::entity {entt::null});
-	EXPECT_EQ(registry.Get<Villager>(woman).town, entt::entity {entt::null});
-	EXPECT_TRUE(left.empty());
+	_left.clear();
+	town_homes::RemoveDeadVillager(_registry, woman);
+	EXPECT_EQ(_registry.Get<Abode>(abode).couple, (std::array {entt::entity {entt::null}, entt::entity {entt::null}}));
+	EXPECT_EQ(_registry.Get<Villager>(woman).abode, entt::entity {entt::null});
+	EXPECT_EQ(_registry.Get<Villager>(woman).town, entt::entity {entt::null});
+	EXPECT_TRUE(_left.empty());
 	// The next man and woman to move in are the new couple
 	const auto fourth = MakeVillager(here, Villager::Sex::FEMALE);
-	town_homes::RemoveDeadVillager(registry, third);
-	town_homes::AddVillagerToAbode(registry, Rooms(), abode, fourth);
-	EXPECT_EQ(registry.Get<Abode>(abode).couple, (std::array {entt::entity {entt::null}, fourth}));
+	town_homes::RemoveDeadVillager(_registry, third);
+	town_homes::AddVillagerToAbode(_registry, Rooms(), abode, fourth);
+	EXPECT_EQ(_registry.Get<Abode>(abode).couple, (std::array {entt::entity {entt::null}, fourth}));
 }
 
 TEST_F(TownHomesTest, ADeadHomelessVillagerLeavesTheHomeless)
 {
 	const auto villager = MakeVillager(glm::vec3(0.0f), Villager::Sex::FEMALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, villager);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, villager);
 	ASSERT_EQ(Homeless(), std::vector<entt::entity> {villager});
-	town_homes::RemoveDeadVillager(registry, villager);
+	town_homes::RemoveDeadVillager(_registry, villager);
 	EXPECT_TRUE(Homeless().empty());
-	EXPECT_EQ(registry.Get<Villager>(villager).town, entt::entity {entt::null});
+	EXPECT_EQ(_registry.Get<Villager>(villager).town, entt::entity {entt::null});
 }
 
 TEST(TownHomesCrowding, TooCrowdedAtItsShareOfPlacesOrWithNoPlaces)
@@ -374,30 +378,30 @@ TEST_F(TownHomesTest, ACrowdedAdultMovesToABetterHomeOrIsHomeless)
 	for (int i = 0; i < 3; ++i)
 	{
 		people.push_back(MakeVillager(here, Villager::Sex::MALE));
-		town_homes::AddVillagerToAbode(registry, Rooms(), crowded, people.back());
+		town_homes::AddVillagerToAbode(_registry, Rooms(), crowded, people.back());
 	}
-	registry.Get<Villager>(people.front()).town = town;
+	_registry.Get<Villager>(people.front()).town = _town;
 	const auto child = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
-	town_homes::AddVillagerToAbode(registry, Rooms(), crowded, child);
-	EXPECT_EQ(town_homes::LookForBetterHome(registry, Rooms(), child), town_homes::NewHome::Stays);
+	town_homes::AddVillagerToAbode(_registry, Rooms(), crowded, child);
+	EXPECT_EQ(town_homes::LookForBetterHome(_registry, Rooms(), child), town_homes::NewHome::Stays);
 
 	// Three of four is past three quarters: with nowhere better it is homeless
 	const auto mover = people.front();
-	EXPECT_EQ(town_homes::LookForBetterHome(registry, Rooms(), mover), town_homes::NewHome::MadeHomeless);
+	EXPECT_EQ(town_homes::LookForBetterHome(_registry, Rooms(), mover), town_homes::NewHome::MadeHomeless);
 	EXPECT_EQ(Homeless(), std::vector<entt::entity> {mover});
 
 	// Two of four is not crowded
-	EXPECT_EQ(town_homes::LookForBetterHome(registry, Rooms(), people[1]), town_homes::NewHome::Stays);
+	EXPECT_EQ(town_homes::LookForBetterHome(_registry, Rooms(), people[1]), town_homes::NewHome::Stays);
 
 	// A new hut suits the homeless one best, and it moves in
 	const auto roomy = MakeAbode(here, k_Hut);
-	EXPECT_EQ(town_homes::LookForBetterHome(registry, Rooms(), mover), town_homes::NewHome::Moved);
-	EXPECT_EQ(registry.Get<Villager>(mover).abode, roomy);
+	EXPECT_EQ(town_homes::LookForBetterHome(_registry, Rooms(), mover), town_homes::NewHome::Moved);
+	EXPECT_EQ(_registry.Get<Villager>(mover).abode, roomy);
 	EXPECT_TRUE(Homeless().empty());
 
 	// Without a town it has nowhere to look
 	const auto vagrant = MakeVillager(here, Villager::Sex::FEMALE);
-	EXPECT_EQ(town_homes::LookForBetterHome(registry, Rooms(), vagrant), town_homes::NewHome::NoTown);
+	EXPECT_EQ(town_homes::LookForBetterHome(_registry, Rooms(), vagrant), town_homes::NewHome::NoTown);
 }
 
 TEST_F(TownHomesTest, ACrowdedAdultOnlyMovesToAHomeItLikesBetterThanItsOwn)
@@ -408,21 +412,21 @@ TEST_F(TownHomesTest, ACrowdedAdultOnlyMovesToAHomeItLikesBetterThanItsOwn)
 	const auto own = MakeAbode(here, half);
 	const auto others = MakeAbode(here, half);
 	const auto villager = MakeVillager(here, Villager::Sex::MALE);
-	town_homes::AddVillagerToAbode(registry, Rooms(), own, villager);
-	town_homes::AddVillagerToAbode(registry, Rooms(), own, MakeVillager(here, Villager::Sex::FEMALE));
+	town_homes::AddVillagerToAbode(_registry, Rooms(), own, villager);
+	town_homes::AddVillagerToAbode(_registry, Rooms(), own, MakeVillager(here, Villager::Sex::FEMALE));
 	for (int i = 0; i < 3; ++i)
 	{
-		town_homes::AddVillagerToAbode(registry, Rooms(), others, MakeVillager(here, Villager::Sex::MALE));
+		town_homes::AddVillagerToAbode(_registry, Rooms(), others, MakeVillager(here, Villager::Sex::MALE));
 	}
-	EXPECT_EQ(town_homes::LookForBetterHome(registry, Rooms(), villager), town_homes::NewHome::MadeHomeless);
-	EXPECT_EQ(registry.Get<Abode>(others).inhabitants.size(), 3u);
+	EXPECT_EQ(town_homes::LookForBetterHome(_registry, Rooms(), villager), town_homes::NewHome::MadeHomeless);
+	EXPECT_EQ(_registry.Get<Abode>(others).inhabitants.size(), 3u);
 }
 
 TEST_F(TownHomesTest, AHomelessAdultWithNowhereToGoStaysHomeless)
 {
 	const auto villager = MakeVillager(glm::vec3(0.0f), Villager::Sex::MALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, villager);
-	EXPECT_EQ(town_homes::LookForBetterHome(registry, Rooms(), villager), town_homes::NewHome::AlreadyHomeless);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, villager);
+	EXPECT_EQ(town_homes::LookForBetterHome(_registry, Rooms(), villager), town_homes::NewHome::AlreadyHomeless);
 	EXPECT_EQ(Homeless(), std::vector<entt::entity> {villager});
 }
 
@@ -431,32 +435,32 @@ TEST_F(TwoTownsTest, MovingToAnotherTownsHouseLeavesTheOldTownAndAFullHouseOnlyT
 	const glm::vec3 here(0.0f);
 	const auto home = MakeAbode(here, k_Hut);
 	const auto villager = MakeVillager(here, Villager::Sex::MALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, villager);
-	ASSERT_EQ(registry.Get<Villager>(villager).abode, home);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, villager);
+	ASSERT_EQ(_registry.Get<Villager>(villager).abode, home);
 
 	const auto tiny = MakeOtherAbode(here, {.maxAdults = 1, .functional = true, .built = true});
 	const auto owner = MakeVillager(here, Villager::Sex::FEMALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), other, owner);
-	ASSERT_EQ(registry.Get<Villager>(owner).abode, tiny);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _other, owner);
+	ASSERT_EQ(_registry.Get<Villager>(owner).abode, tiny);
 
 	// Full: it joins the town, finds no home there and is one of its homeless
-	town_homes::MoveInAnyway(registry, Rooms(), tiny, villager);
-	EXPECT_EQ(registry.Get<Villager>(villager).town, other);
-	EXPECT_EQ(registry.Get<Villager>(villager).abode, entt::entity {entt::null});
-	EXPECT_TRUE(registry.Get<Abode>(home).inhabitants.empty());
-	EXPECT_EQ(registry.Get<const Town>(other).homelessVillagers, std::vector<entt::entity> {villager});
+	town_homes::MoveInAnyway(_registry, Rooms(), tiny, villager);
+	EXPECT_EQ(_registry.Get<Villager>(villager).town, _other);
+	EXPECT_EQ(_registry.Get<Villager>(villager).abode, entt::entity {entt::null});
+	EXPECT_TRUE(_registry.Get<Abode>(home).inhabitants.empty());
+	EXPECT_EQ(_registry.Get<const Town>(_other).homelessVillagers, std::vector<entt::entity> {villager});
 
 	// Into one with room it moves in, leaving the homeless
 	const auto hut = MakeOtherAbode(here, k_Hut);
-	EXPECT_TRUE(town_homes::MoveInByBuilding(registry, Rooms(), hut, villager, 0));
-	EXPECT_EQ(registry.Get<Villager>(villager).abode, hut);
-	EXPECT_TRUE(registry.Get<const Town>(other).homelessVillagers.empty());
+	EXPECT_TRUE(town_homes::MoveInByBuilding(_registry, Rooms(), hut, villager, 0));
+	EXPECT_EQ(_registry.Get<Villager>(villager).abode, hut);
+	EXPECT_TRUE(_registry.Get<const Town>(_other).homelessVillagers.empty());
 
 	// And back home to its first town
-	EXPECT_TRUE(town_homes::MoveInByBuilding(registry, Rooms(), home, villager, 0));
-	EXPECT_EQ(registry.Get<Villager>(villager).town, town);
-	EXPECT_EQ(registry.Get<Abode>(home).inhabitants, std::vector<entt::entity> {villager});
-	EXPECT_TRUE(registry.Get<Abode>(hut).inhabitants.empty());
+	EXPECT_TRUE(town_homes::MoveInByBuilding(_registry, Rooms(), home, villager, 0));
+	EXPECT_EQ(_registry.Get<Villager>(villager).town, _town);
+	EXPECT_EQ(_registry.Get<Abode>(home).inhabitants, std::vector<entt::entity> {villager});
+	EXPECT_TRUE(_registry.Get<Abode>(hut).inhabitants.empty());
 }
 
 TEST_F(TwoTownsTest, MovingIntoATownWithRoomButNoHomeToSuitMakesForItsVillageCentre)
@@ -466,27 +470,27 @@ TEST_F(TwoTownsTest, MovingIntoATownWithRoomButNoHomeToSuitMakesForItsVillageCen
 	const auto centre = MakeOtherAbode(here, {.functional = true, .built = true}, AbodeNumber::TownCentre);
 	MakeOtherAbode(here, {.maxAdults = 4, .functional = false, .built = true});
 	const auto villager = MakeVillager(here, Villager::Sex::MALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, villager);
-	EXPECT_TRUE(town_homes::HasRoomForNewcomer(registry, Rooms(), other, 0));
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, villager);
+	EXPECT_TRUE(town_homes::HasRoomForNewcomer(_registry, Rooms(), _other, 0));
 	// The centre has no places, so it only joins the town, one of its homeless
-	EXPECT_TRUE(town_homes::MoveIntoTown(registry, Rooms(), other, villager, 0));
-	EXPECT_EQ(registry.Get<Villager>(villager).town, other);
-	EXPECT_EQ(registry.Get<Villager>(villager).abode, entt::entity {entt::null});
+	EXPECT_TRUE(town_homes::MoveIntoTown(_registry, Rooms(), _other, villager, 0));
+	EXPECT_EQ(_registry.Get<Villager>(villager).town, _other);
+	EXPECT_EQ(_registry.Get<Villager>(villager).abode, entt::entity {entt::null});
 	EXPECT_TRUE(Homeless().empty());
-	EXPECT_EQ(registry.Get<const Town>(other).homelessVillagers, std::vector<entt::entity> {villager});
-	EXPECT_TRUE(registry.Get<Abode>(centre).inhabitants.empty());
+	EXPECT_EQ(_registry.Get<const Town>(_other).homelessVillagers, std::vector<entt::entity> {villager});
+	EXPECT_TRUE(_registry.Get<Abode>(centre).inhabitants.empty());
 }
 
 TEST_F(TwoTownsTest, ATownWithNoHomesBuiltLetsInAFewPeople)
 {
 	const glm::vec3 here(0.0f);
 	MakeOtherAbode(here, {.maxAdults = 4, .functional = false, .built = false});
-	EXPECT_TRUE(town_homes::HasRoomForNewcomer(registry, Rooms(), other, 1));
-	EXPECT_FALSE(town_homes::HasRoomForNewcomer(registry, Rooms(), other, 0));
+	EXPECT_TRUE(town_homes::HasRoomForNewcomer(_registry, Rooms(), _other, 1));
+	EXPECT_FALSE(town_homes::HasRoomForNewcomer(_registry, Rooms(), _other, 0));
 	const auto villager = MakeVillager(here, Villager::Sex::MALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), other, villager);
-	EXPECT_FALSE(town_homes::HasRoomForNewcomer(registry, Rooms(), other, 1));
-	EXPECT_FALSE(town_homes::MoveIntoTown(registry, Rooms(), town, MakeVillager(here, Villager::Sex::MALE), 0));
+	town_homes::AddVillagerToTown(_registry, Rooms(), _other, villager);
+	EXPECT_FALSE(town_homes::HasRoomForNewcomer(_registry, Rooms(), _other, 1));
+	EXPECT_FALSE(town_homes::MoveIntoTown(_registry, Rooms(), _town, MakeVillager(here, Villager::Sex::MALE), 0));
 }
 
 TEST(TownHomesShuffle, WantsOfMenAndPeopleAgainstTheTown)
@@ -574,21 +578,21 @@ TEST_F(TownHomesTest, ShufflingSwapsOnlyThoseOutOfDoors)
 	                                std::pair {women, Villager::Sex::FEMALE}, std::pair {women, Villager::Sex::FEMALE}})
 	{
 		people.push_back(MakeVillager(here, sex));
-		registry.Get<Villager>(people.back()).town = town;
-		town_homes::AddVillagerToAbode(registry, Rooms(), abode, people.back());
+		_registry.Get<Villager>(people.back()).town = _town;
+		town_homes::AddVillagerToAbode(_registry, Rooms(), abode, people.back());
 	}
 	std::vector<entt::entity> inside {people[0], people[1]};
 	auto homes = Rooms();
 	homes.atHome = [&inside](entt::entity villager) { return std::ranges::find(inside, villager) != inside.end(); };
 	// Both men are in: nothing moves
-	EXPECT_FALSE(town_homes::EvenOutHomes(registry, homes, town));
+	EXPECT_FALSE(town_homes::EvenOutHomes(_registry, homes, _town));
 	// The newer man out: he and the first woman out of the other swap
 	inside = {people[0]};
-	EXPECT_TRUE(town_homes::EvenOutHomes(registry, homes, town));
-	EXPECT_EQ(registry.Get<Villager>(people[1]).abode, women);
-	EXPECT_EQ(registry.Get<Villager>(people[3]).abode, men);
-	EXPECT_EQ(registry.Get<Abode>(men).inhabitants, (std::vector<entt::entity> {people[3], people[0]}));
-	EXPECT_EQ(registry.Get<Abode>(women).inhabitants, (std::vector<entt::entity> {people[1], people[2]}));
+	EXPECT_TRUE(town_homes::EvenOutHomes(_registry, homes, _town));
+	EXPECT_EQ(_registry.Get<Villager>(people[1]).abode, women);
+	EXPECT_EQ(_registry.Get<Villager>(people[3]).abode, men);
+	EXPECT_EQ(_registry.Get<Abode>(men).inhabitants, (std::vector<entt::entity> {people[3], people[0]}));
+	EXPECT_EQ(_registry.Get<Abode>(women).inhabitants, (std::vector<entt::entity> {people[1], people[2]}));
 }
 
 TEST_F(TownHomesTest, AMothersChildrenAreFoundBuildingByBuildingThenAmongTheHomeless)
@@ -605,18 +609,18 @@ TEST_F(TownHomesTest, AMothersChildrenAreFoundBuildingByBuildingThenAmongTheHome
 	const auto someoneElses = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
 	for (const auto child : {inOlder, firstInNewer, secondInNewer, homeless})
 	{
-		registry.Get<Villager>(child).mother = mother;
+		_registry.Get<Villager>(child).mother = mother;
 	}
-	registry.Get<Villager>(someoneElses).mother = other;
-	registry.Get<Abode>(older).inhabitants = {inOlder, someoneElses};
+	_registry.Get<Villager>(someoneElses).mother = other;
+	_registry.Get<Abode>(older).inhabitants = {inOlder, someoneElses};
 	// Each building keeps its people newest first
-	registry.Get<Abode>(newer).inhabitants = {secondInNewer, firstInNewer};
-	registry.Get<Town>(town).homelessVillagers = {homeless};
+	_registry.Get<Abode>(newer).inhabitants = {secondInNewer, firstInNewer};
+	_registry.Get<Town>(_town).homelessVillagers = {homeless};
 
-	EXPECT_EQ(town_homes::ChildrenOf(registry, town, mother),
+	EXPECT_EQ(town_homes::ChildrenOf(_registry, _town, mother),
 	          (std::vector<entt::entity> {secondInNewer, firstInNewer, inOlder, homeless}));
-	EXPECT_EQ(town_homes::ChildrenOf(registry, town, other), std::vector<entt::entity> {someoneElses});
-	EXPECT_TRUE(town_homes::ChildrenOf(registry, entt::null, mother).empty());
+	EXPECT_EQ(town_homes::ChildrenOf(_registry, _town, other), std::vector<entt::entity> {someoneElses});
+	EXPECT_TRUE(town_homes::ChildrenOf(_registry, entt::null, mother).empty());
 }
 
 TEST_F(TwoTownsTest, AMotherLeavingHerTownAliveIsToldFirstWithTheTownSheLeaves)
@@ -624,15 +628,15 @@ TEST_F(TwoTownsTest, AMotherLeavingHerTownAliveIsToldFirstWithTheTownSheLeaves)
 	const glm::vec3 here(0.0f);
 	MakeAbode(here, k_Hut);
 	const auto mother = MakeVillager(here, Villager::Sex::FEMALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, mother);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, mother);
 	const auto hut = MakeOtherAbode(here, k_Hut);
 
 	std::vector<std::pair<entt::entity, entt::entity>> told;
 	auto homes = Rooms();
 	homes.leavingTown = [&told](entt::entity villager, entt::entity from) { told.emplace_back(villager, from); };
-	town_homes::MoveInAnyway(registry, homes, hut, mother);
-	EXPECT_EQ(told, (std::vector<std::pair<entt::entity, entt::entity>> {{mother, town}}));
-	EXPECT_EQ(registry.Get<Villager>(mother).town, other);
+	town_homes::MoveInAnyway(_registry, homes, hut, mother);
+	EXPECT_EQ(told, (std::vector<std::pair<entt::entity, entt::entity>> {{mother, _town}}));
+	EXPECT_EQ(_registry.Get<Villager>(mother).town, _other);
 }
 
 TEST_F(TwoTownsTest, AVillagerMovingToAnotherTownLeavesTheWorshipOfItsOldTownAfterItsHome)
@@ -640,7 +644,7 @@ TEST_F(TwoTownsTest, AVillagerMovingToAnotherTownLeavesTheWorshipOfItsOldTownAft
 	const glm::vec3 here(0.0f);
 	const auto home = MakeAbode(here, k_Hut);
 	const auto mover = MakeVillager(here, Villager::Sex::FEMALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, mover);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, mover);
 	const auto hut = MakeOtherAbode(here, k_Hut);
 
 	struct Told
@@ -652,22 +656,22 @@ TEST_F(TwoTownsTest, AVillagerMovingToAnotherTownLeavesTheWorshipOfItsOldTownAft
 	std::vector<Told> told;
 	auto homes = Rooms();
 	homes.leavingWorship = [this, &told](entt::entity villager) {
-		const auto& person = registry.Get<const Villager>(villager);
+		const auto& person = _registry.Get<const Villager>(villager);
 		told.push_back({villager, person.town, person.abode});
 	};
-	town_homes::MoveInAnyway(registry, homes, hut, mover);
+	town_homes::MoveInAnyway(_registry, homes, hut, mover);
 	// It is out of its home, and it still has its old town
 	ASSERT_EQ(told.size(), 1u);
 	EXPECT_EQ(told.front().villager, mover);
-	EXPECT_EQ(told.front().town, town);
+	EXPECT_EQ(told.front().town, _town);
 	EXPECT_TRUE(told.front().abode == entt::null);
-	EXPECT_TRUE(std::ranges::find(registry.Get<const Abode>(home).inhabitants, mover) ==
-	            registry.Get<const Abode>(home).inhabitants.end());
-	EXPECT_EQ(registry.Get<Villager>(mover).town, other);
+	EXPECT_TRUE(std::ranges::find(_registry.Get<const Abode>(home).inhabitants, mover) ==
+	            _registry.Get<const Abode>(home).inhabitants.end());
+	EXPECT_EQ(_registry.Get<Villager>(mover).town, _other);
 
 	// A move in the same town does not leave the worship
 	const auto second = MakeOtherAbode(here, k_Hut);
-	town_homes::MoveInAnyway(registry, homes, second, mover);
+	town_homes::MoveInAnyway(_registry, homes, second, mover);
 	EXPECT_EQ(told.size(), 1u);
 }
 
@@ -678,21 +682,21 @@ TEST_F(TwoTownsTest, TheLastVillagerMovingToAnotherTownStartsTheCountdownOfItsOl
 	const auto mother = MakeVillager(here, Villager::Sex::FEMALE);
 	const auto child = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
 	const auto grandmother = MakeVillager(here, Villager::Sex::FEMALE);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, mother);
-	town_homes::AddVillagerToTown(registry, Rooms(), town, child);
-	registry.Get<Villager>(child).mother = mother;
-	registry.Get<Villager>(mother).mother = grandmother;
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, mother);
+	town_homes::AddVillagerToTown(_registry, Rooms(), _town, child);
+	_registry.Get<Villager>(child).mother = mother;
+	_registry.Get<Villager>(mother).mother = grandmother;
 	const auto hut = MakeOtherAbode(here, k_Hut);
 
 	// One person is left: no countdown yet
-	town_homes::MoveInAnyway(registry, Rooms(), hut, mother);
-	EXPECT_EQ(registry.Get<const Town>(town).emptyTownTimer, 0u);
+	town_homes::MoveInAnyway(_registry, Rooms(), hut, mother);
+	EXPECT_EQ(_registry.Get<const Town>(_town).emptyTownTimer, 0u);
 	// The villager that leaves loses its own mother
-	EXPECT_TRUE(registry.Get<const Villager>(mother).mother == entt::null);
+	EXPECT_TRUE(_registry.Get<const Villager>(mother).mother == entt::null);
 	// The last person goes: the countdown starts
-	town_homes::MoveInAnyway(registry, Rooms(), hut, child);
-	EXPECT_EQ(registry.Get<const Town>(town).emptyTownTimer, town_empty::k_EmptyTownTurns);
-	EXPECT_EQ(registry.Get<const Town>(other).emptyTownTimer, 0u);
+	town_homes::MoveInAnyway(_registry, Rooms(), hut, child);
+	EXPECT_EQ(_registry.Get<const Town>(_town).emptyTownTimer, town_empty::k_EmptyTownTurns);
+	EXPECT_EQ(_registry.Get<const Town>(_other).emptyTownTimer, 0u);
 }
 
 namespace
@@ -707,68 +711,68 @@ glm::ivec2 DoorCellOf(const Registry& registry, entt::entity abode)
 
 TEST_F(TwoTownsTest, AScriptVillagerFindsTheFirstDoorInTheCellOverTheTownsInTheirOrder)
 {
-	const auto doorCell = [this](entt::entity abode) { return DoorCellOf(registry, abode); };
+	const auto doorCell = [this](entt::entity abode) { return DoorCellOf(_registry, abode); };
 	const auto elsewhere = MakeAbode(glm::vec3(100.0f, 0.0f, 100.0f), k_Hut);
 	const auto older = MakeOtherAbode(glm::vec3(51.0f, 0.0f, 52.0f), k_Hut);
 	const auto newer = MakeOtherAbode(glm::vec3(58.0f, 0.0f, 59.0f), k_Hut);
-	const std::array towns {town, other};
+	const std::array towns {_town, _other};
 
 	// The newer of two buildings in the same cell comes first in its town
-	const auto home = town_homes::FindScriptHome(registry, Rooms(), towns, {5, 5}, doorCell);
+	const auto home = town_homes::FindScriptHome(_registry, Rooms(), towns, {5, 5}, doorCell);
 	EXPECT_EQ(home.abode, newer);
-	EXPECT_EQ(home.town, other);
+	EXPECT_EQ(home.town, _other);
 	EXPECT_NE(home.abode, older);
 	// The town of the first door wins over a later town with a door in the same cell
 	const auto first = MakeAbode(glm::vec3(55.0f, 0.0f, 55.0f), k_Hut);
-	EXPECT_EQ(town_homes::FindScriptHome(registry, Rooms(), towns, {5, 5}, doorCell).abode, first);
-	EXPECT_EQ(town_homes::FindScriptHome(registry, Rooms(), towns, {10, 10}, doorCell).abode, elsewhere);
+	EXPECT_EQ(town_homes::FindScriptHome(_registry, Rooms(), towns, {5, 5}, doorCell).abode, first);
+	EXPECT_EQ(town_homes::FindScriptHome(_registry, Rooms(), towns, {10, 10}, doorCell).abode, elsewhere);
 	// No door in the cell: no home and no town
-	const auto none = town_homes::FindScriptHome(registry, Rooms(), towns, {1, 1}, doorCell);
+	const auto none = town_homes::FindScriptHome(_registry, Rooms(), towns, {1, 1}, doorCell);
 	EXPECT_EQ(none.abode, entt::entity {entt::null});
 	EXPECT_EQ(none.town, entt::entity {entt::null});
 }
 
 TEST_F(TownHomesTest, AScriptVillagerMovesIntoItsBuildingUntilItsPeopleEqualItsPlacesForAdults)
 {
-	const auto doorCell = [this](entt::entity abode) { return DoorCellOf(registry, abode); };
+	const auto doorCell = [this](entt::entity abode) { return DoorCellOf(_registry, abode); };
 	const glm::vec3 here(5.0f, 0.0f, 5.0f);
 	// Two places for adults: a child counts as one of its people too
 	const auto home = MakeAbode(here, {.maxAdults = 2, .maxChildren = 2, .functional = true, .built = true});
 	const auto other = MakeAbode(glm::vec3(300.0f, 0.0f, 300.0f), k_Hut);
-	const std::array towns {town};
+	const std::array towns {_town};
 	const auto child = MakeVillager(here, Villager::Sex::MALE, Villager::LifeStage::Child);
 	const auto wife = MakeVillager(here, Villager::Sex::FEMALE);
 	const auto husband = MakeVillager(here, Villager::Sex::MALE);
 
-	auto found = town_homes::FindScriptHome(registry, Rooms(), towns, {0, 0}, doorCell);
-	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), found, child), town);
-	found = town_homes::FindScriptHome(registry, Rooms(), towns, {0, 0}, doorCell);
-	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), found, wife), town);
-	EXPECT_EQ(registry.Get<Abode>(home).inhabitants, (std::vector<entt::entity> {wife, child}));
+	auto found = town_homes::FindScriptHome(_registry, Rooms(), towns, {0, 0}, doorCell);
+	EXPECT_EQ(town_homes::SettleScriptVillager(_registry, Rooms(), found, child), _town);
+	found = town_homes::FindScriptHome(_registry, Rooms(), towns, {0, 0}, doorCell);
+	EXPECT_EQ(town_homes::SettleScriptVillager(_registry, Rooms(), found, wife), _town);
+	EXPECT_EQ(_registry.Get<Abode>(home).inhabitants, (std::vector<entt::entity> {wife, child}));
 
 	// Full: the building gives only its town, and the villager moves into the best building there
-	found = town_homes::FindScriptHome(registry, Rooms(), towns, {0, 0}, doorCell);
+	found = town_homes::FindScriptHome(_registry, Rooms(), towns, {0, 0}, doorCell);
 	EXPECT_EQ(found.abode, entt::entity {entt::null});
-	EXPECT_EQ(found.town, town);
-	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), found, husband), town);
-	EXPECT_EQ(registry.Get<Villager>(husband).abode, other);
+	EXPECT_EQ(found.town, _town);
+	EXPECT_EQ(town_homes::SettleScriptVillager(_registry, Rooms(), found, husband), _town);
+	EXPECT_EQ(_registry.Get<Villager>(husband).abode, other);
 	EXPECT_TRUE(Homeless().empty());
 }
 
 TEST_F(TownHomesTest, AScriptVillagerWithAFullBuildingAndNoRoomInTheTownIsHomelessAndOneWithNoDoorHasNoTown)
 {
-	const auto doorCell = [this](entt::entity abode) { return DoorCellOf(registry, abode); };
+	const auto doorCell = [this](entt::entity abode) { return DoorCellOf(_registry, abode); };
 	const glm::vec3 here(5.0f, 0.0f, 5.0f);
 	MakeAbode(here, {.maxAdults = 0, .functional = true, .built = true});
-	const std::array towns {town};
+	const std::array towns {_town};
 	const auto villager = MakeVillager(here, Villager::Sex::FEMALE);
-	const auto found = town_homes::FindScriptHome(registry, Rooms(), towns, {0, 0}, doorCell);
-	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), found, villager), town);
+	const auto found = town_homes::FindScriptHome(_registry, Rooms(), towns, {0, 0}, doorCell);
+	EXPECT_EQ(town_homes::SettleScriptVillager(_registry, Rooms(), found, villager), _town);
 	EXPECT_EQ(Homeless(), std::vector<entt::entity> {villager});
 
 	const auto stray = MakeVillager(here, Villager::Sex::MALE);
-	const auto nowhere = town_homes::FindScriptHome(registry, Rooms(), towns, {9, 9}, doorCell);
-	EXPECT_EQ(town_homes::SettleScriptVillager(registry, Rooms(), nowhere, stray), entt::entity {entt::null});
-	EXPECT_EQ(registry.Get<Villager>(stray).abode, entt::entity {entt::null});
+	const auto nowhere = town_homes::FindScriptHome(_registry, Rooms(), towns, {9, 9}, doorCell);
+	EXPECT_EQ(town_homes::SettleScriptVillager(_registry, Rooms(), nowhere, stray), entt::entity {entt::null});
+	EXPECT_EQ(_registry.Get<Villager>(stray).abode, entt::entity {entt::null});
 	EXPECT_EQ(Homeless().size(), 1u);
 }

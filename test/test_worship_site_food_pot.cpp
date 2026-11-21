@@ -47,22 +47,22 @@ protected:
 			spdlog::create<spdlog::sinks::null_sink_st>("game");
 		}
 		Locator::entitiesRegistry::emplace<Registry>();
-		info = std::make_unique<InfoConstants>();
+		_info = std::make_unique<InfoConstants>();
 		// The row of the food pot holds food and has no next pile
-		auto& row = info->pot.at(static_cast<size_t>(PotInfo::StoragePitFoodPile));
+		auto& row = _info->pot.at(static_cast<size_t>(PotInfo::StoragePitFoodPile));
 		row.resourceType = ResourceType::Food;
 		row.nextPotForResource = PotInfo::_COUNT;
-		Locator::infoConstants::emplace(*info);
+		Locator::infoConstants::emplace(*_info);
 
 		auto& registry = Locator::entitiesRegistry::value();
-		pot = registry.Create();
-		registry.Assign<Pot>(pot, Pot {.amount = 0, .maxAmount = 1000, .type = PotInfo::StoragePitFoodPile});
+		_pot = registry.Create();
+		registry.Assign<Pot>(_pot, Pot {.amount = 0, .maxAmount = 1000, .type = PotInfo::StoragePitFoodPile});
 		registry.Assign<Transform>(
-		    pot, Transform {.position = glm::vec3(4.0f, 0.0f, 6.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
-		site = registry.Create();
-		registry.Assign<WorshipSite>(site, WorshipSite {.foodPot = pot});
+		    _pot, Transform {.position = glm::vec3(4.0f, 0.0f, 6.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
+		_site = registry.Create();
+		registry.Assign<WorshipSite>(_site, WorshipSite {.foodPot = _pot});
 		registry.Assign<Transform>(
-		    site, Transform {.position = glm::vec3(0.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
+		    _site, Transform {.position = glm::vec3(0.0f), .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)});
 	}
 	void TearDown() override
 	{
@@ -70,12 +70,12 @@ protected:
 		Locator::entitiesRegistry::reset();
 	}
 
-	[[nodiscard]] const Pot& FoodPot() const { return Locator::entitiesRegistry::value().Get<const Pot>(pot); }
+	[[nodiscard]] const Pot& FoodPot() const { return Locator::entitiesRegistry::value().Get<const Pot>(_pot); }
 
-	std::unique_ptr<InfoConstants> info;
-	ResourceStoreSystem stores;
-	entt::entity site {entt::null};
-	entt::entity pot {entt::null};
+	std::unique_ptr<InfoConstants> _info;
+	ResourceStoreSystem _stores;
+	entt::entity _site {entt::null};
+	entt::entity _pot {entt::null};
 };
 } // namespace
 
@@ -83,7 +83,7 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(WorshipSiteFoodPotTest, FoodGivenToTheSiteGoesIntoItsPot)
 {
-	EXPECT_EQ(stores.AddToStore(site, ResourceType::Food, 300, std::nullopt, true, std::nullopt), 300u);
+	EXPECT_EQ(_stores.AddToStore(_site, ResourceType::Food, 300, std::nullopt, true, std::nullopt), 300u);
 	EXPECT_EQ(FoodPot().amount, 300u);
 	EXPECT_TRUE(FoodPot().poisoned);
 }
@@ -92,8 +92,8 @@ TEST_F(WorshipSiteFoodPotTest, FoodGivenToTheSiteGoesIntoItsPot)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(WorshipSiteFoodPotTest, APotWithNoNextPileTakesAllTheFood)
 {
-	EXPECT_EQ(stores.AddToStore(site, ResourceType::Food, 800, std::nullopt, false, std::nullopt), 800u);
-	EXPECT_EQ(stores.AddToStore(site, ResourceType::Food, 800, std::nullopt, false, std::nullopt), 800u);
+	EXPECT_EQ(_stores.AddToStore(_site, ResourceType::Food, 800, std::nullopt, false, std::nullopt), 800u);
+	EXPECT_EQ(_stores.AddToStore(_site, ResourceType::Food, 800, std::nullopt, false, std::nullopt), 800u);
 	EXPECT_EQ(FoodPot().amount, 1600u);
 }
 
@@ -101,11 +101,11 @@ TEST_F(WorshipSiteFoodPotTest, APotWithNoNextPileTakesAllTheFood)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(WorshipSiteFoodPotTest, APotWithANextPileTakesNoMoreThanItsMaximum)
 {
-	info->pot.at(static_cast<size_t>(PotInfo::StoragePitFoodPile)).nextPotForResource = PotInfo::WoodPile_1;
+	_info->pot.at(static_cast<size_t>(PotInfo::StoragePitFoodPile)).nextPotForResource = PotInfo::WoodPile_1;
 	Locator::infoConstants::reset();
-	Locator::infoConstants::emplace(*info);
-	EXPECT_EQ(stores.AddToStore(site, ResourceType::Food, 800, std::nullopt, false, std::nullopt), 800u);
-	EXPECT_EQ(stores.AddToStore(site, ResourceType::Food, 800, std::nullopt, false, std::nullopt), 200u);
+	Locator::infoConstants::emplace(*_info);
+	EXPECT_EQ(_stores.AddToStore(_site, ResourceType::Food, 800, std::nullopt, false, std::nullopt), 800u);
+	EXPECT_EQ(_stores.AddToStore(_site, ResourceType::Food, 800, std::nullopt, false, std::nullopt), 200u);
 	EXPECT_EQ(FoodPot().amount, 1000u);
 }
 
@@ -113,7 +113,7 @@ TEST_F(WorshipSiteFoodPotTest, APotWithANextPileTakesNoMoreThanItsMaximum)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(WorshipSiteFoodPotTest, ABuiltSiteTakesNoWood)
 {
-	EXPECT_EQ(stores.AddToStore(site, ResourceType::Wood, 300, std::nullopt, false, std::nullopt), 0u);
+	EXPECT_EQ(_stores.AddToStore(_site, ResourceType::Wood, 300, std::nullopt, false, std::nullopt), 0u);
 	EXPECT_EQ(FoodPot().amount, 0u);
 }
 
@@ -121,10 +121,10 @@ TEST_F(WorshipSiteFoodPotTest, ABuiltSiteTakesNoWood)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(WorshipSiteFoodPotTest, AnEmptiedPotLosesItsPoison)
 {
-	stores.AddToStore(site, ResourceType::Food, 300, std::nullopt, true, std::nullopt);
-	EXPECT_EQ(stores.RemoveResource(site, ResourceType::Food, 100), 100u);
+	_stores.AddToStore(_site, ResourceType::Food, 300, std::nullopt, true, std::nullopt);
+	EXPECT_EQ(_stores.RemoveResource(_site, ResourceType::Food, 100), 100u);
 	EXPECT_TRUE(FoodPot().poisoned);
-	EXPECT_EQ(stores.RemoveResource(site, ResourceType::Food, 500), 200u);
+	EXPECT_EQ(_stores.RemoveResource(_site, ResourceType::Food, 500), 200u);
 	EXPECT_EQ(FoodPot().amount, 0u);
 	EXPECT_FALSE(FoodPot().poisoned);
 }

@@ -225,9 +225,9 @@ TEST(PhysicsBody, FrictionHoldsOnGentleSlopesAndNotWithout)
 {
 	const FakeLand slope(0.0f, 0.3f);
 	auto grippy = MakeCube(0.5f, {0.0f, 0.55f, 0.0f});
-	auto slippery_material = k_Stone;
-	slippery_material.friction = 0.02f;
-	auto slippery = MakeCube(0.5f, {0.0f, 0.55f, 0.0f}, slippery_material);
+	auto slipperyMaterial = k_Stone;
+	slipperyMaterial.friction = 0.02f;
+	auto slippery = MakeCube(0.5f, {0.0f, 0.55f, 0.0f}, slipperyMaterial);
 	for (int i = 0; i < 600; ++i)
 	{
 		Step(grippy, slope);

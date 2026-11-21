@@ -66,8 +66,8 @@ std::vector<uint8_t> TemplateMap(std::string_view script = k_TemplateScript)
 
 const std::vector<uint8_t>& Package()
 {
-	static const auto package = gods_ring_map_package::Make();
-	return package;
+	static const auto k_Package = gods_ring_map_package::Make();
+	return k_Package;
 }
 
 std::optional<Failure> FailureOf(const std::variant<std::vector<uint8_t>, Failure>& result)

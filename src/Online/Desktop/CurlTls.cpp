@@ -20,8 +20,8 @@ namespace openblack::online::tls_settings
 
 void StartLibrary()
 {
-	static std::once_flag started;
-	std::call_once(started, []() { curl_global_init(CURL_GLOBAL_DEFAULT); });
+	static std::once_flag s_Started;
+	std::call_once(s_Started, []() { curl_global_init(CURL_GLOBAL_DEFAULT); });
 }
 
 void Apply(CURL* easy, const char* extraAuthorities)

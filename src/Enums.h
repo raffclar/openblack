@@ -3261,9 +3261,9 @@ enum class HelpSystemCondition : uint32_t
 
 constexpr uint32_t MakeSpeedState(float ms)
 {
-	constexpr uint32_t ms100 = 0x10000;
-	constexpr float ms1 = static_cast<float>(ms100) * 0.01f;
-	const float scaled = ms * ms1;
+	constexpr uint32_t k_Ms100 = 0x10000;
+	constexpr float k_Ms1 = static_cast<float>(k_Ms100) * 0.01f;
+	const float scaled = ms * k_Ms1;
 	// Speed needs to be positive. Round cast to int won't work in negative.
 	// NOLINTNEXTLINE(bugprone-incorrect-roundings): can't use lroundf in constexpr
 	return static_cast<uint32_t>(scaled + 0.5f);
@@ -3298,26 +3298,26 @@ enum class SpeedState : uint32_t
 
 constexpr float GetSpeedStateSpeed(SpeedState state)
 {
-	constexpr uint32_t ms100 = 0x10000;
-	constexpr float ms1 = static_cast<float>(ms100) * 0.01f;
+	constexpr uint32_t k_Ms100 = 0x10000;
+	constexpr float k_Ms1 = static_cast<float>(k_Ms100) * 0.01f;
 	const float scaled = static_cast<uint32_t>(state) - 0.5f;
-	return scaled / ms1;
+	return scaled / k_Ms1;
 }
 
 /// The speed state that a speed from GetSpeedStateSpeed came from. The half that GetSpeedStateSpeed takes off comes
 /// back, so each state from 0 to 65535 comes back exactly.
 inline SpeedState GetSpeedStateOf(float speed)
 {
-	constexpr uint32_t ms100 = 0x10000;
-	constexpr float ms1 = static_cast<float>(ms100) * 0.01f;
-	return static_cast<SpeedState>(std::lround(speed * ms1 + 0.5f));
+	constexpr uint32_t k_Ms100 = 0x10000;
+	constexpr float k_Ms1 = static_cast<float>(k_Ms100) * 0.01f;
+	return static_cast<SpeedState>(std::lround(speed * k_Ms1 + 0.5f));
 }
 
 constexpr uint32_t MakeTurnAngleState(float degrees)
 {
-	constexpr uint32_t a360 = 0x800;
-	constexpr float a1 = static_cast<float>(a360) / 360.0f;
-	const float scaled = degrees * a1;
+	constexpr uint32_t k_A360 = 0x800;
+	constexpr float k_A1 = static_cast<float>(k_A360) / 360.0f;
+	const float scaled = degrees * k_A1;
 	// Speed needs to be positive. Round cast to int won't work in negative.
 	// NOLINTNEXTLINE(bugprone-incorrect-roundings): can't use lroundf in constexpr
 	return static_cast<uint32_t>(scaled + 0.5f);

@@ -48,7 +48,7 @@ int32_t ScaleByTable(int32_t table, int32_t whole, int shift)
 
 const std::array<uint16_t, 257>& gutils::ArcTanTable()
 {
-	static const auto s_table = [] {
+	static const auto k_Table = [] {
 		std::array<uint16_t, 257> table {};
 		for (size_t i = 0; i < table.size(); ++i)
 		{
@@ -57,12 +57,12 @@ const std::array<uint16_t, 257>& gutils::ArcTanTable()
 		}
 		return table;
 	}();
-	return s_table;
+	return k_Table;
 }
 
 const std::array<int32_t, 2560>& gutils::SinTable()
 {
-	static const auto s_table = [] {
+	static const auto k_Table = [] {
 		std::array<int32_t, 2560> table {};
 		for (size_t i = 0; i < table.size(); ++i)
 		{
@@ -71,7 +71,7 @@ const std::array<int32_t, 2560>& gutils::SinTable()
 		}
 		return table;
 	}();
-	return s_table;
+	return k_Table;
 }
 
 int32_t gutils::Cos(uint16_t angle)

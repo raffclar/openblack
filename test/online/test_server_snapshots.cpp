@@ -146,15 +146,15 @@ protected:
 	void SetUp() override
 	{
 		const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
-		folder = std::filesystem::temp_directory_path() / (std::string("openblack_snapshots_") + info->name());
+		_folder = std::filesystem::temp_directory_path() / (std::string("openblack_snapshots_") + info->name());
 		std::error_code error;
-		std::filesystem::remove_all(folder, error);
+		std::filesystem::remove_all(_folder, error);
 	}
 
 	void TearDown() override
 	{
 		std::error_code error;
-		std::filesystem::remove_all(folder, error);
+		std::filesystem::remove_all(_folder, error);
 	}
 
 	/// A snapshot of a turn, then the journal of the turns after it until the turn before the next snapshot
@@ -170,7 +170,7 @@ protected:
 		}
 	}
 
-	std::filesystem::path folder;
+	std::filesystem::path _folder;
 };
 
 } // namespace
@@ -341,16 +341,16 @@ TEST(ServerSnapshots, OnlyTheSameLandSeedAndModesAreTheSameGame)
 
 TEST_F(SnapshotStoreTest, TheFolderKeepsTheNewestSnapshotsAndTheirJournals)
 {
-	Store store(folder, 2);
+	Store store(_folder, 2);
 	Play(store, 1, 101);
 	Play(store, 101, 201);
 	Play(store, 201, 250);
-	EXPECT_FALSE(std::filesystem::exists(folder / SnapshotFileName(1)));
-	EXPECT_FALSE(std::filesystem::exists(folder / JournalFileName(1)));
-	EXPECT_TRUE(std::filesystem::exists(folder / SnapshotFileName(101)));
-	EXPECT_TRUE(std::filesystem::exists(folder / JournalFileName(101)));
-	EXPECT_TRUE(std::filesystem::exists(folder / SnapshotFileName(201)));
-	EXPECT_TRUE(std::filesystem::exists(folder / JournalFileName(201)));
+	EXPECT_FALSE(std::filesystem::exists(_folder / SnapshotFileName(1)));
+	EXPECT_FALSE(std::filesystem::exists(_folder / JournalFileName(1)));
+	EXPECT_TRUE(std::filesystem::exists(_folder / SnapshotFileName(101)));
+	EXPECT_TRUE(std::filesystem::exists(_folder / JournalFileName(101)));
+	EXPECT_TRUE(std::filesystem::exists(_folder / SnapshotFileName(201)));
+	EXPECT_TRUE(std::filesystem::exists(_folder / JournalFileName(201)));
 
 	const auto restored = store.LoadNewest();
 	ASSERT_TRUE(restored.has_value());
@@ -366,11 +366,11 @@ TEST_F(SnapshotStoreTest, TheFolderKeepsTheNewestSnapshotsAndTheirJournals)
 
 TEST_F(SnapshotStoreTest, ATornNewestSnapshotIsSkippedAndTheOlderOneUsesBothJournals)
 {
-	Store store(folder, 3);
+	Store store(_folder, 3);
 	Play(store, 1, 101);
 	Play(store, 101, 150);
 	// The server stopped during the write of the newest snapshot: only a part of the file is there
-	const auto newest = folder / SnapshotFileName(101);
+	const auto newest = _folder / SnapshotFileName(101);
 	auto bytes = ReadAll(newest);
 	bytes.resize(bytes.size() / 3);
 	WriteAll(newest, bytes);
@@ -387,7 +387,7 @@ TEST_F(SnapshotStoreTest, ATornNewestSnapshotIsSkippedAndTheOlderOneUsesBothJour
 
 TEST_F(SnapshotStoreTest, ATornLastTurnIsLeftOutAndTheLastRoomChangeIsKept)
 {
-	Store store(folder, 3);
+	Store store(_folder, 3);
 	Play(store, 10, 20);
 	auto room = MakeRoom();
 	room.seats[1].state = 3;
@@ -395,12 +395,12 @@ TEST_F(SnapshotStoreTest, ATornLastTurnIsLeftOutAndTheLastRoomChangeIsKept)
 	store.AddRoom(room);
 	store.AddTurn(20, TurnBytes(20));
 	// The server stopped during the write of the last record
-	const auto journal = folder / JournalFileName(10);
+	const auto journal = _folder / JournalFileName(10);
 	auto bytes = ReadAll(journal);
 	bytes.resize(bytes.size() - 2);
 	WriteAll(journal, bytes);
 
-	const auto restored = Store(folder, 3).LoadNewest();
+	const auto restored = Store(_folder, 3).LoadNewest();
 	ASSERT_TRUE(restored.has_value());
 	EXPECT_TRUE(restored->tornJournal);
 	EXPECT_EQ(restored->turns.size(), 10u);
@@ -411,18 +411,18 @@ TEST_F(SnapshotStoreTest, ATornLastTurnIsLeftOutAndTheLastRoomChangeIsKept)
 
 TEST_F(SnapshotStoreTest, AFolderWithNoGoodSnapshotGivesNothingAndTheEndOfTheGameClearsIt)
 {
-	Store store(folder, 3);
+	Store store(_folder, 3);
 	EXPECT_FALSE(store.LoadNewest().has_value());
 	Play(store, 1, 5);
-	WriteAll(folder / (SnapshotFileName(50) + ".tmp"), {1, 2, 3});
-	WriteAll(folder / SnapshotFileName(60), {1, 2, 3});
+	WriteAll(_folder / (SnapshotFileName(50) + ".tmp"), {1, 2, 3});
+	WriteAll(_folder / SnapshotFileName(60), {1, 2, 3});
 	const auto restored = store.LoadNewest();
 	ASSERT_TRUE(restored.has_value());
 	EXPECT_EQ(restored->snapshot.turn, 1u);
 
 	store.Clear();
 	EXPECT_FALSE(store.LoadNewest().has_value());
-	EXPECT_TRUE(std::filesystem::is_empty(folder));
+	EXPECT_TRUE(std::filesystem::is_empty(_folder));
 }
 
 TEST(SessionHashes, TheDigestIsTheSha256OfTheSaltThenTheSecret)
@@ -459,14 +459,14 @@ TEST_F(SnapshotStoreTest, TheFilesKeepNoSecretOfASessionButTheHashesFindTheRight
 	room.seats[0].session = hasher.Hash("god-secret-alice");
 	room.seats[1].session = hasher.Hash("god-secret-bob");
 	room.watchers = {*hasher.Hash("observer-secret-carol")};
-	Store store(folder, 3);
+	Store store(_folder, 3);
 	ASSERT_TRUE(store.OpenJournal(1, room));
 	ASSERT_TRUE(store.Write(1, EncodeSnapshot({.turn = 1, .room = room, .world = World(1), .blocks = {}})));
 	store.AddRoom(room);
 	store.AddTurn(1, TurnBytes(1));
 
 	size_t files = 0;
-	for (const auto& entry : std::filesystem::directory_iterator(folder))
+	for (const auto& entry : std::filesystem::directory_iterator(_folder))
 	{
 		const auto bytes = ReadAll(entry.path());
 		++files;
@@ -475,7 +475,7 @@ TEST_F(SnapshotStoreTest, TheFilesKeepNoSecretOfASessionButTheHashesFindTheRight
 	}
 	EXPECT_EQ(files, 2u);
 
-	const auto restored = Store(folder, 3).LoadNewest();
+	const auto restored = Store(_folder, 3).LoadNewest();
 	ASSERT_TRUE(restored.has_value());
 	ASSERT_TRUE(restored->room.seats[0].session.has_value());
 	EXPECT_TRUE(hasher.Matches(*restored->room.seats[0].session, "god-secret-alice"));
@@ -540,28 +540,28 @@ TEST(ServerSnapshots, ATurnRecordKeepsTheLastBlocksOfTheGods)
 
 TEST_F(SnapshotStoreTest, TheLastBlocksComeFromTheLastTurnOfTheJournals)
 {
-	Store store(folder, 3);
+	Store store(_folder, 3);
 	const auto room = MakeRoom();
 	ASSERT_TRUE(store.OpenJournal(10, room));
 	ASSERT_TRUE(store.Write(10, EncodeSnapshot({.turn = 10, .room = room, .world = World(10), .blocks = {{0, 4}}})));
 	store.AddTurn(10, TurnBytes(10), {{0, 4}});
 	store.AddTurn(11, TurnBytes(11), {{0, 6}, {1, 2}});
-	const auto restored = Store(folder, 3).LoadNewest();
+	const auto restored = Store(_folder, 3).LoadNewest();
 	ASSERT_TRUE(restored.has_value());
 	EXPECT_EQ(restored->blocks, (BlockSequences {{0, 6}, {1, 2}}));
 
 	// With no turn after the snapshot, the blocks of the snapshot count
-	Store other(folder / "other", 3);
+	Store other(_folder / "other", 3);
 	ASSERT_TRUE(other.OpenJournal(10, room));
 	ASSERT_TRUE(other.Write(10, EncodeSnapshot({.turn = 10, .room = room, .world = World(10), .blocks = {{1, 9}}})));
-	const auto onlySnapshot = Store(folder / "other", 3).LoadNewest();
+	const auto onlySnapshot = Store(_folder / "other", 3).LoadNewest();
 	ASSERT_TRUE(onlySnapshot.has_value());
 	EXPECT_EQ(onlySnapshot->blocks, (BlockSequences {{1, 9}}));
 }
 
 TEST_F(SnapshotStoreTest, ASlotWithANewSessionAfterItsLastBlockHasNoLastBlock)
 {
-	Store store(folder, 3);
+	Store store(_folder, 3);
 	auto room = MakeRoom();
 	ASSERT_TRUE(store.OpenJournal(10, room));
 	ASSERT_TRUE(store.Write(10, EncodeSnapshot({.turn = 10, .room = room, .world = World(10), .blocks = {}})));
@@ -570,7 +570,7 @@ TEST_F(SnapshotStoreTest, ASlotWithANewSessionAfterItsLastBlockHasNoLastBlock)
 	ASSERT_FALSE(room.seats.empty());
 	room.seats[0].session = FixedHash(9);
 	store.AddRoom(room);
-	const auto restored = Store(folder, 3).LoadNewest();
+	const auto restored = Store(_folder, 3).LoadNewest();
 	ASSERT_TRUE(restored.has_value());
 	EXPECT_EQ(restored->blocks, (BlockSequences {{1, 2}}));
 }
@@ -678,7 +678,7 @@ TEST_F(SnapshotStoreTest, TheFilesOfTheEditorComeFromTheSnapshotAndThenFromTheJo
 	const EditorFile first {.kind = EditorFileKind::Mind, .bytes = {1}};
 	const EditorFile second {.kind = EditorFileKind::ScriptProgram, .bytes = {2, 2}};
 	const EditorFile third {.kind = EditorFileKind::LandScript, .bytes = {3, 3, 3}};
-	Store store(folder, 3);
+	Store store(_folder, 3);
 	auto room = MakeRoom();
 	ASSERT_TRUE(store.OpenJournal(10, room));
 	ASSERT_TRUE(
@@ -691,7 +691,7 @@ TEST_F(SnapshotStoreTest, TheFilesOfTheEditorComeFromTheSnapshotAndThenFromTheJo
 	store.AddEditorFile(third);
 	store.AddTurn(12, TurnBytes(12));
 
-	const auto restored = Store(folder, 3).LoadNewest();
+	const auto restored = Store(_folder, 3).LoadNewest();
 	ASSERT_TRUE(restored.has_value());
 	EXPECT_EQ(restored->editorFiles, (std::vector<EditorFile> {first, second, third}));
 	EXPECT_TRUE(restored->snapshot.editorFiles.empty());
@@ -707,7 +707,7 @@ TEST_F(SnapshotStoreTest, ATornNewestSnapshotStillGivesEveryFileOfTheEditor)
 	const EditorFile middle {.kind = EditorFileKind::ScriptSource, .bytes = {2}};
 	const EditorFile late {.kind = EditorFileKind::Mind, .bytes = {3}};
 	const auto room = MakeRoom();
-	Store store(folder, 3);
+	Store store(_folder, 3);
 	ASSERT_TRUE(store.OpenJournal(1, room));
 	ASSERT_TRUE(
 	    store.Write(1, EncodeSnapshot({.turn = 1, .room = room, .world = World(1), .blocks = {}, .editorFiles = {early}})));
@@ -718,12 +718,12 @@ TEST_F(SnapshotStoreTest, ATornNewestSnapshotStillGivesEveryFileOfTheEditor)
 	    2, EncodeSnapshot({.turn = 2, .room = room, .world = World(2), .blocks = {}, .editorFiles = {early, middle}})));
 	store.AddEditorFile(late);
 	store.AddTurn(2, TurnBytes(2));
-	const auto newest = folder / SnapshotFileName(2);
+	const auto newest = _folder / SnapshotFileName(2);
 	auto bytes = ReadAll(newest);
 	bytes.resize(bytes.size() / 2);
 	WriteAll(newest, bytes);
 
-	const auto restored = Store(folder, 3).LoadNewest();
+	const auto restored = Store(_folder, 3).LoadNewest();
 	ASSERT_TRUE(restored.has_value());
 	EXPECT_EQ(restored->snapshot.turn, 1u);
 	EXPECT_EQ(restored->editorFiles, (std::vector<EditorFile> {early, middle, late}));

@@ -147,8 +147,9 @@ protected:
 	{
 		auto file = psys::ParticleFile::Parse(text);
 		EXPECT_TRUE(file.has_value());
-		auto effect = std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
-		                                       EffectServices {classes, world, random, noise}, glm::vec3(0.0f), 1.0f, false);
+		auto effect =
+		    std::make_unique<Effect>(std::make_shared<const psys::ParticleFile>(std::move(*file)),
+		                             EffectServices {_classes, _world, _random, _noise}, glm::vec3(0.0f), 1.0f, false);
 		effect->SetPlayer(0);
 		return effect;
 	}
@@ -181,10 +182,10 @@ protected:
 		return walk.joints;
 	}
 
-	ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
-	FakeWorld world;
-	FakeRandom random;
-	maths::ValueNoise noise;
+	ParticleClassRegistry _classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld _world;
+	FakeRandom _random;
+	maths::ValueNoise _noise;
 };
 } // namespace
 
@@ -192,12 +193,12 @@ TEST_F(GestureEffects, ATrailIsHeardAndItsParticlesFlowToTheShape)
 {
 	auto effect = Make(GestureFile());
 	effect->Step(0.1f);
-	EXPECT_TRUE(world.sounds.empty());
-	world.waiting = ATrail();
+	EXPECT_TRUE(_world.sounds.empty());
+	_world.waiting = ATrail();
 	effect->Step(0.1f);
-	EXPECT_EQ(world.sounds, std::vector<uint32_t> {36});
-	ASSERT_EQ(world.sheets.size(), 1u);
-	EXPECT_FALSE(world.sheets.front().expired());
+	EXPECT_EQ(_world.sounds, std::vector<uint32_t> {36});
+	ASSERT_EQ(_world.sheets.size(), 1u);
+	EXPECT_FALSE(_world.sheets.front().expired());
 	// Nothing shows until the trail starts to grow
 	EXPECT_TRUE(Sprites(*effect).empty());
 	for (int step = 0; step < 7; ++step)
@@ -214,7 +215,7 @@ TEST_F(GestureEffects, ATrailIsHeardAndItsParticlesFlowToTheShape)
 		// On the arc, a little above it as the camera is above, wiggling across its box by a tenth of its size
 		EXPECT_LE(glm::distance(glm::vec2(sprite.position.x, sprite.position.z), glm::vec2(20.0f, 0.0f)), 26.0f);
 	}
-	EXPECT_EQ(world.glow, 0xDEADu);
+	EXPECT_EQ(_world.glow, 0xDEADu);
 }
 
 TEST_F(GestureEffects, AnotherPlayersTrailIsHeardAtTheirHandAndNotAtTheListener)
@@ -222,41 +223,41 @@ TEST_F(GestureEffects, AnotherPlayersTrailIsHeardAtTheirHandAndNotAtTheListener)
 	auto effect = Make(GestureFile());
 	auto trail = ATrail();
 	trail->heardAt = glm::vec3 {300.0f, 12.0f, 400.0f};
-	world.waiting = trail;
+	_world.waiting = trail;
 	effect->Step(0.1f);
-	EXPECT_TRUE(world.sounds.empty());
-	ASSERT_EQ(world.pointSounds.size(), 1u);
-	EXPECT_EQ(world.pointSounds.front().first, 36u);
-	EXPECT_EQ(world.pointSounds.front().second, glm::vec3(300.0f, 12.0f, 400.0f));
+	EXPECT_TRUE(_world.sounds.empty());
+	ASSERT_EQ(_world.pointSounds.size(), 1u);
+	EXPECT_EQ(_world.pointSounds.front().first, 36u);
+	EXPECT_EQ(_world.pointSounds.front().second, glm::vec3(300.0f, 12.0f, 400.0f));
 	// The trail of this computer's player is heard with no position
-	world.waiting = ATrail();
+	_world.waiting = ATrail();
 	effect->Step(0.1f);
-	EXPECT_EQ(world.sounds, std::vector<uint32_t> {36});
-	EXPECT_EQ(world.pointSounds.size(), 1u);
+	EXPECT_EQ(_world.sounds, std::vector<uint32_t> {36});
+	EXPECT_EQ(_world.pointSounds.size(), 1u);
 }
 
 TEST_F(GestureEffects, TheHandGlowsAsTheTrailFlashesAndTheTrailGoes)
 {
 	auto effect = Make(GestureFile());
-	world.waiting = ATrail();
+	_world.waiting = ATrail();
 	effect->Step(0.1f);
 	// 2.5 seconds in, the hand glows almost the player's whole colour
 	for (int step = 0; step < 25; ++step)
 	{
 		effect->Step(0.1f);
 	}
-	EXPECT_NE(world.glow, 0xDEADu);
-	EXPECT_GT(world.glow & 0xFFu, 0x80u);
+	EXPECT_NE(_world.glow, 0xDEADu);
+	EXPECT_GT(_world.glow & 0xFFu, 0x80u);
 	for (int step = 0; step < 6; ++step)
 	{
 		effect->Step(0.1f);
 	}
-	EXPECT_EQ(world.glow, 0u);
+	EXPECT_EQ(_world.glow, 0u);
 	for (int step = 0; step < 50; ++step)
 	{
 		effect->Step(0.1f);
 	}
-	EXPECT_TRUE(world.sheets.front().expired());
+	EXPECT_TRUE(_world.sheets.front().expired());
 	EXPECT_EQ(effect->AtomCount(), 0u);
 	EXPECT_FALSE(effect->Finished());
 }
@@ -266,14 +267,14 @@ TEST_F(GestureEffects, TheTrailOfAnotherPlayerDoesNotMakeTheHandGlow)
 	auto effect = Make(GestureFile());
 	auto trail = ATrail();
 	trail->heardAt = glm::vec3 {300.0f, 12.0f, 400.0f};
-	world.waiting = trail;
+	_world.waiting = trail;
 	effect->Step(0.1f);
 	// Through the flash and to the end of the trail, the hand of this computer keeps its own light
 	for (int step = 0; step < 90; ++step)
 	{
 		effect->Step(0.1f);
 	}
-	EXPECT_EQ(world.glow, 0xDEADu);
+	EXPECT_EQ(_world.glow, 0xDEADu);
 	EXPECT_EQ(effect->AtomCount(), 0u);
 }
 

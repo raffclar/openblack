@@ -77,24 +77,24 @@ protected:
 	void SetUp() override
 	{
 		Locator::entitiesRegistry::emplace<Registry>();
-		creature = Locator::entitiesRegistry::value().Create();
-		Locator::entitiesRegistry::value().Assign<CreatureAnimation>(creature);
+		_creature = Locator::entitiesRegistry::value().Create();
+		Locator::entitiesRegistry::value().Assign<CreatureAnimation>(_creature);
 	}
 	void TearDown() override { Locator::entitiesRegistry::reset(); }
 
 	void Give(CreatureObjectAction action)
 	{
-		Locator::entitiesRegistry::value().AssignOrReplace<CreatureObjectAction>(creature, action);
+		Locator::entitiesRegistry::value().AssignOrReplace<CreatureObjectAction>(_creature, action);
 	}
 	[[nodiscard]] Activity Now() const
 	{
-		return creature_body_busy::ActivityOf(Locator::entitiesRegistry::value(), creature, &legs, &hands);
+		return creature_body_busy::ActivityOf(Locator::entitiesRegistry::value(), _creature, &_legs, &_hands);
 	}
 	[[nodiscard]] bool Busy() const { return creature_body::PerformsBodyAction(Now()); }
 
-	Legs legs;
-	CreatureObjectActionSystem hands;
-	entt::entity creature {entt::null};
+	Legs _legs;
+	CreatureObjectActionSystem _hands;
+	entt::entity _creature {entt::null};
 };
 } // namespace
 
@@ -146,7 +146,7 @@ TEST_F(CreatureBodyBusyTest, AStandingCreatureIsFree)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureBodyBusyTest, AnActionOfTheBodyMakesItBusy)
 {
-	auto& animation = Locator::entitiesRegistry::value().Get<CreatureAnimation>(creature);
+	auto& animation = Locator::entitiesRegistry::value().Get<CreatureAnimation>(_creature);
 	animation.body = *creature_layers::PlaySequence(animation.body, 1, 2, 3);
 	EXPECT_TRUE(Now().bodyPlays);
 	EXPECT_TRUE(Busy());
@@ -156,7 +156,7 @@ TEST_F(CreatureBodyBusyTest, AnActionOfTheBodyMakesItBusy)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(CreatureBodyBusyTest, AMoveMakesItBusy)
 {
-	legs.moving = true;
+	_legs.moving = true;
 	EXPECT_TRUE(Busy());
 	EXPECT_FALSE(creature_body::ActsBesidesMoving(Now()));
 }
@@ -180,8 +180,8 @@ TEST_F(CreatureBodyBusyTest, EachActionOnAThingThatPlaysMakesItBusy)
 TEST_F(CreatureBodyBusyTest, APointThatHoldsItsArmMakesItBusy)
 {
 	Give({.kind = Kind::Point, .phase = Phase::Playing, .status = Status::Running});
-	EXPECT_FALSE(hands.PlaysOnAlone(creature));
-	EXPECT_TRUE(hands.BodyActs(creature));
+	EXPECT_FALSE(_hands.PlaysOnAlone(_creature));
+	EXPECT_TRUE(_hands.BodyActs(_creature));
 }
 
 // A turn on the spot to reach a thing is a part of the pick-up: the body is busy from the turn until the reach ends
@@ -209,8 +209,8 @@ TEST_F(CreatureBodyBusyTest, AnActionThatEndedLeavesTheBodyFree)
 TEST_F(CreatureBodyBusyTest, NoPartsMeanAFreeBody)
 {
 	Give({.kind = Kind::Eat, .phase = Phase::Playing, .status = Status::Running});
-	legs.moving = true;
-	Locator::entitiesRegistry::value().Remove<CreatureAnimation>(creature);
+	_legs.moving = true;
+	Locator::entitiesRegistry::value().Remove<CreatureAnimation>(_creature);
 	EXPECT_FALSE(creature_body::PerformsBodyAction(
-	    creature_body_busy::ActivityOf(Locator::entitiesRegistry::value(), creature, nullptr, nullptr)));
+	    creature_body_busy::ActivityOf(Locator::entitiesRegistry::value(), _creature, nullptr, nullptr)));
 }

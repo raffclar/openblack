@@ -15,10 +15,10 @@
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(GameInitialize, initializeOnly)
 {
-	static const auto mockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
+	static const auto k_MockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
 	auto args = openblack::Arguments {
 	    .graphicsBackend = openblack::GraphicsBackend::Noop,
-	    .gamePath = mockGamePath.string(),
+	    .gamePath = k_MockGamePath.string(),
 	    .numFramesToSimulate = 0,
 	    .logFile = "stdout",
 	    .startLevel = "Land1.txt",
@@ -35,10 +35,10 @@ TEST(GameInitialize, initializeOnly)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(GameInitialize, run0Frames)
 {
-	static const auto mockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
+	static const auto k_MockGamePath = std::filesystem::path(TEST_BINARY_DIR) / "mock";
 	auto args = openblack::Arguments {
 	    .graphicsBackend = openblack::GraphicsBackend::Noop,
-	    .gamePath = mockGamePath.string(),
+	    .gamePath = k_MockGamePath.string(),
 	    .numFramesToSimulate = 0,
 	    .logFile = "stdout",
 	    .startLevel = "Land1.txt",
