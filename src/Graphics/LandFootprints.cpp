@@ -149,10 +149,13 @@ const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
 	FoundFootprint kept;
 	if (meshes.Contains(mesh))
 	{
-		kept.mesh = meshes.Handle(mesh);
-		if (kept.mesh)
+		if (const auto model = meshes.Handle(mesh); model)
 		{
-			kept.footprint = kept.mesh->GetGroundFootprint();
+			if (const auto* own = model->GetGroundFootprint(); own != nullptr)
+			{
+				kept.copy = std::make_unique<const L3DMesh::Footprint>(*own);
+				kept.footprint = kept.copy.get();
+			}
 		}
 	}
 	const auto* footprint = kept.footprint;
