@@ -421,6 +421,50 @@ TEST(GestureRequests, ACastPassesTheSizingCheckWithTheGestureThatSizesIt)
 	EXPECT_TRUE(PassesSizingCheck(GestureType::Circle, GestureType::Circle));
 }
 
+// The hand keeps the circle and the power-up gestures for the check of a cast. Only the gestures of the selection, the
+// R, the leash and the scribbles of a seed or a picker clear it. The other gestures do not change it.
+TEST(GestureRequests, TheKeptGestureIsTheLastCircleOrPowerUp)
+{
+	EXPECT_EQ(KeptAfter(Purpose::SizeCircle, GestureType::Circle, GestureType::None), GestureType::Circle);
+	EXPECT_EQ(KeptAfter(Purpose::PowerUp, GestureType::Infinity, GestureType::Circle), GestureType::Infinity);
+	for (const auto purpose : {Purpose::DropSeed, Purpose::LeashGesture, Purpose::PickLeash, Purpose::ClosePicker,
+	                           Purpose::OpenSelection, Purpose::SelectMiracle, Purpose::CloseSelection, Purpose::RepeatMiracle})
+	{
+		EXPECT_EQ(KeptAfter(purpose, GestureType::Spiral, GestureType::Circle), GestureType::None) << Name(purpose);
+	}
+	for (const auto purpose : {Purpose::ShakeOffLeash, Purpose::ShakeOffHeld, Purpose::FightSpecialMove, Purpose::FightMiracle,
+	                           Purpose::HiddenScript, Purpose::CancelCharge})
+	{
+		EXPECT_EQ(KeptAfter(purpose, GestureType::Scribble, GestureType::Circle), GestureType::Circle) << Name(purpose);
+	}
+}
+
+// The kept gesture has no time limit: a circle stays kept after any number of gestures that do not change it, and a
+// cast at a thing still passes its check with it
+TEST(GestureRequests, TheKeptGestureDoesNotGoOutOfDate)
+{
+	auto kept = KeptAfter(Purpose::SizeCircle, GestureType::Circle, GestureType::None);
+	for (int i = 0; i < 1000; ++i)
+	{
+		kept = KeptAfter(Purpose::ShakeOffHeld, GestureType::Scribble, kept);
+	}
+	EXPECT_TRUE(PassesSizingCheck(GestureType::Circle, kept));
+	// A spiral that opens the selection clears it, and the check then fails
+	kept = KeptAfter(Purpose::OpenSelection, GestureType::Spiral, kept);
+	EXPECT_FALSE(PassesSizingCheck(GestureType::Circle, kept));
+}
+
+// A cast at the land keeps the remembered circle or none before its check. A cast with a power-up asked for keeps the
+// power-up after its check. Another cast keeps what it had.
+TEST(GestureRequests, ACastChangesTheKeptGesture)
+{
+	static_assert(KeptForLandCast(true, GestureType::Circle) == GestureType::Circle);
+	static_assert(KeptForLandCast(false, GestureType::Circle) == GestureType::None);
+	static_assert(KeptAfterCast(GestureType::Circle, true, GestureType::Infinity) == GestureType::Infinity);
+	static_assert(KeptAfterCast(GestureType::Circle, false, GestureType::Infinity) == GestureType::Circle);
+	EXPECT_EQ(KeptForLandCast(false, GestureType::Circle), GestureType::None);
+}
+
 TEST(GestureRequests, OutOfInfluenceOnlyASeedBeingPoweredUpIsScribbledAway)
 {
 	HandContext context;

@@ -170,8 +170,16 @@ public:
 	/// The gesture of the power-up that the hand asked for the seed in it, none when it asked for none
 	[[nodiscard]] virtual GestureType GetAskedPowerUp() const { return GestureType::None; }
 	/// The hand casts the seed in it with a power-up asked for: the hand starts its power-ups again, so it forgets the
-	/// power-up asked for and the circle remembered
+	/// power-up asked for and the circle remembered. The hand keeps the power-up asked for as its kept gesture.
 	virtual void PoweredUpCast() {}
+	/// The gesture that the hand keeps for the check of its next cast: the last circle or power-up, none after the
+	/// gestures that clear it. It has no time limit.
+	[[nodiscard]] virtual GestureType GetKeptGesture() const { return GestureType::None; }
+	/// The hand casts the seed in it at the land. Before the check, the hand keeps the gesture of the circle that it
+	/// remembers, or none. Returns the kept gesture.
+	virtual GestureType KeepForLandCast() { return GestureType::None; }
+	/// A cast at the land passed its check: the hand forgets the circle that it remembers
+	virtual void ForgetCircle() {}
 	/// Whether the hand is drawing a gesture that the chain behind it shows: while it holds a miracle that it can power up
 	/// or a miracle that a circle sizes, or while it draws a gesture of the open miracle selection. Once a miracle did its
 	/// first turn in the hand on this land, or the selection opened once on this land, the chain follows every miracle in

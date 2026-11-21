@@ -349,13 +349,40 @@ bool gesture::ChainFollows(const std::optional<HandContext::Seed>& seed, bool se
 	return (seed->ready && !seed->cast && seed->canPowerUp) || seed->sizingGesture == GestureType::Circle || seedTurnedOnLand;
 }
 
-bool gesture::CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture)
+bool gesture::CountsPoweredUpCast(const HandContext::Seed& seed, GestureType keptGesture)
 {
 	if (!seed.ready || seed.cast || !seed.canPowerUp || seed.askedPowerUp == GestureType::None)
 	{
 		return false;
 	}
-	return PassesSizingCheck(seed.sizingGesture, lastGesture);
+	return PassesSizingCheck(seed.sizingGesture, keptGesture);
+}
+
+GestureType gesture::KeptAfter(Purpose purpose, GestureType gesture, GestureType kept)
+{
+	switch (purpose)
+	{
+	case Purpose::SizeCircle:
+	case Purpose::PowerUp:
+		return gesture;
+	case Purpose::DropSeed:
+	case Purpose::LeashGesture:
+	case Purpose::PickLeash:
+	case Purpose::ClosePicker:
+	case Purpose::OpenSelection:
+	case Purpose::SelectMiracle:
+	case Purpose::CloseSelection:
+	case Purpose::RepeatMiracle:
+		return GestureType::None;
+	case Purpose::ShakeOffLeash:
+	case Purpose::ShakeOffHeld:
+	case Purpose::FightSpecialMove:
+	case Purpose::FightMiracle:
+	case Purpose::HiddenScript:
+	case Purpose::CancelCharge:
+		return kept;
+	}
+	return kept;
 }
 
 std::array<GestureType, 3> gesture::OfferedPowerUps(const std::array<GestureType, 3>& gestures,
