@@ -176,7 +176,7 @@ struct FoodInterestInputs
 	/// Its town's food desire, and the desire at which a town's food desire moves its people; none without a town
 	std::optional<float> townFoodDesire;
 	float townTrigger {0.0f};
-	/// A value that the game adds to every villager's interest. Nothing in the game sets it, so it is always 0.
+	/// A value that the game adds to the interest of each villager. It is 0 unless the land's script sets it.
 	float interactDesire {0.0f};
 };
 /// Whether it is interested in the food: never in food in a hand or in the physics; else its own want of food, its room

@@ -32,6 +32,9 @@ struct MapScriptGlobals
 	/// How much of a town's boredom with each kind of reaction wears off at each of its turns, 1 unless the land's script
 	/// sets it
 	float lostTownScale {1.0f};
+	/// A value that the game adds to the interest of each villager in the food and the wood that it sees. It is 0
+	/// unless the land's script sets it.
+	float interactDesire {0.0f};
 	/// The object the land's script made last, which the script can make an artefact
 	entt::entity lastObject {entt::null};
 };
