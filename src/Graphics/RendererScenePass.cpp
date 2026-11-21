@@ -231,6 +231,9 @@ struct Renderer::EntityPose
 	bool bonePalette {false};
 	/// The body draws with the first environment map added over every part
 	bool environmentMapped {false};
+	/// Where a creature's bones start in the texture of the posed bones. A body without it uploads its bones with each
+	/// draw.
+	std::optional<uint32_t> firstBone {};
 };
 
 // A thing that the game mirrors in the sea by itself is drawn in one flat colour with a colour added, and with no
@@ -838,7 +841,6 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 		// A copy with a shape of its own is drawn with that shape
 		const auto* morph = copy && posers.Valid(poser) ? ecs::components::ShapeOfCopy(posers, poser, desc.entities)
 		                                                : desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
-		const auto* animation = posers.Valid(poser) ? posers.TryGet<const ecs::components::CreatureAnimation>(poser) : nullptr;
 		if (mesh == nullptr || !meshManager.Contains(mesh->id) || !posers.Valid(poser))
 		{
 			continue;
@@ -849,7 +851,6 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 		{
 			continue;
 		}
-		const auto bodyMesh = meshManager.Handle(mesh->id);
 		std::optional<L3DMeshSubmitDesc::MorphTargets> targets;
 		if (creature != nullptr && morph != nullptr)
 		{
@@ -873,14 +874,13 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 				targets->skins = skins->second.drawn;
 			}
 		}
-		const bool posed = animation != nullptr && animation->boneMatrices.size() == bodyMesh->GetBoneMatrices().size();
 		// The environment map belongs to the creature's own body: a copy drawn elsewhere has its own body, without it
 		const uint32_t environmentWord = creature != nullptr && !copy ? creature->environmentMap : 0;
 		const EntityPose pose {
-		    .bones = posed ? std::span<const glm::mat4>(animation->boneMatrices)
-		                   : std::span<const glm::mat4>(bodyMesh->GetBoneMatrices()),
+		    .bones = drawn.bones,
 		    .morphTargets = targets ? &*targets : nullptr,
 		    .environmentMapped = creature_environment_map::DrawnWithMap(environmentWord),
+		    .firstBone = drawn.firstBone,
 		};
 		if (pose.bones.empty())
 		{
@@ -979,27 +979,27 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 	// interface's own camera, in a view of their own
 	if (desc.viewId == RenderPass::Main && _interfaceCreatures.has_value())
 	{
-		DrawInterfaceCreatures(desc,
-		                       [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
-		                           const L3DMeshSubmitDesc::MorphTargets* targets, const ecs::components::CreatureEyes* eyes) {
-			                       const auto placers = renderCtx.instancedDrawDescs.find(meshId);
-			                       if (placers == renderCtx.instancedDrawDescs.end())
-			                       {
-				                       return;
-			                       }
-			                       const EntityPose pose {.bones = bones, .morphTargets = targets};
-			                       submitDesc.viewId = RenderPass::InterfaceCreatures;
-			                       // The body takes the posed models' light, as in the world
-			                       submitDesc.posedModelLight = true;
-			                       drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose,
-			                                     nullptr, _interfaceCreatureInstances);
-			                       submitDesc.posedModelLight = false;
-			                       if (eyes != nullptr)
-			                       {
-				                       DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
-			                       }
-			                       submitDesc.viewId = desc.viewId;
-		                       });
+		DrawInterfaceCreatures(desc, [&](entt::id_type meshId, uint32_t instance, std::span<const glm::mat4> bones,
+		                                 const L3DMeshSubmitDesc::MorphTargets* targets,
+		                                 const ecs::components::CreatureEyes* eyes) {
+			const auto placers = renderCtx.instancedDrawDescs.find(meshId);
+			if (placers == renderCtx.instancedDrawDescs.end())
+			{
+				return;
+			}
+			const EntityPose pose {.bones = bones, .morphTargets = targets, .firstBone = FirstBoneOf(bones)};
+			submitDesc.viewId = RenderPass::InterfaceCreatures;
+			// The body takes the posed models' light, as in the world
+			submitDesc.posedModelLight = true;
+			drawInstances(meshId, placers->second, placers->second.materialBlending, instance, 1, &pose, nullptr,
+			              _interfaceCreatureInstances);
+			submitDesc.posedModelLight = false;
+			if (eyes != nullptr)
+			{
+				DrawCreatureEyes(desc, *eyes, submitDesc, 0.0f, 0.0f, 0);
+			}
+			submitDesc.viewId = desc.viewId;
+		});
 	}
 	// The creature that the main menu's tattoo editor shows, in the editor's view of its own. Its mesh can be a
 	// mesh that the scene does not have, so it has an instance of its own.
@@ -1046,7 +1046,8 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 			    .skins = {},
 			    .blendSeams = Locator::config::value().blendCreatureSeams,
 			};
-			const EntityPose pose {.bones = body->GetBoneMatrices(), .morphTargets = &targets};
+			// The bones are those that the texture has first. The body covers no pixel, thus any bones do.
+			const EntityPose pose {.bones = body->GetBoneMatrices(), .morphTargets = &targets, .firstBone = 0};
 			if (pose.bones.empty())
 			{
 				continue;
@@ -1671,6 +1672,8 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 	const auto* objectShaderMorphInstanced = _shaderManager->GetShader("ObjectMorphInstanced");
 	const auto* objectShaderMorphEnvironmentInstanced = _shaderManager->GetShader("ObjectMorphEnvironmentInstanced");
 	const auto* objectShaderPosedInstanced = _shaderManager->GetShader("ObjectPosedInstanced");
+	const auto* objectShaderMorphPosedInstanced = _shaderManager->GetShader("ObjectMorphPosedInstanced");
+	const auto* objectShaderMorphEnvironmentPosedInstanced = _shaderManager->GetShader("ObjectMorphEnvironmentPosedInstanced");
 	const auto* objectShaderStaticInstanced = _shaderManager->GetShader("ObjectStaticInstanced");
 	const auto* objectShaderEnvironmentStaticInstanced = _shaderManager->GetShader("ObjectEnvironmentStaticInstanced");
 	const auto* objectShaderHeightMapInstanced = _shaderManager->GetShader("ObjectHeightMapInstanced");
@@ -1855,6 +1858,7 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 
 		sd.morphTargets = nullptr;
 		sd.bonePalette = nullptr;
+		sd.boneTexture = nullptr;
 		if (pose != nullptr)
 		{
 			sd.landLightScale = CreatureLandLightScale(desc.viewId);
@@ -1875,6 +1879,17 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 				sd.program = objectShaderMorphInstanced;
 				sd.morphTargets = pose->morphTargets;
 			}
+			// A creature's body reads its bones from the texture of the posed bones, where they start
+			if (pose->morphTargets != nullptr && pose->firstBone.has_value() && _posedBoneTexture)
+			{
+				const static auto identity = glm::mat4(1.0f);
+				sd.modelMatrices = &identity;
+				sd.matrixCount = 1;
+				sd.program = objectShaderMorphPosedInstanced;
+				const auto size = _posedBoneTexture->GetResolution();
+				sd.boneTexture = _posedBoneTexture.get();
+				sd.bones = {static_cast<float>(*pose->firstBone), 0.0f, static_cast<float>(size.x), static_cast<float>(size.y)};
+			}
 		}
 		// The hand pulled towards its evil or good mesh, keeping its own light
 		if (handMorph != nullptr)
@@ -1883,16 +1898,15 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 			sd.morphTargets = handMorph;
 		}
 		// The animals of a model all at once, each posed by its own bones from the texture
-		sd.boneTexture = nullptr;
-		if (posedGroup != nullptr && _animalBoneTexture)
+		if (posedGroup != nullptr && _posedBoneTexture)
 		{
 			sd.landLightScale = CreatureLandLightScale(desc.viewId);
 			sd.program = objectShaderPosedInstanced;
 			const static auto identity = glm::mat4(1.0f);
 			sd.modelMatrices = &identity;
 			sd.matrixCount = 1;
-			const auto size = _animalBoneTexture->GetResolution();
-			sd.boneTexture = _animalBoneTexture.get();
+			const auto size = _posedBoneTexture->GetResolution();
+			sd.boneTexture = _posedBoneTexture.get();
 			sd.bones = {static_cast<float>(posedGroup->firstMatrix), static_cast<float>(posedGroup->bones),
 			            static_cast<float>(size.x), static_cast<float>(size.y)};
 		}
@@ -1919,9 +1933,10 @@ void Renderer::DrawPassEntities(const DrawSceneDesc& desc, const ScenePass& pass
 		// A creature's body with the environment map takes it on every part, added over the lit texture. The sea
 		// mirrors the body without it.
 		if (pose != nullptr && pose->environmentMapped && environmentMap != nullptr && !reflected &&
-		    sd.program == objectShaderMorphInstanced)
+		    (sd.program == objectShaderMorphInstanced || sd.program == objectShaderMorphPosedInstanced))
 		{
-			sd.program = objectShaderMorphEnvironmentInstanced;
+			sd.program = sd.program == objectShaderMorphPosedInstanced ? objectShaderMorphEnvironmentPosedInstanced
+			                                                           : objectShaderMorphEnvironmentInstanced;
 			sd.environment = environmentMap;
 			sd.environmentStageForAll = material_stages::k_CreatureBodyStage;
 		}

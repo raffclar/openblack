@@ -27,7 +27,6 @@
 #include <vector>
 
 #include <bgfx/bgfx.h>
-#include <glm/gtx/norm.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/ChimneySmoke.h"
@@ -59,6 +58,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandMorph.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/PlayerCreatures.h"
 #include "ECS/Components/Transform.h"
@@ -884,41 +884,30 @@ void Renderer::SelectDrawnCreatures(const DrawSceneDesc& drawDesc) const
 		_drawnCreatures.push_back(
 		    {.entity = copy.creature, .instance = copy.instance, .posedBy = copy.copy, .light = copy.light});
 	}
-	const auto cap = MaxCreaturesDrawn();
-	if (_drawnCreatures.size() <= cap || drawDesc.camera == nullptr)
+	// Each creature takes the bones of its pose. A creature without a pose, or with a pose for another mesh, takes the
+	// bones of its mesh.
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	for (auto& drawn : _drawnCreatures)
 	{
-		return;
+		const bool copy = drawn.posedBy != entt::null;
+		const auto poser = copy ? drawn.posedBy : drawn.entity;
+		const auto& posers = copy && Locator::temple::has_value() ? Locator::temple::value().GetRooms() : drawDesc.entities;
+		const auto* mesh = drawDesc.entities.TryGet<const ecs::components::Mesh>(drawn.entity);
+		if (mesh == nullptr || !meshes.Contains(mesh->id) || !posers.Valid(poser))
+		{
+			continue;
+		}
+		const auto& rest = meshes.Handle(mesh->id)->GetBoneMatrices();
+		const auto* animation = posers.TryGet<const ecs::components::CreatureAnimation>(poser);
+		const bool posed = animation != nullptr && animation->boneMatrices.size() == rest.size();
+		drawn.bones = posed ? std::span<const glm::mat4>(animation->boneMatrices) : std::span<const glm::mat4>(rest);
 	}
-	if (!_warnedCreatureCap)
-	{
-		_warnedCreatureCap = true;
-		SPDLOG_LOGGER_WARN(spdlog::get("graphics"),
-		                   "{} creatures to draw, more than the renderer can upload the bones of each frame: only the {} "
-		                   "nearest the camera are drawn",
-		                   _drawnCreatures.size(), cap);
-	}
-	const auto camera = drawDesc.camera->GetOrigin();
-	const auto distance = [&drawDesc, camera](const DrawnCreature& draw) {
-		const auto* transform = drawDesc.entities.TryGet<const ecs::components::Transform>(draw.entity);
-		return transform != nullptr ? glm::distance2(transform->position, camera) : std::numeric_limits<float>::max();
-	};
-	std::ranges::nth_element(_drawnCreatures, _drawnCreatures.begin() + static_cast<std::ptrdiff_t>(cap), std::less {},
-	                         distance);
-	_drawnCreatures.resize(cap);
 }
 
-size_t Renderer::MaxCreaturesDrawn()
+std::optional<uint32_t> Renderer::FirstBoneOf(std::span<const glm::mat4> bones) const
 {
-	// Each creature's body is drawn a submesh at a time in several passes, with every bone's matrix uploaded with each
-	// draw, and the backends set aside a fixed amount of memory for each frame's uploads. Past this many creatures it
-	// would overflow, which the backends don't survive. Holding the bones in a buffer of their own would lift this.
-	switch (bgfx::getRendererType())
-	{
-	case bgfx::RendererType::Vulkan:
-		return k_MaxCreaturesDrawnVulkan;
-	case bgfx::RendererType::Direct3D12:
-		return k_MaxCreaturesDrawnDirect3D12;
-	default:
-		return std::numeric_limits<size_t>::max();
-	}
+	const auto found = std::ranges::find_if(_drawnCreatures, [bones](const DrawnCreature& drawn) {
+		return drawn.firstBone.has_value() && drawn.bones.data() == bones.data() && drawn.bones.size() == bones.size();
+	});
+	return found != _drawnCreatures.end() ? found->firstBone : std::nullopt;
 }
