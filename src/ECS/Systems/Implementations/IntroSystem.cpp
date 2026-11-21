@@ -379,9 +379,6 @@ void IntroSystem::Update(uint32_t milliseconds)
 		return;
 	}
 	DoHandRequests();
-	// Those following the hand are drawn where it held them as the last frame left it
-	UpdateGrip();
-	PlaceFollowers();
 	_lightDrawn = false;
 	const auto stepLight = [this, milliseconds]() {
 		if (!_light.has_value())
@@ -462,6 +459,10 @@ void IntroSystem::Update(uint32_t milliseconds)
 		break;
 	}
 	PoseHand();
+	// The grip comes from the pose that the hand has in this frame. Thus the boy stays in the fingers of the drawn hand,
+	// also when the hand moves fast.
+	UpdateGrip();
+	PlaceFollowers();
 }
 
 std::optional<IntroSystemInterface::CameraView> IntroSystem::GetCameraView() const
