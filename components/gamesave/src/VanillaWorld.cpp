@@ -1852,7 +1852,7 @@ std::optional<VanillaWorld> ReadVanillaRecords(std::span<const uint8_t> bytes, S
 	{
 		if (error != nullptr)
 		{
-			*error = reader.Error()->reason;
+			*error = reader.Error().value().reason;
 		}
 		return std::nullopt;
 	}

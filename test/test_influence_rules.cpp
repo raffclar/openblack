@@ -53,6 +53,7 @@ constexpr std::array k_Players {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO
 PlayerNames MostOf(const std::array<float, 4>& influence)
 {
 	std::vector<influence_rules::PlayerInfluenceAt> players;
+	players.reserve(k_Players.size());
 	for (const auto player : k_Players)
 	{
 		players.push_back({.player = player, .influence = influence.at(static_cast<size_t>(player))});

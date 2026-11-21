@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 #include <cstdint>
@@ -74,7 +74,6 @@ using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using openblack::creature::CreatureRig;
 namespace fight = openblack::creature_fight;
-namespace posed_model = openblack::ecs::posed_model;
 using namespace openblack::ecs::systems::fight_detail;
 
 namespace

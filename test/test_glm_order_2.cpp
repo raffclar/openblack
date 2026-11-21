@@ -35,7 +35,6 @@
 #include "Physics/ObjectRules.h"
 
 namespace x87 = openblack::x87;
-using x87::SumOrder;
 
 namespace
 {

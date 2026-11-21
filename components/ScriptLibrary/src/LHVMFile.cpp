@@ -744,7 +744,7 @@ int LHVMFile::LoadVariableValues(std::istream& stream, std::vector<VMVar>& varia
 			}
 		} while (*(cur - 1) != '\0');
 
-		variables.emplace_back(DataType(type), value, std::string(name.data()));
+		variables.emplace_back(static_cast<DataType>(type), value, std::string(name.data()));
 	}
 
 	return EXIT_SUCCESS;

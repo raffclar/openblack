@@ -449,7 +449,7 @@ TEST(CreatureMode, TemplePenTakesTheFloatProductBeforeItTruncates)
 	// The float product rounds up to the next whole unit, which the exact product does not reach. The game keeps the
 	// float product.
 	const auto places = FakeMarkedPlaces(16, {0.0f, 0.0f, 0.0f});
-	const float metres = std::bit_cast<float>(0x44ECFF24u);
+	const auto metres = std::bit_cast<float>(0x44ECFF24u);
 	const double exact = static_cast<double>(metres) * static_cast<double>(map_coords::k_FixedPerMetre);
 	ASSERT_LT(exact, std::floor(exact) + 1.0);
 	const auto pen = creature_mode::TemplePenOnMap({metres, 0.0f, metres}, 0.0f, 1.0f, places);
@@ -480,7 +480,7 @@ TEST(CreatureMode, TemplePenMapPositionIsAFloatProductTruncated)
 	// The product rounds to a float before the truncation: the exact product is just below 26836758, the float product
 	// is 26836758
 	const auto places = FakeMarkedPlaces(16, {0.0f, 0.0f, 0.0f});
-	const float x = std::bit_cast<float>(0x457FEF6Du);
+	const auto x = std::bit_cast<float>(0x457FEF6Du);
 	const auto pen = creature_mode::TemplePen({x, 0.0f, 0.0f}, 0.0f, 1.0f, places);
 	ASSERT_TRUE(pen.has_value());
 	EXPECT_EQ(std::bit_cast<uint32_t>(pen->x), 0x457FEF6Eu);

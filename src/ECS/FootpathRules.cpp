@@ -19,7 +19,6 @@
 namespace footpath_rules = openblack::ecs::footpath_rules;
 namespace gutils = openblack::gutils;
 namespace map_coords = openblack::map_coords;
-namespace x87 = openblack::x87;
 
 namespace
 {

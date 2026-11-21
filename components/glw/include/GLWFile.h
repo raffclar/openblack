@@ -110,7 +110,7 @@ public:
 
 	[[nodiscard]] const std::vector<Glow>& GetGlows() const noexcept { return _glows; }
 	[[nodiscard]] const Glow& GetGlow(uint32_t index) const noexcept { return _glows[index]; }
-	void AddGlow(const Glow& glow) noexcept { _glows.push_back(glow); }
+	void AddGlow(const Glow& glow) { _glows.push_back(glow); }
 };
 
 } // namespace openblack::glw

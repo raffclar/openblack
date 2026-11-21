@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "InspectorSystem.h"
 
@@ -458,7 +458,7 @@ inspector::QueryResult InspectorSystem::SendToStartupBox(const inspector::Reques
 		    key != nullptr && device.ScancodeFromName(key->name) == SDL_SCANCODE_UNKNOWN)
 		{
 			return inspector::QueryResult::Error("no key " + key->name +
-			                                     "; keys go by SDL's names, as \"Return\", \"Backspace\" or \"A\"");
+			                                     R"(; keys go by SDL's names, as "Return", "Backspace" or "A")");
 		}
 	}
 	// The SDL event queue takes events from any thread. The box reads them in its own loop.

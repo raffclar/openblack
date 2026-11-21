@@ -197,6 +197,7 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 {
 	Random random(StageSeed(seed, 1));
 	std::vector<Range> ranges;
+	ranges.reserve(settings.ranges);
 	for (int i = 0; i < settings.ranges; ++i)
 	{
 		ranges.push_back({
@@ -213,7 +214,7 @@ Grid<float> terrain::BaseHeights(int side, uint64_t seed, const BaseSettings& se
 	const auto crests = StageSeed(seed, 6);
 
 	Grid<float> heights(side, 0.0f);
-	const float last = static_cast<float>(side - 1);
+	const auto last = static_cast<float>(side - 1);
 	const float margin = static_cast<float>(std::max(settings.seaMargin, 1));
 	for (int x = 0; x < side; ++x)
 	{
@@ -319,7 +320,7 @@ void terrain::ErodeHydraulic(Grid<float>& heights, uint64_t seed, const Hydrauli
 	}
 	const float sea = k_SeaLevel * settings.heightScale;
 	const auto brush = MakeBrush(settings.radius);
-	const float limit = static_cast<float>(heights.side - 1);
+	const auto limit = static_cast<float>(heights.side - 1);
 
 	Random random(StageSeed(seed, 10));
 	for (int drop = 0; drop < settings.drops; ++drop)
@@ -761,7 +762,7 @@ std::vector<terrain::Peak> terrain::PlaceMassifs(const Grid<float>& heights, uin
 	{
 		return peaks;
 	}
-	const float last = static_cast<float>(side - 1);
+	const auto last = static_cast<float>(side - 1);
 	Grid<uint8_t> sea(side, 0);
 	for (size_t i = 0; i < heights.values.size(); ++i)
 	{

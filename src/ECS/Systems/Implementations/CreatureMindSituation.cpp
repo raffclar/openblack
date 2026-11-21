@@ -9,7 +9,7 @@
 
 // What the actions of a plan know about the world when they start: the places, the player and the home of the creature
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 
@@ -188,9 +188,6 @@ using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems::mind_detail;
-using creature_desires::Desire;
-using creature_mind_model::TreeKind;
-using creature_plan_actions::Target;
 
 namespace
 {

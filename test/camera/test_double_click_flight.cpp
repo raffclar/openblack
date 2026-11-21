@@ -296,7 +296,7 @@ TEST(CreatureFollowFence, TheFollowCameraStopsAtTheFenceAndGivesTheCameraBack)
 {
 	using namespace std::chrono_literals;
 	Locator::cameraZoneSystem::emplace<SquareFence>();
-	Camera camera;
+	const Camera camera;
 	// A creature just inside the fence's west side, the camera looking at it from outside, to the west
 	const glm::vec3 creature {1010.0f, 0.0f, 1500.0f};
 	CreatureCameraModel outside({940.0f, 30.0f, 1500.0f}, creature, creature, 10.0f);

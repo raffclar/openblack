@@ -39,7 +39,7 @@ openblack::ecs::archetypes::GetFixedObstacleBoundingCircle(entt::id_type meshId,
 	}
 	const auto& bb = meshes.Handle(meshId)->GetBoundingBox();
 	const auto bbSize = glm::max(glm::vec2(1.0f, 1.0f), glm::xz(bb.Size() * 0.5f * transform.scale));
-	glm::mat4 modelMatrix = glm::mat4(1.0f);
+	auto modelMatrix = glm::mat4(1.0f);
 	modelMatrix = glm::translate(modelMatrix, transform.position);
 	modelMatrix *= glm::mat4(transform.rotation);
 	modelMatrix = glm::scale(modelMatrix, transform.scale);

@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "FireSystem.h"
 
@@ -106,7 +106,6 @@ using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace world_objects = openblack::ecs::world_objects;
 namespace worship_site = openblack::ecs::worship_site;
-namespace temple_heart_pass_on = openblack::ecs::temple_heart_pass_on;
 
 namespace
 {

@@ -55,7 +55,7 @@ public:
 		uint8_t holeThreshold;
 	};
 
-	virtual ~VortexSystemInterface() = default;
+	~VortexSystemInterface() override = default;
 
 	/// How a thing a vortex starts to draw in starts: where it stands, turned, the velocity it is taken with and whether
 	/// it can't be destroyed

@@ -77,7 +77,7 @@ public:
 		for (size_t i = 0; i < collection.atoms.size();)
 		{
 			auto& atom = *collection.atoms[i];
-			const auto found = atom.data.find(this);
+			auto* const found = atom.data.find(this);
 			const auto object = found != atom.data.end() ? found->second.object : entt::null;
 			// An atom whose object has gone goes with it
 			if (object == entt::null || !world.ObjectPosition(object).has_value())

@@ -296,12 +296,14 @@ std::optional<Obstacles::Hit> Obstacles::FirstInWay(glm::vec2 from, glm::vec2& t
 			}
 			const auto offset = obstacle.circle.centre - from;
 			const auto along = glm::dot(offset, direction);
+			// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 			if (!(along > 0.0f && along < length + obstacle.circle.radius))
 			{
 				continue;
 			}
 			const auto across = Cross(direction, offset);
 			const auto reach = obstacle.circle.radius - k_GrazeMargin;
+			// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 			if (!(-reach < across && across < reach))
 			{
 				continue;
@@ -870,10 +872,10 @@ void Search::Improve(Obstacles& obstacles, size_t index, int32_t depth)
 
 	for (int32_t retry = 0;; ++retry)
 	{
-		Start start {.point = legs[arcIndex].to,
-		             .circle = legs[arcIndex - 1].heading,
-		             .second = legs[arcIndex].heading,
-		             .way = legs[arcIndex - 1].way};
+		const Start start {.point = legs[arcIndex].to,
+		                   .circle = legs[arcIndex - 1].heading,
+		                   .second = legs[arcIndex].heading,
+		                   .way = legs[arcIndex - 1].way};
 		Goal goal {};
 		if (!legs[candidate].arc)
 		{
@@ -999,7 +1001,7 @@ void Search::Splice(Obstacles& obstacles, Route& route, size_t candidate, const 
 			heading = back[i - 2].heading;
 			way = Opposite(back[i - 2].way);
 		}
-		Leg reversed {.from = leg.to, .to = leg.from, .arc = leg.arc, .heading = heading, .way = way};
+		const Leg reversed {.from = leg.to, .to = leg.from, .arc = leg.arc, .heading = heading, .way = way};
 		if (joined.empty())
 		{
 			addFirst(reversed);

@@ -10,7 +10,7 @@
 // What the gesture effects ask of the world: the trails of recognised gestures, the sheets of light along them, the
 // hand's glow as they flash, and the chain behind the gesturing hand stepped every frame
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdint>
 

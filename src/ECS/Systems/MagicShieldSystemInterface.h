@@ -45,7 +45,7 @@ namespace openblack::ecs::systems
 class MagicShieldSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~MagicShieldSystemInterface() = default;
+	~MagicShieldSystemInterface() override = default;
 
 	/// Once a game turn, after the miracles: new shields are raised, the domes grow, spin, bob and fade, the people react
 	virtual void ProcessTurn() = 0;

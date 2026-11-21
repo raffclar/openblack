@@ -149,6 +149,7 @@ public:
 TEST(InspectorPhysics, BodyByEntityAndBodiesNearAPoint)
 {
 	std::vector<BodyInfo> bodies;
+	bodies.reserve(4);
 	for (int i = 0; i < 4; ++i)
 	{
 		bodies.push_back({.entity = static_cast<entt::entity>(10 + i),
@@ -511,7 +512,7 @@ TEST(InspectorParticles, EmittersByOwner)
 /// Every service the locator holds has a query that inspects it: a service added to the locator without one fails here
 TEST(InspectorCoverage, EveryLocatorServiceHasAQuery)
 {
-	std::ifstream header(SourceDir() + "/src/Locator.h");
+	const std::ifstream header(SourceDir() + "/src/Locator.h");
 	ASSERT_TRUE(header.good());
 	std::stringstream text;
 	text << header.rdbuf();
@@ -607,7 +608,7 @@ TEST(InspectorCoverage, TheAdaptersCatalogueOfQueriesIsUpToDate)
 	{
 		std::ofstream(path, std::ios::binary) << catalogue;
 	}
-	std::ifstream file(path, std::ios::binary);
+	const std::ifstream file(path, std::ios::binary);
 	std::stringstream written;
 	written << file.rdbuf();
 	EXPECT_EQ(written.str(), catalogue) << path << " is out of date: run this test with OPENBLACK_UPDATE_INSPECTOR_QUERIES=1";

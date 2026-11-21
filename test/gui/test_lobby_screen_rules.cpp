@@ -86,6 +86,7 @@ lobby_api::LobbySummary Summary(std::string name, std::string host, int32_t gods
 std::vector<std::string> Names(const std::vector<lobby_api::LobbySummary>& lobbies)
 {
 	std::vector<std::string> names;
+	names.reserve(lobbies.size());
 	for (const auto& lobby : lobbies)
 	{
 		names.push_back(lobby.name);
@@ -183,7 +184,7 @@ TEST(LobbyScreenRules, TheGameToRejoinIsTheFirstLinePickedWithRejoin)
 	EXPECT_EQ(ListButtonOf(&lobbies[2], "gamma"), ListButton::Rejoin);
 	EXPECT_EQ(ListButtonOf(&lobbies[3], "gamma"), ListButton::None);
 	EXPECT_EQ(ListButtonOf(&lobbies[2]), ListButton::None);
-	EXPECT_EQ(ListButtonOf(&lobbies[0], "gamma"), ListButton::Join);
+	EXPECT_EQ(ListButtonOf(lobbies.data(), "gamma"), ListButton::Join);
 	EXPECT_EQ(ListButtonOf(nullptr, "gamma"), ListButton::None);
 	EXPECT_TRUE(ShowsJoinButton(&lobbies[2], "gamma"));
 
@@ -507,7 +508,7 @@ TEST(LobbyScreenRules, AComputerSlotOfRandomAlignmentShowsItAndCanGoBackToTheVan
 {
 	auto lobby = TestLobby();
 	lobby.slotKinds = SlotKindsAfter(lobby, 4, lobby_api::SlotKind::ComputerRandom);
-	LobbyRoom host(lobby, k_Host);
+	const LobbyRoom host(lobby, k_Host);
 	const SlotTexts texts {.god = u"God %d", .host = u" (HOST)", .current = u" (CURRENT)"};
 	const auto slots = host.Slots();
 	ASSERT_EQ(slots.size(), 6u);

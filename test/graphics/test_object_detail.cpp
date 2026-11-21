@@ -210,7 +210,7 @@ TEST(ObjectDetail, TheStoresGiveTheAnswersOfTheRegistry)
 			{
 				// A thing has one shield, one animal and one importance at most
 				const bool second = kind == 18 || kind == 20 || kind == 23;
-				if (((mix >> (kind + 4u)) & 3u) == 0u && !(second && ((mix >> (kind + 3u)) & 3u) == 0u))
+				if (((mix >> (kind + 4u)) & 3u) == 0u && (!second || ((mix >> (kind + 3u)) & 3u) != 0u))
 				{
 					gives.at(kind)(registry, thing);
 				}

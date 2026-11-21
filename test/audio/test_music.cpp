@@ -9,7 +9,7 @@
 
 // LHAudioDLL's music player against a backend that plays a chunk per Advance()
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <array>
 #include <chrono>

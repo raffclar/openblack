@@ -91,7 +91,7 @@ enum class FirstGame
 }
 
 /// The folder of the challenge file when no settings file changes it. It is relative to the game's folder.
-constexpr std::string_view k_DefaultQuestFolder = ".\\Scripts\\Quests\\";
+constexpr std::string_view k_DefaultQuestFolder = R"(.\Scripts\Quests\)";
 /// The name of the challenge file. The game puts it directly after the folder text.
 constexpr std::string_view k_ChallengeFile = "Challenge.chl";
 

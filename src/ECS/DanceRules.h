@@ -88,7 +88,7 @@ void ApplyKeyFramesUpTo(components::Dance& dance, const dance::DanceFile& file, 
 /// no group does.
 std::optional<std::size_t> AddDancer(components::Dance& dance, entt::entity dancer, uint32_t danceType, uint32_t sex);
 /// A dancer leaves its group; those after it move up a place
-void RemoveDancer(components::Dance& dance, std::size_t group, entt::entity dancer);
+void RemoveDancer(components::Dance& dance, std::size_t index, entt::entity dancer);
 /// The first dancer of the first group that has one other than `exclude`
 [[nodiscard]] entt::entity FirstDancer(const components::DanceGroups& groups, entt::entity exclude);
 /// The first thing that a script gets in a dance: the first dancer of the first group. None when the first group has no

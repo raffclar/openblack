@@ -208,8 +208,10 @@ template <typename Type>
 	}
 	else if constexpr (std::is_integral_v<Type> || std::is_enum_v<Type>)
 	{
+		// NOLINTBEGIN(modernize-type-traits): The check reads the result of the alias as the trait itself.
 		using Underlying = detail::Comparable<
 		    typename std::conditional_t<std::is_enum_v<Type>, std::underlying_type<Type>, std::type_identity<Type>>::type>;
+		// NOLINTEND(modernize-type-traits)
 		if (json.is_number_unsigned())
 		{
 			const auto number = json.get<uint64_t>();

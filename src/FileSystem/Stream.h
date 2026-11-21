@@ -44,7 +44,7 @@ public:
 
 	virtual std::string GetLine() = 0;
 
-	virtual bool IsEndOfFile() const = 0;
+	[[nodiscard]] virtual bool IsEndOfFile() const = 0;
 
 	template <typename T>
 	Stream& Read(T* value)

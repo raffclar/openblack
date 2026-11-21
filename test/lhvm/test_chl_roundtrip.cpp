@@ -57,7 +57,7 @@ std::optional<std::filesystem::path> ChallengePath()
 
 std::string ReadText(const std::filesystem::path& path)
 {
-	std::ifstream stream(path, std::ios::binary);
+	const std::ifstream stream(path, std::ios::binary);
 	std::ostringstream text;
 	text << stream.rdbuf();
 	return text.str();
@@ -113,7 +113,7 @@ std::vector<std::array<uint32_t, 4>> Normalised(const LHVMFile& program, size_t 
 	const auto& scripts = program.GetScripts();
 	const auto& code = program.GetInstructions();
 	const auto start = scripts[index].instructionAddress;
-	uint32_t end = static_cast<uint32_t>(code.size());
+	auto end = static_cast<uint32_t>(code.size());
 	for (const auto& script : scripts)
 	{
 		if (script.instructionAddress > start)
@@ -170,6 +170,7 @@ double RoundTrip(const LHVMFile& original, const ConstantTable* constants, size_
 	// The program as the files it was compiled from
 	const auto decompiled = DecompileAll(view, decompileOptions);
 	std::vector<SourceFile> sources;
+	sources.reserve(decompiled.files.size());
 	for (const auto& file : decompiled.files)
 	{
 		sources.push_back({.name = file.name, .text = decompiled.FileText(file)});

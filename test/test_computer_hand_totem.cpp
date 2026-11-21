@@ -24,7 +24,7 @@ using namespace openblack::computer_hand;
 
 TEST(ComputerHandTotem, KindsOfThisPartThatAreNotMadeEndTheActionBadly)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	for (size_t kind = 0; kind < static_cast<size_t>(StepKind::_Count); ++kind)
 	{
 		const auto step = static_cast<StepKind>(kind);

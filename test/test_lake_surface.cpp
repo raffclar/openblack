@@ -135,7 +135,8 @@ TEST(LakeSurface, NoLandGivesNoWater)
 TEST(LakeSurface, LowGroundOutsideTheLakeGetsNoWater)
 {
 	// The lake has only the corner at the middle, in a cell with three corners as low as the water
-	land_lakes::Lake lake {.level = k_Level, .corners = {static_cast<uint32_t>((100 * land_lakes::k_CornersPerSide) + 100)}};
+	const land_lakes::Lake lake {.level = k_Level,
+	                             .corners = {static_cast<uint32_t>((100 * land_lakes::k_CornersPerSide) + 100)}};
 	const land_lakes::LakeMap lakes({lake});
 	const auto surface = lake_surface::Build(
 	    lakes, [](int, int) -> std::optional<float> { return k_Level - 1.0f; }, [](int, int) { return false; }, k_Reach);
@@ -151,7 +152,8 @@ TEST(LakeSurface, LowGroundOutsideTheLakeGetsNoWater)
 TEST(LakeSurface, NoWaterGoesPastTheSpill)
 {
 	// A shore corner just above the level, with the land past it far under the level outside the lake
-	land_lakes::Lake lake {.level = k_Level, .corners = {static_cast<uint32_t>((100 * land_lakes::k_CornersPerSide) + 100)}};
+	const land_lakes::Lake lake {.level = k_Level,
+	                             .corners = {static_cast<uint32_t>((100 * land_lakes::k_CornersPerSide) + 100)}};
 	const land_lakes::LakeMap lakes({lake});
 	const auto surface = lake_surface::Build(
 	    lakes, [](int x, int z) -> std::optional<float> { return x == 100 && z == 100 ? k_Level + 0.3f : k_Level - 10.0f; },

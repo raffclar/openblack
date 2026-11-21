@@ -50,7 +50,7 @@ TEST(WorldStateAtTurn, TheMapGivesThePresentationPartsAndTheBytesOfEachSection)
 {
 	constexpr std::array k_Parts {
 	    synced_state::PresentationPart {.component = "Animal", .field = "clipPlace", .marker = ""},
-	    synced_state::PresentationPart {.component = "*", .field = "", .marker = "Say \"hi\"\\"},
+	    synced_state::PresentationPart {.component = "*", .field = "", .marker = R"(Say "hi"\)"},
 	};
 	const world_state_at_turn::Map map {
 	    .turn = 7,

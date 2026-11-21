@@ -16,9 +16,6 @@
 
 #include "Visual/TreeShadows.h"
 
-namespace openblack::graphics
-{
-
 /// The shadows of buildings, rocks and the island's other solid things, which Black & White bakes into the land's
 /// textures as it paints each land block, together with the trees' (see tree_shadows), from its fixed far sun. They are
 /// cast by the shapes of the things' triangles alone, never through their textures.
@@ -35,7 +32,7 @@ namespace openblack::graphics
 ///
 /// The samples are joined with the trees' alpha bits in the same byte a texel, so overlapping shadows get no darker,
 /// and darken the land the same way (see tree_shadows::Shade): a fully covered texel is half as bright.
-namespace shape_shadows
+namespace openblack::graphics::shape_shadows
 {
 
 /// The sample rows along x and columns along z of a block
@@ -62,6 +59,4 @@ struct Sample
 void Fill(tree_shadows::Coverage& coverage, const std::array<Sample, 3>& corners, bool bothSides,
           int side = tree_shadows::k_BlockTexels);
 
-} // namespace shape_shadows
-
-} // namespace openblack::graphics
+} // namespace openblack::graphics::shape_shadows

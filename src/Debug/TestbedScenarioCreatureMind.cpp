@@ -1524,48 +1524,48 @@ void testbed_scenarios::AddMind(std::vector<Scenario>& all)
 	};
 	for (const auto& scene : {
 	         JointScene {.id = "friends.happy_together",
-	                     .name = "Be happy with a friend",
-	                     .action = "BeHappyWithFriend",
-	                     .expected = "Both go to places side by side and the tiger waits until the lion stops. Both turn "
-	                                 "to face each other and play the happy action."},
+	                    .name = "Be happy with a friend",
+	                    .action = "BeHappyWithFriend",
+	                    .expected = "Both go to places side by side and the tiger waits until the lion stops. Both turn "
+	                                "to face each other and play the happy action."},
 	         JointScene {.id = "friends.sit_together",
-	                     .name = "Sit with a friend",
-	                     .action = "SitWithFriend",
-	                     .expected = "Both go to the two sides of a clear place, turn to face each other and sit for 10 "
-	                                 "to 15 seconds. Then the tiger plays the happy action."},
+	                    .name = "Sit with a friend",
+	                    .action = "SitWithFriend",
+	                    .expected = "Both go to the two sides of a clear place, turn to face each other and sit for 10 "
+	                                "to 15 seconds. Then the tiger plays the happy action."},
 	         JointScene {.id = "friends.sleep_together",
-	                     .name = "Sleep with a friend",
-	                     .action = "SleepWithFriend",
-	                     .desire = Desire::Tiredness,
-	                     .expected = "Both go to the two sides of a clear place, turn to face each other and sleep for 17 "
-	                                 "seconds. Then the tiger wakes with a confused look."},
+	                    .name = "Sleep with a friend",
+	                    .action = "SleepWithFriend",
+	                    .desire = Desire::Tiredness,
+	                    .expected = "Both go to the two sides of a clear place, turn to face each other and sleep for 17 "
+	                                "seconds. Then the tiger wakes with a confused look."},
 	         JointScene {.id = "friends.drink_together",
-	                     .name = "Drink with a friend",
-	                     .action = "DrinkWithFriend",
-	                     .desire = Desire::Water,
-	                     .expected = "Both go to the nearest coast, side by side, turn to face the sea and drink. Then "
-	                                 "the tiger turns to the lion with a smile."},
+	                    .name = "Drink with a friend",
+	                    .action = "DrinkWithFriend",
+	                    .desire = Desire::Water,
+	                    .expected = "Both go to the nearest coast, side by side, turn to face the sea and drink. Then "
+	                                "the tiger turns to the lion with a smile."},
 	         JointScene {.id = "friends.poo_together",
-	                     .name = "Have a poo with a friend",
-	                     .action = "PooWithFriend",
-	                     .desire = Desire::Poo,
-	                     .expected = "Both go to places side by side, squat for four seconds and have a poo. Then the "
-	                                 "tiger turns to the lion with a smile and plays the happy action."},
+	                    .name = "Have a poo with a friend",
+	                    .action = "PooWithFriend",
+	                    .desire = Desire::Poo,
+	                    .expected = "Both go to places side by side, squat for four seconds and have a poo. Then the "
+	                                "tiger turns to the lion with a smile and plays the happy action."},
 	         JointScene {.id = "friends.help_town_together",
-	                     .name = "Help a town with a friend",
-	                     .action = "HelpTownWithFriend",
-	                     .town = true,
-	                     .expected = "The tiger turns to the lion, plays the happy action and points at the town. Both go "
-	                                 "near the storage pit and turn to face each other. Then the first of the two to take "
-	                                 "up the wish to help the town does so, and the other one stops."},
+	                    .name = "Help a town with a friend",
+	                    .action = "HelpTownWithFriend",
+	                    .town = true,
+	                    .expected = "The tiger turns to the lion, plays the happy action and points at the town. Both go "
+	                                "near the storage pit and turn to face each other. Then the first of the two to take "
+	                                "up the wish to help the town does so, and the other one stops."},
 	         JointScene {.id = "friends.attack_town_together",
-	                     .name = "Attack a town with a friend",
-	                     .action = "AttackWithFriend",
-	                     .town = true,
-	                     .desire = Desire::Anger,
-	                     .expected = "The script's action fails: a creature that has learnt nothing finds the town more "
-	                                 "useful to its compassion than to its anger, so it cannot attack the town. A creature "
-	                                 "taught to be angry with towns attacks it as helping a town with a friend."},
+	                    .name = "Attack a town with a friend",
+	                    .action = "AttackWithFriend",
+	                    .town = true,
+	                    .desire = Desire::Anger,
+	                    .expected = "The script's action fails: a creature that has learnt nothing finds the town more "
+	                                "useful to its compassion than to its anger, so it cannot attack the town. A creature "
+	                                "taught to be angry with towns attacks it as helping a town with a friend."},
 	     })
 	{
 		auto tiger = Content(CreatureType::Tiger, {-25.0f, 0.0f}, 90.0f, "asks");

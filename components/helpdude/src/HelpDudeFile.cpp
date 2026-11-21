@@ -236,7 +236,7 @@ HelpDudeResult ReadHelpDudeFile(const std::vector<uint8_t>& bytes, HelpDudeFile&
 	{
 		for (int32_t i = 0; i < faceBytes; ++i)
 		{
-			if (!in.Bytes(&out.faceRecords[0][0], 1))
+			if (!in.Bytes(out.faceRecords[0].data(), 1))
 			{
 				return HelpDudeResult::ErrTruncated;
 			}

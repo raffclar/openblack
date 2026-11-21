@@ -50,7 +50,7 @@ public:
 	StaffQuestionBox& operator=(const StaffQuestionBox&) = delete;
 	~StaffQuestionBox();
 
-	void Ask(gathering_box::question::Question question);
+	void Ask(gathering_box::question::Question asked);
 	/// Takes the box away at once, with no answer, as when a testbed scenario loads
 	void Withdraw();
 	[[nodiscard]] bool IsActive() const noexcept { return _question.has_value(); }

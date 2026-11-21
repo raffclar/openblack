@@ -345,7 +345,7 @@ TEST(SpellRules, HeatHurtsOnlyAboveTheCombustionTemperature)
 	EXPECT_FLOAT_EQ(HeatDamage(199.0f, defence), 0.0f);
 	// Three combustion temperatures over, times its burn defence, a tenth of that
 	EXPECT_NEAR(HeatDamage(800.0f, defence), 3.0f * 0.02f * k_HeatDamageScale, k_Epsilon);
-	EffectDefence fireproof;
+	const EffectDefence fireproof;
 	EXPECT_FLOAT_EQ(HeatDamage(10000.0f, fireproof), 0.0f);
 }
 

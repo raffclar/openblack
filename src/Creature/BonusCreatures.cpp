@@ -104,7 +104,7 @@ uint8_t creature_swap::MaskOf(const Unlocked& unlocked)
 
 Unlocked creature_swap::FromMask(uint8_t mask)
 {
-	return Unlocked(mask);
+	return {mask};
 }
 
 Unlocked creature_swap::ScriptUnlocked(bool networkGame, const Unlocked& option, uint8_t world)

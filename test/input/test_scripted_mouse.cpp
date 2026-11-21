@@ -20,7 +20,7 @@
 #include <SDL_mouse.h>
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include <Debug/DebugGuiInterface.h>
 #include <EngineConfig.h>
 #include <Input/GameActionMap.h>

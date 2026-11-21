@@ -25,7 +25,7 @@ namespace openblack::ecs::systems
 class CreaturePhysiologySystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~CreaturePhysiologySystemInterface() = default;
+	~CreaturePhysiologySystemInterface() override = default;
 
 	/// Once a game turn: the start of the turn, then the turn of each creature
 	virtual void ProcessTurn() = 0;

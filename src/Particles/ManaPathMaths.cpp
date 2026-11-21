@@ -21,7 +21,6 @@
 #include "Common/X87Vector.h"
 
 using namespace openblack::particles;
-namespace x87 = openblack::x87;
 
 namespace
 {

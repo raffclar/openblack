@@ -166,7 +166,7 @@ TEST(CreatureLocomotion, RunsAwayToTheFirstClearCellOfTheSpiral)
 {
 	auto land = OpenLand();
 	// The aimed cell is not clear; the spiral's first step goes one cell back along x
-	land.cellClear = [](int32_t x, int32_t z) { return !(x == 105 && z == 100); };
+	land.cellClear = [](int32_t x, int32_t z) { return x != 105 || z != 100; };
 	EXPECT_EQ(RunAwayPoint(k_InCell, {950.0f, 1000.0f}, 10, 40.0f, land), glm::vec3(1040.0f, 7.0f, 1000.0f));
 	// With no clear cell it stays where it is, at its own height above the ground
 	land.cellClear = [](int32_t, int32_t) { return false; };
@@ -210,8 +210,8 @@ TEST(CreatureLocomotion, TheSpinBlendMultipliesTheTurnByTheShareOfAQuarterTurn)
 {
 	// The game makes the turn positive, then multiplies by its float of 2 / pi, after it takes away a quarter turn
 	// beyond a quarter turn. It does not divide by a quarter turn.
-	constexpr float k_Share = std::bit_cast<float>(0x3F22F983u);
-	constexpr float k_Quarter = std::bit_cast<float>(0x3FC90FDBu);
+	constexpr auto k_Share = std::bit_cast<float>(0x3F22F983u);
+	constexpr auto k_Quarter = std::bit_cast<float>(0x3FC90FDBu);
 	for (const float angle : {0.0f, -0.3f, 0.3f, 1.2f, -1.5707963f, 1.5707964f, 2.5f, -3.1415927f, 3.1415927f})
 	{
 		const auto pair = SpinPairFor(animations::k_RightSpin, angle);

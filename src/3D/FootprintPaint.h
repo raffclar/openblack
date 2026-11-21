@@ -17,9 +17,6 @@
 
 #include <glm/vec2.hpp>
 
-namespace openblack
-{
-
 /// How Black & White paints a building's or a feature's footprint into the land's block textures. The footprint is a
 /// small picture (16 to 128 texels a side, 4 bits a channel) that a few triangles lay on the ground. The game paints it
 /// into the texels of each block that it covers, on the processor, at 16 texels a cell:
@@ -35,7 +32,7 @@ namespace openblack
 /// The rivers' channels use the same triangles, but they lower the land's alpha to the picture's alpha and keep its
 /// colour. Each footprint is painted over the one before it, so each step rounds. The land is filtered only when it is
 /// drawn.
-namespace footprint_paint
+namespace openblack::footprint_paint
 {
 /// Texels along a side of a block's texture
 constexpr int k_BlockTexels = 256;
@@ -140,6 +137,4 @@ void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Pict
 /// the same value as from a paint of the whole block. The texels outside the region do not change.
 void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Picture& picture,
                     std::span<const Triangle> triangles, const Placement& placement, Mix mix, int side, const Region& region);
-} // namespace footprint_paint
-
-} // namespace openblack
+} // namespace openblack::footprint_paint

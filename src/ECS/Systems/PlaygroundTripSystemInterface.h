@@ -21,7 +21,7 @@ namespace openblack::ecs::systems
 class PlaygroundTripSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~PlaygroundTripSystemInterface() = default;
+	~PlaygroundTripSystemInterface() override = default;
 
 	/// Whether every player's influence covers the whole land, as it does from the trip to the Playground until the player
 	/// leaves

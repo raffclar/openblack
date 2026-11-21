@@ -95,29 +95,29 @@ public:
 	}
 
 	explicit GesturingRecognised(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , spriteCreator(object.String("SpriteCreator"))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , sheetHeightScale(object.Float("LightSheetHeightScale", 0.0f))
-	    , timeToIdeal(object.Float("TimeToIdeal", 0.0f))
-	    , interpGain(object.Float("InterpGain", 0.0f))
-	    , dieAge(object.Float("DieAge", 0.0f))
-	    , sheetDieAge(object.Float("LightSheetDieAge", 0.0f))
-	    , maxAlpha(object.Float("MaxAlpha", 0.0f))
-	    , numAtoms(object.Int("NumAtoms", 0))
-	    , wiggleFreq(object.Float("WiggleFreq", 0.0f))
-	    , wiggleMag(object.Float("WiggleMag", 0.0f))
-	    , wiggleMagY(object.Float("WiggleMagY", 0.0f))
-	    , wiggleSpeed(object.Float("WiggleSpeed", 0.0f))
-	    , wigglePhaseSpeed(object.Float("WigglePhaseSpeed", 0.0f))
-	    , dispersalTime(object.Float("DispersalTime", 0.0f))
-	    , collectionAlphaPulse(object.Int("CollectionAlphaPulse", 0))
-	    , collectionAlphaInit(object.Int("CollectionAlphaInit", 0))
-	    , shrinkTime(object.Float("ShrinkTimeAfterDispersal", 0.0f))
-	    , handPulseDuration(object.Float("HandPulseDuration", 0.0f))
-	    , sparkleGroup(object.Int("SparkleGroup", 0))
-	    , goToIdeal(object.Bool("GoToIdeal", false))
-	    , doTransition(object.Bool("DoTransition", false))
+	    : _creator(object.String("PCreator"))
+	    , _spriteCreator(object.String("SpriteCreator"))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _sheetHeightScale(object.Float("LightSheetHeightScale", 0.0f))
+	    , _timeToIdeal(object.Float("TimeToIdeal", 0.0f))
+	    , _interpGain(object.Float("InterpGain", 0.0f))
+	    , _dieAge(object.Float("DieAge", 0.0f))
+	    , _sheetDieAge(object.Float("LightSheetDieAge", 0.0f))
+	    , _maxAlpha(object.Float("MaxAlpha", 0.0f))
+	    , _numAtoms(object.Int("NumAtoms", 0))
+	    , _wiggleFreq(object.Float("WiggleFreq", 0.0f))
+	    , _wiggleMag(object.Float("WiggleMag", 0.0f))
+	    , _wiggleMagY(object.Float("WiggleMagY", 0.0f))
+	    , _wiggleSpeed(object.Float("WiggleSpeed", 0.0f))
+	    , _wigglePhaseSpeed(object.Float("WigglePhaseSpeed", 0.0f))
+	    , _dispersalTime(object.Float("DispersalTime", 0.0f))
+	    , _collectionAlphaPulse(object.Int("CollectionAlphaPulse", 0))
+	    , _collectionAlphaInit(object.Int("CollectionAlphaInit", 0))
+	    , _shrinkTime(object.Float("ShrinkTimeAfterDispersal", 0.0f))
+	    , _handPulseDuration(object.Float("HandPulseDuration", 0.0f))
+	    , _sparkleGroup(object.Int("SparkleGroup", 0))
+	    , _goToIdeal(object.Bool("GoToIdeal", false))
+	    , _doTransition(object.Bool("DoTransition", false))
 	{
 	}
 
@@ -125,7 +125,7 @@ public:
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
-		const auto* pointCreator = effect.FindCreator(creator);
+		const auto* pointCreator = effect.FindCreator(_creator);
 		if (pointCreator == nullptr)
 		{
 			return false;
@@ -140,7 +140,7 @@ public:
 		// One waiting trail a step becomes an atom, heard as it appears
 		if (auto waiting = world.TakeGestureTrail())
 		{
-			auto& atom = effect.NewAtom(collection, pointCreator, nextGroups);
+			auto& atom = effect.NewAtom(collection, pointCreator, _nextGroups);
 			// The gesture of this computer's player is heard with no position, another player's at the place of its hand
 			if (waiting->heardAt.has_value())
 			{
@@ -155,7 +155,7 @@ public:
 
 		// A trail ends when its atom has lived its time, and the hand's glow goes with it
 		std::erase_if(collection.atoms, [&](const AtomPtr& atom) {
-			if (effect.AtomAge(*atom) <= dieAge)
+			if (effect.AtomAge(*atom) <= _dieAge)
 			{
 				return false;
 			}
@@ -185,7 +185,7 @@ public:
 			auto& data = found->second;
 			for (auto& sub : atom.subCollections)
 			{
-				if (sub->group == sparkleGroup && data.started)
+				if (sub->group == _sparkleGroup && data.started)
 				{
 					CarryRound(effect, atom, *sub, data);
 				}
@@ -205,10 +205,10 @@ public:
 					points.push_back(data.trail->ideal.At(static_cast<float>(i) * step));
 				}
 				data.sheet = std::make_shared<LightSheet>();
-				data.sheet->Start(std::move(points), data.colour, data.scale * sheetHeightScale, trail::k_SheetShiftSeconds);
+				data.sheet->Start(std::move(points), data.colour, data.scale * _sheetHeightScale, trail::k_SheetShiftSeconds);
 				world.AddLightSheet(data.sheet);
 			}
-			data.sheet->SetStrength(trail::SheetStrength(age, sheetDieAge));
+			data.sheet->SetStrength(trail::SheetStrength(age, _sheetDieAge));
 		}
 		return true;
 	}
@@ -220,7 +220,7 @@ private:
 		const float age = effect.AtomAge(atom);
 		const float round = std::fmod(age / trail::k_CircuitSeconds, 1.0f);
 		atom.position = data.trail->ideal.At(round);
-		const float left = dieAge - age;
+		const float left = _dieAge - age;
 		if (left < trail::k_CircuitFadeSeconds)
 		{
 			const float alpha = std::clamp(left * (k_ByteMax / trail::k_CircuitFadeSeconds), 0.0f, k_ByteMax);
@@ -241,24 +241,24 @@ private:
 		const float age = effect.CollectionAge(sub);
 
 		// From the drawn path to the shape over a time, eased by the gain
-		const float grown = std::min(age - data.startAge, timeToIdeal) / timeToIdeal;
-		const auto transition = trail::Transition(grown, interpGain);
+		const float grown = std::min(age - data.startAge, _timeToIdeal) / _timeToIdeal;
+		const auto transition = trail::Transition(grown, _interpGain);
 		const auto width = data.boxMax.x - data.boxMin.x;
 		const auto depth = data.boxMax.z - data.boxMin.z;
-		const auto wiggle = trail::WiggleAmount(age, wigglePhaseSpeed, dispersalTime, shrinkTime);
+		const auto wiggle = trail::WiggleAmount(age, _wigglePhaseSpeed, _dispersalTime, _shrinkTime);
 
 		// A while in, the particles flash and the hand glows in the player's colour, both dying away. Only the trail of
 		// this computer's player makes the hand glow: the trail of another player has a place where it is heard.
 		const float sinceFlash = age - trail::k_FlashStart;
 		if (sinceFlash > 0.0f)
 		{
-			const float flash = static_cast<float>(collectionAlphaPulse) * trail::FlashLeft(sinceFlash, trail::k_FlashSeconds);
+			const float flash = static_cast<float>(_collectionAlphaPulse) * trail::FlashLeft(sinceFlash, trail::k_FlashSeconds);
 			sub.alpha = static_cast<uint8_t>(static_cast<int>(flash));
 		}
 		if (sinceFlash > 0.0f && !data.trail->heardAt.has_value())
 		{
 			const auto glow =
-			    static_cast<uint8_t>(static_cast<int>(trail::FlashLeft(sinceFlash, handPulseDuration) * k_ByteMax));
+			    static_cast<uint8_t>(static_cast<int>(trail::FlashLeft(sinceFlash, _handPulseDuration) * k_ByteMax));
 			world.SetHandGlow(trail::Dimmed(data.colour, glow));
 		}
 
@@ -271,10 +271,10 @@ private:
 		{
 			auto& atom = *sub.atoms[count - 1 - i];
 			const float along = static_cast<float>(i) * step;
-			atom.rgba[3] = trail::RevealAlpha(along, grown, maxAlpha);
+			atom.rgba[3] = trail::RevealAlpha(along, grown, _maxAlpha);
 
 			glm::vec3 position;
-			if (doTransition)
+			if (_doTransition)
 			{
 				const auto drawn = data.trail->drawn.At(along);
 				const auto ideal = data.trail->ideal.At(along);
@@ -282,16 +282,16 @@ private:
 			}
 			else
 			{
-				position = goToIdeal ? data.trail->ideal.At(along) : data.trail->drawn.At(along);
+				position = _goToIdeal ? data.trail->ideal.At(along) : data.trail->drawn.At(along);
 			}
 
 			// Each wiggles by its own place in the shuffled order, across the shape's box
 			const float place = static_cast<float>(data.order.at(i)) * step;
-			const float sweep = age * wiggleSpeed;
-			const auto phase = [&](float offset) { return sweep + ((place + offset) * wiggleFreq); };
-			const float acrossX = noise.Smooth(phase(0.0f)) * width * wiggleMag;
-			const float acrossZ = noise.Smooth(phase(trail::k_WiggleOffsetZ)) * depth * wiggleMag;
-			const float up = (noise.Smooth(phase(trail::k_WiggleOffsetY)) + 1.0f) * 0.5f * wiggleMagY * depth;
+			const float sweep = age * _wiggleSpeed;
+			const auto phase = [&](float offset) { return sweep + ((place + offset) * _wiggleFreq); };
+			const float acrossX = noise.Smooth(phase(0.0f)) * width * _wiggleMag;
+			const float acrossZ = noise.Smooth(phase(trail::k_WiggleOffsetZ)) * depth * _wiggleMag;
+			const float up = (noise.Smooth(phase(trail::k_WiggleOffsetY)) + 1.0f) * 0.5f * _wiggleMagY * depth;
 			position.x = (acrossX * wiggle) + position.x;
 			position.y = position.y + (up * wiggle);
 			position.z = position.z + (acrossZ * wiggle);
@@ -308,7 +308,7 @@ private:
 		auto& world = effect.Services().world;
 		data.startAge = effect.CollectionAge(sub);
 		data.started = true;
-		sub.alpha = static_cast<float>(static_cast<uint8_t>(collectionAlphaInit));
+		sub.alpha = static_cast<float>(static_cast<uint8_t>(_collectionAlphaInit));
 		data.scale = data.trail->ideal.Length() * trail::k_ScalePerLength;
 
 		const auto camera = world.CameraPosition();
@@ -319,9 +319,9 @@ private:
 		}
 
 		data.colour = world.PlayerColour(effect.GetPlayer()) & 0xFFFFFFu;
-		if (const auto* sprite = effect.FindCreator(spriteCreator))
+		if (const auto* sprite = effect.FindCreator(_spriteCreator))
 		{
-			for (int i = 0; i < numAtoms; ++i)
+			for (int i = 0; i < _numAtoms; ++i)
 			{
 				auto& atom = effect.NewAtom(sub, sprite, {});
 				atom.rgba[0] = static_cast<uint8_t>(data.colour >> 16u);
@@ -342,42 +342,42 @@ private:
 			data.boxMax = glm::max(data.boxMax, point);
 		}
 
-		data.order.resize(static_cast<size_t>(std::max(numAtoms, 0)));
+		data.order.resize(static_cast<size_t>(std::max(_numAtoms, 0)));
 		for (size_t i = 0; i < data.order.size(); ++i)
 		{
 			data.order[i] = static_cast<int32_t>(i);
 		}
-		for (int k = 0; k < numAtoms * 2; ++k)
+		for (int k = 0; k < _numAtoms * 2; ++k)
 		{
-			const auto a = static_cast<size_t>(effect.Rand(numAtoms));
-			const auto b = static_cast<size_t>(effect.Rand(numAtoms));
+			const auto a = static_cast<size_t>(effect.Rand(_numAtoms));
+			const auto b = static_cast<size_t>(effect.Rand(_numAtoms));
 			std::swap(data.order.at(a), data.order.at(b));
 		}
 	}
 
-	std::string creator;
-	std::string spriteCreator;
-	std::vector<int> nextGroups;
-	float sheetHeightScale;
-	float timeToIdeal;
-	float interpGain;
-	float dieAge;
-	float sheetDieAge;
-	float maxAlpha;
-	int numAtoms;
-	float wiggleFreq;
-	float wiggleMag;
-	float wiggleMagY;
-	float wiggleSpeed;
-	float wigglePhaseSpeed;
-	float dispersalTime;
-	int collectionAlphaPulse;
-	int collectionAlphaInit;
-	float shrinkTime;
-	float handPulseDuration;
-	int sparkleGroup;
-	bool goToIdeal;
-	bool doTransition;
+	std::string _creator;
+	std::string _spriteCreator;
+	std::vector<int> _nextGroups;
+	float _sheetHeightScale;
+	float _timeToIdeal;
+	float _interpGain;
+	float _dieAge;
+	float _sheetDieAge;
+	float _maxAlpha;
+	int _numAtoms;
+	float _wiggleFreq;
+	float _wiggleMag;
+	float _wiggleMagY;
+	float _wiggleSpeed;
+	float _wigglePhaseSpeed;
+	float _dispersalTime;
+	int _collectionAlphaPulse;
+	int _collectionAlphaInit;
+	float _shrinkTime;
+	float _handPulseDuration;
+	int _sparkleGroup;
+	bool _goToIdeal;
+	bool _doTransition;
 };
 
 /// What the chain rule keeps for each of its atoms
@@ -433,12 +433,12 @@ public:
 	static constexpr float k_LeftSeconds = 5.0f;
 
 	explicit ChainGesture(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , dieAge(object.Float("DieAge", 0.0f))
-	    , minEmitDist(object.Float("MinEmitDist", 0.0f))
-	    , adjustInitialScale(object.String("AdjustInitialScale"))
-	    , inTestMode(object.Bool("InTestMode", false))
+	    : _creator(object.String("PCreator"))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _dieAge(object.Float("DieAge", 0.0f))
+	    , _minEmitDist(object.Float("MinEmitDist", 0.0f))
+	    , _adjustInitialScale(object.String("AdjustInitialScale"))
+	    , _inTestMode(object.Bool("InTestMode", false))
 	{
 	}
 
@@ -446,7 +446,7 @@ public:
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
-		const auto* pointCreator = effect.FindCreator(creator);
+		const auto* pointCreator = effect.FindCreator(_creator);
 		if (pointCreator == nullptr)
 		{
 			return false;
@@ -457,12 +457,12 @@ public:
 		}
 		auto& state = *std::any_cast<ChainState>(&slot.data);
 		const bool was = state.gesturing;
-		state.gesturing = inTestMode || effect.GetProcessInfo().enabled;
+		state.gesturing = _inTestMode || effect.GetProcessInfo().enabled;
 		if (state.gesturing && !was)
 		{
 			collection.atoms.clear();
 			state.atoms.clear();
-			effect.NewAtom(collection, pointCreator, nextGroups);
+			effect.NewAtom(collection, pointCreator, _nextGroups);
 		}
 
 		// The newest first
@@ -513,14 +513,14 @@ private:
 				joint->ruleScale = 0.0f;
 			}
 		}
-		const float headScale = adjustInitialScale.empty() ? 1.0f : effect.FloatProvider(adjustInitialScale, 1.0f);
+		const float headScale = _adjustInitialScale.empty() ? 1.0f : effect.FloatProvider(_adjustInitialScale, 1.0f);
 		const float before = data.wanted;
-		const float most = static_cast<float>(chain.atoms.size()) / dieAge * effect.GetDt();
+		const float most = static_cast<float>(chain.atoms.size()) / _dieAge * effect.GetDt();
 		float asked = 1.0f;
 		if (data.laid != 0.0f)
 		{
 			const auto away = data.lastJoint - hand;
-			asked = std::sqrt((away.z * away.z) + (away.y * away.y) + (away.x * away.x)) / minEmitDist;
+			asked = std::sqrt((away.z * away.z) + (away.y * away.y) + (away.x * away.x)) / _minEmitDist;
 		}
 		if (!(most > asked))
 		{
@@ -556,12 +556,12 @@ private:
 		data.last = hand;
 	}
 
-	std::string creator;
-	std::vector<int> nextGroups;
-	float dieAge;
-	float minEmitDist;
-	std::string adjustInitialScale;
-	bool inTestMode;
+	std::string _creator;
+	std::vector<int> _nextGroups;
+	float _dieAge;
+	float _minEmitDist;
+	std::string _adjustInitialScale;
+	bool _inTestMode;
 };
 
 /// The joints of a chain, all made at once, and the rule is done

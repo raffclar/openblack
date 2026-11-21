@@ -10,7 +10,7 @@
 // A temple's destruction as a system, in a world of its own: its sounds, spot visuals and end come on the turns the
 // game's do, a start over while the loop plays sounds a second loop, and the game ends only outside skirmishes.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <memory>
@@ -106,7 +106,7 @@ public:
 	{
 		return triangles;
 	}
-	[[nodiscard]] glm::mat4 PlacementOf(entt::entity /*object*/) const override { return glm::mat4(1.0f); }
+	[[nodiscard]] glm::mat4 PlacementOf(entt::entity /*object*/) const override { return {1.0f}; }
 	[[nodiscard]] std::vector<physics::temple_heart::Town> HeartTowns(PlayerNames /*owner*/) override { return towns; }
 	[[nodiscard]] GameRandomInterface* Random() override { return random; }
 	float RandomShare(float /*spread*/) override { return share; }

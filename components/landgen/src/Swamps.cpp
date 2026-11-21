@@ -77,8 +77,10 @@ Random RandomAt(uint64_t stageSeed, int i, int j)
 std::pair<int, int> CornerOf(const features::Ground& ground, float x, float z)
 {
 	const int side = ground.biomes.side;
+	// NOLINTBEGIN(bugprone-incorrect-roundings): A change gives a different land.
 	return {std::clamp(static_cast<int>((x / k_MetresPerCorner) + 0.5f), 0, side - 1),
 	        std::clamp(static_cast<int>((z / k_MetresPerCorner) + 0.5f), 0, side - 1)};
+	// NOLINTEND(bugprone-incorrect-roundings)
 }
 
 /// A place in metres is over the free ground of a swamp
@@ -149,7 +151,7 @@ void PlaceSheets(const features::Ground& ground, uint64_t seed, const Settings& 
 		return;
 	}
 	const auto siteSeed = StageSeed(seed, 70);
-	const float last = static_cast<float>(ground.biomes.side - 1);
+	const auto last = static_cast<float>(ground.biomes.side - 1);
 	const int points = static_cast<int>(last / settings.spacing);
 	// Only the points on a swamp can start a sheet
 	std::vector<Candidate> candidates;
@@ -157,10 +159,12 @@ void PlaceSheets(const features::Ground& ground, uint64_t seed, const Settings& 
 	{
 		for (int j = 0; j < points; ++j)
 		{
+			// NOLINTBEGIN(bugprone-incorrect-roundings): A change gives a different land.
 			const int ci =
 			    std::clamp(static_cast<int>((static_cast<float>(i) * settings.spacing) + 0.5f), 0, ground.biomes.side - 1);
 			const int cj =
 			    std::clamp(static_cast<int>((static_cast<float>(j) * settings.spacing) + 0.5f), 0, ground.biomes.side - 1);
+			// NOLINTEND(bugprone-incorrect-roundings)
 			if (ground.biomes.At(ci, cj) == biomes::Biome::Swamp)
 			{
 				candidates.push_back({.key = RandomAt(siteSeed, i, j).Next(), .i = i, .j = j});

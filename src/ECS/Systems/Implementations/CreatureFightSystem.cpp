@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "CreatureFightSystem.h"
 
@@ -939,8 +939,9 @@ void CreatureFightSystem::GetUpForPlan(entt::entity creature)
 {
 	if (GetUp(creature))
 	{
-		fight_transcript::Note(creature, "got_up_for_plan",
-		                       [&] { return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)}}; });
+		fight_transcript::Note(creature, "got_up_for_plan", [&] {
+			return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)}};
+		});
 	}
 }
 
@@ -1376,8 +1377,9 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 			else
 			{
 				// With no arena the fight stops
-				fight_transcript::Note(entity, "no_arena",
-				                       [&] { return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)}}; });
+				fight_transcript::Note(entity, "no_arena", [&] {
+					return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)}};
+				});
 				Leave(opponent);
 				Leave(entity);
 			}

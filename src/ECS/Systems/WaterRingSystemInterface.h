@@ -22,7 +22,7 @@ namespace openblack::ecs::systems
 class WaterRingSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~WaterRingSystemInterface() = default;
+	~WaterRingSystemInterface() override = default;
 
 	/// As a new land opens: no rings
 	virtual void Reset() = 0;

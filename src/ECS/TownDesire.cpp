@@ -275,6 +275,7 @@ float DesireForCivicBuildings(const DesireContext& c)
 		if (p != 0)
 		{
 			const float share = static_cast<float>(c.in.homeless) / static_cast<int32_t>(population);
+			// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 			if (!(share < k_HomelessShare || std::isnan(share)))
 			{
 				continue;
@@ -302,10 +303,12 @@ float DesireForChildren(const DesireContext& c)
 	// Wanted less as food is wanted more
 	float a = 1.0f;
 	const float food = Raw(c.desire, 0);
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(food < 1.0f || std::isnan(food)))
 	{
 		a = 0.0f;
 	}
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	else if (!(food <= 0.0f || std::isnan(food)))
 	{
 		a = 1.0f - food;
@@ -370,6 +373,7 @@ float AbodeDesireToBeRepaired(const RepairInput& abode, const GTownInfo& town)
 
 float FixedDesireToBeRepaired(float life, float desireToBeRepaired)
 {
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(life < 1.0f || std::isnan(life)))
 	{
 		return 0.0f;

@@ -98,7 +98,7 @@ Paths ReadPaths()
 	{
 		return {};
 	}
-	std::ifstream stream(*file, std::ios::binary);
+	const std::ifstream stream(*file, std::ios::binary);
 	std::stringstream text;
 	text << stream.rdbuf();
 	return ParsePaths(text.str());
@@ -218,11 +218,13 @@ Outcome ShowWindows(const Request& request)
 
 	// The dialog keeps pointers to the names and patterns until it is shown
 	std::vector<std::pair<std::wstring, std::wstring>> texts;
+	texts.reserve(request.filters.size());
 	for (const auto& filter : request.filters)
 	{
 		texts.emplace_back(Widen(filter.name), Widen(JoinPatterns(filter, ";")));
 	}
 	std::vector<COMDLG_FILTERSPEC> specs;
+	specs.reserve(texts.size());
 	for (const auto& [name, patterns] : texts)
 	{
 		specs.push_back({.pszName = name.c_str(), .pszSpec = patterns.c_str()});

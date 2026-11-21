@@ -74,7 +74,7 @@ public:
 
 	[[nodiscard]] const DeviceMemory* Copy(const void* data, uint32_t size) const override
 	{
-		auto* memory = Alloc(size);
+		const auto* memory = Alloc(size);
 		std::memcpy(Bytes(memory).data(), data, size);
 		return memory;
 	}

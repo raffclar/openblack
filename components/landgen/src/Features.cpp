@@ -825,6 +825,7 @@ private:
 	/// The corner nearest a place in corners
 	[[nodiscard]] std::pair<int, int> CornerOf(float x, float z) const
 	{
+		// NOLINTNEXTLINE(bugprone-incorrect-roundings): A change gives a different land.
 		return {std::clamp(static_cast<int>(x + 0.5f), 0, _side - 1), std::clamp(static_cast<int>(z + 0.5f), 0, _side - 1)};
 	}
 
@@ -850,7 +851,7 @@ Random RandomAt(uint64_t stageSeed, int i, int j)
 void PlaceBigForests(Placement& placement, uint64_t seed, const Settings& settings, std::vector<Feature>& placed)
 {
 	const auto stageSeed = StageSeed(seed, 42);
-	const float last = static_cast<float>(placement.Side() - 1);
+	const auto last = static_cast<float>(placement.Side() - 1);
 	const int points = static_cast<int>(last / settings.bigForestSpacing);
 	constexpr float k_Gap = k_BigForestGap / k_MetresPerCorner;
 	for (int i = 0; i < points; ++i)
@@ -977,7 +978,7 @@ void PlaceStands(const Placement& placement, uint64_t seed, const Settings& sett
 		fill = StandFill(placement.GroundOf());
 	}
 	const auto standSeed = StageSeed(seed, 43);
-	const float last = static_cast<float>(placement.Side() - 1);
+	const auto last = static_cast<float>(placement.Side() - 1);
 	// A higher density puts the points closer together. Each point keeps the chance of a stand of the usual spacing, so
 	// the land has that many times more stands.
 	const float spacing = settings.standSpacing / std::sqrt(std::max(settings.treeDensity, 1.0f));
@@ -1158,7 +1159,7 @@ void PlaceRockClumps(RockPlaces& places, uint64_t seed, const Settings& settings
 {
 	const auto& placement = places.placement;
 	const auto clumpSeed = StageSeed(seed, 45);
-	const float last = static_cast<float>(placement.Side() - 1);
+	const auto last = static_cast<float>(placement.Side() - 1);
 	const int points = static_cast<int>(last / settings.rockSpacing);
 	const float squareSide = settings.rockSpacing * k_MetresPerCorner;
 	const float squareKm = squareSide * squareSide / 1.0e6f;

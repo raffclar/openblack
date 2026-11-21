@@ -11,7 +11,7 @@
 // this computer's player while the miracle is held, rising from where it was cast once it is, in the player's colour,
 // written in the game's font.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <optional>

@@ -38,7 +38,7 @@ using namespace openblack::ecs::components;
 namespace
 {
 /// Where a bone of the creature's action points is in the world, as its body is posed this frame
-std::optional<glm::vec3> PosedPointOf(entt::entity creature, uint32_t creature::CreatureRig::ActionPoints::* point)
+std::optional<glm::vec3> PosedPointOf(entt::entity creature, uint32_t creature::CreatureRig::ActionPoints::*point)
 {
 	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
 	{

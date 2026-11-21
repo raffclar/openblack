@@ -127,7 +127,7 @@ bool ReadUnsigned(const Json& object, std::string_view key, uint64_t most, uint6
 	{
 		return !required;
 	}
-	if (!member->is_number_unsigned() && !(member->is_number_integer() && member->get<int64_t>() >= 0))
+	if (!member->is_number_unsigned() && (!member->is_number_integer() || member->get<int64_t>() < 0))
 	{
 		return false;
 	}
@@ -326,6 +326,7 @@ bool ReadTimeSpeed(const Json& object, float& out)
 		return false;
 	}
 	const auto value = member->get<double>();
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(value >= k_LeastTimeSpeed && value <= k_MostTimeSpeed))
 	{
 		return false;
@@ -364,6 +365,7 @@ bool ReadAlignment(const Json& object, std::string_view key, float& out)
 		return false;
 	}
 	const auto value = member->get<double>();
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(value >= -1.0 && value <= 1.0))
 	{
 		return false;

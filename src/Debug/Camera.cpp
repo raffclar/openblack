@@ -57,7 +57,7 @@ void Camera::Draw() noexcept
 		cameraPathSystem.Stop();
 	}
 	ImGui::SameLine();
-	bool paused = cameraPathSystem.IsPaused();
+	const bool paused = cameraPathSystem.IsPaused();
 	if (ImGui::Button(paused ? "Resume" : "Pause"))
 	{
 		if (paused)

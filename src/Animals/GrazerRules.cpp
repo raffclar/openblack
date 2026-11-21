@@ -351,7 +351,7 @@ glm::ivec2 grazers::SleepSpot(glm::ivec2 cell, uint32_t members, const std::func
 	const auto corner =
 	    glm::ivec2(map_coords::FtoL(static_cast<float>(cell.x) * map_coords::k_CellSize * map_coords::k_FixedPerMetre),
 	               map_coords::FtoL(static_cast<float>(cell.y) * map_coords::k_CellSize * map_coords::k_FixedPerMetre));
-	const float size = static_cast<float>(2 * members);
+	const auto size = static_cast<float>(2 * members);
 	const float half = size * 0.5f;
 	const float dx = half - random(size);
 	const float dz = half - random(size);

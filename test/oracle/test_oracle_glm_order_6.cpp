@@ -93,6 +93,7 @@ bool SameBits(const Row& row, const std::vector<std::string>& names, const std::
 std::vector<std::string> Names(const std::string& prefix, int count)
 {
 	std::vector<std::string> names;
+	names.reserve(count);
 	for (int i = 0; i < count; ++i)
 	{
 		names.push_back(prefix + std::to_string(i));

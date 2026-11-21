@@ -127,7 +127,7 @@ TEST(CreatureAnimation, RotationsBlendOnTheMatrices)
 TEST(CreatureAnimation, BonesAVariantDoesNotMoveTakeItsStand)
 {
 	const auto base = OneBone({0.0f}, {0.0f});
-	Animation variant {.duration = 1000, .looping = true, .rotatedJoints = {}, .translatedJoints = {}, .frames = {{}}};
+	const Animation variant {.duration = 1000, .looping = true, .rotatedJoints = {}, .translatedJoints = {}, .frames = {{}}};
 	const auto stand = OneBone({0.0f}, {6.0f});
 	const auto blended = creature_animation::Blend(base, base, {.animation = &variant, .stand = &stand, .weight = 1.0f},
 	                                               {.animation = nullptr, .stand = nullptr, .weight = 0.0f});
@@ -756,12 +756,12 @@ TEST(SkeletalAnimation, ManyBonesAndATwiceListedBoneSample)
 		const std::vector<glm::mat4> rest(count, glm::mat4(1.0f));
 		const auto skeleton = skeletal_animation::Skeleton::FromRestMatrices(parents, rest);
 		const auto last = static_cast<uint32_t>(count - 1);
-		Animation animation {.duration = 1000,
-		                     .looping = true,
-		                     .rotatedJoints = {last, last},
-		                     .translatedJoints = {last, last},
-		                     .frames = {{.eulerAngles = {glm::vec3(0.0f), glm::vec3(0.0f, 0.5f, 0.0f)},
-		                                 .translations = {glm::vec3(1.0f, 0, 0), glm::vec3(7.0f, 0, 0)}}}};
+		const Animation animation {.duration = 1000,
+		                           .looping = true,
+		                           .rotatedJoints = {last, last},
+		                           .translatedJoints = {last, last},
+		                           .frames = {{.eulerAngles = {glm::vec3(0.0f), glm::vec3(0.0f, 0.5f, 0.0f)},
+		                                       .translations = {glm::vec3(1.0f, 0, 0), glm::vec3(7.0f, 0, 0)}}}};
 		const auto poses = skeletal_animation::SampleCycle(animation, animation, 0, skeleton);
 		ASSERT_EQ(poses.size(), count);
 		EXPECT_FLOAT_EQ(poses[last].translation.x, 7.0f) << count;
@@ -796,7 +796,7 @@ struct TurnsFixture
 		std::vector<glm::mat4> rest;
 		for (size_t bone = 0; bone < parents.size(); ++bone)
 		{
-			auto matrix = glm::mat4(glm::eulerAngleYXZ(angle(random), angle(random), angle(random)));
+			auto matrix = static_cast<glm::mat4>(glm::eulerAngleYXZ(angle(random), angle(random), angle(random)));
 			matrix[3] = glm::vec4(static_cast<float>(bone), 1.0f, -0.5f * static_cast<float>(bone), 1.0f);
 			rest.push_back(matrix);
 		}
@@ -893,7 +893,7 @@ TEST(KeyframeTurns, ACopyOrAMoveOfAnAnimationHasNoMark)
 	Animation assigned;
 	assigned = fixture.animation;
 	EXPECT_EQ(assigned.mark.value, 0u);
-	Animation moved = std::move(assigned);
+	const Animation moved = std::move(assigned);
 	EXPECT_EQ(moved.mark.value, 0u);
 	auto other = fixture.animation;
 	marks.Mark(other);

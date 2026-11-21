@@ -44,7 +44,7 @@ public:
 	explicit CreatureWebPageSystem(PlayerOfFiles player);
 
 	void ProcessTurn() override;
-	void CreatureTurn(entt::entity creature) override;
+	void CreatureTurn(entt::entity entity) override;
 	void WritePage(entt::entity creature) override;
 	void FlushWrites() override;
 	void FinishWrites() const override;

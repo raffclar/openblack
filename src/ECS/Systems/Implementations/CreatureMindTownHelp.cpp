@@ -9,7 +9,7 @@
 
 // The world's side of the actions with which a creature helps a town or plays with its people
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "CreatureMindTownHelp.h"
 

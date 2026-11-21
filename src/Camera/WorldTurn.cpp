@@ -54,7 +54,7 @@ glm::vec3 world_turn::KeyMove(float heading, float pitch, float speed, float for
 	{
 		slope = k_MostSlope;
 	}
-	constexpr float k_SpeedScale = std::bit_cast<float>(uint32_t {0x3A83126Fu});
+	constexpr auto k_SpeedScale = std::bit_cast<float>(uint32_t {0x3A83126Fu});
 	const float scale = speed * k_SpeedScale;
 	const float across = -(scale * strafe);
 	const float along = x87::Div(scale * forwards, slope);

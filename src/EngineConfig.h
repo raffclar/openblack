@@ -46,32 +46,20 @@ enum class GraphicsBackend : uint8_t
 
 /// The names a backend is given by on the command line, in any case: its own and the common short ones
 static constexpr auto k_GraphicsBackendNames = std::to_array<std::pair<std::string_view, GraphicsBackend>>({
-    {"Noop", GraphicsBackend::Noop},
-    {"Null", GraphicsBackend::Noop},
-    {"Direct3D12", GraphicsBackend::Direct3D12},
-    {"D3D12", GraphicsBackend::Direct3D12},
-    {"DX12", GraphicsBackend::Direct3D12},
-    {"DirectX12", GraphicsBackend::Direct3D12},
-    {"Metal", GraphicsBackend::Metal},
-    {"MTL", GraphicsBackend::Metal},
-    {"Vulkan", GraphicsBackend::Vulkan},
-    {"VK", GraphicsBackend::Vulkan},
+	{"Noop", GraphicsBackend::Noop}, {"Null", GraphicsBackend::Noop}, {"Direct3D12", GraphicsBackend::Direct3D12},
+	    {"D3D12", GraphicsBackend::Direct3D12}, {"DX12", GraphicsBackend::Direct3D12},
+	    {"DirectX12", GraphicsBackend::Direct3D12}, {"Metal", GraphicsBackend::Metal}, {"MTL", GraphicsBackend::Metal},
+	    {"Vulkan", GraphicsBackend::Vulkan}, {"VK", GraphicsBackend::Vulkan},
 #if defined(_WIN32)
-    {"Direct3D11", GraphicsBackend::Direct3D11},
-    {"D3D11", GraphicsBackend::Direct3D11},
-    {"DX11", GraphicsBackend::Direct3D11},
-    {"DirectX11", GraphicsBackend::Direct3D11},
+	    {"Direct3D11", GraphicsBackend::Direct3D11}, {"D3D11", GraphicsBackend::Direct3D11},
+	    {"DX11", GraphicsBackend::Direct3D11}, {"DirectX11", GraphicsBackend::Direct3D11},
 #endif
 #if !defined(__EMSCRIPTEN__)
-    {"OpenGL", GraphicsBackend::OpenGL},
-    {"GL", GraphicsBackend::OpenGL},
+	    {"OpenGL", GraphicsBackend::OpenGL}, {"GL", GraphicsBackend::OpenGL},
 #endif
 #if defined(__EMSCRIPTEN__)
-    {"OpenGLES", GraphicsBackend::OpenGLES},
-    {"GLES", GraphicsBackend::OpenGLES},
-    {"WebGL", GraphicsBackend::OpenGLES},
-    {"WebGPU", GraphicsBackend::WebGPU},
-    {"WGPU", GraphicsBackend::WebGPU},
+	    {"OpenGLES", GraphicsBackend::OpenGLES}, {"GLES", GraphicsBackend::OpenGLES}, {"WebGL", GraphicsBackend::OpenGLES},
+	    {"WebGPU", GraphicsBackend::WebGPU}, {"WGPU", GraphicsBackend::WebGPU},
 #endif
 });
 

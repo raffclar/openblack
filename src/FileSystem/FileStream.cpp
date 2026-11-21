@@ -89,7 +89,7 @@ void FileStream::Seek(std::size_t position, SeekMode seek)
 
 Stream& FileStream::Read(uint8_t* buffer, std::size_t length)
 {
-	size_t size = std::fread(buffer, 1, length, _file);
+	const size_t size = std::fread(buffer, 1, length, _file);
 	if (size != length)
 	{
 		throw std::runtime_error(fmt::format("Error while reading file"));
@@ -99,7 +99,7 @@ Stream& FileStream::Read(uint8_t* buffer, std::size_t length)
 
 Stream& FileStream::Write(const uint8_t* buffer, std::size_t length)
 {
-	size_t size = std::fwrite(buffer, 1, length, _file);
+	const size_t size = std::fwrite(buffer, 1, length, _file);
 	if (size != length)
 	{
 		throw std::runtime_error(fmt::format("Error while writing file"));
@@ -123,14 +123,12 @@ std::string FileStream::GetLine()
 
 		return std::string(buffer);
 	}
-	else
-	{
-		// EOF or error
-		return std::string();
-	}
+
+	// EOF or error
+	return std::string();
 }
 
 bool FileStream::IsEndOfFile() const
 {
-	return std::feof(_file);
+	return std::feof(_file) != 0;
 }

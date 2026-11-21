@@ -118,9 +118,9 @@ std::vector<size_t> SymbolDrawOrder(std::span<const glm::vec3> points, const glm
 float SymbolAngle(float angle, int32_t milliseconds)
 {
 	// The symbol turns by this many radians in a millisecond. The game's floats for pi and two pi.
-	constexpr float k_TurnRate = std::bit_cast<float>(0x3A03126Fu);
-	constexpr float k_Pi = std::bit_cast<float>(0x40490FDBu);
-	constexpr float k_TwoPi = std::bit_cast<float>(0x40C90FDBu);
+	constexpr auto k_TurnRate = std::bit_cast<float>(0x3A03126Fu);
+	constexpr auto k_Pi = std::bit_cast<float>(0x40490FDBu);
+	constexpr auto k_TwoPi = std::bit_cast<float>(0x40C90FDBu);
 	const float turned = static_cast<float>(milliseconds) * k_TurnRate + angle;
 	if (turned > k_Pi)
 	{

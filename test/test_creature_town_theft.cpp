@@ -38,7 +38,8 @@ std::optional<std::vector<Step>> AgendaOf(std::string_view action, std::optional
 	{
 		return std::nullopt;
 	}
-	return plan_actions::Agenda(*executor, object, {}, situation, [](uint32_t) { return 0u; }, std::nullopt);
+	return plan_actions::Agenda(
+	    *executor, object, {}, situation, [](uint32_t) { return 0u; }, std::nullopt);
 }
 } // namespace
 

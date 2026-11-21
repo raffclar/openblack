@@ -291,7 +291,9 @@ TEST(FootballRules, APlayerTakesTheOpenTaskWithTheHighestPriority)
 	// A tie keeps the first
 	EXPECT_EQ(rules::ChooseTask(Role::Attacker, nearest, [](uint8_t) { return 0.5f; }), 0u);
 	// No open task, or no priority above nothing, gives no task
-	EXPECT_FALSE(rules::ChooseTask(Role::Attacker, [](Check) { return false; }, [](uint8_t) { return 1.0f; }).has_value());
+	EXPECT_FALSE(rules::ChooseTask(
+	                 Role::Attacker, [](Check) { return false; }, [](uint8_t) { return 1.0f; })
+	                 .has_value());
 	EXPECT_FALSE(rules::ChooseTask(Role::Attacker, nearest, [](uint8_t) { return -1.0f; }).has_value());
 }
 

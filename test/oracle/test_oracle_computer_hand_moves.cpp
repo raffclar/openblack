@@ -53,7 +53,7 @@ TEST(OracleComputerHandMoves, NearMovesAsInTheGame)
 	const auto result = table->Column("result");
 	ASSERT_TRUE(kind && hx && hy && hz && tx && ty && tz && speed && outX && outZ && outTargetY && result);
 	ASSERT_GT(table->Rows(), 0u);
-	FakeWorld world;
+	const FakeWorld world;
 	size_t different = 0;
 	for (size_t row = 0; row < table->Rows(); ++row)
 	{

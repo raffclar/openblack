@@ -365,7 +365,7 @@ TEST(ScriptMusicClock, ALoadKeepsTheSyncedValuesOnlyWhenNoChannelPlays)
 		return loaded;
 	};
 
-	ScriptMusic quiet;
+	const ScriptMusic quiet;
 	EXPECT_EQ(loadedCopy(quiet).SyncedValues(), quiet.SyncedValues());
 
 	ScriptMusic playing;
@@ -456,7 +456,7 @@ TEST(ScriptMusicClock, AWorldStateKeepsTheFadeOfAStoppedPiece)
 TEST(ScriptMusicClock, AWorldStateWithNoChannelOrNoBankKeepsNoChannel)
 {
 	const auto timing = Always(MakeTiming(k_Cues));
-	ScriptMusic quiet;
+	const ScriptMusic quiet;
 	EXPECT_EQ(WorldStateCopy(quiet, timing).SyncedValues(), quiet.SyncedValues());
 
 	ScriptMusic playing;

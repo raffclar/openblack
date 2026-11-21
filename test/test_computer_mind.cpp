@@ -563,7 +563,7 @@ TEST(ComputerMindSeen, GodSeesForestsAndSeedsNearItsHandOnce)
 
 TEST(ComputerMindSeen, LongListForgetsOldThingsEveryFiveHundredTurns)
 {
-	FakeSeenWorld world;
+	const FakeSeenWorld world;
 	const map_coords::MapCoords hand {.x = map_coords::ToFixed(1005.0f), .z = map_coords::ToFixed(1005.0f), .altitude = 0.0f};
 	std::vector<SeenThing> seen;
 	for (uint32_t i = 0; i < 51; ++i)

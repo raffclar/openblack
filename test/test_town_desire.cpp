@@ -222,7 +222,7 @@ TEST_F(TownDesireTest, RepairAddsTheWornBuildingsInListOrder)
 TEST_F(TownDesireTest, SortedAsTheGameSorts)
 {
 	// The game's unstable quicksort leaves ties in its own order
-	std::array<float, 17> zero {};
+	const std::array<float, 17> zero {};
 	EXPECT_EQ(Sorted(zero), "8 1 2 3 4 5 6 7 0 9 10 11 12 13 14 15 16");
 	std::array<float, 17> a {};
 	a.at(0) = 0.3f;

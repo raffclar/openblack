@@ -643,7 +643,7 @@ TEST(TestbedScenarios, StagesTheFenceAndTheForestPath)
 
 TEST(TestbedScenarios, ProblemsAreFound)
 {
-	Scenario broken {
+	const Scenario broken {
 	    .id = "broken",
 	    .name = "Broken",
 	    .description = "Broken on purpose",
@@ -1146,7 +1146,7 @@ TEST(TestbedScenarios, CoversCastingThroughTheHand)
 
 TEST(TestbedScenarios, TheMapForThirtyTwoGodsHasScenariosThatLoadIt)
 {
-	for (const auto id : {"multiplayer.gods_ring_map", "multiplayer.gods_ring_slot"})
+	for (const auto* const id : {"multiplayer.gods_ring_map", "multiplayer.gods_ring_slot"})
 	{
 		const auto* scenario = Find(id);
 		ASSERT_NE(scenario, nullptr) << id;
@@ -1209,7 +1209,7 @@ TEST(TestbedScenarios, EachLandChangeOfTheStoryHasAScenario)
 
 TEST(TestbedScenarios, OnlyANativeCallTakesAText)
 {
-	Scenario script {
+	const Scenario script {
 	    .id = "story.text_to_a_script",
 	    .name = "Text to a script",
 	    .description = "A script with a text",

@@ -10,7 +10,7 @@
 // What a creature wants: how the desires of a species start, how their sources and values change each turn, and how
 // an action that a creature does satisfies a desire
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 #include <cstring>
@@ -744,7 +744,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 	// When the creature is free to choose, it plans the desires of the round for this turn. When no plan is ready, it
 	// does nothing.
 	if (!scripted && !demobilised && !mind.planActive && creature_mind::AgendaOver(mind.idle) &&
-	    !(needs != nullptr && needs->faint.has_value()))
+	    (needs == nullptr || !needs->faint.has_value()))
 	{
 		PlanCreature(entity, mind);
 		// It counts the times it thinks and still has no plan, from the start of its last agenda

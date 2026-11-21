@@ -478,7 +478,7 @@ std::optional<std::string> ChlWriter::Items(const std::vector<PatternItem>& item
 			greedy = typeOf(item.argument) != ArgType::Object;
 			break;
 		case PatternItemKind::Fixed:
-			if (!item.value || !(IsNumber(arg, *item.value) || (*item.value == 0.0 && IsOrigin(arg))))
+			if (!item.value || (!IsNumber(arg, *item.value) && (*item.value != 0.0 || !IsOrigin(arg))))
 			{
 				return std::nullopt;
 			}

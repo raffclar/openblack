@@ -43,6 +43,7 @@ constexpr std::array k_Walk {Step(133), Step(1366)};
 std::vector<int32_t> Times(const std::vector<FiredEvent>& fired)
 {
 	std::vector<int32_t> times;
+	times.reserve(fired.size());
 	for (const auto& event : fired)
 	{
 		times.push_back(event.event.timeMs);
@@ -341,7 +342,7 @@ std::vector<int32_t> HeardAt(float framesPerSecond, float seconds)
 			moveMs = std::fmod(moveMs, 500.0f);
 		}
 		walkMs = std::fmod(walkMs + elapsed, 2000.0f);
-		Layers current {
+		const Layers current {
 		    .body = Played {k_MoveAnimation, moveMs},
 		    .slots = {Played {k_WalkAnimation, walkMs}},
 		    .soundingSlot = 0,

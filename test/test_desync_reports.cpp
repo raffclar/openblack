@@ -229,6 +229,7 @@ TEST(DesyncReports, TheEventOfADesyncHasTheKeyInItsFingerprintAndNoPersonalData)
 	EXPECT_EQ(FieldOf(fields.extras, "desyncs_in_game"), "2");
 	// The fields are only these: no name, account, address or chat
 	std::vector<std::string> keys;
+	keys.reserve(fields.tags.size());
 	for (const auto& [key, value] : fields.tags)
 	{
 		keys.push_back(key);

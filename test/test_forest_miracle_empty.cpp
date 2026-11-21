@@ -29,7 +29,7 @@
 #include "Locator.h"
 #include "Magic/ForestRules.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/ForestSystem.h"
 
 using namespace openblack;
@@ -96,7 +96,7 @@ protected:
 	}
 
 	/// A tree that the miracle planted
-	entt::entity MagicTreeIn(uint32_t forest) const
+	[[nodiscard]] entt::entity MagicTreeIn(uint32_t forest) const
 	{
 		const auto tree = TreeIn(forest);
 		Locator::entitiesRegistry::value().Assign<MagicTree>(tree, MagicTree {.forest = record});

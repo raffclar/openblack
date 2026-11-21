@@ -41,7 +41,9 @@ glm::ivec2 CursorPixel(std::span<const float, 2> cursor, glm::ivec2 screen, floa
 	const auto left = (static_cast<float>(screen.x) - width) * 0.5f;
 	const auto bar = static_cast<int>((height - (k_WideScreenShape * width)) * wideScreenFraction) / 2;
 	const auto barF = static_cast<float>(bar);
+	// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 	return {static_cast<int>(left + (width * cursor[0]) + 0.5f),
+	        // NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 	        static_cast<int>(((height - (2.0f * barF)) * cursor[1]) + barF + 0.5f)};
 }
 

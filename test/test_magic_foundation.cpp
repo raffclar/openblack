@@ -501,11 +501,11 @@ TEST(AreaEffect, AnObjectWithAMiddleOfItsOwnIsReachedAcrossTheLandFromItsMiddle)
 	EffectValues values;
 	values.radius = 3.0f;
 	// As a worship site: its middle is to one side of its position, with a radius of its own
-	EffectReceiver site {.entity = static_cast<entt::entity>(1),
-	                     .position = {0.0f, 0.0f, 0.0f},
-	                     .middle = glm::vec2(30.0f, 0.0f),
-	                     .radius = 14.0f,
-	                     .height = 5.0f};
+	const EffectReceiver site {.entity = static_cast<entt::entity>(1),
+	                           .position = {0.0f, 0.0f, 0.0f},
+	                           .middle = glm::vec2(30.0f, 0.0f),
+	                           .radius = 14.0f,
+	                           .height = 5.0f};
 	EXPECT_TRUE(Reaches(values, {46.5f, 0.0f, 0.0f}, site));
 	EXPECT_FALSE(Reaches(values, {47.5f, 0.0f, 0.0f}, site));
 	EXPECT_FALSE(Reaches(values, {-10.0f, 0.0f, 0.0f}, site));
@@ -585,7 +585,7 @@ TEST(AreaEffect, TheAlignmentMovesByTheLifeReadAfterTheDestruction)
 	EXPECT_EQ(same.alignmentTerms, killed.alignmentTerms);
 	EXPECT_TRUE(same.destroyed);
 	// A thing with no life before keeps its outcome
-	EffectOutcome lifeless {.entity = static_cast<entt::entity>(2)};
+	const EffectOutcome lifeless {.entity = static_cast<entt::entity>(2)};
 	const auto kept = WithLifeAfter(lifeless, hit, 1.0f, table, 0.75f, 0.0f);
 	EXPECT_FALSE(kept.lifeAfter.has_value());
 	EXPECT_FLOAT_EQ(kept.alignmentChange, 0.0f);

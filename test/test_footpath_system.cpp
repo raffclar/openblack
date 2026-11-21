@@ -12,7 +12,7 @@
 // that joins a site finds its path over turns, a dance gets a path from the nearest town's pit, and a thing put on a path
 // or taken off it sends the path round it or back when the changes are processed.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <array>

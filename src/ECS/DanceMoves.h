@@ -69,7 +69,7 @@ enum class Action : uint32_t
 /// What one of a key frame's actions does to a group that isn't about its membership (the dance rules do those). `now`
 /// is the dance's clock in whole beats. True when it starts a move, after which every dancer of the group plays its clip
 /// again.
-bool ApplyAction(components::Dance& dance, std::size_t group, uint32_t type, const std::array<uint32_t, 14>& arguments,
+bool ApplyAction(components::Dance& dance, std::size_t index, uint32_t type, const std::array<uint32_t, 14>& arguments,
                  int32_t now);
 
 /// A group starts a move: how much it changes the group each turn, the dance's rate shared over the beats left
@@ -88,12 +88,12 @@ void ProcessGroup(components::DanceGroup& group, int32_t now);
 
 /// Where the dancer in a place of a group stands: round the group's shape, inside each group it is part of, turned the
 /// way the dance faces, about the dance's place. Its altitude is the dance place's.
-[[nodiscard]] map_coords::MapCoords SlotPosition(const components::Dance& dance, std::size_t group, std::size_t slot,
+[[nodiscard]] map_coords::MapCoords SlotPosition(const components::Dance& dance, std::size_t index, std::size_t slot,
                                                  const std::array<dance_shapes::Shape, dance_shapes::k_ShapeCount>& shapes);
 
 /// The group's centre: the dance's place moved by its offset and those of the groups it is part of, each in whole
 /// metres
-[[nodiscard]] map_coords::MapCoords GroupCentre(const components::Dance& dance, std::size_t group);
+[[nodiscard]] map_coords::MapCoords GroupCentre(const components::Dance& dance, std::size_t index);
 
 /// What the facing of a dancer depends on
 struct FacingView

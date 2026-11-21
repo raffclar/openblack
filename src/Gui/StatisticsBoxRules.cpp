@@ -139,21 +139,30 @@ void PlayerPage(PageMaker& make, const BoxFigures& figures)
 	using P = const PlayerFigures&;
 	constexpr auto k_Highest = ShowMost::NumberToHighest;
 	constexpr auto k_Ticked = Display::AsTicked;
-	make.Players("HELP_TEXT_PAUSE_STATS_110", [](P p) { return p.influence; }, 0, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_110", [](P p) { return p.influence; }, 0, 0.0f, k_Highest, k_Ticked);
 	make.Copy(Graph::Right);
 	const auto others = static_cast<float>(figures.playersInGame - 1);
-	make.Players("HELP_TEXT_PAUSE_STATS_111", [](P p) { return p.godsDefeated; }, others, ShowMost::OutOfMost, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_111", [](P p) { return p.godsDefeated; }, others, ShowMost::OutOfMost, k_Ticked);
 	make.Players(
 	    "HELP_TEXT_PAUSE_STATS_112", [](P p) { return p.alignmentChange; }, 2, 1.0f, ShowMost::Number, Display::Number);
-	make.Players("HELP_TEXT_PAUSE_STATS_113", [](P p) { return p.peopleKilled; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_114", [](P p) { return p.belief; }, 0, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_115", [](P p) { return p.maxBelief; }, 0, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_116", [](P p) { return p.minBelief; }, 0, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_117", [](P p) { return p.artefacts; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_118", [](P p) { return p.creatureGrowth; }, 2, 1.0f, ShowMost::Percent, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_113", [](P p) { return p.peopleKilled; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_114", [](P p) { return p.belief; }, 0, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_115", [](P p) { return p.maxBelief; }, 0, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_116", [](P p) { return p.minBelief; }, 0, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_117", [](P p) { return p.artefacts; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_118", [](P p) { return p.creatureGrowth; }, 2, 1.0f, ShowMost::Percent, k_Ticked);
 	make.Players(
 	    "HELP_TEXT_PAUSE_STATS_119", [](P p) { return p.creatureAlignmentChange; }, 2, 1.0f, ShowMost::Number, Display::Number);
-	make.Players("HELP_TEXT_PAUSE_STATS_120", [](P p) { return p.buildingsDestroyed; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_120", [](P p) { return p.buildingsDestroyed; }, 0.0f, k_Highest, k_Ticked);
 }
 
 void CreaturePage(PageMaker& make)
@@ -168,15 +177,22 @@ void CreaturePage(PageMaker& make)
 	    "HELP_TEXT_DIALOG_ADDITION_68", [](P p) { return p.creatureHunger; }, 2, k_Hundred, ShowMost::Percent, k_Ticked);
 	make.Players(
 	    "HELP_TEXT_DIALOG_ADDITION_137", [](P p) { return p.creatureTiredness; }, 2, k_Hundred, ShowMost::Percent, k_Ticked);
-	make.Players("HELP_TEXT_DIALOG_ADDITION_158", [](P p) { return p.creatureAge; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_DIALOG_ADDITION_159", [](P p) { return p.creatureAlignment; }, 2, 1.0f, ShowMost::Number, k_Ticked);
-	make.Players("HELP_TEXT_DIALOG_ADDITION_161", [](P p) { return p.creature.animalsKilled; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_DIALOG_ADDITION_163", [](P p) { return p.creature.battlesFought; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_DIALOG_ADDITION_158", [](P p) { return p.creatureAge; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_DIALOG_ADDITION_159", [](P p) { return p.creatureAlignment; }, 2, 1.0f, ShowMost::Number, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_DIALOG_ADDITION_161", [](P p) { return p.creature.animalsKilled; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_DIALOG_ADDITION_163", [](P p) { return p.creature.battlesFought; }, 0.0f, k_Highest, k_Ticked);
 	make.Copy(Graph::Middle);
-	make.Players("HELP_TEXT_DIALOG_ADDITION_164", [](P p) { return p.creature.battlesWon; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_DIALOG_ADDITION_164", [](P p) { return p.creature.battlesWon; }, 0.0f, k_Highest, k_Ticked);
 	make.Copy(Graph::Left);
-	make.Players("HELP_TEXT_DIALOG_ADDITION_165", [](P p) { return p.creature.poos; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_DIALOG_ADDITION_166", [](P p) { return p.creature.mushroomsEaten; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_DIALOG_ADDITION_165", [](P p) { return p.creature.poos; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_DIALOG_ADDITION_166", [](P p) { return p.creature.mushroomsEaten; }, 0.0f, k_Highest, k_Ticked);
 }
 
 void TownPage(PageMaker& make)
@@ -185,36 +201,59 @@ void TownPage(PageMaker& make)
 	constexpr auto k_Highest = ShowMost::NumberToHighest;
 	constexpr auto k_OutOf = ShowMost::OutOfMost;
 	constexpr auto k_Ticked = Display::AsTicked;
-	make.Players("HELP_TEXT_PAUSE_STATS_30", [](P p) { return p.births; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_31", [](P p) { return p.deaths; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_32", [](P p) { return p.population; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_30", [](P p) { return p.births; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_31", [](P p) { return p.deaths; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_32", [](P p) { return p.population; }, 0.0f, k_Highest, k_Ticked);
 	make.Copy(Graph::Right);
 	// Every player's men and women are out of the first player's people
 	const auto population = make.FirstPlayers([](P p) { return p.population; });
-	make.Players("HELP_TEXT_PAUSE_STATS_33", [](P p) { return p.men; }, population, k_OutOf, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_34", [](P p) { return p.women; }, population, k_OutOf, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_35", [](P p) { return p.capacity; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_36", [](P p) { return p.populationExtremes.highest; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_33", [](P p) { return p.men; }, population, k_OutOf, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_34", [](P p) { return p.women; }, population, k_OutOf, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_35", [](P p) { return p.capacity; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_36", [](P p) { return p.populationExtremes.highest; }, 0.0f, k_Highest, k_Ticked);
 	const auto most = make.FirstPlayers([](P p) { return p.populationExtremes.highest; });
-	make.Players("HELP_TEXT_PAUSE_STATS_37", [](P p) { return p.menExtremes.highest; }, most, k_OutOf, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_38", [](P p) { return p.womenExtremes.highest; }, most, k_OutOf, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_39", [](P p) { return p.populationExtremes.lowest; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_37", [](P p) { return p.menExtremes.highest; }, most, k_OutOf, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_38", [](P p) { return p.womenExtremes.highest; }, most, k_OutOf, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_39", [](P p) { return p.populationExtremes.lowest; }, 0.0f, k_Highest, k_Ticked);
 	const auto fewest = make.FirstPlayers([](P p) { return p.populationExtremes.lowest; });
-	make.Players("HELP_TEXT_PAUSE_STATS_40", [](P p) { return p.menExtremes.lowest; }, fewest, k_OutOf, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_41", [](P p) { return p.womenExtremes.lowest; }, fewest, k_OutOf, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_42", [](P p) { return p.converted; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_43", [](P p) { return p.satisfaction; }, 2, 1.0f, ShowMost::Number, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_40", [](P p) { return p.menExtremes.lowest; }, fewest, k_OutOf, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_41", [](P p) { return p.womenExtremes.lowest; }, fewest, k_OutOf, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_42", [](P p) { return p.converted; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_43", [](P p) { return p.satisfaction; }, 2, 1.0f, ShowMost::Number, k_Ticked);
 	make.Copy(Graph::Left);
-	make.Players("HELP_TEXT_PAUSE_STATS_44", [](P p) { return p.towns; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_45", [](P p) { return p.totalBuildings; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_46", [](P p) { return p.abodes; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_47", [](P p) { return p.civic; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_48", [](P p) { return p.wonders; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_49", [](P p) { return p.built.total; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_44", [](P p) { return p.towns; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_45", [](P p) { return p.totalBuildings; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_46", [](P p) { return p.abodes; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_47", [](P p) { return p.civic; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_48", [](P p) { return p.wonders; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_49", [](P p) { return p.built.total; }, 0.0f, k_Highest, k_Ticked);
 	make.Copy(Graph::Middle);
-	make.Players("HELP_TEXT_PAUSE_STATS_50", [](P p) { return p.built.abodes; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_51", [](P p) { return p.built.civic; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_52", [](P p) { return p.built.wonders; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_50", [](P p) { return p.built.abodes; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_51", [](P p) { return p.built.civic; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_52", [](P p) { return p.built.wonders; }, 0.0f, k_Highest, k_Ticked);
 	// The disciples made, in the order they are kept: farmers, foresters, fishermen, builders, breeders, traders,
 	// missionaries and craftsmen
 	constexpr std::array<std::string_view, 8> k_Disciples {
@@ -223,10 +262,13 @@ void TownPage(PageMaker& make)
 	};
 	for (size_t i = 0; i < k_Disciples.size(); ++i)
 	{
-		make.Players(k_Disciples.at(i), [i](P p) { return p.disciplesMade.at(i); }, 0.0f, k_Highest, k_Ticked);
+		make.Players(
+		    k_Disciples.at(i), [i](P p) { return p.disciplesMade.at(i); }, 0.0f, k_Highest, k_Ticked);
 	}
-	make.Players("HELP_TEXT_PAUSE_STATS_61", [](P p) { return p.foodUsed; }, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_62", [](P p) { return p.woodUsed; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_61", [](P p) { return p.foodUsed; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_62", [](P p) { return p.woodUsed; }, 0.0f, k_Highest, k_Ticked);
 }
 
 void MiraclePage(PageMaker& make)
@@ -250,15 +292,18 @@ void MiraclePage(PageMaker& make)
 	constexpr size_t k_FirstLabel = 66;
 	const auto castsOf = [&make](size_t type, size_t label) {
 		const auto name = "HELP_TEXT_PAUSE_STATS_" + std::to_string(label);
-		make.Players(name, [type](P p) { return p.castsOfType.at(type); }, 0.0f, ShowMost::NumberToHighest, Display::AsTicked);
+		make.Players(
+		    name, [type](P p) { return p.castsOfType.at(type); }, 0.0f, ShowMost::NumberToHighest, Display::AsTicked);
 	};
 	for (size_t type = k_FirstListed; type <= k_LastListed; ++type)
 	{
 		castsOf(type, k_FirstLabel + type - k_FirstListed);
 	}
 	castsOf(static_cast<size_t>(MagicType::CreatureSpellItchy), 106);
-	make.Players("HELP_TEXT_PAUSE_STATS_107", [](P p) { return p.chantsUsed; }, 1, 0.0f, k_Highest, k_Ticked);
-	make.Players("HELP_TEXT_PAUSE_STATS_108", [](P p) { return p.sacrifices; }, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_107", [](P p) { return p.chantsUsed; }, 1, 0.0f, k_Highest, k_Ticked);
+	make.Players(
+	    "HELP_TEXT_PAUSE_STATS_108", [](P p) { return p.sacrifices; }, 0.0f, k_Highest, k_Ticked);
 }
 
 void TechPage(PageMaker& make, const statistics::TechFigures& tech)

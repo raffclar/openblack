@@ -165,13 +165,10 @@ namespace openblack::chlapi
 using namespace openblack::ecs::archetypes;
 
 using openblack::Locator;
-using openblack::MobileStaticInfo;
 using openblack::ecs::components::CreatureMindState;
-using openblack::ecs::components::Transform;
 using openblack::ecs::systems::HandSystemInterface;
 using openblack::lhvm::DataType;
 using openblack::lhvm::VMValue;
-using openblack::script::ObjectType;
 
 #define CREATE_FUNCTION_BINDING(NAME, STACKIN, STACKOUT, FUNCTION)       \
 	{                                                                    \

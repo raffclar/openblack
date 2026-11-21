@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "ObjectDrawListSystem.h"
 
@@ -366,7 +366,7 @@ bool ObjectDrawListSystem::DrawnWith(const Registry& registry, entt::entity enti
 		return Drawn(registry, entity);
 	}
 	const auto* resident = stores.Resident(entity);
-	if (!(_view.has_value() && resident != nullptr && !resident->cells.empty() && !stores.DrawnOnItsOwn(entity)))
+	if (!_view.has_value() || resident == nullptr || resident->cells.empty() || stores.DrawnOnItsOwn(entity))
 	{
 		return true;
 	}

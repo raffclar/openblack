@@ -1783,8 +1783,9 @@ TEST_F(LockstepTest, AClientThatPartsSendsItsPartsAndBothLogsNameThePartThatDiff
 	MakeHost(1);
 	GiveWorldState();
 	// The two worlds differ only in the part "Transform" from the turn of the part on
-	host->SetPartsOfTurn(
-	    [](uint32_t turn) { return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}}; });
+	host->SetPartsOfTurn([](uint32_t turn) {
+		return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}};
+	});
 	Computer alice(network, now, "god:alice");
 	// The world of the computer keeps the hashes of its parts as they were at each turn, also after it loads the server's
 	// world
@@ -1860,8 +1861,9 @@ TEST_F(LockstepTest, TheServerCapturesTheFirstDesyncOfAGodEntityByEntity)
 {
 	MakeHost(1);
 	GiveWorldState();
-	host->SetPartsOfTurn(
-	    [](uint32_t turn) { return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}}; });
+	host->SetPartsOfTurn([](uint32_t turn) {
+		return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}};
+	});
 	const auto entities = [](uint64_t change) {
 		return [change](std::span<const std::string> names) {
 			std::vector<synced_state::PartEntities> parts;
@@ -1925,8 +1927,9 @@ TEST_F(LockstepTest, BothSidesTellTheDesyncWithItsChecksumsAndThePartsThatDiffer
 {
 	MakeHost(1);
 	GiveWorldState();
-	host->SetPartsOfTurn(
-	    [](uint32_t turn) { return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}}; });
+	host->SetPartsOfTurn([](uint32_t turn) {
+		return online::PartHashes {{"entities", 1}, {"Transform", 10 + turn}, {"synced seed", 7}};
+	});
 	struct HostDesync
 	{
 		uint8_t seat {0};

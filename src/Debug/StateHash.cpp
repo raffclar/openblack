@@ -115,6 +115,7 @@ void StateHash::Draw() noexcept
 	if (ImGui::InputTextWithHint("##paste", "Paste a line from another run", _pasteLine.data(), _pasteLine.size(),
 	                             ImGuiInputTextFlags_EnterReturnsTrue))
 	{
+		// NOLINTNEXTLINE(readability-redundant-string-cstr): The text box can hold a null character, and the line stops there.
 		if (auto parsed = state_hash::FromLine(_pasteLine.c_str()); parsed.has_value())
 		{
 			_pinned = std::move(parsed);

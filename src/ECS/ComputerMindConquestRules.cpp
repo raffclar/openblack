@@ -108,6 +108,7 @@ float computer_mind_rules::PeopleCount(uint32_t people)
 
 float computer_mind_rules::RivalPowerCut(bool neutralOwner, float ownerPower, float godPower)
 {
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (neutralOwner || !(godPower < 0.0f || godPower > 0.0f))
 	{
 		return 0.0f;
@@ -154,6 +155,7 @@ float computer_mind_rules::CappedWorth(float worth)
 float computer_mind_rules::RivalBeliefRatio(float strongestRival, float godBelief)
 {
 	// A belief that is 0, or that is not a number, gives 0
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(godBelief < 0.0f || godBelief > 0.0f))
 	{
 		return 0.0f;

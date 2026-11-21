@@ -49,6 +49,7 @@ static_assert(std::endian::native == std::endian::little, "the land textures kee
 /// them. The tests use it to show that each value comes back exactly.
 [[nodiscard]] constexpr float JoinLandTexelBytes(float low, float high)
 {
+	// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 	const auto round = [](float channel) { return static_cast<float>(static_cast<int32_t>((channel * 255.0f) + 0.5f)); };
 	return round(low) + (256.0f * round(high));
 }

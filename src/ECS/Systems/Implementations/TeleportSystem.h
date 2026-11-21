@@ -58,7 +58,7 @@ private:
 	/// The stones of miracles that have closed down or gone go
 	void RemoveOrphans();
 	/// Travellers that went or stopped heading for the stone are dropped from it
-	void PruneTravellers(entt::entity stone);
+	void PruneTravellers(entt::entity entity);
 	/// The stone no longer controls a creature whose plan has no step of the teleport left
 	void DropCreatures();
 

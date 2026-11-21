@@ -71,7 +71,10 @@ struct Harness
 		            }
 		            return result;
 	            },
-	        .world = []() { return std::vector<uint8_t> {1, 2, 3}; },
+	        .world =
+	            []() {
+		            return std::vector<uint8_t> {1, 2, 3};
+	            },
 	        .finished = [this](CaptureRecord record) { finished.push_back(std::move(record)); },
 	    }};
 };

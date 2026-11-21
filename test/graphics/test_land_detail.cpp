@@ -417,6 +417,7 @@ FrameInputs LookingAlongX()
 std::vector<BlockPlace> RowAlongX(int count)
 {
 	std::vector<BlockPlace> blocks;
+	blocks.reserve(count);
 	for (int i = 0; i < count; ++i)
 	{
 		blocks.push_back({.corner = {static_cast<float>(i) * 160.0f, 0.0f}, .at = {i, 0}});

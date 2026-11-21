@@ -32,13 +32,13 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode)
 	;
 	// clang-format on
 
-	std::filesystem::path outFilename;
+	const std::filesystem::path outFilename;
 	try
 	{
 		auto result = options.parse(argc, argv);
 		if (result["help"].as<bool>())
 		{
-			std::cout << options.help() << std::endl;
+			std::cout << options.help() << '\n';
 			returnCode = EXIT_SUCCESS;
 			return false;
 		}
@@ -47,16 +47,14 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode)
 			args.outFilename = result["output-file"].as<std::filesystem::path>();
 			return true;
 		}
-		else
-		{
-			std::cerr << options.help() << std::endl;
-			returnCode = EXIT_FAILURE;
-			return false;
-		}
+
+		std::cerr << options.help() << std::endl;
+		returnCode = EXIT_FAILURE;
+		return false;
 	}
 	catch (cxxopts::exceptions::parsing& err)
 	{
-		std::cerr << err.what() << std::endl;
+		std::cerr << err.what() << '\n';
 		returnCode = EXIT_FAILURE;
 		return false;
 	}
@@ -83,7 +81,7 @@ int main(int argc, char* argv[]) noexcept
 		std::memcpy(abode.debugString.data(), abodeDebugName.c_str(), abodeDebugName.length());
 		abode.meshId = static_cast<openblack::MeshId>(static_cast<uint32_t>(openblack::MeshId::BuildingCeltic1) + i);
 	}
-	std::string townCentreDebugName = "ABODE_TOWN_CENTRE";
+	const std::string townCentreDebugName = "ABODE_TOWN_CENTRE";
 	constants.abode[12].abodeNumber = openblack::AbodeNumber::TownCentre;
 	std::memcpy(constants.abode[12].debugString.data(), townCentreDebugName.c_str(), townCentreDebugName.length());
 	constants.abode[12].meshId = openblack::MeshId::BuildingCelticVillageCentre;

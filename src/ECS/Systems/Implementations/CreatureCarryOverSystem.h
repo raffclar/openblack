@@ -83,7 +83,7 @@ private:
 	/// The player's creatures that have lived another 600 turns are written to the player's files
 	void SaveAsTheyLive();
 	/// The player's creature is written to its files each time it has lived 600 more turns
-	void SaveAsItLives(entt::entity creature);
+	void SaveAsItLives(entt::entity entity);
 	/// The sparkle into sight of the creatures from a last land, or of one creature, moves on
 	void StepArrivals(std::optional<entt::entity> creature);
 

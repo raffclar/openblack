@@ -159,11 +159,11 @@ TEST(InspectorProtocol, InvalidTextIsReplacedNotRefused)
 
 TEST(InspectorProtocol, TheLogKeepsOnlyTheSizeOfTypedLetters)
 {
-	Request typed {.id = 1, .query = "input.text", .params = {{"text", "secret12"}}, .options = {}};
+	const Request typed {.id = 1, .query = "input.text", .params = {{"text", "secret12"}}, .options = {}};
 	const auto logged = ForTheLog(typed);
 	EXPECT_EQ(logged.params.at("text"), "(8 bytes)");
 	EXPECT_EQ(Dump(logged.params).find("secret12"), std::string::npos);
 	// Other queries keep their parameters
-	Request key {.id = 2, .query = "input.key", .params = {{"key", "Tab"}}, .options = {}};
+	const Request key {.id = 2, .query = "input.key", .params = {{"key", "Tab"}}, .options = {}};
 	EXPECT_EQ(ForTheLog(key).params.at("key"), "Tab");
 }

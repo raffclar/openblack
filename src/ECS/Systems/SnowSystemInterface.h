@@ -35,7 +35,7 @@ class ObjectDrawListSystemInterface;
 class SnowSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~SnowSystemInterface() = default;
+	~SnowSystemInterface() override = default;
 
 	/// As a new land opens: no snow anywhere
 	virtual void Reset() = 0;

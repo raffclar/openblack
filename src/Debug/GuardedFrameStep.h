@@ -24,10 +24,18 @@ namespace openblack::frame_write_guard
 /// What the guard of a frame step reads from the game
 template <typename T>
 concept StepWorld = requires(T& world) {
-	{ world.Turn() } -> std::convertible_to<uint32_t>;
-	{ world.TakeFrameWrites() } -> std::convertible_to<temple::FrameWrites>;
-	{ world.LandLoads() } -> std::convertible_to<uint32_t>;
-	{ world.IsNetworkGame() } -> std::convertible_to<bool>;
+	{
+		world.Turn()
+	} -> std::convertible_to<uint32_t>;
+	{
+		world.TakeFrameWrites()
+	} -> std::convertible_to<temple::FrameWrites>;
+	{
+		world.LandLoads()
+	} -> std::convertible_to<uint32_t>;
+	{
+		world.IsNetworkGame()
+	} -> std::convertible_to<bool>;
 };
 
 /// Plays one frame step under the guard of a tool's run (see Guard). With no guard, the step only plays. The guard does

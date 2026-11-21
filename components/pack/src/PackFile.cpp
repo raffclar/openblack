@@ -437,8 +437,8 @@ std::optional<std::pair<DdsHeader, std::vector<uint8_t>>> ReadDds(std::span<cons
 PackResult PackFile::ExtractTexturesFromBlock() noexcept
 {
 	G3DTextureHeader header;
-	constexpr uint32_t blockNameSize = 0x20;
-	std::array<char, blockNameSize> blockName;
+	constexpr uint32_t k_BlockNameSize = 0x20;
+	std::array<char, k_BlockNameSize> blockName;
 	for (const auto& item : _infoBlockLookup)
 	{
 		// Convert int id to string representation as hexadecimal key
@@ -498,25 +498,25 @@ PackResult PackFile::ExtractAnimationsFromBlock() noexcept
 	imemstream stream(reinterpret_cast<const char*>(data.data()), data.size());
 
 	// Read lookup
-	constexpr uint32_t blockNameSize = 0x20;
-	constexpr uint32_t animationHeaderSize = 0x54;
+	constexpr uint32_t k_BlockNameSize = 0x20;
+	constexpr uint32_t k_AnimationHeaderSize = 0x54;
 
-	std::array<char, blockNameSize> blockName;
+	std::array<char, k_BlockNameSize> blockName;
 	_animations.resize(_bodyBlockLookup.size());
 	for (uint32_t i = 0; i < _bodyBlockLookup.size(); ++i)
 	{
-		snprintf(blockName.data(), blockNameSize, "Julien%d", i);
+		snprintf(blockName.data(), k_BlockNameSize, "Julien%d", i);
 		if (!HasBlock(blockName.data()))
 		{
 			return PackResult::ErrMissingTextureBlock;
 		}
 
 		auto animationData = GetBlock(blockName.data());
-		_animations[i].resize(animationHeaderSize + animationData.size());
+		_animations[i].resize(k_AnimationHeaderSize + animationData.size());
 
 		stream.seekg(_bodyBlockLookup[i].offset);
-		stream.read(reinterpret_cast<char*>(_animations[i].data()), animationHeaderSize);
-		memcpy(_animations[i].data() + animationHeaderSize, animationData.data(), animationData.size());
+		stream.read(reinterpret_cast<char*>(_animations[i].data()), k_AnimationHeaderSize);
+		memcpy(_animations[i].data() + k_AnimationHeaderSize, animationData.data(), animationData.size());
 	}
 
 	return PackResult::Success;

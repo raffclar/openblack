@@ -316,6 +316,7 @@ TEST(FootpathObstaclesClear, APathClearOfTheThingIsLeftAsItIsWithNoCalls)
 	{
 		std::vector<obstacle_rules::KeyedNode> nodes;
 		const auto count = 2 + next(6);
+		nodes.reserve(count);
 		for (int32_t i = 0; i < count; ++i)
 		{
 			nodes.push_back({.node = {.place = East(static_cast<float>(next(200))) + glm::ivec2 {0, next(400000)},
@@ -379,6 +380,7 @@ TEST(FootpathObstaclesClear, APathWithNoNodeInTheReturnSquareIsLeftAsItIsWithNoC
 		                                      .place = East(100.0f + static_cast<float>(next(60)))};
 		std::vector<obstacle_rules::KeyedNode> nodes;
 		const auto count = 2 + next(6);
+		nodes.reserve(count);
 		for (int32_t i = 0; i < count; ++i)
 		{
 			nodes.push_back(

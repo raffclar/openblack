@@ -18,8 +18,6 @@
 #include "ECS/Components/CreatureDrawnFeet.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_creatured(entt::meta_ctx& context);

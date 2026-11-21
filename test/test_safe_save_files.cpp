@@ -202,7 +202,7 @@ TEST(SafeSaveFiles, ALoadCountsItsAttemptInTheFile)
 
 TEST(SafeSaveFiles, AFileOfTheVersionBeforeHasNoCount)
 {
-	gamesave::WorldFile old {.version = 3, .attempts = 5, .chunks = {{.tag = gamesave::k_GameTag, .bytes = {4}}}};
+	const gamesave::WorldFile old {.version = 3, .attempts = 5, .chunks = {{.tag = gamesave::k_GameTag, .bytes = {4}}}};
 	const auto bytes = gamesave::Write(old);
 	EXPECT_EQ(gamesave::ReadAttempts(bytes), 0u);
 	const auto read = gamesave::ReadWorldFile(bytes);

@@ -681,8 +681,10 @@ struct ScriptFindRequest
 	std::optional<uint32_t> finalState;
 };
 
+namespace
+{
 /// The game's number for the state a living thing is in for itself, none for what isn't a villager or an animal
-static std::optional<uint8_t> FinalGameStateOf(const ecs::Registry& registry, entt::entity thing)
+std::optional<uint8_t> FinalGameStateOf(const ecs::Registry& registry, entt::entity thing)
 {
 	if (const auto* action = registry.TryGet<const ecs::components::LivingAction>(thing);
 	    action != nullptr && registry.AllOf<ecs::components::Villager>(thing) && Locator::livingActionSystem::has_value())
@@ -697,7 +699,7 @@ static std::optional<uint8_t> FinalGameStateOf(const ecs::Registry& registry, en
 }
 
 /// The place from which the scripts' searches measure a thing: the altar of a worship site, else the thing itself
-static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, entt::entity entity)
+map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, entt::entity entity)
 {
 	const auto measured = ecs::script_find::MeasuredFrom(registry, entity);
 	const auto* transform = registry.TryGet<const Transform>(measured);
@@ -706,7 +708,7 @@ static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, e
 }
 
 /// The things in a cell of the map that a search asks for
-static std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const ScriptFindRequest& request, glm::ivec2 cell)
+std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const ScriptFindRequest& request, glm::ivec2 cell)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const std::vector<entt::entity> things = Locator::entitiesMap::value().GetAllInCell(cell);
@@ -746,7 +748,7 @@ static std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const Scrip
 }
 
 /// The town nearest a place strictly within the reach, each player's towns in turn and the neutral ones last
-static entt::entity FindScriptTown(const map_coords::MapCoords& at, float reach)
+entt::entity FindScriptTown(const map_coords::MapCoords& at, float reach)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	std::vector<ecs::script_find::Candidate> ordered;
@@ -762,7 +764,7 @@ static entt::entity FindScriptTown(const map_coords::MapCoords& at, float reach)
 
 /// The creature a script's search finds, taken into the scripts' table, or none. The search looks at the creatures, the
 /// newest first.
-static entt::entity FindCreatureForScript(uint32_t subtype, const glm::vec3& position, std::optional<float> radius)
+entt::entity FindCreatureForScript(uint32_t subtype, const glm::vec3& position, std::optional<float> radius)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	std::vector<std::pair<uint64_t, ecs::script_find::CreatureCandidate>> made;
@@ -792,8 +794,8 @@ static entt::entity FindCreatureForScript(uint32_t subtype, const glm::vec3& pos
 /// The thing a script's search finds, taken into the scripts' table, or none. Types with no search (markers, dances,
 /// flocks and two unused ones) and types out of range are an error. A creature has a search of its own. A search for
 /// livings in a state looks through the cells within the radius but doesn't measure the distance of what it finds there.
-static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec3& position, std::optional<float> radius,
-                                  bool excludingScripted, std::optional<uint32_t> inState = std::nullopt)
+entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec3& position, std::optional<float> radius,
+                           bool excludingScripted, std::optional<uint32_t> inState = std::nullopt)
 {
 	constexpr int32_t k_LastFindType = 41;
 	if (type < 1 || type > k_LastFindType)
@@ -849,6 +851,7 @@ static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec
 	Locator::scriptObjects::value().Register(found, false);
 	return found;
 }
+} // namespace
 
 void Call() // 026 CALL
 {
@@ -861,10 +864,12 @@ void Call() // 026 CALL
 	Pusho(found == entt::null ? 0u : static_cast<uint32_t>(found));
 }
 
+namespace
+{
 /// A thing that a script makes goes into the map cells immediately, as the game puts each new thing in the map when it
 /// makes it. A script can then make a villager and release it in the same turn: the villager stands in the map and
 /// starts its usual tasks again. A thing in a hand or in flight does not go into the cells.
-static void FileInMapAtOnce(entt::entity object)
+void FileInMapAtOnce(entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object) || !Locator::entitiesMap::has_value() ||
@@ -875,6 +880,7 @@ static void FileInMapAtOnce(entt::entity object)
 	}
 	Locator::entitiesMap::value().Refile(object);
 }
+} // namespace
 
 /// CREATE and CREATE_WITH_ANGLE_AND_SCALE: a thing of a type the scripts may create, turned and scaled, which the script
 /// then holds; none for any other type, or when nothing could be made
@@ -971,9 +977,11 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 	NotImplemented();
 }
 
+namespace
+{
 /// A thing a script deletes goes at once: a creature leaves the game, a dance's dancers go back to deciding what to do,
 /// a flock's members are in no flock any more
-static void DeleteNow(entt::entity object)
+void DeleteNow(entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (registry.AllOf<ecs::components::Creature>(object))
@@ -1005,6 +1013,7 @@ static void DeleteNow(entt::entity object)
 		ecs::world_objects::Remove(object);
 	}
 }
+} // namespace
 
 void ObjectDelete() // 048 OBJECT_DELETE
 {
@@ -1145,9 +1154,11 @@ void CallIn() // 055 CALL_IN
 	Pusho(0);
 }
 
+namespace
+{
 /// The first thing of a type and subtype in a container, inside the radius of a place or outside it. The game uses
 /// the same search for a town or a flock in the two cases, and only the distance test changes.
-static void CallInByDistance(bool near)
+void CallInByDistance(bool near)
 {
 	const auto excludingScripted = Pop().intVal != 0;
 	const auto radius = Popf();
@@ -1215,6 +1226,7 @@ static void CallInByDistance(bool near)
 	}
 	notFound();
 }
+} // namespace
 
 void CallInNear() // 067 CALL_IN_NEAR
 {
@@ -1738,9 +1750,11 @@ void GameThingHit() // 194 GAME_THING_HIT
 	Pushb(shield != nullptr && shield->spell == object);
 }
 
+namespace
+{
 /// The walk speed of a thing in metres a turn, as the slowest speed of a group reads it: an animal's speed also when it
 /// is dead, a villager's speed of its walk, and 0 for a thing that does not walk
-static float WalkSpeedOf(const ecs::Registry& registry, entt::entity thing)
+float WalkSpeedOf(const ecs::Registry& registry, entt::entity thing)
 {
 	if (const auto* animal = registry.TryGet<const ecs::components::Animal>(thing); animal != nullptr)
 	{
@@ -1752,6 +1766,7 @@ static float WalkSpeedOf(const ecs::Registry& registry, entt::entity thing)
 	}
 	return 0.0f;
 }
+} // namespace
 
 void GetSlowestSpeed() // 198 GET_SLOWEST_SPEED
 {
@@ -2357,8 +2372,10 @@ void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED
 	                                                 static_cast<uint32_t>(msPerTurn.count())));
 }
 
+namespace
+{
 /// What the search for the dead looks at in a thing
-static script::dead_living::LivingFacts DeadLivingFactsOf(const ecs::Registry& registry, entt::entity thing)
+script::dead_living::LivingFacts DeadLivingFactsOf(const ecs::Registry& registry, entt::entity thing)
 {
 	using script::dead_living::LivingFacts;
 	if (registry.AllOf<ecs::components::Villager>(thing))
@@ -2384,6 +2401,7 @@ static script::dead_living::LivingFacts DeadLivingFactsOf(const ecs::Registry& r
 	}
 	return {};
 }
+} // namespace
 
 void GetDeadLiving() // 446 GET_DEAD_LIVING
 {

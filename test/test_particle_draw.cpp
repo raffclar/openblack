@@ -586,7 +586,7 @@ TEST(ParticleDraw, RibbonFramesRepeatAlongTheChain)
 
 TEST(ParticleDraw, PlayersSymbolsGlowInTheirColour)
 {
-	Creator creator;
+	const Creator creator;
 	Effect::DrawAtom atom {.creator = &creator,
 	                       .position = {1.0f, 2.0f, 3.0f},
 	                       .rotation = glm::mat3(1.0f),
@@ -622,16 +622,16 @@ TEST(ParticleDraw, PlayersSymbolsGlowInTheirColour)
 // In a game with more player numbers than the squares of a land's sheet, the symbol takes its cell of eight to a row
 TEST(ParticleDraw, ALaterGodsSymbolTakesItsCellOfTheWiderSheet)
 {
-	Creator creator;
-	Effect::DrawAtom atom {.creator = &creator,
-	                       .position = {1.0f, 2.0f, 3.0f},
-	                       .rotation = glm::mat3(1.0f),
-	                       .scale = 2.0f,
-	                       .stretch = 1.0f,
-	                       .alpha = 255.0f,
-	                       .frame = 0.0f,
-	                       .rgb = {255, 255, 255},
-	                       .age = 0.0f};
+	const Creator creator;
+	const Effect::DrawAtom atom {.creator = &creator,
+	                             .position = {1.0f, 2.0f, 3.0f},
+	                             .rotation = glm::mat3(1.0f),
+	                             .scale = 2.0f,
+	                             .stretch = 1.0f,
+	                             .alpha = 255.0f,
+	                             .frame = 0.0f,
+	                             .rgb = {255, 255, 255},
+	                             .age = 0.0f};
 	constexpr int k_Wide = 8;
 	const auto symbol = SymbolOf(atom, 0xFF4646u, 20, k_Wide);
 	// Player 20: the fifth cell of the third row

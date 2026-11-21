@@ -116,6 +116,7 @@ std::optional<float> script_weather::ClimateShare(const ClimateWind& climate, gl
 	// Within the square round its reach, then within its reach
 	const auto& centre = climate.centre;
 	const float outer = climate.outerRadius;
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(centre.x - outer <= point.x && point.x <= centre.x + outer && centre.y - outer <= point.y &&
 	      point.y <= centre.y + outer))
 	{

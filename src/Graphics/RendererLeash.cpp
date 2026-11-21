@@ -8,7 +8,7 @@
  *******************************************************************************/
 
 // The renderer is one of the locator's implementations
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstring>
 
@@ -69,6 +69,7 @@ const bgfx::VertexLayout& Layout()
 /// White, or black for the shadow, at an opacity
 uint32_t Abgr(float alpha, bool black)
 {
+	// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 	const auto a = static_cast<uint32_t>(std::clamp(alpha, 0.0f, 1.0f) * 255.0f + 0.5f);
 	return (a << 24u) | (black ? 0u : 0xFFFFFFu);
 }
@@ -167,7 +168,7 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 			rope->SetTextureSampler("s_landColour", 8, GetLandColour());
 			rope->SetUniformValue("u_islandExtent", &islandExtent);
 			rope->SetUniformValue("u_landLight", &u_landLight);
-			rope->SetUniformValue("u_haze", &_haze[0]);
+			rope->SetUniformValue("u_haze", _haze.data());
 			rope->SetUniformValue("u_hazeColour", &_haze[1]);
 			bgfx::setVertexBuffer(0, &vertices);
 			bgfx::setIndexBuffer(&indices);

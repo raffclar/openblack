@@ -54,7 +54,7 @@ struct Row
 /// Whether our value is the game's value, bit for bit. A value that is not a number only has to be not a number.
 bool Same(float ours, uint32_t game)
 {
-	const float gameValue = std::bit_cast<float>(game);
+	const auto gameValue = std::bit_cast<float>(game);
 	if (std::isnan(gameValue))
 	{
 		return std::isnan(ours);

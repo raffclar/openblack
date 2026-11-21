@@ -164,9 +164,7 @@ using namespace openblack;
 using namespace openblack::testbed_scenarios;
 using namespace openblack::testbed_scenarios::runner_parts;
 using openblack::ecs::archetypes::CreatureArchetype;
-using openblack::ecs::components::Creature;
 using openblack::ecs::components::CreatureMindState;
-using openblack::ecs::components::Transform;
 
 namespace
 {
@@ -1100,9 +1098,9 @@ void Runner::PlaceCreatures(const Scenario& scenario, glm::vec2 middle)
 			auto& leashes = Locator::leashSystem::value();
 			for (const auto type : creature_leash::k_Types)
 			{
-				const bool known = !setup.knowsNoLeash &&
-				                   (!setup.knownLeashes.has_value() ||
-				                    std::ranges::find(*setup.knownLeashes, type) != setup.knownLeashes->end());
+				const bool known =
+				    !setup.knowsNoLeash && (!setup.knownLeashes.has_value() ||
+				                            std::ranges::find(*setup.knownLeashes, type) != setup.knownLeashes->end());
 				leashes.SetKnown(entity, type, known);
 			}
 			if (setup.leashable.has_value())

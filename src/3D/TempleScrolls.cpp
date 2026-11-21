@@ -97,7 +97,7 @@ bool SameName(std::string_view a, std::string_view b)
 std::u16string Format(std::u16string_view format, std::initializer_list<int32_t> values)
 {
 	std::u16string result;
-	auto value = values.begin();
+	const auto* value = values.begin();
 	for (size_t i = 0; i < format.size(); ++i)
 	{
 		if (format[i] != u'%' || i + 1 >= format.size())

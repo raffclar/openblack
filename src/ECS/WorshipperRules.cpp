@@ -25,6 +25,7 @@ int32_t Target(uint32_t population, float share)
 		return 0;
 	}
 	// Rounded to the nearest person, and never fewer than one
+	// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 	const auto wanted = static_cast<int32_t>(static_cast<float>(population) * share + 0.5f);
 	return std::max(wanted, 1);
 }

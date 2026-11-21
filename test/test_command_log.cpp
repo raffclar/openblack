@@ -57,7 +57,7 @@ TEST(CommandLog, TheCommandsOfEachLandReadApart)
 	std::filesystem::create_directories(folder);
 	const auto path = folder / "commands.jsonl";
 	const std::vector<player_commands::Command> commands {
-	    {.player = PlayerNames::PLAYER_ONE, .action = player_commands::HandTake {.object = entt::entity(5)}}};
+	    {.player = PlayerNames::PLAYER_ONE, .action = player_commands::HandTake {.object = static_cast<entt::entity>(5)}}};
 	{
 		command_log::Writer writer(path);
 		writer.Write(3, commands);

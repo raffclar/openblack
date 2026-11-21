@@ -62,6 +62,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -79,6 +81,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -96,6 +100,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -113,6 +119,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -130,6 +138,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -147,6 +157,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -164,6 +176,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -181,6 +195,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -936,6 +952,8 @@ public:
 				return {{1000.0, 892.7038574}};
 			case 800:
 				return {{1000.0, 892.7038574}};
+			default:
+				break;
 			}
 			return std::nullopt;
 		}
@@ -953,6 +971,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -970,6 +990,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return {{1000.0, 1053.9960938}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -987,6 +1009,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return {{1000.0, 1092.4531250}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -1004,6 +1028,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return {{1000.0, 1102.6950684}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -1021,6 +1047,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return {{1000.0, 1107.2592773}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -1038,6 +1066,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return {{1000.0, 1109.9497070}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -1055,6 +1085,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return {{1000.0, 1111.6485596}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -2130,6 +2162,8 @@ public:
 				return {{996.0671997, 1114.2788086}};
 			case 801:
 				return {{996.0671997, 1114.2788086}};
+			default:
+				break;
 			}
 			return std::nullopt;
 		}

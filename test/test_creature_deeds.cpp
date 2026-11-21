@@ -93,7 +93,7 @@ TEST(CreatureDeeds, ALandingNearTheTempleIsTakenHomeOrStolen)
 	EXPECT_FALSE(LandingDeed(stolen).has_value());
 	stolen.nearestTown = PlayerNames::PLAYER_ONE;
 	EXPECT_EQ(LandingDeed(stolen), k_StealObjectAndPutInTown);
-	Landing nothing {.player = PlayerNames::PLAYER_ONE, .nearestTown = PlayerNames::PLAYER_ONE};
+	const Landing nothing {.player = PlayerNames::PLAYER_ONE, .nearestTown = PlayerNames::PLAYER_ONE};
 	EXPECT_FALSE(LandingDeed(nothing).has_value());
 }
 

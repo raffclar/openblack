@@ -176,7 +176,7 @@ void creature_mind_model::Learn(Learnt& learnt, TreeKind kind, Desire desire, cr
 	const auto d = static_cast<size_t>(desire);
 	auto& episodes = learnt.episodes.at(k).at(d);
 	episode.lessonKind = LessonKind(kind);
-	creature_tree::AddEpisode(episodes, std::move(episode));
+	creature_tree::AddEpisode(episodes, episode);
 	learnt.trees.at(k).at(d) = creature_tree::Build(episodes, allowed);
 }
 
@@ -265,7 +265,7 @@ LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file,
 			belief.x = saved.belief.x;
 			belief.z = saved.belief.z;
 			episodes.push_back({
-			    .belief = std::move(belief),
+			    .belief = belief,
 			    .feedback = saved.feedback,
 			    .action = saved.action,
 			    .savedDesire = saved.desire,

@@ -229,7 +229,7 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 	              Serve<Locator::vortexSystem>(
 	                  "the vortices", [](const ecs::systems::VortexSystemInterface& vortices, const QueryContext& /*c*/) {
 		                  Json items = Json::array();
-		                  if (auto* registry = Registry(); registry != nullptr)
+		                  if (const auto* registry = Registry(); registry != nullptr)
 		                  {
 			                  registry->Each<const ecs::components::Vortex>(
 			                      [&items, &vortices](entt::entity entity, const ecs::components::Vortex& vortex) {

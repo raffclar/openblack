@@ -12,7 +12,6 @@
 #include "Input/SelectPress.h"
 
 using openblack::input::select_press::Event;
-using openblack::input::select_press::Facts;
 using openblack::input::select_press::Next;
 
 TEST(SelectPress, APressThatGripsTheLandAloneSetsTheFlag)

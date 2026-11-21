@@ -35,7 +35,7 @@ public:
 		std::function<void(bool helpScript)> released;
 	};
 
-	virtual ~DialogueControlSystemInterface() = default;
+	~DialogueControlSystemInterface() override = default;
 
 	virtual void SetHooks(Hooks hooks) = 0;
 

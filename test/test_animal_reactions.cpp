@@ -148,8 +148,9 @@ TEST(AnimalReactions, AnAnimalThatDiesOrFallsInAReactionStateStopsTheReaction)
 	constexpr uint8_t k_Downed = 17;
 	for (uint8_t state = 0; state < 60; ++state)
 	{
-		EXPECT_EQ(animals::StateChangeEndsReaction(state, k_Dying), animals::IsReactionState(state)) << int(state);
-		EXPECT_EQ(animals::StateChangeEndsReaction(state, k_Downed), animals::IsReactionState(state)) << int(state);
+		EXPECT_EQ(animals::StateChangeEndsReaction(state, k_Dying), animals::IsReactionState(state)) << static_cast<int>(state);
+		EXPECT_EQ(animals::StateChangeEndsReaction(state, k_Downed), animals::IsReactionState(state))
+		    << static_cast<int>(state);
 	}
 }
 

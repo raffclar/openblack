@@ -288,7 +288,7 @@ TEST(LandgenDump, WritesTheLandOfEachSeedWhenTheEnvironmentAsksForIt)
 			}
 			const auto name = pair.substr(0, equals);
 			const float value = std::stof(pair.substr(equals + 1));
-			for (auto& [key, field] :
+			for (const auto& [key, field] :
 			     std::initializer_list<std::pair<const char*, float*>> {{"halfWidth", &settings.roads.halfWidth},
 			                                                            {"cutSlope", &settings.roads.cutSlope},
 			                                                            {"fillSlope", &settings.roads.fillSlope},

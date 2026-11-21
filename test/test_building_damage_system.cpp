@@ -11,7 +11,7 @@
 // its pieces fly from the building and go when their time is up, big pieces at rest go back into it as rubble, a rock's
 // blow is heard or breaks by its momentum, and the harm is put down to the right player.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstddef>
 
@@ -330,7 +330,7 @@ struct Fixture
 
 TEST(BuildingDamageSystem, ACreaturesBlowBreaksTheBuildingWhereItStandsAndIsPutDownToItsPlayer)
 {
-	Fixture f;
+	const Fixture f;
 	const auto creature = f.world->registry.Create();
 	f.world->players[creature] = PlayerNames::PLAYER_TWO;
 	f.system->Smash(f.house, creature, 1.0f);
@@ -441,6 +441,7 @@ TEST(BuildingDamageSystem, EveryPieceOfABuildingTakesAPlaceInTheCountOfThingsMad
 	ASSERT_FALSE(f.world->placesTaken.empty());
 	EXPECT_EQ(f.world->placesTaken.size(), f.world->dynamics.launched.size());
 	std::vector<entt::entity> launched;
+	launched.reserve(f.world->dynamics.launched.size());
 	for (const auto& piece : f.world->dynamics.launched)
 	{
 		launched.push_back(piece.object);
@@ -498,7 +499,7 @@ TEST(BuildingDamageSystem, TheBrokenModelMarksTheCornersOfItsBackFacesForTheSnow
 
 TEST(BuildingDamageSystem, ABrokenBuildingOnSlopingLandKeepsTheNormalOfEachTriangleInTheWorld)
 {
-	Fixture f;
+	const Fixture f;
 	// The wall leans back by 45 degrees and follows land that rises 1 metre for each metre along z
 	f.world->slope = 1.0f;
 	const float half = glm::sqrt(0.5f);
@@ -609,7 +610,7 @@ TEST(BuildingDamageSystem, ABigPieceAtRestGoesBackIntoItsBuildingAsRubbleAndASma
 
 TEST(BuildingDamageSystem, ARockThatGoesIsForgottenAndAResetForgetsEveryBrokenBuilding)
 {
-	Fixture f;
+	const Fixture f;
 	f.system->Smash(f.house, entt::null, 1.0f);
 	auto& registry = f.world->registry;
 	const auto rock = registry.Create();
@@ -628,7 +629,7 @@ TEST(BuildingDamageSystem, ARockThatGoesIsForgottenAndAResetForgetsEveryBrokenBu
 // damage stay as they were before the save.
 TEST(BuildingDamageSystem, ALoadMakesTheModelOfABrokenBuildingAgainUnderTheSameVersion)
 {
-	Fixture f;
+	const Fixture f;
 	const auto creature = f.world->registry.Create();
 	f.system->Smash(f.house, creature, 1.0f);
 	ASSERT_TRUE(f.world->registry.AllOf<BuildingDamage>(f.house));
@@ -660,7 +661,7 @@ TEST(BuildingDamage, ABrokenBuildingIsDrawnWithItsBrokenModelOnceItHasOne)
 
 TEST(BuildingDamageSystem, OnlyABrokenBuildingOrOneWithARepairSiteOrABuiltAmountShowsAPart)
 {
-	Fixture f;
+	const Fixture f;
 	for (const float life : {0.0f, 0.3f, 1.0f})
 	{
 		f.world->life = life;

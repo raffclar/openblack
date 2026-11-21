@@ -160,8 +160,8 @@ public:
 	void EndCreatureCastBeams(entt::entity creature) override;
 	entt::entity CastOnObject(MagicType type, PlayerNames player, entt::entity target, const magic::SpellCastData& cast,
 	                          const particles::ProcessInfo& info) override;
-	void CloseDown(entt::entity spell) override;
-	void DeleteSpell(entt::entity spell) override;
+	void CloseDown(entt::entity entity) override;
+	void DeleteSpell(entt::entity entity) override;
 	void ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values, PlayerNames player) override
 	{
 		_world.ApplyEffectAt(point, values, {.player = player});
@@ -176,8 +176,8 @@ public:
 	}
 	[[nodiscard]] bool CanCastAt(MagicType type, PlayerNames player, glm::vec3 point) override;
 	[[nodiscard]] bool MeetsKindRule(MagicType type, glm::vec3 point, bool onThing) override;
-	bool SpellEvent(entt::entity spell, const particles::SpellEventInfo& event) override;
-	void PayForSpell(entt::entity spell, float cost) override;
+	bool SpellEvent(entt::entity entity, const particles::SpellEventInfo& event) override;
+	void PayForSpell(entt::entity entity, float cost) override;
 
 	entt::entity CreateDispenser(glm::vec3 position, MagicType type, float yAngleRadians) override;
 	entt::entity CreateScriptDispenser(glm::vec3 position, AbodeInfo building, float yAngleRadians, float scale,
@@ -201,14 +201,14 @@ public:
 	void DiscardHeldSeed() override;
 	void DiscardHeldSeedOf(PlayerNames player) override;
 	void ShakeOffHeldSeedOf(PlayerNames player) override;
-	void DeleteSeed(entt::entity seed) override;
-	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
-	bool TakeSeedBack(PlayerNames player, entt::entity seed) override;
+	void DeleteSeed(entt::entity entity) override;
+	void SetIconSeedPowerUp(entt::entity entity, int powerUp) override;
+	bool TakeSeedBack(PlayerNames player, entt::entity entity) override;
 	[[nodiscard]] std::optional<uint32_t> TakeHeldMiracleToolTip() override;
 
 	void UpdateHand(const HandFrame& frame, const input_steps::Steps& steps) override;
 	bool TapFireBall(entt::entity ball) override;
-	bool TapGlobe(entt::entity globe, PlayerNames player) override;
+	bool TapGlobe(entt::entity orb, PlayerNames player) override;
 	bool PressFireBall(uint32_t nowMs, uint32_t turn) override;
 	void HoldFireBall(uint32_t nowMs, uint32_t turn) override;
 	void ReleaseFireBall(uint32_t nowMs, uint32_t turn) override;
@@ -252,9 +252,9 @@ public:
 	[[nodiscard]] std::optional<magic::HeldCastAtPointer> HeldCastAt(std::optional<entt::entity> pointed) const override;
 
 	bool SendSpellEvent(entt::entity spell, const particles::SpellEventInfo& event) override;
-	float ForcePayForSpell(entt::entity spell, float cost) override;
-	[[nodiscard]] float SpellStrength(entt::entity spell) override;
-	void SetSpellRadius(entt::entity spell, float radius) override;
+	float ForcePayForSpell(entt::entity entity, float cost) override;
+	[[nodiscard]] float SpellStrength(entt::entity entity) override;
+	void SetSpellRadius(entt::entity entity, float radius) override;
 
 	void ProcessTurn() override;
 	void Update(float seconds) override;
@@ -310,13 +310,13 @@ private:
 	class HandEffectLink;
 
 	/// An event a miracle's effect sent it; whether it acted
-	bool OnSpellEvent(entt::entity spell, const particles::SpellEventInfo& event);
+	bool OnSpellEvent(entt::entity entity, const particles::SpellEventInfo& event);
 	/// The miracle's upkeep and age for a turn, and what it hands its effect
 	void Maintain(entt::entity entity, components::Spell& spell);
 	/// The miracle's turn: its caster tops it up, its effect steps, its kind does what more it does; false once it is
 	/// over
 	bool Process(entt::entity entity, components::Spell& spell);
-	void Delete(entt::entity spell);
+	void Delete(entt::entity entity);
 	void ProcessDispensers();
 	/// Whether a magic type may be cast on an object: a creature spell only on a creature
 	[[nodiscard]] bool CanCastOn(MagicType type, entt::entity target) const;
@@ -346,7 +346,7 @@ private:
 	void ReceiveCreatureSpell(entt::entity creature, entt::entity miracle, components::Spell& spell);
 	/// A turn of every creature's spells, and what each does to it
 	void ProcessCreatureSpells();
-	void ApplyCreatureSpell(entt::entity creature, const creature_spells::TurnEvent& event);
+	void ApplyCreatureSpell(entt::entity entity, const creature_spells::TurnEvent& event);
 	/// In the turn of a creature spell, the hand of this computer starts to pour the phial onto the head of the creature,
 	/// one time, while it holds the phial. The pour stops when the spell ends.
 	void PourPhialTurn(entt::entity entity, const components::Spell& spell);
@@ -362,7 +362,7 @@ private:
 		int32_t sample;
 	};
 	std::vector<CreatureSpellSound> _creatureSpellSounds;
-	entt::entity MakeOrb(entt::entity dispenser);
+	entt::entity MakeOrb(entt::entity entity);
 
 	/// What a miracle that follows the hand reads at the turn: the hand, the camera and the hand's velocity as the reports
 	/// of the player give them. Before the first report, the last values stay.
@@ -402,7 +402,7 @@ private:
 	[[nodiscard]] bool HeldSpellRunsInHand() const;
 	/// At the turn: the held seed's miracle cast as the command gives it, or applied again when it runs. The miracle, or
 	/// none.
-	entt::entity CastHeldSeed(const player_commands::HandCast& cast);
+	entt::entity CastHeldSeed(const player_commands::HandCast& command);
 	/// What becomes of the seed once its miracle is cast: it stays, goes, or leaves the hand with its miracle
 	void AfterCast(entt::entity spell);
 	void FailCast();
@@ -446,7 +446,7 @@ private:
 	/// A seed's prayer power goes back to the worship site that made it, or to its player's prayer power
 	void ReturnFromSeed(const components::SpellSeed& seed, float amount);
 	/// The seed's in-hand effect, started, stepped and moved with the hand
-	void StartHandEffect(entt::entity seed);
+	void StartHandEffect(entt::entity entity);
 	void StopHandEffect(components::SpellSeed& seed);
 	/// The held seed as the hand shows it, after it came to the hand, became ready or was powered up: how the hand holds
 	/// it, its model once it is ready (for the seeds that show one), and its in-hand effect drawn once it is ready

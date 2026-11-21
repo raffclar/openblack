@@ -162,7 +162,7 @@ void cliffs::LimitFaces(Grid<float>& heights, const HeightCurve& curve, float se
 	{
 		return;
 	}
-	const float last = static_cast<float>(side - 1);
+	const auto last = static_cast<float>(side - 1);
 	// The work is in height units, so that a rise is the same on the low land and on the mountains
 	std::vector<float> units(heights.values.size());
 	std::vector<float> limit(heights.values.size());

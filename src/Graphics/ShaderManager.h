@@ -73,7 +73,7 @@ public:
 
 	/// Under Vulkan, lets only the draws first to first + count - 1 into the views go to the GPU. Gives false if the
 	/// renderer does not need the window, which then lets all draws go.
-	bool OpenDrawWindow(uint32_t first, uint32_t count, std::span<const uint16_t> views) const;
+	[[nodiscard]] bool OpenDrawWindow(uint32_t first, uint32_t count, std::span<const uint16_t> views) const;
 	/// Stops the draw window. Gives the number of draws into its views while it was open, if it was open.
 	[[nodiscard]] std::optional<uint32_t> CloseDrawWindow() const;
 	[[nodiscard]] bool IsDrawWindowOpen() const { return _drawWindow && _drawWindow->IsOpen(); }

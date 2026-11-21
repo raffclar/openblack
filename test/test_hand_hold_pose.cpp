@@ -164,7 +164,7 @@ TEST(HandHoldPose, AChangeBlendsEachDrawnBoneInAStraightLine)
 {
 	WorldPoseFade fade;
 	// A two-bone hand: its wrist at its origin, its fingers 10 along its own y, drawn at a hundredth of its size
-	std::vector<glm::mat4> bones {glm::mat4(1.0f), glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 10.0f, 0.0f))};
+	const std::vector<glm::mat4> bones {glm::mat4(1.0f), glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 10.0f, 0.0f))};
 	const auto place = [](glm::vec3 at, const glm::mat3& turn) {
 		return glm::translate(glm::mat4(1.0f), at) * glm::mat4(turn) * glm::scale(glm::mat4(1.0f), glm::vec3(0.01f));
 	};

@@ -928,6 +928,7 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 		Locator::gameEndSystem::value().SetTimeLimit(start.timeLimit.value_or(game_end::k_DefaultTimeLimitMinutes));
 		// The winning conditions come from the server too. The gods get them at the first turn.
 		std::vector<game_end::ConditionPick> picks;
+		picks.reserve(start.conditions.size());
 		for (const auto& each : start.conditions)
 		{
 			picks.push_back(

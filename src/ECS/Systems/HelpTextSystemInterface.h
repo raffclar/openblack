@@ -47,7 +47,7 @@ public:
 		bool videoPlaying {false};
 	};
 
-	virtual ~HelpTextSystemInterface() = default;
+	~HelpTextSystemInterface() override = default;
 
 	/// The player's choices for the texts, from the options
 	struct TextChoices

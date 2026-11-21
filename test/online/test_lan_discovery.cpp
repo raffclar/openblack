@@ -126,7 +126,7 @@ struct Side
 	std::shared_ptr<int64_t> now = std::make_shared<int64_t>(1'000'000);
 	std::shared_ptr<uint64_t> random = std::make_shared<uint64_t>(0);
 
-	online::LanSearchParts SearchParts() const
+	[[nodiscard]] online::LanSearchParts SearchParts() const
 	{
 		return {.v4 = std::make_unique<FakeSocket>(v4),
 		        .v6 = std::make_unique<FakeSocket>(v6),
@@ -135,7 +135,7 @@ struct Side
 		        .random = [random = random] { return (*random)++; }};
 	}
 
-	online::LanResponderParts ResponderParts() const
+	[[nodiscard]] online::LanResponderParts ResponderParts() const
 	{
 		return {.v4 = std::make_unique<FakeSocket>(v4),
 		        .v6 = std::make_unique<FakeSocket>(v6),
@@ -340,7 +340,7 @@ TEST(LanDiscovery, TheListHasALimit)
 
 TEST(LanSearcher, TheFirstSearchWaitsForTheRandomStartTime)
 {
-	Side side;
+	const Side side;
 	online::LanSearcher searcher(side.SearchParts());
 	EXPECT_TRUE(searcher.IsAvailable());
 	*side.random = 50'000;
@@ -371,7 +371,7 @@ TEST(LanSearcher, TheFirstSearchWaitsForTheRandomStartTime)
 
 TEST(LanSearcher, OnlyAnswersToItsSessionFromTheLocalNetworkShow)
 {
-	Side side;
+	const Side side;
 	online::LanSearcher searcher(side.SearchParts());
 	searcher.Start();
 	*side.now += lan_discovery::k_MostStartDelayMicroseconds;
@@ -398,7 +398,7 @@ TEST(LanSearcher, OnlyAnswersToItsSessionFromTheLocalNetworkShow)
 
 TEST(LanSearcher, ManyAnswersAllShowInTheirOrder)
 {
-	Side side;
+	const Side side;
 	online::LanSearcher searcher(side.SearchParts());
 	searcher.Start();
 	*side.now += lan_discovery::k_MostStartDelayMicroseconds;
@@ -422,7 +422,7 @@ TEST(LanSearcher, ManyAnswersAllShowInTheirOrder)
 
 TEST(LanSearcher, ASilentRoomGoesAfterThreeSearches)
 {
-	Side side;
+	const Side side;
 	online::LanSearcher searcher(side.SearchParts());
 	searcher.Start();
 	*side.now += lan_discovery::k_MostStartDelayMicroseconds;
@@ -452,7 +452,7 @@ TEST(LanSearcher, ASilentRoomGoesAfterThreeSearches)
 
 TEST(LanSearcher, WithNoOpenSocketTheSearchIsNotAvailable)
 {
-	Side side;
+	const Side side;
 	side.v4->open = false;
 	side.v6->open = false;
 	online::LanSearcher searcher(side.SearchParts());
@@ -469,7 +469,7 @@ TEST(LanSearcher, WithNoOpenSocketTheSearchIsNotAvailable)
 
 TEST(LanResponder, TheAnswerGoesAfterARandomTime)
 {
-	Side side;
+	const Side side;
 	*side.random = 30'000;
 	online::LanResponder responder(side.ResponderParts());
 	EXPECT_EQ(responder.Server(), 30'000u);
@@ -494,7 +494,7 @@ TEST(LanResponder, TheAnswerGoesAfterARandomTime)
 
 TEST(LanResponder, AForeignSenderOrAnotherVersionGetsNoAnswer)
 {
-	Side side;
+	const Side side;
 	online::LanResponder responder(side.ResponderParts());
 	side.v4->inbox.push_back({.bytes = lan_discovery::SearchBytes(1), .from = V4(203, 0, 113, 9), .port = 50'000});
 	side.v6->inbox.push_back(
@@ -545,7 +545,7 @@ TEST(LanResponder, OneSenderGetsOneAnswerInAShortTime)
 
 TEST(LanResponder, ManySendersAreAnsweredUpToTheLimit)
 {
-	Side side;
+	const Side side;
 	online::LanResponder responder(side.ResponderParts());
 	for (int i = 0; i < 100; ++i)
 	{
@@ -562,8 +562,8 @@ TEST(LanResponder, ManySendersAreAnsweredUpToTheLimit)
 
 TEST(LanResponder, TheSearcherFindsTheResponder)
 {
-	Side client;
-	Side server;
+	const Side client;
+	const Side server;
 	*server.random = 900;
 	online::LanSearcher searcher(client.SearchParts());
 	online::LanResponder responder(server.ResponderParts());

@@ -59,8 +59,8 @@ public:
 	[[nodiscard]] const graphics::Texture2D& GetCellColourMap() const override { throw std::logic_error("no maps"); }
 	[[nodiscard]] const graphics::Texture2D& GetBlockTextures() const override { throw std::logic_error("no maps"); }
 	[[nodiscard]] U16Extent2 GetIndexExtent() const override { return {}; }
-	[[nodiscard]] glm::mat4 GetOrthoView() const override { return glm::mat4(1.0f); }
-	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return glm::mat4(1.0f); }
+	[[nodiscard]] glm::mat4 GetOrthoView() const override { return {1.0f}; }
+	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return {1.0f}; }
 	[[nodiscard]] Extent2 GetExtent() const override { return {}; }
 	uint8_t GetNoise(glm::u8vec2) override { return 0; }
 

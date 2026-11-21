@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+// NOLINTNEXTLINE(modernize-macro-to-enum): The headers test this macro with ifdef.
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "VillagerFood.h"
 
@@ -70,10 +71,7 @@ namespace rules = openblack::ecs::villager_food_rules;
 namespace needs = openblack::ecs::villager_needs;
 namespace villager_home = openblack::ecs::villager_home;
 namespace villager_build = openblack::ecs::villager_build;
-namespace villager_footpath = openblack::ecs::villager_footpath;
-namespace villager_fire = openblack::ecs::villager_fire;
 namespace world_objects = openblack::ecs::world_objects;
-namespace construction = openblack::ecs::construction;
 
 namespace
 {
@@ -318,6 +316,7 @@ bool villager_food::ChangeStateToFindFoodToEat(LivingAction& action)
 	{
 		in.pitFood = stores.GetResource(*pit, ResourceType::Food);
 	}
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	else if (!(in.homeFood.has_value() && in.required <= *in.homeFood) && in.required != 0)
 	{
 		// Without a working pit its town leaves food at its temporary pile, which is made if missing

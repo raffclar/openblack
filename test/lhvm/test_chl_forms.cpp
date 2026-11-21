@@ -219,7 +219,7 @@ void Check(const StatementForm& form, bool full, Outcome& outcome, std::set<std:
 		return;
 	}
 	++outcome.samples;
-	const auto label = fmt::format("{} \"{}\" as \"{}\"", form.native, form.pattern, text);
+	const auto label = fmt::format(R"({} "{}" as "{}")", form.native, form.pattern, text);
 
 	const std::vector<SourceFile> sources = {{.name = "Sample.txt", .text = source}};
 	const auto compiled = Compile(sources);

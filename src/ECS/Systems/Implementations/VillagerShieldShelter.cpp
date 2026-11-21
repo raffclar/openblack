@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+// NOLINTNEXTLINE(modernize-macro-to-enum): The headers test this macro with ifdef.
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "VillagerShieldShelter.h"
 
@@ -39,10 +40,7 @@
 using namespace openblack;
 using namespace openblack::ecs::components;
 namespace villager_shield = openblack::ecs::villager_shield;
-namespace villager_animate = openblack::ecs::villager_animate;
-namespace villager_clips = openblack::ecs::villager_clips;
 namespace shield = openblack::magic::shield;
-namespace villager_build = openblack::ecs::villager_build;
 
 namespace
 {

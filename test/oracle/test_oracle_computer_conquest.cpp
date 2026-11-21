@@ -174,7 +174,7 @@ TEST(OracleComputerConquest, CreatureHelpAsInTheGame)
 		const auto tied = t.Bits(row, Need(t, "tied"));
 		const bool sameTown = t.Bits(row, Need(t, "same_town")) != 0;
 		float ours = 0.0f;
-		if (creature && tied != k_TiedToTarget && !(sameTown && tied == k_TiedInTown))
+		if (creature && tied != k_TiedToTarget && (!sameTown || tied != k_TiedInTown))
 		{
 			const auto from = Coords(t.Bits(row, Need(t, "cx")), t.Bits(row, Need(t, "cz")));
 			const auto to = Coords(t.Bits(row, Need(t, "tx")), t.Bits(row, Need(t, "tz")));

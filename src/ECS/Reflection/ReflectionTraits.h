@@ -229,7 +229,7 @@ inline constexpr bool k_IsIndirect<std::weak_ptr<Type>> = true;
 /// that each build writes the same bytes.
 template <typename Type>
 inline constexpr bool k_IsBuildSized =
-    (std::is_same_v<Type, std::size_t> || std::is_same_v<Type, std::ptrdiff_t>) && sizeof(Type) < sizeof(uint64_t);
+    (std::is_same_v<Type, std::size_t> || std::is_same_v<Type, std::ptrdiff_t>)&&sizeof(Type) < sizeof(uint64_t);
 
 /// A value whose bytes in memory are the bytes that the binary archive writes for it: a number (not a bool), or a glm
 /// vector or matrix of such numbers with no padding. A list of such values goes in and out as one block of bytes.
@@ -274,7 +274,7 @@ inline constexpr bool k_IsDuration<std::chrono::duration<Rep, Period>> = true;
 /// A value type that gives the values that it keeps to a visitor, in a fixed order, through its static member
 /// VisitSaved(self, visitor). The binary archive keeps such a value as these values. Private data stays private.
 template <typename Type>
-inline constexpr bool k_IsVisited = requires(Type& value) { Type::VisitSaved(value, [](auto & ...) {}); };
+inline constexpr bool k_IsVisited = requires(Type& value) { Type::VisitSaved(value, [](auto&...) {}); };
 
 /// A presentation part of a saved value (openblack::SavedPresentation). The binary archive keeps the part as it keeps
 /// a presentation value of a system.

@@ -267,7 +267,7 @@ void Trace::Record(uint32_t turn, const creature_desires::Desires& desires, cons
 			{
 				step.outcome = Outcome::NotPressing;
 			}
-			Add(std::move(step));
+			Add(step);
 		}
 		// A plan that did not come from the planner's plans of this turn: an order, a reaction or a script
 		if (currentChanged && !currentFromPlanner)

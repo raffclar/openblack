@@ -10,7 +10,7 @@
 // The miracles that need the hand report of this computer at each turn: a miracle that follows the hand of the player
 // gets the hand at each turn, so the report does not wait after a send.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 

@@ -108,6 +108,7 @@ TEST(TownCensus, TheListsFollowJoinsLeavesBirthsAndDeaths)
 	const auto first = MakeTown(registry, 1);
 	const auto second = MakeTown(registry, 2);
 	std::vector<entt::entity> people;
+	people.reserve(6);
 	for (int i = 0; i < 6; ++i)
 	{
 		people.push_back(MakeVillager(registry, i % 2 == 0 ? first : second));
@@ -310,6 +311,7 @@ TEST(TownCensus, TheCountsFollowJoinsGrowthDisciplesAndDeaths)
 	const auto first = MakeTown(registry, 1);
 	const auto second = MakeTown(registry, 2);
 	std::vector<entt::entity> people;
+	people.reserve(6);
 	for (int i = 0; i < 6; ++i)
 	{
 		people.push_back(MakeCountedVillager(registry, i % 2 == 0 ? first : second,
@@ -356,6 +358,7 @@ TEST(TownCensus, AVillagerThatGoesCountsUntilItsSignalEnds)
 	Registry registry;
 	const auto town = MakeTown(registry, 3);
 	std::vector<entt::entity> people;
+	people.reserve(4);
 	for (int i = 0; i < 4; ++i)
 	{
 		people.push_back(MakeCountedVillager(registry, town, Villager::LifeStage::Adult));

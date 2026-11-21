@@ -33,7 +33,7 @@
 #include "ECS/SnowLevels.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/SnowSystem.h"
 
 using namespace openblack;
@@ -136,7 +136,8 @@ TEST(SnowLevels, ANewThingStartsWithNoSnowAndTakesItInSteps)
 	EXPECT_FALSE(registry.AllOf<SnowLevel>(creature));
 
 	// The snow melts: the thing loses it in steps too
-	snow_levels::Step(registry, things, [](glm::vec2) { return 0.0f; }, 2);
+	snow_levels::Step(
+	    registry, things, [](glm::vec2) { return 0.0f; }, 2);
 	EXPECT_EQ(snow_levels::LevelOf(registry, thing), 97);
 }
 
@@ -145,7 +146,8 @@ TEST(SnowLevels, AThingWithoutSnowWhereNoSnowLiesGetsNoLevel)
 	ecs::Registry registry;
 	const auto thing = Thing(registry);
 	const std::vector things {thing};
-	snow_levels::Step(registry, things, [](glm::vec2) { return 10.0f; }, 1);
+	snow_levels::Step(
+	    registry, things, [](glm::vec2) { return 10.0f; }, 1);
 	EXPECT_FALSE(registry.AllOf<SnowLevel>(thing));
 }
 
@@ -250,7 +252,8 @@ TEST(SnowLevels, ATreeDrawnOutOfTheLandCarriesLessSnowFromThenOn)
 	// In the deepest snow it shows no more than the lower cap
 	for (int step = 0; step < 100; ++step)
 	{
-		snow_levels::Step(registry, things, [](glm::vec2) { return snow_cover::k_MaxDepth; }, 1);
+		snow_levels::Step(
+		    registry, things, [](glm::vec2) { return snow_cover::k_MaxDepth; }, 1);
 	}
 	EXPECT_EQ(snow_levels::LevelOf(registry, held), snow_cover::k_OutOfLandTreeCap);
 }

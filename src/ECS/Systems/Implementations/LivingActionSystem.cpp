@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "LivingActionSystem.h"
 
@@ -106,7 +106,6 @@ namespace villager_housewife = openblack::ecs::villager_housewife;
 namespace villager_mourning = openblack::ecs::villager_mourning;
 namespace villager_magic_tree = openblack::ecs::villager_magic_tree;
 namespace villager_creature = openblack::ecs::villager_creature;
-namespace villager_checks = openblack::ecs::villager_checks;
 namespace villager_breeding = openblack::ecs::villager_breeding;
 namespace villager_worship = openblack::ecs::villager_worship;
 namespace villager_footpath = openblack::ecs::villager_footpath;

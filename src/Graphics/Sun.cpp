@@ -40,7 +40,7 @@ std::optional<sun::Placement> sun::Place(float scriptHour)
 	}
 	// The afternoon mirrors the morning about noon. The game multiplies by its float of a sixth, then by the height at
 	// noon.
-	constexpr float k_Sixth = std::bit_cast<float>(0x3E2AAAABu);
+	constexpr auto k_Sixth = std::bit_cast<float>(0x3E2AAAABu);
 	const float morning = scriptHour > 12.0f ? 12.0f - (std::min(scriptHour, 18.0f) - 12.0f) : std::max(scriptHour, 6.0f);
 	const float height = ((morning - 6.0f) * k_Sixth) * 7500.0f;
 	return Placement {.position = {-30000.0f, height, -30000.0f}, .alpha = alpha};
@@ -81,6 +81,6 @@ float sun::EaseGlare(float glare, int hiddenSamples, uint32_t frameMilliseconds)
 float sun::GlareAlpha(float glare, float sunAlpha, float overcast, bool fog)
 {
 	// The game holds the inverse of 255 as a float
-	constexpr float k_InverseOf255 = std::bit_cast<float>(0x3B808081u);
+	constexpr auto k_InverseOf255 = std::bit_cast<float>(0x3B808081u);
 	return sky_dome::ThroughOvercast((glare * sunAlpha) * k_InverseOf255, overcast, fog);
 }

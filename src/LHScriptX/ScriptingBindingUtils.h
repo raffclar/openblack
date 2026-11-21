@@ -118,7 +118,7 @@ void InvokeCallableFromContext(
     /// In the end, all types from RemainingTypes will be transferred to ParsedParamTypes, at which point the recursion ends
     ParsedParamTypes... params)
 {
-	std::function<void(RemainingTypes...)> remainingTypesFunction;
+	const std::function<void(RemainingTypes...)> remainingTypesFunction;
 	InvokeCallableFromContext(ctx,
 	                          // Increment the parameter index for the next call to this function to fetch the right index
 	                          paramIndex + 1,

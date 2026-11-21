@@ -93,7 +93,7 @@ TEST(PlayersSymbols, ASheetOfTheWrongSizeOrASquareOutsideItChangesNothing)
 {
 	auto players = NumberedSheet(100);
 	const auto designs = NumberedSheet(0);
-	Sheet small {.colours = std::vector<uint8_t>(12), .alpha = std::vector<uint8_t>(4)};
+	const Sheet small {.colours = std::vector<uint8_t>(12), .alpha = std::vector<uint8_t>(4)};
 	CopyDesign(players, small, 1, 0);
 	CopyDesign(players, designs, 16, 0);
 	CopyDesign(players, designs, 1, 16);

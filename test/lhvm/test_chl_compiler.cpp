@@ -168,6 +168,7 @@ TEST(ChlLexer, TokensFollowTheOriginalLexer)
 	    Tokenize("Foo = 3 3. 2.5 3d 1e5 \"a\\\"b\" // comment\n/* outer /* inner */ still */ x += -y", "t", sink);
 	EXPECT_EQ(sink.ErrorCount(), 0);
 	std::vector<std::string> spelled;
+	spelled.reserve(tokens.size());
 	for (const auto& token : tokens)
 	{
 		spelled.push_back(fmt::format("{}:{}", static_cast<int>(token.kind), token.text));

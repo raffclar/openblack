@@ -10,7 +10,7 @@
 // The game world as the miracle rules see it: the land, the objects on it, and what an effect does to each
 // object.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <numbers>
@@ -437,8 +437,10 @@ std::vector<magic::EffectReceiver> GameMagicWorld::ReceiversIn(const magic::Cell
 	return receivers;
 }
 
+namespace
+{
 /// What harmed a town, for the cry of its people: the thing that applied the harm, or else the miracle
-static guidance::Attacker CryAttacker(const ecs::Registry& registry, const magic::EffectSource& source)
+guidance::Attacker CryAttacker(const ecs::Registry& registry, const magic::EffectSource& source)
 {
 	if (source.appliedBy.has_value())
 	{
@@ -464,6 +466,7 @@ static guidance::Attacker CryAttacker(const ecs::Registry& registry, const magic
 	}
 	return guidance::Attacker::Other;
 }
+} // namespace
 
 void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const magic::EffectOutcome> outcomes,
                            const magic::EffectSource& source)

@@ -225,12 +225,12 @@ TEST(CreatureMarks, SkinsArePaintedTattoosThenWoundsThenBlood)
 	using namespace openblack::creature_skin;
 	auto art = std::make_unique<Art>();
 	art->damage = FakeArt({0, 0, 0}, 255, {0, 0, 0}, 255);
-	for (size_t d = 0; d < art->designs.size(); ++d)
+	for (auto& design : art->designs)
 	{
 		for (size_t level = 0; level < creature_tattoo::k_MaskLevels; ++level)
 		{
 			const auto size = creature_tattoo::k_DesignSize >> level;
-			art->designs.at(d).at(level) = {.size = size, .levels = std::vector<uint8_t>(static_cast<size_t>(size) * size, 15)};
+			design.at(level) = {.size = size, .levels = std::vector<uint8_t>(static_cast<size_t>(size) * size, 15)};
 		}
 	}
 	creature_tattoo::Slots tattoos {};

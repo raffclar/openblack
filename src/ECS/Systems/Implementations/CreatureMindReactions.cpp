@@ -10,7 +10,7 @@
 // What a creature's mind does about the miracles cast near it: it runs from a nasty one or goes to look at it, goes to
 // look at a nice one, and learns them by doing so
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdint>
 

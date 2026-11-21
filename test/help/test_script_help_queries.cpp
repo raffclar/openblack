@@ -16,7 +16,6 @@ using namespace openblack;
 
 namespace
 {
-using hand::script_state::Facts;
 using hand::script_state::State;
 using hand::script_state::StateOf;
 using help::script_help_text::Texts;

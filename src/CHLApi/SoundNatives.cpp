@@ -81,8 +81,10 @@ namespace openblack::chlapi
 
 using openblack::Locator;
 
+namespace
+{
 /// The loaded sound group of a bank's file, whatever the case of the file's name on disk
-static std::optional<std::string> LoadedSoundGroup(std::string_view file)
+std::optional<std::string> LoadedSoundGroup(std::string_view file)
 {
 	const auto sameName = [file](const std::string& name) {
 		return std::ranges::equal(name, file, [](char a, char b) {
@@ -101,7 +103,7 @@ static std::optional<std::string> LoadedSoundGroup(std::string_view file)
 
 /// The sound of a script's sample in a script sound bank; none for a number naming no bank, a bank the game doesn't
 /// ship or a sample the bank doesn't have
-static std::optional<entt::id_type> BankSound(int32_t bank, int32_t sample)
+std::optional<entt::id_type> BankSound(int32_t bank, int32_t sample)
 {
 	const auto file = audio::ScriptSoundBankFile(bank);
 	if (!file.has_value() || !Locator::sounds::has_value() || !Locator::resources::has_value())
@@ -120,6 +122,7 @@ static std::optional<entt::id_type> BankSound(int32_t bank, int32_t sample)
 	}
 	return id;
 }
+} // namespace
 
 void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, const audio::SoundEffectOptions& options) const
 {
@@ -153,11 +156,14 @@ void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 	                                              .ownerNumber = static_cast<uint32_t>(sample)});
 }
 
+namespace
+{
 /// The game's music, none before the game has started it
-static audio::GameMusic* ScriptGameMusic()
+audio::GameMusic* ScriptGameMusic()
 {
 	return Locator::gameMusic::has_value() ? &Locator::gameMusic::value() : nullptr;
 }
+} // namespace
 
 /// The music that the scripts start, as the world sees it
 ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic()
@@ -165,17 +171,20 @@ ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic()
 	return Locator::scriptMusicSystem::has_value() ? &Locator::scriptMusicSystem::value() : nullptr;
 }
 
+namespace
+{
 /// Without the music the scripts that wait on music wait on the help text instead
-static bool WorldHasMusic()
+bool WorldHasMusic()
 {
 	const auto* music = WorldScriptMusic();
 	return music != nullptr && music->HasMusic();
 }
 
-static bool HelpTextRead()
+bool HelpTextRead()
 {
 	return !Locator::helpTextSystem::has_value() || Locator::helpTextSystem::value().IsTextRead();
 }
+} // namespace
 
 void StartMusic() // 044 START_MUSIC
 {
@@ -258,12 +267,15 @@ void EnableDisableMusic() // 181 ENABLE_DISABLE_MUSIC
 	}
 }
 
+namespace
+{
 /// How far the music of a type carries, as the world reads it, 100 without the music
-static float WorldMusicPlayDistance(audio::MusicType type)
+float WorldMusicPlayDistance(audio::MusicType type)
 {
 	const auto* music = WorldScriptMusic();
 	return music != nullptr ? music->PlayDistance(type) : audio::MusicPlayDistance(nullptr);
 }
+} // namespace
 
 void GetMusicObjDistance() // 182 GET_MUSIC_OBJ_DISTANCE
 {

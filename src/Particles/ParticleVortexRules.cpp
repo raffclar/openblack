@@ -35,14 +35,14 @@ class VortexAttract final: public Modifier
 public:
 	explicit VortexAttract(const ParticleObject& object)
 	{
-		settings.radialSpeed = object.Float("RadialSpeed", settings.radialSpeed);
-		settings.thetaSpeed = object.Float("ThetaSpeed", settings.thetaSpeed);
-		settings.deletionRadius = object.Float("DeletionRadius", settings.deletionRadius);
-		settings.minRadius = object.Float("MinRadius", settings.minRadius);
-		settings.blendTime = object.Float("BlendTime", settings.blendTime);
-		settings.blendTimeVelocity = object.Float("BlendTimeVel", settings.blendTimeVelocity);
-		settings.yOffset = object.Float("YParam_YOffset", settings.yOffset);
-		settings.rZeroHeight = object.Float("YParam_RZeroHeight", settings.rZeroHeight);
+		_settings.radialSpeed = object.Float("RadialSpeed", _settings.radialSpeed);
+		_settings.thetaSpeed = object.Float("ThetaSpeed", _settings.thetaSpeed);
+		_settings.deletionRadius = object.Float("DeletionRadius", _settings.deletionRadius);
+		_settings.minRadius = object.Float("MinRadius", _settings.minRadius);
+		_settings.blendTime = object.Float("BlendTime", _settings.blendTime);
+		_settings.blendTimeVelocity = object.Float("BlendTimeVel", _settings.blendTimeVelocity);
+		_settings.yOffset = object.Float("YParam_YOffset", _settings.yOffset);
+		_settings.rZeroHeight = object.Float("YParam_RZeroHeight", _settings.rZeroHeight);
 	}
 
 	/// It waits for things to be handed to it for as long as its vortex lasts
@@ -77,7 +77,7 @@ public:
 			                         .startHeight = kept->second.a.w,
 			                         .age = effect.AtomAge(atom),
 			                         .indestructible = kept->second.b.x != 0.0f};
-			if (const auto step = Attract(settings, state, origin, dt, ground))
+			if (const auto step = Attract(_settings, state, origin, dt, ground))
 			{
 				atom.position = step->position;
 				atom.velocity = step->velocity;
@@ -95,7 +95,7 @@ public:
 				const auto object = atom->carried->object;
 				atom->carried->atom = nullptr;
 				atom->carried.reset();
-				world.ThrowOutOfVortex(object, effect.Random(k_TwoPi), settings.throwScale);
+				world.ThrowOutOfVortex(object, effect.Random(k_TwoPi), _settings.throwScale);
 			}
 			// Apple's clang can't capture a structured binding: take a plain copy of it
 			const auto* leaving = atom;
@@ -132,7 +132,7 @@ private:
 		kept.b.x = entry->indestructible ? 1.0f : 0.0f;
 	}
 
-	AttractSettings settings;
+	AttractSettings _settings;
 };
 } // namespace
 

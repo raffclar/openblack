@@ -10,7 +10,7 @@
 // What the particle effects of the heal, the lightning and the creature spells ask of the living world: lighting the
 // healed, the things a bolt may strike, the arcs a strike leaves and the bolts from hands that may clash
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <vector>

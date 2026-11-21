@@ -47,7 +47,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "ECS/MapProduction.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -92,8 +92,8 @@ public:
 	[[nodiscard]] const graphics::Texture2D& GetCellColourMap() const override { throw std::logic_error("no maps"); }
 	[[nodiscard]] const graphics::Texture2D& GetBlockTextures() const override { throw std::logic_error("no maps"); }
 	[[nodiscard]] U16Extent2 GetIndexExtent() const override { return {}; }
-	[[nodiscard]] glm::mat4 GetOrthoView() const override { return glm::mat4(1.0f); }
-	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return glm::mat4(1.0f); }
+	[[nodiscard]] glm::mat4 GetOrthoView() const override { return {1.0f}; }
+	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return {1.0f}; }
 	[[nodiscard]] Extent2 GetExtent() const override { return {}; }
 	uint8_t GetNoise(glm::u8vec2) override { return 0; }
 
@@ -266,6 +266,7 @@ protected:
 	}
 
 	/// A dance about a place 20 m from the villager, with the villager as the one dancer of its one group
+	// NOLINTNEXTLINE(modernize-use-nodiscard): Some tests do not use the dance that it gives.
 	entt::entity JoinDance(Dance::State state = Dance::State::Dancing) const
 	{
 		auto& registry = Locator::entitiesRegistry::value();

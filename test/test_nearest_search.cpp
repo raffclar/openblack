@@ -71,7 +71,7 @@ TEST(NearestSearch, TheFirstMetWinsATieAndANearerOneWinsOutright)
 
 TEST(NearestSearch, ASmallReachStillWalksThreeByThreeCells)
 {
-	FakeCells fake;
+	const FakeCells fake;
 	const auto from = map_coords::FromMetres({1005.0f, 1005.0f});
 	(void)nearest_search::FindNearest(from, 1.0f, fake.Lookup());
 	EXPECT_EQ(fake.visited, 9);

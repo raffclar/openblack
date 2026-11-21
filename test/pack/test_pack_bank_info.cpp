@@ -92,7 +92,7 @@ TEST(PackBankInfo, IsOptional)
 TEST(PackBankInfo, ASoundPackReadWithoutItsWaveDataKeepsWhereTheSamplesLie)
 {
 	const auto bytes = SoundPack({0, 0, 0});
-	std::string text(bytes.begin(), bytes.end());
+	const std::string text(bytes.begin(), bytes.end());
 	std::istringstream stream(text);
 	PackFile pack;
 	ASSERT_EQ(pack.ReadFile(stream, {"LHAudioWaveData"}), PackResult::Success);
@@ -118,7 +118,7 @@ TEST(PackBankInfo, ASoundPackReadWithoutItsWaveDataKeepsWhereTheSamplesLie)
 TEST(PackBankInfo, ASoundPackReadWholeHasItsSamples)
 {
 	const auto bytes = SoundPack({0, 0, 0});
-	std::string text(bytes.begin(), bytes.end());
+	const std::string text(bytes.begin(), bytes.end());
 	std::istringstream stream(text);
 	PackFile pack;
 	ASSERT_EQ(pack.ReadFile(stream), PackResult::Success);

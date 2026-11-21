@@ -142,7 +142,6 @@ private:
 	void AttemptCollisionSound(PhysicsEntry& entry);
 	void AddLandingDust(glm::vec3 centre, float radius, uint32_t argb);
 
-private:
 	[[nodiscard]] PhysicsClassHooks& Hooks();
 
 	std::unique_ptr<dynamics::World> _world;

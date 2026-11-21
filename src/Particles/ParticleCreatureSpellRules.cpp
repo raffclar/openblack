@@ -95,7 +95,7 @@ public:
 		}
 		for (auto& atom : collection.atoms)
 		{
-			auto found = atom->data.find(this);
+			auto* found = atom->data.find(this);
 			if (found == atom->data.end())
 			{
 				continue;
@@ -216,7 +216,7 @@ public:
 		const auto box = maths::WispBoxOf(body->bones);
 		for (auto& atom : collection.atoms)
 		{
-			auto found = atom->data.find(this);
+			auto* found = atom->data.find(this);
 			if (found == atom->data.end())
 			{
 				continue;

@@ -118,7 +118,7 @@ enum class Platform : uint8_t
 /// Remembered folders and files by name, kept as "name=path" lines
 using Paths = std::map<std::string, std::filesystem::path, std::less<>>;
 [[nodiscard]] Paths ParsePaths(std::string_view text);
-[[nodiscard]] std::string FormatPaths(const Paths& folders);
+[[nodiscard]] std::string FormatPaths(const Paths& paths);
 
 /// A folder or file remembered under the name, such as the folder a file was last chosen from, kept for this user of the
 /// computer from one run to the next (in the user's preferences folder, not with the game)

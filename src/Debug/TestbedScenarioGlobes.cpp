@@ -218,12 +218,13 @@ void AddGlobes(std::vector<Scenario>& all)
 	auto everySeed = GlobeRow({MagicType::StormWindRain, MagicType::Forest, MagicType::Fireball, MagicType::Food,
 	                           MagicType::Shield, MagicType::PhysicalShield},
 	                          34.0f);
-	for (auto& row : {GlobeRow({MagicType::LightningBolt, MagicType::Heal, MagicType::Wood, MagicType::Water,
-	                            MagicType::FlockFlying, MagicType::FlockGround},
-	                           27.0f),
-	                  GlobeRow({MagicType::CreatureSpellFreeze, MagicType::CreatureSpellBig, MagicType::CreatureSpellCompassion,
-	                            MagicType::CreatureSpellItchy, MagicType::Teleport, MagicType::ExplosionOne},
-	                           20.0f)})
+	for (const auto& row :
+	     {GlobeRow({MagicType::LightningBolt, MagicType::Heal, MagicType::Wood, MagicType::Water, MagicType::FlockFlying,
+	                MagicType::FlockGround},
+	               27.0f),
+	      GlobeRow({MagicType::CreatureSpellFreeze, MagicType::CreatureSpellBig, MagicType::CreatureSpellCompassion,
+	                MagicType::CreatureSpellItchy, MagicType::Teleport, MagicType::ExplosionOne},
+	               20.0f)})
 	{
 		everySeed.insert(everySeed.end(), row.begin(), row.end());
 	}
@@ -315,7 +316,7 @@ void AddGlobes(std::vector<Scenario>& all)
 	});
 
 	auto extreme = GlobeRow({MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo}, 34.0f);
-	for (auto& row :
+	for (const auto& row :
 	     {GlobeRow({MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo}, 27.0f),
 	      GlobeRow({MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado}, 20.0f)})
 	{

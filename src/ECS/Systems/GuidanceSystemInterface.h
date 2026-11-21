@@ -49,7 +49,7 @@ public:
 		}
 	};
 
-	virtual ~GuidanceSystemInterface() = default;
+	~GuidanceSystemInterface() override = default;
 
 	/// A new land: each kind is taken as last heard a random while before the land's first turn
 	virtual void Reset() = 0;

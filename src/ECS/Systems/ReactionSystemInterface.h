@@ -112,7 +112,7 @@ public:
 		}
 	};
 
-	virtual ~ReactionSystemInterface() = default;
+	~ReactionSystemInterface() override = default;
 
 	/// A new reaction, its id
 	virtual uint32_t Create(const Source& source) = 0;

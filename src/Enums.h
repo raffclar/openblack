@@ -3263,7 +3263,7 @@ constexpr uint32_t MakeSpeedState(float ms)
 {
 	constexpr uint32_t ms100 = 0x10000;
 	constexpr float ms1 = static_cast<float>(ms100) * 0.01f;
-	float scaled = ms * ms1;
+	const float scaled = ms * ms1;
 	// Speed needs to be positive. Round cast to int won't work in negative.
 	// NOLINTNEXTLINE(bugprone-incorrect-roundings): can't use lroundf in constexpr
 	return static_cast<uint32_t>(scaled + 0.5f);
@@ -3300,7 +3300,7 @@ constexpr float GetSpeedStateSpeed(SpeedState state)
 {
 	constexpr uint32_t ms100 = 0x10000;
 	constexpr float ms1 = static_cast<float>(ms100) * 0.01f;
-	float scaled = static_cast<uint32_t>(state) - 0.5f;
+	const float scaled = static_cast<uint32_t>(state) - 0.5f;
 	return scaled / ms1;
 }
 
@@ -3317,7 +3317,7 @@ constexpr uint32_t MakeTurnAngleState(float degrees)
 {
 	constexpr uint32_t a360 = 0x800;
 	constexpr float a1 = static_cast<float>(a360) / 360.0f;
-	float scaled = degrees * a1;
+	const float scaled = degrees * a1;
 	// Speed needs to be positive. Round cast to int won't work in negative.
 	// NOLINTNEXTLINE(bugprone-incorrect-roundings): can't use lroundf in constexpr
 	return static_cast<uint32_t>(scaled + 0.5f);

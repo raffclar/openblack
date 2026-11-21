@@ -17,8 +17,6 @@
 #include "ECS/Components/Construction.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_co(entt::meta_ctx& context);

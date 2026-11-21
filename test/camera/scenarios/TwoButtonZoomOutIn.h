@@ -70,6 +70,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -89,6 +91,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -108,6 +112,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -127,6 +133,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -146,6 +154,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -165,6 +175,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -184,6 +196,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -203,6 +217,8 @@ public:
 				return std::nullopt;
 			case 601:
 				return std::nullopt;
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -1812,6 +1828,8 @@ public:
 				return {{1000.0000000f, -368.4804688f}};
 			case 800:
 				return {{1000.0000000f, -368.4804688f}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -1831,6 +1849,8 @@ public:
 				return {{1000.0000000f, 1086.9483643f}};
 			case 601:
 				return {{1000.0000000f, 1084.7178955f}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -1850,6 +1870,8 @@ public:
 				return {{1000.0000000f, 1109.5463867f}};
 			case 601:
 				return {{1000.0000000f, 1107.2849121f}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -1869,6 +1891,8 @@ public:
 				return {{1000.0000000f, 1116.9654541f}};
 			case 601:
 				return {{1000.0000000f, 1114.6922607f}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -3478,6 +3502,8 @@ public:
 				return {{1000.0000000f, 1108.6680908f}};
 			case 800:
 				return {{1000.0000000f, 1108.6680908f}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -3497,6 +3523,8 @@ public:
 				return {{1000.0000000f, 1123.0528564f}};
 			case 601:
 				return {{1000.0000000f, 1120.7691650f}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -3516,6 +3544,8 @@ public:
 				return {{1000.0000000f, 1124.5964355f}};
 			case 601:
 				return {{1000.0000000f, 1122.3103027f}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}
@@ -3535,6 +3565,8 @@ public:
 				return {{1000.0000000f, 1125.6705322f}};
 			case 601:
 				return {{1000.0000000f, 1123.3833008f}};
+			default:
+				break;
 			}
 			assert(false); // Shouldn't be any unaccounted raycasts
 		}

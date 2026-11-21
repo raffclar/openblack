@@ -9,7 +9,7 @@
 
 // Plans that the creature does not choose itself: plans that a script, a gift or an event forces on it
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 
@@ -188,8 +188,6 @@ using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems::mind_detail;
 using creature_desires::Desire;
-using creature_mind_model::TreeKind;
-using creature_plan_actions::Target;
 
 namespace
 {
@@ -296,7 +294,8 @@ void CreatureMindSystem::BecomeHigh(entt::entity creature)
 		const auto place = ClearAreaFor(registry, creature, position, creature_mind::k_HighSeatRadii * radius, false);
 		return place.has_value() ? std::optional(creature_mind::HighSeat {.place = *place, .radius = radius}) : std::nullopt;
 	};
-	auto agenda = creature_mind::BecomeHigh(findSeat, [this](uint32_t range) { return Random(range); }, _random.GameFloat());
+	auto agenda = creature_mind::BecomeHigh(
+	    findSeat, [this](uint32_t range) { return Random(range); }, _random.GameFloat());
 	static_cast<void>(ForcePlan(creature, {.desire = Desire::GetHigh,
 	                                       .action = "GetHigh",
 	                                       .object = creature,

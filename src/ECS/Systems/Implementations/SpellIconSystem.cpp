@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "SpellIconSystem.h"
 
@@ -258,6 +258,7 @@ void SpellIconSystem::RemoveSiteIconUnlessOffered(entt::entity town, SpellSeedTy
 		return;
 	}
 	std::vector<std::vector<SpellSeedType>> offered;
+	offered.reserve(worship->towns.size());
 	for (const auto other : worship->towns)
 	{
 		offered.push_back(SeedsOfTown(other));

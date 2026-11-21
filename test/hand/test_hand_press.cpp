@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdint>
 
@@ -700,7 +700,7 @@ TEST(HandPress, BothButtonsThatEndTheHoldOfACreatureGripTheLand)
 
 TEST(HandPress, TheHandFollowsTheGamesPointerUntilTheMouseMoves)
 {
-	Fixture fixture;
+	const Fixture fixture;
 	fixture.system->FramePointer(glm::ivec2(40, 50));
 	EXPECT_EQ(fixture.system->GetMousePosition(), glm::ivec2(40, 50));
 	// A cursor that the game sets keeps the hand on the game's pointer

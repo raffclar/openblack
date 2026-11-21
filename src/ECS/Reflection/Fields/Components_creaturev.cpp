@@ -16,8 +16,6 @@
 #include "ECS/Components/CreatureVanillaRecord.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_creaturev(entt::meta_ctx& context);

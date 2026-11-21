@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+// NOLINTNEXTLINE(modernize-macro-to-enum): The headers test this macro with ifdef.
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "VillagerCreatureDance.h"
 
@@ -50,7 +51,6 @@
 using namespace openblack;
 using namespace openblack::ecs::components;
 namespace villager_creature_dance = openblack::ecs::villager_creature_dance;
-using openblack::map_coords::MapCoords;
 
 namespace
 {

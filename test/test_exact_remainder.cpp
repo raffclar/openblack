@@ -38,7 +38,7 @@ TEST(ExactRemainder, RandomValuesGiveTheBitsOfFmod)
 	std::uniform_int_distribution<uint32_t> bits;
 	for (int i = 0; i < 200000; ++i)
 	{
-		const float value = std::bit_cast<float>(bits(random));
+		const auto value = std::bit_cast<float>(bits(random));
 		ExpectSameBits(value, k_TwoPi);
 		ExpectSameBits(value, 32.0f);
 		ExpectSameBits(value, std::bit_cast<float>(bits(random) & 0x7FFFFFFFu));

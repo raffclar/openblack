@@ -128,9 +128,11 @@ void TakeControlInLoop(ecs::Registry& registry, entt::entity member)
 	}
 }
 
+namespace
+{
 /// The villagers of a town in the order the scripts look through them: each building's people, the newest building
 /// first and each building's newest person first, then the homeless, the newest first
-static std::vector<entt::entity> TownVillagersInOrder(const ecs::Registry& registry, entt::entity town)
+std::vector<entt::entity> TownVillagersInOrder(const ecs::Registry& registry, entt::entity town)
 {
 	std::vector<entt::entity> villagers;
 	const auto* data = registry.TryGet<const ecs::components::Town>(town);
@@ -148,6 +150,7 @@ static std::vector<entt::entity> TownVillagersInOrder(const ecs::Registry& regis
 	villagers.insert(villagers.end(), data->homelessVillagers.begin(), data->homelessVillagers.end());
 	return villagers;
 }
+} // namespace
 
 /// Whether a container a script can look in: a town, a flock or a dance
 bool IsScriptContainer(const ecs::Registry& registry, entt::entity thing)
@@ -174,8 +177,10 @@ std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::
 	return {};
 }
 
+namespace
+{
 /// A villager's town: it leaves its old town's homeless, then joins the new town
-static void MoveVillagerToTown(entt::entity villager, entt::entity town)
+void MoveVillagerToTown(entt::entity villager, entt::entity town)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& person = registry.Get<ecs::components::Villager>(villager);
@@ -187,7 +192,7 @@ static void MoveVillagerToTown(entt::entity villager, entt::entity town)
 }
 
 /// A living a script puts in a flock keeps up with it from then on
-static void SetFlockState(entt::entity living)
+void SetFlockState(entt::entity living)
 {
 	if (IsDirectableVillager(living))
 	{
@@ -200,10 +205,11 @@ static void SetFlockState(entt::entity living)
 }
 
 /// Whether a thing is a living a flock can take: a villager or an animal
-static bool IsFlockLiving(const ecs::Registry& registry, entt::entity thing)
+bool IsFlockLiving(const ecs::Registry& registry, entt::entity thing)
 {
 	return registry.Valid(thing) && registry.AnyOf<ecs::components::Villager, ecs::components::Animal>(thing);
 }
+} // namespace
 
 void FlockCreate() // 036 FLOCK_CREATE
 {
@@ -215,8 +221,10 @@ void FlockCreate() // 036 FLOCK_CREATE
 	Pusho(static_cast<uint32_t>(flock));
 }
 
+namespace
+{
 /// Puts a living, or each member of a flock, into a flock
-static void FlockAttachToFlock(entt::entity object, entt::entity flock, bool asLeader)
+void FlockAttachToFlock(entt::entity object, entt::entity flock, bool asLeader)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& scripts = Locator::scriptObjects::value();
@@ -251,7 +259,7 @@ static void FlockAttachToFlock(entt::entity object, entt::entity flock, bool asL
 }
 
 /// A villager, or each villager of a container, joins a town
-static void FlockAttachToTown(entt::entity object, entt::entity town)
+void FlockAttachToTown(entt::entity object, entt::entity town)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (IsScriptContainer(registry, object))
@@ -284,7 +292,7 @@ static void FlockAttachToTown(entt::entity object, entt::entity town)
 }
 
 /// A living joins a dance, dancing in the group whose turn it is that takes it, or standing in the dance in none
-static void JoinDance(entt::entity living, entt::entity dance, bool asCentre)
+void JoinDance(entt::entity living, entt::entity dance, bool asCentre)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (asCentre)
@@ -303,7 +311,7 @@ static void JoinDance(entt::entity living, entt::entity dance, bool asCentre)
 }
 
 /// A living, or each villager of a container, joins a dance
-static void FlockAttachToDance(entt::entity object, entt::entity dance, bool asCentre)
+void FlockAttachToDance(entt::entity object, entt::entity dance, bool asCentre)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& scripts = Locator::scriptObjects::value();
@@ -332,6 +340,7 @@ static void FlockAttachToDance(entt::entity object, entt::entity dance, bool asC
 	scripts.AddReference(object);
 	Pusho(static_cast<uint32_t>(dance));
 }
+} // namespace
 
 void FlockAttach() // 037 FLOCK_ATTACH
 {
@@ -372,10 +381,12 @@ void FlockAttach() // 037 FLOCK_ATTACH
 	Pusho(0);
 }
 
+namespace
+{
 /// A living leaves a flock, keeping its state, the flock staying when it is left empty
 /// A member that a script takes out of a flock: an animal goes into a new flock of its own, anything else is in no flock
 /// after it. The flock stays, also when it is empty.
-static void LeaveFlockForScript(ecs::Registry& registry, entt::entity member)
+void LeaveFlockForScript(ecs::Registry& registry, entt::entity member)
 {
 	if (registry.AllOf<ecs::components::Animal>(member))
 	{
@@ -385,7 +396,7 @@ static void LeaveFlockForScript(ecs::Registry& registry, entt::entity member)
 	ecs::script_flocks::Remove(registry, member, false);
 }
 
-static void DetachFromFlock(uint32_t objectId, entt::entity object, entt::entity flock)
+void DetachFromFlock(uint32_t objectId, entt::entity object, entt::entity flock)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& scripts = Locator::scriptObjects::value();
@@ -421,7 +432,7 @@ static void DetachFromFlock(uint32_t objectId, entt::entity object, entt::entity
 
 /// A dancer leaves a dance: the one given, or with none given the first of its groups', passing over what the dance is
 /// danced about while others dance
-static void DetachFromDance(uint32_t objectId, entt::entity object, entt::entity dance)
+void DetachFromDance(uint32_t objectId, entt::entity object, entt::entity dance)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& scripts = Locator::scriptObjects::value();
@@ -453,6 +464,7 @@ static void DetachFromDance(uint32_t objectId, entt::entity object, entt::entity
 	Pusho(static_cast<uint32_t>(dancer));
 	scripts.RemoveReference(dancer);
 }
+} // namespace
 
 void FlockDetach() // 038 FLOCK_DETACH
 {
@@ -702,15 +714,17 @@ void FlockWithinLimits() // 333 FLOCK_WITHIN_LIMITS
 	Pushb(ecs::script_flocks::AllMembersWithinFlockDistance(registry, object));
 }
 
+namespace
+{
 /// Whether a thing is a building of the buildings' table for the adult counts of the scripts: an abode or a miracle
 /// dispenser
-static bool IsAdultHolderBuilding(const ecs::Registry& registry, entt::entity object)
+bool IsAdultHolderBuilding(const ecs::Registry& registry, entt::entity object)
 {
 	return registry.AnyOf<ecs::components::Abode, ecs::components::SpellDispenser>(object);
 }
 
 /// The grown villagers of a town now
-static uint32_t TownAdultsNow(const ecs::Registry& registry, entt::entity town)
+uint32_t TownAdultsNow(const ecs::Registry& registry, entt::entity town)
 {
 	uint32_t adults = 0;
 	registry.Each<const ecs::components::Villager>([town, &adults](const ecs::components::Villager& villager) {
@@ -721,6 +735,7 @@ static uint32_t TownAdultsNow(const ecs::Registry& registry, entt::entity town)
 	});
 	return adults;
 }
+} // namespace
 
 /// The room for adults and for children in the built buildings of a town
 struct TownRoom
@@ -729,9 +744,11 @@ struct TownRoom
 	int32_t children {0};
 };
 
+namespace
+{
 /// The room in the built buildings of a town now: the places of each building of its tribe's table that has a place
 /// for anyone, as the town stats count them
-static TownRoom TownRoomNow(const ecs::Registry& registry, entt::entity townEntity, const ecs::components::Town& town)
+TownRoom TownRoomNow(const ecs::Registry& registry, entt::entity townEntity, const ecs::components::Town& town)
 {
 	const auto* tribe = registry.TryGet<const Tribe>(townEntity);
 	if (tribe == nullptr || !Locator::infoConstants::has_value())
@@ -763,7 +780,7 @@ static TownRoom TownRoomNow(const ecs::Registry& registry, entt::entity townEnti
 
 /// The adults of a town or a building, or the room for them, as ID_ADULT_SIZE and OBJECT_ADULT_CAPACITY give it. Any
 /// other thing gives 0 and a message.
-static void PushAdultCount(bool room)
+void PushAdultCount(bool room)
 {
 	const auto object = PopObject();
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -796,6 +813,7 @@ static void PushAdultCount(bool room)
 	const bool lived = registry.AllOf<ecs::components::Abode>(object);
 	Pushf(ecs::script_containers::AbodeAdults(lived ? ecs::town_homes::HouseholdOf(registry, object).adults : 0));
 }
+} // namespace
 
 void IdAdultSize() // 387 ID_ADULT_SIZE
 {
@@ -834,8 +852,10 @@ void ObjectAdultCapacity() // 389 OBJECT_ADULT_CAPACITY
 	PushAdultCount(true);
 }
 
+namespace
+{
 /// The first thing in a town, a flock or a dance for a script, or nothing
-static entt::entity FirstInContainer(const ecs::Registry& registry, entt::entity container)
+entt::entity FirstInContainer(const ecs::Registry& registry, entt::entity container)
 {
 	if (const auto* town = registry.TryGet<const ecs::components::Town>(container); town != nullptr)
 	{
@@ -859,7 +879,7 @@ static entt::entity FirstInContainer(const ecs::Registry& registry, entt::entity
 }
 
 /// Pushes a thing that a container gave, or nothing
-static void PushContainerThing(entt::entity thing)
+void PushContainerThing(entt::entity thing)
 {
 	if (thing == entt::null)
 	{
@@ -871,7 +891,7 @@ static void PushContainerThing(entt::entity thing)
 }
 
 /// Takes the container from the stack and pushes its first thing
-static void PushFirstInContainer()
+void PushFirstInContainer()
 {
 	const auto container = PopObject();
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -883,6 +903,7 @@ static void PushFirstInContainer()
 	}
 	PushContainerThing(FirstInContainer(registry, container));
 }
+} // namespace
 
 void GetFirstInContainer() // 455 GET_FIRST_IN_CONTAINER
 {

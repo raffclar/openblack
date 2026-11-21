@@ -8,7 +8,7 @@
  *******************************************************************************/
 
 // The renderer is one of the locator's implementations
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 #include <cstring>
@@ -295,7 +295,7 @@ void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 					program->SetUniformValue("u_modelLight", &u_modelLight);
 					program->SetUniformValue("u_islandExtent", &islandExtent);
 					program->SetUniformValue("u_advisorLook", &u_advisorLook);
-					program->SetUniformValue("u_advisorPupil0", &u_pupils[0]);
+					program->SetUniformValue("u_advisorPupil0", u_pupils.data());
 					program->SetUniformValue("u_advisorPupil1", &u_pupils[1]);
 					program->SetUniformValue("u_advisorPupilCentre", &u_pupilCentre);
 					program->SetUniformValue("u_advisorMode", &u_advisorMode);

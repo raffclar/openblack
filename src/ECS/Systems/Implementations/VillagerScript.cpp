@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+// NOLINTNEXTLINE(modernize-macro-to-enum): The headers test this macro with ifdef.
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "VillagerScript.h"
 
@@ -432,8 +433,7 @@ bool villager_script::StartPathWalk(entt::entity villager, int32_t number, bool 
 	auto walk = camera_track::StartWalk(*track, forward, from, to);
 	walk.step = camera_track::LivingStep(*track, speed, false);
 	registry.AssignOrReplace<WalkPath>(
-	    villager,
-	    WalkPath {.number = number, .track = std::move(track), .walk = std::move(walk), .living = true, .speed = speed});
+	    villager, WalkPath {.number = number, .track = std::move(track), .walk = walk, .living = true, .speed = speed});
 	// It walks it, then waits for the script; its clip starts again
 	auto& action = registry.Get<LivingAction>(villager);
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveAlongPath,

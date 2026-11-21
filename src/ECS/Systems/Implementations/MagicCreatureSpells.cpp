@@ -11,7 +11,7 @@
 // turn. A creature takes a spell two seconds after it is cast; the spell eases over it, holds, and eases off again,
 // putting the creature back as it was unless a script has turned that off.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <array>

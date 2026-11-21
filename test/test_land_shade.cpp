@@ -27,7 +27,7 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 
 using namespace openblack;

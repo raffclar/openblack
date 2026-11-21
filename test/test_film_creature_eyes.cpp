@@ -34,7 +34,7 @@
 #include "Locator.h"
 #include "Video/FilmCreature.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "Resources/Resources.h"

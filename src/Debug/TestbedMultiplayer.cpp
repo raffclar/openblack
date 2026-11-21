@@ -44,7 +44,6 @@ using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::testbed_multiplayer;
 using openblack::gui::MultiplayerFrontEnd;
-using openblack::gui::multiplayer::Box;
 using openblack::gui::multiplayer::LobbyKind;
 using openblack::gui::multiplayer::RoomTab;
 

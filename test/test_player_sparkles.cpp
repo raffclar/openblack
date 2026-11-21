@@ -147,8 +147,8 @@ TEST(PlayerSparkles, TheSymbolTurnsByTheMillisecondsAndStaysBetweenMinusPiAndPi)
 {
 	// Twenty milliseconds turn it by a hundredth of a radian, in the game's floats
 	EXPECT_EQ(player_sparkles::SymbolAngle(0.0f, 20), 20.0f * std::bit_cast<float>(0x3A03126Fu));
-	const float pi = std::bit_cast<float>(0x40490FDBu);
-	const float twoPi = std::bit_cast<float>(0x40C90FDBu);
+	const auto pi = std::bit_cast<float>(0x40490FDBu);
+	const auto twoPi = std::bit_cast<float>(0x40C90FDBu);
 	const float past = 10.0f * std::bit_cast<float>(0x3A03126Fu) + 3.14f;
 	EXPECT_EQ(player_sparkles::SymbolAngle(3.14f, 10), past - twoPi);
 	EXPECT_GT(player_sparkles::SymbolAngle(3.14f, 10), -pi);

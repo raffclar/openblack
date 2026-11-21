@@ -38,7 +38,7 @@ public:
 	/// other computers.
 	[[nodiscard]] bool ShowsInNetworkGame() const noexcept override { return true; }
 	MeshViewer() noexcept;
-	~MeshViewer() noexcept;
+	~MeshViewer() noexcept override;
 
 protected:
 	void Draw() noexcept override;

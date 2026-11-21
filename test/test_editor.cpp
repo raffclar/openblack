@@ -292,6 +292,7 @@ TEST(EditorPalette, ListsTheAnimalsThatALandScriptMakes)
 
 	// A table in the order of the kinds lists fifteen animals
 	std::vector<AnimalInfo> table;
+	table.reserve(static_cast<int>(AnimalInfo::_COUNT));
 	for (int kind = 0; kind < static_cast<int>(AnimalInfo::_COUNT); ++kind)
 	{
 		table.push_back(static_cast<AnimalInfo>(kind));

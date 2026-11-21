@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "HandGrabSystem.h"
 
@@ -1261,7 +1261,7 @@ void HandGrabSystem::StartPull(HandGrab& grab, const Frame& frame)
 	// earlier pull
 	_world->ForgetPulledPose(object);
 	const auto pose = _world->PullStartPoseOf(object);
-	hand_grab::Tug tug {.axes = pose.axes, .base = pose.origin};
+	const hand_grab::Tug tug {.axes = pose.axes, .base = pose.origin};
 	// The pull works in the plane of the land under the thing, at the height the hand's drop below the camera reaches
 	// when scaled from the hand's distance across the ground to the base's. The hand is where the cursor puts it.
 	grab.pullPlaneNormal = _world->LandNormalAt(pose.origin);

@@ -130,8 +130,8 @@ TEST(GlmOrder, LeaningPlacementWithNoLeanTurnsAboutTheUprightAxis)
 	const float angle = 0.7f;
 	const auto rows = openblack::creature_obstacles::LeaningPlacement(angle, 0.0f, 0.0f, 3.0f);
 	// The cosine and sine round to floats first, then the scale multiplies them
-	const float c = static_cast<float>(std::cos(static_cast<double>(angle)));
-	const float s = static_cast<float>(std::sin(static_cast<double>(angle)));
+	const auto c = static_cast<float>(std::cos(static_cast<double>(angle)));
+	const auto s = static_cast<float>(std::sin(static_cast<double>(angle)));
 	EXPECT_EQ(Bits(rows[0].x), Bits(c * 3.0f));
 	EXPECT_EQ(Bits(rows[0].z), Bits(s * 3.0f));
 	EXPECT_EQ(Bits(rows[2].x), Bits(-s * 3.0f));
@@ -212,7 +212,7 @@ TEST(GlmOrder, GameTurnRoundsEachProduct)
 {
 	const auto rows = x87::GameTurnYxz(0.6f, -0.3f, 0.2f);
 	const double sx = std::sin(static_cast<double>(-0.3f));
-	const float sz = static_cast<float>(std::sin(static_cast<double>(0.2f)));
+	const auto sz = static_cast<float>(std::sin(static_cast<double>(0.2f)));
 	// The middle of the third row is the sine about x, rounded; the first row's middle is the sine about z times the
 	// cosine about x, both floats
 	EXPECT_EQ(Bits(rows[2].y), Bits(static_cast<float>(sx)));
@@ -235,7 +235,7 @@ TEST(GlmOrder, WolfEatsFromItsOwnPlaceAlongTheWay)
 TEST(GlmOrder, EllipsoidNormalUsesTheEngineInverseSquareRoot)
 {
 	// A unit box about the origin, not turned: the line along -x from x = 5 meets it at x = 1
-	openblack::physics::Ellipsoid bone {.boxMin = glm::vec3(-1.0f), .boxMax = glm::vec3(1.0f)};
+	const openblack::physics::Ellipsoid bone {.boxMin = glm::vec3(-1.0f), .boxMax = glm::vec3(1.0f)};
 	const std::array bones {bone};
 	const auto hit = openblack::physics::EllipsoidHit(bones, glm::vec3(5.0f, 0.0f, 0.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
 	ASSERT_TRUE(hit.has_value());

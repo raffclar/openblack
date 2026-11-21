@@ -44,8 +44,7 @@ class Random
 {
 public:
 	explicit constexpr Random(uint64_t seed)
-	    : _state(0)
-	    , _increment((Mix(seed ^ 0xDA3E39CB94B95BDBull) << 1u) | 1u)
+	    : _increment((Mix(seed ^ 0xDA3E39CB94B95BDBull) << 1u) | 1u)
 	{
 		Next();
 		_state += Mix(seed);
@@ -75,7 +74,7 @@ public:
 	}
 
 private:
-	uint64_t _state;
+	uint64_t _state {0};
 	uint64_t _increment;
 };
 } // namespace openblack::landgen

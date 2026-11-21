@@ -74,7 +74,6 @@ public:
 	/// How a primitive drawn in a mode blends
 	[[nodiscard]] static Primitive::BlendMode BlendOf(const render_modes::ModeDesc& mode) noexcept;
 
-public:
 	explicit L3DSubMesh(graphics::L3DMesh& mesh) noexcept;
 	~L3DSubMesh() noexcept;
 

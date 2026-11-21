@@ -10,7 +10,7 @@
 // How a creature carries out its plan: each turn the agenda of the plan gives orders to the body, and the mind takes
 // in what the body did
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 #include <cstring>
@@ -154,7 +154,6 @@
 using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
-namespace animations = openblack::creature_layers::animations;
 
 namespace
 {

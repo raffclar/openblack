@@ -186,9 +186,11 @@ uint32_t StartScriptSpotVisual(int32_t effect, glm::vec3 position, int turns, en
 	return handle;
 }
 
+namespace
+{
 /// The thing a script holds for a visual it started, taking its place in the scripts' table as made by a script; none
 /// when no visual was started. The script holds the thing, never the visual's own number.
-static entt::entity ScriptSpotVisualThing(uint32_t effect, glm::vec3 position)
+entt::entity ScriptSpotVisualThing(uint32_t effect, glm::vec3 position)
 {
 	if (effect == ecs::systems::k_NoEffectHandle)
 	{
@@ -198,6 +200,7 @@ static entt::entity ScriptSpotVisualThing(uint32_t effect, glm::vec3 position)
 	RegisterCreated(thing);
 	return thing;
 }
+} // namespace
 
 void SpecialEffectPosition() // 052 SPECIAL_EFFECT_POSITION
 {
@@ -346,9 +349,11 @@ void IsPoisoned() // 162 IS_POISONED
 	Pushb(ecs::script_poison::IsPoisoned(registry, object));
 }
 
+namespace
+{
 /// The first member of a script container that is of the type and subtype, and poisoned or else not poisoned, as the scripts
 /// ask. It is none when there is none, and the script is told of it.
-static void CallPoisonedStateIn(bool poisoned, std::string_view notFound)
+void CallPoisonedStateIn(bool poisoned, std::string_view notFound)
 {
 	const auto excludingScripted = Pop().intVal != 0;
 	const auto container = PopObject();
@@ -395,6 +400,7 @@ static void CallPoisonedStateIn(bool poisoned, std::string_view notFound)
 	}
 	fail();
 }
+} // namespace
 
 void CallPoisonedIn() // 163 CALL_POISONED_IN
 {
@@ -830,13 +836,16 @@ void SetHurtByFire() // 321 SET_HURT_BY_FIRE
 	}
 }
 
+namespace
+{
 /// Whether a script's thing is one in the world with a component
 template <typename Component>
-static bool IsThingWith(entt::entity thing)
+bool IsThingWith(entt::entity thing)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	return thing != entt::null && registry.Valid(thing) && registry.AllOf<Component>(thing);
 }
+} // namespace
 
 void VortexParameters() // 328 VORTEX_PARAMETERS
 {

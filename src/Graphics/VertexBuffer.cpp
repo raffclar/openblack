@@ -27,9 +27,7 @@ using namespace openblack::graphics;
 
 VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, bool dynamic, Storage storage) noexcept
     : _name(std::move(name))
-    , _vertexCount(0)
     , _vertexDecl(std::move(decl))
-    , _strideBytes(0)
     , _handle(InvalidHandle<VertexBufferHandle>())
     , _dynamicHandle(InvalidHandle<DynamicVertexBufferHandle>())
     , _dynamic(dynamic)

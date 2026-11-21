@@ -203,7 +203,7 @@ TEST(ReflectionOrder, TheBeliefsOfACreatureSaveTheSameBytesThroughTheVisitorAsTh
 	                      .attributes = std::nullopt,
 	                      .sourcesTurn = 0};
 	const beliefs::BeliefPlace beliefPlace {.kind = 4, .slot = 3};
-	beliefs::BeliefPool pool {.slots = {std::nullopt, belief, bare, std::nullopt}, .used = 2, .oldest = 1};
+	const beliefs::BeliefPool pool {.slots = {std::nullopt, belief, bare, std::nullopt}, .used = 2, .oldest = 1};
 	beliefs::StoreContents contents {};
 	contents.pools.at(4) = pool;
 	contents.pools.at(2).slots = {bare};
@@ -300,7 +300,7 @@ TEST(ReflectionOrder, ATypeThatSavesFlatGivesTheSameBytesAsTheGeneralSave)
 	static_assert(detail::SavesFlat<Mixed<true>>());
 	static_assert(!detail::SavesFlat<Mixed<false>>());
 	static_assert(detail::k_SavesAsOneBlock<std::optional<Mixed<true>>>);
-	entt::meta_ctx context;
+	const entt::meta_ctx context;
 	BinaryWriter flat(context);
 	Save(flat, MakeMixedLists<true>());
 	BinaryWriter general(context);

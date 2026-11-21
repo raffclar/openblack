@@ -20,7 +20,6 @@
 #include "ParticleSurfaces.h"
 
 using namespace openblack::particles;
-namespace x87 = openblack::x87;
 
 namespace
 {

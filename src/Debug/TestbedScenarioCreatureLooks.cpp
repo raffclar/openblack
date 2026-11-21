@@ -1768,21 +1768,21 @@ void testbed_scenarios::AddLight(std::vector<Scenario>& all)
 	};
 	for (const auto& step : std::array {
 	         SnowCoverStep {.id = "light.snow_cover_low",
-	                        .name = "Object snow at a low level",
-	                        .description = "Snow lies 100 deep over the whole island at noon. A hut, two trees, a rock, "
-	                                       "a cow and a villager are new on the land. Their snow increases to the level 79.",
-	                        .depth = 100.0f},
+	                       .name = "Object snow at a low level",
+	                       .description = "Snow lies 100 deep over the whole island at noon. A hut, two trees, a rock, "
+	                                      "a cow and a villager are new on the land. Their snow increases to the level 79.",
+	                       .depth = 100.0f},
 	         SnowCoverStep {.id = "light.snow_cover_mid",
-	                        .name = "Object snow at a middle level",
-	                        .description = "Snow lies 160 deep over the whole island at noon. A hut, two trees, a rock, "
-	                                       "a cow and a villager are new on the land. Their snow increases to the level 139.",
-	                        .depth = 160.0f},
+	                       .name = "Object snow at a middle level",
+	                       .description = "Snow lies 160 deep over the whole island at noon. A hut, two trees, a rock, "
+	                                      "a cow and a villager are new on the land. Their snow increases to the level 139.",
+	                       .depth = 160.0f},
 	         SnowCoverStep {.id = "light.snow_cover_deep",
-	                        .name = "Object snow at a high level",
-	                        .description = "Snow lies 255 deep over the whole island at noon. A hut, two trees, a rock, "
-	                                       "a cow and a villager are new on the land. Their snow increases to the level "
-	                                       "234.",
-	                        .depth = 255.0f}})
+	                       .name = "Object snow at a high level",
+	                       .description = "Snow lies 255 deep over the whole island at noon. A hut, two trees, a rock, "
+	                                      "a cow and a villager are new on the land. Their snow increases to the level "
+	                                      "234.",
+	                       .depth = 255.0f}})
 	{
 		all.push_back({
 		    .id = step.id,

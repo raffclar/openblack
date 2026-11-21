@@ -25,7 +25,7 @@ namespace openblack::ecs::systems
 class CreatureAudioSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~CreatureAudioSystemInterface() = default;
+	~CreatureAudioSystemInterface() override = default;
 
 	/// Once a frame, by the game time, after the bodies are posed
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;

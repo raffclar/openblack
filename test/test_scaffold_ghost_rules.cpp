@@ -93,7 +93,7 @@ TEST(ScaffoldGhostRules, ShowsTheFullSizeWhenTheGrowthIsComplete)
 TEST(ScaffoldGhostRules, TurnsOnBetweenTheGameTurns)
 {
 	scaffold_ghost::SoundsPlayed played;
-	const float turn = std::bit_cast<float>(0x3D4CCCCDU); // 0.05
+	const auto turn = std::bit_cast<float>(0x3D4CCCCDU); // 0.05
 	const auto look = scaffold_ghost::Held(Showing(0, true), 37, turn, played);
 	ASSERT_TRUE(look.pose.has_value());
 	const float share = 37.0f * scaffold_ghost::k_TurnPerMs;

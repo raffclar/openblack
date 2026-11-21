@@ -199,13 +199,13 @@ std::optional<creature_learning::Context> creature_learning::Remember(std::vecto
 	// The newest action that was not carried out to its end gives its place to the new action
 	if (!contexts.empty() && !contexts.back().done)
 	{
-		contexts.back() = std::move(context);
+		contexts.back() = context;
 		return std::nullopt;
 	}
 	std::optional<Context> forgotten;
 	if (contexts.size() >= k_MaxContexts)
 	{
-		forgotten = std::move(contexts.front());
+		forgotten = contexts.front();
 		contexts.erase(contexts.begin(), contexts.begin() + static_cast<std::ptrdiff_t>(contexts.size() - k_MaxContexts + 1));
 	}
 	contexts.push_back(std::move(context));

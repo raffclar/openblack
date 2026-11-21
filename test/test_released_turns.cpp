@@ -26,7 +26,7 @@
 #include "Locator.h"
 #include "Particles/ParticleEffect.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/TornadoSystem.h"
 #include "ECS/Systems/Implementations/VortexSystem.h"
 

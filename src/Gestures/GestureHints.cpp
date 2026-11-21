@@ -364,7 +364,7 @@ glm::vec3 gesture_hints::HolderPoint(float holderHeight)
 glm::mat4 gesture_hints::GlobeModel()
 {
 	// A quarter turn about the x axis, in single precision: the up axis goes nearly to the camera, the depth axis up
-	constexpr float k_QuarterTurn = glm::half_pi<float>();
+	constexpr auto k_QuarterTurn = glm::half_pi<float>();
 	const double c = x87::Cos(k_QuarterTurn);
 	const double s = x87::Sin(k_QuarterTurn);
 	glm::mat4 model(1.0f);

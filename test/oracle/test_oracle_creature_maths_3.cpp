@@ -57,6 +57,7 @@ void ExpectTheBitsOfTheGame(std::string_view file, const std::vector<std::string
 	for (size_t row = 0; row < table->Rows(); ++row)
 	{
 		std::vector<uint32_t> values;
+		values.reserve(in.size());
 		for (const auto column : in)
 		{
 			values.push_back(table->Bits(row, column));

@@ -1237,7 +1237,7 @@ TEST(InspectorRunControl, AScenarioAskedForIsLoadingUntilItsThingsAreLaidOut)
 	const auto loading = ScenarioLoading("objects.village_totem");
 	ASSERT_TRUE(loading.has_value());
 	EXPECT_EQ(*loading, "scenario objects.village_totem");
-	Inspector inspector;
+	const Inspector inspector;
 	const auto answer = Json::parse(
 	    inspector.HandleWhileLoading(R"({"query": "ecs.entities", "params": {"component": "VillageTotem"}})", *loading));
 	EXPECT_EQ(answer["ok"], false);

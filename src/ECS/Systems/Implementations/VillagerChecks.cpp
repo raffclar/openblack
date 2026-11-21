@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+// NOLINTNEXTLINE(modernize-macro-to-enum): The headers test this macro with ifdef.
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "VillagerChecks.h"
 
@@ -39,7 +40,6 @@ using namespace openblack::ecs::components;
 namespace rules = openblack::ecs::villager_check_rules;
 namespace villager_fire = openblack::ecs::villager_fire;
 namespace villager_age = openblack::ecs::villager_age;
-namespace world_objects = openblack::ecs::world_objects;
 
 namespace
 {

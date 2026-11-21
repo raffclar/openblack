@@ -86,7 +86,6 @@ void Upload::Clear()
 	_done = false;
 }
 
-
 std::optional<std::vector<uint8_t>> ReadFile(const std::string& path)
 {
 	std::ifstream file(std::filesystem::path(path), std::ios::binary);

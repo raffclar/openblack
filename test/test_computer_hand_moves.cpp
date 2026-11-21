@@ -24,7 +24,7 @@ using namespace openblack::computer_hand;
 
 TEST(ComputerHandMoves, KindsOfThisPartThatAreNotMadeEndTheActionBadly)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	for (size_t kind = 0; kind < static_cast<size_t>(StepKind::_Count); ++kind)
 	{
 		const auto step = static_cast<StepKind>(kind);
@@ -84,7 +84,7 @@ int Finish(HandAction& action, const World& world, int most = 1000)
 
 TEST(ComputerHandMoves, SetHandToPlaceFloatsOverTheLandOrKeepsTheHeight)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	HandAction action;
 	action.moveFirst = false;
 	Add(action, StepKind::SetHandToPos, {Argument {.place = {300.0f, 2.0f, 400.0f}}});
@@ -101,7 +101,7 @@ TEST(ComputerHandMoves, SetHandToPlaceFloatsOverTheLandOrKeepsTheHeight)
 
 TEST(ComputerHandMoves, DirectMoveGoesStraightInThreeDirections)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	HandAction action;
 	action.moveFirst = false;
 	action.hand = {0.0f, 0.0f, 0.0f};
@@ -138,7 +138,7 @@ TEST(ComputerHandMoves, HandStopsWhereTheGodHasNoInfluence)
 
 TEST(ComputerHandMoves, NearMoveStopsNearThePlaceAndMovesAwayWhenTooNear)
 {
-	FakeWorld world;
+	const FakeWorld world;
 	HandAction action;
 	action.moveFirst = false;
 	action.hand = {0.0f, 0.0f, 0.0f};

@@ -41,8 +41,9 @@ std::vector<size_t> PaintOrder(std::span<const PaintRequest> requests, glm::vec3
 	};
 	std::vector<std::pair<float, size_t>> order;
 	order.reserve(waiting.size());
-	std::ranges::transform(waiting, std::back_inserter(order),
-	                       [&](const PaintRequest& request) { return std::pair {distance(request), request.block}; });
+	std::ranges::transform(waiting, std::back_inserter(order), [&](const PaintRequest& request) {
+		return std::pair {distance(request), request.block};
+	});
 	// Only a farther block moves behind a nearer one, thus blocks at the same distance keep their order
 	std::ranges::stable_sort(order, {}, &std::pair<float, size_t>::first);
 	std::vector<size_t> blocks;

@@ -14,7 +14,6 @@
 using namespace openblack;
 using ecs::world_file_gods::Change;
 using ecs::world_file_gods::ChangeOf;
-using ecs::world_file_gods::God;
 
 TEST(WorldFileGods, TheGodOfAPlayerOfTheRoomGetsHandsAndNoComputerMind)
 {

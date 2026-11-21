@@ -1940,7 +1940,7 @@ void AdvisorSpirit::UpdateMotion(float dt, bool focus, float zMin, bool sfx)
 	}
 	if (_state != dude_state::k_Cling)
 	{
-		const bool stable = !(_state == dude_state::k_Hover && (_activeFlags & 2) == 0);
+		const bool stable = _state != dude_state::k_Hover || (_activeFlags & 2) != 0;
 		UpdateBasePose(stable, dt * _face[11], sfx);
 	}
 	// 11. the face
@@ -2478,7 +2478,7 @@ void AdvisorSpirit::FlushTags(float before)
 void AdvisorSpirit::UpdateDraw(int32_t frameMs, uint32_t tickMs)
 {
 	// the alpha byte, then the fade
-	int32_t a = static_cast<int32_t>(_alpha * 255.0f);
+	auto a = static_cast<int32_t>(_alpha * 255.0f);
 	if (_flicker)
 	{
 		if (static_cast<int32_t>(tickMs) > static_cast<int32_t>(_control._flickerNext))
@@ -2954,7 +2954,7 @@ void AdvisorSpiritController::ProcessTurn()
 	// one spirit after the other: the help system takes the evil one (dude 1) first, then the good one (dude 0)
 	for (int dude = k_Dudes - 1; dude >= 0; --dude)
 	{
-		Spirit& spirit = _spirits[dude];
+		Spirit const& spirit = _spirits[dude];
 		if (spirit.pointObject != 0)
 		{
 			const auto info = _queries.object ? _queries.object(spirit.pointObject) : std::nullopt;

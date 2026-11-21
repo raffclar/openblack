@@ -29,7 +29,7 @@
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 
 using namespace openblack;

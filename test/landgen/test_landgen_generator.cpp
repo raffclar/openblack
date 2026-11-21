@@ -133,6 +133,7 @@ TEST(LandgenFeatures, NothingStandsInTheWaterOrInAClearing)
 		const float z = feature.z / 10.0f;
 		EXPECT_GE(x, 15.5f);
 		EXPECT_GE(std::hypot(x - 50.0f, z - 50.0f), 6.0f);
+		// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 		EXPECT_NE(static_cast<int>(x + 0.5f), 40);
 	}
 	EXPECT_EQ(placed.size(), features::Place(ground, 5, {}).size());
@@ -470,7 +471,7 @@ TEST(LandgenFeatures, TheRingOfRocksStandsOnFlatGrass)
 			return IsRock(feature) && feature.type == features::k_PlainRockStatic;
 		});
 		if (plain.size() != 8 ||
-		    std::ranges::any_of(placed, [](const auto& feature) { return IsRock(feature) && feature.type == 37; }) == false)
+		    !std::ranges::any_of(placed, [](const auto& feature) { return IsRock(feature) && feature.type == 37; }))
 		{
 			continue;
 		}
@@ -822,6 +823,7 @@ TEST(LandgenCursed, APlaceWithNoRoomForAStackGivesTheLandItsFeaturesBack)
 	}
 	const auto ground = land.Ground();
 	std::vector<features::Feature> rocks;
+	rocks.reserve(CursedLand::k_Side);
 	for (int x = 0; x < CursedLand::k_Side; ++x)
 	{
 		rocks.push_back({.kind = features::Kind::Static,
@@ -967,6 +969,7 @@ TEST(LandgenCursed, TheSameSeedGivesTheSamePlaces)
 TEST(LandgenCursed, BurntTreesStayInNoForest)
 {
 	std::vector<features::Feature> placed;
+	placed.reserve(20);
 	for (int i = 0; i < 20; ++i)
 	{
 		placed.push_back({.kind = features::Kind::Tree,

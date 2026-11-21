@@ -27,7 +27,8 @@ std::string Encode(std::span<const chat::people::FriendRecord> friends)
 	for (const auto& each : friends)
 	{
 		auto name = gui::ToUtf8(each.name);
-		std::ranges::replace_if(name, [](char c) { return c == '\t' || c == '\r' || c == '\n'; }, ' ');
+		std::ranges::replace_if(
+		    name, [](char c) { return c == '\t' || c == '\r' || c == '\n'; }, ' ');
 		text += std::to_string(each.user);
 		text += '\t';
 		text += name;

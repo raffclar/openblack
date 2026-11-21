@@ -44,7 +44,8 @@ struct FakeRolls
 std::vector<Step> Slap(Feelings feelings, std::deque<uint32_t> rolls, float chance = 0.0f)
 {
 	FakeRolls fake {.rolls = std::move(rolls)};
-	return ShowSlapFeeling(feelings, fake.Function(), [chance](float most) { return chance * most; }, 10);
+	return ShowSlapFeeling(
+	    feelings, fake.Function(), [chance](float most) { return chance * most; }, 10);
 }
 } // namespace
 
@@ -110,7 +111,8 @@ TEST(CreatureFollowUp, ASlapCanMakeItLookAtThePlayerForOneToTwoSeconds)
 TEST(CreatureFollowUp, ASlapRollsFourWaysFirst)
 {
 	FakeRolls fake {.rolls = {0, 1}};
-	static_cast<void>(ShowSlapFeeling({.compassion = 0.0f, .anger = 1.0f}, fake.Function(), [](float) { return 0.0f; }, 10));
+	static_cast<void>(ShowSlapFeeling(
+	    {.compassion = 0.0f, .anger = 1.0f}, fake.Function(), [](float) { return 0.0f; }, 10));
 	EXPECT_EQ(fake.ranges, (std::vector<uint32_t> {4, 2}));
 }
 

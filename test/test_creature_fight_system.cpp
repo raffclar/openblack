@@ -60,7 +60,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/CreatureFightSystem.h"
 #include "ECS/Systems/Implementations/FightTranscriptSystem.h"
 #include "camera/scenarios/FakeTemple.h"

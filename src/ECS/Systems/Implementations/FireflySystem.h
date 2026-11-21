@@ -62,7 +62,7 @@ private:
 	/// The first in line goes home, if it is out
 	void SendHomeOnce();
 	/// A turn of a firefly's flight
-	void Fly(entt::entity firefly);
+	void Fly(entt::entity entity);
 	/// The first in line goes to the back
 	void ToTheBack();
 	/// A building near a place to hover by, or a tree or rock to hide in, roughly the nearest

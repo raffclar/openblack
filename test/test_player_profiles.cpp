@@ -19,7 +19,7 @@
 #include "Common/PlayerProfiles.h"
 
 // Enable this define because we use a custom locator
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/PlayerProfileSystem.h"
 #include "TestTempFolder.h"
 
@@ -279,7 +279,7 @@ TEST(PlayerProfileSystem, AFirstStartHasNoProfileUntilOneIsMade)
 	EXPECT_EQ(system.CheckNewName(u"ann"), NameCheck::AlreadyExists);
 
 	// A later game reads the profile back, and knows its creature once its file is there
-	ecs::systems::PlayerProfileSystem later(store, FakeMachine());
+	const ecs::systems::PlayerProfileSystem later(store, FakeMachine());
 	EXPECT_EQ(later.GetProfileCount(), 1u);
 	EXPECT_EQ(later.CreatureFile(), "C4a5c8bc8.erc");
 	EXPECT_FALSE(later.CurrentProfileHasCreature());
@@ -306,7 +306,7 @@ TEST(PlayerProfileSystem, PickingDeletingAndEditingProfilesIsKept)
 	EXPECT_TRUE(system.DeleteProfile(u"Ann"));
 	EXPECT_FALSE(system.DeleteProfile(u"Ann"));
 
-	ecs::systems::PlayerProfileSystem later(store, FakeMachine());
+	const ecs::systems::PlayerProfileSystem later(store, FakeMachine());
 	ASSERT_EQ(later.GetProfileCount(), 1u);
 	const auto profile = later.GetCurrentProfile();
 	ASSERT_TRUE(profile.has_value());
@@ -351,7 +351,7 @@ TEST(PlayerProfileSystem, TheTimePlayedAndTheSavesAndLoadsAreKeptAsTheGameEnds)
 	system.CountLoad();
 	// The counts are kept only with the next change of the profile
 	{
-		ecs::systems::PlayerProfileSystem before(store, FakeMachine());
+		const ecs::systems::PlayerProfileSystem before(store, FakeMachine());
 		EXPECT_EQ(before.GetCurrentProfile()->statistics, Statistics {});
 	}
 	system.StopPlaying(1100);
@@ -375,7 +375,7 @@ TEST(PlayerProfileSystem, ADevelopersRunPlaysAsAProfileNeverKept)
 
 TEST(PlayerProfileSystem, WithNowhereToKeepThemThereAreNoProfiles)
 {
-	ecs::systems::PlayerProfileSystem system({}, FakeMachine());
+	const ecs::systems::PlayerProfileSystem system({}, FakeMachine());
 	EXPECT_FALSE(system.CreatureFile().has_value());
 	EXPECT_EQ(system.GetProfileCount(), 0u);
 }

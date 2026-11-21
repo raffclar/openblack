@@ -10,7 +10,7 @@
 // A creature's dance with the villagers of a town: the world's side of each stage that its mind orders, and what its
 // mind sees of the dance
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <bit>

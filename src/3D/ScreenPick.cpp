@@ -283,6 +283,7 @@ bool CircleReachesScreen(const View& view, const SphereCircle& circle)
 	const float x = circle.centre.x;
 	const float y = circle.centre.y;
 	const float r = circle.radius;
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	return !(r + x < 0.0f || x - r > view.resolution.x || r + y < 0.0f || y - r > view.resolution.y);
 }
 } // namespace
@@ -555,6 +556,7 @@ std::optional<MeshHit> NearestIntersection(std::span<const glm::vec3> corners, s
 		}
 		// The game adds every sum here from z to x
 		const float facing = x87::DotZyx(direction, normal);
+		// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 		if (!(facing < -k_SideOn || facing > k_SideOn))
 		{
 			continue;
@@ -625,6 +627,7 @@ std::optional<MeshHit> NearestSkinIntersection(std::span<const glm::vec3> corner
 		}
 		// The game adds every sum here from z to x
 		const float facing = x87::DotZyx(direction, normal);
+		// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 		if (!(facing < -k_SideOn || facing > k_SideOn))
 		{
 			continue;
@@ -672,6 +675,7 @@ std::optional<MeshHit> NearestSkinIntersection(std::span<const glm::vec3> corner
 			s = (offset.y - offset.x * side2.y / side2.x) / across;
 			t = (offset.x - side1.x * s) / side2.x;
 		}
+		// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 		if (!(s >= 0.0f && s <= 1.0f && t >= 0.0f && t <= 1.0f))
 		{
 			continue;

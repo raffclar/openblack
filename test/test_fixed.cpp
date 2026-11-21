@@ -53,7 +53,7 @@ protected:
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(TestFixed, celticTownCentreMeshBoundingCircle)
 {
-	Transform transform {{}, glm::identity<glm::mat3>(), {1.0f, 1.0f, 1.0f}};
+	const Transform transform {{}, glm::identity<glm::mat3>(), {1.0f, 1.0f, 1.0f}};
 	const auto [center, radius] = GetFixedObstacleBoundingCircle(MeshId::BuildingCelticVillageCentre, transform);
 	ASSERT_VEC2_NEAR(center, glm::vec2(0.00188350677f, 0.22130537f));
 	ASSERT_EQ(radius, 12.9809408f);
@@ -73,7 +73,7 @@ TEST_F(TestFixed, celticTownCentreBoundingCircle)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST_F(TestFixed, celticAbodeMeshBoundingCircle)
 {
-	Transform transform {{}, glm::identity<glm::mat3>(), {1.0f, 1.0f, 1.0f}};
+	const Transform transform {{}, glm::identity<glm::mat3>(), {1.0f, 1.0f, 1.0f}};
 	const auto [center, radius] = GetFixedObstacleBoundingCircle(MeshId::BuildingCeltic5A, transform);
 	ASSERT_VEC2_NEAR(center, glm::vec2(0.0883901119f, 0.188308239f));
 	ASSERT_EQ(radius, 6.33014917f);

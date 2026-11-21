@@ -559,10 +559,7 @@ void ChangeHeld(entt::entity pile, magic::piles::HeldChange change)
 	}
 	static_cast<void>(stores.AddToPile(pile, type, change.added, poisoned));
 }
-} // namespace
 
-namespace
-{
 /// Whether the life of the thing is the life of a villager: a villager that has none of the kinds that come before
 /// a villager in the rules of life
 bool HasVillagerLife(const KeptStores::Life& kinds, entt::entity object)
@@ -1446,8 +1443,10 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 	return life.life;
 }
 
+namespace
+{
 /// The facts about a villager that tell if the villager takes an effect
-static magic::VillagerReceiverFacts VillagerReceiverFactsOf(const Registry& registry, entt::entity villager)
+magic::VillagerReceiverFacts VillagerReceiverFactsOf(const Registry& registry, entt::entity villager)
 {
 	magic::VillagerReceiverFacts facts {.atHome = registry.AllOf<AtHome>(villager), .inHand = registry.AllOf<InHand>(villager)};
 	const auto* action = registry.TryGet<const LivingAction>(villager);
@@ -1467,6 +1466,7 @@ static magic::VillagerReceiverFacts VillagerReceiverFactsOf(const Registry& regi
 	facts.hiding = top == static_cast<uint8_t>(VillagerStates::GoAndHideInNearbyBuilding);
 	return facts;
 }
+} // namespace
 
 bool world_objects::IsAvailable(entt::entity object)
 {

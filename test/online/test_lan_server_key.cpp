@@ -139,9 +139,9 @@ TEST(LanServerKey, AnAnswerWithNoKeyOrABadKeyGivesALineWithNoKey)
 	auto answer = server::lan_room::AnswerOf(room, false, {}, 4433, "office.example", "");
 	// An answer of an older server has no key field
 	auto text = lobby_api::ToJson(answer);
-	const auto field = text.find(",\"key\":\"\"");
+	const auto field = text.find(R"(,"key":"")");
 	ASSERT_NE(field, std::string::npos);
-	text.erase(field, std::string(",\"key\":\"\"").size());
+	text.erase(field, std::string(R"(,"key":"")").size());
 	const auto old = lobby_api::ParseLanAnswer(text);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_TRUE(online::lan_discovery::EntryOf(*old, 7, online::lan_discovery::V4(192, 168, 1, 20)).key.empty());

@@ -217,7 +217,7 @@ struct Reduced
 	// One, two, three or four quarter turns, away from the angles where the subtraction cancels many bits
 	const auto near = [x, negative](int quarters) {
 		const double sign = negative ? -1.0 : 1.0;
-		const double whole = static_cast<double>(quarters);
+		const auto whole = static_cast<double>(quarters);
 		const double z = x - sign * whole * k_Pio2Part1;
 		const double head = z - sign * whole * k_Pio2Part1Tail;
 		const double tail = (z - head) - sign * whole * k_Pio2Part1Tail;
@@ -619,12 +619,12 @@ double Exp(double value)
 	// exp(x) = 2^(k/N) * exp(r), with x = ln2/N * k + r
 	const double z = table::k_InvLn2N * x;
 	double kd = z + table::k_Shift;
-	const uint64_t ki = std::bit_cast<uint64_t>(kd);
+	const auto ki = std::bit_cast<uint64_t>(kd);
 	kd -= table::k_Shift;
 	const double r = x + kd * table::k_NegLn2HiN + kd * table::k_NegLn2LoN;
 	const auto idx = static_cast<size_t>(2 * (ki % k_N));
 	const uint64_t top = ki << (52 - table::k_TableBits);
-	const double tail = std::bit_cast<double>(table::k_Tab[idx]);
+	const auto tail = std::bit_cast<double>(table::k_Tab[idx]);
 	uint64_t sbits = table::k_Tab[idx + 1] + top;
 	const double r2 = r * r;
 	const auto& c = table::k_Poly;
@@ -635,11 +635,11 @@ double Exp(double value)
 		if ((ki & 0x8000'0000u) == 0)
 		{
 			sbits -= 1009ull << 52;
-			const double scale = std::bit_cast<double>(sbits);
+			const auto scale = std::bit_cast<double>(sbits);
 			return 0x1p1009 * (scale + scale * tmp);
 		}
 		sbits += 1022ull << 52;
-		const double scale = std::bit_cast<double>(sbits);
+		const auto scale = std::bit_cast<double>(sbits);
 		double y = scale + scale * tmp;
 		if (y < 1.0)
 		{
@@ -654,7 +654,7 @@ double Exp(double value)
 		}
 		return 0x1p-1022 * y;
 	}
-	const double scale = std::bit_cast<double>(sbits);
+	const auto scale = std::bit_cast<double>(sbits);
 	return scale + scale * tmp;
 }
 
@@ -730,7 +730,7 @@ double Expm1(double value)
 	const double hfx = 0.5 * x;
 	const double hxs = x * hfx;
 	const double r1 = 1.0 + hxs * (k_Q1 + hxs * (k_Q2 + hxs * (k_Q3 + hxs * (k_Q4 + hxs * k_Q5))));
-	double t = 3.0 - r1 * hfx;
+	const double t = 3.0 - r1 * hfx;
 	double e = hxs * ((r1 - t) / (6.0 - x * t));
 	if (k == 0)
 	{
@@ -750,7 +750,7 @@ double Expm1(double value)
 		}
 		return 1.0 + 2.0 * (x - e);
 	}
-	const double twopk = std::bit_cast<double>(static_cast<uint64_t>(0x3FF + k) << 52);
+	const auto twopk = std::bit_cast<double>(static_cast<uint64_t>(0x3FF + k) << 52);
 	if (k < 0 || k > 56)
 	{
 		double y = x - e + 1.0;
@@ -764,7 +764,7 @@ double Expm1(double value)
 		}
 		return y - 1.0;
 	}
-	const double twomk = std::bit_cast<double>(static_cast<uint64_t>(0x3FF - k) << 52);
+	const auto twomk = std::bit_cast<double>(static_cast<uint64_t>(0x3FF - k) << 52);
 	if (k < 20)
 	{
 		return (x - e + (1 - twomk)) * twopk;
@@ -826,9 +826,9 @@ double Log(double value)
 	const auto& b = table::k_Poly1;
 	const auto& a = table::k_Poly;
 	const double x = value;
-	uint64_t ix = std::bit_cast<uint64_t>(x);
-	constexpr uint64_t k_Low = std::bit_cast<uint64_t>(1.0 - 0x1p-4);
-	constexpr uint64_t k_High = std::bit_cast<uint64_t>(1.0 + 0x1.09p-4);
+	auto ix = std::bit_cast<uint64_t>(x);
+	constexpr auto k_Low = std::bit_cast<uint64_t>(1.0 - 0x1p-4);
+	constexpr auto k_High = std::bit_cast<uint64_t>(1.0 + 0x1.09p-4);
 	if (ix - k_Low < k_High - k_Low)
 	{
 		// Near 1
@@ -874,9 +874,9 @@ double Log2(double value)
 	const auto& b = table::k_Poly1;
 	const auto& a = table::k_Poly;
 	const double x = value;
-	uint64_t ix = std::bit_cast<uint64_t>(x);
-	constexpr uint64_t k_Low = std::bit_cast<uint64_t>(1.0 - 0x1.5b51p-5);
-	constexpr uint64_t k_High = std::bit_cast<uint64_t>(1.0 + 0x1.6ab2p-5);
+	auto ix = std::bit_cast<uint64_t>(x);
+	constexpr auto k_Low = std::bit_cast<uint64_t>(1.0 - 0x1.5b51p-5);
+	constexpr auto k_High = std::bit_cast<uint64_t>(1.0 + 0x1.6ab2p-5);
 	const auto highHalf = [](double v) { return std::bit_cast<double>(std::bit_cast<uint64_t>(v) & (~0ull << 32)); };
 	if (ix - k_Low < k_High - k_Low)
 	{

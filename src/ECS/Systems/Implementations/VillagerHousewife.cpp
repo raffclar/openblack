@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+// NOLINTNEXTLINE(modernize-macro-to-enum): The headers test this macro with ifdef.
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "VillagerHousewife.h"
 
@@ -48,9 +49,7 @@ namespace rules = openblack::ecs::villager_food_rules;
 namespace villager_home = openblack::ecs::villager_home;
 namespace villager_food = openblack::ecs::villager_food;
 namespace villager_build = openblack::ecs::villager_build;
-namespace villager_footpath = openblack::ecs::villager_footpath;
 namespace routine = openblack::ecs::villager_routine;
-namespace construction = openblack::ecs::construction;
 
 namespace
 {
