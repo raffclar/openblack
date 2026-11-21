@@ -100,6 +100,7 @@ class LandFootprints;
 class LandShadowBake;
 class L3DSubMesh;
 class OffscreenScreenshots;
+class ScreenGlowPass;
 class MorphStreamLayouts;
 class ShaderProgram;
 class Mesh;
@@ -728,6 +729,8 @@ private:
 	uint32_t _bgfxReset;
 	/// Pictures of frames drawn aside, while the window has no buffers to read
 	std::unique_ptr<OffscreenScreenshots> _offscreenShots;
+	/// The soft glow of the whole screen under a good sky
+	std::unique_ptr<ScreenGlowPass> _screenGlow;
 	bool _bgfxDebug = false;
 	bool _bgfxProfile = false;
 	/// While the scene is drawn only to make the renderer's pipelines and targets: nothing that later frames use changes
@@ -976,6 +979,8 @@ private:
 	mutable std::array<glm::vec4, 2> _haze {};
 	/// The colours the sky's dome is drawn in this frame
 	mutable sky_dome::Tint _skyTint;
+	/// The strength of the good sky's glow over the screen this frame, of 255: 0 for no glow
+	mutable uint8_t _screenGlowStrength {0};
 	/// icons.raw with iconsa.raw's alpha, which the creature's room's belts and medals are drawn with, once loaded
 	mutable std::optional<TextureHandle> _iconsTexture;
 	mutable bool _iconsLoaded {false};

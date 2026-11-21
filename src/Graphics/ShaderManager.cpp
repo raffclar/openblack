@@ -150,6 +150,10 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_sky_dome
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_screen_glow
+#include "ShaderIncluder.h"
+#define SHADER_NAME fs_screen_glow_step
+#include "ShaderIncluder.h"
 #define SHADER_NAME vs_creature_hair
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_creature_hair
@@ -220,7 +224,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 78> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 80> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -271,6 +275,8 @@ const std::array<bgfx::EmbeddedShader, 78> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_land_coarse_edges),    //
     BGFX_EMBEDDED_SHADER(fs_land_coarse_textures), //
     BGFX_EMBEDDED_SHADER(fs_sky_dome),             //
+    BGFX_EMBEDDED_SHADER(fs_screen_glow),          //
+    BGFX_EMBEDDED_SHADER(fs_screen_glow_step),     //
     BGFX_EMBEDDED_SHADER(vs_creature_hair),        //
     BGFX_EMBEDDED_SHADER(fs_creature_hair),        //
     BGFX_EMBEDDED_SHADER(vs_hair_light_kept),      //
@@ -337,6 +343,8 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"LandCoarseEdges", "vs_land_luminosity", "fs_land_coarse_edges"},
     ShaderDefinition {"LandCoarseTextures", "vs_land_luminosity", "fs_land_coarse_textures"},
     ShaderDefinition {"SkyDome", "vs_land_luminosity", "fs_sky_dome"},
+    ShaderDefinition {"ScreenGlow", "vs_land_luminosity", "fs_screen_glow"},
+    ShaderDefinition {"ScreenGlowStep", "vs_land_luminosity", "fs_screen_glow_step"},
     ShaderDefinition {"CreatureHair", "vs_creature_hair", "fs_creature_hair"},
     ShaderDefinition {"HairLightKept", "vs_hair_light_kept", "fs_line"},
     ShaderDefinition {"Leash", "vs_leash", "fs_world_textured"},
