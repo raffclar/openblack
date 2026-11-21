@@ -1804,6 +1804,7 @@ std::optional<VanillaGameData> VanillaWorld::GameData() const
 	data.localSeed = data.words[1];
 	data.gameTurn = data.words[2];
 	data.thingsMade = data.words[4];
+	data.interactDesire = std::bit_cast<float>(data.words[6]);
 	data.worldPopulation = data.words[7];
 	return data;
 }

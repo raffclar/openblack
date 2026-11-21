@@ -322,6 +322,19 @@ TEST(VillagerFoodRules, FoodLyingAboutCatchesAHungryEyeWithRoomToCarry)
 	EXPECT_FALSE(IsInterestedInFood(in));
 }
 
+TEST(VillagerFoodRules, TheLandsInteractDesireAddsToTheInterest)
+{
+	FoodInterestInputs in {.desireForFood = 0.0f, .maxCarried = 150, .stateInterest = 1.0f, .distanceModifier = 1.0f};
+	// Not hungry and with no town, the villager does not look at the food
+	EXPECT_FALSE(IsInterestedInFood(in));
+	// The value that the land's script sets goes past a quarter by itself
+	in.interactDesire = 0.3f;
+	EXPECT_TRUE(IsInterestedInFood(in));
+	// A value under a quarter does not
+	in.interactDesire = 0.25f;
+	EXPECT_FALSE(IsInterestedInFood(in));
+}
+
 TEST(VillagerFoodRules, FoodInAHandOrInThePhysicsCatchesNoEye)
 {
 	const FoodInterestInputs wanted {.desireForFood = 1.0f,

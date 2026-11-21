@@ -292,6 +292,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::MapScriptGlobals::playerInfluenceMultiplier>("playerInfluenceMultiplier")
 	    .Field<&openblack::ecs::components::MapScriptGlobals::landBalance>("landBalance")
 	    .Field<&openblack::ecs::components::MapScriptGlobals::lostTownScale>("lostTownScale")
+	    .Field<&openblack::ecs::components::MapScriptGlobals::interactDesire>("interactDesire")
 	    .Field<&openblack::ecs::components::MapScriptGlobals::lastObject>("lastObject");
 	Reflect<openblack::ecs::components::Player::Cast>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Player::Cast::position>("position")

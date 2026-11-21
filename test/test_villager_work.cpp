@@ -75,6 +75,16 @@ TEST(VillagerWork, OnlyAForesterAtWorkGoesForWoodAgainAtOnce)
 	EXPECT_FALSE(work::ReactsToWoodAgainAtOnce(VillagerStates::ArrivesAtBigForest));
 }
 
+TEST(VillagerWork, TheLandsInteractDesireAddsToTheInterestInWood)
+{
+	auto in = Interested();
+	// The town does not want wood, so the wood does not catch the eye
+	EXPECT_FALSE(work::IsInterestedInWood(in));
+	// The value that the land's script sets goes past the town's trigger by itself
+	in.interactDesire = 0.02f;
+	EXPECT_TRUE(work::IsInterestedInWood(in));
+}
+
 TEST(VillagerWork, AFallenTrunkCatchesTheEyeWhileItsLoadIsUnderItsRoom)
 {
 	auto in = Interested();

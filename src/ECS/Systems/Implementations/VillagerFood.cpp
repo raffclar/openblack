@@ -520,7 +520,7 @@ bool IsInterestedInFoodObject(entt::entity villager, entt::entity food)
 	    .speedUp = IsSpeedUp(food),
 	    .townFoodDesire = townDesire,
 	    .townTrigger = townInfo.desireTriggersVillagerAction,
-	    .interactDesire = 0.0f,
+	    .interactDesire = registry.Context().mapScriptGlobals.interactDesire,
 	});
 }
 } // namespace

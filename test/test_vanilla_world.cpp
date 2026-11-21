@@ -312,6 +312,18 @@ TEST(VanillaWorld, ReadsTheGameDataOfAWholeFile)
 	EXPECT_EQ(world.Refs(world.Game(), "players").size(), 8);
 }
 
+TEST(VanillaWorld, ReadsTheInteractDesireOfTheLandAsAFloat)
+{
+	auto data = k_Data;
+	data[6] = std::bit_cast<uint32_t>(0.375F);
+	const auto result = ReadVanillaWorld(SmallWorld(data, 12.5F));
+	ASSERT_TRUE(result.world.has_value()) << result.error->reason << " at " << result.error->at;
+	const auto game = result.world->GameData();
+	ASSERT_TRUE(game.has_value());
+	EXPECT_EQ(game->interactDesire, 0.375F);
+	EXPECT_EQ(game->worldPopulation, 51);
+}
+
 TEST(VanillaWorld, RefusesAFileWithMoreAfterTheWorld)
 {
 	auto bytes = SmallWorld(k_Data, 12.5F);
