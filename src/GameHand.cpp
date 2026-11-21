@@ -1004,6 +1004,16 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		// Update Hand
 		UpdateDrawnHand(deltaTime, profiler, camera, gameTime, intersectionTransform);
 
+		// While a turn waits between two players to continue, the hand follows the pointer, but it does not move the
+		// things of the world: what the hands hold, the ropes, the globes and the phantom buildings wait for the end of
+		// the turn (deviation row 288)
+		const bool turnWaits = Locator::landSystem::value().IsTurnSplit();
+		if (turnWaits)
+		{
+			ShowInspectorOverride(false);
+			return;
+		}
+
 		// The leashes' ropes swing from where the hand now is
 		{
 			auto creatureLeash = profiler.BeginScoped(Profiler::Stage::CreatureLeashUpdate);

@@ -54,6 +54,7 @@
 #include "Online/OnlineMapStoreInterface.h"
 #include "Online/RoomClock.h"
 #include "PlayerSlots.h"
+#include "Simulation/TurnBody.h"
 
 using namespace openblack::ecs::systems;
 
@@ -549,7 +550,7 @@ void NetworkGameSystem::Update()
 	}
 
 	// A test parts this computer's world from the server's once
-	if (_partAt.has_value() && Locator::time::value().GetTurn() >= *_partAt)
+	if (_partAt.has_value() && simulation::WholeTurns() >= *_partAt)
 	{
 		_partAt.reset();
 		std::ignore = Locator::gameRandom::value().GameRand(1000);
@@ -614,7 +615,7 @@ void NetworkGameSystem::Update()
 
 	// After the last turn of a decided game, the clock of this computer stops. The world stands still, and the frames
 	// take no game time, as in a pause.
-	if (const auto last = _session->StoppedAfter(); last.has_value() && !_stopped && Locator::time::value().GetTurn() > *last)
+	if (const auto last = _session->StoppedAfter(); last.has_value() && !_stopped && simulation::WholeTurns() > *last)
 	{
 		_stopped = true;
 		Locator::time::value().SetPaused(true);

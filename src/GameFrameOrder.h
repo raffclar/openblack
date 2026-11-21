@@ -251,6 +251,16 @@ struct CameraKeyState
 	return false;
 }
 
+/// True for the steps that move the world between two turns: the creatures' poses, the effects of the frame and the
+/// things that the land draws. The start of each turn puts the world back where the last turn left it. While a turn
+/// waits between two of its players to continue, these steps wait too, so that the rest of the turn sees the world as
+/// the first part left it (deviation row 288). The frame draws the world as it is. The hand step continues, because the
+/// reports of the hand go to the turns, but what the hands hold waits too.
+[[nodiscard]] constexpr bool WaitsForWholeTurn(Step step)
+{
+	return step == Step::CreaturePoses || step == Step::FrameEffects || step == Step::Entities;
+}
+
 /// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary.
 /// A run with a fixed frame time draws each frame also while the window is minimised. The renderer keeps some of what it
 /// drew before, such as the shadows on the land. Thus a picture of the run is the same whatever the desktop did with the

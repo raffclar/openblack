@@ -306,3 +306,25 @@ TEST(GameFrameOrder, TheKeysSendTheirCommandsBeforeTheTurnsAndTheBlockGoesAfterT
 	// The hand's frame comes after the block went, so its commands wait for the block of the next frame
 	EXPECT_TRUE(recorder.Before(Step::SendCommands, Step::Hand));
 }
+
+// While a turn waits between two players to continue, only the steps that move the world between turns wait. The
+// input, the camera, the hand, the turns and the draw continue.
+TEST(GameFrameOrder, OnlyTheStepsThatMoveTheWorldWaitForAWholeTurn)
+{
+	std::vector<Step> waiting;
+	for (const auto& place : k_Frame)
+	{
+		if (WaitsForWholeTurn(place.step))
+		{
+			waiting.push_back(place.step);
+		}
+	}
+	const std::vector<Step> expected {Step::CreaturePoses, Step::FrameEffects, Step::Entities};
+	EXPECT_EQ(waiting, expected);
+	// The hand reports to the turns, so it continues
+	EXPECT_FALSE(WaitsForWholeTurn(Step::Hand));
+	EXPECT_FALSE(WaitsForWholeTurn(Step::Turns));
+	EXPECT_FALSE(WaitsForWholeTurn(Step::Input));
+	EXPECT_FALSE(WaitsForWholeTurn(Step::Camera));
+	EXPECT_FALSE(WaitsForWholeTurn(Step::SendCommands));
+}

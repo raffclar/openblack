@@ -200,6 +200,12 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	{
 		return true;
 	}
+	// While a turn waits between two players to continue, the frame draws the world as the turn left it. The steps that
+	// move the world between turns wait for the end of the turn (deviation row 288).
+	if (game_frame::WaitsForWholeTurn(step) && Locator::landSystem::has_value() && Locator::landSystem::value().IsTurnSplit())
+	{
+		return true;
+	}
 	switch (step)
 	{
 	case Step::FrameClock:
@@ -228,6 +234,8 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is
 		if (_scenarioStager && _scenarioRequest.has_value())
 		{
+			// A turn that waits to continue ends before the scenario lays out its world
+			Locator::landSystem::value().FinishSplitTurn();
 			_scenarioStager();
 		}
 		// The turns of this frame played beside the draw of the last frame (deviation row 153)
@@ -444,7 +452,7 @@ bool Game::StartTurnsBesideDraw()
 	auto& time = Locator::time::value();
 	time.Update();
 	loop.turnsPlayedBeside = true;
-	loop.turnBefore = time.GetTurn();
+	loop.turnBefore = simulation::WholeTurns();
 	loop.turnsStart = std::chrono::steady_clock::now();
 	auto& queue = Locator::mainThreadQueue::value();
 	loop.turnsElsewhere.emplace(queue);

@@ -16,6 +16,8 @@
 #include <chrono>
 #include <optional>
 #include <span>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include <LHVM.h>
@@ -90,6 +92,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -136,6 +139,7 @@
 #include "EngineConfig.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
+#include "MindFrameBudget.h"
 #include "PlayerTurnOrder.h"
 #include "Profiler.h"
 #include "TurnStepTimes.h"
@@ -173,67 +177,79 @@ void NotePlayerInfluence(PlayerNames player)
 	influence.NoteInfluencePower(player);
 }
 
-void PlayPlayerTurns()
+/// The players from the player at the index first take their turns. With a budget, the turns stop before the next
+/// player when the computer minds used the budget of the frame, and give the index of that player.
+std::optional<size_t> PlayPlayerTurns(size_t first, MindFrameBudget* budget)
 {
 	// Each player takes its whole turn in the order of the players, the neutral player last, before the next player starts.
 	// First its temple: one whose heart lost all its life moves on through its destruction, and a hurt heart beams. Then
 	// each of its towns, in the order the player got them, takes its turn. Then its stones, its alignment, its computer
 	// mind, the power of its tribes and its influence power. So the game's random numbers come in the same order as the
 	// game draws them.
-	if (Locator::templeDestructionSystem::has_value())
+	if (first == 0 && Locator::templeDestructionSystem::has_value())
 	{
 		Locator::templeDestructionSystem::value().StartTurn();
 	}
 	auto& towns = Locator::townSystem::value();
-	player_turn::Play(ecs::game_players::All(), [&towns](PlayerNames player, player_turn::Part part) {
-		switch (part)
-		{
-		case player_turn::Part::Conditions:
-			// In a network game, the winning conditions that the world measures take their values before the player's turn
-			if (Locator::gameEndSystem::has_value())
-			{
-				Locator::gameEndSystem::value().MeasureConditions(player);
-			}
-			break;
-		case player_turn::Part::Temple:
-			if (Locator::templeDestructionSystem::has_value())
-			{
-				Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
-			}
-			break;
-		case player_turn::Part::Towns:
-			towns.ProcessPlayerTowns(player);
-			break;
-		case player_turn::Part::Stones:
-			// After its towns, the player's stones drop the travellers that changed to a different thing
-			if (Locator::teleportSystem::has_value())
-			{
-				Locator::teleportSystem::value().PlayerTurn(player);
-			}
-			break;
-		case player_turn::Part::Alignment:
-			// The waiting change of the player moves its alignment before its computer mind looks at the players
-			Locator::alignmentSystem::value().PlayerTurn(player);
-			break;
-		case player_turn::Part::Mind:
-			// The computer mind of the player, when a land script switched it on
-			if (Locator::computerPlayerSystem::has_value())
-			{
-				Locator::computerPlayerSystem::value().PlayerTurn(player);
-			}
-			break;
-		case player_turn::Part::Powers:
-			// The player's tribes give the player the most power that they gave it, at least 1
-			if (Locator::wonderSystem::has_value())
-			{
-				Locator::wonderSystem::value().PlayerTurn(player);
-			}
-			break;
-		case player_turn::Part::Influence:
-			NotePlayerInfluence(player);
-			break;
-		}
-	});
+	return player_turn::PlayFrom(
+	    ecs::game_players::All(), first,
+	    [&towns, budget](PlayerNames player, player_turn::Part part) {
+		    switch (part)
+		    {
+		    case player_turn::Part::Conditions:
+			    // In a network game, the winning conditions that the world measures take their values before the player's turn
+			    if (Locator::gameEndSystem::has_value())
+			    {
+				    Locator::gameEndSystem::value().MeasureConditions(player);
+			    }
+			    break;
+		    case player_turn::Part::Temple:
+			    if (Locator::templeDestructionSystem::has_value())
+			    {
+				    Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
+			    }
+			    break;
+		    case player_turn::Part::Towns:
+			    towns.ProcessPlayerTowns(player);
+			    break;
+		    case player_turn::Part::Stones:
+			    // After its towns, the player's stones drop the travellers that changed to a different thing
+			    if (Locator::teleportSystem::has_value())
+			    {
+				    Locator::teleportSystem::value().PlayerTurn(player);
+			    }
+			    break;
+		    case player_turn::Part::Alignment:
+			    // The waiting change of the player moves its alignment before its computer mind looks at the players
+			    Locator::alignmentSystem::value().PlayerTurn(player);
+			    break;
+		    case player_turn::Part::Mind:
+			    // The computer mind of the player, when a land script switched it on. The budget of the frame counts its time.
+			    if (Locator::computerPlayerSystem::has_value())
+			    {
+				    const auto start =
+				        budget != nullptr ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
+				    Locator::computerPlayerSystem::value().PlayerTurn(player);
+				    if (budget != nullptr)
+				    {
+					    budget->AddMindTime(
+					        std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count());
+				    }
+			    }
+			    break;
+		    case player_turn::Part::Powers:
+			    // The player's tribes give the player the most power that they gave it, at least 1
+			    if (Locator::wonderSystem::has_value())
+			    {
+				    Locator::wonderSystem::value().PlayerTurn(player);
+			    }
+			    break;
+		    case player_turn::Part::Influence:
+			    NotePlayerInfluence(player);
+			    break;
+		    }
+	    },
+	    [budget] { return budget != nullptr && budget->Used(); });
 }
 
 /// The footpaths go round what came onto the map since the last time, and stop going round what left it. The game does
@@ -591,6 +607,28 @@ void StartTempleLoss(PlayerNames player)
 		Locator::templeDestructionSystem::value().Start(*temple);
 	}
 }
+
+/// The players' step of the turn, from the player at the index first. It gives the index of the next player when the
+/// budget stops the step between two players.
+std::optional<size_t> PlayPlayersStep(size_t first, MindFrameBudget* budget)
+{
+	// Tests: the temple of a player starts its destruction at a turn, on every computer with the same switch
+	const auto turn = Locator::time::value().GetTurn();
+	if (const auto& loss = Locator::simulation::value().GetSettings().templeLoss;
+	    first == 0 && loss.has_value() && loss->turn == turn && Locator::templeDestructionSystem::has_value())
+	{
+		// The neutral player has no temple. A loss with no range has the player as its last player.
+		const auto lastPlayer = std::max(loss->player, loss->lastPlayer);
+		for (auto player = loss->player; player <= lastPlayer; ++player)
+		{
+			if (static_cast<PlayerNames>(player) != PlayerNames::NEUTRAL)
+			{
+				StartTempleLoss(static_cast<PlayerNames>(player));
+			}
+		}
+	}
+	return PlayPlayerTurns(first, budget);
+}
 } // namespace
 
 void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
@@ -709,22 +747,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		}
 		break;
 	case Step::Players:
-		// Tests: the temple of a player starts its destruction at a turn, on every computer with the same switch
-		if (const auto& loss = Locator::simulation::value().GetSettings().templeLoss;
-		    loss.has_value() && loss->turn == turn && Locator::templeDestructionSystem::has_value())
-		{
-			// The neutral player has no temple. A loss with no range has the player as its last player.
-			const auto lastPlayer = std::max(loss->player, loss->lastPlayer);
-			for (auto player = loss->player; player <= lastPlayer; ++player)
-			{
-				if (static_cast<PlayerNames>(player) != PlayerNames::NEUTRAL)
-				{
-					StartTempleLoss(static_cast<PlayerNames>(player));
-				}
-			}
-		}
 		// The players take their turns, each its temple and then its towns
-		PlayPlayerTurns();
+		std::ignore = PlayPlayersStep(0, nullptr);
 		break;
 	case Step::ComputerPlayers:
 		// The minds took their turns in the turns of their players. Here the computer minds give the report of their times.
@@ -1240,59 +1264,124 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	}
 }
 
-void PlayTurn(TurnViewInterface& view)
+namespace
 {
-	// The checksum of a turn before this one in the same frame takes the world of that turn, before this turn changes it
-	Locator::syncChecksumSystem::value().FinishHash();
+/// Does the steps of a turn from the place where it is. With a budget, the turn can stop between two players of its
+/// players' step. Then it gives the turn that waits to continue.
+std::optional<SplitTurn> PlayTurnPart(TurnViewInterface& view, SplitTurn turn, MindFrameBudget* budget)
+{
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
-	// The draw trace gives each synced draw of the turn the number of the turn. The turn count moves on at the start of
-	// the turn, so the number is the same as the number of the turn's checksum and record.
-	const draw_trace::TurnScope traceTurn(Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetDrawTrace()
-	                                                                       : nullptr,
-	                                      Locator::time::value().GetTurn() + 1);
+	// The draw trace gives each synced draw of the turn the number of the turn, also in each part of a split turn
+	const draw_trace::TurnScope traceTurn(
+	    Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetDrawTrace() : nullptr, turn.number);
 #endif
-	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn
-	// When the input stops the clock, the turn does only the input and the end of the turn
-	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
 	// The queue of the main thread knows the step, so that the check of the turn's calls can name it
 	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
 	// A developer switch logs the time of each step of a turn that takes a long time
 	const auto stepTimesFrom = Locator::config::has_value() ? Locator::config::value().turnStepTimesMs : std::nullopt;
-	TurnStepTimes stepTimes;
-	game_turn::PlayTurn(
-	    [&view, queue, &stepTimesFrom, &stepTimes](game_turn::Step step) {
+	auto& stepTimes = turn.stepTimes;
+	// A turn that continues measures the influence as it did when it stopped
+	if (turn.place.index != 0)
+	{
+		Locator::influenceSystem::value().SetInGameTurn(
+		    game_turn::MeasuresInfluenceFromTurnHands(game_turn::k_Turn[turn.place.index].step));
+	}
+	const auto stopped = game_turn::PlayTurnFrom(
+	    turn.place,
+	    [&view, queue, &stepTimesFrom, &stepTimes, budget](game_turn::Step step, size_t firstPlayer) -> std::optional<size_t> {
 		    if (queue != nullptr)
 		    {
 			    queue->SetTurnStep(static_cast<uint32_t>(step));
 		    }
 		    const auto start =
 		        stepTimesFrom.has_value() ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
-		    PlayTurnStep(step, view);
-		    FileNewInMap();
-		    // What the step put down or took away changes the paths before the next step
-		    FootpathsCatchUp();
+		    std::optional<size_t> nextPlayer;
+		    if (step == game_turn::Step::Players)
+		    {
+			    nextPlayer = PlayPlayersStep(firstPlayer, budget);
+		    }
+		    else
+		    {
+			    PlayTurnStep(step, view);
+		    }
+		    // The rest of the step comes after its last player, also when the step continues in a later frame
+		    if (!nextPlayer.has_value())
+		    {
+			    FileNewInMap();
+			    // What the step put down or took away changes the paths before the next step
+			    FootpathsCatchUp();
+		    }
 		    if (stepTimesFrom.has_value())
 		    {
 			    stepTimes.Add(step, std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count());
 		    }
+		    return nextPlayer;
 	    },
-	    decided,
 	    // The input of a game alone can stop the clock, for example with a tap on the entrance of the temple. Then the
 	    // world does not do the rest of this turn.
 	    [] {
 		    const auto& clock = Locator::time::value();
 		    return clock.IsPaused() || clock.IsHeld();
 	    });
+	if (queue != nullptr)
+	{
+		queue->SetTurnStep(std::nullopt);
+	}
+	if (stopped.has_value())
+	{
+		// Until the turn continues, the frames measure the influence from where this computer shows its hand
+		Locator::influenceSystem::value().SetInGameTurn(false);
+		turn.place = *stopped;
+		++turn.frames;
+		return turn;
+	}
+	if (turn.frames > 1)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Turn {} played in {} frames", turn.number, turn.frames);
+	}
 	if (stepTimesFrom.has_value() && stepTimes.Total() >= *stepTimesFrom)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
 		                   "Turn {} took {:.2f} ms. Steps (number in game_turn::Step) of 0.1 ms or more: {}",
 		                   Locator::time::value().GetTurn(), stepTimes.Total(), stepTimes.Report(0.1f));
 	}
-	if (queue != nullptr)
-	{
-		queue->SetTurnStep(std::nullopt);
-	}
+	return std::nullopt;
+}
+} // namespace
+
+std::optional<SplitTurn> StartTurn(TurnViewInterface& view, MindFrameBudget* budget)
+{
+	// The checksum of a turn before this one in the same frame takes the world of that turn, before this turn changes it
+	Locator::syncChecksumSystem::value().FinishHash();
+	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn.
+	// When the input stops the clock, the turn does only the input and the end of the turn.
+	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
+	// The turn count moves on at the start of the turn, so the number is the same as the number of the turn's checksum
+	// and record
+	return PlayTurnPart(view,
+	                    SplitTurn {
+	                        .place = game_turn::TurnPlace {.decided = decided},
+	                        .number = Locator::time::value().GetTurn() + 1,
+	                        .stepTimes = {},
+	                    },
+	                    budget);
+}
+
+std::optional<SplitTurn> ContinueTurn(TurnViewInterface& view, SplitTurn turn, MindFrameBudget* budget)
+{
+	return PlayTurnPart(view, std::move(turn), budget);
+}
+
+void PlayTurn(TurnViewInterface& view)
+{
+	std::ignore = StartTurn(view, nullptr);
+}
+
+uint32_t WholeTurns()
+{
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	const bool split = Locator::landSystem::has_value() && Locator::landSystem::value().IsTurnSplit();
+	return split && turn > 0 ? turn - 1 : turn;
 }
 
 } // namespace openblack::simulation

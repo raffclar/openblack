@@ -366,6 +366,7 @@ Game::Game(Arguments&& args) noexcept
 	}
 	config.aiTimesEvery = args.aiTimesEvery;
 	config.turnStepTimesMs = args.turnStepTimesMs;
+	config.mindFrameBudgetMs = args.mindFrameBudgetMs;
 	config.frameStatsOut = args.frameStatsOut;
 	config.stageTimes = args.stageTimes;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
@@ -515,7 +516,8 @@ bool Game::Update() noexcept
 	{
 		return false;
 	}
-	if (sim_run::Finished(Locator::simulation::value().GetSettings(), Locator::time::value().GetTurn()))
+	// A run ends after its last whole turn. A turn that waits to continue is not whole yet.
+	if (sim_run::Finished(Locator::simulation::value().GetSettings(), simulation::WholeTurns()))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The simulation run is at its last turn, {}", Locator::time::value().GetTurn());
 		LeaveAsObserverAtTheEndOfTheRun();
@@ -560,7 +562,7 @@ bool Game::Update() noexcept
 	{
 		const auto* session = Locator::networkGame::value().Session();
 		const auto last = session != nullptr ? session->StoppedAfter() : std::nullopt;
-		if (last.has_value() && Locator::time::value().GetTurn() > *last)
+		if (last.has_value() && simulation::WholeTurns() > *last)
 		{
 			// The log names the last turn by the number of the world, as the line of the decision does
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the network game stopped after turn {}: the game stops",
