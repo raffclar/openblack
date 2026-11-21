@@ -709,6 +709,25 @@ TEST(Impressiveness, ItMultipliesTheLandsBalanceTheMiracleTheReactionAndTheBored
 	EXPECT_FLOAT_EQ(BoredomAfterImpression(0.005f, -0.02f), 0.0f);
 }
 
+TEST(Impressiveness, AMissionaryMultipliesTheLandsBalanceAndItsValueFirst)
+{
+	// The game multiplies the land's balance and the value of the missionary first, then the reaction's multiplier. The
+	// order of a miracle gives a different last bit.
+	const ImpressionInputs inputs {.landBalance = 1.24f,
+	                               .impressiveValue = 2.13f,
+	                               .reactionMultiplier = 1.96f,
+	                               .distance = 0.0f,
+	                               .maxDistance = 60.0f,
+	                               .power = 1.0f,
+	                               .boredom = 1.0f};
+	EXPECT_EQ(MissionaryImpressiveValue(inputs), 5.176752f);
+	EXPECT_EQ(ImpressiveValue(inputs), 5.1767526f);
+	// The power has no effect on the preaching
+	auto stronger = inputs;
+	stronger.power = 3.0f;
+	EXPECT_EQ(MissionaryImpressiveValue(stronger), 5.176752f);
+}
+
 TEST(Impressiveness, BoredomWearsOffAtEachTownTurnBelowOne)
 {
 	EXPECT_FLOAT_EQ(BoredomAtTownTurn(0.5f, 0.00056f, 1.0f), 0.5f + 0.00056f);

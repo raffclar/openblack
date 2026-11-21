@@ -391,3 +391,24 @@ TEST(DiscipleRules, ADiscipleCallsFollowersOnlyWhenItDecidesWhatToDo)
 	EXPECT_FALSE(CallsFollowers(Farmer, Decision::AfterWait));
 	EXPECT_FALSE(CallsFollowers(Forester, Decision::AfterWait));
 }
+
+TEST(DiscipleRules, AWaitingDiscipleDecidesAgainWhenTheWantsOfItsTownChange)
+{
+	const WaitFacts waiting {.type = Farmer, .finalState = VillagerStates::DiscipleNothingToDo, .townWantsChanged = true};
+	EXPECT_TRUE(DecidesAgainAfterWait(waiting));
+	// Only when the wants changed
+	auto unchanged = waiting;
+	unchanged.townWantsChanged = false;
+	EXPECT_FALSE(DecidesAgainAfterWait(unchanged));
+	// Only while it waits
+	auto working = waiting;
+	working.finalState = VillagerStates::DecideWhatToDo;
+	EXPECT_FALSE(DecidesAgainAfterWait(working));
+	// Only a disciple of a work that waits when idle
+	auto missionary = waiting;
+	missionary.type = Missionary;
+	EXPECT_FALSE(DecidesAgainAfterWait(missionary));
+	auto none = waiting;
+	none.type = None;
+	EXPECT_FALSE(DecidesAgainAfterWait(none));
+}
