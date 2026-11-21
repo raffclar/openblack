@@ -75,7 +75,10 @@ public:
 	[[nodiscard]] bool IsSelecting() const override { return _selection.IsOpen() || _picker.open; }
 	[[nodiscard]] float GetCircleSecondsLeft() const override { return _circleSeconds; }
 	[[nodiscard]] GestureType GetAskedPowerUp() const override { return _askedPowerUp; }
-	void PoweredUpCast() override { StartPowerUps(); }
+	void PoweredUpCast() override;
+	[[nodiscard]] GestureType GetKeptGesture() const override { return _keptGesture; }
+	GestureType KeepForLandCast() override;
+	void ForgetCircle() override { _circleSeconds = 0.0f; }
 	[[nodiscard]] bool IsGesturing() const override { return _gesturing; }
 	[[nodiscard]] const gesture_hints::Row& GetHints() const override { return _hints; }
 	void StepHints(float seconds, bool wordsShowing) override;
@@ -162,6 +165,10 @@ private:
 	gesture::MiracleSelection _selection;
 	/// The circle drawn for the seed in the hand, while it is remembered
 	float _circleSeconds {0.0f};
+	/// The gesture of the circle drawn for the seed in the hand
+	GestureType _circleGesture {GestureType::None};
+	/// The gesture that the hand keeps for the check of its next cast. It has no time limit.
+	GestureType _keptGesture {GestureType::None};
 	bool _gesturing {false};
 	/// The power-up gestures that the hand offers for the seed in it, found when the hand last started its power-ups
 	std::array<GestureType, 3> _powerUpGestures {GestureType::None, GestureType::None, GestureType::None};

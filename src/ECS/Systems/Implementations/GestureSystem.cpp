@@ -167,6 +167,8 @@ void GestureSystem::Reset()
 	_seedTurnedOnLand = false;
 	_selection.Close();
 	_circleSeconds = 0.0f;
+	_circleGesture = GestureType::None;
+	_keptGesture = GestureType::None;
 	_powerUpGestures = {GestureType::None, GestureType::None, GestureType::None};
 	_askedPowerUp = GestureType::None;
 	_lastRecognised.reset();
@@ -215,6 +217,21 @@ void GestureSystem::SeedFirstTurnInHand()
 	const auto& info = Locator::infoConstants::value();
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, seed->seedType), seed->powerUp);
 	_askedPowerUp = magic::GetPowerUpGestureForMagicType(info, type).gesture;
+}
+
+void GestureSystem::PoweredUpCast()
+{
+	// The hand starts its power-ups again, which forgets the power-up asked for. The hand keeps that power-up for the
+	// check of its next cast.
+	const auto asked = _askedPowerUp;
+	StartPowerUps();
+	_keptGesture = gesture::KeptAfterCast(_keptGesture, true, asked);
+}
+
+GestureType GestureSystem::KeepForLandCast()
+{
+	_keptGesture = gesture::KeptForLandCast(_circleSeconds > 0.0f, _circleGesture);
+	return _keptGesture;
 }
 
 void GestureSystem::StartPowerUps()
@@ -917,6 +934,7 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		                   .centre = centre,
 		                   .radius = gesture::CircleRadius(frame.view.drawnEye, centre, edge, frame.view.cameraHeading)});
 		_circleSeconds = gesture::k_CircleSeconds;
+		_circleGesture = request.gesture;
 		break;
 	}
 	case Purpose::PowerUp:
@@ -1018,6 +1036,13 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	case Purpose::CloseSelection:
 	case Purpose::RepeatMiracle:
 		break;
+	}
+
+	// The hand keeps the circle or the power-up for the check of its next cast, and some gestures clear it. A spiral
+	// that opened no selection does not change it.
+	if (request.purpose != Purpose::OpenSelection || step == gesture::SelectionStep::Opened)
+	{
+		_keptGesture = gesture::KeptAfter(request.purpose, request.gesture, _keptGesture);
 	}
 
 	if (_events.size() > eventsBefore)
