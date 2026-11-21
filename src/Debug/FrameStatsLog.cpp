@@ -31,6 +31,10 @@
 
 #include <unistd.h>
 #endif
+#ifdef __EMSCRIPTEN__
+#include <emscripten/heap.h>
+#include <malloc.h>
+#endif
 
 namespace
 {
@@ -55,6 +59,12 @@ std::optional<ProcessMemory> MemoryOfProcess()
 	}
 	return ProcessMemory {.resident = static_cast<double>(counters.WorkingSetSize) / k_BytesPerMegabyte,
 	                      .own = static_cast<double>(counters.PrivateUsage) / k_BytesPerMegabyte};
+#elif defined(__EMSCRIPTEN__)
+	// The page's memory is the size of the WebAssembly heap, which does not become smaller. The blocks that the game
+	// holds now are its own memory.
+	const auto blocks = mallinfo();
+	return ProcessMemory {.resident = static_cast<double>(emscripten_get_heap_size()) / k_BytesPerMegabyte,
+	                      .own = static_cast<double>(blocks.uordblks) / k_BytesPerMegabyte};
 #elif defined(__linux__)
 	// The second number of the file is the pages in physical memory
 	std::ifstream statm("/proc/self/statm");

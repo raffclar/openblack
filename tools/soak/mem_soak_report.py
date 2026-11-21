@@ -11,6 +11,7 @@
 
     python tools/soak/mem_soak_report.py <run folder> [<run folder> ...] [--png <file>] [--json <file>]
 
+A web run (a folder of ob-web chrome with a page-log.txt) gives its samples from the memory lines of --frame-stats.
 For a skirmish run: the values at the end of each game, and the slope per game (least squares) over the games after
 --skip games. For a land or server run: the slope per hour of game time over the samples after --skip-hours. The rule
 (--limit-per-game, --limit-per-hour) says whether the run is stable: the slope of the private bytes is under the limit.
@@ -18,14 +19,33 @@ For a skirmish run: the values at the end of each game, and the slope per game (
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
 KEYS = ["private_mb", "working_set_mb", "handles", "threads", "gpu_mb", "textures_mb", "component_rows", "drawn_rows"]
 
 
-def read(folder):
+# A memory line of --frame-stats in the page log of a web run (see read_web)
+WEB_MEMORY = re.compile(r"Frame stats #(\d+) memory: process (\d+) MB \((\d+) MB its own\); textures (\d+) MB")
+
+
+def read_web(path, frames_per_report):
+    """The samples of a web run in headless Chrome, from the memory lines of --frame-stats in its page log. The process
+    memory of the page is the size of the WebAssembly heap, which does not become smaller; its own memory is the
+    blocks that the game holds. With --sim-fast and --sim-frame-ms 100, a frame is one turn."""
+    rows = []
+    for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+        if (m := WEB_MEMORY.search(line)) is not None:
+            rows.append({"kind": "sample", "turn": int(m.group(1)) * frames_per_report, "working_set_mb": int(m.group(2)),
+                         "private_mb": int(m.group(3)), "textures_mb": int(m.group(4))})
+    return rows
+
+
+def read(folder, frames_per_report=600):
     path = Path(folder) / "samples.jsonl"
+    if not path.exists() and (Path(folder) / "page-log.txt").exists():
+        return read_web(Path(folder) / "page-log.txt", frames_per_report)
     rows = []
     for line in path.read_text(encoding="utf-8").splitlines():
         try:
@@ -121,8 +141,9 @@ def main():
     parser.add_argument("--limit-per-hour", type=float, default=5.0)
     parser.add_argument("--png")
     parser.add_argument("--json")
+    parser.add_argument("--frame-stats", type=int, default=600, help="The frames between two memory lines of a web run")
     args = parser.parse_args()
-    runs = [(Path(folder).name, read(folder)) for folder in args.runs]
+    runs = [(Path(folder).name, read(folder, args.frame_stats)) for folder in args.runs]
     summaries = {}
     for name, rows in runs:
         if any(row.get("kind") == "game_end" for row in rows):

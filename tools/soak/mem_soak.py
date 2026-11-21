@@ -569,7 +569,7 @@ def heap_dump(run, timeout=1800):
 
 
 def steps(args):
-    """Plays the steps in order: skirmish (start one from the menu), turns:N, level:NAME (level.load), save:SLOT,
+    """Plays the steps in order: skirmish (start one from the menu), turns:N, level:NAME (level.load), levels (logs level.list), save:SLOT,
     load:SLOT, dump (the live heap of a leak trace build), quit (Quit Black & White, then wait for the process to end)"""
     out = Path(args.out)
     extra = ["-s", args.first_land, "--skip-opening", "cow", "--sim-all-computer-gods", "--sim-fast",
@@ -595,6 +595,8 @@ def steps(args):
             elif name == "load":
                 run.log(f"load: {json.dumps(run.inspector.result('saves.load', {'slot': int(value)}, timeout=1800))}")
                 run.wait_inspector(timeout=1800)
+            elif name == "levels":
+                run.log(f"levels: {json.dumps(run.inspector.result('level.list', {}))}")
             elif name == "dump":
                 heap_dump(run)
             elif name == "quit":
