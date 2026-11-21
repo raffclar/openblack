@@ -632,3 +632,16 @@ TEST(FootprintPaint, APaintOfThePartsOfTheChangedPrintsGivesTheTexelsOfAWholePai
 		}
 	}
 }
+
+TEST(FootprintPaint, ANewLandIsEveryBlockPaintedWholeAlsoWithOtherRepaints)
+{
+	// Each block of the land, then height changes of two blocks before the first frame
+	std::vector<size_t> whole {0, 1, 2, 3, 1, 3};
+	EXPECT_TRUE(footprint_paint::PaintsEveryBlock(whole, 4));
+	// The list as long as the land, but a block twice and another block missing, is not a new land
+	EXPECT_FALSE(footprint_paint::PaintsEveryBlock(std::vector<size_t> {0, 1, 1, 3}, 4));
+	// Some blocks only, and blocks past the end of the land, do not count
+	EXPECT_FALSE(footprint_paint::PaintsEveryBlock(std::vector<size_t> {0, 1, 2}, 4));
+	EXPECT_FALSE(footprint_paint::PaintsEveryBlock(std::vector<size_t> {0, 1, 2, 7, 8}, 4));
+	EXPECT_FALSE(footprint_paint::PaintsEveryBlock(std::vector<size_t> {}, 0));
+}

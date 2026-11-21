@@ -168,12 +168,13 @@ private:
 	void ForShares(size_t count, const std::function<void(size_t share, size_t from, size_t to)>& job);
 	void Reset(size_t blockCount);
 
-	/// The footprint of each model that the search found, with the model. The game can make a model again with the same
-	/// id, for example a damaged building, and remove the old model from the resources. The kept model keeps its
-	/// footprint alive until the land is new.
+	/// The footprint of each model that the search found, as a copy. The game can make a model again with the same id,
+	/// for example a damaged building or a temple that changes its shape, and remove the old model from the resources.
+	/// The copy keeps the first footprint until the land is new, and the old model with its buffers on the graphics
+	/// device can go.
 	struct FoundFootprint
 	{
-		entt::resource<const L3DMesh> mesh;
+		std::unique_ptr<const L3DMesh::Footprint> copy;
 		const L3DMesh::Footprint* footprint {nullptr};
 	};
 	std::unordered_map<entt::id_type, FoundFootprint> _footprints;

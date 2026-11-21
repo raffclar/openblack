@@ -63,6 +63,7 @@
 #include "ECS/SyncedState.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -777,6 +778,13 @@ bool ServerWorld::Frame()
 	// The frame steps that change the world: the creatures' fights, walks and animations, and the frame's effects
 	simulation::PlayCreaturePoses();
 	simulation::PlayFrameEffects(_frameView);
+	// The puffs, the ghosts and the shakes of the explosions go by the game time of the frame, as on a computer that draws
+	// the world. Without this step, the server keeps all of them until the land changes.
+	if (Locator::explosionSystem::has_value())
+	{
+		Locator::explosionSystem::value().Update(
+		    std::chrono::duration<float, std::milli>(Locator::time::value().GetFrameGameTime()).count());
+	}
 	land.KeepAlignmentInProfile();
 	if (sim_run::Finished(Locator::simulation::value().GetSettings(), clock.GetTurn()))
 	{
