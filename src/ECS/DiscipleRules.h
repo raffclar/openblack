@@ -228,6 +228,19 @@ struct WaitStep
 /// angle's taken first
 [[nodiscard]] WaitStep WaitStepFromCentre(float towardsDisciple, float centreRadius, const std::function<float(float)>& random);
 
+/// What the turn's checks of a villager know when they do not look at its needs
+struct WaitFacts
+{
+	VillagerDisciple type {VillagerDisciple::None};
+	/// The state that the villager works towards
+	VillagerStates finalState {VillagerStates::InvalidState};
+	/// The villager has a town, and the wants of that town changed
+	bool townWantsChanged {false};
+};
+/// Whether a disciple that waits for work decides again at once. A disciple of a work that waits when idle does this
+/// when it waits and the wants of its town change. A follower is not a disciple and does not do this.
+[[nodiscard]] bool DecidesAgainAfterWait(const WaitFacts& facts);
+
 /// An idle disciple looks for work again this many game turns after finding none
 inline constexpr int32_t k_IdleRetryTurns = 300;
 

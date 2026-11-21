@@ -346,3 +346,9 @@ WaitStep disciple::WaitStepFromCentre(float towardsDisciple, float centreRadius,
 	const float beyond = random(k_Beyond);
 	return {.radians = towardsDisciple + turn, .metres = centreRadius + beyond};
 }
+
+bool disciple::DecidesAgainAfterWait(const WaitFacts& facts)
+{
+	return facts.type != VillagerDisciple::None && KindOf(facts.type).waitsWhenIdle &&
+	       facts.finalState == VillagerStates::DiscipleNothingToDo && facts.townWantsChanged;
+}

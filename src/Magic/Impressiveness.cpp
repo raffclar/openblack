@@ -31,6 +31,15 @@ float openblack::magic::ImpressiveValue(const ImpressionInputs& inputs)
 	return watched * shown;
 }
 
+float openblack::magic::MissionaryImpressiveValue(const ImpressionInputs& inputs)
+{
+	// Multiplied in the game's order, each step rounded to a float. The shown part is the land's balance times the value
+	// of the missionary, times the reaction's multiplier. The boredom and the distance multiply first, then the shown part.
+	const float shown = (inputs.landBalance * inputs.impressiveValue) * inputs.reactionMultiplier;
+	const float watched = inputs.boredom * DistanceChangeToBelief(inputs.distance, inputs.maxDistance);
+	return watched * shown;
+}
+
 float openblack::magic::ObjectImpressiveValue(const ObjectImpressionInputs& inputs)
 {
 	// Multiplied in the game's order, each step rounded to a float. The shown part is the land's balance times the

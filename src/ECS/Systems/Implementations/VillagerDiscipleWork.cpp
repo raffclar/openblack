@@ -176,6 +176,9 @@ bool IsAbout(entt::entity villager)
 	    Locator::livingActionSystem::value().VillagerGetFinalState(registry.Get<const LivingAction>(villager)));
 }
 
+/// The place where the preaching of a new missionary starts: the corner of the map
+constexpr glm::vec3 k_PreachingStart {0.0f, 0.0f, 0.0f};
+
 /// A missionary stops preaching: freed if still one, its reaction ended
 void StopPreaching(entt::entity control)
 {
@@ -201,7 +204,9 @@ void StartPreaching(entt::entity villager, entt::entity town, PlayerNames player
 		return;
 	}
 	const auto* info = VillagerInfoOf(registry.Get<const Villager>(villager));
-	const auto position = registry.Get<const Transform>(villager).position;
+	// The preaching starts at the corner of the map, as in the game, and spreads there at once (vanilla-bugs 2429). It
+	// moves to the missionary at the next turn of the town.
+	const auto position = k_PreachingStart;
 	const auto control = registry.Create();
 	registry.Assign<Transform>(control, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	const auto reaction = Locator::reactionSystem::value().Create({
