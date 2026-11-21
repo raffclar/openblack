@@ -315,6 +315,7 @@ std::span<const Matrix> KeyframeTurns::Of(const Animation& animation, size_t fra
 		}
 		place = found->second;
 	}
+	_animations[place].used = _window;
 	auto& frames = _animations[place].frames;
 	if (frames.size() != animation.frames.size())
 	{
@@ -351,11 +352,20 @@ std::span<const Matrix> KeyframeTurns::Of(const Animation& animation, size_t fra
 
 void KeyframeTurns::Trim()
 {
-	if (_animations.size() > k_MostAnimations)
+	if (++_trims < k_TrimsAWindow)
 	{
-		_animations.clear();
-		_placeOf.clear();
+		return;
 	}
+	_trims = 0;
+	// The turns stay the same bits when the store makes them again, so a removal does not change a pose. The places of
+	// the kept animations change: Of finds each animation again from its address.
+	std::erase_if(_animations, [this](const AnimationTurns& turns) { return turns.used != _window; });
+	_placeOf.clear();
+	for (size_t place = 0; place < _animations.size(); ++place)
+	{
+		_placeOf.emplace(_animations[place].animation, static_cast<uint32_t>(place));
+	}
+	++_window;
 }
 
 namespace
