@@ -1135,7 +1135,7 @@
   "writes": true
  },
  {
-  "description": "The creature fights that the transcript recorded: for each, its number, the two creatures, when it started and ended, and its number of records; with the version of the records and the folder that the files go to",
+  "description": "The creature fights that the transcript keeps (every fight that goes on and the last 64 that ended; an older fight is in the folder, when there is one): for each, its number, the two creatures, when it started and ended, and its number of records; with the version of the records and the folder that the files go to",
   "kind": "object",
   "parameters": [],
   "query": "fights.transcripts"
