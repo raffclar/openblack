@@ -206,6 +206,11 @@ std::vector<entt::entity> computer_world::TownsOf(PlayerNames player)
 			towns.emplace_back(town.gained, entity);
 		}
 	});
+	return InGainedOrder(std::move(towns));
+}
+
+std::vector<entt::entity> computer_world::InGainedOrder(std::vector<std::pair<uint32_t, entt::entity>> towns)
+{
 	std::ranges::sort(towns, {}, &std::pair<uint32_t, entt::entity>::first);
 	std::vector<entt::entity> ordered;
 	std::ranges::transform(towns, std::back_inserter(ordered), &std::pair<uint32_t, entt::entity>::second);

@@ -369,13 +369,20 @@ bool AttackCreatureWithCreature(RuleContext& context, computer_mind::Mind& mind,
 /// The score of a thing that the god can throw at a creature
 float RockScoreOf(entt::entity thing)
 {
+	// The score uses the weight only of a thing that the player can throw and that is a tree or breaks buildings. Thus
+	// the search finds each fact only when the score needs it. A standing tree never breaks buildings.
 	const auto* dynamics = Locator::dynamicsSystem::has_value() ? &Locator::dynamicsSystem::value() : nullptr;
-	return computer_mind_rules::RockScore({
-	    .throwable = CanPlayerThrow(thing),
-	    .destroysBuildings = dynamics != nullptr && dynamics->PhysicallyDestroysAbodes(thing),
-	    .tree = Entities().AllOf<Tree>(thing),
-	    .weight = dynamics != nullptr ? dynamics->WeightOf(thing) : 0.0f,
-	});
+	computer_mind_rules::RockFacts facts {.throwable = CanPlayerThrow(thing)};
+	if (facts.throwable)
+	{
+		facts.tree = Entities().AllOf<Tree>(thing);
+		facts.destroysBuildings = !facts.tree && dynamics != nullptr && dynamics->PhysicallyDestroysAbodes(thing);
+		if (facts.tree || facts.destroysBuildings)
+		{
+			facts.weight = dynamics != nullptr ? dynamics->WeightOf(thing) : 0.0f;
+		}
+	}
+	return computer_mind_rules::RockScore(facts);
 }
 
 /// The heaviest rock or tree near the hand is the node's object. With a creature above the node, the god wants to

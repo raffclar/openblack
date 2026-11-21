@@ -12,6 +12,8 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
+#include <unordered_map>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -36,6 +38,9 @@ namespace openblack::ecs::systems
 /// is a forest like any other, and besides, while the miracle lasts all its trees grow a little each turn; once it has
 /// gone they wither away. A forest left with no trees goes some while later. But when a tree of a forest miracle goes
 /// from the world and leaves its forest with no tree, the forest goes at once.
+/// The trees of each forest, by the number of the forest, in the order that the trees are walked
+using ForestTreeLists = std::unordered_map<uint32_t, std::vector<entt::entity>>;
+
 class ForestSystemInterface: public SavedStateInterface
 {
 public:
@@ -77,6 +82,13 @@ public:
 	[[nodiscard]] virtual std::vector<entt::entity> LandForests() const = 0;
 	/// A forest's grown or still growing trees, the nearest its place first (the one listed first when as near)
 	[[nodiscard]] virtual std::vector<entt::entity> TreesOf(entt::entity forest, bool growing) const = 0;
+	/// The trees of the forests, in one walk of the trees. A caller that asks about many forests makes the lists one
+	/// time. The lists are correct until a tree changes.
+	[[nodiscard]] virtual ForestTreeLists ListTreesOfForests(std::span<const entt::entity> forests) const = 0;
+	/// The same trees as TreesOf, from lists that ListTreesOfForests made after the last change of a tree. For a forest
+	/// that is not in the lists, the search walks all the trees.
+	[[nodiscard]] virtual std::vector<entt::entity> ListedTreesOf(entt::entity forest, bool growing,
+	                                                              const ForestTreeLists& lists) const = 0;
 	/// The wood in a forest: its big forest's and every tree's
 	[[nodiscard]] virtual float WoodOf(entt::entity forest) const = 0;
 	/// The wood of a tree as a forest counts it: its life, the worth of a forest miracle's tree, the wood value of its
@@ -106,6 +118,10 @@ public:
 	virtual bool RemoveEmptyForestNear(glm::vec3 point, float reach) = 0;
 	/// The tree in the middle of a forest: the nearest its place of its grown and growing trees; none without trees
 	[[nodiscard]] virtual std::optional<entt::entity> CentreTreeOf(entt::entity forest) const = 0;
+	/// The same tree as CentreTreeOf, from lists that ListTreesOfForests made after the last change of a tree. For a
+	/// forest that is not in the lists, the search walks all the trees.
+	[[nodiscard]] virtual std::optional<entt::entity> ListedCentreTreeOf(entt::entity forest,
+	                                                                     const ForestTreeLists& lists) const = 0;
 	/// Where a tiger's or a wolf's flock makes its home, choosing among the forests from a point; none to keep it
 	[[nodiscard]] virtual std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const = 0;
 

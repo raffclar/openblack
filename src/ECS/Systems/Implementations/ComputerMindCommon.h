@@ -53,6 +53,8 @@ struct RuleContext;
 [[nodiscard]] computer_mind_rules::IconFacts FactsOf(entt::entity icon);
 /// The towns of the player, in the order that the player gained them
 [[nodiscard]] std::vector<entt::entity> TownsOf(PlayerNames player);
+/// The towns, with the turn that their player got each one, in the order that the player got them
+[[nodiscard]] std::vector<entt::entity> InGainedOrder(std::vector<std::pair<uint32_t, entt::entity>> towns);
 /// The main storage pit of the town when it is built, none when it has none. A damaged pit stays the main pit.
 [[nodiscard]] std::optional<entt::entity> WorkingPitOf(entt::entity town);
 /// Where the town keeps food or wood: its main storage pit, else its temporary pile, which is made if missing

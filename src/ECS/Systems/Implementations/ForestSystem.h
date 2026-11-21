@@ -39,6 +39,9 @@ public:
 	[[nodiscard]] std::optional<entt::entity> LandForestOf(uint32_t id) const override;
 	[[nodiscard]] std::vector<entt::entity> LandForests() const override;
 	[[nodiscard]] std::vector<entt::entity> TreesOf(entt::entity forest, bool growing) const override;
+	[[nodiscard]] ForestTreeLists ListTreesOfForests(std::span<const entt::entity> forests) const override;
+	[[nodiscard]] std::vector<entt::entity> ListedTreesOf(entt::entity forest, bool growing,
+	                                                      const ForestTreeLists& lists) const override;
 	[[nodiscard]] float WoodOf(entt::entity forest) const override;
 	[[nodiscard]] float TreeWoodOf(entt::entity tree) const override;
 	[[nodiscard]] glm::vec3 NearestPointOf(entt::entity forest, glm::vec3 to) const override;
@@ -50,6 +53,8 @@ public:
 	[[nodiscard]] std::optional<entt::entity> NearestForestWithTrees(glm::vec3 point, float reach) const override;
 	bool RemoveEmptyForestNear(glm::vec3 point, float reach) override;
 	[[nodiscard]] std::optional<entt::entity> CentreTreeOf(entt::entity forest) const override;
+	[[nodiscard]] std::optional<entt::entity> ListedCentreTreeOf(entt::entity forest,
+	                                                             const ForestTreeLists& lists) const override;
 	[[nodiscard]] std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const override;
 	void MakeScenicForests() override;
 	void JoinForest(entt::entity tree, uint32_t forest) override;
@@ -62,6 +67,11 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
+	/// The trees of TreesOf. With lists, the search looks only at the trees of the forest's list.
+	[[nodiscard]] std::vector<entt::entity> TreesOfForest(entt::entity forest, bool growing,
+	                                                      const ForestTreeLists* lists) const;
+	/// The tree of CentreTreeOf. With lists, the search looks only at the trees of the forest's list.
+	[[nodiscard]] std::optional<entt::entity> CentreTreeOfForest(entt::entity forest, const ForestTreeLists* lists) const;
 	/// The forest miracles' forests' turn: growing while their miracles last, withering once they have gone
 	void ProcessForests();
 	/// A tree of a forest miracle goes from the world. Its forest goes when no other tree is left in it.

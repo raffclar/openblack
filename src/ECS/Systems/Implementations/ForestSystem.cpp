@@ -208,7 +208,7 @@ void Resize(entt::entity entity, float scale)
 }
 
 /// The trees of each forest, by its number, in the order of a walk of the trees with a forest and a place
-using TreesByForest = std::unordered_map<uint32_t, std::vector<entt::entity>>;
+using TreesByForest = ForestTreeLists;
 
 /// Puts each tree of a forest into the list of its forest, in the order of the walk that ListedTrees does
 TreesByForest SortTreesByForest(const ecs::Registry& registry)
@@ -999,13 +999,51 @@ std::optional<entt::entity> ForestSystem::LandForestOf(uint32_t id) const
 
 std::vector<entt::entity> ForestSystem::TreesOf(entt::entity forest, bool growing) const
 {
+	return TreesOfForest(forest, growing, nullptr);
+}
+
+ForestTreeLists ForestSystem::ListTreesOfForests(std::span<const entt::entity> forests) const
+{
+	const auto& registry = EntityRegistry();
+	ForestTreeLists lists;
+	for (const auto forest : forests)
+	{
+		if (const auto* record = registry.Valid(forest) ? registry.TryGet<const LandForest>(forest) : nullptr)
+		{
+			lists.try_emplace(record->id);
+		}
+	}
+	if (lists.empty())
+	{
+		return lists;
+	}
+	// The trees go into their lists in the order of the walk that ListedTrees does
+	registry.Each<const Tree, const ForestMember, const Transform>(
+	    [&lists](entt::entity tree, const Tree& /*unused*/, const ForestMember& member, const Transform& /*unused*/) {
+		    if (const auto found = lists.find(member.forest); found != lists.end())
+		    {
+			    found->second.push_back(tree);
+		    }
+	    });
+	return lists;
+}
+
+std::vector<entt::entity> ForestSystem::ListedTreesOf(entt::entity forest, bool growing, const ForestTreeLists& lists) const
+{
+	return TreesOfForest(forest, growing, &lists);
+}
+
+std::vector<entt::entity> ForestSystem::TreesOfForest(entt::entity forest, bool growing, const ForestTreeLists* lists) const
+{
 	const auto& registry = EntityRegistry();
 	const auto* record = registry.Valid(forest) ? registry.TryGet<const LandForest>(forest) : nullptr;
 	if (record == nullptr)
 	{
 		return {};
 	}
-	return ListedTrees(registry, record->id, growing, ecs::thing_map_place::Of(registry, forest));
+	// For a forest that is not in the lists, the search walks all the trees
+	const auto* listed = lists != nullptr && lists->contains(record->id) ? lists : nullptr;
+	return ListedTrees(registry, record->id, growing, ecs::thing_map_place::Of(registry, forest), listed);
 }
 
 float ForestSystem::WoodOf(entt::entity forest) const
@@ -1323,13 +1361,23 @@ bool ForestSystem::RemoveEmptyForestNear(glm::vec3 point, float reach)
 
 std::optional<entt::entity> ForestSystem::CentreTreeOf(entt::entity forest) const
 {
+	return CentreTreeOfForest(forest, nullptr);
+}
+
+std::optional<entt::entity> ForestSystem::ListedCentreTreeOf(entt::entity forest, const ForestTreeLists& lists) const
+{
+	return CentreTreeOfForest(forest, &lists);
+}
+
+std::optional<entt::entity> ForestSystem::CentreTreeOfForest(entt::entity forest, const ForestTreeLists* lists) const
+{
 	const auto& registry = EntityRegistry();
 	if (!registry.Valid(forest) || !registry.AllOf<LandForest>(forest))
 	{
 		return std::nullopt;
 	}
-	const auto grown = TreesOf(forest, false);
-	const auto growing = TreesOf(forest, true);
+	const auto grown = TreesOfForest(forest, false, lists);
+	const auto growing = TreesOfForest(forest, true, lists);
 	// The distances go through the map positions, as the lists of the forest measure them
 	const auto centre = ecs::thing_map_place::Of(registry, forest);
 	const auto distanceTo = [&](const std::vector<entt::entity>& trees) -> std::optional<float> {
