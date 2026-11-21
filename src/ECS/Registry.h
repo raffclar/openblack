@@ -106,13 +106,6 @@ public:
 		ComponentsChanged<Component, Other...>();
 		return _registry.remove<Component, Other...>(entity);
 	}
-	template <typename After, typename Before, typename... Args>
-	decltype(auto) SwapComponents(entt::entity entity, [[maybe_unused]] Before previousComponent,
-	                              [[maybe_unused]] Args&&... args)
-	{
-		Remove<Before>(entity);
-		return Assign<After>(entity, std::forward<Args>(args)...);
-	}
 	/// What is drawn has moved: the instances are uploaded again
 	virtual void SetDirty();
 	/// Entities came or went, or gained or lost what they are drawn as: the draw lists are made again as well
