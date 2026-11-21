@@ -12,6 +12,7 @@
 #include <bit>
 #include <limits>
 #include <memory>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
@@ -501,6 +502,39 @@ TEST_F(PhysicsClassesTest, AScaffoldInAYardOrOnASiteNeverFlies)
 	EXPECT_TRUE(loose.interacts);
 	EXPECT_FALSE(Classify(scaffold, {.scaffoldInYard = true}).canBecomePhysicsObject);
 	EXPECT_FALSE(Classify(scaffold, {.scaffoldOnSite = true}).canBecomePhysicsObject);
+}
+
+TEST_F(PhysicsClassesTest, TheCheckForBreakingAbodesGivesTheFactOfClassify)
+{
+	std::vector<entt::entity> things;
+	for (const auto type : {MobileStaticInfo::RockChalk, MobileStaticInfo::GateTotemApe, MobileStaticInfo::WeepingStone,
+	                        MobileStaticInfo::SingingStone_1, MobileStaticInfo::CeltFenceShort, MobileStaticInfo::ToyBall,
+	                        MobileStaticInfo::ToyBowlingBall, MobileStaticInfo::ToyDie, MobileStaticInfo::StreetLantern,
+	                        MobileStaticInfo::CountryLantern, MobileStaticInfo::SingingStoneBase, MobileStaticInfo::Bonfire,
+	                        MobileStaticInfo::StandaloneAltar, MobileStaticInfo::Idol})
+	{
+		things.push_back(Static(type));
+	}
+	// The kinds that Classify looks at before the statics come first, also on a thing that is a rock too
+	const auto tree = Static(MobileStaticInfo::RockChalk);
+	_registry.Assign<Tree>(tree);
+	const auto pot = Static(MobileStaticInfo::RockChalk);
+	_registry.Assign<Pot>(pot, Pot {.amount = 1, .maxAmount = 1, .type = static_cast<PotInfo>(1)});
+	const auto villager = Static(MobileStaticInfo::RockChalk);
+	_registry.Assign<Villager>(villager);
+	const auto piece = Static(MobileStaticInfo::RockChalk);
+	_registry.Assign<BuildingPiece>(piece);
+	const auto football = _registry.Create();
+	_registry.Assign<Ball>(football);
+	const auto plain = _registry.Create();
+	things.insert(things.end(), {tree, pot, villager, piece, football, plain});
+	for (const auto thing : things)
+	{
+		EXPECT_EQ(physics_classes::PhysicallyDestroysAbodes(_registry, thing, *_info), Classify(thing).physicallyDestroysAbodes)
+		    << static_cast<uint32_t>(entt::to_integral(thing));
+	}
+	EXPECT_TRUE(physics_classes::PhysicallyDestroysAbodes(_registry, things.front(), *_info));
+	EXPECT_FALSE(physics_classes::PhysicallyDestroysAbodes(_registry, tree, *_info));
 }
 
 TEST(PhysicsClasses, WeightGrowsWithTheCubeOfTheScaleAndNeverReachesNothing)

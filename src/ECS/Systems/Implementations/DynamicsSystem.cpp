@@ -700,7 +700,9 @@ PhysicsEntry* DynamicsSystem::Find(entt::entity object)
 
 bool DynamicsSystem::PhysicallyDestroysAbodes(entt::entity object) const
 {
-	return Entities().Valid(object) && FactsOf(object).physicallyDestroysAbodes;
+	// The searches of the computer gods ask this for each thing near the hand, so the check does not find all the facts
+	const auto* info = _world->Info();
+	return info != nullptr && IsAvailable(object) && physics_classes::PhysicallyDestroysAbodes(Entities(), object, *info);
 }
 
 bool DynamicsSystem::IsFlying(entt::entity object) const

@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <vector>
 
 #include <glm/mat3x3.hpp>
@@ -91,4 +92,33 @@ TEST_F(ForestMapPlaces, AForestListsItsTreesByTheDistanceBetweenTheirMapPosition
 	// first, would come first.
 	EXPECT_EQ(forests.TreesOf(forest, false), (std::vector {second, first}));
 	EXPECT_EQ(forests.CentreTreeOf(forest), second);
+}
+
+TEST_F(ForestMapPlaces, TheListsOfTheTreesGiveTheTreesOfAWalkOfAllTheTrees)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto forest = At({.x = k_Far + 3, .z = k_Z}, true);
+	registry.Assign<LandForest>(forest, LandForest {.id = k_ForestId});
+	const auto other = At({.x = k_Far + 40, .z = k_Z}, true);
+	registry.Assign<LandForest>(other, LandForest {.id = k_ForestId + 1});
+	GrownTree({.x = k_Far, .z = k_Z}, true, 0);
+	GrownTree({.x = k_Far + 5, .z = k_Z}, false, 1);
+	GrownTree({.x = k_Far + 6, .z = k_Z}, true, 2);
+	const auto lone = GrownTree({.x = k_Far + 41, .z = k_Z}, true, 0);
+	registry.Get<ForestMember>(lone).forest = k_ForestId + 1;
+
+	const ecs::systems::ForestSystem forests;
+	// The lists hold only the first forest. The other forest gets its trees from a walk of all the trees.
+	const std::array listed {forest};
+	const auto lists = forests.ListTreesOfForests(listed);
+	EXPECT_EQ(lists.size(), 1u);
+	for (const auto thing : {forest, other})
+	{
+		for (const bool growing : {false, true})
+		{
+			EXPECT_EQ(forests.ListedTreesOf(thing, growing, lists), forests.TreesOf(thing, growing));
+		}
+		EXPECT_EQ(forests.ListedCentreTreeOf(thing, lists), forests.CentreTreeOf(thing));
+	}
+	EXPECT_EQ(forests.ListedTreesOf(other, false, lists), (std::vector {lone}));
 }

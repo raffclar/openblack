@@ -114,6 +114,9 @@ struct ClassInputs
 /// The kind of an object, from its components and its table row
 [[nodiscard]] ClassFacts Classify(const Registry& registry, entt::entity entity, const InfoConstants& info,
                                   const ClassInputs& inputs);
+/// The physicallyDestroysAbodes fact that Classify gives the object. This check does not find the other facts, so it
+/// costs less. The other inputs of Classify do not change this fact.
+[[nodiscard]] bool PhysicallyDestroysAbodes(const Registry& registry, entt::entity entity, const InfoConstants& info);
 
 /// The row whose physics a mobile object of a row takes. `kind` is the kind that the info table gives the row.
 /// - A lump of poo always takes the row of the poo.

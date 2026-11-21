@@ -14,9 +14,11 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <span>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -210,29 +212,39 @@ glm::vec3 PlaceForHand(const RuleContext& context, const map_coords::MapCoords& 
 // --- Choosing a town ---
 
 /// The miracles of the town as the god sees them
-std::vector<computer_mind_rules::TownMiracleFacts> TownMiraclesFor(const RuleContext& context, entt::entity town)
+std::vector<computer_mind_rules::TownMiracleFacts> TownMiraclesFor(RuleContext& context, entt::entity town)
 {
+	auto& registry = Entities();
+	// The icons do not change while the god works out its needs, so the god puts the icons in lists by town one time
+	if (!context.townIcons.has_value())
+	{
+		auto& byTown = context.townIcons.emplace();
+		registry.Each<const TownCentreIcon>(
+		    [&byTown](entt::entity entity, const TownCentreIcon& icon) { byTown[icon.town].push_back(entity); });
+	}
 	std::vector<computer_mind_rules::TownMiracleFacts> facts;
+	const auto found = context.townIcons->find(town);
+	if (found == context.townIcons->end())
+	{
+		return facts;
+	}
 	const auto god = PlayerEntity(context.player);
-	const auto* player = god != entt::null ? Entities().TryGet<const Player>(god) : nullptr;
+	const auto* player = god != entt::null ? registry.TryGet<const Player>(god) : nullptr;
 	const auto& requested = context.state.mind.castRequested;
-	Entities().Each<const TownCentreIcon>([&](const TownCentreIcon& icon) {
-		if (icon.town != town)
-		{
-			return;
-		}
-		const auto type = PlainType(icon.seed);
+	for (const auto entity : found->second)
+	{
+		const auto type = PlainType(registry.Get<const TownCentreIcon>(entity).seed);
 		const auto index = static_cast<size_t>(type);
 		facts.push_back({
 		    .enabled = player != nullptr && player_miracles::IsMagicTypeEnabled(player->miracles, type),
 		    .requested = index < requested.size() && requested.at(index) != 0,
 		});
-	});
+	}
 	return facts;
 }
 
 /// How much the god wants to win the town of the owner
-float TownWorthFor(const RuleContext& context, entt::entity town, PlayerNames owner, entt::entity ownerEntity, float godPeople)
+float TownWorthFor(RuleContext& context, entt::entity town, PlayerNames owner, entt::entity ownerEntity, float godPeople)
 {
 	const float wish = computer_mind_rules::TownMiracleWish(TownMiraclesFor(context, town));
 	const float share = computer_mind_rules::TownPeopleShare(PeopleOf(town), godPeople, wish);
@@ -249,16 +261,35 @@ float TownWorthFor(const RuleContext& context, entt::entity town, PlayerNames ow
 	return computer_mind_rules::TownWorth(share, wish, hold, cut, near);
 }
 
+/// The towns of the player, as TownsOf gives them. The towns do not change while the god works out its needs, so the god
+/// puts the towns of all the players in order one time.
+std::span<const entt::entity> KnownTownsOf(RuleContext& context, PlayerNames player)
+{
+	if (!context.towns.has_value())
+	{
+		std::unordered_map<PlayerNames, std::vector<std::pair<uint32_t, entt::entity>>> gained;
+		Entities().Each<const Town>(
+		    [&gained](entt::entity entity, const Town& town) { gained[town.owner].emplace_back(town.gained, entity); });
+		auto& byOwner = context.towns.emplace();
+		for (auto& [owner, towns] : gained)
+		{
+			byOwner.emplace(owner, InGainedOrder(std::move(towns)));
+		}
+	}
+	const auto found = context.towns->find(player);
+	return found != context.towns->end() ? std::span<const entt::entity>(found->second) : std::span<const entt::entity> {};
+}
+
 /// The town of the owner that the god wants most, and how much it wants it, not more than 1
-std::pair<float, entt::entity> MostWantedTownOf(const RuleContext& context, PlayerNames owner, entt::entity ownerEntity)
+std::pair<float, entt::entity> MostWantedTownOf(RuleContext& context, PlayerNames owner, entt::entity ownerEntity)
 {
 	uint32_t people = 0;
-	for (const auto town : TownsOf(context.player))
+	for (const auto town : KnownTownsOf(context, context.player))
 	{
 		people += PeopleOf(town);
 	}
 	const float godPeople = computer_mind_rules::PeopleCount(people);
-	const auto towns = TownsOf(owner);
+	const auto towns = KnownTownsOf(context, owner);
 	std::vector<float> worths;
 	worths.reserve(towns.size());
 	for (const auto town : towns)
@@ -729,20 +760,18 @@ float computer_world::CreatureToTown(RuleContext& context, computer_mind::Mind& 
 	return wish;
 }
 
-entt::entity computer_world::BestThingNear(RuleContext& context, const map_coords::MapCoords& centre, float radius,
-                                           const ThingScore& score)
+namespace
 {
-	if (!Locator::entitiesMap::has_value())
-	{
-		return entt::null;
-	}
+
+/// The search of BestThingNear, with no known result
+entt::entity SearchThingNear(RuleContext& context, const map_coords::MapCoords& centre, float radius, ThingScore score)
+{
 	const auto& map = Locator::entitiesMap::value();
 	const auto xs = computer_mind_rules::SearchCells(centre.x, radius);
 	const auto zs = computer_mind_rules::SearchCells(centre.z, radius);
 	float best = 0.0f;
 	entt::entity found = entt::null;
-	const auto look = [&centre, radius, &score](std::span<const entt::entity> things, float& cellBest,
-	                                            entt::entity& cellFound) {
+	const auto look = [&centre, radius, score](std::span<const entt::entity> things, float& cellBest, entt::entity& cellFound) {
 		for (const auto thing : things)
 		{
 			const auto coords = CoordsOfThing(thing);
@@ -811,12 +840,36 @@ entt::entity computer_world::BestThingNear(RuleContext& context, const map_coord
 	return found;
 }
 
+} // namespace
+
+entt::entity computer_world::BestThingNear(RuleContext& context, const map_coords::MapCoords& centre, float radius,
+                                           ThingScore score)
+{
+	if (!Locator::entitiesMap::has_value())
+	{
+		return entt::null;
+	}
+	// The world does not change until the context forgets its searches, so the same search finds the same thing again
+	const auto known = std::ranges::find_if(context.searches, [&centre, radius, score](const KnownSearch& search) {
+		return search.centre == centre && search.radius == radius && search.score == score;
+	});
+	if (known != context.searches.end())
+	{
+		return known->found;
+	}
+	const auto found = SearchThingNear(context, centre, radius, score);
+	context.searches.push_back({.centre = centre, .radius = radius, .score = score, .found = found});
+	return found;
+}
+
 bool computer_world::CanPlayerThrow(entt::entity thing)
 {
 	auto& registry = Entities();
+	const auto kind = ThrowKindOf(thing);
+	// Only a thing like a rock needs its radius, so the check does not measure the other things
+	const float radius = kind == computer_mind_rules::ThrowKind::RockLike ? object_measures::TwoDRadius(registry, thing) : 0.0f;
 	const auto* pot = registry.TryGet<const Pot>(thing);
-	const float radius = object_measures::TwoDRadius(registry, thing);
-	return computer_mind_rules::CanBeThrownByPlayer(ThrowKindOf(thing), radius, pot != nullptr ? pot->amount : 0);
+	return computer_mind_rules::CanBeThrownByPlayer(kind, radius, pot != nullptr ? pot->amount : 0);
 }
 
 float computer_world::PullPastEdge(const RuleContext& context, const map_coords::MapCoords& edge,

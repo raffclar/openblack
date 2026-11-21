@@ -13,12 +13,18 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <unordered_map>
+#include <vector>
 
+#include <entt/entity/entity.hpp>
+
+#include "3D/MapCoords.h"
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerMind.h"
 #include "ECS/ComputerMindDomains.h"
+#include "ECS/Systems/ForestSystemInterface.h"
 #include "Enums.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -31,6 +37,15 @@
 namespace openblack::ecs::systems::computer_world
 {
 
+/// A search for the best thing near a place, and the thing that it found
+struct KnownSearch
+{
+	map_coords::MapCoords centre;
+	float radius {0.0f};
+	float (*score)(entt::entity thing) {nullptr};
+	entt::entity found {entt::null};
+};
+
 /// What a rule works with: the god, its mind and hand, and the hand's parts in the game's world
 struct RuleContext
 {
@@ -41,6 +56,28 @@ struct RuleContext
 	/// not change while the god works out its needs, so a search asks for each cell one time. The world clears it
 	/// before each step of the hand and each start of an action.
 	std::unordered_map<uint32_t, bool> searchCells {};
+	/// The searches for things since the world last changed. The things and their scores do not change while the god
+	/// works out its needs, so the same search finds the same thing again.
+	std::vector<KnownSearch> searches {};
+	/// The trees of the forests that the god saw. The god makes the lists at the first question about the trees of a
+	/// forest since the world last changed.
+	std::optional<ForestTreeLists> forestTrees {};
+	/// The miracle icons of each town centre, by town, in the order of a walk of the icons. The god makes the lists at
+	/// the first question about the icons of a town since the world last changed.
+	std::optional<std::unordered_map<entt::entity, std::vector<entt::entity>>> townIcons {};
+	/// The towns of each player in the order that the player got them. The god makes the lists at the first question
+	/// about the towns since the world last changed.
+	std::optional<std::unordered_map<PlayerNames, std::vector<entt::entity>>> towns {};
+
+	/// Forget what the searches found, because the world can change after this
+	void ForgetSearches()
+	{
+		searchCells.clear();
+		searches.clear();
+		forestTrees.reset();
+		townIcons.reset();
+		towns.reset();
+	}
 };
 
 /// How much the node is wanted. The rule can set the node's object and amount.
