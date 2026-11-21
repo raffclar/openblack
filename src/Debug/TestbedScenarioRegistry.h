@@ -884,7 +884,9 @@ struct Command
 		/// presses are made. Needs no creature
 		PressKey,
 		/// The player's hand takes hold of a fireball in flight, the hand straight over it: an empty hand taps it (catching
-		/// another player's), a hand with a seed presses the action button on it (a fire seed takes it in)
+		/// another player's), a hand with a seed presses the action button on it (a fire seed takes it in). With value 1
+		/// the pointer goes onto the first fireball that rises to the middle of the screen. The Action button goes down in
+		/// the next frame, before the cursor picks the ball, and lets go after some seconds (amount).
 		HandTakeFireBall,
 		/// The player's mouse, through the same input the real one goes through: the pointer put at a point on the
 		/// screen (point, as fractions of its width and height from the top left); a button (value: 1 left, 2 middle,

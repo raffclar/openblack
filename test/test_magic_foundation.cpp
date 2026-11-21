@@ -109,6 +109,26 @@ TEST(CastInput, AGestureSeedIsArmedOnPressAndCastOnRelease)
 	EXPECT_EQ(input.state, CastInput::State::Idle);
 }
 
+// A seed that a press armed on a thing is used on the thing at once. The seed is then not armed, the hum continues, and
+// the let go casts nothing more.
+TEST(CastInput, AnArmedSeedUsedOnItsThingKeepsTheHumAndTheLetGoCastsNothing)
+{
+	CastInput input;
+	constexpr PressContext k_OnThing {.seedReady = true, .onValidObject = true, .pointValid = true, .turn = 10};
+	ASSERT_TRUE(Press(input, k_Gesture, k_OnThing).startHoldLoop);
+	ASSERT_EQ(input.state, CastInput::State::Armed);
+	const auto use = UseArmedSeedOnThing(input);
+	EXPECT_EQ(use, CastActions {.cast = CastTarget::Object});
+	EXPECT_EQ(input.state, CastInput::State::Idle);
+	EXPECT_EQ(Release(input), CastActions {});
+	EXPECT_EQ(Cancel(input), CastActions {});
+	// A seed that is not armed is not used
+	EXPECT_EQ(UseArmedSeedOnThing(input), CastActions {});
+	ASSERT_EQ(Press(input, k_InHand, k_OverLand).cast, CastTarget::Point);
+	EXPECT_EQ(UseArmedSeedOnThing(input), CastActions {});
+	EXPECT_EQ(input.state, CastInput::State::Locked);
+}
+
 TEST(CastInput, AHeldSeedLocksOnCastsAtOnceAndAppliesOnceATurn)
 {
 	CastInput input;

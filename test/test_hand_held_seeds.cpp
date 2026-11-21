@@ -30,6 +30,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -696,8 +697,8 @@ TEST_F(ArmedOnThing, AReadyFireSeedOverAFireballTakesItInWithNoPress)
 	EXPECT_FALSE(_magic->GetUseWait().has_value());
 }
 
-// A fire seed that is not ready, another seed, or a seed that a press armed takes no fireball into it with no press
-TEST_F(ArmedOnThing, OnlyAReadyFireSeedThatNoPressArmedTakesInAFireballWithNoPress)
+// A fire seed that is not ready, or another seed, takes no fireball into it with no press
+TEST_F(ArmedOnThing, OnlyAReadyFireSeedTakesInAFireballWithNoPress)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& fireInfo = _info->spellSeed.at(static_cast<size_t>(SpellSeedType::Fire));
@@ -722,14 +723,81 @@ TEST_F(ArmedOnThing, OnlyAReadyFireSeedThatNoPressArmedTakesInAFireballWithNoPre
 	pick.pick.object.reset();
 	_magic->TakeInFireBallUnderHand();
 	EXPECT_TRUE(_commands->sent.empty());
-	// A press on the fireball armed the seed. The let go of the press uses the seed on the ball.
+	EXPECT_TRUE(registry.Valid(ball));
+}
+
+// A press arms a ready fire seed on a fireball. The gesture step after the press uses the seed on the ball of the press,
+// also when the hand is not on the ball now. The interface then waits for the let go and keeps the ball. The let go
+// casts nothing more.
+TEST_F(ArmedOnThing, AFireSeedArmedOnAFireballTakesItInAtTheNextGestureStep)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fireInfo = _info->spellSeed.at(static_cast<size_t>(SpellSeedType::Fire));
+	fireInfo.castType = SpellCastType::SpellCastHandGesture;
+	fireInfo.castOnObject = 0;
+	Locator::infoConstants::emplace(*_info);
+	registry.Get<SpellSeed>(*_magic->GetHeldSeed()).seedType = SpellSeedType::Fire;
+	_cursor->under.reset();
+	const auto ball = registry.Create();
+	registry.Assign<ecs::components::MagicFireBall>(
+	    ball, ecs::components::MagicFireBall {.player = PlayerNames::PLAYER_TWO, .hasPlayer = true});
+	auto& pick = static_cast<FixedPick&>(Locator::pickingSystem::emplace<FixedPick>());
 	pick.pick.object = ball;
+
 	ASSERT_TRUE(_magic->PressAction());
 	ASSERT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Armed);
+	ASSERT_TRUE(_commands->sent.empty());
+	pick.pick.object.reset();
+	_magic->TakeInFireBallUnderHand();
+	ASSERT_EQ(_commands->sent.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandCast>(_commands->sent.front()));
+	const auto cast = std::get<player_commands::HandCast>(_commands->sent.front());
+	EXPECT_EQ(cast.object, ball);
+	EXPECT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Idle);
+	EXPECT_EQ(_magic->GetPressThing(), entt::entity {entt::null});
+	ASSERT_TRUE(_magic->GetUseWait().has_value());
+	EXPECT_EQ(_magic->GetUseWait()->kept, ball);
+	EXPECT_FALSE(_magic->GetUseWait()->letGo);
+
+	// The next gesture step sends nothing more
+	_magic->TakeInFireBallUnderHand();
+	EXPECT_EQ(_commands->sent.size(), 1u);
+	// The turn of the use takes the ball in, and the seed stays in the hand
+	_magic->DoCast(PlayerNames::PLAYER_ONE, cast);
+	EXPECT_FALSE(registry.Valid(ball));
+	EXPECT_TRUE(_magic->GetHeldSeed().has_value());
+	// The let go casts nothing. The wait keeps the ball for one more frame.
+	_magic->ReleaseAction();
+	EXPECT_EQ(_commands->sent.size(), 1u);
+	ASSERT_TRUE(_magic->GetUseWait().has_value());
+	EXPECT_TRUE(_magic->GetUseWait()->letGo);
+	_magic->EndUseWaitAfterLetGo();
+	EXPECT_FALSE(_magic->GetUseWait().has_value());
+}
+
+// A press arms a ready fire seed on a fireball that a script then makes a highlight of. The gesture step does not use
+// the seed, and the seed stays armed until the let go.
+TEST_F(ArmedOnThing, AFireSeedArmedOnAFireballThatIsNoTargetNowStaysArmed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fireInfo = _info->spellSeed.at(static_cast<size_t>(SpellSeedType::Fire));
+	fireInfo.castType = SpellCastType::SpellCastHandGesture;
+	fireInfo.castOnObject = 0;
+	Locator::infoConstants::emplace(*_info);
+	registry.Get<SpellSeed>(*_magic->GetHeldSeed()).seedType = SpellSeedType::Fire;
+	_cursor->under.reset();
+	const auto ball = registry.Create();
+	registry.Assign<ecs::components::MagicFireBall>(ball);
+	auto& pick = static_cast<FixedPick&>(Locator::pickingSystem::emplace<FixedPick>());
+	pick.pick.object = ball;
+
+	ASSERT_TRUE(_magic->PressAction());
+	ASSERT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Armed);
+	registry.Assign<ecs::components::ScriptHighlight>(ball);
 	_magic->TakeInFireBallUnderHand();
 	EXPECT_TRUE(_commands->sent.empty());
+	EXPECT_EQ(_magic->GetHandCastState().state, magic::CastInput::State::Armed);
 	EXPECT_FALSE(_magic->GetUseWait().has_value());
-	EXPECT_TRUE(registry.Valid(ball));
 }
 
 // The hand of a player takes the seed of a saved game of the game. A hand that holds a seed, a player with no hand and

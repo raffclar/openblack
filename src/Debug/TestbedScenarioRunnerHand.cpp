@@ -148,6 +148,23 @@ void PushMotion(const input::GameActionInterface::ScriptedPointer& pointer, glm:
 	input::Device().PushEvent(event);
 }
 
+/// Sends a press or a let go of a mouse button at the pointer, as the mouse does
+void PushButton(input::GameActionInterface::ScriptedPointer& pointer, uint8_t button, bool press)
+{
+	pointer.buttons = press ? (pointer.buttons | SDL_BUTTON(button)) : (pointer.buttons & ~SDL_BUTTON(button));
+	Locator::gameActionSystem::value().SetScriptedPointer(pointer);
+	SDL_Event event {};
+	event.type = press ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+	event.button.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
+	event.button.button = button;
+	event.button.state = press ? SDL_PRESSED : SDL_RELEASED;
+	event.button.clicks = 1;
+	event.button.x = pointer.position.x;
+	event.button.y = pointer.position.y;
+	input::MarkInjected(event);
+	input::Device().PushEvent(event);
+}
+
 /// What the player's hand holds, for the log
 std::string HeldByHand()
 {
@@ -553,11 +570,17 @@ std::string Runner::TapStoneHand(const Command& command)
 	return fmt::format("tapped the stone hand {}: {}", hand.hand, counted ? "it counts" : "it does not count");
 }
 
-std::string Runner::HandTakeFireBall()
+std::string Runner::HandTakeFireBall(const Command& command)
 {
 	if (!Locator::magicSystem::has_value())
 	{
 		return "no miracles";
+	}
+	// Value 1: the pointer goes onto a fireball that rises to the middle of the screen, and the Action button goes down
+	if (command.value == 1)
+	{
+		_fireBallPress = FireBallPress {.holdSeconds = command.amount};
+		return "the press waits for a fireball in the middle of the screen";
 	}
 	// The first fireball the hand may hold now, the hand straight over it looking down
 	std::optional<glm::vec3> target;
@@ -608,6 +631,83 @@ void Runner::FinishTakingFireBall()
 	}
 	magic.DriveHand(std::nullopt);
 	Log(fmt::format("{:.1f}s: hand on the fireball: {}", _seconds, result));
+}
+
+void Runner::PressOnFireBallUnderPointer(float seconds)
+{
+	if (!_fireBallPress.has_value() || !Locator::magicSystem::has_value() || !Locator::gameActionSystem::has_value() ||
+	    !Locator::camera::has_value())
+	{
+		return;
+	}
+	const auto& hand = Locator::magicSystem::value();
+	auto& actions = Locator::gameActionSystem::value();
+	auto& press = *_fireBallPress;
+	auto pointer = actions.GetScriptedPointer().value_or(input::GameActionInterface::ScriptedPointer {
+	    .position = glm::ivec2(actions.GetMousePosition()),
+	});
+	const auto stateName = [&hand]() {
+		const auto wait = hand.GetUseWait();
+		const bool armed = hand.GetHandCastState().state == magic::CastInput::State::Armed;
+		std::string waitName = "is off";
+		if (wait.has_value())
+		{
+			waitName = wait->kept != entt::null ? fmt::format("keeps #{}", entt::to_integral(wait->kept)) : "keeps no thing";
+		}
+		return fmt::format("the seed is {}, the use wait {}", armed ? "armed" : "not armed", waitName);
+	};
+	constexpr uint8_t k_ActionButton = 3;
+	switch (press.step)
+	{
+	case FireBallPress::Step::Wait:
+	{
+		// The first fireball, when it rises to the middle of the screen
+		const auto size = WindowSize();
+		std::optional<glm::ivec2> onScreen;
+		Locator::entitiesRegistry::value().Each<const ecs::components::MagicFireBall, const ecs::components::Transform>(
+		    [&onScreen, size](entt::entity, const ecs::components::MagicFireBall&, const ecs::components::Transform& at) {
+			    glm::vec3 screen;
+			    if (!onScreen.has_value() &&
+			        Locator::camera::value().ProjectWorldToScreen(at.position, {0.0f, 0.0f, size.x, size.y}, screen) &&
+			        screen.y >= 0.0f && screen.y <= size.y * 0.56f)
+			    {
+				    onScreen = glm::ivec2(glm::round(glm::vec2(screen)));
+			    }
+		    });
+		if (!onScreen.has_value())
+		{
+			return;
+		}
+		// The pointer goes onto the ball. The cursor picks the ball in a later draw.
+		const auto moved = *onScreen - pointer.position;
+		pointer.position = *onScreen;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		press.step = FireBallPress::Step::Moved;
+		Log(fmt::format("{:.1f}s: the pointer goes onto the fireball at ({}, {})", _seconds, onScreen->x, onScreen->y));
+		return;
+	}
+	case FireBallPress::Step::Moved:
+		// The press goes down in the frame after the move
+		PushButton(pointer, k_ActionButton, true);
+		press.step = FireBallPress::Step::Pressed;
+		Log(fmt::format("{:.1f}s: the Action button goes down: {}", _seconds, stateName()));
+		return;
+	case FireBallPress::Step::Pressed:
+		press.step = FireBallPress::Step::Held;
+		Log(fmt::format("{:.1f}s: the frame after the press: {}", _seconds, stateName()));
+		return;
+	case FireBallPress::Step::Held:
+		press.holdSeconds -= seconds;
+		if (press.holdSeconds > 0.0f)
+		{
+			return;
+		}
+		PushButton(pointer, k_ActionButton, false);
+		Log(fmt::format("{:.1f}s: the Action button lets go: {}", _seconds, stateName()));
+		_fireBallPress.reset();
+		return;
+	}
 }
 
 std::string Runner::DrawGesture(GestureType gesture, glm::vec2 offset)
@@ -1137,19 +1237,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 			_pressWaiting = command;
 			break;
 		}
-		const auto button = static_cast<uint8_t>(command.value);
-		pointer.buttons = press ? (pointer.buttons | SDL_BUTTON(button)) : (pointer.buttons & ~SDL_BUTTON(button));
-		actions.SetScriptedPointer(pointer);
-		SDL_Event event {};
-		event.type = press ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
-		event.button.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
-		event.button.button = button;
-		event.button.state = press ? SDL_PRESSED : SDL_RELEASED;
-		event.button.clicks = 1;
-		event.button.x = pointer.position.x;
-		event.button.y = pointer.position.y;
-		input::MarkInjected(event);
-		input::Device().PushEvent(event);
+		PushButton(pointer, static_cast<uint8_t>(command.value), press);
 		_handWatchSeconds = 0.5f;
 		break;
 	}
