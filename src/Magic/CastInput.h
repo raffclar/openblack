@@ -116,6 +116,9 @@ struct CastInput
 [[nodiscard]] CastActions Press(CastInput& input, const CastProfile& profile, const PressContext& context);
 /// The action button comes up
 [[nodiscard]] CastActions Release(CastInput& input);
+/// The interface uses an armed seed at once on the thing that the press keeps, as a fire seed on a fireball. The seed is
+/// not armed after this, and the hand waits for the let go of the button. The hum of the press continues.
+[[nodiscard]] CastActions UseArmedSeedOnThing(CastInput& input);
 /// A game turn passes with the button down: a locked miracle is applied again where the hand is, at most once a turn,
 /// if it may be cast there; nothing is shown when it may not
 [[nodiscard]] CastActions Tick(CastInput& input, uint32_t turn, bool valid);

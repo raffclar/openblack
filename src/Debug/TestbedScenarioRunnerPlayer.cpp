@@ -161,7 +161,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		return given != entt::null ? fmt::format("seed {} summoned to the hand", command.value) : "the hand isn't free";
 	}
 	case Kind::HandTakeFireBall:
-		return HandTakeFireBall();
+		return HandTakeFireBall(command);
 	case Kind::HandTapObject:
 		return HandTapObject(command.object);
 	case Kind::JoinFootball:

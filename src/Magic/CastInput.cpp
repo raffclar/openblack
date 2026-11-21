@@ -105,6 +105,19 @@ CastActions magic::Release(CastInput& input)
 	return actions;
 }
 
+CastActions magic::UseArmedSeedOnThing(CastInput& input)
+{
+	CastActions actions;
+	if (input.state != CastInput::State::Armed)
+	{
+		return actions;
+	}
+	// Only the let go of an armed press, or the end of its lock, stops the hum. This use does neither.
+	actions.cast = CastTarget::Object;
+	input = {};
+	return actions;
+}
+
 CastActions magic::Tick(CastInput& input, uint32_t turn, bool valid)
 {
 	CastActions actions;
