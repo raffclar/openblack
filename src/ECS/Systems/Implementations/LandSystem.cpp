@@ -1798,7 +1798,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	// between its parts, so the turn gives the same world as a turn that did not stop.
 	if (_splitTurn.has_value())
 	{
-		if (!ContinueSplitTurn(budget))
+		// A computer that is behind the server ends the turn in this frame
+		const bool behind = Locator::playerCommandSystem::value().IsBehind(clock.GetTurn());
+		if (!ContinueSplitTurn(behind ? nullptr : budget))
 		{
 			return;
 		}
@@ -1850,7 +1852,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	const auto& commands = Locator::playerCommandSystem::value();
 	while (commands.TurnReady(clock.GetTurn()))
 	{
-		if (commands.IsBehind(clock.GetTurn()))
+		// A computer that is behind the server plays whole turns, so that it catches up
+		const bool behind = commands.IsBehind(clock.GetTurn());
+		if (behind)
 		{
 			clock.ResetTimerToTurn();
 		}
@@ -1870,7 +1874,7 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		{
 			Locator::playerCommandSystem::value().TurnsStartAgain(turn, again);
 		}
-		_splitTurn = simulation::StartTurn(view, budget);
+		_splitTurn = simulation::StartTurn(view, behind ? nullptr : budget);
 		if (_splitTurn.has_value())
 		{
 			// The turn continues in the next frame. No other turn starts before it ends.
