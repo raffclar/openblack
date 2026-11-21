@@ -332,9 +332,11 @@ void GetGameTime() // 113 GET_GAME_TIME
 	Pushf(Locator::skyClockSystem::value().GetClock().GetScriptTime());
 }
 
+namespace
+{
 /// The local time of the player's computer now. In a game for more than one player, the game tells the script that
 /// this is not safe there, and then gives the value.
-static std::tm RealLocalTime()
+std::tm RealLocalTime()
 {
 	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
 	{
@@ -342,6 +344,7 @@ static std::tm RealLocalTime()
 	}
 	return machine_clock::LocalTime();
 }
+} // namespace
 
 void GetRealTime() // 114 GET_REAL_TIME
 {
@@ -388,14 +391,16 @@ void RevealCountdownTimer() // 144 REVEAL_COUNTDOWN_TIMER
 	ScriptCountdown().Reveal();
 }
 
+namespace
+{
 /// The game's turn now, by which the scripts' timers count
-static uint32_t TimerTurn()
+uint32_t TimerTurn()
 {
 	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 }
 
 /// The timer a script names, none for anything else (which the script is told of)
-static ecs::components::ScriptTimer* ScriptTimerOf(entt::entity object)
+ecs::components::ScriptTimer* ScriptTimerOf(entt::entity object)
 {
 	auto* timer = Locator::entitiesRegistry::value().TryGet<ecs::components::ScriptTimer>(object);
 	if (timer == nullptr && !Locator::entitiesRegistry::value().AllOf<ecs::components::SpellDispenser>(object))
@@ -404,6 +409,7 @@ static ecs::components::ScriptTimer* ScriptTimerOf(entt::entity object)
 	}
 	return timer;
 }
+} // namespace
 
 void SetTimerTime() // 145 SET_TIMER_TIME
 {
@@ -1186,6 +1192,7 @@ void SaveGameInSlot() // 439 SAVE_GAME_IN_SLOT
 	// The game takes the whole part of the number as the slot, and saves into it as it does by itself. The game does
 	// not check the slot; openblack does not save into a slot that is not there.
 	const auto number = Popf();
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(number > -1.0f && number < static_cast<float>(openblack::gamesave::k_SlotCount)) ||
 	    !Locator::saveGameSystem::has_value())
 	{

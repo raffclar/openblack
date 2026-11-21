@@ -239,6 +239,6 @@ TEST(OracleFormationLandLine, ALineThatClimbsTheLimitMeetsAFlatCell)
 	constexpr float k_Limit = 0.0001f;
 	const glm::vec3 start {2.5f, 0.0f, 2.5f};
 	EXPECT_TRUE(land_line::HitInCell(2, 2, start, {2.5f, k_Limit, 2.5f}, land).has_value());
-	const float below = std::bit_cast<float>(std::bit_cast<uint32_t>(k_Limit) - 1u);
+	const auto below = std::bit_cast<float>(std::bit_cast<uint32_t>(k_Limit) - 1u);
 	EXPECT_FALSE(land_line::HitInCell(2, 2, start, {2.5f, below, 2.5f}, land).has_value());
 }

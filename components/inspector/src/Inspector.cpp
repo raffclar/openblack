@@ -319,7 +319,7 @@ QueryResult Inspector::Answer(const Request& request) const
 	    std::ranges::find_if(descriptions, [queryName](const auto& each) { return each.name == queryName; });
 	if (description == descriptions.end())
 	{
-		return error("no query " + request.query + "; ask \"describe\" with {\"provider\": \"" + std::string(providerName) +
+		return error("no query " + request.query + R"(; ask "describe" with {"provider": ")" + std::string(providerName) +
 		             "\"}");
 	}
 	if (_networkGameLive && _networkGameLive() && RefusedInNetworkGame(request.query, description->writes))

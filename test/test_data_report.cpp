@@ -222,7 +222,7 @@ TEST(DataReport, ProfilesAreListedWithTheirSettings)
 
 TEST(DataReport, ASaveSlotsInfoIsListed)
 {
-	gamesave::SaveGameInfo info {.slot = 2, .date = u"12:30 1/2/2001", .name = u"Before the temple"};
+	const gamesave::SaveGameInfo info {.slot = 2, .date = u"12:30 1/2/2001", .name = u"Before the temple"};
 	const auto text = DescribeSaveInfo(gamesave::Write(info));
 	EXPECT_TRUE(Contains(text, "slot 2, saved \"12:30 1/2/2001\", named \"Before the temple\""));
 	EXPECT_TRUE(Contains(DescribeSaveInfo(std::vector<uint8_t>(10, 0)), "fewer than 260"));

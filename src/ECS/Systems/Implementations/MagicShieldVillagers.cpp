@@ -11,7 +11,7 @@
 // to the villagers in its reach as it is made and then whenever its turn comes round among all the land's reactions;
 // a villager takes one up by its priority and cooldown, and keeps it for as long as its kind says.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

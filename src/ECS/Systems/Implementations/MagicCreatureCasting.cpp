@@ -14,7 +14,7 @@
 // the object for a seed that casts on objects. Each turn its effect flows from between the creature's hands, towards
 // what it was cast at. Letting go of it stops a miracle that lasts only while held, such as a lightning bolt.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 

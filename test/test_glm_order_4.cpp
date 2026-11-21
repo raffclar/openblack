@@ -106,7 +106,7 @@ TEST(GlmOrder4, AFireballBouncesOffASlopeAsTheGameDoes)
 	for (size_t row = 0; row < k_Cases.size(); ++row)
 	{
 		const auto& c = k_Cases.at(row);
-		const auto ours = maths::BounceOffSlope(V(&c.in[0]), V(&c.in[3]), F(c.in[6]), F(c.in[7]), F(c.in[8]), F(c.in[9]));
+		const auto ours = maths::BounceOffSlope(V(c.in.data()), V(&c.in[3]), F(c.in[6]), F(c.in[7]), F(c.in[8]), F(c.in[9]));
 		ExpectBits(ours, c.out.data(), row);
 	}
 }
@@ -143,7 +143,7 @@ TEST(GlmOrder4, AnotherCastersFireballIsLobbedAsTheGameDoes)
 	for (size_t row = 0; row < k_Cases.size(); ++row)
 	{
 		const auto& c = k_Cases.at(row);
-		const auto launch = maths::Lob(V(&c.in[0]), V(&c.in[3]), F(c.in[6]));
+		const auto launch = maths::Lob(V(c.in.data()), V(&c.in[3]), F(c.in[6]));
 		ExpectBits(launch.direction, c.out.data(), row);
 		EXPECT_EQ(std::bit_cast<uint32_t>(launch.speed), c.out[3]) << "row " << row;
 	}
@@ -193,7 +193,7 @@ TEST(GlmOrder4, ABrokenPieceFliesOutAsTheGameThrowsIt)
 	for (size_t row = 0; row < k_Cases.size(); ++row)
 	{
 		const auto& c = k_Cases.at(row);
-		const auto ours = blast::FragmentVelocity(V(&c.in[0]), V(&c.in[3]), F(c.in[6]), F(c.in[7]), V(&c.in[8]));
+		const auto ours = blast::FragmentVelocity(V(c.in.data()), V(&c.in[3]), F(c.in[6]), F(c.in[7]), V(&c.in[8]));
 		ExpectBits(ours, c.out.data(), row);
 	}
 }

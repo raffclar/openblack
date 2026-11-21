@@ -154,14 +154,14 @@ class Emitter: public CreateRule
 public:
 	explicit Emitter(const ParticleObject& object)
 	    : CreateRule(object)
-	    , limits({
+	    , _limits({
 	          .frequency = object.Float("EmissionFreq", 1.0f),
 	          .maxAlive = object.Int("MaxAtoms", -1),
 	          .maxTotal = object.Int("MaxTotalAtomsToEmit", -1),
 	          .randomise = object.Bool("Randomise", true),
 	      })
-	    , initiallyVisible(object.Bool("InitiallyVisible", true))
-	    , multiple(object.Bool("AllowMultipleEmits", false))
+	    , _initiallyVisible(object.Bool("InitiallyVisible", true))
+	    , _multiple(object.Bool("AllowMultipleEmits", false))
 	{
 	}
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
@@ -184,7 +184,7 @@ public:
 		bool another = true;
 		while (Due(effect, collection, slot) && another)
 		{
-			another = multiple;
+			another = _multiple;
 			Emit(effect, effect.NewAtom(collection, atomCreator, nextGroups), collection);
 		}
 		return true;
@@ -197,14 +197,14 @@ protected:
 	/// otherwise it makes at most one atom a step
 	[[nodiscard]] virtual bool AsksAgain() const { return false; }
 
-	maths::EmitterLimits limits;
-	bool initiallyVisible;
-	bool multiple;
+	maths::EmitterLimits _limits;
+	bool _initiallyVisible;
+	bool _multiple;
 
 private:
 	bool Due(Effect& effect, const Collection& collection, Collection::Slot& slot) const
 	{
-		return maths::ShouldEmit(slot.emitter, limits, effect.CollectionAge(collection), effect.GetDt(),
+		return maths::ShouldEmit(slot.emitter, _limits, effect.CollectionAge(collection), effect.GetDt(),
 		                         static_cast<int>(collection.atoms.size()), [&effect] { return effect.Random(0.5f); });
 	}
 };
@@ -215,33 +215,33 @@ class EmitterRuleSimple final: public Emitter
 public:
 	explicit EmitterRuleSimple(const ParticleObject& object)
 	    : Emitter(object)
-	    , speed(object.Float("Speed", 0.0f))
-	    , orientWithParent(object.Bool("OrientWithParent", false))
+	    , _speed(object.Float("Speed", 0.0f))
+	    , _orientWithParent(object.Bool("OrientWithParent", false))
 	{
 	}
 
 protected:
 	void Emit(Effect& effect, Atom& atom, const Collection& collection) const override
 	{
-		if (speed != 0.0f)
+		if (_speed != 0.0f)
 		{
 			glm::vec3 direction = effect.RandomInBall();
-			const float s = effect.Random(speed);
+			const float s = effect.Random(_speed);
 			if (direction != glm::vec3(0.0f))
 			{
 				direction = x87::Scaled<x87::SumOrder::Zyx>(direction);
 			}
 			atom.velocity = direction * s;
 		}
-		if (orientWithParent && collection.parent != nullptr)
+		if (_orientWithParent && collection.parent != nullptr)
 		{
 			atom.rotation = collection.parent->rotation;
 		}
-		atom.visible = initiallyVisible;
+		atom.visible = _initiallyVisible;
 	}
 
-	float speed;
-	bool orientWithParent;
+	float _speed;
+	bool _orientWithParent;
 };
 
 /// Atoms placed round the spawn point on a flat disk at a height: a direction across the ground, and a distance up to
@@ -251,8 +251,8 @@ class DiskEmitter final: public Emitter
 public:
 	explicit DiskEmitter(const ParticleObject& object)
 	    : Emitter(object)
-	    , radius(object.Float("Radius", 0.0f))
-	    , height(object.Float("Height", 0.0f))
+	    , _radius(object.Float("Radius", 0.0f))
+	    , _height(object.Float("Height", 0.0f))
 	{
 	}
 
@@ -266,16 +266,16 @@ protected:
 			direction.x = effect.Random(2.0f) - 1.0f;
 			direction.y = effect.Random(2.0f) - 1.0f;
 		} while (glm::dot(direction, direction) > 1.0f);
-		const float distance = effect.Random(radius);
+		const float distance = effect.Random(_radius);
 		if (direction != glm::vec2(0.0f))
 		{
 			direction = glm::normalize(direction);
 		}
-		atom.position += glm::vec3(direction.x * distance, height, direction.y * distance);
+		atom.position += glm::vec3(direction.x * distance, _height, direction.y * distance);
 	}
 
-	float radius;
-	float height;
+	float _radius;
+	float _height;
 };
 
 /// Atoms placed on a ring between two radii, at a height: one a step, or as many as are due when it may emit several
@@ -284,25 +284,25 @@ class SpreadingDiskEmitter final: public Emitter
 public:
 	explicit SpreadingDiskEmitter(const ParticleObject& object)
 	    : Emitter(object)
-	    , startRadius(object.Float("StartRadius", 0.0f))
-	    , stopRadius(object.Float("StopRadius", 0.0f))
-	    , height(object.Float("Height", 0.0f))
+	    , _startRadius(object.Float("StartRadius", 0.0f))
+	    , _stopRadius(object.Float("StopRadius", 0.0f))
+	    , _height(object.Float("Height", 0.0f))
 	{
 	}
 
 protected:
 	void Emit(Effect& effect, Atom& atom, const Collection& /*collection*/) const override
 	{
-		const float r = effect.Random(startRadius, stopRadius);
+		const float r = effect.Random(_startRadius, _stopRadius);
 		const float angle = effect.Random(k_TwoPi);
-		atom.position += glm::vec3(openblack::portable_math::Cos(angle) * r, height, openblack::portable_math::Sin(angle) * r);
-		atom.visible = initiallyVisible;
+		atom.position += glm::vec3(openblack::portable_math::Cos(angle) * r, _height, openblack::portable_math::Sin(angle) * r);
+		atom.visible = _initiallyVisible;
 	}
 	[[nodiscard]] bool AsksAgain() const override { return true; }
 
-	float startRadius;
-	float stopRadius;
-	float height;
+	float _startRadius;
+	float _stopRadius;
+	float _height;
 };
 
 /// Atoms that leave upwards within a cone, its half angle the spread, at two thirds to all of its speed, from anywhere
@@ -312,39 +312,39 @@ class EmitterRuleConical final: public Emitter
 public:
 	explicit EmitterRuleConical(const ParticleObject& object)
 	    : Emitter(object)
-	    , speed(object.Float("Speed", 1.0f))
-	    , spread(object.Float("Spread", 0.0f))
-	    , radius(object.Float("Radius", 0.0f))
-	    , sound({.action = object.Sound("SoundEmission")})
+	    , _speed(object.Float("Speed", 1.0f))
+	    , _spread(object.Float("Spread", 0.0f))
+	    , _radius(object.Float("Radius", 0.0f))
+	    , _sound({.action = object.Sound("SoundEmission")})
 	{
 	}
 
 protected:
 	void Emit(Effect& effect, Atom& atom, const Collection& /*collection*/) const override
 	{
-		const float phi = effect.Random(spread);
+		const float phi = effect.Random(_spread);
 		const float theta = effect.Random(k_TwoPi);
-		const float extra = effect.Random(speed * k_ConicalSpeedRange);
-		const float s = speed * k_ConicalSpeedMinimum + extra;
-		if (radius != 0.0f)
+		const float extra = effect.Random(_speed * k_ConicalSpeedRange);
+		const float s = _speed * k_ConicalSpeedMinimum + extra;
+		if (_radius != 0.0f)
 		{
 			const float angle = effect.Random(k_TwoPi);
-			const float distance = effect.Random(radius);
+			const float distance = effect.Random(_radius);
 			atom.position += glm::vec3(openblack::portable_math::Cos(angle) * distance, 0.0f,
 			                           openblack::portable_math::Sin(angle) * distance);
 		}
 		const float across = openblack::portable_math::Sin(phi) * s;
 		atom.velocity = {openblack::portable_math::Cos(theta) * across, openblack::portable_math::Cos(phi) * s,
 		                 openblack::portable_math::Sin(theta) * across};
-		atom.visible = initiallyVisible;
-		StartAtomSound(effect, atom, sound);
+		atom.visible = _initiallyVisible;
+		StartAtomSound(effect, atom, _sound);
 	}
 	[[nodiscard]] bool AsksAgain() const override { return true; }
 
-	float speed;
-	float spread;
-	float radius;
-	ParticleSound sound;
+	float _speed;
+	float _spread;
+	float _radius;
+	ParticleSound _sound;
 };
 
 /// Atoms let out along the path its parent atom (or the effect's origin) moved over the step, as many as its rate and,
@@ -356,40 +356,40 @@ class WillowWisp final: public CreateRule
 public:
 	explicit WillowWisp(const ParticleObject& object)
 	    : CreateRule(object)
-	    , maxAtoms(object.Int("MaxAtoms", -1))
-	    , dieAge(object.Float("DieAge", 1.0f))
-	    , speed(object.Float("Speed", 1.0f))
-	    , maxSpeed(object.Float("MaxSpeed", 100.0f))
-	    , randomSpeed(object.Float("RandomSpeed", 1.0f))
-	    , randomRadiusMin(object.Float("RandomRadiusMin", 0.0f))
-	    , randomRadiusMax(object.Float("RandomRadiusMax", 0.0f))
-	    , deleteAtDieAge(object.Bool("DeleteAtomsAtDieAge", true))
-	    , moving(object.Bool("EmitDueToMoving", false))
-	    , movingDistance(object.Float("EmitDueToMovingDist", 10.0f))
-	    , movingMaxRate(object.Float("EmitDueToMovingMaxRate", 0.0f))
-	    , randomiseOrientation(object.Bool("RandomiseInitOrientation", false))
-	    , useParentScale(object.Bool("UseParentScale", false))
-	    , addCastVelocity(object.Bool("AddCastVelToInitPos", false))
-	    , drawOnFirstUpdate(object.Bool("DrawOnFirstUpdate", true))
-	    , drawOffsets(object.Bool("DoDrawOffsets", false))
-	    , emitCondition(object.String("EmitConditionOfParent"))
-	    , adjustScale(object.String("AdjustInitialScale"))
-	    , adjustRandomVelocity(object.String("AdjustInitialRandomVel"))
-	    , sound({.action = object.Sound("SoundEmission")})
+	    , _maxAtoms(object.Int("MaxAtoms", -1))
+	    , _dieAge(object.Float("DieAge", 1.0f))
+	    , _speed(object.Float("Speed", 1.0f))
+	    , _maxSpeed(object.Float("MaxSpeed", 100.0f))
+	    , _randomSpeed(object.Float("RandomSpeed", 1.0f))
+	    , _randomRadiusMin(object.Float("RandomRadiusMin", 0.0f))
+	    , _randomRadiusMax(object.Float("RandomRadiusMax", 0.0f))
+	    , _deleteAtDieAge(object.Bool("DeleteAtomsAtDieAge", true))
+	    , _moving(object.Bool("EmitDueToMoving", false))
+	    , _movingDistance(object.Float("EmitDueToMovingDist", 10.0f))
+	    , _movingMaxRate(object.Float("EmitDueToMovingMaxRate", 0.0f))
+	    , _randomiseOrientation(object.Bool("RandomiseInitOrientation", false))
+	    , _useParentScale(object.Bool("UseParentScale", false))
+	    , _addCastVelocity(object.Bool("AddCastVelToInitPos", false))
+	    , _drawOnFirstUpdate(object.Bool("DrawOnFirstUpdate", true))
+	    , _drawOffsets(object.Bool("DoDrawOffsets", false))
+	    , _emitCondition(object.String("EmitConditionOfParent"))
+	    , _adjustScale(object.String("AdjustInitialScale"))
+	    , _adjustRandomVelocity(object.String("AdjustInitialRandomVel"))
+	    , _sound({.action = object.Sound("SoundEmission")})
 	{
 	}
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{
-		if (deleteAtDieAge)
+		if (_deleteAtDieAge)
 		{
-			std::erase_if(collection.atoms, [&](const auto& atom) { return effect.AtomAge(*atom) > dieAge; });
+			std::erase_if(collection.atoms, [&](const auto& atom) { return effect.AtomAge(*atom) > _dieAge; });
 		}
 		const glm::vec3 parent = collection.parent != nullptr ? effect.GlobalPosition(*collection.parent) : effect.GetOrigin();
 		const glm::vec3 parentVelocity = collection.parent != nullptr ? collection.parent->velocity : glm::vec3(0.0f);
-		glm::vec3 base = parentVelocity * speed;
-		if (maxSpeed * maxSpeed < x87::Dot<x87::SumOrder::Xzy>(base, base) && base != glm::vec3(0.0f))
+		glm::vec3 base = parentVelocity * _speed;
+		if (_maxSpeed * _maxSpeed < x87::Dot<x87::SumOrder::Xzy>(base, base) && base != glm::vec3(0.0f))
 		{
-			base = x87::Scaled<x87::SumOrder::Xzy>(base, maxSpeed);
+			base = x87::Scaled<x87::SumOrder::Xzy>(base, _maxSpeed);
 		}
 		if (slot.first)
 		{
@@ -397,21 +397,21 @@ public:
 		}
 		const glm::vec3 last(slot.state);
 		const float dt = effect.GetDt();
-		const float rate = static_cast<float>(maxAtoms) / dieAge;
+		const float rate = static_cast<float>(_maxAtoms) / _dieAge;
 		// Tested on the parent atom: without one nothing is let out
-		const bool emit = emitCondition.empty() ||
-		                  (collection.parent != nullptr && effect.ConditionForAtom(emitCondition, *collection.parent));
+		const bool emit = _emitCondition.empty() ||
+		                  (collection.parent != nullptr && effect.ConditionForAtom(_emitCondition, *collection.parent));
 		const auto* atomCreator = effect.FindCreator(creator);
 		if (emit && atomCreator != nullptr)
 		{
 			float amount = dt * rate;
-			if (moving && movingDistance != 0.0f)
+			if (_moving && _movingDistance != 0.0f)
 			{
-				float moved =
-				    x87::Distance<x87::SumOrder::Zyx>(parent, last) * effect.FloatProvider(adjustScale, 1.0f) / movingDistance;
-				if (movingMaxRate != 0.0f)
+				float moved = x87::Distance<x87::SumOrder::Zyx>(parent, last) * effect.FloatProvider(_adjustScale, 1.0f) /
+				              _movingDistance;
+				if (_movingMaxRate != 0.0f)
 				{
-					moved = std::min(moved / dt, movingMaxRate) * dt;
+					moved = std::min(moved / dt, _movingMaxRate) * dt;
 				}
 				amount = std::max(amount, moved);
 			}
@@ -443,19 +443,19 @@ private:
 			position = last + (parent - last) * fraction;
 			atom.birth -= fraction * dt;
 		}
-		if (randomRadiusMax > 0.0f)
+		if (_randomRadiusMax > 0.0f)
 		{
 			const float angle = effect.Random(k_TwoPi);
-			const float r = randomRadiusMin + effect.Random(randomRadiusMax - randomRadiusMin);
+			const float r = _randomRadiusMin + effect.Random(_randomRadiusMax - _randomRadiusMin);
 			position += glm::vec3(openblack::portable_math::Cos(angle) * r, 0.0f, openblack::portable_math::Sin(angle) * r);
 		}
 		// The point in the ball is drawn before the speed. Two statements keep this order, because the operands of a
 		// product have no fixed order of evaluation.
 		glm::vec3 random = effect.RandomInBall();
-		random *= effect.Random(randomSpeed);
-		random *= effect.FloatProvider(adjustRandomVelocity, 1.0f);
+		random *= effect.Random(_randomSpeed);
+		random *= effect.FloatProvider(_adjustRandomVelocity, 1.0f);
 		atom.velocity = base + random;
-		if (addCastVelocity)
+		if (_addCastVelocity)
 		{
 			position += atom.velocity * dt;
 		}
@@ -464,12 +464,12 @@ private:
 			atom.position = position;
 		}
 		// This computer's player sees it come out of their hand, sliding to where it is over two seconds
-		if (drawOffsets && effect.IsMyInterfaceCasting())
+		if (_drawOffsets && effect.IsMyInterfaceCasting())
 		{
 			atom.drawOffset = effect.GetProcessInfo().handPosition - position;
 			atom.drawOffsetFrom = effect.GetAge();
 		}
-		if (randomiseOrientation)
+		if (_randomiseOrientation)
 		{
 			// Drawn z first, then y, then x
 			const float z = effect.Random(k_TwoPi);
@@ -477,35 +477,35 @@ private:
 			const float x = effect.Random(k_TwoPi);
 			atom.rotation = maths::AngleXYZ(x, y, z);
 		}
-		atom.baseScale *= effect.FloatProvider(adjustScale, 1.0f);
-		if (useParentScale && collection.parent != nullptr)
+		atom.baseScale *= effect.FloatProvider(_adjustScale, 1.0f);
+		if (_useParentScale && collection.parent != nullptr)
 		{
 			atom.baseScale *= collection.parent->ruleScale * collection.parent->baseScale;
 		}
-		atom.drawOnFirstUpdate = drawOnFirstUpdate;
-		StartAtomSound(effect, atom, sound);
+		atom.drawOnFirstUpdate = _drawOnFirstUpdate;
+		StartAtomSound(effect, atom, _sound);
 	}
 
-	int maxAtoms;
-	float dieAge;
-	float speed;
-	float maxSpeed;
-	float randomSpeed;
-	float randomRadiusMin;
-	float randomRadiusMax;
-	bool deleteAtDieAge;
-	bool moving;
-	float movingDistance;
-	float movingMaxRate;
-	bool randomiseOrientation;
-	bool useParentScale;
-	bool addCastVelocity;
-	bool drawOnFirstUpdate;
-	bool drawOffsets;
-	std::string emitCondition;
-	std::string adjustScale;
-	std::string adjustRandomVelocity;
-	ParticleSound sound;
+	int _maxAtoms;
+	float _dieAge;
+	float _speed;
+	float _maxSpeed;
+	float _randomSpeed;
+	float _randomRadiusMin;
+	float _randomRadiusMax;
+	bool _deleteAtDieAge;
+	bool _moving;
+	float _movingDistance;
+	float _movingMaxRate;
+	bool _randomiseOrientation;
+	bool _useParentScale;
+	bool _addCastVelocity;
+	bool _drawOnFirstUpdate;
+	bool _drawOffsets;
+	std::string _emitCondition;
+	std::string _adjustScale;
+	std::string _adjustRandomVelocity;
+	ParticleSound _sound;
 };
 } // namespace
 

@@ -40,7 +40,7 @@ class ObjectDrawListSystemInterface;
 class MiracleFxSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~MiracleFxSystemInterface() = default;
+	~MiracleFxSystemInterface() override = default;
 
 	/// The hand some seconds of game time on, and the piles of food and wood some seconds of game time on. The glow and
 	/// the bands of the hand stay as they are in a frame that does not show them (see hand_visibility::ShowsMiracleEffects).

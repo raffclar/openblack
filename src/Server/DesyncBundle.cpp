@@ -224,7 +224,7 @@ std::vector<std::string> Lines(const CaptureRecord& record)
 	std::vector<std::string> lines;
 	lines.push_back(fmt::format(
 	    "The capture of slot {} (parted at turn {}, captured at turn {}): {}", record.seat, record.partTurn, record.captureTurn,
-	    record.fact.has_value() ? fmt::format("the first fact that differs is {}: {} (server \"{}\", player \"{}\")",
+	    record.fact.has_value() ? fmt::format(R"(the first fact that differs is {}: {} (server "{}", player "{}"))",
 	                                          record.fact->fact, record.fact->words, record.fact->server, record.fact->player)
 	                            : (record.player.has_value() ? std::string("no fact differs: the cause is in the logic")
 	                                                         : std::string("the player sent no facts"))));

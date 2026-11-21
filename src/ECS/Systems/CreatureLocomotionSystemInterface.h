@@ -51,7 +51,7 @@ public:
 		Keep,
 	};
 
-	virtual ~CreatureLocomotionSystemInterface() = default;
+	~CreatureLocomotionSystemInterface() override = default;
 
 	/// Once a game turn: routes are planned and the creatures move
 	virtual void ProcessTurn() = 0;

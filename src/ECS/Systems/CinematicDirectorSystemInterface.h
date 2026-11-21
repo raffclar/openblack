@@ -28,7 +28,7 @@ namespace openblack::ecs::systems
 class CinematicDirectorSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~CinematicDirectorSystemInterface() = default;
+	~CinematicDirectorSystemInterface() override = default;
 
 	/// Fades the picture from clear to a colour over whole seconds, at once for none
 	virtual void FadeTo(uint8_t red, uint8_t green, uint8_t blue, int8_t seconds) = 0;

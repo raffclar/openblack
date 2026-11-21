@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "PickingSystem.h"
 
@@ -716,7 +716,7 @@ void PickingSystem::AddFireBalls()
 		    .ball = true,
 		});
 		_candidateEntities.push_back(entity);
-		_candidateModels.push_back(glm::mat4(1.0f));
+		_candidateModels.emplace_back(1.0f);
 		_candidateMeshes.push_back(0);
 	});
 }

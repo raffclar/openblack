@@ -45,7 +45,7 @@ public:
 		}
 	};
 
-	virtual ~CreatureHelpSystemInterface() = default;
+	~CreatureHelpSystemInterface() override = default;
 
 	/// Something happened that the help may tell of: it is told now, waits its turn, or is let go
 	virtual void Raise(entt::entity creature, const creature_help::Message& message) = 0;

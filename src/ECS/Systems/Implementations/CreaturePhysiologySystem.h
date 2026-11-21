@@ -27,7 +27,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ProcessTurn() override;
 	void BeginTurn() override;
-	void CreatureTurn(entt::entity creature) override;
+	void CreatureTurn(entt::entity entity) override;
 
 	[[nodiscard]] float Eat(entt::entity creature, float foodValue) override;
 	[[nodiscard]] float MealEnergy(entt::entity creature, float foodValue) const override;
@@ -48,7 +48,7 @@ public:
 private:
 	/// Count the game turns of the creature's squat loop, once each game turn. On each fifth turn, a fart makes a cloud
 	/// and a poo drops a lump
-	void StepSquat(entt::entity creature);
+	void StepSquat(entt::entity entity);
 	/// Drop a lump of poo behind the creature. The bowels become empty and the desire to poo stops for a time
 	static void DropPooLump(entt::entity creature);
 	/// Make the cloud, the smoke and the fainting reaction of a creature fart

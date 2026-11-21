@@ -39,7 +39,7 @@ namespace openblack::ecs::systems
 class ForestSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~ForestSystemInterface() = default;
+	~ForestSystemInterface() override = default;
 
 	/// The forest miracle plants its trees, their wood worth more by its caster's tribal power; how many it planted
 	virtual uint32_t Plant(entt::entity spell, components::Spell& miracle, float tribalPower) = 0;

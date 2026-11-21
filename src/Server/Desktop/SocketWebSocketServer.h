@@ -61,10 +61,10 @@ public:
 	void SetHandlers(ServerSocketHandlers handlers) override { _handlers = std::move(handlers); }
 	bool SendText(ConnectionId connection, std::string_view text) override;
 	bool SendBinary(ConnectionId connection, std::span<const uint8_t> bytes) override;
-	void Close(ConnectionId connection, uint16_t code) override;
+	void Close(ConnectionId id, uint16_t code) override;
 	void Poll() override;
 	[[nodiscard]] size_t Count() const override;
-	[[nodiscard]] std::string AddressOf(ConnectionId connection) const override;
+	[[nodiscard]] std::string AddressOf(ConnectionId id) const override;
 
 	struct Connection;
 	struct Tls;

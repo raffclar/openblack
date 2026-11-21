@@ -102,7 +102,7 @@ glm::mat3 openblack::magic::FaceTowards(const glm::vec3& direction)
 	const float length = glm::length(direction);
 	if (length <= 0.0f)
 	{
-		return glm::mat3(1.0f);
+		return {1.0f};
 	}
 	const auto up = direction / length;
 	// Any axis not along the direction to build the other two from

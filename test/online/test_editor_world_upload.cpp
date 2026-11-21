@@ -9,8 +9,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 
+#include <filesystem>
 #include <vector>
 
 #include <GameSocket.h>

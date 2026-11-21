@@ -8,7 +8,7 @@
  *******************************************************************************/
 
 // The fake audio is a kind of the audio that does nothing, which only the services of the game and the tests make
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdint>
 

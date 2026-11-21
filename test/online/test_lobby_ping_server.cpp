@@ -153,7 +153,7 @@ TEST(LobbyPingServer, TheAnswerGivesTheOnlineFriendsAndTheAnnouncements)
 	     .error = {}});
 	const auto messages = server.TakeMessages();
 	ASSERT_EQ(messages.size(), 2u);
-	const auto* online = std::get_if<online::PingServerInterface::Online>(&messages[0]);
+	const auto* online = std::get_if<online::PingServerInterface::Online>(messages.data());
 	ASSERT_NE(online, nullptr);
 	EXPECT_EQ(online->users, std::vector<gathering_box::UserId> {301});
 	const auto* here = std::get_if<online::PingServerInterface::Here>(&messages[1]);
@@ -182,7 +182,7 @@ TEST(LobbyPingServer, PushEventsBecomeLinesAndPeopleThatAreHere)
 	lobby.Push(lobby_api::events::k_PingLine, R"({"text": "no sender"})");
 	const auto messages = server.TakeMessages();
 	ASSERT_EQ(messages.size(), 3u);
-	const auto* line = std::get_if<online::PingServerInterface::Line>(&messages[0]);
+	const auto* line = std::get_if<online::PingServerInterface::Line>(messages.data());
 	ASSERT_NE(line, nullptr);
 	EXPECT_EQ(line->user, 9999999u);
 	EXPECT_EQ(line->name, u"Sam");

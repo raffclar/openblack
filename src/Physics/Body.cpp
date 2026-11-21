@@ -598,6 +598,7 @@ std::optional<std::pair<RayHit, float>> openblack::physics::EllipsoidHit(std::sp
 	for (const auto& bone : bones)
 	{
 		const auto half = (bone.boxMax - bone.boxMin) * 0.5f;
+		// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 		if (!(half.x > k_Tiny && half.y > k_Tiny && half.z > k_Tiny))
 		{
 			continue;

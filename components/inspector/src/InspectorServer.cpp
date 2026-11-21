@@ -199,7 +199,7 @@ Socket& Socket::operator=(Socket&& other) noexcept
 {
 	if (this != &other)
 	{
-		Socket closing(std::exchange(_handle, std::exchange(other._handle, -1)));
+		const Socket closing(std::exchange(_handle, std::exchange(other._handle, -1)));
 	}
 	return *this;
 }

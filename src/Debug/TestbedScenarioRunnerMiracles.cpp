@@ -82,7 +82,6 @@
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
 using namespace openblack::testbed_scenarios::runner_parts;
-using openblack::ecs::components::Creature;
 using openblack::ecs::components::Transform;
 
 namespace

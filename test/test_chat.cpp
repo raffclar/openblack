@@ -17,7 +17,7 @@
 
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "Commands/PlayerCommands.h"
 #include "ECS/ChatRules.h"
@@ -398,13 +398,19 @@ struct FakeGame
 			    }
 			    return std::nullopt;
 		    },
-		    .players = []() { return std::vector {P::PLAYER_ONE, P::PLAYER_TWO, P::PLAYER_THREE, P::PLAYER_FOUR}; },
+		    .players =
+		        []() {
+			        return std::vector {P::PLAYER_ONE, P::PLAYER_TWO, P::PLAYER_THREE, P::PLAYER_FOUR};
+		        },
 		    .incoming = [this](std::u16string_view line) { incoming.emplace_back(line); },
 		    .tauntText = [](uint32_t text) { return text == 2140 ? std::u16string(u"Ha!") : std::u16string(u"?"); },
 		    .advisorsSay = [this](uint32_t text) { said.push_back(text); },
 		    .yackingRemark = [this]() { ++yacking; },
 		    .log = [this](std::string_view line) { log.emplace_back(line); },
-		    .names = []() { return std::map<P, std::u16string> {{P::PLAYER_ONE, u"Ann"}, {P::PLAYER_TWO, u"Bob"}}; },
+		    .names =
+		        []() {
+			        return std::map<P, std::u16string> {{P::PLAYER_ONE, u"Ann"}, {P::PLAYER_TWO, u"Bob"}};
+		        },
 		    .turn = []() { return 7u; },
 		};
 	}

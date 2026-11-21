@@ -672,6 +672,7 @@ std::variant<std::vector<ScriptValue>, std::string> GameScripts::CallNative(uint
 		return "the native couldn't be called now";
 	}
 	std::vector<ScriptValue> values;
+	values.reserve(results.size());
 	for (const auto& [value, type] : results)
 	{
 		values.push_back(FromVm(value, type));

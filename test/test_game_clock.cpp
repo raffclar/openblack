@@ -16,7 +16,7 @@
 
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include <ECS/Systems/Implementations/TimeSystem.h>
 
 using openblack::ecs::systems::TimeSystem;

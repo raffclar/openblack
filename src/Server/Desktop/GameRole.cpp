@@ -391,11 +391,11 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	// A room on the local network with no certificate file makes a certificate of its own, and its answers give the pin
 	// of its key (deviation 113)
 	const bool ownCertificate = settings.lan && !settings.certificate.has_value();
-	ListenSettings listen {.address = settings.address,
-	                       .port = settings.port,
-	                       .certificate = settings.certificate,
-	                       .key = settings.key,
-	                       .ownCertificate = ownCertificate};
+	const ListenSettings listen {.address = settings.address,
+	                             .port = settings.port,
+	                             .certificate = settings.certificate,
+	                             .key = settings.key,
+	                             .ownCertificate = ownCertificate};
 	if (auto error = parts.sockets.Listen(listen); error.has_value())
 	{
 		return error;

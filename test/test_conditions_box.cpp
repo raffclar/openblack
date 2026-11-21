@@ -19,7 +19,6 @@
 
 using namespace openblack;
 using namespace openblack::gui::conditions_box;
-using openblack::ecs::components::WinCondition;
 
 // The names of the conditions are the multiplayer texts, which skip the number 13
 TEST(ConditionsBox, TheConditionsTakeTheMultiplayerTexts)

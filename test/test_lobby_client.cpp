@@ -30,7 +30,7 @@
 #include "Online/TokenStoreInterface.h"
 
 // Enable this define because the test makes the system itself
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
 
 using namespace openblack;
@@ -766,8 +766,9 @@ TEST_F(LobbyClientTest, TheNamesOfTheChatAndOfThePresenceEventsGoToTheNamesSink)
 	EXPECT_EQ(_names, (std::vector<std::string> {"Ann", "Bob", "Cid"}));
 
 	// The members and the history of a subscribed channel, and the players of a changed server
-	_push->Deliver(R"({"type":"subscribed","data":{"channel":"lobby","members":[{"account":{"id":8,"name":"Dee"},)"
-	               R"("status":"online"}],"history":[{"seq":1,"time":"2026-10-22T10:00:00Z","from":{"id":9,"name":"Eli"},"text":"hi"}]}})");
+	_push->Deliver(
+	    R"({"type":"subscribed","data":{"channel":"lobby","members":[{"account":{"id":8,"name":"Dee"},)"
+	    R"("status":"online"}],"history":[{"seq":1,"time":"2026-10-22T10:00:00Z","from":{"id":9,"name":"Eli"},"text":"hi"}]}})");
 	EXPECT_NE(std::ranges::find(_names, "Dee"), _names.end());
 	EXPECT_NE(std::ranges::find(_names, "Eli"), _names.end());
 	auto server = ServerJson("s1", 1);

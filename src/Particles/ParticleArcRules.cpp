@@ -80,14 +80,14 @@ public:
 	}
 
 	explicit ObjectArcer(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , chainCreator(object.String("ChainCreator"))
-	    , nextGroups(object.IntArray("NextGroups"))
-	    , averageTicks(object.Int("AverageTicksPerUpdate", k_DefaultAverageTicks))
-	    , joints(object.Int("JointsPerArc", k_DefaultJoints))
-	    , randomFrac(object.Float("RandomFrac", k_DefaultRandomFrac))
-	    , randomTangents(object.Float("RandomTangents", k_DefaultRandomTangents))
-	    , scaleTangents(object.Float("ScaleTangents", k_DefaultScaleTangents))
+	    : _creator(object.String("PCreator"))
+	    , _chainCreator(object.String("ChainCreator"))
+	    , _nextGroups(object.IntArray("NextGroups"))
+	    , _averageTicks(object.Int("AverageTicksPerUpdate", k_DefaultAverageTicks))
+	    , _joints(object.Int("JointsPerArc", k_DefaultJoints))
+	    , _randomFrac(object.Float("RandomFrac", k_DefaultRandomFrac))
+	    , _randomTangents(object.Float("RandomTangents", k_DefaultRandomTangents))
+	    , _scaleTangents(object.Float("ScaleTangents", k_DefaultScaleTangents))
 	{
 	}
 
@@ -106,7 +106,7 @@ public:
 		// are picked; an object with no points loses its atom again.
 		for (auto object = world.TakeArcs(); object.has_value(); object = world.TakeArcs())
 		{
-			auto& atom = effect.NewAtom(collection, effect.FindCreator(creator), nextGroups);
+			auto& atom = effect.NewAtom(collection, effect.FindCreator(_creator), _nextGroups);
 			auto points = world.SurfacePoints(*object, k_ArcPoints, random);
 			if (points.empty())
 			{
@@ -122,7 +122,7 @@ public:
 		for (size_t i = 0; i < collection.atoms.size();)
 		{
 			auto& atom = *collection.atoms[i];
-			const auto found = atom.data.find(this);
+			auto* const found = atom.data.find(this);
 			if (found == atom.data.end())
 			{
 				++i;
@@ -144,7 +144,7 @@ public:
 			// Now and then new ends, picked from its points each on its own, so an arc may start and end together
 			if (--arc.ticks < 0)
 			{
-				arc.ticks = effect.Rand(averageTicks);
+				arc.ticks = effect.Rand(_averageTicks);
 				const auto& from = arc.points.at(static_cast<size_t>(effect.Rand(static_cast<int32_t>(arc.points.size()))));
 				const auto& to = arc.points.at(static_cast<size_t>(effect.Rand(static_cast<int32_t>(arc.points.size()))));
 				arc.ends = {.from = from.position, .to = to.position, .fromNormal = from.normal, .toNormal = to.normal};
@@ -170,37 +170,37 @@ private:
 		auto& chain = *atom.subCollections.front();
 		if (chain.atoms.empty())
 		{
-			const auto* jointCreator = effect.FindCreator(chainCreator);
-			for (int k = 0; k < joints; ++k)
+			const auto* jointCreator = effect.FindCreator(_chainCreator);
+			for (int k = 0; k < _joints; ++k)
 			{
 				effect.NewAtom(chain, jointCreator, {});
 			}
 		}
 		const float length = maths::ArcLength(arc.ends);
 		const auto fromTangent =
-		    maths::ArcTangent(arc.ends.fromNormal, effect.RandomInBall(), randomTangents, length, scaleTangents);
+		    maths::ArcTangent(arc.ends.fromNormal, effect.RandomInBall(), _randomTangents, length, _scaleTangents);
 		const auto toTangent =
-		    maths::ArcTangent(arc.ends.toNormal, effect.RandomInBall(), randomTangents, length, scaleTangents);
+		    maths::ArcTangent(arc.ends.toNormal, effect.RandomInBall(), _randomTangents, length, _scaleTangents);
 		std::vector<glm::vec3> jitters(chain.atoms.size());
 		for (auto& jitter : jitters)
 		{
 			jitter = effect.RandomInBall();
 		}
-		const auto laid = maths::ArcJoints(arc.ends, fromTangent, toTangent, jitters, randomFrac);
+		const auto laid = maths::ArcJoints(arc.ends, fromTangent, toTangent, jitters, _randomFrac);
 		for (size_t k = 0; k < chain.atoms.size(); ++k)
 		{
 			chain.atoms[k]->position = laid[k];
 		}
 	}
 
-	std::string creator;
-	std::string chainCreator;
-	std::vector<int> nextGroups;
-	int32_t averageTicks;
-	int joints;
-	float randomFrac;
-	float randomTangents;
-	float scaleTangents;
+	std::string _creator;
+	std::string _chainCreator;
+	std::vector<int> _nextGroups;
+	int32_t _averageTicks;
+	int _joints;
+	float _randomFrac;
+	float _randomTangents;
+	float _scaleTangents;
 };
 } // namespace
 

@@ -34,7 +34,7 @@ namespace openblack::ecs::systems
 class FireflySystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~FireflySystemInterface() = default;
+	~FireflySystemInterface() override = default;
 
 	/// A firefly hiding at a spot, as a land's script places one
 	virtual entt::entity Create(const map_coords::MapCoords& spot) = 0;

@@ -28,7 +28,6 @@
 using namespace openblack;
 using namespace openblack::debug::gui;
 using openblack::ecs::components::Storm;
-using openblack::ecs::components::WeatherInfo;
 using openblack::ecs::systems::ForcedStorm;
 
 namespace

@@ -229,7 +229,7 @@ void Suppress(Desires& desires, Desire desire, float seconds, float turnsPerSeco
 void ClearSourcesAfterSatisfying(DesireState& desire);
 /// The desire is lessened after an action that lessens it: an activated desire is multiplied by the action's
 /// multiplier, and kept from the creature's floor for desires to its maximum
-void LessenAfterAction(Desires& desires, Desire desire, float multiplier, float floor);
+void LessenAfterAction(Desires& desires, Desire which, float multiplier, float floor);
 /// What the action of a plan does to a desire when the plan is complete, from the game's action table
 struct ActionLessening
 {

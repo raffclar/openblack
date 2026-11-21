@@ -312,7 +312,7 @@ TEST(ScreenPick, AHoleInTheTextureLetsTheCursorThrough)
 {
 	const auto view = View();
 	const auto corners = Corners(view, {{-1.0f, -1.0f, -10.0f}, {1.0f, -1.0f, -10.0f}, {0.0f, 1.0f, -10.0f}});
-	screen_pick::AlphaMask empty {};
+	const screen_pick::AlphaMask empty {};
 	screen_pick::AlphaMask solid {};
 	solid.fill(true);
 	const std::array<uint16_t, 3> indices {0, 2, 1};

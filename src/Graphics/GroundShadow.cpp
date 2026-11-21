@@ -378,6 +378,7 @@ void GroundShadow::ShadowsOfBlocks(std::span<const Footprint> footprints, std::s
 	glm::ivec2 high {std::numeric_limits<int32_t>::min()};
 	for (const auto& block : blocks)
 	{
+		// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 		if (!(std::abs(block.x) < k_Limit && std::abs(block.y) < k_Limit))
 		{
 			testAll();
@@ -420,6 +421,7 @@ void GroundShadow::ShadowsOfBlocks(std::span<const Footprint> footprints, std::s
 				found.emplace_back(static_cast<uint32_t>(block), static_cast<uint32_t>(shadow));
 			}
 		};
+		// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 		if (!(std::abs(footprint.low.x) < k_Limit && std::abs(footprint.low.y) < k_Limit &&
 		      std::abs(footprint.high.x) < k_Limit && std::abs(footprint.high.y) < k_Limit))
 		{

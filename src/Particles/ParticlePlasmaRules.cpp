@@ -53,21 +53,21 @@ public:
 	}
 
 	explicit Plasma(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , chainCreator(object.String("ChainCreator"))
-	    , scaleTangents(object.Float("ScaleTangents", 1.0f))
-	    , randomTangents(object.Float("RandomTangents", 0.2f))
-	    , joints(std::max(0, object.Int("JointsPerArc", 19)))
-	    , keyPoints(object.Int("NumSplinePoints", 5))
-	    , beams(std::max(0, object.Int("NumBeams", 3)))
-	    , beamGroup(object.Int("BeamGroup", -1))
-	    , maxAlpha(object.Int("MaxAlpha", 255))
-	    , wiggleFrequency(object.Float("WiggleFreq", 4.0f))
-	    , wiggleSpeed(object.Float("WiggleSpeed", 1.0f))
-	    , speedV(object.Float("SpeedV", 1.0f))
-	    , randomFrac(object.Float("RandomFrac", 0.1f))
-	    , forkScaleMin(object.Float("ForkScaleMin", 1.0f))
-	    , forkScaleMax(object.Float("ForkScaleMax", 1.0f))
+	    : _creator(object.String("PCreator"))
+	    , _chainCreator(object.String("ChainCreator"))
+	    , _scaleTangents(object.Float("ScaleTangents", 1.0f))
+	    , _randomTangents(object.Float("RandomTangents", 0.2f))
+	    , _joints(std::max(0, object.Int("JointsPerArc", 19)))
+	    , _keyPoints(object.Int("NumSplinePoints", 5))
+	    , _beams(std::max(0, object.Int("NumBeams", 3)))
+	    , _beamGroup(object.Int("BeamGroup", -1))
+	    , _maxAlpha(object.Int("MaxAlpha", 255))
+	    , _wiggleFrequency(object.Float("WiggleFreq", 4.0f))
+	    , _wiggleSpeed(object.Float("WiggleSpeed", 1.0f))
+	    , _speedV(object.Float("SpeedV", 1.0f))
+	    , _randomFrac(object.Float("RandomFrac", 0.1f))
+	    , _forkScaleMin(object.Float("ForkScaleMin", 1.0f))
+	    , _forkScaleMax(object.Float("ForkScaleMax", 1.0f))
 	{
 	}
 
@@ -77,7 +77,7 @@ public:
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& /*slot*/) const override
 	{
 		// Without a creator for its atoms it does nothing at all
-		const auto* pointCreator = effect.FindCreator(creator);
+		const auto* pointCreator = effect.FindCreator(_creator);
 		if (pointCreator == nullptr)
 		{
 			return false;
@@ -90,7 +90,7 @@ public:
 		for (size_t i = collection.atoms.size(); i-- > 0;)
 		{
 			auto& atom = *collection.atoms[i];
-			const auto found = atom.data.find(this);
+			auto* const found = atom.data.find(this);
 			if (found == atom.data.end() || found->second.held == nullptr)
 			{
 				continue;
@@ -111,10 +111,10 @@ private:
 	/// the neutral player
 	void Begin(Effect& effect, Collection& collection, const Creator& pointCreator, const PlasmaCommand& command) const
 	{
-		const std::vector<int> groups(static_cast<size_t>(beams), beamGroup);
+		const std::vector<int> groups(static_cast<size_t>(_beams), _beamGroup);
 		auto& atom = effect.NewAtom(collection, &pointCreator, groups);
 		atom.data[this].held = std::make_shared<const PlasmaCommand>(command);
-		const auto* jointCreator = effect.FindCreator(chainCreator);
+		const auto* jointCreator = effect.FindCreator(_chainCreator);
 		if (jointCreator == nullptr || jointCreator->kind != Creator::Kind::Chain)
 		{
 			return;
@@ -128,8 +128,8 @@ private:
 		// The newest ribbon first, as the game keeps its lists
 		for (auto& ribbon : std::ranges::reverse_view(atom.subCollections))
 		{
-			ribbon->textureSpeed = command.speed * speedV;
-			for (int j = 0; j < joints; ++j)
+			ribbon->textureSpeed = command.speed * _speedV;
+			for (int j = 0; j < _joints; ++j)
 			{
 				auto& joint = effect.NewAtom(*ribbon, jointCreator, {});
 				joint.rgba[0] = static_cast<uint8_t>((rgb >> 16u) & 0xFFu);
@@ -150,18 +150,18 @@ private:
 		{
 			auto& ribbon = *atom.subCollections[count - 1 - s];
 			const float age = effect.CollectionAge(ribbon);
-			ribbon.alpha = static_cast<float>(maths::PlasmaAlpha(age, command.life, command.alpha, maxAlpha));
+			ribbon.alpha = static_cast<float>(maths::PlasmaAlpha(age, command.life, command.alpha, _maxAlpha));
 			// Both nudges are drawn every step, nudging or not, the start's first
 			const auto startNudge = effect.RandomInBall();
 			const auto endNudge = effect.RandomInBall();
 			const auto [startTangent, endTangent] =
 			    maths::PlasmaTangents(command.start, command.end, command.startTangent, command.endTangent, startNudge,
-			                          endNudge, randomTangents, scaleTangents);
+			                          endNudge, _randomTangents, _scaleTangents);
 			const auto curve = maths::PlasmaCurve(command.start, command.end, startTangent, endTangent);
-			const float drift = age * command.speed * wiggleSpeed;
+			const float drift = age * command.speed * _wiggleSpeed;
 			const auto keys =
-			    maths::PlasmaKeyPoints(curve, keyPoints, wiggleFrequency, randomFrac, drift, static_cast<int>(s), noise);
-			const auto laid = maths::BeamJoints(keys, ribbon.atoms.size(), forkScaleMin, forkScaleMax);
+			    maths::PlasmaKeyPoints(curve, _keyPoints, _wiggleFrequency, _randomFrac, drift, static_cast<int>(s), noise);
+			const auto laid = maths::BeamJoints(keys, ribbon.atoms.size(), _forkScaleMin, _forkScaleMax);
 			const auto n = std::min(laid.size(), ribbon.atoms.size());
 			for (size_t j = 0; j < n; ++j)
 			{
@@ -172,23 +172,23 @@ private:
 		}
 	}
 
-	std::string creator;
-	std::string chainCreator;
-	float scaleTangents;
-	float randomTangents;
-	int joints;
-	int keyPoints;
-	int beams;
-	int beamGroup;
-	int maxAlpha;
-	float wiggleFrequency;
-	float wiggleSpeed;
+	std::string _creator;
+	std::string _chainCreator;
+	float _scaleTangents;
+	float _randomTangents;
+	int _joints;
+	int _keyPoints;
+	int _beams;
+	int _beamGroup;
+	int _maxAlpha;
+	float _wiggleFrequency;
+	float _wiggleSpeed;
 	/// How fast the ribbons' texture slides, times the beam's speed
-	float speedV;
+	float _speedV;
 	/// How far the key points are pushed aside
-	float randomFrac;
-	float forkScaleMin;
-	float forkScaleMax;
+	float _randomFrac;
+	float _forkScaleMin;
+	float _forkScaleMax;
 };
 } // namespace
 

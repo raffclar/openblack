@@ -266,7 +266,7 @@ protected:
 			const auto& villagerComp = registry.Get<ecs::components::Villager>(_villagerEntt);
 			const auto& villagerTransform = registry.Get<ecs::components::Transform>(_villagerEntt);
 			const auto& villagerWallhug = registry.Get<ecs::components::WallHug>(_villagerEntt);
-			bool villagerHasObstacle = registry.AnyOf<ecs::components::WallHugObjectReference>(_villagerEntt);
+			const bool villagerHasObstacle = registry.AnyOf<ecs::components::WallHugObjectReference>(_villagerEntt);
 			const auto& state = _expectedStates[turn - _startTurn];
 			const auto msg = std::string("on turn ") + std::to_string(turn) + " in range " + std::to_string(_startTurn) + "-" +
 			                 std::to_string(_lastTurn);

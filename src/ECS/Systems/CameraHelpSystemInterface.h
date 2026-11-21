@@ -20,7 +20,7 @@ namespace openblack::ecs::systems
 class CameraHelpSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~CameraHelpSystemInterface() = default;
+	~CameraHelpSystemInterface() override = default;
 
 	[[nodiscard]] virtual const camera_help::CameraHelp& Get() const = 0;
 	[[nodiscard]] virtual camera_help::CameraHelp& Get() = 0;

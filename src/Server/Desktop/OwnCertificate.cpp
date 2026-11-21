@@ -83,7 +83,7 @@ constexpr size_t k_SerialBytes = 16;
 	}
 	// A serial number is a positive number
 	bytes[0] &= 0x7F;
-	std::unique_ptr<BIGNUM, NumberDeleter> number(BN_bin2bn(bytes.data(), static_cast<int>(bytes.size()), nullptr));
+	const std::unique_ptr<BIGNUM, NumberDeleter> number(BN_bin2bn(bytes.data(), static_cast<int>(bytes.size()), nullptr));
 	return number != nullptr && BN_to_ASN1_INTEGER(number.get(), X509_get_serialNumber(certificate)) != nullptr;
 }
 
@@ -91,8 +91,8 @@ constexpr size_t k_SerialBytes = 16;
 
 std::optional<OwnCertificate> Make(std::string_view name)
 {
-	Key key(EVP_EC_gen("P-256"));
-	Certificate certificate(X509_new());
+	const Key key(EVP_EC_gen("P-256"));
+	const Certificate certificate(X509_new());
 	if (key == nullptr || certificate == nullptr)
 	{
 		return std::nullopt;
@@ -110,8 +110,8 @@ std::optional<OwnCertificate> Make(std::string_view name)
 		return std::nullopt;
 	}
 	const auto pin = PinOfKey(key.get());
-	Bio certificateText(BIO_new(BIO_s_mem()));
-	Bio keyText(BIO_new(BIO_s_mem()));
+	const Bio certificateText(BIO_new(BIO_s_mem()));
+	const Bio keyText(BIO_new(BIO_s_mem()));
 	if (!pin.has_value() || certificateText == nullptr || keyText == nullptr ||
 	    PEM_write_bio_X509(certificateText.get(), cert) != 1 ||
 	    PEM_write_bio_PrivateKey(keyText.get(), key.get(), nullptr, nullptr, 0, nullptr, nullptr) != 1)
@@ -129,12 +129,12 @@ std::optional<OwnCertificate> Make(std::string_view name)
 
 std::optional<online::server_key::Pin> PinOfCertificate(std::string_view certificatePem)
 {
-	Bio text(BIO_new_mem_buf(certificatePem.data(), static_cast<int>(certificatePem.size())));
+	const Bio text(BIO_new_mem_buf(certificatePem.data(), static_cast<int>(certificatePem.size())));
 	if (text == nullptr)
 	{
 		return std::nullopt;
 	}
-	Certificate certificate(PEM_read_bio_X509(text.get(), nullptr, nullptr, nullptr));
+	const Certificate certificate(PEM_read_bio_X509(text.get(), nullptr, nullptr, nullptr));
 	if (certificate == nullptr)
 	{
 		return std::nullopt;

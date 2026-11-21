@@ -31,7 +31,7 @@ namespace openblack::ecs::villager_animate
 
 /// The clip its top state plays now (choosing it, with any random draws, and what it carries): negative to keep the one
 /// it has, the hidden clip to be out of sight
-[[nodiscard]] int32_t StateClip(entt::entity villager);
+[[nodiscard]] int32_t StateClip(entt::entity entity);
 /// Plays its top state's clip, from the start when it is a new one
 void SetStateAnim(entt::entity villager);
 /// Works out again what it shows in its hands, for its states and what it carries

@@ -12,7 +12,7 @@
 // belief leads it on to what the thing belongs to (a tree's forest, an animal's flock, a house's town). Beliefs about
 // things gone from the world are forgotten each turn.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 

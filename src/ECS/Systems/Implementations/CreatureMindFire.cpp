@@ -10,7 +10,7 @@
 // What a creature's mind does about a fire that reaches it: it goes to put the fire out with the water miracle when it
 // cares enough for what burns and has seen the miracle often enough, and runs from the burning thing otherwise
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <optional>
 #include <string_view>

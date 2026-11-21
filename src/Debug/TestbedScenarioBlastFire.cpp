@@ -400,6 +400,7 @@ void AddFire(std::vector<Scenario>& all)
 
 	// Six cows close together. A fireball rolls into them.
 	std::vector<ObjectSetup> cows;
+	cows.reserve(6);
 	for (int i = 0; i < 6; ++i)
 	{
 		cows.push_back({.type = AnimalInfo::Cow,

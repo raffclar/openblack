@@ -18,7 +18,6 @@ using namespace openblack::filesystem;
 
 MemoryStream::MemoryStream(std::vector<uint8_t>&& data)
     : _data(data)
-    , _position(0)
 {
 }
 

@@ -56,11 +56,11 @@ public:
 	void ProcessTurn() override;
 	void BreathTurn(entt::entity creature) override;
 	void BodyTurn(entt::entity creature) override;
-	void MotesTurn(entt::entity creature) override;
-	void SwayTurn(entt::entity creature) override;
+	void MotesTurn(entt::entity entity) override;
+	void SwayTurn(entt::entity entity) override;
 	void EndPoseTurn(entt::entity creature) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
-	void MorphTurn(entt::entity creature) override;
+	void MorphTurn(entt::entity entity) override;
 	void ShapeBodies() override;
 	void PrepareFirstPoses() override;
 	void StartFirstBlends() override;

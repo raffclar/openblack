@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "ScriptMusicSystem.h"
 
@@ -42,7 +42,8 @@ void ScriptMusicSystem::ProcessTurn()
 	const auto turnTime =
 	    std::chrono::microseconds(static_cast<int64_t>(static_cast<float>(turnMicroseconds) / (speed > 0.0f ? speed : 1.0f)));
 	const bool audioTurn = !Locator::time::has_value() || audio::AudioTurnRuns(Locator::time::value().GetTurn());
-	_music.Turn(turnTime, [this](audio::MusicType type) { return Timing(type); }, audioTurn);
+	_music.Turn(
+	    turnTime, [this](audio::MusicType type) { return Timing(type); }, audioTurn);
 }
 
 void ScriptMusicSystem::RegisterTimings()

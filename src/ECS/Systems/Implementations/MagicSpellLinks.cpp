@@ -10,7 +10,7 @@
 // The links between a miracle and its particle effect. The effect tells the miracle about events and asks it for its
 // data.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "MagicSpellLinks.h"
 

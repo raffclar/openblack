@@ -1171,7 +1171,7 @@ TEST(CreatureLearning, CreditGoesToRecentActions)
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(finished), 0.75f);
 	finished.turnsSince = 250;
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(finished), 0.0f);
-	creature_learning::Context unlearnable {.action = 3, .learnable = false};
+	const creature_learning::Context unlearnable {.action = 3, .learnable = false};
 	EXPECT_FLOAT_EQ(creature_learning::LearningPriority(unlearnable), 0.0f);
 
 	std::vector<creature_learning::Context> contexts;
@@ -1355,7 +1355,7 @@ TEST(CreatureLearning, AttitudesToCreatures)
 	EXPECT_EQ(lessons[0].first, Desire::BeFriends);
 	EXPECT_FLOAT_EQ(lessons[0].second, 0.5f);
 	EXPECT_FLOAT_EQ(lessons[1].second, -0.5f);
-	EXPECT_EQ(&creature_learning::AttitudeTo(attitudes, 7), &attitudes[0]);
+	EXPECT_EQ(&creature_learning::AttitudeTo(attitudes, 7), attitudes.data());
 }
 
 TEST(CreatureLearning, ANastierCreatureTeachesAngerFirst)
@@ -1600,9 +1600,9 @@ TEST(CreatureWatching, MimicryStages)
 	};
 	std::optional<creature_watching::Mimicry> mimicry;
 	const auto noExtra = [](uint32_t) { return 0u; };
-	creature_watching::MimicConditions grown {.phase = 13};
+	const creature_watching::MimicConditions grown {.phase = 13};
 	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 1, rules, grown, std::nullopt, 0, noExtra));
-	creature_watching::MimicConditions young {.phase = 2};
+	const creature_watching::MimicConditions young {.phase = 2};
 	EXPECT_FALSE(creature_watching::StartMimicry(mimicry, 0, rules, young, std::nullopt, 0, noExtra));
 	ASSERT_TRUE(creature_watching::StartMimicry(mimicry, 0, rules, grown, 5u, 100, noExtra));
 	EXPECT_EQ(mimicry->stage, creature_watching::MimicStage::Notice);
@@ -1866,7 +1866,7 @@ TEST(CreaturePlanActions, TakingFishHomePutsItDownWithinItsHeightOfHome)
 
 TEST(CreatureMindModel, FreshOpinionsComeFromTheActionTable)
 {
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	const std::array k_Opinions {1.0f, 0.0f, 0.04f, -0.5f};
 	const auto learnt = creature_mind_model::Fresh(desires, k_Opinions, {});
 	EXPECT_TRUE(std::ranges::equal(learnt.opinions, k_Opinions));
@@ -1902,7 +1902,7 @@ TEST(CreatureMindModel, StartingLessonIsAnEnemyVillagerGoodToEat)
 
 TEST(CreatureMindModel, StartingLessonMakesEverythingGoodToEat)
 {
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
 	creature_mind_model::TeachStartingLesson(learnt, k_HungerAttributes);
 	const auto& episodes = learnt.episodes[k_ActOnTree][static_cast<size_t>(Desire::Hunger)];
@@ -1919,7 +1919,7 @@ TEST(CreatureMindModel, StartingLessonMakesEverythingGoodToEat)
 
 TEST(CreatureMindModel, StartingLessonOnlyWhenNothingIsKnownAboutWhatToEat)
 {
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
 	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::ActOn, Desire::Hunger,
 	                           {.belief = Thing(k_Food, 0), .feedback = -1.0f}, k_HungerAttributes);
@@ -1936,7 +1936,7 @@ TEST(CreatureMindModel, StartingLessonOnlyWhenNothingIsKnownAboutWhatToEat)
 
 TEST(CreatureMindModel, LearningRebuildsTrees)
 {
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(10, 0.0f), {});
 	creature_mind_model::Learn(learnt, creature_mind_model::TreeKind::Activity, Desire::Hunger,
 	                           {.belief = Thing(k_Food, 0), .feedback = -1.0f}, k_HungerAttributes);

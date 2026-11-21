@@ -57,6 +57,7 @@ TEST(MapCoords, TheSpiralGrowsASquare)
 {
 	map_coords::Spiral spiral;
 	std::vector<JustMapXZ> steps;
+	steps.reserve(9);
 	for (int i = 0; i < 9; ++i)
 	{
 		steps.push_back(spiral.Next());
@@ -101,7 +102,7 @@ TEST(MapCoords, TheLandUnderTheHandIsReadAtTheMapPositionOfToFixed)
 	const auto limit = std::bit_cast<uint32_t>(5120.0f);
 	for (uint32_t bits = 0; bits <= limit; bits += 997)
 	{
-		const float x = std::bit_cast<float>(bits);
+		const auto x = std::bit_cast<float>(bits);
 		ASSERT_EQ(gameRead(x), map_coords::ToFixed(x)) << x;
 		ASSERT_EQ(gameRead(-x), map_coords::ToFixed(-x)) << x;
 	}

@@ -263,7 +263,7 @@ void StepRound(Path& path, Iterator previous, Iterator next, glm::vec2 metresC, 
 	float v1z = v1z0;
 	const float apartX = v1x - v2x;
 	const float apartZ = v1z - v2z;
-	const auto insertAt = next;
+	const auto& insertAt = next;
 	if (apartZ * apartZ + apartX * apartX > nearSq)
 	{
 		const bool clockwise = side > 0.0f;
@@ -294,12 +294,12 @@ void StepRound(Path& path, Iterator previous, Iterator next, glm::vec2 metresC, 
 void SendStretchRound(Path& path, const Obstacle& obstacle, const Box& box, float reachSq)
 {
 	const auto& hooks = path.Hook();
-	const double cx = static_cast<double>(static_cast<uint32_t>(obstacle.place.x));
+	const auto cx = static_cast<double>(static_cast<uint32_t>(obstacle.place.x));
 	const float cz = x87::RoundToFloat(static_cast<double>(static_cast<uint32_t>(obstacle.place.y)));
 	std::optional<Iterator> previous;
 	bool haveAnchors = false;
-	Iterator firstAnchor = path.End();
-	Iterator lastAnchor = path.End();
+	auto firstAnchor = path.End();
+	auto lastAnchor = path.End();
 	for (auto at = path.Begin(); at != path.End(); previous = at, at = path.NextShown(at))
 	{
 		if (!previous.has_value())
@@ -510,7 +510,7 @@ void RemoveMarkers(Path& path, const Obstacle& obstacle, const Box& box, float r
 void StraightenBends(Path& path, const Obstacle& obstacle, const Box& box, float reach, ReturnState& state)
 {
 	const auto& hooks = path.Hook();
-	Iterator previous = path.End();
+	auto previous = path.End();
 	for (auto at = path.Begin(); at != path.End();)
 	{
 		if (previous == path.End() || !at->node.planned || !InReturnReach(*at, obstacle, box, reach))
@@ -548,9 +548,9 @@ void StraightenBends(Path& path, const Obstacle& obstacle, const Box& box, float
 		}
 		// From this node on, the first node out of reach after the last run of nodes in reach, and the last node in
 		// reach before it
-		Iterator out = path.End();
-		Iterator lastIn = path.End();
-		Iterator last = path.End();
+		auto out = path.End();
+		auto lastIn = path.End();
+		auto last = path.End();
 		const auto start = at;
 		bool inside = true;
 		while (inside || at->node.planned)

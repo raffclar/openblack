@@ -118,7 +118,7 @@ std::vector<glm::mat4> L3DAnim::GetBoneMatrices(uint32_t time) const noexcept
 	{
 		return _frames[0].bones;
 	}
-	uint32_t animationTime = time % _unknown_0x20;
+	const uint32_t animationTime = time % _unknown_0x20;
 	uint32_t index = 0;
 	uint32_t previousTime = 0;
 	for (const auto& frame : _frames)
@@ -142,7 +142,7 @@ std::vector<glm::mat4> L3DAnim::GetBoneMatrices(uint32_t time) const noexcept
 	{
 		return _frames[_frames.size() - 1].bones;
 	}
-	float t = static_cast<float>(animationTime - previousTime) / (_frames[index].time - previousTime);
+	const float t = static_cast<float>(animationTime - previousTime) / (_frames[index].time - previousTime);
 
 	// Interpolate
 	std::vector<glm::mat4> bones;

@@ -34,7 +34,7 @@ public:
 	void PlayerTurn(PlayerNames player) override;
 	void UpdatePlayersTurn() override;
 	void UpdateCreaturesTurn() override;
-	void CreatureTurn(entt::entity creature) override;
+	void CreatureTurn(entt::entity entity) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	[[nodiscard]] float GetCameraLand() const override { return _cameraLand; }
 	[[nodiscard]] float GetSkyLand() const override { return _skyLand; }

@@ -45,7 +45,7 @@ public:
 		bool insideTemple;
 	};
 
-	virtual ~ScriptControlSystemInterface() = default;
+	~ScriptControlSystemInterface() override = default;
 
 	/// A task asks for the camera: false when another task's camera can't be left, or inside the temple for any but its
 	/// own scripts

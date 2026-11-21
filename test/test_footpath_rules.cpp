@@ -38,6 +38,7 @@ constexpr glm::ivec2 At(int32_t cellsX, int32_t cellsZ)
 std::vector<glm::ivec2> StraightPath(int32_t nodes)
 {
 	std::vector<glm::ivec2> places;
+	places.reserve(nodes);
 	for (int32_t i = 0; i < nodes; ++i)
 	{
 		places.push_back(At(i, 0));

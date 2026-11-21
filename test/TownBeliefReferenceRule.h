@@ -234,7 +234,7 @@ public:
 		{
 			prefetch::AtomsAhead(collection.atoms, a, 1, prefetch::Reach::Collections);
 			auto& atom = collection.atoms[a];
-			const auto found = atom->data.find(this);
+			auto* const found = atom->data.find(this);
 			if (found == atom->data.end() || atom->player < 0 || static_cast<size_t>(atom->player) >= beliefs.size())
 			{
 				continue;

@@ -150,11 +150,11 @@ void BodyPaysFor(entt::entity creature, std::string_view action);
 /// Both, as a step of an agenda that no plan gave does when it takes effect
 void Satisfied(entt::entity creature, creature_desires::Desires& desires, std::string_view action);
 /// The town nearest a point along the ground, of any player or none; none when there are no towns
-[[nodiscard]] entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point);
+[[nodiscard]]
 /// The middle of the nearest area so wide about a point that a creature may go to: land it can walk on, with nothing
 /// standing in its way there (nor anything living, when asked), inside any area it is kept within. None without one.
-[[nodiscard]] std::optional<glm::vec2> ClearAreaFor(const ecs::Registry& registry, entt::entity creature, glm::vec2 point,
-                                                    float width, bool livingBlocks);
+[[nodiscard]] std::optional<glm::vec2>
+ClearAreaFor(const ecs::Registry& registry, entt::entity creature, glm::vec2 point, float width, bool livingBlocks);
 /// Whether a cell of the land is clear for a creature: land it can walk on, with nothing standing in its way there (nor
 /// anything living, when asked)
 [[nodiscard]] bool CellClearFor(const ecs::Registry& registry, entt::entity creature, int32_t x, int32_t z, bool livingBlocks);

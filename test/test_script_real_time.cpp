@@ -38,7 +38,7 @@ TEST(ScriptRealTime, TheTimeIsInHoursWithTheMinutesAndSecondsAsAPart)
 	const float part = 2730.0f * 0.00027777778450399637f;
 	EXPECT_EQ(real_time::TimeOfDay(Evening()), part + 18.0f);
 	EXPECT_NEAR(real_time::TimeOfDay(Evening()), 18.758333f, 1e-5f);
-	std::tm midnight {};
+	const std::tm midnight {};
 	EXPECT_EQ(real_time::TimeOfDay(midnight), 0.0f);
 }
 

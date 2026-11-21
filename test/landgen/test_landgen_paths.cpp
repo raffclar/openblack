@@ -192,7 +192,7 @@ TEST(LandgenPaths, TheDrawnLineIsJoinedAlongTheAxesAndKeepsOffTheClearCircles)
 
 TEST(LandgenPaths, LanternsStandBesideTheLitPathsAtTheSpacingOfTheStory)
 {
-	FlatLand land;
+	const FlatLand land;
 	const paths::Settings settings;
 	std::vector<Path> paths;
 	paths.push_back({.link = {0, 1}, .points = {{2.0f, 32.0f}, {62.0f, 32.0f}}, .lit = true});
@@ -428,7 +428,7 @@ TEST(LandgenPaths, SmoothingOnFlatGroundIsThePlainSmoothing)
 
 TEST(LandgenPaths, APathAtTheFootOfACliffDoesNotCoverTheTopOfTheCliff)
 {
-	FlatLand land;
+	const FlatLand land;
 	Grid<float> metres(k_Side, 10.0f);
 	for (int x = 0; x < k_Side; ++x)
 	{

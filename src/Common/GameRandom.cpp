@@ -27,7 +27,7 @@ bool ZeroOrNaN(float x) noexcept
 /// Particles' (u * k) * x, the other way round from the game's (u * x) * k
 float ParticleFloat(uint32_t u, float x) noexcept
 {
-	float r = static_cast<float>(u);
+	auto r = static_cast<float>(u);
 	r = r * game_random::k_FloatRandScale;
 	r = r * x;
 	return r;
@@ -90,7 +90,7 @@ float GameRandomInterface::GameFloatRange(float a, float b, DrawSite site)
 
 float GameRandomInterface::CrtRandom(float a, float b)
 {
-	float r = static_cast<float>(CrtRand());
+	auto r = static_cast<float>(CrtRand());
 	r = r * game_random::k_CrtRandomScale;
 	const float range = b - a;
 	r = r * range;

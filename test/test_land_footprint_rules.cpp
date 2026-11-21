@@ -57,7 +57,7 @@ bool AllHaveFootprints(entt::entity /*unused*/)
 TEST(LandFootprintRules, TheBlockTakesThingsFromFourCellsBeyondEachSide)
 {
 	FakeCells fixed;
-	FakeCells mobile;
+	const FakeCells mobile;
 	// Block (1, 1) covers cells 16 to 31; the cells 12 to 36 count
 	fixed.Put({12, 36}, {Thing(1)});
 	fixed.Put({11, 20}, {Thing(2)});
@@ -70,7 +70,7 @@ TEST(LandFootprintRules, TheBlockTakesThingsFromFourCellsBeyondEachSide)
 TEST(LandFootprintRules, CellsAreTakenRowByRowAlongXThenAlongZ)
 {
 	FakeCells fixed;
-	FakeCells mobile;
+	const FakeCells mobile;
 	fixed.Put({5, 3}, {Thing(1)});
 	fixed.Put({4, 9}, {Thing(2)});
 	fixed.Put({5, 0}, {Thing(3)});
@@ -93,7 +93,7 @@ TEST(LandFootprintRules, InACellTheThingsThatStayPutComeFirstAndEachThingComesOn
 TEST(LandFootprintRules, ThingsWithoutFootprintsAreLeftOut)
 {
 	FakeCells fixed;
-	FakeCells mobile;
+	const FakeCells mobile;
 	fixed.Put({2, 2}, {Thing(1), Thing(2), Thing(3)});
 	const auto things = land_footprints::ThingsOverBlock({0, 0}, fixed.List(), mobile.List(),
 	                                                     [](entt::entity entity) { return entity != Thing(2); });
@@ -103,7 +103,7 @@ TEST(LandFootprintRules, ThingsWithoutFootprintsAreLeftOut)
 TEST(LandFootprintRules, ABuildingThatGoesFromTheCellsPaintsNoMoreAndItsNewSitePaintsAgain)
 {
 	FakeCells fixed;
-	FakeCells mobile;
+	const FakeCells mobile;
 	// A burning hut stands in two cells beside a hut that stays
 	fixed.Put({2, 2}, {Thing(1), Thing(2)});
 	fixed.Put({2, 3}, {Thing(1)});
@@ -124,7 +124,7 @@ TEST(LandFootprintRules, ABuildingThatGoesFromTheCellsPaintsNoMoreAndItsNewSiteP
 TEST(LandFootprintRules, TheLastBlocksTakeNoCellsBeyondTheMap)
 {
 	FakeCells fixed;
-	FakeCells mobile;
+	const FakeCells mobile;
 	fixed.Put({511, 511}, {Thing(1)});
 	fixed.Put({507, 507}, {Thing(2)});
 	const auto things = land_footprints::ThingsOverBlock({31, 31}, fixed.List(), mobile.List(), AllHaveFootprints);

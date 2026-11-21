@@ -155,7 +155,7 @@ std::vector<std::pair<std::string, std::string>> ParseHeaderLines(std::string_vi
 bool IsSameOriginPath(std::string_view url) noexcept
 {
 	// "//host/..." is an address of another origin with the scheme of the page
-	return IsPlainText(url) && url.size() >= 1 && url.front() == '/' && (url.size() == 1 || url[1] != '/') &&
+	return IsPlainText(url) && !url.empty() && url.front() == '/' && (url.size() == 1 || url[1] != '/') &&
 	       url.find('\\') == std::string_view::npos;
 }
 

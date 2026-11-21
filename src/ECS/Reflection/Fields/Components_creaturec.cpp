@@ -17,8 +17,6 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_creaturec(entt::meta_ctx& context);

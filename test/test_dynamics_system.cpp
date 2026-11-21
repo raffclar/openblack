@@ -10,7 +10,7 @@
 // The physics as a system, in a world of its own: things thrown onto a flat piece of land fly, come to rest, go back
 // into the map's cells and leave the physics, and a body at rest wakes again only while something moving comes near.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdint>
 
@@ -83,8 +83,8 @@ public:
 	[[nodiscard]] const graphics::Texture2D& GetCellColourMap() const override { throw std::logic_error("no maps"); }
 	[[nodiscard]] const graphics::Texture2D& GetBlockTextures() const override { throw std::logic_error("no maps"); }
 	[[nodiscard]] U16Extent2 GetIndexExtent() const override { return {}; }
-	[[nodiscard]] glm::mat4 GetOrthoView() const override { return glm::mat4(1.0f); }
-	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return glm::mat4(1.0f); }
+	[[nodiscard]] glm::mat4 GetOrthoView() const override { return {1.0f}; }
+	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return {1.0f}; }
 	[[nodiscard]] Extent2 GetExtent() const override { return {}; }
 	uint8_t GetNoise(glm::u8vec2) override { return 0; }
 

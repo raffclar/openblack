@@ -127,7 +127,7 @@ TEST(TreeSway, ASwayLeansThreeHundredthsOfTheHeightTowardsMinusZAtTheStart)
 TEST(TreeSway, ThePhaseMovesOnByTheFrameTimeTimesTheSpeed)
 {
 	// Each step rounds to a float: the time times the speed, then times the rate, then the add
-	const float rate = std::bit_cast<float>(0x3A8B0409u);
+	const auto rate = std::bit_cast<float>(0x3A8B0409u);
 	EXPECT_EQ(tree_sway::StepPhase(0.5f, 1.5f, 16), ((16.0f * 1.5f) * rate) + 0.5f);
 	EXPECT_EQ(tree_sway::StepPhase(0.5f, 0.0f, 16), 0.5f);
 	// At a speed of 1, a full sway takes about six seconds
@@ -141,7 +141,7 @@ TEST(TreeSway, ThePhaseMovesOnByTheFrameTimeTimesTheSpeed)
 
 TEST(TreeSway, ATreeKeepsItsYawLessItsWholeTurns)
 {
-	constexpr float k_Turn = std::bit_cast<float>(0x40C90FDBu);
+	constexpr auto k_Turn = std::bit_cast<float>(0x40C90FDBu);
 	EXPECT_EQ(tree_sway::Facing(1.0f), 1.0f);
 	EXPECT_EQ(tree_sway::Facing(-5.305f), -5.305f);
 	EXPECT_EQ(tree_sway::Facing(7.0f), 7.0f - k_Turn);

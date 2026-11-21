@@ -257,6 +257,7 @@ TEST(ParticleMiracleMaths, ALobArcsToMostOfTheWayToItsTargetNoSteeperThanItsLimi
 	glm::vec3 p = from;
 	glm::vec3 v = launch.direction * launch.speed;
 	const float aimY = from.y + (target.y - from.y) * maths::k_LobAimShare;
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	for (int i = 0; i < 100000 && !(v.y < 0.0f && p.y <= aimY); ++i)
 	{
 		p += v * 0.001f;

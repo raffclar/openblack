@@ -10,7 +10,7 @@
 // Food and wood the miracles pour goes to the stores and piles about the point it is poured at, as any poured food or
 // wood does (ResourceStoreSystem).
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "Locator.h"

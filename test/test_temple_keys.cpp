@@ -12,13 +12,11 @@
 #include "Temple/TempleKeys.h"
 
 using openblack::temple::keys::EscapeAsksNewGame;
-using openblack::temple::keys::EscapeFacts;
 using openblack::temple::keys::EscapeLeavesRoom;
 using openblack::temple::keys::PictureDoorClick;
 using openblack::temple::keys::PictureDoorClickOutcome;
 using openblack::temple::keys::PictureRoomTakesPress;
 using openblack::temple::keys::RoomKeyActs;
-using openblack::temple::keys::RoomKeyFacts;
 
 TEST(TempleKeys, InsideTheTempleARoomKeyGoesToItsRoom)
 {

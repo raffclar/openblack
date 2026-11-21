@@ -596,8 +596,6 @@ def part_text(index, part):
     for include in sorted(includes):
         lines.append(f'#include "{include}"\n')
     lines.append("\n")
-    if any(unit.stem[0] != "~" for unit in part.units):
-        lines.append("namespace components = openblack::ecs::components;\n\n")
     lines.append(f"namespace openblack::ecs::reflection\n{{\nvoid {part.function}(entt::meta_ctx& context);\n}}\n\n")
     if used:
         lines.append("namespace\n{\n\n")

@@ -152,7 +152,6 @@ namespace openblack::chlapi
 
 using namespace openblack::ecs::archetypes;
 using openblack::Locator;
-using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::Transform;
 
 /// A creature given a state plays what the script last gave it to play
@@ -344,9 +343,11 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 	ScriptMessage("setting the state of something neither a creature nor a villager");
 }
 
+namespace
+{
 /// Whether something is drowning, as the scripts ask: a villager while it is in its drowning state, anything else
 /// while it is in the physics with its body's centre under the sea's level
-static bool IsDrowning(entt::entity object)
+bool IsDrowning(entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -367,6 +368,7 @@ static bool IsDrowning(entt::entity object)
 	const auto* entry = Locator::dynamicsSystem::value().Find(object);
 	return entry != nullptr && entry->body != nullptr && entry->body->Centre().y < 0.0f;
 }
+} // namespace
 
 /// Whether a town is wholly destroyed: none of its buildings stands
 bool TownCompletelyDestroyed(const ecs::components::Town& town)
@@ -390,9 +392,11 @@ bool TownCompletelyDestroyed(const ecs::components::Town& town)
 	return script::property_rules::TownCompletelyDestroyed(buildings);
 }
 
+namespace
+{
 /// A creature has its body from the time that it is made. A script that reads or sets a value of the body before the
 /// first turn of the creature works on the start values of its species, and the value that it sets stays.
-static void StartCreatureBody(entt::entity object)
+void StartCreatureBody(entt::entity object)
 {
 	if (Locator::entitiesRegistry::value().AllOf<ecs::components::Creature>(object) &&
 	    Locator::creaturePhysiologySystem::has_value())
@@ -402,7 +406,7 @@ static void StartCreatureBody(entt::entity object)
 }
 
 /// A creature's body as the scripts read and set it, none for anything else
-static creature_physiology::Needs* CreatureNeedsOf(entt::entity object)
+creature_physiology::Needs* CreatureNeedsOf(entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.AllOf<ecs::components::Creature>(object))
@@ -415,7 +419,7 @@ static creature_physiology::Needs* CreatureNeedsOf(entt::entity object)
 }
 
 /// The need of a creature a property is, none for the properties that aren't
-static std::optional<script::property_rules::CreatureNeed> NeedOf(script::ObjectPropertyType prop)
+std::optional<script::property_rules::CreatureNeed> NeedOf(script::ObjectPropertyType prop)
 {
 	using script::ObjectPropertyType;
 	using script::property_rules::CreatureNeed;
@@ -438,7 +442,7 @@ static std::optional<script::property_rules::CreatureNeed> NeedOf(script::Object
 	}
 }
 
-static float& NeedValue(creature_physiology::Needs& needs, script::property_rules::CreatureNeed need)
+float& NeedValue(creature_physiology::Needs& needs, script::property_rules::CreatureNeed need)
 {
 	using script::property_rules::CreatureNeed;
 	switch (need)
@@ -458,6 +462,7 @@ static float& NeedValue(creature_physiology::Needs& needs, script::property_rule
 		return needs.dehydration;
 	}
 }
+} // namespace
 
 /// Whether a thing is one of the world's objects, which have a life, angles and a height; a town isn't
 bool IsWorldObject(entt::entity object)
@@ -539,11 +544,14 @@ void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean)
 	}
 }
 
+namespace
+{
 /// Whether a thing may lean, so that its angles across and forward are its own; the others always stand upright
-static bool CanLean(entt::entity object)
+bool CanLean(entt::entity object)
 {
 	return ecs::placed_turn::CanLean(Locator::entitiesRegistry::value(), object);
 }
+} // namespace
 
 /// How tall an object stands to the scripts: a creature by its size, anything else by its model as it is scaled, none
 /// without a model
@@ -569,8 +577,10 @@ float ScriptHeightOf(entt::entity object)
 	return meshes.Handle(mesh->id)->GetBoundingBox().Size().y * transform->scale.y;
 }
 
+namespace
+{
 /// The town a totem stands in: the town of the town centre it stands on
-static entt::entity TownOfTotem(entt::entity totem)
+entt::entity TownOfTotem(entt::entity totem)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* totemComponent = registry.TryGet<const ecs::components::VillageTotem>(totem);
@@ -587,16 +597,17 @@ static entt::entity TownOfTotem(entt::entity totem)
 }
 
 /// The script asked for a property the thing doesn't have
-static void CannotGetProperty(script::ObjectPropertyType prop)
+void CannotGetProperty(script::ObjectPropertyType prop)
 {
 	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Cannot Get Property {}", static_cast<int>(prop));
 	Pushf(0.0f);
 }
 
-static void CannotSetProperty(script::ObjectPropertyType prop)
+void CannotSetProperty(script::ObjectPropertyType prop)
 {
 	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Cannot Set Property {}", static_cast<int>(prop));
 }
+} // namespace
 
 void GetProperty() // 021 GET_PROPERTY
 {
@@ -943,7 +954,10 @@ void GetProperty() // 021 GET_PROPERTY
 	}
 }
 
-static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value);
+namespace
+{
+void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value);
+} // namespace
 
 void SetProperty() // 022 SET_PROPERTY
 {
@@ -973,8 +987,10 @@ void SetProperty() // 022 SET_PROPERTY
 	SetPropertyOf(object, prop, value);
 }
 
+namespace
+{
 /// One property of one thing, as a script sets it on that thing
-static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value)
+void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (const auto need = NeedOf(prop); need.has_value())
@@ -1273,6 +1289,7 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 		return;
 	}
 }
+} // namespace
 
 void GetPosition() // 023 GET_POSITION
 {

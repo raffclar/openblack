@@ -244,8 +244,10 @@ bool FreeAt(const features::Ground& ground, float x, float z)
 		return false;
 	}
 	const int side = ground.biomes.side;
+	// NOLINTBEGIN(bugprone-incorrect-roundings): A change gives a different land.
 	return CursedIn(ground.biomes.At(std::clamp(static_cast<int>(cx + 0.5f), 0, side - 1),
 	                                 std::clamp(static_cast<int>(cz + 0.5f), 0, side - 1)));
+	// NOLINTEND(bugprone-incorrect-roundings)
 }
 
 /// The circles in metres that a place keeps clear: the stacks and the craters
@@ -516,7 +518,7 @@ Result cursed::Place(const features::Ground& ground, std::vector<Feature>& place
 	}
 	const auto siteSeed = StageSeed(seed, 51);
 	const auto partSeed = StageSeed(seed, 52);
-	const float last = static_cast<float>(ground.biomes.side - 1);
+	const auto last = static_cast<float>(ground.biomes.side - 1);
 	const int points = static_cast<int>(last / settings.spacing);
 	std::vector<Candidate> candidates;
 	candidates.reserve(static_cast<size_t>(points) * static_cast<size_t>(points));
@@ -570,12 +572,10 @@ Result cursed::Place(const features::Ground& ground, std::vector<Feature>& place
 		const float metresZ = z * k_MetresPerCorner;
 		if (spot.height < settings.lowest || spot.height > settings.highest || spot.sea < settings.nearestSea ||
 		    Distance(metresX, metresZ, townX, townZ) < settings.nearestTown + radius ||
-		    std::ranges::any_of(
-		        ground.towns,
-		        [&](const features::Clearing& town) {
-			        return Distance(metresX, metresZ, town.x * k_MetresPerCorner, town.z * k_MetresPerCorner) <
-			               settings.nearestTown + radius;
-		        }))
+		    std::ranges::any_of(ground.towns, [&](const features::Clearing& town) {
+			    return Distance(metresX, metresZ, town.x * k_MetresPerCorner, town.z * k_MetresPerCorner) <
+			           settings.nearestTown + radius;
+		    }))
 		{
 			continue;
 		}

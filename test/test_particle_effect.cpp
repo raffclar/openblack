@@ -828,7 +828,7 @@ draw::Frame DrawMistWithLightMap(bool shadowMap, FakeCreatorResources& resources
 	const auto classes = ParticleClassRegistry::WithAllClasses(&resources);
 	FakeWorld world;
 	FakeRandom random;
-	maths::ValueNoise noise;
+	const maths::ValueNoise noise;
 	const auto text =
 	    Header() +
 	    Object("ParticleMistCreator", "Mist0",
@@ -1163,7 +1163,7 @@ private:
 /// A particle's float of a draw u up to x, as the effects compute it: (u * k) * x
 float ParticleFloatOf(uint32_t u, float x)
 {
-	float r = static_cast<float>(u);
+	auto r = static_cast<float>(u);
 	r = r * game_random::k_FloatRandScale;
 	return r * x;
 }
@@ -1183,7 +1183,7 @@ TEST(WillowWisp, ItDrawsThePointInTheBallBeforeTheSpeed)
 	const ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
 	FakeWorld world;
 	RecordingRandom random;
-	maths::ValueNoise noise;
+	const maths::ValueNoise noise;
 	const glm::vec3 origin {10.0f, 2.0f, 20.0f};
 	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)), EffectServices {classes, world, random, noise},
 	              origin, 1.0f, true);
@@ -1475,7 +1475,7 @@ TEST(AtomRuleStore, EachRuleFindsItsOwnDataInTheOrderThatTheRulesCame)
 		ASSERT_EQ(store.size(), i + 1);
 		for (size_t j = 0; j <= i; ++j)
 		{
-			const auto found = store.find(rule(j));
+			auto* const found = store.find(rule(j));
 			ASSERT_NE(found, store.end());
 			EXPECT_EQ(found->second.a.x, static_cast<float>(j));
 			EXPECT_EQ(found->second.object, static_cast<entt::entity>(j));
@@ -1498,7 +1498,7 @@ TEST(AtomRuleStore, ANewRuleAfterAnEmptyStoreGetsEmptyData)
 {
 	std::array<int, 2> places {};
 	AtomRuleStore store;
-	const auto* first = reinterpret_cast<const Modifier*>(&places[0]);
+	const auto* first = reinterpret_cast<const Modifier*>(places.data());
 	const auto* second = reinterpret_cast<const Modifier*>(&places[1]);
 	store.insert_or_assign(second, AtomRuleData {.started = true, .a = glm::vec4(2.0f)});
 	const auto& data = store[first];
@@ -1609,7 +1609,7 @@ TEST(ParticleStore, AnAtomAndItsListsGoBackToTheStoreThatTheyCameFrom)
 	CountingStore store;
 	{
 		std::pmr::polymorphic_allocator<Collection> allocator(&store);
-		CollectionPtr collection(allocator.new_object<Collection>(&store), StoreDelete {.store = &store});
+		const CollectionPtr collection(allocator.new_object<Collection>(&store), StoreDelete {.store = &store});
 		std::pmr::polymorphic_allocator<Atom> atoms(&store);
 		auto& atom = *collection->atoms.emplace_back(atoms.new_object<Atom>(&store), StoreDelete {.store = &store});
 		atom.subCollections.emplace_back(allocator.new_object<Collection>(&store), StoreDelete {.store = &store});

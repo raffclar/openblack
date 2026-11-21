@@ -172,7 +172,7 @@ TEST(CaveCreature, ATurnEndsFacingTheNewWay)
 	                          .spin = 3,
 	                          .blendedWith = 4,
 	                          .blendWeight = 0.5f};
-	Body body;
+	const Body body;
 	EXPECT_TRUE(Busy(state, body));
 	AdvanceTurn(state, 60.0f);
 	EXPECT_FLOAT_EQ(state.heading.Radians(), 0.0f);

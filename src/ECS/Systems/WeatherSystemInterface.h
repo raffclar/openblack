@@ -79,7 +79,7 @@ struct ScriptStorm
 class WeatherSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~WeatherSystemInterface() = default;
+	~WeatherSystemInterface() override = default;
 
 	/// Removes every climate and storm, ready for a new island
 	virtual void Reset() = 0;

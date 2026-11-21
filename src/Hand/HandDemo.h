@@ -106,7 +106,7 @@ struct FoundThing
 /// now cannot take the click, so the click lands on no thing.
 [[nodiscard]] constexpr bool FoundThingTakesClick(const FoundThing& thing)
 {
-	return !(thing.building && thing.built == 0.0f) && !thing.dyingVillager;
+	return (!thing.building || thing.built != 0.0f) && !thing.dyingVillager;
 }
 
 /// The camera hints are hidden for this many records at each end of the recording

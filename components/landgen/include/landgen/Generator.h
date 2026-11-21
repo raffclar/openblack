@@ -204,7 +204,7 @@ struct GeneratedLand
 /// the towns, the climate, the biomes, the light, the cells and countries, the temple and town of the start, the neutral
 /// towns, the paths between them and their lanterns, the features, the cursed places, the mist of the swamps, the fairy
 /// rings and lone pillars, and the forests
-[[nodiscard]] GeneratedLand Generate(const Settings& settings);
+[[nodiscard]] GeneratedLand Generate(const Settings& chosen);
 
 /// The cell of each corner, from the altitudes, the luminosity and the biomes. A cell's water and sound come from the
 /// four corners of the cell, as on the lands of the story. A cell under a lake above the sea (lakeLevels, below 0 where no

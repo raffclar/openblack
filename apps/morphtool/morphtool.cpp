@@ -135,14 +135,14 @@ void PrintAnimation(const openblack::morph::Animation& animation)
 	std::printf("\t\ttranslatedJointCount: %u\n", animation.header.translatedJointCount);
 
 	std::printf("\trotatedJointIndices: [");
-	for (uint32_t index : animation.rotatedJointIndices)
+	for (const uint32_t index : animation.rotatedJointIndices)
 	{
 		std::printf("%u, ", index);
 	}
 	std::printf("]\n");
 
 	std::printf("\ttranslatedJointIndices: [");
-	for (uint32_t index : animation.translatedJointIndices)
+	for (const uint32_t index : animation.translatedJointIndices)
 	{
 		std::printf("%u, ", index);
 	}

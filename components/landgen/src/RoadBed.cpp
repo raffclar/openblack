@@ -621,20 +621,18 @@ Grid<float> roads::Grade(const Bed& bed, const Ground& ground, const Settings& s
 			continue;
 		}
 		const float land = ground.metres.values[i];
-		float target = land;
-		if (bed.covered.values[i] != 0)
-		{
-			target = bed.height.values[i];
-		}
-		else if (lowest.values[i] > highest.values[i])
-		{
-			// Two beds of different heights are near each other. The corner is between their banks.
-			target = (lowest.values[i] + highest.values[i]) / 2.0f;
-		}
-		else
-		{
-			target = std::clamp(land, lowest.values[i], highest.values[i]);
-		}
+		const float target = [&]() {
+			if (bed.covered.values[i] != 0)
+			{
+				return bed.height.values[i];
+			}
+			if (lowest.values[i] > highest.values[i])
+			{
+				// Two beds of different heights are near each other. The corner is between their banks.
+				return (lowest.values[i] + highest.values[i]) / 2.0f;
+			}
+			return std::clamp(land, lowest.values[i], highest.values[i]);
+		}();
 		// The bed itself is level up to the shores and the rivers. Only the banks become less near them.
 		const float most = bed.covered.values[i] != 0 ? std::min(change.values[i], fromRing.values[i])
 		                                              : std::min({change.values[i], fromFixed.values[i], fromRing.values[i]});

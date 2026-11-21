@@ -1068,7 +1068,8 @@ DecodeError ReadAction(Reader& in, Action& action)
 		report.cameraTurned = (flags & 16u) != 0;
 		report.cameraIcons = in.Number<uint16_t>();
 		const auto keys = in.Byte();
-		// The sender gives the keys in rising order, once each. Any other order gives other bytes when the frame goes out again.
+		// The sender gives the keys in rising order, once each. Any other order gives other bytes when the frame goes out
+		// again.
 		int previousKey = -1;
 		for (uint8_t i = 0; i < keys; ++i)
 		{

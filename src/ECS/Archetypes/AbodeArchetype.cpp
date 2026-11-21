@@ -61,8 +61,6 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
-namespace abode_foundation = openblack::ecs::abode_foundation;
-namespace abode_surroundings = openblack::ecs::abode_surroundings;
 
 void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAbodeInfo& info, const glm::vec3& position,
                              float yAngleRadians, uint32_t foodAmount, uint32_t woodAmount)

@@ -101,7 +101,7 @@ public:
 		float magnitude {1.0f};
 	};
 
-	virtual ~ParticleRuleSystemInterface() = default;
+	~ParticleRuleSystemInterface() override = default;
 
 	/// An effect from a particle file by its name (such as "SF_Smoke"), at a point and a magnitude; k_NoEffect if there
 	/// is no such file. Its random numbers are the shared ones when synced.
@@ -116,7 +116,7 @@ public:
 	virtual EffectId StartForSpell(ParticleType type, glm::vec3 origin, glm::vec3 direction, float magnitude,
 	                               particles::SpellSink& sink, bool synced = true) = 0;
 	/// One step of a miracle's effect; false once it has ended, and then it is gone
-	virtual bool ProcessForSpell(EffectId id, const particles::ProcessInfo& info, float seconds) = 0;
+	bool ProcessForSpell(EffectId id, const particles::ProcessInfo& info, float seconds) override = 0;
 	/// Steps an effect that is stepped as it is drawn, by the frame's game time, rather than each turn; false once it has
 	/// gone
 	virtual bool ProcessByFrame(EffectId /*id*/, float /*seconds*/) { return false; }
@@ -133,7 +133,7 @@ public:
 		return Start(type, origin, magnitude, true);
 	}
 	/// Whether an effect that its thing draws shows in this frame: it shows only while the frame draws its thing
-	virtual void SetShown(EffectId /*id*/, bool /*shown*/) {}
+	void SetShown(EffectId /*id*/, bool /*shown*/) override {}
 	/// An effect that its draw shows as its last step left it, with no blend from the step before. These seeds draw their
 	/// effects in this way: the seeds over the icons of the worship sites and the hands of the village centres, the
 	/// globes, the seeds on the map and in the creature's room of the temple, and the seeds of the gesture hints. The
@@ -148,60 +148,60 @@ public:
 	/// Gives a running effect another number, as an effect that its owner starts again after a load takes the number that
 	/// the save has for it. When the effect had the newest number, the next effect gets that number again. Returns false,
 	/// and changes nothing, when no effect has the first number or an effect has the second.
-	virtual bool Renumber(EffectId /*from*/, EffectId /*to*/) { return false; }
+	bool Renumber(EffectId /*from*/, EffectId /*to*/) override { return false; }
 	/// A save does not keep the effect: its owner starts it again after a load
 	virtual void KeepOutOfSaves(EffectId /*id*/) {}
 
 	virtual void SetOrigin(EffectId id, glm::vec3 origin) = 0;
-	virtual void SetPlayer(EffectId id, int player) = 0;
+	void SetPlayer(EffectId id, int player) override = 0;
 	/// How strong an effect is drawn from now on, which the strength its rules read follows: a glowing artefact's magic
 	/// is as strong as the artefact is worth
-	virtual void SetPower(EffectId /*id*/, float /*power*/) {}
+	void SetPower(EffectId /*id*/, float /*power*/) override {}
 	/// The players' symbols to draw by themselves from now on, as each worthy artefact shows its owner's; each frame's
 	/// list replaces the last
-	virtual void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> /*symbols*/) {}
+	void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> /*symbols*/) override {}
 	/// The sparkles marking the player's queued fight moves, drawn every frame until replaced
-	virtual void SetFightMarks(std::vector<particles::draw::FightMark> /*marks*/) {}
+	void SetFightMarks(std::vector<particles::draw::FightMark> /*marks*/) override {}
 	/// How the effect is drawn: sorted with everything else that blends unless told otherwise
 	virtual void SetDrawPath(EffectId id, particles::draw::DrawPath path) = 0;
 	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows
 	/// the hand between turns
-	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
+	void SetDrawOffset(EffectId id, glm::vec3 offset) override = 0;
 	/// The point where this computer draws its hand this frame, for a miracle that this computer casts from the hand.
 	/// The draw moves the atoms of the effect that follow the live hand by it.
-	virtual void SetLiveHand(EffectId id, glm::vec3 hand) = 0;
+	void SetLiveHand(EffectId id, glm::vec3 hand) override = 0;
 	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
 	virtual void SetInTemple(EffectId id) = 0;
 	/// A hidden effect continues to step but does not draw
-	virtual void SetHidden(EffectId /*id*/, bool /*hidden*/) {}
+	void SetHidden(EffectId /*id*/, bool /*hidden*/) override {}
 	/// The record that the particles tell of each start and end of an effect, none to stop
-	virtual void SetLifeListener(EffectLifeListener* /*listener*/) {}
+	void SetLifeListener(EffectLifeListener* /*listener*/) override {}
 	/// An effect that the world and the temple do not draw. Only the draw of this one effect shows it, as for the seeds
 	/// over the hints of the gestures.
 	virtual void SetDrawnAlone(EffectId /*id*/) {}
 	/// The live shield holding a point, its sphere grown by a margin, if any
-	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override = 0;
 	/// How many particle sounds are playing or dying away, for the debug window
 	[[nodiscard]] virtual size_t GetSoundCount() const = 0;
 	/// Tools: how many particle sounds travel to the listener of this computer and do not play yet
 	[[nodiscard]] virtual size_t GetWaitingSoundCount() const { return 0; }
 	/// An object for the effect's rules to act on, such as a person for the heal miracle's chakra
-	virtual void AddTarget(EffectId id, entt::entity target) = 0;
+	void AddTarget(EffectId id, entt::entity target) override = 0;
 	/// A point of the world for the effect's rules to act on, such as where a spot visual's beam ends
-	virtual void AddTargetPosition(EffectId /*id*/, glm::vec3 /*position*/) {}
+	void AddTargetPosition(EffectId /*id*/, glm::vec3 /*position*/) override {}
 	/// A plasma beam for the effect to fire, as a temple heart's spot visual fires one at what takes a blow for it
-	virtual void AddPlasma(EffectId /*id*/, const particles::PlasmaCommand& /*command*/) {}
+	void AddPlasma(EffectId /*id*/, const particles::PlasmaCommand& /*command*/) override {}
 	/// A spark for the mana path effect to carry, as a worship site sends its motes
-	virtual void AddManaPathSpark(EffectId /*id*/, const particles::mana_path::Spark& /*spark*/) {}
+	void AddManaPathSpark(EffectId /*id*/, const particles::mana_path::Spark& /*spark*/) override {}
 	/// A symbol of belief rises from something that gained it, in the effect every symbol rises in, kept running once
 	/// wanted; no more than a few hundred wait
-	virtual void AddBeliefSprite(const particles::BeliefSprite& /*sprite*/) {}
+	void AddBeliefSprite(const particles::BeliefSprite& /*sprite*/) override {}
 	/// A spark of the mana path the hand lets out past the border, in the effect every such spark runs in, started
 	/// once wanted and kept running
-	virtual void AddHandManaPathSpark(const particles::mana_path::Spark& /*spark*/) {}
+	void AddHandManaPathSpark(const particles::mana_path::Spark& /*spark*/) override {}
 	/// A storm's forked bolt, let down from a point of light under its cloud, in the effect every storm's bolts come down
 	/// in, which runs all the time; it comes down when the particles next step
-	virtual void AddStormBolt(glm::vec3 /*cloudPoint*/) {}
+	void AddStormBolt(glm::vec3 /*cloudPoint*/) override {}
 	/// The model of an object breaks into pieces where it stands. The pieces fly out from the origin at the speed, in the
 	/// effect that throws the pieces of all broken objects, which runs all the time. The pieces start when the particles
 	/// next step. An object without a model gives no pieces.
@@ -224,7 +224,7 @@ public:
 	virtual void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) = 0;
 	/// A sheet of light standing on the land, drawn and moved on by time for as long as its owner keeps it and doesn't
 	/// hide it
-	virtual void AddLightSheet(const std::shared_ptr<particles::LightSheet>& /*sheet*/) {}
+	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& /*sheet*/) override {}
 	/// Once a frame, by the frame's game time (none while the game is paused): the trails' sheets of light move on, and
 	/// the chain behind the hand steps
 	virtual void UpdateFrame(float gameSeconds, const HandFrame& hand) = 0;
@@ -234,7 +234,7 @@ public:
 	/// The effect stops making particles and fades out as its file has it, or goes at once
 	virtual void CloseDown(EffectId id) = 0;
 	/// Puts back the miracle behind an effect after a load, with no event to the miracle
-	virtual void RestoreSink(EffectId /*id*/, particles::SpellSink* /*sink*/) {}
+	void RestoreSink(EffectId /*id*/, particles::SpellSink* /*sink*/) override {}
 	virtual void Delete(EffectId id) = 0;
 	[[nodiscard]] virtual bool IsRunning(EffectId id) const = 0;
 	[[nodiscard]] virtual particles::Effect* Find(EffectId id) = 0;

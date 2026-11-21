@@ -129,7 +129,7 @@ TEST(X87, VillagerTurnStepChain)
 	// A turn of 2 radians: the size times 2 / pi, doubled, times the turn a millisecond, times 10 milliseconds. Each
 	// step rounds to a float
 	const double twoOverPi = FromBits(0x3FE45F306DC9C883ull);
-	const double turnPerMillisecond = static_cast<double>(0.003f);
+	const auto turnPerMillisecond = static_cast<double>(0.003f);
 	const float scaled = x87::Mul(2.0f, twoOverPi);
 	const float doubled = scaled + scaled;
 	const float perMillisecond = x87::Mul(doubled, turnPerMillisecond);

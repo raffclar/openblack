@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 
 // Enable this define because the test makes its own file system
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "FileSystem/DefaultFileSystem.h"
 #if !defined(__EMSCRIPTEN__)
 #include "Online/Desktop/OsTokenStore.h"

@@ -422,8 +422,10 @@ public:
 			return std::nullopt;
 		}
 		const int side = _ground.biomes.side;
+		// NOLINTBEGIN(bugprone-incorrect-roundings): A change gives a different land.
 		if (!biomeTest(_ground.biomes.At(std::clamp(static_cast<int>(cx + 0.5f), 0, side - 1),
 		                                 std::clamp(static_cast<int>(cz + 0.5f), 0, side - 1))))
+		// NOLINTEND(bugprone-incorrect-roundings)
 		{
 			return std::nullopt;
 		}

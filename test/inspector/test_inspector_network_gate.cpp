@@ -81,7 +81,7 @@ struct Fixture
 
 TEST(InspectorNetworkGate, WritesRunWithNoNetworkGame)
 {
-	Fixture fixture;
+	const Fixture fixture;
 	EXPECT_TRUE(fixture.Ask("edit.change").Ok());
 	EXPECT_EQ(fixture.world->ran, 1);
 }

@@ -250,6 +250,7 @@ bool animals::OverLandAllTheWay(glm::vec2 bird, glm::vec2 point, const std::func
 	const glm::vec2 length = sign * (to - from);
 	glm::vec2 gone(0.0f);
 	constexpr float k_Step = 16.0f;
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	while (!(length.x <= gone.x && length.y <= gone.y))
 	{
 		// Across or along, whichever keeps the walk nearer the line

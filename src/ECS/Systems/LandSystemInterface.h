@@ -116,7 +116,7 @@ public:
 class LandSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~LandSystemInterface() = default;
+	~LandSystemInterface() override = default;
 
 	/// The view that does the parts of the player. With none, the land does no part of a view.
 	virtual void SetView(LandViewInterface* view) = 0;

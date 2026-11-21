@@ -90,7 +90,7 @@ TEST(BinkFile, FrameRateIsRoundedDown)
 TEST(BinkFile, SplitsTheAudioPackets)
 {
 	// Two tracks: frame 0 has 4 bytes of the first and 2 of the second, then 6 bytes of video
-	std::vector<uint8_t> packet = {4, 0, 0, 0, 0xA, 0xA, 0xA, 0xA, 2, 0, 0, 0, 0xB, 0xB, 1, 2, 3, 4, 5, 6};
+	const std::vector<uint8_t> packet = {4, 0, 0, 0, 0xA, 0xA, 0xA, 0xA, 2, 0, 0, 0, 0xB, 0xB, 1, 2, 3, 4, 5, 6};
 	const auto file = BinkFile::Parse(MakeBik({packet}, {.audioTracks = 2}));
 	ASSERT_TRUE(file.has_value());
 	ASSERT_EQ(file->AudioTracks().size(), 2u);
@@ -151,9 +151,9 @@ TEST(BinkFile, RejectsBadFiles)
 	EXPECT_NE(ParseError(shortTable).find("ends at"), std::string::npos);
 
 	// An audio size reaching past its packet
-	std::vector<uint8_t> packet = {200, 0, 0, 0, 1, 2};
+	const std::vector<uint8_t> packet = {200, 0, 0, 0, 1, 2};
 	EXPECT_NE(ParseError(MakeBik({packet}, {.audioTracks = 1})).find("past the packet"), std::string::npos);
-	std::vector<uint8_t> tooSmall = {1, 2};
+	const std::vector<uint8_t> tooSmall = {1, 2};
 	EXPECT_NE(ParseError(MakeBik({tooSmall}, {.audioTracks = 1})).find("no room"), std::string::npos);
 }
 

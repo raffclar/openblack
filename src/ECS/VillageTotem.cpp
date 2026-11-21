@@ -149,7 +149,7 @@ bool Functional(bool built, float life)
 uint32_t GripTimeMs(float closure, uint32_t durationMs)
 {
 	// Each step rounds to a float, and the result is cut to whole milliseconds
-	const float halfDuration = static_cast<float>(durationMs >> 1u);
+	const auto halfDuration = static_cast<float>(durationMs >> 1u);
 	return static_cast<uint32_t>((closure * 0.5f) * halfDuration);
 }
 

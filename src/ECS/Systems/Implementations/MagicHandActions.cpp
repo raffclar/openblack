@@ -10,7 +10,7 @@
 // The actions of the hand on each interface turn: the fireballs that the hand catches, holds and throws, and
 // the press and the release of the action button.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <optional>
 

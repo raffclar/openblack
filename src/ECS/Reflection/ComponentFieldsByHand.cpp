@@ -55,8 +55,6 @@ std::vector<fight::marks::Mark> FightMarks(const fight::marks::MarkList& list)
 	return {marks.begin(), marks.end()};
 }
 
-namespace components = openblack::ecs::components;
-
 /// A step of a villager's walk round an obstacle, one component for each state of the step
 template <typename Tag>
 void ReflectMoveState(entt::meta_ctx& context)

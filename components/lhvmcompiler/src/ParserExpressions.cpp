@@ -535,7 +535,7 @@ std::optional<Parser::FormMatch> Parser::Choose(std::vector<FormMatch>& matches,
 			    matches[i].form->signature->name != matches[best].form->signature->name)
 			{
 				_sink.Warning(_fileName, location,
-				              fmt::format("ambiguous statement: reads as {} (\"{}\") and as {} (\"{}\"); using the first",
+				              fmt::format(R"(ambiguous statement: reads as {} ("{}") and as {} ("{}"); using the first)",
 				                          matches[best].form->signature->name, matches[best].form->source->pattern,
 				                          matches[i].form->signature->name, matches[i].form->source->pattern));
 				break;

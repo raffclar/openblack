@@ -22,12 +22,9 @@
 
 #include "Enums.h"
 
-namespace openblack
-{
-
 /// The trophies in the creature's room: belts hung on its attack dummies for how it fights, medals on its magic plinths
 /// for how well it has learnt its miracles, and the seeds of its four best-learnt miracles hovering by the plinths
-namespace CreatureCaveTrophies
+namespace openblack::CreatureCaveTrophies
 {
 
 /// The icons the game loads from data/citadel/icons: four of each of the seven belts, white to black,
@@ -104,6 +101,4 @@ struct MiracleLearning
 [[nodiscard]] std::array<std::optional<SpellSeedType>, k_BestMiracles>
 SeedsToMake(const std::array<bool, k_BestMiracles>& shown, const std::array<SpellSeedType, k_BestMiracles>& seeds);
 
-} // namespace CreatureCaveTrophies
-
-} // namespace openblack
+} // namespace openblack::CreatureCaveTrophies

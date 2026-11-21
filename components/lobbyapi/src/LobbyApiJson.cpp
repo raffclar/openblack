@@ -31,7 +31,6 @@ namespace
 using json_read::Dump;
 using json_read::Json;
 using json_read::Member;
-using json_read::ParseObject;
 using json_read::ParseWith;
 using json_read::ReadAccountRef;
 using json_read::ReadArray;
@@ -198,7 +197,8 @@ constexpr auto k_Base64Values = MakeBase64Values();
 std::string QuotedHeaderValue(std::string_view value)
 {
 	std::string out(value);
-	std::ranges::replace_if(out, [](char c) { return c == '"' || c == '\r' || c == '\n'; }, '_');
+	std::ranges::replace_if(
+	    out, [](char c) { return c == '"' || c == '\r' || c == '\n'; }, '_');
 	return out;
 }
 

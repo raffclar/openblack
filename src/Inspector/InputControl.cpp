@@ -468,7 +468,7 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	    Write("drag",
 	          "Holds a button where the pointer is, moves it evenly to a pixel or a point of the world over some "
 	          "frames, then lets go",
-	          {{.name = "to", .type = "point", .description = "{\"screen\": [x, y]} or {\"world\": [x, z]}", .required = true},
+	          {{.name = "to", .type = "point", .description = R"({"screen": [x, y]} or {"world": [x, z]})", .required = true},
 	           button,
 	           Optional("frames", "integer", "Frames the move takes (30 by default)"),
 	           Optional("from", "point", "Where it starts, as to; the pointer's place by default"),
@@ -502,7 +502,7 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	    Write("replay", "Makes recorded input again, frame for frame, from this frame on",
 	          {{.name = "events",
 	            .type = "array",
-	            .description = "The recording: [{\"frame\": n, \"event\": {...}}, ...] as input.record answers it",
+	            .description = R"(The recording: [{"frame": n, "event": {...}}, ...] as input.record answers it)",
 	            .required = true},
 	           Optional("timing", "string",
 	                    "The timing of the pointer's events that don't say theirs, as recordings made before the "
@@ -541,7 +541,7 @@ std::optional<uint64_t> InputProvider::Replay(const Json& events, InputEvent::Ti
 		{
 			if (error.empty())
 			{
-				error = "each event is {\"frame\": n, \"event\": {...}}";
+				error = R"(each event is {"frame": n, "event": {...}})";
 			}
 			return std::nullopt;
 		}
@@ -605,7 +605,7 @@ std::optional<glm::ivec2> InputProvider::ScreenPoint(const Json& params, std::st
 		}
 		return pixel;
 	}
-	error = "a point is {\"screen\": [x, y]} or {\"world\": [x, z] or [x, y, z]}";
+	error = R"(a point is {"screen": [x, y]} or {"world": [x, z] or [x, y, z]})";
 	return std::nullopt;
 }
 
@@ -772,7 +772,7 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		}
 		if (!_target.HasKey(*key))
 		{
-			return failed("no key " + *key + "; keys go by SDL's names, as \"L\", \"Space\" or \"Left Shift\"");
+			return failed("no key " + *key + R"(; keys go by SDL's names, as "L", "Space" or "Left Shift")");
 		}
 		const auto how = StringMember(params, "how").value_or("tap");
 		if (how != "press" && how != "release" && how != "tap")

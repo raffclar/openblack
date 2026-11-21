@@ -10,7 +10,7 @@
 // The words of the game's pause and speed ("Game Paused", "Slow Down Time", "Speed Up Time"), as the renderer draws
 // them: their letters in the world in front of the camera, after the rest of the scene.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstring>
 

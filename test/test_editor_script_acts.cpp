@@ -63,6 +63,7 @@ public:
 	[[nodiscard]] std::vector<uint32_t> Tasks() const override
 	{
 		std::vector<uint32_t> ids;
+		ids.reserve(tasks.size());
 		for (const auto& [id, task] : tasks)
 		{
 			ids.push_back(id);

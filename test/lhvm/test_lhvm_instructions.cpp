@@ -465,7 +465,7 @@ LHVMFile StopsItself()
 TEST_F(LhvmInstructions, ATaskThatStopsItselfEndsTheStepOfTheOtherTasks)
 {
 	std::vector<uint32_t> stopped;
-	std::vector<NativeFunction> natives {
+	const std::vector<NativeFunction> natives {
 	    NativeFunction(nullptr, 0, 0, "NONE"),
 	    NativeFunction([this]() { _vm.StopTask(_vm.GetCurrentTaskNumber()); }, 0, 0, "STOP_ME"),
 	};
@@ -485,7 +485,7 @@ TEST_F(LhvmInstructions, ATaskThatStopsItselfEndsTheStepOfTheOtherTasks)
 
 TEST_F(LhvmInstructions, ATaskCanStopEveryTaskDuringItsRun)
 {
-	std::vector<NativeFunction> natives {
+	const std::vector<NativeFunction> natives {
 	    NativeFunction(nullptr, 0, 0, "NONE"),
 	    NativeFunction([this]() { _vm.StopAllTasks(); }, 0, 0, "STOP_ALL"),
 	};

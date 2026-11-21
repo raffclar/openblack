@@ -109,11 +109,11 @@ int WriteFile(const Arguments::Write& args) noexcept
 		return EXIT_FAILURE;
 	}
 
-	tinygltf::TinyGLTF loader;
-	tinygltf::Model gltf;
+	const tinygltf::TinyGLTF loader;
+	const tinygltf::Model gltf;
 
-	std::string err;
-	std::string warn;
+	const std::string err;
+	const std::string warn;
 
 	// TODO (bwrsandman): Extract animation from gltf
 	const std::string name = "TODO";
@@ -196,7 +196,7 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 		}
 	}
 
-	std::cerr << options.help() << std::endl;
+	std::cerr << options.help() << '\n';
 	returnCode = EXIT_FAILURE;
 	return false;
 }

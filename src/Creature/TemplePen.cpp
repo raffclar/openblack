@@ -35,7 +35,7 @@ bool temple_pen::BetweenWalls(glm::vec2 heart, float heartYAngle, glm::vec2 poin
 	// Worked in double, as the game keeps these in its FPU's wider registers; only the cosine is rounded to a float
 	const double dx = static_cast<double>(point.x) - static_cast<double>(heart.x);
 	const double dz = static_cast<double>(point.y) - static_cast<double>(heart.y);
-	double angle = static_cast<double>(heartYAngle + k_FirstWallTurn);
+	auto angle = static_cast<double>(heartYAngle + k_FirstWallTurn);
 	bool inside = true;
 	for (int wall = 0; wall < 2; ++wall)
 	{

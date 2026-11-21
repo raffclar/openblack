@@ -1574,7 +1574,7 @@ TEST(CreatureNeedsMind, TheTurnsTheSleepCouldNotStartCountAsTurnsOfTheSleep)
 {
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::Sleep, creature_mind::Sleep(Always(1)));
-	FakeBody body;
+	const FakeBody body;
 	auto senses = body.Senses();
 	senses.bodyBusy = true;
 	for (int turn = 0; turn < 3; ++turn)
@@ -1764,7 +1764,7 @@ TEST(CreatureNeedsMind, ItPicksFoodUpAndEatsIt)
 {
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(7u, false));
-	FakeBody body;
+	const FakeBody body;
 	auto senses = body.Senses();
 	// Its hands go and pick the food up
 	auto commands = creature_mind::Think(mind, senses, Always(1));
@@ -1792,7 +1792,7 @@ TEST(CreatureNeedsMind, FoodItCantPickUpIsGivenUpUneaten)
 {
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::Eat, creature_mind::Eat(7u, false));
-	FakeBody body;
+	const FakeBody body;
 	auto senses = body.Senses();
 	static_cast<void>(creature_mind::Think(mind, senses, Always(1)));
 	// Its hands couldn't get it: the rest of the agenda is no use, nothing is eaten, and the agenda was given up rather
@@ -1933,7 +1933,7 @@ TEST(CreatureNeedsMind, AFaintedCreatureThatIsMovedBeforeItLiesStillStaysFainted
 {
 	creature_mind::IdleMind mind;
 	creature_mind::Plan(mind, creature_mind::Activity::Faint, creature_mind::Faint(1.0f));
-	FakeBody body;
+	const FakeBody body;
 	auto commands = creature_mind::Think(mind, body.Senses(), Always(1));
 	// The body stands with no action before it lies still, as when a script moves the creature as it falls
 	for (int turn = 1; turn < 2000; ++turn)

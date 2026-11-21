@@ -22,6 +22,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <variant>
 
@@ -484,7 +485,7 @@ LHVMFile LHVM::StateFile(const LHVMFile& program, const RunningState& state)
 
 int LHVM::SaveState(const std::filesystem::path& filepath)
 {
-	StateFile().Write(filepath);
+	std::ignore = StateFile().Write(filepath);
 	return EXIT_SUCCESS;
 }
 

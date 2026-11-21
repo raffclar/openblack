@@ -31,8 +31,6 @@
 #include "ECS/Reflection/ComponentReflection.h"
 #include "Enums.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_t(entt::meta_ctx& context);

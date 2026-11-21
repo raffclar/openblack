@@ -41,7 +41,7 @@ struct SavedHighlight
 class ScriptHighlightSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~ScriptHighlightSystemInterface() = default;
+	~ScriptHighlightSystemInterface() override = default;
 
 	/// A highlight of a kind at a point, belonging to a challenge; none for a kind past the info table
 	virtual entt::entity Create(uint32_t kind, glm::vec3 at, uint32_t challenge) = 0;

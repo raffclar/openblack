@@ -43,7 +43,7 @@ public:
 
 	/// Breaks text into lines that fit across the scroll and ends each of them, then a blank line follows. Text that
 	/// would take the buffer past its end is left out.
-	void Add(std::u16string_view text);
+	void Add(std::u16string_view source);
 	/// Ends a line. The texts that need the player's creature are just this without one.
 	void AddNewLine();
 	/// Marks the end of the text

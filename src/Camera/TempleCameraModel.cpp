@@ -1340,7 +1340,7 @@ void TempleCameraModel::UpdateCaveTargets(float dt, const Input& input, bool scr
 		Locator::temple::value().TurnBackRisingFade();
 	}
 	// The targets and the zoom change only while the player looks around the room
-	if (!(_state == State::Look && !scrollStep))
+	if (_state != State::Look || scrollStep)
 	{
 		_caveTarget.reset();
 		return;

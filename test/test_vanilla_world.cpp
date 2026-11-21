@@ -114,7 +114,7 @@ private:
 /// A world file with a game object that holds no objects, only the game data and the time of day
 std::vector<uint8_t> SmallWorld(const std::array<uint32_t, 8>& data, float visualTime)
 {
-	const auto framing = WriteVanillaFraming(".\\DATA\\LANDSCAPE\\Land1.lnd");
+	const auto framing = WriteVanillaFraming(R"(.\DATA\LANDSCAPE\Land1.lnd)");
 	const auto read = ReadVanillaFraming(framing);
 	Writer w(framing, read->checksum);
 	w.Word(0x6A);

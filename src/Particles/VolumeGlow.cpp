@@ -20,8 +20,6 @@
 #include "Common/X87Vector.h"
 
 namespace volume_glow = openblack::particles::volume_glow;
-namespace gutils = openblack::gutils;
-namespace x87 = openblack::x87;
 
 namespace
 {

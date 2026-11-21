@@ -57,6 +57,7 @@ Scenario ShieldFall(std::string_view id, std::string_view name, std::string_view
                     const std::vector<glm::vec2>& huts)
 {
 	std::vector<ObjectSetup> objects;
+	objects.reserve(huts.size());
 	for (const auto& hut : huts)
 	{
 		objects.push_back({.type = AbodeInfo::CelticHut, .offset = hut});

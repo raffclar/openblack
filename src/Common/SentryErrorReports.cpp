@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "SentryErrorReports.h"
 
@@ -107,7 +107,7 @@ sentry_value_t HideUserFolders(sentry_value_t event, sentry_hint_t* /*hint*/, vo
 		for (const char* key : k_ImageKeys)
 		{
 			auto value = sentry_value_get_by_key(image, key);
-			if (sentry_value_is_null(value))
+			if (sentry_value_is_null(value) != 0)
 			{
 				continue;
 			}

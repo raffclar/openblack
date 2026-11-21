@@ -15,7 +15,7 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include <Audio/AudioManagerNoOp.h>
 #include <Camera/Camera.h>
 #include <Camera/DefaultWorldCameraModel.h>

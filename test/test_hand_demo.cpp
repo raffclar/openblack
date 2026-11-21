@@ -153,7 +153,7 @@ TEST(HandDemo, TheFirstRecordPlaysAtOnceAndTheRestByTheirTimes)
 	std::vector<Played> played;
 	Playback playback(records, 100, played);
 	ASSERT_EQ(played.size(), 1u);
-	EXPECT_EQ(played[0].record, &records[0]);
+	EXPECT_EQ(played[0].record, records.data());
 	bool trigger = false;
 	played.clear();
 	// 25 hundredths later: the records of 10 and 20

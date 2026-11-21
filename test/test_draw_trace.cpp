@@ -10,7 +10,7 @@
 // The draw trace is a developer tool: a build without the developer tools has nothing to test
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdint>
 

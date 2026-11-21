@@ -173,6 +173,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			return false;
 		}
 		break;
+	default:
+		break;
 	}
 
 	return true;

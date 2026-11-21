@@ -23,7 +23,6 @@
 #include "Online/MainLobbyRoom.h"
 
 using namespace openblack;
-using openblack::online::main_room::Line;
 using openblack::online::main_room::MainLobbyRoom;
 
 namespace

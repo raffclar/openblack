@@ -33,6 +33,7 @@ namespace
 TrailPath Line(float length, int points)
 {
 	std::vector<glm::vec3> line;
+	line.reserve(points);
 	for (int i = 0; i < points; ++i)
 	{
 		line.emplace_back(length * static_cast<float>(i) / static_cast<float>(points - 1), 0.0f, 0.0f);

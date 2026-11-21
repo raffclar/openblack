@@ -76,6 +76,7 @@ struct Fixture
 	{
 		FrameInput input;
 		input.dt = dt;
+		// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 		input.frameMs = static_cast<int32_t>(dt * 1000.0f + 0.5f);
 		input.screen = k_Screen;
 		input.mouse = {320, 240};

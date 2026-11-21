@@ -10,7 +10,7 @@
 // The points of an object's model that glints sparkle on: those of a miracle's seed shown in a globe or over an icon,
 // every point of every part of its model in order, placed as the seed was last drawn
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"

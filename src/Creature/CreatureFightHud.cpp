@@ -55,8 +55,8 @@ Layout creature_fight_hud::Compute(glm::u16vec2 resolution)
 	layout.box = {.min = {0.0f, 0.0f}, .max = {static_cast<float>(k_BoxWidth * unit), static_cast<float>(k_BoxHeight * unit)}};
 	layout.textSize = static_cast<float>(k_TextHeight * unit);
 	layout.nameWidth = static_cast<float>(k_NameWidth * unit);
-	const float left = static_cast<float>(k_BarLeft * unit);
-	const float right = static_cast<float>(k_BarRight * unit);
+	const auto left = static_cast<float>(k_BarLeft * unit);
+	const auto right = static_cast<float>(k_BarRight * unit);
 	const float firstTop = u;
 	const std::array<float, 2> tops {firstTop, static_cast<float>(static_cast<int>(firstTop + (k_RowPitch * u)))};
 	for (size_t i = 0; i < layout.rows.size(); ++i)

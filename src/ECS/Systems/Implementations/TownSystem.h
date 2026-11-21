@@ -39,7 +39,7 @@ class TownSystem final: public TownSystemInterface
 public:
 	/// Keeps the towns' lists of buildings and homeless people as they go from the world
 	TownSystem();
-	virtual ~TownSystem();
+	~TownSystem() override;
 	TownSystem(const TownSystem&) = delete;
 	TownSystem& operator=(const TownSystem&) = delete;
 

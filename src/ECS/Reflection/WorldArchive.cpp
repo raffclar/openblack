@@ -20,6 +20,7 @@
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -157,11 +158,11 @@ uint32_t WriteRows(BinaryWriter& out, std::string_view name, const entt::meta_ty
 {
 	rows.clear();
 	rows.reserve(storage.size());
-	for (auto it = storage.rbegin(); it != storage.rend(); ++it)
+	for (auto it : std::ranges::reverse_view(storage))
 	{
-		if (*it != entt::tombstone)
+		if (it != entt::tombstone)
 		{
-			rows.push_back(*it);
+			rows.push_back(it);
 		}
 	}
 	return rows;

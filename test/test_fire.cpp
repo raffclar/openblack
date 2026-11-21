@@ -123,7 +123,7 @@ TEST(FireModel, TheFireIsFiercestAtTwiceItsCombustionAndWeakAsItsObjectBurnsAway
 TEST(FireModel, ABurnPullsTheTemperatureTowardsTheAirsPlusTheBurn)
 {
 	// Water's -4000 cools something light at once, a hut by about 21 degrees a drop
-	Material light {.combustion = 100.0f, .capacity = 10.0f};
+	const Material light {.combustion = 100.0f, .capacity = 10.0f};
 	EXPECT_NEAR(ApplyBurn(300.0f, light, -4000.0f), k_AmbientTemperature - 4000.0f, 0.01f);
 	EXPECT_NEAR(ApplyBurn(300.0f, Hut(), -4000.0f), 300.0f + 10.0f * (k_AmbientTemperature - 4300.0f) / 2000.0f, 0.01f);
 	// A villager's beat cools a burning hut by about 1.4 degrees
@@ -142,7 +142,7 @@ TEST(FireModel, AFireHeatsItsNeighbourByTheDifferenceUpToHalfItsHeat)
 	EXPECT_NEAR(transfer.targetTemperature, k_AmbientTemperature + 10.0f * (220.0f - k_AmbientTemperature) / 2000.0f, 0.01f);
 	EXPECT_FLOAT_EQ(transfer.sourceTemperature, 220.0f);
 	// Something hot but not burning, as a fireball below its combustion, loses what it gives
-	Material ball {.combustion = 2000.0f, .capacity = 75.0f};
+	const Material ball {.combustion = 2000.0f, .capacity = 75.0f};
 	const auto cooling = HeatTransfer(1500.0f, ball, k_AmbientTemperature, Villager());
 	const float heat = 10.0f * (1500.0f - k_AmbientTemperature);
 	EXPECT_NEAR(cooling.sourceTemperature, 1500.0f - heat / 75.0f, 0.01f);
@@ -467,8 +467,8 @@ TEST(ViaPoint, AVillagerGoesRoundAFireInItsWayOnTheSideItLeansTo)
 	EXPECT_FALSE(via.inside);
 	EXPECT_NE(via.angle, 0.0f);
 	// The point lies on the tangent from the start to the circle grown by the margin: 6 m from the centre
-	const float dx = static_cast<float>(via.point.x - ToFixed(20.0f));
-	const float dz = static_cast<float>(via.point.z);
+	const auto dx = static_cast<float>(via.point.x - ToFixed(20.0f));
+	const auto dz = static_cast<float>(via.point.z);
 	EXPECT_NEAR(std::sqrt(dx * dx + dz * dz) / openblack::map_coords::k_FixedPerMetre, 6.0f, 0.01f);
 	// Kept to the same side when asked
 	const auto again = openblack::fire::GetViaPoint(at(0.0f, 0.0f), at(40.0f, 1.0f), at(20.0f, 0.0f), 5.0f, 1.0f, via.angle);

@@ -23,7 +23,7 @@ namespace
 {
 constexpr std::string_view k_Digits = "0123456789abcdef";
 constexpr std::string_view k_TurnKey = "\"turn\":";
-constexpr std::string_view k_FrameKey = "\"frame\":\"";
+constexpr std::string_view k_FrameKey = R"("frame":")";
 constexpr std::string_view k_GiveKey = "\"give\":";
 constexpr std::string_view k_LandKey = "\"land\":";
 

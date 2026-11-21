@@ -150,7 +150,7 @@ std::optional<std::string> openblack::inspector::ReadShapingOptions(const Json& 
 	auto near = ReadNear(object);
 	if (auto* why = std::get_if<std::string>(&near))
 	{
-		return *std::move(why);
+		return *why;
 	}
 	options.near = std::get<std::optional<Near>>(near);
 	if (const auto it = object.find("limit"); it != object.end())

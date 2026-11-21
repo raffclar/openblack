@@ -48,7 +48,7 @@ std::string Utf8(const std::wstring& wide)
 
 std::wstring ItemText(HWND dialog, int item)
 {
-	const auto control = GetDlgItem(dialog, item);
+	auto* const control = GetDlgItem(dialog, item);
 	const auto length = GetWindowTextLengthW(control);
 	std::wstring text(static_cast<size_t>(length) + 1, L'\0');
 	GetWindowTextW(control, text.data(), length + 1);
@@ -87,7 +87,7 @@ struct Window
 
 	void Upload(HWND dialog)
 	{
-		const auto profiles = GetDlgItem(dialog, IDC_PROFILE);
+		auto* const profiles = GetDlgItem(dialog, IDC_PROFILE);
 		std::string profile;
 		const auto selected = SendMessageW(profiles, CB_GETCURSEL, 0, 0);
 		if (selected != CB_ERR)
@@ -205,7 +205,7 @@ std::wstring win32::Wide(std::string_view utf8)
 
 void win32::Apply(HWND dialog, const dialog::Effect& effect)
 {
-	const auto progress = GetDlgItem(dialog, IDC_PROGRESS);
+	auto* const progress = GetDlgItem(dialog, IDC_PROGRESS);
 	if (const auto* status = std::get_if<dialog::SetStatus>(&effect))
 	{
 		SetDlgItemTextW(dialog, IDC_STATUS, Wide(status->text).c_str());
@@ -232,7 +232,7 @@ void win32::Prepare(HWND dialog, const Setup& setup, const dialog::Texts& texts,
 		SendMessageW(dialog, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(icon));
 	}
 	// The list sorts the names. The profile that the game played last is the selected one.
-	const auto profiles = GetDlgItem(dialog, IDC_PROFILE);
+	auto* const profiles = GetDlgItem(dialog, IDC_PROFILE);
 	for (const auto& profile : setup.profiles.profiles)
 	{
 		SendMessageW(profiles, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(Wide(profile.name).c_str()));

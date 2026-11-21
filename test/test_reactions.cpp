@@ -81,7 +81,7 @@
 #include "Magic/ShieldRules.h"
 #include "Magic/VillagerReactionRules.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/MapProduction.h"
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -1645,7 +1645,7 @@ TEST_F(Reactions, ADancingVillagerNoticesAFlyingThingOnlyWhenItComesAtIt)
 	Locator::infoConstants::emplace(*_info);
 	auto& registry = Locator::entitiesRegistry::value();
 	// Every villager dances; the thing flies away from the first and at the second
-	for (auto* villager : {&_villagers[0], &_villagers[1], &_villagers[2]})
+	for (auto* villager : {_villagers.data(), &_villagers[1], &_villagers[2]})
 	{
 		registry.Assign<Dancer>(*villager);
 	}

@@ -594,6 +594,7 @@ int32_t creature_fight::TurnsCounted(float seconds, float turnSeconds)
 
 bool creature_fight::NeedsRest(float life, float exhaustion)
 {
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	return !(exhaustion <= k_RestedExhaustion && life >= k_GetUpLife);
 }
 
@@ -1365,6 +1366,7 @@ AttackChoice creature_fight::ChooseAttack(std::span<const BlowDepth> blows, Band
 			{
 				continue;
 			}
+			// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 			const bool inBand = !(highest < blow.height || blow.height < lowest);
 			const auto score = inBand ? std::abs(count) : k_OutOfBandScore;
 			if (bestBlow.has_value() && score == bestScore)

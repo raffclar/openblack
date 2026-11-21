@@ -9,7 +9,7 @@
 
 // The running state of the miracles in a saved game.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <optional>
 #include <utility>

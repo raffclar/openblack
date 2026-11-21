@@ -118,7 +118,7 @@ bool IsSharedComponent(std::string_view name)
 }
 
 template <typename Member>
-const Member* Table(const InfoConstants* info, Member InfoConstants::* member)
+const Member* Table(const InfoConstants* info, Member InfoConstants::*member)
 {
 	return info == nullptr ? nullptr : &(info->*member);
 }

@@ -10,7 +10,7 @@
 // How a creature chooses a plan: the desire to act on, the activity and the thing to act on, and the agenda of the
 // plan
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 
@@ -1053,7 +1053,7 @@ AgendaAreaOf(const ecs::Registry& registry, entt::entity creature, std::string_v
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .toTeleport = action == k_GoToTeleportAction,
 	};
-	return std::pair {area, glm::vec2(glm::xz(at->position))};
+	return std::pair {area, static_cast<glm::vec2>(glm::xz(at->position))};
 }
 } // namespace openblack::ecs::systems::mind_detail
 

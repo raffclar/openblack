@@ -31,7 +31,7 @@ Token Lexer::GetToken()
 			return Token::MakeEOFToken();
 		}
 
-		unsigned char cc = *_current;
+		const unsigned char cc = *_current;
 		switch (cc)
 		{
 		case '/':
@@ -184,7 +184,7 @@ Token Lexer::GatherIdentifer()
 	auto idStart = _current;
 	while (HasMore())
 	{
-		unsigned char cc = *_current;
+		const unsigned char cc = *_current;
 
 		/* check for invalid characters */
 		if ((cc < 'A' || cc > 'Z') && (cc < 'a' || cc > 'z') && cc != '_' && (cc < '0' || cc > '9'))

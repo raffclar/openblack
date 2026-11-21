@@ -295,7 +295,7 @@ std::string FirstLine(const std::filesystem::path& path)
 /// A folder named in a git file, relative to the folder holding the file unless it is absolute
 std::filesystem::path FolderFrom(const std::filesystem::path& base, std::string_view named)
 {
-	std::filesystem::path folder {std::string(named)};
+	const std::filesystem::path folder {std::string(named)};
 	return folder.is_absolute() ? folder : base / folder;
 }
 

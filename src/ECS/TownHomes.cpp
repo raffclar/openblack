@@ -145,9 +145,6 @@ town_homes::Occupancy OccupancyOf(const Registry& registry, entt::entity abode, 
 }
 } // namespace
 
-using town_homes::Homes;
-using town_homes::Occupancy;
-
 float town_homes::ScoreForAddingVillager(const Occupancy& occupancy)
 {
 	const uint32_t most = occupancy.child ? occupancy.maxChildren : occupancy.maxAdults;

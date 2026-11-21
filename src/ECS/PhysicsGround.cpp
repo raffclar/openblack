@@ -39,6 +39,7 @@ glm::vec2 LandPlace(glm::vec2 xz)
 int32_t NearestInteger(float value)
 {
 	const double nearest = std::nearbyint(static_cast<double>(value));
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(nearest >= static_cast<double>(std::numeric_limits<int32_t>::min()) &&
 	      nearest <= static_cast<double>(std::numeric_limits<int32_t>::max())))
 	{

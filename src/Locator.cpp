@@ -9,7 +9,7 @@
 
 #include "Locator.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdlib>
 #include <ctime>

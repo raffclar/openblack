@@ -61,6 +61,7 @@ entt::entity TownByWalk(const ecs::Registry& registry, uint32_t townId)
 std::vector<entt::entity> Fill(ecs::Registry& registry, int extraTransforms, int extraImpressions)
 {
 	std::vector<entt::entity> centres;
+	centres.reserve(6);
 	for (int i = 0; i < 6; ++i)
 	{
 		centres.push_back(registry.Create());

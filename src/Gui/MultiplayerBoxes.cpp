@@ -1116,8 +1116,8 @@ void MultiplayerBoxes::Update(float deltaSeconds)
 		_left = true;
 		return;
 	}
-	if (_built != _frontEnd->GetBox() && !(_built == Box::Room && _frontEnd->GetBox() == Box::Conditions) &&
-	    !(_built == Box::Conditions && _frontEnd->GetBox() == Box::Room))
+	if (_built != _frontEnd->GetBox() && (_built != Box::Room || _frontEnd->GetBox() != Box::Conditions) &&
+	    (_built != Box::Conditions || _frontEnd->GetBox() != Box::Room))
 	{
 		Build();
 	}

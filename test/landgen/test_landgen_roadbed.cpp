@@ -106,6 +106,7 @@ TEST(LandgenRoadBed, TheProfileKeepsAnEvenClimb)
 {
 	const roads::Settings settings;
 	std::vector<float> land;
+	land.reserve(200);
 	for (int i = 0; i < 200; ++i)
 	{
 		land.push_back(0.1f * settings.step * static_cast<float>(i));
@@ -141,6 +142,7 @@ TEST(LandgenRoadBed, TheProfileRemovesBumpsButFollowsTheLand)
 {
 	const roads::Settings settings;
 	std::vector<float> land;
+	land.reserve(200);
 	for (int i = 0; i < 200; ++i)
 	{
 		// A slow climb with a bump of 2 m up and down on every fourth sample
@@ -173,6 +175,7 @@ TEST(LandgenRoadBed, TheProfileOfASteepClimbStaysNearTheLand)
 {
 	const roads::Settings settings;
 	std::vector<float> land;
+	land.reserve(200);
 	for (int i = 0; i < 200; ++i)
 	{
 		land.push_back(0.6f * settings.step * static_cast<float>(i));
@@ -453,7 +456,7 @@ TEST(LandgenRoadBed, ABedBesideAShoreIsLevel)
 TEST(LandgenRoadBed, ASecondPathKeepsTheBedOfTheFirstPathWhereTheyMeet)
 {
 	const roads::Settings settings;
-	SideSlope land(0.1f);
+	const SideSlope land(0.1f);
 	const int middle = k_Side / 2;
 	// The second path climbs the slope and meets the first path at its middle
 	paths::Path second {.link = {.from = 1, .to = 2}, .points = {}};

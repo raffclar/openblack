@@ -26,7 +26,7 @@
 
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "Common/PlayerProfiles.h"
 #include "ECS/Systems/Implementations/HelpProfileSystem.h"
@@ -152,7 +152,7 @@ TEST(ProfileFolderSystem, EachPlayerHasAFolderNamedByTheKeyOfTheProfile)
 {
 	FakeFileSystem files;
 	const std::filesystem::path root = std::filesystem::path("work") / "Profiles";
-	ecs::systems::ProfileFolderSystem folder(files, root);
+	const ecs::systems::ProfileFolderSystem folder(files, root);
 	EXPECT_EQ(folder.GetFolder(), root);
 	EXPECT_EQ(folder.GetPlayerFolder(u"Ann"), root / "_A_n_n");
 	EXPECT_FALSE(folder.GetPlayerFolder(u"").has_value());
@@ -264,7 +264,7 @@ TEST(HelpProfileSystem, TheHelpRecordGoesToTheFolderOfThePlayerAndComesBack)
 
 TEST(HelpProfileSystem, WithNoFileTheRecordStaysAsItIs)
 {
-	FakeProfileFolder folder;
+	const FakeProfileFolder folder;
 	ecs::systems::HelpProfileSystem system;
 	system.Get().Trigger(k_LastEvent);
 	const auto before = help::profile::ToFileBytes(system.Get());

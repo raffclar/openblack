@@ -29,7 +29,7 @@
 #include "scenarios/ZoomOutIn.h"
 
 // Enable this define because we use a custom locator
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include <Audio/AudioManagerNoOp.h>
 #include <Camera/DefaultWorldCameraModel.h>
 #include <Common/RandomNumberManagerTesting.h>

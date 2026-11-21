@@ -60,6 +60,7 @@ glm::mat3 Frame(glm::vec3 front, glm::vec3 up)
 
 bool LeansAcrossLand(glm::vec3 rayDirection)
 {
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	return !(std::abs(rayDirection.x) <= k_MinHeadingLean && std::abs(rayDirection.z) <= k_MinHeadingLean);
 }
 

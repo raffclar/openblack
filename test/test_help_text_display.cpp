@@ -39,6 +39,7 @@ HelpTextDisplay Settled(int height = 1080)
 std::vector<std::u16string> Words(const TextFrame& frame)
 {
 	std::vector<std::u16string> out;
+	out.reserve(frame.runs.size());
 	for (const auto& run : frame.runs)
 	{
 		out.push_back(run.text);

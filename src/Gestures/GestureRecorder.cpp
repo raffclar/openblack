@@ -42,6 +42,7 @@ bool IsSet(const RecordedPoint& point)
 bool Apart(const RecordedPoint& a, const RecordedPoint& b)
 {
 	const auto step = b.screen - a.screen;
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	return !(std::abs(step.x) < k_SamePlacePixels && std::abs(step.y) < k_SamePlacePixels);
 }
 

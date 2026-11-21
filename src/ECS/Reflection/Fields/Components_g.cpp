@@ -20,8 +20,6 @@
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
-namespace components = openblack::ecs::components;
-
 namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_g(entt::meta_ctx& context);

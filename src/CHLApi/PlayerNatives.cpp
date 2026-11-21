@@ -147,12 +147,15 @@ using openblack::Locator;
 using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::Transform;
 
+namespace
+{
 /// Whether a player that a script names is a player of this game. The players of a land are the 8 of the game. A
 /// network game with more gods has the gods after the seventh too: the script numbers 9 to 33 name them (deviation 165).
-[[nodiscard]] static bool ScriptNamesPlayer(PlayerNames player)
+[[nodiscard]] bool ScriptNamesPlayer(PlayerNames player)
 {
 	return static_cast<size_t>(player) < openblack::ecs::game_players::Count();
 }
+} // namespace
 
 /// The player that these natives name by its place in the game's player list, from 0. None past the last player.
 std::optional<PlayerNames> ScriptPlayerByIndex(uint32_t index)
@@ -194,10 +197,12 @@ void SetAlignment() // 059 SET_ALIGNMENT
 	Locator::alignmentSystem::value().AddPlayerAlignment(*player, change);
 }
 
+namespace
+{
 /// An influence a script makes for a player, at a place or going about with an object: within it the player has
 /// influence, or none at all for an anti-influence. It takes its place in the scripts' table as made by a script; none for
 /// a player there isn't.
-static entt::entity CreateScriptInfluence(uint32_t player, float radius, bool anti, glm::vec3 position, entt::entity follows)
+entt::entity CreateScriptInfluence(uint32_t player, float radius, bool anti, glm::vec3 position, entt::entity follows)
 {
 	if (player >= ecs::game_players::Count())
 	{
@@ -211,6 +216,7 @@ static entt::entity CreateScriptInfluence(uint32_t player, float radius, bool an
 	RegisterCreated(ring);
 	return ring;
 }
+} // namespace
 
 void InfluenceObject() // 060 INFLUENCE_OBJECT
 {

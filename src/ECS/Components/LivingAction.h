@@ -38,7 +38,6 @@ struct LivingAction
 	    : states {static_cast<uint8_t>(topState), static_cast<uint8_t>(VillagerStates::InvalidState),
 	              static_cast<uint8_t>(VillagerStates::InvalidState)}
 	    , turnsUntilStateChange(turnsUntilStateChange)
-	    , turnsSinceStateChange(0)
 	{
 	}
 
@@ -47,7 +46,6 @@ struct LivingAction
 	    : states {static_cast<uint8_t>(topState), static_cast<uint8_t>(LivingStates::LivingInvalid),
 	              static_cast<uint8_t>(LivingStates::LivingInvalid)}
 	    , turnsUntilStateChange(turnsUntilStateChange)
-	    , turnsSinceStateChange(0)
 	{
 	}
 

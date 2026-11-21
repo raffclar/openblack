@@ -62,6 +62,7 @@ void Magic::DrawTownMiracles() noexcept
 	}
 	// The towns by their numbers
 	std::vector<uint32_t> ids;
+	ids.reserve(towns.size());
 	for (const auto& [id, entity] : towns)
 	{
 		ids.push_back(id);

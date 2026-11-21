@@ -51,27 +51,27 @@ public:
 	void SetClimateRain(int32_t index, float desire, int32_t dryDays, int32_t rainingDays, int32_t raining) override;
 	void SetClimateTemperature(int32_t index, float temperature, float targetTemperature) override;
 	void SetClimateWind(int32_t index, float windX, float windZ, float angle) override;
-	void AddLandStorm(int32_t climateIndex, const script_weather::LandStorm& storm) override;
+	void AddLandStorm(int32_t climateIndex, const script_weather::LandStorm& land) override;
 	void SetClimateSystemEnabled(bool enabled) override { _climateSystemEnabled = enabled; }
 	void SetStormCreationEnabled(bool enabled) override { _stormCreationEnabled = enabled; }
 	[[nodiscard]] bool IsClimateSystemEnabled() const override { return _climateSystemEnabled; }
 	[[nodiscard]] bool IsStormCreationEnabled() const override { return _stormCreationEnabled; }
 
-	void ForceStorm(const ForcedStorm& storm) override;
-	void EndStorm(entt::entity storm) override;
-	[[nodiscard]] bool StormLives(entt::entity storm) const override;
-	entt::entity AddStandingStorm(const script_weather::LandStorm& storm) override;
+	void ForceStorm(const ForcedStorm& forced) override;
+	void EndStorm(entt::entity entity) override;
+	[[nodiscard]] bool StormLives(entt::entity entity) const override;
+	entt::entity AddStandingStorm(const script_weather::LandStorm& land) override;
 	void SetBackgroundWeather(const components::WeatherInfo& weather) override;
 	[[nodiscard]] components::WeatherInfo GetBackgroundWeather() const override { return _background; }
 	[[nodiscard]] glm::vec2 GetAmbientWind() const override { return _ambientWind; }
 	void ClearStorms() override;
 	void StrikeLightning(bool bolt) override;
 
-	entt::entity AddMiracleStorm(const MiracleStorm& storm) override;
-	bool MoveMiracleStorm(entt::entity storm, glm::vec3 centre) override;
+	entt::entity AddMiracleStorm(const MiracleStorm& miracle) override;
+	bool MoveMiracleStorm(entt::entity entity, glm::vec3 centre) override;
 	void KillStormsInArea(glm::vec3 position, float radius) override;
-	void RemoveMiracleStorm(entt::entity storm) override;
-	entt::entity CreateWeatherThing(const ScriptStorm& storm) override;
+	void RemoveMiracleStorm(entt::entity entity) override;
+	entt::entity CreateWeatherThing(const ScriptStorm& script) override;
 	bool ChangeWeatherThing(entt::entity thing, const std::function<void(components::Storm&)>& change) override;
 	bool MoveWeatherThing(entt::entity thing, glm::vec3 destination) override;
 	bool SetWeatherThingSpeed(entt::entity thing, float speed) override;

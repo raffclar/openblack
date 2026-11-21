@@ -66,7 +66,7 @@ TEST(TornadoMaths, TheWallWidensWithTheSquareOfTheHeight)
 
 TEST(TornadoMaths, TheAxisBendsAndWiggles)
 {
-	tornado::Funnel funnel;
+	const tornado::Funnel funnel;
 	const glm::vec3 base {0.0f, 0.0f, 0.0f};
 	const glm::vec3 top {100.0f, 100.0f, 0.0f};
 	const auto foot = tornado::AxisCentre(funnel, base, top, 0.0f);

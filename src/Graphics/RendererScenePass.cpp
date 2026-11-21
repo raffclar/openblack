@@ -8,7 +8,7 @@
  *******************************************************************************/
 
 // The renderer is one of the locator's implementations
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cstdint>
 
@@ -490,14 +490,14 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 
 		// clang-format off
 		// The land and its small bump detail come premultiplied over the sea
-		constexpr auto defaultState = 0u
+		constexpr auto k_DefaultState = 0u
 			| BGFX_STATE_WRITE_MASK
 			| BGFX_STATE_DEPTH_TEST_GREATER
 			| BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA)
 			| BGFX_STATE_MSAA
 		;
 
-		constexpr auto discard = 0u
+		constexpr auto k_Discard = 0u
 			| BGFX_DISCARD_INSTANCE_DATA
 			| BGFX_DISCARD_INDEX_BUFFER
 			| BGFX_DISCARD_TRANSFORM
@@ -547,7 +547,7 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			                                 coarsePages != nullptr ? *coarsePages : island.GetBlockTextures());
 			SetObjectShadowUniforms(*terrainShader);
 			terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
-			terrainShader->SetUniformValue("u_haze", &_haze[0]);
+			terrainShader->SetUniformValue("u_haze", _haze.data());
 			terrainShader->SetUniformValue("u_hazeColour", &_haze[1]);
 			terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
 			terrainShader->SetUniformValue("u_landClip", &u_landClip);
@@ -649,8 +649,8 @@ void Renderer::DrawPassLand(const DrawSceneDesc& desc, const ScenePass& pass) co
 			groundShadowBlockUniform.Set(&u_groundShadowBlock);
 			block.BindVertices();
 			triangles.page->Bind(triangles.count, triangles.first);
-			bgfx::setState(defaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
-			terrainShader->Submit(static_cast<bgfx::ViewId>(landViewId), blockDepth(block), discard);
+			bgfx::setState(k_DefaultState | (desc.cullBack ? BGFX_STATE_CULL_CCW : BGFX_STATE_CULL_CW), 0);
+			terrainShader->Submit(static_cast<bgfx::ViewId>(landViewId), blockDepth(block), k_Discard);
 		};
 		if (!blocks.empty())
 		{
@@ -1031,7 +1031,7 @@ void Renderer::DrawPassCreatures(const DrawSceneDesc& desc, const ScenePass& pas
 	{
 		const RenderContext::InstancedDrawDesc placers {0, 1, false};
 		const auto loaded = [&meshManager](entt::id_type id) { return meshManager.Contains(id); };
-		for (int32_t type = static_cast<int32_t>(CreatureType::Cow); type < static_cast<int32_t>(CreatureType::_COUNT); ++type)
+		for (auto type = static_cast<int32_t>(CreatureType::Cow); type < static_cast<int32_t>(CreatureType::_COUNT); ++type)
 		{
 			const auto ids = creature_morph::MeshesOf(static_cast<CreatureType>(type), creature_morph::Morph {}, loaded);
 			if (!meshManager.Contains(ids.base))
@@ -1311,7 +1311,7 @@ void Renderer::DrawPassTranslucent(const DrawSceneDesc& desc, const ScenePass& p
 			{
 				continue;
 			}
-			RenderContext::InstancedDrawDesc placers {soul.instance, 1, false};
+			const RenderContext::InstancedDrawDesc placers {soul.instance, 1, false};
 			const EntityPose soulPose {.bones = soul.bones, .morphTargets = nullptr};
 			// A soul is a model that moves by its bones, so its sort uses the key of a placed model
 			submitDesc.sortDepth =
@@ -2745,7 +2745,7 @@ void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass)
 				    const auto* alpha = found->alpha;
 				    // A sprite that moves between the turns is drawn at its drawn place
 				    const auto placed = drawnPlaces.Of(entity, transform);
-				    glm::mat4 modelMatrix = glm::mat4(1.0f);
+				    auto modelMatrix = glm::mat4(1.0f);
 				    modelMatrix = glm::translate(modelMatrix, placed.position);
 				    modelMatrix *= glm::mat4(placed.rotation);
 				    modelMatrix = glm::scale(modelMatrix, placed.scale);

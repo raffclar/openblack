@@ -42,7 +42,7 @@ entt::entity MakePart(ecs::Registry& registry, BoatFilmPart::Role role, const gl
 
 TEST(BoatFilmBoat, NoFilmGivesNoBoat)
 {
-	ecs::Registry registry;
+	const ecs::Registry registry;
 	EXPECT_FALSE(ecs::boat_film::ShownBoatMatrix(registry).has_value());
 }
 

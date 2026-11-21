@@ -100,7 +100,7 @@ TEST(EditorCreatureActs, EachActWithItsUsualNumbersCanGo)
 
 TEST(EditorCreatureActs, AnActThatIsNotKnownIsRefused)
 {
-	EditorCreatureAct edit {.act = static_cast<uint8_t>(creature_edit_acts::k_ActCount)};
+	const EditorCreatureAct edit {.act = static_cast<uint8_t>(creature_edit_acts::k_ActCount)};
 	EXPECT_TRUE(ActRefusal(edit).has_value());
 }
 

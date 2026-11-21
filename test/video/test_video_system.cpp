@@ -20,7 +20,7 @@
 
 #include <gtest/gtest.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "BinkTestFiles.h"
 #include "ECS/Systems/Implementations/VideoSystem.h"
 

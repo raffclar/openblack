@@ -68,7 +68,7 @@ namespace detail
 	{
 		return static_cast<float>(value);
 	}
-	const volatile float narrowed = static_cast<float>(value);
+	const volatile auto narrowed = static_cast<float>(value);
 	return narrowed;
 }
 
@@ -320,6 +320,7 @@ namespace detail
 [[nodiscard]] constexpr int32_t ToInteger(double value)
 {
 	constexpr double k_Int64Limit = 9223372036854775808.0; // 2 to the power 63
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(value > -k_Int64Limit && value < k_Int64Limit))
 	{
 		return 0;

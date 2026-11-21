@@ -135,8 +135,8 @@ TEST(SpiritCling, TheGoodAdvisorsPitchLessonHoldIsJustBelowTheBottom)
 TEST(SpiritCling, AClingingAdvisorTakesItsHoldFromTheScreen)
 {
 	const Screen screen {.width = 2560, .height = 1440};
-	DudeData good;
-	DudeData evil;
+	const DudeData good;
+	const DudeData evil;
 	Queries queries;
 	queries.localRand = [](int32_t) { return 0u; };
 	queries.localFloatRand = [](float) { return 0.0f; };

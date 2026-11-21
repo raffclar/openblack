@@ -10,7 +10,7 @@
 // How a seed keeps a miracle for one more cast, how a seed is discarded, and how gestures power up the held
 // seed.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <optional>
 #include <utility>

@@ -54,7 +54,7 @@ TEST(HandMorph, JumpsStraightToTheAlignmentOnceFarEnough)
 TEST(HandMorph, ANewLandKeepsTheLookOfTheLastLand)
 {
 	// The hand of the last land shows 0.5, and its player has gone to 0.52. It left the influence of its player.
-	hand_morph::State state {.target = 0.52f, .drawn = 0.5f, .inInfluence = false};
+	const hand_morph::State state {.target = 0.52f, .drawn = 0.5f, .inInfluence = false};
 	auto kept = hand_morph::KeptForNextLand(state);
 	EXPECT_FLOAT_EQ(kept.drawn, 0.5f);
 	EXPECT_FLOAT_EQ(kept.target, 0.52f);

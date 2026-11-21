@@ -18,7 +18,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/CreaturePhysiologySystem.h"
 
 using namespace openblack;

@@ -9,7 +9,7 @@
 
 // What a creature believes about a thing, and how useful it finds the thing for a desire
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 
@@ -190,7 +190,6 @@ using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems::mind_detail;
 using creature_desires::Desire;
 using creature_mind_model::TreeKind;
-using creature_plan_actions::Target;
 
 namespace town_compassion = openblack::creature_town_compassion;
 

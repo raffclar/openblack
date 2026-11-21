@@ -182,7 +182,7 @@ TEST(SurfaceOfRevolution, TheDispenserSwirlIsDrawnAsALitDiskOverTheLand)
 	FlatWorld world;
 	world.slope = 0.5f;
 	FixedRandom random;
-	maths::ValueNoise noise;
+	const maths::ValueNoise noise;
 	auto file = psys::ParticleFile::Parse(k_Swirl);
 	ASSERT_TRUE(file.has_value());
 	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)), EffectServices {classes, world, random, noise},
@@ -246,7 +246,7 @@ ENDCLASS
 	const auto classes = ParticleClassRegistry::WithAllClasses();
 	FlatWorld world;
 	FixedRandom random;
-	maths::ValueNoise noise;
+	const maths::ValueNoise noise;
 	auto file = psys::ParticleFile::Parse(text);
 	ASSERT_TRUE(file.has_value());
 	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)), EffectServices {classes, world, random, noise},
@@ -331,7 +331,7 @@ TEST(SurfaceOfRevolution, TheSurfaceReadsWhetherItUsesTheTextureAlpha)
 	const auto classes = ParticleClassRegistry::WithAllClasses();
 	FlatWorld world;
 	FixedRandom random;
-	maths::ValueNoise noise;
+	const maths::ValueNoise noise;
 	auto text = k_Swirl;
 	const auto replace = [&text](const std::string& from, const std::string& to) {
 		const auto at = text.find(from);

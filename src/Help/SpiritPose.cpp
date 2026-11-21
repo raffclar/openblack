@@ -144,7 +144,7 @@ glm::vec2 help::spirits::HeadAngles(std::span<const glm::mat4> world,
 	}
 	const float across = std::clamp(std::atan2(local.z, local.y), -k_HeadLimit, k_HeadLimit);
 	const float up = std::clamp(std::asin(std::clamp(local.x, -1.0f, 1.0f)), -k_HeadLimit, k_HeadLimit);
-	return glm::vec2(across * k_HeadScale, up * k_HeadScale);
+	return {across * k_HeadScale, up * k_HeadScale};
 }
 
 glm::vec3 help::spirits::Fingertip(std::span<const glm::mat4> world, const DudeData& data, const glm::vec3& fallback)

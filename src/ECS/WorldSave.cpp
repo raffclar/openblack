@@ -476,6 +476,7 @@ void LogWorldReport(const reflection::WorldSaveReport& report)
 		SPDLOG_LOGGER_ERROR(Log(), "{}", synced_state::UnregisteredLine(fresh));
 	}
 	std::vector<std::string> unsaved;
+	unsaved.reserve(report.unsavedValues.size());
 	for (const auto& value : report.unsavedValues)
 	{
 		unsaved.push_back(value.place + " (" + value.type + ")");
@@ -572,6 +573,7 @@ std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx
 	timed(ready(systems.tag, systems.bytes));
 	SPDLOG_LOGGER_INFO(Log(), "The saved world's blocks took (ms):{}", times);
 	std::vector<std::string> unsaved;
+	unsaved.reserve(summary.context.size());
 	for (const auto& value : summary.context)
 	{
 		unsaved.push_back("context " + value.place + " (" + value.type + ")");

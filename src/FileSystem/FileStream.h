@@ -31,7 +31,7 @@ public:
 
 	std::string GetLine() override;
 
-	bool IsEndOfFile() const override;
+	[[nodiscard]] bool IsEndOfFile() const override;
 
 protected:
 	FILE* _file {nullptr};

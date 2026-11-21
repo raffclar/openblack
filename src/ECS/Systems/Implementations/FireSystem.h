@@ -83,7 +83,7 @@ private:
 	components::Fire* FindOrCreate(entt::entity object, std::optional<PlayerNames> player, entt::entity source);
 	void Process(entt::entity object);
 	void Spread(entt::entity object, float radius);
-	void HeatTransfer(entt::entity fire, entt::entity target);
+	void HeatTransfer(entt::entity source, entt::entity target);
 	/// The fire goes out and is taken off the object, which the living think of again as they did before it burned
 	void Delete(entt::entity object);
 	/// The fire is taken off the object and out of its blaze, with its reaction and sound; whether it had one

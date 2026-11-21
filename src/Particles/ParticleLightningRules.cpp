@@ -174,28 +174,28 @@ public:
 	}
 
 	explicit Lightning(const ParticleObject& object)
-	    : creator(object.String("PCreator"))
-	    , lightMapCreator(object.String("PCreatorLightMapAtom"))
-	    , forkGroup(object.Int("ForkGroup", -1))
-	    , commonGlowGroup(object.Int("CommonGlowGroup", -1))
-	    , lightMapGroup(object.Int("LightMapGroup", -1))
-	    , maxObjects(std::max(1, object.Int("MaxLightningObjects", 50)))
-	    , minObjects(std::max(1, object.Int("MinLightningObjects", 3)))
-	    , atOnce(std::max(1, object.Int("MaxLightningObjectsAtOnce", 10)))
-	    , maxJoints(std::max(2, object.Int("MaxJointsPerFork", 10)))
-	    , splitAngle(object.Float("SplitAngle", std::numbers::pi_v<float> / 2.0f))
-	    , randomFrac(object.Float("RandomFrac", 0.1f))
-	    , forkScale(object.Float("ForkScale", 1.0f))
-	    , forkScaleProvider(object.String("FP_ForkScale"))
-	    , searchRadius(object.String("SearchRadius"))
-	    , defaultSearchRadius(object.Float("DefaultSearchRadius", 20.0f))
-	    , castingFromHand(object.Bool("CastingFromHand", true))
-	    , takeTargetsFromSpell(object.Bool("TakeTargetsFromManager", false))
-	    , renewTargetsOnMove(object.Bool("RenewTargetsOnMove", false))
-	    , renewTargetsOnMoveFrac(object.Float("RenewTargetsOnMoveFrac", 0.5f))
-	    , renewSearchEvery(object.Float("RenewSearchEvery", 1.0f))
-	    , texturesToTile(object.Int("NumTexturesToTile", -1))
-	    , sound({.action = object.Sound("SoundLightning")})
+	    : _creator(object.String("PCreator"))
+	    , _lightMapCreator(object.String("PCreatorLightMapAtom"))
+	    , _forkGroup(object.Int("ForkGroup", -1))
+	    , _commonGlowGroup(object.Int("CommonGlowGroup", -1))
+	    , _lightMapGroup(object.Int("LightMapGroup", -1))
+	    , _maxObjects(std::max(1, object.Int("MaxLightningObjects", 50)))
+	    , _minObjects(std::max(1, object.Int("MinLightningObjects", 3)))
+	    , _atOnce(std::max(1, object.Int("MaxLightningObjectsAtOnce", 10)))
+	    , _maxJoints(std::max(2, object.Int("MaxJointsPerFork", 10)))
+	    , _splitAngle(object.Float("SplitAngle", std::numbers::pi_v<float> / 2.0f))
+	    , _randomFrac(object.Float("RandomFrac", 0.1f))
+	    , _forkScale(object.Float("ForkScale", 1.0f))
+	    , _forkScaleProvider(object.String("FP_ForkScale"))
+	    , _searchRadius(object.String("SearchRadius"))
+	    , _defaultSearchRadius(object.Float("DefaultSearchRadius", 20.0f))
+	    , _castingFromHand(object.Bool("CastingFromHand", true))
+	    , _takeTargetsFromSpell(object.Bool("TakeTargetsFromManager", false))
+	    , _renewTargetsOnMove(object.Bool("RenewTargetsOnMove", false))
+	    , _renewTargetsOnMoveFrac(object.Float("RenewTargetsOnMoveFrac", 0.5f))
+	    , _renewSearchEvery(object.Float("RenewSearchEvery", 1.0f))
+	    , _texturesToTile(object.Int("NumTexturesToTile", -1))
+	    , _sound({.action = object.Sound("SoundLightning")})
 	{
 	}
 
@@ -210,7 +210,7 @@ public:
 		auto& bolt = *std::any_cast<Bolt>(&slot.data);
 		bolt.life += effect.GetDt();
 		const auto& info = effect.GetProcessInfo();
-		bolt.origin = castingFromHand                ? info.handPosition
+		bolt.origin = _castingFromHand               ? info.handPosition
 		              : collection.parent != nullptr ? effect.GlobalPosition(*collection.parent)
 		                                             : effect.GetOrigin();
 		// The cone points the way the camera looks
@@ -218,7 +218,7 @@ public:
 		{
 			bolt.heading = x87::RoundToFloat(x87::Atan2(info.cameraForward.z, info.cameraForward.x));
 		}
-		bolt.forkScale = forkScale * (forkScaleProvider.empty() ? 1.0f : effect.FloatProvider(forkScaleProvider, 1.0f));
+		bolt.forkScale = _forkScale * (_forkScaleProvider.empty() ? 1.0f : effect.FloatProvider(_forkScaleProvider, 1.0f));
 		if (effect.Closing())
 		{
 			Unlink(bolt);
@@ -241,12 +241,12 @@ public:
 		}
 		auto& root = *collection.atoms.front();
 		// The thunder plays while the miracle is being cast
-		if (!sound.Silent())
+		if (!_sound.Silent())
 		{
-			auto* playing = FindAtomSound(root, sound.action.sound);
+			auto* playing = FindAtomSound(root, _sound.action.sound);
 			if (info.enabled && playing == nullptr)
 			{
-				StartAtomSound(effect, root, sound);
+				StartAtomSound(effect, root, _sound);
 			}
 			else if (!info.enabled && playing != nullptr)
 			{
@@ -277,21 +277,21 @@ private:
 
 	[[nodiscard]] float SearchRadius(const Effect& effect) const
 	{
-		return searchRadius.empty() ? defaultSearchRadius : effect.FloatProvider(searchRadius, defaultSearchRadius);
+		return _searchRadius.empty() ? _defaultSearchRadius : effect.FloatProvider(_searchRadius, _defaultSearchRadius);
 	}
 
 	/// Looked for again every so often, or once the origin moved far enough from where they were looked for
 	[[nodiscard]] bool Renew(const Effect& effect, const Bolt& bolt) const
 	{
-		if (renewSearchEvery > 0.0f && bolt.life > renewSearchEvery)
+		if (_renewSearchEvery > 0.0f && bolt.life > _renewSearchEvery)
 		{
 			return true;
 		}
-		if (!renewTargetsOnMove)
+		if (!_renewTargetsOnMove)
 		{
 			return false;
 		}
-		const float limit = SearchRadius(effect) * renewTargetsOnMoveFrac;
+		const float limit = SearchRadius(effect) * _renewTargetsOnMoveFrac;
 		return limit * limit < maths::MovedSquared(bolt.searchOrigin, bolt.origin);
 	}
 
@@ -304,7 +304,7 @@ private:
 		const float radius = SearchRadius(effect);
 		auto& world = effect.Services().world;
 		// Later searches find no more than the first did
-		const auto most = static_cast<size_t>(bolt.firstCount.value_or(static_cast<size_t>(maxObjects)));
+		const auto most = static_cast<size_t>(bolt.firstCount.value_or(static_cast<size_t>(_maxObjects)));
 		const auto take = [&bolt](const StrikeCandidate& candidate) {
 			bolt.targets.push_back({.object = candidate.object,
 			                        .ground = candidate.position,
@@ -317,12 +317,12 @@ private:
 			const float dz = point.z - bolt.origin.z;
 			return dx * dx + dz * dz < radius * radius;
 		};
-		if (castingFromHand)
+		if (_castingFromHand)
 		{
 			// In the cone in front of the hand. Keep the cosines and the sine as floats.
 			const float cosHeading = x87::RoundToFloat(x87::Cos(bolt.heading));
 			const float sinHeading = x87::RoundToFloat(x87::Sin(bolt.heading));
-			const float cosHalfAngle = x87::RoundToFloat(x87::Cos(splitAngle));
+			const float cosHalfAngle = x87::RoundToFloat(x87::Cos(_splitAngle));
 			for (const auto& candidate : world.StrikeCandidates(bolt.origin, maths::StrikeSearchCells(radius)))
 			{
 				if (bolt.targets.size() >= most)
@@ -335,7 +335,7 @@ private:
 				}
 			}
 		}
-		else if (!takeTargetsFromSpell)
+		else if (!_takeTargetsFromSpell)
 		{
 			// Anything round it, within the radius across the land
 			for (const auto& candidate : world.StrikeCandidates(bolt.origin, maths::CloudSearchCells(radius)))
@@ -367,21 +367,21 @@ private:
 			}
 		}
 		// The rest are points on the ground: ahead of a hand, anywhere round otherwise
-		while (static_cast<int>(bolt.targets.size()) < minObjects)
+		while (static_cast<int>(bolt.targets.size()) < _minObjects)
 		{
-			const float angle = castingFromHand ? bolt.heading + effect.Random(k_GroundPointSpread)
-			                                    : effect.Random(2.0f * std::numbers::pi_v<float>);
+			const float angle = _castingFromHand ? bolt.heading + effect.Random(k_GroundPointSpread)
+			                                     : effect.Random(2.0f * std::numbers::pi_v<float>);
 			const float distance = effect.Random(k_GroundPointReach * radius);
-			const auto search = castingFromHand        ? maths::GroundPointSearch::Hand
-			                    : takeTargetsFromSpell ? maths::GroundPointSearch::SpellTargets
-			                                           : maths::GroundPointSearch::Around;
+			const auto search = _castingFromHand        ? maths::GroundPointSearch::Hand
+			                    : _takeTargetsFromSpell ? maths::GroundPointSearch::SpellTargets
+			                                            : maths::GroundPointSearch::Around;
 			const auto offset = maths::GroundPointOffset(search, angle, distance);
 			glm::vec3 point(offset.x + bolt.origin.x, 0.0f, offset.y + bolt.origin.z);
 			point.y = world.LandHeight({point.x, point.z}) + k_GroundPointHeight;
 			bolt.targets.push_back({.object = entt::null, .ground = point});
 		}
 		// A creature among a hand's targets takes every fork
-		if (castingFromHand)
+		if (_castingFromHand)
 		{
 			std::vector<bool> drawsBolt;
 			drawsBolt.reserve(bolt.targets.size());
@@ -416,15 +416,15 @@ private:
 	{
 		collection.atoms.clear();
 		bolt.glowJoint = nullptr;
-		const auto* jointCreator = effect.FindCreator(creator);
+		const auto* jointCreator = effect.FindCreator(_creator);
 		auto& root = effect.NewAtom(collection, jointCreator, {});
 		root.visible = false;
-		const std::vector<int> groups(maths::ForkCount(bolt.targets.size()), forkGroup);
+		const std::vector<int> groups(maths::ForkCount(bolt.targets.size()), _forkGroup);
 		effect.AddSubCollections(root, groups);
 		for (auto& fork : root.subCollections)
 		{
 			fork->interpolated = false;
-			for (int i = 0; i < maxJoints; ++i)
+			for (int i = 0; i < _maxJoints; ++i)
 			{
 				auto& joint = effect.NewAtom(*fork, jointCreator, {});
 				// Only the trunk's start keeps up with the hand between steps
@@ -433,7 +433,7 @@ private:
 		}
 		bolt.root = &root;
 		// A bolt from a hand shows itself to the others, which it may clash with
-		if (castingFromHand && !bolt.share)
+		if (_castingFromHand && !bolt.share)
 		{
 			auto& world = effect.Services().world;
 			bolt.share = std::make_shared<BoltShare>();
@@ -536,13 +536,13 @@ private:
 			LayJoints(effect, bolt, trunk, 0, bolt.origin, meeting, 1.0f);
 			// The glow where they meet, on the trunk's last joint
 			auto* last = trunk.atoms.back().get();
-			if (bolt.glowJoint != last && commonGlowGroup >= 0)
+			if (bolt.glowJoint != last && _commonGlowGroup >= 0)
 			{
 				if (bolt.glowJoint != nullptr)
 				{
 					bolt.glowJoint->subCollections.clear();
 				}
-				const std::vector<int> glow {commonGlowGroup};
+				const std::vector<int> glow {_commonGlowGroup};
 				effect.AddSubCollections(*last, glow);
 				for (auto& collection : last->subCollections)
 				{
@@ -560,7 +560,7 @@ private:
 			}
 			return;
 		}
-		const int limit = maths::StrikesAtOnce(atOnce, total);
+		const int limit = maths::StrikesAtOnce(_atOnce, total);
 		std::vector<size_t> striking;
 		const float chance = static_cast<float>(limit) / static_cast<float>(total);
 		for (int i = 0; i < total && static_cast<int>(striking.size()) < limit; ++i)
@@ -662,12 +662,12 @@ private:
 		const auto joints = static_cast<int>(fork.atoms.size());
 		const auto way = split - origin;
 		const float length = x87::LengthZyx(way);
-		if (texturesToTile != -1)
+		if (_texturesToTile != -1)
 		{
-			fork.textureRepeats = maths::TextureRepeats(texturesToTile, length, bolt.centroidDistance);
+			fork.textureRepeats = maths::TextureRepeats(_texturesToTile, length, bolt.centroidDistance);
 		}
 		const bool trunk = depth == 0 && &fork == bolt.root->subCollections.front().get();
-		const bool glued = trunk && castingFromHand && effect.IsMyInterfaceCasting();
+		const bool glued = trunk && _castingFromHand && effect.IsMyInterfaceCasting();
 		const float step = 1.0f / static_cast<float>(joints - 1);
 		for (int i = 0; i < joints; ++i)
 		{
@@ -677,8 +677,8 @@ private:
 			auto position = origin + way * t;
 			if (i != 0 && i != joints - 1)
 			{
-				position.x += (effect.Random(2.0f * randomFrac) - randomFrac) * length;
-				position.z += (effect.Random(2.0f * randomFrac) - randomFrac) * length;
+				position.x += (effect.Random(2.0f * _randomFrac) - _randomFrac) * length;
+				position.z += (effect.Random(2.0f * _randomFrac) - _randomFrac) * length;
 			}
 			joint.position = position;
 			joint.ruleScale = maths::ForkJointScale(scale * bolt.forkScale, depth, i, step);
@@ -699,9 +699,9 @@ private:
 	void Hit(Effect& effect, Bolt& bolt, BoltTarget& target, const glm::vec3& centroid, float strength,
 	         const Effect* clashed) const
 	{
-		if (lightMapGroup >= 0)
+		if (_lightMapGroup >= 0)
 		{
-			if (auto* light = effect.NewAtomInGroup(lightMapGroup, effect.FindCreator(lightMapCreator)))
+			if (auto* light = effect.NewAtomInGroup(_lightMapGroup, effect.FindCreator(_lightMapCreator)))
 			{
 				light->position =
 				    glm::vec3(centroid.x, effect.Services().world.LandHeight({centroid.x, centroid.z}), centroid.z);
@@ -733,28 +733,28 @@ private:
 		}
 	}
 
-	std::string creator;
-	std::string lightMapCreator;
-	int forkGroup;
-	int commonGlowGroup;
-	int lightMapGroup;
-	int maxObjects;
-	int minObjects;
-	int atOnce;
-	int maxJoints;
-	float splitAngle;
-	float randomFrac;
-	float forkScale;
-	std::string forkScaleProvider;
-	std::string searchRadius;
-	float defaultSearchRadius;
-	bool castingFromHand;
-	bool takeTargetsFromSpell;
-	bool renewTargetsOnMove;
-	float renewTargetsOnMoveFrac;
-	float renewSearchEvery;
-	int texturesToTile;
-	ParticleSound sound;
+	std::string _creator;
+	std::string _lightMapCreator;
+	int _forkGroup;
+	int _commonGlowGroup;
+	int _lightMapGroup;
+	int _maxObjects;
+	int _minObjects;
+	int _atOnce;
+	int _maxJoints;
+	float _splitAngle;
+	float _randomFrac;
+	float _forkScale;
+	std::string _forkScaleProvider;
+	std::string _searchRadius;
+	float _defaultSearchRadius;
+	bool _castingFromHand;
+	bool _takeTargetsFromSpell;
+	bool _renewTargetsOnMove;
+	float _renewTargetsOnMoveFrac;
+	float _renewSearchEvery;
+	int _texturesToTile;
+	ParticleSound _sound;
 };
 
 /// The storms' forked bolts: each point of light a storm lets down from its cloud, the last given first, becomes an atom
@@ -793,7 +793,7 @@ public:
 			StartAtomSound(effect, atom, thunder);
 		}
 		std::erase_if(collection.atoms, [&](const AtomPtr& atom) {
-			const auto life = atom->data.find(this);
+			auto* const life = atom->data.find(this);
 			return life != atom->data.end() && effect.AtomAge(*atom) > life->second.a.x;
 		});
 		return true;

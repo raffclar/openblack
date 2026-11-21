@@ -216,6 +216,7 @@ inline constexpr uint32_t k_MostServerTurnsInFrame = 10;
 /// the normal speed and a frame of 100 ms, it is 1. A server with no fixed frame time takes the time of a normal turn.
 [[nodiscard]] constexpr uint32_t ServerTurnsInFrame(float speed, std::optional<std::chrono::microseconds> frameTime) noexcept
 {
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 	if (!(speed >= k_FastestSpeed && speed <= k_SlowestSpeed))
 	{
 		return 1;

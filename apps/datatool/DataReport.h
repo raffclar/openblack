@@ -75,7 +75,7 @@ namespace openblack::datatool
 /// The sound placements of the clips of a sound placement file (the .SAS files)
 [[nodiscard]] std::string DescribeSounds(const sas::SASFile& file, bool frames);
 /// The names of a header of enumerations (such as the sound actions) with their values, in the order of the values
-[[nodiscard]] std::string DescribeEnumHeader(std::string_view text);
+[[nodiscard]] std::string DescribeEnumHeader(std::string_view header);
 
 /// A dance file
 [[nodiscard]] std::string DescribeDance(const dance::DanceFile& file);

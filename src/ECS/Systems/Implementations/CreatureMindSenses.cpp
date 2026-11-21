@@ -10,7 +10,7 @@
 // What a creature sees and where it looks: what catches its eye, where its player and the hand are, and the things
 // that it waits for
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 #include <cstring>
@@ -153,8 +153,6 @@
 using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
-
-using creature_desires::Desire;
 
 namespace openblack::ecs::systems::mind_detail
 {

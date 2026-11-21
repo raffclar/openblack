@@ -71,6 +71,7 @@ bool hand_grab::ValidForPlaceInHand(const Holdable& thing)
 		return thing.speciesAllows;
 	case GrabKind::Rock:
 	case GrabKind::DeadTree:
+		// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
 		return !(thing.isRock && thing.radius > k_RockMaxPickUpRadius);
 	case GrabKind::MobileStatic:
 	case GrabKind::MobileObject:
@@ -453,7 +454,7 @@ bool hand_grab::LandsOnRelease(const Landing& landing)
 
 LandedOutcome hand_grab::OutcomeOfLanding(const LandedThing& thing)
 {
-	if (!thing.living && !thing.fence && !(thing.tree && !thing.burning && thing.onLand))
+	if (!thing.living && !thing.fence && (!thing.tree || thing.burning || !thing.onLand))
 	{
 		return LandedOutcome::Settles;
 	}

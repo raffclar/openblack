@@ -54,7 +54,7 @@
 #include "Simulation/CommandLog.h"
 
 // The test builds its own locator
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/Implementations/CreatureHandSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"

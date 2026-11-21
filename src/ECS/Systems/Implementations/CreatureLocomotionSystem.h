@@ -37,7 +37,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ProcessTurn() override;
 	void ShareSearchSteps() override;
-	void CreatureTurn(entt::entity creature) override;
+	void CreatureTurn(entt::entity entity) override;
 	void Update(float turnFraction) override;
 	void ShowTurnEnds() override;
 	void ShowTurnEnd(entt::entity creature) override;
@@ -74,7 +74,7 @@ private:
 	/// The turn that waits until the action of its body ends starts when the body is at rest
 	void StartTurnAtRest(entt::entity creature);
 	/// Starts a move for a fraction of top speed, the creature's state already gathered, to a point or up to a thing
-	MoveResult StartMove(entt::entity creature, components::CreatureLocomotion& locomotion, glm::vec2 point, float fraction,
+	MoveResult StartMove(entt::entity creature, components::CreatureLocomotion& self, glm::vec2 point, float fraction,
 	                     float minDistance, float maxDistance, bool ontoDestination);
 	/// How far round its middle a species' body reaches at a drawn scale of one, worked out once
 	float BodyRadius(CreatureType species);

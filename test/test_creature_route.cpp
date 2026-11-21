@@ -143,7 +143,7 @@ TEST(CreatureRoute, FollowsAnArcRoundItsCircle)
 	clockwise.roundWay = Way::Clockwise;
 	EXPECT_NEAR(LengthOf(clockwise), 15.0f * k_Pi, k_Tolerance);
 	// Leaving the arc along a tangent doesn't turn
-	Route route {.legs = {arc, {.from = {0, 10}, .to = {-20, 10}}}, .segment = 0, .travelled = 0.0f};
+	const Route route {.legs = {arc, {.from = {0, 10}, .to = {-20, 10}}}, .segment = 0, .travelled = 0.0f};
 	EXPECT_NEAR(route.TurnAtEnd(), 0.0f, k_Tolerance);
 	const auto points = route.Points(k_Pi / 18.0f);
 	ASSERT_GE(points.size(), 10u);

@@ -28,7 +28,7 @@ namespace openblack::ecs::reflection
 /// static member VisitPlainFields, so that the save writes zero into the gaps. A field that the visitor does not get is
 /// written as zero, so the visitor must get every field.
 template <typename Type>
-concept HasPlainFields = requires(const Type& value) { Type::VisitPlainFields(value, [](const auto & ... /*fields*/) {}); };
+concept HasPlainFields = requires(const Type& value) { Type::VisitPlainFields(value, [](const auto&... /*fields*/) {}); };
 
 /// The bytes of a plain value, aligned as the value is
 template <typename Type>

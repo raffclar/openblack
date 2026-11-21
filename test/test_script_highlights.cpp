@@ -33,13 +33,12 @@
 #include "Enums.h"
 #include "Resources/ResourceManager.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 
 using namespace openblack;
 using namespace openblack::ecs::script_highlights;
 using openblack::ecs::components::ScriptHighlight;
-using openblack::ecs::components::ScriptHighlightGlow;
 using openblack::ecs::components::Sprite;
 using openblack::ecs::components::Transform;
 using openblack::ecs::systems::ScriptHighlightSystem;

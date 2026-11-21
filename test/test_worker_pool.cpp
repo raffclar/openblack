@@ -111,7 +111,7 @@ TEST(WorkerPool, AStartedCallFinishesEveryJobOnce)
 		WorkerPool pool(threads);
 		for (int round = 0; round < 50; ++round)
 		{
-			const size_t count = static_cast<size_t>(round % 7);
+			const auto count = static_cast<size_t>(round % 7);
 			std::vector<std::atomic<int>> done(count);
 			pool.Start(count, [&done](size_t index, size_t /*lane*/) { done[index].fetch_add(1); });
 			// The caller does other work while the threads do the jobs, then a call of ForEach after Finish
@@ -132,7 +132,7 @@ TEST(WorkerPool, AStartedCallFinishesEveryJobOnce)
 TEST(WorkerPool, PoolsThatShareThreadsUseTheSameLanes)
 {
 	const auto threads = std::make_shared<WorkerThreads>(3);
-	WorkerPool first(threads);
+	const WorkerPool first(threads);
 	WorkerPool second(threads);
 	EXPECT_EQ(first.GetLaneCount(), 4U);
 	EXPECT_EQ(second.GetLaneCount(), 4U);

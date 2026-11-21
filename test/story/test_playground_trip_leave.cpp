@@ -19,7 +19,7 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/Implementations/PlaygroundTripSystem.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"

@@ -10,7 +10,7 @@
 // How a creature chooses what to act on for a desire: the activity, the things it knows of that suit the desire, and
 // what each choice is worth
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <cmath>
 
@@ -190,8 +190,6 @@ using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems::mind_detail;
 using creature_desires::Desire;
-using creature_mind_model::TreeKind;
-using creature_plan_actions::Target;
 
 namespace openblack::ecs::systems::mind_detail
 {

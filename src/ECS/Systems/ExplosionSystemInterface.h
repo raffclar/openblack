@@ -39,7 +39,7 @@ namespace openblack::ecs::systems
 class ExplosionSystemInterface: public SavedStateInterface
 {
 public:
-	virtual ~ExplosionSystemInterface() = default;
+	~ExplosionSystemInterface() override = default;
 
 	/// A mark that only the frames draw: the roots that drop from a dead tree. The rubble of a blast and the hole of a
 	/// tree are piles (see roots_pile). The marks are no things of the world: the world's turns never read them, and a

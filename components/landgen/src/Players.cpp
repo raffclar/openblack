@@ -104,7 +104,7 @@ StartGround players::GroundAt(const Grid<float>& heights, const Grid<float>& ris
 	const int step = std::max(settings.countStep, 1);
 	const auto cx = static_cast<int>(x);
 	const auto cz = static_cast<int>(z);
-	const float cell = static_cast<float>(step * step);
+	const auto cell = static_cast<float>(step * step);
 	StartGround ground {.land = 0.0f, .flat = 0.0f};
 	for (int dx = -whole; dx <= whole; dx += step)
 	{

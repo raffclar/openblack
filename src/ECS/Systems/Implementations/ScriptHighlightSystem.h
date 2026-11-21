@@ -47,9 +47,9 @@ public:
 	entt::entity Create(uint32_t kind, glm::vec3 at, uint32_t challenge) override;
 	entt::entity Restore(const SavedHighlight& saved) override;
 	void SetProperties(entt::entity highlight, uint32_t text, uint32_t category) override;
-	void SetActive(entt::entity highlight, bool active) override;
-	void SetDrawHeight(entt::entity highlight, float height) override;
-	bool Tap(entt::entity highlight, bool byThisPlayer) override;
+	void SetActive(entt::entity entity, bool active) override;
+	void SetDrawHeight(entt::entity entity, float height) override;
+	bool Tap(entt::entity entity, bool byThisPlayer) override;
 	void ProcessTurn() override;
 	void UpdateFrame(float frameMilliseconds, float turnFraction, glm::vec3 camera, std::chrono::milliseconds frameRealTime,
 	                 bool landDrawn) override;

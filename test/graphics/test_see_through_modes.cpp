@@ -57,8 +57,8 @@ constexpr std::array<Mode, graphics::render_modes::k_ModeCount> k_SecondTable {
 /// 5, never below 0, cut to a whole number
 uint8_t GameRef(uint8_t ref, uint8_t alpha)
 {
-	constexpr float k_OneOver255 = std::bit_cast<float>(0x3B808081U);
-	const float product = static_cast<float>(static_cast<int32_t>(ref) * static_cast<int32_t>(alpha));
+	constexpr auto k_OneOver255 = std::bit_cast<float>(0x3B808081U);
+	const auto product = static_cast<float>(static_cast<int32_t>(ref) * static_cast<int32_t>(alpha));
 	float scaled = x87::Sub(x87::Mul(product, k_OneOver255), 5.0f);
 	if (scaled < 0.0f)
 	{

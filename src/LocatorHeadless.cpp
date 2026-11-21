@@ -11,7 +11,7 @@
 // the audio that plays nothing and the sound requests that go to the audio. The simulation does not use this file, so
 // that it does not use the interfaces of the renderer and the audio of the game.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <memory>
 
@@ -30,7 +30,7 @@ void openblack::EmplaceRenderer(std::unique_ptr<graphics::RendererInterface> ren
 		return;
 	}
 	// The two services own the renderer together. The renderer stops when the last of the two lets it go.
-	std::shared_ptr<graphics::RendererInterface> owner = std::move(renderer);
+	const std::shared_ptr<graphics::RendererInterface> owner = std::move(renderer);
 	Locator::rendererInterface::reset(owner.get(), [owner](graphics::RendererInterface* /*renderer*/) {});
 	Locator::rendererRequests::reset(owner.get(), [owner](graphics::RendererRequestsInterface* /*renderer*/) {});
 }

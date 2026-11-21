@@ -169,8 +169,7 @@ std::string FileNamePart(std::string_view text)
 	std::ranges::replace_if(
 	    part,
 	    [](char c) {
-		    return !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' ||
-		             c == '.');
+		    return (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '_' && c != '-' && c != '.';
 	    },
 	    '-');
 	return part;

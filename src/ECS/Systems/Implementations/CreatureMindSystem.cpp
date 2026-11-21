@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "CreatureMindSystem.h"
 
@@ -596,7 +596,6 @@ void CreatureMindSystem::SendReleaseFeedback(entt::entity creature, float feedba
 
 void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 {
-	namespace sources = creature_desires::sources;
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.TryGet<CreatureMindState>(creature);
 	if (mind == nullptr)
@@ -663,9 +662,11 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	LearnFromFeedback(creature, *mind, feedback);
 }
 
+namespace
+{
 /// How far a body is through what it plays: the time of its action, or of its legs in a move, over the length of the
 /// animation that the game keeps for it
-static std::optional<float> BodyShareOf(entt::entity creature, const CreatureAnimation& body)
+std::optional<float> BodyShareOf(entt::entity creature, const CreatureAnimation& body)
 {
 	// A creature in a move counts as a body that does an action: the time of its legs is read
 	const auto* legs = Locator::entitiesRegistry::value().TryGet<const CreatureLocomotion>(creature);
@@ -686,6 +687,7 @@ static std::optional<float> BodyShareOf(entt::entity creature, const CreatureAni
 	}
 	return share->timeMs / *duration;
 }
+} // namespace
 
 std::optional<float> CreatureMindSystem::BodyShare(entt::entity creature) const
 {

@@ -17,9 +17,6 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-namespace openblack::graphics
-{
-
 /// The shadows of trees and big forests, which Black & White bakes into the land's textures as it paints each land
 /// block, from its fixed far sun. They never move: they don't sway with the trees, and change only when a tree is
 /// planted, grows, is felled or taken away.
@@ -36,7 +33,7 @@ namespace openblack::graphics
 ///
 /// A block takes the shadows of the trees standing within 4 cells before it and 5 after it, along both x and z, so a
 /// shadow cast further than that across a block's edge is cut off there.
-namespace tree_shadows
+namespace openblack::graphics::tree_shadows
 {
 
 /// The game's fixed far sun
@@ -106,6 +103,4 @@ void Fill(Coverage& coverage, const std::array<Corner, 3>& corners, const AlphaM
 /// The blocks along one axis taking the shadows of the trees in a cell along it: first and last
 [[nodiscard]] glm::ivec2 BlocksTakingShadowFrom(int cell);
 
-} // namespace tree_shadows
-
-} // namespace openblack::graphics
+} // namespace openblack::graphics::tree_shadows

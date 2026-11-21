@@ -263,7 +263,7 @@ bool leash_rope::Shown(const Showing& showing)
 	}
 	if (showing.local)
 	{
-		return !(showing.handHidden && !showing.scriptShows) && !showing.handHoldsTiedRope;
+		return (!showing.handHidden || showing.scriptShows) && !showing.handHoldsTiedRope;
 	}
 	return showing.creatureFizz < k_HiddenFizz;
 }

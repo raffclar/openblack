@@ -9,7 +9,7 @@
 
 // The prayer power that pays for the seeds, the cast state of the hand, and how the world reacts to a miracle.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <algorithm>
 #include <chrono>

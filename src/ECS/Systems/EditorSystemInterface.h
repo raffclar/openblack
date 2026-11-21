@@ -67,7 +67,7 @@ public:
 		Follow,
 	};
 
-	virtual ~EditorSystemInterface() = default;
+	~EditorSystemInterface() override = default;
 
 	/// Once a frame: lets go of a picked thing that is gone, keeps the camera on the picked thing and finishes a step
 	virtual void Update(std::chrono::microseconds dt) = 0;

@@ -47,7 +47,7 @@ float magic::SeedPower(float store, float costToCreate)
 float magic::SeedSecondsInHand(uint32_t turnsInHand, uint32_t turnMilliseconds)
 {
 	// The float bits of one thousandth, as the game keeps it
-	constexpr float k_Thousandth = std::bit_cast<float>(0x3A83126Fu);
+	constexpr auto k_Thousandth = std::bit_cast<float>(0x3A83126Fu);
 	const float milliseconds = static_cast<float>(turnsInHand) * static_cast<float>(turnMilliseconds);
 	return milliseconds * k_Thousandth;
 }

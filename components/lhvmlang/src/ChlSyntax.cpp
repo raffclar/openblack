@@ -95,7 +95,7 @@ bool IsDecimalNumber(std::string_view text)
 	{
 		return false;
 	}
-	return !(text.size() > 1 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X'));
+	return text.size() <= 1 || text[0] != '0' || (text[1] != 'x' && text[1] != 'X');
 }
 
 template <typename T, typename Parse>

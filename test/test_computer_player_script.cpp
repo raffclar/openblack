@@ -22,7 +22,7 @@
 #include "Locator.h"
 
 // The test makes its own locator
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
 
 using namespace openblack;

@@ -628,7 +628,7 @@ TEST(SaveCreatureObject, ABodyInThePhysicsWritesItsMatrixAndItsSpeeds)
 
 TEST(SaveVanillaFile, TheStartHasTheRevisionAndTheLand)
 {
-	const auto bytes = WriteVanillaFraming(".\\DATA\\LANDSCAPE\\Land1.lnd");
+	const auto bytes = WriteVanillaFraming(R"(.\DATA\LANDSCAPE\Land1.lnd)");
 	EXPECT_EQ(At<uint32_t>(bytes, 0), 0u);
 	EXPECT_EQ(At<uint32_t>(bytes, 4), 17u);
 	const auto framing = ReadVanillaFraming(bytes);

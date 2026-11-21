@@ -336,7 +336,7 @@ TEST(Dances, ADanceGoesWhenWhatItIsDancedForGoes)
 	Registry registry;
 	const auto owner = registry.Create();
 	const auto entity = dances::Create(registry, {.type = DanceInfo::CitadelDance_1, .owner = owner}, nullptr);
-	dances::TurnContext context {.turn = 1, .available = [](entt::entity) { return false; }, .finished = {}};
+	const dances::TurnContext context {.turn = 1, .available = [](entt::entity) { return false; }, .finished = {}};
 	dances::ProcessTurn(registry, entity, context);
 	EXPECT_FALSE(registry.Valid(entity));
 }
@@ -487,10 +487,10 @@ TEST(Dances, AKeyFramesMoveSetsItsGroupGoingAndItsDancersClipsAgain)
 	auto& dance = registry.Get<Dance>(entity);
 	dance.clock = 20.0f;
 	std::vector<entt::entity> playedAgain;
-	dances::TurnContext context {.turn = 1,
-	                             .available = [](entt::entity) { return true; },
-	                             .finished = {},
-	                             .playClipAgain = [&playedAgain](entt::entity e) { playedAgain.push_back(e); }};
+	const dances::TurnContext context {.turn = 1,
+	                                   .available = [](entt::entity) { return true; },
+	                                   .finished = {},
+	                                   .playClipAgain = [&playedAgain](entt::entity e) { playedAgain.push_back(e); }};
 	dances::ProcessTurn(registry, entity, context);
 	EXPECT_EQ(playedAgain, std::vector<entt::entity> {dancer});
 	const auto& group = registry.Get<const Dance>(entity).groups.all[0];

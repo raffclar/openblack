@@ -97,6 +97,7 @@ TEST(CasterBlocks, GivesTheSameCastersAsALookAtEachCaster)
 	for (int test = 0; test < 40; ++test)
 	{
 		std::vector<glm::ivec2> blocks;
+		blocks.reserve(1 + (test % 4));
 		for (int n = 0; n < 1 + (test % 4); ++n)
 		{
 			blocks.emplace_back(place(random) / tree_shadows::k_BlockCells, place(random) / tree_shadows::k_BlockCells);

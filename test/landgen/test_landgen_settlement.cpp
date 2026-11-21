@@ -192,6 +192,7 @@ TEST(LandgenSettlement, NothingGoesOnGroundThatTheLandKeepsClear)
 	}
 	const auto plan = settlement::Make(k_StartX, k_StartZ, keepClear, 9, settings);
 	const auto free = [&keepClear](float x, float z) {
+		// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 		return keepClear.At(static_cast<int>((x / 10.0f) + 0.5f), static_cast<int>((z / 10.0f) + 0.5f)) == 0;
 	};
 	for (const auto& placed : plan.town.buildings)
@@ -444,10 +445,10 @@ TEST(LandgenTowns, NoTownStandsInALake)
 		ASSERT_FALSE(dry.empty());
 		Grid<uint8_t> lakes(land.heights.side, 0);
 		const auto lakeRadius = static_cast<int>(settings.flatRadius);
-		for (size_t i = 0; i < dry.size(); ++i)
+		for (auto i : dry)
 		{
-			const auto cx = static_cast<int>(dry[i].x);
-			const auto cz = static_cast<int>(dry[i].z);
+			const auto cx = static_cast<int>(i.x);
+			const auto cz = static_cast<int>(i.z);
 			for (int dx = -lakeRadius; dx <= lakeRadius; ++dx)
 			{
 				for (int dz = -lakeRadius; dz <= lakeRadius; ++dz)

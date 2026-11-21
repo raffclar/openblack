@@ -47,7 +47,7 @@ std::array<glm::vec2, 4> creature_land_tilt::SamplePoints(const glm::vec3& posit
 int32_t creature_land_tilt::SampleUnit(float metres)
 {
 	constexpr float k_Units = 65536.0f;
-	constexpr float k_Tenth = std::bit_cast<float>(0x3DCCCCCDu);
+	constexpr auto k_Tenth = std::bit_cast<float>(0x3DCCCCCDu);
 	const float units = metres * k_Units;
 	return map_coords::FtoL(units * k_Tenth);
 }

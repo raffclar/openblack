@@ -192,7 +192,7 @@ struct CreatureLocomotion
 [[nodiscard]] inline bool InMove(const CreatureLocomotion& self)
 {
 	using Motion = CreatureLocomotion::Motion;
-	return self.motion != Motion::Standing && !(self.motion == Motion::Turning && self.facingOnly);
+	return self.motion != Motion::Standing && (self.motion != Motion::Turning || !self.facingOnly);
 }
 
 } // namespace openblack::ecs::components

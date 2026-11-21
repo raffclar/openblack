@@ -322,7 +322,7 @@ TEST(CreatureMindFile, ModelKeepsAFileItWasLoadedFrom)
 	{
 		desire.sources = {{.type = 0}};
 	}
-	creature_watching::Knowledge knowledge {
+	const creature_watching::Knowledge knowledge {
 	    .skillsSeen = std::vector<creature_watching::Sighting>(1),
 	    .miraclesSeen = std::vector<creature_watching::Sighting>(2),
 	    .skillsKnown = std::vector<bool>(1, false),
@@ -358,7 +358,7 @@ TEST(CreatureMindFile, FileExamplesComeAfterTheStartingLesson)
 		mind.trees[9].episodes.push_back(
 		    {.desire = 4, .belief = {.type = 7, .attributes = {0, 0, 1, 0, 0, 0, 7}}, .feedback = -0.5f});
 	}
-	creature_desires::Desires fresh;
+	const creature_desires::Desires fresh;
 	auto freshLearnt = creature_mind_model::Fresh(fresh, std::vector<float>(3, 0.0f), {});
 	const std::array k_Allowed {creature_tree::Attribute::Type};
 	creature_mind_model::TeachStartingLesson(freshLearnt, k_Allowed);
@@ -387,7 +387,7 @@ TEST(CreatureMindFile, ASwappedMindKeepsItsOwnExamplesAndAddsTheFileExamples)
 		    {.desire = 2, .belief = {.type = 7, .attributes = {0, 0, 1, 0, 0, 0, 7}}, .feedback = -0.5f});
 	}
 	// The creature's own mind has 9 examples of its own, and one of them knows a skill
-	creature_desires::Desires own;
+	const creature_desires::Desires own;
 	auto ownLearnt = creature_mind_model::Fresh(own, std::vector<float>(3, 0.0f), {});
 	ownLearnt.knowledge.skillsKnown.assign(2, false);
 	ownLearnt.knowledge.skillsKnown[1] = true;
@@ -410,7 +410,7 @@ TEST(CreatureMindFile, ASwappedMindKeepsItsOwnExamplesAndAddsTheFileExamples)
 TEST(CreatureMindFile, KnownIdsPastTheTableStayInTheFile)
 {
 	// A creature with two skill rows knows skill 1 and, from a teach, skill 6 that has no row
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
 	learnt.knowledge.skillsKnown.assign(2, false);
 	learnt.knowledge.skillsKnown[1] = true;
@@ -439,7 +439,7 @@ TEST(CreatureMindFile, KnownIdsPastTheTableStayInTheFile)
 
 TEST(CreatureMindFile, FreshMindWritesACurrentFile)
 {
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	const auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(328, 0.0f), {});
 	const auto file = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 0, 3);
 	const auto bytes = Write(file);
@@ -464,7 +464,7 @@ constexpr std::array<uint8_t, 27> k_GameSavedOtherCreature = {0x21, 0x00, 0x00, 
 
 TEST(CreatureMindFile, TheNamesOfWhoSavedItAreWrittenAsTheGameWritesThem)
 {
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	const auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(328, 0.0f), {});
 
 	auto players = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 0, 0);
@@ -737,8 +737,8 @@ MindFileData AsTheGameSavesItAfterALoad(MindFileData file)
 std::vector<uint8_t> LoadedAndSaved(const MindFileData& file,
                                     const std::function<void(creature_mind_model::LoadedMind&)>& afterLoad = {})
 {
-	creature_desires::Desires fresh;
-	creature_watching::Knowledge knowledge {
+	const creature_desires::Desires fresh;
+	const creature_watching::Knowledge knowledge {
 	    .skillsSeen = std::vector<creature_watching::Sighting>(file.actionsSeen.size()),
 	    .miraclesSeen = std::vector<creature_watching::Sighting>(file.miraclesSeen.size()),
 	    .skillsKnown = std::vector<bool>(file.actionsSeen.size(), false),
@@ -831,7 +831,7 @@ TEST(CreatureMindFile, TreesGoByTheirPlaceInTheFile)
 	mind.trees[4].type = 5;
 	mind.trees[4].desire = 30;
 	mind.trees[4].desireAgain = 31;
-	creature_desires::Desires fresh;
+	const creature_desires::Desires fresh;
 	const auto freshLearnt = creature_mind_model::Fresh(fresh, std::vector<float>(3, 0.0f), {});
 	const auto loaded = creature_mind_model::FromFile(mind, fresh, freshLearnt);
 	const auto activity = static_cast<size_t>(creature_mind_model::TreeKind::Activity);
@@ -854,7 +854,7 @@ TEST(CreatureMindFile, TreesGoByTheirPlaceInTheFile)
 
 TEST(CreatureMindFile, ANewMindWritesItsActivityTreeFirst)
 {
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
 	const std::array k_Allowed {creature_tree::Attribute::Type};
 	creature_mind_model::TeachStartingLesson(learnt, k_Allowed);
@@ -1019,7 +1019,7 @@ TEST(CreatureMindFile, AVersion30MindKeepsItsOwnFieldsAndGetsTheRest)
 
 TEST(CreatureMindFile, ANewCreatureWritesEmptyTattooSlotsAndItsLastNumbers)
 {
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	const auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(k_GameOpinions, 0.0f), {});
 	const auto file = creature_mind_model::ToFile(desires, learnt, 0, 0.0f, 0, 3);
 	EXPECT_EQ(file.tattooHeader, k_EmptyTattoos);
@@ -1051,7 +1051,7 @@ TEST(CreatureMindFile, ALearntExampleKeepsItsKindDesireActionAndPlace)
 {
 	// An example of the activity tree is of the lesson kind 1, of the act-on tree of kind 2. The action is 0, the desire
 	// is the desire of its tree, and the place is where the creature last came across the thing.
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(k_GameOpinions, 0.0f), {});
 	const std::array k_Allowed {creature_tree::Attribute::Type};
 	creature_mind_model::TeachStartingLesson(learnt, k_Allowed);
@@ -1097,7 +1097,7 @@ TEST(CreatureMindFile, ALessonSpreadsToTheDesiresThatDependOnIt)
 {
 	// The desire learns the feedback, and each desire that depends on it the feedback times how much. The feedback is
 	// kept as it is, also above 1.
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(3, 0.0f), {});
 	creature_learning::Dependencies dependencies {};
 	dependencies[4][9] = 0.5f;
@@ -1120,7 +1120,7 @@ TEST(CreatureMindFile, ALessonSpreadsToTheDesiresThatDependOnIt)
 
 TEST(CreatureMindFile, ALoadKeepsTheLeashWordsAndASaveWritesThem)
 {
-	creature_desires::Desires desires;
+	const creature_desires::Desires desires;
 	auto base = creature_mind_model::Fresh(desires, std::vector<float>(k_GameOpinions, 0.0f), {});
 	// The words of a file are kept as they are, the word of no leash too
 	auto file = FullSampleMind();

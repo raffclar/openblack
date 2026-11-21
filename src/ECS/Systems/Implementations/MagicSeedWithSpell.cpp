@@ -14,7 +14,7 @@
 // trees as they grow. It sinks under the land again when the forest goes with its last tree. Out of its player's influence such
 // a seed's miracle closes down. The hand of the seed's player can take the shown seed back.
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include <vector>
 

@@ -230,8 +230,8 @@ int ViewTexture(openblack::pack::PackFile& pack, const std::string& name, const 
 	if (!outFilename.empty())
 	{
 		std::ofstream output(outFilename, std::ios::binary);
-		constexpr std::string_view magic = "DDS ";
-		output.write(reinterpret_cast<const char*>(magic.data()), magic.size());
+		constexpr std::string_view k_Magic = "DDS ";
+		output.write(reinterpret_cast<const char*>(k_Magic.data()), k_Magic.size());
 		output.write(reinterpret_cast<const char*>(&texture.ddsHeader), sizeof(texture.ddsHeader));
 		output.write(reinterpret_cast<const char*>(texture.ddsData.data()), texture.ddsData.size());
 
@@ -656,7 +656,7 @@ bool parseOptions(int argc, char** argv, Arguments& args, int& returnCode) noexc
 		return true;
 	}
 
-	std::cerr << options.help() << std::endl;
+	std::cerr << options.help() << '\n';
 	returnCode = EXIT_FAILURE;
 	return false;
 }

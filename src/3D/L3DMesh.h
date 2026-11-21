@@ -88,8 +88,8 @@ using SkinId = uint32_t;
 // todo: template this
 inline l3d::L3DMeshFlags operator&(l3d::L3DMeshFlags a, l3d::L3DMeshFlags b)
 {
-	return static_cast<l3d::L3DMeshFlags>(static_cast<std::underlying_type<l3d::L3DMeshFlags>::type>(a) &
-	                                      static_cast<std::underlying_type<l3d::L3DMeshFlags>::type>(b));
+	return static_cast<l3d::L3DMeshFlags>(static_cast<std::underlying_type_t<l3d::L3DMeshFlags>>(a) &
+	                                      static_cast<std::underlying_type_t<l3d::L3DMeshFlags>>(b));
 }
 
 struct PreparedL3DMesh;

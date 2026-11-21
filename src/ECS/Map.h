@@ -37,7 +37,7 @@ public:
 	static CellId GetGridCell(const glm::vec2& pos);
 	static CellId GetGridCell(const glm::vec3& pos);
 
-	virtual ~MapInterface() = default;
+	~MapInterface() override = default;
 
 	/// The things that stay put in a cell, newest building first and carried things behind
 	[[nodiscard]] virtual std::span<const entt::entity> GetFixedInGridCell(const CellId& cellId) const = 0;

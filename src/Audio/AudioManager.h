@@ -59,7 +59,7 @@ public:
 	AudioManager();
 	/// The manager plays its sounds through this player
 	explicit AudioManager(std::unique_ptr<AudioPlayerInterface> player);
-	~AudioManager();
+	~AudioManager() override;
 	BufferId CreateBuffer(ChannelLayout layout, const std::vector<int16_t>& buffer, int sampleRate) override;
 	void CreateBuffer(Sound& sound) override;
 	void PlayEmitter(entt::entity emitter) override;

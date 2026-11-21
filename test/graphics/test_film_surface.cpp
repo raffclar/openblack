@@ -34,7 +34,7 @@ constexpr OfferedFormat k_Compressed {};
 /// The nearest byte to n / (2^bits - 1), from floating-point maths
 uint8_t NearestByte(uint32_t level, uint32_t bits)
 {
-	const double top = static_cast<double>((1u << bits) - 1u);
+	const auto top = static_cast<double>((1u << bits) - 1u);
 	return static_cast<uint8_t>(std::floor((static_cast<double>(level) * 255.0 / top) + 0.5));
 }
 } // namespace

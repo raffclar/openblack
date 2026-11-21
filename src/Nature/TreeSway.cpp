@@ -47,6 +47,7 @@ float tree_sway::Facing(float yaw)
 
 uint8_t tree_sway::SlotOf(float facing)
 {
+	// NOLINTNEXTLINE(bugprone-incorrect-roundings): A different rounding gives a different result.
 	const auto slot = static_cast<int32_t>((facing * k_SlotsPerRadian) + 0.5f);
 	return static_cast<uint8_t>(static_cast<uint32_t>(slot) & (k_Count - 1));
 }

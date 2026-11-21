@@ -32,7 +32,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "Locator.h"
 
-#define LOCATOR_IMPLEMENTATIONS
+#define LOCATOR_IMPLEMENTATIONS 1
 
 #include "ECS/Systems/Implementations/CreatureMindSystem.h"
 

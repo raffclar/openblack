@@ -232,9 +232,9 @@ std::vector<uint8_t> MakeFile(uint32_t creatureVersion, uint32_t binaryVersion)
 void ExpectRoundTrip(uint32_t creatureVersion, uint32_t binaryVersion)
 {
 	const auto original = MakeFile(creatureVersion, binaryVersion);
-	openblack::test::TestTempFolder folder("morph_write_" + std::to_string(creatureVersion) + "_" +
-	                                       std::to_string(binaryVersion));
-	const auto specName = (creatureVersion != 0 ? "ctrspec25.txt" : "hndspec25.txt");
+	const openblack::test::TestTempFolder folder("morph_write_" + std::to_string(creatureVersion) + "_" +
+	                                             std::to_string(binaryVersion));
+	const auto* const specName = (creatureVersion != 0 ? "ctrspec25.txt" : "hndspec25.txt");
 	{
 		std::ofstream spec(folder.Path() / specName);
 		spec << k_Spec;
@@ -276,7 +276,7 @@ TEST(MorphFileWrite, ACreatureFileWithALegacyNameWritesBackByteForByte)
 TEST(MorphFileWrite, ChangedTattooSitesAreWritten)
 {
 	const auto original = MakeFile(19, 6);
-	openblack::test::TestTempFolder folder;
+	const openblack::test::TestTempFolder folder;
 	{
 		std::ofstream spec(folder.Path() / "ctrspec25.txt");
 		spec << k_Spec;
@@ -304,7 +304,7 @@ TEST(MorphFileWrite, ChangedTattooSitesAreWritten)
 TEST(MorphFileWrite, TheDanceMoveNumbersComeFromTheCreatureBlock)
 {
 	const auto original = MakeFile(19, 6);
-	openblack::test::TestTempFolder folder;
+	const openblack::test::TestTempFolder folder;
 	{
 		std::ofstream spec(folder.Path() / "ctrspec25.txt");
 		spec << k_Spec;

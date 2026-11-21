@@ -25,14 +25,14 @@ TextureViewer::TextureViewer() noexcept
 
 void TextureViewer::Draw() noexcept
 {
-	float fontSize = ImGui::GetFontSize();
+	const float fontSize = ImGui::GetFontSize();
 	const auto& textures = Locator::resources::value().GetTextures();
 
 	_filter.Draw();
 
 	ImGui::BeginChild("textures", ImVec2(fontSize * 15.0f, 0));
 	auto textureSize = ImGui::GetItemRectSize();
-	ImGui::BeginChild("texturesSelect", ImVec2(textureSize.x - 5, textureSize.y - ImGui::GetTextLineHeight() - 5), true);
+	ImGui::BeginChild("texturesSelect", ImVec2(textureSize.x - 5, textureSize.y - ImGui::GetTextLineHeight() - 5), 1);
 	uint32_t displayedTexture = 0;
 
 	textures.Each([this, &displayedTexture](entt::id_type id, const graphics::Texture2D& texture) {

@@ -94,7 +94,7 @@ animals::KeyframeSpan animals::SpanAt(const ClipTiming& clip, uint32_t place)
 	}
 	// A clip that holds its end reaches its last keyframe at its end
 	const uint32_t period = clip.looping ? clip.playTime : (clip.playTime * count) / (count - 1);
-	uint32_t from = static_cast<uint32_t>((uint64_t {count} * place) / period);
+	auto from = static_cast<uint32_t>((uint64_t {count} * place) / period);
 	if (from >= count)
 	{
 		from = 0;

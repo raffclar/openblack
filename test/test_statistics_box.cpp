@@ -223,21 +223,21 @@ TEST(StatisticsBoxLayout, ColumnsShareTheRightHand300)
 
 TEST(StatisticsBoxLayout, ARowsBarIsSplitBetweenThePlayers)
 {
-	Row row {.values = {3.0f, 1.0f}, .most = 3.0f};
+	const Row row {.values = {3.0f, 1.0f}, .most = 3.0f};
 	EXPECT_EQ(BarParts(row), (std::vector<float> {0.75f, 1.0f}));
 	// One value is out of the row's most
-	Row one {.values = {2.0f}, .most = 8.0f};
+	const Row one {.values = {2.0f}, .most = 8.0f};
 	EXPECT_EQ(BarParts(one), (std::vector<float> {0.25f}));
 }
 
 TEST(StatisticsBoxLayout, GraphBoxesScaleToTheirMostOrTheTallest)
 {
-	Row one {.values = {2.0f}, .most = 8.0f};
+	const Row one {.values = {2.0f}, .most = 8.0f};
 	EXPECT_EQ(VerticalScale(one).highest, 8.0f);
-	Row two {.values = {2.0f, -1.0f}, .most = 8.0f};
+	const Row two {.values = {2.0f, -1.0f}, .most = 8.0f};
 	EXPECT_EQ(VerticalScale(two).highest, 2.0f);
 	EXPECT_EQ(VerticalScale(two).lowest, -1.0f);
-	Row none {.values = {0.0f, 0.0f}};
+	const Row none {.values = {0.0f, 0.0f}};
 	EXPECT_EQ(VerticalScale(none).highest, 1.0f);
 }
 

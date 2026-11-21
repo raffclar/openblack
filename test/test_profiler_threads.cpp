@@ -118,6 +118,7 @@ TEST(ProfilerThreads, ManyThreadsAtOnceLoseNoScope)
 	constexpr int k_Threads = 4;
 	constexpr int k_Scopes = 500;
 	std::vector<std::thread> workers;
+	workers.reserve(k_Threads);
 	for (int t = 0; t < k_Threads; ++t)
 	{
 		workers.emplace_back([&profiler] {

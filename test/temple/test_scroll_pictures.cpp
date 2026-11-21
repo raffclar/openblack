@@ -136,7 +136,8 @@ TEST(ScrollPictures, AControlStartsOneLineLowerWhenItsActionIsBound)
 	EXPECT_FLOAT_EQ(control.alpha, 1.0f);
 
 	pictures::Pictures unbound;
-	pictures::Place(unbound, Line(Kind::Control, 2), Project, [](int) { return false; }, 1.0f);
+	pictures::Place(
+	    unbound, Line(Kind::Control, 2), Project, [](int) { return false; }, 1.0f);
 	EXPECT_TRUE(unbound.controls.empty());
 }
 

@@ -78,7 +78,7 @@ std::optional<Order> Read(std::span<const uint8_t> data)
 	const auto nameStart = std::min(data.size(), k_Text.size() + k_RowDigits);
 	const auto rest = data.subspan(nameStart);
 	const auto nameEnd = std::ranges::find(rest, uint8_t {0});
-	std::string bytes(rest.begin(), nameEnd);
+	const std::string bytes(rest.begin(), nameEnd);
 	order.name = windows_text::FromWindowsText(bytes);
 	if (order.name.size() > k_MostNameCharacters)
 	{

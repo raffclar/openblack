@@ -34,6 +34,7 @@ std::vector<std::string> Kept(const std::vector<std::string_view>& arguments, st
 {
 	const auto filtered = FilterDeveloperOptions(arguments, options);
 	std::vector<std::string> kept;
+	kept.reserve(filtered.kept.size());
 	for (const auto index : filtered.kept)
 	{
 		kept.emplace_back(arguments.at(index));

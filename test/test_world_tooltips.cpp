@@ -251,7 +251,6 @@ using openblack::magic::HeldCastAtPointer;
 using openblack::magic::HeldCastOffer;
 using openblack::magic::MayCastOn;
 using openblack::magic::OfferFor;
-using openblack::magic::PointedThing;
 
 HeldCastAtPointer ReadyOverLand(MagicType type, bool atPoint)
 {
