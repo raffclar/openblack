@@ -1375,6 +1375,9 @@ struct Command
 		/// An effect kills this many (value) living villagers of the towns at once, as a fire kills them. The villagers
 		/// that die spread evenly over all of them, in the order of their entity numbers. Needs no creature
 		KillVillagers,
+		/// The dome of the sky shows the larger pictures of the sky pack (value 1) or the game's own pictures (value 0), as
+		/// the debug menu's choice does. Value 1 does nothing when no pack loaded. Needs no creature
+		SetSkyPictures,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

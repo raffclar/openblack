@@ -1114,6 +1114,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::LoadGeneratedLand:
 	case Kind::LoadMapLand:
 	case Kind::KillVillagers:
+	case Kind::SetSkyPictures:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:

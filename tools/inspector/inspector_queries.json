@@ -1356,6 +1356,19 @@
   "writes": true
  },
  {
+  "description": "Tools: the pictures of the sky's dome that the debug menu shows, the game's own pictures or the larger pictures of the sky pack in the profile folder. Without upscaled, it only tells",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "True shows the pictures of the pack, false the game's own pictures",
+    "name": "upscaled",
+    "type": "boolean"
+   }
+  ],
+  "query": "engine.sky_pictures",
+  "writes": true
+ },
+ {
   "description": "The engine's settings: what is drawn, the display and the camera's clip",
   "kind": "object",
   "parameters": [],

@@ -11,6 +11,8 @@
 // keeps its place beside the camera, for trying its phases and its path through the night with the moon debug window;
 // a storm's forked bolts coming down round the camera; and the sea drifting with the wind of the real-world weather
 
+#include <cstddef>
+
 #include <tuple>
 #include <vector>
 
@@ -298,4 +300,22 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 		    .commands = {AtHour(12.0f, 8.0f), AtHour(16.75f, 8.0f), AtHour(0.0f, 8.0f)},
 		});
 	}
+
+	// The two sets of pictures of the debug menu at dusk: the game's own pictures and the larger pictures of the sky pack
+	const auto pictures = [](size_t upscaled, float delay) {
+		return Command {.kind = Command::Kind::SetSkyPictures, .delaySeconds = delay, .value = upscaled};
+	};
+	all.push_back({
+	    .id = "sky.pack_switch_dusk",
+	    .name = "The sky pack at dusk",
+	    .facet = Facet::Sky,
+	    .description = "Put the nine pictures of a sky pack in the sky_pictures folder of the profile folder. The clock "
+	                   "stands at dusk (16:45) under a clear good sky, and the camera looks up at the sky. Every 4 seconds "
+	                   "the dome changes between the game's own pictures and the pictures of the pack.",
+	    .expected = "The dome changes at once, with no load of the land. The game's own pictures show the steps of the "
+	                "5-bit pictures. The pictures of the pack show smooth colours. With no pack, the dome does not change.",
+	    .environment = {.hour = 16.75f, .clockRuns = false, .dispenserGrid = false, .playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 90.0f, 100.0f}},
+	    .commands = {pictures(1, 4.0f), pictures(0, 4.0f), pictures(1, 4.0f), pictures(0, 4.0f)},
+	});
 }

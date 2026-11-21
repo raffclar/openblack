@@ -902,6 +902,8 @@ private:
 	mutable std::unique_ptr<FrameBuffer> _skyDomeFrameBuffer;
 	/// The rows of each alignment's dome in the frame buffer above
 	mutable uint16_t _skyDomeRows {sky_dome::k_Rows};
+	/// The frame buffer above keeps the larger pictures of the debug menu's sky pack
+	mutable bool _skyDomeFromPack {false};
 	/// The dome's picture is gone because the renderer made the graphics device again, thus the next draw of the dome
 	/// draws all of it again
 	mutable bool _skyDomeLost {false};

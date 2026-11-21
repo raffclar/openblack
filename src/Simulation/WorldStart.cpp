@@ -46,6 +46,7 @@
 #include "3D/LowResolutionTextures.h"
 #include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
+#include "3D/SkyPicturePack.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleRoomMeshes.h"
 #include "CHLApi.h"
@@ -614,6 +615,27 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 			}
 			textureManager.Load(SkyArchetype::k_DomeTextureId.value(), resources::Texture2DLoader::FromBitmapLayersTag {},
 			                    "Sky", pictures, sky_dome::k_Rows);
+		}
+		// The optional pack of larger sky pictures in the profile folder, which only the debug menu shows. With no
+		// folder, the game loads nothing more.
+		if (Locator::profileFolderSystem::has_value() && !textureManager.Contains(SkyArchetype::k_PackDomeTextureId.value()))
+		{
+			const auto profile = Locator::profileFolderSystem::value().GetFolder();
+			const auto skyPack = profile.has_value() ? *profile / sky_picture_pack::k_FolderName : std::filesystem::path {};
+			if (profile.has_value() && std::filesystem::is_directory(skyPack))
+			{
+				try
+				{
+					textureManager.Load(SkyArchetype::k_PackDomeTextureId.value(),
+					                    resources::Texture2DLoader::FromSkyPackTag {}, "SkyPack", skyPack);
+					SPDLOG_LOGGER_INFO(spdlog::get("game"), "The sky pack in {} loaded", skyPack.string());
+				}
+				catch (const std::exception& error)
+				{
+					SPDLOG_LOGGER_WARN(spdlog::get("game"), "The sky pack in {} did not load: {}", skyPack.string(),
+					                   error.what());
+				}
+			}
 		}
 		registerMesh(SkyArchetype::k_SunMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "sun.l3d");
 		registerMesh(SkyArchetype::k_MoonMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "moon.l3d");
