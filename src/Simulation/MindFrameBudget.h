@@ -18,9 +18,9 @@ namespace openblack::simulation
 /// time. The other work of the frame then has the rest of the 10 milliseconds of a frame at 100 frames a second.
 inline constexpr float k_DefaultMindFrameBudgetMs = 8.0f;
 
-/// The time that the computer minds can use in one frame. When the minds of a turn use all of it, the turn stops between
-/// two players and continues in the next frame (deviation row 288). It keeps no game state, and it never changes the
-/// world: it changes only the frame in which each player does its turn.
+/// The time that the turns of the players, with their computer minds, can use in one frame. When the players of a turn
+/// use all of it, the turn stops between two players and continues in the next frame (deviation row 288). It keeps no game
+/// state, and it never changes the world: it changes only the frame in which each player does its turn.
 class MindFrameBudget
 {
 public:
@@ -31,7 +31,7 @@ public:
 		_usedMs = 0.0f;
 	}
 
-	/// The minds of a player used this time
+	/// The whole turn of a player, with its computer mind, used this time
 	constexpr void AddMindTime(float milliseconds) noexcept { _usedMs += milliseconds; }
 
 	/// True when the frame has a budget

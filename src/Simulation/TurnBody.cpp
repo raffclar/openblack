@@ -191,9 +191,11 @@ std::optional<size_t> PlayPlayerTurns(size_t first, MindFrameBudget* budget)
 		Locator::templeDestructionSystem::value().StartTurn();
 	}
 	auto& towns = Locator::townSystem::value();
+	// The budget of the frame counts the time of each whole player turn, with its computer mind
+	auto mark = budget != nullptr ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
 	return player_turn::PlayFrom(
 	    ecs::game_players::All(), first,
-	    [&towns, budget](PlayerNames player, player_turn::Part part) {
+	    [&towns](PlayerNames player, player_turn::Part part) {
 		    switch (part)
 		    {
 		    case player_turn::Part::Conditions:
@@ -224,17 +226,10 @@ std::optional<size_t> PlayPlayerTurns(size_t first, MindFrameBudget* budget)
 			    Locator::alignmentSystem::value().PlayerTurn(player);
 			    break;
 		    case player_turn::Part::Mind:
-			    // The computer mind of the player, when a land script switched it on. The budget of the frame counts its time.
+			    // The computer mind of the player, when a land script switched it on
 			    if (Locator::computerPlayerSystem::has_value())
 			    {
-				    const auto start =
-				        budget != nullptr ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
 				    Locator::computerPlayerSystem::value().PlayerTurn(player);
-				    if (budget != nullptr)
-				    {
-					    budget->AddMindTime(
-					        std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count());
-				    }
 			    }
 			    break;
 		    case player_turn::Part::Powers:
@@ -249,7 +244,15 @@ std::optional<size_t> PlayPlayerTurns(size_t first, MindFrameBudget* budget)
 			    break;
 		    }
 	    },
-	    [budget] { return budget != nullptr && budget->Used(); });
+	    [budget, &mark] {
+		    if (budget == nullptr)
+		    {
+			    return false;
+		    }
+		    const auto now = std::chrono::steady_clock::now();
+		    budget->AddMindTime(std::chrono::duration<float, std::milli>(now - std::exchange(mark, now)).count());
+		    return budget->Used();
+	    });
 }
 
 /// The footpaths go round what came onto the map since the last time, and stop going round what left it. The game does
