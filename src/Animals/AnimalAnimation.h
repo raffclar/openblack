@@ -38,8 +38,18 @@ struct ClipTiming
 	float stride {0.0f};
 };
 
+/// Where a clip that does not loop stops at its end
+enum class ClipHold
+{
+	/// The place stops at the play time: the villagers, the animals, the doves and the spell wolves
+	AtPlayTime,
+	/// The place stops one millisecond before the play time: the shark and the people in the temple
+	BeforePlayTime,
+};
+
 /// The place in a clip after it has played on: past the end a looping clip comes round again, any other holds its end
-[[nodiscard]] uint32_t AdvanceClip(const ClipTiming& clip, uint32_t place, int32_t played);
+[[nodiscard]] uint32_t AdvanceClip(const ClipTiming& clip, uint32_t place, int32_t played,
+                                   ClipHold hold = ClipHold::AtPlayTime);
 
 /// How far into its clip a moving animal gets in a frame of so many milliseconds: the metres its speed takes it,
 /// shrunk by its scale, as a share of the clip's stride, of the clip's play time. The speed is the tables' speed state

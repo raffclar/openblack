@@ -25,17 +25,19 @@ constexpr uint32_t k_TurnMilliseconds = 100;
 constexpr uint32_t k_LastMillisecond = 99;
 } // namespace
 
-uint32_t animals::AdvanceClip(const ClipTiming& clip, uint32_t place, int32_t played)
+uint32_t animals::AdvanceClip(const ClipTiming& clip, uint32_t place, int32_t played, ClipHold hold)
 {
 	const auto next = static_cast<int64_t>(place) + played;
 	const auto playTime = static_cast<int64_t>(clip.playTime);
+	if (!clip.looping)
+	{
+		// A clip without a play time stays at its start
+		const auto end = hold == ClipHold::BeforePlayTime ? std::max<int64_t>(playTime - 1, 0) : playTime;
+		return static_cast<uint32_t>(std::clamp<int64_t>(next, 0, end));
+	}
 	if (next < playTime)
 	{
 		return static_cast<uint32_t>(std::max<int64_t>(next, 0));
-	}
-	if (!clip.looping)
-	{
-		return clip.playTime;
 	}
 	return playTime > 0 ? static_cast<uint32_t>(next % playTime) : 0;
 }

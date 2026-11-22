@@ -64,6 +64,21 @@ TEST(AnimalAnimation, ALoopingClipComesRoundAndAHeldOneStopsAtItsEnd)
 	EXPECT_EQ(AdvanceClip(k_Held, 1100, 16), 1100u);
 }
 
+TEST(AnimalAnimation, AClipHeldBeforeItsEndStopsOneMillisecondEarly)
+{
+	// The shark and the people in the temple stop a clip that does not loop one millisecond before its play time
+	EXPECT_EQ(AdvanceClip(k_Held, 1000, 50, ClipHold::BeforePlayTime), 1050u);
+	EXPECT_EQ(AdvanceClip(k_Held, 1000, 99, ClipHold::BeforePlayTime), 1099u);
+	EXPECT_EQ(AdvanceClip(k_Held, 1000, 100, ClipHold::BeforePlayTime), 1099u);
+	EXPECT_EQ(AdvanceClip(k_Held, 1099, 16, ClipHold::BeforePlayTime), 1099u);
+	// A looping clip comes round as before
+	EXPECT_EQ(AdvanceClip(k_Flap, 1000, 100, ClipHold::BeforePlayTime), 34u);
+	EXPECT_EQ(AdvanceClip(k_Flap, 1000, 66, ClipHold::BeforePlayTime), 0u);
+	// A clip without a play time stays at its start
+	EXPECT_EQ(AdvanceClip(ClipTiming {.playTime = 0}, 0, 16, ClipHold::BeforePlayTime), 0u);
+	EXPECT_EQ(AdvanceClip(ClipTiming {.playTime = 0}, 0, 16), 0u);
+}
+
 TEST(AnimalAnimation, AMovingAnimalPlaysItsClipByTheGroundItCovers)
 {
 	// 10 metres a second for a tenth of a second is a metre; shrunk by a scale of 2, half a metre, of a stride of 2.77

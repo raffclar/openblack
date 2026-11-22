@@ -105,14 +105,15 @@ void SharkSystem::Update(std::chrono::duration<float, std::milli> gameTime, floa
 		    pose.aboveCutShown = look.aboveSea;
 		    pose.underSea = look.underSea;
 
-		    // It swims on through its clip
+		    // It swims on through its clip. A clip that does not loop stops one millisecond before its end.
 		    std::optional<animals::ClipTiming> timing;
 		    if (animations.Contains(clipId))
 		    {
 			    const auto clip = animations.Handle(clipId);
 			    timing = animals::ClipTiming {
 			        .playTime = clip->GetPlayTime(), .frameCount = clip->GetFrames().size(), .looping = clip->IsLooping()};
-			    shark.clipPlace = animals::AdvanceClip(*timing, shark.clipPlace, frameMilliseconds);
+			    shark.clipPlace =
+			        animals::AdvanceClip(*timing, shark.clipPlace, frameMilliseconds, animals::ClipHold::BeforePlayTime);
 		    }
 
 		    // Drawn between the start of its turn and where it is, facing the way it moved
