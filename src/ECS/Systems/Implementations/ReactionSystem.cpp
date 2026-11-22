@@ -1867,7 +1867,13 @@ void ReactionSystem::EndReactionIfOver(entt::entity entity)
 
 void ReactionSystem::StartTurn()
 {
+	// Each reaction ages as the turn starts, as the game turn does. Thus a reaction that a living thing takes up before
+	// the turn of the reactions starts its time in this turn, as one that it takes up in the turn of the reactions.
 	++_turn;
+	for (auto& reaction : _reactions)
+	{
+		++reaction.age;
+	}
 }
 
 void ReactionSystem::ProcessTurn()
@@ -1879,10 +1885,6 @@ void ReactionSystem::ProcessTurn()
 	// The debug builds make sure each turn that the kept counts of the members of all reactions are the same as a walk
 	// gives
 	assert(ecs::reaction_groups::CountsMatchWalk(Locator::entitiesRegistry::value()));
-	for (auto& reaction : _reactions)
-	{
-		++reaction.age;
-	}
 	// A reaction goes once what made it is deleted, or is a villager that dies. The newest goes first. When the deletion of
 	// the thing stops the living that react to its reactions, they stop now and go back to what they did. Else they stop
 	// when they next find the reaction gone, and keep what they do.
