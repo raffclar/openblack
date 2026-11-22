@@ -15,6 +15,7 @@
 #include <numbers>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
@@ -163,6 +164,33 @@ float shield::DyingEffectAlpha(float alpha, float dieTime)
 bool shield::NeedsRescale(float drawnScale, float solidScale)
 {
 	return x87::Greater(std::abs(drawnScale - solidScale), k_DomeRescaleStep);
+}
+
+std::optional<shield::DomeBreakUp> shield::DomeAtBreakUp(const DomeShape& shape, DomeState state, const DomePose& pose,
+                                                         uint32_t turns, float solidScale, bool stepFirst, float turnSeconds)
+{
+	DomeBreakUp dome {.pose = pose, .solidScale = solidScale};
+	if (!stepFirst)
+	{
+		return dome;
+	}
+	dome.pose = StepDome(shape, state, DomeAge(turns + 1, turnSeconds), turnSeconds);
+	if (dome.pose.gone)
+	{
+		return std::nullopt;
+	}
+	if (NeedsRescale(dome.pose.scale, dome.solidScale))
+	{
+		dome.solidScale = dome.pose.scale;
+	}
+	return dome;
+}
+
+glm::mat4 shield::DomeBreakUpModel(glm::vec3 placeOnLand, const DomeBreakUp& dome)
+{
+	// The dome keeps no turn of its own as a thing: its spin is only in the model that the game draws
+	const glm::vec3 place(placeOnLand.x, placeOnLand.y + dome.pose.height, placeOnLand.z);
+	return glm::scale(glm::translate(glm::mat4(1.0f), place), glm::vec3(dome.solidScale));
 }
 
 shield::DomeVolume shield::VolumeOf(glm::vec3 meshHalfExtent, float scale)

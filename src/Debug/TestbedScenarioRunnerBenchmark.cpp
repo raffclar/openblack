@@ -332,6 +332,7 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	    {"features", registry.Size<ecs::components::Feature>()},
 	    {"shield miracles", shieldMiracles},
 	    {"closed shield miracles", closedShieldMiracles},
+	    {"domes", registry.Size<ecs::components::ShieldDome>()},
 	    {"fading domes", fadingDomes},
 	    {"standing shield reactions", standingReactions},
 	    {"shield fall reactions", fallReactions},

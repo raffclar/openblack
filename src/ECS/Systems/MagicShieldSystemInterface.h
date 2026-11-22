@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -157,6 +158,18 @@ public:
 	};
 	/// The domes to draw, between their last two turns by the turn's fraction
 	[[nodiscard]] virtual std::vector<DomeDraw> GetDomes(float fraction) const = 0;
+	/// The model of a dome, from which it breaks into pieces
+	struct DomePieces
+	{
+		entt::id_type mesh;
+		glm::mat4 model;
+	};
+	/// The pieces of a dome that breaks. When `beforeDomeStep` is true, the domes did not take their step of this turn
+	/// yet. It gives no value for a thing that is not a dome, or for a dome that dies away in its step.
+	[[nodiscard]] virtual std::optional<DomePieces> DomeBreakUp(entt::entity /*object*/, bool /*beforeDomeStep*/) const
+	{
+		return std::nullopt;
+	}
 };
 
 } // namespace openblack::ecs::systems
