@@ -881,3 +881,18 @@ TEST_F(ParticleMiracleTest, NoMoreThanFiftyStormBoltsAreAliveAndOneDueWhileTheyA
 	EXPECT_EQ(bolts->AtomCount(), maths::k_MostSkyStrikes);
 	EXPECT_EQ(bolts->TargetPositionCount(), 0u);
 }
+
+TEST(ParticleMiracleMaths, AThingInOneShieldCanGoIntoAnotherShield)
+{
+	// Two shields that overlap. The thing is in the first shield at the last turn and in both shields now.
+	constexpr glm::vec3 k_First {0.0f, 0.0f, 0.0f};
+	constexpr glm::vec3 k_Second {20.0f, 0.0f, 0.0f};
+	constexpr glm::vec3 k_Before {5.0f, 0.0f, 0.0f};
+	constexpr glm::vec3 k_Now {10.0f, 0.0f, 0.0f};
+	EXPECT_FALSE(maths::CrossedIntoSphere(k_Before, k_Now, k_First, 15.0f, 0.0f));
+	EXPECT_TRUE(maths::CrossedIntoSphere(k_Before, k_Now, k_Second, 15.0f, 0.0f));
+	// The margin makes the sphere larger: the thing was in the second shield before too
+	EXPECT_FALSE(maths::CrossedIntoSphere(k_Before, k_Now, k_Second, 15.0f, 0.5f));
+	// The edge of the sphere does not hold a point
+	EXPECT_FALSE(maths::CrossedIntoSphere(k_Before, {35.0f, 0.0f, 0.0f}, k_Second, 15.0f, 0.0f));
+}

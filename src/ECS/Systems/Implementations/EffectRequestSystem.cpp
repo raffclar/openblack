@@ -233,6 +233,13 @@ std::shared_ptr<openblack::particles::ShieldSphere> EffectRequestSystem::FindShi
 	return server != nullptr ? server->FindShield(point, margin) : nullptr;
 }
 
+std::shared_ptr<openblack::particles::ShieldSphere> EffectRequestSystem::FindShieldCrossing(glm::vec3 before, glm::vec3 point,
+                                                                                            float margin) const
+{
+	const auto* server = _findServer();
+	return server != nullptr ? server->FindShieldCrossing(before, point, margin) : nullptr;
+}
+
 void EffectRequestSystem::AddBeliefSprite(const particles::BeliefSprite& sprite)
 {
 	if (auto* server = _findServer())

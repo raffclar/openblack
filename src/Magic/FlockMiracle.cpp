@@ -369,13 +369,13 @@ void FlockMiracle::CheckShields(SpellServicesInterface& services, Spell& spell)
 		{
 			continue;
 		}
-		// Inside a shield now and not at the last turn, within its own radius; one fading away still strikes it
+		// The first shield that holds it now and did not hold it at the last turn, within its own radius. One fading
+		// away still strikes it.
 		const auto position = registry.Get<const ecs::components::Transform>(animal).position;
 		const float radius = animals.RadiusOf(animal);
-		const auto shield = services.ShieldAt(position, radius);
-		const auto before = services.ShieldAt(spellAnimal->previous, radius);
+		const auto shield = services.ShieldCrossedInto(spellAnimal->previous, position, radius);
 		spellAnimal->previous = position;
-		if (!shield.has_value() || before == shield)
+		if (!shield.has_value())
 		{
 			continue;
 		}
