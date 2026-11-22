@@ -12,6 +12,8 @@
 
 #include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -19,6 +21,7 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Firefly.h"
@@ -55,6 +58,12 @@ class EffectReceivers: public ::testing::Test
 protected:
 	void SetUp() override
 	{
+		// The rules of the world write to the game's log
+		if (spdlog::get("game") == nullptr)
+		{
+			spdlog::create<spdlog::sinks::null_sink_st>("game");
+			_madeLogger = true;
+		}
 		Locator::entitiesRegistry::emplace<ecs::Registry>();
 		_info = std::make_unique<InfoConstants>();
 		Locator::infoConstants::emplace(*_info);
@@ -63,6 +72,10 @@ protected:
 	{
 		Locator::infoConstants::reset();
 		Locator::entitiesRegistry::reset();
+		if (_madeLogger)
+		{
+			spdlog::drop("game");
+		}
 	}
 
 	static entt::entity Made()
@@ -74,6 +87,7 @@ protected:
 	}
 
 	std::unique_ptr<InfoConstants> _info;
+	bool _madeLogger {false};
 };
 } // namespace
 
@@ -202,6 +216,29 @@ TEST_F(EffectReceivers, HarmNeverBringsAnIndestructibleAnimalOrThingToNearlyNoLi
 	registry.Assign<Indestructible>(firefly);
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 0.25f), 0.75f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 1.5f), 0.75f);
+}
+
+TEST_F(EffectReceivers, AnIndestructibleCraterIsNeverDestroyedByAMiracleNorHarmedToNoLife)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto crater = Made();
+	registry.Assign<Feature>(crater, FeatureInfo::Crater);
+	registry.Assign<Indestructible>(crater);
+	// The wave of a blast and the pull of a tornado ask this before they shatter or take the crater
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(crater));
+	// The heat and the blows of a miracle, a fire or a creature never take the last of its life
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(crater, 0.5f), 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(crater, 1.0f), 0.5f);
+	EXPECT_GT(ecs::world_objects::LifeOf(crater), 0.0f);
+}
+
+TEST_F(EffectReceivers, ACraterThatNoScriptMadeIndestructibleCanBeDestroyed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto crater = Made();
+	registry.Assign<Feature>(crater, FeatureInfo::Crater);
+	EXPECT_TRUE(ecs::world_objects::CanBeDestroyedBySpell(crater));
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(crater, 1.5f), 0.0f);
 }
 
 TEST_F(EffectReceivers, ATownsDesireFlagTakesNoEffectEvenWithTheDataOfThePrayerSite)
