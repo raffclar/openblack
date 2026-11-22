@@ -285,6 +285,35 @@ TEST(SkyDome, StandsRoundTheMiddleOfTheMapAtFiveTimesItsSize)
 	EXPECT_FLOAT_EQ(side.x, 2560.0f - (5.0f * 18578.9f));
 }
 
+// The game does not mirror the dome in the sea: under the sea it shows the dome's own lower half. The rows of the lower
+// half are at other heights than those of the upper half (one row is 20.5 degrees below the middle, and the nearest row
+// above it is 22.5 degrees up). The pass of the sea turns the world over about the sea's level, so the dome must come
+// back to the place where the main pass draws it.
+TEST(SkyDome, TheSeaShowsTheLowerHalfOfTheDomeNotTheUpperHalfTurnedOver)
+{
+	const auto turnOver = [](float level) {
+		return glm::mat4(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 2.0f * level, 0.0f,
+		                 1.0f);
+	};
+	// A point of the row under the middle of the dome, and one of the row above it
+	const glm::vec4 lower(-15961.0f, -17040.3f, 5800.0f, 1.0f);
+	const glm::vec4 upper(17164.0f, 18578.9f, -6247.0f, 1.0f);
+	for (const float level : {0.0f, 12.5f})
+	{
+		const auto inThePass = turnOver(level) * openblack::sky_dome::PlacementUnderSea(level);
+		for (const auto& point : {lower, upper})
+		{
+			const auto shown = inThePass * point;
+			const auto drawn = openblack::sky_dome::Placement() * point;
+			EXPECT_FLOAT_EQ(shown.x, drawn.x);
+			EXPECT_NEAR(shown.y, drawn.y, 0.05f);
+			EXPECT_FLOAT_EQ(shown.z, drawn.z);
+		}
+	}
+	// The lower row stays under the sea, where the game draws it
+	EXPECT_LT((turnOver(0.0f) * openblack::sky_dome::PlacementUnderSea(0.0f) * lower).y, 0.0f);
+}
+
 namespace
 {
 /// The 8-bit value of the screen for a point between two texels of 5-bit levels, filtered from a target of `bits`

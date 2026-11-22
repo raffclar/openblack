@@ -237,6 +237,20 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "sky.dome_under_sea",
+	    .name = "The sea shows the lower half of the sky dome",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at noon under a clear sky. The camera stands high over the southern edge of the "
+	                   "land and looks out over the sea to the horizon. An oak stands near the edge of the land.",
+	    .expected = "Far out, the sea fades and the sky dome shows through it. Under the sea, the dome shows its own lower "
+	                "half as the camera sees it, not the upper half turned over. The bands of the sky under the horizon "
+	                "are a little nearer to the horizon than the same bands above it.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 2000.0f, -2400.0f}, .look = {0.0f, 1000.0f, -12000.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, -2380.0f}}},
+	});
+
+	all.push_back({
 	    .id = "sky.good_sky_darkness",
 	    .name = "A good sky is darker than an evil sky",
 	    .facet = Facet::Sky,

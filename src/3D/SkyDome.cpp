@@ -240,4 +240,12 @@ glm::mat4 Placement()
 	return glm::scale(glm::translate(glm::mat4(1.0f), k_Centre), glm::vec3(k_Scale));
 }
 
+glm::mat4 PlacementUnderSea(float seaLevel)
+{
+	// The height turns over about the sea's level, as the camera of the pass turns it
+	const glm::mat4 turnOver(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 2.0f * seaLevel,
+	                         0.0f, 1.0f);
+	return turnOver * Placement();
+}
+
 } // namespace openblack::sky_dome
