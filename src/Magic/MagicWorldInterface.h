@@ -58,6 +58,17 @@ struct EffectSource
 	return source.appliedBy.value_or(source.casterCreature);
 }
 
+/// The player whose alignment the effect moves when no creature cast it: the effect's player, also the neutral player.
+/// An effect from no player moves no player's alignment.
+[[nodiscard]] constexpr std::optional<PlayerNames> AlignmentPlayerOf(const EffectSource& source)
+{
+	if (source.playerless)
+	{
+		return std::nullopt;
+	}
+	return source.player;
+}
+
 /// The source of the strike of a storm's bolt. The neutral player strikes, but nothing applies it, so the strike does
 /// not count as an attack on a town.
 [[nodiscard]] constexpr EffectSource StormBoltSource()
