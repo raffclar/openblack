@@ -36,6 +36,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
+#include "ECS/SkinPaintThreads.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "EngineConfig.h"
@@ -79,9 +80,8 @@ const l3d::L3DFile* MeshFile(const std::string& name)
 }
 
 /// The texels of a skin of a creature mesh as the game loads them: at half size at the two lowest detail levels
-std::vector<uint16_t> TexelsOf(const l3d::L3DFile& file, const l3d::L3DTexture& skin)
+std::vector<uint16_t> TexelsOf(const l3d::L3DFile& file, const l3d::L3DTexture& skin, bool lowResolution)
 {
-	const bool lowResolution = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
 	return l3d_skin::LoadedTexels({reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size()},
 	                              static_cast<uint32_t>(file.GetHeader().flags), lowResolution);
 }
@@ -140,12 +140,16 @@ void ShowLidColour(const CreatureSkin& skin, CreatureEyes& eyes)
 	}
 }
 
-void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const creature_tattoo::Slots& tattoos,
-           const creature_tattoo::Masks* masks, const CreatureMarks& marks, const CreatureRig& rig,
-           const creature_skin::Art* art)
+/// Paints one skin. The paint reads only the job and the art, and writes only the skin of the job. Thus the paints of a
+/// frame can run on different threads at the same time.
+void Paint(const CreatureSkinSystem::PaintJob& job, const creature_skin::Art* art, bool lowResolution)
 {
-	const auto& baseSkins = sources.base->GetSkins();
-	const auto& variantSkins = sources.variant->GetSkins();
+	auto& skin = *job.skin;
+	const auto& base = *job.base;
+	const auto& variantFile = *job.variant;
+	const auto& rig = *job.rig;
+	const auto& baseSkins = base.GetSkins();
+	const auto& variantSkins = variantFile.GetSkins();
 	std::vector<uint32_t> baseOrder;
 	std::vector<uint32_t> variantOrder;
 	std::ranges::transform(baseSkins, std::back_inserter(baseOrder), &l3d::L3DTexture::id);
@@ -154,34 +158,35 @@ void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const
 	skin.skins.resize(baseSkins.size());
 	for (size_t i = 0; i < baseSkins.size(); ++i)
 	{
-		const auto& base = baseSkins[i];
+		const auto& baseSkin = baseSkins[i];
 		auto& painted = skin.skins[i];
-		painted.id = base.id;
-		const auto baseTexels = TexelsOf(*sources.base, base);
+		painted.id = baseSkin.id;
+		const auto baseTexels = TexelsOf(base, baseSkin, lowResolution);
 		painted.texels.resize(baseTexels.size());
 		// A neutral creature, or one whose evil or good mesh lacks the skin, starts from its base skin
 		std::vector<uint16_t> variant;
-		if (sources.variant != sources.base)
+		if (job.variant != job.base)
 		{
-			if (const auto paired = creature_skin::PairedSkin(baseOrder, variantOrder, base.id); paired.has_value())
+			if (const auto paired = creature_skin::PairedSkin(baseOrder, variantOrder, baseSkin.id); paired.has_value())
 			{
 				const auto found = std::ranges::find(variantSkins, *paired, &l3d::L3DTexture::id);
 				if (found != variantSkins.end())
 				{
-					variant = TexelsOf(*sources.variant, *found);
+					variant = TexelsOf(variantFile, *found, lowResolution);
 				}
 			}
 		}
-		creature_skin::Compose(painted.texels, baseTexels, variant, weight,
+		creature_skin::Compose(painted.texels, baseTexels, variant, job.wanted.weight,
 		                       {.skinIndex = static_cast<uint8_t>(i),
-		                        .tattoos = tattoos,
+		                        .tattoos = *job.tattoos,
 		                        .sites = rig.tattooSites,
-		                        .marks = marks.marks,
+		                        .marks = job.marks->marks,
 		                        .art = art,
-		                        .masks = masks});
+		                        .masks = job.masks});
 	}
 	skin.lidColour = LidColourOf(skin, rig);
 	++skin.revision;
+	skin.painted = job.wanted;
 }
 /// The entity of the player that a creature belongs to. A creature of nobody's uses the masks of the local player.
 std::optional<entt::entity> PlayerEntityOf(const ecs::Registry& registry, PlayerNames owner)
@@ -260,10 +265,11 @@ const creature_tattoo::Slots& ShownTattoosOfCopy(const ecs::Registry& registry, 
 	return k_None;
 }
 
-/// Paints the skin of a body of a species with an evil to good value when what it shows has changed
-void PaintIfChanged(CreatureSkin& skin, CreatureType species, float evilGood, const creature_tattoo::Slots& tattoos,
-                    uint32_t tattooRevision, const creature_tattoo::Masks* masks, const CreatureMarks& marks,
-                    const creature_skin::Art* art)
+/// Adds a paint of the skin of a body of a species with an evil to good value when what it shows has changed. This
+/// function can load the mesh files of the species, so only the main thread calls it.
+void CollectIfChanged(std::vector<CreatureSkinSystem::PaintJob>& jobs, CreatureSkin& skin, CreatureType species, float evilGood,
+                      const creature_tattoo::Slots& tattoos, uint32_t tattooRevision, const creature_tattoo::Masks* masks,
+                      const CreatureMarks& marks, const creature_skin::Art* art)
 {
 	const auto& rigs = Locator::resources::value().GetCreatureRigs();
 	const auto rigId = creature::GetRigId(species);
@@ -285,12 +291,28 @@ void PaintIfChanged(CreatureSkin& skin, CreatureType species, float evilGood, co
 	    .marks = marks.revision,
 	    .art = art != nullptr,
 	};
+	const CreatureSkinSystem::PaintJob job {
+	    .skin = &skin,
+	    .base = sources->base,
+	    .variant = sources->variant,
+	    .wanted = wanted,
+	    .tattoos = &tattoos,
+	    .masks = masks,
+	    .marks = &marks,
+	    .rig = &rig,
+	};
+	// A skin gets one paint in a frame. If a skin comes again, its last paint replaces the paint that waits, so that
+	// two threads never write the same skin.
+	if (const auto waiting = std::ranges::find(jobs, &skin, &CreatureSkinSystem::PaintJob::skin); waiting != jobs.end())
+	{
+		*waiting = job;
+		return;
+	}
 	if (skin.painted == wanted)
 	{
 		return;
 	}
-	Paint(skin, *sources, wanted.weight, tattoos, masks, marks, rig, art);
-	skin.painted = wanted;
+	jobs.push_back(job);
 }
 } // namespace
 
@@ -299,14 +321,18 @@ void CreatureSkinSystem::Update()
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& arts = Locator::resources::value().GetCreatureSkinArt();
 	const creature_skin::Art* art = arts.Contains(creature_skin::k_ArtId) ? &*arts.Handle(creature_skin::k_ArtId) : nullptr;
+	const bool lowResolution = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
+	auto& jobs = _paintJobs;
+	jobs.clear();
 
-	// The skins follow the evil to good target of their last paint
+	// First the main thread collects the paints of this frame. The skins follow the evil to good target of their last
+	// paint.
 	registry.Each<const Creature, const CreatureMorph, const CreatureTattoos, const CreatureMarks, CreatureSkin>(
 	    [&](const Creature& creature, const CreatureMorph& morph, const CreatureTattoos& tattoos, const CreatureMarks& marks,
 	        CreatureSkin& skin) {
-		    PaintIfChanged(skin, creature.species, morph.paintedAlignment,
-		                   ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
-		                   MasksOf(registry, creature.owner), marks, art);
+		    CollectIfChanged(jobs, skin, creature.species, morph.paintedAlignment,
+		                     ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
+		                     MasksOf(registry, creature.owner), marks, art);
 	    });
 	// The creature of the tattoo menu is a thing of the drawn registry. It shows the tattoos and uses the masks of the
 	// players of the land.
@@ -316,9 +342,9 @@ void CreatureSkinSystem::Update()
 		    .Each<const Creature, const CreatureMorph, const CreatureTattoos, const CreatureMarks, CreatureSkin>(
 		        [&](const Creature& creature, const CreatureMorph& morph, const CreatureTattoos& tattoos,
 		            const CreatureMarks& marks, CreatureSkin& skin) {
-			        PaintIfChanged(skin, creature.species, morph.paintedAlignment,
-			                       ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
-			                       MasksOf(registry, creature.owner), marks, art);
+			        CollectIfChanged(jobs, skin, creature.species, morph.paintedAlignment,
+			                         ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
+			                         MasksOf(registry, creature.owner), marks, art);
 		        });
 	}
 	// A copy with a skin of its own is painted at its own times. The copy of the land's creature in the temple's
@@ -346,13 +372,13 @@ void CreatureSkinSystem::Update()
 				    static const creature_tattoo::Slots k_NoTattoos {};
 				    if (!copy.paintedAlignment.has_value())
 				    {
-					    PaintIfChanged(skin, creature->species, 0.0f, k_NoTattoos, 0, nullptr, k_NoMarks, art);
+					    CollectIfChanged(jobs, skin, creature->species, 0.0f, k_NoTattoos, 0, nullptr, k_NoMarks, art);
 					    return;
 				    }
 				    const auto* marks = copies.TryGet<const CreatureMarks>(entity);
-				    PaintIfChanged(skin, creature->species, *copy.paintedAlignment, ShownTattoosOfCopy(registry, tattoos),
-				                   tattoos.revision, MasksOf(registry, PlayerNames::NEUTRAL),
-				                   marks != nullptr ? *marks : k_NoMarks, art);
+				    CollectIfChanged(jobs, skin, creature->species, *copy.paintedAlignment,
+				                     ShownTattoosOfCopy(registry, tattoos), tattoos.revision,
+				                     MasksOf(registry, PlayerNames::NEUTRAL), marks != nullptr ? *marks : k_NoMarks, art);
 				    return;
 			    }
 			    const auto* morph = registry.TryGet<const CreatureMorph>(copy.creature);
@@ -362,9 +388,9 @@ void CreatureSkinSystem::Update()
 			    {
 				    return;
 			    }
-			    PaintIfChanged(skin, creature->species, morph->paintedAlignment,
-			                   ShownTattoos(registry, creature->owner, tattoos, *body), tattoos.revision,
-			                   MasksOf(registry, creature->owner), *marks, art);
+			    CollectIfChanged(jobs, skin, creature->species, morph->paintedAlignment,
+			                     ShownTattoos(registry, creature->owner, tattoos, *body), tattoos.revision,
+			                     MasksOf(registry, creature->owner), *marks, art);
 		    });
 	};
 	paintCopies(registry);
@@ -376,6 +402,10 @@ void CreatureSkinSystem::Update()
 	{
 		paintCopies(Locator::drawnRegistry::value());
 	}
+
+	// Then the threads paint the skins. Each paint writes only its own skin, so the pixels are the same as in one thread.
+	ecs::skin_paint_threads::PaintAll(_paintWorkers, std::span(jobs),
+	                                  [art, lowResolution](const PaintJob& job) { Paint(job, art, lowResolution); });
 
 	// The eyelids take their colour from the skins as painted for this frame. A copy without a skin of its own takes the
 	// colour of its creature's skin. The creature of a copy in the drawn registry is in that registry too.
