@@ -69,6 +69,9 @@ struct Rules
 	/// The players go on as they were: their alignment, the miracles they have ever had, their histories. Otherwise they
 	/// start afresh, neither good nor evil, with no miracles and no history
 	bool playersCarried;
+	/// The hand keeps the look of alignment that it shows. The game keeps one hand for all the lands of a game. A new
+	/// game and a load make a new hand, which starts neutral.
+	bool handLookCarried;
 	/// The player starts as good or evil as their profile last kept them
 	bool alignmentFromProfile;
 	/// A new game starts: it is played as the profile picked now, which keeps its creature from now on, the last game's
@@ -95,6 +98,7 @@ struct Rules
 		        .scriptScreenKept = true,
 		        .heartbeatsCarried = true,
 		        .playersCarried = true,
+		        .handLookCarried = true,
 		        .alignmentFromProfile = false,
 		        .gameStarts = false,
 		        .helpTextsKept = true,
@@ -106,6 +110,7 @@ struct Rules
 		        .scriptScreenKept = false,
 		        .heartbeatsCarried = true,
 		        .playersCarried = true,
+		        .handLookCarried = true,
 		        .alignmentFromProfile = false,
 		        .gameStarts = false,
 		        .helpTextsKept = false,
@@ -118,6 +123,7 @@ struct Rules
 		        .scriptScreenKept = false,
 		        .heartbeatsCarried = false,
 		        .playersCarried = false,
+		        .handLookCarried = false,
 		        .alignmentFromProfile = true,
 		        .gameStarts = true,
 		        .helpTextsKept = false,
@@ -129,6 +135,7 @@ struct Rules
 		        .scriptScreenKept = false,
 		        .heartbeatsCarried = false,
 		        .playersCarried = false,
+		        .handLookCarried = false,
 		        .alignmentFromProfile = true,
 		        .gameStarts = true,
 		        .helpTextsKept = false,
@@ -142,6 +149,7 @@ struct Rules
 	        .scriptScreenKept = false,
 	        .heartbeatsCarried = false,
 	        .playersCarried = false,
+	        .handLookCarried = false,
 	        .alignmentFromProfile = false,
 	        .gameStarts = false,
 	        .helpTextsKept = false,

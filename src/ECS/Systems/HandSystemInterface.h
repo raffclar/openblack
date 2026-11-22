@@ -200,6 +200,9 @@ public:
 	/// Before the land goes with its entities: the system keeps the look of the hands of this computer. The next land's
 	/// hands start with that look, as the game keeps its one hand from land to land (see hand_morph::KeptForNextLand).
 	virtual void KeepLooksForNextLand() {}
+	/// Before the land of a new game or a load goes: the system keeps no look. The new hands start neutral, as the new
+	/// hand of a new game does.
+	virtual void ForgetKeptLooks() {}
 	/// Once a game turn, before the creatures think: counts the turns that the player's hand stays in one place. First,
 	/// the hand of this computer ends its wait for a send that a turn did (see hand_send_wait::TurnPass).
 	virtual void ProcessTurn() {}
