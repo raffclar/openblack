@@ -631,6 +631,8 @@ private:
 	std::optional<Circle> _circle;
 	/// Game turns since the land started
 	uint32_t _turn {0};
+	/// The miracles take their turn now
+	bool _inTurn {false};
 	HandResult _lastHandResult {HandResult::None};
 	/// The tooltip text of the held miracle that the hand did not show yet
 	std::optional<uint32_t> _heldMiracleToolTip;

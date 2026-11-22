@@ -44,6 +44,8 @@ public:
 	[[nodiscard]] bool LostObject(entt::entity spell) const override;
 	void ObjectDestroyed(entt::entity object) override;
 	[[nodiscard]] entt::entity ObjectOf(entt::entity spell) const override;
+	[[nodiscard]] entt::entity KeeperOf(entt::entity object) const override;
+	void MiracleClosedDown(entt::entity spell, bool inMiracleTurn) override;
 	entt::entity Restore(entt::entity spell, const components::Spell& miracle, const RestoredShield& file) override;
 	void RestoreReaction(entt::entity object, uint32_t id, Reaction type, float reach, uint32_t firstReacted,
 	                     std::span<const RestoredTaker> villagers) override;
@@ -64,8 +66,14 @@ private:
 	/// Gives a physical shield's object its dome, and puts the dome in the physics: a new dome takes its first two turns
 	/// at once, the dome of a saved game has the values of the file
 	void MakeDome(entt::entity object, const components::Spell& miracle, const RestoredShield* file);
-	/// The shield's miracle has let go of it: the spiritual shield's goes at once, the dome starts to fade
+	/// The shield's miracle closed down. The spiritual shield's object goes at once. The dome lets go of the miracle and
+	/// starts to fade. The miracle keeps the dome, its reactions and its hold on influence until the dome has gone.
 	void LetGo(entt::entity object, components::MagicShield& shield);
+	/// The shield's miracle has gone: its reactions and its hold on influence go with it. The spiritual shield's object
+	/// goes at once, the dome fades away alone.
+	void Abandon(entt::entity object, components::MagicShield& shield);
+	/// The dome's fade has ended: it goes, and the closed-down miracle that kept it goes with it
+	void DomeGone(entt::entity object);
 	/// Takes away what goes with a shield: its rings against influence and the reactions to it
 	void Strip(entt::entity object, components::MagicShield& shield);
 	/// A turn of a physical shield's dome; false once it has gone
