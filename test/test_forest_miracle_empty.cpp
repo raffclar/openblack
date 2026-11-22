@@ -164,7 +164,7 @@ TEST_F(ForestMiracleEmpty, AForestOfASavedGameTakesItsMagicTreesAgain)
 	registry.Get<ForestMember>(_second).growing = true;
 	registry.Remove<MagicForest>(_record);
 	constexpr auto k_SavedSpell = entt::entity {901};
-	Spell miracle {.castPosition = glm::vec3(4.0f, 0.0f, 5.0f)};
+	Spell miracle {.originalCastPlace = map_coords::FromMetres({4.0f, 5.0f})};
 	miracle.caster.player = PlayerNames::PLAYER_TWO;
 	EXPECT_EQ(_forests->RestoreForest(k_SavedSpell, miracle, _land), 2U);
 	EXPECT_EQ(miracle.objectCount, 2U);
@@ -175,7 +175,9 @@ TEST_F(ForestMiracleEmpty, AForestOfASavedGameTakesItsMagicTreesAgain)
 	const auto& forest = registry.Get<const MagicForest>(made);
 	EXPECT_EQ(forest.spell, k_SavedSpell);
 	EXPECT_EQ(forest.player, PlayerNames::PLAYER_TWO);
-	EXPECT_EQ(forest.centre, glm::vec3(4.0f, 0.0f, 5.0f));
+	// The forest stands at the map position where the spell was cast first, on the land
+	const auto cast = map_coords::ToMetres(miracle.originalCastPlace);
+	EXPECT_EQ(forest.centre, glm::vec3(cast.x, 0.0f, cast.y));
 	EXPECT_EQ(forest.landForest, _land);
 	EXPECT_EQ(forest.trees, (std::vector<entt::entity> {_first, _second}));
 	EXPECT_EQ(_forests->ForestOf(k_SavedSpell), MiracleForest::Standing);

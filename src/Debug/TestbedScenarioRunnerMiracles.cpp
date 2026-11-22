@@ -418,7 +418,7 @@ entt::entity Runner::CastMiracle(size_t index)
 		const bool onObject =
 		    target.has_value() && seed != SpellSeedType::None && magic::GetSpellSeedInfo(info, seed).castOnObject != 0;
 		return onObject ? magic.CastOnObject(setup.type, PlayerNames::NEUTRAL, *target, scripted.cast, scripted.info)
-		                : magic.CastAtPoint(setup.type, PlayerNames::NEUTRAL, scripted.point, scripted.cast, scripted.info);
+		                : magic.CastAtPoint(setup.type, PlayerNames::NEUTRAL, point, scripted.cast, scripted.info);
 	}
 	const auto toward = point - hand;
 	const particles::ProcessInfo process {

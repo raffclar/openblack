@@ -60,6 +60,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 	entt::entity CreateFlock(glm::vec2 centre, float domainRadius, float flockDistance) override;
+	entt::entity CreateFlockAt(const map_coords::MapCoords& place, float domainRadius, float flockDistance) override;
 	entt::entity CreateSpellAnimal(AnimalInfo type, glm::vec2 position, float heightAboveLand, uint16_t angle,
 	                               PlayerNames owner, entt::entity flock, entt::entity spell) override;
 	entt::entity CreateScriptFlock(int32_t id, glm::vec2 position, glm::vec2 home, float reach, float flockDistance) override;

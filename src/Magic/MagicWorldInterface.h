@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 #include "SpellRules.h"
 
@@ -94,6 +95,17 @@ public:
 	virtual ~MagicWorldInterface() = default;
 
 	[[nodiscard]] virtual float LandHeight(glm::vec2 xz) const = 0;
+	/// The height of the land at a map position. The altitude of the position has no effect.
+	[[nodiscard]] virtual float GroundAt(const map_coords::MapCoords& place) const
+	{
+		return LandHeight(map_coords::ToMetres(place));
+	}
+	/// A map position as a point of the world: x and z in metres, and y the land there plus the altitude
+	[[nodiscard]] glm::vec3 PointOf(const map_coords::MapCoords& place) const
+	{
+		const auto xz = map_coords::ToMetres(place);
+		return {xz.x, GroundAt(place) + place.altitude, xz.y};
+	}
 	/// On the map at all
 	[[nodiscard]] virtual bool InBounds(glm::vec3 point) const = 0;
 	/// Land above the sea, where piles can be put down
@@ -122,9 +134,10 @@ public:
 	/// A drop of rain lands: it waters the trees and fields within reach, the people watch it put out what burns and,
 	/// when asked, it leaves a ring on the land. Its cooling is its effect's burn, given round the point.
 	virtual void Water(const WaterDrop& drop) = 0;
-	/// The living things the heal heals within a radius of a point, no more than a number, as the game finds them: through
-	/// the land's cells in a spiral out from the point's (see HealTargets.h)
-	[[nodiscard]] virtual std::vector<entt::entity> HealTargets(glm::vec3 point, float radius, size_t maximum) const = 0;
+	/// The living things the heal heals within a radius of a map position, no more than a number, as the game finds them:
+	/// through the land's cells in a spiral out from the cell of the position (see HealTargets.h)
+	[[nodiscard]] virtual std::vector<entt::entity> HealTargets(const map_coords::MapCoords& place, float radius,
+	                                                            size_t maximum) const = 0;
 	/// The heal cures a living thing of poison
 	virtual void CurePoison(entt::entity /*object*/) {}
 	/// A player's miracle of a kind reached an object, the last its effect reached: the player's creature may learn the

@@ -2003,6 +2003,12 @@ magic::ImportedCast CastOf(const gamesave::VanillaWorld& world, std::unordered_m
 	    .lastRipple = file.lastRipple,
 	    .target = file.target.has_value() ? EntityOf(made, *file.target) : entt::null,
 	};
+	// The spell keeps the map positions where it was cast, as the file keeps them
+	const auto place = [](const gamesave::MapCoords& coords) {
+		return map_coords::MapCoords {.x = coords.x, .z = coords.z, .altitude = coords.altitude};
+	};
+	cast.castPlace = file.castPlace.transform(place);
+	cast.originalCastPlace = file.originalCastPlace.transform(place);
 	if (file.forest.has_value())
 	{
 		cast.forest = magic::ImportedForestCast {.planted = file.forest->planted, .mostTrees = file.forest->mostTrees};

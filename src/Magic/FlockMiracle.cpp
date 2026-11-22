@@ -125,9 +125,8 @@ void FlockMiracle::Start(SpellServicesInterface& services, Spell& spell)
 	data.evil = !tables.ground && flock::IsEvil(AlignmentOf(spell.caster.player), tables.alignmentSwitch);
 	if (Locator::animalSystem::has_value())
 	{
-		// The flock is made at the cast point; its domain and how far its followers range are the same
-		data.flock =
-		    Locator::animalSystem::value().CreateFlock(Xz(spell.castPosition), k_FlockDomainRadius, k_FlockDomainRadius);
+		// The flock is made at the map position of the cast. Its domain and how far its followers range are the same.
+		data.flock = Locator::animalSystem::value().CreateFlockAt(spell.castPlace, k_FlockDomainRadius, k_FlockDomainRadius);
 	}
 }
 
@@ -240,7 +239,7 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 			// frame at the hand. A save does not keep it.
 			data.castEffect = Locator::effectRequestSystem::value().StartHere({
 			    .type = data.evil ? ParticleType::FlockFlyingCastEvil : ParticleType::FlockFlyingCastGood,
-			    .position = spell.originalCastPosition,
+			    .position = services.World().PointOf(spell.originalCastPlace),
 			    .synced = false,
 			    .player = static_cast<int>(spell.caster.player),
 			    .processInfo = spell.processInfo,
@@ -288,9 +287,10 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 		{
 			continue;
 		}
-		const auto direction = flock::Direction(spell.humanCasting, spell.processInfo.cameraForward, spell.castPosition,
-		                                        spell.processInfo.handPosition);
-		const float side = flock::Side(spell.humanCasting, direction, spawn, Xz(spell.castPosition), data.created);
+		const auto castPoint = world.PointOf(spell.castPlace);
+		const auto direction =
+		    flock::Direction(spell.humanCasting, spell.processInfo.cameraForward, castPoint, spell.processInfo.handPosition);
+		const float side = flock::Side(spell.humanCasting, direction, spawn, Xz(castPoint), data.created);
 		const auto heading = flock::Rotate(direction, flock::FanAngle(data.created, side, number));
 		const auto target = flock::Destination(spawn, heading, tables.distanceToTravel, onMap);
 		if (!target.has_value())

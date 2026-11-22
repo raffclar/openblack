@@ -46,9 +46,9 @@ void SetLife(entt::entity entity, float life);
 /// Whether the heal may heal it: a villager or animal while alive, a creature always, a bird never
 [[nodiscard]] bool CanBeHealedByHeal(entt::entity entity);
 
-/// The people a heal of a radius and most targets at a point heals, as the game finds them: once, through the land's
-/// cells in a spiral from the point's (see Magic/HealTargets.h)
-[[nodiscard]] std::vector<entt::entity> HealTargets(glm::vec3 point, float radius, size_t maximum);
+/// The people a heal of a radius and most targets at a map position heals, as the game finds them: once, through the
+/// land's cells in a spiral from the cell of the position (see Magic/HealTargets.h)
+[[nodiscard]] std::vector<entt::entity> HealTargets(const map_coords::MapCoords& place, float radius, size_t maximum);
 
 /// The defence an object of the living takes effects with: its row's, a creature's lessened by its size
 [[nodiscard]] magic::EffectDefence DefenceOf(entt::entity entity);
