@@ -196,7 +196,8 @@ bool MagicSystem::CastByCreatureAt(entt::entity creature, MagicType type, glm::v
 	const auto seed = magic::FindFirstSpellSeedForMagicType(Info(), type);
 	const float magnitude =
 	    creature_spell_casting::CastMagnitudeAtPlace(seed == SpellSeedType::Fire, object_measures::Height(registry, creature));
-	return StartCreatureCast(creature, type, std::nullopt, PlaceOfPoint(place), magnitude);
+	// The miracle goes to the map position of the x and z of the place. The height of the place has no effect.
+	return StartCreatureCast(creature, type, std::nullopt, map_coords::FromMetres({place.x, place.z}), magnitude);
 }
 
 bool MagicSystem::StartCreatureCast(entt::entity creature, MagicType type, std::optional<entt::entity> target,

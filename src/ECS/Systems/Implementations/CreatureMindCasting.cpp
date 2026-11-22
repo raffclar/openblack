@@ -87,6 +87,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -560,10 +561,19 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 			    creature_mind::k_FireballClearRadii * object_measures::TwoDRadius(registry, creature), false);
 		}
 	}
-	// The creature casts a forest at the place where the thing is now
+	// The creature casts a forest at the place where it believes that the thing is. The step keeps this map position as
+	// metres, with y the ground there plus the altitude. Without a belief about the thing, it uses the place of the thing.
 	if (executor != nullptr && executor->build == creature_plan_actions::Build::CastForest && target.has_value())
 	{
-		cast.place = object_measures::PositionOf(registry, *target);
+		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+		const auto* belief = mind != nullptr ? mind->beliefs.Find(*target) : nullptr;
+		cast.place =
+		    creature_mind::ForestCastPlace(belief != nullptr ? std::optional(belief->place) : std::nullopt,
+		                                   ecs::thing_map_place::Of(registry, *target), [](const map_coords::MapCoords& place) {
+			                                   return Locator::terrainSystem::has_value()
+			                                              ? map_coords::GroundAt(Locator::terrainSystem::value(), place)
+			                                              : 0.0f;
+		                                   });
 	}
 	return cast;
 }
