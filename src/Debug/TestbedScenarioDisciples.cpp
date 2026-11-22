@@ -10,7 +10,7 @@
 // The testbed scenarios for disciples. One shows the symbol of the work. One shows that a disciple in the hand of another
 // god shows no symbol. One shows the work that a villager keeps when the hand releases it. One shows the villagers that
 // follow a disciple to its work, and one that a disciple calls no followers after a wait. One shows the object that a
-// script gives a villager to hold.
+// script gives a villager to hold. One shows the read-out of a town's houses over which the hand holds a villager.
 
 #include <vector>
 
@@ -202,5 +202,31 @@ void testbed_scenarios::AddDiscipleScenarios(std::vector<Scenario>& all)
 	                 .walkAfterSeconds = 1.0f,
 	                 .walkRepeatSeconds = 20.0f,
 	                 .disciple = VillagerDisciple::Trader}},
+	});
+
+	// A villager in the hand over a house of its town shows the town's read-out, and its own home shows that the hand
+	// holds it
+	all.push_back({
+	    .id = "villagers.held_over_house",
+	    .name = "A villager held over a house of its town",
+	    .facet = Facet::Hand,
+	    .description = "Two Celtic huts of the player's town. The first hut stands 20 m to the left, and a grown villager "
+	                   "of the town that lives in it stands near it. The second hut stands in the middle of the screen "
+	                   "under the hand. After a second, the hand takes the villager and holds it over the second hut for "
+	                   "five seconds. Then the hand puts the villager down.",
+	    .expected = "While the hand holds the villager over the second hut, the second hut shows the row of little people "
+	                "that a knock shows: a gold one for each adult that lives there and a green one for each free place. "
+	                "The row grows in and stays while the villager is over the hut. The first hut shows one teal person "
+	                "at full size in place of its row, while the hand holds the villager. When the hand puts the "
+	                "villager down, the teal person goes at once and the row of the second hut shrinks away after six "
+	                "seconds. No knock sound plays and nobody comes out of a hut.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 26.0f, -40.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-20.0f, 0.0f}, .yawDegrees = 180.0f},
+	                {.type = AbodeInfo::CelticHut, .offset = {0.0f, 0.0f}, .yawDegrees = 180.0f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-20.0f, -8.0f}, .joinTown = true, .homeIn = 0}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 2},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 5.0f}},
+	    .townBeliefInPlayer = 1000.0f,
 	});
 }

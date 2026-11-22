@@ -30,6 +30,7 @@
 #include "Common/GameRandom.h"
 #include "Common/IntegerSteps.h"
 #include "Creature/CreatureDeeds.h"
+#include "ECS/AbodeKnock.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -66,6 +67,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
@@ -514,6 +516,32 @@ std::vector<entt::entity> ThingsNear(entt::entity villager)
 	return ordered;
 }
 
+/// A villager that a player holds over a house of a town of that player shows the town's read-out of its people
+void ShowReadoutIfOverHouse(entt::entity thing, entt::entity villager, PlayerNames holder)
+{
+	const auto& registry = Entities();
+	const auto* abode = registry.TryGet<const Abode>(thing);
+	const auto* info = abode != nullptr ? world_objects::AbodeInfoOf(thing) : nullptr;
+	if (info == nullptr || !Locator::abodeKnockSystem::has_value())
+	{
+		return;
+	}
+	const auto town = TownById(abode->townId);
+	const auto* townData = town.has_value() ? &registry.Get<const Town>(*town) : nullptr;
+	const auto house = ecs::abode_knock::HouseNearHeld {
+	    .places = info->maxVillagersInAbode,
+	    .distance = gutils::GetDistanceInMetres(PositionOf(thing), PositionOf(villager)),
+	    .radius = systems::object_measures::TwoDRadius(registry, thing),
+	    .hasTown = townData != nullptr,
+	    .uninhabitable = townData != nullptr && townData->uninhabitable,
+	    .townOfHolder = townData != nullptr && townData->owner == holder,
+	};
+	if (ecs::abode_knock::HeldVillagerShowsReadout(house))
+	{
+		Locator::abodeKnockSystem::value().ShowReadout(*town);
+	}
+}
+
 /// The player of this computer, who hears the guidance about the disciples that its hand makes
 std::optional<PlayerNames> OwnPlayer()
 {
@@ -894,6 +922,11 @@ uint32_t villager_disciple::InHand(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
 	auto& registry = Entities();
+	// Its home shows that a hand holds it, also the hand of a creature
+	if (const auto home = registry.Get<const Villager>(villager).abode; registry.Valid(home) && registry.AllOf<Abode>(home))
+	{
+		registry.Get<Abode>(home).residentInHand = true;
+	}
 	auto* held = registry.TryGet<DiscipleHeld>(villager);
 	if (held == nullptr || !disciple::LooksForWorkWhileHeld(ecs::creature_carried::CarrierOf(registry, villager).has_value()))
 	{
@@ -906,7 +939,17 @@ uint32_t villager_disciple::InHand(LivingAction& action)
 	{
 		facts.push_back(NearFactsOf(thing, villager));
 	}
-	const auto choice = disciple::ChooseWhileHeld(facts, HeldFactsOf(villager, HolderOf(villager)), held->atPickUp);
+	const auto holder = HolderOf(villager);
+	const auto choice = disciple::ChooseWhileHeld(facts, HeldFactsOf(villager, holder), held->atPickUp);
+	// Each thing that the villager looked at, up to the one whose work it takes, can show a read-out
+	if (holder.has_value() && !things.empty())
+	{
+		const auto last = choice.from.value_or(things.size() - 1);
+		for (size_t i = 0; i <= last; ++i)
+		{
+			ShowReadoutIfOverHouse(things.at(i), villager, *holder);
+		}
+	}
 	// When the hand shows a trader a thing of a town, the trader trades with that town. Other work keeps the trade town.
 	if (choice.type == Trader && choice.from.has_value())
 	{
