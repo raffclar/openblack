@@ -210,8 +210,9 @@ bool VideoSystem::Play(const std::filesystem::path& path)
 
 void VideoSystem::ScheduleIntro()
 {
-	// With films turned off the intro ends at once, as any other film does
-	if (!_video || !_filmsEnabled)
+	// With films turned off the intro ends at once, as any other film does. In the first game of a new player, an intro
+	// whose file did not open also ends at once
+	if (!_video || !_filmsEnabled || (_firstGame && !_video->file))
 	{
 		return;
 	}
@@ -362,7 +363,7 @@ void VideoSystem::WaitForFrame(std::chrono::steady_clock::time_point now)
 void VideoSystem::DecodeDue(std::chrono::steady_clock::time_point now)
 {
 	auto& video = *_video;
-	// A file that didn't open has no frames to count: its counter stays where it is. The intro's schedule then holds
+	// A file that did not open has no frames to count: its counter stays where it is. The intro's schedule then holds
 	// it, black and paused, until Escape ends it
 	if (!video.file)
 	{
@@ -404,7 +405,7 @@ void VideoSystem::Delete()
 	_video.reset();
 	_playing.store(false, std::memory_order_release);
 	_finishedPending = true;
-	_noSkip = false;
+	_firstGame = false;
 	if (opened)
 	{
 		_hooks.closeFile(path);
@@ -418,7 +419,7 @@ void VideoSystem::Finished()
 	{
 		_hooks.setWideScreen(_previousWideScreen);
 	}
-	_noSkip = false;
+	_firstGame = false;
 	_finishedPending = false;
 }
 
@@ -428,8 +429,9 @@ bool VideoSystem::Escape(bool shift, bool ctrl)
 	{
 		return false;
 	}
-	// With Shift or Ctrl held, or while it can't be skipped, Escape does nothing at all
-	if (shift || ctrl || _noSkip)
+	// With Shift or Ctrl held, Escape does nothing at all. In the first game of a new player, Escape also skips the
+	// intro
+	if (shift || ctrl)
 	{
 		return true;
 	}
