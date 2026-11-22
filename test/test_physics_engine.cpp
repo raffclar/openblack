@@ -953,3 +953,63 @@ TEST(PhysicsBody, TheSpeedNowIsTheLengthOfTheVelocityAsItIs)
 	EXPECT_EQ(body.SpeedNow(), expected);
 	EXPECT_EQ(body.Speed(), 0.0f);
 }
+
+TEST(PhysicsShapes, TheCentreOfMassOfAModelIsTheSumTimesOneOverTheCount)
+{
+	const std::vector<glm::vec3> positions {{0.3f, 0.0f, 0.0f}, {1.7f, 0.0f, 0.0f}, {2.9f, 0.0f, 0.0f}};
+	const std::vector<uint32_t> triangle {0, 1, 2};
+	const std::vector<shapes::ModelPart> parts {
+	    {.positions = positions, .indices = triangle, .isPhysics = true, .nearestDetail = true},
+	};
+	const auto shape = shapes::FromModel(parts, 1.0f);
+	const float sum = (0.3f + 1.7f) + 2.9f;
+	// The game multiplies the sum by one over the count, which is not the same as a division by the count
+	ASSERT_NE((1.0f / 3.0f) * sum, sum / 3.0f);
+	EXPECT_EQ(shape.centreOfMass.x, (1.0f / 3.0f) * sum);
+}
+
+TEST(PhysicsShapes, TheCentreOfMassOfATreeOrALivingThingDividesTheShareByTheScaleFirst)
+{
+	constexpr float k_Height = 10.3f;
+	constexpr float k_Scale = 1.7f;
+	ASSERT_NE((0.4f / k_Scale) * k_Height, 0.4f * k_Height / k_Scale);
+	ASSERT_NE((0.5f / k_Scale) * k_Height, 0.5f * k_Height / k_Scale);
+	EXPECT_EQ(shapes::Tree(k_Height, 1.0f, k_Scale, true).centreOfMass.y, (0.4f / k_Scale) * k_Height);
+	EXPECT_EQ(shapes::Tree(k_Height, 1.0f, k_Scale, false).centreOfMass.y, (0.5f / k_Scale) * k_Height);
+	EXPECT_EQ(shapes::LivingBody(shapes::Living::Villager, k_Height, 1.0f, k_Scale).centreOfMass.y,
+	          (0.5f / k_Scale) * k_Height);
+	EXPECT_EQ(shapes::LivingBody(shapes::Living::Animal, k_Height, 1.0f, k_Scale).centreOfMass.y, (0.5f / k_Scale) * k_Height);
+}
+
+TEST(PhysicsShapes, AModelOnTheLandLiftsItsVerticesInModelUnits)
+{
+	const std::vector<glm::vec3> positions {{0.3f, 0.2f, -1.1f}, {1.7f, 0.9f, 0.4f}, {-2.9f, 0.1f, 2.3f}};
+	const std::vector<uint32_t> triangle {0, 1, 2};
+	const std::vector<shapes::ModelPart> parts {
+	    {.positions = positions, .indices = triangle, .isPhysics = true, .nearestDetail = true},
+	};
+	constexpr float k_Scale = 1.3f;
+	const glm::mat3 axes = glm::mat3({0.8f, 0.0f, -0.6f}, {0.0f, 1.0f, 0.0f}, {0.6f, 0.0f, 0.8f}) * k_Scale;
+	const glm::vec3 origin {103.7f, 20.0f, 57.1f};
+	const FakeLand land(4.0f, 0.37f);
+	const auto lifts = shapes::LandLifts(parts, axes, origin, k_Scale, land);
+	ASSERT_EQ(lifts.size(), 3u);
+
+	// The game places each vertex with the products in its own order, then divides the land's rise by the scale
+	const auto& v = positions[1];
+	const float x = ((v.z * axes[2].x + v.y * axes[1].x) + v.x * axes[0].x) + origin.x;
+	const float rise = land.HeightAt(glm::vec2(x, 0.0f)) - land.HeightAt(glm::vec2(origin.x, origin.z));
+	EXPECT_EQ(lifts[1], rise * (1.0f / k_Scale));
+
+	// The lift moves the vertex before the centre of mass is taken off, and the centre of mass does not include it
+	const auto lifted = shapes::FromModel(parts, k_Scale, lifts);
+	const auto flat = shapes::FromModel(parts, k_Scale);
+	EXPECT_EQ(lifted.centreOfMass, flat.centreOfMass);
+	EXPECT_EQ(lifted.points[1].y, ((v.y + lifts[1]) - flat.centreOfMass.y) * k_Scale);
+	float radius = 0.0f;
+	for (const auto& point : lifted.points)
+	{
+		radius = std::max(radius, std::sqrt((point.z * point.z + point.y * point.y) + point.x * point.x));
+	}
+	EXPECT_EQ(lifted.radius, radius);
+}
