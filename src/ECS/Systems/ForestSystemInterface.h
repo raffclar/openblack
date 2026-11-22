@@ -124,8 +124,10 @@ public:
 	/// forest that is not in the lists, the search walks all the trees.
 	[[nodiscard]] virtual std::optional<entt::entity> ListedCentreTreeOf(entt::entity forest,
 	                                                                     const ForestTreeLists& lists) const = 0;
-	/// Where a tiger's or a wolf's flock makes its home, choosing among the forests from a point; none to keep it
-	[[nodiscard]] virtual std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const = 0;
+	/// The map position where a tiger's or a wolf's flock makes its home. The animal chooses among the forests from its own
+	/// map position. None keeps the home.
+	[[nodiscard]] virtual std::optional<map_coords::MapCoords> ForestLair(AnimalInfo kind,
+	                                                                      const map_coords::MapCoords& from) const = 0;
 
 	/// Once the land is laid out: each town gathers the lone trees about it, out to a little beyond the reach of its
 	/// forests, into a forest of its own (taking a tree from another town's such forest when it stands nearer this town)
