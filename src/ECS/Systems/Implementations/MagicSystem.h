@@ -162,9 +162,9 @@ public:
 	                          const particles::ProcessInfo& info) override;
 	void CloseDown(entt::entity entity) override;
 	void DeleteSpell(entt::entity entity) override;
-	void ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values, PlayerNames player) override
+	void ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values, const magic::EffectSource& source) override
 	{
-		_world.ApplyEffectAt(point, values, {.player = player});
+		_world.ApplyEffectAt(point, values, source);
 	}
 	bool ApplyEffectToObject(entt::entity object, const magic::EffectValues& values, PlayerNames player) override
 	{

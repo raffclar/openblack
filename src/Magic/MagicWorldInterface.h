@@ -58,6 +58,13 @@ struct EffectSource
 	return source.appliedBy.value_or(source.casterCreature);
 }
 
+/// The source of the strike of a storm's bolt. The neutral player strikes, but nothing applies it, so the strike does
+/// not count as an attack on a town.
+[[nodiscard]] constexpr EffectSource StormBoltSource()
+{
+	return EffectSource {.player = PlayerNames::NEUTRAL, .appliedBy = entt::entity {entt::null}};
+}
+
 /// A drop of the water miracle's rain
 struct WaterDrop
 {

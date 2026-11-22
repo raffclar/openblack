@@ -606,6 +606,17 @@ TEST(AreaEffect, TheApplierIsWhatAppliedTheEffectElseTheCastingCreature)
 	EXPECT_EQ(ApplierOf({.player = PlayerNames::PLAYER_ONE}), entt::entity {entt::null});
 }
 
+TEST(AreaEffect, TheStrikeOfAStormBoltIsTheNeutralPlayersAndNothingAppliesIt)
+{
+	// The strike has a player for the life, the fire and the alignment, but no thing, so no town counts an attack
+	const auto source = StormBoltSource();
+	EXPECT_EQ(source.player, PlayerNames::NEUTRAL);
+	EXPECT_FALSE(source.playerless);
+	ASSERT_TRUE(source.appliedBy.has_value());
+	EXPECT_EQ(*source.appliedBy, entt::entity {entt::null});
+	EXPECT_EQ(ApplierOf(source), entt::entity {entt::null});
+}
+
 TEST(AreaEffect, HeatCountsOnlyWithAChangeOfLifeAndInFull)
 {
 	const auto table = AlignmentTable();

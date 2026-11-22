@@ -46,6 +46,7 @@
 #include "ECS/ThingModel.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicWorldInterface.h"
 #include "Magic/MapSpiral.h"
 #include "ParticleRuleSystem.h"
 #include "Particles/LightningMaths.h"
@@ -289,7 +290,8 @@ void GameParticleWorld::StrikeWithoutMiracle(glm::vec3 point)
 	const auto row = static_cast<size_t>(EffectInfo::WeatherLightning);
 	if (row < effects.size())
 	{
-		Locator::magicSystem::value().ApplyEffectAt(point, magic::EffectValues::From(effects.at(row)), PlayerNames::NEUTRAL);
+		Locator::magicSystem::value().ApplyEffectAt(point, magic::EffectValues::From(effects.at(row)),
+		                                            magic::StormBoltSource());
 	}
 }
 
