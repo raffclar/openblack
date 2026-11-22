@@ -525,7 +525,8 @@ public:
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// True when the game steps deterministically and this frame started while a turn waited between two players to
-	/// continue. The frame gets no time, and its steps before the turns wait (deviation row 288).
+	/// continue. The frame gets no time, and its steps before the turns wait (deviation row 288). Also true for a frame
+	/// that only draws a picture while the tool holds the run after a step with a fixed frame time.
 	[[nodiscard]] bool IsFrameWithoutTime() const { return _frameWithoutTime; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
 	/// without the developer tools, and a live network game, refuse it: then the result is false.
@@ -646,6 +647,12 @@ private:
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The frame started while a turn waited, in a game that steps deterministically
 	bool _frameWithoutTime {false};
+	/// The frame only draws a picture while the tool holds the run after a step with a fixed frame time
+	bool _onlyDrawsHeldFrame {false};
+	/// The tool held the run in the frames before this frame, so they did not play
+	bool _heldBefore {false};
+	/// The time that the last frame that played gave to the animations of the frames
+	std::chrono::microseconds _lastFrameDeltaTime {0};
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	std::optional<testbed_scenarios::checks::Report> _scenarioChecks;
 #endif

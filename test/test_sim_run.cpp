@@ -111,6 +111,24 @@ TEST(SimRun, AHeldRunThatAToolStepsSkipsItsFrames)
 	EXPECT_FALSE(SkipsHeldFrame(true, true, true));
 }
 
+TEST(SimRun, AFrameHeldAfterAFixedStepOnlyDraws)
+{
+	EXPECT_TRUE(OnlyDrawsHeldFrame(true, false));
+	// A scenario that waits to be laid out plays its frame
+	EXPECT_FALSE(OnlyDrawsHeldFrame(true, true));
+	EXPECT_FALSE(OnlyDrawsHeldFrame(false, false));
+}
+
+TEST(SimRun, AFrameAfterHeldFramesTakesTheTimeOfTheLastFrameThatPlayed)
+{
+	// The wall clock measured the time over the held frames, which did not play
+	EXPECT_EQ(FrameDeltaTime(3000000us, 16000us, true, std::nullopt), 16000us);
+	EXPECT_EQ(FrameDeltaTime(9000us, 16000us, false, std::nullopt), 9000us);
+	// A fixed frame time wins in all cases
+	EXPECT_EQ(FrameDeltaTime(3000000us, 9000us, true, 20000us), 20000us);
+	EXPECT_EQ(FrameDeltaTime(400us, 9000us, false, 16000us), 16000us);
+}
+
 TEST(SimRun, ThePacedRunWaitsForTheRestOfTheFrame)
 {
 	const Settings paced {.paceToWallClock = true};
