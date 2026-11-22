@@ -9,6 +9,9 @@
 
 #include "LandForests.h"
 
+#include <ranges>
+
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 
 using namespace openblack::ecs;
@@ -59,6 +62,25 @@ std::optional<size_t> land_forests::Nearest(std::span<const int32_t> distances)
 bool land_forests::NearTown(float distance, float reach, float wood)
 {
 	return distance < reach && wood != 0.0f;
+}
+
+openblack::map_coords::MapCoords land_forests::EdgeTowards(const map_coords::MapCoords& centre, float radius,
+                                                           const map_coords::MapCoords& place)
+{
+	return centre + gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(centre, place), radius);
+}
+
+std::vector<size_t> land_forests::TownList(std::span<const TownMeasure> forests, float reach)
+{
+	std::vector<size_t> listed;
+	for (const auto i : std::views::iota(size_t {0}, forests.size()) | std::views::reverse)
+	{
+		if (NearTown(forests[i].distance, reach, forests[i].wood))
+		{
+			listed.push_back(i);
+		}
+	}
+	return listed;
 }
 
 uint32_t land_forests::CountAfter(uint32_t count, uint32_t number)

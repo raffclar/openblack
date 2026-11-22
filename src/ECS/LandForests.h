@@ -13,6 +13,9 @@
 
 #include <optional>
 #include <span>
+#include <vector>
+
+#include "3D/MapCoords.h"
 
 /// The rules the land's forests are chosen and ranked by
 namespace openblack::ecs::land_forests
@@ -32,6 +35,19 @@ namespace openblack::ecs::land_forests
 
 /// The forests within a town's reach: their nearest point strictly nearer than the reach, and their wood not nothing
 [[nodiscard]] bool NearTown(float distance, float reach, float wood);
+/// The point on a big forest's edge towards a place, in whole map units: the centre plus a step of the radius at the
+/// angle from the centre to the place
+[[nodiscard]] map_coords::MapCoords EdgeTowards(const map_coords::MapCoords& centre, float radius,
+                                                const map_coords::MapCoords& place);
+/// A forest of the land as a town measures it: the distance from the town to its nearest point, and its wood
+struct TownMeasure
+{
+	float distance;
+	float wood;
+};
+/// The forests that a town lists, given the land's forests newest first: each one near the town (NearTown). The town puts
+/// each one at the front of its list, so the list holds them oldest first.
+[[nodiscard]] std::vector<size_t> TownList(std::span<const TownMeasure> forests, float reach);
 /// The land's forest count once a forest is made with a number of its own: moved past the number only when the number is
 /// beyond the count
 [[nodiscard]] uint32_t CountAfter(uint32_t count, uint32_t number);

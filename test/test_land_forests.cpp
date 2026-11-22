@@ -58,3 +58,29 @@ TEST(LandForests, ANumberGivenMovesTheCountOnlyWhenBeyondIt)
 	// Below the count: the count stays
 	EXPECT_EQ(CountAfter(3u, 1u), 3u);
 }
+
+TEST(LandForests, TheEdgeOfABigForestIsInWholeMapUnits)
+{
+	// Ten metres along the x axis is 65536 whole units from the centre
+	const openblack::map_coords::MapCoords centre {.x = 1000000, .z = 2000000, .altitude = 0.0f};
+	const openblack::map_coords::MapCoords place {.x = 6000000, .z = 2000000, .altitude = 0.0f};
+	const auto edge = EdgeTowards(centre, 10.0f, place);
+	EXPECT_EQ(edge.x, 1065536);
+	EXPECT_EQ(edge.z, 2000000);
+}
+
+TEST(LandForests, ATownListsItsNearForestsOldestFirst)
+{
+	// The land's forests come newest first; the town puts each near one at the front of its list
+	const std::array<TownMeasure, 4> forests {{
+	    {.distance = 10.0f, .wood = 5.0f},
+	    {.distance = 90.0f, .wood = 5.0f},
+	    {.distance = 20.0f, .wood = 5.0f},
+	    {.distance = 30.0f, .wood = 0.0f},
+	}};
+	const auto listed = TownList(forests, 50.0f);
+	ASSERT_EQ(listed.size(), 2u);
+	EXPECT_EQ(listed[0], 2u);
+	EXPECT_EQ(listed[1], 0u);
+	EXPECT_TRUE(TownList({}, 50.0f).empty());
+}
