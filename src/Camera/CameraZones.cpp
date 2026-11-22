@@ -11,6 +11,7 @@
 
 #include <cmath>
 
+#include <bit>
 #include <string>
 #include <utility>
 
@@ -23,8 +24,9 @@ using namespace openblack::camera_zones;
 
 namespace
 {
-/// A point this close to a corner, squared, is on the fence; a side shorter than this, squared, is skipped
-constexpr float k_OnCorner = 1e-8f;
+/// A point this close to a corner, squared, is on the fence; a side shorter than this, squared, is skipped. The game
+/// keeps this value one step below the nearest float to 1e-8.
+constexpr float k_OnCorner = std::bit_cast<float>(0x322BCC76u);
 /// A line this near parallel to a side doesn't cross it, and a crossing this near the point is the point
 constexpr float k_Parallel = 1e-4f;
 /// The camera has hardly moved this frame when it is this near, squared, across the ground to where it started

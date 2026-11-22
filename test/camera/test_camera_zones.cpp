@@ -137,6 +137,16 @@ TEST(CameraZones, APointIsInsideTheFenceWhenALineFromItCrossesItAnOddNumberOfTim
 	EXPECT_TRUE(CrossFence(k_Square, true, {100.0f, 0.0f, 100.0f}, {1.0f, 0.0f, 0.0f}).inside);
 }
 
+TEST(CameraZones, APointIsOnACornerOnlyWhenNearerThanTheGamesLimit)
+{
+	// The square of 0.0001 is the game's limit itself, which is one step below the nearest float to 1e-8. A point at
+	// that distance outside a corner is not on it, so it is outside.
+	constexpr float k_Gap = 1e-4f;
+	EXPECT_FALSE(CrossFence(k_Square, true, {-k_Gap, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}).inside);
+	// A point a little nearer is on the corner, so it is inside
+	EXPECT_TRUE(CrossFence(k_Square, true, {-0.5f * k_Gap, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}).inside);
+}
+
 TEST(CameraZones, ACameraOutsideTheFenceIsPutBackPastWhereItsLineCrossesIt)
 {
 	// Moved out across the right side from where it started: back along the way it came, 20 past the fence

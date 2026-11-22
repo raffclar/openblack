@@ -1085,8 +1085,9 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		    .touchesCreature = _handOnCreature.has_value(),
 		    .movesCamera = _handCameraState,
 		});
-		// The camera's helper icons by the hand, where it is drawn this frame, now that it is posed
-		UpdateHandTricons(IsHandDrawn(), std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(), mode);
+		// The camera's helper icons by the hand, where it is drawn this frame, now that it is posed. They fade with the
+		// whole milliseconds of the camera's step, as the camera moves.
+		UpdateHandTricons(IsHandDrawn(), HandStepSeconds(), mode);
 		// The tooltip by the drawn hand too, which stays with it while it is held still and the pointer moves on
 		UpdateHandToolTipAnchor();
 		// Taking or letting go of a seed cross-fades the drawn hand, and the seed's in-hand effect sits in its fingers
