@@ -331,6 +331,25 @@ TEST(VideoSystem, AMissingIntroWaitsForEscape)
 	EXPECT_FALSE(game.paused);
 }
 
+TEST(VideoSystem, AMissingIntroOfAFirstGameNeverEnds)
+{
+	// The game sets the no-skip rule when no player profile exists, before the film starts
+	FakeGame game;
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	videos.SetNoSkip(true);
+	EXPECT_FALSE(videos.Play("intro.bik"));
+	videos.ScheduleIntro();
+	videos.Update(k_Start);
+	// Escape does nothing, and with no file no frame is counted, so the film stays and the game stays paused
+	EXPECT_TRUE(videos.Escape(false, false));
+	EXPECT_EQ(game.musicReleased, 0);
+	videos.Update(k_Start + 600s);
+	EXPECT_TRUE(videos.IsPlaying());
+	EXPECT_TRUE(videos.CoversScreen());
+	EXPECT_EQ(videos.GetStatus()->frame, 0);
+	EXPECT_TRUE(game.paused);
+}
+
 TEST(VideoSystem, WithFilmsOffTheIntroEndsAtOnce)
 {
 	FakeGame game;

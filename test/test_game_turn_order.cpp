@@ -156,12 +156,22 @@ TEST(GameTurnOrder, TheHandsKeepTheirShareOfInfluenceInTheInputOfThePlayers)
 TEST(GameTurnOrder, TheStormsMoveBeforeThePlayersAndTheClimatesAfterTheTimeOfDay)
 {
 	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Moon, Step::Storms));
 	EXPECT_TRUE(recorder.Before(Step::Storms, Step::Snow));
 	EXPECT_TRUE(recorder.Before(Step::Snow, Step::Players));
 	EXPECT_TRUE(recorder.Before(Step::TimeOfDay, Step::WeatherThings));
 	EXPECT_TRUE(recorder.Before(Step::WeatherThings, Step::CameraBookmarks));
 	EXPECT_TRUE(recorder.Before(Step::CameraBookmarks, Step::ScriptHighlights));
 	EXPECT_TRUE(recorder.Before(Step::ScriptHighlights, Step::Climates));
+}
+
+// The moon takes its place from the clock as the turn starts: before the creatures look at it, and before the clock moves
+TEST(GameTurnOrder, TheMoonTakesItsPlaceBeforeTheLivingAndTheTimeOfDay)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Moon, Step::Living));
+	EXPECT_TRUE(recorder.Before(Step::Moon, Step::Scripts));
+	EXPECT_TRUE(recorder.Before(Step::Moon, Step::TimeOfDay));
 }
 
 TEST(GameTurnOrder, TheCameraTakesItsAlignmentAtTheEndOfThePlayersTurns)

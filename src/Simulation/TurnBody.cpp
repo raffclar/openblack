@@ -736,6 +736,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// Each shark's turn starts where it is
 		Locator::sharkSystem::value().ProcessTurn();
 		break;
+	case Step::Moon:
+		// The moon stands where the clock of the turn's start puts it, until the next turn
+		Locator::skyClockSystem::value().PlaceMoon();
+		break;
 	case Step::Storms:
 		if (Locator::weatherSystem::has_value())
 		{

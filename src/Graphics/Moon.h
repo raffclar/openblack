@@ -32,8 +32,12 @@ struct Placement
 	float alpha;
 };
 [[nodiscard]] std::optional<Placement> Place(float scriptHour);
+/// The moon at a place from the camera, and how strongly it shows there. None while it is down.
+[[nodiscard]] std::optional<Placement> PlaceAt(const glm::vec3& offset);
 /// Where the moon stands from the camera at an hour of script time, whether or not it shows
 [[nodiscard]] glm::vec3 Offset(float scriptHour);
+/// Where the moon stands from the camera before the first turn places it: level with the camera, so it does not show
+inline constexpr glm::vec3 k_OffsetBeforeFirstTurn {4000.0f, 0.0f, 0.0f};
 
 /// The day the moon months are counted from, in whole days since 1970: 6 January 2000, a new moon
 inline constexpr int64_t k_NewMoonDay = 10962;

@@ -74,6 +74,7 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/TownCensus.h"
+#include "ECS/TreeAlignment.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -258,13 +259,11 @@ void Replant(const PhysicsEntry* entry, entt::entity tree)
 	{
 		Locator::creatureMindSystem::value().PlayerDid(objects::k_DeedPlantTree, position, tree, player);
 	}
-	if (Locator::alignmentSystem::has_value() && Locator::infoConstants::has_value() && player != PlayerNames::NEUTRAL)
+	// A planted tree is good for the alignment of the player, also of the neutral player
+	if (Locator::alignmentSystem::has_value() && Locator::infoConstants::has_value())
 	{
-		auto& alignment = Locator::alignmentSystem::value();
-		const float change = Locator::infoConstants::value().player.treePullPutAlignmentChange;
-		const float damped = magic::DampAlignmentChange(change, alignment.GetPlayerAlignment(player));
-		alignment.AddToHistory(player, ecs::components::AlignmentCause::Tree, damped);
-		alignment.AddPendingAlignment(player, damped);
+		tree_alignment::TreeMoved(Locator::alignmentSystem::value(), player,
+		                          Locator::infoConstants::value().player.treePullPutAlignmentChange, true);
 	}
 }
 

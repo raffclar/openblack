@@ -67,14 +67,39 @@ sky_frame::Inputs Midnight(int64_t date, uint32_t ticks)
 	return frame;
 }
 
+/// A frame after a turn that put the moon for the frame's hour
+void UpdateAfterTurn(const sky_frame::Inputs& inputs, SkyDome& dome, Sun& sun, Moon& moon)
+{
+	moon.turnOffset = graphics::moon::Offset(inputs.scriptHour);
+	sky_frame::Update(inputs, dome, sun, moon);
+}
+
 } // namespace
+
+TEST(SkyFrame, TheMoonStandsWhereTheLastTurnPutItNotAtTheFramesHour)
+{
+	SkyDome dome {};
+	Sun sun;
+	Moon moon;
+	// Before the first turn the moon is level with the camera, so it does not show
+	sky_frame::Update(Frame(0.0f), dome, sun, moon);
+	EXPECT_FALSE(moon.placement.has_value());
+	EXPECT_EQ(moon.strength, 0.0f);
+
+	// A turn put it for one hour, and the frame has a later hour: the moon stays at the turn's place
+	moon.turnOffset = graphics::moon::Offset(23.0f);
+	sky_frame::Update(Frame(0.5f), dome, sun, moon);
+	ASSERT_TRUE(moon.placement.has_value());
+	EXPECT_EQ(moon.placement->offset, graphics::moon::Offset(23.0f));
+	EXPECT_EQ(moon.placement->alpha, graphics::moon::Place(23.0f)->alpha);
+}
 
 TEST(SkyFrame, AtNoonTheSunIsUpAndTheMoonDown)
 {
 	SkyDome dome {};
 	Sun sun;
 	Moon moon;
-	sky_frame::Update(Frame(12.0f), dome, sun, moon);
+	UpdateAfterTurn(Frame(12.0f), dome, sun, moon);
 
 	const auto placement = graphics::sun::Place(12.0f);
 	ASSERT_TRUE(placement.has_value());
@@ -90,7 +115,7 @@ TEST(SkyFrame, AtMidnightTheMoonIsUpWithItsPhaseAndColour)
 	SkyDome dome {};
 	Sun sun;
 	Moon moon;
-	sky_frame::Update(Frame(0.0f), dome, sun, moon);
+	UpdateAfterTurn(Frame(0.0f), dome, sun, moon);
 
 	const auto placement = graphics::moon::Place(0.0f);
 	ASSERT_TRUE(placement.has_value());
@@ -108,11 +133,11 @@ TEST(SkyFrame, AFullOvercastLeavesANinthOnlyWithTheFogSetting)
 	SkyDome dome {};
 	Sun sun;
 	Moon moon;
-	sky_frame::Update(Frame(12.0f, 1.0f), dome, sun, moon);
+	UpdateAfterTurn(Frame(12.0f, 1.0f), dome, sun, moon);
 	EXPECT_EQ(dome.overcast, 1.0f);
 	EXPECT_EQ(sun.strength, std::trunc(std::trunc(graphics::sun::Place(12.0f)->alpha) / 9.0f));
 
-	sky_frame::Update(Frame(12.0f, 1.0f, false), dome, sun, moon);
+	UpdateAfterTurn(Frame(12.0f, 1.0f, false), dome, sun, moon);
 	EXPECT_EQ(sun.strength, std::trunc(graphics::sun::Place(12.0f)->alpha));
 }
 
@@ -121,8 +146,8 @@ TEST(SkyFrame, WithoutTheLightPaletteTheLastOvercastIsKept)
 	SkyDome dome {};
 	Sun sun;
 	Moon moon;
-	sky_frame::Update(Frame(12.0f, 0.5f), dome, sun, moon);
-	sky_frame::Update(Frame(12.0f, std::nullopt), dome, sun, moon);
+	UpdateAfterTurn(Frame(12.0f, 0.5f), dome, sun, moon);
+	UpdateAfterTurn(Frame(12.0f, std::nullopt), dome, sun, moon);
 	EXPECT_EQ(dome.overcast, 0.5f);
 	EXPECT_EQ(sun.strength, sky_dome::ThroughOvercast(graphics::sun::Place(12.0f)->alpha, 0.5f, true));
 }
@@ -133,12 +158,12 @@ TEST(SkyFrame, TheMoonsColourIsThePalettesForTheLandsLight)
 	Sun sun;
 	Moon moon;
 	const auto frame = Frame(0.0f, 0.25f);
-	sky_frame::Update(frame, dome, sun, moon);
+	UpdateAfterTurn(frame, dome, sun, moon);
 	EXPECT_EQ(moon.colour,
 	          sky_frame::Colour(LandLightTable::GetMoonColour(FakePalette(), frame.landLight.skyType, frame.landLight.sky)));
 
 	// White without the palette
-	sky_frame::Update(Frame(0.0f, std::nullopt), dome, sun, moon);
+	UpdateAfterTurn(Frame(0.0f, std::nullopt), dome, sun, moon);
 	EXPECT_EQ(moon.colour, glm::vec3(1.0f));
 }
 
@@ -147,14 +172,14 @@ TEST(SkyFrame, TheDomeKeepsTheFramesLandLightForTheLandsLightTable)
 	SkyDome dome {};
 	Sun sun;
 	Moon moon;
-	sky_frame::Update(Frame(12.0f, 0.25f), dome, sun, moon);
+	UpdateAfterTurn(Frame(12.0f, 0.25f), dome, sun, moon);
 	EXPECT_EQ(dome.landLight.skyType, 0.5f);
 	EXPECT_EQ(dome.landLight.sky, 1.25f);
 	EXPECT_EQ(dome.landLight.overcast, 0.25f);
 	EXPECT_EQ(dome.landLight.flash, 3);
 
 	// Without the palette too, though the sun and moon keep the overcast they last showed through
-	sky_frame::Update(Frame(12.0f, std::nullopt), dome, sun, moon);
+	UpdateAfterTurn(Frame(12.0f, std::nullopt), dome, sun, moon);
 	EXPECT_EQ(dome.landLight.overcast, 0.75f);
 	EXPECT_EQ(dome.overcast, 0.25f);
 }
@@ -164,11 +189,11 @@ TEST(SkyFrame, TheMoonTakesItsPhaseOnlyWhileItShows)
 	SkyDome dome {};
 	Sun sun;
 	Moon moon;
-	sky_frame::Update(Frame(12.0f), dome, sun, moon);
+	UpdateAfterTurn(Frame(12.0f), dome, sun, moon);
 	EXPECT_EQ(moon.phase, 0.0f);
 	EXPECT_EQ(moon.date, 0);
 
-	sky_frame::Update(Frame(0.0f), dome, sun, moon);
+	UpdateAfterTurn(Frame(0.0f), dome, sun, moon);
 	const float shown = moon.phase;
 	EXPECT_EQ(shown, graphics::moon::Phase(k_Date));
 
@@ -176,11 +201,11 @@ TEST(SkyFrame, TheMoonTakesItsPhaseOnlyWhileItShows)
 	auto noon = Frame(12.0f);
 	noon.unixTime = k_Date + (10 * 86400);
 	noon.ticks += 60000;
-	sky_frame::Update(noon, dome, sun, moon);
+	UpdateAfterTurn(noon, dome, sun, moon);
 	EXPECT_EQ(moon.phase, shown);
 
 	// A full overcast with the fog setting leaves it a ninth: still showing
-	sky_frame::Update(Frame(0.0f, 1.0f), dome, sun, moon);
+	UpdateAfterTurn(Frame(0.0f, 1.0f), dome, sun, moon);
 	EXPECT_GT(moon.strength, 0.0f);
 }
 
@@ -190,16 +215,16 @@ TEST(SkyFrame, TheDateIsReadAtMostOnceEveryTwoSeconds)
 	Sun sun;
 	Moon moon;
 	constexpr int64_t k_Later = k_Date + (7 * 86400);
-	sky_frame::Update(Midnight(k_Date, 5000), dome, sun, moon);
+	UpdateAfterTurn(Midnight(k_Date, 5000), dome, sun, moon);
 	EXPECT_EQ(moon.date, k_Date);
 	EXPECT_EQ(moon.dateReadAt, 5000u);
 
 	// Two seconds exactly is not yet more than two seconds: the date read is kept
-	sky_frame::Update(Midnight(k_Later, 7000), dome, sun, moon);
+	UpdateAfterTurn(Midnight(k_Later, 7000), dome, sun, moon);
 	EXPECT_EQ(moon.date, k_Date);
 	EXPECT_EQ(moon.phase, graphics::moon::Phase(k_Date));
 
-	sky_frame::Update(Midnight(k_Later, 7001), dome, sun, moon);
+	UpdateAfterTurn(Midnight(k_Later, 7001), dome, sun, moon);
 	EXPECT_EQ(moon.date, k_Later);
 	EXPECT_EQ(moon.dateReadAt, 7001u);
 	EXPECT_EQ(moon.phase, graphics::moon::Phase(k_Later));
@@ -213,7 +238,7 @@ TEST(SkyFrame, TheMachinesClockWrapsBetweenReads)
 	moon.dateReadAt = 0xFFFFFF00u;
 	moon.date = k_Date;
 	// 0x100 + 1000 milliseconds after the last read, across the wrap: the date is kept
-	sky_frame::Update(Midnight(k_Date + 86400, 1000), dome, sun, moon);
+	UpdateAfterTurn(Midnight(k_Date + 86400, 1000), dome, sun, moon);
 	EXPECT_EQ(moon.date, k_Date);
 }
 
@@ -224,7 +249,7 @@ TEST(SkyFrame, ADateOverrideGivesThePhase)
 	Moon moon;
 	constexpr int64_t k_Override = k_Date + (12 * 86400);
 	moon.dateOverride = k_Override;
-	sky_frame::Update(Frame(0.0f), dome, sun, moon);
+	UpdateAfterTurn(Frame(0.0f), dome, sun, moon);
 	EXPECT_EQ(sky_frame::MoonDate(moon), k_Override);
 	EXPECT_EQ(moon.phase, graphics::moon::Phase(k_Override));
 	// The computer's date is still read and kept for when the override goes

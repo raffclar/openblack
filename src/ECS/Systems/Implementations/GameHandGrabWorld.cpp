@@ -125,6 +125,7 @@
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/TreeAlignment.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -642,16 +643,12 @@ void GameHandGrabWorld::AnimalIntoOwnFlock(entt::entity animal)
 
 void GameHandGrabWorld::TreeUprooted(PlayerNames player, entt::entity /*tree*/)
 {
-	// Pulling up a tree is bad, as planting one is good
-	if (player == PlayerNames::NEUTRAL || !Locator::alignmentSystem::has_value() || Info() == nullptr)
+	// A pulled tree is bad for the alignment of the player of the hand, also of the neutral player
+	if (!Locator::alignmentSystem::has_value() || Info() == nullptr)
 	{
 		return;
 	}
-	auto& alignment = Locator::alignmentSystem::value();
-	const float change =
-	    magic::DampAlignmentChange(-Info()->player.treePullPutAlignmentChange, alignment.GetPlayerAlignment(player));
-	alignment.AddToHistory(player, AlignmentCause::Tree, change);
-	alignment.AddPendingAlignment(player, change);
+	tree_alignment::TreeMoved(Locator::alignmentSystem::value(), player, Info()->player.treePullPutAlignmentChange, false);
 }
 
 std::optional<entt::entity> GameHandGrabWorld::TreeFromBigForest(entt::entity bigForest)

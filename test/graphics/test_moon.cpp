@@ -42,6 +42,16 @@ TEST(Moon, ShowsAroundMidnight)
 	EXPECT_TRUE(moon::Place(23.0f).has_value());
 }
 
+TEST(Moon, BeforeTheFirstTurnItIsDown)
+{
+	EXPECT_FALSE(moon::PlaceAt(moon::k_OffsetBeforeFirstTurn).has_value());
+	// At a place the moon stands at an hour, it shows as it does at that hour
+	const auto midnight = moon::PlaceAt(moon::Offset(0.0f));
+	ASSERT_TRUE(midnight.has_value());
+	EXPECT_EQ(midnight->offset, moon::Place(0.0f)->offset);
+	EXPECT_EQ(midnight->alpha, moon::Place(0.0f)->alpha);
+}
+
 TEST(Moon, PhaseFollowsTheRealMoon)
 {
 	// A whole turn at a new moon, then half way through a moon month of about 29.5 days
