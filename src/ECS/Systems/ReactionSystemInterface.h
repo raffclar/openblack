@@ -169,9 +169,9 @@ public:
 	/// Whether a living thing may take up a kind of reaction now. A creature also catches a flying thing only when it may
 	/// take up a reaction, unless a desire was made its only desire.
 	[[nodiscard]] virtual bool IsAvailable(entt::entity /*living*/, Reaction /*type*/) const { return true; }
-	/// Once a game turn: the reactions age, and impress who is in their reach
+	/// Once a game turn: the reactions impress who is in their reach
 	virtual void ProcessTurn() = 0;
-	/// As the game turn starts, the count of the turns moves on
+	/// As the game turn starts, the count of the turns moves on and the reactions age
 	virtual void StartTurn() {}
 	/// At the start of the turn of a creature, villager or animal, it lets go of its reaction when one of these occurs:
 	/// - The reaction is gone.

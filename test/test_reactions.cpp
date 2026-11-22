@@ -1796,7 +1796,7 @@ TEST_F(Reactions, AVillagerChangesFromAMiracleToAMoreUrgentStandingShieldAfterTe
 		miracle.magicType = MagicType::Shield;
 		miracle.spellClass = magic::SpellClass::Shield;
 		miracle.caster.player = PlayerNames::PLAYER_ONE;
-		miracle.castPosition = k_Here;
+		miracle.castPlace = map_coords::FromMetres({k_Here.x, k_Here.z});
 		miracle.magnitude = 30.0f;
 	};
 	ecs::systems::MagicShieldSystem shields;
@@ -1828,7 +1828,7 @@ TEST_F(Reactions, AShieldWhoseObjectTheWorldDestroyedRaisesNoOther)
 	miracle.magicType = MagicType::Shield;
 	miracle.spellClass = magic::SpellClass::Shield;
 	miracle.caster.player = PlayerNames::PLAYER_ONE;
-	miracle.castPosition = k_Here;
+	miracle.castPlace = map_coords::FromMetres({k_Here.x, k_Here.z});
 	miracle.magnitude = 30.0f;
 	ecs::systems::MagicShieldSystem shields;
 	shields.ProcessTurn();
@@ -1864,7 +1864,7 @@ TEST_F(Reactions, AShieldObjectWithNoMiracleThatTheWorldDestroysGoes)
 	miracle.magicType = MagicType::PhysicalShield;
 	miracle.spellClass = magic::SpellClass::Shield;
 	miracle.caster.player = PlayerNames::PLAYER_ONE;
-	miracle.castPosition = k_Here;
+	miracle.castPlace = map_coords::FromMetres({k_Here.x, k_Here.z});
 	miracle.magnitude = 30.0f;
 	ecs::systems::MagicShieldSystem shields;
 	shields.ProcessTurn();
@@ -2092,6 +2092,36 @@ TEST_F(Reactions, AVillagerRemembersTheStateItWasHeadingForAndTakesUpWhereThatRe
 	EXPECT_GT(registry.Get<const VillagerReactionMemory>(villager).memory.LastReacted(
 	              static_cast<uint32_t>(Reaction::LookAtNiceSpell)),
 	          80u);
+	Locator::reactionSystem::reset();
+}
+
+// A reaction that a villager takes up before the turn of the reactions starts its time in that turn. It ends in the
+// turn of the reactions when more turns than its row allows went by since then.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AReactionTakenUpBeforeTheReactionTurnEndsWhenMoreTurnsThanItsRowAllowsWentBy)
+{
+	MakeJob(*_info, k_JobAgain);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	auto miracle = Miracle();
+	miracle.initiator = Locator::entitiesRegistry::value().Create();
+	// The turn starts, then a villager takes up the new reaction before the reactions take their turn
+	reactions.StartTurn();
+	const auto id = reactions.Create(miracle);
+	ASSERT_EQ(StateOf(_villagers[0]), VillagerStates::LookingAtObjectReaction);
+	ASSERT_TRUE(reactions.Find(id).has_value());
+	EXPECT_EQ(reactions.Find(id)->firstTaken, reactions.Find(id)->age);
+	reactions.ProcessTurn();
+	// The row allows 80 turns. The reaction stays for these turns and ends in the next turn.
+	for (int turn = 1; turn <= 80; ++turn)
+	{
+		reactions.StartTurn();
+		reactions.ProcessTurn();
+		ASSERT_TRUE(reactions.IsActive(id)) << "turn " << turn;
+	}
+	reactions.StartTurn();
+	reactions.ProcessTurn();
+	EXPECT_FALSE(reactions.IsActive(id));
 	Locator::reactionSystem::reset();
 }
 

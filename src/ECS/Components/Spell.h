@@ -16,6 +16,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 #include "Magic/SpellChants.h"
 #include "Magic/SpellRules.h"
@@ -55,7 +56,7 @@ struct SpellCaster
 	entt::entity icon {entt::null};
 };
 
-/// A running miracle. Positions are points of the world.
+/// A running miracle. Positions are points of the world, and the cast places are map positions.
 struct Spell
 {
 	MagicType magicType {MagicType::None};
@@ -69,9 +70,10 @@ struct Spell
 	float magnitude {magic::k_DefaultSpellMagnitude};
 	/// Where it acts now: where it was cast, then where its last event happened
 	glm::vec3 position {0.0f};
-	/// Where it was cast, following the hand while it is held there
-	glm::vec3 castPosition {0.0f};
-	glm::vec3 originalCastPosition {0.0f};
+	/// The map position where it was cast. While the hand holds it, it follows the hand.
+	map_coords::MapCoords castPlace;
+	/// The map position where it was cast first. It does not move.
+	map_coords::MapCoords originalCastPlace;
 	/// The way it was cast, and the movement of its last event
 	glm::vec3 direction {0.0f};
 	glm::vec3 movement {1.0f, 0.0f, 0.0f};

@@ -145,7 +145,7 @@ protected:
 		miracle.magicType = type;
 		miracle.spellClass = magic::SpellClass::Shield;
 		miracle.caster.player = PlayerNames::PLAYER_ONE;
-		miracle.castPosition = k_Here;
+		miracle.castPlace = map_coords::FromMetres({k_Here.x, k_Here.z});
 		miracle.magnitude = 30.0f;
 		return spell;
 	}

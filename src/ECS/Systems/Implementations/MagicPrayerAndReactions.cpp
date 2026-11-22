@@ -134,8 +134,15 @@ void WorshipSiteSpellCaster::OnChantsSpent(float chants, magic::ChantCharge char
 		const auto& land = Locator::terrainSystem::value();
 		return map_coords::ToWorld(land, map_coords::HeldPlace(land, point));
 	};
-	const auto to = upkeep ? spell.castPosition : spell.position;
-	Locator::worshipSiteSystem::value().AddMote(_site, onMap(registry.Get<const Transform>(icon).position), onMap(to));
+	// The motes of the upkeep fly to the map position where the miracle is cast, which follows the hand that holds it
+	const auto castPoint = [&spell]() {
+		const auto& place = spell.castPlace;
+		return Locator::terrainSystem::has_value()
+		           ? map_coords::ToWorld(Locator::terrainSystem::value(), place)
+		           : glm::vec3(map_coords::ToMetres(place.x), place.altitude, map_coords::ToMetres(place.z));
+	};
+	const auto to = upkeep ? castPoint() : onMap(spell.position);
+	Locator::worshipSiteSystem::value().AddMote(_site, onMap(registry.Get<const Transform>(icon).position), to);
 }
 
 MagicSystemInterface::HandCastState MagicSystem::GetHandCastState() const

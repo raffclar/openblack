@@ -267,13 +267,29 @@ float MagicSystem::GameRandom(float max)
 entt::entity MagicSystem::CastAtPoint(MagicType type, PlayerNames player, glm::vec3 point, const magic::SpellCastData& cast,
                                       const particles::ProcessInfo& info)
 {
-	return Cast(type, {.kind = SpellCaster::Kind::Player, .player = player, .entity = entt::null}, point, cast, info);
+	return Cast(type, {.kind = SpellCaster::Kind::Player, .player = player, .entity = entt::null}, PlaceOfPoint(point), cast,
+	            info);
 }
 
-entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& caster, glm::vec3 point,
+entt::entity MagicSystem::CastAtPlace(MagicType type, PlayerNames player, const map_coords::MapCoords& place,
+                                      const magic::SpellCastData& cast, const particles::ProcessInfo& info)
+{
+	return Cast(type, {.kind = SpellCaster::Kind::Player, .player = player, .entity = entt::null}, place, cast, info);
+}
+
+map_coords::MapCoords MagicSystem::PlaceOfPoint(glm::vec3 point) const
+{
+	auto place = map_coords::FromMetres({point.x, point.z});
+	place.altitude = point.y - _world.GroundAt(place);
+	return place;
+}
+
+entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& caster, const map_coords::MapCoords& place,
                                const magic::SpellCastData& cast, const particles::ProcessInfo& info)
 {
 	const auto player = caster.player;
+	// The miracle acts at the point of the world of the map position
+	const auto point = _world.PointOf(place);
 	if (!Locator::infoConstants::has_value() || static_cast<size_t>(type) >= magic::k_MagicTypeCount || type == MagicType::None)
 	{
 		return entt::null;
@@ -282,7 +298,7 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 	// is remembered
 	Empathise(type, player, point);
 	RecordCast(type, player, point);
-	const auto entity = MakeSpell(type, caster, point, cast, info);
+	const auto entity = MakeSpell(type, caster, place, cast, info);
 	if (entity == entt::null)
 	{
 		return entt::null;
@@ -306,7 +322,7 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 	return FindSpell(entity) != nullptr ? entity : entt::null;
 }
 
-entt::entity MagicSystem::MakeSpell(MagicType type, const components::SpellCaster& caster, glm::vec3 point,
+entt::entity MagicSystem::MakeSpell(MagicType type, const components::SpellCaster& caster, const map_coords::MapCoords& place,
                                     const magic::SpellCastData& cast, const particles::ProcessInfo& info,
                                     std::shared_ptr<const particles::RestoredEffect> restored)
 {
@@ -326,9 +342,11 @@ entt::entity MagicSystem::MakeSpell(MagicType type, const components::SpellCaste
 	spell.duration = cast.duration;
 	spell.magnitude = cast.magnitude;
 	spell.maxObjectsToCreate = cast.maxObjectsToCreate;
+	// The miracle keeps the map position where it was cast, and acts at the point of the world of that position
+	const auto point = _world.PointOf(place);
 	spell.position = point;
-	spell.castPosition = point;
-	spell.originalCastPosition = point;
+	spell.castPlace = place;
+	spell.originalCastPlace = place;
 	spell.direction = info.direction;
 	spell.processInfo = info;
 	magic::spells::Prepare(*this, spell);
@@ -373,12 +391,12 @@ entt::entity MagicSystem::CastOnObject(MagicType type, PlayerNames player, entt:
 entt::entity MagicSystem::CastOn(MagicType type, const components::SpellCaster& caster, entt::entity target,
                                  const magic::SpellCastData& cast, const particles::ProcessInfo& info)
 {
-	const auto position = _world.PositionOf(target);
-	if (!position.has_value() || !CanCastOn(type, target))
+	if (!_world.PositionOf(target).has_value() || !CanCastOn(type, target))
 	{
 		return entt::null;
 	}
-	const auto entity = Cast(type, caster, *position, cast, info);
+	// The miracle is cast at the map position of the object
+	const auto entity = Cast(type, caster, thing_map_place::OfWithAltitude(EntityRegistry(), target), cast, info);
 	if (entity == entt::null)
 	{
 		return entt::null;
@@ -462,9 +480,10 @@ void MagicSystem::PayForSpell(entt::entity entity, float cost)
 
 entt::entity MagicSystem::CreateTeleportStone(const Spell& spell)
 {
-	return Locator::teleportSystem::has_value() ? Locator::teleportSystem::value().CreateStone(
-	                                                  spell.castPosition, spell.caster.player, EntityRegistry().ToEntity(spell))
-	                                            : entt::null;
+	return Locator::teleportSystem::has_value()
+	           ? Locator::teleportSystem::value().CreateStone(_world.PointOf(spell.castPlace), spell.caster.player,
+	                                                          EntityRegistry().ToEntity(spell))
+	           : entt::null;
 }
 
 bool MagicSystem::CanPlaceTeleportStone(glm::vec3 point) const
@@ -548,7 +567,7 @@ void MagicSystem::Maintain(entt::entity entity, Spell& spell)
 		spell.processInfo.power = power;
 		spell.processInfo.spin = spin;
 		const auto& hand = spell.processInfo.handPosition;
-		spell.castPosition = {hand.x, _world.LandHeight({hand.x, hand.z}), hand.z};
+		spell.castPlace = map_coords::FromMetres({hand.x, hand.z});
 	}
 	else if (magic::spells::FollowsHand(*this, spell))
 	{

@@ -185,7 +185,7 @@ bool magic_living::CanBeHealedByHeal(entt::entity entity)
 	return registry.AnyOf<Villager, Animal>(entity) && !IsDead(entity);
 }
 
-std::vector<entt::entity> magic_living::HealTargets(glm::vec3 point, float radius, size_t maximum)
+std::vector<entt::entity> magic_living::HealTargets(const map_coords::MapCoords& place, float radius, size_t maximum)
 {
 	if (!Locator::entitiesMap::has_value())
 	{
@@ -195,7 +195,7 @@ std::vector<entt::entity> magic_living::HealTargets(glm::vec3 point, float radiu
 	const auto& map = Locator::entitiesMap::value();
 	// The things that move in each cell, as the map keeps them: whoever came into the cell last first
 	std::vector<magic::HealCandidate> inCell;
-	return magic::FindHealTargets(point, radius, maximum, [&](glm::ivec2 cell) -> std::span<const magic::HealCandidate> {
+	return magic::FindHealTargets(place, radius, maximum, [&](glm::ivec2 cell) -> std::span<const magic::HealCandidate> {
 		inCell.clear();
 		if (!map_coords::InBounds(cell))
 		{

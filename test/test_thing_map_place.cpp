@@ -303,3 +303,15 @@ TEST(ThingMapPlace, AThingPutAtThePointsMapPositionKeepsThatPositionNotOneThroug
 	EXPECT_EQ(ecs::thing_map_place::Of(registry, villager), (MapCoords {.x = k_Place, .z = k_Place}));
 	EXPECT_EQ(registry.Get<const WallHug>(villager).position, glm::ivec2(k_Place, k_Place));
 }
+
+TEST(ThingMapPlace, AThingWithAltitudeKeepsItsMapPositionAndItsHeightAboveTheLand)
+{
+	ecs::Registry registry;
+	const auto thing = registry.Create();
+	Stand(registry, thing, {0.0f, 0.0f, 0.0f});
+	ecs::thing_map_place::Put(registry, thing, {.x = k_FarX, .z = k_FarZ}, 12.0f);
+	// With no land, the land is at height 0
+	EXPECT_EQ(ecs::thing_map_place::OfWithAltitude(registry, thing), (MapCoords {.x = k_FarX, .z = k_FarZ, .altitude = 12.0f}));
+	// A thing with no metres is at the corner of the map, on the land
+	EXPECT_EQ(ecs::thing_map_place::OfWithAltitude(registry, registry.Create()), MapCoords {});
+}

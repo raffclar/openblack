@@ -91,7 +91,7 @@ TEST(HealTargets, ThePlainHealLooksInOnlyFourCells)
 	const glm::vec3 skipped(static_cast<float>(missed.x) * 10.0f + 5.0f, 0.0f, static_cast<float>(missed.y) * 10.0f + 5.0f);
 	cells.Add(Id(1), point + (visited - point) * 0.9f);
 	cells.Add(Id(2), point + (skipped - point) * 0.6f);
-	const auto found = FindHealTargets(point, 10.0f, 20, cells.Contents());
+	const auto found = FindHealTargets(map_coords::FromMetres({point.x, point.z}), 10.0f, 20, cells.Contents());
 	ASSERT_EQ(found.size(), 1u);
 	EXPECT_EQ(found[0], Id(1));
 }
@@ -104,7 +104,7 @@ TEST(HealTargets, TakesTheHealableWithinTheRadiusInCellOrder)
 	cells.Add(Id(2), {4.0f, 0.0f, 4.0f}, false); // dead, or a dove
 	cells.Add(Id(3), {5.0f, 0.0f, 5.5f});
 	cells.Add(Id(4), {5.0f, 30.0f, 5.0f}); // far above, but heights don't count
-	const auto found = FindHealTargets(point, 10.0f, 20, cells.Contents());
+	const auto found = FindHealTargets(map_coords::FromMetres({point.x, point.z}), 10.0f, 20, cells.Contents());
 	EXPECT_EQ(found, (std::vector {Id(1), Id(3), Id(4)}));
 }
 
@@ -115,7 +115,7 @@ TEST(HealTargets, NeverTakesAPileOrAnotherThingThatIsNotLiving)
 	const glm::vec3 point(5.0f, 0.0f, 5.0f);
 	cells.Add(Id(1), {5.0f, 0.0f, 5.0f}, true, false);
 	cells.Add(Id(2), {6.0f, 0.0f, 6.0f});
-	const auto found = FindHealTargets(point, 10.0f, 20, cells.Contents());
+	const auto found = FindHealTargets(map_coords::FromMetres({point.x, point.z}), 10.0f, 20, cells.Contents());
 	EXPECT_EQ(found, (std::vector {Id(2)}));
 }
 
@@ -127,12 +127,12 @@ TEST(HealTargets, StopsAtItsMost)
 	{
 		cells.Add(Id(i), {5.0f + static_cast<float>(i) * 0.1f, 0.0f, 5.0f});
 	}
-	EXPECT_EQ(FindHealTargets(point, 10.0f, 20, cells.Contents()).size(), 20u);
+	EXPECT_EQ(FindHealTargets(map_coords::FromMetres({point.x, point.z}), 10.0f, 20, cells.Contents()).size(), 20u);
 	// The power-up's reach covers its whole radius
 	FakeCells wide;
 	wide.Add(Id(1), {5.0f + 33.0f, 0.0f, 5.0f});
 	wide.Add(Id(2), {5.0f, 0.0f, 5.0f - 30.0f});
-	EXPECT_EQ(FindHealTargets(point, 35.0f, 100, wide.Contents()).size(), 2u);
+	EXPECT_EQ(FindHealTargets(map_coords::FromMetres({point.x, point.z}), 35.0f, 100, wide.Contents()).size(), 2u);
 }
 
 TEST(HealTargets, MeasuresEachCellFromTheCastPointMovedIntoIt)
@@ -143,7 +143,7 @@ TEST(HealTargets, MeasuresEachCellFromTheCastPointMovedIntoIt)
 	cells.Add(Id(1), {9.0f, 0.0f, 21.0f});
 	// In the cell to the east, 7 m away, but not among the four cells the plain heal looks in
 	cells.Add(Id(2), {12.0f, 0.0f, 35.0f});
-	EXPECT_EQ(FindHealTargets(point, 10.0f, 20, cells.Contents()), (std::vector {Id(1)}));
+	EXPECT_EQ(FindHealTargets(map_coords::FromMetres({point.x, point.z}), 10.0f, 20, cells.Contents()), (std::vector {Id(1)}));
 }
 
 TEST(HealTargets, TheRadiusIsStrict)
@@ -152,10 +152,10 @@ TEST(HealTargets, TheRadiusIsStrict)
 	// 2.5 m is a whole number of map units, so this one is exactly the radius away: not taken
 	FakeCells onEdge;
 	onEdge.Add(Id(1), {5.0f, 0.0f, 7.5f});
-	EXPECT_TRUE(FindHealTargets(point, 2.5f, 20, onEdge.Contents()).empty());
+	EXPECT_TRUE(FindHealTargets(map_coords::FromMetres({point.x, point.z}), 2.5f, 20, onEdge.Contents()).empty());
 	FakeCells inside;
 	inside.Add(Id(2), {5.0f, 0.0f, 7.4f});
-	EXPECT_EQ(FindHealTargets(point, 2.5f, 20, inside.Contents()), (std::vector {Id(2)}));
+	EXPECT_EQ(FindHealTargets(map_coords::FromMetres({point.x, point.z}), 2.5f, 20, inside.Contents()), (std::vector {Id(2)}));
 }
 
 TEST(MapSpiral, GoesWestThenSouthEastAndNorth)

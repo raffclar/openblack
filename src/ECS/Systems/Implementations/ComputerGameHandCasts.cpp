@@ -31,6 +31,7 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -104,12 +105,12 @@ bool GameHandCasts::Angry(MagicType type) const
 
 bool GameHandCasts::Cast(MagicType type, entt::entity target, entt::entity icon, glm::vec3 hand)
 {
-	const auto targetCoords = CoordsOfThing(target);
-	if (!targetCoords.has_value())
+	if (!CoordsOfThing(target).has_value())
 	{
 		return false;
 	}
-	return CastFrom(type, target, *targetCoords, icon, hand, 1.0f);
+	// The miracle goes to the map position of the thing
+	return CastFrom(type, target, thing_map_place::OfWithAltitude(Entities(), target), icon, hand, 1.0f);
 }
 
 bool GameHandCasts::CastAt(MagicType type, glm::vec3 place, entt::entity icon, glm::vec3 hand, float magnitude)
@@ -118,9 +119,8 @@ bool GameHandCasts::CastAt(MagicType type, glm::vec3 place, entt::entity icon, g
 	{
 		return false;
 	}
-	// The miracle goes on the land at the place
-	map_coords::MapCoords coords {.x = map_coords::ToFixed(place.x), .z = map_coords::ToFixed(place.z), .altitude = 0.0f};
-	coords.altitude = Locator::terrainSystem::value().GetAltitude(coords.x, coords.z);
+	// The miracle goes on the land at the map position of the place
+	const map_coords::MapCoords coords {.x = map_coords::ToFixed(place.x), .z = map_coords::ToFixed(place.z), .altitude = 0.0f};
 	return CastFrom(type, entt::null, coords, icon, hand, magnitude);
 }
 
@@ -149,8 +149,10 @@ bool GameHandCasts::CastFrom(MagicType type, entt::entity target, const map_coor
 	{
 		return false;
 	}
-	const auto at =
-	    glm::vec3(map_coords::ToMetres(targetCoords.x), targetCoords.altitude, map_coords::ToMetres(targetCoords.z));
+	// The point of the world of the map position: the land there plus the altitude
+	const auto at = Locator::terrainSystem::has_value() ? map_coords::ToWorld(Locator::terrainSystem::value(), targetCoords)
+	                                                    : glm::vec3(map_coords::ToMetres(targetCoords.x), targetCoords.altitude,
+	                                                                map_coords::ToMetres(targetCoords.z));
 	auto& magicSystem = Locator::magicSystem::value();
 	// The kind of the miracle must let it go there. For example, a heal needs someone to heal, and food needs land.
 	if (!magicSystem.MeetsKindRule(type, at, target != entt::null))
@@ -175,7 +177,7 @@ bool GameHandCasts::CastFrom(MagicType type, entt::entity target, const map_coor
 	const auto seed = magic::FindFirstSpellSeedForMagicType(info, type);
 	const bool onObject = target != entt::null && seed.has_value() && magic::GetSpellSeedInfo(info, *seed).castOnObject != 0;
 	const auto spell = onObject ? magicSystem.CastOnObject(type, _player, target, cast, process)
-	                            : magicSystem.CastAtPoint(type, _player, at, cast, process);
+	                            : magicSystem.CastAtPlace(type, _player, targetCoords, cast, process);
 	if (spell == entt::null)
 	{
 		return false;
