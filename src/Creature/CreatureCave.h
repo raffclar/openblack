@@ -101,6 +101,8 @@ struct Snapshot
 	std::vector<Miracle> miracles;
 	/// How it leans in its fights, from -1 (defensive) to 1 (aggressive)
 	float fightBalance {0.0f};
+	/// The first of its 16 spell slots, in table order, that holds a spell now. The attributes scroll names this spell.
+	std::optional<uint32_t> spellOn;
 };
 
 /// The scrolls' facts about the creature: the percentages cut short as the game does, the age in its hours of game time

@@ -921,9 +921,13 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 		number("HELP_TEXT_ROOM_CHALLENGE_LIST_NUMBER_OF_DISCOVERED_CHALLENGES", facts.challengesDiscovered);
 		number("HELP_TEXT_ROOM_CHALLENGE_LIST_NUMBER_OF_COMPLETED_CHALLENGES", facts.challengesCompleted);
 		text.AddNewLine();
+		// A challenge with no title (text 0) adds no line
 		for (const auto challenge : facts.challenges)
 		{
-			text.Add(helpText(challenge));
+			if (challenge != 0)
+			{
+				text.Add(helpText(challenge));
+			}
 		}
 		text.End();
 		break;
