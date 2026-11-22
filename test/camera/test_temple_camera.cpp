@@ -545,6 +545,21 @@ TEST(TempleCamera, ARoomOfPicturesTurnsToTheLookWhenThePlayerLeavesIt)
 	EXPECT_FLOAT_EQ(TempleCameraModel::PictureScrollLeave(slant).yaw, TempleCameraModel::PictureStartYaw(slant));
 }
 
+TEST(TempleCamera, ARoomOfPicturesFindsItsStartTurnWithTheGamesMaths)
+{
+	// The game finds the turn at the start with its own arc tangent and a float quarter turn, as when the camera leaves
+	// a scroll, so the two turns are the same to the last bit for every way the path ends
+	for (const auto& end : {
+	         TempleCameraModel::Pose {{3.0f, 9.0f, -4.0f}, {7.0f, 9.0f, 1.0f}},
+	         TempleCameraModel::Pose {{-12.3f, 4.0f, 8.1f}, {-1.7f, 2.0f, -6.6f}},
+	         TempleCameraModel::Pose {{87.0f, 10.0f, 87.0f}, {80.25f, 10.0f, 77.5f}},
+	         TempleCameraModel::Pose {{0.1f, 0.0f, 0.2f}, {-0.3f, 0.0f, 0.7f}},
+	     })
+	{
+		EXPECT_EQ(TempleCameraModel::PictureStartYaw(end), TempleCameraModel::PictureScrollLeave(end).yaw);
+	}
+}
+
 TEST(TempleCamera, ARoomOfPicturesHalfLeansAtTheHeightOfTheAimWhileItLooks)
 {
 	const TempleCameraModel::Pose aim {{1.0f, 27.5f, 2.0f}, {0.0f, 0.0f, 0.0f}};
@@ -642,4 +657,50 @@ TEST(TempleCamera, AHeldPressOrADoubleClickStopsACloseLook)
 	EXPECT_TRUE(TempleCameraModel::LeavesLookOnPress(static_cast<uint8_t>(temple_press::Button::DoubleClick)));
 	// A press on a control comes to the camera as no press, so the look continues
 	EXPECT_FALSE(TempleCameraModel::LeavesLookOnPress(static_cast<uint8_t>(temple_press::Button::None)));
+}
+
+TEST(TempleCamera, TheMainRoomCameraStartsItsPathNearestToTheCameraFromAnotherRoom)
+{
+	// A path that goes along x at ten units a second
+	const auto along = [](std::chrono::milliseconds time) {
+		return glm::vec3(static_cast<float>(time.count()) * 0.01f, 5.0f, 0.0f);
+	};
+	// The times are a tenth of a second apart, added up as floats from zero
+	float twelfth = 0.0f;
+	for (int i = 0; i < 12; ++i)
+	{
+		twelfth += 0.1f;
+	}
+	EXPECT_EQ(TempleCameraModel::MainRoomIntroTime(glm::vec3(12.3f, 5.0f, 0.0f), along), twelfth);
+	// Only the first three seconds are tried, so a camera past them starts at the last time tried. The sum of the
+	// float steps comes to just under three seconds after thirty steps, so that time is tried too.
+	const float last = TempleCameraModel::MainRoomIntroTime(glm::vec3(100.0f, 5.0f, 0.0f), along);
+	EXPECT_GT(last, 2.99f);
+	EXPECT_LT(last, 3.0f);
+	// Before the path's start, it starts at the start
+	EXPECT_EQ(TempleCameraModel::MainRoomIntroTime(glm::vec3(-4.0f, 0.0f, 3.0f), along), 0.0f);
+	// A path that stands still is as near at every time, so the first is kept
+	const auto still = [](std::chrono::milliseconds) { return glm::vec3(1.0f, 2.0f, 3.0f); };
+	EXPECT_EQ(TempleCameraModel::MainRoomIntroTime(glm::vec3(0.0f), still), 0.0f);
+}
+
+TEST(TempleCamera, TheMainRoomCameraTriesTheTimesInWholeMilliseconds)
+{
+	// The time is made into whole milliseconds by cutting off the fraction
+	std::vector<int64_t> tried;
+	const auto record = [&tried](std::chrono::milliseconds time) {
+		tried.push_back(time.count());
+		return glm::vec3(0.0f);
+	};
+	(void)TempleCameraModel::MainRoomIntroTime(glm::vec3(0.0f), record);
+	ASSERT_EQ(tried.size(), 31u);
+	EXPECT_EQ(tried.back(), 2999);
+	EXPECT_EQ(tried.front(), 0);
+	EXPECT_EQ(tried.at(1), 100);
+	float time = 0.0f;
+	for (size_t i = 0; i < tried.size(); ++i)
+	{
+		EXPECT_EQ(tried.at(i), static_cast<int64_t>(time * 1000.0f));
+		time += 0.1f;
+	}
 }

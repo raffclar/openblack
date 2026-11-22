@@ -470,9 +470,9 @@ TempleCameraModel::Pose TempleCameraModel::PictureOrbitPose(Room room, float yaw
 
 float TempleCameraModel::PictureStartYaw(const Pose& pathEnd)
 {
-	// A quarter turn on from the way the path ends looking, which the orbit's views look along unturned
-	const auto along = pathEnd.focus - pathEnd.origin;
-	return std::atan2(along.z, along.x) + glm::half_pi<float>();
+	// A quarter turn on from the way the path ends looking, which the orbit's views look along unturned. The game finds
+	// this turn as it finds the turn when the camera leaves a scroll.
+	return PictureScrollLeave(pathEnd).yaw;
 }
 
 TempleCameraModel::PictureTargets TempleCameraModel::PictureScrollLeave(const Pose& aim)
@@ -652,6 +652,12 @@ void TempleCameraModel::StartIntro(Room room, bool blendFromCurrent)
 	{
 		_previousOrigin = _origin;
 		_previousFocus = _focus;
+		// From another room, the main room's camera starts its path at the point nearest to the camera
+		if (const auto& path = _paths.at(static_cast<size_t>(room)); room == Room::Main && path)
+		{
+			_introTime = MainRoomIntroTime(_origin.GetValue(),
+			                               [&path](std::chrono::milliseconds time) { return path->SampleAt(time).position; });
+		}
 	}
 }
 
@@ -684,6 +690,15 @@ void TempleCameraModel::GoToRoom(Room room)
 
 bool TempleCameraModel::GoThroughDoorTo(Room room)
 {
+	// From a room of pictures, the camera walks back to the main room through the room's door, as a click on the door
+	// makes it do
+	if (const auto* picture = PictureRoomOf(GetRoom());
+	    _state == State::PictureOrbit && room == Room::Main && picture != nullptr)
+	{
+		WalkBackThrough(static_cast<int32_t>(picture->door), _target);
+		ChangeState();
+		return true;
+	}
 	if (_state != State::Orbit)
 	{
 		return false;

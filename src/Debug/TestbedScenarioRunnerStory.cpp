@@ -139,8 +139,9 @@ bool Runner::GiveStoryCommand(const Command& command)
 		if (Locator::temple::has_value())
 		{
 			auto& temple = Locator::temple::value();
-			// In the temple, no room is a walk through the main room's way out
-			if (temple.Active() && room == TempleRoom::Unknown)
+			// In the temple, no room is a walk through the main room's way out, and the main room is a walk back to it
+			// from a room of pictures
+			if (temple.Active() && (room == TempleRoom::Unknown || room == TempleRoom::Main))
 			{
 				temple.EnterRoom(room);
 			}

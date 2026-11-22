@@ -494,3 +494,16 @@ TEST(TempleScrollTexture, APictureLineGivesItsCodeAndThePlaceOfTheWordsBefore)
 	EXPECT_FLOAT_EQ(pictures[0].lastX, (256.0f - (font.GetWidth(u"A", 10.0f) * TempleScrollTexture::k_Stretch)) * 0.5f);
 	EXPECT_FLOAT_EQ(pictures[0].y, 0.0f);
 }
+
+TEST(TempleScrolls, AHeldScrollSqueaksAgainAfterAFrameItDoesNotMove)
+{
+	bool squeaked = false;
+	// It squeaks as it starts to move, and not again while it moves on
+	EXPECT_TRUE(TempleScrolls::Squeaks(squeaked, true));
+	EXPECT_FALSE(TempleScrolls::Squeaks(squeaked, true));
+	// Pushed against the end of its text, it does not move, so it squeaks again as it moves back
+	EXPECT_FALSE(TempleScrolls::Squeaks(squeaked, false));
+	EXPECT_FALSE(squeaked);
+	EXPECT_TRUE(TempleScrolls::Squeaks(squeaked, true));
+	EXPECT_TRUE(squeaked);
+}
