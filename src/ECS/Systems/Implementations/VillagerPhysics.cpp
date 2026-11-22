@@ -17,6 +17,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
@@ -447,11 +448,20 @@ bool villager_physics::ExitFlying([[maybe_unused]] LivingAction& action, Village
 	       next != VillagerStates::Dead && next != VillagerStates::Drowning;
 }
 
-bool villager_physics::ExitInHand([[maybe_unused]] LivingAction& action, VillagerStates next)
+bool villager_physics::ExitInHand(LivingAction& action, VillagerStates next)
 {
 	// Only flying, landing, death or the water take it out of the hand
-	return next != VillagerStates::Flying && next != VillagerStates::Landed && next != VillagerStates::Dying &&
-	       next != VillagerStates::Dead && next != VillagerStates::Drowning;
+	const bool refused = next != VillagerStates::Flying && next != VillagerStates::Landed && next != VillagerStates::Dying &&
+	                     next != VillagerStates::Dead && next != VillagerStates::Drowning;
+	// When it can go, its home stops the mark that shows that a hand holds it
+	auto& registry = Entities();
+	const auto villager = registry.ToEntity(action);
+	if (const auto home = registry.Get<const Villager>(villager).abode;
+	    !refused && registry.Valid(home) && registry.AllOf<Abode>(home))
+	{
+		registry.Get<Abode>(home).residentInHand = false;
+	}
+	return refused;
 }
 
 uint32_t villager_physics::Landed(LivingAction& action)
