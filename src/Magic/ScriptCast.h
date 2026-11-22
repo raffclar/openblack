@@ -35,7 +35,8 @@ inline constexpr float k_ScriptCurlToSpin = 1.0f;
 
 struct ScriptCast
 {
-	/// Where the miracle lands, as a map position
+	/// Where the miracle lands, in metres of a map position. The effect looks towards it. The cast takes the map position
+	/// from the point that the script gives, because a second change to map units can lose one unit.
 	glm::vec3 point {0.0f};
 	SpellCastData cast;
 	particles::ProcessInfo info;

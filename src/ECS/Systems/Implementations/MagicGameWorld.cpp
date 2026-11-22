@@ -254,6 +254,11 @@ float GameMagicWorld::LandHeight(glm::vec2 xz) const
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(xz) : 0.0f;
 }
 
+float GameMagicWorld::GroundAt(const map_coords::MapCoords& place) const
+{
+	return Locator::terrainSystem::has_value() ? map_coords::GroundAt(Locator::terrainSystem::value(), place) : 0.0f;
+}
+
 bool GameMagicWorld::InBounds(glm::vec3 point) const
 {
 	if (!Locator::terrainSystem::has_value())
@@ -849,9 +854,9 @@ void GameMagicWorld::PlayerAffected(entt::entity object, MagicType type, PlayerN
 	}
 }
 
-std::vector<entt::entity> GameMagicWorld::HealTargets(glm::vec3 point, float radius, size_t maximum) const
+std::vector<entt::entity> GameMagicWorld::HealTargets(const map_coords::MapCoords& place, float radius, size_t maximum) const
 {
-	return magic_living::HealTargets(point, radius, maximum);
+	return magic_living::HealTargets(place, radius, maximum);
 }
 
 void GameMagicWorld::CurePoison(entt::entity object)

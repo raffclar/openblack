@@ -223,7 +223,8 @@ bool spells::MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, g
 	case SpellClass::Heal:
 	{
 		const auto reach = HealReachOf(services.Info(), type, 1.0f);
-		return reach.has_value() && !world.HealTargets(point, reach->radius, reach->maximum).empty();
+		return reach.has_value() &&
+		       !world.HealTargets(map_coords::FromMetres({point.x, point.z}), reach->radius, reach->maximum).empty();
 	}
 	case SpellClass::Resource:
 		return world.IsLand(point);
@@ -298,7 +299,7 @@ bool spells::Start(SpellServicesInterface& services, Spell& spell)
 		// The people round the point are given to its chakras; a heal with nobody to heal still plays
 		if (const auto reach = HealReachOf(services.Info(), spell.magicType, services.TribalPower(spell)))
 		{
-			for (const auto target : services.World().HealTargets(spell.castPosition, reach->radius, reach->maximum))
+			for (const auto target : services.World().HealTargets(spell.castPlace, reach->radius, reach->maximum))
 			{
 				services.AddEffectTarget(spell, target);
 			}
@@ -462,13 +463,14 @@ void spells::ProcessTurn(SpellServicesInterface& services, Spell& spell)
 	{
 		return;
 	}
-	// One drop a turn at a random point round where it is cast
+	// One drop a turn at a random point round the map position where it is cast. It follows the hand that holds it.
 	auto& world = services.World();
+	const auto centre = map_coords::ToMetres(spell.castPlace);
 	const float distance = DropDistance(services.GameRandom(RainRadius(spell.magicType)));
 	const float angle = services.GameRandom(k_TwoPi);
 	// Round the cosine to a float before it multiplies the distance. The sine multiplies the distance at full width.
-	glm::vec3 drop(spell.castPosition.x + (x87::RoundToFloat(x87::Cos(angle)) * distance), 0.0f,
-	               spell.castPosition.z + x87::Mul(x87::Sin(angle), distance));
+	glm::vec3 drop(centre.x + (x87::RoundToFloat(x87::Cos(angle)) * distance), 0.0f,
+	               centre.y + x87::Mul(x87::Sin(angle), distance));
 	drop.y = world.LandHeight({drop.x, drop.z}) + k_DropHeight;
 	ApplyDefaultEffect(services, spell,
 	                   {.type = SpellEventInfo::Type::Point,

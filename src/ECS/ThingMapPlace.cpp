@@ -11,6 +11,7 @@
 
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "3D/LandIslandInterface.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -66,6 +67,18 @@ map_coords::MapCoords thing_map_place::Of(const Registry& registry, entt::entity
 		return {.x = kept->place.x, .z = kept->place.z};
 	}
 	return {.x = map_coords::ToFixed(metres.x), .z = map_coords::ToFixed(metres.y)};
+}
+
+map_coords::MapCoords thing_map_place::OfWithAltitude(const Registry& registry, entt::entity thing)
+{
+	auto place = Of(registry, thing);
+	if (const auto* at = registry.TryGet<const components::Transform>(thing))
+	{
+		const float ground =
+		    Locator::terrainSystem::has_value() ? map_coords::GroundAt(Locator::terrainSystem::value(), place) : 0.0f;
+		place.altitude = at->position.y - ground;
+	}
+	return place;
 }
 
 void thing_map_place::Keep(Registry& registry, entt::entity thing, const map_coords::MapCoords& place)

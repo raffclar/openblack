@@ -125,7 +125,8 @@ entt::entity NearestTown(glm::vec3 point)
 
 void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 {
-	auto position = miracle.castPosition;
+	const auto xz = map_coords::ToMetres(miracle.castPlace);
+	glm::vec3 position(xz.x, 0.0f, xz.y);
 	position.y = LandHeight(position);
 	const auto object = MakeObject(spell, miracle, position, false);
 	// Its player's people react to it as far as a little beyond its edge

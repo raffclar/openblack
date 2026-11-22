@@ -1026,6 +1026,10 @@ struct ImportedHeldSpell
 	uint32_t reaction {0};
 	/// The point where the spell is
 	gamesave::MapCoords position {};
+	/// The map position where the spell was cast, which follows the hand that holds it, and the map position where it
+	/// was cast first
+	std::optional<gamesave::MapCoords> castPlace;
+	std::optional<gamesave::MapCoords> originalCastPlace;
 	/// The number of the object that cast the spell, and the number of the player record of the spell, 0 for none
 	uint32_t creator {0};
 	uint32_t player {0};

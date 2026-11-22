@@ -115,7 +115,8 @@ public:
 		rings.push_back(drop.ringGrowth);
 		extremeDrops.push_back(drop.extreme);
 	}
-	[[nodiscard]] std::vector<entt::entity> HealTargets(glm::vec3 /*point*/, float radius, size_t maximum) const override
+	[[nodiscard]] std::vector<entt::entity> HealTargets(const map_coords::MapCoords& /*place*/, float radius,
+	                                                    size_t maximum) const override
 	{
 		lastHealRadius = radius;
 		std::vector<entt::entity> targets;
@@ -255,8 +256,16 @@ Spell MakeSpell(MagicType type, float chants)
 	spell.spellClass = ClassOf(type);
 	spell.caster = {.kind = SpellCaster::Kind::Player, .player = PlayerNames::PLAYER_ONE, .entity = entt::null};
 	SetChants(spell.chants, chants);
-	spell.castPosition = {100.0f, 0.0f, 100.0f};
+	spell.castPlace = map_coords::FromMetres({100.0f, 100.0f});
+	spell.originalCastPlace = spell.castPlace;
 	return spell;
+}
+
+/// The point on the land of the map position where a spell was cast
+glm::vec3 CastPointOf(const Spell& spell)
+{
+	const auto xz = map_coords::ToMetres(spell.castPlace);
+	return {xz.x, 0.0f, xz.y};
 }
 
 SpellEventInfo EventAt(SpellEventInfo::Type type, glm::vec3 position, entt::entity target = entt::null)
@@ -940,13 +949,13 @@ TEST(SpellBehaviours, TheForestPlantsOnceAsItsSeedLandsAndPaysForEachTree)
 	FakeServices services(*info);
 	auto forest = MakeSpell(MagicType::Forest, 10000.0f);
 	// Its start is no event; its seed landing plants it, and pays for the event
-	EXPECT_TRUE(spells::OnEvent(services, forest, EventAt(SpellEventInfo::Type::Started, forest.castPosition)));
+	EXPECT_TRUE(spells::OnEvent(services, forest, EventAt(SpellEventInfo::Type::Started, CastPointOf(forest))));
 	EXPECT_EQ(services.planted, 0);
-	EXPECT_TRUE(spells::OnEvent(services, forest, EventAt(SpellEventInfo::Type::Landed, forest.castPosition)));
+	EXPECT_TRUE(spells::OnEvent(services, forest, EventAt(SpellEventInfo::Type::Landed, CastPointOf(forest))));
 	EXPECT_EQ(services.planted, 1);
 	EXPECT_FLOAT_EQ(forest.chants.chants, 9999.0f);
 	// Planted, it plants no more
-	EXPECT_FALSE(spells::OnEvent(services, forest, EventAt(SpellEventInfo::Type::Landed, forest.castPosition)));
+	EXPECT_FALSE(spells::OnEvent(services, forest, EventAt(SpellEventInfo::Type::Landed, CastPointOf(forest))));
 	EXPECT_EQ(services.planted, 1);
 	// Its upkeep is its own and one event's cost for each tree
 	forest.objectCount = 18;
@@ -1073,8 +1082,8 @@ TEST(SpellBehaviours, TheWaterRainsADropEachTurnAndLeavesRingsEveryTenthOfASecon
 	spells::ProcessTurn(services, spell);
 	ASSERT_EQ(services.world.drops.size(), 1u);
 	// Half way out in the fake's random numbers: 0.5 of the radius times 0.7 plus 0.3, half way round
-	const float distance = glm::distance(glm::vec2(services.world.drops[0].x, services.world.drops[0].z),
-	                                     glm::vec2(spell.castPosition.x, spell.castPosition.z));
+	const float distance =
+	    glm::distance(glm::vec2(services.world.drops[0].x, services.world.drops[0].z), map_coords::ToMetres(spell.castPlace));
 	EXPECT_NEAR(distance, DropDistance(3.0f), k_Epsilon);
 	EXPECT_NEAR(services.world.drops[0].y, 0.2f, k_Epsilon);
 	ASSERT_TRUE(services.world.rings[0].has_value());
