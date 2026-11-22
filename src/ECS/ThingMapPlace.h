@@ -29,6 +29,10 @@ namespace openblack::ecs::thing_map_place
 /// thing with no place is at the corner of the map.
 [[nodiscard]] map_coords::MapCoords Of(const Registry& registry, entt::entity thing);
 
+/// Where a thing is, as Of gives it, with the height of the thing above the land as the altitude. A thing with no metres
+/// has altitude 0.
+[[nodiscard]] map_coords::MapCoords OfWithAltitude(const Registry& registry, entt::entity thing);
+
 /// Gives a thing the exact map position that the game puts it at, where its metres are now. A walker's walk and an
 /// animal's turn also start from this map position. A thing with no metres gets nothing.
 void Keep(Registry& registry, entt::entity thing, const map_coords::MapCoords& place);

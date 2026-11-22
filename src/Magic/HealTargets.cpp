@@ -26,7 +26,7 @@ size_t openblack::magic::HealCellsAcross(float radius)
 	return static_cast<size_t>(std::ceil(2.0f * radius / map_coords::k_CellSize));
 }
 
-std::vector<entt::entity> openblack::magic::FindHealTargets(glm::vec3 point, float radius, size_t maximum,
+std::vector<entt::entity> openblack::magic::FindHealTargets(const map_coords::MapCoords& cast, float radius, size_t maximum,
                                                             const CellContents& cells)
 {
 	std::vector<entt::entity> targets;
@@ -35,7 +35,6 @@ std::vector<entt::entity> openblack::magic::FindHealTargets(glm::vec3 point, flo
 	{
 		return targets;
 	}
-	const auto cast = map_coords::FromMetres({point.x, point.z});
 	const auto castCell = map_coords::Cell(cast);
 	const float radiusSquared = radius * radius;
 	for (const auto cell : SpiralCells(castCell, across * across))

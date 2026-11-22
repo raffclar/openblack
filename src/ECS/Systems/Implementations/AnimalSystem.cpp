@@ -162,13 +162,18 @@ void JoinLine(Flock& flock, entt::entity animal)
 
 entt::entity AnimalSystem::CreateFlock(glm::vec2 centre, float domainRadius, float flockDistance)
 {
+	return CreateFlockAt(map_coords::FromMetres(centre), domainRadius, flockDistance);
+}
+
+entt::entity AnimalSystem::CreateFlockAt(const map_coords::MapCoords& place, float domainRadius, float flockDistance)
+{
 	auto& registry = EntityRegistry();
 	const auto entity = registry.Create();
-	registry.Assign<Flock>(entity, Flock {.place = map_coords::FromMetres(centre),
+	registry.Assign<Flock>(entity, Flock {.place = place,
 	                                      .domainRadius = static_cast<uint16_t>(domainRadius),
 	                                      .flockDistance = static_cast<uint16_t>(flockDistance),
 	                                      .made = _flocksMade++,
-	                                      .savedPlace = map_coords::FromMetres(centre)});
+	                                      .savedPlace = place});
 	return entity;
 }
 

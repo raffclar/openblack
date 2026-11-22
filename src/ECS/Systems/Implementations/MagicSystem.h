@@ -55,6 +55,7 @@ class GameMagicWorld final: public magic::MagicWorldInterface
 {
 public:
 	[[nodiscard]] float LandHeight(glm::vec2 xz) const override;
+	[[nodiscard]] float GroundAt(const map_coords::MapCoords& place) const override;
 	[[nodiscard]] bool InBounds(glm::vec3 point) const override;
 	[[nodiscard]] bool IsDryLand(glm::vec3 point) const override;
 	[[nodiscard]] bool IsLand(glm::vec3 point) const override;
@@ -67,7 +68,8 @@ public:
 	std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values,
 	                                        const magic::EffectSource& source) override;
 	void Water(const magic::WaterDrop& drop) override;
-	[[nodiscard]] std::vector<entt::entity> HealTargets(glm::vec3 point, float radius, size_t maximum) const override;
+	[[nodiscard]] std::vector<entt::entity> HealTargets(const map_coords::MapCoords& place, float radius,
+	                                                    size_t maximum) const override;
 	void CurePoison(entt::entity object) override;
 	void PlayerAffected(entt::entity object, MagicType type, PlayerNames player) override;
 	bool AddResource(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player) override;
@@ -150,6 +152,8 @@ public:
 
 	entt::entity CastAtPoint(MagicType type, PlayerNames player, glm::vec3 point, const magic::SpellCastData& cast,
 	                         const particles::ProcessInfo& info) override;
+	entt::entity CastAtPlace(MagicType type, PlayerNames player, const map_coords::MapCoords& place,
+	                         const magic::SpellCastData& cast, const particles::ProcessInfo& info) override;
 	bool CastByCreature(entt::entity creature, MagicType type, entt::entity target) override;
 	bool CastByCreatureAt(entt::entity creature, MagicType type, glm::vec3 place) override;
 	void ReleaseCreatureCast(entt::entity creature) override;
@@ -322,14 +326,17 @@ private:
 	void ProcessDispensers();
 	/// Whether a magic type may be cast on an object: a creature spell only on a creature
 	[[nodiscard]] bool CanCastOn(MagicType type, entt::entity target) const;
-	/// A miracle cast by a caster at a point, or on an object
-	entt::entity Cast(MagicType type, const components::SpellCaster& caster, glm::vec3 point, const magic::SpellCastData& cast,
-	                  const particles::ProcessInfo& info);
+	/// A miracle cast by a caster at a map position, or on an object
+	entt::entity Cast(MagicType type, const components::SpellCaster& caster, const map_coords::MapCoords& place,
+	                  const magic::SpellCastData& cast, const particles::ProcessInfo& info);
+	/// The map position of a point that a script gives: x and z truncated to map units, and the altitude the height of
+	/// the point above the land there
+	[[nodiscard]] map_coords::MapCoords PlaceOfPoint(glm::vec3 point) const;
 	/// The miracle and its effect, which a cast starts. Nothing for a miracle that is its effect when the effect cannot
 	/// start. An effect with a saved state continues from that state.
 	/// The spell of a saved game of the game with the values of the file, before it closes down when the file says so
 	entt::entity MakeImportedCast(const components::SpellCaster& caster, const magic::ImportedCast& cast);
-	entt::entity MakeSpell(MagicType type, const components::SpellCaster& caster, glm::vec3 point,
+	entt::entity MakeSpell(MagicType type, const components::SpellCaster& caster, const map_coords::MapCoords& place,
 	                       const magic::SpellCastData& cast, const particles::ProcessInfo& info,
 	                       std::shared_ptr<const particles::RestoredEffect> restored = nullptr);
 	entt::entity CastOn(MagicType type, const components::SpellCaster& caster, entt::entity target,
@@ -339,8 +346,8 @@ private:
 	/// The part of a cast by a creature that is the same for a thing and for a place: the body of the creature pays,
 	/// and the miracle starts and flows from its hands. Return false if the creature cannot pay or the miracle cannot go
 	/// there.
-	bool StartCreatureCast(entt::entity creature, MagicType type, std::optional<entt::entity> target, glm::vec3 at,
-	                       float magnitude);
+	bool StartCreatureCast(entt::entity creature, MagicType type, std::optional<entt::entity> target,
+	                       const map_coords::MapCoords& place, float magnitude);
 	/// Where a creature casting a miracle holds its hands, and the way to what it casts at: each turn its miracle follows
 	/// them
 	void UpdateCreatureCast(components::Spell& spell);

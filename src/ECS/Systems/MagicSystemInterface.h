@@ -21,6 +21,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Common/InputSteps.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
@@ -73,6 +74,10 @@ struct ImportedCast
 	MagicType type {MagicType::None};
 	/// The point where the spell is
 	glm::vec3 position {0.0f};
+	/// The map position where the spell was cast, which follows the hand that holds it, and the map position where it
+	/// was cast first. Without a value, the spell takes the map position of its point.
+	std::optional<map_coords::MapCoords> castPlace;
+	std::optional<map_coords::MapCoords> originalCastPlace;
 	float chants {0.0f};
 	float initialChants {0.0f};
 	bool closedDown {false};
@@ -227,6 +232,13 @@ public:
 	/// it could not start. The process info is what its effect starts with: the hand's place, the camera, the throw.
 	virtual entt::entity CastAtPoint(MagicType type, PlayerNames player, glm::vec3 point, const magic::SpellCastData& cast,
 	                                 const particles::ProcessInfo& info) = 0;
+	/// A miracle cast by a player at a map position, as a computer god casts it: the entity, or none when it could not
+	/// start. The miracle keeps this exact map position as the place where it was cast.
+	virtual entt::entity CastAtPlace(MagicType /*type*/, PlayerNames /*player*/, const map_coords::MapCoords& /*place*/,
+	                                 const magic::SpellCastData& /*cast*/, const particles::ProcessInfo& /*info*/)
+	{
+		return entt::null;
+	}
 	/// A miracle cast on an object: at its feet, its effect given the object to act on
 	virtual entt::entity CastOnObject(MagicType type, PlayerNames player, entt::entity target, const magic::SpellCastData& cast,
 	                                  const particles::ProcessInfo& info) = 0;

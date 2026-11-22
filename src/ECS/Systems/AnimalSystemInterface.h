@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Animals/Zoomer.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
@@ -92,6 +93,11 @@ public:
 
 	/// A new flock with nobody in it yet, made at a point its leader's legs wander about
 	virtual entt::entity CreateFlock(glm::vec2 centre, float domainRadius, float flockDistance) = 0;
+	/// The same flock, made at an exact map position
+	virtual entt::entity CreateFlockAt(const map_coords::MapCoords& place, float domainRadius, float flockDistance)
+	{
+		return CreateFlock(map_coords::ToMetres(place), domainRadius, flockDistance);
+	}
 	/// An animal a miracle makes, joining a flock, born at a random age at its size for its age (a spell wolf always
 	/// grown); it faces a game angle (2048 to the circle, 0 along +x, a quarter turn along +z), and a bird flies at a
 	/// height above the land

@@ -121,6 +121,7 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WallHugRules.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -513,8 +514,11 @@ void SpellAtThing() // 195 SPELL_AT_THING
 	const bool object = IsScriptObject(registry, target);
 	const bool onObject = object && seed.has_value() && magic::GetSpellSeedInfo(info, *seed).castOnObject != 0;
 	auto& magicSystem = Locator::magicSystem::value();
-	const auto entity = onObject ? magicSystem.CastOnObject(type, PlayerNames::NEUTRAL, target, cast.cast, cast.info)
-	                             : magicSystem.CastAtPoint(type, PlayerNames::NEUTRAL, cast.point, cast.cast, cast.info);
+	// A miracle at a thing goes to the map position of the thing
+	const auto entity =
+	    onObject ? magicSystem.CastOnObject(type, PlayerNames::NEUTRAL, target, cast.cast, cast.info)
+	             : magicSystem.CastAtPlace(type, PlayerNames::NEUTRAL, ecs::thing_map_place::OfWithAltitude(registry, target),
+	                                       cast.cast, cast.info);
 	if (entity == entt::null)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Spell not created");
@@ -545,7 +549,8 @@ void SpellAtPos() // 196 SPELL_AT_POS
 	const auto type = static_cast<MagicType>(spell);
 	const auto cast = magic::MakeScriptCast(magic::GetMagicEffectInfo(Locator::infoConstants::value(), type).initialChants,
 	                                        target, from, radius, duration, curl);
-	const auto entity = Locator::magicSystem::value().CastAtPoint(type, PlayerNames::NEUTRAL, cast.point, cast.cast, cast.info);
+	// The miracle keeps the map position of the point that the script gives
+	const auto entity = Locator::magicSystem::value().CastAtPoint(type, PlayerNames::NEUTRAL, target, cast.cast, cast.info);
 	if (entity == entt::null)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Spell not created");

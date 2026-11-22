@@ -19,6 +19,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
+
 // Who the heal miracle heals. It looks once, as it is cast, through the land's cells in a spiral out from the cast
 // point's cell: as many cells as twice its radius spans, squared. The plain heal's radius of ten spans only two cells,
 // so it looks in just four, the point's and three neighbours, and misses people close by in the other neighbours, as
@@ -49,8 +51,8 @@ using CellContents = std::function<std::span<const HealCandidate>(glm::ivec2 cel
 /// How many cells across the heal looks: twice its radius over the cell's size, rounded up
 [[nodiscard]] size_t HealCellsAcross(float radius);
 
-/// The people a heal of a radius and most targets cast at a point heals, in the order it finds them
-[[nodiscard]] std::vector<entt::entity> FindHealTargets(glm::vec3 point, float radius, size_t maximum,
+/// The people a heal of a radius and most targets cast at a map position heals, in the order it finds them
+[[nodiscard]] std::vector<entt::entity> FindHealTargets(const map_coords::MapCoords& cast, float radius, size_t maximum,
                                                         const CellContents& cells);
 
 } // namespace openblack::magic

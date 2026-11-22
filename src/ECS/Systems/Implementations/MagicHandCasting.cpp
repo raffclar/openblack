@@ -379,8 +379,10 @@ entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)
 	    .enabled = true,
 	    .spin = command.spin,
 	};
-	const auto spellEntity =
-	    object.has_value() ? CastOn(castType, caster, *object, cast, hand) : Cast(castType, caster, point, cast, hand);
+	// The hand casts at the map position of the land under the pointer, or of the middle of the circle, on the land
+	const auto spellEntity = object.has_value()
+	                             ? CastOn(castType, caster, *object, cast, hand)
+	                             : Cast(castType, caster, map_coords::FromMetres({point.x, point.z}), cast, hand);
 	if (spellEntity == entt::null)
 	{
 		return entt::null;
@@ -460,7 +462,8 @@ void MagicSystem::AfterCast(entt::entity spellEntity)
 	// Leaving the hand, it shows the cast succeeded where it was cast
 	if (const auto* spell = FindSpell(spellEntity); spell != nullptr && Locator::effectRequestSystem::has_value())
 	{
-		Locator::effectRequestSystem::value().Show({.type = SpotVisualType::SpellSucceedCast, .position = spell->castPosition});
+		Locator::effectRequestSystem::value().Show(
+		    {.type = SpotVisualType::SpellSucceedCast, .position = _world.PointOf(spell->castPlace)});
 	}
 	// The hand lets go of the seed, so it starts the path of its gesture again. A seed kept in the hand does not do this.
 	if (ActsOnOwnHand() && Locator::gestureSystem::has_value())
