@@ -27,6 +27,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/TreeAlignment.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -359,6 +360,24 @@ TEST_F(Alignment, TheNeutralPlayerHasNoAlignmentAfterItsTurn)
 	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::NEUTRAL), 0.0f);
 	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::NEUTRAL), 0.0f);
 	Locator::infoConstants::reset();
+}
+
+// A planted tree adds the change and a pulled tree removes it. The alignment of the player damps each change. The
+// neutral player also gets the change.
+TEST_F(Alignment, ATreeMovesTheWaitingAlignmentOfEachPlayerAlsoTheNeutralPlayer)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<components::Player>(registry.Create(), PlayerNames::NEUTRAL);
+	constexpr float k_Change = 0.02f;
+	_alignment.SetPlayerAlignment(PlayerNames::NEUTRAL, 0.5f);
+	tree_alignment::TreeMoved(_alignment, PlayerNames::NEUTRAL, k_Change, true);
+	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::NEUTRAL), k_Change * 0.75f);
+	tree_alignment::TreeMoved(_alignment, PlayerNames::NEUTRAL, k_Change, false);
+	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::NEUTRAL), (k_Change * 0.75f) - (k_Change * 1.25f));
+	// The change of one player does not go to another player
+	tree_alignment::TreeMoved(_alignment, PlayerNames::PLAYER_ONE, k_Change, false);
+	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::PLAYER_ONE), -k_Change);
+	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::PLAYER_TWO), 0.0f);
 }
 
 TEST_F(Alignment, ThePlanOfACreatureMovesItsAlignmentEachTurn)

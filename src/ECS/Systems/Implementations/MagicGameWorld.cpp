@@ -68,6 +68,7 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/TempleHeartPassOn.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TreeAlignment.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSites.h"
 #include "Help/VillageVoices.h"
@@ -787,19 +788,22 @@ void GameMagicWorld::PlantNear(entt::entity tree, const magic::WaterDrop& drop)
 	}
 	// The tree's forest gains a young tree beside it, when it is not too soon after the last any forest gained
 	const auto planted = Locator::forestSystem::value().AddTreeNear(tree);
-	// In a network game the player of the water counts a tree grown, for the winning condition
-	if (planted.has_value() && drop.source.player != PlayerNames::NEUTRAL && Locator::gameEndSystem::has_value())
+	// The player of the water gets the young tree, also the neutral player
+	const auto player = magic::AlignmentPlayerOf(drop.source);
+	if (!planted.has_value() || !player.has_value())
 	{
-		Locator::gameEndSystem::value().AddToCondition(drop.source.player, game_end::Condition::TreesGrown, 1);
+		return;
 	}
-	// Planting a tree is good. The alignment history of the player keeps the change.
-	if (planted.has_value() && drop.source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())
+	// In a network game the player counts a tree grown, for the winning condition
+	if (Locator::gameEndSystem::has_value())
 	{
-		auto& alignment = Locator::alignmentSystem::value();
-		const float change = magic::DampAlignmentChange(Locator::infoConstants::value().player.treePullPutAlignmentChange,
-		                                                alignment.GetPlayerAlignment(drop.source.player));
-		alignment.AddToHistory(drop.source.player, AlignmentCause::Tree, change);
-		alignment.AddPendingAlignment(drop.source.player, change);
+		Locator::gameEndSystem::value().AddToCondition(*player, game_end::Condition::TreesGrown, 1);
+	}
+	// A planted tree is good for the alignment of the player
+	if (Locator::alignmentSystem::has_value())
+	{
+		tree_alignment::TreeMoved(Locator::alignmentSystem::value(), *player,
+		                          Locator::infoConstants::value().player.treePullPutAlignmentChange, true);
 	}
 }
 
