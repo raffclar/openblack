@@ -21,8 +21,10 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/CreatureBody.h"
 #include "3D/MapCoords.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicShield.h"
@@ -524,4 +526,25 @@ TEST_F(CreatureHeldCastImport, AMiracleCastAtAMapPositionKeepsItExactly)
 	EXPECT_EQ(made.originalCastPlace, k_Place);
 	EXPECT_EQ(made.position.x, map_coords::ToMetres(k_Place.x));
 	EXPECT_EQ(made.position.z, map_coords::ToMetres(k_Place.z));
+}
+
+// A creature that casts at a place above the land casts at the map position of the x and z of the place, at altitude 0
+TEST_F(CreatureHeldCastImport, ACreatureCastsAtAPlaceAtAltitudeZero)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<CreatureNeeds>(_creature);
+	// The species pays with a rate, so that the miracle at no cost does not tire it
+	auto& species = _info->creature.at(creature::InfoRow(registry.Get<const Creature>(_creature).species));
+	species.chantsPerEnergy = 1.0f;
+	species.spellSizeFactor = 1.0f;
+	Locator::infoConstants::reset();
+	Locator::infoConstants::emplace(*_info);
+	const glm::vec3 place {1234.5678f, 6.5f, 321.9876f};
+	ASSERT_TRUE(_magic->CastByCreatureAt(_creature, MagicType::StormWindRain, place));
+	const auto spell = _magic->CreatureCastOf(_creature);
+	ASSERT_TRUE(spell != entt::null);
+	const map_coords::MapCoords expected {
+	    .x = map_coords::ToFixed(place.x), .z = map_coords::ToFixed(place.z), .altitude = 0.0f};
+	EXPECT_EQ(SpellOf(spell).castPlace, expected);
+	EXPECT_EQ(SpellOf(spell).originalCastPlace, expected);
 }
