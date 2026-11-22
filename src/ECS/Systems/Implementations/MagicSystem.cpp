@@ -239,6 +239,16 @@ std::optional<entt::entity> MagicSystem::ShieldAt(glm::vec3 point, float margin)
 	return shield->spell;
 }
 
+std::optional<entt::entity> MagicSystem::ShieldCrossedInto(glm::vec3 before, glm::vec3 point, float margin)
+{
+	const auto shield = Locator::effectRequestSystem::value().FindShieldCrossing(before, point, margin);
+	if (!shield || shield->spell == entt::null)
+	{
+		return std::nullopt;
+	}
+	return shield->spell;
+}
+
 void MagicSystem::StrikeShield(entt::entity shieldSpell, glm::vec3 point)
 {
 	if (const auto shield = Locator::effectRequestSystem::value().FindShield(point, k_ShieldStrikeMargin);

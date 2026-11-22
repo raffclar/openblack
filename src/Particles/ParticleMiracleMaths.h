@@ -87,6 +87,9 @@ struct ForkSplit
 
 /// Whether a point lies inside a sphere grown by a margin
 [[nodiscard]] bool InsideSphere(glm::vec3 point, glm::vec3 centre, float radius, float margin);
+/// Whether a thing went into a sphere grown by a margin between two points: the sphere holds the point now and did not
+/// hold the point before. Each sphere is tested by itself, so a thing that is in one shield can go into another.
+[[nodiscard]] bool CrossedIntoSphere(glm::vec3 before, glm::vec3 point, glm::vec3 centre, float radius, float margin);
 /// Where a way from one point to another first goes into a sphere grown by a margin: the start when it is inside
 /// already, else the first crossing, or the end when it never crosses. A crossing exactly at the end of the way also
 /// gives the end.

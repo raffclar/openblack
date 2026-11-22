@@ -60,6 +60,9 @@ public:
 	virtual void AddEffectTarget(const ecs::components::Spell& spell, entt::entity target) = 0;
 	/// The miracle of the shield holding a point, its sphere grown by a margin, if any
 	[[nodiscard]] virtual std::optional<entt::entity> ShieldAt(glm::vec3 point, float margin) = 0;
+	/// The miracle of the first shield that a thing went into between two points: its sphere, grown by a margin, holds
+	/// the point now and did not hold the point before. The newest shield comes first.
+	[[nodiscard]] virtual std::optional<entt::entity> ShieldCrossedInto(glm::vec3 before, glm::vec3 point, float margin) = 0;
 	/// The shield of a miracle was struck at a point, which it shows with a spark
 	virtual void StrikeShield(entt::entity shieldSpell, glm::vec3 point) = 0;
 	/// Another running miracle by its entity
