@@ -53,6 +53,24 @@ TEST(ParticleSoundTurn, ThunderOutlivesItsBolt)
 	EXPECT_EQ(Next(false, false, true, wait, k_Turn), Step::LetGo);
 }
 
+// With the thunder of the game, thunder that waits goes with its bolt, so it is never heard
+TEST(ParticleSoundTurn, TheThunderOfTheGameGoesWithItsBolt)
+{
+	float wait = 0.25f;
+	const bool wholeLand = WholeLandHears(true, false);
+	EXPECT_EQ(Next(true, false, wholeLand, wait, k_Turn), Step::Nothing);
+	EXPECT_EQ(Next(false, false, wholeLand, wait, k_Turn), Step::LetGo);
+}
+
+// Only thunder is heard by the whole land, and only when the debug menu asks for far thunder
+TEST(ParticleSoundTurn, TheWholeLandHearsOnlyFarThunder)
+{
+	EXPECT_TRUE(WholeLandHears(true, true));
+	EXPECT_FALSE(WholeLandHears(true, false));
+	EXPECT_FALSE(WholeLandHears(false, true));
+	EXPECT_FALSE(WholeLandHears(false, false));
+}
+
 // Thunder that played already, or that never waited, goes with its bolt
 TEST(ParticleSoundTurn, ThunderThatDoesNotWaitGoesWithItsBolt)
 {

@@ -560,6 +560,10 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	{
 		Locator::config::value().testbedSilentAtmosphere = true;
 	}
+	if (environment.farThunder.has_value() && Locator::config::has_value())
+	{
+		Locator::config::value().farThunder = *environment.farThunder;
+	}
 	if (environment.dynamicTreeShadows && Locator::config::has_value())
 	{
 		Locator::config::value().dynamicTreeShadows = true;
