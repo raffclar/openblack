@@ -33,6 +33,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
@@ -42,6 +43,8 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
@@ -227,6 +230,19 @@ void GameObjectEffects::ExplodeObject(entt::entity object, glm::vec3 origin, flo
 	{
 		// A one-shot globe breaks up its dome, turned as the last frame drew it
 		ExplodeMesh(OneOffSpellSeed::k_MeshId, globe->drawnModel.value_or(matrix), origin, speed);
+		return;
+	}
+	if (registry.AllOf<ShieldDome>(object))
+	{
+		// A shield dome breaks up as it stands after the step of the domes in this turn, which comes before the miracles
+		if (Locator::magicShieldSystem::has_value())
+		{
+			const bool beforeDomeStep = Locator::magicSystem::has_value() && Locator::magicSystem::value().InMiraclesTurn();
+			if (const auto pieces = Locator::magicShieldSystem::value().DomeBreakUp(object, beforeDomeStep))
+			{
+				ExplodeMesh(pieces->mesh, pieces->model, origin, speed);
+			}
+		}
 		return;
 	}
 	if (const auto* mesh = registry.TryGet<const Mesh>(object))

@@ -224,6 +224,7 @@ public:
 	void StopActionAtLockEnd() override;
 	[[nodiscard]] bool IsHandBusy() const override { return HeldOf(OwnPlayer()).has_value(); }
 	[[nodiscard]] bool IsHandBusyOf(PlayerNames player) const override { return HeldOf(player).has_value(); }
+	[[nodiscard]] bool InMiraclesTurn() const override { return _inTurn; }
 	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override;
 	[[nodiscard]] HandCastState GetHandCastState() const override;
 	[[nodiscard]] entt::entity GetPressThing() const override;

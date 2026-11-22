@@ -833,6 +833,30 @@ std::vector<MagicShieldSystemInterface::DomeDraw> MagicShieldSystem::GetDomes(fl
 	return domes;
 }
 
+std::optional<MagicShieldSystemInterface::DomePieces> MagicShieldSystem::DomeBreakUp(entt::entity object,
+                                                                                     bool beforeDomeStep) const
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = EntityRegistry();
+	const auto* dome = registry.TryGet<const ShieldDome>(object);
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (dome == nullptr || transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto at = shield::DomeAtBreakUp(dome->shape, dome->state, dome->pose, dome->turns, dome->solidScale, beforeDomeStep,
+	                                      k_TurnSeconds);
+	if (!at.has_value())
+	{
+		return std::nullopt;
+	}
+	const glm::vec3 place(transform->position.x, LandHeight(transform->position), transform->position.z);
+	return DomePieces {.mesh = dome->mesh, .model = shield::DomeBreakUpModel(place, *at)};
+}
+
 void MagicShieldSystem::SaveState(reflection::BinaryWriter& out) const
 {
 	reflection::Save(out, _objects);

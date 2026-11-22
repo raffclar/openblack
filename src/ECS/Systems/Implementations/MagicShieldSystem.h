@@ -58,6 +58,7 @@ public:
 	[[nodiscard]] std::optional<HeldReaction> HeldReactionOf(entt::entity villager) const override;
 	void LeaveForOtherReaction(entt::entity villager) override;
 	[[nodiscard]] std::vector<DomeDraw> GetDomes(float fraction) const override;
+	[[nodiscard]] std::optional<DomePieces> DomeBreakUp(entt::entity object, bool beforeDomeStep) const override;
 
 private:
 	/// Raises the object of a shield miracle that has none yet

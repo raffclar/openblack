@@ -194,9 +194,9 @@ void AddBlasts(std::vector<Scenario>& all)
 	    .facet = Facet::Miracles,
 	    .description = "The player casts a physical shield at bare land with no prayer power to spare. Another player casts "
 	                   "an extreme blast at the middle of the shield four seconds later.",
-	    .expected = "The wave strikes the shield, which the player can't pay for, so the shield breaks. The wave then "
-	                "destroys the dome at once: the dome, its sparkles and its hum go without a fade. No new dome rises, "
-	                "and the shield miracle goes in its next turn.",
+	    .expected = "The wave does not strike the shield: only a spiritual shield stops the wave. The wave breaks the "
+	                "dome into pieces and destroys it at once: the dome, its sparkles and its hum go without a fade. No "
+	                "new dome rises, and the shield miracle goes in the same turn.",
 	    .environment = {.dispenserGrid = false, .prayer = 0.0f},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Ground - glm::vec2(40.0f), k_Ground + glm::vec2(40.0f)},
@@ -230,6 +230,86 @@ void AddBlasts(std::vector<Scenario>& all)
 	          .byTurn = 200,
 	          .atMost = 0.0},
 	         {.label = "no new dome rises", .quantity = checks::Quantity::PhysicalShields, .afterTurns = 210, .atMost = 0.0}},
+	});
+
+	all.push_back({
+	    .id = "miracles.blast_pu2_paid_physical_shield",
+	    .name = "Extreme blast on a physical shield with prayer power",
+	    .facet = Facet::Miracles,
+	    .description = "The player casts a physical shield at bare land and has much prayer power. Another player casts an "
+	                   "extreme blast at the middle of the shield four seconds later.",
+	    .expected = "The prayer power does not keep the dome. The wave does not strike the shield. It breaks the dome into "
+	                "pieces and destroys it at once. The shield miracle goes in the same turn as the dome.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Ground - glm::vec2(40.0f), k_Ground + glm::vec2(40.0f)},
+	                .distance = 1.0f},
+	    .miracles = {{.type = MagicType::PhysicalShield, .point = k_Ground, .delaySeconds = 0.5f},
+	                 {.type = MagicType::ExplosionOnePuTwo,
+	                  .point = k_Ground,
+	                  .handOffset = k_Ground,
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 4.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	    .checks = {{.label = "the dome stands in the turn before the blast destroys it",
+	                .quantity = checks::Quantity::PhysicalShields,
+	                .afterTurns = 44,
+	                .atLeast = 1.0},
+	               {.label = "the shield miracle runs in the turn before the blast",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "shield miracles",
+	                .afterTurns = 44,
+	                .atLeast = 1.0},
+	               {.label = "the wave destroys the dome",
+	                .quantity = checks::Quantity::PhysicalShields,
+	                .afterTurns = 45,
+	                .atMost = 0.0},
+	               {.label = "the older shield miracle goes in the same turn",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "shield miracles",
+	                .afterTurns = 45,
+	                .atMost = 0.0}},
+	});
+
+	all.push_back({
+	    .id = "miracles.physical_shield_after_blast_cast",
+	    .name = "Physical shield cast after a blast",
+	    .facet = Facet::Miracles,
+	    .description = "Another player casts an extreme blast at bare land. Before the beam lands, the player casts a "
+	                   "physical shield at the same point.",
+	    .expected = "The wave breaks the dome into pieces and destroys it at once. The shield miracle is newer than the "
+	                "blast, so it takes its turn before the blast. Thus it goes one turn after its dome.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Ground - glm::vec2(40.0f), k_Ground + glm::vec2(40.0f)},
+	                .distance = 1.0f},
+	    .miracles = {{.type = MagicType::ExplosionOnePuTwo,
+	                  .point = k_Ground,
+	                  .handOffset = k_Ground,
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 0.5f,
+	                  .player = PlayerNames::PLAYER_TWO},
+	                 {.type = MagicType::PhysicalShield, .point = k_Ground, .delaySeconds = 0.6f}},
+	    .checks = {{.label = "the dome stands in the turn before the blast destroys it",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "domes",
+	                .afterTurns = 9,
+	                .atLeast = 1.0},
+	               {.label = "the wave destroys the dome",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "domes",
+	                .afterTurns = 10,
+	                .atMost = 0.0},
+	               {.label = "the newer shield miracle stays in the turn of the blast",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "shield miracles",
+	                .afterTurns = 10,
+	                .atLeast = 1.0},
+	               {.label = "the shield miracle goes in the next turn",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "shield miracles",
+	                .afterTurns = 11,
+	                .atMost = 0.0}},
 	});
 
 	all.push_back({

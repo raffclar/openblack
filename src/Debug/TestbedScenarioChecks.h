@@ -35,7 +35,7 @@ enum class Quantity : uint8_t
 	/// How many of the scenario's objects are still in the world
 	ObjectsAlive,
 	/// How many things of a kind there are in all: "placed", "creatures", "villagers", "abodes", "towns", "vortices",
-	/// "highlights", "street lanterns", "features", "shield miracles", "closed shield miracles", "fading domes",
+	/// "highlights", "street lanterns", "features", "shield miracles", "closed shield miracles", "domes", "fading domes",
 	/// "standing shield reactions" or "shield fall reactions"
 	Entities,
 	/// A need of the scenario's creature at the index
