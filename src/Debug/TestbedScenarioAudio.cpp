@@ -1149,6 +1149,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.edit_box_selection",
+	    .name = "The selected text of an edit box",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Players page. Then Tab moves the focus three times, to "
+	                   "the box of the creature's name. The box selects all of its text when it takes the focus.",
+	    .expected = "A pale band covers the name, and the letters of the name are black on the band. The caret blinks "
+	                "at the end of the name, every other fifth of a second.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 2},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 9}},
+	});
+
+	all.push_back({
 	    .id = "interface.read_speed_slider",
 	    .name = "The help text speed slider of a game with no sound",
 	    .facet = Facet::Interface,
