@@ -74,6 +74,8 @@ constexpr uint64_t k_ShortestPacePeriod = 1;
 constexpr uint64_t k_LongestPacePeriod = 100'000;
 /// The most bytes of the name of the player in a "game.time" frame
 constexpr size_t k_MostTimeNameBytes = 64;
+/// The hexadecimal digits of a SHA-256
+constexpr size_t k_Sha256HexDigits = 64;
 constexpr std::string_view k_EditorScriptFile = "editor.script_file";
 /// The most bytes of the hints of a copy of the game (the patch and the language)
 constexpr size_t k_MostHintBytes = 16;
@@ -435,6 +437,12 @@ bool ReadStart(const Json& object, Start& start)
 	{
 		return false;
 	}
+	// A SHA-256 is 64 hexadecimal digits
+	if (!ReadShort(object, "map_sha256", start.mapSha256, k_Sha256HexDigits, false) ||
+	    (!start.mapSha256.empty() && start.mapSha256.size() != k_Sha256HexDigits))
+	{
+		return false;
+	}
 	if (const auto* timeLimit = Member(object, "time_limit"); timeLimit != nullptr && !timeLimit->is_null())
 	{
 		uint64_t value = 0;
@@ -566,6 +574,10 @@ void WriteStart(const Start& start, Json& object)
 	if (start.godsRingMap)
 	{
 		object["gods_ring_map"] = true;
+	}
+	if (!start.mapSha256.empty())
+	{
+		object["map_sha256"] = start.mapSha256;
 	}
 	if (start.allComputerGods)
 	{
@@ -999,9 +1011,10 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	if (type == k_EditorLand)
 	{
 		EditorLand land;
-		// A request names a land or the testbed, not both
+		// A request names one of a land, the testbed and the map for 32 gods
 		if (!ReadShort(object, "land", land.land, k_MostLandNameBytes, false) ||
-		    !ReadBool(object, "testbed", land.testbed, false) || land.land.empty() == !land.testbed)
+		    !ReadBool(object, "testbed", land.testbed, false) || !ReadBool(object, "gods_ring_map", land.godsRingMap, false) ||
+		    !NamesOneLand(land))
 		{
 			return std::nullopt;
 		}
@@ -1524,6 +1537,10 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, EditorLand>)
 		    {
 			    object = Json {{"type", k_EditorLand}, {"land", value.land}, {"testbed", value.testbed}};
+			    if (value.godsRingMap)
+			    {
+				    object["gods_ring_map"] = true;
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, EditorScriptFile>)
 		    {

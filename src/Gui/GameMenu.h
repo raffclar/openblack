@@ -130,7 +130,6 @@ public:
 	void SetStatisticsSource(StatisticsSource source) { _statisticsSource = std::move(source); }
 	/// Opens the Game Statistics box with the figures as they are now
 	void OpenStatistics();
-	[[nodiscard]] const StatisticsBox& GetStatistics() const noexcept { return *_statistics; }
 	/// The defaults that Load Defaults of the Controls page puts back, read as the player confirms it
 	using DefaultControlsSource = std::function<input::KeyBindingTable()>;
 	void SetDefaultControlsSource(DefaultControlsSource source) { _defaultControlsSource = std::move(source); }

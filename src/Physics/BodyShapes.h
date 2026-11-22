@@ -15,9 +15,11 @@
 #include <span>
 #include <vector>
 
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
 #include "Body.h"
+#include "Ground.h"
 
 /// The shapes bodies are built from: a model's own points and triangles, or the hand-made shapes of trees, villagers and
 /// animals, building pieces and the creature.
@@ -52,7 +54,16 @@ struct ModelPart
 
 /// A body from a model's parts: every vertex a point, every triangle a face, the centre of mass at the mean of the
 /// points and the radius the farthest scaled point from it. Empty when no part makes a body.
-[[nodiscard]] Shape FromModel(std::span<const ModelPart> parts, float scale);
+///
+/// A model that lies over the land's shape gives one lift for each vertex of its body's parts, in model units. The lift
+/// moves the vertex up after the centre of mass is known, so the centre of mass does not include it.
+[[nodiscard]] Shape FromModel(std::span<const ModelPart> parts, float scale, std::span<const float> lifts = {});
+
+/// The lifts of a model that lies over the land's shape, one for each vertex of its body's parts in model units: the
+/// land under the vertex less the land under the model's origin, over the model's scale. The model's axes include its
+/// scale.
+[[nodiscard]] std::vector<float> LandLifts(std::span<const ModelPart> parts, const glm::mat3& scaledAxes,
+                                           const glm::vec3& origin, float scale, const Ground& ground);
 
 /// A tree's spindle of 16 points along its trunk. A rooted tree's centre of mass is at 0.4 of its height and its spindle
 /// reaches a little below its base; a fallen one balances at half its height. Height and radius are scaled.

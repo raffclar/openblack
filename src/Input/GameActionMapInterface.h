@@ -178,7 +178,6 @@ public:
 	/// While set (a hand demonstration plays), the player's own mouse moves, buttons and wheel don't reach the game; the
 	/// game's own injected ones still do
 	virtual void SetPlayerMouseBlocked([[maybe_unused]] bool blocked) {}
-	[[nodiscard]] virtual bool IsPlayerMouseBlocked() const { return false; }
 	[[nodiscard]] virtual std::optional<ScriptedPointer> GetScriptedPointer() const { return std::nullopt; }
 	/// Just before the frame takes its events from the window's queue: the scripted pointer takes its moves and buttons
 	/// sent as pumped events (see ScriptedMouse), as SDL takes a real mouse's as it pumps them

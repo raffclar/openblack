@@ -106,9 +106,9 @@ public:
 	[[nodiscard]] virtual bool SendEditorWorld(std::span<const uint8_t> /*file*/) { return false; }
 	/// The editor asks the game server to start the room again on a testbed scenario. False when the request does not go.
 	[[nodiscard]] virtual bool SendEditorScenario(std::string_view /*id*/) { return false; }
-	/// The Load Island menu asks the game server to start the room again on a land, or on the testbed with no land. Only a
-	/// player with the editor claim can do it. False when the request does not go.
-	[[nodiscard]] virtual bool SendEditorLand(std::string_view /*land*/, bool /*testbed*/) { return false; }
+	/// The Load Island menu asks the game server to start the room again on a land, on the testbed with no land, or on the
+	/// map for 32 gods. Only a player with the editor claim can do it. False when the request does not go.
+	[[nodiscard]] virtual bool SendEditorLand(const game_socket::EditorLand& /*land*/) { return false; }
 	/// A file of the script tabs of the editor goes to the game server in parts on the game socket. The server sends it to
 	/// every player. False when the socket of the game is not open: then the file does not go.
 	[[nodiscard]] virtual bool SendEditorScriptFile(game_socket::EditorScriptFile::Kind /*kind*/, std::vector<uint8_t> /*file*/)

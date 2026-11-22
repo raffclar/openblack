@@ -82,10 +82,12 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -358,7 +360,7 @@ struct SavedSystem
 
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
-constexpr std::array<SavedSystem, 47> k_SavedSystems {{
+constexpr std::array<SavedSystem, 49> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindOldParticles, false},
     {"syncedParticles", &FindSystem<Locator::particleRuleSystem>},
@@ -381,6 +383,8 @@ constexpr std::array<SavedSystem, 47> k_SavedSystems {{
     {"dialogueControl", &FindSystem<Locator::dialogueControlSystem>},
     {"scriptControl", &FindSystem<Locator::scriptControlSystem>},
     {"scriptSwitches", &FindSystem<Locator::chlapi>},
+    {"leashSwitch", &FindSystem<Locator::leashSystem>},
+    {"handDemo", &FindSystem<Locator::handDemoSystem>},
     {"editorScripts", &FindSystem<Locator::editorSystem>},
     {"creatureAudio", &FindSystem<Locator::creatureAudioSystem>},
     {"scriptMusic", &FindSystem<Locator::scriptMusicSystem>},

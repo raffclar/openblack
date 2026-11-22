@@ -12,6 +12,7 @@
 #include "TownDesireSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <ranges>
 #include <utility>
 #include <vector>
@@ -112,6 +113,21 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		in.belief = impression->belief.belief.at(static_cast<size_t>(town.owner));
 	}
 	auto& stats = in.stats;
+	// The info of each kind of abode of the tribe, found in one walk of the table. Each kind keeps the first row that
+	// matches, as a search of the table gives.
+	std::array<const GAbodeInfo*, static_cast<size_t>(AbodeNumber::_COUNT)> tribeAbodes {};
+	for (const auto& info : Locator::infoConstants::value().abode)
+	{
+		const auto number = static_cast<size_t>(info.abodeNumber);
+		if (info.tribeType == tribe && number < tribeAbodes.size() && tribeAbodes.at(number) == nullptr)
+		{
+			tribeAbodes.at(number) = &info;
+		}
+	}
+	const auto abodeInfoOf = [&tribeAbodes, tribe](AbodeNumber number) {
+		const auto index = static_cast<size_t>(number);
+		return index < tribeAbodes.size() ? tribeAbodes.at(index) : FindAbodeInfo(tribe, number);
+	};
 
 	// The town's people, abodes and miracle dispensers come from the census in the order of a walk of the world. The
 	// last storage pit of that order gives the food and the wood in store.
@@ -140,7 +156,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	for (const auto entity : ecs::town_census::AbodesOf(registry, town.id))
 	{
 		const auto& abode = registry.Get<const Abode>(entity);
-		const auto* info = FindAbodeInfo(tribe, abode.type);
+		const auto* info = abodeInfoOf(abode.type);
 		// A building counts among the town's buildings and their places once it is built
 		const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		if (progress == nullptr || progress->built >= 1.0f)
@@ -170,7 +186,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 
 	for (size_t i = 0; i < in.populationWhenNeeded.size(); ++i)
 	{
-		if (const auto* info = FindAbodeInfo(tribe, static_cast<AbodeNumber>(i)); info != nullptr)
+		if (const auto* info = abodeInfoOf(static_cast<AbodeNumber>(i)); info != nullptr)
 		{
 			in.populationWhenNeeded.at(i) = info->populationWhenNeeded;
 		}
@@ -194,7 +210,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		}
 		if (const auto* abode = registry.TryGet<const Abode>(building); abode != nullptr)
 		{
-			const auto* info = FindAbodeInfo(tribe, abode->type);
+			const auto* info = abodeInfoOf(abode->type);
 			in.abodes.push_back({
 			    .life = ecs::world_objects::LifeOf(building),
 			    .livingQuarters = info != nullptr && (static_cast<uint32_t>(info->abodeType) &

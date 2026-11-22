@@ -101,6 +101,8 @@ public:
 	                                                                               entt::entity ignore) const = 0;
 	/// Where a town's people gather, in whole map units: worked out once, between its buildings or near one
 	virtual map_coords::MapCoords GetCongregationPos(entt::entity town) = 0;
+	/// True when GetCongregationPos gives the place that the town keeps, and so changes nothing and draws no random number
+	[[nodiscard]] virtual bool KeepsCongregationPos(entt::entity town) const = 0;
 	/// A town's temporary pile for a resource, and its edge nearest a point
 	struct TemporaryStore
 	{

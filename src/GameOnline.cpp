@@ -36,6 +36,7 @@
 #include "Common/ErrorReportsRules.h"
 #include "Game.h"
 #include "Online/GameBuildId.h"
+#include "Online/GodsRingMapFile.h"
 #include "Online/ServerSilence.h"
 #include "Sound/ClipSounds.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -104,6 +105,7 @@
 #include "Online/OnlineMapLand.h"
 #include "Online/OnlineMapStoreInterface.h"
 #include "Online/OpenPage.h"
+#include "Online/Sha256.h"
 #include "Online/StartRules.h"
 #include "Online/WebSocketInterface.h"
 #include "Particles/LiquidParticles.h"
@@ -974,13 +976,25 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	}
 	else if (start.godsRingMap)
 	{
-		// A network client does not make the map for 32 gods: it loads the file of the server, which it got from the
-		// lobby (deviation 171)
+		// A network client loads the file of the server, which it got from the lobby (deviation 171). When the editor
+		// changes the room to the map during the game, the lobby gives no file: the client then makes the file from its
+		// own game data, as the download of the map package does, and plays it only when it is the file of the server.
 		const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
-		const auto file = online::ReadStartLand(start.land, store, Locator::filesystem::value());
+		auto file = online::ReadStartLand(start.land, store, Locator::filesystem::value());
+		if (!start.mapSha256.empty() && (!file.has_value() || online::sha256::HexOf(*file) != start.mapSha256))
+		{
+			file = gods_ring_map_file::MakeFromGameFolder(Locator::filesystem::value());
+		}
 		if (!file.has_value())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This computer does not have the map of the game server: {}", start.land);
+			return false;
+		}
+		if (!start.mapSha256.empty() && online::sha256::HexOf(*file) != start.mapSha256)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"),
+			                    "The map for 32 gods of this computer is not the file of the game server: SHA-256 {}, not {}",
+			                    online::sha256::HexOf(*file), start.mapSha256);
 			return false;
 		}
 		if (!lands.LoadGodsRingMapFile(*file))

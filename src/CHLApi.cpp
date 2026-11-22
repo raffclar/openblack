@@ -522,6 +522,8 @@ void CHLApi::ResetSwitches()
 	_gameSoundOn = true;
 	_highlightDrawOn = true;
 	_scriptHelpOn = true;
+	// The scripts' switch for the leashes is on again
+	DrawLeashes(true);
 	// The sun that a script hid shows again
 	if (Locator::skySystem::has_value())
 	{

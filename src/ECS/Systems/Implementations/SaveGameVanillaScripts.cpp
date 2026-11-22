@@ -292,6 +292,15 @@ void PutScriptValues(const gamesave::VanillaWorld& world, ecs::Registry& registr
 		SPDLOG_LOGGER_WARN(ImportLog(), "The level {} of the interface of the file is not a level of the game",
 		                   values->interfaceLevel);
 	}
+	// The features and the pitch of the file come after the level, so they replace those that the level gave
+	if (const auto help = script_import::ReadCameraHelpValues(world);
+	    help.has_value() && Locator::cameraHelpSystem::has_value())
+	{
+		auto& state = Locator::cameraHelpSystem::value().Get();
+		state.features = help->features;
+		state.autoPitch = help->autoPitch;
+		state.autoPitchHeight = help->autoPitchHeight;
+	}
 	if (values->countdownOn)
 	{
 		SPDLOG_LOGGER_WARN(ImportLog(), "The import does not make the countdown timer of the scripts ({} left)",

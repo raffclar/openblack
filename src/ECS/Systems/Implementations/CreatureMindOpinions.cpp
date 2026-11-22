@@ -366,8 +366,7 @@ size_t TreesInForest(entt::entity forest)
 	{
 		return 0;
 	}
-	const auto& forests = Locator::forestSystem::value();
-	return forests.TreesOf(forest, false).size() + forests.TreesOf(forest, true).size();
+	return Locator::forestSystem::value().TreeCountOf(forest);
 }
 
 /// The desire that another creature shows: the desire that the action of its plan shows, or of its last plan

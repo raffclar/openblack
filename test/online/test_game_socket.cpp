@@ -692,12 +692,12 @@ TEST(GameSocket, TheEditorWorldAndScenarioFramesGoBothWays)
 
 TEST(GameSocket, TheEditorLandFrameNamesALandOrTheTestbed)
 {
-	const EditorLand land {.land = "Land2.txt", .testbed = false};
+	const EditorLand land {.land = "Land2.txt", .testbed = false, .godsRingMap = false};
 	const auto parsedLand = Parse(ToJson(land));
 	ASSERT_TRUE(parsedLand.has_value());
 	ASSERT_TRUE(std::holds_alternative<EditorLand>(*parsedLand));
 	EXPECT_EQ(std::get<EditorLand>(*parsedLand), land);
-	const EditorLand testbed {.land = {}, .testbed = true};
+	const EditorLand testbed {.land = {}, .testbed = true, .godsRingMap = false};
 	const auto parsedTestbed = Parse(ToJson(testbed));
 	ASSERT_TRUE(parsedTestbed.has_value());
 	EXPECT_EQ(std::get<EditorLand>(*parsedTestbed), testbed);
@@ -705,4 +705,29 @@ TEST(GameSocket, TheEditorLandFrameNamesALandOrTheTestbed)
 	EXPECT_FALSE(Parse(R"({"type":"editor.land","land":""})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"editor.land","land":"Land1.txt","testbed":true})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"editor.land","land":")" + std::string(300, 'a') + R"("})").has_value());
+}
+
+TEST(GameSocket, TheEditorLandFrameCanNameTheMapFor32GodsAndTheStartGivesTheFileOfTheServer)
+{
+	const EditorLand map {.land = {}, .testbed = false, .godsRingMap = true};
+	const auto parsedMap = Parse(ToJson(map));
+	ASSERT_TRUE(parsedMap.has_value());
+	ASSERT_TRUE(std::holds_alternative<EditorLand>(*parsedMap));
+	EXPECT_EQ(std::get<EditorLand>(*parsedMap), map);
+	// The map goes with no land and no testbed
+	EXPECT_FALSE(Parse(R"({"type":"editor.land","land":"Land1.txt","gods_ring_map":true})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"editor.land","testbed":true,"gods_ring_map":true})").has_value());
+	// A start of the map gives the SHA-256 of the server's file. A start of an older server has none.
+	Start start {.land = "Online Maps/gods_ring.map", .seed = 7, .godsRingMap = true, .mapSha256 = std::string(64, 'f')};
+	const auto parsedStart = Parse(ToJson(start));
+	ASSERT_TRUE(parsedStart.has_value());
+	ASSERT_TRUE(std::holds_alternative<Start>(*parsedStart));
+	EXPECT_EQ(std::get<Start>(*parsedStart).mapSha256, start.mapSha256);
+	EXPECT_TRUE(std::get<Start>(*parsedStart).godsRingMap);
+	start.mapSha256.clear();
+	const auto json = ToJson(start);
+	EXPECT_EQ(json.find("map_sha256"), std::string::npos);
+	EXPECT_TRUE(std::get<Start>(*Parse(json)).mapSha256.empty());
+	// A SHA-256 has 64 digits
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"map_sha256":"abc"})").has_value());
 }

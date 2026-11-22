@@ -481,6 +481,7 @@ void NetworkGameSystem::SetGameSpeed(float speed)
 	}
 	else
 	{
+		// Vanilla has no limit here (vanilla-bugs row 1586). The guard sends no request and writes a warning.
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The speed of the game {} gives no time between two turns from {} to {} ms",
 		                   speed, online::room_clock::k_ShortestPeriod, online::room_clock::k_LongestPeriod);
 	}

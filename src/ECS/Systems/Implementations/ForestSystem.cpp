@@ -986,20 +986,46 @@ std::vector<entt::entity> ForestSystem::LandForests() const
 
 std::optional<entt::entity> ForestSystem::LandForestOf(uint32_t id) const
 {
-	const auto& registry = EntityRegistry();
-	for (const auto forest : LandForests())
-	{
-		if (registry.Get<const LandForest>(forest).id == id)
+	// Two forests can have the same number. The answer is the first in the order of LandForests, which is the newest. A
+	// single walk finds it with no list and no sort.
+	std::optional<std::pair<uint32_t, entt::entity>> newest;
+	EntityRegistry().Each<const LandForest>([id, &newest](entt::entity forest, const LandForest& record) {
+		const std::pair made {record.made, forest};
+		if (record.id == id && (!newest.has_value() || made > *newest))
 		{
-			return forest;
+			newest = made;
 		}
+	});
+	if (!newest.has_value())
+	{
+		return std::nullopt;
 	}
-	return std::nullopt;
+	return newest->second;
 }
 
 std::vector<entt::entity> ForestSystem::TreesOf(entt::entity forest, bool growing) const
 {
 	return TreesOfForest(forest, growing, nullptr);
+}
+
+size_t ForestSystem::TreeCountOf(entt::entity forest) const
+{
+	const auto& registry = EntityRegistry();
+	const auto* record = registry.Valid(forest) ? registry.TryGet<const LandForest>(forest) : nullptr;
+	if (record == nullptr)
+	{
+		return 0;
+	}
+	size_t count = 0;
+	registry.Each<const Tree, const ForestMember, const Transform>(
+	    [&count, id = record->id](entt::entity /*tree*/, const Tree& /*unused*/, const ForestMember& member,
+	                              const Transform& /*unused*/) {
+		    if (member.forest == id)
+		    {
+			    ++count;
+		    }
+	    });
+	return count;
 }
 
 ForestTreeLists ForestSystem::ListTreesOfForests(std::span<const entt::entity> forests) const

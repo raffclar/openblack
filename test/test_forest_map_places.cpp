@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <vector>
 
 #include <glm/mat3x3.hpp>
@@ -121,4 +122,56 @@ TEST_F(ForestMapPlaces, TheListsOfTheTreesGiveTheTreesOfAWalkOfAllTheTrees)
 		EXPECT_EQ(forests.ListedCentreTreeOf(thing, lists), forests.CentreTreeOf(thing));
 	}
 	EXPECT_EQ(forests.ListedTreesOf(other, false, lists), (std::vector {lone}));
+}
+
+TEST_F(ForestMapPlaces, TheCountOfTheTreesOfAForestIsTheSizeOfBothListsOfItsTrees)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto forest = At({.x = k_Far + 3, .z = k_Z}, true);
+	registry.Assign<LandForest>(forest, LandForest {.id = k_ForestId});
+	const auto other = At({.x = k_Far + 40, .z = k_Z}, true);
+	registry.Assign<LandForest>(other, LandForest {.id = k_ForestId + 1});
+	GrownTree({.x = k_Far, .z = k_Z}, true, 0);
+	const auto young = GrownTree({.x = k_Far + 5, .z = k_Z}, false, 1);
+	registry.Get<ForestMember>(young).growing = true;
+	GrownTree({.x = k_Far + 6, .z = k_Z}, true, 2);
+	const auto lone = GrownTree({.x = k_Far + 41, .z = k_Z}, true, 0);
+	registry.Get<ForestMember>(lone).forest = k_ForestId + 1;
+
+	const ecs::systems::ForestSystem forests;
+	for (const auto thing : {forest, other, lone})
+	{
+		EXPECT_EQ(forests.TreeCountOf(thing), forests.TreesOf(thing, false).size() + forests.TreesOf(thing, true).size());
+	}
+	EXPECT_EQ(forests.TreeCountOf(forest), 3u);
+	EXPECT_EQ(forests.TreeCountOf(other), 1u);
+	EXPECT_EQ(forests.TreeCountOf(lone), 0u);
+}
+
+TEST_F(ForestMapPlaces, TheForestOfANumberIsTheFirstOfTheListOfForestsWithThatNumber)
+{
+	// Two forests can share a number. The answer is the one that the list of the forests (the newest first) meets first.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto older = At({.x = k_Far, .z = k_Z}, true);
+	registry.Assign<LandForest>(older, LandForest {.id = k_ForestId, .made = 1});
+	const auto newer = At({.x = k_Far + 9, .z = k_Z}, true);
+	registry.Assign<LandForest>(newer, LandForest {.id = k_ForestId, .made = 4});
+	const auto another = At({.x = k_Far + 20, .z = k_Z}, true);
+	registry.Assign<LandForest>(another, LandForest {.id = k_ForestId + 1, .made = 2});
+
+	const ecs::systems::ForestSystem forests;
+	for (const uint32_t id : {k_ForestId, k_ForestId + 1, k_ForestId + 2})
+	{
+		std::optional<entt::entity> first;
+		for (const auto forest : forests.LandForests())
+		{
+			if (registry.Get<const LandForest>(forest).id == id)
+			{
+				first = forest;
+				break;
+			}
+		}
+		EXPECT_EQ(forests.LandForestOf(id), first);
+	}
+	EXPECT_EQ(forests.LandForestOf(k_ForestId), newer);
 }

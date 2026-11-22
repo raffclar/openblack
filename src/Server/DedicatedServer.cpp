@@ -183,6 +183,20 @@ struct WorldChangeResult
 {
 	std::optional<uint32_t> turn;
 	std::string refusal;
+	/// The SHA-256 of the file of the map for 32 gods that the world loaded. Empty for every other change.
+	std::string mapSha256 {};
+};
+
+/// The land on which the world starts again: a script of the game, the testbed or the map for 32 gods
+struct LandRestart
+{
+	/// The script of the land, as a start names it. Empty for the testbed and the map for 32 gods.
+	std::string_view land;
+	bool testbed {false};
+	bool godsRingMap {false};
+	/// How the new game on the land starts, as the start names it
+	std::string_view opening;
+	uint32_t seed {0};
 };
 
 /// The land that the clients load, as they find it and compare its file
@@ -265,9 +279,9 @@ public:
 	/// on the scenario. The scenario is laid out in the first frame in which the world turns. Gives the turn of the new
 	/// world, or why it did not start.
 	[[nodiscard]] WorldChangeResult RestartOnScenario(std::string_view id, uint32_t seed);
-	/// Between two turns: the world starts again on a land, or on the testbed with no scenario, as a network game that
-	/// starts on it. Gives the turn of the new world, or why it did not start.
-	[[nodiscard]] WorldChangeResult RestartOnLand(std::string_view land, bool testbed, std::string_view opening, uint32_t seed);
+	/// Between two turns: the world starts again on a land, on the testbed with no scenario, or on the map for 32 gods, as
+	/// a network game that starts on it. Gives the turn of the new world, or why it did not start.
+	[[nodiscard]] WorldChangeResult RestartOnLand(const LandRestart& restart);
 	/// Why the server cannot load a land of the Load Island menu, or none when it can
 	[[nodiscard]] static std::optional<std::string> LandRefusal(std::string_view land);
 	/// What the game role lets the world do in a frame
@@ -964,25 +978,41 @@ std::optional<std::string> ServerWorld::LandRefusal(std::string_view land)
 	return std::nullopt;
 }
 
-WorldChangeResult ServerWorld::RestartOnLand(std::string_view land, bool testbed, std::string_view opening, uint32_t seed)
+WorldChangeResult ServerWorld::RestartOnLand(const LandRestart& restart)
 {
+	const bool scriptLand = !restart.testbed && !restart.godsRingMap;
 	std::optional<std::filesystem::path> path;
-	if (!testbed)
+	if (scriptLand)
 	{
-		if (const auto refusal = LandRefusal(land); refusal.has_value())
+		if (const auto refusal = LandRefusal(restart.land); refusal.has_value())
 		{
 			return {.turn = std::nullopt, .refusal = *refusal};
 		}
-		path = network_land::PathOf(land, Locator::filesystem::value().GetPath<filesystem::Path::Scripts>());
+		path = network_land::PathOf(restart.land, Locator::filesystem::value().GetPath<filesystem::Path::Scripts>());
 	}
-	const auto name = testbed ? std::string("the testbed") : std::string(land);
+	// The server makes the file of the map for 32 gods from its game folder, as at the start of a network game on the
+	// map. The clients make the same file, or have it from the lobby.
+	std::optional<std::vector<uint8_t>> godsRingMap;
+	if (restart.godsRingMap)
+	{
+		godsRingMap = gods_ring_map_file::MakeFromGameFolder(Locator::filesystem::value());
+		if (!godsRingMap.has_value())
+		{
+			return {.turn = std::nullopt, .refusal = "the server cannot make the map for 32 gods"};
+		}
+	}
+	const auto name = restart.testbed       ? std::string("the testbed")
+	                  : restart.godsRingMap ? std::string("the map for 32 gods")
+	                                        : std::string(restart.land);
 	Locator::syncChecksumSystem::value().FinishHash();
 	// The land starts from the state that every client starts it from, as at the start of a network game
-	simulation::PrepareNetworkLand(seed);
+	simulation::PrepareNetworkLand(restart.seed);
 	auto& landSystem = Locator::landSystem::value();
-	landSystem.SetNewGameStart(opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(opening));
-	const bool loaded = testbed ? landSystem.LoadTestbed()
-	                            : landSystem.LoadMap(*path, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame);
+	landSystem.SetNewGameStart(restart.opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(restart.opening));
+	const bool loaded = restart.testbed ? landSystem.LoadTestbed()
+	                    : godsRingMap.has_value()
+	                        ? landSystem.LoadGodsRingMapFile(*godsRingMap)
+	                        : landSystem.LoadMap(*path, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame);
 	if (!loaded)
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The land {} of the editor did not load", name);
@@ -1014,7 +1044,13 @@ WorldChangeResult ServerWorld::RestartOnLand(std::string_view land, bool testbed
 	_scenario.reset();
 	_scenarioStarted = false;
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world starts again on the land {} at turn {}", name, clock.GetTurn());
-	return {.turn = clock.GetTurn(), .refusal = {}};
+	if (!godsRingMap.has_value())
+	{
+		return {.turn = clock.GetTurn(), .refusal = {}};
+	}
+	auto sha256 = online::sha256::HexOf(*godsRingMap);
+	_godsRingMap = std::move(*godsRingMap);
+	return {.turn = clock.GetTurn(), .refusal = {}, .mapSha256 = std::move(sha256)};
 }
 
 /// The seconds since 1970 (UTC) on the clock of the computer
@@ -1422,7 +1458,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, const Play
 	{
 		auto changedSettings = settings;
 		changedSettings.testbed = savedStart->testbed;
-		changedSettings.godsRingMap = false;
+		changedSettings.godsRingMap = savedStart->godsRingMap;
 		changedSettings.customMap.reset();
 		played = PlayedLandOf(changedSettings, world);
 	}
@@ -1621,15 +1657,18 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, const Play
 	host.SetChangeWorld([&world, keeper](const LockstepHost::WorldChange& change) {
 		using Kind = LockstepHost::WorldChange::Kind;
 		const bool file = change.kind == Kind::WorldFile;
-		const auto changed = file ? world.LoadEditorWorld(change.file, change.players)
-		                     : change.kind == Kind::Scenario
-		                         ? world.RestartOnScenario(change.scenario, change.seed)
-		                         : world.RestartOnLand(change.land, change.testbed, change.opening, change.seed);
+		const auto changed = file                            ? world.LoadEditorWorld(change.file, change.players)
+		                     : change.kind == Kind::Scenario ? world.RestartOnScenario(change.scenario, change.seed)
+		                                                     : world.RestartOnLand({.land = change.land,
+		                                                                            .testbed = change.testbed,
+		                                                                            .godsRingMap = change.godsRingMap,
+		                                                                            .opening = change.opening,
+		                                                                            .seed = change.seed});
 		if (changed.turn.has_value() && keeper != nullptr)
 		{
 			keeper->WorldChanged(change.kind);
 		}
-		return LockstepHost::WorldChanged {.turn = changed.turn, .refusal = changed.refusal};
+		return LockstepHost::WorldChanged {.turn = changed.turn, .refusal = changed.refusal, .mapSha256 = changed.mapSha256};
 	});
 	if (const auto& lobby = settings.network->lobby; lobby.has_value())
 	{
@@ -1796,7 +1835,11 @@ bool PrepareResume(const ServerSettings& settings, ServerWorld& world, std::opti
 			return false;
 		}
 		const auto name = start->testbed ? std::string("of the testbed") : start->land;
-		if (const auto changed = world.RestartOnLand(start->land, start->testbed, start->opening, start->seed);
+		if (const auto changed = world.RestartOnLand({.land = start->land,
+		                                              .testbed = start->testbed,
+		                                              .godsRingMap = start->godsRingMap,
+		                                              .opening = start->opening,
+		                                              .seed = start->seed});
 		    !changed.turn.has_value())
 		{
 			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The land {} of the snapshot does not load: {}", name, changed.refusal);

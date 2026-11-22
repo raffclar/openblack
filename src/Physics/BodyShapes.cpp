@@ -56,7 +56,26 @@ std::vector<std::size_t> shapes::BodyParts(std::span<const ModelPart> parts)
 	return used;
 }
 
-Shape shapes::FromModel(std::span<const ModelPart> parts, float scale)
+std::vector<float> shapes::LandLifts(std::span<const ModelPart> parts, const glm::mat3& scaledAxes, const glm::vec3& origin,
+                                     float scale, const Ground& ground)
+{
+	const float baseHeight = ground.HeightAt(glm::vec2(origin.x, origin.z));
+	const float inverseScale = 1.0f / scale;
+	std::vector<float> lifts;
+	for (const auto index : BodyParts(parts))
+	{
+		for (const auto& vertex : parts[index].positions)
+		{
+			// The game adds the products of the vertex and the axes in this order
+			const float x = ((vertex.z * scaledAxes[2].x + vertex.y * scaledAxes[1].x) + vertex.x * scaledAxes[0].x) + origin.x;
+			const float z = ((vertex.x * scaledAxes[0].z + vertex.z * scaledAxes[2].z) + vertex.y * scaledAxes[1].z) + origin.z;
+			lifts.push_back((ground.HeightAt(glm::vec2(x, z)) - baseHeight) * inverseScale);
+		}
+	}
+	return lifts;
+}
+
+Shape shapes::FromModel(std::span<const ModelPart> parts, float scale, std::span<const float> lifts)
 {
 	Shape shape;
 	std::vector<glm::vec3> positions;
@@ -79,10 +98,16 @@ Shape shapes::FromModel(std::span<const ModelPart> parts, float scale)
 	{
 		sum += position;
 	}
-	shape.centreOfMass = sum / static_cast<float>(positions.size());
+	// The game multiplies the sum by one over the count
+	shape.centreOfMass = (1.0f / static_cast<float>(positions.size())) * sum;
 	shape.points.reserve(positions.size());
-	for (const auto& position : positions)
+	for (std::size_t i = 0; i < positions.size(); ++i)
 	{
+		auto position = positions[i];
+		if (i < lifts.size())
+		{
+			position.y += lifts[i];
+		}
 		shape.points.push_back((position - shape.centreOfMass) * scale);
 	}
 	shape.radius = FarthestPoint(shape.points);
@@ -93,7 +118,8 @@ Shape shapes::Tree(float height, float radius, float scale, bool rooted)
 {
 	const float half = (rooted ? 0.6f : 0.5f) * height;
 	Shape shape;
-	shape.centreOfMass = glm::vec3(0.0f, (rooted ? 0.4f : 0.5f) * height / scale, 0.0f);
+	// The game divides the share by the scale first
+	shape.centreOfMass = glm::vec3(0.0f, ((rooted ? 0.4f : 0.5f) / scale) * height, 0.0f);
 	for (const auto& [ringRadius, y] :
 	     {std::pair {0.65f * radius, -0.6f * half}, std::pair {radius, 0.0f}, std::pair {0.65f * radius, 0.6f * half}})
 	{
@@ -157,7 +183,8 @@ Shape shapes::LivingBody(Living kind, float height, float radius, float scale)
 	    {endX, -y, -endZ},
 	}};
 	Shape shape;
-	shape.centreOfMass = glm::vec3(0.0f, y / scale, 0.0f);
+	// The game divides the half by the scale first
+	shape.centreOfMass = glm::vec3(0.0f, (0.5f / scale) * height, 0.0f);
 	for (const auto& point : box)
 	{
 		// A quarter turn about the up axis

@@ -110,8 +110,6 @@ public:
 	[[nodiscard]] std::span<const entt::entity> GetCreatures() const { return _creatures; }
 	/// What became of the last commands, the newest last
 	[[nodiscard]] const std::deque<std::string>& GetLog() const { return _log; }
-	/// What the scenario states about its outcome and how the world answers it so far
-	[[nodiscard]] const checks::Evaluator& GetChecks() const { return _checks; }
 
 	/// The scenario's crowd as it spawns, if it has one
 	[[nodiscard]] std::optional<CrowdProgress> GetCrowdProgress() const;

@@ -83,13 +83,13 @@
 #include "Input/PlatformKeys.h"
 #include "KeyBindingsWindow.h"
 #include "LandIsland.h"
+#include "LoadIslandMenu.h"
 #include "Locator.h"
 #include "Magic.h"
 #include "Magic/MagicTables.h"
 #include "MemoryUse.h"
 #include "MeshViewer.h"
 #include "Moon.h"
-#include "Online/NetworkLand.h"
 #include "Online/NetworkSession.h"
 #include "Online/RoomClock.h"
 #include "PathFinding.h"
@@ -160,17 +160,6 @@ protected:
 };
 #endif
 
-/// The Load Island menu in a network game: the game server starts the room again on the land, or on the testbed
-void AskServerForLand(const std::string& land, bool testbed) noexcept
-{
-	const bool sent = Locator::networkGame::has_value() && Locator::networkGame::value().SendEditorLand(land, testbed);
-	if (auto logger = spdlog::get("game"))
-	{
-		// The test tools find the words "The Load Island menu asks the game server"
-		SPDLOG_LOGGER_INFO(logger, "The Load Island menu asks the game server for {}: {}",
-		                   testbed ? std::string("the testbed") : land, sent ? "the request went" : "the request did not go");
-	}
-}
 } // namespace
 
 std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPass viewId) noexcept
@@ -956,92 +945,10 @@ bool Gui::ShowMenu() noexcept
 		// In a network game the World, Bonus Creatures and Game Speed menus send their changes as commands of the turns or
 		// as requests to the game server. Load Island asks the game server to start the room again on the land, and opens
 		// only for a player with the editor claim.
-		const auto landAct = developer_tools::LandMenuActOf(_networkSessionLive, developer_tools::LocalPlayerHasEditorClaim());
-		const bool asksServer = landAct == developer_tools::LandMenuAct::AsksServer;
+		const auto landAct = CurrentLandMenuAct();
 		if (ImGui::BeginMenu("Load Island", landAct != developer_tools::LandMenuAct::Closed))
 		{
-			auto& resources = Locator::resources::value();
-			auto& levelsManager = resources.GetLevels();
-			auto campaigns = std::vector<const Level*>();
-			auto playgrounds = std::vector<const Level*>();
-			levelsManager.Each([&campaigns, &playgrounds](entt::id_type /*id*/, const Level& level) {
-				if (level.GetType() == Level::LandType::Campaign)
-				{
-					campaigns.emplace_back(&level);
-				}
-				else
-				{
-					playgrounds.emplace_back(&level);
-				}
-			});
-
-			std::sort(campaigns.begin(), campaigns.end(),
-			          [](const Level* level1, const Level* level2) { return level1->GetName() < level2->GetName(); });
-			std::sort(playgrounds.begin(), playgrounds.end(),
-			          [](const Level* level1, const Level* level2) { return level1->GetName() < level2->GetName(); });
-
-			auto menuItem = [&game, asksServer](const auto& label, const std::filesystem::path& path,
-			                                    const std::string description, bool validLevel) {
-				if (ImGui::MenuItem(label.data(), nullptr, false, validLevel))
-				{
-					if (asksServer)
-					{
-						AskServerForLand(network_land::WireName(path), false);
-					}
-					else
-					{
-						game.LoadFromLandMenu(path);
-					}
-				}
-				if (!description.empty() && ImGui::IsItemHovered())
-				{
-					ImGui::SetTooltip("%s", description.c_str());
-				}
-			};
-
-			if (ImGui::BeginMenu("Story Islands"))
-			{
-				for (auto& level : campaigns)
-				{
-					menuItem(level->GetName(), level->GetScriptPath(), level->GetDescription(), level->IsValid());
-				}
-				ImGui::EndMenu();
-			}
-			if (ImGui::BeginMenu("Playground Islands"))
-			{
-				for (auto& level : playgrounds)
-				{
-					menuItem(level->GetName(), level->GetScriptPath(), level->GetDescription(), level->IsValid());
-				}
-				ImGui::EndMenu();
-			}
-			ImGui::Separator();
-			if (ImGui::MenuItem("Creature Testbed"))
-			{
-				if (asksServer)
-				{
-					AskServerForLand({}, true);
-				}
-				else
-				{
-					game.LoadTestbed();
-				}
-			}
-			if (ImGui::IsItemHovered())
-			{
-				ImGui::SetTooltip("A flat plane over the whole map with a lake north of the middle, for trying out how "
-				                  "creatures move, are animated, drink and wade, and what the water reflects");
-			}
-			// The players get the map for 32 gods from the lobby before the start, so the room cannot change to it
-			if (ImGui::MenuItem("Map for 32 Gods", nullptr, false, !asksServer))
-			{
-				game.LoadGodsRingMap();
-			}
-			if (ImGui::IsItemHovered())
-			{
-				ImGui::SetTooltip("The network map for 32 gods on this computer alone: a round island with a citadel and "
-				                  "a village in each of its 32 slots");
-			}
+			DrawLoadIslandItems(landAct);
 			ImGui::EndMenu();
 		}
 

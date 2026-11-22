@@ -73,6 +73,18 @@ struct ScriptValues
 /// The values of the scripts of the game object, nothing when the game object does not keep them
 [[nodiscard]] std::optional<ScriptValues> ReadScriptValues(const gamesave::VanillaWorld& world);
 
+/// What the camera lets the player do and the self-tilting camera's pitch and height, as the file keeps them. The load
+/// reads them after the interface level, so they replace the features and the pitch that the level gave.
+struct CameraHelpValues
+{
+	uint32_t features {0};
+	float autoPitch {0.0f};
+	float autoPitchHeight {0.0f};
+};
+
+/// The camera help values of the game object, nothing when the game object does not keep them
+[[nodiscard]] std::optional<CameraHelpValues> ReadCameraHelpValues(const gamesave::VanillaWorld& world);
+
 /// The entity that openblack made for the object with a number of the file, nothing when it made none
 using EntityOfNumber = std::function<std::optional<uint32_t>(uint32_t number)>;
 

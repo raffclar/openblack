@@ -40,6 +40,9 @@ public:
 	void TaskStopped(uint32_t task) override;
 	void Reset() override;
 
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
+
 	[[nodiscard]] std::optional<CameraPose> GetCamera() const override;
 	[[nodiscard]] uint32_t GetHints() const override { return _hints; }
 	[[nodiscard]] float GetHintAngle() const override { return _hintAngle; }

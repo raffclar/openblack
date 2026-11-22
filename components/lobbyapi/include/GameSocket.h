@@ -115,6 +115,10 @@ struct Start
 	std::string opening;
 	/// The network map for 32 gods in place of a land ("gods_ring_map", optional)
 	bool godsRingMap {false};
+	/// The SHA-256 of the file of the map for 32 gods that the server plays, as 64 hexadecimal digits ("map_sha256",
+	/// optional). The server sends it when the editor changes the room to the map during the game. Then a client that did
+	/// not get the file from the lobby makes the file from its own game data, and plays it only when it has this SHA-256.
+	std::string mapSha256;
 	/// Tools: every god with a citadel is a computer god, and the room has no human god ("all_computer_gods", optional).
 	/// Only a developer build plays such a game.
 	bool allComputerGods {false};
@@ -744,17 +748,26 @@ struct EditorScenario
 inline constexpr size_t k_MostLandNameBytes = 256;
 
 /// "editor.land". Client to server: a player with the editor claim loads a land for the whole room, as the Load Island
-/// menu of the debug menu bar does. The server ends the current game, and starts the room again on the land: every
-/// player gets a new "game.start" that names the land.
+/// menu does. The server ends the current game, and starts the room again on the land: every player gets a new
+/// "game.start" that names the land. A request names one of a land, the testbed and the map for 32 gods.
 struct EditorLand
 {
-	/// The script of the land, as the "land" of a "game.start" names it. Empty for the testbed.
+	/// The script of the land, as the "land" of a "game.start" names it. Empty for the testbed and the map for 32 gods.
 	std::string land;
 	/// The room starts again on the testbed in place of a land ("testbed", optional)
 	bool testbed {false};
+	/// The room starts again on the network map for 32 gods in place of a land ("gods_ring_map", optional)
+	bool godsRingMap {false};
 
 	[[nodiscard]] bool operator==(const EditorLand&) const = default;
 };
+
+/// A request names exactly one of a land, the testbed and the map for 32 gods, and a land name is not too long
+[[nodiscard]] inline bool NamesOneLand(const EditorLand& land) noexcept
+{
+	const int named = (land.land.empty() ? 0 : 1) + (land.testbed ? 1 : 0) + (land.godsRingMap ? 1 : 0);
+	return named == 1 && land.land.size() <= k_MostLandNameBytes;
+}
 
 /// The reason of a refusal of a world file or a scenario of the editor that no computer can load (see CommandRefused)
 inline constexpr std::string_view k_WorldRefused = "world_refused";

@@ -2094,6 +2094,9 @@ AWAY_CASE_COME_BACK_SECONDS = {"scenario-away": 120, "body-away": 120, "scenario
 # The land that the case island of --editor-desync loads for the whole room with the Load Island menu
 EDITOR_ISLAND = "Land2.txt"
 
+# The cases of --editor-desync that change the land of the room with the Load Island menu
+ISLAND_CASES = ("island", "island-away", "island-ring")
+
 # The testbed scenario that the case scenario of --editor-desync runs for the whole room: a network game plays it with two
 # clients and an observer in step (merge train, car 979)
 EDITOR_SCENARIO = "mind.computer_player_start"
@@ -2224,14 +2227,25 @@ def editor_scenario(pids, shots=None, away=False, fast=False):
     return done
 
 
-def editor_island(pids, shots=None, away=False):
+def editor_island(pids, shots=None, away=False, ring=False):
     """The Load Island menu of the debug menu bar in a network game: the first client (editor claim) asks the game server
     to start the room again on another land. Every computer loads the land before the first turn of the new game, and
     the worlds go on in step. With away, the second client drops its socket before the change and comes back 15 seconds
-    later: it gets the start of the land and then the world of the server. Each client also has the debugger claim, so
-    that the pictures show the debug menu bar of each."""
+    later: it gets the start of the land and then the world of the server. With ring, the first change is to the map for
+    32 gods, which no client got from the lobby: each client makes the file and checks it against the server's. Each
+    client also has the debugger claim, so that the pictures show the debug menu bar of each."""
     editor = pids[0]
     done = {"land": EDITOR_ISLAND}
+    if ring:
+        for pid in pids:
+            close_land_info_box(pid)
+        debug_menu_shots(pids, shots, "island_00_menu_bar")
+        done["ring_sent"] = inspector_answer(editor, "editor.land", {"params": {"gods_ring_map": True}})
+        if not (done["ring_sent"] or {}).get("sent"):
+            done["error"] = f"the map for 32 gods did not go: {done['ring_sent']}"
+            return done
+        time.sleep(40.0)
+        editor_shots(pids, shots, "island_01_ring_map")
     for pid in pids:
         close_land_info_box(pid)
     if away and len(pids) > 1:
@@ -2242,7 +2256,8 @@ def editor_island(pids, shots=None, away=False):
         time.sleep(2.0)
     # Both clients have the debugger claim, so both show the debug menu bar: Load Island opens only on the first client,
     # which has the editor claim
-    debug_menu_shots(pids, shots, "island_00_menu_bar")
+    if not ring:
+        debug_menu_shots(pids, shots, "island_00_menu_bar")
     done["sent"] = inspector_answer(editor, "editor.land", {"params": {"land": EDITOR_ISLAND}})
     if not (done["sent"] or {}).get("sent"):
         done["error"] = f"the land did not go: {done['sent']}"
@@ -2415,8 +2430,8 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         gods = [[(god["player"], god["creature"]) for god in client] for client in done["world"]["computer_gods"]]
         if any(client != gods[0] for client in gods):
             done.setdefault("errors", []).append(f"the clients tell different computer gods: {gods}")
-    if case in ("island", "island-away"):
-        done["island"] = editor_island(pids, shots, away=case == "island-away")
+    if case in ISLAND_CASES:
+        done["island"] = editor_island(pids, shots, away=case == "island-away", ring=case == "island-ring")
         if done["island"].get("error"):
             done.setdefault("errors", []).append(done["island"]["error"])
     if case in ("scenario", "scenario-away", "scenario-away-fast"):
@@ -4132,7 +4147,7 @@ def main():
                              "(--editor-shots takes the pictures)")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
                                                     "creature-remove", "land", "history", "mind", "time", "scripts", "debugger",
-                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "island", "island-away", "debug-reads", "debug-magic", "debug-things", "game-speed", "all"),
+                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "island", "island-away", "island-ring", "debug-reads", "debug-magic", "debug-things", "game-speed", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -4154,7 +4169,8 @@ def main():
                              "away for 75 seconds (scenario-away-fast), or the second client is away while the editor "
                              "changes the body time and the fainting switch and loads a world file (body-away), or "
                              "loads Land2.txt for the room with the Load Island menu (island), also while the second client "
-                             "is away for 15 seconds (island-away). With debug and "
+                             "is away for 15 seconds (island-away), or loads the map for 32 gods and then Land2.txt "
+                             "(island-ring). With debug and "
                              "debug-magic the first client has only the debugger claim: it does the acts of the Advisors, "
                              "World, Console and Gestures debug windows (debug), or each button of the Magic, Weather and "
                              "Moon windows (debug-magic), or each button of the Physics window, of the Particles tab, of the "
@@ -4632,7 +4648,7 @@ def main():
                           and index == 0,
                 "staff": options.editor_check and index == 1,
                 "debugger": ((options.editor_desync in DEBUGGER_CASES or options.debugger_right_change)
-                             and index == 0) or options.editor_desync in ("island", "island-away")}
+                             and index == 0) or options.editor_desync in ISLAND_CASES}
             ticket = make_ticket(key, kid, **ticket_claims[index])
 
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
@@ -4777,7 +4793,7 @@ def main():
         # The time case stops the server in its pause
         restart_in_pause = options.restart_server_at is not None and options.editor_desync in ("time", "debugger")
         # The island cases stop the server only after the land change, so that the new server starts on the new land
-        restart_after_island = options.editor_desync in ("island", "island-away")
+        restart_after_island = options.editor_desync in ISLAND_CASES
         server_gone_at = None
         # A pause or a slow network makes the run longer
         extra_seconds = sum(int(pause["seconds"]) + 5 for pause in pauses)
@@ -5256,8 +5272,7 @@ def main():
             if not summary["mind_loads"]["same"]:
                 print(f"the mind loads differ or did not come: {json.dumps(summary['mind_loads'])[:2000]}")
                 all_same = False
-        if options.editor_desync in ("world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "island",
-                                     "island-away"):
+        if options.editor_desync in ("world", "scenario", "scenario-away", "scenario-away-fast", "body-away") + ISLAND_CASES:
             summary["world_changes"] = world_change_lines(
                 server_log, [os.path.join(folder, "client.log") for folder in client_dirs])
             if not summary["world_changes"]["same"]:
@@ -5403,7 +5418,7 @@ def main():
         if not restart["restarted_turns"] or not restart["overlap_same"] or not restart["resumed"]:
             print(f"the restarted server did not continue the game in step: {json.dumps(restart)}")
             all_same = False
-        if options.editor_desync in ("island", "island-away") and not restart["land"]:
+        if options.editor_desync in ISLAND_CASES and not restart["land"]:
             print(f"the restarted server did not load the land of the room: {json.dumps(restart)}")
             all_same = False
     if pauses or options.net_loss or options.net_delay_ms:

@@ -577,10 +577,10 @@ void ReadGameTail(WorldReader& r)
 	r.Ref("camera");
 	r.Ref("climate");
 	ReadCameraExclusions(r);
-	for (int i = 0; i < 3; ++i)
-	{
-		r.Word();
-	}
+	// What the camera lets the player do, then the pitch that the self-tilting camera tilts to and its height
+	r.Word("cameraFeatures");
+	r.Float("cameraAutoPitch");
+	r.Float("cameraAutoPitchHeight");
 	r.Word("creatureInTemple");
 	r.Array(4, "snow");
 	r.Array(4);
