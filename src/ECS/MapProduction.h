@@ -93,7 +93,7 @@ private:
 	void KnowLandBlocks() const;
 	void File(entt::entity entity, const Kind& kind) const;
 	void TakeOut(entt::entity entity) const;
-	[[nodiscard]] std::vector<uint32_t> CellsFor(entt::entity entity, const Kind& kind) const;
+	void CellsFor(entt::entity entity, const Kind& kind, std::vector<uint32_t>& cells) const;
 	/// Whether a thing in the cells is now somewhere that puts it in other cells. Without anyThing, only a thing that
 	/// moves by itself counts.
 	[[nodiscard]] bool MovedSinceFiled(entt::entity entity, bool anyThing = false) const;
