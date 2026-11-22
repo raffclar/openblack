@@ -315,11 +315,18 @@ bool GamePhysicsHooksWorld::TakeObject(entt::entity store, entt::entity object, 
 	return Locator::resourceStoreSystem::has_value() && Locator::resourceStoreSystem::value().TakeObject(store, object, giver);
 }
 
-void GamePhysicsHooksWorld::AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned)
+uint32_t GamePhysicsHooksWorld::AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned)
+{
+	return Locator::resourceStoreSystem::has_value()
+	           ? Locator::resourceStoreSystem::value().AddToPile(pile, type, amount, poisoned)
+	           : 0u;
+}
+
+void GamePhysicsHooksWorld::AnswerDrop(entt::entity pile, PlayerNames giver)
 {
 	if (Locator::resourceStoreSystem::has_value())
 	{
-		Locator::resourceStoreSystem::value().AddToPile(pile, type, amount, poisoned);
+		Locator::resourceStoreSystem::value().AnswerDrop(pile, giver);
 	}
 }
 
