@@ -56,7 +56,7 @@ struct SpellCaster
 	entt::entity icon {entt::null};
 };
 
-/// A running miracle. Positions are points of the world, and the cast places are map positions.
+/// A running miracle. Its places are map positions, and its directions are in the world.
 struct Spell
 {
 	MagicType magicType {MagicType::None};
@@ -68,8 +68,9 @@ struct Spell
 	float duration {-1.0f};
 	/// How big it was cast: a shield's radius, a fireball's size
 	float magnitude {magic::k_DefaultSpellMagnitude};
-	/// Where it acts now: where it was cast, then where its last event happened
-	glm::vec3 position {0.0f};
+	/// The map position where it acts now: where it was cast, then where its last event happened. A storm takes the map
+	/// position of its cloud, and a flock takes the map position of its leader.
+	map_coords::MapCoords place;
 	/// The map position where it was cast. While the hand holds it, it follows the hand.
 	map_coords::MapCoords castPlace;
 	/// The map position where it was cast first. It does not move.

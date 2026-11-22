@@ -728,7 +728,8 @@ struct CastInfo
 	/// For a fireball, and for water on itself: the middle of the clear area near the creature that it goes to first,
 	/// none when there is none
 	std::optional<glm::vec2> clearArea;
-	/// Where the thing is at the time the creature makes the agenda, for a miracle that goes to a place
+	/// For a miracle that goes to a place: the map position where the creature believes the thing is, when it makes the
+	/// agenda. It is in metres, with y the ground there plus the altitude.
 	std::optional<glm::vec3> place;
 	/// To amuse another creature: the spells on creatures that it knows and can pay for, in the order of their types
 	std::vector<creature_mind::AmusingSpell> amusingSpells;

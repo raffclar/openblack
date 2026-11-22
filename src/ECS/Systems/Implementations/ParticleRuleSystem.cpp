@@ -11,6 +11,8 @@
 
 #include "ParticleRuleSystem.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -87,13 +89,15 @@
 #include "Particles/ParticleImport.h"
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleSoundRelease.h"
-#include "Particles/ParticleSoundResume.h"
+#include "Particles/ParticleSoundTurn.h"
+#include "Particles/ParticleSounds.h"
 #include "Particles/ParticleTurnOrder.h"
 #include "Particles/ParticleTypes.h"
 #include "Particles/VolumeGlow.h"
 #include "PlayerSlots.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
+#include "Sound/HearingRange.h"
 #include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
@@ -332,17 +336,16 @@ void GameParticleWorld::StartSound(const particles::Effect& /*effect*/,
 {
 	auto& playing = _sounds.emplace_back(PlayingSound {.link = sound, .start = sound->position});
 	playing.owner = NewSoundOwner();
-	// Thunder is heard once it has come from the cloud. The audio measures the distance from its own listener.
-	const auto distance = sound->sound.travelsAtSoundSpeed && Locator::sounds::has_value()
-	                          ? Locator::sounds::value().ListenerDistance(sound->position)
-	                          : std::nullopt;
-	if (distance.has_value())
+	// Thunder is heard once it has come from the cloud. The audio measures the distance from its own listener. The
+	// sound does not start now, also when the wait is zero (see ProcessSounds).
+	if (sound->sound.travelsAtSoundSpeed)
 	{
-		playing.wait = *distance / k_SpeedOfSound;
-		if (playing.wait > 0.0f)
+		if (Locator::sounds::has_value())
 		{
-			return;
+			const auto listener = Locator::sounds::value().GetListener().origin;
+			playing.wait = std::sqrt(audio::DistanceSquared(listener, sound->position)) / k_SpeedOfSound;
 		}
+		return;
 	}
 	Play(playing);
 }
@@ -384,10 +387,6 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	auto& sounds = Locator::sounds::value();
 	const auto result = sounds.PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner, sound.start,
 	                                          audio::CurrentSoundEffectConditions());
-	sound.maxDistance = result.maxDistance;
-	// A sound that does not start because the listener is too far away plays when the listener comes nearer (see
-	// ProcessSounds)
-	sound.far = result.outcome == audio::AnimEffectPlay::Outcome::TooFar;
 	if (result.emitter != entt::null)
 	{
 		sound.emitter = result.emitter;
@@ -404,52 +403,47 @@ void GameParticleWorld::ProcessSounds()
 		return sounds != nullptr && sound.emitter != entt::null && sounds->EmitterExists(sound.emitter) &&
 		       sounds->GetStatus(sound.emitter) != audio::AudioStatus::Stopped;
 	};
+	// The camera must be near enough for a sound to start. The audio measures from its own listener.
+	const auto nearEnough = [&](const glm::vec3& point) {
+		return sounds != nullptr &&
+		       particles::sound_turn::WithinReplayReach(audio::DistanceSquared(sounds->GetListener().origin, point));
+	};
 	std::erase_if(_sounds, [&](PlayingSound& sound) {
 		auto& link = *sound.link;
-		// The place of the sound follows its particle on each turn, also while the sound travels to the listener. Thus
-		// all computers keep the same place, whatever the distance to their listeners.
+		// The place of the sound follows its particle on each turn. Thus all computers keep the same place, whatever
+		// the distance to their listeners.
 		if (link.atom != nullptr && link.atom->drawn)
 		{
 			link.position = link.atom->current.position;
 			if (link.sound.onLand)
 			{
-				link.position.y = LandHeight({link.position.x, link.position.z});
+				link.position.y = particles::SoundHeightOnLand(*this, link.position.x, link.position.z);
 			}
 		}
-		// On its way to the listener: it plays from its start when it gets there, wherever its particle has gone
-		if (sound.wait > 0.0f)
-		{
-			sound.wait -= k_TurnSeconds;
-			if (sound.wait > 0.0f)
-			{
-				return false;
-			}
-			Play(sound);
-		}
-		if (link.atom != nullptr)
+		if (link.atom != nullptr && sounds != nullptr && sound.emitter != entt::null)
 		{
 			// The sounds of the particles lock no axis, so the emitter goes to the full position
-			if (sounds != nullptr && sound.emitter != entt::null)
-			{
-				sounds->SetEmitterPosition(sound.emitter, link.position);
-			}
-			// The sound stays with its particle. The audio can stop a looping sound because the listener left it: the
-			// listener went to its maximum distance or more, or into the temple. Then the sound plays again when the
-			// listener comes back nearer. The game does not start it again (deviation 235).
-			const bool listenerLeft = sounds != nullptr && sounds->TakeListenerLeft(sound.owner);
-			const auto distance = sounds != nullptr ? sounds->ListenerDistance(link.position) : std::nullopt;
-			const auto step = particles::sound_resume::Next(sound.far, {.looping = link.sound.action.looping,
-			                                                            .playing = playing(sound),
-			                                                            .listenerLeft = listenerLeft,
-			                                                            .distance = distance,
-			                                                            .maxDistance = sound.maxDistance});
-			sound.far = step.far;
-			if (step.replay)
+			sounds->SetEmitterPosition(sound.emitter, link.position);
+		}
+		switch (particles::sound_turn::Next(link.atom != nullptr, link.sound.action.looping, sound.wait, k_TurnSeconds))
+		{
+		case particles::sound_turn::Step::Nothing:
+			return false;
+		case particles::sound_turn::Step::Start:
+			// A looping sound asks for its sample in each turn. Thus it plays again after the audio stopped it, for
+			// example when the camera went too far or into the temple. A sample that plays once keeps its voice.
+			if (nearEnough(link.position))
 			{
 				sound.start = link.position;
 				Play(sound);
 			}
 			return false;
+		case particles::sound_turn::Step::LetGo:
+			if (const auto logger = spdlog::get("audio"); logger != nullptr && !sound.letGo && sound.wait > 0.0f)
+			{
+				SPDLOG_LOGGER_DEBUG(logger, "Particles: {} was not heard, its particle went first", link.sound.action.sound);
+			}
+			break;
 		}
 		if (!sound.letGo)
 		{
@@ -508,13 +502,8 @@ void GameParticleWorld::Fade(PlayingSound& sound)
 	{
 		return;
 	}
-	// Quieter each turn, and stopped once silent when it would otherwise loop or ring on
-	const auto volume = particles::FadedVolume(audio.GetEmitterVolume(sound.emitter), sound.fade.fadeStep);
-	audio.SetEmitterVolume(sound.emitter, volume);
-	if (volume == 0 && sound.fade.stopWhenSilent)
-	{
-		audio.StopEmitter(sound.emitter);
-	}
+	// Quieter each turn. A silent sound plays on to its end and keeps its voice.
+	audio.SetEmitterVolume(sound.emitter, particles::FadedVolume(audio.GetEmitterVolume(sound.emitter), sound.fade.fadeStep));
 }
 
 entt::entity GameParticleWorld::NewSoundOwner()
@@ -2007,7 +1996,7 @@ void GameParticleWorld::AddLocalThings(particles::SharedTables& localThings) con
 
 bool GameParticleWorld::EndsWithLoad(const PlayingSound& sound)
 {
-	return !sound.link || sound.letGo || (sound.link->atom == nullptr && sound.wait <= 0.0f);
+	return !sound.link || sound.letGo || sound.link->atom == nullptr;
 }
 
 bool GameParticleWorld::Saved(const PlayingSound& sound, const LeftOutSounds& leftOut)

@@ -21,8 +21,10 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/CreatureBody.h"
 #include "3D/MapCoords.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/FlockSpell.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicShield.h"
@@ -129,7 +131,7 @@ protected:
 	{
 		return {
 		    .type = MagicType::Water,
-		    .position = {10.0f, 2.0f, 20.0f},
+		    .place = {.x = map_coords::ToFixed(10.0f), .z = map_coords::ToFixed(20.0f), .altitude = 2.0f},
 		    .chants = 30.0f,
 		    .initialChants = 50.0f,
 		    .closedDown = false,
@@ -172,7 +174,7 @@ TEST_F(CreatureHeldCastImport, TheCreatureHoldsTheSpellWithTheValuesOfTheFile)
 	EXPECT_EQ(made.chants.chants, 30.0f);
 	EXPECT_EQ(made.chants.initialChants, 50.0f);
 	EXPECT_EQ(made.lastRipple, 2.0f);
-	EXPECT_EQ(made.position, glm::vec3(10.0f, 2.0f, 20.0f));
+	EXPECT_EQ(made.place, Water().place);
 	EXPECT_EQ(made.processInfo.handPosition, glm::vec3(10.0f, 12.0f, 20.0f));
 	EXPECT_EQ(made.processInfo.power, 0.75f);
 	EXPECT_FALSE(made.closedDown);
@@ -498,10 +500,10 @@ TEST_F(CreatureHeldCastImport, TheSpellKeepsTheMapPositionsOfTheFileWhereItWasCa
 	const auto& made = SpellOf(spell);
 	EXPECT_EQ(made.castPlace, k_Moved);
 	EXPECT_EQ(made.originalCastPlace, k_First);
-	EXPECT_EQ(made.position, glm::vec3(10.0f, 2.0f, 20.0f));
+	EXPECT_EQ(made.place, Water().place);
 }
 
-// A spell of a file without the map positions where it was cast takes the map position of its point for both
+// A spell of a file without the map positions where it was cast takes the map position where it acts now for both
 TEST_F(CreatureHeldCastImport, ASpellWithoutTheMapPositionsTakesTheMapPositionOfItsPoint)
 {
 	const auto spell = _magic->ImportCreatureCast(_creature, Water());
@@ -522,6 +524,26 @@ TEST_F(CreatureHeldCastImport, AMiracleCastAtAMapPositionKeepsItExactly)
 	const auto& made = SpellOf(spell);
 	EXPECT_EQ(made.castPlace, k_Place);
 	EXPECT_EQ(made.originalCastPlace, k_Place);
-	EXPECT_EQ(made.position.x, map_coords::ToMetres(k_Place.x));
-	EXPECT_EQ(made.position.z, map_coords::ToMetres(k_Place.z));
+	EXPECT_EQ(made.place, k_Place);
+}
+
+// A creature that casts at a place above the land casts at the map position of the x and z of the place, at altitude 0
+TEST_F(CreatureHeldCastImport, ACreatureCastsAtAPlaceAtAltitudeZero)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Assign<CreatureNeeds>(_creature);
+	// The species pays with a rate, so that the miracle at no cost does not tire it
+	auto& species = _info->creature.at(creature::InfoRow(registry.Get<const Creature>(_creature).species));
+	species.chantsPerEnergy = 1.0f;
+	species.spellSizeFactor = 1.0f;
+	Locator::infoConstants::reset();
+	Locator::infoConstants::emplace(*_info);
+	const glm::vec3 place {1234.5678f, 6.5f, 321.9876f};
+	ASSERT_TRUE(_magic->CastByCreatureAt(_creature, MagicType::StormWindRain, place));
+	const auto spell = _magic->CreatureCastOf(_creature);
+	ASSERT_TRUE(spell != entt::null);
+	const map_coords::MapCoords expected {
+	    .x = map_coords::ToFixed(place.x), .z = map_coords::ToFixed(place.z), .altitude = 0.0f};
+	EXPECT_EQ(SpellOf(spell).castPlace, expected);
+	EXPECT_EQ(SpellOf(spell).originalCastPlace, expected);
 }

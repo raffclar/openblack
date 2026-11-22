@@ -178,7 +178,8 @@ void TemplePeople::Update(float milliseconds, const glm::mat4& temple, const glm
 		const auto model = glm::translate(glm::mat4(1.0f), glm::vec3(feet)) * glm::mat4(glm::mat3(temple)) *
 		                   glm::eulerAngleY(-walker.facing) * glm::scale(glm::mat4(1.0f), glm::vec3(visitor.scale));
 		TemplePerson person {.mesh = visitor.mesh, .model = model, .bones = {}};
-		// While seen, its clip plays on and sets the speed it walks at
+		// While seen, its clip plays on and sets the speed it walks at. A clip that does not loop stops one millisecond
+		// before its end.
 		const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(temple_people::ClipOf(walker.gait, visitor.man)));
 		if (animations.Contains(clipId))
 		{
@@ -186,7 +187,7 @@ void TemplePeople::Update(float milliseconds, const glm::mat4& temple, const glm
 			const animals::ClipTiming timing {
 			    .playTime = clip->GetPlayTime(), .frameCount = clip->GetFrames().size(), .looping = clip->IsLooping()};
 			walker.speed = temple_people::SpeedOf(clip->GetStride(), timing.playTime, visitor.scale);
-			walker.clipPlace = animals::AdvanceClip(timing, walker.clipPlace, played);
+			walker.clipPlace = animals::AdvanceClip(timing, walker.clipPlace, played, animals::ClipHold::BeforePlayTime);
 
 			const auto body = meshes.Handle(visitor.mesh);
 			const auto& frames = clip->GetFrames();

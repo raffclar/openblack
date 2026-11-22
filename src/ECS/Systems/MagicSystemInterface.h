@@ -72,10 +72,10 @@ struct ImportedForestCast
 struct ImportedCast
 {
 	MagicType type {MagicType::None};
-	/// The point where the spell is
-	glm::vec3 position {0.0f};
+	/// The map position where the spell acts now
+	map_coords::MapCoords place;
 	/// The map position where the spell was cast, which follows the hand that holds it, and the map position where it
-	/// was cast first. Without a value, the spell takes the map position of its point.
+	/// was cast first. Without a value, the spell takes the map position where it acts now.
 	std::optional<map_coords::MapCoords> castPlace;
 	std::optional<map_coords::MapCoords> originalCastPlace;
 	float chants {0.0f};
@@ -254,7 +254,8 @@ public:
 	virtual bool CastByCreature(entt::entity /*creature*/, MagicType /*type*/, entt::entity /*target*/) { return false; }
 	/// A creature casts a miracle at a place, as its casting pose's loop begins. The miracle has a fixed size, or for a
 	/// fire seed a size from the height of the creature. The other rules are the same as for a cast at an object.
-	/// Return true if the creature cast it.
+	/// The place is in metres, as a step of the creature keeps it. The miracle goes to the map position of its x and z,
+	/// at altitude 0. Return true if the creature cast it.
 	virtual bool CastByCreatureAt(entt::entity /*creature*/, MagicType /*type*/, glm::vec3 /*place*/) { return false; }
 	/// The creature lets go of the miracle it cast: one that lasts only while it is held stops
 	virtual void ReleaseCreatureCast(entt::entity /*creature*/) {}
@@ -301,9 +302,9 @@ public:
 	}
 	/// Whether a player may cast a magic type at a point
 	[[nodiscard]] virtual bool CanCastAt(MagicType type, PlayerNames player, glm::vec3 point) = 0;
-	/// Whether the kind of a miracle lets it go at a point, or on a thing at the point. This test has no cast rule and no
-	/// influence.
-	[[nodiscard]] virtual bool MeetsKindRule(MagicType type, glm::vec3 point, bool onThing) = 0;
+	/// Whether the kind of a miracle lets it go at a map position, or on a thing at the map position. This test has no cast
+	/// rule and no influence.
+	[[nodiscard]] virtual bool MeetsKindRule(MagicType type, const map_coords::MapCoords& place, bool onThing) = 0;
 	/// Something the miracle made acts for it, as its particles would: whether the miracle acted
 	virtual bool SpellEvent(entt::entity spell, const particles::SpellEventInfo& event) = 0;
 	/// The miracle pays prayer power, or is given it back for a negative cost

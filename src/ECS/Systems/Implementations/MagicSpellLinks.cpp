@@ -128,7 +128,8 @@ void MagicSystem::SpellLink::MoveTo(glm::vec3 position)
 {
 	if (auto* spell = EntityRegistry().TryGet<components::Spell>(_spell))
 	{
-		spell->position = position;
+		// The miracle takes the map position of the point, as high above the land as the point is
+		spell->place = _system.PlaceOfPoint(position);
 	}
 }
 

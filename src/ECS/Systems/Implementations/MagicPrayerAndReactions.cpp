@@ -134,14 +134,12 @@ void WorshipSiteSpellCaster::OnChantsSpent(float chants, magic::ChantCharge char
 		const auto& land = Locator::terrainSystem::value();
 		return map_coords::ToWorld(land, map_coords::HeldPlace(land, point));
 	};
-	// The motes of the upkeep fly to the map position where the miracle is cast, which follows the hand that holds it
-	const auto castPoint = [&spell]() {
-		const auto& place = spell.castPlace;
-		return Locator::terrainSystem::has_value()
-		           ? map_coords::ToWorld(Locator::terrainSystem::value(), place)
-		           : glm::vec3(map_coords::ToMetres(place.x), place.altitude, map_coords::ToMetres(place.z));
-	};
-	const auto to = upkeep ? castPoint() : onMap(spell.position);
+	// The motes of the upkeep fly to the map position where the miracle is cast, which follows the hand that holds it. The
+	// motes of an event fly to the map position where the miracle acts now.
+	const auto& place = upkeep ? spell.castPlace : spell.place;
+	const auto to = Locator::terrainSystem::has_value()
+	                    ? map_coords::ToWorld(Locator::terrainSystem::value(), place)
+	                    : glm::vec3(map_coords::ToMetres(place.x), place.altitude, map_coords::ToMetres(place.z));
 	Locator::worshipSiteSystem::value().AddMote(_site, onMap(registry.Get<const Transform>(icon).position), to);
 }
 
@@ -230,7 +228,7 @@ void MagicSystem::ReactToSpell(Spell& spell, bool onCast)
 	    .initiator = entity,
 	    .type = effect.reactionType,
 	    .player = spell.caster.player,
-	    .position = spell.position,
+	    .position = _world.PointOf(spell.place),
 	    .impressiveValue = effect.impressiveValue,
 	    .power = 1.0f,
 	    .strength = magic::spells::StrengthOf(*this, spell),

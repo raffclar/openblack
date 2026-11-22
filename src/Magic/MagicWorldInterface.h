@@ -125,6 +125,24 @@ public:
 	[[nodiscard]] virtual bool IsLand(glm::vec3 point) const = 0;
 	/// Within a player's influence, where most of its miracles may be cast
 	[[nodiscard]] virtual bool InInfluence(PlayerNames player, glm::vec3 point) const = 0;
+	/// On the map at all, by the cell of a map position
+	[[nodiscard]] virtual bool InBoundsAt(const map_coords::MapCoords& place) const
+	{
+		const auto xz = map_coords::ToMetres(place);
+		return InBounds({xz.x, 0.0f, xz.y});
+	}
+	/// Land rather than water, by the cell of a map position
+	[[nodiscard]] virtual bool IsLandAt(const map_coords::MapCoords& place) const
+	{
+		const auto xz = map_coords::ToMetres(place);
+		return IsLand({xz.x, 0.0f, xz.y});
+	}
+	/// Within a player's influence at a map position
+	[[nodiscard]] virtual bool InInfluenceAt(PlayerNames player, const map_coords::MapCoords& place) const
+	{
+		const auto xz = map_coords::ToMetres(place);
+		return InInfluence(player, {xz.x, 0.0f, xz.y});
+	}
 	/// Whether the hand, at its point, is in its player's influence: while it keeps any of it past the border it is
 	[[nodiscard]] virtual bool HandInInfluence(PlayerNames player, glm::vec3 hand) const { return InInfluence(player, hand); }
 	/// The hand used what it holds on the land, which counts as a turn more for what it keeps past the border

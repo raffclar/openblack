@@ -18,7 +18,9 @@
 #include <vector>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "CreatureIdleMind.h"
 
 // How a creature casts a miracle at something. One time in five it first shows how it feels: angry before a lightning
@@ -133,6 +135,17 @@ inline constexpr float k_ForestHoldSeconds = 4.0f;
 /// and turns to face it. Then it casts the forest at the place in the scatter pose and holds it four seconds. It does
 /// not draw a gesture.
 [[nodiscard]] std::vector<Step> CastForestAt(uint32_t magicType, uint32_t object, glm::vec3 place, float height);
+
+/// The place of the forest cast, as the step keeps it. It is the map position where the creature believes the thing is.
+/// Without a belief about the thing, it is the map position of the thing. The step keeps the place in metres, with y the
+/// ground there plus the altitude.
+template <typename GroundAt>
+[[nodiscard]] glm::vec3 ForestCastPlace(const std::optional<map_coords::MapCoords>& believed,
+                                        const map_coords::MapCoords& thing, const GroundAt& groundAt)
+{
+	const auto& place = believed.has_value() ? *believed : thing;
+	return {map_coords::ToMetres(place.x), groundAt(place) + place.altitude, map_coords::ToMetres(place.z)};
+}
 
 /// The creature casts a miracle to impress the people of a thing (a villager). It goes near to one and a half times its
 /// height and gets away to twice its height. One time in two it points at the thing first. Two times in three it

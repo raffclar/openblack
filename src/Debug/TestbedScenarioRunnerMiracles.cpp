@@ -725,7 +725,7 @@ void Runner::LogMiracles()
 	const auto& land = Locator::terrainSystem::value();
 	Locator::entitiesRegistry::value().Each<const ecs::components::Spell>(
 	    [&](entt::entity, const ecs::components::Spell& spell) {
-		    const glm::vec2 xz(spell.position.x, spell.position.z);
+		    const glm::vec2 xz = map_coords::ToMetres(spell.place);
 		    Log(fmt::format("{:.1f} s: miracle {} at ({:.2f}, {:.2f}), land {:.2f}", _seconds,
 		                    static_cast<int>(spell.magicType), xz.x - _middle.x, xz.y - _middle.y, land.GetHeightAt(xz)));
 	    });

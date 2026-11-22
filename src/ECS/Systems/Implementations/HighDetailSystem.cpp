@@ -310,21 +310,31 @@ void HighDetailSystem::LeaveSwimmingRings(uint32_t frameGameMs)
 	// The ring turns by a random angle up to a full turn, from the random numbers of the C library
 	constexpr auto k_FullTurn = std::bit_cast<float>(0x40C90FDBu);
 	const auto angle = [] { return Locator::gameRandom::value().CrtRandom(0.0f, k_FullTurn); };
-	registry.Each<const HighDetail, const VillagerPose, const Mesh>(
-	    [&](entt::entity, const HighDetail&, const VillagerPose& pose, const Mesh& mesh) {
+	registry.Each<const HighDetail, const VillagerPose, const Mesh, const Transform>(
+	    [&](entt::entity entity, const HighDetail& detail, const VillagerPose& pose, const Mesh& mesh,
+	        const Transform& transform) {
 		    if (!ecs::swimmer_rules::Swims(true, pose.clip) || !meshes.Contains(mesh.id))
 		    {
 			    return;
 		    }
-		    // The place of the ring bone in the pose, or in the model's own pose before the villager has one
+		    // The ring bone in the pose, or in the model's own pose before the villager has one
 		    const auto& rest = meshes.Handle(mesh.id)->GetBoneMatrices();
 		    const auto& bones = pose.bones.size() == rest.size() ? pose.bones : rest;
 		    if (ecs::swimmer_rules::k_RingBone >= bones.size())
 		    {
 			    return;
 		    }
-		    const auto ring = ecs::swimmer_rules::Ring(_ringTimer, static_cast<int32_t>(frameGameMs),
-		                                               glm::vec3(bones[ecs::swimmer_rules::k_RingBone][3]), angle);
+		    // The bone goes where the body is drawn this frame
+		    const auto drawnAt = rules::DrawnAt(detail.heldAt, DrawnPosition(transform.position, &pose));
+		    const auto standing = PlacedMatrix(drawnAt, DrawnRotation(transform.rotation, &pose), transform.scale);
+		    const auto model = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(entity));
+		    if (!model.has_value())
+		    {
+			    return;
+		    }
+		    const auto ring =
+		        ecs::swimmer_rules::Ring(_ringTimer, static_cast<int32_t>(frameGameMs),
+		                                 ecs::swimmer_rules::RingPlace(*model, bones[ecs::swimmer_rules::k_RingBone]), angle);
 		    if (ring.has_value())
 		    {
 			    // A ring that does not fit among the many already on the water does not come

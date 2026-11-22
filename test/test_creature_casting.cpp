@@ -22,6 +22,7 @@
 #include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureCastMoves.h"
@@ -502,6 +503,29 @@ TEST(CreatureCastAgenda, AForestIsScatteredAtThePlaceOfTheVillagerForFourSeconds
 	const auto built = openblack::creature_plan_actions::Agenda(*executor, 7u, {}, {}, Always(1), cast);
 	ASSERT_TRUE(built.has_value());
 	EXPECT_EQ(*built->back().cast.place, place);
+}
+
+// The forest goes to the map position where the creature believes the villager is, not to where the villager is now.
+// Without a belief, it goes to the map position of the villager. The step keeps the place in metres.
+TEST(CreatureCastAgenda, AForestGoesToTheBelievedMapPositionOfTheVillager)
+{
+	constexpr map_coords::MapCoords k_Believed {.x = 8090858, .z = 3276801, .altitude = 0.5f};
+	constexpr map_coords::MapCoords k_Now {.x = 8100000, .z = 3300000, .altitude = 0.0f};
+	std::vector<map_coords::MapCoords> asked;
+	const auto groundAt = [&asked](const map_coords::MapCoords& place) {
+		asked.push_back(place);
+		return 7.0f;
+	};
+	const auto believed = ForestCastPlace(k_Believed, k_Now, groundAt);
+	EXPECT_EQ(believed, glm::vec3(map_coords::ToMetres(k_Believed.x), 7.5f, map_coords::ToMetres(k_Believed.z)));
+	const auto unknown = ForestCastPlace(std::nullopt, k_Now, groundAt);
+	EXPECT_EQ(unknown, glm::vec3(map_coords::ToMetres(k_Now.x), 7.0f, map_coords::ToMetres(k_Now.z)));
+	ASSERT_EQ(asked.size(), 2u);
+	EXPECT_EQ(asked[0], k_Believed);
+	EXPECT_EQ(asked[1], k_Now);
+	// The cast takes the map position of the x and z of the place again. Far from the corner of the map, this can be one
+	// unit away from the belief, as in the game.
+	EXPECT_EQ(map_coords::ToFixed(believed.x), 8090857);
 }
 
 TEST(CreatureCastAgenda, ToImpressItPointsBeforeOrAfterAndBeckonsTwoTimesInThree)

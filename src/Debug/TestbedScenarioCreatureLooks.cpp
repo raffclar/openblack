@@ -918,7 +918,7 @@ void testbed_scenarios::AddAppearance(std::vector<Scenario>& all)
 	                   "The cinema bars come in. A villager in the shallows changes to high detail and plays the clip of "
 	                   "the swimmer.",
 	    .expected = "The part of the villager that is under the water shows dark blue through the water. The part above "
-	                "the water shows as usual. No rings come on the water near the villager.",
+	                "the water shows as usual. Each second, a ring comes on the water at the villager.",
 	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 4.0f}}, .distance = 0.08f},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x, k_FarShallows - 4.0f}}},

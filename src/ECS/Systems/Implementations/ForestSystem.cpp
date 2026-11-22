@@ -501,7 +501,7 @@ uint32_t ForestSystem::RestoreForest(entt::entity spell, Spell& miracle, entt::e
 	return miracle.objectCount;
 }
 
-bool ForestSystem::CanGrowAt(glm::vec3 point) const
+bool ForestSystem::CanGrowAt(const map_coords::MapCoords& place) const
 {
 	if (!Locator::entitiesMap::has_value())
 	{
@@ -510,7 +510,7 @@ bool ForestSystem::CanGrowAt(glm::vec3 point) const
 	// No building's fire would be inside the forest: no abode in the cell (fields are not abodes here) whose fire, at the
 	// abode's map position and as wide as its model on the ground, takes in the point. The distance is between the two
 	// map positions.
-	const auto at = map_coords::FromMetres(glm::xz(point));
+	const map_coords::MapCoords at {.x = place.x, .z = place.z, .altitude = 0.0f};
 	const auto cell = CellOf(at);
 	if (!cell.has_value())
 	{

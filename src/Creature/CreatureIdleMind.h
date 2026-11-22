@@ -269,7 +269,8 @@ struct CastOrder
 	uint32_t magicType {0};
 	/// What it is cast at, by its entity's number
 	std::optional<uint32_t> object;
-	/// The place that it is cast at, when the miracle goes to a place and not to a thing
+	/// The place that it is cast at, in metres, when the miracle goes to a place and not to a thing. The cast uses the
+	/// map position of its x and z, at altitude 0.
 	std::optional<glm::vec3> place;
 };
 

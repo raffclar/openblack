@@ -196,7 +196,8 @@ bool MagicSystem::CastByCreatureAt(entt::entity creature, MagicType type, glm::v
 	const auto seed = magic::FindFirstSpellSeedForMagicType(Info(), type);
 	const float magnitude =
 	    creature_spell_casting::CastMagnitudeAtPlace(seed == SpellSeedType::Fire, object_measures::Height(registry, creature));
-	return StartCreatureCast(creature, type, std::nullopt, PlaceOfPoint(place), magnitude);
+	// The miracle goes to the map position of the x and z of the place. The height of the place has no effect.
+	return StartCreatureCast(creature, type, std::nullopt, map_coords::FromMetres({place.x, place.z}), magnitude);
 }
 
 bool MagicSystem::StartCreatureCast(entt::entity creature, MagicType type, std::optional<entt::entity> target,
@@ -360,9 +361,9 @@ entt::entity MagicSystem::MakeImportedCast(const SpellCaster& caster, const magi
 	    .duration = cast.duration,
 	    .maxObjectsToCreate = -1,
 	};
-	// The spell keeps the map position where it was cast. A file without it gives the map position of the point of the
-	// spell.
-	const auto place = cast.castPlace.value_or(PlaceOfPoint(cast.position));
+	// The spell keeps the map position where it was cast. A file without it gives the map position where the spell acts
+	// now.
+	const auto place = cast.castPlace.value_or(cast.place);
 	// The effect continues from its state in the file. When that state does not agree with the particle file, the
 	// effect starts from its start.
 	auto spell = MakeSpell(cast.type, caster, place, data, cast.processInfo, cast.effect);
@@ -381,7 +382,7 @@ entt::entity MagicSystem::MakeImportedCast(const SpellCaster& caster, const magi
 	// The miracle continues with the prayer power, the age and the size of the file. The size of the file is the size
 	// after the limits of the cast.
 	auto& made = registry.Get<Spell>(spell);
-	made.position = cast.position;
+	made.place = cast.place;
 	made.originalCastPlace = cast.originalCastPlace.value_or(place);
 	made.chants.chants = cast.chants;
 	made.chants.initialChants = cast.initialChants;

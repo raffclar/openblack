@@ -1744,4 +1744,23 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PlayBankSample, .delaySeconds = 1.0f, .value = k_VillageBellSample},
 	                 {.kind = Kind::ReleaseBankSample, .delaySeconds = 2.0f}},
 	});
+
+	// A storm lets down bolts round a camera low over the land. The thunder of each bolt travels at the speed of sound,
+	// but the game forgets it when the bolt goes first.
+	all.push_back({
+	    .id = "audio.thunder_ends_with_its_bolt",
+	    .name = "The thunder of a far bolt is not heard",
+	    .facet = Facet::Audio,
+	    .description =
+	        "A thunderstorm over the whole island at noon. Its forked bolts come down every one to two seconds "
+	        "within 300 m of the camera, which looks along the land from 30 m up at two trees. The audio log gives each "
+	        "thunder that the game forgets.",
+	    .expected = "A bolt is gone after 0.4 to 0.8 seconds. Its thunder waits 1 second for each 347 m to the camera. "
+	                "The thunder of a near bolt comes after its wait. The thunder of a bolt that goes before the wait "
+	                "ends is not heard: the debug log (audio) says \"Particles: ... was not heard, its particle went "
+	                "first\". So only bolts nearer than about 140 m to 280 m make thunder, as in the game.",
+	    .environment = {.weather = Weather::Thunderstorm, .boltSeconds = glm::vec2(1.0f, 2.0f), .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -150.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 45.0f}}, {.type = TreeInfo::Conifer, .offset = {35.0f, 60.0f}}},
+	});
 }
