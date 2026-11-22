@@ -60,8 +60,9 @@ public:
 	/// A land loads: the files of the films that the scripts start (the intro and the falling spell's film) are read with
 	/// the other resources behind the loading screen. Thus the turn that starts a film does not read its file.
 	virtual void RegisterScriptFilms() = 0;
-	/// The intro's schedule: a fade from 58 s, the end at 60 s. An intro whose file didn't open counts no frames, so it
-	/// stays black and paused until Escape ends it, as the game does; with films turned off it ends at once instead
+	/// The intro's schedule: a fade from 58 s, the end at 60 s. An intro whose file did not open counts no frames, so it
+	/// stays black and paused until Escape ends it. With films turned off, or in the first game of a new player, it ends
+	/// at once instead
 	virtual void ScheduleIntro() = 0;
 	/// The falling spell's film: drawn faintly over the scene with no fade of its own, the world hidden behind it, its
 	/// timeline of sounds and white fade running; nothing unless the player has a creature
@@ -79,8 +80,9 @@ public:
 	virtual void Skip() = 0;
 	/// Ends the video at once
 	virtual void Stop() = 0;
-	/// While set (a new player's first video), Escape does nothing; ending the video clears it
-	virtual void SetNoSkip(bool noSkip) = 0;
+	/// While set (the first game of a new player), an intro whose file did not open ends at once. The end of the video
+	/// clears it
+	virtual void SetFirstGame(bool firstGame) = 0;
 
 	/// A video is playing. Safe to ask from any thread
 	[[nodiscard]] virtual bool IsPlaying() const = 0;

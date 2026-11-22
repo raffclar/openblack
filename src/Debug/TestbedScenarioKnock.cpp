@@ -24,9 +24,10 @@ void testbed_scenarios::AddKnockScenarios(std::vector<Scenario>& all)
 	    .id = "villagers.knock_at_night",
 	    .name = "Knocking on a house at night",
 	    .facet = Facet::Hand,
-	    .description = "A Celtic hut of the player's town at night with two grown villagers of the town beside it. Once they "
-	                   "have gone in to sleep, the player's hand knocks on "
-	                   "the hut, twice.",
+	    .description = "A Celtic hut at night. Two grown villagers that live in the hut stand beside it. The neutral "
+	                   "player holds their town from the start, so no change of owner makes the town celebrate. At 45 "
+	                   "seconds, when both have gone in to sleep, the player's hand knocks on the hut. It knocks again "
+	                   "3 seconds later.",
 	    .expected = "At night the town wants sleep, so they go home into the hut, where they are not drawn. The knock plays a "
 	                "knocking sound at the hand, the hand stays upright where it was and plays its tap once, and a row "
 	                "of little people grows in over the hut for a second, stays six and shrinks away over the last: a "
@@ -36,11 +37,16 @@ void testbed_scenarios::AddKnockScenarios(std::vector<Scenario>& all)
 	    .environment = {.hour = 23.0f, .dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
 	    .framing = {.shot = Shot::Overview, .include = {k_House}, .distance = 0.3f},
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_House, .yawDegrees = 180.0f},
-	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_House + glm::vec2 {-6.0f, -8.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_House + glm::vec2 {-6.0f, -8.0f},
+	                 .joinTown = true,
+	                 .homeIn = 0},
 	                {.type = VillagerInfo::CelticHousewifeFemale,
 	                 .offset = k_House + glm::vec2 {6.0f, -8.0f},
-	                 .joinTown = true}},
-	    .commands = {{.kind = Kind::HandTapObject, .delaySeconds = 18.0f, .object = 0},
+	                 .joinTown = true,
+	                 .homeIn = 0}},
+	    .commands = {{.kind = Kind::HandTapObject, .delaySeconds = 45.0f, .object = 0},
 	                 {.kind = Kind::HandTapObject, .delaySeconds = 3.0f, .object = 0}},
+	    .townOwner = PlayerNames::NEUTRAL,
 	});
 }

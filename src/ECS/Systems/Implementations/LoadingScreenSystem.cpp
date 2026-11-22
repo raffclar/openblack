@@ -344,10 +344,10 @@ void LoadingScreenSystem::PlayStartupScreens(const StartupScreenOptions& options
 	{
 		PlayPreIntro();
 	}
-	// A new player's first film can't be skipped
+	// In the first game of a new player, an intro that cannot play ends at once
 	if (!HasPlayerProfiles())
 	{
-		Locator::videoSystem::value().SetNoSkip(true);
+		Locator::videoSystem::value().SetFirstGame(true);
 	}
 	if (!QuitRequested())
 	{

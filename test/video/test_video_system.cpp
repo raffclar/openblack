@@ -331,23 +331,42 @@ TEST(VideoSystem, AMissingIntroWaitsForEscape)
 	EXPECT_FALSE(game.paused);
 }
 
-TEST(VideoSystem, AMissingIntroOfAFirstGameNeverEnds)
+TEST(VideoSystem, AMissingIntroOfAFirstGameEndsAtOnce)
 {
-	// The game sets the no-skip rule when no player profile exists, before the film starts
+	// The game sets the first-game rule when no player profile exists, before the film starts
 	FakeGame game;
 	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
-	videos.SetNoSkip(true);
+	videos.SetFirstGame(true);
 	EXPECT_FALSE(videos.Play("intro.bik"));
 	videos.ScheduleIntro();
-	videos.Update(k_Start);
-	// Escape does nothing, and with no file no frame is counted, so the film stays and the game stays paused
-	EXPECT_TRUE(videos.Escape(false, false));
-	EXPECT_EQ(game.musicReleased, 0);
-	videos.Update(k_Start + 600s);
-	EXPECT_TRUE(videos.IsPlaying());
-	EXPECT_TRUE(videos.CoversScreen());
-	EXPECT_EQ(videos.GetStatus()->frame, 0);
 	EXPECT_TRUE(game.paused);
+	// With no file, the intro ends at the first update, and the next update starts the game again
+	videos.Update(k_Start);
+	EXPECT_FALSE(videos.IsPlaying());
+	EXPECT_FALSE(videos.CoversScreen());
+	videos.Update(k_Start + 1s);
+	EXPECT_FALSE(game.paused);
+	EXPECT_EQ(game.musicReleased, 0);
+}
+
+TEST(VideoSystem, EscapeSkipsTheIntroOfAFirstGame)
+{
+	FakeGame game;
+	game.files["intro.bik"] = MakeVideo(1601, 24);
+	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
+	videos.SetFirstGame(true);
+	EXPECT_TRUE(videos.Play("intro.bik"));
+	videos.ScheduleIntro();
+	auto now = Play(videos, k_Start, 100, 24);
+	EXPECT_TRUE(game.paused);
+	// Escape skips the intro as in any other game: the film fades out over 48 frames, the game runs under the fade
+	EXPECT_TRUE(videos.Escape(false, false));
+	EXPECT_EQ(game.musicReleased, 1);
+	EXPECT_EQ(videos.GetStatus()->schedule, (video::Schedule {.fadeStart = 100, .end = 148}));
+	EXPECT_FALSE(game.paused);
+	Play(videos, now, 60, 24);
+	EXPECT_FALSE(videos.IsPlaying());
+	EXPECT_FALSE(game.paused);
 }
 
 TEST(VideoSystem, WithFilmsOffTheIntroEndsAtOnce)
@@ -375,11 +394,6 @@ TEST(VideoSystem, EscapeFadesOutOverFortyEightFrames)
 	EXPECT_TRUE(videos.Escape(false, true));
 	EXPECT_EQ(videos.GetStatus()->schedule, video::DefaultSchedule(1000, 24));
 	EXPECT_EQ(game.musicReleased, 0);
-	// While it can't be skipped, likewise
-	videos.SetNoSkip(true);
-	EXPECT_TRUE(videos.Escape(false, false));
-	EXPECT_EQ(game.musicReleased, 0);
-	videos.SetNoSkip(false);
 
 	EXPECT_TRUE(videos.Escape(false, false));
 	EXPECT_EQ(game.musicReleased, 1);
@@ -391,19 +405,21 @@ TEST(VideoSystem, EscapeFadesOutOverFortyEightFrames)
 	EXPECT_FALSE(videos.IsPlaying());
 }
 
-TEST(VideoSystem, EndingClearsTheNoSkip)
+TEST(VideoSystem, EndingClearsTheFirstGame)
 {
 	FakeGame game;
 	game.files["a.bik"] = MakeVideo(4, 24);
 	VideoSystem videos(game.Hooks(), video::DecodeMode::Inline);
 	videos.Play("a.bik");
-	videos.SetNoSkip(true);
+	videos.SetFirstGame(true);
 	Play(videos, k_Start, 10, 24);
-	game.files["b.bik"] = MakeVideo(100, 24);
-	videos.Play("b.bik");
+	ASSERT_FALSE(videos.IsPlaying());
+	// The rule went with the first video: a missing intro after it waits for Escape, as in any other game
+	EXPECT_FALSE(videos.Play("intro.bik"));
+	videos.ScheduleIntro();
 	videos.Update(k_Start + 1s);
-	EXPECT_TRUE(videos.Escape(false, false));
-	EXPECT_EQ(game.musicReleased, 1);
+	videos.Update(k_Start + 2s);
+	EXPECT_TRUE(videos.IsPlaying());
 }
 
 TEST(VideoSystem, AReplacedVideoLeavesTheGamePaused)
