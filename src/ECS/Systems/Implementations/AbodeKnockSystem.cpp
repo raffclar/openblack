@@ -108,6 +108,12 @@ bool AbodeKnockSystem::Knock(entt::entity building, AbodeType type, float built,
 	return true;
 }
 
+void AbodeKnockSystem::ShowReadout(entt::entity town)
+{
+	_knockedTown = town;
+	_readoutMs = ecs::abode_knock::Knock(_readoutMs);
+}
+
 void AbodeKnockSystem::Update(std::chrono::milliseconds frame)
 {
 	// Nothing changes while the read-out isn't showing

@@ -503,6 +503,11 @@ bool spells::KeptByKind(SpellServicesInterface& services, const Spell& spell)
 	       services.HasWorldObjects(spell);
 }
 
+bool spells::LostByKind(SpellServicesInterface& services, const Spell& spell)
+{
+	return spell.spellClass == SpellClass::Shield && services.LostWorldObjects(spell);
+}
+
 ParticleType spells::ParticleTypeOf(SpellServicesInterface& services, const Spell& spell)
 {
 	if (IsFlock(spell.spellClass))

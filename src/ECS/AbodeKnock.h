@@ -57,10 +57,11 @@ constexpr uint32_t k_ReadoutShrinkMs = 1000;
 /// second and shrink away over the last, in steps of a 255th
 [[nodiscard]] float ReadoutScale(uint32_t remaining);
 
-/// A marker's colour, 0xAARRGGBB: gold for each adult living there, green for each free place; a held follower near a
-/// house shows a single teal one
+/// A marker's colour, 0xAARRGGBB: gold for each adult living there, green for each free place, and teal for a house
+/// with one of its people in a hand
 constexpr uint32_t k_LivedInColour = 0xFFF8D235u;
 constexpr uint32_t k_FreePlaceColour = 0xFF5C822Fu;
+constexpr uint32_t k_HeldResidentColour = 0xFF4995A9u;
 /// The markers stand this far apart along the screen's sideways line, and are this big at full size
 constexpr float k_MarkerSpacing = 1.0f / 1.3f;
 /// They are never drawn smaller than this
@@ -78,6 +79,29 @@ struct Marker
 };
 /// The markers over a house with `places` places and `adults` adults living there, at a scale
 [[nodiscard]] std::vector<Marker> Readout(uint32_t places, uint32_t adults, float scale);
+/// While a hand holds one of the people of a house, the house shows one teal marker at full size in place of its
+/// read-out. It shows for every town, also when no read-out shows.
+[[nodiscard]] Marker HeldResidentMarker();
+
+/// A house near a villager that a player holds in the hand
+struct HouseNearHeld
+{
+	/// How many places the house has for its people
+	uint32_t places;
+	/// The distance across the land from the house to the held villager, and the radius of the house on the land
+	float distance;
+	float radius;
+	/// The house has a town, the town is not uninhabitable, and the player of the town holds the villager
+	bool hasTown;
+	bool uninhabitable;
+	bool townOfHolder;
+};
+/// A villager that a player holds over a house with places, of a town of that player, starts or holds the read-out of
+/// the town, as a knock does
+[[nodiscard]] constexpr bool HeldVillagerShowsReadout(const HouseNearHeld& house)
+{
+	return house.places != 0 && house.distance < house.radius && house.hasTown && !house.uninhabitable && house.townOfHolder;
+}
 
 /// Damage to a building brings everyone inside out, as a knock does, when the building has less than its full life
 /// after it

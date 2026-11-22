@@ -172,6 +172,8 @@ private:
 	void DrawLandColourPass(const DrawSceneDesc& drawDesc) const;
 	/// The sky's dome blended again where the sky has moved on, a band of rows a frame
 	void DrawSkyDomePass(const DrawSceneDesc& drawDesc) const;
+	/// Gives the program of the sky of the pack its blue noise. With no dither, the noise has no effect.
+	void SetSkyDither(const ShaderProgram& program, bool dither) const;
 	[[nodiscard]] const Texture2D& GetLandColour() const;
 	/// The sun in the sky, after the sky's dome
 	void DrawSun(RenderPass viewId) const;
@@ -902,6 +904,11 @@ private:
 	mutable std::unique_ptr<FrameBuffer> _skyDomeFrameBuffer;
 	/// The rows of each alignment's dome in the frame buffer above
 	mutable uint16_t _skyDomeRows {sky_dome::k_Rows};
+	/// The frame buffer above keeps the larger pictures of the debug menu's sky pack
+	mutable bool _skyDomeFromPack {false};
+	/// The blue noise that the sky of the pack adds before the screen cuts its colours to 8 bits. The renderer makes it
+	/// when it first draws the sky of the pack.
+	mutable std::unique_ptr<Texture2D> _skyDither;
 	/// The dome's picture is gone because the renderer made the graphics device again, thus the next draw of the dome
 	/// draws all of it again
 	mutable bool _skyDomeLost {false};

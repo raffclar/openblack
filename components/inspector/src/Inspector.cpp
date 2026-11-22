@@ -357,6 +357,11 @@ QueryResult Inspector::Answer(const Request& request) const
 		return error(request.query + " searches around a point: give near and radius beside params or inside them");
 	}
 
+	// A query that writes sees the game at a point that the game chose for it
+	if (description->writes && _beforeWrite)
+	{
+		_beforeWrite();
+	}
 	auto answered = provider->Run(queryName, QueryContext {.params = params, .options = options});
 	if (description->writes)
 	{

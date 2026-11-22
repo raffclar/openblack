@@ -400,7 +400,11 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	static constexpr auto k_AlphaTextureId = entt::hashed_string("raw/misc0a");
 	const auto& textures = Locator::resources::value().GetTextures();
 	const auto* townData = town.has_value() ? desc.entities.TryGet<const ecs::components::Town>(*town) : nullptr;
-	if (townData == nullptr || !textures.Contains(k_TextureId.value()) || !textures.Contains(k_AlphaTextureId.value()))
+	bool residentInHand = false;
+	desc.entities.Each<const ecs::components::Abode>(
+	    [&residentInHand](entt::entity, const ecs::components::Abode& abode) { residentInHand |= abode.residentInHand; });
+	if ((townData == nullptr && !residentInHand) || !textures.Contains(k_TextureId.value()) ||
+	    !textures.Contains(k_AlphaTextureId.value()))
 	{
 		return;
 	}
@@ -425,7 +429,8 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 	const float scale = knocks.GetReadoutScale();
 	const auto origin = desc.camera->GetOrigin();
 	// Each house of the town shows its read-out when the renderer draws the house. Only the houses that this frame draws
-	// show one, in the order of the draw, and each takes its own place among what blends.
+	// show one, in the order of the draw, and each takes its own place among what blends. A house with one of its
+	// people in a hand shows its teal marker in place of the read-out, in every town.
 	struct Row
 	{
 		uint32_t firstVertex;
@@ -440,8 +445,12 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 		const auto* data = desc.entities.TryGet<const ecs::components::Abode>(abode);
 		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(abode);
 		const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(abode);
-		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id) ||
-		    std::ranges::find(townData->abodes, abode) == townData->abodes.end())
+		if (data == nullptr || transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
+		{
+			continue;
+		}
+		const bool readout = townData != nullptr && std::ranges::find(townData->abodes, abode) != townData->abodes.end();
+		if (!data->residentInHand && !readout)
 		{
 			continue;
 		}
@@ -454,7 +463,9 @@ void Renderer::DrawKnockReadout(const DrawSceneDesc& desc) const
 		point.y += meshes.Handle(mesh->id)->GetBoundingBox().Size().y + ecs::abode_knock::k_RaisedAbove;
 		const auto places = infos.at(static_cast<size_t>(data->type)).maxVillagersInAbode;
 		const auto first = static_cast<uint32_t>(vertices.size());
-		for (const auto& marker : ecs::abode_knock::Readout(places, adults, scale))
+		const auto markers = data->residentInHand ? std::vector {ecs::abode_knock::HeldResidentMarker()}
+		                                          : ecs::abode_knock::Readout(places, adults, scale);
+		for (const auto& marker : markers)
 		{
 			const auto centre = point + right * marker.offset;
 			// The colour as the vertices take it, a byte each of red, green, blue and alpha from the lowest

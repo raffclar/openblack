@@ -17,6 +17,10 @@ SpellFate openblack::magic::FateOf(const SpellLife& life)
 	{
 		return SpellFate::Continue;
 	}
+	if (life.lostByKind)
+	{
+		return SpellFate::Delete;
+	}
 	if (life.hasParticleType)
 	{
 		// Its effect has gone, closed down or not

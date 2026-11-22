@@ -154,6 +154,17 @@ uint8_t BlendChannel(uint8_t lower, uint8_t upper, uint8_t weight)
 	return static_cast<uint8_t>(((lower * (255 - weight)) >> 8) + ((upper * weight) >> 8));
 }
 
+glm::vec2 FullWeights(uint8_t weight)
+{
+	return {(255.0f - static_cast<float>(weight)) / 256.0f, static_cast<float>(weight) / 256.0f};
+}
+
+float BlendFull(float lower, float upper, uint8_t weight)
+{
+	const auto weights = FullWeights(weight);
+	return (lower * weights.x) + (upper * weights.y);
+}
+
 uint8_t Darkness(float sky)
 {
 	const float good = 1.0f - (sky * 0.5f);

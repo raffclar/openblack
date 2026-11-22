@@ -42,10 +42,16 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/MagicShield.h"
+#include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/Spell.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
@@ -56,6 +62,7 @@
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -291,12 +298,44 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 		return {};
 	}
 	auto& registry = Locator::entitiesRegistry::value();
+	size_t shieldMiracles = 0;
+	size_t closedShieldMiracles = 0;
+	registry.Each<const ecs::components::Spell>([&](const ecs::components::Spell& spell) {
+		if (spell.spellClass == magic::SpellClass::Shield)
+		{
+			++shieldMiracles;
+			closedShieldMiracles += spell.closedDown ? 1 : 0;
+		}
+	});
+	size_t fadingDomes = 0;
+	registry.Each<const ecs::components::ShieldDome>(
+	    [&fadingDomes](const ecs::components::ShieldDome& dome) { fadingDomes += dome.state.dying ? 1 : 0; });
+	size_t standingReactions = 0;
+	registry.Each<const ecs::components::MagicShield>([&standingReactions](const ecs::components::MagicShield& shield) {
+		standingReactions += shield.reaction != 0 ? 1 : 0;
+	});
+	// The reactions to the fall of a shield
+	const auto fallReactions = Locator::reactionSystem::has_value()
+	                               ? static_cast<size_t>(std::ranges::count(
+	                                     Locator::reactionSystem::value().GetReactions(), Reaction::ReactToMagicShieldDestroyed,
+	                                     [](const auto& active) { return active.source.type; }))
+	                               : 0;
 	return {
 	    {"placed", registry.Size<Transform>()},
 	    {"creatures", registry.Size<Creature>()},
 	    {"villagers", registry.Size<ecs::components::Villager>()},
 	    {"abodes", registry.Size<ecs::components::Abode>()},
 	    {"towns", registry.Size<ecs::components::Town>()},
+	    {"vortices", registry.Size<ecs::components::Vortex>()},
+	    {"highlights", registry.Size<ecs::components::ScriptHighlight>()},
+	    {"street lanterns", registry.Size<ecs::components::StreetLantern>()},
+	    {"features", registry.Size<ecs::components::Feature>()},
+	    {"shield miracles", shieldMiracles},
+	    {"closed shield miracles", closedShieldMiracles},
+	    {"domes", registry.Size<ecs::components::ShieldDome>()},
+	    {"fading domes", fadingDomes},
+	    {"standing shield reactions", standingReactions},
+	    {"shield fall reactions", fallReactions},
 	};
 }
 

@@ -135,6 +135,15 @@ constexpr std::string_view k_CurseScript = "CreatureCurse";
 /// A table from the keys of one stream to the keys of another
 using ObjectRefKeys = std::unordered_map<gamesave::ObjectKey, gamesave::ObjectKey>;
 
+/// A save and a load see only whole turns: a turn that waits between two players to continue ends first
+void FinishSplitTurn()
+{
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().FinishSplitTurn();
+	}
+}
+
 std::shared_ptr<spdlog::logger> Log()
 {
 	return spdlog::get("game");
@@ -967,6 +976,7 @@ bool SaveGameSystem::Save(uint32_t slot, std::u16string_view name)
 std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name,
                                                                                         bool putPicture)
 {
+	FinishSplitTurn();
 	const auto player = PlayerFolder();
 	const auto playerPath = player.has_value() ? ProfilePath(*player) : std::nullopt;
 	if (!gamesave::IsSlot(slot) || !playerPath.has_value() || !Locator::filesystem::has_value())
@@ -1245,6 +1255,7 @@ bool SaveGameSystem::Load(uint32_t slot)
 
 bool SaveGameSystem::LoadSlot(uint32_t slot)
 {
+	FinishSplitTurn();
 	FlushWrites();
 	const auto player = PlayerFolder();
 	if (!gamesave::IsSlot(slot) || !player.has_value())
@@ -1398,6 +1409,7 @@ void SaveGameSystem::PrepareWorldState()
 
 std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 {
+	FinishSplitTurn();
 	auto& registry = Locator::entitiesRegistry::value();
 	gamesave::WorldFile world;
 	gamesave::GameChunk game {.land = LandNumber(),
@@ -1451,6 +1463,7 @@ std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 
 bool SaveGameSystem::LoadWorldState(std::span<const uint8_t> bytes)
 {
+	FinishSplitTurn();
 	FlushWrites();
 	const auto world = gamesave::ReadWorldFile(bytes);
 	if (!world.has_value() || !ecs::world_save::HasWholeWorld(*world))
@@ -1470,6 +1483,7 @@ bool SaveGameSystem::LoadWorldState(std::span<const uint8_t> bytes)
 
 bool SaveGameSystem::LoadServerWorldState(std::span<const uint8_t> bytes)
 {
+	FinishSplitTurn();
 	FlushWrites();
 	const auto world = gamesave::ReadWorldFile(bytes);
 	if (!world.has_value() || !ecs::world_save::HasWholeWorld(*world))

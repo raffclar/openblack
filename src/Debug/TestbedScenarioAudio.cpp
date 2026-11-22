@@ -1149,6 +1149,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.edit_box_selection",
+	    .name = "The selected text of an edit box",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Players page. Then Tab moves the focus three times, to "
+	                   "the box of the creature's name. The box selects all of its text when it takes the focus.",
+	    .expected = "A pale band covers the name, and the letters of the name are black on the band. The caret blinks "
+	                "at the end of the name, every other fifth of a second.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 2},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 9}},
+	});
+
+	all.push_back({
 	    .id = "interface.read_speed_slider",
 	    .name = "The help text speed slider of a game with no sound",
 	    .facet = Facet::Interface,
@@ -1206,6 +1221,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::SetGameSpeed, .delaySeconds = 1.0f, .amount = 0.5f},
 	                 {.kind = Kind::SetGameSpeed, .delaySeconds = 3.0f, .amount = 2.0f},
 	                 {.kind = Kind::SetGameSpeed, .delaySeconds = 12.0f, .amount = 1.0f}},
+	});
+
+	// A saved game loads at the normal speed: the load ends the control of the game speed first
+	all.push_back({
+	    .id = "interface.speed_after_load",
+	    .name = "A loaded game goes at the normal speed",
+	    .facet = Facet::Interface,
+	    .description = "After a second the game goes at half speed, as Alt and 1 does. Four seconds later the game saves into "
+	                   "slot 0, and four seconds after that it loads the slot.",
+	    .expected = "Slow Down Time shows at the top middle of the screen. After the load, the game goes at the normal "
+	                "speed, and the words fade out.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SetGameSpeed, .delaySeconds = 1.0f, .amount = 0.5f},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 4.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
 	});
 
 	all.push_back({

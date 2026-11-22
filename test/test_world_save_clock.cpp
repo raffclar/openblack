@@ -150,3 +150,14 @@ TEST(WorldSaveClock, AClockWithNoPlaceReadsBackWithNone)
 	ASSERT_TRUE(loaded.has_value());
 	EXPECT_FALSE(loaded->place.has_value());
 }
+
+TEST(WorldSaveClock, ASavedGameLoadsAtTheNormalSpeed)
+{
+	using openblack::ecs::world_save::LoadKind;
+	using openblack::ecs::world_save::SpeedAfterLoad;
+	// The game ends the control of the game speed before it loads a saved game, so the speed is normal again
+	EXPECT_EQ(SpeedAfterLoad(LoadKind::SavedGame, 0.5f), 1.0f);
+	EXPECT_EQ(SpeedAfterLoad(LoadKind::SavedGame, 2.0f), 1.0f);
+	// The world state of a game server keeps the speed of the world
+	EXPECT_EQ(SpeedAfterLoad(LoadKind::WorldState, 0.5f), 0.5f);
+}

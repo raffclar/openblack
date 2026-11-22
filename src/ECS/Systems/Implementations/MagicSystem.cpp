@@ -36,6 +36,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
@@ -411,6 +412,11 @@ void MagicSystem::CloseDown(entt::entity entity)
 	{
 		Locator::teleportSystem::value().RemoveStonesOf(entity);
 	}
+	// The spiritual shield's object goes at once, and the dome starts to fade
+	if (spell->spellClass == magic::SpellClass::Shield && Locator::magicShieldSystem::has_value())
+	{
+		Locator::magicShieldSystem::value().MiracleClosedDown(entity, _inTurn);
+	}
 	if (spell->effect != k_NoEffectHandle)
 	{
 		Locator::effectRequestSystem::value().Stop(spell->effect);
@@ -618,12 +624,20 @@ bool MagicSystem::Process(entt::entity entity, Spell& spell)
 		                                      magic::spells::StrengthOf(*this, *after));
 	}
 	// It lives while its effect does, or until it closes down without one, or while what its kind made keeps it
-	return magic::FateOf({
-	           .hasParticleType = after->hasParticleType,
-	           .effectRunning = after->effect != k_NoEffectHandle,
-	           .closedDown = after->closedDown,
-	           .keptByKind = magic::spells::KeptByKind(*this, *after),
-	       }) == magic::SpellFate::Continue;
+	const magic::SpellLife life {
+	    .hasParticleType = after->hasParticleType,
+	    .effectRunning = after->effect != k_NoEffectHandle,
+	    .closedDown = after->closedDown,
+	    .keptByKind = magic::spells::KeptByKind(*this, *after),
+	    .lostByKind = magic::spells::LostByKind(*this, *after),
+	};
+	const auto fate = magic::FateOf(life);
+	// A running miracle that goes because the world destroyed what it made closes down first
+	if (fate == magic::SpellFate::Delete && life.lostByKind && !life.closedDown)
+	{
+		CloseDown(entity);
+	}
+	return fate == magic::SpellFate::Continue;
 }
 
 void MagicSystem::Delete(entt::entity entity)
@@ -726,6 +740,7 @@ void MagicSystem::ProcessTurn()
 		return;
 	}
 	++_turn;
+	_inTurn = true;
 	_world.ProcessTurn();
 	ProcessDispensers();
 	ProcessCreatureSpells();
@@ -774,6 +789,7 @@ void MagicSystem::ProcessTurn()
 		_pourCreature = entt::null;
 	}
 	magic::StepPour(_pour, k_TurnSeconds);
+	_inTurn = false;
 }
 
 void MagicSystem::Update(float /*seconds*/)

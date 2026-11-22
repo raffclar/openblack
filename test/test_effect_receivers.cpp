@@ -12,6 +12,8 @@
 
 #include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -19,6 +21,7 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Firefly.h"
@@ -26,10 +29,16 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MagicShield.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StreetLantern.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
@@ -37,6 +46,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/StreetLanternRules.h"
 #include "ECS/WorldObjects.h"
@@ -55,6 +65,12 @@ class EffectReceivers: public ::testing::Test
 protected:
 	void SetUp() override
 	{
+		// The rules of the world write to the game's log
+		if (spdlog::get("game") == nullptr)
+		{
+			spdlog::create<spdlog::sinks::null_sink_st>("game");
+			_madeLogger = true;
+		}
 		Locator::entitiesRegistry::emplace<ecs::Registry>();
 		_info = std::make_unique<InfoConstants>();
 		Locator::infoConstants::emplace(*_info);
@@ -63,6 +79,10 @@ protected:
 	{
 		Locator::infoConstants::reset();
 		Locator::entitiesRegistry::reset();
+		if (_madeLogger)
+		{
+			spdlog::drop("game");
+		}
 	}
 
 	static entt::entity Made()
@@ -74,6 +94,7 @@ protected:
 	}
 
 	std::unique_ptr<InfoConstants> _info;
+	bool _madeLogger {false};
 };
 } // namespace
 
@@ -202,6 +223,141 @@ TEST_F(EffectReceivers, HarmNeverBringsAnIndestructibleAnimalOrThingToNearlyNoLi
 	registry.Assign<Indestructible>(firefly);
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 0.25f), 0.75f);
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(firefly, 1.5f), 0.75f);
+}
+
+TEST_F(EffectReceivers, AnIndestructibleCraterIsNeverDestroyedByAMiracleNorHarmedToNoLife)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto crater = Made();
+	registry.Assign<Feature>(crater, FeatureInfo::Crater);
+	registry.Assign<Indestructible>(crater);
+	// The wave of a blast and the pull of a tornado ask this before they shatter or take the crater
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(crater));
+	// The heat and the blows of a miracle, a fire or a creature never take the last of its life
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(crater, 0.5f), 0.5f);
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(crater, 1.0f), 0.5f);
+	EXPECT_GT(ecs::world_objects::LifeOf(crater), 0.0f);
+}
+
+TEST_F(EffectReceivers, ACraterThatNoScriptMadeIndestructibleCanBeDestroyed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto crater = Made();
+	registry.Assign<Feature>(crater, FeatureInfo::Crater);
+	EXPECT_TRUE(ecs::world_objects::CanBeDestroyedBySpell(crater));
+	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(crater, 1.5f), 0.0f);
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysAVortexOrTheVolcanosMouth)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The volcano's mouth on Land 5 has no indestructible mark, but it takes no effect
+	for (const auto type : {VortexType::In, VortexType::Out, VortexType::Volcano})
+	{
+		const auto vortex = Made();
+		registry.Assign<Vortex>(vortex, Vortex {.type = type});
+		EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(vortex));
+	}
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysATownsDesireFlag)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto flag = Made();
+	registry.Assign<TownDesireFlag>(flag);
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(flag));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysAScriptHighlight)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto highlight = Made();
+	registry.Assign<ScriptHighlight>(highlight);
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(highlight));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(highlight, 0.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysTheSpiritualShieldsObject)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto shield = Made();
+	registry.Assign<MagicShield>(shield, MagicShield {.kind = MagicShield::Kind::Spiritual});
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(shield));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(shield, 0.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, AMiracleCanDestroyThePhysicalShieldsDomeWhichTakesOnlyEffectsThatDoNotBurn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto dome = Made();
+	registry.Assign<MagicShield>(dome, MagicShield {.kind = MagicShield::Kind::Physical});
+	EXPECT_TRUE(ecs::world_objects::CanBeDestroyedBySpell(dome));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(dome, 0.0f, 1.0f));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(dome, 1.0f, 0.0f));
+	// Any burn that is not zero, also one below zero
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(dome, -1.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, AMiracleCanDestroyAStreetLanternAndAFishFarm)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto lantern = Made();
+	registry.Assign<StreetLantern>(lantern, StreetLantern {.country = false, .info = MobileStaticInfo::StreetLantern});
+	EXPECT_TRUE(ecs::world_objects::CanBeDestroyedBySpell(lantern));
+	const auto farm = Made();
+	registry.Assign<FishFarm>(farm);
+	EXPECT_TRUE(ecs::world_objects::CanBeDestroyedBySpell(farm));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysATownCentresTotem)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto totem = Made();
+	registry.Assign<VillageTotem>(totem);
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(totem));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(totem, 1.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysAWorshipSiteOrItsAltar)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto site = Made();
+	registry.Assign<WorshipSite>(site);
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(site));
+	// The site takes effects, but the altar takes none
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(site, 1.0f, 0.0f));
+	const auto altar = Made();
+	registry.Assign<WorshipAltar>(altar, WorshipAltar {.site = site});
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(altar));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(altar, 1.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysATeleportStoneAWorshipSitesIconOrASpellSeed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto stone = Made();
+	registry.Assign<TeleportStone>(stone);
+	const auto icon = Made();
+	registry.Assign<WorshipIcon>(icon);
+	const auto seed = Made();
+	registry.Assign<SpellSeed>(seed);
+	const auto oneOff = Made();
+	registry.Assign<OneOffSpellSeed>(oneOff);
+	for (const auto thing : {stone, icon, seed, oneOff})
+	{
+		EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(thing));
+		EXPECT_FALSE(ecs::world_objects::TakesEffect(thing, 0.0f, 1.0f));
+	}
+}
+
+TEST_F(EffectReceivers, AnEmptyFieldIsAReceiverWithNoEffectButNoMiracleDestroysIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto field = Made();
+	registry.Assign<Field>(field);
+	EXPECT_TRUE(ecs::world_objects::IsEffectReceiver(field, std::nullopt));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(field, 1.0f, 0.0f));
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(field));
 }
 
 TEST_F(EffectReceivers, ATownsDesireFlagTakesNoEffectEvenWithTheDataOfThePrayerSite)

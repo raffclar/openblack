@@ -48,6 +48,7 @@
 #include "Creature/CreatureScriptPlay.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/TownMiracles.h"
+#include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -103,6 +104,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/WorldObjects.h"
+#include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/GameTexts.h"
 #include "Help/Spirits.h"
@@ -114,6 +116,7 @@
 #include "Magic/TownBelief.h"
 #include "Online/NetworkLand.h"
 #include "PlayerSlots.h"
+#include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "TestbedScenarioRunner.h"
 #include "TestbedScenarioRunnerParts.h"
@@ -164,6 +167,18 @@ bool Runner::GiveStoryCommand(const Command& command)
 		_deviceRestoreAsked =
 		    command.value == 1 ? graphics::device_restore::Request::Lose : graphics::device_restore::Request::MakeAgain;
 		Log(fmt::format("{:.1f}s: the graphics device is made again when the dome next follows the sky", _seconds));
+		return true;
+	}
+	if (command.kind == Kind::SetSkyPictures)
+	{
+		const bool upscaled = command.value == 1;
+		const bool hasPack =
+		    Locator::resources::value().GetTextures().Contains(ecs::archetypes::SkyArchetype::k_PackDomeTextureId.value());
+		Locator::config::value().upscaledSkyPictures = upscaled && hasPack;
+		Log(fmt::format("{:.1f}s: the sky shows {}", _seconds,
+		                !upscaled ? "the game's own pictures"
+		                : hasPack ? "the pictures of the sky pack"
+		                          : "the game's own pictures, as no sky pack loaded"));
 		return true;
 	}
 	if (command.kind == Kind::RestoreDevice)

@@ -384,6 +384,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "parallel-draw-encode"},
     DeveloperOption {.name = "ai-times", .takesValue = true},
     DeveloperOption {.name = "turn-step-times", .takesValue = true},
+    DeveloperOption {.name = "mind-frame-budget", .takesValue = true},
     DeveloperOption {.name = "no-first-frame-warm-up"},
     DeveloperOption {.name = "unlock-bonus-creatures", .takesValue = true},
     DeveloperOption {.name = "no-draw"},

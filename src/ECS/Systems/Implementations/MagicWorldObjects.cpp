@@ -72,6 +72,12 @@ bool MagicSystem::HasWorldObjects(const Spell& spell) const
 	return false;
 }
 
+bool MagicSystem::LostWorldObjects(const Spell& spell) const
+{
+	return spell.spellClass == magic::SpellClass::Shield && Locator::magicShieldSystem::has_value() &&
+	       Locator::magicShieldSystem::value().LostObject(EntityRegistry().ToEntity(spell));
+}
+
 uint32_t MagicSystem::ForestTrees(const Spell& spell) const
 {
 	// The forest's trees at this moment. A tree that went since the last turn of the forest does not count.

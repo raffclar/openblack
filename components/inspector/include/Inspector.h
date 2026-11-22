@@ -45,6 +45,10 @@ public:
 	/// RefusedInNetworkGame, so that no tool changes the shared world.
 	using NetworkGameLive = std::function<bool()>;
 	void SetNetworkGameLive(NetworkGameLive live) { _networkGameLive = std::move(live); }
+	/// Called before each query that writes runs, so that the game can come to a point where a write is safe, such as
+	/// the end of a turn that waits to continue
+	using BeforeWrite = std::function<void()>;
+	void SetBeforeWrite(BeforeWrite before) { _beforeWrite = std::move(before); }
 	/// What "ping" answers beside pong: the game's port, process and the like, for tools telling games apart. Every
 	/// answer also names the game it came from ("game": its pid, port and worktree), so that a tool talking to several
 	/// games can tell when an answer isn't from the one it meant.
@@ -85,6 +89,7 @@ private:
 	std::vector<std::unique_ptr<ProviderInterface>> _providers;
 	WriteLog _writeLog;
 	NetworkGameLive _networkGameLive;
+	BeforeWrite _beforeWrite;
 	Json _identity = Json::object();
 	/// The identity's pid, port and worktree, put in every answer
 	Json _tag = Json::object();

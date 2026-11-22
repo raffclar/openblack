@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -41,7 +42,11 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ShieldStruck(entt::entity spell, bool destroyed) override;
 	[[nodiscard]] bool HasObject(entt::entity spell) const override;
+	[[nodiscard]] bool LostObject(entt::entity spell) const override;
+	void ObjectDestroyed(entt::entity object) override;
 	[[nodiscard]] entt::entity ObjectOf(entt::entity spell) const override;
+	[[nodiscard]] entt::entity KeeperOf(entt::entity object) const override;
+	void MiracleClosedDown(entt::entity spell, bool inMiracleTurn) override;
 	entt::entity Restore(entt::entity spell, const components::Spell& miracle, const RestoredShield& file) override;
 	void RestoreReaction(entt::entity object, uint32_t id, Reaction type, float reach, uint32_t firstReacted,
 	                     std::span<const RestoredTaker> villagers) override;
@@ -53,6 +58,7 @@ public:
 	[[nodiscard]] std::optional<HeldReaction> HeldReactionOf(entt::entity villager) const override;
 	void LeaveForOtherReaction(entt::entity villager) override;
 	[[nodiscard]] std::vector<DomeDraw> GetDomes(float fraction) const override;
+	[[nodiscard]] std::optional<DomePieces> DomeBreakUp(entt::entity object, bool beforeDomeStep) const override;
 
 private:
 	/// Raises the object of a shield miracle that has none yet
@@ -62,14 +68,21 @@ private:
 	/// Gives a physical shield's object its dome, and puts the dome in the physics: a new dome takes its first two turns
 	/// at once, the dome of a saved game has the values of the file
 	void MakeDome(entt::entity object, const components::Spell& miracle, const RestoredShield* file);
-	/// The shield's miracle has let go of it: the spiritual shield's goes at once, the dome starts to fade
+	/// The shield's miracle closed down. The spiritual shield's object goes at once. The dome lets go of the miracle and
+	/// starts to fade. The miracle keeps the dome, its reactions and its hold on influence until the dome has gone.
 	void LetGo(entt::entity object, components::MagicShield& shield);
+	/// The shield's miracle has gone: its reactions and its hold on influence go with it. The spiritual shield's object
+	/// goes at once, the dome fades away alone.
+	void Abandon(entt::entity object, components::MagicShield& shield);
+	/// The dome's fade has ended: it goes, and the closed-down miracle that kept it goes with it
+	void DomeGone(entt::entity object);
 	/// Takes away what goes with a shield: its rings against influence and the reactions to it
 	void Strip(entt::entity object, components::MagicShield& shield);
 	/// A turn of a physical shield's dome; false once it has gone
 	bool StepDome(entt::entity object);
-	/// A reaction to a shield the villagers take up: the shield's object, its kind and reach, the turn the first villager
-	/// took it up (or it was last struck), and those taking it up now
+	/// A reaction to a shield the villagers take up: what it is to, its kind and reach, the turn the first villager took
+	/// it up (or it was last struck), and those taking it up now. It is to the shield's object, or to the shield's
+	/// miracle after the world destroyed the object.
 	struct ShieldReaction
 	{
 		entt::entity object {entt::null};
@@ -90,6 +103,15 @@ private:
 	/// A reaction goes; the villagers taking it up stop, going back to what they did when asked
 	void RemoveReaction(uint32_t id, bool setState);
 	void RemoveReactions(entt::entity object, Reaction type);
+	/// The miracle of a shield reaction: the miracle that it is to, or the miracle that keeps the shield's object
+	[[nodiscard]] entt::entity MiracleOf(const ShieldReaction& reaction) const;
+	/// Where a shield reaction is. The reaction to a standing shield is at the shield's object. The reactions to the
+	/// strikes and to the fall are at the place of the miracle. None when neither is there.
+	[[nodiscard]] std::optional<glm::vec3> CentreOf(const ShieldReaction& reaction) const;
+	/// The world destroyed a shield's object: its reactions to the strikes and to the fall are to its miracle from now on
+	void PassToMiracle(entt::entity object, entt::entity miracle);
+	/// The reactions whose miracle has gone after the world destroyed its object go too
+	void RemoveReactionsOfGoneMiracles();
 	/// One reaction of all the land's is spread each turn in turn: its villagers in reach may take it up
 	void ProcessReactions();
 	void SpreadReaction(uint32_t id);
@@ -116,7 +138,10 @@ private:
 	/// A thrown thing struck a dome
 	void Impact(entt::entity object, entt::entity hitter, float momentum, std::optional<PlayerNames> player) override;
 
-	/// Each shield miracle's object
+	/// A shield's object goes at once, with its effect and its reactions
+	void Destroy(entt::entity object, components::MagicShield& shieldObject);
+
+	/// Each shield miracle's object. A miracle whose object the world destroyed keeps no object until it goes.
 	std::unordered_map<entt::entity, entt::entity> _objects;
 	std::unordered_map<uint32_t, ShieldReaction> _reactions;
 	/// The next of the land's reactions to spread

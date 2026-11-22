@@ -375,13 +375,15 @@ bool PlaceCrater(const features::Ground& ground, const Patch& patch, const std::
 		const Circle circle {.x = x, .z = z, .radius = k_CraterClearing};
 		ClearCircle(placed, circle);
 		circles.push_back(circle);
+		// The crater is indestructible, as the script of the fifth land makes each of its craters
 		placed.push_back({.kind = Kind::Feature,
 		                  .type = k_CraterFeature,
 		                  .x = x,
 		                  .z = z,
 		                  .angle = crater.angle,
 		                  .size = crater.scale,
-		                  .maxSize = crater.scale});
+		                  .maxSize = crater.scale,
+		                  .indestructible = true});
 		mists.push_back(
 		    {.x = x, .z = z, .altitude = 0.0f, .colour = k_SmokeColour, .size = k_SmokeSize, .edgeShrink = k_SmokeEdgeShrink});
 		return true;
