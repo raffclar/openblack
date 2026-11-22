@@ -31,6 +31,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -176,7 +177,12 @@ bool MagicSystem::CastByCreature(entt::entity creature, MagicType type, entt::en
 	    object_measures::TwoDRadius(registry, target),
 	    targetCreature != nullptr ? std::optional(ShownSize(*targetCreature)) : std::nullopt, seed == SpellSeedType::Fire,
 	    object_measures::Height(registry, creature));
-	return StartCreatureCast(creature, type, target, *at, magnitude);
+	// The miracle goes to the map position of the thing. A thing that stands at the place of another thing, such as the
+	// flag of a worship site, gives the map position of that place.
+	const auto* transform = registry.TryGet<const Transform>(target);
+	const auto place = transform != nullptr && transform->position == *at ? thing_map_place::OfWithAltitude(registry, target)
+	                                                                      : PlaceOfPoint(*at);
+	return StartCreatureCast(creature, type, target, place, magnitude);
 }
 
 bool MagicSystem::CastByCreatureAt(entt::entity creature, MagicType type, glm::vec3 place)
@@ -190,12 +196,13 @@ bool MagicSystem::CastByCreatureAt(entt::entity creature, MagicType type, glm::v
 	const auto seed = magic::FindFirstSpellSeedForMagicType(Info(), type);
 	const float magnitude =
 	    creature_spell_casting::CastMagnitudeAtPlace(seed == SpellSeedType::Fire, object_measures::Height(registry, creature));
-	return StartCreatureCast(creature, type, std::nullopt, place, magnitude);
+	return StartCreatureCast(creature, type, std::nullopt, PlaceOfPoint(place), magnitude);
 }
 
-bool MagicSystem::StartCreatureCast(entt::entity creature, MagicType type, std::optional<entt::entity> target, glm::vec3 at,
-                                    float magnitude)
+bool MagicSystem::StartCreatureCast(entt::entity creature, MagicType type, std::optional<entt::entity> target,
+                                    const map_coords::MapCoords& place, float magnitude)
 {
+	const auto at = _world.PointOf(place);
 	auto& registry = Entities();
 	const auto& info = Info();
 	const auto& body = registry.Get<const Creature>(creature);
@@ -228,7 +235,7 @@ bool MagicSystem::StartCreatureCast(entt::entity creature, MagicType type, std::
 	};
 	const auto seed = magic::FindFirstSpellSeedForMagicType(info, type);
 	const bool onObject = target.has_value() && seed.has_value() && magic::GetSpellSeedInfo(info, *seed).castOnObject != 0;
-	const auto spell = onObject ? CastOn(type, caster, *target, cast, process) : Cast(type, caster, at, cast, process);
+	const auto spell = onObject ? CastOn(type, caster, *target, cast, process) : Cast(type, caster, place, cast, process);
 	// Past its body's and the miracle's checks, the cast counts as made even when no miracle comes of it
 	if (spell == entt::null)
 	{
@@ -353,16 +360,19 @@ entt::entity MagicSystem::MakeImportedCast(const SpellCaster& caster, const magi
 	    .duration = cast.duration,
 	    .maxObjectsToCreate = -1,
 	};
+	// The spell keeps the map position where it was cast. A file without it gives the map position of the point of the
+	// spell.
+	const auto place = cast.castPlace.value_or(PlaceOfPoint(cast.position));
 	// The effect continues from its state in the file. When that state does not agree with the particle file, the
 	// effect starts from its start.
-	auto spell = MakeSpell(cast.type, caster, cast.position, data, cast.processInfo, cast.effect);
+	auto spell = MakeSpell(cast.type, caster, place, data, cast.processInfo, cast.effect);
 	const bool restored = spell != entt::null && cast.effect != nullptr;
 	if (spell == entt::null && cast.effect != nullptr)
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"),
 		                   "The saved effect of a spell of magic type {} does not start, so it starts again",
 		                   static_cast<int>(cast.type));
-		spell = MakeSpell(cast.type, caster, cast.position, data, cast.processInfo);
+		spell = MakeSpell(cast.type, caster, place, data, cast.processInfo);
 	}
 	if (spell == entt::null)
 	{
@@ -371,6 +381,8 @@ entt::entity MagicSystem::MakeImportedCast(const SpellCaster& caster, const magi
 	// The miracle continues with the prayer power, the age and the size of the file. The size of the file is the size
 	// after the limits of the cast.
 	auto& made = registry.Get<Spell>(spell);
+	made.position = cast.position;
+	made.originalCastPlace = cast.originalCastPlace.value_or(place);
 	made.chants.chants = cast.chants;
 	made.chants.initialChants = cast.initialChants;
 	made.age = cast.age;
@@ -442,7 +454,7 @@ void MagicSystem::UpdateCreatureCast(Spell& spell)
 		return;
 	}
 	spell.processInfo.handPosition = HandsOf(spell.caster.entity);
-	spell.processInfo.cameraForward = particles::CastHeading(spell.processInfo.handPosition, spell.castPosition);
+	spell.processInfo.cameraForward = particles::CastHeading(spell.processInfo.handPosition, _world.PointOf(spell.castPlace));
 }
 
 void MagicSystem::KeepCreatureBeams()

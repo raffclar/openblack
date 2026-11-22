@@ -1796,7 +1796,7 @@ TEST_F(Reactions, AVillagerChangesFromAMiracleToAMoreUrgentStandingShieldAfterTe
 		miracle.magicType = MagicType::Shield;
 		miracle.spellClass = magic::SpellClass::Shield;
 		miracle.caster.player = PlayerNames::PLAYER_ONE;
-		miracle.castPosition = k_Here;
+		miracle.castPlace = map_coords::FromMetres({k_Here.x, k_Here.z});
 		miracle.magnitude = 30.0f;
 	};
 	ecs::systems::MagicShieldSystem shields;
@@ -1828,7 +1828,7 @@ TEST_F(Reactions, AShieldWhoseObjectTheWorldDestroyedRaisesNoOther)
 	miracle.magicType = MagicType::Shield;
 	miracle.spellClass = magic::SpellClass::Shield;
 	miracle.caster.player = PlayerNames::PLAYER_ONE;
-	miracle.castPosition = k_Here;
+	miracle.castPlace = map_coords::FromMetres({k_Here.x, k_Here.z});
 	miracle.magnitude = 30.0f;
 	ecs::systems::MagicShieldSystem shields;
 	shields.ProcessTurn();
@@ -1864,7 +1864,7 @@ TEST_F(Reactions, AShieldObjectWithNoMiracleThatTheWorldDestroysGoes)
 	miracle.magicType = MagicType::PhysicalShield;
 	miracle.spellClass = magic::SpellClass::Shield;
 	miracle.caster.player = PlayerNames::PLAYER_ONE;
-	miracle.castPosition = k_Here;
+	miracle.castPlace = map_coords::FromMetres({k_Here.x, k_Here.z});
 	miracle.magnitude = 30.0f;
 	ecs::systems::MagicShieldSystem shields;
 	shields.ProcessTurn();

@@ -482,3 +482,46 @@ TEST_F(CreatureHeldCastImport, AVillagerUnderAShieldOfTheFileLooksAtThePointOfTh
 	EXPECT_EQ(registry.Get<const VillagerShieldReaction>(other).lookAt, centre);
 	Locator::magicShieldSystem::reset();
 }
+
+// A spell of the file keeps the map positions where it was cast, as the file keeps them. Far from the corner of the map,
+// metres cannot keep each map position, so the spell does not take them from its point.
+TEST_F(CreatureHeldCastImport, TheSpellKeepsTheMapPositionsOfTheFileWhereItWasCast)
+{
+	constexpr map_coords::MapCoords k_Moved {.x = 8090858, .z = 3276801, .altitude = 0.0f};
+	constexpr map_coords::MapCoords k_First {.x = 8090859, .z = 3276803, .altitude = 0.0f};
+	ASSERT_NE(map_coords::ToFixed(map_coords::ToMetres(k_Moved.x)), k_Moved.x);
+	auto cast = Water();
+	cast.castPlace = k_Moved;
+	cast.originalCastPlace = k_First;
+	const auto spell = _magic->ImportCreatureCast(_creature, cast);
+	ASSERT_TRUE(spell != entt::null);
+	const auto& made = SpellOf(spell);
+	EXPECT_EQ(made.castPlace, k_Moved);
+	EXPECT_EQ(made.originalCastPlace, k_First);
+	EXPECT_EQ(made.position, glm::vec3(10.0f, 2.0f, 20.0f));
+}
+
+// A spell of a file without the map positions where it was cast takes the map position of its point for both
+TEST_F(CreatureHeldCastImport, ASpellWithoutTheMapPositionsTakesTheMapPositionOfItsPoint)
+{
+	const auto spell = _magic->ImportCreatureCast(_creature, Water());
+	ASSERT_TRUE(spell != entt::null);
+	const auto& made = SpellOf(spell);
+	const map_coords::MapCoords expected {.x = map_coords::ToFixed(10.0f), .z = map_coords::ToFixed(20.0f), .altitude = 2.0f};
+	EXPECT_EQ(made.castPlace, expected);
+	EXPECT_EQ(made.originalCastPlace, expected);
+}
+
+// A miracle cast at an exact map position keeps that map position, also where metres cannot keep it
+TEST_F(CreatureHeldCastImport, AMiracleCastAtAMapPositionKeepsItExactly)
+{
+	constexpr map_coords::MapCoords k_Place {.x = 8090858, .z = 3276801, .altitude = 0.0f};
+	const magic::SpellCastData cast {.magnitude = 40.0f, .chants = 50.0f, .duration = 12.5f, .maxObjectsToCreate = -1};
+	const auto spell = _magic->CastAtPlace(MagicType::StormWindRain, PlayerNames::PLAYER_ONE, k_Place, cast, {});
+	ASSERT_TRUE(spell != entt::null);
+	const auto& made = SpellOf(spell);
+	EXPECT_EQ(made.castPlace, k_Place);
+	EXPECT_EQ(made.originalCastPlace, k_Place);
+	EXPECT_EQ(made.position.x, map_coords::ToMetres(k_Place.x));
+	EXPECT_EQ(made.position.z, map_coords::ToMetres(k_Place.z));
+}

@@ -145,7 +145,7 @@ void MagicSystem::StartCastEffect(Spell& spell, ParticleType type, bool synced)
 	// It plays out by itself, as big as the miracle and heading the way it was cast
 	spell.castEffect = Locator::effectRequestSystem::value().Start({
 	    .type = type,
-	    .position = spell.castPosition,
+	    .position = _world.PointOf(spell.castPlace),
 	    .magnitude = spell.magnitude,
 	    .synced = synced,
 	    .player = static_cast<int>(spell.caster.player),

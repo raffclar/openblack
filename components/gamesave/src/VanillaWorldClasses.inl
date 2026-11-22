@@ -1150,8 +1150,9 @@ void ReadSpell(WorldReader& r)
 	r.Ref("spellSystem");
 	r.Word();
 	r.Ref("spellReaction");
+	// A point, the map position where the spell was cast, which follows the hand that holds it, and a point
 	r.Bytes(12);
-	r.Bytes(12);
+	r.Coords("spellCastPlace");
 	r.Bytes(12);
 	// The prayer power that is left, the prayer power after the last fill, and the flag of a spell that closed down
 	r.Float("spellChants");
@@ -1179,8 +1180,9 @@ void ReadSpell(WorldReader& r)
 	r.Word("spellMagicType");
 	r.Float("spellAge");
 	r.Float("spellMagnitude");
+	// A word, the map position where the spell was cast first, and two words
 	r.Word();
-	r.Bytes(12);
+	r.Coords("spellOriginalCastPlace");
 	r.Word();
 	r.Word();
 }

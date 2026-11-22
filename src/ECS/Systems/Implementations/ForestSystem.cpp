@@ -121,6 +121,15 @@ std::optional<glm::u16vec2> CellOf(const map_coords::MapCoords& place)
 	return glm::u16vec2(static_cast<uint16_t>(cell.x), static_cast<uint16_t>(cell.y));
 }
 
+/// The point of the world where the forest miracle was cast first: the land at its map position
+glm::vec3 OriginalCastPoint(const Spell& miracle)
+{
+	const auto& place = miracle.originalCastPlace;
+	return Locator::terrainSystem::has_value()
+	           ? map_coords::ToWorld(Locator::terrainSystem::value(), place)
+	           : glm::vec3(map_coords::ToMetres(place.x), place.altitude, map_coords::ToMetres(place.z));
+}
+
 /// Land a tree may stand on: on the map and not under water
 bool IsLand(const map_coords::MapCoords& place)
 {
@@ -383,9 +392,9 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 	auto& random = Locator::gameRandom::value();
 	// The event that plants it has just been paid for, so it has strength
 	const auto count = forest::TreesWeCanAfford(miracle.maxObjectsToCreate, trees->finalNoTrees, 1.0f);
-	const auto centre = miracle.castPosition;
-	// The trees go round the map position of the miracle, and take their kinds and sizes from it
-	const auto castPlace = map_coords::FromMetres(glm::xz(centre));
+	// The trees go round the map position where the miracle was cast first, and take their kinds and sizes from it
+	const auto& castPlace = miracle.originalCastPlace;
+	const auto centre = OriginalCastPoint(miracle);
 	const auto castMetres = map_coords::ToMetres(castPlace);
 	const auto& kinds = info.terrainMaterial.at(forest::MaterialRow(MaterialAt(castPlace), info.terrainMaterial.size()));
 	const auto& effect = magic::GetMagicEffectInfo(info, miracle.magicType);
@@ -476,13 +485,12 @@ uint32_t ForestSystem::RestoreForest(entt::entity spell, Spell& miracle, entt::e
 	// The forest stands where its forest of the land stands
 	const auto* place = registry.TryGet<const Transform>(landForest);
 	const auto forestEntity = registry.Create();
-	registry.Assign<Transform>(forestEntity, place != nullptr ? place->position : miracle.castPosition, glm::mat3(1.0f),
-	                           glm::vec3(1.0f));
-	registry.Assign<MagicForest>(forestEntity, MagicForest {.spell = spell,
-	                                                        .player = miracle.caster.player,
-	                                                        .centre = miracle.castPosition,
-	                                                        .trees = trees,
-	                                                        .landForest = landForest});
+	const auto centre = OriginalCastPoint(miracle);
+	registry.Assign<Transform>(forestEntity, place != nullptr ? place->position : centre, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<MagicForest>(
+	    forestEntity,
+	    MagicForest {
+	        .spell = spell, .player = miracle.caster.player, .centre = centre, .trees = trees, .landForest = landForest});
 	for (const auto tree : trees)
 	{
 		registry.Get<MagicTree>(tree).forest = forestEntity;

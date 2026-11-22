@@ -186,10 +186,10 @@ constexpr uint32_t k_NoScriptBuilding = 0xFFFFFFFFU;
 /// The record types of the villagers
 constexpr std::array k_VillagerTypes = {VanillaType::Villager, VanillaType::SpecialVillager};
 
-/// The map position of the record
-std::optional<gamesave::MapCoords> PositionOf(const VanillaWorld& world, const VanillaRecord& record)
+/// A map position of the record, by the name of its field
+std::optional<gamesave::MapCoords> CoordsOf(const VanillaWorld& world, const VanillaRecord& record, std::string_view name)
 {
-	const auto bytes = world.Raw(record, "position");
+	const auto bytes = world.Raw(record, name);
 	if (bytes.size() != sizeof(gamesave::MapCoords))
 	{
 		return std::nullopt;
@@ -197,6 +197,12 @@ std::optional<gamesave::MapCoords> PositionOf(const VanillaWorld& world, const V
 	gamesave::MapCoords coords;
 	std::memcpy(&coords, bytes.data(), sizeof(coords));
 	return coords;
+}
+
+/// The map position of the record
+std::optional<gamesave::MapCoords> PositionOf(const VanillaWorld& world, const VanillaRecord& record)
+{
+	return CoordsOf(world, record, "position");
 }
 
 int16_t SignedHalf(const VanillaWorld& world, const VanillaRecord& record, std::string_view name)
@@ -1105,6 +1111,8 @@ std::optional<ImportedHeldSpell> ReadHeldSpell(const VanillaWorld& world, const 
 	    .magnitude = world.Float(record, "spellMagnitude").value_or(0.0f),
 	    .humanCasting = world.Word(record, "spellHumanCasting").value_or(0) != 0,
 	};
+	spell.castPlace = CoordsOf(world, record, "spellCastPlace");
+	spell.originalCastPlace = CoordsOf(world, record, "spellOriginalCastPlace");
 	if (const auto info = world.Raw(record, "spellProcessInfo"); info.size() == k_ProcessInfoSize)
 	{
 		spell.casterPoint = PointAt(info, k_CasterPointAt);
