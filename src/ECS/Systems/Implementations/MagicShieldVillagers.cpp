@@ -200,6 +200,92 @@ void MagicShieldSystem::RestoreReaction(entt::entity object, uint32_t id, Reacti
 	}
 }
 
+entt::entity MagicShieldSystem::MiracleOf(const ShieldReaction& reaction) const
+{
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(reaction.object))
+	{
+		return entt::null;
+	}
+	if (registry.AllOf<Spell>(reaction.object))
+	{
+		return reaction.object;
+	}
+	const auto* shieldObject = registry.TryGet<const MagicShield>(reaction.object);
+	if (shieldObject == nullptr)
+	{
+		return entt::null;
+	}
+	return shieldObject->spell != entt::null ? shieldObject->spell : KeeperOf(reaction.object);
+}
+
+std::optional<glm::vec3> MagicShieldSystem::CentreOf(const ShieldReaction& reaction) const
+{
+	auto& registry = EntityRegistry();
+	// The reactions to the strikes and to the fall are at the place of the miracle: where it was cast, or where its
+	// last event was, such as the last strike on its dome
+	if (reaction.type != Reaction::ReactToMagicShield)
+	{
+		const auto miracle = MiracleOf(reaction);
+		if (const auto* spell = registry.Valid(miracle) ? registry.TryGet<const Spell>(miracle) : nullptr; spell != nullptr)
+		{
+			return spell->position;
+		}
+	}
+	if (!registry.Valid(reaction.object) || registry.AllOf<Spell>(reaction.object))
+	{
+		return std::nullopt;
+	}
+	const auto* transform = registry.TryGet<const Transform>(reaction.object);
+	return transform != nullptr ? std::optional(transform->position) : std::nullopt;
+}
+
+void MagicShieldSystem::PassToMiracle(entt::entity object, entt::entity miracle)
+{
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(miracle) || !registry.AllOf<Spell>(miracle))
+	{
+		return;
+	}
+	std::vector<uint32_t> ids;
+	for (const auto& [id, reaction] : _reactions)
+	{
+		if (reaction.object == object && reaction.type != Reaction::ReactToMagicShield)
+		{
+			ids.push_back(id);
+		}
+	}
+	// In the order of their numbers: the order of the map is different on each C++ library
+	std::ranges::sort(ids);
+	for (const auto id : ids)
+	{
+		_reactions.at(id).object = miracle;
+		if (Locator::reactionSystem::has_value())
+		{
+			Locator::reactionSystem::value().SetInitiator(id, miracle);
+		}
+	}
+}
+
+void MagicShieldSystem::RemoveReactionsOfGoneMiracles()
+{
+	auto& registry = EntityRegistry();
+	std::vector<uint32_t> ids;
+	for (const auto& [id, reaction] : _reactions)
+	{
+		if (!registry.Valid(reaction.object))
+		{
+			ids.push_back(id);
+		}
+	}
+	// In the order of their numbers: the order of the map is different on each C++ library
+	std::ranges::sort(ids);
+	for (const auto id : ids)
+	{
+		RemoveReaction(id, true);
+	}
+}
+
 uint32_t MagicShieldSystem::CreateReaction(entt::entity object, Reaction type, glm::vec3 position, float multiplier)
 {
 	auto& registry = EntityRegistry();
@@ -305,11 +391,12 @@ void MagicShieldSystem::SpreadReaction(uint32_t id)
 	}
 	auto& registry = EntityRegistry();
 	const auto& reaction = _reactions.at(id);
-	if (!registry.Valid(reaction.object))
+	const auto at = CentreOf(reaction);
+	if (!at.has_value())
 	{
 		return;
 	}
-	const auto centre = PositionOf(reaction.object);
+	const auto centre = glm::xz(*at);
 	const auto& map = Locator::entitiesMap::value();
 	const auto cells = map_coords::CellSpiralSize(reaction.radius);
 	map_coords::Spiral spiral;
@@ -388,8 +475,9 @@ uint8_t MagicShieldSystem::PriorityFor(entt::entity villager, const ShieldReacti
 		const bool amazed =
 		    action != nullptr && Locator::livingActionSystem::value().VillagerGetState(*action, LivingAction::Index::Top) ==
 		                             VillagerStates::AmazedByMagicShieldReaction;
-		if (current == nullptr || !amazed ||
-		    current->lookAt == map_coords::WholeXZ(map_coords::FromMetres(PositionOf(reaction.object))))
+		const auto centre = CentreOf(reaction);
+		if (current == nullptr || !amazed || !centre.has_value() ||
+		    current->lookAt == map_coords::WholeXZ(map_coords::FromMetres(glm::xz(*centre))))
 		{
 			return 0;
 		}
@@ -430,7 +518,8 @@ int32_t MagicShieldSystem::ReactTurnsFor(entt::entity villager, const ShieldReac
 {
 	auto& registry = EntityRegistry();
 	// The row's turns, longer the nearer the villager now is to the shield
-	const auto distance = gutils::GetDistanceInMetres(PositionOf(villager), PositionOf(reaction.object));
+	const auto centre = CentreOf(reaction);
+	const auto distance = centre.has_value() ? gutils::GetDistanceInMetres(PositionOf(villager), glm::xz(*centre)) : 0.0f;
 	const auto standard = magic::reaction_timing::StandardTurnsToReact(magic::reaction_timing::RowOf(RowOf(reaction.type)),
 	                                                                   magic::reaction_timing::Reacting::Villager, distance);
 	if (reaction.type != Reaction::ReactToMagicShield)
@@ -469,11 +558,12 @@ void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
 		return;
 	}
 	const auto at = registry.Get<const Transform>(villager).position;
-	if (Blocked(at, registry.Get<const Transform>(reaction.object).position))
+	const auto centre = CentreOf(reaction);
+	if (!centre.has_value() || Blocked(at, *centre))
 	{
 		return;
 	}
-	const float distance = villager_reaction::SpreadDistance(glm::xz(at), PositionOf(reaction.object));
+	const float distance = villager_reaction::SpreadDistance(glm::xz(at), glm::xz(*centre));
 	// One reacting through the reaction system weighs the shield reaction against what it reacts to
 	if (const auto* other = registry.TryGet<const LivingReaction>(villager); other != nullptr && other->reaction != 0)
 	{
@@ -528,7 +618,12 @@ void MagicShieldSystem::ApplyToVillager(entt::entity villager, uint32_t id)
 uint8_t MagicShieldSystem::HeldPriorityFor(entt::entity villager, const ShieldReaction& held) const
 {
 	// The reaction it has is weighed by the distance to the middle of that reaction's cell
-	const auto cell = map_coords::Cell(map_coords::FromMetres(PositionOf(held.object)));
+	const auto centre = CentreOf(held);
+	if (!centre.has_value())
+	{
+		return 0;
+	}
+	const auto cell = map_coords::Cell(map_coords::FromMetres(glm::xz(*centre)));
 	return PriorityFor(villager, held,
 	                   gutils::GetDistanceInMetresToCell(map_coords::FromMetres(PositionOf(villager)),
 	                                                     {static_cast<int16_t>(cell.x), static_cast<int16_t>(cell.y)}));
@@ -575,7 +670,7 @@ std::optional<MagicShieldSystemInterface::HeldReaction> MagicShieldSystem::HeldR
 		return std::nullopt;
 	}
 	const auto found = _reactions.find(current->reaction);
-	if (found == _reactions.end() || !registry.Valid(found->second.object))
+	if (found == _reactions.end() || !CentreOf(found->second).has_value())
 	{
 		return std::nullopt;
 	}
@@ -606,21 +701,26 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id, bool w
 	auto& living = Locator::livingActionSystem::value();
 	auto& reaction = _reactions.at(id);
 	const auto at = PositionOf(villager);
-	const auto centre = PositionOf(reaction.object);
+	const auto reactionAt = CentreOf(reaction);
+	if (!reactionAt.has_value())
+	{
+		return;
+	}
+	const auto centre = glm::xz(*reactionAt);
 	auto* current = registry.TryGet<VillagerShieldReaction>(villager);
 
 	if (reaction.type == Reaction::ReactToMagicShieldStruck)
 	{
-		// Struck: one already sheltering turns to look at the shield and keeps to its standing reaction
-		const auto& shieldObject = registry.Get<const MagicShield>(reaction.object);
-		if (current == nullptr || !_reactions.contains(shieldObject.reaction))
+		// Struck: one already sheltering turns to look at the place of the strike and keeps to the standing reaction
+		const auto* shieldObject = registry.TryGet<const MagicShield>(reaction.object);
+		if (current == nullptr || shieldObject == nullptr || !_reactions.contains(shieldObject->reaction))
 		{
 			return;
 		}
-		current->reaction = shieldObject.reaction;
+		current->reaction = shieldObject->reaction;
 		current->type = Reaction::ReactToMagicShield;
 		current->lookAt = map_coords::WholeXZ(map_coords::FromMetres(centre));
-		_reactions.at(shieldObject.reaction).reacting.push_back(villager);
+		_reactions.at(shieldObject->reaction).reacting.push_back(villager);
 		return;
 	}
 

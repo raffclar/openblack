@@ -450,10 +450,11 @@ void MagicShieldSystem::ProcessTurn()
 	}
 	auto& registry = EntityRegistry();
 
-	// A miracle that has gone forgets that the world destroyed its object
+	// A miracle that has gone forgets that the world destroyed its object, and the reactions it kept go
 	std::erase_if(_objects, [&registry](const auto& entry) {
 		return entry.second == entt::null && (!registry.Valid(entry.first) || !registry.AllOf<Spell>(entry.first));
 	});
+	RemoveReactionsOfGoneMiracles();
 
 	// Shield miracles without an object yet raise theirs
 	std::vector<std::pair<entt::entity, const Spell*>> raise;
@@ -586,7 +587,9 @@ void MagicShieldSystem::ShieldStruck(entt::entity spell, bool destroyed)
 		return;
 	}
 	auto& shieldObject = registry.Get<MagicShield>(object);
-	const auto position = registry.Get<const Transform>(object).position;
+	// The reactions to the strikes and to the fall are at the place of the miracle
+	const auto* miracle = registry.Valid(spell) ? registry.TryGet<const Spell>(spell) : nullptr;
+	const auto position = miracle != nullptr ? miracle->position : registry.Get<const Transform>(object).position;
 	if (destroyed)
 	{
 		// Its people no longer react to it standing, but to its fall
@@ -626,10 +629,12 @@ void MagicShieldSystem::ObjectDestroyed(entt::entity object)
 	{
 		return;
 	}
-	// Its miracle keeps no object and does not raise another, also a closed-down miracle whose dome fades
+	// Its miracle keeps no object and does not raise another, also a closed-down miracle whose dome fades. The reactions
+	// to the strikes and to the fall stay with the miracle until it goes.
 	if (const auto keeper = shieldObject->spell != entt::null ? shieldObject->spell : KeeperOf(object); keeper != entt::null)
 	{
 		_objects.insert_or_assign(keeper, entt::null);
+		PassToMiracle(object, keeper);
 	}
 	shieldObject->spell = entt::null;
 	Destroy(object, *shieldObject);
@@ -746,6 +751,21 @@ void MagicShieldSystem::FollowSpellRadius(entt::entity spell, float radius)
 
 void MagicShieldSystem::RemoveWithSpell(entt::entity spell)
 {
+	// The reactions that the miracle kept after the world destroyed its object go with it
+	std::vector<uint32_t> kept;
+	for (const auto& [id, reaction] : _reactions)
+	{
+		if (reaction.object == spell)
+		{
+			kept.push_back(id);
+		}
+	}
+	// In the order of their numbers: the order of the map is different on each C++ library
+	std::ranges::sort(kept);
+	for (const auto id : kept)
+	{
+		RemoveReaction(id, true);
+	}
 	const auto known = _objects.find(spell);
 	if (known == _objects.end())
 	{

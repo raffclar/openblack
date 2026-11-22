@@ -322,4 +322,105 @@ TEST_F(ShieldCloseDown, TheWorldDestroysAFadingDomeAndItsClosedDownMiracleKeepsN
 	EXPECT_TRUE(_shields.LostObject(spell));
 }
 
+/// The reactions of the reaction system of a kind, with their initiator
+std::vector<ReactionSystemInterface::Active> ReactionsOfKind(Reaction type)
+{
+	std::vector<ReactionSystemInterface::Active> found;
+	for (const auto& active : Locator::reactionSystem::value().GetReactions())
+	{
+		if (active.source.type == type)
+		{
+			found.push_back(active);
+		}
+	}
+	return found;
+}
+
+TEST_F(ShieldCloseDown, TheFallOfADomeThatTheWorldDestroysIsAReactionOfItsMiracleUntilTheMiracleGoes)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto spell = Cast(MagicType::PhysicalShield);
+	// The miracle's last event was at another place than its cast
+	constexpr glm::vec3 k_Strike {510.0f, 0.0f, 495.0f};
+	registry.Get<Spell>(spell).position = k_Strike;
+	_shields.ProcessTurn();
+	const auto object = _shields.ObjectOf(spell);
+	ASSERT_NE(object, static_cast<entt::entity>(entt::null));
+
+	// The blast breaks the shield, then destroys its dome
+	_shields.ShieldStruck(spell, true);
+	ASSERT_EQ(ReactionsOfKind(Reaction::ReactToMagicShieldDestroyed).size(), 1u);
+	EXPECT_EQ(registry.Get<const MagicShield>(object).reaction, 0u);
+	_shields.ObjectDestroyed(object);
+	ASSERT_FALSE(registry.Valid(object));
+	EXPECT_TRUE(_shields.LostObject(spell));
+
+	// The fall stays at the place of the last event of the miracle while the miracle runs
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		const auto fall = ReactionsOfKind(Reaction::ReactToMagicShieldDestroyed);
+		ASSERT_EQ(fall.size(), 1u);
+		EXPECT_EQ(fall.front().source.initiator, spell);
+		EXPECT_EQ(fall.front().source.position, k_Strike);
+		_shields.ProcessTurn();
+	}
+
+	// It goes with the miracle
+	registry.Destroy(spell);
+	_shields.ProcessTurn();
+	EXPECT_TRUE(ReactionsOfKind(Reaction::ReactToMagicShieldDestroyed).empty());
+	EXPECT_FALSE(_shields.LostObject(spell));
+}
+
+TEST_F(ShieldCloseDown, TheStrikesOfADomeThatTheWorldDestroysStayWithItsMiracleAndTheStandingReactionGoes)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto spell = Cast(MagicType::PhysicalShield);
+	_shields.ProcessTurn();
+	const auto object = _shields.ObjectOf(spell);
+	ASSERT_NE(object, static_cast<entt::entity>(entt::null));
+	_shields.ShieldStruck(spell, false);
+	ASSERT_EQ(ReactionsOfKind(Reaction::ReactToMagicShieldStruck).size(), 1u);
+	ASSERT_EQ(ReactionsOfKind(Reaction::ReactToMagicShield).size(), 1u);
+
+	_shields.ObjectDestroyed(object);
+	EXPECT_TRUE(ReactionsOfKind(Reaction::ReactToMagicShield).empty());
+	const auto struck = ReactionsOfKind(Reaction::ReactToMagicShieldStruck);
+	ASSERT_EQ(struck.size(), 1u);
+	EXPECT_EQ(struck.front().source.initiator, spell);
+}
+
+TEST_F(ShieldCloseDown, AScriptThatDeletesTheMiracleRemovesTheFallThatItKeeps)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto spell = Cast(MagicType::PhysicalShield);
+	_shields.ProcessTurn();
+	const auto object = _shields.ObjectOf(spell);
+	ASSERT_NE(object, static_cast<entt::entity>(entt::null));
+	_shields.ShieldStruck(spell, true);
+	_shields.ObjectDestroyed(object);
+	ASSERT_EQ(ReactionsOfKind(Reaction::ReactToMagicShieldDestroyed).size(), 1u);
+
+	_shields.RemoveWithSpell(spell);
+	EXPECT_TRUE(ReactionsOfKind(Reaction::ReactToMagicShieldDestroyed).empty());
+	EXPECT_TRUE(registry.Valid(spell));
+}
+
+TEST_F(ShieldCloseDown, TheFallOfADomeThatFadesAloneGoesWithTheDome)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto spell = Cast(MagicType::PhysicalShield);
+	_shields.ProcessTurn();
+	const auto object = _shields.ObjectOf(spell);
+	ASSERT_NE(object, static_cast<entt::entity>(entt::null));
+	_shields.ShieldStruck(spell, true);
+	ASSERT_EQ(ReactionsOfKind(Reaction::ReactToMagicShieldDestroyed).size(), 1u);
+
+	// The miracle goes first, and the dome then fades alone with no reactions
+	registry.Destroy(spell);
+	_shields.ProcessTurn();
+	EXPECT_TRUE(registry.Valid(object));
+	EXPECT_TRUE(ReactionsOfKind(Reaction::ReactToMagicShieldDestroyed).empty());
+}
+
 } // namespace

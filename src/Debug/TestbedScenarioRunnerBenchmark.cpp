@@ -62,6 +62,7 @@
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -313,6 +314,12 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	registry.Each<const ecs::components::MagicShield>([&standingReactions](const ecs::components::MagicShield& shield) {
 		standingReactions += shield.reaction != 0 ? 1 : 0;
 	});
+	// The reactions to the fall of a shield
+	const auto fallReactions = Locator::reactionSystem::has_value()
+	                               ? static_cast<size_t>(std::ranges::count(
+	                                     Locator::reactionSystem::value().GetReactions(), Reaction::ReactToMagicShieldDestroyed,
+	                                     [](const auto& active) { return active.source.type; }))
+	                               : 0;
 	return {
 	    {"placed", registry.Size<Transform>()},
 	    {"creatures", registry.Size<Creature>()},
@@ -327,6 +334,7 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	    {"closed shield miracles", closedShieldMiracles},
 	    {"fading domes", fadingDomes},
 	    {"standing shield reactions", standingReactions},
+	    {"shield fall reactions", fallReactions},
 	};
 }
 
