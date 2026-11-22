@@ -245,6 +245,15 @@ struct GlobalFigures
 };
 /// Every this many game turns the global figures change
 inline constexpr uint32_t k_GlobalFiguresEvery = 10;
+
+/// True when the global figures change at the end of a turn. A turn whose input stopped the clock, by a pause or the
+/// temple, uses half the period. The turn count does not move on in that turn, so a count that half the period divides
+/// also changes the figures.
+[[nodiscard]] constexpr bool GlobalFiguresDue(uint32_t turn, bool clockStopped)
+{
+	const uint32_t every = clockStopped ? k_GlobalFiguresEvery / 2 : k_GlobalFiguresEvery;
+	return turn % every == 0;
+}
 /// A random number below a bound, from the game's local random numbers
 using LocalRandom = std::function<uint32_t(int32_t)>;
 /// The invented lines of code a step adds: the towns at the start times 10,130, and a random part of a fifth of that

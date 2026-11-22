@@ -153,6 +153,16 @@ TEST(GameTurnOrder, TheHandsKeepTheirShareOfInfluenceInTheInputOfThePlayers)
 	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::VirtualInfluence));
 }
 
+TEST(GameTurnOrder, TheRingsOfInfluenceTakeThePlacesOfTheirThingsAfterTheWeatherAndBeforeThePlayers)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Snow, Step::InfluenceRings));
+	EXPECT_TRUE(recorder.Before(Step::InfluenceRings, Step::Players));
+	// A paused turn does not move the rings, as it does not move the world
+	const auto ring = std::ranges::find_if(k_Turn, [](const Place& place) { return place.step == Step::InfluenceRings; });
+	EXPECT_FALSE(PlaysWhileStopped(k_Turn, static_cast<size_t>(ring - k_Turn.begin())));
+}
+
 TEST(GameTurnOrder, TheStormsMoveBeforeThePlayersAndTheClimatesAfterTheTimeOfDay)
 {
 	const auto recorder = PlayOneTurn();

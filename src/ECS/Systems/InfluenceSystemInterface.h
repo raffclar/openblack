@@ -199,6 +199,9 @@ public:
 	/// Fixes the reach of each citadel that has no fixed reach yet, in the order of the players. Only the game turn fixes
 	/// the reaches, so every computer and the dedicated server keep them in the same order. A question does not fix them.
 	virtual void FixCitadelReaches() = 0;
+	/// The rings of influence that scripts made on things take the places of their things, and a ring whose thing is not
+	/// there goes. The turn does this one time, before the players do their turns.
+	virtual void ProcessRings() {}
 
 	[[nodiscard]] virtual std::span<const influence::Circle> GetCircles() const = 0;
 	/// Whether a player's border shows yet: from the first time their temple stands wholly built on the land

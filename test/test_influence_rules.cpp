@@ -269,3 +269,15 @@ TEST(InfluenceRules, TheCheatOfInfiniteInfluenceGivesNoInfluenceInTheAntiInfluen
 	// fourth land
 	EXPECT_FLOAT_EQ(CheatInfluence(true), 0.0f);
 }
+
+TEST(InfluenceRules, ARingOnAThingFollowsItAndGoesWithIt)
+{
+	using openblack::influence_rules::RingTurn;
+	using openblack::influence_rules::TurnOfRing;
+	// A ring at a place stays there, also when no thing is given
+	EXPECT_EQ(TurnOfRing(false, false), RingTurn::Stays);
+	EXPECT_EQ(TurnOfRing(false, true), RingTurn::Stays);
+	// A ring on a thing takes the place of the thing while the thing is there, and goes when the thing goes
+	EXPECT_EQ(TurnOfRing(true, true), RingTurn::Follows);
+	EXPECT_EQ(TurnOfRing(true, false), RingTurn::Goes);
+}

@@ -111,4 +111,26 @@ struct FoundedTownCentre
 	return inScriptAntiInfluence ? 0.0f : 1.0f;
 }
 
+/// What a ring of influence that a script made does in its step of the turn
+enum class RingTurn : uint8_t
+{
+	/// The ring stays where it is
+	Stays,
+	/// The ring takes the place of its thing
+	Follows,
+	/// The ring goes, because its thing is not there now
+	Goes,
+};
+
+/// The step of a ring of influence in the turn. A ring at a place stays there. A ring on a thing takes the place of the
+/// thing one time in each turn, before the players do their turns. When the thing is not there, the ring goes.
+[[nodiscard]] constexpr RingTurn TurnOfRing(bool onThing, bool thingThere)
+{
+	if (!onThing)
+	{
+		return RingTurn::Stays;
+	}
+	return thingThere ? RingTurn::Follows : RingTurn::Goes;
+}
+
 } // namespace openblack::influence_rules
