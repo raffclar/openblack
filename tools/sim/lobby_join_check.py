@@ -74,7 +74,7 @@ from map_download_check import CDP, CHROME, NO_WINDOW, Processes, free_port, mak
 ACCOUNT = "LobbyJoinWeb"
 # The window of headless Chrome in CSS pixels, and the height of the site's header bar over the game's frame
 WINDOW = (1280, 1121)
-FRAME_TOP = 97
+FRAME_TOP = 84
 # The game draws its front end at 1280x1024; the page moves the game's pointer 1.25 pixels for each pixel of a page
 # movement under the lock
 POINTER_SCALE = 0.8
@@ -82,7 +82,9 @@ LOCK_AT = (640, 512)
 # Trees near the temple of slot 0 on mpm_4p_1 in the view of the start (game pixels of a 1280x1024 frame)
 TREE_POINTS = [(215, 372), (240, 360), (190, 380), (690, 178), (735, 192), (600, 172)]
 # The first line of the lobby list in the front end
-LOBBY_LINE = (320, 336)
+LOBBY_LINE = (300, 316)
+# The button at the bottom right of the lobby list that joins the picked game
+JOIN_BUTTON = (1225, 946)
 SERVER_PARTS = re.compile(r"parts from the server's world at turn (\d+)")
 SERVER_COUNTS = re.compile(r"Slot (\d+): (\d+) checksums compared, (\d+) the same")
 
@@ -117,9 +119,9 @@ class Steps:
         self.wait(1.0)
 
     def move(self, x, y, count=10, ms=400, buttons=0):
-        dx = (x - self.pointer[0]) / POINTER_SCALE / count
-        dy = (y - self.pointer[1]) / POINTER_SCALE / count
-        self.step(0.3, {"do": "synth-move", "dx": dx, "dy": dy, "count": count, "ms": ms, "buttons": buttons})
+        """Moves the game's pointer onto a place of the frame. The script of the page follows the pointer on the real
+        canvas, so the place holds at the size of the canvas that the page has"""
+        self.step(0.3, {"do": "pointer-to", "x": x, "y": y + FRAME_TOP, "count": count, "ms": ms, "buttons": buttons})
         self.pointer = [x, y]
         self.wait(ms / 1000.0 + 0.1)
 
@@ -176,18 +178,15 @@ def front_end_steps(steps, new_profile, land_seconds=None):
         steps.step(0.5, {"do": "eval", "expression": "document.getElementById('join-online').click(), true"})
         steps.wait_log("Join Online Game of the page: the multiplayer front end opens", 300)
         steps.wait(4)
-    steps.shot("f0-connections")
-    steps.click(1200, 912)
-    steps.click(448, 656)
-    steps.click(1200, 912)
+    # With the sign-in of the site, the front end opens at the lobby list of the Internet
     steps.wait_log("The lobby session comes from the sign-in of the site", 120)
     steps.wait(6)
     steps.shot("f1-list")
     # The list has one lobby, the lobby of the account: a click on its line, then the button of the join
-    steps.click(LOBBY_LINE[0], LOBBY_LINE[1])
+    steps.click(*LOBBY_LINE)
     steps.wait(1)
     steps.shot("f2-picked")
-    steps.click(1200, 912)
+    steps.click(*JOIN_BUTTON)
     steps.wait(4)
     steps.shot("f3-room")
 
