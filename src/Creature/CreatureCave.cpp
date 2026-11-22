@@ -63,6 +63,10 @@ temple_scrolls::CreatureFacts FactsOf(const Snapshot& snapshot)
 	facts.poo = Percent(needs.poo);
 	facts.alignment = std::clamp(snapshot.alignment, -1.0f, 1.0f);
 	facts.warmth = std::clamp(needs.warmth, -1.0f, 1.0f);
+	if (snapshot.spellOn.has_value())
+	{
+		facts.miracleApplied = static_cast<int32_t>(*snapshot.spellOn);
+	}
 	for (size_t i = 0; i < facts.actionsKnown.size(); ++i)
 	{
 		const auto skill = i + k_FirstScrollSkill;

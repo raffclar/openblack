@@ -568,6 +568,29 @@ void AddCaveScrollZoom(std::vector<Scenario>& all)
 	});
 }
 
+/// The attributes scroll of the Creature Cave while a spell is on the player's creature
+void AddCaveScrollSpellReceived(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "creature_mode.cave_scroll_spell_received",
+	    .name = "The attributes scroll names the spell on the creature",
+	    .facet = Facet::CreatureMode,
+	    .description = "The strength spell goes on the player's creature after one second. Then the player goes into the "
+	                   "temple and its Creature Cave, and the camera looks at the creature's attributes scroll.",
+	    .expected = "The spells received line of the scroll names the strength spell, not \"none\". The world stays "
+	                "paused in the temple, so the spell stays on the creature and the line does not change.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .miracles = {{.type = MagicType::CreatureSpellStrong,
+	                  .target = MiracleCast::Target::Creature,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 3.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 10.0f, .waitUntilFree = true, .value = 0}},
+	});
+}
+
 /// The copy of the player's ape in the Creature Cave, which has hair of its own
 void AddCaveCopyHair(std::vector<Scenario>& all)
 {
@@ -810,6 +833,7 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 	AddCaveOwnTattooPicture(all);
 	AddMenuTattooEditor(all);
 	AddCaveScrollZoom(all);
+	AddCaveScrollSpellReceived(all);
 	AddCaveCopyHair(all);
 	AddCaveTrophies(all);
 	AddTattooEditorLowestView(all);

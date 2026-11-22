@@ -46,6 +46,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/PosedModel.h"
@@ -252,6 +253,15 @@ std::optional<creature_cave::Snapshot> CreatureCaveSystem::Snapshot() const
 	if (const auto* record = registry.TryGet<const CreatureFightRecord>(*creature))
 	{
 		snapshot.fightBalance = record->tendency;
+	}
+	if (const auto* spells = registry.TryGet<const CreatureSpells>(*creature))
+	{
+		const auto& slots = spells->spells.slots;
+		const auto on = std::ranges::find_if(slots, [](const auto& slot) { return slot.phase != creature_spells::Phase::Off; });
+		if (on != slots.end())
+		{
+			snapshot.spellOn = static_cast<uint32_t>(std::distance(slots.begin(), on));
+		}
 	}
 	const auto* mind = registry.TryGet<const CreatureMindState>(*creature);
 	if (mind == nullptr)
