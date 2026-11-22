@@ -168,6 +168,38 @@ TEST(SavedSystemState, TheOwnersOfTheDialogueAndOfTheSpeedComeBack)
 	EXPECT_EQ(loadedControl.GetCameraDetails().focus, glm::vec3(4.0f, 5.0f, 6.0f));
 }
 
+TEST(SavedSystemState, TheWordsOfTheSpeedShowAfterALoadAlsoWhenATaskHoldsTheSpeed)
+{
+	ScriptControlSystem control;
+	EXPECT_FALSE(control.HidesSpeedWords());
+	control.StartGameSpeed(5);
+	EXPECT_TRUE(control.HidesSpeedWords());
+	ScriptControlSystem loaded;
+	LoadInto(loaded, StateOf(control));
+	// The task holds the speed again, but the words of a slower or quicker game are not hidden
+	EXPECT_EQ(loaded.GetGameSpeedOwner(), 5u);
+	EXPECT_FALSE(loaded.HidesSpeedWords());
+	// Only a new start of the control hides them again
+	loaded.StartGameSpeed(5);
+	EXPECT_TRUE(loaded.HidesSpeedWords());
+}
+
+TEST(SavedSystemState, TheEndOfTheControlOfTheSpeedShowsTheWordsAgain)
+{
+	ScriptControlSystem control;
+	control.StartGameSpeed(5);
+	// Another task does not take the speed or change the words
+	control.StartGameSpeed(6);
+	EXPECT_EQ(control.GetGameSpeedOwner(), 5u);
+	EXPECT_FALSE(control.EndGameSpeed(6));
+	EXPECT_TRUE(control.HidesSpeedWords());
+	EXPECT_TRUE(control.EndGameSpeed(5));
+	EXPECT_FALSE(control.HidesSpeedWords());
+	control.StartGameSpeed(6);
+	control.Reset();
+	EXPECT_FALSE(control.HidesSpeedWords());
+}
+
 TEST(SavedSystemState, TheCreaturesVoiceSwitchesComeBack)
 {
 	CreatureAudioSystem saved;

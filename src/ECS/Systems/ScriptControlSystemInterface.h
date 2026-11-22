@@ -65,6 +65,9 @@ public:
 	[[nodiscard]] virtual bool MaySetGameSpeed(uint32_t task) const = 0;
 	/// The task with the game's speed, 0 for none
 	[[nodiscard]] virtual uint32_t GetGameSpeedOwner() const = 0;
+	/// Whether the words of a slower or quicker game stay hidden. A task that takes the game's speed hides them, and
+	/// the end of its control shows them again. A load does not hide them again, also when a task holds the speed.
+	[[nodiscard]] virtual bool HidesSpeedWords() const = 0;
 
 	/// What a stopped task gave back
 	struct Released

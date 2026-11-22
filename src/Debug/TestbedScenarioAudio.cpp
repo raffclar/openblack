@@ -1208,6 +1208,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::SetGameSpeed, .delaySeconds = 12.0f, .amount = 1.0f}},
 	});
 
+	// A saved game loads at the normal speed: the load ends the control of the game speed first
+	all.push_back({
+	    .id = "interface.speed_after_load",
+	    .name = "A loaded game goes at the normal speed",
+	    .facet = Facet::Interface,
+	    .description = "After a second the game goes at half speed, as Alt and 1 does. Four seconds later the game saves into "
+	                   "slot 0, and four seconds after that it loads the slot.",
+	    .expected = "Slow Down Time shows at the top middle of the screen. After the load, the game goes at the normal "
+	                "speed, and the words fade out.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SetGameSpeed, .delaySeconds = 1.0f, .amount = 0.5f},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 4.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "temple.save_room_pictures",
 	    .name = "The save game room shows the picture of a quick save",
