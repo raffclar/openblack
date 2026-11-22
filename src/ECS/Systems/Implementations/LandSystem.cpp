@@ -152,6 +152,7 @@
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
+#include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
@@ -1261,6 +1262,12 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	if (!rules.scriptScreenKept)
 	{
 		Locator::cinematicDirectorSystem::value().Reset();
+	}
+	// The scripts start again on each change of land but the story's. Then the advisors stop their cheer of the turn of
+	// the camera, also when a script did not stop it. On the story's change of land, the cheer continues.
+	if (!rules.scriptScreenKept && Locator::turnCheerSystem::has_value())
+	{
+		Locator::turnCheerSystem::value().Stop();
 	}
 	// The opening's light and hand go
 	Locator::introSystem::value().ReleaseAll();

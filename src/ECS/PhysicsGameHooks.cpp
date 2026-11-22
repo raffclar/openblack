@@ -31,6 +31,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureDesires.h"
@@ -93,6 +94,14 @@ namespace living = openblack::physics::living;
 namespace
 {
 using physics_hooks::World;
+
+/// Whether a thing is a mushroom of any kind
+bool IsMushroom(const ecs::Registry& registry, entt::entity object)
+{
+	const auto* mobile = registry.TryGet<const MobileObject>(object);
+	return mobile != nullptr && (mobile->type == MobileObjectInfo::Champi || mobile->type == MobileObjectInfo::MagicMushroom ||
+	                             mobile->type == MobileObjectInfo::Toadstool);
+}
 
 /// Whether a blow can hurt a villager: not one hidden in its home or a building, nor one in a hand
 bool TakesBlows(World& world, entt::entity villager)
@@ -265,7 +274,8 @@ void StrikeShield(World& world, DynamicsSystemInterface& dynamics, entt::entity 
 	{
 		return;
 	}
-	const float momentum = glm::length(hitter->body->velocity) * hitter->body->Mass();
+	// The squares of the speed add from z to x
+	const float momentum = x87::LengthZyx(hitter->body->velocity) * hitter->body->Mass();
 	world.ShieldImpact(shield, impact.hitBy, momentum, hitter->player);
 }
 
@@ -761,7 +771,15 @@ void PhysicsGameHooks::ReactToImpact(DynamicsSystemInterface& dynamics, PhysicsE
 				// help
 				const bool helpCounts = registry.AnyOf<StoragePit, WorshipSite>(hitter) && impact.player.has_value() &&
 				                        impact.player == world.OwnPlayer();
-				const bool taken = world.TakeObject(hitter, object, impact.player);
+				// A mushroom gives the store the player of the store's own body, not its own player. That player is
+				// usually none, so the gift goes to no player.
+				auto giver = impact.player;
+				if (IsMushroom(registry, object))
+				{
+					const auto* store = dynamics.Find(hitter);
+					giver = store != nullptr ? store->player : std::nullopt;
+				}
+				const bool taken = world.TakeObject(hitter, object, giver);
 				if (taken && helpCounts)
 				{
 					world.CountHelpEvent(help::profile::k_ThrownIntoStore);
@@ -776,7 +794,13 @@ void PhysicsGameHooks::ReactToImpact(DynamicsSystemInterface& dynamics, PhysicsE
 				if (const auto* other = registry.TryGet<const Pot>(hitter);
 				    other != nullptr && world.ResourceOf(hitter).type == resource.type)
 				{
-					world.AddToPile(hitter, resource.type, resource.amount, resource.poisoned);
+					// The town near the pile can answer the drop of the player that threw the pot, if the pile took a
+					// part of it
+					const auto added = world.AddToPile(hitter, resource.type, resource.amount, resource.poisoned);
+					if (added != 0 && impact.player.has_value())
+					{
+						world.AnswerDrop(hitter, *impact.player);
+					}
 					world.LeaveGhost(object);
 					world.Remove(object);
 					return;

@@ -31,6 +31,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreaturePlanner.h"
@@ -41,6 +42,8 @@
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicShield.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/StoragePit.h"
@@ -223,12 +226,17 @@ public:
 	{
 		return std::ranges::find(stores, store) != stores.end();
 	}
-	bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> /*giver*/) override
+	bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) override
 	{
 		taken.emplace_back(store, object);
+		givers.push_back(giver);
 		return true;
 	}
-	void AddToPile(entt::entity /*pile*/, ResourceType /*type*/, uint32_t /*amount*/, bool /*poisoned*/) override {}
+	uint32_t AddToPile(entt::entity /*pile*/, ResourceType /*type*/, uint32_t amount, bool /*poisoned*/) override
+	{
+		return std::min(amount, pileRoom);
+	}
+	void AnswerDrop(entt::entity pile, PlayerNames giver) override { answeredDrops.emplace_back(pile, giver); }
 	void CountHelpEvent(uint32_t event) override { helpEvents.push_back(event); }
 	void SetDying(entt::entity /*animal*/) override {}
 	[[nodiscard]] bool HasMinds() const override { return true; }
@@ -298,6 +306,11 @@ public:
 	std::vector<StruckVortex> struckVortices;
 	std::vector<uint32_t> helpEvents;
 	std::vector<std::pair<entt::entity, entt::entity>> taken;
+	/// The player that each take gave the store
+	std::vector<std::optional<PlayerNames>> givers;
+	/// How much a pile takes of what it is given
+	uint32_t pileRoom {1000};
+	std::vector<std::pair<entt::entity, PlayerNames>> answeredDrops;
 	std::vector<Deed> deeds;
 	std::vector<float> feedbacks;
 	std::vector<std::pair<uint32_t, float>> desireSources;
@@ -686,6 +699,77 @@ TEST(PhysicsGameHooks, AStoragePitOrAWorshipSiteThatTakesAThrowOfTheLocalPlayerC
 	strike(other, PlayerNames::PLAYER_ONE);
 	EXPECT_EQ(f.world->helpEvents.size(), 2u);
 	EXPECT_EQ(f.world->taken.size(), 5u);
+}
+
+TEST(PhysicsGameHooks, AMushroomGivesTheStoreThePlayerOfTheStoresOwnBody)
+{
+	Fixture f;
+	auto& registry = f.world->registry;
+	const auto pit = registry.Create();
+	registry.Assign<StoragePit>(pit);
+	f.world->stores = {pit};
+	const auto strike = [&f, &registry, pit](MobileObjectInfo type) {
+		const auto thing = registry.Create();
+		registry.Assign<MobileObject>(thing, type);
+		f.world->resources[thing] = {.type = ResourceType::Food, .amount = 10};
+		f.struck.entity = thing;
+		f.hooks->ReactToImpact(f.dynamics, f.struck, {.hitBy = pit, .player = PlayerNames::PLAYER_ONE});
+	};
+	// The storage pit has no body in the physics: the mushroom gives the food to no player
+	strike(MobileObjectInfo::Champi);
+	// The body of the storage pit has a player: the mushrooms give the food to that player
+	auto& pitEntry = f.dynamics.AddRock(pit, glm::vec3(0.0f), PlayerNames::PLAYER_TWO);
+	strike(MobileObjectInfo::MagicMushroom);
+	strike(MobileObjectInfo::Toadstool);
+	pitEntry.player = std::nullopt;
+	strike(MobileObjectInfo::Toadstool);
+	const std::vector<std::optional<PlayerNames>> givers {std::nullopt, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_TWO,
+	                                                      std::nullopt};
+	EXPECT_EQ(f.world->givers, givers);
+	// The help counts the player that threw the mushroom
+	EXPECT_EQ(f.world->helpEvents.size(), 4u);
+	// Other things give their own player
+	strike(MobileObjectInfo::Ball);
+	EXPECT_EQ(f.world->givers.back(), std::optional(PlayerNames::PLAYER_ONE));
+}
+
+TEST(PhysicsGameHooks, APileThatTakesAPartOfAPotLetsTheTownNearItAnswerTheThrower)
+{
+	Fixture f;
+	auto& registry = f.world->registry;
+	const auto pile = registry.Create();
+	registry.Assign<Pot>(pile, Pot {.amount = 50, .maxAmount = 100, .type = PotInfo::FoodPile});
+	f.world->resources[pile] = {.type = ResourceType::Food, .amount = 50};
+	const auto strike = [&f, &registry, pile](std::optional<PlayerNames> player) {
+		const auto pot = registry.Create();
+		registry.Assign<Pot>(pot, Pot {.amount = 20, .maxAmount = 100, .type = PotInfo::FoodPot});
+		f.world->resources[pot] = {.type = ResourceType::Food, .amount = 20};
+		f.struck.entity = pot;
+		f.hooks->ReactToImpact(f.dynamics, f.struck, {.hitBy = pile, .player = player});
+	};
+	strike(PlayerNames::PLAYER_ONE);
+	// A pot of no player, or a pile with no room, gets no answer
+	strike(std::nullopt);
+	f.world->pileRoom = 0;
+	strike(PlayerNames::PLAYER_ONE);
+	const std::vector<std::pair<entt::entity, PlayerNames>> answered {{pile, PlayerNames::PLAYER_ONE}};
+	EXPECT_EQ(f.world->answeredDrops, answered);
+}
+
+TEST(PhysicsGameHooks, AShieldTakesTheSpeedOfWhatStruckItWithTheSquaresAddedFromZToX)
+{
+	Fixture f;
+	const auto shield = f.world->registry.Create();
+	f.world->registry.Assign<MagicShield>(shield, MagicShield {.kind = MagicShield::Kind::Physical});
+	// From z to x the squares of this speed give a length one step less than from x to z
+	const glm::vec3 velocity(3.115586280822754f, 19.790283203125f, 13.4055757522583f);
+	const auto rock = f.world->registry.Create();
+	f.dynamics.AddRock(rock, velocity, PlayerNames::PLAYER_ONE);
+	f.struck.entity = shield;
+	f.hooks->ReactToImpact(f.dynamics, f.struck, {.hitBy = rock, .player = PlayerNames::PLAYER_ONE});
+	ASSERT_EQ(f.world->shields.size(), 1U);
+	EXPECT_EQ(f.world->shields[0].momentum, openblack::x87::LengthZyx(velocity) * 10.0f);
+	EXPECT_NE(f.world->shields[0].momentum, glm::length(velocity) * 10.0f);
 }
 
 TEST(PhysicsGameHooks, RocksBreakBuildings)

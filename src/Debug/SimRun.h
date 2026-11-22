@@ -209,6 +209,19 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 /// reports. A frame with work that the tool waits for still plays, for example a scenario to lay out or a picture.
 [[nodiscard]] bool SkipsHeldFrame(bool steppedByTool, bool paused, bool workWaits);
 
+/// Whether a frame that plays while the tool holds the run after a step with a fixed frame time only draws. Such a frame
+/// gives a picture to the tool. It gets no time, and the steps of the frame that move the world, the hand and the
+/// camera wait. Thus a picture shows the last stepped frame again. A scenario that waits to be laid out plays its frame.
+[[nodiscard]] bool OnlyDrawsHeldFrame(bool holdsFixedStep, bool scenarioWaits);
+
+/// The time that a frame gives to the hand, the camera and the other animations of the frames:
+/// - the fixed frame time, when the frames take a fixed time;
+/// - the time of the last frame that played, when the tool held the frames before this frame;
+/// - else the time that the wall clock measured since the last frame.
+/// The frames that the tool holds do not play. Thus the wall clock time over them does not go into the next frame.
+[[nodiscard]] std::chrono::microseconds FrameDeltaTime(std::chrono::microseconds measured, std::chrono::microseconds lastPlayed,
+                                                       bool heldBefore, std::optional<std::chrono::microseconds> fixed);
+
 /// The loss of a temple from the text "player:turn", such as "1:300". None for another text or a player past the seventh.
 /// Reads PLAYER:TURN or FIRST-LAST:TURN. The players are numbers from 0 to the last god of a network game of 32 gods.
 [[nodiscard]] std::optional<TempleLoss> ParseTempleLoss(std::string_view text);

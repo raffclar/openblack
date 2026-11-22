@@ -210,9 +210,9 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	}
 	// A game that steps deterministically does the steps of one frame for each turn that waits. The steps before the
 	// turns wait in each frame that started with a turn that waited, and the steps after the turns wait until the turn
-	// ends.
+	// ends. A frame that only draws a picture while the tool holds the run does none of these steps.
 	if (Locator::time::value().GetFixedFrameTime().has_value() && game_frame::WaitsForWholeStepTurn(step) &&
-	    (step < Step::Turns ? _frameWithoutTime : turnWaits))
+	    (step < Step::Turns ? _frameWithoutTime : (turnWaits || _onlyDrawsHeldFrame)))
 	{
 		return true;
 	}

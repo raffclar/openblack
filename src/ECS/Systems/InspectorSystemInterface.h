@@ -82,6 +82,14 @@ public:
 	[[nodiscard]] virtual bool InputWaits() const { return false; }
 	/// Tools: true while a tool holds the run: the game is paused between the tool's steps, or a step of the tool runs
 	[[nodiscard]] virtual bool HoldsRun() const { return false; }
+	/// Tools: true while the game stays paused after a step with a fixed frame time. The frames do not play then, so
+	/// that the animations of the frames move only in the frames that the tool steps.
+	[[nodiscard]] virtual bool HoldsFixedStep() const { return false; }
+	/// Tools: true when the game will stay paused after a step with a fixed frame time once the inspector next serves a
+	/// frame: it is held now, or the step ends then.
+	[[nodiscard]] virtual bool HoldsFixedStepAtService() const { return false; }
+	/// Tools: true while a picture that the inspector asked for needs the next frames to play
+	[[nodiscard]] virtual bool PictureWaits() const { return false; }
 	/// Tools: the next land or scenario that starts records the input made from its first frame on, with the frames as
 	/// ReplayOnLoad reads them. The recording goes to the file as the inspector stops.
 	virtual void RecordInputOnLoad([[maybe_unused]] const std::filesystem::path& path) {}

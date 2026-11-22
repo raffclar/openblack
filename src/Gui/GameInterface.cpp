@@ -2427,6 +2427,7 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	                            .demonstration = in.demonstration,
 	                            .cameraBusy = in.cameraBusy,
 	                            .crossNudge = in.crossNudge,
+	                            .crossHidden = in.crossHidden,
 	                        });
 	const auto screen = glm::ivec2(resolution);
 	const auto centre = tricons::Place(in.hand, in.cursor, screen, in.cinemaBars, in.leans);

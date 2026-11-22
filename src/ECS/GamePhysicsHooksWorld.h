@@ -56,7 +56,8 @@ public:
 	[[nodiscard]] bool HasStores() const override;
 	[[nodiscard]] bool IsStore(entt::entity store, ResourceType type) const override;
 	bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) override;
-	void AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) override;
+	uint32_t AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) override;
+	void AnswerDrop(entt::entity pile, PlayerNames giver) override;
 	void CountHelpEvent(uint32_t event) override;
 	void SetDying(entt::entity animal) override;
 	[[nodiscard]] bool HasMinds() const override;

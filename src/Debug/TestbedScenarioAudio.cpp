@@ -1253,6 +1253,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
 	});
 
+	// A saved game loads with no fade of the scripts: the load ends the fade first, and the save does not keep it
+	all.push_back({
+	    .id = "interface.fade_after_load",
+	    .name = "A loaded game shows no fade of the scripts",
+	    .facet = Facet::Interface,
+	    .description = "After a second a script fades the picture to black over two seconds. Four seconds later the game "
+	                   "saves into slot 0, and four seconds after that it loads the slot.",
+	    .expected = "The picture goes black and stays black until the load. After the load, the picture shows the land at "
+	                "once, with no black.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::ScriptFade, .delaySeconds = 1.0f, .value = 1, .amount = 2.0f},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 4.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "temple.save_room_pictures",
 	    .name = "The save game room shows the picture of a quick save",
@@ -1608,6 +1623,26 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .repeatFrom = 1,
 	});
 
+	// As the hum's land, with a gold scroll out past the border, in the middle of the screen
+	all.push_back({
+	    .id = "interface.red_cross_scroll",
+	    .name = "The red cross over a scroll out of the influence",
+	    .facet = Facet::Interface,
+	    .description = "The hand goes out past the north edge of the player's influence, onto a gold scroll there, and "
+	                   "off it again, every three seconds.",
+	    .expected = "Out of the influence the red cross shows by the hand, faint. Over the scroll the cross goes at once, "
+	                "because a scroll takes the hand out of the influence too. A quarter of a second after the hand "
+	                "leaves the scroll, the cross comes back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 330.0f}, .look = {0.0f, 0.0f, 420.0f}},
+	    .highlights = {{.kind = 3, .offset = {0.0f, 420.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.95f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.5f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.3f, 0.5f}}},
+	    .repeatFrom = 2,
+	});
+
 	// Two teleport stones the villagers jump between, the first jumps heard from the land, the later ones while the
 	// camera is in the temple
 	constexpr glm::vec2 k_StoneA {-40.0f, 20.0f};
@@ -1761,21 +1796,40 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	});
 
 	// A storm lets down bolts round a camera low over the land. The thunder of each bolt travels at the speed of sound,
-	// but the game forgets it when the bolt goes first.
+	// and it waits on after its bolt goes (deviation 291).
 	all.push_back({
 	    .id = "audio.thunder_ends_with_its_bolt",
-	    .name = "The thunder of a far bolt is not heard",
+	    .name = "The thunder of a bolt comes after its bolt is gone",
 	    .facet = Facet::Audio,
 	    .description =
 	        "A thunderstorm over the whole island at noon. Its forked bolts come down every one to two seconds "
 	        "within 300 m of the camera, which looks along the land from 30 m up at two trees. The audio log gives each "
-	        "thunder that the game forgets.",
+	        "thunder as it starts.",
 	    .expected = "A bolt is gone after 0.4 to 0.8 seconds. Its thunder waits 1 second for each 347 m to the camera. "
-	                "The thunder of a near bolt comes after its wait. The thunder of a bolt that goes before the wait "
-	                "ends is not heard: the debug log (audio) says \"Particles: ... was not heard, its particle went "
-	                "first\". So only bolts nearer than about 140 m to 280 m make thunder, as in the game.",
+	                "Each bolt makes thunder after its wait, also when the bolt is gone before the wait ends. The "
+	                "debug log (audio) says \"Thunder ... starts ... m from the listener\" for each thunder. In the "
+	                "game, only bolts nearer than about 140 m to 280 m make thunder (deviation 291).",
 	    .environment = {.weather = Weather::Thunderstorm, .boltSeconds = glm::vec2(1.0f, 2.0f), .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -150.0f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 45.0f}}, {.type = TreeInfo::Conifer, .offset = {35.0f, 60.0f}}},
+	});
+
+	// Three bolts strike at three distances from a camera at a corner of the land, so that the crack, the rumble and the
+	// far rumble are heard one after the other (deviation 291)
+	all.push_back({
+	    .id = "audio.thunder_far_bolts",
+	    .name = "Thunder gets quieter and lower with distance, and the whole land hears it",
+	    .facet = Facet::Audio,
+	    .description = "The camera is near a corner of the land, 40 m up, and looks to the middle. A bolt strikes 6.6 km "
+	                   "away after 1 second, a bolt strikes 110 m away after 2.7 seconds, and a bolt strikes 2.3 km "
+	                   "away after 3.5 seconds. The command log gives the distance of each bolt.",
+	    .expected = "At approximately 3 seconds, the near thunder is a loud, sharp crack. At approximately 10 seconds, the "
+	                "middle thunder is quieter and it is a rumble with less crack. At approximately 20 seconds, the far "
+	                "thunder is a quiet, low rumble. In the game, only the near thunder is heard.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-2300.0f, 40.0f, -2300.0f}, .look = {-2000.0f, 0.0f, -2000.0f}},
+	    .commands = {{.kind = Kind::StormBolt, .delaySeconds = 1.0f, .point = {2400.0f, 2400.0f}},
+	                 {.kind = Kind::StormBolt, .delaySeconds = 1.7f, .point = {-2250.0f, -2200.0f}},
+	                 {.kind = Kind::StormBolt, .delaySeconds = 0.8f, .point = {-700.0f, -700.0f}}},
 	});
 }

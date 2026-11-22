@@ -40,6 +40,11 @@ public:
 	[[nodiscard]] bool Stepping() const { return _framesLeft.has_value() || _untilTurn.has_value(); }
 	[[nodiscard]] std::optional<uint32_t> FramesLeft() const { return _framesLeft; }
 	[[nodiscard]] std::optional<uint32_t> UntilTurn() const { return _untilTurn; }
+	/// Whether the step ends at the next call of Frame with this turn, which then pauses the game
+	[[nodiscard]] bool EndsAtFrame(uint32_t turn) const
+	{
+		return (_framesLeft.has_value() && *_framesLeft == 0) || (_untilTurn.has_value() && turn >= *_untilTurn);
+	}
 
 private:
 	std::optional<uint32_t> _framesLeft;
@@ -129,6 +134,19 @@ public:
 	[[nodiscard]] Json State() const;
 	/// Whether the run stays held in a frame that the tool holds: the game is paused and no step releases it
 	[[nodiscard]] bool HoldsFrame() const { return _target.IsPaused() && !_control.Stepping(); }
+	/// Whether the run stays held after a step with a fixed frame time. Then the frames do not play, so that the hand
+	/// and the other animations of the frames move only in the frames that the tool steps.
+	[[nodiscard]] bool HoldsFixedStep() const { return HoldsFrame() && _frameTimeAfterStep.has_value(); }
+	/// Whether the run will hold after a step with a fixed frame time when Frame is next called: it holds now, or the
+	/// step ends there. The frame in which a step ends is a held frame too.
+	[[nodiscard]] bool HoldsFixedStepAtFrame() const
+	{
+		if (!_frameTimeAfterStep.has_value())
+		{
+			return false;
+		}
+		return _control.Stepping() ? _control.EndsAtFrame(_target.GetTurn()) : _target.IsPaused();
+	}
 	/// Whether the tool holds the run: the game is paused between the tool's steps, or a step of the tool runs
 	[[nodiscard]] bool HoldsRun() const { return _target.IsPaused() || _control.Stepping(); }
 	/// The frames served so far
@@ -140,7 +158,7 @@ private:
 	RunTargetInterface& _target;
 	RunControl _control;
 	/// The last step asked for, as game.state reports it once done: what was asked, the frame time it ran with (the
-	/// frame time goes back to what it was once the step ends) and where it started and ended
+	/// frame time goes back to what it was when the game plays again) and where it started and ended
 	struct StepRecord
 	{
 		std::optional<uint32_t> frames;
@@ -154,8 +172,10 @@ private:
 		bool endedByLoad {false};
 	};
 	[[nodiscard]] static Json ToJson(const StepRecord& step);
+	/// Gives back the frame time that the game had before the last step with a fixed frame time
+	void EndFixedStepHold();
 
-	/// The frame time to go back to once a step with a fixed frame time ends
+	/// The frame time to go back to once the game plays again after a step with a fixed frame time
 	std::optional<std::optional<uint32_t>> _frameTimeAfterStep;
 	std::optional<StepRecord> _lastStep;
 	/// Seeded through game.seed: each land or scenario loaded afterwards starts paused

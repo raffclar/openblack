@@ -68,6 +68,7 @@
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
@@ -123,6 +124,9 @@ namespace
 {
 /// How high above its hand another god reports its camera, in metres
 constexpr float k_OtherGodCameraAbove = 30.0f;
+/// How high above the land the cloud of a storm bolt of a scenario is, in metres. The thunder comes from the land under
+/// it.
+constexpr float k_StormBoltCloudHeight = 160.0f;
 } // namespace
 
 std::string Runner::GivePlayerCommand(const Command& command)
@@ -712,6 +716,20 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		Locator::sounds::value().ReleaseEmitterLoop(_bankSample);
 		return "the loop of the sample is released";
+	}
+	case Kind::StormBolt:
+	{
+		if (!Locator::effectRequestSystem::has_value() || !Locator::terrainSystem::has_value())
+		{
+			return "no effects";
+		}
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 cloud {at.x, Locator::terrainSystem::value().GetHeightAt(at) + k_StormBoltCloudHeight, at.y};
+		Locator::effectRequestSystem::value().AddStormBolt(cloud);
+		const auto listener =
+		    Locator::sounds::has_value() ? Locator::sounds::value().GetListener().origin : glm::vec3 {cloud.x, 0.0f, cloud.z};
+		return fmt::format("A storm bolt strikes ({:.0f}, {:.0f}), {:.0f} m across the land from the listener", cloud.x,
+		                   cloud.z, glm::distance(glm::vec2 {listener.x, listener.z}, glm::vec2 {cloud.x, cloud.z}));
 	}
 	case Kind::FillSiteIcons:
 	{

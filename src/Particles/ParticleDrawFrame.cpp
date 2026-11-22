@@ -196,7 +196,10 @@ public:
 	{
 	}
 
-	void Sprite(const sprites::SpriteInstance& instance, std::string_view texture, Mode mode)
+	/// Adds a sprite. It is sorted at its own place, or at `sortPoint` when it is one of a set that the game sorts as one
+	/// thing.
+	void Sprite(const sprites::SpriteInstance& instance, std::string_view texture, Mode mode,
+	            std::optional<glm::vec3> sortPoint = std::nullopt)
 	{
 		const auto material = MaterialOf(texture, mode);
 		if (!material.has_value())
@@ -205,7 +208,7 @@ public:
 		}
 		_frame.items.push_back({.kind = ItemKind::Sprite,
 		                        .index = static_cast<uint32_t>(_frame.sprites.size()),
-		                        .sortPoint = glm::vec3(instance.positionHalfWidth)});
+		                        .sortPoint = sortPoint.value_or(glm::vec3(instance.positionHalfWidth))});
 		_frame.sprites.push_back(instance);
 		_frame.spriteMaterials.push_back(*material);
 	}
@@ -336,6 +339,7 @@ void AddShell(Frame& frame, const Effect::DrawAtom& atom, const ObjectGlow& glow
 
 /// The shower of sparks an atom sends up from its object, each spark as strong as the atom is seen; nothing once the object
 /// has gone. The sparks rise from where the frame draws the object, so that they stay on a thing in the hand or in flight.
+/// The game sorts the shower as one thing at that point, and draws its sparks in their order.
 void AddShower(GroupBuilder& builder, const Effect::DrawAtom& atom, const ObjectShower& shower, const Sources& sources)
 {
 	const auto from = sources.objectDrawnOrigin ? sources.objectDrawnOrigin(shower.object) : std::nullopt;
@@ -354,7 +358,7 @@ void AddShower(GroupBuilder& builder, const Effect::DrawAtom& atom, const Object
 		builder.Sprite(FacingSprite(look->position, look->halfSize, look->angle, static_cast<int>(look->picture),
 		                            static_cast<int>(rising_sparks::k_SparkSheetPictures),
 		                            glm::vec4(1.0f, 1.0f, 1.0f, static_cast<float>(look->alpha) / k_ByteMax)),
-		               rising_sparks::k_SparkSheet, Mode::AlphaTexturedAlphaAdditiveNz);
+		               rising_sparks::k_SparkSheet, Mode::AlphaTexturedAlphaAdditiveNz, *from);
 	}
 }
 

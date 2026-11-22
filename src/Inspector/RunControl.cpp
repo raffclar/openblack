@@ -101,7 +101,9 @@ std::vector<QueryDescription> GameProvider::Describe() const
 	          "Runs the game for some frames or turns from the next frame, then pauses it; poll game.state until "
 	          "stepping is null. A land that loads during the step ends it there: the game is paused at the start of "
 	          "the new land and game.state.last_step has ended_by_land_load true. With fixed_ms each frame takes that long "
-	          "whatever the wall clock says, so that the same input gives the same frames",
+	          "whatever the wall clock says, so that the same input gives the same frames. After a step with fixed_ms the "
+	          "game stays held: it plays no frame and its frame time stays fixed_ms until game.resume, game.frame_time or "
+	          "a step without fixed_ms. A picture taken while it is held shows the last frame again, with no time added",
 	          {{.name = "frames", .type = "integer", .description = "Frames to run", .required = false},
 	           {.name = "turns", .type = "integer", .description = "Game turns to run (ten a second)", .required = false},
 	           {.name = "fixed_ms",
@@ -257,8 +259,17 @@ void GameProvider::Frame()
 		_lastStep->toFrame = _frame;
 		_lastStep->toTurn = _target.GetTurn();
 	}
-	// A step with a fixed frame time gives the frame time back once it has run
-	if (!_control.Stepping() && _frameTimeAfterStep.has_value())
+	// A step with a fixed frame time keeps that time while the game stays paused after it. The game gets its frame time
+	// back when it plays again.
+	if (!_control.Stepping() && !_target.IsPaused())
+	{
+		EndFixedStepHold();
+	}
+}
+
+void GameProvider::EndFixedStepHold()
+{
+	if (_frameTimeAfterStep.has_value())
 	{
 		_target.SetFixedFrameTime(*std::exchange(_frameTimeAfterStep, std::nullopt));
 	}
@@ -290,7 +301,12 @@ QueryResult GameProvider::Run(std::string_view query, const QueryContext& contex
 		{
 			return QueryResult::Error("fixed_ms is a whole number of milliseconds from 1 to 1000");
 		}
-		if (fixed.has_value())
+		// A step without a fixed frame time runs with the frame time that the game had before the last fixed step
+		if (!fixed.has_value())
+		{
+			EndFixedStepHold();
+		}
+		else
 		{
 			if (!_frameTimeAfterStep.has_value())
 			{

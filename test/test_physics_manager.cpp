@@ -671,6 +671,15 @@ TEST(PhysicsTurn, TheWhooshAddsTheSquaresOfTheDistanceFromZToX)
 	EXPECT_TRUE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), after * 0.999f, glm::vec3(0.0f), glm::vec3(-21.0f, 0, 0)));
 }
 
+TEST(PhysicsTurn, TheWhooshAddsTheSquaresOfTheSpeedXAndZFirstThenY)
+{
+	// With x and z first, then y, the squares of this speed add to more than 400. From x to z they add to 400 exactly.
+	const glm::vec3 velocity(std::bit_cast<float>(0x4150E1E2u), std::bit_cast<float>(0x4162C2B4u),
+	                         std::bit_cast<float>(0x40AB7056u));
+	EXPECT_TRUE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), glm::vec3(9.0f, 0, 0), glm::vec3(0.0f), velocity));
+	EXPECT_FALSE(turn::PassesCamera(glm::vec3(11.0f, 0, 0), glm::vec3(9.0f, 0, 0), glm::vec3(0.0f), velocity * 0.999f));
+}
+
 TEST(PhysicsTurn, SinkingAndBobbing)
 {
 	EXPECT_TRUE(turn::NearSeaLevel(false, 0.4f, 1.0f));

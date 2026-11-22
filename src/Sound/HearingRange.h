@@ -24,6 +24,15 @@ namespace openblack::audio
 	return (way.z * way.z + way.y * way.y) + way.x * way.x;
 }
 
+/// How a placed sound falls off with its distance from the listener
+enum class Hearing : uint8_t
+{
+	/// By the distances of its sample. The sound is silent past the maximum distance.
+	Sample,
+	/// As thunder that the whole land hears (see far_thunder::HearingAt)
+	Thunder,
+};
+
 /// The furthest from the camera a placed sound effect may start. The bank's maximum distance for the sample counts
 /// whether or not the bank's header applies it to the voice; a sample whose bank gives none (most of those that keep
 /// the default distances) falls back on the play's own maximum distance, by default the voice's 9999.

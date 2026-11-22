@@ -906,6 +906,9 @@ struct Command
 		LayGateStone,
 		/// A script's cinema bars slide in (value 1) or out (value 0)
 		WideScreen,
+		/// A script fades the picture to black (value 1), or back to normal (value 0), over whole seconds (amount), as
+		/// the script commands that set the fade do. Needs no creature
+		ScriptFade,
 		/// A script sets the interface level (value), as the script command that sets the interface interaction does:
 		/// the camera's features, its keys and the hand's reach. Needs no creature
 		SetInterfaceLevel,
@@ -1122,6 +1125,9 @@ struct Command
 		/// The game releases the loop of the sample that the last PlayBankSample started, as a stop that finishes the
 		/// last loop does. Needs no creature.
 		ReleaseBankSample,
+		/// A bolt of a storm strikes the point (from the middle of the map), as the weather lets one down from a cloud
+		/// 160 m above the land. Needs no creature.
+		StormBolt,
 		/// The creature stops at once where it is, as a new body action or a placement stops it. The Stop command stops
 		/// it as the game stops a walk.
 		StopAtOnce,

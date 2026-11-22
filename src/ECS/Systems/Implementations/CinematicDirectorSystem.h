@@ -53,6 +53,7 @@ public:
 	[[nodiscard]] gui::script_text::ClipWindow GetClipWindow() const override { return _clipWindow; }
 
 	void Reset() override;
+	void SetSavedGameForm(bool on) override { _savedGameForm = on; }
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
@@ -75,6 +76,8 @@ private:
 	glm::u8vec3 _textColour {0, 0, 0};
 	/// A saved game does not keep it
 	gui::script_text::ClipWindow _clipWindow;
+	/// The save and the load have the form of a saved game
+	bool _savedGameForm {false};
 };
 
 } // namespace openblack::ecs::systems

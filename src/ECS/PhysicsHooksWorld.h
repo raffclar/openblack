@@ -136,7 +136,10 @@ public:
 	[[nodiscard]] virtual bool HasStores() const = 0;
 	[[nodiscard]] virtual bool IsStore(entt::entity store, ResourceType type) const = 0;
 	virtual bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) = 0;
-	virtual void AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) = 0;
+	/// Adds a resource to a pile and gives the amount that the pile took
+	virtual uint32_t AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) = 0;
+	/// A pile took a part of a drop of a player. The town near the pile can answer the gift to the player.
+	virtual void AnswerDrop(entt::entity /*pile*/, PlayerNames /*giver*/) {}
 	/// The help of this computer's player counts an event
 	virtual void CountHelpEvent([[maybe_unused]] uint32_t event) {}
 

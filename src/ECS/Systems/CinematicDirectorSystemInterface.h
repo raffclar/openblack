@@ -92,6 +92,11 @@ public:
 
 	/// As a new land opens: no fade, no bars, no close clipping, no window, and the texts are taken away
 	virtual void Reset() = 0;
+	/// When this is on, the save and the load of the system have the form of a saved game. The game ends the fade of
+	/// the scripts and removes their words from the screen before it loads a saved game, and its save keeps neither.
+	/// Its save does not keep the colour of the words either, so the load keeps the colour that this computer has. The
+	/// cinema bars stay.
+	virtual void SetSavedGameForm(bool on) = 0;
 	/// Moves the fade on by a game turn, and the bars that the scripts wait for
 	virtual void ProcessTurn() = 0;
 	/// A turn of the temple's scripts, while the world stands still: the bars that the scripts wait for move on by the

@@ -55,6 +55,21 @@ bool SkipsHeldFrame(bool steppedByTool, bool paused, bool workWaits)
 	return steppedByTool && paused && !workWaits;
 }
 
+bool OnlyDrawsHeldFrame(bool holdsFixedStep, bool scenarioWaits)
+{
+	return holdsFixedStep && !scenarioWaits;
+}
+
+std::chrono::microseconds FrameDeltaTime(std::chrono::microseconds measured, std::chrono::microseconds lastPlayed,
+                                         bool heldBefore, std::optional<std::chrono::microseconds> fixed)
+{
+	if (fixed.has_value())
+	{
+		return *fixed;
+	}
+	return heldBefore ? lastPlayed : measured;
+}
+
 bool Paces(const Settings& settings, std::optional<std::chrono::microseconds> frameTime)
 {
 	return !settings.fast && settings.paceToWallClock && frameTime.has_value();

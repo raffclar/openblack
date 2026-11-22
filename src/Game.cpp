@@ -612,8 +612,16 @@ void Game::StartFrame(FrameState& frame)
 	// Thus the frames after the turn get the same times as the frames of a turn that does not wait (deviation row 288).
 	const bool stepWaits = Locator::time::value().GetFixedFrameTime().has_value() && Locator::landSystem::has_value() &&
 	                       Locator::landSystem::value().IsTurnSplit();
-	_frameWithoutTime = stepWaits;
-	if ((_frameLoop == nullptr || !_frameLoop->turnsPlayedBeside) && !stepWaits)
+	// A frame that plays while the tool holds the run after a fixed step only draws a picture of the last stepped frame.
+	// The frame in which the step ends is such a frame too. When the inspector answered before this frame, its answer
+	// already decided the frame.
+	const bool holdsFixedStep =
+	    Locator::inspector::has_value() && (_inspectorServedEarly ? Locator::inspector::value().HoldsFixedStep()
+	                                                              : Locator::inspector::value().HoldsFixedStepAtService());
+	_onlyDrawsHeldFrame = sim_run::OnlyDrawsHeldFrame(holdsFixedStep, _scenarioRequest.has_value());
+	_frameWithoutTime = stepWaits || _onlyDrawsHeldFrame;
+	const bool clockMovedBeside = _frameLoop != nullptr && _frameLoop->turnsPlayedBeside;
+	if (!clockMovedBeside && !_frameWithoutTime)
 	{
 		Locator::time::value().Update();
 	}
@@ -623,11 +631,22 @@ void Game::StartFrame(FrameState& frame)
 	{
 		Locator::inspector::value().Service();
 	}
-	// Stepped deterministically, a frame takes the fixed time the clock gives it, whatever the wall clock says
-	if (const auto fixed = Locator::time::value().GetFixedFrameTime(); fixed.has_value())
+	// A step or a resume that the inspector answered in this frame releases the run: the frame plays and its clock moves on
+	if (_onlyDrawsHeldFrame &&
+	    !sim_run::OnlyDrawsHeldFrame(Locator::inspector::value().HoldsFixedStep(), _scenarioRequest.has_value()))
 	{
-		frame.deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(*fixed);
+		_onlyDrawsHeldFrame = false;
+		_frameWithoutTime = stepWaits;
+		if (!clockMovedBeside && !_frameWithoutTime)
+		{
+			Locator::time::value().Update();
+		}
 	}
+	// Stepped deterministically, a frame takes the fixed time the clock gives it, whatever the wall clock says. After
+	// frames that the tool held, the frame takes the time of the last frame that played.
+	frame.deltaTime = sim_run::FrameDeltaTime(frame.deltaTime, _lastFrameDeltaTime, std::exchange(_heldBefore, false),
+	                                          Locator::time::value().GetFixedFrameTime());
+	_lastFrameDeltaTime = frame.deltaTime;
 
 	// The physics world isn't stepped: the game's objects don't move as rigid bodies, and the world only answers the
 	// rays cast for the hand, the camera and the like. Stepping it let the features fall and lose their turn.
@@ -1193,8 +1212,13 @@ bool Game::ServeHeldRun()
 	{
 		return false;
 	}
-	const bool steppedByTool = _simulation.has_value() && _simulation->startPaused;
-	const bool workWaits = _scenarioRequest.has_value() || _requestScreenshot.has_value();
+	// A run that a tool started paused, or a run that the inspector holds after a step with a fixed frame time
+	const bool steppedByTool =
+	    (_simulation.has_value() && _simulation->startPaused) || Locator::inspector::value().HoldsFixedStep();
+	// The frames that a picture of the inspector needs also play: they only draw while the run holds after a fixed step.
+	// The inspector watches each picture until the renderer writes its file.
+	const bool pictureWaits = Locator::inspector::value().HoldsFixedStep() && Locator::inspector::value().PictureWaits();
+	const bool workWaits = _scenarioRequest.has_value() || _requestScreenshot.has_value() || pictureWaits;
 	if (!sim_run::SkipsHeldFrame(steppedByTool, Locator::time::value().IsPaused(), workWaits))
 	{
 		return false;
@@ -1208,6 +1232,7 @@ bool Game::ServeHeldRun()
 		_inspectorServedEarly = true;
 		return false;
 	}
+	_heldBefore = true;
 #if !defined(__EMSCRIPTEN__)
 	// The tool holds the game: the loop waits a short time, so that it does not use all of the processor
 	std::this_thread::sleep_for(std::chrono::milliseconds(1));

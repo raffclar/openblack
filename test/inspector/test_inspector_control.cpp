@@ -1072,6 +1072,40 @@ TEST(InspectorScreenshot, TakenAtTheFrameAskedWithTheCameraAsked)
 	EXPECT_FALSE(Refused(inspector, R"({"query": "screenshot.take", "params": {"path": "x.bmp"}})").empty());
 }
 
+// A run that the tool holds plays the frames that a picture needs, but not the frames before a picture far ahead
+TEST(InspectorScreenshot, APictureWaitsForTheFramesThatItNeeds)
+{
+	FakeScreenshots screenshots;
+	FakeCamera camera;
+	auto owned = std::make_unique<ScreenshotProvider>(screenshots, camera);
+	auto* provider = owned.get();
+	Inspector inspector;
+	inspector.Add(std::move(owned));
+	provider->Frame(10);
+	EXPECT_FALSE(provider->WaitsForFrames());
+
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"in_frames": 50}})");
+	EXPECT_FALSE(provider->WaitsForFrames());
+
+	Ask(inspector, R"({"query": "screenshot.take", "params": {"hide_gui": true, "path": "a/hidden.png"}})");
+	EXPECT_TRUE(provider->WaitsForFrames());
+	uint64_t frame = 11;
+	for (; frame < 40 && std::ranges::find(screenshots.taken, "a/hidden.png") == screenshots.taken.end(); ++frame)
+	{
+		EXPECT_TRUE(provider->WaitsForFrames()) << frame;
+		provider->Frame(frame);
+		provider->PlaceCamera();
+	}
+	// The frames continue until the renderer writes the file and the held frames after the picture end
+	EXPECT_TRUE(provider->WaitsForFrames());
+	screenshots.written.insert("a/hidden.png");
+	for (; provider->WaitsForFrames() && frame < 40; ++frame)
+	{
+		provider->Frame(frame);
+	}
+	EXPECT_LT(frame, 40u);
+}
+
 // The camera asked for is put in place after anything else moved it each frame, from the first frame held until a few
 // frames after the picture, so that whichever of those frames the picture is read from shows it: never the view from
 // before, nor the last picture's

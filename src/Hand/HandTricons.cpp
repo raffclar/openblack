@@ -92,8 +92,8 @@ void Fade(Fades& fades, const FadeFrame& frame)
 				target = k_UsedAlpha;
 				alpha = target;
 			}
-			// Never while a demonstration plays: it goes at once
-			if (frame.demonstration)
+			// Never while a demonstration plays or the interface hides it: it goes at once
+			if (frame.demonstration || frame.crossHidden)
 			{
 				target = 0.0f;
 				alpha = target;
@@ -108,6 +108,41 @@ void Fade(Fades& fades, const FadeFrame& frame)
 			alpha = std::min(alpha + (k_FadeSpeed * frame.seconds), target);
 		}
 	}
+}
+
+bool HidesCross(const CrossHideFacts& facts)
+{
+	if (!facts.interfaceActive || facts.inTemple)
+	{
+		return false;
+	}
+	if (facts.waitHides)
+	{
+		return true;
+	}
+	if (facts.stateKeeps || facts.handHolds)
+	{
+		return false;
+	}
+	if (facts.overRope || facts.overBubble)
+	{
+		return true;
+	}
+	return facts.overThing && (facts.handInInfluence || facts.thingNeedsNoInfluence);
+}
+
+int32_t HoldCrossHide(int32_t hideMs, bool hides)
+{
+	return hides ? std::max(hideMs, k_CrossHideMs) : hideMs;
+}
+
+int32_t CountCrossHide(int32_t hideMs, int32_t realFrameMs)
+{
+	if (hideMs > 0)
+	{
+		hideMs -= realFrameMs;
+	}
+	return std::max(hideMs, 0);
 }
 
 WorldCameraIcons WorldCamera(const WorldCameraFrame& frame, float rotateAngle)

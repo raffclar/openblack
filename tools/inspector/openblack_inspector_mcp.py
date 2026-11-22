@@ -187,7 +187,9 @@ TOOLS = [
         "description": "Runs the game for some frames or turns (ten turns a second), then pauses it. Waits until "
                        "the step is done unless wait is false. A land that loads during the step ends it there, paused at "
                        "the start of the new land (last_step.ended_by_land_load). With fixed_ms each frame takes that long whatever the "
-                       "wall clock says (deterministic stepping for replays).",
+                       "wall clock says (deterministic stepping for replays). After a step with fixed_ms the game stays held: no frame "
+                       "plays and the frame time stays fixed_ms until game_resume, game_frame_time or a step without fixed_ms, "
+                       "so a screenshot between steps shows the last stepped frame with no time added.",
         "inputSchema": schema({"frames": {"type": "integer"}, "turns": {"type": "integer"},
                                "fixed_ms": {"type": "integer"}, "wait": {"type": "boolean"}}),
         "query": "game.step",
