@@ -1849,8 +1849,11 @@ void FireSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& fr
 		}
 		if (!walk.atoms.empty())
 		{
+			// The game sorts the flames, the steam and the smoke of a fire as one thing among what blends. That thing is at
+			// the place where the frame draws the object, and its flames come first, then its steam, then its smoke.
+			const auto place = ToWorld(object, glm::vec3(0.0f));
 			particles::draw::AddEffect(frame, walk, particles::draw::DrawPath::Sorted, transform.position,
-			                           particles::draw::k_NeutralPlayer, sources);
+			                           particles::draw::k_NeutralPlayer, sources, place);
 		}
 		// A large building burning lights the land round it, flickering
 		if (look.lightsLand && lightMap.has_value())
