@@ -28,7 +28,7 @@ namespace openblack::sky_frame
 /// What a frame of the sky is worked out from
 struct Inputs
 {
-	/// The hour of script time, which places the sun and moon
+	/// The hour of script time, which places the sun. The moon stands where the last turn put it.
 	float scriptHour;
 	/// The computer's date and time, in seconds since 1970, which gives the moon's phase
 	int64_t unixTime;
@@ -57,7 +57,8 @@ inline constexpr int32_t k_MoonDateReadInterval = 2000;
 /// The date the moon's phase is taken from, in seconds since 1970: the override, or the computer's as last read
 [[nodiscard]] int64_t MoonDate(const ecs::components::Moon& moon);
 
-/// Keeps the frame's land light on the dome, places the sun and moon for the frame, gives the moon its colour and works
+/// Keeps the frame's land light on the dome, places the sun for the frame and the moon where the last turn put it, gives
+/// the moon its colour and works
 /// out how strongly they show. Only a moon that shows reads the date
 /// (at most once every two seconds) and takes up its phase.
 void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::components::Sun& sun, ecs::components::Moon& moon);

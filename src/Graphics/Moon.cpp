@@ -56,7 +56,11 @@ glm::vec3 moon::Offset(float scriptHour)
 
 std::optional<moon::Placement> moon::Place(float scriptHour)
 {
-	const auto offset = Offset(scriptHour);
+	return PlaceAt(Offset(scriptHour));
+}
+
+std::optional<moon::Placement> moon::PlaceAt(const glm::vec3& offset)
+{
 	const float alpha = std::min(200.0f, std::floor((0.5f * offset.y) - 110.0f));
 	if (alpha <= 0.0f)
 	{

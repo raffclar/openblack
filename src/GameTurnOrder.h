@@ -32,7 +32,7 @@ enum class Stage : uint8_t
 	Input,
 	/// The turn count moves on
 	StartTurn,
-	/// The storms move on, and the snow on the land lies and melts
+	/// The moon takes its place, the storms move on, and the snow on the land lies and melts
 	Atmosphere,
 	/// Each player in turn: its temple, its towns, its computer mind, its influence and its alignment
 	Players,
@@ -110,6 +110,8 @@ enum class Step : uint8_t
 	TurnStartPlaces,
 	InfluenceTurnStart,
 	Sharks,
+	/// The moon takes its place for the turn
+	Moon,
 	Storms,
 	Snow,
 	/// Each player does its whole turn: its temple, its towns, its stones, its alignment, its computer mind, the power of
@@ -299,6 +301,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::TurnStartPlaces, .stage = Stage::StartTurn},
     {.step = Step::InfluenceTurnStart, .stage = Stage::StartTurn},
     {.step = Step::Sharks, .stage = Stage::StartTurn},
+    // The moon takes its place from the clock before the clock moves on, then the storms move
+    {.step = Step::Moon, .stage = Stage::Atmosphere},
     {.step = Step::Storms, .stage = Stage::Atmosphere},
     {.step = Step::Snow, .stage = Stage::Atmosphere},
     {.step = Step::Players, .stage = Stage::Players},

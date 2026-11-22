@@ -32,6 +32,7 @@ public:
 	void KeepShownDome() override;
 	void FindAfterLoad() override;
 	void ProcessTurn() override;
+	void PlaceMoon() override;
 	void SetTime(float time) override;
 	[[nodiscard]] float GetCurrentSkyType() const override;
 	[[nodiscard]] float GetCurrentNightSkyType() const override;
