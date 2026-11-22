@@ -630,6 +630,16 @@ TEST(GestureRequests, OnLandOneTheLeashPickerAlsoWaitsForTheSquareWave)
 	EXPECT_EQ(std::ranges::count(Requests(context), hidden), 0);
 }
 
+TEST(GestureRequests, OnlyASinglePlayerGameOnLandOneWaitsForTheSquareWave)
+{
+	EXPECT_TRUE(HiddenScriptLand(1, false, false));
+	EXPECT_FALSE(HiddenScriptLand(2, false, false));
+	EXPECT_FALSE(HiddenScriptLand(0, false, false));
+	// A skirmish or a network game on Land 1 does not wait for it
+	EXPECT_FALSE(HiddenScriptLand(1, true, false));
+	EXPECT_FALSE(HiddenScriptLand(1, false, true));
+}
+
 TEST(GestureRequests, TheSquareWaveShowsNothingAndTheHandDoesNotStop)
 {
 	EXPECT_FALSE(ShowsRecognition(Purpose::HiddenScript));
