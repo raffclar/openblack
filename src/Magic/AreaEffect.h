@@ -182,11 +182,6 @@ struct EffectOutcome
 /// The waiting alignment after it takes the damped change of each kind of effect, one at a time: crush, hit, heal, fly
 /// away, then heat. Each addition rounds to a float, so this order gives the game's last bits.
 [[nodiscard]] float AddEffectAlignmentChanges(float pending, const EffectAlignmentTerms& damped);
-/// The caster's alignment moves for what an effect did to a thing whose life changed by so much; its heat counts by the
-/// harm it did. This is the damped change of each kind, added from 0 in the order above.
-[[nodiscard]] float EffectAlignmentChange(const EffectValues& values, float burnDamage, AlignmentType type, float lifeChange,
-                                          std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
-                                          float casterAlignment);
 
 /// A turn of an alignment, a player's or a creature's: the change waiting, held between -1 and 1, moves it by that share
 /// of its owner's change a turn, and whatever was waiting is then gone. Returns the alignment, held between -1 and 1. A

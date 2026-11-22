@@ -69,7 +69,6 @@ public:
 	[[nodiscard]] const std::vector<gesture::Request>& GetRequests() const override { return _requests; }
 	[[nodiscard]] std::optional<Recognised> GetLastRecognised() const override { return _lastRecognised; }
 	[[nodiscard]] bool IsLeashPickerOpen() const override { return _picker.open; }
-	[[nodiscard]] bool IsSelectionOpen() const override { return _selection.IsOpen(); }
 	bool OpenSelectionByKey(PlayerNames player) override;
 	bool RepeatMiracleByKey(PlayerNames player) override;
 	[[nodiscard]] bool IsSelecting() const override { return _selection.IsOpen() || _picker.open; }

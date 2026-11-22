@@ -154,8 +154,6 @@ public:
 	[[nodiscard]] virtual std::optional<Recognised> GetLastRecognised() const = 0;
 	/// Whether the leash picker is open, offering the creature's other leashes as gestures
 	[[nodiscard]] virtual bool IsLeashPickerOpen() const = 0;
-	/// Whether the miracle selection is open, offering the miracles of the player's worship site icons as gestures
-	[[nodiscard]] virtual bool IsSelectionOpen() const { return false; }
 	/// The key that opens the miracle selection: with the hand ready and the selection closed, the selection opens for
 	/// the player's own miracles. Whether it opened.
 	virtual bool OpenSelectionByKey(PlayerNames /*player*/) { return false; }
