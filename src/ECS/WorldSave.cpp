@@ -133,8 +133,9 @@ std::string GeneratorText(const std::mt19937& generator)
 	return text.str();
 }
 
-/// The block of the game clock and the random numbers, from the services of the game
-world_save::PendingChunk ClockChunk()
+/// The block of the game clock and the random numbers, from the services of the game. A saved game writes the speed
+/// that its load gives.
+world_save::PendingChunk ClockChunk(world_save::LoadKind kind)
 {
 	// The generators are copied now. Their text, which takes long to make, is made on the thread of the writer.
 	world_save::ClockState state;
@@ -152,7 +153,7 @@ world_save::PendingChunk ClockChunk()
 	if (Locator::time::has_value())
 	{
 		const auto& time = Locator::time::value();
-		state.speed = time.GetSpeed();
+		state.speed = world_save::SpeedAfterLoad(kind, time.GetSpeed());
 		state.paused = time.IsPaused();
 		state.remainderMs = time.GetTurnRemainderMs();
 		state.place = time.GetClockPlace();
@@ -169,7 +170,7 @@ world_save::PendingChunk ClockChunk()
 	return {.tag = gamesave::k_ClockTag, .bytes = [saved]() { return world_save::WriteClock(*saved); }};
 }
 
-bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
+bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn, world_save::LoadKind kind)
 {
 	const auto state = world_save::ReadClock(bytes);
 	if (!state.has_value())
@@ -179,7 +180,7 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 	if (Locator::time::has_value())
 	{
 		auto& time = Locator::time::value();
-		time.SetSpeed(state->speed);
+		time.SetSpeed(world_save::SpeedAfterLoad(kind, state->speed));
 		if (state->place.has_value())
 		{
 			time.ResumeAtPlace(turn, *state->place);
@@ -549,7 +550,7 @@ std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx
 	       }});
 	timed(ready(gamesave::k_ContextTag, reflection::SaveValue(reflection, registry.Context(), &summary.context)));
 	form.reset();
-	timed(ClockChunk());
+	timed(ClockChunk(kind));
 	if (Locator::camera::has_value())
 	{
 		const auto camera = CameraChunk();
@@ -917,7 +918,7 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 	bool read = true;
 	if (const auto clock = gamesave::FindChunk(file, gamesave::k_ClockTag); clock.has_value())
 	{
-		read = LoadClock(*clock, turn) && read;
+		read = LoadClock(*clock, turn, kind) && read;
 	}
 	if (const auto camera = gamesave::FindChunk(file, gamesave::k_CameraTag);
 	    LoadsCamera(kind) && camera.has_value() && Locator::camera::has_value())

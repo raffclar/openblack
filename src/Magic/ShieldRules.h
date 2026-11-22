@@ -16,6 +16,7 @@
 #include <span>
 #include <vector>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -170,6 +171,23 @@ inline constexpr float k_DomeLeastAlpha = 40.0f;
 /// float difference with this double constant.
 inline constexpr double k_DomeRescaleStep = 0.3;
 [[nodiscard]] bool NeedsRescale(float drawnScale, float solidScale);
+
+/// The dome when it breaks into pieces, as at the end of the step of the domes in the turn
+struct DomeBreakUp
+{
+	/// The pose that the dome shows
+	DomePose pose;
+	/// The scale of its solid shape
+	float solidScale {0.0f};
+};
+/// The dome that breaks into pieces. The game steps the domes before the miracles. Thus, when the dome breaks in the step
+/// of the miracles before its own step, the dome takes the step of this turn first. It gives no value when the dome
+/// dies away in that step, because then nothing breaks it.
+[[nodiscard]] std::optional<DomeBreakUp> DomeAtBreakUp(const DomeShape& shape, DomeState state, const DomePose& pose,
+                                                       uint32_t turns, float solidScale, bool stepFirst, float turnSeconds);
+/// The model that the pieces of the dome come from: not turned and upright, at its place on the land plus its height, at
+/// the scale of its solid shape
+[[nodiscard]] glm::mat4 DomeBreakUpModel(glm::vec3 placeOnLand, const DomeBreakUp& dome);
 
 /// The dome's solid shape: a cone as wide as its model's widest and twice its model's half height tall
 struct DomeVolume

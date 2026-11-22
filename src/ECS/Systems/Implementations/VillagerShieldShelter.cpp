@@ -29,6 +29,7 @@
 #include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerClips.h"
 #include "InfoConstants.h"
@@ -80,8 +81,11 @@ uint32_t villager_shield::AmazedByMagicShield(LivingAction& action)
 	const auto* standing = reacting != nullptr && registry.Valid(reacting->shield)
 	                           ? registry.TryGet<const MagicShield>(reacting->shield)
 	                           : nullptr;
-	if (town != entt::null && registry.Valid(town) && standing != nullptr && standing->spell != entt::null &&
-	    ProtectionSignificance(town) > 0.0f)
+	// A miracle keeps the shield, also while its dome fades after the miracle closed down
+	const bool kept = standing != nullptr && (standing->spell != entt::null ||
+	                                          (Locator::magicShieldSystem::has_value() &&
+	                                           Locator::magicShieldSystem::value().KeeperOf(reacting->shield) != entt::null));
+	if (town != entt::null && registry.Valid(town) && kept && ProtectionSignificance(town) > 0.0f)
 	{
 		auto& transform = registry.Get<Transform>(villager);
 		const auto centre = glm::xz(registry.Get<const Transform>(reacting->shield).position);

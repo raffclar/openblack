@@ -511,6 +511,14 @@ TEST(CreatureCave, FactsCutPercentagesShort)
 	EXPECT_FLOAT_EQ(facts.alignment, -1.0f);
 }
 
+TEST(CreatureCave, FactsNameTheSpellOnTheCreature)
+{
+	creature_cave::Snapshot snapshot;
+	EXPECT_FALSE(creature_cave::FactsOf(snapshot).miracleApplied.has_value());
+	snapshot.spellOn = 4;
+	EXPECT_EQ(creature_cave::FactsOf(snapshot).miracleApplied, 4);
+}
+
 TEST(CreatureCave, FactsTellOfTheMind)
 {
 	using creature_desires::Desire;

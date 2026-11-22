@@ -11,10 +11,13 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
 #include "GameTurnOrder.h"
+#include "TurnStepTimes.h"
 
 namespace openblack::simulation
 {
@@ -80,5 +83,33 @@ void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature);
 
 /// Do all the steps of one game turn, in the order of the game
 void PlayTurn(TurnViewInterface& view);
+
+class MindFrameBudget;
+
+/// A turn that stopped between two players of its players' step, so that the frame can draw before the turn continues
+/// (deviation row 288). Nothing of the world changes until the turn continues.
+struct SplitTurn
+{
+	/// The place where the turn continues
+	game_turn::TurnPlace place;
+	/// The number of the turn, as its checksum and its record have it
+	uint32_t number {0};
+	/// The time of each step of the turn until now, for the developer log of long turns
+	TurnStepTimes stepTimes;
+	/// The frames that the turn played in until now
+	uint32_t frames {1};
+};
+
+/// Do the steps of one game turn, in the order of the game. With a budget, the turn stops before the next player when
+/// the computer minds of this frame used the budget, and it gives the turn that waits to continue. With no budget, or
+/// when the turn did all of its steps, there is no such turn.
+[[nodiscard]] std::optional<SplitTurn> StartTurn(TurnViewInterface& view, MindFrameBudget* budget);
+
+/// Continue a turn that stopped between two players, as StartTurn does. With no budget, the turn does all of its steps.
+[[nodiscard]] std::optional<SplitTurn> ContinueTurn(TurnViewInterface& view, SplitTurn turn, MindFrameBudget* budget);
+
+/// The count of the turns that the world did completely: the turn count of the clock, less one while a turn waits to
+/// continue. The clock counts a turn at its start.
+[[nodiscard]] uint32_t WholeTurns();
 
 } // namespace openblack::simulation

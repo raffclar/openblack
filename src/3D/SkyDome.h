@@ -19,6 +19,7 @@
 
 #include <glm/gtc/type_precision.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 /// The sky's dome: three pictures of the sky for each alignment, by day, at dusk and at night, blended into one for the
@@ -138,6 +139,12 @@ struct Pair
 [[nodiscard]] Pair AlignmentPair(float sky);
 /// A 5-bit channel of two pictures blended by a weight of 255, in whole steps: the weights only add up to 255 of 256
 [[nodiscard]] uint8_t BlendChannel(uint8_t lower, uint8_t upper, uint8_t weight);
+/// The weights of the full blend of the larger pictures of the debug menu's pack: the lower picture times the first and
+/// the upper picture times the second. They are the weights of BlendChannel, but the blend does not cut the result to
+/// whole 5-bit steps.
+[[nodiscard]] glm::vec2 FullWeights(uint8_t weight);
+/// A channel of two pictures of the pack, 0 to 1, blended by a weight of 255 with the full weights
+[[nodiscard]] float BlendFull(float lower, float upper, uint8_t weight);
 
 /// The colours each alignment's dome is drawn in: its picture times the first, with the second added, 0 to 255
 struct Tint

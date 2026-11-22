@@ -672,7 +672,10 @@ int EditBox::Width(std::u16string_view text) const
 
 int EditBox::CharacterAt(glm::ivec2 point) const
 {
-	return text_edit::CharacterAt(_state, rect.min.x, point.x, [this](std::u16string_view text) { return Width(text); });
+	// A click measures the characters of the text, also in a box that shows a '#' for each character
+	return text_edit::CharacterAt(_state, rect.min.x, point.x, [this](std::u16string_view text) {
+		return static_cast<int>(_font.GetWidth(text, static_cast<float>(_size)));
+	});
 }
 
 void EditBox::Changed(bool textChanged)
@@ -747,12 +750,14 @@ void EditBox::Draw(const DialogPainter& painter, bool /*hovered*/, bool focused,
 		band(left + low, rect.min.x + 5 + high);
 		const auto first =
 		    static_cast<size_t>(std::max(std::min(_state.selectionStart, _state.selectionEnd), static_cast<int>(scroll)));
-		const auto last =
-		    static_cast<size_t>(std::max(std::max(_state.selectionStart, _state.selectionEnd), static_cast<int>(scroll)));
-		if (first < last && last <= text.size())
+		// A selection can end after the text when a click falls after the last character. Only the text shows.
+		const auto last = std::min(
+		    static_cast<size_t>(std::max(std::max(_state.selectionStart, _state.selectionEnd), static_cast<int>(scroll))),
+		    text.size());
+		if (first < last)
 		{
 			painter.DrawText({left + low, top}, room - low, Justify::Left, text.substr(first, last - first), _size,
-			                 DialogPainter::k_TextColour);
+			                 k_SelectedTextColour);
 		}
 	}
 }

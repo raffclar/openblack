@@ -26,6 +26,7 @@
 #include "Common/WorkerPools.h"
 #include "Creature/BonusCreatures.h"
 #include "Debug/DebugGuiInterface.h"
+#include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Systems/ClanCreatureSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/GatheringBoxSystemInterface.h"
@@ -39,6 +40,7 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "GameProviderShared.h"
+#include "Graphics/Texture2D.h"
 #include "Help/ScriptSpirits.h"
 #include "Locator.h"
 #include "Online/HttpClientInterface.h"
@@ -212,6 +214,38 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 			return QueryResult::Error("engine.online_away needs a network game that plays");
 		}
 		return QueryResult::Value({{"away", true}, {"seconds", seconds->get<double>()}});
+	});
+	auto skyPictures = Query("sky_pictures",
+	                         "Tools: the pictures of the sky's dome that the debug menu shows, the game's own pictures or the "
+	                         "larger pictures of the sky pack in the profile folder. Without upscaled, it only tells",
+	                         {{.name = "upscaled",
+	                           .type = "boolean",
+	                           .description = "True shows the pictures of the pack, false the game's own pictures",
+	                           .required = false}});
+	skyPictures.writes = true;
+	provider->Add(std::move(skyPictures), [](const QueryContext& context) {
+		if (!Locator::config::has_value() || !Locator::resources::has_value())
+		{
+			return QueryResult::Error("engine.sky_pictures needs the config and the resources");
+		}
+		auto& config = Locator::config::value();
+		const auto* pack =
+		    Locator::resources::value().GetTextures().Find(ecs::archetypes::SkyArchetype::k_PackDomeTextureId.value());
+		if (const auto upscaled = context.params.find("upscaled"); upscaled != context.params.end())
+		{
+			if (!upscaled->is_boolean())
+			{
+				return QueryResult::Error("engine.sky_pictures needs upscaled as true or false");
+			}
+			if (upscaled->get<bool>() && pack == nullptr)
+			{
+				return QueryResult::Error("engine.sky_pictures has no sky pack in the profile folder");
+			}
+			config.upscaledSkyPictures = upscaled->get<bool>();
+		}
+		return QueryResult::Value({{"upscaled", config.upscaledSkyPictures},
+		                           {"pack", pack != nullptr},
+		                           {"side", pack != nullptr ? pack->GetResolution().x : 0}});
 	});
 	provider->Add(
 	    Query("config", "The engine's settings: what is drawn, the display and the camera's clip"),

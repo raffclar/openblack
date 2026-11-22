@@ -28,6 +28,9 @@ public:
 	/// The hand taps a building at a point; `ownHand` when it is this computer's player's hand, which then plays its tap.
 	/// Whether the building took the tap.
 	virtual bool Tap(entt::entity abode, glm::vec3 handPoint, bool ownHand) = 0;
+	/// A villager that a player holds over a house of the town starts or holds the town's read-out, as a knock does.
+	/// Nobody comes out, and the house does not knock back.
+	virtual void ShowReadout(entt::entity town) = 0;
 	/// Each frame: the read-out's time runs down
 	virtual void Update(std::chrono::milliseconds frame) = 0;
 

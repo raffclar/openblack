@@ -36,6 +36,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/OwnReportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -55,6 +56,7 @@
 #include "Inspector/SimRecorder.h"
 #include "Inspector/StartupBoxInput.h"
 #include "Locator.h"
+#include "Simulation/TurnBody.h"
 
 // The build's configuration, given by the build files
 #if !defined(OPENBLACK_BUILD_TYPE)
@@ -93,10 +95,8 @@ public:
 			Locator::time::value().SetPaused(paused);
 		}
 	}
-	[[nodiscard]] uint32_t GetTurn() const override
-	{
-		return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	}
+	/// The whole turns: a step of turns ends after the end of a turn that waits to continue
+	[[nodiscard]] uint32_t GetTurn() const override { return simulation::WholeTurns(); }
 	[[nodiscard]] float GetSpeed() const override
 	{
 		return Locator::time::has_value() ? Locator::time::value().GetSpeed() : 1.0f;
@@ -212,6 +212,13 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server, std:
 	inspector::reflection::RegisterComponents(*_reflection);
 	// A live network game refuses the queries that change the shared world, on a client and on the game server
 	_inspector.SetNetworkGameLive([this]() { return _hostsNetworkGame || developer_tools::NetworkSessionLive(); });
+	// An edit of the inspector sees only whole turns: a turn that waits between two players to continue ends first
+	_inspector.SetBeforeWrite([]() {
+		if (Locator::landSystem::has_value())
+		{
+			Locator::landSystem::value().FinishSplitTurn();
+		}
+	});
 	_inspector.SetWriteLog([](const inspector::Request& request, const inspector::QueryResult& answer) {
 		if (answer.Ok())
 		{

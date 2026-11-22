@@ -59,7 +59,7 @@ void Type(State& state, char16_t character);
 /// after the caret. With Shift held the selection follows the caret instead.
 void Press(State& state, Key key, bool shift);
 /// The character a point of the box is before: the first whose width from the first shown, 4 pixels in from the box's
-/// left, ends beyond the point
+/// left, ends beyond the point. A point after the last character gives the scroll plus the length of the text.
 [[nodiscard]] int CharacterAt(const State& state, int left, int x, const Measure& measure);
 /// The mouse button goes down at a character, or is held there
 void MouseDown(State& state, int character);
