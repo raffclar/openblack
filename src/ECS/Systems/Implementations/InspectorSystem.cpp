@@ -708,6 +708,21 @@ bool InspectorSystem::HoldsRun() const
 	return _game != nullptr && _game->HoldsRun();
 }
 
+bool InspectorSystem::HoldsFixedStep() const
+{
+	return _game != nullptr && _game->HoldsFixedStep();
+}
+
+bool InspectorSystem::HoldsFixedStepAtService() const
+{
+	return _game != nullptr && _game->HoldsFixedStepAtFrame();
+}
+
+bool InspectorSystem::PictureWaits() const
+{
+	return _screenshots != nullptr && _screenshots->WaitsForFrames();
+}
+
 void InspectorSystem::PauseOnLoad(bool pause)
 {
 	_game->SetPauseOnLoad(pause);

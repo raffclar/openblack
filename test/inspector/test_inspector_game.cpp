@@ -885,7 +885,8 @@ TEST(InspectorRunControl, GameQueriesDriveTheClock)
 	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 }
 
-// A step with a fixed frame time holds the frames to it while stepping, then gives the wall clock back
+// A step with a fixed frame time holds the frames to it while stepping and while the game stays paused after it, then
+// gives the wall clock back when the game plays again
 TEST(InspectorRunControl, StepWithAFixedFrameTimeGivesItBackAfter)
 {
 	FakeRunTarget target;
@@ -901,12 +902,20 @@ TEST(InspectorRunControl, StepWithAFixedFrameTimeGivesItBackAfter)
 	EXPECT_EQ(target.fixedMs, 16u);
 	game->Frame();
 	EXPECT_TRUE(target.paused);
+	EXPECT_EQ(target.fixedMs, 16u);
+	EXPECT_TRUE(game->HoldsFixedStep());
+	Ask(inspector, R"({"query": "game.resume"})");
+	game->Frame();
 	EXPECT_FALSE(target.fixedMs.has_value());
+	EXPECT_FALSE(game->HoldsFixedStep());
 
-	// Set for good, it stays after steps
+	// Set for good, it comes back when the game plays after steps
 	EXPECT_EQ(Ask(inspector, R"({"query": "game.frame_time", "params": {"ms": 10}})")["fixed_ms"], 10);
 	Ask(inspector, R"({"query": "game.step", "params": {"frames": 1, "fixed_ms": 20}})");
 	game->Frame();
+	game->Frame();
+	EXPECT_EQ(target.fixedMs, 20u);
+	Ask(inspector, R"({"query": "game.resume"})");
 	game->Frame();
 	EXPECT_EQ(target.fixedMs, 10u);
 	EXPECT_TRUE(Ask(inspector, R"({"query": "game.frame_time", "params": {"ms": 0}})")["fixed_ms"].is_null());
@@ -936,7 +945,8 @@ TEST(InspectorRunControl, TheLastStepIsReportedWithItsFixedFrameTime)
 	game->Frame();
 	const auto state = Ask(inspector, R"({"query": "game.state"})");
 	EXPECT_TRUE(state["stepping"].is_null());
-	EXPECT_TRUE(state["fixed_ms"].is_null());
+	// The game stays held after the step with the step's frame time
+	EXPECT_EQ(state["fixed_ms"], 16);
 	const auto& last = state["last_step"];
 	EXPECT_EQ(last["done"], true);
 	EXPECT_EQ(last["frames"], 2);
@@ -1055,6 +1065,58 @@ TEST(InspectorRunControl, ASeededRunStartsEachLoadPaused)
 
 // A tool that holds a run keeps it held until a step or a resume releases it. The held frames then do not count, so that
 // the wall clock, which sets their number, does not change where the frames of the run start.
+// After a step with a fixed frame time, the frames do not play while the game stays paused, so that the hand and the
+// other animations of the frames move only in the stepped frames. The frame in which the step ends is held too.
+TEST(InspectorRunControl, AFixedStepHoldsTheFramesAfterIt)
+{
+	FakeRunTarget target;
+	Inspector inspector;
+	auto provider = std::make_unique<GameProvider>(target);
+	auto* game = provider.get();
+	inspector.Add(std::move(provider));
+	EXPECT_FALSE(game->HoldsFixedStepAtFrame());
+
+	Ask(inspector, R"({"query": "game.step", "params": {"frames": 2, "fixed_ms": 16}})");
+	EXPECT_FALSE(game->HoldsFixedStepAtFrame());
+	game->Frame();
+	EXPECT_FALSE(game->HoldsFixedStepAtFrame());
+	game->Frame();
+	// The next frame ends the step and pauses the game
+	EXPECT_TRUE(game->HoldsFixedStepAtFrame());
+	EXPECT_FALSE(game->HoldsFixedStep());
+	game->Frame();
+	EXPECT_TRUE(game->HoldsFixedStep());
+	EXPECT_TRUE(game->HoldsFixedStepAtFrame());
+
+	// A step of turns ends at its turn
+	Ask(inspector, R"({"query": "game.step", "params": {"turns": 1, "fixed_ms": 16}})");
+	EXPECT_FALSE(game->HoldsFixedStep());
+	game->Frame();
+	EXPECT_FALSE(game->HoldsFixedStepAtFrame());
+	target.turn = 11;
+	EXPECT_TRUE(game->HoldsFixedStepAtFrame());
+	game->Frame();
+	EXPECT_TRUE(game->HoldsFixedStep());
+
+	// A step without a fixed frame time gives back the frame time from before the fixed steps
+	Ask(inspector, R"({"query": "game.step", "params": {"frames": 1}})");
+	EXPECT_FALSE(target.fixedMs.has_value());
+	game->Frame();
+	game->Frame();
+	EXPECT_FALSE(game->HoldsFixedStep());
+
+	// game.frame_time also ends the hold, and a pause keeps it
+	Ask(inspector, R"({"query": "game.step", "params": {"frames": 1, "fixed_ms": 16}})");
+	game->Frame();
+	game->Frame();
+	EXPECT_TRUE(game->HoldsFixedStep());
+	Ask(inspector, R"({"query": "game.pause"})");
+	EXPECT_TRUE(game->HoldsFixedStep());
+	Ask(inspector, R"({"query": "game.frame_time", "params": {"ms": 0}})");
+	EXPECT_FALSE(game->HoldsFixedStep());
+	EXPECT_FALSE(target.fixedMs.has_value());
+}
+
 TEST(InspectorRunControl, AHeldRunStaysHeldUntilAStepOrAResume)
 {
 	FakeRunTarget target;

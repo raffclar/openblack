@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <filesystem>
@@ -159,6 +160,14 @@ public:
 	/// due this frame wants it, so that nothing moving the camera this frame (its own easing, a flight, the land's
 	/// height under it) spoils the picture, and a framed entity is framed where it is at the picture's frame
 	void PlaceCamera();
+	/// Whether a picture needs the next frames to play: a picture is held, one is due by the next frame or by the frames
+	/// that the held pictures keep, or a kept picture waits for its line in the catalogue. A run that the tool holds
+	/// plays these frames.
+	[[nodiscard]] bool WaitsForFrames() const
+	{
+		return _holding.has_value() || !_cataloguing.empty() ||
+		       (!_pending.empty() && _pending.front().frame <= std::max(_frame, _heldUntil) + 1);
+	}
 
 private:
 	struct Pending
