@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -85,4 +86,57 @@ TEST(PlayerTurnOrder, TheAlignmentMovesBeforeTheMindAndThePowersSettleAfterIt)
 TEST(PlayerTurnOrder, NoPlayersDoNoParts)
 {
 	EXPECT_TRUE(TurnOf({}).empty());
+}
+
+// A turn that stops between two players and continues later does the same parts in the same order as a turn that does
+// not stop. It stops only after the whole turn of a player, and never after the last player.
+TEST(PlayerTurnOrder, ATurnThatStopsBetweenPlayersAndContinuesDoesTheSameParts)
+{
+	const std::vector<uint32_t> players {1, 2, 5, 7};
+	std::vector<Done> done;
+	const auto play = [&done](uint32_t player, Part part) { done.emplace_back(player, part); };
+	std::vector<size_t> stops;
+	size_t asked = 0;
+	std::optional<size_t> next = 0;
+	while (next.has_value())
+	{
+		next = player_turn::PlayFrom(players, *next, play, [&asked] { return ++asked % 2 == 1; });
+		if (next.has_value())
+		{
+			stops.push_back(*next);
+			// Each stop comes after the whole turn of a player
+			EXPECT_EQ(done.back().second, Part::Influence);
+		}
+	}
+	EXPECT_EQ(done, TurnOf(players));
+	EXPECT_EQ(stops, (std::vector<size_t> {1, 3}));
+}
+
+TEST(PlayerTurnOrder, ATurnThatIsNeverStoppedDoesAllPlayersAndAsksAfterEachButTheLast)
+{
+	const std::vector<uint32_t> players {1, 2, 7};
+	std::vector<Done> done;
+	size_t asked = 0;
+	const auto next = player_turn::PlayFrom(
+	    players, 0, [&done](uint32_t player, Part part) { done.emplace_back(player, part); },
+	    [&asked] {
+		    ++asked;
+		    return false;
+	    });
+	EXPECT_FALSE(next.has_value());
+	EXPECT_EQ(done, TurnOf(players));
+	EXPECT_EQ(asked, 2u);
+}
+
+TEST(PlayerTurnOrder, ATurnThatAlwaysStopsStillDoesOnePlayerEachTime)
+{
+	const std::vector<uint32_t> players {3, 4};
+	std::vector<Done> done;
+	const auto play = [&done](uint32_t player, Part part) { done.emplace_back(player, part); };
+	const auto first = player_turn::PlayFrom(players, 0, play, [] { return true; });
+	ASSERT_EQ(first, std::optional<size_t>(1));
+	EXPECT_EQ(done.size(), player_turn::k_Parts.size());
+	const auto second = player_turn::PlayFrom(players, *first, play, [] { return true; });
+	EXPECT_FALSE(second.has_value());
+	EXPECT_EQ(done, TurnOf(players));
 }

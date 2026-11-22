@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <optional>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -565,4 +566,72 @@ TEST(GameTurnOrder, TheThreadsStartTheFirstBlendsAfterTheCommandsAndBeforeTheSlo
 	TurnRecorder decided;
 	PlayTurn([&decided](Step step) { decided(step); }, true);
 	EXPECT_EQ(std::ranges::count(decided.Steps(), Step::CreatureFirstBlends), 0);
+}
+
+// A turn that stops between two players of its players' step, and continues in later frames, does each step once and in
+// the same order as a turn that does not stop. The players' step starts again at the next player each time.
+TEST(GameTurnOrder, ATurnThatStopsBetweenTwoPlayersContinuesWithTheSameSteps)
+{
+	TurnRecorder recorder;
+	std::vector<size_t> firstPlayers;
+	constexpr size_t k_Players = 4;
+	std::optional<TurnPlace> place = TurnPlace {};
+	size_t parts = 0;
+	while (place.has_value())
+	{
+		++parts;
+		place = PlayTurnFrom(
+		    *place,
+		    [&recorder, &firstPlayers](Step step, size_t firstPlayer) -> std::optional<size_t> {
+			    if (step != Step::Players)
+			    {
+				    recorder(step);
+				    return std::nullopt;
+			    }
+			    firstPlayers.push_back(firstPlayer);
+			    // Each part of the turn does one player
+			    if (firstPlayer + 1 < k_Players)
+			    {
+				    return firstPlayer + 1;
+			    }
+			    recorder(step);
+			    return std::nullopt;
+		    },
+		    [] { return false; });
+	}
+	EXPECT_EQ(recorder.Steps(), PlayTurnSteps().Steps());
+	EXPECT_EQ(firstPlayers, (std::vector<size_t> {0, 1, 2, 3}));
+	EXPECT_EQ(parts, k_Players);
+}
+
+// The place where the turn continues keeps what the turn read at its start: a decided game and a stopped clock
+TEST(GameTurnOrder, ATurnThatContinuesKeepsWhatItReadAtItsStart)
+{
+	const auto stop = PlayTurnFrom(
+	    TurnPlace {.decided = true},
+	    [](Step step, size_t /*firstPlayer*/) -> std::optional<size_t> {
+		    // A decided game does no players' step, so the test stops at the clock instead
+		    return step == Step::Clock ? std::optional<size_t>(0) : std::nullopt;
+	    },
+	    [] { return true; });
+	ASSERT_TRUE(stop.has_value());
+	EXPECT_TRUE(stop->decided);
+	EXPECT_TRUE(stop->clockStopped);
+	EXPECT_EQ(k_Turn[stop->index].step, Step::Clock);
+}
+
+// A turn that never stops does all of its steps and gives no place
+TEST(GameTurnOrder, ATurnThatNeverStopsGivesNoPlace)
+{
+	TurnRecorder recorder;
+	const auto place = PlayTurnFrom(
+	    TurnPlace {},
+	    [&recorder](Step step, size_t firstPlayer) -> std::optional<size_t> {
+		    EXPECT_EQ(firstPlayer, 0u);
+		    recorder(step);
+		    return std::nullopt;
+	    },
+	    [] { return false; });
+	EXPECT_FALSE(place.has_value());
+	EXPECT_EQ(recorder.Steps(), PlayTurnSteps().Steps());
 }

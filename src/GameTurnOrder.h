@@ -15,6 +15,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <tuple>
 #include <utility>
 
 /// The order of the steps of one game turn. The game does its turn in a fixed order of stages, and many systems depend
@@ -508,24 +509,58 @@ inline constexpr std::array k_CreaturesTurn = std::to_array<Step>({
 	return !stage.has_value() || *stage == Stage::Input || *stage == Stage::EndTurn || *stage == Stage::AfterTurn;
 }
 
+/// The place where a turn continues after it stopped between two players of its players' step
+struct TurnPlace
+{
+	/// The index in k_Turn of the step that the turn does next
+	size_t index {0};
+	/// In the players' step, the index of the player that does its turn next
+	size_t nextPlayer {0};
+	/// The game was decided at the start of the turn
+	bool decided {false};
+	/// The input of the turn stopped the clock
+	bool clockStopped {false};
+};
+
+/// Does each step of the turn from the place, in the order of the turn, as PlayTurn does. The step gets the index of the
+/// player that it starts with. A step that stops between two players gives the index of the next player. Then the turn
+/// stops and gives the place where it continues. A turn that does all of its steps gives no place.
+template <typename Do, typename Stopped>
+[[nodiscard]] std::optional<TurnPlace> PlayTurnFrom(TurnPlace place, Do&& step, Stopped&& stopped)
+{
+	for (; place.index < k_Turn.size(); ++place.index)
+	{
+		if (k_Turn[place.index].step == Step::Clock)
+		{
+			place.clockStopped = stopped();
+		}
+		if ((!place.decided || PlaysOnceDecided(k_Turn, place.index)) &&
+		    (!place.clockStopped || PlaysWhileStopped(k_Turn, place.index)))
+		{
+			if (const std::optional<size_t> next = step(k_Turn[place.index].step, place.nextPlayer); next.has_value())
+			{
+				place.nextPlayer = *next;
+				return place;
+			}
+		}
+		place.nextPlayer = 0;
+	}
+	return std::nullopt;
+}
+
 /// Does each step of the turn, in the order of the turn. After the game is decided, the turn does only the steps that
 /// PlaysOnceDecided gives. The turn reads stopped just before the clock step. When it is true, the rest of the turn does
 /// only the steps that PlaysWhileStopped gives.
 template <typename Do, typename Stopped>
 void PlayTurn(Do&& step, bool decided, Stopped&& stopped)
 {
-	bool clockStopped = false;
-	for (size_t index = 0; index < k_Turn.size(); ++index)
-	{
-		if (k_Turn[index].step == Step::Clock)
-		{
-			clockStopped = stopped();
-		}
-		if ((!decided || PlaysOnceDecided(k_Turn, index)) && (!clockStopped || PlaysWhileStopped(k_Turn, index)))
-		{
-			step(k_Turn[index].step);
-		}
-	}
+	std::ignore = PlayTurnFrom(
+	    TurnPlace {.decided = decided},
+	    [&step](Step turnStep, size_t /*firstPlayer*/) -> std::optional<size_t> {
+		    step(turnStep);
+		    return std::nullopt;
+	    },
+	    std::forward<Stopped>(stopped));
 }
 
 /// Does each step of the turn, in the order of the turn, with a clock that does not stop

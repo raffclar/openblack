@@ -9,9 +9,12 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
+#include <optional>
+#include <ranges>
 
 /// The order of the turn of the players. Each player does its whole turn before the next player starts: its temple, its
 /// towns, its stones, its alignment, its computer mind, the power of its tribes and its influence power. Thus a computer
@@ -57,6 +60,34 @@ void Play(const Players& players, PartTurn&& play)
 			play(player, part);
 		}
 	}
+}
+
+/// Each player from the player at the index first does each part of its turn (play), as Play does. After the whole turn
+/// of each player but the last, the order asks cut. When cut is true, the order stops and gives the index of the next
+/// player. The order continues from that index later. When all the players did their turns, the order gives no index.
+template <typename Players, typename PartTurn, typename Cut>
+[[nodiscard]] std::optional<size_t> PlayFrom(const Players& players, size_t first, PartTurn&& play, Cut&& cut)
+{
+	const auto count = static_cast<size_t>(std::ranges::distance(players));
+	size_t index = 0;
+	for (const auto player : players)
+	{
+		if (index < first)
+		{
+			++index;
+			continue;
+		}
+		for (const auto part : k_Parts)
+		{
+			play(player, part);
+		}
+		++index;
+		if (index < count && cut())
+		{
+			return index;
+		}
+	}
+	return std::nullopt;
 }
 
 } // namespace openblack::player_turn

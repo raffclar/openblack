@@ -200,6 +200,21 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	{
 		return true;
 	}
+	// While a turn waits between two players to continue, the frame draws the world as the turn left it. The steps that
+	// move the world between turns wait for the end of the turn (deviation row 288).
+	const bool turnWaits = Locator::landSystem::has_value() && Locator::landSystem::value().IsTurnSplit();
+	if (turnWaits && game_frame::WaitsForWholeTurn(step))
+	{
+		return true;
+	}
+	// A game that steps deterministically does the steps of one frame for each turn that waits. The steps before the
+	// turns wait in each frame that started with a turn that waited, and the steps after the turns wait until the turn
+	// ends.
+	if (Locator::time::value().GetFixedFrameTime().has_value() && game_frame::WaitsForWholeStepTurn(step) &&
+	    (step < Step::Turns ? _frameWithoutTime : turnWaits))
+	{
+		return true;
+	}
 	switch (step)
 	{
 	case Step::FrameClock:
@@ -228,6 +243,8 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is
 		if (_scenarioStager && _scenarioRequest.has_value())
 		{
+			// A turn that waits to continue ends before the scenario lays out its world
+			Locator::landSystem::value().FinishSplitTurn();
 			_scenarioStager();
 		}
 		// The turns of this frame played beside the draw of the last frame (deviation row 153)
@@ -425,7 +442,9 @@ bool Game::StartTurnsBesideDraw()
 	// frame. The next turns play in the world that
 	// it loads.
 	const bool loadAsked = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().LoadAsked();
-	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || loadAsked || _closeAsked)
+	// A turn that waits between two players to continue ends in the next frame, in its turns step (deviation row 288)
+	const bool turnWaits = Locator::landSystem::has_value() && Locator::landSystem::value().IsTurnSplit();
+	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || loadAsked || _closeAsked || turnWaits)
 	{
 		return false;
 	}
@@ -444,7 +463,7 @@ bool Game::StartTurnsBesideDraw()
 	auto& time = Locator::time::value();
 	time.Update();
 	loop.turnsPlayedBeside = true;
-	loop.turnBefore = time.GetTurn();
+	loop.turnBefore = simulation::WholeTurns();
 	loop.turnsStart = std::chrono::steady_clock::now();
 	auto& queue = Locator::mainThreadQueue::value();
 	loop.turnsElsewhere.emplace(queue);
