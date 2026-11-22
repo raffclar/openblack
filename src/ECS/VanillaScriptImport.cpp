@@ -329,6 +329,23 @@ std::optional<ScriptValues> vanilla_script_import::ReadScriptValues(const gamesa
 	                     .countdownShown = *shown != 0};
 }
 
+std::optional<CameraHelpValues> vanilla_script_import::ReadCameraHelpValues(const gamesave::VanillaWorld& world)
+{
+	if (world.Records().empty())
+	{
+		return std::nullopt;
+	}
+	const auto& game = world.Game();
+	const auto features = world.Word(game, "cameraFeatures");
+	const auto pitch = world.Float(game, "cameraAutoPitch");
+	const auto height = world.Float(game, "cameraAutoPitchHeight");
+	if (!features.has_value() || !pitch.has_value() || !height.has_value())
+	{
+		return std::nullopt;
+	}
+	return CameraHelpValues {.features = *features, .autoPitch = *pitch, .autoPitchHeight = *height};
+}
+
 std::optional<FileTable> vanilla_script_import::ReadScriptTable(const gamesave::VanillaWorld& world)
 {
 	if (world.Records().empty())
