@@ -12,6 +12,7 @@
 #include <array>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "TestbedScenarioRegistry.h"
@@ -913,7 +914,27 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "pit.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_Fields[1]}, .distance = 0.6f},
-	    .objects = std::move(hungry),
+	    .objects = hungry,
+	});
+	// The same town with ripe fields, so that its farmers dig up the crop at once
+	std::vector<ObjectSetup> ripe = hungry;
+	for (auto& object : ripe)
+	{
+		if (std::holds_alternative<FieldTypeInfo>(object.type))
+		{
+			object.ripeCrop = true;
+		}
+	}
+	all.push_back({
+	    .id = "town.food_jobs_ripe",
+	    .name = "A town out of food, with ripe fields",
+	    .facet = Facet::Objects,
+	    .description = "The town of town.food_jobs, but its two wheat fields to the east are ripe.",
+	    .expected = "The town wants food. Its villagers take up farming the fields. A farmer at a ripe field digs up the "
+	                "crop: it bends and swings its arms in the dig clip, then carries the food to the pit.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_Fields[1]}, .distance = 0.6f},
+	    .objects = std::move(ripe),
 	});
 	// A town whose one person dies
 	all.push_back({
