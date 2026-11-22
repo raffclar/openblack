@@ -70,6 +70,7 @@ public:
 	                                                                       float step, float radius, ClearAreaFilter filter,
 	                                                                       entt::entity ignore) const override;
 	map_coords::MapCoords GetCongregationPos(entt::entity town) override;
+	[[nodiscard]] bool KeepsCongregationPos(entt::entity town) const override;
 	void BuildingCreated(entt::entity town, glm::vec2 position, float radius) override;
 	void StructuresChanged(entt::entity town) override;
 	[[nodiscard]] bool IsInStateOfEmergency(entt::entity town) const override;
