@@ -33,11 +33,19 @@ std::optional<Held> HeldNow(const Registry& registry, entt::entity entity)
 	return Held {.reaction = state->reaction, .left = state->left};
 }
 
+/// Adds a living thing to the count of the group of its reaction, or removes it. A count that becomes zero goes from the
+/// map. Each reaction has a new number, thus the map must not keep the numbers of all the old reactions.
 void AddTo(std::unordered_map<uint32_t, uint32_t>& members, const Held& held, int32_t sign)
 {
-	if (held.left != held.reaction)
+	if (held.left == held.reaction)
 	{
-		members[held.reaction] += static_cast<uint32_t>(sign);
+		return;
+	}
+	const auto found = members.try_emplace(held.reaction, 0).first;
+	found->second += static_cast<uint32_t>(sign);
+	if (found->second == 0)
+	{
+		members.erase(found);
 	}
 }
 
@@ -147,10 +155,10 @@ bool CountsMatchWalk(const Registry& registry)
 {
 	const auto& kept = CountsOf(registry).members;
 	const auto walked = WalkedMembers(registry);
-	// A reaction that nobody holds now can keep a count of zero
+	// The counts keep no reaction that nobody holds now
 	const bool keptMatch = std::ranges::all_of(kept, [&walked](const auto& entry) {
 		const auto found = walked.find(entry.first);
-		return entry.second == (found != walked.end() ? found->second : 0);
+		return found != walked.end() && found->second == entry.second;
 	});
 	const bool walkedMatch = std::ranges::all_of(walked, [&kept](const auto& entry) {
 		const auto found = kept.find(entry.first);
