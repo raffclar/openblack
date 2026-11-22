@@ -25,7 +25,7 @@ void testbed_scenarios::AddKnockScenarios(std::vector<Scenario>& all)
 	    .name = "Knocking on a house at night",
 	    .facet = Facet::Hand,
 	    .description = "A Celtic hut at night. Two grown villagers that live in the hut stand beside it. The neutral "
-	                   "player holds their town from the start, so no change of owner makes the town celebrate. At 45 "
+	                   "player holds their town from the start, so no change of owner makes the town celebrate. At 60 "
 	                   "seconds, when both have gone in to sleep, the player's hand knocks on the hut. It knocks again "
 	                   "3 seconds later.",
 	    .expected = "At night the town wants sleep, so they go home into the hut, where they are not drawn. The knock plays a "
@@ -45,7 +45,9 @@ void testbed_scenarios::AddKnockScenarios(std::vector<Scenario>& all)
 	                 .offset = k_House + glm::vec2 {6.0f, -8.0f},
 	                 .joinTown = true,
 	                 .homeIn = 0}},
-	    .commands = {{.kind = Kind::HandTapObject, .delaySeconds = 45.0f, .object = 0},
+	    // A new villager stands for 1 to 500 turns before it first decides, and then walks home for about 8 seconds.
+	    // Thus at 60 seconds both are inside for all random draws.
+	    .commands = {{.kind = Kind::HandTapObject, .delaySeconds = 60.0f, .object = 0},
 	                 {.kind = Kind::HandTapObject, .delaySeconds = 3.0f, .object = 0}},
 	    .townOwner = PlayerNames::NEUTRAL,
 	});
