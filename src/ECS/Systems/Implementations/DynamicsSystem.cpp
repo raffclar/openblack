@@ -539,7 +539,17 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, con
 	default:
 		if (const auto parts = _world->ModelOf(meshId))
 		{
-			shape = physics::shapes::FromModel(parts->parts, scale);
+			// A model that lies over the land's shape has its points lifted with it. The lift of each point is the land
+			// under its vertex against the land under the model's origin.
+			std::vector<float> lifts;
+			if (facts.body == BodyKind::Model && registry.AllOf<MorphWithTerrain>(object))
+			{
+				if (const auto* land = Land())
+				{
+					lifts = physics::shapes::LandLifts(parts->parts, axes * scale, origin, scale, *land);
+				}
+			}
+			shape = physics::shapes::FromModel(parts->parts, scale, lifts);
 		}
 		break;
 	}
@@ -551,23 +561,6 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, con
 	if (facts.animated)
 	{
 		axes = physics::QuarterTurnedBack(axes);
-	}
-	// A model that lies over the land's shape has its points lifted with it, the land under each point against the land
-	// under its origin; its centre of mass stays where its unlifted points put it, and its reach takes the lift in
-	if (facts.body == BodyKind::Model && registry.AllOf<MorphWithTerrain>(object))
-	{
-		if (const auto* land = Land())
-		{
-			const float baseHeight = land->HeightAt(glm::vec2(origin.x, origin.z));
-			const auto centreOfMass = shape.centreOfMass * scale;
-			shape.radius = 0.0f;
-			for (auto& point : shape.points)
-			{
-				const auto world = origin + axes * (point + centreOfMass);
-				point.y += land->HeightAt(glm::vec2(world.x, world.z)) - baseHeight;
-				shape.radius = std::max(shape.radius, x87::LengthZyx(point));
-			}
-		}
 	}
 	auto body = std::make_unique<physics::Body>(setup, shape);
 	body->SetUpPose({.axes = axes * scale, .origin = origin});
