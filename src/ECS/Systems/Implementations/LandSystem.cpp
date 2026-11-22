@@ -24,7 +24,9 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <tuple>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <LHVM.h>
@@ -227,6 +229,8 @@ std::filesystem::path LandSystem::ChallengePath()
 
 bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change)
 {
+	// A turn that waits to continue ends in the land that it started in
+	FinishSplitTurn();
 	// A land loads on the main thread. A turn on another thread, such as a script of the story that goes to the next land,
 	// waits while the main thread loads it, and then goes on as it does on the main thread.
 	if (InTurnOnOtherThread())
@@ -391,6 +395,8 @@ bool LandSystem::IsPlaygroundLand(const std::filesystem::path& path) const
 
 bool LandSystem::LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change)
 {
+	// A turn that waits to continue ends in the land that it started in
+	FinishSplitTurn();
 	if (InTurnOnOtherThread())
 	{
 		return CallOnMainThread(MainThreadApi::Renderer,
@@ -402,6 +408,8 @@ bool LandSystem::LoadMapWithFreshScripts(const std::filesystem::path& path, land
 
 bool LandSystem::LoadNetworkMapFile(const std::filesystem::path& path, std::span<const uint8_t> file, ChallengeScripts scripts)
 {
+	// A turn that waits to continue ends in the land that it started in
+	FinishSplitTurn();
 	if (InTurnOnOtherThread())
 	{
 		return CallOnMainThread(MainThreadApi::Renderer,
@@ -454,6 +462,8 @@ void LandSystem::StartChallengeScriptsAgain()
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 bool LandSystem::LoadTestbed()
 {
+	// A turn that waits to continue ends in the land that it started in
+	FinishSplitTurn();
 	const InspectorLoading loading("testbed");
 	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
 	if (Locator::vm::has_value())
@@ -507,6 +517,8 @@ bool LandSystem::LoadTestbed()
 #else
 bool LandSystem::LoadTestbed()
 {
+	// A turn that waits to continue ends in the land that it started in
+	FinishSplitTurn();
 	// The testbed is a developer tool: a build for players has none
 	return false;
 }
@@ -634,6 +646,8 @@ void PlaceGeneratedThings(const landgen::GeneratedLand& land)
 
 bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 {
+	// A turn that waits to continue ends in the land that it started in
+	FinishSplitTurn();
 	const InspectorLoading loading("generated land");
 	const auto parts = generated_land::ReadStoryParts(Locator::filesystem::value());
 	if (!parts.has_value())
@@ -722,6 +736,8 @@ bool LandSystem::LoadGeneratedLand(const generated_land::Choices& choices)
 
 bool LandSystem::LoadGodsRingMap()
 {
+	// A turn that waits to continue ends in the land that it started in
+	FinishSplitTurn();
 	// The village of each slot comes from a land of the game for network play, which the player has. The game makes the
 	// map's file from it, and loads the file as a player loads the file from the lobby.
 	const auto file = gods_ring_map_file::MakeFromGameFolder(Locator::filesystem::value());
@@ -730,6 +746,8 @@ bool LandSystem::LoadGodsRingMap()
 
 bool LandSystem::LoadGodsRingMapFile(std::span<const uint8_t> file)
 {
+	// A turn that waits to continue ends in the land that it started in
+	FinishSplitTurn();
 	const InspectorLoading loading {std::string(gods_ring_map::k_File)};
 	auto parts = gods_ring_map_file::Read(file);
 	if (!parts.has_value())
@@ -1500,6 +1518,12 @@ void LandSystem::KeepAlignmentInProfile()
 
 void LandSystem::StartNewLand(land_change::Kind change)
 {
+	// A turn of the last land that waited to continue does not continue in the new land
+	if (std::exchange(_splitTurn, std::nullopt).has_value())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "A new land starts while a turn of the last land waits to continue");
+	}
+	_splitView = nullptr;
 	// With the land and its towns ready, the creatures' map of the land gets its regions
 	creature_exploration_land::MakeMap();
 	_lastGameLoopTime = machine_clock::Ticks();
@@ -1773,6 +1797,24 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	const auto delta = std::chrono::milliseconds(currentTime - _lastGameLoopTime);
 	auto& clock = Locator::time::value();
 
+	// Each frame gives the computer minds a budget of time. A turn whose minds use it stops between two players, and the
+	// frame draws. The game server has no budget, so its turns never stop (deviation row 288).
+	_mindBudget.StartFrame(Locator::config::has_value() ? Locator::config::value().mindFrameBudgetMs : std::nullopt);
+	auto* budget = _mindBudget.HasBudget() ? &_mindBudget : nullptr;
+	// A turn that stopped continues first, before the temple, the pause and the next commands. Nothing of the world comes
+	// between its parts, so the turn gives the same world as a turn that did not stop.
+	if (_splitTurn.has_value())
+	{
+		// A computer that is behind the server ends the turn in this frame
+		const bool behind = Locator::playerCommandSystem::value().IsBehind(clock.GetTurn());
+		if (!ContinueSplitTurn(behind ? nullptr : budget))
+		{
+			return;
+		}
+		_lastGameLoopTime = currentTime;
+		_turnDeltaTime = delta;
+	}
+
 	// The game pauses the world while the player is in the temple. The temple's own turns, by real time whatever the
 	// game's speed, run the temple's scripts and its help scripts, keep the audio going and have the advisors follow
 	// what they point at. A network game does not pause: the world's turns go on while the player is in the temple.
@@ -1817,7 +1859,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	const auto& commands = Locator::playerCommandSystem::value();
 	while (commands.TurnReady(clock.GetTurn()))
 	{
-		if (commands.IsBehind(clock.GetTurn()))
+		// A computer that is behind the server plays whole turns, so that it catches up
+		const bool behind = commands.IsBehind(clock.GetTurn());
+		if (behind)
 		{
 			clock.ResetTimerToTurn();
 		}
@@ -1837,10 +1881,60 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		{
 			Locator::playerCommandSystem::value().TurnsStartAgain(turn, again);
 		}
-		simulation::PlayTurn(view);
+		_splitTurn = simulation::StartTurn(view, behind ? nullptr : budget);
+		if (_splitTurn.has_value())
+		{
+			// The turn continues in the next frame. No other turn starts before it ends.
+			_splitView = &view;
+			if (!std::exchange(_splitTurnTold, true))
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"),
+				                   "Turn {} continues in the next frame: the computer minds used the {:.1f} ms of the frame "
+				                   "(deviation row 288)",
+				                   _splitTurn->number, _mindBudget.UsedMs());
+			}
+			return;
+		}
 
 		_lastGameLoopTime = currentTime;
 		_turnDeltaTime = delta;
+	}
+}
+
+bool LandSystem::ContinueSplitTurn(simulation::MindFrameBudget* budget)
+{
+	// The turn is not split while it plays, so a save or a load that the turn does itself finds no turn to finish
+	auto turn = std::exchange(_splitTurn, std::nullopt);
+	auto* view = std::exchange(_splitView, nullptr);
+	_splitTurn = simulation::ContinueTurn(*view, std::move(*turn), budget);
+	if (_splitTurn.has_value())
+	{
+		_splitView = view;
+		return false;
+	}
+	return true;
+}
+
+void LandSystem::FinishSplitTurn()
+{
+	if (!_splitTurn.has_value())
+	{
+		return;
+	}
+	// The queue knows that this thread does the turn, as it knows for each turn
+	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
+	{
+		std::optional<MainThreadQueue::TurnScope> turnScope;
+		if (queue != nullptr)
+		{
+			turnScope.emplace(*queue);
+		}
+		std::ignore = ContinueSplitTurn(nullptr);
+	}
+	// The main thread does the work that the turn gave it
+	if (queue != nullptr)
+	{
+		queue->RunPending();
 	}
 }
 
@@ -1848,7 +1942,7 @@ void LandSystem::PlayTurns(simulation::TurnViewInterface& view)
 {
 	auto& profiler = Locator::profiler::value();
 	auto gameLogic = profiler.BeginScoped(Profiler::Stage::GameLogic);
-	const auto turnBefore = Locator::time::value().GetTurn();
+	const auto turnBefore = simulation::WholeTurns();
 	const auto logicStart = std::chrono::steady_clock::now();
 	const auto cpuStart = debug::ThreadCpuMilliseconds();
 	PlayDueTurns(view);
@@ -1883,8 +1977,8 @@ void LandSystem::FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::tim
 	{
 		Locator::mainThreadQueue::value().RunPending();
 	}
-	// The run record keeps the time of each turn
-	if (Locator::time::value().GetTurn() != turnBefore)
+	// The run record keeps the time of each turn. A turn that continues in the next frame counts when it ends.
+	if (simulation::WholeTurns() != turnBefore)
 	{
 		Locator::simulation::value().TurnPlayed(
 		    std::chrono::duration<float, std::milli>(end.value_or(std::chrono::steady_clock::now()) - start).count(), cpuMs);

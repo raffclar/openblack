@@ -85,6 +85,8 @@ private:
 	/// The time that the running scenario counts, never less than the time of the turns that passed
 	testbed_scenarios::TurnClock _turnClock;
 	const testbed_scenarios::Scenario* _clockScenario {nullptr};
+	/// The time of the frames in which a turn waited between two players to continue
+	float _heldSeconds {0.0f};
 	/// What happened to the last request of a scenario in a network game
 	std::string _networkStatus;
 };

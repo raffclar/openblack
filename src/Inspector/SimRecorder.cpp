@@ -63,6 +63,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Profiler.h"
+#include "Simulation/TurnBody.h"
 #include "SystemProviders.h"
 
 using namespace openblack;
@@ -523,7 +524,7 @@ QueryResult SimProvider::Run(std::string_view query, const QueryContext& context
 	if (query == "sample")
 	{
 		std::vector<sim_checks::Flag> flags;
-		const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+		const auto turn = simulation::WholeTurns();
 		auto record = Sample(turn, _frame, false, flags);
 		Json problems = Json::array();
 		for (const auto& flag : flags)
@@ -805,7 +806,8 @@ void SimProvider::Frame(uint64_t frame)
 	{
 		return;
 	}
-	const auto turn = Locator::time::value().GetTurn();
+	// The record comes after each whole turn. A turn that waits between two players to continue is not whole yet.
+	const auto turn = simulation::WholeTurns();
 	if (_lastTurn == turn)
 	{
 		return;

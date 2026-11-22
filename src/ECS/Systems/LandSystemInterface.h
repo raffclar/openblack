@@ -245,6 +245,12 @@ public:
 	                         std::optional<std::chrono::steady_clock::time_point> end, std::optional<float> cpuMs) = 0;
 	/// The real time between the last two turns
 	[[nodiscard]] virtual std::chrono::steady_clock::duration GetTurnDeltaTime() const = 0;
+	/// True while a turn stopped between two players and waits for the next frame to continue (deviation row 288). Until
+	/// then, nothing of the world changes, and the frames do not move the world between turns.
+	[[nodiscard]] virtual bool IsTurnSplit() const { return false; }
+	/// A turn that waits to continue does the rest of its steps now. A save, a load, a scenario, an edit of the inspector
+	/// and the end of the game see only whole turns, so they call this first. With no such turn, it does nothing.
+	virtual void FinishSplitTurn() {}
 	/// Every some turns, the profile of the player keeps the alignment of the player, but not on the testbed
 	virtual void KeepAlignmentInProfile() = 0;
 	/// The values that the reader of the land scripts keeps from the lines that it read. They stay while the game runs.

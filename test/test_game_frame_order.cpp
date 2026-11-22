@@ -306,3 +306,35 @@ TEST(GameFrameOrder, TheKeysSendTheirCommandsBeforeTheTurnsAndTheBlockGoesAfterT
 	// The hand's frame comes after the block went, so its commands wait for the block of the next frame
 	EXPECT_TRUE(recorder.Before(Step::SendCommands, Step::Hand));
 }
+
+// While a turn waits between two players to continue, only the steps that move the world between turns wait. The
+// input, the camera, the hand, the turns and the draw continue.
+TEST(GameFrameOrder, OnlyTheStepsThatMoveTheWorldWaitForAWholeTurn)
+{
+	std::vector<Step> waiting;
+	for (const auto& place : k_Frame)
+	{
+		if (WaitsForWholeTurn(place.step))
+		{
+			waiting.push_back(place.step);
+		}
+	}
+	const std::vector<Step> expected {Step::CreaturePoses, Step::FrameEffects, Step::Entities};
+	EXPECT_EQ(waiting, expected);
+	// The hand reports to the turns, so it continues
+	EXPECT_FALSE(WaitsForWholeTurn(Step::Hand));
+	// A game that steps deterministically also holds every step after the turns, but not the turns or the steps before
+	EXPECT_FALSE(WaitsForWholeStepTurn(Step::FrameClock));
+	EXPECT_FALSE(WaitsForWholeStepTurn(Step::Input));
+	EXPECT_FALSE(WaitsForWholeStepTurn(Step::DebugGui));
+	EXPECT_FALSE(WaitsForWholeStepTurn(Step::Turns));
+	EXPECT_TRUE(WaitsForWholeStepTurn(Step::KeyCommands));
+	EXPECT_TRUE(WaitsForWholeStepTurn(Step::Interface));
+	EXPECT_TRUE(WaitsForWholeStepTurn(Step::SendCommands));
+	EXPECT_TRUE(WaitsForWholeStepTurn(Step::Hand));
+	EXPECT_TRUE(WaitsForWholeStepTurn(Step::ProfileAlignment));
+	EXPECT_FALSE(WaitsForWholeTurn(Step::Turns));
+	EXPECT_FALSE(WaitsForWholeTurn(Step::Input));
+	EXPECT_FALSE(WaitsForWholeTurn(Step::Camera));
+	EXPECT_FALSE(WaitsForWholeTurn(Step::SendCommands));
+}
