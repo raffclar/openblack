@@ -241,6 +241,26 @@ TEST_F(EffectReceivers, ACraterThatNoScriptMadeIndestructibleCanBeDestroyed)
 	EXPECT_FLOAT_EQ(ecs::world_objects::ReduceLife(crater, 1.5f), 0.0f);
 }
 
+TEST_F(EffectReceivers, NoMiracleDestroysAVortexOrTheVolcanosMouth)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The volcano's mouth on Land 5 has no indestructible mark, but it takes no effect
+	for (const auto type : {VortexType::In, VortexType::Out, VortexType::Volcano})
+	{
+		const auto vortex = Made();
+		registry.Assign<Vortex>(vortex, Vortex {.type = type});
+		EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(vortex));
+	}
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysATownsDesireFlag)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto flag = Made();
+	registry.Assign<TownDesireFlag>(flag);
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(flag));
+}
+
 TEST_F(EffectReceivers, ATownsDesireFlagTakesNoEffectEvenWithTheDataOfThePrayerSite)
 {
 	auto& registry = Locator::entitiesRegistry::value();
