@@ -2439,6 +2439,10 @@ def editor_desync(pids, case, shots=None, mind_files=None, script_files=None, wo
         done["time"] = editor_time(pids, shots, restart)
         if done["time"].get("error"):
             done["error"] = done["time"]["error"]
+    if case == "game-speed":
+        done["game_speed"] = game_speed_keys(pids)
+        if done["game_speed"].get("errors"):
+            done.setdefault("errors", []).extend(done["game_speed"]["errors"])
     if case == "debug":
         done["debug"] = editor_debug(pids, focus, shots)
         if done["debug"].get("error"):
@@ -2505,6 +2509,8 @@ DEBUG_ADVISOR_ACTS = [
 
 # The cases where the first client has only the debugger claim
 DEBUGGER_CASES = ("debug", "debug-reads", "debug-magic", "debug-things")
+# The cases of --editor-desync in which no client has a claim
+NO_CLAIM_CASES = ("game-speed",)
 
 # Each button of the Magic, Weather and Moon debug windows that the debug-magic case presses, in order. The miracles
 # are magic types: 1 the fireball, 10 the heal, 14 the food, 22 the water, 28 the big creature spell.
@@ -2793,6 +2799,48 @@ def room_time(pid):
     the speed of its game clock"""
     answer = inspector_answer(pid, "editor.time", {}) or {}
     return answer if isinstance(answer, dict) else {}
+
+
+def game_speed_keys(pids):
+    """The speed keys of players with no claim, as in the game: each key sets the speed of the game of its computer, and
+    the server sets the time between two turns of every computer to 100 ms divided by that speed. The second client
+    presses Alt+2 (speed 2, 50 ms), then the first client presses Alt+1 (its own speed 0.5, 200 ms), then the second
+    client presses Alt+1 (its own speed 1, 100 ms). After each key every client must have the same time between two
+    turns and the clock speed 100 divided by it. Returns what each step saw."""
+    done = {"steps": [], "errors": []}
+
+    def alt_key(pid, key):
+        inspector_call(pid, "input.key", {"params": {"key": "Left Alt", "how": "press"}})
+        time.sleep(0.2)
+        inspector_call(pid, "input.key", {"params": {"key": key, "how": "tap"}})
+        time.sleep(0.2)
+        inspector_call(pid, "input.key", {"params": {"key": "Left Alt", "how": "release"}})
+        time.sleep(2.0)
+
+    def note(name, period, game_speeds):
+        states = [room_time(pid) for pid in pids]
+        step = {"step": name, "turns": [state.get("turn") for state in states],
+                "period": [state.get("period") for state in states],
+                "clock_speed": [state.get("clock_speed") for state in states],
+                "game_speed": [state.get("game_speed") for state in states]}
+        done["steps"].append(step)
+        if any(value != period for value in step["period"]):
+            done["errors"].append(f"{name}: the time between two turns is {step['period']}, not {period}")
+        if any(value is None or abs(value - 100.0 / period) > 1e-4 for value in step["clock_speed"]):
+            done["errors"].append(f"{name}: the clock speeds are {step['clock_speed']}, not {100.0 / period}")
+        if step["game_speed"] != game_speeds:
+            done["errors"].append(f"{name}: the speeds of the game are {step['game_speed']}, not {game_speeds}")
+
+    if len(pids) < 2:
+        done["errors"].append("game-speed needs two clients")
+        return done
+    alt_key(pids[1], "2")
+    note("second client Alt+2", 50, [1.0, 2.0])
+    alt_key(pids[0], "1")
+    note("first client Alt+1", 200, [0.5, 2.0])
+    alt_key(pids[1], "1")
+    note("second client Alt+1", 100, [0.5, 1.0])
+    return done
 
 
 def editor_time(pids, shots=None, restart=None):
@@ -4084,7 +4132,7 @@ def main():
                              "(--editor-shots takes the pictures)")
     parser.add_argument("--editor-desync", choices=("villagers", "creature", "objects", "spawn", "animals",
                                                     "creature-remove", "land", "history", "mind", "time", "scripts", "debugger",
-                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "island", "island-away", "debug-reads", "debug-magic", "debug-things", "all"),
+                                                    "debug", "world", "scenario", "scenario-away", "scenario-away-fast", "body-away", "island", "island-away", "debug-reads", "debug-magic", "debug-things", "game-speed", "all"),
                         help="the first client has the editor claim: after --hold-after turns it puts down rows of each "
                              "villager type (villagers), or changes each value and does each act of the creature near the "
                              "camera (creature), or moves, turns and scales a building, a tree, a feature and a villager "
@@ -4110,7 +4158,9 @@ def main():
                              "debug-magic the first client has only the debugger claim: it does the acts of the Advisors, "
                              "World, Console and Gestures debug windows (debug), or each button of the Magic, Weather and "
                              "Moon windows (debug-magic), or each button of the Physics window, of the Particles tab, of the "
-                             "Temple villagers window and of the Path finding window (debug-things)")
+                             "Temple villagers window and of the Path finding window (debug-things). With game-speed no "
+                             "client has a claim: the clients press the speed keys Alt+2 and Alt+1, and the time between "
+                             "two turns of every client must follow the speed of the game of the last key")
     parser.add_argument("--world-file", metavar="FILE",
                         help="with --editor-desync world: the first client sends this world file, for example the world "
                              "of a room with other players, and does not write its own")
@@ -4577,7 +4627,8 @@ def main():
                 "account": 100 + index, "name": f"{'Observer' if is_observer else 'Player'}{index + 1}",
                 "role": "observer" if is_observer else "god", "lifetime": 600,
                 "editor": (options.editor_check or options.forest_camera or options.editor_right_change
-                           or (bool(options.editor_desync) and options.editor_desync not in DEBUGGER_CASES))
+                           or (bool(options.editor_desync) and options.editor_desync not in DEBUGGER_CASES
+                               and options.editor_desync not in NO_CLAIM_CASES))
                           and index == 0,
                 "staff": options.editor_check and index == 1,
                 "debugger": ((options.editor_desync in DEBUGGER_CASES or options.debugger_right_change)

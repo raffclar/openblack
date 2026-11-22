@@ -85,10 +85,14 @@ size_t FirstStartBytes(const Room& room)
 	return 4 + room.firstStart.size();
 }
 
-/// The bytes after the claims of the room of format 6: the clock, the accounts of the observers and the first start
+/// The bytes of the time between two turns at the end of the room of format 10
+constexpr size_t k_PeriodBytes = 4;
+
+/// The bytes after the claims of the room of format 6: the clock, the accounts of the observers, the first start and the
+/// time between two turns
 size_t TailBytes(const Room& room)
 {
-	return k_ClockBytes + AccountBytes(room) + FirstStartBytes(room);
+	return k_ClockBytes + AccountBytes(room) + FirstStartBytes(room) + k_PeriodBytes;
 }
 
 /// The bytes of the claims at the end of the room of format 6: two lists, each with a 4-byte count and one byte for each
@@ -508,12 +512,12 @@ TEST(ServerSnapshots, ASnapshotOfAnEarlierFormatDoesNotLoad)
 	ASSERT_TRUE(DecodeSnapshot(now).has_value());
 	// The first format kept the secrets of the sessions, and the second format kept no blocks of commands. The version is
 	// after the 8 bytes of the magic text.
-	// The formats 3 to 8 still load.
-	for (const uint8_t version : {1, 2, 3, 4, 5, 6, 7, 8})
+	// The formats 3 to 9 still load.
+	for (const uint8_t version : {1, 2, 3, 4, 5, 6, 7, 8, 9})
 	{
 		auto bytes = now;
 		bytes.resize(bytes.size() - sizeof(uint64_t));
-		ASSERT_EQ(bytes[8], 9);
+		ASSERT_EQ(bytes[8], 10);
 		bytes[8] = version;
 		const auto checksum = Checksum(bytes);
 		for (int shift = 0; shift < 64; shift += 8)
@@ -602,6 +606,30 @@ TEST(ServerSnapshots, TheRoomOfTheSixthFormatReadsWithTheNormalClock)
 	EXPECT_FALSE(DecodeRoom(bytes).has_value());
 }
 
+// The room keeps the time between two turns that the speed of the game set, so that a restart keeps the clock speed
+TEST(ServerSnapshots, TheRoomKeepsTheTimeBetweenTwoTurnsOfTheSpeedOfTheGame)
+{
+	auto room = MakeRoom();
+	room.clock = openblack::online::room_clock::ApplyPeriod(room.clock, 50);
+	const auto read = DecodeRoom(EncodeRoom(room));
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(read->clock, room.clock);
+	EXPECT_EQ(read->clock.period, 50u);
+}
+
+// A room of format 9 has no time between two turns. It still reads, with the time of a turn of the clock only.
+TEST(ServerSnapshots, TheRoomOfTheNinthFormatReadsWithNoTimeBetweenTwoTurns)
+{
+	auto room = MakeRoom();
+	room.clock = openblack::online::room_clock::ApplyPeriod(room.clock, 50);
+	auto bytes = EncodeRoom(room);
+	bytes.resize(bytes.size() - k_PeriodBytes);
+	const auto old = DecodeRoom(bytes);
+	ASSERT_TRUE(old.has_value());
+	EXPECT_FLOAT_EQ(old->clock.speed, 0.5f);
+	EXPECT_FALSE(old->clock.period.has_value());
+}
+
 // The room keeps the account of each observer, so that a kick or a ban after a restart also ends an away session
 TEST(ServerSnapshots, TheRoomKeepsTheAccountsOfTheObservers)
 {
@@ -616,7 +644,7 @@ TEST(ServerSnapshots, TheRoomOfTheSeventhFormatReadsWithNoAccountsOfObservers)
 {
 	const auto room = MakeRoom();
 	auto bytes = EncodeRoom(room);
-	bytes.resize(bytes.size() - AccountBytes(room) - FirstStartBytes(room));
+	bytes.resize(bytes.size() - AccountBytes(room) - FirstStartBytes(room) - k_PeriodBytes);
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->clock, room.clock);
@@ -750,7 +778,7 @@ TEST(ServerSnapshots, TheRoomOfTheEighthFormatReadsWithNoChangeOfTheLand)
 	auto room = MakeRoom();
 	room.firstStart = R"({"type":"room.start","land":"Land1.txt"})";
 	auto bytes = EncodeRoom(room);
-	bytes.resize(bytes.size() - FirstStartBytes(room));
+	bytes.resize(bytes.size() - FirstStartBytes(room) - k_PeriodBytes);
 	const auto old = DecodeRoom(bytes);
 	ASSERT_TRUE(old.has_value());
 	EXPECT_EQ(old->watcherAccounts, room.watcherAccounts);

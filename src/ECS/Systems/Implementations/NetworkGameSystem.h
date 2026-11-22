@@ -103,6 +103,8 @@ public:
 			_session->RequestTime(request);
 		}
 	}
+	void SetGameSpeed(float speed) override;
+	[[nodiscard]] float GetGameSpeed() const override { return _gameSpeed; }
 	bool GoAwayForTest(int64_t microseconds) override { return _session && _session->GoAwayForTest(microseconds); }
 	[[nodiscard]] std::vector<std::string> TakeTimeNotices() override
 	{
@@ -158,6 +160,10 @@ private:
 	uint32_t _roomClockChanges {0};
 	/// The time of a turn of the clock of the room that this computer set last
 	float _roomSpeed {1.0f};
+	/// The time between two turns of the clock of the room that this computer set last, none for a speed of the editor
+	std::optional<uint32_t> _roomPeriod;
+	/// The speed of the game that this computer set last (see GetGameSpeed)
+	float _gameSpeed {1.0f};
 	/// The desync events that this run of the game can still send, for all its network games
 	error_reports::DesyncRunBudget _desyncBudget;
 	/// The desyncs of the network game, from the join to the end of the game

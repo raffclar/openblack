@@ -1554,8 +1554,10 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	});
 	auto time = Query(
 	    "time",
-	    "The clock of the room of a network game: with no act, the clock that the game server sent last and the turn of "
-	    "this computer. With an act, asks the game server to pause, play, step or change the speed of the clock for every "
+	    "The clock of the room of a network game: with no act, the clock that the game server sent last (with the time "
+	    "between two turns in ms when the speed of the game set it), the turn of this computer, the speed of its clock and "
+	    "the speed of the game that it set last. With an act, asks the game server to pause, play, step or change the speed of "
+	    "the clock for every "
 	    "player, as the play, step and speed of the editor do in a network game. The server takes the request only from a "
 	    "player with the editor claim, a speed from 0.1 to 10, and a step only while the room is paused. force sends it also "
 	    "when the editor of this computer is refused.",
@@ -1577,11 +1579,16 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			const auto& room = Locator::networkGame::value().Session()->RoomClock();
 			Json value {{"room", room.has_value()},
 			            {"turn", Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u},
-			            {"clock_speed", Locator::time::has_value() ? Locator::time::value().GetSpeed() : 1.0f}};
+			            {"clock_speed", Locator::time::has_value() ? Locator::time::value().GetSpeed() : 1.0f},
+			            {"game_speed", Locator::networkGame::value().GetGameSpeed()}};
 			if (room.has_value())
 			{
 				value["paused"] = room->paused;
 				value["speed"] = room->speed;
+				if (room->period.has_value())
+				{
+					value["period"] = *room->period;
+				}
 				value["act"] = std::string(game_socket::TimeActName(room->act));
 				value["by"] = room->by;
 				value["server_turn"] = room->turn;

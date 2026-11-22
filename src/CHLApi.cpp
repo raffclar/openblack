@@ -87,6 +87,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
+#include "ECS/GameSpeed.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -394,7 +395,7 @@ void CHLApi::TaskStopped(uint32_t task)
 	}
 	if (released.gameSpeed)
 	{
-		Locator::time::value().SetSpeed(1.0f);
+		ecs::game_speed::Set(1.0f);
 	}
 }
 

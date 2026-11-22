@@ -67,6 +67,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/GamePlayers.h"
+#include "ECS/GameSpeed.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
 #include "ECS/OtherPlayerSparkles.h"
@@ -753,7 +754,7 @@ void Game::UpdatePauseText()
 	Locator::pauseTextSystem::value().Update(
 	    {
 	        .paused = clock.IsPaused(),
-	        .speed = clock.GetSpeed(),
+	        .speed = ecs::game_speed::Get(),
 	        .started = true,
 	        .insideTemple = inTemple,
 	        .scriptHasSpeed = scriptHasSpeed,

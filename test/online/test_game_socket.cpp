@@ -215,6 +215,30 @@ TEST(GameSocket, TheClockOfTheRoomGivesThePauseTheSpeedTheActThePlayerAndTheTurn
 	EXPECT_FALSE(TimeActFrom("Pause").has_value());
 }
 
+TEST(GameSocket, TheRequestOfTheSpeedOfTheGameGivesTheTimeBetweenTwoTurns)
+{
+	const GamePace pace {.period = 50};
+	EXPECT_EQ(ToJson(pace), R"({"period":50,"type":"game.pace"})");
+	EXPECT_EQ(std::get<GamePace>(*Parse(ToJson(pace))), pace);
+	EXPECT_EQ(std::get<GamePace>(*Parse(R"({"type":"game.pace","period":100000})")).period, 100'000u);
+	// The time is needed, and it is a whole number from 1 to 100000
+	EXPECT_FALSE(Parse(R"({"type":"game.pace"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.pace","period":0})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.pace","period":100001})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.pace","period":-5})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.pace","period":"fast"})").has_value());
+}
+
+TEST(GameSocket, TheClockOfTheRoomGivesTheTimeBetweenTwoTurnsOnlyWhenTheSpeedOfTheGameSetIt)
+{
+	const GameTime time {.paused = false, .speed = 0.5f, .act = TimeAct::Speed, .by = {}, .turn = 30, .period = 50};
+	EXPECT_EQ(ToJson(time), R"({"act":"speed","by":"","paused":false,"period":50,"speed":0.5,"turn":30,"type":"game.time"})");
+	EXPECT_EQ(std::get<GameTime>(*Parse(ToJson(time))), time);
+	EXPECT_FALSE(std::get<GameTime>(*Parse(R"({"type":"game.time","act":"play","paused":false})")).period.has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.time","act":"play","paused":false,"period":0})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.time","act":"play","paused":false,"period":100001})").has_value());
+}
+
 TEST(GameSocket, TheReplyToAJoinGivesTheServersWorld)
 {
 	const auto joined = RoundTrip(Joined {.role = Role::God,
