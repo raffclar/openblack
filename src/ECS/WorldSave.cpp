@@ -413,13 +413,44 @@ constexpr std::array<SavedSystem, 49> k_SavedSystems {{
     {"land", &FindSystem<Locator::landSystem>},
 }};
 
-gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)
+/// While it exists, the scripts' screen saves and loads in the form of a saved game (see
+/// CinematicDirectorSystemInterface::SetSavedGameForm). A world state keeps the screen of the world exactly.
+class ScriptScreenForm
 {
+public:
+	explicit ScriptScreenForm(world_save::LoadKind kind)
+	    : _on(kind == world_save::LoadKind::SavedGame && Locator::cinematicDirectorSystem::has_value())
+	{
+		if (_on)
+		{
+			Locator::cinematicDirectorSystem::value().SetSavedGameForm(true);
+		}
+	}
+	~ScriptScreenForm()
+	{
+		if (_on && Locator::cinematicDirectorSystem::has_value())
+		{
+			Locator::cinematicDirectorSystem::value().SetSavedGameForm(false);
+		}
+	}
+	ScriptScreenForm(const ScriptScreenForm&) = delete;
+	ScriptScreenForm& operator=(const ScriptScreenForm&) = delete;
+	ScriptScreenForm(ScriptScreenForm&&) = delete;
+	ScriptScreenForm& operator=(ScriptScreenForm&&) = delete;
+
+private:
+	bool _on;
+};
+
+gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection, world_save::LoadKind kind)
+{
+	const ScriptScreenForm screen(kind);
 	return {.tag = gamesave::k_SystemsTag, .bytes = reflection::SaveSections(world_save::SavedSystemSections(reflection))};
 }
 
-bool LoadSystems(const entt::meta_ctx& reflection, std::span<const uint8_t> bytes)
+bool LoadSystems(const entt::meta_ctx& reflection, std::span<const uint8_t> bytes, world_save::LoadKind kind)
 {
+	const ScriptScreenForm screen(kind);
 	const auto sections = reflection::LoadSections(bytes);
 	if (!sections.has_value())
 	{
@@ -574,7 +605,7 @@ std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx
 	{
 		timed(ready(gamesave::k_ScriptObjectsTag, Locator::scriptObjects::value().SaveTable()));
 	}
-	const auto systems = SystemsChunk(reflection);
+	const auto systems = SystemsChunk(reflection, kind);
 	timed(ready(systems.tag, systems.bytes));
 	SPDLOG_LOGGER_INFO(Log(), "The saved world's blocks took (ms):{}", times);
 	std::vector<std::string> unsaved;
@@ -958,7 +989,7 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 	// The systems take their running state last, with every entity and the clock back
 	if (const auto systems = gamesave::FindChunk(file, gamesave::k_SystemsTag); systems.has_value())
 	{
-		read = LoadSystems(reflection, *systems) && read;
+		read = LoadSystems(reflection, *systems, kind) && read;
 	}
 	// A world state then gives the channel of the scripts' music, after the section of the music cleared it
 	if (const auto channel = gamesave::FindChunk(file, gamesave::k_ScriptMusicChannelTag);

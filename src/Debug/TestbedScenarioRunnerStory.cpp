@@ -626,6 +626,25 @@ bool Runner::GiveStoryCommand(const Command& command)
 		Log(fmt::format("{:.1f}s: the cinema bars slide {}", _seconds, command.value != 0 ? "in" : "out"));
 		return true;
 	}
+	if (command.kind == Kind::ScriptFade)
+	{
+		const auto seconds = static_cast<int8_t>(std::lround(command.amount));
+		if (Locator::cinematicDirectorSystem::has_value())
+		{
+			auto& director = Locator::cinematicDirectorSystem::value();
+			if (command.value != 0)
+			{
+				director.FadeTo(0, 0, 0, seconds);
+			}
+			else
+			{
+				director.FadeBackToNormal(seconds);
+			}
+		}
+		Log(fmt::format("{:.1f}s: the script's fade goes {} over {} s", _seconds, command.value != 0 ? "to black" : "back",
+		                seconds));
+		return true;
+	}
 	// With a value of 1, the scenario's object catches fire, with or without a creature. With a value of 2, it catches
 	// at the most heat of its fire, so that it burns for a time.
 	if (command.kind == Kind::SetAlight && (command.value == 1 || command.value == 2))

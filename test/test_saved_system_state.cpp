@@ -150,6 +150,67 @@ TEST(SavedSystemState, TheScriptsScreenComesBack)
 	EXPECT_EQ(loaded.GetTexts().front().words, u"Hello");
 }
 
+TEST(SavedSystemState, ASavedGameKeepsNoFadeAndNoWordsOfTheScripts)
+{
+	CinematicDirectorSystem saved;
+	saved.FadeTo(0, 0, 0, 2);
+	saved.SetWideScreen(true, 7);
+	saved.SetTextColour({200, 100, 50});
+	saved.WriteText(u"Hello", {0.1f, 0.2f}, {0.5f, 0.1f}, 0.05f, 1.0f);
+	saved.ProcessTurn();
+	ASSERT_FALSE(saved.IsFadeFinished());
+	saved.SetSavedGameForm(true);
+	const auto bytes = StateOf(saved);
+	saved.SetSavedGameForm(false);
+	// The form of the save changes nothing in the world that saves
+	EXPECT_FALSE(saved.IsFadeFinished());
+	EXPECT_EQ(saved.GetTexts().size(), 1u);
+
+	CinematicDirectorSystem loaded;
+	loaded.SetTextColour({200, 100, 50});
+	loaded.SetSavedGameForm(true);
+	LoadInto(loaded, bytes);
+	loaded.SetSavedGameForm(false);
+	// The fade is over and clear, and no words show. The cinema bars stay.
+	EXPECT_TRUE(loaded.IsFadeFinished());
+	EXPECT_EQ(loaded.GetFadeColour(), 0u);
+	EXPECT_TRUE(loaded.GetTexts().empty());
+	EXPECT_TRUE(loaded.IsWideScreenOn());
+	EXPECT_EQ(loaded.GetWideScreenOwner(), 7u);
+}
+
+TEST(SavedSystemState, TheLoadOfASavedGameKeepsTheColourOfTheWordsOfThisComputer)
+{
+	CinematicDirectorSystem saved;
+	saved.FadeTo(0, 0, 0, 0);
+	saved.SetTextColour({200, 100, 50});
+	saved.WriteText(u"Hello", {0.1f, 0.2f}, {0.5f, 0.1f}, 0.05f, 1.0f);
+	// A file of an older build keeps the fade and the words
+	const auto bytes = StateOf(saved);
+
+	CinematicDirectorSystem loaded;
+	loaded.SetTextColour({1, 2, 3});
+	loaded.SetSavedGameForm(true);
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), bytes, identity);
+	ASSERT_TRUE(loaded.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	loaded.SetSavedGameForm(false);
+	EXPECT_TRUE(loaded.IsFadeFinished());
+	EXPECT_EQ(loaded.GetFadeColour(), 0u);
+	EXPECT_TRUE(loaded.GetTexts().empty());
+	// The next words that a script writes have the colour of this computer
+	loaded.WriteText(u"Again", {0.1f, 0.2f}, {0.5f, 0.1f}, 0.05f, 0.0f);
+	ASSERT_EQ(loaded.GetTexts().size(), 1u);
+	EXPECT_EQ(loaded.GetTexts().front().colour, glm::u8vec3(1, 2, 3));
+
+	// A world state gives back the screen of the world exactly
+	CinematicDirectorSystem world;
+	LoadInto(world, bytes);
+	EXPECT_EQ(world.GetFadeColour(), saved.GetFadeColour());
+	EXPECT_EQ(world.GetTexts().size(), 1u);
+}
+
 TEST(SavedSystemState, TheOwnersOfTheDialogueAndOfTheSpeedComeBack)
 {
 	DialogueControlSystem dialogue;

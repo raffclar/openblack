@@ -1253,6 +1253,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
 	});
 
+	// A saved game loads with no fade of the scripts: the load ends the fade first, and the save does not keep it
+	all.push_back({
+	    .id = "interface.fade_after_load",
+	    .name = "A loaded game shows no fade of the scripts",
+	    .facet = Facet::Interface,
+	    .description = "After a second a script fades the picture to black over two seconds. Four seconds later the game "
+	                   "saves into slot 0, and four seconds after that it loads the slot.",
+	    .expected = "The picture goes black and stays black until the load. After the load, the picture shows the land at "
+	                "once, with no black.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::ScriptFade, .delaySeconds = 1.0f, .value = 1, .amount = 2.0f},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 4.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "temple.save_room_pictures",
 	    .name = "The save game room shows the picture of a quick save",
