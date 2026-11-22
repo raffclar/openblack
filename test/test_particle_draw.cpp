@@ -257,6 +257,66 @@ TEST(ParticleDraw, SortedThingsGoInTheOrderOfAStableSortOfTheirDistances)
 	EXPECT_EQ(order, sprites);
 }
 
+TEST(ParticleDraw, AnEffectSortedAtOnePointIsOneThingAmongWhatBlends)
+{
+	// A fire: two flames that add to what is behind, then a puff of smoke that blends
+	openblack::particles::Creator flame;
+	flame.kind = openblack::particles::Creator::Kind::Sprite;
+	flame.texture = "flame";
+	flame.additive = true;
+	flame.writeDepth = false;
+	auto smoke = flame;
+	smoke.texture = "smoke";
+	smoke.additive = false;
+	openblack::particles::Effect::DrawWalk walk;
+	const auto add = [&walk](const openblack::particles::Creator& creator, glm::vec3 position) {
+		walk.steps.push_back({.chain = false, .index = static_cast<uint32_t>(walk.atoms.size())});
+		walk.atoms.push_back({.creator = &creator,
+		                      .position = position,
+		                      .rotation = glm::mat3(1.0f),
+		                      .scale = 1.0f,
+		                      .stretch = 1.0f,
+		                      .alpha = 255.0f,
+		                      .frame = 0.0f,
+		                      .rgb = {0xFF, 0xFF, 0xFF}});
+	};
+	add(flame, {0.0f, 0.0f, 100.0f});
+	add(flame, {0.0f, 0.0f, 10.0f});
+	add(smoke, {0.0f, 0.0f, 70.0f});
+	const Sources sources {
+	    .textures = [](std::string_view texture) -> std::optional<std::pair<entt::id_type, entt::id_type>> {
+		    return texture == "flame" ? std::pair<entt::id_type, entt::id_type> {7, 8}
+		                              : std::pair<entt::id_type, entt::id_type> {9, 10};
+	    },
+	    .playerColour = {},
+	    .random = {},
+	};
+	const glm::vec3 camera(0.0f);
+	const glm::vec3 place(0.0f, 0.0f, 50.0f);
+	const auto drawn = [&](std::optional<glm::vec3> sortPoint) {
+		// A mist that blends, between the fire's place and its far flame
+		auto frame = MakeFrame();
+		AddSprite(frame, {0.0f, 0.0f, 60.0f}, 0);
+		AddGroup(frame, DrawPath::Sorted, glm::vec3(0.0f), 0);
+		AddEffect(frame, walk, DrawPath::Sorted, place, k_NeutralPlayer, sources, sortPoint);
+		std::vector<Command> commands;
+		std::vector<uint32_t> order;
+		Order(frame, camera, std::nullopt, commands, order);
+		return std::pair {commands, order};
+	};
+	// Each at its own place, the far flame and the smoke come before the mist, and the near flame after it
+	EXPECT_EQ(drawn(std::nullopt).second, (std::vector<uint32_t> {1, 3, 0, 2}));
+	// At the fire's place all of the fire comes after the mist: the flames first, then the smoke
+	const auto [oneCommands, oneOrder] = drawn(place);
+	EXPECT_EQ(oneOrder, (std::vector<uint32_t> {0, 1, 2, 3}));
+	ASSERT_EQ(oneCommands.size(), 3u);
+	// The two flames add to what is behind on one sheet, so they take one draw
+	EXPECT_EQ(oneCommands[1].count, 2u);
+	EXPECT_EQ(oneCommands[1].depth, graphics::zsort::Depth(place, camera));
+	// The smoke comes just after them at the same place
+	EXPECT_EQ(oneCommands[2].depth, oneCommands[1].depth - 1);
+}
+
 TEST(ParticleDraw, KeptListsGiveTheSameOrderAsNewLists)
 {
 	// Frames of different sizes, one after the other, through the same lists
