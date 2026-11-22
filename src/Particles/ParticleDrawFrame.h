@@ -276,9 +276,10 @@ struct Sources
 /// The player whose symbol and colour an effect without one shows
 constexpr int k_NeutralPlayer = 7;
 
-/// Adds an effect's walk to the frame, drawn in one of the three ways, its symbols those of a player
+/// Adds an effect's walk to the frame, drawn in one of the three ways, its symbols those of a player. A sorted effect
+/// with a `sortPoint` is one thing among what blends: all its things take their place at that point, in their order.
 void AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, const glm::vec3& origin, int player,
-               const Sources& sources);
+               const Sources& sources, std::optional<glm::vec3> sortPoint = std::nullopt);
 /// Adds a sheet of light to the frame, sorted with everything else that blends by a point: added to what is behind it,
 /// seen from both sides, its texture (a sheet of stars, or the force field's) repeating along and up it
 void AddLightSheet(Frame& frame, std::span<const LightSheet::Vertex> vertices, std::span<const uint32_t> triangles,

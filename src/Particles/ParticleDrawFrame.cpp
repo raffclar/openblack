@@ -710,7 +710,7 @@ void draw::PlaceChainCorners(std::span<ChainVertex> corners, std::span<const Cha
 }
 
 void draw::AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, const glm::vec3& origin, int player,
-                     const Sources& sources)
+                     const Sources& sources, std::optional<glm::vec3> sortPoint)
 {
 	const auto firstItem = static_cast<uint32_t>(frame.items.size());
 	const int shown = player >= 0 ? player : k_NeutralPlayer;
@@ -742,10 +742,18 @@ void draw::AddEffect(Frame& frame, const Effect::DrawWalk& walk, DrawPath path, 
 		AppendChain(frame.chainVertices, frame.chainJoints, *chain.creator, joints, chain.textureRepeats, chain.textureScroll);
 	}
 	const auto count = static_cast<uint32_t>(frame.items.size()) - firstItem;
-	if (count > 0)
+	if (count == 0)
 	{
-		frame.groups.push_back({.path = path, .origin = origin, .firstItem = firstItem, .itemCount = count});
+		return;
 	}
+	if (sortPoint.has_value())
+	{
+		for (auto& item : std::span(frame.items).subspan(firstItem))
+		{
+			item.sortPoint = *sortPoint;
+		}
+	}
+	frame.groups.push_back({.path = path, .origin = origin, .firstItem = firstItem, .itemCount = count});
 }
 
 void draw::AddPlayerSymbol(Frame& frame, const PlayerSymbol& symbol, const Sources& sources)

@@ -596,6 +596,33 @@ void AddFire(std::vector<Scenario>& all)
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Ground, .alight = true}},
 	});
 
+	// A burning hut in a mist: the game sorts all the flames of a fire as one thing at the place of the hut
+	all.push_back({
+	    .id = "miracles.fire_flames_in_mist",
+	    .name = "The flames of a burning hut in a mist",
+	    .facet = Facet::Miracles,
+	    .description = "A hut burns on bare land. A script makes a white mist, mostly opaque, 3 above the land and 1.5 in "
+	                   "front of the middle of the hut. The camera is still, before the hut and a little above it.",
+	    .expected = "The mist takes the light of the land, thus it shows little against the land, but it dims the flames "
+	                "behind it. The game sorts the flames of the fire as one thing at the place of the hut on the land. "
+	                "The mist is nearer to the camera than that place, thus all the flames show dimmed, also a flame on "
+	                "the front of the roof. No flame shows bright.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 7.0f, 27.0f}, .look = {0.0f, 3.0f, 40.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Ground, .alight = true}},
+	    .commands = {{.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_MIST",
+	                  .scriptArguments =
+	                      {{.kind = ScriptArgument::Kind::Position, .point = k_Ground - glm::vec2 {0.0f, 1.5f}, .height = 3.0f},
+	                       {.kind = ScriptArgument::Kind::Number, .number = 3.0f},
+	                       {.kind = ScriptArgument::Kind::Number, .number = 255.0f},
+	                       {.kind = ScriptArgument::Kind::Number, .number = 255.0f},
+	                       {.kind = ScriptArgument::Kind::Number, .number = 255.0f},
+	                       {.kind = ScriptArgument::Kind::Number, .number = 0.7f},
+	                       {.kind = ScriptArgument::Kind::Number, .number = 0.6f}}}},
+	});
+
 	all.push_back({
 	    .id = "miracles.fire_paused",
 	    .name = "A pause while a forest burns and the hand holds fire",
