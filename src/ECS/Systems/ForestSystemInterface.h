@@ -82,6 +82,8 @@ public:
 	[[nodiscard]] virtual std::vector<entt::entity> LandForests() const = 0;
 	/// A forest's grown or still growing trees, the nearest its place first (the one listed first when as near)
 	[[nodiscard]] virtual std::vector<entt::entity> TreesOf(entt::entity forest, bool growing) const = 0;
+	/// How many trees a forest has, grown and growing: the sizes of both lists of TreesOf, from one walk with no lists
+	[[nodiscard]] virtual size_t TreeCountOf(entt::entity forest) const = 0;
 	/// The trees of the forests, in one walk of the trees. A caller that asks about many forests makes the lists one
 	/// time. The lists are correct until a tree changes.
 	[[nodiscard]] virtual ForestTreeLists ListTreesOfForests(std::span<const entt::entity> forests) const = 0;

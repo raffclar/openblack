@@ -110,11 +110,32 @@ struct Counts
 	std::unordered_set<entt::entity> goingDisciples;
 };
 
+/// The town and the two values that give its place in the order of all the towns (see player_towns::AllInOrder)
+struct TownOrderKey
+{
+	uint32_t owner;
+	uint32_t gained;
+	entt::entity town;
+
+	[[nodiscard]] bool operator==(const TownOrderKey&) const = default;
+};
+
+/// The last sort of the towns into the order of all the players' lists. A walk of the towns that gives the same keys in
+/// the same order gives the same sort, thus the sort is not done again. A direct change to a town changes its key.
+struct TownOrder
+{
+	/// The keys in the order of the walk
+	std::vector<TownOrderKey> walked;
+	/// The place in the walk of each town of the sorted order
+	std::vector<uint32_t> sorted;
+};
+
 struct Caches
 {
 	Members members;
 	Towns towns;
 	Counts counts;
+	TownOrder order;
 };
 
 /// The villagers of a town, in the order of a walk of all villagers

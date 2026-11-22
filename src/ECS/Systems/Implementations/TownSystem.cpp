@@ -760,11 +760,17 @@ std::optional<map_coords::MapCoords> TownSystem::FindClearAreaCoords(map_coords:
 	return std::nullopt;
 }
 
+bool TownSystem::KeepsCongregationPos(entt::entity townEntity) const
+{
+	const auto& town = Locator::entitiesRegistry::value().Get<const Town>(townEntity);
+	return town.congregationPos.has_value() && town_area::IsGatheringPlace(*town.congregationPos);
+}
+
 map_coords::MapCoords TownSystem::GetCongregationPos(entt::entity townEntity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& town = registry.Get<Town>(townEntity);
-	if (town.congregationPos.has_value() && town_area::IsGatheringPlace(*town.congregationPos))
+	if (KeepsCongregationPos(townEntity))
 	{
 		return *town.congregationPos;
 	}

@@ -330,6 +330,18 @@ std::optional<ImpressPlace> ImpressPlaceOf(entt::entity town, const map_coords::
 	return ImpressPlace {.value = values[*best], .place = places[*best]};
 }
 
+/// The god looks at the places of the town again. When the town keeps its gathering place, the look changes nothing in
+/// the world and draws no random number. Thus the second look gives the same place as the first, and the god uses it.
+std::optional<ImpressPlace> ImpressPlaceAgain(entt::entity town, const map_coords::MapCoords& hand,
+                                              const std::optional<ImpressPlace>& first)
+{
+	if (Locator::townSystem::has_value() && Locator::townSystem::value().KeepsCongregationPos(town))
+	{
+		return first;
+	}
+	return ImpressPlaceOf(town, hand);
+}
+
 /// The building of the god's towns that is the most damaged, against the pull of its place
 float CheckTownForDamage(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 {
@@ -658,7 +670,7 @@ float computer_world::ImpressiveSpell(RuleContext& context, computer_mind::Mind&
 	// Short of a full value the god looks at the places again
 	if (value < 1.0f)
 	{
-		place = ImpressPlaceOf(town, context.state.hand.coords);
+		place = ImpressPlaceAgain(town, context.state.hand.coords, place);
 		value = place.has_value() ? place->value : 0.0f;
 	}
 	else
@@ -686,6 +698,17 @@ std::optional<computer_world::ImpressSpot> computer_world::TownImpressPlace(entt
 		return std::nullopt;
 	}
 	return ImpressSpot {.value = place->value, .place = place->place};
+}
+
+std::optional<computer_world::ImpressSpot> computer_world::TownImpressPlaceAgain(entt::entity town,
+                                                                                 const map_coords::MapCoords& hand,
+                                                                                 const std::optional<ImpressSpot>& first)
+{
+	if (Locator::townSystem::has_value() && Locator::townSystem::value().KeepsCongregationPos(town))
+	{
+		return first;
+	}
+	return TownImpressPlace(town, hand);
 }
 
 std::optional<map_coords::MapCoords> computer_world::InfluenceEdgeOf(const RuleContext& context,

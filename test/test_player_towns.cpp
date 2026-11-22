@@ -213,3 +213,26 @@ TEST(PlayerTowns, TheNearestTownOfAPlayerKeepsTheLastOfEqualsWithinTheReach)
 	EXPECT_EQ(openblack::ecs::player_towns::NearestOfPlayer(towns, 20.0f), c);
 	EXPECT_EQ(openblack::ecs::player_towns::NearestOfPlayer(towns, 19.0f), entt::entity {entt::null});
 }
+
+TEST(PlayerTowns, TheKeptOrderFollowsADirectChangeOfATownAndANewTown)
+{
+	// The second read uses the kept sort. A change of an owner or of a gain turn, and a new town, give a new sort.
+	Registry registry;
+	const auto a = MakeTown(registry, 1, PlayerNames::PLAYER_TWO, 0);
+	const auto b = MakeTown(registry, 2, PlayerNames::PLAYER_ONE, 3);
+	const auto c = MakeTown(registry, 3, PlayerNames::PLAYER_ONE, 1);
+	using openblack::ecs::player_towns::AllInOrder;
+	EXPECT_EQ(AllInOrder(registry), (std::vector<entt::entity> {c, b, a}));
+	EXPECT_EQ(AllInOrder(registry), (std::vector<entt::entity> {c, b, a}));
+	registry.Get<Town>(a).owner = PlayerNames::PLAYER_ONE;
+	EXPECT_EQ(AllInOrder(registry), (std::vector<entt::entity> {a, c, b}));
+	// The walk meets the newest town first, so b comes before a with the same owner and gain turn
+	registry.Get<Town>(b).gained = 0;
+	EXPECT_EQ(AllInOrder(registry), (std::vector<entt::entity> {b, a, c}));
+	const auto d = MakeTown(registry, 4, PlayerNames::NEUTRAL, 0);
+	std::vector<entt::entity> visited;
+	openblack::ecs::player_towns::ForEachInOrder(registry, [&visited](entt::entity town) { visited.push_back(town); });
+	EXPECT_EQ(visited, (std::vector<entt::entity> {b, a, c, d}));
+	registry.Destroy(c);
+	EXPECT_EQ(AllInOrder(registry), (std::vector<entt::entity> {b, a, d}));
+}

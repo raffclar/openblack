@@ -39,6 +39,7 @@ public:
 	[[nodiscard]] std::optional<entt::entity> LandForestOf(uint32_t id) const override;
 	[[nodiscard]] std::vector<entt::entity> LandForests() const override;
 	[[nodiscard]] std::vector<entt::entity> TreesOf(entt::entity forest, bool growing) const override;
+	[[nodiscard]] size_t TreeCountOf(entt::entity forest) const override;
 	[[nodiscard]] ForestTreeLists ListTreesOfForests(std::span<const entt::entity> forests) const override;
 	[[nodiscard]] std::vector<entt::entity> ListedTreesOf(entt::entity forest, bool growing,
 	                                                      const ForestTreeLists& lists) const override;
