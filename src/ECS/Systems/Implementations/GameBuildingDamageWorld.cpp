@@ -32,6 +32,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundRequestInterface.h"
@@ -169,7 +170,10 @@ entt::id_type GameBuildingDamageWorld::MakeModel(const std::string& name, entt::
 	const auto id = entt::hashed_string(name.c_str()).value();
 	if (meshes.Contains(id))
 	{
+		// The turn can play on another thread, so the main thread frees the buffers of the mesh
+		auto old = meshes.Handle(id).handle();
 		meshes.Erase(id);
+		ReleaseOnMainThread(std::move(old));
 	}
 	try
 	{
@@ -187,7 +191,11 @@ void GameBuildingDamageWorld::EraseModel(entt::id_type mesh)
 {
 	if (mesh != 0 && Locator::resources::has_value() && Locator::resources::value().GetMeshes().Contains(mesh))
 	{
-		Locator::resources::value().GetMeshes().Erase(mesh);
+		// The turn can play on another thread, so the main thread frees the buffers of the mesh
+		auto& meshes = Locator::resources::value().GetMeshes();
+		auto old = meshes.Handle(mesh).handle();
+		meshes.Erase(mesh);
+		ReleaseOnMainThread(std::move(old));
 	}
 }
 

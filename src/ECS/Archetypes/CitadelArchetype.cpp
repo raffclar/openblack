@@ -33,6 +33,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
 #include "Utils.h"
 
 using namespace openblack;
@@ -70,7 +71,9 @@ void LevelGroundUnderHeart(const map_coords::MapCoords& place)
 			land.SetCellAltitude(glm::u16vec2(corner), altitude);
 		}
 	}
-	land.CommitAltitudeChanges();
+	// The new altitudes are in the land at once. The turn can play on another thread, so their draw goes to the main
+	// thread.
+	PostToMainThread(MainThreadApi::Graphics, [] { Locator::terrainSystem::value().CommitAltitudeChanges(); });
 }
 } // namespace
 
