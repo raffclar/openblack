@@ -156,12 +156,10 @@ def front_end_steps(steps, new_profile, land_seconds=None):
         steps.type_text("lobbyjoin")
         steps.lock()
         steps.wait_log("The page locked the pointer", 240)
-        steps.move(290, 700)
-        steps.step(0.5, {"do": "wait-pointer", "x": 325, "y": 712 + FRAME_TOP, "within": 30, "seconds": 240})
-        steps.button("mousedown", 0)
-        steps.step(0.3, {"do": "wait-frames", "count": 3, "seconds": 120})
-        steps.button("mouseup", 0)
-        steps.wait_log("Made the player profile", 120)
+        # Return answers the box, as its OK button does. It needs no place on the screen, so it holds at any layout of
+        # the box (a fixed pointer place for the OK button missed it), and the log line is the one the game writes
+        steps.key("Enter", "Enter", 13)
+        steps.wait_log("Made a player profile", 120)
     if land_seconds is None:
         steps.wait_log("The -MULTIPLAYER switch: the multiplayer front end opens", 900)
         steps.wait(4)
