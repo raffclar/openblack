@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -78,8 +79,9 @@ private:
 	void Strip(entt::entity object, components::MagicShield& shield);
 	/// A turn of a physical shield's dome; false once it has gone
 	bool StepDome(entt::entity object);
-	/// A reaction to a shield the villagers take up: the shield's object, its kind and reach, the turn the first villager
-	/// took it up (or it was last struck), and those taking it up now
+	/// A reaction to a shield the villagers take up: what it is to, its kind and reach, the turn the first villager took
+	/// it up (or it was last struck), and those taking it up now. It is to the shield's object, or to the shield's
+	/// miracle after the world destroyed the object.
 	struct ShieldReaction
 	{
 		entt::entity object {entt::null};
@@ -100,6 +102,15 @@ private:
 	/// A reaction goes; the villagers taking it up stop, going back to what they did when asked
 	void RemoveReaction(uint32_t id, bool setState);
 	void RemoveReactions(entt::entity object, Reaction type);
+	/// The miracle of a shield reaction: the miracle that it is to, or the miracle that keeps the shield's object
+	[[nodiscard]] entt::entity MiracleOf(const ShieldReaction& reaction) const;
+	/// Where a shield reaction is. The reaction to a standing shield is at the shield's object. The reactions to the
+	/// strikes and to the fall are at the place of the miracle. None when neither is there.
+	[[nodiscard]] std::optional<glm::vec3> CentreOf(const ShieldReaction& reaction) const;
+	/// The world destroyed a shield's object: its reactions to the strikes and to the fall are to its miracle from now on
+	void PassToMiracle(entt::entity object, entt::entity miracle);
+	/// The reactions whose miracle has gone after the world destroyed its object go too
+	void RemoveReactionsOfGoneMiracles();
 	/// One reaction of all the land's is spread each turn in turn: its villagers in reach may take it up
 	void ProcessReactions();
 	void SpreadReaction(uint32_t id);

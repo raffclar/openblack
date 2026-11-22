@@ -233,6 +233,55 @@ void AddBlasts(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.blast_pu2_broken_physical_shield",
+	    .name = "Extreme blast on a broken physical shield",
+	    .facet = Facet::Miracles,
+	    .description = "The player casts a physical shield at bare land. The shield breaks after 3.3 seconds, and its people "
+	                   "react to its fall. Another player casts an extreme blast at the middle of the shield four seconds "
+	                   "after the start.",
+	    .expected = "The broken shield closes down and its dome starts to fade. The wave destroys the fading dome at "
+	                "once. The reaction to the fall stays while the dome fades. It stays with the miracle after the dome "
+	                "has gone, and it goes with the miracle.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Ground - glm::vec2(40.0f), k_Ground + glm::vec2(40.0f)},
+	                .distance = 1.0f},
+	    .miracles = {{.type = MagicType::PhysicalShield, .point = k_Ground, .delaySeconds = 0.5f, .breakSeconds = 3.3f},
+	                 {.type = MagicType::ExplosionOnePuTwo,
+	                  .point = k_Ground,
+	                  .handOffset = k_Ground,
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 4.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	    .checks = {{.label = "the dome stands before the blast",
+	                .quantity = checks::Quantity::PhysicalShields,
+	                .afterTurns = 35,
+	                .atLeast = 1.0},
+	               {.label = "the wave destroys the dome",
+	                .quantity = checks::Quantity::PhysicalShields,
+	                .afterTurns = 41,
+	                .byTurn = 200,
+	                .atMost = 0.0},
+	               {.label = "the reaction to the fall stays while the dome fades",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "shield fall reactions",
+	                .afterTurns = 42,
+	                .atLeast = 1.0},
+	               {.label = "the shield miracle goes",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "shield miracles",
+	                .afterTurns = 41,
+	                .byTurn = 200,
+	                .atMost = 0.0},
+	               {.label = "the reaction to the fall goes with the miracle",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "shield fall reactions",
+	                .afterTurns = 43,
+	                .byTurn = 200,
+	                .atMost = 0.0}},
+	});
+
+	all.push_back({
 	    .id = "miracles.blast_water",
 	    .name = "Blast on the water",
 	    .facet = Facet::Miracles,
