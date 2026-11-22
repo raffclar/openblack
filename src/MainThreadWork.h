@@ -10,6 +10,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -30,6 +31,17 @@ void PostToMainThread(MainThreadApi api, Work&& work)
 		return;
 	}
 	std::invoke(work);
+}
+
+/// Gives the last reference of a resource of the graphics, such as a mesh that the turn removed, to the main thread. The
+/// main thread then frees its buffers and textures. With no queue, or on the main thread, the resource goes at once.
+template <typename Resource>
+void ReleaseOnMainThread(std::shared_ptr<Resource> resource)
+{
+	if (Locator::mainThreadQueue::has_value())
+	{
+		Locator::mainThreadQueue::value().Release(std::move(resource));
+	}
 }
 
 /// Work given to the main thread from this thread now runs at once (see MainThreadQueue::RunsAtOnce). Work that waits

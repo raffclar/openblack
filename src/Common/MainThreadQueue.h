@@ -17,6 +17,7 @@
 #include <atomic>
 #include <deque>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <source_location>
@@ -172,6 +173,15 @@ public:
 			return;
 		}
 		Keep(api, std::function<void()>(std::forward<Work>(work)));
+	}
+
+	/// Gives the reference of a resource of the graphics, such as a mesh that the turn removed, to the main thread. When
+	/// it is the last reference, the main thread frees the buffers and the textures of the resource. On the main thread,
+	/// the resource goes at once, as work of the queue.
+	template <typename Resource>
+	void Release(std::shared_ptr<Resource> resource)
+	{
+		Post(MainThreadApi::Graphics, [resource = std::move(resource)]() mutable { resource.reset(); });
 	}
 
 	/// Does work on the main thread and gives back its result. From a turn on another thread, the turn waits while the
