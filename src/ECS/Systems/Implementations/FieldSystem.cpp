@@ -30,6 +30,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerWorkRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -64,8 +65,8 @@ field_crop::Type TypeOf(FieldTypeInfo type)
 	};
 }
 
-/// The land's alignment at a place: each player's influence there times their alignment
-float LandAlignment(const glm::vec3& position)
+/// The land's alignment at a map position: each player's influence there times their alignment
+float LandAlignment(const map_coords::MapCoords& place)
 {
 	if (!Locator::influenceSystem::has_value() || !Locator::alignmentSystem::has_value())
 	{
@@ -74,7 +75,7 @@ float LandAlignment(const glm::vec3& position)
 	const auto& influence = Locator::influenceSystem::value();
 	const auto& alignment = Locator::alignmentSystem::value();
 	// The influence of all players at the place comes from one pass over their sources
-	const auto influences = influence.PlayerInfluences(map_coords::FromMetres({position.x, position.z}));
+	const auto influences = influence.PlayerInfluences(place);
 	float sum = 0.0f;
 	for (const auto player : ecs::game_players::All())
 	{
@@ -87,9 +88,12 @@ float LandAlignment(const glm::vec3& position)
 	return field_crop::ClampAlignment(sum);
 }
 
-bool IsRaining(const glm::vec3& position)
+/// Whether it rains at the point of a map position, at the given height
+bool IsRaining(const map_coords::MapCoords& place, float height)
 {
-	return Locator::weatherSystem::has_value() && Locator::weatherSystem::value().GetWeather(position).rain > 0;
+	const auto metres = map_coords::ToMetres(place);
+	return Locator::weatherSystem::has_value() &&
+	       Locator::weatherSystem::value().GetWeather({metres.x, height, metres.y}).rain > 0;
 }
 
 } // namespace
@@ -126,10 +130,12 @@ void FieldSystem::ProcessField(entt::entity field, uint32_t turn)
 	// The weather is asked in each pass, because its cells fill when a question first reads them. The alignment of the
 	// land is a sum over each player's influence and changes nothing, thus only a pass that grows the crop measures it.
 	const auto type = TypeOf(data->type);
-	const bool raining = IsRaining(transform->position);
+	// The weather and the alignment come from the map position of the field, not from where it is drawn.
+	const auto place = ecs::thing_map_place::Of(registry, field);
+	const bool raining = IsRaining(place, transform->position.y);
 	if (field_crop::GrowsInPass(data->crop, type, turn, data->growthTurn))
 	{
-		field_crop::Pass(data->crop, type, turn, data->growthTurn, LandAlignment(transform->position), raining);
+		field_crop::Pass(data->crop, type, turn, data->growthTurn, LandAlignment(place), raining);
 	}
 }
 
