@@ -385,8 +385,12 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	const std::array<int32_t, 5> keys {sound.link->sound.size, sound.link->sound.alignment, k_SoundObject,
 	                                   sound.link->sound.surface, action->second};
 	auto& sounds = Locator::sounds::value();
-	const auto result = sounds.PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner, sound.start,
-	                                          audio::CurrentSoundEffectConditions());
+	// The whole land hears thunder. It gets quieter and loses its high sounds with distance.
+	const auto result = sound.link->sound.travelsAtSoundSpeed
+	                        ? sounds.PlayThunder(std::string(k_SpellSoundBank), keys, sound.owner, sound.start,
+	                                             audio::CurrentSoundEffectConditions())
+	                        : sounds.PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner, sound.start,
+	                                                audio::CurrentSoundEffectConditions());
 	if (result.emitter != entt::null)
 	{
 		sound.emitter = result.emitter;
@@ -425,24 +429,22 @@ void GameParticleWorld::ProcessSounds()
 			// The sounds of the particles lock no axis, so the emitter goes to the full position
 			sounds->SetEmitterPosition(sound.emitter, link.position);
 		}
-		switch (particles::sound_turn::Next(link.atom != nullptr, link.sound.action.looping, sound.wait, k_TurnSeconds))
+		switch (particles::sound_turn::Next(link.atom != nullptr, link.sound.action.looping, link.sound.travelsAtSoundSpeed,
+		                                    sound.wait, k_TurnSeconds))
 		{
 		case particles::sound_turn::Step::Nothing:
 			return false;
 		case particles::sound_turn::Step::Start:
 			// A looping sound asks for its sample in each turn. Thus it plays again after the audio stopped it, for
-			// example when the camera went too far or into the temple. A sample that plays once keeps its voice.
-			if (nearEnough(link.position))
+			// example when the camera went too far or into the temple. A sample that plays once keeps its voice. The
+			// whole land hears thunder, so the camera can be at any distance from it.
+			if (link.sound.travelsAtSoundSpeed || nearEnough(link.position))
 			{
 				sound.start = link.position;
 				Play(sound);
 			}
 			return false;
 		case particles::sound_turn::Step::LetGo:
-			if (const auto logger = spdlog::get("audio"); logger != nullptr && !sound.letGo && sound.wait > 0.0f)
-			{
-				SPDLOG_LOGGER_DEBUG(logger, "Particles: {} was not heard, its particle went first", link.sound.action.sound);
-			}
 			break;
 		}
 		if (!sound.letGo)

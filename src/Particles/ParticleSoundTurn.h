@@ -13,11 +13,14 @@
 
 /// What the game does with the sound of a particle in each turn. Pure rules, so they are tested without audio.
 ///
-/// - When the particle is gone, the game lets go of the sound. A sound that waits to be heard never plays then.
+/// - When the particle is gone, the game lets go of the sound.
 /// - A looping sound starts again in each turn when the camera is nearer than k_ReplayReach. The play type of its
 ///   sample decides what happens to a voice that plays already: a sample that plays once keeps its voice.
-/// - A sound that travels at the speed of sound waits. It starts in the turn that its wait goes below zero. A wait of
-///   zero or less at the start never ends, so the sound never plays.
+/// - A sound that travels at the speed of sound (thunder) waits. It starts in the turn that its wait goes below zero. A
+///   wait of zero or less at the start never ends, so the sound never plays.
+/// - Thunder that waits does not go with its particle. It keeps its wait and starts when the wait ends. The game lets
+///   go of it after that. This is a deviation, which the user asked for: in the game, thunder whose particle goes first
+///   is never heard.
 namespace openblack::particles::sound_turn
 {
 
@@ -42,18 +45,20 @@ enum class Step : uint8_t
 }
 
 /// The step of a particle sound in a turn. `wait` is the time in seconds before a sound that travels at the speed of
-/// sound is heard; the rule counts it down by `turnSeconds`.
-[[nodiscard]] constexpr Step Next(bool particleLives, bool looping, float& wait, float turnSeconds)
+/// sound is heard; the rule counts it down by `turnSeconds`. `travels` is true for a sound that travels at the speed of
+/// sound.
+[[nodiscard]] constexpr Step Next(bool particleLives, bool looping, bool travels, float& wait, float turnSeconds)
 {
-	if (!particleLives)
+	const bool waits = wait > 0.0f;
+	if (!particleLives && !(travels && waits))
 	{
 		return Step::LetGo;
 	}
-	if (looping)
+	if (particleLives && looping)
 	{
 		return Step::Start;
 	}
-	if (!(wait > 0.0f))
+	if (!waits)
 	{
 		return Step::Nothing;
 	}

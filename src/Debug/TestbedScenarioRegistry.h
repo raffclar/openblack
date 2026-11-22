@@ -1122,6 +1122,9 @@ struct Command
 		/// The game releases the loop of the sample that the last PlayBankSample started, as a stop that finishes the
 		/// last loop does. Needs no creature.
 		ReleaseBankSample,
+		/// A bolt of a storm strikes the point (from the middle of the map), as the weather lets one down from a cloud
+		/// 160 m above the land. Needs no creature.
+		StormBolt,
 		/// The creature stops at once where it is, as a new body action or a placement stops it. The Stop command stops
 		/// it as the game stops a walk.
 		StopAtOnce,

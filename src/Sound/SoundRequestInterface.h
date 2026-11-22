@@ -171,6 +171,10 @@ public:
 	{
 		return PlayAnimEffect(bankName, keys, owner, position, std::nullopt, AnimEffectMeasure::Straight);
 	}
+	/// One of the samples of a bank's animation effects for the keys, as thunder that the whole land hears (see
+	/// AudioManagerInterface::PlayThunder)
+	virtual AnimEffectPlay PlayThunder(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                                   const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder) = 0;
 	/// Ends the samples of a bank's animation effects for the keys, if the owner plays them (see
 	/// AudioManagerInterface::EndAnimEffect)
 	virtual void EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,

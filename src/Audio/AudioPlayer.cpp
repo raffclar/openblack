@@ -171,6 +171,12 @@ void AudioPlayer::AttachBuffer(SourceId sourceId, BufferId bufferId)
 	alCheckCall(alSourcei(sourceId, AL_BUFFER, static_cast<ALint>(bufferId)));
 }
 
+void AudioPlayer::ReplaceQueue(SourceId sourceId, BufferId bufferId)
+{
+	// A source that did not start lets go of its queue when it gets a buffer
+	alCheckCall(alSourcei(sourceId, AL_BUFFER, static_cast<ALint>(bufferId)));
+}
+
 void AudioPlayer::DeleteBuffer(BufferId id)
 {
 	alCheckCall(alDeleteBuffers(1, &id));

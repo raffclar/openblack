@@ -179,6 +179,11 @@ public:
 	{
 		return PlayAnimEffect(bankName, keys, owner, position, std::nullopt, AnimEffectMeasure::Straight);
 	}
+	/// One of the samples of a bank's animation effects for the keys, played as thunder that the whole land hears (see
+	/// far_thunder::HearingAt). The hearing limit and the sample's maximum distance do not stop it. Past its maximum
+	/// distance, the thunder gets quieter and loses its high sounds, and it is silent past the silent distance.
+	virtual AnimEffectPlay PlayThunder(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                                   const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder) = 0;
 	/// Ends the samples that a bank's animation effects pick for keys, if owner plays them. For each of these samples,
 	/// the first emitter of owner that plays it stops or releases its loop. Nothing ends when the camera is further
 	/// than the hearing limit. The maximum distance of the sample has no effect.

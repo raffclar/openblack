@@ -186,6 +186,13 @@ AnimEffectPlay GameSoundRequests::PlayAnimEffect(const std::string& bankName, st
 	return audio != nullptr ? audio->PlayAnimEffect(bankName, keys, owner, position, heardUnder, measure) : AnimEffectPlay {};
 }
 
+AnimEffectPlay GameSoundRequests::PlayThunder(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+                                              const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder)
+{
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->PlayThunder(bankName, keys, owner, position, heardUnder) : AnimEffectPlay {};
+}
+
 void GameSoundRequests::EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
                                       const glm::vec3& position, AnimEffectEnd end, AnimEffectMeasure measure)
 {

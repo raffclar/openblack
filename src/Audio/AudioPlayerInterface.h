@@ -42,6 +42,9 @@ public:
 	/// looping it plays on to the buffer's end
 	virtual void SetLoopPoints(BufferId /*buffer*/, int32_t /*first*/, int32_t /*end*/) {}
 	virtual void DeleteBuffer(BufferId id) = 0;
+	/// Puts the buffer in place of the queue of a source that did not start. A player that makes no sound can keep the
+	/// queue that it has.
+	virtual void ReplaceQueue(SourceId /*sourceId*/, BufferId /*buffer*/) {}
 	[[nodiscard]] virtual SourceId CreateSource(float pitch, bool relative) = 0;
 	virtual void DeleteSource(SourceId id) = 0;
 	virtual void UpdateSource(SourceId id, glm::vec3 pos, float volume, bool loop) = 0;
