@@ -100,6 +100,8 @@
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_sky
 #include "ShaderIncluder.h"
+#define SHADER_NAME fs_sky_pack
+#include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_terrain
 #include "ShaderIncluder.h"
@@ -226,7 +228,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 81> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 82> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -253,7 +255,8 @@ const std::array<bgfx::EmbeddedShader, 81> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_reflection),
     BGFX_EMBEDDED_SHADER(fs_object_lightmap),
     BGFX_EMBEDDED_SHADER(fs_object_reflective_lightmap),
-    BGFX_EMBEDDED_SHADER(fs_sky), //
+    BGFX_EMBEDDED_SHADER(fs_sky),      //
+    BGFX_EMBEDDED_SHADER(fs_sky_pack), //
     BGFX_EMBEDDED_SHADER(vs_terrain),
     BGFX_EMBEDDED_SHADER(fs_terrain), //
     BGFX_EMBEDDED_SHADER(vs_water),
@@ -333,6 +336,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"Reflection", "vs_object", "fs_reflection"},
     ShaderDefinition {"ObjectReflectiveLightmapInstanced", "vs_object_lightmap_instanced", "fs_object_reflective_lightmap"},
     ShaderDefinition {"Sky", "vs_object", "fs_sky"},
+    ShaderDefinition {"SkyPack", "vs_object", "fs_sky_pack"},
     ShaderDefinition {"Water", "vs_water", "fs_water"},
     ShaderDefinition {"Lake", "vs_lake", "fs_lake"},
     ShaderDefinition {"Sprite", "vs_sprite", "fs_sprite"},
@@ -377,6 +381,8 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ReflectionFewBones", "vs_object_few_bones", "fs_reflection"},
     ShaderDefinition {"SkySingleBone", "vs_object_single_bone", "fs_sky"},
     ShaderDefinition {"SkyFewBones", "vs_object_few_bones", "fs_sky"},
+    ShaderDefinition {"SkyPackSingleBone", "vs_object_single_bone", "fs_sky_pack"},
+    ShaderDefinition {"SkyPackFewBones", "vs_object_few_bones", "fs_sky_pack"},
     ShaderDefinition {"GhostPatternSingleBone", "vs_object_single_bone", "fs_ghost_pattern"},
     ShaderDefinition {"GhostPatternFewBones", "vs_object_few_bones", "fs_ghost_pattern"},
     ShaderDefinition {"ShadowCasterSingleBone", "vs_object_single_bone", "fs_shadow_caster"},
@@ -396,6 +402,7 @@ constexpr std::array k_BoneVariants {
     BoneVariants {.program = "Object", .singleBone = "ObjectSingleBone", .fewBones = "ObjectFewBones"},
     BoneVariants {.program = "Reflection", .singleBone = "ReflectionSingleBone", .fewBones = "ReflectionFewBones"},
     BoneVariants {.program = "Sky", .singleBone = "SkySingleBone", .fewBones = "SkyFewBones"},
+    BoneVariants {.program = "SkyPack", .singleBone = "SkyPackSingleBone", .fewBones = "SkyPackFewBones"},
     BoneVariants {.program = "GhostPattern", .singleBone = "GhostPatternSingleBone", .fewBones = "GhostPatternFewBones"},
     BoneVariants {.program = "ShadowCaster", .singleBone = "ShadowCasterSingleBone", .fewBones = "ShadowCasterFewBones"},
 };

@@ -8,8 +8,11 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 
+#include <algorithm>
 #include <array>
 #include <map>
 #include <optional>
@@ -48,6 +51,112 @@ std::vector<uint8_t> OneColourPng(uint32_t width, uint32_t height, uint8_t red, 
 	    },
 	    &file, static_cast<int>(width), static_cast<int>(height), 4, texels.data(), static_cast<int>(width * 4));
 	return file;
+}
+
+/// Adds a number to a file as 4 bytes, the high byte first, as a PNG file keeps it
+void PutBigEndian(std::vector<uint8_t>& out, uint32_t value)
+{
+	for (int shift = 24; shift >= 0; shift -= 8)
+	{
+		out.push_back(static_cast<uint8_t>(value >> shift));
+	}
+}
+
+/// The check sum of the chunks of a PNG file
+uint32_t Crc32(const std::vector<uint8_t>& bytes, size_t start)
+{
+	uint32_t crc = 0xFFFFFFFFu;
+	for (size_t i = start; i < bytes.size(); ++i)
+	{
+		crc ^= bytes[i];
+		for (int bit = 0; bit < 8; ++bit)
+		{
+			crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+		}
+	}
+	return ~crc;
+}
+
+/// A chunk of a PNG file: its length, its type, its data and its check sum
+void PutChunk(std::vector<uint8_t>& file, const char* type, const std::vector<uint8_t>& data)
+{
+	PutBigEndian(file, static_cast<uint32_t>(data.size()));
+	const auto start = file.size();
+	file.insert(file.end(), type, type + 4);
+	file.insert(file.end(), data.begin(), data.end());
+	PutBigEndian(file, Crc32(file, start));
+}
+
+/// A PNG file of one colour with 16 bits for each channel. The data is not compressed.
+std::vector<uint8_t> OneColourPng16(uint32_t side, uint16_t red, uint16_t green, uint16_t blue)
+{
+	std::vector<uint8_t> rows;
+	for (uint32_t y = 0; y < side; ++y)
+	{
+		rows.push_back(0);
+		for (uint32_t x = 0; x < side; ++x)
+		{
+			for (const uint16_t value : {red, green, blue, uint16_t {0}})
+			{
+				rows.push_back(static_cast<uint8_t>(value >> 8));
+				rows.push_back(static_cast<uint8_t>(value & 0xFF));
+			}
+		}
+	}
+	// A zlib stream of stored blocks, then the Adler-32 sum of the data
+	std::vector<uint8_t> stream {0x78, 0x01};
+	constexpr size_t k_Block = 65535;
+	for (size_t start = 0; start < rows.size(); start += k_Block)
+	{
+		const auto length = static_cast<uint16_t>(std::min(k_Block, rows.size() - start));
+		stream.push_back(start + length == rows.size() ? 1 : 0);
+		for (const uint16_t value : {length, static_cast<uint16_t>(~length)})
+		{
+			stream.push_back(static_cast<uint8_t>(value & 0xFF));
+			stream.push_back(static_cast<uint8_t>(value >> 8));
+		}
+		stream.insert(stream.end(), rows.begin() + static_cast<std::ptrdiff_t>(start),
+		              rows.begin() + static_cast<std::ptrdiff_t>(start + length));
+	}
+	uint32_t low = 1;
+	uint32_t high = 0;
+	for (const auto byte : rows)
+	{
+		low = (low + byte) % 65521;
+		high = (high + low) % 65521;
+	}
+	PutBigEndian(stream, (high << 16) | low);
+
+	std::vector<uint8_t> file {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+	std::vector<uint8_t> header;
+	PutBigEndian(header, side);
+	PutBigEndian(header, side);
+	// 16 bits, red, green, blue and alpha, no interlace
+	header.insert(header.end(), {16, 6, 0, 0, 0});
+	PutChunk(file, "IHDR", header);
+	PutChunk(file, "IDAT", stream);
+	PutChunk(file, "IEND", {});
+	return file;
+}
+
+/// The value of a positive half float
+float FromHalf(uint16_t half)
+{
+	const int exponent = (half >> 10) & 0x1F;
+	const auto mantissa = static_cast<float>(half & 0x3FF);
+	if (exponent == 0)
+	{
+		return std::ldexp(mantissa, -24);
+	}
+	return std::ldexp(1.0f + (mantissa / 1024.0f), exponent - 15);
+}
+
+/// The value of a half float in the texels of a pack
+float HalfAt(const std::vector<uint8_t>& texels, size_t channel)
+{
+	uint16_t half = 0;
+	std::memcpy(&half, &texels.at(channel * sizeof(half)), sizeof(half));
+	return FromHalf(half);
 }
 
 /// A fake folder of a pack: each picture of the side has the colour of its place in the pack
@@ -197,6 +306,100 @@ TEST(SkyPicturePack, AFileThatIsNotAPngStopsTheLoad)
 	EXPECT_EQ(loaded.problem, Problem::UnreadablePicture);
 	EXPECT_EQ(loaded.picture, 0u);
 	EXPECT_FALSE(sky_picture_pack::Decode({}).has_value());
+}
+
+TEST(SkyPicturePack, HalfFloatsAreTheNearestValues)
+{
+	EXPECT_EQ(sky_picture_pack::HalfFromFloat(0.0f), 0x0000);
+	EXPECT_EQ(sky_picture_pack::HalfFromFloat(1.0f), 0x3C00);
+	EXPECT_EQ(sky_picture_pack::HalfFromFloat(0.5f), 0x3800);
+	EXPECT_EQ(sky_picture_pack::HalfFromFloat(65504.0f), 0x7BFF);
+	EXPECT_EQ(sky_picture_pack::HalfFromFloat(1.0e6f), 0x7C00);
+	// The smallest half float under the normal values, and half of it rounds to even: to zero
+	EXPECT_EQ(sky_picture_pack::HalfFromFloat(std::ldexp(1.0f, -24)), 0x0001);
+	EXPECT_EQ(sky_picture_pack::HalfFromFloat(std::ldexp(1.0f, -25)), 0x0000);
+	// Each value of 16 bits from 0 to 1 comes back within half a step of a half float
+	for (uint32_t value = 0; value <= 65535; value += 7)
+	{
+		const float unit = static_cast<float>(value) / 65535.0f;
+		const float back = FromHalf(sky_picture_pack::HalfFromFloat(unit));
+		EXPECT_LE(std::abs(back - unit), std::max(unit, std::ldexp(1.0f, -14)) / 2048.0f) << value;
+	}
+}
+
+TEST(SkyPicturePack, APictureOf16BitsKeepsAllItsBits)
+{
+	const auto file = OneColourPng16(256, 0x1234, 0x8001, 0xFFFF);
+	const auto picture = sky_picture_pack::Decode(file);
+	ASSERT_TRUE(picture.has_value());
+	EXPECT_EQ(picture->bits, 16);
+	EXPECT_EQ(picture->size, (Size {256, 256}));
+	ASSERT_EQ(picture->texels.size(), 256u * 256u * sky_picture_pack::k_TexelBytes * sizeof(uint16_t));
+	std::array<uint16_t, 4> texel {};
+	std::memcpy(texel.data(), picture->texels.data(), sizeof(texel));
+	EXPECT_EQ(texel.at(0), 0x1234);
+	EXPECT_EQ(texel.at(1), 0x8001);
+	EXPECT_EQ(texel.at(2), 0xFFFF);
+	// The alpha of the file is not used: each texel is opaque
+	EXPECT_EQ(texel.at(3), 0xFFFF);
+
+	const auto eight = sky_picture_pack::Decode(OneColourPng(256, 256, 1, 2, 3));
+	ASSERT_TRUE(eight.has_value());
+	EXPECT_EQ(eight->bits, 8);
+}
+
+TEST(SkyPicturePack, APackWithAPictureOf16BitsKeepsHalfFloats)
+{
+	FakeFolder folder(256);
+	// Between two steps of 8 bits: a picture of 8 bits cannot keep this value
+	constexpr uint16_t k_Between = (100 * 257) + 128;
+	folder.Put("Sky_Ntrl_Night.png", OneColourPng16(256, k_Between, 0, 65535));
+	const auto loaded = sky_picture_pack::Load(folder.Reader(), k_LargeDevice);
+	ASSERT_TRUE(loaded.pack.has_value());
+	EXPECT_TRUE(loaded.pack->halfFloats);
+	constexpr size_t k_LayerTexels = 256 * 256;
+	ASSERT_EQ(loaded.pack->texels.size(), k_LayerTexels * sky_picture_pack::k_HalfTexelBytes * 9);
+	constexpr size_t k_LayerChannels = k_LayerTexels * 4;
+	// The picture of 16 bits keeps its step between the steps of 8 bits
+	const auto between = HalfAt(loaded.pack->texels, 3 * k_LayerChannels);
+	EXPECT_NEAR(between, static_cast<float>(k_Between) / 65535.0f, 1.0f / 4096.0f);
+	EXPECT_GT(between, 100.0f / 255.0f);
+	EXPECT_LT(between, 101.0f / 255.0f);
+	EXPECT_EQ(HalfAt(loaded.pack->texels, (3 * k_LayerChannels) + 1), 0.0f);
+	EXPECT_EQ(HalfAt(loaded.pack->texels, (3 * k_LayerChannels) + 2), 1.0f);
+	EXPECT_EQ(HalfAt(loaded.pack->texels, (3 * k_LayerChannels) + 3), 1.0f);
+	// The pictures of 8 bits in the same pack become half floats of the same values
+	for (size_t layer : {0u, 8u})
+	{
+		const auto first = layer * k_LayerChannels;
+		EXPECT_NEAR(HalfAt(loaded.pack->texels, first), static_cast<float>(layer * 10) / 255.0f, 1.0f / 2048.0f);
+		EXPECT_NEAR(HalfAt(loaded.pack->texels, first + 2), static_cast<float>((layer * 10) + 2) / 255.0f, 1.0f / 2048.0f);
+		EXPECT_EQ(HalfAt(loaded.pack->texels, first + 3), 1.0f);
+	}
+}
+
+TEST(SkyPicturePack, APackOf8BitsStaysAt8Bits)
+{
+	const FakeFolder folder(256);
+	const auto loaded = sky_picture_pack::Load(folder.Reader(), k_LargeDevice);
+	ASSERT_TRUE(loaded.pack.has_value());
+	EXPECT_FALSE(loaded.pack->halfFloats);
+}
+
+TEST(SkyPicturePack, APackOf16BitsHasASmallerLargestSide)
+{
+	// The check of the sizes accepts the side, but a pack of half floats keeps twice the bytes
+	constexpr uint32_t k_Side = sky_picture_pack::k_LargestWideSide + sky_picture_pack::k_SideStep;
+	FakeFolder folder(256);
+	const auto eight = OneColourPng(k_Side, k_Side, 1, 2, 3);
+	for (const auto& file : sky_picture_pack::PictureFiles())
+	{
+		folder.Put(file, eight);
+	}
+	folder.Put("sky_good_dusk.png", OneColourPng16(k_Side, 1, 2, 3));
+	const auto loaded = sky_picture_pack::Load(folder.Reader(), k_LargeDevice);
+	EXPECT_FALSE(loaded.pack.has_value());
+	EXPECT_EQ(loaded.problem, Problem::TooLarge);
 }
 
 TEST(SkyDomeFullBlend, TheWeightsAreThoseOfTheGamesBlend)

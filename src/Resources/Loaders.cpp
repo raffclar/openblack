@@ -622,14 +622,16 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromSkyPackTag, const s
 	}
 	const auto side = static_cast<uint16_t>(loaded.pack->side);
 	const auto layers = static_cast<uint16_t>(sky_dome::k_Pictures);
+	// A pack with pictures of 16 bits for each channel keeps all their steps as half floats
+	const auto format = loaded.pack->halfFloats ? graphics::TextureFormat::RGBA16F : graphics::TextureFormat::RGBA8;
 	auto texture = std::make_shared<graphics::Texture2D>(name);
 	if (KeepsDataOnly())
 	{
-		texture->Describe(side, side, layers, graphics::TextureFormat::RGBA8);
+		texture->Describe(side, side, layers, format);
 		return texture;
 	}
 	const auto& texels = loaded.pack->texels;
-	texture->Create(side, side, layers, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+	texture->Create(side, side, layers, format, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
 	                Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size())));
 	// After a restore of the graphics device the texture reads its pictures again
 	texture->SetTexelSource([folder, largestTexture](Rereads& rereads) {
