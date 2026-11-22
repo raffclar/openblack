@@ -395,15 +395,6 @@ void AudioManager::StopOutOfRangeEmitters()
 		                            !ecs::SoundPointOf(Locator::entitiesRegistry::value(), emitter.owner).has_value()
 		                        ? std::string("its owner is gone or has no point")
 		                        : TooFar(emitter.position, emitter.maxDistance));
-		// A sound that stays at its place stops only for the distance. Tell the owner that the audio made for the sound
-		// that the listener left it. Then the system of the owner can start the sound again (deviation 235).
-		if (emitter.follows == Follows::Place && emitter.owner != entt::null && registry.Valid(emitter.owner))
-		{
-			if (auto* const owner = registry.TryGet<ecs::components::SoundOwner>(emitter.owner); owner != nullptr)
-			{
-				owner->listenerLeft = true;
-			}
-		}
 		DestroyEmitter(entity);
 	}
 }

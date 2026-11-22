@@ -65,12 +65,9 @@ public:
 	void PlaceOwnedEmitters(const std::function<std::optional<glm::vec3>(entt::entity owner)>& placeOf) override;
 
 	[[nodiscard]] Listener GetListener() const override;
-	[[nodiscard]] std::optional<float> ListenerDistance(const glm::vec3& point) const override;
 
 	[[nodiscard]] entt::entity CreateSoundOwner() override;
 	void DestroySoundOwner(entt::entity owner) override;
-	[[nodiscard]] bool TakeListenerLeft(entt::entity owner) override;
-	void MarkListenerLeftPlacedSounds() override;
 
 	void StopAllSounds() override;
 	void ProcessAtmosphere(bool active) override;

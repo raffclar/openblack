@@ -14,7 +14,8 @@
 // What becomes of a particle's sound once the particle lets go of it, or goes. A sound the effect file doesn't
 // soft-release is stopped at once, whether its sample loops or not. One it soft-releases plays on: a loop to the end of
 // its pass, a sample that plays once to its end. Each turn from the one it is let go on, the sound gets quieter by its
-// fade step, so a step of 20 is silent on the seventh. Pure rules, so they are tested without audio.
+// fade step, so a step of 20 is silent on the seventh. A silent sound plays on to its end. Pure rules, so they are tested
+// without audio.
 
 namespace openblack::particles
 {
@@ -29,8 +30,6 @@ struct SoundLetGo
 	bool releaseLoop {false};
 	/// How much quieter it gets each turn, out of k_MaxSoundVolume; 0 to keep its volume
 	int fadeStep {0};
-	/// Stop it once it is silent, rather than letting the sample end by itself
-	bool stopWhenSilent {false};
 	/// Stop it at once, as a sound the file doesn't soft-release
 	bool stopNow {false};
 
@@ -40,7 +39,7 @@ struct SoundLetGo
 	template <typename Visitor>
 	static void VisitPlainFields(const SoundLetGo& self, Visitor&& visit)
 	{
-		visit(self.releaseLoop, self.fadeStep, self.stopWhenSilent, self.stopNow);
+		visit(self.releaseLoop, self.fadeStep, self.stopNow);
 	}
 };
 

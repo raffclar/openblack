@@ -206,22 +206,12 @@ public:
 
 	/// The place from which the player hears the placed sounds
 	[[nodiscard]] virtual Listener GetListener() const = 0;
-	/// The distance from the place from which the player hears to a point. The audio reads its own listener for it.
-	/// None when the computer has no audio manager.
-	[[nodiscard]] virtual std::optional<float> ListenerDistance(const glm::vec3& point) const = 0;
 
 	/// A new owner of sounds among the entities of the audio, not of the world. It tells the voice rules which sounds
 	/// are the same. Null when the audio has no entities.
 	[[nodiscard]] virtual entt::entity CreateSoundOwner() = 0;
 	/// The owner of sounds that CreateSoundOwner gave goes. Nothing happens when it is not there.
 	virtual void DestroySoundOwner(entt::entity owner) = 0;
-	/// Tells if the audio stopped a sound of an owner that CreateSoundOwner gave, because the listener left the sound:
-	/// it went to the maximum distance of the sound or more, or into the temple. The audio clears this record when it
-	/// tells it.
-	[[nodiscard]] virtual bool TakeListenerLeft(entt::entity owner) = 0;
-	/// Records on the owners that CreateSoundOwner gave that the listener leaves each placed sound that plays now. Call
-	/// this before the audio stops these sounds, for example when the player goes into the temple.
-	virtual void MarkListenerLeftPlacedSounds() = 0;
 
 	/// Stops every sound: the music at once, with no fade, the atmosphere, and each sound and voice that plays
 	virtual void StopAllSounds() = 0;

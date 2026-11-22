@@ -26,7 +26,7 @@ ParticleSoundLink* openblack::particles::StartAtomSound(Effect& effect, Atom& at
 	auto position = effect.GlobalPosition(atom);
 	if (sound.onLand)
 	{
-		position.y = world.LandHeight({position.x, position.z});
+		position.y = SoundHeightOnLand(world, position.x, position.z);
 	}
 	auto played = sound;
 	played.alignment = world.SoundAlignment(effect.GetPlayer());
@@ -71,6 +71,13 @@ void openblack::particles::StopAllAtomSounds(Atom& atom)
 		link->atom = nullptr;
 	}
 	atom.sounds.clear();
+}
+
+float openblack::particles::SoundHeightOnLand(const ParticleWorldInterface& world, float x, float z)
+{
+	// Metres to the map's fixed point: a 10 m cell to 0x10000
+	const auto fixed = [](float metres) { return x87::ToInteger(metres * 65536.0f * 0.1f); };
+	return world.LandHeightAtMap(fixed(x), fixed(z));
 }
 
 int openblack::particles::SoundSizeFromThrow(float share)

@@ -388,7 +388,7 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	    .description = "A way out of a land opens on the flat plane after a second, seen from 370 m away, and hums. After 6 "
 	                   "seconds the camera goes 900 m away, and after 6 more seconds it comes back near the vortex.",
 	    .expected = "The hum starts as the vortex opens. Far away the audio stops it. When the camera comes back near, "
-	                "the hum plays again from its start (deviation 235: the game does not start it again).",
+	                "the hum plays again from its start, as the game does: its particle asks for the hum in each turn.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_OnThePlane.x, 120.0f, k_OnThePlane.y - 355.0f},
@@ -408,9 +408,10 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	        "A way out of a land opens on the flat plane after a second, near the player's temple, and hums. After 5 "
 	        "seconds the player goes into the temple's main room, and after 10 more seconds the player leaves "
 	        "the temple.",
-	    .expected = "The hum starts as the vortex opens. In the temple the first turn of the temple's music stops every "
-	                "sound effect, and the hum too. When the player is out of the temple and the camera is near the "
-	                "vortex again, the hum plays again from its start (deviation 235: the game does not start it again).",
+	    .expected =
+	        "The hum starts as the vortex opens. In the temple the first turn of the temple's music stops every "
+	        "sound effect, and the hum too. When the player is out of the temple and the camera is near the "
+	        "vortex again, the hum plays again from its start, as the game does: its particle asks for the hum in each turn.",
 	    .environment = {.dispenserGrid = false, .temple = glm::vec2(0.0f)},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_OnThePlane.x, 120.0f, k_OnThePlane.y - 355.0f},
@@ -429,10 +430,11 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	    .description = "A way out of a land opens on the flat plane after a second, seen from 370 m away. Its hum has full "
 	                   "volume up to 200 m. From 200 m to 400 m it is 200 / (200 + 2 * (distance - 200)) of full volume. "
 	                   "Past 400 m it is silent.",
-	    .expected = "The hum starts at 0.37 of its full volume as the vortex opens, and is louder as the camera comes "
-	                "nearer: full volume at 200 m and nearer, half at 300 m. Move the camera back past 400 m from the "
-	                "vortex: the hum stops at once and the debug log (audio) says why. When the camera comes back nearer "
-	                "than 400 m, the hum plays again from its start (deviation 235: the game does not start it again).",
+	    .expected =
+	        "The hum starts at 0.37 of its full volume as the vortex opens, and is louder as the camera comes "
+	        "nearer: full volume at 200 m and nearer, half at 300 m. Move the camera back past 400 m from the "
+	        "vortex: the hum stops at once and the debug log (audio) says why. When the camera comes back nearer "
+	        "than 400 m, the hum plays again from its start, as the game does: its particle asks for the hum in each turn.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_OnThePlane.x, 120.0f, k_OnThePlane.y - 355.0f},

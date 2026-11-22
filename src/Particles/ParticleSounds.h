@@ -26,6 +26,9 @@ ParticleSoundLink* StartAtomSound(Effect& effect, Atom& atom, const ParticleSoun
 void StopAtomSound(Atom& atom, const ParticleSoundLink& sound, int fadeStep = 0);
 /// The particle lets go of all its sounds
 void StopAllAtomSounds(Atom& atom);
+/// The height of the land under a point, where a sound that the file puts on the land is heard. The game finds the
+/// height at the map position of the point in 16.16 fixed point.
+[[nodiscard]] float SoundHeightOnLand(const ParticleWorldInterface& world, float x, float z);
 
 /// A thrown particle's sound is large above this share of the fastest throw, medium above the next, else small. The game
 /// compares the share with these as doubles.
