@@ -33,6 +33,7 @@ public:
 	bool EndGameSpeed(uint32_t task) override;
 	[[nodiscard]] bool MaySetGameSpeed(uint32_t task) const override { return _gameSpeedOwner == task; }
 	[[nodiscard]] uint32_t GetGameSpeedOwner() const override { return _gameSpeedOwner; }
+	[[nodiscard]] bool HidesSpeedWords() const override { return _hidesSpeedWords; }
 
 	Released TaskStopped(Camera& camera, uint32_t task) override;
 
@@ -55,6 +56,8 @@ private:
 	/// The camera of a dance that the script's camera took over from. The script gives it back when it ends.
 	std::unique_ptr<CameraModel> _danceCamera;
 	uint32_t _gameSpeedOwner {0};
+	/// The camera keeps this switch, and no save keeps it
+	bool _hidesSpeedWords {false};
 	CameraDetails _cameraDetails;
 	script::timers::CountdownTimer _countdown;
 };

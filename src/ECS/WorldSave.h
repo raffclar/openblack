@@ -116,6 +116,17 @@ enum class LoadKind : uint8_t
 	return kind == LoadKind::SavedGame;
 }
 
+/// The normal speed of the game clock
+constexpr float k_NormalClockSpeed = 1.0f;
+
+/// The speed of the clock after a load. A saved game loads at the normal speed. Before the load, the game ends the
+/// control of the game speed by the scripts, and this sets the normal speed. The file keeps no speed. A world state
+/// keeps the speed of the world.
+[[nodiscard]] constexpr float SpeedAfterLoad(LoadKind kind, float speed)
+{
+	return kind == LoadKind::SavedGame ? k_NormalClockSpeed : speed;
+}
+
 /// The saved state of each system that a save keeps, by the name of the system. Each section also keeps the bytes of
 /// its presentation values. With valueEnds, each section also keeps where each value ends, for tools.
 [[nodiscard]] std::vector<reflection::NamedSection> SavedSystemSections(const entt::meta_ctx& reflection,
