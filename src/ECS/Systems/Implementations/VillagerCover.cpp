@@ -35,6 +35,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerHidingRules.h"
 #include "ECS/VillagerRoutine.h"
@@ -81,7 +82,8 @@ bool CanHideIn(entt::entity building)
 	return info != nullptr && hiding::CanBeHiddenIn(info->abodeType, ecs::villager_home::IsFunctional(building));
 }
 
-/// Whether what frightened a villager is still about: a shield only while its miracle stands
+/// Whether what frightened a villager is still about: a shield only while a miracle keeps it, also while its dome fades
+/// after its miracle closed down
 bool ThreatAvailable(entt::entity threat)
 {
 	auto& registry = Entities();
@@ -90,7 +92,8 @@ bool ThreatAvailable(entt::entity threat)
 		return false;
 	}
 	const auto* shield = registry.TryGet<const MagicShield>(threat);
-	return shield == nullptr || shield->spell != entt::null;
+	return shield == nullptr || shield->spell != entt::null ||
+	       (Locator::magicShieldSystem::has_value() && Locator::magicShieldSystem::value().KeeperOf(threat) != entt::null);
 }
 
 /// The villager stops being frightened and goes back to what it was doing

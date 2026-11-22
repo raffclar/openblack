@@ -132,8 +132,8 @@ TownState TownStateOf(const Villager& villager)
 	return state;
 }
 
-/// The shield a reaction is to, while it stands with its miracle
-const MagicShield* StandingShield(entt::entity object)
+/// The shield a reaction is to, while a miracle keeps it: also while its dome fades after its miracle closed down
+const MagicShield* StandingShield(const MagicShieldSystemInterface& shields, entt::entity object)
 {
 	auto& registry = EntityRegistry();
 	if (object == entt::null || !registry.Valid(object))
@@ -141,7 +141,7 @@ const MagicShield* StandingShield(entt::entity object)
 		return nullptr;
 	}
 	const auto* found = registry.TryGet<const MagicShield>(object);
-	return found != nullptr && found->spell != entt::null ? found : nullptr;
+	return found != nullptr && (found->spell != entt::null || shields.KeeperOf(object) != entt::null) ? found : nullptr;
 }
 
 glm::vec2 PositionOf(entt::entity entity)
@@ -371,7 +371,7 @@ uint8_t MagicShieldSystem::PriorityFor(entt::entity villager, const ShieldReacti
 	{
 	case Reaction::ReactToMagicShield:
 	{
-		if (StandingShield(reaction.object) == nullptr)
+		if (StandingShield(*this, reaction.object) == nullptr)
 		{
 			return 0;
 		}
@@ -414,7 +414,7 @@ uint32_t MagicShieldSystem::AgainTurnsFor(entt::entity villager, const ShieldRea
 	const auto& person = registry.Get<const Villager>(villager);
 	const auto town = TownStateOf(person);
 	bool goalUnder = false;
-	if (const auto* found = StandingShield(reaction.object); found != nullptr)
+	if (const auto* found = StandingShield(*this, reaction.object); found != nullptr)
 	{
 		if (const auto* hug = registry.TryGet<const WallHug>(villager))
 		{
@@ -734,7 +734,7 @@ void MagicShieldSystem::ProcessVillagers()
 			return;
 		}
 		// It reacts to the shield while it stands, for as long as its reaction lasts
-		if (StandingShield(current.shield) != nullptr)
+		if (StandingShield(*this, current.shield) != nullptr)
 		{
 			const auto* memory = registry.TryGet<const VillagerReactionMemory>(villager);
 			const auto elapsed =

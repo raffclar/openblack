@@ -36,6 +36,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
@@ -411,6 +412,11 @@ void MagicSystem::CloseDown(entt::entity entity)
 	{
 		Locator::teleportSystem::value().RemoveStonesOf(entity);
 	}
+	// The spiritual shield's object goes at once, and the dome starts to fade
+	if (spell->spellClass == magic::SpellClass::Shield && Locator::magicShieldSystem::has_value())
+	{
+		Locator::magicShieldSystem::value().MiracleClosedDown(entity, _inTurn);
+	}
 	if (spell->effect != k_NoEffectHandle)
 	{
 		Locator::effectRequestSystem::value().Stop(spell->effect);
@@ -734,6 +740,7 @@ void MagicSystem::ProcessTurn()
 		return;
 	}
 	++_turn;
+	_inTurn = true;
 	_world.ProcessTurn();
 	ProcessDispensers();
 	ProcessCreatureSpells();
@@ -782,6 +789,7 @@ void MagicSystem::ProcessTurn()
 		_pourCreature = entt::null;
 	}
 	magic::StepPour(_pour, k_TurnSeconds);
+	_inTurn = false;
 }
 
 void MagicSystem::Update(float /*seconds*/)

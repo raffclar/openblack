@@ -1861,7 +1861,7 @@ TEST_F(Reactions, AShieldObjectWithNoMiracleThatTheWorldDestroysGoes)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto spell = registry.Create();
 	auto& miracle = registry.Assign<Spell>(spell);
-	miracle.magicType = MagicType::Shield;
+	miracle.magicType = MagicType::PhysicalShield;
 	miracle.spellClass = magic::SpellClass::Shield;
 	miracle.caster.player = PlayerNames::PLAYER_ONE;
 	miracle.castPosition = k_Here;
@@ -1870,8 +1870,10 @@ TEST_F(Reactions, AShieldObjectWithNoMiracleThatTheWorldDestroysGoes)
 	shields.ProcessTurn();
 	const auto object = shields.ObjectOf(spell);
 	ASSERT_NE(object, static_cast<entt::entity>(entt::null));
-	// An object that its miracle let go of, as a dome that fades
-	registry.Get<MagicShield>(object).spell = entt::null;
+	// A dome that fades alone after a script deleted its miracle
+	shields.RemoveWithSpell(spell);
+	registry.Destroy(spell);
+	ASSERT_TRUE(registry.Valid(object));
 	shields.ObjectDestroyed(object);
 	EXPECT_FALSE(registry.Valid(object));
 	EXPECT_FALSE(shields.LostObject(spell));

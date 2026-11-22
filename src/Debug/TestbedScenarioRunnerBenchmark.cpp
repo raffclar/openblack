@@ -44,6 +44,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/StreetLantern.h"
@@ -297,11 +298,20 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	size_t shieldMiracles = 0;
-	registry.Each<const ecs::components::Spell>([&shieldMiracles](const ecs::components::Spell& spell) {
+	size_t closedShieldMiracles = 0;
+	registry.Each<const ecs::components::Spell>([&](const ecs::components::Spell& spell) {
 		if (spell.spellClass == magic::SpellClass::Shield)
 		{
 			++shieldMiracles;
+			closedShieldMiracles += spell.closedDown ? 1 : 0;
 		}
+	});
+	size_t fadingDomes = 0;
+	registry.Each<const ecs::components::ShieldDome>(
+	    [&fadingDomes](const ecs::components::ShieldDome& dome) { fadingDomes += dome.state.dying ? 1 : 0; });
+	size_t standingReactions = 0;
+	registry.Each<const ecs::components::MagicShield>([&standingReactions](const ecs::components::MagicShield& shield) {
+		standingReactions += shield.reaction != 0 ? 1 : 0;
 	});
 	return {
 	    {"placed", registry.Size<Transform>()},
@@ -314,6 +324,9 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	    {"street lanterns", registry.Size<ecs::components::StreetLantern>()},
 	    {"features", registry.Size<ecs::components::Feature>()},
 	    {"shield miracles", shieldMiracles},
+	    {"closed shield miracles", closedShieldMiracles},
+	    {"fading domes", fadingDomes},
+	    {"standing shield reactions", standingReactions},
 	};
 }
 
