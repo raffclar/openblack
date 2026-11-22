@@ -17,13 +17,18 @@
 
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
+
 namespace openblack::ecs::systems
 {
 
 /// The tutorial's hand demonstrations: while the advisors teach a move, a recording of the player's interface plays
 /// through the player's own hand and camera, the player's mouse kept out. The script that starts one keeps it in step
 /// with the advisors' lines through the marks in the recording, at which it can hold until the script reads the mark.
-class HandDemoSystemInterface
+///
+/// A save keeps only whether the demonstration reached a mark that no script read yet. A load stops the demonstration
+/// that plays, and the scripts can then read the saved mark.
+class HandDemoSystemInterface: public SavedStateInterface
 {
 public:
 	/// Where the demonstration has the camera
@@ -48,7 +53,7 @@ public:
 		bool replayHolding {false};
 	};
 
-	virtual ~HandDemoSystemInterface() = default;
+	~HandDemoSystemInterface() override = default;
 
 	/// A script task starts the demonstration of a name (a file of Data/HandDemo). Unless `withoutHandModify`, the hand
 	/// first lets go of what it holds. A demonstration that can't be read doesn't play.

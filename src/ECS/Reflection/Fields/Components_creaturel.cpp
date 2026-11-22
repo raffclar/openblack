@@ -31,7 +31,6 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturel(entt::meta_
 	    .Field<&components::CreatureLeash::lastTiedTurn>("lastTiedTurn")
 	    .Field<&components::CreatureLeash::leashWorks>("leashWorks")
 	    .Field<&components::CreatureLeash::selected>("selected")
-	    .Field<&components::CreatureLeash::drawn>("drawn")
 	    .Field<&components::CreatureLeash::confinementCentre>("confinementCentre")
 	    .Field<&components::CreatureLeash::confinementRadius>("confinementRadius")
 	    .Field<&components::CreatureLeash::home>("home")
