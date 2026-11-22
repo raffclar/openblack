@@ -167,7 +167,7 @@ world_save::PendingChunk ClockChunk()
 	return {.tag = gamesave::k_ClockTag, .bytes = [saved]() { return world_save::WriteClock(*saved); }};
 }
 
-bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
+bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn, world_save::LoadKind kind)
 {
 	const auto state = world_save::ReadClock(bytes);
 	if (!state.has_value())
@@ -177,7 +177,10 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 	if (Locator::time::has_value())
 	{
 		auto& time = Locator::time::value();
-		time.SetSpeed(state->speed);
+		if (world_save::LoadsSpeed(kind))
+		{
+			time.SetSpeed(state->speed);
+		}
 		if (state->place.has_value())
 		{
 			time.ResumeAtPlace(turn, *state->place);
@@ -913,7 +916,7 @@ bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesa
 	bool read = true;
 	if (const auto clock = gamesave::FindChunk(file, gamesave::k_ClockTag); clock.has_value())
 	{
-		read = LoadClock(*clock, turn) && read;
+		read = LoadClock(*clock, turn, kind) && read;
 	}
 	if (const auto camera = gamesave::FindChunk(file, gamesave::k_CameraTag);
 	    LoadsCamera(kind) && camera.has_value() && Locator::camera::has_value())

@@ -116,6 +116,13 @@ enum class LoadKind : uint8_t
 	return kind == LoadKind::SavedGame;
 }
 
+/// Whether a load sets the speed of the game from the file. A saved game does not: the file of the game keeps no speed,
+/// so a load keeps the speed that the game had before it. A world state does: it is the world that all computers share.
+[[nodiscard]] constexpr bool LoadsSpeed(LoadKind kind)
+{
+	return kind == LoadKind::WorldState;
+}
+
 /// The saved state of each system that a save keeps, by the name of the system. Each section also keeps the bytes of
 /// its presentation values. With valueEnds, each section also keeps where each value ends, for tools.
 [[nodiscard]] std::vector<reflection::NamedSection> SavedSystemSections(const entt::meta_ctx& reflection,

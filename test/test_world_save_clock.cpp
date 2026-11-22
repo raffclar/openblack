@@ -150,3 +150,10 @@ TEST(WorldSaveClock, AClockWithNoPlaceReadsBackWithNone)
 	ASSERT_TRUE(loaded.has_value());
 	EXPECT_FALSE(loaded->place.has_value());
 }
+
+// The file of a saved game keeps no speed, so its load keeps the speed from before. A world state sets the speed.
+TEST(WorldSaveClock, ASavedGameLoadKeepsTheSpeedOfTheGameAndAWorldStateSetsIt)
+{
+	EXPECT_FALSE(ecs::world_save::LoadsSpeed(ecs::world_save::LoadKind::SavedGame));
+	EXPECT_TRUE(ecs::world_save::LoadsSpeed(ecs::world_save::LoadKind::WorldState));
+}
