@@ -43,6 +43,7 @@ public:
 	GetOwnHandPositions() const noexcept override;
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) override;
 	void KeepLooksForNextLand() override;
+	void ForgetKeptLooks() override { _keptLooks.reset(); }
 	[[nodiscard]] std::optional<glm::vec3> GetDrawnHandPosition() const noexcept override;
 	[[nodiscard]] std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
 	GetHandsOf(PlayerNames player) const noexcept override;

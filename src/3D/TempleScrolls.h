@@ -153,6 +153,23 @@ public:
 	/// press on a scroll gives where the camera is to look at it from in focus.
 	bool Hold(bool pressed, float mouseY, const std::optional<TempleCursorHit>& hit, const Facts& facts,
 	          std::optional<Focus>& focus);
+	/// Whether a held scroll squeaks in this frame. It squeaks when it starts to move. A frame in which it does not move,
+	/// also when the mouse moves it against the end of its text, lets it squeak again when it next moves. Squeaked keeps
+	/// whether it squeaked since it last stood still.
+	[[nodiscard]] static constexpr bool Squeaks(bool& squeaked, bool moved)
+	{
+		if (!moved)
+		{
+			squeaked = false;
+			return false;
+		}
+		if (squeaked)
+		{
+			return false;
+		}
+		squeaked = true;
+		return true;
+	}
 	/// The camera looks at a room's scroll, by its place among the room's scrolls, as a press on the scroll does. None
 	/// when the room has no such scroll.
 	std::optional<Focus> LookAt(TempleRoom room, size_t place, const Facts& facts);

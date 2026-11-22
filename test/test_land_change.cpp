@@ -53,6 +53,18 @@ TEST(LandChange, ANewGameAndTheTestbedStartEverythingAfresh)
 	}
 }
 
+TEST(LandChange, OnlyALandOfTheSameGameKeepsTheLookOfTheHand)
+{
+	// The game keeps one hand for all the lands of a game
+	EXPECT_TRUE(RulesFor(Kind::Story).handLookCarried);
+	EXPECT_TRUE(RulesFor(Kind::FreshScripts).handLookCarried);
+	// A new game and a load make a new hand, which starts neutral. Nothing comes onto the testbed.
+	for (const auto kind : {Kind::NewGame, Kind::Skirmish, Kind::SavedGame, Kind::Testbed})
+	{
+		EXPECT_FALSE(RulesFor(kind).handLookCarried);
+	}
+}
+
 TEST(LandChange, ANewGameOrALoadStartsThePlayerAtTheirProfilesAlignment)
 {
 	EXPECT_TRUE(RulesFor(Kind::NewGame).alignmentFromProfile);
