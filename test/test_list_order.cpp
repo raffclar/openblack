@@ -11,13 +11,16 @@
 
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/ListPlace.h"
 #include "ECS/FieldOrder.h"
+#include "ECS/FishFarmOrder.h"
 #include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 
@@ -123,4 +126,29 @@ TEST(ListOrder, TheFieldsOfATownComeNewestFirstAfterAFieldGoes)
 	EXPECT_EQ(field_order::FieldsOfTown(registry, 0), (std::vector {made[4], made[2]}));
 	EXPECT_EQ(field_order::AllFields(registry), (std::vector {made[4], made[3], made[2], made[1]}));
 	EXPECT_TRUE(field_order::FieldsOfTown(registry, 7).empty());
+}
+
+// The fish farms of a town come newest first, also after a farm goes and the store moves its last farm into the gap
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ListOrder, TheFishFarmsOfATownComeNewestFirstAfterAFarmGoes)
+{
+	Registry registry;
+	const auto townA = registry.Create();
+	const auto townB = registry.Create();
+	std::vector<entt::entity> made;
+	for (int i = 0; i < 5; ++i)
+	{
+		const auto entity = registry.Create();
+		components::FishFarm farm;
+		farm.town = i % 2 == 0 ? townA : townB;
+		registry.Assign<components::FishFarm>(entity, std::move(farm));
+		list_order::Join(registry, entity);
+		made.push_back(entity);
+	}
+	EXPECT_EQ(fish_farm_order::FarmsOfTown(registry, townA), (std::vector {made[4], made[2], made[0]}));
+	EXPECT_EQ(fish_farm_order::FarmsOfTown(registry, townB), (std::vector {made[3], made[1]}));
+
+	registry.Destroy(made[0]);
+	EXPECT_EQ(fish_farm_order::FarmsOfTown(registry, townA), (std::vector {made[4], made[2]}));
+	EXPECT_TRUE(fish_farm_order::FarmsOfTown(registry, entt::null).empty());
 }

@@ -19,10 +19,12 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/FishFarmOrder.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -128,18 +130,18 @@ std::optional<entt::entity> FishFarmSystem::ClosestFarm(glm::vec3 point, float m
 
 std::optional<FishFarmSystemInterface::FarmChoice> FishFarmSystem::BestFarmFor(entt::entity town, glm::vec3 fisherman) const
 {
-	std::vector<entt::entity> farms;
+	// The town takes its farms in the order of its list, and measures each one by the map distance
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto at = map_coords::FromMetres(glm::xz(fisherman));
+	const auto farms = ecs::fish_farm_order::FarmsOfTown(registry, town);
 	std::vector<fish_farm::Candidate> candidates;
-	Locator::entitiesRegistry::value().Each<const FishFarm, const Transform>(
-	    [&](entt::entity entity, const FishFarm& farm, const Transform& transform) {
-		    if (farm.town != town)
-		    {
-			    return;
-		    }
-		    farms.push_back(entity);
-		    candidates.push_back({.distance = glm::distance(glm::xz(transform.position), glm::xz(fisherman)),
-		                          .fishermen = farm.fishermen.size()});
-	    });
+	candidates.reserve(farms.size());
+	for (const auto entity : farms)
+	{
+		const auto& farm = registry.Get<const FishFarm>(entity);
+		candidates.push_back(
+		    {.distance = gutils::GetDistanceInMetres(farm.place, glm::ivec2(at.x, at.z)), .fishermen = farm.fishermen.size()});
+	}
 	const auto best = fish_farm::BestFarm(candidates, GetType().maxFishermen);
 	if (!best.has_value())
 	{
