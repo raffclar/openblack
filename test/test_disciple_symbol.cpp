@@ -130,3 +130,12 @@ TEST(DiscipleSymbol, AThingThatIsGoneShowsNoSymbol)
 	world.land.Destroy(gone);
 	EXPECT_FALSE(world.Shown(gone).has_value());
 }
+
+TEST(DiscipleSymbol, TheSizeOfTheSymbolComesFromTheDistanceToTheGlow)
+{
+	// The camera is 3 across, 4 up and 12 back from the glow. The symbol stands higher, but its height does not count.
+	const glm::vec3 glow {10.0f, 2.0f, 5.0f};
+	const glm::vec3 eye {13.0f, 6.0f, -7.0f};
+	EXPECT_FLOAT_EQ(disciple_symbol::SymbolDistance(eye, glow), 13.0f);
+	EXPECT_FLOAT_EQ(disciple_symbol::SymbolDistance(glow, glow), 0.0f);
+}
