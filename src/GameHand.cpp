@@ -84,6 +84,7 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
@@ -172,6 +173,7 @@
 #include "Hand/HandReach.h"
 #include "Hand/HandSendWait.h"
 #include "Hand/HandTrace.h"
+#include "Hand/HandTricons.h"
 #include "Hand/HandVisibility.h"
 #include "Hand/ScriptHandState.h"
 #include "Help/DialogueText.h"
@@ -338,6 +340,47 @@ void StepEase(Ease& ease)
 	    .nothingBuilt = !gui::hand_tooltip::IsInteractable(thing),
 	    .inHand = registry.AllOf<ecs::components::InHand>(thing),
 	};
+}
+
+/// What the interface does with the player's hand this frame, which can hide the red cross
+[[nodiscard]] hand_tricons::CrossHideFacts CrossHideNow(bool inTemple, bool grippingLand)
+{
+	hand_tricons::CrossHideFacts facts {
+	    .interfaceActive =
+	        !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
+	    .inTemple = inTemple,
+	};
+	const bool boxTakesMouse = Locator::gameInterface::has_value() && Locator::gameInterface::value().FrontEndPointerOn();
+	const bool bubbleGripped = Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped();
+	const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
+	// The waits of the interface that hide the cross
+	facts.waitHides = boxTakesMouse || bubbleGripped ||
+	                  (grab != nullptr && (grab->GetGiveWait().has_value() || grab->GetTaking().has_value()));
+	// The states of the interface that keep it: the grip of the land, a locked hold, a throw, the fight with no press
+	const bool directsFight = Locator::creatureFightSystem::has_value() &&
+	                          Locator::creatureFightSystem::value().DirectsFight() &&
+	                          !Locator::creatureFightSystem::value().HoldsBodyPress();
+	facts.stateKeeps =
+	    grippingLand || directsFight || (grab != nullptr && (grab->GetLockedOn().has_value() || grab->IsAboutToThrow()));
+	facts.handHolds = (grab != nullptr && grab->GetHeld().has_value()) ||
+	                  (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeed().has_value());
+	if (!Locator::pickingSystem::has_value())
+	{
+		return facts;
+	}
+	const auto& pick = Locator::pickingSystem::value().GetPick();
+	facts.overRope = pick.rope || (Locator::leashSystem::has_value() &&
+	                               Locator::leashSystem::value().RopeHand(LocalInputPlayer()) == leash_snap::Hand::Holding);
+	facts.overBubble = !pick.object.has_value() && pick.textBubble;
+	if (pick.object.has_value())
+	{
+		const auto& registry = Locator::entitiesRegistry::value();
+		facts.overThing = gui::hand_tooltip::IsInteractable(*pick.object);
+		facts.handInInfluence = HandInInfluence();
+		facts.thingNeedsNoInfluence =
+		    registry.Valid(*pick.object) && registry.AllOf<ecs::components::ScriptHighlight>(*pick.object);
+	}
+	return facts;
 }
 
 } // namespace
@@ -2012,6 +2055,8 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	const auto cues = camera.GetModel().GetHandCues();
 	const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying();
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	// Each pass of the interface that hides the cross keeps it hidden for a short time
+	_crossHideMs = hand_tricons::HoldCrossHide(_crossHideMs, hand_tricons::HidesCross(CrossHideNow(inTemple, cues.dragging)));
 	// The world camera makes its icons each frame, also while the hand is not drawn. The scripts read them, so they are
 	// kept. A demonstration puts its recorded icons in their place.
 	std::optional<hand_tricons::WorldCameraFrame> worldFrame;
@@ -2022,6 +2067,9 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	}
 	else if (cues.icons.has_value() && !inTemple)
 	{
+		// The world camera counts down the time that the cross stays hidden, by the real time of the frame
+		_crossHideMs =
+		    hand_tricons::CountCrossHide(_crossHideMs, static_cast<int32_t>(Locator::time::value().GetFrameRealTime().count()));
 		worldFrame = *cues.icons;
 		worldFrame->handInInfluence = HandInInfluence();
 		// A box of the menu on the screen stops the camera input, so no icon shows
@@ -2058,6 +2106,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 		tricons.leans = cues.clearView <= hand_tricons::k_ClearViewLeans;
 		tricons.cameraBusy =
 		    frame.gripping || frame.rotatingAroundMouse || frame.turn != 0.0f || frame.tilt != 0.0f || frame.zoom != 0.0f;
+		tricons.crossHidden = _crossHideMs > 0;
 		// The cross brightens with a thing under the hand, and shows at once with the action button
 		if (actions.Get(input::BindableActionMap::ACTION))
 		{

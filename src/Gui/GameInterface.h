@@ -430,6 +430,8 @@ public:
 		/// The world camera moves the view itself, and how the cross is nudged
 		bool cameraBusy {false};
 		hand_tricons::CrossNudge crossNudge {hand_tricons::CrossNudge::None};
+		/// The interface hides the cross for a short time
+		bool crossHidden {false};
 		/// The frame's time
 		float seconds {0.0f};
 	};

@@ -1593,6 +1593,26 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .repeatFrom = 1,
 	});
 
+	// As the hum's land, with a gold scroll out past the border, in the middle of the screen
+	all.push_back({
+	    .id = "interface.red_cross_scroll",
+	    .name = "The red cross over a scroll out of the influence",
+	    .facet = Facet::Interface,
+	    .description = "The hand goes out past the north edge of the player's influence, onto a gold scroll there, and "
+	                   "off it again, every three seconds.",
+	    .expected = "Out of the influence the red cross shows by the hand, faint. Over the scroll the cross goes at once, "
+	                "because a scroll takes the hand out of the influence too. A quarter of a second after the hand "
+	                "leaves the scroll, the cross comes back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 330.0f}, .look = {0.0f, 0.0f, 420.0f}},
+	    .highlights = {{.kind = 3, .offset = {0.0f, 420.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.95f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.3f, 0.5f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.3f, 0.5f}}},
+	    .repeatFrom = 2,
+	});
+
 	// Two teleport stones the villagers jump between, the first jumps heard from the land, the later ones while the
 	// camera is in the temple
 	constexpr glm::vec2 k_StoneA {-40.0f, 20.0f};
