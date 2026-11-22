@@ -556,6 +556,10 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	{
 		Locator::config::value().drawFootpaths = true;
 	}
+	if (!environment.atmosphere && Locator::config::has_value())
+	{
+		Locator::config::value().testbedSilentAtmosphere = true;
+	}
 	if (environment.dynamicTreeShadows && Locator::config::has_value())
 	{
 		Locator::config::value().dynamicTreeShadows = true;

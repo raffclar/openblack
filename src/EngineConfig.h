@@ -110,6 +110,8 @@ struct EngineConfig
 	/// For the testbed only: a game in a window pushes the camera as one in full screen does, so that the push can be
 	/// watched without the game taking the whole screen
 	bool testbedPushScrollInWindow {false};
+	/// For the testbed only: the atmosphere sounds stay silent, so that only the sounds of a scenario are heard
+	bool testbedSilentAtmosphere {false};
 	/// Creatures' vertices at the seams between their bones are blended towards their partners, as the game draws them
 	bool blendCreatureSeams {true};
 	/// Creatures cast their shadows onto the land and what stands on it, and villagers a script draws in high detail

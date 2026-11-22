@@ -9,6 +9,8 @@
 
 // Testbed scenarios for the sounds, the voices and the music.
 
+#include <cmath>
+
 #include <array>
 
 #include <SDL_scancode.h>
@@ -1782,4 +1784,41 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::StormBolt, .delaySeconds = 1.7f, .point = {-2250.0f, -2200.0f}},
 	                 {.kind = Kind::StormBolt, .delaySeconds = 0.8f, .point = {-700.0f, -700.0f}}},
 	});
+
+	// One bolt at night strikes at the same point in each of these scenarios. Only the distance to the camera changes,
+	// so that a clip of each one shows how the thunder changes with distance (deviation 291).
+	struct BoltDistance
+	{
+		float metres;
+		std::string_view id;
+		std::string_view name;
+	};
+	constexpr std::array k_BoltDistances = {
+	    BoltDistance {300.0f, "audio.thunder_bolt_at_300m", "One bolt at night, 300 m from the camera"},
+	    BoltDistance {600.0f, "audio.thunder_bolt_at_600m", "One bolt at night, 600 m from the camera"},
+	    BoltDistance {1000.0f, "audio.thunder_bolt_at_1km", "One bolt at night, 1 km from the camera"},
+	    BoltDistance {2000.0f, "audio.thunder_bolt_at_2km", "One bolt at night, 2 km from the camera"},
+	};
+	constexpr glm::vec2 k_BoltPoint {600.0f, 600.0f};
+	constexpr float k_EyeHeight = 40.0f;
+	for (const auto& bolt : k_BoltDistances)
+	{
+		// The eye is to the south west of the bolt, 40 m up, at the given distance from the foot of the bolt
+		const float along = std::sqrt(bolt.metres * bolt.metres - k_EyeHeight * k_EyeHeight) / std::sqrt(2.0f);
+		all.push_back({
+		    .id = bolt.id,
+		    .name = bolt.name,
+		    .facet = Facet::Audio,
+		    .description = "The camera is 40 m up and looks at a point of the land. At night, one bolt strikes at that "
+		                   "point after 2 seconds. The atmosphere sounds stay silent. The other scenarios of this set "
+		                   "put the camera at 300 m, 600 m, 1 km and 2 km from the same point.",
+		    .expected = "The bolt shows in the middle of the screen. Its thunder starts 1 second for each 347 m after "
+		                "the bolt. A far thunder is quieter and lower than a near thunder.",
+		    .environment = {.hour = 23.0f, .clockRuns = false, .atmosphere = false, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed,
+		                .eye = {k_BoltPoint.x - along, k_EyeHeight, k_BoltPoint.y - along},
+		                .look = {k_BoltPoint.x, 70.0f, k_BoltPoint.y}},
+		    .commands = {{.kind = Kind::StormBolt, .delaySeconds = 2.0f, .point = k_BoltPoint}},
+		});
+	}
 }

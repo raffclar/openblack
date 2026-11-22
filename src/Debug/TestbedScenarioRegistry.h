@@ -166,6 +166,9 @@ struct Environment
 	/// The hour of the day, as scripts give it, and whether the clock then runs on or stands still
 	float hour {12.0f};
 	bool clockRuns {true};
+	/// The atmosphere sounds (the wind, the birds and the night) play. When false, only the sounds of the scenario are
+	/// heard
+	bool atmosphere {true};
 	Weather weather {Weather::Clear};
 	/// With a thunderstorm, the shortest and longest wait between its forked bolts, in seconds; the weather window's 2 to
 	/// 8 when not given
