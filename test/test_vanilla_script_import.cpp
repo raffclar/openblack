@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <bit>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -153,6 +154,26 @@ TEST(VanillaScriptImport, ReadsTheValuesOfTheScriptsAfterTheTable)
 	EXPECT_TRUE(values->countdownShown);
 
 	EXPECT_FALSE(script_import::ReadScriptValues(FakeTable().Make(1)).has_value());
+}
+
+// The camera features and the self-tilting camera's pitch and height come after the interface level. A game object
+// without all of them gives no values.
+TEST(VanillaScriptImport, ReadsTheCameraFeaturesAndTheAutoPitch)
+{
+	FakeTable fake;
+	fake.Word("cameraFeatures", 0x45)
+	    .Word("cameraAutoPitch", std::bit_cast<uint32_t>(0.25f))
+	    .Word("cameraAutoPitchHeight", std::bit_cast<uint32_t>(120.0f));
+	const auto values = script_import::ReadCameraHelpValues(fake.Make(1));
+	ASSERT_TRUE(values.has_value());
+	EXPECT_EQ(values->features, 0x45U);
+	EXPECT_FLOAT_EQ(values->autoPitch, 0.25f);
+	EXPECT_FLOAT_EQ(values->autoPitchHeight, 120.0f);
+
+	FakeTable partial;
+	partial.Word("cameraFeatures", 0x45);
+	EXPECT_FALSE(script_import::ReadCameraHelpValues(partial.Make(1)).has_value());
+	EXPECT_FALSE(script_import::ReadCameraHelpValues(FakeTable().Make(1)).has_value());
 }
 
 // An object that openblack made takes its place as its entity. A place of an object that openblack did not make is
