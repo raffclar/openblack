@@ -66,6 +66,7 @@
 #include "Online/ConnectionLostNotice.h"
 #include "Simulation/FrameBody.h"
 #include "Simulation/MindFrameBudget.h"
+#include "Simulation/TurnBesideDraw.h"
 #include "Simulation/TurnBody.h"
 #include "Simulation/WorldStart.h"
 #include "Story/NewGameChoice.h"
@@ -237,9 +238,9 @@ struct Arguments
 	/// For developers: what the check does when turn code uses the graphics, the renderer or the audio directly (see
 	/// MainThreadQueue). Off by default.
 	TurnApiCheck turnApiCheck {};
-	/// For developers: the turns of the next frame play on another thread beside the end of the draw of this frame
-	/// (deviation row 153). Off by default.
-	bool turnBesideDraw {false};
+	/// When the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row
+	/// 153). By default only on the map for 32 gods. Developers can make it always or never.
+	turn_beside_draw::Mode turnBesideDraw {turn_beside_draw::Mode::ByLand};
 	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
 	std::optional<uint16_t> inspectPort;
 	/// The fight autopilot to start with the inspector, and the folder for the files of the fight transcript
@@ -980,8 +981,8 @@ private:
 	std::optional<uint32_t> _deviceLossFrame;
 	/// What the check of the turn's calls does
 	TurnApiCheck _turnApiCheck {};
-	/// The turns of the next frame play beside the draw of this frame (deviation row 153)
-	bool _turnBesideDraw {false};
+	/// When the turns of the next frame play beside the draw of this frame (deviation row 153)
+	turn_beside_draw::Mode _turnBesideDraw {turn_beside_draw::Mode::ByLand};
 	/// The inspector gave its answers before this frame, while the tool held the game, so the frame does not ask it again
 	bool _inspectorServedEarly {false};
 	/// The requested screenshot leaves the debug windows out

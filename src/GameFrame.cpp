@@ -426,7 +426,14 @@ bool Game::PlayTurns()
 
 bool Game::StartTurnsBesideDraw()
 {
-	if (!_turnBesideDraw || _frameLoop == nullptr || !Locator::mainThreadQueue::has_value())
+	if (_frameLoop == nullptr || !Locator::mainThreadQueue::has_value())
+	{
+		return false;
+	}
+	// By default, only the turns of the map for 32 gods play beside the draw
+	const bool landPlaysBeside = _turnBesideDraw == turn_beside_draw::Mode::ByLand && Locator::landSystem::has_value() &&
+	                             turn_beside_draw::LandPlaysBeside(Locator::landSystem::value().GetLandPath());
+	if (!turn_beside_draw::PlaysBeside(_turnBesideDraw, landPlaysBeside))
 	{
 		return false;
 	}
