@@ -96,7 +96,8 @@ public:
 	/// The wood of a tree as a forest counts it: its life, the worth of a forest miracle's tree, the wood value of its
 	/// kind, its scale and the land's balance for wood, not truncated. 0 for a thing that is not a tree.
 	[[nodiscard]] virtual float TreeWoodOf(entt::entity tree) const = 0;
-	/// The point of a forest nearest a point: on its big forest's edge towards it, or else the forest's place
+	/// The point of a forest nearest a point: on its big forest's edge towards it in whole map units, or else the forest's
+	/// place
 	[[nodiscard]] virtual glm::vec3 NearestPointOf(entt::entity forest, glm::vec3 to) const = 0;
 	/// Wood taken from a big forest: it comes off divided by the forest's life; a forest left with none goes from the
 	/// land (its forest stays), and one whose wood has drifted far enough from its size shrinks to fit and plants a young
@@ -107,7 +108,8 @@ public:
 	virtual std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) = 0;
 	/// Each town lists the forests near enough its storage pit with wood in them
 	virtual void AssignForestsToTowns() = 0;
-	/// One town lists the forests near enough its storage pit with wood in them, in place of the forests it listed before
+	/// One town lists the forests near enough its storage pit with wood in them, in place of the forests it listed before.
+	/// The list holds them oldest first, and the distances are in whole map units.
 	virtual void AssignForestsToTown(entt::entity town) = 0;
 	/// The forest of its own a town sends a villager at a point to: the nearest of the forests it lists, by the edge of
 	/// its big forest (none when the point is inside it) or the forest's place, within the town's reach for forests; an

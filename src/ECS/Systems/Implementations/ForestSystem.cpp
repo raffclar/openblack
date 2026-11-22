@@ -349,6 +349,21 @@ PlayerNames MostInfluentialPlayerAt(const ecs::Registry& registry, glm::vec3 poi
 	std::ranges::sort(players, {}, &influence_rules::PlayerInfluenceAt::player);
 	return influence_rules::MostInfluentialPlayer(players);
 }
+/// The point of a forest nearest a map position, in whole map units: on its big forest's edge towards the position, or
+/// else the forest's place
+map_coords::MapCoords NearestMapPointOf(entt::entity forest, const map_coords::MapCoords& to)
+{
+	const auto& registry = EntityRegistry();
+	const auto& record = registry.Get<const LandForest>(forest);
+	if (record.bigForest != entt::null && registry.Valid(record.bigForest))
+	{
+		const auto& at = registry.Get<const Transform>(record.bigForest).position;
+		return ecs::land_forests::EdgeTowards(map_coords::FromMetres(glm::xz(at)),
+		                                      ecs::world_objects::SizeOf(record.bigForest).radius, to);
+	}
+	return map_coords::FromMetres(glm::xz(registry.Get<const Transform>(forest).position));
+}
+
 } // namespace
 
 ForestSystem::ForestSystem()
@@ -1141,13 +1156,10 @@ glm::vec3 ForestSystem::NearestPointOf(entt::entity forest, glm::vec3 to) const
 	const auto& record = registry.Get<const LandForest>(forest);
 	if (record.bigForest != entt::null && registry.Valid(record.bigForest))
 	{
-		// On the big forest's edge, towards the point
-		const auto& at = registry.Get<const Transform>(record.bigForest).position;
-		const glm::vec2 towards = glm::xz(to) - glm::xz(at);
-		const float length = glm::length(towards);
-		const auto edge =
-		    length > 0.0f ? towards / length * ecs::world_objects::SizeOf(record.bigForest).radius : glm::vec2(0.0f);
-		return {at.x + edge.x, at.y, at.z + edge.y};
+		// On the big forest's edge towards the point, in whole map units
+		const auto edge = NearestMapPointOf(forest, map_coords::FromMetres(glm::xz(to)));
+		return {map_coords::ToMetres(edge.x), registry.Get<const Transform>(record.bigForest).position.y,
+		        map_coords::ToMetres(edge.z)};
 	}
 	return registry.Get<const Transform>(forest).position;
 }
@@ -1313,13 +1325,20 @@ void ForestSystem::AssignForestsToTown(entt::entity townEntity)
 	{
 		return;
 	}
-	for (const auto forest : LandForests())
+	// The distances are in whole map units. The land's forests are met newest first, and the town puts each forest that
+	// is near enough at the front of its list.
+	const auto forests = LandForests();
+	const auto fromCoords = map_coords::FromMetres(glm::xz(*from));
+	std::vector<ecs::land_forests::TownMeasure> measures;
+	measures.reserve(forests.size());
+	for (const auto forest : forests)
 	{
-		const float distance = glm::length(glm::xz(NearestPointOf(forest, *from)) - glm::xz(*from));
-		if (ecs::land_forests::NearTown(distance, reach, WoodOf(forest)))
-		{
-			listed.forests.push_back(forest);
-		}
+		measures.push_back({.distance = gutils::GetDistanceInMetres(NearestMapPointOf(forest, fromCoords), fromCoords),
+		                    .wood = WoodOf(forest)});
+	}
+	for (const auto i : ecs::land_forests::TownList(measures, reach))
+	{
+		listed.forests.push_back(forests.at(i));
 	}
 }
 
@@ -1331,6 +1350,7 @@ std::optional<entt::entity> ForestSystem::NearestTownForest(entt::entity town, g
 	{
 		return std::nullopt;
 	}
+	const auto here = map_coords::FromMetres(glm::xz(point));
 	std::vector<entt::entity> forests;
 	std::vector<ecs::villager_work::ForestCandidate> candidates;
 	for (const auto forest : listed->forests)
@@ -1340,19 +1360,20 @@ std::optional<entt::entity> ForestSystem::NearestTownForest(entt::entity town, g
 		{
 			continue;
 		}
-		// Inside a big forest the forest is right there; outside it, at its edge
+		// Inside a big forest the forest is right there; outside it, at its edge. The distances are in whole map units.
 		float distance = 0.0f;
 		if (record->bigForest != entt::null && registry.Valid(record->bigForest))
 		{
 			const auto& at = registry.Get<const Transform>(record->bigForest).position;
-			if (glm::length(glm::xz(at) - glm::xz(point)) > ecs::world_objects::SizeOf(record->bigForest).radius)
+			if (gutils::GetDistanceInMetres(map_coords::FromMetres(glm::xz(at)), here) >
+			    ecs::world_objects::SizeOf(record->bigForest).radius)
 			{
-				distance = glm::length(glm::xz(NearestPointOf(forest, point)) - glm::xz(point));
+				distance = gutils::GetDistanceInMetres(NearestMapPointOf(forest, here), here);
 			}
 		}
 		else
 		{
-			distance = glm::length(glm::xz(NearestPointOf(forest, point)) - glm::xz(point));
+			distance = gutils::GetDistanceInMetres(NearestMapPointOf(forest, here), here);
 		}
 		forests.push_back(forest);
 		candidates.push_back({.distance = distance, .scenic = record->scenic});
