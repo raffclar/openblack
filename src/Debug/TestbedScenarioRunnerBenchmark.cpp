@@ -45,6 +45,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -295,6 +296,13 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 		return {};
 	}
 	auto& registry = Locator::entitiesRegistry::value();
+	size_t shieldMiracles = 0;
+	registry.Each<const ecs::components::Spell>([&shieldMiracles](const ecs::components::Spell& spell) {
+		if (spell.spellClass == magic::SpellClass::Shield)
+		{
+			++shieldMiracles;
+		}
+	});
 	return {
 	    {"placed", registry.Size<Transform>()},
 	    {"creatures", registry.Size<Creature>()},
@@ -305,6 +313,7 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	    {"highlights", registry.Size<ecs::components::ScriptHighlight>()},
 	    {"street lanterns", registry.Size<ecs::components::StreetLantern>()},
 	    {"features", registry.Size<ecs::components::Feature>()},
+	    {"shield miracles", shieldMiracles},
 	};
 }
 

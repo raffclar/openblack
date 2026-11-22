@@ -369,6 +369,11 @@ void MagicShieldSystem::ProcessTurn()
 	}
 	auto& registry = EntityRegistry();
 
+	// A miracle that has gone forgets that the world destroyed its object
+	std::erase_if(_objects, [&registry](const auto& entry) {
+		return entry.second == entt::null && (!registry.Valid(entry.first) || !registry.AllOf<Spell>(entry.first));
+	});
+
 	// Shield miracles without an object yet raise theirs
 	std::vector<std::pair<entt::entity, const Spell*>> raise;
 	registry.Each<const Spell>([&](entt::entity entity, const Spell& spell) {
@@ -484,6 +489,10 @@ void MagicShieldSystem::ShieldStruck(entt::entity spell, bool destroyed)
 	}
 	auto& registry = EntityRegistry();
 	const auto object = found->second;
+	if (!registry.Valid(object))
+	{
+		return;
+	}
 	auto& shieldObject = registry.Get<MagicShield>(object);
 	const auto position = registry.Get<const Transform>(object).position;
 	if (destroyed)
@@ -507,7 +516,44 @@ void MagicShieldSystem::ShieldStruck(entt::entity spell, bool destroyed)
 
 bool MagicShieldSystem::HasObject(entt::entity spell) const
 {
-	return _objects.contains(spell);
+	const auto found = _objects.find(spell);
+	return found != _objects.end() && found->second != entt::null;
+}
+
+bool MagicShieldSystem::LostObject(entt::entity spell) const
+{
+	const auto found = _objects.find(spell);
+	return found != _objects.end() && found->second == entt::null;
+}
+
+void MagicShieldSystem::ObjectDestroyed(entt::entity object)
+{
+	auto& registry = EntityRegistry();
+	auto* shieldObject = registry.Valid(object) ? registry.TryGet<MagicShield>(object) : nullptr;
+	if (shieldObject == nullptr)
+	{
+		return;
+	}
+	// Its running miracle keeps no object and does not raise another
+	if (shieldObject->spell != entt::null)
+	{
+		_objects.insert_or_assign(shieldObject->spell, entt::null);
+		shieldObject->spell = entt::null;
+	}
+	Destroy(object, *shieldObject);
+}
+
+void MagicShieldSystem::Destroy(entt::entity object, MagicShield& shieldObject)
+{
+	auto& registry = EntityRegistry();
+	if (const auto* dome = registry.TryGet<const ShieldDome>(object);
+	    dome != nullptr && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Remove(dome->effect);
+	}
+	Strip(object, shieldObject);
+	registry.Destroy(object);
+	registry.SetDirty();
 }
 
 bool MagicShieldSystem::KeepsReactionOff(glm::vec3 watcher, glm::vec3 initiator) const
@@ -592,7 +638,7 @@ std::optional<entt::entity> MagicShieldSystem::ShieldAt(glm::vec3 point) const
 void MagicShieldSystem::FollowSpellRadius(entt::entity spell, float radius)
 {
 	const auto known = _objects.find(spell);
-	if (known == _objects.end())
+	if (known == _objects.end() || !EntityRegistry().Valid(known->second))
 	{
 		return;
 	}
@@ -616,16 +662,9 @@ void MagicShieldSystem::RemoveWithSpell(entt::entity spell)
 	{
 		return;
 	}
-	if (const auto* dome = registry.TryGet<const ShieldDome>(object);
-	    dome != nullptr && Locator::effectRequestSystem::has_value())
-	{
-		Locator::effectRequestSystem::value().Remove(dome->effect);
-	}
 	auto& shieldObject = registry.Get<MagicShield>(object);
 	shieldObject.spell = entt::null;
-	Strip(object, shieldObject);
-	registry.Destroy(object);
-	registry.SetDirty();
+	Destroy(object, shieldObject);
 }
 
 std::vector<MagicShieldSystemInterface::Avoid> MagicShieldSystem::CreatureAvoids(PlayerNames creaturePlayer,

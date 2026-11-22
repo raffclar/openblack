@@ -41,6 +41,8 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ShieldStruck(entt::entity spell, bool destroyed) override;
 	[[nodiscard]] bool HasObject(entt::entity spell) const override;
+	[[nodiscard]] bool LostObject(entt::entity spell) const override;
+	void ObjectDestroyed(entt::entity object) override;
 	[[nodiscard]] entt::entity ObjectOf(entt::entity spell) const override;
 	entt::entity Restore(entt::entity spell, const components::Spell& miracle, const RestoredShield& file) override;
 	void RestoreReaction(entt::entity object, uint32_t id, Reaction type, float reach, uint32_t firstReacted,
@@ -116,7 +118,10 @@ private:
 	/// A thrown thing struck a dome
 	void Impact(entt::entity object, entt::entity hitter, float momentum, std::optional<PlayerNames> player) override;
 
-	/// Each shield miracle's object
+	/// A shield's object goes at once, with its effect and its reactions
+	void Destroy(entt::entity object, components::MagicShield& shieldObject);
+
+	/// Each shield miracle's object. A miracle whose object the world destroyed keeps no object until it goes.
 	std::unordered_map<entt::entity, entt::entity> _objects;
 	std::unordered_map<uint32_t, ShieldReaction> _reactions;
 	/// The next of the land's reactions to spread

@@ -296,6 +296,7 @@ private:
 	[[nodiscard]] bool CanPlaceTeleportStone(glm::vec3 point) const override;
 	void ShieldStruck(const components::Spell& shield, bool destroyed) override;
 	[[nodiscard]] bool HasWorldObjects(const components::Spell& spell) const override;
+	[[nodiscard]] bool LostWorldObjects(const components::Spell& spell) const override;
 	bool PlantForest(components::Spell& spell) override;
 	[[nodiscard]] bool ForestCanGrowAt(glm::vec3 point) const override;
 	[[nodiscard]] entt::entity SpellEntity(const components::Spell& spell) const override;
