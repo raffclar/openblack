@@ -365,6 +365,18 @@ void NetworkSession::RequestTime(const game_socket::EditorTime& request)
 	}
 }
 
+void NetworkSession::RequestPace(uint32_t period)
+{
+	if (!online::room_clock::SendsPeriod(online::room_clock::PeriodOfRoom(_roomClock), period))
+	{
+		return;
+	}
+	if (_stream && _stream->IsOpen())
+	{
+		_stream->SendText(game_socket::ToJson(game_socket::GamePace {.period = period}));
+	}
+}
+
 bool NetworkSession::GoAwayForTest(int64_t microseconds)
 {
 	if (_state != State::Playing)
@@ -619,8 +631,9 @@ void NetworkSession::Text(std::string_view text)
 			_timeNotices.push_back(std::move(*notice));
 		}
 		_log->Write(spdlog::level::info,
-		            fmt::format("The clock of the room after turn {}: {}, the time of a turn {:.2f}{}", time->turn,
+		            fmt::format("The clock of the room after turn {}: {}, the time of a turn {:.2f}{}{}", time->turn,
 		                        time->paused ? "paused" : "turns", time->speed,
+		                        time->period.has_value() ? fmt::format(" ({} ms)", *time->period) : std::string(),
 		                        time->by.empty()
 		                            ? std::string()
 		                            : fmt::format(" ({} by {})", game_socket::TimeActName(time->act), Printable(time->by))));

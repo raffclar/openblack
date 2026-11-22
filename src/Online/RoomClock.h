@@ -60,6 +60,9 @@ struct State
 	float speed {k_NormalSpeed};
 	/// The turns of steps that the server did not send yet
 	uint32_t steps {0};
+	/// The time between two turns in milliseconds, when the last change of the speed came from the speed of the game
+	/// (see PeriodOf). None after a change of the speed of the editor.
+	std::optional<uint32_t> period;
 
 	[[nodiscard]] bool operator==(const State&) const = default;
 };
@@ -179,6 +182,7 @@ struct Claims
 		break;
 	case game_socket::TimeAct::Speed:
 		state.speed = request.speed;
+		state.period.reset();
 		break;
 	}
 	return state;
@@ -206,6 +210,71 @@ struct Claims
 	return 1.0f / speed;
 }
 
+/// The time between two turns at the speed of the game 1, in milliseconds
+inline constexpr float k_NormalPeriod = 100.0f;
+/// The shortest and the longest time between two turns that the speed of the game can ask for, in milliseconds
+inline constexpr uint32_t k_ShortestPeriod = 1;
+inline constexpr uint32_t k_LongestPeriod = 100'000;
+
+/// The time between two turns in milliseconds that a speed of the game asks for in a network game: 100 divided by the
+/// speed, with the fraction cut off, as the game calculates it. None when the time is not from k_ShortestPeriod to
+/// k_LongestPeriod: then the game asks for no change.
+[[nodiscard]] inline std::optional<uint32_t> PeriodOf(float speed) noexcept
+{
+	const float period = k_NormalPeriod / speed;
+	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
+	if (!(period >= static_cast<float>(k_ShortestPeriod) && period < static_cast<float>(k_LongestPeriod + 1)))
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(period);
+}
+
+/// The time of a turn of the room, as a multiple of a tenth of a second, for a time between two turns in milliseconds
+[[nodiscard]] constexpr float SpeedOfPeriod(uint32_t period) noexcept
+{
+	return static_cast<float>(period) / k_NormalPeriod;
+}
+
+/// The time between two turns that this computer has from the server: the period of the last change of the clock of
+/// the room, or the normal period before the server sent a change. None after a change of the speed of the editor.
+[[nodiscard]] constexpr std::optional<uint32_t> PeriodOfRoom(const std::optional<game_socket::GameTime>& room) noexcept
+{
+	if (!room.has_value() || (!room->period.has_value() && room->speed == k_NormalSpeed))
+	{
+		return static_cast<uint32_t>(k_NormalPeriod);
+	}
+	return room->period;
+}
+
+/// Whether a speed of the game asks the server for a new time between two turns. The request does not go when the
+/// time does not change.
+[[nodiscard]] constexpr bool SendsPeriod(std::optional<uint32_t> roomPeriod, uint32_t period) noexcept
+{
+	return roomPeriod != period;
+}
+
+/// The clock after a request of the speed of the game that the server took
+[[nodiscard]] constexpr State ApplyPeriod(State state, uint32_t period) noexcept
+{
+	state.speed = SpeedOfPeriod(period);
+	state.period = period;
+	return state;
+}
+
+/// The speed of the game clock for a time between two turns in milliseconds: 100 divided by the time
+[[nodiscard]] constexpr float ClockSpeedOfPeriod(uint32_t period) noexcept
+{
+	return k_NormalPeriod / static_cast<float>(period);
+}
+
+/// The speed of the game clock for a clock of the room: from its period when the speed of the game set it, else from
+/// the time of a turn
+[[nodiscard]] constexpr float ClockSpeedOf(float speed, std::optional<uint32_t> period) noexcept
+{
+	return period.has_value() ? ClockSpeedOfPeriod(*period) : ClockSpeedOf(speed);
+}
+
 /// The time of a turn at the normal speed of the room
 inline constexpr std::chrono::microseconds k_NormalTurnTime {100'000};
 /// The most turns that the game server plays in one frame. A player's computer that catches up plays as many.
@@ -217,7 +286,7 @@ inline constexpr uint32_t k_MostServerTurnsInFrame = 10;
 [[nodiscard]] constexpr uint32_t ServerTurnsInFrame(float speed, std::optional<std::chrono::microseconds> frameTime) noexcept
 {
 	// NOLINTNEXTLINE(readability-simplify-boolean-expr): The negated test also takes a NaN value.
-	if (!(speed >= k_FastestSpeed && speed <= k_SlowestSpeed))
+	if (!(speed >= SpeedOfPeriod(k_ShortestPeriod) && speed <= SpeedOfPeriod(k_LongestPeriod)))
 	{
 		return 1;
 	}
@@ -246,10 +315,13 @@ struct Follow
 	[[nodiscard]] bool operator==(const Follow&) const = default;
 };
 
-/// How the clock of a computer follows a frame of the clock of the room, from the time of a turn that it set last
-[[nodiscard]] constexpr Follow FollowOf(const game_socket::GameTime& room, float lastSpeed) noexcept
+/// How the clock of a computer follows a frame of the clock of the room, from the time of a turn and the period that it
+/// set last
+[[nodiscard]] constexpr Follow FollowOf(const game_socket::GameTime& room, float lastSpeed,
+                                        std::optional<uint32_t> lastPeriod = std::nullopt) noexcept
 {
-	return Follow {.clockSpeed = room.speed != lastSpeed ? std::optional(ClockSpeedOf(room.speed)) : std::nullopt,
+	const bool changed = room.speed != lastSpeed || room.period != lastPeriod;
+	return Follow {.clockSpeed = changed ? std::optional(ClockSpeedOf(room.speed, room.period)) : std::nullopt,
 	               .fromTurn = room.act == game_socket::TimeAct::Play || room.act == game_socket::TimeAct::Step};
 }
 

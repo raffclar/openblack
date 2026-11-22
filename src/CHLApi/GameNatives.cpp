@@ -93,6 +93,7 @@
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
 #include "ECS/DiscipleRules.h"
+#include "ECS/GameSpeed.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -274,7 +275,7 @@ void SetGamespeed() // 066 SET_GAMESPEED
 	const auto speed = Popf();
 	if (Locator::scriptControlSystem::value().MaySetGameSpeed(CurrentTask()))
 	{
-		Locator::time::value().SetSpeed(speed);
+		ecs::game_speed::Set(speed);
 	}
 }
 
@@ -381,7 +382,7 @@ void EndGameSpeed() // 129 END_GAME_SPEED
 {
 	if (Locator::scriptControlSystem::value().EndGameSpeed(CurrentTask()))
 	{
-		Locator::time::value().SetSpeed(1.0f);
+		ecs::game_speed::Set(1.0f);
 	}
 }
 

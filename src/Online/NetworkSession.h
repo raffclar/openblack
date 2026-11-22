@@ -221,6 +221,10 @@ public:
 	/// The editor asks the server to pause, play, step or change the speed of the clock of the room. The server takes the
 	/// request only from a player with the editor claim, and then sends the new clock to every player.
 	void RequestTime(const game_socket::EditorTime& request);
+	/// The speed of the game asks the server for a new time between two turns in milliseconds, as the game does. The request
+	/// does not go when the clock of the room already has that time, or when the socket is not open. The server takes it
+	/// from each player.
+	void RequestPace(uint32_t period);
 	/// Tools: the client drops its socket in a game, as at a loss of the network, and tries to come back only after the
 	/// time. Gives false when the session does not play.
 	bool GoAwayForTest(int64_t microseconds);
