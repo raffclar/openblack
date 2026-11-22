@@ -473,8 +473,22 @@ struct GameTime
 	std::string by;
 	/// The number of turns that the server sent when it took the change
 	uint32_t turn {0};
+	/// The time between two turns in milliseconds, when the last change of the speed came from the speed of the game
+	/// (GamePace). None after a change of the speed of the editor.
+	std::optional<uint32_t> period;
 
 	[[nodiscard]] bool operator==(const GameTime&) const = default;
+};
+
+/// Client to server: "game.pace". The speed of the game changed on the player's computer: the speed keys or a script
+/// of the land. The player asks the server for a new time between two turns, as the game does. The server takes it from
+/// each player and tells every player with no line (GameTime).
+struct GamePace
+{
+	/// The time between two turns in milliseconds, from 1 to 100000
+	uint32_t period {100};
+
+	[[nodiscard]] bool operator==(const GamePace&) const = default;
 };
 
 /// The reason of a refusal of a request of the clock with a value that the server does not take
@@ -761,8 +775,8 @@ inline constexpr std::string_view k_WorldRefused = "world_refused";
 using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
                            StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop, RoomChat, ObserverLeft,
                            SyncParts, Loaded, LoadWait, DataPrint, SyncFacts, SyncCapture, SyncBlocks, SyncAsk, SyncEntities,
-                           SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime, EditorScriptFile, EditorWorld,
-                           EditorScenario, EditorLand, EditorRight, DebuggerRight, TurnsAgain>;
+                           SyncWorld, CommandRefused, EditorMindFile, EditorTime, GameTime, GamePace, EditorScriptFile,
+                           EditorWorld, EditorScenario, EditorLand, EditorRight, DebuggerRight, TurnsAgain>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

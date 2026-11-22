@@ -73,9 +73,12 @@ public:
 	/// The scripts let the advisors talk about the creature as it attacks a town, or stop them. A new land and a load let
 	/// them again.
 	virtual void SetCreatureRemarks([[maybe_unused]] bool on) {}
-	/// Harm done to a town: sometimes its people cry out at the town, in a voice that tells what harmed it. The town must
-	/// have people, and the guidance kind of the cry must wait no longer.
-	virtual void TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice) = 0;
+	/// Harm done to a town, before the town adds the attack. The guidance always asks for the wait of the cry first.
+	/// When the town has people and the harm gives a voice, the people can then cry out in that voice. After that, the
+	/// advisors can say that another player attacks a town of the player here. The caused player is none when no player
+	/// caused the harm.
+	virtual void TownAttackCry(entt::entity town, std::optional<guidance::TownAttackVoice> voice,
+	                           std::optional<PlayerNames> causedBy) = 0;
 	/// A town gained belief in the player at this computer, and another player leads its belief: sometimes its people
 	/// call out in awe at the place. The share is the belief of the town in the player against its most belief (see
 	/// guidance::BeliefVoiceShare). A voice that is not good or evil is good or evil at random.

@@ -575,8 +575,9 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 			                                       .hit = values[magic::EffectKind::Hit]};
 			if (target.has_value())
 			{
-				ecs::world_objects::AttackTown(*target, outcome.damaged + outcome.burnt, source.player, harm, applyingCreature,
-				                               cry);
+				// An effect of no player has no caused player: the town counts the neutral player as the attacker
+				const auto causedBy = source.playerless ? std::nullopt : std::optional(source.player);
+				ecs::world_objects::AttackTown(*target, outcome.damaged + outcome.burnt, causedBy, harm, applyingCreature, cry);
 			}
 		}
 		// A player's effect, not a creature's, is remembered against them by the player whose object it harmed

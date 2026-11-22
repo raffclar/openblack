@@ -64,10 +64,14 @@ constexpr std::string_view k_EditorScenario = "editor.scenario";
 constexpr std::string_view k_EditorLand = "editor.land";
 constexpr std::string_view k_EditorTime = "editor.time";
 constexpr std::string_view k_GameTime = "game.time";
+constexpr std::string_view k_GamePace = "game.pace";
 /// The fastest and the slowest time of a turn that a frame of the clock can give, as a multiple of a tenth of a second.
 /// The server takes a smaller range (see room_clock).
 constexpr double k_LeastTimeSpeed = 0.001;
 constexpr double k_MostTimeSpeed = 1000.0;
+/// The shortest and the longest time between two turns that a request of the speed of the game gives, in milliseconds
+constexpr uint64_t k_ShortestPacePeriod = 1;
+constexpr uint64_t k_LongestPacePeriod = 100'000;
 /// The most bytes of the name of the player in a "game.time" frame
 constexpr size_t k_MostTimeNameBytes = 64;
 /// The hexadecimal digits of a SHA-256
@@ -1035,7 +1039,25 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 			return std::nullopt;
 		}
 		time.turn = static_cast<uint32_t>(turn);
+		if (const auto* period = Member(object, "period"); period != nullptr && !period->is_null())
+		{
+			uint64_t value = 0;
+			if (!ReadUnsigned(object, "period", k_LongestPacePeriod, value) || value < k_ShortestPacePeriod)
+			{
+				return std::nullopt;
+			}
+			time.period = static_cast<uint32_t>(value);
+		}
 		return time;
+	}
+	if (type == k_GamePace)
+	{
+		uint64_t period = 0;
+		if (!ReadUnsigned(object, "period", k_LongestPacePeriod, period) || period < k_ShortestPacePeriod)
+		{
+			return std::nullopt;
+		}
+		return GamePace {.period = static_cast<uint32_t>(period)};
 	}
 	if (type == k_EditorScriptFile)
 	{
@@ -1555,6 +1577,14 @@ std::string ToJson(const Frame& frame)
 			    object = Json {{"type", k_GameTime},   {"paused", value.paused},
 			                   {"speed", value.speed}, {"act", TimeActName(value.act)},
 			                   {"by", value.by},       {"turn", value.turn}};
+			    if (value.period.has_value())
+			    {
+				    object["period"] = *value.period;
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, GamePace>)
+		    {
+			    object = Json {{"type", k_GamePace}, {"period", value.period}};
 		    }
 		    else if constexpr (std::is_same_v<Kind, ObserverLeft>)
 		    {

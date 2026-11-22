@@ -146,6 +146,13 @@ public:
 	[[nodiscard]] virtual uint32_t TakeEditorRefusals() { return 0; }
 	/// The editor asks the game server to pause, play, step or change the speed of the clock of the room
 	virtual void RequestTime(const game_socket::EditorTime& /*request*/) {}
+	/// The speed of the game changed in a network game: the speed keys, a script or the playback of the hand. This
+	/// computer keeps the speed, and the session asks the game server for the time between two turns of every player.
+	/// The clock of this computer changes only when the clock of the room comes back from the server.
+	virtual void SetGameSpeed(float /*speed*/) {}
+	/// The speed of the game that this computer set last in the network game, 1 from the start of the game. The speed
+	/// keys and the words of the speed read it.
+	[[nodiscard]] virtual float GetGameSpeed() const { return 1.0f; }
 	/// Tools: the client drops its socket, as at a loss of the network, and tries to come back after the time
 	virtual bool GoAwayForTest(int64_t /*microseconds*/) { return false; }
 	/// The lines of the changes of the clock of the room since the last call, which every player sees

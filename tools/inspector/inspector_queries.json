@@ -2899,7 +2899,7 @@
   "writes": true
  },
  {
-  "description": "The clock of the room of a network game: with no act, the clock that the game server sent last and the turn of this computer. With an act, asks the game server to pause, play, step or change the speed of the clock for every player, as the play, step and speed of the editor do in a network game. The server takes the request only from a player with the editor claim, a speed from 0.1 to 10, and a step only while the room is paused. force sends it also when the editor of this computer is refused.",
+  "description": "The clock of the room of a network game: with no act, the clock that the game server sent last (with the time between two turns in ms when the speed of the game set it), the turn of this computer, the speed of its clock and the speed of the game that it set last. With an act, asks the game server to pause, play, step or change the speed of the clock for every player, as the play, step and speed of the editor do in a network game. The server takes the request only from a player with the editor claim, a speed from 0.1 to 10, and a step only while the room is paused. force sends it also when the editor of this computer is refused.",
   "kind": "object",
   "parameters": [
    {

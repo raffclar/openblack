@@ -1273,12 +1273,13 @@ void world_objects::Remove(entt::entity object)
 	}
 }
 
-void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
-                               entt::entity creature, std::optional<guidance::TownAttackVoice> cry)
+void world_objects::AttackTown(entt::entity object, float damage, std::optional<PlayerNames> causedBy,
+                               const town_aggression::Harm& harm, entt::entity creature,
+                               std::optional<guidance::TownAttackVoice> cry)
 {
 	if (const auto target = TownAttackTargetOf(object); target.has_value())
 	{
-		AttackTown(*target, damage, aggressor, harm, creature, cry);
+		AttackTown(*target, damage, causedBy, harm, creature, cry);
 	}
 }
 
@@ -1338,7 +1339,7 @@ std::optional<world_objects::TownAttackTarget> world_objects::TownAttackTargetOf
 	return TownAttackTarget {.town = town, .kind = kind};
 }
 
-void world_objects::AttackTown(const TownAttackTarget& target, float damage, PlayerNames aggressor,
+void world_objects::AttackTown(const TownAttackTarget& target, float damage, std::optional<PlayerNames> causedBy,
                                const town_aggression::Harm& harm, entt::entity creature,
                                std::optional<guidance::TownAttackVoice> cry)
 {
@@ -1353,11 +1354,12 @@ void world_objects::AttackTown(const TownAttackTarget& target, float damage, Pla
 	{
 		return;
 	}
-	// The people cry out before the town counts the attack
-	if (cry.has_value() && Locator::guidanceSystem::has_value())
+	// The people cry out, and the advisors look at the attack, before the town counts the attack
+	if (Locator::guidanceSystem::has_value())
 	{
-		Locator::guidanceSystem::value().TownAttackCry(town, *cry);
+		Locator::guidanceSystem::value().TownAttackCry(town, cry, causedBy);
 	}
+	const auto aggressor = causedBy.value_or(PlayerNames::NEUTRAL);
 	const float amount = ecs::town_aggression::AggressionFromDamage(damage, target.kind->aggressorValue);
 	auto* aggression = registry.TryGet<TownAggression>(town);
 	if (aggression == nullptr)

@@ -269,9 +269,12 @@ public:
 	/// The beams from the hands of a creature that casts from above stop. The miracle that it casts continues. The hold
 	/// of the creature by a hand does this.
 	virtual void EndCreatureCastBeams(entt::entity /*creature*/) {}
-	/// An effect at a point that no miracle is behind, such as a lightning strike a script calls down: everything it
-	/// reaches takes it, as from the player
-	virtual void ApplyEffectAt(glm::vec3 /*point*/, const magic::EffectValues& /*values*/, PlayerNames /*player*/) {}
+	/// An effect at a point that no miracle is behind, such as the strike of a storm's bolt: everything it reaches takes
+	/// it, from the player and the thing that the source gives
+	virtual void ApplyEffectAt(glm::vec3 /*point*/, const magic::EffectValues& /*values*/,
+	                           const magic::EffectSource& /*source*/)
+	{
+	}
 	/// An effect on one object that no miracle is behind, such as the crush of a blow, from a player: what its defence
 	/// lets through, as any effect does. Whether the object has life to take it.
 	virtual bool ApplyEffectToObject(entt::entity /*object*/, const magic::EffectValues& /*values*/, PlayerNames /*player*/)

@@ -5363,6 +5363,54 @@ TEST(RoomClock, TheClockOfAComputerFollowsTheSpeedOfTheRoomAndStartsFromTheTurnA
 	EXPECT_TRUE(room_clock::FollowOf(GameTime {.paused = true, .speed = 1.0f, .act = TimeAct::Step}, 1.0f).fromTurn);
 }
 
+TEST(RoomClock, TheSpeedOfTheGameGivesTheTimeBetweenTwoTurnsAsTheGameCalculatesIt)
+{
+	namespace room_clock = online::room_clock;
+	// 100 divided by the speed, with the fraction cut off
+	EXPECT_EQ(room_clock::PeriodOf(1.0f), 100u);
+	EXPECT_EQ(room_clock::PeriodOf(2.0f), 50u);
+	EXPECT_EQ(room_clock::PeriodOf(0.5f), 200u);
+	EXPECT_EQ(room_clock::PeriodOf(3.0f), 33u);
+	EXPECT_EQ(room_clock::PeriodOf(1.5f), 66u);
+	EXPECT_EQ(room_clock::PeriodOf(0.3f), 333u);
+	EXPECT_EQ(room_clock::PeriodOf(100.0f), 1u);
+	EXPECT_EQ(room_clock::PeriodOf(0.001f), 99'999u);
+	// A time out of the limits, or a speed that is not a positive number, asks for no change
+	EXPECT_FALSE(room_clock::PeriodOf(101.0f).has_value());
+	EXPECT_FALSE(room_clock::PeriodOf(0.0009f).has_value());
+	EXPECT_FALSE(room_clock::PeriodOf(0.0f).has_value());
+	EXPECT_FALSE(room_clock::PeriodOf(-1.0f).has_value());
+	EXPECT_FALSE(room_clock::PeriodOf(std::nanf("")).has_value());
+}
+
+TEST(RoomClock, TheTimeBetweenTwoTurnsSetsTheClockOfTheRoomAndOfEachComputer)
+{
+	using game_socket::GameTime;
+	using game_socket::TimeAct;
+	namespace room_clock = online::room_clock;
+	const auto state = room_clock::ApplyPeriod(room_clock::State {.paused = true, .speed = 1.0f, .steps = 2}, 33);
+	EXPECT_EQ(state, (room_clock::State {.paused = true, .speed = 0.33f, .steps = 2, .period = 33}));
+	// The clock speed is 100 divided by the time, not one divided by the time of a turn
+	EXPECT_EQ(room_clock::ClockSpeedOf(state.speed, state.period), 100.0f / 33.0f);
+	EXPECT_EQ(room_clock::ClockSpeedOfPeriod(50), 2.0f);
+	EXPECT_EQ(room_clock::ClockSpeedOf(2.0f, std::nullopt), 0.5f);
+	// A speed of the editor removes the time between two turns
+	const auto edited = room_clock::Apply(state, game_socket::EditorTime {.act = TimeAct::Speed, .speed = 2.0f});
+	EXPECT_FALSE(edited.period.has_value());
+	// A computer follows a new time between two turns, also when the time of a turn is the same as a float
+	const GameTime paced {.paused = false, .speed = 0.33f, .act = TimeAct::Speed, .period = 33};
+	EXPECT_EQ(room_clock::FollowOf(paced, 0.33f).clockSpeed, 100.0f / 33.0f);
+	EXPECT_FALSE(room_clock::FollowOf(paced, 0.33f, 33u).clockSpeed.has_value());
+	// The time that this computer has from the room: the normal time before a change, none after a speed of the editor
+	EXPECT_EQ(room_clock::PeriodOfRoom(std::nullopt), 100u);
+	EXPECT_EQ(room_clock::PeriodOfRoom(GameTime {.speed = 1.0f}), 100u);
+	EXPECT_EQ(room_clock::PeriodOfRoom(paced), 33u);
+	EXPECT_FALSE(room_clock::PeriodOfRoom(GameTime {.speed = 2.0f}).has_value());
+	EXPECT_FALSE(room_clock::SendsPeriod(100u, 100));
+	EXPECT_TRUE(room_clock::SendsPeriod(100u, 50));
+	EXPECT_TRUE(room_clock::SendsPeriod(std::nullopt, 100));
+}
+
 TEST(RoomClock, TheGameServerPlaysInAFrameTheTurnsThatTheClockOfTheRoomGives)
 {
 	namespace room_clock = online::room_clock;
@@ -5382,6 +5430,9 @@ TEST(RoomClock, TheGameServerPlaysInAFrameTheTurnsThatTheClockOfTheRoomGives)
 	// No fixed frame time: the frame takes the time of a normal turn
 	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.1f, std::nullopt), 10u);
 	EXPECT_EQ(room_clock::ServerTurnsInFrame(1.0f, std::nullopt), 1u);
+	// The shortest time between two turns of the speed of the game gives the most turns
+	EXPECT_EQ(room_clock::ServerTurnsInFrame(room_clock::SpeedOfPeriod(1), milliseconds(100)),
+	          room_clock::k_MostServerTurnsInFrame);
 	// A speed out of the limits gives one turn
 	EXPECT_EQ(room_clock::ServerTurnsInFrame(0.0f, milliseconds(100)), 1u);
 	EXPECT_EQ(room_clock::ServerTurnsInFrame(std::nanf(""), milliseconds(100)), 1u);
@@ -5536,6 +5587,54 @@ TEST_F(LockstepTest, TheServerTakesTheActsOnTheThingsOfTheWorldOnlyFromAGodWithT
 	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheSpeedOfTheGameOfAPlayerWithNoClaimSetsTheTimeBetweenTwoTurnsOfEveryComputer)
+{
+	MakeHost(2);
+	Computer alice(_network, _now, "god:alice");
+	Computer bob(_network, _now, "god:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(_host->Started());
+	// The faster key of a god with no claim: the speed 2 asks for 50 ms between two turns
+	alice.session.RequestPace(*online::room_clock::PeriodOf(2.0f));
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(_host->RoomClock().period, 50u);
+	EXPECT_FLOAT_EQ(_host->RoomClock().speed, 0.5f);
+	EXPECT_EQ(_host->RefusedTimeRequests(), 0u);
+	for (const auto* computer : {&alice, &bob})
+	{
+		ASSERT_TRUE(computer->session.RoomClock().has_value());
+		EXPECT_EQ(computer->session.RoomClock()->period, 50u);
+		EXPECT_EQ(computer->session.RoomClock()->act, game_socket::TimeAct::Speed);
+		EXPECT_TRUE(computer->session.RoomClock()->by.empty());
+	}
+	// No player sees a line for the change
+	EXPECT_TRUE(alice.session.TakeTimeNotices().empty());
+	EXPECT_TRUE(bob.session.TakeTimeNotices().empty());
+	// The slower key of the other god sets the time for every player again
+	bob.session.RequestPace(*online::room_clock::PeriodOf(0.5f));
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(_host->RoomClock().period, 200u);
+	EXPECT_EQ(alice.session.RoomClock()->period, 200u);
+	// The worlds stay the same as the world of the server
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
+}
+
+TEST_F(LockstepTest, TheSpeedOfTheGameSendsNoRequestWhenTheTimeBetweenTwoTurnsDoesNotChange)
+{
+	MakeHost(2);
+	Computer alice(_network, _now, "god:alice");
+	Computer bob(_network, _now, "god:bob");
+	Frames({&alice, &bob}, 20);
+	ASSERT_TRUE(_host->Started());
+	const auto changes = alice.session.RoomClockChanges();
+	// The normal speed asks for the normal time, which the room has
+	alice.session.RequestPace(*online::room_clock::PeriodOf(1.0f));
+	Frames({&alice, &bob}, 4);
+	EXPECT_EQ(alice.session.RoomClockChanges(), changes);
+	EXPECT_FALSE(_host->RoomClock().period.has_value());
 }
 
 TEST_F(LockstepTest, TheEditorPausesStepsAndChangesTheSpeedOfTheTurnsOfEveryComputer)

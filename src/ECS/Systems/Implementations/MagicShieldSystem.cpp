@@ -50,6 +50,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -560,15 +561,27 @@ void MagicShieldSystem::Impact(entt::entity object, entt::entity hitter, float m
 	// The town it protects counts the thrower's player as having attacked it, with no harm done
 	if (shieldObject.town != entt::null && registry.Valid(shieldObject.town))
 	{
+		const auto town = shieldObject.town;
+		// The blow gives no voice, but the guidance looks at it as at any harm to the town, before the town counts it
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().TownAttackCry(town, std::nullopt, player);
+		}
 		const auto aggressor = player.value_or(PlayerNames::NEUTRAL);
-		auto* aggression = registry.TryGet<TownAggression>(shieldObject.town);
+		auto* aggression = registry.TryGet<TownAggression>(town);
 		if (aggression == nullptr)
 		{
-			aggression = &registry.Assign<TownAggression>(shieldObject.town);
+			aggression = &registry.Assign<TownAggression>(town);
 		}
-		const bool owner = registry.Get<const Town>(shieldObject.town).owner == aggressor;
+		const bool owner = registry.Get<const Town>(town).owner == aggressor;
 		ecs::town_aggression::Attacked(aggression->record, aggressor, owner, 0.0f, Info().town.firstTimeDamageDoneAddition,
 		                               GameTurn());
+		// The advisors can then remark on the player, or on the creature of the player, that threw the thing
+		if (Locator::guidanceSystem::has_value())
+		{
+			const auto creature = registry.Valid(hitter) && registry.AllOf<Creature>(hitter) ? hitter : entt::null;
+			Locator::guidanceSystem::value().TownAttacked(town, aggressor, creature);
+		}
 	}
 	ShieldStruck(shieldObject.spell, !(strength > 0.0f));
 }
