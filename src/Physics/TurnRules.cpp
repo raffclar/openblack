@@ -180,11 +180,11 @@ bool turn::PassesCamera(glm::vec3 before, glm::vec3 after, glm::vec3 camera, glm
 {
 	const auto from = before - camera;
 	const auto to = after - camera;
-	// The game adds the squares of the distances from z to x and the squares of the speed from x to z. It compares the
-	// distance after the step with the FPU, so a NaN passes that compare.
+	// The game adds the squares of the distances from z to x. It adds the squares of the speed x and z first, then y.
+	// It compares the distance after the step with the FPU, so a NaN passes that compare.
 	return openblack::x87::DotZyx(from, from) > k_WhooshDistanceSquared &&
 	       openblack::x87::LessOrUnordered(openblack::x87::DotZyx(to, to), k_WhooshDistanceSquared) &&
-	       glm::dot(velocity, velocity) > k_WhooshSpeedSquared;
+	       openblack::x87::Dot<openblack::x87::SumOrder::Xzy>(velocity, velocity) > k_WhooshSpeedSquared;
 }
 
 bool turn::NearSeaLevel(bool resting, float centreHeight, float radius)
