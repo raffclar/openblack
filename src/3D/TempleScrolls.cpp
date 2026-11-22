@@ -424,9 +424,8 @@ bool TempleScrolls::Hold(bool pressed, float mouseY, const std::optional<TempleC
 	const auto previous = scroll.position;
 	scroll.position = TempleScrollTexture::ClampPosition(scroll.position - delta, scroll.textHeight);
 	Redraw(scroll, facts);
-	if (scroll.position != previous && !_squeaked)
+	if (Squeaks(_squeaked, scroll.position != previous))
 	{
-		_squeaked = true;
 		if (Locator::sounds::has_value())
 		{
 			const auto ticks = machine_clock::Ticks();

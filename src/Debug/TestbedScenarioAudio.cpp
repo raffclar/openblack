@@ -497,6 +497,21 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
 	});
 
+	all.push_back({
+	    .id = "temple.main_room_walk_back",
+	    .name = "The main room's camera after the walk back from the save game room",
+	    .facet = Facet::Story,
+	    .description = "The player goes through the temple's main room into the save game room. Twelve seconds later the "
+	                   "camera walks back through the room's door to the main room, as a click on the door does.",
+	    .expected = "Through the door, the main room's camera does not go back to the start of its flight at the "
+	                "entrance. It continues along its path from the point nearest to the door, and comes to the middle "
+	                "of the room in a short time.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = static_cast<size_t>(TempleRoom::SaveGame)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 12.0f, .value = static_cast<size_t>(TempleRoom::Main)}},
+	});
+
 	// The scrolls ask for the list of saved games in each frame, and the list comes from the last read of the folder
 	all.push_back({
 	    .id = "temple.save_room_frame_time",

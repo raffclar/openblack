@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <concepts>
 #include <cstdint>
 
 #include <array>
@@ -126,6 +127,32 @@ public:
 	/// A pose about the main room's centre turned to face one of its doors, as a room other than the main room turns its
 	/// way back: the sine of the turn is not stored as a float
 	[[nodiscard]] static Pose TurnToDoorBack(const Pose& pose, int32_t door);
+	/// The time into the main room's path at which its camera starts when it comes in from another room. The camera
+	/// tries the times a tenth of a second apart over the first three seconds of the path, and starts at the time at
+	/// which the path's eye is nearest to the eye of the camera. Of two times that are equally near, it keeps the first.
+	template <std::invocable<std::chrono::milliseconds> EyeAt>
+	[[nodiscard]] static float MainRoomIntroTime(glm::vec3 eye, EyeAt&& eyeAt)
+	{
+		constexpr float k_Step = 0.1f;
+		constexpr float k_Search = 3.0f;
+		constexpr float k_FarAway = 1e20f;
+		float nearestTime = 0.0f;
+		float nearest = k_FarAway;
+		for (float time = 0.0f; time < k_Search; time += k_Step)
+		{
+			const glm::vec3 at = eyeAt(std::chrono::milliseconds(static_cast<int64_t>(time * 1000.0f)));
+			const float x = at.x - eye.x;
+			const float y = at.y - eye.y;
+			const float z = at.z - eye.z;
+			const float distance = ((z * z) + (y * y)) + (x * x);
+			if (distance < nearest)
+			{
+				nearest = distance;
+				nearestTime = time;
+			}
+		}
+		return nearestTime;
+	}
 	/// Whether a room is one of the rooms of pictures, which share one kind of camera
 	[[nodiscard]] static bool IsPictureRoom(Room room);
 	/// The view of a room of pictures at a turn about its centre, a lean between looking up, at 0, and
