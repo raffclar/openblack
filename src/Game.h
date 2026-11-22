@@ -574,8 +574,8 @@ private:
 	void FollowWindowSize();
 	/// Sets the scene's view and the sea's reflection to the window's size, as the game's frames draw them
 	void SizeSceneToWindow() override;
-	/// Whether the player has a profile. A first start has none: the pre-intro plays, the tips start from the first, the
-	/// intro can't be skipped and the new player's box asks for a name before the first land
+	/// Whether the player has a profile. A first start has none: the pre-intro plays, the tips start from the first, an
+	/// intro that cannot play ends at once and the new player's box asks for a name before the first land
 	[[nodiscard]] static bool HasPlayerProfiles() noexcept;
 	/// Where the players' profiles are kept for this run
 	[[nodiscard]] player_profiles::Store ProfileStore() const;

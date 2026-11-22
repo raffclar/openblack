@@ -82,7 +82,7 @@ public:
 	bool Escape(bool shift, bool ctrl) override;
 	void Skip() override;
 	void Stop() override;
-	void SetNoSkip(bool noSkip) override { _noSkip = noSkip; }
+	void SetFirstGame(bool firstGame) override { _firstGame = firstGame; }
 
 	[[nodiscard]] bool IsPlaying() const override { return _playing.load(std::memory_order_acquire); }
 	[[nodiscard]] bool CoversScreen() const override;
@@ -137,7 +137,7 @@ private:
 	bool _finishedPending {false};
 	bool _previousPause {false};
 	bool _previousWideScreen {false};
-	bool _noSkip {false};
+	bool _firstGame {false};
 	bool _filmsEnabled {true};
 	std::optional<graphics::film_surface::Format> _filmSurface {graphics::film_surface::k_TodaysCards};
 	bool _fallingSpell {false};
