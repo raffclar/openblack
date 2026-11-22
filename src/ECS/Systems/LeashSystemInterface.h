@@ -23,6 +23,7 @@
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOwnership.h"
 #include "Creature/LeashSnap.h"
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -39,7 +40,9 @@ namespace openblack::ecs::systems
 /// Who may lead which creature is decided here and nowhere else (see creature_leash::WhyNot): each player leads only
 /// their one leashable creature, so the hand, the shortcuts, the scripts, the debug windows and the scenarios all go
 /// through these calls. A refusal is logged and kept as the last refusal for the debug windows to show.
-class LeashSystemInterface
+///
+/// A save keeps the scripts' switch for the leashes.
+class LeashSystemInterface: public SavedStateInterface
 {
 public:
 	/// A leash that was refused: who wanted it on which creature, and why not
@@ -50,7 +53,7 @@ public:
 		creature_leash::Refusal why;
 	};
 
-	virtual ~LeashSystemInterface() = default;
+	~LeashSystemInterface() override = default;
 
 	/// Once a game turn: the start of the turn, then the turn of each leashed creature
 	virtual void ProcessTurn() = 0;
@@ -129,8 +132,11 @@ public:
 	virtual void PlayHandAttachSound(entt::entity creature) = 0;
 	/// Whether the leash makes the creature do anything, as scripts set
 	virtual void SetWorks(entt::entity creature, bool works) = 0;
-	/// Whether ropes are drawn
+	/// The scripts' switch for the leashes, one switch for all the creatures. It is off while a script has the camera.
+	/// It hides nothing alone: it lets the rope show through the cinema bars of a script and while the player puts the hand
+	/// away (see leash_rope::Shown). It is on when the scripts start again.
 	virtual void SetDrawn(bool drawn) = 0;
+	[[nodiscard]] virtual bool IsDrawn() const = 0;
 
 	/// Keeps the creature within a radius of its home, as it is while it starts to grow up
 	virtual void ConfineToHome(entt::entity creature, float radius) = 0;

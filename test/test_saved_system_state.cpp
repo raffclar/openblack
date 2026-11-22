@@ -51,10 +51,12 @@
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
 #include "ECS/Systems/Implementations/GuidanceSystem.h"
+#include "ECS/Systems/Implementations/HandDemoSystem.h"
 #include "ECS/Systems/Implementations/HelpMessageSystem.h"
 #include "ECS/Systems/Implementations/HelpTextSystem.h"
 #include "ECS/Systems/Implementations/InfluenceSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
+#include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
 #include "ECS/Systems/Implementations/MagicSystem.h"
@@ -569,6 +571,43 @@ TEST(SavedSystemState, ASaveWithNoInterfaceLevelSetsTheNormalLevel)
 	EXPECT_TRUE(loaded.Get().placeKeys);
 	EXPECT_FLOAT_EQ(loaded.Get().handReach, camera_help::CameraHelp {}.handReach);
 	EXPECT_EQ(loaded.Get().features, 0x15u);
+}
+
+TEST(SavedSystemState, AHandDemonstrationMarkThatNoScriptReadComesBack)
+{
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, true);
+	const auto bytes = out.Bytes();
+	HandDemoSystem loaded;
+	LoadInto(loaded, bytes);
+	// The load does not start the demonstration again
+	EXPECT_FALSE(loaded.IsPlaying(0));
+	EXPECT_FALSE(loaded.IsReplaying());
+	// The scripts read the mark once
+	EXPECT_TRUE(loaded.TakeTrigger());
+	EXPECT_FALSE(loaded.TakeTrigger());
+	EXPECT_EQ(StateOf(loaded), StateOf(HandDemoSystem {}));
+}
+
+TEST(SavedSystemState, AHandDemonstrationWithNoMarkLoadsWithNoMark)
+{
+	const HandDemoSystem saved;
+	HandDemoSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_FALSE(loaded.TakeTrigger());
+}
+
+TEST(SavedSystemState, TheScriptsSwitchForTheLeashesComesBack)
+{
+	LeashSystem saved;
+	EXPECT_TRUE(saved.IsDrawn());
+	saved.SetDrawn(false);
+	LeashSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_FALSE(loaded.IsDrawn());
+	saved.SetDrawn(true);
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_TRUE(loaded.IsDrawn());
 }
 
 TEST(SavedSystemState, TheCameraZonesComeBack)

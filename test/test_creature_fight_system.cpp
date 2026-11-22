@@ -463,6 +463,7 @@ public:
 	void PlayHandAttachSound(entt::entity /*creature*/) override {}
 	void SetWorks(entt::entity /*creature*/, bool /*works*/) override {}
 	void SetDrawn(bool /*drawn*/) override {}
+	[[nodiscard]] bool IsDrawn() const override { return true; }
 	void ConfineToHome(entt::entity /*creature*/, float /*radius*/) override {}
 	void ClearConfinement(entt::entity /*creature*/) override {}
 	[[nodiscard]] bool FreeOfHome(entt::entity /*creature*/) const override { return true; }

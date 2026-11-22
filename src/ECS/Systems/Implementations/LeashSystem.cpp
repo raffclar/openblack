@@ -92,6 +92,7 @@
 #include "ECS/DrawnPlace.h"
 #include "ECS/MazePuzzleRules.h"
 #include "ECS/NeedFlagRules.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -1347,7 +1348,24 @@ void LeashSystem::SetWorks(entt::entity creature, bool works)
 
 void LeashSystem::SetDrawn(bool drawn)
 {
-	Locator::entitiesRegistry::value().Each<CreatureLeash>([drawn](CreatureLeash& leashes) { leashes.drawn = drawn; });
+	_drawn = drawn;
+}
+
+void LeashSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _drawn);
+}
+
+bool LeashSystem::LoadState(reflection::BinaryReader& in)
+{
+	bool drawn = true;
+	reflection::Load(in, drawn);
+	if (in.Failed())
+	{
+		return false;
+	}
+	_drawn = drawn;
+	return true;
 }
 
 void LeashSystem::ConfineToHome(entt::entity creature, float radius)

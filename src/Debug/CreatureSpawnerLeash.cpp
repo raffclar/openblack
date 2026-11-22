@@ -226,7 +226,7 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 			act(editor::SwitchOf(entity, Act::LeashWorks, works));
 		}
 		ImGui::SameLine();
-		bool drawn = state->drawn;
+		bool drawn = !Locator::leashSystem::has_value() || Locator::leashSystem::value().IsDrawn();
 		if (ImGui::Checkbox("Draw rope", &drawn))
 		{
 			act(editor::SwitchOf(entt::null, Act::LeashDrawn, drawn));

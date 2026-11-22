@@ -65,10 +65,6 @@ struct CreatureLeash
 	bool leashWorks {true};
 	/// The leash picked to put on next, at the citadel or by the hotkeys
 	LeashType selected {LeashType::Rope};
-	/// The scripts' switch for the leashes, off while a script has the camera. It hides nothing alone: it lets the
-	/// rope show through a script's cinema bars and while the hand is put away (see leash_rope::Shown)
-	bool drawn {true};
-
 	/// The area the creature is kept within, none when the radius is 0
 	glm::vec3 confinementCentre {0.0f};
 	float confinementRadius {0.0f};

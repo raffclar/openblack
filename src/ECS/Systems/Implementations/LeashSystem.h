@@ -58,6 +58,9 @@ public:
 	void PlayHandAttachSound(entt::entity creature) override;
 	void SetWorks(entt::entity creature, bool works) override;
 	void SetDrawn(bool drawn) override;
+	[[nodiscard]] bool IsDrawn() const override { return _drawn; }
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 	void ConfineToHome(entt::entity creature, float radius) override;
 	void ClearConfinement(entt::entity creature) override;
 	[[nodiscard]] bool FreeOfHome(entt::entity creature) const override;
@@ -182,6 +185,8 @@ private:
 	static void SendPuzzleTap(const Under& under);
 	/// Sends an order of the player of this computer, which the world does at the start of a later turn
 	static void SendOrder(const player_commands::LeashOrder& order);
+	/// The scripts' switch for the leashes, which all the creatures share
+	bool _drawn {true};
 	/// The clock every order's ring throbs by, in milliseconds of game time
 };
 
