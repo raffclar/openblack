@@ -64,6 +64,12 @@ public:
 	}
 	/// Whether a shield miracle's object still stands
 	[[nodiscard]] virtual bool HasObject(entt::entity spell) const = 0;
+	/// Whether the object of a running shield miracle was destroyed in the world. Such a miracle does not raise another
+	/// object, and it goes in its next turn.
+	[[nodiscard]] virtual bool LostObject(entt::entity /*spell*/) const { return false; }
+	/// The world destroys the object of a shield, as a blast wave does: it goes at once with its effect and its
+	/// reactions, also a dome that fades
+	virtual void ObjectDestroyed(entt::entity /*object*/) {}
 	/// The object of a shield miracle, none when it has none
 	[[nodiscard]] virtual entt::entity ObjectOf(entt::entity /*spell*/) const { return entt::null; }
 

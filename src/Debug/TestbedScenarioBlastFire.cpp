@@ -188,6 +188,50 @@ void AddBlasts(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.blast_pu2_physical_shield",
+	    .name = "Extreme blast on a physical shield",
+	    .facet = Facet::Miracles,
+	    .description = "The player casts a physical shield at bare land with no prayer power to spare. Another player casts "
+	                   "an extreme blast at the middle of the shield four seconds later.",
+	    .expected = "The wave strikes the shield, which the player can't pay for, so the shield breaks. The wave then "
+	                "destroys the dome at once: the dome, its sparkles and its hum go without a fade. No new dome rises, "
+	                "and the shield miracle goes in its next turn.",
+	    .environment = {.dispenserGrid = false, .prayer = 0.0f},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Ground - glm::vec2(40.0f), k_Ground + glm::vec2(40.0f)},
+	                .distance = 1.0f},
+	    .miracles = {{.type = MagicType::PhysicalShield, .point = k_Ground, .delaySeconds = 0.5f},
+	                 {.type = MagicType::ExplosionOnePuTwo,
+	                  .point = k_Ground,
+	                  .handOffset = k_Ground,
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 4.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	    .checks =
+	        {{.label = "the dome stands before the blast",
+	          .quantity = checks::Quantity::PhysicalShields,
+	          .afterTurns = 35,
+	          .atLeast = 1.0},
+	         {.label = "the shield miracle runs before the blast",
+	          .quantity = checks::Quantity::Entities,
+	          .kind = "shield miracles",
+	          .afterTurns = 35,
+	          .atLeast = 1.0},
+	         {.label = "the wave destroys the dome",
+	          .quantity = checks::Quantity::PhysicalShields,
+	          .afterTurns = 41,
+	          .byTurn = 200,
+	          .atMost = 0.0},
+	         {.label = "the shield miracle goes",
+	          .quantity = checks::Quantity::Entities,
+	          .kind = "shield miracles",
+	          .afterTurns = 41,
+	          .byTurn = 200,
+	          .atMost = 0.0},
+	         {.label = "no new dome rises", .quantity = checks::Quantity::PhysicalShields, .afterTurns = 210, .atMost = 0.0}},
+	});
+
+	all.push_back({
 	    .id = "miracles.blast_water",
 	    .name = "Blast on the water",
 	    .facet = Facet::Miracles,

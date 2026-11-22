@@ -1214,11 +1214,11 @@ void world_objects::Remove(entt::entity object)
 	{
 		world_objects::Remove(workshop->woodPile);
 	}
-	// A shield's object that goes takes its reactions and its effect with it, and its miracle lets go of it
-	if (const auto* shield = registry.TryGet<const MagicShield>(object);
-	    shield != nullptr && shield->spell != entt::null && Locator::magicShieldSystem::has_value())
+	// A shield's object that goes takes its reactions and its effect with it at once, also a dome that fades. Its running
+	// miracle keeps no object from then on and goes in its next turn.
+	if (registry.AllOf<MagicShield>(object) && Locator::magicShieldSystem::has_value())
 	{
-		Locator::magicShieldSystem::value().RemoveWithSpell(shield->spell);
+		Locator::magicShieldSystem::value().ObjectDestroyed(object);
 		return;
 	}
 	// A weather thing that goes ends its storm at once

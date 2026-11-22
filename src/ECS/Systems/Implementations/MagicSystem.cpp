@@ -618,12 +618,20 @@ bool MagicSystem::Process(entt::entity entity, Spell& spell)
 		                                      magic::spells::StrengthOf(*this, *after));
 	}
 	// It lives while its effect does, or until it closes down without one, or while what its kind made keeps it
-	return magic::FateOf({
-	           .hasParticleType = after->hasParticleType,
-	           .effectRunning = after->effect != k_NoEffectHandle,
-	           .closedDown = after->closedDown,
-	           .keptByKind = magic::spells::KeptByKind(*this, *after),
-	       }) == magic::SpellFate::Continue;
+	const magic::SpellLife life {
+	    .hasParticleType = after->hasParticleType,
+	    .effectRunning = after->effect != k_NoEffectHandle,
+	    .closedDown = after->closedDown,
+	    .keptByKind = magic::spells::KeptByKind(*this, *after),
+	    .lostByKind = magic::spells::LostByKind(*this, *after),
+	};
+	const auto fate = magic::FateOf(life);
+	// A running miracle that goes because the world destroyed what it made closes down first
+	if (fate == magic::SpellFate::Delete && life.lostByKind && !life.closedDown)
+	{
+		CloseDown(entity);
+	}
+	return fate == magic::SpellFate::Continue;
 }
 
 void MagicSystem::Delete(entt::entity entity)
