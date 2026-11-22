@@ -29,10 +29,16 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MagicShield.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StreetLantern.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
@@ -40,6 +46,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/StreetLanternRules.h"
 #include "ECS/WorldObjects.h"
@@ -259,6 +266,98 @@ TEST_F(EffectReceivers, NoMiracleDestroysATownsDesireFlag)
 	const auto flag = Made();
 	registry.Assign<TownDesireFlag>(flag);
 	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(flag));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysAScriptHighlight)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto highlight = Made();
+	registry.Assign<ScriptHighlight>(highlight);
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(highlight));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(highlight, 0.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysTheSpiritualShieldsObject)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto shield = Made();
+	registry.Assign<MagicShield>(shield, MagicShield {.kind = MagicShield::Kind::Spiritual});
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(shield));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(shield, 0.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, AMiracleCanDestroyThePhysicalShieldsDomeWhichTakesOnlyEffectsThatDoNotBurn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto dome = Made();
+	registry.Assign<MagicShield>(dome, MagicShield {.kind = MagicShield::Kind::Physical});
+	EXPECT_TRUE(ecs::world_objects::CanBeDestroyedBySpell(dome));
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(dome, 0.0f, 1.0f));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(dome, 1.0f, 0.0f));
+	// Any burn that is not zero, also one below zero
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(dome, -1.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, AMiracleCanDestroyAStreetLanternAndAFishFarm)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto lantern = Made();
+	registry.Assign<StreetLantern>(lantern, StreetLantern {.country = false, .info = MobileStaticInfo::StreetLantern});
+	EXPECT_TRUE(ecs::world_objects::CanBeDestroyedBySpell(lantern));
+	const auto farm = Made();
+	registry.Assign<FishFarm>(farm);
+	EXPECT_TRUE(ecs::world_objects::CanBeDestroyedBySpell(farm));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysATownCentresTotem)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto totem = Made();
+	registry.Assign<VillageTotem>(totem);
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(totem));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(totem, 1.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysAWorshipSiteOrItsAltar)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto site = Made();
+	registry.Assign<WorshipSite>(site);
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(site));
+	// The site takes effects, but the altar takes none
+	EXPECT_TRUE(ecs::world_objects::TakesEffect(site, 1.0f, 0.0f));
+	const auto altar = Made();
+	registry.Assign<WorshipAltar>(altar, WorshipAltar {.site = site});
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(altar));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(altar, 1.0f, 0.0f));
+}
+
+TEST_F(EffectReceivers, NoMiracleDestroysATeleportStoneAWorshipSitesIconOrASpellSeed)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto stone = Made();
+	registry.Assign<TeleportStone>(stone);
+	const auto icon = Made();
+	registry.Assign<WorshipIcon>(icon);
+	const auto seed = Made();
+	registry.Assign<SpellSeed>(seed);
+	const auto oneOff = Made();
+	registry.Assign<OneOffSpellSeed>(oneOff);
+	for (const auto thing : {stone, icon, seed, oneOff})
+	{
+		EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(thing));
+		EXPECT_FALSE(ecs::world_objects::TakesEffect(thing, 0.0f, 1.0f));
+	}
+}
+
+TEST_F(EffectReceivers, AnEmptyFieldIsAReceiverWithNoEffectButNoMiracleDestroysIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto field = Made();
+	registry.Assign<Field>(field);
+	EXPECT_TRUE(ecs::world_objects::IsEffectReceiver(field, std::nullopt));
+	EXPECT_FALSE(ecs::world_objects::TakesEffect(field, 1.0f, 0.0f));
+	EXPECT_FALSE(ecs::world_objects::CanBeDestroyedBySpell(field));
 }
 
 TEST_F(EffectReceivers, ATownsDesireFlagTakesNoEffectEvenWithTheDataOfThePrayerSite)
