@@ -1087,6 +1087,26 @@ void testbed_scenarios::AddAppearance(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
 	    .creatures = {tattooed, plain},
 	});
+	// The same two tigers on the first land, at the show place of the creature breeder, where the land is flat
+	constexpr glm::vec2 k_LandOneMiddle {2240.0f, 2640.0f};
+	const auto landOneShowPlace = glm::vec2(1892.885f, 3403.713f) - k_LandOneMiddle;
+	auto landTattooed = tattooed;
+	landTattooed.offset = landOneShowPlace;
+	auto landPlain = plain;
+	landPlain.offset = landOneShowPlace + glm::vec2 {25.0f, 0.0f};
+	all.push_back({
+	    .id = "appearance.land_one_wounds_heal",
+	    .name = "Tattoos and wounds that heal on the first land",
+	    .facet = Facet::Appearance,
+	    .description = "The tattooed and wounded tiger of the showcase on the first land at noon, with the clock stopped, "
+	                   "beside an unmarked tiger to compare. The wounds heal a step at each game turn.",
+	    .expected = "The tattoos and the wounds show as in the showcase on the testbed. Each heal step paints the skin "
+	                "again, and the wounds change from fresh and red to old scars.",
+	    .environment =
+	        {.land = Land::Story, .storyLand = "Land1.txt", .hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.9f},
+	    .creatures = {landTattooed, landPlain},
+	});
 	all.push_back({
 	    .id = "appearance.low_detail_tattoos_wounds",
 	    .name = "Tattoos and wounds on half-size skins",

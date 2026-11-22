@@ -9,11 +9,26 @@
 
 #pragma once
 
+#include <memory>
+#include <vector>
+
+#include "Common/WorkerPool.h"
+#include "ECS/Components/CreatureSkin.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
 #endif
+
+namespace openblack::l3d
+{
+class L3DFile;
+} // namespace openblack::l3d
+
+namespace openblack::creature
+{
+struct CreatureRig;
+} // namespace openblack::creature
 
 namespace openblack::ecs::systems
 {
@@ -35,6 +50,24 @@ public:
 	void AddWound(entt::entity creature, const creature_marks::Mark& wound) override;
 	void AddBlood(entt::entity creature, const creature_marks::Mark& blood) override;
 	void Heal(entt::entity creature, uint32_t counts) override;
+
+	/// One skin to paint in this frame, with all that the paint reads. The paint writes only the skin.
+	struct PaintJob
+	{
+		components::CreatureSkin* skin;
+		const l3d::L3DFile* base;
+		const l3d::L3DFile* variant;
+		components::CreatureSkin::Painted wanted;
+		const creature_tattoo::Slots* tattoos;
+		const creature_tattoo::Masks* masks;
+		const components::CreatureMarks* marks;
+		const creature::CreatureRig* rig;
+	};
+
+private:
+	/// The paints of this frame. The list keeps its memory from frame to frame.
+	std::vector<PaintJob> _paintJobs;
+	std::unique_ptr<WorkerPool> _paintWorkers;
 };
 
 } // namespace openblack::ecs::systems
