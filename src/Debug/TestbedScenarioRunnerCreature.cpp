@@ -1050,6 +1050,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::SetOpenClose:
 	case Kind::LayGateStone:
 	case Kind::WideScreen:
+	case Kind::ScriptFade:
 	case Kind::SetInterfaceLevel:
 	case Kind::FlyToBookmark:
 	case Kind::TabToTown:

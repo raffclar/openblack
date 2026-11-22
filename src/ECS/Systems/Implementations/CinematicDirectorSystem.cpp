@@ -205,7 +205,8 @@ void CinematicDirectorSystem::CloseClipWindow(float seconds)
 
 void CinematicDirectorSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _fade);
+	// A saved game keeps no fade and no words on the screen, because its load clears them
+	reflection::Save(out, _savedGameForm ? gui::ScriptFade {} : _fade);
 	reflection::Save(out, _bars);
 	reflection::Save(out, _wideScreenOwner);
 	reflection::Save(out, _interfaceActive);
@@ -214,13 +215,21 @@ void CinematicDirectorSystem::SaveState(reflection::BinaryWriter& out) const
 	// place in the save stays, always off.
 	reflection::Save(out, false);
 	// The frames fade the scripts' words on the screen, and no turn reads them
-	reflection::SavePresentation(out, _texts);
+	if (_savedGameForm)
+	{
+		reflection::SavePresentation(out, std::vector<gui::script_text::ScreenText> {});
+	}
+	else
+	{
+		reflection::SavePresentation(out, _texts);
+	}
 	reflection::Save(out, _textColour);
 }
 
 bool CinematicDirectorSystem::LoadState(reflection::BinaryReader& in)
 {
-	reflection::Load(in, _fade);
+	gui::ScriptFade fade;
+	reflection::Load(in, fade);
 	reflection::Load(in, _bars);
 	_bars.DrawFromTurns();
 	reflection::Load(in, _wideScreenOwner);
@@ -229,8 +238,23 @@ bool CinematicDirectorSystem::LoadState(reflection::BinaryReader& in)
 	bool closeClipping = false;
 	reflection::Load(in, closeClipping);
 	_closeClipping = false;
-	reflection::Load(in, _texts);
-	reflection::Load(in, _textColour);
+	std::vector<gui::script_text::ScreenText> texts;
+	reflection::Load(in, texts);
+	glm::u8vec3 colour {0, 0, 0};
+	reflection::Load(in, colour);
+	// The load of a saved game starts with no fade and no words on the screen, and the colour of the words stays as
+	// this computer has it. A world state gives back the screen of the world exactly.
+	if (_savedGameForm)
+	{
+		_fade = {};
+		_texts.clear();
+	}
+	else
+	{
+		_fade = fade;
+		_texts = std::move(texts);
+		_textColour = colour;
+	}
 	return !in.Failed();
 }
 
