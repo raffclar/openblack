@@ -297,6 +297,35 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.2f}},
 	    .throws = throws,
 	});
+	// Another player strikes three people of the player's town with lightning, on a land after the first
+	constexpr glm::vec2 k_StruckHut {40.0f, 0.0f};
+	all.push_back({
+	    .id = "advisors.our_town_attacked",
+	    .name = "The advisors say that another player attacks the player's town",
+	    .facet = Facet::Advisors,
+	    .description = "The second player casts a lightning bolt for 30 seconds at the three people of the player's town, "
+	                   "30 metres from their hut, on land 2. The town believes 5 in the player. The guidance waits end "
+	                   "first. The game log gives each remark of the guidance and its kind.",
+	    .expected = "When the aggression of the second player against the town is more than 1, an advisor says that the "
+	                "town is under attack (guidance remark kind 9). The town also cries out from the town centre.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, k_StruckHut + glm::vec2(10.0f, 10.0f)}},
+	    .objects =
+	        {{.type = AbodeInfo::CelticHut, .offset = k_StruckHut},
+	         {.type = VillagerInfo::CelticFarmerMale, .offset = k_StruckHut + glm::vec2(-30.0f, 2.0f), .joinTown = true},
+	         {.type = VillagerInfo::CelticHousewifeFemale, .offset = k_StruckHut + glm::vec2(-30.0f, -2.0f), .joinTown = true},
+	         {.type = VillagerInfo::CelticFarmerMale, .offset = k_StruckHut + glm::vec2(-28.0f, 0.0f), .joinTown = true}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = k_StruckHut + glm::vec2(-30.0f, 0.0f),
+	                  .delaySeconds = 2.0f,
+	                  .holdSeconds = 30.0f,
+	                  .repeatSeconds = 32.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = 5.0f,
+	    .townOwner = PlayerNames::PLAYER_ONE,
+	});
+
 	// A town of the player on the second land that believes in a rival almost as much as in the player
 	constexpr glm::vec2 k_DoubtingHut {0.0f, 20.0f};
 	all.push_back({

@@ -1181,8 +1181,8 @@ void FireSystem::Process(entt::entity object)
 			if (!field && registry.Valid(object))
 			{
 				// The town keeps the heat of the thing as the burn of the attack
-				world_objects::AttackTown(object, outcome.damage, litBy.value_or(PlayerNames::NEUTRAL),
-				                          ecs::town_aggression::Harm {.burn = temperature}, entt::null, cry);
+				world_objects::AttackTown(object, outcome.damage, litBy, ecs::town_aggression::Harm {.burn = temperature},
+				                          entt::null, cry);
 			}
 			// Only the burn that takes the last of its life burns it down: one burning on with none left is not burnt down
 			// again
