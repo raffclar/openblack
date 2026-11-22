@@ -21,6 +21,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/ListOrder.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
@@ -93,6 +94,8 @@ entt::entity FishFarmArchetype::Create(const glm::vec3& position)
 		                                   [&random](float a, float b) { return random.CrtRandom(a, b); });
 	}
 	registry.Assign<FishFarm>(entity, std::move(farm));
+	// The new farm goes to the front of the list of its town
+	ecs::list_order::Join(registry, entity);
 	return entity;
 }
 
