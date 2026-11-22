@@ -161,6 +161,7 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Moon::date>("date")
 	    .Field<&components::Moon::dateReadAt>("dateReadAt")
 	    .Field<&components::Moon::dateOverride>("dateOverride")
+	    .Field<&components::Moon::turnOffset>("turnOffset")
 	    .Field<&components::Moon::placement>("placement")
 	    .Field<&components::Moon::colour>("colour")
 	    .Field<&components::Moon::strength>("strength");

@@ -197,8 +197,8 @@ void Moon::DrawSky() noexcept
 	ImGui::TextUnformatted("In the sky");
 	ImGui::Text("Script hour %.2f, visual hour %.2f, clock %s", static_cast<double>(clock.GetScriptTime()),
 	            static_cast<double>(clock.GetVisualTime()), clock.IsRunning() ? "running" : "stopped");
-	// Where it would stand at this hour, whether or not it shows
-	const auto where = moon::Offset(clock.GetScriptTime());
+	// Where the last turn put it, whether or not it shows
+	const auto& where = theMoon.turnOffset;
 	const auto angles = moon::Angles(where);
 	ImGui::Text("From the camera: %.0f east, %.0f up, %.0f north", static_cast<double>(where.x), static_cast<double>(where.y),
 	            static_cast<double>(where.z));

@@ -41,7 +41,8 @@ void Update(const Inputs& inputs, ecs::components::SkyDome& dome, ecs::component
 	sun.strength =
 	    sun.placement.has_value() ? sky_dome::ThroughOvercast(sun.placement->alpha, dome.overcast, inputs.fog) : 0.0f;
 
-	moon.placement = graphics::moon::Place(inputs.scriptHour);
+	// The moon stands where the last turn put it
+	moon.placement = graphics::moon::PlaceAt(moon.turnOffset);
 	moon.colour = Colour(inputs.palette != nullptr
 	                         ? LandLightTable::GetMoonColour(*inputs.palette, inputs.landLight.skyType, inputs.landLight.sky)
 	                         : 0xFFFFFFu);

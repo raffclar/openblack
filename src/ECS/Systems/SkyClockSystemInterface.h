@@ -38,6 +38,9 @@ public:
 
 	/// One turn of game time
 	virtual void ProcessTurn() = 0;
+	/// Puts the moon beside the camera for the clock as the turn starts, before the clock moves on. The frames draw
+	/// the moon there until the next turn.
+	virtual void PlaceMoon() = 0;
 
 	/// Jumps to an hour of script time. When the presentation shows the sky, it builds the dome again for it at once.
 	virtual void SetTime(float time) = 0;

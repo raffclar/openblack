@@ -137,6 +137,18 @@ TEST_F(SkyClockSystemTest, ATurnMovesTheClockOn)
 	EXPECT_FLOAT_EQ(_clock->GetClock().GetVisualTime(), stopped);
 }
 
+TEST_F(SkyClockSystemTest, TheMoonTakesItsPlaceFromTheClockBeforeTheTurnMovesIt)
+{
+	auto& moon = Entities().Get<ecs::components::Moon>(_clock->GetEntities().moon);
+	EXPECT_EQ(moon.turnOffset, graphics::moon::k_OffsetBeforeFirstTurn);
+	_clock->GetClock().SetScriptTime(23.0f);
+	const auto hour = _clock->GetClock().GetScriptTime();
+	_clock->PlaceMoon();
+	_clock->ProcessTurn();
+	EXPECT_EQ(moon.turnOffset, graphics::moon::Offset(hour));
+	EXPECT_NE(_clock->GetClock().GetScriptTime(), hour);
+}
+
 TEST_F(SkyClockSystemTest, AfterALoadTheClockFindsTheSkysEntities)
 {
 	const auto entities = _clock->GetEntities();

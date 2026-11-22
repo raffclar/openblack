@@ -101,6 +101,12 @@ void SkyClockSystem::ProcessTurn()
 	GetClock().ProcessTurn();
 }
 
+void SkyClockSystem::PlaceMoon()
+{
+	Locator::entitiesRegistry::value().Get<Moon>(_entities.moon).turnOffset =
+	    graphics::moon::Offset(GetClock().GetScriptTime());
+}
+
 void SkyClockSystem::SetTime(float time)
 {
 	GetClock().SetScriptTime(time);

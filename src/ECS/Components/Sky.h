@@ -91,6 +91,9 @@ struct Moon
 	uint32_t dateReadAt {0};
 	/// A date to take the phase from instead of the computer's, for trying the phases
 	std::optional<int64_t> dateOverride;
+	/// Where the last turn put it from the camera. Each turn puts it there from the clock before the clock moves on in
+	/// that turn. Thus the moon stays one turn behind the sun and the dome.
+	glm::vec3 turnOffset {graphics::moon::k_OffsetBeforeFirstTurn};
 	/// Where it stands from the camera and how strongly it shows before any overcast, 0 to 200; none while it is down
 	std::optional<graphics::moon::Placement> placement;
 	/// Its colour for the time of day and alignment, 0 to 1
