@@ -161,7 +161,8 @@ std::string StormBoltsText()
 constexpr glm::vec3 k_CloudPoint {300.0f, 160.0f, 0.0f};
 /// A listener at the place where the thunder starts, which hears it at once
 constexpr glm::vec3 k_NearListener {300.0f, 0.0f, 0.0f};
-/// A listener 3 km from the strike, which hears the thunder after more than 8 seconds
+/// A listener 3 km from the strike. The thunder needs more than 8 seconds to come there, so the strike goes first and the
+/// thunder is never heard.
 constexpr glm::vec3 k_FarListener {-2700.0f, 0.0f, 0.0f};
 /// The turns of each run of the storm
 constexpr int k_StormTurns = 40;
@@ -420,46 +421,40 @@ TEST_F(ParticleSaveParts, TheSyncedPartIsTheSameWhereverTheListenerIs)
 	ParticleRuleSystem far;
 	const auto farTurns = RunStorm(far, k_FarListener);
 	ASSERT_EQ(serverTurns.size(), static_cast<size_t>(k_StormTurns));
-	bool thunderWaited = false;
 	bool localPartsDiffer = false;
+	std::optional<size_t> waitTurn;
 	for (size_t turn = 0; turn < serverTurns.size(); ++turn)
 	{
 		EXPECT_EQ(nearTurns[turn].first.synced, serverTurns[turn].first.synced) << "turn " << turn;
 		EXPECT_EQ(farTurns[turn].first.synced, serverTurns[turn].first.synced) << "turn " << turn;
-		// The far client keeps the thunder while it travels, after the strike has gone
-		thunderWaited = thunderWaited || farTurns[turn].second > serverTurns[turn].second;
-		localPartsDiffer = localPartsDiffer || farTurns[turn].first.local != nearTurns[turn].first.local;
+		// The far client keeps the thunder no longer than its strike
+		EXPECT_LE(farTurns[turn].second, serverTurns[turn].second) << "turn " << turn;
+		if (farTurns[turn].first.local != nearTurns[turn].first.local)
+		{
+			localPartsDiffer = true;
+			waitTurn = waitTurn.value_or(turn);
+		}
 	}
 	EXPECT_GT(serverTurns.front().second, 0u);
-	EXPECT_TRUE(thunderWaited);
-	// The part of this computer keeps the wait, and all of it is a presentation value
+	// The part of this computer keeps the wait while the strike lives, and all of it is a presentation value
 	EXPECT_TRUE(localPartsDiffer);
-	const auto& last = farTurns.back().first;
-	ASSERT_EQ(last.localPresentation.size(), 1u);
-	EXPECT_EQ(last.localPresentation.front(), std::make_pair(size_t {0}, last.local.size()));
+	ASSERT_TRUE(waitTurn.has_value());
+	const auto& waiting = farTurns[*waitTurn].first;
+	ASSERT_EQ(waiting.localPresentation.size(), 1u);
+	EXPECT_EQ(waiting.localPresentation.front(), std::make_pair(size_t {0}, waiting.local.size()));
 }
 
-TEST_F(ParticleSaveParts, AThunderThatTravelsComesBackWithTheSaveAndArrivesAtTheSameTurn)
+TEST_F(ParticleSaveParts, AThunderWhoseStrikeHasGoneIsForgottenUnheard)
 {
 	AddStormFiles();
 	ParticleRuleSystem far;
 	const auto turns = RunStorm(far, k_FarListener);
-	// The strike has gone, and only the thunder on its way to the listener is left
-	ASSERT_EQ(turns.back().second, 1u);
-	const auto& parts = turns.back().first;
-
+	// The strike has gone before its thunder came to the listener, so no sound is left to save
+	EXPECT_EQ(turns.back().second, 0u);
 	ParticleRuleSystem loaded;
-	ASSERT_TRUE(Read(loaded, parts.synced));
+	ASSERT_TRUE(Read(loaded, turns.back().first.synced));
+	ASSERT_TRUE(Read(*loaded.LocalEffectsState(), turns.back().first.local));
 	EXPECT_EQ(loaded.GetSoundCount(), 0u);
-	ASSERT_TRUE(Read(*loaded.LocalEffectsState(), parts.local));
-	EXPECT_EQ(loaded.GetSoundCount(), 1u);
-	const auto again = Save(loaded);
-	EXPECT_EQ(again.synced, parts.synced);
-	EXPECT_EQ(again.local, parts.local);
-
-	const auto original = TurnsUntilSilent(far);
-	EXPECT_GT(original, 0);
-	EXPECT_EQ(TurnsUntilSilent(loaded), original);
 }
 
 TEST_F(ParticleSaveParts, AThunderThatTravelsWhileItsStrikeLivesKeepsItsWaitInThePartOfThisComputer)
@@ -482,9 +477,9 @@ TEST_F(ParticleSaveParts, AThunderThatTravelsWhileItsStrikeLivesKeepsItsWaitInTh
 	const auto again = Save(loaded);
 	EXPECT_EQ(again.synced, parts.synced);
 	EXPECT_EQ(again.local, parts.local);
-	// The wait came back: the sound stays after its strike has gone, until it arrives
+	// The wait came back, and the sound goes with its strike in the same turn
 	const auto original = TurnsUntilSilent(far);
-	EXPECT_GT(original, 20);
+	EXPECT_GT(original, 0);
 	EXPECT_EQ(TurnsUntilSilent(loaded), original);
 }
 

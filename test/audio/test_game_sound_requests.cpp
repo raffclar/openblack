@@ -223,16 +223,13 @@ TEST_F(GameSoundRequestsTest, TheOwnedEmittersGoToThePlaceOfTheirOwner)
 	EXPECT_EQ(audio.emitters.Get<ecs::components::AudioEmitter>(ownerless).position, glm::vec3(0.0f));
 }
 
-// The distance to the listener comes from the audio's own listener. With no audio manager, there is no distance.
-TEST_F(GameSoundRequestsTest, TheListenerDistanceComesFromTheAudiosListener)
+// The listener comes from the audio's own listener
+TEST_F(GameSoundRequestsTest, TheListenerComesFromTheAudiosListener)
 {
 	const GameSoundRequests requests;
-	EXPECT_FALSE(requests.ListenerDistance(glm::vec3(1.0f)).has_value());
 	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
 	audio.SetListenerOverride(Listener {.origin = glm::vec3(1.0f, 2.0f, 3.0f)});
-	const auto distance = requests.ListenerDistance(glm::vec3(4.0f, 6.0f, 3.0f));
-	ASSERT_TRUE(distance.has_value());
-	EXPECT_FLOAT_EQ(*distance, 5.0f);
+	EXPECT_EQ(requests.GetListener().origin, glm::vec3(1.0f, 2.0f, 3.0f));
 	EXPECT_TRUE(audio.calls.empty());
 }
 
@@ -251,47 +248,4 @@ TEST_F(GameSoundRequestsTest, AnOwnerOfSoundsIsAnEntityOfTheAudio)
 	requests.DestroySoundOwner(owner);
 	requests.DestroySoundOwner(entt::null);
 	EXPECT_TRUE(audio.calls.empty());
-}
-
-// The audio records on the owner that it stopped a sound of the owner for the distance. The owner's system reads the
-// record once, and the record is then clear.
-TEST_F(GameSoundRequestsTest, TheOwnerTellsOnceThatTheDistanceStoppedItsSound)
-{
-	GameSoundRequests requests;
-	EXPECT_FALSE(requests.TakeListenerLeft(k_Placed));
-	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
-	const auto owner = requests.CreateSoundOwner();
-	ASSERT_TRUE(owner != entt::null);
-	EXPECT_FALSE(requests.TakeListenerLeft(owner));
-	audio.emitters.Get<openblack::ecs::components::SoundOwner>(owner).listenerLeft = true;
-	EXPECT_TRUE(requests.TakeListenerLeft(owner));
-	EXPECT_FALSE(requests.TakeListenerLeft(owner));
-	requests.DestroySoundOwner(owner);
-	EXPECT_FALSE(requests.TakeListenerLeft(owner));
-	EXPECT_FALSE(requests.TakeListenerLeft(entt::null));
-}
-
-// Before the temple stops the sound effects, the owner of each placed sound that plays gets the record. A sound that
-// follows its owner, or that stopped, gives no record.
-TEST_F(GameSoundRequestsTest, TheTempleMarksTheOwnersOfThePlacedSoundsThatPlay)
-{
-	using openblack::ecs::components::AudioEmitter;
-	GameSoundRequests requests;
-	requests.MarkListenerLeftPlacedSounds();
-	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
-	const auto placed = requests.CreateSoundOwner();
-	const auto following = requests.CreateSoundOwner();
-	const auto stopped = requests.CreateSoundOwner();
-	const auto addSound = [&audio](entt::entity owner, Follows follows, AudioStatus state) {
-		const auto sound = audio.emitters.Create();
-		audio.emitters.Assign<AudioEmitter>(sound,
-		                                    AudioEmitter {.spatial = true, .state = state, .owner = owner, .follows = follows});
-	};
-	addSound(placed, Follows::Place, AudioStatus::Playing);
-	addSound(following, Follows::Owner, AudioStatus::Playing);
-	addSound(stopped, Follows::Place, AudioStatus::Stopped);
-	requests.MarkListenerLeftPlacedSounds();
-	EXPECT_TRUE(requests.TakeListenerLeft(placed));
-	EXPECT_FALSE(requests.TakeListenerLeft(following));
-	EXPECT_FALSE(requests.TakeListenerLeft(stopped));
 }

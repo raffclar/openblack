@@ -200,12 +200,8 @@ private:
 		/// Seconds before it is heard, while it travels to the listener. This value comes from the listener of this
 		/// computer.
 		float wait {0.0f};
-		/// Where the listener hears the sound start: where its particle was when it started the sound
+		/// Where the listener hears the sound start: where its particle was when the sound last started
 		glm::vec3 start {0.0f};
-		/// The maximum distance of the sample that plays, and whether the distance stopped the sound or did not let it
-		/// start (see particles::sound_resume). These values come from the listener of this computer.
-		float maxDistance {0.0f};
-		bool far {false};
 	};
 	/// How a save keeps a sound
 	enum class SoundRecord : uint8_t
@@ -217,13 +213,11 @@ private:
 		/// A sound in the part of this computer, with its wait and the place where the listener hears it start
 		LinkWaitAndStart,
 	};
-	/// A sound that its particle let go of was dying away, and a sound whose particle is gone and that does not wait to
-	/// be heard is over: a load ends them
+	/// A sound that its particle let go of was dying away, and a sound whose particle is gone is over: a load ends them
 	[[nodiscard]] static bool EndsWithLoad(const PlayingSound& sound);
 	/// Whether a save keeps the sound
 	[[nodiscard]] static bool Saved(const PlayingSound& sound, const LeftOutSounds& leftOut);
-	/// Whether the synced part keeps the sound: a kept sound of a synced particle that lives. A sound whose particle has
-	/// gone stays only while it travels to the listener of this computer, so the part of this computer keeps it.
+	/// Whether the synced part keeps the sound: a kept sound of a synced particle that lives
 	[[nodiscard]] static bool InSyncedPart(const PlayingSound& sound, const LeftOutSounds& leftOut,
 	                                       const particles::SharedTables& localThings);
 	/// Writes a sound in the part of this computer
@@ -234,7 +228,7 @@ private:
 	/// The particle let go of the sound: stopped at once, or, when its effect file soft-releases it, its loop released
 	/// and its first step quieter taken
 	static void LetGo(PlayingSound& sound);
-	/// A let-go sound one step quieter, stopped once silent
+	/// A let-go sound one step quieter
 	static void Fade(PlayingSound& sound);
 	/// The sound has gone: its owner goes with it
 	static void Forget(PlayingSound& sound);

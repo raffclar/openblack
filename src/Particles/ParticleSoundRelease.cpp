@@ -22,8 +22,7 @@ SoundLetGo openblack::particles::LetGoOf(bool softRelease, bool sampleLoops, int
 	}
 	// Otherwise a loop plays to the end of its pass and a sample that plays once plays out, fading as it goes when it has
 	// a step
-	const int step = std::max(fadeStep, 0);
-	return {.releaseLoop = sampleLoops, .fadeStep = step, .stopWhenSilent = step > 0};
+	return {.releaseLoop = sampleLoops, .fadeStep = std::max(fadeStep, 0)};
 }
 
 uint32_t openblack::particles::FadedVolume(uint32_t volume, int fadeStep)
