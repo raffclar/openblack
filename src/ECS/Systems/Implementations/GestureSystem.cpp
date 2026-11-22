@@ -41,6 +41,7 @@
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
@@ -415,7 +416,9 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 	if (Locator::entitiesRegistry::has_value())
 	{
 		const auto& globals = Locator::entitiesRegistry::value().Context();
-		context.hiddenScriptLand = globals.mapScriptGlobals.landNumber == 1 && !globals.skirmish;
+		const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+		context.hiddenScriptLand =
+		    gesture::HiddenScriptLand(globals.mapScriptGlobals.landNumber, globals.skirmish, networkGame);
 	}
 
 	// The miracle selection, and what the player's icons offer to the gestures that open it or call a miracle again

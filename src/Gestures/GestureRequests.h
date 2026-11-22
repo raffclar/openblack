@@ -173,7 +173,8 @@ struct HandContext
 	std::optional<Creature> creature;
 	/// The leash picker is open
 	bool pickerOpen {false};
-	/// The land is Land 1 of the story, not a skirmish. Then the leash picker also waits for the square wave.
+	/// The land is Land 1 of a single-player game that is not a skirmish. Then the leash picker also waits for the square
+	/// wave.
 	bool hiddenScriptLand {false};
 
 	/// The hand has space for a miracle: it holds nothing
@@ -215,6 +216,11 @@ struct HandContext
 [[nodiscard]] int KnownLeashes(const HandContext::Creature& creature);
 /// The script that the square wave starts
 inline constexpr std::string_view k_HiddenScript = "HiddenScript";
+/// The leash picker waits for the square wave only on Land 1, in a single-player game that is not a skirmish
+[[nodiscard]] constexpr bool HiddenScriptLand(int32_t landNumber, bool skirmish, bool networkGame) noexcept
+{
+	return landNumber == 1 && !skirmish && !networkGame;
+}
 /// The gestures waited for, in the order they are tried
 [[nodiscard]] std::vector<Request> Requests(const HandContext& context);
 
