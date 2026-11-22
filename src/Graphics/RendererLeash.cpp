@@ -27,6 +27,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ZSort.h"
@@ -141,6 +142,7 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 	};
 
 	// Cinema bars a script brought in hide the ropes, unless the scripts show the leashes
+	const bool scriptShows = !Locator::leashSystem::has_value() || Locator::leashSystem::value().IsDrawn();
 	const bool scriptCinema = Locator::cinematicDirectorSystem::has_value() &&
 	                          Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
 	                          Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
@@ -187,7 +189,7 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 		const auto& worn = *leashes.worn;
 		const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(creature);
 		const leash_rope::Showing showing {
-		    .scriptShows = leashes.drawn,
+		    .scriptShows = scriptShows,
 		    .scriptCinema = scriptCinema,
 		    .local = worn.holder == OwnPlayer(),
 		    .handHidden = !desc.drawHand,

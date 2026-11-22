@@ -22,6 +22,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -463,6 +464,24 @@ void HandDemoSystem::Reset()
 	Stop();
 	_triggerReached = false;
 	_name.clear();
+}
+
+void HandDemoSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, _triggerReached);
+}
+
+bool HandDemoSystem::LoadState(reflection::BinaryReader& in)
+{
+	// The load started the land again, which stopped the demonstration. Only the mark comes back.
+	bool reached = false;
+	reflection::Load(in, reached);
+	if (in.Failed())
+	{
+		return false;
+	}
+	_triggerReached = reached;
+	return true;
 }
 
 std::optional<HandDemoSystemInterface::CameraPose> HandDemoSystem::GetCamera() const
