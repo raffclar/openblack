@@ -388,7 +388,7 @@ void AudioManager::StopOutOfRangeEmitters()
 	});
 	for (const auto entity : stopped)
 	{
-		const auto& emitter = registry.Get<const AudioEmitter>(entity);
+		[[maybe_unused]] const auto& emitter = registry.Get<const AudioEmitter>(entity);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stops at turn {}: {}", DescribeEmitter(entity, emitter),
 		                    LogTurn(),
 		                    emitter.follows == Follows::Owner &&
