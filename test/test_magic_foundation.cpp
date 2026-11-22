@@ -617,6 +617,15 @@ TEST(AreaEffect, TheStrikeOfAStormBoltIsTheNeutralPlayersAndNothingAppliesIt)
 	EXPECT_EQ(ApplierOf(source), entt::entity {entt::null});
 }
 
+TEST(AreaEffect, TheNeutralPlayerTakesTheAlignmentOfItsEffects)
+{
+	// The strike of a storm bolt moves the waiting alignment of the neutral player
+	EXPECT_EQ(AlignmentPlayerOf(StormBoltSource()), PlayerNames::NEUTRAL);
+	EXPECT_EQ(AlignmentPlayerOf(EffectSource {.player = PlayerNames::PLAYER_TWO}), PlayerNames::PLAYER_TWO);
+	// An effect from no player moves the alignment of no player
+	EXPECT_FALSE(AlignmentPlayerOf(EffectSource {.playerless = true}).has_value());
+}
+
 TEST(AreaEffect, HeatCountsOnlyWithAChangeOfLifeAndInFull)
 {
 	const auto table = AlignmentTable();

@@ -610,18 +610,19 @@ void GameMagicWorld::AddEffectAlignment(const magic::EffectOutcome& outcome, con
 	{
 		return;
 	}
-	// What a creature did moves its own alignment, what a player did the player's, over the turns to come. The waiting
-	// alignment takes the change of each kind of effect one at a time, in the order of the outcome.
+	// What a creature did moves its own alignment, what a player did the player's, over the turns to come. The neutral
+	// player also takes the change. The waiting alignment takes the change of each kind of effect one at a time, in the
+	// order of the outcome.
 	if (actingCreature != entt::null)
 	{
 		auto& pending = EntityRegistry().Get<Creature>(actingCreature).pendingAlignment;
 		pending = magic::AddEffectAlignmentChanges(pending, outcome.alignmentDamped);
 	}
-	else if (!source.playerless && source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())
+	else if (const auto player = magic::AlignmentPlayerOf(source); player.has_value() && Locator::alignmentSystem::has_value())
 	{
 		for (const float change : outcome.alignmentDamped)
 		{
-			Locator::alignmentSystem::value().AddPendingAlignment(source.player, change);
+			Locator::alignmentSystem::value().AddPendingAlignment(*player, change);
 		}
 	}
 }
