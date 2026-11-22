@@ -165,7 +165,8 @@ float town_homes::ScoreForAddingVillager(const Occupancy& occupancy)
 			sexes = ((1.0f - same) + 1.0f) * 0.5f;
 		}
 		const float nearness = gutils::GetDistanceModifier(occupancy.distance, k_FarthestLiked);
-		score = score * sexes * ((nearness + 1.0f) * 0.5f);
+		// The game multiplies in this order: the nearness, then the sexes, then the room left
+		score = (((nearness + 1.0f) * 0.5f) * sexes) * score;
 	}
 	return score;
 }

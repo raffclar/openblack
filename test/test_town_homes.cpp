@@ -126,6 +126,34 @@ TEST(TownHomesScore, ARoomierBuildingOfTheOtherSexNearbyIsLikedBetter)
 	EXPECT_LT(near, here);
 }
 
+TEST(TownHomesScore, TheScoreMultipliesTheNearnessThenTheSexesThenTheRoomLeftAsTheGameDoes)
+{
+	// Each float product rounds, so the order of the three parts can change the last bit of the score
+	int ordersDiffer = 0;
+	for (const uint32_t adults : {0u, 1u, 2u})
+	{
+		for (const auto [people, sameSex] : std::array<std::pair<uint32_t, uint32_t>, 4> {{{0, 0}, {1, 1}, {2, 1}, {3, 2}}})
+		{
+			for (int metres = 0; metres < 500; metres += 7)
+			{
+				const town_homes::Occupancy occupancy {.adults = adults,
+				                                       .maxAdults = 3,
+				                                       .people = people,
+				                                       .sameSex = sameSex,
+				                                       .distance = static_cast<float>(metres)};
+				const float room = 1.0f - static_cast<float>(adults) / 3.0f;
+				const float sexes =
+				    people == 0 ? 1.0f : ((1.0f - static_cast<float>(sameSex) / static_cast<float>(people)) + 1.0f) * 0.5f;
+				const float nearness = (gutils::GetDistanceModifier(occupancy.distance, 500.0f) + 1.0f) * 0.5f;
+				EXPECT_EQ(town_homes::ScoreForAddingVillager(occupancy), (nearness * sexes) * room);
+				ordersDiffer += (room * sexes) * nearness != (nearness * sexes) * room ? 1 : 0;
+			}
+		}
+	}
+	// The cases above include some where the other order gives another score
+	EXPECT_GT(ordersDiffer, 0);
+}
+
 TEST_F(TownHomesTest, ANewcomerMovesIntoTheBestFunctionalBuildingTheFirstOfEqualsInTheTownsOrder)
 {
 	const glm::vec3 here(100.0f, 0.0f, 100.0f);
