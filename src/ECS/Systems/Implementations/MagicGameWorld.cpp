@@ -374,12 +374,13 @@ bool GameMagicWorld::ApplyEffect(entt::entity object, const magic::EffectValues&
 	return receiver->life.has_value();
 }
 
-std::vector<entt::entity> GameMagicWorld::ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values,
+std::vector<entt::entity> GameMagicWorld::ApplyEffectAt(const map_coords::MapCoords& place, const magic::EffectValues& values,
                                                         const magic::EffectSource& source)
 {
-	// Everything in the cells round the point that the effect reaches takes it, one after another. A temple's heart or a
-	// worship site gives it to what its heart chooses, which takes it as it is when its turn comes.
-	const auto receivers = ReceiversIn(magic::EffectCellsAround(point, values.radius));
+	// Everything in the cells round the map position that the effect reaches takes it, one after another. A temple's
+	// heart or a worship site gives it to what its heart chooses, which takes it as it is when its turn comes.
+	const auto receivers = ReceiversIn(magic::EffectCellsAround(place, values.radius));
+	const float height = PointOf(place).y;
 	const auto& info = Locator::infoConstants::value();
 	const float casterAlignment = AlignmentOf(source);
 	const bool breaksBuildings = values.IsDestructive();
@@ -393,7 +394,7 @@ std::vector<entt::entity> GameMagicWorld::ApplyEffectAt(glm::vec3 point, const m
 		// The effect finds only an object that is available and that takes it, such as a pot that holds something or a
 		// villager that is not in its home
 		if (!ecs::world_objects::IsAvailable(receiver.entity) || !TakesEffect(receiver.entity, shared) ||
-		    !magic::Reaches(shared, point, receiver))
+		    !magic::Reaches(shared, place, height, receiver))
 		{
 			continue;
 		}

@@ -221,6 +221,11 @@ bool maths::InsideSphere(glm::vec3 point, glm::vec3 centre, float radius, float 
 	return r * r > x87::Dot<x87::SumOrder::Zyx>(d, d);
 }
 
+bool maths::CrossedIntoSphere(glm::vec3 before, glm::vec3 point, glm::vec3 centre, float radius, float margin)
+{
+	return InsideSphere(point, centre, radius, margin) && !InsideSphere(before, centre, radius, margin);
+}
+
 glm::vec3 maths::SphereEntry(glm::vec3 from, glm::vec3 to, glm::vec3 centre, float radius, float margin)
 {
 	// Make the way one long, unless it has no length

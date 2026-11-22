@@ -704,9 +704,8 @@ std::shared_ptr<particles::ShieldSphere> GameParticleWorld::FindShieldCrossing(g
 {
 	for (const auto& weak : std::views::reverse(_shields))
 	{
-		if (auto shield = weak.lock(); shield &&
-		                               particles::maths::InsideSphere(point, shield->centre, shield->radius, margin) &&
-		                               !particles::maths::InsideSphere(before, shield->centre, shield->radius, margin))
+		if (auto shield = weak.lock();
+		    shield && particles::maths::CrossedIntoSphere(before, point, shield->centre, shield->radius, margin))
 		{
 			return shield;
 		}
