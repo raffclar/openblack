@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
+#include <bit>
 #include <optional>
 #include <vector>
 
@@ -135,6 +138,14 @@ TEST(ArtefactRules, ATownGivesBeliefForADanceByWorthImpressivenessAndDancersPerH
 	// A town without people counts 1 for its dancers
 	EXPECT_FLOAT_EQ(
 	    DancingBelief({.worth = 3.0f, .impressiveness = 2.0f, .dancers = 10, .population = 0, .beliefMultiplier = 5.0f}), 6.0f);
+}
+
+TEST(ArtefactRules, TheBeliefOfADanceMultipliesTheImpressivenessByTheWorthFirst)
+{
+	// The impressiveness times the worth, then times the dancers per head. The other order gives 0x3B0913F1.
+	const float belief =
+	    DancingBelief({.worth = 1.049f, .impressiveness = 0.0047f, .dancers = 14, .population = 66, .beliefMultiplier = 2.0f});
+	EXPECT_EQ(std::bit_cast<uint32_t>(belief), 0x3B0913F0u);
 }
 
 TEST(ArtefactRules, BeliefComesEveryHundredTurnsWithARandomPartOfAQuarter)

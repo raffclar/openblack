@@ -138,7 +138,9 @@ float artefact_rules::DancingBelief(const BeliefInputs& in)
 	{
 		perHead = static_cast<float>(in.dancers) / static_cast<float>(in.population) * in.beliefMultiplier;
 	}
-	return perHead * in.impressiveness * worth;
+	// The impressiveness times the worth comes first, then the dancers per head. Each step rounds, thus the order of the
+	// steps is part of the answer.
+	return (in.impressiveness * worth) * perHead;
 }
 
 bool artefact_rules::BeliefGiftDue(uint32_t sinceLastGift, uint32_t randomPart, uint32_t gap)
