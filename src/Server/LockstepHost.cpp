@@ -30,6 +30,7 @@
 #include "Gui/TextDatabase.h"
 #include "Online/ConnectionLog.h"
 #include "Online/GameBuildId.h"
+#include "Online/GodsRingMapFile.h"
 #include "Online/StartRules.h"
 #include "PlayerSlots.h"
 #include "Server/ConnectionLimits.h"
@@ -1870,6 +1871,12 @@ void LockstepHost::Closed(ConnectionId connection, uint16_t code)
 	}
 	place.state = SeatState::Away;
 	place.awaySince = _clock();
+	// The player lost the connection after a change of the world and before the report that the client loaded the new
+	// world. The client can still have the old world, so it comes back as a player who was away at the change.
+	if (std::exchange(place.oldWorldChecksums, false))
+	{
+		place.missedWorldChange = true;
+	}
 	Log(spdlog::level::info, fmt::format("The player of slot {} lost the connection; the god waits", *seat));
 	Broadcast(game_socket::PlayerState {.slot = *seat, .state = game_socket::PlayerState::State::Away});
 }
@@ -2330,6 +2337,7 @@ void LockstepHost::EditorWorldFrom(ConnectionId connection, Peer& peer, const ga
 	                            .scenario = {},
 	                            .land = {},
 	                            .testbed = false,
+	                            .godsRingMap = false,
 	                            .opening = {},
 	                            .by = peer.name,
 	                            .seed = 0,
@@ -2358,6 +2366,7 @@ void LockstepHost::EditorScenarioFrom(ConnectionId connection, const Peer& peer,
 	                            .scenario = scenario.id,
 	                            .land = {},
 	                            .testbed = true,
+	                            .godsRingMap = false,
 	                            .opening = {},
 	                            .by = peer.name,
 	                            .seed = _settings.start.seed,
@@ -2367,12 +2376,15 @@ void LockstepHost::EditorScenarioFrom(ConnectionId connection, const Peer& peer,
 
 void LockstepHost::EditorLandFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorLand& land)
 {
-	const auto name = land.testbed ? std::string("the testbed") : fmt::format("the land {}", land.land);
+	const auto name = land.testbed       ? std::string("the testbed")
+	                  : land.godsRingMap ? std::string("the map for 32 gods")
+	                                     : fmt::format("the land {}", land.land);
 	if (!TakesWorldChange(connection, peer, name))
 	{
 		return;
 	}
-	if (!land.testbed && _landRefusal)
+	const bool scriptLand = !land.testbed && !land.godsRingMap;
+	if (scriptLand && _landRefusal)
 	{
 		if (const auto refusal = _landRefusal(land.land); refusal.has_value())
 		{
@@ -2382,13 +2394,15 @@ void LockstepHost::EditorLandFrom(ConnectionId connection, const Peer& peer, con
 	}
 	Log(spdlog::level::info,
 	    fmt::format("{} loads {}: the room starts again on it before the next turn", log_names::Capitalised(Who(peer)), name));
-	// The new game on the land starts as the game of the room started. The testbed has no opening.
+	// The new game on the land starts as the game of the room started. The testbed and the map for 32 gods have no
+	// opening.
 	_worldChange = WorldChange {.kind = WorldChange::Kind::Land,
 	                            .file = {},
 	                            .scenario = {},
-	                            .land = land.testbed ? std::string() : land.land,
+	                            .land = scriptLand ? land.land : std::string(),
 	                            .testbed = land.testbed,
-	                            .opening = land.testbed ? std::string() : _settings.start.opening,
+	                            .godsRingMap = land.godsRingMap,
+	                            .opening = scriptLand ? _settings.start.opening : std::string(),
 	                            .by = peer.name,
 	                            .seed = _settings.start.seed,
 	                            .players = {}};
@@ -2474,9 +2488,11 @@ void LockstepHost::ApplyWorldChange()
 		start.scenario = change.scenario;
 	}
 	start.testbed = change.testbed;
-	start.land = change.land;
+	start.land = change.godsRingMap ? gods_ring_map_file::WireName() : change.land;
 	start.opening = change.opening;
-	start.godsRingMap = false;
+	start.godsRingMap = change.godsRingMap;
+	// A client that did not get the map for 32 gods from the lobby makes its file, and checks it against the server's
+	start.mapSha256 = change.godsRingMap ? changed.mapSha256 : std::string();
 	// The snapshots keep the start of the command line, so that a server that continues the game can check it
 	if (change.kind == WorldChange::Kind::Land && !_firstStart.has_value())
 	{
@@ -2498,7 +2514,11 @@ void LockstepHost::ApplyWorldChange()
 	// The test tools find the words "started the room again on the land"
 	Log(spdlog::level::info,
 	    fmt::format("After turn {}, {} started the room again on the land {}: the game starts again at turn {}", before,
-	                WhoIs(_worldChangeFrom), change.testbed ? std::string("of the testbed") : change.land, _turnsDone));
+	                WhoIs(_worldChangeFrom),
+	                change.testbed       ? std::string("of the testbed")
+	                : change.godsRingMap ? std::string("for 32 gods")
+	                                     : change.land,
+	                _turnsDone));
 }
 
 game_socket::Start LockstepHost::StartRoomAgain(game_socket::Start start)

@@ -207,7 +207,7 @@ public:
 	[[nodiscard]] bool SendEditorScenario(std::string_view id);
 	/// The editor asks the server to start the room again on a land, or on the testbed with no land. False when the
 	/// request does not go.
-	[[nodiscard]] bool SendEditorLand(std::string_view land, bool testbed);
+	[[nodiscard]] bool SendEditorLand(const game_socket::EditorLand& land);
 	/// True one time after the server started the game again (a new game.start in the game, for a scenario of the
 	/// editor). The game then loads the land of the new start.
 	[[nodiscard]] bool TakeRestart() { return std::exchange(_restarted, false); }
