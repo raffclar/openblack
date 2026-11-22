@@ -2206,6 +2206,7 @@ endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
 openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
 openblack_setup_and_add_test(test_side_thread test_side_thread.cpp)
+openblack_setup_and_add_test(test_turn_beside_draw test_turn_beside_draw.cpp)
   add_test(
     NAME test_text_encoding
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_text_encoding.py

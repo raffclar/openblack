@@ -948,7 +948,9 @@ void SaveGameSystem::ShowSaveBox(uint32_t slot, bool loading) const
 {
 	if (_showBox)
 	{
-		_showBox(loading, gui::saving_box::DarkensScreen(slot));
+		// The box draws a frame, which only the main thread can do. A save from a turn on another thread waits for it.
+		CallOnMainThread(MainThreadApi::Renderer,
+		                 [this, loading, slot] { _showBox(loading, gui::saving_box::DarkensScreen(slot)); });
 	}
 }
 

@@ -52,6 +52,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/UndrawnPicks.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "Visual/UploadMode.h"
@@ -515,7 +516,10 @@ void TempleExteriorSystem::Unbind(entt::id_type id)
 	{
 		if (meshes.Contains(made))
 		{
+			// The turn can play on another thread, so the main thread frees the buffers of the mesh
+			auto mesh = meshes.Handle(made).handle();
 			meshes.Erase(made);
+			ReleaseOnMainThread(std::move(mesh));
 		}
 	}
 	if (auto& files = resources.GetL3DFiles(); files.Contains(id))
