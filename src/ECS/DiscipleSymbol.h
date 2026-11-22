@@ -9,10 +9,13 @@
 
 #pragma once
 
+#include <cmath>
+
 #include <optional>
 #include <span>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec3.hpp>
 
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/HandGrab.h"
@@ -71,6 +74,16 @@ namespace openblack::ecs::disciple_symbol
 		return std::nullopt;
 	}
 	return chosen;
+}
+
+/// The distance from the camera that sets the size of the symbol. The game measures it to the glow, not to the symbol
+/// over the glow. It adds the squares from the height and the depth first, then the width.
+[[nodiscard]] inline float SymbolDistance(const glm::vec3& eye, const glm::vec3& glow)
+{
+	const float dx = eye.x - glow.x;
+	const float dy = eye.y - glow.y;
+	const float dz = eye.z - glow.z;
+	return std::sqrt(((dz * dz) + (dy * dy)) + (dx * dx));
 }
 
 } // namespace openblack::ecs::disciple_symbol

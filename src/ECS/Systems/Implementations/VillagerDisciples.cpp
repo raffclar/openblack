@@ -1326,12 +1326,14 @@ void villager_disciple::UpdateMarks()
 	const auto origin = drawnPlaces.ModelOriginOf(*shown, body);
 	const auto mark = symbolMark.value_or(entt::null) != entt::null ? *symbolMark : MakeMark(marks, *shown, true);
 	auto& transform = marks.Get<Transform>(mark);
-	transform.position = origin + glm::vec3(0.0f, body.scale.x + (body.scale.x * k_SymbolRise), 0.0f);
+	const auto glow = origin + glm::vec3(0.0f, body.scale.x, 0.0f);
+	transform.position = glow + glm::vec3(0.0f, body.scale.x * k_SymbolRise, 0.0f);
 	float size = k_LeastSpriteSize;
 	if (Locator::camera::has_value() && Locator::windowing::has_value())
 	{
+		// The size comes from the distance to the glow, not to the symbol
 		const auto screen = Locator::windowing::value().GetSize();
-		const float distance = glm::distance(Locator::camera::value().GetOrigin(), transform.position);
+		const float distance = disciple_symbol::SymbolDistance(Locator::camera::value().GetOrigin(), glow);
 		size = disciple::SymbolSize(distance, screen.x, screen.y);
 	}
 	transform.scale = glm::vec3(size, size, 1.0f);
