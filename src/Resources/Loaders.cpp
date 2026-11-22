@@ -16,8 +16,11 @@
 #include <array>
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <ranges>
 #include <span>
+#include <stdexcept>
+#include <string_view>
 #include <utility>
 
 #include <BinkFile.h>
@@ -46,6 +49,8 @@
 #include "3D/LandLightTable.h"
 #include "3D/Light.h"
 #include "3D/LowResolutionTextures.h"
+#include "3D/SkyDome.h"
+#include "3D/SkyPicturePack.h"
 #include "Common/Bitmap16B.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/StringUtils.h"
@@ -149,6 +154,21 @@ struct RawShape
 	}
 	graphics::texel_depth::Reduce(texels, graphics::texel_depth::Depth::FourBits);
 	return texels;
+}
+
+/// Reads the files of the sky pack in a folder. An empty file counts as a missing file.
+sky_picture_pack::Reader SkyPackReader(std::filesystem::path folder,
+                                       std::function<std::vector<uint8_t>(const std::filesystem::path&)> readFile)
+{
+	return [folder = std::move(folder),
+	        readFile = std::move(readFile)](std::string_view file) -> std::optional<std::vector<uint8_t>> {
+		auto bytes = readFile(folder / file);
+		if (bytes.empty())
+		{
+			return std::nullopt;
+		}
+		return bytes;
+	};
 }
 
 /// The texels of the layers of 16-bit bitmaps, each at the given side
@@ -578,6 +598,45 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
 		const auto again =
 		    BitmapLayerTexels(paths, side, [&rereads](const std::filesystem::path& path) { return rereads.File(path); });
 		return BitmapTextureBytes(again, deviceHas1555);
+	});
+	return texture;
+}
+
+Texture2DLoader::result_type Texture2DLoader::operator()(FromSkyPackTag, const std::string& name,
+                                                         const std::filesystem::path& folder) const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const auto largestTexture = KeepsDataOnly() ? sky_picture_pack::k_LargestSide * sky_picture_pack::k_TargetSides
+	                                            : Locator::graphicsDevice::value().MaxTextureSize();
+	auto loaded = sky_picture_pack::Load(SkyPackReader(folder,
+	                                                   [&fileSystem](const std::filesystem::path& path) {
+		                                                   return fileSystem.Exists(path) ? fileSystem.ReadAll(path)
+		                                                                                  : std::vector<uint8_t> {};
+	                                                   }),
+	                                     largestTexture);
+	if (!loaded.pack.has_value())
+	{
+		const auto problem = loaded.problem.value_or(sky_picture_pack::Problem::MissingPicture);
+		throw std::runtime_error(std::string(sky_picture_pack::Describe(problem)) + ": " +
+		                         sky_picture_pack::PictureFiles().at(loaded.picture));
+	}
+	const auto side = static_cast<uint16_t>(loaded.pack->side);
+	const auto layers = static_cast<uint16_t>(sky_dome::k_Pictures);
+	auto texture = std::make_shared<graphics::Texture2D>(name);
+	if (KeepsDataOnly())
+	{
+		texture->Describe(side, side, layers, graphics::TextureFormat::RGBA8);
+		return texture;
+	}
+	const auto& texels = loaded.pack->texels;
+	texture->Create(side, side, layers, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+	                Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size())));
+	// After a restore of the graphics device the texture reads its pictures again
+	texture->SetTexelSource([folder, largestTexture](Rereads& rereads) {
+		auto again = sky_picture_pack::Load(
+		    SkyPackReader(folder, [&rereads](const std::filesystem::path& path) { return rereads.File(path); }),
+		    largestTexture);
+		return again.pack.has_value() ? std::move(again.pack->texels) : std::vector<uint8_t> {};
 	});
 	return texture;
 }

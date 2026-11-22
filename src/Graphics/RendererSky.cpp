@@ -26,6 +26,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -409,45 +410,65 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	const auto* dome =
 	    Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
 	const bool lowResolution = Locator::config::value().detail.lowResTextures;
+	const auto& textures = Locator::resources::value().GetTextures();
+	using SkyArchetype = ecs::archetypes::SkyArchetype;
+	// The debug menu can show the larger pictures of the sky pack, when the pack loaded. The low resolution dome always
+	// shows the game's own pictures.
+	const bool fromPack = !lowResolution && Locator::config::value().upscaledSkyPictures &&
+	                      textures.Contains(SkyArchetype::k_PackDomeTextureId.value());
+	// A change between the two sets of pictures blends all of the picture again, as after a restore of the device
+	const bool changesPictures =
+	    _skyDomeFrameBuffer && !lowResolution && _skyDomeRows != sky_dome::k_LowRows && _skyDomeFromPack != fromPack;
+	const bool drawAgain = _skyDomeLost || changesPictures;
 	// A warm-up makes the target and draws a band of no rows when the dome has none this frame: it changes no texel. The
 	// low resolution dome is made once and stays.
 	// After a restore of the device the dome's picture is gone. The renderer blends the rows of the picture again at their
 	// own sky types, and then the rows of this frame.
-	const bool lowDomeMade = lowResolution && _skyDomeFrameBuffer && _skyDomeRows == sky_dome::k_LowRows && !_skyDomeLost;
+	const bool lowDomeMade = lowResolution && _skyDomeFrameBuffer && _skyDomeRows == sky_dome::k_LowRows && !drawAgain;
 	const auto frameRows = dome != nullptr ? dome->frameRows.Get() : std::span<const sky_dome::Rows> {};
 	std::vector<sky_dome::Rows> again;
-	if (dome != nullptr && _skyDomeLost)
+	if (dome != nullptr && drawAgain)
 	{
 		again = _skyDomePicture.Again();
 		again.insert(again.end(), frameRows.begin(), frameRows.end());
 	}
-	const auto rowsToDraw = _skyDomeLost ? std::span<const sky_dome::Rows>(again) : frameRows;
+	const auto rowsToDraw = drawAgain ? std::span<const sky_dome::Rows>(again) : frameRows;
 	if (dome == nullptr || (!lowResolution && rowsToDraw.empty() && !_warmingUp) || (lowDomeMade && !_warmingUp))
 	{
 		return;
 	}
-	const auto* pictures = Locator::resources::value().GetTextures().Find(dome->textureId);
+	const auto* pictures = textures.Find(fromPack ? SkyArchetype::k_PackDomeTextureId.value() : dome->textureId);
 	if (pictures == nullptr)
 	{
 		return;
 	}
 	constexpr uint16_t k_Alignments = 3;
-	const uint16_t domeRows = lowResolution ? sky_dome::k_LowRows : sky_dome::k_Rows;
+	const uint16_t domeRows = lowResolution ? sky_dome::k_LowRows : fromPack ? pictures->GetResolution().y : sky_dome::k_Rows;
 	const glm::u16vec2 size {domeRows, static_cast<uint16_t>(domeRows * k_Alignments)};
-	if (!_skyDomeFrameBuffer || _skyDomeRows != domeRows)
+	if (!_skyDomeFrameBuffer || _skyDomeRows != domeRows || _skyDomeFromPack != fromPack)
 	{
-		// The target keeps each 5-bit level of the dome, thus the filtered sky has the values of a filtered 5-bit texture
-		// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index): bgfx has caps for every texture format
-		const bool tenBitsDraw =
-		    (bgfx::getCaps()->formats[toBgfx(TextureFormat::RGB10A2)] & BGFX_CAPS_FORMAT_TEXTURE_FRAMEBUFFER) != 0;
-		_skyDomeFrameBuffer = std::make_unique<FrameBuffer>("SkyDome", size.x, size.y, sky_dome_target::Format(tenBitsDraw),
-		                                                    std::nullopt, 1, Wrapping::ClampEdge);
+		// The target keeps each 5-bit level of the dome, thus the filtered sky has the values of a filtered 5-bit texture.
+		// The pictures of the pack use a 16-bit float target when the device can draw into it.
+		const auto canDraw = [](TextureFormat format) {
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index): bgfx has caps for every texture format
+			return (bgfx::getCaps()->formats[toBgfx(format)] & BGFX_CAPS_FORMAT_TEXTURE_FRAMEBUFFER) != 0;
+		};
+		const bool tenBitsDraw = canDraw(TextureFormat::RGB10A2);
+		const auto format = fromPack ? sky_dome_target::PackFormat(canDraw(TextureFormat::RGBA16F), tenBitsDraw)
+		                             : sky_dome_target::Format(tenBitsDraw);
+		_skyDomeFrameBuffer =
+		    std::make_unique<FrameBuffer>("SkyDome", size.x, size.y, format, std::nullopt, 1, Wrapping::ClampEdge);
 		_skyDomeRows = domeRows;
-		_skyDomePicture = {};
+		_skyDomeFromPack = fromPack;
+		// A change between the two sets of pictures keeps the sky types of the rows, which the draw below uses
+		if (!changesPictures)
+		{
+			_skyDomePicture = {};
+		}
 	}
 	_skyDomeLost = false;
 	const auto viewId = SetUpLandView(RenderPass::SkyDome, *_skyDomeFrameBuffer, size);
-	const auto& program = *_shaderManager->GetShader("SkyDome");
+	const auto& program = *_shaderManager->GetShader(fromPack ? "SkyDomeFull" : "SkyDome");
 	const auto rowsAcross = static_cast<float>(domeRows);
 	if (lowResolution)
 	{
@@ -469,6 +490,10 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 		SubmitLandQuad(viewId, program, {0.0f, 0.0f}, {rowsAcross, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}, BGFX_STATE_WRITE_RGB);
 	}
 	_skyDomePicture.Drew(rowsToDraw);
+	// The rows of the follow are rows of the game's own pictures. A picture of the pack has a whole number of its texel
+	// rows for each of these rows.
+	constexpr auto k_FollowRows = static_cast<float>(sky_dome::k_Rows);
+	const auto texelRows = rowsAcross / k_FollowRows;
 	for (const auto& rows : rowsToDraw)
 	{
 		const auto times = sky_dome::TimePair(rows.skyType);
@@ -481,8 +506,8 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 			program.SetTextureSampler("s_diffuse", 0, *pictures);
 			program.SetUniformValue("u_skyDome", &u_skyDome);
 			const auto top = static_cast<float>(alignment) * rowsAcross;
-			SubmitLandQuad(viewId, program, {0.0f, top + first}, {rowsAcross, top + last}, {0.0f, first / rowsAcross},
-			               {1.0f, last / rowsAcross}, BGFX_STATE_WRITE_RGB);
+			SubmitLandQuad(viewId, program, {0.0f, top + (first * texelRows)}, {rowsAcross, top + (last * texelRows)},
+			               {0.0f, first / k_FollowRows}, {1.0f, last / k_FollowRows}, BGFX_STATE_WRITE_RGB);
 		}
 	}
 }
