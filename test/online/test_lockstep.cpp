@@ -40,6 +40,7 @@
 #include "LoopbackSockets.h"
 #include "Online/ConnectionLostNotice.h"
 #include "Online/GameBuildId.h"
+#include "Online/GodsRingMapFile.h"
 #include "Online/NetworkSession.h"
 #include "Online/RoomClock.h"
 #include "Online/StartRules.h"
@@ -4697,7 +4698,7 @@ TEST_F(LockstepTest, AWorldFileOfTheEditorLoadsOnTheServerAndEveryComputerGoesOn
 		// The fake world file is the hash and the turn of a world
 		std::memcpy(&_serverWorld.hash, change.file.data(), sizeof(uint64_t));
 		std::memcpy(&_serverWorld.turns, change.file.data() + sizeof(uint64_t), sizeof(uint32_t));
-		return server::LockstepHost::WorldChanged {.turn = _serverWorld.turns, .refusal = {}};
+		return server::LockstepHost::WorldChanged {.turn = _serverWorld.turns, .refusal = {}, .mapSha256 = {}};
 	});
 	Computer alice(_network, _now, "god+editor:alice");
 	Computer bob(_network, _now, "god:bob");
@@ -4745,7 +4746,8 @@ TEST_F(LockstepTest, TheServerTakesAWorldFileOrAScenarioOnlyFromTheEditor)
 	uint32_t changes = 0;
 	_host->SetChangeWorld([&changes](const server::LockstepHost::WorldChange& /*change*/) {
 		++changes;
-		return server::LockstepHost::WorldChanged {.turn = std::nullopt, .refusal = "the fake world does not change"};
+		return server::LockstepHost::WorldChanged {
+		    .turn = std::nullopt, .refusal = "the fake world does not change", .mapSha256 = {}};
 	});
 	_host->SetScenarioRefusal([](std::string_view id) -> std::optional<std::string> {
 		return id == "known" ? std::nullopt : std::optional<std::string>("no such scenario");
@@ -4784,7 +4786,7 @@ TEST_F(LockstepTest, AScenarioOfTheEditorStartsTheRoomAgainOnTheTestbedForEveryC
 		EXPECT_EQ(change.seed, 1u);
 		_serverWorld = FakeWorld {};
 		_serverWorld.mindFileHere = [this](uint64_t hash) { return !_host->EditorMindFile(hash).empty(); };
-		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = {}};
 	});
 	Computer alice(_network, _now, "god+editor:alice");
 	Computer bob(_network, _now, "god:bob");
@@ -4825,7 +4827,7 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringAWorldFileComesBackWithTheNewWorld)
 		players = change.players;
 		std::memcpy(&_serverWorld.hash, change.file.data(), sizeof(uint64_t));
 		std::memcpy(&_serverWorld.turns, change.file.data() + sizeof(uint64_t), sizeof(uint32_t));
-		return server::LockstepHost::WorldChanged {.turn = _serverWorld.turns, .refusal = {}};
+		return server::LockstepHost::WorldChanged {.turn = _serverWorld.turns, .refusal = {}, .mapSha256 = {}};
 	});
 	Computer alice(_network, _now, "god+editor:alice");
 	Computer bob(_network, _now, "god:bob");
@@ -4857,7 +4859,7 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringAScenarioStartComesBackIntoTheScenar
 	_host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
 		_serverWorld = FakeWorld {};
 		_serverWorld.mindFileHere = [this](uint64_t hash) { return !_host->EditorMindFile(hash).empty(); };
-		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = {}};
 	});
 	Computer alice(_network, _now, "god+editor:alice");
 	Computer bob(_network, _now, "god:bob");
@@ -4905,13 +4907,13 @@ TEST_F(LockstepTest, ALandOfTheEditorStartsTheRoomAgainOnTheLandForEveryComputer
 	_host->SetChangeWorld([this, &changes](const server::LockstepHost::WorldChange& change) {
 		changes.push_back(change);
 		_serverWorld = FakeWorld {};
-		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = {}};
 	});
 	Computer alice(_network, _now, "god+editor:alice");
 	Computer bob(_network, _now, "god:bob");
 	Frames({&alice, &bob}, 40);
 	ASSERT_TRUE(_host->Started());
-	ASSERT_TRUE(alice.session.SendEditorLand("Land2.txt", false));
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = false}));
 	Frames({&alice, &bob}, 20);
 	ASSERT_EQ(changes.size(), 1u);
 	EXPECT_EQ(changes.front().kind, server::LockstepHost::WorldChange::Kind::Land);
@@ -4941,7 +4943,7 @@ TEST_F(LockstepTest, ALandOfTheEditorStartsTheRoomAgainOnTheLandForEveryComputer
 	// The room keeps the new land, so a player who joins later loads it too
 	EXPECT_NE(_host->RoomRecord().start.find("Land2.txt"), std::string::npos);
 	// The editor then loads the testbed for the room
-	ASSERT_TRUE(alice.session.SendEditorLand({}, true));
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = {}, .testbed = true, .godsRingMap = false}));
 	Frames({&alice, &bob}, 20);
 	ASSERT_EQ(changes.size(), 2u);
 	EXPECT_TRUE(changes.back().testbed);
@@ -4956,13 +4958,73 @@ TEST_F(LockstepTest, ALandOfTheEditorStartsTheRoomAgainOnTheLandForEveryComputer
 	EXPECT_EQ(_host->RefusedEditorValues(), 0u);
 }
 
+TEST_F(LockstepTest, TheMapFor32GodsOfTheEditorStartsTheRoomAgainOnTheMapWithTheFileOfTheServer)
+{
+	MakeHost(2);
+	const std::string sha256(64, 'a');
+	std::vector<server::LockstepHost::WorldChange> changes;
+	_host->SetChangeWorld([this, &changes, &sha256](const server::LockstepHost::WorldChange& change) {
+		changes.push_back(change);
+		_serverWorld = FakeWorld {};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = sha256};
+	});
+	// The map has no script of the game, so the server does not check a land name
+	uint32_t landChecks = 0;
+	_host->SetLandRefusal([&landChecks](std::string_view /*land*/) -> std::optional<std::string> {
+		++landChecks;
+		return "no land passes";
+	});
+	Computer alice(_network, _now, "god+editor:alice");
+	Computer bob(_network, _now, "god:bob");
+	Frames({&alice, &bob}, 40);
+	ASSERT_TRUE(_host->Started());
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = {}, .testbed = false, .godsRingMap = true}));
+	Frames({&alice, &bob}, 20);
+	EXPECT_EQ(landChecks, 0u);
+	ASSERT_EQ(changes.size(), 1u);
+	EXPECT_EQ(changes.front().kind, server::LockstepHost::WorldChange::Kind::Land);
+	EXPECT_TRUE(changes.front().godsRingMap);
+	EXPECT_FALSE(changes.front().testbed);
+	EXPECT_TRUE(changes.front().land.empty());
+	EXPECT_TRUE(changes.front().opening.empty());
+	// Each computer gets the start of the map with the SHA-256 of the server's file, and plays in step with the server
+	for (auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->restarts, 1u);
+		const auto& start = computer->session.GetStart();
+		ASSERT_TRUE(start.has_value());
+		EXPECT_TRUE(start->godsRingMap);
+		EXPECT_FALSE(start->testbed);
+		EXPECT_EQ(start->land, gods_ring_map_file::WireName());
+		EXPECT_EQ(start->mapSha256, sha256);
+		EXPECT_EQ(computer->world.hash, _serverWorld.hash);
+		EXPECT_TRUE(computer->desyncs.empty());
+	}
+	// A later land of the editor is a script of the game again, with no file of a map
+	_host->SetLandRefusal([](std::string_view /*land*/) -> std::optional<std::string> { return std::nullopt; });
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = false}));
+	Frames({&alice, &bob}, 20);
+	ASSERT_EQ(changes.size(), 2u);
+	for (auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->restarts, 2u);
+		EXPECT_FALSE(computer->session.GetStart()->godsRingMap);
+		EXPECT_EQ(computer->session.GetStart()->land, "Land2.txt");
+		EXPECT_TRUE(computer->session.GetStart()->mapSha256.empty());
+	}
+	// The session sends no request that names the map and a land or the testbed
+	EXPECT_FALSE(alice.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = true}));
+	EXPECT_FALSE(alice.session.SendEditorLand({.land = {}, .testbed = true, .godsRingMap = true}));
+}
+
 TEST_F(LockstepTest, TheServerTakesALandOnlyFromAPlayerWithTheEditorClaim)
 {
 	MakeHost(3);
 	uint32_t changes = 0;
 	_host->SetChangeWorld([&changes](const server::LockstepHost::WorldChange& /*change*/) {
 		++changes;
-		return server::LockstepHost::WorldChanged {.turn = std::nullopt, .refusal = "the fake world does not change"};
+		return server::LockstepHost::WorldChanged {
+		    .turn = std::nullopt, .refusal = "the fake world does not change", .mapSha256 = {}};
 	});
 	_host->SetLandRefusal([](std::string_view land) -> std::optional<std::string> {
 		return land == "Land2.txt" ? std::nullopt : std::optional<std::string>("the game has no such land");
@@ -4973,18 +5035,18 @@ TEST_F(LockstepTest, TheServerTakesALandOnlyFromAPlayerWithTheEditorClaim)
 	Frames({&alice, &bob, &carol}, 10);
 	ASSERT_TRUE(_host->Started());
 	// A player with no claim, and a player with only the debugger claim
-	ASSERT_TRUE(bob.session.SendEditorLand("Land2.txt", false));
-	ASSERT_TRUE(carol.session.SendEditorLand("Land2.txt", false));
+	ASSERT_TRUE(bob.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = false}));
+	ASSERT_TRUE(carol.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = false}));
 	Frames({&alice, &bob, &carol}, 4);
 	EXPECT_EQ(_host->RefusedEditorCommands(), 2u);
 	EXPECT_GE(bob.session.TakeEditorRefusals(), 1u);
 	EXPECT_GE(carol.session.TakeEditorRefusals(), 1u);
 	EXPECT_EQ(changes, 0u);
 	// The editor asks for a land that the game does not have, then for a land that the world of the server refuses
-	ASSERT_TRUE(alice.session.SendEditorLand("NoSuchLand.txt", false));
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = "NoSuchLand.txt", .testbed = false, .godsRingMap = false}));
 	Frames({&alice, &bob, &carol}, 2);
 	EXPECT_EQ(changes, 0u);
-	ASSERT_TRUE(alice.session.SendEditorLand("Land2.txt", false));
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = false}));
 	Frames({&alice, &bob, &carol}, 4);
 	EXPECT_EQ(changes, 1u);
 	EXPECT_EQ(_host->RefusedEditorValues(), 2u);
@@ -4992,8 +5054,8 @@ TEST_F(LockstepTest, TheServerTakesALandOnlyFromAPlayerWithTheEditorClaim)
 	EXPECT_EQ(alice.restarts, 0u);
 	EXPECT_EQ(bob.restarts, 0u);
 	// The session sends no request that names no land and no testbed, or both
-	EXPECT_FALSE(alice.session.SendEditorLand({}, false));
-	EXPECT_FALSE(alice.session.SendEditorLand("Land2.txt", true));
+	EXPECT_FALSE(alice.session.SendEditorLand({.land = {}, .testbed = false, .godsRingMap = false}));
+	EXPECT_FALSE(alice.session.SendEditorLand({.land = "Land2.txt", .testbed = true, .godsRingMap = false}));
 }
 
 TEST_F(LockstepTest, APlayerWhoWasAwayDuringALandChangeLoadsTheNewLandAndThenTheWorldOfTheServer)
@@ -5002,7 +5064,7 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringALandChangeLoadsTheNewLandAndThenThe
 	GiveWorldState();
 	_host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
 		_serverWorld = FakeWorld {};
-		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = {}};
 	});
 	Computer alice(_network, _now, "god+editor:alice");
 	Computer bob(_network, _now, "god:bob");
@@ -5012,7 +5074,7 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringALandChangeLoadsTheNewLandAndThenThe
 	Frames({&alice}, 1);
 	bob.Frame();
 	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Reconnecting);
-	ASSERT_TRUE(alice.session.SendEditorLand("Land2.txt", false));
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = false}));
 	Frames({&alice}, 20);
 	ASSERT_EQ(alice.restarts, 1u);
 	EXPECT_TRUE(_host->Seats()[1].missedWorldChange);
@@ -5038,6 +5100,39 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringALandChangeLoadsTheNewLandAndThenThe
 	EXPECT_EQ(seat.compares.compared, seat.compares.same);
 }
 
+// A long load of the new land on the server can outlast the patience of a client: the client closes its socket while the
+// server loads, and asks to resume from a turn of the old land
+TEST_F(LockstepTest, APlayerWhoLostTheConnectionDuringTheLoadOfALandComesBackOnTheNewLand)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(_network, _now, "god+editor:alice");
+	Computer bob(_network, _now, "god:bob");
+	_host->SetChangeWorld([this, &bob](const server::LockstepHost::WorldChange& /*change*/) {
+		// The socket of bob closes while the server loads the land
+		_network.Cut(bob.sockets->Ids().back());
+		_serverWorld = FakeWorld {};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = {}};
+	});
+	Frames({&alice, &bob}, 40);
+	ASSERT_TRUE(_host->Started());
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = false}));
+	Frames({&alice}, 20);
+	ASSERT_EQ(alice.restarts, 1u);
+	EXPECT_TRUE(_host->Seats()[1].missedWorldChange);
+	EXPECT_FALSE(_host->Seats()[1].oldWorldChecksums);
+	Frames({&alice, &bob}, 40);
+	// The client of bob got the start of the land and the world of the server, and the server did not refuse it
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.restarts, 1u);
+	EXPECT_EQ(bob.loads, 1u);
+	ASSERT_TRUE(bob.session.GetStart().has_value());
+	EXPECT_EQ(bob.session.GetStart()->land, "Land2.txt");
+	EXPECT_EQ(bob.world.hash, _serverWorld.hash);
+	EXPECT_TRUE(bob.desyncs.empty());
+	EXPECT_FALSE(_host->Seats()[1].missedWorldChange);
+}
+
 // The snapshots of a room that changed its land keep the start of the command line. A server that continues the game
 // from such a snapshot sends the land of the room to a player who was away, before the world of the server.
 TEST_F(LockstepTest, ARestoredServerSendsTheLandOfTheRoomToAPlayerWhoWasAwayAtTheLandChange)
@@ -5047,7 +5142,7 @@ TEST_F(LockstepTest, ARestoredServerSendsTheLandOfTheRoomToAPlayerWhoWasAwayAtTh
 	KeepJournal();
 	_host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
 		_serverWorld = FakeWorld {};
-		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = {}};
 	});
 	Computer alice(_network, _now, "god+editor:alice");
 	Computer bob(_network, _now, "god:bob");
@@ -5057,7 +5152,7 @@ TEST_F(LockstepTest, ARestoredServerSendsTheLandOfTheRoomToAPlayerWhoWasAwayAtTh
 	_network.Cut(bob.sockets->Ids().back());
 	Frames({&alice}, 1);
 	bob.Frame();
-	ASSERT_TRUE(alice.session.SendEditorLand("Land2.txt", false));
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = false}));
 	Frames({&alice}, 20);
 	ASSERT_EQ(alice.restarts, 1u);
 	ASSERT_EQ(bob.restarts, 0u);
@@ -5118,7 +5213,7 @@ TEST_F(LockstepTest, APlayerWhoWasAwayAtAScenarioStartComesBackAfterMoreTurnsTha
 	_host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
 		_serverWorld = FakeWorld {};
 		_serverWorld.mindFileHere = [this](uint64_t hash) { return !_host->EditorMindFile(hash).empty(); };
-		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = {}};
 	});
 	Computer alice(_network, _now, "god+editor:alice");
 	Computer bob(_network, _now, "god:bob");
@@ -5155,7 +5250,7 @@ TEST_F(LockstepTest, TheServerKeepsTheTurnsOfAScenarioOnlyWhileTheAwayPlayerCanC
 	MakeHost(2, 2'000'000);
 	_host->SetChangeWorld([this](const server::LockstepHost::WorldChange& /*change*/) {
 		_serverWorld = FakeWorld {};
-		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = {}};
 	});
 	Computer alice(_network, _now, "god+editor:alice");
 	Computer bob(_network, _now, "god:bob");

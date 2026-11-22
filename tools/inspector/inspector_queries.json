@@ -2600,6 +2600,11 @@
     "type": "boolean"
    },
    {
+    "description": "The network map for 32 gods in place of a land",
+    "name": "gods_ring_map",
+    "type": "boolean"
+   },
+   {
     "description": "Send also when the editor is refused",
     "name": "force",
     "type": "boolean"

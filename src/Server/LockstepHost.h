@@ -269,7 +269,8 @@ public:
 			WorldFile,
 			/// The room starts again on the testbed with a testbed scenario
 			Scenario,
-			/// The room starts again on a land, or on the testbed with no scenario, as the Load Island menu asks
+			/// The room starts again on a land, on the testbed with no scenario, or on the map for 32 gods, as the Load
+			/// Island menu asks
 			Land,
 		};
 		Kind kind {Kind::WorldFile};
@@ -277,10 +278,12 @@ public:
 		std::vector<uint8_t> file;
 		/// The id of the scenario
 		std::string scenario;
-		/// The script of the land, as the start names it. Empty for the testbed.
+		/// The script of the land, as the start names it. Empty for the testbed and the map for 32 gods.
 		std::string land;
 		/// The room starts again on the testbed, with a scenario or with no scenario
 		bool testbed {false};
+		/// The room starts again on the network map for 32 gods
+		bool godsRingMap {false};
 		/// How the new game on the land starts, as the start names it. Empty for the testbed.
 		std::string opening;
 		/// The name of the player who asked for the change
@@ -296,6 +299,9 @@ public:
 	{
 		std::optional<uint32_t> turn;
 		std::string refusal;
+		/// The SHA-256 of the file of the map for 32 gods that the world loaded, as 64 hexadecimal digits. Empty for
+		/// every other change.
+		std::string mapSha256;
 	};
 
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,

@@ -1000,6 +1000,10 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 	      .description = "The script of the land, as a start names it (for example Land2.txt)",
 	      .required = false},
 	     {.name = "testbed", .type = "boolean", .description = "The testbed in place of a land", .required = false},
+	     {.name = "gods_ring_map",
+	      .type = "boolean",
+	      .description = "The network map for 32 gods in place of a land",
+	      .required = false},
 	     {.name = "force", .type = "boolean", .description = "Send also when the editor is refused", .required = false}});
 	land.writes = true;
 	provider->Add(std::move(land), [](const QueryContext& context) {
@@ -1008,19 +1012,25 @@ std::unique_ptr<ProviderInterface> EditorProvider()
 			return *refused;
 		}
 		const auto landParam = context.params.find("land");
-		const auto testbedParam = context.params.find("testbed");
-		const bool testbed = testbedParam != context.params.end() && testbedParam->is_boolean() && testbedParam->get<bool>();
-		const auto name =
-		    landParam != context.params.end() && landParam->is_string() ? landParam->get<std::string>() : std::string();
-		if (name.empty() == !testbed)
+		const auto flag = [&context](const char* key) {
+			const auto param = context.params.find(key);
+			return param != context.params.end() && param->is_boolean() && param->get<bool>();
+		};
+		const game_socket::EditorLand request {
+		    .land = landParam != context.params.end() && landParam->is_string() ? landParam->get<std::string>() : std::string(),
+		    .testbed = flag("testbed"),
+		    .godsRingMap = flag("gods_ring_map"),
+		};
+		if (!game_socket::NamesOneLand(request))
 		{
-			return QueryResult::Error("editor.land needs the name of a land or testbed true, not both");
+			return QueryResult::Error("editor.land needs one of the name of a land, testbed true and gods_ring_map true");
 		}
-		if (!Locator::networkGame::has_value() || !Locator::networkGame::value().SendEditorLand(name, testbed))
+		if (!Locator::networkGame::has_value() || !Locator::networkGame::value().SendEditorLand(request))
 		{
 			return QueryResult::Error("the game socket is not open: the request did not go");
 		}
-		return QueryResult::Value({{"sent", true}, {"land", name}, {"testbed", testbed}});
+		return QueryResult::Value(
+		    {{"sent", true}, {"land", request.land}, {"testbed", request.testbed}, {"gods_ring_map", request.godsRingMap}});
 	});
 	auto scriptAct = Query(
 	    "script",
