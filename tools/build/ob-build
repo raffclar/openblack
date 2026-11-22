@@ -439,7 +439,8 @@ stop_sccache() {
 }
 
 # The number of build jobs: CMAKE_BUILD_PARALLEL_LEVEL (8), fewer when free memory is low (see the top of this file)
-free_memory_mb() { awk '/^MemFree:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null; }
+# Memory that is free to use: MemAvailable, else MemFree plus Cached, else MemFree (cached memory is freed on demand)
+free_memory_mb() { awk '/^MemAvailable:/ { a = $2 } /^MemFree:/ { f = $2 } /^Cached:/ { c = $2 } END { if (a != "") print int(a / 1024); else if (f != "" && c != "") print int((f + c) / 1024); else if (f != "") print int(f / 1024) }' /proc/meminfo 2>/dev/null; }
 
 build_jobs() {
 	local wanted=${CMAKE_BUILD_PARALLEL_LEVEL:-8}

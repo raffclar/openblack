@@ -229,7 +229,7 @@ web_run_in_job() {
 web_jobs() {
 	local wanted=${OB_WEB_JOBS:-8} free jobs
 	case "$wanted" in '' | *[!0-9]*) wanted=8 ;; esac
-	free=$(awk '/^MemFree:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)
+	free=$(awk '/^MemAvailable:/ { a = $2 } /^MemFree:/ { f = $2 } /^Cached:/ { c = $2 } END { if (a != "") print int(a / 1024); else if (f != "" && c != "") print int((f + c) / 1024); else if (f != "") print int(f / 1024) }' /proc/meminfo 2>/dev/null)
 	if [ "${OB_MEMORY_JOBS:-1}" = 0 ] || [ -z "$free" ]; then
 		echo "$wanted"
 		return 0
