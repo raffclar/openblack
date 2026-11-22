@@ -1507,7 +1507,7 @@ void TempleInterior::UpdateMapSpells()
 		    casts.push_back({
 		        .spell = entity,
 		        .seed = *seed,
-		        .mapPoint = origin + _map.MarkerPosition(glm::vec2(spell.position.x, spell.position.z)),
+		        .mapPoint = origin + _map.MarkerPosition(map_coords::ToMetres(spell.place)),
 		        .player = player,
 		        .ownerAlignment = alignment != nullptr ? alignment->GetPlayerAlignment(player) : 0.0f,
 		        .holderParticle = seedInfo.holderParticle,

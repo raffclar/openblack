@@ -137,9 +137,17 @@ float teleport::JumpCost(float saving, float costPerKilometre)
 
 bool teleport::CanPlaceStone(glm::vec3 point, std::span<const glm::vec3> fixedObjects)
 {
+	return CanPlaceStoneAt(openblack::map_coords::MapCoords {.x = Fixed(point.x), .z = Fixed(point.z)}, fixedObjects);
+}
+
+bool teleport::CanPlaceStoneAt(const map_coords::MapCoords& place, std::span<const glm::vec3> fixedObjects)
+{
 	// The game measures from the place of each thing in whole map units, as it measures a jump
-	return std::ranges::none_of(fixedObjects,
-	                            [point](glm::vec3 object) { return JumpDistance(point, object) < k_StoneRadius; });
+	const openblack::map_coords::MapCoords at {.x = place.x, .z = place.z};
+	return std::ranges::none_of(fixedObjects, [&at](glm::vec3 object) {
+		return openblack::gutils::GetDistanceInMetres(
+		           at, openblack::map_coords::MapCoords {.x = Fixed(object.x), .z = Fixed(object.z)}) < k_StoneRadius;
+	});
 }
 
 std::optional<size_t> teleport::FindRouteStone(glm::vec3 worshipper, glm::vec3 site, std::span<const glm::vec3> stones,

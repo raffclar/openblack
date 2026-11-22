@@ -603,7 +603,12 @@ void MagicShieldSystem::ShieldStruck(entt::entity spell, bool destroyed)
 	auto& shieldObject = registry.Get<MagicShield>(object);
 	// The reactions to the strikes and to the fall are at the place of the miracle
 	const auto* miracle = registry.Valid(spell) ? registry.TryGet<const Spell>(spell) : nullptr;
-	const auto position = miracle != nullptr ? miracle->position : registry.Get<const Transform>(object).position;
+	const auto miraclePoint = [](const map_coords::MapCoords& place) {
+		return Locator::terrainSystem::has_value()
+		           ? map_coords::ToWorld(Locator::terrainSystem::value(), place)
+		           : glm::vec3(map_coords::ToMetres(place.x), place.altitude, map_coords::ToMetres(place.z));
+	};
+	const auto position = miracle != nullptr ? miraclePoint(miracle->place) : registry.Get<const Transform>(object).position;
 	if (destroyed)
 	{
 		// Its people no longer react to it standing, but to its fall

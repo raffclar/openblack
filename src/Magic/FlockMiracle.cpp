@@ -27,6 +27,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "FlockMiracleRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -178,10 +179,10 @@ void FlockMiracle::ProcessTurn(SpellServicesInterface& services, Spell& spell)
 	}
 	auto& animals = Locator::animalSystem::value();
 	auto& registry = EntityRegistry();
-	// The miracle is where its leader is
+	// The miracle takes the map position of its leader, with the altitude of the leader
 	if (const auto leader = animals.LeaderOf(data->flock); leader != entt::null)
 	{
-		spell.position = registry.Get<const ecs::components::Transform>(leader).position;
+		spell.place = ecs::thing_map_place::OfWithAltitude(registry, leader);
 	}
 	// The hand's trail closes down in the turn after the last animal was made, also after the miracle is over
 	const bool trailStops =
@@ -283,7 +284,7 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 		{
 			continue;
 		}
-		if (spell.humanCasting && !ignoreInfluence && !world.InInfluence(spell.caster.player, spell.position))
+		if (spell.humanCasting && !ignoreInfluence && !world.InInfluenceAt(spell.caster.player, spell.place))
 		{
 			continue;
 		}

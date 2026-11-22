@@ -216,13 +216,15 @@ bool TeleportSystem::LoadState(reflection::BinaryReader& in)
 	return !in.Failed();
 }
 
-entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, entt::entity spell)
+entt::entity TeleportSystem::CreateStone(const map_coords::MapCoords& place, PlayerNames player, entt::entity spell)
 {
-	if (!CanPlaceStone(point))
+	if (!CanPlaceStone(place))
 	{
 		return entt::null;
 	}
-	return RestoreStone(point, player, spell);
+	// The stone stands on the land at the map position
+	const auto xz = map_coords::ToMetres(place);
+	return RestoreStone({xz.x, 0.0f, xz.y}, player, spell);
 }
 
 entt::entity TeleportSystem::RestoreStone(glm::vec3 point, PlayerNames player, entt::entity spell)
@@ -344,7 +346,7 @@ void TeleportSystem::RemoveStonesOf(entt::entity spell)
 	}
 }
 
-bool TeleportSystem::CanPlaceStone(glm::vec3 point) const
+bool TeleportSystem::CanPlaceStone(const map_coords::MapCoords& place) const
 {
 	// Anything that stands fixed over several of the map's cells: buildings and fields, wonders, features, the things that
 	// stand still and dead trees, big forests, the temple, its worship sites, the miracle dispensers, the village
@@ -380,7 +382,7 @@ bool TeleportSystem::CanPlaceStone(glm::vec3 point) const
 	registry.Each<const FishFarm, const Transform>([&](entt::entity e, const FishFarm&, const Transform& t) { add(e, t); });
 	registry.Each<const FootballPitch, const Transform>(
 	    [&](entt::entity e, const FootballPitch&, const Transform& t) { add(e, t); });
-	return teleport::CanPlaceStone(point, fixed);
+	return teleport::CanPlaceStoneAt(place, fixed);
 }
 
 std::vector<entt::entity> TeleportSystem::GetStones(PlayerNames player) const

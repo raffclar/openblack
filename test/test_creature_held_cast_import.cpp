@@ -129,7 +129,7 @@ protected:
 	{
 		return {
 		    .type = MagicType::Water,
-		    .position = {10.0f, 2.0f, 20.0f},
+		    .place = {.x = map_coords::ToFixed(10.0f), .z = map_coords::ToFixed(20.0f), .altitude = 2.0f},
 		    .chants = 30.0f,
 		    .initialChants = 50.0f,
 		    .closedDown = false,
@@ -172,7 +172,7 @@ TEST_F(CreatureHeldCastImport, TheCreatureHoldsTheSpellWithTheValuesOfTheFile)
 	EXPECT_EQ(made.chants.chants, 30.0f);
 	EXPECT_EQ(made.chants.initialChants, 50.0f);
 	EXPECT_EQ(made.lastRipple, 2.0f);
-	EXPECT_EQ(made.position, glm::vec3(10.0f, 2.0f, 20.0f));
+	EXPECT_EQ(made.place, Water().place);
 	EXPECT_EQ(made.processInfo.handPosition, glm::vec3(10.0f, 12.0f, 20.0f));
 	EXPECT_EQ(made.processInfo.power, 0.75f);
 	EXPECT_FALSE(made.closedDown);
@@ -498,10 +498,10 @@ TEST_F(CreatureHeldCastImport, TheSpellKeepsTheMapPositionsOfTheFileWhereItWasCa
 	const auto& made = SpellOf(spell);
 	EXPECT_EQ(made.castPlace, k_Moved);
 	EXPECT_EQ(made.originalCastPlace, k_First);
-	EXPECT_EQ(made.position, glm::vec3(10.0f, 2.0f, 20.0f));
+	EXPECT_EQ(made.place, Water().place);
 }
 
-// A spell of a file without the map positions where it was cast takes the map position of its point for both
+// A spell of a file without the map positions where it was cast takes the map position where it acts now for both
 TEST_F(CreatureHeldCastImport, ASpellWithoutTheMapPositionsTakesTheMapPositionOfItsPoint)
 {
 	const auto spell = _magic->ImportCreatureCast(_creature, Water());
@@ -522,6 +522,5 @@ TEST_F(CreatureHeldCastImport, AMiracleCastAtAMapPositionKeepsItExactly)
 	const auto& made = SpellOf(spell);
 	EXPECT_EQ(made.castPlace, k_Place);
 	EXPECT_EQ(made.originalCastPlace, k_Place);
-	EXPECT_EQ(made.position.x, map_coords::ToMetres(k_Place.x));
-	EXPECT_EQ(made.position.z, map_coords::ToMetres(k_Place.z));
+	EXPECT_EQ(made.place, k_Place);
 }

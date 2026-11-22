@@ -212,10 +212,10 @@ bool spells::CanCastAt(SpellServicesInterface& services, MagicType type, PlayerN
 	case CastRuleType::Anywhere:
 		break;
 	}
-	return MeetsKindRuleAt(services, type, point);
+	return MeetsKindRuleAt(services, type, map_coords::FromMetres({point.x, point.z}));
 }
 
-bool spells::MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, glm::vec3 point)
+bool spells::MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, const map_coords::MapCoords& place)
 {
 	auto& world = services.World();
 	switch (ClassOf(type))
@@ -223,16 +223,15 @@ bool spells::MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, g
 	case SpellClass::Heal:
 	{
 		const auto reach = HealReachOf(services.Info(), type, 1.0f);
-		return reach.has_value() &&
-		       !world.HealTargets(map_coords::FromMetres({point.x, point.z}), reach->radius, reach->maximum).empty();
+		return reach.has_value() && !world.HealTargets(place, reach->radius, reach->maximum).empty();
 	}
 	case SpellClass::Resource:
-		return world.IsLand(point);
+		return world.IsLandAt(place);
 	case SpellClass::Teleport:
 		// Not where something stands fixed on the land, a building, a field or another stone
-		return services.CanPlaceTeleportStone(point);
+		return services.CanPlaceTeleportStone(place);
 	case SpellClass::Forest:
-		return world.InBounds(point) && world.IsLand(point) && services.ForestCanGrowAt(point);
+		return world.InBoundsAt(place) && world.IsLandAt(place) && services.ForestCanGrowAt(place);
 	case SpellClass::Creature:
 		return false;
 	default:
@@ -240,7 +239,7 @@ bool spells::MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, g
 	}
 }
 
-bool spells::MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, glm::vec3 position)
+bool spells::MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, const map_coords::MapCoords& place)
 {
 	switch (ClassOf(type))
 	{
@@ -251,13 +250,13 @@ bool spells::MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, g
 		// The cast on a creature has its own test
 		return true;
 	default:
-		return MeetsKindRuleAt(services, type, position);
+		return MeetsKindRuleAt(services, type, place);
 	}
 }
 
 bool spells::CanCastAtPointItself(SpellServicesInterface& services, MagicType type, glm::vec3 point)
 {
-	return MeetsKindRuleAt(services, type, point);
+	return MeetsKindRuleAt(services, type, map_coords::FromMetres({point.x, point.z}));
 }
 
 void spells::Prepare(SpellServicesInterface& services, Spell& spell)
@@ -346,9 +345,9 @@ bool spells::ApplyDefaultEffect(SpellServicesInterface& services, Spell& spell, 
 		return false;
 	}
 	auto& world = services.World();
-	// The event's point is taken on the land under it
-	const glm::vec3 point(event.position.x, world.LandHeight({event.position.x, event.position.z}), event.position.z);
-	spell.position = point;
+	// The miracle now acts at the map position of the event, on the land
+	spell.place = {.x = map_coords::ToFixed(event.position.x), .z = map_coords::ToFixed(event.position.z), .altitude = 0.0f};
+	const auto point = world.PointOf(spell.place);
 	auto values = EffectValues::From(GetMagicEffectInfo(services.Info(), spell.magicType));
 	const float strength = PayEvent(services, spell);
 	if (!(strength > 0.0f))
