@@ -734,6 +734,8 @@ private:
 	/// The camera icons of the world camera's last frame or of a demonstration's recording, before the draw takes away
 	/// the camera icons that the hand does not show (hand_tricons::icon)
 	uint32_t _cameraIcons {0};
+	/// How many milliseconds more the red cross stays hidden after the interface last hid it
+	int32_t _crossHideMs {0};
 	/// How far from the camera the hand holds while it drags by the edge of the screen
 	Zoomer _handHoldZoomer;
 	/// The land the hand grips while it drags it, and where the hand was when it gripped

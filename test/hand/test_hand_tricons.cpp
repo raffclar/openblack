@@ -353,6 +353,51 @@ TEST(HandTricons, TheCrossBrightensWithAThingUnderTheHandAndAtOnceWithTheAction)
 	EXPECT_FLOAT_EQ(fades[3], 1.0f);
 }
 
+TEST(HandTricons, TheInterfaceHidesTheCrossAtOnceEvenWithTheAction)
+{
+	Fades fades {};
+	Fade(fades, {.icons = icon::k_Cross, .seconds = 1.0f});
+	EXPECT_FLOAT_EQ(fades[3], 0.2f);
+	Fade(fades, {.icons = icon::k_Cross, .seconds = 0.01f, .crossNudge = CrossNudge::Action, .crossHidden = true});
+	EXPECT_FLOAT_EQ(fades[3], 0.0f);
+}
+
+TEST(HandTricons, TheEmptyHandHidesTheCrossOverTheRopeTheBubbleAndAThingItCanUse)
+{
+	EXPECT_FALSE(HidesCross({}));
+	EXPECT_TRUE(HidesCross({.overRope = true}));
+	EXPECT_TRUE(HidesCross({.overBubble = true}));
+	EXPECT_TRUE(HidesCross({.overThing = true}));
+	// Out of the influence, only a thing that needs no influence hides it
+	EXPECT_FALSE(HidesCross({.overThing = true, .handInInfluence = false}));
+	EXPECT_TRUE(HidesCross({.overThing = true, .handInInfluence = false, .thingNeedsNoInfluence = true}));
+	// A hand that holds something keeps the cross
+	EXPECT_FALSE(HidesCross({.handHolds = true, .overRope = true}));
+	EXPECT_FALSE(HidesCross({.handHolds = true, .overThing = true}));
+}
+
+TEST(HandTricons, TheWaitsOfTheInterfaceHideTheCrossItsOtherStatesKeepIt)
+{
+	EXPECT_TRUE(HidesCross({.waitHides = true, .handHolds = true}));
+	EXPECT_FALSE(HidesCross({.stateKeeps = true, .overRope = true}));
+	// Not with the interface off, and not in the temple
+	EXPECT_FALSE(HidesCross({.interfaceActive = false, .waitHides = true}));
+	EXPECT_FALSE(HidesCross({.inTemple = true, .overRope = true}));
+}
+
+TEST(HandTricons, TheCrossStaysHiddenForAQuarterOfASecondOfRealTime)
+{
+	auto hideMs = HoldCrossHide(0, true);
+	EXPECT_EQ(hideMs, 250);
+	// A longer time stays
+	EXPECT_EQ(HoldCrossHide(300, true), 300);
+	EXPECT_EQ(HoldCrossHide(100, false), 100);
+	hideMs = CountCrossHide(hideMs, 16);
+	EXPECT_EQ(hideMs, 234);
+	EXPECT_EQ(CountCrossHide(hideMs, 1000), 0);
+	EXPECT_EQ(CountCrossHide(0, 16), 0);
+}
+
 TEST(HandTricons, TheIconsAreAPartOfTheFocalLength)
 {
 	// A 70 degree field of view across

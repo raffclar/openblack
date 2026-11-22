@@ -142,10 +142,51 @@ struct FadeFrame
 	/// The world camera is moving the view itself: the icons in use show a little dimmer
 	bool cameraBusy {false};
 	CrossNudge crossNudge {CrossNudge::None};
+	/// The interface hides the cross for a short time (see HidesCross): it goes at once
+	bool crossHidden {false};
 };
 /// The icons fade towards their strength: in at the fade speed, out at the fade speed (the cross falling slowly to a
 /// faint mark)
 void Fade(Fades& fades, const FadeFrame& frame);
+
+/// What the interface does with the player's hand in a frame, which can hide the red cross for a short time
+struct CrossHideFacts
+{
+	/// The interface takes the player's input, and the player is out of the temple
+	bool interfaceActive {true};
+	bool inTemple {false};
+	/// The interface waits in a state of its own that hides the cross: a box of the front end takes the mouse, the
+	/// interface waits for a gift or for the take of a thing, or the hand grips the tip bubble
+	bool waitHides {false};
+	/// The interface is in a state of its own that keeps the cross: the hand grips the land, holds a thing in a lock,
+	/// is about to throw, or directs the fight of the player's creature with no press held
+	bool stateKeeps {false};
+	/// The hand holds a thing or a miracle
+	bool handHolds {false};
+	/// The rope of the leash is under the cursor or in the hand
+	bool overRope {false};
+	/// The help's text bubble is under the cursor, and no thing is
+	bool overBubble {false};
+	/// A thing that the hand can interact with is under the cursor
+	bool overThing {false};
+	/// The hand is in its player's influence
+	bool handInInfluence {true};
+	/// The thing under the cursor takes the hand also out of the influence: a highlight of the scripts
+	bool thingNeedsNoInfluence {false};
+};
+/// Whether the interface hides the cross this frame, by these rules in turn:
+/// 1. Not while the interface is off, and not in the temple.
+/// 2. A wait of the interface that hides the cross hides it. Another state of the interface keeps it.
+/// 3. A hand that holds something keeps it.
+/// 4. The empty hand hides it over the rope of the leash, over the text bubble, and over a thing that it can interact
+///    with, when the hand is in the influence or the thing needs no influence.
+[[nodiscard]] bool HidesCross(const CrossHideFacts& facts);
+/// Each frame that the interface hides the cross, the cross stays hidden for this many milliseconds at least
+constexpr int32_t k_CrossHideMs = 250;
+/// The time of the cross's hide after a pass of the interface: at least k_CrossHideMs when the interface hides it
+[[nodiscard]] int32_t HoldCrossHide(int32_t hideMs, bool hides);
+/// The time of the cross's hide after a step of the world camera: less the real time of the frame, not below zero
+[[nodiscard]] int32_t CountCrossHide(int32_t hideMs, int32_t realFrameMs);
 
 /// The point of the world the icons are anchored to: the posed hand's first bone, at its wrist, rather than the point
 /// the hand hovers at (which its fingertips reach). `position`, `rotation` and `scale` place the hand's model, `bones`
