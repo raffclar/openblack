@@ -47,3 +47,8 @@ std::optional<water_rings::Ring> swimmer_rules::Ring(int32_t& timer, int32_t fra
 	                          .cell = k_RingCell,
 	                          .argb = k_RingColour};
 }
+
+glm::vec3 swimmer_rules::RingPlace(const glm::mat4& model, const glm::mat4& bone)
+{
+	return glm::vec3(model * bone[3]);
+}
