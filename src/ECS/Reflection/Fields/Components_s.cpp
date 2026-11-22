@@ -199,7 +199,7 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Spell::age>("age")
 	    .Field<&components::Spell::duration>("duration")
 	    .Field<&components::Spell::magnitude>("magnitude")
-	    .Field<&components::Spell::position>("position")
+	    .Field<&components::Spell::place>("place")
 	    .Field<&components::Spell::castPlace>("castPlace")
 	    .Field<&components::Spell::originalCastPlace>("originalCastPlace")
 	    .Field<&components::Spell::direction>("direction")

@@ -727,8 +727,7 @@ bool computer_world::OwnCastAt(const RuleContext& context, const map_coords::Map
 		{
 			continue;
 		}
-		const map_coords::MapCoords at {
-		    .x = map_coords::ToFixed(spell->position.x), .z = map_coords::ToFixed(spell->position.z), .altitude = 0.0f};
+		const map_coords::MapCoords at {.x = spell->place.x, .z = spell->place.z, .altitude = 0.0f};
 		if (computer_mind_rules::SameCastPlace(at, place))
 		{
 			return true;

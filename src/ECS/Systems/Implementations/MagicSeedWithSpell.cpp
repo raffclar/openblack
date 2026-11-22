@@ -166,7 +166,7 @@ void MagicSystem::KeepSeedInInfluence(entt::entity spellEntity, const Spell& spe
 	else
 	{
 		// Out of the hand, only the frames move a seed that follows its miracle
-		position = magic::PlaceForInfluence(position, seed->followsSpell, spell.position);
+		position = magic::PlaceForInfluence(position, seed->followsSpell, _world.PointOf(spell.place));
 	}
 	if (magic::ClosesOutOfInfluence(SeedShownWithSpell(*seed, spell), _world.InInfluence(seed->player, position),
 	                                spell.closedDown))
@@ -239,9 +239,10 @@ void MagicSystem::ShowSeedsWithSpells()
 		{
 			continue;
 		}
-		// It stays with its miracle across the land
-		transform->position.x = spell->position.x;
-		transform->position.z = spell->position.z;
+		// It stays with its miracle across the land, at the map position of the miracle
+		const auto xz = map_coords::ToMetres(spell->place);
+		transform->position.x = xz.x;
+		transform->position.z = xz.y;
 		// Only a seed that the turn shows has its model
 		if (!registry.AllOf<Mesh>(entity))
 		{

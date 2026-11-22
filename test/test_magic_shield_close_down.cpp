@@ -57,7 +57,7 @@ public:
 		Locator::entitiesRegistry::value().Destroy(spell);
 	}
 	[[nodiscard]] bool CanCastAt(MagicType, PlayerNames, glm::vec3) override { return false; }
-	[[nodiscard]] bool MeetsKindRule(MagicType, glm::vec3, bool) override { return false; }
+	[[nodiscard]] bool MeetsKindRule(MagicType, const map_coords::MapCoords&, bool) override { return false; }
 	bool SpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
 	void PayForSpell(entt::entity, float) override {}
 	entt::entity CreateDispenser(glm::vec3, MagicType, float) override { return entt::null; }
@@ -342,7 +342,7 @@ TEST_F(ShieldCloseDown, TheFallOfADomeThatTheWorldDestroysIsAReactionOfItsMiracl
 	const auto spell = Cast(MagicType::PhysicalShield);
 	// The miracle's last event was at another place than its cast
 	constexpr glm::vec3 k_Strike {510.0f, 0.0f, 495.0f};
-	registry.Get<Spell>(spell).position = k_Strike;
+	registry.Get<Spell>(spell).place = map_coords::FromMetres({k_Strike.x, k_Strike.z});
 	_shields.ProcessTurn();
 	const auto object = _shields.ObjectOf(spell);
 	ASSERT_NE(object, static_cast<entt::entity>(entt::null));

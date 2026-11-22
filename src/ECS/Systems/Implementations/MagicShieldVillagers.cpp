@@ -229,7 +229,10 @@ std::optional<glm::vec3> MagicShieldSystem::CentreOf(const ShieldReaction& react
 		const auto miracle = MiracleOf(reaction);
 		if (const auto* spell = registry.Valid(miracle) ? registry.TryGet<const Spell>(miracle) : nullptr; spell != nullptr)
 		{
-			return spell->position;
+			const auto& place = spell->place;
+			return Locator::terrainSystem::has_value()
+			           ? map_coords::ToWorld(Locator::terrainSystem::value(), place)
+			           : glm::vec3(map_coords::ToMetres(place.x), place.altitude, map_coords::ToMetres(place.z));
 		}
 	}
 	if (!registry.Valid(reaction.object) || registry.AllOf<Spell>(reaction.object))

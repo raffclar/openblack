@@ -77,8 +77,8 @@ public:
 	[[nodiscard]] virtual FlockMiracleInterface* Flocks() { return nullptr; }
 	/// The teleport's stone for the miracle at where it was cast, none if one may not go there
 	virtual entt::entity CreateTeleportStone(const ecs::components::Spell& /*spell*/) { return entt::null; }
-	/// Whether a teleport stone may go at a point: nothing fixed on the land within its reach
-	[[nodiscard]] virtual bool CanPlaceTeleportStone(glm::vec3 /*point*/) const { return true; }
+	/// Whether a teleport stone may go at a map position: nothing fixed on the land within its reach
+	[[nodiscard]] virtual bool CanPlaceTeleportStone(const map_coords::MapCoords& /*place*/) const { return true; }
 	/// A shield was struck by another miracle and stood, or was destroyed: the people about it see it
 	virtual void ShieldStruck(const ecs::components::Spell& /*shield*/, bool /*destroyed*/) {}
 	/// Whether what a miracle made in the world still stands: a shield's dome, a forest's trees
@@ -87,8 +87,8 @@ public:
 	[[nodiscard]] virtual bool LostWorldObjects(const ecs::components::Spell& /*spell*/) const { return false; }
 	/// The forest plants its trees round where it was cast; whether it planted any
 	virtual bool PlantForest(ecs::components::Spell& /*spell*/) { return false; }
-	/// Whether a forest may be cast at a point: there is room for a tree, and no building's fire there
-	[[nodiscard]] virtual bool ForestCanGrowAt(glm::vec3 /*point*/) const { return true; }
+	/// Whether a forest may be cast at a map position: there is room for a tree, and no building's fire there
+	[[nodiscard]] virtual bool ForestCanGrowAt(const map_coords::MapCoords& /*place*/) const { return true; }
 	/// The miracle's own entity, none where there are no entities
 	[[nodiscard]] virtual entt::entity SpellEntity(const ecs::components::Spell& /*spell*/) const { return entt::null; }
 	/// The trees that the forest of a forest miracle has at this moment, 0 when it has no forest. Without a forest
@@ -156,17 +156,17 @@ namespace spells
 /// forest land)
 [[nodiscard]] bool CanCastAt(SpellServicesInterface& services, MagicType type, PlayerNames player, glm::vec3 point,
                              bool ignoreInfluence);
-/// Whether the kind of a miracle lets it go at a point, with no cast rule and no influence:
+/// Whether the kind of a miracle lets it go at a map position, with no cast rule and no influence:
 /// - A heal needs someone to heal.
 /// - Food and wood need land.
 /// - A teleport needs a place for its stone.
 /// - A forest needs land in the map where trees can grow.
 /// - A creature spell never goes at a point.
 /// The other kinds go to any place.
-[[nodiscard]] bool MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, glm::vec3 point);
-/// Whether the kind of a miracle lets it go on a thing at the position. A forest never goes on a thing. A creature spell
-/// has the test of its cast on a creature. The other kinds use the test at the position of the thing.
-[[nodiscard]] bool MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, glm::vec3 position);
+[[nodiscard]] bool MeetsKindRuleAt(SpellServicesInterface& services, MagicType type, const map_coords::MapCoords& place);
+/// Whether the kind of a miracle lets it go on a thing at the map position of the thing. A forest never goes on a thing. A
+/// creature spell has the test of its cast on a creature. The other kinds use the test at the map position of the thing.
+[[nodiscard]] bool MeetsKindRuleOn(SpellServicesInterface& services, MagicType type, const map_coords::MapCoords& place);
 /// Whether a creature can cast a miracle at a point, with no cast rule and no influence. The test is the test of the kind
 /// at a point: food and wood need land, a teleport needs a place for its stone, and a creature spell never goes there.
 /// A cast on a thing uses the same test at the position of the thing.

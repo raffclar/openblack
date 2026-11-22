@@ -360,9 +360,9 @@ entt::entity MagicSystem::MakeImportedCast(const SpellCaster& caster, const magi
 	    .duration = cast.duration,
 	    .maxObjectsToCreate = -1,
 	};
-	// The spell keeps the map position where it was cast. A file without it gives the map position of the point of the
-	// spell.
-	const auto place = cast.castPlace.value_or(PlaceOfPoint(cast.position));
+	// The spell keeps the map position where it was cast. A file without it gives the map position where the spell acts
+	// now.
+	const auto place = cast.castPlace.value_or(cast.place);
 	// The effect continues from its state in the file. When that state does not agree with the particle file, the
 	// effect starts from its start.
 	auto spell = MakeSpell(cast.type, caster, place, data, cast.processInfo, cast.effect);
@@ -381,7 +381,7 @@ entt::entity MagicSystem::MakeImportedCast(const SpellCaster& caster, const magi
 	// The miracle continues with the prayer power, the age and the size of the file. The size of the file is the size
 	// after the limits of the cast.
 	auto& made = registry.Get<Spell>(spell);
-	made.position = cast.position;
+	made.place = cast.place;
 	made.originalCastPlace = cast.originalCastPlace.value_or(place);
 	made.chants.chants = cast.chants;
 	made.chants.initialChants = cast.initialChants;

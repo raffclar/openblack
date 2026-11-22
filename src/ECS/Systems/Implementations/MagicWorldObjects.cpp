@@ -94,9 +94,9 @@ bool MagicSystem::PlantForest(Spell& spell)
 	       Locator::forestSystem::value().Plant(EntityRegistry().ToEntity(spell), spell, TribalPower(spell)) > 0;
 }
 
-bool MagicSystem::ForestCanGrowAt(glm::vec3 point) const
+bool MagicSystem::ForestCanGrowAt(const map_coords::MapCoords& place) const
 {
-	return !Locator::forestSystem::has_value() || Locator::forestSystem::value().CanGrowAt(point);
+	return !Locator::forestSystem::has_value() || Locator::forestSystem::value().CanGrowAt(place);
 }
 
 bool MagicSystem::SendSpellEvent(entt::entity spell, const particles::SpellEventInfo& event)
@@ -173,12 +173,12 @@ void MagicSystem::RainOnFire(const glm::vec3& point)
 		{
 			return;
 		}
-		if (glm::distance(glm::vec2(point.x, point.z), glm::vec2(spell.position.x, spell.position.z)) < spell.magnitude)
+		if (glm::distance(glm::vec2(point.x, point.z), map_coords::ToMetres(spell.place)) < spell.magnitude)
 		{
 			watching = reactions.Create({.initiator = entity,
 			                             .type = Reaction::ReactToMagicWaterPuttingOutFire,
 			                             .player = spell.caster.player,
-			                             .position = spell.position,
+			                             .position = _world.PointOf(spell.place),
 			                             .onCast = true});
 			done = true;
 		}
@@ -191,7 +191,8 @@ std::optional<entt::entity> MagicSystem::SpellAt(MagicType type, glm::vec3 point
 	for (const auto entity : _spells)
 	{
 		const auto* spell = EntityRegistry().TryGet<const Spell>(entity);
-		if (spell != nullptr && spell->magicType == type && gutils::GetDistanceInMetres(spell->position, point) < radius)
+		if (spell != nullptr && spell->magicType == type &&
+		    gutils::GetDistanceInMetres(spell->place, map_coords::FromMetres({point.x, point.z})) < radius)
 		{
 			return entity;
 		}
@@ -227,7 +228,7 @@ std::vector<MagicSystemInterface::SpellInfo> MagicSystem::GetSpells() const
 		    .closing = spell->closedDown,
 		    .fromHand = spell->castFromHand,
 		    .effect = spell->effect,
-		    .position = spell->position,
+		    .position = _world.PointOf(spell->place),
 		});
 	}
 	return result;

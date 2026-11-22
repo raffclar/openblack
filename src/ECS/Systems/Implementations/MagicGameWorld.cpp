@@ -303,6 +303,28 @@ bool GameMagicWorld::InInfluence(PlayerNames player, glm::vec3 point) const
 	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().PlayerInfluence(player, point) > 0.0f;
 }
 
+bool GameMagicWorld::InBoundsAt(const map_coords::MapCoords& place) const
+{
+	return Locator::terrainSystem::has_value() && map_coords::InBounds(place, LandIslandInterface::k_MapCellsPerSide);
+}
+
+bool GameMagicWorld::IsLandAt(const map_coords::MapCoords& place) const
+{
+	if (!InBoundsAt(place))
+	{
+		return false;
+	}
+	// Land is a cell without water in it. The cell comes from the map position.
+	const auto* landCell =
+	    Locator::terrainSystem::value().FindCell(glm::u16vec2(map_coords::CellX(place), map_coords::CellZ(place)));
+	return landCell != nullptr && landCell->properties.hasWater == 0;
+}
+
+bool GameMagicWorld::InInfluenceAt(PlayerNames player, const map_coords::MapCoords& place) const
+{
+	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().PlayerInfluence(player, place) > 0.0f;
+}
+
 bool GameMagicWorld::HandInInfluence(PlayerNames player, glm::vec3 hand) const
 {
 	return Locator::influenceSystem::has_value() && Locator::influenceSystem::value().IsHandInInfluence(player, hand);
