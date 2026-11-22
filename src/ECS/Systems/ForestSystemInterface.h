@@ -19,6 +19,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Magic/ForestRules.h"
@@ -48,8 +49,8 @@ public:
 
 	/// The forest miracle plants its trees, their wood worth more by its caster's tribal power; how many it planted
 	virtual uint32_t Plant(entt::entity spell, components::Spell& miracle, float tribalPower) = 0;
-	/// Whether a forest may be planted at a point: no building there whose fire would be in it, and room for a tree
-	[[nodiscard]] virtual bool CanGrowAt(glm::vec3 point) const = 0;
+	/// Whether a forest may be planted at a map position: no building there whose fire would be in it, and room for a tree
+	[[nodiscard]] virtual bool CanGrowAt(const map_coords::MapCoords& place) const = 0;
 	/// Whether a forest miracle's forest still has trees
 	[[nodiscard]] virtual bool HasTrees(entt::entity spell) const = 0;
 	/// The forest of a forest miracle: none, on the land, or gone from the land since the miracle's last turn

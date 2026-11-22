@@ -344,7 +344,7 @@ entt::entity MagicSystem::MakeSpell(MagicType type, const components::SpellCaste
 	spell.maxObjectsToCreate = cast.maxObjectsToCreate;
 	// The miracle keeps the map position where it was cast, and acts at the point of the world of that position
 	const auto point = _world.PointOf(place);
-	spell.position = point;
+	spell.place = place;
 	spell.castPlace = place;
 	spell.originalCastPlace = place;
 	spell.direction = info.direction;
@@ -456,13 +456,13 @@ bool MagicSystem::CanCastAt(MagicType type, PlayerNames player, glm::vec3 point)
 	return Locator::infoConstants::has_value() && magic::spells::CanCastAt(*this, type, player, point, _ignoreInfluence);
 }
 
-bool MagicSystem::MeetsKindRule(MagicType type, glm::vec3 point, bool onThing)
+bool MagicSystem::MeetsKindRule(MagicType type, const map_coords::MapCoords& place, bool onThing)
 {
 	if (!Locator::infoConstants::has_value())
 	{
 		return false;
 	}
-	return onThing ? magic::spells::MeetsKindRuleOn(*this, type, point) : magic::spells::MeetsKindRuleAt(*this, type, point);
+	return onThing ? magic::spells::MeetsKindRuleOn(*this, type, place) : magic::spells::MeetsKindRuleAt(*this, type, place);
 }
 
 bool MagicSystem::SpellEvent(entt::entity entity, const particles::SpellEventInfo& event)
@@ -480,15 +480,14 @@ void MagicSystem::PayForSpell(entt::entity entity, float cost)
 
 entt::entity MagicSystem::CreateTeleportStone(const Spell& spell)
 {
-	return Locator::teleportSystem::has_value()
-	           ? Locator::teleportSystem::value().CreateStone(_world.PointOf(spell.castPlace), spell.caster.player,
-	                                                          EntityRegistry().ToEntity(spell))
-	           : entt::null;
+	return Locator::teleportSystem::has_value() ? Locator::teleportSystem::value().CreateStone(
+	                                                  spell.castPlace, spell.caster.player, EntityRegistry().ToEntity(spell))
+	                                            : entt::null;
 }
 
-bool MagicSystem::CanPlaceTeleportStone(glm::vec3 point) const
+bool MagicSystem::CanPlaceTeleportStone(const map_coords::MapCoords& place) const
 {
-	return !Locator::teleportSystem::has_value() || Locator::teleportSystem::value().CanPlaceStone(point);
+	return !Locator::teleportSystem::has_value() || Locator::teleportSystem::value().CanPlaceStone(place);
 }
 
 bool MagicSystem::OnSpellEvent(entt::entity entity, const particles::SpellEventInfo& event)
@@ -639,7 +638,7 @@ bool MagicSystem::Process(entt::entity entity, Spell& spell)
 	}
 	if (after->reaction != 0 && Locator::reactionSystem::has_value())
 	{
-		Locator::reactionSystem::value().Move(after->reaction, after->position, after->movement,
+		Locator::reactionSystem::value().Move(after->reaction, _world.PointOf(after->place), after->movement,
 		                                      magic::spells::StrengthOf(*this, *after));
 	}
 	// It lives while its effect does, or until it closes down without one, or while what its kind made keeps it

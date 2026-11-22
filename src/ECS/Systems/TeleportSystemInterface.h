@@ -19,6 +19,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
@@ -46,8 +47,9 @@ public:
 
 	~TeleportSystemInterface() override = default;
 
-	/// A new stone of a miracle at a point on the land, at the head of its player's stones; none if one may not go there
-	virtual entt::entity CreateStone(glm::vec3 point, PlayerNames player, entt::entity spell) = 0;
+	/// A new stone of a miracle at a map position on the land, at the head of its player's stones; none if one may not go
+	/// there
+	virtual entt::entity CreateStone(const map_coords::MapCoords& place, PlayerNames player, entt::entity spell) = 0;
 	/// The stone of a miracle of a saved game of the game, at its point on the land, at the head of its player's stones.
 	/// The load of the game does not look if a stone may go there.
 	virtual entt::entity RestoreStone(glm::vec3 /*point*/, PlayerNames /*player*/, entt::entity /*spell*/)
@@ -62,8 +64,8 @@ public:
 	virtual void RemoveStone(entt::entity stone) = 0;
 	/// A miracle closes down or goes: its stones go at that time, in the miracle's turn
 	virtual void RemoveStonesOf(entt::entity spell) = 0;
-	/// Whether a stone may be put at a point: nothing standing fixed on the land within its reach
-	[[nodiscard]] virtual bool CanPlaceStone(glm::vec3 point) const = 0;
+	/// Whether a stone may be put at a map position: nothing standing fixed on the land within its reach
+	[[nodiscard]] virtual bool CanPlaceStone(const map_coords::MapCoords& place) const = 0;
 	/// A player's stones, the newest first
 	[[nodiscard]] virtual std::vector<entt::entity> GetStones(PlayerNames player) const = 0;
 	/// The stone of a miracle, if it has one

@@ -105,6 +105,8 @@ struct Jump
 /// Whether a stone may be put at a point: no thing that stands fixed over the map's cells (a building, a field, a
 /// feature, another stone; not a tree) has its place nearer than the stone's reach
 [[nodiscard]] bool CanPlaceStone(glm::vec3 point, std::span<const glm::vec3> fixedObjects);
+/// The same test at a map position, which the test uses as it is
+[[nodiscard]] bool CanPlaceStoneAt(const map_coords::MapCoords& place, std::span<const glm::vec3> fixedObjects);
 
 /// The stone a worshipper heads for to reach a far worship site: the stone nearest it, when going through the stones
 /// (to the nearest stone, then from the stone nearest the site) is shorter than the limit; none otherwise

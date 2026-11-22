@@ -102,6 +102,23 @@ TEST(TeleportRules, AThingJustBeyondTheStonesReachLetsTheStoneBePut)
 	EXPECT_FALSE(CanPlaceStone({10.0f, 40.0f, 20.0f}, fixed));
 }
 
+// The test at a map position measures from the map position as it is
+TEST(TeleportRules, TheStoneTestAtAMapPositionMeasuresFromThatPosition)
+{
+	const std::array fixed {glm::vec3 {10.0f, 0.0f, 0.0f}};
+	// Seven metres off is beyond the reach of six metres, and five metres off is in it
+	const auto atTen = openblack::map_coords::ToFixed(10.0f);
+	EXPECT_TRUE(CanPlaceStoneAt({.x = atTen - openblack::map_coords::ToFixed(7.0f), .z = 0}, fixed));
+	EXPECT_FALSE(CanPlaceStoneAt({.x = atTen - openblack::map_coords::ToFixed(5.0f), .z = 0}, fixed));
+	// The point test is the test at the map position of the point
+	for (const float x : {3.9f, 4.0f, 4.1f, 5.0f})
+	{
+		EXPECT_EQ(CanPlaceStone({x, 0.0f, 0.0f}, fixed),
+		          CanPlaceStoneAt({.x = openblack::map_coords::ToFixed(x), .z = 0}, fixed))
+		    << x;
+	}
+}
+
 TEST(TeleportRules, WorshippersGoThroughTheNearestStone)
 {
 	const std::array stones {glm::vec3 {200.0f, 0.0f, 0.0f}, glm::vec3 {10.0f, 0.0f, 0.0f}, glm::vec3 {490.0f, 0.0f, 0.0f}};

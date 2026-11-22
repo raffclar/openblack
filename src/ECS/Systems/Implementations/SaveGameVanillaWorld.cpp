@@ -1779,7 +1779,7 @@ std::optional<vanilla_reaction_import::Initiator> SpellInitiatorOf(const ecs::Re
 	const auto& effect = magic::GetMagicEffectInfo(Locator::infoConstants::value(), spell.magicType);
 	return vanilla_reaction_import::Initiator {
 	    .entity = entity,
-	    .position = spell.position,
+	    .position = GroundPosition({.x = spell.place.x, .z = spell.place.z, .altitude = spell.place.altitude}),
 	    .impressiveValue = effect.impressiveValue,
 	    .strength = Locator::magicSystem::value().SpellStrength(entity),
 	    .magicType = spell.magicType,
@@ -1986,7 +1986,7 @@ magic::ImportedCast CastOf(const gamesave::VanillaWorld& world, std::unordered_m
 	const auto point = [](const std::array<float, 3>& value) { return glm::vec3(value[0], value[1], value[2]); };
 	magic::ImportedCast cast {
 	    .type = file.magicType,
-	    .position = GroundPosition(file.position),
+	    .place = {.x = file.position.x, .z = file.position.z, .altitude = file.position.altitude},
 	    .chants = file.chants,
 	    .initialChants = file.initialChants,
 	    .closedDown = file.closedDown,

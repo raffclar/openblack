@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <bit>
 #include <map>
 #include <memory>
@@ -84,6 +85,16 @@ public:
 		return InBounds(point) && !(point.x < wetBelowX) && !(point.z < waterBelowZ);
 	}
 	[[nodiscard]] bool InInfluence(PlayerNames /*player*/, glm::vec3 /*point*/) const override { return influence; }
+	[[nodiscard]] bool InBoundsAt(const map_coords::MapCoords& place) const override
+	{
+		asked.push_back(place);
+		return MagicWorldInterface::InBoundsAt(place);
+	}
+	[[nodiscard]] bool IsLandAt(const map_coords::MapCoords& place) const override
+	{
+		asked.push_back(place);
+		return MagicWorldInterface::IsLandAt(place);
+	}
 	[[nodiscard]] std::optional<glm::vec3> PositionOf(entt::entity object) const override
 	{
 		const auto found = objects.find(object);
@@ -115,9 +126,10 @@ public:
 		rings.push_back(drop.ringGrowth);
 		extremeDrops.push_back(drop.extreme);
 	}
-	[[nodiscard]] std::vector<entt::entity> HealTargets(const map_coords::MapCoords& /*place*/, float radius,
+	[[nodiscard]] std::vector<entt::entity> HealTargets(const map_coords::MapCoords& place, float radius,
 	                                                    size_t maximum) const override
 	{
+		asked.push_back(place);
 		lastHealRadius = radius;
 		std::vector<entt::entity> targets;
 		for (const auto& [entity, position] : objects)
@@ -134,6 +146,9 @@ public:
 		resources.push_back({type, point, amount, sparkles});
 		return true;
 	}
+
+	/// The map positions that the tests of the land and the heal got
+	mutable std::vector<map_coords::MapCoords> asked;
 
 	struct ResourceRecord
 	{
@@ -225,8 +240,16 @@ public:
 		spell.forestPlanted = true;
 		return true;
 	}
-	[[nodiscard]] bool ForestCanGrowAt(glm::vec3 /*point*/) const override { return forestGrows; }
-	[[nodiscard]] bool CanPlaceTeleportStone(glm::vec3 /*point*/) const override { return stoneFits; }
+	[[nodiscard]] bool ForestCanGrowAt(const map_coords::MapCoords& place) const override
+	{
+		world.asked.push_back(place);
+		return forestGrows;
+	}
+	[[nodiscard]] bool CanPlaceTeleportStone(const map_coords::MapCoords& place) const override
+	{
+		world.asked.push_back(place);
+		return stoneFits;
+	}
 
 	InfoConstants& info;
 	FakeWorld world;
@@ -575,7 +598,7 @@ TEST(SpellBehaviours, AnEventPaysItsCostAndActsOnItsTargetByTheMiraclesStrength)
 	// From the player who cast it
 	EXPECT_EQ(services.world.lastSource.player, PlayerNames::PLAYER_ONE);
 	EXPECT_EQ(services.world.lastSource.casterCreature, entt::entity {entt::null});
-	EXPECT_NEAR(spell.position.z, 120.0f, k_Epsilon);
+	EXPECT_EQ(spell.place, (map_coords::MapCoords {.x = map_coords::ToFixed(100.0f), .z = map_coords::ToFixed(120.0f)}));
 	// Without a target it acts round the point
 	ASSERT_TRUE(spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Landed, {90.0f, 2.0f, 90.0f})));
 	ASSERT_EQ(services.world.appliedAt.size(), 1u);
@@ -657,7 +680,7 @@ TEST(SpellBehaviours, AFireballsStepMovesItButBurnsNothingByItself)
 	FakeServices services(*info);
 	auto spell = MakeSpell(MagicType::Fireball, 1000.0f);
 	ASSERT_TRUE(spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Point, {50.0f, 20.0f, 60.0f})));
-	EXPECT_FLOAT_EQ(spell.position.x, 50.0f);
+	EXPECT_EQ(spell.place.x, map_coords::ToFixed(50.0f));
 	// Its zero effect values reach what is round it, doing nothing: its ball's own fire does the burning
 	ASSERT_EQ(services.world.appliedAt.size(), 1u);
 	EXPECT_FLOAT_EQ(services.world.appliedAt[0].second[EffectKind::Burn], 0.0f);
@@ -842,8 +865,8 @@ TEST(SpellBehaviours, TheKindOfAMiracleDecidesWhereItCanGoWithNoCastRule)
 	info->magicHeal.at(0).maxToHeal = 20;
 	FakeServices services(*info);
 	services.world.waterBelowZ = 50.0f;
-	const glm::vec3 land {100.0f, 0.0f, 100.0f};
-	const glm::vec3 sea {100.0f, 0.0f, 10.0f};
+	const auto land = map_coords::FromMetres({100.0f, 100.0f});
+	const auto sea = map_coords::FromMetres({100.0f, 10.0f});
 	// Food and wood need land
 	EXPECT_TRUE(spells::MeetsKindRuleAt(services, MagicType::Food, land));
 	EXPECT_FALSE(spells::MeetsKindRuleAt(services, MagicType::Food, sea));
@@ -851,7 +874,7 @@ TEST(SpellBehaviours, TheKindOfAMiracleDecidesWhereItCanGoWithNoCastRule)
 	EXPECT_FALSE(spells::MeetsKindRuleOn(services, MagicType::Wood, sea));
 	// A heal needs someone to heal near the point
 	EXPECT_FALSE(spells::MeetsKindRuleOn(services, MagicType::Heal, land));
-	services.world.objects[static_cast<entt::entity>(1)] = land;
+	services.world.objects[static_cast<entt::entity>(1)] = {100.0f, 0.0f, 100.0f};
 	EXPECT_TRUE(spells::MeetsKindRuleOn(services, MagicType::Heal, land));
 	// A forest goes at a point where trees can grow, but never on a thing
 	EXPECT_TRUE(spells::MeetsKindRuleAt(services, MagicType::Forest, land));
@@ -862,6 +885,52 @@ TEST(SpellBehaviours, TheKindOfAMiracleDecidesWhereItCanGoWithNoCastRule)
 	// The other kinds go to any place, also into the sea
 	EXPECT_TRUE(spells::MeetsKindRuleAt(services, MagicType::Fireball, sea));
 	EXPECT_TRUE(spells::MeetsKindRuleOn(services, MagicType::Water, sea));
+}
+
+// The kind of a miracle is tested at the map position of the cast as it is. Far from the corner of the map, metres cannot
+// keep each map position, so the test does not go through metres.
+TEST(SpellBehaviours, TheKindOfAMiracleIsTestedAtTheExactMapPosition)
+{
+	auto info = MakeTables();
+	info->magicHeal.at(0).dummyVar = 10.0f;
+	info->magicHeal.at(0).maxToHeal = 20;
+	FakeServices services(*info);
+	constexpr map_coords::MapCoords k_Place {.x = 8090858, .z = 3276801, .altitude = 0.0f};
+	ASSERT_NE(map_coords::ToFixed(map_coords::ToMetres(k_Place.x)), k_Place.x);
+	const auto allAt = [&services, &k_Place]() {
+		return std::ranges::all_of(services.world.asked, [&k_Place](const map_coords::MapCoords& asked) {
+			return asked.x == k_Place.x && asked.z == k_Place.z;
+		});
+	};
+	for (const auto type : {MagicType::Food, MagicType::Heal, MagicType::Teleport, MagicType::Forest})
+	{
+		services.world.asked.clear();
+		static_cast<void>(spells::MeetsKindRuleAt(services, type, k_Place));
+		EXPECT_FALSE(services.world.asked.empty()) << static_cast<int>(type);
+		EXPECT_TRUE(allAt()) << static_cast<int>(type);
+		services.world.asked.clear();
+		static_cast<void>(spells::MeetsKindRuleOn(services, type, k_Place));
+		EXPECT_TRUE(allAt()) << static_cast<int>(type);
+	}
+}
+
+// An event moves the miracle to the map position of the event, on the land: x and z by the conversion to map units, and
+// the altitude 0
+TEST(SpellBehaviours, AnEventMovesTheMiracleToTheMapPositionOfTheEvent)
+{
+	auto info = MakeTables();
+	Effect(*info, MagicType::Fireball).initialChants = 1000.0f;
+	FakeServices services(*info);
+	auto spell = MakeSpell(MagicType::Fireball, 1000.0f);
+	spell.place = {.x = 1, .z = 2, .altitude = 3.0f};
+	constexpr glm::vec3 k_Event {1234.567f, 20.0f, 4321.123f};
+	ASSERT_TRUE(spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Point, k_Event)));
+	EXPECT_EQ(spell.place, (map_coords::MapCoords {
+	                           .x = map_coords::ToFixed(k_Event.x), .z = map_coords::ToFixed(k_Event.z), .altitude = 0.0f}));
+	// The effect acts at the point of that map position
+	ASSERT_EQ(services.world.appliedAt.size(), 1u);
+	EXPECT_EQ(services.world.appliedAt[0].first.x, map_coords::ToMetres(spell.place.x));
+	EXPECT_EQ(services.world.appliedAt[0].first.z, map_coords::ToMetres(spell.place.z));
 }
 
 TEST(SpellBehaviours, LandForACastRuleIsACellWithoutWaterWhateverItsHeight)

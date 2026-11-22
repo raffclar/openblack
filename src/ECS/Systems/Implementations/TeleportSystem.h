@@ -24,12 +24,12 @@ namespace openblack::ecs::systems
 class TeleportSystem final: public TeleportSystemInterface
 {
 public:
-	entt::entity CreateStone(glm::vec3 point, PlayerNames player, entt::entity spell) override;
+	entt::entity CreateStone(const map_coords::MapCoords& place, PlayerNames player, entt::entity spell) override;
 	entt::entity RestoreStone(glm::vec3 point, PlayerNames player, entt::entity spell) override;
 	void OrderStones(PlayerNames player, std::span<const entt::entity> headFirst) override;
 	void RemoveStone(entt::entity stone) override;
 	void RemoveStonesOf(entt::entity spell) override;
-	[[nodiscard]] bool CanPlaceStone(glm::vec3 point) const override;
+	[[nodiscard]] bool CanPlaceStone(const map_coords::MapCoords& place) const override;
 	[[nodiscard]] std::vector<entt::entity> GetStones(PlayerNames player) const override;
 	[[nodiscard]] std::optional<entt::entity> StoneOf(entt::entity spell) const override;
 	[[nodiscard]] bool ShouldReact(entt::entity stone, entt::entity living) const override;

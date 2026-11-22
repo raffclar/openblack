@@ -60,6 +60,9 @@ public:
 	[[nodiscard]] bool IsDryLand(glm::vec3 point) const override;
 	[[nodiscard]] bool IsLand(glm::vec3 point) const override;
 	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override;
+	[[nodiscard]] bool InBoundsAt(const map_coords::MapCoords& place) const override;
+	[[nodiscard]] bool IsLandAt(const map_coords::MapCoords& place) const override;
+	[[nodiscard]] bool InInfluenceAt(PlayerNames player, const map_coords::MapCoords& place) const override;
 	[[nodiscard]] bool HandInInfluence(PlayerNames player, glm::vec3 hand) const override;
 	void HeldThingUsedOnLand(PlayerNames player) override;
 	[[nodiscard]] std::optional<glm::vec3> PositionOf(entt::entity object) const override;
@@ -179,7 +182,7 @@ public:
 		return _world.ApplyEffect(object, values, source);
 	}
 	[[nodiscard]] bool CanCastAt(MagicType type, PlayerNames player, glm::vec3 point) override;
-	[[nodiscard]] bool MeetsKindRule(MagicType type, glm::vec3 point, bool onThing) override;
+	[[nodiscard]] bool MeetsKindRule(MagicType type, const map_coords::MapCoords& place, bool onThing) override;
 	bool SpellEvent(entt::entity entity, const particles::SpellEventInfo& event) override;
 	void PayForSpell(entt::entity entity, float cost) override;
 
@@ -298,12 +301,12 @@ private:
 	void StartCastEffect(components::Spell& spell, ParticleType type, bool synced) override;
 	[[nodiscard]] magic::FlockMiracleInterface* Flocks() override { return &_flocks; }
 	entt::entity CreateTeleportStone(const components::Spell& spell) override;
-	[[nodiscard]] bool CanPlaceTeleportStone(glm::vec3 point) const override;
+	[[nodiscard]] bool CanPlaceTeleportStone(const map_coords::MapCoords& place) const override;
 	void ShieldStruck(const components::Spell& shield, bool destroyed) override;
 	[[nodiscard]] bool HasWorldObjects(const components::Spell& spell) const override;
 	[[nodiscard]] bool LostWorldObjects(const components::Spell& spell) const override;
 	bool PlantForest(components::Spell& spell) override;
-	[[nodiscard]] bool ForestCanGrowAt(glm::vec3 point) const override;
+	[[nodiscard]] bool ForestCanGrowAt(const map_coords::MapCoords& place) const override;
 	[[nodiscard]] entt::entity SpellEntity(const components::Spell& spell) const override;
 	[[nodiscard]] uint32_t ForestTrees(const components::Spell& spell) const override;
 	/// The caster player's creature, if it can see where a miracle is cast, takes it that the player wants the desires

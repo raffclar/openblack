@@ -154,8 +154,9 @@ bool GameHandCasts::CastFrom(MagicType type, entt::entity target, const map_coor
 	                                                    : glm::vec3(map_coords::ToMetres(targetCoords.x), targetCoords.altitude,
 	                                                                map_coords::ToMetres(targetCoords.z));
 	auto& magicSystem = Locator::magicSystem::value();
-	// The kind of the miracle must let it go there. For example, a heal needs someone to heal, and food needs land.
-	if (!magicSystem.MeetsKindRule(type, at, target != entt::null))
+	// The kind of the miracle must let it go at the exact map position. For example, a heal needs someone to heal, and food
+	// needs land.
+	if (!magicSystem.MeetsKindRule(type, targetCoords, target != entt::null))
 	{
 		return false;
 	}
