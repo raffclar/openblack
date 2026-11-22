@@ -62,6 +62,33 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	    .highlights = {{.kind = 3, .offset = {-3.0f, 25.0f}}, {.kind = 2, .offset = {3.0f, 25.0f}, .active = true}},
 	});
 
+	// A gold scroll whose sparks rise through a mist: the game sorts the shower as one thing at the top of the scroll
+	all.push_back({
+	    .id = "scripts.highlight_sparks_mist",
+	    .name = "A gold scroll's sparks rise through a mist",
+	    .facet = Facet::Objects,
+	    .description = "A gold scroll on bare land, 15 before the camera, and a white mist that a script makes 6 above it, "
+	                   "half opaque. The sparks of the scroll rise through the mist. The camera is still, a little above "
+	                   "the mist.",
+	    .expected = "The game sorts the shower of sparks as one thing at the top of the scroll, which is further from the "
+	                "camera than the mist. Thus the mist is drawn over all of the sparks: a spark in the mist or behind it "
+	                "shows dimmed by the mist, also a spark that is nearer to the camera than the middle of the mist. No "
+	                "spark shows bright over the mist.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, 10.0f}, .look = {0.0f, 6.0f, 25.0f}},
+	    .highlights = {{.kind = 3, .offset = {0.0f, 25.0f}}},
+	    .commands = {{.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_MIST",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Position, .point = {0.0f, 25.0f}, .height = 6.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.5f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 255.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 255.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 255.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.5f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.6f}}}},
+	});
+
 	// A lesson's gold scroll, as the creature lessons put it up at the pen, near the camera
 	all.push_back({
 	    .id = "scripts.highlight_click",

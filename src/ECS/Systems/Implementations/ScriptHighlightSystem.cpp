@@ -476,7 +476,7 @@ void ScriptHighlightSystem::UpdateSparks(entt::entity entity, bool drawn, float 
 		                  [this](float x) { return _world->LocalFloatRandom(x); });
 	}
 	// They rise from the top of the model
-	const auto from = highlight.centre + glm::vec3(0.0f, highlight.radius, 0.0f);
+	const auto from = rules::SparkOrigin(highlight.centre, highlight.radius);
 	for (size_t i = 0; i < rules::k_Sparks; ++i)
 	{
 		auto& sprite = highlight.sparkSprites.at(i);
@@ -538,7 +538,7 @@ void ScriptHighlightSystem::MakeGlows()
 			    sprite == entt::null || !registry.Valid(sprite))
 			{
 				const auto& highlight = registry.Get<ScriptHighlight>(entity);
-				const auto made = make(entity, highlight.centre + glm::vec3(0.0f, highlight.radius, 0.0f));
+				const auto made = make(entity, rules::SparkOrigin(highlight.centre, highlight.radius));
 				registry.Get<ScriptHighlight>(entity).sparkSprites.at(i) = made;
 			}
 		}

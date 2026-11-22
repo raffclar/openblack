@@ -673,6 +673,13 @@ TEST(ScriptHighlights, AStartedScrollTappedReplaysItsChallenge)
 	EXPECT_TRUE(world->tipsShown.empty());
 }
 
+TEST(ScriptHighlightRules, AGoldScrollsSparksRiseFromTheTopOfItsModelWhereTheShowerIsSorted)
+{
+	// The model's middle and its reach: the shower is at the reach above the middle
+	const auto origin = SparkOrigin({1.0f, 10.0f, 2.0f}, 3.5f);
+	EXPECT_EQ(origin, glm::vec3(1.0f, 13.5f, 2.0f));
+}
+
 TEST(ScriptHighlightRules, AGoldScrollsSparksStartApartRiseShrinkAndFade)
 {
 	// The fake randoms: half of what is asked
