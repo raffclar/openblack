@@ -83,9 +83,9 @@ float ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> b
 /// Whether a script holds the thing while the script owns the widescreen bars of a cutscene
 [[nodiscard]] bool HeldDuringCutscene(entt::entity object);
 /// Whether a miracle may destroy an object, as the blast's wave shatters what it reaches and the tornado carries off
-/// what it picks up. Not a creature, a field, the temple, a teleport stone, a totem or a one-off spell seed, nor a pot
-/// with nothing in it, nor something a script made indestructible. Nor a thing that a script holds while its cutscene
-/// runs, unless a script controls the miracle (spell).
+/// what it picks up. The object must be an effect receiver when no effect is given (see IsEffectReceiver). Not a
+/// creature, a field, the temple, a worship site or its altar, nor something a script made indestructible. Nor a thing
+/// that a script holds while its cutscene runs, unless a script controls the miracle (spell).
 [[nodiscard]] bool CanBeDestroyedBySpell(entt::entity object, entt::entity spell = entt::null);
 [[nodiscard]] bool IsVillager(entt::entity object);
 [[nodiscard]] bool IsCreature(entt::entity object);
@@ -153,12 +153,24 @@ float IncreaseLife(entt::entity object, float amount);
 /// Whether an area effect can find an object. A villager that goes to the dying state is not available. Every other
 /// object is available.
 [[nodiscard]] bool IsAvailable(entt::entity object);
-/// Whether an object takes an effect that burns and heals by these values:
+/// The parts of an effect that tell if an object takes it
+struct EffectTest
+{
+	float burn {0.0f};
+	float heal {0.0f};
+};
+/// Whether an object is a receiver of an effect, each kind by its own rule. With no effect, the answer is the one that a
+/// miracle asks before it destroys the object.
+/// - A town's desire flag, a vortex, a script highlight, a town centre's totem, a totem, a teleport stone, a worship
+///   site's icon or altar, a spell seed, a one-off spell seed and the spiritual shield's object take no effect.
+/// - The physical shield's dome takes an effect that does not burn. With no effect, it is a receiver.
 /// - A pot takes an effect only while it holds something.
 /// - A field takes an effect that burns only while its crop has an age and food.
-/// - A villager takes an effect that heals while it is not dead. It takes another effect only while it is available,
-///   not in its home, not in a hand and not on its way to hide in a building.
+/// - A villager takes an effect that heals while it is not dead. It takes another effect, or no effect, only while it
+///   is available, not in its home, not in a hand and not on its way to hide in a building.
 /// - Every other object takes every effect.
+[[nodiscard]] bool IsEffectReceiver(entt::entity object, std::optional<EffectTest> effect);
+/// Whether an object takes an effect that burns and heals by these values (see IsEffectReceiver)
 [[nodiscard]] bool TakesEffect(entt::entity object, float burn, float heal);
 
 } // namespace openblack::ecs::world_objects

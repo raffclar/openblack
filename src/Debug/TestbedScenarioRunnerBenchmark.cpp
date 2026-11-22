@@ -42,7 +42,10 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -299,6 +302,9 @@ std::vector<std::pair<std::string, size_t>> Runner::EntityCounts() const
 	    {"abodes", registry.Size<ecs::components::Abode>()},
 	    {"towns", registry.Size<ecs::components::Town>()},
 	    {"vortices", registry.Size<ecs::components::Vortex>()},
+	    {"highlights", registry.Size<ecs::components::ScriptHighlight>()},
+	    {"street lanterns", registry.Size<ecs::components::StreetLantern>()},
+	    {"features", registry.Size<ecs::components::Feature>()},
 	};
 }
 
