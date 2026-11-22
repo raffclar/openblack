@@ -156,9 +156,9 @@ public:
 	/// Whether an object takes an effect that a miracle aims at it. An empty pot, a field with no food under an effect
 	/// that burns, and a villager in its home do not.
 	[[nodiscard]] virtual bool TakesEffect(entt::entity object, const EffectValues& values) const = 0;
-	/// An effect at a point: every object it reaches takes it, found in the land's cells round the point (see
+	/// An effect at a map position: every object it reaches takes it, found in the land's cells round the position (see
 	/// AreaEffect.h). The objects that took it.
-	virtual std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const EffectValues& values,
+	virtual std::vector<entt::entity> ApplyEffectAt(const map_coords::MapCoords& place, const EffectValues& values,
 	                                                const EffectSource& source) = 0;
 	/// A drop of rain lands: it waters the trees and fields within reach, the people watch it put out what burns and,
 	/// when asked, it leaves a ring on the land. Its cooling is its effect's burn, given round the point.

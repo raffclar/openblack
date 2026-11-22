@@ -496,13 +496,37 @@ EffectReceiver Villager(entt::entity entity, glm::vec3 position, float life)
 
 TEST(AreaEffect, TheCellsSearchedSpanTheSquareOfTheRadius)
 {
-	const auto cells = EffectCellsAround({55.0f, 0.0f, 55.0f}, 12.0f);
+	const auto cells = EffectCellsAround(glm::vec3(55.0f, 0.0f, 55.0f), 12.0f);
 	EXPECT_EQ(cells.first, glm::ivec2(4, 4));
 	EXPECT_EQ(cells.last, glm::ivec2(6, 6));
 	EXPECT_EQ(cells.Count(), 9u);
 	EXPECT_TRUE(cells.Contains({5, 6}));
 	EXPECT_FALSE(cells.Contains({7, 5}));
 	EXPECT_EQ(EffectCellOf({-0.5f, 0.0f, 19.9f}), glm::ivec2(-1, 1));
+}
+
+TEST(AreaEffect, TheCellsOfAMapPositionFarOutComeFromItsExactMapUnits)
+{
+	// Past 2^24 map units a float cannot hold each unit. The game multiplies the exact unit by 10 and then rounds one
+	// time, so the low cell here is 377. A float of the unit first gives 378.
+	const map_coords::MapCoords place {.x = 24792267, .z = 24792267, .altitude = 0.0f};
+	const auto cells = EffectCellsAround(place, 3.0f);
+	EXPECT_EQ(cells.first, glm::ivec2(377, 377));
+	EXPECT_EQ(cells.last, glm::ivec2(378, 378));
+}
+
+TEST(AreaEffect, AnEffectAtAMapPositionMeasuresFromThatPosition)
+{
+	EffectValues values;
+	values.radius = 3.0f;
+	const EffectReceiver hut {
+	    .entity = static_cast<entt::entity>(1), .position = {30.0f, 2.0f, 0.0f}, .radius = 1.0f, .height = 5.0f};
+	// The effect reaches 4 m across, to the edge of the hut
+	EXPECT_TRUE(Reaches(values, map_coords::FromMetres({26.5f, 0.0f}), 2.0f, hut));
+	EXPECT_FALSE(Reaches(values, map_coords::FromMetres({25.0f, 0.0f}), 2.0f, hut));
+	// Up and down it is the height of the land at the position plus the altitude
+	EXPECT_TRUE(Reaches(values, map_coords::FromMetres({30.0f, 0.0f}), 10.0f, hut));
+	EXPECT_FALSE(Reaches(values, map_coords::FromMetres({30.0f, 0.0f}), 10.5f, hut));
 }
 
 TEST(AreaEffect, AnObjectWithAMiddleOfItsOwnIsReachedAcrossTheLandFromItsMiddle)

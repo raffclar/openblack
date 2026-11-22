@@ -114,10 +114,12 @@ public:
 	{
 		affected.emplace_back(object, type, player);
 	}
-	std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const EffectValues& values, const EffectSource& source) override
+	std::vector<entt::entity> ApplyEffectAt(const map_coords::MapCoords& place, const EffectValues& values,
+	                                        const EffectSource& source) override
 	{
 		lastSource = source;
-		appliedAt.emplace_back(point, values);
+		appliedAt.emplace_back(PointOf(place), values);
+		appliedPlaces.push_back(place);
 		return {};
 	}
 	void Water(const WaterDrop& drop) override
@@ -169,6 +171,7 @@ public:
 	std::set<entt::entity> lifeless;
 	std::vector<std::tuple<entt::entity, MagicType, PlayerNames>> affected;
 	std::vector<std::pair<glm::vec3, EffectValues>> appliedAt;
+	std::vector<map_coords::MapCoords> appliedPlaces;
 	EffectSource lastSource;
 	std::vector<glm::vec3> drops;
 	std::vector<bool> extremeDrops;
@@ -201,6 +204,11 @@ public:
 			return shield;
 		}
 		return std::nullopt;
+	}
+	[[nodiscard]] std::optional<entt::entity> ShieldCrossedInto(glm::vec3 before, glm::vec3 point, float margin) override
+	{
+		const auto now = ShieldAt(point, margin);
+		return now.has_value() && !ShieldAt(before, margin).has_value() ? now : std::nullopt;
 	}
 	void StrikeShield(entt::entity /*shieldSpell*/, glm::vec3 point) override { strikes.push_back(point); }
 	[[nodiscard]] Spell* FindSpell(entt::entity entity) override
@@ -927,10 +935,9 @@ TEST(SpellBehaviours, AnEventMovesTheMiracleToTheMapPositionOfTheEvent)
 	ASSERT_TRUE(spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Point, k_Event)));
 	EXPECT_EQ(spell.place, (map_coords::MapCoords {
 	                           .x = map_coords::ToFixed(k_Event.x), .z = map_coords::ToFixed(k_Event.z), .altitude = 0.0f}));
-	// The effect acts at the point of that map position
-	ASSERT_EQ(services.world.appliedAt.size(), 1u);
-	EXPECT_EQ(services.world.appliedAt[0].first.x, map_coords::ToMetres(spell.place.x));
-	EXPECT_EQ(services.world.appliedAt[0].first.z, map_coords::ToMetres(spell.place.z));
+	// The effect acts round that exact map position
+	ASSERT_EQ(services.world.appliedPlaces.size(), 1u);
+	EXPECT_EQ(services.world.appliedPlaces[0], spell.place);
 }
 
 TEST(SpellBehaviours, LandForACastRuleIsACellWithoutWaterWhateverItsHeight)

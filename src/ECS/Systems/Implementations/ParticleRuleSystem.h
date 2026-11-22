@@ -330,6 +330,11 @@ public:
 	void SetDrawnAlone(EffectId id) override;
 	void SetDrawnAtLastStep(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShieldCrossing(glm::vec3 before, glm::vec3 point,
+	                                                                          float margin) const override
+	{
+		return _world.FindShieldCrossing(before, point, margin);
+	}
 	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
 	[[nodiscard]] size_t GetWaitingSoundCount() const override { return _world.WaitingSoundCount(); }
 	void AddTarget(EffectId id, entt::entity target) override;

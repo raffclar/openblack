@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 #include "SpellRules.h"
 
@@ -55,7 +56,9 @@ struct CellRange
 
 /// The cell a point is in
 [[nodiscard]] glm::ivec2 EffectCellOf(glm::vec3 point);
-/// The map cells over the square a radius spans round a point, the point taken as a map position
+/// The map cells over the square a radius spans round a map position
+[[nodiscard]] CellRange EffectCellsAround(const map_coords::MapCoords& place, float radius);
+/// The same round a point, the point taken as a map position
 [[nodiscard]] CellRange EffectCellsAround(glm::vec3 point, float radius);
 
 /// One object an effect may reach, as the world describes it
@@ -79,8 +82,12 @@ struct EffectReceiver
 	bool creature {false};
 };
 
-/// Whether an effect at a point reaches an object: its edge within the radius across the land from its middle, and its
-/// height within the radius up and down from its position
+/// Whether an effect at a map position reaches an object: its edge within the radius across the land from its middle,
+/// and its height within the radius up and down from its position. The height is the land at the map position plus
+/// the altitude of the position.
+[[nodiscard]] bool Reaches(const EffectValues& values, const map_coords::MapCoords& place, float height,
+                           const EffectReceiver& receiver);
+/// The same at a point, the point taken as a map position at the height of the point
 [[nodiscard]] bool Reaches(const EffectValues& values, glm::vec3 point, const EffectReceiver& receiver);
 
 /// The facts about a villager that tell if the villager takes an effect

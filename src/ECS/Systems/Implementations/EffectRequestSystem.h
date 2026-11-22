@@ -60,6 +60,8 @@ public:
 	void SetDrawOffset(EffectHandle handle, glm::vec3 offset) override;
 	void SetLiveHand(EffectHandle handle, glm::vec3 hand) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShieldCrossing(glm::vec3 before, glm::vec3 point,
+	                                                                          float margin) const override;
 	void AddBeliefSprite(const particles::BeliefSprite& sprite) override;
 	void AddHandManaPathSpark(const particles::mana_path::Spark& spark) override;
 	void AddStormBolt(glm::vec3 cloudPoint) override;

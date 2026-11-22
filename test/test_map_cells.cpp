@@ -217,11 +217,11 @@ TEST(MapCells, ABuildingAtTheEdgeOfTheMapKeepsToIt)
 
 TEST(AreaEffectCells, TheSquareIsFoundThroughMapPositions)
 {
-	const auto cells = magic::EffectCellsAround({55.0f, 0.0f, 55.0f}, 12.0f);
+	const auto cells = magic::EffectCellsAround(glm::vec3(55.0f, 0.0f, 55.0f), 12.0f);
 	EXPECT_EQ(cells.first, glm::ivec2(4, 4));
 	EXPECT_EQ(cells.last, glm::ivec2(6, 6));
 	// Off the low edge the cell is -1, kept signed
-	EXPECT_EQ(magic::EffectCellsAround({5.0f, 0.0f, 5.0f}, 6.0f).first, glm::ivec2(-1, -1));
+	EXPECT_EQ(magic::EffectCellsAround(glm::vec3(5.0f, 0.0f, 5.0f), 6.0f).first, glm::ivec2(-1, -1));
 }
 
 TEST(ReactionImpressiveness, FoodAndWoodImpressByHowMuchTheTownWantsThem)

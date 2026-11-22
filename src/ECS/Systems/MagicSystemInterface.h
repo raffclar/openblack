@@ -282,7 +282,8 @@ public:
 	/// of the creature by a hand does this.
 	virtual void EndCreatureCastBeams(entt::entity /*creature*/) {}
 	/// An effect at a point that no miracle is behind, such as the strike of a storm's bolt: everything it reaches takes
-	/// it, from the player and the thing that the source gives
+	/// it, from the player and the thing that the source gives. The point becomes a map position first, with its height
+	/// above the land as the altitude.
 	virtual void ApplyEffectAt(glm::vec3 /*point*/, const magic::EffectValues& /*values*/,
 	                           const magic::EffectSource& /*source*/)
 	{

@@ -68,7 +68,7 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> PositionOf(entt::entity object) const override;
 	bool ApplyEffect(entt::entity object, const magic::EffectValues& values, const magic::EffectSource& source) override;
 	[[nodiscard]] bool TakesEffect(entt::entity object, const magic::EffectValues& values) const override;
-	std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values,
+	std::vector<entt::entity> ApplyEffectAt(const map_coords::MapCoords& place, const magic::EffectValues& values,
 	                                        const magic::EffectSource& source) override;
 	void Water(const magic::WaterDrop& drop) override;
 	[[nodiscard]] std::vector<entt::entity> HealTargets(const map_coords::MapCoords& place, float radius,
@@ -171,7 +171,7 @@ public:
 	void DeleteSpell(entt::entity entity) override;
 	void ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values, const magic::EffectSource& source) override
 	{
-		_world.ApplyEffectAt(point, values, source);
+		_world.ApplyEffectAt(PlaceOfPoint(point), values, source);
 	}
 	bool ApplyEffectToObject(entt::entity object, const magic::EffectValues& values, PlayerNames player) override
 	{
@@ -294,6 +294,7 @@ private:
 	[[nodiscard]] float SeedPower(const components::Spell& spell) const override;
 	void AddEffectTarget(const components::Spell& spell, entt::entity target) override;
 	[[nodiscard]] std::optional<entt::entity> ShieldAt(glm::vec3 point, float margin) override;
+	[[nodiscard]] std::optional<entt::entity> ShieldCrossedInto(glm::vec3 before, glm::vec3 point, float margin) override;
 	void StrikeShield(entt::entity shieldSpell, glm::vec3 point) override;
 	[[nodiscard]] components::Spell* FindSpell(entt::entity spell) override;
 	[[nodiscard]] float GameRandom(float max) override;

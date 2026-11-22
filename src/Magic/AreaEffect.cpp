@@ -17,6 +17,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 #include "InfoConstants.h"
 
 using namespace openblack;
@@ -41,25 +42,36 @@ glm::ivec2 magic::EffectCellOf(glm::vec3 point)
 	return {static_cast<int>(std::floor(point.x / k_EffectCellSize)), static_cast<int>(std::floor(point.z / k_EffectCellSize))};
 }
 
-CellRange magic::EffectCellsAround(glm::vec3 point, float radius)
+CellRange magic::EffectCellsAround(const map_coords::MapCoords& place, float radius)
 {
-	// The point as a map position, back in metres, the radius taken off or added, and the cell of that as a map
-	// position again, its high word read signed
-	const auto edge = [radius](float metres, float side) {
-		const float at = static_cast<float>(map_coords::ToFixed(metres)) * 10.0f * (1.0f / 65536.0f);
+	// The map position in metres, the radius taken off or added, and the cell of that as a map position again, its
+	// high word read signed. The map unit times 10 is exact before it rounds to a float one time.
+	const auto edge = [radius](int32_t fixed, float side) {
+		const float at = x87::Mul(static_cast<double>(fixed), 10.0) * (1.0f / 65536.0f);
 		const float moved = side < 0.0f ? at + -radius : at + radius;
 		return static_cast<int>(map_coords::SignedCellOf(map_coords::FtoL(moved * 65536.0f / 10.0f)));
 	};
-	return {.first = {edge(point.x, -1.0f), edge(point.z, -1.0f)}, .last = {edge(point.x, 1.0f), edge(point.z, 1.0f)}};
+	return {.first = {edge(place.x, -1.0f), edge(place.z, -1.0f)}, .last = {edge(place.x, 1.0f), edge(place.z, 1.0f)}};
+}
+
+CellRange magic::EffectCellsAround(glm::vec3 point, float radius)
+{
+	return EffectCellsAround(map_coords::FromMetres({point.x, point.z}), radius);
+}
+
+bool magic::Reaches(const EffectValues& values, const map_coords::MapCoords& place, float height,
+                    const EffectReceiver& receiver)
+{
+	const auto middle = receiver.middle.value_or(glm::vec2(receiver.position.x, receiver.position.z));
+	// The game measures the map distance between the two places
+	const float across = gutils::GetDistanceInMetres(place, map_coords::FromMetres(middle));
+	return across <= receiver.radius + values.radius &&
+	       std::abs(height - receiver.position.y) <= receiver.height + values.radius;
 }
 
 bool magic::Reaches(const EffectValues& values, glm::vec3 point, const EffectReceiver& receiver)
 {
-	const auto middle = receiver.middle.value_or(glm::vec2(receiver.position.x, receiver.position.z));
-	// The game measures the map distance between the two places
-	const float across = gutils::GetDistanceInMetres(glm::vec2(point.x, point.z), middle);
-	return across <= receiver.radius + values.radius &&
-	       std::abs(point.y - receiver.position.y) <= receiver.height + values.radius;
+	return Reaches(values, map_coords::FromMetres({point.x, point.z}), point.y, receiver);
 }
 
 bool magic::VillagerAvailable(const VillagerReceiverFacts& facts) noexcept

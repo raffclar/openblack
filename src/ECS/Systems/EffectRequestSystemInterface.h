@@ -168,6 +168,13 @@ public:
 	virtual void SetLiveHand(EffectHandle handle, glm::vec3 hand) = 0;
 	/// The live shield that holds a point, with its sphere larger by a margin, if a shield holds the point
 	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
+	/// The first live shield that a thing went into between two points: its sphere, larger by a margin, holds the point
+	/// now and did not hold the point before. The newest shield comes first.
+	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShieldCrossing(glm::vec3 /*before*/, glm::vec3 /*point*/,
+	                                                                                  float /*margin*/) const
+	{
+		return nullptr;
+	}
 
 	/// A symbol of belief rises in the effect that shows all the symbols
 	virtual void AddBeliefSprite(const particles::BeliefSprite& sprite) = 0;
@@ -247,6 +254,12 @@ public:
 	virtual void SetLiveHand(EffectHandle handle, glm::vec3 hand) = 0;
 	/// The live shield that holds a point, with its sphere larger by a margin. None on a computer that shows nothing.
 	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
+	/// The first live shield that a thing went into between two points. None on a computer that shows nothing.
+	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShieldCrossing(glm::vec3 /*before*/, glm::vec3 /*point*/,
+	                                                                                  float /*margin*/) const
+	{
+		return nullptr;
+	}
 
 	/// A symbol of belief rises in the effect that shows all the symbols
 	virtual void AddBeliefSprite(const particles::BeliefSprite& sprite) = 0;

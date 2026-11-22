@@ -347,7 +347,6 @@ bool spells::ApplyDefaultEffect(SpellServicesInterface& services, Spell& spell, 
 	auto& world = services.World();
 	// The miracle now acts at the map position of the event, on the land
 	spell.place = {.x = map_coords::ToFixed(event.position.x), .z = map_coords::ToFixed(event.position.z), .altitude = 0.0f};
-	const auto point = world.PointOf(spell.place);
 	auto values = EffectValues::From(GetMagicEffectInfo(services.Info(), spell.magicType));
 	const float strength = PayEvent(services, spell);
 	if (!(strength > 0.0f))
@@ -409,7 +408,7 @@ bool spells::ApplyDefaultEffect(SpellServicesInterface& services, Spell& spell, 
 			else
 			{
 				// Everything in reach takes it, even an effect of no strength
-				const auto all = world.ApplyEffectAt(point, values, source);
+				const auto all = world.ApplyEffectAt(spell.place, values, source);
 				if (!all.empty())
 				{
 					reached = all.back();
