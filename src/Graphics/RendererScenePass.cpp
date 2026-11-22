@@ -67,6 +67,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Temple.h"
@@ -77,6 +78,7 @@
 #include "ECS/DrawnRegistry.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptHighlightRules.h"
 #include "ECS/SwimmerRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
@@ -160,6 +162,26 @@ bool IsOwnLeashMarker(const ecs::Registry& registry, const ecs::components::Leas
 	    registry.Valid(marker.creature) ? registry.TryGet<const ecs::components::CreatureLeash>(marker.creature) : nullptr;
 	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	return leashes != nullptr && leashes->worn.has_value() && leashes->worn->holder == own;
+}
+
+/// Where a sprite goes among what blends. The game sorts the shower of a gold scroll as one thing, at the point its sparks
+/// rise from, and draws its sparks in their order. Each other sprite goes by its drawn place.
+glm::vec3 SpriteSortPoint(const ecs::Registry& registry,
+                          const ecs::ComponentLookup<ecs::components::ScriptHighlightGlow>& highlightSprites,
+                          entt::entity sprite, glm::vec3 placed)
+{
+	const auto* drawnFor = highlightSprites.TryGet(sprite);
+	if (drawnFor == nullptr || !registry.Valid(drawnFor->highlight))
+	{
+		return placed;
+	}
+	const auto* highlight = registry.TryGet<const ecs::components::ScriptHighlight>(drawnFor->highlight);
+	if (highlight == nullptr || !highlight->sparks.has_value() ||
+	    std::ranges::find(highlight->sparkSprites, sprite) == highlight->sparkSprites.end())
+	{
+		return placed;
+	}
+	return ecs::script_highlights::SparkOrigin(highlight->centre, highlight->radius);
 }
 
 /// Whether the game mirrors a creature's body in the sea this frame (see creature_reflection). The block under the
@@ -2714,10 +2736,11 @@ void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass)
 			const ecs::ComponentLookup<CameraBookmark> bookmarks(from);
 			const ecs::ComponentLookup<LeashMarker> markers(from);
 			const ecs::ComponentLookup<TempleInteriorPart> templeParts(from);
+			const ecs::ComponentLookup<ScriptHighlightGlow> highlightSprites(from);
 			from.Each<const Sprite, const Transform>(
 			    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &from, bookmarksShown,
-			     leashMarkersShown, &seenBy, &drawnPlaces, &bookmarks, &markers,
-			     &templeParts](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+			     leashMarkersShown, &seenBy, &drawnPlaces, &bookmarks, &markers, &templeParts,
+			     &highlightSprites](entt::entity entity, const Sprite& sprite, const Transform& transform) {
 				    if (!bookmarksShown && bookmarks.Has(entity))
 				    {
 					    return;
@@ -2781,8 +2804,8 @@ void Renderer::DrawPassSprites(const DrawSceneDesc& desc, const ScenePass& pass)
 
 				    bgfx::setState(SpriteState(sprite.additive));
 
-				    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
-				                         zsort::Depth(placed.position, cameraOrigin));
+				    const auto sortPoint = SpriteSortPoint(from, highlightSprites, entity, placed.position);
+				    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId), zsort::Depth(sortPoint, cameraOrigin));
 			    });
 		};
 		// The temple's rooms have sprites of their own: their glows, and the flames and smoke of the creature's room

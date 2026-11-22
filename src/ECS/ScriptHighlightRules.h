@@ -107,6 +107,12 @@ constexpr uint32_t k_GlowSheetPictures = 8;
 {
 	return kind == HighlightInfo::Gold;
 }
+/// Where the sparks rise from: the top of the model, its reach above its middle. The game sorts the shower as one thing at
+/// this point among what blends, and draws its sparks in their order.
+[[nodiscard]] inline glm::vec3 SparkOrigin(glm::vec3 centre, float radius)
+{
+	return centre + glm::vec3(0.0f, radius, 0.0f);
+}
 using particles::rising_sparks::k_SparkLifeMilliseconds;
 using particles::rising_sparks::k_Sparks;
 using particles::rising_sparks::k_SparkSheetPictures;

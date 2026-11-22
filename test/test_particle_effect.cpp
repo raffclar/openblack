@@ -1061,6 +1061,13 @@ TEST_F(ParticleEffectTest, ASparkShowerRisesFromItsObjectAsStrongAsItsAtom)
 	EXPECT_NEAR(first.positionHalfWidth.x, 10.0f, k_Epsilon);
 	EXPECT_NEAR(first.positionHalfWidth.y, 20.0f + 20.0f * 0.390625f, 1e-3f);
 	EXPECT_NEAR(first.positionHalfWidth.z, 30.0f, k_Epsilon);
+	// The game sorts the shower as one thing at the stone, and draws its sparks in their order
+	ASSERT_EQ(frame.items.size(), 13u);
+	for (size_t i = 0; i < frame.items.size(); ++i)
+	{
+		EXPECT_EQ(frame.items.at(i).index, i);
+		EXPECT_EQ(frame.items.at(i).sortPoint, stone);
+	}
 	// Once the stone has gone nothing is drawn
 	const draw::Sources gone {
 	    .textures = sources.textures,
