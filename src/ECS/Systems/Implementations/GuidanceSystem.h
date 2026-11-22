@@ -36,7 +36,8 @@ public:
 	void RemarkIfNow(guidance::Kind kind) override;
 	void TownAttacked(entt::entity town, PlayerNames attacker, entt::entity creature) override;
 	void SetCreatureRemarks(bool on) override { _creatureRemarks = on; }
-	void TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice) override;
+	void TownAttackCry(entt::entity town, std::optional<guidance::TownAttackVoice> voice,
+	                   std::optional<PlayerNames> causedBy) override;
 	void BeliefVoice(glm::vec3 at, float share, GuidanceAlignment alignment) override;
 	void BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining) override;
 	void AlignmentTurn(float change) override;
@@ -74,6 +75,10 @@ private:
 	void Say(uint32_t text, guidance::Kind kind);
 	/// A creature applied harm to a town: the remark on the creature of the player here as it attacks the town
 	void CreatureAttackedTown(entt::entity town, entt::entity creature);
+	/// The people of a town with people cry out in the voice of the harm
+	void CryOut(entt::entity town, const guidance::TownAttackVoice& voice);
+	/// The remark that another player attacks a town of the player here (see guidance::OurTownAttackAsks)
+	void OurTownAttacked(entt::entity town, std::optional<PlayerNames> causedBy);
 	void LookAtMoon();
 	/// The night whisper of this turn, if there is one. The name of the player is looked up again on each new land.
 	void NightWhisper();

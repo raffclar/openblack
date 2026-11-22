@@ -161,6 +161,32 @@ struct CreatureAttackFacts
 	       *facts.creatureOwner == facts.here;
 }
 
+/// What the advisors know when a player harms a town
+struct OurTownAttackFacts
+{
+	/// The player that owns the town
+	PlayerNames townOwner {PlayerNames::NEUTRAL};
+	/// The player that caused the harm, none when no player caused it
+	std::optional<PlayerNames> causedBy;
+	/// The player at this computer
+	PlayerNames here {PlayerNames::PLAYER_ONE};
+	/// The town has people
+	bool hasPeople {false};
+};
+/// Whether the advisors look at the harm as an attack on a town of the player here: the town is of the player here, a
+/// different player caused the harm, and the town has people. The wait of the remark comes after this test.
+[[nodiscard]] constexpr bool OurTownAttackAsks(const OurTownAttackFacts& facts)
+{
+	return facts.townOwner == facts.here && facts.causedBy.has_value() && *facts.causedBy != facts.here && facts.hasPeople;
+}
+/// The aggression of the attacker against the town must be more than this value for the remark. The town reads the
+/// aggression before it adds the new attack.
+constexpr float k_OurTownAttackedAggression = 1.0f;
+[[nodiscard]] constexpr bool OurTownAttackRemarked(float attackerAggression)
+{
+	return attackerAggression > k_OurTownAttackedAggression;
+}
+
 /// Whether the unhappiness of a town (see town_desire::Process) is more than the threshold of the town's info, at which
 /// the advisors say that the villagers are unhappy
 [[nodiscard]] constexpr bool WarnsVillagersUnhappy(float unhappiness, float threshold)

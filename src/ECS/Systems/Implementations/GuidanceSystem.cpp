@@ -478,18 +478,55 @@ void GuidanceSystem::CreatureAttackedTown(entt::entity town, entt::entity creatu
 	}
 }
 
-void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice)
+void GuidanceSystem::TownAttackCry(entt::entity town, std::optional<guidance::TownAttackVoice> voice,
+                                   std::optional<PlayerNames> causedBy)
 {
 	if (!Locator::entitiesRegistry::has_value() || !Locator::helpMessageSystem::has_value() ||
-	    !PlayNow(guidance::Kind::TownAttackedSound))
+	    !Locator::entitiesRegistry::value().Valid(town))
 	{
 		return;
 	}
+	// The guidance asks for the wait of the cry at each harm, also at harm that gives no voice
+	if (PlayNow(guidance::Kind::TownAttackedSound) && voice.has_value())
+	{
+		CryOut(town, *voice);
+	}
+	OurTownAttacked(town, causedBy);
+}
+
+void GuidanceSystem::OurTownAttacked(entt::entity town, std::optional<PlayerNames> causedBy)
+{
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(town))
+	const auto* owned = registry.TryGet<const Town>(town);
+	const auto* stats = registry.TryGet<const TownStats>(town);
+	if (owned == nullptr)
 	{
 		return;
 	}
+	const guidance::OurTownAttackFacts facts {
+	    .townOwner = owned->owner,
+	    .causedBy = causedBy,
+	    .here = OwnPlayer(),
+	    .hasPeople = stats != nullptr && stats->adults + stats->children != 0,
+	};
+	// This remark waits only for its own kind, not for the wait of any remark
+	if (!guidance::OurTownAttackAsks(facts) || !PlayNow(guidance::Kind::OurTownAttacked))
+	{
+		return;
+	}
+	const auto* aggression = registry.TryGet<const TownAggression>(town);
+	const auto index = static_cast<size_t>(*causedBy);
+	const float held =
+	    aggression != nullptr && index < aggression->record.aggression.size() ? aggression->record.aggression.at(index) : 0.0f;
+	if (guidance::OurTownAttackRemarked(held))
+	{
+		SayRemark(guidance::Kind::OurTownAttacked);
+	}
+}
+
+void GuidanceSystem::CryOut(entt::entity town, const guidance::TownAttackVoice& voice)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
 	// Only a town with people in it cries out
 	const auto* stats = registry.TryGet<const TownStats>(town);
 	const auto* at = registry.TryGet<const Transform>(town);
