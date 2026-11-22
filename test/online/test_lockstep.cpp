@@ -5100,6 +5100,39 @@ TEST_F(LockstepTest, APlayerWhoWasAwayDuringALandChangeLoadsTheNewLandAndThenThe
 	EXPECT_EQ(seat.compares.compared, seat.compares.same);
 }
 
+// A long load of the new land on the server can outlast the patience of a client: the client closes its socket while the
+// server loads, and asks to resume from a turn of the old land
+TEST_F(LockstepTest, APlayerWhoLostTheConnectionDuringTheLoadOfALandComesBackOnTheNewLand)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(_network, _now, "god+editor:alice");
+	Computer bob(_network, _now, "god:bob");
+	_host->SetChangeWorld([this, &bob](const server::LockstepHost::WorldChange& /*change*/) {
+		// The socket of bob closes while the server loads the land
+		_network.Cut(bob.sockets->Ids().back());
+		_serverWorld = FakeWorld {};
+		return server::LockstepHost::WorldChanged {.turn = 0, .refusal = {}, .mapSha256 = {}};
+	});
+	Frames({&alice, &bob}, 40);
+	ASSERT_TRUE(_host->Started());
+	ASSERT_TRUE(alice.session.SendEditorLand({.land = "Land2.txt", .testbed = false, .godsRingMap = false}));
+	Frames({&alice}, 20);
+	ASSERT_EQ(alice.restarts, 1u);
+	EXPECT_TRUE(_host->Seats()[1].missedWorldChange);
+	EXPECT_FALSE(_host->Seats()[1].oldWorldChecksums);
+	Frames({&alice, &bob}, 40);
+	// The client of bob got the start of the land and the world of the server, and the server did not refuse it
+	ASSERT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.restarts, 1u);
+	EXPECT_EQ(bob.loads, 1u);
+	ASSERT_TRUE(bob.session.GetStart().has_value());
+	EXPECT_EQ(bob.session.GetStart()->land, "Land2.txt");
+	EXPECT_EQ(bob.world.hash, _serverWorld.hash);
+	EXPECT_TRUE(bob.desyncs.empty());
+	EXPECT_FALSE(_host->Seats()[1].missedWorldChange);
+}
+
 // The snapshots of a room that changed its land keep the start of the command line. A server that continues the game
 // from such a snapshot sends the land of the room to a player who was away, before the world of the server.
 TEST_F(LockstepTest, ARestoredServerSendsTheLandOfTheRoomToAPlayerWhoWasAwayAtTheLandChange)

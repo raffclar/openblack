@@ -1871,6 +1871,12 @@ void LockstepHost::Closed(ConnectionId connection, uint16_t code)
 	}
 	place.state = SeatState::Away;
 	place.awaySince = _clock();
+	// The player lost the connection after a change of the world and before the report that the client loaded the new
+	// world. The client can still have the old world, so it comes back as a player who was away at the change.
+	if (std::exchange(place.oldWorldChecksums, false))
+	{
+		place.missedWorldChange = true;
+	}
 	Log(spdlog::level::info, fmt::format("The player of slot {} lost the connection; the god waits", *seat));
 	Broadcast(game_socket::PlayerState {.slot = *seat, .state = game_socket::PlayerState::State::Away});
 }
