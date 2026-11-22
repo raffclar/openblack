@@ -199,7 +199,6 @@ public:
 	/// Whether every check is decided
 	[[nodiscard]] bool Done() const;
 	[[nodiscard]] std::span<const Result> GetResults() const { return _results; }
-	[[nodiscard]] std::span<const Check> GetChecks() const { return _checks; }
 	/// The report: a line for each check and the verdict
 	[[nodiscard]] std::vector<std::string> Report(std::string_view scenario) const;
 

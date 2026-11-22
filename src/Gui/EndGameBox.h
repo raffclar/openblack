@@ -101,7 +101,6 @@ public:
 	/// The end box is open and shows no box of a tab over it
 	[[nodiscard]] bool ShowsItself() const noexcept { return _open && !_showsStatistics && !_showsConditions; }
 	[[nodiscard]] const ConditionsBox& GetConditions() const noexcept { return *_conditions; }
-	[[nodiscard]] const StatisticsBox& GetStatistics() const noexcept { return *_statistics; }
 	[[nodiscard]] const Contents& GetContents() const noexcept { return _contents; }
 	[[nodiscard]] const StaticText& GetTitle() const noexcept { return *_title; }
 

@@ -125,14 +125,6 @@ float magic::DampAlignmentChange(float change, float current)
 	return sameWay ? change * (1.0f - lean) : change * (1.0f + lean);
 }
 
-float magic::EffectAlignmentChange(const EffectValues& values, float burnDamage, AlignmentType type, float lifeChange,
-                                   std::span<const GAlignmentInfo> alignmentTable, float alignmentAddition,
-                                   float casterAlignment)
-{
-	const auto terms = EffectAlignmentChanges(values, burnDamage, type, lifeChange, alignmentTable, alignmentAddition);
-	return AddEffectAlignmentChanges(0.0f, DampEffectAlignmentChanges(terms, casterAlignment));
-}
-
 EffectAlignmentTerms magic::DampEffectAlignmentChanges(const EffectAlignmentTerms& terms, float casterAlignment)
 {
 	EffectAlignmentTerms damped {};

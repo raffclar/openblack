@@ -148,9 +148,6 @@ public:
 	}
 	/// The start-of-game question's box, up or not
 	[[nodiscard]] const SkipBox& GetSkipBox() const noexcept { return *_skipBox; }
-	/// The buttons of the story history in the temple's library
-	[[nodiscard]] StoryHistoryBox& GetStoryHistoryBox() noexcept { return *_storyHistoryBox; }
-	[[nodiscard]] const StoryHistoryBox& GetStoryHistoryBox() const noexcept { return *_storyHistoryBox; }
 	/// The controls of the custom music player at the top right of the screen
 	[[nodiscard]] CustomMusicControls& GetMusicControls() noexcept { return *_musicControls; }
 	[[nodiscard]] const CustomMusicControls& GetMusicControls() const noexcept { return *_musicControls; }
