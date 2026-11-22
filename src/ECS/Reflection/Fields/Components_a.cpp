@@ -147,6 +147,8 @@ void openblack::ecs::reflection::RegisterFields_Components_a(entt::meta_ctx& con
 	    .Field<&components::AudioEmitter::minDistance>("minDistance")
 	    .Field<&components::AudioEmitter::maxDistance>("maxDistance")
 	    .Field<&components::AudioEmitter::distanceScale>("distanceScale")
+	    .Field<&components::AudioEmitter::hearing>("hearing")
+	    .RunField<&components::AudioEmitter::filteredBuffer>("filteredBuffer")
 	    .Field<&components::AudioEmitter::headerSet>("headerSet")
 	    .Field<&components::AudioEmitter::loop>("loop")
 	    .RunField<&components::AudioEmitter::loopCount>("loopCount")

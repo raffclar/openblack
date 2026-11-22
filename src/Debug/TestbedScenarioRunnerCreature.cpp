@@ -1004,6 +1004,7 @@ void Runner::GiveCreatureCommand(const Command& command)
 	case Kind::PlayGuidanceVoice:
 	case Kind::PlayBankSample:
 	case Kind::ReleaseBankSample:
+	case Kind::StormBolt:
 	case Kind::ScriptRelease:
 	case Kind::FillSiteIcons:
 	case Kind::BuildWorshipSites:

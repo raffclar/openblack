@@ -161,8 +161,8 @@ std::string StormBoltsText()
 constexpr glm::vec3 k_CloudPoint {300.0f, 160.0f, 0.0f};
 /// A listener at the place where the thunder starts, which hears it at once
 constexpr glm::vec3 k_NearListener {300.0f, 0.0f, 0.0f};
-/// A listener 3 km from the strike. The thunder needs more than 8 seconds to come there, so the strike goes first and the
-/// thunder is never heard.
+/// A listener 3 km from the strike. The thunder needs more than 8 seconds to come there, so the strike goes first. The
+/// thunder waits on after its strike.
 constexpr glm::vec3 k_FarListener {-2700.0f, 0.0f, 0.0f};
 /// The turns of each run of the storm
 constexpr int k_StormTurns = 40;
@@ -427,8 +427,6 @@ TEST_F(ParticleSaveParts, TheSyncedPartIsTheSameWhereverTheListenerIs)
 	{
 		EXPECT_EQ(nearTurns[turn].first.synced, serverTurns[turn].first.synced) << "turn " << turn;
 		EXPECT_EQ(farTurns[turn].first.synced, serverTurns[turn].first.synced) << "turn " << turn;
-		// The far client keeps the thunder no longer than its strike
-		EXPECT_LE(farTurns[turn].second, serverTurns[turn].second) << "turn " << turn;
 		if (farTurns[turn].first.local != nearTurns[turn].first.local)
 		{
 			localPartsDiffer = true;
@@ -436,6 +434,10 @@ TEST_F(ParticleSaveParts, TheSyncedPartIsTheSameWhereverTheListenerIs)
 		}
 	}
 	EXPECT_GT(serverTurns.front().second, 0u);
+	// The server forgets the sound with its strike. The far client keeps the thunder after its strike, outside the synced
+	// part.
+	EXPECT_EQ(serverTurns.back().second, 0u);
+	EXPECT_EQ(farTurns.back().second, 1u);
 	// The part of this computer keeps the wait while the strike lives, and all of it is a presentation value
 	EXPECT_TRUE(localPartsDiffer);
 	ASSERT_TRUE(waitTurn.has_value());
@@ -444,13 +446,17 @@ TEST_F(ParticleSaveParts, TheSyncedPartIsTheSameWhereverTheListenerIs)
 	EXPECT_EQ(waiting.localPresentation.front(), std::make_pair(size_t {0}, waiting.local.size()));
 }
 
-TEST_F(ParticleSaveParts, AThunderWhoseStrikeHasGoneIsForgottenUnheard)
+TEST_F(ParticleSaveParts, AThunderWhoseStrikeHasGoneWaitsOnAndASaveLeavesItOut)
 {
 	AddStormFiles();
 	ParticleRuleSystem far;
 	const auto turns = RunStorm(far, k_FarListener);
-	// The strike has gone before its thunder came to the listener, so no sound is left to save
-	EXPECT_EQ(turns.back().second, 0u);
+	// The strike has gone before its thunder came to the listener. The thunder waits on, and it goes when its wait ends.
+	EXPECT_EQ(turns.back().second, 1u);
+	const auto silentAfter = TurnsUntilSilent(far);
+	EXPECT_GT(silentAfter, 0);
+	EXPECT_LT(silentAfter, 1000);
+	// A load ends a sound whose particle is gone, so a save does not keep it
 	ParticleRuleSystem loaded;
 	ASSERT_TRUE(Read(loaded, turns.back().first.synced));
 	ASSERT_TRUE(Read(*loaded.LocalEffectsState(), turns.back().first.local));
@@ -477,7 +483,7 @@ TEST_F(ParticleSaveParts, AThunderThatTravelsWhileItsStrikeLivesKeepsItsWaitInTh
 	const auto again = Save(loaded);
 	EXPECT_EQ(again.synced, parts.synced);
 	EXPECT_EQ(again.local, parts.local);
-	// The wait came back, and the sound goes with its strike in the same turn
+	// The wait came back, and the sound ends in the same turn
 	const auto original = TurnsUntilSilent(far);
 	EXPECT_GT(original, 0);
 	EXPECT_EQ(TurnsUntilSilent(loaded), original);

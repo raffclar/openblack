@@ -25,31 +25,52 @@ TEST(ParticleSoundTurn, ALoopingSoundStartsInEachTurn)
 	float wait = 0.0f;
 	for (int turn = 0; turn < 5; ++turn)
 	{
-		EXPECT_EQ(Next(true, true, wait, k_Turn), Step::Start);
+		EXPECT_EQ(Next(true, true, false, wait, k_Turn), Step::Start);
 	}
 	wait = 1.0f;
-	EXPECT_EQ(Next(true, true, wait, k_Turn), Step::Start);
+	EXPECT_EQ(Next(true, true, false, wait, k_Turn), Step::Start);
 	EXPECT_EQ(wait, 1.0f);
 }
 
-// When the particle goes, the game lets go of the sound. A sound that waits to be heard never plays.
+// When the particle goes, the game lets go of a sound that does not travel at the speed of sound
 TEST(ParticleSoundTurn, TheGameLetsGoOfTheSoundWhenItsParticleGoes)
 {
 	float wait = 0.5f;
-	EXPECT_EQ(Next(false, false, wait, k_Turn), Step::LetGo);
+	EXPECT_EQ(Next(false, false, false, wait, k_Turn), Step::LetGo);
 	EXPECT_EQ(wait, 0.5f);
-	EXPECT_EQ(Next(false, true, wait, k_Turn), Step::LetGo);
+	EXPECT_EQ(Next(false, true, false, wait, k_Turn), Step::LetGo);
+}
+
+// Thunder that waits keeps its wait when its bolt goes, and starts when the wait ends. The game lets go of it in the
+// next turn. In the game, this thunder was never heard.
+TEST(ParticleSoundTurn, ThunderOutlivesItsBolt)
+{
+	float wait = 0.25f;
+	EXPECT_EQ(Next(true, false, true, wait, k_Turn), Step::Nothing);
+	EXPECT_EQ(Next(false, false, true, wait, k_Turn), Step::Nothing);
+	EXPECT_EQ(Next(false, false, true, wait, k_Turn), Step::Start);
+	EXPECT_LT(wait, 0.0f);
+	EXPECT_EQ(Next(false, false, true, wait, k_Turn), Step::LetGo);
+}
+
+// Thunder that played already, or that never waited, goes with its bolt
+TEST(ParticleSoundTurn, ThunderThatDoesNotWaitGoesWithItsBolt)
+{
+	float played = -0.05f;
+	EXPECT_EQ(Next(false, false, true, played, k_Turn), Step::LetGo);
+	float none = 0.0f;
+	EXPECT_EQ(Next(false, false, true, none, k_Turn), Step::LetGo);
 }
 
 // Thunder 80 m away waits 0.23 s: it starts in the third turn, when its wait goes below zero
 TEST(ParticleSoundTurn, ThunderStartsWhenItsWaitGoesBelowZero)
 {
 	float wait = 80.0f / 347.0f;
-	EXPECT_EQ(Next(true, false, wait, k_Turn), Step::Nothing);
-	EXPECT_EQ(Next(true, false, wait, k_Turn), Step::Nothing);
-	EXPECT_EQ(Next(true, false, wait, k_Turn), Step::Start);
+	EXPECT_EQ(Next(true, false, true, wait, k_Turn), Step::Nothing);
+	EXPECT_EQ(Next(true, false, true, wait, k_Turn), Step::Nothing);
+	EXPECT_EQ(Next(true, false, true, wait, k_Turn), Step::Start);
 	// Then it does not start again
-	EXPECT_EQ(Next(true, false, wait, k_Turn), Step::Nothing);
+	EXPECT_EQ(Next(true, false, true, wait, k_Turn), Step::Nothing);
 	EXPECT_LT(wait, 0.0f);
 }
 
@@ -58,11 +79,11 @@ TEST(ParticleSoundTurn, ThunderStartsWhenItsWaitGoesBelowZero)
 TEST(ParticleSoundTurn, AWaitOfZeroNeverEnds)
 {
 	float wait = k_Turn;
-	EXPECT_EQ(Next(true, false, wait, k_Turn), Step::Nothing);
+	EXPECT_EQ(Next(true, false, true, wait, k_Turn), Step::Nothing);
 	EXPECT_EQ(wait, 0.0f);
 	for (int turn = 0; turn < 5; ++turn)
 	{
-		EXPECT_EQ(Next(true, false, wait, k_Turn), Step::Nothing);
+		EXPECT_EQ(Next(true, false, true, wait, k_Turn), Step::Nothing);
 	}
 	EXPECT_EQ(wait, 0.0f);
 }

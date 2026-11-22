@@ -48,6 +48,11 @@ struct AudioEmitter
 	float minDistance = 1.0f;
 	float maxDistance = 9999.0f;
 	float distanceScale = 0.3f;
+	/// How the sound falls off past its maximum distance: it is silent there, or it is thunder that the whole land hears
+	audio::Hearing hearing {audio::Hearing::Sample};
+	/// A copy of the sample that a filter changed, which the source plays and this emitter owns, or 0. This number names a
+	/// buffer of this run only, so a save does not keep it.
+	audio::BufferId filteredBuffer {0};
 	/// The play settings that the bank header set when the sound started (bits of pack::AudioBankOverride). Later
 	/// changes of the volume or the playback rate do nothing when the header set them.
 	uint32_t headerSet {0};

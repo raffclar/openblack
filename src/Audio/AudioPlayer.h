@@ -49,6 +49,7 @@ public:
 	void SetPitch(SourceId id, float pitch) override;
 	void SetPosition(SourceId id, glm::vec3 position) override;
 	void SetDistanceAttenuation(SourceId id, float referenceDistance, float maxDistance, float rolloff) override;
+	void ReplaceQueue(SourceId sourceId, BufferId buffer) override;
 	void SetLooping(SourceId id, bool loop) override;
 	void StartSource(SourceId id) override;
 	[[nodiscard]] float GetVolume() const override;

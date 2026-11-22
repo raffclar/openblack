@@ -48,6 +48,7 @@
 #include "Resources/Resources.h"
 #include "SampleFeed.h"
 #include "Sound/EmitterFollow.h"
+#include "Sound/FarThunder.h"
 #include "Sound/HeaderOverrides.h"
 #include "Sound/HearingRange.h"
 #include "Sound/ListenerFrame.h"
@@ -352,6 +353,13 @@ Listener AudioManager::HeardListener() const
 
 float AudioManager::EmitterVolume(const AudioEmitter& emitter) const
 {
+	// Thunder that the whole land hears falls off past its maximum distance as far thunder does. The source keeps the
+	// volume of the maximum distance there.
+	if (emitter.spatial && emitter.hearing == Hearing::Thunder)
+	{
+		const auto far = far_thunder::HearingAt(ListenerDistance(emitter.position), emitter.maxDistance);
+		return emitter.gain * far.gain * _globalVolume;
+	}
 	// A placed voice past its maximum distance is silent
 	if (emitter.spatial && IsBeyondMaxDistance(ListenerDistance(emitter.position), emitter.maxDistance))
 	{
@@ -376,7 +384,9 @@ void AudioManager::StopOutOfRangeEmitters()
 		const auto ownerPoint = emitter.follows == Follows::Owner
 		                            ? ecs::SoundPointOf(Locator::entitiesRegistry::value(), emitter.owner)
 		                            : std::optional<glm::vec3> {};
-		const auto step = StepFollowingSound(emitter.follows, ownerPoint, emitter.position, listener, emitter.maxDistance);
+		// Thunder that the whole land hears stops only past the silent distance
+		const auto reach = emitter.hearing == Hearing::Thunder ? far_thunder::k_SilentDistance : emitter.maxDistance;
+		const auto step = StepFollowingSound(emitter.follows, ownerPoint, emitter.position, listener, reach);
 		if (step.stop)
 		{
 			stopped.push_back(entity);
@@ -464,6 +474,10 @@ void AudioManager::DestroyEmitter(entt::entity emitter)
 	}
 	_audioPlayer->StopSource(component.sourceId);
 	_audioPlayer->DeleteSource(component.sourceId);
+	if (component.filteredBuffer != 0)
+	{
+		_audioPlayer->DeleteBuffer(component.filteredBuffer);
+	}
 	if (const auto slot = VoiceOf(emitter))
 	{
 		ReleaseVoice(*slot);
@@ -974,6 +988,46 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
                                             const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder,
                                             AnimEffectMeasure measure)
 {
+	return PlayHeardAnimEffect(bankName, keys, owner, position, heardUnder, measure, Hearing::Sample);
+}
+
+AnimEffectPlay AudioManager::PlayThunder(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+                                         const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder)
+{
+	return PlayHeardAnimEffect(bankName, keys, owner, position, heardUnder, AnimEffectMeasure::Straight, Hearing::Thunder);
+}
+
+BufferId AudioManager::FilteredBuffer(entt::id_type id, const Sound& sound, float cutOff)
+{
+	auto samples = _thunderSamples.find(id);
+	if (samples == _thunderSamples.end())
+	{
+		DecodedSound decoded {.samples = {}, .channelLayout = ChannelLayout::Mono, .sampleRate = sound.sampleRate};
+		for (const auto& part : sound.buffer)
+		{
+			auto result = DecodeSound(part, sound.sampleRate);
+			if (!result.sound)
+			{
+				return 0;
+			}
+			decoded.channelLayout = result.sound->channelLayout;
+			decoded.sampleRate = result.sound->sampleRate;
+			decoded.samples.insert(decoded.samples.end(), result.sound->samples.begin(), result.sound->samples.end());
+		}
+		samples = _thunderSamples.emplace(id, std::move(decoded)).first;
+	}
+	const auto& decoded = samples->second;
+	auto filtered = decoded.samples;
+	const size_t channels = decoded.channelLayout == ChannelLayout::Stereo ? 2 : 1;
+	far_thunder::LowPass(filtered, channels, decoded.sampleRate, cutOff);
+	return CreateBuffer(decoded.channelLayout, filtered, decoded.sampleRate);
+}
+
+AnimEffectPlay AudioManager::PlayHeardAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+                                                 const glm::vec3& position,
+                                                 const std::optional<SoundEffectConditions>& heardUnder,
+                                                 AnimEffectMeasure measure, Hearing hearing)
+{
 	const auto effects = _animEffects.find(bankName);
 	if (effects == _animEffects.end())
 	{
@@ -1008,7 +1062,10 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 	// The sample doesn't start further from the camera than the hearing limit, or than its bank's maximum distance,
 	// applied to the voice or not
 	const auto distance = AnimEffectDistance(GetListener().origin, position, measure);
-	if (!IsAnimEffectWithinReach(distance, sound->maxDistance))
+	// Thunder that the whole land hears starts nearer than the silent distance
+	const auto far = far_thunder::HearingAt(distance, sound->maxDistance);
+	const bool reaches = hearing == Hearing::Thunder ? far.gain > 0.0f : IsAnimEffectWithinReach(distance, sound->maxDistance);
+	if (!reaches)
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"),
 		                    "Sound {} at ({}, {}, {}) not started at turn {}: {:.1f} m from the listener, beyond its {} m or "
@@ -1031,6 +1088,23 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 		                     : sounds.Contains(id)   ? AnimEffectPlay::Outcome::NoVoice
 		                                             : AnimEffectPlay::Outcome::NotLoaded;
 		return {.outcome = outcome, .emitter = entt::null, .sample = sample, .maxDistance = sound->maxDistance};
+	}
+	if (hearing == Hearing::Thunder)
+	{
+		// The air takes the high sounds of far thunder. The filter takes the distance when the thunder starts.
+		auto& emitter = _emitters.Get<AudioEmitter>(entity);
+		emitter.hearing = Hearing::Thunder;
+		if (far.cutOff.has_value())
+		{
+			emitter.filteredBuffer = FilteredBuffer(id, *sound, *far.cutOff);
+			if (emitter.filteredBuffer != 0)
+			{
+				_audioPlayer->ReplaceQueue(emitter.sourceId, emitter.filteredBuffer);
+			}
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Thunder {} starts {:.1f} m from the listener: gain {:.4f}, cut-off {}",
+		                    sound->name, distance, far.gain,
+		                    far.cutOff.has_value() ? fmt::format("{:.0f} Hz", *far.cutOff) : std::string("none"));
 	}
 	PlayEmitter(entity);
 	return {.outcome = AnimEffectPlay::Outcome::Played, .emitter = entity, .sample = sample, .maxDistance = sound->maxDistance};

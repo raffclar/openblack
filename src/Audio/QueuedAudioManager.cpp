@@ -321,6 +321,14 @@ AnimEffectPlay QueuedAudioManager::PlayAnimEffect(const std::string& bankName, s
 	return _audio->PlayAnimEffect(bankName, keys, owner, position, heardUnder, measure);
 }
 
+AnimEffectPlay QueuedAudioManager::PlayThunder(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+                                               const glm::vec3& position,
+                                               const std::optional<SoundEffectConditions>& heardUnder)
+{
+	Direct("PlayThunder");
+	return _audio->PlayThunder(bankName, keys, owner, position, heardUnder);
+}
+
 void QueuedAudioManager::EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
                                        const glm::vec3& position, AnimEffectEnd end, AnimEffectMeasure measure)
 {

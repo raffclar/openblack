@@ -332,7 +332,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandCastOnDispenser || kind == Kind::HandCastOnCreature || kind == Kind::CloseHeldMiracle ||
 	       kind == Kind::JoinFootball || kind == Kind::GiveMagicTreesToStore || kind == Kind::HandCastAtPoint ||
 	       kind == Kind::TempleFreeCamera || kind == Kind::InfiniteInfluenceCheat || kind == Kind::LoadGeneratedLand ||
-	       kind == Kind::LoadMapLand || kind == Kind::KillVillagers || kind == Kind::SetSkyPictures || IsPointerCommand(kind);
+	       kind == Kind::LoadMapLand || kind == Kind::KillVillagers || kind == Kind::SetSkyPictures ||
+	       kind == Kind::StormBolt || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -539,6 +540,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "play a guidance voice",
 	    "play a bank sample",
 	    "release the bank sample",
+	    "let down a storm bolt",
 	    "stop at once",
 	    "turn to face when still",
 	    "script release",

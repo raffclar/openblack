@@ -95,6 +95,8 @@ public:
 	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
 	                              const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder,
 	                              AnimEffectMeasure measure) override;
+	AnimEffectPlay PlayThunder(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                           const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder) override;
 	void EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
 	                   const glm::vec3& position, AnimEffectEnd end, AnimEffectMeasure measure) override;
 	const Sound& GetSound(entt::id_type id) override;

@@ -141,6 +141,11 @@ public:
 	{
 		return {};
 	}
+	audio::AnimEffectPlay PlayThunder(const std::string&, std::span<const int32_t>, entt::entity, const glm::vec3&,
+	                                  const std::optional<audio::SoundEffectConditions>&) override
+	{
+		return {};
+	}
 	void EndAnimEffect(const std::string&, std::span<const int32_t>, entt::entity, const glm::vec3&, audio::AnimEffectEnd,
 	                   audio::AnimEffectMeasure) override
 	{

@@ -33,6 +33,7 @@
 #include "MusicPlayer.h"
 #include "MusicStreamBackend.h"
 #include "Sound/HeaderOverrides.h"
+#include "Sound/SoundDecoder.h"
 #include "Sound/SoundGroup.h"
 #include "VoicePool.h"
 
@@ -106,6 +107,8 @@ public:
 	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
 	                              const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder,
 	                              AnimEffectMeasure measure) override;
+	AnimEffectPlay PlayThunder(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                           const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder) override;
 	void EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
 	                   const glm::vec3& position, AnimEffectEnd end, AnimEffectMeasure measure) override;
 	void SetGlobalVolume(float volume) override { _globalVolume = volume; }
@@ -184,6 +187,13 @@ private:
 	                                entt::entity owner, uint64_t ownerKey, pack::AudioBankLoop callerPlayType,
 	                                VoiceChoice& choice);
 
+	/// An animation effect that falls off with its distance as the hearing tells (see PlayAnimEffect and PlayThunder)
+	AnimEffectPlay PlayHeardAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                                   const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder,
+	                                   AnimEffectMeasure measure, Hearing hearing);
+	/// A buffer of the sample with the low-pass filter at the cut-off, or 0 when the sample does not decode. The caller
+	/// owns the buffer.
+	[[nodiscard]] BufferId FilteredBuffer(entt::id_type id, const Sound& sound, float cutOff);
 	/// A source for a voice of a loaded sound, decoding the sound first if needed
 	SourceId CreateSource(Sound& sound, const VoiceStart& start);
 	/// Places a source in LHAudio's listener frame, or centres it
@@ -230,6 +240,8 @@ private:
 	std::map<Handle, AtmosVoice> _atmosVoices;
 	/// Decoded samples, kept for the lifetime of the audio manager
 	std::vector<BufferId> _decodedBuffers;
+	/// The samples of thunder, decoded the first time that a filter changes them
+	std::map<entt::id_type, DecodedSound> _thunderSamples;
 	Handle _nextAtmosVoice {1};
 	std::unique_ptr<AtmosPlayer> _atmos;
 	std::mt19937 _customMusicRandom;
