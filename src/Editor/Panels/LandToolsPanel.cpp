@@ -31,6 +31,7 @@
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
 #include "Common/UserData.h"
+#include "Debug/LoadIslandMenu.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
@@ -93,6 +94,7 @@ namespace
 /// The folder of the profile folder that the editor saves into
 constexpr std::string_view k_SaveFolder = "Editor";
 constexpr const char* k_ConfirmPopup = "Replace land files?";
+constexpr const char* k_LoadIslandPopup = "Load island";
 /// The points round a circle of the brush that the overlay draws
 constexpr int k_CirclePoints = 48;
 constexpr ImU32 k_InnerCircle = IM_COL32(255, 220, 90, 230);
@@ -1253,6 +1255,24 @@ void LandToolsPanel::Draw(EditorContext& context) noexcept
 			                      "every player gets its world");
 		}
 		ImGui::TextColored(style::k_Muted, "Into the profile folder's %s folder", std::string(k_SaveFolder).c_str());
+		// The islands of the Load Island menu of the debug menu bar. The editor right opens the editor, so a player who
+		// does not have the debugger right finds the islands here too.
+		const auto landAct = debug::gui::CurrentLandMenuAct();
+		ImGui::BeginDisabled(landAct == developer_tools::LandMenuAct::Closed);
+		if (ImGui::Button("Load island"))
+		{
+			ImGui::OpenPopup(k_LoadIslandPopup);
+		}
+		ImGui::EndDisabled();
+		if (landAct == developer_tools::LandMenuAct::AsksServer)
+		{
+			ImGui::SetItemTooltip("Ends the game of every player in the room: the room starts again on the island");
+		}
+		if (ImGui::BeginPopup(k_LoadIslandPopup))
+		{
+			debug::gui::DrawLoadIslandItems(landAct);
+			ImGui::EndPopup();
+		}
 		ImGui::EndTable();
 	}
 	DrawConfirmation(context);

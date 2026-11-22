@@ -318,17 +318,18 @@ bool NetworkSession::SendEditorScenario(std::string_view id)
 	return _stream->SendText(game_socket::ToJson(game_socket::EditorScenario {.id = std::string(id)}));
 }
 
-bool NetworkSession::SendEditorLand(std::string_view land, bool testbed)
+bool NetworkSession::SendEditorLand(const game_socket::EditorLand& land)
 {
-	// A request names a land or the testbed, not both
-	if (!_start.has_value() || !_stream || !_stream->IsOpen() || land.empty() == !testbed ||
-	    land.size() > game_socket::k_MostLandNameBytes)
+	// A request names one of a land, the testbed and the map for 32 gods
+	if (!_start.has_value() || !_stream || !_stream->IsOpen() || !game_socket::NamesOneLand(land))
 	{
 		return false;
 	}
-	_log->Write(spdlog::level::info, fmt::format("This computer asks the server to load {}",
-	                                             testbed ? std::string("the testbed") : std::string(land)));
-	return _stream->SendText(game_socket::ToJson(game_socket::EditorLand {.land = std::string(land), .testbed = testbed}));
+	const auto name = land.testbed       ? std::string("the testbed")
+	                  : land.godsRingMap ? std::string("the map for 32 gods")
+	                                     : land.land;
+	_log->Write(spdlog::level::info, fmt::format("This computer asks the server to load {}", name));
+	return _stream->SendText(game_socket::ToJson(land));
 }
 
 void NetworkSession::Leave()
