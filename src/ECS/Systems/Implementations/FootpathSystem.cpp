@@ -920,6 +920,11 @@ bool FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 void FootpathSystem::ProcessObstacleChanges()
 {
 	auto& registry = _world->Entities();
+	// Most living things change nothing that the paths go round, thus the list is empty after most of their turns
+	if (registry.Context().footpathObstacleChanges.empty())
+	{
+		return;
+	}
 	// Each change goes through every path. The paths do not depend on each other, so their order does not matter.
 	auto changes = std::move(registry.Context().footpathObstacleChanges);
 	registry.Context().footpathObstacleChanges.clear();

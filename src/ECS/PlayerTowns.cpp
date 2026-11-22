@@ -9,12 +9,14 @@
 
 #include "PlayerTowns.h"
 
+#include <cassert>
 #include <cstdint>
 
 #include <algorithm>
 #include <array>
 #include <iterator>
 #include <ranges>
+#include <span>
 #include <tuple>
 #include <utility>
 
@@ -23,6 +25,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/TownCensus.h"
 
 namespace openblack::ecs
 {
@@ -86,6 +89,35 @@ void SortedTowns(const Registry& registry, const std::function<void(std::span<co
 		++walked;
 	});
 	const auto towns = all.first(walked);
+	const auto keyOf = [](const OrderEntry& entry) {
+		return town_census::TownOrderKey {
+		    .owner = static_cast<uint32_t>(entry.owner), .gained = entry.gained, .town = entry.town};
+	};
+	// A walk with the same keys as the last sort gives the same order, thus the towns take the places of the last sort
+	auto& kept = registry.TownCaches().order;
+	if (kept.walked.size() == towns.size() && std::ranges::equal(kept.walked, towns, std::ranges::equal_to {}, {}, keyOf))
+	{
+		std::array<OrderEntry, player_towns::k_InlineTowns> inlineSorted {};
+		std::vector<OrderEntry> sortedOnHeap;
+		if (walked > inlineSorted.size())
+		{
+			sortedOnHeap.resize(walked);
+		}
+		const auto sorted =
+		    (walked > inlineSorted.size() ? std::span<OrderEntry>(sortedOnHeap) : std::span<OrderEntry>(inlineSorted))
+		        .first(walked);
+		std::ranges::transform(kept.sorted, sorted.begin(), [&towns](uint32_t place) { return towns[place]; });
+#ifndef NDEBUG
+		// The debug builds make sure that the kept order is the same as a new sort gives
+		std::vector<OrderEntry> fresh(towns.begin(), towns.end());
+		std::ranges::sort(fresh, [](const OrderEntry& a, const OrderEntry& b) {
+			return std::tie(a.owner, a.gained, a.walked) < std::tie(b.owner, b.gained, b.walked);
+		});
+		assert(std::ranges::equal(fresh, sorted, {}, &OrderEntry::town, &OrderEntry::town));
+#endif
+		use(sorted);
+		return;
+	}
 	// The neutral player has the last number, so its list comes after the lists of all the other players
 	static_assert(PlayerNames::NEUTRAL == static_cast<PlayerNames>(static_cast<uint8_t>(PlayerNames::_COUNT) - 1));
 	// The place in the walk makes each key different. Thus this sort gives the order of a stable sort, with no memory
@@ -93,6 +125,14 @@ void SortedTowns(const Registry& registry, const std::function<void(std::span<co
 	std::ranges::sort(towns, [](const OrderEntry& a, const OrderEntry& b) {
 		return std::tie(a.owner, a.gained, a.walked) < std::tie(b.owner, b.gained, b.walked);
 	});
+	// The keys go back into the order of the walk for the next comparison
+	kept.walked.resize(towns.size());
+	kept.sorted.resize(towns.size());
+	for (size_t i = 0; i < towns.size(); ++i)
+	{
+		kept.walked[towns[i].walked] = keyOf(towns[i]);
+		kept.sorted[i] = towns[i].walked;
+	}
 	use(towns);
 }
 } // namespace

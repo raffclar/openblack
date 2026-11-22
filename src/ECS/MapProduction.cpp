@@ -305,16 +305,16 @@ void MapProduction::FileMadeBeforeLook() const
 	}
 }
 
-std::vector<uint32_t> MapProduction::CellsFor(entt::entity entity, const Kind& kind) const
+void MapProduction::CellsFor(entt::entity entity, const Kind& kind, std::vector<uint32_t>& cells) const
 {
-	std::vector<uint32_t> cells;
+	cells.clear();
 	if (kind.coversOutline)
 	{
 		const auto outline = _outlines(*_registry, entity);
 		if (!outline.has_value())
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Map: a building without a model can't be put in the map's cells");
-			return cells;
+			return;
 		}
 		for (const auto cell : map_cells::CellsCovered(*outline, _lists.CellsPerSide()))
 		{
@@ -323,13 +323,12 @@ std::vector<uint32_t> MapProduction::CellsFor(entt::entity entity, const Kind& k
 				cells.push_back(*index);
 			}
 		}
-		return cells;
+		return;
 	}
 	if (const auto index = CellOfPlace(entity))
 	{
 		cells.push_back(*index);
 	}
-	return cells;
 }
 
 std::optional<uint32_t> MapProduction::CellOfPlace(entt::entity entity) const
@@ -375,7 +374,13 @@ void MapProduction::File(entt::entity entity, const Kind& kind) const
 {
 	// The land's blocks are known before anything goes on them
 	KnowLandBlocks();
-	auto cells = CellsFor(entity, kind);
+	// The list of the cells uses the memory of the list that the thing had, so that a move gets no memory from the heap
+	std::vector<uint32_t> cells;
+	if (auto* resident = _registry->TryGet<MapCellResident>(entity); resident != nullptr)
+	{
+		cells = std::move(resident->cells);
+	}
+	CellsFor(entity, kind, cells);
 	for (const auto cell : cells)
 	{
 		_lists.Insert(cell, entity, kind.placement);

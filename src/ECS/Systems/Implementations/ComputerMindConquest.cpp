@@ -664,7 +664,7 @@ float ThrowToImpress(RuleContext& context, computer_mind::Mind& mind, uint16_t n
 	if (value < 1.0f)
 	{
 		// Short of a full value, the god looks at the places again
-		spot = TownImpressPlace(town, hand);
+		spot = TownImpressPlaceAgain(town, hand, spot);
 		value = spot.has_value() ? spot->value : 0.0f;
 		if (spot.has_value())
 		{
