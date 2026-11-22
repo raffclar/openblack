@@ -21,6 +21,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/GameSpeed.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -98,7 +99,7 @@ void NormalSpeed()
 {
 	if (Locator::time::has_value())
 	{
-		Locator::time::value().SetSpeed(1.0f);
+		ecs::game_speed::Set(1.0f);
 	}
 }
 

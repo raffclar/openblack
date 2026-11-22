@@ -746,6 +746,7 @@ private:
 	void SendLoadWait(ConnectionId connection);
 	/// A request of the editor to pause, play, step or change the speed of the clock of the room
 	void TimeFrom(ConnectionId connection, const Peer& peer, const game_socket::EditorTime& request);
+	void PaceFrom(const Peer& peer, const game_socket::GamePace& request);
 	/// A player who joins or comes back gets the clock of the room
 	void SendRoomClock(ConnectionId connection);
 	/// The frame of the clock of the room after a change

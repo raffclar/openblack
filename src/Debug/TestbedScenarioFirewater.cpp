@@ -58,6 +58,37 @@ void AddBlasts(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.blast_crater",
+	    .name = "Extreme blast on a crater",
+	    .facet = Facet::Miracles,
+	    .description = "The extreme blast on a crater of the fifth land, which a script made indestructible as the "
+	                   "land's script does, with a tree beside it.",
+	    .expected = "The wave shatters the tree, which goes. The crater does not break into pieces and stays where it is "
+	                "after the barrage.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Ground - glm::vec2(30.0f), k_Ground + glm::vec2(30.0f)},
+	                .distance = 0.8f},
+	    .objects = {{.type = FeatureInfo::Crater, .offset = k_Ground, .scale = 4.0f, .indestructible = true},
+	                {.type = TreeInfo::Oak, .offset = k_Ground + glm::vec2(12.0f, 0.0f)}},
+	    .miracles = {{.type = MagicType::ExplosionOnePuTwo,
+	                  .point = k_Ground,
+	                  .handOffset = k_Ground,
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 2.0f}},
+	    .checks = {{.label = "the crater stays after the extreme blast",
+	                .quantity = checks::Quantity::ObjectDistance,
+	                .index = 0,
+	                .point = k_Ground,
+	                .afterTurns = 250,
+	                .atMost = 1.0},
+	               {.label = "the tree beside the crater goes",
+	                .quantity = checks::Quantity::ObjectsAlive,
+	                .afterTurns = 250,
+	                .atMost = 1.0}},
+	});
+
+	all.push_back({
 	    .id = "miracles.blast_coast",
 	    .name = "Blast on a coast",
 	    .facet = Facet::Miracles,

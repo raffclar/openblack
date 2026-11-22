@@ -345,7 +345,7 @@ private:
 };
 
 /// An edit box: a bevelled box of white text the player types into while it has the focus. A blinking bar marks the
-/// caret and a pale band the selection, its text grey; the text scrolls to keep the caret in the box. The first click
+/// caret and a pale band the selection, its text black; the text scrolls to keep the caret in the box. The first click
 /// into the box as it takes the focus selects all of its text; dragging selects, and Shift with the arrows, Home and
 /// End moves the selection's end
 class EditBox final: public Control
@@ -370,6 +370,8 @@ public:
 	/// The box shows a '#' for each character of its text, as a password's box does
 	bool masked {false};
 	static constexpr char16_t k_MaskCharacter = u'#';
+	/// The selected text shows black on the pale band
+	static constexpr glm::vec4 k_SelectedTextColour {0.0f, 0.0f, 0.0f, 1.0f};
 
 private:
 	[[nodiscard]] int Width(std::u16string_view text) const;

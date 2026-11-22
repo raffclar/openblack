@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <utility>
 
 #include <fmt/core.h>
 #include <fmt/format.h>
@@ -30,6 +31,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -166,6 +168,21 @@ void TestbedScenarios::UpdateAlways() noexcept
 		                                           ? time.GetFixedFrameTime().value_or(time.GetFrameRealTime())
 		                                           : time.GetFrameGameTime())
 		              .count();
+		// A game that steps deterministically gives no time to the frames in which a turn waits between two players. The
+		// scenario does not step in these frames, also when the turn ends in one of them before the turns of the frame.
+		if (const auto* game = Game::Instance(); game != nullptr && game->IsFrameWithoutTime())
+		{
+			return;
+		}
+		// A turn that waits between two players to continue gets no command of the scenario. The scenario keeps the time
+		// of these frames, and continues after the last player of the turn (deviation row 288).
+		if (Locator::landSystem::has_value() && Locator::landSystem::value().IsTurnSplit())
+		{
+			_heldSeconds += seconds;
+			_runner.UpdateView();
+			return;
+		}
+		seconds += std::exchange(_heldSeconds, 0.0f);
 		// The time of the turns is the least that the scenario counts, so that a stepped game gives each command at its turn
 		if (_clockScenario != _runner.GetScenario())
 		{

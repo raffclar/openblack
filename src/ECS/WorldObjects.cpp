@@ -45,6 +45,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicForest.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -54,8 +55,10 @@
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
@@ -93,6 +96,7 @@
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -972,17 +976,15 @@ bool world_objects::CanBeDestroyedBySpell(entt::entity object, entt::entity spel
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto can = [&registry, object, spell] {
-		// Nor anything a script made indestructible
+		// A creature, a field, the temple, a worship site and its altar refuse every miracle by their own rule. Nor
+		// anything a script made indestructible.
 		if (!registry.Valid(object) ||
-		    registry.AnyOf<Creature, Field, Temple, TeleportStone, OneOffSpellSeed, Indestructible, WorshipIcon>(object))
+		    registry.AnyOf<Creature, Field, Temple, WorshipSite, WorshipAltar, Indestructible>(object))
 		{
 			return false;
 		}
-		if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && abode->type == AbodeNumber::Totem)
-		{
-			return false;
-		}
-		if (const auto* pot = registry.TryGet<const Pot>(object); pot != nullptr && pot->amount == 0)
+		// A thing that takes no effect is not destroyed, such as the volcano's mouth on Land 5
+		if (!IsEffectReceiver(object, std::nullopt))
 		{
 			return false;
 		}
@@ -1212,6 +1214,13 @@ void world_objects::Remove(entt::entity object)
 	{
 		world_objects::Remove(workshop->woodPile);
 	}
+	// A shield's object that goes takes its reactions and its effect with it at once, also a dome that fades. Its running
+	// miracle keeps no object from then on and goes in its next turn.
+	if (registry.AllOf<MagicShield>(object) && Locator::magicShieldSystem::has_value())
+	{
+		Locator::magicShieldSystem::value().ObjectDestroyed(object);
+		return;
+	}
 	// A weather thing that goes ends its storm at once
 	if (registry.AllOf<WeatherThing>(object) && Locator::weatherSystem::has_value())
 	{
@@ -1264,12 +1273,13 @@ void world_objects::Remove(entt::entity object)
 	}
 }
 
-void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
-                               entt::entity creature, std::optional<guidance::TownAttackVoice> cry)
+void world_objects::AttackTown(entt::entity object, float damage, std::optional<PlayerNames> causedBy,
+                               const town_aggression::Harm& harm, entt::entity creature,
+                               std::optional<guidance::TownAttackVoice> cry)
 {
 	if (const auto target = TownAttackTargetOf(object); target.has_value())
 	{
-		AttackTown(*target, damage, aggressor, harm, creature, cry);
+		AttackTown(*target, damage, causedBy, harm, creature, cry);
 	}
 }
 
@@ -1329,7 +1339,7 @@ std::optional<world_objects::TownAttackTarget> world_objects::TownAttackTargetOf
 	return TownAttackTarget {.town = town, .kind = kind};
 }
 
-void world_objects::AttackTown(const TownAttackTarget& target, float damage, PlayerNames aggressor,
+void world_objects::AttackTown(const TownAttackTarget& target, float damage, std::optional<PlayerNames> causedBy,
                                const town_aggression::Harm& harm, entt::entity creature,
                                std::optional<guidance::TownAttackVoice> cry)
 {
@@ -1344,11 +1354,12 @@ void world_objects::AttackTown(const TownAttackTarget& target, float damage, Pla
 	{
 		return;
 	}
-	// The people cry out before the town counts the attack
-	if (cry.has_value() && Locator::guidanceSystem::has_value())
+	// The people cry out, and the advisors look at the attack, before the town counts the attack
+	if (Locator::guidanceSystem::has_value())
 	{
-		Locator::guidanceSystem::value().TownAttackCry(town, *cry);
+		Locator::guidanceSystem::value().TownAttackCry(town, cry, causedBy);
 	}
+	const auto aggressor = causedBy.value_or(PlayerNames::NEUTRAL);
 	const float amount = ecs::town_aggression::AggressionFromDamage(damage, target.kind->aggressorValue);
 	auto* aggression = registry.TryGet<TownAggression>(town);
 	if (aggression == nullptr)
@@ -1474,12 +1485,25 @@ bool world_objects::IsAvailable(entt::entity object)
 	return !registry.AllOf<Villager>(object) || magic::VillagerAvailable(VillagerReceiverFactsOf(registry, object));
 }
 
-bool world_objects::TakesEffect(entt::entity object, float burn, float heal)
+bool world_objects::IsEffectReceiver(entt::entity object, std::optional<EffectTest> effect)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	if (registry.AnyOf<TownDesireFlag, Vortex, ScriptHighlight, VillageTotem, TeleportStone, WorshipIcon, WorshipAltar,
+	                   SpellSeed, OneOffSpellSeed>(object))
+	{
+		return false;
+	}
+	if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && abode->type == AbodeNumber::Totem)
+	{
+		return false;
+	}
+	if (const auto* shield = registry.TryGet<const MagicShield>(object))
+	{
+		return shield->kind == MagicShield::Kind::Physical && (!effect.has_value() || effect->burn == 0.0f);
+	}
 	if (registry.AllOf<Villager>(object))
 	{
-		return magic::VillagerTakesEffect(VillagerReceiverFactsOf(registry, object), heal);
+		return magic::VillagerTakesEffect(VillagerReceiverFactsOf(registry, object), effect.has_value() ? effect->heal : 0.0f);
 	}
 	if (const auto* pot = registry.TryGet<const Pot>(object))
 	{
@@ -1487,9 +1511,14 @@ bool world_objects::TakesEffect(entt::entity object, float burn, float heal)
 	}
 	if (const auto* field = registry.TryGet<const Field>(object))
 	{
-		return (field->crop.age > 0.0f && field->crop.food > 0.0f) || !(burn > 0.0f);
+		return (field->crop.age > 0.0f && field->crop.food > 0.0f) || !effect.has_value() || !(effect->burn > 0.0f);
 	}
 	return true;
+}
+
+bool world_objects::TakesEffect(entt::entity object, float burn, float heal)
+{
+	return IsEffectReceiver(object, EffectTest {.burn = burn, .heal = heal});
 }
 
 bool world_objects::CanBeCrushed(entt::entity object)

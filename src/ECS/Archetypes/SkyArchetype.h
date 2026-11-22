@@ -22,6 +22,8 @@ public:
 	/// The dome: its mesh and its pictures, in the mesh and texture caches
 	static constexpr entt::hashed_string k_DomeMeshId = entt::hashed_string("weather/sky");
 	static constexpr entt::hashed_string k_DomeTextureId = entt::hashed_string("weather/sky");
+	/// The larger pictures of the optional pack, which only the debug menu shows
+	static constexpr entt::hashed_string k_PackDomeTextureId = entt::hashed_string("weather/sky_pack");
 	/// The sun: a square far out in the sky, and its texture
 	static constexpr entt::hashed_string k_SunMeshId = entt::hashed_string("weather/sun");
 	static constexpr entt::hashed_string k_SunTextureId = entt::hashed_string("raw/sun");

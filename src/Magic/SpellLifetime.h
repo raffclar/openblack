@@ -17,7 +17,8 @@
 // strength falls to nothing, its caster goes or something stops it; it goes once whatever keeps it has gone. A miracle
 // with a particle effect lives while the effect does, so it goes once its effect has died away after closing down. A
 // miracle without one (the physical shield, teleport, the flocks) lives until it closes down, unless what its kind
-// made (a shield's dome, a forest's trees, a flock) keeps it longer. Pure rules, tested without the game.
+// made (a shield's dome, a forest's trees, a flock) keeps it longer. When the world destroys a shield's object while
+// the miracle runs, the miracle goes in its next turn unless its effect runs. Pure rules, tested without the game.
 
 namespace openblack::magic
 {
@@ -32,6 +33,9 @@ struct SpellLife
 	bool closedDown {false};
 	/// What its kind made still keeps it: a shield's dome fading out, a forest with trees left, a flock in the air
 	bool keptByKind {false};
+	/// The world destroyed what its kind made while it ran, as a blast wave destroys a shield's dome: with no effect
+	/// that runs, it goes, closed down or not
+	bool lostByKind {false};
 };
 
 /// Whether a miracle carries on into the next turn or goes

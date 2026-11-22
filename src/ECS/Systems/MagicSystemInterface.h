@@ -434,6 +434,8 @@ public:
 	[[nodiscard]] virtual bool IsHandBusy() const = 0;
 	/// Whether the hand of a player holds a miracle. The turns read this, because it is the same on every computer.
 	[[nodiscard]] virtual bool IsHandBusyOf(PlayerNames player) const = 0;
+	/// Whether the miracles take their step of the turn now
+	[[nodiscard]] virtual bool InMiraclesTurn() const { return false; }
 	/// How a pour of food or wood lifts and tips the hand now, a fraction of the way from the last turn to the next
 	[[nodiscard]] virtual magic::PourPose GetHandPour(float fraction) const = 0;
 	[[nodiscard]] virtual HandCastState GetHandCastState() const = 0;

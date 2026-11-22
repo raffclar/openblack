@@ -83,9 +83,9 @@ float ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> b
 /// Whether a script holds the thing while the script owns the widescreen bars of a cutscene
 [[nodiscard]] bool HeldDuringCutscene(entt::entity object);
 /// Whether a miracle may destroy an object, as the blast's wave shatters what it reaches and the tornado carries off
-/// what it picks up. Not a creature, a field, the temple, a teleport stone, a totem or a one-off spell seed, nor a pot
-/// with nothing in it, nor something a script made indestructible. Nor a thing that a script holds while its cutscene
-/// runs, unless a script controls the miracle (spell).
+/// what it picks up. The object must be an effect receiver when no effect is given (see IsEffectReceiver). Not a
+/// creature, a field, the temple, a worship site or its altar, nor something a script made indestructible. Nor a thing
+/// that a script holds while its cutscene runs, unless a script controls the miracle (spell).
 [[nodiscard]] bool CanBeDestroyedBySpell(entt::entity object, entt::entity spell = entt::null);
 [[nodiscard]] bool IsVillager(entt::entity object);
 [[nodiscard]] bool IsCreature(entt::entity object);
@@ -128,10 +128,11 @@ void KeepForScript(entt::entity building);
 /// seven tenths, one fewer when it rises back over
 void CountInjury(entt::entity villager, float before, float after);
 /// Harm done to a town's villager or building is an attack on its town by whoever did it; the player at this machine's
-/// advisors may remark on it. The creature is the creature that applied the harm, entt::null for harm that no creature
-/// applied. The people of the town may cry out in the voice that the harm gives, if it gives one. The town keeps how
-/// much the attack burnt, crushed and hit.
-void AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
+/// advisors may remark on it. The caused player is none when no player caused the harm: the town then counts the
+/// neutral player as the attacker. The creature is the creature that applied the harm, entt::null for harm that no
+/// creature applied. The people of the town may cry out in the voice that the harm gives, if it gives one. The town
+/// keeps how much the attack burnt, crushed and hit.
+void AttackTown(entt::entity object, float damage, std::optional<PlayerNames> causedBy, const town_aggression::Harm& harm,
                 entt::entity creature = entt::null, std::optional<guidance::TownAttackVoice> cry = std::nullopt);
 /// The town that harm to an object attacks, and the row of the object's kind that sets how much the attack counts
 struct TownAttackTarget
@@ -142,8 +143,8 @@ struct TownAttackTarget
 /// The town that harm to the object attacks: none for an object of no town, or of a kind that no town counts
 [[nodiscard]] std::optional<TownAttackTarget> TownAttackTargetOf(entt::entity object);
 /// Harm done to an object of a town that was found before, as AttackTown does it. The object can be gone.
-void AttackTown(const TownAttackTarget& target, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
-                entt::entity creature, std::optional<guidance::TownAttackVoice> cry);
+void AttackTown(const TownAttackTarget& target, float damage, std::optional<PlayerNames> causedBy,
+                const town_aggression::Harm& harm, entt::entity creature, std::optional<guidance::TownAttackVoice> cry);
 
 /// Life given back to an object other than a living thing, as a miracle's heal gives it: never above 1. Its life after.
 float IncreaseLife(entt::entity object, float amount);
@@ -153,12 +154,24 @@ float IncreaseLife(entt::entity object, float amount);
 /// Whether an area effect can find an object. A villager that goes to the dying state is not available. Every other
 /// object is available.
 [[nodiscard]] bool IsAvailable(entt::entity object);
-/// Whether an object takes an effect that burns and heals by these values:
+/// The parts of an effect that tell if an object takes it
+struct EffectTest
+{
+	float burn {0.0f};
+	float heal {0.0f};
+};
+/// Whether an object is a receiver of an effect, each kind by its own rule. With no effect, the answer is the one that a
+/// miracle asks before it destroys the object.
+/// - A town's desire flag, a vortex, a script highlight, a town centre's totem, a totem, a teleport stone, a worship
+///   site's icon or altar, a spell seed, a one-off spell seed and the spiritual shield's object take no effect.
+/// - The physical shield's dome takes an effect that does not burn. With no effect, it is a receiver.
 /// - A pot takes an effect only while it holds something.
 /// - A field takes an effect that burns only while its crop has an age and food.
-/// - A villager takes an effect that heals while it is not dead. It takes another effect only while it is available,
-///   not in its home, not in a hand and not on its way to hide in a building.
+/// - A villager takes an effect that heals while it is not dead. It takes another effect, or no effect, only while it
+///   is available, not in its home, not in a hand and not on its way to hide in a building.
 /// - Every other object takes every effect.
+[[nodiscard]] bool IsEffectReceiver(entt::entity object, std::optional<EffectTest> effect);
+/// Whether an object takes an effect that burns and heals by these values (see IsEffectReceiver)
 [[nodiscard]] bool TakesEffect(entt::entity object, float burn, float heal);
 
 } // namespace openblack::ecs::world_objects

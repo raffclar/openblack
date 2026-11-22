@@ -23,6 +23,8 @@
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "Enums.h"
+#include "Simulation/MindFrameBudget.h"
+#include "Simulation/TurnBody.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -90,6 +92,8 @@ public:
 	void FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
 	                 std::optional<std::chrono::steady_clock::time_point> end, std::optional<float> cpuMs) override;
 	[[nodiscard]] std::chrono::steady_clock::duration GetTurnDeltaTime() const override { return _turnDeltaTime; }
+	[[nodiscard]] bool IsTurnSplit() const override { return _splitTurn.has_value(); }
+	void FinishSplitTurn() override;
 	void KeepAlignmentInProfile() override;
 	[[nodiscard]] lhscriptx::ScriptLineValues& GetScriptLineValues() override { return _scriptLineValues; }
 
@@ -122,6 +126,8 @@ private:
 	void GameLogicLoop(simulation::TurnViewInterface& view);
 	/// The turns that are due, with the queue of the main thread told that this thread does them
 	void PlayDueTurns(simulation::TurnViewInterface& view);
+	/// The turn that waits continues, with the budget or with none. Gives true when the turn did all of its steps.
+	bool ContinueSplitTurn(simulation::MindFrameBudget* budget);
 
 	LandViewInterface* _view {nullptr};
 	NoLandView _noView;
@@ -154,6 +160,13 @@ private:
 	/// When the scripts last took a turn in the temple, in real time
 	std::optional<uint32_t> _lastTempleTurnTime;
 	std::chrono::steady_clock::duration _turnDeltaTime {0};
+	/// The time that the computer minds can use in this frame before a turn stops between two players
+	simulation::MindFrameBudget _mindBudget;
+	/// The turn that stopped between two players, and the view that it plays for, until the turn continues
+	std::optional<simulation::SplitTurn> _splitTurn;
+	simulation::TurnViewInterface* _splitView {nullptr};
+	/// The log told of the first turn that continued in the next frame
+	bool _splitTurnTold {false};
 
 	/// The steps that lay out a new land after its map script, in their order (land_laid_out::k_Order). The footpaths
 	/// load from the file of the land at the path, when there is a path. The slots of the gods fill last, when there

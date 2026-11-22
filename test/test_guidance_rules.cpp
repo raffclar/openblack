@@ -174,6 +174,36 @@ TEST(GuidanceRules, TheCreatureOfThePlayerHereAttackingATownIsRemarkedOn)
 	EXPECT_FALSE(CreatureAttackRemarked(ownTown));
 }
 
+TEST(GuidanceRules, AnotherPlayerAttackingATownOfThePlayerHereIsRemarkedOn)
+{
+	const OurTownAttackFacts ours {.townOwner = openblack::PlayerNames::PLAYER_ONE,
+	                               .causedBy = openblack::PlayerNames::PLAYER_TWO,
+	                               .here = openblack::PlayerNames::PLAYER_ONE,
+	                               .hasPeople = true};
+	EXPECT_TRUE(OurTownAttackAsks(ours));
+	// The neutral player counts as another player
+	auto neutral = ours;
+	neutral.causedBy = openblack::PlayerNames::NEUTRAL;
+	EXPECT_TRUE(OurTownAttackAsks(neutral));
+	// Harm that no player caused, or that the player here caused, is not an attack on the town
+	auto nobody = ours;
+	nobody.causedBy = std::nullopt;
+	EXPECT_FALSE(OurTownAttackAsks(nobody));
+	auto self = ours;
+	self.causedBy = openblack::PlayerNames::PLAYER_ONE;
+	EXPECT_FALSE(OurTownAttackAsks(self));
+	// A town of another player, or a town with no people, gives no remark
+	auto theirs = ours;
+	theirs.townOwner = openblack::PlayerNames::PLAYER_THREE;
+	EXPECT_FALSE(OurTownAttackAsks(theirs));
+	auto empty = ours;
+	empty.hasPeople = false;
+	EXPECT_FALSE(OurTownAttackAsks(empty));
+	// The aggression of the attacker must be more than 1
+	EXPECT_FALSE(OurTownAttackRemarked(1.0f));
+	EXPECT_TRUE(OurTownAttackRemarked(1.0001f));
+}
+
 TEST(GuidanceRules, VillagersUnhappyOnlyAboveTheThreshold)
 {
 	EXPECT_FALSE(WarnsVillagersUnhappy(0.5f, 0.5f));

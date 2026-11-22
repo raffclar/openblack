@@ -26,6 +26,7 @@
 #include "Creature/LeashKeys.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/GameSpeed.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -158,13 +159,13 @@ bool GameKeysSystem::ProcessKeyPress(const SDL_Event& event, input::KeyDownBindi
 			break;
 		}
 		// The slower key halves the game's speed, to half of normal at the least. The faster key doubles it, to
-		// twice normal at the most. These keys do not act when an action has the key.
+		// twice normal at the most. These keys do not act when an action has the key. In a network game the speed sets
+		// the time between two turns of every player.
 		if (const auto speed = keys::SpeedKeyFor(k_Platform, key, held);
 		    speed != keys::SpeedKey::None && binding == input::KeyDownBinding::None)
 		{
-			auto& clock = Locator::time::value();
-			clock.SetSpeed(speed == keys::SpeedKey::Slower ? std::max(clock.GetSpeed() * 0.5f, 0.5f)
-			                                               : std::min(clock.GetSpeed() + clock.GetSpeed(), 2.0f));
+			const float now = ecs::game_speed::Get();
+			ecs::game_speed::Set(speed == keys::SpeedKey::Slower ? std::max(now * 0.5f, 0.5f) : std::min(now + now, 2.0f));
 			break;
 		}
 		if (key >= SDLK_1 && key <= SDLK_7)

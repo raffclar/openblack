@@ -502,6 +502,10 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 	{
 		TimeFrom(connection, peer, *time);
 	}
+	else if (const auto* pace = std::get_if<game_socket::GamePace>(&*frame))
+	{
+		PaceFrom(peer, *pace);
+	}
 	else if (const auto* script = std::get_if<game_socket::EditorScriptFile>(&*frame))
 	{
 		EditorScriptFileFrom(connection, peer, *script);
@@ -1204,8 +1208,12 @@ void LockstepHost::SendLoadWait(ConnectionId connection)
 
 game_socket::GameTime LockstepHost::RoomClockFrame(game_socket::TimeAct act, std::string by) const
 {
-	return game_socket::GameTime {
-	    .paused = _roomClock.paused, .speed = _roomClock.speed, .act = act, .by = std::move(by), .turn = _turnsDone};
+	return game_socket::GameTime {.paused = _roomClock.paused,
+	                              .speed = _roomClock.speed,
+	                              .act = act,
+	                              .by = std::move(by),
+	                              .turn = _turnsDone,
+	                              .period = _roomClock.period};
 }
 
 void LockstepHost::SendRoomClock(ConnectionId connection)
@@ -1266,6 +1274,20 @@ void LockstepHost::TimeFrom(ConnectionId connection, const Peer& peer, const gam
 	}
 	// With the rule, every player sees a line. Without it, each computer sets its clock but shows no line.
 	Broadcast(RoomClockFrame(request.act, room_clock::k_Rule.tellsEveryPlayer ? peer.name : std::string()));
+}
+
+void LockstepHost::PaceFrom(const Peer& peer, const game_socket::GamePace& request)
+{
+	// The speed of the game of each player sets the time between two turns for all the players, as in the game. The
+	// change needs no claim, and no player sees a line for it.
+	if (!peer.joined || !_started)
+	{
+		return;
+	}
+	_roomClock = online::room_clock::ApplyPeriod(_roomClock, request.period);
+	Log(spdlog::level::info, fmt::format("The speed of the game of {} sets the time between two turns to {} ms after turn {}",
+	                                     Who(peer), request.period, _turnsDone));
+	Broadcast(RoomClockFrame(game_socket::TimeAct::Speed, {}));
 }
 
 std::string LockstepHost::NewWatcher(ConnectionId connection, std::string name, std::string account, uint8_t number,
@@ -2015,7 +2037,8 @@ void LockstepHost::Update()
 	// A pause of the editor does not stay when no player with the editor claim is in the game to end it
 	if (_roomClock.paused && !AnyEditorInGame())
 	{
-		_roomClock = online::room_clock::State {.paused = false, .speed = _roomClock.speed, .steps = 0};
+		_roomClock =
+		    online::room_clock::State {.paused = false, .speed = _roomClock.speed, .steps = 0, .period = _roomClock.period};
 		Log(spdlog::level::info, "No player with the editor claim is in the game: the game plays again");
 		Broadcast(RoomClockFrame(game_socket::TimeAct::Play, {}));
 	}

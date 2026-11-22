@@ -242,6 +242,12 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	{
 	};
 
+	/// A texture of layers from the PNG pictures of the optional sky pack in a folder, 8 bits for each channel. The load
+	/// fails with an exception when a picture is missing or has a bad size.
+	struct FromSkyPackTag
+	{
+	};
+
 	/// A square raw file at half its size, as the lowest detail levels load it: the texel at the start of each two by two
 	/// square. A file of another size loads at its full size. After a restore of the graphics device the texture reads
 	/// the file again and halves it again.
@@ -258,6 +264,7 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	[[nodiscard]] result_type operator()(FromPackTag, const std::string& name, const pack::G3DTexture& g3dTexture) const;
 	[[nodiscard]] result_type operator()(FromBitmapLayersTag, const std::string& name,
 	                                     std::span<const std::filesystem::path> layerPaths, uint16_t side) const;
+	[[nodiscard]] result_type operator()(FromSkyPackTag, const std::string& name, const std::filesystem::path& folder) const;
 	/// A square raw file of one or three bytes a texel
 	/// @param depth the bits a channel the texture keeps, as the game keeps the file (texel_depth::DepthOf)
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath,

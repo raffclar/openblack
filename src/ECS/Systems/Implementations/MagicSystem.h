@@ -224,6 +224,7 @@ public:
 	void StopActionAtLockEnd() override;
 	[[nodiscard]] bool IsHandBusy() const override { return HeldOf(OwnPlayer()).has_value(); }
 	[[nodiscard]] bool IsHandBusyOf(PlayerNames player) const override { return HeldOf(player).has_value(); }
+	[[nodiscard]] bool InMiraclesTurn() const override { return _inTurn; }
 	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override;
 	[[nodiscard]] HandCastState GetHandCastState() const override;
 	[[nodiscard]] entt::entity GetPressThing() const override;
@@ -296,6 +297,7 @@ private:
 	[[nodiscard]] bool CanPlaceTeleportStone(glm::vec3 point) const override;
 	void ShieldStruck(const components::Spell& shield, bool destroyed) override;
 	[[nodiscard]] bool HasWorldObjects(const components::Spell& spell) const override;
+	[[nodiscard]] bool LostWorldObjects(const components::Spell& spell) const override;
 	bool PlantForest(components::Spell& spell) override;
 	[[nodiscard]] bool ForestCanGrowAt(glm::vec3 point) const override;
 	[[nodiscard]] entt::entity SpellEntity(const components::Spell& spell) const override;
@@ -630,6 +632,8 @@ private:
 	std::optional<Circle> _circle;
 	/// Game turns since the land started
 	uint32_t _turn {0};
+	/// The miracles take their turn now
+	bool _inTurn {false};
 	HandResult _lastHandResult {HandResult::None};
 	/// The tooltip text of the held miracle that the hand did not show yet
 	std::optional<uint32_t> _heldMiracleToolTip;

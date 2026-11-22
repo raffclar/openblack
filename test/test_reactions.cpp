@@ -1820,6 +1820,65 @@ TEST_F(Reactions, AVillagerChangesFromAMiracleToAMoreUrgentStandingShieldAfterTe
 	Locator::gameRandom::reset();
 }
 
+TEST_F(Reactions, AShieldWhoseObjectTheWorldDestroyedRaisesNoOther)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto spell = registry.Create();
+	auto& miracle = registry.Assign<Spell>(spell);
+	miracle.magicType = MagicType::Shield;
+	miracle.spellClass = magic::SpellClass::Shield;
+	miracle.caster.player = PlayerNames::PLAYER_ONE;
+	miracle.castPosition = k_Here;
+	miracle.magnitude = 30.0f;
+	ecs::systems::MagicShieldSystem shields;
+	shields.ProcessTurn();
+	const auto object = shields.ObjectOf(spell);
+	ASSERT_NE(object, static_cast<entt::entity>(entt::null));
+	EXPECT_TRUE(shields.HasObject(spell));
+	EXPECT_FALSE(shields.LostObject(spell));
+
+	// The object goes at once, and the running miracle keeps none
+	shields.ObjectDestroyed(object);
+	EXPECT_FALSE(registry.Valid(object));
+	EXPECT_FALSE(shields.HasObject(spell));
+	EXPECT_TRUE(shields.LostObject(spell));
+	EXPECT_EQ(shields.ObjectOf(spell), static_cast<entt::entity>(entt::null));
+	// It raises no other, and a blow on it does nothing
+	shields.ProcessTurn();
+	EXPECT_FALSE(shields.HasObject(spell));
+	EXPECT_TRUE(shields.LostObject(spell));
+	shields.ShieldStruck(spell, true);
+	EXPECT_EQ(registry.Size<MagicShield>(), 0u);
+
+	// Once the miracle has gone, the shields forget it
+	registry.Destroy(spell);
+	shields.ProcessTurn();
+	EXPECT_FALSE(shields.LostObject(spell));
+}
+
+TEST_F(Reactions, AShieldObjectWithNoMiracleThatTheWorldDestroysGoes)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto spell = registry.Create();
+	auto& miracle = registry.Assign<Spell>(spell);
+	miracle.magicType = MagicType::PhysicalShield;
+	miracle.spellClass = magic::SpellClass::Shield;
+	miracle.caster.player = PlayerNames::PLAYER_ONE;
+	miracle.castPosition = k_Here;
+	miracle.magnitude = 30.0f;
+	ecs::systems::MagicShieldSystem shields;
+	shields.ProcessTurn();
+	const auto object = shields.ObjectOf(spell);
+	ASSERT_NE(object, static_cast<entt::entity>(entt::null));
+	// A dome that fades alone after a script deleted its miracle
+	shields.RemoveWithSpell(spell);
+	registry.Destroy(spell);
+	ASSERT_TRUE(registry.Valid(object));
+	shields.ObjectDestroyed(object);
+	EXPECT_FALSE(registry.Valid(object));
+	EXPECT_FALSE(shields.LostObject(spell));
+}
+
 TEST_F(Reactions, AVillagerTellsTheShieldsWhatItReactsToAndLeavesItKeepingWhatItDid)
 {
 	auto& registry = Locator::entitiesRegistry::value();

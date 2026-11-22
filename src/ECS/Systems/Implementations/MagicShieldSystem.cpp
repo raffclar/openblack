@@ -50,6 +50,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -304,16 +305,97 @@ void MagicShieldSystem::Strip(entt::entity object, MagicShield& shieldObject)
 void MagicShieldSystem::LetGo(entt::entity object, MagicShield& shieldObject)
 {
 	auto& registry = EntityRegistry();
-	_objects.erase(shieldObject.spell);
-	shieldObject.spell = entt::null;
-	Strip(object, shieldObject);
-	if (auto* dome = registry.TryGet<ShieldDome>(object))
+	const auto spell = shieldObject.spell;
+	auto* dome = registry.TryGet<ShieldDome>(object);
+	if (dome == nullptr)
 	{
-		// The dome fades away by itself
-		dome->state.dying = true;
+		// The spiritual shield's object goes at once, and its miracle goes in the same turn
+		_objects.erase(spell);
+		shieldObject.spell = entt::null;
+		Destroy(object, shieldObject);
 		return;
 	}
+	// The dome lets go of its miracle and is of the neutral player from now on. The miracle keeps it in its list, with
+	// the reactions and the hold on influence, while the dome fades away.
+	shieldObject.spell = entt::null;
+	shieldObject.player = PlayerNames::NEUTRAL;
+	dome->state.dying = true;
+}
+
+void MagicShieldSystem::Abandon(entt::entity object, MagicShield& shieldObject)
+{
+	auto& registry = EntityRegistry();
+	if (const auto keeper = KeeperOf(object); keeper != entt::null)
+	{
+		_objects.erase(keeper);
+	}
+	shieldObject.spell = entt::null;
+	shieldObject.player = PlayerNames::NEUTRAL;
+	auto* dome = registry.TryGet<ShieldDome>(object);
+	if (dome == nullptr)
+	{
+		Destroy(object, shieldObject);
+		return;
+	}
+	// The reactions and the hold on influence go with the miracle. The dome fades away alone.
+	Strip(object, shieldObject);
+	dome->state.dying = true;
+}
+
+void MagicShieldSystem::DomeGone(entt::entity object)
+{
+	auto& registry = EntityRegistry();
+	const auto keeper = KeeperOf(object);
+	if (keeper != entt::null)
+	{
+		_objects.erase(keeper);
+	}
+	Strip(object, registry.Get<MagicShield>(object));
 	registry.Destroy(object);
+	// The closed-down miracle that kept the dome goes in the same turn, and its reactions go with it
+	const auto* spell = keeper != entt::null && registry.Valid(keeper) ? registry.TryGet<const Spell>(keeper) : nullptr;
+	if (spell != nullptr && spell->closedDown && Locator::magicSystem::has_value())
+	{
+		Locator::magicSystem::value().DeleteSpell(keeper);
+	}
+}
+
+entt::entity MagicShieldSystem::KeeperOf(entt::entity object) const
+{
+	if (object == entt::null)
+	{
+		return entt::null;
+	}
+	const auto found = std::ranges::find_if(_objects, [object](const auto& entry) { return entry.second == object; });
+	return found != _objects.end() ? found->first : entt::null;
+}
+
+void MagicShieldSystem::MiracleClosedDown(entt::entity spell, bool inMiracleTurn)
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	const auto found = _objects.find(spell);
+	if (found == _objects.end() || found->second == entt::null)
+	{
+		return;
+	}
+	auto& registry = EntityRegistry();
+	const auto object = found->second;
+	auto* shieldObject = registry.Valid(object) ? registry.TryGet<MagicShield>(object) : nullptr;
+	if (shieldObject == nullptr || shieldObject->spell != spell)
+	{
+		return;
+	}
+	// A dome takes its turn before the miracles. So a dome whose miracle closes down in the turn of the miracles takes
+	// this turn of the domes as it stands, and it starts to fade after it.
+	if (inMiracleTurn && registry.AllOf<ShieldDome>(object))
+	{
+		return;
+	}
+	LetGo(object, *shieldObject);
+	registry.SetDirty();
 }
 
 bool MagicShieldSystem::StepDome(entt::entity object)
@@ -369,6 +451,12 @@ void MagicShieldSystem::ProcessTurn()
 	}
 	auto& registry = EntityRegistry();
 
+	// A miracle that has gone forgets that the world destroyed its object, and the reactions it kept go
+	std::erase_if(_objects, [&registry](const auto& entry) {
+		return entry.second == entt::null && (!registry.Valid(entry.first) || !registry.AllOf<Spell>(entry.first));
+	});
+	RemoveReactionsOfGoneMiracles();
+
 	// Shield miracles without an object yet raise theirs
 	std::vector<std::pair<entt::entity, const Spell*>> raise;
 	registry.Each<const Spell>([&](entt::entity entity, const Spell& spell) {
@@ -382,13 +470,20 @@ void MagicShieldSystem::ProcessTurn()
 		Raise(entity, *spell);
 	}
 
+	// A shield whose miracle has gone loses its reactions at once. A miracle that closed down in this turn of the
+	// miracles lets go of its dome after the dome's turn.
+	std::vector<entt::entity> abandoned;
 	std::vector<entt::entity> letGo;
 	std::vector<entt::entity> gone;
 	registry.Each<MagicShield>([&](entt::entity object, MagicShield& shieldObject) {
 		if (shieldObject.spell != entt::null)
 		{
 			const auto* spell = registry.Valid(shieldObject.spell) ? registry.TryGet<const Spell>(shieldObject.spell) : nullptr;
-			if (spell == nullptr || spell->closedDown)
+			if (spell == nullptr)
+			{
+				abandoned.push_back(object);
+			}
+			else if (spell->closedDown)
 			{
 				letGo.push_back(object);
 			}
@@ -399,9 +494,9 @@ void MagicShieldSystem::ProcessTurn()
 			shieldObject.struckReaction = 0;
 		}
 	});
-	for (const auto object : letGo)
+	for (const auto object : abandoned)
 	{
-		LetGo(object, registry.Get<MagicShield>(object));
+		Abandon(object, registry.Get<MagicShield>(object));
 	}
 	registry.Each<const ShieldDome>([&](entt::entity object, const ShieldDome&) {
 		if (!StepDome(object))
@@ -409,15 +504,19 @@ void MagicShieldSystem::ProcessTurn()
 			gone.push_back(object);
 		}
 	});
+	for (const auto object : letGo)
+	{
+		if (registry.Valid(object))
+		{
+			LetGo(object, registry.Get<MagicShield>(object));
+		}
+	}
 	for (const auto object : gone)
 	{
-		auto& shieldObject = registry.Get<MagicShield>(object);
-		if (shieldObject.spell != entt::null)
+		if (registry.Valid(object))
 		{
-			_objects.erase(shieldObject.spell);
+			DomeGone(object);
 		}
-		Strip(object, shieldObject);
-		registry.Destroy(object);
 	}
 	ProcessReactions();
 	ProcessVillagers();
@@ -462,15 +561,27 @@ void MagicShieldSystem::Impact(entt::entity object, entt::entity hitter, float m
 	// The town it protects counts the thrower's player as having attacked it, with no harm done
 	if (shieldObject.town != entt::null && registry.Valid(shieldObject.town))
 	{
+		const auto town = shieldObject.town;
+		// The blow gives no voice, but the guidance looks at it as at any harm to the town, before the town counts it
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().TownAttackCry(town, std::nullopt, player);
+		}
 		const auto aggressor = player.value_or(PlayerNames::NEUTRAL);
-		auto* aggression = registry.TryGet<TownAggression>(shieldObject.town);
+		auto* aggression = registry.TryGet<TownAggression>(town);
 		if (aggression == nullptr)
 		{
-			aggression = &registry.Assign<TownAggression>(shieldObject.town);
+			aggression = &registry.Assign<TownAggression>(town);
 		}
-		const bool owner = registry.Get<const Town>(shieldObject.town).owner == aggressor;
+		const bool owner = registry.Get<const Town>(town).owner == aggressor;
 		ecs::town_aggression::Attacked(aggression->record, aggressor, owner, 0.0f, Info().town.firstTimeDamageDoneAddition,
 		                               GameTurn());
+		// The advisors can then remark on the player, or on the creature of the player, that threw the thing
+		if (Locator::guidanceSystem::has_value())
+		{
+			const auto creature = registry.Valid(hitter) && registry.AllOf<Creature>(hitter) ? hitter : entt::null;
+			Locator::guidanceSystem::value().TownAttacked(town, aggressor, creature);
+		}
 	}
 	ShieldStruck(shieldObject.spell, !(strength > 0.0f));
 }
@@ -484,8 +595,14 @@ void MagicShieldSystem::ShieldStruck(entt::entity spell, bool destroyed)
 	}
 	auto& registry = EntityRegistry();
 	const auto object = found->second;
+	if (!registry.Valid(object))
+	{
+		return;
+	}
 	auto& shieldObject = registry.Get<MagicShield>(object);
-	const auto position = registry.Get<const Transform>(object).position;
+	// The reactions to the strikes and to the fall are at the place of the miracle
+	const auto* miracle = registry.Valid(spell) ? registry.TryGet<const Spell>(spell) : nullptr;
+	const auto position = miracle != nullptr ? miracle->position : registry.Get<const Transform>(object).position;
 	if (destroyed)
 	{
 		// Its people no longer react to it standing, but to its fall
@@ -507,7 +624,46 @@ void MagicShieldSystem::ShieldStruck(entt::entity spell, bool destroyed)
 
 bool MagicShieldSystem::HasObject(entt::entity spell) const
 {
-	return _objects.contains(spell);
+	const auto found = _objects.find(spell);
+	return found != _objects.end() && found->second != entt::null;
+}
+
+bool MagicShieldSystem::LostObject(entt::entity spell) const
+{
+	const auto found = _objects.find(spell);
+	return found != _objects.end() && found->second == entt::null;
+}
+
+void MagicShieldSystem::ObjectDestroyed(entt::entity object)
+{
+	auto& registry = EntityRegistry();
+	auto* shieldObject = registry.Valid(object) ? registry.TryGet<MagicShield>(object) : nullptr;
+	if (shieldObject == nullptr)
+	{
+		return;
+	}
+	// Its miracle keeps no object and does not raise another, also a closed-down miracle whose dome fades. The reactions
+	// to the strikes and to the fall stay with the miracle until it goes.
+	if (const auto keeper = shieldObject->spell != entt::null ? shieldObject->spell : KeeperOf(object); keeper != entt::null)
+	{
+		_objects.insert_or_assign(keeper, entt::null);
+		PassToMiracle(object, keeper);
+	}
+	shieldObject->spell = entt::null;
+	Destroy(object, *shieldObject);
+}
+
+void MagicShieldSystem::Destroy(entt::entity object, MagicShield& shieldObject)
+{
+	auto& registry = EntityRegistry();
+	if (const auto* dome = registry.TryGet<const ShieldDome>(object);
+	    dome != nullptr && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Remove(dome->effect);
+	}
+	Strip(object, shieldObject);
+	registry.Destroy(object);
+	registry.SetDirty();
 }
 
 bool MagicShieldSystem::KeepsReactionOff(glm::vec3 watcher, glm::vec3 initiator) const
@@ -574,8 +730,10 @@ std::optional<entt::entity> MagicShieldSystem::ShieldAt(glm::vec3 point) const
 		    {
 			    return;
 		    }
-		    // A dome that fades after the end of its miracle is not a shield miracle
-		    if (shield.spell == entt::null)
+		    // A dome that fades after its miracle closed down gives that miracle. A dome whose miracle has gone does not
+		    // count.
+		    const auto keeper = shield.spell != entt::null ? shield.spell : KeeperOf(entity);
+		    if (keeper == entt::null)
 		    {
 			    return;
 		    }
@@ -583,7 +741,7 @@ std::optional<entt::entity> MagicShieldSystem::ShieldAt(glm::vec3 point) const
 		    const float scale = dome != nullptr ? dome->solidScale : shield.radius * shield::k_DomeScalePerRadius;
 		    if (gutils::GetDistanceInMetres(transform.position, point) < shield::VolumeOf(halfExtent, scale).radius)
 		    {
-			    found = shield.spell;
+			    found = keeper;
 		    }
 	    });
 	return found;
@@ -592,11 +750,13 @@ std::optional<entt::entity> MagicShieldSystem::ShieldAt(glm::vec3 point) const
 void MagicShieldSystem::FollowSpellRadius(entt::entity spell, float radius)
 {
 	const auto known = _objects.find(spell);
-	if (known == _objects.end())
+	if (known == _objects.end() || !EntityRegistry().Valid(known->second))
 	{
 		return;
 	}
-	if (auto* shieldObject = EntityRegistry().TryGet<MagicShield>(known->second); shieldObject != nullptr)
+	// A dome that has let go of its miracle keeps its reach
+	if (auto* shieldObject = EntityRegistry().TryGet<MagicShield>(known->second);
+	    shieldObject != nullptr && shieldObject->spell == spell)
 	{
 		shieldObject->radius = radius;
 	}
@@ -604,6 +764,21 @@ void MagicShieldSystem::FollowSpellRadius(entt::entity spell, float radius)
 
 void MagicShieldSystem::RemoveWithSpell(entt::entity spell)
 {
+	// The reactions that the miracle kept after the world destroyed its object go with it
+	std::vector<uint32_t> kept;
+	for (const auto& [id, reaction] : _reactions)
+	{
+		if (reaction.object == spell)
+		{
+			kept.push_back(id);
+		}
+	}
+	// In the order of their numbers: the order of the map is different on each C++ library
+	std::ranges::sort(kept);
+	for (const auto id : kept)
+	{
+		RemoveReaction(id, true);
+	}
 	const auto known = _objects.find(spell);
 	if (known == _objects.end())
 	{
@@ -616,15 +791,8 @@ void MagicShieldSystem::RemoveWithSpell(entt::entity spell)
 	{
 		return;
 	}
-	if (const auto* dome = registry.TryGet<const ShieldDome>(object);
-	    dome != nullptr && Locator::effectRequestSystem::has_value())
-	{
-		Locator::effectRequestSystem::value().Remove(dome->effect);
-	}
-	auto& shieldObject = registry.Get<MagicShield>(object);
-	shieldObject.spell = entt::null;
-	Strip(object, shieldObject);
-	registry.Destroy(object);
+	// The spiritual shield's object goes at once with its miracle. The dome fades away alone.
+	Abandon(object, registry.Get<MagicShield>(object));
 	registry.SetDirty();
 }
 
@@ -676,6 +844,30 @@ std::vector<MagicShieldSystemInterface::DomeDraw> MagicShieldSystem::GetDomes(fl
 		                 .scale = from.scale + ((dome.pose.scale - from.scale) * fraction)});
 	});
 	return domes;
+}
+
+std::optional<MagicShieldSystemInterface::DomePieces> MagicShieldSystem::DomeBreakUp(entt::entity object,
+                                                                                     bool beforeDomeStep) const
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = EntityRegistry();
+	const auto* dome = registry.TryGet<const ShieldDome>(object);
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (dome == nullptr || transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto at = shield::DomeAtBreakUp(dome->shape, dome->state, dome->pose, dome->turns, dome->solidScale, beforeDomeStep,
+	                                      k_TurnSeconds);
+	if (!at.has_value())
+	{
+		return std::nullopt;
+	}
+	const glm::vec3 place(transform->position.x, LandHeight(transform->position), transform->position.z);
+	return DomePieces {.mesh = dome->mesh, .model = shield::DomeBreakUpModel(place, *at)};
 }
 
 void MagicShieldSystem::SaveState(reflection::BinaryWriter& out) const

@@ -54,6 +54,7 @@
 #include "Online/OnlineMapStoreInterface.h"
 #include "Online/RoomClock.h"
 #include "PlayerSlots.h"
+#include "Simulation/TurnBody.h"
 
 using namespace openblack::ecs::systems;
 
@@ -260,6 +261,8 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	_partAgain = join.partAgain;
 	_roomClockChanges = 0;
 	_roomSpeed = online::room_clock::k_NormalSpeed;
+	_roomPeriod.reset();
+	_gameSpeed = 1.0f;
 	_started = false;
 	_endLogged = false;
 	_awaitingLand = !join.fromCommandLine;
@@ -431,6 +434,8 @@ void NetworkGameSystem::BeginPlay()
 		return;
 	}
 	_awaitingLand = false;
+	// Each start of the game sets the speed of the game of this computer to normal, as the game does
+	_gameSpeed = 1.0f;
 	Attach();
 	// The server of a lobby game starts the turns when each god's player loaded the world
 	_session->ReportLoaded();
@@ -457,8 +462,29 @@ void NetworkGameSystem::FollowRoomSpeed()
 {
 	if (const auto& room = _session->RoomClock(); room.has_value())
 	{
-		Locator::time::value().SetSpeed(online::room_clock::ClockSpeedOf(room->speed));
+		Locator::time::value().SetSpeed(online::room_clock::ClockSpeedOf(room->speed, room->period));
 		_roomSpeed = room->speed;
+		_roomPeriod = room->period;
+	}
+}
+
+void NetworkGameSystem::SetGameSpeed(float speed)
+{
+	// The speed stays on this computer. The clock follows only the clock of the room that the server sends back.
+	_gameSpeed = speed;
+	if (!_session)
+	{
+		return;
+	}
+	if (const auto period = online::room_clock::PeriodOf(speed); period.has_value())
+	{
+		_session->RequestPace(*period);
+	}
+	else
+	{
+		// Vanilla has no limit here (vanilla-bugs row 1586). The guard sends no request and writes a warning.
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The speed of the game {} gives no time between two turns from {} to {} ms",
+		                   speed, online::room_clock::k_ShortestPeriod, online::room_clock::k_LongestPeriod);
 	}
 }
 
@@ -549,7 +575,7 @@ void NetworkGameSystem::Update()
 	}
 
 	// A test parts this computer's world from the server's once
-	if (_partAt.has_value() && Locator::time::value().GetTurn() >= *_partAt)
+	if (_partAt.has_value() && simulation::WholeTurns() >= *_partAt)
 	{
 		_partAt.reset();
 		std::ignore = Locator::gameRandom::value().GameRand(1000);
@@ -590,11 +616,12 @@ void NetworkGameSystem::Update()
 		if (const auto& room = _session->RoomClock(); room.has_value())
 		{
 			auto& clock = Locator::time::value();
-			const auto follow = online::room_clock::FollowOf(*room, _roomSpeed);
+			const auto follow = online::room_clock::FollowOf(*room, _roomSpeed, _roomPeriod);
 			if (follow.clockSpeed.has_value())
 			{
 				clock.SetSpeed(*follow.clockSpeed);
 				_roomSpeed = room->speed;
+				_roomPeriod = room->period;
 			}
 			if (follow.fromTurn)
 			{
@@ -614,7 +641,7 @@ void NetworkGameSystem::Update()
 
 	// After the last turn of a decided game, the clock of this computer stops. The world stands still, and the frames
 	// take no game time, as in a pause.
-	if (const auto last = _session->StoppedAfter(); last.has_value() && !_stopped && Locator::time::value().GetTurn() > *last)
+	if (const auto last = _session->StoppedAfter(); last.has_value() && !_stopped && simulation::WholeTurns() > *last)
 	{
 		_stopped = true;
 		Locator::time::value().SetPaused(true);

@@ -509,6 +509,7 @@ Renderer::~Renderer() noexcept
 	_hairLightKept.reset();
 	_worldBodyColoursKept.reset();
 	_skyDomeFrameBuffer.reset();
+	_skyDither.reset();
 	if (_lightningGlowTexture)
 	{
 		bgfx::destroy(toBgfx(*_lightningGlowTexture));

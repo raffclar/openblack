@@ -32,6 +32,13 @@ const CreatureSetup k_PlayersTiger {
 
 const Framing k_LandOverview {.shot = Shot::Overview, .include = {{-40.0f, -40.0f}, {40.0f, 40.0f}}};
 
+/// The middle of the fifth land's map, from which the scenarios give their points
+constexpr glm::vec2 k_FifthLandMiddle {2720.0f, 3040.0f};
+
+/// The glowing mouth of the volcano near the temple of Nemesis, from the middle of the map. The set-up script of the land
+/// makes it there.
+constexpr glm::vec2 k_VolcanoMouth = glm::vec2(3920.2275f, 2153.4255f) - k_FifthLandMiddle;
+
 /// The land's set-up script runs first, so that Nemesis has his creature, then the script of one part of the end
 std::vector<Command> SetUpThenRun(std::string_view script)
 {
@@ -73,6 +80,35 @@ void testbed_scenarios::AddEndingScenarios(std::vector<Scenario>& all)
 	    .framing = k_LandOverview,
 	    .creatures = {k_PlayersTiger},
 	    .commands = SetUpThenRun("EndOfGameCreatureSequenceGoToVolcano"),
+	});
+	all.push_back({
+	    .id = "story.l5_volcano_blast",
+	    .name = "Story: an extreme blast on the volcano of the fifth land",
+	    .facet = Facet::Story,
+	    .description = "The fifth land loads with its own scripts and sky. The set-up script of the land runs and makes the "
+	                   "glowing mouth of the volcano near the temple of Nemesis. Then an extreme blast hits the mouth.",
+	    .expected = "The blast shakes the land and its rubble falls round the volcano. The glowing mouth of the volcano "
+	                "stays, also after the rubble goes.",
+	    .environment = {.land = Land::Story, .storyLand = k_FifthLand, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_VolcanoMouth - glm::vec2(60.0f), k_VolcanoMouth + glm::vec2(60.0f)},
+	                .distance = 0.8f},
+	    .miracles = {{.type = MagicType::ExplosionOnePuTwo,
+	                  .point = k_VolcanoMouth,
+	                  .handOffset = k_VolcanoMouth,
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 4.0f}},
+	    .commands = {{.kind = Command::Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand5"}},
+	    .checks = {{.label = "the set-up script makes the mouth of the volcano",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "vortices",
+	                .afterTurns = 30,
+	                .atLeast = 1.0},
+	               {.label = "the mouth of the volcano stays after the extreme blast",
+	                .quantity = checks::Quantity::Entities,
+	                .kind = "vortices",
+	                .afterTurns = 300,
+	                .atLeast = 1.0}},
 	});
 	all.push_back({
 	    .id = "story.l5_temple_of_nemesis_falls",

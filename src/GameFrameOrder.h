@@ -251,6 +251,26 @@ struct CameraKeyState
 	return false;
 }
 
+/// True for the steps that move the world between two turns: the creatures' poses, the effects of the frame and the
+/// things that the land draws. The start of each turn puts the world back where the last turn left it. While a turn
+/// waits between two of its players to continue, these steps wait too, so that the rest of the turn sees the world as
+/// the first part left it (deviation row 288). The frame draws the world as it is. The hand step continues, because the
+/// reports of the hand go to the turns, but what the hands hold waits too.
+[[nodiscard]] constexpr bool WaitsForWholeTurn(Step step)
+{
+	return step == Step::CreaturePoses || step == Step::FrameEffects || step == Step::Entities;
+}
+
+/// True for the steps that wait for the end of a stopped turn in a game that steps deterministically: the commands of
+/// the keys, the interface and all the steps after the turns. Thus the frames of a stopped turn do the steps of one
+/// frame of a turn that does not stop, and the steps after the turns get the time of the frame in which the turn
+/// started. The clock of the frame, the input, the debug windows and the turns continue.
+[[nodiscard]] constexpr bool WaitsForWholeStepTurn(Step step)
+{
+	return step == Step::KeyCommands || step == Step::Interface ||
+	       static_cast<uint8_t>(step) > static_cast<uint8_t>(Step::Turns);
+}
+
 /// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary.
 /// A run with a fixed frame time draws each frame also while the window is minimised. The renderer keeps some of what it
 /// drew before, such as the shadows on the land. Thus a picture of the run is the same whatever the desktop did with the

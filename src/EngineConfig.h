@@ -91,6 +91,9 @@ struct EngineConfig
 
 	bool viewDetailOverlay {false};
 	bool drawSky {true};
+	/// The debug menu shows the larger pictures of the sky's pack, when the pack loaded. Off by default: the game shows
+	/// its own pictures.
+	bool upscaledSkyPictures {false};
 	bool drawWater {true};
 	bool drawIsland {true};
 	bool drawEntities {true};
@@ -172,6 +175,10 @@ struct EngineConfig
 	uint32_t aiTimesEvery {0};
 	/// Tools: log the time of each step of each turn that takes this many milliseconds or more, never when none
 	std::optional<float> turnStepTimesMs;
+	/// For developers: the time in milliseconds that the computer minds can use in one frame. A turn whose minds use it
+	/// stops between two players and continues in the next frame (deviation row 288). None: the turns never stop, as on
+	/// the game server.
+	std::optional<float> mindFrameBudgetMs;
 	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
 	std::string frameStatsOut;
 	/// Tools: the profiler times its stages while a tool reads them. When false, it never times them.

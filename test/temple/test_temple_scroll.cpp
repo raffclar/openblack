@@ -361,6 +361,57 @@ TEST(TempleScrolls, WithoutACreatureTheCreatureRoomWritesOnlyItsTitles)
 	          std::u16string(u"AA<N><N><N><E>"));
 }
 
+TEST(TempleScrolls, TheAttributesScrollNamesTheSpellOnTheCreature)
+{
+	const auto font = LoadFont();
+	gui::TextDatabase texts;
+	const std::u16string script = u"ADD_TEXT(1, NONE, \"HELP_TEXT_ROOM_CREATURE_SCROLL_SPELLS_RECEIVED\", \"On: $s\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_CREATURE_RECEIVED_SPELL_03\", \"Heal\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_DIALOG_ADDITION_101\", \"None\")\n";
+	std::vector<uint8_t> bytes;
+	for (const auto c : script)
+	{
+		bytes.push_back(static_cast<uint8_t>(c & 0xFF));
+		bytes.push_back(static_cast<uint8_t>(c >> 8));
+	}
+	texts.AddScript(bytes);
+	auto facts = TempleScrolls::Facts::Mock();
+	ASSERT_TRUE(facts.creature.has_value());
+
+	// With no spell on the creature, the line says that there is none
+	facts.creature->miracleApplied.reset();
+	const auto none = TempleScrolls::Write(TempleScrolls::Content::CreatureAttributes, texts, font, facts);
+	ASSERT_TRUE(none.has_value());
+	EXPECT_NE(none->find(u"On: None"), std::u16string::npos);
+
+	// The third slot gives the third text of the spells
+	facts.creature->miracleApplied = 2;
+	const auto heal = TempleScrolls::Write(TempleScrolls::Content::CreatureAttributes, texts, font, facts);
+	ASSERT_TRUE(heal.has_value());
+	EXPECT_NE(heal->find(u"On: Heal"), std::u16string::npos);
+}
+
+TEST(TempleScrolls, AChallengeWithNoTitleAddsNoLine)
+{
+	const auto font = LoadFont();
+	gui::TextDatabase texts;
+	const std::u16string script = u"ADD_TEXT(1, NONE, \"HELP_TEXT_NONE\", \"Invalid\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_FIRST\", \"First\")\n";
+	std::vector<uint8_t> bytes;
+	for (const auto c : script)
+	{
+		bytes.push_back(static_cast<uint8_t>(c & 0xFF));
+		bytes.push_back(static_cast<uint8_t>(c >> 8));
+	}
+	texts.AddHelpScript(bytes);
+	auto facts = TempleScrolls::Facts::Mock();
+	facts.challenges = {0, 1, 0};
+	const auto challenges = TempleScrolls::Write(TempleScrolls::Content::Challenge, texts, font, facts);
+	ASSERT_TRUE(challenges.has_value());
+	EXPECT_EQ(challenges->find(u"Invalid"), std::u16string::npos);
+	EXPECT_NE(challenges->find(u"First"), std::u16string::npos);
+}
+
 TEST(TempleScrolls, TheStoryHistoryShowsFiveLinesFromItsFirstLine)
 {
 	const auto font = LoadFont();

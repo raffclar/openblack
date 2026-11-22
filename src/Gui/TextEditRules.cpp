@@ -201,7 +201,9 @@ int CharacterAt(const State& state, int left, int x, const Measure& measure)
 			return state.scroll + static_cast<int>(count) - 1;
 		}
 	}
-	return Length(state);
+	// A point after the last character gives the scroll plus the length of the text, also when the text scrolls. Then
+	// the caret is after the end, and Backspace takes out no character until the caret comes back into the text.
+	return state.scroll + Length(state);
 }
 
 void MouseDown(State& state, int character)
