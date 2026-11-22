@@ -852,9 +852,17 @@ void SimProvider::Frame(uint64_t frame)
 		record["draws"] = random.GetSyncedDraws();
 	}
 	// The synced part of the world at the end of the turn, which the frame rate must not change. A turn that ended
-	// before the turn of this record gets a line of its own, so that each recorded turn keeps its synced part
+	// before the turn of this record gets a line of its own, so that each recorded turn keeps its synced part. The hash of
+	// a turn can wait for the draw of the frame, as when the turn played beside the draw of the frame before. That turn
+	// stays in the list, and a later record writes it in a line of its own.
+	std::vector<Synced> waiting;
 	for (auto& synced : _synced)
 	{
+		if (synced.value.is_null())
+		{
+			waiting.push_back(std::move(synced));
+			continue;
+		}
 		if (synced.turn == turn)
 		{
 			record["synced"] = std::move(synced.value);
@@ -863,7 +871,7 @@ void SimProvider::Frame(uint64_t frame)
 		const Json line = {{"type", "synced"}, {"turn", synced.turn}, {"frame", frame}, {"synced", std::move(synced.value)}};
 		*_out << Dump(line) << '\n';
 	}
-	_synced.clear();
+	_synced = std::move(waiting);
 	record["flags"] = std::move(problems);
 	*_out << Dump(record) << '\n';
 	_out->flush();

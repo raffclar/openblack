@@ -109,26 +109,26 @@ ecs::Registry& EntityRegistry()
 	return Locator::entitiesRegistry::value();
 }
 
-/// The cell of the land a point is in, none off the map
-std::optional<glm::u16vec2> CellOf(glm::vec3 point)
+/// The cell of the land that a map position is in, none off the map. The cell comes from the map position. Metres near
+/// the edge of a cell can give the cell next to it.
+std::optional<glm::u16vec2> CellOf(const map_coords::MapCoords& place)
 {
-	const auto x = static_cast<int32_t>(std::floor(point.x / LandIslandInterface::k_CellSize));
-	const auto z = static_cast<int32_t>(std::floor(point.z / LandIslandInterface::k_CellSize));
-	if (x < 0 || z < 0 || x >= LandIslandInterface::k_MapCellsPerSide || z >= LandIslandInterface::k_MapCellsPerSide)
+	const auto cell = map_coords::Cell(place);
+	if (cell.x >= LandIslandInterface::k_MapCellsPerSide || cell.y >= LandIslandInterface::k_MapCellsPerSide)
 	{
 		return std::nullopt;
 	}
-	return glm::u16vec2(static_cast<uint16_t>(x), static_cast<uint16_t>(z));
+	return glm::u16vec2(static_cast<uint16_t>(cell.x), static_cast<uint16_t>(cell.y));
 }
 
 /// Land a tree may stand on: on the map and not under water
-bool IsLand(glm::vec3 point)
+bool IsLand(const map_coords::MapCoords& place)
 {
 	if (!Locator::terrainSystem::has_value())
 	{
 		return false;
 	}
-	const auto cell = CellOf(point);
+	const auto cell = CellOf(place);
 	if (!cell.has_value())
 	{
 		return false;
@@ -139,14 +139,15 @@ bool IsLand(glm::vec3 point)
 
 /// Where a tree may be planted: on land, in a cell whose first thing that stays put has no fixed mark. The game does not
 /// look at the other things of the cell, so a building behind a tree or a pile in the list does not stop a tree.
-bool ValidPlaceForTree(glm::vec3 point)
+bool ValidPlaceForTree(const map_coords::MapCoords& place)
 {
-	if (!IsLand(point) || !Locator::entitiesMap::has_value())
+	const auto cell = CellOf(place);
+	if (!IsLand(place) || !cell.has_value() || !Locator::entitiesMap::has_value())
 	{
 		return false;
 	}
 	const auto& registry = EntityRegistry();
-	return !fixed_kinds::CellIsFixed(Locator::entitiesMap::value().GetFixedInGridCell(point),
+	return !fixed_kinds::CellIsFixed(Locator::entitiesMap::value().GetFixedInGridCell(*cell),
 	                                 [&registry](entt::entity thing) { return fixed_kinds::IsFixedKind(registry, thing); });
 }
 
@@ -157,12 +158,12 @@ bool FreeForAddedTree(const map_coords::MapCoords& spot)
 	return !Locator::fixedOutlineSystem::has_value() || Locator::fixedOutlineSystem::value().IsOkToCreateAt(spot);
 }
 
-/// The ground's material at a point, as the trees see it: deep snow is snow whatever lies under it. Else it is the
-/// material of the cell's country at the cell's altitude, also on a cell with water.
-uint16_t MaterialAt(glm::vec3 point)
+/// The ground's material at a map position, as the trees see it: deep snow is snow whatever lies under it. Else it is
+/// the material of the cell's country at the cell's altitude, also on a cell with water.
+uint16_t MaterialAt(const map_coords::MapCoords& place)
 {
 	std::optional<uint16_t> type;
-	const auto cell = CellOf(point);
+	const auto cell = CellOf(place);
 	if (cell.has_value() && Locator::terrainSystem::has_value())
 	{
 		const auto& land = Locator::terrainSystem::value();
@@ -181,8 +182,9 @@ uint16_t MaterialAt(glm::vec3 point)
 		}
 	}
 	// The ground is snow by the lying snow in the weather of the cell, which is half of the snow depth
+	const auto point = map_coords::ToMetres(place);
 	const float snow = Locator::weatherSystem::has_value()
-	                       ? static_cast<float>(Locator::weatherSystem::value().GetWeather({point.x, 0.0f, point.z}).snowCover)
+	                       ? static_cast<float>(Locator::weatherSystem::value().GetWeather({point.x, 0.0f, point.y}).snowCover)
 	                       : 0.0f;
 	return creature_audio::TerrainMaterial(type, snow);
 }
@@ -382,7 +384,10 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 	// The event that plants it has just been paid for, so it has strength
 	const auto count = forest::TreesWeCanAfford(miracle.maxObjectsToCreate, trees->finalNoTrees, 1.0f);
 	const auto centre = miracle.castPosition;
-	const auto& kinds = info.terrainMaterial.at(forest::MaterialRow(MaterialAt(centre), info.terrainMaterial.size()));
+	// The trees go round the map position of the miracle, and take their kinds and sizes from it
+	const auto castPlace = map_coords::FromMetres(glm::xz(centre));
+	const auto castMetres = map_coords::ToMetres(castPlace);
+	const auto& kinds = info.terrainMaterial.at(forest::MaterialRow(MaterialAt(castPlace), info.terrainMaterial.size()));
 	const auto& effect = magic::GetMagicEffectInfo(info, miracle.magicType);
 
 	entt::entity forestEntity = entt::null;
@@ -391,18 +396,18 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 	for (uint32_t i = 0; i < count; ++i)
 	{
 		const auto offset = forest::SpiralOffset(i, count);
-		const auto spot = forest::TreeSpot(glm::xz(centre), offset);
+		const auto spot = forest::TreeSpot(castMetres, offset);
 		const auto xz = map_coords::ToMetres(spot);
 		glm::vec3 point(xz.x, 0.0f, xz.y);
 		// A slot with no room is passed over, never tried again
-		if (!ValidPlaceForTree(point) || planted.size() >= count)
+		if (!ValidPlaceForTree(spot) || planted.size() >= count)
 		{
 			continue;
 		}
 		const auto type = forest::SpeciesFor(kinds.magicTreeTypes, random.GameRand(4));
 		const float yaw = random.GameFloatRand(k_TwoPi);
 		point.y = Locator::terrainSystem::value().GetHeightAt({point.x, point.z});
-		const float target = forest::TargetScaleAt(map_coords::FromMetres(glm::xz(centre)), spot);
+		const float target = forest::TargetScaleAt(castPlace, spot);
 		// The miracle's trees make a forest of their own, one of the land's forests with the land's next number, made
 		// where its first tree stands
 		if (forestEntity == entt::null)
@@ -445,7 +450,7 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 		forest.landForest = LandForestOf(forestId).value_or(entt::null);
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: a forest planted {} of {} trees on material {}", planted.size(), count,
-	                    MaterialAt(centre));
+	                    MaterialAt(castPlace));
 	miracle.forestPlanted = true;
 	miracle.objectCount = static_cast<uint32_t>(planted.size());
 	registry.SetLayoutDirty();
@@ -494,22 +499,26 @@ bool ForestSystem::CanGrowAt(glm::vec3 point) const
 	{
 		return false;
 	}
-	// No building's fire would be inside the forest: no abode in the cell (fields aren't abodes here) whose fire, at the
-	// abode's place and as wide as its model on the ground, takes in the point, measured across the land in whole map
-	// units
-	const auto& registry = EntityRegistry();
-	const auto& fixed = Locator::entitiesMap::value().GetFixedInGridCell(point);
+	// No building's fire would be inside the forest: no abode in the cell (fields are not abodes here) whose fire, at the
+	// abode's map position and as wide as its model on the ground, takes in the point. The distance is between the two
+	// map positions.
 	const auto at = map_coords::FromMetres(glm::xz(point));
+	const auto cell = CellOf(at);
+	if (!cell.has_value())
+	{
+		return false;
+	}
+	const auto& registry = EntityRegistry();
+	const auto& fixed = Locator::entitiesMap::value().GetFixedInGridCell(*cell);
 	const bool clear = std::ranges::none_of(fixed, [&registry, at](entt::entity entity) {
-		const auto* transform = registry.TryGet<const Transform>(entity);
-		if (!registry.AnyOf<Abode>(entity) || registry.AnyOf<Field>(entity) || transform == nullptr)
+		if (!registry.AnyOf<Abode>(entity) || registry.AnyOf<Field>(entity) || !registry.AllOf<Transform>(entity))
 		{
 			return false;
 		}
-		const auto fireCentre = map_coords::FromMetres(glm::xz(transform->position));
+		const auto fireCentre = ecs::thing_map_place::Of(registry, entity);
 		return gutils::GetDistanceInMetres(at, fireCentre) < object_measures::TwoDRadius(registry, entity);
 	});
-	return clear && ValidPlaceForTree(point);
+	return clear && ValidPlaceForTree(at);
 }
 
 bool ForestSystem::HasTrees(entt::entity spell) const
@@ -1211,7 +1220,7 @@ std::optional<entt::entity> ForestSystem::PlantPineAround(entt::entity bigForest
 		const auto spot = base + gutils::GetPosFromAngle(random.GameFloatRand(k_TwoPi), edge);
 		const glm::vec2 xz = map_coords::ToMetres(spot);
 		const glm::vec3 point(xz.x, land.GetHeightAt(xz) + spot.altitude, xz.y);
-		if (!IsLand(point))
+		if (!IsLand(spot))
 		{
 			continue;
 		}
@@ -1424,37 +1433,37 @@ std::optional<entt::entity> ForestSystem::CentreTreeOfForest(entt::entity forest
 	return *pick == 0 ? grown.front() : growing.front();
 }
 
-std::optional<glm::vec3> ForestSystem::ForestLair(AnimalInfo kind, glm::vec3 from) const
+std::optional<map_coords::MapCoords> ForestSystem::ForestLair(AnimalInfo kind, const map_coords::MapCoords& from) const
 {
+	// The distances and the lair are map positions: the animal's own, and those of the forests and the trees
 	const auto& registry = EntityRegistry();
-	const auto own = map_coords::FromMetres(glm::xz(from));
-	const auto distanceTo = [&own](glm::vec3 at) { return gutils::GetDistance(own, map_coords::FromMetres(glm::xz(at))); };
+	const auto placeOf = [&registry](entt::entity thing) { return ecs::thing_map_place::Of(registry, thing); };
+	const auto distanceTo = [&from, &placeOf](entt::entity thing) { return gutils::GetDistance(from, placeOf(thing)); };
 	if (kind == AnimalInfo::Wolf)
 	{
 		// A wolf's flock goes to the nearest big forest first
 		std::vector<entt::entity> bigForests;
 		std::vector<int32_t> distances;
-		registry.Each<const BigForest, const Transform>([&](entt::entity big, const BigForest&, const Transform& at) {
+		registry.Each<const BigForest, const Transform>([&](entt::entity big, const BigForest&, const Transform&) {
 			bigForests.push_back(big);
-			distances.push_back(distanceTo(at.position));
+			distances.push_back(distanceTo(big));
 		});
 		if (const auto nearest = ecs::land_forests::Nearest(distances))
 		{
-			return registry.Get<const Transform>(bigForests[*nearest]).position;
+			return placeOf(bigForests[*nearest]);
 		}
 	}
 	// Then the forest the flock's rule chooses, at its grown tree nearest its place
 	const auto forests = LandForests();
 	std::vector<float> scores;
-	std::ranges::transform(forests, std::back_inserter(scores), [&](entt::entity forest) {
-		return ecs::land_forests::LairScore(distanceTo(registry.Get<const Transform>(forest).position));
-	});
+	std::ranges::transform(forests, std::back_inserter(scores),
+	                       [&](entt::entity forest) { return ecs::land_forests::LairScore(distanceTo(forest)); });
 	if (const auto chosen = ecs::land_forests::LairForest(scores))
 	{
 		const auto grown = TreesOf(forests[*chosen], false);
 		if (!grown.empty())
 		{
-			return registry.Get<const Transform>(grown.front()).position;
+			return placeOf(grown.front());
 		}
 	}
 	if (kind == AnimalInfo::Wolf)
@@ -1462,13 +1471,13 @@ std::optional<glm::vec3> ForestSystem::ForestLair(AnimalInfo kind, glm::vec3 fro
 		// Else the nearest tree of all
 		std::vector<entt::entity> trees;
 		std::vector<int32_t> distances;
-		registry.Each<const Tree, const Transform>([&](entt::entity tree, const Tree&, const Transform& at) {
+		registry.Each<const Tree, const Transform>([&](entt::entity tree, const Tree&, const Transform&) {
 			trees.push_back(tree);
-			distances.push_back(distanceTo(at.position));
+			distances.push_back(distanceTo(tree));
 		});
 		if (const auto nearest = ecs::land_forests::Nearest(distances))
 		{
-			return registry.Get<const Transform>(trees[*nearest]).position;
+			return placeOf(trees[*nearest]);
 		}
 	}
 	// Else where the animal is

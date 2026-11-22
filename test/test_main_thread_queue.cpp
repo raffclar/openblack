@@ -64,6 +64,27 @@ private:
 	std::vector<std::string>& _calls;
 };
 
+/// A resource of the graphics: its destructor frees a buffer, which only the main thread may do. It keeps the thread
+/// that freed it.
+class FakeBuffer
+{
+public:
+	explicit FakeBuffer(std::thread::id& freedOn)
+	    : _freedOn(freedOn)
+	{
+	}
+	FakeBuffer(const FakeBuffer&) = delete;
+	FakeBuffer& operator=(const FakeBuffer&) = delete;
+	~FakeBuffer()
+	{
+		MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "FakeBuffer::~FakeBuffer");
+		_freedOn = std::this_thread::get_id();
+	}
+
+private:
+	std::thread::id& _freedOn;
+};
+
 } // namespace
 
 TEST(MainThreadQueue, APostOnTheMainThreadRunsAtOnceInItsPlace)
@@ -158,6 +179,43 @@ TEST(MainThreadQueue, ATurnOnAnotherThreadWaitsForTheMainThread)
 	{
 		EXPECT_EQ(thread, std::this_thread::get_id());
 	}
+}
+
+TEST(MainThreadQueue, AResourceThatATurnOnAnotherThreadReleasesGoesOnTheMainThread)
+{
+	MainThreadQueue queue;
+	queue.SetCheck(TurnApiCheck::Report);
+	std::thread::id freedOn;
+	std::thread worker([&] {
+		const MainThreadQueue::TurnScope turn(queue);
+		queue.Release(std::make_shared<FakeBuffer>(freedOn));
+	});
+	worker.join();
+	EXPECT_EQ(freedOn, std::thread::id());
+	EXPECT_EQ(queue.GetPendingCount(), 1U);
+	EXPECT_EQ(queue.RunPending(), 1U);
+	EXPECT_EQ(freedOn, std::this_thread::get_id());
+	EXPECT_TRUE(queue.GetDirectCalls().empty());
+}
+
+TEST(MainThreadQueue, AResourceThatATurnOnTheMainThreadReleasesGoesAtOnceAsWorkOfTheQueue)
+{
+	MainThreadQueue queue;
+	queue.SetCheck(TurnApiCheck::Report);
+	std::thread::id freedOn;
+	{
+		const MainThreadQueue::TurnScope turn(queue);
+		auto buffer = std::make_shared<FakeBuffer>(freedOn);
+		auto other = buffer;
+		// Not the last reference: the resource stays
+		queue.Release(std::move(other));
+		EXPECT_EQ(freedOn, std::thread::id());
+		queue.Release(std::move(buffer));
+		EXPECT_EQ(freedOn, std::this_thread::get_id());
+	}
+	EXPECT_EQ(queue.GetPendingCount(), 0U);
+	// The check finds no direct call: the queue's work freed the buffer
+	EXPECT_TRUE(queue.GetDirectCalls().empty());
 }
 
 TEST(MainThreadQueue, AnotherThreadOutsideATurnKeepsItsDirectCalls)

@@ -24,6 +24,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 
 using namespace openblack;
@@ -126,13 +127,17 @@ void AnimalSystem::ChooseLair(entt::entity entity, Animal& animal)
 	{
 		return;
 	}
-	// The flock's home moves by the rule of its kind
+	// The flock's home moves by the rule of its kind. The home is a map position, and the animal starts from its own map
+	// position. When the flock's home moves, its leader turns to the new home at once, as for a shepherd's flock.
 	const bool leader = LeaderOf(animal.flock) == entity;
-	const auto position = registry.Get<const Transform>(entity).position;
+	const auto place = ecs::thing_map_place::Of(registry, entity);
+	const auto moveHome = [this, &animal](const map_coords::MapCoords& home) {
+		MoveFlockPlace(animal.flock, glm::ivec2(home.x, home.z));
+	};
 	switch (physics::living::LairOnLanding(animal.type, leader))
 	{
 	case physics::living::LandedLair::WhereItLanded:
-		SetFlockCentre(animal.flock, Xz(position));
+		moveHome(place);
 		break;
 	case physics::living::LandedLair::ForestOfItsKind:
 	{
@@ -143,18 +148,18 @@ void AnimalSystem::ChooseLair(entt::entity entity, Animal& animal)
 		{
 			break;
 		}
-		std::optional<glm::vec3> lair;
+		std::optional<map_coords::MapCoords> lair;
 		if (animal.type == AnimalInfo::Wolf && registry.AllOf<InScript>(entity))
 		{
-			lair = position;
+			lair = place;
 		}
 		else if (Locator::forestSystem::has_value())
 		{
-			lair = Locator::forestSystem::value().ForestLair(animal.type, position);
+			lair = Locator::forestSystem::value().ForestLair(animal.type, place);
 		}
 		if (lair.has_value())
 		{
-			SetFlockCentre(animal.flock, Xz(*lair));
+			moveHome(*lair);
 		}
 		break;
 	}

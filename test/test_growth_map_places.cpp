@@ -23,6 +23,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Forest.h"
 #include "ECS/Components/ForestMember.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/Transform.h"
@@ -178,5 +179,32 @@ TEST_F(GrowthMapPlaces, AGrowingFieldTakesTheAlignmentAtItsMapPosition)
 	ASSERT_TRUE(_influence->askedAt.has_value());
 	EXPECT_EQ(_influence->askedAt->x, k_Far);
 	EXPECT_EQ(_influence->askedAt->z, k_Z);
+}
+
+TEST_F(GrowthMapPlaces, AWolfFlockMakesItsHomeAtTheMapPositionOfTheBigForest)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const map_coords::MapCoords place {.x = k_Far, .z = k_Z};
+	registry.Assign<BigForest>(At(place), BigForest {.type = 0});
+
+	const ecs::systems::ForestSystem forests;
+	const auto lair = forests.ForestLair(AnimalInfo::Wolf, {.x = k_Far - 0x10000, .z = k_Z});
+	ASSERT_TRUE(lair.has_value());
+	EXPECT_EQ(lair->x, k_Far);
+	EXPECT_EQ(lair->z, k_Z);
+}
+
+TEST_F(GrowthMapPlaces, AWolfFlockWithNoForestMakesItsHomeAtTheMapPositionOfTheNearestTree)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const map_coords::MapCoords place {.x = k_Far, .z = k_Z};
+	registry.Assign<Tree>(At(place), Tree {.type = TreeInfo::Beech});
+	registry.Assign<Tree>(At({.x = k_Far + 0x100000, .z = k_Z}), Tree {.type = TreeInfo::Beech});
+
+	const ecs::systems::ForestSystem forests;
+	const auto lair = forests.ForestLair(AnimalInfo::Wolf, {.x = k_Far - 0x10000, .z = k_Z});
+	ASSERT_TRUE(lair.has_value());
+	EXPECT_EQ(lair->x, k_Far);
+	EXPECT_EQ(lair->z, k_Z);
 }
 } // namespace

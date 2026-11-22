@@ -128,3 +128,26 @@ TEST(ReactionGroups, TheCountsComeAgainAfterAReset)
 	EXPECT_EQ(reaction_groups::MembersOf(registry, 5), 2u);
 	EXPECT_TRUE(reaction_groups::CountsMatchWalk(registry));
 }
+
+TEST(ReactionGroups, TheCountsForgetAReactionThatNobodyHolds)
+{
+	Registry registry;
+	const auto living = Reacting(registry, 1);
+	// Each new reaction has a new number. The counts keep only the reaction that the living thing holds now.
+	for (uint32_t reaction = 2; reaction <= 100; ++reaction)
+	{
+		registry.Get<LivingReaction>(living).reaction = reaction;
+		reaction_groups::Changed(registry, living);
+		EXPECT_EQ(reaction_groups::MembersOf(registry, reaction), 1u);
+		EXPECT_EQ(reaction_groups::MembersOf(registry, reaction - 1), 0u);
+	}
+	EXPECT_EQ(registry.ReactionGroupCounts().members.size(), 1u);
+	EXPECT_TRUE(reaction_groups::CountsMatchWalk(registry));
+
+	// A living thing that leaves the group of its reaction takes the last count to zero
+	registry.Get<LivingReaction>(living).left = 100;
+	reaction_groups::Changed(registry, living);
+	EXPECT_EQ(reaction_groups::MembersOf(registry, 100), 0u);
+	EXPECT_TRUE(registry.ReactionGroupCounts().members.empty());
+	EXPECT_TRUE(reaction_groups::CountsMatchWalk(registry));
+}
