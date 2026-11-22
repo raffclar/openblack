@@ -42,6 +42,8 @@ constexpr std::array<glm::vec2, 5> k_Blowholes {{
     {-1253.93f, -956.15f},
 }};
 constexpr glm::vec2 k_CaveExit {-1299.04f, -971.28f};
+/// The volcano's mouth near the temple of Nemesis, which the land's set-up script opens
+constexpr glm::vec2 k_VolcanoMouth {1200.23f, -886.57f};
 /// The farmer's house at the edge of the Japanese village, and the first pile of dung west of it
 constexpr glm::vec2 k_FarmersHouse {-360.68f, 350.02f};
 constexpr glm::vec2 k_FirstDung {-465.09f, 346.62f};
@@ -181,6 +183,22 @@ Command DeleteWonder(size_t index)
 
 void testbed_scenarios::AddLandFiveQuestScenarios(std::vector<Scenario>& all)
 {
+	all.push_back({
+	    .id = "story.l5_volcano_mouth",
+	    .name = "Story: the glowing mouth of the volcano on the fifth land",
+	    .facet = Facet::Story,
+	    .description = "The fifth land loads with its own scripts and its set-up script runs, which opens the volcano's "
+	                   "mouth near the temple of Nemesis. The camera looks down into the mouth from the south.",
+	    .expected = "The ring of the mouth's ground texture lies round a hole in the land. In the hole is a dark rock "
+	                "bowl with red cracks. Two layers of orange fire move round it in opposite directions near its "
+	                "bottom, with orange flames and grey steam. The land round the mouth has no glow and no light, as in "
+	                "the original game: the files of the glow and the light make no particles.",
+	    .environment = {.land = Land::Story, .storyLand = "Land5.txt", .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_VolcanoMouth.x, 110.0f, k_VolcanoMouth.y - 60.0f},
+	                .look = {k_VolcanoMouth.x, 0.0f, k_VolcanoMouth.y}},
+	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SetupLand5"}},
+	});
 	all.push_back({
 	    .id = "story.l5_crusaders_camp",
 	    .name = "Story: the crusaders' camp by the dragon's cave on the fifth land",
