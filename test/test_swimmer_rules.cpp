@@ -57,3 +57,28 @@ TEST(SwimmerRules, ARingComesOnceTheFramesPassOneSecondAndTheTimerStartsAgain)
 	EXPECT_EQ(ring->argb, 0xFFFFFFFFu);
 	EXPECT_EQ(ring->age, 0u);
 }
+
+TEST(SwimmerRules, TheRingComesAtTheBoneWhereTheSwimmerIsDrawn)
+{
+	// A swimmer drawn twice its size at (100, 0, 200), turned a quarter turn about the vertical
+	const glm::mat4 model {
+	    glm::vec4(0.0f, 0.0f, -2.0f, 0.0f),
+	    glm::vec4(0.0f, 2.0f, 0.0f, 0.0f),
+	    glm::vec4(2.0f, 0.0f, 0.0f, 0.0f),
+	    glm::vec4(100.0f, 0.0f, 200.0f, 1.0f),
+	};
+	// The bone is 1 along x, 0.5 up and 3 along z in the pose
+	glm::mat4 bone(1.0f);
+	bone[3] = glm::vec4(1.0f, 0.5f, 3.0f, 1.0f);
+	const auto place = RingPlace(model, bone);
+	EXPECT_EQ(place.x, 106.0f);
+	EXPECT_EQ(place.y, 1.0f);
+	EXPECT_EQ(place.z, 198.0f);
+
+	// The ring lies on the water at that place, not at the bone's place in the pose
+	int32_t timer = 1000;
+	const auto ring = Ring(timer, 1, place, [] { return 0.0f; });
+	ASSERT_TRUE(ring.has_value());
+	EXPECT_EQ(ring->position.x, 106.0f);
+	EXPECT_EQ(ring->position.z, 198.0f);
+}
