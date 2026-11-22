@@ -775,7 +775,7 @@ void Game::UpdatePauseText()
 	const auto& clock = Locator::time::value();
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const bool scriptHasSpeed =
-	    Locator::scriptControlSystem::has_value() && Locator::scriptControlSystem::value().GetGameSpeedOwner() != 0;
+	    Locator::scriptControlSystem::has_value() && Locator::scriptControlSystem::value().HidesSpeedWords();
 	Locator::pauseTextSystem::value().Update(
 	    {
 	        .paused = clock.IsPaused(),

@@ -110,6 +110,40 @@ TEST(AbodeKnock, AHouseShowsGoldForItsAdultsAndGreenForItsFreePlaces)
 	EXPECT_FLOAT_EQ(markers[0].size, 1.0f / 1.3f);
 }
 
+TEST(AbodeKnock, AHouseWithAPersonInAHandShowsOneTealMarkerAtFullSize)
+{
+	const auto marker = HeldResidentMarker();
+	EXPECT_EQ(marker.colour, k_HeldResidentColour);
+	// The place and size of the first marker of a full row of one place
+	EXPECT_FLOAT_EQ(marker.offset, Readout(1, 0, 1.0f)[0].offset);
+	EXPECT_FLOAT_EQ(marker.size, 1.0f / 1.3f);
+}
+
+TEST(AbodeKnock, AVillagerHeldOverAHouseOfTheHoldersTownShowsTheReadout)
+{
+	constexpr HouseNearHeld k_Over {
+	    .places = 3, .distance = 2.0f, .radius = 4.0f, .hasTown = true, .uninhabitable = false, .townOfHolder = true};
+	EXPECT_TRUE(HeldVillagerShowsReadout(k_Over));
+	// Not over the house: the distance must be less than the radius
+	auto house = k_Over;
+	house.distance = 4.0f;
+	EXPECT_FALSE(HeldVillagerShowsReadout(house));
+	// A building with no places for people
+	house = k_Over;
+	house.places = 0;
+	EXPECT_FALSE(HeldVillagerShowsReadout(house));
+	// A house of another player's town, of no town, or of an uninhabitable town
+	house = k_Over;
+	house.townOfHolder = false;
+	EXPECT_FALSE(HeldVillagerShowsReadout(house));
+	house = k_Over;
+	house.hasTown = false;
+	EXPECT_FALSE(HeldVillagerShowsReadout(house));
+	house = k_Over;
+	house.uninhabitable = true;
+	EXPECT_FALSE(HeldVillagerShowsReadout(house));
+}
+
 TEST(AbodeKnock, ShrunkMarkersKeepASmallestSize)
 {
 	EXPECT_FLOAT_EQ(Readout(1, 0, 0.0f)[0].size, k_SmallestMarker);

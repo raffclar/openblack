@@ -96,6 +96,66 @@ TEST(ShieldRules, TheDomeIsHiddenThenGrowsSpinsDownAndBobs)
 	EXPECT_FLOAT_EQ(shield::Ease(1.0f), 1.0f);
 }
 
+TEST(ShieldRules, ADomeThatBreaksInTheMiraclesStepTakesItsStepOfTheTurnFirst)
+{
+	const auto shape = shield::MakeDomeShape(PhysicalTables(), 30.0f, 2.0f);
+	shield::DomeState state;
+	shield::DomePose pose;
+	uint32_t turns = 0;
+	float solid = shape.finalScale;
+	for (; turns < 40; ++turns)
+	{
+		pose = shield::StepDome(shape, state, shield::DomeAge(turns + 1, k_Turn), k_Turn);
+		if (shield::NeedsRescale(pose.scale, solid))
+		{
+			solid = pose.scale;
+		}
+	}
+	// After the step of the domes, the dome breaks up as it stands
+	const auto after = shield::DomeAtBreakUp(shape, state, pose, turns, solid, false, k_Turn);
+	ASSERT_TRUE(after.has_value());
+	EXPECT_EQ(after->pose.height, pose.height);
+	EXPECT_EQ(after->solidScale, solid);
+	// Before it, the dome takes the step of this turn first, and its own state does not change
+	const auto stateBefore = state;
+	const auto before = shield::DomeAtBreakUp(shape, state, pose, turns, solid, true, k_Turn);
+	ASSERT_TRUE(before.has_value());
+	auto next = state;
+	const auto expected = shield::StepDome(shape, next, shield::DomeAge(turns + 1, k_Turn), k_Turn);
+	EXPECT_EQ(before->pose.height, expected.height);
+	EXPECT_EQ(before->pose.scale, expected.scale);
+	EXPECT_NE(before->pose.height, pose.height);
+	EXPECT_EQ(state.bob, stateBefore.bob);
+	EXPECT_EQ(state.angle, stateBefore.angle);
+}
+
+TEST(ShieldRules, ADomeThatDiesAwayInItsStepDoesNotBreakUp)
+{
+	const auto shape = shield::MakeDomeShape(PhysicalTables(), 30.0f, 2.0f);
+	shield::DomeState state {.dieTime = shield::k_DomeGoneSeconds, .dying = true};
+	const shield::DomePose pose {.scale = shape.finalScale, .drawn = true};
+	EXPECT_FALSE(shield::DomeAtBreakUp(shape, state, pose, 100, shape.finalScale, true, k_Turn).has_value());
+	EXPECT_TRUE(shield::DomeAtBreakUp(shape, state, pose, 100, shape.finalScale, false, k_Turn).has_value());
+}
+
+TEST(ShieldRules, TheDomeBreaksUpUprightAndUnturnedAtTheScaleOfItsSolidShape)
+{
+	const shield::DomeBreakUp dome {.pose = {.scale = 0.9f, .angle = 1.0f, .height = -1.5f}, .solidScale = 0.5f};
+	const auto model = shield::DomeBreakUpModel({10.0f, 20.0f, 30.0f}, dome);
+	// The pieces come from the model at its place on the land plus its height
+	EXPECT_EQ(model[3][0], 10.0f);
+	EXPECT_EQ(model[3][1], 18.5f);
+	EXPECT_EQ(model[3][2], 30.0f);
+	// The model is not turned: its spin is only in the model that the game draws
+	for (int column = 0; column < 3; ++column)
+	{
+		for (int row = 0; row < 3; ++row)
+		{
+			EXPECT_EQ(model[column][row], column == row ? 0.5f : 0.0f);
+		}
+	}
+}
+
 TEST(ShieldRules, TheDomeEaseAndAgeRoundAsTheGameDoes)
 {
 	// ((1 - x) x + 1) x, each step rounded: one float under the x + x^2 - x^3 form at this point

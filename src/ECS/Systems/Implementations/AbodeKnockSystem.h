@@ -29,6 +29,7 @@ class AbodeKnockSystem final: public AbodeKnockSystemInterface
 {
 public:
 	bool Tap(entt::entity abode, glm::vec3 handPoint, bool ownHand) override;
+	void ShowReadout(entt::entity town) override;
 	void Update(std::chrono::milliseconds frame) override;
 	[[nodiscard]] std::optional<entt::entity> GetReadoutTown() const override;
 	[[nodiscard]] float GetReadoutScale() const override { return _readoutScale; }

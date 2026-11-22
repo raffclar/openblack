@@ -118,6 +118,43 @@ TEST(TextEdit, AClickFallsBeforeTheCharacterItIsOn)
 	EXPECT_EQ(CharacterAt(state, 100, 115, TenEach), 3);
 }
 
+TEST(TextEdit, AClickAfterTheScrolledTextPutsTheCaretAfterTheEnd)
+{
+	// The game adds the scroll to the length of the text
+	auto state = Box(u"abcd");
+	state.scroll = 2;
+	const auto place = CharacterAt(state, 100, 500, TenEach);
+	EXPECT_EQ(place, 6);
+	MouseDown(state, place);
+	MouseUp(state, place);
+	EXPECT_EQ(state.caret, 6);
+	// Backspace takes out no character for as many presses as the text scrolls
+	Type(state, u'\b');
+	EXPECT_EQ(state.text, u"abcd");
+	EXPECT_EQ(state.caret, 5);
+	Type(state, u'\b');
+	EXPECT_EQ(state.text, u"abcd");
+	EXPECT_EQ(state.caret, 4);
+	Type(state, u'\b');
+	EXPECT_EQ(state.text, u"abc");
+	EXPECT_EQ(state.caret, 3);
+	// A typed character after the end goes in at the end of the text, and the caret stays in the text
+	MouseDown(state, CharacterAt(state, 100, 500, TenEach));
+	EXPECT_EQ(state.caret, 5);
+	Type(state, u'x');
+	EXPECT_EQ(state.text, u"abcx");
+	EXPECT_EQ(state.caret, 4);
+}
+
+TEST(TextEdit, AnArrowKeyBringsTheCaretBackIntoTheText)
+{
+	auto state = Box(u"abcd");
+	state.scroll = 2;
+	MouseDown(state, CharacterAt(state, 100, 500, TenEach));
+	Press(state, Key::Left, false);
+	EXPECT_EQ(state.caret, 4);
+}
+
 TEST(TextEdit, TheTextScrollsToKeepTheCaretInTheBox)
 {
 	// A box 59 wide shows less than 50 pixels of text: four characters

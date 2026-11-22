@@ -786,6 +786,25 @@ TEST(LandgenCursed, EachPlaceHasTheThingsOfTheStory)
 	}
 }
 
+TEST(LandgenCursed, EachCraterIsIndestructibleAsTheCratersOfTheFifthLand)
+{
+	const CursedLand land;
+	const auto ground = land.Ground();
+	size_t craters = 0;
+	for (uint64_t seed = 1; seed <= 12; ++seed)
+	{
+		std::vector<features::Feature> placed;
+		static_cast<void>(cursed::Place(ground, placed, seed, {}));
+		for (const auto& feature : placed)
+		{
+			// Only the craters are indestructible: the stacks, the boulders and the dead trees are not
+			EXPECT_EQ(feature.indestructible, IsCrater(feature));
+			craters += IsCrater(feature) ? 1 : 0;
+		}
+	}
+	EXPECT_GT(craters, 0u);
+}
+
 TEST(LandgenCursed, TheBurntTreesKeepToTheMostOfTheStoryForTheArea)
 {
 	const cursed::Settings settings;

@@ -57,6 +57,7 @@
 #include "Creature/BonusCreatures.h"
 #include "CreatureMindWindow.h"
 #include "CreatureSpawner.h"
+#include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -1041,6 +1042,23 @@ bool Gui::ShowMenu() noexcept
 				ImGui::Checkbox("Bounding Boxes", &config.drawBoundingBoxes);
 				ImGui::Checkbox("Footpaths", &config.drawFootpaths);
 				ImGui::Checkbox("Streams", &config.drawStreams);
+
+				ImGui::EndMenu();
+			}
+
+			if (ImGui::BeginMenu("Sky Pictures"))
+			{
+				// The larger pictures of the optional sky pack in the profile folder. With no pack, the choice is greyed.
+				const bool hasPack = Locator::resources::value().GetTextures().Contains(
+				    ecs::archetypes::SkyArchetype::k_PackDomeTextureId.value());
+				if (ImGui::MenuItem("Original", nullptr, !config.upscaledSkyPictures))
+				{
+					config.upscaledSkyPictures = false;
+				}
+				if (ImGui::MenuItem("Upscaled", nullptr, config.upscaledSkyPictures && hasPack, hasPack))
+				{
+					config.upscaledSkyPictures = true;
+				}
 
 				ImGui::EndMenu();
 			}

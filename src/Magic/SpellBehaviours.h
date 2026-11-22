@@ -83,6 +83,8 @@ public:
 	virtual void ShieldStruck(const ecs::components::Spell& /*shield*/, bool /*destroyed*/) {}
 	/// Whether what a miracle made in the world still stands: a shield's dome, a forest's trees
 	[[nodiscard]] virtual bool HasWorldObjects(const ecs::components::Spell& /*spell*/) const { return false; }
+	/// Whether the world destroyed what a running miracle made, as a blast wave destroys a shield's dome
+	[[nodiscard]] virtual bool LostWorldObjects(const ecs::components::Spell& /*spell*/) const { return false; }
 	/// The forest plants its trees round where it was cast; whether it planted any
 	virtual bool PlantForest(ecs::components::Spell& /*spell*/) { return false; }
 	/// Whether a forest may be cast at a point: there is room for a tree, and no building's fire there
@@ -197,6 +199,9 @@ void ProcessTurn(SpellServicesInterface& services, ecs::components::Spell& spell
 /// Whether what its kind made keeps it alive after its effect has gone or it has closed down: a shield's dome fading out,
 /// a forest's trees withering, a flock still flying
 [[nodiscard]] bool KeptByKind(SpellServicesInterface& services, const ecs::components::Spell& spell);
+
+/// Whether the world destroyed what its kind made while it ran, so that nothing is left to keep it: a shield's object
+[[nodiscard]] bool LostByKind(SpellServicesInterface& services, const ecs::components::Spell& spell);
 
 /// The particle effect its kind starts: its magic type's, but the flocks' by kind (and the flying flock's by its caster's
 /// alignment)

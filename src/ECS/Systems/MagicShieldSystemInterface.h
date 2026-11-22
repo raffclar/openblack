@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -40,8 +41,9 @@ namespace openblack::ecs::systems
 /// The shield miracles' objects in the world. Each running shield miracle raises one where it was cast: the spiritual
 /// shield's marks where it is (its sphere is its particle effect's), the physical shield's is a solid dome that grows,
 /// spins and bobs, and stops what is thrown at it. While a shield stands no other player has influence under it, the
-/// people about it shelter under it, and other players' creatures walk round it. Once its miracle lets go the spiritual
-/// shield's goes at once, the dome fades away.
+/// people about it shelter under it, and other players' creatures walk round it. When its miracle closes down, the
+/// spiritual shield's object goes at once. The dome fades away, and the miracle lives with its reactions until the dome
+/// has gone.
 class MagicShieldSystemInterface: public SavedStateInterface
 {
 public:
@@ -64,8 +66,21 @@ public:
 	}
 	/// Whether a shield miracle's object still stands
 	[[nodiscard]] virtual bool HasObject(entt::entity spell) const = 0;
+	/// Whether the object of a running shield miracle was destroyed in the world. Such a miracle does not raise another
+	/// object, and it goes in its next turn.
+	[[nodiscard]] virtual bool LostObject(entt::entity /*spell*/) const { return false; }
+	/// The world destroys the object of a shield, as a blast wave does: it goes at once with its effect and its
+	/// reactions, also a dome that fades
+	virtual void ObjectDestroyed(entt::entity /*object*/) {}
 	/// The object of a shield miracle, none when it has none
 	[[nodiscard]] virtual entt::entity ObjectOf(entt::entity /*spell*/) const { return entt::null; }
+	/// The miracle that keeps a shield's object: its own miracle, also while its dome fades after the miracle closed
+	/// down. None when no miracle keeps it.
+	[[nodiscard]] virtual entt::entity KeeperOf(entt::entity /*object*/) const { return entt::null; }
+	/// A shield miracle closes down. The spiritual shield's object goes at once. The dome lets go of its miracle and
+	/// starts to fade, but the miracle keeps it and its reactions until it has gone. A miracle that closes down in the
+	/// turn of the miracles lets its dome take the turn of the domes first.
+	virtual void MiracleClosedDown(entt::entity /*spell*/, bool /*inMiracleTurn*/) {}
 
 	/// The object of a shield miracle of a saved game of the game
 	struct RestoredShield
@@ -111,10 +126,11 @@ public:
 	/// ground and what made the reaction is not inside that shield
 	[[nodiscard]] virtual bool KeepsReactionOff(glm::vec3 /*watcher*/, glm::vec3 /*initiator*/) const { return false; }
 	/// The miracle of the first shield whose reach on the ground a point is strictly within, of either kind, as a script
-	/// asks for a shield miracle at a point. A dome that fades after the end of its miracle has no miracle and does not
-	/// count.
+	/// asks for a shield miracle at a point. A dome that fades after its miracle closed down gives that miracle. A dome
+	/// that fades after its miracle has gone does not count.
 	[[nodiscard]] virtual std::optional<entt::entity> ShieldAt(glm::vec3 /*point*/) const { return std::nullopt; }
-	/// A script deletes a shield miracle: the object of the miracle goes at once with it and does not fade
+	/// A script deletes a shield miracle: the spiritual shield's object goes at once with it. The dome lets go of the
+	/// miracle and fades away alone, with no reactions and no hold on influence.
 	virtual void RemoveWithSpell(entt::entity /*spell*/) {}
 	/// A shield miracle's radius changed: its object's reach follows it at once
 	virtual void FollowSpellRadius(entt::entity /*spell*/, float /*radius*/) {}
@@ -142,6 +158,18 @@ public:
 	};
 	/// The domes to draw, between their last two turns by the turn's fraction
 	[[nodiscard]] virtual std::vector<DomeDraw> GetDomes(float fraction) const = 0;
+	/// The model of a dome, from which it breaks into pieces
+	struct DomePieces
+	{
+		entt::id_type mesh;
+		glm::mat4 model;
+	};
+	/// The pieces of a dome that breaks. When `beforeDomeStep` is true, the domes did not take their step of this turn
+	/// yet. It gives no value for a thing that is not a dome, or for a dome that dies away in its step.
+	[[nodiscard]] virtual std::optional<DomePieces> DomeBreakUp(entt::entity /*object*/, bool /*beforeDomeStep*/) const
+	{
+		return std::nullopt;
+	}
 };
 
 } // namespace openblack::ecs::systems

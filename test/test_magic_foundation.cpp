@@ -59,6 +59,15 @@ TEST(SpellLifetime, WhatItsKindMadeKeepsItLonger)
 	          SpellFate::Continue);
 }
 
+TEST(SpellLifetime, AMiracleWhoseObjectTheWorldDestroyedGoesUnlessItsEffectRuns)
+{
+	// Running or closed down, with nothing left to keep it
+	EXPECT_EQ(FateOf({.hasParticleType = false, .closedDown = false, .lostByKind = true}), SpellFate::Delete);
+	EXPECT_EQ(FateOf({.hasParticleType = false, .closedDown = true, .lostByKind = true}), SpellFate::Delete);
+	// Its effect keeps it while the effect runs
+	EXPECT_EQ(FateOf({.hasParticleType = true, .effectRunning = true, .lostByKind = true}), SpellFate::Continue);
+}
+
 TEST(SpellLifetime, ACastIsRefusedWhenItsEffectCantStart)
 {
 	EXPECT_TRUE(CastRefusedWithoutEffect(true, false));

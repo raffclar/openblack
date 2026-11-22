@@ -72,3 +72,13 @@ std::vector<abode_knock::Marker> abode_knock::Readout(uint32_t places, uint32_t 
 	}
 	return markers;
 }
+
+abode_knock::Marker abode_knock::HeldResidentMarker()
+{
+	// The place of the first marker of a row of one, at the full size of a marker
+	return {
+	    .offset = -0.5f,
+	    .colour = k_HeldResidentColour,
+	    .size = k_MarkerSpacing,
+	};
+}

@@ -29,6 +29,14 @@ inline constexpr uint32_t k_PictureBits = 5;
 	return tenBitsDraw ? TextureFormat::RGB10A2 : TextureFormat::RGBA8;
 }
 
+/// The format of the dome's target for the larger pictures of the debug menu's pack. These pictures have 8 bits for
+/// each channel and the blend does not cut them to 5-bit steps. Use 16-bit floats when the device can draw into this
+/// format, else the format of the game's own pictures.
+[[nodiscard]] constexpr TextureFormat PackFormat(bool halfFloatDraw, bool tenBitsDraw) noexcept
+{
+	return halfFloatDraw ? TextureFormat::RGBA16F : Format(tenBitsDraw);
+}
+
 /// The bits of a colour channel of the dome's target format
 [[nodiscard]] constexpr uint32_t ChannelBits(TextureFormat format) noexcept
 {

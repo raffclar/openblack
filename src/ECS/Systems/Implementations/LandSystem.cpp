@@ -63,6 +63,7 @@
 #include "ECS/Archetypes/StreamSegmentArchetype.h"
 #include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
+#include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
@@ -579,7 +580,13 @@ void PlaceGeneratedThings(const landgen::GeneratedLand& land)
 		}
 		else if (feature.kind == landgen::features::Kind::Feature)
 		{
-			archetypes::FeatureArchetype::Create(position, static_cast<FeatureInfo>(feature.type), feature.angle, feature.size);
+			const auto made = archetypes::FeatureArchetype::Create(position, static_cast<FeatureInfo>(feature.type),
+			                                                       feature.angle, feature.size);
+			// The generator marks a feature indestructible as a land script does, such as a crater of the fifth land
+			if (feature.indestructible)
+			{
+				Locator::entitiesRegistry::value().AssignOrReplace<components::Indestructible>(made);
+			}
 		}
 		else if (feature.kind == landgen::features::Kind::Mobile)
 		{

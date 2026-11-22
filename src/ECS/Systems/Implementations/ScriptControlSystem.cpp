@@ -144,6 +144,7 @@ void ScriptControlSystem::StartGameSpeed(uint32_t task)
 	if (_gameSpeedOwner == 0 || _gameSpeedOwner == task)
 	{
 		_gameSpeedOwner = task;
+		_hidesSpeedWords = true;
 	}
 }
 
@@ -154,6 +155,7 @@ bool ScriptControlSystem::EndGameSpeed(uint32_t task)
 		return false;
 	}
 	_gameSpeedOwner = 0;
+	_hidesSpeedWords = false;
 	return true;
 }
 
@@ -168,6 +170,7 @@ ScriptControlSystemInterface::Released ScriptControlSystem::TaskStopped(Camera& 
 	if (_gameSpeedOwner == task)
 	{
 		_gameSpeedOwner = 0;
+		_hidesSpeedWords = false;
 		released.gameSpeed = true;
 	}
 	return released;
@@ -192,6 +195,9 @@ bool ScriptControlSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _gameSpeedOwner);
 	reflection::Load(in, _cameraDetails);
 	reflection::Load(in, _countdown);
+	// The game ends the control of the game speed before the load, and the load gives back only the task with the
+	// speed. Thus the words of a slower or quicker game show again (vanilla-bugs 2445).
+	_hidesSpeedWords = false;
 	std::optional<ScriptCameraModel::Saved> saved;
 	reflection::Load(in, saved);
 	if (in.Failed())
@@ -216,5 +222,6 @@ void ScriptControlSystem::Reset()
 	_cameraOwner = 0;
 	_danceCamera.reset();
 	_gameSpeedOwner = 0;
+	_hidesSpeedWords = false;
 	_countdown.Reset();
 }

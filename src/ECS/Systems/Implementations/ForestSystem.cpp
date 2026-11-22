@@ -269,9 +269,9 @@ std::vector<entt::entity> ListedTrees(const ecs::Registry& registry, uint32_t fo
 	return sorted;
 }
 
-/// The land's alignment at a place: each player's influence there times their alignment, no more than wholly good or
-/// evil
-float LandAlignmentAt(const glm::vec3& position)
+/// The land's alignment at a map position: each player's influence there times their alignment, no more than wholly
+/// good or evil
+float LandAlignmentAt(const map_coords::MapCoords& place)
 {
 	if (!Locator::influenceSystem::has_value() || !Locator::alignmentSystem::has_value())
 	{
@@ -280,7 +280,7 @@ float LandAlignmentAt(const glm::vec3& position)
 	const auto& influence = Locator::influenceSystem::value();
 	const auto& alignment = Locator::alignmentSystem::value();
 	// The influence of all players at the place comes from one pass over their sources
-	const auto influences = influence.PlayerInfluences(map_coords::FromMetres({position.x, position.z}));
+	const auto influences = influence.PlayerInfluences(place);
 	float sum = 0.0f;
 	for (const auto player : ecs::game_players::All())
 	{
@@ -293,14 +293,16 @@ float LandAlignmentAt(const glm::vec3& position)
 	return std::clamp(sum, -1.0f, 1.0f);
 }
 
-/// How wet the ground is under a tree for its growing
-int WetnessAt(const glm::vec3& position)
+/// How wet the ground is under a tree for its growing. The weather comes from the point of the map position of the tree,
+/// at the given height.
+int WetnessAt(const map_coords::MapCoords& place, float height)
 {
 	if (!Locator::weatherSystem::has_value())
 	{
 		return 0;
 	}
-	const auto here = Locator::weatherSystem::value().GetWeather(position);
+	const auto metres = map_coords::ToMetres(place);
+	const auto here = Locator::weatherSystem::value().GetWeather({metres.x, height, metres.y});
 	return forest_growth::Wetness(here.rain, here.snowCover);
 }
 
@@ -822,8 +824,9 @@ void ForestSystem::GrowForests()
 				                                  .rainAccelerator = info.rainingAcceleratorMultiplier};
 				const auto step = forest_growth::TreeStep(
 				    kind.growthCountdown, kind.madeToGrow, transform.scale.x, kind.maxSize, info.growsAfterNumGameTurns, [&] {
-					    return forest_growth::Growth(growth, WetnessAt(transform.position),
-					                                 LandAlignmentAt(transform.position));
+					    // The weather and the alignment come from the map position of the tree, not from where it is drawn
+					    const auto place = ecs::thing_map_place::Of(registry, tree);
+					    return forest_growth::Growth(growth, WetnessAt(place, transform.position.y), LandAlignmentAt(place));
 				    });
 				// Only its size: what it stands in the way of stays as it was
 				if (step.size.has_value())
