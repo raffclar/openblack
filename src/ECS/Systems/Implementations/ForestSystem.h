@@ -56,7 +56,8 @@ public:
 	[[nodiscard]] std::optional<entt::entity> CentreTreeOf(entt::entity forest) const override;
 	[[nodiscard]] std::optional<entt::entity> ListedCentreTreeOf(entt::entity forest,
 	                                                             const ForestTreeLists& lists) const override;
-	[[nodiscard]] std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const override;
+	[[nodiscard]] std::optional<map_coords::MapCoords> ForestLair(AnimalInfo kind,
+	                                                              const map_coords::MapCoords& from) const override;
 	void MakeScenicForests() override;
 	void JoinForest(entt::entity tree, uint32_t forest) override;
 	void ListInForest(entt::entity tree, uint32_t forest, bool growing) override;
