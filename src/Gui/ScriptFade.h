@@ -14,6 +14,11 @@
 namespace openblack::gui
 {
 
+/// A colour value of a script fade command. The game removes the fraction and keeps the low byte of the whole number.
+[[nodiscard]] uint8_t FadeColourFromScript(float value);
+/// The seconds of a script fade command. The game removes the fraction and keeps the low byte as a signed number.
+[[nodiscard]] int8_t FadeSecondsFromScript(float value);
+
 /// The scripts' fade of the picture to a colour and back, moving once a game turn. Its colour covers the picture between
 /// the cinema bars.
 class ScriptFade
