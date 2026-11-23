@@ -68,6 +68,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
+import sim_paths  # noqa: E402
 import draw_trace  # noqa: E402
 from map_download_check import CDP, CHROME, NO_WINDOW, Processes, free_port, make_certificates, run, site_spki  # noqa: E402
 
@@ -552,6 +553,7 @@ def page_lines(folder, keep):
 
 
 def main():
+    sim_paths.close_error_reports()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--service", required=True, help="a clone of bwgame-service")
     parser.add_argument("--service-python", required=True, help="the python of the service's environment")

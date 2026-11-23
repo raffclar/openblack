@@ -4053,6 +4053,7 @@ def join_order(gods, clients, scenario):
 
 
 def main():
+    sim_paths.close_error_reports()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--turns", type=int, default=600, help="the turns that each client plays")
     parser.add_argument("--seed", type=int, default=1)

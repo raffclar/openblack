@@ -637,6 +637,8 @@ def steps(args):
 
 
 def main():
+    if not os.environ.get("SENTRY_DSN"):
+        os.environ["SENTRY_DSN"] = "http://test@127.0.0.1:9/0"  # no report of a test run goes to the live project
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="mode", required=True)
     for name in ("skirmish", "land", "server", "steps"):
