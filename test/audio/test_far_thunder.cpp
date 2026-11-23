@@ -93,18 +93,48 @@ TEST(FarThunder, TheWholeLandHearsThunder)
 	EXPECT_GT(HearingAt(corners, k_SampleReach).gain, 0.1f);
 }
 
-// The air takes nothing up to the sharp distance. Past it, the cut-off falls quickly to the low pitches of a rumble.
+// The air takes nothing up to the sharp distance. Past it, the crack softens slowly, so that thunder at 300 m and at
+// 600 m is sharp.
+TEST(FarThunder, TheCrackIsSharpNear)
+{
+	for (const float distance : {k_SampleReach, 600.0f, k_SharpDistance, 650.0f})
+	{
+		EXPECT_FALSE(HearingAt(distance, k_SampleReach).cutOff.has_value()) << distance;
+	}
+	// From about 660 m, the air takes 3 dB below 8 kHz
+	const auto at700 = HearingAt(700.0f, k_SampleReach).cutOff;
+	ASSERT_TRUE(at700.has_value());
+	EXPECT_GT(*at700, 6000.0f);
+}
+
+// At 1 km the crack is softer: the air path of 162 m takes 3 dB above about 3.4 kHz, between the 2 kHz and the 4 kHz
+// bands
+TEST(FarThunder, TheCrackIsSofterAtOneKilometre)
+{
+	const auto at1km = HearingAt(1000.0f, k_SampleReach).cutOff;
+	ASSERT_TRUE(at1km.has_value());
+	const float loss = 3.0f / ((1000.0f - k_SharpDistance) * k_SoftAirPathPerMetre * 0.001f);
+	EXPECT_NEAR(*at1km, 2000.0f * std::pow(2.0f, std::log(loss / 9.0f) / std::log(22.9f / 9.0f)), 0.5f);
+	EXPECT_GT(*at1km, 3000.0f);
+	EXPECT_LT(*at1km, 4000.0f);
+}
+
+// Past the rumble distance, each metre adds one metre of air path. The cut-off falls quickly to the low pitches of a
+// rumble.
 TEST(FarThunder, TheCrackBecomesARumble)
 {
-	EXPECT_FALSE(HearingAt(k_SharpDistance, k_SampleReach).cutOff.has_value());
-	// 30 m further, the air takes more than 3 dB only above 8 kHz
-	EXPECT_FALSE(HearingAt(k_SharpDistance + 30.0f, k_SampleReach).cutOff.has_value());
-	// 500 m further, it takes 6 dB a kilometre: between the 1 kHz and the 2 kHz bands
+	// At 2 km the soft air path of 522 m is the longer: the air takes 5.7 dB a kilometre, between the 1 kHz and the
+	// 2 kHz bands
 	const auto at2km = HearingAt(2000.0f, k_SampleReach).cutOff;
 	ASSERT_TRUE(at2km.has_value());
-	EXPECT_NEAR(*at2km, 1000.0f * std::pow(2.0f, std::log(6.0f / 5.0f) / std::log(9.0f / 5.0f)), 0.5f);
+	const float loss2km = 3.0f / 0.522f;
+	EXPECT_NEAR(*at2km, 1000.0f * std::pow(2.0f, std::log(loss2km / 5.0f) / std::log(9.0f / 5.0f)), 0.5f);
+	// From about 2.03 km, the air path is the distance past the rumble distance: 800 m at 2.3 km
+	const auto at2300 = HearingAt(2300.0f, k_SampleReach).cutOff;
+	ASSERT_TRUE(at2300.has_value());
+	EXPECT_NEAR(*at2300, 500.0f * std::pow(2.0f, std::log(3.75f / 2.8f) / std::log(5.0f / 2.8f)), 0.5f);
 	float last = 20000.0f;
-	for (float distance = 1600.0f; distance < k_SilentDistance; distance += 250.0f)
+	for (float distance = 700.0f; distance < k_SilentDistance; distance += 50.0f)
 	{
 		const auto cutOff = HearingAt(distance, k_SampleReach).cutOff;
 		ASSERT_TRUE(cutOff.has_value()) << distance;
