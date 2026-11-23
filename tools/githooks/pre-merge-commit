@@ -1,0 +1,19 @@
+#!/bin/sh
+# openblack pre-merge-commit check: git runs this, not pre-commit, for a merge commit that git makes itself.
+# Every C++ file that the merge changes must match clang-format 17 (whole files, see tools/githooks/clang-format-gate.sh).
+# Install it with tools/githooks/install.sh. It goes in the common git folder, so it applies to every worktree.
+# Skip it once: not allowed for openblack work (no --no-verify).
+
+top=$(git rev-parse --show-toplevel) || exit 1
+gate="$top/tools/githooks/clang-format-gate.sh"
+if [ ! -f "$gate" ]; then
+	echo "pre-merge-commit: $gate is not in this work tree: the format check is skipped." >&2
+	exit 0
+fi
+git diff --cached --name-only --diff-filter=ACMR HEAD | sh "$gate"
+status=$?
+if [ $status -ne 0 ]; then
+	echo "pre-merge-commit: the merge is not clang-format 17 clean: format the files, git add them, then git commit." >&2
+	exit 1
+fi
+exit 0

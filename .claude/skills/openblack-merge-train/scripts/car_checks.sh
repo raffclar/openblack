@@ -5,6 +5,7 @@ if [ -f src/Debug/TestbedScenarioRegistry.h ]; then
   python "$HERE/fix_kind_names.py" . || { echo "STOP: testbed kinds and names differ"; exit 3; }
   [ -n "$(git status --porcelain src/Debug/TestbedScenarioRegistry.cpp)" ] && git commit -qam "Testbed: the command names array holds every command after the merge" -m "$OB_TRAIN_TRAILER"
 fi
+echo "--- format (clang-format 17, every changed C++ file)"; bash "$HERE/format_check.sh" "$WT" </dev/null || { echo "STOP: format: a changed C++ file is not clang-format 17 clean, or clang-format 17 is missing (see the lines above)"; exit 21; }
 extra_check start "$WT" "$NAME"
 if [ -f tools/build/check_draw_order.py ]; then echo "--- draw order"; python tools/build/check_draw_order.py || { echo "STOP: two random draws in no fixed order (tools/build/check_draw_order.py)"; exit 13; }; fi
 echo "--- configure"; $OB configure --fresh > car-cfg.log 2>&1 || { tail -20 car-cfg.log; echo "STOP: configure"; exit 4; }
