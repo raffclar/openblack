@@ -84,9 +84,11 @@ glm::vec2 ResourceDropoffPos(entt::entity villager, ResourceType type, entt::ent
 /// A place where the villager takes or leaves a resource, and its height above the land
 struct Dropoff
 {
+	/// The place in metres, for distances
 	glm::vec2 place;
-	/// The height of a temporary pile, which sinks into the land; 0 for the other places
-	float altitude {0.0f};
+	/// The same place as the map keeps it: the arrive place of a storage pit, the point of a temporary pile nearest the
+	/// villager with the height of the pile, or where the villager stands
+	map_coords::MapCoords goal;
 
 	/// The place as the goal of a walk, with its height
 	[[nodiscard]] map_coords::MapCoords Goal() const;

@@ -59,6 +59,7 @@
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAge.h"
@@ -881,6 +882,43 @@ glm::vec2 villager_home::DoorPosition(entt::entity abode)
 	return glm::xz(point);
 }
 
+map_coords::MapCoords villager_home::DoorPlace(entt::entity abode)
+{
+	auto& registry = WorldRegistry();
+	const auto& transform = registry.Get<const Transform>(abode);
+	const auto* info = registry.AllOf<Abode>(abode) ? world_objects::AbodeInfoOf(abode) : nullptr;
+	const auto door = abode_door::DoorOfThing(info != nullptr ? std::optional(info->abodeType) : std::nullopt,
+	                                          registry.AnyOf<Field, FishFarm>(abode));
+	std::optional<glm::vec2> doorMetres;
+	if (door == abode_door::Door::VillageCentre)
+	{
+		doorMetres = abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
+	}
+	else if (const auto model = thing_model::ModelOf(registry, abode); door == abode_door::Door::Model && model.has_value())
+	{
+		const auto& meshes = Locator::resources::value().GetMeshes();
+		if (meshes.Contains(*model))
+		{
+			if (const auto& modelDoor = meshes.Handle(*model)->GetDoorPos(); modelDoor.has_value())
+			{
+				doorMetres = glm::xz(transform.position + transform.rotation * (transform.scale * *modelDoor));
+			}
+		}
+	}
+	return abode_door::DoorPlace(door, doorMetres, thing_map_place::Of(registry, abode));
+}
+
+map_coords::MapCoords villager_home::ArrivePlace(entt::entity abode)
+{
+	auto& registry = WorldRegistry();
+	const auto* info = registry.AllOf<Abode>(abode) ? world_objects::AbodeInfoOf(abode) : nullptr;
+	if (info != nullptr && abode_door::ArrivesAtMiddle(info->abodeType))
+	{
+		return thing_map_place::Of(registry, abode);
+	}
+	return DoorPlace(abode);
+}
+
 glm::vec2 villager_home::ArrivePosition(entt::entity abode)
 {
 	auto& registry = WorldRegistry();
@@ -1142,7 +1180,7 @@ uint32_t villager_home::DoGoingHome(LivingAction& action, VillagerStates arrive,
 		}
 		else if (FinalState(action) != arrive)
 		{
-			villager_footpath::SetupMoveToOnFootpath(action, abode, ArrivePosition(abode), arrive);
+			villager_footpath::SetupMoveToOnFootpath(action, abode, ArrivePlace(abode), arrive);
 		}
 		return 1;
 	}
@@ -1188,8 +1226,8 @@ uint32_t villager_home::ArrivesHome(LivingAction& action)
 		SetTopState(action, VillagerStates::HomelessStart);
 		return 0;
 	}
-	const auto door = ArrivePosition(abode);
-	if (!AreWeThere(villager, door))
+	const auto door = ArrivePlace(abode);
+	if (!AreWeThere(villager, glm::ivec2(door.x, door.z)))
 	{
 		villager_footpath::SetupMoveToOnFootpath(action, abode, door, VillagerStates::ArrivesHome);
 		return 1;
@@ -1514,8 +1552,8 @@ uint32_t villager_home::GoHomeAndChange(LivingAction& action)
 	auto next = VillagerStates::DecideWhatToDo;
 	if (const auto abode = AbodeOf(villager); abode != entt::null)
 	{
-		const auto door = ArrivePosition(abode);
-		if (!AreWeThere(villager, door))
+		const auto door = ArrivePlace(abode);
+		if (!AreWeThere(villager, glm::ivec2(door.x, door.z)))
 		{
 			// It walks home round what stands in the way
 			SetupMoveTo(action, door, VillagerStates::GoHomeAndChange);

@@ -36,6 +36,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/TownWorkshops.h"
 #include "ECS/VillagerBreedingRules.h"
 #include "ECS/VillagerCarry.h"
@@ -98,12 +99,13 @@ bool IsFunctional(std::optional<entt::entity> building)
 	return building.has_value() && Entities().Valid(*building) && villager_home::IsFunctional(*building);
 }
 
-/// Whether the villager has got to a point, as near as its step in whole units
-bool AreWeThere(entt::entity villager, glm::vec2 point)
+/// Whether the villager has got to a map position, as near as its step in whole units. The villager is where the map
+/// keeps it.
+bool AreWeThere(entt::entity villager, const map_coords::MapCoords& point)
 {
 	const auto* wallHug = Entities().TryGet<const WallHug>(villager);
 	const auto speed = static_cast<float>(wall_hug::WholeSpeed(wallHug != nullptr ? wallHug->speed : 0.0f));
-	return villager_work::AreWeThere(map_coords::FromMetres(GroundOf(villager)), map_coords::FromMetres(point), speed, 0.0f);
+	return villager_work::AreWeThere(thing_map_place::Of(Entities(), villager), point, speed, 0.0f);
 }
 
 /// The villager's larger load (wood when as much as food) and how much of it there is, none when it carries nothing
@@ -306,7 +308,7 @@ uint32_t villager_disciple_work::CheckSupplyWorkshop(LivingAction& action)
 	const auto& person = Entities().Get<const Villager>(villager);
 	if (person.woodHeld != 0)
 	{
-		villager_footpath::SetupMoveToOnFootpath(action, *workshop, villager_home::ArrivePosition(*workshop),
+		villager_footpath::SetupMoveToOnFootpath(action, *workshop, villager_home::ArrivePlace(*workshop),
 		                                         VillagerStates::ArrivesAtWorkshopForDropOff);
 		return 1;
 	}
@@ -314,7 +316,7 @@ uint32_t villager_disciple_work::CheckSupplyWorkshop(LivingAction& action)
 	if (pit.has_value() && Entities().Valid(*pit) &&
 	    Locator::resourceStoreSystem::value().GetResource(*pit, ResourceType::Wood) > 0)
 	{
-		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePosition(*pit),
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePlace(*pit),
 		                                         VillagerStates::ArrivesAtStoragePitForWorkshopMaterials);
 		return 1;
 	}
@@ -331,7 +333,7 @@ uint32_t villager_disciple_work::ArrivesAtWorkshopForDropOff(LivingAction& actio
 	}
 	if (const auto workshop = BestWorkshop(villager))
 	{
-		const auto door = villager_home::ArrivePosition(*workshop);
+		const auto door = villager_home::ArrivePlace(*workshop);
 		if (!AreWeThere(villager, door))
 		{
 			villager_footpath::SetupMoveToOnFootpath(action, *workshop, door, VillagerStates::ArrivesAtWorkshopForDropOff);
@@ -360,7 +362,7 @@ uint32_t villager_disciple_work::ArrivesAtStoragePitForWorkshopMaterials(LivingA
 	const auto pit = villager_build::StoreOf(person, ValidTown(person.town).value_or(entt::null));
 	if (IsFunctional(pit))
 	{
-		const auto door = villager_home::ArrivePosition(*pit);
+		const auto door = villager_home::ArrivePlace(*pit);
 		if (!AreWeThere(villager, door))
 		{
 			villager_footpath::SetupMoveToOnFootpath(action, *pit, door,

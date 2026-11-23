@@ -305,8 +305,7 @@ bool ChildGotoCreche(LivingAction& action)
 	{
 		return false;
 	}
-	villager_footpath::SetupMoveToOnFootpath(action, creche, villager_home::DoorPosition(creche),
-	                                         VillagerStates::ChildAtCreche);
+	villager_footpath::SetupMoveToOnFootpath(action, creche, villager_home::DoorPlace(creche), VillagerStates::ChildAtCreche);
 	return true;
 }
 
@@ -316,11 +315,11 @@ void StrollOn(LivingAction& action, entt::entity creche)
 {
 	const auto child = EntityOf(action);
 	auto& person = Entities().Get<Villager>(child);
-	const auto door = villager_home::DoorPosition(creche);
+	const auto door = villager_home::DoorPlace(creche);
 	const auto* walk = Entities().TryGet<const WallHug>(child);
 	const auto here = walk != nullptr ? walk->position : ecs::wall_hug::ToWhole(PositionOf(child));
 	const auto leg = creche::NextStrollLeg({.path = person.crechePath, .leg = person.crecheLeg}, creches::PathsOf(creche),
-	                                       here == ecs::wall_hug::ToWhole(door), GameInt());
+	                                       here == glm::ivec2(door.x, door.z), GameInt());
 	person.crechePath = static_cast<int16_t>(leg.stroll.path);
 	person.crecheLeg = static_cast<int16_t>(leg.stroll.leg);
 	if (!leg.point.has_value())
@@ -331,8 +330,8 @@ void StrollOn(LivingAction& action, entt::entity creche)
 	const auto point = creches::PathPoint(creche, *leg.point);
 	if (!point.has_value())
 	{
-		villager_home::SetupMoveTo(action, creche::Strayed(door, GameFloat()), VillagerStates::ChildAtCreche,
-		                           villager_home::WalkWay::StraightThrough);
+		villager_home::SetupMoveTo(action, creche::Strayed(villager_home::DoorPosition(creche), GameFloat()),
+		                           VillagerStates::ChildAtCreche, villager_home::WalkWay::StraightThrough);
 		return;
 	}
 	// The child strays from the point on the land only. The goal keeps the height of the marker above the land there.

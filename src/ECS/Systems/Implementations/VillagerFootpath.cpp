@@ -24,6 +24,7 @@
 #include "Common/GameRandom.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
@@ -31,10 +32,13 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/FootpathRules.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WallHugRules.h"
 #include "Locator.h"
 #include "VillagerAnimate.h"
@@ -119,19 +123,32 @@ entt::entity NearestTown(glm::ivec2 place)
 	return nearest;
 }
 
-/// Where a villager going to a building stands when it gets there
+/// Where a villager going to a building stands when it gets there. A dance has its arrive place half a cell along x from
+/// its place, and a worship site has it at its gate.
 glm::ivec2 ArrivePlace(entt::entity building)
 {
+	/// A dance's arrive place is this far along x from its place, in whole map units
+	constexpr int32_t k_DanceArriveOffset = 0x8000;
 	const auto& registry = Entities();
 	if (const auto* farm = registry.TryGet<const FishFarm>(building))
 	{
 		return farm->place;
 	}
-	if (registry.AllOf<Abode>(building))
+	if (const auto* dance = registry.TryGet<const Dance>(building))
 	{
-		return wall_hug::ToWhole(villager_home::ArrivePosition(building));
+		return {dance->place.x + k_DanceArriveOffset, dance->place.z};
 	}
-	return wall_hug::ToWhole(glm::xz(registry.Get<const Transform>(building).position));
+	if (registry.AllOf<WorshipSite>(building) && Locator::worshipSiteSystem::has_value())
+	{
+		if (const auto gate =
+		        Locator::worshipSiteSystem::value().PlaceAt(building, systems::WorshipSiteSystemInterface::SitePlace::Gate))
+		{
+			return wall_hug::ToWhole(*gate);
+		}
+	}
+	const auto place =
+	    registry.AllOf<Abode>(building) ? villager_home::ArrivePlace(building) : thing_map_place::Of(registry, building);
+	return {place.x, place.z};
 }
 
 /// For each node of a path, whether walkers pass it by

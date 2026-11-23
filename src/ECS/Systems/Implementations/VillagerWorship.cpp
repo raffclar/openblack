@@ -44,6 +44,7 @@
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
@@ -184,13 +185,19 @@ bool MoveOnPathsTo(LivingAction& action, entt::entity place, glm::vec2 goal, Vil
 	return villager_footpath::SetupMoveToOnFootpath(action, place, goal, final);
 }
 
+/// The same for a goal that is a map position, which the walk keeps as it is
+bool MoveOnPathsTo(LivingAction& action, entt::entity place, const map_coords::MapCoords& goal, VillagerStates final)
+{
+	return villager_footpath::SetupMoveToOnFootpath(action, place, goal, final);
+}
+
 /// Whether the villager has got to a place, as near as its step and some slack in the map's whole units
 bool AreWeThere(entt::entity villager, const map_coords::MapCoords& goal, float slack)
 {
 	const auto& registry = Entities();
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
 	const auto speed = static_cast<float>(wall_hug::WholeSpeed(wallHug != nullptr ? wallHug->speed : 0.0f));
-	const auto at = map_coords::FromMetres(PositionOf(villager));
+	const auto at = thing_map_place::Of(registry, villager);
 	const auto dx = static_cast<float>(at.x - goal.x);
 	const auto dz = static_cast<float>(at.z - goal.z);
 	const float reach = speed + slack;
@@ -452,9 +459,9 @@ map_coords::MapCoords FoodDropPlace(entt::entity site, entt::entity villager)
 	const auto pot = registry.Get<const WorshipSite>(site).foodPot;
 	if (pot != entt::null && registry.Valid(pot) && registry.AllOf<Transform>(pot))
 	{
-		auto place = map_coords::FromMetres(PositionOf(pot));
+		auto place = thing_map_place::Of(registry, pot);
 		place.altitude = systems::object_measures::PlaceAltitude(registry, pot);
-		const float angle = gutils::Get3DAngleFromXZ(place, map_coords::FromMetres(PositionOf(villager)));
+		const float angle = gutils::Get3DAngleFromXZ(place, thing_map_place::Of(registry, villager));
 		const float reach =
 		    systems::object_measures::TwoDRadius(registry, pot) + systems::object_measures::TwoDRadius(registry, villager);
 		place += gutils::GetPosFromAngle(angle, reach);
@@ -1070,7 +1077,7 @@ uint32_t villager_worship::GotoStoragePitForWorshipSupplies(LivingAction& action
 		return 0;
 	}
 	// It walks to the edge of the pit's food nearest it, which for a storage pit is the pit's door
-	MoveOnPathsTo(action, *pit, villager_home::ArrivePosition(*pit), VillagerStates::ArrivesAtStoragePitForWorshipSupplies);
+	MoveOnPathsTo(action, *pit, villager_home::ArrivePlace(*pit), VillagerStates::ArrivesAtStoragePitForWorshipSupplies);
 	return 1;
 }
 

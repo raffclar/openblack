@@ -15,6 +15,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 /// The two places of a town's building that villagers use. The door is where a child goes into the crèche and where a
@@ -90,6 +91,25 @@ constexpr float k_VillageCentreDoorBack = 12.0f;
 	const float x = (position.x - back.x * k_VillageCentreDoorBack) + side.x * k_VillageCentreDoorSide;
 	const float z = (side.z * k_VillageCentreDoorSide - back.z * k_VillageCentreDoorBack) + position.z;
 	return {x, z};
+}
+
+/// The door of a building as a map position, as a walk keeps it. The door in metres changes to whole map units, and the
+/// altitude is 0. A model door that falls on the line x = 0 or z = 0 of the map counts as no door. When the model has no
+/// door, the door is the map position of the building, as the map keeps it. The village centre always uses its fixed
+/// door, and a building of the kind Middle always uses its map position.
+[[nodiscard]] constexpr map_coords::MapCoords DoorPlace(Door door, std::optional<glm::vec2> doorMetres,
+                                                        const map_coords::MapCoords& middle)
+{
+	if (door == Door::Middle || !doorMetres.has_value())
+	{
+		return middle;
+	}
+	const map_coords::MapCoords place {.x = map_coords::ToFixed(doorMetres->x), .z = map_coords::ToFixed(doorMetres->y)};
+	if (door == Door::Model && (place.x == 0 || place.z == 0))
+	{
+		return middle;
+	}
+	return place;
 }
 
 } // namespace openblack::ecs::abode_door

@@ -413,7 +413,7 @@ uint32_t villager_food::GotoStoragePitForFood(LivingAction& action)
 	const auto& person = Entities().Get<const Villager>(EntityOf(action));
 	if (const auto pit = WorkingStoragePit(person); pit.has_value())
 	{
-		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePosition(*pit),
+		villager_footpath::SetupMoveToOnFootpath(action, *pit, villager_home::ArrivePlace(*pit),
 		                                         VillagerStates::ArrivesAtStoragePitForFood);
 		return 1;
 	}
