@@ -45,15 +45,15 @@ public:
 	uint32_t AddResource(entt::entity object, ResourceType type, uint32_t amount, std::optional<glm::vec3> at) override;
 	uint32_t RemoveResource(entt::entity object, ResourceType type, uint32_t amount) override;
 	uint32_t AddToTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount,
-	                        std::optional<glm::vec3> at) override;
+	                        std::optional<map_coords::MapCoords> at) override;
 	uint32_t RemoveFromTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount) override;
 	void StoreStopsWorking(entt::entity store) override;
 	void StoreWorksAgain(entt::entity store) override;
 
-	/// One site at a building takes wood: a temple's onto its pile nearest where it is brought, any other's onto its one
-	/// pile, made for the first wood. What it took.
+	/// One site at a building takes wood: a temple's onto its pile nearest the map position where it is brought, any
+	/// other's onto its one pile, made for the first wood. What it took.
 	uint32_t AddToSite(entt::entity building, components::BuildingSite& site, ResourceType type, uint32_t amount,
-	                   std::optional<glm::vec3> at);
+	                   std::optional<map_coords::MapCoords> at);
 	/// One site at a building gives up to an amount of wood from its piles. A hand takes from a temple's site at the pile
 	/// nearest its point. What it gave.
 	uint32_t TakeFromSite(entt::entity building, components::BuildingSite& site, ResourceType type, uint32_t amount,

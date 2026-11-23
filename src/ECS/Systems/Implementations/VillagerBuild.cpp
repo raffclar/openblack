@@ -725,7 +725,7 @@ uint32_t villager_build::ArrivesAtBuildingSite(LivingAction& action)
 			{
 				Locator::resourceStoreSystem::value().AddToTownsSite(
 				    building, town, ResourceType::Wood, static_cast<uint32_t>(static_cast<int32_t>(person.woodHeld)),
-				    PositionOf(villager));
+				    MapPlaceOf(villager));
 				const auto dropped = villager_carry::PutDown(person, ResourceType::Wood, 0);
 				if (auto* tally = Entities().TryGet<TownResourceTally>(TownOf(person)))
 				{
