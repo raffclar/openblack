@@ -58,11 +58,6 @@ const systems::LivingActionSystemInterface& Living()
 	return Locator::livingActionSystem::value();
 }
 
-glm::vec2 ToMetres(glm::ivec2 whole)
-{
-	return {map_coords::ToMetres(whole.x), map_coords::ToMetres(whole.y)};
-}
-
 /// The town a building belongs to, none for a thing of no town
 entt::entity TownOfBuilding(entt::entity building)
 {
@@ -207,7 +202,7 @@ struct PathNodes
 /// only across the land, so the height stays.
 void WalkToNode(LivingAction& action, glm::ivec2 place, float altitude, villager_home::WalkWay way)
 {
-	villager_home::SetupMobileMoveTo(action, ToMetres(place), way);
+	villager_home::SetupMobileMoveTo(action, place, way);
 	Entities().Get<WallHug>(Entities().ToEntity(action)).goalHeight = altitude;
 }
 
@@ -259,15 +254,11 @@ bool SetupMoveOnFootpath(LivingAction& action, entt::entity footpath, bool towar
 	return true;
 }
 
-/// A straight walk to a goal that keeps the goal's height above the land
-bool MoveStraightTo(LivingAction& action, glm::vec2 goal, float goalAltitude, VillagerStates final)
+/// A straight walk to a goal in whole map units that keeps the goal's height above the land
+bool MoveStraightTo(LivingAction& action, glm::ivec2 goal, float goalAltitude, VillagerStates final)
 {
-	if (!villager_home::SetupMoveTo(action, goal, final))
-	{
-		return false;
-	}
-	Entities().Get<WallHug>(Entities().ToEntity(action)).goalHeight = goalAltitude;
-	return true;
+	return villager_home::SetupMoveTo(action, map_coords::MapCoords {.x = goal.x, .z = goal.y, .altitude = goalAltitude},
+	                                  final);
 }
 
 /// The walk through the building's footpaths, or straight there when none leads its way. Only a straight walk keeps
@@ -276,11 +267,10 @@ bool UseFootpathIfNecessary(LivingAction& action, entt::entity building, glm::iv
                             VillagerStates final)
 {
 	const auto villager = Entities().ToEntity(action);
-	const auto hereGoal = ToMetres(goal);
 	const auto buildingPaths = FootpathsOf(building);
 	if (buildingPaths.paths.empty() && !Entities().AllOf<FootpathLink>(building))
 	{
-		return MoveStraightTo(action, hereGoal, goalAltitude, final);
+		return MoveStraightTo(action, goal, goalAltitude, final);
 	}
 	const auto here = villager_home::WalkPosition(villager);
 	if (const auto join = footpath_rules::NearestPathTo(buildingPaths.paths, here, goal, footpath_rules::k_JoinReach);
@@ -313,7 +303,7 @@ bool UseFootpathIfNecessary(LivingAction& action, entt::entity building, glm::iv
 			return true;
 		}
 	}
-	return MoveStraightTo(action, hereGoal, goalAltitude, final);
+	return MoveStraightTo(action, goal, goalAltitude, final);
 }
 
 } // namespace
@@ -326,20 +316,28 @@ bool villager_footpath::SetupMoveToOnFootpath(LivingAction& action, entt::entity
 bool villager_footpath::SetupMoveToOnFootpath(LivingAction& action, entt::entity building, glm::vec2 goal, float goalAltitude,
                                               VillagerStates final)
 {
+	const auto whole = wall_hug::ToWhole(goal);
+	return SetupMoveToOnFootpath(action, building, map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = goalAltitude},
+	                             final);
+}
+
+bool villager_footpath::SetupMoveToOnFootpath(LivingAction& action, entt::entity building, const map_coords::MapCoords& goal,
+                                              VillagerStates final)
+{
 	auto& registry = Entities();
 	const auto villager = registry.ToEntity(action);
+	const glm::ivec2 whole {goal.x, goal.z};
 	if (building == entt::null || !registry.Valid(building) || !registry.AllOf<Transform>(building))
 	{
-		return MoveStraightTo(action, goal, goalAltitude, final);
+		return MoveStraightTo(action, whole, goal.altitude, final);
 	}
 	// One standing where it arrives at the building, going on to another point of it, steps straight there
 	const auto here = villager_home::WalkPosition(villager);
-	const auto whole = wall_hug::ToWhole(goal);
 	if (here == ArrivePlace(building) && whole != here)
 	{
-		return MoveStraightTo(action, goal, goalAltitude, final);
+		return MoveStraightTo(action, whole, goal.altitude, final);
 	}
-	return UseFootpathIfNecessary(action, building, whole, goalAltitude, final);
+	return UseFootpathIfNecessary(action, building, whole, goal.altitude, final);
 }
 
 uint32_t villager_footpath::MoveOnPath(LivingAction& action)

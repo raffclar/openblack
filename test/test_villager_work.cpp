@@ -44,13 +44,44 @@ work::WoodInterestInputs Interested()
 
 TEST(VillagerWork, AForesterStandsByTheTrunkItsOwnSizeAndALittleMoreAway)
 {
-	const auto at = work::TreeWorkingPosition({100.0f, 100.0f}, {110.0f, 100.0f}, 0.5f);
-	EXPECT_NEAR(glm::distance(at, glm::vec2(100.0f, 100.0f)), 1.4f, 1e-3f);
-	EXPECT_GT(at.x, 100.0f);
-	const auto edge = work::EdgeWorkingPosition({50.0f, 50.0f}, {50.0f, 60.0f}, 2.0f, 0.5f);
-	EXPECT_NEAR(glm::distance(edge, glm::vec2(50.0f, 50.0f)), 2.5f, 1e-3f);
-	const auto big = work::BigForestArrivePosition({0.0f, 0.0f}, {40.0f, 0.0f}, 30.0f);
-	EXPECT_NEAR(glm::distance(big, glm::vec2(0.0f, 0.0f)), 15.0f, 1e-3f);
+	// The step of 0.5 + 0.9 metres is 9175 whole map units along x, added to the tree's map position as an integer
+	const map_coords::MapCoords tree {.x = 0x400001, .z = 0x400000, .altitude = 1.5f};
+	const map_coords::MapCoords villager {.x = 0x410000, .z = 0x400000};
+	const auto at = work::TreeWorkingPosition(tree, villager, 0.5f);
+	EXPECT_EQ(at.x, 0x400001 + 9175);
+	EXPECT_EQ(at.z, 0x400000);
+	EXPECT_EQ(at.altitude, 1.5f);
+}
+
+TEST(VillagerWork, TheTreeWorkingSpotKeepsEveryUnitFarOutOnTheMap)
+{
+	// Near the far edge of the map a metre value cannot hold each map unit. The step is still added exactly. A goal
+	// found in metres and changed back to map units ended 2 units short here.
+	const map_coords::MapCoords tree {.x = 0x1FB5355, .z = 0x1F00005};
+	const map_coords::MapCoords villager {.x = 0x1FD0000, .z = 0x1F00005};
+	const auto at = work::TreeWorkingPosition(tree, villager, 0.5f);
+	EXPECT_EQ(at.x, 0x1FB5355 + 9175);
+	EXPECT_EQ(at.z, 0x1F00005);
+}
+
+TEST(VillagerWork, AVillagerStandsByAThingBothTheirSizesAway)
+{
+	// 2 + 0.5 metres is 16384 whole map units, here towards a villager at lower x
+	const map_coords::MapCoords thing {.x = 0x320007, .z = 0x320000};
+	const map_coords::MapCoords villager {.x = 0x310000, .z = 0x320000};
+	const auto edge = work::EdgeWorkingPosition(thing, villager, 2.0f, 0.5f);
+	EXPECT_EQ(edge.x, 0x320007 - 16384);
+	EXPECT_EQ(edge.z, 0x320000);
+}
+
+TEST(VillagerWork, ABigForestGivesWoodHalfItsRadiusFromItsMiddle)
+{
+	// Half of a radius of 30 metres is 98304 whole map units
+	const map_coords::MapCoords bigForest {.x = 0x100009, .z = 0x200000};
+	const map_coords::MapCoords villager {.x = 0x140000, .z = 0x200000};
+	const auto big = work::BigForestArrivePosition(bigForest, villager, 30.0f);
+	EXPECT_EQ(big.x, 0x100009 + 98304);
+	EXPECT_EQ(big.z, 0x200000);
 }
 
 TEST(VillagerWork, TouchingIsTheEdgeNearerThanAStep)
