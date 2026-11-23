@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <optional>
 #include <unordered_map>
 #include <utility>
@@ -60,7 +61,6 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
-#include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureCarried.h"
 #include "ECS/DiscipleGlowDraw.h"
@@ -78,6 +78,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -1436,6 +1437,16 @@ void villager_disciple::KeepDrawnGlows()
 		{
 			places.emplace(list[i], i);
 		}
+		std::unordered_map<entt::entity, uint32_t> bodies;
+		if (Locator::dynamicsSystem::has_value())
+		{
+			const auto drawnBodies = Locator::dynamicsSystem::value().DrawnBodies();
+			bodies.reserve(drawnBodies.size());
+			for (uint32_t i = 0; i < drawnBodies.size(); ++i)
+			{
+				bodies.emplace(drawnBodies[i], i);
+			}
+		}
 		const auto& meshes = Locator::resources::value().GetMeshes();
 		const drawn_place::DrawnPlaces drawnPlaces(registry);
 		std::vector<disciple_glow_draw::Glow> glows;
@@ -1459,8 +1470,10 @@ void villager_disciple::KeepDrawnGlows()
 			}
 			else
 			{
-				glow.draw =
-				    registry.AllOf<WalkPath>(villager) ? disciple_glow_draw::Draw::WalkPath : disciple_glow_draw::Draw::Physics;
+				// The moving bodies come in the order of the list of bodies, and other things after them
+				glow.draw = disciple_glow_draw::Draw::Physics;
+				const auto body = bodies.find(villager);
+				glow.place = body != bodies.end() ? body->second : std::numeric_limits<uint32_t>::max();
 			}
 			// The sphere about the box of the standard model, as the frame tests the body
 			const auto* detail = registry.TryGet<const DetailMeshes>(villager);

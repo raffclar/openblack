@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <limits>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -169,28 +170,30 @@ TEST(DiscipleGlowDraw, TheGlowsPastTheLimitInTheFrameOrderDoNotShow)
 	Registry land;
 	const auto listedLate = land.Create();
 	const auto listedEarly = land.Create();
-	const auto walking = land.Create();
-	const auto flying = land.Create();
+	const auto flyingLate = land.Create();
+	const auto flyingEarly = land.Create();
+	const auto outOfMap = land.Create();
 	const auto heldNear = land.Create();
 	const auto heldFar = land.Create();
 	const auto offScreen = land.Create();
 	using Draw = disciple_glow_draw::Draw;
 	const std::vector<disciple_glow_draw::Glow> glows {
 	    {.villager = heldNear, .draw = Draw::Hand, .key = 10.0f},
-	    {.villager = flying, .draw = Draw::Physics},
+	    {.villager = outOfMap, .draw = Draw::Physics, .place = std::numeric_limits<uint32_t>::max()},
+	    {.villager = flyingLate, .draw = Draw::Physics, .place = 4},
 	    {.villager = listedLate, .place = 7},
 	    {.villager = offScreen, .place = 0, .onScreen = false},
 	    {.villager = heldFar, .draw = Draw::Hand, .key = 90.0f},
-	    {.villager = walking, .draw = Draw::WalkPath},
+	    {.villager = flyingEarly, .draw = Draw::Physics, .place = 1},
 	    {.villager = listedEarly, .place = 3},
 	};
-	// The land's draw list in its order, the walked tracks, the physics, then the hands from the farthest. A glow off
-	// the screen does not count.
-	const std::vector<entt::entity> all {listedEarly, listedLate, walking, flying, heldFar, heldNear};
-	EXPECT_EQ(disciple_glow_draw::Kept(glows, 6), all);
-	EXPECT_EQ(disciple_glow_draw::Kept(glows, 3), (std::vector<entt::entity> {listedEarly, listedLate, walking}));
-	EXPECT_EQ(disciple_glow_draw::Kept(glows, 5),
-	          (std::vector<entt::entity> {listedEarly, listedLate, walking, flying, heldFar}));
+	// The land's draw list in its order, the moving bodies in the order of their list, the other things out of the map,
+	// then the hands from the farthest. A glow off the screen does not count.
+	const std::vector<entt::entity> all {listedEarly, listedLate, flyingEarly, flyingLate, outOfMap, heldFar, heldNear};
+	EXPECT_EQ(disciple_glow_draw::Kept(glows, 7), all);
+	EXPECT_EQ(disciple_glow_draw::Kept(glows, 3), (std::vector<entt::entity> {listedEarly, listedLate, flyingEarly}));
+	EXPECT_EQ(disciple_glow_draw::Kept(glows, 6),
+	          (std::vector<entt::entity> {listedEarly, listedLate, flyingEarly, flyingLate, outOfMap, heldFar}));
 }
 
 TEST(DiscipleGlowDraw, TheLimitIs1024GlowsAFrame)
