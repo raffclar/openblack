@@ -56,7 +56,6 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
-#include "ECS/DrawnPlace.h"
 #include "ECS/MovingShadowCasters.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -391,8 +390,6 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 	// The things under the sea, whose shadows stay as they were when they went under
 	auto& underSea = _groundShadowUnderSea;
 	underSea.clear();
-	// The shadow of the last throw shows only while the frame casts shadows
-	_throwLeadShadowKept = false;
 	// Kept for the bodies that are blended, in place: made room for first, thus the casters can point to them
 	auto& morphs = _groundShadowMorphs;
 	morphs.clear();
@@ -635,7 +632,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 				lead = &*found;
 			}
 		}
-		// A thing with no model makes no shadow, and the shadow of the last throw stays
+		// A thing with no model makes no shadow
 		if (lead != nullptr && !meshManager.Contains(lead->mesh))
 		{
 			lead = nullptr;
@@ -676,7 +673,6 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			    .cast = throw_lead_shadow::LeadCast(origin, ground),
 			    .alpha = leadAlpha,
 			    .onObjects = false,
-			    .throwLead = lead->entity,
 			};
 			leadCaster->bodies.at(0) = {.mesh = body,
 			                            .model = model,
@@ -686,29 +682,11 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			                            .throughAlpha =
 			                                ecs::MovingShadowOf(registry, lead->entity) == ecs::MovingShadow::Texture};
 		}
-		switch (throw_lead_shadow::StepOf(lead != nullptr, leadAlpha, _throwLeadShadow.has_value()))
+		// The shadow shows only on the frames of the lead. The game keeps the shadow on the land after the lead.
+		// openblack removes it (deviations, signed off by the user).
+		if (throw_lead_shadow::StepOf(lead != nullptr, leadAlpha) == throw_lead_shadow::Step::Lead)
 		{
-		case throw_lead_shadow::Step::None:
-			_throwLeadShadow.reset();
-			break;
-		case throw_lead_shadow::Step::Lead:
 			casters.push_back(*leadCaster);
-			break;
-		case throw_lead_shadow::Step::Kept:
-		{
-			// The kept shadow is laid on the land at the height under the thing where the frame draws it now
-			std::optional<float> ground;
-			const auto thing = _throwLeadShadow->thing;
-			if (const auto* transform =
-			        registry.Valid(thing) ? registry.TryGet<const ecs::components::Transform>(thing) : nullptr)
-			{
-				const auto origin = ecs::drawn_place::ModelOriginOf(registry, thing, *transform);
-				ground = land.GetHeightAt(glm::vec2(origin.x, origin.z));
-			}
-			_throwLeadShadow->cast = throw_lead_shadow::KeptCast(_throwLeadShadow->cast, ground);
-			_throwLeadShadowKept = true;
-			break;
-		}
 		}
 
 		// The things that the physics moves, cast from a light straight above where each is drawn, onto the land only
@@ -845,10 +823,6 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		const auto& footprint = _groundShadowMade[index].footprint;
 		if (!footprint)
 		{
-			if (caster.throwLead != entt::null)
-			{
-				_throwLeadShadow.reset();
-			}
 			continue;
 		}
 		const auto bodies = std::span(caster.bodies).first(caster.bodyCount);
@@ -879,17 +853,6 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		{
 			++_groundShadowsOnObjects;
 		}
-		// The shadow of the lead stays after the lead, until the next throw
-		if (caster.throwLead != entt::null)
-		{
-			_throwLeadShadow = KeptThrowLeadShadow {
-			    .thing = caster.throwLead,
-			    .cast = caster.cast,
-			    .shadow = {.texels = std::vector<glm::vec4>(_groundShadowTexels.begin() + static_cast<std::ptrdiff_t>(first),
-			                                                _groundShadowTexels.end()),
-			               .footprint = *footprint},
-			};
-		}
 		if (caster.kept != entt::null)
 		{
 			kept[caster.kept] = {.texels =
@@ -912,16 +875,6 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		kept.insert(*found);
 	}
 	_keptGroundShadows = std::move(kept);
-	// The shadow of the last throw, laid at the height under the thing now
-	if (_throwLeadShadowKept && _throwLeadShadow.has_value())
-	{
-		const auto& shadow = _throwLeadShadow->shadow;
-		const auto first = _groundShadowTexels.size();
-		_groundShadowTexels.insert(_groundShadowTexels.end(), shadow.texels.begin(), shadow.texels.end());
-		_groundShadowTexels[first] = GroundShadow::Receiver(shadow.footprint, _throwLeadShadow->cast);
-		footprints.push_back(shadow.footprint);
-		++_groundShadowCount;
-	}
 
 	// Each land block's list of the shadows reaching it, after the shadows themselves
 	if (Locator::terrainSystem::has_value())

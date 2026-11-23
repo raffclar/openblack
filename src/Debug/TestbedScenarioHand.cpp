@@ -715,7 +715,7 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	    .expected = "At the release the rock stops in the hand's move and starts its flight at once. The hand does not "
 	                "carry it. At the next turn the rock jumps forward along its flight, to where it is three turns "
 	                "after the release, and flies on from there. Along the lead the rock also casts a shadow straight "
-	                "down on the land. That shadow stays where the lead ended, after the rock flies on.",
+	                "down on the land. That shadow goes away when the lead ends.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},

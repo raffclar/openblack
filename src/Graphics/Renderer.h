@@ -836,8 +836,6 @@ private:
 		bool onObjects;
 		/// The thing that the physics moves, whose shadow stays as it is while the thing is under the sea
 		entt::entity kept {entt::null};
-		/// The thing that goes along the lead of its throw, whose shadow stays after the lead
-		entt::entity throwLead {entt::null};
 	};
 	/// The casters of the shadows that the workers make for this frame, the things under the sea, and the blends of
 	/// the bodies that the casters point to
@@ -859,17 +857,6 @@ private:
 		GroundShadow::Footprint footprint;
 	};
 	mutable std::unordered_map<entt::entity, KeptGroundShadow> _keptGroundShadows;
-	/// The shadow of the last frame of the last throw's lead (see graphics::throw_lead_shadow): the thing, its cast, and
-	/// its data for the land. Only one shadow of this kind exists.
-	struct KeptThrowLeadShadow
-	{
-		entt::entity thing;
-		GroundShadow::Cast cast;
-		KeptGroundShadow shadow;
-	};
-	mutable std::optional<KeptThrowLeadShadow> _throwLeadShadow;
-	/// The kept shadow of the lead shows on this frame
-	mutable bool _throwLeadShadowKept {false};
 	/// The thing that the hand held on the frame before, and where that frame drew it, for the hand's shadow on the lead
 	/// of a throw (see graphics::throw_lead_shadow::HandShadowModel)
 	mutable std::optional<std::pair<entt::entity, glm::mat4>> _handHeldDrawnBefore;

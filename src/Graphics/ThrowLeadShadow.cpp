@@ -19,26 +19,15 @@ GroundShadow::Cast throw_lead_shadow::LeadCast(const glm::vec3& origin, float gr
 	return {.light = shadow_texture::LightAbove(origin), .level = origin.y, .ground = ground};
 }
 
-GroundShadow::Cast throw_lead_shadow::KeptCast(const GroundShadow::Cast& last, std::optional<float> groundUnderThing)
-{
-	auto cast = last;
-	cast.ground = groundUnderThing.value_or(last.ground);
-	return cast;
-}
-
 glm::mat4 throw_lead_shadow::HandShadowModel(const glm::mat4& drawnNow, bool onLead,
                                              const std::optional<glm::mat4>& drawnBefore)
 {
 	return onLead ? drawnBefore.value_or(drawnNow) : drawnNow;
 }
 
-throw_lead_shadow::Step throw_lead_shadow::StepOf(bool onLead, uint8_t alpha, bool hasKept)
+throw_lead_shadow::Step throw_lead_shadow::StepOf(bool onLead, uint8_t alpha)
 {
-	if (onLead)
-	{
-		return alpha != 0 ? Step::Lead : Step::None;
-	}
-	return hasKept ? Step::Kept : Step::None;
+	return onLead && alpha != 0 ? Step::Lead : Step::None;
 }
 
 } // namespace openblack::graphics

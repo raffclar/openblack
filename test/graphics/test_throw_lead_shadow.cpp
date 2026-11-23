@@ -27,48 +27,21 @@ TEST(ThrowLeadShadow, LeadIsCastFromStraightAboveOntoTheHeightOfTheThing)
 	EXPECT_FLOAT_EQ(cast.ground, 40.0f);
 }
 
-TEST(ThrowLeadShadow, KeptShadowKeepsItsLightAndLevel)
-{
-	const auto last = throw_lead_shadow::LeadCast({10.0f, 60.0f, 20.0f}, 30.0f);
-	const auto kept = throw_lead_shadow::KeptCast(last, 12.0f);
-	EXPECT_EQ(kept.light, last.light);
-	EXPECT_FLOAT_EQ(kept.level, last.level);
-}
-
-TEST(ThrowLeadShadow, KeptShadowTakesTheLandUnderTheThingNow)
-{
-	const auto last = throw_lead_shadow::LeadCast({10.0f, 60.0f, 20.0f}, 30.0f);
-	EXPECT_FLOAT_EQ(throw_lead_shadow::KeptCast(last, 12.0f).ground, 12.0f);
-}
-
-TEST(ThrowLeadShadow, KeptShadowOfAThingThatIsGoneKeepsItsLastLand)
-{
-	const auto last = throw_lead_shadow::LeadCast({10.0f, 60.0f, 20.0f}, 30.0f);
-	const auto moved = throw_lead_shadow::KeptCast(last, 18.0f);
-	EXPECT_FLOAT_EQ(throw_lead_shadow::KeptCast(moved, std::nullopt).ground, 18.0f);
-}
-
 TEST(ThrowLeadShadow, LeadMakesTheShadowAgain)
 {
-	EXPECT_EQ(throw_lead_shadow::StepOf(true, 255, false), Step::Lead);
-	EXPECT_EQ(throw_lead_shadow::StepOf(true, 1, true), Step::Lead);
+	EXPECT_EQ(throw_lead_shadow::StepOf(true, 255), Step::Lead);
+	EXPECT_EQ(throw_lead_shadow::StepOf(true, 1), Step::Lead);
 }
 
-TEST(ThrowLeadShadow, LeadTooFarFromTheCameraRemovesTheShadow)
+TEST(ThrowLeadShadow, LeadTooFarFromTheCameraShowsNoShadow)
 {
-	EXPECT_EQ(throw_lead_shadow::StepOf(true, 0, true), Step::None);
-	EXPECT_EQ(throw_lead_shadow::StepOf(true, 0, false), Step::None);
+	EXPECT_EQ(throw_lead_shadow::StepOf(true, 0), Step::None);
 }
 
-TEST(ThrowLeadShadow, ShadowStaysAfterTheLead)
+TEST(ThrowLeadShadow, ShadowGoesAwayWhenTheLeadEnds)
 {
-	EXPECT_EQ(throw_lead_shadow::StepOf(false, 0, true), Step::Kept);
-	EXPECT_EQ(throw_lead_shadow::StepOf(false, 255, true), Step::Kept);
-}
-
-TEST(ThrowLeadShadow, NoShadowBeforeTheFirstThrow)
-{
-	EXPECT_EQ(throw_lead_shadow::StepOf(false, 255, false), Step::None);
+	EXPECT_EQ(throw_lead_shadow::StepOf(false, 255), Step::None);
+	EXPECT_EQ(throw_lead_shadow::StepOf(false, 0), Step::None);
 }
 
 TEST(ThrowLeadShadow, HandShadowTakesTheThingWhereTheFrameBeforeDrewItOnTheLead)
