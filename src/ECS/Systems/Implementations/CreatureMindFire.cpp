@@ -15,11 +15,8 @@
 #include <optional>
 #include <string_view>
 
-#include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
-#include "3D/MapCoords.h"
-#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureFireReaction.h"
 #include "CreatureMindSystem.h"
@@ -39,6 +36,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicWorldInterface.h"
@@ -62,33 +60,6 @@ std::optional<entt::entity> TownOf(const ecs::Registry& registry, uint32_t id)
 	const auto& towns = registry.Context().towns;
 	const auto found = towns.find(id);
 	return found != towns.end() && registry.Valid(found->second) ? std::optional(found->second) : std::nullopt;
-}
-
-/// The nearest of the land's forests with trees, strictly within a distance of a point, the newest of the nearest
-std::optional<entt::entity> NearestForestWithTrees(const ecs::Registry& registry, glm::vec3 point, float within)
-{
-	if (!Locator::forestSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& forests = Locator::forestSystem::value();
-	const auto from = map_coords::FromMetres(glm::xz(point));
-	std::optional<entt::entity> nearest;
-	for (const auto forest : forests.LandForests())
-	{
-		const auto* at = registry.TryGet<const Transform>(forest);
-		if (at == nullptr)
-		{
-			continue;
-		}
-		const auto distance = gutils::GetDistanceInMetres(from, map_coords::FromMetres(glm::xz(at->position)));
-		if (distance < within && (!forests.TreesOf(forest, false).empty() || !forests.TreesOf(forest, true).empty()))
-		{
-			nearest = forest;
-			within = distance;
-		}
-	}
-	return nearest;
 }
 } // namespace
 
@@ -147,9 +118,13 @@ std::optional<entt::entity> CreatureMindSystem::BelongsTo(entt::entity thing)
 				return forest;
 			}
 		}
-		const auto* at = registry.TryGet<const Transform>(thing);
-		return at != nullptr ? NearestForestWithTrees(registry, at->position, creature_fire::k_NearestForestDistance)
-		                     : std::nullopt;
+		// Else the nearest forest with trees to the map position of the tree, as the forest search of a forester finds it
+		if (!Locator::forestSystem::has_value() || !registry.AllOf<Transform>(thing))
+		{
+			return std::nullopt;
+		}
+		return Locator::forestSystem::value().NearestForestWithTrees(ecs::thing_map_place::Of(registry, thing),
+		                                                             creature_fire::k_NearestForestDistance);
 	}
 	if (const auto* animal = registry.TryGet<const Animal>(thing))
 	{
