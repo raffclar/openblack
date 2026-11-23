@@ -91,6 +91,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/TownCensus.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/WorldObjects.h"
@@ -612,23 +613,26 @@ void SetupInspectObject(LivingAction& action, entt::entity thing)
 	const auto villager = EntityOf(action);
 	auto& registry = Entities();
 	registry.AssignOrReplace<DiscipleInspect>(villager, DiscipleInspect {.thing = thing});
-	// A worship site is looked at from its middle, but with the radius of its model
-	const auto there = systems::object_measures::InspectPoint(registry, thing);
-	const auto here = glm::xz(PositionOf(villager));
+	// The villager looks at a worship site from its middle, but with the radius of its model. The distance is between
+	// the map positions of the villager and the point.
+	const auto there = systems::object_measures::InspectPlace(registry, thing);
+	const auto here = ecs::thing_map_place::Of(registry, villager);
 	const float radius = systems::object_measures::TwoDRadius(registry, thing);
 	if (gutils::GetDistanceInMetres(here, there) - radius > disciple::k_InspectReach)
 	{
-		const float angle = gutils::Get3DAngleFromXZ(there, here);
-		const auto step = gutils::GetPosFromAngle(angle, radius + disciple::k_InspectReach);
-		villager_home::SetupMoveTo(action, there + glm::vec2(map_coords::ToMetres(step.x), map_coords::ToMetres(step.z)),
-		                           VillagerStates::InspectObject);
+		const auto goal =
+		    disciple::InspectGoal(there, here, radius + disciple::k_InspectReach, [](const map_coords::MapCoords& at) {
+			    return Locator::terrainSystem::has_value() ? map_coords::GroundAt(Locator::terrainSystem::value(), at) : 0.0f;
+		    });
+		villager_home::SetupMoveTo(action, goal, VillagerStates::InspectObject);
 		return;
 	}
 	SetTopState(action, VillagerStates::InspectObject);
 }
 
-/// Where an idle disciple waits by a town, none for no town
-std::optional<glm::vec2> WaitPosition(entt::entity villager, std::optional<entt::entity> town)
+/// Where an idle disciple waits by a town, none for no town: a step from the map position of the village centre, on the
+/// side of the disciple, or the map position of the town when it has no village centre
+std::optional<map_coords::MapCoords> WaitPosition(entt::entity villager, std::optional<entt::entity> town)
 {
 	if (!town.has_value())
 	{
@@ -642,15 +646,14 @@ std::optional<glm::vec2> WaitPosition(entt::entity villager, std::optional<entt:
 		{
 			continue;
 		}
-		const auto centre = glm::xz(PositionOf(abode));
-		const auto step = disciple::WaitStepFromCentre(gutils::Get3DAngleFromXZ(centre, glm::xz(PositionOf(villager))),
-		                                               systems::object_measures::TwoDRadius(registry, abode), [](float limit) {
-			                                               return Locator::gameRandom::value().GameFloatRand(limit);
-		                                               });
-		const auto offset = gutils::GetPosFromAngle(step.radians, step.metres);
-		return centre + glm::vec2(map_coords::ToMetres(offset.x), map_coords::ToMetres(offset.z));
+		const auto centre = ecs::thing_map_place::Of(registry, abode);
+		const auto step =
+		    disciple::WaitStepFromCentre(gutils::Get3DAngleFromXZ(centre, ecs::thing_map_place::Of(registry, villager)),
+		                                 systems::object_measures::TwoDRadius(registry, abode),
+		                                 [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); });
+		return centre + gutils::GetPosFromAngle(step.radians, step.metres);
 	}
-	return glm::xz(PositionOf(*town));
+	return ecs::thing_map_place::Of(registry, *town);
 }
 
 /// A farmer goes to its town's best field; if that field has grown and it still carries a load of food, it takes the

@@ -16,6 +16,7 @@
 #include <numbers>
 #include <numeric>
 
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Gui/ScreenFit.h"
 
@@ -345,6 +346,20 @@ WaitStep disciple::WaitStepFromCentre(float towardsDisciple, float centreRadius,
 	const float turn = random(k_Spread) - (k_Spread * 0.5f);
 	const float beyond = random(k_Beyond);
 	return {.radians = towardsDisciple + turn, .metres = centreRadius + beyond};
+}
+
+map_coords::MapCoords disciple::InspectGoal(const map_coords::MapCoords& point, const map_coords::MapCoords& walker,
+                                            float distance, const std::function<float(const map_coords::MapCoords&)>& groundAt)
+{
+	// The number of the game angle goes into the sine and the cosine with no change to radians
+	const auto radians = static_cast<float>(gutils::GetAngleFromXZ(point, walker));
+	const auto step = gutils::GetPointFromAngle(radians, distance);
+	const float x = map_coords::ToMetres(point.x) + step.x;
+	const float y = point.altitude + step.y;
+	const float z = map_coords::ToMetres(point.z) + step.z;
+	// The ground is at the truncated position of x times 65536 times 0.1, as for the hand
+	const map_coords::MapCoords ground {.x = map_coords::FtoL(x * 65536.0f * 0.1f), .z = map_coords::FtoL(z * 65536.0f * 0.1f)};
+	return {.x = map_coords::ToFixed(x), .z = map_coords::ToFixed(z), .altitude = y - groundAt(ground)};
 }
 
 bool disciple::DecidesAgainAfterWait(const WaitFacts& facts)

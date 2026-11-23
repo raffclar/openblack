@@ -341,14 +341,12 @@ void KeepInMind(entt::entity villager, ScriptRemind& remind)
 {
 	auto& registry = Entities();
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
-	const auto* transform = registry.TryGet<const Transform>(villager);
-	const auto goal = wallHug != nullptr ? wall_hug::ToPoint(wallHug->goalPlace) : glm::vec2(0.0f);
-	const float goalHeight = wallHug != nullptr ? wallHug->goalHeight : 0.0f;
-	const auto standing = transform != nullptr ? glm::xz(transform->position) : glm::vec2(0.0f);
 	// The goal keeps its height above the land. A villager that stands on the land has no height.
-	const bool ownPlace = rules::KeepsOwnPlace(goal, goalHeight, remind.returnTo);
-	remind.goal = ownPlace ? standing : goal;
-	remind.goalHeight = ownPlace ? 0.0f : goalHeight;
+	const auto goal =
+	    wallHug != nullptr
+	        ? map_coords::MapCoords {.x = wallHug->goalPlace.x, .z = wallHug->goalPlace.y, .altitude = wallHug->goalHeight}
+	        : map_coords::MapCoords {};
+	remind.goal = rules::KeptGoal(goal, ecs::thing_map_place::Of(registry, villager), remind.returnTo);
 	const auto* arguments = registry.TryGet<const ScriptStateArguments>(villager);
 	remind.arguments = arguments != nullptr ? *arguments : ScriptStateArguments {};
 	const auto* animation = registry.TryGet<const ScriptAnimation>(villager);
@@ -361,8 +359,8 @@ void BringBackToMind(entt::entity villager, const ScriptRemind& remind)
 	auto& registry = Entities();
 	if (auto* wallHug = registry.TryGet<WallHug>(villager); wallHug != nullptr)
 	{
-		wallHug->goalPlace = wall_hug::ToWhole(remind.goal);
-		wallHug->goalHeight = remind.goalHeight;
+		wallHug->goalPlace = {remind.goal.x, remind.goal.z};
+		wallHug->goalHeight = remind.goal.altitude;
 	}
 	registry.AssignOrReplace<ScriptStateArguments>(villager, remind.arguments);
 	if (remind.animation.has_value())
@@ -582,7 +580,7 @@ ecs::VillagerStateEntry villager_script::EnterInScript(LivingAction& action, Vil
 	const auto kept = *remind;
 	BringBackToMind(villager, kept);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("ai"), "Villager #{}: goes back to its script's work, state {}, place ({}, {})",
-	                    static_cast<uint32_t>(villager), static_cast<int>(into), kept.goal.x, kept.goal.y);
+	                    static_cast<uint32_t>(villager), static_cast<int>(into), kept.goal.x, kept.goal.z);
 	// It walks back to its kept place, or to the point of its track that it had got to; the walk takes it on into the
 	// state
 	if (const auto point = TrackPointOf(villager); point.has_value())
@@ -593,9 +591,7 @@ ecs::VillagerStateEntry villager_script::EnterInScript(LivingAction& action, Vil
 	else
 	{
 		// The walk keeps the height of the kept place above the land
-		const auto whole = wall_hug::ToWhole(kept.goal);
-		villager_home::SetupMoveTo(action, map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = kept.goalHeight},
-		                           into, villager_home::WalkWay::StraightThrough);
+		villager_home::SetupMoveTo(action, kept.goal, into, villager_home::WalkWay::StraightThrough);
 	}
 	return ecs::VillagerStateEntry::Outcome::SentOn;
 }
@@ -613,12 +609,10 @@ ecs::VillagerStateEntry villager_script::EnterPlayAnim(LivingAction& action, Vil
 	remind->returnTo = VillagerStates::InvalidState;
 	// Away from its kept place: it walks back there first, and the walk takes it on into the state
 	if (const auto goal = remind->goal;
-	    rules::HasKeptGoal(goal, remind->goalHeight) && !villager_home::AreWeThere(villager, goal))
+	    rules::HasKeptGoal(goal) && !villager_home::AreWeThere(villager, glm::ivec2 {goal.x, goal.z}))
 	{
 		// The walk keeps the height of the kept place above the land
-		const auto whole = wall_hug::ToWhole(goal);
-		villager_home::SetupMoveTo(action, map_coords::MapCoords {.x = whole.x, .z = whole.y, .altitude = remind->goalHeight},
-		                           into, villager_home::WalkWay::StraightThrough);
+		villager_home::SetupMoveTo(action, goal, into, villager_home::WalkWay::StraightThrough);
 		return ecs::VillagerStateEntry::Outcome::SentOn;
 	}
 	// There: the clip a script forced starts again, unless it plays already

@@ -338,6 +338,25 @@ TEST(DiscipleRules, IdleDisciplesWaitJustBeyondTheCentre)
 	EXPECT_FLOAT_EQ(most.metres, 7.0f);
 }
 
+// The game uses the number of the game angle as radians. A disciple on the +z side of the point (game angle 512) thus
+// walks to the far side in x: 10 m along 512 radians, not along a quarter turn.
+TEST(DiscipleRules, ADiscipleInspectsFromTheStepOfTheGameAngleNumberInRadians)
+{
+	const map_coords::MapCoords point {.x = 3276800, .z = 3276800};
+	const map_coords::MapCoords walker {.x = 3276800, .z = 3276800 + 655360};
+	map_coords::MapCoords groundAsked {};
+	const auto goal = InspectGoal(point, walker, 10.0f, [&groundAsked](const map_coords::MapCoords& at) {
+		groundAsked = at;
+		return 2.0f;
+	});
+	EXPECT_EQ(goal.x, 3211471);
+	EXPECT_EQ(goal.z, 3282011);
+	// The altitude is the height of the point above the land less the ground at the goal
+	EXPECT_FLOAT_EQ(goal.altitude, -2.0f);
+	EXPECT_EQ(groundAsked.x, 3211471);
+	EXPECT_EQ(groundAsked.z, 3282011);
+}
+
 TEST(DiscipleRules, AScriptNamesAWorkByItsNumberOrNoneOutsideTheKinds)
 {
 	EXPECT_EQ(FromScript(0), None);

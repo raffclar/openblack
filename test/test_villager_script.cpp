@@ -13,6 +13,7 @@
 
 using namespace openblack;
 namespace rules = openblack::ecs::villager_script_rules;
+using openblack::map_coords::MapCoords;
 
 TEST(VillagerScriptRules, DistanceIsAlongTheGround)
 {
@@ -296,28 +297,27 @@ TEST(VillagerScriptRules, AVillagerGoesBackToItsKeptWorkOnlyInTheKeptState)
 
 TEST(VillagerScriptRules, WithNoGoalAVillagerKeepsWhereItStandsUnlessItPlaysAClip)
 {
-	const glm::vec2 standing {120.0f, 340.0f};
-	const glm::vec2 goal {80.0f, 90.0f};
+	const MapCoords standing {.x = 786432, .z = 2228224};
+	const MapCoords goal {.x = 524289, .z = 589823};
 	EXPECT_EQ(rules::KeptGoal(goal, standing, VillagerStates::InScript), goal);
-	EXPECT_EQ(rules::KeptGoal({0.0f, 0.0f}, standing, VillagerStates::InScript), standing);
-	EXPECT_EQ(rules::KeptGoal({0.0f, 0.0f}, standing, VillagerStates::InvalidState), standing);
-	EXPECT_EQ(rules::KeptGoal({0.0f, 0.0f}, standing, VillagerStates::ScriptPlayAnim), glm::vec2(0.0f));
-	// Less than a map unit from nothing is no goal
-	EXPECT_EQ(rules::KeptGoal({0.0001f, 0.0f}, standing, VillagerStates::InScript), standing);
-	EXPECT_FALSE(rules::HasKeptGoal({0.0001f, 0.0001f}));
-	EXPECT_TRUE(rules::HasKeptGoal({0.0f, 0.001f}));
+	EXPECT_EQ(rules::KeptGoal({}, standing, VillagerStates::InScript), standing);
+	EXPECT_EQ(rules::KeptGoal({}, standing, VillagerStates::InvalidState), standing);
+	EXPECT_EQ(rules::KeptGoal({}, standing, VillagerStates::ScriptPlayAnim), MapCoords {});
+	// One map unit from the corner of the map is a goal
+	EXPECT_EQ(rules::KeptGoal({.x = 1}, standing, VillagerStates::InScript), (MapCoords {.x = 1}));
+	EXPECT_TRUE(rules::HasKeptGoal({.z = 1}));
+	EXPECT_FALSE(rules::HasKeptGoal({}));
 }
 
 TEST(VillagerScriptRules, AGoalWithAHeightIsAGoalToKeep)
 {
-	// A goal at no distance with a height above the land is still a goal
-	EXPECT_TRUE(rules::HasKeptGoal({0.0f, 0.0f}, 1.5f));
-	EXPECT_TRUE(rules::HasKeptGoal({80.0f, 90.0f}, 0.0f));
-	EXPECT_FALSE(rules::HasKeptGoal({0.0f, 0.0f}, 0.0f));
-	EXPECT_FALSE(rules::KeepsOwnPlace({0.0f, 0.0f}, -3.0f, VillagerStates::InScript));
-	EXPECT_TRUE(rules::KeepsOwnPlace({0.0f, 0.0f}, 0.0f, VillagerStates::InScript));
-	EXPECT_FALSE(rules::KeepsOwnPlace({0.0f, 0.0f}, 0.0f, VillagerStates::ScriptPlayAnim));
-	EXPECT_FALSE(rules::KeepsOwnPlace({80.0f, 90.0f}, 0.0f, VillagerStates::InScript));
+	// A goal at the corner of the map with a height above the land is still a goal
+	EXPECT_TRUE(rules::HasKeptGoal({.altitude = 1.5f}));
+	EXPECT_TRUE(rules::HasKeptGoal({.x = 524289, .z = 589823}));
+	EXPECT_FALSE(rules::KeepsOwnPlace({.altitude = -3.0f}, VillagerStates::InScript));
+	EXPECT_TRUE(rules::KeepsOwnPlace({}, VillagerStates::InScript));
+	EXPECT_FALSE(rules::KeepsOwnPlace({}, VillagerStates::ScriptPlayAnim));
+	EXPECT_FALSE(rules::KeepsOwnPlace({.x = 524289, .z = 589823}, VillagerStates::InScript));
 }
 
 TEST(VillagerScriptRules, AKeptClipThatIsNotOneOfTheGamesPlaysTheFirstClip)

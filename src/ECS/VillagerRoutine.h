@@ -146,26 +146,35 @@ constexpr float k_TentSearchLeast = 2.0f;
 constexpr float k_TentSearchRange = 8.0f;
 constexpr float k_HomelessRoamLeast = 10.0f;
 constexpr float k_HomelessRoamRange = 20.0f;
-/// From far off: the angle is drawn first, within a quarter turn either side of the line from the town to it
-[[nodiscard]] glm::vec2 TowardsTown(glm::vec2 town, glm::vec2 villager, const FloatRandom& random);
-/// Round itself: the distance is drawn first, then the angle
-[[nodiscard]] glm::vec2 RoundAbout(glm::vec2 from, float least, float range, const FloatRandom& random);
+/// From far off: the angle is drawn first, within a quarter turn either side of the line from the town to it. The step
+/// adds to the map position of the town in whole map units.
+[[nodiscard]] map_coords::MapCoords TowardsTown(const map_coords::MapCoords& town, const map_coords::MapCoords& villager,
+                                                const FloatRandom& random);
+/// Round itself: the distance is drawn first, then the angle. The step adds to the map position in whole map units.
+[[nodiscard]] map_coords::MapCoords RoundAbout(const map_coords::MapCoords& from, float least, float range,
+                                               const FloatRandom& random);
+/// A map position a distance along an angle from another map position: the step in whole map units adds to the
+/// position, and the altitude stays the same
+[[nodiscard]] map_coords::MapCoords StepFrom(const map_coords::MapCoords& from, float angle, float metres);
 
 /// A villager with no town looks this far for one to join
 constexpr float k_VagrantTownSearch = 200.0f;
 constexpr float k_VagrantWanderLeast = 10.0f;
 constexpr float k_VagrantWanderRange = 20.0f;
 constexpr float k_VagrantTentRange = 5.0f;
-/// A vagrant wanders on roughly the way it faces: within an eighth of a turn either way, angle drawn first
-[[nodiscard]] glm::vec2 VagrantWander(glm::vec2 villager, float facing, const FloatRandom& random);
+/// A vagrant wanders on roughly the way it faces: within an eighth of a turn either way, angle drawn first. The step
+/// adds to its map position in whole map units.
+[[nodiscard]] map_coords::MapCoords VagrantWander(const map_coords::MapCoords& villager, float facing,
+                                                  const FloatRandom& random);
 /// A hurt vagrant looks for a spot to lie down close by: the distance is drawn first, then the angle
-[[nodiscard]] glm::vec2 VagrantTentSearch(glm::vec2 villager, const FloatRandom& random);
+[[nodiscard]] map_coords::MapCoords VagrantTentSearch(const map_coords::MapCoords& villager, const FloatRandom& random);
 
 /// A hurt villager whose home is broken lies down outside it, away from it give or take an eighth of a turn: the jitter
 /// is drawn first, then the distance
 constexpr float k_BrokenHomeTentLeast = 5.0f;
 constexpr float k_BrokenHomeTentRange = 5.0f;
-[[nodiscard]] glm::vec2 BrokenHomeTentSearch(glm::vec2 abode, glm::vec2 villager, const FloatRandom& random);
+[[nodiscard]] map_coords::MapCoords BrokenHomeTentSearch(const map_coords::MapCoords& abode,
+                                                         const map_coords::MapCoords& villager, const FloatRandom& random);
 
 /// A spot to lie down in the open is moved on this far, and up to as far again past it, when it is taken
 constexpr float k_TentRetryLeast = 3.0f;
@@ -175,7 +184,7 @@ constexpr uint32_t k_TentTries = 3;
 /// Another sleeper this close to a spot in the open takes it
 constexpr float k_TentSleeperGap = 5.0f;
 /// A spot taken in the open is moved on: the distance is drawn first, then the angle
-[[nodiscard]] glm::vec2 TentRetry(glm::vec2 spot, const FloatRandom& random);
+[[nodiscard]] map_coords::MapCoords TentRetry(const map_coords::MapCoords& spot, const FloatRandom& random);
 
 /// The kinds of cell that keep a villager off a spot in the open (to lie down, to gossip, to follow its mother): water,
 /// a fixed thing and the map's edge. The cell test never marks a fixed thing, so a building does not keep a villager off

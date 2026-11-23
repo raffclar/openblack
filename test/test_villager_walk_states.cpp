@@ -42,6 +42,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorshipSites.h"
 #include "InfoConstants.h"
@@ -61,6 +62,7 @@
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/Implementations/VillagerMoveToObject.h"
 #include "ECS/Systems/Implementations/VillagerReactions.h"
+#include "ECS/Systems/Implementations/VillagerScript.h"
 #include "ECS/Systems/Implementations/VillagerTeleport.h"
 #include "ECS/Systems/Implementations/VillagerWorship.h"
 
@@ -540,6 +542,41 @@ TEST_F(VillagerWalkStates, ADancerThatLeavesTheDanceKeepsItInMind)
 	ASSERT_TRUE(registry.AllOf<ScriptRemind>(_villager));
 	EXPECT_EQ(registry.Get<const ScriptRemind>(_villager).returnTo, VillagerStates::InDance);
 	EXPECT_FALSE(registry.AllOf<Dancer>(_villager));
+}
+
+// A villager that a script takes back walks to the goal it kept in mind in whole map units, with the height of the goal.
+// A trip through metres would move this goal by one map unit.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AVillagerThatAScriptTakesBackWalksToItsKeptGoalInWholeMapUnits)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	constexpr glm::ivec2 k_Goal {31457283, 25165827};
+	auto& wallHug = registry.Get<WallHug>(_villager);
+	wallHug.goalPlace = k_Goal;
+	wallHug.goalHeight = 1.5f;
+	villager_script::KeepScriptWorkInMind(_villager, VillagerStates::InScript);
+	const auto& remind = registry.Get<const ScriptRemind>(_villager);
+	EXPECT_EQ(remind.goal, (map_coords::MapCoords {.x = k_Goal.x, .z = k_Goal.y, .altitude = 1.5f}));
+	wallHug.goalPlace = {0, 0};
+	wallHug.goalHeight = 0.0f;
+	const auto entry =
+	    villager_script::EnterInScript(Action(), VillagerStates::FleeingFromObjectReaction, VillagerStates::InScript);
+	EXPECT_TRUE(entry.SentOn());
+	EXPECT_EQ(registry.Get<const WallHug>(_villager).goalPlace, k_Goal);
+	EXPECT_EQ(registry.Get<const WallHug>(_villager).goalHeight, 1.5f);
+	EXPECT_EQ(Final(), VillagerStates::InScript);
+}
+
+// A villager with no goal keeps the map position where it stands
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AVillagerWithNoGoalKeepsItsMapPositionInMind)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& wallHug = registry.Get<WallHug>(_villager);
+	wallHug.goalPlace = {0, 0};
+	wallHug.goalHeight = 0.0f;
+	villager_script::KeepScriptWorkInMind(_villager, VillagerStates::InScript);
+	EXPECT_EQ(registry.Get<const ScriptRemind>(_villager).goal, thing_map_place::Of(registry, _villager));
 }
 
 // A dancer that goes back to the dance it kept in mind walks to the goal its walk has now, with that goal's height, and
