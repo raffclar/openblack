@@ -120,6 +120,10 @@ std::string_view Name(Quantity quantity)
 		return "football players that wait for the kick-off";
 	case Quantity::FootballBallFromCentre:
 		return "the distance from the football to the middle of the pitch";
+	case Quantity::VillagerPregnant:
+		return "the villager is a pregnant woman";
+	case Quantity::VillagerAsleepAtHome:
+		return "the villager sleeps in its home";
 	}
 	return "";
 }

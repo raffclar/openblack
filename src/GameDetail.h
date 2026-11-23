@@ -46,6 +46,8 @@ struct Game::FrameLoop
 	std::optional<float> turnsCpuMs;
 	/// The clock of the next frame moved on already, and its turns played beside the draw of this frame
 	bool turnsPlayedBeside {false};
+	/// The turn beside the draw stopped between two players. It continues beside the draw of the next frames.
+	bool turnStoppedBeside {false};
 	/// The clock of the machine for the statistics of this frame, read before the clock of the next frame moved on
 	std::optional<uint32_t> statisticsTicks;
 	/// Open while the turns play beside the draw: the main thread then does not use the services that the turns hold

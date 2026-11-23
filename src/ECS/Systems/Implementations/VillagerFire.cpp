@@ -73,6 +73,7 @@
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipperRules.h"
+#include "Fire/FireModel.h"
 #include "Fire/ViaPoint.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -346,13 +347,15 @@ std::optional<glm::ivec2> GetFireFightingPos(entt::entity villager, entt::entity
 	const auto& registry = Entities();
 	const auto middle = object_measures::FireMiddlePlace(registry, fire);
 	const float angle = gutils::Get3DAngleFromXZ(middle, map_coords::WholeXZ(ecs::thing_map_place::Of(registry, villager)));
-	float radius = reach->safeRadius < reach->defaultRadius ? reach->defaultRadius : reach->safeRadius;
+	float radius = fire::StandBackRadius(reach->objectRadius, reach->safeRadius);
 	radius += RadiusOf(villager);
 	radius += GameFloatRandom(1.0f);
 	return map_coords::WholeXZ(ecs::thing_map_place::Of(registry, fire) + gutils::GetPosFromAngle(angle, radius));
 }
 
-/// Whether a villager stands within reach of beating a fire: beyond the edge it stands back by, by less than a margin
+/// Whether a villager stands within reach of beating a fire: beyond the edge it stands back by, by less than a margin.
+/// The edge is the radius of the object or the safe radius of the fire, whichever is wider, and the radius of the
+/// villager.
 bool InRange(entt::entity villager, entt::entity fire, float margin)
 {
 	const auto reach = fire != entt::null ? Locator::fireSystem::value().GetReach(fire) : std::nullopt;
@@ -361,8 +364,7 @@ bool InRange(entt::entity villager, entt::entity fire, float margin)
 		return false;
 	}
 	const float distance = Distance(MapPlaceOf(villager), MapPlaceOf(fire));
-	const float radius =
-	    (reach->safeRadius < reach->defaultRadius ? reach->defaultRadius : reach->safeRadius) + RadiusOf(villager);
+	const float radius = fire::StandBackRadius(reach->objectRadius, reach->safeRadius) + RadiusOf(villager);
 	return distance > radius && distance < radius + margin;
 }
 

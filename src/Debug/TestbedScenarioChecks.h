@@ -121,6 +121,10 @@ enum class Quantity : uint8_t
 	/// The distance in metres on the ground from the ball of a football pitch to the middle of the pitch. The pitch is
 	/// the scenario's object at the index.
 	FootballBallFromCentre,
+	/// 1 when the scenario's villager at the index is a pregnant woman, else 0
+	VillagerPregnant,
+	/// 1 when the scenario's villager at the index is asleep in its home, else 0
+	VillagerAsleepAtHome,
 };
 
 /// One statement about the world. It is read once at its turn; with byTurn it is read again at each frame from its

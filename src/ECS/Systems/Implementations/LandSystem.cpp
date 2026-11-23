@@ -149,6 +149,7 @@
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
+#include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1894,6 +1895,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		// The tools that act by the turns act first, so that each computer of a network game does them before the same
 		// turn.
 		const auto turn = clock.GetTurn();
+		// The checksum of the last turn takes the world as that turn left it, before the tools of this turn change it. The
+		// game server takes it at the end of the turn, and a hash that waits for the draw must give the same value.
+		Locator::syncChecksumSystem::value().FinishHash();
 		view.BeforeTurn();
 		// A command of a testbed scenario can load a land before the turn. The turns of the new land start again, and the
 		// source of the commands of a network game follows them.

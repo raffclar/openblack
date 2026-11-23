@@ -161,6 +161,9 @@ constexpr float k_WorshipSiteFireRadius = 14.0f;
 [[nodiscard]] float FireRadius(const Material& material, float fraction);
 [[nodiscard]] float MaxFireRadius(const Material& material);
 [[nodiscard]] float SafeFireRadius(float radius, float maxRadius);
+/// How far a villager stands back from a fire: the radius of the object or the safe radius of the fire, whichever is
+/// wider. When the two are equal, the result is the safe radius.
+[[nodiscard]] float StandBackRadius(float objectRadius, float safeRadius);
 /// How tall its flames stand above it
 [[nodiscard]] float FlameHeight(float temperature, const Material& material);
 /// The heat it holds above the air's
