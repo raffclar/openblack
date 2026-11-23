@@ -282,6 +282,16 @@ struct SiteCandidate
 };
 [[nodiscard]] std::optional<size_t> BestSite(std::span<const SiteCandidate> sites, bool anyway);
 
+/// The map position out from a building towards a place by a distance: the map position of the building plus a step of
+/// the distance at the angle from the building to the place, added in whole map units. The altitude of the building
+/// stays. With the building's radius as the distance, this is the edge of the building nearest the place. A closed
+/// site's workers step back to it with the radius and two metres.
+[[nodiscard]] map_coords::MapCoords OutFrom(const map_coords::MapCoords& building, const map_coords::MapCoords& place,
+                                            float distance);
+
+/// A builder's place round a building as a walk goal: the whole map units of the place's x and z, at altitude 0
+[[nodiscard]] map_coords::MapCoords PlaceGoal(glm::vec3 place);
+
 /// Where a villager gets wood from: its store, a big forest or a forest, by how far each is and what it already
 /// carries. For a building, the store counts only when it holds more than the villager has room for, and a forest
 /// counts half.

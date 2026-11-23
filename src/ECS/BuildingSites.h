@@ -19,6 +19,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
+
 namespace openblack::ecs::components
 {
 struct BuildingSite;
@@ -74,10 +76,10 @@ namespace openblack::ecs::construction
 /// The wood the town's site still wants to build it
 [[nodiscard]] float WoodNeededToBuild(entt::entity town, entt::entity building);
 
-/// The building's reach across the ground, and its point nearest a place. The point of a food pile is as far out as
-/// the pile is raised by what it holds.
+/// The building's reach across the ground, and the map position of its edge nearest a place (see
+/// building_site::OutFrom). The point of a food pile is as far out as the pile is raised by what it holds.
 [[nodiscard]] float BuildingRadius(entt::entity building);
-[[nodiscard]] glm::vec2 NearestEdgeToPos(entt::entity building, glm::vec2 place);
+[[nodiscard]] map_coords::MapCoords NearestEdgeToPos(entt::entity building, const map_coords::MapCoords& place);
 
 /// A villager sets to work at its town's site, counted again each time; and is let go of it, every time it was counted
 /// gone
