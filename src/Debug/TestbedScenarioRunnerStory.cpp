@@ -175,7 +175,7 @@ bool Runner::GiveStoryCommand(const Command& command)
 		const bool upscaled = command.value == 1;
 		const bool hasPack =
 		    Locator::resources::value().GetTextures().Contains(ecs::archetypes::SkyArchetype::k_PackDomeTextureId.value());
-		Locator::config::value().upscaledSkyPictures = upscaled && hasPack;
+		Locator::config::value().upscaledSkyPictures = upscaled;
 		Log(fmt::format("{:.1f}s: the sky shows {}", _seconds,
 		                !upscaled ? "the game's own pictures"
 		                : hasPack ? "the pictures of the sky pack"
