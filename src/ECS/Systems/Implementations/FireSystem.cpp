@@ -880,7 +880,7 @@ std::vector<entt::entity> FireSystem::GetBlazeMembers(entt::entity object) const
 	return group != nullptr ? group->members : std::vector<entt::entity> {};
 }
 
-std::optional<entt::entity> FireSystem::NearestSafeFire(entt::entity object, const glm::vec3& point) const
+std::optional<entt::entity> FireSystem::NearestSafeFire(entt::entity object, const map_coords::MapCoords& point) const
 {
 	constexpr float k_FarAway = 1.0e7f;
 	std::optional<entt::entity> nearest;
@@ -893,7 +893,8 @@ std::optional<entt::entity> FireSystem::NearestSafeFire(entt::entity object, con
 			continue;
 		}
 		const float radius = reach->safeRadius < reach->defaultRadius ? reach->defaultRadius : reach->safeRadius;
-		const float distance = gutils::GetDistanceInMetres(point, reach->centre) - radius;
+		const auto middle = object_measures::FireMiddlePlace(Entities(), member);
+		const float distance = gutils::GetDistanceInMetres(map_coords::WholeXZ(point), middle) - radius;
 		if (distance < best && reach->aboveReactionTemperature)
 		{
 			best = distance;

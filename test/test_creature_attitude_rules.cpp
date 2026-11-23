@@ -256,11 +256,33 @@ TEST(CreatureAttitudeRules, TheLastPlanStillTellsWhetherTheCreatureMeansSomethin
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(CreatureAttitudeRules, StepsCloserByWholeMetres)
 {
-	const auto step = attitude::StepCloser({100.0f, 100.0f}, {130.6f, 100.0f}, 20.0f);
+	const auto villager = map_coords::FromMetres({100.0f, 100.0f});
+	const auto step = attitude::StepCloser(villager, map_coords::FromMetres({130.6f, 100.0f}), 20.0f);
 	ASSERT_TRUE(step.has_value());
-	EXPECT_NEAR(step->x, 110.0f, 0.01f);
-	EXPECT_NEAR(step->y, 100.0f, 0.01f);
-	EXPECT_FALSE(attitude::StepCloser({100.0f, 100.0f}, {120.9f, 100.0f}, 20.0f).has_value());
+	EXPECT_NEAR(map_coords::ToMetres(*step).x, 110.0f, 0.01f);
+	EXPECT_NEAR(map_coords::ToMetres(*step).y, 100.0f, 0.01f);
+	EXPECT_FALSE(attitude::StepCloser(villager, map_coords::FromMetres({120.9f, 100.0f}), 20.0f).has_value());
+}
+
+// The step and the place to bow start at the map position of the villager, not at its metres. A map position that does
+// not come back the same through metres shows it. The step keeps the altitude of the villager.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(CreatureAttitudeRules, StepAndBowStartAtTheMapPositionOfTheVillager)
+{
+	constexpr int32_t k_Unround = 8090858;
+	static_assert(map_coords::ToFixed(map_coords::ToMetres(k_Unround)) != k_Unround);
+	const map_coords::MapCoords villager {.x = k_Unround, .z = k_Unround, .altitude = 1.5f};
+	const map_coords::MapCoords creature {.x = k_Unround + 30 * 6554, .z = k_Unround, .altitude = 0.0f};
+	const auto step = attitude::StepCloser(villager, creature, 20.0f);
+	ASSERT_TRUE(step.has_value());
+	// Ten whole metres along x are 65536 map units
+	EXPECT_EQ(step->x, k_Unround + 65536);
+	EXPECT_EQ(step->z, k_Unround);
+	EXPECT_FLOAT_EQ(step->altitude, 1.5f);
+	// Three metres of radii along x are 19660 map units, truncated
+	const auto bow = attitude::BowingPlace(villager, creature, 1.0f, 2.0f);
+	EXPECT_EQ(bow.x, map_coords::ToMetres(k_Unround + 19660));
+	EXPECT_EQ(bow.y, map_coords::ToMetres(k_Unround));
 }
 
 // A frightened villager runs straight away; one bowing turns again only past an eighth of a turn, the angles taken as they

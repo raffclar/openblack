@@ -14,8 +14,6 @@
 
 #include <algorithm>
 
-#include <glm/gtx/vec_swizzle.hpp>
-
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
@@ -105,15 +103,16 @@ uint32_t Random(uint32_t range)
 	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameRand(range) : 0;
 }
 
-glm::vec2 PositionOf(entt::entity entity)
-{
-	return glm::xz(EntityRegistry().Get<const Transform>(entity).position);
-}
-
 /// Where a thing is, as the map keeps it, with no height above the land
 map_coords::MapCoords MapPlaceOf(entt::entity entity)
 {
 	return ecs::thing_map_place::Of(EntityRegistry(), entity);
+}
+
+/// Where a thing is, as the map keeps it, with its height above the land
+map_coords::MapCoords MapPlaceWithAltitudeOf(entt::entity entity)
+{
+	return ecs::thing_map_place::OfWithAltitude(EntityRegistry(), entity);
 }
 
 /// The creature the villager reacts to, while it is there
@@ -496,7 +495,8 @@ uint32_t villager_creature::ApproachCreatureReaction(LivingAction& action)
 		return StopReacting(action);
 	}
 	// Further than it means to be, it steps closer, and comes back here
-	if (const auto step = creature_attitude::StepCloser(PositionOf(villager), PositionOf(*creature), inspection->keep))
+	if (const auto step =
+	        creature_attitude::StepCloser(MapPlaceWithAltitudeOf(villager), MapPlaceOf(*creature), inspection->keep))
 	{
 		MoveTowards(action, *step, VillagerStates::ApproachCreatureReaction);
 		FollowTownFeeling(action);
@@ -522,7 +522,7 @@ uint32_t villager_creature::InitialiseRespectCreatureReaction(LivingAction& acti
 	{
 		return StopReacting(action);
 	}
-	const auto place = creature_attitude::BowingPlace(PositionOf(villager), PositionOf(*creature),
+	const auto place = creature_attitude::BowingPlace(MapPlaceOf(villager), MapPlaceOf(*creature),
 	                                                  object_measures::TwoDRadius(registry, villager),
 	                                                  object_measures::TwoDRadius(registry, *creature));
 	MoveTowards(action, place, VillagerStates::TurnToFaceCreatureReaction);
@@ -558,8 +558,8 @@ uint32_t villager_creature::PerformRespectCreatureReaction(LivingAction& action)
 	{
 		return StopReacting(action);
 	}
-	// The creature moved round it: it turns to face it again
-	const auto towards = gutils::GetAngleFromXZ(PositionOf(villager), PositionOf(*creature));
+	// The creature moved round it: it turns to face it again. The angle is between the two map positions.
+	const auto towards = gutils::GetAngleFromXZ(MapPlaceOf(villager), MapPlaceOf(*creature));
 	if (creature_attitude::DriftedFrom(registry.Get<const WallHug>(villager).gameAngle, towards))
 	{
 		SetTop(action, VillagerStates::TurnToFaceCreatureReaction);
