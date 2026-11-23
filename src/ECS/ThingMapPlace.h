@@ -49,5 +49,9 @@ void Reinsert(entt::entity thing);
 /// A thing that changes its size comes out of the map's cells before the change and goes in again after it, as the
 /// game does (see MapInterface::Reinsert). A thing that is not in the cells only changes.
 void ReinsertWith(entt::entity thing, const std::function<void()>& change);
+/// A thing takes a size that is the same along every axis. Only a new size changes the thing. Then the thing comes out of
+/// the map's cells at its old size and goes in again at its new size, as ReinsertWith does. Gives true when the size
+/// changed.
+bool Resize(Registry& registry, entt::entity thing, float scale);
 
 } // namespace openblack::ecs::thing_map_place

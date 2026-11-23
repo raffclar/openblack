@@ -36,6 +36,8 @@ def load_agent(service):
 
 
 def main():
+    if not os.environ.get("SENTRY_DSN"):
+        os.environ["SENTRY_DSN"] = "http://test@127.0.0.1:9/0"  # no report of a test run goes to the live project
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--service", required=True, help="a clone of bwgame-service")
     parser.add_argument("--heartbeat", required=True, help="the heartbeat file of the agent")

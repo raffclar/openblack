@@ -378,26 +378,29 @@ void Pull(PuzzleGame& game, int32_t across, int32_t along)
 	}
 }
 
-/// A tree of the puzzle grows one step towards its full size. The map's cells take it out and put it in again.
+/// A tree of the puzzle grows one step towards its full size. A tree that gets a new size comes out of the map's cells at
+/// its old size and goes in again at its new size.
 void GrowTree(entt::entity tree)
 {
 	auto& registry = Entities();
-	auto& transform = registry.Get<Transform>(tree);
 	const auto fullSize = registry.Get<const Tree>(tree).maxSize;
-	const float size = transform.scale.y;
+	const float size = registry.Get<const Transform>(tree).scale.y;
 	if (!(size < fullSize))
 	{
 		return;
 	}
 	const float grown = tree_puzzle::Grown(size, fullSize);
-	const float ratio = grown / std::max(size, 1e-4f);
-	transform.scale = glm::vec3(grown);
-	if (auto* fixed = registry.TryGet<Fixed>(tree))
+	if (grown != size)
 	{
-		fixed->boundingRadius *= ratio;
+		ecs::thing_map_place::ReinsertWith(tree, [&registry, tree, size, grown]() {
+			registry.Get<Transform>(tree).scale = glm::vec3(grown);
+			if (auto* fixed = registry.TryGet<Fixed>(tree))
+			{
+				fixed->boundingRadius *= grown / std::max(size, 1e-4f);
+			}
+		});
 	}
 	registry.SetDirty();
-	ecs::thing_map_place::Reinsert(tree);
 }
 
 /// The tree puzzle at its start:

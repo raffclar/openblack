@@ -113,6 +113,8 @@ const chrome = spawn(chromePath, [
   '--metrics-recording-only', '--disable-component-update', `--window-size=${width},${height}`,
   `--force-device-scale-factor=${pixelRatio}`,
   '--autoplay-policy=user-gesture-required', ...graphics,
+  // A test run never sends an error report to the live Sentry project (a shipping page has its address)
+  '--host-resolver-rules=MAP *.sentry.io ~NOTFOUND',
   ...(option('--trust-spki', '') ? [`--ignore-certificate-errors-spki-list=${option('--trust-spki', '')}`] : []),
   'about:blank',
 ], { stdio: 'ignore' });

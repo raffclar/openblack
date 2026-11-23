@@ -296,14 +296,10 @@ void villager_script::SetAge(entt::entity villager, uint32_t age)
 		    villager_age::GrownScale(setting.age, info.grownUpAge, info.ageToScale.values, start, [](float limit) {
 			    return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(limit) : 0.0f;
 		    });
-		// The size changes two times: to the start size, then to the grown size. A villager in the map's cells comes out
-		// of them and goes in again when either change is not zero.
-		const bool resized = transform->scale.x != start || grown != start;
-		transform->scale = glm::vec3(grown);
-		if (resized)
-		{
-			ecs::thing_map_place::Reinsert(villager);
-		}
+		// The size changes two times: to the start size, then to the grown size. For each change that gives a new size, a
+		// villager in the map's cells comes out of them at its old size and goes in again at its new size.
+		ecs::thing_map_place::Resize(registry, villager, start);
+		ecs::thing_map_place::Resize(registry, villager, grown);
 	}
 	villager_age::SetBirthTurnForAge(*person, setting.age);
 	registry.SetDirty();
