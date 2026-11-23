@@ -1643,6 +1643,23 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .repeatFrom = 2,
 	});
 
+	// The player's temple stands to the north west, out of the testbed's influence. A script makes a ring of the
+	// player's influence to the north east, also out of it.
+	all.push_back({
+	    .id = "interface.script_ring_no_border",
+	    .name = "A ring of influence that a script makes has no border",
+	    .facet = Facet::Interface,
+	    .description =
+	        "The player's temple stands 300 m west of the middle and 750 m north. The land's script makes a "
+	        "ring of the player's influence with a radius of 120 m, 300 m east of the middle and 750 m north. The camera "
+	        "looks north over the two. The near arc is the border of the testbed's own influence.",
+	    .expected = "The temple has its border in the player's colour round it. The ring has no border, as in the "
+	                "game: only the temples and the towns have a border.",
+	    .environment = {.dispenserGrid = false, .temple = glm::vec2(-300.0f, 750.0f)},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 450.0f, 150.0f}, .look = {0.0f, 0.0f, 750.0f}},
+	    .landScript = R"(CREATE_INFLUENCE_RING("300.0,750.0", 0, 120.0, 0))",
+	});
+
 	// Two teleport stones the villagers jump between, the first jumps heard from the land, the later ones while the
 	// camera is in the temple
 	constexpr glm::vec2 k_StoneA {-40.0f, 20.0f};
