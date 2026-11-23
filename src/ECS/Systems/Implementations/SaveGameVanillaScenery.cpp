@@ -48,6 +48,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillagerWork.h"
+#include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
@@ -358,6 +359,23 @@ void SaveGameSystem::ImportVanillaFarms(const gamesave::VanillaWorld& world, Van
 			const auto entity = ecs::archetypes::FishFarmArchetype::CreateLoaded(GroundPosition(farm.position),
 			                                                                     EntityOf(made, farm.town), farm.fish);
 			made.emplace(farm.number, entity);
+		}
+	}
+
+	// The game's load keeps the order of the lists of fields and of fish farms of the file, the newest first, and each
+	// town's list has the same order. The things join the lists again in that order, so the oldest joins first.
+	for (const auto field : world_import::ListedToJoin(imported.fieldList, made))
+	{
+		if (registry.AllOf<Field>(field))
+		{
+			ecs::list_order::Join(registry, field);
+		}
+	}
+	for (const auto farm : world_import::ListedToJoin(imported.fishFarmList, made))
+	{
+		if (registry.AllOf<FishFarm>(farm))
+		{
+			ecs::list_order::Join(registry, farm);
 		}
 	}
 

@@ -25,6 +25,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/FishFarmOrder.h"
+#include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -114,18 +115,18 @@ float FishFarmSystem::FishLeft(entt::entity farm) const
 
 std::optional<entt::entity> FishFarmSystem::ClosestFarm(glm::vec3 point, float maxDistance) const
 {
-	std::optional<entt::entity> closest;
-	float best = maxDistance;
-	Locator::entitiesRegistry::value().Each<const FishFarm, const Transform>(
-	    [&](entt::entity entity, const FishFarm&, const Transform& transform) {
-		    const float distance = glm::distance(glm::xz(transform.position), glm::xz(point));
-		    if (distance < best)
-		    {
-			    best = distance;
-			    closest = entity;
-		    }
-	    });
-	return closest;
+	// The game goes along the list of all farms, the newest first, and measures each one by the map distance
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto at = map_coords::FromMetres(glm::xz(point));
+	const auto farms = ecs::list_order::Walk<FishFarm>(registry);
+	std::vector<float> distances;
+	distances.reserve(farms.size());
+	for (const auto entity : farms)
+	{
+		distances.push_back(gutils::GetDistanceInMetres(registry.Get<const FishFarm>(entity).place, glm::ivec2(at.x, at.z)));
+	}
+	const auto closest = fish_farm::ClosestFarm(distances, maxDistance);
+	return closest.has_value() ? std::optional<entt::entity> {farms.at(*closest)} : std::nullopt;
 }
 
 std::optional<FishFarmSystemInterface::FarmChoice> FishFarmSystem::BestFarmFor(entt::entity town, glm::vec3 fisherman) const
