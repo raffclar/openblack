@@ -193,8 +193,12 @@ std::optional<size_t> PlayPlayerTurns(size_t first, MindFrameBudget* budget)
 	auto& towns = Locator::townSystem::value();
 	// The budget of the frame counts the time of each whole player turn, with its computer mind
 	auto mark = budget != nullptr ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
+	const auto players = ecs::game_players::All();
+	const auto count = static_cast<size_t>(std::ranges::distance(players));
+	// The players that ended their turns until now, in this turn
+	auto played = first;
 	return player_turn::PlayFrom(
-	    ecs::game_players::All(), first,
+	    players, first,
 	    [&towns](PlayerNames player, player_turn::Part part) {
 		    switch (part)
 		    {
@@ -244,14 +248,15 @@ std::optional<size_t> PlayPlayerTurns(size_t first, MindFrameBudget* budget)
 			    break;
 		    }
 	    },
-	    [budget, &mark] {
+	    [budget, &mark, &played, count] {
 		    if (budget == nullptr)
 		    {
 			    return false;
 		    }
 		    const auto now = std::chrono::steady_clock::now();
 		    budget->AddMindTime(std::chrono::duration<float, std::milli>(now - std::exchange(mark, now)).count());
-		    return budget->Used();
+		    ++played;
+		    return budget->StopsBefore(count - std::min(played, count));
 	    });
 }
 
@@ -1298,9 +1303,17 @@ std::optional<SplitTurn> PlayTurnPart(TurnViewInterface& view, SplitTurn turn, M
 		Locator::influenceSystem::value().SetInGameTurn(
 		    game_turn::MeasuresInfluenceFromTurnHands(game_turn::k_Turn[turn.place.index].step));
 	}
+	// The budget keeps room for the steps after the players only in the first frames of a turn
+	if (budget != nullptr)
+	{
+		budget->SetFrameOfTurn(turn.frames);
+	}
+	// The time when the players of the turn ended their turns, for the budget of the next turns
+	std::optional<std::chrono::steady_clock::time_point> playersEnd;
 	const auto stopped = game_turn::PlayTurnFrom(
 	    turn.place,
-	    [&view, queue, &stepTimesFrom, &stepTimes, budget](game_turn::Step step, size_t firstPlayer) -> std::optional<size_t> {
+	    [&view, queue, &stepTimesFrom, &stepTimes, budget, &playersEnd](game_turn::Step step,
+	                                                                    size_t firstPlayer) -> std::optional<size_t> {
 		    if (queue != nullptr)
 		    {
 			    queue->SetTurnStep(static_cast<uint32_t>(step));
@@ -1327,6 +1340,10 @@ std::optional<SplitTurn> PlayTurnPart(TurnViewInterface& view, SplitTurn turn, M
 		    {
 			    stepTimes.Add(step, std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count());
 		    }
+		    if (budget != nullptr && step == game_turn::Step::Players && !nextPlayer.has_value())
+		    {
+			    playersEnd = std::chrono::steady_clock::now();
+		    }
 		    return nextPlayer;
 	    },
 	    // The input of a game alone can stop the clock, for example with a tap on the entrance of the temple. Then the
@@ -1346,6 +1363,11 @@ std::optional<SplitTurn> PlayTurnPart(TurnViewInterface& view, SplitTurn turn, M
 		turn.place = *stopped;
 		++turn.frames;
 		return turn;
+	}
+	if (budget != nullptr && playersEnd.has_value())
+	{
+		budget->NoteStepsAfterPlayers(
+		    std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - *playersEnd).count());
 	}
 	if (turn.frames > 1)
 	{

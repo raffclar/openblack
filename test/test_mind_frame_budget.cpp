@@ -109,3 +109,92 @@ TEST(MindFrameBudget, TheFramesShareThePlayersOfALongTurn)
 	const std::vector<std::vector<uint32_t>> expected {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {9}};
 	EXPECT_EQ(frames, expected);
 }
+
+namespace
+{
+
+/// The players of a turn frame by frame, each mind of a fixed time, with the budget's room for the steps after the
+/// players. Each list is the players of one frame.
+std::vector<std::vector<uint32_t>> FramesOfTurn(size_t playerCount, float mindMs, float budgetMs, float afterPlayersMs)
+{
+	std::vector<uint32_t> players(playerCount);
+	for (size_t i = 0; i < playerCount; ++i)
+	{
+		players[i] = static_cast<uint32_t>(i);
+	}
+	MindFrameBudget budget;
+	budget.NoteStepsAfterPlayers(afterPlayersMs);
+	std::vector<std::vector<uint32_t>> frames;
+	std::optional<size_t> next = 0;
+	uint32_t frame = 0;
+	while (next.has_value())
+	{
+		budget.StartFrame(budgetMs);
+		budget.SetFrameOfTurn(++frame);
+		frames.emplace_back();
+		auto played = *next;
+		next = player_turn::PlayFrom(
+		    players, *next,
+		    [&](uint32_t player, player_turn::Part part) {
+			    if (part == player_turn::Part::Mind)
+			    {
+				    frames.back().push_back(player);
+			    }
+		    },
+		    [&] {
+			    budget.AddMindTime(mindMs);
+			    ++played;
+			    return budget.StopsBefore(playerCount - played);
+		    });
+	}
+	return frames;
+}
+
+} // namespace
+
+// The minds of all players fit in the budget, and the steps after the players fit too: the turn does not stop
+TEST(MindFrameBudget, ATurnWithRoomForTheStepsAfterThePlayersDoesNotStop)
+{
+	const std::vector<std::vector<uint32_t>> expected {{0, 1, 2, 3}};
+	EXPECT_EQ(FramesOfTurn(4, 0.5f, 8.0f, 4.0f), expected);
+}
+
+// The minds of all players fit in the budget, but the steps after them do not. The turn stops when the steps after the
+// players have no more room, and the next frame ends it.
+TEST(MindFrameBudget, TheBudgetKeepsRoomForTheStepsAfterThePlayers)
+{
+	const std::vector<std::vector<uint32_t>> expected {{0, 1, 2, 3}, {4, 5}};
+	EXPECT_EQ(FramesOfTurn(6, 1.0f, 8.0f, 4.0f), expected);
+}
+
+// A long turn uses all of the budget in its first frames. The frame that ends the turn keeps room for the steps after the
+// players.
+TEST(MindFrameBudget, TheFrameThatEndsALongTurnKeepsRoomForTheStepsAfterThePlayers)
+{
+	// Without the room, the second frame does players 8 to 14: 7 ms of minds and 4.5 ms of steps after the players
+	const std::vector<std::vector<uint32_t>> expected {{0, 1, 2, 3, 4, 5, 6, 7}, {8, 9, 10, 11}, {12, 13, 14}};
+	EXPECT_EQ(FramesOfTurn(15, 1.0f, 8.0f, 4.5f), expected);
+}
+
+// After the frames with room, a frame uses all of the budget. Thus the room adds no more than one frame to a turn.
+TEST(MindFrameBudget, TheBudgetKeepsRoomOnlyInTheFirstFramesOfATurn)
+{
+	const std::vector<std::vector<uint32_t>> expected {{0}, {1}, {2, 3}};
+	EXPECT_EQ(FramesOfTurn(4, 1.0f, 8.0f, 7.5f), expected);
+}
+
+// Steps after the players that need all of the budget get no room: the budget then stops the turn as before
+TEST(MindFrameBudget, StepsAfterThePlayersThatNeedAllOfTheBudgetGetNoRoom)
+{
+	const std::vector<std::vector<uint32_t>> expected {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {9}};
+	EXPECT_EQ(FramesOfTurn(10, 3.0f, 8.0f, 9.0f), expected);
+}
+
+TEST(MindFrameBudget, AFrameWithNoBudgetNeverStopsBeforeAPlayer)
+{
+	MindFrameBudget budget;
+	budget.NoteStepsAfterPlayers(5.0f);
+	budget.StartFrame(std::nullopt);
+	budget.AddMindTime(1000.0f);
+	EXPECT_FALSE(budget.StopsBefore(10));
+}
