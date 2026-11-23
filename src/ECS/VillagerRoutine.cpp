@@ -24,21 +24,22 @@ glm::vec2 villager_routine::Polar(glm::vec2 from, float angle, float metres)
 	return map_coords::ToMetres(coords);
 }
 
-glm::vec2 villager_routine::PosOutsideDoor(glm::vec2 abode, glm::vec2 door, const FloatRandom& random)
+map_coords::MapCoords villager_routine::PosOutsideDoor(const map_coords::MapCoords& abode, const map_coords::MapCoords& door,
+                                                       const FloatRandom& random)
 {
 	const float angle = gutils::Get3DAngleFromXZ(abode, door);
 	const float distance = random(k_OutsideDoorRange) + k_OutsideDoorLeast;
 	const float jitter = k_EighthPi - random(k_QuarterPi);
-	return Polar(door, angle + jitter, distance);
+	return door + gutils::GetPosFromAngle(jitter + angle, distance);
 }
 
-glm::vec2 villager_routine::PosOutside(glm::vec2 abode, glm::vec2 door, float divisions, float leastDistance, float range,
-                                       const FloatRandom& random)
+map_coords::MapCoords villager_routine::PosOutside(const map_coords::MapCoords& abode, const map_coords::MapCoords& door,
+                                                   float divisions, float leastDistance, float range, const FloatRandom& random)
 {
 	float angle = random(k_TwoPi / divisions) - k_TwoPi / (divisions + divisions);
-	angle += gutils::Get3DAngleFromXZ(abode, door);
+	angle = gutils::Get3DAngleFromXZ(abode, door) + angle;
 	const float distance = random(range) + leastDistance;
-	return Polar(door, angle, distance);
+	return door + gutils::GetPosFromAngle(angle, distance);
 }
 
 map_coords::MapCoords villager_routine::ChillOutPos(const map_coords::MapCoords& congregation,

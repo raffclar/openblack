@@ -43,13 +43,16 @@ constexpr float k_TwoPi = 6.2831855f;
 constexpr float k_OutsideDoorLeast = 1.5f;
 constexpr float k_OutsideDoorRange = 1.5f;
 /// Where a villager stands after coming out of its home: a few steps out from the door, straight out from the home
-/// give or take an eighth of a turn. The distance is drawn first.
-[[nodiscard]] glm::vec2 PosOutsideDoor(glm::vec2 abode, glm::vec2 door, const FloatRandom& random);
+/// give or take an eighth of a turn. The distance is drawn first. The home and the door are map positions. The step is
+/// added to the door in whole map units, so the spot keeps the height of the door.
+[[nodiscard]] map_coords::MapCoords PosOutsideDoor(const map_coords::MapCoords& abode, const map_coords::MapCoords& door,
+                                                   const FloatRandom& random);
 
 /// A spot about a building's door: out from it within a share of a turn (a turn divided into `divisions`), at least
-/// `leastDistance` and up to `range` more. The angle is drawn first.
-[[nodiscard]] glm::vec2 PosOutside(glm::vec2 abode, glm::vec2 door, float divisions, float leastDistance, float range,
-                                   const FloatRandom& random);
+/// `leastDistance` and up to `range` more. The angle is drawn first. As PosOutsideDoor, the step is added to the door in
+/// whole map units.
+[[nodiscard]] map_coords::MapCoords PosOutside(const map_coords::MapCoords& abode, const map_coords::MapCoords& door,
+                                               float divisions, float leastDistance, float range, const FloatRandom& random);
 
 /// A tenth of how far from the town's gathering place people sit about: the least distance they sit at
 constexpr float k_ChillOutRadiusShare = 0.1f;

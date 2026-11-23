@@ -58,6 +58,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerBreedingRules.h"
 #include "ECS/VillagerSkeletons.h"
@@ -428,7 +429,7 @@ entt::entity ChildBorn(entt::entity mother)
 }
 
 /// The nearest building of a town strictly within reach of a point
-entt::entity NearestHome(entt::entity town, glm::vec2 point, float reach)
+entt::entity NearestHome(entt::entity town, const map_coords::MapCoords& point, float reach)
 {
 	auto& registry = Entities();
 	entt::entity nearest = entt::null;
@@ -439,8 +440,8 @@ entt::entity NearestHome(entt::entity town, glm::vec2 point, float reach)
 		{
 			continue;
 		}
-		// The game's map distance
-		const float distance = gutils::GetDistanceInMetres(point, PositionOf(abode));
+		// The game's map distance between the map positions
+		const float distance = gutils::GetDistanceInMetres(point, ecs::thing_map_place::Of(registry, abode));
 		if (distance < best)
 		{
 			best = distance;
@@ -672,21 +673,22 @@ bool villager_breeding::SetupBreederDisciple(LivingAction& action)
 	{
 		return false;
 	}
-	glm::vec2 spot;
-	if (const auto home = NearestHome(town, PositionOf(villager), k_BreederHomeReach); home != entt::null)
+	map_coords::MapCoords spot;
+	if (const auto home = NearestHome(town, ecs::thing_map_place::Of(registry, villager), k_BreederHomeReach);
+	    home != entt::null)
 	{
-		spot = BreederSpotByHome(PositionOf(home), villager_home::ArrivePosition(home), world_objects::SizeOf(home).radius,
-		                         GameInt(), GameFloat());
+		spot = BreederSpotByHome(ecs::thing_map_place::Of(registry, home), villager_home::ArrivePlace(home),
+		                         world_objects::SizeOf(home).radius, GameInt(), GameFloat());
 		villager_footpath::SetupMoveToOnFootpath(action, home, spot, VillagerStates::BreederDisciple);
 	}
 	else
 	{
 		// Near where its town leaves food: its working pit's door, or its temporary pile, made if missing
-		spot = BreederSpotByStore(villager_build::ResourceDropoffPos(villager, ResourceType::Food), GameFloat());
+		spot = BreederSpotByStore(villager_build::ResourceDropoff(villager, ResourceType::Food).goal, GameFloat());
 		villager_home::SetupMoveTo(action, spot, VillagerStates::BreederDisciple, villager_home::WalkWay::StraightThrough);
 	}
 	SetLover(villager, entt::null);
-	registry.AssignOrReplace<BreederSpot>(villager, spot);
+	registry.AssignOrReplace<BreederSpot>(villager, BreederSpot {.spot = map_coords::WholeXZ(spot)});
 	return true;
 }
 
@@ -875,7 +877,9 @@ uint32_t villager_breeding::BreederDisciple(LivingAction& action)
 		return 1;
 	}
 	const auto* spot = Entities().TryGet<const BreederSpot>(villager);
-	const auto amble = BreederAmble(spot != nullptr ? spot->spot : PositionOf(villager), GameFloat(), GameInt());
+	const auto amble =
+	    BreederAmble(spot != nullptr ? spot->spot : map_coords::WholeXZ(ecs::thing_map_place::Of(Entities(), villager)),
+	                 GameFloat(), GameInt());
 	villager_home::SetupMoveTo(action, amble.goal, VillagerStates::BreederDisciple);
 	action.turnsUntilStateChange = amble.pause;
 	return 1;

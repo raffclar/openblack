@@ -22,6 +22,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -530,7 +531,7 @@ bool villager_home::AreWeThere(entt::entity villager, glm::ivec2 point)
 	return walk_arrival::WithinAStep(WalkPositionOf(villager), point, speed);
 }
 
-std::optional<glm::vec2> villager_home::PosOutsideAbode(entt::entity villager)
+std::optional<map_coords::MapCoords> villager_home::PosOutsideAbode(entt::entity villager)
 {
 	const auto abode = AbodeOf(villager);
 	if (abode == entt::null)
@@ -538,12 +539,17 @@ std::optional<glm::vec2> villager_home::PosOutsideAbode(entt::entity villager)
 		return std::nullopt;
 	}
 	// Out from its door, about an eighth of a half turn either side, a step or two from it
-	return routine::PosOutsideDoor(PositionOf(abode), ArrivePosition(abode), FloatRandom());
+	return routine::PosOutsideDoor(thing_map_place::Of(WorldRegistry(), abode), ArrivePlace(abode), FloatRandom());
 }
 
 bool villager_home::Collides(glm::vec2 point)
 {
-	return routine::OpenSpotCollides(villager_flock::CellCollision(map_coords::FromMetres(point)));
+	return Collides(map_coords::FromMetres(point));
+}
+
+bool villager_home::Collides(const map_coords::MapCoords& place)
+{
+	return routine::OpenSpotCollides(villager_flock::CellCollision(place));
 }
 
 namespace
@@ -678,7 +684,7 @@ std::optional<map_coords::MapCoords> GetChillOutPos(entt::entity villager)
 }
 
 /// Where a villager sits outside its house, about its door
-std::optional<glm::vec2> GetPosOutsideMyHouse(entt::entity villager)
+std::optional<map_coords::MapCoords> GetPosOutsideMyHouse(entt::entity villager)
 {
 	const auto abode = AbodeOf(villager);
 	if (abode == entt::null || TownOf(villager) == entt::null)
@@ -686,8 +692,8 @@ std::optional<glm::vec2> GetPosOutsideMyHouse(entt::entity villager)
 		return std::nullopt;
 	}
 	const float half = k_OutsideHouseShare * Locator::infoConstants::value().town.maxDistanceFromHouseThatPeopleChillOut;
-	return routine::PosOutside(PositionOf(abode), villager_home::ArrivePosition(abode), k_OutsideHouseDivisions, half, half,
-	                           FloatRandom());
+	return routine::PosOutside(ecs::thing_map_place::Of(WorldRegistry(), abode), villager_home::ArrivePlace(abode),
+	                           k_OutsideHouseDivisions, half, half, FloatRandom());
 }
 
 /// The town a vagrant can join: the nearest town within reach of any tribe, but only when that town is of its own
@@ -864,7 +870,7 @@ glm::vec2 villager_home::DoorPosition(entt::entity abode)
 	                                          registry.AnyOf<Field, FishFarm>(abode));
 	if (door == abode_door::Door::VillageCentre)
 	{
-		return abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
+		return glm::xz(abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale));
 	}
 	glm::vec3 point = transform.position;
 	// An altar has its model also while the game does not show it
@@ -892,7 +898,15 @@ map_coords::MapCoords villager_home::DoorPlace(entt::entity abode)
 	std::optional<glm::vec2> doorMetres;
 	if (door == abode_door::Door::VillageCentre)
 	{
-		doorMetres = abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
+		// The village centre's door keeps the height of its point above the land
+		const auto point = abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
+		if (Locator::terrainSystem::has_value())
+		{
+			const auto& island = Locator::terrainSystem::value();
+			return abode_door::VillageCentreDoorPlace(
+			    point, [&island](const map_coords::MapCoords& place) { return map_coords::GroundAt(island, place); });
+		}
+		doorMetres = glm::xz(point);
 	}
 	else if (const auto model = thing_model::ModelOf(registry, abode); door == abode_door::Door::Model && model.has_value())
 	{
@@ -967,7 +981,7 @@ bool villager_home::SetStateWhenTappedOnAbode(entt::entity villager)
 	{
 		return false;
 	}
-	const auto spot = routine::PosOutsideDoor(PositionOf(abode), ArrivePosition(abode), FloatRandom());
+	const auto spot = routine::PosOutsideDoor(thing_map_place::Of(WorldRegistry(), abode), ArrivePlace(abode), FloatRandom());
 	// It decides afresh once it has yawned outside, and its needs and bed leave it be for that decision
 	Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Previous,
 	                                                      VillagerStates::DecideWhatToDo, true);
@@ -1376,13 +1390,14 @@ uint32_t villager_home::GoAndChilloutOutsideHome(LivingAction& action)
 		SetTopState(action, VillagerStates::DecideWhatToDo);
 		return 1;
 	}
-	const auto door = ArrivePosition(abode);
+	const auto door = ArrivePlace(abode);
 	const float distance = Locator::infoConstants::value().town.maxDistanceFromHouseThatPeopleChillOut;
+	// It looks out from its door, away from its home, in whole map units
 	const auto lookOut =
-	    routine::Polar(door, gutils::Get3DAngleFromXZ(PositionOf(abode), door), k_OutsideHouseLookOut * distance);
+	    door + gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(thing_map_place::Of(WorldRegistry(), abode), door),
+	                                   distance * k_OutsideHouseLookOut);
 	GetMeToMyChillOutPos(
-	    action, [villager] { return GetPosOutsideMyHouse(villager); }, map_coords::FromMetres(door), distance,
-	    map_coords::FromMetres(lookOut));
+	    action, [villager] { return GetPosOutsideMyHouse(villager); }, door, distance, lookOut);
 	return 1;
 }
 

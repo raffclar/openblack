@@ -82,15 +82,24 @@ enum class Door
 constexpr float k_VillageCentreDoorSide = 2.0f;
 constexpr float k_VillageCentreDoorBack = 12.0f;
 
-/// The village centre's door on the ground (x, z), for a centre that stands at `position`, turned by `rotation` and
-/// sized by `scale`. The sums are made in this order, each one rounded to a float.
-[[nodiscard]] inline glm::vec2 VillageCentreDoor(glm::vec3 position, const glm::mat3& rotation, glm::vec3 scale)
+/// The village centre's door as a point, for a centre that stands at `position`, turned by `rotation` and sized by
+/// `scale`. The sums are made in this order, each one rounded to a float.
+[[nodiscard]] inline glm::vec3 VillageCentreDoor(glm::vec3 position, const glm::mat3& rotation, glm::vec3 scale)
 {
 	const glm::vec3 side = rotation[0] * scale.x;
 	const glm::vec3 back = rotation[2] * scale.z;
 	const float x = (position.x - back.x * k_VillageCentreDoorBack) + side.x * k_VillageCentreDoorSide;
+	const float y = (side.y * k_VillageCentreDoorSide - back.y * k_VillageCentreDoorBack) + position.y;
 	const float z = (side.z * k_VillageCentreDoorSide - back.z * k_VillageCentreDoorBack) + position.z;
-	return {x, z};
+	return {x, y, z};
+}
+
+/// The village centre's door as a map position: x and z change from metres to whole map units, and the altitude is the
+/// height of the door point above the land there. `groundAt` gives the height of the land at a map position.
+template <typename GroundAt>
+[[nodiscard]] constexpr map_coords::MapCoords VillageCentreDoorPlace(glm::vec3 door, const GroundAt& groundAt)
+{
+	return map_coords::FromWorld(door, groundAt);
 }
 
 /// The door of a building as a map position, as a walk keeps it. The door in metres changes to whole map units, and the

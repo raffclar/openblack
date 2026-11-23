@@ -195,14 +195,14 @@ bool villager_cover::SetupGoAndHideInNearbyBuilding(LivingAction& action, entt::
 		return false;
 	}
 	const auto& buildings = registry.Get<const Town>(person.town).abodes;
-	const auto here = GroundOf(villager);
+	const auto here = ecs::thing_map_place::Of(registry, villager);
 	std::vector<hiding::Shelter> shelters;
 	shelters.reserve(buildings.size());
 	for (const auto building : buildings)
 	{
 		const bool hides = CanHideIn(building);
 		shelters.push_back(
-		    {.distance = hides ? gutils::GetDistanceInMetres(here, ecs::villager_home::ArrivePosition(building)) : 0.0f,
+		    {.distance = hides ? gutils::GetDistanceInMetres(here, ecs::villager_home::ArrivePlace(building)) : 0.0f,
 		     .canBeHiddenIn = hides});
 	}
 	const auto nearest = hiding::NearestShelter(shelters);
@@ -300,8 +300,9 @@ uint32_t villager_cover::GoAndHideInNearbyBuilding(LivingAction& action)
 	if (stands && atDoor && hidingIn->threat != entt::null)
 	{
 		const auto& row = Locator::infoConstants::value().reaction.at(static_cast<size_t>(hidingIn->threatKind));
-		threatNear =
-		    gutils::GetDistanceInMetres(GroundOf(villager), GroundOf(hidingIn->threat)) <= row.minDistanceToRunAwayFromObject;
+		threatNear = gutils::GetDistanceInMetres(ecs::thing_map_place::Of(Entities(), villager),
+		                                         ecs::thing_map_place::Of(Entities(), hidingIn->threat)) <=
+		             row.minDistanceToRunAwayFromObject;
 	}
 	const auto step = hiding::HideStep(
 	    {.shelterStands = stands, .atDoor = atDoor, .threatNear = threatNear, .turnsInside = hidingIn->turns}, IntRandom());
@@ -318,7 +319,7 @@ uint32_t villager_cover::GoAndHideInNearbyBuilding(LivingAction& action)
 		// It steps out of the door and looks about
 		const auto building = hidingIn->building;
 		const auto out = ecs::villager_routine::PosOutsideDoor(
-		    GroundOf(building), ecs::villager_home::ArrivePosition(building),
+		    ecs::thing_map_place::Of(Entities(), building), ecs::villager_home::ArrivePlace(building),
 		    [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); });
 		ecs::villager_home::SetupMoveTo(action, out, VillagerStates::LookToSeeIfItIsSafe);
 		return 1;

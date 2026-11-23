@@ -1224,8 +1224,7 @@ void PutStateValues(ecs::Registry& registry, entt::entity entity, const world_im
 		if (const auto breeder = world_import::BreederValuesOf(state, *values); breeder.has_value())
 		{
 			// The lover can come later in the file, so the import gives it after it made all the villagers
-			registry.AssignOrReplace<BreederSpot>(entity, BreederSpot {.spot = {world_import::MetresOfMapUnits(breeder->x),
-			                                                                    world_import::MetresOfMapUnits(breeder->z)}});
+			registry.AssignOrReplace<BreederSpot>(entity, BreederSpot {.spot = {breeder->x, breeder->z}});
 		}
 		if (const auto reason = world_import::DeathReasonOf(state, *values); reason.has_value())
 		{

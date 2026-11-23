@@ -22,6 +22,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
+
 /// The rules of a building site and its builders: how many builders it wants, how much it wants them, where they stand
 /// round the building, whether one should fetch wood first, how much wood a stroke uses and how far it raises the
 /// building. Free of the game's state so they can be tested on their own.
@@ -196,14 +198,16 @@ struct SiteThing
 
 /// Where any other building's site puts its one pile of wood, made for the first wood brought: beyond the building on
 /// the side away from its door, as far out from the building as the door is plus four metres, turned an eighth of a
-/// turn either way at random, and facing back towards the building
+/// turn either way at random, and facing back towards the building. The building and its door are map positions, and
+/// the step is added to the map position of the building in whole map units.
 struct PilePlace
 {
-	glm::vec2 position;
+	map_coords::MapCoords position;
 	float yAngle;
 };
 inline constexpr float k_PileBeyondDoor = 4.0f;
-[[nodiscard]] PilePlace StandardPilePlace(glm::vec2 building, glm::vec2 door, const FloatRandom& floatRandom);
+[[nodiscard]] PilePlace StandardPilePlace(const map_coords::MapCoords& building, const map_coords::MapCoords& door,
+                                          const FloatRandom& floatRandom);
 
 /// A wonder's site puts its one pile at a fixed point of the wonder: nine metres along its x axis and fifty metres back
 /// along its z axis, turned and sized with the wonder. The pile has the wonder's turn. The sums are made in this order,
