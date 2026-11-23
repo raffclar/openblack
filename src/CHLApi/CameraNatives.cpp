@@ -231,8 +231,10 @@ void PlaceCamera(const glm::vec3& origin, const glm::vec3& focus)
 void SetCameraPosition() // 001 SET_CAMERA_POSITION
 {
 	const auto position = PopVec();
-	// Without the script's camera the position is quietly dropped
-	if (auto* camera = OrderedScriptCamera(); camera != nullptr)
+	// Without the script's camera, or while a two-thing camera has control, the position is ignored and no warning is
+	// given
+	if (auto* camera = OrderedScriptCamera();
+	    camera != nullptr && script_camera::SetPositionReachesScriptCamera(camera->InDualView()))
 	{
 		camera->SetOrigin(position);
 		RemakeDrawList();
@@ -269,16 +271,25 @@ void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 	}
 }
 
+/// The player is inside the temple, as the last view report of the player tells it
+bool ReportedInsideTemple()
+{
+	const auto view = ScriptView();
+	return view.has_value() && view->insideTemple;
+}
+
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
 {
 	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-	PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
+	PushVec(script_camera::ScriptCameraRead(reported.has_value() ? std::optional(reported->origin) : std::nullopt,
+	                                        ReportedInsideTemple()));
 }
 
 void GetCameraFocus() // 006 GET_CAMERA_FOCUS
 {
 	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-	PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
+	PushVec(script_camera::ScriptCameraRead(reported.has_value() ? std::optional(reported->focus) : std::nullopt,
+	                                        ReportedInsideTemple()));
 }
 
 void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW

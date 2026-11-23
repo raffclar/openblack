@@ -127,6 +127,8 @@ public:
 		std::bitset<255> keysHeld;
 		/// How many buttons the computer's system says the mouse has
 		uint32_t mouseButtons {0};
+		/// The player is inside their temple
+		bool insideTemple {false};
 	};
 	/// The view of a player: from the last view report of the player that a turn did, none before the first view
 	/// report or for a player with no hands. The world never reads the camera or the input of the frames.
