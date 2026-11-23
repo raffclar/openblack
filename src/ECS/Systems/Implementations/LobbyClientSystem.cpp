@@ -475,7 +475,7 @@ std::optional<bool> LobbyClientSystem::GetAccountEditor() const
 {
 	if (_state != LobbySessionState::LoggedIn || !_account.has_value())
 	{
-		return std::nullopt;
+		return IsGuest() ? std::optional<bool>(_guest->editor) : std::nullopt;
 	}
 	return _accountEditor;
 }
@@ -484,9 +484,16 @@ std::optional<bool> LobbyClientSystem::GetAccountDebugger() const
 {
 	if (_state != LobbySessionState::LoggedIn || !_account.has_value())
 	{
-		return std::nullopt;
+		return IsGuest() ? std::optional<bool>(_guest->debugger) : std::nullopt;
 	}
 	return _accountDebugger;
+}
+
+bool LobbyClientSystem::IsGuest() const
+{
+	// The guest session ends at its time: after that, the guest has no rights
+	return _guest.has_value() && !_account.has_value() &&
+	       std::chrono::duration_cast<std::chrono::milliseconds>(_clock().time_since_epoch()).count() < _guest->expires;
 }
 
 std::optional<error_reports::AccountConsent> LobbyClientSystem::GetAccountErrorReports() const
@@ -649,6 +656,19 @@ void LobbyClientSystem::SiteSignIn(LobbyCallback<lobby_api::AccountRef> callback
 			}
 			LogSession("The site gives no lobby session (status {}): the login box stays", response.status);
 			Fail(callback, std::move(error));
+			return;
+		}
+		if (const auto guest = lobby_api::ParseGuestRights(TextOf(response)); guest.has_value())
+		{
+			// A guest session of the site: no account, so no lobby. The rights of the guest open the editor and the
+			// debug menu bar. The client does not ask the site again, and the lobby refuses a login of the guest.
+			_guest = *guest;
+			_siteDeclined = true;
+			// The test tools find the words "the editor right" and "the debugger right"
+			LogSession("The site gives a guest session with no account: the guest {} the editor right and {} the "
+			           "debugger right",
+			           guest->editor ? "has" : "does not have", guest->debugger ? "has" : "does not have");
+			Fail(callback, ErrorOfKind(LobbyErrorKind::NotLoggedIn));
 			return;
 		}
 		const auto session = lobby_api::ParseSession(TextOf(response));

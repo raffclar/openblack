@@ -50,6 +50,9 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string RoomReadyFrame(bool ready);
 
 [[nodiscard]] std::optional<Session> ParseSession(std::string_view text);
+/// The answer of the game page of the site in a guest session: {"guest": {"editor": ..., "debugger": ...,
+/// "multiplayer": ..., "expires": ...}}
+[[nodiscard]] std::optional<GuestRights> ParseGuestRights(std::string_view text);
 /// The answer of GET and PUT /api/v1/me/consent
 [[nodiscard]] std::optional<Consent> ParseConsent(std::string_view text);
 /// The body of PUT /api/v1/me/consent: {"error_reports": "anonymous"} or {"error_reports": "off"}
