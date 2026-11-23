@@ -17,6 +17,7 @@
 #include <entt/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -90,9 +91,10 @@ public:
 	/// store or itself, a building going up from its newest site's piles in turn. What it gave.
 	virtual uint32_t RemoveResource(entt::entity object, ResourceType type, uint32_t amount) = 0;
 	/// A town's site at a building takes wood its builders bring, as the building takes wood brought to it but onto the
-	/// town's own site rather than the newest. What it took, none if the town has no site there.
+	/// town's own site rather than the newest. A temple's site puts the wood on the pile nearest the map position of the
+	/// builder. What it took, none if the town has no site there.
 	virtual uint32_t AddToTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount,
-	                                std::optional<glm::vec3> at) = 0;
+	                                std::optional<map_coords::MapCoords> at) = 0;
 	/// A town's site at a building gives up to an amount of wood to its builders. What it gave.
 	virtual uint32_t RemoveFromTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount) = 0;
 	/// A storage pit stops working when damage takes its life down to the limit for its kind. Each of its piles that

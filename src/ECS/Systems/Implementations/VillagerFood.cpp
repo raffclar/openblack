@@ -15,9 +15,6 @@
 #include <algorithm>
 #include <optional>
 
-#include <glm/gtx/vec_swizzle.hpp>
-
-#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
@@ -52,16 +49,15 @@
 #include "ECS/VillagerCheckRules.h"
 #include "ECS/VillagerFoodRules.h"
 #include "ECS/VillagerNeeds.h"
-#include "ECS/VillagerRoutine.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
-#include "ObjectMeasures.h"
 #include "VillagerBuild.h"
 #include "VillagerFire.h"
 #include "VillagerFootpath.h"
 #include "VillagerHome.h"
+#include "VillagerMoveToObject.h"
 #include "VillagerReactions.h"
 #include "VillagerWorship.h"
 
@@ -482,9 +478,10 @@ const ::openblack::ReactionInfo& FoodReactionInfo()
 	return Locator::infoConstants::value().reaction.at(static_cast<size_t>(Reaction::ReactToFood));
 }
 
-glm::vec3 Position(entt::entity entity)
+/// Where a thing is, as the map keeps it, with no height above the land
+map_coords::MapCoords MapPlaceOf(entt::entity entity)
 {
-	return Entities().Get<const Transform>(entity).position;
+	return thing_map_place::Of(Entities(), entity);
 }
 
 /// A pile of food a villager can take from: a pile on the ground or a store's food pile, not a pot
@@ -517,7 +514,8 @@ bool IsInterestedInFoodObject(entt::entity villager, entt::entity food)
 	    .carried = person.foodHeld,
 	    .maxCarried = info.maxFoodCarried,
 	    .stateInterest = StateInfo(FinalState(action)).foodInterest,
-	    .distanceModifier = gutils::GetDistanceModifier(gutils::GetDistanceInMetres(Position(villager), Position(food)), reach),
+	    .distanceModifier =
+	        gutils::GetDistanceModifier(gutils::GetDistanceInMetres(MapPlaceOf(villager), MapPlaceOf(food)), reach),
 	    .speedUp = IsSpeedUp(food),
 	    .townFoodDesire = townDesire,
 	    .townTrigger = townInfo.desireTriggersVillagerAction,
@@ -533,7 +531,7 @@ uint32_t villager_food::ReactToFoodPriority(entt::entity villager, entt::entity 
 	if (food == entt::null || !registry.Valid(food) || !registry.AllOf<Transform>(food) ||
 	    !Locator::resourceStoreSystem::has_value() ||
 	    Locator::resourceStoreSystem::value().GetResource(food, ResourceType::Food) == 0 ||
-	    gutils::GetDistanceInMetres(Position(villager), Position(food)) > FoodReactionInfo().maxDistanceToRunAwayFromObject)
+	    gutils::GetDistanceInMetres(MapPlaceOf(villager), MapPlaceOf(food)) > FoodReactionInfo().maxDistanceToRunAwayFromObject)
 	{
 		return 0;
 	}
@@ -550,12 +548,9 @@ uint32_t villager_food::GotoFoodReaction(LivingAction& action)
 		ecs::systems::villager_reactions::StopReacting(action);
 		return 1;
 	}
-	// It makes for the edge of the food on its own side
-	const auto at = glm::xz(Position(*food));
-	const float angle = gutils::Get3DAngleFromXZ(at, glm::xz(Position(villager)));
-	const float gap = ecs::systems::object_measures::TwoDRadius(registry, *food) +
-	                  ecs::systems::object_measures::TwoDRadius(registry, villager);
-	villager_home::SetupMoveTo(action, ecs::villager_routine::Polar(at, angle, gap), VillagerStates::ArrivesAtFoodReaction);
+	// It makes for the edge of the food on its own side, round what is in the way
+	villager_home::SetupMoveTo(action, villager_move_to_object::WorkingPosition(*food, villager),
+	                           VillagerStates::ArrivesAtFoodReaction);
 	return 1;
 }
 

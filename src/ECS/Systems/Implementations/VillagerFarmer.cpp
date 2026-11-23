@@ -12,21 +12,19 @@
 
 #include "VillagerFarmer.h"
 
-#include <glm/gtx/vec_swizzle.hpp>
-
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
-#include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WallHugRules.h"
@@ -72,9 +70,10 @@ entt::entity TownOf(const Villager& villager)
 	                                                                                                           : entt::null;
 }
 
-glm::vec2 GroundOf(entt::entity entity)
+/// Where a thing is, as the map keeps it, with no height above the land
+map_coords::MapCoords MapPlaceOf(entt::entity entity)
 {
-	return glm::xz(Entities().Get<const Transform>(entity).position);
+	return thing_map_place::Of(Entities(), entity);
 }
 
 void SetTopState(LivingAction& action, VillagerStates state)
@@ -89,7 +88,7 @@ void MoveTo(LivingAction& action, glm::ivec2 goal, VillagerStates final)
 }
 
 /// Walks to the field along its footpaths where they lead its way
-void MoveOnPathsTo(LivingAction& action, entt::entity field, glm::vec2 goal, VillagerStates final)
+void MoveOnPathsTo(LivingAction& action, entt::entity field, const map_coords::MapCoords& goal, VillagerStates final)
 {
 	villager_footpath::SetupMoveToOnFootpath(action, field, goal, final);
 }
@@ -108,7 +107,7 @@ glm::ivec2 RandomSpot(entt::entity field)
 	auto& random = Locator::gameRandom::value();
 	const float drawX = random.GameFloatRand(2.0f * work::k_FieldSpotReach);
 	const float drawZ = random.GameFloatRand(2.0f * work::k_FieldSpotReach);
-	return work::FieldWorkSpot(GroundOf(field), drawX, drawZ);
+	return work::FieldWorkSpot(MapPlaceOf(field), drawX, drawZ);
 }
 
 void PickNewSpot(entt::entity villager, entt::entity field)
@@ -119,7 +118,12 @@ void PickNewSpot(entt::entity villager, entt::entity field)
 glm::ivec2 SpotOf(entt::entity villager)
 {
 	const auto* spot = Entities().TryGet<const FieldWorkSpot>(villager);
-	return spot != nullptr ? spot->place : wall_hug::ToWhole(GroundOf(villager));
+	if (spot != nullptr)
+	{
+		return spot->place;
+	}
+	const auto here = MapPlaceOf(villager);
+	return {here.x, here.z};
 }
 
 /// Whether the villager stands at its spot: nearer than it walks in a step
@@ -128,8 +132,7 @@ bool AtSpot(entt::entity villager)
 	const auto* wallHug = Entities().TryGet<const WallHug>(villager);
 	const auto speed = static_cast<float>(wall_hug::WholeSpeed(wallHug != nullptr ? wallHug->speed : 0.0f));
 	const auto spot = SpotOf(villager);
-	return work::AreWeThere(map_coords::FromMetres(GroundOf(villager)), {.x = spot.x, .z = spot.y, .altitude = 0.0f}, speed,
-	                        0.0f);
+	return work::AreWeThere(MapPlaceOf(villager), {.x = spot.x, .z = spot.y, .altitude = 0.0f}, speed, 0.0f);
 }
 
 bool IsFarmingState(VillagerStates state)
@@ -147,7 +150,7 @@ std::optional<villager_farmer::FieldChoice> villager_farmer::FindBestField(Livin
 	{
 		return std::nullopt;
 	}
-	const auto choice = Locator::fieldSystem::value().BestFieldFor(town, Entities().Get<const Transform>(villager).position);
+	const auto choice = Locator::fieldSystem::value().BestFieldFor(town, MapPlaceOf(villager));
 	if (!choice.has_value())
 	{
 		return std::nullopt;
@@ -179,7 +182,8 @@ uint32_t villager_farmer::SetFarmerGotoField(LivingAction& action, entt::entity 
 	const auto villager = EntityOf(action);
 	SetTopState(action, VillagerStates::DecideWhatToDo);
 	Entities().AssignOrReplace<WorkTarget>(villager, WorkTarget {.thing = field});
-	MoveOnPathsTo(action, field, GroundOf(field), VillagerStates::FarmerArrivesAtFarm);
+	// The goal is the map position of the field with its height above the land
+	MoveOnPathsTo(action, field, thing_map_place::OfWithAltitude(Entities(), field), VillagerStates::FarmerArrivesAtFarm);
 	// Its first spot is picked once it has set off
 	PickNewSpot(villager, field);
 	return 1;

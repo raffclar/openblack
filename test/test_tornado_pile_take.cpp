@@ -58,7 +58,10 @@ public:
 		removed.emplace_back(object, type, amount);
 		return std::min(amount, gives);
 	}
-	uint32_t AddToTownsSite(entt::entity, entt::entity, ResourceType, uint32_t, std::optional<glm::vec3>) override { return 0; }
+	uint32_t AddToTownsSite(entt::entity, entt::entity, ResourceType, uint32_t, std::optional<map_coords::MapCoords>) override
+	{
+		return 0;
+	}
 	uint32_t RemoveFromTownsSite(entt::entity, entt::entity, ResourceType, uint32_t) override { return 0; }
 
 	uint32_t count {0};

@@ -15,9 +15,9 @@
 #include <optional>
 
 #include <entt/entity/entity.hpp>
-#include <glm/vec3.hpp>
 
 #include "3D/FieldCrop.h"
+#include "3D/MapCoords.h"
 
 namespace openblack::ecs::components
 {
@@ -48,14 +48,15 @@ public:
 	[[nodiscard]] virtual field_crop::Activity GetActivity(entt::entity field) const = 0;
 	[[nodiscard]] virtual bool IsRipe(entt::entity field) const = 0;
 
-	/// The field of a town a villager at a place would best farm, by how much each wants farming and how near it is,
-	/// with how good it is; none when no field wants farming
+	/// The field of a town a villager at a map position would best farm, by how much each wants farming and how near its
+	/// map position is, with how good it is; none when no field wants farming
 	struct FieldChoice
 	{
 		entt::entity field {entt::null};
 		float score {0.0f};
 	};
-	[[nodiscard]] virtual std::optional<FieldChoice> BestFieldFor(entt::entity town, const glm::vec3& position) const = 0;
+	[[nodiscard]] virtual std::optional<FieldChoice> BestFieldFor(entt::entity town,
+	                                                              const map_coords::MapCoords& place) const = 0;
 
 	/// A villager starts or stops farming a field
 	virtual void AddFarmer(entt::entity field, entt::entity villager) = 0;

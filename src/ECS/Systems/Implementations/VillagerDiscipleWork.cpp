@@ -151,13 +151,13 @@ std::optional<entt::entity> BestWorkshop(entt::entity villager)
 	const auto workshops = WorkshopsOf(*town);
 	std::vector<disciple_work::WorkshopFacts> facts;
 	facts.reserve(workshops.size());
-	const auto here = GroundOf(villager);
+	const auto here = thing_map_place::Of(Entities(), villager);
 	for (const auto workshop : workshops)
 	{
 		// The workshop wants wood while it has room for a scaffold, or while it lacks the wood for one
 		const auto& abode = Entities().Get<const Abode>(workshop);
 		const int32_t room = Locator::workshopSystem::has_value() ? Locator::workshopSystem::value().RoomOf(workshop) : 0;
-		facts.push_back({.metresAway = gutils::GetDistanceInMetres(here, GroundOf(workshop)),
+		facts.push_back({.metresAway = gutils::GetDistanceInMetres(here, thing_map_place::Of(Entities(), workshop)),
 		                 .wantsWood = disciple_work::WorkshopWantsWood(room, abode.woodAmount, ScaffoldWood()),
 		                 .functional = villager_home::IsFunctional(workshop)});
 	}
