@@ -167,8 +167,8 @@ struct Arguments
 	/// Tools: log the time of each step of each turn that takes this many milliseconds or more, never when none
 	std::optional<float> turnStepTimesMs;
 	/// For developers: the time in milliseconds that the computer minds can use in one frame before a turn stops between
-	/// two players (deviation row 288). None: the turns never stop.
-	std::optional<float> mindFrameBudgetMs {simulation::k_DefaultMindFrameBudgetMs};
+	/// two players (deviation row 288), 0 for never. None: the game decides the budget (simulation::FrameBudgetMs).
+	std::optional<float> mindFrameBudgetMs;
 	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
 	std::string frameStatsOut;
 	/// Tools: the profiler times its stages while a tool reads them. When false, it never times them.
