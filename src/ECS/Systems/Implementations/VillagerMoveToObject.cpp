@@ -20,10 +20,12 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WallHugRules.h"
 #include "Locator.h"
@@ -97,13 +99,25 @@ bool move_to_object::SetupMoveToObject(LivingAction& action, entt::entity thing,
 		return true;
 	}
 	// It first heads for where it would stand by the thing, stepping straight there; from then on, for the thing itself
-	const auto goal = villager_work::EdgeWorkingPosition(GroundOf(thing), GroundOf(villager),
-	                                                     systems::object_measures::TwoDRadius(registry, thing),
-	                                                     systems::object_measures::TwoDRadius(registry, villager));
-	villager_home::SetupMobileMoveTo(action, goal, villager_home::WalkWay::StraightThrough);
+	auto goal = move_to_object::WorkingPosition(thing, villager);
 	// The goal has the height of the thing above the land
-	registry.Get<WallHug>(villager).goalHeight = HeightOf(thing);
+	goal.altitude = HeightOf(thing);
+	villager_home::SetupMobileMoveTo(action, goal, villager_home::WalkWay::StraightThrough);
 	return true;
+}
+
+map_coords::MapCoords move_to_object::WorkingPosition(entt::entity thing, entt::entity villager)
+{
+	const auto& registry = Entities();
+	const auto thingPlace = thing_map_place::Of(registry, thing);
+	const auto villagerPlace = thing_map_place::Of(registry, villager);
+	const float villagerRadius = systems::object_measures::TwoDRadius(registry, villager);
+	if (registry.AllOf<Tree>(thing))
+	{
+		return villager_work::TreeWorkingPosition(thingPlace, villagerPlace, villagerRadius);
+	}
+	return villager_work::EdgeWorkingPosition(thingPlace, villagerPlace, systems::object_measures::TwoDRadius(registry, thing),
+	                                          villagerRadius);
 }
 
 uint32_t move_to_object::MoveToObject(LivingAction& action)

@@ -59,6 +59,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerHeldObject.h"
 #include "ECS/VillagerWorkRules.h"
@@ -70,6 +71,7 @@
 #include "VillagerBuild.h"
 #include "VillagerFootpath.h"
 #include "VillagerHome.h"
+#include "VillagerMoveToObject.h"
 #include "VillagerReactions.h"
 
 using namespace openblack;
@@ -118,6 +120,12 @@ glm::vec2 GroundOf(entt::entity entity)
 	return glm::xz(PositionOf(entity));
 }
 
+/// Where a thing stands, as the map keeps it, with no height above the land
+map_coords::MapCoords MapPlaceOf(entt::entity entity)
+{
+	return thing_map_place::Of(Entities(), entity);
+}
+
 float RadiusOf(entt::entity entity)
 {
 	return systems::object_measures::TwoDRadius(Entities(), entity);
@@ -138,8 +146,8 @@ const GVillagerStateTableInfo& StateInfo(VillagerStates state)
 	return Locator::infoConstants::value().villagerStateTable.at(static_cast<size_t>(state));
 }
 
-/// Walks the villager to a point round what is in the way, then on into a state, as long as the states let it
-bool MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
+/// Walks the villager to a map position round what is in the way, then on into a state, as long as the states let it
+bool MoveTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates final)
 {
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
 	{
@@ -150,7 +158,7 @@ bool MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
 }
 
 /// The same along the town's paths
-bool MoveOnPathsTo(LivingAction& action, entt::entity place, glm::vec2 goal, VillagerStates final)
+bool MoveOnPathsTo(LivingAction& action, entt::entity place, const map_coords::MapCoords& goal, VillagerStates final)
 {
 	return villager_footpath::SetupMoveToOnFootpath(action, place, goal, final);
 }
@@ -168,11 +176,10 @@ float WholeSpeed(entt::entity villager)
 	return static_cast<float>(wall_hug::WholeSpeed(wallHug != nullptr ? wallHug->speed : 0.0f));
 }
 
-/// Whether the villager has got to a point, as near as its step and some slack in whole units
-bool AreWeThere(entt::entity villager, glm::vec2 point, float slack)
+/// Whether the villager has got to a map position, as near as its step and some slack in whole units
+bool AreWeThere(entt::entity villager, const map_coords::MapCoords& point, float slack)
 {
-	return work::AreWeThere(map_coords::FromMetres(GroundOf(villager)), map_coords::FromMetres(point), WholeSpeed(villager),
-	                        slack);
+	return work::AreWeThere(MapPlaceOf(villager), point, WholeSpeed(villager), slack);
 }
 
 int32_t WoodRoom(const Villager& person)
@@ -234,15 +241,11 @@ bool WoodStillThere(entt::entity wood)
 	       !OnFire(wood);
 }
 
-/// Where the villager stands to work at a thing: by a tree its own size and a little more from the trunk, by anything
-/// else both their sizes from its middle
-glm::vec2 WorkingPosition(entt::entity thing, entt::entity villager)
+/// Where the villager stands to work at a thing, as a map position: by a tree its own size and a little more from the
+/// trunk, by anything else both their sizes from its middle
+map_coords::MapCoords WorkingPosition(entt::entity thing, entt::entity villager)
 {
-	if (Entities().AllOf<Tree>(thing))
-	{
-		return work::TreeWorkingPosition(GroundOf(thing), GroundOf(villager), RadiusOf(villager));
-	}
-	return work::EdgeWorkingPosition(GroundOf(thing), GroundOf(villager), RadiusOf(thing), RadiusOf(villager));
+	return villager_move_to_object::WorkingPosition(thing, villager);
 }
 
 /// What finding a tree near a forester gave
@@ -263,8 +266,8 @@ TreeFound FindTreeNearVillager(entt::entity villager)
 	}
 	auto& registry = Entities();
 	const auto& map = Locator::entitiesMap::value();
-	const auto here = GroundOf(villager);
-	auto cell = map_coords::FromMetres(here);
+	const auto here = MapPlaceOf(villager);
+	auto cell = here;
 	map_coords::Spiral spiral;
 	float best = 99999.0f;
 	for (int32_t i = 0; i < work::k_TreeSearchCells; ++i)
@@ -433,7 +436,7 @@ uint32_t villager_forester::CheckSatisfyWoodDesire(LivingAction& action)
 uint32_t villager_forester::GotoForest(LivingAction& action, entt::entity forest, VillagerStates final)
 {
 	const auto villager = EntityOf(action);
-	glm::vec2 goal = GroundOf(forest);
+	auto goal = MapPlaceOf(forest);
 	if (Locator::forestSystem::has_value())
 	{
 		if (const auto centre = Locator::forestSystem::value().CentreTreeOf(forest))
@@ -454,7 +457,7 @@ uint32_t villager_forester::GotoForest(LivingAction& action, entt::entity forest
 uint32_t villager_forester::GotoBigForest(LivingAction& action, entt::entity bigForest, VillagerStates final)
 {
 	const auto villager = EntityOf(action);
-	const auto at = work::BigForestArrivePosition(GroundOf(bigForest), GroundOf(villager), RadiusOf(bigForest));
+	const auto at = work::BigForestArrivePosition(MapPlaceOf(bigForest), MapPlaceOf(villager), RadiusOf(bigForest));
 	MoveOnPathsTo(action, bigForest, at, final);
 	return 1;
 }
@@ -584,7 +587,7 @@ uint32_t villager_forester::ArrivesAtBigForest(LivingAction& action)
 		if (record != nullptr && record->bigForest != entt::null && registry.Valid(record->bigForest))
 		{
 			const auto bigForest = record->bigForest;
-			const auto at = work::BigForestArrivePosition(GroundOf(bigForest), GroundOf(villager), RadiusOf(bigForest));
+			const auto at = work::BigForestArrivePosition(MapPlaceOf(bigForest), MapPlaceOf(villager), RadiusOf(bigForest));
 			if (!AreWeThere(villager, at, 0.0f))
 			{
 				MoveTo(action, at, FinalState(action));

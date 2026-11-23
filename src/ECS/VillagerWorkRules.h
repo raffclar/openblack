@@ -42,12 +42,18 @@ inline constexpr float k_NearMovingWood = 0.5f;
 /// A big forest gives its wood at this share of its radius from its middle, on the villager's side
 inline constexpr float k_BigForestArriveShare = 0.5f;
 
-/// Where a villager stands to fell a tree: out from the trunk towards the villager, its own size and a little more
-[[nodiscard]] glm::vec2 TreeWorkingPosition(glm::vec2 tree, glm::vec2 villager, float villagerRadius);
-/// Where a villager stands by anything else it works at: out from it towards the villager, by both their sizes
-[[nodiscard]] glm::vec2 EdgeWorkingPosition(glm::vec2 thing, glm::vec2 villager, float thingRadius, float villagerRadius);
-/// Where a villager takes wood from a big forest: halfway in from its edge, on the villager's side
-[[nodiscard]] glm::vec2 BigForestArrivePosition(glm::vec2 bigForest, glm::vec2 villager, float radius);
+/// Where a villager stands to fell a tree, as a map position: out from the trunk towards the villager, its own size and
+/// a little more. The positions of the tree and the villager are map positions too.
+[[nodiscard]] map_coords::MapCoords TreeWorkingPosition(const map_coords::MapCoords& tree,
+                                                        const map_coords::MapCoords& villager, float villagerRadius);
+/// Where a villager stands by anything else it works at, as a map position: out from it towards the villager, by both
+/// their sizes
+[[nodiscard]] map_coords::MapCoords EdgeWorkingPosition(const map_coords::MapCoords& thing,
+                                                        const map_coords::MapCoords& villager, float thingRadius,
+                                                        float villagerRadius);
+/// Where a villager takes wood from a big forest, as a map position: halfway in from its edge, on the villager's side
+[[nodiscard]] map_coords::MapCoords BigForestArrivePosition(const map_coords::MapCoords& bigForest,
+                                                            const map_coords::MapCoords& villager, float radius);
 
 /// Where a builder that a script tells to wait for wood walks to: away from the building, along the line from the
 /// building through the villager, by 2 metres and a random distance of up to 2 metres more. The random value is from 0
