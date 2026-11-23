@@ -840,15 +840,17 @@ uint32_t villager_breeding::ChildFollowsMother(LivingAction& action)
 		return 1;
 	}
 	const auto child = EntityOf(action);
-	const auto mother = Entities().Get<const Villager>(child).mother;
-	glm::vec2 centre;
+	const auto& registry = Entities();
+	const auto mother = registry.Get<const Villager>(child).mother;
+	// The centre is the map position of the mother, or of the home without her
+	map_coords::MapCoords centre;
 	if (IsAvailable(mother))
 	{
-		centre = PositionOf(mother);
+		centre = ecs::thing_map_place::Of(registry, mother);
 	}
 	else if (const auto abode = AbodeOf(child); abode != entt::null)
 	{
-		centre = PositionOf(abode);
+		centre = ecs::thing_map_place::Of(registry, abode);
 	}
 	else
 	{

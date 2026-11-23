@@ -43,13 +43,20 @@ namespace
 /// Bit 1 of a cell's flags marks open sea, where the land is not drawn
 constexpr uint8_t k_OpenSeaFlag = 0x02;
 
+/// Whether a script walks a thing along a track on the list of the walking things. A living thing walks its track in
+/// its own state and stays on the land's list.
+bool OnTheWalkList(const WalkPath* walk)
+{
+	return walk != nullptr && !walk->living;
+}
+
 /// Things drawn on their own, never by the list: the temple, and things the scripts draw in high detail
 bool DrawnOnTheirOwn(const openblack::ecs::Registry& registry, entt::entity entity)
 {
 	return object_draw_list::DrawnOnItsOwn({
 	    .temple = registry.AllOf<Temple>(entity),
 	    .highDetail = registry.AllOf<HighDetail>(entity),
-	    .walkingTrack = registry.AllOf<WalkPath>(entity),
+	    .walkingTrack = OnTheWalkList(registry.TryGet<const WalkPath>(entity)),
 	});
 }
 } // namespace
@@ -321,7 +328,7 @@ bool ObjectDrawListSystem::LandCallsOwnDraw(const Registry& registry, entt::enti
 		return false;
 	}
 	const bool listed = Listed(entity);
-	return object_draw_list::LandCallsOwnDraw(_frame, registry.AllOf<WalkPath>(entity), listed,
+	return object_draw_list::LandCallsOwnDraw(_frame, OnTheWalkList(registry.TryGet<const WalkPath>(entity)), listed,
 	                                          listed && _keptByIndex[static_cast<size_t>(entt::to_entity(entity))]);
 }
 
@@ -395,7 +402,7 @@ bool DrawnStores::DrawnOnItsOwn(entt::entity entity) const
 	return object_draw_list::DrawnOnItsOwn({
 	    .temple = _temple.Has(entity),
 	    .highDetail = _highDetail.Has(entity),
-	    .walkingTrack = _walkPath.Has(entity),
+	    .walkingTrack = OnTheWalkList(_walkPath.TryGet(entity)),
 	});
 }
 

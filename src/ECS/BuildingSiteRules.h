@@ -71,7 +71,8 @@ struct BuildersNeededInputs
 /// Whether a villager about to build should fetch wood first. Near the building it fetches only when none lies at the
 /// site. Farther off, while what lies at the site and what its builders carry falls short of what is still wanted, it
 /// fetches when the way to its drop-off point scores better than the way to the building, the building's score weighed
-/// by how well the site is stocked for one more builder and what the villager itself carries.
+/// by how well the site is stocked for one more builder and what the villager itself carries. The rule asks for the
+/// distance to the drop-off point only at that last step, because the drop-off point can make a temporary pile.
 struct ShouldFetchInputs
 {
 	uint32_t woodAtSite;
@@ -80,7 +81,7 @@ struct ShouldFetchInputs
 	float woodNeeded;
 	/// The villager's distance to the building, and to where it would take or leave wood
 	float distanceToBuilding;
-	float distanceToDropOff;
+	std::function<float()> distanceToDropOff;
 	int16_t woodHeld;
 	int32_t maxWoodCarried;
 	int32_t woodPerBuilderWanted;
@@ -211,10 +212,11 @@ inline constexpr float k_PileBeyondDoor = 4.0f;
 
 /// A wonder's site puts its one pile at a fixed point of the wonder: nine metres along its x axis and fifty metres back
 /// along its z axis, turned and sized with the wonder. The pile has the wonder's turn. The sums are made in this order,
-/// each one rounded to a float.
+/// each one rounded to a float. The game makes a map position from this world point, so the height of the point gives
+/// the altitude of the pile above the land.
 inline constexpr float k_WonderPileSide = 9.0f;
 inline constexpr float k_WonderPileBack = 50.0f;
-[[nodiscard]] glm::vec2 WonderPilePlace(glm::vec3 position, const glm::mat3& rotation, glm::vec3 scale);
+[[nodiscard]] glm::vec3 WonderPilePoint(glm::vec3 position, const glm::mat3& rotation, glm::vec3 scale);
 
 /// Of a town's sites opened to mend its buildings, the one wanting its builders most, none when none wants them at all.
 /// The earlier one on a tie.

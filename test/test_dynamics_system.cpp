@@ -368,6 +368,29 @@ TEST_F(DynamicsSystemTest, TheDrawnPoseOfAMovingBodyIsBetweenItsLastTwoTurns)
 	EXPECT_FALSE(_dynamics->DrawnPoseOf(rock, 0.5f).has_value());
 }
 
+// The frame draws the moving bodies in the order of the list of bodies. A new body goes to the end of the list, and the
+// last body takes the place of a body that leaves.
+TEST_F(DynamicsSystemTest, TheFrameDrawsTheMovingBodiesInTheOrderOfTheirList)
+{
+	const auto first = Rock({1000.0f, 1000.0f});
+	const auto second = Rock({1100.0f, 1000.0f});
+	const auto third = Rock({1200.0f, 1000.0f});
+	for (const auto rock : {first, second, third})
+	{
+		_world->Entities().Get<Transform>(rock).position.y += 20.0f;
+		ASSERT_TRUE(_dynamics->InitialisePhysics(rock, {.velocity = {0.0f, 2.0f, 0.0f}}).started);
+	}
+	_dynamics->ProcessTurn();
+	_dynamics->UpdateFrame(0.5f);
+	EXPECT_EQ((std::vector<entt::entity>(_dynamics->DrawnBodies().begin(), _dynamics->DrawnBodies().end())),
+	          (std::vector<entt::entity> {first, second, third}));
+
+	_dynamics->RemoveObject(first, true, true);
+	_dynamics->UpdateFrame(0.5f);
+	EXPECT_EQ((std::vector<entt::entity>(_dynamics->DrawnBodies().begin(), _dynamics->DrawnBodies().end())),
+	          (std::vector<entt::entity> {third, second}));
+}
+
 TEST_F(DynamicsSystemTest, AThingThatItsBodyMovesNoLongerKeepsAnExactMapPosition)
 {
 	const auto rock = Rock({1000.0f, 1000.0f});

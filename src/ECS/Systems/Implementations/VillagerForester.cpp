@@ -339,10 +339,10 @@ bool IsSitePile(entt::entity pile)
 	return Entities().AllOf<SitePile>(pile);
 }
 
-/// Where the villager's town keeps its wood, and how much it has
+/// Where the villager's town keeps its wood, as a map position, and how much it has
 struct Store
 {
-	std::optional<glm::vec2> position;
+	std::optional<map_coords::MapCoords> position;
 	uint32_t wood {0};
 };
 Store StoreOf(entt::entity villager, const Villager& person)
@@ -351,7 +351,7 @@ Store StoreOf(entt::entity villager, const Villager& person)
 	auto& stores = Locator::resourceStoreSystem::value();
 	if (pit.has_value() && villager_home::IsFunctional(*pit))
 	{
-		return {.position = villager_home::ArrivePosition(*pit), .wood = stores.GetResource(*pit, ResourceType::Wood)};
+		return {.position = villager_home::ArrivePlace(*pit), .wood = stores.GetResource(*pit, ResourceType::Wood)};
 	}
 	// Without a working storage pit the town keeps its wood in a temporary pile by its gathering place, made if missing
 	const auto town = TownOf(person);
@@ -364,7 +364,8 @@ Store StoreOf(entt::entity villager, const Villager& person)
 	{
 		return {};
 	}
-	return {.position = store->edge, .wood = stores.GetResource(store->pile, ResourceType::Wood)};
+	return {.position = villager_build::TemporaryPileEdge(store->pile, store->edgeAltitude, villager),
+	        .wood = stores.GetResource(store->pile, ResourceType::Wood)};
 }
 } // namespace
 
@@ -395,7 +396,7 @@ villager_forester::WoodPlan villager_forester::DecideHowToGetWood(entt::entity v
 	std::optional<float> forestDistance;
 	if (forest.has_value())
 	{
-		forestDistance = gutils::GetDistanceInMetres(GroundOf(*forest), glm::xz(here));
+		forestDistance = gutils::GetDistanceInMetres(MapPlaceOf(*forest), MapPlaceOf(villager));
 		const auto& record = registry.Get<const LandForest>(*forest);
 		if (record.bigForest != entt::null && registry.Valid(record.bigForest))
 		{
@@ -404,7 +405,7 @@ villager_forester::WoodPlan villager_forester::DecideHowToGetWood(entt::entity v
 	}
 	const auto source = building_site::DecideWoodSource({
 	    .forBuilding = forBuilding,
-	    .distanceToStore = store.position.has_value() ? gutils::GetDistanceInMetres(*store.position, glm::xz(here))
+	    .distanceToStore = store.position.has_value() ? gutils::GetDistanceInMetres(*store.position, MapPlaceOf(villager))
 	                                                  : std::numeric_limits<float>::max(),
 	    .storeWood = store.wood,
 	    .room = WoodRoom(person),
