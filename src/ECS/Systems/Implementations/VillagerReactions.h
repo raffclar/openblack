@@ -16,6 +16,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -96,6 +97,8 @@ enum class LookSpeed : uint8_t
 };
 /// A villager turns towards a point, a step a turn, as one watching something does: whether it now faces it
 bool LookAt(entt::entity villager, const glm::vec3& point, LookSpeed speed = LookSpeed::Steady);
+/// The same towards a map position
+bool LookAt(entt::entity villager, const map_coords::MapCoords& place, LookSpeed speed = LookSpeed::Steady);
 /// Dancing round what it reacts to, in the reaction's dance: out of the dance it decides what to do
 uint32_t DanceWhileReacting(components::LivingAction& action);
 /// The states of fleeing, and of watching (after fleeing, or a nice miracle)

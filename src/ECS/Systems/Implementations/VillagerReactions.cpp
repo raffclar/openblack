@@ -195,6 +195,41 @@ bool TurnTowards(entt::entity villager, const glm::vec3& point, int32_t step = k
 {
 	return ecs::villager_build::FaceTowards(villager, glm::xz(point), step);
 }
+/// The same towards a map position
+bool TurnTowards(entt::entity villager, const map_coords::MapCoords& place, int32_t step = k_WatchTurn)
+{
+	return ecs::villager_build::FaceTowards(villager, map_coords::WholeXZ(place), step);
+}
+
+/// Where the thing of a reaction is, as the map keeps it: the thing while it has a place, else the point of the reaction
+map_coords::MapCoords ThingPlace(const ReactionSystemInterface::Active& reaction)
+{
+	const auto& registry = EntityRegistry();
+	const auto thing = reaction.source.initiator;
+	if (thing != entt::null && registry.Valid(thing) && registry.AllOf<Transform>(thing))
+	{
+		return ecs::thing_map_place::Of(registry, thing);
+	}
+	return map_coords::FromMetres(glm::xz(reaction.source.position));
+}
+
+/// The point in the world of a thing at its map position: the land there plus the height of the thing above the land
+glm::vec3 WorldPointOf(entt::entity thing)
+{
+	return map_coords::ToWorld(Locator::terrainSystem::value(), ecs::thing_map_place::OfWithAltitude(EntityRegistry(), thing));
+}
+
+/// The same for the thing of a reaction, else the point of the reaction
+glm::vec3 ThingWorldPoint(const ReactionSystemInterface::Active& reaction)
+{
+	const auto& registry = EntityRegistry();
+	const auto thing = reaction.source.initiator;
+	if (thing != entt::null && registry.Valid(thing) && registry.AllOf<Transform>(thing))
+	{
+		return WorldPointOf(thing);
+	}
+	return reaction.source.position;
+}
 /// The awe of a town's people at the belief that it gained: the guidance sometimes plays a voice at the thing
 void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, GuidanceAlignment alignment)
 {
@@ -656,16 +691,18 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 	{
 		return GiveUp(action);
 	}
-	const auto here = registry.Get<const Transform>(villager).position;
-	const auto object = reaction->source.position;
+	const auto here = thing_map_place::Of(registry, villager);
+	const auto object = ThingPlace(*reaction);
 	// The distance is on the land between the two map positions. The height does not change it.
 	const float distance = gutils::GetDistanceInMetres(here, object);
 	if (distance > info->maxDistanceToRunAwayFromObject)
 	{
 		return GiveUp(action);
 	}
-	// Far enough from what isn't coming at it, it turns and watches
-	if (distance > info->minDistanceToRunAwayFromObject && !magic::ComingTowards(here, object, reaction->velocity))
+	// Far enough from what isn't coming at it, it turns and watches. The way from the thing to the villager is between
+	// their points in the world at their map positions.
+	if (distance > info->minDistanceToRunAwayFromObject &&
+	    !magic::ComingTowards(WorldPointOf(villager), ThingWorldPoint(*reaction), reaction->velocity))
 	{
 		SetTop(action, VillagerStates::FleeingAndLookingAtObjectReaction);
 		TurnTowards(villager, object);
@@ -684,9 +721,7 @@ uint32_t villager_reactions::Fleeing(LivingAction& action)
 	// and tries again on the next turn.
 	const auto& island = Locator::terrainSystem::value();
 	const auto ground = [&island](const map_coords::MapCoords& place) { return map_coords::GroundAt(island, place); };
-	const auto from = map_coords::FromMetres(glm::vec2(object.x, object.z));
-	if (const auto goal = magic::FleePlace(thing_map_place::Of(registry, villager), from, reaction->velocity, random,
-	                                       magic::k_FleeStep, ground);
+	if (const auto goal = magic::FleePlace(here, object, reaction->velocity, random, magic::k_FleeStep, ground);
 	    goal.has_value())
 	{
 		villager_home::SetupMoveTo(action, *goal, VillagerStates::FleeingAndLookingAtObjectReaction);
@@ -750,6 +785,11 @@ bool villager_reactions::LookAt(entt::entity villager, const glm::vec3& point, L
 	return TurnTowards(villager, point, speed == LookSpeed::Quick ? k_QuickWatchTurn : k_WatchTurn);
 }
 
+bool villager_reactions::LookAt(entt::entity villager, const map_coords::MapCoords& place, LookSpeed speed)
+{
+	return TurnTowards(villager, place, speed == LookSpeed::Quick ? k_QuickWatchTurn : k_WatchTurn);
+}
+
 uint32_t villager_reactions::Fainting(LivingAction& /*action*/)
 {
 	return 1;
@@ -770,12 +810,13 @@ uint32_t villager_reactions::Watching(LivingAction& action)
 		return GiveUp(action);
 	}
 	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(reaction->source.type));
-	const auto here = registry.Get<const Transform>(villager).position;
-	if (gutils::GetDistanceInMetres(here, reaction->source.position) > info.maxDistanceToRunAwayFromObject)
+	// The distance is between the map positions of the villager and the thing
+	const auto object = ThingPlace(*reaction);
+	if (gutils::GetDistanceInMetres(thing_map_place::Of(registry, villager), object) > info.maxDistanceToRunAwayFromObject)
 	{
 		return GiveUp(action);
 	}
-	TurnTowards(villager, reaction->source.position);
+	TurnTowards(villager, object);
 	return 0;
 }
 
@@ -799,8 +840,8 @@ uint32_t villager_reactions::DanceWhileReacting(LivingAction& action)
 
 namespace
 {
-/// How far a villager is from a burning thing, and how fast the thing moves, in metres a second: a thing that doesn't walk
-/// about keeps still as far as this goes
+/// How far a villager is from a burning thing, between their map positions, and how fast the thing moves, in metres a
+/// second: a thing that does not walk keeps still as far as this goes
 std::pair<float, float> BurningThingFrom(entt::entity villager, entt::entity thing)
 {
 	auto& registry = EntityRegistry();
@@ -808,8 +849,8 @@ std::pair<float, float> BurningThingFrom(entt::entity villager, entt::entity thi
 	{
 		return {std::numeric_limits<float>::max(), 0.0f};
 	}
-	const float distance = gutils::GetDistanceInMetres(registry.Get<const Transform>(villager).position,
-	                                                   registry.Get<const Transform>(thing).position);
+	const float distance =
+	    gutils::GetDistanceInMetres(ecs::thing_map_place::Of(registry, villager), ecs::thing_map_place::Of(registry, thing));
 	const auto* walker = registry.TryGet<const WallHug>(thing);
 	return {distance, walker != nullptr ? walker->speed : 0.0f};
 }
@@ -873,10 +914,9 @@ uint32_t villager_reactions::WaitForMate(LivingAction& action)
 		return GiveUp(action);
 	}
 	const auto& info = Locator::infoConstants::value().reaction.at(static_cast<size_t>(reaction->source.type));
-	const auto here = registry.Get<const Transform>(villager).position;
-	const auto* held =
-	    registry.Valid(reaction->source.initiator) ? registry.TryGet<const Transform>(reaction->source.initiator) : nullptr;
-	const auto there = held != nullptr ? held->position : reaction->source.position;
+	// The distance is between the map positions of the villager and the one held
+	const auto here = thing_map_place::Of(registry, villager);
+	const auto there = ThingPlace(*reaction);
 	if (!magic::villager_reaction::KeepsWaitingForMate(gutils::GetDistanceInMetres(here, there), info.maxReactionDistance))
 	{
 		GiveUp(action);

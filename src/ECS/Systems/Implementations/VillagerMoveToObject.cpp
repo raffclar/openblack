@@ -12,8 +12,6 @@
 
 #include "VillagerMoveToObject.h"
 
-#include <glm/gtx/vec_swizzle.hpp>
-
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
@@ -47,11 +45,6 @@ ecs::Registry& Entities()
 	return Locator::entitiesRegistry::value();
 }
 
-glm::vec2 GroundOf(entt::entity entity)
-{
-	return glm::xz(Entities().Get<const Transform>(entity).position);
-}
-
 /// How far a thing goes in a turn, in metres
 float StepOf(entt::entity thing)
 {
@@ -71,16 +64,6 @@ bool IsThere(entt::entity thing)
 {
 	return thing != entt::null && Entities().Valid(thing) && Entities().AllOf<Transform>(thing);
 }
-
-/// How high a thing is above the land, as the game keeps it with the place of the thing
-float HeightOf(entt::entity thing)
-{
-	if (!Locator::terrainSystem::has_value())
-	{
-		return 0.0f;
-	}
-	return map_coords::FromWorld(Locator::terrainSystem::value(), Entities().Get<const Transform>(thing).position).altitude;
-}
 } // namespace
 
 bool move_to_object::SetupMoveToObject(LivingAction& action, entt::entity thing, VillagerStates final)
@@ -99,17 +82,16 @@ bool move_to_object::SetupMoveToObject(LivingAction& action, entt::entity thing,
 		return true;
 	}
 	// It first heads for where it would stand by the thing, stepping straight there; from then on, for the thing itself
-	auto goal = move_to_object::WorkingPosition(thing, villager);
-	// The goal has the height of the thing above the land
-	goal.altitude = HeightOf(thing);
-	villager_home::SetupMobileMoveTo(action, goal, villager_home::WalkWay::StraightThrough);
+	villager_home::SetupMobileMoveTo(action, move_to_object::WorkingPosition(thing, villager),
+	                                 villager_home::WalkWay::StraightThrough);
 	return true;
 }
 
 map_coords::MapCoords move_to_object::WorkingPosition(entt::entity thing, entt::entity villager)
 {
 	const auto& registry = Entities();
-	const auto thingPlace = thing_map_place::Of(registry, thing);
+	// The place keeps the height of the thing above the land, so the working position keeps it too
+	const auto thingPlace = thing_map_place::OfWithAltitude(registry, thing);
 	const auto villagerPlace = thing_map_place::Of(registry, villager);
 	const float villagerRadius = systems::object_measures::TwoDRadius(registry, villager);
 	if (registry.AllOf<Tree>(thing))
@@ -135,10 +117,11 @@ uint32_t move_to_object::MoveToObject(LivingAction& action)
 		return 1;
 	}
 	auto& wallHug = registry.Get<WallHug>(villager);
-	const auto there = GroundOf(thing);
+	// The thing is at its map position, with its height above the land
+	const auto there = thing_map_place::OfWithAltitude(registry, thing);
 	float step = wall_hug::StepMetres(wallHug.speed);
 	// Within a step of the thing it has arrived
-	if (step > gutils::GetDistanceInMetres(map_coords::FromMetres(GroundOf(villager)), map_coords::FromMetres(there)))
+	if (step > gutils::GetDistanceInMetres(thing_map_place::Of(registry, villager), there))
 	{
 		registry.Remove<MoveTarget, MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
 		living.VillagerSetTopStateToFinal(action);
@@ -151,8 +134,8 @@ uint32_t move_to_object::MoveToObject(LivingAction& action)
 		step = targetStep;
 		wallHug.speed = GetSpeedStateSpeed(static_cast<SpeedState>(gutils::ConvertMetersToWholeDistance(step)));
 	}
-	wallHug.goalPlace = wall_hug::ToWhole(there);
-	wallHug.goalHeight = HeightOf(thing);
+	wallHug.goalPlace = map_coords::WholeXZ(there);
+	wallHug.goalHeight = there.altitude;
 	// The villager takes its step towards where the thing is now. If the step puts it there, it arrives too.
 	villager_home::TakeWalkStep(villager);
 	if (villager_home::WalkIsOverAt(villager, wallHug.goalPlace))

@@ -110,6 +110,12 @@ glm::vec2 PositionOf(entt::entity entity)
 	return glm::xz(EntityRegistry().Get<const Transform>(entity).position);
 }
 
+/// Where a thing is, as the map keeps it, with no height above the land
+map_coords::MapCoords MapPlaceOf(entt::entity entity)
+{
+	return ecs::thing_map_place::Of(EntityRegistry(), entity);
+}
+
 /// The creature the villager reacts to, while it is there
 std::optional<entt::entity> CreatureOf(entt::entity villager)
 {
@@ -365,8 +371,7 @@ uint8_t villager_creature::Priority(entt::entity villager, entt::entity creature
 	const auto town = TownOf(villager);
 	const auto* disciple = registry.TryGet<const Disciple>(villager);
 	const auto& creatureRow = RowOf(Reaction::ReactToCreature);
-	const float distance = gutils::GetDistanceInMetres(registry.Get<const Transform>(villager).position,
-	                                                   registry.Get<const Transform>(creature).position);
+	const float distance = gutils::GetDistanceInMetres(MapPlaceOf(villager), MapPlaceOf(creature));
 	creature_attitude::Watch watch {
 	    .dancing = registry.AllOf<Dancer>(villager),
 	    .creatureInvisible = Invisible(creature),
@@ -585,14 +590,15 @@ uint32_t villager_creature::FleeingFromCreatureReaction(LivingAction& action)
 		return StopReacting(action);
 	}
 	const float run = RowOf(Reaction::ReactToCreature).maxReactionDistance * creature_attitude::k_FleeReachFactor;
-	const auto here = PositionOf(villager);
-	const auto there = PositionOf(*creature);
+	// The distance and the point to run to are from the map positions of the villager and the creature
+	const auto here = MapPlaceOf(villager);
+	const auto there = MapPlaceOf(*creature);
 	// Far enough away it stops
 	if (run * creature_attitude::k_FleeGiveUpFactor < gutils::GetDistanceInMetres(here, there))
 	{
 		return StopReacting(action);
 	}
-	const auto to = creature_attitude::FleePoint(here, there, run);
+	const auto to = creature_attitude::FleePoint(map_coords::ToMetres(here), map_coords::ToMetres(there), run);
 	if (!map_coords::InBounds(map_coords::FromMetres(to)))
 	{
 		FollowTownFeeling(action);
@@ -609,8 +615,7 @@ uint32_t villager_creature::FleeingFromCreatureReaction(LivingAction& action)
 		}
 		villager_reactions::SetSpeed(villager, fleeing / 2);
 		// The goal keeps the height of the villager in the world
-		const auto goal =
-		    creature_attitude::FleeGoal(Locator::terrainSystem::value(), ecs::thing_map_place::Of(registry, villager), to);
+		const auto goal = creature_attitude::FleeGoal(Locator::terrainSystem::value(), here, to);
 		MoveTowards(action, goal, VillagerStates::FleeingFromCreatureReaction);
 		return 0;
 	}
