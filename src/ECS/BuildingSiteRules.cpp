@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <limits>
 #include <numbers>
 
 #include <glm/geometric.hpp>
@@ -418,4 +419,20 @@ WoodSource building_site::DecideWoodSource(const WoodSourceInputs& in)
 		return WoodSource::None;
 	}
 	return in.forestHasBigForest ? WoodSource::BigForest : WoodSource::Forest;
+}
+
+std::optional<size_t> building_site::NearestPile(std::span<const std::optional<int32_t>> distances)
+{
+	std::optional<size_t> best;
+	float bestDistance = std::numeric_limits<float>::max();
+	for (size_t i = 0; i < distances.size(); ++i)
+	{
+		// The whole distance is exact in the compare, and the nearest so far is rounded to a float when kept
+		if (distances[i].has_value() && static_cast<double>(*distances[i]) < static_cast<double>(bestDistance))
+		{
+			bestDistance = static_cast<float>(*distances[i]);
+			best = i;
+		}
+	}
+	return best;
 }

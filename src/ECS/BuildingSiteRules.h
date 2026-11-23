@@ -197,6 +197,11 @@ struct SiteThing
 	return thing.wonder ? SitePiles::Wonder : SitePiles::Beyond;
 }
 
+/// Which of a temple site's piles, met in order, gets or gives the wood at a place: the nearest by the whole map distance
+/// from the place. An empty slot (no distance) does not count. The nearest distance so far is kept as a float. Only a
+/// whole distance that is strictly less than that float replaces it, so the first of equals stays.
+[[nodiscard]] std::optional<size_t> NearestPile(std::span<const std::optional<int32_t>> distances);
+
 /// Where any other building's site puts its one pile of wood, made for the first wood brought: beyond the building on
 /// the side away from its door, as far out from the building as the door is plus four metres, turned an eighth of a
 /// turn either way at random, and facing back towards the building. The building and its door are map positions, and

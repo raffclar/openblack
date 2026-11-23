@@ -242,6 +242,22 @@ TEST(BuildingSiteRules, ABuildersPlaceIsAGoalInWholeMapUnitsAtNoAltitude)
 	EXPECT_FLOAT_EQ(goal.altitude, 0.0f);
 }
 
+TEST(BuildingSiteRules, ATemplePileIsTheNearestByWholeMapDistanceAndTheFirstOfEqualsStays)
+{
+	// An empty slot does not count, and the first of two equal distances stays
+	const std::array<std::optional<int32_t>, 6> piles {std::nullopt, 900, 400, 400, std::nullopt, 401};
+	EXPECT_EQ(NearestPile(piles), std::optional<size_t>(2));
+	// With no pile there is no nearest
+	const std::array<std::optional<int32_t>, 2> none {std::nullopt, std::nullopt};
+	EXPECT_FALSE(NearestPile(none).has_value());
+	// The nearest so far is kept as a float: past 2^24 map units, a whole distance one less is not strictly less
+	const std::array<std::optional<int32_t>, 2> far {16777217, 16777216};
+	EXPECT_EQ(NearestPile(far), std::optional<size_t>(0));
+	// A distance that is less than the float of the kept distance replaces it
+	const std::array<std::optional<int32_t>, 2> farther {16777219, 16777218};
+	EXPECT_EQ(NearestPile(farther), std::optional<size_t>(1));
+}
+
 TEST(BuildingSiteRules, ForABuildingTheStoreCountsOnlyWhenItHasMoreThanTheRoom)
 {
 	WoodSourceInputs in {.forBuilding = true,
