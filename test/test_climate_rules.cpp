@@ -10,7 +10,9 @@
 #include <cmath>
 #include <cstdint>
 
+#include <array>
 #include <bit>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -201,4 +203,31 @@ TEST(ClimateRulesTest, TheLastStormThatEndsStopsTheRain)
 	storms = {-1, 2};
 	EXPECT_TRUE(WalkStorms(storms, lastGone).empty());
 	EXPECT_FALSE(lastGone);
+}
+
+TEST(ClimateRulesTest, ANewClimateTakesTheNextSerial)
+{
+	EXPECT_EQ(climate_rules::NextClimateSerial({}), 1u);
+	const std::array<uint32_t, 3> serials {3, 1, 2};
+	EXPECT_EQ(climate_rules::NextClimateSerial(serials), 4u);
+	// The climates of a save with no serials have the serial 0
+	const std::array<uint32_t, 2> fromAnOldSave {0, 0};
+	EXPECT_EQ(climate_rules::NextClimateSerial(fromAnOldSave), 1u);
+}
+
+TEST(ClimateRulesTest, TheClimatesTakeTheirTurnsFromTheNewest)
+{
+	// The global climate came first, then two local climates. A new global climate replaced the first one. The store
+	// moved its last climate into the place of the removed one, so the store walks the local climates in the wrong order.
+	std::vector<std::pair<uint32_t, char>> climates {{2, 'a'}, {3, 'b'}, {4, 'g'}};
+	climate_rules::SortClimatesNewestFirst(climates);
+	EXPECT_EQ(climates, (std::vector<std::pair<uint32_t, char>> {{4, 'g'}, {3, 'b'}, {2, 'a'}}));
+}
+
+TEST(ClimateRulesTest, ClimatesWithTheSameSerialKeepTheirOrder)
+{
+	// The climates of a save with no serials keep the order of the store, and a newer climate goes first
+	std::vector<std::pair<uint32_t, char>> climates {{0, 'b'}, {0, 'a'}, {1, 'c'}};
+	climate_rules::SortClimatesNewestFirst(climates);
+	EXPECT_EQ(climates, (std::vector<std::pair<uint32_t, char>> {{1, 'c'}, {0, 'b'}, {0, 'a'}}));
 }

@@ -11,6 +11,7 @@
 
 #include <array>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -100,6 +101,9 @@ private:
 
 	[[nodiscard]] entt::entity FindClimate(int32_t index) const;
 	entt::entity GetGlobalClimate();
+	[[nodiscard]] uint32_t NextClimateSerial() const;
+	/// The climates with their serials, the newest first, as the game walks its list
+	const std::vector<std::pair<uint32_t, entt::entity>>& ClimatesNewestFirst();
 	void InitialiseClimate(components::Climate& climate) const;
 
 	void UpdateStorms();
@@ -146,6 +150,8 @@ private:
 	components::WeatherInfo _background {};
 	/// The climates' parts of the last weather that AddClimates found
 	std::vector<script_weather::ClimateWind> _climateParts;
+	/// The order of the climates that ClimatesNewestFirst found last
+	std::vector<std::pair<uint32_t, entt::entity>> _climateOrder;
 	/// The direction of the background weather's wind at the start of the last turn. A new land and a load keep it, so
 	/// it changes only with the next turn.
 	glm::vec2 _ambientWind {ambient_wind::Start()};

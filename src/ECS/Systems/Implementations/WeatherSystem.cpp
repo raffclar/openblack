@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <iterator>
 #include <numbers>
 #include <utility>
 #include <vector>
@@ -382,6 +383,25 @@ entt::entity WeatherSystem::FindClimate(int32_t index) const
 	return found;
 }
 
+uint32_t WeatherSystem::NextClimateSerial() const
+{
+	std::vector<uint32_t> serials;
+	Locator::entitiesRegistry::value().Each<const Climate>(
+	    [&serials](entt::entity, const Climate& climate) { serials.push_back(climate.serial); });
+	return climate_rules::NextClimateSerial(serials);
+}
+
+const std::vector<std::pair<uint32_t, entt::entity>>& WeatherSystem::ClimatesNewestFirst()
+{
+	// The store walks from its newest climate, but the removal of a climate can move another one. The serials keep the
+	// order of the game's list.
+	_climateOrder.clear();
+	Locator::entitiesRegistry::value().Each<const Climate>(
+	    [this](entt::entity entity, const Climate& climate) { _climateOrder.emplace_back(climate.serial, entity); });
+	climate_rules::SortClimatesNewestFirst(_climateOrder);
+	return _climateOrder;
+}
+
 void WeatherSystem::InitialiseClimate(Climate& climate) const
 {
 	const auto& info = GetInfo(climate);
@@ -419,10 +439,12 @@ entt::entity WeatherSystem::GetGlobalClimate()
 		return entity;
 	}
 
-	// The global climate covers the whole map with the first climate type
+	// The global climate covers the whole map with the first climate type. It goes first in the list of climates.
 	auto& registry = Locator::entitiesRegistry::value();
+	const auto serial = NextClimateSerial();
 	entity = registry.Create();
 	auto& climate = registry.Assign<Climate>(entity);
+	climate.serial = serial;
 	climate.index = 0;
 	climate.global = true;
 	climate.info = 0;
@@ -459,9 +481,11 @@ void WeatherSystem::CreateClimate(int32_t index, uint32_t info, const map_coords
 		return;
 	}
 
-	// A local climate around a point, between two radii
+	// A local climate around a point, between two radii. It goes first in the list of climates.
+	const auto serial = NextClimateSerial();
 	const auto entity = registry.Create();
 	auto& climate = registry.Assign<Climate>(entity);
+	climate.serial = serial;
 	climate.index = index;
 	climate.global = false;
 	climate.info = info;
@@ -590,9 +614,9 @@ void WeatherSystem::ProcessClimates(uint32_t turn)
 		_season = GetSeason(turn);
 	}
 
+	// The newest climate first. A climate turn makes no climate and removes no climate.
 	std::vector<entt::entity> climates;
-	Locator::entitiesRegistry::value().Each<const Climate>(
-	    [&climates](entt::entity entity, const Climate&) { climates.push_back(entity); });
+	std::ranges::transform(ClimatesNewestFirst(), std::back_inserter(climates), [](const auto& entry) { return entry.second; });
 	for (const auto entity : climates)
 	{
 		ProcessClimate(entity, newDay);
@@ -663,7 +687,10 @@ WeatherInfo WeatherSystem::AddClimates(WeatherInfo air, const glm::vec3& positio
 	// The newest climate first. The list keeps its memory from call to call, because the particles ask for each atom.
 	auto& climates = _climateParts;
 	climates.clear();
-	registry.Each<const Climate>([&climates, &toWind](const Climate& climate) { climates.push_back(toWind(climate)); });
+	for (const auto& [serial, entity] : ClimatesNewestFirst())
+	{
+		climates.push_back(toWind(registry.Get<const Climate>(entity)));
+	}
 	return script_weather::ClimateWeather(air, global, climates, {position.x, position.z});
 }
 

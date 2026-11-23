@@ -83,6 +83,8 @@ struct Climate
 
 	/// Newest first
 	std::vector<entt::entity> storms;
+	/// The order in which the climate was made. The climates take their turns from the newest to the oldest.
+	uint32_t serial {0};
 };
 
 /// A moving weather system. Within its outer radius it pulls the temperature towards its own and adds its rain, snow,

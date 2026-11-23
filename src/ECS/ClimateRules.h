@@ -12,7 +12,11 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
+#include <functional>
+#include <span>
+#include <utility>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -52,6 +56,21 @@ namespace openblack::ecs::climate_rules
 
 /// The speed of the storms of a climate from the most wind of its season
 [[nodiscard]] float StormSpeed(float mostWind);
+
+/// The serial of a new climate: one more than the largest serial of the climates that exist. The first climate has the
+/// serial 1. A climate from a save that has no serials has the serial 0.
+[[nodiscard]] constexpr uint32_t NextClimateSerial(std::span<const uint32_t> serials)
+{
+	return (serials.empty() ? 0u : std::ranges::max(serials)) + 1u;
+}
+
+/// Puts the climates in the order of the list of the game, the newest first, by the serial of each climate. Climates
+/// with the same serial keep the order that they had before.
+template <typename T>
+void SortClimatesNewestFirst(std::vector<std::pair<uint32_t, T>>& climates)
+{
+	std::ranges::stable_sort(climates, std::greater {}, &std::pair<uint32_t, T>::first);
+}
 
 /// Walks the list of the storms of a climate in the order of the game, the newest first, and returns true when the
 /// walk removed the last storm of the list. A storm that is not alive goes off the list. After a removal the walk
