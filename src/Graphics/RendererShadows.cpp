@@ -75,6 +75,7 @@
 #include "Graphics/RendererDetail.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShadowTexture.h"
+#include "Graphics/ThrowLeadShadow.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Profiler.h"
@@ -419,6 +420,38 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 				                       radius) *
 				    HandShadow::Daylight(sky.GetTime(), sky.GetDayNightTimes());
 				const auto alpha = GroundShadow::ScaledAlpha(fade);
+				// What the hand holds. The trees have a draw of their own, thus a held tree is in a list of its own.
+				const auto heldByThisHand = [&registry, handEntity](const auto& draw) {
+					const auto* inHand = registry.TryGet<const ecs::components::InHand>(draw.entity);
+					return inHand != nullptr && inHand->hand == handEntity;
+				};
+				const ecs::systems::RenderContext::HighDetailDraw* held = nullptr;
+				for (const auto* draws : {&renderCtx.inHandDraws, &renderCtx.heldTreeDraws})
+				{
+					if (const auto found = std::ranges::find_if(*draws, heldByThisHand);
+					    held == nullptr && found != draws->end())
+					{
+						held = &*found;
+					}
+				}
+				// On the lead of a throw, the hand's shadow takes the thing where the frame before drew it
+				std::optional<glm::mat4> heldModel;
+				if (held != nullptr)
+				{
+					const auto* inHand = registry.TryGet<const ecs::components::InHand>(held->entity);
+					const bool onLead = inHand->drawn.has_value() && inHand->drawn->onThrowLead;
+					std::optional<glm::mat4> before;
+					if (_handHeldDrawnBefore.has_value() && _handHeldDrawnBefore->first == held->entity)
+					{
+						before = _handHeldDrawnBefore->second;
+					}
+					heldModel = throw_lead_shadow::HandShadowModel(held->model, onLead, before);
+					_handHeldDrawnBefore = std::pair {held->entity, held->model};
+				}
+				else
+				{
+					_handHeldDrawnBefore.reset();
+				}
 				if (alpha > 0)
 				{
 					const L3DMeshSubmitDesc::MorphTargets* handMorph = nullptr;
@@ -447,21 +480,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 					    .secondRowsOnly = true,
 					};
 					// What the hand holds counts every sample. A tree, a pot or a crop fills the shadow through its
-					// textures' alpha instead, as its moving shadow does. The trees have a draw of their own, thus a
-					// held tree is in a list of its own.
-					const auto heldByThisHand = [&registry, handEntity](const auto& draw) {
-						const auto* inHand = registry.TryGet<const ecs::components::InHand>(draw.entity);
-						return inHand != nullptr && inHand->hand == handEntity;
-					};
-					const ecs::systems::RenderContext::HighDetailDraw* held = nullptr;
-					for (const auto* draws : {&renderCtx.inHandDraws, &renderCtx.heldTreeDraws})
-					{
-						if (const auto found = std::ranges::find_if(*draws, heldByThisHand);
-						    held == nullptr && found != draws->end())
-						{
-							held = &*found;
-						}
-					}
+					// textures' alpha instead, as its moving shadow does.
 					if (held != nullptr && meshManager.Contains(held->mesh))
 					{
 						const auto* heldMesh = &*meshManager.Handle(held->mesh);
@@ -472,7 +491,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 							pose = villagerPose->bones;
 						}
 						caster.bodies.at(1) = {.mesh = heldMesh,
-						                       .model = held->model,
+						                       .model = *heldModel,
 						                       .pose = pose,
 						                       .morph = nullptr,
 						                       .secondRowsOnly = false,
@@ -596,6 +615,78 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 		for (const auto& draw : renderCtx.filmShadowDraws)
 		{
 			castFromSun(draw, true);
+		}
+
+		// The thing that this computer threw, while it goes along the lead of the throw. Every thing casts this shadow,
+		// whatever its kind: from a light straight above where it is drawn, onto the land only.
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto onThrowLead = [&registry](const auto& draw) {
+			const auto* inHand = registry.TryGet<const ecs::components::InHand>(draw.entity);
+			return inHand != nullptr && inHand->drawn.has_value() && inHand->drawn->onThrowLead;
+		};
+		const ecs::systems::RenderContext::HighDetailDraw* lead = nullptr;
+		for (const auto* draws : {&renderCtx.inHandDraws, &renderCtx.heldTreeDraws})
+		{
+			if (const auto found = std::ranges::find_if(*draws, onThrowLead); lead == nullptr && found != draws->end())
+			{
+				lead = &*found;
+			}
+		}
+		// A thing with no model makes no shadow
+		if (lead != nullptr && !meshManager.Contains(lead->mesh))
+		{
+			lead = nullptr;
+		}
+		std::optional<Caster> leadCaster;
+		uint8_t leadAlpha = 0;
+		if (lead != nullptr)
+		{
+			const auto* body = &*meshManager.Handle(lead->mesh);
+			const auto& model = lead->model;
+			const auto origin = glm::vec3(model[3]);
+			const auto ground = land.GetHeightAt(glm::vec2(origin.x, origin.z));
+			const auto radius = openblack::graphics::mesh_detail::HalfDiagonal(body->GetBoundingBox().Size()) * scaleOf(model);
+			leadAlpha = GroundShadow::Alpha(glm::distance(camera, glm::vec3(origin.x, ground, origin.z)), radius);
+			// An animated thing casts in the pose of its clip
+			const auto& rest = body->GetBoneMatrices();
+			std::span<const glm::mat4> pose = rest;
+			if (const auto* villagerPose = registry.TryGet<const ecs::components::VillagerPose>(lead->entity))
+			{
+				if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
+				{
+					pose = villagerPose->clipBones;
+				}
+				else if (villagerPose->bones.size() == rest.size())
+				{
+					pose = villagerPose->bones;
+				}
+			}
+			else if (const auto* animalPose = registry.TryGet<const ecs::components::AnimalPose>(lead->entity);
+			         animalPose != nullptr && animalPose->bones.size() == rest.size())
+			{
+				pose = animalPose->bones;
+			}
+			leadCaster = Caster {
+			    .bodies = {},
+			    .bodyCount = 1,
+			    .standsAt = origin,
+			    .cast = throw_lead_shadow::LeadCast(origin, ground),
+			    .alpha = leadAlpha,
+			    .onObjects = false,
+			};
+			leadCaster->bodies.at(0) = {.mesh = body,
+			                            .model = model,
+			                            .pose = pose,
+			                            .morph = nullptr,
+			                            .secondRowsOnly = false,
+			                            .throughAlpha =
+			                                ecs::MovingShadowOf(registry, lead->entity) == ecs::MovingShadow::Texture};
+		}
+		// The shadow shows only on the frames of the lead. The game keeps the shadow on the land after the lead.
+		// openblack removes it (deviations, signed off by the user).
+		if (throw_lead_shadow::StepOf(lead != nullptr, leadAlpha) == throw_lead_shadow::Step::Lead)
+		{
+			casters.push_back(*leadCaster);
 		}
 
 		// The things that the physics moves, cast from a light straight above where each is drawn, onto the land only

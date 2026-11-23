@@ -857,6 +857,9 @@ private:
 		GroundShadow::Footprint footprint;
 	};
 	mutable std::unordered_map<entt::entity, KeptGroundShadow> _keptGroundShadows;
+	/// The thing that the hand held on the frame before, and where that frame drew it, for the hand's shadow on the lead
+	/// of a throw (see graphics::throw_lead_shadow::HandShadowModel)
+	mutable std::optional<std::pair<entt::entity, glm::mat4>> _handHeldDrawnBefore;
 	/// The caps over the broken buildings' cut walls, by primitive and cut height; made afresh when a cut moves
 	mutable std::map<std::pair<const void*, float>, Cap> _caps;
 	/// The caps of the models that follow the land, made again each frame
