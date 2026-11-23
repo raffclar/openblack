@@ -878,6 +878,42 @@ class GestureTest(SessionBase):
         self.assertIn("new player", tool["description"])
         self.assertIn("new player", mcp.TOOLS_BY_NAME["input_key"]["description"])
 
+    def type_text(self, text, **arguments):
+        started = time.monotonic()
+        answer = self.session.call("input_text", {"text": text, "port": self.first.port, **arguments})
+        return answer, time.monotonic() - started
+
+    def test_the_text_tool_sends_its_letters_and_answers_at_once(self):
+        answer, seconds = self.type_text("OB_TEST_IME:あいう")
+        self.assertTrue(answer["ok"], answer)
+        self.assertLess(seconds, 3.0)
+        asked = [r for r in self.first.asked() if r["query"] == "input.text"]
+        self.assertEqual([r["params"] for r in asked], [{"text": "OB_TEST_IME:あいう"}])
+
+    def test_the_text_tool_with_no_wait_sends_its_letters_and_answers_at_once(self):
+        answer, seconds = self.type_text("abc", wait_ms=0)
+        self.assertTrue(answer["ok"], answer)
+        self.assertLess(seconds, 3.0)
+        self.assertEqual([r["params"] for r in self.first.asked() if r["query"] == "input.text"], [{"text": "abc"}])
+
+    def test_the_text_tool_works_on_the_connection_a_picture_and_a_step_used(self):
+        self.assertTrue(self.session.call("game_pause", {"port": self.first.port})["ok"])
+        self.assertTrue(self.session.call("game_step", {"port": self.first.port, "frames": 3})["ok"])
+        first, _ = self.type_text("one")
+        second, seconds = self.type_text("two", wait_ms=0)
+        self.assertTrue(first["ok"] and second["ok"])
+        self.assertLess(seconds, 3.0)
+        typed = [r["params"]["text"] for r in self.first.asked() if r["query"] == "input.text"]
+        self.assertEqual(typed, ["one", "two"])
+
+    def test_the_text_tool_is_answered_while_the_game_loads_a_scenario(self):
+        self.first.loading = 2
+        answer, _ = self.type_text("abc")
+        self.assertTrue(answer["ok"], answer)
+        typed = [r["params"]["text"] for r in self.first.asked() if r["query"] == "input.text"]
+        # Asked again while the game said it loads, and then taken
+        self.assertEqual(typed, ["abc", "abc", "abc"])
+
     def test_the_tool_tells_how_a_drawing_is_lost_and_how_to_see_it_was_recognised(self):
         description = mcp.TOOLS_BY_NAME["input_gesture"]["description"]
         self.assertIn("camera", description)
