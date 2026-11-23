@@ -11,7 +11,10 @@
 // god shows no symbol. One shows the work that a villager keeps when the hand releases it. One shows the villagers that
 // follow a disciple to its work, and one that a disciple calls no followers after a wait. One shows the object that a
 // script gives a villager to hold. One shows the read-out of a town's houses over which the hand holds a villager.
+// One shows the walk of a new disciple to a thing that is more than 5 m away, and one that it stays for a thing that is
+// 5 m away or less.
 
+#include <utility>
 #include <vector>
 
 #include "TestbedScenarioRegistry.h"
@@ -162,6 +165,72 @@ void testbed_scenarios::AddDiscipleScenarios(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticForesterMale, .offset = {20.0f, -16.0f}, .joinTown = true}},
 	    .townBeliefInPlayer = 1000.0f,
 	});
+
+	// A disciple that the hand makes by a field walks to it only when it was put more than 5 m from the field's edge. The
+	// field is 5 m wide from its middle. The hand puts the villager down where the cursor points, at the middle of the
+	// screen, so the field stands at the offset and the villager is put at the middle of the map.
+	const auto addInspectScenario = [&all](const char* id, const char* name, float fieldOffset, const char* description,
+	                                       const char* expected, std::vector<checks::Check> checkList) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Objects,
+		    .description = description,
+		    .expected = expected,
+		    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 18.0f, -26.0f}, .look = {0.0f, 0.0f, 0.0f}},
+		    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {fieldOffset, 0.0f}},
+		                {.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 0.0f}, .joinTown = true}},
+		    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 1},
+		                 {.kind = Kind::HandRelease, .delaySeconds = 2.0f}},
+		    .townBeliefInPlayer = 1000.0f,
+		    .checks = std::move(checkList),
+		});
+	};
+	addInspectScenario(
+	    "villagers.disciple_inspect_walk", "A new disciple walks to a thing that is more than 5 m away", -10.2f,
+	    "A wheat field of the player's town lies 10.2 m west of the middle of the screen, thus a little more than 5 m from "
+	    "its edge (the field is 5 m wide from its middle). A grown villager of the town stands at the middle of the "
+	    "screen under the hand. After a second, the hand takes the villager and puts it down where it stands.",
+	    "The villager glows and shows the farmer's wheat symbol while the hand holds it. After the hand puts it down, the "
+	    "villager walks a short way west, until it is 5 m from the edge of the field, and looks at the field. Then it "
+	    "goes to farm the field. The report of the checks passes.",
+	    {{.label = "the villager is put down 10.2 m from the middle of the field",
+	      .quantity = checks::Quantity::ObjectDistance,
+	      .index = 1,
+	      .point = {-10.2f, 0.0f},
+	      .afterTurns = 40,
+	      .atLeast = 10.1,
+	      .atMost = 10.3},
+	     {.label = "the villager walks to 5 m from the edge of the field",
+	      .quantity = checks::Quantity::ObjectDistance,
+	      .index = 1,
+	      .point = {-10.2f, 0.0f},
+	      .afterTurns = 40,
+	      .byTurn = 70,
+	      .atMost = 10.05}});
+	addInspectScenario(
+	    "villagers.disciple_inspect_stay", "A new disciple stays when its thing is 5 m away or less", -9.5f,
+	    "A wheat field of the player's town lies 9.5 m west of the middle of the screen, thus less than 5 m from its "
+	    "edge (the field is 5 m wide from its middle). A grown villager of the town stands at the middle of the screen "
+	    "under the hand. After a second, the hand takes the villager and puts it down where it stands.",
+	    "The villager glows and shows the farmer's wheat symbol while the hand holds it. After the hand puts it down, the "
+	    "villager stays where it was put and looks at the field. Then it goes to farm the field. The report of the "
+	    "checks passes.",
+	    {{.label = "the villager stays 9.5 m from the middle of the field when the other villager would have walked",
+	      .quantity = checks::Quantity::ObjectDistance,
+	      .index = 1,
+	      .point = {-9.5f, 0.0f},
+	      .afterTurns = 50,
+	      .atLeast = 9.4,
+	      .atMost = 9.6},
+	     {.label = "the villager is still 9.5 m from the middle of the field just before it goes to farm",
+	      .quantity = checks::Quantity::ObjectDistance,
+	      .index = 1,
+	      .point = {-9.5f, 0.0f},
+	      .afterTurns = 58,
+	      .atLeast = 9.4,
+	      .atMost = 9.6}});
 
 	// A script gives a villager that it holds an object to hold, as the Land 2 lessons give a builder its heavy mallet
 	all.push_back({
