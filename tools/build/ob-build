@@ -893,6 +893,10 @@ do_run() {
 	local exe="$B/bin/$CONFIG/openblack.exe"
 	[ -f "$exe" ] || die "no $exe; run 'ob-build build --config $CONFIG openblack' first"
 	local arg has_game=0 has_shots=0
+	# A leading -- only ends the options of ob-build: every argument after it goes to the game as it is.
+	if [ "${1:-}" = -- ]; then
+		shift
+	fi
 	for arg in "$@"; do
 		case "$arg" in
 		-g | --game-path | --game-path=*) has_game=1 ;;
