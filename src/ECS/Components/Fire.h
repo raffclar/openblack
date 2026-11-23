@@ -75,7 +75,8 @@ struct VillagerFireState
 	entt::entity reactionTarget {entt::null};
 	/// The reaction it reacts to, 0 for none
 	uint32_t reaction {0};
-	glm::vec2 walkTarget {0.0f};
+	/// Where it walks to, in whole map units (x and z), at altitude 0
+	glm::ivec2 walkTarget {0};
 };
 
 /// The life of an object that isn't living, 0 to 1: a tree, a building, a rock. Without it an object has all its life.

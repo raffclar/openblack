@@ -223,9 +223,10 @@ map_coords::MapCoords ToCoords(glm::vec2 point)
 	return map_coords::FromMetres(point);
 }
 
-glm::vec2 CoordsToMetres(const map_coords::MapCoords& coords)
+/// A point in whole map units (x and z) as a map position at altitude 0
+map_coords::MapCoords AtGround(glm::ivec2 whole)
 {
-	return map_coords::ToMetres(coords);
+	return {.x = whole.x, .z = whole.y, .altitude = 0.0f};
 }
 
 /// The way from one point to another as one of the game's 2048 angles of a turn, in radians
@@ -362,7 +363,7 @@ const ReactionInfo& FireReaction()
 
 /// Where a villager stands to beat a fire: on the line from where the fire burns out through the villager, beyond the
 /// object's radius or the fire's safe radius, whichever is wider, by its own radius and a little more at random
-std::optional<glm::vec2> GetFireFightingPos(entt::entity villager, entt::entity fire)
+std::optional<glm::ivec2> GetFireFightingPos(entt::entity villager, entt::entity fire)
 {
 	const auto reach = fire != entt::null ? Locator::fireSystem::value().GetReach(fire) : std::nullopt;
 	if (!reach.has_value())
@@ -373,7 +374,7 @@ std::optional<glm::vec2> GetFireFightingPos(entt::entity villager, entt::entity 
 	float radius = reach->safeRadius < reach->defaultRadius ? reach->defaultRadius : reach->safeRadius;
 	radius += RadiusOf(villager);
 	radius += GameFloatRandom(1.0f);
-	return CoordsToMetres(ToCoords(Across(reach->position)) + PosFromAngle(angle, radius));
+	return map_coords::WholeXZ(ToCoords(Across(reach->position)) + PosFromAngle(angle, radius));
 }
 
 /// Whether a villager stands within reach of beating a fire: beyond the edge it stands back by, by less than a margin
@@ -406,7 +407,7 @@ void WalkTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerSta
 
 /// Goes round the fire it is about to a point, then on into a state. A villager that goes on to its arrival at the
 /// worship site goes back on its way to the site, so that its town counts it on the way again
-bool SetupMoveAroundFire(LivingAction& action, glm::vec2 point, VillagerStates then)
+bool SetupMoveAroundFire(LivingAction& action, glm::ivec2 point, VillagerStates then)
 {
 	SetTopState(action, VillagerStates::MoveAroundFire);
 	if (State(action, LivingAction::Index::Top) != VillagerStates::MoveAroundFire)
@@ -532,7 +533,7 @@ void villager_fire::SetupReactToFire(entt::entity villager, entt::entity object,
 	if (onTheWay && registry.AllOf<Fire>(object))
 	{
 		FireStateOf(villager).fire = object;
-		SetupMoveAroundFire(*action, ecs::wall_hug::ToPoint(GoalOf(villager)), goOnTo);
+		SetupMoveAroundFire(*action, GoalOf(villager), goOnTo);
 	}
 }
 
@@ -595,7 +596,7 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 		}
 	}
 	// Otherwise it goes round the fire on its way
-	SetupMoveAroundFire(action, ecs::wall_hug::ToPoint(GoalOf(villager)), State(action, LivingAction::Index::Previous));
+	SetupMoveAroundFire(action, GoalOf(villager), State(action, LivingAction::Index::Previous));
 	return 1;
 }
 
@@ -644,8 +645,7 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 	const auto villager = EntityOf(action);
 	auto& fires = Locator::fireSystem::value();
 	auto& state = FireStateOf(villager);
-	auto target = ToCoords(state.walkTarget);
-	const auto here = PositionOf(villager);
+	auto target = AtGround(state.walkTarget);
 	// Within a step of where it was going, at the speed it walks: on with what it was going to do there
 	if (villager_home::AreWeThere(villager, state.walkTarget))
 	{
@@ -658,7 +658,8 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 	{
 		return 0;
 	}
-	const auto from = ToCoords(Across(here));
+	// The way round starts at the map position of the villager
+	const auto from = ecs::thing_map_place::Of(Entities(), villager);
 	const float margin = RadiusOf(villager) + k_SkirtMargin;
 	bool changed = false;
 	float side = 0.0f;
@@ -673,8 +674,8 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 	{
 		// Where it was going lies in the fire: it stops there and decides again
 		SetPrevious(action, VillagerStates::DecideWhatToDo);
-		state.walkTarget = CoordsToMetres(target);
-		GoalOf(villager) = {target.x, target.z};
+		state.walkTarget = map_coords::WholeXZ(target);
+		GoalOf(villager) = state.walkTarget;
 		return 1;
 	}
 	const auto members = fires.GetBlazeMembers(state.fire);
@@ -707,9 +708,10 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 	}
 	if (!changed)
 	{
-		target = ToCoords(state.walkTarget);
+		target = AtGround(state.walkTarget);
 	}
-	WalkTo(action, CoordsToMetres(target), VillagerStates::MoveAroundFire);
+	// The walk has no height, as in the game
+	WalkTo(action, AtGround(map_coords::WholeXZ(target)), VillagerStates::MoveAroundFire);
 	// The full speed of its state, wounds, town and its own way of going included
 	ecs::systems::villager_reactions::SetStateSpeed(villager, State(action, LivingAction::Index::Previous));
 	return 1;
@@ -727,7 +729,7 @@ void villager_fire::SetupOnFire(entt::entity villager, entt::entity fire)
 	}
 	villager_memory::StorePreviousState(*action);
 	auto& state = FireStateOf(villager);
-	state.walkTarget = ecs::wall_hug::ToPoint(GoalOf(villager));
+	state.walkTarget = GoalOf(villager);
 	villager_home::LeaveHome(villager);
 	SetTopState(*action, VillagerStates::DecideWhatToDo);
 	FireStateOf(villager).fire = fire;
@@ -740,7 +742,7 @@ namespace
 void FinishBeingOnFire(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
-	GoalOf(villager) = ecs::wall_hug::ToWhole(FireStateOf(villager).walkTarget);
+	GoalOf(villager) = FireStateOf(villager).walkTarget;
 	PopFromPrevious(action);
 }
 } // namespace

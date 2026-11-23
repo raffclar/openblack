@@ -137,6 +137,28 @@ TEST(VillagerDeath, AMournerWalksToAFewMetresOffTheBodyThenLooks)
 	EXPECT_FLOAT_EQ(near.walk, 1.5f);
 }
 
+TEST(VillagerDeath, AVillagerStepsTowardsTheBodyInWholeMapUnitsFromItsMapPosition)
+{
+	// Towards a body at higher x: game angle 0, a cosine of 65536. A walk of 3.7 m is cut to 3 m, which is 19660 map
+	// units, and the step keeps only its top bits: 76 x 65536 / 256 = 19456. Far from the map corner, a change of the
+	// goal to metres and back would lose one unit (31019457 to 31019456).
+	const map_coords::MapCoords from {.x = 31000001, .z = 20000001, .altitude = 1.5f};
+	const auto east = StepTowardsBody(from, {.x = 32000001, .z = 20000001}, 3.7f);
+	EXPECT_EQ(east.x, 31019457);
+	EXPECT_EQ(east.z, 20000001);
+	EXPECT_FLOAT_EQ(east.altitude, 1.5f);
+	// Towards a body at lower x: game angle 1024, a cosine of -65536
+	const auto west = StepTowardsBody(from, {.x = 30000001, .z = 20000001}, 3.7f);
+	EXPECT_EQ(west.x, 31000001 - 19456);
+	EXPECT_EQ(west.z, 20000001);
+	// Towards a body at higher z: game angle 512. A walk of 12.9 m is cut to 12 m, which is 78643 map units, and the step
+	// is 307 x 65536 / 256 = 78592. Metres would make 20078593 into 20078594.
+	const auto north = StepTowardsBody({.x = 30000001, .z = 20000001}, {.x = 30000001, .z = 21000001}, 12.9f);
+	EXPECT_EQ(north.x, 30000001);
+	EXPECT_EQ(north.z, 20078593);
+	EXPECT_FLOAT_EQ(north.altitude, 0.0f);
+}
+
 TEST(VillagerDeath, ASoulGoesToHeavenOrHellAtEvenOddsButAChildsAlwaysToHeaven)
 {
 	EXPECT_EQ(SoulClip(0.0f, false), AnimId::PDead1GotoHeaven);

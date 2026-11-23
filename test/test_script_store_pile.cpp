@@ -149,7 +149,7 @@ public:
 	void RemoveFarm(entt::entity) override {}
 	void AddFisherman(entt::entity, entt::entity) override {}
 	void RemoveFisherman(entt::entity, entt::entity) override {}
-	[[nodiscard]] glm::vec3 FishingSpot(entt::entity) override { return glm::vec3(0.0f); }
+	[[nodiscard]] glm::ivec2 FishingSpot(entt::entity) override { return glm::ivec2(0); }
 	[[nodiscard]] std::optional<int32_t> Fish(entt::entity, uint32_t, uint32_t, float) override { return std::nullopt; }
 	void Reset() override {}
 };

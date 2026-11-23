@@ -30,6 +30,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -189,25 +190,23 @@ void FishFarmSystem::RemoveFisherman(entt::entity farm, entt::entity villager)
 	}
 }
 
-glm::vec3 FishFarmSystem::FishingSpot(entt::entity farm)
+glm::ivec2 FishFarmSystem::FishingSpot(entt::entity farm)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* transform = registry.TryGet<const Transform>(farm);
-	if (transform == nullptr)
+	if (!registry.AllOf<Transform>(farm))
 	{
-		return glm::vec3(0.0f);
+		return glm::ivec2(0);
 	}
 	const auto* data = registry.TryGet<const FishFarm>(farm);
 	if (data == nullptr)
 	{
-		return transform->position;
+		return map_coords::WholeXZ(ecs::thing_map_place::Of(registry, farm));
 	}
 	// Within a square the farm's width across, drawn along x and then z
 	auto& random = Locator::gameRandom::value();
 	const float x = random.GameFloatRand(fish_farm::k_FishingSpread) - fish_farm::k_FishingSpread * 0.5f;
 	const float z = random.GameFloatRand(fish_farm::k_FishingSpread) - fish_farm::k_FishingSpread * 0.5f;
-	const auto spot = fish_farm::FishingSpot(data->place, {x, z});
-	return {map_coords::ToMetres(spot.x), transform->position.y, map_coords::ToMetres(spot.y)};
+	return fish_farm::FishingSpot(data->place, {x, z});
 }
 
 std::optional<int32_t> FishFarmSystem::Fish(entt::entity farm, uint32_t capacity, uint32_t held, float tribalPower)

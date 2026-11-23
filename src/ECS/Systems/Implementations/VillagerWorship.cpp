@@ -580,7 +580,7 @@ bool StartWorshippingAtWorshipSite(LivingAction& action)
 		return false;
 	}
 	// The walk goal keeps the height of the dance's place above the land. It walks straight there.
-	const auto slot = villager_dance::SlotGoalOf(villager);
+	const auto slot = villager_dance::SlotOf(villager);
 	if (!slot.has_value() ||
 	    !MoveTo(action, *slot, VillagerStates::WorshippingAtWorshipSite, villager_home::WalkWay::StraightThrough))
 	{

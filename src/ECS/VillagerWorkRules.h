@@ -51,6 +51,11 @@ inline constexpr float k_BigForestArriveShare = 0.5f;
 [[nodiscard]] map_coords::MapCoords EdgeWorkingPosition(const map_coords::MapCoords& thing,
                                                         const map_coords::MapCoords& villager, float thingRadius,
                                                         float villagerRadius);
+/// The nearest edge of a thing to a villager, as the game gives it as a walk goal: the edge position by both their sizes,
+/// changed to metres and back to a map position at altitude 0. The change to metres can move the goal by one map unit.
+[[nodiscard]] map_coords::MapCoords NearestEdgePosition(const map_coords::MapCoords& thing,
+                                                        const map_coords::MapCoords& villager, float thingRadius,
+                                                        float villagerRadius);
 /// Where a villager takes wood from a big forest, as a map position: halfway in from its edge, on the villager's side
 [[nodiscard]] map_coords::MapCoords BigForestArrivePosition(const map_coords::MapCoords& bigForest,
                                                             const map_coords::MapCoords& villager, float radius);

@@ -74,6 +74,18 @@ TEST(VillagerWork, AVillagerStandsByAThingBothTheirSizesAway)
 	EXPECT_EQ(edge.z, 0x320000);
 }
 
+TEST(VillagerWork, TheNearestEdgeOfAThingGoesThroughMetresAsTheGameGivesIt)
+{
+	// The edge is 2 + 0.5 metres (16384 map units) towards a villager at lower x, at 8090858. That position in metres
+	// and back is 8090857. The altitude is 0.
+	const map_coords::MapCoords thing {.x = 8090858 + 16384, .z = 0x320000, .altitude = 2.0f};
+	const map_coords::MapCoords villager {.x = 0x310000, .z = 0x320000};
+	const auto edge = work::NearestEdgePosition(thing, villager, 2.0f, 0.5f);
+	EXPECT_EQ(edge.x, 8090857);
+	EXPECT_EQ(edge.z, 0x320000);
+	EXPECT_FLOAT_EQ(edge.altitude, 0.0f);
+}
+
 TEST(VillagerWork, ABigForestGivesWoodHalfItsRadiusFromItsMiddle)
 {
 	// Half of a radius of 30 metres is 98304 whole map units
