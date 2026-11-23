@@ -412,3 +412,14 @@ TEST(DiscipleRules, AWaitingDiscipleDecidesAgainWhenTheWantsOfItsTownChange)
 	none.type = None;
 	EXPECT_FALSE(DecidesAgainAfterWait(none));
 }
+
+TEST(DiscipleRules, ALoadGivesAFollowerTheGlowOfTheWorkThatItFollows)
+{
+	// A follower of a work that glows glows after a load
+	EXPECT_TRUE(FollowerGlowsAfterLoad(Farmer));
+	EXPECT_TRUE(FollowerGlowsAfterLoad(Builder));
+	// A follower that started the work holds none, so it does not glow
+	EXPECT_FALSE(FollowerGlowsAfterLoad(None));
+	// The work of a worshipper does not glow
+	EXPECT_FALSE(FollowerGlowsAfterLoad(Worship));
+}
