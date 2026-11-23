@@ -92,6 +92,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -1781,6 +1782,8 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	// The seeds of the file, which the icons of the worship sites keep
 	ImportVanillaSeeds(*read.world, made);
 	ImportVanillaTowns(*read.world, made, works, circles, footpathWalks, dances);
+	// The game gives the glow of the work to each follower that its load finds
+	ecs::villager_disciple::GlowFollowersAfterLoad();
 	// The forests, the big forests and the trees of the file replace those of the land
 	ImportVanillaForests(*read.world, made);
 	// The fields and the fish farms of the file replace those of the land

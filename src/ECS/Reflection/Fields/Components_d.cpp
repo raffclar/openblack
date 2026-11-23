@@ -121,6 +121,7 @@ void openblack::ecs::reflection::RegisterFields_Components_d(entt::meta_ctx& con
 	    .Field<&components::Disciple::tradeTown>("tradeTown")
 	    .Field<&components::Disciple::tradeResource>("tradeResource");
 	Reflect<components::DiscipleFollower>(context).Field<&components::DiscipleFollower::type>("type");
+	Reflect<components::DiscipleGlowAfterLoad> {context};
 	Reflect<components::MissionaryControl>(context)
 	    .Field<&components::MissionaryControl::villager>("villager")
 	    .Field<&components::MissionaryControl::town>("town")

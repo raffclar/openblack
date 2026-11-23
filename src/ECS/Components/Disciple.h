@@ -35,6 +35,13 @@ struct DiscipleFollower
 	VillagerDisciple type {VillagerDisciple::None};
 };
 
+/// A villager that glows because a load found it as a follower of a work that glows. A follower does not glow in play,
+/// but a load gives the glow of its work to it. The glow stays when the villager stops being a follower. Only a new
+/// work, or the end of a work, removes it. The world does not save this mark, because each load makes it again.
+struct DiscipleGlowAfterLoad
+{
+};
+
 /// A missionary preaching in a town: it follows the missionary about, and the villagers of the town near it come to
 /// believe in the player who sent it. It goes when the missionary stops preaching.
 struct MissionaryControl
