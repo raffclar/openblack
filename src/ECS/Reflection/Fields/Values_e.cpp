@@ -285,7 +285,8 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::HeldByCreature::Drawn::rotation>("rotation");
 	Reflect<openblack::ecs::components::InHand::Drawn>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::InHand::Drawn::position>("position")
-	    .Field<&openblack::ecs::components::InHand::Drawn::rotation>("rotation");
+	    .Field<&openblack::ecs::components::InHand::Drawn::rotation>("rotation")
+	    .Field<&openblack::ecs::components::InHand::Drawn::onThrowLead>("onThrowLead");
 	Reflect<openblack::ecs::components::MapScriptGlobals>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::MapScriptGlobals::landNumber>("landNumber")
 	    .Field<&openblack::ecs::components::MapScriptGlobals::townInfluenceMultiplier>("townInfluenceMultiplier")
