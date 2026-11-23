@@ -84,6 +84,29 @@ TEST(VillagerWork, ABigForestGivesWoodHalfItsRadiusFromItsMiddle)
 	EXPECT_EQ(big.z, 0x200000);
 }
 
+TEST(VillagerWork, ThePointOfAPileNearestAVillagerKeepsEveryUnitOfThePile)
+{
+	// 2.5 metres is 16384 whole map units, here towards a villager at higher x. The pile is far out on the map, where
+	// metres cannot hold each map unit.
+	const map_coords::MapCoords pile {.x = 0x1FB5355, .z = 0x1F00005, .altitude = 0.25f};
+	const map_coords::MapCoords villager {.x = 0x1FD0000, .z = 0x1F00005};
+	const auto edge = work::NearestEdgePosition(pile, villager, 2.5f);
+	EXPECT_EQ(edge.x, 0x1FB5355 + 16384);
+	EXPECT_EQ(edge.z, 0x1F00005);
+	EXPECT_EQ(edge.altitude, 0.25f);
+}
+
+TEST(VillagerWork, AMapPositionThroughMetresCanMoveAUnit)
+{
+	const auto far = work::ThroughMetres({.x = 0x1FB5355, .z = 0x1234567, .altitude = 3.0f});
+	EXPECT_EQ(far.x, 0x1FB5356);
+	EXPECT_EQ(far.z, 0x1234566);
+	EXPECT_EQ(far.altitude, 0.0f);
+	const auto near = work::ThroughMetres({.x = 0x400001, .z = 0x320000});
+	EXPECT_EQ(near.x, 0x400001);
+	EXPECT_EQ(near.z, 0x320000);
+}
+
 TEST(VillagerWork, TouchingIsTheEdgeNearerThanAStep)
 {
 	EXPECT_TRUE(work::Touching(0.6f, 0.5f, 0.2f));

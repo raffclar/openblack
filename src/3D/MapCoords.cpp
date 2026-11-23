@@ -20,9 +20,7 @@ float map_coords::GroundAt(const LandIslandInterface& island, const MapCoords& c
 
 map_coords::MapCoords map_coords::FromWorld(const LandIslandInterface& island, glm::vec3 point)
 {
-	MapCoords coords {ToFixed(point.x), ToFixed(point.z), 0.0f};
-	coords.altitude = point.y - GroundAt(island, coords);
-	return coords;
+	return FromWorld(point, [&island](const MapCoords& coords) { return GroundAt(island, coords); });
 }
 
 map_coords::MapCoords map_coords::HeldPlace(const LandIslandInterface& island, glm::vec3 point)

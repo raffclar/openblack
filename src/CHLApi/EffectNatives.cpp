@@ -703,9 +703,12 @@ void CreateMist() // 263 CREATE_MIST
 	const auto red = Popf();
 	const auto scale = Popf();
 	const auto position = PopVec();
-	const float ground = Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z));
-	const auto mist = ecs::archetypes::MistArchetype::Create(
-	    position, position.y - ground, mists::ScriptColour(red, green, blue, transparency), scale, 1.0f / heightRatio);
+	// The mist stands on the grid of the map, at the height of the point above the ground there
+	const auto& island = Locator::terrainSystem::value();
+	const auto place = map_coords::FromWorld(island, position);
+	const auto mist =
+	    ecs::archetypes::MistArchetype::Create(map_coords::ToWorld(island, place), place.altitude,
+	                                           mists::ScriptColour(red, green, blue, transparency), scale, 1.0f / heightRatio);
 	if (mist == entt::null)
 	{
 		ScriptMessage("Thing not created");
