@@ -17,12 +17,15 @@
 #include <algorithm>
 #include <array>
 #include <optional>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <PackFile.h>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/L3DMesh.h"
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
@@ -34,6 +37,7 @@
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
@@ -42,7 +46,9 @@
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HiddenByState.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -54,8 +60,10 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
+#include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureCarried.h"
+#include "ECS/DiscipleGlowDraw.h"
 #include "ECS/DiscipleRules.h"
 #include "ECS/DiscipleSymbol.h"
 #include "ECS/DiscipleWorkRules.h"
@@ -76,16 +84,20 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/TownCensus.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/WorldObjects.h"
+#include "Graphics/MeshDetail.h"
 #include "Graphics/Texture2D.h"
+#include "Graphics/ZSort.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MapSpiral.h"
@@ -601,23 +613,26 @@ void SetupInspectObject(LivingAction& action, entt::entity thing)
 	const auto villager = EntityOf(action);
 	auto& registry = Entities();
 	registry.AssignOrReplace<DiscipleInspect>(villager, DiscipleInspect {.thing = thing});
-	// A worship site is looked at from its middle, but with the radius of its model
-	const auto there = systems::object_measures::InspectPoint(registry, thing);
-	const auto here = glm::xz(PositionOf(villager));
+	// The villager looks at a worship site from its middle, but with the radius of its model. The distance is between
+	// the map positions of the villager and the point.
+	const auto there = systems::object_measures::InspectPlace(registry, thing);
+	const auto here = ecs::thing_map_place::Of(registry, villager);
 	const float radius = systems::object_measures::TwoDRadius(registry, thing);
 	if (gutils::GetDistanceInMetres(here, there) - radius > disciple::k_InspectReach)
 	{
-		const float angle = gutils::Get3DAngleFromXZ(there, here);
-		const auto step = gutils::GetPosFromAngle(angle, radius + disciple::k_InspectReach);
-		villager_home::SetupMoveTo(action, there + glm::vec2(map_coords::ToMetres(step.x), map_coords::ToMetres(step.z)),
-		                           VillagerStates::InspectObject);
+		const auto goal =
+		    disciple::InspectGoal(there, here, radius + disciple::k_InspectReach, [](const map_coords::MapCoords& at) {
+			    return Locator::terrainSystem::has_value() ? map_coords::GroundAt(Locator::terrainSystem::value(), at) : 0.0f;
+		    });
+		villager_home::SetupMoveTo(action, goal, VillagerStates::InspectObject);
 		return;
 	}
 	SetTopState(action, VillagerStates::InspectObject);
 }
 
-/// Where an idle disciple waits by a town, none for no town
-std::optional<glm::vec2> WaitPosition(entt::entity villager, std::optional<entt::entity> town)
+/// Where an idle disciple waits by a town, none for no town: a step from the map position of the village centre, on the
+/// side of the disciple, or the map position of the town when it has no village centre
+std::optional<map_coords::MapCoords> WaitPosition(entt::entity villager, std::optional<entt::entity> town)
 {
 	if (!town.has_value())
 	{
@@ -631,15 +646,14 @@ std::optional<glm::vec2> WaitPosition(entt::entity villager, std::optional<entt:
 		{
 			continue;
 		}
-		const auto centre = glm::xz(PositionOf(abode));
-		const auto step = disciple::WaitStepFromCentre(gutils::Get3DAngleFromXZ(centre, glm::xz(PositionOf(villager))),
-		                                               systems::object_measures::TwoDRadius(registry, abode), [](float limit) {
-			                                               return Locator::gameRandom::value().GameFloatRand(limit);
-		                                               });
-		const auto offset = gutils::GetPosFromAngle(step.radians, step.metres);
-		return centre + glm::vec2(map_coords::ToMetres(offset.x), map_coords::ToMetres(offset.z));
+		const auto centre = ecs::thing_map_place::Of(registry, abode);
+		const auto step =
+		    disciple::WaitStepFromCentre(gutils::Get3DAngleFromXZ(centre, ecs::thing_map_place::Of(registry, villager)),
+		                                 systems::object_measures::TwoDRadius(registry, abode),
+		                                 [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); });
+		return centre + gutils::GetPosFromAngle(step.radians, step.metres);
 	}
-	return glm::xz(PositionOf(*town));
+	return ecs::thing_map_place::Of(registry, *town);
 }
 
 /// A farmer goes to its town's best field; if that field has grown and it still carries a load of food, it takes the
@@ -1371,4 +1385,124 @@ void villager_disciple::UpdateMarks()
 	transform.scale = glm::vec3(size, size, 1.0f);
 	marks.Get<Sprite>(mark).uvMin = CellUv(*cell);
 	marks.Get<DiscipleMark>(mark).villager = *shown;
+}
+
+void villager_disciple::KeepDrawnGlows()
+{
+	if (!Locator::entitiesRegistry::has_value() || !Locator::drawnRegistry::has_value() ||
+	    !Locator::objectDrawListSystem::has_value())
+	{
+		return;
+	}
+	const auto& registry = Entities();
+	auto& marks = Locator::drawnRegistry::value();
+	const auto& drawList = Locator::objectDrawListSystem::value();
+
+	// The frame draws the glow of a villager only when it draws the body. A creature draws the thing in its hand.
+	std::vector<std::pair<entt::entity, entt::entity>> shown;
+	std::optional<entt::entity> symbolMark;
+	marks.Each<const DiscipleMark, Transform>([&](entt::entity mark, const DiscipleMark& of, Transform& transform) {
+		if (of.symbol)
+		{
+			symbolMark = mark;
+			return;
+		}
+		if (transform.scale == glm::vec3(0.0f) || !registry.Valid(of.villager))
+		{
+			return;
+		}
+		const auto* holder = registry.TryGet<const HeldByCreature>(of.villager);
+		const auto drawer = holder != nullptr && registry.Valid(holder->creature) ? holder->creature : of.villager;
+		if (!disciple_glow_draw::Shown({
+		        .highDetail = registry.AllOf<HighDetail>(of.villager),
+		        .drawn = drawList.Drawn(registry, drawer),
+		    }))
+		{
+			transform.scale = glm::vec3(0.0f);
+			return;
+		}
+		shown.emplace_back(mark, of.villager);
+	});
+
+	std::vector<entt::entity> kept;
+	const auto& view = drawList.GetView();
+	if (shown.size() > disciple_glow_draw::k_MostGlows && view.has_value() && Locator::resources::has_value())
+	{
+		// More glows than the frame draws. The frame draws them in its order, and only the glows on the screen count.
+		const auto list = drawList.GetList();
+		std::unordered_map<entt::entity, uint32_t> places;
+		places.reserve(list.size());
+		for (uint32_t i = 0; i < list.size(); ++i)
+		{
+			places.emplace(list[i], i);
+		}
+		const auto& meshes = Locator::resources::value().GetMeshes();
+		const drawn_place::DrawnPlaces drawnPlaces(registry);
+		std::vector<disciple_glow_draw::Glow> glows;
+		glows.reserve(shown.size());
+		for (const auto& [mark, villager] : shown)
+		{
+			const auto& transform = registry.Get<const Transform>(villager);
+			const auto model = drawnPlaces.ModelMatrixOf(villager, transform);
+			const auto origin = glm::vec3(model[3]);
+			disciple_glow_draw::Glow glow {.villager = villager};
+			const auto* holder = registry.TryGet<const HeldByCreature>(villager);
+			const auto listed = places.find(holder != nullptr ? holder->creature : villager);
+			if (registry.AllOf<components::InHand>(villager))
+			{
+				glow.draw = disciple_glow_draw::Draw::Hand;
+				glow.key = graphics::zsort::ModelKey(origin, view->eye);
+			}
+			else if (listed != places.end())
+			{
+				glow.place = listed->second;
+			}
+			else
+			{
+				glow.draw =
+				    registry.AllOf<WalkPath>(villager) ? disciple_glow_draw::Draw::WalkPath : disciple_glow_draw::Draw::Physics;
+			}
+			// The sphere about the box of the standard model, as the frame tests the body
+			const auto* detail = registry.TryGet<const DetailMeshes>(villager);
+			const auto* mesh = registry.TryGet<const Mesh>(villager);
+			const auto boxMesh =
+			    detail != nullptr ? std::optional(detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)))
+			                      : (mesh != nullptr ? std::optional(mesh->id) : std::nullopt);
+			if (boxMesh.has_value() && meshes.Contains(*boxMesh))
+			{
+				const auto box = meshes.Handle(*boxMesh)->GetBoundingBox();
+				const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
+				const float radius = std::abs(transform.scale.x) * graphics::mesh_detail::HalfDiagonal(box.Size());
+				glow.onScreen = object_draw_list::SphereOnScreen(*view, origin, centre, radius);
+			}
+			glows.push_back(glow);
+		}
+		kept = disciple_glow_draw::Kept(std::move(glows));
+		std::ranges::sort(kept);
+		for (const auto& [mark, villager] : shown)
+		{
+			if (!std::ranges::binary_search(kept, villager))
+			{
+				marks.Get<Transform>(mark).scale = glm::vec3(0.0f);
+			}
+		}
+	}
+	else
+	{
+		for (const auto& [mark, villager] : shown)
+		{
+			kept.push_back(villager);
+		}
+		std::ranges::sort(kept);
+	}
+
+	// The frame draws the symbol only with the glow of its villager
+	if (symbolMark.has_value())
+	{
+		const auto& of = marks.Get<const DiscipleMark>(*symbolMark);
+		if (!std::ranges::binary_search(kept, of.villager))
+		{
+			marks.Get<Transform>(*symbolMark).scale = glm::vec3(0.0f);
+		}
+	}
 }

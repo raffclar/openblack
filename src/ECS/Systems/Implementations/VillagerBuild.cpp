@@ -195,6 +195,19 @@ map_coords::MapCoords MapPlaceOf(entt::entity thing)
 	return thing_map_place::Of(Entities(), thing);
 }
 
+/// A map position through a point on the land and back, as villager_work::ThroughPoint on the land of the island. With no
+/// land, the land is at height 0.
+map_coords::MapCoords ThroughPointOnLand(const map_coords::MapCoords& place)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return villager_work::ThroughPoint(place, [](const map_coords::MapCoords&) { return 0.0f; });
+	}
+	const auto& island = Locator::terrainSystem::value();
+	return villager_work::ThroughPoint(place,
+	                                   [&island](const map_coords::MapCoords& at) { return map_coords::GroundAt(island, at); });
+}
+
 /// The point of a temporary pile nearest the villager, as a map position with the height of the pile
 map_coords::MapCoords PileEdgeOf(const systems::TownSystemInterface::TemporaryStore& store, entt::entity villager)
 {
@@ -534,9 +547,12 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 		const auto villager = EntityOf(action);
 		if (const auto store = TemporaryStoreOf(TownOf(person), GroundOf(villager), type); store.has_value())
 		{
-			// The game finds this point as a map position, then gives it in metres
-			const auto edge = villager_work::ThroughMetres(villager_work::EdgeWorkingPosition(
-			    MapPlaceOf(store->pile), MapPlaceOf(villager), systems::object_measures::TwoDRadius(Entities(), store->pile),
+			// The game finds this point as a map position with the height of the pile, then gives it as a point on the
+			// land, then changes the point back to a map position
+			auto pile = MapPlaceOf(store->pile);
+			pile.altitude = store->edgeAltitude;
+			const auto edge = ThroughPointOnLand(villager_work::EdgeWorkingPosition(
+			    pile, MapPlaceOf(villager), systems::object_measures::TwoDRadius(Entities(), store->pile),
 			    systems::object_measures::TwoDRadius(Entities(), villager)));
 			if (villager_home::AreWeThere(villager, glm::ivec2(edge.x, edge.z)))
 			{
@@ -552,9 +568,7 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 				SetTopState(action, fail);
 				return 0;
 			}
-			// The walk keeps the height of the pile, which sinks into the land
-			MoveTo(action, map_coords::MapCoords {.x = edge.x, .z = edge.z, .altitude = store->edgeAltitude},
-			       FinalState(action));
+			MoveTo(action, edge, FinalState(action));
 			return k_StillBusy;
 		}
 	}

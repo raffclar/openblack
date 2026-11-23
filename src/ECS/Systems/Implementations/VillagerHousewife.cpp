@@ -17,6 +17,7 @@
 
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
@@ -30,6 +31,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerFoodRules.h"
 #include "ECS/VillagerNeeds.h"
@@ -366,8 +368,9 @@ uint32_t housewife::GossipsAroundStoragePit(LivingAction& action)
 	auto& random = Locator::gameRandom::value();
 	const float angle = random.GameFloatRand(routine::k_TwoPi);
 	const float reach = random.GameFloatRand(rules::k_GossipReach);
-	const auto centre = glm::xz(Entities().Get<const Transform>(*pit).position);
-	const auto spot = routine::Polar(centre, angle, ecs::systems::object_measures::TwoDRadius(Entities(), *pit) + reach);
+	// The step is added to the map position of the pit in whole map units
+	const auto spot = ecs::thing_map_place::Of(Entities(), *pit) +
+	                  gutils::GetPosFromAngle(angle, ecs::systems::object_measures::TwoDRadius(Entities(), *pit) + reach);
 	if (!villager_home::Collides(spot))
 	{
 		villager_footpath::SetupMoveToOnFootpath(action, *pit, spot, VillagerStates::HousewifeGossipsAroundStoragePit);

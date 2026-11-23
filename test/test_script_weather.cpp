@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <bit>
+#include <limits>
 #include <vector>
 
 #include <ECS/ScriptWeatherRules.h>
@@ -162,6 +163,19 @@ TEST(ScriptWeather, AmountsAreCutToWholePercentsAndCloudsToAWholeNumber)
 	Storm storm {};
 	weather::SetClouds(storm, 3.9f, 0.5f, 100.0f);
 	EXPECT_EQ(storm.cloudCount, 3);
+}
+
+TEST(ScriptWeather, NumbersOutOfRangeBecomeWholeNumbersByTheGameRule)
+{
+	// The game keeps the low 32 bits of the whole number, and gives 0 for a NaN
+	Storm storm {};
+	weather::SetClouds(storm, 1.0e10f, 0.5f, 100.0f);
+	EXPECT_EQ(storm.cloudCount, 1410065408);
+	weather::SetClouds(storm, std::numeric_limits<float>::quiet_NaN(), 0.5f, 100.0f);
+	EXPECT_EQ(storm.cloudCount, 0);
+	EXPECT_EQ(weather::Percent(std::numeric_limits<float>::quiet_NaN()), 0);
+	weather::SetWeather(storm, -3.0e9f, 0.0f, 0.0f, 0.0f, 1.0f);
+	EXPECT_EQ(storm.effect.temperature, 0);
 }
 
 TEST(ScriptWeather, SheetLightningThundersAndForksStrike)

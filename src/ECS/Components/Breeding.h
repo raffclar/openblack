@@ -21,10 +21,10 @@ struct Lover
 	entt::entity partner {entt::null};
 };
 
-/// Where a breeder disciple walks about drawing villagers of the other sex to it
+/// Where a breeder disciple walks about drawing villagers of the other sex to it, as the x and z of a map position
 struct BreederSpot
 {
-	glm::vec2 spot {0.0f};
+	glm::ivec2 spot {0};
 };
 
 } // namespace openblack::ecs::components

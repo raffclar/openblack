@@ -8,6 +8,8 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <optional>
+#include <span>
 #include <vector>
 
 #include <entt/meta/context.hpp>
@@ -56,6 +58,7 @@
 #include "ECS/MapCells.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownPlanning.h"
@@ -577,6 +580,76 @@ TEST_F(MapProductionFiling, ABuildingThatChangesItsSizeCoversTheCellsOfItsNewOut
 	map.Reinsert(field);
 	EXPECT_EQ(registry.Get<const MapCellResident>(field).cells.size(), 5u);
 	EXPECT_EQ(map.GetAllInCell(middle + glm::ivec2 {1, 0}), std::vector {field});
+}
+
+namespace
+{
+/// Footpaths that only keep the size of each thing that comes onto the map or goes off it, at the time it does
+class SizeRecordingFootpaths final: public ecs::systems::FootpathSystemInterface
+{
+public:
+	void BuildingWorking(entt::entity /*building*/) override {}
+	void TownJoinedSite(entt::entity /*site*/, entt::entity /*town*/) override {}
+	void DanceMade(entt::entity /*dance*/, entt::entity /*town*/) override {}
+	void DanceMoved(entt::entity /*dance*/) override {}
+	void ThingPut(entt::entity thing) override { put.push_back(ScaleOf(thing)); }
+	void ThingRemoved(entt::entity thing, glm::vec3 /*position*/, bool /*filed*/) override
+	{
+		removed.push_back(ScaleOf(thing));
+	}
+	void ProcessObstacleChanges() override {}
+	void CatchUpWithMap() override {}
+	void ProcessTurn() override {}
+	std::vector<entt::entity> PutLoadedFootpaths(std::span<const Footpath> /*footpaths*/) override { return {}; }
+	[[nodiscard]] std::optional<std::vector<glm::ivec2>> PlanBetween(glm::ivec2 /*from*/, glm::ivec2 /*to*/) const override
+	{
+		return std::nullopt;
+	}
+
+	std::vector<float> put;
+	std::vector<float> removed;
+
+private:
+	static float ScaleOf(entt::entity thing) { return Locator::entitiesRegistry::value().Get<const Transform>(thing).scale.x; }
+};
+} // namespace
+
+TEST_F(MapProductionFiling, AThingThatChangesItsSizeLeavesTheMapAtItsOldSizeAndComesBackAtItsNewSize)
+{
+	// The footpaths stop to go round the thing at the size it had, then go round it at its new size
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 place {505.0f, 0.0f, 505.0f};
+	Locator::entitiesMap::reset();
+	Locator::entitiesMap::emplace<MapProduction>([](const Registry& from, entt::entity entity) {
+		const auto& transform = from.Get<const Transform>(entity);
+		return std::optional(map_cells::OutlineOfBox(transform.position, glm::mat3(1.0f), transform.scale.x, glm::vec3(0.0f),
+		                                             {2.0f, 1.0f, 2.0f}));
+	});
+	Locator::footpathSystem::emplace<SizeRecordingFootpaths>();
+	auto& footpaths = static_cast<SizeRecordingFootpaths&>(Locator::footpathSystem::value());
+	auto& map = Locator::entitiesMap::value();
+	const auto forest = registry.Create();
+	registry.Assign<Transform>(forest, place, glm::mat3(1.0f), glm::vec3(3.0f));
+	registry.Assign<BigForest>(forest);
+	map.FileNew();
+	ASSERT_EQ(footpaths.put, std::vector {3.0f});
+
+	ecs::thing_map_place::ReinsertWith(forest,
+	                                   [&registry, forest]() { registry.Get<Transform>(forest).scale = glm::vec3(1.0f); });
+	EXPECT_EQ(footpaths.removed, std::vector {3.0f});
+	EXPECT_EQ(footpaths.put, (std::vector {3.0f, 1.0f}));
+	EXPECT_EQ(registry.Get<const MapCellResident>(forest).cells.size(), 1u);
+
+	// A thing that is not in the cells only changes
+	const auto held = registry.Create();
+	registry.Assign<Transform>(held, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<BigForest>(held);
+	registry.Assign<InHand>(held);
+	map.FileNew();
+	ecs::thing_map_place::ReinsertWith(held, [&registry, held]() { registry.Get<Transform>(held).scale = glm::vec3(2.0f); });
+	EXPECT_EQ(registry.Get<const Transform>(held).scale.x, 2.0f);
+	EXPECT_EQ(footpaths.removed, std::vector {3.0f});
+	Locator::footpathSystem::reset();
 }
 
 TEST_F(MapProductionFiling, AWalkerGoesToTheFrontOfItsCellOnlyWhenItsAngleChanges)

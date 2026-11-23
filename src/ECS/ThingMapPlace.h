@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include <entt/entity/entity.hpp>
 
 #include "3D/MapCoords.h"
@@ -44,5 +46,8 @@ void Put(Registry& registry, entt::entity thing, const map_coords::MapCoords& pl
 /// A thing that turned or changed its size comes out of the map's cells and goes in again at once, as the game does
 /// (see MapInterface::Reinsert). Nothing changes for a thing that is not in the cells.
 void Reinsert(entt::entity thing);
+/// A thing that changes its size comes out of the map's cells before the change and goes in again after it, as the
+/// game does (see MapInterface::Reinsert). A thing that is not in the cells only changes.
+void ReinsertWith(entt::entity thing, const std::function<void()>& change);
 
 } // namespace openblack::ecs::thing_map_place

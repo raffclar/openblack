@@ -55,6 +55,7 @@
 #include "CHLApi/Natives.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/LeashRules.h"
 #include "ECS/AllyInfluence.h"
@@ -250,7 +251,7 @@ void GetInfluence() // 062 GET_INFLUENCE
 {
 	const auto position = PopVec();
 	const auto raw = Pop().intVal != 0;
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	// A player who isn't in the game has no influence anywhere
 	std::optional<float> influence;
 	if (ScriptNamesPlayer(player) && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
@@ -350,7 +351,7 @@ void GetNearestTownOfPlayer() // 226 GET_NEAREST_TOWN_OF_PLAYER
 	// The player's nearest town to the place within the radius, by the game's map distance. The towns go in the order
 	// of the player's own list, and the last of equals wins.
 	const auto radius = Popf();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	const auto position = PopVec();
 	auto& registry = Locator::entitiesRegistry::value();
 	entt::entity found = entt::null;
@@ -420,7 +421,7 @@ ecs::components::TownImpression* ScriptTownImpression(entt::entity object)
 
 void BeliefForPlayer() // 247 BELIEF_FOR_PLAYER
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object) || !ScriptNamesPlayer(player))
@@ -443,7 +444,7 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 {
 	// The player takes the town: the player it believes in most is halved, and the taker believes that most and the amount
 	const auto amount = Popf();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	auto* impression = ScriptTownImpression(PopObject());
 	if (impression == nullptr || !ScriptNamesPlayer(player))
 	{
@@ -464,7 +465,7 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 
 void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	const auto enable = Pop().intVal != 0;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The hand's virtual influence for player {} is turned {}",
 	                    static_cast<int>(player), enable ? "on" : "off");
@@ -491,7 +492,7 @@ void MoveComputerPlayerPosition() // 310 MOVE_COMPUTER_PLAYER_POSITION
 	const auto withFixedHeight = Pop().intVal != 0;
 	const auto speed = Popf();
 	const auto position = PopVec();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().MoveHand(player, position, speed, withFixedHeight);
@@ -500,7 +501,7 @@ void MoveComputerPlayerPosition() // 310 MOVE_COMPUTER_PLAYER_POSITION
 
 void EnableDisableComputerPlayer311() // 311 ENABLE_DISABLE_COMPUTER_PLAYER
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	const auto enable = Pop().intVal != 0;
 	if (Locator::computerPlayerSystem::has_value())
 	{
@@ -510,7 +511,7 @@ void EnableDisableComputerPlayer311() // 311 ENABLE_DISABLE_COMPUTER_PLAYER
 
 void GetComputerPlayerPosition() // 312 GET_COMPUTER_PLAYER_POSITION
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	// A player with no computer mind gives the origin
 	std::optional<glm::vec3> position;
 	if (Locator::computerPlayerSystem::has_value())
@@ -524,7 +525,7 @@ void SetComputerPlayerPosition() // 313 SET_COMPUTER_PLAYER_POSITION
 {
 	const auto withFixedHeight = Pop().intVal != 0;
 	const auto position = PopVec();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().SetHand(player, position, withFixedHeight);
@@ -535,7 +536,7 @@ void SetPlayerBelief() // 325 SET_PLAYER_BELIEF
 {
 	// The town's belief in the player becomes a share of its belief in its owner
 	const auto share = Popf();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	const auto object = PopObject();
 	auto* impression = ScriptTownImpression(object);
 	if (impression == nullptr || !ScriptNamesPlayer(player))
@@ -573,13 +574,13 @@ void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 
 void ComputerPlayerReady() // 344 COMPUTER_PLAYER_READY
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	Pushb(Locator::computerPlayerSystem::has_value() && Locator::computerPlayerSystem::value().Ready(player));
 }
 
 void EnableDisableComputerPlayer345() // 345 ENABLE_DISABLE_COMPUTER_PLAYER
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	const auto pause = Pop().intVal != 0;
 	if (Locator::computerPlayerSystem::has_value())
 	{
@@ -591,7 +592,7 @@ void SetComputerPlayerPersonality() // 364 SET_COMPUTER_PLAYER_PERSONALITY
 {
 	const auto weight = Popf();
 	const auto aspect = PopString();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().SetPersonality(player, aspect, weight);
@@ -602,7 +603,7 @@ void SetComputerPlayerSuppression() // 365 SET_COMPUTER_PLAYER_SUPPRESSION
 {
 	const auto suppression = Popf();
 	const auto aspect = PopString();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().SetSuppression(player, aspect, suppression);
@@ -614,7 +615,7 @@ void ForceComputerPlayerAction() // 366 FORCE_COMPUTER_PLAYER_ACTION
 	const auto second = PopObject();
 	const auto first = PopObject();
 	const auto action = PopString();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (Locator::computerPlayerSystem::has_value())
 	{
 		std::ignore = Locator::computerPlayerSystem::value().ForceAction(player, action, first, second);
@@ -626,7 +627,7 @@ void QueueComputerPlayerAction() // 367 QUEUE_COMPUTER_PLAYER_ACTION
 	const auto second = PopObject();
 	const auto first = PopObject();
 	const auto action = PopString();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().QueueAction(player, action, first, second);
@@ -677,7 +678,7 @@ void SetDisciple() // 369 SET_DISCIPLE
 void ReleaseComputerPlayer() // 370 RELEASE_COMPUTER_PLAYER
 {
 	// The mind continues and releases the hand
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().SetPaused(player, false);
@@ -687,7 +688,7 @@ void ReleaseComputerPlayer() // 370 RELEASE_COMPUTER_PLAYER
 void SetComputerPlayerSpeed() // 371 SET_COMPUTER_PLAYER_SPEED
 {
 	const auto speed = Popf();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().SetSpeed(player, speed);
@@ -698,7 +699,7 @@ void CallComputerPlayer() // 374 CALL_COMPUTER_PLAYER
 {
 	// Each player has a computer player from its start. The script gets the player's entity, which keeps the state of
 	// the computer player.
-	const auto name = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto name = ScriptPlayerName(Popf());
 	const auto player =
 	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().FindPlayer(name) : std::optional<entt::entity> {};
 	if (!player.has_value() || !Locator::entitiesRegistry::value().Valid(*player))
@@ -766,8 +767,8 @@ void SetCanBuildWorshipsite() // 376 SET_CAN_BUILD_WORSHIPSITE
 void SetComputerPlayerAttitude() // 378 SET_COMPUTER_PLAYER_ATTITUDE
 {
 	const auto attitude = Popf();
-	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto other = ScriptPlayerName(Popf());
+	const auto player = ScriptPlayerName(Popf());
 	// The mind of the first player now thinks this of the second; a number that names no player does nothing
 	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::computerPlayerSystem::has_value())
 	{
@@ -777,8 +778,8 @@ void SetComputerPlayerAttitude() // 378 SET_COMPUTER_PLAYER_ATTITUDE
 
 void GetComputerPlayerAttitude() // 379 GET_COMPUTER_PLAYER_ATTITUDE
 {
-	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto other = ScriptPlayerName(Popf());
+	const auto player = ScriptPlayerName(Popf());
 	// A number that names no player gives 0
 	float attitude = 0.0f;
 	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::computerPlayerSystem::has_value())
@@ -791,7 +792,7 @@ void GetComputerPlayerAttitude() // 379 GET_COMPUTER_PLAYER_ATTITUDE
 void LoadComputerPlayerPersonality() // 380 LOAD_COMPUTER_PLAYER_PERSONALITY
 {
 	const auto file = PopString();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	// The mind of the player gets the weights of the file. A missing file or a number that names no player does nothing.
 	if (ScriptNamesPlayer(player) && Locator::computerPlayerSystem::has_value())
 	{
@@ -802,7 +803,7 @@ void LoadComputerPlayerPersonality() // 380 LOAD_COMPUTER_PLAYER_PERSONALITY
 void SaveComputerPlayerPersonality() // 381 SAVE_COMPUTER_PLAYER_PERSONALITY
 {
 	const auto file = PopString();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	// The file gets the weights of the mind of the player. A number that names no player does nothing.
 	if (ScriptNamesPlayer(player) && Locator::computerPlayerSystem::has_value())
 	{
@@ -813,8 +814,8 @@ void SaveComputerPlayerPersonality() // 381 SAVE_COMPUTER_PLAYER_PERSONALITY
 void SetPlayerAlly() // 382 SET_PLAYER_ALLY
 {
 	const auto strength = Popf();
-	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto other = ScriptPlayerName(Popf());
+	const auto player = ScriptPlayerName(Popf());
 	// The two players are allies of each other with this strength; a number that names no player does nothing
 	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::playerSystem::has_value())
 	{
@@ -824,8 +825,8 @@ void SetPlayerAlly() // 382 SET_PLAYER_ALLY
 
 void GetPlayerAlly() // 398 GET_PLAYER_ALLY
 {
-	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto other = ScriptPlayerName(Popf());
+	const auto player = ScriptPlayerName(Popf());
 	// The strength that the second player keeps for the first; a number that names no player gives 0
 	float strength = 0.0f;
 	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::playerSystem::has_value())
@@ -836,9 +837,9 @@ void GetPlayerAlly() // 398 GET_PLAYER_ALLY
 }
 
 /// The player a script names: its 0 is the neutral player, the others count from 1
-PlayerNames ScriptPlayerName(int32_t scriptPlayer)
+PlayerNames ScriptPlayerName(float scriptPlayer)
 {
-	return script::script_players::NameOf(scriptPlayer);
+	return script::script_players::NameOfValue(scriptPlayer);
 }
 
 void GetTownWorshipDeaths() // 410 GET_TOWN_WORSHIP_DEATHS
@@ -858,7 +859,7 @@ void GetTownWorshipDeaths() // 410 GET_TOWN_WORSHIP_DEATHS
 
 void GetPlayerTownTotal() // 417 GET_PLAYER_TOWN_TOTAL
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	// The number of towns that the player has now
 	const auto& registry = Locator::entitiesRegistry::value();
 	Pushf(static_cast<float>(ecs::player_towns::Total(registry, player)));
@@ -894,7 +895,7 @@ void SetLandBalance() // 427 SET_LAND_BALANCE
 	// One of the eight balances of the land, as the land script sets it. The game writes outside the eight balances for
 	// an index out of the range; openblack ignores such an index (vanilla-bugs 928).
 	const auto value = Popf();
-	const auto index = static_cast<int32_t>(Popf());
+	const auto index = x87::ToInteger(Popf());
 	lhscriptx::FeatureScriptCommands::SetGlobalLandBalance(index, value);
 }
 
@@ -986,7 +987,7 @@ std::optional<entt::entity> PlayersTemple(PlayerNames player)
 void GetTemplePosition() // 451 GET_TEMPLE_POSITION
 {
 	// Where a player's temple stands, or nowhere (all zero) without one
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	glm::vec3 position {0.0f};
 	if (const auto templeEntity = PlayersTemple(player); templeEntity.has_value())
 	{
@@ -997,7 +998,7 @@ void GetTemplePosition() // 451 GET_TEMPLE_POSITION
 
 void GameClearComputerPlayerActions() // 454 GAME_CLEAR_COMPUTER_PLAYER_ACTIONS
 {
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	if (Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().ClearActions(player);
@@ -1010,7 +1011,7 @@ void GetTempleEntrancePosition() // 457 GET_TEMPLE_ENTRANCE_POSITION
 	// without a temple
 	const auto height = Popf();
 	const auto radius = Popf();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	const auto templeEntity = PlayersTemple(player);
 	if (!templeEntity.has_value())
 	{

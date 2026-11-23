@@ -59,6 +59,15 @@ inline constexpr float k_BigForestArriveShare = 0.5f;
 /// A map position that changes to metres and back to whole map units, as the game does when it gives a point in metres.
 /// Far from the corner of the map the result can be a map unit or two away from the start. The altitude is 0.
 [[nodiscard]] map_coords::MapCoords ThroughMetres(const map_coords::MapCoords& place);
+/// A map position that changes to a point and back, as the game does when a thing gives its nearest edge as a point: the
+/// point has the land height at the map position plus its altitude, and the new map position has the height of the
+/// point above the land at the new position. `groundAt` gives the height of the land at a map position.
+template <typename GroundAt>
+[[nodiscard]] map_coords::MapCoords ThroughPoint(const map_coords::MapCoords& place, const GroundAt& groundAt)
+{
+	const float height = static_cast<float>(groundAt(place)) + place.altitude;
+	return map_coords::FromWorld(glm::vec3(map_coords::ToMetres(place.x), height, map_coords::ToMetres(place.z)), groundAt);
+}
 /// Where a villager takes wood from a big forest, as a map position: halfway in from its edge, on the villager's side
 [[nodiscard]] map_coords::MapCoords BigForestArrivePosition(const map_coords::MapCoords& bigForest,
                                                             const map_coords::MapCoords& villager, float radius);

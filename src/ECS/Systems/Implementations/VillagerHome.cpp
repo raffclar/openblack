@@ -22,6 +22,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -469,12 +470,11 @@ uint32_t HomeNothingToDo(LivingAction& action)
 
 /// What blocks a spot to lie down by a tree: a sleeper lying down, or a thing with the fixed mark, close to the tree past
 /// its size. A tree has no fixed mark, so the tree does not block its own spot.
-bool BlocksTreeTent(entt::entity thing, glm::vec2 tree)
+bool BlocksTreeTent(entt::entity thing, const map_coords::MapCoords& tree)
 {
 	auto& registry = WorldRegistry();
-	const auto* transform = registry.TryGet<const Transform>(thing);
-	if (transform == nullptr ||
-	    gutils::GetDistanceInMetres(tree, glm::xz(transform->position)) - world_objects::SizeOf(thing).radius >=
+	if (!registry.AllOf<Transform>(thing) ||
+	    gutils::GetDistanceInMetres(tree, ecs::thing_map_place::Of(registry, thing)) - world_objects::SizeOf(thing).radius >=
 	        routine::k_TentTreeCrowd)
 	{
 		return false;
@@ -487,13 +487,14 @@ bool BlocksTreeTent(entt::entity thing, glm::vec2 tree)
 }
 
 /// A spot to lie down by a tree, on its far side from what is near it; none when two things are near it. With nothing
-/// near it, the spot is on the side of the tree that is towards the villager.
-std::optional<glm::vec2> TreeTentPos(entt::entity tree, glm::vec2 villager)
+/// near it, the spot is on the side of the tree that is towards the villager. The search and the spot use map positions.
+std::optional<map_coords::MapCoords> TreeTentPos(entt::entity tree, const map_coords::MapCoords& villager)
 {
+	const auto& registry = WorldRegistry();
 	const auto& map = Locator::entitiesMap::value();
-	const auto at = PositionOf(tree);
-	std::optional<glm::vec2> blocker;
-	auto cell = map_coords::CellOf(at);
+	const auto at = ecs::thing_map_place::Of(registry, tree);
+	std::optional<map_coords::MapCoords> blocker;
+	auto cell = map_coords::Cell(at);
 	map_coords::Spiral spiral;
 	for (int32_t count = 9; count != 0; --count)
 	{
@@ -507,13 +508,13 @@ std::optional<glm::vec2> TreeTentPos(entt::entity tree, glm::vec2 villager)
 			{
 				return std::nullopt;
 			}
-			blocker = PositionOf(thing);
+			blocker = ecs::thing_map_place::Of(registry, thing);
 		}
 		const auto& step = spiral.Next();
 		cell += glm::ivec2(step.x, step.z);
 	}
 	const float angle = blocker.has_value() ? gutils::Get3DAngleFromXZ(*blocker, at) : gutils::Get3DAngleFromXZ(at, villager);
-	return routine::Polar(at, angle, routine::k_TentTreeGap);
+	return routine::StepFrom(at, angle, routine::k_TentTreeGap);
 }
 
 } // namespace
@@ -530,7 +531,7 @@ bool villager_home::AreWeThere(entt::entity villager, glm::ivec2 point)
 	return walk_arrival::WithinAStep(WalkPositionOf(villager), point, speed);
 }
 
-std::optional<glm::vec2> villager_home::PosOutsideAbode(entt::entity villager)
+std::optional<map_coords::MapCoords> villager_home::PosOutsideAbode(entt::entity villager)
 {
 	const auto abode = AbodeOf(villager);
 	if (abode == entt::null)
@@ -538,26 +539,31 @@ std::optional<glm::vec2> villager_home::PosOutsideAbode(entt::entity villager)
 		return std::nullopt;
 	}
 	// Out from its door, about an eighth of a half turn either side, a step or two from it
-	return routine::PosOutsideDoor(PositionOf(abode), ArrivePosition(abode), FloatRandom());
+	return routine::PosOutsideDoor(thing_map_place::Of(WorldRegistry(), abode), ArrivePlace(abode), FloatRandom());
 }
 
 bool villager_home::Collides(glm::vec2 point)
 {
-	return routine::OpenSpotCollides(villager_flock::CellCollision(map_coords::FromMetres(point)));
+	return Collides(map_coords::FromMetres(point));
+}
+
+bool villager_home::Collides(const map_coords::MapCoords& place)
+{
+	return routine::OpenSpotCollides(villager_flock::CellCollision(place));
 }
 
 namespace
 {
 
 /// Whether a villager lies down in the open within reach of a spiral point
-bool SleeperNear(glm::ivec2 cell, glm::vec2 point)
+bool SleeperNear(const map_coords::MapCoords& point)
 {
 	auto& registry = WorldRegistry();
-	for (const auto thing : Locator::entitiesMap::value().GetAllInCell(cell))
+	for (const auto thing : Locator::entitiesMap::value().GetAllInCell(map_coords::Cell(point)))
 	{
 		const auto* action = registry.TryGet<const LivingAction>(thing);
 		if (action != nullptr && registry.AllOf<Villager>(thing) &&
-		    gutils::GetDistanceInMetres(point, PositionOf(thing)) < routine::k_TentSleeperGap &&
+		    gutils::GetDistanceInMetres(point, ecs::thing_map_place::Of(registry, thing)) < routine::k_TentSleeperGap &&
 		    State(*action, LivingAction::Index::Top) == VillagerStates::SleepInTent)
 		{
 			return true;
@@ -566,8 +572,9 @@ bool SleeperNear(glm::ivec2 cell, glm::vec2 point)
 	return false;
 }
 
-/// A spot for the villager to lie down for the night without a home: by a tree near it, or in the open about a point
-std::optional<glm::vec2> GetTentPos(entt::entity villager, glm::vec2 spot)
+/// A spot for the villager to lie down for the night without a home: by a tree near it, or in the open about a point.
+/// The search uses map positions and changes the spot in whole map units.
+std::optional<map_coords::MapCoords> GetTentPos(entt::entity villager, map_coords::MapCoords spot)
 {
 	if (!Locator::entitiesMap::has_value())
 	{
@@ -575,36 +582,36 @@ std::optional<glm::vec2> GetTentPos(entt::entity villager, glm::vec2 spot)
 	}
 	auto& registry = WorldRegistry();
 	const auto& map = Locator::entitiesMap::value();
-	const auto tree = ecs::nearest_search::FindNearest(
-	    map_coords::FromMetres(PositionOf(villager)), routine::k_TentTreeSearch, [&](glm::ivec2 cell) {
-		    std::vector<ecs::nearest_search::Candidate> found;
-		    for (const auto thing : map.GetAllInCell(cell))
-		    {
-			    if (registry.AllOf<Tree, Transform>(thing))
-			    {
-				    found.push_back({.entity = thing, .at = map_coords::FromMetres(PositionOf(thing))});
-			    }
-		    }
-		    return found;
-	    });
+	const auto here = ecs::thing_map_place::Of(registry, villager);
+	const auto tree = ecs::nearest_search::FindNearest(here, routine::k_TentTreeSearch, [&](glm::ivec2 cell) {
+		std::vector<ecs::nearest_search::Candidate> found;
+		for (const auto thing : map.GetAllInCell(cell))
+		{
+			if (registry.AllOf<Tree, Transform>(thing))
+			{
+				found.push_back({.entity = thing, .at = ecs::thing_map_place::Of(registry, thing)});
+			}
+		}
+		return found;
+	});
 	if (tree != entt::null)
 	{
-		if (const auto byTree = TreeTentPos(tree, PositionOf(villager)); byTree.has_value())
+		if (const auto byTree = TreeTentPos(tree, here); byTree.has_value())
 		{
 			return byTree;
 		}
 	}
 	for (uint32_t tries = 0; tries < routine::k_TentTries; ++tries)
 	{
-		if (!villager_home::Collides(spot))
+		if (!routine::OpenSpotCollides(ecs::villager_flock::CellCollision(spot)))
 		{
 			// The spot is taken if a sleeper lies near any point of a spiral walked from it; it ends where the walk does
 			bool free = true;
-			auto coords = map_coords::FromMetres(spot);
+			auto coords = spot;
 			map_coords::Spiral spiral;
 			for (int32_t count = 9; count != 0; --count)
 			{
-				if (free && SleeperNear(map_coords::Cell(coords), map_coords::ToMetres(coords)))
+				if (free && SleeperNear(coords))
 				{
 					free = false;
 				}
@@ -612,7 +619,7 @@ std::optional<glm::vec2> GetTentPos(entt::entity villager, glm::vec2 spot)
 			}
 			if (free)
 			{
-				return map_coords::ToMetres(coords);
+				return coords;
 			}
 		}
 		spot = routine::TentRetry(spot, FloatRandom());
@@ -678,7 +685,7 @@ std::optional<map_coords::MapCoords> GetChillOutPos(entt::entity villager)
 }
 
 /// Where a villager sits outside its house, about its door
-std::optional<glm::vec2> GetPosOutsideMyHouse(entt::entity villager)
+std::optional<map_coords::MapCoords> GetPosOutsideMyHouse(entt::entity villager)
 {
 	const auto abode = AbodeOf(villager);
 	if (abode == entt::null || TownOf(villager) == entt::null)
@@ -686,8 +693,8 @@ std::optional<glm::vec2> GetPosOutsideMyHouse(entt::entity villager)
 		return std::nullopt;
 	}
 	const float half = k_OutsideHouseShare * Locator::infoConstants::value().town.maxDistanceFromHouseThatPeopleChillOut;
-	return routine::PosOutside(PositionOf(abode), villager_home::ArrivePosition(abode), k_OutsideHouseDivisions, half, half,
-	                           FloatRandom());
+	return routine::PosOutside(ecs::thing_map_place::Of(WorldRegistry(), abode), villager_home::ArrivePlace(abode),
+	                           k_OutsideHouseDivisions, half, half, FloatRandom());
 }
 
 /// The town a vagrant can join: the nearest town within reach of any tribe, but only when that town is of its own
@@ -864,7 +871,7 @@ glm::vec2 villager_home::DoorPosition(entt::entity abode)
 	                                          registry.AnyOf<Field, FishFarm>(abode));
 	if (door == abode_door::Door::VillageCentre)
 	{
-		return abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
+		return glm::xz(abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale));
 	}
 	glm::vec3 point = transform.position;
 	// An altar has its model also while the game does not show it
@@ -892,7 +899,15 @@ map_coords::MapCoords villager_home::DoorPlace(entt::entity abode)
 	std::optional<glm::vec2> doorMetres;
 	if (door == abode_door::Door::VillageCentre)
 	{
-		doorMetres = abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
+		// The village centre's door keeps the height of its point above the land
+		const auto point = abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
+		if (Locator::terrainSystem::has_value())
+		{
+			const auto& island = Locator::terrainSystem::value();
+			return abode_door::VillageCentreDoorPlace(
+			    point, [&island](const map_coords::MapCoords& place) { return map_coords::GroundAt(island, place); });
+		}
+		doorMetres = glm::xz(point);
 	}
 	else if (const auto model = thing_model::ModelOf(registry, abode); door == abode_door::Door::Model && model.has_value())
 	{
@@ -967,7 +982,7 @@ bool villager_home::SetStateWhenTappedOnAbode(entt::entity villager)
 	{
 		return false;
 	}
-	const auto spot = routine::PosOutsideDoor(PositionOf(abode), ArrivePosition(abode), FloatRandom());
+	const auto spot = routine::PosOutsideDoor(thing_map_place::Of(WorldRegistry(), abode), ArrivePlace(abode), FloatRandom());
 	// It decides afresh once it has yawned outside, and its needs and bed leave it be for that decision
 	Locator::livingActionSystem::value().VillagerSetState(*action, LivingAction::Index::Previous,
 	                                                      VillagerStates::DecideWhatToDo, true);
@@ -1190,13 +1205,15 @@ uint32_t villager_home::DoGoingHome(LivingAction& action, VillagerStates arrive,
 		SetTopState(action, VillagerStates::VagrantStart);
 		return 1;
 	}
-	// Homeless: towards its town from far off; near it, somewhere to lie down for the night, or a wander about
+	// Homeless: towards its town from far off; near it, somewhere to lie down for the night, or a wander about. All the
+	// spots are map positions.
 	const auto top = State(action, LivingAction::Index::Top);
-	const auto position = PositionOf(villager);
-	const auto townPosition = PositionOf(town);
+	const auto& registry = WorldRegistry();
+	const auto position = ecs::thing_map_place::Of(registry, villager);
+	const auto townPosition = ecs::thing_map_place::Of(registry, town);
 	auto end = top;
-	glm::vec2 goal;
-	if (gutils::GetDistanceInMetres(townPosition, position) > routine::k_FarFromTown)
+	map_coords::MapCoords goal;
+	if (gutils::GetDistanceInMetres(position, townPosition) > routine::k_FarFromTown)
 	{
 		goal = routine::TowardsTown(townPosition, position, FloatRandom());
 	}
@@ -1243,8 +1260,9 @@ uint32_t villager_home::ArrivesHome(LivingAction& action)
 			break;
 		case routine::UnfinishedHome::LieDownOutside:
 			// It tries again each turn until it finds a spot
-			if (const auto tent =
-			        GetTentPos(villager, routine::BrokenHomeTentSearch(PositionOf(abode), PositionOf(villager), FloatRandom()));
+			if (const auto tent = GetTentPos(villager, routine::BrokenHomeTentSearch(
+			                                               ecs::thing_map_place::Of(WorldRegistry(), abode),
+			                                               ecs::thing_map_place::Of(WorldRegistry(), villager), FloatRandom()));
 			    tent.has_value())
 			{
 				SetupMoveTo(action, *tent, VillagerStates::SleepInTent);
@@ -1316,11 +1334,11 @@ uint32_t villager_home::VagrantStart(LivingAction& action)
 			return 1;
 		}
 	}
-	const auto position = PositionOf(villager);
+	const auto position = ecs::thing_map_place::Of(registry, villager);
 	if (registry.Get<const Villager>(villager).life >= InfoOf(villager).damageThresholdToGoHome)
 	{
 		const auto goal = routine::VagrantWander(position, FacingOf(villager), FloatRandom());
-		if (map_coords::InBounds(map_coords::CellOf(goal)))
+		if (map_coords::InBounds(goal))
 		{
 			SetupMoveTo(action, goal, VillagerStates::VagrantStart);
 		}
@@ -1376,13 +1394,14 @@ uint32_t villager_home::GoAndChilloutOutsideHome(LivingAction& action)
 		SetTopState(action, VillagerStates::DecideWhatToDo);
 		return 1;
 	}
-	const auto door = ArrivePosition(abode);
+	const auto door = ArrivePlace(abode);
 	const float distance = Locator::infoConstants::value().town.maxDistanceFromHouseThatPeopleChillOut;
+	// It looks out from its door, away from its home, in whole map units
 	const auto lookOut =
-	    routine::Polar(door, gutils::Get3DAngleFromXZ(PositionOf(abode), door), k_OutsideHouseLookOut * distance);
+	    door + gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(thing_map_place::Of(WorldRegistry(), abode), door),
+	                                   distance * k_OutsideHouseLookOut);
 	GetMeToMyChillOutPos(
-	    action, [villager] { return GetPosOutsideMyHouse(villager); }, map_coords::FromMetres(door), distance,
-	    map_coords::FromMetres(lookOut));
+	    action, [villager] { return GetPosOutsideMyHouse(villager); }, door, distance, lookOut);
 	return 1;
 }
 

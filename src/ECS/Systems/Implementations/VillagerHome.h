@@ -114,10 +114,12 @@ uint32_t OfferToTownDesires(components::LivingAction& action);
 /// What the villager is needed for besides a home: worship, its town's desires, then its own hunger and rest. 1 when it
 /// took something up.
 uint32_t CheckNeededForSpecial(components::LivingAction& action);
-/// A spot just outside the villager's home, none without a home
-[[nodiscard]] std::optional<glm::vec2> PosOutsideAbode(entt::entity villager);
+/// A spot just outside the villager's home as a map position, none without a home
+[[nodiscard]] std::optional<map_coords::MapCoords> PosOutsideAbode(entt::entity villager);
 /// Whether a spot in the open is closed to a villager: off the map, or in water or on no land. Buildings do not close it.
 [[nodiscard]] bool Collides(glm::vec2 point);
+/// The same for a map position
+[[nodiscard]] bool Collides(const map_coords::MapCoords& place);
 /// What a villager with nothing to do does: goes home, sits outside it, or sits about its town
 uint32_t SetupNothingToDo(components::LivingAction& action);
 /// What a villager in its home does next: bed in an emergency, its own needs, its town's, or nothing much

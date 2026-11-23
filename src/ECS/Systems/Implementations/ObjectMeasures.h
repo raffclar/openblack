@@ -16,6 +16,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
+
 namespace openblack::ecs
 {
 class Registry;
@@ -50,6 +52,9 @@ namespace openblack::ecs::systems::object_measures
 /// from its middle. A dead or felled tree measures from the middle of the box of its model, as the tree lies. Every
 /// other thing measures from where it stands.
 [[nodiscard]] glm::vec2 FireMiddle(const Registry& registry, entt::entity entity);
+/// The fire middle (FireMiddle) as whole map units. A thing that measures from where it stands gives its own map
+/// position. A worship site and a dead or felled tree change their middle from metres to map units.
+[[nodiscard]] glm::ivec2 FireMiddlePlace(const Registry& registry, entt::entity entity);
 /// Where a point of a model is across the land, for a model at the position with the turn and the scale. The sum adds
 /// the third axis, then the second axis, then the first axis, then the position, as the game adds them.
 [[nodiscard]] glm::vec2 PlacedAcrossLand(glm::vec3 point, const glm::mat3& rotation, float scale, glm::vec3 position);
@@ -62,9 +67,10 @@ namespace openblack::ecs::systems::object_measures
 /// The distance from the edge of a thing to the edge of another thing, across the land. A worship site measures from
 /// its middle with its fixed reach. Every other thing measures from where it stands with its radius on the ground.
 [[nodiscard]] float DistanceFromObject(const Registry& registry, entt::entity entity, entt::entity other);
-/// The point across the land that a villager looks at when it inspects a thing: the middle of a worship site, and the
-/// place of every other thing
-[[nodiscard]] glm::vec2 InspectPoint(const Registry& registry, entt::entity entity);
+/// The map position that a villager looks at when it inspects a thing. A worship site gives its middle, changed from
+/// metres to a map position, with the height of the site above the ground there. Every other thing gives its own map
+/// position.
+[[nodiscard]] map_coords::MapCoords InspectPlace(const Registry& registry, entt::entity entity);
 /// Where a thing stands, none once it has gone. A need flag of a worship site stands at the altar of its site.
 [[nodiscard]] std::optional<glm::vec3> PositionOf(const Registry& registry, entt::entity entity);
 

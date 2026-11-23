@@ -645,6 +645,33 @@ void MapProduction::Reinsert(entt::entity entity)
 	}
 }
 
+void MapProduction::ReinsertWith(entt::entity entity, const std::function<void()>& change)
+{
+	if (_registry == nullptr)
+	{
+		change();
+		return;
+	}
+	// The things made before it changed are in their cells first
+	FileMadeBeforeLook();
+	const auto* resident = _registry->Valid(entity) && _registry->AllOf<Transform>(entity)
+	                           ? _registry->TryGet<const MapCellResident>(entity)
+	                           : nullptr;
+	// What a hand holds or the physics moves is not in the cells
+	const auto kind = resident != nullptr && !resident->cells.empty() && !_registry->AnyOf<InHand, InPhysics>(entity)
+	                      ? KindOf(*_registry, entity)
+	                      : std::nullopt;
+	if (!kind.has_value())
+	{
+		change();
+		return;
+	}
+	// It leaves its cells at its old size and goes into them at its new size
+	TakeOut(entity);
+	change();
+	File(entity, *kind);
+}
+
 void MapProduction::FileNew()
 {
 	FileMadeBeforeLook();
