@@ -366,7 +366,9 @@ Game::Game(Arguments&& args) noexcept
 	}
 	config.aiTimesEvery = args.aiTimesEvery;
 	config.turnStepTimesMs = args.turnStepTimesMs;
-	config.mindFrameBudgetMs = args.mindFrameBudgetMs;
+	// A tool's run with a fixed frame time draws the same frames each time, so its turns stop only on a budget asked for
+	config.mindFrameBudgetMs = simulation::FrameBudgetMs(args.mindFrameBudgetMs,
+	                                                     args.simulation.has_value() && args.simulation->frameTime.has_value());
 	config.frameStatsOut = args.frameStatsOut;
 	config.stageTimes = args.stageTimes;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
