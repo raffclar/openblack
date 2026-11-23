@@ -28,6 +28,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS 1
 #include "ECS/Systems/Implementations/ForestSystem.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -174,4 +175,21 @@ TEST_F(ForestMapPlaces, TheForestOfANumberIsTheFirstOfTheListOfForestsWithThatNu
 		EXPECT_EQ(forests.LandForestOf(id), first);
 	}
 	EXPECT_EQ(forests.LandForestOf(k_ForestId), newer);
+}
+
+TEST_F(ForestMapPlaces, ABigForestWithNoModelHasNoRadiusSoItsNearestPointIsItsPlace)
+{
+	// The forester and the town measure a big forest with the same radius as all other things on the ground. A big
+	// forest with no model has the radius 0. Thus its nearest point is its own place.
+	auto& registry = Locator::entitiesRegistry::value();
+	const map_coords::MapCoords bigPlace {.x = k_Z, .z = k_Z};
+	const auto bigForest = At(bigPlace, true);
+	const auto forest = At(bigPlace, true);
+	registry.Assign<LandForest>(forest, LandForest {.id = k_ForestId, .bigForest = bigForest});
+	ASSERT_EQ(ecs::systems::object_measures::TwoDRadius(registry, bigForest), 0.0f);
+
+	const ecs::systems::ForestSystem forests;
+	const auto xz = map_coords::ToMetres(bigPlace);
+	const glm::vec3 to(xz.x + 100.0f, 0.0f, xz.y);
+	EXPECT_EQ(forests.NearestPointOf(forest, to), glm::vec3(xz.x, 0.0f, xz.y));
 }

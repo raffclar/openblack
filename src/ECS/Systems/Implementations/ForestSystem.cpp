@@ -359,7 +359,7 @@ map_coords::MapCoords NearestMapPointOf(entt::entity forest, const map_coords::M
 	{
 		const auto& at = registry.Get<const Transform>(record.bigForest).position;
 		return ecs::land_forests::EdgeTowards(map_coords::FromMetres(glm::xz(at)),
-		                                      ecs::world_objects::SizeOf(record.bigForest).radius, to);
+		                                      object_measures::TwoDRadius(registry, record.bigForest), to);
 	}
 	return map_coords::FromMetres(glm::xz(registry.Get<const Transform>(forest).position));
 }
@@ -1231,7 +1231,7 @@ std::optional<entt::entity> ForestSystem::PlantPineAround(entt::entity bigForest
 	const auto& land = Locator::terrainSystem::value();
 	const auto& map = Locator::entitiesMap::value();
 	// Its edge at its size now, about its own place
-	const float edge = ecs::world_objects::SizeOf(bigForest).radius;
+	const float edge = object_measures::TwoDRadius(registry, bigForest);
 	const glm::vec3 from = registry.Get<const Transform>(bigForest).position;
 	auto base = ecs::thing_map_place::Of(registry, bigForest);
 	base.altitude = from.y - land.GetHeightAt({from.x, from.z});
@@ -1249,7 +1249,7 @@ std::optional<entt::entity> ForestSystem::PlantPineAround(entt::entity bigForest
 		const auto inCell = map.GetAllInCell(map_coords::Cell(spot));
 		const bool blocked = std::ranges::any_of(inCell, [&registry, &spot](entt::entity thing) {
 			return registry.AllOf<Transform>(thing) && big_forest::BlocksPine(spot, ecs::thing_map_place::Of(registry, thing),
-			                                                                  ecs::world_objects::SizeOf(thing).radius);
+			                                                                  object_measures::TwoDRadius(registry, thing));
 		});
 		if (blocked)
 		{
@@ -1366,7 +1366,7 @@ std::optional<entt::entity> ForestSystem::NearestTownForest(entt::entity town, g
 		{
 			const auto& at = registry.Get<const Transform>(record->bigForest).position;
 			if (gutils::GetDistanceInMetres(map_coords::FromMetres(glm::xz(at)), here) >
-			    ecs::world_objects::SizeOf(record->bigForest).radius)
+			    object_measures::TwoDRadius(registry, record->bigForest))
 			{
 				distance = gutils::GetDistanceInMetres(NearestMapPointOf(forest, here), here);
 			}
