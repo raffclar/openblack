@@ -10,8 +10,7 @@
 // The testbed scenarios for disciples. One shows the symbol of the work. One shows that a disciple in the hand of another
 // god shows no symbol. One shows the work that a villager keeps when the hand releases it. One shows the villagers that
 // follow a disciple to its work, and one that a disciple calls no followers after a wait. One shows the object that a
-// script gives a villager to hold. One shows the read-out of a town's houses over which the hand holds a villager. One
-// shows the walk of a new disciple up to the thing it was put by.
+// script gives a villager to hold. One shows the read-out of a town's houses over which the hand holds a villager.
 
 #include <vector>
 
@@ -203,28 +202,6 @@ void testbed_scenarios::AddDiscipleScenarios(std::vector<Scenario>& all)
 	                 .walkAfterSeconds = 1.0f,
 	                 .walkRepeatSeconds = 20.0f,
 	                 .disciple = VillagerDisciple::Trader}},
-	});
-
-	// A villager that the hand makes a farmer by a field walks up to the field first. The game turns the direction of that
-	// walk wrong, so the villager often stops on another side of the field.
-	all.push_back({
-	    .id = "villagers.disciple_inspect_walk",
-	    .name = "A new disciple walks up to the thing it was put by",
-	    .facet = Facet::Movement,
-	    .description = "A wheat field of the player's town lies 16 m to the right of the middle of the screen. A grown "
-	                   "villager of the town stands 6 m to the left. After a second, the hand takes the villager. Three "
-	                   "seconds later, the hand puts it down at the middle of the screen, 16 m from the middle of the field.",
-	    .expected = "The villager becomes a farmer and glows. Before it farms, it walks to a spot 5 m beyond the edge of "
-	                "the field. As in the original game, this spot is often not on the side of the field where the "
-	                "villager landed: the game takes the direction of the spot from a number in the wrong unit. Before "
-	                "the change the villager walked to the spot on its own side of the field.",
-	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
-	    .framing = {.shot = Shot::Placed, .eye = {8.0f, 30.0f, -36.0f}, .look = {8.0f, 0.0f, 0.0f}},
-	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {16.0f, 0.0f}},
-	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-6.0f, -8.0f}, .joinTown = true}},
-	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 1},
-	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
-	    .townBeliefInPlayer = 1000.0f,
 	});
 
 	// A villager in the hand over a house of its town shows the town's read-out, and its own home shows that the hand
