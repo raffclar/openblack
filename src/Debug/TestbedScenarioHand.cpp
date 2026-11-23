@@ -902,6 +902,33 @@ void testbed_scenarios::AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.5f, 0.9f}}},
 	});
 
+	// The camera looks at two storage pits of the player's town, one half built and one whole. The building help of the
+	// camera is off, so the hand does not show the building tooltips. The empty hand goes over each pit.
+	all.push_back({
+	    .id = "hand.stored_over_unbuilt_pit",
+	    .name = "What a storage pit stores shows only over a built pit",
+	    .facet = Facet::Hand,
+	    .description = "A Celtic town of the player's with a village centre and two storage pits. The first pit is half "
+	                   "built and the second is whole. Each holds 300 food and 200 wood. The interface level is 1, so the "
+	                   "building tooltips do not show. The empty hand goes over the first pit for four seconds, then "
+	                   "over the second pit for four seconds.",
+	    .expected = "Over the half built pit, the hand shows \"Tap\" and not what the pit stores. Over the whole pit, the "
+	                "hand shows \"Stored - Food: 300 Wood: 200\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {28.0f, 30.0f, -5.0f}, .look = {28.0f, 0.0f, 30.0f}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {-20.0f, 60.0f}},
+	                {.type = AbodeInfo::CelticStoragePit,
+	                 .offset = {10.0f, 30.0f},
+	                 .storedFood = 300,
+	                 .storedWood = 200,
+	                 .built = 0.5f},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {45.0f, 30.0f}, .storedFood = 300, .storedWood = 200}},
+	    .commands = {{.kind = Kind::SetInterfaceLevel, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::PointerOnObject, .delaySeconds = 1.5f, .object = 1, .amount = 1.0f},
+	                 {.kind = Kind::PointerOnObject, .delaySeconds = 4.0f, .object = 2, .amount = 1.0f},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 4.0f, .point = {0.5f, 0.9f}}},
+	});
+
 	// The camera looks at a ripe wheat field of the player's town from 22 m. The hand scoops from it for three seconds.
 	all.push_back({
 	    .id = "hand.scoop_field_let_go",
