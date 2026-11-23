@@ -119,7 +119,8 @@ std::vector<Action> EachCommand()
 	                .cameraTurned = true,
 	                .cameraIcons = 0x202,
 	                .keysHeld = std::bitset<255>().set(0x39),
-	                .mouseButtons = 5},
+	                .mouseButtons = 5,
+	                .insideTemple = true},
 	    TempleLeashOff {},
 	    GiveCallOff {.creature = Entity(27)},
 	    CreatureTattoo {.creature = Entity(28),
@@ -437,7 +438,8 @@ Action RandomAction(std::mt19937& random)
 		                   .cameraTurned = bits(random) % 2 == 0,
 		                   .cameraIcons = static_cast<uint16_t>(bits(random)),
 		                   .keysHeld = std::bitset<255>().set(bits(random) % 255).set(bits(random) % 255),
-		                   .mouseButtons = bits(random)};
+		                   .mouseButtons = bits(random),
+		                   .insideTemple = bits(random) % 2 == 0};
 	case 34:
 		return GiveCallOff {.creature = entity()};
 	case 35:
@@ -1723,7 +1725,8 @@ TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlagsAndKeys)
 	                         .cameraTurned = true,
 	                         .cameraIcons = 0x0606,
 	                         .keysHeld = std::bitset<255>().set(0x1C).set(0x39),
-	                         .mouseButtons = 3};
+	                         .mouseButtons = 3,
+	                         .insideTemple = true};
 	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
 	const auto decoded = Decode(bytes);
 	ASSERT_EQ(decoded.error, DecodeError::None);
@@ -1732,10 +1735,10 @@ TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlagsAndKeys)
 
 	// The flags, the camera icons, the count of the keys held, each key's number in order, then the count of mouse buttons
 	const std::vector<uint8_t> tail(bytes.end() - 10, bytes.end());
-	EXPECT_EQ(tail, (std::vector<uint8_t> {0x1E, 0x06, 0x06, 2, 0x1C, 0x39, 3, 0, 0, 0}));
-	// A flag after the fifth is refused
+	EXPECT_EQ(tail, (std::vector<uint8_t> {0x3E, 0x06, 0x06, 2, 0x1C, 0x39, 3, 0, 0, 0}));
+	// A flag after the sixth is refused
 	auto wrongFlags = bytes;
-	*(wrongFlags.end() - 10) = 32;
+	*(wrongFlags.end() - 10) = 64;
 	EXPECT_EQ(Decode(wrongFlags).error, DecodeError::Value);
 	// A key number past the game's keys is refused
 	auto wrongKey = bytes;

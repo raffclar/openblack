@@ -65,6 +65,25 @@ inline constexpr float k_ArrivedDistanceSquared = 0.001f;
 {
 	return taken && !insideTemple;
 }
+/// While the player is inside the temple, the scripts read the position and the focus of the camera as one point far
+/// out of the world. This value is the same on each of the three axes.
+inline constexpr float k_OutOfWorld = 50000.0f;
+/// The position or the focus of the camera that a script reads. While the player is inside the temple, it is the point
+/// far out of the world. Else it is the reported point, or the middle of the axes of the world before the first report.
+[[nodiscard]] inline glm::vec3 ScriptCameraRead(std::optional<glm::vec3> reported, bool insideTemple)
+{
+	if (insideTemple)
+	{
+		return glm::vec3(k_OutOfWorld);
+	}
+	return reported.value_or(glm::vec3(0.0f));
+}
+/// SET_CAMERA_POSITION changes the script's camera only while no two-thing camera has control. Else the script's
+/// position is ignored, and no warning is given.
+[[nodiscard]] constexpr bool SetPositionReachesScriptCamera(bool inDualView)
+{
+	return !inDualView;
+}
 /// The camera is kept within a sphere of 3500 around the middle of the world, at (2560, 0, 2560)
 inline constexpr float k_WorldCentre = 2560.0f;
 inline constexpr float k_WorldRadiusSquared = 1.225e7f;

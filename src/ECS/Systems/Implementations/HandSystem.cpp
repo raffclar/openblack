@@ -722,6 +722,7 @@ void HandSystem::ReportView(PlayerNames player, const player_commands::ViewRepor
 	reported.cameraIcons = report.cameraIcons;
 	reported.keysHeld = report.keysHeld;
 	reported.mouseButtons = report.mouseButtons;
+	reported.insideTemple = report.insideTemple;
 }
 
 std::optional<HandSystemInterface::ReportedView> HandSystem::GetReportedView(PlayerNames player) const noexcept
@@ -755,6 +756,7 @@ std::optional<HandSystemInterface::ReportedView> HandSystem::GetReportedView(Pla
 	    .cameraTurned = reported->cameraTurned,
 	    .keysHeld = reported->keysHeld,
 	    .mouseButtons = reported->mouseButtons,
+	    .insideTemple = reported->insideTemple,
 	};
 }
 
