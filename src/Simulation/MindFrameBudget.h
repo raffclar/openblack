@@ -18,6 +18,22 @@ namespace openblack::simulation
 /// time. The other work of the frame then has the rest of the 10 milliseconds of a frame at 100 frames a second.
 inline constexpr float k_DefaultMindFrameBudgetMs = 8.0f;
 
+/// The budget of the computer minds in each frame of a game. When the developer gives a time, the game uses it, and 0
+/// gives no budget. When the developer gives no time, a run with a fixed frame time has no budget, because the budget
+/// follows the machine's clock and the frames of two runs then are not the same. Other games have the default budget.
+[[nodiscard]] constexpr std::optional<float> FrameBudgetMs(std::optional<float> givenMs, bool fixedFrameTime) noexcept
+{
+	if (givenMs.has_value())
+	{
+		return *givenMs > 0.0f ? givenMs : std::nullopt;
+	}
+	if (fixedFrameTime)
+	{
+		return std::nullopt;
+	}
+	return k_DefaultMindFrameBudgetMs;
+}
+
 /// The time that the turns of the players, with their computer minds, can use in one frame. When the players of a turn
 /// use all of it, the turn stops between two players and continues in the next frame (deviation row 288). It keeps no game
 /// state, and it never changes the world: it changes only the frame in which each player does its turn.
