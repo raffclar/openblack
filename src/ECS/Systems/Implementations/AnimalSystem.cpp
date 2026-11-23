@@ -2278,16 +2278,8 @@ float AnimalSystem::SpeedForScript(entt::entity entity) const
 
 void AnimalSystem::SetScale(entt::entity animal, float scale)
 {
-	if (auto* transform = EntityRegistry().TryGet<Transform>(animal))
-	{
-		const bool resized = transform->scale.x != scale;
-		transform->scale = glm::vec3(scale);
-		// An animal in the map's cells that changes its size comes out of them and goes in again
-		if (resized)
-		{
-			ecs::thing_map_place::Reinsert(animal);
-		}
-	}
+	// An animal in the map's cells that changes its size comes out of them at its old size and goes in at its new size
+	ecs::thing_map_place::Resize(EntityRegistry(), animal, scale);
 }
 
 bool AnimalSystem::IsFrighteningToCreature(entt::entity animal) const

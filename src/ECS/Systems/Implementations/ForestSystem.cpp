@@ -943,9 +943,12 @@ void ForestSystem::ProcessForests()
 					RemoveTree(tree);
 					return true;
 				}
-				Resize(tree, *after);
-				// A tree that withers comes out of the map's cells and goes in again. A tree that grows does not.
-				ecs::thing_map_place::Reinsert(tree);
+				// A tree that withers to a new size comes out of the map's cells at its old size and goes in again at its
+				// new size. A tree that grows does not.
+				if (*after != registry.Get<const Transform>(tree).scale.y)
+				{
+					ecs::thing_map_place::ReinsertWith(tree, [tree, size = *after]() { Resize(tree, size); });
+				}
 				return false;
 			});
 		}

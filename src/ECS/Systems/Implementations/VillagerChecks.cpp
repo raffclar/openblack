@@ -110,15 +110,9 @@ float GrownScaleFor(const Villager& person, uint32_t age, float scale)
 
 void SetScale(entt::entity villager, float scale)
 {
-	auto& transform = Entities().Get<Transform>(villager);
-	const bool resized = transform.scale.x != scale;
-	transform.scale = glm::vec3(scale);
+	// A villager in the map's cells that changes its size comes out of them at its old size and goes in at its new size
+	ecs::thing_map_place::Resize(Entities(), villager, scale);
 	Entities().SetDirty();
-	// A villager in the map's cells that changes its size comes out of them and goes in again
-	if (resized)
-	{
-		ecs::thing_map_place::Reinsert(villager);
-	}
 }
 
 /// A child grows on the growth turns its checks fall on, and once old enough becomes an adult: the youngest adult's
