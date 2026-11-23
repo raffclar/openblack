@@ -66,6 +66,7 @@ lhvm::ScriptType TaskType(uint32_t task);
 void ScriptMessage(std::string_view message);
 void ObjectNoLongerValid();
 bool PlayerInsideTemple();
+bool ReportedInsideTemple();
 void ApplySwitchChanges(const script::switches::SwitchChanges& changes);
 glm::vec3 PopVec();
 void PushVec(const glm::vec3& vec);

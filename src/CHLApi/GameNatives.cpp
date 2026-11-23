@@ -1139,7 +1139,7 @@ void SetScaffoldProperties() // 363 SET_SCAFFOLD_PROPERTIES
 
 void InsideTemple() // 405 INSIDE_TEMPLE
 {
-	Pushb(PlayerInsideTemple());
+	Pushb(ReportedInsideTemple());
 }
 
 void SetGameTimeProperties() // 407 SET_GAME_TIME_PROPERTIES

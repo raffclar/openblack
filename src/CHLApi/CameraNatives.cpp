@@ -271,13 +271,6 @@ void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 	}
 }
 
-/// The player is inside the temple, as the last view report of the player tells it
-bool ReportedInsideTemple()
-{
-	const auto view = ScriptView();
-	return view.has_value() && view->insideTemple;
-}
-
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
 {
 	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
@@ -301,21 +294,21 @@ void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW
 		ObjectNoLongerValid();
 	}
 	const auto view = ecs::thing_on_screen::ScreenView(PlayerNames::PLAYER_ONE);
-	Pushb(valid && !PlayerInsideTemple() && view.has_value() && ecs::thing_on_screen::OnScreen(*view, object));
+	Pushb(valid && !ReportedInsideTemple() && view.has_value() && ecs::thing_on_screen::OnScreen(*view, object));
 }
 
 void PosFieldOfView() // 012 POS_FIELD_OF_VIEW
 {
 	const auto position = PopVec();
 	const auto view = ecs::thing_on_screen::ScreenView(PlayerNames::PLAYER_ONE);
-	Pushb(!PlayerInsideTemple() && view.has_value() && screen_pick::PointOnScreen(*view, position));
+	Pushb(!ReportedInsideTemple() && view.has_value() && screen_pick::PointOnScreen(*view, position));
 }
 
 void StartCameraControl() // 030 START_CAMERA_CONTROL
 {
 	const auto task = CurrentTask();
 	const bool templeScript = TaskType(task) & (lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
-	const bool insideTemple = PlayerInsideTemple();
+	const bool insideTemple = ReportedInsideTemple();
 	// Following a creature is left for the script's camera, which takes over from where the camera is
 	if (!insideTemple && Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().IsActive())
 	{
