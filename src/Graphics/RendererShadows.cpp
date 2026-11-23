@@ -423,6 +423,38 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 				                       radius) *
 				    HandShadow::Daylight(sky.GetTime(), sky.GetDayNightTimes());
 				const auto alpha = GroundShadow::ScaledAlpha(fade);
+				// What the hand holds. The trees have a draw of their own, thus a held tree is in a list of its own.
+				const auto heldByThisHand = [&registry, handEntity](const auto& draw) {
+					const auto* inHand = registry.TryGet<const ecs::components::InHand>(draw.entity);
+					return inHand != nullptr && inHand->hand == handEntity;
+				};
+				const ecs::systems::RenderContext::HighDetailDraw* held = nullptr;
+				for (const auto* draws : {&renderCtx.inHandDraws, &renderCtx.heldTreeDraws})
+				{
+					if (const auto found = std::ranges::find_if(*draws, heldByThisHand);
+					    held == nullptr && found != draws->end())
+					{
+						held = &*found;
+					}
+				}
+				// On the lead of a throw, the hand's shadow takes the thing where the frame before drew it
+				std::optional<glm::mat4> heldModel;
+				if (held != nullptr)
+				{
+					const auto* inHand = registry.TryGet<const ecs::components::InHand>(held->entity);
+					const bool onLead = inHand->drawn.has_value() && inHand->drawn->onThrowLead;
+					std::optional<glm::mat4> before;
+					if (_handHeldDrawnBefore.has_value() && _handHeldDrawnBefore->first == held->entity)
+					{
+						before = _handHeldDrawnBefore->second;
+					}
+					heldModel = throw_lead_shadow::HandShadowModel(held->model, onLead, before);
+					_handHeldDrawnBefore = std::pair {held->entity, held->model};
+				}
+				else
+				{
+					_handHeldDrawnBefore.reset();
+				}
 				if (alpha > 0)
 				{
 					const L3DMeshSubmitDesc::MorphTargets* handMorph = nullptr;
@@ -451,21 +483,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 					    .secondRowsOnly = true,
 					};
 					// What the hand holds counts every sample. A tree, a pot or a crop fills the shadow through its
-					// textures' alpha instead, as its moving shadow does. The trees have a draw of their own, thus a
-					// held tree is in a list of its own.
-					const auto heldByThisHand = [&registry, handEntity](const auto& draw) {
-						const auto* inHand = registry.TryGet<const ecs::components::InHand>(draw.entity);
-						return inHand != nullptr && inHand->hand == handEntity;
-					};
-					const ecs::systems::RenderContext::HighDetailDraw* held = nullptr;
-					for (const auto* draws : {&renderCtx.inHandDraws, &renderCtx.heldTreeDraws})
-					{
-						if (const auto found = std::ranges::find_if(*draws, heldByThisHand);
-						    held == nullptr && found != draws->end())
-						{
-							held = &*found;
-						}
-					}
+					// textures' alpha instead, as its moving shadow does.
 					if (held != nullptr && meshManager.Contains(held->mesh))
 					{
 						const auto* heldMesh = &*meshManager.Handle(held->mesh);
@@ -476,7 +494,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 							pose = villagerPose->bones;
 						}
 						caster.bodies.at(1) = {.mesh = heldMesh,
-						                       .model = held->model,
+						                       .model = *heldModel,
 						                       .pose = pose,
 						                       .morph = nullptr,
 						                       .secondRowsOnly = false,

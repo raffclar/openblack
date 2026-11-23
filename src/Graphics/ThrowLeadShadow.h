@@ -13,6 +13,7 @@
 
 #include <optional>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
 #include "Graphics/GroundShadow.h"
@@ -33,6 +34,11 @@ namespace openblack::graphics::throw_lead_shadow
 /// The cast of the shadow that stays after the lead. The light and the level stay as on the last frame of the lead.
 /// The land height comes from the place of the thing now. When the thing is gone, the land height stays as it was.
 [[nodiscard]] GroundShadow::Cast KeptCast(const GroundShadow::Cast& last, std::optional<float> groundUnderThing);
+
+/// The model of the thrown thing in the shadow of the hand. The hand makes its shadow before the frame puts the thing
+/// on the lead. Thus on the lead, the hand's shadow takes the thing where the frame before drew it. On the first frame of
+/// the lead, that is where the hand held it. Off the lead, the hand puts the thing first and takes it where it is now.
+[[nodiscard]] glm::mat4 HandShadowModel(const glm::mat4& drawnNow, bool onLead, const std::optional<glm::mat4>& drawnBefore);
 
 /// What the shadow does on a frame
 enum class Step

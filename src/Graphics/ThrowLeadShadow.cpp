@@ -26,6 +26,12 @@ GroundShadow::Cast throw_lead_shadow::KeptCast(const GroundShadow::Cast& last, s
 	return cast;
 }
 
+glm::mat4 throw_lead_shadow::HandShadowModel(const glm::mat4& drawnNow, bool onLead,
+                                             const std::optional<glm::mat4>& drawnBefore)
+{
+	return onLead ? drawnBefore.value_or(drawnNow) : drawnNow;
+}
+
 throw_lead_shadow::Step throw_lead_shadow::StepOf(bool onLead, uint8_t alpha, bool hasKept)
 {
 	if (onLead)

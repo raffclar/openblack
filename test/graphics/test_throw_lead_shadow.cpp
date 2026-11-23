@@ -9,6 +9,7 @@
 
 #include <optional>
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "Graphics/ThrowLeadShadow.h"
@@ -68,4 +69,24 @@ TEST(ThrowLeadShadow, ShadowStaysAfterTheLead)
 TEST(ThrowLeadShadow, NoShadowBeforeTheFirstThrow)
 {
 	EXPECT_EQ(throw_lead_shadow::StepOf(false, 255, false), Step::None);
+}
+
+TEST(ThrowLeadShadow, HandShadowTakesTheThingWhereTheFrameBeforeDrewItOnTheLead)
+{
+	const auto now = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 20.0f, 30.0f));
+	const auto before = glm::translate(glm::mat4(1.0f), glm::vec3(8.0f, 19.0f, 29.0f));
+	EXPECT_EQ(throw_lead_shadow::HandShadowModel(now, true, before), before);
+}
+
+TEST(ThrowLeadShadow, HandShadowTakesTheThingWhereItIsNowOffTheLead)
+{
+	const auto now = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 20.0f, 30.0f));
+	const auto before = glm::translate(glm::mat4(1.0f), glm::vec3(8.0f, 19.0f, 29.0f));
+	EXPECT_EQ(throw_lead_shadow::HandShadowModel(now, false, before), now);
+}
+
+TEST(ThrowLeadShadow, HandShadowWithNoFrameBeforeTakesTheThingWhereItIsNow)
+{
+	const auto now = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 20.0f, 30.0f));
+	EXPECT_EQ(throw_lead_shadow::HandShadowModel(now, true, std::nullopt), now);
 }
