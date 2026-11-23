@@ -65,6 +65,18 @@ glm::vec2 GroundOf(entt::entity entity)
 	return glm::xz(Entities().Get<const Transform>(entity).position);
 }
 
+/// Where a thing is, as the map keeps it, with no height above the land
+map_coords::MapCoords MapPlaceOf(entt::entity entity)
+{
+	return ecs::thing_map_place::Of(Entities(), entity);
+}
+
+/// The point in the world of a thing at its map position: the land there plus the height of the thing above the land
+glm::vec3 WorldPointOf(entt::entity entity)
+{
+	return map_coords::ToWorld(Locator::terrainSystem::value(), ecs::thing_map_place::OfWithAltitude(Entities(), entity));
+}
+
 auto IntRandom()
 {
 	return [](uint32_t limit) { return Locator::gameRandom::value().GameRand(limit); };
@@ -140,10 +152,12 @@ uint32_t FleeFromObjectIfComingTowardsMe(LivingAction& action, entt::entity thin
 {
 	auto& registry = Entities();
 	const auto villager = registry.ToEntity(action);
-	const auto here = registry.Get<const Transform>(villager).position;
-	const auto there = registry.Get<const Transform>(thing).position;
+	// The distance is between the map positions. The way from the thing to the villager is between their points in the
+	// world at their map positions.
+	const auto here = MapPlaceOf(villager);
+	const auto there = MapPlaceOf(thing);
 	const auto movement = MovementOf(thing);
-	const bool coming = magic::ComingTowards(here, there, movement);
+	const bool coming = magic::ComingTowards(WorldPointOf(villager), WorldPointOf(thing), movement);
 	auto& living = Locator::livingActionSystem::value();
 	if (animals::predators::WatchesRatherThanRuns(gutils::GetDistanceInMetres(here, there), row.minDistanceToRunAwayFromObject,
 	                                              coming))
@@ -163,10 +177,7 @@ uint32_t FleeFromObjectIfComingTowardsMe(LivingAction& action, entt::entity thin
 	}
 	const auto& island = Locator::terrainSystem::value();
 	const auto ground = [&island](const map_coords::MapCoords& place) { return map_coords::GroundAt(island, place); };
-	if (const auto goal =
-	        magic::FleePlace(ecs::thing_map_place::Of(registry, villager), ecs::thing_map_place::Of(registry, thing), movement,
-	                         random, magic::k_FleeStep, ground);
-	    goal.has_value())
+	if (const auto goal = magic::FleePlace(here, there, movement, random, magic::k_FleeStep, ground); goal.has_value())
 	{
 		ecs::villager_home::SetupMoveTo(action, *goal, VillagerStates::LookingAtObjectReaction);
 		ecs::systems::villager_reactions::SetStateSpeed(villager, living.VillagerGetFinalState(action));
@@ -246,13 +257,12 @@ uint32_t villager_cover::FleeingFromPredatorReaction(LivingAction& action)
 	if (animal)
 	{
 		const auto& animals = Locator::animalSystem::value();
-		const auto here = registry.Get<const Transform>(villager).position;
-		const auto at = registry.Get<const Transform>(*hunter).position;
 		const auto step = animals.MovementOf(*hunter);
-		turn.distance = gutils::GetDistanceInMetres(here, at);
+		// The distance is between the map positions
+		turn.distance = gutils::GetDistanceInMetres(MapPlaceOf(villager), MapPlaceOf(*hunter));
 		turn.furthestRunDistance = RowOf(HeldKind(villager)).maxDistanceToRunAwayFromObject;
 		turn.fast = predators::SpeedMetresPerSecond(animals.SpeedOf(*hunter)) > predators::k_FastMetresPerSecond;
-		turn.comingAt = magic::ComingTowards(here, at, step);
+		turn.comingAt = magic::ComingTowards(WorldPointOf(villager), WorldPointOf(*hunter), step);
 	}
 	const auto step = predators::VillagerFleeStep(turn, IntRandom());
 	if (const auto logger = spdlog::get("game"); logger != nullptr)
@@ -346,7 +356,7 @@ uint32_t villager_cover::LookToSeeIfItIsSafe(LivingAction& action)
 	    thing.has_value() && registry.AllOf<Transform>(*thing) && HeldKind(villager) != Reaction::None)
 	{
 		const auto& row = RowOf(HeldKind(villager));
-		const float distance = gutils::GetDistanceInMetres(GroundOf(villager), GroundOf(*thing));
+		const float distance = gutils::GetDistanceInMetres(MapPlaceOf(villager), MapPlaceOf(*thing));
 		if (animals::predators::StillFrightensLookout(true, distance, row.maxReactionDistance, registry.AllOf<Animal>(*thing),
 		                                              Resting(*thing)))
 		{

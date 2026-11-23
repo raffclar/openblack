@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -104,6 +105,32 @@ TEST(ThingMapPlace, AWalkerIsWhereItsWalkHoldsItUnlessItWasMovedSince)
 	// Something else moved it: it is where its metres are
 	registry.Get<Transform>(villager).position.x += 1.0f;
 	EXPECT_EQ(ecs::thing_map_place::Of(registry, villager).x, map_coords::ToFixed(metres.x + 1.0f));
+}
+
+TEST(ThingMapPlace, TheDistanceBetweenTwoWalkersIsBetweenTheirWalkPlacesNotTheirMetres)
+{
+	// The game measures the distance from one villager to another thing between their map positions. The walk of the
+	// second villager holds it a metre from where it is drawn, so a distance through metres is not the same.
+	constexpr int32_t k_ThreeCells = 3 * 0x10000;
+	ecs::Registry registry;
+	const auto first = registry.Create();
+	const auto second = registry.Create();
+	const glm::vec3 firstMetres {map_coords::ToMetres(k_FarX), 0.0f, map_coords::ToMetres(k_FarZ)};
+	const glm::vec3 secondMetres {map_coords::ToMetres(k_FarX + k_ThreeCells) + 1.0f, 0.0f, map_coords::ToMetres(k_FarZ)};
+	Stand(registry, first, firstMetres);
+	Stand(registry, second, secondMetres);
+	auto& firstWalk = registry.Assign<WallHug>(first);
+	firstWalk.position = {k_FarX, k_FarZ};
+	firstWalk.placedAt = {firstMetres.x, firstMetres.z};
+	auto& secondWalk = registry.Assign<WallHug>(second);
+	secondWalk.position = {k_FarX + k_ThreeCells, k_FarZ};
+	secondWalk.placedAt = {secondMetres.x, secondMetres.z};
+	const float onTheMap =
+	    gutils::GetDistanceInMetres(ecs::thing_map_place::Of(registry, first), ecs::thing_map_place::Of(registry, second));
+	EXPECT_EQ(onTheMap, gutils::GetDistanceInMetres(MapCoords {.x = k_FarX, .z = k_FarZ},
+	                                                MapCoords {.x = k_FarX + k_ThreeCells, .z = k_FarZ}));
+	EXPECT_NEAR(onTheMap, 30.0f, 0.01f);
+	EXPECT_NE(gutils::GetDistanceInMetres(firstMetres, secondMetres), onTheMap);
 }
 
 TEST(ThingMapPlace, AnAnimalIsWhereItsTurnPutItNotWhereItIsDrawn)

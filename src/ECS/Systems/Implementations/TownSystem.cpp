@@ -394,7 +394,7 @@ entt::entity TownSystem::NearestTown(glm::vec2 point, float reach, const std::fu
 	return closest;
 }
 
-entt::entity TownSystem::NearestBuilding(glm::vec2 point) const
+entt::entity TownSystem::NearestBuilding(const map_coords::MapCoords& point) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto towns = TownsInTurn(registry);
@@ -404,13 +404,12 @@ entt::entity TownSystem::NearestBuilding(glm::vec2 point) const
 	{
 		for (const auto abode : town->abodes)
 		{
-			const auto* transform = registry.Valid(abode) ? registry.TryGet<const Transform>(abode) : nullptr;
-			if (transform == nullptr)
+			if (!registry.Valid(abode) || !registry.AllOf<Transform>(abode))
 			{
 				continue;
 			}
-			// The game's map distance
-			const float distance = gutils::GetDistanceInMetres(glm::xz(transform->position), point);
+			// The game's map distance between the map positions
+			const float distance = gutils::GetDistanceInMetres(thing_map_place::Of(registry, abode), point);
 			if (distance < nearest)
 			{
 				nearest = distance;

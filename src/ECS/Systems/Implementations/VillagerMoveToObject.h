@@ -33,7 +33,7 @@ uint32_t MoveToObject(components::LivingAction& action);
 
 /// Where a villager stands to work at a thing, as a map position. By a tree, it stands its own size and a little more
 /// from the trunk. By any other thing, it stands both their sizes from the middle of the thing. The goal has the map
-/// position of the thing plus a step towards the villager, in whole map units, and no height above the land.
+/// position of the thing plus a step towards the villager, in whole map units, and the height of the thing above the land.
 [[nodiscard]] map_coords::MapCoords WorkingPosition(entt::entity thing, entt::entity villager);
 
 } // namespace openblack::ecs::villager_move_to_object

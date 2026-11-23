@@ -219,6 +219,12 @@ glm::vec3 PositionOf(entt::entity entity)
 	return Entities().Get<const Transform>(entity).position;
 }
 
+/// Where a thing is, as the map keeps it, with no height above the land
+map_coords::MapCoords MapPlaceOf(entt::entity entity)
+{
+	return ecs::thing_map_place::Of(Entities(), entity);
+}
+
 const GVillagerInfo* VillagerInfoOf(const Villager& villager)
 {
 	if (!Locator::infoConstants::has_value())
@@ -543,7 +549,7 @@ void ShowReadoutIfOverHouse(entt::entity thing, entt::entity villager, PlayerNam
 	const auto* townData = town.has_value() ? &registry.Get<const Town>(*town) : nullptr;
 	const auto house = ecs::abode_knock::HouseNearHeld {
 	    .places = info->maxVillagersInAbode,
-	    .distance = gutils::GetDistanceInMetres(PositionOf(thing), PositionOf(villager)),
+	    .distance = gutils::GetDistanceInMetres(MapPlaceOf(thing), MapPlaceOf(villager)),
 	    .radius = systems::object_measures::TwoDRadius(registry, thing),
 	    .hasTown = townData != nullptr,
 	    .uninhabitable = townData != nullptr && townData->uninhabitable,
@@ -692,7 +698,7 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 		const auto before = world_objects::PlayerOf(villager);
 		villager_disciple::SetType(villager, None);
 		auto& towns = Locator::townSystem::value();
-		if (!towns.MoveInByBuilding(towns.NearestBuilding(glm::xz(PositionOf(villager))), villager))
+		if (!towns.MoveInByBuilding(towns.NearestBuilding(MapPlaceOf(villager)), villager))
 		{
 			return false;
 		}
@@ -1088,7 +1094,7 @@ uint8_t villager_disciple::FollowPriority(entt::entity villager, entt::entity di
 	        .leaderAvailable = IsAvailableVillager(disciple),
 	        .watcherDisciple = TypeOf(villager) != None,
 	        .sameTown = watcher->town == leader->town,
-	        .distance = gutils::GetDistanceInMetres(PositionOf(villager), PositionOf(disciple)),
+	        .distance = gutils::GetDistanceInMetres(MapPlaceOf(villager), MapPlaceOf(disciple)),
 	        .watcherFree = systems::villager_reactions::FreeForNewTask(villager),
 	        .watcherAvailable = IsAvailableVillager(villager),
 	        .watcherChild = watcher->lifeStage == Villager::LifeStage::Child,

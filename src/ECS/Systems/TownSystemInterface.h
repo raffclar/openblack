@@ -36,9 +36,9 @@ public:
 	/// The functional building of a town that suits a villager best, scoring above a least score; none if none does
 	[[nodiscard]] virtual entt::entity FindAbodeWithSpace(entt::entity town, entt::entity villager, float leastScore) const = 0;
 	[[nodiscard]] virtual entt::entity FindClosestTown(const glm::vec3& point) const = 0;
-	/// The building of any town, any player's or none, nearest a point on the ground; the first of equals by player, the
-	/// players' towns before the neutral ones
-	[[nodiscard]] virtual entt::entity NearestBuilding(glm::vec2 point) const = 0;
+	/// The building of any town, any player's or none, nearest a map position, measured to the map position of each
+	/// building; the first of equals by player, the players' towns before the neutral ones
+	[[nodiscard]] virtual entt::entity NearestBuilding(const map_coords::MapCoords& point) const = 0;
 	/// The town nearest a point on the ground, strictly nearer than a reach, that a test accepts; the first of equals by
 	/// player, the players' towns before the neutral ones
 	[[nodiscard]] virtual entt::entity NearestTown(glm::vec2 point, float reach,
