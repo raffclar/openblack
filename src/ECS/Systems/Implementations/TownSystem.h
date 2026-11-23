@@ -84,7 +84,8 @@ public:
 	[[nodiscard]] bool DesiresChanged(entt::entity town) const override;
 	void ClaimTown(entt::entity town, PlayerNames player) override;
 	void BuildingLeft(entt::entity town) override;
-	std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, glm::vec2 from, ResourceType type) override;
+	std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, const map_coords::MapCoords& from,
+	                                                 ResourceType type) override;
 	void SetStoragePit(entt::entity town, entt::entity pit) override;
 	void StoragePitGone(entt::entity town, entt::entity pit) override;
 	void UpdateFrame(std::chrono::milliseconds frameRealTime, bool landDrawn) override;

@@ -323,16 +323,11 @@ void StrollOn(LivingAction& action, entt::entity creche)
 	                                       here == glm::ivec2(door.x, door.z), GameInt());
 	person.crechePath = static_cast<int16_t>(leg.stroll.path);
 	person.crecheLeg = static_cast<int16_t>(leg.stroll.leg);
-	if (!leg.point.has_value())
-	{
-		villager_home::SetupMoveTo(action, door, VillagerStates::ChildAtCreche, villager_home::WalkWay::StraightThrough);
-		return;
-	}
-	const auto point = creches::PathPoint(creche, *leg.point);
+	// A crèche with no paths sends the child straight to its door. A missing point of a path does the same.
+	const auto point = leg.point.has_value() ? creches::PathPoint(creche, *leg.point) : std::nullopt;
 	if (!point.has_value())
 	{
-		villager_home::SetupMoveTo(action, creche::Strayed(villager_home::DoorPosition(creche), GameFloat()),
-		                           VillagerStates::ChildAtCreche, villager_home::WalkWay::StraightThrough);
+		villager_home::SetupMoveTo(action, door, VillagerStates::ChildAtCreche, villager_home::WalkWay::StraightThrough);
 		return;
 	}
 	// The child strays from the point on the land only. The goal keeps the height of the marker above the land there.

@@ -112,15 +112,18 @@ public:
 	/// One town lists the forests near enough its storage pit with wood in them, in place of the forests it listed before.
 	/// The list holds them oldest first, and the distances are in whole map units.
 	virtual void AssignForestsToTown(entt::entity town) = 0;
-	/// The forest of its own a town sends a villager at a point to: the nearest of the forests it lists, by the edge of
-	/// its big forest (none when the point is inside it) or the forest's place, within the town's reach for forests; an
-	/// ordinary forest before the town's forest of lone trees. None when it lists none near enough.
-	[[nodiscard]] virtual std::optional<entt::entity> NearestTownForest(entt::entity town, glm::vec3 point) const = 0;
-	/// The nearest of the land's forests with trees whose place is nearer a point than a reach, the newest of equals
-	[[nodiscard]] virtual std::optional<entt::entity> NearestForestWithTrees(glm::vec3 point, float reach) const = 0;
-	/// The nearest of the land's forests with no trees and no big forest nearer a point than a reach goes at once.
-	/// Whether one went.
-	virtual bool RemoveEmptyForestNear(glm::vec3 point, float reach) = 0;
+	/// The forest of its own a town sends a villager at a map position to: the nearest of the forests it lists, by the
+	/// edge of its big forest (none when the position is inside it) or the forest's place, within the town's reach for
+	/// forests; an ordinary forest before the town's forest of lone trees. None when it lists none near enough.
+	[[nodiscard]] virtual std::optional<entt::entity> NearestTownForest(entt::entity town,
+	                                                                    const map_coords::MapCoords& place) const = 0;
+	/// The nearest of the land's forests with trees whose place is nearer a map position than a reach, the newest of
+	/// equals. The distances are in whole map units.
+	[[nodiscard]] virtual std::optional<entt::entity> NearestForestWithTrees(const map_coords::MapCoords& place,
+	                                                                         float reach) const = 0;
+	/// The nearest of the land's forests with no trees and no big forest nearer a map position than a reach goes at
+	/// once. The distances are in whole map units. Whether one went.
+	virtual bool RemoveEmptyForestNear(const map_coords::MapCoords& place, float reach) = 0;
 	/// The tree in the middle of a forest: the nearest its place of its grown and growing trees; none without trees
 	[[nodiscard]] virtual std::optional<entt::entity> CentreTreeOf(entt::entity forest) const = 0;
 	/// The same tree as CentreTreeOf, from lists that ListTreesOfForests made after the last change of a tree. For a

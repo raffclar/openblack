@@ -33,6 +33,17 @@ namespace openblack::ecs::land_forests
 /// The nearest, met in order, by whole distances: only a strictly nearer one replaces the one before
 [[nodiscard]] std::optional<size_t> Nearest(std::span<const int32_t> distances);
 
+/// A forest of the land as a search near a place measures it: the distance from the place to the forest's place, and
+/// whether the forest is of the kind that the search looks for
+struct ReachMeasure
+{
+	float distance;
+	bool fits;
+};
+/// The forest that a search near a place finds, met in order: the nearest that fits and that is strictly nearer than
+/// the reach. Only a strictly nearer one replaces the one before, so the first of equals stays.
+[[nodiscard]] std::optional<size_t> NearestWithin(std::span<const ReachMeasure> forests, float reach);
+
 /// The forests within a town's reach: their nearest point strictly nearer than the reach, and their wood not nothing
 [[nodiscard]] bool NearTown(float distance, float reach, float wood);
 /// The point on a big forest's edge towards a place, in whole map units: the centre plus a step of the radius at the

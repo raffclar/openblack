@@ -91,6 +91,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TemporaryStoreRules.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/TownAggression.h"
 #include "ECS/TownAreaRules.h"
 #include "ECS/TownCensus.h"
@@ -103,6 +104,7 @@
 #include "ECS/TownRemoval.h"
 #include "ECS/TownTurnOrder.h"
 #include "ECS/VillagerRoutine.h"
+#include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -507,8 +509,8 @@ void TownSystem::StartEmptyTownTimerIfEmpty(entt::entity town)
 	}
 }
 
-std::optional<TownSystemInterface::TemporaryStore> TownSystem::TemporaryStorePile(entt::entity town, glm::vec2 from,
-                                                                                  ResourceType type)
+std::optional<TownSystemInterface::TemporaryStore>
+TownSystem::TemporaryStorePile(entt::entity town, const map_coords::MapCoords& from, ResourceType type)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto slot = temporary_store::SlotOf(type);
@@ -538,9 +540,12 @@ std::optional<TownSystemInterface::TemporaryStore> TownSystem::TemporaryStorePil
 		registry.Assign<MagicPile>(pile, type, PlayerNames::NEUTRAL);
 		registry.Get<Town>(town).temporaryStores.at(*slot) = pile;
 	}
-	return TemporaryStore {.pile = pile,
-	                       .edge = construction::NearestEdgeToPos(pile, from),
-	                       .edgeAltitude = object_measures::PlaceAltitude(registry, pile)};
+	// The edge keeps the map position of the pile and its height, and adds the step towards the point
+	auto place = thing_map_place::Of(registry, pile);
+	place.altitude = object_measures::PlaceAltitude(registry, pile);
+	return TemporaryStore {
+	    .pile = pile,
+	    .edge = villager_work::EdgeWorkingPosition(place, from, object_measures::TwoDRadius(registry, pile), 0.0f)};
 }
 
 void TownSystem::StoragePitGone(entt::entity town, entt::entity pit)
