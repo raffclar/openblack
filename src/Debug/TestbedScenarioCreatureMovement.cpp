@@ -743,4 +743,19 @@ void testbed_scenarios::AddFootprints(std::vector<Scenario>& all)
 	                {.type = FeatureInfo::EgptWell, .offset = {-25.0f, 0.0f}}},
 	    .commands = {OnObject(Kind::RemoveObject, 0, 2, 8.0f, false)},
 	});
+
+	all.push_back({
+	    .id = "footprints.dead_tree_and_flowers_show_none",
+	    .name = "A dead tree and flowers show no footprint",
+	    .facet = Facet::Footprints,
+	    .description = "A live oak, a dead oak and a bed of white flowers stand 12 metres apart in a line. The dead oak "
+	                   "keeps the model of a live oak.",
+	    .expected = "The land under the live oak shows the dark footprint of its model. The land under the dead oak and "
+	                "under the flowers shows no footprint, as in the game.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {12.0f, 30.0f, -24.0f}, .look = {12.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, 0.0f}},
+	                {.type = TreeInfo::Oak, .offset = {12.0f, 0.0f}, .dead = true},
+	                {.type = FlowersInfo::WhiteOne, .offset = {24.0f, 0.0f}}},
+	});
 }

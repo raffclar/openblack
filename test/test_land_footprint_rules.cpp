@@ -12,6 +12,8 @@
 
 #include <bit>
 #include <map>
+#include <set>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -47,6 +49,40 @@ entt::entity Thing(uint32_t number)
 {
 	return static_cast<entt::entity>(number);
 }
+
+/// The components of a few things, as the game's component lookups give them: only dead trees and flowers are known
+class FakeKinds
+{
+public:
+	void PutDeadTree(entt::entity entity) { _deadTrees.insert(entity); }
+	void PutFlowers(entt::entity entity) { _flowers.insert(entity); }
+	template <typename... Asked>
+	[[nodiscard]] bool AnyOf(entt::entity entity) const
+	{
+		return (IsOf<Asked>(entity) || ...);
+	}
+
+private:
+	template <typename Asked>
+	[[nodiscard]] bool IsOf(entt::entity entity) const
+	{
+		if constexpr (std::is_same_v<Asked, openblack::ecs::components::DeadTree>)
+		{
+			return _deadTrees.contains(entity);
+		}
+		else if constexpr (std::is_same_v<Asked, openblack::ecs::components::Flowers>)
+		{
+			return _flowers.contains(entity);
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	std::set<entt::entity> _deadTrees;
+	std::set<entt::entity> _flowers;
+};
 
 bool AllHaveFootprints(entt::entity /*unused*/)
 {
@@ -98,6 +134,31 @@ TEST(LandFootprintRules, ThingsWithoutFootprintsAreLeftOut)
 	const auto things = land_footprints::ThingsOverBlock({0, 0}, fixed.List(), mobile.List(),
 	                                                     [](entt::entity entity) { return entity != Thing(2); });
 	EXPECT_EQ(things, (std::vector {Thing(1), Thing(3)}));
+}
+
+TEST(LandFootprintRules, ADeadTreeShowsNoFootprintThoughItKeepsTheModelOfItsTree)
+{
+	FakeKinds kinds;
+	kinds.PutDeadTree(Thing(2));
+	EXPECT_TRUE(land_footprints::ShowsFootprint(kinds, Thing(1)));
+	EXPECT_FALSE(land_footprints::ShowsFootprint(kinds, Thing(2)));
+
+	// The block takes the live tree and leaves out the dead tree, though both models have a footprint
+	FakeCells fixed;
+	const FakeCells mobile;
+	fixed.Put({2, 2}, {Thing(1), Thing(2)});
+	const auto things = land_footprints::ThingsOverBlock({0, 0}, fixed.List(), mobile.List(), [&kinds](entt::entity entity) {
+		return land_footprints::ShowsFootprint(kinds, entity);
+	});
+	EXPECT_EQ(things, (std::vector {Thing(1)}));
+}
+
+TEST(LandFootprintRules, FlowersShowNoFootprint)
+{
+	FakeKinds kinds;
+	kinds.PutFlowers(Thing(3));
+	EXPECT_FALSE(land_footprints::ShowsFootprint(kinds, Thing(3)));
+	EXPECT_TRUE(land_footprints::ShowsFootprint(kinds, Thing(4)));
 }
 
 TEST(LandFootprintRules, ABuildingThatGoesFromTheCellsPaintsNoMoreAndItsNewSitePaintsAgain)
