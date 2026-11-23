@@ -184,7 +184,8 @@ private:
 	void UpdateDeviceRestore();
 	void UpdateChecks(float seconds);
 	/// Gives the report of the checks to the stage. With quit, the game also ends with the exit code of the verdict.
-	void PublishChecks(bool quit);
+	/// With gameEnds, a verdict that still waits gets a last line that tells the turn that the game got to.
+	void PublishChecks(bool quit, bool gameEnds = false);
 	[[nodiscard]] std::optional<double> ReadCheck(const checks::Check& check) const;
 	/// Casts the scenario's miracle of that index; the running miracle, or none
 	entt::entity CastMiracle(size_t index);

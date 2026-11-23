@@ -143,6 +143,17 @@ int ExitCodeOf(Verdict verdict)
 	return 2;
 }
 
+std::optional<std::string> EndNote(Verdict verdict, uint32_t worldTurn)
+{
+	if (verdict != Verdict::Waiting)
+	{
+		return std::nullopt;
+	}
+	return fmt::format("the game ended at turn {} before the checks had a verdict: -n counts frames, not turns; "
+	                   "give --sim-frame-ms 20 or --sim-until-turn for the same turns on each build",
+	                   worldTurn);
+}
+
 bool Holds(const Check& check, double value)
 {
 	return (!check.atLeast.has_value() || value >= *check.atLeast) && (!check.atMost.has_value() || value <= *check.atMost);
