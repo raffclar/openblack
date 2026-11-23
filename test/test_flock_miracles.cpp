@@ -165,6 +165,23 @@ TEST(FlockMiracleRules, ScaleAndFade)
 	EXPECT_NEAR(flock::SpawnScale(true, 0.25f), 1.75f, k_Epsilon);
 }
 
+TEST(FlockMiracleRules, TheShieldTestStartsFromThePlaceAtTheStartOfTheTurnOnTheLandNow)
+{
+	using map_coords::MapCoords;
+	// x and z come from the map units that the animal kept, the height from the ground now plus its altitude
+	const MapCoords kept {.x = 655360, .z = 1310721, .altitude = 3.5f};
+	float ground = 12.0f;
+	const auto groundAt = [&ground](const MapCoords&) { return ground; };
+	const auto before = flock::PointAtTurnStart(kept, groundAt);
+	EXPECT_EQ(before.x, map_coords::ToMetres(kept.x));
+	EXPECT_EQ(before.z, map_coords::ToMetres(kept.z));
+	EXPECT_EQ(before.y, 12.0f + 3.5f);
+	// The land rose after the turn started: the point rises with it, as the game asks for the ground at the test
+	ground = 20.0f;
+	EXPECT_EQ(flock::PointAtTurnStart(kept, groundAt).y, 20.0f + 3.5f);
+	EXPECT_EQ(flock::PointAtTurnStart(kept, groundAt).x, before.x);
+}
+
 TEST(AnimalRules, BirthScale)
 {
 	const std::array<float, 20> table {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f,

@@ -509,6 +509,8 @@ TEST(CreatureCave, FactsCutPercentagesShort)
 	EXPECT_EQ(facts.strength, 42);
 	EXPECT_EQ(facts.fatness, 35);
 	EXPECT_FLOAT_EQ(facts.alignment, -1.0f);
+	// The game never changes the illness of the body, so it stays 0
+	EXPECT_EQ(facts.illness, 0.0f);
 }
 
 TEST(CreatureCave, FactsNameTheSpellOnTheCreature)

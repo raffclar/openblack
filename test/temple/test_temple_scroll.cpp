@@ -391,6 +391,54 @@ TEST(TempleScrolls, TheAttributesScrollNamesTheSpellOnTheCreature)
 	EXPECT_NE(heal->find(u"On: Heal"), std::u16string::npos);
 }
 
+TEST(TempleScrolls, TheIllnessTextIsTheIllnessTimesFiveWithTheFifthTextAtMost)
+{
+	using temple_scrolls::IllnessText;
+	EXPECT_EQ(IllnessText(0.0f), 0u);
+	EXPECT_EQ(IllnessText(0.19f), 0u);
+	EXPECT_EQ(IllnessText(0.2f), 1u);
+	EXPECT_EQ(IllnessText(0.5f), 2u);
+	EXPECT_EQ(IllnessText(0.79f), 3u);
+	EXPECT_EQ(IllnessText(0.99f), 4u);
+	EXPECT_EQ(IllnessText(1.0f), 4u);
+	EXPECT_EQ(IllnessText(3.0f), 4u);
+	// The fraction goes towards 0, so a small value below 0 still gives the first text
+	EXPECT_EQ(IllnessText(-0.1f), 0u);
+	// The compare is unsigned, so a value of -1 or less after the multiplication gives the fifth text
+	EXPECT_EQ(IllnessText(-0.2f), 4u);
+	EXPECT_EQ(IllnessText(-1.0f), 4u);
+}
+
+TEST(TempleScrolls, TheAttributesScrollGivesTheIllnessText)
+{
+	const auto font = LoadFont();
+	gui::TextDatabase texts;
+	const std::u16string script = u"ADD_TEXT(1, NONE, \"HELP_TEXT_ROOM_CREATURE_SCROLL_ILLNESS\", \"Ill: $s\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_HOW_ILL_01\", \"Healthy\")\n"
+	                              u"ADD_TEXT(1, NONE, \"HELP_TEXT_HOW_ILL_05\", \"Very ill\")\n";
+	std::vector<uint8_t> bytes;
+	for (const auto c : script)
+	{
+		bytes.push_back(static_cast<uint8_t>(c & 0xFF));
+		bytes.push_back(static_cast<uint8_t>(c >> 8));
+	}
+	texts.AddScript(bytes);
+	auto facts = TempleScrolls::Facts::Mock();
+	ASSERT_TRUE(facts.creature.has_value());
+
+	// The game keeps the illness at 0, so the line gives the first text
+	facts.creature->illness = 0.0f;
+	const auto healthy = TempleScrolls::Write(TempleScrolls::Content::CreatureAttributes, texts, font, facts);
+	ASSERT_TRUE(healthy.has_value());
+	EXPECT_NE(healthy->find(u"Ill: Healthy"), std::u16string::npos);
+
+	// A value below 0 gives the fifth text, as the unsigned compare does
+	facts.creature->illness = -0.5f;
+	const auto below = TempleScrolls::Write(TempleScrolls::Content::CreatureAttributes, texts, font, facts);
+	ASSERT_TRUE(below.has_value());
+	EXPECT_NE(below->find(u"Ill: Very ill"), std::u16string::npos);
+}
+
 TEST(TempleScrolls, AChallengeWithNoTitleAddsNoLine)
 {
 	const auto font = LoadFont();

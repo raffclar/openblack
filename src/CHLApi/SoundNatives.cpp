@@ -50,6 +50,7 @@
 #include "Sound/SoundRequestInterface.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
+#include "Common/X87.h"
 #endif
 #include "CHLApi/NativeHelpers.h"
 #include "CHLApi/Natives.h"
@@ -372,7 +373,7 @@ void SetCreatureSound() // 317 SET_CREATURE_SOUND
 void LastMusicLine() // 335 LAST_MUSIC_LINE
 {
 	// Whether the script's sung music has reached a line: the sung verses wait for each line before showing it
-	const auto line = static_cast<int32_t>(Popf());
+	const auto line = x87::ToInteger(Popf());
 	if (!WorldHasMusic())
 	{
 		Pushb(HelpTextRead());

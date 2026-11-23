@@ -819,8 +819,8 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 			named("HELP_TEXT_ROOM_CREATURE_SCROLL_WARMTH", get(fmt::format("HELP_TEXT_HOW_WARM_{:02}", n + 1)));
 		});
 		aboutCreature([&](const CreatureFacts& c) {
-			const auto n = std::clamp(static_cast<int32_t>(c.illness * 5.0f), 0, 4);
-			named("HELP_TEXT_ROOM_CREATURE_SCROLL_ILLNESS", get(fmt::format("HELP_TEXT_HOW_ILL_{:02}", n + 1)));
+			named("HELP_TEXT_ROOM_CREATURE_SCROLL_ILLNESS",
+			      get(fmt::format("HELP_TEXT_HOW_ILL_{:02}", temple_scrolls::IllnessText(c.illness) + 1)));
 		});
 		aboutCreature([&](const CreatureFacts& c) {
 			named("HELP_TEXT_ROOM_CREATURE_SCROLL_SPELLS_RECEIVED",
