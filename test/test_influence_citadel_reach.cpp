@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <tuple>
@@ -520,3 +521,49 @@ TEST_F(CitadelReach, ARingOnAThingMovesWithItOnlyAtItsStepAndGoesWithIt)
 	EXPECT_TRUE(registry.Valid(placed));
 	EXPECT_GT(_influence.PlayerRawInfluence(k_Player, atStart), 0.0f);
 }
+
+TEST_F(CitadelReach, TheBorderHasACircleForEachCitadelAndTownButNoneForARing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto town = registry.Create();
+	registry.Assign<components::Town>(town).owner = PlayerNames::PLAYER_ONE;
+	registry.Assign<components::TownInfluence>(town, 60.0f, 0.0f);
+	registry.Assign<components::Transform>(town, glm::vec3(1100.0f, 0.0f, 1200.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	// A ring of the first player and a ring of the fourth player, who has no temple and no town
+	for (const auto player : {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_FOUR})
+	{
+		const auto ring = registry.Create();
+		registry.Assign<components::Transform>(ring, glm::vec3(3000.0f, 0.0f, 3000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<components::InfluenceSource>(ring, player, 80.0f);
+	}
+
+	_influence.ProcessTurn(0);
+
+	const auto circles = _influence.GetCircles();
+	ASSERT_EQ(circles.size(), k_Players.size() + 1);
+	EXPECT_TRUE(std::ranges::none_of(circles, [](const influence::Circle& circle) {
+		return circle.player == PlayerNames::PLAYER_FOUR || circle.centre.x == 3000.0f;
+	}));
+	// The ring still gives its player influence
+	EXPECT_GT(_influence.PlayerRawInfluence(PlayerNames::PLAYER_FOUR, map_coords::FromMetres({3000.0f, 3000.0f})), 0.0f);
+}
+
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+TEST_F(CitadelReach, TheSourceOfTheTestbedKeepsItsCircleOnTheBorder)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto source = registry.Create();
+	registry.Assign<components::Transform>(source, glm::vec3(3000.0f, 0.0f, 3000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<components::InfluenceSource>(source, PlayerNames::PLAYER_ONE, 400.0f);
+	registry.Assign<components::TestbedBorder>(source);
+
+	_influence.ProcessTurn(0);
+
+	const auto circles = _influence.GetCircles();
+	ASSERT_EQ(circles.size(), k_Players.size() + 1);
+	const auto circle = std::ranges::find_if(circles, [](const influence::Circle& c) { return c.centre.x == 3000.0f; });
+	ASSERT_NE(circle, circles.end());
+	EXPECT_EQ(circle->player, PlayerNames::PLAYER_ONE);
+	EXPECT_FLOAT_EQ(circle->radius, 400.0f);
+}
+#endif
