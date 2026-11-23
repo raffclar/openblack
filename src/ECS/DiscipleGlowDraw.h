@@ -41,14 +41,15 @@ struct Body
 	return !body.highDetail && body.drawn;
 }
 
-/// The parts of a frame that draw the bodies of the villagers, in the order of the frame
+/// The parts of a frame that draw the bodies of the villagers, in the order of the frame. The frame draws the things
+/// that scripts walk along tracks after the land's list. A villager is not one of these things, because a villager walks
+/// its track in its own state and the land's list draws it.
 enum class Draw : uint8_t
 {
 	/// The land's draw list, thing by thing. A villager in the hand of a creature comes with the creature.
 	LandList,
-	/// The things that scripts walk along tracks
-	WalkPath,
-	/// The things that move in the physics, and other things that are not in the map
+	/// The things that move in the physics, in the order of the list of bodies. Other things that are not in the map come
+	/// after them.
 	Physics,
 	/// The things in the hands. The frame sorts them with the other sorted things at its end, the farthest first.
 	Hand,
@@ -59,7 +60,7 @@ struct Glow
 {
 	entt::entity villager {entt::null};
 	Draw draw {Draw::LandList};
-	/// The place in the land's draw list, for the land's draw list
+	/// The place in the land's draw list, or in the list of moving bodies
 	uint32_t place {0};
 	/// The sort key of the body, its distance from the camera squared, for the hands
 	float key {0.0f};
