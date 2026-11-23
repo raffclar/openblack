@@ -141,6 +141,12 @@ glm::vec2 PositionOf(entt::entity entity)
 	return glm::xz(Entities().Get<const Transform>(entity).position);
 }
 
+/// Where a thing is, as the map keeps it, with no height above the land
+map_coords::MapCoords MapPlaceOf(entt::entity entity)
+{
+	return ecs::thing_map_place::Of(Entities(), entity);
+}
+
 void SetTopState(LivingAction& action, VillagerStates state)
 {
 	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top, state, false);
@@ -385,10 +391,8 @@ std::vector<float> KeysOf(entt::entity town, const std::vector<entt::entity>& pe
 			keys.push_back(0.0f);
 			continue;
 		}
-		const float villagerToSite =
-		    gutils::GetDistanceInMetres(map_coords::FromMetres(PositionOf(villager)), map_coords::FromMetres(*centre));
-		const float townToSite =
-		    gutils::GetDistanceInMetres(map_coords::FromMetres(PositionOf(town)), map_coords::FromMetres(*centre));
+		const float villagerToSite = gutils::GetDistanceInMetres(MapPlaceOf(villager), map_coords::FromMetres(*centre));
+		const float townToSite = gutils::GetDistanceInMetres(MapPlaceOf(town), map_coords::FromMetres(*centre));
 		keys.push_back(rules::CandidateKey(villagerToSite, townToSite, world_objects::LifeOf(villager)));
 	}
 	return keys;
@@ -418,8 +422,7 @@ bool CanGetToTheWorshipSite(entt::entity villager, std::optional<entt::entity>& 
 		return true;
 	}
 	const float maxDistance = Locator::infoConstants::value().town.maxDistanceThatVillagersWillGoToWorship;
-	const float distance =
-	    gutils::GetDistanceInMetres(map_coords::FromMetres(PositionOf(villager)), map_coords::FromMetres(PositionOf(site)));
+	const float distance = gutils::GetDistanceInMetres(MapPlaceOf(villager), MapPlaceOf(site));
 	if (distance > maxDistance)
 	{
 		stone = StoneToSite(villager, site, town);
@@ -479,7 +482,7 @@ bool WithinAStep(entt::entity villager, const map_coords::MapCoords& place)
 {
 	const auto* wallHug = Entities().TryGet<const WallHug>(villager);
 	const float step = gutils::ConvertWholeDistanceToMeters(wall_hug::WholeSpeed(wallHug != nullptr ? wallHug->speed : 0.0f));
-	return gutils::GetDistanceInMetres(map_coords::FromMetres(PositionOf(villager)), place) <= step;
+	return gutils::GetDistanceInMetres(MapPlaceOf(villager), place) <= step;
 }
 
 /// Whether a hungry worshipper eats at its site, walking to its pot when asked. Whether it eats there.
@@ -886,8 +889,7 @@ uint32_t villager_worship::ArrivesAtWorshipSiteForWorship(LivingAction& action)
 		return villager_home::DecideWhatToDo(action);
 	}
 	const auto gate = Sites().PlaceAt(site, SitePlace::Gate).value_or(PositionOf(site));
-	const float distance =
-	    gutils::GetDistanceInMetres(map_coords::FromMetres(PositionOf(villager)), map_coords::FromMetres(gate));
+	const float distance = gutils::GetDistanceInMetres(MapPlaceOf(villager), map_coords::FromMetres(gate));
 	const auto* dance = DanceOfSite(site);
 	const auto tribe = static_cast<size_t>(Entities().Get<const WorshipSite>(site).tribe);
 	const auto maxVisible = Locator::infoConstants::value().worshipSite.at(tribe).maxDancersVisible;

@@ -170,6 +170,12 @@ glm::vec2 PositionOf(entt::entity entity)
 	return glm::xz(Entities().Get<const Transform>(entity).position);
 }
 
+/// Where a thing is, as the map keeps it, with no height above the land
+map_coords::MapCoords MapPlaceOf(entt::entity entity)
+{
+	return ecs::thing_map_place::Of(Entities(), entity);
+}
+
 entt::entity TownOf(entt::entity villager)
 {
 	const auto town = Entities().Get<const Villager>(villager).town;
@@ -205,10 +211,10 @@ void Face(entt::entity villager, entt::entity other)
 	Living().VillagerFace(villager, PositionOf(other));
 }
 
-/// Whether two villagers stand within a gap of each other, edge to edge
+/// Whether two things stand within a gap of each other, edge to edge, from their map positions
 bool AreTouching(entt::entity a, entt::entity b, float gap)
 {
-	return villager_breeding::Touching(gutils::GetDistanceInMetres(PositionOf(a), PositionOf(b)),
+	return villager_breeding::Touching(gutils::GetDistanceInMetres(MapPlaceOf(a), MapPlaceOf(b)),
 	                                   world_objects::SizeOf(a).radius, world_objects::SizeOf(b).radius, gap);
 }
 
@@ -913,15 +919,16 @@ uint32_t villager_breeding::BreederJustLanded(LivingAction& action)
 {
 	const auto breeder = EntityOf(action);
 	const bool female = IsFemale(breeder);
-	const auto here = PositionOf(breeder);
+	const auto here = MapPlaceOf(breeder);
 	auto& registry = Entities();
 	entt::entity nearest = entt::null;
 	float best = std::numeric_limits<float>::max();
 	if (Locator::entitiesMap::has_value())
 	{
-		// The first villager of each of the nine cells about it, the nearest of age and of the other sex
+		// The first villager of each of the nine cells about it, the nearest of age and of the other sex, between the map
+		// positions
 		const auto& map = Locator::entitiesMap::value();
-		auto cell = map_coords::CellOf(here);
+		auto cell = map_coords::Cell(here);
 		map_coords::Spiral spiral;
 		for (int32_t count = 9; count != 0; --count)
 		{
@@ -933,7 +940,7 @@ uint32_t villager_breeding::BreederJustLanded(LivingAction& action)
 				}
 				if (IsVillager(thing) && IsSexuallyActive(thing) && IsFemale(thing) != female)
 				{
-					const float distance = gutils::GetDistanceInMetres(here, PositionOf(thing));
+					const float distance = gutils::GetDistanceInMetres(here, MapPlaceOf(thing));
 					if (distance < best)
 					{
 						best = distance;

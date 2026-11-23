@@ -15,8 +15,6 @@
 #include <optional>
 #include <vector>
 
-#include <glm/gtx/vec_swizzle.hpp>
-
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "ECS/BuildingSites.h"
@@ -74,11 +72,6 @@ Villager& VillagerOf(LivingAction& action)
 void SetTopState(LivingAction& action, VillagerStates state)
 {
 	Locator::livingActionSystem::value().VillagerSetState(action, LivingAction::Index::Top, state, false);
-}
-
-glm::vec2 GroundOf(entt::entity entity)
-{
-	return glm::xz(Entities().Get<const Transform>(entity).position);
 }
 
 std::optional<entt::entity> ValidTown(entt::entity town)
@@ -390,7 +383,7 @@ uint32_t villager_disciple_work::MissionaryDisciple(LivingAction& action)
 	auto& registry = Entities();
 	auto& towns = Locator::townSystem::value();
 	// The nearest building of any town, any player's or none: not necessarily the one it was put down by
-	const auto abode = towns.NearestBuilding(GroundOf(villager));
+	const auto abode = towns.NearestBuilding(thing_map_place::Of(registry, villager));
 	if (abode == entt::null || !registry.Valid(abode))
 	{
 		SetTopState(action, VillagerStates::DecideWhatToDo);

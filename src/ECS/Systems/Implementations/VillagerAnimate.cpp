@@ -30,6 +30,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAnimation.h"
 #include "ECS/VillagerClips.h"
 #include "ECS/WallHugRules.h"
@@ -143,7 +144,7 @@ AnimId WalkClipOf(entt::entity entity, const Villager& villager)
 	});
 }
 
-/// How far the villager is from the thing it reacts to, in metres on the map; none when it reacts to nothing
+/// How far the villager is from the thing it reacts to, in metres between their map positions; none when it reacts to nothing
 std::optional<float> DistanceToReactionThing(entt::entity entity)
 {
 	auto& registry = Entities();
@@ -152,12 +153,11 @@ std::optional<float> DistanceToReactionThing(entt::entity entity)
 	{
 		return std::nullopt;
 	}
-	const auto* transform = registry.TryGet<const Transform>(*thing);
-	if (transform == nullptr)
+	if (!registry.AllOf<Transform>(*thing))
 	{
 		return std::nullopt;
 	}
-	return gutils::GetDistanceInMetres(registry.Get<const Transform>(entity).position, transform->position);
+	return gutils::GetDistanceInMetres(thing_map_place::Of(registry, entity), thing_map_place::Of(registry, *thing));
 }
 
 float WatchedHeightAboveLand(entt::entity entity)
