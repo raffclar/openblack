@@ -421,6 +421,19 @@ TEST_F(VillagerWalkStates, AStraightWalkForAFootpathKeepsTheHeightOfItsGoal)
 	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const WallHug>(_villager).goalHeight, 0.0f);
 }
 
+// A walk for a footpath to a map position keeps each unit of the goal, also far out on the map where metres cannot
+// hold it
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(VillagerWalkStates, AStraightWalkForAFootpathKeepsTheMapPositionOfItsGoal)
+{
+	const map_coords::MapCoords goal {.x = 0x1FB5355 + 9175, .z = 0x1F00005, .altitude = 0.75f};
+	EXPECT_TRUE(villager_footpath::SetupMoveToOnFootpath(Action(), entt::null, goal, k_Next));
+	const auto& wallHug = Locator::entitiesRegistry::value().Get<const WallHug>(_villager);
+	EXPECT_EQ(wallHug.goalPlace, glm::ivec2(goal.x, goal.z));
+	EXPECT_EQ(wallHug.goalHeight, 0.75f);
+	EXPECT_EQ(Final(), k_Next);
+}
+
 // A villager with food for its worship site that is away from the site's food place walks there first, with the
 // height of the site's place above the land there, and keeps its food. The walk takes it back into the same state.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro

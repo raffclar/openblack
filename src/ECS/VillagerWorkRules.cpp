@@ -21,30 +21,33 @@ using namespace openblack::ecs;
 
 namespace
 {
-/// Out from a place towards a villager by a distance, on the ground
-glm::vec2 TowardsVillager(glm::vec2 from, glm::vec2 villager, float distance)
+/// Out from a place towards a villager by a distance in metres. The game adds the offset to the map position of the place
+/// as whole map units, so the goal keeps the place's map position and its altitude exactly.
+map_coords::MapCoords TowardsVillager(const map_coords::MapCoords& from, const map_coords::MapCoords& villager, float distance)
 {
 	const float angle = gutils::Get3DAngleFromXZ(from, villager);
-	auto coords = map_coords::FromMetres(from);
-	gutils::AddDistanceFromAngle(coords, angle, distance);
-	return map_coords::ToMetres(coords);
+	return from + gutils::GetPosFromAngle(angle, distance);
 }
 
 /// Keeps a carried amount's sum from dividing by nothing
 constexpr float k_Tiny = 1e-5f;
 } // namespace
 
-glm::vec2 villager_work::TreeWorkingPosition(glm::vec2 tree, glm::vec2 villager, float villagerRadius)
+map_coords::MapCoords villager_work::TreeWorkingPosition(const map_coords::MapCoords& tree,
+                                                         const map_coords::MapCoords& villager, float villagerRadius)
 {
 	return TowardsVillager(tree, villager, villagerRadius + k_TreeWorkingGap);
 }
 
-glm::vec2 villager_work::EdgeWorkingPosition(glm::vec2 thing, glm::vec2 villager, float thingRadius, float villagerRadius)
+map_coords::MapCoords villager_work::EdgeWorkingPosition(const map_coords::MapCoords& thing,
+                                                         const map_coords::MapCoords& villager, float thingRadius,
+                                                         float villagerRadius)
 {
 	return TowardsVillager(thing, villager, villagerRadius + thingRadius);
 }
 
-glm::vec2 villager_work::BigForestArrivePosition(glm::vec2 bigForest, glm::vec2 villager, float radius)
+map_coords::MapCoords villager_work::BigForestArrivePosition(const map_coords::MapCoords& bigForest,
+                                                             const map_coords::MapCoords& villager, float radius)
 {
 	return TowardsVillager(bigForest, villager, radius * k_BigForestArriveShare);
 }

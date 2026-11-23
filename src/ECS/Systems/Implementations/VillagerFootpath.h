@@ -14,6 +14,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -35,6 +36,9 @@ bool SetupMoveToOnFootpath(components::LivingAction& action, entt::entity buildi
 /// The same for a goal with a height above the land. A straight walk keeps that height; a walk along a footpath ends at
 /// the last node of the path.
 bool SetupMoveToOnFootpath(components::LivingAction& action, entt::entity building, glm::vec2 goal, float goalAltitude,
+                           VillagerStates final);
+/// The same for a goal that is a map position with a height above the land. The walk keeps the map position as it is.
+bool SetupMoveToOnFootpath(components::LivingAction& action, entt::entity building, const map_coords::MapCoords& goal,
                            VillagerStates final);
 
 /// Walking a footpath: on reaching each node it heads for the next, until the path ends and it goes into the state it
