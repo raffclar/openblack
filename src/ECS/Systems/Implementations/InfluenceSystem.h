@@ -55,6 +55,7 @@ public:
 	void HeldThingUsedOnLand(PlayerNames player) override;
 	void SetInGameTurn(bool inGameTurn) override { _inGameTurn = inGameTurn; }
 	void FixCitadelReaches() override;
+	void ProcessRings() override;
 	void LandLaidOut() override;
 
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return _circles; }

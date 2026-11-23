@@ -753,6 +753,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::snowSystem::value().ProcessTurn(Locator::weatherSystem::value().GetSteppedStorms());
 		}
 		break;
+	case Step::InfluenceRings:
+		// The rings of influence on things move to their things, before the players ask about influence
+		Locator::influenceSystem::value().ProcessRings();
+		break;
 	case Step::Players:
 		// The players take their turns, each its temple and then its towns
 		std::ignore = PlayPlayersStep(0, nullptr);
@@ -1219,7 +1223,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		}
 		break;
 	case Step::GlobalStatistics:
-		player_statistics::ProcessGlobalTurn(turn, view.FrameRate());
+		// The input of the turn can stop the clock, and then the figures change on a shorter period
+		player_statistics::ProcessGlobalTurn(turn, clock.IsPaused() || clock.IsHeld(), view.FrameRate());
 		break;
 	case Step::RealWeather:
 		// After the turn of the game, the real-world weather that came changes the weather of the land
