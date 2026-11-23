@@ -141,7 +141,7 @@ bool building_site::ShouldFetchWood(const ShouldFetchInputs& in)
 		stocked = 1.0f;
 	}
 	const float siteScore = gutils::GetDistanceModifier(in.distanceToBuilding, k_FetchDistanceScale) * stocked;
-	const float storeScore = gutils::GetDistanceModifier(in.distanceToDropOff, k_FetchDistanceScale) * (1.0f - stocked);
+	const float storeScore = gutils::GetDistanceModifier(in.distanceToDropOff(), k_FetchDistanceScale) * (1.0f - stocked);
 	return siteScore < storeScore;
 }
 
@@ -323,13 +323,14 @@ PilePlace building_site::StandardPilePlace(const map_coords::MapCoords& building
 	return {.position = building + gutils::GetPosFromAngle(angle, distance), .yAngle = angle - std::numbers::pi_v<float>};
 }
 
-glm::vec2 building_site::WonderPilePlace(glm::vec3 position, const glm::mat3& rotation, glm::vec3 scale)
+glm::vec3 building_site::WonderPilePoint(glm::vec3 position, const glm::mat3& rotation, glm::vec3 scale)
 {
 	const glm::vec3 side = rotation[0] * scale.x;
 	const glm::vec3 back = rotation[2] * scale.z;
 	const float x = (back.x * -k_WonderPileBack + side.x * k_WonderPileSide) + position.x;
+	const float y = (back.y * -k_WonderPileBack + side.y * k_WonderPileSide) + position.y;
 	const float z = (back.z * -k_WonderPileBack + side.z * k_WonderPileSide) + position.z;
-	return {x, z};
+	return {x, y, z};
 }
 
 std::optional<size_t> building_site::BestRepairSite(std::span<const RepairCandidate> sites)

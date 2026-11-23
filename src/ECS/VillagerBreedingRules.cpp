@@ -168,7 +168,7 @@ villager_breeding::Amble villager_breeding::BreederAmble(glm::ivec2 spot, const 
 	return {.goal = goal, .pause = static_cast<uint16_t>(intRandom(k_BreederPauseRange) + k_BreederPauseLeast)};
 }
 
-glm::vec2 villager_breeding::NearMother(glm::vec2 centre, const FloatRandom& random)
+map_coords::MapCoords villager_breeding::NearMother(const map_coords::MapCoords& centre, const FloatRandom& random)
 {
-	return routine::Polar(centre, random(routine::k_TwoPi), k_NearMother);
+	return routine::StepFrom(centre, random(routine::k_TwoPi), k_NearMother);
 }

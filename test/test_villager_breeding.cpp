@@ -287,8 +287,22 @@ TEST(VillagerBreeding, ABreedersSpotByTheStoreAndItsAmbles)
 TEST(VillagerBreeding, AChildMakesForAPointFiveMetresFromItsMother)
 {
 	Draws<float> angle {.values = {1.0f}};
-	const glm::vec2 mother {400.0f, 400.0f};
-	EXPECT_NEAR(glm::distance(NearMother(mother, angle.Make()), mother), k_NearMother, 0.05f);
+	const map_coords::MapCoords mother {.x = map_coords::ToFixed(400.0f), .z = map_coords::ToFixed(400.0f), .altitude = 0.0f};
+	const auto goal = NearMother(mother, angle.Make());
+	EXPECT_NEAR(glm::distance(map_coords::ToMetres(goal), map_coords::ToMetres(mother)), k_NearMother, 0.05f);
+	EXPECT_EQ(angle.limits, (std::vector<float> {6.2831855f}));
+}
+
+// The step adds to the map position of the mother in whole map units, and the goal keeps her altitude
+TEST(VillagerBreeding, AChildsGoalAddsItsStepToTheMothersMapPositionInWholeUnits)
+{
+	Draws<float> angle {.values = {1.0f}};
+	const map_coords::MapCoords mother {.x = 0x1FB5355, .z = 0x1234567, .altitude = 2.5f};
+	const auto goal = NearMother(mother, angle.Make());
+	const auto step = gutils::GetPosFromAngle(1.0f, k_NearMother);
+	EXPECT_EQ(goal.x, mother.x + step.x);
+	EXPECT_EQ(goal.z, mother.z + step.z);
+	EXPECT_EQ(goal.altitude, 2.5f);
 }
 
 TEST(VillagerBreeding, OnlyADyingVillagerCannotBeCalledOn)

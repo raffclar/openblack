@@ -176,7 +176,8 @@ struct Amble
 };
 /// The spot is the x and z of a map position. The goal is on the land, the step added through metres.
 [[nodiscard]] Amble BreederAmble(glm::ivec2 spot, const FloatRandom& floatRandom, const IntRandom& intRandom);
-/// A point a child makes for near its mother, or its home without her
-[[nodiscard]] glm::vec2 NearMother(glm::vec2 centre, const FloatRandom& random);
+/// A place a child makes for near its mother, or its home without her. The step adds to the map position of the centre
+/// in whole map units, and the place keeps the altitude of the centre.
+[[nodiscard]] map_coords::MapCoords NearMother(const map_coords::MapCoords& centre, const FloatRandom& random);
 
 } // namespace openblack::ecs::villager_breeding
