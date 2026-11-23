@@ -241,3 +241,14 @@ TEST(TestbedScenarioChecks, TheClockContinuesWhenANewLandStartsTheTurnsAgain)
 	clock.Advance(5, false, 0.0f);
 	EXPECT_EQ(clock.Elapsed(5), 35u);
 }
+
+TEST(TestbedScenarioChecks, AGameThatEndsBeforeAVerdictSaysItsTurn)
+{
+	const auto note = EndNote(Verdict::Waiting, 135);
+	ASSERT_TRUE(note.has_value());
+	EXPECT_NE(note->find("turn 135"), std::string::npos);
+	EXPECT_NE(note->find("--sim-frame-ms"), std::string::npos);
+	EXPECT_FALSE(EndNote(Verdict::Passed, 135).has_value());
+	EXPECT_FALSE(EndNote(Verdict::Failed, 135).has_value());
+	EXPECT_FALSE(EndNote(Verdict::NoChecks, 135).has_value());
+}
