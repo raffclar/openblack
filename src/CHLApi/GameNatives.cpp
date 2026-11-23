@@ -121,6 +121,7 @@
 #include "ECS/Systems/FootballSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
@@ -173,12 +174,14 @@
 #include "ScriptHeaders/ScriptDeadLiving.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptLessonNatives.h"
+#include "ScriptHeaders/ScriptLockedInteraction.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptRandom.h"
 #include "ScriptHeaders/ScriptRealTime.h"
 #include "ScriptHeaders/ScriptTownHealth.h"
 #include "Story/PlaygroundTrip.h"
 #include "Temple/TempleEntrancePoint.h"
+#include "Temple/TempleKeys.h"
 
 namespace openblack::chlapi
 {
@@ -1038,36 +1041,49 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 		Pushb(false);
 		return;
 	}
-	const bool heldCreature = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(object);
-	const bool grippedTotem =
-	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
 	// A puzzle totem that a hand holds, as the turn last saw it
 	const auto* puzzleTotem = Locator::entitiesRegistry::value().TryGet<const ecs::components::PuzzleTotem>(object);
-	const bool heldPuzzleTotem = puzzleTotem != nullptr && puzzleTotem->held;
-	const auto player =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
-	const bool scooped =
-	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOnOf(player) == std::optional(object);
-	Pushb(heldCreature || grippedTotem || heldPuzzleTotem || scooped);
+	const script::locked_interaction::Locks locks {
+	    .heldCreature = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(object),
+	    .grippedTotem = Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object,
+	    .heldPuzzleTotem = puzzleTotem != nullptr && puzzleTotem->held,
+	};
+	// The scoop of the hand of each player counts
+	const auto lockedOnOf = [](PlayerNames player) -> std::optional<entt::entity> {
+		return Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetLockedOnOf(player) : std::nullopt;
+	};
+	Pushb(script::locked_interaction::IsLocked(locks, object, lockedOnOf));
 }
 
 void EnterExitCitadel() // 347 ENTER_EXIT_CITADEL
 {
+	// The script sends the player of each computer into the main room of the temple, or out of the temple
 	const auto enter = static_cast<bool>(Pop().intVal);
 	if (Locator::temple::has_value())
 	{
-		auto& temple = Locator::temple::value();
-		const auto active = temple.Active();
-		if (enter != active)
+		auto& interior = Locator::temple::value();
+		switch (temple::keys::ScriptSwitchOf(enter, interior.Active()))
 		{
-			if (enter)
+		case temple::keys::ScriptSwitch::GoIn:
+			// The world part of the entry occurs in this turn, as for a tap on the entrance
+			interior.TapIntoTemple(TempleRoom::Main);
+			break;
+		case temple::keys::ScriptSwitch::GoToMainRoom:
+			if (Locator::cinematicDirectorSystem::has_value())
 			{
-				temple.Activate();
+				Locator::cinematicDirectorSystem::value().AllBoxesClosed();
 			}
-			else
+			interior.GoToRoom(TempleRoom::Main);
+			break;
+		case temple::keys::ScriptSwitch::Leave:
+			interior.Deactivate();
+			break;
+		case temple::keys::ScriptSwitch::EndHandLock:
+			if (Locator::handSystem::has_value())
 			{
-				temple.Deactivate();
+				Locator::handSystem::value().EndOwnInterfaceLock();
 			}
+			break;
 		}
 	}
 	else

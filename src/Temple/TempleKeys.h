@@ -100,4 +100,27 @@ enum class PictureDoorClick
 	return gameOver ? PictureDoorClick::AskNewGame : PictureDoorClick::WalkBack;
 }
 
+/// What a script that sends the player into the temple or out of it does
+enum class ScriptSwitch
+{
+	/// The player goes into the main room, as a tap on the entrance of the temple does
+	GoIn,
+	/// All the boxes close, and the camera cuts to the main room
+	GoToMainRoom,
+	/// The player leaves the temple
+	Leave,
+	/// The player is outside already: only the interface lock of the hand ends
+	EndHandLock
+};
+
+/// What a script that sends the player into the temple (`enter`) or out of it does, from where the player is now
+[[nodiscard]] constexpr ScriptSwitch ScriptSwitchOf(bool enter, bool insideTemple) noexcept
+{
+	if (enter)
+	{
+		return insideTemple ? ScriptSwitch::GoToMainRoom : ScriptSwitch::GoIn;
+	}
+	return insideTemple ? ScriptSwitch::Leave : ScriptSwitch::EndHandLock;
+}
+
 } // namespace openblack::temple::keys
