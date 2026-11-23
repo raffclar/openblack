@@ -78,19 +78,6 @@ using namespace openblack::ecs::components;
 
 namespace
 {
-/// Where an influence of its own is: about the object it goes with while there is one, otherwise where it was put
-glm::vec3 SourcePosition(const ecs::Registry& registry, const InfluenceSource& source, const Transform& transform)
-{
-	if (source.follows != entt::null && registry.Valid(source.follows))
-	{
-		if (const auto* followed = registry.TryGet<const Transform>(source.follows); followed != nullptr)
-		{
-			return followed->position;
-		}
-	}
-	return transform.position;
-}
-
 /// The border is drawn again only on every tenth turn, and only once a reach has moved by more than this
 constexpr uint32_t k_RedrawTurns = 10;
 constexpr float k_RedrawReach = 0.01f;
@@ -449,6 +436,33 @@ void InfluenceSystem::FixCitadelReaches()
 	}
 }
 
+void InfluenceSystem::ProcessRings()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> gone;
+	registry.Each<const InfluenceSource, Transform>(
+	    [&registry, &gone](entt::entity ring, const InfluenceSource& source, Transform& transform) {
+		    const auto* thing = source.follows != entt::null && registry.Valid(source.follows)
+		                            ? registry.TryGet<const Transform>(source.follows)
+		                            : nullptr;
+		    switch (openblack::influence_rules::TurnOfRing(source.follows != entt::null, thing != nullptr))
+		    {
+		    case openblack::influence_rules::RingTurn::Stays:
+			    break;
+		    case openblack::influence_rules::RingTurn::Follows:
+			    transform.position = thing->position;
+			    break;
+		    case openblack::influence_rules::RingTurn::Goes:
+			    gone.push_back(ring);
+			    break;
+		    }
+	    });
+	for (const auto ring : gone)
+	{
+		registry.Destroy(ring);
+	}
+}
+
 void InfluenceSystem::LandLaidOut()
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -533,7 +547,7 @@ void InfluenceSystem::DrawBorders()
 		registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
 			if (source.player == name && source.radius > 0.0f && !source.anti)
 			{
-				influence::AddCircle(_circles, name, SourcePosition(registry, source, transform), source.radius, ground);
+				influence::AddCircle(_circles, name, transform.position, source.radius, ground);
 			}
 		});
 	}
@@ -584,7 +598,7 @@ bool InfluenceSystem::InScriptAntiInfluence(PlayerNames player, const map_coords
 	const auto& registry = Locator::entitiesRegistry::value();
 	bool anti = false;
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
-		const auto at = SourcePosition(registry, source, transform);
+		const auto& at = transform.position;
 		anti = anti || (source.anti && source.player == player &&
 		                gutils::GetDistanceInMetres(map_coords::FromMetres({at.x, at.z}), position) <= source.radius);
 	});
@@ -1105,7 +1119,7 @@ InfluenceSystem::NearInfluence InfluenceSystem::RawInfluences(const map_coords::
 		{
 			return;
 		}
-		const float distance = distanceTo(SourcePosition(registry, source, transform));
+		const float distance = distanceTo(transform.position);
 		if (source.anti)
 		{
 			anti.at(index) = anti.at(index) || distance <= source.radius;
@@ -1243,8 +1257,7 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	}
 	bool anti = false;
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
-		anti = anti || (source.anti && source.player == player &&
-		                distanceTo(SourcePosition(registry, source, transform)) <= source.radius);
+		anti = anti || (source.anti && source.player == player && distanceTo(transform.position) <= source.radius);
 	});
 	if (anti)
 	{
@@ -1278,9 +1291,8 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
 		if (source.player == player && !source.anti)
 		{
-			sum += influence::OnRange(distanceTo(SourcePosition(registry, source, transform)), source.radius,
-			                          range.percentageFullInfluence, range.percentageDistanceForDecreasingGradient,
-			                          range.valueOfSmall);
+			sum += influence::OnRange(distanceTo(transform.position), source.radius, range.percentageFullInfluence,
+			                          range.percentageDistanceForDecreasingGradient, range.valueOfSmall);
 		}
 	});
 	return std::clamp(sum, -1.0f, 1.0f);

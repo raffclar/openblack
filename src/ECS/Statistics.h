@@ -71,8 +71,8 @@ void ProcessTurn(uint32_t turn);
 void CheckBelief(uint32_t turn);
 
 /// Every so many game turns the figures kept once for everyone change: the invented lines of code and the frame rate's
-/// highest and lowest
-void ProcessGlobalTurn(uint32_t turn, int32_t frameRate);
+/// highest and lowest. A turn whose input stopped the clock uses half the period.
+void ProcessGlobalTurn(uint32_t turn, bool clockStopped, int32_t frameRate);
 
 /// Everything the Game Statistics box shows now, for the first four players. As in the game, when the box takes the figures, it
 /// increases the lines of code on once more.

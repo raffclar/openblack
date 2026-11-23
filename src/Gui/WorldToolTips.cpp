@@ -131,7 +131,7 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 				submissions.push_back({.numbers = Population(people, PlacesOf(*townComponent))});
 			}
 		}
-		else if (abode->type == AbodeNumber::StoragePit && Shows(Subject::Store, handInInfluence) &&
+		else if (abode->type == AbodeNumber::StoragePit && OffersStored(ecs::construction::IsBuilt(object), handInInfluence) &&
 		         Locator::resourceStoreSystem::has_value())
 		{
 			const auto& stores = Locator::resourceStoreSystem::value();

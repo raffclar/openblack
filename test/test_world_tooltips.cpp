@@ -355,6 +355,15 @@ TEST(WorldToolTips, TheWayIntoTheOwnBuiltTempleShowsOnlyInTheInfluence)
 	EXPECT_FALSE(OffersEnterTemple(true, true, false));
 }
 
+// The hand shows what a storage pit stores only over a pit that is fully built, within the influence
+TEST(WorldToolTips, OnlyABuiltStoragePitShowsWhatItStores)
+{
+	EXPECT_TRUE(OffersStored(true, true));
+	EXPECT_FALSE(OffersStored(true, false));
+	EXPECT_FALSE(OffersStored(false, true));
+	EXPECT_FALSE(OffersStored(false, false));
+}
+
 TEST(WorldToolTips, AWorshipIconWritesItsChargeAfterTheWords)
 {
 	// The charge is a whole number right aligned to three places, then a percent sign

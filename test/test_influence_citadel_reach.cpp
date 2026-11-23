@@ -482,3 +482,41 @@ TEST_F(CitadelReach, TheInfluenceCheatGivesItsPlayerFullInfluenceAtEachPoint)
 	EXPECT_FLOAT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, nowhere), 0.0f);
 	Locator::debugCheatSystem::reset();
 }
+
+TEST_F(CitadelReach, ARingOnAThingMovesWithItOnlyAtItsStepAndGoesWithIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The fourth player has no temple, so only the ring gives the player influence
+	constexpr auto k_Player = PlayerNames::PLAYER_FOUR;
+	const glm::vec3 start {3000.0f, 0.0f, 3000.0f};
+	const glm::vec3 moved {3500.0f, 0.0f, 3000.0f};
+	const auto thing = registry.Create();
+	auto& thingPlace = registry.Assign<components::Transform>(thing, start, glm::mat3(1.0f), glm::vec3(1.0f));
+	const auto ring = registry.Create();
+	registry.Assign<components::Transform>(ring, start, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<components::InfluenceSource>(ring, k_Player, 20.0f, false, thing);
+	const auto atStart = map_coords::FromMetres({start.x, start.z});
+	const auto atMoved = map_coords::FromMetres({moved.x, moved.z});
+
+	// The thing moves in the turn. Until the ring's step of the next turn, the influence stays where the thing was.
+	thingPlace.position = moved;
+	EXPECT_GT(_influence.PlayerRawInfluence(k_Player, atStart), 0.0f);
+	EXPECT_FLOAT_EQ(_influence.PlayerRawInfluence(k_Player, atMoved), 0.0f);
+	_influence.ProcessRings();
+	EXPECT_FLOAT_EQ(_influence.PlayerRawInfluence(k_Player, atStart), 0.0f);
+	EXPECT_GT(_influence.PlayerRawInfluence(k_Player, atMoved), 0.0f);
+
+	// A ring at a place stays there
+	const auto placed = registry.Create();
+	registry.Assign<components::Transform>(placed, start, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<components::InfluenceSource>(placed, k_Player, 20.0f);
+
+	// When the thing goes, its ring goes at its next step, and the player has no influence there now
+	registry.Destroy(thing);
+	EXPECT_GT(_influence.PlayerRawInfluence(k_Player, atMoved), 0.0f);
+	_influence.ProcessRings();
+	EXPECT_FALSE(registry.Valid(ring));
+	EXPECT_FLOAT_EQ(_influence.PlayerRawInfluence(k_Player, atMoved), 0.0f);
+	EXPECT_TRUE(registry.Valid(placed));
+	EXPECT_GT(_influence.PlayerRawInfluence(k_Player, atStart), 0.0f);
+}

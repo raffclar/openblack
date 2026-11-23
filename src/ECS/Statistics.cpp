@@ -292,10 +292,10 @@ void player_statistics::ProcessTurn(uint32_t turn)
 	}
 }
 
-void player_statistics::ProcessGlobalTurn(uint32_t turn, int32_t frameRate)
+void player_statistics::ProcessGlobalTurn(uint32_t turn, bool clockStopped, int32_t frameRate)
 {
 	auto& global = Entities().Context().globalStatistics;
-	if (turn % statistics::k_GlobalFiguresEvery != 0 || !Locator::gameRandom::has_value())
+	if (!statistics::GlobalFiguresDue(turn, clockStopped) || !Locator::gameRandom::has_value())
 	{
 		return;
 	}

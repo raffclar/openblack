@@ -48,6 +48,11 @@ inline constexpr glm::vec3 k_Centre {2560.0f, 0.0f, 2560.0f};
 inline constexpr float k_Scale = 5.0f;
 /// The dome mesh's model matrix: its own units scaled up about its middle, then moved to the dome's centre
 [[nodiscard]] glm::mat4 Placement();
+/// The dome's model matrix in the pass that the sea shows. The game does not mirror the dome. Under the sea, it shows
+/// the lower half of the dome as the camera sees it. The lower half is not the upper half turned over, because its
+/// rows are at other heights. The pass turns the world over about the sea's level, so this matrix turns the dome over
+/// about the same level first. The two turns cancel.
+[[nodiscard]] glm::mat4 PlacementUnderSea(float seaLevel);
 
 /// The pictures of the dome: one for each alignment, good, neutral and evil, at each time of day, night, dusk and day,
 /// in that order

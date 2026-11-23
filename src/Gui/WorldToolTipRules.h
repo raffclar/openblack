@@ -94,6 +94,12 @@ constexpr uint32_t k_EnterTemple = 88;
 {
 	return ownTemple && templeBuilt && Shows(Subject::TempleEntrance, handInInfluence);
 }
+/// Over a storage pit, the hand shows what the pit stores only when all of the pit is built, and only while the hand is
+/// within the player's influence. A pit that is not fully built is only a building that the hand can knock on.
+[[nodiscard]] constexpr bool OffersStored(bool pitBuilt, bool handInInfluence)
+{
+	return pitBuilt && Shows(Subject::Store, handInInfluence);
+}
 /// "%3.0f Belief Left", over any village centre: the belief the town holds in the player beyond any other player's
 constexpr uint32_t k_BeliefLeft = 89;
 /// "%3.0f Belief Needed": the words the belief tooltip shows instead while another player is ahead in the town, with

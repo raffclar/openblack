@@ -34,8 +34,10 @@
 #include "3D/LandBlock.h"
 #include "3D/LandColourStamps.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandLakes.h"
 #include "3D/LandLightTable.h"
 #include "3D/OceanInterface.h"
+#include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/StormClouds.h"
 #include "3D/TempleDoors.h"
@@ -408,7 +410,10 @@ void Renderer::DrawPassSky(const DrawSceneDesc& desc, const ScenePass& pass) con
 		{
 			SetSkyDither(*skyShader, !IsMirrorScene(desc.viewId));
 		}
-		const auto modelMatrix = sky_dome::Placement();
+		// The sea shows the dome as the camera sees it, not mirrored. The dome turns over in the pass of the sea, and
+		// then its faces are in the same order as in the main pass.
+		const bool underSea = desc.viewId == RenderPass::Reflection;
+		const auto modelMatrix = underSea ? sky_dome::PlacementUnderSea(land_lakes::k_SeaLevel) : sky_dome::Placement();
 		// The value of the land that the sky shows, from 0, good, to 2, evil, mixes two of the alignments' domes
 		const auto alignments = sky_dome::AlignmentPair(Locator::alignmentSystem::value().GetSkyLand());
 		const glm::vec4 u_skyAlignment {alignments.lower, alignments.upper, alignments.weight,
@@ -425,7 +430,7 @@ void Renderer::DrawPassSky(const DrawSceneDesc& desc, const ScenePass& pass) con
 		submitDesc.viewId = skyViewId;
 		submitDesc.program = skyShader;
 		submitDesc.state = k_BgfxDefaultStateInvertedZ;
-		if (!desc.cullBack)
+		if (!desc.cullBack || underSea)
 		{
 			submitDesc.state &= ~BGFX_STATE_CULL_MASK;
 			submitDesc.state |= BGFX_STATE_CULL_CCW;

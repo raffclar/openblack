@@ -34,6 +34,8 @@ enum class Stage : uint8_t
 	StartTurn,
 	/// The moon takes its place, the storms move on, and the snow on the land lies and melts
 	Atmosphere,
+	/// The rings of influence that scripts made on things take the places of their things
+	InfluenceRings,
 	/// Each player in turn: its temple, its towns, its computer mind, its influence and its alignment
 	Players,
 	Dances,
@@ -114,6 +116,8 @@ enum class Step : uint8_t
 	Moon,
 	Storms,
 	Snow,
+	/// The rings of influence that scripts made on things take the places of their things, or go with their things
+	InfluenceRings,
 	/// Each player does its whole turn: its temple, its towns, its stones, its alignment, its computer mind, the power of
 	/// its tribes and its influence power
 	Players,
@@ -305,6 +309,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Moon, .stage = Stage::Atmosphere},
     {.step = Step::Storms, .stage = Stage::Atmosphere},
     {.step = Step::Snow, .stage = Stage::Atmosphere},
+    // A ring of influence on a thing stands where its thing was at this step for the rest of the turn
+    {.step = Step::InfluenceRings, .stage = Stage::InfluenceRings},
     {.step = Step::Players, .stage = Stage::Players},
     // A town's totem takes its turn with the buildings of its town
     {.step = Step::VillageTotems, .stage = Stage::Players},

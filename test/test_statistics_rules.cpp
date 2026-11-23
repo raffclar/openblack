@@ -358,3 +358,14 @@ TEST(PlayerStatistics, TheNoteOfTheStartGivesNoStatisticsToAPlayerWithNone)
 	EXPECT_FALSE(registry.AllOf<ecs::components::PlayerStatistics>(two));
 	EXPECT_EQ(registry.Context().globalStatistics.townsAtStart, 1u);
 }
+
+TEST(StatisticsGlobal, TheFiguresChangeEveryTenTurnsAndEveryFiveInATurnThatStoppedTheClock)
+{
+	EXPECT_TRUE(GlobalFiguresDue(0, false));
+	EXPECT_TRUE(GlobalFiguresDue(20, false));
+	EXPECT_FALSE(GlobalFiguresDue(25, false));
+	// The input of the turn paused the game or went into the temple: the turn count stays, and the period is half
+	EXPECT_TRUE(GlobalFiguresDue(25, true));
+	EXPECT_TRUE(GlobalFiguresDue(20, true));
+	EXPECT_FALSE(GlobalFiguresDue(23, true));
+}

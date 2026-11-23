@@ -299,11 +299,16 @@ TEST_F(VirtualGrant, AScriptsInfluenceGoesAboutWithItsObject)
 	const auto ring = registry.Create();
 	registry.Assign<components::Transform>(ring, k_Middle, glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<components::InfluenceSource>(ring, PlayerNames::PLAYER_TWO, 20.0f, false, object);
+	// The ring takes the place of its object at its step of the turn
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, k_Middle), 1.0f);
+	_influence.ProcessRings();
 	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, away), 1.0f);
 	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, k_Middle), 0.0f);
-	// Once its object has gone it stays where it was put
+	// Once its object has gone, the ring goes at its next step
 	registry.Destroy(object);
-	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, k_Middle), 1.0f);
+	_influence.ProcessRings();
+	EXPECT_FALSE(registry.Valid(ring));
+	EXPECT_EQ(_influence.PlayerRawInfluence(PlayerNames::PLAYER_TWO, away), 0.0f);
 }
 
 TEST_F(VirtualGrant, AHeldThingUsedOnTheLandCountsAtTheGameTurnNow)
