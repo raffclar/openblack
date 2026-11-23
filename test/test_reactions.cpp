@@ -42,6 +42,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
@@ -1213,15 +1214,14 @@ TEST_F(Reactions, AFiremanWithinAStepOfItsPlaceByTheFireGoesOnToBeatIt)
 	registry.Assign<Fire>(burning).root = burning;
 	registry.Assign<FireGroup>(burning, FireGroup {.members = {burning}, .firemen = {villager}});
 	const auto reaction = reactions.Create({.initiator = burning, .type = Reaction::ReactToFire, .position = k_Here});
-	// Going round the fire to its place to beat it from. The place is kept to the map's grid, so after the walk it
-	// stands a hair from it, much less than the 10 cm its walk makes in a turn
+	// It goes round the fire to its place to beat it from. The place is 3 and 327 map units from where it stands (500 m,
+	// 500 m is 3276800 map units), much less than the 10 cm its walk makes in a turn
 	auto& action = registry.Get<LivingAction>(villager);
 	action.states = {static_cast<uint8_t>(VillagerStates::MoveAroundFire), static_cast<uint8_t>(VillagerStates::InvalidState),
 	                 static_cast<uint8_t>(VillagerStates::PutOutFireByBeating)};
-	registry.Assign<VillagerFireState>(villager, VillagerFireState {.fire = burning,
-	                                                                .reactionTarget = burning,
-	                                                                .reaction = reaction,
-	                                                                .walkTarget = {k_Here.x + 0.0005f, k_Here.z + 0.05f}});
+	registry.Assign<VillagerFireState>(
+	    villager,
+	    VillagerFireState {.fire = burning, .reactionTarget = burning, .reaction = reaction, .walkTarget = {3276803, 3277127}});
 	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = reaction, .type = Reaction::ReactToFire});
 	EXPECT_EQ(villager_fire::MoveAroundFire(action), 1u);
 	// It is there: on to beating the fire, still one of the blaze's firemen, rather than setting off on a walk to where it
@@ -1230,6 +1230,47 @@ TEST_F(Reactions, AFiremanWithinAStepOfItsPlaceByTheFireGoesOnToBeatIt)
 	EXPECT_EQ(static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Previous))),
 	          VillagerStates::DecideWhatToDo);
 	EXPECT_EQ(registry.Get<const FireGroup>(burning).firemen, std::vector<entt::entity> {villager});
+	Locator::fireSystem::reset();
+	Locator::reactionSystem::reset();
+}
+
+TEST_F(Reactions, AVillagerGoesRoundAFireToTheExactMapPositionOfItsWalkTarget)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& stateTable = _info->villagerStateTable;
+	for (const auto state : {VillagerStates::PutOutFireByBeating, VillagerStates::MoveAroundFire})
+	{
+		auto& row = stateTable.at(static_cast<size_t>(state));
+		row.isFinalState = 1;
+		row.isReactionState = 1;
+		row.resumeState = static_cast<int>(state);
+	}
+	Locator::infoConstants::emplace(*_info);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	const auto villager = _villagers[0];
+	const auto burning = registry.Create();
+	registry.Assign<Transform>(burning, k_Here + glm::vec3(0.0f, 0.0f, 6.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Fire>(burning).root = burning;
+	// A fireball of 1 m burns by the fireball table, so the fire has a reach
+	registry.Assign<MagicFireBall>(burning);
+	registry.Assign<FireGroup>(burning, FireGroup {.members = {burning}, .firemen = {villager}});
+	const auto reaction = reactions.Create({.initiator = burning, .type = Reaction::ReactToFire, .position = k_Here});
+	// The walk target is 10 m and one map unit from the villager at lower x, and one unit at higher z. Nothing burns
+	// on the way, so the walk goes to the target as it is, with no height.
+	constexpr glm::ivec2 k_Target {3276800 - 65537, 3276801};
+	auto& action = registry.Get<LivingAction>(villager);
+	action.states = {static_cast<uint8_t>(VillagerStates::MoveAroundFire), static_cast<uint8_t>(VillagerStates::InvalidState),
+	                 static_cast<uint8_t>(VillagerStates::PutOutFireByBeating)};
+	registry.Assign<VillagerFireState>(
+	    villager, VillagerFireState {.fire = burning, .reactionTarget = burning, .reaction = reaction, .walkTarget = k_Target});
+	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = reaction, .type = Reaction::ReactToFire});
+	EXPECT_EQ(villager_fire::MoveAroundFire(action), 1u);
+	const auto& wallHug = registry.Get<const WallHug>(villager);
+	EXPECT_EQ(wallHug.goalPlace, k_Target);
+	EXPECT_FLOAT_EQ(wallHug.goalHeight, 0.0f);
+	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).walkTarget, k_Target);
 	Locator::fireSystem::reset();
 	Locator::reactionSystem::reset();
 }

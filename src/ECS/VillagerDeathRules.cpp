@@ -9,6 +9,8 @@
 
 #include "VillagerDeathRules.h"
 
+#include "Common/GUtilsAngle.h"
+
 namespace openblack
 {
 
@@ -64,6 +66,17 @@ villager_death::Approach villager_death::ApproachToBody(float distance, float ke
 		return {.looks = true, .walk = 0.0f};
 	}
 	return {.looks = false, .walk = walk};
+}
+
+map_coords::MapCoords villager_death::StepTowardsBody(const map_coords::MapCoords& from, const map_coords::MapCoords& body,
+                                                      float walk)
+{
+	const auto angle = gutils::GetAngleFromXZ(from, body);
+	const auto whole = map_coords::FtoL((static_cast<float>(map_coords::FtoL(walk)) / 10.0f) * 65536.0f);
+	const auto step = [whole](int32_t table) {
+		return static_cast<int32_t>(static_cast<uint32_t>(table) * static_cast<uint32_t>(whole >> 8)) >> 8;
+	};
+	return {.x = from.x + step(gutils::Cos(angle)), .z = from.z + step(gutils::Sin(angle)), .altitude = from.altitude};
 }
 
 uint8_t villager_death::SoulAlphaAt(uint32_t timeMs, uint32_t clipMs)

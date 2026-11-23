@@ -15,10 +15,7 @@
 #include <optional>
 #include <vector>
 
-#include <glm/gtx/vec_swizzle.hpp>
-
 #include "3D/MapCoords.h"
-#include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/ForestMember.h"
 #include "ECS/Components/LivingAction.h"
@@ -30,6 +27,8 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
+#include "ECS/VillagerWorkRules.h"
 #include "Locator.h"
 #include "ObjectMeasures.h"
 #include "VillagerAnimate.h"
@@ -107,21 +106,16 @@ ForestTrees TreesOf(entt::entity forest)
 	return {.growing = forests.TreesOf(forest, true), .grown = forests.TreesOf(forest, false)};
 }
 
-/// The point where a villager stands to come to a thing: from the thing towards the villager, as far as the two radii
-/// on the ground together
-glm::vec2 PointBeside(entt::entity thing, entt::entity villager)
+/// The point where a villager stands to come to a thing: from the map position of the thing towards the map position of
+/// the villager, as far as the two radii on the ground together. The game gives this point in metres, then changes it back
+/// to a map position.
+map_coords::MapCoords PointBeside(entt::entity thing, entt::entity villager)
 {
 	const auto& registry = Entities();
-	const auto from = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(thing).position));
-	const auto to = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(villager).position));
-	const float angle = gutils::Get3DAngleFromXZ(from, to);
-	const float villagerRadius = ecs::systems::object_measures::TwoDRadius(registry, villager);
-	const float reach = ecs::systems::object_measures::TwoDRadius(registry, thing) + villagerRadius;
-	auto point = from;
-	const auto offset = gutils::GetPosFromAngle(angle, reach);
-	point.x += offset.x;
-	point.z += offset.z;
-	return map_coords::ToMetres(point);
+	return ecs::villager_work::NearestEdgePosition(ecs::thing_map_place::Of(registry, thing),
+	                                               ecs::thing_map_place::Of(registry, villager),
+	                                               ecs::systems::object_measures::TwoDRadius(registry, thing),
+	                                               ecs::systems::object_measures::TwoDRadius(registry, villager));
 }
 } // namespace
 

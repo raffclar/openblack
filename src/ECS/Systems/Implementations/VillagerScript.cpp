@@ -375,15 +375,15 @@ void BringBackToMind(entt::entity villager, const ScriptRemind& remind)
 	}
 }
 
-/// The point of its track that a villager's walk has got to, put on the land's grid
-std::optional<glm::vec2> TrackPointOf(entt::entity villager)
+/// The point of its track that the walk of a villager is at, as a map position at altitude 0
+std::optional<map_coords::MapCoords> TrackPointOf(entt::entity villager)
 {
 	auto* path = Entities().TryGet<WalkPath>(villager);
 	if (path == nullptr || !path->living)
 	{
 		return std::nullopt;
 	}
-	return map_coords::ToMetres(map_coords::FromMetres(camera_track::LivingWalkPoint(path->walk, *path->track)));
+	return map_coords::FromMetres(camera_track::LivingWalkPoint(path->walk, *path->track));
 }
 } // namespace
 
@@ -535,7 +535,7 @@ uint32_t villager_script::ScriptWanderAroundPosition(LivingAction& action)
 	const float bearing = random.GameFloatRand(rules::k_FullTurn);
 	const float distance = random.GameFloatRand(arguments.number);
 	gutils::AddDistanceFromAngle(stop, bearing, distance);
-	villager_home::SetupMoveTo(action, map_coords::ToMetres(stop), VillagerStates::ScriptWanderAroundPosition);
+	villager_home::SetupMoveTo(action, stop, VillagerStates::ScriptWanderAroundPosition);
 	action.turnsUntilStateChange =
 	    rules::WanderPause(arguments.first, arguments.second, [&random](uint32_t limit) { return random.GameRand(limit); });
 	return 1;

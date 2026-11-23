@@ -89,7 +89,7 @@ void SetTopState(LivingAction& action, VillagerStates state)
 /// Walks the villager to a place round what is in the way, then on into a state
 void MoveTo(LivingAction& action, const MapCoords& goal, VillagerStates final)
 {
-	villager_home::SetupMoveTo(action, map_coords::ToMetres(goal), final);
+	villager_home::SetupMoveTo(action, goal, final);
 }
 
 ShepherdWork& WorkOf(entt::entity villager)

@@ -63,8 +63,9 @@ public:
 	/// A villager starts fishing a farm, or stops
 	virtual void AddFisherman(entt::entity farm, entt::entity villager) = 0;
 	virtual void RemoveFisherman(entt::entity farm, entt::entity villager) = 0;
-	/// A spot round the farm a fisherman goes to fish from, drawn at random; the farm's own place for what isn't a farm
-	[[nodiscard]] virtual glm::vec3 FishingSpot(entt::entity farm) = 0;
+	/// A spot round the farm a fisherman goes to fish from, drawn at random, in whole map units (x and z); the map
+	/// position of a thing that is not a farm
+	[[nodiscard]] virtual glm::ivec2 FishingSpot(entt::entity farm) = 0;
 	/// Once a fisherman's fishing animation ends: the fish bite for one fisherman in as many as the farm has, and then
 	/// what he catches (see fish_farm::Catch), which he picks up when it isn't 0; none when nothing bit. The farm's own
 	/// fish are not taken. After a bite he takes his food to the store when fish_farm::TakesCatchToStore says so.

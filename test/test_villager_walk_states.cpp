@@ -102,12 +102,14 @@ private:
 	std::array<lnd::LNDCell, 19> _cells {};
 };
 
-/// One step of a walk: the villager, its top state at the step, and the goal of the walk at the step
+/// One step of a walk: the villager, its top state at the step, and the goal of the walk at the step, in metres and in
+/// whole map units
 struct Step
 {
 	entt::entity villager;
 	VillagerStates top;
 	glm::vec2 goal;
+	glm::ivec2 goalPlace;
 };
 
 /// Records each step of a walk and does no other work. When `arrives` is true, a step puts the walker on its goal.
@@ -125,6 +127,7 @@ public:
 		    .villager = walker,
 		    .top = static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Top))),
 		    .goal = wall_hug::ToPoint(wallHug.goalPlace),
+		    .goalPlace = wallHug.goalPlace,
 		});
 		if (!arrives)
 		{
@@ -278,12 +281,17 @@ protected:
 		registry.Assign<Dancer>(_villager, Dancer {.dance = dance, .group = 0});
 		return dance;
 	}
-	/// Puts the villager on its place in its dance
+	/// Puts the villager exactly on the map position of its place in its dance
 	void StandOnSlot() const
 	{
 		const auto slot = villager_dance::SlotOf(_villager);
 		ASSERT_TRUE(slot.has_value());
-		Locator::entitiesRegistry::value().Get<Transform>(_villager).position = glm::vec3(slot->x, 0.0f, slot->y);
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto metres = map_coords::ToMetres(*slot);
+		registry.Get<Transform>(_villager).position = glm::vec3(metres.x, 0.0f, metres.y);
+		auto& wallHug = registry.Get<WallHug>(_villager);
+		wallHug.position = map_coords::WholeXZ(*slot);
+		wallHug.placedAt = metres;
 	}
 
 	std::unique_ptr<InfoConstants> _info;
@@ -571,10 +579,10 @@ TEST_F(VillagerWalkStates, ADancerAwayFromItsPlaceStepsInTheTurnItSetsOff)
 	villager_dance::InDance(Action());
 	ASSERT_EQ(_steps->steps.size(), 1u);
 	EXPECT_EQ(_steps->steps.front().top, VillagerStates::MoveToDancePos);
+	// The goal is the map position of the place, exactly
 	const auto slot = villager_dance::SlotOf(_villager);
 	ASSERT_TRUE(slot.has_value());
-	EXPECT_NEAR(_steps->steps.front().goal.x, slot->x, 0.01f);
-	EXPECT_NEAR(_steps->steps.front().goal.y, slot->y, 0.01f);
+	EXPECT_EQ(_steps->steps.front().goalPlace, map_coords::WholeXZ(*slot));
 	EXPECT_EQ(Final(), VillagerStates::InDance);
 }
 
@@ -618,10 +626,10 @@ TEST_F(VillagerWalkStates, AWalkToAPlaceInADanceStepsToThePlaceOfAMovedGroup)
 	Locator::entitiesRegistry::value().Get<Dance>(dance).groups.all.front().moved = true;
 	villager_dance::MoveToDancePos(Action());
 	ASSERT_EQ(_steps->steps.size(), 1u);
+	// The goal is the map position of the place, exactly
 	const auto slot = villager_dance::SlotOf(_villager);
 	ASSERT_TRUE(slot.has_value());
-	EXPECT_NEAR(_steps->steps.front().goal.x, slot->x, 0.01f);
-	EXPECT_NEAR(_steps->steps.front().goal.y, slot->y, 0.01f);
+	EXPECT_EQ(_steps->steps.front().goalPlace, map_coords::WholeXZ(*slot));
 }
 
 // A dancer of an artefact dance that stands where a walk to the dance ends starts its walk to its place, with no step yet
