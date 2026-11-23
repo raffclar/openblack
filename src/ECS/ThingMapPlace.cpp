@@ -50,7 +50,7 @@ map_coords::MapCoords thing_map_place::Of(const Registry& registry, entt::entity
 	{
 		return {.x = firefly->at.x, .z = firefly->at.z};
 	}
-	const auto* at = registry.TryGet<const Transform>(thing);
+	const auto* at = registry.TryGet<const components::Transform>(thing);
 	if (at == nullptr)
 	{
 		return {};
@@ -144,6 +144,17 @@ void thing_map_place::ReinsertWith(entt::entity thing, const std::function<void(
 		return;
 	}
 	Locator::entitiesMap::value().ReinsertWith(thing, change);
+}
+
+bool thing_map_place::Resize(Registry& registry, entt::entity thing, float scale)
+{
+	const auto* transform = registry.TryGet<const components::Transform>(thing);
+	if (transform == nullptr || transform->scale.x == scale)
+	{
+		return false;
+	}
+	ReinsertWith(thing, [&registry, thing, scale]() { registry.Get<components::Transform>(thing).scale = glm::vec3(scale); });
+	return true;
 }
 
 } // namespace openblack::ecs

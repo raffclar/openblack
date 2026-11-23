@@ -637,15 +637,10 @@ void SetCropLife(Registry& registry, entt::entity object, float life, bool allow
 	{
 		return;
 	}
-	// A crop that changes its size comes out of the map's cells and goes in again
+	// A crop that changes its size comes out of the map's cells at its old size and goes in again at its new size
 	const float scale = mobile_object_class::CropScale(world_objects::LifeOf(object), record->finalScale);
-	const bool resized = transform->scale.x != scale;
-	transform->scale = glm::vec3(scale);
+	thing_map_place::Resize(registry, object, scale);
 	registry.SetDirty();
-	if (resized)
-	{
-		thing_map_place::Reinsert(object);
-	}
 }
 } // namespace
 

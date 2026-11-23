@@ -238,15 +238,9 @@ entt::entity GameWorshipSiteWorld::MakeFoodPot(glm::vec3 position, float yAngle)
 	const auto pot = archetypes::PotArchetype::CreateEmpty(position, yAngle, PotInfo::StoragePitFoodPile);
 	if (pot != entt::null)
 	{
-		// The pot takes its size after it is made. If the size changes, the pot comes out of the map's cells and goes
-		// in again.
-		auto& transform = Locator::entitiesRegistry::value().Get<Transform>(pot);
-		const bool resized = transform.scale.x != worship_site::k_FoodPotScale;
-		transform.scale = glm::vec3(worship_site::k_FoodPotScale);
-		if (resized)
-		{
-			ecs::thing_map_place::Reinsert(pot);
-		}
+		// The pot takes its size after it is made. If the size changes, the pot comes out of the map's cells at its old
+		// size and goes in again at its new size.
+		ecs::thing_map_place::Resize(Locator::entitiesRegistry::value(), pot, worship_site::k_FoodPotScale);
 	}
 	return pot;
 }
