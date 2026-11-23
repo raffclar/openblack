@@ -344,12 +344,22 @@ TEST(VillagerWork, ATownCountsWhatItsPeopleDoByTheirStates)
 TEST(VillagerWork, AFarmerWorksAtSpotsUpToFiveMetresEitherWayOfTheFieldsMiddle)
 {
 	// The first draw moves it along x, the second along z
-	const auto spot = work::FieldWorkSpot({100.0f, 200.0f}, 0.0f, 10.0f);
+	const map_coords::MapCoords field {.x = 655360, .z = 1310720, .altitude = 0.0f};
+	const auto spot = work::FieldWorkSpot(field, 0.0f, 10.0f);
 	EXPECT_EQ(spot.x, 688128);
 	EXPECT_EQ(spot.y, 1277952);
-	const auto middle = work::FieldWorkSpot({100.0f, 200.0f}, 5.0f, 5.0f);
+	const auto middle = work::FieldWorkSpot(field, 5.0f, 5.0f);
 	EXPECT_EQ(middle.x, 655360);
 	EXPECT_EQ(middle.y, 1310720);
+}
+
+TEST(VillagerWork, AFarmersSpotStartsFromTheMapPositionOfTheFieldAndNotFromItsMetres)
+{
+	// The field is a map unit off a whole metre. Its spot keeps that map unit, and the height of the field has no effect.
+	const map_coords::MapCoords field {.x = 655361, .z = 1310719, .altitude = 3.0f};
+	const auto middle = work::FieldWorkSpot(field, 5.0f, 5.0f);
+	EXPECT_EQ(middle.x, 655361);
+	EXPECT_EQ(middle.y, 1310719);
 }
 
 TEST(VillagerWork, AFarmerSowsOrDigsOnceAtItsSpotAndOtherwiseDecidesAfresh)

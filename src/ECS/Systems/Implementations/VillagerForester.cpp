@@ -19,7 +19,6 @@
 
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/euler_angles.hpp>
-#include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
@@ -108,16 +107,6 @@ entt::entity TownOf(const Villager& villager)
 	const auto& registry = Entities();
 	return villager.town != entt::null && registry.Valid(villager.town) && registry.AllOf<Town>(villager.town) ? villager.town
 	                                                                                                           : entt::null;
-}
-
-glm::vec3 PositionOf(entt::entity entity)
-{
-	return Entities().Get<const Transform>(entity).position;
-}
-
-glm::vec2 GroundOf(entt::entity entity)
-{
-	return glm::xz(PositionOf(entity));
 }
 
 /// Where a thing stands, as the map keeps it, with no height above the land
@@ -687,7 +676,8 @@ uint32_t villager_forester::ArrivesAtWoodReaction(LivingAction& action)
 				MoveTo(action, at, FinalState(action));
 				return 1;
 			}
-			if (!villager_build::FaceTowards(villager, GroundOf(wood), 0x80))
+			const auto woodPlace = MapPlaceOf(wood);
+			if (!villager_build::FaceTowards(villager, glm::ivec2 {woodPlace.x, woodPlace.z}, 0x80))
 			{
 				return 1;
 			}
@@ -744,7 +734,7 @@ uint32_t villager_forester::ReactToWoodPriority(entt::entity villager, entt::ent
 	                          : 0.0f,
 	    .stateInterest = StateInfo(FinalState(*action)).woodInterest,
 	    .distanceModifier =
-	        gutils::GetDistanceModifier(gutils::GetDistanceInMetres(PositionOf(villager), PositionOf(wood)), reach),
+	        gutils::GetDistanceModifier(gutils::GetDistanceInMetres(MapPlaceOf(villager), MapPlaceOf(wood)), reach),
 	    .townTrigger = townInfo.desireTriggersVillagerAction,
 	    .interactDesire = registry.Context().mapScriptGlobals.interactDesire,
 	});
