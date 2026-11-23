@@ -19,6 +19,7 @@
 #include <glm/mat4x4.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "ECS/BuildingSiteRules.h"
 #include "ECS/VillagerCarry.h"
 
@@ -294,27 +295,32 @@ TEST(BuildingSiteRules, AStandardSitesPileLiesBeyondTheBuildingAwayFromItsDoor)
 {
 	const glm::vec2 building {100.0f, 200.0f};
 	const glm::vec2 door {97.0f, 196.0f}; // five metres off
+	const auto buildingPlace = map_coords::FromMetres(building);
+	const auto doorPlace = map_coords::FromMetres(door);
 	constexpr float k_Eighth = std::numbers::pi_v<float> / 4.0f;
+	// The map's distance and the game's angles are a little coarse
+	constexpr float k_MapLeeway = 0.02f;
+	const auto metres = [](const PilePlace& pile) { return map_coords::ToMetres(pile.position); };
 
 	// A draw of a sixteenth of a turn cancels the turn: straight on from the door through the building
-	const auto straight = StandardPilePlace(building, door, FixedFloat(k_Eighth / 2.0f));
-	const glm::vec2 out = straight.position - building;
-	EXPECT_NEAR(glm::length(out), 9.0f, 1e-3f);
+	const auto straight = StandardPilePlace(buildingPlace, doorPlace, FixedFloat(k_Eighth / 2.0f));
+	const glm::vec2 out = metres(straight) - building;
+	EXPECT_NEAR(glm::length(out), 9.0f, k_MapLeeway);
 	const glm::vec2 away = glm::normalize(building - door);
 	EXPECT_NEAR(glm::dot(glm::normalize(out), away), 1.0f, 1e-4f);
 
 	// The point is laid out along a game angle (2048 to a turn), so it is only that close.
 	// The extreme draws turn it an eighth of a turn's half either way, at the same distance, and it always faces back
-	const auto left = StandardPilePlace(building, door, FixedFloat(0.0f));
-	const auto right = StandardPilePlace(building, door, FixedFloat(k_Eighth));
+	const auto left = StandardPilePlace(buildingPlace, doorPlace, FixedFloat(0.0f));
+	const auto right = StandardPilePlace(buildingPlace, doorPlace, FixedFloat(k_Eighth));
 	for (const auto& pile : {left, right})
 	{
-		const glm::vec2 offset = pile.position - building;
-		EXPECT_NEAR(glm::length(offset), 9.0f, 1e-3f);
+		const glm::vec2 offset = metres(pile) - building;
+		EXPECT_NEAR(glm::length(offset), 9.0f, k_MapLeeway);
 		EXPECT_NEAR(glm::dot(glm::normalize(offset), away), std::cos(k_Eighth / 2.0f), 5e-3f);
 	}
-	const glm::vec2 l = left.position - building;
-	const glm::vec2 r = right.position - building;
+	const glm::vec2 l = metres(left) - building;
+	const glm::vec2 r = metres(right) - building;
 	const float leftSide = away.x * l.y - away.y * l.x;
 	const float rightSide = away.x * r.y - away.y * r.x;
 	EXPECT_LT(leftSide * rightSide, 0.0f);

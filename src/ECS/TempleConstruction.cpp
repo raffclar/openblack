@@ -938,9 +938,11 @@ void construction::MakeSitePiles(entt::entity building, BuildingSite& site)
 		if (!livePile(first))
 		{
 			const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
-			const auto at = glm::xz(registry.Get<const Transform>(building).position);
-			const auto place = building_site::StandardPilePlace(at, villager_home::DoorPosition(building), random);
-			first = makePile(place.position, place.yAngle, 0.0f);
+			const auto place = building_site::StandardPilePlace(thing_map_place::Of(registry, building),
+			                                                    villager_home::DoorPlace(building), random);
+			// The pile stands at the exact map position that the game finds
+			first = makePile(map_coords::ToMetres(place.position), place.yAngle, 0.0f);
+			thing_map_place::Keep(registry, first, place.position);
 		}
 		return;
 	}

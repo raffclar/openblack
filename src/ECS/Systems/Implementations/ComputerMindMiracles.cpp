@@ -292,15 +292,12 @@ std::optional<ImpressPlace> ImpressPlaceOf(entt::entity town, const map_coords::
 	{
 		return std::nullopt;
 	}
-	const auto fromMetres = [](glm::vec2 metres) {
-		return map_coords::MapCoords {.x = map_coords::ToFixed(metres.x), .z = map_coords::ToFixed(metres.y), .altitude = 0.0f};
-	};
 	// The god looks at the places in this order: the door of the storage pit, the gathering place, the town centre,
 	// then each field of the town
 	std::vector<map_coords::MapCoords> places;
 	if (const auto pit = ecs::construction::StoragePitOf(town))
 	{
-		places.push_back(fromMetres(ecs::villager_home::DoorPosition(*pit)));
+		places.push_back(ecs::villager_home::DoorPlace(*pit));
 	}
 	places.push_back(Locator::townSystem::value().GetCongregationPos(town));
 	if (const auto centre = CoordsOfThing(TownCentreOf(town)))

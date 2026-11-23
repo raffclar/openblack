@@ -313,14 +313,14 @@ float building_site::TemplePileAngle(float heartYAngle, size_t pile)
 	return heartYAngle + static_cast<float>(static_cast<int32_t>(pile)) * k_SeventhTurn - k_PileAngleOffset;
 }
 
-PilePlace building_site::StandardPilePlace(glm::vec2 building, glm::vec2 door, const FloatRandom& floatRandom)
+PilePlace building_site::StandardPilePlace(const map_coords::MapCoords& building, const map_coords::MapCoords& door,
+                                           const FloatRandom& floatRandom)
 {
 	// The way from the door through the building, give or take an eighth of a turn
-	const float angle = (std::numbers::pi_v<float> / 8.0f - floatRandom(std::numbers::pi_v<float> / 4.0f)) +
-	                    gutils::Get3DAngleFromXZ(door, building);
-	const float distance = glm::distance(building, door) + k_PileBeyondDoor;
-	const auto offset = gutils::GetPointFromAngle(angle, distance);
-	return {.position = building + glm::vec2(offset.x, offset.z), .yAngle = angle - std::numbers::pi_v<float>};
+	const float way = gutils::Get3DAngleFromXZ(door, building);
+	const float angle = (std::numbers::pi_v<float> / 8.0f - floatRandom(std::numbers::pi_v<float> / 4.0f)) + way;
+	const float distance = gutils::GetDistanceInMetres(building, door) + k_PileBeyondDoor;
+	return {.position = building + gutils::GetPosFromAngle(angle, distance), .yAngle = angle - std::numbers::pi_v<float>};
 }
 
 glm::vec2 building_site::WonderPilePlace(glm::vec3 position, const glm::mat3& rotation, glm::vec3 scale)

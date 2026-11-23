@@ -66,13 +66,43 @@ TEST(VillagerRoutine, OutOfTheDoorTheDistanceIsDrawnBeforeTheAngle)
 	FakeFloats random {.answers = {0.0f, k_EighthPi}};
 	const glm::vec2 abode {100.0f, 100.0f};
 	const glm::vec2 door {100.0f, 104.0f};
-	const auto spot = PosOutsideDoor(abode, door, random.Random());
+	const auto spot =
+	    map_coords::ToMetres(PosOutsideDoor(map_coords::FromMetres(abode), map_coords::FromMetres(door), random.Random()));
 	ASSERT_EQ(random.limits.size(), 2u);
 	EXPECT_FLOAT_EQ(random.limits[0], k_OutsideDoorRange);
 	EXPECT_FLOAT_EQ(random.limits[1], k_QuarterPi);
 	// No jitter and the least distance: straight out from the home, a step and a half past the door
 	EXPECT_NEAR(glm::distance(spot, door), k_OutsideDoorLeast, k_GridLeeway);
 	EXPECT_GT(glm::distance(spot, abode), glm::distance(door, abode));
+}
+
+TEST(VillagerRoutine, OutOfTheDoorTheStepIsAddedToTheDoorInWholeMapUnits)
+{
+	// A door far out on the map, whose last unit metres cannot keep, and with a height above the land
+	const map_coords::MapCoords abode {.x = 0x1FB5355 - 0x6000, .z = 0x1234567 - 0x2000, .altitude = 0.0f};
+	const map_coords::MapCoords door {.x = 0x1FB5355, .z = 0x1234567, .altitude = 2.5f};
+	FakeFloats random {.answers = {1.0f, 0.5f}};
+	const auto spot = PosOutsideDoor(abode, door, random.Random());
+	const float angle = (k_EighthPi - 0.5f) + gutils::Get3DAngleFromXZ(abode, door);
+	const auto step = gutils::GetPosFromAngle(angle, 1.0f + k_OutsideDoorLeast);
+	EXPECT_EQ(spot.x, door.x + step.x);
+	EXPECT_EQ(spot.z, door.z + step.z);
+	EXPECT_EQ(spot.altitude, 2.5f);
+}
+
+TEST(VillagerRoutine, AboutTheDoorTheAngleIsDrawnFirstAndTheStepAddedInWholeMapUnits)
+{
+	const map_coords::MapCoords abode {.x = 0x1FB5355 + 0x4000, .z = 0x1234567 - 0x7000, .altitude = 0.0f};
+	const map_coords::MapCoords door {.x = 0x1FB5355, .z = 0x1234567, .altitude = 0.0f};
+	FakeFloats random {.answers = {0.75f, 2.0f}};
+	const auto spot = PosOutside(abode, door, 3.0f, 5.0f, 5.0f, random.Random());
+	ASSERT_EQ(random.limits.size(), 2u);
+	EXPECT_FLOAT_EQ(random.limits[0], k_TwoPi / 3.0f);
+	EXPECT_FLOAT_EQ(random.limits[1], 5.0f);
+	const float angle = gutils::Get3DAngleFromXZ(abode, door) + (0.75f - k_TwoPi / 6.0f);
+	const auto step = gutils::GetPosFromAngle(angle, 2.0f + 5.0f);
+	EXPECT_EQ(spot.x, door.x + step.x);
+	EXPECT_EQ(spot.z, door.z + step.z);
 }
 
 TEST(VillagerRoutine, SittingAboutTownIsWithinTheChillOutDistance)

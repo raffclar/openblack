@@ -119,6 +119,23 @@ TEST(VillagerWork, AMapPositionThroughMetresCanMoveAUnit)
 	EXPECT_EQ(near.z, 0x320000);
 }
 
+TEST(VillagerWork, AMapPositionThroughAPointTakesTheLandHeightDifference)
+{
+	// Far out, the map position moves a unit on its way through metres. The land is 7 metres high at the start and 6.5
+	// metres at the new position, so a place 0.25 metres above the land ends 0.75 metres above it.
+	const map_coords::MapCoords start {.x = 0x1FB5355, .z = 0x1234567, .altitude = 0.25f};
+	const auto ground = [](const map_coords::MapCoords& place) { return place.x == 0x1FB5355 ? 7.0f : 6.5f; };
+	const auto end = work::ThroughPoint(start, ground);
+	EXPECT_EQ(end.x, 0x1FB5356);
+	EXPECT_EQ(end.z, 0x1234566);
+	EXPECT_FLOAT_EQ(end.altitude, 0.75f);
+	// On flat land the altitude stays
+	const auto flat = work::ThroughPoint({.x = 0x400001, .z = 0x320000, .altitude = 0.25f},
+	                                     [](const map_coords::MapCoords&) { return 3.0f; });
+	EXPECT_EQ(flat.x, 0x400001);
+	EXPECT_FLOAT_EQ(flat.altitude, 0.25f);
+}
+
 TEST(VillagerWork, TouchingIsTheEdgeNearerThanAStep)
 {
 	EXPECT_TRUE(work::Touching(0.6f, 0.5f, 0.2f));
