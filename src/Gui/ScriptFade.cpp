@@ -33,6 +33,16 @@ uint32_t WithAlpha(uint32_t colour, uint32_t alpha)
 }
 } // namespace
 
+uint8_t openblack::gui::FadeColourFromScript(float value)
+{
+	return static_cast<uint8_t>(static_cast<uint32_t>(openblack::x87::ToInteger(value)) & 0xFFu);
+}
+
+int8_t openblack::gui::FadeSecondsFromScript(float value)
+{
+	return static_cast<int8_t>(FadeColourFromScript(value));
+}
+
 void ScriptFade::FadeTo(uint8_t red, uint8_t green, uint8_t blue, int8_t seconds)
 {
 	_colour = (_colour & 0xFF000000u) | (static_cast<uint32_t>(red) << 16u) | (static_cast<uint32_t>(green) << 8u) | blue;

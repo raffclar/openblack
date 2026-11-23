@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <limits>
 #include <tuple>
 
 #include <gtest/gtest.h>
@@ -49,6 +50,25 @@ TEST(ScriptFade, NoTimeIsAtOnce)
 	fade.FadeBackToNormal(-1);
 	EXPECT_TRUE(fade.IsFinished());
 	EXPECT_EQ(fade.GetColour(), 0x00FF0000u);
+}
+
+// The script values lose the fraction towards zero, and only the low byte stays
+TEST(ScriptFade, ScriptValuesBecomeBytes)
+{
+	using openblack::gui::FadeColourFromScript;
+	using openblack::gui::FadeSecondsFromScript;
+	EXPECT_EQ(FadeColourFromScript(255.9f), 255u);
+	EXPECT_EQ(FadeColourFromScript(256.0f), 0u);
+	EXPECT_EQ(FadeColourFromScript(-1.0f), 255u);
+	EXPECT_EQ(FadeSecondsFromScript(3.7f), 3);
+	EXPECT_EQ(FadeSecondsFromScript(-1.9f), -1);
+	// 200 seconds wrap to a negative byte, so the fade is at once
+	EXPECT_EQ(FadeSecondsFromScript(200.0f), -56);
+	EXPECT_EQ(FadeSecondsFromScript(300.5f), 44);
+	// Out of the range of a whole number, the game gives the low byte of the 64-bit value; NaN gives 0
+	EXPECT_EQ(FadeColourFromScript(3.0e9f), 0u);
+	EXPECT_EQ(FadeSecondsFromScript(-3.0e9f), 0);
+	EXPECT_EQ(FadeSecondsFromScript(std::numeric_limits<float>::quiet_NaN()), 0);
 }
 
 TEST(ScriptFade, FadesBackToClear)
