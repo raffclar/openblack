@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <vector>
 
@@ -130,6 +131,13 @@ TEST_F(ForestMiracleEmpty, TheForestGoesWithItsLastMagicTree)
 	EXPECT_FALSE(registry.Valid(_record));
 	EXPECT_FALSE(registry.Valid(_land));
 	EXPECT_FALSE(_forests->TallestTreeOf(k_Spell).has_value());
+}
+
+TEST_F(ForestMiracleEmpty, ATreeWithNoModelHasNoHeightSoTheTallestTreeIsZero)
+{
+	// The game measures the height of each tree from the box of its model and its scale. A tree with no model has the
+	// height 0, not a default height.
+	EXPECT_EQ(_forests->TallestTreeOf(k_Spell), std::optional(0.0f));
 }
 
 TEST_F(ForestMiracleEmpty, ATreeThatSpreadIntoTheForestKeepsIt)

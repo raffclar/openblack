@@ -675,7 +675,7 @@ std::optional<float> ForestSystem::TallestTreeOf(entt::entity spell) const
 		{
 			if (registry.Valid(tree))
 			{
-				height = std::max(height, world_objects::SizeOf(tree).height);
+				height = std::max(height, object_measures::Height(registry, tree));
 			}
 		}
 		tallest = height;
@@ -1206,11 +1206,16 @@ uint32_t ForestSystem::TakeBigForestWood(entt::entity bigForest, uint32_t amount
 	}
 	if (taken.shrinksTo.has_value())
 	{
-		// Drawn and walked round at its new size, then a young pine is planted round its new edge
-		transform.scale = glm::vec3(*taken.shrinksTo);
-		const auto [centre, radius] = ecs::archetypes::GetFixedObstacleBoundingCircle(kind.meshId, transform);
-		registry.AssignOrReplace<Fixed>(bigForest, centre, radius);
-		ecs::thing_map_place::Reinsert(bigForest);
+		// Drawn and walked round at its new size, then a young pine is planted round its new edge. The size changes
+		// only when it is a new size. The big forest leaves the map's cells at its old size and goes in at its new size.
+		if (transform.scale.x != *taken.shrinksTo)
+		{
+			ecs::thing_map_place::ReinsertWith(bigForest, [&registry, &transform, &kind, bigForest, &taken]() {
+				transform.scale = glm::vec3(*taken.shrinksTo);
+				const auto [centre, radius] = ecs::archetypes::GetFixedObstacleBoundingCircle(kind.meshId, transform);
+				registry.AssignOrReplace<Fixed>(bigForest, centre, radius);
+			});
+		}
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: big forest #{} shrinks to {:.3f} with {:.1f} wood left",
 		                    entt::to_integral(bigForest), *taken.shrinksTo, taken.woodLeft);
 		PlantPineAround(bigForest);

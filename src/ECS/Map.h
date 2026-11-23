@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -83,6 +84,14 @@ public:
 	/// it covers the cells of its new outline, and it goes to the front of the lists of its cells. Nothing changes for a
 	/// thing that is not in the cells.
 	virtual void Reinsert(entt::entity /*entity*/) {}
+	/// A thing in the cells that changes its size comes out of its cells before the change and goes in again after it,
+	/// as the game does. The footpaths stop to go round it at its old size, then go round it at its new size. A thing
+	/// that is not in the cells only changes.
+	virtual void ReinsertWith(entt::entity entity, const std::function<void()>& change)
+	{
+		change();
+		Reinsert(entity);
+	}
 	/// The things made since the last look go into their cells now, in the order they were made, as the game puts a
 	/// thing in its cells when it makes it
 	virtual void FileNew() {}

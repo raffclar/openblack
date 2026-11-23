@@ -63,6 +63,7 @@ public:
 	void Moved(entt::entity entity) override;
 	void Placed(entt::entity entity) override;
 	void Reinsert(entt::entity entity) override;
+	void ReinsertWith(entt::entity entity, const std::function<void()>& change) override;
 	void FileNew() override;
 	void FileResidents() override;
 	[[nodiscard]] bool InMap(entt::entity entity) const override;
