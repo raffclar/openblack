@@ -53,12 +53,15 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/MovingShadowCasters.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "EngineConfig.h"
@@ -398,6 +401,62 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 	if (casts)
 	{
 		const auto& land = Locator::terrainSystem::value();
+		// The land blocks as the box test of this frame sees them, which every moving shadow needs before it shows
+		static_assert(GroundShadow::k_BlockRange == object_draw_list::k_Range);
+		auto& sights = _groundShadowSights;
+		sights.fill({});
+		{
+			const auto viewProjection = drawDesc.camera->GetViewProjectionMatrix();
+			const auto nearPlane = drawDesc.camera->GetNearClip();
+			const bool reflected = Locator::config::value().detail.landReflection;
+			for (const auto& block : land.GetBlocks())
+			{
+				const auto at = block.GetBlockPosition();
+				if (block.GetLndBlock() == nullptr || at.x < 0 || at.x >= GroundShadow::k_BlocksPerSide || at.y < 0 ||
+				    at.y >= GroundShadow::k_BlocksPerSide)
+				{
+					continue;
+				}
+				const object_draw_list::Block box {
+				    .corner = block.GetMapPosition(), .highestAltitude = block.GetHighestAltitude(), .reflected = reflected};
+				sights.at(static_cast<size_t>((at.x * GroundShadow::k_BlocksPerSide) + at.y)) = {
+				    .present = true,
+				    .inView = Locator::objectDrawListSystem::has_value()
+				                  ? Locator::objectDrawListSystem::value().BlockInView(viewProjection, nearPlane, box)
+				                  : object_draw_list::BlockInView(viewProjection, nearPlane, box),
+				    .distance = object_draw_list::BlockDistance(camera, box),
+				};
+			}
+		}
+		// The fade of a moving shadow, none when no land block near the place lets it show
+		const auto fadeAt = [&sights, &camera](const glm::vec3& place, float ground, float radius) {
+			return GroundShadow::NearBlockShows(place, sights)
+			           ? GroundShadow::Fade(glm::distance(camera, glm::vec3(place.x, ground, place.z)), radius)
+			           : 0.0f;
+		};
+		// A globe in a hand has no model of its own in the draws of the things in the hands. Its shadow uses the
+		// globe's dome where the hand holds it, as the shadow of any other thing does.
+		using HeldDraws = std::vector<ecs::systems::RenderContext::HighDetailDraw>;
+		HeldDraws heldGlobes;
+		{
+			const auto& registry = Locator::entitiesRegistry::value();
+			registry
+			    .Each<const ecs::components::InHand, const ecs::components::OneOffSpellSeed, const ecs::components::Transform>(
+			        [&heldGlobes, &registry](entt::entity entity, const ecs::components::InHand& /*unused*/,
+			                                 const ecs::components::OneOffSpellSeed& /*unused*/,
+			                                 const ecs::components::Transform& transform) {
+				        const auto placed = ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+				        const auto model =
+				            glm::translate(placed.position) * glm::mat4(placed.rotation) * glm::scale(placed.scale);
+				        heldGlobes.push_back({.entity = entity,
+				                              .mesh = ecs::components::OneOffSpellSeed::k_MeshId.value(),
+				                              .model = model,
+				                              .castModel = model});
+			        },
+			        entt::exclude<ecs::components::Mesh>);
+		}
+		const std::array<const HeldDraws*, 3> heldDrawLists {&renderCtx.inHandDraws, &renderCtx.heldTreeDraws, &heldGlobes};
+
 		// The hand's, cast from the sun and laid on the ground beneath it, with what it holds
 		if (drawDesc.drawHand && Locator::handSystem::has_value() && Locator::skyClockSystem::has_value())
 		{
@@ -416,9 +475,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 				    openblack::graphics::mesh_detail::HalfDiagonal(handMesh->GetBoundingBox().Size()) * scaleOf(model);
 				const auto& sky = Locator::skyClockSystem::value();
 				const auto fade =
-				    GroundShadow::Fade(glm::distance(camera, glm::vec3(transform->position.x, ground, transform->position.z)),
-				                       radius) *
-				    HandShadow::Daylight(sky.GetTime(), sky.GetDayNightTimes());
+				    fadeAt(transform->position, ground, radius) * HandShadow::Daylight(sky.GetTime(), sky.GetDayNightTimes());
 				const auto alpha = GroundShadow::ScaledAlpha(fade);
 				// What the hand holds. The trees have a draw of their own, thus a held tree is in a list of its own.
 				const auto heldByThisHand = [&registry, handEntity](const auto& draw) {
@@ -426,7 +483,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 					return inHand != nullptr && inHand->hand == handEntity;
 				};
 				const ecs::systems::RenderContext::HighDetailDraw* held = nullptr;
-				for (const auto* draws : {&renderCtx.inHandDraws, &renderCtx.heldTreeDraws})
+				for (const auto* draws : heldDrawLists)
 				{
 					if (const auto found = std::ranges::find_if(*draws, heldByThisHand);
 					    held == nullptr && found != draws->end())
@@ -525,8 +582,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			const auto standsAt = glm::vec3(model[3]);
 			const auto radius = openblack::graphics::mesh_detail::HalfDiagonal(body->GetBoundingBox().Size()) * scaleOf(model);
 			const auto ground = land.GetHeightAt(glm::vec2(standsAt.x, standsAt.z));
-			const auto alpha = GroundShadow::ScaledAlpha(
-			    GroundShadow::Fade(glm::distance(camera, glm::vec3(standsAt.x, ground, standsAt.z)), radius));
+			const auto alpha = GroundShadow::ScaledAlpha(fadeAt(standsAt, ground, radius));
 			if (alpha == 0)
 			{
 				continue;
@@ -576,7 +632,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			const auto standsAt = glm::vec3(model[3]);
 			const auto ground = land.GetHeightAt(glm::vec2(standsAt.x, standsAt.z));
 			const auto radius = openblack::graphics::mesh_detail::HalfDiagonal(mesh->GetBoundingBox().Size()) * scaleOf(model);
-			const auto alpha = GroundShadow::Alpha(glm::distance(camera, glm::vec3(standsAt.x, ground, standsAt.z)), radius);
+			const auto alpha = static_cast<uint8_t>(fadeAt(standsAt, ground, radius));
 			if (alpha == 0)
 			{
 				return;
@@ -618,14 +674,14 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 		}
 
 		// The thing that this computer threw, while it goes along the lead of the throw. Every thing casts this shadow,
-		// whatever its kind: from a light straight above where it is drawn, onto the land only.
+		// whatever its kind, a globe too: from a light straight above where it is drawn, onto the land only.
 		const auto& registry = Locator::entitiesRegistry::value();
 		const auto onThrowLead = [&registry](const auto& draw) {
 			const auto* inHand = registry.TryGet<const ecs::components::InHand>(draw.entity);
 			return inHand != nullptr && inHand->drawn.has_value() && inHand->drawn->onThrowLead;
 		};
 		const ecs::systems::RenderContext::HighDetailDraw* lead = nullptr;
-		for (const auto* draws : {&renderCtx.inHandDraws, &renderCtx.heldTreeDraws})
+		for (const auto* draws : heldDrawLists)
 		{
 			if (const auto found = std::ranges::find_if(*draws, onThrowLead); lead == nullptr && found != draws->end())
 			{
@@ -646,7 +702,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			const auto origin = glm::vec3(model[3]);
 			const auto ground = land.GetHeightAt(glm::vec2(origin.x, origin.z));
 			const auto radius = openblack::graphics::mesh_detail::HalfDiagonal(body->GetBoundingBox().Size()) * scaleOf(model);
-			leadAlpha = GroundShadow::Alpha(glm::distance(camera, glm::vec3(origin.x, ground, origin.z)), radius);
+			leadAlpha = static_cast<uint8_t>(fadeAt(origin, ground, radius));
 			// An animated thing casts in the pose of its clip
 			const auto& rest = body->GetBoneMatrices();
 			std::span<const glm::mat4> pose = rest;
@@ -736,8 +792,7 @@ void Renderer::StartGroundShadows(const DrawSceneDesc& drawDesc) const
 			    const auto ground = land.GetHeightAt(glm::vec2(drawn.origin.x, drawn.origin.z));
 			    const auto radius =
 			        openblack::graphics::mesh_detail::HalfDiagonal(body->GetBoundingBox().Size()) * scaleOf(model);
-			    const auto alpha =
-			        GroundShadow::Alpha(glm::distance(camera, glm::vec3(drawn.origin.x, ground, drawn.origin.z)), radius);
+			    const auto alpha = static_cast<uint8_t>(fadeAt(drawn.origin, ground, radius));
 			    if (alpha == 0)
 			    {
 				    return;

@@ -842,6 +842,8 @@ private:
 	mutable std::vector<GroundShadowCaster> _groundShadowCasters;
 	mutable std::vector<entt::entity> _groundShadowUnderSea;
 	mutable std::vector<L3DMeshSubmitDesc::MorphTargets> _groundShadowMorphs;
+	/// The land blocks of this frame as the moving shadows see them (see GroundShadow::NearBlockShows)
+	mutable GroundShadow::BlockSights _groundShadowSights {};
 	/// The workers make the shadows of this frame, and DrawGroundShadowPass did not take them yet
 	mutable bool _groundShadowsStarted {false};
 	/// The threads that make the shadows of a frame side by side, and that encode draws with the game's thread
