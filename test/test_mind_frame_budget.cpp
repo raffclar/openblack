@@ -55,6 +55,30 @@ TEST(MindFrameBudget, EachFrameStartsWithAllOfItsBudget)
 	EXPECT_FLOAT_EQ(budget.UsedMs(), 0.0f);
 }
 
+TEST(MindFrameBudget, AGameWithNoTimeGivenHasTheDefaultBudget)
+{
+	EXPECT_EQ(openblack::simulation::FrameBudgetMs(std::nullopt, false),
+	          std::optional(openblack::simulation::k_DefaultMindFrameBudgetMs));
+}
+
+// The budget follows the machine's clock. Two runs with a fixed frame time must draw the same frames.
+TEST(MindFrameBudget, ARunWithAFixedFrameTimeHasNoBudgetWhenNoTimeIsGiven)
+{
+	EXPECT_EQ(openblack::simulation::FrameBudgetMs(std::nullopt, true), std::nullopt);
+}
+
+TEST(MindFrameBudget, TheGivenTimeIsTheBudgetAlsoWithAFixedFrameTime)
+{
+	EXPECT_EQ(openblack::simulation::FrameBudgetMs(5.0f, false), std::optional(5.0f));
+	EXPECT_EQ(openblack::simulation::FrameBudgetMs(5.0f, true), std::optional(5.0f));
+}
+
+TEST(MindFrameBudget, AGivenTimeOfZeroGivesNoBudget)
+{
+	EXPECT_EQ(openblack::simulation::FrameBudgetMs(0.0f, false), std::nullopt);
+	EXPECT_EQ(openblack::simulation::FrameBudgetMs(0.0f, true), std::nullopt);
+}
+
 // The players' turns with minds of a fixed time, frame by frame: each frame does the players until their minds used the
 // budget, and the next frame continues with the next player. All the players do their turns once, in their order.
 TEST(MindFrameBudget, TheFramesShareThePlayersOfALongTurn)
