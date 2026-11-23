@@ -66,6 +66,8 @@ struct ReportedHand
 	std::bitset<255> keysHeld;
 	/// How many buttons the computer's system says the mouse has
 	uint32_t mouseButtons {0};
+	/// The player is inside their temple
+	bool insideTemple {false};
 };
 
 } // namespace openblack::ecs::components

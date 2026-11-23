@@ -73,6 +73,7 @@ struct LoadedReports
 		    .cameraIcons = reported.cameraIcons,
 		    .keysHeld = reported.keysHeld,
 		    .mouseButtons = reported.mouseButtons,
+		    .insideTemple = reported.insideTemple,
 		};
 	}
 	return loaded;
