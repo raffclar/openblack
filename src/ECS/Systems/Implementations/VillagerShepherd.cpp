@@ -560,7 +560,7 @@ uint32_t villager_shepherd::ShepherdCheckAnimalForSlaughter(LivingAction& action
 	{
 		return 0;
 	}
-	const auto door = map_coords::FromMetres(villager_home::ArrivePosition(*store));
+	const auto door = villager_home::DoorPlace(*store);
 	const auto goal = rules::StoreLegGoal(here, door);
 	auto final = VillagerStates::ShepherdCheckAnimalForSlaughter;
 	if (rules::StoreLegFor(gutils::GetDistanceInMetres(here, door)) == rules::StoreLeg::Door)

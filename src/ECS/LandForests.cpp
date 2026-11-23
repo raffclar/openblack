@@ -59,6 +59,21 @@ std::optional<size_t> land_forests::Nearest(std::span<const int32_t> distances)
 	return best;
 }
 
+std::optional<size_t> land_forests::NearestWithin(std::span<const ReachMeasure> forests, float reach)
+{
+	std::optional<size_t> best;
+	float bestDistance = reach;
+	for (size_t i = 0; i < forests.size(); ++i)
+	{
+		if (forests[i].distance < bestDistance && forests[i].fits)
+		{
+			bestDistance = forests[i].distance;
+			best = i;
+		}
+	}
+	return best;
+}
+
 bool land_forests::NearTown(float distance, float reach, float wood)
 {
 	return distance < reach && wood != 0.0f;

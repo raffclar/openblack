@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -83,4 +84,21 @@ TEST(LandForests, ATownListsItsNearForestsOldestFirst)
 	EXPECT_EQ(listed[0], 2u);
 	EXPECT_EQ(listed[1], 0u);
 	EXPECT_TRUE(TownList({}, 50.0f).empty());
+}
+
+TEST(LandForests, ASearchNearAPlaceFindsTheNearestForestThatFitsStrictlyWithinTheReach)
+{
+	// The nearest forest does not fit, two forests that fit are as near, and one is at the reach exactly
+	const std::array<ReachMeasure, 5> forests {{
+	    {.distance = 5.0f, .fits = false},
+	    {.distance = 50.0f, .fits = true},
+	    {.distance = 20.0f, .fits = true},
+	    {.distance = 20.0f, .fits = true},
+	    {.distance = 10.0f, .fits = false},
+	}};
+	EXPECT_EQ(NearestWithin(forests, 100.0f), std::optional<size_t>(2));
+	// A forest at the reach is not within it
+	EXPECT_EQ(NearestWithin(forests, 20.0f), std::nullopt);
+	EXPECT_EQ(NearestWithin(forests, 20.5f), std::optional<size_t>(2));
+	EXPECT_EQ(NearestWithin({}, 100.0f), std::nullopt);
 }

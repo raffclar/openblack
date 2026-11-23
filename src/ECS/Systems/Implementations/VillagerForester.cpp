@@ -359,13 +359,12 @@ Store StoreOf(entt::entity villager, const Villager& person)
 	{
 		return {};
 	}
-	const auto store = Locator::townSystem::value().TemporaryStorePile(town, glm::xz(PositionOf(villager)), ResourceType::Wood);
+	const auto store = Locator::townSystem::value().TemporaryStorePile(town, MapPlaceOf(villager), ResourceType::Wood);
 	if (!store.has_value())
 	{
 		return {};
 	}
-	return {.position = villager_build::TemporaryPileEdge(store->pile, store->edgeAltitude, villager),
-	        .wood = stores.GetResource(store->pile, ResourceType::Wood)};
+	return {.position = store->edge, .wood = stores.GetResource(store->pile, ResourceType::Wood)};
 }
 } // namespace
 
@@ -375,7 +374,7 @@ villager_forester::WoodPlan villager_forester::DecideHowToGetWood(entt::entity v
 	const auto& person = VillagerOf(villager);
 	const auto& info = InfoOf(person);
 	const auto reach = static_cast<float>(Locator::infoConstants::value().town.maxDistanceForTownForest);
-	const auto here = PositionOf(villager);
+	const auto here = MapPlaceOf(villager);
 	const auto store = StoreOf(villager, person);
 	// The town's own forests first, else any forest with trees near enough
 	std::optional<entt::entity> forest;
@@ -396,7 +395,7 @@ villager_forester::WoodPlan villager_forester::DecideHowToGetWood(entt::entity v
 	std::optional<float> forestDistance;
 	if (forest.has_value())
 	{
-		forestDistance = gutils::GetDistanceInMetres(MapPlaceOf(*forest), MapPlaceOf(villager));
+		forestDistance = gutils::GetDistanceInMetres(MapPlaceOf(*forest), here);
 		const auto& record = registry.Get<const LandForest>(*forest);
 		if (record.bigForest != entt::null && registry.Valid(record.bigForest))
 		{
@@ -405,8 +404,8 @@ villager_forester::WoodPlan villager_forester::DecideHowToGetWood(entt::entity v
 	}
 	const auto source = building_site::DecideWoodSource({
 	    .forBuilding = forBuilding,
-	    .distanceToStore = store.position.has_value() ? gutils::GetDistanceInMetres(*store.position, MapPlaceOf(villager))
-	                                                  : std::numeric_limits<float>::max(),
+	    .distanceToStore =
+	        store.position.has_value() ? gutils::GetDistanceInMetres(*store.position, here) : std::numeric_limits<float>::max(),
 	    .storeWood = store.wood,
 	    .room = WoodRoom(person),
 	    .maxWoodCarried = static_cast<int32_t>(info.maxWoodCarried),
@@ -524,7 +523,7 @@ uint32_t villager_forester::ForesterArrivesAtForest(LivingAction& action)
 	// No tree near: a forest about here left with no trees goes
 	if (Locator::forestSystem::has_value())
 	{
-		Locator::forestSystem::value().RemoveEmptyForestNear(PositionOf(villager), work::k_EmptyForestReach);
+		Locator::forestSystem::value().RemoveEmptyForestNear(MapPlaceOf(villager), work::k_EmptyForestReach);
 	}
 	SetTopState(action, VillagerStates::ForesterFinishedForestering);
 	return ForesterFinishedForestering(action);
@@ -583,7 +582,7 @@ uint32_t villager_forester::ArrivesAtBigForest(LivingAction& action)
 	const auto town = TownOf(person);
 	if (town != entt::null && room != 0 && Locator::forestSystem::has_value())
 	{
-		const auto forest = Locator::forestSystem::value().NearestTownForest(town, PositionOf(villager));
+		const auto forest = Locator::forestSystem::value().NearestTownForest(town, MapPlaceOf(villager));
 		const auto* record = forest.has_value() ? registry.TryGet<const LandForest>(*forest) : nullptr;
 		if (record != nullptr && record->bigForest != entt::null && registry.Valid(record->bigForest))
 		{

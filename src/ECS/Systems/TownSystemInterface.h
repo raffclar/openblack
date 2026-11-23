@@ -103,17 +103,19 @@ public:
 	virtual map_coords::MapCoords GetCongregationPos(entt::entity town) = 0;
 	/// True when GetCongregationPos gives the place that the town keeps, and so changes nothing and draws no random number
 	[[nodiscard]] virtual bool KeepsCongregationPos(entt::entity town) const = 0;
-	/// A town's temporary pile for a resource, and its edge nearest a point
+	/// A town's temporary pile for a resource, and its edge nearest a map position
 	struct TemporaryStore
 	{
 		entt::entity pile;
-		glm::vec2 edge;
-		/// The height of that point above the land: the height of the pile, which sinks into the land
-		float edgeAltitude {0.0f};
+		/// The point of the pile's edge nearest the map position, as a map position. Its altitude is the height of the
+		/// pile, which sinks into the land.
+		map_coords::MapCoords edge;
 	};
 	/// The temporary pile in which a town with no storage pit that works keeps a resource. A pile that has gone is made
-	/// again, empty, at a clear place near the town's gathering place. None for a resource with no pile.
-	virtual std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, glm::vec2 from, ResourceType type) = 0;
+	/// again, empty, at a clear place near the town's gathering place. None for a resource with no pile. The edge is the
+	/// place of the pile plus a step of the pile's radius towards `from`, added in whole map units.
+	virtual std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, const map_coords::MapCoords& from,
+	                                                         ResourceType type) = 0;
 	/// The town gets a new main storage pit, or none: it lets go of its temporary piles. A storage pit that starts to
 	/// work becomes the main pit, also when it is made built or it is repaired. An empty pile is removed, and a
 	/// pile that holds something becomes an ordinary pile with its reaction.

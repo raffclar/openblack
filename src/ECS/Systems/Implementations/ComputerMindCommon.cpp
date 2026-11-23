@@ -40,6 +40,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -246,12 +247,8 @@ entt::entity computer_world::StoreOf(entt::entity town, ResourceType resource)
 	{
 		return entt::null;
 	}
-	glm::vec2 from {0.0f};
-	if (const auto* transform = Entities().TryGet<const Transform>(town); transform != nullptr)
-	{
-		from = {transform->position.x, transform->position.z};
-	}
-	const auto pile = Locator::townSystem::value().TemporaryStorePile(town, from, resource);
+	const auto pile =
+	    Locator::townSystem::value().TemporaryStorePile(town, ecs::thing_map_place::Of(Entities(), town), resource);
 	return pile.has_value() ? pile->pile : entt::null;
 }
 
