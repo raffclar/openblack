@@ -24,6 +24,7 @@
 
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DMesh.h"
+#include "3D/SkyPicturePack.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/SkyArchetype.h"
@@ -431,10 +432,11 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	const bool lowResolution = Locator::config::value().detail.lowResTextures;
 	const auto& textures = Locator::resources::value().GetTextures();
 	using SkyArchetype = ecs::archetypes::SkyArchetype;
-	// The debug menu can show the larger pictures of the sky pack, when the pack loaded. The low resolution dome always
+	// The sky shows the larger pictures of the sky pack by default, when the pack loaded. The low resolution dome always
 	// shows the game's own pictures.
-	const bool fromPack = !lowResolution && Locator::config::value().upscaledSkyPictures &&
-	                      textures.Contains(SkyArchetype::k_PackDomeTextureId.value());
+	const bool fromPack =
+	    sky_picture_pack::ShowsPack(Locator::config::value().upscaledSkyPictures,
+	                                textures.Contains(SkyArchetype::k_PackDomeTextureId.value()), lowResolution);
 	// A change between the two sets of pictures blends all of the picture again, as after a restore of the device
 	const bool changesPictures =
 	    _skyDomeFrameBuffer && !lowResolution && _skyDomeRows != sky_dome::k_LowRows && _skyDomeFromPack != fromPack;

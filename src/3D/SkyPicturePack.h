@@ -22,7 +22,7 @@
 
 #include "3D/SkyDome.h"
 
-/// An optional pack of larger sky pictures, for the debug menu only. The pack has the nine pictures of the sky's dome
+/// An optional pack of larger sky pictures, which the sky shows by default. The pack has the nine pictures of the sky's dome
 /// as PNG files, in the same order and with the same two halves in each picture as the game's own pictures. Each
 /// picture is a square with a side that is a whole multiple of 256 texels. A picture has 8 or 16 bits for each channel.
 /// The game does not change when there is no pack.
@@ -43,6 +43,13 @@ inline constexpr uint32_t k_LargestWideSide = 2048;
 inline constexpr size_t k_TexelBytes = 4;
 /// The bytes of a texel of a pack of half floats: red, green, blue and alpha, each a 16-bit float
 inline constexpr size_t k_HalfTexelBytes = 8;
+
+/// Whether the sky shows the pictures of the pack. The setting is on by default. With no pack that loaded, or with the
+/// low resolution dome, the sky quietly shows the game's own pictures.
+[[nodiscard]] constexpr bool ShowsPack(bool settingOn, bool packLoaded, bool lowResolution)
+{
+	return settingOn && packLoaded && !lowResolution;
+}
 
 /// The files of the pictures, in the order of sky_dome::PictureFiles, with the same names and a ".png" extension
 [[nodiscard]] std::array<std::string, sky_dome::k_Pictures> PictureFiles();

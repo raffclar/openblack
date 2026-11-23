@@ -91,9 +91,9 @@ struct EngineConfig
 
 	bool viewDetailOverlay {false};
 	bool drawSky {true};
-	/// The debug menu shows the larger pictures of the sky's pack, when the pack loaded. Off by default: the game shows
-	/// its own pictures.
-	bool upscaledSkyPictures {false};
+	/// The sky shows the larger pictures of the sky's pack, when the pack loaded. On by default. With no pack, the game
+	/// shows its own pictures.
+	bool upscaledSkyPictures {true};
 	/// The whole land hears thunder. Far thunder gets quieter and loses its high sounds as real thunder does, and it
 	/// waits on after its bolt goes. On by default. The debug menu choice "Original" turns it off: then thunder is heard
 	/// as the game plays it.

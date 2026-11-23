@@ -450,3 +450,12 @@ TEST(SkyDomeTarget, ThePackUsesHalfFloatsWhereTheDeviceDrawsThem)
 	EXPECT_EQ(graphics::sky_dome_target::PackFormat(false, true), TextureFormat::RGB10A2);
 	EXPECT_EQ(graphics::sky_dome_target::PackFormat(false, false), TextureFormat::RGBA8);
 }
+
+TEST(SkyPicturePack, ThePackShowsOnlyWhenTheSettingIsOnAndThePackLoaded)
+{
+	EXPECT_TRUE(sky_picture_pack::ShowsPack(true, true, false));
+	EXPECT_FALSE(sky_picture_pack::ShowsPack(false, true, false));
+	// With no pack the game's own pictures show, with no error
+	EXPECT_FALSE(sky_picture_pack::ShowsPack(true, false, false));
+	EXPECT_FALSE(sky_picture_pack::ShowsPack(true, true, true));
+}
