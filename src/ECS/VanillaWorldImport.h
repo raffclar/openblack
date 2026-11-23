@@ -588,6 +588,10 @@ inline constexpr size_t k_ImportedSitePlaces = 128;
 inline constexpr size_t k_GameObjectLists = 44;
 /// The place of the game's list of all the towns among the lists of the game object
 inline constexpr size_t k_GameTownList = 31;
+/// The place of the game's list of all the fields among the lists of the game object
+inline constexpr size_t k_GameFieldList = 12;
+/// The place of the game's list of all the fish farms among the lists of the game object
+inline constexpr size_t k_GameFishFarmList = 13;
 /// The place of the game's list of all the dances among the lists of the game object
 inline constexpr size_t k_GameDanceList = 8;
 
