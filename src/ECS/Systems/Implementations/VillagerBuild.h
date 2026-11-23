@@ -82,8 +82,6 @@ uint32_t ArrivesAtStoragePitForResource(components::LivingAction& action, Resour
 map_coords::MapCoords ResourceDropoffPos(entt::entity villager, ResourceType type);
 /// The same for the store of a given town, which can be another town than the town of the villager
 map_coords::MapCoords ResourceDropoffPos(entt::entity villager, ResourceType type, entt::entity town);
-/// The point of a temporary pile nearest the villager, as a map position with the given height above the land
-[[nodiscard]] map_coords::MapCoords TemporaryPileEdge(entt::entity pile, float altitude, entt::entity villager);
 /// A place where the villager takes or leaves a resource, and its height above the land
 struct Dropoff
 {

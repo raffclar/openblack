@@ -208,12 +208,6 @@ map_coords::MapCoords ThroughPointOnLand(const map_coords::MapCoords& place)
 	                                   [&island](const map_coords::MapCoords& at) { return map_coords::GroundAt(island, at); });
 }
 
-/// The point of a temporary pile nearest the villager, as a map position with the height of the pile
-map_coords::MapCoords PileEdgeOf(const systems::TownSystemInterface::TemporaryStore& store, entt::entity villager)
-{
-	return villager_build::TemporaryPileEdge(store.pile, store.edgeAltitude, villager);
-}
-
 /// The angle across the land that the model of a villager faces, in radians
 float ModelFacingOf(const Transform& transform)
 {
@@ -247,9 +241,9 @@ bool IsFunctional(std::optional<entt::entity> pit)
 	return pit.has_value() && villager_home::IsFunctional(*pit);
 }
 
-/// The town's temporary pile of a resource and its edge nearest a point, made if missing
-std::optional<systems::TownSystemInterface::TemporaryStore> TemporaryStoreOf(entt::entity town, glm::vec2 from,
-                                                                             ResourceType type)
+/// The town's temporary pile of a resource and its edge nearest a map position, made if missing
+std::optional<systems::TownSystemInterface::TemporaryStore>
+TemporaryStoreOf(entt::entity town, const map_coords::MapCoords& from, ResourceType type)
 {
 	if (town == entt::null || !Locator::townSystem::has_value())
 	{
@@ -265,8 +259,8 @@ villager_build::Dropoff DropoffOf(entt::entity villager, ResourceType type, entt
 	{
 		return {.goal = villager_home::ArrivePlace(*pit)};
 	}
-	const auto store = TemporaryStoreOf(town, GroundOf(villager), type);
-	return {.goal = store.has_value() ? PileEdgeOf(*store, villager) : MapPlaceOf(villager)};
+	const auto store = TemporaryStoreOf(town, MapPlaceOf(villager), type);
+	return {.goal = store.has_value() ? store->edge : MapPlaceOf(villager)};
 }
 
 /// How good or evil the land is where the villager stands: each player's influence there times their alignment
@@ -544,12 +538,12 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 		// Without a storage pit that works it takes from its town's temporary pile, at the edge nearest it, the pile's
 		// size and its own apart
 		const auto villager = EntityOf(action);
-		if (const auto store = TemporaryStoreOf(TownOf(person), GroundOf(villager), type); store.has_value())
+		if (const auto store = TemporaryStoreOf(TownOf(person), MapPlaceOf(villager), type); store.has_value())
 		{
 			// The game finds this point as a map position with the height of the pile, then gives it as a point on the
 			// land, then changes the point back to a map position
 			auto pile = MapPlaceOf(store->pile);
-			pile.altitude = store->edgeAltitude;
+			pile.altitude = store->edge.altitude;
 			const auto edge = ThroughPointOnLand(villager_work::EdgeWorkingPosition(
 			    pile, MapPlaceOf(villager), systems::object_measures::TwoDRadius(Entities(), store->pile),
 			    systems::object_measures::TwoDRadius(Entities(), villager)));
@@ -1026,10 +1020,9 @@ uint32_t villager_build::DropOffAtStoragePit(LivingAction& action, entt::entity 
 		}
 		// Without a storage pit that works it leaves all its load in the temporary pile of the town, at the pile's edge
 		// nearest it. The pile keeps what it can take; the villager has none left.
-		if (const auto store = TemporaryStoreOf(town, GroundOf(villager), type); store.has_value())
+		if (const auto store = TemporaryStoreOf(town, MapPlaceOf(villager), type); store.has_value())
 		{
-			if (const auto edge = PileEdgeOf(*store, villager);
-			    !villager_home::AreWeThere(villager, glm::ivec2(edge.x, edge.z)))
+			if (const auto& edge = store->edge; !villager_home::AreWeThere(villager, glm::ivec2(edge.x, edge.z)))
 			{
 				// The walk keeps the height of the pile, which sinks into the land
 				villager_home::SetupMoveTo(action, edge, FinalState(action));
@@ -1056,14 +1049,6 @@ map_coords::MapCoords villager_build::ResourceDropoffPos(entt::entity villager, 
 map_coords::MapCoords villager_build::ResourceDropoffPos(entt::entity villager, ResourceType type, entt::entity town)
 {
 	return DropoffOf(villager, type, town).goal;
-}
-
-map_coords::MapCoords villager_build::TemporaryPileEdge(entt::entity pile, float altitude, entt::entity villager)
-{
-	auto edge = villager_work::EdgeWorkingPosition(MapPlaceOf(pile), MapPlaceOf(villager),
-	                                               systems::object_measures::TwoDRadius(Entities(), pile), 0.0f);
-	edge.altitude = altitude;
-	return edge;
 }
 
 villager_build::Dropoff villager_build::ResourceDropoff(entt::entity villager, ResourceType type)

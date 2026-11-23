@@ -50,9 +50,11 @@ public:
 	std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) override;
 	void AssignForestsToTowns() override;
 	void AssignForestsToTown(entt::entity town) override;
-	[[nodiscard]] std::optional<entt::entity> NearestTownForest(entt::entity town, glm::vec3 point) const override;
-	[[nodiscard]] std::optional<entt::entity> NearestForestWithTrees(glm::vec3 point, float reach) const override;
-	bool RemoveEmptyForestNear(glm::vec3 point, float reach) override;
+	[[nodiscard]] std::optional<entt::entity> NearestTownForest(entt::entity town,
+	                                                            const map_coords::MapCoords& place) const override;
+	[[nodiscard]] std::optional<entt::entity> NearestForestWithTrees(const map_coords::MapCoords& place,
+	                                                                 float reach) const override;
+	bool RemoveEmptyForestNear(const map_coords::MapCoords& place, float reach) override;
 	[[nodiscard]] std::optional<entt::entity> CentreTreeOf(entt::entity forest) const override;
 	[[nodiscard]] std::optional<entt::entity> ListedCentreTreeOf(entt::entity forest,
 	                                                             const ForestTreeLists& lists) const override;

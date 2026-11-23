@@ -1311,18 +1311,19 @@ void ForestSystem::AssignForestsToTown(entt::entity townEntity)
 	const float reach = Locator::infoConstants::value().town.maxDistanceForTownForest;
 	// The distance starts at the main storage pit of the town. A town with no main storage pit gets its temporary pile
 	// for wood beside its gathering place, and the distance starts at the edge of that pile nearest the town.
-	std::optional<glm::vec3> from;
+	// All places are map positions: the place of the pit, or the edge of the pile nearest the place of the town.
+	std::optional<map_coords::MapCoords> from;
 	if (const auto pit = ecs::construction::StoragePitOf(townEntity); pit.has_value())
 	{
-		from = registry.Get<const Transform>(*pit).position;
+		from = ecs::thing_map_place::Of(registry, *pit);
 	}
 	if (!from.has_value() && Locator::townSystem::has_value())
 	{
-		const auto& centre = registry.Get<const Transform>(townEntity).position;
-		if (const auto store = Locator::townSystem::value().TemporaryStorePile(townEntity, glm::xz(centre), ResourceType::Wood);
+		if (const auto store = Locator::townSystem::value().TemporaryStorePile(
+		        townEntity, ecs::thing_map_place::Of(registry, townEntity), ResourceType::Wood);
 		    store.has_value())
 		{
-			from = glm::vec3(store->edge.x, 0.0f, store->edge.y);
+			from = store->edge;
 		}
 	}
 	auto& listed = registry.AssignOrReplace<TownForests>(townEntity);
@@ -1333,7 +1334,7 @@ void ForestSystem::AssignForestsToTown(entt::entity townEntity)
 	// The distances are in whole map units. The land's forests are met newest first, and the town puts each forest that
 	// is near enough at the front of its list.
 	const auto forests = LandForests();
-	const auto fromCoords = map_coords::FromMetres(glm::xz(*from));
+	const auto& fromCoords = *from;
 	std::vector<ecs::land_forests::TownMeasure> measures;
 	measures.reserve(forests.size());
 	for (const auto forest : forests)
@@ -1347,7 +1348,7 @@ void ForestSystem::AssignForestsToTown(entt::entity townEntity)
 	}
 }
 
-std::optional<entt::entity> ForestSystem::NearestTownForest(entt::entity town, glm::vec3 point) const
+std::optional<entt::entity> ForestSystem::NearestTownForest(entt::entity town, const map_coords::MapCoords& place) const
 {
 	const auto& registry = EntityRegistry();
 	const auto* listed = town != entt::null && registry.Valid(town) ? registry.TryGet<const TownForests>(town) : nullptr;
@@ -1355,7 +1356,7 @@ std::optional<entt::entity> ForestSystem::NearestTownForest(entt::entity town, g
 	{
 		return std::nullopt;
 	}
-	const auto here = map_coords::FromMetres(glm::xz(point));
+	const auto& here = place;
 	std::vector<entt::entity> forests;
 	std::vector<ecs::villager_work::ForestCandidate> candidates;
 	for (const auto forest : listed->forests)
@@ -1388,46 +1389,43 @@ std::optional<entt::entity> ForestSystem::NearestTownForest(entt::entity town, g
 	return best.has_value() ? std::optional(forests.at(*best)) : std::nullopt;
 }
 
-std::optional<entt::entity> ForestSystem::NearestForestWithTrees(glm::vec3 point, float reach) const
+std::optional<entt::entity> ForestSystem::NearestForestWithTrees(const map_coords::MapCoords& place, float reach) const
 {
 	const auto& registry = EntityRegistry();
-	std::optional<entt::entity> nearest;
-	float best = reach;
-	for (const auto forest : LandForests())
+	const auto forests = LandForests();
+	std::vector<ecs::land_forests::ReachMeasure> measures;
+	measures.reserve(forests.size());
+	for (const auto forest : forests)
 	{
-		const float distance = glm::length(glm::xz(registry.Get<const Transform>(forest).position) - glm::xz(point));
-		if (distance < best && (!TreesOf(forest, false).empty() || !TreesOf(forest, true).empty()))
-		{
-			best = distance;
-			nearest = forest;
-		}
+		measures.push_back({.distance = gutils::GetDistanceInMetres(place, ecs::thing_map_place::Of(registry, forest)),
+		                    .fits = !TreesOf(forest, false).empty() || !TreesOf(forest, true).empty()});
 	}
-	return nearest;
+	const auto nearest = ecs::land_forests::NearestWithin(measures, reach);
+	return nearest.has_value() ? std::optional(forests.at(*nearest)) : std::nullopt;
 }
 
-bool ForestSystem::RemoveEmptyForestNear(glm::vec3 point, float reach)
+bool ForestSystem::RemoveEmptyForestNear(const map_coords::MapCoords& place, float reach)
 {
 	auto& registry = EntityRegistry();
-	std::optional<entt::entity> nearest;
-	float best = reach;
-	for (const auto forest : LandForests())
+	const auto forests = LandForests();
+	std::vector<ecs::land_forests::ReachMeasure> measures;
+	measures.reserve(forests.size());
+	for (const auto forest : forests)
 	{
 		const auto& record = registry.Get<const LandForest>(forest);
-		const float distance = glm::length(glm::xz(registry.Get<const Transform>(forest).position) - glm::xz(point));
 		const bool hasBigForest = record.bigForest != entt::null && registry.Valid(record.bigForest);
-		if (distance < best && !hasBigForest && TreesOf(forest, false).empty() && TreesOf(forest, true).empty())
-		{
-			best = distance;
-			nearest = forest;
-		}
+		measures.push_back({.distance = gutils::GetDistanceInMetres(place, ecs::thing_map_place::Of(registry, forest)),
+		                    .fits = !hasBigForest && TreesOf(forest, false).empty() && TreesOf(forest, true).empty()});
 	}
-	if (!nearest.has_value())
+	const auto found = ecs::land_forests::NearestWithin(measures, reach);
+	if (!found.has_value())
 	{
 		return false;
 	}
+	const auto nearest = forests.at(*found);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: empty forest {} removed by a forester",
-	                    registry.Get<const LandForest>(*nearest).id);
-	registry.Destroy(*nearest);
+	                    registry.Get<const LandForest>(nearest).id);
+	registry.Destroy(nearest);
 	return true;
 }
 
