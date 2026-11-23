@@ -1278,7 +1278,7 @@ TEST_F(Reactions, AFiremanFindsItsPlaceByTheFireFromTheMapPositionOfTheFire)
 	const auto reach = Locator::fireSystem::value().GetReach(burning);
 	ASSERT_TRUE(reach.has_value());
 	// With no game random numbers, the place is the wider radius and the villager's radius from the fire
-	const float radius = std::max(reach->safeRadius, reach->defaultRadius) + ecs::world_objects::SizeOf(villager).radius;
+	const float radius = std::max(reach->safeRadius, reach->objectRadius) + ecs::world_objects::SizeOf(villager).radius;
 	EXPECT_EQ(villager_fire::PutOutFireByBeating(action), 1u);
 	EXPECT_EQ(StateOf(villager), VillagerStates::MoveAroundFire);
 	const auto target = registry.Get<const VillagerFireState>(villager).walkTarget;

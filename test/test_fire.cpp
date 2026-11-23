@@ -231,6 +231,25 @@ TEST(FireModel, MostThingsFireReachesByTheirRadiusADeadTreesByItsHeightAndAWorsh
 	EXPECT_EQ(DefaultFireRadius(FireReach::WorshipSite, 0.0f, 0.0f), 14.0f);
 }
 
+// A villager beats a fire from beyond the radius of the object across the ground, but looks for the nearest safe fire by
+// the default reach of the fire. For a dead tree, the two radii are not the same.
+TEST(FireModel, AVillagerStandsBackByTheWiderOfTheObjectRadiusAndTheSafeRadius)
+{
+	// The wider of the two, and the safe radius when they are equal
+	EXPECT_EQ(StandBackRadius(6.5f, 3.0f), 6.5f);
+	EXPECT_EQ(StandBackRadius(2.0f, 3.0f), 3.0f);
+	EXPECT_EQ(StandBackRadius(3.0f, 3.0f), 3.0f);
+	// A dead tree with a radius of 3 and a height of 20 when its fire is small
+	constexpr float k_TreeRadius = 3.0f;
+	const float defaultRadius = DefaultFireRadius(FireReach::ShareOfHeight, k_TreeRadius, 20.0f);
+	EXPECT_EQ(StandBackRadius(k_TreeRadius, 1.5f), k_TreeRadius);
+	EXPECT_EQ(StandBackRadius(defaultRadius, 1.5f), 20.0f * 0.35f);
+	// A worship site: its radius beats, 14 finds the nearest safe fire
+	const float siteRadius = DefaultFireRadius(FireReach::WorshipSite, 40.0f, 30.0f);
+	EXPECT_EQ(StandBackRadius(40.0f, 1.5f), 40.0f);
+	EXPECT_EQ(StandBackRadius(siteRadius, 1.5f), 14.0f);
+}
+
 TEST(FireModel, ItCharsAsItsLifeRunsLowAndGoesOnceColdAndClean)
 {
 	const auto hut = Hut();
