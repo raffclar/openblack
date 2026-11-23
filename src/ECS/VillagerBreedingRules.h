@@ -136,8 +136,10 @@ struct Countdown
 
 /// The turns two villagers make love for: half of the mate's time and twice the villager's own, and one more
 [[nodiscard]] uint16_t LoveTurns(uint32_t mateTime, uint32_t ownTime);
-/// Where a villager walks to meet another: towards it, stopping a gap short of halfway between them
-[[nodiscard]] glm::vec2 MeetingPoint(glm::vec2 from, glm::vec2 to, float gap);
+/// Where a villager walks to meet another: towards it, stopping a gap short of halfway between them. The distance and
+/// the angle are between the two map positions, and the point keeps the altitude of the first. Two villagers at the same
+/// place meet where the first stands.
+[[nodiscard]] map_coords::MapCoords MeetingPoint(const map_coords::MapCoords& from, const map_coords::MapCoords& to, float gap);
 /// Whether two things touch within a gap, edge to edge
 [[nodiscard]] bool Touching(float centreDistance, float radiusA, float radiusB, float gap);
 /// Whether a villager that has reached its meeting point waits for its partner instead of starting the kiss: when the

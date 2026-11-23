@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
@@ -128,9 +129,11 @@ public:
 	[[nodiscard]] virtual std::optional<Reach> GetReach(entt::entity object) const = 0;
 	/// The fires of an object's blaze, its first fire first, none when it doesn't burn
 	[[nodiscard]] virtual std::vector<entt::entity> GetBlazeMembers(entt::entity object) const = 0;
-	/// The fire of an object's blaze nearest a point by the distance to the edge of its safe radius, or its object's own
-	/// radius when that is wider, of those hot enough to react to; none when none is
-	[[nodiscard]] virtual std::optional<entt::entity> NearestSafeFire(entt::entity object, const glm::vec3& point) const = 0;
+	/// The fire of an object's blaze nearest a map position by the distance to the edge of its safe radius, or its object's
+	/// own radius when that is wider, of those hot enough to react to; none when none is. The distance is from the map
+	/// position to the fire middle of each object.
+	[[nodiscard]] virtual std::optional<entt::entity> NearestSafeFire(entt::entity object,
+	                                                                  const map_coords::MapCoords& point) const = 0;
 	/// Whether two objects' fires are of one blaze
 	[[nodiscard]] virtual bool InSameBlaze(entt::entity a, entt::entity b) const = 0;
 	/// Another object's blaze joins the blaze of an object's fire

@@ -66,7 +66,7 @@ public:
 	[[nodiscard]] std::optional<Reach> GetReach(entt::entity /*object*/) const override { return std::nullopt; }
 	[[nodiscard]] std::vector<entt::entity> GetBlazeMembers(entt::entity /*object*/) const override { return {}; }
 	[[nodiscard]] std::optional<entt::entity> NearestSafeFire(entt::entity /*object*/,
-	                                                          const glm::vec3& /*point*/) const override
+	                                                          const map_coords::MapCoords& /*point*/) const override
 	{
 		return std::nullopt;
 	}
