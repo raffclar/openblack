@@ -1111,6 +1111,36 @@ TEST_F(LobbyClientTest, NobodySignedInOnTheSiteGivesNotLoggedIn)
 	EXPECT_TRUE(_client->CanSignInFromSite());
 }
 
+TEST_F(LobbyClientTest, AGuestSessionOfTheSiteGivesTheRightsWithNoAccount)
+{
+	Make(lobby_api::ClientKind::Browser, true, true);
+	EXPECT_EQ(_client->GetAccountEditor(), std::nullopt);
+	_client->SignInAtStart();
+	ASSERT_EQ(_site->asked.size(), 1u);
+	// The session ends at 12:00 on the day of the test
+	_site->Answer(200, R"({"guest":{"editor":true,"debugger":true,"multiplayer":false,"expires":"2026-10-22T12:00:00Z"}})");
+	EXPECT_TRUE(_client->IsGuest());
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+	EXPECT_FALSE(_client->GetAccount().has_value());
+	EXPECT_EQ(_client->GetAccountEditor(), std::optional<bool>(true));
+	EXPECT_EQ(_client->GetAccountDebugger(), std::optional<bool>(true));
+	EXPECT_EQ(_push->opens, 0);
+	EXPECT_TRUE(_http.sent.empty());
+
+	// The multiplayer screens do not ask the site again: the guest has no lobby session
+	EXPECT_FALSE(_client->CanSignInFromSite());
+	std::optional<LobbyErrorKind> kind;
+	_client->SignInFromSite([&](auto&& result) { kind = result.error.kind; });
+	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
+	EXPECT_TRUE(_site->asked.empty());
+
+	// At the end of the guest session, the guest has no rights
+	_now += 2h;
+	EXPECT_FALSE(_client->IsGuest());
+	EXPECT_EQ(_client->GetAccountEditor(), std::nullopt);
+	EXPECT_EQ(_client->GetAccountDebugger(), std::nullopt);
+}
+
 TEST_F(LobbyClientTest, ASiteAnswerWithARefreshTokenIsRefused)
 {
 	Make(lobby_api::ClientKind::Browser, true, true);

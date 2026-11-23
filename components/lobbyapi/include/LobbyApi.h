@@ -107,6 +107,20 @@ struct Session
 	std::string errorReports;
 };
 
+/// The answer of the game page of the site in a guest session: the visitor typed the guest code of the day and has no
+/// account and no token. The site refuses the lobby calls of a guest.
+struct GuestRights
+{
+	/// "editor": the guest opens the editor and its debug cheats in a single player game
+	bool editor {false};
+	/// "debugger": the guest sees the debug menu bar
+	bool debugger {false};
+	/// "multiplayer": the guest can use the lobby. The site gives false.
+	bool multiplayer {false};
+	/// "expires": the end of the guest session, in milliseconds since 1970 (UTC)
+	int64_t expires {0};
+};
+
 /// The answer of GET and PUT /api/v1/me/consent
 struct Consent
 {

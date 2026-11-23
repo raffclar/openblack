@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <ranges>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -377,7 +378,30 @@ ImportedFarms ReadFarms(const VanillaWorld& world)
 		}
 		imported.skipped.push_back(Skip(record, why));
 	}
+	if (const auto lists = world.Fields(world.Game(), "lists"); lists.size() == k_GameObjectLists)
+	{
+		const auto fields = world.Refs(*lists.at(k_GameFieldList));
+		imported.fieldList.assign(fields.begin(), fields.end());
+		const auto farms = world.Refs(*lists.at(k_GameFishFarmList));
+		imported.fishFarmList.assign(farms.begin(), farms.end());
+	}
 	return imported;
+}
+
+std::vector<entt::entity> ListedToJoin(std::span<const uint32_t> gameList,
+                                       const std::unordered_map<uint32_t, entt::entity>& made)
+{
+	std::vector<entt::entity> order;
+	// The last thing of the game's list is the oldest, so it joins first
+	for (const auto number : gameList | std::views::reverse)
+	{
+		const auto entity = made.find(number);
+		if (entity != made.end() && std::ranges::find(order, entity->second) == order.end())
+		{
+			order.push_back(entity->second);
+		}
+	}
+	return order;
 }
 
 ImportedStatics ReadStatics(const VanillaWorld& world)

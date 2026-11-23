@@ -82,6 +82,11 @@ struct Choice
 };
 [[nodiscard]] std::optional<Choice> BestFarm(std::span<const Candidate> farms, uint32_t maxFishermen);
 
+/// The farm a creature fishes at: the first, going along the list of all farms, that is nearer than the reach and than
+/// every farm before it. A farm at the reach, or at the same distance as an earlier one, is not taken. The distances
+/// are in the order of the list. None when no farm is near enough.
+[[nodiscard]] std::optional<size_t> ClosestFarm(std::span<const float> distances, float reach);
+
 /// Where a fisherman stands to fish, in 16.16 map units: the farm's place moved by an offset in metres along x and z
 [[nodiscard]] glm::ivec2 FishingSpot(glm::ivec2 farm, glm::vec2 offset);
 

@@ -136,10 +136,14 @@ public:
 	[[nodiscard]] virtual bool IsEmailRequired() const = 0;
 	/// The editor right of the account of the session, or none while no account is logged in. Each answer of the
 	/// lobby with a session gives the right again: a login, a refresh of the access token, and a sign-in from the site.
+	/// In a guest session of the site with no account, the right of the guest.
 	[[nodiscard]] virtual std::optional<bool> GetAccountEditor() const { return std::nullopt; }
 	/// The debugger mark of the account of the session, or none while no account is logged in. Each answer of the lobby
 	/// with a session gives the mark again, as for the editor right.
 	[[nodiscard]] virtual std::optional<bool> GetAccountDebugger() const { return std::nullopt; }
+	/// Whether the browser game has a guest session of the site: the visitor typed the guest code of the day. A guest
+	/// has no account. The editor right and the debugger mark come from the site, and the lobby refuses the guest.
+	[[nodiscard]] virtual bool IsGuest() const { return false; }
 	/// The choice of the account of the session for the error reports, from the privacy choices of the site. None while
 	/// no account is logged in, or when the account made no choice for the privacy notice of now. Each answer of the
 	/// lobby with a session gives the choice again.

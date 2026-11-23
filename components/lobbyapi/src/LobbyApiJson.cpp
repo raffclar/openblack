@@ -335,6 +335,19 @@ std::optional<Session> ParseSession(std::string_view text)
 	});
 }
 
+std::optional<GuestRights> ParseGuestRights(std::string_view text)
+{
+	return ParseWith<GuestRights>(text, [](const Json& object, GuestRights& out) {
+		const auto* guest = Member(object, "guest");
+		if (guest == nullptr || !guest->is_object())
+		{
+			return false;
+		}
+		return ReadBool(*guest, "editor", out.editor, false) && ReadBool(*guest, "debugger", out.debugger, false) &&
+		       ReadBool(*guest, "multiplayer", out.multiplayer, false) && ReadTime(*guest, "expires", out.expires);
+	});
+}
+
 std::optional<Consent> ParseConsent(std::string_view text)
 {
 	return ParseWith<Consent>(text, [](const Json& object, Consent& out) {
