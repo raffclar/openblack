@@ -91,7 +91,8 @@ void openblack::ecs::reflection::RegisterFields_Components_w(entt::meta_ctx& con
 	    .Field<&components::Climate::stormSpeed>("stormSpeed")
 	    .Field<&components::Climate::stormLightning>("stormLightning")
 	    .Field<&components::Climate::stormOvercast>("stormOvercast")
-	    .Field<&components::Climate::storms>("storms");
+	    .Field<&components::Climate::storms>("storms")
+	    .Field<&components::Climate::serial>("serial");
 	Reflect<components::Storm>(context)
 	    .Field<&components::Storm::position>("position")
 	    .Field<&components::Storm::destination>("destination")
