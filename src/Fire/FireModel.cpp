@@ -100,6 +100,11 @@ float fire::SafeFireRadius(float radius, float maxRadius)
 	return std::min(radius, maxRadius) + 1.0f;
 }
 
+float fire::StandBackRadius(float objectRadius, float safeRadius)
+{
+	return safeRadius < objectRadius ? objectRadius : safeRadius;
+}
+
 float fire::FlameHeight(float temperature, const Material& material)
 {
 	const float gap = std::max(MaxTemperature(material) - k_AmbientTemperature, k_SmallestGap);
