@@ -28,6 +28,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -58,8 +59,8 @@ const GVillagerInfo& InfoOf(entt::entity villager)
 	return Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(person, GVillagerInfo::Find)));
 }
 
-/// The villager walks to a point and goes on waiting there
-void WalkThenWait(LivingAction& action, glm::vec2 goal)
+/// The villager walks to a map position and continues to wait there
+void WalkThenWait(LivingAction& action, const map_coords::MapCoords& goal)
 {
 	auto& living = Locator::livingActionSystem::value();
 	if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, VillagerStates::WaitForArtifactDance))
@@ -83,13 +84,15 @@ uint32_t ecs::villager_artefact_dance::WaitForArtefactDance(LivingAction& action
 	const auto& data = registry.Get<Dance>(dance);
 	const auto at = glm::xz(registry.Get<const Transform>(villager).position);
 	const auto middle = map_coords::ToMetres(data.place);
+	// The spot that it walks to comes from the map positions of the villager and the dance
+	const auto here = thing_map_place::Of(registry, villager);
 	// It keeps a little more than its own width clear about itself
 	const float room = world_objects::SizeOf(villager).radius * rules::k_WaitingRoom;
 	const float distance = glm::distance(middle, at);
 	const auto& towns = Locator::townSystem::value();
 	// Whether it has room where it stands is only asked on its first turn of waiting close by
 	const bool askRoom = distance <= rules::k_WaitingReach && action.turnsUntilStateChange == 0;
-	const bool roomHere = askRoom && towns.CheckForClearArea(at, room, ClearAreaFilter::AnyObject, villager);
+	const bool roomHere = askRoom && towns.CheckForClearAreaCoords(here, room, ClearAreaFilter::AnyObject, villager);
 	switch (rules::WaitingTurn(distance, action.turnsUntilStateChange, roomHere, InfoOf(villager).timeToWaitForArtifactDance))
 	{
 	case rules::Waiting::WalkCloser:
@@ -97,11 +100,11 @@ uint32_t ecs::villager_artefact_dance::WaitForArtefactDance(LivingAction& action
 		// To a clear spot up to 12 m from the artefact, on its own side of it, a little to one side or the other
 		auto& random = Locator::gameRandom::value();
 		const float spread = random.GameFloatRand(rules::k_WaitingSpread);
-		const float angle = gutils::Get3DAngleFromXZ(middle, at) + spread - rules::k_WaitingHalfSpread;
+		const float angle = gutils::Get3DAngleFromXZ(data.place, here) + spread - rules::k_WaitingHalfSpread;
 		const float away = random.GameFloatRand(rules::k_WaitingReach);
-		const auto target = map_coords::ToMetres(data.place + gutils::GetPosFromAngle(angle, away));
-		if (const auto spot = towns.FindClearArea(target, rules::k_WaitingReach, rules::k_WaitingRoomStep, room,
-		                                          ClearAreaFilter::AnyObject, villager);
+		const auto target = data.place + gutils::GetPosFromAngle(angle, away);
+		if (const auto spot = towns.FindClearAreaCoords(target, rules::k_WaitingReach, rules::k_WaitingRoomStep, room,
+		                                                ClearAreaFilter::AnyObject, villager);
 		    spot.has_value())
 		{
 			WalkThenWait(action, *spot);
@@ -109,8 +112,8 @@ uint32_t ecs::villager_artefact_dance::WaitForArtefactDance(LivingAction& action
 		break;
 	}
 	case rules::Waiting::MakeRoom:
-		if (const auto spot = towns.FindClearArea(at, rules::k_WaitingReach, rules::k_WaitingRoomStep, room,
-		                                          ClearAreaFilter::AnyObject, villager);
+		if (const auto spot = towns.FindClearAreaCoords(here, rules::k_WaitingReach, rules::k_WaitingRoomStep, room,
+		                                                ClearAreaFilter::AnyObject, villager);
 		    spot.has_value())
 		{
 			WalkThenWait(action, *spot);

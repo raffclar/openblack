@@ -15,6 +15,7 @@
 #include <array>
 
 #include "3D/AllMeshes.h"
+#include "3D/MapCoords.h"
 #include "Enums.h"
 #include "PlayerSlots.h"
 
@@ -215,6 +216,11 @@ struct Approach
 	float walk {0.0f};
 };
 [[nodiscard]] Approach ApproachToBody(float distance, float keepAway);
+/// The goal of one walk towards the body: from the map position of the villager, towards the map position of the body by
+/// the game angle between them. The step is the walk cut to whole metres, in whole map units. The goal keeps the altitude
+/// of the villager.
+[[nodiscard]] map_coords::MapCoords StepTowardsBody(const map_coords::MapCoords& from, const map_coords::MapCoords& body,
+                                                    float walk);
 
 /// The clip a soul rises with: to heaven or to hell at even odds on a draw of 0 to 100, but always to heaven for a child
 [[nodiscard]] constexpr AnimId SoulClip(float drawUpToHundred, bool child)

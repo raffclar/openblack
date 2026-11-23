@@ -179,10 +179,7 @@ bool villager_creature_dance::SendToPlace(entt::entity villager, entt::entity da
 	systems::villager_reactions::SetSpeed(villager, run);
 	// The villager walks the dance's footpaths where it has any, else straight to its place with the height of the
 	// dance's place above the land
-	const auto goal = villager_dance::SlotGoalOf(villager);
-	const float altitude = goal.has_value() ? goal->altitude : 0.0f;
-	static_cast<void>(
-	    villager_footpath::SetupMoveToOnFootpath(*action, dance, *place, altitude, VillagerStates::ControlledByCreature));
+	static_cast<void>(villager_footpath::SetupMoveToOnFootpath(*action, dance, *place, VillagerStates::ControlledByCreature));
 	// Its new state set its speed: the run is set again
 	systems::villager_reactions::SetSpeed(villager, run);
 	return true;
@@ -240,17 +237,15 @@ uint32_t villager_creature_dance::ControlledByCreature(LivingAction& action)
 	}
 	const auto place = villager_dance::SlotOf(villager);
 	const auto here = WholePositionOf(villager);
-	const auto slot = ecs::wall_hug::ToWhole(*place);
 	// Only a villager that stands exactly where a walk to the dance ends walks to its place
-	if (ecs::dance_rules::WalksToOwnPlace({.x = here.x, .z = here.y}, {.x = slot.x, .z = slot.y}, dance->place))
+	if (ecs::dance_rules::WalksToOwnPlace({.x = here.x, .z = here.y}, {.x = place->x, .z = place->z}, dance->place))
 	{
 		auto& living = Locator::livingActionSystem::value();
 		if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos,
 		                                                 VillagerStates::ControlledByCreature))
 		{
 			// The goal keeps the height of the dance's place above the land
-			villager_home::SetupMobileMoveTo(action, *villager_dance::SlotGoalOf(villager),
-			                                 villager_home::WalkWay::StraightThrough);
+			villager_home::SetupMobileMoveTo(action, *place, villager_home::WalkWay::StraightThrough);
 		}
 	}
 	return 1;

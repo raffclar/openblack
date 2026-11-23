@@ -198,8 +198,8 @@ map_coords::MapCoords MapPlaceOf(entt::entity thing)
 /// The point of a temporary pile nearest the villager, as a map position with the height of the pile
 map_coords::MapCoords PileEdgeOf(const systems::TownSystemInterface::TemporaryStore& store, entt::entity villager)
 {
-	auto edge = villager_work::NearestEdgePosition(MapPlaceOf(store.pile), MapPlaceOf(villager),
-	                                               systems::object_measures::TwoDRadius(Entities(), store.pile));
+	auto edge = villager_work::EdgeWorkingPosition(MapPlaceOf(store.pile), MapPlaceOf(villager),
+	                                               systems::object_measures::TwoDRadius(Entities(), store.pile), 0.0f);
 	edge.altitude = store.edgeAltitude;
 	return edge;
 }
