@@ -233,5 +233,45 @@ class FramesTests(unittest.TestCase):
         self.assertFalse(sim_run.repeat_result(first, other)["same"])
 
 
+class ScenarioPauseTests(unittest.TestCase):
+    def test_a_paused_game_with_no_step_is_resumed(self):
+        self.assertTrue(sim_run.needs_resume({"ready": True, "paused": True, "stepping": None}))
+
+    def test_a_running_game_is_left_alone(self):
+        self.assertFalse(sim_run.needs_resume({"ready": True, "paused": False, "stepping": None}))
+
+    def test_a_game_that_a_step_holds_is_left_alone(self):
+        self.assertFalse(sim_run.needs_resume({"ready": True, "paused": True, "stepping": {"turns": 5}}))
+
+    def test_a_game_that_loads_is_left_alone(self):
+        self.assertFalse(sim_run.needs_resume({"ready": False}))
+
+    def test_keep_running_resumes_a_paused_game_until_it_ends(self):
+        class Process:
+            def __init__(self):
+                self.polls = 0
+
+            def poll(self):
+                self.polls += 1
+                return None if self.polls < 4 else 0
+
+        class PausingGame:
+            def __init__(self):
+                self.process = Process()
+                self.resumes = 0
+                self.paused = True
+
+            def call(self, query, params=None):
+                if query == "game.resume":
+                    self.resumes += 1
+                    self.paused = False
+                    return {}
+                return {"ready": True, "paused": self.paused, "stepping": None}
+
+        game = PausingGame()
+        sim_run.keep_running(game, poll=0)
+        self.assertEqual(game.resumes, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

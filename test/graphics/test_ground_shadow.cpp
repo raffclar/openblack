@@ -413,3 +413,92 @@ TEST(GroundShadow, AHeldTreeJoinsTheHandsShadowByTheBitsOfBothLevels)
 	EXPECT_EQ(faded.at(33), GroundShadow::Level(7, 128));
 	EXPECT_EQ(faded.at(36), GroundShadow::Level(3, 128));
 }
+
+namespace
+{
+/// A land where every block is present, in view and near
+GroundShadow::BlockSights AllShown()
+{
+	GroundShadow::BlockSights sights {};
+	sights.fill({.present = true, .inView = true, .distance = 100.0f});
+	return sights;
+}
+
+GroundShadow::BlockSight& SightOf(GroundShadow::BlockSights& sights, int x, int z)
+{
+	return sights.at(static_cast<size_t>((x * GroundShadow::k_BlocksPerSide) + z));
+}
+} // namespace
+
+TEST(GroundShadow, AShadowShowsOverANearBlockInView)
+{
+	const auto sights = AllShown();
+	EXPECT_TRUE(GroundShadow::NearBlockShows({800.0f, 30.0f, 800.0f}, sights));
+}
+
+TEST(GroundShadow, AShadowOverAFarBlockDoesNotShowWhateverTheBlocksRoundIt)
+{
+	auto sights = AllShown();
+	// The place (800, 800) is in block (5, 5)
+	SightOf(sights, 5, 5).distance = GroundShadow::k_BlockRange;
+	EXPECT_FALSE(GroundShadow::NearBlockShows({800.0f, 0.0f, 800.0f}, sights));
+	SightOf(sights, 5, 5).distance = std::nextafter(GroundShadow::k_BlockRange, 0.0f);
+	EXPECT_TRUE(GroundShadow::NearBlockShows({800.0f, 0.0f, 800.0f}, sights));
+}
+
+TEST(GroundShadow, ANearBlockOutOfViewNeedsABlockInViewWithin60Units)
+{
+	auto sights = AllShown();
+	for (auto& sight : sights)
+	{
+		sight.inView = false;
+	}
+	// The place (810, 810) is in block (5, 5)
+	EXPECT_FALSE(GroundShadow::NearBlockShows({810.0f, 0.0f, 810.0f}, sights));
+	// The point 60 units on x and z, (870, 870), is also in block (5, 5), thus the game does not look at block (6, 6)
+	SightOf(sights, 6, 6).inView = true;
+	EXPECT_FALSE(GroundShadow::NearBlockShows({810.0f, 0.0f, 810.0f}, sights));
+	// Block (4, 4) holds the point (750, 750)
+	SightOf(sights, 4, 4).inView = true;
+	EXPECT_TRUE(GroundShadow::NearBlockShows({810.0f, 0.0f, 810.0f}, sights));
+}
+
+TEST(GroundShadow, ABlockInViewMustAlsoBeNearAndPresent)
+{
+	auto sights = AllShown();
+	for (auto& sight : sights)
+	{
+		sight.inView = false;
+	}
+	// The place (900, 900) is near the corner of block (5, 5): (960, 960) is in block (6, 6)
+	SightOf(sights, 6, 6) = {.present = true, .inView = true, .distance = 800.0f};
+	EXPECT_FALSE(GroundShadow::NearBlockShows({900.0f, 0.0f, 900.0f}, sights));
+	SightOf(sights, 6, 6) = {.present = false, .inView = true, .distance = 100.0f};
+	EXPECT_FALSE(GroundShadow::NearBlockShows({900.0f, 0.0f, 900.0f}, sights));
+	SightOf(sights, 6, 6) = {.present = true, .inView = true, .distance = 100.0f};
+	EXPECT_TRUE(GroundShadow::NearBlockShows({900.0f, 0.0f, 900.0f}, sights));
+}
+
+TEST(GroundShadow, AShadowOverNoBlockShowsWhenABlockRoundItShows)
+{
+	GroundShadow::BlockSights sights {};
+	// No block under the place (800, 800), but the point (740, 740) is in block (4, 4)
+	SightOf(sights, 4, 4) = {.present = true, .inView = true, .distance = 100.0f};
+	EXPECT_TRUE(GroundShadow::NearBlockShows({800.0f, 0.0f, 800.0f}, sights));
+	// Off the map, the points round the place still find a block
+	SightOf(sights, 0, 0) = {.present = true, .inView = true, .distance = 100.0f};
+	EXPECT_TRUE(GroundShadow::NearBlockShows({-50.0f, 0.0f, -50.0f}, sights));
+	// Every point is off the map
+	EXPECT_FALSE(GroundShadow::NearBlockShows({-70.0f, 0.0f, -70.0f}, sights));
+}
+
+TEST(GroundShadow, TheCellOfAPointIsTruncatedTowardsZero)
+{
+	GroundShadow::BlockSights sights {};
+	SightOf(sights, 0, 0) = {.present = true, .inView = true, .distance = GroundShadow::k_BlockRange};
+	SightOf(sights, 0, 1) = {.present = true, .inView = true, .distance = 100.0f};
+	// The place is a little below 0 on x, but its cell is 0, thus the far block (0, 0) is the block of the place
+	EXPECT_FALSE(GroundShadow::NearBlockShows({-5.0f, 0.0f, 155.0f}, sights));
+	// On the map, the point 60 units on z finds the near block (0, 1)
+	EXPECT_TRUE(GroundShadow::NearBlockShows({5.0f, 0.0f, 165.0f}, sights));
+}

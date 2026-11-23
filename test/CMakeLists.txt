@@ -745,6 +745,11 @@ if (Python3_Interpreter_FOUND)
     NAME test_web_crash_symbolize
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/crash/test_web_crash_symbolize.py
   )
+  # The tool that draws the progress map of the readme, on a made-up progress folder
+  add_test(
+    NAME test_progress_map
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/test_progress_map.py
+  )
 endif ()
 # The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
 # parallel ctest they don't also crowd each other
@@ -918,6 +923,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_artefact_rules test_artefact_rules.cpp)
 openblack_setup_and_add_test(test_camera_limits camera/test_camera_limits.cpp)
 openblack_setup_and_add_test(test_ground_shadow graphics/test_ground_shadow.cpp)
+openblack_setup_and_add_test(
+  test_throw_lead_shadow graphics/test_throw_lead_shadow.cpp
+)
 openblack_setup_and_add_test(
   test_size_follower windowing/test_size_follower.cpp
 )

@@ -1336,7 +1336,7 @@ void GameHandGrabWorld::DrawThrownPose(entt::entity object, const physics::Pose&
 	auto& registry = Locator::entitiesRegistry::value();
 	if (auto* inHand = registry.TryGet<InHand>(object))
 	{
-		inHand->drawn = InHand::Drawn {.position = pose.origin, .rotation = pose.axes};
+		inHand->drawn = InHand::Drawn {.position = pose.origin, .rotation = pose.axes, .onThrowLead = true};
 	}
 	// A globe draws its own model
 	if (auto* globe = registry.TryGet<OneOffSpellSeed>(object))
