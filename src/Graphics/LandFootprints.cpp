@@ -30,6 +30,8 @@
 #include "Common/SideThread.h"
 #include "Common/WorkerPools.h"
 #include "Common/X87Angle.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Flowers.h"
 #include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
@@ -111,7 +113,7 @@ struct LandFootprints::ThingStores
 	const ecs::Registry* registry;
 	/// The things filed in the map's cells that have a model and a transform
 	decltype(std::declval<const entt::registry&>().view<const MapCellResident, const MeshComponent, const Transform>()) filed;
-	ecs::ComponentLookups<MeshComponent, MapCellResident> things;
+	ecs::ComponentLookups<MeshComponent, MapCellResident, ecs::components::DeadTree, ecs::components::Flowers> things;
 	ecs::placed_turn::TurnLookups turns;
 };
 
@@ -379,7 +381,8 @@ void LandFootprints::FindChangedThings(const ThingStores& stores)
 		     it != first->begin() + static_cast<std::ptrdiff_t>(to); ++it)
 		{
 			const auto entity = *it;
-			if (!filed.contains(entity))
+			// A thing that does not show its footprint counts as a thing outside the cells
+			if (!filed.contains(entity) || !land_footprints::ShowsFootprint(stores.things, entity))
 			{
 				continue;
 			}
@@ -571,7 +574,7 @@ LandFootprints::BlockPaint LandFootprints::FindBlockPaint(size_t block, const Th
 	    [&](entt::entity entity) {
 		    const auto* mesh = stores.things.TryGet<const MeshComponent>(entity);
 		    return mesh != nullptr && stores.turns.AllOf<Transform>(entity) && stores.things.AllOf<MapCellResident>(entity) &&
-		           FoundFootprintOf(mesh->id) != nullptr;
+		           land_footprints::ShowsFootprint(stores.things, entity) && FoundFootprintOf(mesh->id) != nullptr;
 	    });
 	// After the things come the loose prints, the newest first: the prints of the things that show only as prints, then
 	// the rivers, which the land made before its scripts started

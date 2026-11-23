@@ -24,6 +24,8 @@
 #include <glm/vec3.hpp>
 
 #include "3D/FootprintPaint.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Flowers.h"
 
 /// Which footprints the game paints into a land block, in which order, and where they lie. Pure rules, tested on their
 /// own.
@@ -50,6 +52,16 @@ using CellList = std::function<std::span<const entt::entity>(glm::ivec2 cell)>;
 /// column and row along x and z. `hasFootprint` tells which things have a footprint.
 [[nodiscard]] std::vector<entt::entity> ThingsOverBlock(glm::ivec2 block, const CellList& fixed, const CellList& mobile,
                                                         const std::function<bool(entt::entity)>& hasFootprint);
+
+/// Whether the land shows the footprint of a thing's model. The game paints the footprint of a thing in the map's cells
+/// only when the thing shows its shadow or its footprint on the land's texture. Dead trees and flowers show neither, so
+/// the land under them shows no footprint. A dead tree keeps the model of the tree that it was. `things` gives AnyOf for
+/// components.
+template <typename Things>
+[[nodiscard]] bool ShowsFootprint(const Things& things, entt::entity entity)
+{
+	return !things.template AnyOf<components::DeadTree, components::Flowers>(entity);
+}
 
 /// Where a placed thing's footprint lies: from its position and its turn with its scale in it, in the form of
 /// x87::GameUprightTurn (each column is a row of the game's matrix)
