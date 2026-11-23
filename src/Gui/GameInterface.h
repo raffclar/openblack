@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <glm/vec2.hpp>
+#include <glm/vec4.hpp>
 
 #include "3D/TempleScreenInterface.h"
 #include "BoxButtonsHeld.h"
@@ -661,6 +662,8 @@ private:
 	std::unique_ptr<ChatControls> _chatControls;
 	/// The chat started the text input of the window
 	bool _chatTextInput {false};
+	/// The area of the screen near which the window of the input method last opened: its left, top, width and height
+	std::optional<glm::ivec4> _textInputArea;
 	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates
 	std::unique_ptr<graphics::Texture2D> _backdrop;
 	std::optional<menu_backdrop::Swirls> _backdropSwirls;
