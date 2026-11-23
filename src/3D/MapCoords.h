@@ -262,7 +262,16 @@ constexpr void SpiralIncrement(MapCoords& coords, Spiral& spiral, float step)
 /// The height of the ground at a map position. The altitude of the position has no effect
 [[nodiscard]] float GroundAt(const LandIslandInterface& island, const MapCoords& coords);
 
-/// A world point as a map position: x and z by ToFixed, and the altitude above the ground at the truncated position
+/// A world point as a map position: x and z by ToFixed, and the altitude above the ground at the truncated position.
+/// `groundAt` gives the height of the ground at a map position.
+template <typename GroundAt>
+[[nodiscard]] constexpr MapCoords FromWorld(glm::vec3 point, const GroundAt& groundAt)
+{
+	MapCoords coords {ToFixed(point.x), ToFixed(point.z), 0.0f};
+	coords.altitude = point.y - static_cast<float>(groundAt(coords));
+	return coords;
+}
+/// As FromWorld, with the ground of the island
 [[nodiscard]] MapCoords FromWorld(const LandIslandInterface& island, glm::vec3 point);
 
 /// The map position that a thing in a hand gets at each turn, from the reported point of the hand. x and z are by
