@@ -1669,6 +1669,12 @@ void GameInterface::OpenMenu()
 bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution)
 {
 	_painter.Begin(resolution);
+	// The text that the player composes with an input method shows in the edit box that has the focus
+	if (event.type == SDL_TEXTEDITING)
+	{
+		_painter.SetComposition(ToUtf16(event.edit.text));
+		return false;
+	}
 	if (_skipBox->IsActive())
 	{
 		return ProcessSkipBoxEvent(event);
@@ -2138,6 +2144,23 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		if (FrontEndPointerOn() || overDebugWindow)
 		{
 			_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
+		}
+	}
+	// The window of the input method opens near the caret of the edit box that has the focus
+	if (const auto area = _painter.TakeTextInputArea())
+	{
+		const auto min = _painter.ToScreenPoint(area->min);
+		const auto max = _painter.ToScreenPoint(area->max);
+		const auto screenArea = glm::ivec4(min, max - min);
+		if (SDL_IsTextInputActive() == SDL_FALSE)
+		{
+			SDL_StartTextInput();
+		}
+		if (screenArea != _textInputArea)
+		{
+			SDL_Rect rect {.x = screenArea.x, .y = screenArea.y, .w = screenArea.z, .h = screenArea.w};
+			SDL_SetTextInputRect(&rect);
+			_textInputArea = screenArea;
 		}
 	}
 	// A video on a screen wider than its picture has black bars at its sides, which go with the cinema bars

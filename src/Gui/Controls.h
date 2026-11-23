@@ -392,7 +392,8 @@ private:
 	void Changed(bool textChanged);
 
 	const GameFont& _font;
-	text_edit::State _state;
+	/// The draw also keeps the scroll in step with the text that the player composes with an input method
+	mutable text_edit::State _state;
 	int _size;
 };
 
