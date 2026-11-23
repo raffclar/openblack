@@ -27,7 +27,7 @@ public:
 	[[nodiscard]] std::optional<field_crop::Look> GetLook(const components::Field& field) const override;
 	[[nodiscard]] field_crop::Activity GetActivity(entt::entity field) const override;
 	[[nodiscard]] bool IsRipe(entt::entity field) const override;
-	[[nodiscard]] std::optional<FieldChoice> BestFieldFor(entt::entity town, const glm::vec3& position) const override;
+	[[nodiscard]] std::optional<FieldChoice> BestFieldFor(entt::entity town, const map_coords::MapCoords& place) const override;
 	void AddFarmer(entt::entity field, entt::entity villager) override;
 	void RemoveFarmer(entt::entity field, entt::entity villager) override;
 	bool PlantCrop(entt::entity field) override;

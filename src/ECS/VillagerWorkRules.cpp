@@ -255,12 +255,11 @@ float villager_work::DesireToBeFarmed(const FieldDesireInputs& in)
 	return 0.0f;
 }
 
-glm::ivec2 villager_work::FieldWorkSpot(glm::vec2 field, float drawX, float drawZ)
+glm::ivec2 villager_work::FieldWorkSpot(const map_coords::MapCoords& field, float drawX, float drawZ)
 {
-	// Each axis goes through a map position, its offset added in metres and truncated back
-	const auto at = map_coords::FromMetres(field);
-	const auto x = map_coords::ToFixedGUtils(map_coords::ToMetres(at.x) + (k_FieldSpotReach - drawX));
-	const auto z = map_coords::ToFixedGUtils(map_coords::ToMetres(at.z) + (k_FieldSpotReach - drawZ));
+	// Each axis of the map position changes to metres, adds its offset and goes back to map units with truncation
+	const auto x = map_coords::ToFixedGUtils(map_coords::ToMetres(field.x) + (k_FieldSpotReach - drawX));
+	const auto z = map_coords::ToFixedGUtils(map_coords::ToMetres(field.z) + (k_FieldSpotReach - drawZ));
 	return {x, z};
 }
 

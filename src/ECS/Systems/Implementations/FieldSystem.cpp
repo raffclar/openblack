@@ -14,8 +14,6 @@
 #include <algorithm>
 #include <vector>
 
-#include <glm/gtx/vec_swizzle.hpp>
-
 #include "Common/GUtilsDistance.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Field.h"
@@ -169,7 +167,8 @@ bool FieldSystem::IsRipe(entt::entity field) const
 	return field_crop::IsRipe(data.crop, TypeOf(data.type));
 }
 
-std::optional<FieldSystemInterface::FieldChoice> FieldSystem::BestFieldFor(entt::entity town, const glm::vec3& position) const
+std::optional<FieldSystemInterface::FieldChoice> FieldSystem::BestFieldFor(entt::entity town,
+                                                                           const map_coords::MapCoords& place) const
 {
 	const auto* record = Entities().TryGet<const Town>(town);
 	if (record == nullptr)
@@ -177,15 +176,13 @@ std::optional<FieldSystemInterface::FieldChoice> FieldSystem::BestFieldFor(entt:
 		return std::nullopt;
 	}
 	const auto& types = Locator::infoConstants::value().fieldType;
-	const auto here = glm::xz(position);
 	// The newest of equals wins, as fields are weighed newest first
 	std::optional<FieldChoice> best;
 	float bestScore = 0.0f;
 	auto& registry = Entities();
 	for (const auto entity : ecs::field_order::FieldsOfTown(registry, static_cast<int>(record->id)))
 	{
-		const auto* at = registry.TryGet<const Transform>(entity);
-		if (at == nullptr)
+		if (!registry.AllOf<Transform>(entity))
 		{
 			continue;
 		}
@@ -198,8 +195,9 @@ std::optional<FieldSystemInterface::FieldChoice> FieldSystem::BestFieldFor(entt:
 		                                                           .ageRecolt = type.ageRecolt,
 		                                                           .farmers = static_cast<uint32_t>(field.farmers.size()),
 		                                                           .maxFarmers = type.maxFarmerInFarm});
-		const float score =
-		    gutils::GetDistanceModifier(gutils::GetDistanceInMetres(glm::xz(at->position), here), k_FieldReach) * desire;
+		const float score = gutils::GetDistanceModifier(
+		                        gutils::GetDistanceInMetres(thing_map_place::Of(registry, entity), place), k_FieldReach) *
+		                    desire;
 		if (score > bestScore)
 		{
 			bestScore = score;
