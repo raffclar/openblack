@@ -13,7 +13,7 @@ common=$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)
 dest="$common/hooks"
 mkdir -p "$dest"
 
-for hook in pre-commit; do
+for hook in pre-commit pre-merge-commit; do
 	src="$here/$hook"
 	target="$dest/$hook"
 	if [ -f "$target" ] && ! cmp -s "$src" "$target"; then
