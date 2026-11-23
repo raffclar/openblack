@@ -32,6 +32,7 @@ void openblack::ecs::reflection::RegisterFields_Components_i(entt::meta_ctx& con
 	    .Field<&components::InfluenceSource::radius>("radius")
 	    .Field<&components::InfluenceSource::anti>("anti")
 	    .Field<&components::InfluenceSource::follows>("follows");
+	Reflect<components::TestbedBorder> {context};
 	Reflect<components::TownInfluence>(context)
 	    .Field<&components::TownInfluence::radius>("radius")
 	    .Field<&components::TownInfluence::drawnRadius>("drawnRadius");

@@ -519,7 +519,8 @@ void InfluenceSystem::DrawBorders()
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto citadels = Citadels();
 	const auto ground = LandHeight();
-	// Every player's but the neutral one's: a circle about their citadel, then one about each of their towns
+	// Every player's but the neutral one's: a circle about their citadel, then one about each of their towns. A ring of
+	// influence that a script makes gives influence, but it has no circle on the border.
 	for (const auto name : ecs::game_players::Gods())
 	{
 		if (const auto citadel = citadels.at(static_cast<size_t>(name)); citadel != entt::null)
@@ -544,12 +545,16 @@ void InfluenceSystem::DrawBorders()
 			    }
 			    influence.drawnRadius = influence.radius;
 		    });
-		registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
-			if (source.player == name && source.radius > 0.0f && !source.anti)
-			{
-				influence::AddCircle(_circles, name, transform.position, source.radius, ground);
-			}
-		});
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		// The testbed has no citadel, so its source of influence keeps a border for the scenarios to show
+		registry.Each<const InfluenceSource, const Transform>(
+		    [&](entt::entity entity, const InfluenceSource& source, const Transform& transform) {
+			    if (source.player == name && source.radius > 0.0f && registry.AllOf<TestbedBorder>(entity))
+			    {
+				    influence::AddCircle(_circles, name, transform.position, source.radius, ground);
+			    }
+		    });
+#endif
 	}
 	_bordersDirty = false;
 }

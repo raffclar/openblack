@@ -498,6 +498,8 @@ bool LandSystem::LoadTestbed()
 	const auto influence = registry.Create();
 	registry.Assign<components::Transform>(influence, glm::vec3(middle.x, ground, middle.y), glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<components::InfluenceSource>(influence, PlayerNames::PLAYER_ONE, k_TestbedInfluenceRadius);
+	// A script ring has no border. This debug source has a border, so with a temple the border shows at its edge.
+	registry.Assign<components::TestbedBorder>(influence);
 	registry.Each<const components::Player>([&registry](entt::entity entity, const components::Player& player) {
 		if (player.name == PlayerNames::PLAYER_ONE)
 		{

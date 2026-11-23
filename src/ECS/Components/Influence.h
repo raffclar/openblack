@@ -17,9 +17,9 @@
 namespace openblack::ecs::components
 {
 
-/// Influence a player has round something that is neither a town nor a citadel, reaching so far across the land. The
-/// testbed gives its player influence this way, as it has no temple, so that the miracles cast only in influence may be
-/// cast there.
+/// Influence a player has round something that is neither a town nor a citadel, reaching so far across the land. A
+/// script makes such a ring. The ring gives influence, but it has no circle on the border. The testbed gives its player
+/// influence this way, as it has no temple, so that the miracles cast only in influence may be cast there.
 struct InfluenceSource
 {
 	PlayerNames player {PlayerNames::PLAYER_ONE};
@@ -28,6 +28,11 @@ struct InfluenceSource
 	bool anti {false};
 	/// The object it goes about with, which a script made it on; none for one that stays where it is
 	entt::entity follows {entt::null};
+};
+
+/// A debug mark on the influence source of the testbed: the border has a circle round it, as round a citadel
+struct TestbedBorder
+{
 };
 
 /// How far a town's influence reaches, worked out each turn from its own and its buildings', and how far it reached
