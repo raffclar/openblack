@@ -542,6 +542,21 @@ TEST(ObjectDrawList, TheStoresOfAWalkGiveTheFactsOfTheRegistry)
 	}
 }
 
+// A script walks a thing that is not living on the list of the walking things. A living thing walks its track in its
+// own state, and the land's list draws it.
+TEST(ObjectDrawList, ALivingThingOnATrackStaysOnTheLandsList)
+{
+	using namespace openblack::ecs::components;
+	openblack::ecs::Registry registry;
+	const auto object = registry.Create();
+	const auto villager = registry.Create();
+	registry.Assign<WalkPath>(object, WalkPath {.living = false});
+	registry.Assign<WalkPath>(villager, WalkPath {.living = true});
+	const openblack::ecs::systems::DrawnStores stores(registry);
+	EXPECT_TRUE(stores.DrawnOnItsOwn(object));
+	EXPECT_FALSE(stores.DrawnOnItsOwn(villager));
+}
+
 TEST(ObjectDrawList, TheMemoOfTheBlockTestGivesTheAnswersOfTheTestAndTestsEachBlockOneTimeForACamera)
 {
 	const auto projection = glm::perspectiveLH_NO(2.0f * std::atan(0.5f), 1.6f, 1.0f, 5000.0f);

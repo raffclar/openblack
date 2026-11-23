@@ -139,34 +139,36 @@ bool villager_breeding::BreederMayBreed(const TownHeadcount& town, float overAll
 	       over(town.adults, town.adultPlaces) < overAllowance * k_BreederAdultShare;
 }
 
-glm::vec2 villager_breeding::BreederSpotByHome(glm::vec2 home, glm::vec2 door, float homeRadius, const IntRandom& intRandom,
-                                               const FloatRandom& floatRandom)
+map_coords::MapCoords villager_breeding::BreederSpotByHome(const map_coords::MapCoords& home, const map_coords::MapCoords& door,
+                                                           float homeRadius, const IntRandom& intRandom,
+                                                           const FloatRandom& floatRandom)
 {
 	const float out = gutils::Get3DAngleFromXZ(home, door);
 	const float side = intRandom(2) != 0 ? 1.0f : -1.0f;
-	const float angle = side * floatRandom(k_BreederFan) + out;
+	const float angle = floatRandom(k_BreederFan) * side + out;
 	const float half = homeRadius * k_BreederHomeShare;
 	const float distance = floatRandom(half) + half;
-	return routine::Polar(door, angle, distance);
+	return door + gutils::GetPosFromAngle(angle, distance);
 }
 
-glm::vec2 villager_breeding::BreederSpotByStore(glm::vec2 store, const FloatRandom& random)
+map_coords::MapCoords villager_breeding::BreederSpotByStore(const map_coords::MapCoords& store, const FloatRandom& random)
 {
 	const float distance = random(k_BreederStoreRange) + k_BreederStoreLeast;
 	const float angle = random(routine::k_TwoPi);
-	return routine::Polar(store, angle, distance);
+	return store + gutils::GetPosFromAngle(angle, distance);
 }
 
-villager_breeding::Amble villager_breeding::BreederAmble(glm::vec2 spot, const FloatRandom& floatRandom,
+villager_breeding::Amble villager_breeding::BreederAmble(glm::ivec2 spot, const FloatRandom& floatRandom,
                                                          const IntRandom& intRandom)
 {
 	const float angle = floatRandom(routine::k_TwoPi);
 	const float distance = floatRandom(k_BreederAmble);
-	const auto goal = routine::Polar(spot, angle, distance);
+	map_coords::MapCoords goal {.x = spot.x, .z = spot.y, .altitude = 0.0f};
+	gutils::AddDistanceFromAngle(goal, angle, distance);
 	return {.goal = goal, .pause = static_cast<uint16_t>(intRandom(k_BreederPauseRange) + k_BreederPauseLeast)};
 }
 
-glm::vec2 villager_breeding::NearMother(glm::vec2 centre, const FloatRandom& random)
+map_coords::MapCoords villager_breeding::NearMother(const map_coords::MapCoords& centre, const FloatRandom& random)
 {
-	return routine::Polar(centre, random(routine::k_TwoPi), k_NearMother);
+	return routine::StepFrom(centre, random(routine::k_TwoPi), k_NearMother);
 }

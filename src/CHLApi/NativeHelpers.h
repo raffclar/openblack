@@ -66,6 +66,7 @@ lhvm::ScriptType TaskType(uint32_t task);
 void ScriptMessage(std::string_view message);
 void ObjectNoLongerValid();
 bool PlayerInsideTemple();
+bool ReportedInsideTemple();
 void ApplySwitchChanges(const script::switches::SwitchChanges& changes);
 glm::vec3 PopVec();
 void PushVec(const glm::vec3& vec);
@@ -118,7 +119,7 @@ std::vector<entt::entity> ContainerMembers(const ecs::Registry& registry, entt::
 void ChangeWeatherThing(entt::entity thing, const std::function<void(ecs::components::Storm&)>& change);
 
 // In CHLApi/PlayerNatives.cpp
-PlayerNames ScriptPlayerName(int32_t scriptPlayer);
+PlayerNames ScriptPlayerName(float scriptPlayer);
 
 // In CHLApi/HandNatives.cpp
 ecs::components::HandClicked* LocalHandClicked();

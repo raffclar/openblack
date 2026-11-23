@@ -929,18 +929,25 @@ void construction::MakeSitePiles(entt::entity building, BuildingSite& site)
 	case building_site::SitePiles::Wonder:
 		if (!livePile(first))
 		{
+			// The pile stands at the map position of the wonder's point, with the height of the point above the land
 			const auto& transform = registry.Get<const Transform>(building);
-			first = makePile(building_site::WonderPilePlace(transform.position, transform.rotation, transform.scale),
-			                 placed_turn::AnglesOf(registry, building).y, 0.0f);
+			const auto point = building_site::WonderPilePoint(transform.position, transform.rotation, transform.scale);
+			const auto place = Locator::terrainSystem::has_value()
+			                       ? map_coords::FromWorld(Locator::terrainSystem::value(), point)
+			                       : map_coords::FromWorld(point, [](const map_coords::MapCoords&) { return 0.0f; });
+			first = makePile(map_coords::ToMetres(place), placed_turn::AnglesOf(registry, building).y, 0.0f);
+			thing_map_place::Keep(registry, first, place);
 		}
 		return;
 	case building_site::SitePiles::Beyond:
 		if (!livePile(first))
 		{
 			const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
-			const auto at = glm::xz(registry.Get<const Transform>(building).position);
-			const auto place = building_site::StandardPilePlace(at, villager_home::DoorPosition(building), random);
-			first = makePile(place.position, place.yAngle, 0.0f);
+			const auto place = building_site::StandardPilePlace(thing_map_place::Of(registry, building),
+			                                                    villager_home::DoorPlace(building), random);
+			// The pile stands at the exact map position that the game finds
+			first = makePile(map_coords::ToMetres(place.position), place.yAngle, 0.0f);
+			thing_map_place::Keep(registry, first, place.position);
 		}
 		return;
 	}

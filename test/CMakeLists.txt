@@ -2023,6 +2023,9 @@ add_test(NAME test_frame_time_check
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_frame_time_check.py
 )
+add_test(NAME test_picture_repeat
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_picture_repeat.py
+)
 openblack_setup_and_add_test(test_creature_drawn_walk test_creature_drawn_walk.cpp)
 openblack_setup_and_add_test(test_living_drawn_places test_living_drawn_places.cpp)
 openblack_setup_and_add_test(test_world_drawn_places test_world_drawn_places.cpp)

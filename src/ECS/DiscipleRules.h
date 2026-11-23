@@ -17,6 +17,7 @@
 #include <span>
 #include <vector>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 /// The rules of disciples: a villager held in the player's hand takes up the work of what it is held near, a field, a
@@ -251,5 +252,14 @@ inline constexpr int32_t k_IdleRetryTurns = 300;
 
 /// A villager made a disciple walks up to the thing it was put by when farther than this from its edge
 inline constexpr float k_InspectReach = 5.0f;
+
+/// The goal of the walk of a disciple that inspects a thing. The game finds the game angle from the point of the thing
+/// to the disciple, and then uses the number of that angle as radians. Thus the step from the point does not go
+/// towards the disciple, as in the game (see docs/vanilla-bugs.md). The step goes from the point in metres. The sum
+/// changes back to a map position. The altitude is the height of the point less the ground at the goal, as in the game.
+/// `groundAt` gives the height of the ground at a map position.
+[[nodiscard]] map_coords::MapCoords InspectGoal(const map_coords::MapCoords& point, const map_coords::MapCoords& walker,
+                                                float distance,
+                                                const std::function<float(const map_coords::MapCoords&)>& groundAt);
 
 } // namespace openblack::disciple

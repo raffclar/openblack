@@ -26,6 +26,7 @@
 #include "3D/L3DAnim.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
@@ -76,6 +77,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ReactionRules.h"
+#include "ObjectMeasures.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerDisciples.h"
@@ -90,6 +92,7 @@ namespace villager_home = openblack::ecs::villager_home;
 namespace villager_worship = openblack::ecs::villager_worship;
 namespace world_objects = openblack::ecs::world_objects;
 namespace villager_clips = openblack::ecs::villager_clips;
+namespace object_measures = openblack::ecs::systems::object_measures;
 
 namespace
 {
@@ -215,12 +218,6 @@ float Distance(const glm::vec3& a, const glm::vec3& b)
 float RadiusOf(entt::entity object)
 {
 	return world_objects::SizeOf(object).radius;
-}
-
-/// A point of the ground as a map position, at no height
-map_coords::MapCoords ToCoords(glm::vec2 point)
-{
-	return map_coords::FromMetres(point);
 }
 
 /// A point in whole map units (x and z) as a map position at altitude 0
@@ -362,7 +359,9 @@ const ReactionInfo& FireReaction()
 }
 
 /// Where a villager stands to beat a fire: on the line from where the fire burns out through the villager, beyond the
-/// object's radius or the fire's safe radius, whichever is wider, by its own radius and a little more at random
+/// object's radius or the fire's safe radius, whichever is wider, by its own radius and a little more at random. The
+/// angle comes from the map positions of the fire middle and the villager. The step starts at the map position of the
+/// object.
 std::optional<glm::ivec2> GetFireFightingPos(entt::entity villager, entt::entity fire)
 {
 	const auto reach = fire != entt::null ? Locator::fireSystem::value().GetReach(fire) : std::nullopt;
@@ -370,11 +369,13 @@ std::optional<glm::ivec2> GetFireFightingPos(entt::entity villager, entt::entity
 	{
 		return std::nullopt;
 	}
-	const float angle = AngleBetween(Across(reach->centre), Across(PositionOf(villager)));
+	const auto& registry = Entities();
+	const auto middle = object_measures::FireMiddlePlace(registry, fire);
+	const float angle = gutils::Get3DAngleFromXZ(middle, map_coords::WholeXZ(ecs::thing_map_place::Of(registry, villager)));
 	float radius = reach->safeRadius < reach->defaultRadius ? reach->defaultRadius : reach->safeRadius;
 	radius += RadiusOf(villager);
 	radius += GameFloatRandom(1.0f);
-	return map_coords::WholeXZ(ToCoords(Across(reach->position)) + PosFromAngle(angle, radius));
+	return map_coords::WholeXZ(ecs::thing_map_place::Of(registry, fire) + gutils::GetPosFromAngle(angle, radius));
 }
 
 /// Whether a villager stands within reach of beating a fire: beyond the edge it stands back by, by less than a margin
@@ -663,7 +664,9 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 	const float margin = RadiusOf(villager) + k_SkirtMargin;
 	bool changed = false;
 	float side = 0.0f;
-	auto via = fire::GetViaPoint(from, target, ToCoords(Across(reach->position)), reach->safeRadius, margin, 0.0f);
+	// The walk measures each fire from the map position of its burning thing
+	auto via =
+	    fire::GetViaPoint(from, target, ecs::thing_map_place::Of(Entities(), state.fire), reach->safeRadius, margin, 0.0f);
 	if (via.angle != 0.0f)
 	{
 		side = via.angle;
@@ -688,7 +691,8 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 			++i;
 			continue;
 		}
-		via = fire::GetViaPoint(from, target, ToCoords(Across(memberReach->position)), memberReach->safeRadius, margin, side);
+		via = fire::GetViaPoint(from, target, ecs::thing_map_place::Of(Entities(), members[i]), memberReach->safeRadius, margin,
+		                        side);
 		if (via.angle != 0.0f || (via.detour && via.inside))
 		{
 			side = via.angle;

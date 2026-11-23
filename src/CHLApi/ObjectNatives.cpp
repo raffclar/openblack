@@ -2357,7 +2357,7 @@ void SetObjectCarrying() // 440 SET_OBJECT_CARRYING
 void GetTimeSinceObjectAttacked() // 442 GET_TIME_SINCE_OBJECT_ATTACKED
 {
 	const auto town = PopObject();
-	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(Popf());
 	auto& registry = Locator::entitiesRegistry::value();
 	// Only a town keeps a record of attacks. Any other thing gives the largest float.
 	const auto* aggression = registry.Valid(town) ? registry.TryGet<const ecs::components::TownAggression>(town) : nullptr;

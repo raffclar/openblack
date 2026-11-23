@@ -13,6 +13,8 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "ECS/VillagerBreedingRules.h"
 
 using namespace openblack;
@@ -227,28 +229,56 @@ TEST(VillagerBreeding, ABreedersSpotByAHomeIsOutFromItsDoor)
 {
 	Draws<uint32_t> side {.values = {1}};
 	Draws<float> floats {.values = {0.0f, 0.0f}};
-	const glm::vec2 home {200.0f, 200.0f};
-	const glm::vec2 door {200.0f, 205.0f};
+	const auto home = map_coords::FromMetres({200.0f, 200.0f});
+	const auto door = map_coords::FromMetres({200.0f, 205.0f});
 	const auto spot = BreederSpotByHome(home, door, 6.0f, side.Make(), floats.Make());
 	EXPECT_EQ(side.limits, (std::vector<uint32_t> {2}));
 	EXPECT_EQ(floats.limits.size(), 2u);
 	EXPECT_FLOAT_EQ(floats.limits.at(0), k_BreederFan);
 	EXPECT_FLOAT_EQ(floats.limits.at(1), 3.0f);
 	// Straight out from the door, half the home's size
-	EXPECT_NEAR(spot.x, 200.0f, 0.05f);
-	EXPECT_NEAR(spot.y, 208.0f, 0.05f);
+	const auto metres = map_coords::ToMetres(spot);
+	EXPECT_NEAR(metres.x, 200.0f, 0.05f);
+	EXPECT_NEAR(metres.y, 208.0f, 0.05f);
+}
+
+TEST(VillagerBreeding, ABreedersSpotByAHomeAddsItsStepToTheDoorInWholeMapUnits)
+{
+	// A door far out on the map, whose last unit metres cannot keep, with a height above the land
+	const map_coords::MapCoords home {.x = 0x1FB5355, .z = 0x1234567 - 0x8000, .altitude = 0.0f};
+	const map_coords::MapCoords door {.x = 0x1FB5355, .z = 0x1234567, .altitude = 1.5f};
+	Draws<uint32_t> side {.values = {0}};
+	Draws<float> floats {.values = {0.25f, 1.0f}};
+	const auto spot = BreederSpotByHome(home, door, 6.0f, side.Make(), floats.Make());
+	// The other side: the fan draw turns the way out back by a quarter of a radian
+	const float angle = 0.25f * -1.0f + gutils::Get3DAngleFromXZ(home, door);
+	const auto step = gutils::GetPosFromAngle(angle, 1.0f + 3.0f);
+	EXPECT_EQ(spot.x, door.x + step.x);
+	EXPECT_EQ(spot.z, door.z + step.z);
+	EXPECT_EQ(spot.altitude, 1.5f);
 }
 
 TEST(VillagerBreeding, ABreedersSpotByTheStoreAndItsAmbles)
 {
 	Draws<float> store {.values = {1.0f, 0.0f}};
-	const glm::vec2 pit {300.0f, 300.0f};
-	EXPECT_NEAR(glm::distance(BreederSpotByStore(pit, store.Make()), pit), 4.0f, 0.05f);
+	const map_coords::MapCoords pit {.x = 0x1FB5355, .z = 0x1234567, .altitude = 0.5f};
+	const auto spot = BreederSpotByStore(pit, store.Make());
 	EXPECT_FLOAT_EQ(store.limits.at(0), k_BreederStoreRange);
+	EXPECT_FLOAT_EQ(store.limits.at(1), 6.2831855f);
+	// Four metres along x, added to the store in whole map units
+	const auto step = gutils::GetPosFromAngle(0.0f, 4.0f);
+	EXPECT_EQ(spot.x, pit.x + step.x);
+	EXPECT_EQ(spot.z, pit.z);
+	EXPECT_EQ(spot.altitude, 0.5f);
 	Draws<float> walk {.values = {0.0f, 6.0f}};
 	Draws<uint32_t> pause {.values = {39}};
-	const auto amble = BreederAmble(pit, walk.Make(), pause.Make());
-	EXPECT_NEAR(glm::distance(amble.goal, pit), 6.0f, 0.05f);
+	const glm::ivec2 kept {0x320000, 0x330000};
+	const auto amble = BreederAmble(kept, walk.Make(), pause.Make());
+	// The amble goes through metres from the kept spot, on the land
+	map_coords::MapCoords goal {.x = kept.x, .z = kept.y, .altitude = 0.0f};
+	gutils::AddDistanceFromAngle(goal, 0.0f, 6.0f);
+	EXPECT_EQ(amble.goal, goal);
+	EXPECT_NEAR(map_coords::ToMetres(amble.goal.x) - map_coords::ToMetres(kept.x), 6.0f, 0.05f);
 	EXPECT_FLOAT_EQ(walk.limits.at(1), k_BreederAmble);
 	EXPECT_EQ(amble.pause, 69);
 	EXPECT_EQ(pause.limits, (std::vector<uint32_t> {40}));
@@ -257,8 +287,22 @@ TEST(VillagerBreeding, ABreedersSpotByTheStoreAndItsAmbles)
 TEST(VillagerBreeding, AChildMakesForAPointFiveMetresFromItsMother)
 {
 	Draws<float> angle {.values = {1.0f}};
-	const glm::vec2 mother {400.0f, 400.0f};
-	EXPECT_NEAR(glm::distance(NearMother(mother, angle.Make()), mother), k_NearMother, 0.05f);
+	const map_coords::MapCoords mother {.x = map_coords::ToFixed(400.0f), .z = map_coords::ToFixed(400.0f), .altitude = 0.0f};
+	const auto goal = NearMother(mother, angle.Make());
+	EXPECT_NEAR(glm::distance(map_coords::ToMetres(goal), map_coords::ToMetres(mother)), k_NearMother, 0.05f);
+	EXPECT_EQ(angle.limits, (std::vector<float> {6.2831855f}));
+}
+
+// The step adds to the map position of the mother in whole map units, and the goal keeps her altitude
+TEST(VillagerBreeding, AChildsGoalAddsItsStepToTheMothersMapPositionInWholeUnits)
+{
+	Draws<float> angle {.values = {1.0f}};
+	const map_coords::MapCoords mother {.x = 0x1FB5355, .z = 0x1234567, .altitude = 2.5f};
+	const auto goal = NearMother(mother, angle.Make());
+	const auto step = gutils::GetPosFromAngle(1.0f, k_NearMother);
+	EXPECT_EQ(goal.x, mother.x + step.x);
+	EXPECT_EQ(goal.z, mother.z + step.z);
+	EXPECT_EQ(goal.altitude, 2.5f);
 }
 
 TEST(VillagerBreeding, OnlyADyingVillagerCannotBeCalledOn)

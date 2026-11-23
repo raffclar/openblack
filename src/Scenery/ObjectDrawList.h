@@ -271,8 +271,9 @@ struct OwnDraw
 	bool temple {false};
 	/// A villager that a script draws in high detail
 	bool highDetail {false};
-	/// A thing that a script walks along a track: the game keeps it on a list of its own while it walks, and draws all of
-	/// that list after the land's list
+	/// A thing that is not living, and that a script walks along a track: the game keeps it on a list of its own while it
+	/// walks, and draws all of that list after the land's list. A living thing walks its track in its own state, and the
+	/// land's list draws it.
 	bool walkingTrack {false};
 };
 /// Whether the game draws a thing on its own, whatever the land's list says

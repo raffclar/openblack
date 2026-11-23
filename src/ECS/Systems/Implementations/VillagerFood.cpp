@@ -47,6 +47,7 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerCheckRules.h"
 #include "ECS/VillagerFoodRules.h"
@@ -72,6 +73,7 @@ namespace needs = openblack::ecs::villager_needs;
 namespace villager_home = openblack::ecs::villager_home;
 namespace villager_build = openblack::ecs::villager_build;
 namespace world_objects = openblack::ecs::world_objects;
+namespace thing_map_place = openblack::ecs::thing_map_place;
 
 namespace
 {
@@ -321,8 +323,7 @@ bool villager_food::ChangeStateToFindFoodToEat(LivingAction& action)
 	{
 		// Without a working pit its town leaves food at its temporary pile, which is made if missing
 		dropOff = villager_build::ResourceDropoff(villager, ResourceType::Food);
-		in.dropOffElsewhere =
-		    gutils::GetDistanceInMetres(dropOff->place, glm::xz(Entities().Get<const Transform>(villager).position)) > 0.0f;
+		in.dropOffElsewhere = gutils::GetDistanceInMetres(dropOff->Goal(), thing_map_place::Of(Entities(), villager)) > 0.0f;
 	}
 	switch (rules::PlanMeal(in))
 	{
@@ -588,7 +589,7 @@ uint32_t villager_food::ArrivesAtFoodReaction(LivingAction& action)
 		{
 			// Where its town leaves food: its working pit's door, or its temporary pile, made if missing
 			const auto dropOff = villager_build::ResourceDropoffPos(villager, ResourceType::Food);
-			const float distance = gutils::GetDistanceInMetres(glm::xz(Position(villager)), dropOff);
+			const float distance = gutils::GetDistanceInMetres(thing_map_place::Of(Entities(), villager), dropOff);
 			if (town != entt::null && Locator::townDesireSystem::has_value())
 			{
 				const float shortage = Locator::townDesireSystem::value().FoodShortage(town);

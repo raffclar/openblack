@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Enums.h"
 
@@ -193,30 +194,26 @@ constexpr std::array k_ScriptHeldStates = {VillagerStates::InScript, VillagerSta
 	return !EnterTheSameWay(from, into) && returnTo == into;
 }
 
-/// Whether a villager that goes back to its kept work has a goal to walk to: a goal of no distance is no goal
-[[nodiscard]] constexpr bool HasKeptGoal(glm::vec2 goal)
+/// Whether a villager that goes back to its kept work has a goal to walk to: a goal at the corner of the map with no
+/// height above the land is no goal
+[[nodiscard]] constexpr bool HasKeptGoal(const map_coords::MapCoords& goal)
 {
-	return gutils::ConvertMetersToWholeDistance(goal.x) != 0 || gutils::ConvertMetersToWholeDistance(goal.y) != 0;
-}
-
-/// The same for a goal with a height above the land: a goal of no distance with a height is a goal
-[[nodiscard]] constexpr bool HasKeptGoal(glm::vec2 goal, float goalHeight)
-{
-	return HasKeptGoal(goal) || goalHeight != 0.0f;
+	return goal != map_coords::MapCoords {};
 }
 
 /// Whether a villager that leaves a script's hands keeps the place where it stands and not the goal of its walk: its walk
 /// has no goal. A villager that goes back to play a clip keeps its goal.
-[[nodiscard]] constexpr bool KeepsOwnPlace(glm::vec2 goal, float goalHeight, VillagerStates returnTo)
+[[nodiscard]] constexpr bool KeepsOwnPlace(const map_coords::MapCoords& goal, VillagerStates returnTo)
 {
-	return !HasKeptGoal(goal, goalHeight) && returnTo != VillagerStates::ScriptPlayAnim;
+	return !HasKeptGoal(goal) && returnTo != VillagerStates::ScriptPlayAnim;
 }
 
 /// The place a villager keeps when it leaves a script's hands: the goal of its walk, or where it stands when it has no
 /// goal. A villager that goes back to play a clip keeps no goal.
-[[nodiscard]] constexpr glm::vec2 KeptGoal(glm::vec2 goal, glm::vec2 standing, VillagerStates returnTo)
+[[nodiscard]] constexpr map_coords::MapCoords KeptGoal(const map_coords::MapCoords& goal, const map_coords::MapCoords& standing,
+                                                       VillagerStates returnTo)
 {
-	return KeepsOwnPlace(goal, 0.0f, returnTo) ? standing : goal;
+	return KeepsOwnPlace(goal, returnTo) ? standing : goal;
 }
 
 /// The clip a villager plays again when it goes back to play a script's clip: the kept clip, or the first clip when the

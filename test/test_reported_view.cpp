@@ -144,6 +144,32 @@ TEST(ReportedView, AScriptReadsTheCameraFarOutOfTheWorldInsideTheTemple)
 	EXPECT_EQ(script_camera::ScriptCameraRead(std::nullopt, true), glm::vec3(50000.0f));
 }
 
+// In a network game, the scripts' answers that depend on the temple use the report of the player, not the temple of
+// this computer. The game server has no temple.
+TEST(ReportedView, TheScriptsReadTheTempleFromTheReportInANetworkGame)
+{
+	constexpr bool k_Network = true;
+	EXPECT_TRUE(script_camera::InsideTempleByReport(true, k_Network, false));
+	EXPECT_FALSE(script_camera::InsideTempleByReport(false, k_Network, true));
+	// Before the first report the player is outside the temple
+	EXPECT_FALSE(script_camera::InsideTempleByReport(std::nullopt, k_Network, true));
+	// Inside the temple, a take of the camera by a temple script keeps the temple's camera
+	EXPECT_FALSE(script_camera::TakeIsCameraOrder(true, script_camera::InsideTempleByReport(true, k_Network, false)));
+	EXPECT_TRUE(script_camera::TakeIsCameraOrder(true, script_camera::InsideTempleByReport(false, k_Network, true)));
+}
+
+// In a game alone, the temple's own turns run the scripts while the world's turns stop. No report comes from the
+// temple, so the temple of this computer tells the scripts that the player is inside.
+TEST(ReportedView, TheTemplesOwnTurnsReadTheTempleOfThisComputerInAGameAlone)
+{
+	constexpr bool k_Network = false;
+	EXPECT_TRUE(script_camera::InsideTempleByReport(false, k_Network, true));
+	EXPECT_TRUE(script_camera::InsideTempleByReport(std::nullopt, k_Network, true));
+	EXPECT_TRUE(script_camera::InsideTempleByReport(true, k_Network, false));
+	EXPECT_FALSE(script_camera::InsideTempleByReport(false, k_Network, false));
+	EXPECT_FALSE(script_camera::InsideTempleByReport(std::nullopt, k_Network, false));
+}
+
 // SET_CAMERA_POSITION does not change the script's camera while a two-thing camera has control
 TEST(ReportedView, ATwoThingCameraIgnoresTheScriptsSetPosition)
 {

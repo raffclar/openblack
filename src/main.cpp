@@ -223,7 +223,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("lake-mirrors", "Developer switch: how the lakes above the sea draw their mirrors, in words that commas divide: off, no-floor, no-rects, occlusion, no-share, half=<share of the screen>, join=<height>, alternate=<share of the screen>.", cxxopts::value<std::string>()->default_value(""))
 		("ai-times", "Tools: log the mean and longest time of the seen list, the mind and the hand of each computer god each time this many turns go by (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
 		("turn-step-times", "Tools: log the time of each step of each turn that takes this many milliseconds or more.", cxxopts::value<float>())
-		("mind-frame-budget", "Developers: the milliseconds that the computer minds can use in one frame. A turn whose minds use them stops between two players and continues in the next frame (deviation row 288). 0 for never.", cxxopts::value<float>())
+		("mind-frame-budget", "Developers: the milliseconds that the computer minds can use in one frame. A turn whose minds use them stops between two players and continues in the next frame (deviation row 288). 0 for never. 8 by default, but none by default with --sim-frame-ms or --sim-fast, because the budget follows the machine's clock and the frames of two runs would not be the same.", cxxopts::value<float>())
 		("frame-stats-out", "With --frame-stats, write each frame of the run (its time, its time on the processor and the game turn) into this CSV file when the game ends.", cxxopts::value<std::string>())
 		("no-stage-times", "Tools: do not time the profiler stages, also when --frame-stats, a benchmark, the run record or the profiler window reads them. A measured run then costs what a player's game costs. The frame times stay correct, and the stage times are zero.")
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
@@ -745,8 +745,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		}
 		if (result.count("mind-frame-budget") != 0)
 		{
-			const auto budget = result["mind-frame-budget"].as<float>();
-			args.mindFrameBudgetMs = budget > 0.0f ? std::optional(budget) : std::nullopt;
+			args.mindFrameBudgetMs = result["mind-frame-budget"].as<float>();
 		}
 		if (result.count("frame-stats-out") != 0)
 		{

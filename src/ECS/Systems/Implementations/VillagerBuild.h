@@ -76,17 +76,18 @@ uint32_t DropOffAtStoragePit(components::LivingAction& action, entt::entity town
 uint32_t ArrivesAtStoragePitForResource(components::LivingAction& action, ResourceType type, uint32_t amount,
                                         VillagerStates arrive, VillagerStates fail);
 
-/// Where the villager takes or leaves a resource: its storage pit's door when the pit works; with no town, where it
-/// stands; else at the edge of its town's temporary pile of the resource, nearest the villager, which is made if missing
-glm::vec2 ResourceDropoffPos(entt::entity villager, ResourceType type);
+/// Where the villager takes or leaves a resource, as a map position: its storage pit's arrive place when the pit works;
+/// with no town, where it stands; else the edge of its town's temporary pile of the resource, nearest the villager, which
+/// is made if missing. Distances to it are between map positions.
+map_coords::MapCoords ResourceDropoffPos(entt::entity villager, ResourceType type);
 /// The same for the store of a given town, which can be another town than the town of the villager
-glm::vec2 ResourceDropoffPos(entt::entity villager, ResourceType type, entt::entity town);
+map_coords::MapCoords ResourceDropoffPos(entt::entity villager, ResourceType type, entt::entity town);
+/// The point of a temporary pile nearest the villager, as a map position with the given height above the land
+[[nodiscard]] map_coords::MapCoords TemporaryPileEdge(entt::entity pile, float altitude, entt::entity villager);
 /// A place where the villager takes or leaves a resource, and its height above the land
 struct Dropoff
 {
-	/// The place in metres, for distances
-	glm::vec2 place;
-	/// The same place as the map keeps it: the arrive place of a storage pit, the point of a temporary pile nearest the
+	/// The place as the map keeps it: the arrive place of a storage pit, the point of a temporary pile nearest the
 	/// villager with the height of the pile, or where the villager stands
 	map_coords::MapCoords goal;
 

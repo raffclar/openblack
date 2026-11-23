@@ -19,6 +19,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 /// How villagers make children. A couple at home at bed time may make one when the town feels sleep with all its heart
@@ -159,19 +160,24 @@ struct TownHeadcount
 /// A breeder breeds while its town's children are fewer over their places than the allowance, and its adults fewer
 /// over theirs than four times it
 [[nodiscard]] bool BreederMayBreed(const TownHeadcount& town, float overAllowance);
-/// A breeder's spot by a home: out from the home's door, its way from the home turned by up to an eighth either side
-[[nodiscard]] glm::vec2 BreederSpotByHome(glm::vec2 home, glm::vec2 door, float homeRadius, const IntRandom& intRandom,
-                                          const FloatRandom& floatRandom);
-/// A breeder's spot without a home near: three to five metres from its town's food store
-[[nodiscard]] glm::vec2 BreederSpotByStore(glm::vec2 store, const FloatRandom& random);
+/// A breeder's spot by a home: out from the home's door, its way from the home turned by up to an eighth either side.
+/// The home and its door are map positions, and the step is added to the door in whole map units.
+[[nodiscard]] map_coords::MapCoords BreederSpotByHome(const map_coords::MapCoords& home, const map_coords::MapCoords& door,
+                                                      float homeRadius, const IntRandom& intRandom,
+                                                      const FloatRandom& floatRandom);
+/// A breeder's spot without a home near: three to five metres from its town's food store. The step is added to the map
+/// position of the store in whole map units.
+[[nodiscard]] map_coords::MapCoords BreederSpotByStore(const map_coords::MapCoords& store, const FloatRandom& random);
 /// A breeder's amble about its spot, and the turns it then pauses
 struct Amble
 {
-	glm::vec2 goal {0.0f};
+	map_coords::MapCoords goal {};
 	uint16_t pause {0};
 };
-[[nodiscard]] Amble BreederAmble(glm::vec2 spot, const FloatRandom& floatRandom, const IntRandom& intRandom);
-/// A point a child makes for near its mother, or its home without her
-[[nodiscard]] glm::vec2 NearMother(glm::vec2 centre, const FloatRandom& random);
+/// The spot is the x and z of a map position. The goal is on the land, the step added through metres.
+[[nodiscard]] Amble BreederAmble(glm::ivec2 spot, const FloatRandom& floatRandom, const IntRandom& intRandom);
+/// A place a child makes for near its mother, or its home without her. The step adds to the map position of the centre
+/// in whole map units, and the place keeps the altitude of the centre.
+[[nodiscard]] map_coords::MapCoords NearMother(const map_coords::MapCoords& centre, const FloatRandom& random);
 
 } // namespace openblack::ecs::villager_breeding

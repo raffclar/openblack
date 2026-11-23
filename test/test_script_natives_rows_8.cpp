@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -53,6 +54,23 @@ TEST(ScriptNativesRows8, ScriptPlayerZeroIsTheNeutralPlayer)
 	EXPECT_EQ(NameOf(7), PlayerNames::PLAYER_SEVEN);
 	// The number 8 names the neutral player too
 	EXPECT_EQ(NameOf(8), PlayerNames::NEUTRAL);
+}
+
+TEST(ScriptNativesRows8, AScriptPlayerFloatBecomesAWholeNumberByTheGameRule)
+{
+	using script::script_players::NameOfValue;
+	EXPECT_EQ(NameOfValue(1.0f), PlayerNames::PLAYER_ONE);
+	// The game removes the fraction, also below zero
+	EXPECT_EQ(NameOfValue(2.9f), PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(NameOfValue(0.5f), PlayerNames::NEUTRAL);
+	EXPECT_EQ(NameOfValue(-0.5f), PlayerNames::NEUTRAL);
+	// A NaN gives 0, the neutral player
+	EXPECT_EQ(NameOfValue(std::numeric_limits<float>::quiet_NaN()), PlayerNames::NEUTRAL);
+	// Out of the range, the game keeps the low 32 bits of the whole number
+	EXPECT_EQ(NameOfValue(4294967296.0f), PlayerNames::NEUTRAL);
+	EXPECT_EQ(NameOfValue(1.0e10f), static_cast<PlayerNames>(0xFF));
+	// The subtraction from the lowest number wraps
+	EXPECT_EQ(NameOfValue(-2147483648.0f), static_cast<PlayerNames>(0xFF));
 }
 
 TEST(ScriptNativesRows8, AVillagerGoalHasItsHeightAboveTheLand)

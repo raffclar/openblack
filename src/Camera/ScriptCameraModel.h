@@ -78,6 +78,14 @@ inline constexpr float k_OutOfWorld = 50000.0f;
 	}
 	return reported.value_or(glm::vec3(0.0f));
 }
+/// The scripts' answers that depend on the temple use the last view report of the player. Before the first report, the
+/// player is outside the temple. In a game alone, the world's turns stop in the temple, and only the temple's own turns
+/// run the scripts there. No report comes from the temple, so the temple of this computer tells it.
+[[nodiscard]] constexpr bool InsideTempleByReport(std::optional<bool> reportedInsideTemple, bool networkGame,
+                                                  bool localInsideTemple)
+{
+	return reportedInsideTemple.value_or(false) || (!networkGame && localInsideTemple);
+}
 /// SET_CAMERA_POSITION changes the script's camera only while no two-thing camera has control. Else the script's
 /// position is ignored, and no warning is given.
 [[nodiscard]] constexpr bool SetPositionReachesScriptCamera(bool inDualView)

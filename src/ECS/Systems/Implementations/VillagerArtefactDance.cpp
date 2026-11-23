@@ -12,16 +12,13 @@
 #include <algorithm>
 #include <array>
 
-#include <glm/geometric.hpp>
-#include <glm/gtx/vec_swizzle.hpp>
-
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/ArtefactRules.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
-#include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
@@ -82,13 +79,11 @@ uint32_t ecs::villager_artefact_dance::WaitForArtefactDance(LivingAction& action
 		return 1;
 	}
 	const auto& data = registry.Get<Dance>(dance);
-	const auto at = glm::xz(registry.Get<const Transform>(villager).position);
-	const auto middle = map_coords::ToMetres(data.place);
-	// The spot that it walks to comes from the map positions of the villager and the dance
+	// The distance and the spot that it walks to come from the map positions of the villager and the dance
 	const auto here = thing_map_place::Of(registry, villager);
 	// It keeps a little more than its own width clear about itself
 	const float room = world_objects::SizeOf(villager).radius * rules::k_WaitingRoom;
-	const float distance = glm::distance(middle, at);
+	const float distance = gutils::GetDistanceInMetres(data.place, here);
 	const auto& towns = Locator::townSystem::value();
 	// Whether it has room where it stands is only asked on its first turn of waiting close by
 	const bool askRoom = distance <= rules::k_WaitingReach && action.turnsUntilStateChange == 0;

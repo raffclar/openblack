@@ -617,6 +617,16 @@ std::optional<HandSystemInterface::ReportedView> ScriptView()
 	                                        : std::nullopt;
 }
 
+/// The player is inside the temple, as the last view report of the player tells it. The scripts' answers use this, so
+/// that each computer and the server give the same answer.
+bool ReportedInsideTemple()
+{
+	const auto view = ScriptView();
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	return script_camera::InsideTempleByReport(view.has_value() ? std::optional(view->insideTemple) : std::nullopt, networkGame,
+	                                           PlayerInsideTemple());
+}
+
 void CHLApi::InitFunctionsTable0()
 {
 	CREATE_FUNCTION_BINDING("NONE", 0, 0, None);

@@ -202,7 +202,8 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	{
 		return Kind {.type = ScriptType::SpellDispenser, .subtype = Row(dispenser->building)};
 	}
-	// A field is a building to the scripts; the row of its building isn't kept
+	// A field is a building to the scripts. A field in the world is also an abode, so the abode test above gives the
+	// field row of its tribe. This test is only for a field with no abode, which has no row.
 	if (registry.AllOf<Field>(entity))
 	{
 		return Kind {.type = ScriptType::Abode};
@@ -251,9 +252,11 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 		return Kind {.type = mobile->type == MobileObjectInfo::LumpOfPoo ? ScriptType::Poo : ScriptType::MobileObject,
 		             .subtype = Row(mobile->type)};
 	}
+	// A one-shot globe is a mobile object to the scripts. Its subtype is the globe row of the mobile objects' table,
+	// for each kind of miracle.
 	if (registry.AllOf<OneOffSpellSeed>(entity))
 	{
-		return Kind {.type = ScriptType::MobileObject};
+		return Kind {.type = ScriptType::MobileObject, .subtype = Row(MobileObjectInfo::OneOffSpellSeed)};
 	}
 	// A miracle in the hand, by its seed: a one-shot miracle when it came out of a globe, else a plain seed
 	if (const auto* seed = registry.TryGet<const SpellSeed>(entity))

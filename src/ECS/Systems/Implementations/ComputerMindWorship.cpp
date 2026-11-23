@@ -644,7 +644,7 @@ bool TakeWorshipperHome(RuleContext& context, computer_mind::Mind& mind, uint16_
 	if (home != entt::null)
 	{
 		const auto homeCoords = CoordsOfThing(home).value_or(map_coords::MapCoords {});
-		const auto door = map_coords::FromMetres(ecs::villager_home::ArrivePosition(home));
+		const auto door = ecs::villager_home::ArrivePlace(home);
 		const float angle = gutils::Get3DAngleFromXZ(homeCoords, door);
 		const float distance = computer_mind_rules::HomeDropDistance(object_measures::TwoDRadius(registry, home),
 		                                                             object_measures::TwoDRadius(registry, villager));

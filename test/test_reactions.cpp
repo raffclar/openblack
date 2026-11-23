@@ -74,7 +74,9 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WallHugRules.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/Impressiveness.h"
@@ -1230,6 +1232,57 @@ TEST_F(Reactions, AFiremanWithinAStepOfItsPlaceByTheFireGoesOnToBeatIt)
 	EXPECT_EQ(static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Previous))),
 	          VillagerStates::DecideWhatToDo);
 	EXPECT_EQ(registry.Get<const FireGroup>(burning).firemen, std::vector<entt::entity> {villager});
+	Locator::fireSystem::reset();
+	Locator::reactionSystem::reset();
+}
+
+// A fireman out of reach finds its place to beat the fire from the map positions of the fire and itself. The place is on
+// the line from the fire through the villager, and starts at the exact map position of the burning thing. A trip through
+// the metres of the fire would move the place by one map unit.
+TEST_F(Reactions, AFiremanFindsItsPlaceByTheFireFromTheMapPositionOfTheFire)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& stateTable = _info->villagerStateTable;
+	for (const auto state : {VillagerStates::PutOutFireByBeating, VillagerStates::MoveAroundFire})
+	{
+		auto& row = stateTable.at(static_cast<size_t>(state));
+		row.isFinalState = 1;
+		row.isReactionState = 1;
+		row.resumeState = static_cast<int>(state);
+	}
+	Locator::infoConstants::emplace(*_info);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	const auto villager = _villagers[0];
+	const auto burning = registry.Create();
+	constexpr map_coords::MapCoords k_FirePlace {.x = 25165827, .z = 31457283};
+	const auto fireMetres = map_coords::ToMetres(k_FirePlace);
+	registry.Assign<Transform>(burning, glm::vec3(fireMetres.x, 0.0f, fireMetres.y), glm::mat3(1.0f), glm::vec3(1.0f));
+	ecs::thing_map_place::Keep(registry, burning, k_FirePlace);
+	registry.Assign<Fire>(burning).root = burning;
+	registry.Assign<MagicFireBall>(burning);
+	registry.Assign<FireGroup>(burning, FireGroup {.members = {burning}, .firemen = {villager}});
+	// The villager stands 30 m from the fire at higher x, at the same z
+	const map_coords::MapCoords villagerPlace {.x = k_FirePlace.x + 30 * 6553 + 18, .z = k_FirePlace.z};
+	const auto villagerMetres = map_coords::ToMetres(villagerPlace);
+	registry.Get<Transform>(villager).position = glm::vec3(villagerMetres.x, 0.0f, villagerMetres.y);
+	ecs::thing_map_place::Keep(registry, villager, villagerPlace);
+	const auto reaction = reactions.Create({.initiator = burning, .type = Reaction::ReactToFire, .position = k_Here});
+	auto& action = registry.Get<LivingAction>(villager);
+	action.states = {static_cast<uint8_t>(VillagerStates::PutOutFireByBeating),
+	                 static_cast<uint8_t>(VillagerStates::InvalidState), static_cast<uint8_t>(VillagerStates::InvalidState)};
+	registry.Assign<VillagerFireState>(villager,
+	                                   VillagerFireState {.fire = burning, .reactionTarget = burning, .reaction = reaction});
+	registry.AssignOrReplace<LivingReaction>(villager, LivingReaction {.reaction = reaction, .type = Reaction::ReactToFire});
+	const auto reach = Locator::fireSystem::value().GetReach(burning);
+	ASSERT_TRUE(reach.has_value());
+	// With no game random numbers, the place is the wider radius and the villager's radius from the fire
+	const float radius = std::max(reach->safeRadius, reach->defaultRadius) + ecs::world_objects::SizeOf(villager).radius;
+	EXPECT_EQ(villager_fire::PutOutFireByBeating(action), 1u);
+	EXPECT_EQ(StateOf(villager), VillagerStates::MoveAroundFire);
+	const auto target = registry.Get<const VillagerFireState>(villager).walkTarget;
+	EXPECT_EQ(target, glm::ivec2(k_FirePlace.x + map_coords::ToFixedGUtils(radius), k_FirePlace.z));
 	Locator::fireSystem::reset();
 	Locator::reactionSystem::reset();
 }

@@ -48,7 +48,24 @@ TEST(AbodeDoor, TheVillageCentreDoorIsTwoMetresAcrossAndTwelveBack)
 {
 	const auto door = VillageCentreDoor({100.0f, 5.0f, 200.0f}, glm::mat3(1.0f), glm::vec3(1.0f));
 	EXPECT_EQ(door.x, 102.0f);
-	EXPECT_EQ(door.y, 188.0f);
+	EXPECT_EQ(door.y, 5.0f);
+	EXPECT_EQ(door.z, 188.0f);
+}
+
+TEST(AbodeDoor, TheVillageCentreDoorKeepsItsHeightAboveTheLand)
+{
+	// A centre tipped forward: its z axis climbs, so the door twelve metres back is three metres lower than the centre
+	const glm::mat3 tipped(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.25f, 1.0f));
+	const auto door = VillageCentreDoor({100.0f, 20.0f, 200.0f}, tipped, glm::vec3(1.0f));
+	EXPECT_EQ(door.y, 17.0f);
+	const auto ground = [](const openblack::map_coords::MapCoords& place) {
+		// The land is 12 metres high at the door
+		return place.x == 668467 && place.z == 1232076 ? 12.0f : 0.0f;
+	};
+	const auto place = VillageCentreDoorPlace(door, ground);
+	EXPECT_EQ(place.x, openblack::map_coords::ToFixed(102.0f));
+	EXPECT_EQ(place.z, openblack::map_coords::ToFixed(188.0f));
+	EXPECT_EQ(place.altitude, 5.0f);
 }
 
 TEST(AbodeDoor, TheVillageCentreDoorTurnsAndGrowsWithTheCentre)
@@ -57,7 +74,7 @@ TEST(AbodeDoor, TheVillageCentreDoorTurnsAndGrowsWithTheCentre)
 	const glm::mat3 quarter(glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 	const auto door = VillageCentreDoor({100.0f, 0.0f, 200.0f}, quarter, glm::vec3(0.5f));
 	EXPECT_EQ(door.x, 94.0f);
-	EXPECT_EQ(door.y, 199.0f);
+	EXPECT_EQ(door.z, 199.0f);
 }
 
 TEST(AbodeDoor, AFieldAndAFishFarmHaveTheirMiddleAsTheirDoor)
