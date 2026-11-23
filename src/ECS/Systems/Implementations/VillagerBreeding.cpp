@@ -25,6 +25,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
@@ -48,6 +49,7 @@
 #include "ECS/CrecheRules.h"
 #include "ECS/Creches.h"
 #include "ECS/GameEndConditions.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -176,6 +178,12 @@ map_coords::MapCoords MapPlaceOf(entt::entity entity)
 	return ecs::thing_map_place::Of(Entities(), entity);
 }
 
+/// Where a thing is, as the map keeps it, with its height above the land
+map_coords::MapCoords MapPlaceWithAltitudeOf(entt::entity entity)
+{
+	return ecs::thing_map_place::OfWithAltitude(Entities(), entity);
+}
+
 entt::entity TownOf(entt::entity villager)
 {
 	const auto town = Entities().Get<const Villager>(villager).town;
@@ -206,9 +214,11 @@ void SetLover(entt::entity villager, entt::entity partner)
 	}
 }
 
+/// The villager faces the other at once, along the game angle from its map position to the map position of the other
 void Face(entt::entity villager, entt::entity other)
 {
-	Living().VillagerFace(villager, PositionOf(other));
+	const auto angle = gutils::ConvertAngle3DToGame(gutils::Get3DAngleFromXZ(MapPlaceOf(villager), MapPlaceOf(other)));
+	openblack::ecs::living_facing::FaceGameAngle(Entities(), villager, static_cast<uint16_t>(angle));
 }
 
 /// Whether two things stand within a gap of each other, edge to edge, from their map positions
@@ -254,8 +264,9 @@ bool StartLoving(entt::entity villager, entt::entity mate, VillagerStates state)
 /// touch already, so that they always stand at the gap. The game started the state where they stood (deviations list).
 void WalkToMeet(entt::entity villager, entt::entity other, VillagerStates state, float gap)
 {
-	const auto here = PositionOf(villager);
-	const auto there = PositionOf(other);
+	// The meeting points come from the map positions of the two villagers and keep their altitudes
+	const auto here = MapPlaceWithAltitudeOf(villager);
+	const auto there = MapPlaceWithAltitudeOf(other);
 	villager_home::SetupMoveTo(Entities().Get<LivingAction>(villager), villager_breeding::MeetingPoint(here, there, gap), state,
 	                           villager_home::WalkWay::StraightThrough);
 	villager_home::SetupMoveTo(Entities().Get<LivingAction>(other), villager_breeding::MeetingPoint(there, here, gap), state,

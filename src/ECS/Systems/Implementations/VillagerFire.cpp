@@ -121,9 +121,6 @@ constexpr float k_RunFromFire = 10.0f;
 constexpr float k_SkirtMargin = 1.0f;
 /// The scan of a blaze for a way round it gives up after this many detours
 constexpr int k_MostDetours = 1000;
-/// The game's angles: a whole turn in 2048, and a villager turning towards something by a quarter of 1024 a turn
-constexpr int32_t k_AngleUnits = 2048;
-constexpr int32_t k_LookStep = 0x100;
 
 ecs::Registry& Entities()
 {
@@ -197,19 +194,20 @@ VillagerFireState& FireStateOf(entt::entity villager)
 	                                                   : registry.Assign<VillagerFireState>(villager);
 }
 
-glm::vec2 Across(const glm::vec3& point)
-{
-	return {point.x, point.z};
-}
-
 glm::vec3 PositionOf(entt::entity object)
 {
 	const auto* transform = Entities().TryGet<const Transform>(object);
 	return transform != nullptr ? transform->position : glm::vec3(0.0f);
 }
 
-/// The game's distance between two points, on the ground, through map positions
-float Distance(const glm::vec3& a, const glm::vec3& b)
+/// Where a thing is, as the map keeps it, with no height above the land
+map_coords::MapCoords MapPlaceOf(entt::entity thing)
+{
+	return ecs::thing_map_place::Of(Entities(), thing);
+}
+
+/// The game's distance between two map positions, on the ground
+float Distance(const map_coords::MapCoords& a, const map_coords::MapCoords& b)
 {
 	return gutils::GetDistanceInMetres(a, b);
 }
@@ -224,15 +222,6 @@ float RadiusOf(entt::entity object)
 map_coords::MapCoords AtGround(glm::ivec2 whole)
 {
 	return {.x = whole.x, .z = whole.y, .altitude = 0.0f};
-}
-
-/// The way from one point to another as one of the game's 2048 angles of a turn, in radians
-float AngleBetween(glm::vec2 from, glm::vec2 to)
-{
-	const auto d = to - from;
-	auto units = static_cast<int32_t>(portable_math::Atan2(d.y, d.x) * static_cast<float>(k_AngleUnits) / k_TwoPi);
-	units &= k_AngleUnits - 1;
-	return static_cast<float>(units) * k_TwoPi / static_cast<float>(k_AngleUnits);
 }
 
 /// A map position a distance along an angle, x by its cosine and z by its sine, in whole map units
@@ -253,31 +242,16 @@ map_coords::MapCoords FleeingPlace(entt::entity villager, entt::entity object, f
 	                                 distance, ground);
 }
 
-/// The way a villager faces, as an angle across the land, from how walking has turned it
-float FacingOf(const Transform& transform)
-{
-	const auto x = transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-	return -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
-}
-
-/// Turns the villager towards an object by a quarter of 1024 a turn; whether it faces it. Nothing to look at is looked at.
+/// Turns the villager a quick step towards the map position of an object; whether it faces it. Nothing to look at is
+/// looked at.
 bool LookAtObject(entt::entity villager, entt::entity object)
 {
-	auto* transform = Entities().TryGet<Transform>(villager);
-	if (transform == nullptr || object == entt::null || !Entities().Valid(object))
+	if (object == entt::null || !Entities().Valid(object))
 	{
 		return true;
 	}
-	const float step = static_cast<float>(k_LookStep) * k_TwoPi / static_cast<float>(k_AngleUnits);
-	const float target = AngleBetween(Across(transform->position), Across(PositionOf(object)));
-	const float diff = std::remainder(target - FacingOf(*transform), k_TwoPi);
-	if (std::abs(diff) < step)
-	{
-		openblack::ecs::living_facing::FaceAngle(Entities(), villager, target);
-		return true;
-	}
-	openblack::ecs::living_facing::FaceAngle(Entities(), villager, FacingOf(*transform) + (diff > 0.0f ? step : -step));
-	return false;
+	return ecs::systems::villager_reactions::LookAt(villager, MapPlaceOf(object),
+	                                                ecs::systems::villager_reactions::LookSpeed::Quick);
 }
 
 /// Whether the state's animation has played through as many times since the villager went into it
@@ -386,7 +360,7 @@ bool InRange(entt::entity villager, entt::entity fire, float margin)
 	{
 		return false;
 	}
-	const float distance = Distance(PositionOf(villager), reach->position);
+	const float distance = Distance(MapPlaceOf(villager), MapPlaceOf(fire));
 	const float radius =
 	    (reach->safeRadius < reach->defaultRadius ? reach->defaultRadius : reach->safeRadius) + RadiusOf(villager);
 	return distance > radius && distance < radius + margin;
@@ -431,7 +405,7 @@ bool DecideHowToPutOutFire(LivingAction& action, entt::entity fire)
 {
 	const auto villager = EntityOf(action);
 	auto& state = FireStateOf(villager);
-	state.fire = Locator::fireSystem::value().NearestSafeFire(fire, PositionOf(villager)).value_or(entt::null);
+	state.fire = Locator::fireSystem::value().NearestSafeFire(fire, MapPlaceOf(villager)).value_or(entt::null);
 	if (state.fire == entt::null)
 	{
 		return false;
@@ -462,7 +436,7 @@ uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity o
 	{
 		return 0;
 	}
-	const float distance = Distance(PositionOf(villager), reach->position);
+	const float distance = Distance(MapPlaceOf(villager), MapPlaceOf(object));
 	const auto& info = FireReaction();
 	const float urgency = (reach->maxRadius != 0.0f ? reach->radius / reach->maxRadius : 0.0f) * 0.5f + 1.0f;
 	const float priority = urgency * static_cast<float>(info.priority);
@@ -497,7 +471,7 @@ uint8_t villager_fire::ReactToFirePriority(entt::entity villager, entt::entity o
 		return 0;
 	}
 	const float merge = k_MergeReachBase + info.maxReactionDistance;
-	if (Distance(myReach->position, reach->position) > 2.0f * merge)
+	if (Distance(MapPlaceOf(mine), MapPlaceOf(object)) > 2.0f * merge)
 	{
 		return result;
 	}
@@ -555,8 +529,8 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 	{
 		return 1;
 	}
-	const auto here = PositionOf(villager);
-	const float distance = Distance(here, reach->position);
+	const auto here = MapPlaceOf(villager);
+	const float distance = Distance(here, MapPlaceOf(object));
 	const auto& info = FireReaction();
 	const auto age = ReactionAge(state.reaction);
 	const bool recent = age.has_value() && *age < k_NewReactionTurns;
@@ -582,11 +556,11 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 	const bool hasTown = person != nullptr && person->town != entt::null && registry.Valid(person->town);
 	if (ecs::worshipper_rules::WeighsFireFight(hasTown, IsOnTheWayToWorship(villager)))
 	{
-		const auto* town = registry.TryGet<const Transform>(person->town);
+		const bool townStands = registry.AllOf<Transform>(person->town);
 		const auto blaze = fires.GetBlaze(object);
-		if (town != nullptr && blaze.has_value())
+		if (townStands && blaze.has_value())
 		{
-			const float townNearness = gutils::GetDistanceModifier(Distance(town->position, here), k_TownReach);
+			const float townNearness = gutils::GetDistanceModifier(Distance(MapPlaceOf(person->town), here), k_TownReach);
 			const float need = blaze->burningRadius * k_TwoPi / (RadiusOf(villager) * k_FiremanSpacing);
 			const float share = need != 0.0f ? (need - static_cast<float>(blaze->firemen)) / need : 0.0f;
 			const float score = blaze->burningPriority * share * townNearness;
@@ -762,7 +736,7 @@ uint32_t villager_fire::OnFire(LivingAction& action)
 		FinishBeingOnFire(action);
 		return 1;
 	}
-	const auto here = PositionOf(villager);
+	const auto here = MapPlaceOf(villager);
 	const bool burning = fires.IsOnFire(villager);
 	const auto& state = FireStateOf(villager);
 	map_coords::MapCoords goal;
@@ -780,7 +754,7 @@ uint32_t villager_fire::OnFire(LivingAction& action)
 		}
 		else
 		{
-			if (external->maxRadius < Distance(here, external->position))
+			if (external->maxRadius < Distance(here, MapPlaceOf(state.fire)))
 			{
 				FinishBeingOnFire(action);
 				return 1;

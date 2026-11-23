@@ -15,6 +15,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "ECS/VillagerBreedingRules.h"
 
 using namespace openblack;
@@ -22,6 +23,12 @@ using namespace openblack::ecs::villager_breeding;
 
 namespace
 {
+/// The distance in metres between two map positions
+float Metres(const map_coords::MapCoords& a, const map_coords::MapCoords& b)
+{
+	return gutils::GetDistanceInMetres(a, b);
+}
+
 /// Hands out the given draws in turn, recording the limits asked for
 template <typename T>
 struct Draws
@@ -168,11 +175,11 @@ TEST(VillagerBreeding, LoversMakeLoveForHalfOfTheirTimesWithTheirOwnCountedTwice
 
 TEST(VillagerBreeding, MeetingStopsAGapShortOfHalfway)
 {
-	const glm::vec2 from {100.0f, 100.0f};
-	const glm::vec2 to {110.0f, 100.0f};
+	const auto from = map_coords::FromMetres({100.0f, 100.0f});
+	const auto to = map_coords::FromMetres({110.0f, 100.0f});
 	const auto point = MeetingPoint(from, to, k_MeetingGap);
-	EXPECT_NEAR(glm::distance(from, point), (10.0f - k_MeetingGap) * 0.5f, 0.01f);
-	EXPECT_NEAR(glm::distance(point, MeetingPoint(to, from, k_MeetingGap)), k_MeetingGap, 0.02f);
+	EXPECT_NEAR(Metres(from, point), (10.0f - k_MeetingGap) * 0.5f, 0.01f);
+	EXPECT_NEAR(Metres(point, MeetingPoint(to, from, k_MeetingGap)), k_MeetingGap, 0.02f);
 	EXPECT_EQ(MeetingPoint(from, from, k_MeetingGap), from);
 }
 
@@ -181,12 +188,27 @@ TEST(VillagerBreeding, ACoupleNearOrTooNearMeetsAtTheGap)
 	// A couple that touches already steps nearer, and a couple that stands too near steps back
 	for (const float distance : {1.0f, 0.3f})
 	{
-		const glm::vec2 from {100.0f, 100.0f};
-		const glm::vec2 to {100.0f + distance, 100.0f};
+		const auto from = map_coords::FromMetres({100.0f, 100.0f});
+		const auto to = map_coords::FromMetres({100.0f + distance, 100.0f});
 		const auto point = MeetingPoint(from, to, k_MeetingGap);
-		EXPECT_NEAR(glm::distance(point, MeetingPoint(to, from, k_MeetingGap)), k_MeetingGap, 0.02f);
+		EXPECT_NEAR(Metres(point, MeetingPoint(to, from, k_MeetingGap)), k_MeetingGap, 0.02f);
 		EXPECT_EQ(point.x < from.x, distance < k_MeetingGap);
 	}
+}
+
+// The meeting point starts at the map position of the villager, not at its metres, and keeps its altitude. A map
+// position that does not come back the same through metres shows it.
+TEST(VillagerBreeding, AMeetingPointStartsAtTheMapPositionOfTheVillager)
+{
+	constexpr int32_t k_Unround = 8090858;
+	static_assert(map_coords::ToFixed(map_coords::ToMetres(k_Unround)) != k_Unround);
+	const map_coords::MapCoords from {.x = k_Unround, .z = k_Unround, .altitude = 0.5f};
+	const map_coords::MapCoords to {.x = k_Unround + 65536, .z = k_Unround, .altitude = 0.0f};
+	const auto point = MeetingPoint(from, to, k_MeetingGap);
+	// Half of the map distance less the gap, along x, truncated to map units
+	EXPECT_EQ(point.x, k_Unround + map_coords::ToFixedGUtils((Metres(from, to) - k_MeetingGap) * 0.5f));
+	EXPECT_EQ(point.z, k_Unround);
+	EXPECT_FLOAT_EQ(point.altitude, 0.5f);
 }
 
 TEST(VillagerBreeding, TouchingIsEdgeToEdgeWithinAGap)

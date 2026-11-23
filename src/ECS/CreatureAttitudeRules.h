@@ -164,12 +164,15 @@ inline constexpr uint32_t k_FleeChance = 10;
 [[nodiscard]] int32_t TurnsIn(float seconds, uint32_t turnsPerSecond);
 
 /// Where a curious villager steps to, to stand some distance from the creature: straight towards it by the whole metres
-/// it is too far, along the map's angle to it. None when it is within a metre of that distance already.
-[[nodiscard]] std::optional<glm::vec2> StepCloser(glm::vec2 villager, glm::vec2 creature, float keep);
+/// it is too far, along the map's angle to it. The distance and the angle are between the two map positions. The step
+/// keeps the altitude of the villager. None when it is within a metre of that distance already.
+[[nodiscard]] std::optional<map_coords::MapCoords> StepCloser(const map_coords::MapCoords& villager,
+                                                              const map_coords::MapCoords& creature, float keep);
 
-/// Where a villager goes to bow to a creature: from where it stands, towards the creature, by its own and the creature's
-/// radii together
-[[nodiscard]] glm::vec2 BowingPlace(glm::vec2 villager, glm::vec2 creature, float villagerRadius, float creatureRadius);
+/// Where a villager goes to bow to a creature, in metres: from its map position, towards the map position of the
+/// creature, by its own and the creature's radii together
+[[nodiscard]] glm::vec2 BowingPlace(const map_coords::MapCoords& villager, const map_coords::MapCoords& creature,
+                                    float villagerRadius, float creatureRadius);
 
 /// Where a frightened villager runs to: straight away from the creature, so far
 [[nodiscard]] glm::vec2 FleePoint(glm::vec2 villager, glm::vec2 creature, float distance);

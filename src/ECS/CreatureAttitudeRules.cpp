@@ -233,7 +233,8 @@ int32_t creature_attitude::TurnsIn(float seconds, uint32_t turnsPerSecond)
 	return static_cast<int32_t>(static_cast<float>(turnsPerSecond) * seconds);
 }
 
-std::optional<glm::vec2> creature_attitude::StepCloser(glm::vec2 villager, glm::vec2 creature, float keep)
+std::optional<map_coords::MapCoords> creature_attitude::StepCloser(const map_coords::MapCoords& villager,
+                                                                   const map_coords::MapCoords& creature, float keep)
 {
 	const float distance = gutils::GetDistanceInMetres(villager, creature);
 	if (!(distance - keep > k_CloseEnoughMetres))
@@ -244,15 +245,16 @@ std::optional<glm::vec2> creature_attitude::StepCloser(glm::vec2 villager, glm::
 	// The step is in whole metres, made map units
 	const auto metres = static_cast<float>(static_cast<int32_t>(distance - keep));
 	const auto whole = static_cast<int32_t>(metres / k_MetresPerCell * k_UnitsPerCell);
-	auto at = map_coords::FromMetres(villager);
+	auto at = villager;
 	at += map_coords::MapCoords {gutils::GetXByAngleHugeDistance(angle, whole), gutils::GetZByAngleHugeDistance(angle, whole),
 	                             0.0f};
-	return map_coords::ToMetres(at);
+	return at;
 }
 
-glm::vec2 creature_attitude::BowingPlace(glm::vec2 villager, glm::vec2 creature, float villagerRadius, float creatureRadius)
+glm::vec2 creature_attitude::BowingPlace(const map_coords::MapCoords& villager, const map_coords::MapCoords& creature,
+                                         float villagerRadius, float creatureRadius)
 {
-	auto at = map_coords::FromMetres(villager);
+	auto at = villager;
 	at += gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(villager, creature), villagerRadius + creatureRadius);
 	return map_coords::ToMetres(at);
 }

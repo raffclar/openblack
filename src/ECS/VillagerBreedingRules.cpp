@@ -11,9 +11,8 @@
 
 #include <algorithm>
 
-#include <glm/geometric.hpp>
-
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 #include "ECS/VillagerRoutine.h"
 
 using namespace openblack;
@@ -105,14 +104,17 @@ uint16_t villager_breeding::LoveTurns(uint32_t mateTime, uint32_t ownTime)
 	return static_cast<uint16_t>((mateTime + ownTime + ownTime) / 2 + 1);
 }
 
-glm::vec2 villager_breeding::MeetingPoint(glm::vec2 from, glm::vec2 to, float gap)
+map_coords::MapCoords villager_breeding::MeetingPoint(const map_coords::MapCoords& from, const map_coords::MapCoords& to,
+                                                      float gap)
 {
-	const float distance = glm::distance(from, to);
+	auto point = from;
+	const float distance = gutils::GetDistanceInMetres(from, to);
 	if (distance == 0.0f)
 	{
-		return from;
+		return point;
 	}
-	return routine::Polar(from, gutils::Get3DAngleFromXZ(from, to), (distance - gap) * 0.5f);
+	point += gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(from, to), (distance - gap) * 0.5f);
+	return point;
 }
 
 bool villager_breeding::Touching(float centreDistance, float radiusA, float radiusB, float gap)

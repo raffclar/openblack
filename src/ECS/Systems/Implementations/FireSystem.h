@@ -63,7 +63,8 @@ public:
 	[[nodiscard]] std::optional<entt::entity> NearestHotMember(entt::entity root, const glm::vec3& point) const override;
 	[[nodiscard]] std::optional<Reach> GetReach(entt::entity object) const override;
 	[[nodiscard]] std::vector<entt::entity> GetBlazeMembers(entt::entity object) const override;
-	[[nodiscard]] std::optional<entt::entity> NearestSafeFire(entt::entity object, const glm::vec3& point) const override;
+	[[nodiscard]] std::optional<entt::entity> NearestSafeFire(entt::entity object,
+	                                                          const map_coords::MapCoords& point) const override;
 	[[nodiscard]] bool InSameBlaze(entt::entity a, entt::entity b) const override;
 	void MergeBlazes(entt::entity object, entt::entity other) override;
 	void MoveFire(entt::entity from, entt::entity to) override;
