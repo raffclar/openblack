@@ -19,6 +19,7 @@
 
 #include "3D/SkeletalAnimation.h"
 #include "Common/WorkerPool.h"
+#include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureBlendStore.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
@@ -304,4 +305,68 @@ TEST(CreatureBlendStore, TheBackgroundWaitsForItsJobWhenItGoes)
 		job.Start(stores, wanted, workers, 1);
 	}
 	EXPECT_EQ(stores.prepared.size(), wanted.size());
+}
+
+TEST(CreatureBlendStore, TheStoresKeepTheFrameTurnsOfAnAnimationWhileItsAnglesStayTheSame)
+{
+	auto animation = Moving(0.6f, 5);
+	creature_blends::Stores stores;
+	const auto first = creature_blends::TurnsOf(stores, animation);
+	const auto made = creature_animation::FrameTurns(animation);
+	ASSERT_EQ(first.size(), made.size());
+	EXPECT_EQ(std::memcmp(first.data(), made.data(), made.size() * sizeof(skeletal_animation::Matrix)), 0);
+	// The second call gives the kept turns
+	const auto second = creature_blends::TurnsOf(stores, animation);
+	EXPECT_EQ(second.data(), first.data());
+	// New angles at the same address get new turns, also minus zero for plus zero
+	animation.frames[2].eulerAngles[1] = glm::vec3(0.0f, -0.0f, 0.3f);
+	const auto changed = creature_blends::TurnsOf(stores, animation);
+	const auto remade = creature_animation::FrameTurns(animation);
+	ASSERT_EQ(changed.size(), remade.size());
+	EXPECT_EQ(std::memcmp(changed.data(), remade.data(), remade.size() * sizeof(skeletal_animation::Matrix)), 0);
+	animation.frames[2].eulerAngles[1] = glm::vec3(0.0f, 0.0f, 0.3f);
+	const auto plus = creature_blends::TurnsOf(stores, animation);
+	const auto plusMade = creature_animation::FrameTurns(animation);
+	EXPECT_EQ(std::memcmp(plus.data(), plusMade.data(), plusMade.size() * sizeof(skeletal_animation::Matrix)), 0);
+	// Fewer frames get new turns too
+	animation.frames.pop_back();
+	EXPECT_EQ(creature_blends::TurnsOf(stores, animation).size(), creature_animation::FrameTurns(animation).size());
+}
+
+// The blends of a turn that use the kept turns of the species' animations have the bits of blends in new stores
+TEST(CreatureBlendStore, ABlendWithKeptTurnsIsTheBlendOfNewStores)
+{
+	const auto rig = Species();
+	WorkerPool workers(2);
+	creature_blends::Stores warm;
+	const std::vector<creature_blends::Wanted> early {{.rig = &rig, .morph = Body(-0.6f, -0.3f), .index = k_Walk},
+	                                                  {.rig = &rig, .morph = Body(-0.6f, -0.3f), .index = k_Wave}};
+	creature_blends::Prepare(warm, early, workers, 1);
+	ASSERT_FALSE(warm.turns.empty());
+	for (const auto& body : {Body(-0.2f, -0.9f), Body(0.7f, 0.4f), Body(0.0f, 0.0f), Body(-1.0f, 0.0f)})
+	{
+		for (const auto index : {size_t {0}, k_Walk, k_Wave})
+		{
+			creature_blends::Stores cold;
+			const auto kept = creature_blends::Blend(warm, rig, body, index);
+			const auto fresh = creature_blends::Blend(cold, rig, body, index);
+			ASSERT_TRUE(kept.has_value());
+			ASSERT_TRUE(fresh.has_value());
+			EXPECT_TRUE(SameBits(*kept, *fresh)) << "animation " << index;
+		}
+	}
+	// A Prepare after the turns finds the kept turns and makes the same blends
+	creature_blends::Stores cold;
+	const std::vector<creature_blends::Wanted> later {{.rig = &rig, .morph = Body(0.3f, -0.8f), .index = k_Walk},
+	                                                  {.rig = &rig, .morph = Body(0.3f, -0.8f), .index = k_Wave}};
+	creature_blends::Prepare(warm, later, workers, 2);
+	creature_blends::Prepare(cold, later, workers, 2);
+	for (const auto& [_, morph, index] : later)
+	{
+		const auto kept = creature_blends::KeptBlend(warm, rig, morph, index);
+		const auto fresh = creature_blends::KeptBlend(cold, rig, morph, index);
+		ASSERT_TRUE(kept.has_value());
+		ASSERT_TRUE(fresh.has_value());
+		EXPECT_TRUE(SameBits(*kept, *fresh)) << "animation " << index;
+	}
 }
