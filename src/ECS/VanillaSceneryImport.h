@@ -15,8 +15,10 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
 #include "Animals/Zoomer.h"
@@ -170,11 +172,22 @@ struct ImportedFarms
 {
 	std::vector<ImportedField> fields;
 	std::vector<ImportedFishFarm> fishFarms;
+	/// The numbers of the fields in the game's list of fields, the newest first. The game's load keeps this order, and
+	/// each town's list keeps the same order.
+	std::vector<uint32_t> fieldList;
+	/// The numbers of the fish farms in the game's list of fish farms, the newest first
+	std::vector<uint32_t> fishFarmList;
 	std::vector<std::string> skipped;
 };
 
 /// The fields and the fish farms of the world. A field without a row of the tables goes into the skipped list.
 [[nodiscard]] ImportedFarms ReadFarms(const gamesave::VanillaWorld& world);
+
+/// The things that the import made, in the order that they join their list again: the oldest first. Thus the list has the
+/// order of the game's list of the file, the newest first. A number that the import did not make is not in the order, and
+/// a number in the list twice counts once.
+[[nodiscard]] std::vector<entt::entity> ListedToJoin(std::span<const uint32_t> gameList,
+                                                     const std::unordered_map<uint32_t, entt::entity>& made);
 
 /// The kinds of still things and loose things that the import makes from the file
 enum class StaticKind : uint8_t

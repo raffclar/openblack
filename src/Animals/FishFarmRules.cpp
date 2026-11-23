@@ -83,6 +83,20 @@ uint32_t DesireToBeFished(size_t fishermen, uint32_t maxFishermen)
 	return static_cast<uint32_t>(map_coords::FtoL(k_PercentFull * (1.0f - lacking)));
 }
 
+std::optional<size_t> ClosestFarm(std::span<const float> distances, float reach)
+{
+	std::optional<size_t> closest;
+	for (size_t i = 0; i < distances.size(); ++i)
+	{
+		if (distances[i] < reach)
+		{
+			reach = distances[i];
+			closest = i;
+		}
+	}
+	return closest;
+}
+
 std::optional<Choice> BestFarm(std::span<const Candidate> farms, uint32_t maxFishermen)
 {
 	std::optional<Choice> best;

@@ -5907,3 +5907,30 @@ TEST(VanillaWorldImport, TheSpellSeedsOfTheSavedGamesRead)
 	}
 	std::cout << seeds << " spell seeds and " << held << " seeds in a hand in the saves\n";
 }
+
+/// The game's load keeps the lists of fields and of fish farms in the order of the file
+TEST(VanillaSceneryImport, ReadsTheGamesListsOfFieldsAndFishFarms)
+{
+	FakeWorld fake;
+	auto& game = fake.Record(VanillaType::Game);
+	for (size_t list = 0; list < world_import::k_GameObjectLists; ++list)
+	{
+		game.Refs("lists", list == world_import::k_GameFieldList      ? std::vector<uint32_t> {7, 2}
+		                   : list == world_import::k_GameFishFarmList ? std::vector<uint32_t> {5, 3, 4}
+		                                                              : std::vector<uint32_t> {});
+	}
+	const auto imported = world_import::ReadFarms(fake.Make());
+	EXPECT_EQ(imported.fieldList, (std::vector<uint32_t> {7, 2}));
+	EXPECT_EQ(imported.fishFarmList, (std::vector<uint32_t> {5, 3, 4}));
+}
+
+/// The things join their list again from the oldest, so the newest of the file is first in the list
+TEST(VanillaSceneryImport, ThingsJoinTheirListFromTheOldestOfTheFile)
+{
+	const std::unordered_map<uint32_t, entt::entity> made {
+	    {3, entt::entity {30}}, {4, entt::entity {40}}, {5, entt::entity {50}}};
+	// 9 was not made by the import, 3 is in the list twice
+	const std::vector<uint32_t> list {5, 9, 3, 4, 3};
+	const auto order = world_import::ListedToJoin(list, made);
+	EXPECT_EQ(order, (std::vector<entt::entity> {entt::entity {30}, entt::entity {40}, entt::entity {50}}));
+}

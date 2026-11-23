@@ -9,6 +9,8 @@
 
 // Testbed scenarios for the sounds, the voices and the music.
 
+#include <cmath>
+
 #include <array>
 
 #include <SDL_scancode.h>
@@ -1826,7 +1828,10 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	                "Each bolt makes thunder after its wait, also when the bolt is gone before the wait ends. The "
 	                "debug log (audio) says \"Thunder ... starts ... m from the listener\" for each thunder. In the "
 	                "game, only bolts nearer than about 140 m to 280 m make thunder (deviation 291).",
-	    .environment = {.weather = Weather::Thunderstorm, .boltSeconds = glm::vec2(1.0f, 2.0f), .dispenserGrid = false},
+	    .environment = {.farThunder = true,
+	                    .weather = Weather::Thunderstorm,
+	                    .boltSeconds = glm::vec2(1.0f, 2.0f),
+	                    .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -150.0f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 45.0f}}, {.type = TreeInfo::Conifer, .offset = {35.0f, 60.0f}}},
 	});
@@ -1843,10 +1848,57 @@ void testbed_scenarios::AddAudio(std::vector<Scenario>& all)
 	    .expected = "At approximately 3 seconds, the near thunder is a loud, sharp crack. At approximately 10 seconds, the "
 	                "middle thunder is quieter and it is a rumble with less crack. At approximately 20 seconds, the far "
 	                "thunder is a quiet, low rumble. In the game, only the near thunder is heard.",
-	    .environment = {.dispenserGrid = false},
+	    .environment = {.farThunder = true, .dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {-2300.0f, 40.0f, -2300.0f}, .look = {-2000.0f, 0.0f, -2000.0f}},
 	    .commands = {{.kind = Kind::StormBolt, .delaySeconds = 1.0f, .point = {2400.0f, 2400.0f}},
 	                 {.kind = Kind::StormBolt, .delaySeconds = 1.7f, .point = {-2250.0f, -2200.0f}},
 	                 {.kind = Kind::StormBolt, .delaySeconds = 0.8f, .point = {-700.0f, -700.0f}}},
 	});
+
+	// One bolt at night strikes at the same point in each of these scenarios. Only the distance to the camera changes,
+	// so that a clip of each one shows how the thunder changes with distance (deviation 291). The scenarios that end in
+	// "_original" hear the thunder as the game plays it.
+	struct BoltDistance
+	{
+		float metres;
+		bool farThunder;
+		std::string_view id;
+		std::string_view name;
+	};
+	constexpr std::array k_BoltDistances = {
+	    BoltDistance {300.0f, true, "audio.thunder_bolt_at_300m", "One bolt at night, 300 m from the camera"},
+	    BoltDistance {600.0f, true, "audio.thunder_bolt_at_600m", "One bolt at night, 600 m from the camera"},
+	    BoltDistance {1000.0f, true, "audio.thunder_bolt_at_1km", "One bolt at night, 1 km from the camera"},
+	    BoltDistance {2000.0f, true, "audio.thunder_bolt_at_2km", "One bolt at night, 2 km from the camera"},
+	    BoltDistance {300.0f, false, "audio.thunder_bolt_at_300m_original",
+	                  "One bolt at night, 300 m from the camera, with the thunder of the game"},
+	    BoltDistance {1000.0f, false, "audio.thunder_bolt_at_1km_original",
+	                  "One bolt at night, 1 km from the camera, with the thunder of the game"},
+	};
+	constexpr glm::vec2 k_BoltPoint {600.0f, 600.0f};
+	constexpr float k_EyeHeight = 40.0f;
+	for (const auto& bolt : k_BoltDistances)
+	{
+		// The eye is to the south west of the bolt, 40 m up, at the given distance from the foot of the bolt
+		const float along = std::sqrt(bolt.metres * bolt.metres - k_EyeHeight * k_EyeHeight) / std::sqrt(2.0f);
+		all.push_back({
+		    .id = bolt.id,
+		    .name = bolt.name,
+		    .facet = Facet::Audio,
+		    .description = "The camera is 40 m up and looks at a point of the land. At night, one bolt strikes at that "
+		                   "point after 2 seconds. The atmosphere sounds stay silent. The other scenarios of this set "
+		                   "put the camera at 300 m, 600 m, 1 km and 2 km from the same point.",
+		    .expected = bolt.farThunder
+		                    ? "The bolt shows in the middle of the screen. Its thunder starts 1 second for each 347 m "
+		                      "after the bolt. A far thunder is quieter and lower than a near thunder."
+		                    : "The bolt shows in the middle of the screen. As in the game, the bolt is gone before its "
+		                      "thunder comes, so no thunder is heard.",
+		    .environment =
+		        {.hour = 23.0f, .clockRuns = false, .atmosphere = false, .farThunder = bolt.farThunder, .dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed,
+		                .eye = {k_BoltPoint.x - along, k_EyeHeight, k_BoltPoint.y - along},
+		                .look = {k_BoltPoint.x, 70.0f, k_BoltPoint.y}},
+		    .commands = {{.kind = Kind::StormBolt, .delaySeconds = 2.0f, .point = k_BoltPoint}},
+		});
+	}
 }

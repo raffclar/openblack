@@ -36,8 +36,15 @@
 namespace openblack::audio::far_thunder
 {
 
-/// Up to this distance, thunder sounds sharp: the air takes nothing from its crack
-inline constexpr float k_SharpDistance = 1500.0f;
+/// Up to this distance, thunder sounds sharp: the air takes nothing from its crack. Past it, the air path that
+/// softens the crack starts to grow slowly.
+inline constexpr float k_SharpDistance = 550.0f;
+/// For each metre past the sharp distance, the air path that softens the crack grows by this part of a metre. Thus the
+/// crack is softer at 1 km, but the thunder is not yet a rumble.
+inline constexpr float k_SoftAirPathPerMetre = 0.36f;
+/// Past this distance, each metre adds one metre of air path, and the crack becomes a rumble. The air path is the
+/// larger of the two.
+inline constexpr float k_RumbleDistance = 1500.0f;
 /// The length of a lightning channel. Nearer than this, thunder falls off as from a line; further, as from a point.
 inline constexpr float k_ChannelLength = 5000.0f;
 /// From this distance, thunder gets quieter to silence
@@ -91,7 +98,9 @@ struct Hearing
 
 /// How the listener hears thunder at this distance. The sample's own distances give the volume up to its maximum
 /// distance, `sampleReach`. Past it, the thunder falls off as from a line to the channel length, then as from a point,
-/// and fades to silence between the fade and the silent distances.
+/// and fades to silence between the fade and the silent distances. Past the sharp distance, a low-pass filter takes
+/// the high sounds that the air takes over the air path. The filter does not change the true pitch or the speed of the
+/// sample.
 [[nodiscard]] inline Hearing HearingAt(float distance, float sampleReach)
 {
 	if (!(distance < k_SilentDistance))
@@ -114,7 +123,9 @@ struct Hearing
 	}
 	if (distance > k_SharpDistance)
 	{
-		const float kilometres = (distance - k_SharpDistance) * 0.001f;
+		const float soft = (distance - k_SharpDistance) * k_SoftAirPathPerMetre;
+		const float rumble = distance - k_RumbleDistance;
+		const float kilometres = std::max(soft, rumble) * 0.001f;
 		hearing.cutOff = PitchOfAbsorption(k_CutOffAbsorption / kilometres);
 	}
 	return hearing;

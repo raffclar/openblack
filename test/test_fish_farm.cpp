@@ -267,3 +267,17 @@ TEST(FishShoal, AFishLiesFlatAlongItsWayAndShowsItsFrame)
 	EXPECT_EQ(atlas[0], glm::vec2(0.25f, 0.125f));
 	EXPECT_EQ(atlas[2], glm::vec2(0.375f, 0.25f));
 }
+
+TEST(FishFarmClosest, ACreatureTakesTheFirstFarmNearerThanTheReachAndEveryEarlierFarm)
+{
+	const std::vector<float> distances {500.0f, 300.0f, 300.0f, 450.0f};
+	// The list is walked in order, an equal distance later in the list does not win
+	EXPECT_EQ(fish_farm::ClosestFarm(distances, 600.0f), std::optional<size_t> {1});
+}
+
+TEST(FishFarmClosest, AFarmAtTheReachIsNotTaken)
+{
+	const std::vector<float> distances {600.0f, 700.0f};
+	EXPECT_EQ(fish_farm::ClosestFarm(distances, 600.0f), std::nullopt);
+	EXPECT_EQ(fish_farm::ClosestFarm({}, 600.0f), std::nullopt);
+}

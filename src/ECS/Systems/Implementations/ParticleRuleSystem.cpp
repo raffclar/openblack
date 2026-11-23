@@ -77,6 +77,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TownCentreLinks.h"
 #include "ECS/WorldObjects.h"
+#include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -370,6 +371,11 @@ const std::map<std::string, int32_t, std::less<>>& GameParticleWorld::SoundActio
 	return *_soundActions;
 }
 
+bool GameParticleWorld::FarThunder()
+{
+	return Locator::config::has_value() && Locator::config::value().farThunder;
+}
+
 void GameParticleWorld::Play(PlayingSound& sound) const
 {
 	if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio() || !Locator::camera::has_value())
@@ -385,8 +391,9 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	const std::array<int32_t, 5> keys {sound.link->sound.size, sound.link->sound.alignment, k_SoundObject,
 	                                   sound.link->sound.surface, action->second};
 	auto& sounds = Locator::sounds::value();
-	// The whole land hears thunder. It gets quieter and loses its high sounds with distance.
-	const auto result = sound.link->sound.travelsAtSoundSpeed
+	// When the debug menu asks for it, the whole land hears thunder. It gets quieter and loses its high sounds with
+	// distance.
+	const auto result = particles::sound_turn::WholeLandHears(sound.link->sound.travelsAtSoundSpeed, FarThunder())
 	                        ? sounds.PlayThunder(std::string(k_SpellSoundBank), keys, sound.owner, sound.start,
 	                                             audio::CurrentSoundEffectConditions())
 	                        : sounds.PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner, sound.start,
@@ -412,6 +419,7 @@ void GameParticleWorld::ProcessSounds()
 		return sounds != nullptr &&
 		       particles::sound_turn::WithinReplayReach(audio::DistanceSquared(sounds->GetListener().origin, point));
 	};
+	const bool farThunder = FarThunder();
 	std::erase_if(_sounds, [&](PlayingSound& sound) {
 		auto& link = *sound.link;
 		// The place of the sound follows its particle on each turn. Thus all computers keep the same place, whatever
@@ -429,16 +437,17 @@ void GameParticleWorld::ProcessSounds()
 			// The sounds of the particles lock no axis, so the emitter goes to the full position
 			sounds->SetEmitterPosition(sound.emitter, link.position);
 		}
-		switch (particles::sound_turn::Next(link.atom != nullptr, link.sound.action.looping, link.sound.travelsAtSoundSpeed,
-		                                    sound.wait, k_TurnSeconds))
+		const bool wholeLand = particles::sound_turn::WholeLandHears(link.sound.travelsAtSoundSpeed, farThunder);
+		switch (
+		    particles::sound_turn::Next(link.atom != nullptr, link.sound.action.looping, wholeLand, sound.wait, k_TurnSeconds))
 		{
 		case particles::sound_turn::Step::Nothing:
 			return false;
 		case particles::sound_turn::Step::Start:
 			// A looping sound asks for its sample in each turn. Thus it plays again after the audio stopped it, for
 			// example when the camera went too far or into the temple. A sample that plays once keeps its voice. The
-			// whole land hears thunder, so the camera can be at any distance from it.
-			if (link.sound.travelsAtSoundSpeed || nearEnough(link.position))
+			// whole land hears far thunder, so the camera can be at any distance from it.
+			if (wholeLand || nearEnough(link.position))
 			{
 				sound.start = link.position;
 				Play(sound);
