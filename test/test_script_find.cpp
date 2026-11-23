@@ -20,6 +20,7 @@
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Influence.h"
@@ -27,6 +28,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -342,10 +344,13 @@ TEST(ScriptFind, AMiracleInTheHandFromAGlobeIsAOneShotMiracle)
 	const auto summoned = registry.Create();
 	registry.Assign<components::SpellSeed>(summoned, components::SpellSeed {.seedType = SpellSeedType::Food});
 
-	// The globe itself is a mobile object (script type 20) of no subtype
+	// The globe itself is a mobile object (script type 20) of the globe row of the mobile objects' table
 	const auto globeKind = script_find::KindOf(registry, globe);
 	ASSERT_TRUE(globeKind.has_value());
 	EXPECT_EQ(globeKind->type, ScriptType::MobileObject);
+	EXPECT_EQ(globeKind->subtype, 25u);
+	EXPECT_TRUE(script_find::Matches(*globeKind, ScriptType::MobileObject, 25));
+	EXPECT_FALSE(script_find::Matches(*globeKind, ScriptType::MobileObject, 24));
 	// The miracle tapped from it is a one-shot miracle (script type 30), and any other is a seed (script type 24)
 	EXPECT_EQ(static_cast<int>(ScriptType::OneShotSpell), 30);
 	EXPECT_EQ(static_cast<int>(ScriptType::SpellSeed), 24);
@@ -358,6 +363,43 @@ TEST(ScriptFind, AMiracleInTheHandFromAGlobeIsAOneShotMiracle)
 	ASSERT_TRUE(summonedKind.has_value());
 	EXPECT_EQ(summonedKind->type, ScriptType::SpellSeed);
 	EXPECT_FALSE(script_find::Matches(*summonedKind, ScriptType::OneShotSpell, script_find::k_AnySubtype));
+}
+
+// A field is an abode to the scripts, of the field row of its tribe in the buildings' table
+TEST(ScriptFind, AFieldIsAnAbodeOfItsFieldRow)
+{
+	Registry registry;
+	const auto field = registry.Create();
+	registry.Assign<components::Abode>(field).info = AbodeInfo::NorseField;
+	registry.Assign<components::Field>(field);
+	const auto bare = registry.Create();
+	registry.Assign<components::Field>(bare);
+
+	const auto kind = script_find::KindOf(registry, field);
+	ASSERT_TRUE(kind.has_value());
+	EXPECT_EQ(kind->type, ScriptType::Abode);
+	EXPECT_EQ(kind->subtype, 127u);
+	EXPECT_TRUE(script_find::Matches(*kind, ScriptType::Abode, 127));
+	EXPECT_FALSE(script_find::Matches(*kind, ScriptType::Abode, 15));
+	EXPECT_FALSE(script_find::Matches(*kind, ScriptType::Field, script_find::k_AnySubtype));
+	EXPECT_EQ(script_find::GameTypeOf(registry, field), ScriptType::Abode);
+	// A field with no abode has no row: it matches only any subtype
+	const auto bareKind = script_find::KindOf(registry, bare);
+	ASSERT_TRUE(bareKind.has_value());
+	EXPECT_EQ(bareKind->type, ScriptType::Abode);
+	EXPECT_FALSE(bareKind->subtype.has_value());
+}
+
+// A puzzle game has no type for the scripts: GAME_TYPE gives none, GAME_SUB_TYPE gives no subtype, and no search
+// finds it
+TEST(ScriptFind, APuzzleGameHasNoKind)
+{
+	Registry registry;
+	const auto puzzle = registry.Create();
+	registry.Assign<components::PuzzleGame>(puzzle).type = script::PuzzleGameType::Hanoi;
+
+	EXPECT_FALSE(script_find::KindOf(registry, puzzle).has_value());
+	EXPECT_EQ(script_find::GameTypeOf(registry, puzzle), ScriptType::None);
 }
 
 TEST(ScriptFind, ATownNumberIsCutTowardsNought)
