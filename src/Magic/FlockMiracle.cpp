@@ -369,12 +369,14 @@ void FlockMiracle::CheckShields(SpellServicesInterface& services, Spell& spell)
 		{
 			continue;
 		}
-		// The first shield that holds it now and did not hold it at the last turn, within its own radius. One fading
-		// away still strikes it.
+		// The first shield that holds it now and did not hold it at the start of its turn, within its own radius. One
+		// fading away still strikes it. The place at the start of its turn is on the land as it is now.
 		const auto position = registry.Get<const ecs::components::Transform>(animal).position;
 		const float radius = animals.RadiusOf(animal);
-		const auto shield = services.ShieldCrossedInto(spellAnimal->previous, position, radius);
-		spellAnimal->previous = position;
+		const auto before = flock::PointAtTurnStart(spellAnimal->turnStart, [](const map_coords::MapCoords& place) {
+			return Locator::terrainSystem::has_value() ? map_coords::GroundAt(Locator::terrainSystem::value(), place) : 0.0f;
+		});
+		const auto shield = services.ShieldCrossedInto(before, position, radius);
 		if (!shield.has_value())
 		{
 			continue;

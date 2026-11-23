@@ -89,7 +89,7 @@ void openblack::ecs::reflection::RegisterFields_Components_a(entt::meta_ctx& con
 	Reflect<components::SpellAnimal>(context)
 	    .Field<&components::SpellAnimal::spell>("spell")
 	    .Field<&components::SpellAnimal::fade>("fade")
-	    .Field<&components::SpellAnimal::previous>("previous");
+	    .Field<&components::SpellAnimal::turnStart>("turnStart");
 	Reflect<components::HuntState>(context)
 	    .Field<&components::HuntState::prey>("prey")
 	    .Field<&components::HuntState::huntStart>("huntStart")

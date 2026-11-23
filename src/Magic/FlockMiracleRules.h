@@ -17,6 +17,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 // The rules of the flock miracles, the flying flock of doves or bats and the ground flock of wolves: how many animals a
@@ -158,5 +159,13 @@ inline constexpr float k_PounceReach = 1.0f;
 [[nodiscard]] bool OutOfTheHunt(LivingStates finalState, bool broughtDown);
 /// Where a wolf goes to eat its prey: its scale short of the prey, the way from the wolf in three dimensions
 [[nodiscard]] glm::vec3 EatingPosition(glm::vec3 prey, glm::vec3 wolf, float scale);
+
+/// The point that the shield test takes for an animal at the start of its turn. It is the map position that the animal
+/// kept then, with the ground under it now plus its altitude. A change of the land after the turn starts moves the point.
+template <typename GroundAt>
+[[nodiscard]] glm::vec3 PointAtTurnStart(const map_coords::MapCoords& kept, const GroundAt& groundAt)
+{
+	return {map_coords::ToMetres(kept.x), groundAt(kept) + kept.altitude, map_coords::ToMetres(kept.z)};
+}
 
 } // namespace openblack::magic::flock

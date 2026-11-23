@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
+#include "Creature/LeashOwnership.h"
 #include "InfoConstants.h"
 #include "Magic/AreaEffect.h"
 #include "Magic/CastInput.h"
@@ -657,6 +658,16 @@ TEST(AreaEffect, TheNeutralPlayerTakesTheAlignmentOfItsEffects)
 	EXPECT_EQ(AlignmentPlayerOf(EffectSource {.player = PlayerNames::PLAYER_TWO}), PlayerNames::PLAYER_TWO);
 	// An effect from no player moves the alignment of no player
 	EXPECT_FALSE(AlignmentPlayerOf(EffectSource {.playerless = true}).has_value());
+}
+
+TEST(AreaEffect, TheNeutralPlayerTellsTheWaterOnCropsDeedToNoCreature)
+{
+	// Water from the neutral player tells the deed as the neutral player, as water from any player does
+	EXPECT_EQ(AlignmentPlayerOf(EffectSource {.player = PlayerNames::NEUTRAL}), PlayerNames::NEUTRAL);
+	EXPECT_EQ(AlignmentPlayerOf(EffectSource {.player = PlayerNames::PLAYER_ONE}), PlayerNames::PLAYER_ONE);
+	// The neutral player leads no creature, so no creature learns the deed from it
+	EXPECT_FALSE(creature_leash::CanLead(PlayerNames::NEUTRAL));
+	EXPECT_TRUE(creature_leash::CanLead(PlayerNames::PLAYER_ONE));
 }
 
 TEST(AreaEffect, HeatCountsOnlyWithAChangeOfLifeAndInFull)

@@ -21,6 +21,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
+#include "3D/MapCoords.h"
 #include "Animals/AnimalMove.h"
 #include "Animals/GrazerRules.h"
 #include "Animals/Zoomer.h"
@@ -199,8 +200,9 @@ struct SpellAnimal
 	entt::entity spell {entt::null};
 	/// Its fade out, none while it isn't fading
 	std::optional<animals::Zoomer> fade;
-	/// Where it was at the last turn, to see whether it crossed into a shield
-	glm::vec3 previous {0.0f};
+	/// Where it was at the start of its last turn, as a map position with its height above the land. The shield test of
+	/// its miracle compares this place with where it is now.
+	map_coords::MapCoords turnStart;
 
 	[[nodiscard]] bool Fading() const { return fade.has_value(); }
 	/// Its alpha, 0..255
