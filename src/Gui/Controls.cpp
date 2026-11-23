@@ -704,7 +704,18 @@ void EditBox::Draw(const DialogPainter& painter, bool /*hovered*/, bool focused,
 	{
 		return;
 	}
-	painter.DrawBevelBox(rect, 1, DialogPainter::All, glm::vec4(1.0f));
+	if (editable)
+	{
+		painter.DrawBevelBox(rect, 1, DialogPainter::All, glm::vec4(1.0f));
+	}
+	else
+	{
+		// The frame of a box that the player cannot type into shows at half opacity, in whole steps of 255
+		const auto opacity = static_cast<int>(std::lround(std::clamp(painter.GetAlpha(), 0.0f, 1.0f) * 255.0f));
+		painter.SetAlpha(static_cast<float>(FrameOpacityWhenNotEditable(opacity)) / 255.0f);
+		painter.DrawBevelBox(rect, 1, DialogPainter::All, glm::vec4(1.0f));
+		painter.SetAlpha(static_cast<float>(OpacityAfterFrameWhenNotEditable(opacity)) / 255.0f);
+	}
 	// A box that hides its text, as the password's box, shows a '#' for each character
 	const auto hidden = masked ? std::u16string(_state.text.size(), k_MaskCharacter) : std::u16string();
 	const auto text = masked ? std::u16string_view(hidden) : std::u16string_view(_state.text);
@@ -714,7 +725,8 @@ void EditBox::Draw(const DialogPainter& painter, bool /*hovered*/, bool focused,
 	const int top = rect.Centre().y - (_size / 2);
 	const int room = rect.Width() - 8;
 	painter.DrawText({left, top}, room, Justify::Left, shown, _size, DialogPainter::k_FocusColour);
-	if (!focused)
+	// Only a box that the player can type into shows its caret and its selection
+	if (!focused || !editable)
 	{
 		return;
 	}
@@ -788,6 +800,10 @@ void EditBox::SetFocus(bool focused)
 
 bool EditBox::TextInput(std::u16string_view text)
 {
+	if (!editable)
+	{
+		return false;
+	}
 	for (const auto c : text)
 	{
 		text_edit::Type(_state, c);
@@ -798,6 +814,10 @@ bool EditBox::TextInput(std::u16string_view text)
 
 bool EditBox::KeyDown(int key)
 {
+	if (!editable)
+	{
+		return false;
+	}
 	const bool shift = (SDL_GetModState() & KMOD_SHIFT) != 0;
 	switch (key)
 	{
