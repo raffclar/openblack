@@ -738,12 +738,13 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 	const auto& info = Locator::infoConstants::value();
 	if (auto* field = registry.TryGet<Field>(object))
 	{
-		// The caster's creature may learn to water the crops from watching. It sees the plain water miracle, whichever
-		// water was cast.
-		if (drop.source.player != PlayerNames::NEUTRAL && Locator::creatureMindSystem::has_value())
+		// The creature of the water's player may learn to water the crops from watching. It sees the plain water
+		// miracle, whichever water was cast. The neutral player also tells the deed, but it has no creature to learn it.
+		if (const auto player = magic::AlignmentPlayerOf(drop.source);
+		    player.has_value() && Locator::creatureMindSystem::has_value())
 		{
-			Locator::creatureMindSystem::value().PlayerCastDeed(magic::k_DeedCastWaterOnCrops, drop.position, object,
-			                                                    drop.source.player, MagicType::Water);
+			Locator::creatureMindSystem::value().PlayerCastDeed(magic::k_DeedCastWaterOnCrops, drop.position, object, *player,
+			                                                    MagicType::Water);
 		}
 		if (Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(object))
 		{
