@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include "Common/X87.h"
 #include "Enums.h"
 
 /// The player that a script names by a number. Pure rules, tested on their own.
@@ -25,7 +26,15 @@ namespace openblack::script::script_players
 	{
 		return PlayerNames::NEUTRAL;
 	}
-	return static_cast<PlayerNames>(scriptPlayer - 1);
+	// The subtraction wraps, as the game's does
+	return static_cast<PlayerNames>(static_cast<uint32_t>(scriptPlayer) - 1u);
+}
+
+/// The player of the number that a script gives as a float. The game first takes the whole number by its float rule
+/// (see x87::ToInteger), also for a number out of range.
+[[nodiscard]] constexpr PlayerNames NameOfValue(float scriptValue)
+{
+	return NameOf(x87::ToInteger(scriptValue));
 }
 
 } // namespace openblack::script::script_players
