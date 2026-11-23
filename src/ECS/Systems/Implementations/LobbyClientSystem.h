@@ -87,6 +87,7 @@ public:
 	[[nodiscard]] bool IsEmailRequired() const override { return _emailRequired; }
 	[[nodiscard]] std::optional<bool> GetAccountEditor() const override;
 	[[nodiscard]] std::optional<bool> GetAccountDebugger() const override;
+	[[nodiscard]] bool IsGuest() const override;
 	[[nodiscard]] std::optional<error_reports::AccountConsent> GetAccountErrorReports() const override;
 	void SendErrorReportsChoice(bool option) override;
 
@@ -221,6 +222,8 @@ private:
 	bool _accountEditor {false};
 	/// The debugger mark of the account, from the last answer of the lobby with a session
 	bool _accountDebugger {false};
+	/// The rights of a guest session of the site: no account, and the site refuses the lobby calls
+	std::optional<lobby_api::GuestRights> _guest;
 	/// The choice of the account for the error reports, as the lobby gave it ("full", "anonymous", "off"), or empty
 	std::string _accountErrorReports;
 	/// The time of the next read of the rights of the account, while the push channel is not open

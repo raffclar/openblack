@@ -98,6 +98,29 @@ TEST(LobbyApi, SessionNeedsATokenATimeAndAnAccount)
 	EXPECT_FALSE(ParseSession("[]").has_value());
 }
 
+TEST(LobbyApi, GuestRightsNeedTheGuestObjectAndTheEnd)
+{
+	const auto guest = ParseGuestRights(
+	    R"({"guest":{"editor":true,"debugger":true,"multiplayer":false,"expires":"2026-11-24T00:00:00+00:00"}})");
+	ASSERT_TRUE(guest.has_value());
+	EXPECT_TRUE(guest->editor);
+	EXPECT_TRUE(guest->debugger);
+	EXPECT_FALSE(guest->multiplayer);
+	EXPECT_EQ(guest->expires, *ParseTime("2026-11-24T00:00:00Z"));
+	// A right that the site does not give is off
+	const auto plain = ParseGuestRights(R"({"guest":{"expires":"2026-11-24T00:00:00Z"}})");
+	ASSERT_TRUE(plain.has_value());
+	EXPECT_FALSE(plain->editor);
+	EXPECT_FALSE(plain->debugger);
+
+	EXPECT_FALSE(ParseGuestRights(R"({"guest":{"editor":true}})"));
+	EXPECT_FALSE(ParseGuestRights(R"({"guest":{"editor":1,"expires":"2026-11-24T00:00:00Z"}})"));
+	EXPECT_FALSE(ParseGuestRights(R"({"guest":true})"));
+	EXPECT_FALSE(ParseGuestRights(R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z",
+	    "account":{"id":7,"name":"abc"}})"));
+	EXPECT_FALSE(ParseGuestRights("not json"));
+}
+
 TEST(LobbyApi, TimesAreMillisecondsSince1970)
 {
 	EXPECT_EQ(ParseTime("1970-01-01T00:00:00Z"), 0);
