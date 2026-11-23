@@ -102,6 +102,7 @@
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
@@ -1035,6 +1036,8 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				if (Locator::objectDrawListSystem::has_value())
 				{
 					Locator::objectDrawListSystem::value().Update(clock.GetTurn(), simulation::LandDrawn());
+					// The disciples glow only where the list draws their bodies, at most 1024 in the frame
+					ecs::villager_disciple::KeepDrawnGlows();
 					// The things that the list draws show a little more or less of the snow where they stand
 					if (Locator::snowSystem::has_value())
 					{

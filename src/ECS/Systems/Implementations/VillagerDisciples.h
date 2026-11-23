@@ -82,6 +82,10 @@ void GlowFollowersAfterLoad();
 
 /// Every frame: the disciples' glows, and the symbol of the one in the hand or under it
 void UpdateMarks();
+/// Every frame, after the land's draw list of the frame: the frame draws a glow only when it draws the body of the
+/// villager, and at most 1024 glows. When more glows show, the frame draws them in its order and does not draw the
+/// others. The symbol shows only with its glow.
+void KeepDrawnGlows();
 
 /// The puff of the glow sheet to show at a time in game milliseconds: the first fifteen, through in half a second. At a
 /// whole half second after the start, the sixteenth puff shows, as in the game
