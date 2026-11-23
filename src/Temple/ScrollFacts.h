@@ -17,6 +17,8 @@
 #include <string_view>
 #include <vector>
 
+#include "Common/X87.h"
+
 namespace openblack::temple_scrolls
 {
 
@@ -37,7 +39,8 @@ struct CreatureFacts
 	float alignment {0.0f};
 	/// From -1, cold, to 1, hot
 	float warmth {0.0f};
-	/// From 0, healthy, to 1, ill
+	/// From 0, healthy, to 1, ill. The game never changes the illness of a body after it makes the body, so this value
+	/// is always 0 in play.
 	float illness {0.0f};
 	/// The miracle cast on the creature, of the 16 HELP_TEXT_CREATURE_RECEIVED_SPELL texts
 	std::optional<int32_t> miracleApplied;
@@ -104,5 +107,15 @@ enum class Content
 	LibraryDidYouKnow,
 	LibraryHistory,
 };
+
+/// The number of the illness text that the attributes scroll shows, of the five HELP_TEXT_HOW_ILL texts from 0. The
+/// scroll multiplies the illness by 5 and removes the fraction. It compares the result as an unsigned number, so a
+/// result more than 4, and also a result less than 0, gives the last text.
+[[nodiscard]] constexpr uint32_t IllnessText(float illness)
+{
+	constexpr uint32_t k_LastText = 4;
+	const auto text = static_cast<uint32_t>(x87::ToInteger(illness * 5.0f));
+	return text > k_LastText ? k_LastText : text;
+}
 
 } // namespace openblack::temple_scrolls
