@@ -836,6 +836,8 @@ private:
 		bool onObjects;
 		/// The thing that the physics moves, whose shadow stays as it is while the thing is under the sea
 		entt::entity kept {entt::null};
+		/// The thing that goes along the lead of its throw, whose shadow stays after the lead
+		entt::entity throwLead {entt::null};
 	};
 	/// The casters of the shadows that the workers make for this frame, the things under the sea, and the blends of
 	/// the bodies that the casters point to
@@ -857,6 +859,17 @@ private:
 		GroundShadow::Footprint footprint;
 	};
 	mutable std::unordered_map<entt::entity, KeptGroundShadow> _keptGroundShadows;
+	/// The shadow of the last frame of the last throw's lead (see graphics::throw_lead_shadow): the thing, its cast, and
+	/// its data for the land. Only one shadow of this kind exists.
+	struct KeptThrowLeadShadow
+	{
+		entt::entity thing;
+		GroundShadow::Cast cast;
+		KeptGroundShadow shadow;
+	};
+	mutable std::optional<KeptThrowLeadShadow> _throwLeadShadow;
+	/// The kept shadow of the lead shows on this frame
+	mutable bool _throwLeadShadowKept {false};
 	/// The caps over the broken buildings' cut walls, by primitive and cut height; made afresh when a cut moves
 	mutable std::map<std::pair<const void*, float>, Cap> _caps;
 	/// The caps of the models that follow the land, made again each frame
