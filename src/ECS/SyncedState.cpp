@@ -274,6 +274,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ShownRoots", .field = "", .marker = ""},
     // The snow that a thing shows eases only while this computer draws the thing. Only the draw reads it.
     {.component = "SnowLevel", .field = "", .marker = ""},
+    // The glow that a load gives to a follower. Each computer makes it when it loads, so a computer that joins later
+    // can have other marks. Only the draw reads it.
+    {.component = "DiscipleGlowAfterLoad", .field = "", .marker = ""},
     // The flags over the stores move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
     {.component = "*", .field = "", .marker = "WorkshopFlag"},

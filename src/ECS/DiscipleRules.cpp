@@ -352,3 +352,8 @@ bool disciple::DecidesAgainAfterWait(const WaitFacts& facts)
 	return facts.type != VillagerDisciple::None && KindOf(facts.type).waitsWhenIdle &&
 	       facts.finalState == VillagerStates::DiscipleNothingToDo && facts.townWantsChanged;
 }
+
+bool disciple::FollowerGlowsAfterLoad(VillagerDisciple follows)
+{
+	return follows != VillagerDisciple::None && KindOf(follows).glows;
+}

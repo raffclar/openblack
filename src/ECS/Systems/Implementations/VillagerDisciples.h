@@ -77,6 +77,9 @@ bool SetDiscipleNothingToDo(components::LivingAction& action, std::optional<entt
 /// preaching in it stop
 void TownClaimed(entt::entity town);
 
+/// After a load: each villager that follows a disciple of a work that glows also glows, as the game does after a load
+void GlowFollowersAfterLoad();
+
 /// Every frame: the disciples' glows, and the symbol of the one in the hand or under it
 void UpdateMarks();
 

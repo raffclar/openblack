@@ -123,6 +123,7 @@
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/IntroSystemInterface.h"
@@ -1069,6 +1070,8 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	{
 		Locator::entitiesMap::value().FileResidents();
 	}
+	// The game gives the glow of the work to each follower that its load finds
+	villager_disciple::GlowFollowersAfterLoad();
 	if (Locator::objectDrawListSystem::has_value())
 	{
 		Locator::objectDrawListSystem::value().Reset();

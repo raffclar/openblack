@@ -241,6 +241,11 @@ struct WaitFacts
 /// when it waits and the wants of its town change. A follower is not a disciple and does not do this.
 [[nodiscard]] bool DecidesAgainAfterWait(const WaitFacts& facts);
 
+/// Whether a load gives the glow to a villager that follows a disciple. A load gives each villager the glow of the work
+/// in its disciple field. The field of a follower holds the work that it follows until it starts that work. Then the
+/// field holds none.
+[[nodiscard]] bool FollowerGlowsAfterLoad(VillagerDisciple follows);
+
 /// An idle disciple looks for work again this many game turns after finding none
 inline constexpr int32_t k_IdleRetryTurns = 300;
 

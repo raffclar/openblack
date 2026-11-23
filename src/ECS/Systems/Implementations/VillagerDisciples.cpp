@@ -837,8 +837,9 @@ VillagerDisciple villager_disciple::TypeOf(entt::entity villager)
 void villager_disciple::SetType(entt::entity villager, VillagerDisciple type, entt::entity tradeTown)
 {
 	auto& registry = Entities();
-	// A new work or the end of the work also ends a follower
+	// A new work or the end of the work also ends a follower. The glow then comes from the work alone.
 	registry.Remove<DiscipleFollower>(villager);
+	registry.Remove<DiscipleGlowAfterLoad>(villager);
 	if (type == None)
 	{
 		registry.Remove<Disciple>(villager);
@@ -1199,6 +1200,29 @@ void villager_disciple::TownClaimed(entt::entity town)
 	villager_disciple_work::StopMissionariesIn(town);
 }
 
+void villager_disciple::GlowFollowersAfterLoad()
+{
+	auto& registry = Entities();
+	// Each load gives the glow again from the followers alone. A saved world can hold old marks, which go first.
+	std::vector<entt::entity> marked;
+	registry.Each<const DiscipleGlowAfterLoad>([&marked](entt::entity villager) { marked.push_back(villager); });
+	for (const auto villager : marked)
+	{
+		registry.Remove<DiscipleGlowAfterLoad>(villager);
+	}
+	std::vector<entt::entity> glowing;
+	registry.Each<const DiscipleFollower>([&glowing](entt::entity villager, const DiscipleFollower& follower) {
+		if (disciple::FollowerGlowsAfterLoad(follower.type))
+		{
+			glowing.push_back(villager);
+		}
+	});
+	for (const auto villager : glowing)
+	{
+		registry.AssignOrReplace<DiscipleGlowAfterLoad>(villager);
+	}
+}
+
 bool villager_disciple::SetDiscipleNothingToDo(LivingAction& action, std::optional<entt::entity> town)
 {
 	const auto place = WaitPosition(EntityOf(action), town.has_value() ? ValidTown(*town) : std::nullopt);
@@ -1259,7 +1283,8 @@ void villager_disciple::UpdateMarks()
 			symbolMark = mark;
 			return;
 		}
-		if (!registry.Valid(of.villager) || !disciple::KindOf(TypeOf(of.villager)).glows)
+		if (!registry.Valid(of.villager) ||
+		    (!disciple::KindOf(TypeOf(of.villager)).glows && !registry.AllOf<DiscipleGlowAfterLoad>(of.villager)))
 		{
 			gone.push_back(mark);
 		}
@@ -1271,6 +1296,13 @@ void villager_disciple::UpdateMarks()
 	std::vector<entt::entity> glowing;
 	registry.Each<const Disciple>([&glowing](entt::entity villager, const Disciple& disciple) {
 		if (disciple::KindOf(disciple.type).glows)
+		{
+			glowing.push_back(villager);
+		}
+	});
+	// A follower that a load found keeps the glow of the work that it followed
+	registry.Each<const DiscipleGlowAfterLoad>([&glowing](entt::entity villager) {
+		if (std::ranges::find(glowing, villager) == glowing.end())
 		{
 			glowing.push_back(villager);
 		}
