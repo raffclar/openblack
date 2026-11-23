@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <array>
 #include <bit>
 #include <limits>
 #include <optional>
@@ -24,6 +25,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLearning.h"
 #include "Creature/CreaturePlanActions.h"
+#include "ECS/LandForests.h"
 #include "Enums.h"
 
 using namespace openblack;
@@ -86,6 +88,22 @@ TEST(CreatureFire, WhatABurningThingBelongsTo)
 	EXPECT_EQ(creature_fire::Owner(Burning::Creature), BelongsTo::Itself);
 	EXPECT_EQ(creature_fire::Owner(Burning::TemplePart), BelongsTo::Temple);
 	EXPECT_EQ(creature_fire::Owner(Burning::Other), BelongsTo::Nothing);
+}
+
+TEST(CreatureFire, ATreeInNoForestBelongsToTheNearestForestWithTreesStrictlyInAThousandMetres)
+{
+	using ecs::land_forests::ReachMeasure;
+	// The forests in the order of the land's list: the nearest that has trees, strictly in the reach, the first of equals
+	const std::array<ReachMeasure, 4> forests {{
+	    {.distance = 400.0f, .fits = false},
+	    {.distance = 700.0f, .fits = true},
+	    {.distance = 700.0f, .fits = true},
+	    {.distance = 900.0f, .fits = true},
+	}};
+	EXPECT_EQ(ecs::land_forests::NearestWithin(forests, creature_fire::k_NearestForestDistance), std::optional<size_t>(1));
+	// A forest at a thousand metres is not in the reach
+	const std::array<ReachMeasure, 1> far {{{.distance = 1000.0f, .fits = true}}};
+	EXPECT_EQ(ecs::land_forests::NearestWithin(far, creature_fire::k_NearestForestDistance), std::nullopt);
 }
 
 TEST(CreatureFire, UsefulnessIsCappedAtAnEighth)

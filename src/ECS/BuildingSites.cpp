@@ -11,9 +11,6 @@
 
 #include <algorithm>
 
-#include <glm/gtx/vec_swizzle.hpp>
-
-#include "Common/GUtilsAngle.h"
 #include "ECS/BuildingSiteList.h"
 #include "ECS/BuildingSiteRules.h"
 #include "ECS/Components/Abode.h"
@@ -35,6 +32,7 @@
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/TownCensus.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
@@ -325,12 +323,10 @@ float construction::BuildingRadius(entt::entity building)
 	return systems::object_measures::TwoDRadius(Entities(), building);
 }
 
-glm::vec2 construction::NearestEdgeToPos(entt::entity building, glm::vec2 place)
+map_coords::MapCoords construction::NearestEdgeToPos(entt::entity building, const map_coords::MapCoords& place)
 {
-	const auto centre = glm::xz(Entities().Get<const Transform>(building).position);
-	const float angle = gutils::Get3DAngleFromXZ(centre, place);
-	const auto offset = gutils::GetPointFromAngle(angle, systems::object_measures::TwoDRadius(Entities(), building));
-	return centre + glm::vec2(offset.x, offset.z);
+	return building_site::OutFrom(thing_map_place::Of(Entities(), building), place,
+	                              systems::object_measures::TwoDRadius(Entities(), building));
 }
 
 void construction::AddWorker(entt::entity town, entt::entity building, entt::entity villager)

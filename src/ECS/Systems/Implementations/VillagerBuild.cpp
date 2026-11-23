@@ -135,17 +135,18 @@ glm::vec3 PositionOf(entt::entity entity)
 	return Entities().Get<const Transform>(entity).position;
 }
 
+/// Where a thing is, as the map keeps it
+map_coords::MapCoords MapPlaceOf(entt::entity thing)
+{
+	return thing_map_place::Of(Entities(), thing);
+}
+
 /// A thing's place as the game gives the 3D point of a map position: x and z in metres, and y as the height above the
 /// land
 glm::vec3 MapPointOf(const LandIslandInterface& island, entt::entity entity)
 {
 	const auto coords = map_coords::FromWorld(island, PositionOf(entity));
 	return {map_coords::ToMetres(coords.x), coords.altitude, map_coords::ToMetres(coords.z)};
-}
-
-glm::vec2 GroundOf(entt::entity entity)
-{
-	return glm::xz(PositionOf(entity));
 }
 
 /// A builder disciple is offered sites even when no builder is wanted
@@ -159,16 +160,7 @@ bool BuilderDisciple(const Villager& villager)
 	       (follower != nullptr && follower->type == VillagerDisciple::Builder);
 }
 
-/// Walks the villager to a point round what is in the way, then on into a state, as long as the states let it
-void MoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final)
-{
-	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
-	{
-		villager_home::SetupMobileMoveTo(action, goal);
-	}
-}
-
-/// The same to a point with a height above the land
+/// Walks the villager to a map position round what is in the way, then on into a state, as long as the states let it
 void MoveTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerStates final)
 {
 	if (Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, final))
@@ -177,22 +169,10 @@ void MoveTo(LivingAction& action, const map_coords::MapCoords& goal, VillagerSta
 	}
 }
 
-/// The same along the town's paths
-void MoveOnPathsTo(LivingAction& action, entt::entity building, glm::vec2 goal, VillagerStates final)
-{
-	villager_footpath::SetupMoveToOnFootpath(action, building, goal, final);
-}
-
-/// The same to a map position, which the walk keeps as it is
+/// The same along the town's paths, to a map position that the walk keeps as it is
 void MoveOnPathsTo(LivingAction& action, entt::entity building, const map_coords::MapCoords& goal, VillagerStates final)
 {
 	villager_footpath::SetupMoveToOnFootpath(action, building, goal, final);
-}
-
-/// Where a thing is, as the map keeps it
-map_coords::MapCoords MapPlaceOf(entt::entity thing)
-{
-	return thing_map_place::Of(Entities(), thing);
 }
 
 /// A map position through a point on the land and back, as villager_work::ThroughPoint on the land of the island. With no
@@ -215,11 +195,12 @@ float ModelFacingOf(const Transform& transform)
 	return -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
 }
 
-/// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
+/// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it. The angle is from
+/// the map position of the villager.
 bool LookAtPos(entt::entity villager, glm::ivec2 point, int32_t step)
 {
 	auto& transform = Entities().Get<Transform>(villager);
-	const auto from = map_coords::WholeXZ(map_coords::FromMetres(glm::xz(transform.position)));
+	const auto from = map_coords::WholeXZ(MapPlaceOf(villager));
 	const auto target = static_cast<int32_t>(gutils::GetAngleFromXZ(from, point));
 	// The turn starts from the game angle that the walk keeps. Only a villager with no walk takes the angle of its model.
 	const auto kept = openblack::ecs::living_facing::WalkGameAngleOf(Entities(), villager);
@@ -263,8 +244,8 @@ villager_build::Dropoff DropoffOf(entt::entity villager, ResourceType type, entt
 	return {.goal = store.has_value() ? store->edge : MapPlaceOf(villager)};
 }
 
-/// How good or evil the land is where the villager stands: each player's influence there times their alignment
-float LandAlignmentAt(glm::vec3 position)
+/// How good or evil the land is at a map position: each player's influence there times their alignment
+float LandAlignmentAt(const map_coords::MapCoords& place)
 {
 	if (!Locator::influenceSystem::has_value() || !Locator::alignmentSystem::has_value())
 	{
@@ -273,7 +254,7 @@ float LandAlignmentAt(glm::vec3 position)
 	const auto& influence = Locator::influenceSystem::value();
 	const auto& alignment = Locator::alignmentSystem::value();
 	// The influence of all players at the place comes from one pass over their sources
-	const auto influences = influence.PlayerInfluences(map_coords::FromMetres({position.x, position.z}));
+	const auto influences = influence.PlayerInfluences(place);
 	float sum = 0.0f;
 	for (const auto player : ecs::game_players::All())
 	{
@@ -335,10 +316,10 @@ int32_t WoodRoom(const Villager& villager)
 	                                                 static_cast<int32_t>(info.maxWoodCarried)));
 }
 
-/// Where a place of the town's site at the building is on the ground
-glm::vec2 PlacePosition(entt::entity town, entt::entity building, uint32_t place)
+/// A place of the town's site at the building as a walk goal: the map position of the place, at altitude 0
+map_coords::MapCoords PlacePosition(entt::entity town, entt::entity building, uint32_t place)
 {
-	return glm::xz(construction::SiteOf(town, building)->places.at(place));
+	return building_site::PlaceGoal(construction::SiteOf(town, building)->places.at(place));
 }
 
 uint32_t ToBuildingSite(LivingAction& action, entt::entity building)
@@ -359,10 +340,11 @@ uint32_t ToBuildingSite(LivingAction& action, entt::entity building)
 	builder.buildingSite = building;
 	// It makes for the place round the building on its own side, give or take an eighth of a turn
 	const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
-	const float angle = gutils::Get3DAngleFromXZ(GroundOf(building), GroundOf(villager));
+	const auto here = MapPlaceOf(villager);
+	const float angle = gutils::Get3DAngleFromXZ(MapPlaceOf(building), here);
 	builder.buildPlace = static_cast<int32_t>(building_site::PlaceAt(building_site::FirstPlaceAngle(angle, random)));
 	const auto goal = PlacePosition(town, building, static_cast<uint32_t>(builder.buildPlace));
-	if (gutils::GetDistanceInMetres(GroundOf(villager), goal) <= k_HugDistance)
+	if (gutils::GetDistanceInMetres(here, goal) <= k_HugDistance)
 	{
 		MoveTo(action, goal, VillagerStates::ArrivesAtBuildingSite);
 	}
@@ -474,7 +456,7 @@ std::optional<entt::entity> BestSite(entt::entity villager, entt::entity town, b
 {
 	const auto sites = construction::SitesOfTown(town);
 	std::vector<building_site::SiteCandidate> candidates;
-	const auto here = GroundOf(villager);
+	const auto here = MapPlaceOf(villager);
 	for (const auto building : sites)
 	{
 		const auto edge = construction::NearestEdgeToPos(building, here);
@@ -731,12 +713,12 @@ uint32_t villager_build::ArrivesAtBuildingSite(LivingAction& action)
 	    person.buildPlace < static_cast<int32_t>(building_site::k_Places))
 	{
 		const auto place = PlacePosition(town, building, static_cast<uint32_t>(person.buildPlace));
-		if (gutils::GetDistanceInMetres(GroundOf(villager), place) > k_AtPlace)
+		if (gutils::GetDistanceInMetres(MapPlaceOf(villager), place) > k_AtPlace)
 		{
 			MoveTo(action, place, VillagerStates::ArrivesAtBuildingSite);
 			return 1;
 		}
-		if (LookAtPos(villager, map_coords::WholeXZ(map_coords::FromMetres(GroundOf(building))), k_FaceBuildingStep))
+		if (LookAtPos(villager, map_coords::WholeXZ(MapPlaceOf(building)), k_FaceBuildingStep))
 		{
 			// It puts all its wood down at the site; what the site doesn't take is lost
 			if (person.woodHeld != 0)
@@ -780,7 +762,7 @@ uint32_t villager_build::Building(LivingAction& action)
 	{
 		// A stroke uses the site's wood, a little more on evil land, and raises the building by its share of its worth
 		const auto& info = InfoOf(person);
-		const auto want = building_site::WoodPerStroke(info.woodUsedPerBuildCycle, LandAlignmentAt(PositionOf(villager)));
+		const auto want = building_site::WoodPerStroke(info.woodUsedPerBuildCycle, LandAlignmentAt(MapPlaceOf(villager)));
 		auto& stores = Locator::resourceStoreSystem::value();
 		const auto atSite = construction::WoodAtSite(town, building);
 		const auto use = atSite < static_cast<uint32_t>(want) ? atSite : static_cast<uint32_t>(want);
@@ -846,11 +828,13 @@ uint32_t villager_build::ReenterBuildingState(LivingAction& action)
 		if (!ShouldIGetWood(villager, building))
 		{
 			const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
-			const float angle = gutils::Get3DAngleFromXZ(GroundOf(building), GroundOf(villager));
+			const auto here = MapPlaceOf(villager);
+			const auto centre = MapPlaceOf(building);
+			const float angle = gutils::Get3DAngleFromXZ(centre, here);
 			person.buildPlace = static_cast<int32_t>(building_site::PlaceAt(building_site::FirstPlaceAngle(angle, random)));
 			const auto& registry = Entities();
 			const float gap =
-			    gutils::GetDistanceInMetres(GroundOf(villager), GroundOf(building)) -
+			    gutils::GetDistanceInMetres(here, centre) -
 			    (systems::object_measures::TwoDRadius(registry, villager) + construction::BuildingRadius(building));
 			if (gap <= k_Touching)
 			{
@@ -858,7 +842,7 @@ uint32_t villager_build::ReenterBuildingState(LivingAction& action)
 				return 1;
 			}
 			const auto goal = PlacePosition(town, building, static_cast<uint32_t>(person.buildPlace));
-			if (gutils::GetDistanceInMetres(GroundOf(villager), goal) <= k_HugDistance)
+			if (gutils::GetDistanceInMetres(here, goal) <= k_HugDistance)
 			{
 				MoveTo(action, goal, VillagerStates::ArrivesAtBuildingSite);
 			}
@@ -914,7 +898,8 @@ void villager_build::LetGoOfSite(entt::entity building, std::span<const entt::en
 {
 	auto& registry = Entities();
 	const auto& living = Locator::livingActionSystem::value();
-	const auto centre = GroundOf(building);
+	// The goal keeps the altitude of the building's map position
+	const auto centre = thing_map_place::OfWithAltitude(registry, building);
 	const float clear = construction::BuildingRadius(building) + k_StepBackFromClosedSite;
 	for (const auto villager : workers)
 	{
@@ -924,14 +909,13 @@ void villager_build::LetGoOfSite(entt::entity building, std::span<const entt::en
 		{
 			continue;
 		}
-		const auto at = GroundOf(villager);
+		const auto at = MapPlaceOf(villager);
 		if (gutils::GetDistanceInMetres(at, centre) >= clear)
 		{
 			SetTopState(*action, VillagerStates::DecideWhatToDo);
 			continue;
 		}
-		const auto away = gutils::GetPointFromAngle(gutils::Get3DAngleFromXZ(centre, at), clear);
-		MoveTo(*action, centre + glm::vec2(away.x, away.z), VillagerStates::DecideWhatToDo);
+		MoveTo(*action, building_site::OutFrom(centre, at, clear), VillagerStates::DecideWhatToDo);
 	}
 }
 

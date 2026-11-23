@@ -378,6 +378,17 @@ std::optional<size_t> building_site::BestSite(std::span<const SiteCandidate> sit
 	return best;
 }
 
+map_coords::MapCoords building_site::OutFrom(const map_coords::MapCoords& building, const map_coords::MapCoords& place,
+                                             float distance)
+{
+	return building + gutils::GetPosFromAngle(gutils::Get3DAngleFromXZ(building, place), distance);
+}
+
+map_coords::MapCoords building_site::PlaceGoal(glm::vec3 place)
+{
+	return map_coords::FromMetres({place.x, place.z});
+}
+
 WoodSource building_site::DecideWoodSource(const WoodSourceInputs& in)
 {
 	float storeWeight = 0.0f;

@@ -217,6 +217,31 @@ TEST(BuildingSiteRules, BestSiteWeighsDistanceByDesire)
 	EXPECT_FALSE(BestSite(std::span(sites).last(1), false).has_value());
 }
 
+TEST(BuildingSiteRules, TheWayOutFromABuildingIsAddedInWholeMapUnits)
+{
+	// Ten metres along the x axis is 65536 whole units from the building. The altitude of the building stays.
+	const map_coords::MapCoords building {.x = 1000000, .z = 2000000, .altitude = 1.5f};
+	const map_coords::MapCoords place {.x = 6000000, .z = 2000000, .altitude = 7.0f};
+	const auto out = OutFrom(building, place, 10.0f);
+	EXPECT_EQ(out.x, 1065536);
+	EXPECT_EQ(out.z, 2000000);
+	EXPECT_FLOAT_EQ(out.altitude, 1.5f);
+	// Towards a place behind it, the step goes the other way
+	const map_coords::MapCoords behind {.x = 1000000, .z = 100, .altitude = 0.0f};
+	const auto back = OutFrom(building, behind, 10.0f);
+	EXPECT_EQ(back.x, 1000000);
+	EXPECT_EQ(back.z, 2000000 - 65536);
+}
+
+TEST(BuildingSiteRules, ABuildersPlaceIsAGoalInWholeMapUnitsAtNoAltitude)
+{
+	// The metres change to map units and the fraction goes: 1.5 metres is 9830.4 units
+	const auto goal = PlaceGoal({1.5f, 4.0f, 2.0f});
+	EXPECT_EQ(goal.x, 9830);
+	EXPECT_EQ(goal.z, 13107);
+	EXPECT_FLOAT_EQ(goal.altitude, 0.0f);
+}
+
 TEST(BuildingSiteRules, ForABuildingTheStoreCountsOnlyWhenItHasMoreThanTheRoom)
 {
 	WoodSourceInputs in {.forBuilding = true,
