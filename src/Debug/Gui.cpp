@@ -1051,7 +1051,7 @@ bool Gui::ShowMenu() noexcept
 				// The larger pictures of the optional sky pack in the profile folder. With no pack, the choice is greyed.
 				const bool hasPack = Locator::resources::value().GetTextures().Contains(
 				    ecs::archetypes::SkyArchetype::k_PackDomeTextureId.value());
-				if (ImGui::MenuItem("Original", nullptr, !config.upscaledSkyPictures))
+				if (ImGui::MenuItem("Original", nullptr, !(config.upscaledSkyPictures && hasPack)))
 				{
 					config.upscaledSkyPictures = false;
 				}

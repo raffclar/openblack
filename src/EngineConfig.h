@@ -91,9 +91,9 @@ struct EngineConfig
 
 	bool viewDetailOverlay {false};
 	bool drawSky {true};
-	/// The debug menu shows the larger pictures of the sky's pack, when the pack loaded. Off by default: the game shows
-	/// its own pictures.
-	bool upscaledSkyPictures {false};
+	/// The sky shows the larger pictures of the sky's pack, when the pack loaded. On by default. With no pack, the game
+	/// shows its own pictures.
+	bool upscaledSkyPictures {true};
 	bool drawWater {true};
 	bool drawIsland {true};
 	bool drawEntities {true};
