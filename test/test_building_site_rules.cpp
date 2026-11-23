@@ -65,12 +65,22 @@ TEST(BuildingSiteRules, WoodValueAndWoodStillNeeded)
 	EXPECT_FLOAT_EQ(WoodNeededToBuild(0.25f, 8000.0f, 1000), 5000.0f);
 }
 
+namespace
+{
+/// The drop-off point can make a temporary pile, so a rule that does not need its distance must not ask for it
+float FailIfAsked()
+{
+	ADD_FAILURE() << "The rule asked for the distance to the drop-off point";
+	return 0.0f;
+}
+} // namespace
+
 TEST(BuildingSiteRules, NearTheBuildingAVillagerFetchesOnlyWhenTheSiteHasNoWood)
 {
 	ShouldFetchInputs in {.woodAtSite = 0,
 	                      .woodNeeded = 1000.0f,
 	                      .distanceToBuilding = 10.0f,
-	                      .distanceToDropOff = 500.0f,
+	                      .distanceToDropOff = FailIfAsked,
 	                      .woodHeld = 148,
 	                      .maxWoodCarried = 250,
 	                      .woodPerBuilderWanted = 50};
@@ -86,7 +96,7 @@ TEST(BuildingSiteRules, FarFromTheBuildingAVillagerWeighsTheWays)
 	                      .workersWood = workers,
 	                      .woodNeeded = 1000.0f,
 	                      .distanceToBuilding = 100.0f,
-	                      .distanceToDropOff = 10.0f,
+	                      .distanceToDropOff = [] { return 10.0f; },
 	                      .woodHeld = 0,
 	                      .maxWoodCarried = 250,
 	                      .woodPerBuilderWanted = 50};
@@ -98,6 +108,21 @@ TEST(BuildingSiteRules, FarFromTheBuildingAVillagerWeighsTheWays)
 	// Nothing more wanted than lies there and is carried
 	in.woodHeld = 0;
 	in.woodAtSite = 1000;
+	EXPECT_FALSE(ShouldFetchWood(in));
+}
+
+// With enough wood at the site and in the hands of its builders, the rule does not find the drop-off point
+TEST(BuildingSiteRules, AStockedSiteDoesNotAskForTheDropOffPoint)
+{
+	const std::array<int16_t, 1> workers {500};
+	const ShouldFetchInputs in {.woodAtSite = 500,
+	                            .workersWood = workers,
+	                            .woodNeeded = 1000.0f,
+	                            .distanceToBuilding = 100.0f,
+	                            .distanceToDropOff = FailIfAsked,
+	                            .woodHeld = 0,
+	                            .maxWoodCarried = 250,
+	                            .woodPerBuilderWanted = 50};
 	EXPECT_FALSE(ShouldFetchWood(in));
 }
 
@@ -461,14 +486,27 @@ TEST(BuildingSiteRules, EveryThingWithTheFixedMarkKeepsOnePileBeyondIt)
 
 TEST(BuildingSiteRules, AWondersPileIsNineAcrossAndFiftyBack)
 {
-	const auto still = WonderPilePlace({100.0f, 5.0f, 200.0f}, glm::mat3(1.0f), glm::vec3(1.0f));
+	const auto still = WonderPilePoint({100.0f, 5.0f, 200.0f}, glm::mat3(1.0f), glm::vec3(1.0f));
 	EXPECT_EQ(still.x, 109.0f);
-	EXPECT_EQ(still.y, 150.0f);
+	EXPECT_EQ(still.y, 5.0f);
+	EXPECT_EQ(still.z, 150.0f);
 	// Turned and sized with the wonder, each sum rounded to a float
 	const glm::mat3 turned(glm::vec3(0.6f, 0.0f, -0.8f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.8f, 0.0f, 0.6f));
-	const auto place = WonderPilePlace({1234.5f, 7.0f, 987.25f}, turned, glm::vec3(1.3f));
+	const auto place = WonderPilePoint({1234.5f, 7.0f, 987.25f}, turned, glm::vec3(1.3f));
 	EXPECT_EQ(place.x, 1189.52001953125f);
-	EXPECT_EQ(place.y, 938.8900146484375f);
+	EXPECT_EQ(place.y, 7.0f);
+	EXPECT_EQ(place.z, 938.8900146484375f);
+}
+
+// The pile is the map position of the wonder's point: whole map units from the metres, and the height of the point
+// above the land at that map position
+TEST(BuildingSiteRules, AWondersPileKeepsTheHeightOfItsPointAboveTheLand)
+{
+	const auto point = WonderPilePoint({100.0f, 12.0f, 200.0f}, glm::mat3(1.0f), glm::vec3(1.0f));
+	const auto place = map_coords::FromWorld(point, [](const map_coords::MapCoords&) { return 9.5f; });
+	EXPECT_EQ(place.x, map_coords::ToFixed(109.0f));
+	EXPECT_EQ(place.z, map_coords::ToFixed(150.0f));
+	EXPECT_EQ(place.altitude, 2.5f);
 }
 
 TEST(BuildingSiteRules, ABuilderWithNoWoodAtItsSiteGetsWoodAndOneWithWoodBuildsOn)

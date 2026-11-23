@@ -430,9 +430,8 @@ entt::entity TownSystem::SettleScriptVillager(glm::ivec2 homeCell, entt::entity 
 	const auto homes = GameHomes();
 	// The towns of each player in turn, then the neutral towns
 	const auto towns = player_towns::AllInOrder(registry);
-	const auto home = town_homes::FindScriptHome(registry, homes, towns, homeCell, [](entt::entity abode) {
-		return map_coords::CellOf(villager_home::DoorPosition(abode));
-	});
+	const auto home = town_homes::FindScriptHome(
+	    registry, homes, towns, homeCell, [](entt::entity abode) { return map_coords::Cell(villager_home::DoorPlace(abode)); });
 	return town_homes::SettleScriptVillager(registry, homes, home, villager);
 }
 

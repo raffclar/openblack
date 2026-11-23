@@ -135,14 +135,18 @@ public:
 	}
 
 	/// The height above the land where a path to a thing ends. The path ends at a dance at the height of the dance's place.
-	/// It ends at a worship site at the height of the site's gate above the land there. It ends at every other thing at the
-	/// height of the thing's place: a building's door and place are on the land.
+	/// It ends at a worship site at the height of the site's gate above the land there. It ends at a building or a miracle
+	/// dispenser at the altitude of its arrive place. It ends at every other thing at the height of the thing's place.
 	[[nodiscard]] float ArriveAltitude(entt::entity thing) const override
 	{
 		const auto& registry = SharedRegistry();
 		if (const auto* dance = registry.TryGet<const Dance>(thing))
 		{
 			return dance->place.altitude;
+		}
+		if (registry.AnyOf<Abode, SpellDispenser>(thing) && !registry.AllOf<WorshipSite>(thing))
+		{
+			return villager_home::ArrivePlace(thing).altitude;
 		}
 		if (registry.AllOf<WorshipSite>(thing) && Locator::worshipSiteSystem::has_value())
 		{

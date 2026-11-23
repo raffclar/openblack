@@ -248,7 +248,8 @@ uint32_t villager_disciple_work::CheckTrader(LivingAction& action)
 		return 0;
 	}
 	// Its fullness is that of its larger load, whatever it is to carry; the food limit stands for both
-	const auto here = GroundOf(villager);
+	// The distances are between map positions
+	const auto here = thing_map_place::Of(Entities(), villager);
 	const auto leg = disciple_work::ChooseTradeLeg(
 	    LargerLoad(person).second, info->maxTraderFoodCarried,
 	    gutils::GetDistanceInMetres(here, villager_build::ResourceDropoffPos(villager, *resource)),

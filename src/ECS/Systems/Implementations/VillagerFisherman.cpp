@@ -158,7 +158,8 @@ uint32_t villager_fisherman::CheckSatisfyFoodDesire(LivingAction& action)
 	const auto room = static_cast<int16_t>(info.maxFoodCarried - static_cast<uint32_t>(person.foodHeld));
 	// How near is the place where its town leaves food: its working pit's door, or its temporary pile, made if missing
 	const float storeNearness = gutils::GetDistanceModifier(
-	    gutils::GetDistanceInMetres(villager_build::ResourceDropoffPos(EntityOf(action), ResourceType::Food), glm::xz(here)),
+	    gutils::GetDistanceInMetres(villager_build::ResourceDropoffPos(EntityOf(action), ResourceType::Food),
+	                                thing_map_place::Of(Entities(), EntityOf(action))),
 	    k_DropOffReach);
 	const auto choice = work::ChooseFoodJob(jobs, room, static_cast<int32_t>(info.maxFoodCarried), storeNearness);
 	if (choice.dropOff)
