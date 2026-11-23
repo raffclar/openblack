@@ -26,6 +26,7 @@
 #include "Common/MachineClock.h"
 #include "DialogKeyRules.h"
 #include "GameFont.h"
+#include "InputMethodRules.h"
 
 using namespace openblack::gui;
 
@@ -717,61 +718,78 @@ void EditBox::Draw(const DialogPainter& painter, bool /*hovered*/, bool focused,
 		painter.SetAlpha(static_cast<float>(OpacityAfterFrameWhenNotEditable(opacity)) / 255.0f);
 	}
 	// A box that hides its text, as the password's box, shows a '#' for each character
-	const auto hidden = masked ? std::u16string(_state.text.size(), k_MaskCharacter) : std::u16string();
-	const auto text = masked ? std::u16string_view(hidden) : std::u16string_view(_state.text);
+	const auto hidden = masked ? std::u16string(_state.text.size(), k_MaskCharacter) : _state.text;
+	// The box that has the focus shows the text that the player composes with an input method, at the caret
+	const auto shown = input_method::Compose(hidden, _state.caret, painter.GetComposition(), focused);
+	const auto measure = [this](std::u16string_view text) {
+		return static_cast<int>(_font.GetWidth(text, static_cast<float>(_size)));
+	};
+	_state.scroll = input_method::Scroll(shown, _state.scroll, rect.Width(), measure);
+	const auto text = std::u16string_view(shown.text);
 	const auto scroll = static_cast<size_t>(std::clamp(_state.scroll, 0, static_cast<int>(text.size())));
-	const auto shown = text.substr(scroll);
 	const int left = rect.min.x + 4;
 	const int top = rect.Centre().y - (_size / 2);
 	const int room = rect.Width() - 8;
-	painter.DrawText({left, top}, room, Justify::Left, shown, _size, DialogPainter::k_FocusColour);
-	// Only a box that the player can type into shows its caret and its selection
-	if (!focused || !editable)
+	painter.DrawText({left, top}, room, Justify::Left, text.substr(scroll), _size, DialogPainter::k_FocusColour);
+	if (!focused)
 	{
 		return;
 	}
 	// Widths from the first character shown
-	const auto widthTo = [this, &text, scroll](int place) {
+	const auto widthTo = [&measure, &text, scroll](int place) {
 		const auto end = static_cast<size_t>(std::clamp(place, static_cast<int>(scroll), static_cast<int>(text.size())));
-		return Width(text.substr(scroll, end - scroll));
+		return measure(text.substr(scroll, end - scroll));
 	};
 	const auto start = widthTo(_state.selectionStart);
 	const auto end = widthTo(_state.selectionEnd);
-	const auto caret = widthTo(_state.caret);
+	const auto compositionStart = widthTo(shown.compositionStart);
+	// The caret shows after the composed text
+	const auto caret = widthTo(shown.compositionEnd);
 	const auto low = std::min({start, end, room});
 	const auto high = std::min(std::max(start, end) + 1, room);
-	if (low >= high)
+	// Only a box that the player can type into shows its caret and its selection
+	if (editable && low < high)
 	{
-		return;
-	}
-	const auto pale = glm::vec4(1.0f, 1.0f, 1.0f, 0.5f);
-	const auto band = [&painter, &pale, this](int from, int to) {
-		const auto y0 = static_cast<float>(rect.min.y + 2);
-		const auto y1 = static_cast<float>(rect.max.y - 2);
-		const auto x0 = static_cast<float>(from);
-		const auto x1 = static_cast<float>(to);
-		painter.DrawShape({glm::vec2(x0, y0), {x1, y0}, {x1, y1}, {x0, y1}}, {pale, pale, pale, pale});
-	};
-	// The caret shows every other fifth of a second
-	if ((machine_clock::Ticks() / 200u) % 2u == 1u && caret >= 0 && caret < room)
-	{
-		band(rect.min.x + 5 + caret, rect.min.x + 7 + caret);
-	}
-	if (_state.selectionStart != _state.selectionEnd)
-	{
-		band(left + low, rect.min.x + 5 + high);
-		const auto first =
-		    static_cast<size_t>(std::max(std::min(_state.selectionStart, _state.selectionEnd), static_cast<int>(scroll)));
-		// A selection can end after the text when a click falls after the last character. Only the text shows.
-		const auto last = std::min(
-		    static_cast<size_t>(std::max(std::max(_state.selectionStart, _state.selectionEnd), static_cast<int>(scroll))),
-		    text.size());
-		if (first < last)
+		const auto pale = glm::vec4(1.0f, 1.0f, 1.0f, 0.5f);
+		const auto band = [&painter, &pale, this](int from, int to) {
+			const auto y0 = static_cast<float>(rect.min.y + 2);
+			const auto y1 = static_cast<float>(rect.max.y - 2);
+			const auto x0 = static_cast<float>(from);
+			const auto x1 = static_cast<float>(to);
+			painter.DrawShape({glm::vec2(x0, y0), {x1, y0}, {x1, y1}, {x0, y1}}, {pale, pale, pale, pale});
+		};
+		// The caret shows every other fifth of a second
+		if ((machine_clock::Ticks() / 200u) % 2u == 1u && caret >= 0 && caret < room)
 		{
-			painter.DrawText({left + low, top}, room - low, Justify::Left, text.substr(first, last - first), _size,
-			                 k_SelectedTextColour);
+			band(rect.min.x + 5 + caret, rect.min.x + 7 + caret);
+		}
+		if (_state.selectionStart != _state.selectionEnd)
+		{
+			band(left + low, rect.min.x + 5 + high);
+			const auto first =
+			    static_cast<size_t>(std::max(std::min(_state.selectionStart, _state.selectionEnd), static_cast<int>(scroll)));
+			// A selection can end after the text when a click falls after the last character. Only the text shows.
+			const auto last = std::min(
+			    static_cast<size_t>(std::max(std::max(_state.selectionStart, _state.selectionEnd), static_cast<int>(scroll))),
+			    text.size());
+			if (first < last)
+			{
+				painter.DrawText({left + low, top}, room - low, Justify::Left, text.substr(first, last - first), _size,
+				                 k_SelectedTextColour);
+			}
 		}
 	}
+	// The composed text shows again in orange over the white text
+	if (const auto run = input_method::ComposedRun(shown, static_cast<int>(scroll)))
+	{
+		constexpr auto k_Orange = input_method::k_CompositionColour;
+		const auto part = [](uint32_t shift) { return static_cast<float>((k_Orange >> shift) & 0xFFu) / 255.0f; };
+		painter.DrawText({left + compositionStart, top}, room - compositionStart, Justify::Left,
+		                 text.substr(static_cast<size_t>(run->first), static_cast<size_t>(run->count)), _size,
+		                 glm::vec4(part(16), part(8), part(0), part(24)));
+	}
+	// The window of the input method opens near the caret
+	painter.AskTextInputArea({.min = {left + std::clamp(caret, 0, room), rect.min.y}, .max = rect.max});
 }
 
 void EditBox::MouseDown(glm::ivec2 point)
