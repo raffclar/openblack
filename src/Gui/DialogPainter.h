@@ -13,7 +13,9 @@
 
 #include <array>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/gtc/type_precision.hpp>
@@ -122,6 +124,17 @@ public:
 	void SetAlpha(float alpha) const noexcept { _alpha = alpha; }
 	[[nodiscard]] float GetAlpha() const noexcept { return _alpha; }
 
+	/// The text that the player composes with an input method of the system. The edit box that has the focus shows it.
+	void SetComposition(std::u16string composition) { _composition = std::move(composition); }
+	[[nodiscard]] std::u16string_view GetComposition() const noexcept { return _composition; }
+	/// The edit box that has the focus asks for the window of the input method near an area of the dialog space
+	void AskTextInputArea(DialogRect area) const noexcept { _textInputArea = area; }
+	/// The area that an edit box asked for since the last call, or nothing
+	[[nodiscard]] std::optional<DialogRect> TakeTextInputArea() const noexcept
+	{
+		return std::exchange(_textInputArea, std::nullopt);
+	}
+
 	/// What is drawn from now on shows only inside a rectangle of the dialog space. With no rectangle it shows everywhere
 	/// again.
 	void SetClip(const std::optional<DialogRect>& rect) const;
@@ -215,6 +228,8 @@ private:
 	glm::vec2 _offset {0.0f, 0.0f};
 	float _scale {1.0f};
 	mutable float _alpha {1.0f};
+	std::u16string _composition;
+	mutable std::optional<DialogRect> _textInputArea;
 };
 
 } // namespace openblack::gui
